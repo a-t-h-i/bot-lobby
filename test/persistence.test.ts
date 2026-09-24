@@ -15,10 +15,13 @@ import {
   saveTask,
   taskSlug,
   taskDirFor,
+  readTaskArtifact,
+  taskReadDirs,
 } from "../src/state/persistence.ts";
 import { knowledgeDir, KNOWLEDGE_FILES, AGENT_DIR_NAMES, scratchpadPath } from "../src/knowledge/paths.ts";
 import { dataRoot, legacyDataRoot } from "../src/state/project.ts";
 import { createTask } from "../src/schemas/task.ts";
+import { loadScoutResults } from "../src/master/master.ts";
 import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
 
 function project(): string {
@@ -180,4 +183,20 @@ test("ensureProjectStructure migrates legacy knowledge instead of seeding over i
   ensureProjectStructure(root, ".pi");
   const migrated = join(knowledgeDir(dataRoot(root, ".pi"), "backend"), "knowledge.md");
   assert.equal(readFileSync(migrated, "utf8"), "# Legacy\n\nPagination facts.\n");
+});
+
+test("per-task artifacts fall back to the legacy tree, new tree winning per file", () => {
+  const root = project();
+  const id = "TASK-artifacts";
+  const legacyDir = join(legacyDataRoot(root, ".pi"), "tasks", id);
+  mkdirSync(legacyDir, { recursive: true });
+  writeFileSync(join(legacyDir, "backend.md"), "legacy scratchpad\n");
+  writeFileSync(join(legacyDir, "scout-backend.json"), JSON.stringify({ result: { domain: "backend" } }));
+
+  assert.equal(readTaskArtifact(root, ".pi", id, "backend.md"), "legacy scratchpad\n");
+  assert.deepEqual(loadScoutResults(taskReadDirs(root, ".pi", id), ["backend"]).map((entry) => entry.result.domain), ["backend"]);
+
+  createTaskDir(root, ".pi", createTask(id, "Artifacts"));
+  writeFileSync(join(taskDirFor(root, ".pi", id), "backend.md"), "new scratchpad\n");
+  assert.equal(readTaskArtifact(root, ".pi", id, "backend.md"), "new scratchpad\n", "the new tree wins per file");
 });

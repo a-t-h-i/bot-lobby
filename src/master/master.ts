@@ -105,19 +105,28 @@ export function saveScoutResults(taskDir: string, outcomes: ScoutOutcome[]): voi
   }
 }
 
-/** Re-read persisted scout findings for the given domains. */
-export function loadScoutResults(taskDir: string, domains: Domain[]): ScoutOutcome[] {
+/** Re-read persisted scout findings for the given domains; the first dir with a file wins. */
+export function loadScoutResults(taskDirs: string | readonly string[], domains: Domain[]): ScoutOutcome[] {
+  const dirs = typeof taskDirs === "string" ? [taskDirs] : taskDirs;
   const outcomes: ScoutOutcome[] = [];
   for (const domain of domains) {
-    const path = scoutResultPath(taskDir, domain);
-    if (!existsSync(path)) continue;
-    try {
-      outcomes.push(JSON.parse(readFileSync(path, "utf8")) as ScoutOutcome);
-    } catch {
-      // Corrupted scout artifact: skip it rather than failing the workflow.
-    }
+    const found = readScoutArtifact(dirs, domain);
+    if (found) outcomes.push(found);
   }
   return outcomes;
+}
+
+function readScoutArtifact(dirs: readonly string[], domain: Domain): ScoutOutcome | undefined {
+  for (const dir of dirs) {
+    const path = scoutResultPath(dir, domain);
+    if (!existsSync(path)) continue;
+    try {
+      return JSON.parse(readFileSync(path, "utf8")) as ScoutOutcome;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 export interface WorkerOutcome {

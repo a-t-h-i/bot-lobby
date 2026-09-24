@@ -4,11 +4,11 @@ import type { AgentRun, ResearchResult, ReviewResult } from "../schemas/findings
 import { TASK_STATES, TERMINAL_STATES, taskRequest, type Approval, type ApprovalKind, type Task, type TaskState } from "../schemas/task.ts";
 import { isDomain, type Domain } from "../schemas/agent.ts";
 import { transition } from "../state/task-state.ts";
-import { removeTaskScratchpads, saveTask, selectTask, taskDirFor } from "../state/persistence.ts";
+import { readTaskArtifact, removeTaskScratchpads, saveTask, selectTask, taskDirFor, taskReadDirs } from "../state/persistence.ts";
 import { dataRoot, readDataRoots } from "../state/project.ts";
 import { appendCompletedTask, appendDecision, applyKnowledge, readFileOr, writeFileEnsured, type KnowledgeKind } from "../knowledge/store.ts";
 import { compactKnowledgeFile, overThreshold } from "../knowledge/compactor.ts";
-import { knowledgeDir, scratchpadPath, type KnowledgeAgent } from "../knowledge/paths.ts";
+import { knowledgeDir, type KnowledgeAgent } from "../knowledge/paths.ts";
 import { writeScratchpad } from "../state/persistence.ts";
 import { spawnPiProcess, type ProcessRunner } from "../execution/pi-runner.ts";
 import { readRepositoryDiff } from "../execution/git.ts";
@@ -406,7 +406,7 @@ function workerReport(outcome: WorkerOutcome, approvals: Approval[]): string {
 function updateScratchpad(deps: WorkflowDeps, task: Task, outcome: WorkerOutcome): void {
   const dir = taskDirFor(deps.root, deps.configDir, task.id);
   const domain = outcome.result.domain;
-  const existing = readFileOr(scratchpadPath(dir, domain)).replace(/^#\s.*\n/, "").trim();
+  const existing = (readTaskArtifact(deps.root, deps.configDir, task.id, `${domain}.md`) ?? "").replace(/^#\s.*\n/, "").trim();
   const entry = [
     `### ${outcome.run.finishedAt ?? outcome.run.startedAt}`,
     outcome.result.completed || outcome.run.error || "no summary",
@@ -432,7 +432,7 @@ function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instructi
     domain,
     instruction,
     taskText: workerTaskText(task),
-    scoutOutcomes: loadScoutResults(taskDirFor(deps.root, deps.configDir, task.id), [domain]),
+    scoutOutcomes: loadScoutResults(taskReadDirs(deps.root, deps.configDir, task.id), [domain]),
     cwd: deps.cwd,
     dataRoots: readDataRoots(deps.root, deps.configDir),
     config: deps.config,
@@ -471,7 +471,7 @@ function handleResolveApproval(task: Task, params: OrchestrateParams): string {
 }
 
 function scratchpadSummary(deps: WorkflowDeps, task: Task, domain: Domain): string {
-  return readFileOr(scratchpadPath(taskDirFor(deps.root, deps.configDir, task.id), domain));
+  return readTaskArtifact(deps.root, deps.configDir, task.id, `${domain}.md`) ?? "";
 }
 function recordReview(task: Task, domain: Domain, result: ReviewResult): void {
   task.reviewRecords.push({
@@ -497,13 +497,12 @@ const QA_INSTRUCTION = [
 
 /** The QA gate looks at every domain's work, not just one worker's diff. */
 function qaRequest(deps: WorkflowDeps, task: Task, diff: string, instruction?: string): ReviewerRequest {
-  const taskDir = taskDirFor(deps.root, deps.configDir, task.id);
   return {
     taskId: task.id,
     domain: "qa",
     taskText: `${workerTaskText(task)}\n\nAcceptance criteria and plan:\n${truncate(task.plan ?? "", 5000)}`,
     workerSummary: allScratchpads(deps, task),
-    scoutOutcomes: loadScoutResults(taskDir, [...new Set<Domain>(["qa", ...task.domains])]),
+    scoutOutcomes: loadScoutResults(taskReadDirs(deps.root, deps.configDir, task.id), [...new Set<Domain>(["qa", ...task.domains])]),
     diff,
     instruction: instruction?.trim() || QA_INSTRUCTION,
     cwd: deps.cwd,

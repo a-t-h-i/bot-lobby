@@ -48,6 +48,34 @@ export function taskDirFor(root: string, configDir: string, taskId: string): str
   return taskDir(dataRoot(root, configDir), taskId);
 }
 
+/** Per-task dirs to read, newest first: dev-lobby, then the legacy dev-house tree. */
+export function taskReadDirs(root: string, configDir: string, taskId: string): string[] {
+  return readDataRoots(root, configDir).map((dr) => taskDir(dr, taskId));
+}
+
+function readIfExists(path: string): string | undefined {
+  if (!existsSync(path)) return undefined;
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+/** Read the first existing per-task artifact; the new tree wins per file. */
+export function readTaskArtifact(
+  root: string,
+  configDir: string,
+  taskId: string,
+  relative: string,
+): string | undefined {
+  for (const dir of taskReadDirs(root, configDir, taskId)) {
+    const text = readIfExists(join(dir, relative));
+    if (text !== undefined) return text;
+  }
+  return undefined;
+}
+
 export function saveTask(root: string, configDir: string, task: Task): void {
   writeFileEnsured(join(taskDir(dataRoot(root, configDir), task.id), "state.json"), JSON.stringify(task, null, 2));
 }
