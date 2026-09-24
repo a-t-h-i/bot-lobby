@@ -38,3 +38,10 @@ export function bullets(text: string | undefined): string[] {
     .map((line) => line.replace(/^[-*]\s+/, "").trim())
     .filter((line) => line.length > 0);
 }
+
+/** Parse a `path — reason` bullet into its parts. */
+export function parseFileBullet(text: string): { path: string; reason: string } {
+  const match = /^`?([^`\s]+)`?\s*(?:[—–]|--|-)\s*(.*)$/.exec(text);
+  if (match) return { path: match[1]!, reason: match[2]!.trim() };
+  return { path: text.trim(), reason: "" };
+}

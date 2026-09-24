@@ -1,21 +1,33 @@
 import { join } from "node:path";
 import type { DevHouseConfig } from "../schemas/configuration.ts";
 import type { AgentRun } from "../schemas/findings.ts";
-import { TERMINAL_STATES, type Task, type TaskState } from "../schemas/task.ts";
-import { isDomain } from "../schemas/agent.ts";
+import { TERMINAL_STATES, type Approval, type ApprovalKind, type Task, type TaskState } from "../schemas/task.ts";
+import { isDomain, type Domain } from "../schemas/agent.ts";
 import { transition } from "../state/task-state.ts";
 import { activeTask, loadTask, saveTask, taskDirFor } from "../state/persistence.ts";
 import { dataRoot } from "../state/project.ts";
-import { writeFileEnsured } from "../knowledge/store.ts";
+import { readFileOr, writeFileEnsured } from "../knowledge/store.ts";
+import { scratchpadPath } from "../knowledge/paths.ts";
+import { writeScratchpad } from "../state/persistence.ts";
 import { spawnPiProcess, type ProcessRunner } from "../execution/pi-runner.ts";
-import { runScouts, type ScoutOutcome } from "../master/master.ts";
+import { loadScoutResults, runScouts, runWorker, type ScoutOutcome, type WorkerOutcome, type WorkerRequest } from "../master/master.ts";
 import { assessReconnaissance, recordDecision } from "../master/decisions.ts";
 import { detectSharedFiles, summarizeOutcomes } from "../master/synthesis.ts";
 import { truncate } from "../text.ts";
-import { pendingApprovals } from "./approvals.ts";
+import { assertNoPendingApprovals, pendingApprovals, requestApproval, resolveApproval } from "./approvals.ts";
 import { nextStates } from "./transitions.ts";
 
-export const ORCHESTRATE_ACTIONS = ["clarify", "scout", "propose", "plan", "decide", "status", "cancel"] as const;
+export const ORCHESTRATE_ACTIONS = [
+  "clarify",
+  "scout",
+  "propose",
+  "plan",
+  "implement",
+  "resolve_approval",
+  "decide",
+  "status",
+  "cancel",
+] as const;
 export type OrchestrateAction = (typeof ORCHESTRATE_ACTIONS)[number];
 
 export interface OrchestrateParams {
@@ -28,8 +40,13 @@ export interface OrchestrateParams {
   proposal?: string;
   concerns?: string[];
   plan?: string;
-  text?: string;
   domain?: string;
+  /** implement/review: the concrete instruction for the worker. */
+  task?: string;
+  approvalId?: string;
+  decision?: "approved" | "rejected";
+  note?: string;
+  text?: string;
 }
 
 export interface WorkflowDeps {
@@ -78,11 +95,16 @@ function requireState(task: Task, allowed: TaskState[]): void {
   }
 }
 
-
-function deriveDomains(values: string[] | undefined): string[] {
+function deriveDomains(values: string[] | undefined): Domain[] {
   const domains = (values ?? []).map((value) => value.trim().toLowerCase()).filter((value) => isDomain(value));
   if (domains.length === 0) throw new Error("scout requires at least one of: designer, backend, qa");
   return [...new Set(domains)];
+}
+
+function parseDomain(value: string | undefined, action: string): Domain {
+  const domain = value?.trim().toLowerCase();
+  if (!domain || !isDomain(domain)) throw new Error(`${action} requires domain: designer, backend, or qa`);
+  return domain;
 }
 
 export function describeTask(task: Task): string {
@@ -132,7 +154,7 @@ function scoutReport(outcomes: ScoutOutcome[], verifying: boolean): string {
     assessment.warnings.length > 0 ? `Gaps to verify: ${assessment.warnings.join("; ")}` : "",
     verifying
       ? "Use this to confirm or correct the claim, then continue with action=propose."
-      : "Next: synthesize these findings, target-verify anything important (repeat action=scout with a focused instruction), then call action=propose.",
+      : "Next: synthesize these findings, target-verify anything important, then call action=propose.",
   ]
     .filter((line) => line.length > 0)
     .join("\n");
@@ -143,9 +165,7 @@ async function handleClarify(task: Task, params: OrchestrateParams, deps: Workfl
   const question = params.question?.trim();
   if (!question) throw new Error("clarify requires a question");
   transition(task, "clarifying");
-  const answer = params.options?.length
-    ? await deps.choose(question, params.options)
-    : await deps.ask(question);
+  const answer = params.options?.length ? await deps.choose(question, params.options) : await deps.ask(question);
   if (answer === undefined) {
     return `No answer captured. Ask the user this in your reply, then continue.\n\nQuestion: ${question}`;
   }
@@ -163,7 +183,7 @@ async function handleScout(task: Task, params: OrchestrateParams, deps: Workflow
       taskId: task.id,
       taskText: task.title,
       instruction: params.instruction?.trim() || "Investigate this request and report findings the Master needs.",
-      domains: domains as ScoutOutcome["result"]["domain"][],
+      domains,
       cwd: deps.cwd,
       dataRoot: dataRoot(deps.root, deps.configDir),
       taskDir: taskDirFor(deps.root, deps.configDir, task.id),
@@ -189,17 +209,12 @@ async function handlePropose(task: Task, params: OrchestrateParams, deps: Workfl
   writeFileEnsured(join(taskDirFor(deps.root, deps.configDir, task.id), "proposal.md"), proposal);
   for (const concern of params.concerns ?? []) recordDecision(task, `Concern: ${concern}`);
   transition(task, "awaiting_approval");
-  if (!deps.config.workflow.requireApprovalForFeatures) {
-    return applyApprovalChoice(task, "approve");
-  }
+  if (!deps.config.workflow.requireApprovalForFeatures) return applyApprovalChoice(task, "approve");
   const choice = await deps.choose(`Approve this proposal?\n\n${truncate(proposal, 2000)}`, APPROVAL_OPTIONS);
   if (!choice) return `Awaiting approval. Present the proposal to the user and continue after they respond.\n\n${proposal}`;
-  const kind: ApprovalChoice = choice.toLowerCase().startsWith("approve")
-    ? "approve"
-    : choice.toLowerCase().startsWith("decline")
-      ? "decline"
-      : "amend";
-  if (kind !== "amend") return applyApprovalChoice(task, kind);
+  const lower = choice.toLowerCase();
+  if (lower.startsWith("approve")) return applyApprovalChoice(task, "approve");
+  if (lower.startsWith("decline")) return applyApprovalChoice(task, "decline");
   return applyApprovalChoice(task, "amend", await deps.ask("What should change?"));
 }
 
@@ -211,7 +226,112 @@ function handlePlan(task: Task, params: OrchestrateParams, deps: WorkflowDeps): 
   if (missing.length > 0) throw new Error(`plan is missing: ${missing.join(", ")}`);
   task.plan = plan;
   writeFileEnsured(join(taskDirFor(deps.root, deps.configDir, task.id), "plan.md"), plan);
-  return "Plan recorded. Next: pick the first domain and call action=implement with domain and task.";
+  return "Plan recorded. Next: call action=implement with domain and task for the first step.";
+}
+
+/** Record approvals a worker asked for; auto-approve when config allows it. */
+function recordWorkerApprovals(task: Task, outcome: WorkerOutcome, config: DevHouseConfig): Approval[] {
+  const created: Approval[] = [];
+  const kinds: Array<[ApprovalKind, string, string[], boolean]> = [
+    ["dependency", "dependencies", outcome.result.dependencyNeeds, config.workflow.requireApprovalForDependencies],
+    ["architecture", "architecture changes", outcome.result.architectureChanges, config.workflow.requireApprovalForArchitectureChanges],
+  ];
+  for (const [kind, label, items, required] of kinds) {
+    for (const detail of items) {
+      if (required) created.push(requestApproval(task, kind, outcome.result.domain, detail));
+      else recordDecision(task, `Auto-approved ${label}: ${detail}`, outcome.result.domain);
+    }
+  }
+  return created;
+}
+
+function workerReport(outcome: WorkerOutcome, approvals: Approval[]): string {
+  const { result, run, issues } = outcome;
+  return [
+    `Worker ${result.domain}: ${run.status}${run.error ? ` (${run.error})` : ""}`,
+    result.completed ? `Completed: ${truncate(result.completed, 1200)}` : "",
+    result.filesChanged.length > 0
+      ? `Files changed:\n${result.filesChanged.map((file) => `- ${file.path} — ${file.change}`).join("\n")}`
+      : "",
+    result.verification ? `Verification: ${truncate(result.verification, 600)}` : "",
+    result.blockers.length > 0
+      ? `Blocked: ${result.blockers.map((blocker) => `${blocker.reason} (need: ${blocker.need})`).join("; ")}`
+      : "",
+    approvals.length > 0
+      ? `Approvals required before more ${result.domain} work: ${approvals.map((a) => `${a.id} ${a.kind}: ${a.detail}`).join("; ")}. Resolve with action=resolve_approval.`
+      : "",
+    issues.length > 0 ? `Issues: ${issues.join("; ")}` : "",
+    "Next: inspect the diff, then run action=review for this domain.",
+  ]
+    .filter((line) => line.length > 0)
+    .join("\n");
+}
+
+function updateScratchpad(deps: WorkflowDeps, task: Task, outcome: WorkerOutcome): void {
+  const dir = taskDirFor(deps.root, deps.configDir, task.id);
+  const domain = outcome.result.domain;
+  const existing = readFileOr(scratchpadPath(dir, domain)).replace(/^#\s.*\n/, "").trim();
+  const entry = [
+    `### ${outcome.run.finishedAt ?? outcome.run.startedAt}`,
+    outcome.result.completed || outcome.run.error || "no summary",
+    ...outcome.result.filesChanged.map((file) => `- ${file.path}: ${file.change}`),
+  ].join("\n");
+  writeScratchpad(dir, domain, [existing, entry].filter(Boolean).join("\n\n"), deps.config.knowledge);
+}
+
+function workerTaskText(task: Task): string {
+  return [
+    `Requirements: ${task.title}`,
+    task.proposal ? `Approved objective: ${task.proposal}` : "",
+    task.plan ? `Approved plan:\n${truncate(task.plan, 6000)}` : "",
+    task.amendments.length > 0 ? `User amendments:\n${task.amendments.map((entry) => `- ${entry}`).join("\n")}` : "",
+  ]
+    .filter((line) => line.length > 0)
+    .join("\n\n");
+}
+
+function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instruction: string): WorkerRequest {
+  return {
+    taskId: task.id,
+    domain,
+    instruction,
+    taskText: workerTaskText(task),
+    scoutOutcomes: loadScoutResults(taskDirFor(deps.root, deps.configDir, task.id), [domain]),
+    cwd: deps.cwd,
+    dataRoot: dataRoot(deps.root, deps.configDir),
+    config: deps.config,
+    signal: deps.signal,
+    onUpdate: deps.onUpdate,
+  };
+}
+
+async function handleImplement(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
+  requireState(task, ["planning", "implementing", "reviewing"]);
+  const domain = parseDomain(params.domain, "implement");
+  const instruction = params.task?.trim();
+  if (!instruction) throw new Error("implement requires task (what to implement)");
+  assertNoPendingApprovals(task, domain);
+  if (!task.domains.includes(domain)) task.domains.push(domain);
+  if (task.state !== "implementing") transition(task, "implementing");
+  const outcome = await runWorker(workerRequest(deps, task, domain, instruction), deps.runProcess ?? spawnPiProcess);
+  const approvals = recordWorkerApprovals(task, outcome, deps.config);
+  task.blockers = [...task.blockers.filter((blocker) => blocker.domain !== domain), ...outcome.result.blockers];
+  updateScratchpad(deps, task, outcome);
+  return workerReport(outcome, approvals);
+}
+
+function handleResolveApproval(task: Task, params: OrchestrateParams): string {
+  const id = params.approvalId?.trim();
+  const decision = params.decision;
+  if (!id || (decision !== "approved" && decision !== "rejected")) {
+    throw new Error("resolve_approval requires approvalId and decision (approved|rejected)");
+  }
+  const approval = resolveApproval(task, id, decision, params.note);
+  if (!approval) throw new Error(`no pending approval "${id}"`);
+  recordDecision(task, `${decision} ${approval.kind} for ${approval.domain}: ${approval.detail}`);
+  return decision === "approved"
+    ? `${id} approved. The ${approval.domain} worker may now proceed with: ${approval.detail}`
+    : `${id} rejected. Instruct the ${approval.domain} worker to achieve the goal without that change.`;
 }
 
 function handleDecide(task: Task, params: OrchestrateParams): string {
@@ -232,6 +352,8 @@ const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams
   scout: handleScout,
   propose: handlePropose,
   plan: handlePlan,
+  implement: handleImplement,
+  resolve_approval: handleResolveApproval,
   decide: handleDecide,
   status: (task) => describeTask(task),
   cancel: handleCancel,

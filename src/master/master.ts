@@ -2,12 +2,14 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DevHouseConfig } from "../schemas/configuration.ts";
 import type { Domain } from "../schemas/agent.ts";
-import type { AgentRun, ScoutResult } from "../schemas/findings.ts";
+import type { AgentRun, ScoutResult, WorkerResult } from "../schemas/findings.ts";
 import { domainSpec } from "../agents/registry.ts";
-import { runParallel, type AgentRequest } from "../execution/agent-runner.ts";
+import { runAgent, runParallel, type AgentRequest } from "../execution/agent-runner.ts";
 import { spawnPiProcess, type ProcessRunner } from "../execution/pi-runner.ts";
 import { readAgentKnowledge, writeFileEnsured } from "../knowledge/store.ts";
 import { selectKnowledge } from "../knowledge/selector.ts";
+import { summarizeOutcomes } from "./synthesis.ts";
+import { parseWorkerResult, validateWorkerResult } from "../roles/worker.ts";
 import { isScoutResultUsable, parseScoutResult, validateScoutResult } from "../roles/scout.ts";
 
 export interface ScoutOutcome {
@@ -112,4 +114,71 @@ export function loadScoutResults(taskDir: string, domains: Domain[]): ScoutOutco
     }
   }
   return outcomes;
+}
+
+export interface WorkerOutcome {
+  result: WorkerResult;
+  run: AgentRun;
+  issues: string[];
+}
+
+export interface WorkerRequest {
+  taskId: string;
+  domain: Domain;
+  /** What the Master wants implemented. */
+  instruction: string;
+  /** Requirements + approved objective + approved plan. */
+  taskText: string;
+  scoutOutcomes: ScoutOutcome[];
+  cwd: string;
+  dataRoot: string;
+  config: DevHouseConfig;
+  signal?: AbortSignal;
+  onUpdate?: (run: AgentRun) => void;
+}
+
+function workerWorkflowContext(request: WorkerRequest): string {
+  const spec = domainSpec(request.domain);
+  const own = request.scoutOutcomes.filter(
+    (outcome) => outcome.result.domain === request.domain && outcome.usable,
+  );
+  return [
+    `Task state: implementing. Domain: ${request.domain}.`,
+    `Domain boundary: ${spec.boundary}`,
+    "Dependency policy: never add a dependency or make a significant architectural change yourself; list them under the matching output section and stop that part of the work.",
+    own.length > 0
+      ? `Scout findings for your domain:\n${summarizeOutcomes(own, 1500)}`
+      : "No scout findings were collected for your domain; verify the repository yourself.",
+  ].join("\n\n");
+}
+
+/** Delegate one implementation step to a domain worker. */
+export async function runWorker(
+  request: WorkerRequest,
+  run: ProcessRunner = spawnPiProcess,
+): Promise<WorkerOutcome> {
+  const slices = readAgentKnowledge(request.dataRoot, request.domain);
+  const selected = selectKnowledge(`${request.taskText} ${request.instruction}`, slices);
+  const agentRun = await runAgent(
+    {
+      taskId: request.taskId,
+      domain: request.domain,
+      role: "worker",
+      instruction: request.instruction,
+      context: { task: request.taskText, ...selected, workflowContext: workerWorkflowContext(request) },
+      model: resolveModel(request.config, request.domain),
+      thinking: request.config.agents[request.domain].thinking,
+      timeoutMs: request.config.workflow.agentTimeoutMs,
+      cwd: request.cwd,
+      signal: request.signal,
+      onUpdate: request.onUpdate,
+    },
+    run,
+  );
+  const result = parseWorkerResult(request.domain, agentRun.output);
+  const issues =
+    agentRun.status === "success"
+      ? validateWorkerResult(result)
+      : [`worker ${agentRun.status}: ${agentRun.error ?? "no detail"}`];
+  return { result, run: agentRun, issues };
 }

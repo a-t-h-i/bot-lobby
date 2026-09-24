@@ -24,6 +24,10 @@ them.
 - Do not make significant architecture changes without approval.
 - Do not make unrelated changes.
 
+If you need a new dependency, or you believe a significant architectural
+change is required, do not make that change. Report it under the matching
+section of your output instead and continue with the rest of the work.
+
 ## Testing
 
 Run the project's existing test commands. New public behavior, endpoints, and
@@ -52,5 +56,11 @@ What was implemented.
 Important implementation details.
 
 ## Blockers
-Only if applicable.
+Only if applicable. Use `**Blocker:**`, `**Tried:**`, `**Need:**`.
+
+## Dependencies Needed
+Dependencies you need but did not install. One per line.
+
+## Architecture Changes
+Significant architectural changes you believe are required but did not make.
 ```

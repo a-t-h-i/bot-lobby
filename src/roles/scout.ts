@@ -1,6 +1,6 @@
 import type { Domain, RoleSpec } from "../schemas/agent.ts";
-import type { RelevantFile, ScoutResult } from "../schemas/findings.ts";
-import { bullets, findSection, parseSections } from "./markdown.ts";
+import type { ScoutResult } from "../schemas/findings.ts";
+import { bullets, findSection, parseFileBullet, parseSections } from "./markdown.ts";
 
 /** Scout runs read-only so it can never modify implementation. */
 export const scoutSpec: RoleSpec = {
@@ -18,11 +18,6 @@ export const scoutSpec: RoleSpec = {
   ].join(" "),
 };
 
-function parseFileBullet(text: string): RelevantFile {
-  const match = /^`?([^`\s]+)`?\s*(?:[—–]|--|-)\s*(.*)$/.exec(text);
-  if (match) return { path: match[1]!, reason: match[2]!.trim() };
-  return { path: text.trim(), reason: "" };
-}
 
 function parseConfidence(text: string | undefined): ScoutResult["confidence"] {
   const value = (text ?? "").toLowerCase();

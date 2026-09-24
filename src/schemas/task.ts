@@ -21,6 +21,7 @@ export type Verdict = "pass" | "changes_required" | "blocked";
 export type Severity = "critical" | "major" | "minor" | "info";
 
 export interface Blocker {
+  domain: Domain;
   reason: string;
   tried: string[];
   need: string;
