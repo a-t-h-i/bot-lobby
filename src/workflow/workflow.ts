@@ -6,7 +6,7 @@ import { isDomain, type Domain } from "../schemas/agent.ts";
 import { transition } from "../state/task-state.ts";
 import { activeTask, loadTask, removeTaskScratchpads, saveTask, taskDirFor } from "../state/persistence.ts";
 import { dataRoot } from "../state/project.ts";
-import { appendCompletedTask, readFileOr, writeFileEnsured } from "../knowledge/store.ts";
+import { appendCompletedTask, appendDecision, applyKnowledge, readFileOr, writeFileEnsured, type KnowledgeKind } from "../knowledge/store.ts";
 import { knowledgeDir, scratchpadPath, type KnowledgeAgent } from "../knowledge/paths.ts";
 import { writeScratchpad } from "../state/persistence.ts";
 import { spawnPiProcess, type ProcessRunner } from "../execution/pi-runner.ts";
@@ -37,6 +37,7 @@ export const ORCHESTRATE_ACTIONS = [
   "resolve_approval",
   "review",
   "qa",
+  "knowledge",
   "complete",
   "block",
   "resume",
@@ -59,6 +60,8 @@ export interface OrchestrateParams {
   domain?: string;
   /** implement/review: the concrete instruction for the worker. */
   task?: string;
+  /** knowledge: which persistent file the text belongs to. */
+  kind?: KnowledgeKind;
   approvalId?: string;
   decision?: "approved" | "rejected";
   note?: string;
@@ -277,6 +280,9 @@ function workerReport(outcome: WorkerOutcome, approvals: Approval[]): string {
     approvals.length > 0
       ? `Approvals required before more ${result.domain} work: ${approvals.map((a) => `${a.id} ${a.kind}: ${a.detail}`).join("; ")}. Resolve with action=resolve_approval.`
       : "",
+    result.knowledgeProposals.length > 0
+      ? `Knowledge proposals (accept with action=knowledge, or ignore): ${result.knowledgeProposals.map((proposal) => `${proposal.kind}: ${truncate(proposal.content, 160)}`).join("; ")}`
+      : "",
     issues.length > 0 ? `Issues: ${issues.join("; ")}` : "",
     "Next: inspect the diff, then run action=review for this domain.",
   ]
@@ -481,17 +487,42 @@ async function handleQa(task: Task, params: OrchestrateParams, deps: WorkflowDep
   return qaReport(outcome);
 }
 
+/**
+ * §22: the only path into persistent knowledge, and it is Master-only because
+ * domain agents never receive this tool. Proposals are accepted by calling this
+ * with rewritten text, or silently dropped by not calling it.
+ */
+function handleKnowledge(task: Task, params: OrchestrateParams, deps: WorkflowDeps): string {
+  const text = params.text?.trim();
+  if (!text) throw new Error("knowledge requires text");
+  const kind: KnowledgeKind = params.kind ?? "knowledge";
+  const agent: KnowledgeAgent = params.domain && isDomain(params.domain) ? params.domain : "master";
+  const outcome = applyKnowledge({ dataRoot: dataRoot(deps.root, deps.configDir), agent, kind, text });
+  if (outcome.result === "empty") throw new Error("knowledge text is empty");
+  if (outcome.result === "duplicate") return `Already recorded in ${outcome.path}; nothing changed.`;
+  recordDecision(task, `Recorded ${kind} for ${agent}: ${truncate(text, 200)}`);
+  return `Recorded ${kind} for ${agent} in ${outcome.path}.`;
+}
+
 /** §63: record history, drop scratchpads, then mark the task completed. */
 function handleComplete(task: Task, params: OrchestrateParams, deps: WorkflowDeps): string {
   requireState(task, ["reviewing"]);
   const blockers = completionBlockers(task, pendingApprovals(task).length);
   if (blockers.length > 0) throw new Error(`cannot complete: ${blockers.join("; ")}`);
   const summary = params.text?.trim() || task.proposal || task.title;
+  flushDecisions(deps, task);
   recordCompletion(deps, task, summary);
   removeTaskScratchpads(deps.root, deps.configDir, task.id);
   task.blockers = [];
   transition(task, "completed");
   return `Task ${task.id} completed. History recorded for the involved domains and the temporary scratchpads removed.`;
+}
+
+function flushDecisions(deps: WorkflowDeps, task: Task): void {
+  const root = dataRoot(deps.root, deps.configDir);
+  for (const decision of task.decisions) {
+    appendDecision(knowledgeDir(root, decision.domain), `${task.id} ${decision.text}`);
+  }
 }
 
 function recordCompletion(deps: WorkflowDeps, task: Task, summary: string): void {
@@ -542,6 +573,7 @@ const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams
   resolve_approval: handleResolveApproval,
   review: handleReview,
   qa: handleQa,
+  knowledge: handleKnowledge,
   complete: handleComplete,
   block: handleBlock,
   resume: handleResume,

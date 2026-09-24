@@ -31,7 +31,12 @@ const OrchestrateSchema = Type.Object({
   ),
   note: Type.Optional(Type.String({ description: "resolve_approval: rationale, or what to do instead when rejected" })),
   reason: Type.Optional(Type.String({ description: "block: why the task cannot continue" })),
-  text: Type.Optional(Type.String({ description: "decide/complete: the decision, or the completion summary" })),
+  text: Type.Optional(Type.String({ description: "decide/complete/knowledge: the decision, completion summary, or knowledge text" })),
+  kind: Type.Optional(
+    StringEnum(["knowledge", "standard", "decision", "completed"] as const, {
+      description: "knowledge: which persistent file the text belongs to",
+    }),
+  ),
 });
 
 const DESCRIPTION = [
@@ -39,8 +44,8 @@ const DESCRIPTION = [
   "Actions: clarify (ask the user), scout (domain reconnaissance in parallel), propose (record the",
   "proposal and request approval), plan (record the internal plan), implement (delegate one step to a",
   "domain worker), review (independent verification of the current diff), qa (final quality gate),",
-  "resolve_approval (approve or reject a dependency/architecture request), complete (declare the task",
-  "done after the gates pass), block/resume (escalate or continue), decide (record a decision), status, cancel.",
+  "knowledge (record approved knowledge or a decision), resolve_approval (approve or reject a request),",
+  "complete (declare the task done after the gates pass), block/resume (escalate or continue), status, cancel.",
   "The engine validates every step against the task state machine, so a rejected action means the",
   "workflow is not at that step yet.",
 ].join(" ");

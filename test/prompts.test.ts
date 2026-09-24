@@ -27,15 +27,16 @@ test("compiler layers global, domain, role, task, then contract in order", () =>
     decisions: "REST over GraphQL.",
     workflowContext: "Task state: implementing.",
   });
+  // Markers use the injected content so a prompt file cannot collide with them.
   const order = [
     "Global Engineering Agent",
     "Backend Domain Agent",
     "Worker Role",
-    "## Task Context",
-    "## Standards",
-    "## Knowledge",
-    "## Decisions",
-    "## Workflow Context",
+    "Add pagination to /users",
+    "Always validate input.",
+    "Service layer lives in src/services.",
+    "REST over GraphQL.",
+    "Task state: implementing.",
     "### Output contract",
   ];
   let cursor = -1;

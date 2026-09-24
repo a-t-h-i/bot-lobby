@@ -58,8 +58,10 @@ Important implementation details.
 ## Blockers
 Only if applicable. Use `**Blocker:**`, `**Tried:**`, `**Need:**`.
 
-## Dependencies Needed
-Dependencies you need but did not install. One per line.
+## Knowledge Proposals
+Durable project knowledge worth keeping, one per line as `- knowledge: ...`,
+`- standard: ...`, or `- decision: ...`. Only stable, reusable facts — never
+temporary observations or obvious details.
 
 ## Architecture Changes
 Significant architectural changes you believe are required but did not make.

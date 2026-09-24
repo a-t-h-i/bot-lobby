@@ -1,6 +1,6 @@
 import type { Domain, RoleSpec } from "../schemas/agent.ts";
 import type { Blocker } from "../schemas/task.ts";
-import type { FileChange, WorkerResult } from "../schemas/findings.ts";
+import type { FileChange, KnowledgeProposal, WorkerResult } from "../schemas/findings.ts";
 import { bullets, findSection, parseFileBullet, parseSections } from "./markdown.ts";
 
 /** Worker has no tool allowlist: it needs the full set to implement. */
@@ -10,7 +10,8 @@ export const workerSpec: RoleSpec = {
   contract: [
     "### Output contract",
     "Respond with exactly these sections and nothing else: `## Completed`, `## Files Changed`,",
-    "`## Verification`, `## Notes`, `## Blockers`, `## Dependencies Needed`, `## Architecture Changes`.",
+    "`## Verification`, `## Notes`, `## Blockers`, `## Dependencies Needed`, `## Architecture Changes`,",
+    "`## Knowledge Proposals` (`- knowledge: ...`, `- standard: ...`, or `- decision: ...`).",
     "`## Files Changed` entries are `- \\`path\\` — change`.",
     "`## Verification` entries are `- command — result`.",
     "Blocked work uses `**Blocker:**`, `**Tried:**`, `**Need:**` under `## Blockers`.",
@@ -18,6 +19,15 @@ export const workerSpec: RoleSpec = {
     "the matching section instead. Do not narrate. Report only what you actually changed and verified.",
   ].join(" "),
 };
+
+/** Parse `- kind: text` proposals; unknown kinds fall back to plain knowledge. */
+export function parseKnowledgeProposals(domain: Domain, text: string | undefined): KnowledgeProposal[] {
+  return bullets(text).map((entry) => {
+    const match = /^(knowledge|standard|decision|completed)\s*:\s*(.+)$/i.exec(entry);
+    const kind = (match?.[1]?.toLowerCase() ?? "knowledge") as KnowledgeProposal["kind"];
+    return { domain, kind, content: (match?.[2] ?? entry).trim() };
+  });
+}
 
 function fieldValue(body: string, name: string): string | undefined {
   const match = new RegExp(`\\*\\*${name}:\\*\\*\\s*(.+)`, "i").exec(body);
@@ -66,7 +76,7 @@ export function parseWorkerResult(domain: Domain, raw: string, now = new Date().
     verification: findSection(sections, "verification") ?? "",
     notes: findSection(sections, "notes") ?? "",
     blockers: parseBlockers(sections, domain, now),
-    knowledgeProposals: [],
+    knowledgeProposals: parseKnowledgeProposals(domain, findSection(sections, "knowledge proposals")),
     dependencyNeeds: bullets(findSection(sections, "dependencies needed")),
     architectureChanges: bullets(findSection(sections, "architecture changes")),
     raw,

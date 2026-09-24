@@ -30,15 +30,59 @@ export function ensureFile(path: string, content: string): void {
   if (!existsSync(path)) writeFileEnsured(path, content);
 }
 
-/** Append one operational-history line to an agent's completed-tasks log. */
-export function appendCompletedTask(dir: string, line: string, now = new Date()): void {
-  const path = join(dir, "completed-tasks.md");
+/** Append a line under a date heading, creating the heading when needed. */
+function appendDatedEntry(path: string, line: string, now: Date): void {
   const date = now.toISOString().slice(0, 10);
-  const existing = readFileOr(path, "# Completed Tasks\n");
-  const body = existing.trimEnd();
-  const entry = `\n# ${date}\n\n- [x] ${line}\n`;
-  const withDate = body.includes(`# ${date}`) ? `${body}${entry.replace(`\n# ${date}\n\n`, "\n")}` : `${body}${entry}`;
-  writeFileEnsured(path, withDate);
+  const header = `# ${date}`;
+  const body = readFileOr(path, "").trimEnd();
+  const updated = body.includes(header) ? `${body}\n${line}` : `${body}\n\n${header}\n\n${line}`;
+  writeFileEnsured(path, `${updated.trimStart()}\n`);
+}
+
+/** Append one operational-history line to an agent's completed-tasks log. */
+export function appendCompletedTask(dir: string, text: string, now = new Date()): void {
+  appendDatedEntry(join(dir, "completed-tasks.md"), `- [x] ${text}`, now);
+}
+
+/** Append one decision to an agent's decisions log. */
+export function appendDecision(dir: string, text: string, now = new Date()): void {
+  appendDatedEntry(join(dir, "decisions.md"), `- ${text}`, now);
+}
+
+export type KnowledgeKind = "knowledge" | "standard" | "decision" | "completed";
+
+/** The persistent file a knowledge kind belongs to for one agent (§21). */
+export function knowledgeFilePath(dataRoot: string, agent: KnowledgeAgent, kind: KnowledgeKind): string {
+  const dir = knowledgeDir(dataRoot, agent);
+  if (kind === "knowledge") return join(dir, "knowledge.md");
+  if (kind === "standard") return join(dir, STANDARDS_FILE[agent]);
+  if (kind === "decision") return join(dir, "decisions.md");
+  return join(dir, "completed-tasks.md");
+}
+
+export interface KnowledgeEntry {
+  dataRoot: string;
+  agent: KnowledgeAgent;
+  kind: KnowledgeKind;
+  text: string;
+  now?: Date;
+}
+
+/**
+ * The only write path into persistent knowledge. Deduplicates before writing,
+ * so re-accepting the same insight cannot bloat the file.
+ */
+export function applyKnowledge(entry: KnowledgeEntry): { path: string; result: "added" | "duplicate" | "empty" } {
+  const text = entry.text.trim();
+  if (!text) return { path: "", result: "empty" };
+  const path = knowledgeFilePath(entry.dataRoot, entry.agent, entry.kind);
+  const existing = readFileOr(path);
+  if (existing.toLowerCase().includes(text.toLowerCase())) return { path, result: "duplicate" };
+  const now = entry.now ?? new Date();
+  if (entry.kind === "decision") appendDecision(dirname(path), text, now);
+  else if (entry.kind === "completed") appendCompletedTask(dirname(path), text, now);
+  else writeFileEnsured(path, `${existing.trimEnd()}\n\n${text}\n`);
+  return { path, result: "added" };
 }
 
 /** Read an agent's knowledge slices for prompt context selection (§23). */
