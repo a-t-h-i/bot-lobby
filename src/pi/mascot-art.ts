@@ -3,9 +3,10 @@ import type { TaskState } from "../schemas/task.ts";
 /**
  * Pure ASCII art data for the scene-based zen panel. No logic lives here:
  * the shapes, labels, props, captions and layout templates are constants that
- * `zen.ts` composes. Every glyph is exactly one visible column so the diorama
- * stays narrow/ambiguous-width safe; the only non-ASCII glyphs are the house `⌂`
- * in `BANNER_NARROW` and the panel's ◐/✓/✗ status family.
+ * `zen.ts` and `zen-large.ts` compose. Every glyph is exactly one visible
+ * column so the art stays narrow/ambiguous-width safe: the non-ASCII glyphs are
+ * the house `⌂` in `BANNER_NARROW`, the panel's ◐/✓/✗ status family, and the
+ * box-drawing, bar and eye glyphs of the large scene (─ │ ┌ ┐ └ ┘ ├ ┤ ┬ ┴ ═ █ ▓ ░ ◉ ◍ ◎ ◌ ○).
  */
 
 /** The four blob mascots that are always present in the scene. */
@@ -178,4 +179,192 @@ export const DIORAMA: { full: DioramaSpec; compact: DioramaSpec } = {
     propRows: [0],
     propColumn: 1,
   },
+};
+
+/* -------------------------------------------------------------------------
+ * Large scene (>= LARGE_MIN_WIDTH columns, composed by zen-large.ts).
+ *
+ * The 58-column full diorama above and the four-mascot `BLOB_*` art stay until
+ * the backend pass moves zen.ts onto this slot roster; they are then dead and
+ * can be deleted with the compact strip's own wiring.
+ * ---------------------------------------------------------------------- */
+
+/** The four agent columns of the large scene, in the order the scene draws them. */
+export type SlotId = "dev" | "design" | "research" | "qa";
+
+export const SLOT_IDS: readonly SlotId[] = ["dev", "design", "research", "qa"];
+
+/** Uppercase column captions; RESEARCH is the longest at 8 columns. */
+export const SLOT_LABELS: Record<SlotId, string> = {
+  dev: "DEV",
+  design: "DESIGN",
+  research: "RESEARCH",
+  qa: "QA",
+};
+
+/** Status the roster reports; drives the face, the colour and the state word. */
+export type SlotState = "working" | "idle" | "done" | "failed";
+
+export const SLOT_STATES: readonly SlotState[] = ["working", "idle", "done", "failed"];
+
+export const SLOT_STATE_WORDS: Record<SlotState, string> = {
+  working: "working",
+  idle: "idle",
+  done: "done",
+  failed: "failed",
+};
+
+/** The slice of a panel theme's colour vocabulary this art maps onto. */
+export type PanelColor = "accent" | "muted" | "dim" | "success" | "error" | "warning";
+
+/** Status -> colour for the face, state word and bar fill. Working is bold as well. */
+export const SLOT_STATE_COLORS: Record<SlotState, { color: PanelColor; bold: boolean }> = {
+  working: { color: "accent", bold: true },
+  idle: { color: "dim", bold: false },
+  done: { color: "success", bold: false },
+  failed: { color: "error", bold: false },
+};
+
+/** Ten-cell progress bar; the caller fills `cells` of it from a percentage. */
+export const BAR = { filled: "█", empty: "░", cells: 10 } as const;
+
+/** The master's pose: orchestrating while the task is live, dormant when paused or finished. */
+export type OraclePose = "orchestrating" | "dormant";
+
+export const ORACLE_POSES: readonly OraclePose[] = ["orchestrating", "dormant"];
+
+export const ORACLE_WORDS: Record<OraclePose, string> = {
+  orchestrating: "orchestrating",
+  dormant: "dormant",
+};
+
+export const ORACLE_COLORS: Record<OraclePose, { color: PanelColor; bold: boolean }> = {
+  orchestrating: { color: "accent", bold: true },
+  dormant: { color: "dim", bold: false },
+};
+
+/** One oracle frame: the tower orb plus both window eyes, each exactly one column. */
+export interface OracleFrame {
+  orb: string;
+  winL: string;
+  winR: string;
+}
+
+/**
+ * Orb pulse and window-eye tracking per pose. Orchestrating sweeps the eyes and
+ * pulses the orb; dormant half-closes them and dims the orb. Every alternate is
+ * one column wide, so a frame swap never moves the tower geometry.
+ */
+export const ORACLE_FRAMES: Record<OraclePose, readonly OracleFrame[]> = {
+  orchestrating: [
+    { orb: "◉", winL: "◉", winR: "◉" },
+    { orb: "◍", winL: "◉", winR: "◉" },
+    { orb: "◉", winL: "◍", winR: "◉" },
+    { orb: "◉", winL: "◉", winR: "◍" },
+    { orb: "◎", winL: "◉", winR: "◉" },
+    { orb: "◉", winL: "─", winR: "─" },
+    { orb: "◍", winL: "◍", winR: "◍" },
+    { orb: "◉", winL: "◉", winR: "◉" },
+  ],
+  dormant: [
+    { orb: "◌", winL: "◌", winR: "◌" },
+    { orb: "○", winL: "◌", winR: "◌" },
+    { orb: "◌", winL: "─", winR: "─" },
+    { orb: "◌", winL: "◌", winR: "◌" },
+  ],
+};
+
+/**
+ * Eye-shift and blink frames per status, one row each: working looks around and
+ * blinks, idle droops, done is calm and content, failed winces. Same length for
+ * every state so the caller's frame index stays comparable across statuses.
+ */
+const FACE_FRAMES: Record<SlotState, readonly string[]> = {
+  working: ["(^_^)", "(^-^)", "(^o^)", "(^_^)", "(-_-)", "(-.-)", "(^o^)", "(^_^)"],
+  idle: ["(-_-)", "(-_-)", "(u_u)", "(-.-)", "(-_-)", "(-_-)", "(u_u)", "(-.-)"],
+  done: ["(o_o)", "(^_^)", "(o_o)", "(^-^)", "(o_-)", "(o_o)", "(-_-)", "(^_^)"],
+  failed: ["(>_<)", "(>o<)", "(x_x)", "(>_<)", "(T_T)", "(>_<)", "(;_;)", "(>o<)"],
+};
+
+/** Every face is five columns, so a centered column never shifts between frames. */
+export const FACE_WIDTH = 5;
+
+function buildSlotFrames(): Record<SlotState, readonly string[][]> {
+  const frames = {} as Record<SlotState, readonly string[][]>;
+  for (const state of SLOT_STATES) frames[state] = FACE_FRAMES[state].map((face) => [face]);
+  return frames;
+}
+
+/** Animated faces per slot: frames of one row each, identical width in every frame. */
+export const SLOT_FRAMES: Record<SlotId, Record<SlotState, readonly string[][]>> = {
+  dev: buildSlotFrames(),
+  design: buildSlotFrames(),
+  research: buildSlotFrames(),
+  qa: buildSlotFrames(),
+};
+
+/** Three-column accessory that marks each slot in the one-row compact strip. */
+export const SLOT_MARKS: Record<SlotId, string> = {
+  dev: "[=]",
+  design: "~,~",
+  research: "<?>",
+  qa: "<o>",
+};
+
+/** Eight columns: the slot's accessory followed by one face frame. */
+export const COMPACT_WIDTH = 8;
+
+function buildCompactFrames(id: SlotId): Record<SlotState, readonly string[]> {
+  const mark = SLOT_MARKS[id];
+  const frames = {} as Record<SlotState, readonly string[]>;
+  for (const state of SLOT_STATES) frames[state] = FACE_FRAMES[state].map((face) => `${mark}${face}`);
+  return frames;
+}
+
+/** Animated one-row sprites per slot and status for the compact strip. */
+export const COMPACT_FRAMES: Record<SlotId, Record<SlotState, readonly string[]>> = {
+  dev: buildCompactFrames("dev"),
+  design: buildCompactFrames("design"),
+  research: buildCompactFrames("research"),
+  qa: buildCompactFrames("qa"),
+};
+
+/**
+ * The oracle tower: 13 columns wide, `rows` while height allows and `smallRows`
+ * when it must shrink. `{orb}` is the pulsing bead, `{winL}`/`{winR}` the two
+ * window eyes and `{door}` the name over the door.
+ */
+export interface TowerSpec {
+  rows: readonly string[];
+  smallRows: readonly string[];
+  tokens: { orb: string; winL: string; winR: string; door: string };
+}
+
+export const TOWER_WIDTH = 13;
+
+export const TOWER_DOOR = "ORC";
+
+export const TOWER: TowerSpec = {
+  rows: [
+    "     \\|/     ",
+    "     ─{orb}─     ",
+    "      │      ",
+    "┌─────┴─────┐",
+    "│ ┌─┐   ┌─┐ │",
+    "│ │{winL}│   │{winR}│ │",
+    "│ └─┘   └─┘ │",
+    "│  ═══════  │",
+    "├───┬───┬───┤",
+    "│▓▓▓│{door}│▓▓▓│",
+    "└───┴───┴───┘",
+  ],
+  smallRows: [
+    "     ─{orb}─     ",
+    "┌─────┴─────┐",
+    "│ ┌─┐   ┌─┐ │",
+    "│ │{winL}│   │{winR}│ │",
+    "│▓▓▓│{door}│▓▓▓│",
+    "└───┴───┴───┘",
+  ],
+  tokens: { orb: "{orb}", winL: "{winL}", winR: "{winR}", door: "{door}" },
 };
