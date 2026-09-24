@@ -144,6 +144,8 @@ export function spawnPiProcess(args: string[], options: { cwd: string; signal?: 
     const invocation = resolvePiInvocation(args);
     const proc = spawn(invocation.command, invocation.args, {
       cwd: options.cwd,
+      // Marks subagent processes so dev-house skips master-only quiet wiring.
+      env: { ...process.env, DEV_HOUSE_SUBAGENT: "1" },
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
     });

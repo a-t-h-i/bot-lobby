@@ -7,7 +7,7 @@ import type { ProcessRunner } from "../execution/pi-runner.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { truncate } from "../text.ts";
 import { applyStatus, summarizeRun } from "./ui.ts";
-import { isZenActive } from "./zen.ts";
+import { isQuiet } from "./quiet.ts";
 import {
   ORCHESTRATE_ACTIONS,
   runWorkflowAction,
@@ -121,6 +121,8 @@ export function registerOrchestrateTool(pi: ExtensionAPI, configDir: string, run
       "Use orchestrate for every dev-house workflow step; it enforces the task state machine and records results.",
     ],
     parameters: OrchestrateSchema,
+    // Self shell: an empty renderer then yields zero lines (see quiet.ts).
+    renderShell: "self",
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const root = detectProjectRoot(ctx.cwd, configDir);
       const deps = workflowDeps(ctx, configDir, signal, runReporter(onUpdate, (runs) => applyStatus(ctx, root, configDir, runs)), runProcess);
@@ -135,21 +137,19 @@ export function registerOrchestrateTool(pi: ExtensionAPI, configDir: string, run
       };
     },
     renderCall(args, theme) {
-      if (isZenActive()) return new Container();
+      if (isQuiet()) return new Container();
       const call = args as OrchestrateParams & { file?: string };
       const target = call.domain ?? call.domains?.join(", ") ?? call.file ?? "";
-      const preview = call.task ?? call.instruction ?? call.proposal ?? call.plan ?? call.text ?? "";
       const header = `${theme.fg("toolTitle", theme.bold("orchestrate"))} ${theme.fg("accent", call.action)}${target ? ` ${theme.fg("muted", target)}` : ""}`;
-      return new Text(preview ? `${header}\n${theme.fg("dim", truncate(preview, 120))}` : header, 0, 0);
+      return new Text(header, 0, 0);
     },
     renderResult(result, { expanded }, theme) {
-      if (isZenActive()) return new Container();
+      if (isQuiet()) return new Container();
       const details = result.details as Partial<WorkflowResult> | undefined;
       const body = result.content[0]?.type === "text" ? result.content[0].text : "";
       const icon = details?.ok ? theme.fg("success", "✓") : theme.fg("warning", "!");
       const header = `${icon} ${theme.fg("toolTitle", theme.bold("orchestrate"))} ${theme.fg("accent", details?.taskId ?? "")} ${theme.fg("muted", `→ ${details?.state ?? "?"}`)}`;
-      const shown = expanded ? body : body.split("\n").slice(0, 6).join("\n");
-      return new Text(`${header}\n${theme.fg("dim", shown)}`, 0, 0);
+      return new Text(expanded && body ? `${header}\n${theme.fg("dim", truncate(body, 2000))}` : header, 0, 0);
     },
   });
 }

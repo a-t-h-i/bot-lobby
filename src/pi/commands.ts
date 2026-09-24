@@ -18,7 +18,7 @@ import { AGENT_DIR_NAMES, KNOWLEDGE_FILES, knowledgeDir, type KnowledgeAgent } f
 import { readFileOr } from "../knowledge/store.ts";
 import { overThreshold } from "../knowledge/compactor.ts";
 import { applyApprovalChoice, describeTask, describeOversizedKnowledge, type ApprovalChoice } from "../workflow/workflow.ts";
-import { applyStatus } from "./ui.ts";
+import { applyStatus, registerRevealShortcut } from "./ui.ts";
 import { applyMasterModel, openSettings } from "./settings-ui.ts";
 
 const HELP = [
@@ -179,6 +179,7 @@ function showConfig(ctx: ExtensionCommandContext): void {
 }
 
 export function registerCommands(pi: ExtensionAPI, configDir: string): void {
+  registerRevealShortcut(pi, configDir);
   pi.registerCommand("dev-house", {
     description: "Structured multi-agent engineering orchestrator",
     getArgumentCompletions: (prefix) => {

@@ -85,6 +85,8 @@ export interface AgentRun {
   domain: Domain;
   role: Role;
   status: "running" | "success" | "failed" | "cancelled" | "timeout";
+  /** Concrete instruction sent for this run; lets the panel map it to a plan step. */
+  instruction?: string;
   output: string;
   error?: string;
   /** How many attempts were made; > 1 means the retry policy kicked in. */

@@ -8,6 +8,8 @@ import { cancelAllRuns } from "../execution/agent-runner.ts";
 import { describeTask } from "../workflow/workflow.ts";
 import { truncate } from "../text.ts";
 import { applyStatus, clearStatus } from "./ui.ts";
+import { isSubagentProcess, visibleTools } from "./quiet.ts";
+import { registerQuietTools } from "./tool-renderers.ts";
 import type { Task } from "../schemas/task.ts";
 
 function masterTaskContext(task: Task): string {
@@ -28,6 +30,11 @@ function masterTaskContext(task: Task): string {
  */
 export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
   pi.on("session_start", (_event, ctx) => {
+    // Master-only: subagents keep their own --tools allowlist (see quiet.ts).
+    if (!isSubagentProcess()) {
+      registerQuietTools(pi);
+      pi.setActiveTools(visibleTools(pi.getActiveTools()));
+    }
     const root = detectProjectRoot(ctx.cwd, configDir);
     applyStatus(ctx, root, configDir);
   });

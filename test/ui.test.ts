@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { statusLines, statusText, summarizeRun } from "../src/pi/ui.ts";
+import { statusText, summarizeRun } from "../src/pi/ui.ts";
+import { setQuiet } from "../src/pi/quiet.ts";
 import { createTask, type Task } from "../src/schemas/task.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
 
@@ -22,35 +23,18 @@ function task(overrides: Partial<Task> = {}): Task {
   return { ...createTask("TASK-1", "Add pagination to the users endpoint"), ...overrides };
 }
 
-test("no task means no status output", () => {
-  assert.equal(statusText(undefined), undefined);
-  assert.deepEqual(statusLines(undefined), []);
+test("status text always carries the quiet-mode hint", () => {
+  setQuiet(true);
+  assert.equal(statusText(undefined), "dev-house · tools hidden (alt+t)");
+  setQuiet(false);
+  assert.equal(statusText(undefined), "dev-house · tools shown");
+  setQuiet(true);
 });
 
 test("status text shows the task and state, including paused", () => {
-  assert.equal(statusText(task()), "dev-house TASK-1 · created");
-  assert.equal(statusText(task({ paused: true })), "dev-house TASK-1 · created (paused)");
-});
-
-test("status lines include the request and live agent badges", () => {
-  const lines = statusLines(task({ domains: ["backend"] }), [run(), run({ role: "worker", status: "success" })]);
-  assert.equal(lines[0], "dev-house TASK-1 · created");
-  assert.equal(lines[1], "Add pagination to the users endpoint");
-  assert.match(lines[2]!, /⏳ backend\/scout/);
-  assert.match(lines[2]!, /✓ backend\/worker/);
-});
-
-test("status lines surface pending approvals and blockers", () => {
-  const withApproval = task({
-    approvals: [
-      { id: "APR-1", kind: "dependency", domain: "backend", detail: "install zod", status: "pending", createdAt: "now" },
-      { id: "APR-2", kind: "dependency", domain: "backend", detail: "already handled", status: "approved", createdAt: "now" },
-    ],
-  });
-  assert.deepEqual(statusLines(withApproval).slice(2), ["approvals pending: APR-1"]);
-
-  const blocked = task({ blockers: [{ domain: "backend", reason: "schema owner must confirm", tried: [], need: "answer", createdAt: "now" }] });
-  assert.deepEqual(statusLines(blocked).slice(2), ["blocked: schema owner must confirm"]);
+  setQuiet(true);
+  assert.equal(statusText(task()), "dev-house TASK-1 · created · tools hidden (alt+t)");
+  assert.equal(statusText(task({ paused: true })), "dev-house TASK-1 · created (paused) · tools hidden (alt+t)");
 });
 
 test("summarizeRun marks running, success, and failure", () => {

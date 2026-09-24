@@ -61,6 +61,7 @@ function baseRun(request: AgentRequest, runId: string, startedAt: string, attemp
     taskId: request.taskId,
     domain: request.domain,
     role: request.role,
+    instruction: request.instruction,
     status: "running",
     output: "",
     attempts,
