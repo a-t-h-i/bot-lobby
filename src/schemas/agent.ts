@@ -9,9 +9,16 @@ export type Role = (typeof ROLES)[number];
 export const AGENT_KINDS = ["master", ...DOMAINS] as const;
 export type AgentKind = (typeof AGENT_KINDS)[number];
 
-/** Tool allowlists enforce the "no modification" boundary for read-only roles. */
-export const SCOUT_TOOLS = ["read", "grep", "find", "ls"] as const;
-export const REVIEWER_TOOLS = ["read", "grep", "find", "ls", "bash"] as const;
+/**
+ * Role definition. `tools` is the subagent tool allowlist; undefined means
+ * the full default tool set.
+ */
+export interface RoleSpec {
+  role: Role;
+  promptFile: string;
+  tools?: readonly string[];
+  contract: string;
+}
 
 export function isDomain(value: string): value is Domain {
   return (DOMAINS as readonly string[]).includes(value);

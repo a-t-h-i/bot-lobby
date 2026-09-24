@@ -1,0 +1,82 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { clearPromptCache, loadPrompt } from "../src/prompts/loader.ts";
+import { compilePrompt } from "../src/prompts/compiler.ts";
+import { ROLE_SPECS } from "../src/roles/registry.ts";
+import { DOMAINS, ROLES } from "../src/schemas/agent.ts";
+
+test("all eight prompt layers load and are non-empty", () => {
+  const files = [
+    "global.md", "master.md", "designer.md", "backend.md", "qa.md",
+    "scout.md", "worker.md", "reviewer.md",
+  ];
+  for (const file of files) {
+    assert.ok(loadPrompt(file).length > 0, `${file} should be non-empty`);
+  }
+  clearPromptCache();
+  assert.ok(loadPrompt("global.md").includes("Global Engineering Agent"));
+});
+
+test("compiler layers global, domain, role, task, then contract in order", () => {
+  const prompt = compilePrompt({
+    domain: "backend",
+    role: "worker",
+    task: "Add pagination to /users",
+    standards: "Always validate input.",
+    knowledge: "Service layer lives in src/services.",
+    decisions: "REST over GraphQL.",
+    workflowContext: "Task state: implementing.",
+  });
+  const order = [
+    "Global Engineering Agent",
+    "Backend Domain Agent",
+    "Worker Role",
+    "## Task Context",
+    "## Standards",
+    "## Knowledge",
+    "## Decisions",
+    "## Workflow Context",
+    "### Output contract",
+  ];
+  let cursor = -1;
+  for (const marker of order) {
+    const at = prompt.indexOf(marker);
+    assert.ok(at > cursor, `${marker} should appear after the previous layer`);
+    cursor = at;
+  }
+  assert.ok(prompt.includes("Add pagination to /users"));
+});
+
+test("compiler omits empty optional layers", () => {
+  const prompt = compilePrompt({ domain: "designer", role: "scout", task: "Inspect nav" });
+  assert.ok(!prompt.includes("## Standards"));
+  assert.ok(!prompt.includes("## Knowledge"));
+  assert.ok(!prompt.includes("## Decisions"));
+  assert.ok(!prompt.includes("## Workflow Context"));
+  assert.ok(prompt.includes("## Task Context"));
+});
+
+test("master prompt compiles without a role layer or contract", () => {
+  const prompt = compilePrompt({ domain: "master", task: "Add feature X" });
+  assert.ok(prompt.includes("Master / Orchestrator"));
+  assert.ok(!prompt.includes("### Output contract"));
+  assert.ok(!prompt.includes("Scout Role"));
+});
+
+test("every domain and role pair compiles with its own prompt and contract", () => {
+  const headings = { scout: "Scout Role", worker: "Worker Role", reviewer: "Reviewer Role" };
+  for (const domain of DOMAINS) {
+    for (const role of ROLES) {
+      const prompt = compilePrompt({ domain, role, task: "t" });
+      assert.ok(prompt.includes(headings[role]), `${domain}/${role} role prompt`);
+      assert.ok(prompt.includes("### Output contract"), `${domain}/${role} contract`);
+      assert.ok(prompt.includes("Global Engineering Agent"));
+    }
+  }
+});
+
+test("read-only roles keep their tool restrictions", () => {
+  assert.deepEqual(ROLE_SPECS.scout.tools, ["read", "grep", "find", "ls"]);
+  assert.deepEqual(ROLE_SPECS.reviewer.tools, ["read", "grep", "find", "ls", "bash"]);
+  assert.equal(ROLE_SPECS.worker.tools, undefined);
+});
