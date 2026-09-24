@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import type { DevHouseConfig } from "../schemas/configuration.ts";
 import type { AgentRun, ResearchResult, ReviewResult } from "../schemas/findings.ts";
-import { TASK_STATES, TERMINAL_STATES, type Approval, type ApprovalKind, type Task, type TaskState } from "../schemas/task.ts";
+import { TASK_STATES, TERMINAL_STATES, taskRequest, type Approval, type ApprovalKind, type Task, type TaskState } from "../schemas/task.ts";
 import { isDomain, type Domain } from "../schemas/agent.ts";
 import { transition } from "../state/task-state.ts";
 import { removeTaskScratchpads, saveTask, selectTask, taskDirFor } from "../state/persistence.ts";
@@ -28,6 +28,7 @@ import { assessReconnaissance, completionBlockers, decideReviewLoop, recordDecis
 import { detectSharedFiles, summarizeOutcomes } from "../master/synthesis.ts";
 import { truncate } from "../text.ts";
 import { assertNoPendingApprovals, pendingApprovals, requestApproval, resolveApproval } from "./approvals.ts";
+import { pingApproval } from "../pi/notify.ts";
 import { nextStates } from "./transitions.ts";
 
 export const ORCHESTRATE_ACTIONS = [
@@ -135,7 +136,8 @@ function parseDomain(value: string | undefined, action: string): Domain {
 export function describeTask(task: Task): string {
   const lines = [
     `${task.id} — state: ${task.state}${task.paused ? " (paused)" : ""}`,
-    `Request: ${truncate(task.title, 200)}`,
+    `Title: ${task.title}`,
+    `Request: ${truncate(taskRequest(task), 200)}`,
     task.domains.length > 0 ? `Domains: ${task.domains.join(", ")}` : "",
     `Review iterations: ${Object.entries(task.reviewIterations).map(([d, n]) => `${d}=${n}`).join(", ")}`,
     pendingApprovals(task).length > 0
@@ -211,7 +213,7 @@ async function handleScout(task: Task, params: OrchestrateParams, deps: Workflow
   const outcomes = await runScouts(
     {
       taskId: task.id,
-      taskText: task.title,
+      taskText: taskRequest(task),
       instruction: params.instruction?.trim() || "Investigate this request and report findings the Master needs.",
       domains,
       cwd: deps.cwd,
@@ -367,8 +369,10 @@ function recordWorkerApprovals(task: Task, outcome: WorkerOutcome, config: DevHo
   ];
   for (const [kind, label, items, required] of kinds) {
     for (const detail of items) {
-      if (required) created.push(requestApproval(task, kind, outcome.result.domain, detail));
-      else recordDecision(task, `Auto-approved ${label}: ${detail}`, outcome.result.domain);
+      if (required) {
+        created.push(requestApproval(task, kind, outcome.result.domain, detail));
+        pingApproval(outcome.result.domain, detail);
+      } else recordDecision(task, `Auto-approved ${label}: ${detail}`, outcome.result.domain);
     }
   }
   return created;
@@ -413,7 +417,7 @@ function updateScratchpad(deps: WorkflowDeps, task: Task, outcome: WorkerOutcome
 
 function workerTaskText(task: Task): string {
   return [
-    `Requirements: ${task.title}`,
+    `Requirements: ${taskRequest(task)}`,
     task.proposal ? `Approved objective: ${task.proposal}` : "",
     task.plan ? `Approved plan:\n${truncate(task.plan, 6000)}` : "",
     task.amendments.length > 0 ? `User amendments:\n${task.amendments.map((entry) => `- ${entry}`).join("\n")}` : "",

@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { TERMINAL_STATES, createTask, type Task } from "../schemas/task.ts";
+import { TERMINAL_STATES, createTask, taskRequest, type Task } from "../schemas/task.ts";
 import { detectProjectRoot, globalConfigPath, loadConfig, readDataRoots } from "../state/project.ts";
 import {
   activeTask,
@@ -59,10 +59,11 @@ function uniqueTaskId(root: string, configDir: string, request: string): string 
   return id;
 }
 
-function kickoff(task: Task): string {
+export function kickoff(task: Task): string {
   return [
     `A dev-lobby task is active: ${task.id}`,
-    `Request: ${task.title}`,
+    `Title: ${task.title}`,
+    `Request: ${taskRequest(task)}`,
     `State: ${task.state}`,
     "",
     "Drive it with the orchestrate tool:",
@@ -81,7 +82,7 @@ async function startTask(
 ): Promise<void> {
   const root = detectProjectRoot(ctx.cwd, configDir);
   ensureProjectStructure(root, configDir);
-  const task = createTask(uniqueTaskId(root, configDir, request), shortTitle(request));
+  const task = createTask(uniqueTaskId(root, configDir, request), shortTitle(request), new Date().toISOString(), request);
   createTaskDir(root, configDir, task);
   transition(task, "clarifying");
   saveTask(root, configDir, task);

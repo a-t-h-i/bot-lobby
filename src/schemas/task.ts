@@ -57,6 +57,8 @@ export interface ReviewRecord {
 export interface Task {
   id: string;
   title: string;
+  /** The user's original request, kept in full while `title` stays a short label. */
+  request: string;
   state: TaskState;
   domains: Domain[];
   proposal?: string;
@@ -73,10 +75,16 @@ export interface Task {
   updatedAt: string;
 }
 
-export function createTask(id: string, title: string, now = new Date().toISOString()): Task {
+export function createTask(
+  id: string,
+  title: string,
+  now = new Date().toISOString(),
+  request = title,
+): Task {
   return {
     id,
     title,
+    request,
     state: "created",
     domains: [],
     amendments: [],
@@ -89,6 +97,11 @@ export function createTask(id: string, title: string, now = new Date().toISOStri
     createdAt: now,
     updatedAt: now,
   };
+}
+
+/** The full request for a task, falling back to the title for pre-field state. */
+export function taskRequest(task: Task): string {
+  return task.request || task.title;
 }
 
 export function isTaskState(value: string): value is TaskState {

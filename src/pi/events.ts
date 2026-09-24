@@ -10,11 +10,12 @@ import { truncate } from "../text.ts";
 import { applyStatus, clearStatus } from "./ui.ts";
 import { isSubagentProcess, visibleTools } from "./quiet.ts";
 import { registerQuietTools } from "./tool-renderers.ts";
-import type { Task } from "../schemas/task.ts";
+import { taskRequest, type Task } from "../schemas/task.ts";
 
 function masterTaskContext(task: Task): string {
   return [
     `Task ${task.id}: ${task.title}`,
+    `Request: ${truncate(taskRequest(task), 2000)}`,
     task.proposal ? `Current proposal:\n${truncate(task.proposal, 2000)}` : "",
     task.plan ? `Approved plan:\n${truncate(task.plan, 3000)}` : "",
     task.amendments.length > 0 ? `User amendments:\n${task.amendments.map((entry) => `- ${entry}`).join("\n")}` : "",
@@ -49,7 +50,7 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
     const task = activeTask(root, configDir);
     if (!task) return;
     const slices = readAgentKnowledge(readDataRoots(root, configDir), "master");
-    const selected = selectKnowledge(`${task.title} ${task.proposal ?? ""}`, slices);
+    const selected = selectKnowledge(`${taskRequest(task)} ${task.proposal ?? ""}`, slices);
     event.systemPromptOptions.sections["dev-lobby"] = compilePrompt({
       domain: "master",
       task: masterTaskContext(task),

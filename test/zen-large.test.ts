@@ -110,6 +110,7 @@ test("emote frames are status-aware kaomoji with no zero-width joiners", () => {
   }
   assert.ok(emotes("dev", "working")[0]!.includes("٥"), "working emotes are nervous");
   assert.ok(emotes("dev", "done")[0]!.includes("✿"), "done emotes are happy");
+  assert.ok(emotes("dev", "done")[1]!.includes("っ"), "done emotes include in-love");
   assert.ok(emotes("dev", "failed")[0]!.includes("ಥ"), "failed emotes are scared");
   assert.ok(emotes("qa", "done")[0]!.includes("ᕙ"), "qa flexes on success");
   assert.ok(emotes("qa", "done").some((face) => face.includes("ᕕ( ᐛ )ᕗ")), "qa dances on success");

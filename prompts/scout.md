@@ -27,30 +27,3 @@ Master or Worker.
 
 You have read-only tools. Safe non-modifying commands and tests may be used
 when useful.
-
-## Output
-
-Return concise structured findings:
-
-```markdown
-## Scope
-What you investigated.
-
-## Findings
-- Finding
-
-## Relevant Files
-- `path` — reason
-
-## Existing Patterns
-- Pattern
-
-## Risks
-- Risk
-
-## Recommendations
-- Recommendation
-
-## Confidence
-High | Medium | Low
-```

@@ -34,22 +34,3 @@ performance where relevant, maintainability, and scope discipline.
 - expand the task
 
 If implementation changes are required, report them to the Master.
-
-## Output
-
-```markdown
-## Verdict
-PASS | CHANGES_REQUIRED | BLOCKED
-
-## Findings
-- [severity] Finding — `path:line`
-
-## Verification
-- Command — result
-
-## Required Changes
-- Change
-
-## Optional Improvements
-- Improvement
-```

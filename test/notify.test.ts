@@ -1,7 +1,7 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { createTask } from "../src/schemas/task.ts";
-import { formatNotice, ping } from "../src/pi/notify.ts";
+import { formatApprovalNotice, formatNotice, ping, pingApproval } from "../src/pi/notify.ts";
 import { onTransition, transition } from "../src/state/task-state.ts";
 
 // The suite can run inside a subagent process (DEV_LOBBY_SUBAGENT=1); park the
@@ -50,6 +50,24 @@ test("formatNotice pings exactly completed, blocked and awaiting_approval", () =
 
 test("formatNotice falls back to a generic title when none is set", () => {
   assert.match(formatNotice("blocked", "") ?? "", /\x07\x1b\]9;task blocked\x07/);
+});
+
+test("a title with control characters cannot break out of the OSC payload", () => {
+  const payload = formatNotice("blocked", "evil\x07\x1b]9;hijack") ?? "";
+  assert.ok(payload.startsWith("\x07\x1b]9;"));
+  assert.equal(payload.slice(6).split("\x07").length - 1, 1, "exactly one terminating BEL");
+  assert.doesNotMatch(payload.slice(6, -1), /[\x00-\x1f\x7f]/);
+});
+
+test("an approval ping names the domain and detail once", () => {
+  const capture = captureStderr();
+  try {
+    pingApproval("backend", "add stripe SDK");
+  } finally {
+    capture.restore();
+  }
+  assert.deepEqual(capture.writes, ["\x07\x1b]9;backend approval needed: add stripe SDK\x07"]);
+  assert.equal(formatApprovalNotice("backend", "x").startsWith("\x07\x1b]9;"), true);
 });
 
 test("ping writes one notice when not in a subagent process", () => {

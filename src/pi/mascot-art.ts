@@ -147,7 +147,7 @@ const FACE_FRAMES: Record<SlotState, readonly string[]> = {
 const EMOTE_FACES: Record<SlotState, readonly string[]> = {
   working: ["(٥↼_↼)", "(●´⌓`●)"],
   idle: ["(-.-)", "(u.u)"],
-  done: ["(✿^‿^)", "(•‿•)"],
+  done: ["(✿^‿^)", "(っ˘з(˘⌣˘ )"],
   failed: ["ಥ_ಥ", "(〒﹏〒)"],
 };
 
