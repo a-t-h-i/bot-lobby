@@ -1,0 +1,81 @@
+import type { Domain } from "./agent.ts";
+
+export const TASK_STATES = [
+  "created",
+  "clarifying",
+  "scouting",
+  "synthesizing",
+  "awaiting_approval",
+  "planning",
+  "implementing",
+  "reviewing",
+  "blocked",
+  "completed",
+  "abandoned",
+] as const;
+export type TaskState = (typeof TASK_STATES)[number];
+
+export const TERMINAL_STATES: readonly TaskState[] = ["completed", "abandoned"];
+
+export type Verdict = "pass" | "changes_required" | "blocked";
+export type Severity = "critical" | "major" | "minor" | "info";
+
+export interface Blocker {
+  reason: string;
+  tried: string[];
+  need: string;
+  createdAt: string;
+}
+
+export interface Decision {
+  domain: Domain | "master";
+  text: string;
+  createdAt: string;
+}
+
+export interface ReviewRecord {
+  domain: Domain;
+  verdict: Verdict;
+  findings: { severity: Severity; text: string }[];
+  requiredChanges: string[];
+  createdAt: string;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  state: TaskState;
+  domains: Domain[];
+  proposal?: string;
+  plan?: string;
+  amendments: string[];
+  paused: boolean;
+  reviewIterations: Record<Domain, number>;
+  reviewRecords: ReviewRecord[];
+  qaVerdict?: Verdict;
+  blockers: Blocker[];
+  decisions: Decision[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function createTask(id: string, title: string, now = new Date().toISOString()): Task {
+  return {
+    id,
+    title,
+    state: "created",
+    domains: [],
+    amendments: [],
+    paused: false,
+    reviewIterations: { designer: 0, backend: 0, qa: 0 },
+    reviewRecords: [],
+    blockers: [],
+    decisions: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export function isTaskState(value: string): value is TaskState {
+  return (TASK_STATES as readonly string[]).includes(value);
+}
