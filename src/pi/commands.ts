@@ -16,6 +16,7 @@ import {
 import { transition } from "../state/task-state.ts";
 import { AGENT_DIR_NAMES, KNOWLEDGE_FILES, knowledgeDir, type KnowledgeAgent } from "../knowledge/paths.ts";
 import { readFileOr } from "../knowledge/store.ts";
+import { overThreshold } from "../knowledge/compactor.ts";
 import { applyApprovalChoice, describeTask, type ApprovalChoice } from "../workflow/workflow.ts";
 
 const HELP = [
@@ -145,12 +146,18 @@ function showKnowledge(ctx: ExtensionCommandContext, configDir: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
   const cfg = loadConfig(root, configDir);
   const dr = dataRoot(root, configDir);
-  const lines: string[] = [`Threshold: ${cfg.knowledge.compactionThreshold} chars`];
+  const threshold = cfg.knowledge.compactionThreshold;
+  const lines: string[] = [`Threshold: ${threshold} chars`];
   for (const agent of Object.keys(AGENT_DIR_NAMES) as KnowledgeAgent[]) {
     const dir = knowledgeDir(dr, agent);
-    const sizes = KNOWLEDGE_FILES[agent].map((file) => `${file}=${readFileOr(join(dir, file)).length}`);
+    const sizes = KNOWLEDGE_FILES[agent].map((file) => {
+      const chars = readFileOr(join(dir, file)).length;
+      return `${file}=${chars}${chars > threshold ? " OVER" : ""}`;
+    });
     lines.push(`${AGENT_DIR_NAMES[agent]}: ${sizes.join(" ")}`);
   }
+  const oversized = overThreshold(dr, threshold);
+  if (oversized.length > 0) lines.push("", "Ask the Master to compact the files marked OVER.");
   ctx.ui.notify(lines.join("\n"), "info");
 }
 

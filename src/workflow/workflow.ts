@@ -7,6 +7,7 @@ import { transition } from "../state/task-state.ts";
 import { activeTask, loadTask, removeTaskScratchpads, saveTask, taskDirFor } from "../state/persistence.ts";
 import { dataRoot } from "../state/project.ts";
 import { appendCompletedTask, appendDecision, applyKnowledge, readFileOr, writeFileEnsured, type KnowledgeKind } from "../knowledge/store.ts";
+import { compactKnowledgeFile, overThreshold } from "../knowledge/compactor.ts";
 import { knowledgeDir, scratchpadPath, type KnowledgeAgent } from "../knowledge/paths.ts";
 import { writeScratchpad } from "../state/persistence.ts";
 import { spawnPiProcess, type ProcessRunner } from "../execution/pi-runner.ts";
@@ -38,6 +39,7 @@ export const ORCHESTRATE_ACTIONS = [
   "review",
   "qa",
   "knowledge",
+  "compact",
   "complete",
   "block",
   "resume",
@@ -62,6 +64,8 @@ export interface OrchestrateParams {
   task?: string;
   /** knowledge: which persistent file the text belongs to. */
   kind?: KnowledgeKind;
+  /** compact: the knowledge file being rewritten. */
+  file?: string;
   approvalId?: string;
   decision?: "approved" | "rejected";
   note?: string;
@@ -140,6 +144,11 @@ export function describeTask(task: Task): string {
     `Next legal states: ${nextStates(task.state).join(", ")}`,
   ];
   return lines.filter((line) => line.length > 0).join("\n");
+}
+
+/** Knowledge files past the compaction threshold, for status reporting. */
+export function describeOversizedKnowledge(dataRootPath: string, threshold: number): string[] {
+  return overThreshold(dataRootPath, threshold).map((entry) => `${entry.agent}/${entry.file} (${entry.chars} chars)`);
 }
 
 /** Apply the user's approve/amend/decline decision to an awaiting-approval task. */
@@ -504,6 +513,27 @@ function handleKnowledge(task: Task, params: OrchestrateParams, deps: WorkflowDe
   return `Recorded ${kind} for ${agent} in ${outcome.path}.`;
 }
 
+/**
+ * §24: the Master rewrites the file (asking the user about ambiguity), the
+ * engine archives the previous version and writes the compacted text.
+ */
+function handleCompact(task: Task, params: OrchestrateParams, deps: WorkflowDeps): string {
+  const agent: KnowledgeAgent = params.domain && isDomain(params.domain) ? params.domain : "master";
+  const file = params.file?.trim();
+  const content = params.text?.trim();
+  if (!file) throw new Error("compact requires file");
+  if (!content) throw new Error("compact requires text (the compacted content)");
+  const outcome = compactKnowledgeFile({
+    dataRoot: dataRoot(deps.root, deps.configDir),
+    agent,
+    file,
+    content,
+    backupCount: deps.config.knowledge.backupCount,
+  });
+  recordDecision(task, `Compacted ${agent}/${file} (${outcome.before} -> ${outcome.after} chars)`);
+  return `Compacted ${agent}/${file}: ${outcome.before} -> ${outcome.after} chars. Previous version archived at ${outcome.archive}.`;
+}
+
 /** §63: record history, drop scratchpads, then mark the task completed. */
 function handleComplete(task: Task, params: OrchestrateParams, deps: WorkflowDeps): string {
   requireState(task, ["reviewing"]);
@@ -515,7 +545,12 @@ function handleComplete(task: Task, params: OrchestrateParams, deps: WorkflowDep
   removeTaskScratchpads(deps.root, deps.configDir, task.id);
   task.blockers = [];
   transition(task, "completed");
-  return `Task ${task.id} completed. History recorded for the involved domains and the temporary scratchpads removed.`;
+  const oversized = overThreshold(dataRoot(deps.root, deps.configDir), deps.config.knowledge.compactionThreshold);
+  const advice =
+    oversized.length > 0
+      ? `\nKnowledge files over the compaction threshold: ${oversized.map((entry) => `${entry.agent}/${entry.file} (${entry.chars})`).join(", ")}. Compact them with action=compact when convenient.`
+      : "";
+  return `Task ${task.id} completed. History recorded and temporary scratchpads removed.${advice}`;
 }
 
 function flushDecisions(deps: WorkflowDeps, task: Task): void {
@@ -574,6 +609,7 @@ const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams
   review: handleReview,
   qa: handleQa,
   knowledge: handleKnowledge,
+  compact: handleCompact,
   complete: handleComplete,
   block: handleBlock,
   resume: handleResume,
