@@ -5,12 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseReviewResult, validateReviewResult } from "../src/roles/reviewer.ts";
 import { decideReviewLoop } from "../src/master/decisions.ts";
-import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
+import { DEFAULT_CONFIG, type DevHouseConfig } from "../src/schemas/configuration.ts";
 import { createTask, type Task, type TaskState } from "../src/schemas/task.ts";
 import { createTaskDir, ensureProjectStructure, loadTask, saveTask } from "../src/state/persistence.ts";
 import { transition } from "../src/state/task-state.ts";
 import { runWorkflowAction, type OrchestrateParams, type WorkflowDeps } from "../src/workflow/workflow.ts";
-import type { ProcessRunner } from "../src/execution/pi-runner.ts";
+import type { ProcessOutcome, ProcessRunner } from "../src/execution/pi-runner.ts";
+import { runReviewer, type ReviewerRequest } from "../src/master/master.ts";
 
 function review(text: string): string {
   return JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], stopReason: "stop" } });
@@ -179,4 +180,66 @@ test("resume is rejected when the task is not blocked", async () => {
   const result = await act(deps, { action: "resume" });
   assert.equal(result.ok, false);
   assert.match(result.message, /not allowed in state/);
+});
+
+const REVIEW_CONFIG: DevHouseConfig = {
+  ...DEFAULT_CONFIG,
+  workflow: { ...DEFAULT_CONFIG.workflow, maxAgentRetries: 2 },
+};
+
+const OFF_CONTRACT = "The changes look reasonable but I have no structured verdict.";
+
+function reviewerRequest(overrides: Partial<ReviewerRequest> = {}): ReviewerRequest {
+  return {
+    taskId: "TASK-1",
+    domain: "backend",
+    taskText: "Add pagination",
+    workerSummary: "Added pagination.",
+    scoutOutcomes: [],
+    diff: "diff --git a/src/x.ts b/src/x.ts",
+    cwd: process.cwd(),
+    dataRoot: mkdtempSync(join(tmpdir(), "dh-review-")),
+    config: REVIEW_CONFIG,
+    ...overrides,
+  };
+}
+
+function outcome(stdout: string, overrides: Partial<ProcessOutcome> = {}): ProcessOutcome {
+  return { exitCode: 0, stdout, stderr: "", killed: false, timedOut: false, ...overrides };
+}
+
+test("an off-contract success is resampled and can still pass", async () => {
+  let calls = 0;
+  const runner: ProcessRunner = async () => {
+    calls += 1;
+    return outcome(review(calls === 1 ? OFF_CONTRACT : PASS));
+  };
+  const result = await runReviewer(reviewerRequest(), runner);
+  assert.equal(calls, 2);
+  assert.equal(result.run.status, "success");
+  assert.equal(result.result.verdict, "pass");
+  assert.deepEqual(result.issues, []);
+});
+
+test("an always off-contract reviewer is bounded by maxAgentRetries", async () => {
+  let calls = 0;
+  const runner: ProcessRunner = async () => {
+    calls += 1;
+    return outcome(review(OFF_CONTRACT));
+  };
+  const result = await runReviewer(reviewerRequest(), runner);
+  assert.equal(calls, REVIEW_CONFIG.workflow.maxAgentRetries + 1);
+  assert.equal(result.result.verdict, "blocked");
+  assert.ok(result.issues.includes("missing Verdict section"));
+});
+
+test("a cancelled reviewer run is never retried", async () => {
+  let calls = 0;
+  const runner: ProcessRunner = async () => {
+    calls += 1;
+    return outcome(review(OFF_CONTRACT), { killed: true });
+  };
+  const result = await runReviewer(reviewerRequest(), runner);
+  assert.equal(calls, 1);
+  assert.equal(result.run.status, "cancelled");
 });

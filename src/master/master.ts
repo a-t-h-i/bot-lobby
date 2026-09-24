@@ -7,7 +7,7 @@ import { domainSpec } from "../agents/registry.ts";
 import { runAgent, runParallel, type AgentRequest } from "../execution/agent-runner.ts";
 import { spawnPiProcess, type ProcessRunner } from "../execution/pi-runner.ts";
 import { readAgentKnowledge, writeFileEnsured } from "../knowledge/store.ts";
-import { selectKnowledge } from "../knowledge/selector.ts";
+import { selectKnowledge, type KnowledgeSelection } from "../knowledge/selector.ts";
 import { summarizeOutcomes } from "./synthesis.ts";
 import { parseWorkerResult, validateWorkerResult } from "../roles/worker.ts";
 import { parseReviewResult, validateReviewResult } from "../roles/reviewer.ts";
@@ -229,41 +229,61 @@ function reviewerContext(request: ReviewerRequest): string {
     .join("\n\n");
 }
 
+/** True when the output carries the reviewer contract's required heading. */
+export function hasReviewVerdict(text: string): boolean {
+  return /##\s*verdict/i.test(text);
+}
+
+/** A success without the Verdict section is off-contract and worth resampling. */
+function isRetryableReviewRun(run: AgentRun): boolean {
+  return run.status !== "cancelled" && (run.status !== "success" || !hasReviewVerdict(run.output));
+}
+
+function reviewerAgentRequest(request: ReviewerRequest, selected: KnowledgeSelection): AgentRequest {
+  return {
+    taskId: request.taskId,
+    domain: request.domain,
+    role: "reviewer",
+    instruction:
+      request.instruction?.trim() ||
+      "Review the current repository changes against the approved requirements and plan.",
+    context: {
+      task: request.taskText,
+      ...selected,
+      instructions: request.config.agents[request.domain].instructions,
+      workflowContext: reviewerContext(request),
+    },
+    model: resolveModel(request.config, request.domain),
+    thinking: request.config.agents[request.domain].thinking,
+    timeoutMs: request.config.workflow.agentTimeoutMs,
+    cwd: request.cwd,
+    signal: request.signal,
+    onUpdate: request.onUpdate,
+    retries: 0,
+  };
+}
+
+function reviewerIssues(run: AgentRun, result: ReviewResult): string[] {
+  return run.status === "success"
+    ? validateReviewResult(result)
+    : [`reviewer ${run.status}: ${run.error ?? "no detail"}`];
+}
+
 /** Independently review the current repository state for one domain. */
 export async function runReviewer(
   request: ReviewerRequest,
   run: ProcessRunner = spawnPiProcess,
 ): Promise<ReviewerOutcome> {
-  const slices = readAgentKnowledge(request.dataRoot, request.domain);
-  const selected = selectKnowledge(`${request.taskText} ${request.workerSummary}`, slices);
-  const agentRun = await runAgent(
-    {
-      taskId: request.taskId,
-      domain: request.domain,
-      role: "reviewer",
-      instruction:
-        request.instruction?.trim() ||
-        "Review the current repository changes against the approved requirements and plan.",
-      context: {
-        task: request.taskText,
-        ...selected,
-        instructions: request.config.agents[request.domain].instructions,
-        workflowContext: reviewerContext(request),
-      },
-      model: resolveModel(request.config, request.domain),
-      thinking: request.config.agents[request.domain].thinking,
-      timeoutMs: request.config.workflow.agentTimeoutMs,
-      cwd: request.cwd,
-      signal: request.signal,
-      onUpdate: request.onUpdate,
-      retries: request.config.workflow.maxAgentRetries,
-    },
-    run,
+  const selected = selectKnowledge(
+    `${request.taskText} ${request.workerSummary}`,
+    readAgentKnowledge(request.dataRoot, request.domain),
   );
+  const agentRequest = reviewerAgentRequest(request, selected);
+  const attempts = Math.max(1, request.config.workflow.maxAgentRetries + 1);
+  let agentRun = await runAgent(agentRequest, run);
+  for (let attempt = 2; attempt <= attempts && isRetryableReviewRun(agentRun); attempt++) {
+    agentRun = await runAgent(agentRequest, run);
+  }
   const result = parseReviewResult(request.domain, agentRun.output);
-  const issues =
-    agentRun.status === "success"
-      ? validateReviewResult(result)
-      : [`reviewer ${agentRun.status}: ${agentRun.error ?? "no detail"}`];
-  return { result, run: agentRun, issues };
+  return { result, run: agentRun, issues: reviewerIssues(agentRun, result) };
 }
