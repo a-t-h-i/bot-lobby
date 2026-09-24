@@ -7,6 +7,7 @@ import {
   SLOT_FRAMES,
   SLOT_LABELS,
   SLOT_STATE_COLORS,
+  SLOT_STATE_GLYPHS,
   SLOT_STATE_WORDS,
   TOWER,
   TOWER_DOOR,
@@ -37,7 +38,7 @@ export const SCENE_WIDTH = 63;
 
 export const MAX_TASK_ROWS = 6;
 export const MAX_LOG_ROWS = 6;
-export const MAX_LARGE_LINES = 30;
+export const MAX_LARGE_LINES = 34;
 
 /** One agent column of the scene, with the caller-selected animation frame. */
 export interface LargeSlot {
@@ -75,6 +76,8 @@ export interface LargeSceneInput {
   oracle: { pose: OraclePose; frame: number };
   /** Approval/blocked line; never dropped when present. */
   alert?: string;
+  /** Severity of the alert line: approvals are `warning`, blocked is `error`. */
+  alertKind?: "warning" | "error";
   /** Name over the tower door, `TOWER_DOOR` when omitted. */
   doorLabel?: string;
 }
@@ -137,19 +140,30 @@ const PLANS: readonly LayoutPlan[] = [
 
 const EMPTY_PLAN: LayoutPlan = { tower: "none", branch: false, strip: false, section: false };
 
-/** Scene lines for the large tier, or nothing below `LARGE_MIN_WIDTH`. */
+/**
+ * Scene lines for the large tier, or nothing below `LARGE_MIN_WIDTH`.
+ *
+ * `budget` is a caller-computed LINE budget (zen.ts derives it from the
+ * terminal height), not a terminal row count. The header box and the alert are
+ * the fixed frame and are always drawn, so a budget below the fixed frame still
+ * returns a bounded, width-safe scene instead of dropping the alert.
+ */
 export function largeLines(
   input: LargeSceneInput,
   width: number,
-  rows: number,
+  budget: number,
   theme?: PanelTheme,
 ): string[] {
   if (width < LARGE_MIN_WIDTH) return [];
   const head = boxLines(input, width, theme);
-  const alert = input.alert ? [alertLine(input.alert, width, theme)] : [];
-  const budget = Math.min(Math.max(rows, 0), MAX_LARGE_LINES);
-  const avail = Math.max(0, budget - head.length - alert.length);
+  const alert = input.alert ? [alertLine(input.alert, width, theme, input.alertKind ?? "warning")] : [];
+  const avail = Math.max(0, lineBudget(budget) - head.length - alert.length);
   return [...head, ...alert, ...bodyLines(input, width, theme, avail)];
+}
+
+/** Clamp a caller line budget to the scene cap, ignoring non-finite input. */
+function lineBudget(budget: number): number {
+  return clamp(Number.isFinite(budget) ? Math.floor(budget) : 0, 0, MAX_LARGE_LINES);
 }
 
 function paint(text: string, color: PanelColor, theme?: PanelTheme, bold = false): string {
@@ -205,9 +219,14 @@ function place(row: string, width: number): string {
   return " ".repeat(Math.max(0, sceneLeft(width) + Math.floor((SCENE_WIDTH - visibleWidth(row)) / 2))) + row;
 }
 
-function alertLine(alert: string, width: number, theme?: PanelTheme): string {
+function alertLine(
+  alert: string,
+  width: number,
+  theme?: PanelTheme,
+  kind: "warning" | "error" = "warning",
+): string {
   const left = sceneLeft(width);
-  const line = paint(truncateToWidth(`! ${alert}`, width - left, "…"), "warning", theme, true);
+  const line = paint(truncateToWidth(`! ${alert}`, width - left, "…"), kind, theme, true);
   return " ".repeat(left) + line;
 }
 
@@ -326,22 +345,29 @@ function branchLines(input: LargeSceneInput, width: number, theme?: PanelTheme):
   const nodes = slotOffsets(count, width).map((offset) => offset + Math.floor(SLOT_CELL / 2));
   const stem = sceneCentre(width);
   const end = nodes[nodes.length - 1]! + 1;
-  const stemRow = " ".repeat(Math.max(0, stem - stripLeft(count, width))) + "│";
-  const rows = [stemRow, treeLine(nodes, stem, end), pipeLine(nodes, end)];
+  const rows = [stemLine(stem, end), treeLine(nodes, stem, end), pipeLine(nodes, end)];
   return rows.map((row) => paint(row, "muted", theme));
+}
+
+/** Absolute-coordinate row: an explicit mark wins, otherwise `fill` draws the cell. */
+function absRow(length: number, fill: (index: number) => string, marks: ReadonlyMap<number, string>): string {
+  return Array.from({ length }, (_value, index) => marks.get(index) ?? fill(index)).join("");
+}
+
+/** The tower stem, dropping from `sceneCentre(width)` onto the tree row. */
+function stemLine(stem: number, end: number): string {
+  return absRow(Math.max(end, stem + 1), () => " ", new Map([[stem, "│"]]));
 }
 
 function treeLine(nodes: readonly number[], stem: number, end: number): string {
   const marks = new Map<number, string>();
   nodes.forEach((node, index) => marks.set(node, index === 0 ? "┌" : index === nodes.length - 1 ? "┐" : "┬"));
   if (!marks.has(stem) && stem > nodes[0]! && stem < nodes[nodes.length - 1]!) marks.set(stem, "┴");
-  const chars: string[] = Array.from({ length: end }, (_value, index) => (index >= nodes[0]! ? "─" : " "));
-  for (const [at, mark] of marks) chars[at] = mark;
-  return chars.join("");
+  return absRow(end, (index) => (index >= nodes[0]! ? "─" : " "), marks);
 }
 
 function pipeLine(nodes: readonly number[], end: number): string {
-  return Array.from({ length: end }, (_value, index) => (nodes.includes(index) ? "│" : " ")).join("");
+  return absRow(end, () => " ", new Map(nodes.map((node) => [node, "│"] as const)));
 }
 
 function slotLines(input: LargeSceneInput, width: number, theme?: PanelTheme): string[] {
@@ -381,7 +407,7 @@ function labelCells(slots: readonly LargeSlot[], offsets: readonly number[], the
 function wordCells(slots: readonly LargeSlot[], offsets: readonly number[], theme?: PanelTheme): Cell[] {
   return slots.map((slot, index) => ({
     offset: offsets[index]!,
-    text: centre(SLOT_STATE_WORDS[slot.status], SLOT_CELL),
+    text: centre(`${SLOT_STATE_GLYPHS[slot.status]} ${SLOT_STATE_WORDS[slot.status]}`, SLOT_CELL),
     paint: statusPaint(slot.status, theme),
   }));
 }

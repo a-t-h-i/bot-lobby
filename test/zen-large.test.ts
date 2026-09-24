@@ -13,6 +13,7 @@ import {
   SLOT_LABELS,
   SLOT_STATES,
   SLOT_STATE_COLORS,
+  SLOT_STATE_GLYPHS,
   SLOT_STATE_WORDS,
   TOWER,
   TOWER_DOOR,
@@ -144,6 +145,7 @@ test("tower templates render TOWER_WIDTH columns and carry all four tokens", () 
   const joined = TOWER.rows.join("\n");
   for (const token of Object.values(TOWER.tokens)) assert.ok(joined.includes(token), token);
   assert.ok(TOWER.smallRows.length < TOWER.rows.length);
+  for (const row of TOWER.smallRows) assert.ok(TOWER.rows.includes(row), `small row missing: ${JSON.stringify(row)}`);
 });
 
 // --- tier and width invariants ---
@@ -157,7 +159,7 @@ test("the large scene renders nothing below LARGE_MIN_WIDTH", () => {
 
 test("no width, height, status or alert combination overflows the terminal", () => {
   for (const width of [72, 100, 200]) {
-    for (const rows of [0, 1, 8, 18, 24, 30, 40, 60]) {
+    for (const rows of [0, 1, 8, 18, 24, 30, 34, 40, 60]) {
       for (const status of SLOT_STATES) {
         for (const alert of [undefined, `blocked: ${"reason ".repeat(30)}`]) {
           const input = { ...withStatus(status), alert, oracle: { pose: "dormant" as const, frame: 4 } };
@@ -180,23 +182,27 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
     "    │ █████░░░░░  50%  (3/6 tasks)                                │",
     "    └─ ⏱ 12m 30s · tools hidden (alt+t) ──────────────────────────┘",
     "    ! approvals pending: APR-1",
+    "                                 \\ | /    ",
     "                                  \\|/     ",
     "                                  ─◉─     ",
     "                                   │      ",
     "                             ┌─────┴─────┐",
+    "                             │▓▓▓▓▓▓▓▓▓▓▓│",
+    "                             ├───────────┤",
     "                             │ ┌─┐   ┌─┐ │",
     "                             │ │◉│   │◉│ │",
     "                             │ └─┘   └─┘ │",
+    "                             ├───────────┤",
     "                             │  ═══════  │",
     "                             ├───┬───┬───┤",
     "                             │▓▓▓│ORC│▓▓▓│",
     "                             └───┴───┴───┘",
-    "                               │",
+    "                                   │                        ",
     "           ┌───────────────┬───────┴───────┬───────────────┐",
     "           │               │               │               │",
     "         (^_^)           (-_-)           (o_o)           (>_<)     ",
     "          DEV           DESIGN         RESEARCH           QA       ",
-    "        working          idle            done           failed     ",
+    "       ◐ working        · idle          ✓ done         ✗ failed    ",
     "    ██████░░░░ 58%  ░░░░░░░░░░  0%  ██████████100%  ░░░░░░░░░░  0% ",
     "     TASKS                           LOG",
     "    [x] Research reqs                10:12 ORACLE    orchestrating ",
@@ -212,23 +218,27 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
     "                  │ █████░░░░░  50%  (3/6 tasks)                                │",
     "                  └─ ⏱ 12m 30s · tools hidden (alt+t) ──────────────────────────┘",
     "                  ! approvals pending: APR-1",
+    "                                               \\ | /    ",
     "                                                \\|/     ",
     "                                                ─◉─     ",
     "                                                 │      ",
     "                                           ┌─────┴─────┐",
+    "                                           │▓▓▓▓▓▓▓▓▓▓▓│",
+    "                                           ├───────────┤",
     "                                           │ ┌─┐   ┌─┐ │",
     "                                           │ │◉│   │◉│ │",
     "                                           │ └─┘   └─┘ │",
+    "                                           ├───────────┤",
     "                                           │  ═══════  │",
     "                                           ├───┬───┬───┤",
     "                                           │▓▓▓│ORC│▓▓▓│",
     "                                           └───┴───┴───┘",
-    "                               │",
+    "                                                 │                        ",
     "                         ┌───────────────┬───────┴───────┬───────────────┐",
     "                         │               │               │               │",
     "                       (^_^)           (-_-)           (o_o)           (>_<)     ",
     "                        DEV           DESIGN         RESEARCH           QA       ",
-    "                      working          idle            done           failed     ",
+    "                     ◐ working        · idle          ✓ done         ✗ failed    ",
     "                  ██████░░░░ 58%  ░░░░░░░░░░  0%  ██████████100%  ░░░░░░░░░░  0% ",
     "                   TASKS                           LOG",
     "                  [x] Research reqs                10:12 ORACLE    orchestrating ",
@@ -277,6 +287,19 @@ test("the tower stem, the tree branch and the agent columns share one centre", (
   assert.equal(face.indexOf("(^_^)") + 2, lines[tree]!.indexOf("┌"), "first column sits under its node");
   const orb = lines.find((line) => line.includes("─◉─"))!;
   assert.equal(orb.indexOf("◉"), centre, "orb over the stem");
+});
+
+test("the tower stem, the branch stem and the tree node share the terminal centre at every large width", () => {
+  for (const width of [72, 100, 133]) {
+    const lines = largeLines(scene(), width, 34);
+    const centre = Math.floor((width - 1) / 2);
+    const roof = lines.findIndex((line) => line.includes("┌─────┴─────┐"));
+    const tree = lines.findIndex((line) => line.includes("┬") && line.includes("┴"));
+    assert.equal(lines[roof - 1]!.indexOf("│"), centre, `tower stem at ${width}`);
+    assert.equal(lines[tree - 1]!.trim(), "│", `branch stem row at ${width}`);
+    assert.equal(lines[tree - 1]!.indexOf("│"), centre, `branch stem column at ${width}`);
+    assert.equal(lines[tree]!.indexOf("┴"), centre, `tree node at ${width}`);
+  }
 });
 
 // --- animation, status colours and determinism ---
@@ -357,6 +380,51 @@ test("the theme paints every status and keeps the geometry identical", () => {
   assert.ok(orbRow.includes(`\x1b[${CODES.accent}m◉\x1b[0m`), "oracle orb colour");
 });
 
+test("each agent column renders its status glyph beside the state word", () => {
+  for (const status of SLOT_STATES) {
+    const label = `${SLOT_STATE_GLYPHS[status]} ${SLOT_STATE_WORDS[status]}`;
+    const lines = largeLines(withStatus(status), 72, 34);
+    const rows = lines.filter((line) => line.includes(label));
+    assert.equal(rows.length, 1, `${status} state row`);
+    assert.equal(rows[0]!.split(label).length - 1, 4, `${status} glyph in every column`);
+    assert.ok(visibleWidth(rows[0]!) <= 72, `${status} state row width`);
+  }
+});
+
+test("the status glyph and the state word share the status colour and weight", () => {
+  for (const status of SLOT_STATES) {
+    const style = SLOT_STATE_COLORS[status];
+    const label = `${SLOT_STATE_GLYPHS[status]} ${SLOT_STATE_WORDS[status]}`;
+    const row = largeLines(withStatus(status), 72, 34, ANSI_THEME).find((line) => stripAnsi(line).includes(label))!;
+    assert.match(row, new RegExp(`\\x1b\\[${CODES[style.color]}m[^\\x1b]*${escapeRegExp(label)}`), `${status} colour`);
+    if (style.bold) assert.ok(row.includes(`\x1b[1m`), `${status} bold`);
+  }
+});
+
+test("the alert keeps its marker and paints the severity it is given", () => {
+  const warning = largeLines(scene({ alertKind: "warning" }), 72, 34, ANSI_THEME).find((line) =>
+    stripAnsi(line).includes("approvals pending"),
+  )!;
+  assert.ok(warning.includes(`\x1b[${CODES.warning}m`), "warning colour");
+  assert.ok(stripAnsi(warning).includes("! approvals pending: APR-1"), "warning marker and text");
+  const error = largeLines(scene({ alertKind: "error", alert: "blocked: needs a decision" }), 72, 34, ANSI_THEME).find(
+    (line) => stripAnsi(line).includes("blocked:"),
+  )!;
+  assert.ok(error.includes(`\x1b[${CODES.error}m`), "error colour");
+  assert.ok(stripAnsi(error).includes("! blocked: needs a decision"), "error marker and text");
+});
+
+test("a budget below the fixed frame stays bounded, width-safe and keeps the alert", () => {
+  for (const budget of [0, 1, 4]) {
+    const lines = largeLines(scene({ alertKind: "error" }), 72, budget);
+    assert.equal(lines.length, 5, `fixed frame at budget ${budget}`);
+    assert.ok(lines.some((line) => line.includes("! approvals pending: APR-1")), `alert at ${budget}`);
+    assert.ok(lines.every((line) => visibleWidth(line) <= 72), `width at ${budget}`);
+    assert.ok(lines.length <= MAX_LARGE_LINES, `cap at ${budget}`);
+  }
+  assert.equal(largeLines(scene({ alert: undefined }), 72, Number.NaN).length, 4, "non-finite budget keeps the box");
+});
+
 // --- sections and degradation ---
 
 test("TASKS and LOG are capped at their row limits", () => {
@@ -383,32 +451,38 @@ test("the LOG gives way to TASKS when the height runs out, and both give way las
       status: "working" as const,
     })),
   });
-  const tight = largeLines(many, 72, 28);
-  assert.equal(tight.filter((line) => TASK_ROW.test(line)).length, 4);
+  const tight = largeLines(many, 72, 30);
+  assert.equal(tight.filter((line) => TASK_ROW.test(line)).length, 2);
+  assert.ok(tight.some((line) => line.includes("│▓▓▓▓▓▓▓▓▓▓▓│")), "the full tower stays while TASKS shrinks");
   assert.equal(tight.filter((line) => LOG_ROW.test(line)).length, 0);
   assert.ok(!tight.some((line) => line.includes("LOG")));
   const tiny = largeLines(many, 72, 18);
   assert.equal(tiny.filter((line) => TASK_ROW.test(line)).length, 0);
   assert.ok(tiny.some((line) => line.includes("┌─────┴─────┐")), "the tower stays");
   const long = scene({ tasks: [{ text: "x".repeat(50), status: "pending" }], log: many.log });
-  const pair = largeLines(long, 72, 30).find((line) => TASK_ROW.test(line))!;
-  const solo = largeLines(long, 72, 28).find((line) => TASK_ROW.test(line))!;
+  const pair = largeLines(long, 72, 34).find((line) => TASK_ROW.test(line))!;
+  const solo = largeLines(long, 72, 30).find((line) => TASK_ROW.test(line))!;
   assert.ok(solo.includes("x".repeat(50)), "TASKS takes the free width once the LOG is gone");
   assert.ok(!pair.includes("x".repeat(50)), "the paired TASKS cell stays narrow");
 });
 
-test("every row budget keeps the alert, stays inside the cap and degrades monotonically", () => {
+test("every line budget keeps the alert, stays inside the cap and degrades monotonically", () => {
   const input = scene();
-  const counts = [40, 30, 24, 18].map((rows) => {
-    const lines = largeLines(input, 72, rows);
-    assert.ok(lines.some((line) => line.includes("approvals pending: APR-1")), `alert at ${rows} rows`);
-    assert.ok(lines.length <= MAX_LARGE_LINES, `cap at ${rows} rows`);
-    assert.ok(lines.length <= Math.max(rows, 5), `budget at ${rows} rows`);
-    assert.ok(lines.every((line) => visibleWidth(line) <= 72), `width at ${rows} rows`);
+  const counts = Array.from({ length: 41 }, (_value, budget) => budget).map((budget) => {
+    const lines = largeLines(input, 72, budget);
+    assert.ok(lines.some((line) => line.includes("approvals pending: APR-1")), `alert at ${budget}`);
+    assert.ok(lines.length <= MAX_LARGE_LINES, `cap at ${budget}`);
+    assert.ok(lines.length <= Math.max(budget, 5), `budget at ${budget}`);
+    assert.ok(lines.every((line) => visibleWidth(line) <= 72), `width at ${budget}`);
     return lines.length;
   });
-  assert.deepEqual([...counts].sort((a, b) => b - a), counts);
-  assert.ok(counts[0]! > counts.at(-1)!);
+  for (let index = 1; index < counts.length; index += 1) {
+    assert.ok(counts[index]! >= counts[index - 1]!, `length fell at budget ${index}`);
+  }
+  assert.ok(counts.at(-1)! > counts[0]!);
+  const sampled = [40, 34, 30, 24, 18].map((budget) => largeLines(input, 72, budget));
+  assert.ok(sampled[0]!.length > sampled.at(-1)!.length);
+  assert.equal(sampled[0]!.length, MAX_LARGE_LINES);
 });
 
 test("the bar fills proportionally and clamps out-of-range percentages", () => {

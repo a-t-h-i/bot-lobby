@@ -214,6 +214,14 @@ export const SLOT_STATE_WORDS: Record<SlotState, string> = {
   failed: "failed",
 };
 
+/** One-column status glyph sitting beside the state word, so status never rests on colour alone. */
+export const SLOT_STATE_GLYPHS: Record<SlotState, string> = {
+  working: STATUS_GLYPHS.running,
+  idle: STATUS_GLYPHS.idle,
+  done: STATUS_GLYPHS.done,
+  failed: STATUS_GLYPHS.failed,
+};
+
 /** The slice of a panel theme's colour vocabulary this art maps onto. */
 export type PanelColor = "accent" | "muted" | "dim" | "success" | "error" | "warning";
 
@@ -304,7 +312,7 @@ export const SLOT_FRAMES: Record<SlotId, Record<SlotState, readonly string[][]>>
 };
 
 /** Three-column accessory that marks each slot in the one-row compact strip. */
-export const SLOT_MARKS: Record<SlotId, string> = {
+const SLOT_MARKS: Record<SlotId, string> = {
   dev: "[=]",
   design: "~,~",
   research: "<?>",
@@ -346,13 +354,17 @@ export const TOWER_DOOR = "ORC";
 
 export const TOWER: TowerSpec = {
   rows: [
+    "    \\ | /    ",
     "     \\|/     ",
     "     ─{orb}─     ",
     "      │      ",
     "┌─────┴─────┐",
+    "│▓▓▓▓▓▓▓▓▓▓▓│",
+    "├───────────┤",
     "│ ┌─┐   ┌─┐ │",
     "│ │{winL}│   │{winR}│ │",
     "│ └─┘   └─┘ │",
+    "├───────────┤",
     "│  ═══════  │",
     "├───┬───┬───┤",
     "│▓▓▓│{door}│▓▓▓│",
