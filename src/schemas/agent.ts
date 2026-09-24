@@ -3,7 +3,7 @@
 export const DOMAINS = ["designer", "backend", "qa"] as const;
 export type Domain = (typeof DOMAINS)[number];
 
-export const ROLES = ["scout", "worker", "reviewer"] as const;
+export const ROLES = ["scout", "worker", "reviewer", "researcher"] as const;
 export type Role = (typeof ROLES)[number];
 
 export const AGENT_KINDS = ["master", ...DOMAINS] as const;

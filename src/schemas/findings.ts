@@ -60,6 +60,25 @@ export interface ReviewResult {
   raw: string;
 }
 
+export interface ResearchSource {
+  url: string;
+  title: string;
+  /** Publication date or version the claim was checked against, when stated. */
+  date?: string;
+}
+
+export interface ResearchResult {
+  domain: Domain;
+  role: "researcher";
+  question: string;
+  findings: string[];
+  sources: ResearchSource[];
+  recommendations: string[];
+  confidence: "high" | "medium" | "low";
+  unverified: string[];
+  raw: string;
+}
+
 export interface AgentRun {
   runId: string;
   taskId: string;

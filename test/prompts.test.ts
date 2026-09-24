@@ -5,10 +5,10 @@ import { compilePrompt } from "../src/prompts/compiler.ts";
 import { ROLE_SPECS } from "../src/roles/registry.ts";
 import { DOMAINS, ROLES } from "../src/schemas/agent.ts";
 
-test("all eight prompt layers load and are non-empty", () => {
+test("all prompt layers load and are non-empty", () => {
   const files = [
     "global.md", "master.md", "designer.md", "backend.md", "qa.md",
-    "scout.md", "worker.md", "reviewer.md",
+    "scout.md", "worker.md", "reviewer.md", "researcher.md",
   ];
   for (const file of files) {
     assert.ok(loadPrompt(file).length > 0, `${file} should be non-empty`);
@@ -80,7 +80,7 @@ test("master prompt compiles without a role layer or contract", () => {
 });
 
 test("every domain and role pair compiles with its own prompt and contract", () => {
-  const headings = { scout: "Scout Role", worker: "Worker Role", reviewer: "Reviewer Role" };
+  const headings = { scout: "Scout Role", worker: "Worker Role", reviewer: "Reviewer Role", researcher: "Researcher Role" };
   for (const domain of DOMAINS) {
     for (const role of ROLES) {
       const prompt = compilePrompt({ domain, role, task: "t" });
@@ -94,5 +94,9 @@ test("every domain and role pair compiles with its own prompt and contract", () 
 test("read-only roles keep their tool restrictions", () => {
   assert.deepEqual(ROLE_SPECS.scout.tools, ["read", "grep", "find", "ls"]);
   assert.deepEqual(ROLE_SPECS.reviewer.tools, ["read", "grep", "find", "ls", "bash"]);
+  assert.deepEqual(ROLE_SPECS.researcher.tools, [
+    "read", "grep", "find", "ls",
+    "web_search", "fetch_content", "source_check", "get_search_content",
+  ]);
   assert.equal(ROLE_SPECS.worker.tools, undefined);
 });

@@ -1,11 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
 import { createTask, type Task, type TaskState } from "../src/schemas/task.ts";
-import { createTaskDir, ensureProjectStructure, loadTask, saveTask } from "../src/state/persistence.ts";
+import { createTaskDir, ensureProjectStructure, loadTask, saveTask, taskDirFor } from "../src/state/persistence.ts";
 import { transition } from "../src/state/task-state.ts";
 import {
   runWorkflowAction,
@@ -219,4 +219,96 @@ test("pending approvals surface in status and gate the domain", () => {
 test("validatePlan reports every missing area", () => {
   assert.equal(validatePlan("Objective: x\nDomains: backend\nFiles: a.ts\nSequence: 1\nDependencies: none\nTesting: unit\nAcceptance: works\nRollback: revert\nReview: peer").length, 0);
   assert.equal(validatePlan("nothing useful here").length, 9);
+});
+
+const RESEARCH_REPLY = [
+  "## Question",
+  "Does pi support a web search tool?",
+  "",
+  "## Findings",
+  "- Web tools ship as the pi-web-access extension",
+  "",
+  "## Sources",
+  "- https://example.com/docs — documents the web_search tool (2026-01-02)",
+  "",
+  "## Unverified",
+  "- Windows support was not confirmed",
+  "",
+  "## Recommendations",
+  "- Install pi-web-access and allowlist its tools",
+  "",
+  "## Confidence",
+  "High",
+].join("\n");
+
+function researchRunner(text: string): ProcessRunner {
+  return async () => ({
+    exitCode: 0,
+    stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], stopReason: "stop" } }),
+    stderr: "",
+    killed: false,
+    timedOut: false,
+  });
+}
+
+test("research requires an instruction and a valid domain", async () => {
+  const deps = makeDeps({ runProcess: researchRunner(RESEARCH_REPLY) });
+  withTask(deps, "created");
+  const noInstruction = await act(deps, { action: "research", domain: "backend" });
+  assert.equal(noInstruction.ok, false);
+  assert.match(noInstruction.message, /requires instruction/);
+  const noDomain = await act(deps, { action: "research", instruction: "Any trends?" });
+  assert.equal(noDomain.ok, false);
+  assert.match(noDomain.message, /requires domain/);
+  const badDomain = await act(deps, { action: "research", domain: "nonsense", instruction: "Any trends?" });
+  assert.equal(badDomain.ok, false);
+  assert.match(badDomain.message, /requires domain/);
+});
+
+test("research runs in clarifying, planning and implementing without changing the task", async () => {
+  for (const state of ["clarifying", "planning", "implementing"] as const) {
+    const deps = makeDeps({ runProcess: researchRunner(RESEARCH_REPLY) });
+    withTask(deps, state);
+    const result = await act(deps, { action: "research", domain: "backend", instruction: "Any trends?" });
+    assert.equal(result.ok, true, result.message);
+    assert.match(result.message, /Research for backend \(confidence: high\)/);
+    assert.match(result.message, /https:\/\/example\.com\/docs/);
+    const task = loadTask(deps.root, deps.configDir, "TASK-1")!;
+    assert.equal(task.state, state);
+    assert.deepEqual(task.domains, []);
+  }
+});
+
+test("research persists its artifact and appends the research log", async () => {
+  const deps = makeDeps({ runProcess: researchRunner(RESEARCH_REPLY) });
+  withTask(deps, "implementing");
+  await act(deps, { action: "research", domain: "qa", instruction: "Which versions?" });
+  const taskDir = taskDirFor(deps.root, deps.configDir, "TASK-1");
+  assert.ok(existsSync(join(taskDir, "research-qa.json")), "research artifact is persisted");
+  const log = readFileSync(join(taskDir, "research.md"), "utf8");
+  assert.match(log, /Which versions\?|Does pi support a web search tool\?/);
+  assert.match(log, /https:\/\/example\.com\/docs/);
+});
+
+test("an unusable research run is reported as degraded, never as findings", async () => {
+  const sourceless = ["## Question", "Why?", "", "## Findings", "- a claim", "", "## Confidence", "High"].join("\n");
+  const deps = makeDeps({ runProcess: researchRunner(sourceless) });
+  withTask(deps, "clarifying");
+  const result = await act(deps, { action: "research", domain: "backend", instruction: "Why?" });
+  assert.equal(result.ok, true);
+  assert.match(result.message, /No usable cited research report/);
+  assert.match(result.message, /pi-web-access/);
+  assert.match(result.message, /no sources reported/);
+  assert.doesNotMatch(result.message, /^Findings:/m);
+});
+
+test("a failed research process reports the failure and the artifact path", async () => {
+  const failing: ProcessRunner = async () => ({ exitCode: 1, stdout: "", stderr: "boom", killed: false, timedOut: false });
+  const deps = makeDeps({ runProcess: failing });
+  withTask(deps, "clarifying");
+  const result = await act(deps, { action: "research", domain: "designer", instruction: "Any trends?" });
+  assert.equal(result.ok, true);
+  assert.match(result.message, /No usable cited research report \(run failed\)/);
+  assert.match(result.message, /Error: boom/);
+  assert.match(result.message, /research-designer\.json/);
 });

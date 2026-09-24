@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import type { DevHouseConfig } from "../schemas/configuration.ts";
-import type { AgentRun, ReviewResult } from "../schemas/findings.ts";
-import { TERMINAL_STATES, type Approval, type ApprovalKind, type Task, type TaskState } from "../schemas/task.ts";
+import type { AgentRun, ResearchResult, ReviewResult } from "../schemas/findings.ts";
+import { TASK_STATES, TERMINAL_STATES, type Approval, type ApprovalKind, type Task, type TaskState } from "../schemas/task.ts";
 import { isDomain, type Domain } from "../schemas/agent.ts";
 import { transition } from "../state/task-state.ts";
 import { removeTaskScratchpads, saveTask, selectTask, taskDirFor } from "../state/persistence.ts";
@@ -23,6 +23,7 @@ import {
   type WorkerOutcome,
   type WorkerRequest,
 } from "../master/master.ts";
+import { researchResultPath, runResearch, type ResearchOutcome, type ResearchRequest } from "../master/research.ts";
 import { assessReconnaissance, completionBlockers, decideReviewLoop, recordDecision } from "../master/decisions.ts";
 import { detectSharedFiles, summarizeOutcomes } from "../master/synthesis.ts";
 import { truncate } from "../text.ts";
@@ -32,6 +33,7 @@ import { nextStates } from "./transitions.ts";
 export const ORCHESTRATE_ACTIONS = [
   "clarify",
   "scout",
+  "research",
   "propose",
   "plan",
   "implement",
@@ -226,6 +228,105 @@ async function handleScout(task: Task, params: OrchestrateParams, deps: Workflow
   const involved = outcomes.filter((outcome) => outcome.usable).map((outcome) => outcome.result.domain);
   task.domains = [...new Set([...task.domains, ...involved])];
   return scoutReport(outcomes, verifying);
+}
+
+/** Research is evidence gathering, so it is legal in every non-terminal state. */
+const RESEARCH_STATES: TaskState[] = TASK_STATES.filter((state) => !TERMINAL_STATES.includes(state));
+
+const RESEARCH_DEGRADED =
+  "The researcher is spawned with read-only repository tools plus web_search, fetch_content, source_check and get_search_content. If pi-web-access is not installed, the pi CLI silently ignores those tool names, so research degrades to repository-only and cannot cite the internet.";
+
+function bulletSection(label: string, items: string[], limit: number): string {
+  if (items.length === 0) return "";
+  const bullets = items.slice(0, limit).map((item) => `- ${truncate(item, 300)}`);
+  return `${label}:\n${bullets.join("\n")}`;
+}
+
+function sourceSection(result: ResearchResult): string {
+  if (result.sources.length === 0) return "";
+  const lines = result.sources.slice(0, 12).map(
+    (source) =>
+      `- ${source.url}${source.title ? ` — ${truncate(source.title, 160)}` : ""}${source.date ? ` (${source.date})` : ""}`,
+  );
+  return `Sources:\n${lines.join("\n")}`;
+}
+
+function researchLogEntry(domain: Domain, outcome: ResearchOutcome): string {
+  const { result, run, issues, usable } = outcome;
+  return [
+    `## ${new Date().toISOString()} — ${domain} (${run.status}${usable ? "" : ", unusable"})`,
+    result.question ? `Question: ${result.question}` : "",
+    bulletSection("Findings", result.findings, 20),
+    sourceSection(result),
+    bulletSection("Unverified", result.unverified, 10),
+    `Confidence: ${result.confidence}`,
+    issues.length > 0 ? `Issues: ${issues.join("; ")}` : "",
+  ]
+    .filter((line) => line.length > 0)
+    .join("\n");
+}
+
+function appendResearchLog(taskDir: string, domain: Domain, outcome: ResearchOutcome): void {
+  const path = join(taskDir, "research.md");
+  const existing = readFileOr(path).trimEnd();
+  const entry = [existing, researchLogEntry(domain, outcome)].filter(Boolean).join("\n\n");
+  writeFileEnsured(path, `${entry}\n`);
+}
+
+function researchReport(outcome: ResearchOutcome, artifact: string): string {
+  const { result, run, issues, usable } = outcome;
+  if (run.status !== "success" || !usable) {
+    return [
+      `No usable cited research report (run ${run.status}).`,
+      RESEARCH_DEGRADED,
+      run.error ? `Error: ${run.error}` : "",
+      issues.length > 0 ? `Issues: ${issues.join("; ")}` : "",
+      `Artifact: ${artifact}`,
+    ]
+      .filter((line) => line.length > 0)
+      .join("\n");
+  }
+  return [
+    `Research for ${result.domain} (confidence: ${result.confidence})`,
+    `Question: ${truncate(result.question, 400)}`,
+    bulletSection("Findings", result.findings, 12),
+    sourceSection(result),
+    bulletSection("Unverified", result.unverified, 8),
+    `Artifact: ${artifact}`,
+    "Research is evidence only: it is not injected into worker, reviewer, or QA prompts, and nothing enters persistent knowledge until you record it with action=knowledge.",
+  ]
+    .filter((line) => line.length > 0)
+    .join("\n");
+}
+
+function researchRequestFor(
+  deps: WorkflowDeps,
+  task: Task,
+  domain: Domain,
+  instruction: string,
+  taskDir: string,
+): ResearchRequest {
+  return {
+    taskId: task.id,
+    domain,
+    instruction,
+    config: deps.config,
+    cwd: deps.cwd,
+    taskDir,
+    signal: deps.signal,
+    onUpdate: deps.onUpdate,
+  };
+}
+
+async function handleResearch(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
+  requireState(task, RESEARCH_STATES);
+  const domain = parseDomain(params.domain, "research");
+  const instruction = params.instruction?.trim();
+  if (!instruction) throw new Error("research requires instruction (the question to investigate)");
+  const taskDir = taskDirFor(deps.root, deps.configDir, task.id);
+  const outcome = await runResearch(researchRequestFor(deps, task, domain, instruction, taskDir), deps.runProcess ?? spawnPiProcess);
+  appendResearchLog(taskDir, domain, outcome);
+  return researchReport(outcome, researchResultPath(taskDir, domain));
 }
 
 async function handlePropose(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
@@ -602,6 +703,7 @@ function handleCancel(task: Task): string {
 const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams, deps: WorkflowDeps) => Promise<string> | string> = {
   clarify: handleClarify,
   scout: handleScout,
+  research: handleResearch,
   propose: handlePropose,
   plan: handlePlan,
   implement: handleImplement,

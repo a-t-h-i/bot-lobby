@@ -22,11 +22,11 @@ const OrchestrateSchema = Type.Object({
   question: Type.Optional(Type.String({ description: "clarify: question for the user" })),
   options: Type.Optional(Type.Array(Type.String(), { description: "clarify: optional answer choices" })),
   domains: Type.Optional(Type.Array(Type.String(), { description: "scout: any of designer, backend, qa" })),
-  instruction: Type.Optional(Type.String({ description: "scout: what to investigate (also used to target-verify a claim)" })),
+  instruction: Type.Optional(Type.String({ description: "scout/research: what to investigate (for scout, also used to target-verify a claim)" })),
   proposal: Type.Optional(Type.String({ description: "propose: the user-facing proposal, at most one paragraph" })),
   concerns: Type.Optional(Type.Array(Type.String(), { description: "propose: concerns raised while challenging the request" })),
   plan: Type.Optional(Type.String({ description: "plan: the detailed internal plan" })),
-  domain: Type.Optional(Type.String({ description: "implement: designer, backend, or qa" })),
+  domain: Type.Optional(Type.String({ description: "implement/review/research: designer, backend, or qa" })),
   task: Type.Optional(Type.String({ description: "implement: the concrete step for that domain's worker" })),
   approvalId: Type.Optional(Type.String({ description: "resolve_approval: the approval id from a worker result" })),
   decision: Type.Optional(
@@ -45,12 +45,14 @@ const OrchestrateSchema = Type.Object({
 
 const DESCRIPTION = [
   "Drive the dev-house multi-agent workflow for the active task.",
-  "Actions: clarify (ask the user), scout (domain reconnaissance in parallel), propose (record the",
-  "proposal and request approval), plan (record the internal plan), implement (delegate one step to a",
-  "domain worker), review (independent verification of the current diff), qa (final quality gate),",
-  "knowledge (record approved knowledge or a decision), compact (replace a knowledge file with a",
-  "rewritten version, archiving the old one), resolve_approval (approve or reject a request), complete",
-  "(declare the task done after the gates pass), block/resume (escalate or continue), status, cancel.",
+  "Actions: clarify (ask the user), scout (domain reconnaissance in parallel), research (summon the",
+  "read-only researcher for cited internet evidence on a complex change, tool, plugin, doc set or",
+  "dependency), propose (record the proposal and request approval), plan (record the internal",
+  "plan), implement (delegate one step to a domain worker), review (independent verification of the",
+  "current diff), qa (final quality gate), knowledge (record approved knowledge or a decision),",
+  "compact (replace a knowledge file with a rewritten version, archiving the old one),",
+  "resolve_approval (approve or reject a request), complete (declare the task done after the gates",
+  "pass), block/resume (escalate or continue), status, cancel.",
   "The engine validates every step against the task state machine, so a rejected action means the workflow is not at that step yet.",
 ].join(" ");
 

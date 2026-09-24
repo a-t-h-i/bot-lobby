@@ -6,7 +6,8 @@ software engineering orchestrator.
 `/dev-house <request>` starts a task. One Master agent (the Pi session you are
 already talking to) coordinates three domain agents — **Designer+Frontend**,
 **Backend**, and **QA** — each able to act as a **Scout**, **Worker**, or
-**Reviewer** in an isolated Pi subprocess.
+**Reviewer** in an isolated Pi subprocess. A read-only **Researcher** role can be
+summoned for cited internet evidence.
 
 The core rule: **LLMs make decisions; the engine enforces the rules.** Agents
 propose work; the extension validates state transitions, role permissions,
@@ -85,6 +86,7 @@ One tool, every workflow step. It is the Master's only way to move a task.
 |---|---|---|
 | `clarify` | created, clarifying | Ask the user a question (or return it for the Master to ask) |
 | `scout` | created…synthesizing | Run domain reconnaissance in parallel; repeat later to target-verify a claim |
+| `research` | any active | Summon the read-only Researcher (domain + instruction) for cited internet evidence; persists the report for audit |
 | `propose` | created…awaiting_approval | Record the proposal, request approval, handle approve/amend/decline |
 | `plan` | planning | Record the internal plan (all §12 areas required) |
 | `implement` | planning, implementing, reviewing | Delegate one step to a domain Worker |
@@ -97,6 +99,30 @@ One tool, every workflow step. It is the Master's only way to move a task.
 | `block` / `resume` | implementing, reviewing / blocked | Escalate or continue |
 | `decide`, `status`, `cancel` | any active | Record a decision, inspect, abandon |
 
+## Research
+
+`orchestrate action=research` summons a read-only **Researcher** for one domain
+(reusing that domain's model, thinking level, and prompt layers) with a `domain`
+and an `instruction`. It is legal in any non-terminal state, is never callable by
+workers, and never changes the task state or `task.domains`.
+
+The researcher has read-only repository tools plus `web_search`, `fetch_content`,
+`source_check`, and `get_search_content`. It must cite a URL (and a date or
+version where the source states one) for every claim, list what it could not
+verify, and state a confidence level; it never implements, writes, or installs
+anything. Reports are persisted for audit as `research-<domain>.json` and
+appended to `research.md` in the task directory, and the tool returns a bounded
+summary to the Master.
+
+Those web tools come from the separate `pi-web-access` extension. The pi CLI
+silently ignores unknown `--tools` names, so without it the researcher loses
+internet access and degrades to repository-only; the returned message says so
+explicitly instead of presenting it as findings.
+
+Research is evidence only: it is not injected into worker, reviewer, or QA
+prompts, and it never enters persistent knowledge automatically. The Master must
+decide to record it with `action=knowledge`.
+
 ## What the engine enforces (not just prompts)
 
 | Rule | Enforcement |
@@ -108,6 +134,7 @@ One tool, every workflow step. It is the Master's only way to move a task.
 | Dependency and architecture changes need approval | Worker output is parsed; pending approvals block that domain until resolved |
 | Review loops are bounded | `maxReviewIterations`; exceeding it forces the blocked path |
 | Only the Master writes knowledge | Agents only propose; one dedup-aware write path |
+| Research never becomes knowledge by itself | Reports are artifacts; only the Master's `action=knowledge` writes persistent knowledge |
 | Completion is gated | Plan, accepted review per domain, passing QA gate, no blockers or pending approvals |
 | Failure is never success | Unknown verdicts, empty output, crashes, and timeouts map to failed/timeout/blocked |
 | Task state is never corrupted by a crash | Single mutation point + disk state; interrupted tasks resume from their state |
@@ -171,7 +198,9 @@ the defaults; `DEV_HOUSE_CONFIG_DIR` overrides the config directory.
     ├── proposal.md             scratchpads: deleted on completion
     ├── plan.md
     ├── designer.md backend.md qa.md
-    └── scout-<domain>.json     structured scout artifacts
+    ├── scout-<domain>.json     structured scout artifacts
+    ├── research-<domain>.json  structured research reports (kept for audit)
+    └── research.md             appended research log (kept for audit)
 ```
 
 The global config lives outside this per-project tree, at
@@ -187,10 +216,11 @@ src/
 ├── index.ts                  Extension entry: lifecycle, commands, orchestrate tool
 ├── master/
 │   ├── master.ts             Scout/Worker/Reviewer delegation and artifact persistence
+│   ├── research.ts           Researcher delegation and research artifact persistence
 │   ├── synthesis.ts          Bounded summaries, shared-file and gap detection
 │   └── decisions.ts          Decision log, review-loop rule, completion gates
 ├── agents/                   Domain specs (designer, backend, qa) + registry
-├── roles/                    Scout/Worker/Reviewer specs, output contracts, parsers
+├── roles/                    Scout/Worker/Reviewer/Researcher specs, contracts, parsers
 ├── workflow/
 │   ├── workflow.ts           The engine: every action, every guard
 │   ├── transitions.ts        Legal state machine
@@ -204,7 +234,7 @@ src/
 ├── state/                    Project root, config, task persistence, state mutation
 ├── schemas/                  Task, agent, findings, configuration types
 └── pi/                       Commands, lifecycle, orchestrate tool, status widget
-prompts/                      global, master, designer, backend, qa, scout, worker, reviewer
+prompts/                      global, master, designer, backend, qa, scout, worker, reviewer, researcher
 ```
 
 Prompts are composed, never duplicated: `global + domain + role + task context +
