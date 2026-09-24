@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -82,6 +82,19 @@ function makeCtx(cwd: string, expanded = false) {
 function tempDir(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
+
+// The suite also runs inside a subagent process (DEV_HOUSE_SUBAGENT=1), where
+// registration, filtering and shortcut wiring are intentionally skipped. Tests
+// must observe the master path, so the ambient flag is parked for the file.
+let ambientSubagent: string | undefined;
+before(() => {
+  ambientSubagent = process.env.DEV_HOUSE_SUBAGENT;
+  delete process.env.DEV_HOUSE_SUBAGENT;
+});
+after(() => {
+  if (ambientSubagent === undefined) delete process.env.DEV_HOUSE_SUBAGENT;
+  else process.env.DEV_HOUSE_SUBAGENT = ambientSubagent;
+});
 
 function setSubagent(value: string | undefined): () => void {
   const key = "DEV_HOUSE_SUBAGENT";
