@@ -68,8 +68,8 @@ id, state, elapsed time and quiet-mode hint, an estimated ETA and progress bar; 
 oracle tower with its ORC door, animated orb, window eyes and seven-column mouth;
 four animated slots — DEV, DESIGN, RESEARCH and QA — each with a status face, a
 coloured status glyph and state word and a 10-cell bar; and a TASKS checklist
-windowed on the
-current step beside a LOG of real run transitions. Narrower terminals keep the
+windowed on the current step beside a LOG of real run transitions. Narrower
+terminals keep the
 boxed banner, header and compact animated strip. Each sprite rests on one calm
 face and, independently every 20–30 s, briefly blinks (~150 ms) or emotes
 (~600 ms); the oracle's mouth moves with its expressions. Sprites redraw on an
