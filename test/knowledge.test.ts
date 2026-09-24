@@ -131,7 +131,6 @@ test("completion flushes the task's decisions into the knowledge store", async (
   task.domains = ["backend"];
   task.plan = "plan mentions files, sequence, dependencies, testing, acceptance, rollback, review";
   task.qaVerdict = "pass";
-  task.reviewRecords.push({ domain: "backend", verdict: "pass", findings: [], requiredChanges: [], createdAt: "2026-01-01T00:00:00.000Z" });
   task.decisions.push({ domain: "backend", text: "Use the existing query builder.", createdAt: "2026-01-01T00:00:00.000Z" });
   saveTask(deps.root, deps.configDir, task);
 

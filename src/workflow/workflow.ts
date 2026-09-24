@@ -38,7 +38,6 @@ export const ORCHESTRATE_ACTIONS = [
   "plan",
   "implement",
   "resolve_approval",
-  "review",
   "qa",
   "knowledge",
   "compact",
@@ -62,7 +61,7 @@ export interface OrchestrateParams {
   concerns?: string[];
   plan?: string;
   domain?: string;
-  /** implement/review: the concrete instruction for the worker. */
+  /** implement: the concrete instruction for the worker. */
   task?: string;
   /** knowledge: which persistent file the text belongs to. */
   kind?: KnowledgeKind;
@@ -394,7 +393,7 @@ function workerReport(outcome: WorkerOutcome, approvals: Approval[]): string {
       ? `Knowledge proposals (accept with action=knowledge, or ignore): ${result.knowledgeProposals.map((proposal) => `${proposal.kind}: ${truncate(proposal.content, 160)}`).join("; ")}`
       : "",
     issues.length > 0 ? `Issues: ${issues.join("; ")}` : "",
-    "Next: inspect the diff, then run action=review for this domain.",
+    "Next: inspect the diff, then run action=qa once this domain's work is complete.",
   ]
     .filter((line) => line.length > 0)
     .join("\n");
@@ -466,54 +465,10 @@ function handleResolveApproval(task: Task, params: OrchestrateParams): string {
     ? `${id} approved. The ${approval.domain} worker may now proceed with: ${approval.detail}`
     : `${id} rejected. Instruct the ${approval.domain} worker to achieve the goal without that change.`;
 }
-function reviewReport(outcome: ReviewerOutcome, decision: "accept" | "iterate" | "blocked"): string {
-  const { result, run, issues } = outcome;
-  return [
-    `Reviewer ${result.domain}: verdict ${result.verdict.toUpperCase()} (run ${run.status})`,
-    result.findings.length > 0
-      ? `Findings:\n${result.findings.map((finding) => `- [${finding.severity}] ${truncate(finding.text, 300)}`).join("\n")}`
-      : "",
-    result.requiredChanges.length > 0
-      ? `Required changes:\n${result.requiredChanges.map((change) => `- ${truncate(change, 300)}`).join("\n")}`
-      : "",
-    result.verification ? `Verification: ${truncate(result.verification, 400)}` : "",
-    `Review-loop decision: ${decision}${decision === "iterate" ? " — re-run action=implement with the required changes" : ""}`,
-    decision === "blocked" ? "The review limit is reached: mark the task blocked and tell the user." : "",
-    issues.length > 0 ? `Issues: ${issues.join("; ")}` : "",
-    run.error ? `Error: ${run.error}` : "",
-  ]
-    .filter((line) => line.length > 0)
-    .join("\n");
-}
 
 function scratchpadSummary(deps: WorkflowDeps, task: Task, domain: Domain): string {
   return readFileOr(scratchpadPath(taskDirFor(deps.root, deps.configDir, task.id), domain));
 }
-
-function reviewerRequest(
-  deps: WorkflowDeps,
-  task: Task,
-  domain: Domain,
-  diff: string,
-  instruction?: string,
-): ReviewerRequest {
-  const taskDir = taskDirFor(deps.root, deps.configDir, task.id);
-  return {
-    taskId: task.id,
-    domain,
-    taskText: workerTaskText(task),
-    workerSummary: scratchpadSummary(deps, task, domain),
-    scoutOutcomes: loadScoutResults(taskDir, [domain]),
-    diff,
-    instruction,
-    cwd: deps.cwd,
-    dataRoot: dataRoot(deps.root, deps.configDir),
-    config: deps.config,
-    signal: deps.signal,
-    onUpdate: deps.onUpdate,
-  };
-}
-
 function recordReview(task: Task, domain: Domain, result: ReviewResult): void {
   task.reviewRecords.push({
     domain,
@@ -523,20 +478,6 @@ function recordReview(task: Task, domain: Domain, result: ReviewResult): void {
     createdAt: new Date().toISOString(),
   });
 }
-
-async function handleReview(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
-  requireState(task, ["implementing", "reviewing"]);
-  const domain = parseDomain(params.domain, "review");
-  if (task.state !== "reviewing") transition(task, "reviewing");
-  task.reviewIterations[domain] += 1;
-  const diff = await readRepositoryDiff(deps.cwd);
-  const outcome = await runReviewer(reviewerRequest(deps, task, domain, diff, params.task), deps.runProcess ?? spawnPiProcess);
-  recordReview(task, domain, outcome.result);
-  const decision = decideReviewLoop(outcome.result.verdict, task.reviewIterations[domain], deps.config.workflow.maxReviewIterations);
-  if (decision === "accept") task.blockers = task.blockers.filter((blocker) => blocker.domain !== domain);
-  return reviewReport(outcome, decision);
-}
-
 function allScratchpads(deps: WorkflowDeps, task: Task): string {
   return (["designer", "backend", "qa"] as Domain[])
     .map((domain) => scratchpadSummary(deps, task, domain).trim())
@@ -569,7 +510,7 @@ function qaRequest(deps: WorkflowDeps, task: Task, diff: string, instruction?: s
   };
 }
 
-function qaReport(outcome: ReviewerOutcome): string {
+function qaReport(outcome: ReviewerOutcome, decision: "accept" | "iterate" | "blocked"): string {
   const { result, run, issues } = outcome;
   return [
     `QA gate: ${result.verdict.toUpperCase()} (run ${run.status}${run.error ? `: ${run.error}` : ""})`,
@@ -579,9 +520,10 @@ function qaReport(outcome: ReviewerOutcome): string {
     result.requiredChanges.length > 0
       ? `Required changes:\n${result.requiredChanges.map((change) => `- ${truncate(change, 300)}`).join("\n")}`
       : "",
-    result.verdict === "pass"
+    decision === "accept"
       ? "The QA gate passed. Record any distilled knowledge, then call action=complete."
       : "The QA gate did not pass: delegate the required changes to the owning domain, then re-run action=qa.",
+    decision === "blocked" ? "The review limit is reached: mark the task blocked and tell the user." : "",
     issues.length > 0 ? `Issues: ${issues.join("; ")}` : "",
   ]
     .filter((line) => line.length > 0)
@@ -589,12 +531,17 @@ function qaReport(outcome: ReviewerOutcome): string {
 }
 
 async function handleQa(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
-  requireState(task, ["reviewing"]);
+  requireState(task, ["implementing", "reviewing"]);
+  if (task.state !== "reviewing") transition(task, "reviewing");
+  const iterations = (task.reviewIterations?.qa ?? 0) + 1;
+  task.reviewIterations = { qa: iterations };
   const diff = await readRepositoryDiff(deps.cwd);
   const outcome = await runReviewer(qaRequest(deps, task, diff, params.task), deps.runProcess ?? spawnPiProcess);
   task.qaVerdict = outcome.result.verdict;
   recordReview(task, "qa", outcome.result);
-  return qaReport(outcome);
+  const decision = decideReviewLoop(outcome.result.verdict, iterations, deps.config.workflow.maxReviewIterations);
+  if (decision === "accept") task.blockers = task.blockers.filter((blocker) => blocker.domain !== "qa");
+  return qaReport(outcome, decision);
 }
 
 /**
@@ -708,7 +655,6 @@ const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams
   plan: handlePlan,
   implement: handleImplement,
   resolve_approval: handleResolveApproval,
-  review: handleReview,
   qa: handleQa,
   knowledge: handleKnowledge,
   compact: handleCompact,

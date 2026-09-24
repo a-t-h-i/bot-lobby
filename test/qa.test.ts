@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { completionBlockers } from "../src/master/decisions.ts";
@@ -20,7 +20,7 @@ function review(text: string): string {
 const PASS = "## Verdict\nPASS\n\n## Verification\n- `npm test` — passing";
 const FAIL = "## Verdict\nCHANGES_REQUIRED\n\n## Findings\n- [major] regression in the empty state\n\n## Required Changes\n- handle empty list";
 
-const REVIEWING: TaskState[] = ["clarifying", "scouting", "synthesizing", "awaiting_approval", "planning", "implementing", "reviewing"];
+const FLOW: TaskState[] = ["clarifying", "scouting", "synthesizing", "awaiting_approval", "planning", "implementing", "reviewing"];
 
 function makeDeps(overrides: Partial<WorkflowDeps> = {}): WorkflowDeps {
   return {
@@ -36,16 +36,17 @@ function makeDeps(overrides: Partial<WorkflowDeps> = {}): WorkflowDeps {
   };
 }
 
-function withTask(deps: WorkflowDeps, options: { acceptedReview?: boolean; qa?: "pass" | "changes_required" } = {}): Task {
+function withTask(deps: WorkflowDeps, options: { state?: "implementing" | "reviewing"; qa?: "pass" | "changes_required" } = {}): Task {
   ensureProjectStructure(deps.root, deps.configDir);
   const task = createTask("TASK-1", "Add pagination");
   createTaskDir(deps.root, deps.configDir, task);
-  for (const step of REVIEWING) transition(task, step);
+  const until = options.state ?? "reviewing";
+  for (const step of FLOW) {
+    transition(task, step);
+    if (step === until) break;
+  }
   task.domains = ["backend"];
   task.plan = "## Objective\nAdd pagination.\n## Domains\nbackend\n## Files\nsrc/api/users.ts\n## Sequence\n1\n## Dependencies\nnone\n## Testing\nunit\n## Acceptance Criteria\nworks\n## Rollback\nrevert\n## Review\npeer";
-  if (options.acceptedReview !== false) {
-    task.reviewRecords.push({ domain: "backend", verdict: "pass", findings: [], requiredChanges: [], createdAt: "2026-01-01T00:00:00.000Z" });
-  }
   if (options.qa) task.qaVerdict = options.qa;
   saveTask(deps.root, deps.configDir, task);
   return task;
@@ -61,8 +62,6 @@ test("completionBlockers lists every unmet gate", () => {
   task.plan = "plan";
   task.domains = ["backend"];
   task.qaVerdict = "pass";
-  assert.deepEqual(completionBlockers(task, 0), ["backend has no accepted review"]);
-  task.reviewRecords.push({ domain: "backend", verdict: "pass", findings: [], requiredChanges: [], createdAt: "now" });
   assert.deepEqual(completionBlockers(task, 0), []);
   assert.deepEqual(completionBlockers(task, 2), ["2 unresolved approval request(s)"]);
   task.blockers.push({ domain: "backend", reason: "x", tried: [], need: "y", createdAt: "now" });
@@ -71,7 +70,7 @@ test("completionBlockers lists every unmet gate", () => {
 
 test("qa runs the gate, records the verdict, and reports a pass", async () => {
   const deps = makeDeps();
-  withTask(deps, { acceptedReview: false });
+  withTask(deps);
   const result = await act(deps, { action: "qa" });
   assert.equal(result.ok, true, result.message);
   assert.equal(result.state, "reviewing");
@@ -89,14 +88,34 @@ test("a failing QA gate tells the Master to send work back", async () => {
   assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.qaVerdict, "changes_required");
 });
 
+test("qa is accepted from implementing and transitions to reviewing", async () => {
+  const deps = makeDeps();
+  withTask(deps, { state: "implementing" });
+  const result = await act(deps, { action: "qa" });
+  assert.equal(result.ok, true, result.message);
+  assert.equal(result.state, "reviewing");
+  assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.reviewIterations.qa, 1);
+});
+
+test("a failing QA gate iterates until the review limit, then blocks", async () => {
+  const runner: ProcessRunner = async () => ({ exitCode: 0, stdout: review(FAIL), stderr: "", killed: false, timedOut: false });
+  const deps = makeDeps({ runProcess: runner });
+  withTask(deps, { state: "implementing" });
+  const first = await act(deps, { action: "qa" });
+  assert.match(first.message, /re-run action=qa/);
+  const second = await act(deps, { action: "qa" });
+  assert.match(second.message, /mark the task blocked/);
+  assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.reviewIterations.qa, 2);
+});
+
 test("complete is refused until every gate passes", async () => {
   const deps = makeDeps();
-  withTask(deps, { acceptedReview: false, qa: "changes_required" });
+  withTask(deps, { qa: "changes_required" });
   const result = await act(deps, { action: "complete" });
   assert.equal(result.ok, false);
   assert.match(result.message, /cannot complete/);
   assert.match(result.message, /QA gate is changes_required/);
-  assert.match(result.message, /backend has no accepted review/);
+  assert.doesNotMatch(result.message, /accepted review/);
 });
 
 test("complete records history, clears scratchpads, and finishes the task", async () => {
@@ -124,7 +143,7 @@ test("a completed task rejects further workflow actions", async () => {
   assert.match(result.message, /already completed/);
 });
 
-test("qa and complete are rejected outside the reviewing state", async () => {
+test("qa and complete are rejected outside implementing/reviewing", async () => {
   const deps = makeDeps();
   ensureProjectStructure(deps.root, deps.configDir);
   const task = createTask("TASK-1", "x");
@@ -136,4 +155,24 @@ test("qa and complete are rejected outside the reviewing state", async () => {
   const complete = await act(deps, { action: "complete" });
   assert.equal(complete.ok, false);
   assert.match(complete.message, /not allowed in state/);
+});
+
+test("legacy per-domain review state still loads and completes after a qa pass", async () => {
+  const deps = makeDeps();
+  withTask(deps);
+  const statePath = join(taskDirFor(deps.root, deps.configDir, "TASK-1"), "state.json");
+  const legacy = {
+    ...JSON.parse(readFileSync(statePath, "utf8")),
+    reviewIterations: { designer: 1, backend: 1, qa: 0 },
+    reviewRecords: [{ domain: "backend", verdict: "pass", findings: [], requiredChanges: [], createdAt: "2026-01-01T00:00:00.000Z" }],
+  };
+  writeFileSync(statePath, JSON.stringify(legacy));
+
+  const qa = await act(deps, { action: "qa" });
+  assert.equal(qa.ok, true, qa.message);
+  const complete = await act(deps, { action: "complete" });
+  assert.equal(complete.ok, true, complete.message);
+  const task = loadTask(deps.root, deps.configDir, "TASK-1")!;
+  assert.equal(task.state, "completed");
+  assert.deepEqual(task.reviewIterations, { qa: 1 });
 });

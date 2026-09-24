@@ -105,57 +105,6 @@ test("decideReviewLoop accepts passes, iterates within the limit, then blocks", 
   assert.equal(decideReviewLoop("changes_required", 2, 2), "blocked");
 });
 
-test("review records the verdict and returns accept for a pass", async () => {
-  const deps = makeDeps();
-  withTask(deps, "implementing");
-  const result = await act(deps, { action: "review", domain: "backend" });
-  assert.equal(result.ok, true, result.message);
-  assert.equal(result.state, "reviewing");
-  assert.match(result.message, /verdict PASS/);
-  assert.match(result.message, /Review-loop decision: accept/);
-  const task = loadTask(deps.root, deps.configDir, "TASK-1")!;
-  assert.equal(task.reviewRecords.length, 1);
-  assert.equal(task.reviewIterations.backend, 1);
-});
-
-test("a changes-required review asks for another worker iteration", async () => {
-  const runner: ProcessRunner = async () => ({ exitCode: 0, stdout: review(CHANGES), stderr: "", killed: false, timedOut: false });
-  const deps = makeDeps({ runProcess: runner });
-  withTask(deps, "implementing");
-  const result = await act(deps, { action: "review", domain: "backend" });
-  assert.equal(result.state, "reviewing");
-  assert.match(result.message, /Review-loop decision: iterate/);
-  assert.match(result.message, /Validate limit and offset/);
-});
-
-test("the review iteration limit blocks further iteration", async () => {
-  const runner: ProcessRunner = async () => ({ exitCode: 0, stdout: review(CHANGES), stderr: "", killed: false, timedOut: false });
-  const deps = makeDeps({ runProcess: runner });
-  withTask(deps, "implementing");
-  const first = await act(deps, { action: "review", domain: "backend" });
-  assert.match(first.message, /iterate/);
-  const second = await act(deps, { action: "review", domain: "backend" });
-  assert.match(second.message, /Review-loop decision: blocked/);
-  assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.reviewIterations.backend, 2);
-});
-
-test("a failed reviewer run is reported instead of accepted", async () => {
-  const failing: ProcessRunner = async () => ({ exitCode: 1, stdout: "", stderr: "reviewer crashed", killed: false, timedOut: false });
-  const deps = makeDeps({ runProcess: failing });
-  withTask(deps, "implementing");
-  const result = await act(deps, { action: "review", domain: "backend" });
-  assert.match(result.message, /BLOCKED/);
-  assert.match(result.message, /reviewer crashed/);
-});
-
-test("review is rejected while the task is still being planned", async () => {
-  const deps = makeDeps();
-  withTask(deps, "planning" as TaskState);
-  const result = await act(deps, { action: "review", domain: "backend" });
-  assert.equal(result.ok, false);
-  assert.match(result.message, /not allowed in state/);
-});
-
 test("block moves the task to blocked and resume restores implementation", async () => {
   const deps = makeDeps();
   withTask(deps, "implementing");

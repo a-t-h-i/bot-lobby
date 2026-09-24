@@ -9,7 +9,7 @@ test("createTask produces a valid initial task", () => {
   assert.equal(task.title, "Add feature X");
   assert.deepEqual(task.domains, []);
   assert.equal(task.paused, false);
-  assert.deepEqual(task.reviewIterations, { designer: 0, backend: 0, qa: 0 });
+  assert.deepEqual(task.reviewIterations, { qa: 0 });
   assert.deepEqual(task.reviewRecords, []);
 });
 

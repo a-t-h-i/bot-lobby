@@ -127,7 +127,7 @@ test("an interrupted task can be resumed from the state it stopped in", async ()
   assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.state, "synthesizing");
 });
 
-test("a task left mid-review can re-run the review after a crash", async () => {
+test("a task left mid-review can re-run the QA gate after a crash", async () => {
   const deps: WorkflowDeps = {
     root: mkdtempSync(join(tmpdir(), "dh-rel3-")),
     configDir: ".pi",
@@ -139,15 +139,15 @@ test("a task left mid-review can re-run the review after a crash", async () => {
     runProcess: async () => outcome(reply("## Verdict\nPASS\n\n## Verification\n- npm test")),
   };
   ensureProjectStructure(deps.root, deps.configDir);
-  const task = createTask("TASK-1", "Interrupted review");
+  const task = createTask("TASK-1", "Interrupted QA gate");
   createTaskDir(deps.root, deps.configDir, task);
   for (const step of ["clarifying", "scouting", "synthesizing", "awaiting_approval", "planning", "implementing", "reviewing"] as TaskState[]) {
     transition(task, step);
   }
   saveTask(deps.root, deps.configDir, task);
 
-  const resumed = await runWorkflowAction({ action: "review", taskId: "TASK-1", domain: "backend" } as OrchestrateParams, deps);
+  const resumed = await runWorkflowAction({ action: "qa", taskId: "TASK-1" } as OrchestrateParams, deps);
   assert.equal(resumed.ok, true, resumed.message);
   assert.equal(resumed.state, "reviewing");
-  assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.reviewIterations.backend, 1);
+  assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.reviewIterations.qa, 1);
 });

@@ -10,10 +10,6 @@ export function completionBlockers(task: Task, pendingCount: number): string[] {
   if (task.qaVerdict !== "pass") blockers.push(`QA gate is ${task.qaVerdict ?? "not run"}`);
   if (pendingCount > 0) blockers.push(`${pendingCount} unresolved approval request(s)`);
   if (task.blockers.length > 0) blockers.push(`${task.blockers.length} unresolved blocker(s)`);
-  for (const domain of task.domains.filter((entry) => entry !== "qa")) {
-    const accepted = task.reviewRecords.some((record) => record.domain === domain && record.verdict === "pass");
-    if (!accepted) blockers.push(`${domain} has no accepted review`);
-  }
   return blockers;
 }
 

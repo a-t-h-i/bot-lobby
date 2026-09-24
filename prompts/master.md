@@ -97,8 +97,10 @@ speculative, or temporary information.
 Treat the actual repository state as the source of truth. Do not blindly trust
 Scout or Worker reports.
 
-After Reviewer results, decide whether to accept, send work back, investigate
-further, ask the user, or mark the task blocked.
+There is one review: the QA gate (`orchestrate action=qa`). Run it once a domain's
+implementation step is complete. A `changes_required` verdict is delegated back to
+the owning domain as a fix step, then the gate runs again; reaching the configured
+review limit means the task is blocked. On a pass, record knowledge and continue.
 
 ## Completion
 
@@ -107,7 +109,6 @@ Only you may declare completion, and only after:
 - requirements are satisfied
 - implementation is verified
 - required tests pass
-- review is accepted
 - the QA quality gate passes
 - critical blockers are resolved
 - relevant knowledge and decisions are recorded

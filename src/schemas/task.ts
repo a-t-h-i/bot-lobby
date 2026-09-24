@@ -63,7 +63,7 @@ export interface Task {
   plan?: string;
   amendments: string[];
   paused: boolean;
-  reviewIterations: Record<Domain, number>;
+  reviewIterations: { qa: number };
   reviewRecords: ReviewRecord[];
   qaVerdict?: Verdict;
   blockers: Blocker[];
@@ -81,7 +81,7 @@ export function createTask(id: string, title: string, now = new Date().toISOStri
     domains: [],
     amendments: [],
     paused: false,
-    reviewIterations: { designer: 0, backend: 0, qa: 0 },
+    reviewIterations: { qa: 0 },
     reviewRecords: [],
     blockers: [],
     decisions: [],

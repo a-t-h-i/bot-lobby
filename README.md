@@ -5,8 +5,9 @@ software engineering orchestrator.
 
 `/dev-house <request>` starts a task. One Master agent (the Pi session you are
 already talking to) coordinates three domain agents — **Designer+Frontend**,
-**Backend**, and **QA** — each able to act as a **Scout**, **Worker**, or
-**Reviewer** in an isolated Pi subprocess. A read-only **Researcher** role can be
+**Backend**, and **QA** — each able to act as a **Scout** or **Worker** in an
+isolated Pi subprocess. **QA** also runs the read-only **Reviewer** role as the
+single quality gate. A read-only **Researcher** role can be
 summoned for cited internet evidence.
 
 The core rule: **LLMs make decisions; the engine enforces the rules.** Agents
@@ -80,8 +81,8 @@ concise task name; older `TASK-<timestamp>` tasks keep loading untouched.
 
 ```
 REQUEST → CLARIFY → (CHALLENGE) → SCOUT → SYNTHESIS → PROPOSAL
-  → APPROVE / AMEND / DECLINE → PLAN → WORK → REVIEW → (ITERATE)
-  → QA GATE → KNOWLEDGE UPDATE → CLEANUP → COMPLETE
+  → APPROVE / AMEND / DECLINE → PLAN → WORK → QA GATE → (FIX → QA GATE)
+  → KNOWLEDGE UPDATE → CLEANUP → COMPLETE
 ```
 
 States: `created`, `clarifying`, `scouting`, `synthesizing`,
@@ -102,8 +103,7 @@ One tool, every workflow step. It is the Master's only way to move a task.
 | `propose` | created…awaiting_approval | Record the proposal, request approval, handle approve/amend/decline |
 | `plan` | planning | Record the internal plan (all §12 areas required) |
 | `implement` | planning, implementing, reviewing | Delegate one step to a domain Worker |
-| `review` | implementing, reviewing | Independent review of the real diff |
-| `qa` | reviewing | Run the QA quality gate over the whole feature |
+| `qa` | implementing, reviewing | Run the QA gate — the only review — over the whole feature |
 | `knowledge` | any active | Record Master-approved knowledge or a decision |
 | `compact` | any active | Replace a knowledge file with a rewritten version (archived) |
 | `resolve_approval` | any active | Approve or reject a Worker's dependency/architecture request |
@@ -142,12 +142,12 @@ decide to record it with `action=knowledge`.
 | A step cannot run out of order | State machine validated in `runWorkflowAction` |
 | No implementation before user approval | `implement` rejects any pre-approval state |
 | Scouts cannot modify anything | Spawned with `--tools read,grep,find,ls` |
-| Reviewers cannot modify implementation | Read-only tools plus `bash` for tests/analysis |
+| The QA gate cannot modify implementation | Read-only Reviewer tools plus `bash` for tests/analysis |
 | Dependency and architecture changes need approval | Worker output is parsed; pending approvals block that domain until resolved |
-| Review loops are bounded | `maxReviewIterations`; exceeding it forces the blocked path |
+| QA review loops are bounded | `maxReviewIterations`; exceeding it forces the blocked path |
 | Only the Master writes knowledge | Agents only propose; one dedup-aware write path |
 | Research never becomes knowledge by itself | Reports are artifacts; only the Master's `action=knowledge` writes persistent knowledge |
-| Completion is gated | Plan, accepted review per domain, passing QA gate, no blockers or pending approvals |
+| Completion is gated | Plan, passing QA gate, no blockers or pending approvals |
 | Failure is never success | Unknown verdicts, empty output, crashes, and timeouts map to failed/timeout/blocked |
 | Task state is never corrupted by a crash | Single mutation point + disk state; interrupted tasks resume from their state |
 
