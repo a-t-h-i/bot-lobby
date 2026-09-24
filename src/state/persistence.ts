@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { KnowledgeConfig } from "../schemas/configuration.ts";
 import type { Domain } from "../schemas/agent.ts";
 import { TERMINAL_STATES, isTaskState, type Task } from "../schemas/task.ts";
-import { dataRoot } from "./project.ts";
+import { dataRoot, legacyDataRoot, readDataRoots } from "./project.ts";
 import {
   AGENT_DIR_NAMES,
   KNOWLEDGE_FILES,
@@ -13,17 +13,20 @@ import {
   tasksRoot,
   type KnowledgeAgent,
 } from "../knowledge/paths.ts";
-import { DEFAULT_KNOWLEDGE_CONTENT, ensureFile, writeFileEnsured } from "../knowledge/store.ts";
+import { DEFAULT_KNOWLEDGE_CONTENT, ensureFile, readFileOr, writeFileEnsured } from "../knowledge/store.ts";
 
 /** Idempotently create the full knowledge + tasks layout with seed files. */
 export function ensureProjectStructure(root: string, configDir: string): void {
   const dr = dataRoot(root, configDir);
+  const legacy = legacyDataRoot(root, configDir);
   const agents = Object.keys(AGENT_DIR_NAMES) as KnowledgeAgent[];
   for (const agent of agents) {
     const dir = knowledgeDir(dr, agent);
     mkdirSync(dir, { recursive: true });
     for (const file of KNOWLEDGE_FILES[agent]) {
-      ensureFile(join(dir, file), DEFAULT_KNOWLEDGE_CONTENT[file] ?? `# ${file}\n`);
+      // Seed from the legacy tree so pre-rename knowledge is migrated, not shadowed by defaults.
+      const migrated = readFileOr(join(knowledgeDir(legacy, agent), file));
+      ensureFile(join(dir, file), migrated || (DEFAULT_KNOWLEDGE_CONTENT[file] ?? `# ${file}\n`));
     }
   }
   mkdirSync(tasksRoot(dr), { recursive: true });
@@ -49,12 +52,19 @@ export function saveTask(root: string, configDir: string, task: Task): void {
   writeFileEnsured(join(taskDir(dataRoot(root, configDir), task.id), "state.json"), JSON.stringify(task, null, 2));
 }
 
+/** Read a task state: the dev-lobby copy wins, else the legacy dev-house copy. */
 export function loadTask(root: string, configDir: string, taskId: string): Task | undefined {
-  try {
-    return JSON.parse(readFileSync(join(taskDir(dataRoot(root, configDir), taskId), "state.json"), "utf8")) as Task;
-  } catch {
-    return undefined;
+  for (const dr of readDataRoots(root, configDir)) {
+    const path = join(taskDir(dr, taskId), "state.json");
+    if (!existsSync(path)) continue;
+    try {
+      return JSON.parse(readFileSync(path, "utf8")) as Task;
+    } catch {
+      // A dev-lobby state.json that exists but cannot be parsed is surfaced, not shadowed.
+      return undefined;
+    }
   }
+  return undefined;
 }
 
 /** Enforce the scratchpad size cap (§20) before writing. */
@@ -69,13 +79,41 @@ export function writeScratchpad(dir: string, domain: Domain, content: string, cf
   writeFileEnsured(scratchpadPath(dir, domain), capScratchpad(content, cfg));
 }
 
+/** Read one task dir's state.json; missing and unreadable both yield undefined. */
+function readTaskAt(dir: string): Task | undefined {
+  const path = join(dir, "state.json");
+  if (!existsSync(path)) return undefined;
+  try {
+    return JSON.parse(readFileSync(path, "utf8")) as Task;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Task dirs across the merged read roots, dev-lobby first and winning per
+ * entry, so a legacy task stays visible until its id exists in the new tree.
+ */
+function taskEntries(root: string, configDir: string): { entry: string; dir: string }[] {
+  const entries: { entry: string; dir: string }[] = [];
+  const seen = new Set<string>();
+  for (const dr of readDataRoots(root, configDir)) {
+    const dir = tasksRoot(dr);
+    if (!existsSync(dir)) continue;
+    for (const entry of readdirSync(dir)) {
+      if (seen.has(entry)) continue;
+      seen.add(entry);
+      entries.push({ entry, dir: join(dir, entry) });
+    }
+  }
+  return entries;
+}
+
 /** All tasks on disk, newest first. Unreadable task dirs are skipped. */
 export function listTasks(root: string, configDir: string): Task[] {
-  const dir = tasksRoot(dataRoot(root, configDir));
-  if (!existsSync(dir)) return [];
   const tasks: Task[] = [];
-  for (const entry of readdirSync(dir)) {
-    const task = loadTask(root, configDir, entry);
+  for (const { entry, dir } of taskEntries(root, configDir)) {
+    const task = readTaskAt(dir);
     if (task) tasks.push(task);
   }
   return tasks.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -83,14 +121,11 @@ export function listTasks(root: string, configDir: string): Task[] {
 
 /** Tasks on disk plus the ids whose state.json could not be read (§59). */
 export function taskHealth(root: string, configDir: string): { tasks: Task[]; corrupted: string[] } {
-  const dir = tasksRoot(dataRoot(root, configDir));
-  if (!existsSync(dir)) return { tasks: [], corrupted: [] };
   const tasks: Task[] = [];
   const corrupted: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    const task = loadTask(root, configDir, entry);
-    if (!task) corrupted.push(entry);
-    else if (task.id !== entry || !isTaskState(task.state)) corrupted.push(entry);
+  for (const { entry, dir } of taskEntries(root, configDir)) {
+    const task = readTaskAt(dir);
+    if (!task || task.id !== entry || !isTaskState(task.state)) corrupted.push(entry);
     else tasks.push(task);
   }
   return { tasks: tasks.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), corrupted };

@@ -5,7 +5,7 @@ import { TASK_STATES, TERMINAL_STATES, type Approval, type ApprovalKind, type Ta
 import { isDomain, type Domain } from "../schemas/agent.ts";
 import { transition } from "../state/task-state.ts";
 import { removeTaskScratchpads, saveTask, selectTask, taskDirFor } from "../state/persistence.ts";
-import { dataRoot } from "../state/project.ts";
+import { dataRoot, readDataRoots } from "../state/project.ts";
 import { appendCompletedTask, appendDecision, applyKnowledge, readFileOr, writeFileEnsured, type KnowledgeKind } from "../knowledge/store.ts";
 import { compactKnowledgeFile, overThreshold } from "../knowledge/compactor.ts";
 import { knowledgeDir, scratchpadPath, type KnowledgeAgent } from "../knowledge/paths.ts";
@@ -148,8 +148,8 @@ export function describeTask(task: Task): string {
 }
 
 /** Knowledge files past the compaction threshold, for status reporting. */
-export function describeOversizedKnowledge(dataRootPath: string, threshold: number): string[] {
-  return overThreshold(dataRootPath, threshold).map((entry) => `${entry.agent}/${entry.file} (${entry.chars} chars)`);
+export function describeOversizedKnowledge(dataRoots: readonly string[], threshold: number): string[] {
+  return overThreshold(dataRoots, threshold).map((entry) => `${entry.agent}/${entry.file} (${entry.chars} chars)`);
 }
 
 /** Apply the user's approve/amend/decline decision to an awaiting-approval task. */
@@ -215,7 +215,7 @@ async function handleScout(task: Task, params: OrchestrateParams, deps: Workflow
       instruction: params.instruction?.trim() || "Investigate this request and report findings the Master needs.",
       domains,
       cwd: deps.cwd,
-      dataRoot: dataRoot(deps.root, deps.configDir),
+      dataRoots: readDataRoots(deps.root, deps.configDir),
       taskDir: taskDirFor(deps.root, deps.configDir, task.id),
       config: deps.config,
       signal: deps.signal,
@@ -430,7 +430,7 @@ function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instructi
     taskText: workerTaskText(task),
     scoutOutcomes: loadScoutResults(taskDirFor(deps.root, deps.configDir, task.id), [domain]),
     cwd: deps.cwd,
-    dataRoot: dataRoot(deps.root, deps.configDir),
+    dataRoots: readDataRoots(deps.root, deps.configDir),
     config: deps.config,
     signal: deps.signal,
     onUpdate: deps.onUpdate,
@@ -503,7 +503,7 @@ function qaRequest(deps: WorkflowDeps, task: Task, diff: string, instruction?: s
     diff,
     instruction: instruction?.trim() || QA_INSTRUCTION,
     cwd: deps.cwd,
-    dataRoot: dataRoot(deps.root, deps.configDir),
+    dataRoots: readDataRoots(deps.root, deps.configDir),
     config: deps.config,
     signal: deps.signal,
     onUpdate: deps.onUpdate,
@@ -593,7 +593,7 @@ function handleComplete(task: Task, params: OrchestrateParams, deps: WorkflowDep
   removeTaskScratchpads(deps.root, deps.configDir, task.id);
   task.blockers = [];
   transition(task, "completed");
-  const oversized = overThreshold(dataRoot(deps.root, deps.configDir), deps.config.knowledge.compactionThreshold);
+  const oversized = overThreshold(readDataRoots(deps.root, deps.configDir), deps.config.knowledge.compactionThreshold);
   const advice =
     oversized.length > 0
       ? `\nKnowledge files over the compaction threshold: ${oversized.map((entry) => `${entry.agent}/${entry.file} (${entry.chars})`).join(", ")}. Compact them with action=compact when convenient.`
@@ -673,7 +673,7 @@ const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams
 export async function runWorkflowAction(params: OrchestrateParams, deps: WorkflowDeps): Promise<WorkflowResult> {
   const task = selectTask(deps.root, deps.configDir, params.taskId);
   if (!task) {
-    return { ok: false, taskId: params.taskId ?? "", state: "created", message: "No dev-house task found. Start one with /dev-house <request>." };
+    return { ok: false, taskId: params.taskId ?? "", state: "created", message: "No dev-lobby task found. Start one with /dev-lobby <request>." };
   }
   if (TERMINAL_STATES.includes(task.state) && params.action !== "status") {
     return { ok: false, taskId: task.id, state: task.state, message: `Task ${task.id} is already ${task.state}; no further actions are possible.` };

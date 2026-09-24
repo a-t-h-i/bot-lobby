@@ -29,7 +29,7 @@ export interface ScoutRequest {
   instruction: string;
   domains: Domain[];
   cwd: string;
-  dataRoot: string;
+  dataRoots: readonly string[];
   taskDir: string;
   config: DevHouseConfig;
   signal?: AbortSignal;
@@ -52,7 +52,7 @@ function scoutInstruction(request: ScoutRequest, domain: Domain): string {
 }
 
 function scoutContext(request: ScoutRequest, domain: Domain): AgentRequest["context"] {
-  const slices = readAgentKnowledge(request.dataRoot, domain);
+  const slices = readAgentKnowledge(request.dataRoots, domain);
   return {
     task: request.taskText,
     ...selectKnowledge(`${request.taskText} ${domainSpec(domain).scoutFocus}`, slices),
@@ -135,7 +135,7 @@ export interface WorkerRequest {
   taskText: string;
   scoutOutcomes: ScoutOutcome[];
   cwd: string;
-  dataRoot: string;
+  dataRoots: readonly string[];
   config: DevHouseConfig;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
@@ -161,7 +161,7 @@ export async function runWorker(
   request: WorkerRequest,
   run: ProcessRunner = spawnPiProcess,
 ): Promise<WorkerOutcome> {
-  const slices = readAgentKnowledge(request.dataRoot, request.domain);
+  const slices = readAgentKnowledge(request.dataRoots, request.domain);
   const selected = selectKnowledge(`${request.taskText} ${request.instruction}`, slices);
   const agentRun = await runAgent(
     {
@@ -208,7 +208,7 @@ export interface ReviewerRequest {
   diff: string;
   instruction?: string;
   cwd: string;
-  dataRoot: string;
+  dataRoots: readonly string[];
   config: DevHouseConfig;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
@@ -276,7 +276,7 @@ export async function runReviewer(
 ): Promise<ReviewerOutcome> {
   const selected = selectKnowledge(
     `${request.taskText} ${request.workerSummary}`,
-    readAgentKnowledge(request.dataRoot, request.domain),
+    readAgentKnowledge(request.dataRoots, request.domain),
   );
   const agentRequest = reviewerAgentRequest(request, selected);
   const attempts = Math.max(1, request.config.workflow.maxAgentRetries + 1);

@@ -141,7 +141,7 @@ export function parsePiStream(stdout: string): ParsedStream {
 
 /**
  * Prefer the pi launcher that started this session so subagents use the same
- * build; otherwise fall back to `pi` on PATH (or DEV_HOUSE_PI_BIN). We match
+ * build; otherwise fall back to `pi` on PATH (or DEV_LOBBY_PI_BIN). We match
  * on the launcher filename, not PI_SESSION_ID: that variable is inherited by
  * every child process, including test runners and scripts, where argv[1] is
  * not pi at all.
@@ -151,7 +151,7 @@ function resolvePiInvocation(args: string[]): { command: string; args: string[] 
   if (launcher && existsSync(launcher) && isPiLauncher(launcher)) {
     return { command: launcher, args };
   }
-  return { command: process.env.DEV_HOUSE_PI_BIN ?? "pi", args };
+  return { command: process.env.DEV_LOBBY_PI_BIN ?? "pi", args };
 }
 
 /** Exported for tests: mis-detecting a non-pi script re-runs it as an agent. */
@@ -186,8 +186,8 @@ export function spawnPiProcess(args: string[], options: { cwd: string; signal?: 
     const invocation = resolvePiInvocation(args);
     const proc = spawn(invocation.command, invocation.args, {
       cwd: options.cwd,
-      // Marks subagent processes so dev-house skips master-only quiet wiring.
-      env: { ...process.env, DEV_HOUSE_SUBAGENT: "1" },
+      // Marks subagent processes so dev-lobby skips master-only quiet wiring.
+      env: { ...process.env, DEV_LOBBY_SUBAGENT: "1" },
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -239,7 +239,7 @@ function toResult(parsed: ParsedStream, outcome: ProcessOutcome, aborted: boolea
 }
 
 function writePromptFile(prompt: string): { file: string; cleanup: () => void } {
-  const dir = mkdtempSync(join(tmpdir(), "dev-house-prompt-"));
+  const dir = mkdtempSync(join(tmpdir(), "dev-lobby-prompt-"));
   const file = join(dir, "system.md");
   writeFileSync(file, prompt, { encoding: "utf8", mode: 0o600 });
   return { file, cleanup: () => rmSync(dir, { recursive: true, force: true }) };

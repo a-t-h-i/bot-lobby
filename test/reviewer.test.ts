@@ -147,7 +147,7 @@ function reviewerRequest(overrides: Partial<ReviewerRequest> = {}): ReviewerRequ
     scoutOutcomes: [],
     diff: "diff --git a/src/x.ts b/src/x.ts",
     cwd: process.cwd(),
-    dataRoot: mkdtempSync(join(tmpdir(), "dh-review-")),
+    dataRoots: [mkdtempSync(join(tmpdir(), "dh-review-"))],
     config: REVIEW_CONFIG,
     ...overrides,
   };

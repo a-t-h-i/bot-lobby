@@ -184,16 +184,16 @@ test("runPiAgent keeps the final report when the stream is 20x the old cap", asy
     { mode: 0o755 },
   );
   chmodSync(stub, 0o755);
-  const previous = process.env.DEV_HOUSE_PI_BIN;
-  process.env.DEV_HOUSE_PI_BIN = stub;
+  const previous = process.env.DEV_LOBBY_PI_BIN;
+  process.env.DEV_LOBBY_PI_BIN = stub;
   try {
     const result = await runPiAgent({ cwd: dir, task: "review", timeoutMs: 120_000 });
     assert.equal(result.status, "success");
     assert.match(result.output, /## Verdict PASS/);
     assert.equal(result.usage.turns, 1);
   } finally {
-    if (previous === undefined) delete process.env.DEV_HOUSE_PI_BIN;
-    else process.env.DEV_HOUSE_PI_BIN = previous;
+    if (previous === undefined) delete process.env.DEV_LOBBY_PI_BIN;
+    else process.env.DEV_LOBBY_PI_BIN = previous;
     rmSync(dir, { recursive: true, force: true });
   }
 });

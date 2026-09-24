@@ -1,21 +1,23 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   capScratchpad,
   cleanupTaskDir,
   createTaskDir,
   ensureProjectStructure,
   loadTask,
+  listTasks,
+  taskHealth,
   nextTaskId,
   saveTask,
   taskSlug,
   taskDirFor,
 } from "../src/state/persistence.ts";
 import { knowledgeDir, KNOWLEDGE_FILES, AGENT_DIR_NAMES, scratchpadPath } from "../src/knowledge/paths.ts";
-import { dataRoot } from "../src/state/project.ts";
+import { dataRoot, legacyDataRoot } from "../src/state/project.ts";
 import { createTask } from "../src/schemas/task.ts";
 import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
 
@@ -129,4 +131,53 @@ test("a slug-named task round-trips and a timestamped directory still loads", ()
   assert.equal(loadedLegacy?.id, legacyId);
   assert.equal(loadedLegacy?.state, "reviewing");
   assert.notEqual(loadedSlug?.id, loadedLegacy?.id);
+});
+
+/** Write a task into the pre-rename dev-house tree, which merged reads still see. */
+function writeLegacyTask(root: string, task: ReturnType<typeof createTask>): void {
+  const dir = join(legacyDataRoot(root, ".pi"), "tasks", task.id);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "state.json"), JSON.stringify(task, null, 2));
+}
+
+test("listTasks merges the legacy dev-house tree and lets dev-lobby win per id", () => {
+  const root = project();
+  const legacyOnly = createTask("TASK-legacy-only", "Legacy only");
+  legacyOnly.state = "implementing";
+  writeLegacyTask(root, legacyOnly);
+  createTaskDir(root, ".pi", createTask("TASK-shared", "New copy"));
+  writeLegacyTask(root, createTask("TASK-shared", "Stale copy"));
+
+  const tasks = listTasks(root, ".pi");
+  assert.deepEqual(tasks.map((task) => task.id).sort(), ["TASK-legacy-only", "TASK-shared"]);
+  assert.equal(loadTask(root, ".pi", "TASK-shared")?.title, "New copy");
+  assert.equal(loadTask(root, ".pi", "TASK-legacy-only")?.state, "implementing");
+});
+
+test("taskHealth reports a corrupt state.json from either tree", () => {
+  const root = project();
+  const dir = join(legacyDataRoot(root, ".pi"), "tasks", "TASK-broken");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "state.json"), "{broken");
+  const health = taskHealth(root, ".pi");
+  assert.deepEqual(health.tasks, []);
+  assert.deepEqual(health.corrupted, ["TASK-broken"]);
+});
+
+test("loadTask does not shadow a corrupt dev-lobby state with the legacy copy", () => {
+  const root = project();
+  createTaskDir(root, ".pi", createTask("TASK-shadow", "Live copy"));
+  writeFileSync(join(taskDirFor(root, ".pi", "TASK-shadow"), "state.json"), "{broken");
+  writeLegacyTask(root, createTask("TASK-shadow", "Legacy copy"));
+  assert.equal(loadTask(root, ".pi", "TASK-shadow"), undefined);
+});
+
+test("ensureProjectStructure migrates legacy knowledge instead of seeding over it", () => {
+  const root = project();
+  const legacyPath = join(knowledgeDir(legacyDataRoot(root, ".pi"), "backend"), "knowledge.md");
+  mkdirSync(dirname(legacyPath), { recursive: true });
+  writeFileSync(legacyPath, "# Legacy\n\nPagination facts.\n");
+  ensureProjectStructure(root, ".pi");
+  const migrated = join(knowledgeDir(dataRoot(root, ".pi"), "backend"), "knowledge.md");
+  assert.equal(readFileSync(migrated, "utf8"), "# Legacy\n\nPagination facts.\n");
 });

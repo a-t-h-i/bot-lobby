@@ -13,9 +13,9 @@ import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
 
 /**
  * Real end-to-end check against the installed pi binary. Skipped unless
- * DEV_HOUSE_E2E=1 because it spends tokens and needs a configured model.
+ * DEV_LOBBY_E2E=1 because it spends tokens and needs a configured model.
  */
-const enabled = process.env.DEV_HOUSE_E2E === "1";
+const enabled = process.env.DEV_LOBBY_E2E === "1";
 
 test("backend scout runs in an isolated pi process", { skip: !enabled, timeout: 300_000 }, async () => {
   const run = await runAgent({
@@ -23,7 +23,7 @@ test("backend scout runs in an isolated pi process", { skip: !enabled, timeout: 
     domain: "backend",
     role: "scout",
     instruction: "List the top-level files of this repository in one short paragraph. Do not modify anything.",
-    context: { task: "Verify the dev-house agent runner works end to end." },
+    context: { task: "Verify the dev-lobby agent runner works end to end." },
     timeoutMs: 240_000,
     cwd: process.cwd(),
   });
@@ -72,7 +72,7 @@ test("an active task injects the Master prompt into a real pi session", { skip: 
   const entry = join(process.cwd(), "src", "index.ts");
   const result = spawnSync(
     "pi",
-    ["-e", entry, "-p", "--no-session", "State the active dev-house task id and the exact 'Next legal states' line from your instructions. Nothing else."],
+    ["-e", entry, "-p", "--no-session", "State the active dev-lobby task id and the exact 'Next legal states' line from your instructions. Nothing else."],
     { cwd: root, encoding: "utf8", timeout: 150_000 },
   );
   const output = `${result.stdout}\n${result.stderr}`;

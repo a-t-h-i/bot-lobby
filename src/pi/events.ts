@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { activeTask } from "../state/persistence.ts";
-import { detectProjectRoot, dataRoot, loadConfig } from "../state/project.ts";
+import { detectProjectRoot, loadConfig, readDataRoots } from "../state/project.ts";
 import { compilePrompt } from "../prompts/compiler.ts";
 import { readAgentKnowledge } from "../knowledge/store.ts";
 import { selectKnowledge } from "../knowledge/selector.ts";
@@ -24,7 +24,7 @@ function masterTaskContext(task: Task): string {
 }
 
 /**
- * While a dev-house task is active the main agent acts as the Master, so its
+ * While a dev-lobby task is active the main agent acts as the Master, so its
  * operating prompt is patched into the system prompt as one cache-stable
  * section rather than replacing the whole prompt.
  */
@@ -48,9 +48,9 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
     const root = detectProjectRoot(ctx.cwd, configDir);
     const task = activeTask(root, configDir);
     if (!task) return;
-    const slices = readAgentKnowledge(dataRoot(root, configDir), "master");
+    const slices = readAgentKnowledge(readDataRoots(root, configDir), "master");
     const selected = selectKnowledge(`${task.title} ${task.proposal ?? ""}`, slices);
-    event.systemPromptOptions.sections["dev-house"] = compilePrompt({
+    event.systemPromptOptions.sections["dev-lobby"] = compilePrompt({
       domain: "master",
       task: masterTaskContext(task),
       standards: selected.standards,

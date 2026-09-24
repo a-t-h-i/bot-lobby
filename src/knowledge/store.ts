@@ -10,6 +10,12 @@ export function readFileOr(path: string, fallback = ""): string {
   }
 }
 
+/** First existing file among `paths`, in order; merged legacy reads use it per file. */
+export function readFirstExisting(paths: readonly string[], fallback = ""): string {
+  for (const path of paths) if (existsSync(path)) return readFileOr(path, fallback);
+  return fallback;
+}
+
 export function writeFileEnsured(path: string, content: string): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, content, "utf8");
@@ -87,18 +93,19 @@ export function applyKnowledge(entry: KnowledgeEntry): { path: string; result: "
 
 /** Read an agent's knowledge slices for prompt context selection (§23). */
 export function readKnowledgeSlices(
-  dir: string,
+  dirs: readonly string[],
   standardsFile: string,
 ): { knowledge: string; standards: string; decisions: string; completed: string } {
+  const file = (name: string) => readFirstExisting(dirs.map((dir) => join(dir, name)));
   return {
-    knowledge: readFileOr(join(dir, "knowledge.md")),
-    standards: readFileOr(join(dir, standardsFile)),
-    decisions: readFileOr(join(dir, "decisions.md")),
-    completed: readFileOr(join(dir, "completed-tasks.md")),
+    knowledge: file("knowledge.md"),
+    standards: file(standardsFile),
+    decisions: file("decisions.md"),
+    completed: file("completed-tasks.md"),
   };
 }
 
-/** Read an agent's knowledge by agent key (convenience over directory paths). */
-export function readAgentKnowledge(dataRoot: string, agent: KnowledgeAgent) {
-  return readKnowledgeSlices(knowledgeDir(dataRoot, agent), STANDARDS_FILE[agent]);
+/** Read an agent's knowledge by agent key; dev-lobby dirs win per file over legacy dev-house ones. */
+export function readAgentKnowledge(roots: readonly string[], agent: KnowledgeAgent) {
+  return readKnowledgeSlices(roots.map((root) => knowledgeDir(root, agent)), STANDARDS_FILE[agent]);
 }

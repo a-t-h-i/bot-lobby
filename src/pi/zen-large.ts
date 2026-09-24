@@ -239,7 +239,7 @@ function boxLines(input: LargeSceneInput, width: number, theme?: PanelTheme): st
 }
 
 function topBorder(input: LargeSceneInput, theme?: PanelTheme): string {
-  const lead = "┌─ DEV-HOUSE ── ";
+  const lead = "┌─ DEV-LOBBY ── ";
   const label = truncateToWidth(`${input.taskId} · ${input.state} `, SCENE_WIDTH - 18, "…");
   const tail = "─".repeat(Math.max(0, SCENE_WIDTH - 1 - visibleWidth(lead) - visibleWidth(label)));
   return paint(lead, "muted", theme) + paint(label, "accent", theme, true) + paint(`${tail}┐`, "muted", theme);

@@ -26,16 +26,16 @@ function task(overrides: Partial<Task> = {}): Task {
 
 test("status text always carries the quiet-mode hint", () => {
   setQuiet(true);
-  assert.equal(statusText(undefined), "dev-house · tools hidden (alt+t)");
+  assert.equal(statusText(undefined), "dev-lobby · tools hidden (alt+t)");
   setQuiet(false);
-  assert.equal(statusText(undefined), "dev-house · tools shown");
+  assert.equal(statusText(undefined), "dev-lobby · tools shown");
   setQuiet(true);
 });
 
 test("status text shows the task and state, including paused", () => {
   setQuiet(true);
-  assert.equal(statusText(task()), "dev-house TASK-1 · created · tools hidden (alt+t)");
-  assert.equal(statusText(task({ paused: true })), "dev-house TASK-1 · created (paused) · tools hidden (alt+t)");
+  assert.equal(statusText(task()), "dev-lobby TASK-1 · created · tools hidden (alt+t)");
+  assert.equal(statusText(task({ paused: true })), "dev-lobby TASK-1 · created (paused) · tools hidden (alt+t)");
 });
 
 test("summarizeRun marks running, success, and failure", () => {

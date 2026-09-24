@@ -83,21 +83,21 @@ function tempDir(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
-// The suite also runs inside a subagent process (DEV_HOUSE_SUBAGENT=1), where
+// The suite also runs inside a subagent process (DEV_LOBBY_SUBAGENT=1), where
 // registration, filtering and shortcut wiring are intentionally skipped. Tests
 // must observe the master path, so the ambient flag is parked for the file.
 let ambientSubagent: string | undefined;
 before(() => {
-  ambientSubagent = process.env.DEV_HOUSE_SUBAGENT;
-  delete process.env.DEV_HOUSE_SUBAGENT;
+  ambientSubagent = process.env.DEV_LOBBY_SUBAGENT;
+  delete process.env.DEV_LOBBY_SUBAGENT;
 });
 after(() => {
-  if (ambientSubagent === undefined) delete process.env.DEV_HOUSE_SUBAGENT;
-  else process.env.DEV_HOUSE_SUBAGENT = ambientSubagent;
+  if (ambientSubagent === undefined) delete process.env.DEV_LOBBY_SUBAGENT;
+  else process.env.DEV_LOBBY_SUBAGENT = ambientSubagent;
 });
 
 function setSubagent(value: string | undefined): () => void {
-  const key = "DEV_HOUSE_SUBAGENT";
+  const key = "DEV_LOBBY_SUBAGENT";
   const previous = process.env[key];
   if (value === undefined) delete process.env[key];
   else process.env[key] = value;
@@ -130,13 +130,13 @@ test("toggleQuiet round-trips with setQuiet and isQuiet", () => {
   setQuiet(true);
 });
 
-test("isSubagentProcess reads DEV_HOUSE_SUBAGENT", () => {
+test("isSubagentProcess reads DEV_LOBBY_SUBAGENT", () => {
   const restore = setSubagent(undefined);
   try {
     assert.equal(isSubagentProcess(), false);
-    process.env.DEV_HOUSE_SUBAGENT = "0";
+    process.env.DEV_LOBBY_SUBAGENT = "0";
     assert.equal(isSubagentProcess(), false);
-    process.env.DEV_HOUSE_SUBAGENT = "1";
+    process.env.DEV_LOBBY_SUBAGENT = "1";
     assert.equal(isSubagentProcess(), true);
   } finally {
     restore();
@@ -230,7 +230,7 @@ test("alt+t flips quiet, restores tool expansion, and refreshes the status", () 
   setQuiet(true);
 });
 
-test("session_shutdown clears the dev-house status", () => {
+test("session_shutdown clears the dev-lobby status", () => {
   const fake = makePi(["read"]);
   registerLifecycle(asPi(fake), ".pi");
   const { ctx, ui } = makeCtx(tempDir("dh-shutdown-"));
@@ -242,5 +242,5 @@ test("commands registration wires alt+t through the reveal shortcut", () => {
   const fake = makePi(["read"]);
   registerCommands(asPi(fake), ".pi");
   assert.ok(fake.shortcuts.includes("alt+t"));
-  assert.ok(fake.commands.includes("dev-house"));
+  assert.ok(fake.commands.includes("dev-lobby"));
 });

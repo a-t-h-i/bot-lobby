@@ -11,7 +11,7 @@ import { ensureProjectStructure } from "../src/state/persistence.ts";
 function dataRootFor(): string {
   const root = mkdtempSync(join(tmpdir(), "dh-c-"));
   ensureProjectStructure(root, ".pi");
-  return join(root, ".pi", "dev-house");
+  return join(root, ".pi", "dev-lobby");
 }
 
 test("analyzeKnowledge finds duplicate lines", () => {
@@ -42,13 +42,13 @@ test("overThreshold lists only files past the limit, largest first", () => {
   const root = dataRootFor();
   writeFileEnsured(join(knowledgeDir(root, "backend"), "knowledge.md"), "x".repeat(150));
   writeFileEnsured(join(knowledgeDir(root, "qa"), "knowledge.md"), "y".repeat(200));
-  const oversized = overThreshold(root, 100);
+  const oversized = overThreshold([root], 100);
   assert.deepEqual(oversized.map((entry) => entry.file), ["knowledge.md", "knowledge.md"]);
   assert.equal(oversized[0]!.agent, "qa");
   assert.equal(oversized[1]!.agent, "backend");
   assert.equal(oversized[1]!.chars, 150);
-  assert.deepEqual(overThreshold(root, 10_000), []);
-  assert.deepEqual(overThreshold(root, 149), [{ agent: "backend", file: "knowledge.md", chars: 150 }, { agent: "qa", file: "knowledge.md", chars: 200 }].sort((a, b) => b.chars - a.chars));
+  assert.deepEqual(overThreshold([root], 10_000), []);
+  assert.deepEqual(overThreshold([root], 149), [{ agent: "backend", file: "knowledge.md", chars: 150 }, { agent: "qa", file: "knowledge.md", chars: 200 }].sort((a, b) => b.chars - a.chars));
 });
 
 test("compactKnowledgeFile archives the previous version and writes the new one", () => {

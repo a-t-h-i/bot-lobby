@@ -6,6 +6,8 @@ import { join } from "node:path";
 import {
   detectProjectRoot,
   dataRoot,
+  legacyDataRoot,
+  readDataRoots,
   globalConfigDir,
   globalConfigPath,
   loadConfig,
@@ -15,13 +17,13 @@ import { DEFAULT_CONFIG, INHERIT_THINKING, inheritThinking, resolveConfig } from
 
 /** Point the global config at a temp dir for the duration of one test. */
 function withConfig(dir: string, run: () => void): void {
-  const previous = process.env.DEV_HOUSE_CONFIG_DIR;
-  process.env.DEV_HOUSE_CONFIG_DIR = dir;
+  const previous = process.env.DEV_LOBBY_CONFIG_DIR;
+  process.env.DEV_LOBBY_CONFIG_DIR = dir;
   try {
     run();
   } finally {
-    if (previous === undefined) delete process.env.DEV_HOUSE_CONFIG_DIR;
-    else process.env.DEV_HOUSE_CONFIG_DIR = previous;
+    if (previous === undefined) delete process.env.DEV_LOBBY_CONFIG_DIR;
+    else process.env.DEV_LOBBY_CONFIG_DIR = previous;
   }
 }
 
@@ -39,16 +41,49 @@ test("detectProjectRoot returns cwd when cwd itself is the root", () => {
   assert.equal(detectProjectRoot(root, ".pi"), root);
 });
 
-test("dataRoot stays inside <root>/<configDir>/dev-house", () => {
-  assert.equal(dataRoot("/proj", ".pi"), "/proj/.pi/dev-house");
+test("dataRoot points at <root>/<configDir>/dev-lobby", () => {
+  assert.equal(dataRoot("/proj", ".pi"), "/proj/.pi/dev-lobby");
 });
 
-test("global config points at the dev-house config dir", () => {
+test("legacyDataRoot points at the pre-rename tree", () => {
+  assert.equal(legacyDataRoot("/proj", ".pi"), "/proj/.pi/dev-house");
+});
+
+test("readDataRoots merges the legacy tree only while it exists", () => {
+  const root = mkdtempSync(join(tmpdir(), "dh-roots-"));
+  assert.deepEqual(readDataRoots(root, ".pi"), [join(root, ".pi", "dev-lobby")]);
+  mkdirSync(join(root, ".pi", "dev-house"), { recursive: true });
+  assert.deepEqual(readDataRoots(root, ".pi"), [join(root, ".pi", "dev-lobby"), join(root, ".pi", "dev-house")]);
+});
+
+test("global config points at the dev-lobby config dir", () => {
   const dir = mkdtempSync(join(tmpdir(), "dh-gcfg-"));
   withConfig(dir, () => {
     assert.equal(globalConfigDir(), dir);
     assert.equal(globalConfigPath(), join(dir, "config.json"));
   });
+});
+
+test("loadConfig reads the legacy dev-house config until a dev-lobby one exists", () => {
+  const home = mkdtempSync(join(tmpdir(), "dh-home-"));
+  const legacyDir = join(home, ".pi", "dev-house");
+  const newDir = join(home, ".pi", "dev-lobby");
+  mkdirSync(legacyDir, { recursive: true });
+  writeFileSync(join(legacyDir, "config.json"), JSON.stringify({ master: { thinking: "low" } }));
+  const previousHome = process.env.HOME;
+  const previousOverride = process.env.DEV_LOBBY_CONFIG_DIR;
+  delete process.env.DEV_LOBBY_CONFIG_DIR;
+  process.env.HOME = home;
+  try {
+    assert.equal(loadConfig().master.thinking, "low");
+    mkdirSync(newDir, { recursive: true });
+    writeFileSync(join(newDir, "config.json"), JSON.stringify({ master: { thinking: "max" } }));
+    assert.equal(loadConfig().master.thinking, "max");
+  } finally {
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    if (previousOverride !== undefined) process.env.DEV_LOBBY_CONFIG_DIR = previousOverride;
+  }
 });
 
 test("loadConfig merges partial user config over defaults", () => {

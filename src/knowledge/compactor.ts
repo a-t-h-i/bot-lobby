@@ -2,7 +2,7 @@ import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { KnowledgeAgent } from "./paths.ts";
 import { AGENT_DIR_NAMES, KNOWLEDGE_FILES, knowledgeDir } from "./paths.ts";
-import { readFileOr, writeFileEnsured } from "./store.ts";
+import { readFirstExisting, readFileOr, writeFileEnsured } from "./store.ts";
 
 export interface KnowledgeAnalysis {
   /** Lines that say the same thing twice. */
@@ -80,12 +80,13 @@ export interface OversizedFile {
   chars: number;
 }
 
-/** Knowledge files that have grown past the configured compaction threshold. */
-export function overThreshold(dataRoot: string, threshold: number): OversizedFile[] {
+/** Knowledge files past the configured compaction threshold, sized from the merged read roots. */
+export function overThreshold(roots: readonly string[], threshold: number): OversizedFile[] {
   const oversized: OversizedFile[] = [];
   for (const agent of Object.keys(AGENT_DIR_NAMES) as KnowledgeAgent[]) {
     for (const file of KNOWLEDGE_FILES[agent]) {
-      const chars = readFileOr(join(knowledgeDir(dataRoot, agent), file)).length;
+      const paths = roots.map((root) => join(knowledgeDir(root, agent), file));
+      const chars = readFirstExisting(paths).length;
       if (chars > threshold) oversized.push({ agent, file, chars });
     }
   }

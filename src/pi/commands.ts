@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { TERMINAL_STATES, createTask, type Task } from "../schemas/task.ts";
-import { dataRoot, detectProjectRoot, globalConfigPath, loadConfig } from "../state/project.ts";
+import { detectProjectRoot, globalConfigPath, loadConfig, readDataRoots } from "../state/project.ts";
 import {
   activeTask,
   createTaskDir,
@@ -15,22 +15,22 @@ import {
 } from "../state/persistence.ts";
 import { transition } from "../state/task-state.ts";
 import { AGENT_DIR_NAMES, KNOWLEDGE_FILES, knowledgeDir, type KnowledgeAgent } from "../knowledge/paths.ts";
-import { readFileOr } from "../knowledge/store.ts";
+import { readFirstExisting } from "../knowledge/store.ts";
 import { overThreshold } from "../knowledge/compactor.ts";
 import { applyApprovalChoice, describeTask, describeOversizedKnowledge, type ApprovalChoice } from "../workflow/workflow.ts";
 import { applyStatus, registerRevealShortcut } from "./ui.ts";
 import { applyMasterModel, openSettings } from "./settings-ui.ts";
 
 const HELP = [
-  "/dev-house <request>        Start a task through the workflow",
-  "/dev-house status [taskId]  Show the active task",
-  "/dev-house tasks            List tasks",
-  "/dev-house pause|resume     Pause or resume the active task",
-  "/dev-house cancel [taskId]  Abandon a task",
-  "/dev-house approve|amend <text>|decline   Answer the current proposal",
-  "/dev-house knowledge        Show persistent knowledge files",
-  "/dev-house settings         Edit per-agent model/thinking/instructions",
-  "/dev-house config           Show effective configuration",
+  "/dev-lobby <request>        Start a task through the workflow",
+  "/dev-lobby status [taskId]  Show the active task",
+  "/dev-lobby tasks            List tasks",
+  "/dev-lobby pause|resume     Pause or resume the active task",
+  "/dev-lobby cancel [taskId]  Abandon a task",
+  "/dev-lobby approve|amend <text>|decline   Answer the current proposal",
+  "/dev-lobby knowledge        Show persistent knowledge files",
+  "/dev-lobby settings         Edit per-agent model/thinking/instructions",
+  "/dev-lobby config           Show effective configuration",
 ].join("\n");
 
 /** Subcommands only win when no free-form text follows (so tasks still start). */
@@ -60,7 +60,7 @@ function uniqueTaskId(root: string, configDir: string, request: string): string 
 
 function kickoff(task: Task): string {
   return [
-    `A dev-house task is active: ${task.id}`,
+    `A dev-lobby task is active: ${task.id}`,
     `Request: ${task.title}`,
     `State: ${task.state}`,
     "",
@@ -86,7 +86,7 @@ async function startTask(
   saveTask(root, configDir, task);
   applyStatus(ctx, root, configDir);
   await applyMasterModel(pi, ctx, loadConfig());
-  ctx.ui.notify(`dev-house ${task.id} started`, "info");
+  ctx.ui.notify(`dev-lobby ${task.id} started`, "info");
   pi.sendUserMessage(kickoff(task));
 }
 
@@ -94,22 +94,22 @@ function showStatus(ctx: ExtensionCommandContext, configDir: string, taskId?: st
   const root = detectProjectRoot(ctx.cwd, configDir);
   const task = selectTask(root, configDir, taskId);
   applyStatus(ctx, root, configDir);
-  const oversized = describeOversizedKnowledge(dataRoot(root, configDir), loadConfig().knowledge.compactionThreshold);
+  const oversized = describeOversizedKnowledge(readDataRoots(root, configDir), loadConfig().knowledge.compactionThreshold);
   const broken = taskHealth(root, configDir).corrupted;
   const knowledge = [
     oversized.length > 0 ? `Knowledge over threshold: ${oversized.join(", ")}` : "",
     broken.length > 0 ? `Unreadable task state: ${broken.join(", ")}` : "",
   ].filter(Boolean).join("\n");
   const footer = knowledge ? `\n${knowledge}` : "";
-  ctx.ui.notify(task ? `${describeTask(task)}${footer}` : `No dev-house task found in ${root}.${footer}`, task ? "info" : "warning");
+  ctx.ui.notify(task ? `${describeTask(task)}${footer}` : `No dev-lobby task found in ${root}.${footer}`, task ? "info" : "warning");
 }
 
 function showTasks(ctx: ExtensionCommandContext, configDir: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
   const { tasks, corrupted } = taskHealth(root, configDir);
-  if (tasks.length === 0 && corrupted.length === 0) return ctx.ui.notify("No dev-house tasks yet.", "info");
+  if (tasks.length === 0 && corrupted.length === 0) return ctx.ui.notify("No dev-lobby tasks yet.", "info");
   const lines = tasks.slice(0, 12).map((task) => `${task.id}  ${task.state.padEnd(17)} ${task.title.slice(0, 60)}`);
-  if (corrupted.length > 0) lines.push("", `Unreadable task state: ${corrupted.join(", ")} (left untouched; inspect ${dataRoot(root, configDir)}/tasks)`);
+  if (corrupted.length > 0) lines.push("", `Unreadable task state: ${corrupted.join(", ")} (left untouched; inspect ${readDataRoots(root, configDir).join(" and ")}/tasks)`);
   ctx.ui.notify(lines.join("\n"), "info");
 }
 
@@ -151,25 +151,24 @@ function answerProposal(
     applyStatus(ctx, root, configDir);
     ctx.ui.notify(message, "info");
   } catch (error) {
-    ctx.ui.notify(`dev-house: ${(error as Error).message}`, "warning");
+    ctx.ui.notify(`dev-lobby: ${(error as Error).message}`, "warning");
   }
 }
 
 function showKnowledge(ctx: ExtensionCommandContext, configDir: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
   const cfg = loadConfig();
-  const dr = dataRoot(root, configDir);
+  const roots = readDataRoots(root, configDir);
   const threshold = cfg.knowledge.compactionThreshold;
   const lines: string[] = [`Threshold: ${threshold} chars`];
   for (const agent of Object.keys(AGENT_DIR_NAMES) as KnowledgeAgent[]) {
-    const dir = knowledgeDir(dr, agent);
     const sizes = KNOWLEDGE_FILES[agent].map((file) => {
-      const chars = readFileOr(join(dir, file)).length;
+      const chars = readFirstExisting(roots.map((dr) => join(knowledgeDir(dr, agent), file))).length;
       return `${file}=${chars}${chars > threshold ? " OVER" : ""}`;
     });
     lines.push(`${AGENT_DIR_NAMES[agent]}: ${sizes.join(" ")}`);
   }
-  const oversized = overThreshold(dr, threshold);
+  const oversized = overThreshold(roots, threshold);
   if (oversized.length > 0) lines.push("", "Ask the Master to compact the files marked OVER.");
   ctx.ui.notify(lines.join("\n"), "info");
 }
@@ -180,7 +179,7 @@ function showConfig(ctx: ExtensionCommandContext): void {
 
 export function registerCommands(pi: ExtensionAPI, configDir: string): void {
   registerRevealShortcut(pi, configDir);
-  pi.registerCommand("dev-house", {
+  pi.registerCommand("dev-lobby", {
     description: "Structured multi-agent engineering orchestrator",
     getArgumentCompletions: (prefix) => {
       const items = [...SUBCOMMANDS].map((value) => ({ value, label: value }));
@@ -220,7 +219,7 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
     },
   });
 
-  pi.registerCommand("dev-house-settings", {
+  pi.registerCommand("dev-lobby-settings", {
     description: "Edit per-agent model, thinking, and instructions",
     handler: async (_args, ctx) => openSettings(pi, ctx),
   });
