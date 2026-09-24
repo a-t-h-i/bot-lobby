@@ -1,7 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   buildPiArgs,
+  createStreamCollector,
   isPiLauncher,
   parsePiStream,
   runPiAgent,
@@ -134,4 +138,62 @@ test("runPiAgent writes and cleans up the system prompt file", async () => {
   const file = passedArgs[passedArgs.indexOf("--append-system-prompt") + 1]!;
   const { existsSync } = await import("node:fs");
   assert.ok(!existsSync(file), "prompt file should be removed after the run");
+});
+
+test("stream collector keeps assistant message_end lines and drops the rest", () => {
+  const collector = createStreamCollector();
+  const lines = [
+    JSON.stringify({ type: "agent_start" }),
+    JSON.stringify({ type: "message_end", message: { role: "user" } }),
+    JSON.stringify({ type: "message_update", message: { role: "assistant" } }),
+    JSON.stringify({ type: "tool_execution_end", result: "x".repeat(500) }),
+    "not json",
+    assistantEvent("first"),
+    assistantEvent("final"),
+  ];
+  collector.push(`${lines.join("\n")}\n`);
+  const kept = collector.finish();
+  assert.ok(!kept.includes("tool_execution_end"));
+  assert.ok(!kept.includes('"role":"user"'));
+  const parsed = parsePiStream(kept);
+  assert.equal(parsed.text, "final");
+  assert.equal(parsed.usage.turns, 2);
+});
+
+test("stream collector reassembles an event split across chunk boundaries", () => {
+  const collector = createStreamCollector();
+  const event = assistantEvent("split report");
+  collector.push(event.slice(0, 25));
+  collector.push(event.slice(25));
+  assert.equal(parsePiStream(collector.finish()).text, "split report");
+});
+
+test("runPiAgent keeps the final report when the stream is 20x the old cap", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "dh-pi-"));
+  const stub = join(dir, "fake-pi.mjs");
+  const finalEvent = assistantEvent("## Verdict PASS\nfinal report");
+  writeFileSync(
+    stub,
+    [
+      "#!/usr/bin/env node",
+      'const chunk = \'{"type":"message_update","message":{"role":"assistant"}}\\n\'.repeat(1250);',
+      "const writes = Math.ceil((20 * 5_000_000) / chunk.length);",
+      "for (let i = 0; i < writes; i += 1) process.stdout.write(chunk);",
+      `process.stdout.write(${JSON.stringify(`${finalEvent}\n`)});`,
+    ].join("\n"),
+    { mode: 0o755 },
+  );
+  chmodSync(stub, 0o755);
+  const previous = process.env.DEV_HOUSE_PI_BIN;
+  process.env.DEV_HOUSE_PI_BIN = stub;
+  try {
+    const result = await runPiAgent({ cwd: dir, task: "review", timeoutMs: 120_000 });
+    assert.equal(result.status, "success");
+    assert.match(result.output, /## Verdict PASS/);
+    assert.equal(result.usage.turns, 1);
+  } finally {
+    if (previous === undefined) delete process.env.DEV_HOUSE_PI_BIN;
+    else process.env.DEV_HOUSE_PI_BIN = previous;
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

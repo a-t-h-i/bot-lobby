@@ -45,6 +45,44 @@ export interface ParsedStream {
 
 const MAX_STREAM_CHARS = 5_000_000;
 
+/** Buffers one JSON-mode stream, keeping only lines parsePiStream consumes. */
+export interface StreamCollector {
+  push(chunk: string): void;
+  finish(): string;
+}
+
+/**
+ * Keeps assistant `message_end` events and discards everything else, so a
+ * tool-heavy run cannot exhaust memory or truncate the final report. Events
+ * split across chunk boundaries are reassembled; malformed lines are ignored
+ * exactly as parsePiStream ignores them.
+ */
+export function createStreamCollector(): StreamCollector {
+  let pending = "";
+  const kept: string[] = [];
+  const keep = (line: string) => {
+    try {
+      const event = JSON.parse(line) as { type?: string; message?: { role?: string } };
+      if (event?.type === "message_end" && event.message?.role === "assistant") kept.push(line);
+    } catch {
+      // Malformed or partial lines never parse; drop them.
+    }
+  };
+  return {
+    push(chunk) {
+      pending += chunk;
+      const lines = pending.split("\n");
+      pending = lines.pop() ?? "";
+      for (const line of lines) keep(line);
+    },
+    finish() {
+      if (pending) keep(pending);
+      pending = "";
+      return kept.join("\n");
+    },
+  };
+}
+
 /** Build the `pi` argv for one isolated, non-interactive agent run. */
 export function buildPiArgs(options: PiRunOptions & { systemPromptFile?: string }): string[] {
   const args = ["--mode", "json", "-p", "--no-session"];
@@ -130,12 +168,16 @@ function terminate(proc: ChildProcess): void {
   escalation.unref();
 }
 
-function wireOutput(proc: ChildProcess, buffers: { stdout: string; stderr: string }): void {
-  const append = (key: "stdout" | "stderr", chunk: string) => {
-    if (buffers[key].length < MAX_STREAM_CHARS) buffers[key] += chunk;
+function wireOutput(proc: ChildProcess, buffers: { stdout: string; stderr: string }): () => void {
+  const collector = createStreamCollector();
+  proc.stdout?.on("data", (chunk: Buffer) => collector.push(chunk.toString()));
+  proc.stderr?.on("data", (chunk: Buffer) => {
+    // Keep stderr head-bounded: it only feeds exit-code error messages.
+    if (buffers.stderr.length < MAX_STREAM_CHARS) buffers.stderr += chunk.toString();
+  });
+  return () => {
+    buffers.stdout = collector.finish();
   };
-  proc.stdout?.on("data", (chunk: Buffer) => append("stdout", chunk.toString()));
-  proc.stderr?.on("data", (chunk: Buffer) => append("stderr", chunk.toString()));
 }
 
 /** Default runner: spawn the same pi binary in JSON mode and collect output. */
@@ -151,11 +193,12 @@ export function spawnPiProcess(args: string[], options: { cwd: string; signal?: 
     });
     const buffers = { stdout: "", stderr: "" };
     const state = { killed: false, timedOut: false };
-    wireOutput(proc, buffers);
+    const flush = wireOutput(proc, buffers);
 
     const finish = (exitCode: number) => {
       clearTimeout(timer);
       options.signal?.removeEventListener("abort", onAbort);
+      flush();
       resolve({ exitCode, ...buffers, ...state });
     };
     const onAbort = () => {
