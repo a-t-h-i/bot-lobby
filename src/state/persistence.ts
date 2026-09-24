@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:f
 import { join } from "node:path";
 import type { KnowledgeConfig } from "../schemas/configuration.ts";
 import type { Domain } from "../schemas/agent.ts";
-import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
+import { TERMINAL_STATES, isTaskState, type Task } from "../schemas/task.ts";
 import { dataRoot } from "./project.ts";
 import {
   AGENT_DIR_NAMES,
@@ -79,6 +79,21 @@ export function listTasks(root: string, configDir: string): Task[] {
     if (task) tasks.push(task);
   }
   return tasks.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+/** Tasks on disk plus the ids whose state.json could not be read (§59). */
+export function taskHealth(root: string, configDir: string): { tasks: Task[]; corrupted: string[] } {
+  const dir = tasksRoot(dataRoot(root, configDir));
+  if (!existsSync(dir)) return { tasks: [], corrupted: [] };
+  const tasks: Task[] = [];
+  const corrupted: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const task = loadTask(root, configDir, entry);
+    if (!task) corrupted.push(entry);
+    else if (task.id !== entry || !isTaskState(task.state)) corrupted.push(entry);
+    else tasks.push(task);
+  }
+  return { tasks: tasks.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), corrupted };
 }
 
 /** The task the Master is currently driving, if any. */

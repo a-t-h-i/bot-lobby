@@ -68,6 +68,8 @@ export interface AgentRun {
   status: "running" | "success" | "failed" | "cancelled" | "timeout";
   output: string;
   error?: string;
+  /** How many attempts were made; > 1 means the retry policy kicked in. */
+  attempts: number;
   usage?: { input: number; output: number; cost: number; turns: number };
   startedAt: string;
   finishedAt?: string;

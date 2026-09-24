@@ -26,9 +26,26 @@ export interface AgentRequest {
   cwd: string;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
+  /** Bounded retries for transient failures (crash/timeout). */
+  retries?: number;
 }
 
 const activeControllers = new Set<AbortController>();
+
+/**
+ * Run one domain/role agent, retrying transient failures a bounded number of
+ * times. Cancellation never retries, so Esc/quit stays responsive.
+ */
+export async function runAgent(request: AgentRequest, run: ProcessRunner = spawnPiProcess): Promise<AgentRun> {
+  const startedAt = new Date().toISOString();
+  const attempts = Math.max(1, (request.retries ?? 0) + 1);
+  let last: AgentRun | undefined;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    last = await runAgentOnce(request, run, attempt, startedAt);
+    if (last.status === "success" || last.status === "cancelled") break;
+  }
+  return last!;
+}
 
 /** Abort every in-flight subagent (session shutdown, user cancel). */
 export function cancelAllRuns(): void {
@@ -36,7 +53,7 @@ export function cancelAllRuns(): void {
   activeControllers.clear();
 }
 
-function baseRun(request: AgentRequest, runId: string, startedAt: string): AgentRun {
+function baseRun(request: AgentRequest, runId: string, startedAt: string, attempts = 1): AgentRun {
   return {
     runId,
     taskId: request.taskId,
@@ -44,6 +61,7 @@ function baseRun(request: AgentRequest, runId: string, startedAt: string): Agent
     role: request.role,
     status: "running",
     output: "",
+    attempts,
     startedAt,
   };
 }
@@ -52,9 +70,8 @@ function baseRun(request: AgentRequest, runId: string, startedAt: string): Agent
  * Run one domain/role agent in an isolated pi process. The role's tool
  * allowlist comes from its spec, so read-only roles cannot modify anything.
  */
-export async function runAgent(request: AgentRequest, run: ProcessRunner = spawnPiProcess): Promise<AgentRun> {
-  const startedAt = new Date().toISOString();
-  const base = baseRun(request, `${request.taskId}:${request.domain}:${request.role}:${Date.now().toString(36)}`, startedAt);
+async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: number, startedAt: string): Promise<AgentRun> {
+  const base = baseRun(request, `${request.taskId}:${request.domain}:${request.role}:${Date.now().toString(36)}`, startedAt, attempt);
   request.onUpdate?.(base);
 
   const controller = new AbortController();

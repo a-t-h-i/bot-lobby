@@ -12,6 +12,8 @@ export interface WorkflowConfig {
   requireApprovalForDependencies: boolean;
   requireApprovalForArchitectureChanges: boolean;
   agentTimeoutMs: number;
+  /** Bounded retries for transient agent failures (crash/timeout), §59. */
+  maxAgentRetries: number;
 }
 
 export interface KnowledgeConfig {
@@ -42,6 +44,7 @@ export const DEFAULT_CONFIG: DevHouseConfig = {
     requireApprovalForDependencies: true,
     requireApprovalForArchitectureChanges: true,
     agentTimeoutMs: 15 * 60 * 1000,
+    maxAgentRetries: 1,
   },
   knowledge: {
     compactionThreshold: 20000,

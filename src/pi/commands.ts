@@ -7,8 +7,8 @@ import {
   activeTask,
   createTaskDir,
   ensureProjectStructure,
-  listTasks,
   loadTask,
+  taskHealth,
   nextTaskId,
   saveTask,
   taskDirFor,
@@ -96,15 +96,21 @@ function showStatus(ctx: ExtensionCommandContext, configDir: string, taskId?: st
   const task = resolveTask(root, configDir, taskId);
   applyStatus(ctx, root, configDir);
   const oversized = describeOversizedKnowledge(dataRoot(root, configDir), loadConfig(root, configDir).knowledge.compactionThreshold);
-  const knowledge = oversized.length > 0 ? `\nKnowledge over threshold: ${oversized.join(", ")}` : "";
-  ctx.ui.notify(task ? `${describeTask(task)}${knowledge}` : `No dev-house task found in ${root}.`, task ? "info" : "warning");
+  const broken = taskHealth(root, configDir).corrupted;
+  const knowledge = [
+    oversized.length > 0 ? `Knowledge over threshold: ${oversized.join(", ")}` : "",
+    broken.length > 0 ? `Unreadable task state: ${broken.join(", ")}` : "",
+  ].filter(Boolean).join("\n");
+  const footer = knowledge ? `\n${knowledge}` : "";
+  ctx.ui.notify(task ? `${describeTask(task)}${footer}` : `No dev-house task found in ${root}.${footer}`, task ? "info" : "warning");
 }
 
 function showTasks(ctx: ExtensionCommandContext, configDir: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
-  const tasks = listTasks(root, configDir);
-  if (tasks.length === 0) return ctx.ui.notify("No dev-house tasks yet.", "info");
+  const { tasks, corrupted } = taskHealth(root, configDir);
+  if (tasks.length === 0 && corrupted.length === 0) return ctx.ui.notify("No dev-house tasks yet.", "info");
   const lines = tasks.slice(0, 12).map((task) => `${task.id}  ${task.state.padEnd(17)} ${task.title.slice(0, 60)}`);
+  if (corrupted.length > 0) lines.push("", `Unreadable task state: ${corrupted.join(", ")} (left untouched; inspect ${dataRoot(root, configDir)}/tasks)`);
   ctx.ui.notify(lines.join("\n"), "info");
 }
 

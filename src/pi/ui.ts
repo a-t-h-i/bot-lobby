@@ -8,7 +8,8 @@ export const STATUS_KEY = "dev-house";
 
 export function summarizeRun(run: AgentRun): string {
   const icon = run.status === "running" ? "⏳" : run.status === "success" ? "✓" : "✗";
-  return `${icon} ${run.domain}/${run.role}${run.status === "running" ? "" : ` (${run.status})`}`;
+  const state = run.status === "running" ? "" : ` (${run.status})`;
+  return `${icon} ${run.domain}/${run.role}${state}${run.attempts > 1 ? ` ×${run.attempts}` : ""}`;
 }
 
 /** One-line footer text for the active task. */

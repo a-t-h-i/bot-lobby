@@ -87,6 +87,7 @@ export async function runScouts(request: ScoutRequest, run: ProcessRunner = spaw
     cwd: request.cwd,
     signal: request.signal,
     onUpdate: request.onUpdate,
+    retries: request.config.workflow.maxAgentRetries,
   }));
   const runs = await runParallel(requests, request.config.workflow.maxParallelScouts, run);
   const outcomes = runs.map((agentRun) => toOutcome(agentRun, agentRun.domain));
@@ -174,6 +175,7 @@ export async function runWorker(
       cwd: request.cwd,
       signal: request.signal,
       onUpdate: request.onUpdate,
+      retries: request.config.workflow.maxAgentRetries,
     },
     run,
   );
@@ -243,6 +245,7 @@ export async function runReviewer(
       cwd: request.cwd,
       signal: request.signal,
       onUpdate: request.onUpdate,
+      retries: request.config.workflow.maxAgentRetries,
     },
     run,
   );

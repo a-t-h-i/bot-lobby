@@ -12,6 +12,7 @@ function run(overrides: Partial<AgentRun> = {}): AgentRun {
     role: "scout",
     status: "running",
     output: "",
+    attempts: 1,
     startedAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
   };
@@ -57,4 +58,5 @@ test("summarizeRun marks running, success, and failure", () => {
   assert.equal(summarizeRun(run({ status: "success" })), "✓ backend/scout (success)");
   assert.equal(summarizeRun(run({ status: "failed" })), "✗ backend/scout (failed)");
   assert.equal(summarizeRun(run({ status: "timeout" })), "✗ backend/scout (timeout)");
+  assert.equal(summarizeRun(run({ status: "success", attempts: 2 })), "✓ backend/scout (success) ×2");
 });
