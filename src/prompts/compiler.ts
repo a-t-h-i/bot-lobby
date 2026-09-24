@@ -1,5 +1,6 @@
 import type { Domain, Role } from "../schemas/agent.ts";
 import { ROLE_SPECS } from "../roles/registry.ts";
+import { DOMAIN_SPECS } from "../agents/registry.ts";
 import { loadPrompt } from "./loader.ts";
 
 export type PromptDomain = Domain | "master";
@@ -15,12 +16,9 @@ export interface CompileInput {
   workflowContext?: string;
 }
 
-const DOMAIN_PROMPT_FILES: Record<PromptDomain, string> = {
-  master: "master.md",
-  designer: "designer.md",
-  backend: "backend.md",
-  qa: "qa.md",
-};
+function domainPromptFile(domain: PromptDomain): string {
+  return domain === "master" ? "master.md" : DOMAIN_SPECS[domain].promptFile;
+}
 
 function section(title: string, body?: string): string {
   const text = body?.trim();
@@ -36,7 +34,7 @@ export function compilePrompt(input: CompileInput): string {
   const spec = input.role ? ROLE_SPECS[input.role] : undefined;
   const layers = [
     loadPrompt("global.md"),
-    loadPrompt(DOMAIN_PROMPT_FILES[input.domain]),
+    loadPrompt(domainPromptFile(input.domain)),
     spec ? loadPrompt(spec.promptFile) : "",
     section("Task Context", input.task),
     section("Standards", input.standards),

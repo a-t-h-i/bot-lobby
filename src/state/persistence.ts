@@ -1,8 +1,8 @@
-import { mkdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { KnowledgeConfig } from "../schemas/configuration.ts";
 import type { Domain } from "../schemas/agent.ts";
-import type { Task } from "../schemas/task.ts";
+import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { dataRoot } from "./project.ts";
 import {
   AGENT_DIR_NAMES,
@@ -67,6 +67,28 @@ export function capScratchpad(content: string, cfg: KnowledgeConfig): string {
 
 export function writeScratchpad(dir: string, domain: Domain, content: string, cfg: KnowledgeConfig): void {
   writeFileEnsured(scratchpadPath(dir, domain), capScratchpad(content, cfg));
+}
+
+/** All tasks on disk, newest first. Unreadable task dirs are skipped. */
+export function listTasks(root: string, configDir: string): Task[] {
+  const dir = tasksRoot(dataRoot(root, configDir));
+  if (!existsSync(dir)) return [];
+  const tasks: Task[] = [];
+  for (const entry of readdirSync(dir)) {
+    const task = loadTask(root, configDir, entry);
+    if (task) tasks.push(task);
+  }
+  return tasks.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+/** The task the Master is currently driving, if any. */
+export function activeTask(root: string, configDir: string): Task | undefined {
+  return listTasks(root, configDir).find((task) => !TERMINAL_STATES.includes(task.state));
+}
+
+/** Timestamped id; callers suffix it when a task already exists this second. */
+export function nextTaskId(now = new Date()): string {
+  return `TASK-${now.toISOString().replace(/[-:T]/g, "").slice(0, 14)}`;
 }
 
 /** Delete the temporary task dir after knowledge has been distilled. */

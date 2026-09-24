@@ -1,4 +1,6 @@
-import type { RoleSpec } from "../schemas/agent.ts";
+import type { Domain, RoleSpec } from "../schemas/agent.ts";
+import type { RelevantFile, ScoutResult } from "../schemas/findings.ts";
+import { bullets, findSection, parseSections } from "./markdown.ts";
 
 /** Scout runs read-only so it can never modify implementation. */
 export const scoutSpec: RoleSpec = {
@@ -15,3 +17,47 @@ export const scoutSpec: RoleSpec = {
     "Keep the whole response under 400 words. Report uncertainty; do not implement.",
   ].join(" "),
 };
+
+function parseFileBullet(text: string): RelevantFile {
+  const match = /^`?([^`\s]+)`?\s*(?:[—–]|--|-)\s*(.*)$/.exec(text);
+  if (match) return { path: match[1]!, reason: match[2]!.trim() };
+  return { path: text.trim(), reason: "" };
+}
+
+function parseConfidence(text: string | undefined): ScoutResult["confidence"] {
+  const value = (text ?? "").toLowerCase();
+  if (value.includes("high")) return "high";
+  if (value.includes("medium")) return "medium";
+  return "low";
+}
+
+/** Parse a scout's markdown into structured findings (never throws). */
+export function parseScoutResult(domain: Domain, raw: string): ScoutResult {
+  const sections = parseSections(raw);
+  return {
+    domain,
+    role: "scout",
+    scope: findSection(sections, "scope") ?? "",
+    findings: bullets(findSection(sections, "findings")),
+    relevantFiles: bullets(findSection(sections, "relevant files")).map(parseFileBullet),
+    patterns: bullets(findSection(sections, "existing patterns")),
+    risks: bullets(findSection(sections, "risks")),
+    recommendations: bullets(findSection(sections, "recommendations")),
+    confidence: parseConfidence(findSection(sections, "confidence")),
+    raw,
+  };
+}
+
+/** Report contract deviations so the Master can retry or downgrade trust. */
+export function validateScoutResult(result: ScoutResult): string[] {
+  const issues: string[] = [];
+  if (!result.scope) issues.push("missing Scope section");
+  if (result.findings.length === 0) issues.push("no findings reported");
+  if (!/##\s*confidence/i.test(result.raw)) issues.push("missing Confidence section");
+  return issues;
+}
+
+/** A scout result is usable when it produced any evidence at all. */
+export function isScoutResultUsable(result: ScoutResult): boolean {
+  return result.findings.length > 0 || result.relevantFiles.length > 0 || result.risks.length > 0;
+}

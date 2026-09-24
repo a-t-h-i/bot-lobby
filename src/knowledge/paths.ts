@@ -11,11 +11,19 @@ export const AGENT_DIR_NAMES: Record<KnowledgeAgent, string> = {
   qa: "QA",
 };
 
+/** Domain-specific standards file per agent (§21). */
+export const STANDARDS_FILE: Record<KnowledgeAgent, string> = {
+  master: "standards.md",
+  designer: "design-language.md",
+  backend: "engineering-standards.md",
+  qa: "testing-standards.md",
+};
+
 export const KNOWLEDGE_FILES: Record<KnowledgeAgent, readonly string[]> = {
-  master: ["knowledge.md", "standards.md", "decisions.md", "completed-tasks.md"],
-  designer: ["knowledge.md", "design-language.md", "decisions.md", "completed-tasks.md"],
-  backend: ["knowledge.md", "engineering-standards.md", "decisions.md", "completed-tasks.md"],
-  qa: ["knowledge.md", "testing-standards.md", "decisions.md", "completed-tasks.md"],
+  master: ["knowledge.md", STANDARDS_FILE.master, "decisions.md", "completed-tasks.md"],
+  designer: ["knowledge.md", STANDARDS_FILE.designer, "decisions.md", "completed-tasks.md"],
+  backend: ["knowledge.md", STANDARDS_FILE.backend, "decisions.md", "completed-tasks.md"],
+  qa: ["knowledge.md", STANDARDS_FILE.qa, "decisions.md", "completed-tasks.md"],
 };
 
 export function knowledgeDir(dataRoot: string, agent: KnowledgeAgent): string {

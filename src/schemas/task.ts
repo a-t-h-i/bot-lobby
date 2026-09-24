@@ -33,6 +33,19 @@ export interface Decision {
   createdAt: string;
 }
 
+export type ApprovalKind = "dependency" | "architecture";
+
+/** A Worker-requested exception the Master must resolve before proceeding. */
+export interface Approval {
+  id: string;
+  kind: ApprovalKind;
+  domain: Domain;
+  detail: string;
+  status: "pending" | "approved" | "rejected";
+  note?: string;
+  createdAt: string;
+}
+
 export interface ReviewRecord {
   domain: Domain;
   verdict: Verdict;
@@ -40,7 +53,6 @@ export interface ReviewRecord {
   requiredChanges: string[];
   createdAt: string;
 }
-
 export interface Task {
   id: string;
   title: string;
@@ -55,6 +67,7 @@ export interface Task {
   qaVerdict?: Verdict;
   blockers: Blocker[];
   decisions: Decision[];
+  approvals: Approval[];
   createdAt: string;
   updatedAt: string;
 }
@@ -71,6 +84,7 @@ export function createTask(id: string, title: string, now = new Date().toISOStri
     reviewRecords: [],
     blockers: [],
     decisions: [],
+    approvals: [],
     createdAt: now,
     updatedAt: now,
   };

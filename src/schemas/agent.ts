@@ -20,6 +20,16 @@ export interface RoleSpec {
   contract: string;
 }
 
+/** Static description of a domain agent, independent of any run. */
+export interface DomainSpec {
+  domain: Domain;
+  promptFile: string;
+  /** What this domain's scout should look for. */
+  scoutFocus: string;
+  /** Domain boundary statement passed to workers. */
+  boundary: string;
+}
+
 export function isDomain(value: string): value is Domain {
   return (DOMAINS as readonly string[]).includes(value);
 }

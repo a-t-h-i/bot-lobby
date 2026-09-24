@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
+import { knowledgeDir, STANDARDS_FILE, type KnowledgeAgent } from "./paths.ts";
 
 export function readFileOr(path: string, fallback = ""): string {
   try {
@@ -27,4 +28,22 @@ export const DEFAULT_KNOWLEDGE_CONTENT: Record<string, string> = {
 
 export function ensureFile(path: string, content: string): void {
   if (!existsSync(path)) writeFileEnsured(path, content);
+}
+
+/** Read an agent's knowledge slices for prompt context selection (§23). */
+export function readKnowledgeSlices(
+  dir: string,
+  standardsFile: string,
+): { knowledge: string; standards: string; decisions: string; completed: string } {
+  return {
+    knowledge: readFileOr(join(dir, "knowledge.md")),
+    standards: readFileOr(join(dir, standardsFile)),
+    decisions: readFileOr(join(dir, "decisions.md")),
+    completed: readFileOr(join(dir, "completed-tasks.md")),
+  };
+}
+
+/** Read an agent's knowledge by agent key (convenience over directory paths). */
+export function readAgentKnowledge(dataRoot: string, agent: KnowledgeAgent) {
+  return readKnowledgeSlices(knowledgeDir(dataRoot, agent), STANDARDS_FILE[agent]);
 }
