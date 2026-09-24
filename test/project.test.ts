@@ -71,9 +71,11 @@ test("loadConfig merges partial user config over defaults", () => {
 
 test("loadConfig rejects an unknown thinking level", () => {
   const dir = mkdtempSync(join(tmpdir(), "dh-cfg-bad-"));
-  writeFileSync(join(dir, "config.json"), JSON.stringify({ agents: { qa: { thinking: "turbo" } } }));
+  writeFileSync(join(dir, "config.json"), JSON.stringify({ master: { thinking: "turbo" }, agents: { qa: { thinking: "turbo" } } }));
   withConfig(dir, () => {
-    assert.equal(loadConfig().agents.qa.thinking, DEFAULT_CONFIG.agents.qa.thinking);
+    const cfg = loadConfig();
+    assert.equal(cfg.master.thinking, DEFAULT_CONFIG.master.thinking);
+    assert.equal(cfg.agents.qa.thinking, DEFAULT_CONFIG.agents.qa.thinking);
   });
 });
 
