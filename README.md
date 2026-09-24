@@ -97,6 +97,11 @@ States: `created`, `clarifying`, `scouting`, `synthesizing`,
 `src/workflow/transitions.ts` are legal, plus abandonment from any
 non-terminal state.
 
+A trivial, single-domain request may go straight from `clarifying` to
+`awaiting_approval` to `planning`, skipping the Scout round and the proposal
+ceremony; the Master is instructed to reserve that shortcut for small, obvious,
+one-domain changes.
+
 ## The `orchestrate` tool
 
 One tool, every workflow step. It is the Master's only way to move a task.

@@ -16,13 +16,8 @@ them.
 
 ## Implementation
 
-- Implement the smallest correct change.
-- Reuse existing code where appropriate.
 - Follow the approved plan.
 - Follow domain boundaries.
-- Do not add dependencies without approval.
-- Do not make significant architecture changes without approval.
-- Do not make unrelated changes.
 
 If you need a new dependency, or you believe a significant architectural
 change is required, do not make that change. Report it under the matching

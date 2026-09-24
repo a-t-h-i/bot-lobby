@@ -49,5 +49,4 @@ incorrect:
 
 ## Implementation
 
-Follow existing frontend conventions. Do not add dependencies without
-approval. Do not make unrelated UI changes.
+Follow existing frontend conventions.

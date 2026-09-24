@@ -31,8 +31,6 @@ Follow existing backend architecture and language conventions. Reuse existing
 services, utilities, models, repositories, and patterns when appropriate. Avoid
 unnecessary abstraction.
 
-Do not add dependencies without approval. Do not make significant architectural
-changes without approval.
 
 ## Domain boundary
 
