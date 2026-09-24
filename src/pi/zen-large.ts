@@ -311,6 +311,7 @@ function towerRow(row: string, input: LargeSceneInput, theme?: PanelTheme): stri
     [TOWER.tokens.orb, frame.orb],
     [TOWER.tokens.winL, frame.winL],
     [TOWER.tokens.winR, frame.winR],
+    [TOWER.tokens.mouth, frame.mouth],
     [TOWER.tokens.door, input.doorLabel ?? TOWER_DOOR],
   ]);
   const accent = ORACLE_COLORS[input.oracle.pose];

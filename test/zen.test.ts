@@ -6,7 +6,6 @@ import {
   MAX_PLAN_STEPS,
   bannerLines,
   formatDuration,
-  frameIndex,
   largeLineBudget,
   panelLines,
   planChecklist,
@@ -94,19 +93,7 @@ function stripAnsi(text: string): string {
   return text.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
-// --- frame clock ---
-
-test("frameIndex wraps in both directions and never divides by zero", () => {
-  assert.equal(frameIndex(0, 0, 8), 0);
-  assert.equal(frameIndex(8, 0, 8), 0);
-  assert.equal(frameIndex(-1, 0, 8), 7);
-  assert.equal(frameIndex(-9, 0, 8), 7);
-  assert.equal(frameIndex(0, 2, 8), 2);
-  assert.equal(frameIndex(5, 9, 4), 2);
-  assert.equal(frameIndex(3.7, 0, 8), 3);
-  assert.equal(frameIndex(5, 3, 0), 0);
-  assert.equal(frameIndex(5, 3, -2), 0);
-});
+// --- expressions (scheduled in src/pi/expressions.ts, covered by test/expressions.test.ts) ---
 
 // --- banner ---
 
@@ -180,7 +167,7 @@ test("every non-terminal state draws a 40-column compact strip with its caption"
   assert.equal(SCENE_PROPS.implementing, "agents at work");
 });
 
-test("the compact strip animates the four slots and follows each slot's status", () => {
+test("the compact strip shows each slot's expression frame and follows its status", () => {
   const lines = panelLines(task({ state: "implementing" }), statusRuns(), NOW, true, COMPACT_OPTS);
   const strip = stripRows(lines);
   const statuses = ["working", "failed", "done", "done"] as const;
@@ -192,20 +179,24 @@ test("the compact strip animates the four slots and follows each slot's status",
     for (const frame of frames) assert.equal(visibleWidth(frame), COMPACT_WIDTH);
     assert.ok(frames.some((frame) => strip[1]!.includes(frame)), `${id} drew a foreign frame: ${JSON.stringify(strip[1])}`);
   }
-  const ticked = stripRows(panelLines(task({ state: "implementing" }), statusRuns(), NOW, true, { ...COMPACT_OPTS, tick: 1 }));
-  assert.notEqual(ticked[1], strip[1], "the sprites must move between frames");
-  assert.equal(ticked[0], strip[0], "the caption must not animate");
+  assert.ok(strip[1]!.includes(COMPACT_FRAMES.dev.working[0]!), "the default expression is rest");
+  const blink = { ...COMPACT_OPTS, expressions: { dev: 1, design: 1, research: 1, qa: 1 } };
+  const blinked = stripRows(panelLines(task({ state: "implementing" }), statusRuns(), NOW, true, blink));
+  assert.ok(blinked[1]!.includes(COMPACT_FRAMES.dev.working[1]!), "dev's blink frame is missing");
+  assert.notEqual(blinked[1], strip[1], "a blink frame must move the sprites");
+  assert.equal(blinked[0], strip[0], "the caption must not animate");
 });
 
-test("the four slots do not animate in lockstep", () => {
+test("the four slots render their own expression frame independently", () => {
   const runs = SLOT_IDS.map((id, index) =>
     run({ runId: `r${index}`, domain: id === "dev" ? "backend" : id === "design" ? "designer" : "qa", role: id === "research" ? "researcher" : "worker" }),
   );
-  const strip = stripRows(panelLines(task({ state: "implementing" }), runs, NOW, true, COMPACT_OPTS));
+  const expressions = { dev: 0, design: 1, research: 2, qa: 3 } as const;
+  const strip = stripRows(panelLines(task({ state: "implementing" }), runs, NOW, true, { ...COMPACT_OPTS, expressions }));
   const sprites = [1, 11, 21, 31].map((offset) => strip[1]!.slice(offset, offset + COMPACT_WIDTH));
-  assert.equal(new Set(sprites).size > 1, true, `all four sprites shared one frame: ${JSON.stringify(sprites)}`);
+  assert.equal(new Set(sprites).size, SLOT_IDS.length, `slots shared a frame: ${JSON.stringify(sprites)}`);
   for (const [index, id] of SLOT_IDS.entries()) {
-    assert.ok(COMPACT_FRAMES[id].working.some((frame) => frame === sprites[index]), `${id} drew a foreign frame`);
+    assert.equal(sprites[index], COMPACT_FRAMES[id].working[expressions[id]], `${id} drew a foreign frame`);
   }
 });
 
@@ -280,12 +271,14 @@ test("no state, width or height combination exceeds its cap or the terminal widt
 
 // --- determinism, status words and theme safety ---
 
-test("the same tick renders identically and a later tick moves the eyes", () => {
+test("identical expressions render identically and a different frame moves the eyes", () => {
   const input = [task({ state: "implementing" }), statusRuns(), NOW, true] as const;
+  const expressions = { dev: 1, design: 1, research: 1, qa: 1, oracle: 2 };
   assert.deepEqual(panelLines(...input, COMPACT_OPTS), panelLines(...input, COMPACT_OPTS));
   assert.deepEqual(panelLines(...input, LARGE_OPTS), panelLines(...input, LARGE_OPTS));
-  assert.notDeepEqual(panelLines(...input, { ...COMPACT_OPTS, tick: 5 }), panelLines(...input, COMPACT_OPTS));
-  assert.notDeepEqual(panelLines(...input, { ...LARGE_OPTS, tick: 5 }), panelLines(...input, LARGE_OPTS));
+  assert.deepEqual(panelLines(...input, { ...COMPACT_OPTS, expressions }), panelLines(...input, { ...COMPACT_OPTS, expressions }));
+  assert.notDeepEqual(panelLines(...input, { ...COMPACT_OPTS, expressions }), panelLines(...input, COMPACT_OPTS));
+  assert.notDeepEqual(panelLines(...input, { ...LARGE_OPTS, expressions }), panelLines(...input, LARGE_OPTS));
 });
 
 test("faces and state words follow each slot status in both tiers", () => {

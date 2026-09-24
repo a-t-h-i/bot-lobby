@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { statusText, summarizeRun } from "../src/pi/ui.ts";
+import { IDLE_TICK_MS, LIVE_TICK_MS, expressionTickDelay, statusText, summarizeRun } from "../src/pi/ui.ts";
+import { BLINK_MS, FAST_TICK_MS } from "../src/pi/expressions.ts";
 import { setQuiet } from "../src/pi/quiet.ts";
 import { createTask, type Task } from "../src/schemas/task.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
@@ -43,4 +44,15 @@ test("summarizeRun marks running, success, and failure", () => {
   assert.equal(summarizeRun(run({ status: "failed" })), "✗ backend/scout (failed)");
   assert.equal(summarizeRun(run({ status: "timeout" })), "✗ backend/scout (timeout)");
   assert.equal(summarizeRun(run({ status: "success", attempts: 2 })), "✓ backend/scout (success) ×2");
+});
+
+test("the zen clock speeds up while an expression plays", () => {
+  const resting = { nextAt: 10_000, until: 0, frame: 0 };
+  const blinking = { nextAt: 10_000, until: 1_000, frame: 1 };
+  assert.equal(expressionTickDelay([resting], 0, true), LIVE_TICK_MS);
+  assert.equal(expressionTickDelay([resting], 0, false), IDLE_TICK_MS);
+  assert.equal(expressionTickDelay([blinking], 0, false), FAST_TICK_MS);
+  assert.equal(expressionTickDelay([resting, blinking], 0, true), FAST_TICK_MS);
+  assert.ok(FAST_TICK_MS < BLINK_MS, "a blink must survive one fast tick");
+  assert.equal(expressionTickDelay([resting], Number.NaN, true), LIVE_TICK_MS);
 });

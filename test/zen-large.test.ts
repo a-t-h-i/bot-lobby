@@ -125,6 +125,8 @@ test("oracle frames stay one column wide and read distinctly per pose", () => {
     assert.ok(ORACLE_FRAMES[pose].length > 1, pose);
     for (const frame of ORACLE_FRAMES[pose]) {
       for (const glyph of [frame.orb, frame.winL, frame.winR]) assert.equal(visibleWidth(glyph), 1, glyph);
+      assert.equal(frame.mouth.length, 7, frame.mouth);
+      assert.equal(visibleWidth(frame.mouth), 7, frame.mouth);
     }
   }
   const dormantOrbs = ORACLE_FRAMES.dormant.map((frame) => frame.orb);
@@ -132,18 +134,32 @@ test("oracle frames stay one column wide and read distinctly per pose", () => {
   assert.ok(ORACLE_FRAMES.dormant.some((frame) => frame.winL !== frame.orb));
 });
 
-test("tower templates render TOWER_WIDTH columns and carry all four tokens", () => {
+test("the oracle mouth follows the injected expression frame", () => {
+  for (const frame of ORACLE_FRAMES.orchestrating.keys()) {
+    const value = ORACLE_FRAMES.orchestrating[frame]!;
+    const lines = largeLines(scene({ oracle: { pose: "orchestrating", frame } }), 72, 40);
+    assert.ok(lines.some((line) => line.includes(value.mouth)), `mouth at frame ${frame}`);
+    for (const line of lines) assert.ok(visibleWidth(line) <= 72, `overflow at frame ${frame}`);
+  }
+  const rest = largeLines(scene({ oracle: { pose: "orchestrating", frame: 0 } }), 72, 40);
+  const emote = largeLines(scene({ oracle: { pose: "orchestrating", frame: 2 } }), 72, 40);
+  assert.notDeepEqual(rest, emote, "the emote frame must change the tower");
+});
+
+test("tower templates render TOWER_WIDTH columns and carry every token", () => {
   const fill = (row: string) =>
     row
       .replace(TOWER.tokens.door, TOWER_DOOR)
       .replace(TOWER.tokens.orb, "◉")
       .replace(TOWER.tokens.winL, "◉")
-      .replace(TOWER.tokens.winR, "◉");
+      .replace(TOWER.tokens.winR, "◉")
+      .replace(TOWER.tokens.mouth, "═══════");
   for (const rows of [TOWER.rows, TOWER.smallRows]) {
     for (const row of rows) assert.equal(visibleWidth(fill(row)), TOWER_WIDTH, JSON.stringify(row));
   }
   const joined = TOWER.rows.join("\n");
   for (const token of Object.values(TOWER.tokens)) assert.ok(joined.includes(token), token);
+  assert.ok(TOWER.rows.some((row) => row.includes(TOWER.tokens.mouth)), "the mouth row is missing");
   assert.ok(TOWER.smallRows.length < TOWER.rows.length);
   for (const row of TOWER.smallRows) assert.ok(TOWER.rows.includes(row), `small row missing: ${JSON.stringify(row)}`);
 });
@@ -200,7 +216,7 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
     "                                   │                        ",
     "           ┌───────────────┬───────┴───────┬───────────────┐",
     "           │               │               │               │",
-    "         (^_^)           (-_-)           (o_o)           (>_<)     ",
+    "         (^_^)           (u_u)           (^-^)           (;_;)     ",
     "          DEV           DESIGN         RESEARCH           QA       ",
     "       ◐ working        · idle          ✓ done         ✗ failed    ",
     "    ██████░░░░ 58%  ░░░░░░░░░░  0%  ██████████100%  ░░░░░░░░░░  0% ",
@@ -236,7 +252,7 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
     "                                                 │                        ",
     "                         ┌───────────────┬───────┴───────┬───────────────┐",
     "                         │               │               │               │",
-    "                       (^_^)           (-_-)           (o_o)           (>_<)     ",
+    "                       (^_^)           (u_u)           (^-^)           (;_;)     ",
     "                        DEV           DESIGN         RESEARCH           QA       ",
     "                     ◐ working        · idle          ✓ done         ✗ failed    ",
     "                  ██████░░░░ 58%  ░░░░░░░░░░  0%  ██████████100%  ░░░░░░░░░░  0% ",
@@ -312,13 +328,13 @@ test("the same input and frame render identically, and a new frame moves the eye
     72,
     40,
   );
-  assert.ok(largeLines(base, 72, 40).some((line) => line.includes("(^_^)")));
-  assert.ok(shifted.some((line) => line.includes("(^-^)")));
+  assert.ok(largeLines(base, 72, 40).some((line) => line.includes(SLOT_FRAMES.dev.working[0]![0]!)));
+  assert.ok(shifted.some((line) => line.includes(SLOT_FRAMES.dev.working[1]![0]!)), "the blink frame is missing");
   assert.notDeepEqual(shifted, largeLines(base, 72, 40));
   const wrapped = largeLines(scene({ slots: base.slots.map((slot) => ({ ...slot, frame: 99 })) }), 72, 40);
   assert.equal(wrapped.length, largeLines(base, 72, 40).length);
   const negative = largeLines(scene({ slots: base.slots.map((slot) => ({ ...slot, frame: -3 })) }), 72, 40);
-  assert.ok(negative.some((line) => line.includes(SLOT_FRAMES.dev.working.at(-3)![0]!)));
+  assert.ok(negative.some((line) => line.includes(SLOT_FRAMES.dev.working.at(-3)![0]!)), "negative frames wrap from the end");
 });
 
 test("faces and state words follow each slot status", () => {

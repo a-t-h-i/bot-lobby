@@ -4,8 +4,10 @@ import type { AgentRun } from "../schemas/findings.ts";
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { activeTask } from "../state/persistence.ts";
 import { detectProjectRoot } from "../state/project.ts";
+import { advanceExpression, anyPlaying, createExpression, FAST_TICK_MS, type ExpressionState } from "./expressions.ts";
+import { SLOT_IDS } from "./mascot-art.ts";
 import { isQuiet, isSubagentProcess, toggleQuiet } from "./quiet.ts";
-import { panelLines } from "./zen.ts";
+import { panelLines, type ExpressionFrames } from "./zen.ts";
 
 export const STATUS_KEY = "dev-house";
 
@@ -25,8 +27,8 @@ export function statusText(task: Task | undefined): string {
 let zenOn = false;
 let zenState: { task: Task | undefined; runs: AgentRun[] } = { task: undefined, runs: [] };
 
-const LIVE_TICK_MS = 250;
-const IDLE_TICK_MS = 1000;
+export const LIVE_TICK_MS = 250;
+export const IDLE_TICK_MS = 1000;
 
 /** Fast frames while an agent works or the task is live; slow frames when it is quiet. */
 function isLive(): boolean {
@@ -35,44 +37,70 @@ function isLive(): boolean {
   return Boolean(task && !TERMINAL_STATES.includes(task.state) && !task.paused);
 }
 
-function tickDelay(): number {
+function liveTickDelay(): number {
   return isLive() ? LIVE_TICK_MS : IDLE_TICK_MS;
 }
+
+/** Tick delay for the zen clock: fastest while an expression plays, so a blink is never skipped. */
+export function expressionTickDelay(states: readonly ExpressionState[], now: number, live: boolean): number {
+  if (anyPlaying(states, now)) return FAST_TICK_MS;
+  return live ? LIVE_TICK_MS : IDLE_TICK_MS;
+}
+
+/** Every sprite with its own expression schedule. */
+type ExpressionKey = keyof ExpressionFrames;
+const EXPRESSION_KEYS: readonly ExpressionKey[] = [...SLOT_IDS, "oracle"];
 
 /** Animated zen scene + plan checklist shown above the editor while a task is active. */
 class ZenWidget implements Component {
   private tick = 0;
-  private delay = tickDelay();
+  private delay = liveTickDelay();
   private timer: ReturnType<typeof setInterval>;
   private disposed = false;
+  private readonly expressions: Record<ExpressionKey, ExpressionState>;
   private readonly tui: TUI;
   private readonly theme: () => Theme;
+  private readonly rng: () => number;
 
-  constructor(tui: TUI, theme: () => Theme) {
+  constructor(tui: TUI, theme: () => Theme, rng: () => number = Math.random) {
     this.tui = tui;
     this.theme = theme;
+    this.rng = rng;
+    const now = Date.now();
+    const entries = EXPRESSION_KEYS.map((key) => [key, createExpression(now, rng)] as const);
+    this.expressions = Object.fromEntries(entries) as Record<ExpressionKey, ExpressionState>;
     this.timer = setInterval(() => this.advance(), this.delay);
   }
 
   private advance(): void {
     if (this.disposed) return;
     this.tick += 1;
-    this.retime();
+    const now = Date.now();
+    this.play(now);
+    this.retime(now);
     this.tui.requestRender();
   }
 
-  /** One interval, retimed only when the task starts or stops working. */
-  private retime(): void {
-    const delay = tickDelay();
+  private play(now: number): void {
+    for (const key of EXPRESSION_KEYS) this.expressions[key] = advanceExpression(this.expressions[key], now, this.rng);
+  }
+
+  /** One interval, retimed when work starts or stops or an expression plays. */
+  private retime(now: number): void {
+    const delay = expressionTickDelay(Object.values(this.expressions), now, isLive());
     if (delay === this.delay) return;
     this.delay = delay;
     clearInterval(this.timer);
     this.timer = setInterval(() => this.advance(), delay);
   }
 
+  private frames(): Partial<Record<ExpressionKey, number>> {
+    return Object.fromEntries(EXPRESSION_KEYS.map((key) => [key, this.expressions[key].frame]));
+  }
+
   render(width: number): string[] {
     const now = Date.now();
-    const opts = { width, rows: this.tui.terminal.rows, tick: this.tick, theme: this.theme() };
+    const opts = { width, rows: this.tui.terminal.rows, tick: this.tick, theme: this.theme(), expressions: this.frames() };
     const lines = panelLines(zenState.task, zenState.runs, now, isQuiet(), opts);
     return lines.map((line) => truncateToWidth(line, width));
   }

@@ -102,47 +102,45 @@ export const ORACLE_COLORS: Record<OraclePose, { color: PanelColor; bold: boolea
   dormant: { color: "dim", bold: false },
 };
 
-/** One oracle frame: the tower orb plus both window eyes, each exactly one column. */
+/** One oracle frame: the tower orb, both window eyes and the seven-column mouth. */
 export interface OracleFrame {
   orb: string;
   winL: string;
   winR: string;
+  /** Exactly seven one-column glyphs; never moves the tower geometry. */
+  mouth: string;
 }
 
 /**
- * Orb pulse and window-eye tracking per pose. Orchestrating sweeps the eyes and
- * pulses the orb; dormant half-closes them and dims the orb. Every alternate is
- * one column wide, so a frame swap never moves the tower geometry.
+ * Indexed oracle expressions per pose: 0 rests, 1 blinks and 2-3 emote with a
+ * pulsing orb, sweeping window eyes and a moving mouth. Every glyph is one
+ * column and every mouth seven, so a frame swap never moves the tower geometry.
  */
 export const ORACLE_FRAMES: Record<OraclePose, readonly OracleFrame[]> = {
   orchestrating: [
-    { orb: "◉", winL: "◉", winR: "◉" },
-    { orb: "◍", winL: "◉", winR: "◉" },
-    { orb: "◉", winL: "◍", winR: "◉" },
-    { orb: "◉", winL: "◉", winR: "◍" },
-    { orb: "◎", winL: "◉", winR: "◉" },
-    { orb: "◉", winL: "─", winR: "─" },
-    { orb: "◍", winL: "◍", winR: "◍" },
-    { orb: "◉", winL: "◉", winR: "◉" },
+    { orb: "◉", winL: "◉", winR: "◉", mouth: "═══════" },
+    { orb: "◉", winL: "─", winR: "─", mouth: "═══════" },
+    { orb: "◎", winL: "◍", winR: "◉", mouth: "◡◡◡◡◡◡◡" },
+    { orb: "◍", winL: "◉", winR: "◍", mouth: "▁▂▃▂▃▂▁" },
   ],
   dormant: [
-    { orb: "◌", winL: "◌", winR: "◌" },
-    { orb: "○", winL: "◌", winR: "◌" },
-    { orb: "◌", winL: "─", winR: "─" },
-    { orb: "◌", winL: "◌", winR: "◌" },
+    { orb: "◌", winL: "◌", winR: "◌", mouth: "═══════" },
+    { orb: "◌", winL: "─", winR: "─", mouth: "═══════" },
+    { orb: "○", winL: "◌", winR: "◌", mouth: "▂▂▂▂▂▂▂" },
+    { orb: "○", winL: "─", winR: "─", mouth: "▁▁▁▁▁▁▁" },
   ],
 };
 
 /**
- * Eye-shift and blink frames per status, one row each: working looks around and
- * blinks, idle droops, done is calm and content, failed winces. Same length for
- * every state so the caller's frame index stays comparable across statuses.
+ * One frame per status and expression: index 0 is the calm rest face, 1 the
+ * blink and 2-3 the emotes. Every status keeps the same frame count and one row
+ * each, so a caller-chosen index stays comparable across statuses.
  */
 const FACE_FRAMES: Record<SlotState, readonly string[]> = {
-  working: ["(^_^)", "(^-^)", "(^o^)", "(^_^)", "(-_-)", "(-.-)", "(^o^)", "(^_^)"],
-  idle: ["(-_-)", "(-_-)", "(u_u)", "(-.-)", "(-_-)", "(-_-)", "(u_u)", "(-.-)"],
-  done: ["(o_o)", "(^_^)", "(o_o)", "(^-^)", "(o_-)", "(o_o)", "(-_-)", "(^_^)"],
-  failed: ["(>_<)", "(>o<)", "(x_x)", "(>_<)", "(T_T)", "(>_<)", "(;_;)", "(>o<)"],
+  working: ["(^_^)", "(-_-)", "(^o^)", "(^-^)"],
+  idle: ["(-_-)", "(u_u)", "(-.-)", "(u.u)"],
+  done: ["(o_o)", "(-_-)", "(^-^)", "(^_^)"],
+  failed: ["(>_<)", "(x_x)", "(T_T)", "(;_;)"],
 };
 
 /** Every face is five columns, so a centered column never shifts between frames. */
@@ -196,7 +194,7 @@ export const COMPACT_FRAMES: Record<SlotId, Record<SlotState, readonly string[]>
 export interface TowerSpec {
   rows: readonly string[];
   smallRows: readonly string[];
-  tokens: { orb: string; winL: string; winR: string; door: string };
+  tokens: { orb: string; winL: string; winR: string; door: string; mouth: string };
 }
 
 export const TOWER_WIDTH = 13;
@@ -216,7 +214,7 @@ export const TOWER: TowerSpec = {
     "│ │{winL}│   │{winR}│ │",
     "│ └─┘   └─┘ │",
     "├───────────┤",
-    "│  ═══════  │",
+    "│  {mouth}  │",
     "├───┬───┬───┤",
     "│▓▓▓│{door}│▓▓▓│",
     "└───┴───┴───┘",
@@ -229,5 +227,5 @@ export const TOWER: TowerSpec = {
     "│▓▓▓│{door}│▓▓▓│",
     "└───┴───┴───┘",
   ],
-  tokens: { orb: "{orb}", winL: "{winL}", winR: "{winR}", door: "{door}" },
+  tokens: { orb: "{orb}", winL: "{winL}", winR: "{winR}", door: "{door}", mouth: "{mouth}" },
 };

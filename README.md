@@ -65,14 +65,18 @@ While a task is active the transcript switches to a zen view: `orchestrate` rows
 and the built-in spinner are hidden, and a widget above the editor animates the
 task. At 72 columns and wider it draws a large scene: a header box with the task
 id, state, elapsed time and quiet-mode hint, an estimated ETA and progress bar; an
-oracle tower with its ORC door and animated orb and window eyes; four animated
-slots — DEV, DESIGN, RESEARCH and QA — each with a status face, a coloured status
-glyph and state word and a 10-cell bar; and a TASKS checklist windowed on the
+oracle tower with its ORC door, animated orb, window eyes and seven-column mouth;
+four animated slots — DEV, DESIGN, RESEARCH and QA — each with a status face, a
+coloured status glyph and state word and a 10-cell bar; and a TASKS checklist
+windowed on the
 current step beside a LOG of real run transitions. Narrower terminals keep the
-boxed banner, header and compact animated strip. Sprites animate on an adaptive
-clock — 250 ms while work is live and 1 s when idle — and their faces, colours
-and words follow each agent's status (working, idle, done, failed); percentages
-are plan-derived while the ETA is an estimate.
+boxed banner, header and compact animated strip. Each sprite rests on one calm
+face and, independently every 20–30 s, briefly blinks (~150 ms) or emotes
+(~600 ms); the oracle's mouth moves with its expressions. Sprites redraw on an
+adaptive clock — 250 ms while work is live, 1 s when idle and ~120 ms while an
+expression plays — and their faces, colours and words follow each agent's status
+(working, idle, done, failed); percentages are plan-derived while the ETA is an
+estimate.
 New tasks are named from their request as
 `TASK-<slug>` (for example `TASK-add-pagination`), so the banner and header show a
 concise task name; older `TASK-<timestamp>` tasks keep loading untouched.

@@ -3,8 +3,8 @@
  *
  * `panelLines` owns the tier choice: the large animated scene at
  * `width >= LARGE_MIN_WIDTH` while the terminal height allows, and the compact
- * animated strip below that. Everything here is pure: the frame clock is a
- * function of the caller's `tick`, and every timestamp arrives as `now`.
+ * animated strip below that. Everything here is pure: expression frames and the
+ * spinner tick arrive from the caller, and every timestamp arrives as `now`.
  */
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { AgentRun } from "../schemas/findings.ts";
@@ -15,16 +15,16 @@ import {
   BANNER_TITLE,
   COMPACT_FRAMES,
   COMPACT_WIDTH,
-  ORACLE_FRAMES,
   SCENE_PROPS,
-  SLOT_FRAMES,
   SLOT_IDS,
   SLOT_STATE_COLORS,
   SLOT_STATE_GLYPHS,
   type OraclePose,
   type PanelColor,
+  type SlotId,
   type SlotState,
 } from "./mascot-art.ts";
+import { REST_FRAME } from "./expressions.ts";
 import {
   LARGE_MIN_WIDTH,
   MAX_LARGE_LINES,
@@ -191,23 +191,21 @@ function paintStatus(status: SlotState, text: string, theme?: PanelTheme): strin
   return style.bold ? theme.bold(painted) : painted;
 }
 
-/*
- * Frame clock. Every sprite reads `frameIndex` with its own phase, so the four
- * agents and the oracle never animate in lockstep while a fixed tick still
- * renders byte-identical output.
- */
+/* -------------------------------------------------------------------------
+ * Expression frames. The caller schedules blinks and emotes (expressions.ts)
+ * and passes one frame index per slot and the oracle; the art only wraps it,
+ * so nothing here reads a clock or a random source.
+ * ---------------------------------------------------------------------- */
 
-/** Deterministic frame index: `tick + phase` wrapped into `[0, count)`. */
-export function frameIndex(tick: number, phase: number, count: number): number {
-  if (!(count > 0)) return 0;
-  return (((Math.floor(tick) + phase) % count) + count) % count;
+/** Caller-chosen expression frame per slot and the oracle; absent reads as rest. */
+export type ExpressionFrames = Partial<Record<SlotId | "oracle", number>>;
+
+/** Frame `index` wrapped into the art's frame list; a non-finite index rests. */
+function frameAt(frames: readonly string[], index: number): string {
+  if (frames.length === 0) return "";
+  const at = ((Math.floor(index) % frames.length) + frames.length) % frames.length;
+  return frames[at] ?? "";
 }
-
-function slotPhase(index: number): number {
-  return index * 2;
-}
-
-const ORACLE_PHASE = SLOT_IDS.length * 2 + 1;
 
 /* -------------------------------------------------------------------------
  * Compact tier (< LARGE_MIN_WIDTH): banner, header, the one-row-per-agent strip
@@ -218,9 +216,8 @@ const COMPACT_GAP = 2;
 const COMPACT_INNER = SLOT_IDS.length * COMPACT_WIDTH + (SLOT_IDS.length - 1) * COMPACT_GAP;
 const COMPACT_STATUS_GAP = " ".repeat(COMPACT_WIDTH + COMPACT_GAP - 1);
 
-function compactFrame(slot: SlotView, index: number, tick: number): string {
-  const frames = COMPACT_FRAMES[slot.id][slot.status];
-  return frames[frameIndex(tick, slotPhase(index), frames.length)] ?? "";
+function compactFrame(slot: SlotView, expressions: ExpressionFrames): string {
+  return frameAt(COMPACT_FRAMES[slot.id][slot.status], expressions[slot.id] ?? REST_FRAME);
 }
 
 function compactRow(content: string, color: PanelColor, theme?: PanelTheme): string {
@@ -229,8 +226,8 @@ function compactRow(content: string, color: PanelColor, theme?: PanelTheme): str
 }
 
 /** Caption, animated sprites, then the coloured status glyph per slot. */
-function compactStrip(state: TaskState, slots: readonly SlotView[], tick: number, theme?: PanelTheme): string[] {
-  const sprites = slots.map((slot, index) => paintStatus(slot.status, compactFrame(slot, index, tick), theme)).join(" ".repeat(COMPACT_GAP));
+function compactStrip(state: TaskState, slots: readonly SlotView[], expressions: ExpressionFrames, theme?: PanelTheme): string[] {
+  const sprites = slots.map((slot) => paintStatus(slot.status, compactFrame(slot, expressions), theme)).join(" ".repeat(COMPACT_GAP));
   const glyphs = slots.map((slot) => paintStatus(slot.status, SLOT_STATE_GLYPHS[slot.status], theme)).join(COMPACT_STATUS_GAP);
   return [
     compactRow(SCENE_PROPS[state], "dim", theme),
@@ -267,7 +264,8 @@ function compactPanel(
   width: number,
 ): string[] {
   const metrics = sceneMetrics(task, runs, now);
-  const fixed = [...bannerLines(width), headerLine(task, now, quiet), ...compactStrip(task.state, metrics.slots, tick, opts.theme)];
+  const expressions = opts.expressions ?? {};
+  const fixed = [...bannerLines(width), headerLine(task, now, quiet), ...compactStrip(task.state, metrics.slots, expressions, opts.theme)];
   const tail = tailLines(task, runs, now, tick, steps, opts.theme);
   const room = Math.max(0, MAX_PANEL_LINES - fixed.length - tail.length);
   return [...fixed, ...tail, ...checklistLines(steps, room)].map((line) => truncateToWidth(line, width));
@@ -294,16 +292,16 @@ function oraclePose(task: Task): OraclePose {
   return task.paused || TERMINAL_STATES.includes(task.state) ? "dormant" : "orchestrating";
 }
 
-function sceneSlots(metrics: SceneMetrics, tick: number): LargeSlot[] {
-  return metrics.slots.map((slot, index) => ({
+function sceneSlots(metrics: SceneMetrics, expressions: ExpressionFrames): LargeSlot[] {
+  return metrics.slots.map((slot) => ({
     ...slot,
-    frame: frameIndex(tick, slotPhase(index), SLOT_FRAMES[slot.id][slot.status].length),
+    frame: expressions[slot.id] ?? REST_FRAME,
   }));
 }
 
-function oracleSlot(task: Task, tick: number): LargeSceneInput["oracle"] {
+function oracleSlot(task: Task, expressions: ExpressionFrames): LargeSceneInput["oracle"] {
   const pose = oraclePose(task);
-  return { pose, frame: frameIndex(tick, ORACLE_PHASE, ORACLE_FRAMES[pose].length) };
+  return { pose, frame: expressions.oracle ?? REST_FRAME };
 }
 
 function sceneTasks(steps: readonly PlanStep[]): LargeTaskRow[] {
@@ -313,7 +311,15 @@ function sceneTasks(steps: readonly PlanStep[]): LargeTaskRow[] {
   }));
 }
 
-function sceneInput(task: Task, runs: AgentRun[], now: number, quiet: boolean, tick: number, steps: PlanStep[]): LargeSceneInput {
+function sceneInput(
+  task: Task,
+  runs: AgentRun[],
+  now: number,
+  quiet: boolean,
+  tick: number,
+  steps: PlanStep[],
+  expressions: ExpressionFrames,
+): LargeSceneInput {
   const metrics = sceneMetrics(task, runs, now);
   const alert = taskAlert(task);
   return {
@@ -325,10 +331,10 @@ function sceneInput(task: Task, runs: AgentRun[], now: number, quiet: boolean, t
     quietHint: quiet ? "tools hidden (alt+t)" : "tools shown",
     done: metrics.done,
     total: metrics.total,
-    slots: sceneSlots(metrics, tick),
+    slots: sceneSlots(metrics, expressions),
     tasks: sceneTasks(steps),
     log: metrics.log,
-    oracle: oracleSlot(task, tick),
+    oracle: oracleSlot(task, expressions),
     alert: alert?.text,
     alertKind: alert?.kind,
   };
@@ -338,8 +344,11 @@ export interface PanelOptions {
   width?: number;
   /** Terminal rows; drives the large tier's line budget. */
   rows?: number;
+  /** Spinner frame; only the working line animates off it. */
   tick?: number;
   theme?: PanelTheme;
+  /** Caller-scheduled expression frame per slot and the oracle; absent means rest. */
+  expressions?: ExpressionFrames;
 }
 
 /**
@@ -361,7 +370,7 @@ export function panelLines(
   const steps = planChecklist(task.plan ?? "", runs);
   const budget = largeLineBudget(opts.rows ?? DEFAULT_ROWS);
   if (width >= LARGE_MIN_WIDTH && budget >= MIN_LARGE_LINES) {
-    const scene = largeLines(sceneInput(task, runs, now, quiet, tick, steps), width, budget, opts.theme);
+    const scene = largeLines(sceneInput(task, runs, now, quiet, tick, steps, opts.expressions ?? {}), width, budget, opts.theme);
     return scene.map((line) => truncateToWidth(line, width));
   }
   return compactPanel(task, runs, now, quiet, tick, steps, opts, width);
