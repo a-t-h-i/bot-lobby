@@ -1,12 +1,13 @@
 import { StringEnum } from "@earendil-works/pi-ai";
 import type { AgentToolUpdateCallback, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
+import { Container, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import type { AgentRun } from "../schemas/findings.ts";
 import type { ProcessRunner } from "../execution/pi-runner.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { truncate } from "../text.ts";
 import { applyStatus, summarizeRun } from "./ui.ts";
+import { isZenActive } from "./zen.ts";
 import {
   ORCHESTRATE_ACTIONS,
   runWorkflowAction,
@@ -67,7 +68,7 @@ export function workflowDeps(
     root,
     configDir,
     cwd: ctx.cwd,
-    config: loadConfig(root, configDir),
+    config: loadConfig(),
     signal,
     onUpdate,
     runProcess,
@@ -132,6 +133,7 @@ export function registerOrchestrateTool(pi: ExtensionAPI, configDir: string, run
       };
     },
     renderCall(args, theme) {
+      if (isZenActive()) return new Container();
       const call = args as OrchestrateParams & { file?: string };
       const target = call.domain ?? call.domains?.join(", ") ?? call.file ?? "";
       const preview = call.task ?? call.instruction ?? call.proposal ?? call.plan ?? call.text ?? "";
@@ -139,6 +141,7 @@ export function registerOrchestrateTool(pi: ExtensionAPI, configDir: string, run
       return new Text(preview ? `${header}\n${theme.fg("dim", truncate(preview, 120))}` : header, 0, 0);
     },
     renderResult(result, { expanded }, theme) {
+      if (isZenActive()) return new Container();
       const details = result.details as Partial<WorkflowResult> | undefined;
       const body = result.content[0]?.type === "text" ? result.content[0].text : "";
       const icon = details?.ok ? theme.fg("success", "✓") : theme.fg("warning", "!");

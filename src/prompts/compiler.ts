@@ -8,6 +8,8 @@ export type PromptDomain = Domain | "master";
 export interface CompileInput {
   domain: PromptDomain;
   role?: Role;
+  /** Per-agent custom instructions layered on top of the built-in prompts. */
+  instructions?: string;
   /** Task context: requirements, objective, approved plan, boundaries. */
   task: string;
   standards?: string;
@@ -36,6 +38,7 @@ export function compilePrompt(input: CompileInput): string {
     loadPrompt("global.md"),
     loadPrompt(domainPromptFile(input.domain)),
     spec ? loadPrompt(spec.promptFile) : "",
+    section("Custom Instructions", input.instructions),
     section("Task Context", input.task),
     section("Standards", input.standards),
     section("Knowledge", input.knowledge),

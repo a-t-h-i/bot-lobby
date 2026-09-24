@@ -29,11 +29,6 @@ function masterTaskContext(task: Task): string {
 export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
   pi.on("session_start", (_event, ctx) => {
     const root = detectProjectRoot(ctx.cwd, configDir);
-    try {
-      loadConfig(root, configDir);
-    } catch (error) {
-      ctx.ui.notify(`dev-house: failed to load config (${(error as Error).message})`, "error");
-    }
     applyStatus(ctx, root, configDir);
   });
 
@@ -55,6 +50,7 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
       knowledge: selected.knowledge,
       decisions: selected.decisions,
       workflowContext: describeTask(task),
+      instructions: loadConfig().master.instructions,
     });
   });
 }

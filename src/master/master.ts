@@ -56,6 +56,7 @@ function scoutContext(request: ScoutRequest, domain: Domain): AgentRequest["cont
   return {
     task: request.taskText,
     ...selectKnowledge(`${request.taskText} ${domainSpec(domain).scoutFocus}`, slices),
+    instructions: request.config.agents[domain].instructions,
     workflowContext: `Task state: scouting. Domain: ${domain}. Read-only reconnaissance; no implementation.`,
   };
 }
@@ -168,7 +169,12 @@ export async function runWorker(
       domain: request.domain,
       role: "worker",
       instruction: request.instruction,
-      context: { task: request.taskText, ...selected, workflowContext: workerWorkflowContext(request) },
+      context: {
+        task: request.taskText,
+        ...selected,
+        instructions: request.config.agents[request.domain].instructions,
+        workflowContext: workerWorkflowContext(request),
+      },
       model: resolveModel(request.config, request.domain),
       thinking: request.config.agents[request.domain].thinking,
       timeoutMs: request.config.workflow.agentTimeoutMs,
@@ -238,7 +244,12 @@ export async function runReviewer(
       instruction:
         request.instruction?.trim() ||
         "Review the current repository changes against the approved requirements and plan.",
-      context: { task: request.taskText, ...selected, workflowContext: reviewerContext(request) },
+      context: {
+        task: request.taskText,
+        ...selected,
+        instructions: request.config.agents[request.domain].instructions,
+        workflowContext: reviewerContext(request),
+      },
       model: resolveModel(request.config, request.domain),
       thinking: request.config.agents[request.domain].thinking,
       timeoutMs: request.config.workflow.agentTimeoutMs,

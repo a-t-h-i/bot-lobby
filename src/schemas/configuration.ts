@@ -1,8 +1,21 @@
 export type ModelRef = "inherit" | string;
 
+/** Thinking levels accepted by the pi CLI (`--thinking`). */
+export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+export type ThinkingLevelName = (typeof THINKING_LEVELS)[number];
+
+/** Value meaning "use the model/thinking of the current session". */
+export const INHERIT_MODEL = "inherit";
+
+export function isThinkingLevel(value: string): value is ThinkingLevelName {
+  return (THINKING_LEVELS as readonly string[]).includes(value);
+}
+
 export interface AgentModelConfig {
   model: ModelRef;
   thinking: string;
+  /** Free-form instructions layered on top of this agent's built-in prompt. */
+  instructions?: string;
 }
 
 export interface WorkflowConfig {
@@ -31,11 +44,11 @@ export interface DevHouseConfig {
 }
 
 export const DEFAULT_CONFIG: DevHouseConfig = {
-  master: { model: "inherit", thinking: "high" },
+  master: { model: INHERIT_MODEL, thinking: "high", instructions: "" },
   agents: {
-    designer: { model: "inherit", thinking: "medium" },
-    backend: { model: "inherit", thinking: "medium" },
-    qa: { model: "inherit", thinking: "high" },
+    designer: { model: INHERIT_MODEL, thinking: "medium", instructions: "" },
+    backend: { model: INHERIT_MODEL, thinking: "medium", instructions: "" },
+    qa: { model: INHERIT_MODEL, thinking: "high", instructions: "" },
   },
   workflow: {
     maxReviewIterations: 2,
@@ -54,17 +67,25 @@ export const DEFAULT_CONFIG: DevHouseConfig = {
   },
 };
 
+/** Merge one agent's override over its default, dropping an invalid thinking level. */
+function normalizeAgent(base: AgentModelConfig, override: Partial<AgentModelConfig> | undefined): AgentModelConfig {
+  const merged = { ...base, ...(override ?? {}) };
+  return { ...merged, thinking: isThinkingLevel(merged.thinking) ? merged.thinking : base.thinking };
+}
+
 /** Deep-merge user config over defaults, keeping unknown keys out. */
 export function resolveConfig(partial: unknown): DevHouseConfig {
   const src = (partial ?? {}) as Record<string, unknown>;
   const workflow = { ...DEFAULT_CONFIG.workflow, ...(src.workflow as Partial<WorkflowConfig> | undefined) };
   const knowledge = { ...DEFAULT_CONFIG.knowledge, ...(src.knowledge as Partial<KnowledgeConfig> | undefined) };
   const srcAgents = (src.agents ?? {}) as Partial<DevHouseConfig["agents"]>;
-  const merge = (key: "designer" | "backend" | "qa"): AgentModelConfig =>
-    ({ ...DEFAULT_CONFIG.agents[key], ...(srcAgents[key] ?? {}) });
   return {
-    master: { ...DEFAULT_CONFIG.master, ...(src.master as Partial<AgentModelConfig> | undefined) },
-    agents: { designer: merge("designer"), backend: merge("backend"), qa: merge("qa") },
+    master: normalizeAgent(DEFAULT_CONFIG.master, src.master as Partial<AgentModelConfig> | undefined),
+    agents: {
+      designer: normalizeAgent(DEFAULT_CONFIG.agents.designer, srcAgents.designer),
+      backend: normalizeAgent(DEFAULT_CONFIG.agents.backend, srcAgents.backend),
+      qa: normalizeAgent(DEFAULT_CONFIG.agents.qa, srcAgents.qa),
+    },
     workflow,
     knowledge,
   };

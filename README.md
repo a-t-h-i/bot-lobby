@@ -49,6 +49,8 @@ the checkout needs to stay where it is.
 /dev-house decline              Decline the proposal and abandon the task
 /dev-house knowledge            Knowledge file sizes vs. the compaction threshold
 /dev-house config               Effective configuration and its file path
+/dev-house settings             Edit per-agent model, thinking, and instructions
+/dev-house-settings             Same as the settings subcommand
 ```
 
 Subcommands only win when no free-form text follows, so `/dev-house status page
@@ -56,6 +58,10 @@ redesign` still starts a task named "status page redesign".
 
 Press `Esc` during a run to abort the current step: the signal propagates to
 every in-flight subagent process.
+
+While a task is active the transcript switches to a zen view: `orchestrate` rows
+and the built-in spinner are hidden, and a widget above the editor shows the task
+state, elapsed time, per-agent run status, and a small animated mascot.
 
 ## Lifecycle
 
@@ -112,15 +118,17 @@ change its own code. Worktree isolation is deferred (§14 of the plan).
 
 ## Configuration
 
-`.pi/dev-house/config.json` (project root) is merged over the defaults:
+Per-agent settings are edited interactively with `/dev-house settings` (or the
+top-level `/dev-house-settings`) and persist globally to
+`~/.pi/dev-house/config.json`:
 
 ```json
 {
-  "master": { "model": "inherit", "thinking": "high" },
+  "master": { "model": "inherit", "thinking": "high", "instructions": "" },
   "agents": {
-    "designer": { "model": "inherit", "thinking": "medium" },
-    "backend": { "model": "inherit", "thinking": "medium" },
-    "qa": { "model": "inherit", "thinking": "high" }
+    "designer": { "model": "inherit", "thinking": "medium", "instructions": "" },
+    "backend": { "model": "inherit", "thinking": "medium", "instructions": "" },
+    "qa": { "model": "inherit", "thinking": "high", "instructions": "" }
   },
   "workflow": {
     "maxReviewIterations": 2,
@@ -141,14 +149,18 @@ change its own code. Worktree isolation is deferred (§14 of the plan).
 ```
 
 `"model": "inherit"` uses the session's model; any other value is passed to the
-subagent as `--model` (e.g. `"anthropic/claude-sonnet-4-5"`). A malformed
-config falls back to the defaults.
+subagent as `--model` (e.g. `"anthropic/claude-sonnet-4-5"`). `thinking` must be
+one of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`; an invalid value
+falls back to the default. `instructions` is appended to that agent's compiled
+system prompt as a `Custom Instructions` layer (empty layers are dropped). The
+master's model and thinking are applied to the live session when a task starts
+and when you change them in the settings TUI. A malformed config falls back to
+the defaults; `DEV_HOUSE_CONFIG_DIR` overrides the config directory.
 
 ## On-disk layout
 
 ```
 .pi/dev-house/
-├── config.json                 (optional)
 ├── Master/knowledge/           knowledge.md, standards.md, decisions.md, completed-tasks.md
 ├── Designer/knowledge/         knowledge.md, design-language.md, decisions.md, completed-tasks.md
 ├── Backend/knowledge/          knowledge.md, engineering-standards.md, decisions.md, completed-tasks.md
@@ -161,6 +173,9 @@ config falls back to the defaults.
     ├── designer.md backend.md qa.md
     └── scout-<domain>.json     structured scout artifacts
 ```
+
+The global config lives outside this per-project tree, at
+`~/.pi/dev-house/config.json`.
 
 Scratchpads are capped (`scratchpadMaxParagraphs`, `scratchpadMaxChars`) by the
 engine, not by prompt discipline.

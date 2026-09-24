@@ -9,6 +9,8 @@ export interface AgentContext {
   standards?: string;
   knowledge?: string;
   decisions?: string;
+  /** Per-agent custom instructions from the global config. */
+  instructions?: string;
   workflowContext?: string;
 }
 

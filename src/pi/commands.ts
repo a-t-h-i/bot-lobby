@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { TERMINAL_STATES, createTask, type Task } from "../schemas/task.ts";
-import { configPath, dataRoot, detectProjectRoot, loadConfig } from "../state/project.ts";
+import { dataRoot, detectProjectRoot, globalConfigPath, loadConfig } from "../state/project.ts";
 import {
   activeTask,
   createTaskDir,
@@ -19,6 +19,7 @@ import { readFileOr } from "../knowledge/store.ts";
 import { overThreshold } from "../knowledge/compactor.ts";
 import { applyApprovalChoice, describeTask, describeOversizedKnowledge, type ApprovalChoice } from "../workflow/workflow.ts";
 import { applyStatus } from "./ui.ts";
+import { applyMasterModel, openSettings } from "./settings-ui.ts";
 
 const HELP = [
   "/dev-house <request>        Start a task through the workflow",
@@ -28,11 +29,12 @@ const HELP = [
   "/dev-house cancel [taskId]  Abandon a task",
   "/dev-house approve|amend <text>|decline   Answer the current proposal",
   "/dev-house knowledge        Show persistent knowledge files",
+  "/dev-house settings         Edit per-agent model/thinking/instructions",
   "/dev-house config           Show effective configuration",
 ].join("\n");
 
 /** Subcommands only win when no free-form text follows (so tasks still start). */
-const SUBCOMMANDS = new Set(["status", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "knowledge", "config"]);
+const SUBCOMMANDS = new Set(["status", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "knowledge", "config", "settings"]);
 
 function isTaskId(value: string | undefined): boolean {
   return Boolean(value && /^TASK-/.test(value));
@@ -83,6 +85,7 @@ async function startTask(
   transition(task, "clarifying");
   saveTask(root, configDir, task);
   applyStatus(ctx, root, configDir);
+  await applyMasterModel(pi, ctx, loadConfig());
   ctx.ui.notify(`dev-house ${task.id} started`, "info");
   pi.sendUserMessage(kickoff(task));
 }
@@ -91,7 +94,7 @@ function showStatus(ctx: ExtensionCommandContext, configDir: string, taskId?: st
   const root = detectProjectRoot(ctx.cwd, configDir);
   const task = selectTask(root, configDir, taskId);
   applyStatus(ctx, root, configDir);
-  const oversized = describeOversizedKnowledge(dataRoot(root, configDir), loadConfig(root, configDir).knowledge.compactionThreshold);
+  const oversized = describeOversizedKnowledge(dataRoot(root, configDir), loadConfig().knowledge.compactionThreshold);
   const broken = taskHealth(root, configDir).corrupted;
   const knowledge = [
     oversized.length > 0 ? `Knowledge over threshold: ${oversized.join(", ")}` : "",
@@ -154,7 +157,7 @@ function answerProposal(
 
 function showKnowledge(ctx: ExtensionCommandContext, configDir: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
-  const cfg = loadConfig(root, configDir);
+  const cfg = loadConfig();
   const dr = dataRoot(root, configDir);
   const threshold = cfg.knowledge.compactionThreshold;
   const lines: string[] = [`Threshold: ${threshold} chars`];
@@ -171,9 +174,8 @@ function showKnowledge(ctx: ExtensionCommandContext, configDir: string): void {
   ctx.ui.notify(lines.join("\n"), "info");
 }
 
-function showConfig(ctx: ExtensionCommandContext, configDir: string): void {
-  const root = detectProjectRoot(ctx.cwd, configDir);
-  ctx.ui.notify(`${configPath(root, configDir)}\n${JSON.stringify(loadConfig(root, configDir), null, 2)}`, "info");
+function showConfig(ctx: ExtensionCommandContext): void {
+  ctx.ui.notify(`${globalConfigPath()}\n${JSON.stringify(loadConfig(), null, 2)}`, "info");
 }
 
 export function registerCommands(pi: ExtensionAPI, configDir: string): void {
@@ -209,9 +211,16 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
           return answerProposal(ctx, configDir, "decline");
         case "knowledge":
           return showKnowledge(ctx, configDir);
+        case "settings":
+          return openSettings(pi, ctx);
         default:
-          return showConfig(ctx, configDir);
+          return showConfig(ctx);
       }
     },
+  });
+
+  pi.registerCommand("dev-house-settings", {
+    description: "Edit per-agent model, thinking, and instructions",
+    handler: async (_args, ctx) => openSettings(pi, ctx),
   });
 }

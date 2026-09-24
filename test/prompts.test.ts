@@ -48,6 +48,21 @@ test("compiler layers global, domain, role, task, then contract in order", () =>
   assert.ok(prompt.includes("Add pagination to /users"));
 });
 
+test("compiler layers custom instructions between the role and the task", () => {
+  const prompt = compilePrompt({
+    domain: "backend",
+    role: "worker",
+    task: "Add pagination to /users",
+    instructions: "Always add focused unit tests.",
+  });
+  const roleAt = prompt.indexOf("Worker Role");
+  const instructionsAt = prompt.indexOf("## Custom Instructions");
+  const taskAt = prompt.indexOf("Add pagination to /users");
+  assert.ok(instructionsAt > roleAt, "instructions come after the role prompt");
+  assert.ok(instructionsAt < taskAt, "instructions come before the task context");
+  assert.ok(prompt.includes("Always add focused unit tests."));
+});
+
 test("compiler omits empty optional layers", () => {
   const prompt = compilePrompt({ domain: "designer", role: "scout", task: "Inspect nav" });
   assert.ok(!prompt.includes("## Standards"));
