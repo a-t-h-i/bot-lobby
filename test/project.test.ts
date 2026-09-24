@@ -11,7 +11,7 @@ import {
   loadConfig,
   saveConfig,
 } from "../src/state/project.ts";
-import { DEFAULT_CONFIG, resolveConfig } from "../src/schemas/configuration.ts";
+import { DEFAULT_CONFIG, INHERIT_THINKING, inheritThinking, resolveConfig } from "../src/schemas/configuration.ts";
 
 /** Point the global config at a temp dir for the duration of one test. */
 function withConfig(dir: string, run: () => void): void {
@@ -95,4 +95,32 @@ test("saveConfig round-trips through loadConfig", () => {
     saveConfig(config);
     assert.deepEqual(loadConfig(), config);
   });
+});
+
+test("resolveConfig keeps the inherit thinking sentinel but still rejects unknown levels", () => {
+  const cfg = resolveConfig({ agents: { designer: { thinking: INHERIT_THINKING }, backend: { thinking: "turbo" } } });
+  assert.equal(cfg.agents.designer.thinking, INHERIT_THINKING);
+  assert.equal(DEFAULT_CONFIG.agents.designer.thinking, INHERIT_THINKING);
+  assert.equal(cfg.agents.backend.thinking, DEFAULT_CONFIG.agents.backend.thinking);
+});
+
+test("inheritThinking resolves inherit agents from the live session level", () => {
+  const cfg = inheritThinking(DEFAULT_CONFIG, "low");
+  assert.equal(cfg.agents.designer.thinking, "low");
+  assert.equal(cfg.agents.backend.thinking, "low");
+  assert.equal(cfg.agents.qa.thinking, "low");
+  assert.equal(cfg.master.thinking, DEFAULT_CONFIG.master.thinking);
+  assert.equal(DEFAULT_CONFIG.agents.designer.thinking, INHERIT_THINKING, "input is not mutated");
+  assert.notEqual(cfg.agents, DEFAULT_CONFIG.agents);
+  assert.notEqual(cfg.agents.designer, DEFAULT_CONFIG.agents.designer);
+});
+
+test("inheritThinking omits the flag for a missing or invalid level and leaves explicit levels alone", () => {
+  for (const level of [undefined, "turbo"]) {
+    const cfg = inheritThinking(DEFAULT_CONFIG, level);
+    assert.equal(cfg.agents.designer.thinking, "");
+    assert.equal(cfg.agents.qa.thinking, "");
+  }
+  const explicit = resolveConfig({ agents: { qa: { thinking: "max" } } });
+  assert.equal(inheritThinking(explicit, "low").agents.qa.thinking, "max");
 });

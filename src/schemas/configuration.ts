@@ -5,7 +5,9 @@ export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhig
 export type ThinkingLevelName = (typeof THINKING_LEVELS)[number];
 
 /** Value meaning "use the model/thinking of the current session". */
-export const INHERIT_MODEL = "inherit";
+const INHERIT = "inherit";
+export const INHERIT_MODEL = INHERIT;
+export const INHERIT_THINKING = INHERIT;
 
 export function isThinkingLevel(value: string): value is ThinkingLevelName {
   return (THINKING_LEVELS as readonly string[]).includes(value);
@@ -46,9 +48,9 @@ export interface DevHouseConfig {
 export const DEFAULT_CONFIG: DevHouseConfig = {
   master: { model: INHERIT_MODEL, thinking: "high", instructions: "" },
   agents: {
-    designer: { model: INHERIT_MODEL, thinking: "medium", instructions: "" },
-    backend: { model: INHERIT_MODEL, thinking: "medium", instructions: "" },
-    qa: { model: INHERIT_MODEL, thinking: "high", instructions: "" },
+    designer: { model: INHERIT_MODEL, thinking: INHERIT_THINKING, instructions: "" },
+    backend: { model: INHERIT_MODEL, thinking: INHERIT_THINKING, instructions: "" },
+    qa: { model: INHERIT_MODEL, thinking: INHERIT_THINKING, instructions: "" },
   },
   workflow: {
     maxReviewIterations: 2,
@@ -67,10 +69,23 @@ export const DEFAULT_CONFIG: DevHouseConfig = {
   },
 };
 
-/** Merge one agent's override over its default, dropping an invalid thinking level. */
+/** Merge one agent's override over its default, dropping an invalid thinking level but keeping the inherit sentinel. */
 function normalizeAgent(base: AgentModelConfig, override: Partial<AgentModelConfig> | undefined): AgentModelConfig {
   const merged = { ...base, ...(override ?? {}) };
-  return { ...merged, thinking: isThinkingLevel(merged.thinking) ? merged.thinking : base.thinking };
+  const thinking = merged.thinking === INHERIT_THINKING || isThinkingLevel(merged.thinking) ? merged.thinking : base.thinking;
+  return { ...merged, thinking };
+}
+
+/** Replace every agent's inherit thinking with the live session level; a missing/invalid level omits the flag. */
+export function inheritThinking(config: DevHouseConfig, level: string | undefined): DevHouseConfig {
+  const resolved = level && isThinkingLevel(level) ? level : "";
+  const agents = Object.fromEntries(
+    Object.entries(config.agents).map(([name, agent]) => [
+      name,
+      agent.thinking === INHERIT_THINKING ? { ...agent, thinking: resolved } : { ...agent },
+    ]),
+  ) as DevHouseConfig["agents"];
+  return { ...config, agents };
 }
 
 /** Deep-merge user config over defaults, keeping unknown keys out. */

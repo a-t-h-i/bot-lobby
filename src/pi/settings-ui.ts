@@ -9,6 +9,7 @@ import { Container, type Component, type SelectItem, SelectList, Text } from "@e
 import { AGENT_KINDS, type AgentKind } from "../schemas/agent.ts";
 import {
   INHERIT_MODEL,
+  INHERIT_THINKING,
   isThinkingLevel,
   THINKING_LEVELS,
   type AgentModelConfig,
@@ -107,7 +108,10 @@ async function editModel(pi: ExtensionAPI, ctx: ExtensionContext, agent: AgentKi
 
 async function editThinking(pi: ExtensionAPI, ctx: ExtensionContext, agent: AgentKind): Promise<void> {
   const current = agentConfig(loadConfig(), agent).thinking;
-  const items: SelectItem[] = THINKING_LEVELS.map((level) => ({ value: level, label: level === current ? `${level} ✓` : level }));
+  const items: SelectItem[] = [
+    { value: INHERIT_THINKING, label: `${INHERIT_THINKING} (live session level)`, description: "Use the thinking level of the current session" },
+    ...THINKING_LEVELS.map((level) => ({ value: level, label: level })),
+  ].map((item) => (item.value === current ? { ...item, label: `${item.label} ✓` } : item));
   const level = await pick(ctx, `Thinking — ${agentLabel(agent)}`, items);
   if (!level) return;
   await commit(pi, ctx, agent, { thinking: level }, `thinking → ${level}`);

@@ -4,6 +4,7 @@ import { Container, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import type { AgentRun } from "../schemas/findings.ts";
 import type { ProcessRunner } from "../execution/pi-runner.ts";
+import { inheritThinking } from "../schemas/configuration.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { truncate } from "../text.ts";
 import { applyStatus, summarizeRun } from "./ui.ts";
@@ -56,13 +57,14 @@ const DESCRIPTION = [
   "The engine validates every step against the task state machine, so a rejected action means the workflow is not at that step yet.",
 ].join(" ");
 
-/** Build the engine dependencies from the current Pi context. */
+/** Build the engine dependencies from the current Pi context. `thinking` is the live session level used by agents configured to inherit it. */
 export function workflowDeps(
   ctx: ExtensionContext,
   configDir: string,
   signal: AbortSignal | undefined,
   onUpdate: ((run: AgentRun) => void) | undefined,
   runProcess?: ProcessRunner,
+  thinking?: string,
 ): WorkflowDeps {
   const root = detectProjectRoot(ctx.cwd, configDir);
   const hasUI = ctx.hasUI;
@@ -70,7 +72,7 @@ export function workflowDeps(
     root,
     configDir,
     cwd: ctx.cwd,
-    config: loadConfig(),
+    config: inheritThinking(loadConfig(), thinking),
     signal,
     onUpdate,
     runProcess,
@@ -125,7 +127,7 @@ export function registerOrchestrateTool(pi: ExtensionAPI, configDir: string, run
     renderShell: "self",
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const root = detectProjectRoot(ctx.cwd, configDir);
-      const deps = workflowDeps(ctx, configDir, signal, runReporter(onUpdate, (runs) => applyStatus(ctx, root, configDir, runs)), runProcess);
+      const deps = workflowDeps(ctx, configDir, signal, runReporter(onUpdate, (runs) => applyStatus(ctx, root, configDir, runs)), runProcess, pi.getThinkingLevel());
       if (params.action === "propose" && params.proposal) {
         pi.appendEntry("dev-house", { kind: "proposal", taskId: params.taskId, text: params.proposal });
       }
