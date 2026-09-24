@@ -7,11 +7,11 @@ import {
   activeTask,
   createTaskDir,
   ensureProjectStructure,
-  loadTask,
-  taskHealth,
   nextTaskId,
   saveTask,
+  selectTask,
   taskDirFor,
+  taskHealth,
 } from "../state/persistence.ts";
 import { transition } from "../state/task-state.ts";
 import { AGENT_DIR_NAMES, KNOWLEDGE_FILES, knowledgeDir, type KnowledgeAgent } from "../knowledge/paths.ts";
@@ -46,10 +46,6 @@ function parseCommand(args: string): { sub: string | undefined; rest: string[]; 
     return { sub: undefined, rest: [], restText: trimmed };
   }
   return { sub, rest, restText: trimmed.slice(sub.length).trim() };
-}
-
-function resolveTask(root: string, configDir: string, taskId?: string): Task | undefined {
-  return taskId ? loadTask(root, configDir, taskId) : activeTask(root, configDir);
 }
 
 function uniqueTaskId(root: string, configDir: string): string {
@@ -93,7 +89,7 @@ async function startTask(
 
 function showStatus(ctx: ExtensionCommandContext, configDir: string, taskId?: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
-  const task = resolveTask(root, configDir, taskId);
+  const task = selectTask(root, configDir, taskId);
   applyStatus(ctx, root, configDir);
   const oversized = describeOversizedKnowledge(dataRoot(root, configDir), loadConfig(root, configDir).knowledge.compactionThreshold);
   const broken = taskHealth(root, configDir).corrupted;
@@ -116,7 +112,7 @@ function showTasks(ctx: ExtensionCommandContext, configDir: string): void {
 
 function setPaused(ctx: ExtensionCommandContext, configDir: string, paused: boolean, taskId?: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
-  const task = resolveTask(root, configDir, taskId);
+  const task = selectTask(root, configDir, taskId);
   if (!task || TERMINAL_STATES.includes(task.state)) {
     return ctx.ui.notify("No active task to pause or resume.", "warning");
   }
@@ -128,7 +124,7 @@ function setPaused(ctx: ExtensionCommandContext, configDir: string, paused: bool
 
 function cancelTask(ctx: ExtensionCommandContext, configDir: string, taskId?: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
-  const task = resolveTask(root, configDir, taskId);
+  const task = selectTask(root, configDir, taskId);
   if (!task) return ctx.ui.notify("No task to cancel.", "warning");
   if (TERMINAL_STATES.includes(task.state)) return ctx.ui.notify(`${task.id} is already ${task.state}.`, "warning");
   transition(task, "abandoned");

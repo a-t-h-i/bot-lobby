@@ -4,7 +4,7 @@ import type { AgentRun, ReviewResult } from "../schemas/findings.ts";
 import { TERMINAL_STATES, type Approval, type ApprovalKind, type Task, type TaskState } from "../schemas/task.ts";
 import { isDomain, type Domain } from "../schemas/agent.ts";
 import { transition } from "../state/task-state.ts";
-import { activeTask, loadTask, removeTaskScratchpads, saveTask, taskDirFor } from "../state/persistence.ts";
+import { removeTaskScratchpads, saveTask, selectTask, taskDirFor } from "../state/persistence.ts";
 import { dataRoot } from "../state/project.ts";
 import { appendCompletedTask, appendDecision, applyKnowledge, readFileOr, writeFileEnsured, type KnowledgeKind } from "../knowledge/store.ts";
 import { compactKnowledgeFile, overThreshold } from "../knowledge/compactor.ts";
@@ -618,16 +618,12 @@ const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams
   cancel: handleCancel,
 };
 
-function resolveTask(taskId: string | undefined, deps: WorkflowDeps): Task | undefined {
-  return taskId ? loadTask(deps.root, deps.configDir, taskId) : activeTask(deps.root, deps.configDir);
-}
-
 /**
  * Single entry point for every orchestration step. The engine — not the
  * calling agent — decides whether an action is legal in the current state.
  */
 export async function runWorkflowAction(params: OrchestrateParams, deps: WorkflowDeps): Promise<WorkflowResult> {
-  const task = resolveTask(params.taskId, deps);
+  const task = selectTask(deps.root, deps.configDir, params.taskId);
   if (!task) {
     return { ok: false, taskId: params.taskId ?? "", state: "created", message: "No dev-house task found. Start one with /dev-house <request>." };
   }

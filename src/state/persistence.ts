@@ -101,6 +101,11 @@ export function activeTask(root: string, configDir: string): Task | undefined {
   return listTasks(root, configDir).find((task) => !TERMINAL_STATES.includes(task.state));
 }
 
+/** A specific task, or the active one when no id is given. */
+export function selectTask(root: string, configDir: string, taskId?: string): Task | undefined {
+  return taskId ? loadTask(root, configDir, taskId) : activeTask(root, configDir);
+}
+
 /** Timestamped id; callers suffix it when a task already exists this second. */
 export function nextTaskId(now = new Date()): string {
   return `TASK-${now.toISOString().replace(/[-:T]/g, "").slice(0, 14)}`;

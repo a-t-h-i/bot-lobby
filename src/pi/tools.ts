@@ -127,7 +127,7 @@ export function registerOrchestrateTool(pi: ExtensionAPI, configDir: string, run
       const result = await runWorkflowAction(params as OrchestrateParams, deps);
       applyStatus(ctx, root, configDir);
       return {
-        content: [{ type: "text", text: result.ok ? result.message : `${result.message}` }],
+        content: [{ type: "text", text: result.message }],
         details: { ok: result.ok, state: result.state, taskId: result.taskId },
       };
     },
