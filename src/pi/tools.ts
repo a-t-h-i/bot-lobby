@@ -31,16 +31,16 @@ const OrchestrateSchema = Type.Object({
   ),
   note: Type.Optional(Type.String({ description: "resolve_approval: rationale, or what to do instead when rejected" })),
   reason: Type.Optional(Type.String({ description: "block: why the task cannot continue" })),
-  text: Type.Optional(Type.String({ description: "decide: the decision and its rationale" })),
+  text: Type.Optional(Type.String({ description: "decide/complete: the decision, or the completion summary" })),
 });
 
 const DESCRIPTION = [
   "Drive the dev-house multi-agent workflow for the active task.",
   "Actions: clarify (ask the user), scout (domain reconnaissance in parallel), propose (record the",
   "proposal and request approval), plan (record the internal plan), implement (delegate one step to a",
-  "domain worker), review (independent verification of the current diff), resolve_approval (approve or",
-  "reject a dependency/architecture request), block/resume (escalate or continue), decide (record a",
-  "decision), status, cancel.",
+  "domain worker), review (independent verification of the current diff), qa (final quality gate),",
+  "resolve_approval (approve or reject a dependency/architecture request), complete (declare the task",
+  "done after the gates pass), block/resume (escalate or continue), decide (record a decision), status, cancel.",
   "The engine validates every step against the task state machine, so a rejected action means the",
   "workflow is not at that step yet.",
 ].join(" ");

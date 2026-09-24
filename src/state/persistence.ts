@@ -91,6 +91,22 @@ export function nextTaskId(now = new Date()): string {
   return `TASK-${now.toISOString().replace(/[-:T]/g, "").slice(0, 14)}`;
 }
 
+/** Files that make up a task's temporary working state (§20). */
+const TASK_ARTIFACTS = ["proposal.md", "plan.md", "designer.md", "backend.md", "qa.md"];
+
+/**
+ * §20: on completion the scratchpads are deleted while the distilled
+ * knowledge, decisions, and the task's own state.json record are retained.
+ */
+export function removeTaskScratchpads(root: string, configDir: string, taskId: string): void {
+  const dir = taskDir(dataRoot(root, configDir), taskId);
+  if (!existsSync(dir)) return;
+  for (const file of TASK_ARTIFACTS) rmSync(join(dir, file), { force: true });
+  for (const file of readdirSync(dir)) {
+    if (file.startsWith("scout-")) rmSync(join(dir, file), { force: true });
+  }
+}
+
 /** Delete the temporary task dir after knowledge has been distilled. */
 export function cleanupTaskDir(root: string, configDir: string, taskId: string): void {
   rmSync(taskDir(dataRoot(root, configDir), taskId), { recursive: true, force: true });

@@ -4,10 +4,10 @@ import type { AgentRun, ReviewResult } from "../schemas/findings.ts";
 import { TERMINAL_STATES, type Approval, type ApprovalKind, type Task, type TaskState } from "../schemas/task.ts";
 import { isDomain, type Domain } from "../schemas/agent.ts";
 import { transition } from "../state/task-state.ts";
-import { activeTask, loadTask, saveTask, taskDirFor } from "../state/persistence.ts";
+import { activeTask, loadTask, removeTaskScratchpads, saveTask, taskDirFor } from "../state/persistence.ts";
 import { dataRoot } from "../state/project.ts";
-import { readFileOr, writeFileEnsured } from "../knowledge/store.ts";
-import { scratchpadPath } from "../knowledge/paths.ts";
+import { appendCompletedTask, readFileOr, writeFileEnsured } from "../knowledge/store.ts";
+import { knowledgeDir, scratchpadPath, type KnowledgeAgent } from "../knowledge/paths.ts";
 import { writeScratchpad } from "../state/persistence.ts";
 import { spawnPiProcess, type ProcessRunner } from "../execution/pi-runner.ts";
 import { readRepositoryDiff } from "../execution/git.ts";
@@ -22,7 +22,7 @@ import {
   type WorkerOutcome,
   type WorkerRequest,
 } from "../master/master.ts";
-import { assessReconnaissance, decideReviewLoop, recordDecision } from "../master/decisions.ts";
+import { assessReconnaissance, completionBlockers, decideReviewLoop, recordDecision } from "../master/decisions.ts";
 import { detectSharedFiles, summarizeOutcomes } from "../master/synthesis.ts";
 import { truncate } from "../text.ts";
 import { assertNoPendingApprovals, pendingApprovals, requestApproval, resolveApproval } from "./approvals.ts";
@@ -36,6 +36,8 @@ export const ORCHESTRATE_ACTIONS = [
   "implement",
   "resolve_approval",
   "review",
+  "qa",
+  "complete",
   "block",
   "resume",
   "decide",
@@ -419,6 +421,87 @@ async function handleReview(task: Task, params: OrchestrateParams, deps: Workflo
   return reviewReport(outcome, decision);
 }
 
+function allScratchpads(deps: WorkflowDeps, task: Task): string {
+  return (["designer", "backend", "qa"] as Domain[])
+    .map((domain) => scratchpadSummary(deps, task, domain).trim())
+    .filter((text) => text.length > 0)
+    .join("\n\n---\n\n");
+}
+
+const QA_INSTRUCTION = [
+  "Run the QA quality gate for the completed feature.",
+  "Verify requirements, acceptance criteria, regression risk, edge cases, security, accessibility,",
+  "UX, reliability, and tests. Passing automated tests alone is not acceptance.",
+].join(" ");
+
+/** The QA gate looks at every domain's work, not just one worker's diff. */
+function qaRequest(deps: WorkflowDeps, task: Task, diff: string, instruction?: string): ReviewerRequest {
+  const taskDir = taskDirFor(deps.root, deps.configDir, task.id);
+  return {
+    taskId: task.id,
+    domain: "qa",
+    taskText: `${workerTaskText(task)}\n\nAcceptance criteria and plan:\n${truncate(task.plan ?? "", 5000)}`,
+    workerSummary: allScratchpads(deps, task),
+    scoutOutcomes: loadScoutResults(taskDir, [...new Set<Domain>(["qa", ...task.domains])]),
+    diff,
+    instruction: instruction?.trim() || QA_INSTRUCTION,
+    cwd: deps.cwd,
+    dataRoot: dataRoot(deps.root, deps.configDir),
+    config: deps.config,
+    signal: deps.signal,
+    onUpdate: deps.onUpdate,
+  };
+}
+
+function qaReport(outcome: ReviewerOutcome): string {
+  const { result, run, issues } = outcome;
+  return [
+    `QA gate: ${result.verdict.toUpperCase()} (run ${run.status}${run.error ? `: ${run.error}` : ""})`,
+    result.findings.length > 0
+      ? `Findings:\n${result.findings.map((finding) => `- [${finding.severity}] ${truncate(finding.text, 300)}`).join("\n")}`
+      : "",
+    result.requiredChanges.length > 0
+      ? `Required changes:\n${result.requiredChanges.map((change) => `- ${truncate(change, 300)}`).join("\n")}`
+      : "",
+    result.verdict === "pass"
+      ? "The QA gate passed. Record any distilled knowledge, then call action=complete."
+      : "The QA gate did not pass: delegate the required changes to the owning domain, then re-run action=qa.",
+    issues.length > 0 ? `Issues: ${issues.join("; ")}` : "",
+  ]
+    .filter((line) => line.length > 0)
+    .join("\n");
+}
+
+async function handleQa(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
+  requireState(task, ["reviewing"]);
+  const diff = await readRepositoryDiff(deps.cwd);
+  const outcome = await runReviewer(qaRequest(deps, task, diff, params.task), deps.runProcess ?? spawnPiProcess);
+  task.qaVerdict = outcome.result.verdict;
+  recordReview(task, "qa", outcome.result);
+  return qaReport(outcome);
+}
+
+/** §63: record history, drop scratchpads, then mark the task completed. */
+function handleComplete(task: Task, params: OrchestrateParams, deps: WorkflowDeps): string {
+  requireState(task, ["reviewing"]);
+  const blockers = completionBlockers(task, pendingApprovals(task).length);
+  if (blockers.length > 0) throw new Error(`cannot complete: ${blockers.join("; ")}`);
+  const summary = params.text?.trim() || task.proposal || task.title;
+  recordCompletion(deps, task, summary);
+  removeTaskScratchpads(deps.root, deps.configDir, task.id);
+  task.blockers = [];
+  transition(task, "completed");
+  return `Task ${task.id} completed. History recorded for the involved domains and the temporary scratchpads removed.`;
+}
+
+function recordCompletion(deps: WorkflowDeps, task: Task, summary: string): void {
+  const line = `${task.id}: ${truncate(summary.replace(/\s+/g, " "), 200)}`;
+  const agents: KnowledgeAgent[] = ["master", ...new Set(task.domains)];
+  for (const agent of agents) {
+    appendCompletedTask(knowledgeDir(dataRoot(deps.root, deps.configDir), agent), line);
+  }
+}
+
 function handleBlock(task: Task, params: OrchestrateParams): string {
   const reason = params.reason?.trim() ?? params.text?.trim();
   if (!reason) throw new Error("block requires reason");
@@ -458,6 +541,8 @@ const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams
   implement: handleImplement,
   resolve_approval: handleResolveApproval,
   review: handleReview,
+  qa: handleQa,
+  complete: handleComplete,
   block: handleBlock,
   resume: handleResume,
   decide: handleDecide,

@@ -30,6 +30,17 @@ export function ensureFile(path: string, content: string): void {
   if (!existsSync(path)) writeFileEnsured(path, content);
 }
 
+/** Append one operational-history line to an agent's completed-tasks log. */
+export function appendCompletedTask(dir: string, line: string, now = new Date()): void {
+  const path = join(dir, "completed-tasks.md");
+  const date = now.toISOString().slice(0, 10);
+  const existing = readFileOr(path, "# Completed Tasks\n");
+  const body = existing.trimEnd();
+  const entry = `\n# ${date}\n\n- [x] ${line}\n`;
+  const withDate = body.includes(`# ${date}`) ? `${body}${entry.replace(`\n# ${date}\n\n`, "\n")}` : `${body}${entry}`;
+  writeFileEnsured(path, withDate);
+}
+
 /** Read an agent's knowledge slices for prompt context selection (§23). */
 export function readKnowledgeSlices(
   dir: string,

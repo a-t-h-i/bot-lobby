@@ -1,8 +1,21 @@
-import type { Decision, Task } from "../schemas/task.ts";
+import type { Decision, Task, Verdict } from "../schemas/task.ts";
 import type { Domain } from "../schemas/agent.ts";
-import type { Verdict } from "../schemas/task.ts";
 import type { ScoutOutcome } from "./master.ts";
 import { detectGaps, domainsInvolved } from "./synthesis.ts";
+
+/** §19: everything the engine requires before completion may be declared. */
+export function completionBlockers(task: Task, pendingCount: number): string[] {
+  const blockers: string[] = [];
+  if (!task.plan) blockers.push("no approved plan is recorded");
+  if (task.qaVerdict !== "pass") blockers.push(`QA gate is ${task.qaVerdict ?? "not run"}`);
+  if (pendingCount > 0) blockers.push(`${pendingCount} unresolved approval request(s)`);
+  if (task.blockers.length > 0) blockers.push(`${task.blockers.length} unresolved blocker(s)`);
+  for (const domain of task.domains.filter((entry) => entry !== "qa")) {
+    const accepted = task.reviewRecords.some((record) => record.domain === domain && record.verdict === "pass");
+    if (!accepted) blockers.push(`${domain} has no accepted review`);
+  }
+  return blockers;
+}
 
 /** Record a Master decision on the task so it survives into knowledge. */
 export function recordDecision(
