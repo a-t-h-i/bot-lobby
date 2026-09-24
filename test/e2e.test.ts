@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runAgent } from "../src/execution/agent-runner.ts";
@@ -54,4 +55,27 @@ test("workflow runs a real scout and advances to synthesizing", { skip: !enabled
   assert.equal(result.state, "synthesizing");
   assert.equal(loadTask(root, ".pi", "TASK-E2E")!.state, "synthesizing");
   assert.match(result.message, /Scout results/);
+});
+
+test("an active task injects the Master prompt into a real pi session", { skip: !enabled, timeout: 180_000 }, async () => {
+  const root = mkdtempSync(join(tmpdir(), "dh-e2e-inject-"));
+  ensureProjectStructure(root, ".pi");
+  const task = createTask("TASK-INJECT", "Document the repository layout");
+  createTaskDir(root, ".pi", task);
+  for (const step of ["clarifying", "scouting", "synthesizing"] as const) transition(task, step);
+  transition(task, "awaiting_approval");
+  transition(task, "planning");
+  transition(task, "implementing");
+  const { saveTask } = await import("../src/state/persistence.ts");
+  saveTask(root, ".pi", task);
+
+  const entry = join(process.cwd(), "src", "index.ts");
+  const result = spawnSync(
+    "pi",
+    ["-e", entry, "-p", "--no-session", "State the active dev-house task id and the exact 'Next legal states' line from your instructions. Nothing else."],
+    { cwd: root, encoding: "utf8", timeout: 150_000 },
+  );
+  const output = `${result.stdout}\n${result.stderr}`;
+  assert.match(output, /TASK-INJECT/, `expected the injected task id, got: ${output.slice(0, 400)}`);
+  assert.match(output, /reviewing, blocked, abandoned/, "expected the injected workflow context");
 });

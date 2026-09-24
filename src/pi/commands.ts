@@ -17,7 +17,8 @@ import { transition } from "../state/task-state.ts";
 import { AGENT_DIR_NAMES, KNOWLEDGE_FILES, knowledgeDir, type KnowledgeAgent } from "../knowledge/paths.ts";
 import { readFileOr } from "../knowledge/store.ts";
 import { overThreshold } from "../knowledge/compactor.ts";
-import { applyApprovalChoice, describeTask, type ApprovalChoice } from "../workflow/workflow.ts";
+import { applyApprovalChoice, describeTask, describeOversizedKnowledge, type ApprovalChoice } from "../workflow/workflow.ts";
+import { applyStatus } from "./ui.ts";
 
 const HELP = [
   "/dev-house <request>        Start a task through the workflow",
@@ -85,6 +86,7 @@ async function startTask(
   createTaskDir(root, configDir, task);
   transition(task, "clarifying");
   saveTask(root, configDir, task);
+  applyStatus(ctx, root, configDir);
   ctx.ui.notify(`dev-house ${task.id} started`, "info");
   pi.sendUserMessage(kickoff(task));
 }
@@ -92,7 +94,10 @@ async function startTask(
 function showStatus(ctx: ExtensionCommandContext, configDir: string, taskId?: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
   const task = resolveTask(root, configDir, taskId);
-  ctx.ui.notify(task ? describeTask(task) : `No dev-house task found in ${root}.`, task ? "info" : "warning");
+  applyStatus(ctx, root, configDir);
+  const oversized = describeOversizedKnowledge(dataRoot(root, configDir), loadConfig(root, configDir).knowledge.compactionThreshold);
+  const knowledge = oversized.length > 0 ? `\nKnowledge over threshold: ${oversized.join(", ")}` : "";
+  ctx.ui.notify(task ? `${describeTask(task)}${knowledge}` : `No dev-house task found in ${root}.`, task ? "info" : "warning");
 }
 
 function showTasks(ctx: ExtensionCommandContext, configDir: string): void {
@@ -111,6 +116,7 @@ function setPaused(ctx: ExtensionCommandContext, configDir: string, paused: bool
   }
   task.paused = paused;
   saveTask(root, configDir, task);
+  applyStatus(ctx, root, configDir);
   ctx.ui.notify(`${task.id} ${paused ? "paused" : "resumed"}.`, "info");
 }
 
@@ -121,6 +127,7 @@ function cancelTask(ctx: ExtensionCommandContext, configDir: string, taskId?: st
   if (TERMINAL_STATES.includes(task.state)) return ctx.ui.notify(`${task.id} is already ${task.state}.`, "warning");
   transition(task, "abandoned");
   saveTask(root, configDir, task);
+  applyStatus(ctx, root, configDir);
   ctx.ui.notify(`${task.id} abandoned.`, "info");
 }
 
@@ -136,6 +143,7 @@ function answerProposal(
   try {
     const message = applyApprovalChoice(task, choice, amendment);
     saveTask(root, configDir, task);
+    applyStatus(ctx, root, configDir);
     ctx.ui.notify(message, "info");
   } catch (error) {
     ctx.ui.notify(`dev-house: ${(error as Error).message}`, "warning");

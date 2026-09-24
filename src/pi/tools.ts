@@ -5,6 +5,8 @@ import { Type } from "typebox";
 import type { AgentRun } from "../schemas/findings.ts";
 import type { ProcessRunner } from "../execution/pi-runner.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
+import { truncate } from "../text.ts";
+import { applyStatus, summarizeRun } from "./ui.ts";
 import {
   ORCHESTRATE_ACTIONS,
   runWorkflowAction,
@@ -77,25 +79,36 @@ export function workflowDeps(
   };
 }
 
-function summarizeRun(run: AgentRun): string {
-  const icon = run.status === "running" ? "⏳" : run.status === "success" ? "✓" : "✗";
-  return `${icon} ${run.domain}/${run.role}${run.status === "running" ? "" : ` (${run.status})`}`;
-}
-
 /** Accumulate agent runs so parallel scouts show as one progress list. */
-function runReporter(update: AgentToolUpdateCallback<unknown> | undefined): (run: AgentRun) => void {
+function runReporter(
+  update: AgentToolUpdateCallback<unknown> | undefined,
+  refresh: (runs: AgentRun[]) => void,
+): (run: AgentRun) => void {
   const runs = new Map<string, AgentRun>();
   return (run) => {
     runs.set(`${run.domain}:${run.role}`, run);
+    const current = [...runs.values()];
+    refresh(current);
     if (!update) return;
     update({
-      content: [{ type: "text", text: [...runs.values()].map(summarizeRun).join("\n") }],
-      details: { runs: [...runs.values()] },
+      content: [{ type: "text", text: current.map(summarizeRun).join("\n") }],
+      details: { runs: current },
     });
   };
 }
 
+/** TUI-only transcript entries; these never enter the model's context. */
+function registerDevHouseEntries(pi: ExtensionAPI): void {
+  pi.registerEntryRenderer("dev-house", (entry, { expanded }, theme) => {
+    const data = entry.data as { kind?: string; taskId?: string; text?: string } | undefined;
+    const header = `dev-house ${data?.taskId ?? ""} — ${data?.kind ?? "note"}`.trim();
+    const body = data?.text ?? "";
+    return new Text(`${theme.fg("accent", theme.bold(header))}\n${theme.fg("toolOutput", expanded ? body : truncate(body, 600))}`, 0, 0);
+  });
+}
+
 export function registerOrchestrateTool(pi: ExtensionAPI, configDir: string, runProcess?: ProcessRunner): void {
+  registerDevHouseEntries(pi);
   pi.registerTool({
     name: "orchestrate",
     label: "Orchestrate",
@@ -106,12 +119,24 @@ export function registerOrchestrateTool(pi: ExtensionAPI, configDir: string, run
     ],
     parameters: OrchestrateSchema,
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
-      const deps = workflowDeps(ctx, configDir, signal, runReporter(onUpdate), runProcess);
+      const root = detectProjectRoot(ctx.cwd, configDir);
+      const deps = workflowDeps(ctx, configDir, signal, runReporter(onUpdate, (runs) => applyStatus(ctx, root, configDir, runs)), runProcess);
+      if (params.action === "propose" && params.proposal) {
+        pi.appendEntry("dev-house", { kind: "proposal", taskId: params.taskId, text: params.proposal });
+      }
       const result = await runWorkflowAction(params as OrchestrateParams, deps);
+      applyStatus(ctx, root, configDir);
       return {
         content: [{ type: "text", text: result.ok ? result.message : `${result.message}` }],
         details: { ok: result.ok, state: result.state, taskId: result.taskId },
       };
+    },
+    renderCall(args, theme) {
+      const call = args as OrchestrateParams & { file?: string };
+      const target = call.domain ?? call.domains?.join(", ") ?? call.file ?? "";
+      const preview = call.task ?? call.instruction ?? call.proposal ?? call.plan ?? call.text ?? "";
+      const header = `${theme.fg("toolTitle", theme.bold("orchestrate"))} ${theme.fg("accent", call.action)}${target ? ` ${theme.fg("muted", target)}` : ""}`;
+      return new Text(preview ? `${header}\n${theme.fg("dim", truncate(preview, 120))}` : header, 0, 0);
     },
     renderResult(result, { expanded }, theme) {
       const details = result.details as Partial<WorkflowResult> | undefined;

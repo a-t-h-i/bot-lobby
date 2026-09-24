@@ -7,6 +7,7 @@ import { selectKnowledge } from "../knowledge/selector.ts";
 import { cancelAllRuns } from "../execution/agent-runner.ts";
 import { describeTask } from "../workflow/workflow.ts";
 import { truncate } from "../text.ts";
+import { applyStatus, clearStatus } from "./ui.ts";
 import type { Task } from "../schemas/task.ts";
 
 function masterTaskContext(task: Task): string {
@@ -33,10 +34,12 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
     } catch (error) {
       ctx.ui.notify(`dev-house: failed to load config (${(error as Error).message})`, "error");
     }
+    applyStatus(ctx, root, configDir);
   });
 
-  pi.on("session_shutdown", () => {
+  pi.on("session_shutdown", (_event, ctx) => {
     cancelAllRuns();
+    clearStatus(ctx);
   });
 
   pi.on("before_agent_start", (event, ctx) => {
