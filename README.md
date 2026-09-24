@@ -3,85 +3,223 @@
 A Pi-native TypeScript extension that turns Pi into a structured multi-agent
 software engineering orchestrator.
 
-Invoke with `/dev-house`. The system coordinates one Master plus three domain
-agents (Designer+Frontend, Backend, QA), each with Scout, Worker, and Reviewer
-roles. The Master makes decisions; the orchestration engine enforces the
-workflow rules, state transitions, and domain boundaries.
+`/dev-house <request>` starts a task. One Master agent (the Pi session you are
+already talking to) coordinates three domain agents — **Designer+Frontend**,
+**Backend**, and **QA** — each able to act as a **Scout**, **Worker**, or
+**Reviewer** in an isolated Pi subprocess.
+
+The core rule: **LLMs make decisions; the engine enforces the rules.** Agents
+propose work; the extension validates state transitions, role permissions,
+approval gates, and completion authority through one `orchestrate` tool.
 
 ## Install
 
-Project-local (auto-discovered, hot-reloadable):
+Reference the entry file from `settings.json` (global, or project
+`.pi/settings.json`):
 
-```bash
-mkdir -p .pi/extensions/dev-house
-cp -r . .pi/extensions/dev-house/   # or symlink index.ts into a subdirectory
+```json
+{
+  "extensions": ["/absolute/path/to/dev-house/src/index.ts"]
+}
 ```
 
-Or global: `~/.pi/agent/extensions/dev-house/`.
+Or, for auto-discovery and `/reload` support, add a one-line shim at
+`.pi/extensions/dev-house/index.ts` (project) or
+`~/.pi/agent/extensions/dev-house/index.ts` (global):
+
+```ts
+export { default } from "/absolute/path/to/dev-house/src/index.ts";
+```
+
+Or run it for a single session without installing: `pi -e ./src/index.ts`.
+
+The extension finds its `prompts/` directory relative to its own source files, so
+the checkout needs to stay where it is.
 
 ## Usage
 
 ```
-/dev-house <task description>   Start a feature request through the workflow
-/dev-house status               Show the active task and its state
-/dev-house tasks                List tasks
-/dev-house cancel [taskId]      Abandon a task
-/dev-house approve|amend|decline Approve / amend / decline the current proposal
-/dev-house knowledge            Show persistent knowledge state
-/dev-house config               Show the effective configuration
+/dev-house <request>            Start a task and hand it to the Master
+/dev-house status [taskId]      Active task, state, approvals, blockers, legal next states
+/dev-house tasks                Task list (plus any unreadable task state)
+/dev-house pause | resume       Stop or allow further workflow steps
+/dev-house cancel [taskId]      Abandon a task (scratchpad retained)
+/dev-house approve              Approve the current proposal
+/dev-house amend <text>         Record an amendment; the Master re-proposes
+/dev-house decline              Decline the proposal and abandon the task
+/dev-house knowledge            Knowledge file sizes vs. the compaction threshold
+/dev-house config               Effective configuration and its file path
 ```
 
-## Workflow
+Subcommands only win when no free-form text follows, so `/dev-house status page
+redesign` still starts a task named "status page redesign".
+
+Press `Esc` during a run to abort the current step: the signal propagates to
+every in-flight subagent process.
+
+## Lifecycle
 
 ```
 REQUEST → CLARIFY → (CHALLENGE) → SCOUT → SYNTHESIS → PROPOSAL
-  → APPROVE/AMEND/DECLINE → PLAN → WORK → REVIEW → (ITERATE)
-  → QA GATE → COMPLETE → KNOWLEDGE UPDATE → CLEANUP
+  → APPROVE / AMEND / DECLINE → PLAN → WORK → REVIEW → (ITERATE)
+  → QA GATE → KNOWLEDGE UPDATE → CLEANUP → COMPLETE
 ```
 
-The Master (the main Pi agent) drives each step by calling the `orchestrate`
-tool. The engine enforces the task state machine, role tool restrictions,
-approval gates, and completion authority.
+States: `created`, `clarifying`, `scouting`, `synthesizing`,
+`awaiting_approval`, `planning`, `implementing`, `reviewing`, `blocked`,
+`completed`, `abandoned`. Only the transitions in
+`src/workflow/transitions.ts` are legal, plus abandonment from any
+non-terminal state.
+
+## The `orchestrate` tool
+
+One tool, every workflow step. It is the Master's only way to move a task.
+
+| Action | State required | Effect |
+|---|---|---|
+| `clarify` | created, clarifying | Ask the user a question (or return it for the Master to ask) |
+| `scout` | created…synthesizing | Run domain reconnaissance in parallel; repeat later to target-verify a claim |
+| `propose` | created…awaiting_approval | Record the proposal, request approval, handle approve/amend/decline |
+| `plan` | planning | Record the internal plan (all §12 areas required) |
+| `implement` | planning, implementing, reviewing | Delegate one step to a domain Worker |
+| `review` | implementing, reviewing | Independent review of the real diff |
+| `qa` | reviewing | Run the QA quality gate over the whole feature |
+| `knowledge` | any active | Record Master-approved knowledge or a decision |
+| `compact` | any active | Replace a knowledge file with a rewritten version (archived) |
+| `resolve_approval` | any active | Approve or reject a Worker's dependency/architecture request |
+| `complete` | reviewing | Check every gate, record history, drop scratchpads, finish |
+| `block` / `resume` | implementing, reviewing / blocked | Escalate or continue |
+| `decide`, `status`, `cancel` | any active | Record a decision, inspect, abandon |
+
+## What the engine enforces (not just prompts)
+
+| Rule | Enforcement |
+|---|---|
+| A step cannot run out of order | State machine validated in `runWorkflowAction` |
+| No implementation before user approval | `implement` rejects any pre-approval state |
+| Scouts cannot modify anything | Spawned with `--tools read,grep,find,ls` |
+| Reviewers cannot modify implementation | Read-only tools plus `bash` for tests/analysis |
+| Dependency and architecture changes need approval | Worker output is parsed; pending approvals block that domain until resolved |
+| Review loops are bounded | `maxReviewIterations`; exceeding it forces the blocked path |
+| Only the Master writes knowledge | Agents only propose; one dedup-aware write path |
+| Completion is gated | Plan, accepted review per domain, passing QA gate, no blockers or pending approvals |
+| Failure is never success | Unknown verdicts, empty output, crashes, and timeouts map to failed/timeout/blocked |
+| Task state is never corrupted by a crash | Single mutation point + disk state; interrupted tasks resume from their state |
+
+Domain boundaries between *writers* remain prompt-enforced and Master
+coordinated: Workers run sequentially and only the affected domain is asked to
+change its own code. Worktree isolation is deferred (§14 of the plan).
+
+## Configuration
+
+`.pi/dev-house/config.json` (project root) is merged over the defaults:
+
+```json
+{
+  "master": { "model": "inherit", "thinking": "high" },
+  "agents": {
+    "designer": { "model": "inherit", "thinking": "medium" },
+    "backend": { "model": "inherit", "thinking": "medium" },
+    "qa": { "model": "inherit", "thinking": "high" }
+  },
+  "workflow": {
+    "maxReviewIterations": 2,
+    "maxParallelScouts": 3,
+    "requireApprovalForFeatures": true,
+    "requireApprovalForDependencies": true,
+    "requireApprovalForArchitectureChanges": true,
+    "agentTimeoutMs": 900000,
+    "maxAgentRetries": 1
+  },
+  "knowledge": {
+    "compactionThreshold": 20000,
+    "backupCount": 1,
+    "scratchpadMaxParagraphs": 4,
+    "scratchpadMaxChars": 2000
+  }
+}
+```
+
+`"model": "inherit"` uses the session's model; any other value is passed to the
+subagent as `--model` (e.g. `"anthropic/claude-sonnet-4-5"`). A malformed
+config falls back to the defaults.
+
+## On-disk layout
+
+```
+.pi/dev-house/
+├── config.json                 (optional)
+├── Master/knowledge/           knowledge.md, standards.md, decisions.md, completed-tasks.md
+├── Designer/knowledge/         knowledge.md, design-language.md, decisions.md, completed-tasks.md
+├── Backend/knowledge/          knowledge.md, engineering-standards.md, decisions.md, completed-tasks.md
+├── QA/knowledge/               knowledge.md, testing-standards.md, decisions.md, completed-tasks.md
+├── archive/<Agent>/            previous knowledge versions (outside all retrieval paths)
+└── tasks/TASK-<stamp>/
+    ├── state.json              the task record (kept after completion)
+    ├── proposal.md             scratchpads: deleted on completion
+    ├── plan.md
+    ├── designer.md backend.md qa.md
+    └── scout-<domain>.json     structured scout artifacts
+```
+
+Scratchpads are capped (`scratchpadMaxParagraphs`, `scratchpadMaxChars`) by the
+engine, not by prompt discipline.
 
 ## Architecture
 
 ```
 src/
-  index.ts              Extension entry point
-  master/               Master decisions and synthesis
-  agents/               Domain definitions (designer, backend, qa)
-  roles/                Scout / Worker / Reviewer definitions
-  workflow/             State machine, transitions, approvals
-  execution/            Subagent runner (spawns isolated `pi` processes)
-  knowledge/            Persistent knowledge store, selection, compaction
-  prompts/              Prompt compiler and loader
-  state/                Task state and persistence
-  schemas/              Shared types and configuration schema
-  pi/                   Commands, events, and UI integration
-prompts/                Composable prompt layers (global, master, domain, role)
+├── index.ts                  Extension entry: lifecycle, commands, orchestrate tool
+├── master/
+│   ├── master.ts             Scout/Worker/Reviewer delegation and artifact persistence
+│   ├── synthesis.ts          Bounded summaries, shared-file and gap detection
+│   └── decisions.ts          Decision log, review-loop rule, completion gates
+├── agents/                   Domain specs (designer, backend, qa) + registry
+├── roles/                    Scout/Worker/Reviewer specs, output contracts, parsers
+├── workflow/
+│   ├── workflow.ts           The engine: every action, every guard
+│   ├── transitions.ts        Legal state machine
+│   └── approvals.ts          Dependency/architecture approval bookkeeping
+├── execution/
+│   ├── agent-runner.ts       Single/parallel/sequential runs, cancellation, retries
+│   ├── pi-runner.ts          Isolated `pi --mode json` subprocess + stream parsing
+│   └── git.ts                Diff evidence for reviewers
+├── knowledge/                Paths, store (single write path), selector, compactor
+├── prompts/                  Layer loader + compiler
+├── state/                    Project root, config, task persistence, state mutation
+├── schemas/                  Task, agent, findings, configuration types
+└── pi/                       Commands, lifecycle, orchestrate tool, status widget
+prompts/                      global, master, designer, backend, qa, scout, worker, reviewer
 ```
 
-## Configuration
-
-`.pi/dev-house/config.json` (project root) overrides defaults. See
-`src/schemas/configuration.ts` for the full schema and defaults.
+Prompts are composed, never duplicated: `global + domain + role + task context +
+standards + knowledge + decisions + workflow context + output contract`, with
+empty layers dropped and only task-relevant knowledge slices included.
 
 ## Development
 
 ```bash
 npm install
 npm run typecheck
-npm test
+npm test                 # node:test, no extra framework
 ```
 
-Tests use Node's built-in test runner; no extra test framework is added.
+Live end-to-end checks (spend tokens, need a configured model):
 
-## Security model
+```bash
+DEV_HOUSE_E2E=1 npx tsx --test test/e2e.test.ts   # or: node --test test/e2e.test.ts
+```
 
-- Scouts run with read-only tools (read/grep/find/ls).
-- Reviewers run read-only plus bash (to run tests); they never commit.
-- Workers get full tools but run sequentially, never in parallel on shared
-  files; domain boundaries are prompt-enforced and coordinated by the Master.
-- New dependencies and significant architecture changes require Master
-  approval.
-- Only the Master can declare completion.
+They cover: a real isolated subagent run, a real workflow-level scout that
+advances the task state, and the Master prompt injection in a real Pi session.
+
+## Scope of v0.1
+
+Included: the full workflow above, persistent knowledge with governance and
+compaction, bounded review loops, dependency/architecture approval, retries,
+cancellation, corrupted-state detection, and the commands/status UI.
+
+Deliberately deferred (matching the build plan): worktree-based parallel
+Workers, a large dashboard, cost/token analytics beyond per-run usage, and
+cross-platform runtime abstractions. The internal module boundaries keep those
+extractable.

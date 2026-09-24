@@ -10,6 +10,16 @@ async function git(cwd: string, args: string[]): Promise<string> {
   return stdout.trim();
 }
 
+/** `git diff HEAD`, falling back to index+worktree when HEAD does not exist yet. */
+async function diffAgainstHead(cwd: string): Promise<string> {
+  try {
+    return await git(cwd, ["diff", "HEAD"]);
+  } catch {
+    const [unstaged, staged] = await Promise.all([git(cwd, ["diff"]), git(cwd, ["diff", "--cached"])]);
+    return [unstaged, staged].filter((part) => part.length > 0).join("\n");
+  }
+}
+
 /**
  * Repository evidence for a reviewer: working-tree status plus the diff against
  * HEAD. Returns an explanatory string instead of throwing when git is unusable
@@ -19,7 +29,7 @@ export async function readRepositoryDiff(cwd: string, limitChars = 20_000): Prom
   try {
     const [status, diff] = await Promise.all([
       git(cwd, ["status", "--porcelain"]),
-      git(cwd, ["diff", "HEAD"]),
+      diffAgainstHead(cwd),
     ]);
     const parts = [
       status ? `Status:\n${status}` : "Status: clean working tree",
