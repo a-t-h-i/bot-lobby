@@ -25,7 +25,15 @@ import {
   type PanelColor,
   type SlotState,
 } from "./mascot-art.ts";
-import { LARGE_MIN_WIDTH, MAX_LARGE_LINES, largeLines, type LargeSceneInput, type LargeSlot } from "./zen-large.ts";
+import {
+  LARGE_MIN_WIDTH,
+  MAX_LARGE_LINES,
+  MAX_TASK_ROWS,
+  largeLines,
+  type LargeSceneInput,
+  type LargeSlot,
+  type LargeTaskRow,
+} from "./zen-large.ts";
 import { runStatus, sceneMetrics, type SceneMetrics, type SlotView } from "./zen-metrics.ts";
 
 /** Minimal slice of pi's Theme the panel needs; keeps zen.ts decoupled from the agent. */
@@ -114,9 +122,9 @@ export function planChecklist(plan: string, runs: AgentRun[]): PlanStep[] {
   return steps.map((text, index) => ({ text, status: stepStatus(index, current) }));
 }
 
-/** Up to `count` consecutive step indexes centered on the current step. */
-function checklistWindow(steps: PlanStep[], count: number): number[] {
-  const size = Math.min(count, CHECKLIST_ROWS);
+/** Up to `count` consecutive step indexes centered on the current step, hard-capped at `max`. */
+export function checklistWindow(steps: readonly PlanStep[], count: number, max = CHECKLIST_ROWS): number[] {
+  const size = Math.min(count, max);
   if (steps.length <= size) return steps.map((_step, index) => index);
   const found = steps.findIndex((step) => step.status === "current");
   const current = found < 0 ? 0 : found;
@@ -292,9 +300,20 @@ function sceneSlots(metrics: SceneMetrics, tick: number): LargeSlot[] {
   }));
 }
 
+function oracleSlot(task: Task, tick: number): LargeSceneInput["oracle"] {
+  const pose = oraclePose(task);
+  return { pose, frame: frameIndex(tick, ORACLE_PHASE, ORACLE_FRAMES[pose].length) };
+}
+
+function sceneTasks(steps: readonly PlanStep[]): LargeTaskRow[] {
+  return checklistWindow(steps, MAX_TASK_ROWS, MAX_TASK_ROWS).map((index) => ({
+    text: steps[index]!.text,
+    status: steps[index]!.status,
+  }));
+}
+
 function sceneInput(task: Task, runs: AgentRun[], now: number, quiet: boolean, tick: number, steps: PlanStep[]): LargeSceneInput {
   const metrics = sceneMetrics(task, runs, now);
-  const pose = oraclePose(task);
   const alert = taskAlert(task);
   return {
     taskId: task.id,
@@ -306,9 +325,9 @@ function sceneInput(task: Task, runs: AgentRun[], now: number, quiet: boolean, t
     done: metrics.done,
     total: metrics.total,
     slots: sceneSlots(metrics, tick),
-    tasks: steps.map((step) => ({ text: step.text, status: step.status })),
+    tasks: sceneTasks(steps),
     log: metrics.log,
-    oracle: { pose, frame: frameIndex(tick, ORACLE_PHASE, ORACLE_FRAMES[pose].length) },
+    oracle: oracleSlot(task, tick),
     alert: alert?.text,
     alertKind: alert?.kind,
   };

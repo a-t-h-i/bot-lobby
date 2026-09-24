@@ -3,17 +3,17 @@
  * LOG of real run transitions.
  *
  * Pure by construction: the only clock input is the `now` argument, and nothing
- * here reads the wall clock, a random source or the environment. Every
- * percentage is an estimate and is labelled as one.
+ * here reads the wall clock, a random source or the environment. Percentages
+ * are plan-derived measurements; the ETA alone is an estimate and is labelled.
  */
 import type { AgentRun } from "../schemas/findings.ts";
 import type { Task } from "../schemas/task.ts";
 import { SLOT_IDS, SLOT_LABELS, type SlotId, type SlotState } from "./mascot-art.ts";
-import { currentStepIndex, formatDuration, latestWorkerRun, planChecklist, planSteps, type PlanStep } from "./zen.ts";
+import { currentStepIndex, formatDuration, latestWorkerRun, planSteps } from "./zen.ts";
 
 export type { SlotId, SlotState };
 
-/** One agent column: its latest run status plus an estimated percent. */
+/** One agent column: its latest run status plus a plan-derived percent. */
 export interface SlotView {
   id: SlotId;
   label: string;
@@ -40,14 +40,6 @@ export interface SceneMetrics {
 
 /** LOG rows drawn: one oracle row plus the five most recent runs. */
 export const LOG_CAP = 6;
-
-/**
- * A running slot that is not on the current plan step has no measured progress,
- * so it reports a time stub that saturates just below the ceiling: ten minutes
- * of its own work reads as 95% and never as "done".
- */
-const STUB_CEILING = 95;
-const STUB_FULL_MS = 600_000;
 
 const ORACLE_LABEL = "ORACLE";
 
@@ -76,39 +68,35 @@ function latestRunFor(runs: AgentRun[], id: SlotId): AgentRun | undefined {
   return latest;
 }
 
-/** The slot working the current plan step, or undefined when no worker run matches one. */
-function activeSlot(plan: string, runs: AgentRun[]): SlotId | undefined {
-  const run = latestWorkerRun(runs);
-  const index = currentStepIndex(planSteps(plan), run?.instruction);
-  return run && index >= 0 ? slotOf(run) : undefined;
-}
-
-function planProgress(steps: readonly PlanStep[]): { done: number; total: number; progress: number } {
-  const done = steps.filter((step) => step.status === "done").length;
+function planSummary(steps: readonly string[], current: number): { done: number; total: number; progress: number } {
+  const done = current > 0 ? current : 0;
   const total = steps.length;
   return { done, total, progress: total > 0 ? Math.round((done / total) * 100) : 0 };
 }
 
-function elapsedMs(run: AgentRun, now: number): number {
-  const end = run.finishedAt ? Date.parse(run.finishedAt) : now;
-  return Math.max(0, end - Date.parse(run.startedAt));
-}
-
-/** Running, not the active slot: an estimate from how long its own run has been going. */
-function stubPercent(run: AgentRun, now: number): number {
-  return Math.min(STUB_CEILING, Math.round((elapsedMs(run, now) / STUB_FULL_MS) * 100));
+/** Percent guarded against non-finite input so a malformed timestamp can never render a NaN. */
+function clampPercent(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(100, Math.max(0, Math.round(value)));
 }
 
 /**
- * Estimated percent. The active slot carries the plan's own progress, a slot
- * whose run succeeded reads 100, a running slot that is not active reads a time
- * stub, and everything else reads 0.
+ * Measured percent only: a succeeded slot reads 100, a working slot reads the
+ * plan step its own latest worker instruction targets (or the shared plan
+ * progress when nothing matches), and every other state reads 0.
  */
-function slotPercent(id: SlotId, run: AgentRun | undefined, active: SlotId | undefined, progress: number, now: number): number {
-  if (active === id) return progress;
-  if (!run) return 0;
-  if (run.status === "success") return 100;
-  return run.status === "running" ? stubPercent(run, now) : 0;
+function measuredPercent(status: SlotState, runs: AgentRun[], id: SlotId, steps: readonly string[], fallback: number): number {
+  if (status === "done") return 100;
+  if (status !== "working") return 0;
+  const own = latestWorkerRun(runs.filter((run) => slotOf(run) === id));
+  const index = currentStepIndex(steps, own?.instruction);
+  return index >= 0 && steps.length > 0 ? clampPercent((index / steps.length) * 100) : clampPercent(fallback);
+}
+
+function slotView(id: SlotId, runs: AgentRun[], steps: readonly string[], fallback: number): SlotView {
+  const run = latestRunFor(runs, id);
+  const status: SlotState = run ? runStatus(run.status) : "idle";
+  return { id, label: SLOT_LABELS[id], status, percent: run ? measuredPercent(status, runs, id, steps, fallback) : 0 };
 }
 
 /** Always an estimate: "ETA —" until a plan step is done, then "ETA ~<duration>". */
@@ -138,25 +126,15 @@ function logRows(task: Task, runs: AgentRun[]): LogRow[] {
 }
 
 export function sceneMetrics(task: Task, runs: AgentRun[], now: number): SceneMetrics {
-  const plan = task.plan ?? "";
-  const summary = planProgress(planChecklist(plan, runs));
-  const active = activeSlot(plan, runs);
+  const steps = planSteps(task.plan ?? "");
+  const summary = planSummary(steps, currentStepIndex(steps, latestWorkerRun(runs)?.instruction));
   const created = Date.parse(task.createdAt);
   const elapsed = Number.isFinite(created) ? Math.max(0, now - created) : 0;
-  const slots = SLOT_IDS.map((id) => {
-    const run = latestRunFor(runs, id);
-    return {
-      id,
-      label: SLOT_LABELS[id],
-      status: run ? runStatus(run.status) : ("idle" as const),
-      percent: slotPercent(id, run, active, summary.progress, now),
-    };
-  });
   return {
     ...summary,
     etaLabel: estimateLabel(summary.done, summary.total, elapsed),
     elapsedLabel: formatDuration(elapsed),
-    slots,
+    slots: SLOT_IDS.map((id) => slotView(id, runs, steps, summary.progress)),
     log: logRows(task, runs),
   };
 }

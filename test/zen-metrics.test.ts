@@ -85,7 +85,7 @@ test("a researcher run on any domain fills the RESEARCH column and keeps its dom
 
 // --- percent and ETA rules ---
 
-test("the active slot carries the plan's progress, success reads 100, a running stub caps at 95", () => {
+test("a working slot reads its own plan step and the rest read measured progress", () => {
   const runs = [
     run({ runId: "design", domain: "designer", role: "scout", status: "success", startedAt: "2026-01-01T00:01:00.000Z", finishedAt: "2026-01-01T00:02:00.000Z" }),
     run({ runId: "research", domain: "backend", role: "researcher", status: "running", startedAt: "2026-01-01T00:00:10.000Z" }),
@@ -97,29 +97,43 @@ test("the active slot carries the plan's progress, success reads 100, a running 
   assert.equal(metrics.done, 1);
   assert.equal(metrics.total, 4);
   assert.equal(metrics.progress, 25);
-  assert.deepEqual(metrics.slots.map((slot) => slot.percent), [25, 100, 95, 0]);
+  // dev's own worker instruction targets step 2 of 4; research has no worker
+  // instruction so it inherits the shared plan progress; design succeeded (100).
+  assert.deepEqual(metrics.slots.map((slot) => slot.percent), [25, 100, 25, 0]);
   assert.equal(metrics.etaLabel, `ETA ~${formatDuration(600_000 * 3)}`);
   assert.equal(metrics.elapsedLabel, "10m 00s");
 });
 
-test("a successful run that is also the active slot reports plan progress, not 100", () => {
+test("a succeeded slot reads 100 even when it is the current plan step", () => {
   const runs = [
     run({ runId: "dev", domain: "backend", role: "worker", status: "success", instruction: "implement `src/b.ts` now", startedAt: "2026-01-01T00:09:00.000Z", finishedAt: "2026-01-01T00:09:30.000Z" }),
   ];
   const planText = plan("`src/a.ts`: first", "`src/b.ts`: second", "`src/c.ts`: third");
   const metrics = sceneMetrics(task({ plan: planText }), runs, NOW);
   assert.equal(metrics.progress, 33);
-  assert.equal(percentById(runs, { plan: planText }).dev, 33);
+  assert.equal(percentById(runs, { plan: planText }).dev, 100);
   assert.deepEqual(metrics.slots.map((slot) => slot.status), ["done", "idle", "idle", "idle"]);
 });
 
-test("a running stub grows with the run's own duration and never reaches 100", () => {
-  const stub = (startedAt: string) =>
-    percentById([run({ domain: "backend", role: "scout", status: "running", startedAt })], {}).dev;
-  assert.equal(stub("2026-01-01T00:10:00.000Z"), 0);
-  assert.equal(stub("2026-01-01T00:05:00.000Z"), 50);
-  assert.equal(stub("2026-01-01T00:00:10.000Z"), 95);
-  assert.equal(stub("2025-12-31T00:00:00.000Z"), 95);
+test("a working slot measures its plan step instead of its run duration", () => {
+  const planText = plan("`src/a.ts`: first", "`src/b.ts`: second", "`src/c.ts`: third", "`src/d.ts`: fourth");
+  const measured = (startedAt: string) =>
+    percentById([run({ domain: "backend", role: "worker", status: "running", instruction: "implement `src/c.ts` now", startedAt })], { plan: planText }).dev;
+  // The percent follows the matched plan step (3 of 4 -> 50), never the clock.
+  assert.equal(measured("2026-01-01T00:10:00.000Z"), 50);
+  assert.equal(measured("2025-12-31T00:00:00.000Z"), 50);
+});
+
+test("a working slot with no matching plan step falls back to the plan's completed/total progress", () => {
+  const planText = plan("`src/a.ts`: first", "`src/b.ts`: second", "`src/c.ts`: third", "`src/d.ts`: fourth");
+  const runs = [
+    run({ runId: "dev", role: "worker", status: "running", instruction: "implement `src/c.ts` now", startedAt: "2026-01-01T00:09:00.000Z" }),
+    run({ runId: "design", domain: "designer", role: "scout", status: "running", startedAt: "2026-01-01T00:09:30.000Z" }),
+  ];
+  const metrics = sceneMetrics(task({ plan: planText }), runs, NOW);
+  assert.equal(metrics.progress, 50);
+  assert.equal(percentById(runs, { plan: planText }).design, 50);
+  assert.equal(percentById([run({ domain: "designer", role: "scout", status: "running" })], {}).design, 0);
 });
 
 test("a zero plan reports no progress and an em-dash ETA estimate", () => {
@@ -195,4 +209,7 @@ test("an unparsable timestamp degrades to a placeholder time", () => {
   assert.deepEqual(metrics.log.map((row) => row.time), ["--:--", "--:--"]);
   assert.equal(metrics.elapsedLabel, "0s");
   assert.equal(metrics.etaLabel, "ETA —");
+  const percents = metrics.slots.map((slot) => slot.percent);
+  assert.deepEqual(percents, [0, 0, 0, 0]);
+  assert.ok(percents.every((percent) => Number.isFinite(percent) && percent >= 0 && percent <= 100));
 });

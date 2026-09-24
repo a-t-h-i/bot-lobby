@@ -14,7 +14,7 @@ import type { TaskState } from "../schemas/task.ts";
  * for runs and steps (◐ running, ✓ success, ✗ failure); the slot roster below
  * reuses them so a status never rests on colour alone.
  */
-export const STATUS_GLYPHS = { idle: "·", running: "◐", done: "✓", failed: "✗" } as const;
+const STATUS_GLYPHS = { idle: "·", running: "◐", done: "✓", failed: "✗" } as const;
 
 export const BANNER_TITLE = "THE DEV HOUSE";
 export const BANNER_NARROW = "⌂ THE DEV HOUSE";

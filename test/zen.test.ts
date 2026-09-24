@@ -243,6 +243,15 @@ test("the large tier lists the plan steps in TASKS beside a LOG of real transiti
   assert.equal(checklistRows(lines).length, 0, "the large tier must not draw the compact checklist");
 });
 
+test("a long plan windows around the current step in the large tier", () => {
+  const steps = Array.from({ length: 10 }, (_value, index) => `\`src/s${index}.ts\`: step ${index}`);
+  const runs = [run({ runId: "dev", domain: "backend", role: "worker", status: "running", instruction: "implement `src/s6.ts` now" })];
+  const lines = panelLines(task({ state: "implementing", plan: plan(...steps) }), runs, NOW, true, LARGE_OPTS);
+  assert.ok(lines.some((line) => line.includes("[>] `src/s6.ts`")), "the current step 7 is missing");
+  assert.ok(lines.some((line) => line.includes("(6/10 tasks)")), "the counts must span the whole plan");
+  assert.ok(lines.some((line) => line.includes("60%")), "the bar percent must span the whole plan");
+});
+
 test("the alert survives every large-tier height that still renders the scene", () => {
   const blockers = [{ domain: "backend" as const, reason: "schema owner must confirm", tried: [], need: "answer", createdAt: "now" }];
   const alertTask = task({ state: "blocked", blockers });
