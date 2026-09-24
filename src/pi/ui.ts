@@ -5,15 +5,7 @@ import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { activeTask } from "../state/persistence.ts";
 import { detectProjectRoot } from "../state/project.ts";
 import { isQuiet, isSubagentProcess, toggleQuiet } from "./quiet.ts";
-import {
-  advanceBlink,
-  isBlinking,
-  MASCOT_IDS,
-  nextBlinkDelay,
-  panelLines,
-  type BlinkState,
-  type MascotId,
-} from "./zen.ts";
+import { panelLines } from "./zen.ts";
 
 export const STATUS_KEY = "dev-house";
 
@@ -33,45 +25,54 @@ export function statusText(task: Task | undefined): string {
 let zenOn = false;
 let zenState: { task: Task | undefined; runs: AgentRun[] } = { task: undefined, runs: [] };
 
-const TICK_MS = 1000;
+const LIVE_TICK_MS = 250;
+const IDLE_TICK_MS = 1000;
 
-/** One blink window per mascot, each scheduled independently. */
-function blinkStates(now: number, rng: () => number = Math.random): Record<MascotId, BlinkState> {
-  const states = {} as Record<MascotId, BlinkState>;
-  for (const mascot of MASCOT_IDS) states[mascot] = { nextAt: now + nextBlinkDelay(rng), until: 0 };
-  return states;
+/** Fast frames while an agent works or the task is live; slow frames when it is quiet. */
+function isLive(): boolean {
+  if (zenState.runs.some((run) => run.status === "running")) return true;
+  const task = zenState.task;
+  return Boolean(task && !TERMINAL_STATES.includes(task.state) && !task.paused);
 }
 
-/** Blob diorama + plan checklist shown above the editor while a task is active. */
+function tickDelay(): number {
+  return isLive() ? LIVE_TICK_MS : IDLE_TICK_MS;
+}
+
+/** Animated zen scene + plan checklist shown above the editor while a task is active. */
 class ZenWidget implements Component {
   private tick = 0;
-  private blinks = blinkStates(Date.now());
+  private delay = tickDelay();
+  private timer: ReturnType<typeof setInterval>;
+  private disposed = false;
   private readonly tui: TUI;
   private readonly theme: () => Theme;
-  private readonly timer: ReturnType<typeof setInterval>;
 
   constructor(tui: TUI, theme: () => Theme) {
     this.tui = tui;
     this.theme = theme;
-    this.timer = setInterval(() => this.advance(), TICK_MS);
+    this.timer = setInterval(() => this.advance(), this.delay);
   }
 
   private advance(): void {
+    if (this.disposed) return;
     this.tick += 1;
-    const now = Date.now();
-    for (const mascot of MASCOT_IDS) this.blinks[mascot] = advanceBlink(this.blinks[mascot], now, Math.random);
+    this.retime();
     this.tui.requestRender();
   }
 
-  private flags(now: number): Partial<Record<MascotId, boolean>> {
-    const flags: Partial<Record<MascotId, boolean>> = {};
-    for (const mascot of MASCOT_IDS) flags[mascot] = isBlinking(this.blinks[mascot], now);
-    return flags;
+  /** One interval, retimed only when the task starts or stops working. */
+  private retime(): void {
+    const delay = tickDelay();
+    if (delay === this.delay) return;
+    this.delay = delay;
+    clearInterval(this.timer);
+    this.timer = setInterval(() => this.advance(), delay);
   }
 
   render(width: number): string[] {
     const now = Date.now();
-    const opts = { width, blinks: this.flags(now), tick: this.tick, theme: this.theme() };
+    const opts = { width, rows: this.tui.terminal.rows, tick: this.tick, theme: this.theme() };
     const lines = panelLines(zenState.task, zenState.runs, now, isQuiet(), opts);
     return lines.map((line) => truncateToWidth(line, width));
   }
@@ -79,6 +80,7 @@ class ZenWidget implements Component {
   invalidate(): void {}
 
   dispose(): void {
+    this.disposed = true;
     clearInterval(this.timer);
   }
 }
