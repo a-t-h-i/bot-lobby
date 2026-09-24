@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Domain } from "../schemas/agent.ts";
-import type { DevHouseConfig } from "../schemas/configuration.ts";
+import type { BotLobbyConfig } from "../schemas/configuration.ts";
 import type { AgentRun, ResearchResult } from "../schemas/findings.ts";
 import { runAgent, type AgentRequest } from "../execution/agent-runner.ts";
 import { spawnPiProcess, type ProcessRunner } from "../execution/pi-runner.ts";
@@ -24,7 +24,7 @@ export interface ResearchRequest {
   instruction: string;
   cwd: string;
   taskDir: string;
-  config: DevHouseConfig;
+  config: BotLobbyConfig;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
 }

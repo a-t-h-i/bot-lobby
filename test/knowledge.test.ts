@@ -24,7 +24,7 @@ import { runWorkflowAction, type OrchestrateParams, type WorkflowDeps } from "..
 function dataRootFor(): string {
   const root = mkdtempSync(join(tmpdir(), "dh-k-"));
   ensureProjectStructure(root, ".pi");
-  return join(root, ".pi", "dev-lobby");
+  return join(root, ".pi", "bot-lobby");
 }
 
 function makeDeps(): WorkflowDeps {
@@ -79,17 +79,21 @@ test("applyKnowledge writes once and rejects duplicates", () => {
   assert.equal(empty.result, "empty");
 });
 
-test("readAgentKnowledge prefers the dev-lobby file and falls back per file", () => {
+test("readAgentKnowledge prefers bot-lobby and falls back per file through both legacies", () => {
   const root = mkdtempSync(join(tmpdir(), "dh-kmerge-"));
-  const legacyRoot = join(root, ".pi", "dev-house");
-  const newRoot = join(root, ".pi", "dev-lobby");
-  writeFileEnsured(join(knowledgeDir(legacyRoot, "backend"), "knowledge.md"), "legacy facts");
-  writeFileEnsured(join(knowledgeDir(legacyRoot, "backend"), "decisions.md"), "legacy decision");
+  const lobbyRoot = join(root, ".pi", "dev-lobby");
+  const houseRoot = join(root, ".pi", "dev-house");
+  const newRoot = join(root, ".pi", "bot-lobby");
+  writeFileEnsured(join(knowledgeDir(houseRoot, "backend"), "knowledge.md"), "legacy facts");
+  writeFileEnsured(join(knowledgeDir(houseRoot, "backend"), "decisions.md"), "house decision");
+  writeFileEnsured(join(knowledgeDir(lobbyRoot, "backend"), "knowledge.md"), "lobby facts");
+  writeFileEnsured(join(knowledgeDir(lobbyRoot, "backend"), "decisions.md"), "lobby decision");
   writeFileEnsured(join(knowledgeDir(newRoot, "backend"), "knowledge.md"), "new facts");
 
-  const slices = readAgentKnowledge([newRoot, legacyRoot], "backend");
-  assert.equal(slices.knowledge, "new facts");
-  assert.equal(slices.decisions, "legacy decision");
+  const slices = readAgentKnowledge([newRoot, lobbyRoot, houseRoot], "backend");
+  assert.equal(slices.knowledge, "new facts", "bot-lobby wins per file");
+  assert.equal(slices.decisions, "lobby decision", "dev-lobby wins over dev-house");
+  assert.equal(readAgentKnowledge([newRoot, houseRoot], "backend").decisions, "house decision");
   assert.equal(readAgentKnowledge([newRoot], "backend").decisions, "");
 });
 
@@ -116,7 +120,7 @@ test("knowledge action records Master-approved knowledge", async () => {
   const result = await act(deps, { action: "knowledge", domain: "backend", kind: "knowledge", text: "Pagination belongs in src/api/users.ts." });
   assert.equal(result.ok, true, result.message);
   assert.match(result.message, /Recorded knowledge for backend/);
-  assert.match(readFileOr(join(knowledgeDir(join(deps.root, ".pi", "dev-lobby"), "backend"), "knowledge.md")), /Pagination belongs/);
+  assert.match(readFileOr(join(knowledgeDir(join(deps.root, ".pi", "bot-lobby"), "backend"), "knowledge.md")), /Pagination belongs/);
 });
 
 test("knowledge action reports duplicates and rejects empty text", async () => {
@@ -137,7 +141,7 @@ test("agent workers have no knowledge write action of their own", async () => {
   withTask(deps, "implementing");
   const result = await act(deps, { action: "knowledge", domain: "backend", kind: "standard", text: "Always validate query params." });
   assert.equal(result.ok, true);
-  assert.match(readFileOr(join(knowledgeDir(join(deps.root, ".pi", "dev-lobby"), "backend"), "engineering-standards.md")), /Always validate query params/);
+  assert.match(readFileOr(join(knowledgeDir(join(deps.root, ".pi", "bot-lobby"), "backend"), "engineering-standards.md")), /Always validate query params/);
 });
 
 test("completion flushes the task's decisions into the knowledge store", async () => {
@@ -151,7 +155,7 @@ test("completion flushes the task's decisions into the knowledge store", async (
 
   const result = await act(deps, { action: "complete" });
   assert.equal(result.ok, true, result.message);
-  const decisions = readFileOr(join(knowledgeDir(join(deps.root, ".pi", "dev-lobby"), "backend"), "decisions.md"));
+  const decisions = readFileOr(join(knowledgeDir(join(deps.root, ".pi", "bot-lobby"), "backend"), "decisions.md"));
   assert.match(decisions, /TASK-1 Use the existing query builder\./);
   assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.state, "completed");
 });

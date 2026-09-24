@@ -136,25 +136,29 @@ test("a slug-named task round-trips and a timestamped directory still loads", ()
   assert.notEqual(loadedSlug?.id, loadedLegacy?.id);
 });
 
-/** Write a task into the pre-rename dev-house tree, which merged reads still see. */
-function writeLegacyTask(root: string, task: ReturnType<typeof createTask>): void {
-  const dir = join(legacyDataRoot(root, ".pi"), "tasks", task.id);
+/** Write a task into a pre-rename tree (dev-lobby or dev-house), which merged reads still see. */
+function writeLegacyTask(root: string, task: ReturnType<typeof createTask>, name: "dev-lobby" | "dev-house" = "dev-lobby"): void {
+  const dir = join(legacyDataRoot(root, ".pi", name), "tasks", task.id);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "state.json"), JSON.stringify(task, null, 2));
 }
 
-test("listTasks merges the legacy dev-house tree and lets dev-lobby win per id", () => {
+test("listTasks merges both legacy trees and lets bot-lobby win per id", () => {
   const root = project();
-  const legacyOnly = createTask("TASK-legacy-only", "Legacy only");
-  legacyOnly.state = "implementing";
-  writeLegacyTask(root, legacyOnly);
+  const lobbyOnly = createTask("TASK-lobby-only", "Lobby only");
+  lobbyOnly.state = "implementing";
+  writeLegacyTask(root, lobbyOnly, "dev-lobby");
+  const houseOnly = createTask("TASK-house-only", "House only");
+  houseOnly.state = "reviewing";
+  writeLegacyTask(root, houseOnly, "dev-house");
   createTaskDir(root, ".pi", createTask("TASK-shared", "New copy"));
-  writeLegacyTask(root, createTask("TASK-shared", "Stale copy"));
+  writeLegacyTask(root, createTask("TASK-shared", "Stale copy"), "dev-lobby");
 
   const tasks = listTasks(root, ".pi");
-  assert.deepEqual(tasks.map((task) => task.id).sort(), ["TASK-legacy-only", "TASK-shared"]);
+  assert.deepEqual(tasks.map((task) => task.id).sort(), ["TASK-house-only", "TASK-lobby-only", "TASK-shared"]);
   assert.equal(loadTask(root, ".pi", "TASK-shared")?.title, "New copy");
-  assert.equal(loadTask(root, ".pi", "TASK-legacy-only")?.state, "implementing");
+  assert.equal(loadTask(root, ".pi", "TASK-lobby-only")?.state, "implementing");
+  assert.equal(loadTask(root, ".pi", "TASK-house-only")?.state, "reviewing");
 });
 
 test("taskHealth reports a corrupt state.json from either tree", () => {
@@ -167,7 +171,7 @@ test("taskHealth reports a corrupt state.json from either tree", () => {
   assert.deepEqual(health.corrupted, ["TASK-broken"]);
 });
 
-test("loadTask does not shadow a corrupt dev-lobby state with the legacy copy", () => {
+test("loadTask does not shadow a corrupt bot-lobby state with the legacy copy", () => {
   const root = project();
   createTaskDir(root, ".pi", createTask("TASK-shadow", "Live copy"));
   writeFileSync(join(taskDirFor(root, ".pi", "TASK-shadow"), "state.json"), "{broken");
@@ -175,20 +179,22 @@ test("loadTask does not shadow a corrupt dev-lobby state with the legacy copy", 
   assert.equal(loadTask(root, ".pi", "TASK-shadow"), undefined);
 });
 
-test("ensureProjectStructure migrates legacy knowledge instead of seeding over it", () => {
+test("ensureProjectStructure migrates the newest legacy knowledge instead of seeding over it", () => {
   const root = project();
-  const legacyPath = join(knowledgeDir(legacyDataRoot(root, ".pi"), "backend"), "knowledge.md");
-  mkdirSync(dirname(legacyPath), { recursive: true });
-  writeFileSync(legacyPath, "# Legacy\n\nPagination facts.\n");
+  const housePath = join(knowledgeDir(legacyDataRoot(root, ".pi", "dev-house"), "backend"), "knowledge.md");
+  const lobbyPath = join(knowledgeDir(legacyDataRoot(root, ".pi", "dev-lobby"), "backend"), "knowledge.md");
+  for (const path of [housePath, lobbyPath]) mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(housePath, "# House\n\nOld facts.\n");
+  writeFileSync(lobbyPath, "# Lobby\n\nPagination facts.\n");
   ensureProjectStructure(root, ".pi");
   const migrated = join(knowledgeDir(dataRoot(root, ".pi"), "backend"), "knowledge.md");
-  assert.equal(readFileSync(migrated, "utf8"), "# Legacy\n\nPagination facts.\n");
+  assert.equal(readFileSync(migrated, "utf8"), "# Lobby\n\nPagination facts.\n");
 });
 
-test("per-task artifacts fall back to the legacy tree, new tree winning per file", () => {
+test("per-task artifacts fall back through the legacy trees, bot-lobby winning per file", () => {
   const root = project();
   const id = "TASK-artifacts";
-  const legacyDir = join(legacyDataRoot(root, ".pi"), "tasks", id);
+  const legacyDir = join(legacyDataRoot(root, ".pi", "dev-lobby"), "tasks", id);
   mkdirSync(legacyDir, { recursive: true });
   writeFileSync(join(legacyDir, "backend.md"), "legacy scratchpad\n");
   writeFileSync(join(legacyDir, "scout-backend.json"), JSON.stringify({ result: { domain: "backend" } }));

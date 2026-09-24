@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { DevHouseConfig } from "../schemas/configuration.ts";
+import type { BotLobbyConfig } from "../schemas/configuration.ts";
 import type { Domain } from "../schemas/agent.ts";
 import type { AgentRun, ReviewResult, ScoutResult, WorkerResult } from "../schemas/findings.ts";
 import { domainSpec } from "../agents/registry.ts";
@@ -31,13 +31,13 @@ export interface ScoutRequest {
   cwd: string;
   dataRoots: readonly string[];
   taskDir: string;
-  config: DevHouseConfig;
+  config: BotLobbyConfig;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
 }
 
 /** Models are inherited from the session unless the config pins one. */
-export function resolveModel(config: DevHouseConfig, domain: Domain): string | undefined {
+export function resolveModel(config: BotLobbyConfig, domain: Domain): string | undefined {
   const model = config.agents[domain].model;
   return model === "inherit" ? undefined : model;
 }
@@ -145,7 +145,7 @@ export interface WorkerRequest {
   scoutOutcomes: ScoutOutcome[];
   cwd: string;
   dataRoots: readonly string[];
-  config: DevHouseConfig;
+  config: BotLobbyConfig;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
 }
@@ -218,7 +218,7 @@ export interface ReviewerRequest {
   instruction?: string;
   cwd: string;
   dataRoots: readonly string[];
-  config: DevHouseConfig;
+  config: BotLobbyConfig;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
 }

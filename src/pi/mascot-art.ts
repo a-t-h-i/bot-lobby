@@ -16,8 +16,8 @@ import type { TaskState } from "../schemas/task.ts";
  */
 const STATUS_GLYPHS = { idle: "·", running: "◐", done: "✓", failed: "✗" } as const;
 
-export const BANNER_TITLE = "THE DEV LOBBY";
-export const BANNER_NARROW = "⌂ THE DEV LOBBY";
+export const BANNER_TITLE = "THE BOT LOBBY";
+export const BANNER_NARROW = "⌂ THE BOT LOBBY";
 
 /** One-line (<= 30 chars) caption per task state, labelling the compact strip. */
 export const SCENE_PROPS: Record<TaskState, string> = {

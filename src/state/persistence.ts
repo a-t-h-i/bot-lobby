@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { KnowledgeConfig } from "../schemas/configuration.ts";
 import type { Domain } from "../schemas/agent.ts";
 import { TERMINAL_STATES, isTaskState, type Task } from "../schemas/task.ts";
-import { dataRoot, legacyDataRoot, readDataRoots } from "./project.ts";
+import { dataRoot, firstLegacyDataRoot, readDataRoots } from "./project.ts";
 import {
   AGENT_DIR_NAMES,
   KNOWLEDGE_FILES,
@@ -18,14 +18,14 @@ import { DEFAULT_KNOWLEDGE_CONTENT, ensureFile, readFileOr, writeFileEnsured } f
 /** Idempotently create the full knowledge + tasks layout with seed files. */
 export function ensureProjectStructure(root: string, configDir: string): void {
   const dr = dataRoot(root, configDir);
-  const legacy = legacyDataRoot(root, configDir);
+  const legacy = firstLegacyDataRoot(root, configDir);
   const agents = Object.keys(AGENT_DIR_NAMES) as KnowledgeAgent[];
   for (const agent of agents) {
     const dir = knowledgeDir(dr, agent);
     mkdirSync(dir, { recursive: true });
     for (const file of KNOWLEDGE_FILES[agent]) {
-      // Seed from the legacy tree so pre-rename knowledge is migrated, not shadowed by defaults.
-      const migrated = readFileOr(join(knowledgeDir(legacy, agent), file));
+      // Seed from the newest existing pre-rename tree so legacy knowledge migrates instead of being shadowed by defaults.
+      const migrated = legacy ? readFileOr(join(knowledgeDir(legacy, agent), file)) : "";
       ensureFile(join(dir, file), migrated || (DEFAULT_KNOWLEDGE_CONTENT[file] ?? `# ${file}\n`));
     }
   }
@@ -48,7 +48,7 @@ export function taskDirFor(root: string, configDir: string, taskId: string): str
   return taskDir(dataRoot(root, configDir), taskId);
 }
 
-/** Per-task dirs to read, newest first: dev-lobby, then the legacy dev-house tree. */
+/** Per-task dirs to read, newest first: bot-lobby, then the pre-rename trees. */
 export function taskReadDirs(root: string, configDir: string, taskId: string): string[] {
   return readDataRoots(root, configDir).map((dr) => taskDir(dr, taskId));
 }
@@ -80,7 +80,7 @@ export function saveTask(root: string, configDir: string, task: Task): void {
   writeFileEnsured(join(taskDir(dataRoot(root, configDir), task.id), "state.json"), JSON.stringify(task, null, 2));
 }
 
-/** Read a task state: the dev-lobby copy wins, else the legacy dev-house copy. */
+/** Read a task state: the bot-lobby copy wins, else the newest pre-rename copy. */
 export function loadTask(root: string, configDir: string, taskId: string): Task | undefined {
   for (const dr of readDataRoots(root, configDir)) {
     const path = join(taskDir(dr, taskId), "state.json");
@@ -88,7 +88,7 @@ export function loadTask(root: string, configDir: string, taskId: string): Task 
     try {
       return JSON.parse(readFileSync(path, "utf8")) as Task;
     } catch {
-      // A dev-lobby state.json that exists but cannot be parsed is surfaced, not shadowed.
+      // A bot-lobby state.json that exists but cannot be parsed is surfaced, not shadowed.
       return undefined;
     }
   }
@@ -119,7 +119,7 @@ function readTaskAt(dir: string): Task | undefined {
 }
 
 /**
- * Task dirs across the merged read roots, dev-lobby first and winning per
+ * Task dirs across the merged read roots, bot-lobby first and winning per
  * entry, so a legacy task stays visible until its id exists in the new tree.
  */
 function taskEntries(root: string, configDir: string): { entry: string; dir: string }[] {

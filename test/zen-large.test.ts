@@ -209,7 +209,7 @@ test("no width, height, status or alert combination overflows the terminal", () 
 
 test("the large scene is byte-identical to the locked art at 72 and 100 columns", () => {
   const at72 = [
-    "    ┌─ DEV-LOBBY ── TASK-core-feature · implementing ─────────────┐",
+    "    ┌─ BOT-LOBBY ── TASK-core-feature · implementing ─────────────┐",
     "    │ core-feature                                       ETA ~50m │",
     "    │ █████░░░░░  50%  (3/6 tasks)                                │",
     "    └─ ⏱ 12m 30s · tools hidden (alt+t) ──────────────────────────┘",
@@ -245,7 +245,7 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
     "    [ ] Deploy                       10:19 ORACLE    orchestrating ",
   ];
   const at100 = [
-    "                  ┌─ DEV-LOBBY ── TASK-core-feature · implementing ─────────────┐",
+    "                  ┌─ BOT-LOBBY ── TASK-core-feature · implementing ─────────────┐",
     "                  │ core-feature                                       ETA ~50m │",
     "                  │ █████░░░░░  50%  (3/6 tasks)                                │",
     "                  └─ ⏱ 12m 30s · tools hidden (alt+t) ──────────────────────────┘",

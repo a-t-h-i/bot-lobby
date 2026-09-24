@@ -142,7 +142,7 @@ function headerLine(task: Task, now: number, quiet: boolean): string {
   const paused = task.paused ? " (paused)" : "";
   const elapsed = formatDuration(now - Date.parse(task.createdAt));
   const mode = quiet ? "tools hidden (alt+t)" : "tools shown";
-  return `dev-lobby ${task.id} · ${task.state}${paused}   ⏱ ${elapsed} · ${mode}`;
+  return `bot-lobby ${task.id} · ${task.state}${paused}   ⏱ ${elapsed} · ${mode}`;
 }
 
 /** The pending approval or blocker the user must resolve, with its severity. */

@@ -9,7 +9,7 @@ import { SLOT_IDS } from "./mascot-art.ts";
 import { isQuiet, isSubagentProcess, toggleQuiet } from "./quiet.ts";
 import { panelLines, type ExpressionFrames } from "./zen.ts";
 
-export const STATUS_KEY = "dev-lobby";
+export const STATUS_KEY = "bot-lobby";
 
 export function summarizeRun(run: AgentRun): string {
   const icon = run.status === "running" ? "⏳" : run.status === "success" ? "✓" : "✗";
@@ -20,8 +20,8 @@ export function summarizeRun(run: AgentRun): string {
 /** One-line footer text, always carrying the quiet-mode hint. */
 export function statusText(task: Task | undefined): string {
   const mode = isQuiet() ? "tools hidden (alt+t)" : "tools shown";
-  if (!task) return `dev-lobby · ${mode}`;
-  return `dev-lobby ${task.id} · ${task.paused ? `${task.state} (paused)` : task.state} · ${mode}`;
+  if (!task) return `bot-lobby · ${mode}`;
+  return `bot-lobby ${task.id} · ${task.paused ? `${task.state} (paused)` : task.state} · ${mode}`;
 }
 
 let zenOn = false;
@@ -151,7 +151,7 @@ export function clearStatus(ctx: ExtensionContext): void {
 export function registerRevealShortcut(pi: ExtensionAPI, configDir: string): void {
   if (isSubagentProcess()) return;
   pi.registerShortcut("alt+t", {
-    description: "dev-lobby: reveal or hide built-in tool rows",
+    description: "bot-lobby: reveal or hide built-in tool rows",
     handler: (ctx) => revealTools(ctx, configDir),
   });
 }
@@ -164,8 +164,8 @@ function revealTools(ctx: ExtensionContext, configDir: string): void {
   applyStatus(ctx, detectProjectRoot(ctx.cwd, configDir), configDir, zenState.runs);
   ctx.ui.notify(
     quiet
-      ? "dev-lobby: tool rows hidden from now on — alt+t reveals them"
-      : "dev-lobby: tool rows shown from now on — ctrl+o expands, alt+t hides",
+      ? "bot-lobby: tool rows hidden from now on — alt+t reveals them"
+      : "bot-lobby: tool rows shown from now on — ctrl+o expands, alt+t hides",
     "info",
   );
 }

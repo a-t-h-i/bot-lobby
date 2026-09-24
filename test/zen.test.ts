@@ -66,7 +66,7 @@ function plan(...steps: string[]): string {
 }
 
 function headerOf(lines: string[]): string {
-  return lines.find((line) => line.startsWith("dev-lobby ")) ?? "";
+  return lines.find((line) => line.startsWith("bot-lobby ")) ?? "";
 }
 
 function checklistRows(lines: string[]): string[] {
@@ -79,7 +79,7 @@ function stripRows(lines: string[]): string[] {
 }
 
 function boxLines(lines: string[]): string[] {
-  return lines.filter((line) => line.includes("DEV-LOBBY"));
+  return lines.filter((line) => line.includes("BOT-LOBBY"));
 }
 
 const ANSI_CODES: Record<string, string> = { accent: "35", muted: "90", dim: "2", success: "32", error: "31", warning: "33" };
@@ -101,7 +101,7 @@ test("bannerLines boxes the title on wide terminals and never overflows", () => 
   const banner = bannerLines(100);
   assert.deepEqual(banner, [
     "┌────────────────────────────────────────────────────────┐",
-    "│                     THE DEV LOBBY                      │",
+    "│                     THE BOT LOBBY                      │",
     "└────────────────────────────────────────────────────────┘",
   ]);
   assert.equal(banner.length, 3);
@@ -325,13 +325,13 @@ test("no task means no panel lines", () => {
 
 test("the header shows the concise task name, state, elapsed time and quiet mode", () => {
   const scouting = task({ state: "scouting" });
-  assert.equal(headerOf(panelLines(scouting, [], NOW, true, WIDE_COMPACT_OPTS)), "dev-lobby TASK-1 · scouting   ⏱ 10m 00s · tools hidden (alt+t)");
-  assert.equal(headerOf(panelLines(scouting, [], NOW, false, WIDE_COMPACT_OPTS)), "dev-lobby TASK-1 · scouting   ⏱ 10m 00s · tools shown");
+  assert.equal(headerOf(panelLines(scouting, [], NOW, true, WIDE_COMPACT_OPTS)), "bot-lobby TASK-1 · scouting   ⏱ 10m 00s · tools hidden (alt+t)");
+  assert.equal(headerOf(panelLines(scouting, [], NOW, false, WIDE_COMPACT_OPTS)), "bot-lobby TASK-1 · scouting   ⏱ 10m 00s · tools shown");
 });
 
 test("the header marks a paused task", () => {
   const header = headerOf(panelLines(task({ state: "implementing", paused: true }), [], NOW, true, WIDE_COMPACT_OPTS));
-  assert.match(header, /^dev-lobby TASK-1 · implementing \(paused\)/);
+  assert.match(header, /^bot-lobby TASK-1 · implementing \(paused\)/);
 });
 
 test("pending approvals surface before blockers", () => {

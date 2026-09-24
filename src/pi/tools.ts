@@ -45,7 +45,7 @@ const OrchestrateSchema = Type.Object({
 });
 
 const DESCRIPTION = [
-  "Drive the dev-lobby multi-agent workflow for the active task.",
+  "Drive the bot-lobby multi-agent workflow for the active task.",
   "Actions: clarify (ask the user), scout (domain reconnaissance in parallel), research (summon the",
   "read-only researcher for cited internet evidence on a complex change, tool, plugin, doc set or",
   "dependency), propose (record the proposal and request approval), plan (record the internal",
@@ -103,24 +103,24 @@ function runReporter(
 }
 
 /** TUI-only transcript entries; these never enter the model's context. */
-function registerDevHouseEntries(pi: ExtensionAPI): void {
-  pi.registerEntryRenderer("dev-lobby", (entry, { expanded }, theme) => {
+function registerBotLobbyEntries(pi: ExtensionAPI): void {
+  pi.registerEntryRenderer("bot-lobby", (entry, { expanded }, theme) => {
     const data = entry.data as { kind?: string; taskId?: string; text?: string } | undefined;
-    const header = `dev-lobby ${data?.taskId ?? ""} — ${data?.kind ?? "note"}`.trim();
+    const header = `bot-lobby ${data?.taskId ?? ""} — ${data?.kind ?? "note"}`.trim();
     const body = data?.text ?? "";
     return new Text(`${theme.fg("accent", theme.bold(header))}\n${theme.fg("toolOutput", expanded ? body : truncate(body, 600))}`, 0, 0);
   });
 }
 
 export function registerOrchestrateTool(pi: ExtensionAPI, configDir: string, runProcess?: ProcessRunner): void {
-  registerDevHouseEntries(pi);
+  registerBotLobbyEntries(pi);
   pi.registerTool({
     name: "orchestrate",
     label: "Orchestrate",
     description: DESCRIPTION,
-    promptSnippet: "Run a dev-lobby workflow step (clarify, scout, propose, plan, decide, status, cancel)",
+    promptSnippet: "Run a bot-lobby workflow step (clarify, scout, propose, plan, decide, status, cancel)",
     promptGuidelines: [
-      "Use orchestrate for every dev-lobby workflow step; it enforces the task state machine and records results.",
+      "Use orchestrate for every bot-lobby workflow step; it enforces the task state machine and records results.",
     ],
     parameters: OrchestrateSchema,
     // Self shell: an empty renderer then yields zero lines (see quiet.ts).
@@ -129,7 +129,7 @@ export function registerOrchestrateTool(pi: ExtensionAPI, configDir: string, run
       const root = detectProjectRoot(ctx.cwd, configDir);
       const deps = workflowDeps(ctx, configDir, signal, runReporter(onUpdate, (runs) => applyStatus(ctx, root, configDir, runs)), runProcess, pi.getThinkingLevel());
       if (params.action === "propose" && params.proposal) {
-        pi.appendEntry("dev-lobby", { kind: "proposal", taskId: params.taskId, text: params.proposal });
+        pi.appendEntry("bot-lobby", { kind: "proposal", taskId: params.taskId, text: params.proposal });
       }
       const result = await runWorkflowAction(params as OrchestrateParams, deps);
       applyStatus(ctx, root, configDir);

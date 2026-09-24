@@ -4,26 +4,26 @@ import { createTask } from "../src/schemas/task.ts";
 import { formatApprovalNotice, formatNotice, ping, pingApproval } from "../src/pi/notify.ts";
 import { onTransition, transition } from "../src/state/task-state.ts";
 
-// The suite can run inside a subagent process (DEV_LOBBY_SUBAGENT=1); park the
+// The suite can run inside a subagent process (BOT_LOBBY_SUBAGENT=1); park the
 // ambient flag so the master path is observable, and restore it afterwards.
 let ambientSubagent: string | undefined;
 before(() => {
-  ambientSubagent = process.env.DEV_LOBBY_SUBAGENT;
-  delete process.env.DEV_LOBBY_SUBAGENT;
+  ambientSubagent = process.env.BOT_LOBBY_SUBAGENT;
+  delete process.env.BOT_LOBBY_SUBAGENT;
 });
 after(() => {
-  if (ambientSubagent === undefined) delete process.env.DEV_LOBBY_SUBAGENT;
-  else process.env.DEV_LOBBY_SUBAGENT = ambientSubagent;
+  if (ambientSubagent === undefined) delete process.env.BOT_LOBBY_SUBAGENT;
+  else process.env.BOT_LOBBY_SUBAGENT = ambientSubagent;
   onTransition(() => {});
 });
 
 function setSubagent(value: string | undefined): () => void {
-  const previous = process.env.DEV_LOBBY_SUBAGENT;
-  if (value === undefined) delete process.env.DEV_LOBBY_SUBAGENT;
-  else process.env.DEV_LOBBY_SUBAGENT = value;
+  const previous = process.env.BOT_LOBBY_SUBAGENT;
+  if (value === undefined) delete process.env.BOT_LOBBY_SUBAGENT;
+  else process.env.BOT_LOBBY_SUBAGENT = value;
   return () => {
-    if (previous === undefined) delete process.env.DEV_LOBBY_SUBAGENT;
-    else process.env.DEV_LOBBY_SUBAGENT = previous;
+    if (previous === undefined) delete process.env.BOT_LOBBY_SUBAGENT;
+    else process.env.BOT_LOBBY_SUBAGENT = previous;
   };
 }
 

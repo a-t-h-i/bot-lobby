@@ -38,14 +38,14 @@ export interface KnowledgeConfig {
   scratchpadMaxChars: number;
 }
 
-export interface DevHouseConfig {
+export interface BotLobbyConfig {
   master: AgentModelConfig;
   agents: Record<"designer" | "backend" | "qa", AgentModelConfig>;
   workflow: WorkflowConfig;
   knowledge: KnowledgeConfig;
 }
 
-export const DEFAULT_CONFIG: DevHouseConfig = {
+export const DEFAULT_CONFIG: BotLobbyConfig = {
   master: { model: INHERIT_MODEL, thinking: "high", instructions: "" },
   agents: {
     designer: { model: INHERIT_MODEL, thinking: INHERIT_THINKING, instructions: "" },
@@ -77,23 +77,23 @@ function normalizeAgent(base: AgentModelConfig, override: Partial<AgentModelConf
 }
 
 /** Replace every agent's inherit thinking with the live session level; a missing/invalid level omits the flag. */
-export function inheritThinking(config: DevHouseConfig, level: string | undefined): DevHouseConfig {
+export function inheritThinking(config: BotLobbyConfig, level: string | undefined): BotLobbyConfig {
   const resolved = level && isThinkingLevel(level) ? level : "";
   const agents = Object.fromEntries(
     Object.entries(config.agents).map(([name, agent]) => [
       name,
       agent.thinking === INHERIT_THINKING ? { ...agent, thinking: resolved } : { ...agent },
     ]),
-  ) as DevHouseConfig["agents"];
+  ) as BotLobbyConfig["agents"];
   return { ...config, agents };
 }
 
 /** Deep-merge user config over defaults, keeping unknown keys out. */
-export function resolveConfig(partial: unknown): DevHouseConfig {
+export function resolveConfig(partial: unknown): BotLobbyConfig {
   const src = (partial ?? {}) as Record<string, unknown>;
   const workflow = { ...DEFAULT_CONFIG.workflow, ...(src.workflow as Partial<WorkflowConfig> | undefined) };
   const knowledge = { ...DEFAULT_CONFIG.knowledge, ...(src.knowledge as Partial<KnowledgeConfig> | undefined) };
-  const srcAgents = (src.agents ?? {}) as Partial<DevHouseConfig["agents"]>;
+  const srcAgents = (src.agents ?? {}) as Partial<BotLobbyConfig["agents"]>;
   return {
     master: normalizeAgent(DEFAULT_CONFIG.master, src.master as Partial<AgentModelConfig> | undefined),
     agents: {

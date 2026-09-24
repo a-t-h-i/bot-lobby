@@ -4,7 +4,7 @@
  * tools are removed from the master's active set so the researcher subagent,
  * running in its own process, stays the only web path.
  *
- * dev-lobby's extension also loads inside the subagent processes it spawns
+ * bot-lobby's extension also loads inside the subagent processes it spawns
  * (see `spawnPiProcess`). Those children receive their tools from an explicit
  * `--tools` allowlist, so the master-only filtering and renderer overrides must
  * never run there or research silently degrades to repository-only.
@@ -40,7 +40,7 @@ export function visibleTools(active: string[]): string[] {
   return active.filter((name) => !WEB_TOOL_NAMES.includes(name));
 }
 
-/** True inside a dev-lobby subagent process (marked in `spawnPiProcess`). */
+/** True inside a bot-lobby subagent process (marked in `spawnPiProcess`). */
 export function isSubagentProcess(): boolean {
-  return process.env.DEV_LOBBY_SUBAGENT === "1";
+  return process.env.BOT_LOBBY_SUBAGENT === "1";
 }

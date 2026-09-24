@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseReviewResult, validateReviewResult } from "../src/roles/reviewer.ts";
 import { decideReviewLoop } from "../src/master/decisions.ts";
-import { DEFAULT_CONFIG, type DevHouseConfig } from "../src/schemas/configuration.ts";
+import { DEFAULT_CONFIG, type BotLobbyConfig } from "../src/schemas/configuration.ts";
 import { createTask, type Task, type TaskState } from "../src/schemas/task.ts";
 import { createTaskDir, ensureProjectStructure, loadTask, saveTask } from "../src/state/persistence.ts";
 import { transition } from "../src/state/task-state.ts";
@@ -131,7 +131,7 @@ test("resume is rejected when the task is not blocked", async () => {
   assert.match(result.message, /not allowed in state/);
 });
 
-const REVIEW_CONFIG: DevHouseConfig = {
+const REVIEW_CONFIG: BotLobbyConfig = {
   ...DEFAULT_CONFIG,
   workflow: { ...DEFAULT_CONFIG.workflow, maxAgentRetries: 2 },
 };

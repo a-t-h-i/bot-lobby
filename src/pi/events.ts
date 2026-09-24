@@ -25,7 +25,7 @@ function masterTaskContext(task: Task): string {
 }
 
 /**
- * While a dev-lobby task is active the main agent acts as the Master, so its
+ * While a bot-lobby task is active the main agent acts as the Master, so its
  * operating prompt is patched into the system prompt as one cache-stable
  * section rather than replacing the whole prompt.
  */
@@ -51,7 +51,7 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
     if (!task) return;
     const slices = readAgentKnowledge(readDataRoots(root, configDir), "master");
     const selected = selectKnowledge(`${taskRequest(task)} ${task.proposal ?? ""}`, slices);
-    event.systemPromptOptions.sections["dev-lobby"] = compilePrompt({
+    event.systemPromptOptions.sections["bot-lobby"] = compilePrompt({
       domain: "master",
       task: masterTaskContext(task),
       standards: selected.standards,

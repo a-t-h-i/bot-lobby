@@ -1,9 +1,9 @@
-# Dev-Lobby
+# Bot-Lobby
 
 A Pi-native TypeScript extension that turns Pi into a structured multi-agent
 software engineering orchestrator.
 
-`/dev-lobby <request>` starts a task. One Master agent (the Pi session you are
+`/bot-lobby <request>` starts a task. One Master agent (the Pi session you are
 already talking to) coordinates three domain agents — **Designer+Frontend**,
 **Backend**, and **QA** — each able to act as a **Scout** or **Worker** in an
 isolated Pi subprocess. **QA** also runs the read-only **Reviewer** role as the
@@ -21,16 +21,16 @@ Reference the entry file from `settings.json` (global, or project
 
 ```json
 {
-  "extensions": ["/absolute/path/to/dev-lobby/src/index.ts"]
+  "extensions": ["/absolute/path/to/bot-lobby/src/index.ts"]
 }
 ```
 
 Or, for auto-discovery and `/reload` support, add a one-line shim at
-`.pi/extensions/dev-lobby/index.ts` (project) or
-`~/.pi/agent/extensions/dev-lobby/index.ts` (global):
+`.pi/extensions/bot-lobby/index.ts` (project) or
+`~/.pi/agent/extensions/bot-lobby/index.ts` (global):
 
 ```ts
-export { default } from "/absolute/path/to/dev-lobby/src/index.ts";
+export { default } from "/absolute/path/to/bot-lobby/src/index.ts";
 ```
 
 Or run it for a single session without installing: `pi -e ./src/index.ts`.
@@ -41,21 +41,21 @@ the checkout needs to stay where it is.
 ## Usage
 
 ```
-/dev-lobby <request>            Start a task and hand it to the Master
-/dev-lobby status [taskId]      Active task, state, approvals, blockers, legal next states
-/dev-lobby tasks                Task list (plus any unreadable task state)
-/dev-lobby pause | resume       Stop or allow further workflow steps
-/dev-lobby cancel [taskId]      Abandon a task (scratchpad retained)
-/dev-lobby approve              Approve the current proposal
-/dev-lobby amend <text>         Record an amendment; the Master re-proposes
-/dev-lobby decline              Decline the proposal and abandon the task
-/dev-lobby knowledge            Knowledge file sizes vs. the compaction threshold
-/dev-lobby config               Effective configuration and its file path
-/dev-lobby settings             Edit per-agent model, thinking, and instructions
-/dev-lobby-settings             Same as the settings subcommand
+/bot-lobby <request>            Start a task and hand it to the Master
+/bot-lobby status [taskId]      Active task, state, approvals, blockers, legal next states
+/bot-lobby tasks                Task list (plus any unreadable task state)
+/bot-lobby pause | resume       Stop or allow further workflow steps
+/bot-lobby cancel [taskId]      Abandon a task (scratchpad retained)
+/bot-lobby approve              Approve the current proposal
+/bot-lobby amend <text>         Record an amendment; the Master re-proposes
+/bot-lobby decline              Decline the proposal and abandon the task
+/bot-lobby knowledge            Knowledge file sizes vs. the compaction threshold
+/bot-lobby config               Effective configuration and its file path
+/bot-lobby settings             Edit per-agent model, thinking, and instructions
+/bot-lobby-settings             Same as the settings subcommand
 ```
 
-Subcommands only win when no free-form text follows, so `/dev-lobby status page
+Subcommands only win when no free-form text follows, so `/bot-lobby status page
 redesign` still starts a task named "status page redesign".
 
 Press `Esc` during a run to abort the current step: the signal propagates to
@@ -168,9 +168,9 @@ change its own code. Worktree isolation is deferred (§14 of the plan).
 
 ## Configuration
 
-Per-agent settings are edited interactively with `/dev-lobby settings` (or the
-top-level `/dev-lobby-settings`) and persist globally to
-`~/.pi/dev-lobby/config.json`:
+Per-agent settings are edited interactively with `/bot-lobby settings` (or the
+top-level `/bot-lobby-settings`) and persist globally to
+`~/.pi/bot-lobby/config.json`:
 
 ```json
 {
@@ -205,12 +205,12 @@ falls back to the default. `instructions` is appended to that agent's compiled
 system prompt as a `Custom Instructions` layer (empty layers are dropped). The
 master's model and thinking are applied to the live session when a task starts
 and when you change them in the settings TUI. A malformed config falls back to
-the defaults; `DEV_LOBBY_CONFIG_DIR` overrides the config directory.
+the defaults; `BOT_LOBBY_CONFIG_DIR` overrides the config directory.
 
 ## On-disk layout
 
 ```
-.pi/dev-lobby/
+.pi/bot-lobby/
 ├── Master/knowledge/           knowledge.md, standards.md, decisions.md, completed-tasks.md
 ├── Designer/knowledge/         knowledge.md, design-language.md, decisions.md, completed-tasks.md
 ├── Backend/knowledge/          knowledge.md, engineering-standards.md, decisions.md, completed-tasks.md
@@ -227,15 +227,17 @@ the defaults; `DEV_LOBBY_CONFIG_DIR` overrides the config directory.
 ```
 
 The global config lives outside this per-project tree, at
-`~/.pi/dev-lobby/config.json`.
+`~/.pi/bot-lobby/config.json`.
 
-After the dev-house → dev-lobby rename, reads merge both trees: `listTasks` and
-`taskHealth` enumerate `.pi/dev-lobby` and the pre-rename `.pi/dev-house` tree
-with the new root winning per task id, `loadTask` and knowledge reads fall back
-per file, and the legacy `~/.pi/dev-house/config.json` is still read while no
-dev-lobby config exists. Writes always target the dev-lobby paths, and
-`ensureProjectStructure` seeds the new knowledge files from the legacy tree so
-pre-rename knowledge is migrated rather than shadowed by defaults.
+After the dev-house → dev-lobby → bot-lobby renames, reads merge every tree:
+`listTasks` and `taskHealth` enumerate `.pi/bot-lobby`, `.pi/dev-lobby` and the
+pre-rename `.pi/dev-house` tree with the newest root winning per task id,
+`loadTask` and knowledge reads fall back per file, and the newest existing of
+`~/.pi/bot-lobby/config.json`, `~/.pi/dev-lobby/config.json` and
+`~/.pi/dev-house/config.json` is still read while no bot-lobby config exists.
+Writes always target the bot-lobby paths, and `ensureProjectStructure` seeds the
+new knowledge files from the newest pre-rename tree so legacy knowledge is
+migrated rather than shadowed by defaults.
 
 Scratchpads are capped (`scratchpadMaxParagraphs`, `scratchpadMaxChars`) by the
 engine, not by prompt discipline.
@@ -283,7 +285,7 @@ npm test                 # node:test, no extra framework
 Live end-to-end checks (spend tokens, need a configured model):
 
 ```bash
-DEV_LOBBY_E2E=1 npx tsx --test test/e2e.test.ts  # or: node --test test/e2e.test.ts
+BOT_LOBBY_E2E=1 npx tsx --test test/e2e.test.ts  # or: node --test test/e2e.test.ts
 ```
 
 They cover: a real isolated subagent run, a real workflow-level scout that

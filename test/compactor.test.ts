@@ -11,7 +11,7 @@ import { ensureProjectStructure } from "../src/state/persistence.ts";
 function dataRootFor(): string {
   const root = mkdtempSync(join(tmpdir(), "dh-c-"));
   ensureProjectStructure(root, ".pi");
-  return join(root, ".pi", "dev-lobby");
+  return join(root, ".pi", "bot-lobby");
 }
 
 test("analyzeKnowledge finds duplicate lines", () => {

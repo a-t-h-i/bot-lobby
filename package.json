@@ -1,5 +1,5 @@
 {
-  "name": "dev-lobby",
+  "name": "bot-lobby",
   "version": "0.1.0",
   "description": "Structured multi-agent software engineering orchestrator for Pi",
   "type": "module",

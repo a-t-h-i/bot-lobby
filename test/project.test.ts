@@ -6,6 +6,7 @@ import { join } from "node:path";
 import {
   detectProjectRoot,
   dataRoot,
+  firstLegacyDataRoot,
   legacyDataRoot,
   readDataRoots,
   globalConfigDir,
@@ -17,13 +18,13 @@ import { DEFAULT_CONFIG, INHERIT_THINKING, inheritThinking, resolveConfig } from
 
 /** Point the global config at a temp dir for the duration of one test. */
 function withConfig(dir: string, run: () => void): void {
-  const previous = process.env.DEV_LOBBY_CONFIG_DIR;
-  process.env.DEV_LOBBY_CONFIG_DIR = dir;
+  const previous = process.env.BOT_LOBBY_CONFIG_DIR;
+  process.env.BOT_LOBBY_CONFIG_DIR = dir;
   try {
     run();
   } finally {
-    if (previous === undefined) delete process.env.DEV_LOBBY_CONFIG_DIR;
-    else process.env.DEV_LOBBY_CONFIG_DIR = previous;
+    if (previous === undefined) delete process.env.BOT_LOBBY_CONFIG_DIR;
+    else process.env.BOT_LOBBY_CONFIG_DIR = previous;
   }
 }
 
@@ -41,22 +42,30 @@ test("detectProjectRoot returns cwd when cwd itself is the root", () => {
   assert.equal(detectProjectRoot(root, ".pi"), root);
 });
 
-test("dataRoot points at <root>/<configDir>/dev-lobby", () => {
-  assert.equal(dataRoot("/proj", ".pi"), "/proj/.pi/dev-lobby");
+test("dataRoot points at <root>/<configDir>/bot-lobby", () => {
+  assert.equal(dataRoot("/proj", ".pi"), "/proj/.pi/bot-lobby");
 });
 
-test("legacyDataRoot points at the pre-rename tree", () => {
-  assert.equal(legacyDataRoot("/proj", ".pi"), "/proj/.pi/dev-house");
+test("legacyDataRoot resolves each pre-rename tree by name", () => {
+  assert.equal(legacyDataRoot("/proj", ".pi"), "/proj/.pi/dev-lobby");
+  assert.equal(legacyDataRoot("/proj", ".pi", "dev-house"), "/proj/.pi/dev-house");
 });
 
-test("readDataRoots merges the legacy tree only while it exists", () => {
+test("readDataRoots lists bot-lobby then each existing pre-rename tree, newest first", () => {
   const root = mkdtempSync(join(tmpdir(), "dh-roots-"));
-  assert.deepEqual(readDataRoots(root, ".pi"), [join(root, ".pi", "dev-lobby")]);
+  assert.deepEqual(readDataRoots(root, ".pi"), [join(root, ".pi", "bot-lobby")]);
   mkdirSync(join(root, ".pi", "dev-house"), { recursive: true });
-  assert.deepEqual(readDataRoots(root, ".pi"), [join(root, ".pi", "dev-lobby"), join(root, ".pi", "dev-house")]);
+  assert.deepEqual(readDataRoots(root, ".pi"), [join(root, ".pi", "bot-lobby"), join(root, ".pi", "dev-house")]);
+  mkdirSync(join(root, ".pi", "dev-lobby"), { recursive: true });
+  assert.deepEqual(readDataRoots(root, ".pi"), [
+    join(root, ".pi", "bot-lobby"),
+    join(root, ".pi", "dev-lobby"),
+    join(root, ".pi", "dev-house"),
+  ]);
+  assert.equal(firstLegacyDataRoot(root, ".pi"), join(root, ".pi", "dev-lobby"));
 });
 
-test("global config points at the dev-lobby config dir", () => {
+test("global config points at the bot-lobby config dir", () => {
   const dir = mkdtempSync(join(tmpdir(), "dh-gcfg-"));
   withConfig(dir, () => {
     assert.equal(globalConfigDir(), dir);
@@ -64,25 +73,29 @@ test("global config points at the dev-lobby config dir", () => {
   });
 });
 
-test("loadConfig reads the legacy dev-house config until a dev-lobby one exists", () => {
+test("loadConfig falls back through pre-rename configs until a bot-lobby one exists", () => {
   const home = mkdtempSync(join(tmpdir(), "dh-home-"));
-  const legacyDir = join(home, ".pi", "dev-house");
-  const newDir = join(home, ".pi", "dev-lobby");
-  mkdirSync(legacyDir, { recursive: true });
-  writeFileSync(join(legacyDir, "config.json"), JSON.stringify({ master: { thinking: "low" } }));
+  const houseDir = join(home, ".pi", "dev-house");
+  const lobbyDir = join(home, ".pi", "dev-lobby");
+  const botDir = join(home, ".pi", "bot-lobby");
+  mkdirSync(houseDir, { recursive: true });
+  writeFileSync(join(houseDir, "config.json"), JSON.stringify({ master: { thinking: "low" } }));
   const previousHome = process.env.HOME;
-  const previousOverride = process.env.DEV_LOBBY_CONFIG_DIR;
-  delete process.env.DEV_LOBBY_CONFIG_DIR;
+  const previousOverride = process.env.BOT_LOBBY_CONFIG_DIR;
+  delete process.env.BOT_LOBBY_CONFIG_DIR;
   process.env.HOME = home;
   try {
     assert.equal(loadConfig().master.thinking, "low");
-    mkdirSync(newDir, { recursive: true });
-    writeFileSync(join(newDir, "config.json"), JSON.stringify({ master: { thinking: "max" } }));
+    mkdirSync(lobbyDir, { recursive: true });
+    writeFileSync(join(lobbyDir, "config.json"), JSON.stringify({ master: { thinking: "minimal" } }));
+    assert.equal(loadConfig().master.thinking, "minimal");
+    mkdirSync(botDir, { recursive: true });
+    writeFileSync(join(botDir, "config.json"), JSON.stringify({ master: { thinking: "max" } }));
     assert.equal(loadConfig().master.thinking, "max");
   } finally {
     if (previousHome === undefined) delete process.env.HOME;
     else process.env.HOME = previousHome;
-    if (previousOverride !== undefined) process.env.DEV_LOBBY_CONFIG_DIR = previousOverride;
+    if (previousOverride !== undefined) process.env.BOT_LOBBY_CONFIG_DIR = previousOverride;
   }
 });
 

@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { DevHouseConfig } from "../schemas/configuration.ts";
+import type { BotLobbyConfig } from "../schemas/configuration.ts";
 import type { AgentRun, ResearchResult, ReviewResult } from "../schemas/findings.ts";
 import { TASK_STATES, TERMINAL_STATES, taskRequest, type Approval, type ApprovalKind, type Task, type TaskState } from "../schemas/task.ts";
 import { isDomain, type Domain } from "../schemas/agent.ts";
@@ -79,7 +79,7 @@ export interface WorkflowDeps {
   root: string;
   configDir: string;
   cwd: string;
-  config: DevHouseConfig;
+  config: BotLobbyConfig;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
   ask: (question: string) => Promise<string | undefined>;
@@ -361,7 +361,7 @@ function handlePlan(task: Task, params: OrchestrateParams, deps: WorkflowDeps): 
 }
 
 /** Record approvals a worker asked for; auto-approve when config allows it. */
-function recordWorkerApprovals(task: Task, outcome: WorkerOutcome, config: DevHouseConfig): Approval[] {
+function recordWorkerApprovals(task: Task, outcome: WorkerOutcome, config: BotLobbyConfig): Approval[] {
   const created: Approval[] = [];
   const kinds: Array<[ApprovalKind, string, string[], boolean]> = [
     ["dependency", "dependencies", outcome.result.dependencyNeeds, config.workflow.requireApprovalForDependencies],
@@ -676,7 +676,7 @@ const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams
 export async function runWorkflowAction(params: OrchestrateParams, deps: WorkflowDeps): Promise<WorkflowResult> {
   const task = selectTask(deps.root, deps.configDir, params.taskId);
   if (!task) {
-    return { ok: false, taskId: params.taskId ?? "", state: "created", message: "No dev-lobby task found. Start one with /dev-lobby <request>." };
+    return { ok: false, taskId: params.taskId ?? "", state: "created", message: "No bot-lobby task found. Start one with /bot-lobby <request>." };
   }
   if (TERMINAL_STATES.includes(task.state) && params.action !== "status") {
     return { ok: false, taskId: task.id, state: task.state, message: `Task ${task.id} is already ${task.state}; no further actions are possible.` };

@@ -13,7 +13,7 @@ import {
   isThinkingLevel,
   THINKING_LEVELS,
   type AgentModelConfig,
-  type DevHouseConfig,
+  type BotLobbyConfig,
 } from "../schemas/configuration.ts";
 import { globalConfigPath, loadConfig, saveConfig } from "../state/project.ts";
 
@@ -23,7 +23,7 @@ function agentLabel(agent: AgentKind): string {
   return agent === "master" ? "Master" : `${agent[0]!.toUpperCase()}${agent.slice(1)}`;
 }
 
-function agentConfig(config: DevHouseConfig, agent: AgentKind): AgentModelConfig {
+function agentConfig(config: BotLobbyConfig, agent: AgentKind): AgentModelConfig {
   return agent === "master" ? config.master : config.agents[agent];
 }
 
@@ -42,12 +42,12 @@ function findModel(ctx: ExtensionContext, ref: string) {
 }
 
 /** Apply the master model/thinking to the live session; "inherit" leaves it alone. */
-export async function applyMasterModel(pi: ExtensionAPI, ctx: ExtensionContext, config: DevHouseConfig): Promise<void> {
+export async function applyMasterModel(pi: ExtensionAPI, ctx: ExtensionContext, config: BotLobbyConfig): Promise<void> {
   const { model, thinking } = config.master;
   if (model !== INHERIT_MODEL) {
     const found = findModel(ctx, model);
-    if (!found) ctx.ui.notify(`dev-lobby: unknown master model "${model}".`, "warning");
-    else if (!(await pi.setModel(found))) ctx.ui.notify(`dev-lobby: no auth for ${model}.`, "warning");
+    if (!found) ctx.ui.notify(`bot-lobby: unknown master model "${model}".`, "warning");
+    else if (!(await pi.setModel(found))) ctx.ui.notify(`bot-lobby: no auth for ${model}.`, "warning");
   }
   if (isThinkingLevel(thinking)) pi.setThinkingLevel(thinking);
 }
@@ -94,7 +94,7 @@ function modelItems(ctx: ExtensionContext, current: string): SelectItem[] {
 async function commit(pi: ExtensionAPI, ctx: ExtensionContext, agent: AgentKind, patch: Partial<AgentModelConfig>, detail: string): Promise<void> {
   updateAgent(agent, patch);
   if (agent === "master") await applyMasterModel(pi, ctx, loadConfig());
-  ctx.ui.notify(`dev-lobby: ${agent} ${detail} — saved to ${globalConfigPath()}`, "info");
+  ctx.ui.notify(`bot-lobby: ${agent} ${detail} — saved to ${globalConfigPath()}`, "info");
 }
 
 async function editModel(pi: ExtensionAPI, ctx: ExtensionContext, agent: AgentKind): Promise<void> {
@@ -144,7 +144,7 @@ async function editAgent(pi: ExtensionAPI, ctx: ExtensionContext, agent: AgentKi
 /** Open the per-agent settings editor; every change is written to the global config. */
 export async function openSettings(pi: ExtensionAPI, ctx: ExtensionContext): Promise<void> {
   if (ctx.mode !== "tui") {
-    ctx.ui.notify(`dev-lobby settings live in ${globalConfigPath()}; edit that file outside the TUI.`, "info");
+    ctx.ui.notify(`bot-lobby settings live in ${globalConfigPath()}; edit that file outside the TUI.`, "info");
     return;
   }
   for (;;) {
@@ -155,7 +155,7 @@ export async function openSettings(pi: ExtensionAPI, ctx: ExtensionContext): Pro
       return { value: agent, label: agentLabel(agent), description: `${cfg.model} · ${cfg.thinking}${custom}` };
     });
     items.push({ value: "close", label: "Close" });
-    const choice = await pick(ctx, "dev-lobby settings", items);
+    const choice = await pick(ctx, "bot-lobby settings", items);
     if (!choice || choice === "close") return;
     await editAgent(pi, ctx, choice as AgentKind);
   }

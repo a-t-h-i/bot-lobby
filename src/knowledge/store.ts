@@ -105,7 +105,7 @@ export function readKnowledgeSlices(
   };
 }
 
-/** Read an agent's knowledge by agent key; dev-lobby dirs win per file over legacy dev-house ones. */
+/** Read an agent's knowledge by agent key; bot-lobby dirs win per file over the pre-rename ones. */
 export function readAgentKnowledge(roots: readonly string[], agent: KnowledgeAgent) {
   return readKnowledgeSlices(roots.map((root) => knowledgeDir(root, agent)), STANDARDS_FILE[agent]);
 }
