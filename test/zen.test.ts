@@ -22,6 +22,7 @@ import {
   SLOT_IDS,
   SLOT_STATE_GLYPHS,
   SLOT_STATE_WORDS,
+  SPIN_FRAMES,
 } from "../src/pi/mascot-art.ts";
 import { TERMINAL_STATES, TASK_STATES, createTask, type Task } from "../src/schemas/task.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
@@ -144,7 +145,7 @@ test("short terminals fall back to the compact strip", () => {
 });
 
 test("largeLineBudget is a clamped fraction of the terminal rows", () => {
-  assert.equal(MAX_LARGE_LINES, 34);
+  assert.equal(MAX_LARGE_LINES, 33);
   assert.equal(largeLineBudget(200), MAX_LARGE_LINES);
   assert.equal(largeLineBudget(40), 30);
   assert.equal(largeLineBudget(18), 13);
@@ -222,15 +223,15 @@ test("the large tier keeps the task id, state, elapsed, quiet hint, counts and a
   assert.ok(lines.some((line) => line.includes("(0/0 tasks)")), "the plan bar lost its task counts");
 });
 
-test("the large tier lists the plan steps in TASKS beside a LOG of real transitions", () => {
+test("the large tier lists the plan steps in a full-width TASKS checklist", () => {
   const steps = ["`src/a.ts`: first", "`src/b.ts`: second", "`src/c.ts`: third", "`src/d.ts`: fourth"];
   const runs = [run({ runId: "dev", domain: "backend", role: "worker", status: "running", instruction: "implement `src/c.ts` now" })];
   const lines = panelLines(task({ state: "implementing", plan: plan(...steps) }), runs, NOW, true, LARGE_OPTS);
   assert.ok(lines.some((line) => line.includes("[x] `src/a.ts`")), "a completed step is missing");
   assert.ok(lines.some((line) => line.includes("[>] `src/c.ts`")), "the current step is missing");
   assert.ok(lines.some((line) => line.includes("[ ] `src/d.ts`")), "a pending step is missing");
-  assert.ok(lines.some((line) => /\d\d:\d\d ORACLE/.test(line)), "the oracle LOG row is missing");
-  assert.ok(lines.some((line) => /\d\d:\d\d DEV\s+working/.test(line)), "the run LOG row is missing");
+  assert.ok(lines.some((line) => line.includes("TASKS")), "the TASKS header is missing");
+  assert.ok(!lines.some((line) => /\d\d:\d\d [A-Z]/.test(line)), "the LOG window is gone");
   assert.equal(checklistRows(lines).length, 0, "the large tier must not draw the compact checklist");
 });
 
@@ -285,7 +286,7 @@ test("faces and state words follow each slot status in both tiers", () => {
   const runs = statusRuns();
   const large = panelLines(task({ state: "implementing" }), runs, NOW, true, LARGE_OPTS);
   for (const status of ["working", "done", "failed"] as const) {
-    const label = `${SLOT_STATE_GLYPHS[status]} ${SLOT_STATE_WORDS[status]}`;
+    const label = status === "working" ? "working..." : `${SLOT_STATE_GLYPHS[status]} ${SLOT_STATE_WORDS[status]}`;
     assert.ok(large.some((line) => line.includes(label)), `large tier lost the ${label} label`);
   }
   const idle = panelLines(task({ state: "implementing" }), [], NOW, true, LARGE_OPTS);
@@ -307,7 +308,8 @@ test("a theme recolours both tiers without changing a single visible column", ()
   }
   const colored = panelLines(sceneTask, statusRuns(), NOW, true, { ...LARGE_OPTS, theme: ANSI_THEME });
   const coloured = (word: string) => new RegExp(`\\x1b\\[[0-9;]*m[^\\x1b]*${word}`);
-  assert.match(colored.find((line) => stripAnsi(line).includes("◐ working"))!, coloured("◐ working"));
+  const workingRow = colored.find((line) => stripAnsi(line).includes("working..."))!;
+  assert.ok(workingRow.includes(`\x1b[${ANSI_CODES.accent}m`), "the working row lost its accent colour");
   assert.match(colored.find((line) => stripAnsi(line).includes("✓ done"))!, coloured("✓ done"));
   assert.match(colored.find((line) => stripAnsi(line).includes("✗ failed"))!, coloured("✗ failed"));
   assert.ok(colored.some((line) => line.includes(`\x1b[${ANSI_CODES.warning}m`)), "the warning alert was not painted");
@@ -439,14 +441,32 @@ test("planChecklist ignores non-worker runs and uses the latest worker run", () 
   assert.deepEqual(planChecklist(steps, runs).map((step) => step.status), ["done", "done", "current"]);
 });
 
-test("workingLine spins through the quarter circles and names the running agent", () => {
+test("planChecklist marks a succeeded step done and opens the next one", () => {
+  const steps = plan("`src/a.ts`: first", "`src/b.ts`: second", "`src/c.ts`: third");
+  const runs = [run({ role: "worker", status: "success", instruction: "implement `src/b.ts`", finishedAt: "2026-01-01T00:09:55.000Z" })];
+  assert.deepEqual(planChecklist(steps, runs).map((step) => step.status), ["done", "done", "current"]);
+});
+
+test("planChecklist marks the final step done once its worker succeeded", () => {
+  const steps = plan("`src/a.ts`: first", "`src/b.ts`: second");
+  const runs = [run({ role: "worker", status: "success", instruction: "implement `src/b.ts`", finishedAt: "2026-01-01T00:09:55.000Z" })];
+  assert.deepEqual(planChecklist(steps, runs).map((step) => step.status), ["done", "done"]);
+});
+
+test("planChecklist keeps a failed step current", () => {
+  const steps = plan("`src/a.ts`: first", "`src/b.ts`: second");
+  const runs = [run({ role: "worker", status: "failed", instruction: "implement `src/b.ts`" })];
+  assert.deepEqual(planChecklist(steps, runs).map((step) => step.status), ["done", "current"]);
+});
+
+test("workingLine spins through the braille frames and names the running agent", () => {
   const runs = [run({ domain: "qa", role: "worker" })];
-  const frames = ["◐", "◓", "◑", "◒"];
+  const frames = [...SPIN_FRAMES];
   frames.forEach((frame, tick) => {
     assert.equal(workingLine(runs, tick, undefined, NOW), `  ${frame} agents working (1) · qa/worker running 10s`);
   });
-  assert.ok(workingLine(runs, 4, undefined, NOW).startsWith("  ◐"));
-  assert.ok(workingLine(runs, -1, undefined, NOW).startsWith("  ◓"));
+  assert.ok(workingLine(runs, SPIN_FRAMES.length, undefined, NOW).startsWith(`  ${SPIN_FRAMES[0]}`));
+  assert.ok(workingLine(runs, -1, undefined, NOW).startsWith(`  ${SPIN_FRAMES[1]}`));
   assert.match(workingLine([...runs, run({ runId: "r2" })], 0, undefined, NOW), /agents working \(2\)/);
 });
 

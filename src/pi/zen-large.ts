@@ -3,12 +3,12 @@ import {
   BAR,
   ORACLE_COLORS,
   ORACLE_FRAMES,
-  ORACLE_WORDS,
   SLOT_FRAMES,
   SLOT_LABELS,
   SLOT_STATE_COLORS,
   SLOT_STATE_GLYPHS,
   SLOT_STATE_WORDS,
+  SPIN_FRAMES,
   TOWER,
   TOWER_DOOR,
   type OracleFrame,
@@ -22,7 +22,7 @@ import type { PanelTheme } from "./zen.ts";
 /**
  * The large animated zen scene: a header box, the pulsing oracle tower with its
  * tree connector, the four animated agent columns, and the TASKS checklist
- * beside a colour-coded LOG of real run transitions.
+ * spanning the full scene width (there is no LOG window).
  *
  * Pure layout: every colour comes from the optional `PanelTheme`, every frame
  * index comes from the caller, and nothing here reads the clock or a random
@@ -37,27 +37,19 @@ export const LARGE_MIN_WIDTH = 72;
 export const SCENE_WIDTH = 63;
 
 export const MAX_TASK_ROWS = 6;
-export const MAX_LOG_ROWS = 6;
-export const MAX_LARGE_LINES = 34;
+export const MAX_LARGE_LINES = 33;
 
 /** One agent column of the scene, with the caller-selected animation frame. */
 export interface LargeSlot {
   id: SlotId;
   label: string;
   status: SlotState;
-  percent: number;
   frame: number;
 }
 
 export interface LargeTaskRow {
   text: string;
   status: "done" | "current" | "pending";
-}
-
-export interface LargeLogRow {
-  time: string;
-  label: string;
-  status: SlotState | "oracle";
 }
 
 /** Everything the large scene draws; assembled by the caller from task and runs. */
@@ -68,11 +60,12 @@ export interface LargeSceneInput {
   elapsedLabel: string;
   etaLabel: string;
   quietHint: string;
+  /** Caller-injected spinner frame; the scene reads no clock. */
+  tick: number;
   done: number;
   total: number;
   slots: readonly LargeSlot[];
   tasks: readonly LargeTaskRow[];
-  log: readonly LargeLogRow[];
   oracle: { pose: OraclePose; frame: number };
   /** Approval/blocked line; never dropped when present. */
   alert?: string;
@@ -84,15 +77,12 @@ export interface LargeSceneInput {
 
 export const SLOT_CELL = 15;
 const SLOT_GAP = 1;
-const SLOT_ROWS = 4;
+const SLOT_ROWS = 3;
 const BRANCH_ROWS = 3;
 const SECTION_MIN = 2;
 const MAX_SLOTS = 4;
-const TASKS_CELL = 31;
-const LOG_WIDTH = 30;
-const LOG_LABEL_WIDTH = 8;
 const CONTENT = SCENE_WIDTH - 4;
-const BAR_BLOCK = BAR.cells + 4;
+const TASKS_CELL = CONTENT;
 
 const TASK_COLORS: Record<LargeTaskRow["status"], PanelColor> = {
   done: "success",
@@ -279,7 +269,7 @@ function bodyLines(
   theme: PanelTheme | undefined,
   avail: number,
 ): string[] {
-  const sections = input.tasks.length > 0 || input.log.length > 0;
+  const sections = input.tasks.length > 0;
   const plan = pickPlan(avail, sections);
   const entries = plan.section ? clamp(avail - blockRows(plan) - 1, 0, MAX_TASK_ROWS) : 0;
   return [
@@ -382,8 +372,7 @@ function slotLines(input: LargeSceneInput, width: number, theme?: PanelTheme): s
   return [
     assemble(end, faceCells(slots, offsets, theme)),
     assemble(end, labelCells(slots, offsets, theme)),
-    assemble(end, wordCells(slots, offsets, theme)),
-    assemble(end, barCells(slots, offsets, theme)),
+    assemble(end, wordCells(slots, offsets, input.tick, theme)),
   ];
 }
 
@@ -408,27 +397,18 @@ function labelCells(slots: readonly LargeSlot[], offsets: readonly number[], the
   }));
 }
 
-function wordCells(slots: readonly LargeSlot[], offsets: readonly number[], theme?: PanelTheme): Cell[] {
+function wordCells(slots: readonly LargeSlot[], offsets: readonly number[], tick: number, theme?: PanelTheme): Cell[] {
   return slots.map((slot, index) => ({
     offset: offsets[index]!,
-    text: centre(`${SLOT_STATE_GLYPHS[slot.status]} ${SLOT_STATE_WORDS[slot.status]}`, SLOT_CELL),
+    text: centre(slotStatusText(slot.status, tick), SLOT_CELL),
     paint: statusPaint(slot.status, theme),
   }));
 }
 
-function barCells(slots: readonly LargeSlot[], offsets: readonly number[], theme?: PanelTheme): Cell[] {
-  return slots.flatMap((slot, index) => barSpans(slot, offsets[index]!, theme));
-}
-
-function barSpans(slot: LargeSlot, offset: number, theme?: PanelTheme): Cell[] {
-  const percent = clamp(Math.round(slot.percent), 0, 100);
-  const filled = Math.round((percent / 100) * BAR.cells);
-  const lead = offset + Math.floor((SLOT_CELL - BAR_BLOCK) / 2);
-  return [
-    { offset: lead, text: BAR.filled.repeat(filled), paint: statusPaint(slot.status, theme) },
-    { offset: lead + filled, text: BAR.empty.repeat(BAR.cells - filled), paint: (text) => paint(text, "dim", theme) },
-    { offset: lead + BAR.cells, text: `${percent}%`.padStart(4), paint: statusPaint(slot.status, theme) },
-  ];
+/** Working agents show the braille spinner with "working..."; every other state keeps its glyph and word. */
+function slotStatusText(status: SlotState, tick: number): string {
+  if (status !== "working") return `${SLOT_STATE_GLYPHS[status]} ${SLOT_STATE_WORDS[status]}`;
+  return `${SPIN_FRAMES[mod(tick, SPIN_FRAMES.length)]!} working...`;
 }
 
 function assemble(end: number, cells: readonly Cell[]): string {
@@ -441,7 +421,7 @@ function assemble(end: number, cells: readonly Cell[]): string {
   return row + " ".repeat(Math.max(0, end - cursor));
 }
 
-/** TASKS beside the LOG whenever both have rows and the entry budget allows it. */
+/** The full-width TASKS checklist whenever it has rows and the entry budget allows it. */
 function sectionLines(
   input: LargeSceneInput,
   width: number,
@@ -450,36 +430,8 @@ function sectionLines(
 ): string[] {
   if (entries < 1) return [];
   const tasks = input.tasks.slice(0, MAX_TASK_ROWS);
-  const logs = input.log.slice(0, MAX_LOG_ROWS);
-  if (tasks.length > 0 && logs.length > 0 && entries >= SECTION_MIN) {
-    return pairSection(input, tasks, logs, entries, width, theme);
-  }
-  if (tasks.length > 0) {
-    return soloSection(" TASKS", tasks.map((task) => taskCell(task, SCENE_WIDTH, theme)), entries, width, theme);
-  }
-  if (logs.length > 0) {
-    const cells = logs.map((log) => logCell(log, input.oracle.pose, SCENE_WIDTH, theme));
-    return soloSection(" LOG", cells, entries, width, theme);
-  }
-  return [];
-}
-
-function pairSection(
-  input: LargeSceneInput,
-  tasks: readonly LargeTaskRow[],
-  logs: readonly LargeLogRow[],
-  entries: number,
-  width: number,
-  theme?: PanelTheme,
-): string[] {
-  const left = sceneLeft(width);
-  const rows = Math.min(entries, Math.max(tasks.length, logs.length));
-  const lines = [paint(padTo(" TASKS", TASKS_CELL + 2) + "LOG", "muted", theme, true)];
-  for (let index = 0; index < rows; index += 1) {
-    const cell = logCell(logs[index], input.oracle.pose, LOG_WIDTH, theme);
-    lines.push(taskCell(tasks[index], TASKS_CELL, theme) + "  " + cell);
-  }
-  return lines.map((line) => " ".repeat(left) + line);
+  if (tasks.length === 0) return [];
+  return soloSection(" TASKS", tasks.map((task) => taskCell(task, TASKS_CELL, theme)), entries, width, theme);
 }
 
 function soloSection(
@@ -499,17 +451,4 @@ function taskCell(task: LargeTaskRow | undefined, cell: number, theme?: PanelThe
   const icon = task.status === "done" ? "[x]" : task.status === "current" ? "[>]" : "[ ]";
   const text = padTo(`${icon} ${task.text}`, cell);
   return paint(text, TASK_COLORS[task.status], theme, task.status === "current");
-}
-
-function logCell(log: LargeLogRow | undefined, pose: OraclePose, cell: number, theme?: PanelTheme): string {
-  if (!log) return " ".repeat(cell);
-  const style = logStyle(log.status, pose);
-  const lead = `${log.time} ${padTo(log.label, LOG_LABEL_WIDTH)}  `;
-  const plain = padTo(lead + style.word, cell);
-  return paint(lead, "dim", theme) + paint(plain.slice(lead.length), style.color, theme, style.bold);
-}
-
-function logStyle(status: LargeLogRow["status"], pose: OraclePose): { word: string; color: PanelColor; bold: boolean } {
-  if (status === "oracle") return { word: ORACLE_WORDS[pose], ...ORACLE_COLORS[pose] };
-  return { word: SLOT_STATE_WORDS[status], ...SLOT_STATE_COLORS[status] };
 }

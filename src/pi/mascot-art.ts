@@ -16,6 +16,9 @@ import type { TaskState } from "../schemas/task.ts";
  */
 const STATUS_GLYPHS = { idle: "·", running: "◐", done: "✓", failed: "✗" } as const;
 
+/** Braille spinner frames shared by the large scene and the compact working line. */
+export const SPIN_FRAMES: readonly string[] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
 export const BANNER_TITLE = "THE BOT LOBBY";
 export const BANNER_NARROW = "⌂ THE BOT LOBBY";
 

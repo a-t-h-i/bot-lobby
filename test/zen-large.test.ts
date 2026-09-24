@@ -15,6 +15,7 @@ import {
   SLOT_STATE_COLORS,
   SLOT_STATE_GLYPHS,
   SLOT_STATE_WORDS,
+  SPIN_FRAMES,
   TOWER,
   TOWER_DOOR,
   TOWER_WIDTH,
@@ -22,7 +23,6 @@ import {
 import {
   LARGE_MIN_WIDTH,
   MAX_LARGE_LINES,
-  MAX_LOG_ROWS,
   MAX_TASK_ROWS,
   SCENE_WIDTH,
   SLOT_CELL,
@@ -32,7 +32,7 @@ import {
 import type { PanelTheme } from "../src/pi/zen.ts";
 import { BLINK_FRAME, EMOTE_FRAME, EMOTE_FRAMES, REST_FRAME } from "../src/pi/expressions.ts";
 
-/** Representative scene: mixed statuses, six plan steps and six run transitions. */
+/** Representative scene: mixed statuses, six plan steps and an injected spinner frame. */
 function scene(overrides: Partial<LargeSceneInput> = {}): LargeSceneInput {
   return {
     taskId: "TASK-core-feature",
@@ -41,13 +41,14 @@ function scene(overrides: Partial<LargeSceneInput> = {}): LargeSceneInput {
     elapsedLabel: "12m 30s",
     etaLabel: "ETA ~50m",
     quietHint: "tools hidden (alt+t)",
+    tick: 0,
     done: 3,
     total: 6,
     slots: [
-      { id: "dev", label: SLOT_LABELS.dev, status: "working", percent: 58, frame: 0 },
-      { id: "design", label: SLOT_LABELS.design, status: "idle", percent: 0, frame: 1 },
-      { id: "research", label: SLOT_LABELS.research, status: "done", percent: 100, frame: 2 },
-      { id: "qa", label: SLOT_LABELS.qa, status: "failed", percent: 0, frame: 3 },
+      { id: "dev", label: SLOT_LABELS.dev, status: "working", frame: 0 },
+      { id: "design", label: SLOT_LABELS.design, status: "idle", frame: 1 },
+      { id: "research", label: SLOT_LABELS.research, status: "done", frame: 2 },
+      { id: "qa", label: SLOT_LABELS.qa, status: "failed", frame: 3 },
     ],
     tasks: [
       { text: "Research reqs", status: "done" },
@@ -56,14 +57,6 @@ function scene(overrides: Partial<LargeSceneInput> = {}): LargeSceneInput {
       { text: "Write tests", status: "pending" },
       { text: "Run QA", status: "pending" },
       { text: "Deploy", status: "pending" },
-    ],
-    log: [
-      { time: "10:12", label: "ORACLE", status: "oracle" },
-      { time: "10:14", label: "DESIGN", status: "done" },
-      { time: "10:15", label: "DEV", status: "working" },
-      { time: "10:16", label: "RESEARCH", status: "done" },
-      { time: "10:18", label: "QA", status: "failed" },
-      { time: "10:19", label: "ORACLE", status: "oracle" },
     ],
     oracle: { pose: "orchestrating", frame: 0 },
     alert: "approvals pending: APR-1",
@@ -77,7 +70,6 @@ function withStatus(status: LargeSceneInput["slots"][number]["status"], frame = 
 }
 
 const TASK_ROW = /\[[x> ]\] /;
-const LOG_ROW = /\d\d:\d\d [A-Z]+ /;
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -134,6 +126,11 @@ test("compact frames are one animated row of COMPACT_WIDTH columns per slot and 
       for (const frame of frames) assert.equal(frame.length, COMPACT_WIDTH, `${id}/${status} ${frame}`);
     }
   }
+});
+
+test("the braille spinner frames are the shared ten-frame set", () => {
+  assert.deepEqual([...SPIN_FRAMES], ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]);
+  for (const frame of SPIN_FRAMES) assert.equal(visibleWidth(frame), 1, frame);
 });
 
 test("oracle frames stay one column wide and read distinctly per pose", () => {
@@ -234,15 +231,14 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
     "           │               │               │               │",
     "         (^_^)           (u_u)          (✿^‿^)         (〒﹏〒)    ",
     "          DEV           DESIGN         RESEARCH           QA       ",
-    "       ◐ working        · idle          ✓ done         ✗ failed    ",
-    "    ██████░░░░ 58%  ░░░░░░░░░░  0%  ██████████100%  ░░░░░░░░░░  0% ",
-    "     TASKS                           LOG",
-    "    [x] Research reqs                10:12 ORACLE    orchestrating ",
-    "    [x] Design architecture          10:14 DESIGN    done          ",
-    "    [>] Implement feature            10:15 DEV       working       ",
-    "    [ ] Write tests                  10:16 RESEARCH  done          ",
-    "    [ ] Run QA                       10:18 QA        failed        ",
-    "    [ ] Deploy                       10:19 ORACLE    orchestrating ",
+    "     ⠋ working...       · idle          ✓ done         ✗ failed    ",
+    "     TASKS",
+    "    [x] Research reqs                                          ",
+    "    [x] Design architecture                                    ",
+    "    [>] Implement feature                                      ",
+    "    [ ] Write tests                                            ",
+    "    [ ] Run QA                                                 ",
+    "    [ ] Deploy                                                 ",
   ];
   const at100 = [
     "                  ┌─ BOT-LOBBY ── TASK-core-feature · implementing ─────────────┐",
@@ -270,15 +266,14 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
     "                         │               │               │               │",
     "                       (^_^)           (u_u)          (✿^‿^)         (〒﹏〒)    ",
     "                        DEV           DESIGN         RESEARCH           QA       ",
-    "                     ◐ working        · idle          ✓ done         ✗ failed    ",
-    "                  ██████░░░░ 58%  ░░░░░░░░░░  0%  ██████████100%  ░░░░░░░░░░  0% ",
-    "                   TASKS                           LOG",
-    "                  [x] Research reqs                10:12 ORACLE    orchestrating ",
-    "                  [x] Design architecture          10:14 DESIGN    done          ",
-    "                  [>] Implement feature            10:15 DEV       working       ",
-    "                  [ ] Write tests                  10:16 RESEARCH  done          ",
-    "                  [ ] Run QA                       10:18 QA        failed        ",
-    "                  [ ] Deploy                       10:19 ORACLE    orchestrating ",
+    "                   ⠋ working...       · idle          ✓ done         ✗ failed    ",
+    "                   TASKS",
+    "                  [x] Research reqs                                          ",
+    "                  [x] Design architecture                                    ",
+    "                  [>] Implement feature                                      ",
+    "                  [ ] Write tests                                            ",
+    "                  [ ] Run QA                                                 ",
+    "                  [ ] Deploy                                                 ",
   ];
   assert.deepEqual(largeLines(scene(), 72, 40), at72);
   assert.deepEqual(largeLines(scene(), 100, 40), at100);
@@ -298,11 +293,11 @@ test("the box keeps the task id, state, title, estimate, elapsed and quiet hint"
   assert.ok(lines.some((line) => line.includes(TOWER_DOOR)));
 });
 
-test("an empty plan renders a zero bar and keeps the estimate label", () => {
-  const lines = largeLines(scene({ done: 0, total: 0, tasks: [], log: [], etaLabel: "ETA —" }), 72, 40);
+test("an empty plan renders a zero bar and no checklist section", () => {
+  const lines = largeLines(scene({ done: 0, total: 0, tasks: [], etaLabel: "ETA —" }), 72, 40);
   assert.ok(lines.some((line) => line.includes("(0/0 tasks)")));
   assert.ok(lines.some((line) => line.includes("  0%")));
-  assert.ok(!lines.some((line) => line.includes("TASKS") || line.includes("LOG")));
+  assert.ok(!lines.some((line) => line.includes("TASKS")));
 });
 
 // --- geometry ---
@@ -353,6 +348,17 @@ test("the same input and frame render identically, and a new frame moves the eye
   assert.ok(negative.some((line) => line.includes(SLOT_FRAMES.dev.working.at(-3)![0]!)), "negative frames wrap from the end");
 });
 
+test("a working agent shows the braille spinner with 'working...' and animates off the injected tick", () => {
+  const rows = (tick: number) => largeLines(scene({ tick }), 72, 40).filter((line) => line.includes("working..."));
+  const base = rows(0);
+  assert.equal(base.length, 1, "one status row");
+  assert.ok(base[0]!.includes(`${SPIN_FRAMES[0]} working...`));
+  assert.ok(rows(1)[0]!.includes(`${SPIN_FRAMES[1]} working...`));
+  assert.ok(rows(SPIN_FRAMES.length)[0]!.includes(`${SPIN_FRAMES[0]} working...`), "the tick wraps");
+  assert.ok(rows(-1)[0]!.includes(`${SPIN_FRAMES.at(-1)} working...`), "negative ticks wrap from the end");
+  assert.ok(!largeLines(withStatus("done"), 72, 40).some((line) => line.includes("working...")));
+});
+
 test("faces and state words follow each slot status", () => {
   for (const status of SLOT_STATES) {
     const lines = largeLines(withStatus(status), 72, 40);
@@ -367,10 +373,6 @@ test("faces and state words follow each slot status", () => {
     assert.ok(lines.some((line) => line.includes(ORACLE_FRAMES[pose][0]!.orb)), `orb for ${pose}`);
     assert.ok(lines.some((line) => line.includes(ORACLE_FRAMES[pose][0]!.winL)), `window eye for ${pose}`);
   }
-  const dormant = largeLines(scene({ oracle: { pose: "dormant", frame: 0 } }), 72, 40);
-  const oracleRows = dormant.filter((line) => line.includes("ORACLE"));
-  assert.ok(oracleRows.length > 0);
-  for (const row of oracleRows) assert.ok(row.includes("dormant"), `log word: ${row}`);
 });
 
 const CODES: Record<string, string> = { accent: "35", muted: "90", dim: "2", success: "32", error: "31", warning: "33" };
@@ -403,32 +405,32 @@ test("the theme paints every status and keeps the geometry identical", () => {
   }
   const alertRow = colored.find((line) => stripAnsi(line).includes("approvals pending"))!;
   assert.ok(alertRow.includes(`\x1b[${CODES.warning}m`), "alert colour");
-  const wordRow = colored.findIndex((line) => stripAnsi(line).includes(SLOT_STATE_WORDS.working));
-  const barRow = colored[wordRow + 1]!;
-  assert.ok(stripAnsi(barRow).includes(`${"58%".padStart(4)}`));
-  assert.ok(barRow.includes(`\x1b[${CODES.accent}m${BAR.filled.repeat(6)}`), "working bar fill");
-  assert.ok(barRow.includes(`\x1b[${CODES.dim}m${BAR.empty.repeat(4)}`), "bar track");
+  const headerBar = colored.find((line) => stripAnsi(line).includes("(3/6 tasks)"))!;
+  assert.ok(headerBar.includes(`\x1b[1m\x1b[${CODES.accent}m${BAR.filled.repeat(5)}`), "header bar fill");
+  assert.ok(headerBar.includes(`\x1b[${CODES.dim}m${BAR.empty.repeat(5)}`), "header bar track");
+  const spinnerRow = colored.find((line) => stripAnsi(line).includes("working..."))!;
+  assert.ok(spinnerRow.includes(`\x1b[1m`), "working row bold");
   const orbRow = colored.find((line) => stripAnsi(line).includes("─◉─"))!;
   assert.ok(orbRow.includes(`\x1b[${CODES.accent}m◉\x1b[0m`), "oracle orb colour");
 });
 
-test("each agent column renders its status glyph beside the state word", () => {
+test("each agent column renders its status in one row", () => {
   for (const status of SLOT_STATES) {
-    const label = `${SLOT_STATE_GLYPHS[status]} ${SLOT_STATE_WORDS[status]}`;
     const lines = largeLines(withStatus(status), 72, 34);
-    const rows = lines.filter((line) => line.includes(label));
-    assert.equal(rows.length, 1, `${status} state row`);
-    assert.equal(rows[0]!.split(label).length - 1, 4, `${status} glyph in every column`);
-    assert.ok(visibleWidth(rows[0]!) <= 72, `${status} state row width`);
+    const marker = status === "working" ? "working..." : `${SLOT_STATE_GLYPHS[status]} ${SLOT_STATE_WORDS[status]}`;
+    const rows = lines.filter((line) => line.includes(marker));
+    assert.equal(rows.length, 1, `${status} status row`);
+    assert.equal(rows[0]!.split(marker).length - 1, 4, `${status} marker in every column`);
+    assert.ok(visibleWidth(rows[0]!) <= 72, `${status} status row width`);
   }
 });
 
-test("the status glyph and the state word share the status colour and weight", () => {
+test("the status glyph, state word or spinner shares the status colour and weight", () => {
   for (const status of SLOT_STATES) {
     const style = SLOT_STATE_COLORS[status];
-    const label = `${SLOT_STATE_GLYPHS[status]} ${SLOT_STATE_WORDS[status]}`;
-    const row = largeLines(withStatus(status), 72, 34, ANSI_THEME).find((line) => stripAnsi(line).includes(label))!;
-    assert.match(row, new RegExp(`\\x1b\\[${CODES[style.color]}m[^\\x1b]*${escapeRegExp(label)}`), `${status} colour`);
+    const marker = status === "working" ? `${SPIN_FRAMES[0]} working...` : `${SLOT_STATE_GLYPHS[status]} ${SLOT_STATE_WORDS[status]}`;
+    const row = largeLines(withStatus(status), 72, 34, ANSI_THEME).find((line) => stripAnsi(line).includes(marker))!;
+    assert.match(row, new RegExp(`\\x1b\\[${CODES[style.color]}m[^\\x1b]*${escapeRegExp(marker)}`), `${status} colour`);
     if (style.bold) assert.ok(row.includes(`\x1b[1m`), `${status} bold`);
   }
 });
@@ -459,82 +461,50 @@ test("a budget below the fixed frame stays bounded, width-safe and keeps the ale
 
 // --- sections and degradation ---
 
-test("TASKS and LOG are capped at their row limits", () => {
+test("TASKS is capped at its row limit", () => {
   const many = scene({
     tasks: Array.from({ length: MAX_TASK_ROWS + 3 }, (_value, index) => ({ text: `step ${index}`, status: "pending" as const })),
-    log: Array.from({ length: MAX_LOG_ROWS + 3 }, (_value, index) => ({
-      time: `10:${String(index).padStart(2, "0")}`,
-      label: "DEV",
-      status: "working" as const,
-    })),
   });
   const lines = largeLines(many, 72, MAX_LARGE_LINES);
   assert.equal(lines.filter((line) => TASK_ROW.test(line)).length, MAX_TASK_ROWS);
-  assert.equal(lines.filter((line) => LOG_ROW.test(line)).length, MAX_LOG_ROWS);
   assert.ok(lines.length <= MAX_LARGE_LINES);
 });
 
-test("the section outranks the tower, so a taller terminal never hides TASKS or LOG", () => {
+test("TASKS outranks the tower, so a taller terminal never hides checklist rows", () => {
   const many = scene({
     tasks: Array.from({ length: MAX_TASK_ROWS }, (_value, index) => ({ text: `step ${index}`, status: "pending" as const })),
-    log: Array.from({ length: MAX_LOG_ROWS }, (_value, index) => ({
-      time: `10:${String(index).padStart(2, "0")}`,
-      label: "DEV",
-      status: "working" as const,
-    })),
   });
   const tall = largeLines(many, 72, MAX_LARGE_LINES);
   assert.equal(tall.filter((line) => TASK_ROW.test(line)).length, MAX_TASK_ROWS);
-  assert.equal(tall.filter((line) => LOG_ROW.test(line)).length, MAX_LOG_ROWS);
-  assert.ok(tall.some((line) => line.includes("│▓▓▓▓▓▓▓▓▓▓▓│")), "the full tower fits a full section");
+  assert.ok(tall.some((line) => line.includes("│▓▓▓▓▓▓▓▓▓▓▓│")), "the full tower fits a full checklist");
   const roomy = largeLines(many, 72, 30);
   assert.equal(roomy.filter((line) => TASK_ROW.test(line)).length, MAX_TASK_ROWS);
-  assert.equal(roomy.filter((line) => LOG_ROW.test(line)).length, MAX_LOG_ROWS);
-  assert.ok(!roomy.some((line) => line.includes("│▓▓▓▓▓▓▓▓▓▓▓│")), "the tower shrinks before the section");
+  assert.ok(!roomy.some((line) => line.includes("│▓▓▓▓▓▓▓▓▓▓▓│")), "the tower shrinks before the checklist");
   const tiny = largeLines(many, 72, 18);
   assert.equal(tiny.filter((line) => TASK_ROW.test(line)).length, 0);
   assert.ok(tiny.some((line) => line.includes("┌─────┴─────┐")), "the tower stays");
 });
 
-test("solo TASKS takes the free width while paired entry rows stay narrow", () => {
-  const solo = largeLines(scene({ tasks: [{ text: "x".repeat(50), status: "pending" }], log: [] }), 72, 34).find(
-    (line) => TASK_ROW.test(line),
+test("TASKS takes the full scene width for its step text", () => {
+  const row = largeLines(scene({ tasks: [{ text: "x".repeat(50), status: "pending" }] }), 72, 34).find((line) =>
+    TASK_ROW.test(line),
   )!;
-  assert.ok(solo.includes("x".repeat(50)), "TASKS takes the free width without a LOG");
-  const paired = largeLines(
-    scene({ tasks: [{ text: "x".repeat(50), status: "pending" }], log: scene().log }),
-    72,
-    34,
-  ).find((line) => TASK_ROW.test(line))!;
-  assert.ok(!paired.includes("x".repeat(50)), "the paired TASKS cell stays narrow");
+  assert.ok(row.includes("x".repeat(50)), "the step text spans the free width");
+  assert.ok(visibleWidth(row) <= 72, "the row stays inside the terminal");
 });
 
-test("section presence and visible entry rows are monotonic across the whole height budget", () => {
+test("checklist presence and visible rows are monotonic across the whole height budget", () => {
   const input = scene();
   const samples = Array.from({ length: 31 }, (_value, index) => index + 4).map((budget) => {
     const lines = largeLines(input, 72, budget);
-    return {
-      budget,
-      tasks: lines.filter((line) => TASK_ROW.test(line)).length,
-      logs: lines.filter((line) => LOG_ROW.test(line)).length,
-    };
+    return { budget, tasks: lines.filter((line) => TASK_ROW.test(line)).length };
   });
   samples.slice(1).forEach((sample, index) => {
     const previous = samples[index]!;
     if (previous.tasks > 0) assert.ok(sample.tasks > 0, `TASKS vanished at budget ${sample.budget}`);
-    if (previous.logs > 0) assert.ok(sample.logs > 0, `LOG vanished at budget ${sample.budget}`);
     assert.ok(sample.tasks >= previous.tasks, `TASKS shrank at budget ${sample.budget}`);
-    assert.ok(sample.logs >= previous.logs, `LOG shrank at budget ${sample.budget}`);
   });
-  assert.ok(samples.some((sample) => sample.tasks === MAX_TASK_ROWS && sample.logs === MAX_LOG_ROWS));
-});
-
-test("the section pairs TASKS with LOG as soon as two entry rows fit", () => {
-  const tight = largeLines(scene(), 72, 21);
-  const pairs = tight.filter((line) => TASK_ROW.test(line));
-  assert.equal(pairs.length, 2, "exactly two paired entry rows");
-  assert.equal(tight.filter((line) => LOG_ROW.test(line)).length, 2);
-  for (const row of pairs) assert.match(row, LOG_ROW, "each entry row pairs one task with one log");
+  assert.ok(samples.some((sample) => sample.tasks === MAX_TASK_ROWS));
 });
 
 test("every line budget keeps the alert, stays inside the cap and degrades monotonically", () => {
@@ -556,18 +526,12 @@ test("every line budget keeps the alert, stays inside the cap and degrades monot
   assert.equal(sampled[0]!.length, MAX_LARGE_LINES);
 });
 
-test("the bar fills proportionally and clamps out-of-range percentages", () => {
-  const barRow = (percent: number): string => {
-    const slot = { id: "dev" as const, label: SLOT_LABELS.dev, status: "working" as const, percent, frame: 0 };
-    const lines = largeLines(scene({ slots: [slot] }), 72, 40);
-    const word = lines.findIndex((line) => line.includes(SLOT_STATE_WORDS.working));
-    return lines[word + 1]!;
-  };
-  assert.ok(barRow(58).includes(`${BAR.filled.repeat(6)}${BAR.empty.repeat(4)}`));
-  assert.ok(barRow(50).includes(`${BAR.filled.repeat(5)}${BAR.empty.repeat(5)}`));
-  assert.ok(barRow(0).includes(BAR.empty.repeat(BAR.cells)));
-  assert.ok(barRow(100).includes(BAR.filled.repeat(BAR.cells)));
-  assert.ok(barRow(-20).includes(BAR.empty.repeat(BAR.cells)));
-  assert.ok(barRow(250).includes(BAR.filled.repeat(BAR.cells)));
-  assert.ok(barRow(58).includes(`${"58%".padStart(4)}`));
+test("the header bar fills proportionally and clamps out-of-range counts", () => {
+  const barRow = (done: number, total: number): string =>
+    largeLines(scene({ done, total }), 72, 40).find((line) => line.includes("tasks)"))!;
+  assert.ok(barRow(5, 10).includes(`${BAR.filled.repeat(5)}${BAR.empty.repeat(5)}`));
+  assert.ok(barRow(0, 10).includes(BAR.empty.repeat(BAR.cells)));
+  assert.ok(barRow(10, 10).includes(BAR.filled.repeat(BAR.cells)));
+  assert.ok(barRow(20, 10).includes(BAR.filled.repeat(BAR.cells)));
+  assert.ok(barRow(0, 0).includes(BAR.empty.repeat(BAR.cells)));
 });

@@ -19,6 +19,7 @@ import {
   SLOT_IDS,
   SLOT_STATE_COLORS,
   SLOT_STATE_GLYPHS,
+  SPIN_FRAMES,
   type OraclePose,
   type PanelColor,
   type SlotId,
@@ -116,10 +117,16 @@ function stepStatus(index: number, current: number): PlanStepStatus {
   return index === current ? "current" : "pending";
 }
 
-/** Done/current/pending per plan step, matched from the latest worker instruction. */
+/**
+ * Done/current/pending per plan step, matched from the latest worker instruction.
+ * A succeeded run completes its step, so the next step becomes current (and the
+ * last step reads done); running, failed, cancelled and timeout runs keep it current.
+ */
 export function planChecklist(plan: string, runs: AgentRun[]): PlanStep[] {
   const steps = planSteps(plan);
-  const current = currentStepIndex(steps, latestWorkerRun(runs)?.instruction);
+  const latest = latestWorkerRun(runs);
+  const matched = currentStepIndex(steps, latest?.instruction);
+  const current = matched >= 0 && latest?.status === "success" ? matched + 1 : matched;
   return steps.map((text, index) => ({ text, status: stepStatus(index, current) }));
 }
 
@@ -167,7 +174,6 @@ export function bannerLines(width: number): string[] {
   return [`┌${border}┐`, `│${" ".repeat(left)}${BANNER_TITLE}${" ".repeat(inner - titleWidth - left)}│`, `└${border}┘`];
 }
 
-const SPIN_FRAMES: readonly string[] = ["◐", "◓", "◑", "◒"];
 
 /** One-line replacement for pi's suppressed streaming indicator. */
 export function workingLine(runs: AgentRun[], tick: number, theme?: PanelTheme, now = Date.now()): string {
@@ -329,11 +335,11 @@ function sceneInput(
     elapsedLabel: metrics.elapsedLabel,
     etaLabel: metrics.etaLabel,
     quietHint: quiet ? "tools hidden (alt+t)" : "tools shown",
+    tick,
     done: metrics.done,
     total: metrics.total,
     slots: sceneSlots(metrics, expressions),
     tasks: sceneTasks(steps),
-    log: metrics.log,
     oracle: oracleSlot(task, expressions),
     alert: alert?.text,
     alertKind: alert?.kind,

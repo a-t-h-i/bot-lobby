@@ -66,19 +66,20 @@ and the built-in spinner are hidden, and a widget above the editor animates the
 task. At 72 columns and wider it draws a large scene: a header box with the task
 id, state, elapsed time and quiet-mode hint, an estimated ETA and progress bar; an
 oracle tower with its ORC door, animated orb, window eyes and seven-column mouth;
-four animated slots — DEV, DESIGN, RESEARCH and QA — each with a status face, a
-coloured status glyph and state word and a 10-cell bar; and a TASKS checklist
-windowed on the current step beside a LOG of real run transitions. Narrower
+four animated slots — DEV, DESIGN, RESEARCH and QA — each with a status face and,
+while running, a braille spinner with `working...` (otherwise the coloured status
+glyph and state word); and a full-width TASKS checklist windowed on the current
+step. Narrower
 terminals keep the
 boxed banner, header and compact animated strip. Each sprite rests on one calm
-face and, independently every 20–30 s, briefly blinks (~150 ms) or emotes
-(~600 ms); the oracle's mouth moves with its expressions. Sprites redraw on an
+face and, independently every 20–30 s, briefly blinks (~200 ms) or emotes
+(~700 ms); the oracle's mouth moves with its expressions. Sprites redraw on an
 adaptive clock — 250 ms while work is live, 1 s when idle and ~120 ms while an
 expression plays — and their faces, colours and words follow each agent's status
 (working, idle, done, failed). The large scene's rest and blink frames stay the
 five-column ASCII eyes, while its emote frames are status-aware kaomoji: nervous
-while working, happy when done (QA flexes and dances), scared on failure;
-percentages are plan-derived while the ETA is an estimate.
+while working, happy when done (QA flexes and dances), scared on failure. The
+header progress bar is plan-derived; the ETA is an estimate.
 New tasks get a <=3-word title derived from the request (for example "create
 landing page") plus an id `TASK-<slug>` built from the full request, so the banner
 and header stay concise; older `TASK-<timestamp>` tasks keep loading untouched.

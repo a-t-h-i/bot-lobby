@@ -11,8 +11,8 @@
 export const BLINK_MIN_MS = 20_000;
 export const BLINK_MAX_MS = 30_000;
 /** How long one blink and one emote are held. */
-export const BLINK_MS = 150;
-export const EMOTE_MS = 600;
+export const BLINK_MS = 200;
+export const EMOTE_MS = 700;
 /** Fast clock while an expression plays, short enough that a blink is never skipped. */
 export const FAST_TICK_MS = 120;
 
