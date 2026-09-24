@@ -50,8 +50,8 @@ function parseCommand(args: string): { sub: string | undefined; rest: string[]; 
   return { sub, rest, restText: trimmed.slice(sub.length).trim() };
 }
 
-function uniqueTaskId(root: string, configDir: string): string {
-  const base = nextTaskId();
+function uniqueTaskId(root: string, configDir: string, request: string): string {
+  const base = nextTaskId(request);
   let id = base;
   let suffix = 2;
   while (existsSync(taskDirFor(root, configDir, id))) id = `${base}-${suffix++}`;
@@ -80,7 +80,7 @@ async function startTask(
 ): Promise<void> {
   const root = detectProjectRoot(ctx.cwd, configDir);
   ensureProjectStructure(root, configDir);
-  const task = createTask(uniqueTaskId(root, configDir), request);
+  const task = createTask(uniqueTaskId(root, configDir, request), request);
   createTaskDir(root, configDir, task);
   transition(task, "clarifying");
   saveTask(root, configDir, task);

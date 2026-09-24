@@ -106,9 +106,24 @@ export function selectTask(root: string, configDir: string, taskId?: string): Ta
   return taskId ? loadTask(root, configDir, taskId) : activeTask(root, configDir);
 }
 
-/** Timestamped id; callers suffix it when a task already exists this second. */
-export function nextTaskId(now = new Date()): string {
-  return `TASK-${now.toISOString().replace(/[-:T]/g, "").slice(0, 14)}`;
+/** Dash-slug of a request: lowercase, non-alphanumerics collapsed, capped at `max`. */
+export function taskSlug(request: string, max = 40): string {
+  return request
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, max)
+    .replace(/-+$/, "");
+}
+
+/**
+ * Task id from the request (`TASK-<slug>`); requests with no usable slug fall
+ * back to the timestamped `TASK-task-<timestamp>` form callers already suffix.
+ */
+export function nextTaskId(request: string, now = new Date()): string {
+  const slug = taskSlug(request);
+  if (slug.length > 0) return `TASK-${slug}`;
+  return `TASK-task-${now.toISOString().replace(/[-:T]/g, "").slice(0, 14)}`;
 }
 
 /** Files that make up a task's temporary working state (§20). */

@@ -1,11 +1,19 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, type Component, type TUI } from "@earendil-works/pi-tui";
 import type { AgentRun } from "../schemas/findings.ts";
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { activeTask } from "../state/persistence.ts";
 import { detectProjectRoot } from "../state/project.ts";
 import { isQuiet, isSubagentProcess, toggleQuiet } from "./quiet.ts";
-import { panelLines } from "./zen.ts";
+import {
+  advanceBlink,
+  isBlinking,
+  MASCOT_IDS,
+  nextBlinkDelay,
+  panelLines,
+  type BlinkState,
+  type MascotId,
+} from "./zen.ts";
 
 export const STATUS_KEY = "dev-house";
 
@@ -25,22 +33,46 @@ export function statusText(task: Task | undefined): string {
 let zenOn = false;
 let zenState: { task: Task | undefined; runs: AgentRun[] } = { task: undefined, runs: [] };
 
-/** Animated plan checklist + mascot shown above the editor while a task is running. */
+const TICK_MS = 1000;
+
+/** One blink window per mascot, each scheduled independently. */
+function blinkStates(now: number, rng: () => number = Math.random): Record<MascotId, BlinkState> {
+  const states = {} as Record<MascotId, BlinkState>;
+  for (const mascot of MASCOT_IDS) states[mascot] = { nextAt: now + nextBlinkDelay(rng), until: 0 };
+  return states;
+}
+
+/** Blob diorama + plan checklist shown above the editor while a task is active. */
 class ZenWidget implements Component {
   private tick = 0;
+  private blinks = blinkStates(Date.now());
   private readonly tui: TUI;
+  private readonly theme: () => Theme;
   private readonly timer: ReturnType<typeof setInterval>;
 
-  constructor(tui: TUI) {
+  constructor(tui: TUI, theme: () => Theme) {
     this.tui = tui;
-    this.timer = setInterval(() => {
-      this.tick += 1;
-      this.tui.requestRender();
-    }, 250);
+    this.theme = theme;
+    this.timer = setInterval(() => this.advance(), TICK_MS);
+  }
+
+  private advance(): void {
+    this.tick += 1;
+    const now = Date.now();
+    for (const mascot of MASCOT_IDS) this.blinks[mascot] = advanceBlink(this.blinks[mascot], now, Math.random);
+    this.tui.requestRender();
+  }
+
+  private flags(now: number): Partial<Record<MascotId, boolean>> {
+    const flags: Partial<Record<MascotId, boolean>> = {};
+    for (const mascot of MASCOT_IDS) flags[mascot] = isBlinking(this.blinks[mascot], now);
+    return flags;
   }
 
   render(width: number): string[] {
-    const lines = panelLines(zenState.task, zenState.runs, Date.now(), isQuiet(), this.tick);
+    const now = Date.now();
+    const opts = { width, blinks: this.flags(now), tick: this.tick, theme: this.theme() };
+    const lines = panelLines(zenState.task, zenState.runs, now, isQuiet(), opts);
     return lines.map((line) => truncateToWidth(line, width));
   }
 
@@ -55,6 +87,7 @@ function leaveZen(ctx: ExtensionContext): void {
   if (!zenOn) return;
   zenOn = false;
   ctx.ui.setWorkingVisible(true);
+  ctx.ui.setWorkingIndicator();
 }
 
 /** Refresh the footer + widget to match the task on disk. */
@@ -71,9 +104,10 @@ export function applyStatus(ctx: ExtensionContext, root: string, configDir: stri
     return;
   }
   ctx.ui.setWorkingVisible(false);
+  ctx.ui.setWorkingIndicator({ frames: [] });
   if (!zenOn) {
     zenOn = true;
-    ctx.ui.setWidget(STATUS_KEY, (tui) => new ZenWidget(tui));
+    ctx.ui.setWidget(STATUS_KEY, (tui) => new ZenWidget(tui, () => ctx.ui.theme));
   }
 }
 

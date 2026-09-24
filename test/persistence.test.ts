@@ -9,7 +9,9 @@ import {
   createTaskDir,
   ensureProjectStructure,
   loadTask,
+  nextTaskId,
   saveTask,
+  taskSlug,
   taskDirFor,
 } from "../src/state/persistence.ts";
 import { knowledgeDir, KNOWLEDGE_FILES, AGENT_DIR_NAMES, scratchpadPath } from "../src/knowledge/paths.ts";
@@ -91,4 +93,40 @@ test("cleanupTaskDir removes the temporary task directory", () => {
   assert.ok(existsSync(dir));
   cleanupTaskDir(root, ".pi", "TASK-004");
   assert.ok(!existsSync(dir));
+});
+
+test("taskSlug turns a request into a bounded dash slug", () => {
+  assert.equal(taskSlug("Add pagination to the task list!"), "add-pagination-to-the-task-list");
+  assert.equal(taskSlug("  Mixed   CASE -- and punctuation??  "), "mixed-case-and-punctuation");
+  assert.equal(taskSlug("!!! ???"), "");
+  assert.equal(taskSlug("a".repeat(45)), "a".repeat(40));
+  assert.equal(taskSlug("x".repeat(39) + "-yyy"), "x".repeat(39));
+});
+
+test("nextTaskId names a task from its request and falls back to a timestamp", () => {
+  assert.equal(nextTaskId("Add pagination to the task list"), "TASK-add-pagination-to-the-task-list");
+  assert.equal(nextTaskId("!!!", new Date("2026-01-01T00:10:00.000Z")), "TASK-task-20260101001000");
+  assert.equal(nextTaskId("   ", new Date("2026-01-01T00:10:00.000Z")), "TASK-task-20260101001000");
+});
+
+test("a slug-named task round-trips and a timestamped directory still loads", () => {
+  const root = project();
+  const slugId = nextTaskId("Add pagination to the task list");
+  const slugTask = createTask(slugId, "Add pagination to the task list");
+  createTaskDir(root, ".pi", slugTask);
+  slugTask.state = "implementing";
+  saveTask(root, ".pi", slugTask);
+  const loadedSlug = loadTask(root, ".pi", slugId);
+  assert.equal(loadedSlug?.id, "TASK-add-pagination-to-the-task-list");
+  assert.equal(loadedSlug?.state, "implementing");
+
+  const legacyId = "TASK-20260101001000";
+  const legacy = createTask(legacyId, "legacy task");
+  createTaskDir(root, ".pi", legacy);
+  legacy.state = "reviewing";
+  saveTask(root, ".pi", legacy);
+  const loadedLegacy = loadTask(root, ".pi", legacyId);
+  assert.equal(loadedLegacy?.id, legacyId);
+  assert.equal(loadedLegacy?.state, "reviewing");
+  assert.notEqual(loadedSlug?.id, loadedLegacy?.id);
 });
