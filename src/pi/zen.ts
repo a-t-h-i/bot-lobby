@@ -42,16 +42,17 @@ export interface PanelTheme {
   bold(text: string): string;
 }
 
-/** Human-readable duration such as "9s" or "2m 05s". */
+/** Human-readable duration such as "9s" or "2m 05s"; a non-finite input reads "0s". */
 export function formatDuration(ms: number): string {
-  const seconds = Math.max(0, Math.floor(ms / 1000));
+  const seconds = Number.isFinite(ms) ? Math.max(0, Math.floor(ms / 1000)) : 0;
   const minutes = Math.floor(seconds / 60);
   return minutes > 0 ? `${minutes}m ${String(seconds % 60).padStart(2, "0")}s` : `${seconds}s`;
 }
 
 function runElapsed(run: AgentRun, now: number): number {
   const end = run.finishedAt ? Date.parse(run.finishedAt) : now;
-  return end - Date.parse(run.startedAt);
+  const elapsed = end - Date.parse(run.startedAt);
+  return Number.isFinite(elapsed) && elapsed > 0 ? elapsed : 0;
 }
 
 /** Upper bound on parsed plan steps so the widget stays bounded. */

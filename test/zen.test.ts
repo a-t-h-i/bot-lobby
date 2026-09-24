@@ -383,6 +383,10 @@ test("formatDuration switches to minutes past 60s and clamps negatives", () => {
   assert.equal(formatDuration(9_000), "9s");
   assert.equal(formatDuration(65_000), "1m 05s");
   assert.equal(formatDuration(-5), "0s");
+  assert.equal(formatDuration(Number.NaN), "0s");
+  assert.equal(formatDuration(Number.POSITIVE_INFINITY), "0s");
+  assert.equal(formatDuration(Number.NEGATIVE_INFINITY), "0s");
+  assert.equal(formatDuration(10 * 60_000), "10m 00s");
 });
 
 test("planSteps keeps numbered steps and ignores everything else", () => {
@@ -460,4 +464,20 @@ test("workingLine reports the last finished run when nothing is running", () => 
 
 test("workingLine keeps the legacy waiting string before the first agent", () => {
   assert.equal(workingLine([], 0, undefined, NOW), "  ○ waiting for the first agent…");
+});
+
+test("an unparsable timestamp never renders NaN in either tier", () => {
+  const brokenTask = task({ state: "implementing", createdAt: "not-a-date", plan: plan("`src/a.ts`: first") });
+  const brokenRuns = [
+    run({ runId: "r1", status: "running", startedAt: "not-a-date" }),
+    run({ runId: "r2", status: "running", startedAt: "not-a-date", finishedAt: "also-not-a-date" }),
+  ];
+  for (const opts of [COMPACT_OPTS, WIDE_COMPACT_OPTS, LARGE_OPTS]) {
+    const lines = panelLines(brokenTask, brokenRuns, Number.NaN, true, opts);
+    assert.ok(lines.length > 0, `width ${opts.width} drew nothing`);
+    for (const line of lines) {
+      assert.ok(!line.includes("NaN"), `width ${opts.width} rendered NaN: ${JSON.stringify(line)}`);
+      assert.ok(visibleWidth(line) <= opts.width, `width ${opts.width} overflowed: ${JSON.stringify(line)}`);
+    }
+  }
 });
