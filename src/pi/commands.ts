@@ -18,6 +18,7 @@ import { AGENT_DIR_NAMES, KNOWLEDGE_FILES, knowledgeDir, type KnowledgeAgent } f
 import { readFirstExisting } from "../knowledge/store.ts";
 import { overThreshold } from "../knowledge/compactor.ts";
 import { applyApprovalChoice, describeTask, describeOversizedKnowledge, type ApprovalChoice } from "../workflow/workflow.ts";
+import { shortTitle } from "../text.ts";
 import { applyStatus, registerRevealShortcut } from "./ui.ts";
 import { applyMasterModel, openSettings } from "./settings-ui.ts";
 
@@ -80,7 +81,7 @@ async function startTask(
 ): Promise<void> {
   const root = detectProjectRoot(ctx.cwd, configDir);
   ensureProjectStructure(root, configDir);
-  const task = createTask(uniqueTaskId(root, configDir, request), request);
+  const task = createTask(uniqueTaskId(root, configDir, request), shortTitle(request));
   createTaskDir(root, configDir, task);
   transition(task, "clarifying");
   saveTask(root, configDir, task);
