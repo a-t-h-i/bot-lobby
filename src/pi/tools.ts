@@ -30,17 +30,19 @@ const OrchestrateSchema = Type.Object({
     StringEnum(["approved", "rejected"] as const, { description: "resolve_approval: approve or reject the request" }),
   ),
   note: Type.Optional(Type.String({ description: "resolve_approval: rationale, or what to do instead when rejected" })),
+  reason: Type.Optional(Type.String({ description: "block: why the task cannot continue" })),
   text: Type.Optional(Type.String({ description: "decide: the decision and its rationale" })),
 });
 
 const DESCRIPTION = [
   "Drive the dev-house multi-agent workflow for the active task.",
-  "Actions: clarify (ask the user), scout (domain reconnaissance in parallel),",
-  "propose (record the proposal and request approval), plan (record the internal plan),",
-  "implement (delegate one step to a domain worker), resolve_approval (approve or reject a",
-  "dependency/architecture request), decide (record a decision), status, cancel.",
-  "The engine validates every step against the task state machine, so a rejected action means",
-  "the workflow is not at that step yet.",
+  "Actions: clarify (ask the user), scout (domain reconnaissance in parallel), propose (record the",
+  "proposal and request approval), plan (record the internal plan), implement (delegate one step to a",
+  "domain worker), review (independent verification of the current diff), resolve_approval (approve or",
+  "reject a dependency/architecture request), block/resume (escalate or continue), decide (record a",
+  "decision), status, cancel.",
+  "The engine validates every step against the task state machine, so a rejected action means the",
+  "workflow is not at that step yet.",
 ].join(" ");
 
 /** Build the engine dependencies from the current Pi context. */

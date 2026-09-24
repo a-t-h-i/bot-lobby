@@ -1,0 +1,182 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { parseReviewResult, validateReviewResult } from "../src/roles/reviewer.ts";
+import { decideReviewLoop } from "../src/master/decisions.ts";
+import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
+import { createTask, type Task, type TaskState } from "../src/schemas/task.ts";
+import { createTaskDir, ensureProjectStructure, loadTask, saveTask } from "../src/state/persistence.ts";
+import { transition } from "../src/state/task-state.ts";
+import { runWorkflowAction, type OrchestrateParams, type WorkflowDeps } from "../src/workflow/workflow.ts";
+import type { ProcessRunner } from "../src/execution/pi-runner.ts";
+
+function review(text: string): string {
+  return JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], stopReason: "stop" } });
+}
+
+const PASS = "## Verdict\nPASS\n\n## Verification\n- `npm test` — passing";
+
+const CHANGES = [
+  "## Verdict",
+  "CHANGES_REQUIRED",
+  "",
+  "## Findings",
+  "- [major] No validation on the query param — `src/api/users.ts:42`",
+  "",
+  "## Verification",
+  "- `npm test` — passing",
+  "",
+  "## Required Changes",
+  "- Validate limit and offset",
+].join("\n");
+
+function makeDeps(overrides: Partial<WorkflowDeps> = {}): WorkflowDeps {
+  return {
+    root: mkdtempSync(join(tmpdir(), "dh-r-")),
+    configDir: ".pi",
+    cwd: process.cwd(),
+    config: DEFAULT_CONFIG,
+    ask: async () => undefined,
+    choose: async () => undefined,
+    notify: () => {},
+    runProcess: async () => ({ exitCode: 0, stdout: review(PASS), stderr: "", killed: false, timedOut: false }),
+    ...overrides,
+  };
+}
+
+const PATHS: Record<string, TaskState[]> = {
+  implementing: ["clarifying", "scouting", "synthesizing", "awaiting_approval", "planning", "implementing"],
+  blocked: ["clarifying", "scouting", "synthesizing", "awaiting_approval", "planning", "implementing", "blocked"],
+};
+
+function withTask(deps: WorkflowDeps, state: TaskState): Task {
+  ensureProjectStructure(deps.root, deps.configDir);
+  const task = createTask("TASK-1", "Add pagination");
+  createTaskDir(deps.root, deps.configDir, task);
+  for (const step of PATHS[state] ?? []) transition(task, step);
+  saveTask(deps.root, deps.configDir, task);
+  return task;
+}
+
+function act(deps: WorkflowDeps, params: Partial<OrchestrateParams>) {
+  return runWorkflowAction({ action: "status", taskId: "TASK-1", ...params } as OrchestrateParams, deps);
+}
+
+test("parseReviewResult extracts a pass verdict", () => {
+  const result = parseReviewResult("backend", PASS);
+  assert.equal(result.verdict, "pass");
+  assert.equal(result.findings.length, 0);
+  assert.deepEqual(validateReviewResult(result), []);
+});
+
+test("parseReviewResult extracts findings with severities and required changes", () => {
+  const result = parseReviewResult("backend", CHANGES);
+  assert.equal(result.verdict, "changes_required");
+  assert.deepEqual(result.findings, [{ severity: "major", text: "No validation on the query param — `src/api/users.ts:42`" }]);
+  assert.deepEqual(result.requiredChanges, ["Validate limit and offset"]);
+  assert.deepEqual(validateReviewResult(result), []);
+});
+
+test("an unknown or missing verdict is never treated as a pass", () => {
+  assert.equal(parseReviewResult("backend", "Looks fine to me!").verdict, "blocked");
+  assert.equal(parseReviewResult("backend", "## Verdict\nMAYBE\n\n## Findings\n- [minor] x").verdict, "blocked");
+  const missing = parseReviewResult("backend", "no sections here");
+  assert.ok(validateReviewResult(missing).includes("missing Verdict section"));
+});
+
+test("a pass with critical findings is flagged", () => {
+  const result = parseReviewResult("backend", "## Verdict\nPASS\n\n## Findings\n- [critical] data loss — `x.ts:1`");
+  assert.equal(result.verdict, "pass");
+  assert.ok(validateReviewResult(result).includes("PASS declared with critical findings"));
+});
+
+test("a non-pass verdict without evidence is flagged", () => {
+  const result = parseReviewResult("backend", "## Verdict\nCHANGES_REQUIRED");
+  assert.ok(validateReviewResult(result).includes("non-pass verdict without findings or required changes"));
+});
+
+test("decideReviewLoop accepts passes, iterates within the limit, then blocks", () => {
+  assert.equal(decideReviewLoop("pass", 1, 2), "accept");
+  assert.equal(decideReviewLoop("blocked", 1, 2), "blocked");
+  assert.equal(decideReviewLoop("changes_required", 1, 2), "iterate");
+  assert.equal(decideReviewLoop("changes_required", 2, 2), "blocked");
+});
+
+test("review records the verdict and returns accept for a pass", async () => {
+  const deps = makeDeps();
+  withTask(deps, "implementing");
+  const result = await act(deps, { action: "review", domain: "backend" });
+  assert.equal(result.ok, true, result.message);
+  assert.equal(result.state, "reviewing");
+  assert.match(result.message, /verdict PASS/);
+  assert.match(result.message, /Review-loop decision: accept/);
+  const task = loadTask(deps.root, deps.configDir, "TASK-1")!;
+  assert.equal(task.reviewRecords.length, 1);
+  assert.equal(task.reviewIterations.backend, 1);
+});
+
+test("a changes-required review asks for another worker iteration", async () => {
+  const runner: ProcessRunner = async () => ({ exitCode: 0, stdout: review(CHANGES), stderr: "", killed: false, timedOut: false });
+  const deps = makeDeps({ runProcess: runner });
+  withTask(deps, "implementing");
+  const result = await act(deps, { action: "review", domain: "backend" });
+  assert.equal(result.state, "reviewing");
+  assert.match(result.message, /Review-loop decision: iterate/);
+  assert.match(result.message, /Validate limit and offset/);
+});
+
+test("the review iteration limit blocks further iteration", async () => {
+  const runner: ProcessRunner = async () => ({ exitCode: 0, stdout: review(CHANGES), stderr: "", killed: false, timedOut: false });
+  const deps = makeDeps({ runProcess: runner });
+  withTask(deps, "implementing");
+  const first = await act(deps, { action: "review", domain: "backend" });
+  assert.match(first.message, /iterate/);
+  const second = await act(deps, { action: "review", domain: "backend" });
+  assert.match(second.message, /Review-loop decision: blocked/);
+  assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.reviewIterations.backend, 2);
+});
+
+test("a failed reviewer run is reported instead of accepted", async () => {
+  const failing: ProcessRunner = async () => ({ exitCode: 1, stdout: "", stderr: "reviewer crashed", killed: false, timedOut: false });
+  const deps = makeDeps({ runProcess: failing });
+  withTask(deps, "implementing");
+  const result = await act(deps, { action: "review", domain: "backend" });
+  assert.match(result.message, /BLOCKED/);
+  assert.match(result.message, /reviewer crashed/);
+});
+
+test("review is rejected while the task is still being planned", async () => {
+  const deps = makeDeps();
+  withTask(deps, "planning" as TaskState);
+  const result = await act(deps, { action: "review", domain: "backend" });
+  assert.equal(result.ok, false);
+  assert.match(result.message, /not allowed in state/);
+});
+
+test("block moves the task to blocked and resume restores implementation", async () => {
+  const deps = makeDeps();
+  withTask(deps, "implementing");
+  const blocked = await act(deps, { action: "block", reason: "waiting on schema owner", domain: "backend" });
+  assert.equal(blocked.state, "blocked");
+  const resumed = await act(deps, { action: "resume", domain: "backend" });
+  assert.equal(resumed.state, "implementing");
+  assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.blockers.length, 0);
+});
+
+test("block requires a reason", async () => {
+  const deps = makeDeps();
+  withTask(deps, "implementing");
+  const result = await act(deps, { action: "block" });
+  assert.equal(result.ok, false);
+  assert.match(result.message, /requires reason/);
+});
+
+test("resume is rejected when the task is not blocked", async () => {
+  const deps = makeDeps();
+  withTask(deps, "implementing");
+  const result = await act(deps, { action: "resume" });
+  assert.equal(result.ok, false);
+  assert.match(result.message, /not allowed in state/);
+});

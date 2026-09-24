@@ -1,5 +1,6 @@
 import type { Decision, Task } from "../schemas/task.ts";
 import type { Domain } from "../schemas/agent.ts";
+import type { Verdict } from "../schemas/task.ts";
 import type { ScoutOutcome } from "./master.ts";
 import { detectGaps, domainsInvolved } from "./synthesis.ts";
 
@@ -11,6 +12,17 @@ export function recordDecision(
   now = new Date().toISOString(),
 ): void {
   task.decisions.push({ domain, text, createdAt: now });
+}
+
+/** §17: a changes-required verdict iterates until the configured limit. */
+export function decideReviewLoop(
+  verdict: Verdict,
+  iterations: number,
+  maxIterations: number,
+): "accept" | "iterate" | "blocked" {
+  if (verdict === "pass") return "accept";
+  if (verdict === "blocked") return "blocked";
+  return iterations < maxIterations ? "iterate" : "blocked";
 }
 
 export interface ReconAssessment {

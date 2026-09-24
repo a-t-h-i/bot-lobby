@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import type { DevHouseConfig } from "../schemas/configuration.ts";
-import type { AgentRun } from "../schemas/findings.ts";
+import type { AgentRun, ReviewResult } from "../schemas/findings.ts";
 import { TERMINAL_STATES, type Approval, type ApprovalKind, type Task, type TaskState } from "../schemas/task.ts";
 import { isDomain, type Domain } from "../schemas/agent.ts";
 import { transition } from "../state/task-state.ts";
@@ -10,8 +10,19 @@ import { readFileOr, writeFileEnsured } from "../knowledge/store.ts";
 import { scratchpadPath } from "../knowledge/paths.ts";
 import { writeScratchpad } from "../state/persistence.ts";
 import { spawnPiProcess, type ProcessRunner } from "../execution/pi-runner.ts";
-import { loadScoutResults, runScouts, runWorker, type ScoutOutcome, type WorkerOutcome, type WorkerRequest } from "../master/master.ts";
-import { assessReconnaissance, recordDecision } from "../master/decisions.ts";
+import { readRepositoryDiff } from "../execution/git.ts";
+import {
+  loadScoutResults,
+  runReviewer,
+  runScouts,
+  runWorker,
+  type ReviewerOutcome,
+  type ReviewerRequest,
+  type ScoutOutcome,
+  type WorkerOutcome,
+  type WorkerRequest,
+} from "../master/master.ts";
+import { assessReconnaissance, decideReviewLoop, recordDecision } from "../master/decisions.ts";
 import { detectSharedFiles, summarizeOutcomes } from "../master/synthesis.ts";
 import { truncate } from "../text.ts";
 import { assertNoPendingApprovals, pendingApprovals, requestApproval, resolveApproval } from "./approvals.ts";
@@ -24,6 +35,9 @@ export const ORCHESTRATE_ACTIONS = [
   "plan",
   "implement",
   "resolve_approval",
+  "review",
+  "block",
+  "resume",
   "decide",
   "status",
   "cancel",
@@ -46,6 +60,7 @@ export interface OrchestrateParams {
   approvalId?: string;
   decision?: "approved" | "rejected";
   note?: string;
+  reason?: string;
   text?: string;
 }
 
@@ -333,6 +348,94 @@ function handleResolveApproval(task: Task, params: OrchestrateParams): string {
     ? `${id} approved. The ${approval.domain} worker may now proceed with: ${approval.detail}`
     : `${id} rejected. Instruct the ${approval.domain} worker to achieve the goal without that change.`;
 }
+function reviewReport(outcome: ReviewerOutcome, decision: "accept" | "iterate" | "blocked"): string {
+  const { result, run, issues } = outcome;
+  return [
+    `Reviewer ${result.domain}: verdict ${result.verdict.toUpperCase()} (run ${run.status})`,
+    result.findings.length > 0
+      ? `Findings:\n${result.findings.map((finding) => `- [${finding.severity}] ${truncate(finding.text, 300)}`).join("\n")}`
+      : "",
+    result.requiredChanges.length > 0
+      ? `Required changes:\n${result.requiredChanges.map((change) => `- ${truncate(change, 300)}`).join("\n")}`
+      : "",
+    result.verification ? `Verification: ${truncate(result.verification, 400)}` : "",
+    `Review-loop decision: ${decision}${decision === "iterate" ? " — re-run action=implement with the required changes" : ""}`,
+    decision === "blocked" ? "The review limit is reached: mark the task blocked and tell the user." : "",
+    issues.length > 0 ? `Issues: ${issues.join("; ")}` : "",
+    run.error ? `Error: ${run.error}` : "",
+  ]
+    .filter((line) => line.length > 0)
+    .join("\n");
+}
+
+function scratchpadSummary(deps: WorkflowDeps, task: Task, domain: Domain): string {
+  return readFileOr(scratchpadPath(taskDirFor(deps.root, deps.configDir, task.id), domain));
+}
+
+function reviewerRequest(
+  deps: WorkflowDeps,
+  task: Task,
+  domain: Domain,
+  diff: string,
+  instruction?: string,
+): ReviewerRequest {
+  const taskDir = taskDirFor(deps.root, deps.configDir, task.id);
+  return {
+    taskId: task.id,
+    domain,
+    taskText: workerTaskText(task),
+    workerSummary: scratchpadSummary(deps, task, domain),
+    scoutOutcomes: loadScoutResults(taskDir, [domain]),
+    diff,
+    instruction,
+    cwd: deps.cwd,
+    dataRoot: dataRoot(deps.root, deps.configDir),
+    config: deps.config,
+    signal: deps.signal,
+    onUpdate: deps.onUpdate,
+  };
+}
+
+function recordReview(task: Task, domain: Domain, result: ReviewResult): void {
+  task.reviewRecords.push({
+    domain,
+    verdict: result.verdict,
+    findings: result.findings.map((finding) => ({ severity: finding.severity, text: finding.text })),
+    requiredChanges: result.requiredChanges,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+async function handleReview(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
+  requireState(task, ["implementing", "reviewing"]);
+  const domain = parseDomain(params.domain, "review");
+  if (task.state !== "reviewing") transition(task, "reviewing");
+  task.reviewIterations[domain] += 1;
+  const diff = await readRepositoryDiff(deps.cwd);
+  const outcome = await runReviewer(reviewerRequest(deps, task, domain, diff, params.task), deps.runProcess ?? spawnPiProcess);
+  recordReview(task, domain, outcome.result);
+  const decision = decideReviewLoop(outcome.result.verdict, task.reviewIterations[domain], deps.config.workflow.maxReviewIterations);
+  if (decision === "accept") task.blockers = task.blockers.filter((blocker) => blocker.domain !== domain);
+  return reviewReport(outcome, decision);
+}
+
+function handleBlock(task: Task, params: OrchestrateParams): string {
+  const reason = params.reason?.trim() ?? params.text?.trim();
+  if (!reason) throw new Error("block requires reason");
+  const domain = params.domain && isDomain(params.domain) ? params.domain : task.domains[0] ?? "qa";
+  task.blockers.push({ domain, reason, tried: [], need: "a decision or input from the user", createdAt: new Date().toISOString() });
+  transition(task, "blocked");
+  return `Task blocked: ${reason}. Tell the user what is needed, then call action=resume once resolved.`;
+}
+
+function handleResume(task: Task, params: OrchestrateParams): string {
+  requireState(task, ["blocked"]);
+  if (params.domain && isDomain(params.domain)) {
+    task.blockers = task.blockers.filter((blocker) => blocker.domain !== params.domain);
+  }
+  transition(task, "implementing");
+  return "Task resumed. Continue with action=implement.";
+}
 
 function handleDecide(task: Task, params: OrchestrateParams): string {
   const text = params.text?.trim();
@@ -354,6 +457,9 @@ const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams
   plan: handlePlan,
   implement: handleImplement,
   resolve_approval: handleResolveApproval,
+  review: handleReview,
+  block: handleBlock,
+  resume: handleResume,
   decide: handleDecide,
   status: (task) => describeTask(task),
   cancel: handleCancel,

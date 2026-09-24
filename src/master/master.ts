@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DevHouseConfig } from "../schemas/configuration.ts";
 import type { Domain } from "../schemas/agent.ts";
-import type { AgentRun, ScoutResult, WorkerResult } from "../schemas/findings.ts";
+import type { AgentRun, ReviewResult, ScoutResult, WorkerResult } from "../schemas/findings.ts";
 import { domainSpec } from "../agents/registry.ts";
 import { runAgent, runParallel, type AgentRequest } from "../execution/agent-runner.ts";
 import { spawnPiProcess, type ProcessRunner } from "../execution/pi-runner.ts";
@@ -10,6 +10,8 @@ import { readAgentKnowledge, writeFileEnsured } from "../knowledge/store.ts";
 import { selectKnowledge } from "../knowledge/selector.ts";
 import { summarizeOutcomes } from "./synthesis.ts";
 import { parseWorkerResult, validateWorkerResult } from "../roles/worker.ts";
+import { parseReviewResult, validateReviewResult } from "../roles/reviewer.ts";
+import { truncate } from "../text.ts";
 import { isScoutResultUsable, parseScoutResult, validateScoutResult } from "../roles/scout.ts";
 
 export interface ScoutOutcome {
@@ -180,5 +182,74 @@ export async function runWorker(
     agentRun.status === "success"
       ? validateWorkerResult(result)
       : [`worker ${agentRun.status}: ${agentRun.error ?? "no detail"}`];
+  return { result, run: agentRun, issues };
+}
+
+export interface ReviewerOutcome {
+  result: ReviewResult;
+  run: AgentRun;
+  issues: string[];
+}
+
+export interface ReviewerRequest {
+  taskId: string;
+  domain: Domain;
+  taskText: string;
+  workerSummary: string;
+  scoutOutcomes: ScoutOutcome[];
+  diff: string;
+  instruction?: string;
+  cwd: string;
+  dataRoot: string;
+  config: DevHouseConfig;
+  signal?: AbortSignal;
+  onUpdate?: (run: AgentRun) => void;
+}
+
+function reviewerContext(request: ReviewerRequest): string {
+  const owns = request.scoutOutcomes.filter(
+    (outcome) => outcome.result.domain === request.domain && outcome.usable,
+  );
+  return [
+    `Task state: reviewing. Domain: ${request.domain}.`,
+    "You may not modify implementation. Report required changes instead.",
+    request.workerSummary ? `Worker summary:\n${truncate(request.workerSummary, 2000)}` : "No worker summary available.",
+    owns.length > 0 ? `Scout findings:\n${summarizeOutcomes(owns, 1200)}` : "",
+    `Repository changes:\n${request.diff}`,
+  ]
+    .filter((line) => line.length > 0)
+    .join("\n\n");
+}
+
+/** Independently review the current repository state for one domain. */
+export async function runReviewer(
+  request: ReviewerRequest,
+  run: ProcessRunner = spawnPiProcess,
+): Promise<ReviewerOutcome> {
+  const slices = readAgentKnowledge(request.dataRoot, request.domain);
+  const selected = selectKnowledge(`${request.taskText} ${request.workerSummary}`, slices);
+  const agentRun = await runAgent(
+    {
+      taskId: request.taskId,
+      domain: request.domain,
+      role: "reviewer",
+      instruction:
+        request.instruction?.trim() ||
+        "Review the current repository changes against the approved requirements and plan.",
+      context: { task: request.taskText, ...selected, workflowContext: reviewerContext(request) },
+      model: resolveModel(request.config, request.domain),
+      thinking: request.config.agents[request.domain].thinking,
+      timeoutMs: request.config.workflow.agentTimeoutMs,
+      cwd: request.cwd,
+      signal: request.signal,
+      onUpdate: request.onUpdate,
+    },
+    run,
+  );
+  const result = parseReviewResult(request.domain, agentRun.output);
+  const issues =
+    agentRun.status === "success"
+      ? validateReviewResult(result)
+      : [`reviewer ${agentRun.status}: ${agentRun.error ?? "no detail"}`];
   return { result, run: agentRun, issues };
 }
