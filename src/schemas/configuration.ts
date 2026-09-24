@@ -56,10 +56,13 @@ export function resolveConfig(partial: unknown): DevHouseConfig {
   const src = (partial ?? {}) as Record<string, unknown>;
   const workflow = { ...DEFAULT_CONFIG.workflow, ...(src.workflow as Partial<WorkflowConfig> | undefined) };
   const knowledge = { ...DEFAULT_CONFIG.knowledge, ...(src.knowledge as Partial<KnowledgeConfig> | undefined) };
-  const agents = {
-    ...DEFAULT_CONFIG.agents,
-    ...(src.agents as Partial<DevHouseConfig["agents"]> | undefined),
+  const srcAgents = (src.agents ?? {}) as Partial<DevHouseConfig["agents"]>;
+  const merge = (key: "designer" | "backend" | "qa"): AgentModelConfig =>
+    ({ ...DEFAULT_CONFIG.agents[key], ...(srcAgents[key] ?? {}) });
+  return {
+    master: { ...DEFAULT_CONFIG.master, ...(src.master as Partial<AgentModelConfig> | undefined) },
+    agents: { designer: merge("designer"), backend: merge("backend"), qa: merge("qa") },
+    workflow,
+    knowledge,
   };
-  const master = { ...DEFAULT_CONFIG.master, ...(src.master as Partial<AgentModelConfig> | undefined) };
-  return { master, agents, workflow, knowledge };
 }
