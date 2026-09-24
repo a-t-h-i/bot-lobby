@@ -442,7 +442,7 @@ test("TASKS and LOG are capped at their row limits", () => {
   assert.ok(lines.length <= MAX_LARGE_LINES);
 });
 
-test("the LOG gives way to TASKS when the height runs out, and both give way last", () => {
+test("the section outranks the tower, so a taller terminal never hides TASKS or LOG", () => {
   const many = scene({
     tasks: Array.from({ length: MAX_TASK_ROWS }, (_value, index) => ({ text: `step ${index}`, status: "pending" as const })),
     log: Array.from({ length: MAX_LOG_ROWS }, (_value, index) => ({
@@ -451,19 +451,58 @@ test("the LOG gives way to TASKS when the height runs out, and both give way las
       status: "working" as const,
     })),
   });
-  const tight = largeLines(many, 72, 30);
-  assert.equal(tight.filter((line) => TASK_ROW.test(line)).length, 2);
-  assert.ok(tight.some((line) => line.includes("│▓▓▓▓▓▓▓▓▓▓▓│")), "the full tower stays while TASKS shrinks");
-  assert.equal(tight.filter((line) => LOG_ROW.test(line)).length, 0);
-  assert.ok(!tight.some((line) => line.includes("LOG")));
+  const tall = largeLines(many, 72, MAX_LARGE_LINES);
+  assert.equal(tall.filter((line) => TASK_ROW.test(line)).length, MAX_TASK_ROWS);
+  assert.equal(tall.filter((line) => LOG_ROW.test(line)).length, MAX_LOG_ROWS);
+  assert.ok(tall.some((line) => line.includes("│▓▓▓▓▓▓▓▓▓▓▓│")), "the full tower fits a full section");
+  const roomy = largeLines(many, 72, 30);
+  assert.equal(roomy.filter((line) => TASK_ROW.test(line)).length, MAX_TASK_ROWS);
+  assert.equal(roomy.filter((line) => LOG_ROW.test(line)).length, MAX_LOG_ROWS);
+  assert.ok(!roomy.some((line) => line.includes("│▓▓▓▓▓▓▓▓▓▓▓│")), "the tower shrinks before the section");
   const tiny = largeLines(many, 72, 18);
   assert.equal(tiny.filter((line) => TASK_ROW.test(line)).length, 0);
   assert.ok(tiny.some((line) => line.includes("┌─────┴─────┐")), "the tower stays");
-  const long = scene({ tasks: [{ text: "x".repeat(50), status: "pending" }], log: many.log });
-  const pair = largeLines(long, 72, 34).find((line) => TASK_ROW.test(line))!;
-  const solo = largeLines(long, 72, 30).find((line) => TASK_ROW.test(line))!;
-  assert.ok(solo.includes("x".repeat(50)), "TASKS takes the free width once the LOG is gone");
-  assert.ok(!pair.includes("x".repeat(50)), "the paired TASKS cell stays narrow");
+});
+
+test("solo TASKS takes the free width while paired entry rows stay narrow", () => {
+  const solo = largeLines(scene({ tasks: [{ text: "x".repeat(50), status: "pending" }], log: [] }), 72, 34).find(
+    (line) => TASK_ROW.test(line),
+  )!;
+  assert.ok(solo.includes("x".repeat(50)), "TASKS takes the free width without a LOG");
+  const paired = largeLines(
+    scene({ tasks: [{ text: "x".repeat(50), status: "pending" }], log: scene().log }),
+    72,
+    34,
+  ).find((line) => TASK_ROW.test(line))!;
+  assert.ok(!paired.includes("x".repeat(50)), "the paired TASKS cell stays narrow");
+});
+
+test("section presence and visible entry rows are monotonic across the whole height budget", () => {
+  const input = scene();
+  const samples = Array.from({ length: 31 }, (_value, index) => index + 4).map((budget) => {
+    const lines = largeLines(input, 72, budget);
+    return {
+      budget,
+      tasks: lines.filter((line) => TASK_ROW.test(line)).length,
+      logs: lines.filter((line) => LOG_ROW.test(line)).length,
+    };
+  });
+  samples.slice(1).forEach((sample, index) => {
+    const previous = samples[index]!;
+    if (previous.tasks > 0) assert.ok(sample.tasks > 0, `TASKS vanished at budget ${sample.budget}`);
+    if (previous.logs > 0) assert.ok(sample.logs > 0, `LOG vanished at budget ${sample.budget}`);
+    assert.ok(sample.tasks >= previous.tasks, `TASKS shrank at budget ${sample.budget}`);
+    assert.ok(sample.logs >= previous.logs, `LOG shrank at budget ${sample.budget}`);
+  });
+  assert.ok(samples.some((sample) => sample.tasks === MAX_TASK_ROWS && sample.logs === MAX_LOG_ROWS));
+});
+
+test("the section pairs TASKS with LOG as soon as two entry rows fit", () => {
+  const tight = largeLines(scene(), 72, 21);
+  const pairs = tight.filter((line) => TASK_ROW.test(line));
+  assert.equal(pairs.length, 2, "exactly two paired entry rows");
+  assert.equal(tight.filter((line) => LOG_ROW.test(line)).length, 2);
+  for (const row of pairs) assert.match(row, LOG_ROW, "each entry row pairs one task with one log");
 });
 
 test("every line budget keeps the alert, stays inside the cap and degrades monotonically", () => {

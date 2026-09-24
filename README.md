@@ -61,17 +61,18 @@ Press `Esc` during a run to abort the current step: the signal propagates to
 every in-flight subagent process.
 
 While a task is active the transcript switches to a zen view: `orchestrate` rows
-and the built-in spinner are hidden, and a widget above the editor draws a boxed
-`THE DEV HOUSE` banner, the task state and elapsed time, and an ASCII diorama with
-the four blob mascots — master, designer, backend, and qa. Each blob carries the
-status of its latest run (idle `·`, running `◐`, done `✓`, failed `✗`) and a
-per-domain accessory, the room's prop follows the task state (a question mark while
-clarifying, a telescope while scouting, a blueprint while planning, a hammer while
-implementing, a magnifier while reviewing, a barricade when blocked), and the
-active agent is emphasized by outline and label rather than color alone. Motion
-stays calm: every 30–70 seconds a blob blinks once instead of animating
-continuously. Terminals narrower than 60 columns fall back to a one-line title and
-a compact three-row strip. New tasks are named from their request as
+and the built-in spinner are hidden, and a widget above the editor animates the
+task. At 72 columns and wider it draws a large scene: a header box with the task
+id, state, elapsed time and quiet-mode hint, an estimated ETA and progress bar; an
+oracle tower with its ORC door and animated orb and window eyes; four animated
+slots — DEV, DESIGN, RESEARCH and QA — each with a status face, a coloured status
+glyph and state word and a 10-cell bar; and a TASKS checklist windowed on the
+current step beside a LOG of real run transitions. Narrower terminals keep the
+boxed banner, header and compact animated strip. Sprites animate on an adaptive
+clock — 250 ms while work is live and 1 s when idle — and their faces, colours
+and words follow each agent's status (working, idle, done, failed); percentages
+are plan-derived while the ETA is an estimate.
+New tasks are named from their request as
 `TASK-<slug>` (for example `TASK-add-pagination`), so the banner and header show a
 concise task name; older `TASK-<timestamp>` tasks keep loading untouched.
 

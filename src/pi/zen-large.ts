@@ -123,22 +123,25 @@ interface LayoutPlan {
   branch: boolean;
   strip: boolean;
   section: boolean;
+  /** Entry rows the plan guarantees when a section is present. */
+  minEntries: number;
 }
 
 /**
- * Rich to sparse: the LOG is dropped before TASKS, then TASKS/LOG together, and
- * only then does the tower shrink.
+ * Rich to sparse. The section outranks the tower: the tower only grows once the
+ * section can keep all `MAX_TASK_ROWS` entry rows, so a taller terminal never
+ * removes or shrinks TASKS/LOG.
  */
 const PLANS: readonly LayoutPlan[] = [
-  { tower: "full", branch: true, strip: true, section: true },
-  { tower: "full", branch: true, strip: true, section: false },
-  { tower: "small", branch: true, strip: true, section: true },
-  { tower: "small", branch: true, strip: true, section: false },
-  { tower: "small", branch: false, strip: true, section: false },
-  { tower: "none", branch: false, strip: true, section: false },
+  { tower: "full", branch: true, strip: true, section: true, minEntries: MAX_TASK_ROWS },
+  { tower: "small", branch: true, strip: true, section: true, minEntries: MAX_TASK_ROWS },
+  { tower: "small", branch: true, strip: true, section: true, minEntries: SECTION_MIN },
+  { tower: "small", branch: true, strip: true, section: false, minEntries: 0 },
+  { tower: "small", branch: false, strip: true, section: false, minEntries: 0 },
+  { tower: "none", branch: false, strip: true, section: false, minEntries: 0 },
 ];
 
-const EMPTY_PLAN: LayoutPlan = { tower: "none", branch: false, strip: false, section: false };
+const EMPTY_PLAN: LayoutPlan = { tower: "none", branch: false, strip: false, section: false, minEntries: 0 };
 
 /**
  * Scene lines for the large tier, or nothing below `LARGE_MIN_WIDTH`.
@@ -293,7 +296,7 @@ function blockRows(plan: LayoutPlan): number {
 }
 
 function pickPlan(avail: number, sections: boolean): LayoutPlan {
-  const needed = (plan: LayoutPlan) => blockRows(plan) + (plan.section && sections ? SECTION_MIN : 0);
+  const needed = (plan: LayoutPlan) => blockRows(plan) + (plan.section && sections ? 1 + plan.minEntries : 0);
   return PLANS.find((plan) => needed(plan) <= avail) ?? EMPTY_PLAN;
 }
 
@@ -437,7 +440,7 @@ function assemble(end: number, cells: readonly Cell[]): string {
   return row + " ".repeat(Math.max(0, end - cursor));
 }
 
-/** TASKS beside the LOG while both fit; TASKS keeps the space when the LOG cannot. */
+/** TASKS beside the LOG whenever both have rows and the entry budget allows it. */
 function sectionLines(
   input: LargeSceneInput,
   width: number,
@@ -447,8 +450,8 @@ function sectionLines(
   if (entries < 1) return [];
   const tasks = input.tasks.slice(0, MAX_TASK_ROWS);
   const logs = input.log.slice(0, MAX_LOG_ROWS);
-  if (logs.length > 0 && entries >= Math.max(tasks.length, logs.length)) {
-    return pairSection(input, tasks, logs, width, theme);
+  if (tasks.length > 0 && logs.length > 0 && entries >= SECTION_MIN) {
+    return pairSection(input, tasks, logs, entries, width, theme);
   }
   if (tasks.length > 0) {
     return soloSection(" TASKS", tasks.map((task) => taskCell(task, SCENE_WIDTH, theme)), entries, width, theme);
@@ -464,11 +467,12 @@ function pairSection(
   input: LargeSceneInput,
   tasks: readonly LargeTaskRow[],
   logs: readonly LargeLogRow[],
+  entries: number,
   width: number,
   theme?: PanelTheme,
 ): string[] {
   const left = sceneLeft(width);
-  const rows = Math.max(tasks.length, logs.length);
+  const rows = Math.min(entries, Math.max(tasks.length, logs.length));
   const lines = [paint(padTo(" TASKS", TASKS_CELL + 2) + "LOG", "muted", theme, true)];
   for (let index = 0; index < rows; index += 1) {
     const cell = logCell(logs[index], input.oracle.pose, LOG_WIDTH, theme);
