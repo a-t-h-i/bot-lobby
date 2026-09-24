@@ -75,11 +75,13 @@ face and, independently every 20–30 s, briefly blinks (~150 ms) or emotes
 (~600 ms); the oracle's mouth moves with its expressions. Sprites redraw on an
 adaptive clock — 250 ms while work is live, 1 s when idle and ~120 ms while an
 expression plays — and their faces, colours and words follow each agent's status
-(working, idle, done, failed); percentages are plan-derived while the ETA is an
-estimate.
-New tasks are named from their request as
-`TASK-<slug>` (for example `TASK-add-pagination`), so the banner and header show a
-concise task name; older `TASK-<timestamp>` tasks keep loading untouched.
+(working, idle, done, failed). The large scene's rest and blink frames stay the
+five-column ASCII eyes, while its emote frames are status-aware kaomoji: nervous
+while working, happy when done (QA flexes and dances), scared on failure;
+percentages are plan-derived while the ETA is an estimate.
+New tasks get a <=3-word title derived from the request (for example "create
+landing page") plus an id `TASK-<slug>` built from the full request, so the banner
+and header stay concise; older `TASK-<timestamp>` tasks keep loading untouched.
 
 ## Lifecycle
 

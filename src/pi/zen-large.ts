@@ -82,7 +82,7 @@ export interface LargeSceneInput {
   doorLabel?: string;
 }
 
-const SLOT_CELL = 15;
+export const SLOT_CELL = 15;
 const SLOT_GAP = 1;
 const SLOT_ROWS = 4;
 const BRANCH_ROWS = 3;

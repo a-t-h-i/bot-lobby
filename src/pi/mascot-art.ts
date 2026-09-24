@@ -143,21 +143,39 @@ const FACE_FRAMES: Record<SlotState, readonly string[]> = {
   failed: ["(>_<)", "(x_x)", "(T_T)", "(;_;)"],
 };
 
-/** Every face is five columns, so a centered column never shifts between frames. */
+/** Kaomoji emotes for the large scene: working nervous, done happy, failed scared. */
+const EMOTE_FACES: Record<SlotState, readonly string[]> = {
+  working: ["(٥↼_↼)", "(●´⌓`●)"],
+  idle: ["(-.-)", "(u.u)"],
+  done: ["(✿^‿^)", "(•‿•)"],
+  failed: ["ಥ_ಥ", "(〒﹏〒)"],
+};
+
+/** QA's success emotes are a flex and a victory dance rather than a smile. */
+const QA_DONE_FACES: readonly string[] = ["ᕙ( • ‿ • )ᕗ", "ᕕ( ᐛ )ᕗ"];
+
+/** Every compact face is five columns, so a centered column never shifts between frames. */
 export const FACE_WIDTH = 5;
 
-function buildSlotFrames(): Record<SlotState, readonly string[][]> {
+function buildSlotFrames(id: SlotId): Record<SlotState, readonly string[][]> {
   const frames = {} as Record<SlotState, readonly string[][]>;
-  for (const state of SLOT_STATES) frames[state] = FACE_FRAMES[state].map((face) => [face]);
+  for (const state of SLOT_STATES) {
+    const emotes = id === "qa" && state === "done" ? QA_DONE_FACES : EMOTE_FACES[state];
+    frames[state] = [...FACE_FRAMES[state].slice(0, 2), ...emotes].map((face) => [face]);
+  }
   return frames;
 }
 
-/** Animated faces per slot: frames of one row each, identical width in every frame. */
+/**
+ * Animated faces per slot: one row each. Rest (0) and blink (1) stay the five-column
+ * ASCII eyes; the emote frames (2+) are status-aware kaomoji, wider than five columns,
+ * so the scene centres each frame inside its fixed slot cell.
+ */
 export const SLOT_FRAMES: Record<SlotId, Record<SlotState, readonly string[][]>> = {
-  dev: buildSlotFrames(),
-  design: buildSlotFrames(),
-  research: buildSlotFrames(),
-  qa: buildSlotFrames(),
+  dev: buildSlotFrames("dev"),
+  design: buildSlotFrames("design"),
+  research: buildSlotFrames("research"),
+  qa: buildSlotFrames("qa"),
 };
 
 /** Three-column accessory that marks each slot in the one-row compact strip. */

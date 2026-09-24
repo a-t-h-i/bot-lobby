@@ -25,10 +25,12 @@ import {
   MAX_LOG_ROWS,
   MAX_TASK_ROWS,
   SCENE_WIDTH,
+  SLOT_CELL,
   largeLines,
   type LargeSceneInput,
 } from "../src/pi/zen-large.ts";
 import type { PanelTheme } from "../src/pi/zen.ts";
+import { BLINK_FRAME, EMOTE_FRAME, EMOTE_FRAMES, REST_FRAME } from "../src/pi/expressions.ts";
 
 /** Representative scene: mixed statuses, six plan steps and six run transitions. */
 function scene(overrides: Partial<LargeSceneInput> = {}): LargeSceneInput {
@@ -83,22 +85,35 @@ function escapeRegExp(text: string): string {
 
 // --- animated art contract ---
 
-test("every slot frame keeps its row count, its row widths and one column per glyph", () => {
+test("every slot frame is one row that fits its cell, and the eyes stay five-column ASCII", () => {
   for (const id of SLOT_IDS) {
     for (const status of SLOT_STATES) {
       const frames = SLOT_FRAMES[id][status];
-      assert.ok(frames.length > 1, `${id}/${status} must animate`);
-      const widths = frames[0]!.map((row) => visibleWidth(row));
+      assert.equal(frames.length, EMOTE_FRAME + EMOTE_FRAMES, `${id}/${status} frame count`);
       for (const frame of frames) {
-        assert.equal(frame.length, widths.length, `${id}/${status} frame row count`);
-        frame.forEach((row, index) => {
-          assert.equal(row.length, visibleWidth(row), `${id}/${status} glyph width in ${JSON.stringify(row)}`);
-          assert.equal(visibleWidth(row), widths[index], `${id}/${status} row ${index} width`);
-        });
+        assert.equal(frame.length, 1, `${id}/${status} frame row count`);
+        assert.ok(visibleWidth(frame[0]!) <= SLOT_CELL, `${id}/${status} ${JSON.stringify(frame[0])} overflows the cell`);
       }
-      assert.equal(widths[0], FACE_WIDTH);
+      assert.equal(visibleWidth(frames[REST_FRAME]![0]!), FACE_WIDTH, `${id}/${status} rest face`);
+      assert.equal(visibleWidth(frames[BLINK_FRAME]![0]!), FACE_WIDTH, `${id}/${status} blink face`);
     }
   }
+});
+
+test("emote frames are status-aware kaomoji with no zero-width joiners", () => {
+  const emotes = (id: (typeof SLOT_IDS)[number], status: (typeof SLOT_STATES)[number]) =>
+    SLOT_FRAMES[id][status].slice(EMOTE_FRAME, EMOTE_FRAME + EMOTE_FRAMES).map((frame) => frame[0]!);
+  for (const id of SLOT_IDS) {
+    for (const status of SLOT_STATES) {
+      for (const face of emotes(id, status)) assert.doesNotMatch(face, /[\u2060\u2063]/);
+    }
+  }
+  assert.ok(emotes("dev", "working")[0]!.includes("٥"), "working emotes are nervous");
+  assert.ok(emotes("dev", "done")[0]!.includes("✿"), "done emotes are happy");
+  assert.ok(emotes("dev", "failed")[0]!.includes("ಥ"), "failed emotes are scared");
+  assert.ok(emotes("qa", "done")[0]!.includes("ᕙ"), "qa flexes on success");
+  assert.ok(emotes("qa", "done").some((face) => face.includes("ᕕ( ᐛ )ᕗ")), "qa dances on success");
+  assert.notDeepEqual(emotes("qa", "done"), emotes("dev", "done"));
 });
 
 test("eye frames differ within every status and across statuses", () => {
@@ -216,7 +231,7 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
     "                                   │                        ",
     "           ┌───────────────┬───────┴───────┬───────────────┐",
     "           │               │               │               │",
-    "         (^_^)           (u_u)           (^-^)           (;_;)     ",
+    "         (^_^)           (u_u)          (✿^‿^)         (〒﹏〒)    ",
     "          DEV           DESIGN         RESEARCH           QA       ",
     "       ◐ working        · idle          ✓ done         ✗ failed    ",
     "    ██████░░░░ 58%  ░░░░░░░░░░  0%  ██████████100%  ░░░░░░░░░░  0% ",
@@ -252,7 +267,7 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
     "                                                 │                        ",
     "                         ┌───────────────┬───────┴───────┬───────────────┐",
     "                         │               │               │               │",
-    "                       (^_^)           (u_u)           (^-^)           (;_;)     ",
+    "                       (^_^)           (u_u)          (✿^‿^)         (〒﹏〒)    ",
     "                        DEV           DESIGN         RESEARCH           QA       ",
     "                     ◐ working        · idle          ✓ done         ✗ failed    ",
     "                  ██████░░░░ 58%  ░░░░░░░░░░  0%  ██████████100%  ░░░░░░░░░░  0% ",
