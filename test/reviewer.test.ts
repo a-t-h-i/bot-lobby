@@ -78,6 +78,7 @@ test("parseReviewResult extracts findings with severities and required changes",
   assert.deepEqual(result.findings, [{ severity: "major", text: "No validation on the query param — `src/api/users.ts:42`" }]);
   assert.deepEqual(result.requiredChanges, ["Validate limit and offset"]);
   assert.deepEqual(validateReviewResult(result), []);
+  assert.equal(parseReviewResult("backend", `${CHANGES}\n\n## Pushback\n**Request:** x\n**Reason:** y`).pushback?.reason, "y");
 });
 
 test("an unknown or missing verdict is never treated as a pass", () => {

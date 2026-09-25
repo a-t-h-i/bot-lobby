@@ -120,7 +120,7 @@ interface LayoutPlan {
 /**
  * Rich to sparse. The section outranks the tower: the tower only grows once the
  * section can keep all `MAX_TASK_ROWS` entry rows, so a taller terminal never
- * removes or shrinks TASKS/LOG.
+ * removes or shrinks TASKS.
  */
 const PLANS: readonly LayoutPlan[] = [
   { tower: "full", branch: true, strip: true, section: true, minEntries: MAX_TASK_ROWS },

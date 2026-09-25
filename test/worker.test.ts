@@ -48,6 +48,22 @@ const BLOCKED = [
   "**Need:** Confirmation on whether we may add the column.",
 ].join("\n");
 
+const PUSHBACK_WORKER = [
+  "## Completed",
+  "Paused the risky change.",
+  "",
+  "## Files Changed",
+  "- `src/session.ts` — left the store alone",
+  "",
+  "## Verification",
+  "- `npm test` — passing",
+  "",
+  "## Pushback",
+  "**Request:** Replace the session store",
+  "**Reason:** It drops in-flight sessions",
+  "**Alternative:** Extend the existing store",
+].join("\n");
+
 function workerReply(text: string): string {
   return JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], stopReason: "stop" } });
 }
@@ -159,7 +175,7 @@ test("pending approvals block further work in that domain and are resolvable", a
 });
 
 test("a worker pushback blocks its domain and the oracle resolves it with a counter-argument", async () => {
-  const raw = ["## Completed", "Paused the risky change.", "", "## Files Changed", "- `src/session.ts` — left the store alone", "", "## Verification", "- `npm test` — passing", "", "## Pushback", "**Request:** Replace the session store", "**Reason:** It drops in-flight sessions", "**Alternative:** Extend the existing store"].join("\n");
+  const raw = PUSHBACK_WORKER;
   const runner: ProcessRunner = async () => ({ exitCode: 0, stdout: workerReply(raw), stderr: "", killed: false, timedOut: false });
   const deps = makeDeps({ runProcess: runner });
   withTask(deps, "planning");
@@ -181,6 +197,17 @@ test("a worker pushback blocks its domain and the oracle resolves it with a coun
   assert.equal(overruled.ok, true, overruled.message);
   assert.match(overruled.message, /overruled/);
   assert.match(overruled.message, /Sessions drain at deploy/);
+  assert.equal(pendingApprovals(loadTask(deps.root, deps.configDir, "TASK-1")!, "backend").length, 0);
+});
+
+test("accepting a pushback drops the change and unblocks the domain", async () => {
+  const runner: ProcessRunner = async () => ({ exitCode: 0, stdout: workerReply(PUSHBACK_WORKER), stderr: "", killed: false, timedOut: false });
+  const deps = makeDeps({ runProcess: runner });
+  withTask(deps, "planning");
+  await act(deps, { action: "implement", domain: "backend", task: "Swap the session store." });
+  const approved = await act(deps, { action: "resolve_approval", approvalId: "APR-1", decision: "approved" });
+  assert.equal(approved.ok, true, approved.message);
+  assert.match(approved.message, /accepted/);
   assert.equal(pendingApprovals(loadTask(deps.root, deps.configDir, "TASK-1")!, "backend").length, 0);
 });
 

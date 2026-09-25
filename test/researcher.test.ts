@@ -61,6 +61,7 @@ test("parseResearchResult extracts sections and a dated source", () => {
   assert.equal(result.confidence, "high");
   assert.deepEqual(validateResearchResult(result), []);
   assert.ok(isResearchResultUsable(result));
+  assert.equal(parseResearchResult("backend", `${WELL_FORMED}\n\n## Pushback\n**Request:** x\n**Reason:** y`).pushback?.request, "x");
 });
 
 test("sources parse with a version, without a date, and as a bare URL", () => {

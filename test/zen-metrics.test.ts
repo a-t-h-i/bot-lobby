@@ -94,7 +94,7 @@ test("a zero plan reports no progress and an em-dash ETA estimate", () => {
   assert.equal(metrics.slots.find((slot) => slot.id === "dev")!.status, "done");
 });
 
-test("the ETA stays an em-dash estimate until one plan step is done", () => {
+test("the ETA needs a completed plan step before it shows a numeric estimate", () => {
   const planText = plan("`src/a.ts`: first", "`src/b.ts`: second", "`src/c.ts`: third");
   assert.equal(sceneMetrics(task({ plan: planText }), [], NOW).etaLabel, "ETA —");
   const runs = [run({ runId: "dev", domain: "backend", role: "worker", status: "running", instruction: "implement `src/c.ts` now", startedAt: "2026-01-01T00:09:00.000Z" })];
