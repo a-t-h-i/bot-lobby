@@ -1,6 +1,6 @@
 /**
- * Derived zen-scene metrics: plan progress and per-slot status.
- *
+ * Derived zen-scene metrics: plan progress and per-slot status, live activity
+ * word and per-agent elapsed.
  * Pure by construction: the only clock input is the `now` argument, and nothing
  * here reads the wall clock, a random source or the environment. Percentages
  * are plan-derived measurements; the ETA alone is an estimate and is labelled.
@@ -12,11 +12,15 @@ import { formatDuration, planChecklist } from "./zen.ts";
 
 export type { SlotId, SlotState };
 
-/** One agent column: its latest run status. */
+/** One agent column: its latest run's status, live activity word and elapsed label. */
 export interface SlotView {
   id: SlotId;
   label: string;
   status: SlotState;
+  /** The run's one-word tool activity, when the backend reported one. */
+  activity?: string;
+  /** "—" without a run, live since `startedAt` while running, fixed once terminal. */
+  elapsedLabel: string;
 }
 
 export interface SceneMetrics {
@@ -49,10 +53,17 @@ function latestRunFor(runs: AgentRun[], id: SlotId): AgentRun | undefined {
   return latest;
 }
 
-function slotView(id: SlotId, runs: AgentRun[]): SlotView {
+/** A run's duration label from the injected clock; a malformed timestamp reads "0s". */
+function runElapsedLabel(run: AgentRun | undefined, now: number): string {
+  if (!run) return "—";
+  const end = run.finishedAt ? Date.parse(run.finishedAt) : now;
+  return formatDuration(end - Date.parse(run.startedAt));
+}
+
+function slotView(id: SlotId, runs: AgentRun[], now: number): SlotView {
   const run = latestRunFor(runs, id);
   const status: SlotState = run ? runStatus(run.status) : "idle";
-  return { id, label: SLOT_LABELS[id], status };
+  return { id, label: SLOT_LABELS[id], status, activity: run?.activity, elapsedLabel: runElapsedLabel(run, now) };
 }
 
 /** Always an estimate: "ETA —" until a plan step is done, then "ETA ~<duration>". */
@@ -72,6 +83,6 @@ export function sceneMetrics(task: Task, runs: AgentRun[], now: number): SceneMe
     ...summary,
     etaLabel: estimateLabel(summary.done, summary.total, elapsed),
     elapsedLabel: formatDuration(elapsed),
-    slots: SLOT_IDS.map((id) => slotView(id, runs)),
+    slots: SLOT_IDS.map((id) => slotView(id, runs, now)),
   };
 }

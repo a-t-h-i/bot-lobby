@@ -85,12 +85,15 @@ and the built-in spinner are hidden, and a widget above the editor animates the
 task. At 72 columns and wider it draws a large scene: a header box with the task
 id, state, elapsed time and quiet-mode hint, an estimated ETA and progress bar; an
 oracle tower with its ORC door, animated orb, window eyes and seven-column mouth;
-four animated slots — DEV, DESIGN, RESEARCH and QA — each with a status face and,
-while running, a braille spinner with `working...` (otherwise the coloured status
-glyph and state word); and a full-width TASKS checklist windowed on the current
+four animated slots — DEV, DESIGN, RESEARCH and QA — each with a status face, a
+caption and two status rows: while running, a braille spinner beside the agent's
+live one-word activity (for example `⠋ reading` or `⠋ editing`) with its elapsed
+time on the row beneath; otherwise the coloured status glyph and state word over
+that elapsed time; and a full-width TASKS checklist windowed on the current
 step. Narrower
 terminals keep the
-boxed banner, header and compact animated strip. Each sprite rests on one calm
+boxed banner, header and compact animated strip, whose working line names the
+newest running agent's activity and elapsed time. Each sprite rests on one calm
 face and, independently every 20–30 s, briefly blinks (~500 ms) or emotes
 (~2 s, stepping through its kaomoji frames); the oracle's mouth moves with its
 adaptive clock — 250 ms while work is live, 1 s when idle and ~120 ms while an
@@ -229,6 +232,9 @@ system prompt as a `Custom Instructions` layer (empty layers are dropped). The
 master's model and thinking are applied to the live session when a task starts
 and when you change them in the settings TUI. A malformed config falls back to
 the defaults; `BOT_LOBBY_CONFIG_DIR` overrides the config directory.
+
+The model picker is searchable: type to fuzzy-filter by `provider/id` or model
+name, `inherit` and `custom…` stay reachable, and ↑↓/enter/esc behave as before.
 
 ## On-disk layout
 

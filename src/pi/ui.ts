@@ -28,6 +28,25 @@ export function statusText(task: Task | undefined, minimized = false): string {
 let zenOn = false;
 let zenState: { task: Task | undefined; runs: AgentRun[] } = { task: undefined, runs: [] };
 
+/** Upper bound on retained runs so a long task cannot grow the widget state without limit. */
+export const MAX_RETAINED_RUNS = 64;
+
+/**
+ * Merge `incoming` runs into `previous`, keyed by `runId`: a newer copy of a run
+ * replaces the old one and moves to the end (so `runs.at(-1)` stays the newest),
+ * order is otherwise preserved and only the newest `MAX_RETAINED_RUNS` survive.
+ */
+export function mergeRuns(previous: readonly AgentRun[], incoming: readonly AgentRun[]): AgentRun[] {
+  if (incoming.length === 0) return [...previous];
+  const merged = [...previous];
+  for (const run of incoming) {
+    const at = merged.findIndex((existing) => existing.runId === run.runId);
+    if (at >= 0) merged.splice(at, 1);
+    merged.push(run);
+  }
+  return merged.slice(-MAX_RETAINED_RUNS);
+}
+
 /** Per-session standard-pi mode: the widget and Master prompt are hidden but ownership stays. */
 let minimized = false;
 
@@ -139,13 +158,17 @@ function leaveZen(ctx: ExtensionContext): void {
   ctx.ui.setWorkingIndicator();
 }
 
-/** Refresh the footer + widget to match the task on disk. */
+/**
+ * Refresh the footer + widget to match the task on disk. Runs are merged into the
+ * retained set for the same task because each `orchestrate` call reports only its
+ * own agents: without retention the qa/reviewer call that follows the workers would
+ * evict their successes and the checklist would reset. A new task starts clean.
+ */
 export function applyStatus(ctx: ExtensionContext, root: string, configDir: string, runs: AgentRun[] = []): void {
   const sessionId = ctx.sessionManager.getSessionId();
   const task = isSubagentProcess() || minimized ? undefined : activeTask(root, configDir, sessionId);
   const sameTask = zenState.task?.id === task?.id;
-  const currentRuns = runs.length > 0 ? runs : sameTask ? zenState.runs : [];
-  zenState = { task, runs: currentRuns };
+  zenState = { task, runs: mergeRuns(sameTask ? zenState.runs : [], runs) };
   ctx.ui.setStatus(STATUS_KEY, statusText(task, minimized));
   const active = Boolean(task && !TERMINAL_STATES.includes(task.state));
   if (!active) {

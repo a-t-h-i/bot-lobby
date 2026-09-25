@@ -91,6 +91,7 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
       thinking: request.thinking,
       timeoutMs: request.timeoutMs,
       signal,
+      onActivity: activityReporter(base, request),
     }, run);
     const final: AgentRun = { ...base, status: result.status, output: result.output, error: result.error, usage: result.usage, finishedAt: new Date().toISOString() };
     request.onUpdate?.(final);
@@ -98,6 +99,16 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
   } finally {
     activeControllers.delete(controller);
   }
+}
+
+/** Streams activity-word changes for one run, deduping consecutive repeats. */
+function activityReporter(base: AgentRun, request: AgentRequest): (activity: string) => void {
+  let last: string | undefined;
+  return (activity) => {
+    if (activity === last) return;
+    last = activity;
+    request.onUpdate?.({ ...base, activity });
+  };
 }
 
 async function mapWithConcurrencyLimit<TIn, TOut>(items: TIn[], concurrency: number, fn: (item: TIn) => Promise<TOut>): Promise<TOut[]> {

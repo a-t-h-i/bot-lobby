@@ -21,8 +21,9 @@ import type { PanelTheme } from "./zen.ts";
 
 /**
  * The large animated zen scene: a header box, the pulsing oracle tower with its
- * tree connector, the four animated agent columns, and the TASKS checklist
- * spanning the full scene width (there is no LOG window).
+ * tree connector, the four animated agent columns (face, label, status word and
+ * elapsed rows), and the TASKS checklist spanning the full scene width (there is
+ * no LOG window).
  *
  * Pure layout: every colour comes from the optional `PanelTheme`, every frame
  * index comes from the caller, and nothing here reads the clock or a random
@@ -37,14 +38,18 @@ export const LARGE_MIN_WIDTH = 72;
 export const SCENE_WIDTH = 63;
 
 export const MAX_TASK_ROWS = 6;
-export const MAX_LARGE_LINES = 33;
+export const MAX_LARGE_LINES = 34;
 
-/** One agent column of the scene, with the caller-selected animation frame. */
+/** One agent column: state, caller-selected animation frame, live activity and elapsed. */
 export interface LargeSlot {
   id: SlotId;
   label: string;
   status: SlotState;
   frame: number;
+  /** One-word tool activity while working; absent reads as "working". */
+  activity?: string;
+  /** Run duration label rendered under the status row; "—" when idle. */
+  elapsedLabel: string;
 }
 
 export interface LargeTaskRow {
@@ -77,7 +82,7 @@ export interface LargeSceneInput {
 
 export const SLOT_CELL = 15;
 const SLOT_GAP = 1;
-const SLOT_ROWS = 3;
+const SLOT_ROWS = 4;
 const BRANCH_ROWS = 3;
 const SECTION_MIN = 2;
 const MAX_SLOTS = 4;
@@ -373,6 +378,7 @@ function slotLines(input: LargeSceneInput, width: number, theme?: PanelTheme): s
     assemble(end, faceCells(slots, offsets, theme)),
     assemble(end, labelCells(slots, offsets, theme)),
     assemble(end, wordCells(slots, offsets, input.tick, theme)),
+    assemble(end, elapsedCells(slots, offsets, theme)),
   ];
 }
 
@@ -400,15 +406,28 @@ function labelCells(slots: readonly LargeSlot[], offsets: readonly number[], the
 function wordCells(slots: readonly LargeSlot[], offsets: readonly number[], tick: number, theme?: PanelTheme): Cell[] {
   return slots.map((slot, index) => ({
     offset: offsets[index]!,
-    text: centre(slotStatusText(slot.status, tick), SLOT_CELL),
+    text: centre(slotStatusText(slot, tick), SLOT_CELL),
     paint: statusPaint(slot.status, theme),
   }));
 }
 
-/** Working agents show the braille spinner with "working..."; every other state keeps its glyph and word. */
-function slotStatusText(status: SlotState, tick: number): string {
-  if (status !== "working") return `${SLOT_STATE_GLYPHS[status]} ${SLOT_STATE_WORDS[status]}`;
-  return `${SPIN_FRAMES[mod(tick, SPIN_FRAMES.length)]!} working...`;
+function elapsedCells(slots: readonly LargeSlot[], offsets: readonly number[], theme?: PanelTheme): Cell[] {
+  return slots.map((slot, index) => ({
+    offset: offsets[index]!,
+    text: centre(slot.elapsedLabel, SLOT_CELL),
+    paint: dimPaint(theme),
+  }));
+}
+
+/** Working agents show the braille spinner with their live activity; every other state keeps its glyph and word. */
+function slotStatusText(slot: LargeSlot, tick: number): string {
+  if (slot.status !== "working") return `${SLOT_STATE_GLYPHS[slot.status]} ${SLOT_STATE_WORDS[slot.status]}`;
+  return `${SPIN_FRAMES[mod(tick, SPIN_FRAMES.length)]!} ${slot.activity ?? SLOT_STATE_WORDS.working}`;
+}
+
+/** The elapsed row stays dim so the status row keeps the colour. */
+function dimPaint(theme?: PanelTheme): ((text: string) => string) | undefined {
+  return theme ? (text) => theme.fg("dim", text) : undefined;
 }
 
 function assemble(end: number, cells: readonly Cell[]): string {

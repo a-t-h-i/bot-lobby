@@ -124,3 +124,27 @@ test("an unparsable timestamp degrades to zero elapsed and an em-dash ETA", () =
   assert.equal(metrics.elapsedLabel, "0s");
   assert.equal(metrics.etaLabel, "ETA —");
 });
+
+// --- per-slot activity and elapsed ---
+
+test("slots carry the run's activity word and a run-relative elapsed label", () => {
+  const runs = [
+    run({ runId: "dev", domain: "backend", role: "worker", status: "running", activity: "editing", startedAt: "2026-01-01T00:09:50.000Z" }),
+    run({ runId: "design", domain: "designer", role: "worker", status: "success", startedAt: "2026-01-01T00:09:00.000Z", finishedAt: "2026-01-01T00:09:55.000Z" }),
+  ];
+  const slots = sceneMetrics(task(), runs, NOW).slots;
+  const dev = slots.find((slot) => slot.id === "dev")!;
+  assert.equal(dev.activity, "editing");
+  assert.equal(dev.elapsedLabel, "10s");
+  const design = slots.find((slot) => slot.id === "design")!;
+  assert.equal(design.activity, undefined);
+  assert.equal(design.elapsedLabel, "55s");
+  assert.equal(slots.find((slot) => slot.id === "qa")!.elapsedLabel, "—");
+});
+
+test("a malformed run timestamp degrades the slot elapsed label to 0s", () => {
+  const runs = [run({ domain: "backend", role: "worker", startedAt: "not-a-date" })];
+  const dev = sceneMetrics(task(), runs, NOW).slots.find((slot) => slot.id === "dev")!;
+  assert.equal(dev.elapsedLabel, "0s");
+  assert.ok(!JSON.stringify(dev).includes("NaN"));
+});

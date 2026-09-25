@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { activityWord } from "../pi/activity.ts";
 
 export interface PiRunOptions {
   cwd: string;
@@ -12,6 +13,8 @@ export interface PiRunOptions {
   thinking?: string;
   timeoutMs: number;
   signal?: AbortSignal;
+  /** Reports the current one-word tool activity while the agent works. */
+  onActivity?: (activity: string) => void;
 }
 
 export interface ProcessOutcome {
@@ -22,9 +25,23 @@ export interface ProcessOutcome {
   timedOut: boolean;
 }
 
+/** Streaming agent events forwarded as they arrive on stdout. */
+export interface PiStreamEvent {
+  type: "tool_execution_start";
+  toolName: string;
+}
+
+export interface ProcessRunOptions {
+  cwd: string;
+  signal?: AbortSignal;
+  timeoutMs: number;
+  /** Optional sink for streaming agent events (tool starts). */
+  onEvent?: (event: PiStreamEvent) => void;
+}
+
 export type ProcessRunner = (
   args: string[],
-  options: { cwd: string; signal?: AbortSignal; timeoutMs: number },
+  options: ProcessRunOptions,
 ) => Promise<ProcessOutcome>;
 
 export interface PiRunResult {
@@ -52,21 +69,29 @@ export interface StreamCollector {
 }
 
 /**
- * Keeps assistant `message_end` events and discards everything else, so a
- * tool-heavy run cannot exhaust memory or truncate the final report. Events
- * split across chunk boundaries are reassembled; malformed lines are ignored
- * exactly as parsePiStream ignores them.
+ * Buffers one JSON-mode stream, keeping only lines parsePiStream consumes and
+ * forwarding tool-start events to an optional sink. Keeping only assistant
+ * `message_end` events means a tool-heavy run cannot exhaust memory or
+ * truncate the final report. Events split across chunk boundaries are
+ * reassembled; malformed lines are ignored exactly as parsePiStream ignores
+ * them.
  */
-export function createStreamCollector(): StreamCollector {
+export function createStreamCollector(onEvent?: (event: PiStreamEvent) => void): StreamCollector {
   let pending = "";
   const kept: string[] = [];
   const keep = (line: string) => {
+    let raw: unknown;
     try {
-      const event = JSON.parse(line) as { type?: string; message?: { role?: string } };
-      if (event?.type === "message_end" && event.message?.role === "assistant") kept.push(line);
+      raw = JSON.parse(line);
     } catch {
-      // Malformed or partial lines never parse; drop them.
+      return; // Malformed lines never parse; drop them.
     }
+    if (raw === null || typeof raw !== "object") return;
+    const event = raw as { type?: string; toolName?: string; message?: { role?: string } };
+    if (event.type === "tool_execution_start" && typeof event.toolName === "string") {
+      onEvent?.({ type: "tool_execution_start", toolName: event.toolName });
+    }
+    if (event.type === "message_end" && event.message?.role === "assistant") kept.push(line);
   };
   return {
     push(chunk) {
@@ -168,8 +193,12 @@ function terminate(proc: ChildProcess): void {
   escalation.unref();
 }
 
-function wireOutput(proc: ChildProcess, buffers: { stdout: string; stderr: string }): () => void {
-  const collector = createStreamCollector();
+function wireOutput(
+  proc: ChildProcess,
+  buffers: { stdout: string; stderr: string },
+  onEvent?: (event: PiStreamEvent) => void,
+): () => void {
+  const collector = createStreamCollector(onEvent);
   proc.stdout?.on("data", (chunk: Buffer) => collector.push(chunk.toString()));
   proc.stderr?.on("data", (chunk: Buffer) => {
     // Keep stderr head-bounded: it only feeds exit-code error messages.
@@ -181,7 +210,7 @@ function wireOutput(proc: ChildProcess, buffers: { stdout: string; stderr: strin
 }
 
 /** Default runner: spawn the same pi binary in JSON mode and collect output. */
-export function spawnPiProcess(args: string[], options: { cwd: string; signal?: AbortSignal; timeoutMs: number }): Promise<ProcessOutcome> {
+export function spawnPiProcess(args: string[], options: ProcessRunOptions): Promise<ProcessOutcome> {
   return new Promise((resolve) => {
     const invocation = resolvePiInvocation(args);
     const proc = spawn(invocation.command, invocation.args, {
@@ -193,7 +222,7 @@ export function spawnPiProcess(args: string[], options: { cwd: string; signal?: 
     });
     const buffers = { stdout: "", stderr: "" };
     const state = { killed: false, timedOut: false };
-    const flush = wireOutput(proc, buffers);
+    const flush = wireOutput(proc, buffers, options.onEvent);
 
     const finish = (exitCode: number) => {
       clearTimeout(timer);
@@ -254,6 +283,7 @@ export async function runPiAgent(options: PiRunOptions, run: ProcessRunner = spa
       cwd: options.cwd,
       signal: options.signal,
       timeoutMs: options.timeoutMs,
+      onEvent: (event) => options.onActivity?.(activityWord(event.toolName)),
     });
     return toResult(parsePiStream(outcome.stdout), outcome, options.signal?.aborted === true);
   } finally {
