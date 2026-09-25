@@ -3,8 +3,9 @@
  *
  * `panelLines` owns the tier choice: the large animated scene at
  * `width >= LARGE_MIN_WIDTH` while the terminal height allows, and the compact
- * animated strip below that. Everything here is pure: expression frames and the
- * spinner tick arrive from the caller, and every timestamp arrives as `now`.
+ * animated strip below that. Each agent's live one-word activity and elapsed time
+ * arrive on its run. Everything here is pure: expression frames and the spinner
+ * tick arrive from the caller, and every timestamp arrives as `now`.
  */
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { AgentRun } from "../schemas/findings.ts";
@@ -61,10 +62,14 @@ export const MAX_PLAN_STEPS = 50;
 /** Upper bound on compact-tier panel rows. */
 export const MAX_PANEL_LINES = 14;
 
-const STEP_LINE = /^\s*\d+\.\s+(.*\S)\s*$/;
 const CHECKLIST_ROWS = 3;
 const PREFIX_CHARS = 32;
 const MIN_PREFIX = 8;
+const HEADER_LINE = /^\s*(?:#{1,6}\s+\S.*|\*\*[^*]+\*\*)\s*$/;
+const STEP_SECTION = /sequence|steps|order/i;
+const NUMBERED_STEP_LINE = /^\s*\d+[.)]\s+(.*\S)\s*$/;
+const INDENTED_BULLET = /^\s*[*-]\s+(.*\S)\s*$/;
+const TOP_LEVEL_BULLET = /^[*-]\s+(.*\S)\s*$/;
 
 export type PlanStepStatus = "done" | "current" | "pending";
 
@@ -73,15 +78,51 @@ export interface PlanStep {
   status: PlanStepStatus;
 }
 
-/** Numbered `1. \`path\`: …` lines from a free-form plan, capped. */
-export function planSteps(plan: string): string[] {
-  const steps: string[] = [];
-  for (const line of plan.split("\n")) {
-    const match = STEP_LINE.exec(line);
-    if (match) steps.push(match[1]!);
-    if (steps.length >= MAX_PLAN_STEPS) break;
+/** Numbered `1.`/`1)` text, or a bullet inside a step section; undefined otherwise. */
+function stepText(line: string): string | undefined {
+  return NUMBERED_STEP_LINE.exec(line)?.[1] ?? INDENTED_BULLET.exec(line)?.[1];
+}
+
+function topBulletText(line: string): string | undefined {
+  return TOP_LEVEL_BULLET.exec(line)?.[1];
+}
+
+function collectSteps(lines: readonly string[], accept: (line: string) => string | undefined): string[] {
+  const found: string[] = [];
+  for (const line of lines) {
+    const text = accept(line);
+    if (text !== undefined) found.push(text);
   }
-  return steps;
+  return found;
+}
+
+/** Body of the first `sequence|steps|order` header, up to the next header; undefined when absent. */
+function stepSection(lines: readonly string[]): string[] | undefined {
+  const start = lines.findIndex((line) => HEADER_LINE.test(line) && STEP_SECTION.test(line));
+  if (start < 0) return undefined;
+  const body: string[] = [];
+  for (const line of lines.slice(start + 1)) {
+    if (HEADER_LINE.test(line)) break;
+    body.push(line);
+  }
+  return body;
+}
+
+/**
+ * Step texts from a free-form plan, capped. A `sequence|steps|order` section wins; otherwise
+ * numbered lines win; when neither exists, top-level bullets are the last resort, so unrelated
+ * bullet lists under other headers never leak into the checklist.
+ */
+export function planSteps(plan: string): string[] {
+  const lines = plan.split("\n");
+  const section = stepSection(lines);
+  if (section) {
+    const sectioned = collectSteps(section, stepText);
+    if (sectioned.length > 0) return sectioned.slice(0, MAX_PLAN_STEPS);
+  }
+  const numbered = collectSteps(lines, (line) => NUMBERED_STEP_LINE.exec(line)?.[1]);
+  if (numbered.length > 0) return numbered.slice(0, MAX_PLAN_STEPS);
+  return collectSteps(lines, topBulletText).slice(0, MAX_PLAN_STEPS);
 }
 
 function normalize(text: string): string {
@@ -117,16 +158,46 @@ function stepStatus(index: number, current: number): PlanStepStatus {
   return index === current ? "current" : "pending";
 }
 
+/** Lowest index not yet in `completed`, or -1 when every step is. */
+function nextOpenStep(steps: readonly string[], completed: ReadonlySet<number>): number {
+  return steps.findIndex((_text, index) => !completed.has(index));
+}
+
+/** Marks every step up to and including `index` as completed. */
+function markThrough(completed: Set<number>, index: number): void {
+  for (let step = 0; step <= index; step += 1) completed.add(step);
+}
+
+/**
+ * Steps completed by successful worker runs, in start order. A run whose instruction matches
+ * a step completes everything up to that step; a run that matches nothing -- the common case
+ * for a reworded instruction -- completes the next still-open step, so the count only grows
+ * and a failure can never tick one off.
+ */
+function completedSteps(steps: readonly string[], runs: AgentRun[]): number {
+  const completed = new Set<number>();
+  for (const run of runs) {
+    if (run.role !== "worker" || run.status !== "success") continue;
+    const matched = currentStepIndex(steps, run.instruction);
+    const target = matched >= 0 ? matched : nextOpenStep(steps, completed);
+    if (target >= 0) markThrough(completed, target);
+  }
+  return completed.size;
+}
+
 /**
  * Done/current/pending per plan step, matched from the latest worker instruction.
  * A succeeded run completes its step, so the next step becomes current (and the
  * last step reads done); running, failed, cancelled and timeout runs keep it current.
+ * Progress is monotonic: steps already completed by successful worker runs stay done,
+ * and a later call that names an earlier step can never tick it back.
  */
 export function planChecklist(plan: string, runs: AgentRun[]): PlanStep[] {
   const steps = planSteps(plan);
   const latest = latestWorkerRun(runs);
   const matched = currentStepIndex(steps, latest?.instruction);
-  const current = matched >= 0 && latest?.status === "success" ? matched + 1 : matched;
+  const latestCurrent = matched >= 0 ? (latest?.status === "success" ? matched + 1 : matched) : -1;
+  const current = Math.max(completedSteps(steps, runs), latestCurrent);
   return steps.map((text, index) => ({ text, status: stepStatus(index, current) }));
 }
 
@@ -175,14 +246,15 @@ export function bannerLines(width: number): string[] {
 }
 
 
-/** One-line replacement for pi's suppressed streaming indicator. */
+/** One-line replacement for pi's suppressed streaming indicator; names the live activity too. */
 export function workingLine(runs: AgentRun[], tick: number, theme?: PanelTheme, now = Date.now()): string {
   const running = runs.filter((run) => run.status === "running");
   const spin = SPIN_FRAMES[Math.abs(tick) % SPIN_FRAMES.length]!;
   if (running.length > 0) {
     const run = running.at(-1)!;
     const spinner = theme ? theme.fg("accent", spin) : spin;
-    return `  ${spinner} agents working (${running.length}) · ${run.domain}/${run.role} running ${formatDuration(runElapsed(run, now))}`;
+    const activity = run.activity ?? "working";
+    return `  ${spinner} agents working (${running.length}) · ${run.domain}/${run.role} ${activity} ${formatDuration(runElapsed(run, now))}`;
   }
   const last = runs.at(-1);
   if (!last) return "  ○ waiting for the first agent…";
@@ -215,7 +287,8 @@ function frameAt(frames: readonly string[], index: number): string {
 
 /* -------------------------------------------------------------------------
  * Compact tier (< LARGE_MIN_WIDTH): banner, header, the one-row-per-agent strip
- * and the checklist. Geometry matches the long-standing 40-column strip.
+ * and the checklist; the working line names the newest running agent's activity
+ * and elapsed. Geometry matches the long-standing 40-column strip.
  * ---------------------------------------------------------------------- */
 
 const COMPACT_GAP = 2;
@@ -360,7 +433,8 @@ export interface PanelOptions {
 /**
  * Zen panel lines. At `width >= LARGE_MIN_WIDTH` with enough terminal height the
  * large animated scene owns the panel; otherwise the compact strip keeps the
- * banner, header, agent row, alert, working line and checklist. No line ever
+ * banner, header, agent row, alert, live activity/elapsed working line and
+ * checklist. No line ever
  * exceeds `width`.
  */
 export function panelLines(

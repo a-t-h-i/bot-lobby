@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -9,10 +9,23 @@ import {
   isPiLauncher,
   parsePiStream,
   runPiAgent,
+  spawnPiProcess,
   type ProcessOutcome,
   type ProcessRunner,
 } from "../src/execution/pi-runner.ts";
 
+
+// The suite can run inside a subagent process (BOT_LOBBY_SUBAGENT=1), where
+// ambient gate variables would otherwise leak into spawned-process assertions.
+let ambientSubagent: string | undefined;
+before(() => {
+  ambientSubagent = process.env.BOT_LOBBY_SUBAGENT;
+  delete process.env.BOT_LOBBY_SUBAGENT;
+});
+after(() => {
+  if (ambientSubagent === undefined) delete process.env.BOT_LOBBY_SUBAGENT;
+  else process.env.BOT_LOBBY_SUBAGENT = ambientSubagent;
+});
 function assistantEvent(text: string, extra: Record<string, unknown> = {}): string {
   return JSON.stringify({
     type: "message_end",
@@ -148,6 +161,7 @@ test("stream collector keeps assistant message_end lines and drops the rest", ()
     JSON.stringify({ type: "message_update", message: { role: "assistant" } }),
     JSON.stringify({ type: "tool_execution_end", result: "x".repeat(500) }),
     "not json",
+    "null",
     assistantEvent("first"),
     assistantEvent("final"),
   ];
@@ -195,5 +209,85 @@ test("runPiAgent keeps the final report when the stream is 20x the old cap", asy
     if (previous === undefined) delete process.env.BOT_LOBBY_PI_BIN;
     else process.env.BOT_LOBBY_PI_BIN = previous;
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/** Point BOT_LOBBY_PI_BIN at a throwaway stub and return the restore/cleanup hook. */
+function withFakePi(script: string): () => void {
+  const dir = mkdtempSync(join(tmpdir(), "dh-pi-activity-"));
+  const stub = join(dir, "fake-pi.mjs");
+  writeFileSync(stub, script, { mode: 0o755 });
+  chmodSync(stub, 0o755);
+  const previous = process.env.BOT_LOBBY_PI_BIN;
+  process.env.BOT_LOBBY_PI_BIN = stub;
+  return () => {
+    if (previous === undefined) delete process.env.BOT_LOBBY_PI_BIN;
+    else process.env.BOT_LOBBY_PI_BIN = previous;
+    rmSync(dir, { recursive: true, force: true });
+  };
+}
+
+/** Stub pi that splits the first tool line across two stdout writes. */
+function activityScript(): string {
+  const read = '{"type":"tool_execution_start","toolCallId":"1","toolName":"read"}\n';
+  const bash = '{"type":"tool_execution_start","toolCallId":"2","toolName":"bash"}\n';
+  const write = (payload: string) => `process.stdout.write(${JSON.stringify(payload)});`;
+  const lines = ["#!/usr/bin/env node", write(read.slice(0, 40)), write(read.slice(40)), write(bash), write(`${assistantEvent("## done")}\n`)];
+  return lines.join("\n");
+}
+
+test("stream collector forwards tool starts while keeping only the report", () => {
+  const tools: string[] = [];
+  const collector = createStreamCollector((event) => tools.push(event.toolName));
+  const toolLine = JSON.stringify({ type: "tool_execution_start", toolCallId: "1", toolName: "grep" });
+  const report = assistantEvent("report");
+  collector.push(`${toolLine}\n${report.slice(0, 10)}`);
+  collector.push(`${report.slice(10)}\n`);
+  const kept = collector.finish();
+  assert.deepEqual(tools, ["grep"]);
+  assert.ok(!kept.includes("tool_execution_start"));
+  assert.equal(parsePiStream(kept).text, "report");
+});
+
+test("a tool_execution_start stream drives onActivity through the spawned process", async () => {
+  const cleanup = withFakePi(activityScript());
+  try {
+    const words: string[] = [];
+    const result = await runPiAgent({
+      cwd: process.cwd(),
+      task: "explore",
+      timeoutMs: 30_000,
+      onActivity: (word) => words.push(word),
+    });
+    assert.equal(result.status, "success");
+    assert.deepEqual(words, ["reading", "running"]);
+  } finally {
+    cleanup();
+  }
+});
+
+test("runPiAgent maps streamed tool names to activity words", async () => {
+  const words: string[] = [];
+  const streaming: ProcessRunner = async (_args, options) => {
+    options.onEvent?.({ type: "tool_execution_start", toolName: "grep" });
+    return outcome(assistantEvent("ok"));
+  };
+  const result = await runPiAgent(
+    { cwd: "/p", task: "t", timeoutMs: 1000, onActivity: (word) => words.push(word) },
+    streaming,
+  );
+  assert.equal(result.status, "success");
+  assert.deepEqual(words, ["searching"]);
+});
+
+test("absent onEvent and onActivity callbacks are optional", async () => {
+  const cleanup = withFakePi(activityScript());
+  try {
+    const spawned = await spawnPiProcess(["Task: t"], { cwd: process.cwd(), timeoutMs: 30_000 });
+    assert.equal(spawned.exitCode, 0);
+    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 30_000 });
+    assert.equal(result.status, "success");
+  } finally {
+    cleanup();
   }
 });

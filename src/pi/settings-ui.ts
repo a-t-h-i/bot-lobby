@@ -5,7 +5,7 @@ import {
   type ExtensionContext,
   type Theme,
 } from "@earendil-works/pi-coding-agent";
-import { Container, type Component, type SelectItem, SelectList, Text } from "@earendil-works/pi-tui";
+import { Container, type Component, type Focusable, fuzzyFilter, getKeybindings, Input, type SelectItem, SelectList, Text } from "@earendil-works/pi-tui";
 import { AGENT_KINDS, type AgentKind } from "../schemas/agent.ts";
 import {
   INHERIT_MODEL,
@@ -18,6 +18,7 @@ import {
 import { globalConfigPath, loadConfig, saveConfig } from "../state/project.ts";
 
 const CUSTOM_MODEL = "__custom__";
+const MAX_VISIBLE = 12;
 
 function agentLabel(agent: AgentKind): string {
   return agent === "master" ? "Master" : `${agent[0]!.toUpperCase()}${agent.slice(1)}`;
@@ -52,40 +53,135 @@ export async function applyMasterModel(pi: ExtensionAPI, ctx: ExtensionContext, 
   if (isThinkingLevel(thinking)) pi.setThinkingLevel(thinking);
 }
 
-function frame(theme: Theme, title: string, body: Component): Component {
+function hintText(search: boolean): string {
+  const nav = "↑↓ navigate • enter select • esc back";
+  return search ? `type to search • ${nav}` : nav;
+}
+
+function frame(theme: Theme, title: string, body: Component, search = false): Component {
   const container = new Container();
   container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
   container.addChild(new Text(theme.fg("accent", theme.bold(title)), 1, 0));
   container.addChild(body);
-  container.addChild(new Text(theme.fg("dim", "↑↓ navigate • enter select • esc back"), 1, 0));
+  container.addChild(new Text(theme.fg("dim", hintText(search)), 1, 0));
   container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
   return container;
 }
 
-async function pick(ctx: ExtensionContext, title: string, items: SelectItem[]): Promise<string | undefined> {
+/** Fuzzy-filter picker items over label, value and description; blank queries pass through. */
+export function filterItems(items: SelectItem[], query: string): SelectItem[] {
+  if (query.trim() === "") return items;
+  return fuzzyFilter(items, query, (item) => `${item.label} ${item.value} ${item.description ?? ""}`);
+}
+
+function listFor(items: SelectItem[], done: (value: string | undefined) => void): SelectList {
+  const list = new SelectList(items, Math.min(items.length, MAX_VISIBLE), getSelectListTheme());
+  list.onSelect = (item) => done(item.value);
+  list.onCancel = () => done(undefined);
+  return list;
+}
+
+function isListKey(data: string): boolean {
+  const kb = getKeybindings();
+  return kb.matches(data, "tui.select.up") || kb.matches(data, "tui.select.down")
+    || kb.matches(data, "tui.select.confirm") || kb.matches(data, "tui.select.cancel");
+}
+
+/** Searchable picker: typing rebuilds the list, while arrows/enter/esc still drive it. */
+export class SearchPicker implements Component, Focusable {
+  private readonly body = new Container();
+  private readonly input = new Input({ placeholder: "search" });
+  private readonly frame: Component;
+  private readonly items: SelectItem[];
+  private readonly done: (value: string | undefined) => void;
+  private readonly requestRender: () => void;
+  private list: SelectList;
+  private query = "";
+
+  constructor(title: string, items: SelectItem[], theme: Theme, done: (value: string | undefined) => void, requestRender: () => void) {
+    this.items = items;
+    this.done = done;
+    this.requestRender = requestRender;
+    this.list = listFor(items, done);
+    this.body.addChild(this.input);
+    this.body.addChild(this.list);
+    this.frame = frame(theme, title, this.body, true);
+  }
+
+  get focused(): boolean {
+    return this.input.focused;
+  }
+
+  set focused(value: boolean) {
+    this.input.focused = value;
+  }
+
+  private refine(): void {
+    const query = this.input.getValue();
+    if (query === this.query) return;
+    this.query = query;
+    const next = filterItems(this.items, query);
+    this.body.removeChild(this.list);
+    this.list = listFor(next, this.done);
+    this.body.addChild(this.list);
+  }
+
+  handleInput(data: string): void {
+    if (isListKey(data)) this.list.handleInput(data);
+    else {
+      this.input.handleInput(data);
+      this.refine();
+    }
+    this.requestRender();
+  }
+
+  render(width: number): string[] {
+    return this.frame.render(width);
+  }
+
+  invalidate(): void {
+    this.frame.invalidate();
+  }
+}
+
+async function pickPlain(ctx: ExtensionContext, title: string, items: SelectItem[]): Promise<string | undefined> {
   return ctx.ui.custom<string | undefined>((tui, theme, _keys, done) => {
-    const list = new SelectList(items, Math.min(items.length, 12), getSelectListTheme());
-    list.onSelect = (item) => done(item.value);
-    list.onCancel = () => done(undefined);
+    const list = listFor(items, done);
     const container = frame(theme, title, list);
     return {
       render: (width: number) => container.render(width),
       invalidate: () => container.invalidate(),
       handleInput: (data: string) => {
-        list.handleInput?.(data);
+        list.handleInput(data);
         tui.requestRender();
       },
     };
   });
 }
 
-function modelItems(ctx: ExtensionContext, current: string): SelectItem[] {
+async function pickSearch(ctx: ExtensionContext, title: string, items: SelectItem[]): Promise<string | undefined> {
+  return ctx.ui.custom<string | undefined>((tui, theme, _keys, done) => {
+    return new SearchPicker(title, items, theme, done, () => tui.requestRender());
+  });
+}
+
+interface PickOptions {
+  search?: boolean;
+}
+
+async function pick(ctx: ExtensionContext, title: string, items: SelectItem[], options: PickOptions = {}): Promise<string | undefined> {
+  return options.search ? pickSearch(ctx, title, items) : pickPlain(ctx, title, items);
+}
+
+export function modelItems(ctx: ExtensionContext, current: string): SelectItem[] {
   const inherit = current === INHERIT_MODEL ? `${INHERIT_MODEL} ✓` : INHERIT_MODEL;
   const items: SelectItem[] = [{ value: INHERIT_MODEL, label: inherit, description: "Use the session's current model" }];
   const usable = ctx.scopedModels.length > 0 ? ctx.scopedModels.map((entry) => entry.model) : ctx.modelRegistry.getAvailable();
   for (const model of usable) {
     const value = `${model.provider}/${model.id}`;
-    items.push({ value, label: value === current ? `${value} ✓` : value });
+    const label = value === current ? `${value} ✓` : value;
+    const description = model.name && model.name !== value ? model.name : undefined;
+    items.push(description ? { value, label, description } : { value, label });
   }
   items.push({ value: CUSTOM_MODEL, label: "custom…", description: "Type a provider/model id" });
   return items;
@@ -99,7 +195,7 @@ async function commit(pi: ExtensionAPI, ctx: ExtensionContext, agent: AgentKind,
 
 async function editModel(pi: ExtensionAPI, ctx: ExtensionContext, agent: AgentKind): Promise<void> {
   const current = agentConfig(loadConfig(), agent).model;
-  const choice = await pick(ctx, `Model — ${agentLabel(agent)}`, modelItems(ctx, current));
+  const choice = await pick(ctx, `Model — ${agentLabel(agent)}`, modelItems(ctx, current), { search: true });
   if (choice === undefined) return;
   const typed = choice === CUSTOM_MODEL ? (await ctx.ui.input("Model id", "provider/model"))?.trim() : choice;
   if (!typed) return;
