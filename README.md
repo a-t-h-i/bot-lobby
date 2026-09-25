@@ -16,6 +16,19 @@ approval gates, and completion authority through one `orchestrate` tool.
 
 ## Install
 
+Install the published package from npm:
+
+```bash
+pi install npm:@a-t-h-i/bot-lobby
+```
+
+Pi records the declaration and loads the package's extension and prompt layers
+from Pi's own npm directory; `pi list` shows what is installed. Use
+`pi -e npm:@a-t-h-i/bot-lobby` to try it for a single invocation without adding
+it to settings.
+
+### Advanced and local options
+
 Reference the entry file from `settings.json` (global, or project
 `.pi/settings.json`):
 
@@ -35,8 +48,10 @@ export { default } from "/absolute/path/to/bot-lobby/src/index.ts";
 
 Or run it for a single session without installing: `pi -e ./src/index.ts`.
 
-The extension finds its `prompts/` directory relative to its own source files, so
-the checkout needs to stay where it is.
+The published package ships `prompts/` alongside `src/`, so an npm install loads
+the prompt layers without a local checkout. A source checkout must keep
+`prompts/` beside `src/`, because the loader resolves the directory relative to
+its own source files.
 
 ## Recommended companion: ask-user-question
 
@@ -359,6 +374,25 @@ BOT_LOBBY_E2E=1 npx tsx --test test/e2e.test.ts  # or: node --test test/e2e.test
 
 They cover: a real isolated subagent run, a real workflow-level scout that
 advances the task state, and the Master prompt injection in a real Pi session.
+
+## Publishing (maintainers)
+
+The [Pi package gallery](https://pi.dev/packages) discovers npm packages that
+carry the `pi-package` keyword, which `package.json` already sets: the package
+page is [pi.dev/packages/@a-t-h-i/bot-lobby](https://pi.dev/packages/@a-t-h-i/bot-lobby)
+and the registry page is
+[npmjs.com/package/@a-t-h-i/bot-lobby](https://www.npmjs.com/package/@a-t-h-i/bot-lobby).
+
+A release is a version bump followed by:
+
+```bash
+npm publish --access public
+```
+
+`publishConfig.access` pins public access, and `files` (`src`, `prompts`) keeps the
+tarball to the extension and its prompt layers — check it with
+`npm pack --dry-run`. Pi supplies the Pi packages at runtime, so they stay in
+`peerDependencies` with a `"*"` range.
 
 ## Scope of v0.1
 

@@ -1,15 +1,39 @@
 {
-  "name": "bot-lobby",
+  "name": "@a-t-h-i/bot-lobby",
   "version": "0.1.0",
   "description": "Structured multi-agent software engineering orchestrator for Pi",
   "type": "module",
-  "license": "MIT",
+  "license": "Apache-2.0",
+  "keywords": [
+    "pi-package"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/a-t-h-i/bot-lobby.git"
+  },
+  "homepage": "https://github.com/a-t-h-i/bot-lobby#readme",
+  "bugs": {
+    "url": "https://github.com/a-t-h-i/bot-lobby/issues"
+  },
+  "files": [
+    "src",
+    "prompts"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "pi": {
     "extensions": ["./src/index.ts"]
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --test --test-reporter=dot test/*.test.ts"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "0.87.0",
