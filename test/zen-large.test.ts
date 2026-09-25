@@ -39,7 +39,6 @@ function scene(overrides: Partial<LargeSceneInput> = {}): LargeSceneInput {
     taskTitle: "core-feature",
     state: "implementing",
     elapsedLabel: "12m 30s",
-    etaLabel: "ETA ~50m",
     quietHint: "tools hidden (alt+t)",
     tick: 0,
     done: 3,
@@ -208,7 +207,7 @@ test("no width, height, status or alert combination overflows the terminal", () 
 test("the large scene is byte-identical to the locked art at 72 and 100 columns", () => {
   const at72 = [
     "    ┌─ BOT-LOBBY ── TASK-core-feature · implementing ─────────────┐",
-    "    │ core-feature                                       ETA ~50m │",
+    "    │ core-feature                                                │",
     "    │ █████░░░░░  50%  (3/6 tasks)                                │",
     "    └─ ⏱ 12m 30s · tools hidden (alt+t) ──────────────────────────┘",
     "    ! approvals pending: APR-1",
@@ -244,7 +243,7 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
   ];
   const at100 = [
     "                  ┌─ BOT-LOBBY ── TASK-core-feature · implementing ─────────────┐",
-    "                  │ core-feature                                       ETA ~50m │",
+    "                  │ core-feature                                                │",
     "                  │ █████░░░░░  50%  (3/6 tasks)                                │",
     "                  └─ ⏱ 12m 30s · tools hidden (alt+t) ──────────────────────────┘",
     "                  ! approvals pending: APR-1",
@@ -282,12 +281,11 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
   assert.deepEqual(largeLines(scene(), 100, 40), at100);
 });
 
-test("the box keeps the task id, state, title, estimate, elapsed and quiet hint", () => {
-  const lines = largeLines(scene({ etaLabel: "ETA —" }), 72, 40);
+test("the box keeps the task id, state, title, elapsed and quiet hint", () => {
+  const lines = largeLines(scene(), 72, 40);
   const box = lines.slice(0, 4).join("\n");
   assert.ok(box.includes("TASK-core-feature · implementing"));
   assert.ok(box.includes("core-feature"));
-  assert.ok(box.includes("ETA —"));
   assert.ok(box.includes("(3/6 tasks)"));
   assert.ok(box.includes("12m 30s"));
   assert.ok(box.includes("tools hidden (alt+t)"));
@@ -297,7 +295,7 @@ test("the box keeps the task id, state, title, estimate, elapsed and quiet hint"
 });
 
 test("an empty plan renders a zero bar and no checklist section", () => {
-  const lines = largeLines(scene({ done: 0, total: 0, tasks: [], etaLabel: "ETA —" }), 72, 40);
+  const lines = largeLines(scene({ done: 0, total: 0, tasks: [] }), 72, 40);
   assert.ok(lines.some((line) => line.includes("(0/0 tasks)")));
   assert.ok(lines.some((line) => line.includes("  0%")));
   assert.ok(!lines.some((line) => line.includes("TASKS")));

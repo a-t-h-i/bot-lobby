@@ -406,7 +406,6 @@ function sceneInput(
     taskTitle: task.title,
     state: task.paused ? `${task.state} (paused)` : task.state,
     elapsedLabel: metrics.elapsedLabel,
-    etaLabel: metrics.etaLabel,
     quietHint: quiet ? "tools hidden (alt+t)" : "tools shown",
     tick,
     done: metrics.done,

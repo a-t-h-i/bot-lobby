@@ -63,7 +63,6 @@ export interface LargeSceneInput {
   taskTitle: string;
   state: string;
   elapsedLabel: string;
-  etaLabel: string;
   quietHint: string;
   /** Caller-injected spinner frame; the scene reads no clock. */
   tick: number;
@@ -229,7 +228,7 @@ function alertLine(
 }
 
 function boxLines(input: LargeSceneInput, width: number, theme?: PanelTheme): string[] {
-  const rows = [topBorder(input, theme), titleRow(input, theme), barRow(input, theme), bottomBorder(input, theme)];
+  const rows = [topBorder(input, theme), titleRow(input), barRow(input, theme), bottomBorder(input, theme)];
   return rows.map((row) => place(row, width));
 }
 
@@ -246,11 +245,8 @@ function bottomBorder(input: LargeSceneInput, theme?: PanelTheme): string {
   return paint("└─", "muted", theme) + paint(label, "dim", theme) + paint(`${tail}┘`, "muted", theme);
 }
 
-function titleRow(input: LargeSceneInput, theme?: PanelTheme): string {
-  const eta = input.etaLabel;
-  const room = Math.max(0, CONTENT - visibleWidth(eta) - 2);
-  const title = padTo(input.taskTitle, room);
-  return boxRow(title + paint(padTo(`  ${eta}`, CONTENT - room), "dim", theme), theme);
+function titleRow(input: LargeSceneInput): string {
+  return boxRow(padTo(input.taskTitle, CONTENT));
 }
 
 function barRow(input: LargeSceneInput, theme?: PanelTheme): string {
