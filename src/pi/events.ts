@@ -8,7 +8,7 @@ import { cancelAllRuns } from "../execution/agent-runner.ts";
 import { describeTask } from "../workflow/workflow.ts";
 import { truncate } from "../text.ts";
 import { applyStatus, clearStatus, isMinimized, setMinimized, setOracleActivity } from "./ui.ts";
-import { oracleActivityWord } from "./activity.ts";
+import { ORACLE_THINKING, oracleActivityWord } from "./activity.ts";
 import { isSubagentProcess, visibleTools } from "./quiet.ts";
 import { registerQuietTools } from "./tool-renderers.ts";
 import { taskRequest, type Task } from "../schemas/task.ts";
@@ -43,9 +43,31 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
   });
 
 
-  // The oracle spinner mirrors the master's own tool calls; subagents report into runs.
+  // The oracle's speech bubble mirrors the master's own turn: thinking between
+  // tool calls, the tool's word during one, and silent (your turn) once it ends.
+  // Subagents report into runs instead.
+  // Parallel tool calls: the newest still-running call keeps the word.
+  const inFlight = new Map<string, string>();
+  const showOracle = () => setOracleActivity([...inFlight.values()].at(-1) ?? ORACLE_THINKING);
+  pi.on("agent_start", () => {
+    if (isSubagentProcess()) return;
+    inFlight.clear();
+    showOracle();
+  });
   pi.on("tool_execution_start", (event) => {
-    if (!isSubagentProcess()) setOracleActivity(oracleActivityWord(event.toolName, event.args));
+    if (isSubagentProcess()) return;
+    inFlight.set(event.toolCallId, oracleActivityWord(event.toolName, event.args));
+    showOracle();
+  });
+  pi.on("tool_execution_end", (event) => {
+    if (isSubagentProcess()) return;
+    inFlight.delete(event.toolCallId);
+    showOracle();
+  });
+  pi.on("agent_end", () => {
+    if (isSubagentProcess()) return;
+    inFlight.clear();
+    setOracleActivity(undefined);
   });
   pi.on("session_shutdown", (_event, ctx) => {
     cancelAllRuns();

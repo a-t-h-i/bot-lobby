@@ -291,3 +291,14 @@ test("absent onEvent and onActivity callbacks are optional", async () => {
     cleanup();
   }
 });
+
+test("stream collector joins a line split over many chunks and several lines in one chunk", () => {
+  const tools: string[] = [];
+  const collector = createStreamCollector((event) => tools.push(event.toolName));
+  const report = assistantEvent("many chunks — ünïcode report");
+  for (let at = 0; at < report.length; at += 3) collector.push(report.slice(at, at + 3));
+  const tool = JSON.stringify({ type: "tool_execution_start", toolCallId: "1", toolName: "read" });
+  collector.push(`\n${tool}\n${JSON.stringify({ type: "message_update", usage: {} })}\n`);
+  assert.equal(parsePiStream(collector.finish()).text, "many chunks — ünïcode report");
+  assert.deepEqual(tools, ["read"]);
+});

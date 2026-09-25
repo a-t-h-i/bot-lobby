@@ -77,9 +77,12 @@ export interface StreamCollector {
  * them.
  */
 export function createStreamCollector(onEvent?: (event: PiStreamEvent) => void): StreamCollector {
-  let pending = "";
+  const partial: string[] = [];
   const kept: string[] = [];
   const keep = (line: string) => {
+    // Most lines are per-token `message_update` deltas or large tool results;
+    // skip the parse for any line that cannot be one of the two kept events.
+    if (!line.includes('"tool_execution_start"') && !line.includes('"message_end"')) return;
     let raw: unknown;
     try {
       raw = JSON.parse(line);
@@ -94,15 +97,21 @@ export function createStreamCollector(onEvent?: (event: PiStreamEvent) => void):
     if (event.type === "message_end" && event.message?.role === "assistant") kept.push(line);
   };
   return {
+    // Scan only the new chunk for line breaks; a long line split over many
+    // chunks is joined once, when its newline finally arrives.
     push(chunk) {
-      pending += chunk;
-      const lines = pending.split("\n");
-      pending = lines.pop() ?? "";
-      for (const line of lines) keep(line);
+      let start = 0;
+      let newline = chunk.indexOf("\n");
+      while (newline >= 0) {
+        const tail = chunk.slice(start, newline);
+        keep(partial.length > 0 ? partial.splice(0).join("") + tail : tail);
+        start = newline + 1;
+        newline = chunk.indexOf("\n", start);
+      }
+      if (start < chunk.length) partial.push(chunk.slice(start));
     },
     finish() {
-      if (pending) keep(pending);
-      pending = "";
+      if (partial.length > 0) keep(partial.splice(0).join(""));
       return kept.join("\n");
     },
   };
@@ -199,10 +208,13 @@ function wireOutput(
   onEvent?: (event: PiStreamEvent) => void,
 ): () => void {
   const collector = createStreamCollector(onEvent);
-  proc.stdout?.on("data", (chunk: Buffer) => collector.push(chunk.toString()));
-  proc.stderr?.on("data", (chunk: Buffer) => {
+  // Decode as UTF-8 streams so a multi-byte character split across chunks survives.
+  proc.stdout?.setEncoding("utf8");
+  proc.stderr?.setEncoding("utf8");
+  proc.stdout?.on("data", (chunk: string) => collector.push(chunk));
+  proc.stderr?.on("data", (chunk: string) => {
     // Keep stderr head-bounded: it only feeds exit-code error messages.
-    if (buffers.stderr.length < MAX_STREAM_CHARS) buffers.stderr += chunk.toString();
+    if (buffers.stderr.length < MAX_STREAM_CHARS) buffers.stderr += chunk;
   });
   return () => {
     buffers.stdout = collector.finish();
