@@ -11,8 +11,8 @@
 export const BLINK_MIN_MS = 20_000;
 export const BLINK_MAX_MS = 30_000;
 /** How long one blink and one emote are held. */
-export const BLINK_MS = 200;
-export const EMOTE_MS = 700;
+export const BLINK_MS = 500;
+export const EMOTE_MS = 2000;
 /** Fast clock while an expression plays, short enough that a blink is never skipped. */
 export const FAST_TICK_MS = 120;
 
@@ -20,8 +20,10 @@ export const FAST_TICK_MS = 120;
 export const REST_FRAME = 0;
 export const BLINK_FRAME = 1;
 export const EMOTE_FRAME = 2;
-/** Emote frames the scheduler may pick: `EMOTE_FRAME .. EMOTE_FRAME + EMOTE_FRAMES - 1`. */
+/** Emote frame range: `EMOTE_FRAME .. EMOTE_FRAME + EMOTE_FRAMES - 1`; an emote steps through them. */
 export const EMOTE_FRAMES = 2;
+/** Each emote frame is held this long, so an emote steps through its frames. */
+export const EMOTE_STEP_MS = Math.floor(EMOTE_MS / EMOTE_FRAMES);
 
 const BLINK_CHANCE = 0.65;
 
@@ -30,6 +32,8 @@ export interface ExpressionState {
   nextAt: number;
   /** When the playing expression ends; not after `now` while resting. */
   until: number;
+  /** When the current expression started; drives emote frame stepping. */
+  startedAt: number;
   /** Frame index for the art: 0 rest, 1 blink, 2+ emote. */
   frame: number;
 }
@@ -53,7 +57,7 @@ export function pickEvent(rng: () => number): "blink" | "emote" {
 /** A freshly rested expression that fires for the first time after one random gap. */
 export function createExpression(now: number, rng: () => number): ExpressionState {
   const start = Number.isFinite(now) ? now : 0;
-  return { nextAt: start + nextGap(rng), until: start, frame: REST_FRAME };
+  return { nextAt: start + nextGap(rng), until: start, startedAt: start, frame: REST_FRAME };
 }
 
 /** True while `now` is inside a playing blink or emote. */
@@ -71,7 +75,8 @@ export function anyPlaying(states: readonly ExpressionState[], now: number): boo
  * drop back to the rest frame when it ends, and change nothing in between.
  */
 export function advanceExpression(state: ExpressionState, now: number, rng: () => number): ExpressionState {
-  if (!Number.isFinite(now) || now < state.until) return state;
+  if (!Number.isFinite(now)) return state;
+  if (now < state.until) return state.frame >= EMOTE_FRAME ? steppedEmote(state, now) : state;
   if (now < state.nextAt) return state.frame === REST_FRAME ? state : { ...state, frame: REST_FRAME };
   return play(now, rng);
 }
@@ -79,9 +84,18 @@ export function advanceExpression(state: ExpressionState, now: number, rng: () =
 function play(now: number, rng: () => number): ExpressionState {
   const blink = pickEvent(rng) === "blink";
   const until = now + (blink ? BLINK_MS : EMOTE_MS);
-  return { nextAt: until + nextGap(rng), until, frame: blink ? BLINK_FRAME : emoteFrame(rng) };
+  return { nextAt: until + nextGap(rng), until, startedAt: now, frame: blink ? BLINK_FRAME : EMOTE_FRAME };
 }
 
-function emoteFrame(rng: () => number): number {
-  return EMOTE_FRAME + Math.min(EMOTE_FRAMES - 1, Math.floor(unit(rng) * EMOTE_FRAMES));
+/** Emote frame for `now`: one step per EMOTE_STEP_MS, clamped to the last frame. */
+function emoteFrameAt(startedAt: number, now: number): number {
+  const elapsed = now - startedAt;
+  const step = Number.isFinite(elapsed) && elapsed > 0 ? Math.floor(elapsed / EMOTE_STEP_MS) : 0;
+  return EMOTE_FRAME + Math.min(EMOTE_FRAMES - 1, Math.max(0, step));
+}
+
+/** Advance an in-flight emote's frame, keeping the same object when it has not changed. */
+function steppedEmote(state: ExpressionState, now: number): ExpressionState {
+  const frame = emoteFrameAt(state.startedAt, now);
+  return frame === state.frame ? state : { ...state, frame };
 }

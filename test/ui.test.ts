@@ -47,8 +47,8 @@ test("summarizeRun marks running, success, and failure", () => {
 });
 
 test("the zen clock speeds up while an expression plays", () => {
-  const resting = { nextAt: 10_000, until: 0, frame: 0 };
-  const blinking = { nextAt: 10_000, until: 1_000, frame: 1 };
+  const resting = { nextAt: 10_000, until: 0, startedAt: 0, frame: 0 };
+  const blinking = { nextAt: 10_000, until: 1_000, startedAt: 0, frame: 1 };
   assert.equal(expressionTickDelay([resting], 0, true), LIVE_TICK_MS);
   assert.equal(expressionTickDelay([resting], 0, false), IDLE_TICK_MS);
   assert.equal(expressionTickDelay([blinking], 0, false), FAST_TICK_MS);

@@ -72,8 +72,8 @@ glyph and state word); and a full-width TASKS checklist windowed on the current
 step. Narrower
 terminals keep the
 boxed banner, header and compact animated strip. Each sprite rests on one calm
-face and, independently every 20–30 s, briefly blinks (~200 ms) or emotes
-(~700 ms); the oracle's mouth moves with its expressions. Sprites redraw on an
+face and, independently every 20–30 s, briefly blinks (~500 ms) or emotes
+(~2 s, stepping through its kaomoji frames); the oracle's mouth moves with its
 adaptive clock — 250 ms while work is live, 1 s when idle and ~120 ms while an
 expression plays — and their faces, colours and words follow each agent's status
 (working, idle, done, failed). The large scene's rest and blink frames stay the

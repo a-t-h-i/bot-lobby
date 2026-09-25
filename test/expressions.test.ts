@@ -7,6 +7,7 @@ import {
   BLINK_MS,
   EMOTE_FRAME,
   EMOTE_MS,
+  EMOTE_STEP_MS,
   FAST_TICK_MS,
   REST_FRAME,
   advanceExpression,
@@ -73,14 +74,16 @@ test("a blink lasts BLINK_MS and drops back to rest afterwards", () => {
   assert.ok(restedAgain.nextAt >= blinking.until + BLINK_MIN_MS, "the next gap follows the blink");
 });
 
-test("an emote lasts EMOTE_MS and picks a distinct emote frame", () => {
+test("an emote lasts EMOTE_MS and steps through its frames", () => {
   const rested = createExpression(0, fake(0.5));
   const at = rested.nextAt;
-  const first = advanceExpression(rested, at, fake(0.9, 0.5, 0));
+  const first = advanceExpression(rested, at, fake(0.9));
   assert.equal(first.frame, EMOTE_FRAME);
   assert.equal(first.until, at + EMOTE_MS);
-  const second = advanceExpression(rested, at, fake(0.9, 0.5, 1));
-  assert.equal(second.frame > EMOTE_FRAME, true);
+  assert.equal(advanceExpression(first, at + EMOTE_STEP_MS - 1, fake(0)), first, "the first frame is held");
+  const stepped = advanceExpression(first, at + EMOTE_STEP_MS, fake(0));
+  assert.equal(stepped.frame, EMOTE_FRAME + 1);
+  assert.equal(advanceExpression(stepped, at + EMOTE_MS - 1, fake(0)).frame, EMOTE_FRAME + 1, "the last frame holds to the end");
   assert.equal(isPlaying(first, at + EMOTE_MS - 1), true);
   assert.equal(isPlaying(first, at + EMOTE_MS), false);
 });
@@ -108,4 +111,5 @@ test("a non-finite clock or source never yields NaN", () => {
 
 test("the fast tick is shorter than a blink, so a blink is never skipped", () => {
   assert.ok(FAST_TICK_MS < BLINK_MS);
+  assert.ok(FAST_TICK_MS < EMOTE_STEP_MS, "an emote step is never skipped");
 });

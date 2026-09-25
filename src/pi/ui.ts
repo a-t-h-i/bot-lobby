@@ -41,7 +41,7 @@ function liveTickDelay(): number {
   return isLive() ? LIVE_TICK_MS : IDLE_TICK_MS;
 }
 
-/** Tick delay for the zen clock: fastest while an expression plays, so a blink is never skipped. */
+/** Tick delay for the zen clock: fastest while an expression plays, so no blink or emote step is skipped. */
 export function expressionTickDelay(states: readonly ExpressionState[], now: number, live: boolean): number {
   if (anyPlaying(states, now)) return FAST_TICK_MS;
   return live ? LIVE_TICK_MS : IDLE_TICK_MS;
