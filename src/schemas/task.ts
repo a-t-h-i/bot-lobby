@@ -54,6 +54,22 @@ export interface ReviewRecord {
   requiredChanges: string[];
   createdAt: string;
 }
+/**
+ * One finished worker delegation, kept on the task so the plan checklist can be
+ * replayed after a reload instead of resetting to the first step.
+ */
+export interface WorkerRunRecord {
+  runId: string;
+  domain: Domain;
+  instruction: string;
+  status: "running" | "success" | "failed" | "cancelled" | "timeout";
+  startedAt: string;
+  finishedAt?: string;
+}
+
+/** Upper bound on persisted worker records; plans cap at 50 steps. */
+export const MAX_WORKER_RECORDS = 64;
+
 export interface Task {
   id: string;
   title: string;
@@ -71,6 +87,8 @@ export interface Task {
   blockers: Blocker[];
   decisions: Decision[];
   approvals: Approval[];
+  /** Worker delegations in start order; absent on tasks created before tracking. */
+  workerRuns?: WorkerRunRecord[];
   createdAt: string;
   updatedAt: string;
   /** The pi session (ctx.sessionManager id) that owns this task; absent on legacy tasks. */

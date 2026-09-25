@@ -10,6 +10,7 @@ import {
   panelLines,
   planChecklist,
   planSteps,
+  explicitStepIndex,
   workingLine,
   type PanelTheme,
 } from "../src/pi/zen.ts";
@@ -133,7 +134,7 @@ test("widths below LARGE_MIN_WIDTH render the compact strip, not the scene", () 
   assert.equal(stripRows(compact).length, 3);
   const large = panelLines(task({ state: "implementing" }), [], NOW, true, { width: LARGE_MIN_WIDTH, rows: 50 });
   assert.equal(boxLines(large).length, 1);
-  assert.ok(large.some((line) => line.includes("┌─────┴─────┐")), "the tower is missing at 72 columns");
+  assert.ok(large.some((line) => line.includes("╭─────┴─────╮")), "the tower is missing at 72 columns");
 });
 
 test("short terminals fall back to the compact strip", () => {
@@ -575,4 +576,94 @@ test("an unparsable timestamp never renders NaN in either tier", () => {
       assert.ok(visibleWidth(line) <= opts.width, `width ${opts.width} overflowed: ${JSON.stringify(line)}`);
     }
   }
+});
+
+// --- tracker regressions: the checklist must follow the workers through the plan ---
+
+function worker(runId: string, instruction: string, minute: number, status: AgentRun["status"] = "success"): AgentRun {
+  const at = (second: number) => `2026-01-01T00:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}.000Z`;
+  return run({ runId, role: "worker", status, instruction, startedAt: at(0), ...(status === "running" ? {} : { finishedAt: at(30) }) });
+}
+
+const statuses = (steps: ReturnType<typeof planChecklist>) => steps.map((step) => step.status);
+
+test("planChecklist advances when later steps reuse an earlier step's file path", () => {
+  const steps = plan(
+    "Add the `status` field to `src/schema.ts`",
+    "Read the new `src/schema.ts` status field in `src/api.ts`",
+    "Render the status from `src/api.ts` in `src/ui.ts`",
+  );
+  const runs = [
+    worker("w1", "Add a `status` field to the Task type in `src/schema.ts`.", 1),
+    worker("w2", "In `src/api.ts`, read the status field added to `src/schema.ts` and return it.", 2),
+  ];
+  assert.deepEqual(statuses(planChecklist(steps, runs.slice(0, 1))), ["done", "current", "pending"]);
+  assert.deepEqual(statuses(planChecklist(steps, runs)), ["done", "done", "current"]);
+  const third = worker("w3", "Render the status returned by `src/api.ts` in `src/ui.ts`.", 3, "running");
+  assert.deepEqual(statuses(planChecklist(steps, [...runs, third])), ["done", "done", "current"]);
+  assert.deepEqual(statuses(planChecklist(steps, [...runs, { ...third, status: "success" }])), ["done", "done", "done"]);
+});
+
+test("planChecklist honours an explicit step label in the instruction", () => {
+  const steps = plan("Scaffold the module", "Wire the module into the app", "Write the tests", "Document it");
+  const labelled = [worker("w1", "Step 1: scaffold it", 1), worker("w2", "Step 3: write the unit tests (step 2 is done)", 2)];
+  assert.deepEqual(statuses(planChecklist(steps, labelled)), ["done", "done", "done", "current"]);
+  const ranged = [worker("w1", "Implement steps 1-2 of the plan together", 1)];
+  assert.deepEqual(statuses(planChecklist(steps, ranged)), ["done", "done", "current", "pending"]);
+  const building = [worker("w1", "Building on step 1, wire everything up", 1, "running")];
+  assert.deepEqual(statuses(planChecklist(steps, building)), ["current", "pending", "pending", "pending"]);
+});
+
+test("planChecklist advances through a whole plan of reworded, path-sharing instructions", () => {
+  const steps = plan(
+    "`src/pi/zen.ts`: parse step headings",
+    "`src/pi/zen.ts`: score instructions against steps",
+    "`src/pi/ui.ts`: replay persisted worker runs",
+    "`test/zen.test.ts`: cover the tracker",
+  );
+  const instructions = [
+    "Teach `src/pi/zen.ts` to parse `Step N` headings.",
+    "Now in `src/pi/zen.ts` score each worker instruction against every plan step.",
+    "Make `src/pi/ui.ts` replay the persisted worker runs from `src/pi/zen.ts`.",
+    "Cover the tracker in `test/zen.test.ts`, exercising `src/pi/zen.ts` and `src/pi/ui.ts`.",
+  ];
+  const runs: AgentRun[] = [];
+  instructions.forEach((instruction, index) => {
+    runs.push(worker(`w${index}`, instruction, index + 1));
+    const done = statuses(planChecklist(steps, [...runs])).filter((status) => status === "done").length;
+    assert.equal(done, index + 1, `after worker ${index + 1}`);
+  });
+});
+
+test("planSteps reads Step headings and ignores the sub-points under each step", () => {
+  const text = [
+    "## Implementation steps",
+    "### Step 1: Add the schema",
+    "1. add the field",
+    "2. migrate",
+    "### Step 2 — Wire the API",
+    "- read it",
+    "**Step 3:** Render it",
+  ].join("\n");
+  assert.deepEqual(planSteps(text), ["Add the schema", "Wire the API", "Render it"]);
+  const nested = ["1. First", "   1. sub one", "   2. sub two", "   - a bullet", "2. Second", "3. Third"].join("\n");
+  assert.deepEqual(planSteps(nested), ["First", "Second", "Third"]);
+  const sectioned = ["## Steps", "- First", "  - detail", "- Second"].join("\n");
+  assert.deepEqual(planSteps(sectioned), ["First", "Second"]);
+});
+
+test("explicitStepIndex reads leading labels and single references only", () => {
+  assert.equal(explicitStepIndex("Step 2: wire it", 5), 1);
+  assert.equal(explicitStepIndex("steps 2 to 4 together", 5), 3);
+  assert.equal(explicitStepIndex("do the thing from step #3", 5), 2);
+  assert.equal(explicitStepIndex("after step 1 and before step 4, fix it", 5), -1);
+  assert.equal(explicitStepIndex("Step 9: out of range", 5), -1);
+  assert.equal(explicitStepIndex("no reference here", 5), -1);
+});
+
+test("planChecklist returns the same array for the same plan and runs", () => {
+  const steps = plan("`src/a.ts`: first", "`src/b.ts`: second");
+  const runs = [worker("w1", "implement `src/a.ts`", 1)];
+  assert.equal(planChecklist(steps, runs), planChecklist(steps, runs));
+  assert.notEqual(planChecklist(steps, runs), planChecklist(steps, [...runs]));
 });

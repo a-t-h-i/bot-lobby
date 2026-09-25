@@ -6,7 +6,7 @@ import type { TaskState } from "../schemas/task.ts";
  * that `zen.ts` and `zen-large.ts` compose. Every glyph is exactly one visible
  * column so the art stays narrow/ambiguous-width safe: the non-ASCII glyphs are
  * the lobby `⌂` in `BANNER_NARROW`, the panel's ◐/✓/✗ status family, and the
- * box-drawing, bar and eye glyphs of the large scene (─ │ ┌ ┐ └ ┘ ├ ┤ ┬ ┴ ═ █ ▓ ░ ◉ ◍ ◎ ◌ ○).
+ * box-drawing, bar, eye and aura glyphs of the large scene (─ │ ┌ ┐ └ ┘ ╭ ╮ ╰ ╯ ╲ ╱ ╶ ├ ┤ ┬ ┴ █ ▓ ▒ ░ ▁ ▂ ▃ ◉ ◍ ◎ ◌ ○ ✦ ✧).
  */
 
 /**
@@ -105,7 +105,7 @@ export const ORACLE_COLORS: Record<OraclePose, { color: PanelColor; bold: boolea
   dormant: { color: "dim", bold: false },
 };
 
-/** One oracle frame: the tower orb, both window eyes and the seven-column mouth. */
+/** One oracle frame: the crown orb, both window eyes and the seven-column mouth. */
 export interface OracleFrame {
   orb: string;
   winL: string;
@@ -115,24 +115,37 @@ export interface OracleFrame {
 }
 
 /**
- * Indexed oracle expressions per pose: 0 rests, 1 blinks and 2-3 emote with a
- * pulsing orb, sweeping window eyes and a moving mouth. Every glyph is one
- * column and every mouth seven, so a frame swap never moves the tower geometry.
+ * Indexed oracle expressions per pose: 0 rests, 1 blinks and 2-3 emote. While
+ * orchestrating the oracle glances around (2) and speaks (3); dormant, it sleeps
+ * with closed eyes, peeks (1) and snores (2). Every glyph is one column and every
+ * mouth seven, so a frame swap never moves the tower geometry.
  */
 export const ORACLE_FRAMES: Record<OraclePose, readonly OracleFrame[]> = {
   orchestrating: [
-    { orb: "◉", winL: "◉", winR: "◉", mouth: "═══════" },
-    { orb: "◉", winL: "─", winR: "─", mouth: "═══════" },
-    { orb: "◎", winL: "◍", winR: "◉", mouth: "◡◡◡◡◡◡◡" },
-    { orb: "◍", winL: "◉", winR: "◍", mouth: "▁▂▃▂▃▂▁" },
+    { orb: "◉", winL: "◉", winR: "◉", mouth: " ╰───╯ " },
+    { orb: "◉", winL: "─", winR: "─", mouth: " ╰───╯ " },
+    { orb: "◎", winL: "◍", winR: "◉", mouth: "  ───  " },
+    { orb: "◍", winL: "◉", winR: "◍", mouth: " ▁▂▃▂▁ " },
   ],
   dormant: [
-    { orb: "◌", winL: "◌", winR: "◌", mouth: "═══════" },
-    { orb: "◌", winL: "─", winR: "─", mouth: "═══════" },
-    { orb: "○", winL: "◌", winR: "◌", mouth: "▂▂▂▂▂▂▂" },
-    { orb: "○", winL: "─", winR: "─", mouth: "▁▁▁▁▁▁▁" },
+    { orb: "◌", winL: "─", winR: "─", mouth: "  ───  " },
+    { orb: "◌", winL: "◌", winR: "─", mouth: "  ───  " },
+    { orb: "○", winL: "─", winR: "─", mouth: "  ─o─  " },
+    { orb: "○", winL: "─", winR: "─", mouth: "  ───  " },
   ],
 };
+
+/**
+ * The seven-column aura above the crown, stepped by the spinner tick: sparkles
+ * twinkle while the oracle orchestrates, and z's drift up while it sleeps.
+ */
+export const ORACLE_AURA: Record<OraclePose, readonly string[]> = {
+  orchestrating: ["·  ✦  ·", " ✧ · ✧ ", "✦  ·  ✦", " · ✧ · "],
+  dormant: ["  z    ", "   z   ", "  z  Z ", "     Z "],
+};
+
+/** Ticks each aura frame holds: a calm twinkle rather than the spinner's pace. */
+export const ORACLE_AURA_TICKS = 2;
 
 /**
  * One frame per status and expression: index 0 is the calm rest face, 1 the
@@ -209,13 +222,14 @@ export const COMPACT_FRAMES: Record<SlotId, Record<SlotState, readonly string[]>
 
 /**
  * The oracle tower: 13 columns wide, `rows` while height allows and `smallRows`
- * when it must shrink. `{orb}` is the pulsing bead, `{winL}`/`{winR}` the two
- * window eyes and `{door}` the name over the door.
+ * when it must shrink. `{aura}` twinkles over the radiant `{orb}` crown,
+ * `{winL}`/`{winR}` are the two window eyes, `{mouth}` speaks and `{door}` is
+ * the name over the door. The speech bubble hangs beside the crown.
  */
 export interface TowerSpec {
   rows: readonly string[];
   smallRows: readonly string[];
-  tokens: { orb: string; winL: string; winR: string; door: string; mouth: string };
+  tokens: { aura: string; orb: string; winL: string; winR: string; door: string; mouth: string };
 }
 
 export const TOWER_WIDTH = 13;
@@ -224,29 +238,32 @@ export const TOWER_DOOR = "ORC";
 
 export const TOWER: TowerSpec = {
   rows: [
-    "    \\ | /    ",
-    "     \\|/     ",
-    "     ─{orb}─     ",
+    "   {aura}   ",
+    "    ╲ │ ╱    ",
+    "   ──({orb})──   ",
+    "    ╱ │ ╲    ",
     "      │      ",
-    "┌─────┴─────┐",
-    "│▓▓▓▓▓▓▓▓▓▓▓│",
-    "├───────────┤",
-    "│ ┌─┐   ┌─┐ │",
+    "╭─────┴─────╮",
+    "│ ╭─╮   ╭─╮ │",
     "│ │{winL}│   │{winR}│ │",
-    "│ └─┘   └─┘ │",
-    "├───────────┤",
+    "│ ╰─╯   ╰─╯ │",
     "│  {mouth}  │",
     "├───┬───┬───┤",
-    "│▓▓▓│{door}│▓▓▓│",
+    "│░▒▓│{door}│▓▒░│",
     "└───┴───┴───┘",
   ],
   smallRows: [
-    "     ─{orb}─     ",
-    "┌─────┴─────┐",
-    "│ ┌─┐   ┌─┐ │",
+    "   ──({orb})──   ",
+    "╭─────┴─────╮",
     "│ │{winL}│   │{winR}│ │",
-    "│▓▓▓│{door}│▓▓▓│",
+    "│░▒▓│{door}│▓▒░│",
     "└───┴───┴───┘",
   ],
-  tokens: { orb: "{orb}", winL: "{winL}", winR: "{winR}", door: "{door}", mouth: "{mouth}" },
+  tokens: { aura: "{aura}", orb: "{orb}", winL: "{winL}", winR: "{winR}", door: "{door}", mouth: "{mouth}" },
 };
+
+/** The oracle's speech bubble: outer width including borders, and its text rows. */
+export const BUBBLE = { width: 24, lines: 2 } as const;
+
+/** What the oracle says while the master waits on the user between turns. */
+export const ORACLE_IDLE_WORD = "your turn";

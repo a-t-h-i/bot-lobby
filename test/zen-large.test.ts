@@ -6,7 +6,11 @@ import {
   COMPACT_FRAMES,
   COMPACT_WIDTH,
   FACE_WIDTH,
+  BUBBLE,
+  ORACLE_AURA,
+  ORACLE_AURA_TICKS,
   ORACLE_FRAMES,
+  ORACLE_IDLE_WORD,
   ORACLE_POSES,
   ORACLE_WORDS,
   SLOT_FRAMES,
@@ -28,6 +32,8 @@ import {
   SCENE_WIDTH,
   SLOT_CELL,
   largeLines,
+  oracleAside,
+  oracleSpeech,
   type LargeSceneInput,
 } from "../src/pi/zen-large.ts";
 import type { PanelTheme } from "../src/pi/zen.ts";
@@ -71,6 +77,9 @@ function withStatus(status: LargeSceneInput["slots"][number]["status"], frame = 
 }
 
 const TASK_ROW = /\[[x> ]\] /;
+
+/** Box, alert, full tower, branch, agent strip, TASKS header and six entries. */
+const FULL_SCENE_LINES = 4 + 1 + TOWER.rows.length + 3 + 4 + 1 + MAX_TASK_ROWS;
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -167,7 +176,8 @@ test("tower templates render TOWER_WIDTH columns and carry every token", () => {
       .replace(TOWER.tokens.orb, "◉")
       .replace(TOWER.tokens.winL, "◉")
       .replace(TOWER.tokens.winR, "◉")
-      .replace(TOWER.tokens.mouth, "═══════");
+      .replace(TOWER.tokens.mouth, "═══════")
+      .replace(TOWER.tokens.aura, ORACLE_AURA.orchestrating[0]!);
   for (const rows of [TOWER.rows, TOWER.smallRows]) {
     for (const row of rows) assert.equal(visibleWidth(fill(row)), TOWER_WIDTH, JSON.stringify(row));
   }
@@ -212,21 +222,18 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
     "    │ ⏱ 12m 30s · tools hidden (alt+t) · TASK-core-feature        │",
     "    └─────────────────────────────────────────────────────────────┘",
     "    ! approvals pending: APR-1",
-    "                               ⠋ working",
-    "                                 \\ | /    ",
-    "                                  \\|/     ",
-    "                                  ─◉─     ",
-    "                                   │      ",
-    "                             ┌─────┴─────┐",
-    "                             │▓▓▓▓▓▓▓▓▓▓▓│",
-    "                             ├───────────┤",
-    "                             │ ┌─┐   ┌─┐ │",
+    "                                ·  ✦  ·   ",
+    "                                 ╲ │ ╱     ╭──────────────────────╮",
+    "                                ──(◉)── ╶──┤ ⠋ orchestrating      │",
+    "                                 ╱ │ ╲     │ → DEV                │",
+    "                                   │       ╰──────────────────────╯",
+    "                             ╭─────┴─────╮",
+    "                             │ ╭─╮   ╭─╮ │",
     "                             │ │◉│   │◉│ │",
-    "                             │ └─┘   └─┘ │",
-    "                             ├───────────┤",
-    "                             │  ═══════  │",
+    "                             │ ╰─╯   ╰─╯ │",
+    "                             │   ╰───╯   │",
     "                             ├───┬───┬───┤",
-    "                             │▓▓▓│ORC│▓▓▓│",
+    "                             │░▒▓│ORC│▓▒░│",
     "                             └───┴───┴───┘",
     "                                   │                        ",
     "           ┌───────────────┬───────┴───────┬───────────────┐",
@@ -249,21 +256,18 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
     "                  │ ⏱ 12m 30s · tools hidden (alt+t) · TASK-core-feature        │",
     "                  └─────────────────────────────────────────────────────────────┘",
     "                  ! approvals pending: APR-1",
-    "                                             ⠋ working",
-    "                                               \\ | /    ",
-    "                                                \\|/     ",
-    "                                                ─◉─     ",
-    "                                                 │      ",
-    "                                           ┌─────┴─────┐",
-    "                                           │▓▓▓▓▓▓▓▓▓▓▓│",
-    "                                           ├───────────┤",
-    "                                           │ ┌─┐   ┌─┐ │",
+    "                                              ·  ✦  ·   ",
+    "                                               ╲ │ ╱     ╭──────────────────────╮",
+    "                                              ──(◉)── ╶──┤ ⠋ orchestrating      │",
+    "                                               ╱ │ ╲     │ → DEV                │",
+    "                                                 │       ╰──────────────────────╯",
+    "                                           ╭─────┴─────╮",
+    "                                           │ ╭─╮   ╭─╮ │",
     "                                           │ │◉│   │◉│ │",
-    "                                           │ └─┘   └─┘ │",
-    "                                           ├───────────┤",
-    "                                           │  ═══════  │",
+    "                                           │ ╰─╯   ╰─╯ │",
+    "                                           │   ╰───╯   │",
     "                                           ├───┬───┬───┤",
-    "                                           │▓▓▓│ORC│▓▓▓│",
+    "                                           │░▒▓│ORC│▓▒░│",
     "                                           └───┴───┴───┘",
     "                                                 │                        ",
     "                         ┌───────────────┬───────┴───────┬───────────────┐",
@@ -316,7 +320,7 @@ test("an empty plan renders a zero bar and no checklist section", () => {
 
 test("the tower stem, the tree branch and the agent columns share one centre", () => {
   const lines = largeLines(scene(), 100, 40);
-  const roof = lines.findIndex((line) => line.includes("┌─────┴─────┐"));
+  const roof = lines.findIndex((line) => line.includes("╭─────┴─────╮"));
   const tree = lines.findIndex((line) => line.includes("┬") && line.includes("┴"));
   const centre = lines[roof]!.indexOf("┴");
   assert.equal(lines[roof - 1]!.indexOf("│"), centre, "tower stem above the roof");
@@ -324,7 +328,7 @@ test("the tower stem, the tree branch and the agent columns share one centre", (
   assert.equal(lines[tree + 1]!.indexOf("│"), lines[tree]!.indexOf("┌"), "pipes under the first node");
   const face = lines.find((line) => line.includes("(^_^)"))!;
   assert.equal(face.indexOf("(^_^)") + 2, lines[tree]!.indexOf("┌"), "first column sits under its node");
-  const orb = lines.find((line) => line.includes("─◉─"))!;
+  const orb = lines.find((line) => line.includes("(◉)"))!;
   assert.equal(orb.indexOf("◉"), centre, "orb over the stem");
 });
 
@@ -332,7 +336,7 @@ test("the tower stem, the branch stem and the tree node share the terminal centr
   for (const width of [72, 100, 133]) {
     const lines = largeLines(scene(), width, MAX_LARGE_LINES);
     const centre = Math.floor((width - 1) / 2);
-    const roof = lines.findIndex((line) => line.includes("┌─────┴─────┐"));
+    const roof = lines.findIndex((line) => line.includes("╭─────┴─────╮"));
     const tree = lines.findIndex((line) => line.includes("┬") && line.includes("┴"));
     assert.equal(lines[roof - 1]!.indexOf("│"), centre, `tower stem at ${width}`);
     assert.equal(lines[tree - 1]!.trim(), "│", `branch stem row at ${width}`);
@@ -378,7 +382,7 @@ test("a working agent without an activity word falls back to the state word", ()
 
 test("the longest activity word fits its cell beside the braille spinner", () => {
   const slots = scene().slots.map((slot) => ({ ...slot, status: "working" as const, activity: "orchestrating" }));
-  const row = largeLines(scene({ slots }), 72, 40).find((line) => line.includes("orchestrating"))!;
+  const row = largeLines(scene({ slots, oracleActivity: "delegating" }), 72, 40).find((line) => line.includes("orchestrating"))!;
   assert.ok(row.includes(`${SPIN_FRAMES[0]} orchestrating`), "the word must not truncate");
   assert.equal(row.split("orchestrating").length - 1, 4, "every column shows the word");
   assert.ok(visibleWidth(`${SPIN_FRAMES[0]} orchestrating`) <= SLOT_CELL, "the status cell must hold the word");
@@ -436,7 +440,7 @@ test("the theme paints every status and keeps the geometry identical", () => {
   assert.ok(headerBar.includes(`\x1b[${CODES.dim}m${BAR.empty.repeat(5)}`), "header bar track");
   const spinnerRow = colored.find((line) => stripAnsi(line).includes("reading"))!;
   assert.ok(spinnerRow.includes(`\x1b[1m`), "working row bold");
-  const orbRow = colored.find((line) => stripAnsi(line).includes("─◉─"))!;
+  const orbRow = colored.find((line) => stripAnsi(line).includes("(◉)"))!;
   assert.ok(orbRow.includes(`\x1b[${CODES.accent}m◉\x1b[0m`), "oracle orb colour");
 });
 
@@ -512,13 +516,13 @@ test("TASKS outranks the tower, so a taller terminal never hides checklist rows"
   });
   const tall = largeLines(many, 72, MAX_LARGE_LINES);
   assert.equal(tall.filter((line) => TASK_ROW.test(line)).length, MAX_TASK_ROWS);
-  assert.ok(tall.some((line) => line.includes("│▓▓▓▓▓▓▓▓▓▓▓│")), "the full tower fits a full checklist");
+  assert.ok(tall.some((line) => line.includes("│ ╭─╮   ╭─╮ │")), "the full tower fits a full checklist");
   const roomy = largeLines(many, 72, 30);
   assert.equal(roomy.filter((line) => TASK_ROW.test(line)).length, MAX_TASK_ROWS);
-  assert.ok(!roomy.some((line) => line.includes("│▓▓▓▓▓▓▓▓▓▓▓│")), "the tower shrinks before the checklist");
+  assert.ok(!roomy.some((line) => line.includes("│ ╭─╮   ╭─╮ │")), "the tower shrinks before the checklist");
   const tiny = largeLines(many, 72, 18);
   assert.equal(tiny.filter((line) => TASK_ROW.test(line)).length, 0);
-  assert.ok(tiny.some((line) => line.includes("┌─────┴─────┐")), "the tower stays");
+  assert.ok(tiny.some((line) => line.includes("╭─────┴─────╮")), "the tower stays");
 });
 
 test("TASKS takes the full scene width for its step text", () => {
@@ -559,7 +563,8 @@ test("every line budget keeps the alert, stays inside the cap and degrades monot
   assert.ok(counts.at(-1)! > counts[0]!);
   const sampled = [40, 34, 30, 24, 18].map((budget) => largeLines(input, 72, budget));
   assert.ok(sampled[0]!.length > sampled.at(-1)!.length);
-  assert.equal(sampled[0]!.length, MAX_LARGE_LINES);
+  assert.equal(sampled[0]!.length, FULL_SCENE_LINES);
+  assert.ok(FULL_SCENE_LINES <= MAX_LARGE_LINES);
 });
 
 test("the header bar fills proportionally and clamps out-of-range counts", () => {
@@ -570,4 +575,51 @@ test("the header bar fills proportionally and clamps out-of-range counts", () =>
   assert.ok(barRow(10, 10).includes(BAR.filled.repeat(BAR.cells)));
   assert.ok(barRow(20, 10).includes(BAR.filled.repeat(BAR.cells)));
   assert.ok(barRow(0, 0).includes(BAR.empty.repeat(BAR.cells)));
+});
+
+// --- the oracle's speech bubble ---
+
+test("the speech bubble hangs beside the crown with its tail on the orb row", () => {
+  for (const width of [72, 100, 160]) {
+    const lines = largeLines(scene({ oracleActivity: "delegating" }), width, 40);
+    const orbRow = lines.find((line) => line.includes("(◉)"))!;
+    assert.ok(orbRow.includes("(◉)── ╶──┤ ⠋ delegating"), `tail at ${width}: ${orbRow}`);
+    const top = lines.indexOf(orbRow) - 1;
+    assert.ok(lines[top]!.trimEnd().endsWith(`╭${"─".repeat(BUBBLE.width - 2)}╮`), "bubble top above the tail");
+    assert.ok(lines[top + 3]!.trimEnd().endsWith(`╰${"─".repeat(BUBBLE.width - 2)}╯`), "bubble bottom");
+    const right = (line: string) => visibleWidth(line.trimEnd());
+    assert.equal(right(lines[top]!), right(lines[top + 3]!), "bubble edges line up");
+    assert.equal(right(lines[top + 1]!), right(lines[top]!), "speech row closes the box");
+    assert.ok(right(lines[top]!) <= Math.floor((width - SCENE_WIDTH) / 2) + SCENE_WIDTH, "bubble stays inside the scene");
+  }
+  const small = largeLines(scene(), 72, 24);
+  assert.ok(small.some((line) => line.includes("╭─────┴─────╮╶┤")), "the small tower gets a stub tail");
+});
+
+test("the oracle says what the master does, oversees running agents, and waits on the user", () => {
+  const idle = scene({ slots: scene().slots.map((slot) => ({ ...slot, status: "idle" as const, activity: undefined })) });
+  assert.equal(oracleSpeech(scene({ oracleActivity: "planning", tick: 2 })), `${SPIN_FRAMES[2]} planning`);
+  assert.equal(oracleSpeech(scene()), `${SPIN_FRAMES[0]} ${ORACLE_WORDS.orchestrating}`);
+  assert.equal(oracleSpeech(idle), `${SLOT_STATE_GLYPHS.idle} ${ORACLE_IDLE_WORD}`);
+  assert.equal(oracleSpeech(scene({ oracle: { pose: "dormant", frame: 0 }, oracleActivity: "planning" })), `${SLOT_STATE_GLYPHS.idle} ${ORACLE_WORDS.dormant}`);
+  const both = scene({ slots: scene().slots.map((slot) => ({ ...slot, status: slot.id === "design" ? "working" as const : slot.status })) });
+  assert.equal(oracleAside(both), "→ DEV · DESIGN");
+  assert.equal(oracleAside(idle), "step 4 of 6");
+  assert.equal(oracleAside({ ...idle, done: 6 }), "all steps done");
+  assert.equal(oracleAside({ ...idle, state: "awaiting_approval", caption: "awaiting your approval" }), "awaiting your approval");
+  assert.equal(oracleAside({ ...idle, state: "planning", caption: undefined }), "planning");
+  const long = largeLines(scene({ oracleActivity: "x".repeat(60) }), 72, 40).find((line) => line.includes("xxx"))!;
+  assert.ok(long.includes("…"), "a long activity is truncated inside the bubble");
+  assert.ok(visibleWidth(long) <= 72);
+});
+
+test("the aura twinkles with the tick while orchestrating and drifts z's while dormant", () => {
+  const aura = (input: LargeSceneInput) => largeLines(input, 72, 40)[5]!.trim();
+  assert.equal(aura(scene({ tick: 0 })), ORACLE_AURA.orchestrating[0]!.trim());
+  assert.equal(aura(scene({ tick: ORACLE_AURA_TICKS })), ORACLE_AURA.orchestrating[1]!.trim());
+  assert.equal(aura(scene({ tick: 1 })), aura(scene({ tick: 0 })), "each aura frame holds for several ticks");
+  assert.equal(aura(scene({ oracle: { pose: "dormant", frame: 0 } })), ORACLE_AURA.dormant[0]!.trim());
+  for (const pose of ORACLE_POSES) {
+    for (const frame of ORACLE_AURA[pose]) assert.equal(visibleWidth(frame), 7, `${pose} aura ${JSON.stringify(frame)}`);
+  }
 });

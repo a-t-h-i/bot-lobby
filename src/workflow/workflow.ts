@@ -1,7 +1,17 @@
 import { join } from "node:path";
 import type { BotLobbyConfig } from "../schemas/configuration.ts";
 import type { AgentRun, Pushback, ResearchResult, ReviewResult } from "../schemas/findings.ts";
-import { TASK_STATES, TERMINAL_STATES, taskRequest, type Approval, type ApprovalKind, type Task, type TaskState } from "../schemas/task.ts";
+import {
+  MAX_WORKER_RECORDS,
+  TASK_STATES,
+  TERMINAL_STATES,
+  taskRequest,
+  type Approval,
+  type ApprovalKind,
+  type Task,
+  type TaskState,
+  type WorkerRunRecord,
+} from "../schemas/task.ts";
 import { isDomain, type Domain } from "../schemas/agent.ts";
 import { transition } from "../state/task-state.ts";
 import { ownerlessTask, readTaskArtifact, removeTaskScratchpads, saveTask, selectTask, taskDirFor, taskReadDirs } from "../state/persistence.ts";
@@ -495,6 +505,19 @@ function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instructi
   };
 }
 
+/** Remember a worker delegation so the checklist replays it after a reload. */
+function recordWorkerRun(task: Task, run: AgentRun): void {
+  const record: WorkerRunRecord = {
+    runId: run.runId,
+    domain: run.domain,
+    instruction: run.instruction ?? "",
+    status: run.status,
+    startedAt: run.startedAt,
+    ...(run.finishedAt ? { finishedAt: run.finishedAt } : {}),
+  };
+  task.workerRuns = [...(task.workerRuns ?? []), record].slice(-MAX_WORKER_RECORDS);
+}
+
 async function handleImplement(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
   requireState(task, ["planning", "implementing", "reviewing"]);
   const domain = parseDomain(params.domain, "implement");
@@ -504,6 +527,7 @@ async function handleImplement(task: Task, params: OrchestrateParams, deps: Work
   if (!task.domains.includes(domain)) task.domains.push(domain);
   if (task.state !== "implementing") transition(task, "implementing");
   const outcome = await runWorker(workerRequest(deps, task, domain, instruction), deps.runProcess ?? spawnPiProcess);
+  recordWorkerRun(task, outcome.run);
   const approvals = recordWorkerApprovals(task, outcome, deps.config);
   const pushback = recordPushback(task, outcome);
   task.blockers = [...task.blockers.filter((blocker) => blocker.domain !== domain), ...outcome.result.blockers];

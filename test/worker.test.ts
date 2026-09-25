@@ -270,3 +270,16 @@ test("implement is rejected before the plan is approved", async () => {
   assert.equal(result.ok, false);
   assert.match(result.message, /not allowed in state/);
 });
+
+test("implement records each worker delegation on the task for the plan checklist", async () => {
+  const deps = makeDeps();
+  withTask(deps, "planning");
+  await act(deps, { action: "implement", domain: "backend", task: "Step 1: add pagination." });
+  await act(deps, { action: "implement", domain: "designer", task: "Step 2: style the pager." });
+  const records = loadTask(deps.root, deps.configDir, "TASK-1")!.workerRuns ?? [];
+  assert.deepEqual(records.map((record) => [record.domain, record.instruction, record.status]), [
+    ["backend", "Step 1: add pagination.", "success"],
+    ["designer", "Step 2: style the pager.", "success"],
+  ]);
+  assert.ok(records.every((record) => record.runId && record.startedAt && record.finishedAt));
+});

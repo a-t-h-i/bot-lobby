@@ -26,18 +26,36 @@ export function statusText(task: Task | undefined, minimized = false): string {
 }
 
 let zenOn = false;
-let zenState: { task: Task | undefined; runs: AgentRun[] } = { task: undefined, runs: [] };
 
-/** Latest master tool activity; the oracle spinner line shows it. */
+/**
+ * Widget state. `live` holds the runs reported in this session; `runs` is what the
+ * panel draws: the task's persisted worker records overlaid by the live copies,
+ * so the checklist replays after a reload. `version` bumps on every change and
+ * keys the widget's render cache.
+ */
+let zenState: { task: Task | undefined; live: AgentRun[]; runs: AgentRun[] } = { task: undefined, live: [], runs: [] };
+let zenVersion = 0;
+
+/** Latest master tool activity; the oracle's speech bubble shows it. */
 let oracleActivity: string | undefined;
 
-/** Record the master's current activity word (see events.ts); undefined clears it. */
+/** The mounted widget, so run and activity updates can repaint without waiting a tick. */
+let mountedWidget: { refresh(): void } | undefined;
+
+function touch(): void {
+  zenVersion += 1;
+  mountedWidget?.refresh();
+}
+
+/** Record the master's current activity word (see events.ts); undefined means it waits on the user. */
 export function setOracleActivity(activity: string | undefined): void {
+  if (activity === oracleActivity) return;
   oracleActivity = activity;
+  touch();
 }
 
 /** Upper bound on retained runs so a long task cannot grow the widget state without limit. */
-export const MAX_RETAINED_RUNS = 64;
+export const MAX_RETAINED_RUNS = 128;
 
 /**
  * Merge `incoming` runs into `previous`, keyed by `runId`: a newer copy of a run
@@ -46,13 +64,39 @@ export const MAX_RETAINED_RUNS = 64;
  */
 export function mergeRuns(previous: readonly AgentRun[], incoming: readonly AgentRun[]): AgentRun[] {
   if (incoming.length === 0) return [...previous];
-  const merged = [...previous];
+  const merged = new Map<string, AgentRun>();
+  for (const run of previous) merged.set(run.runId, run);
   for (const run of incoming) {
-    const at = merged.findIndex((existing) => existing.runId === run.runId);
-    if (at >= 0) merged.splice(at, 1);
-    merged.push(run);
+    merged.delete(run.runId);
+    merged.set(run.runId, run);
   }
-  return merged.slice(-MAX_RETAINED_RUNS);
+  return [...merged.values()].slice(-MAX_RETAINED_RUNS);
+}
+
+/** The task's persisted worker records as runs, oldest first; the panel only reads their plan fields. */
+export function persistedRuns(task: Task | undefined): AgentRun[] {
+  return (task?.workerRuns ?? []).map((record) => ({
+    runId: record.runId,
+    taskId: task!.id,
+    domain: record.domain,
+    role: "worker",
+    status: record.status,
+    instruction: record.instruction,
+    output: "",
+    attempts: 1,
+    startedAt: record.startedAt,
+    ...(record.finishedAt ? { finishedAt: record.finishedAt } : {}),
+  }));
+}
+
+/** Runs are retained without their report text: the panel never reads it and reports can be large. */
+function slim(runs: readonly AgentRun[]): AgentRun[] {
+  return runs.map((run) => (run.output ? { ...run, output: "" } : run));
+}
+
+function setZenState(task: Task | undefined, live: AgentRun[]): void {
+  zenState = { task, live, runs: mergeRuns(persistedRuns(task), live) };
+  touch();
 }
 
 /** Per-session standard-pi mode: the widget and Master prompt are hidden but ownership stays. */
@@ -69,7 +113,7 @@ export function setMinimized(value: boolean): void {
 /** Flip minimize/restore and refresh the footer; the session is unchanged. */
 export function toggleMinimized(ctx: ExtensionContext, configDir: string): void {
   setMinimized(!minimized);
-  applyStatus(ctx, detectProjectRoot(ctx.cwd, configDir), configDir, zenState.runs);
+  applyStatus(ctx, detectProjectRoot(ctx.cwd, configDir), configDir, zenState.live);
   ctx.ui.notify(minimized ? "bot-lobby minimized — ctrl+shift+m or /bot-lobby restore to return" : "bot-lobby restored", "info");
 }
 
@@ -100,6 +144,7 @@ const EXPRESSION_KEYS: readonly ExpressionKey[] = [...SLOT_IDS, "oracle"];
 /** Animated zen scene + plan checklist shown above the editor while a task is active. */
 class ZenWidget implements Component {
   private tick = 0;
+  private cache: { key: string; theme: Theme; lines: string[] } | undefined;
   private delay = liveTickDelay();
   private timer: ReturnType<typeof setInterval>;
   private disposed = false;
@@ -116,6 +161,12 @@ class ZenWidget implements Component {
     const entries = EXPRESSION_KEYS.map((key) => [key, createExpression(now, rng)] as const);
     this.expressions = Object.fromEntries(entries) as Record<ExpressionKey, ExpressionState>;
     this.timer = setInterval(() => this.advance(), this.delay);
+    mountedWidget = this;
+  }
+
+  /** Repaint now: state changed between ticks. */
+  refresh(): void {
+    if (!this.disposed) this.tui.requestRender();
   }
 
   private advance(): void {
@@ -144,18 +195,34 @@ class ZenWidget implements Component {
     return Object.fromEntries(EXPRESSION_KEYS.map((key) => [key, this.expressions[key].frame]));
   }
 
+  /**
+   * The panel only changes with the tick, an expression frame, the widget state or
+   * the elapsed second, so every other repaint (typing in the editor, streaming
+   * output) reuses the last lines instead of recomposing the scene.
+   */
   render(width: number): string[] {
     const now = Date.now();
-    const opts = { width, rows: this.tui.terminal.rows, tick: this.tick, theme: this.theme(), expressions: this.frames(), oracleActivity };
-    const lines = panelLines(zenState.task, zenState.runs, now, isQuiet(), opts);
-    return lines.map((line) => truncateToWidth(line, width));
+    const rows = this.tui.terminal.rows;
+    const theme = this.theme();
+    const expressions = this.frames();
+    const quiet = isQuiet();
+    const frameKey = EXPRESSION_KEYS.map((key) => expressions[key] ?? 0).join(",");
+    const key = `${width}|${rows}|${this.tick}|${frameKey}|${zenVersion}|${Math.floor(now / 1000)}|${quiet}`;
+    if (this.cache && this.cache.key === key && this.cache.theme === theme) return this.cache.lines;
+    const opts = { width, rows, tick: this.tick, theme, expressions, oracleActivity };
+    const lines = panelLines(zenState.task, zenState.runs, now, quiet, opts).map((line) => truncateToWidth(line, width));
+    this.cache = { key, theme, lines };
+    return lines;
   }
 
-  invalidate(): void {}
+  invalidate(): void {
+    this.cache = undefined;
+  }
 
   dispose(): void {
     this.disposed = true;
     clearInterval(this.timer);
+    if (mountedWidget === this) mountedWidget = undefined;
   }
 }
 
@@ -176,7 +243,7 @@ export function applyStatus(ctx: ExtensionContext, root: string, configDir: stri
   const sessionId = ctx.sessionManager.getSessionId();
   const task = isSubagentProcess() || minimized ? undefined : activeTask(root, configDir, sessionId);
   const sameTask = zenState.task?.id === task?.id;
-  zenState = { task, runs: mergeRuns(sameTask ? zenState.runs : [], runs) };
+  setZenState(task, mergeRuns(sameTask ? zenState.live : [], slim(runs)));
   ctx.ui.setStatus(STATUS_KEY, statusText(task, minimized));
   const active = Boolean(task && !TERMINAL_STATES.includes(task.state));
   if (!active) {
@@ -192,9 +259,24 @@ export function applyStatus(ctx: ExtensionContext, root: string, configDir: stri
   }
 }
 
+/**
+ * Streamed run updates (start, every activity change, finish) from an in-flight
+ * `orchestrate` call. The task on disk does not change mid-call, so this only
+ * merges the runs and repaints; `applyStatus` rereads the task once the call ends.
+ * Before any task is loaded it falls back to `applyStatus` so the widget appears.
+ */
+export function reportRuns(ctx: ExtensionContext, root: string, configDir: string, runs: AgentRun[]): void {
+  if (!zenState.task && !minimized) {
+    applyStatus(ctx, root, configDir, runs);
+    return;
+  }
+  setZenState(zenState.task, mergeRuns(zenState.live, slim(runs)));
+}
+
 export function clearStatus(ctx: ExtensionContext): void {
   leaveZen(ctx);
   oracleActivity = undefined;
+  zenState = { task: undefined, live: [], runs: [] };
   ctx.ui.setStatus(STATUS_KEY, undefined);
   ctx.ui.setWidget(STATUS_KEY, undefined);
 }
@@ -217,7 +299,7 @@ function revealTools(ctx: ExtensionContext, configDir: string): void {
   const expanded = ctx.ui.getToolsExpanded();
   ctx.ui.setToolsExpanded(!expanded);
   ctx.ui.setToolsExpanded(expanded);
-  applyStatus(ctx, detectProjectRoot(ctx.cwd, configDir), configDir, zenState.runs);
+  applyStatus(ctx, detectProjectRoot(ctx.cwd, configDir), configDir, zenState.live);
   ctx.ui.notify(
     quiet
       ? "bot-lobby: tool rows hidden from now on — alt+t reveals them"

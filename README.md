@@ -117,10 +117,13 @@ While the owning session has a task active, its transcript switches to a zen vie
 and the built-in spinner are hidden, and a widget above the editor animates the
 task. At 72 columns and wider it draws a large scene: a header box with the task
 title and state in its top border, a progress bar, and a metadata row with
-elapsed time, quiet-mode hint and task id; a spinner line above the oracle
-naming the master's live tool activity (`⠋ delegating`, `⠋ planning`) or
-`dormant` when the task is paused or finished; an oracle tower with its ORC
-door, animated orb, window eyes and seven-column mouth;
+elapsed time, quiet-mode hint and task id; an oracle tower with a twinkling
+aura (drifting z's while dormant), a radiant orb crown, window eyes, a
+seven-column mouth and its ORC door; beside the crown, the oracle's speech
+bubble, its tail on the orb, says what the master is doing (`⠋ delegating`,
+`⠋ thinking`, `· your turn` once its turn ends, `· dormant` when paused) above
+who is at work (`→ DEV · QA`), the current step (`step 3 of 7`) or the task
+phase (`awaiting your approval`);
 four animated slots — DEV, DESIGN, RESEARCH and QA — each with a status face, a
 caption and two status rows: while running, a braille spinner beside the agent's
 live one-word activity (for example `⠋ reading` or `⠋ editing`) with its elapsed
@@ -138,6 +141,15 @@ expression plays — and their faces, colours and words follow each agent's stat
 five-column ASCII eyes, while its emote frames are status-aware kaomoji: nervous
 while working, happy when done (QA flexes and dances), scared on failure. The
 header progress bar is plan-derived.
+
+The checklist follows the workers through the plan. Plan steps are read from
+`Step N` headings, a `Steps`/`Sequence`/`Order` section, or numbered lines, and
+only top-level items count (sub-points nested under a step never inflate it).
+Each worker instruction is matched to a step by an explicit label
+(`Step 3: ...`, `steps 2-4`) or, failing that, by shared paths, its opening
+phrase and word overlap, with near-ties going to the earliest open step so a
+file path reused across steps cannot pin progress to step 1. Every worker
+delegation is recorded on the task, so progress survives a reload.
 New tasks get a <=3-word title derived from the request (for example "create
 landing page") plus an id `TASK-<slug>` built from the full request, so the banner
 and header stay concise; older `TASK-<timestamp>` tasks keep loading untouched.

@@ -1,7 +1,11 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import {
   BAR,
+  BUBBLE,
+  ORACLE_AURA,
+  ORACLE_AURA_TICKS,
   ORACLE_COLORS,
+  ORACLE_IDLE_WORD,
   ORACLE_FRAMES,
   ORACLE_WORDS,
   SLOT_FRAMES,
@@ -12,6 +16,7 @@ import {
   SPIN_FRAMES,
   TOWER,
   TOWER_DOOR,
+  TOWER_WIDTH,
   type OracleFrame,
   type OraclePose,
   type PanelColor,
@@ -21,8 +26,8 @@ import {
 import type { PanelTheme } from "./zen.ts";
 
 /**
- * The large animated zen scene: a header box, the pulsing oracle tower with its
- * tree connector, the four animated agent columns (face, label, status word and
+ * The large animated zen scene: a header box, the oracle tower with its speech
+ * bubble and tree connector, the four animated agent columns (face, label, status word and
  * elapsed rows), and the TASKS checklist spanning the full scene width (there is
  * no LOG window).
  *
@@ -72,8 +77,10 @@ export interface LargeSceneInput {
   slots: readonly LargeSlot[];
   tasks: readonly LargeTaskRow[];
   oracle: { pose: OraclePose; frame: number };
-  /** Master's live tool activity for the oracle spinner; absent reads "working". */
+  /** Master's live activity for the speech bubble; absent means it waits on the user. */
   oracleActivity?: string;
+  /** Plain-words task phase ("writing the plan"); the bubble's fallback second line. */
+  caption?: string;
   /** Approval/blocked line; never dropped when present. */
   alert?: string;
   /** Severity of the alert line: approvals are `warning`, blocked is `error`. */
@@ -98,10 +105,14 @@ const TASK_COLORS: Record<LargeTaskRow["status"], PanelColor> = {
 };
 
 const TOWER_ROWS: Record<TowerSize, number> = {
-  full: TOWER.rows.length + 1,
-  small: TOWER.smallRows.length + 1,
+  full: TOWER.rows.length,
+  small: TOWER.smallRows.length,
   none: 0,
 };
+
+/** Bubble rows: top border, the text lines and the bottom border. */
+const BUBBLE_ROWS = BUBBLE.lines + 2;
+const BUBBLE_TEXT = BUBBLE.width - 4;
 
 const TOWER_PATTERN = new RegExp(
   `(${Object.values(TOWER.tokens).map((token) => token.replace(/([{}])/g, "\\$1")).join("|")})`,
@@ -299,40 +310,99 @@ function oracleFrame(input: LargeSceneInput): OracleFrame {
   return frames[mod(input.oracle.frame, frames.length)]!;
 }
 
+function oracleAura(input: LargeSceneInput): string {
+  const frames = ORACLE_AURA[input.oracle.pose];
+  return frames[mod(Math.floor(input.tick / ORACLE_AURA_TICKS), frames.length)]!;
+}
+
 function towerRow(row: string, input: LargeSceneInput, theme?: PanelTheme): string {
   const frame = oracleFrame(input);
-  const values = new Map<string, string>([
-    [TOWER.tokens.orb, frame.orb],
-    [TOWER.tokens.winL, frame.winL],
-    [TOWER.tokens.winR, frame.winR],
-    [TOWER.tokens.mouth, frame.mouth],
-    [TOWER.tokens.door, input.doorLabel ?? TOWER_DOOR],
-  ]);
   const accent = ORACLE_COLORS[input.oracle.pose];
-  const parts = row.split(TOWER_PATTERN);
-  return parts
-    .map((part) => {
-      const value = values.get(part);
-      return value === undefined ? paint(part, "muted", theme) : paint(value, accent.color, theme, accent.bold);
-    })
+  const glow = (text: string) => paint(text, accent.color, theme, accent.bold);
+  const values = new Map<string, () => string>([
+    [TOWER.tokens.aura, () => paint(oracleAura(input), accent.color, theme)],
+    [TOWER.tokens.orb, () => glow(frame.orb)],
+    [TOWER.tokens.winL, () => glow(frame.winL)],
+    [TOWER.tokens.winR, () => glow(frame.winR)],
+    [TOWER.tokens.mouth, () => glow(frame.mouth)],
+    [TOWER.tokens.door, () => glow(input.doorLabel ?? TOWER_DOOR)],
+  ]);
+  return row
+    .split(TOWER_PATTERN)
+    .map((part) => values.get(part)?.() ?? paint(part, "muted", theme))
     .join("");
 }
 
-/** The oracle spinner line: the master's live tool activity, or the dormant word. */
-function oracleLine(input: LargeSceneInput, width: number, theme?: PanelTheme): string {
-  const accent = ORACLE_COLORS[input.oracle.pose];
-  return place(paint(oracleStatusText(input), accent.color, theme, accent.bold), width);
+/** The bubble's first line: what the oracle is doing right now. */
+export function oracleSpeech(input: LargeSceneInput): string {
+  if (input.oracle.pose !== "orchestrating") return `${SLOT_STATE_GLYPHS.idle} ${ORACLE_WORDS.dormant}`;
+  const spin = SPIN_FRAMES[mod(input.tick, SPIN_FRAMES.length)]!;
+  if (input.oracleActivity) return `${spin} ${input.oracleActivity}`;
+  if (workingLabels(input).length > 0) return `${spin} ${ORACLE_WORDS.orchestrating}`;
+  return `${SLOT_STATE_GLYPHS.idle} ${ORACLE_IDLE_WORD}`;
 }
 
-function oracleStatusText(input: LargeSceneInput): string {
-  if (input.oracle.pose !== "orchestrating") return `${SLOT_STATE_GLYPHS.idle} ${ORACLE_WORDS.dormant}`;
-  return `${SPIN_FRAMES[mod(input.tick, SPIN_FRAMES.length)]!} ${input.oracleActivity ?? "working"}`;
+function workingLabels(input: LargeSceneInput): string[] {
+  return input.slots.filter((slot) => slot.status === "working").map((slot) => slot.label || SLOT_LABELS[slot.id]);
+}
+
+/** The bubble's second line: who is at work, else plan progress while building, else the task phase. */
+export function oracleAside(input: LargeSceneInput): string {
+  const working = workingLabels(input);
+  if (input.oracle.pose === "orchestrating" && working.length > 0) return `→ ${working.join(" · ")}`;
+  const building = /^(implementing|reviewing)\b/.test(input.state);
+  if (building && input.total > 0) {
+    return input.done >= input.total ? "all steps done" : `step ${Math.min(input.done + 1, input.total)} of ${input.total}`;
+  }
+  return input.caption ?? input.state;
+}
+
+/**
+ * The speech bubble beside the crown: a rounded box with `BUBBLE.lines` text
+ * rows. The first text row opens with `┤`, where the tail from the oracle lands.
+ */
+function bubbleRows(input: LargeSceneInput, theme?: PanelTheme): string[] {
+  const accent = ORACLE_COLORS[input.oracle.pose];
+  const border = (text: string) => paint(text, "muted", theme);
+  const text = (value: string) => padTo(truncateToWidth(value, BUBBLE_TEXT, "…"), BUBBLE_TEXT);
+  const rule = "─".repeat(BUBBLE.width - 2);
+  return [
+    border(`╭${rule}╮`),
+    border("┤ ") + paint(text(oracleSpeech(input)), accent.color, theme, accent.bold) + border(" │"),
+    border("│ ") + paint(text(oracleAside(input)), "muted", theme) + border(" │"),
+    border(`╰${rule}╯`),
+  ];
+}
+
+/** Row where the bubble starts: its tail row lines up with the crown orb where there is room. */
+function bubbleStart(rows: readonly string[]): number {
+  const orb = rows.findIndex((row) => row.includes(TOWER.tokens.orb));
+  return clamp(orb - 1, 0, Math.max(0, rows.length - BUBBLE_ROWS));
+}
+
+/**
+ * The tail from the oracle to the bubble: the tower row's trailing blanks plus
+ * the one-column gap become `╶──` (`──(◉)── ╶──┤`); a full-width row gets a stub.
+ */
+function tailRow(row: string, input: LargeSceneInput, theme?: PanelTheme): string {
+  const body = row.replace(/ +$/, "");
+  const pad = row.length - body.length;
+  const tail = pad >= 1 ? ` ╶${"─".repeat(pad - 1)}` : "╶";
+  return towerRow(body, input, theme) + paint(tail, "muted", theme);
 }
 
 function towerLines(input: LargeSceneInput, width: number, theme: PanelTheme | undefined, size: TowerSize): string[] {
   if (size === "none") return [];
   const rows = size === "small" ? TOWER.smallRows : TOWER.rows;
-  return [oracleLine(input, width, theme), ...rows.map((row) => place(towerRow(row, input, theme), width))];
+  const left = " ".repeat(sceneLeft(width) + Math.floor((SCENE_WIDTH - TOWER_WIDTH) / 2));
+  const bubble = bubbleRows(input, theme);
+  const start = bubbleStart(rows);
+  return rows.map((row, index) => {
+    const speech = bubble[index - start];
+    if (speech === undefined) return left + towerRow(row, input, theme);
+    const tower = index === start + 1 ? tailRow(row, input, theme) : `${towerRow(row, input, theme)} `;
+    return left + tower + speech;
+  });
 }
 
 function stripWidth(count: number): number {
