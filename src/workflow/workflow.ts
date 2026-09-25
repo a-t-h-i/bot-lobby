@@ -123,7 +123,7 @@ export function validatePlan(plan: string): string[] {
 }
 
 /** A user-facing proposal must be a short `- ` bullet list so the user can scan it. */
-export const MAX_PROPOSAL_CHARS = 1400;
+export const MAX_PROPOSAL_CHARS = 1200;
 export function validateProposal(proposal: string): string[] {
   const lines = proposal.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
   const issues: string[] = [];

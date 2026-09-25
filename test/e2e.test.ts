@@ -60,6 +60,7 @@ test("workflow runs a real scout and advances to synthesizing", { skip: !enabled
 test("an active task injects the Master prompt into a real pi session", { skip: !enabled, timeout: 180_000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), "dh-e2e-inject-"));
   ensureProjectStructure(root, ".pi");
+  const sessionId = "e2e-inject";
   const task = createTask("TASK-INJECT", "Document the repository layout");
   createTaskDir(root, ".pi", task);
   for (const step of ["clarifying", "scouting", "synthesizing"] as const) transition(task, step);
@@ -67,12 +68,13 @@ test("an active task injects the Master prompt into a real pi session", { skip: 
   transition(task, "planning");
   transition(task, "implementing");
   const { saveTask } = await import("../src/state/persistence.ts");
+  task.ownerSessionId = sessionId;
   saveTask(root, ".pi", task);
 
   const entry = join(process.cwd(), "src", "index.ts");
   const result = spawnSync(
     "pi",
-    ["-e", entry, "-p", "--no-session", "State the active bot-lobby task id and the exact 'Next legal states' line from your instructions. Nothing else."],
+    ["-e", entry, "--no-session", "--session-id", sessionId, "-p", "State the active bot-lobby task id and the exact 'Next legal states' line from your instructions. Nothing else."],
     { cwd: root, encoding: "utf8", timeout: 150_000 },
   );
   const output = `${result.stdout}\n${result.stderr}`;

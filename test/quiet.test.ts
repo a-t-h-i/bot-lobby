@@ -7,8 +7,10 @@ import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-w
 import { isQuiet, isSubagentProcess, setQuiet, toggleQuiet, visibleTools, WEB_TOOL_NAMES } from "../src/pi/quiet.ts";
 import { registerQuietTools } from "../src/pi/tool-renderers.ts";
 import { registerLifecycle } from "../src/pi/events.ts";
-import { isMinimized, registerRevealShortcut, setMinimized, STATUS_KEY } from "../src/pi/ui.ts";
+import { applyStatus, isMinimized, registerRevealShortcut, setMinimized, STATUS_KEY } from "../src/pi/ui.ts";
 import { registerCommands } from "../src/pi/commands.ts";
+import { createTask } from "../src/schemas/task.ts";
+import { createTaskDir, ensureProjectStructure, listTasks, loadTask } from "../src/state/persistence.ts";
 
 type AnyTool = ToolDefinition<any, any, any>;
 type Renderer = (...args: unknown[]) => { render(width: number): string[] };
@@ -24,6 +26,7 @@ function makePi(available: string[], active: string[] = [...available]) {
     handlers: new Map<string, (...args: unknown[]) => unknown>(),
     shortcutHandler: undefined as ((ctx: ExtensionContext) => unknown) | undefined,
     shortcutHandlers: {} as Record<string, (ctx: ExtensionContext) => unknown>,
+    commandHandlers: {} as Record<string, (args: string | undefined, ctx: ExtensionContext) => unknown>,
     on(event: string, handler: (...args: unknown[]) => unknown): () => void {
       state.handlers.set(event, handler);
       return () => {};
@@ -36,8 +39,9 @@ function makePi(available: string[], active: string[] = [...available]) {
       state.shortcutHandler = options.handler;
       state.shortcutHandlers[shortcut] = options.handler;
     },
-    registerCommand(name: string): void {
+    registerCommand(name: string, options?: { handler: (args: string | undefined, ctx: ExtensionContext) => unknown }): void {
       state.commands.push(name);
+      if (options?.handler) state.commandHandlers[name] = options.handler;
     },
     getActiveTools(): string[] {
       return [...state.active];
@@ -56,17 +60,24 @@ function makePi(available: string[], active: string[] = [...available]) {
 type FakePi = ReturnType<typeof makePi>;
 const asPi = (fake: FakePi): ExtensionAPI => fake as unknown as ExtensionAPI;
 
-function makeCtx(cwd: string, expanded = false) {
+function makeCtx(cwd: string, expanded = false, sessionId = "session-1") {
   const ui = {
     expanded,
     expandedCalls: [] as boolean[],
     statuses: [] as Array<{ key: string; text: string | undefined }>,
+    widgets: [] as Array<{ key: string; content: unknown }>,
     notifications: [] as Array<{ message: string; type: string | undefined }>,
     setStatus(key: string, text: string | undefined): void {
       ui.statuses.push({ key, text });
     },
-    setWidget(_key: string, _content: unknown): void {},
+    setWidget(key: string, content: unknown): void {
+      ui.widgets.push({ key, content });
+    },
     setWorkingVisible(_visible: boolean): void {},
+    workingIndicators: [] as unknown[],
+    setWorkingIndicator(indicator?: unknown): void {
+      ui.workingIndicators.push(indicator);
+    },
     getToolsExpanded(): boolean {
       return ui.expanded;
     },
@@ -78,7 +89,7 @@ function makeCtx(cwd: string, expanded = false) {
       ui.notifications.push({ message, type });
     },
   };
-  return { ctx: { cwd, ui, sessionManager: { getSessionId: () => "session-1" } } as unknown as ExtensionContext, ui };
+  return { ctx: { cwd, ui, sessionManager: { getSessionId: () => sessionId } } as unknown as ExtensionContext, ui };
 }
 
 function tempDir(prefix: string): string {
@@ -250,6 +261,94 @@ test("ctrl+shift+m minimizes and restores the widget without touching ownership"
   assert.ok(ui.statuses.at(-1)!.text?.includes("minimized"), "the footer signals minimize");
   fake.shortcutHandlers["ctrl+shift+m"]!(ctx);
   assert.equal(isMinimized(), false);
+});
+
+function ownedProject(sessionId: string, prefix: string): string {
+  const root = tempDir(prefix);
+  ensureProjectStructure(root, ".pi");
+  const task = createTask("TASK-owned", "Owned task");
+  task.ownerSessionId = sessionId;
+  createTaskDir(root, ".pi", task);
+  return root;
+}
+
+test("applyStatus shows the widget and task only for the owning session", () => {
+  setMinimized(false);
+  const root = ownedProject("session-a", "dh-owner-widget-");
+  const foreign = makeCtx(root, false, "session-b");
+  applyStatus(foreign.ctx, root, ".pi");
+  assert.equal(foreign.ui.widgets.at(-1)!.content, undefined, "a foreign session gets no widget");
+  assert.ok(!foreign.ui.statuses.at(-1)!.text?.includes("TASK-owned"), "a foreign session's footer hides the task");
+  const owner = makeCtx(root, false, "session-a");
+  applyStatus(owner.ctx, root, ".pi");
+  assert.equal(typeof owner.ui.widgets.at(-1)!.content, "function", "the owning session gets the widget");
+  assert.ok(owner.ui.statuses.at(-1)!.text?.includes("TASK-owned"));
+  setMinimized(true);
+  applyStatus(owner.ctx, root, ".pi");
+  assert.equal(owner.ui.widgets.at(-1)!.content, undefined, "minimize hides the widget");
+  assert.ok(owner.ui.statuses.at(-1)!.text?.includes("minimized"));
+  setMinimized(false);
+  applyStatus(owner.ctx, root, ".pi");
+  assert.equal(typeof owner.ui.widgets.at(-1)!.content, "function", "restore brings the widget back");
+});
+
+test("before_agent_start injects the Master section only for the owning session", () => {
+  setMinimized(false);
+  const root = ownedProject("session-a", "dh-owner-section-");
+  const fake = makePi(["read"]);
+  registerLifecycle(asPi(fake), ".pi");
+  const handler = fake.handlers.get("before_agent_start")!;
+  const foreign = { systemPromptOptions: { sections: {} as Record<string, string> } };
+  handler(foreign, makeCtx(root, false, "session-b").ctx);
+  assert.equal(foreign.systemPromptOptions.sections["bot-lobby"], undefined);
+  const owner = { systemPromptOptions: { sections: {} as Record<string, string> } };
+  handler(owner, makeCtx(root, false, "session-a").ctx);
+  assert.ok(owner.systemPromptOptions.sections["bot-lobby"]?.includes("TASK-owned"));
+  setMinimized(true);
+  const hidden = { systemPromptOptions: { sections: { "bot-lobby": "stale" } as Record<string, string> } };
+  handler(hidden, makeCtx(root, false, "session-a").ctx);
+  assert.equal(hidden.systemPromptOptions.sections["bot-lobby"], undefined, "minimize removes the section");
+  setMinimized(false);
+});
+
+test("a subagent process never gets the widget or the Master section", () => {
+  setMinimized(false);
+  const restore = setSubagent("1");
+  try {
+    const root = ownedProject("session-a", "dh-subgate-");
+    const { ctx, ui } = makeCtx(root, false, "session-a");
+    applyStatus(ctx, root, ".pi");
+    assert.equal(ui.widgets.at(-1)!.content, undefined);
+    const fake = makePi(["read"]);
+    registerLifecycle(asPi(fake), ".pi");
+    const event = { systemPromptOptions: { sections: {} as Record<string, string> } };
+    fake.handlers.get("before_agent_start")!(event, ctx);
+    assert.equal(event.systemPromptOptions.sections["bot-lobby"], undefined);
+  } finally {
+    restore();
+  }
+});
+
+test("starting a second task in one session is refused with a clear message", async () => {
+  const root = ownedProject("session-1", "dh-one-active-");
+  const fake = makePi(["read"]);
+  registerCommands(asPi(fake), ".pi");
+  const { ctx, ui } = makeCtx(root, false, "session-1");
+  await fake.commandHandlers["bot-lobby"]!("ship the redesign", ctx);
+  assert.ok(ui.notifications.some((entry) => entry.message.includes("already active")), "the session is told to finish the active task");
+  assert.deepEqual(listTasks(root, ".pi").map((task) => task.id), ["TASK-owned"], "no second task is created");
+});
+
+test("/bot-lobby claim reassigns an ownerless task to this session", async () => {
+  const root = tempDir("dh-claim-cmd-");
+  ensureProjectStructure(root, ".pi");
+  createTaskDir(root, ".pi", createTask("TASK-orphan", "Orphaned task"));
+  const fake = makePi(["read"]);
+  registerCommands(asPi(fake), ".pi");
+  const { ctx, ui } = makeCtx(root, false, "session-1");
+  await fake.commandHandlers["bot-lobby"]!("claim TASK-orphan", ctx);
+  assert.equal(loadTask(root, ".pi", "TASK-orphan")!.ownerSessionId, "session-1");
+  assert.ok(ui.notifications.some((entry) => entry.message.includes("TASK-orphan")), "the takeover is reported");
 });
 
 test("commands registration wires alt+t through the reveal shortcut", () => {
