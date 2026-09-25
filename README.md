@@ -64,10 +64,11 @@ A task is owned by the pi session that started it (`ctx.sessionManager` id,
 injects the Master prompt; any other pi session in the same project stays
 ordinary pi. Each session owns at most one active task, so several sessions can
 drive their own tasks concurrently over the shared per-project task and
-knowledge files. A task with no owner (legacy state, or an owner that vanished)
+knowledge files. A task with no owner (legacy state, or one created before this
 is claimed by the first session that runs a state-moving `orchestrate` action;
 `/bot-lobby status`, `tasks` and the widget never claim. Take over an orphaned or
-foreign task explicitly with `/bot-lobby claim <taskId>`.
+foreign task — including one whose owning session has ended — explicitly with
+`/bot-lobby claim <taskId>`.
 
 `/bot-lobby minimize` (or `ctrl+shift+m`) collapses the widget and skips the
 Master prompt for that session only, so plain prompts go straight to standard
