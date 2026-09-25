@@ -347,6 +347,17 @@ test("starting a second task in one session is refused with a clear message", as
   assert.deepEqual(listTasks(root, ".pi").map((task) => task.id), ["TASK-owned"], "no second task is created");
 });
 
+test("/bot-lobby claim refuses when this session already owns an active task", async () => {
+  const root = ownedProject("session-1", "dh-claim-guard-");
+  createTaskDir(root, ".pi", createTask("TASK-orphan", "Orphaned task"));
+  const fake = makePi(["read"]);
+  registerCommands(asPi(fake), ".pi");
+  const { ctx, ui } = makeCtx(root, false, "session-1");
+  await fake.commandHandlers["bot-lobby"]!("claim TASK-orphan", ctx);
+  assert.ok(ui.notifications.some((entry) => entry.message.includes("already active")));
+  assert.equal(loadTask(root, ".pi", "TASK-orphan")!.ownerSessionId, undefined, "the orphan is not claimed");
+});
+
 test("/bot-lobby claim reassigns an ownerless task to this session", async () => {
   const root = tempDir("dh-claim-cmd-");
   ensureProjectStructure(root, ".pi");

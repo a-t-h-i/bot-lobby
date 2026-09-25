@@ -53,8 +53,8 @@ the checkout needs to stay where it is.
 /bot-lobby config               Effective configuration and its file path
 /bot-lobby settings             Edit per-agent model, thinking, and instructions
 /bot-lobby-settings             Same as the settings subcommand
-/bot-lobby minimize|restore   Hide or restore bot-lobby for this session (ctrl+shift+m)
-/bot-lobby claim <taskId>     Take ownership of an orphaned task
+/bot-lobby minimize|restore     Hide or restore bot-lobby for this session (ctrl+shift+m)
+/bot-lobby claim <taskId>      Take ownership of an orphaned task
 ```
 
 ## Sessions and ownership

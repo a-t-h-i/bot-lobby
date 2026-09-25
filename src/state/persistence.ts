@@ -185,6 +185,7 @@ export function claimTask(root: string, configDir: string, taskId: string, sessi
   const task = loadTask(root, configDir, taskId);
   if (!task) return undefined;
   task.ownerSessionId = sessionId;
+  task.updatedAt = new Date().toISOString();
   saveTask(root, configDir, task);
   return task;
 }

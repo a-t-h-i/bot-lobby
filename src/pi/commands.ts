@@ -160,7 +160,12 @@ function cancelTask(ctx: ExtensionCommandContext, configDir: string, taskId?: st
 function claimTaskCommand(ctx: ExtensionCommandContext, configDir: string, taskId?: string): void {
   if (!isTaskId(taskId)) return ctx.ui.notify("Usage: /bot-lobby claim <taskId>", "warning");
   const root = detectProjectRoot(ctx.cwd, configDir);
-  const claimed = claimTask(root, configDir, taskId!, ctx.sessionManager.getSessionId());
+  const sessionId = ctx.sessionManager.getSessionId();
+  const current = ownedTask(root, configDir, sessionId);
+  if (current && current.id !== taskId) {
+    return ctx.ui.notify(`bot-lobby ${current.id} is already active in this session; cancel it before claiming ${taskId}.`, "warning");
+  }
+  const claimed = claimTask(root, configDir, taskId!, sessionId);
   if (!claimed) return ctx.ui.notify(`No task ${taskId}.`, "warning");
   applyStatus(ctx, root, configDir);
   ctx.ui.notify(`bot-lobby now owns ${claimed.id}.`, "info");
