@@ -7,7 +7,8 @@ import { selectKnowledge } from "../knowledge/selector.ts";
 import { cancelAllRuns } from "../execution/agent-runner.ts";
 import { describeTask } from "../workflow/workflow.ts";
 import { truncate } from "../text.ts";
-import { applyStatus, clearStatus, isMinimized, setMinimized } from "./ui.ts";
+import { applyStatus, clearStatus, isMinimized, setMinimized, setOracleActivity } from "./ui.ts";
+import { oracleActivityWord } from "./activity.ts";
 import { isSubagentProcess, visibleTools } from "./quiet.ts";
 import { registerQuietTools } from "./tool-renderers.ts";
 import { taskRequest, type Task } from "../schemas/task.ts";
@@ -41,6 +42,11 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
     applyStatus(ctx, root, configDir);
   });
 
+
+  // The oracle spinner mirrors the master's own tool calls; subagents report into runs.
+  pi.on("tool_execution_start", (event) => {
+    if (!isSubagentProcess()) setOracleActivity(oracleActivityWord(event.toolName, event.args));
+  });
   pi.on("session_shutdown", (_event, ctx) => {
     cancelAllRuns();
     clearStatus(ctx);

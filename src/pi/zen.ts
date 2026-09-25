@@ -398,6 +398,7 @@ function sceneInput(
   tick: number,
   steps: PlanStep[],
   expressions: ExpressionFrames,
+  oracleActivity: string | undefined,
 ): LargeSceneInput {
   const metrics = sceneMetrics(task, runs, now);
   const alert = taskAlert(task);
@@ -413,6 +414,7 @@ function sceneInput(
     slots: sceneSlots(metrics, expressions),
     tasks: sceneTasks(steps),
     oracle: oracleSlot(task, expressions),
+    oracleActivity,
     alert: alert?.text,
     alertKind: alert?.kind,
   };
@@ -427,6 +429,8 @@ export interface PanelOptions {
   theme?: PanelTheme;
   /** Caller-scheduled expression frame per slot and the oracle; absent means rest. */
   expressions?: ExpressionFrames;
+  /** Live master activity word for the oracle spinner; absent reads "working". */
+  oracleActivity?: string;
 }
 
 /**
@@ -449,7 +453,7 @@ export function panelLines(
   const steps = planChecklist(task.plan ?? "", runs);
   const budget = largeLineBudget(opts.rows ?? DEFAULT_ROWS);
   if (width >= LARGE_MIN_WIDTH && budget >= MIN_LARGE_LINES) {
-    const scene = largeLines(sceneInput(task, runs, now, quiet, tick, steps, opts.expressions ?? {}), width, budget, opts.theme);
+    const scene = largeLines(sceneInput(task, runs, now, quiet, tick, steps, opts.expressions ?? {}, opts.oracleActivity), width, budget, opts.theme);
     return scene.map((line) => truncateToWidth(line, width));
   }
   return compactPanel(task, runs, now, quiet, tick, steps, opts, width);

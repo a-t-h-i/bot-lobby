@@ -3,6 +3,7 @@ import {
   BAR,
   ORACLE_COLORS,
   ORACLE_FRAMES,
+  ORACLE_WORDS,
   SLOT_FRAMES,
   SLOT_LABELS,
   SLOT_STATE_COLORS,
@@ -38,7 +39,7 @@ export const LARGE_MIN_WIDTH = 72;
 export const SCENE_WIDTH = 63;
 
 export const MAX_TASK_ROWS = 6;
-export const MAX_LARGE_LINES = 34;
+export const MAX_LARGE_LINES = 35;
 
 /** One agent column: state, caller-selected animation frame, live activity and elapsed. */
 export interface LargeSlot {
@@ -71,6 +72,8 @@ export interface LargeSceneInput {
   slots: readonly LargeSlot[];
   tasks: readonly LargeTaskRow[];
   oracle: { pose: OraclePose; frame: number };
+  /** Master's live tool activity for the oracle spinner; absent reads "working". */
+  oracleActivity?: string;
   /** Approval/blocked line; never dropped when present. */
   alert?: string;
   /** Severity of the alert line: approvals are `warning`, blocked is `error`. */
@@ -95,8 +98,8 @@ const TASK_COLORS: Record<LargeTaskRow["status"], PanelColor> = {
 };
 
 const TOWER_ROWS: Record<TowerSize, number> = {
-  full: TOWER.rows.length,
-  small: TOWER.smallRows.length,
+  full: TOWER.rows.length + 1,
+  small: TOWER.smallRows.length + 1,
   none: 0,
 };
 
@@ -228,25 +231,25 @@ function alertLine(
 }
 
 function boxLines(input: LargeSceneInput, width: number, theme?: PanelTheme): string[] {
-  const rows = [topBorder(input, theme), titleRow(input), barRow(input, theme), bottomBorder(input, theme)];
+  const rows = [topBorder(input, theme), barRow(input, theme), metaRow(input, theme), bottomBorder(theme)];
   return rows.map((row) => place(row, width));
 }
 
 function topBorder(input: LargeSceneInput, theme?: PanelTheme): string {
   const lead = "┌─ BOT-LOBBY ── ";
-  const label = truncateToWidth(`${input.taskId} · ${input.state} `, SCENE_WIDTH - 18, "…");
+  const label = truncateToWidth(`${input.taskTitle} · ${input.state} `, SCENE_WIDTH - 18, "…");
   const tail = "─".repeat(Math.max(0, SCENE_WIDTH - 1 - visibleWidth(lead) - visibleWidth(label)));
   return paint(lead, "muted", theme) + paint(label, "accent", theme, true) + paint(`${tail}┐`, "muted", theme);
 }
 
-function bottomBorder(input: LargeSceneInput, theme?: PanelTheme): string {
-  const label = truncateToWidth(` ⏱ ${input.elapsedLabel} · ${input.quietHint} `, SCENE_WIDTH - 8, "…");
-  const tail = "─".repeat(Math.max(0, SCENE_WIDTH - 3 - visibleWidth(label)));
-  return paint("└─", "muted", theme) + paint(label, "dim", theme) + paint(`${tail}┘`, "muted", theme);
+function bottomBorder(theme?: PanelTheme): string {
+  return paint(`└${"─".repeat(SCENE_WIDTH - 2)}┘`, "muted", theme);
 }
 
-function titleRow(input: LargeSceneInput): string {
-  return boxRow(padTo(input.taskTitle, CONTENT));
+/** Metadata row: elapsed, quiet hint and the task id (the title lives in the border). */
+function metaRow(input: LargeSceneInput, theme?: PanelTheme): string {
+  const meta = `⏱ ${input.elapsedLabel} · ${input.quietHint} · ${input.taskId}`;
+  return boxRow(paint(padTo(meta, CONTENT), "dim", theme), theme);
 }
 
 function barRow(input: LargeSceneInput, theme?: PanelTheme): string {
@@ -315,10 +318,21 @@ function towerRow(row: string, input: LargeSceneInput, theme?: PanelTheme): stri
     .join("");
 }
 
+/** The oracle spinner line: the master's live tool activity, or the dormant word. */
+function oracleLine(input: LargeSceneInput, width: number, theme?: PanelTheme): string {
+  const accent = ORACLE_COLORS[input.oracle.pose];
+  return place(paint(oracleStatusText(input), accent.color, theme, accent.bold), width);
+}
+
+function oracleStatusText(input: LargeSceneInput): string {
+  if (input.oracle.pose !== "orchestrating") return `${SLOT_STATE_GLYPHS.idle} ${ORACLE_WORDS.dormant}`;
+  return `${SPIN_FRAMES[mod(input.tick, SPIN_FRAMES.length)]!} ${input.oracleActivity ?? "working"}`;
+}
+
 function towerLines(input: LargeSceneInput, width: number, theme: PanelTheme | undefined, size: TowerSize): string[] {
   if (size === "none") return [];
   const rows = size === "small" ? TOWER.smallRows : TOWER.rows;
-  return rows.map((row) => place(towerRow(row, input, theme), width));
+  return [oracleLine(input, width, theme), ...rows.map((row) => place(towerRow(row, input, theme), width))];
 }
 
 function stripWidth(count: number): number {
