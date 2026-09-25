@@ -107,9 +107,17 @@ test("a non-finite clock or source never yields NaN", () => {
   assert.equal(anyPlaying([state], Number.NaN), false);
   const fired = advanceExpression(state, state.nextAt, fake(0, Number.POSITIVE_INFINITY));
   for (const value of Object.values(fired)) assert.ok(Number.isFinite(value), JSON.stringify(fired));
+  const badStart = { ...fired, frame: EMOTE_FRAME, until: fired.until + EMOTE_MS, startedAt: Number.NaN };
+  assert.equal(advanceExpression(badStart, badStart.until - 1, fake(0)).frame, EMOTE_FRAME, "a non-finite start stays on the first emote frame");
 });
 
-test("the fast tick is shorter than a blink, so a blink is never skipped", () => {
+test("the expression durations are pinned so the README cannot drift", () => {
+  assert.equal(BLINK_MS, 500);
+  assert.equal(EMOTE_MS, 2000);
+  assert.equal(EMOTE_STEP_MS, 1000);
+});
+
+test("the fast tick is shorter than a blink and an emote step, so none is skipped", () => {
   assert.ok(FAST_TICK_MS < BLINK_MS);
   assert.ok(FAST_TICK_MS < EMOTE_STEP_MS, "an emote step is never skipped");
 });
