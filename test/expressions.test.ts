@@ -9,10 +9,17 @@ import {
   EMOTE_MS,
   EMOTE_STEP_MS,
   FAST_TICK_MS,
+  ORACLE_GAP,
+  PHASE_MS,
   REST_FRAME,
+  SLOT_GAP,
+  TALK_MS,
+  TALK_STEP_MS,
   advanceExpression,
   anyPlaying,
   createExpression,
+  expressionPhase,
+  talkFrame,
   isPlaying,
   nextGap,
   pickEvent,
@@ -120,4 +127,35 @@ test("the expression durations are pinned so the README cannot drift", () => {
 test("the fast tick is shorter than a blink and an emote step, so none is skipped", () => {
   assert.ok(FAST_TICK_MS < BLINK_MS);
   assert.ok(FAST_TICK_MS < EMOTE_STEP_MS, "an emote step is never skipped");
+});
+
+test("the oracle keeps a livelier 6-12 s schedule than the agent slots", () => {
+  assert.deepEqual(ORACLE_GAP, { min: 6_000, max: 12_000 });
+  assert.equal(nextGap(fake(0), ORACLE_GAP), 6_000);
+  assert.equal(nextGap(fake(1), ORACLE_GAP), 12_000);
+  assert.equal(nextGap(fake(0)), SLOT_GAP.min, "slots keep the 20-30 s default");
+  const oracle = createExpression(0, fake(0.5), ORACLE_GAP);
+  assert.equal(oracle.nextAt, 9_000);
+  const played = advanceExpression(oracle, oracle.nextAt, fake(0, 0), ORACLE_GAP);
+  assert.equal(played.frame, BLINK_FRAME);
+  assert.equal(played.nextAt, played.until + ORACLE_GAP.min, "the next gap uses the oracle window too");
+});
+
+test("expressionPhase counts sub-steps only while an expression plays", () => {
+  const blinking = advanceExpression(createExpression(0, fake(0)), 20_000, fake(0, 0));
+  assert.equal(expressionPhase(blinking, 20_000), 0);
+  assert.equal(expressionPhase(blinking, 20_000 + PHASE_MS - 1), 0);
+  assert.equal(expressionPhase(blinking, 20_000 + 2 * PHASE_MS), 2);
+  assert.equal(expressionPhase(blinking, blinking.until), 0, "resting again");
+  assert.equal(expressionPhase(blinking, Number.NaN), 0);
+});
+
+test("talkFrame lip-syncs for TALK_MS after the oracle speaks", () => {
+  assert.equal(talkFrame(undefined, 1_000), undefined);
+  assert.equal(talkFrame(1_000, 1_000), 0);
+  assert.equal(talkFrame(1_000, 1_000 + 3 * TALK_STEP_MS), 3);
+  assert.equal(talkFrame(1_000, 1_000 + TALK_MS - 1), Math.floor((TALK_MS - 1) / TALK_STEP_MS));
+  assert.equal(talkFrame(1_000, 1_000 + TALK_MS), undefined, "silent once the burst ends");
+  assert.equal(talkFrame(1_000, 999), undefined, "a clock that ran backwards stays silent");
+  assert.equal(talkFrame(Number.NaN, 1_000), undefined);
 });

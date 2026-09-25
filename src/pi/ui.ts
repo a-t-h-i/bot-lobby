@@ -4,10 +4,22 @@ import type { AgentRun } from "../schemas/findings.ts";
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { activeTask } from "../state/persistence.ts";
 import { detectProjectRoot } from "../state/project.ts";
-import { advanceExpression, anyPlaying, createExpression, FAST_TICK_MS, type ExpressionState } from "./expressions.ts";
+import {
+  advanceExpression,
+  anyPlaying,
+  createExpression,
+  expressionPhase,
+  FAST_TICK_MS,
+  ORACLE_GAP,
+  SLOT_GAP,
+  talkFrame,
+  type ExpressionGap,
+  type ExpressionState,
+} from "./expressions.ts";
+import { ORACLE_THINKING } from "./activity.ts";
 import { SLOT_IDS } from "./mascot-art.ts";
 import { isQuiet, isSubagentProcess, toggleQuiet } from "./quiet.ts";
-import { panelLines, type ExpressionFrames } from "./zen.ts";
+import { panelLines, type ExpressionFrames, type OracleMotion } from "./zen.ts";
 
 export const STATUS_KEY = "bot-lobby";
 
@@ -48,11 +60,17 @@ function touch(): void {
 }
 
 /** Record the master's current activity word (see events.ts); undefined means it waits on the user. */
-export function setOracleActivity(activity: string | undefined): void {
+export function setOracleActivity(activity: string | undefined, now = Date.now()): void {
   if (activity === oracleActivity) return;
   oracleActivity = activity;
+  // The oracle speaks when it names something new, including handing you the turn;
+  // quietly going back to "thinking" between tool calls is not worth a word.
+  if (activity !== ORACLE_THINKING) oracleSpokeAt = now;
   touch();
 }
+
+/** When the oracle last said something new; its mouth lip-syncs for `TALK_MS` after. */
+let oracleSpokeAt: number | undefined;
 
 /** Upper bound on retained runs so a long task cannot grow the widget state without limit. */
 export const MAX_RETAINED_RUNS = 128;
@@ -131,15 +149,20 @@ function liveTickDelay(): number {
   return isLive() ? LIVE_TICK_MS : IDLE_TICK_MS;
 }
 
-/** Tick delay for the zen clock: fastest while an expression plays, so no blink or emote step is skipped. */
-export function expressionTickDelay(states: readonly ExpressionState[], now: number, live: boolean): number {
-  if (anyPlaying(states, now)) return FAST_TICK_MS;
+/** Tick delay for the zen clock: fastest while an expression plays or the oracle talks, so no step is skipped. */
+export function expressionTickDelay(states: readonly ExpressionState[], now: number, live: boolean, talking = false): number {
+  if (talking || anyPlaying(states, now)) return FAST_TICK_MS;
   return live ? LIVE_TICK_MS : IDLE_TICK_MS;
 }
 
 /** Every sprite with its own expression schedule. */
 type ExpressionKey = keyof ExpressionFrames;
 const EXPRESSION_KEYS: readonly ExpressionKey[] = [...SLOT_IDS, "oracle"];
+
+/** The oracle keeps a livelier schedule than the agent slots. */
+function gapFor(key: ExpressionKey): ExpressionGap {
+  return key === "oracle" ? ORACLE_GAP : SLOT_GAP;
+}
 
 /** Animated zen scene + plan checklist shown above the editor while a task is active. */
 class ZenWidget implements Component {
@@ -158,7 +181,7 @@ class ZenWidget implements Component {
     this.theme = theme;
     this.rng = rng;
     const now = Date.now();
-    const entries = EXPRESSION_KEYS.map((key) => [key, createExpression(now, rng)] as const);
+    const entries = EXPRESSION_KEYS.map((key) => [key, createExpression(now, rng, gapFor(key))] as const);
     this.expressions = Object.fromEntries(entries) as Record<ExpressionKey, ExpressionState>;
     this.timer = setInterval(() => this.advance(), this.delay);
     mountedWidget = this;
@@ -179,16 +202,20 @@ class ZenWidget implements Component {
   }
 
   private play(now: number): void {
-    for (const key of EXPRESSION_KEYS) this.expressions[key] = advanceExpression(this.expressions[key], now, this.rng);
+    for (const key of EXPRESSION_KEYS) this.expressions[key] = advanceExpression(this.expressions[key], now, this.rng, gapFor(key));
   }
 
   /** One interval, retimed when work starts or stops or an expression plays. */
   private retime(now: number): void {
-    const delay = expressionTickDelay(Object.values(this.expressions), now, isLive());
+    const delay = expressionTickDelay(Object.values(this.expressions), now, isLive(), talkFrame(oracleSpokeAt, now) !== undefined);
     if (delay === this.delay) return;
     this.delay = delay;
     clearInterval(this.timer);
     this.timer = setInterval(() => this.advance(), delay);
+  }
+
+  private motion(now: number): OracleMotion {
+    return { phase: expressionPhase(this.expressions.oracle, now), talk: talkFrame(oracleSpokeAt, now) };
   }
 
   private frames(): Partial<Record<ExpressionKey, number>> {
@@ -207,9 +234,10 @@ class ZenWidget implements Component {
     const expressions = this.frames();
     const quiet = isQuiet();
     const frameKey = EXPRESSION_KEYS.map((key) => expressions[key] ?? 0).join(",");
-    const key = `${width}|${rows}|${this.tick}|${frameKey}|${zenVersion}|${Math.floor(now / 1000)}|${quiet}`;
+    const motion = this.motion(now);
+    const key = `${width}|${rows}|${this.tick}|${frameKey}|${motion.phase}|${motion.talk}|${zenVersion}|${Math.floor(now / 1000)}|${quiet}`;
     if (this.cache && this.cache.key === key && this.cache.theme === theme) return this.cache.lines;
-    const opts = { width, rows, tick: this.tick, theme, expressions, oracleActivity };
+    const opts = { width, rows, tick: this.tick, theme, expressions, oracleActivity, oracleMotion: motion };
     const lines = panelLines(zenState.task, zenState.runs, now, quiet, opts).map((line) => truncateToWidth(line, width));
     this.cache = { key, theme, lines };
     return lines;
