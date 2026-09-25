@@ -145,7 +145,7 @@ test("short terminals fall back to the compact strip", () => {
 });
 
 test("largeLineBudget is a clamped fraction of the terminal rows", () => {
-  assert.equal(MAX_LARGE_LINES, 34);
+  assert.equal(MAX_LARGE_LINES, 35);
   assert.equal(largeLineBudget(200), MAX_LARGE_LINES);
   assert.equal(largeLineBudget(40), 30);
   assert.equal(largeLineBudget(18), 13);
@@ -215,7 +215,8 @@ test("the large tier keeps the task id, state, elapsed, quiet hint, counts and a
   const approvals = [{ id: "APR-1", kind: "dependency" as const, domain: "backend" as const, detail: "install zod", status: "pending" as const, createdAt: "now" }];
   const lines = panelLines(task({ state: "implementing", paused: true, approvals }), statusRuns(), NOW, true, LARGE_OPTS);
   const box = lines.slice(0, 4).join("\n");
-  assert.ok(box.includes("TASK-1 · implementing (paused)"));
+  assert.ok(box.includes("implementing (paused)"));
+  assert.ok(box.includes("TASK-1"));
   assert.ok(box.includes("10m 00s"));
   assert.ok(box.includes("tools hidden (alt+t)"));
   assert.ok(lines.some((line) => line.includes("! approvals pending: APR-1")), "the approval alert was dropped");

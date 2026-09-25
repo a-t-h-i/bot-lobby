@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { activityWord } from "../src/pi/activity.ts";
+import { activityWord, oracleActivityWord } from "../src/pi/activity.ts";
 
 test("activityWord maps known tools to a single gerund", () => {
   assert.equal(activityWord("read"), "reading");
@@ -37,4 +37,20 @@ test("every mapped word is a single word", () => {
   for (const tool of ["read", "edit", "grep", "bash", "orchestrate", "web_search", "unknown"]) {
     assert.match(activityWord(tool), /^\S+$/);
   }
+});
+
+test("oracleActivityWord names the master's orchestrate action instead of 'orchestrating'", () => {
+  assert.equal(oracleActivityWord("orchestrate", { action: "propose" }), "proposing");
+  assert.equal(oracleActivityWord("orchestrate", { action: "plan" }), "planning");
+  assert.equal(oracleActivityWord("orchestrate", { action: "implement" }), "delegating");
+  assert.equal(oracleActivityWord("orchestrate", { action: "qa" }), "reviewing");
+  assert.equal(oracleActivityWord("orchestrate", { action: "scout" }), "scouting");
+});
+
+test("oracleActivityWord reuses the tool word outside orchestrate and falls back safely", () => {
+  assert.equal(oracleActivityWord("read"), "reading");
+  assert.equal(oracleActivityWord("edit", { action: "propose" }), "editing");
+  assert.equal(oracleActivityWord("orchestrate", { action: "unknown" }), "working");
+  assert.equal(oracleActivityWord("orchestrate"), "working");
+  assert.equal(oracleActivityWord("orchestrate", "not-an-object"), "working");
 });
