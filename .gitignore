@@ -1,4 +1,43 @@
+# Dependencies
 node_modules/
+
+# bot-lobby local task state, knowledge and config
 .pi/
+
+# Build output
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Test and coverage output
+coverage/
+.nyc_output/
+
+# Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local environment and secrets
+.env
+.env.local
+.env.*.local
+*.local
+
+# Caches and temporary files
+.cache/
+.npm/
+.tmp/
+tmp/
+*.tmp
+*.swp
+*~
+
+# Editors and OS
+.idea/
+.vscode/
 .DS_Store
+Thumbs.db
