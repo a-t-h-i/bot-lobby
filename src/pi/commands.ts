@@ -5,6 +5,9 @@ import { TERMINAL_STATES, createTask, taskRequest, type Task } from "../schemas/
 import { detectProjectRoot, globalConfigPath, loadConfig, readDataRoots } from "../state/project.ts";
 import {
   activeTask,
+  claimTask,
+  ownedTask,
+  ownerlessTask,
   createTaskDir,
   ensureProjectStructure,
   nextTaskId,
@@ -19,7 +22,7 @@ import { readFirstExisting } from "../knowledge/store.ts";
 import { overThreshold } from "../knowledge/compactor.ts";
 import { applyApprovalChoice, describeTask, describeOversizedKnowledge, type ApprovalChoice } from "../workflow/workflow.ts";
 import { shortTitle } from "../text.ts";
-import { applyStatus, registerRevealShortcut } from "./ui.ts";
+import { applyStatus, registerRevealShortcut, setMinimized } from "./ui.ts";
 import { applyMasterModel, openSettings } from "./settings-ui.ts";
 
 const HELP = [
@@ -32,10 +35,12 @@ const HELP = [
   "/bot-lobby knowledge        Show persistent knowledge files",
   "/bot-lobby settings         Edit per-agent model/thinking/instructions",
   "/bot-lobby config           Show effective configuration",
+  "/bot-lobby minimize|restore   Hide or restore bot-lobby for this session (ctrl+shift+m)",
+  "/bot-lobby claim <taskId>    Take ownership of an orphaned task",
 ].join("\n");
 
 /** Subcommands only win when no free-form text follows (so tasks still start). */
-const SUBCOMMANDS = new Set(["status", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "knowledge", "config", "settings"]);
+const SUBCOMMANDS = new Set(["status", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "knowledge", "config", "settings", "minimize", "restore", "claim"]);
 
 function isTaskId(value: string | undefined): boolean {
   return Boolean(value && /^TASK-/.test(value));
@@ -69,7 +74,7 @@ export function kickoff(task: Task): string {
     "Drive it with the orchestrate tool:",
     "1. clarify if the request is genuinely ambiguous,",
     "2. scout the domains the request touches,",
-    "3. synthesize the findings and propose a one-paragraph plan for approval.",
+    "3. synthesize the findings and propose a short `- ` bullet list for approval.",
     "Do not implement anything before the user approves the proposal.",
   ].join("\n");
 }
@@ -82,7 +87,13 @@ async function startTask(
 ): Promise<void> {
   const root = detectProjectRoot(ctx.cwd, configDir);
   ensureProjectStructure(root, configDir);
-  const task = createTask(uniqueTaskId(root, configDir, request), shortTitle(request), new Date().toISOString(), request);
+  const sessionId = ctx.sessionManager.getSessionId();
+  const existing = ownedTask(root, configDir, sessionId);
+  if (existing) {
+    ctx.ui.notify(`bot-lobby ${existing.id} is already active in this session. Finish it or run /bot-lobby cancel ${existing.id} first.`, "warning");
+    return;
+  }
+  const task = createTask(uniqueTaskId(root, configDir, request), shortTitle(request), new Date().toISOString(), request, sessionId);
   createTaskDir(root, configDir, task);
   transition(task, "clarifying");
   saveTask(root, configDir, task);
@@ -94,7 +105,8 @@ async function startTask(
 
 function showStatus(ctx: ExtensionCommandContext, configDir: string, taskId?: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
-  const task = selectTask(root, configDir, taskId);
+  const sessionId = ctx.sessionManager.getSessionId();
+  const task = selectTask(root, configDir, taskId, sessionId) ?? (taskId ? undefined : ownerlessTask(root, configDir));
   applyStatus(ctx, root, configDir);
   const oversized = describeOversizedKnowledge(readDataRoots(root, configDir), loadConfig().knowledge.compactionThreshold);
   const broken = taskHealth(root, configDir).corrupted;
@@ -110,14 +122,17 @@ function showTasks(ctx: ExtensionCommandContext, configDir: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
   const { tasks, corrupted } = taskHealth(root, configDir);
   if (tasks.length === 0 && corrupted.length === 0) return ctx.ui.notify("No bot-lobby tasks yet.", "info");
-  const lines = tasks.slice(0, 12).map((task) => `${task.id}  ${task.state.padEnd(17)} ${task.title.slice(0, 60)}`);
+  const lines = tasks.slice(0, 12).map((task) => `${task.id}  ${task.state.padEnd(17)} ${(task.ownerSessionId ? task.ownerSessionId.slice(0, 8) : "—").padEnd(9)} ${task.title.slice(0, 60)}`);
   if (corrupted.length > 0) lines.push("", `Unreadable task state: ${corrupted.join(", ")} (left untouched; inspect ${readDataRoots(root, configDir).join(" and ")}/tasks)`);
   ctx.ui.notify(lines.join("\n"), "info");
 }
 
 function setPaused(ctx: ExtensionCommandContext, configDir: string, paused: boolean, taskId?: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
-  const task = selectTask(root, configDir, taskId);
+  const task = selectTask(root, configDir, taskId, ctx.sessionManager.getSessionId());
+  if (task?.ownerSessionId && task.ownerSessionId !== ctx.sessionManager.getSessionId()) {
+    return ctx.ui.notify(`${task.id} is owned by another pi session; /bot-lobby claim ${task.id} to take it over.`, "warning");
+  }
   if (!task || TERMINAL_STATES.includes(task.state)) {
     return ctx.ui.notify("No active task to pause or resume.", "warning");
   }
@@ -129,7 +144,10 @@ function setPaused(ctx: ExtensionCommandContext, configDir: string, paused: bool
 
 function cancelTask(ctx: ExtensionCommandContext, configDir: string, taskId?: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
-  const task = selectTask(root, configDir, taskId);
+  const task = selectTask(root, configDir, taskId, ctx.sessionManager.getSessionId());
+  if (task?.ownerSessionId && task.ownerSessionId !== ctx.sessionManager.getSessionId()) {
+    return ctx.ui.notify(`${task.id} is owned by another pi session; /bot-lobby claim ${task.id} to take it over.`, "warning");
+  }
   if (!task) return ctx.ui.notify("No task to cancel.", "warning");
   if (TERMINAL_STATES.includes(task.state)) return ctx.ui.notify(`${task.id} is already ${task.state}.`, "warning");
   transition(task, "abandoned");
@@ -138,6 +156,15 @@ function cancelTask(ctx: ExtensionCommandContext, configDir: string, taskId?: st
   ctx.ui.notify(`${task.id} abandoned.`, "info");
 }
 
+/** Explicit takeover of an orphaned task (ownerless, or owned by a dead session). */
+function claimTaskCommand(ctx: ExtensionCommandContext, configDir: string, taskId?: string): void {
+  if (!isTaskId(taskId)) return ctx.ui.notify("Usage: /bot-lobby claim <taskId>", "warning");
+  const root = detectProjectRoot(ctx.cwd, configDir);
+  const claimed = claimTask(root, configDir, taskId!, ctx.sessionManager.getSessionId());
+  if (!claimed) return ctx.ui.notify(`No task ${taskId}.`, "warning");
+  applyStatus(ctx, root, configDir);
+  ctx.ui.notify(`bot-lobby now owns ${claimed.id}.`, "info");
+}
 function answerProposal(
   ctx: ExtensionCommandContext,
   configDir: string,
@@ -145,7 +172,7 @@ function answerProposal(
   amendment?: string,
 ): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
-  const task = activeTask(root, configDir);
+  const task = activeTask(root, configDir, ctx.sessionManager.getSessionId());
   if (!task) return ctx.ui.notify("No active task.", "warning");
   try {
     const message = applyApprovalChoice(task, choice, amendment);
@@ -215,6 +242,14 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
           return showKnowledge(ctx, configDir);
         case "settings":
           return openSettings(pi, ctx);
+        case "minimize":
+          setMinimized(true);
+          return applyStatus(ctx, detectProjectRoot(ctx.cwd, configDir), configDir);
+        case "restore":
+          setMinimized(false);
+          return applyStatus(ctx, detectProjectRoot(ctx.cwd, configDir), configDir);
+        case "claim":
+          return claimTaskCommand(ctx, configDir, rest[0]);
         default:
           return showConfig(ctx);
       }

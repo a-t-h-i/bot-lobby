@@ -11,6 +11,9 @@ import {
   loadTask,
   listTasks,
   taskHealth,
+  ownedTask,
+  ownerlessTask,
+  claimTask,
   nextTaskId,
   saveTask,
   taskSlug,
@@ -62,6 +65,19 @@ test("createTaskDir creates state, proposal, plan, and scratchpads", () => {
   for (const domain of ["designer", "backend", "qa"] as const) {
     assert.ok(existsSync(scratchpadPath(dir, domain)));
   }
+});
+
+test("ownedTask and ownerlessTask split tasks by session owner", () => {
+  const root = project();
+  const owned = createTask("TASK-owned", "Owned");
+  owned.ownerSessionId = "session-a";
+  createTaskDir(root, ".pi", owned);
+  createTaskDir(root, ".pi", createTask("TASK-free", "Free"));
+  assert.equal(ownedTask(root, ".pi", "session-a")?.id, "TASK-owned");
+  assert.equal(ownedTask(root, ".pi", "session-b"), undefined);
+  assert.equal(ownerlessTask(root, ".pi")?.id, "TASK-free");
+  assert.equal(claimTask(root, ".pi", "TASK-free", "session-b")?.ownerSessionId, "session-b");
+  assert.equal(ownedTask(root, ".pi", "session-b")?.id, "TASK-free");
 });
 
 test("saveTask and loadTask round-trip through state.json", () => {

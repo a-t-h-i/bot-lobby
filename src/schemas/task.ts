@@ -73,6 +73,8 @@ export interface Task {
   approvals: Approval[];
   createdAt: string;
   updatedAt: string;
+  /** The pi session (ctx.sessionManager id) that owns this task; absent on legacy tasks. */
+  ownerSessionId?: string;
 }
 
 export function createTask(
@@ -80,6 +82,7 @@ export function createTask(
   title: string,
   now = new Date().toISOString(),
   request = title,
+  ownerSessionId?: string,
 ): Task {
   return {
     id,
@@ -95,6 +98,7 @@ export function createTask(
     decisions: [],
     approvals: [],
     createdAt: now,
+    ...(ownerSessionId ? { ownerSessionId } : {}),
     updatedAt: now,
   };
 }

@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth, type Component, type TUI } from "@earendil-works/pi-tui";
+import { Key, truncateToWidth, type Component, type TUI } from "@earendil-works/pi-tui";
 import type { AgentRun } from "../schemas/findings.ts";
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { activeTask } from "../state/persistence.ts";
@@ -18,14 +18,33 @@ export function summarizeRun(run: AgentRun): string {
 }
 
 /** One-line footer text, always carrying the quiet-mode hint. */
-export function statusText(task: Task | undefined): string {
+export function statusText(task: Task | undefined, minimized = false): string {
   const mode = isQuiet() ? "tools hidden (alt+t)" : "tools shown";
+  if (minimized) return `bot-lobby minimized (ctrl+shift+m) · ${mode}`;
   if (!task) return `bot-lobby · ${mode}`;
   return `bot-lobby ${task.id} · ${task.paused ? `${task.state} (paused)` : task.state} · ${mode}`;
 }
 
 let zenOn = false;
 let zenState: { task: Task | undefined; runs: AgentRun[] } = { task: undefined, runs: [] };
+
+/** Per-session standard-pi mode: the widget and Master prompt are hidden but ownership stays. */
+let minimized = false;
+
+export function isMinimized(): boolean {
+  return minimized;
+}
+
+export function setMinimized(value: boolean): void {
+  minimized = value;
+}
+
+/** Flip minimize/restore and refresh the footer; the session is unchanged. */
+export function toggleMinimized(ctx: ExtensionContext, configDir: string): void {
+  setMinimized(!minimized);
+  applyStatus(ctx, detectProjectRoot(ctx.cwd, configDir), configDir, zenState.runs);
+  ctx.ui.notify(minimized ? "bot-lobby minimized — ctrl+shift+m or /bot-lobby restore to return" : "bot-lobby restored", "info");
+}
 
 export const LIVE_TICK_MS = 250;
 export const IDLE_TICK_MS = 1000;
@@ -122,11 +141,12 @@ function leaveZen(ctx: ExtensionContext): void {
 
 /** Refresh the footer + widget to match the task on disk. */
 export function applyStatus(ctx: ExtensionContext, root: string, configDir: string, runs: AgentRun[] = []): void {
-  const task = activeTask(root, configDir);
+  const sessionId = ctx.sessionManager.getSessionId();
+  const task = isSubagentProcess() || minimized ? undefined : activeTask(root, configDir, sessionId);
   const sameTask = zenState.task?.id === task?.id;
   const currentRuns = runs.length > 0 ? runs : sameTask ? zenState.runs : [];
   zenState = { task, runs: currentRuns };
-  ctx.ui.setStatus(STATUS_KEY, statusText(task));
+  ctx.ui.setStatus(STATUS_KEY, statusText(task, minimized));
   const active = Boolean(task && !TERMINAL_STATES.includes(task.state));
   if (!active) {
     leaveZen(ctx);
@@ -153,6 +173,10 @@ export function registerRevealShortcut(pi: ExtensionAPI, configDir: string): voi
   pi.registerShortcut("alt+t", {
     description: "bot-lobby: reveal or hide built-in tool rows",
     handler: (ctx) => revealTools(ctx, configDir),
+  });
+  pi.registerShortcut(Key.ctrlShift("m"), {
+    description: "bot-lobby: minimize or restore the widget for this session",
+    handler: (ctx) => toggleMinimized(ctx, configDir),
   });
 }
 

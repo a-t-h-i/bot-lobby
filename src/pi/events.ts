@@ -7,7 +7,7 @@ import { selectKnowledge } from "../knowledge/selector.ts";
 import { cancelAllRuns } from "../execution/agent-runner.ts";
 import { describeTask } from "../workflow/workflow.ts";
 import { truncate } from "../text.ts";
-import { applyStatus, clearStatus } from "./ui.ts";
+import { applyStatus, clearStatus, isMinimized, setMinimized } from "./ui.ts";
 import { isSubagentProcess, visibleTools } from "./quiet.ts";
 import { registerQuietTools } from "./tool-renderers.ts";
 import { taskRequest, type Task } from "../schemas/task.ts";
@@ -37,6 +37,7 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
       pi.setActiveTools(visibleTools(pi.getActiveTools()));
     }
     const root = detectProjectRoot(ctx.cwd, configDir);
+    setMinimized(false);
     applyStatus(ctx, root, configDir);
   });
 
@@ -47,8 +48,12 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
 
   pi.on("before_agent_start", (event, ctx) => {
     const root = detectProjectRoot(ctx.cwd, configDir);
-    const task = activeTask(root, configDir);
-    if (!task) return;
+    const sessionId = ctx.sessionManager.getSessionId();
+    const task = isSubagentProcess() || isMinimized() ? undefined : activeTask(root, configDir, sessionId);
+    if (!task) {
+      delete event.systemPromptOptions.sections["bot-lobby"];
+      return;
+    }
     const slices = readAgentKnowledge(readDataRoots(root, configDir), "master");
     const selected = selectKnowledge(`${taskRequest(task)} ${task.proposal ?? ""}`, slices);
     event.systemPromptOptions.sections["bot-lobby"] = compilePrompt({

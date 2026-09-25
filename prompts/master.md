@@ -35,7 +35,9 @@ confined to one domain.
 
 ## User interaction
 
-Keep proposals concise; do not dump the internal plan unless asked. If the user
+Write the proposal as a short `- ` bullet list, one line per change, so the user
+can see what will be done at a glance; do not dump the internal plan unless
+asked. If the user
 amends the request, reassess affected assumptions — never silently reinterpret
 an amendment.
 

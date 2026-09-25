@@ -10,6 +10,7 @@ import { transition } from "../src/state/task-state.ts";
 import {
   runWorkflowAction,
   validatePlan,
+  validateProposal,
   describeTask,
   type WorkflowDeps,
   type OrchestrateParams,
@@ -121,7 +122,7 @@ test("a scout pushback is recorded as a decision and does not gate the domain", 
 test("propose from clarifying takes the trivial shortcut to approval", async () => {
   const deps = makeDeps({ choose: async () => "Approve" });
   withTask(deps, "clarifying");
-  const result = await act(deps, { action: "propose", proposal: "Slow the sprite animations." });
+  const result = await act(deps, { action: "propose", proposal: "- Slow the sprite animations." });
   assert.equal(result.ok, true, result.message);
   assert.equal(result.state, "planning");
 });
@@ -137,34 +138,34 @@ test("scout from synthesizing is a targeted verification that stays in synthesiz
 test("propose approval moves to planning", async () => {
   const deps = makeDeps({ choose: async () => "Approve" });
   withTask(deps, "synthesizing");
-  const result = await act(deps, { action: "propose", proposal: "Add Z while keeping the login flow." });
+  const result = await act(deps, { action: "propose", proposal: "- Add Z while keeping the login flow." });
   assert.equal(result.ok, true);
   assert.equal(result.state, "planning");
-  assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.proposal, "Add Z while keeping the login flow.");
+  assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.proposal, "- Add Z while keeping the login flow.");
 });
 
 test("propose decline abandons the task", async () => {
   const deps = makeDeps({ choose: async () => "Decline" });
   withTask(deps, "synthesizing");
-  const result = await act(deps, { action: "propose", proposal: "Risky change." });
+  const result = await act(deps, { action: "propose", proposal: "- Replace the endpoint." });
   assert.equal(result.state, "abandoned");
 });
 
 test("propose amend records the amendment and stays awaiting approval", async () => {
   const deps = makeDeps({ choose: async () => "Amend", ask: async () => "Keep the old endpoint" });
   withTask(deps, "synthesizing");
-  const result = await act(deps, { action: "propose", proposal: "Replace the endpoint." });
+  const result = await act(deps, { action: "propose", proposal: "- Replace the endpoint." });
   assert.equal(result.state, "awaiting_approval");
   const task = loadTask(deps.root, deps.configDir, "TASK-1")!;
   assert.deepEqual(task.amendments, ["Keep the old endpoint"]);
-  const again = await act(deps, { action: "propose", proposal: "Keep the old endpoint and add a new one." });
+  const again = await act(deps, { action: "propose", proposal: "- Keep the old endpoint and add a new one." });
   assert.equal(again.ok, true, again.message);
 });
 
 test("propose without UI leaves the proposal awaiting approval", async () => {
   const deps = makeDeps();
   withTask(deps, "synthesizing");
-  const result = await act(deps, { action: "propose", proposal: "Do the thing." });
+  const result = await act(deps, { action: "propose", proposal: "- Do the thing." });
   assert.equal(result.state, "awaiting_approval");
   assert.match(result.message, /Awaiting approval/);
 });
@@ -211,7 +212,7 @@ test("paused tasks reject workflow actions but still report status", async () =>
   const task = withTask(deps, "synthesizing");
   task.paused = true;
   saveTask(deps.root, deps.configDir, task);
-  const blocked = await act(deps, { action: "propose", proposal: "x" });
+  const blocked = await act(deps, { action: "propose", proposal: "- Do the thing." });
   assert.equal(blocked.ok, false);
   assert.match(blocked.message, /paused/);
   const status = await act(deps, { action: "status" });
@@ -235,6 +236,43 @@ test("pending approvals surface in status and gate the domain", () => {
   requestApproval(task, "dependency", "backend", "install zod", "2026-01-01T00:00:00.000Z");
   assert.equal(pendingApprovals(task, "backend").length, 1);
   assert.match(describeTask(task), /APR-1 dependency for backend/);
+});
+
+test("validateProposal accepts a short bullet list and rejects prose or bloat", () => {
+  assert.deepEqual(validateProposal("- Add pagination\n- Keep the login flow"), []);
+  assert.deepEqual(validateProposal("Add pagination."), ["every proposal line must be a `- ` bullet"]);
+  assert.deepEqual(validateProposal(" "), ["proposal is empty"]);
+  assert.equal(validateProposal(`- ${"x".repeat(1400)}`).length, 1);
+});
+
+test("a prose proposal is rejected before it reaches the user", async () => {
+  const deps = makeDeps({ choose: async () => "Approve" });
+  withTask(deps, "synthesizing");
+  const result = await act(deps, { action: "propose", proposal: "Add pagination and keep the login flow." });
+  assert.equal(result.ok, false);
+  assert.match(result.message, /concise bullet list/);
+  assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.state, "synthesizing");
+});
+
+test("an ownerless task is claimed by the first drive action but not by status", async () => {
+  const deps = makeDeps({ sessionId: "session-b" });
+  withTask(deps, "implementing");
+  await act(deps, { action: "status" });
+  assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.ownerSessionId, undefined, "status never claims");
+  await act(deps, { action: "decide", text: "Use the existing query builder." });
+  assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.ownerSessionId, "session-b");
+});
+
+test("a foreign session cannot drive a task but may still read its status", async () => {
+  const deps = makeDeps({ sessionId: "session-b" });
+  const task = withTask(deps, "implementing");
+  task.ownerSessionId = "session-a";
+  saveTask(deps.root, deps.configDir, task);
+  const status = await act(deps, { action: "status", taskId: "TASK-1" });
+  assert.equal(status.ok, true);
+  const blocked = await act(deps, { action: "implement", taskId: "TASK-1", domain: "backend", task: "Do work." });
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.message, /owned by another pi session/);
 });
 
 test("validatePlan reports every missing area", () => {

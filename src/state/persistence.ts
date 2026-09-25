@@ -160,13 +160,33 @@ export function taskHealth(root: string, configDir: string): { tasks: Task[]; co
 }
 
 /** The task the Master is currently driving, if any. */
-export function activeTask(root: string, configDir: string): Task | undefined {
+export function activeTask(root: string, configDir: string, sessionId?: string): Task | undefined {
+  if (sessionId !== undefined) return ownedTask(root, configDir, sessionId);
   return listTasks(root, configDir).find((task) => !TERMINAL_STATES.includes(task.state));
 }
 
-/** A specific task, or the active one when no id is given. */
-export function selectTask(root: string, configDir: string, taskId?: string): Task | undefined {
-  return taskId ? loadTask(root, configDir, taskId) : activeTask(root, configDir);
+/** The non-terminal task a session owns, if any. */
+export function ownedTask(root: string, configDir: string, sessionId: string): Task | undefined {
+  return listTasks(root, configDir).find((task) => !TERMINAL_STATES.includes(task.state) && task.ownerSessionId === sessionId);
+}
+
+/** The newest non-terminal task with no owner, if any. */
+export function ownerlessTask(root: string, configDir: string): Task | undefined {
+  return listTasks(root, configDir).find((task) => !TERMINAL_STATES.includes(task.state) && !task.ownerSessionId);
+}
+
+/** A specific task, or the session's active one when no id is given. */
+export function selectTask(root: string, configDir: string, taskId?: string, sessionId?: string): Task | undefined {
+  return taskId ? loadTask(root, configDir, taskId) : activeTask(root, configDir, sessionId);
+}
+
+/** Reassign a task to a session; explicit takeover for orphaned tasks. */
+export function claimTask(root: string, configDir: string, taskId: string, sessionId: string): Task | undefined {
+  const task = loadTask(root, configDir, taskId);
+  if (!task) return undefined;
+  task.ownerSessionId = sessionId;
+  saveTask(root, configDir, task);
+  return task;
 }
 
 /** Dash-slug of a request: lowercase, non-alphanumerics collapsed, capped at `max`. */

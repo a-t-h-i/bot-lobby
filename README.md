@@ -53,7 +53,25 @@ the checkout needs to stay where it is.
 /bot-lobby config               Effective configuration and its file path
 /bot-lobby settings             Edit per-agent model, thinking, and instructions
 /bot-lobby-settings             Same as the settings subcommand
+/bot-lobby minimize|restore   Hide or restore bot-lobby for this session (ctrl+shift+m)
+/bot-lobby claim <taskId>     Take ownership of an orphaned task
 ```
+
+## Sessions and ownership
+
+A task is owned by the pi session that started it (`ctx.sessionManager` id,
+`ownerSessionId` on the task). Only the owning session shows the zen widget and
+injects the Master prompt; any other pi session in the same project stays
+ordinary pi. Each session owns at most one active task, so several sessions can
+drive their own tasks concurrently over the shared per-project task and
+knowledge files. A task with no owner (legacy state, or an owner that vanished)
+is claimed by the first session that runs a state-moving `orchestrate` action;
+`/bot-lobby status`, `tasks` and the widget never claim. Take over an orphaned or
+foreign task explicitly with `/bot-lobby claim <taskId>`.
+
+`/bot-lobby minimize` (or `ctrl+shift+m`) collapses the widget and skips the
+Master prompt for that session only, so plain prompts go straight to standard
+pi; ownership is kept, and `/bot-lobby restore` resumes exactly where you were.
 
 Subcommands only win when no free-form text follows, so `/bot-lobby status page
 redesign` still starts a task named "status page redesign".
@@ -61,7 +79,7 @@ redesign` still starts a task named "status page redesign".
 Press `Esc` during a run to abort the current step: the signal propagates to
 every in-flight subagent process.
 
-While a task is active the transcript switches to a zen view: `orchestrate` rows
+While the owning session has a task active, its transcript switches to a zen view: `orchestrate` rows
 and the built-in spinner are hidden, and a widget above the editor animates the
 task. At 72 columns and wider it draws a large scene: a header box with the task
 id, state, elapsed time and quiet-mode hint, an estimated ETA and progress bar; an
@@ -161,6 +179,8 @@ decide to record it with `action=knowledge`.
 | Only the Master writes knowledge | Agents only propose; one dedup-aware write path |
 | Research never becomes knowledge by itself | Reports are artifacts; only the Master's `action=knowledge` writes persistent knowledge |
 | Completion is gated | Plan, passing QA gate, no blockers or pending approvals |
+| A task has one owning session | Ownership is stamped at start; a foreign session is rejected unless it claims the task |
+| Proposals are short and scannable | `validateProposal` rejects non-bullet or over-long proposals before they reach the user |
 | Failure is never success | Unknown verdicts, empty output, crashes, and timeouts map to failed/timeout/blocked |
 | Task state is never corrupted by a crash | Single mutation point + disk state; interrupted tasks resume from their state |
 

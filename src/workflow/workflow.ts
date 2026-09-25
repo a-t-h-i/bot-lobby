@@ -4,7 +4,7 @@ import type { AgentRun, Pushback, ResearchResult, ReviewResult } from "../schema
 import { TASK_STATES, TERMINAL_STATES, taskRequest, type Approval, type ApprovalKind, type Task, type TaskState } from "../schemas/task.ts";
 import { isDomain, type Domain } from "../schemas/agent.ts";
 import { transition } from "../state/task-state.ts";
-import { readTaskArtifact, removeTaskScratchpads, saveTask, selectTask, taskDirFor, taskReadDirs } from "../state/persistence.ts";
+import { ownerlessTask, readTaskArtifact, removeTaskScratchpads, saveTask, selectTask, taskDirFor, taskReadDirs } from "../state/persistence.ts";
 import { dataRoot, readDataRoots } from "../state/project.ts";
 import { appendCompletedTask, appendDecision, applyKnowledge, readFileOr, writeFileEnsured, type KnowledgeKind } from "../knowledge/store.ts";
 import { compactKnowledgeFile, overThreshold } from "../knowledge/compactor.ts";
@@ -51,6 +51,11 @@ export const ORCHESTRATE_ACTIONS = [
 ] as const;
 export type OrchestrateAction = (typeof ORCHESTRATE_ACTIONS)[number];
 
+/** Actions that claim an ownerless task for the calling session; status/cancel/resolve_approval never do. */
+export const CLAIM_ACTIONS: ReadonlySet<OrchestrateAction> = new Set(
+  ORCHESTRATE_ACTIONS.filter((action) => action !== "status" && action !== "cancel" && action !== "resolve_approval"),
+);
+
 export interface OrchestrateParams {
   action: OrchestrateAction;
   taskId?: string;
@@ -79,6 +84,8 @@ export interface WorkflowDeps {
   root: string;
   configDir: string;
   cwd: string;
+  /** The pi session driving this workflow; task ownership is skipped when absent (tests, headless use). */
+  sessionId?: string;
   config: BotLobbyConfig;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
@@ -113,6 +120,17 @@ const PLAN_REQUIREMENTS: Array<[string, RegExp]> = [
 /** §12: the internal plan must cover every required area. */
 export function validatePlan(plan: string): string[] {
   return PLAN_REQUIREMENTS.filter(([, pattern]) => !pattern.test(plan)).map(([label]) => label);
+}
+
+/** A user-facing proposal must be a short `- ` bullet list so the user can scan it. */
+export const MAX_PROPOSAL_CHARS = 1400;
+export function validateProposal(proposal: string): string[] {
+  const lines = proposal.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
+  const issues: string[] = [];
+  if (lines.length === 0) issues.push("proposal is empty");
+  if (lines.some((line) => !line.startsWith("- "))) issues.push("every proposal line must be a \`- \` bullet");
+  if (proposal.length > MAX_PROPOSAL_CHARS) issues.push(`proposal is too long (> ${MAX_PROPOSAL_CHARS} chars)`);
+  return issues;
 }
 
 function requireState(task: Task, allowed: TaskState[]): void {
@@ -339,6 +357,8 @@ async function handlePropose(task: Task, params: OrchestrateParams, deps: Workfl
   requireState(task, ["created", "clarifying", "synthesizing", "awaiting_approval"]);
   const proposal = params.proposal?.trim();
   if (!proposal) throw new Error("propose requires a proposal");
+  const proposalIssues = validateProposal(proposal);
+  if (proposalIssues.length > 0) throw new Error(`proposal must be a concise bullet list: ${proposalIssues.join("; ")}`);
   if (task.state === "created") transition(task, "clarifying");
   if (task.state === "clarifying") transition(task, "awaiting_approval");
   task.proposal = proposal;
@@ -721,7 +741,12 @@ const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams
  * calling agent — decides whether an action is legal in the current state.
  */
 export async function runWorkflowAction(params: OrchestrateParams, deps: WorkflowDeps): Promise<WorkflowResult> {
-  const task = selectTask(deps.root, deps.configDir, params.taskId);
+  const selected = selectTask(deps.root, deps.configDir, params.taskId, deps.sessionId);
+  const task = selected ?? (params.taskId ? undefined : ownerlessTask(deps.root, deps.configDir));
+  if (params.action !== "status" && task?.ownerSessionId && deps.sessionId && task.ownerSessionId !== deps.sessionId) {
+    return { ok: false, taskId: task.id, state: task.state, message: `Task ${task.id} is owned by another pi session. Take it over with /bot-lobby claim ${task.id}.` };
+  }
+  if (task && !task.ownerSessionId && deps.sessionId && CLAIM_ACTIONS.has(params.action)) task.ownerSessionId = deps.sessionId;
   if (!task) {
     return { ok: false, taskId: params.taskId ?? "", state: "created", message: "No bot-lobby task found. Start one with /bot-lobby <request>." };
   }

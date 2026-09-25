@@ -7,7 +7,7 @@ import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-w
 import { isQuiet, isSubagentProcess, setQuiet, toggleQuiet, visibleTools, WEB_TOOL_NAMES } from "../src/pi/quiet.ts";
 import { registerQuietTools } from "../src/pi/tool-renderers.ts";
 import { registerLifecycle } from "../src/pi/events.ts";
-import { registerRevealShortcut, STATUS_KEY } from "../src/pi/ui.ts";
+import { isMinimized, registerRevealShortcut, setMinimized, STATUS_KEY } from "../src/pi/ui.ts";
 import { registerCommands } from "../src/pi/commands.ts";
 
 type AnyTool = ToolDefinition<any, any, any>;
@@ -23,6 +23,7 @@ function makePi(available: string[], active: string[] = [...available]) {
     commands: [] as string[],
     handlers: new Map<string, (...args: unknown[]) => unknown>(),
     shortcutHandler: undefined as ((ctx: ExtensionContext) => unknown) | undefined,
+    shortcutHandlers: {} as Record<string, (ctx: ExtensionContext) => unknown>,
     on(event: string, handler: (...args: unknown[]) => unknown): () => void {
       state.handlers.set(event, handler);
       return () => {};
@@ -33,6 +34,7 @@ function makePi(available: string[], active: string[] = [...available]) {
     registerShortcut(shortcut: string, options: { description?: string; handler: (ctx: ExtensionContext) => unknown }): void {
       state.shortcuts.push(shortcut);
       state.shortcutHandler = options.handler;
+      state.shortcutHandlers[shortcut] = options.handler;
     },
     registerCommand(name: string): void {
       state.commands.push(name);
@@ -76,7 +78,7 @@ function makeCtx(cwd: string, expanded = false) {
       ui.notifications.push({ message, type });
     },
   };
-  return { ctx: { cwd, ui } as unknown as ExtensionContext, ui };
+  return { ctx: { cwd, ui, sessionManager: { getSessionId: () => "session-1" } } as unknown as ExtensionContext, ui };
 }
 
 function tempDir(prefix: string): string {
@@ -219,9 +221,9 @@ test("alt+t flips quiet, restores tool expansion, and refreshes the status", () 
   setQuiet(true);
   const fake = makePi(["read"]);
   registerRevealShortcut(asPi(fake), ".pi");
-  assert.deepEqual(fake.shortcuts, ["alt+t"]);
+  assert.deepEqual(fake.shortcuts, ["alt+t", "ctrl+shift+m"]);
   const { ctx, ui } = makeCtx(tempDir("dh-reveal-"), false);
-  fake.shortcutHandler!(ctx);
+  fake.shortcutHandlers["alt+t"]!(ctx);
   assert.equal(isQuiet(), false);
   assert.deepEqual(ui.expandedCalls, [true, false]);
   assert.equal(ui.expanded, false);
@@ -236,6 +238,18 @@ test("session_shutdown clears the bot-lobby status", () => {
   const { ctx, ui } = makeCtx(tempDir("dh-shutdown-"));
   fake.handlers.get("session_shutdown")!({ type: "session_shutdown" }, ctx);
   assert.deepEqual(ui.statuses.at(-1), { key: STATUS_KEY, text: undefined });
+});
+
+test("ctrl+shift+m minimizes and restores the widget without touching ownership", () => {
+  setMinimized(false);
+  const fake = makePi(["read"]);
+  registerRevealShortcut(asPi(fake), ".pi");
+  const { ctx, ui } = makeCtx(tempDir("dh-minimize-"));
+  fake.shortcutHandlers["ctrl+shift+m"]!(ctx);
+  assert.equal(isMinimized(), true);
+  assert.ok(ui.statuses.at(-1)!.text?.includes("minimized"), "the footer signals minimize");
+  fake.shortcutHandlers["ctrl+shift+m"]!(ctx);
+  assert.equal(isMinimized(), false);
 });
 
 test("commands registration wires alt+t through the reveal shortcut", () => {
