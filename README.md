@@ -83,8 +83,11 @@ every in-flight subagent process.
 While the owning session has a task active, its transcript switches to a zen view: `orchestrate` rows
 and the built-in spinner are hidden, and a widget above the editor animates the
 task. At 72 columns and wider it draws a large scene: a header box with the task
-id, state, elapsed time and quiet-mode hint, and a progress bar; an
-oracle tower with its ORC door, animated orb, window eyes and seven-column mouth;
+title and state in its top border, a progress bar, and a metadata row with
+elapsed time, quiet-mode hint and task id; a spinner line above the oracle
+naming the master's live tool activity (`⠋ delegating`, `⠋ planning`) or
+`dormant` when the task is paused or finished; an oracle tower with its ORC
+door, animated orb, window eyes and seven-column mouth;
 four animated slots — DEV, DESIGN, RESEARCH and QA — each with a status face, a
 caption and two status rows: while running, a braille spinner beside the agent's
 live one-word activity (for example `⠋ reading` or `⠋ editing`) with its elapsed

@@ -8,6 +8,7 @@ import {
   FACE_WIDTH,
   ORACLE_FRAMES,
   ORACLE_POSES,
+  ORACLE_WORDS,
   SLOT_FRAMES,
   SLOT_IDS,
   SLOT_LABELS,
@@ -206,11 +207,12 @@ test("no width, height, status or alert combination overflows the terminal", () 
 
 test("the large scene is byte-identical to the locked art at 72 and 100 columns", () => {
   const at72 = [
-    "    ┌─ BOT-LOBBY ── TASK-core-feature · implementing ─────────────┐",
-    "    │ core-feature                                                │",
+    "    ┌─ BOT-LOBBY ── core-feature · implementing ──────────────────┐",
     "    │ █████░░░░░  50%  (3/6 tasks)                                │",
-    "    └─ ⏱ 12m 30s · tools hidden (alt+t) ──────────────────────────┘",
+    "    │ ⏱ 12m 30s · tools hidden (alt+t) · TASK-core-feature        │",
+    "    └─────────────────────────────────────────────────────────────┘",
     "    ! approvals pending: APR-1",
+    "                               ⠋ working",
     "                                 \\ | /    ",
     "                                  \\|/     ",
     "                                  ─◉─     ",
@@ -242,11 +244,12 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
     "    [ ] Deploy                                                 ",
   ];
   const at100 = [
-    "                  ┌─ BOT-LOBBY ── TASK-core-feature · implementing ─────────────┐",
-    "                  │ core-feature                                                │",
+    "                  ┌─ BOT-LOBBY ── core-feature · implementing ──────────────────┐",
     "                  │ █████░░░░░  50%  (3/6 tasks)                                │",
-    "                  └─ ⏱ 12m 30s · tools hidden (alt+t) ──────────────────────────┘",
+    "                  │ ⏱ 12m 30s · tools hidden (alt+t) · TASK-core-feature        │",
+    "                  └─────────────────────────────────────────────────────────────┘",
     "                  ! approvals pending: APR-1",
+    "                                             ⠋ working",
     "                                               \\ | /    ",
     "                                                \\|/     ",
     "                                                ─◉─     ",
@@ -281,10 +284,18 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
   assert.deepEqual(largeLines(scene(), 100, 40), at100);
 });
 
+test("the oracle line spins the master's activity and reads dormant when idle", () => {
+  const spinning = largeLines(scene({ oracleActivity: "delegating", tick: 1 }), 72, 40);
+  assert.ok(spinning.some((line) => line.includes(`${SPIN_FRAMES[1]} delegating`)), "the oracle spinner is missing");
+  const dormant = largeLines(scene({ oracle: { pose: "dormant", frame: 0 } }), 72, 40);
+  assert.ok(dormant.some((line) => line.includes(`${SLOT_STATE_GLYPHS.idle} ${ORACLE_WORDS.dormant}`)), "the dormant word is missing");
+});
+
 test("the box keeps the task id, state, title, elapsed and quiet hint", () => {
   const lines = largeLines(scene(), 72, 40);
   const box = lines.slice(0, 4).join("\n");
-  assert.ok(box.includes("TASK-core-feature · implementing"));
+  assert.ok(box.includes("core-feature · implementing"));
+  assert.ok(box.includes("TASK-core-feature"));
   assert.ok(box.includes("core-feature"));
   assert.ok(box.includes("(3/6 tasks)"));
   assert.ok(box.includes("12m 30s"));
@@ -319,7 +330,7 @@ test("the tower stem, the tree branch and the agent columns share one centre", (
 
 test("the tower stem, the branch stem and the tree node share the terminal centre at every large width", () => {
   for (const width of [72, 100, 133]) {
-    const lines = largeLines(scene(), width, 34);
+    const lines = largeLines(scene(), width, MAX_LARGE_LINES);
     const centre = Math.floor((width - 1) / 2);
     const roof = lines.findIndex((line) => line.includes("┌─────┴─────┐"));
     const tree = lines.findIndex((line) => line.includes("┬") && line.includes("┴"));

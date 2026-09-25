@@ -28,6 +28,14 @@ export function statusText(task: Task | undefined, minimized = false): string {
 let zenOn = false;
 let zenState: { task: Task | undefined; runs: AgentRun[] } = { task: undefined, runs: [] };
 
+/** Latest master tool activity; the oracle spinner line shows it. */
+let oracleActivity: string | undefined;
+
+/** Record the master's current activity word (see events.ts); undefined clears it. */
+export function setOracleActivity(activity: string | undefined): void {
+  oracleActivity = activity;
+}
+
 /** Upper bound on retained runs so a long task cannot grow the widget state without limit. */
 export const MAX_RETAINED_RUNS = 64;
 
@@ -138,7 +146,7 @@ class ZenWidget implements Component {
 
   render(width: number): string[] {
     const now = Date.now();
-    const opts = { width, rows: this.tui.terminal.rows, tick: this.tick, theme: this.theme(), expressions: this.frames() };
+    const opts = { width, rows: this.tui.terminal.rows, tick: this.tick, theme: this.theme(), expressions: this.frames(), oracleActivity };
     const lines = panelLines(zenState.task, zenState.runs, now, isQuiet(), opts);
     return lines.map((line) => truncateToWidth(line, width));
   }
@@ -186,6 +194,7 @@ export function applyStatus(ctx: ExtensionContext, root: string, configDir: stri
 
 export function clearStatus(ctx: ExtensionContext): void {
   leaveZen(ctx);
+  oracleActivity = undefined;
   ctx.ui.setStatus(STATUS_KEY, undefined);
   ctx.ui.setWidget(STATUS_KEY, undefined);
 }
