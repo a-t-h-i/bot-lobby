@@ -56,6 +56,7 @@ test("the zen clock speeds up while an expression plays", () => {
   assert.equal(expressionTickDelay([resting, blinking], 0, true), FAST_TICK_MS);
   assert.ok(FAST_TICK_MS < BLINK_MS, "a blink must survive one fast tick");
   assert.equal(expressionTickDelay([resting], Number.NaN, true), LIVE_TICK_MS);
+  assert.equal(expressionTickDelay([resting], 0, false, true), FAST_TICK_MS, "the oracle's lip-sync runs on the fast clock");
 });
 
 test("mergeRuns returns a fresh copy of the previous set when nothing arrives", () => {

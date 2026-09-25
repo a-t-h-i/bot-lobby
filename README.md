@@ -118,8 +118,16 @@ and the built-in spinner are hidden, and a widget above the editor animates the
 task. At 72 columns and wider it draws a large scene: a header box with the task
 title and state in its top border, a progress bar, and a metadata row with
 elapsed time, quiet-mode hint and task id; an oracle tower with a twinkling
-aura (drifting z's while dormant), a radiant orb crown, window eyes, a
-seven-column mouth and its ORC door; beside the crown, the oracle's speech
+aura (drifting z's while dormant), a radiant orb crown, two window eyes, a
+seven-column mouth and its ORC door. Its pupils look around: they move
+left, centre or right in each window and turn up `◓`, ahead `◉` or down `◒`.
+While agents work it looks down at them, taking turns between them; while it
+talks it looks at you; otherwise its eyes wander the room and keep returning
+to you. It keeps a straight, serious face (`───`), tightening into a frown
+only when the task is blocked, and its mouth lip-syncs as a voice waveform
+for ~2 s whenever it says something new. Every 6–12 s it blinks (lids
+stepping down and up) or scans the whole room; asleep, it peeks one eye open
+or snores. Beside the crown, the oracle's speech
 bubble, its tail on the orb, says what the master is doing (`⠋ delegating`,
 `⠋ thinking`, `· your turn` once its turn ends, `· dormant` when paused) above
 who is at work (`→ DEV · QA`), the current step (`step 3 of 7`) or the task
@@ -134,9 +142,9 @@ terminals keep the
 boxed banner, header and compact animated strip, whose working line names the
 newest running agent's activity and elapsed time. Each sprite rests on one calm
 face and, independently every 20–30 s, briefly blinks (~500 ms) or emotes
-(~2 s, stepping through its kaomoji frames); the oracle's mouth moves with its
+(~2 s, stepping through its kaomoji frames), all on one
 adaptive clock — 250 ms while work is live, 1 s when idle and ~120 ms while an
-expression plays — and their faces, colours and words follow each agent's status
+expression plays or the oracle talks — and their faces, colours and words follow each agent's status
 (working, idle, done, failed). The large scene's rest and blink frames stay the
 five-column ASCII eyes, while its emote frames are status-aware kaomoji: nervous
 while working, happy when done (QA flexes and dances), scared on failure. The

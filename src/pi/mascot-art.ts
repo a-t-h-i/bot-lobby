@@ -6,7 +6,7 @@ import type { TaskState } from "../schemas/task.ts";
  * that `zen.ts` and `zen-large.ts` compose. Every glyph is exactly one visible
  * column so the art stays narrow/ambiguous-width safe: the non-ASCII glyphs are
  * the lobby `⌂` in `BANNER_NARROW`, the panel's ◐/✓/✗ status family, and the
- * box-drawing, bar, eye and aura glyphs of the large scene (─ │ ┌ ┐ └ ┘ ╭ ╮ ╰ ╯ ╲ ╱ ╶ ├ ┤ ┬ ┴ █ ▓ ▒ ░ ▁ ▂ ▃ ◉ ◍ ◎ ◌ ○ ✦ ✧).
+ * box-drawing, bar, eye and aura glyphs of the large scene (─ │ ┌ ┐ └ ┘ ╭ ╮ ╰ ╯ ╲ ╱ ╶ ├ ┤ ┬ ┴ █ ▓ ▒ ░ ▁-▇ ◉ ◍ ◎ ◌ ○ ◓ ◒ ✦ ✧).
  */
 
 /**
@@ -105,35 +105,134 @@ export const ORACLE_COLORS: Record<OraclePose, { color: PanelColor; bold: boolea
   dormant: { color: "dim", bold: false },
 };
 
-/** One oracle frame: the crown orb, both window eyes and the seven-column mouth. */
+/** One oracle frame: the crown orb, both pupils and the seven-column mouth. */
 export interface OracleFrame {
   orb: string;
+  /**
+   * One-column pupil drawn inside its three-column eye window: `OPEN_EYE` takes
+   * the gaze's pupil, `CLOSED_EYE` fills the window as a lid, anything else is drawn as is.
+   */
   winL: string;
   winR: string;
   /** Exactly seven one-column glyphs; never moves the tower geometry. */
   mouth: string;
 }
 
+/** Oracle expression frame indexes, matching the shared schedule (see expressions.ts). */
+export const ORACLE_REST = 0;
+export const ORACLE_BLINK = 1;
+/** Both emote frames are the look-around; the second only dims the orb. */
+export const ORACLE_LOOK = 2;
+
+/** An open eye: its pupil comes from where the oracle is looking. */
+export const OPEN_EYE = "◉";
+/** A closed eye: the lid fills the whole window. */
+export const CLOSED_EYE = "─";
+/** A half-closed lid, mid-blink or half-asleep. */
+export const HALF_LID = "◒";
+/** Inner width of each eye window; the pupil moves across it. */
+export const EYE_WIDTH = 3;
+
+/** The oracle's straight, serious mouth: it never idles on a smile. */
+export const ORACLE_MOUTH = "  ───  ";
+
 /**
- * Indexed oracle expressions per pose: 0 rests, 1 blinks and 2-3 emote. While
- * orchestrating the oracle glances around (2) and speaks (3); dormant, it sleeps
- * with closed eyes, peeks (1) and snores (2). Every glyph is one column and every
- * mouth seven, so a frame swap never moves the tower geometry.
+ * Indexed oracle expressions per pose: rest, blink, then the two emote steps.
+ * Orchestrating, the oracle keeps a straight face and its emotes are a look
+ * around the room; dormant, it sleeps, peeks one eye open and snores (o, then O).
+ * While it talks the mouth lip-syncs instead.
  */
 export const ORACLE_FRAMES: Record<OraclePose, readonly OracleFrame[]> = {
   orchestrating: [
-    { orb: "◉", winL: "◉", winR: "◉", mouth: " ╰───╯ " },
-    { orb: "◉", winL: "─", winR: "─", mouth: " ╰───╯ " },
-    { orb: "◎", winL: "◍", winR: "◉", mouth: "  ───  " },
-    { orb: "◍", winL: "◉", winR: "◍", mouth: " ▁▂▃▂▁ " },
+    { orb: "◉", winL: OPEN_EYE, winR: OPEN_EYE, mouth: ORACLE_MOUTH },
+    { orb: "◉", winL: CLOSED_EYE, winR: CLOSED_EYE, mouth: ORACLE_MOUTH },
+    { orb: "◎", winL: OPEN_EYE, winR: OPEN_EYE, mouth: ORACLE_MOUTH },
+    { orb: "◍", winL: OPEN_EYE, winR: OPEN_EYE, mouth: ORACLE_MOUTH },
   ],
   dormant: [
-    { orb: "◌", winL: "─", winR: "─", mouth: "  ───  " },
-    { orb: "◌", winL: "◌", winR: "─", mouth: "  ───  " },
-    { orb: "○", winL: "─", winR: "─", mouth: "  ─o─  " },
-    { orb: "○", winL: "─", winR: "─", mouth: "  ───  " },
+    { orb: "◌", winL: CLOSED_EYE, winR: CLOSED_EYE, mouth: ORACLE_MOUTH },
+    { orb: "◌", winL: HALF_LID, winR: CLOSED_EYE, mouth: ORACLE_MOUTH },
+    { orb: "○", winL: CLOSED_EYE, winR: CLOSED_EYE, mouth: "  ─o─  " },
+    { orb: "○", winL: CLOSED_EYE, winR: CLOSED_EYE, mouth: "  ─O─  " },
   ],
 };
+
+/**
+ * Lid positions stepped through by a blink (one per `PHASE_MS`, the last held):
+ * half-lidded, shut, shut, half-lidded. Dormant, the "blink" is a sleepy peek:
+ * the left eye cracks open, looks, and drifts shut again.
+ */
+export const ORACLE_BLINKS: Record<OraclePose, readonly (readonly [string, string])[]> = {
+  orchestrating: [[HALF_LID, HALF_LID], [CLOSED_EYE, CLOSED_EYE], [CLOSED_EYE, CLOSED_EYE], [HALF_LID, HALF_LID]],
+  dormant: [[HALF_LID, CLOSED_EYE], [OPEN_EYE, CLOSED_EYE], [OPEN_EYE, CLOSED_EYE], [OPEN_EYE, CLOSED_EYE], [HALF_LID, CLOSED_EYE], [CLOSED_EYE, CLOSED_EYE]],
+};
+
+/**
+ * Where the pupils look. `x` moves the pupil across its three-column window
+ * (left, centre, right); `y` swaps its glyph, since the window is one row:
+ * `◓` looks up, `◉` straight ahead, `◒` down.
+ */
+export interface Gaze {
+  x: -1 | 0 | 1;
+  y: -1 | 0 | 1;
+}
+
+export const GAZE_AHEAD: Gaze = { x: 0, y: 0 };
+
+/** The pupil glyph for each vertical gaze. */
+export const ORACLE_PUPILS: Record<Gaze["y"], string> = { [-1]: "◓", 0: "◉", 1: "◒" };
+
+const look = (x: Gaze["x"], y: Gaze["y"]): Gaze => ({ x, y });
+
+/**
+ * The look-around emote, one step per `PHASE_MS` across both emote frames
+ * (~2 s): a slow scan left, up across the ceiling, right, down at the agents
+ * and back to you.
+ */
+export const ORACLE_LOOK_PATH: readonly Gaze[] = [
+  look(0, 0), look(-1, 0), look(-1, 0), look(-1, 0), look(-1, -1), look(-1, -1),
+  look(0, -1), look(1, -1), look(1, -1), look(1, 0), look(1, 0), look(1, 0),
+  look(1, 1), look(0, 1), look(0, 1), look(-1, 1), look(0, 0), look(0, 0),
+];
+
+/**
+ * Idle wandering when nothing holds the oracle's attention: it keeps returning
+ * to you between glances around the room. Starts looking ahead.
+ */
+export const ORACLE_WANDER: readonly Gaze[] = [
+  look(0, 0), look(-1, 0), look(0, 0), look(1, -1), look(1, 0), look(0, 0),
+  look(-1, 1), look(0, -1), look(0, 0), look(1, 1), look(-1, -1), look(0, 0),
+];
+
+/** Ticks the eyes hold one wandering spot (~2.5 s while work is live). */
+export const ORACLE_WANDER_TICKS = 10;
+
+/**
+ * Lip-sync while the oracle talks: a voice waveform that swells and falls, with
+ * a closed-mouth breath so it reads as phrases rather than a buzz.
+ */
+export const ORACLE_TALK: readonly string[] = [
+  " ▁▃▅▃▁ ",
+  "  ▂▆▂  ",
+  " ▂▄▇▄▂ ",
+  "  ▁▂▁  ",
+  " ▃▅▂▅▃ ",
+  " ▁▂▄▂▁ ",
+  "   ▁   ",
+  ORACLE_MOUTH,
+];
+
+/** The oracle's resting mood: steady by default, worried when the task is blocked. */
+export type OracleMood = "steady" | "worried";
+
+/** The resting mouth per mood: straight, or a tight frown when blocked. */
+export const ORACLE_MOOD_MOUTHS: Record<OracleMood, string> = {
+  steady: ORACLE_MOUTH,
+  worried: "  ╭─╮  ",
+};
+
+/** Ticks the eyes hold on one working agent before glancing to the next. */
+export const ORACLE_GAZE_TICKS = 8;
 
 /**
  * The seven-column aura above the crown, stepped by the spinner tick: sparkles
@@ -223,8 +322,9 @@ export const COMPACT_FRAMES: Record<SlotId, Record<SlotState, readonly string[]>
 /**
  * The oracle tower: 13 columns wide, `rows` while height allows and `smallRows`
  * when it must shrink. `{aura}` twinkles over the radiant `{orb}` crown,
- * `{winL}`/`{winR}` are the two window eyes, `{mouth}` speaks and `{door}` is
- * the name over the door. The speech bubble hangs beside the crown.
+ * `{winL}`/`{winR}` are the three-column eye windows the pupils move in,
+ * `{mouth}` speaks and `{door}` is the name over the door. The speech bubble
+ * hangs beside the crown.
  */
 export interface TowerSpec {
   rows: readonly string[];
@@ -244,9 +344,9 @@ export const TOWER: TowerSpec = {
     "    ╱ │ ╲    ",
     "      │      ",
     "╭─────┴─────╮",
-    "│ ╭─╮   ╭─╮ │",
-    "│ │{winL}│   │{winR}│ │",
-    "│ ╰─╯   ╰─╯ │",
+    "│╭───╮ ╭───╮│",
+    "││{winL}│ │{winR}││",
+    "│╰───╯ ╰───╯│",
     "│  {mouth}  │",
     "├───┬───┬───┤",
     "│░▒▓│{door}│▓▒░│",
@@ -255,7 +355,7 @@ export const TOWER: TowerSpec = {
   smallRows: [
     "   ──({orb})──   ",
     "╭─────┴─────╮",
-    "│ │{winL}│   │{winR}│ │",
+    "││{winL}│ │{winR}││",
     "│░▒▓│{door}│▓▒░│",
     "└───┴───┴───┘",
   ],

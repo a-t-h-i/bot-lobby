@@ -537,9 +537,9 @@ function sceneSlots(metrics: SceneMetrics, expressions: ExpressionFrames): Large
   }));
 }
 
-function oracleSlot(task: Task, expressions: ExpressionFrames): LargeSceneInput["oracle"] {
+function oracleSlot(task: Task, expressions: ExpressionFrames, motion: OracleMotion): LargeSceneInput["oracle"] {
   const pose = oraclePose(task);
-  return { pose, frame: expressions.oracle ?? REST_FRAME };
+  return { pose, frame: expressions.oracle ?? REST_FRAME, ...motion };
 }
 
 function sceneTasks(steps: readonly PlanStep[]): LargeTaskRow[] {
@@ -556,8 +556,7 @@ function sceneInput(
   quiet: boolean,
   tick: number,
   steps: PlanStep[],
-  expressions: ExpressionFrames,
-  oracleActivity: string | undefined,
+  opts: PanelOptions,
 ): LargeSceneInput {
   const metrics = sceneMetrics(task, runs, now);
   const alert = taskAlert(task);
@@ -570,10 +569,10 @@ function sceneInput(
     tick,
     done: metrics.done,
     total: metrics.total,
-    slots: sceneSlots(metrics, expressions),
+    slots: sceneSlots(metrics, opts.expressions ?? {}),
     tasks: sceneTasks(steps),
-    oracle: oracleSlot(task, expressions),
-    oracleActivity,
+    oracle: oracleSlot(task, opts.expressions ?? {}, opts.oracleMotion ?? {}),
+    oracleActivity: opts.oracleActivity,
     caption: task.paused ? "task paused" : SCENE_PROPS[task.state],
     alert: alert?.text,
     alertKind: alert?.kind,
@@ -591,6 +590,14 @@ export interface PanelOptions {
   expressions?: ExpressionFrames;
   /** Live master activity word for the oracle's speech bubble; absent means it waits on the user. */
   oracleActivity?: string;
+  /** Caller-clocked oracle animation: the expression's sub-step and the lip-sync shape. */
+  oracleMotion?: OracleMotion;
+}
+
+/** The oracle's clocked animation state beyond its expression frame (see expressions.ts). */
+export interface OracleMotion {
+  phase?: number;
+  talk?: number;
 }
 
 /**
@@ -613,7 +620,7 @@ export function panelLines(
   const steps = planChecklist(task.plan ?? "", runs);
   const budget = largeLineBudget(opts.rows ?? DEFAULT_ROWS);
   if (width >= LARGE_MIN_WIDTH && budget >= MIN_LARGE_LINES) {
-    const scene = largeLines(sceneInput(task, runs, now, quiet, tick, steps, opts.expressions ?? {}, opts.oracleActivity), width, budget, opts.theme);
+    const scene = largeLines(sceneInput(task, runs, now, quiet, tick, steps, opts), width, budget, opts.theme);
     return scene.map((line) => truncateToWidth(line, width));
   }
   return compactPanel(task, runs, now, quiet, tick, steps, opts, width);

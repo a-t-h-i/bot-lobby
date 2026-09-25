@@ -2,11 +2,26 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import {
   BAR,
   BUBBLE,
+  CLOSED_EYE,
+  EYE_WIDTH,
+  GAZE_AHEAD,
+  OPEN_EYE,
   ORACLE_AURA,
   ORACLE_AURA_TICKS,
+  ORACLE_BLINK,
+  ORACLE_BLINKS,
   ORACLE_COLORS,
-  ORACLE_IDLE_WORD,
   ORACLE_FRAMES,
+  ORACLE_GAZE_TICKS,
+  ORACLE_IDLE_WORD,
+  ORACLE_LOOK,
+  ORACLE_LOOK_PATH,
+  ORACLE_MOOD_MOUTHS,
+  ORACLE_PUPILS,
+  ORACLE_REST,
+  ORACLE_TALK,
+  ORACLE_WANDER,
+  ORACLE_WANDER_TICKS,
   ORACLE_WORDS,
   SLOT_FRAMES,
   SLOT_LABELS,
@@ -17,7 +32,9 @@ import {
   TOWER,
   TOWER_DOOR,
   TOWER_WIDTH,
+  type Gaze,
   type OracleFrame,
+  type OracleMood,
   type OraclePose,
   type PanelColor,
   type SlotId,
@@ -63,6 +80,17 @@ export interface LargeTaskRow {
   status: "done" | "current" | "pending";
 }
 
+/** The oracle's pose plus the caller-clocked animation state (see expressions.ts). */
+export interface OracleInput {
+  pose: OraclePose;
+  /** Expression frame: rest, blink, glance or delight (snore while dormant). */
+  frame: number;
+  /** Sub-step inside the playing expression; steps the blink lids and the glance. */
+  phase?: number;
+  /** Lip-sync shape index while the oracle talks about something it just said. */
+  talk?: number;
+}
+
 /** Everything the large scene draws; assembled by the caller from task and runs. */
 export interface LargeSceneInput {
   taskId: string;
@@ -76,7 +104,7 @@ export interface LargeSceneInput {
   total: number;
   slots: readonly LargeSlot[];
   tasks: readonly LargeTaskRow[];
-  oracle: { pose: OraclePose; frame: number };
+  oracle: OracleInput;
   /** Master's live activity for the speech bubble; absent means it waits on the user. */
   oracleActivity?: string;
   /** Plain-words task phase ("writing the plan"); the bubble's fallback second line. */
@@ -310,26 +338,98 @@ function oracleFrame(input: LargeSceneInput): OracleFrame {
   return frames[mod(input.oracle.frame, frames.length)]!;
 }
 
+function frameIndex(input: LargeSceneInput): number {
+  return mod(input.oracle.frame, ORACLE_FRAMES[input.oracle.pose].length);
+}
+
+function phaseOf(input: LargeSceneInput): number {
+  const phase = input.oracle.phase ?? 0;
+  return Number.isFinite(phase) && phase > 0 ? Math.floor(phase) : 0;
+}
+
+/** The oracle's resting mood: worried by a blocker, otherwise steady. */
+export function oracleMood(input: LargeSceneInput): OracleMood {
+  return input.alert && input.alertKind === "error" ? "worried" : "steady";
+}
+
+function isLooking(input: LargeSceneInput): boolean {
+  return frameIndex(input) >= ORACLE_LOOK;
+}
+
+/**
+ * Where the pupils look. The look-around emote scans the room; while talking the
+ * oracle looks at you; while agents work it looks down at them, moving on to
+ * the next one every `ORACLE_GAZE_TICKS`; otherwise its eyes wander the room.
+ */
+export function oracleGaze(input: LargeSceneInput): Gaze {
+  if (input.oracle.pose !== "orchestrating") return GAZE_AHEAD;
+  if (isLooking(input)) return ORACLE_LOOK_PATH[Math.min(phaseOf(input), ORACLE_LOOK_PATH.length - 1)]!;
+  if (input.oracle.talk !== undefined) return GAZE_AHEAD;
+  const working = input.slots.flatMap((slot, index) => (slot.status === "working" ? [index] : []));
+  if (working.length === 0) return ORACLE_WANDER[mod(Math.floor(input.tick / ORACLE_WANDER_TICKS), ORACLE_WANDER.length)]!;
+  const target = working[mod(Math.floor(input.tick / ORACLE_GAZE_TICKS), working.length)]!;
+  const centre = (input.slots.length - 1) / 2;
+  return { x: target < centre ? -1 : target > centre ? 1 : 0, y: 1 };
+}
+
+/** One eye window: a lid fills it, otherwise the pupil sits at the gaze column. */
+function eyeCell(pupil: string, gaze: Gaze): string {
+  if (pupil === CLOSED_EYE) return CLOSED_EYE.repeat(EYE_WIDTH);
+  const glyph = pupil === OPEN_EYE ? ORACLE_PUPILS[gaze.y] : pupil;
+  const at = Math.floor(EYE_WIDTH / 2) + gaze.x;
+  return Array.from({ length: EYE_WIDTH }, (_value, column) => (column === at ? glyph : " ")).join("");
+}
+
+/** Both pupils: blink lids step with the phase, the frame supplies the rest. */
+function oraclePupils(input: LargeSceneInput): readonly [string, string] {
+  if (frameIndex(input) === ORACLE_BLINK) {
+    const lids = ORACLE_BLINKS[input.oracle.pose];
+    return lids[Math.min(phaseOf(input), lids.length - 1)]!;
+  }
+  const frame = oracleFrame(input);
+  return [frame.winL, frame.winR];
+}
+
+/** The mouth: lip-sync while talking, the mood's straight line or frown otherwise; dormant it snores. */
+function oracleMouth(input: LargeSceneInput): string {
+  if (input.oracle.pose !== "orchestrating") return oracleFrame(input).mouth;
+  if (input.oracle.talk !== undefined) return ORACLE_TALK[mod(input.oracle.talk, ORACLE_TALK.length)]!;
+  return ORACLE_MOOD_MOUTHS[oracleMood(input)];
+}
+
+/** The whole face for this frame: orb, both eye windows (three columns each) and the mouth. */
+export function oracleFace(input: LargeSceneInput): { orb: string; left: string; right: string; mouth: string } {
+  const [left, right] = oraclePupils(input);
+  const gaze = oracleGaze(input);
+  return { orb: oracleFrame(input).orb, left: eyeCell(left, gaze), right: eyeCell(right, gaze), mouth: oracleMouth(input) };
+}
+
 function oracleAura(input: LargeSceneInput): string {
   const frames = ORACLE_AURA[input.oracle.pose];
   return frames[mod(Math.floor(input.tick / ORACLE_AURA_TICKS), frames.length)]!;
 }
 
-function towerRow(row: string, input: LargeSceneInput, theme?: PanelTheme): string {
-  const frame = oracleFrame(input);
+/** Painted token values for one frame; built once and shared by every tower row. */
+type TowerValues = ReadonlyMap<string, string>;
+
+function towerValues(input: LargeSceneInput, theme?: PanelTheme): TowerValues {
+  const face = oracleFace(input);
   const accent = ORACLE_COLORS[input.oracle.pose];
   const glow = (text: string) => paint(text, accent.color, theme, accent.bold);
-  const values = new Map<string, () => string>([
-    [TOWER.tokens.aura, () => paint(oracleAura(input), accent.color, theme)],
-    [TOWER.tokens.orb, () => glow(frame.orb)],
-    [TOWER.tokens.winL, () => glow(frame.winL)],
-    [TOWER.tokens.winR, () => glow(frame.winR)],
-    [TOWER.tokens.mouth, () => glow(frame.mouth)],
-    [TOWER.tokens.door, () => glow(input.doorLabel ?? TOWER_DOOR)],
+  return new Map([
+    [TOWER.tokens.aura, paint(oracleAura(input), accent.color, theme)],
+    [TOWER.tokens.orb, glow(face.orb)],
+    [TOWER.tokens.winL, glow(face.left)],
+    [TOWER.tokens.winR, glow(face.right)],
+    [TOWER.tokens.mouth, glow(face.mouth)],
+    [TOWER.tokens.door, glow(input.doorLabel ?? TOWER_DOOR)],
   ]);
+}
+
+function towerRow(row: string, values: TowerValues, theme?: PanelTheme): string {
   return row
     .split(TOWER_PATTERN)
-    .map((part) => values.get(part)?.() ?? paint(part, "muted", theme))
+    .map((part) => values.get(part) ?? paint(part, "muted", theme))
     .join("");
 }
 
@@ -384,23 +484,24 @@ function bubbleStart(rows: readonly string[]): number {
  * The tail from the oracle to the bubble: the tower row's trailing blanks plus
  * the one-column gap become `╶──` (`──(◉)── ╶──┤`); a full-width row gets a stub.
  */
-function tailRow(row: string, input: LargeSceneInput, theme?: PanelTheme): string {
+function tailRow(row: string, values: TowerValues, theme?: PanelTheme): string {
   const body = row.replace(/ +$/, "");
   const pad = row.length - body.length;
   const tail = pad >= 1 ? ` ╶${"─".repeat(pad - 1)}` : "╶";
-  return towerRow(body, input, theme) + paint(tail, "muted", theme);
+  return towerRow(body, values, theme) + paint(tail, "muted", theme);
 }
 
 function towerLines(input: LargeSceneInput, width: number, theme: PanelTheme | undefined, size: TowerSize): string[] {
   if (size === "none") return [];
   const rows = size === "small" ? TOWER.smallRows : TOWER.rows;
   const left = " ".repeat(sceneLeft(width) + Math.floor((SCENE_WIDTH - TOWER_WIDTH) / 2));
+  const values = towerValues(input, theme);
   const bubble = bubbleRows(input, theme);
   const start = bubbleStart(rows);
   return rows.map((row, index) => {
     const speech = bubble[index - start];
-    if (speech === undefined) return left + towerRow(row, input, theme);
-    const tower = index === start + 1 ? tailRow(row, input, theme) : `${towerRow(row, input, theme)} `;
+    if (speech === undefined) return left + towerRow(row, values, theme);
+    const tower = index === start + 1 ? tailRow(row, values, theme) : `${towerRow(row, values, theme)} `;
     return left + tower + speech;
   });
 }

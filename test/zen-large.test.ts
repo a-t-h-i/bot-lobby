@@ -7,10 +7,22 @@ import {
   COMPACT_WIDTH,
   FACE_WIDTH,
   BUBBLE,
+  EYE_WIDTH,
   ORACLE_AURA,
   ORACLE_AURA_TICKS,
+  GAZE_AHEAD,
+  ORACLE_BLINK,
   ORACLE_FRAMES,
+  ORACLE_GAZE_TICKS,
   ORACLE_IDLE_WORD,
+  ORACLE_LOOK,
+  ORACLE_LOOK_PATH,
+  ORACLE_MOOD_MOUTHS,
+  ORACLE_MOUTH,
+  ORACLE_PUPILS,
+  ORACLE_TALK,
+  ORACLE_WANDER,
+  ORACLE_WANDER_TICKS,
   ORACLE_POSES,
   ORACLE_WORDS,
   SLOT_FRAMES,
@@ -33,6 +45,9 @@ import {
   SLOT_CELL,
   largeLines,
   oracleAside,
+  oracleFace,
+  oracleGaze,
+  oracleMood,
   oracleSpeech,
   type LargeSceneInput,
 } from "../src/pi/zen-large.ts";
@@ -160,7 +175,7 @@ test("oracle frames stay one column wide and read distinctly per pose", () => {
 test("the oracle mouth follows the injected expression frame", () => {
   for (const frame of ORACLE_FRAMES.orchestrating.keys()) {
     const value = ORACLE_FRAMES.orchestrating[frame]!;
-    const lines = largeLines(scene({ oracle: { pose: "orchestrating", frame } }), 72, 40);
+    const lines = largeLines(scene({ alert: undefined, oracle: { pose: "orchestrating", frame } }), 72, 40);
     assert.ok(lines.some((line) => line.includes(value.mouth)), `mouth at frame ${frame}`);
     for (const line of lines) assert.ok(visibleWidth(line) <= 72, `overflow at frame ${frame}`);
   }
@@ -174,8 +189,8 @@ test("tower templates render TOWER_WIDTH columns and carry every token", () => {
     row
       .replace(TOWER.tokens.door, TOWER_DOOR)
       .replace(TOWER.tokens.orb, "◉")
-      .replace(TOWER.tokens.winL, "◉")
-      .replace(TOWER.tokens.winR, "◉")
+      .replace(TOWER.tokens.winL, " ◉ ")
+      .replace(TOWER.tokens.winR, " ◉ ")
       .replace(TOWER.tokens.mouth, "═══════")
       .replace(TOWER.tokens.aura, ORACLE_AURA.orchestrating[0]!);
   for (const rows of [TOWER.rows, TOWER.smallRows]) {
@@ -228,10 +243,10 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
     "                                 ╱ │ ╲     │ → DEV                │",
     "                                   │       ╰──────────────────────╯",
     "                             ╭─────┴─────╮",
-    "                             │ ╭─╮   ╭─╮ │",
-    "                             │ │◉│   │◉│ │",
-    "                             │ ╰─╯   ╰─╯ │",
-    "                             │   ╰───╯   │",
+    "                             │╭───╮ ╭───╮│",
+    "                             ││◒  │ │◒  ││",
+    "                             │╰───╯ ╰───╯│",
+    "                             │    ───    │",
     "                             ├───┬───┬───┤",
     "                             │░▒▓│ORC│▓▒░│",
     "                             └───┴───┴───┘",
@@ -262,10 +277,10 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
     "                                               ╱ │ ╲     │ → DEV                │",
     "                                                 │       ╰──────────────────────╯",
     "                                           ╭─────┴─────╮",
-    "                                           │ ╭─╮   ╭─╮ │",
-    "                                           │ │◉│   │◉│ │",
-    "                                           │ ╰─╯   ╰─╯ │",
-    "                                           │   ╰───╯   │",
+    "                                           │╭───╮ ╭───╮│",
+    "                                           ││◒  │ │◒  ││",
+    "                                           │╰───╯ ╰───╯│",
+    "                                           │    ───    │",
     "                                           ├───┬───┬───┤",
     "                                           │░▒▓│ORC│▓▒░│",
     "                                           └───┴───┴───┘",
@@ -516,10 +531,10 @@ test("TASKS outranks the tower, so a taller terminal never hides checklist rows"
   });
   const tall = largeLines(many, 72, MAX_LARGE_LINES);
   assert.equal(tall.filter((line) => TASK_ROW.test(line)).length, MAX_TASK_ROWS);
-  assert.ok(tall.some((line) => line.includes("│ ╭─╮   ╭─╮ │")), "the full tower fits a full checklist");
+  assert.ok(tall.some((line) => line.includes("│╭───╮ ╭───╮│")), "the full tower fits a full checklist");
   const roomy = largeLines(many, 72, 30);
   assert.equal(roomy.filter((line) => TASK_ROW.test(line)).length, MAX_TASK_ROWS);
-  assert.ok(!roomy.some((line) => line.includes("│ ╭─╮   ╭─╮ │")), "the tower shrinks before the checklist");
+  assert.ok(!roomy.some((line) => line.includes("│╭───╮ ╭───╮│")), "the tower shrinks before the checklist");
   const tiny = largeLines(many, 72, 18);
   assert.equal(tiny.filter((line) => TASK_ROW.test(line)).length, 0);
   assert.ok(tiny.some((line) => line.includes("╭─────┴─────╮")), "the tower stays");
@@ -622,4 +637,124 @@ test("the aura twinkles with the tick while orchestrating and drifts z's while d
   for (const pose of ORACLE_POSES) {
     for (const frame of ORACLE_AURA[pose]) assert.equal(visibleWidth(frame), 7, `${pose} aura ${JSON.stringify(frame)}`);
   }
+});
+
+// --- the oracle's eyes and mouth ---
+
+/** The eye row and mouth row, read off the rendered tower. */
+function oracleFaceRows(input: LargeSceneInput): { eyes: string; mouth: string } {
+  const lines = largeLines(input, 72, 40);
+  const roof = lines.findIndex((line) => line.includes("╭─────┴─────╮"));
+  const left = lines[roof]!.indexOf("╭");
+  const row = (offset: number) => lines[roof + offset]!.slice(left, left + TOWER_WIDTH);
+  return { eyes: row(2), mouth: row(4) };
+}
+
+const calm = (overrides: Partial<LargeSceneInput> = {}) =>
+  scene({ alert: undefined, slots: scene().slots.map((slot) => ({ ...slot, status: "idle" as const })), ...overrides });
+
+const working = (ids: string[], tick = 0) =>
+  calm({ tick, slots: calm().slots.map((slot) => ({ ...slot, status: ids.includes(slot.id) ? "working" as const : "idle" as const })) });
+
+test("the oracle keeps a straight, serious face at rest and never idles on a smile", () => {
+  for (const overrides of [{}, { done: 6, total: 6 }, { alert: "approvals pending: APR-1", alertKind: "warning" as const }]) {
+    assert.equal(oracleFaceRows(calm(overrides)).mouth, `│  ${ORACLE_MOUTH}  │`);
+  }
+  for (const frame of ORACLE_FRAMES.orchestrating) assert.equal(frame.mouth, ORACLE_MOUTH, "no smiling expression frame");
+  for (const shape of [...ORACLE_TALK, ...Object.values(ORACLE_MOOD_MOUTHS)]) assert.doesNotMatch(shape, /╰|◡|‿/, `no smile in ${shape}`);
+  assert.equal(oracleMood(calm({ alert: "blocked: stuck", alertKind: "error" })), "worried");
+  assert.ok(oracleFaceRows(calm({ alert: "blocked: stuck", alertKind: "error" })).mouth.includes(ORACLE_MOOD_MOUTHS.worried), "a blocker tightens it into a frown");
+});
+
+test("the oracle's pupils reach all nine spots: left, centre, right and up, ahead, down", () => {
+  const seen = new Set<string>();
+  for (let tick = 0; tick < ORACLE_WANDER.length * ORACLE_WANDER_TICKS; tick += 1) seen.add(oracleFaceRows(calm({ tick })).eyes);
+  for (let phase = 0; phase < ORACLE_LOOK_PATH.length; phase += 1) {
+    seen.add(oracleFaceRows(calm({ oracle: { pose: "orchestrating", frame: ORACLE_LOOK, phase } })).eyes);
+  }
+  const cell = (x: number, glyph: string) => [" ", " ", " "].map((blank, column) => (column === x + 1 ? glyph : blank)).join("");
+  for (const x of [-1, 0, 1]) {
+    for (const glyph of Object.values(ORACLE_PUPILS)) {
+      assert.ok(seen.has(`││${cell(x, glyph)}│ │${cell(x, glyph)}││`), `never looked at ${x}/${glyph}`);
+    }
+  }
+});
+
+test("idle, the oracle's eyes wander the room and keep coming back to you", () => {
+  assert.deepEqual(oracleGaze(calm({ tick: 0 })), GAZE_AHEAD, "starts looking ahead");
+  assert.deepEqual(oracleGaze(calm({ tick: ORACLE_WANDER_TICKS - 1 })), GAZE_AHEAD, "holds each spot");
+  const spots = ORACLE_WANDER.map((_gaze, index) => oracleGaze(calm({ tick: index * ORACLE_WANDER_TICKS })));
+  assert.deepEqual(spots, [...ORACLE_WANDER]);
+  assert.ok(new Set(spots.map((gaze) => `${gaze.x},${gaze.y}`)).size >= 6, "it really looks around");
+  assert.ok(spots.filter((gaze) => gaze.x === 0 && gaze.y === 0).length >= 3, "and returns to you between glances");
+});
+
+test("while agents work, the oracle looks down at them and takes turns between them", () => {
+  assert.equal(oracleFaceRows(working(["dev"])).eyes, "││◒  │ │◒  ││", "down-left at DEV");
+  assert.equal(oracleFaceRows(working(["qa"])).eyes, "││  ◒│ │  ◒││", "down-right at QA");
+  assert.deepEqual(oracleGaze(working(["dev", "qa"], 0)), { x: -1, y: 1 });
+  assert.deepEqual(oracleGaze(working(["dev", "qa"], ORACLE_GAZE_TICKS - 1)), { x: -1, y: 1 }, "holds its gaze");
+  assert.deepEqual(oracleGaze(working(["dev", "qa"], ORACLE_GAZE_TICKS)), { x: 1, y: 1 }, "then moves to the next agent");
+  assert.deepEqual(oracleGaze({ ...working(["dev"]), oracle: { pose: "orchestrating", frame: 0, talk: 0 } }), GAZE_AHEAD, "looks at you while talking");
+  assert.deepEqual(oracleGaze({ ...working(["dev"]), oracle: { pose: "dormant", frame: 0 } }), GAZE_AHEAD, "asleep, it looks nowhere");
+});
+
+test("the look-around emote scans the room, and a blink steps the lids down and up", () => {
+  const looked = ORACLE_LOOK_PATH.map((_gaze, phase) => oracleGaze(calm({ oracle: { pose: "orchestrating", frame: ORACLE_LOOK, phase } })));
+  assert.deepEqual(looked, [...ORACLE_LOOK_PATH]);
+  assert.deepEqual(oracleGaze(calm({ oracle: { pose: "orchestrating", frame: ORACLE_LOOK + 1, phase: 99 } })), ORACLE_LOOK_PATH.at(-1), "the second emote frame finishes the scan");
+  for (const axis of ["x", "y"] as const) {
+    for (const value of [-1, 1]) assert.ok(ORACLE_LOOK_PATH.some((gaze) => gaze[axis] === value), `the scan reaches ${axis}=${value}`);
+  }
+  const blink = (phase: number) => oracleFaceRows(calm({ oracle: { pose: "orchestrating", frame: ORACLE_BLINK, phase } })).eyes;
+  assert.deepEqual([0, 1, 2, 3, 9].map(blink), [
+    "││ ◒ │ │ ◒ ││",
+    "││───│ │───││",
+    "││───│ │───││",
+    "││ ◒ │ │ ◒ ││",
+    "││ ◒ │ │ ◒ ││",
+  ]);
+});
+
+test("the oracle lip-syncs while it talks", () => {
+  const talking = (talk: number) => oracleFaceRows(calm({ oracleActivity: "planning", oracle: { pose: "orchestrating", frame: 0, talk } })).mouth;
+  const shapes = ORACLE_TALK.map((_shape, talk) => talking(talk));
+  ORACLE_TALK.forEach((shape, talk) => assert.ok(shapes[talk]!.includes(shape), `talk shape ${talk}`));
+  assert.ok(new Set(shapes).size >= 6, "the mouth moves through distinct shapes");
+  assert.ok(shapes.some((shape) => shape.includes(ORACLE_MOUTH)), "it pauses for breath");
+  assert.equal(talking(ORACLE_TALK.length), talking(0), "the lip-sync loops");
+  const looking = oracleFaceRows(calm({ oracle: { pose: "orchestrating", frame: ORACLE_LOOK, talk: 2 } })).mouth;
+  assert.ok(looking.includes(ORACLE_TALK[2]!), "it keeps talking while it looks around");
+  const asleep = oracleFaceRows(calm({ oracle: { pose: "dormant", frame: 0, talk: 2 } })).mouth;
+  assert.ok(asleep.includes(ORACLE_MOUTH), "a dormant oracle does not talk");
+});
+
+test("asleep, the oracle peeks one eye open and snores louder", () => {
+  const dormant = (frame: number, phase = 0) => oracleFaceRows(calm({ oracle: { pose: "dormant", frame, phase } }));
+  assert.equal(dormant(0).eyes, "││───│ │───││");
+  assert.equal(dormant(1, 1).eyes, "││ ◉ │ │───││", "one eye cracks open");
+  assert.equal(dormant(1, 99).eyes, "││───│ │───││", "and drifts shut again");
+  assert.ok(dormant(2).mouth.includes("─o─") && dormant(3).mouth.includes("─O─"), "the snore grows");
+});
+
+test("every eye, lid and mouth combination keeps the tower exactly TOWER_WIDTH wide", () => {
+  const bases = [calm(), calm({ alert: "blocked: x", alertKind: "error" }), working(["dev", "qa"], 9)];
+  for (const base of bases) {
+    for (const pose of ORACLE_POSES) {
+      for (const frame of ORACLE_FRAMES[pose].keys()) {
+        for (const phase of [0, 1, 3, 7, 12, 40]) {
+          for (const talk of [undefined, 0, 3, 11]) {
+            for (const tick of [0, 17, 55]) {
+              const face = oracleFace({ ...base, tick, oracle: { pose, frame, phase, talk } });
+              assert.equal(visibleWidth(face.left), EYE_WIDTH, `${pose}/${frame}/${phase} left`);
+              assert.equal(visibleWidth(face.right), EYE_WIDTH, `${pose}/${frame}/${phase} right`);
+              assert.equal(visibleWidth(face.mouth), 7, `${pose}/${frame}/${talk} mouth ${JSON.stringify(face.mouth)}`);
+              assert.equal(visibleWidth(face.orb), 1);
+            }
+          }
+        }
+      }
+    }
+  }
+  for (const glyph of Object.values(ORACLE_PUPILS)) assert.equal(visibleWidth(glyph), 1, glyph);
 });
