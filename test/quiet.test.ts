@@ -23,6 +23,14 @@ function makePi(available: string[], active: string[] = [...available]) {
     tools: [] as AnyTool[],
     shortcuts: [] as string[],
     commands: [] as string[],
+    sentMessages: [] as string[],
+    thinkingLevels: [] as unknown[],
+    sendUserMessage(message: string): void {
+      state.sentMessages.push(message);
+    },
+    setThinkingLevel(level: unknown): void {
+      state.thinkingLevels.push(level);
+    },
     handlers: new Map<string, (...args: unknown[]) => unknown>(),
     shortcutHandler: undefined as ((ctx: ExtensionContext) => unknown) | undefined,
     shortcutHandlers: {} as Record<string, (ctx: ExtensionContext) => unknown>,
@@ -349,6 +357,40 @@ test("/bot-lobby claim reassigns an ownerless task to this session", async () =>
   await fake.commandHandlers["bot-lobby"]!("claim TASK-orphan", ctx);
   assert.equal(loadTask(root, ".pi", "TASK-orphan")!.ownerSessionId, "session-1");
   assert.ok(ui.notifications.some((entry) => entry.message.includes("TASK-orphan")), "the takeover is reported");
+});
+
+test("/bot-lobby <request> stamps the starting session as owner", async () => {
+  const previous = process.env.BOT_LOBBY_CONFIG_DIR;
+  process.env.BOT_LOBBY_CONFIG_DIR = tempDir("dh-cfg-");
+  setMinimized(false);
+  try {
+    const root = tempDir("dh-stamp-");
+    ensureProjectStructure(root, ".pi");
+    const fake = makePi(["read"]);
+    registerCommands(asPi(fake), ".pi");
+    const { ctx } = makeCtx(root, false, "session-stamp");
+    await fake.commandHandlers["bot-lobby"]!("ship the redesign", ctx);
+    assert.equal(listTasks(root, ".pi")[0]!.ownerSessionId, "session-stamp");
+  } finally {
+    if (previous === undefined) delete process.env.BOT_LOBBY_CONFIG_DIR;
+    else process.env.BOT_LOBBY_CONFIG_DIR = previous;
+  }
+});
+
+test("/bot-lobby minimize and restore toggle the per-session mode without releasing ownership", async () => {
+  setMinimized(false);
+  const root = ownedProject("session-1", "dh-min-cmd-");
+  const fake = makePi(["read"]);
+  registerCommands(asPi(fake), ".pi");
+  const { ctx, ui } = makeCtx(root, false, "session-1");
+  await fake.commandHandlers["bot-lobby"]!("minimize", ctx);
+  assert.equal(isMinimized(), true);
+  assert.equal(ui.widgets.at(-1)!.content, undefined, "minimize hides the widget");
+  assert.ok(ui.statuses.at(-1)!.text?.includes("minimized"));
+  await fake.commandHandlers["bot-lobby"]!("restore", ctx);
+  assert.equal(isMinimized(), false);
+  assert.equal(typeof ui.widgets.at(-1)!.content, "function", "restore brings the widget back");
+  assert.equal(loadTask(root, ".pi", "TASK-owned")!.ownerSessionId, "session-1", "ownership is preserved");
 });
 
 test("commands registration wires alt+t through the reveal shortcut", () => {

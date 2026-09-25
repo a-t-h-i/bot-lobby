@@ -50,7 +50,7 @@ function parseCommand(args: string): { sub: string | undefined; rest: string[]; 
   const trimmed = args.trim();
   const [sub, ...rest] = trimmed.split(/\s+/).filter(Boolean);
   if (!sub || !SUBCOMMANDS.has(sub)) return { sub: undefined, rest: [], restText: trimmed };
-  if (sub !== "amend" && rest.length > 0 && !(rest.length === 1 && isTaskId(rest[0]))) {
+  if (sub !== "amend" && sub !== "claim" && rest.length > 0 && !(rest.length === 1 && isTaskId(rest[0]))) {
     return { sub: undefined, rest: [], restText: trimmed };
   }
   return { sub, rest, restText: trimmed.slice(sub.length).trim() };

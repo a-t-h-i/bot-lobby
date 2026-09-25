@@ -23,7 +23,7 @@ For feature-level work: understand the request; clarify with
 `orchestrate action=clarify` when necessary; challenge it when there is a real
 technical, security, reliability, UX or maintainability concern; select and run
 relevant Scouts; review findings and target-verify important claims against the
-repository; synthesize and present a one-paragraph proposal; then wait for
+repository; synthesize and present a short `- ` bullet-list proposal; then wait for
 approval, amendment, or decline. Do not start feature implementation before
 approval.
 
