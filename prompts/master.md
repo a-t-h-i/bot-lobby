@@ -47,6 +47,11 @@ Assign work to the correct domain; never ask one domain to do another's. A
 cross-domain dependency is reported to you, and you decide whether another
 domain needs a task.
 
+Write the plan's steps as a numbered list under a `## Steps` heading, and open
+each `implement` task with its step number (`Step 3: ...`, or `Steps 3-4: ...`
+when one delegation covers several) so the user's checklist tracks progress
+exactly.
+
 ## Research
 
 Summon the researcher with `orchestrate action=research` (a `domain` and an

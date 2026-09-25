@@ -7,7 +7,7 @@ import type { ProcessRunner } from "../execution/pi-runner.ts";
 import { inheritThinking } from "../schemas/configuration.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { truncate } from "../text.ts";
-import { applyStatus, summarizeRun } from "./ui.ts";
+import { applyStatus, reportRuns, summarizeRun } from "./ui.ts";
 import { isQuiet } from "./quiet.ts";
 import {
   ORCHESTRATE_ACTIONS,
@@ -128,7 +128,7 @@ export function registerOrchestrateTool(pi: ExtensionAPI, configDir: string, run
     renderShell: "self",
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const root = detectProjectRoot(ctx.cwd, configDir);
-      const deps = workflowDeps(ctx, configDir, signal, runReporter(onUpdate, (runs) => applyStatus(ctx, root, configDir, runs)), runProcess, pi.getThinkingLevel());
+      const deps = workflowDeps(ctx, configDir, signal, runReporter(onUpdate, (runs) => reportRuns(ctx, root, configDir, runs)), runProcess, pi.getThinkingLevel());
       const result = await runWorkflowAction(params as OrchestrateParams, deps);
       if (params.action === "propose" && params.proposal && result.ok) {
         pi.appendEntry("bot-lobby", { kind: "proposal", taskId: params.taskId, text: params.proposal });

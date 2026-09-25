@@ -22,6 +22,9 @@ const ACTIVITY_WORDS: Record<string, string> = {
 
 const FALLBACK_WORD = "working";
 
+/** What the oracle says between its own tool calls while a master turn runs. */
+export const ORACLE_THINKING = "thinking";
+
 export function activityWord(toolName: string): string {
   return ACTIVITY_WORDS[toolName.trim().toLowerCase()] ?? FALLBACK_WORD;
 }
