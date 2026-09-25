@@ -118,6 +118,14 @@ test("a scout pushback is recorded as a decision and does not gate the domain", 
   assert.match(task.decisions.map((decision) => decision.text).join("\n"), /pushed back/);
 });
 
+test("propose from clarifying takes the trivial shortcut to approval", async () => {
+  const deps = makeDeps({ choose: async () => "Approve" });
+  withTask(deps, "clarifying");
+  const result = await act(deps, { action: "propose", proposal: "Slow the sprite animations." });
+  assert.equal(result.ok, true, result.message);
+  assert.equal(result.state, "planning");
+});
+
 test("scout from synthesizing is a targeted verification that stays in synthesizing", async () => {
   const deps = makeDeps();
   withTask(deps, "synthesizing");

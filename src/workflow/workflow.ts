@@ -340,7 +340,7 @@ async function handlePropose(task: Task, params: OrchestrateParams, deps: Workfl
   const proposal = params.proposal?.trim();
   if (!proposal) throw new Error("propose requires a proposal");
   if (task.state === "created") transition(task, "clarifying");
-  if (task.state === "clarifying") transition(task, "synthesizing");
+  if (task.state === "clarifying") transition(task, "awaiting_approval");
   task.proposal = proposal;
   writeFileEnsured(join(taskDirFor(deps.root, deps.configDir, task.id), "proposal.md"), proposal);
   for (const concern of params.concerns ?? []) recordDecision(task, `Concern: ${concern}`);
