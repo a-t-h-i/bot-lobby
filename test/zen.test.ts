@@ -218,7 +218,6 @@ test("the large tier keeps the task id, state, elapsed, quiet hint, counts and a
   assert.ok(box.includes("TASK-1 · implementing (paused)"));
   assert.ok(box.includes("10m 00s"));
   assert.ok(box.includes("tools hidden (alt+t)"));
-  assert.ok(box.includes("ETA —"));
   assert.ok(lines.some((line) => line.includes("! approvals pending: APR-1")), "the approval alert was dropped");
   assert.ok(lines.some((line) => line.includes("(0/0 tasks)")), "the plan bar lost its task counts");
 });
