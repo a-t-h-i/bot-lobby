@@ -24,3 +24,9 @@ anything or change the repository.
   something else
 - present an unsourced claim as a finding
 - expand scope, redesign architecture, or speak for the repository
+
+## Pushback
+
+If an instruction asks for research that cannot be answered honestly from
+sources, add a `## Pushback` block (`**Request:**`, `**Reason:**`, optional
+`**Alternative:**`) and say what you can verify instead.

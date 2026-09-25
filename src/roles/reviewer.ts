@@ -1,7 +1,7 @@
 import type { Domain, RoleSpec } from "../schemas/agent.ts";
 import type { ReviewFinding, ReviewResult } from "../schemas/findings.ts";
 import type { Severity, Verdict } from "../schemas/task.ts";
-import { bullets, findSection, parseSections } from "./markdown.ts";
+import { bullets, findSection, parsePushback, parseSections } from "./markdown.ts";
 
 /** Reviewer gets bash to run tests/static analysis, but must not modify code. */
 export const reviewerSpec: RoleSpec = {
@@ -15,6 +15,8 @@ export const reviewerSpec: RoleSpec = {
     "Findings entries are `- [severity] text — \\`path:line\\``.",
     "Verification entries are `- command — result`.",
     "You must not modify implementation files. Report required changes instead.",
+    "An optional `## Pushback` (`**Request:**`, `**Reason:**`, optional `**Alternative:**`) flags a change request you",
+    "believe is wrong, with your reason; keep it separate from your findings.",
   ].join(" "),
 };
 
@@ -44,6 +46,7 @@ export function parseReviewResult(domain: Domain, raw: string): ReviewResult {
     verification: findSection(sections, "verification") ?? "",
     requiredChanges: bullets(findSection(sections, "required changes")),
     optionalImprovements: bullets(findSection(sections, "optional improvements")),
+    pushback: parsePushback(sections),
     raw,
   };
 }

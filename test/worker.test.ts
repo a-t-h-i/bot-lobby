@@ -104,6 +104,13 @@ test("parseWorkerResult extracts a structured blocker", () => {
   assert.ok(result.blockers[0]!.tried.length >= 1);
 });
 
+test("parseWorkerResult extracts a structured pushback", () => {
+  const raw = ["## Completed", "Did the safe parts.", "", "## Pushback", "**Request:** Replace the session store", "**Reason:** It drops in-flight sessions", "**Alternative:** Extend the existing store"].join("\n");
+  const result = parseWorkerResult("backend", raw);
+  assert.deepEqual(result.pushback, { request: "Replace the session store", reason: "It drops in-flight sessions", alternative: "Extend the existing store" });
+  assert.equal(parseWorkerResult("backend", "## Pushback\n**Request:** x").pushback, undefined, "a reason is required");
+});
+
 test("validateWorkerResult flags unverified or empty work", () => {
   const unverified = parseWorkerResult("backend", "## Completed\nDid things.\n\n## Files Changed\n- src/a.ts — change");
   assert.deepEqual(validateWorkerResult(unverified), ["changed files without verification"]);
@@ -149,6 +156,29 @@ test("pending approvals block further work in that domain and are resolvable", a
   assert.equal(pendingApprovals(loadTask(deps.root, deps.configDir, task.id)!, "backend").length, 1);
   const unknown = await act(deps, { action: "resolve_approval", approvalId: "APR-99", decision: "approved" });
   assert.equal(unknown.ok, false);
+});
+
+test("a worker pushback blocks its domain and the oracle resolves it with a counter-argument", async () => {
+  const raw = ["## Completed", "Paused the risky change.", "", "## Files Changed", "- `src/session.ts` — left the store alone", "", "## Verification", "- `npm test` — passing", "", "## Pushback", "**Request:** Replace the session store", "**Reason:** It drops in-flight sessions", "**Alternative:** Extend the existing store"].join("\n");
+  const runner: ProcessRunner = async () => ({ exitCode: 0, stdout: workerReply(raw), stderr: "", killed: false, timedOut: false });
+  const deps = makeDeps({ runProcess: runner });
+  withTask(deps, "planning");
+  const first = await act(deps, { action: "implement", domain: "backend", task: "Swap the session store." });
+  assert.equal(first.ok, true, first.message);
+  assert.match(first.message, /Pushback recorded/);
+  const task = loadTask(deps.root, deps.configDir, "TASK-1")!;
+  const pending = pendingApprovals(task, "backend");
+  assert.equal(pending.length, 1);
+  assert.equal(pending[0]!.kind, "pushback");
+  assert.match(task.decisions.map((decision) => decision.text).join("\n"), /pushed back/);
+  const blocked = await act(deps, { action: "implement", domain: "backend", task: "Step two." });
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.message, /unresolved approvals/);
+  const overruled = await act(deps, { action: "resolve_approval", approvalId: pending[0]!.id, decision: "rejected", note: "Sessions drain at deploy." });
+  assert.equal(overruled.ok, true, overruled.message);
+  assert.match(overruled.message, /overruled/);
+  assert.match(overruled.message, /Sessions drain at deploy/);
+  assert.equal(pendingApprovals(loadTask(deps.root, deps.configDir, "TASK-1")!, "backend").length, 0);
 });
 
 test("a designer worker is not blocked by backend approvals", async () => {

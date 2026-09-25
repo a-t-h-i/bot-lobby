@@ -1,6 +1,6 @@
 import type { Domain, RoleSpec } from "../schemas/agent.ts";
 import type { ScoutResult } from "../schemas/findings.ts";
-import { bullets, findSection, parseFileBullet, parseSections } from "./markdown.ts";
+import { bullets, findSection, parseFileBullet, parsePushback, parseSections } from "./markdown.ts";
 
 /** Scout runs read-only so it can never modify implementation. */
 export const scoutSpec: RoleSpec = {
@@ -15,6 +15,8 @@ export const scoutSpec: RoleSpec = {
     "Use `- ` bullets. `## Relevant Files` entries are `- \\`path\\` — reason`.",
     "`## Confidence` is exactly one of `High`, `Medium`, `Low`.",
     "Keep the whole response under 400 words. Report uncertainty; do not implement.",
+    "An optional `## Pushback` (`**Request:**`, `**Reason:**`, optional `**Alternative:**`) flags a change you",
+    "believe is wrong, with your reason; keep it separate from your findings.",
   ].join(" "),
 };
 
@@ -39,6 +41,7 @@ export function parseScoutResult(domain: Domain, raw: string): ScoutResult {
     risks: bullets(findSection(sections, "risks")),
     recommendations: bullets(findSection(sections, "recommendations")),
     confidence: parseConfidence(findSection(sections, "confidence")),
+    pushback: parsePushback(sections),
     raw,
   };
 }

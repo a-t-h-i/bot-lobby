@@ -11,6 +11,13 @@ export interface FileChange {
   change: string;
 }
 
+/** A subagent's reasoned objection to a change request; the oracle decides its fate. */
+export interface Pushback {
+  request: string;
+  reason: string;
+  alternative?: string;
+}
+
 export interface KnowledgeProposal {
   domain: Domain;
   kind: "knowledge" | "standard" | "decision" | "completed";
@@ -27,6 +34,7 @@ export interface ScoutResult {
   risks: string[];
   recommendations: string[];
   confidence: "high" | "medium" | "low";
+  pushback?: Pushback;
   raw: string;
 }
 
@@ -41,6 +49,7 @@ export interface WorkerResult {
   knowledgeProposals: KnowledgeProposal[];
   dependencyNeeds: string[];
   architectureChanges: string[];
+  pushback?: Pushback;
   raw: string;
 }
 
@@ -57,6 +66,7 @@ export interface ReviewResult {
   verification: string;
   requiredChanges: string[];
   optionalImprovements: string[];
+  pushback?: Pushback;
   raw: string;
 }
 
@@ -76,6 +86,7 @@ export interface ResearchResult {
   recommendations: string[];
   confidence: "high" | "medium" | "low";
   unverified: string[];
+  pushback?: Pushback;
   raw: string;
 }
 

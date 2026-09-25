@@ -4,6 +4,8 @@
  * may be missing entirely. Everything here degrades instead of throwing.
  */
 
+import type { Pushback } from "../schemas/findings.ts";
+
 /** Map lowercase heading text to its body for `##`/`###` sections. */
 export function parseSections(markdown: string): Map<string, string> {
   const sections = new Map<string, string>();
@@ -20,6 +22,21 @@ export function parseSections(markdown: string): Map<string, string> {
   return sections;
 }
 
+/** Read a `**Name:** value` field from a section body, trimmed. */
+export function fieldValue(body: string, name: string): string | undefined {
+  const match = new RegExp(`\\*\\*${name}:\\*\\*\\s*(.+)`, "i").exec(body);
+  return match?.[1]?.trim();
+}
+
+/** Optional `## Pushback` block: request + reason (required) and an alternative. */
+export function parsePushback(sections: Map<string, string>): Pushback | undefined {
+  const body = findSection(sections, "pushback");
+  if (!body) return undefined;
+  const reason = fieldValue(body, "Reason");
+  if (!reason) return undefined;
+  const alternative = fieldValue(body, "Alternative");
+  return { request: fieldValue(body, "Request") ?? "the assigned change", reason, alternative };
+}
 /** Find a section whose heading contains `name` (case-insensitive). */
 export function findSection(sections: Map<string, string>, name: string): string | undefined {
   const needle = name.toLowerCase();

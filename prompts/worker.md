@@ -34,3 +34,16 @@ bug fixes require appropriate tests before claiming completion.
 - Verify tests.
 - Update the temporary task scratchpad.
 - Report concise results.
+
+## Pushback
+
+If you believe the assigned change is wrong, harmful, or out of scope, say so
+instead of silently implementing it. Complete everything else you can safely do,
+then add a `## Pushback` block to your output:
+
+- `**Request:**` the change you were asked to make
+- `**Reason:**` the concrete technical reason it is wrong, plus the evidence
+- `**Alternative:**` (optional) what you would do instead
+
+The engine records the pushback and blocks that domain until the Master
+resolves it, so be specific and keep working on the rest of the task.

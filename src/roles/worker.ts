@@ -1,7 +1,7 @@
 import type { Domain, RoleSpec } from "../schemas/agent.ts";
 import type { Blocker } from "../schemas/task.ts";
 import type { FileChange, KnowledgeProposal, WorkerResult } from "../schemas/findings.ts";
-import { bullets, findSection, parseFileBullet, parseSections } from "./markdown.ts";
+import { bullets, fieldValue, findSection, parseFileBullet, parsePushback, parseSections } from "./markdown.ts";
 
 /** Worker has no tool allowlist: it needs the full set to implement. */
 export const workerSpec: RoleSpec = {
@@ -17,6 +17,8 @@ export const workerSpec: RoleSpec = {
     "Blocked work uses `**Blocker:**`, `**Tried:**`, `**Need:**` under `## Blockers`.",
     "Never install a dependency or make a significant architectural change yourself; list it under",
     "the matching section instead. Do not narrate. Report only what you actually changed and verified.",
+    "An optional `## Pushback` (`**Request:**`, `**Reason:**`, optional `**Alternative:**`) states a change you",
+    "believe is wrong, with your reason, instead of doing it; still complete everything else you safely can.",
   ].join(" "),
 };
 
@@ -27,11 +29,6 @@ export function parseKnowledgeProposals(domain: Domain, text: string | undefined
     const kind = (match?.[1]?.toLowerCase() ?? "knowledge") as KnowledgeProposal["kind"];
     return { domain, kind, content: (match?.[2] ?? entry).trim() };
   });
-}
-
-function fieldValue(body: string, name: string): string | undefined {
-  const match = new RegExp(`\\*\\*${name}:\\*\\*\\s*(.+)`, "i").exec(body);
-  return match?.[1]?.trim();
 }
 
 function splitList(text: string | undefined): string[] {
@@ -77,6 +74,7 @@ export function parseWorkerResult(domain: Domain, raw: string, now = new Date().
     notes: findSection(sections, "notes") ?? "",
     blockers: parseBlockers(sections, domain, now),
     knowledgeProposals: parseKnowledgeProposals(domain, findSection(sections, "knowledge proposals")),
+    pushback: parsePushback(sections),
     dependencyNeeds: bullets(findSection(sections, "dependencies needed")),
     architectureChanges: bullets(findSection(sections, "architecture changes")),
     raw,

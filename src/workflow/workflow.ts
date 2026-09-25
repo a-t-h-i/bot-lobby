@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import type { BotLobbyConfig } from "../schemas/configuration.ts";
-import type { AgentRun, ResearchResult, ReviewResult } from "../schemas/findings.ts";
+import type { AgentRun, Pushback, ResearchResult, ReviewResult } from "../schemas/findings.ts";
 import { TASK_STATES, TERMINAL_STATES, taskRequest, type Approval, type ApprovalKind, type Task, type TaskState } from "../schemas/task.ts";
 import { isDomain, type Domain } from "../schemas/agent.ts";
 import { transition } from "../state/task-state.ts";
@@ -173,6 +173,7 @@ export function applyApprovalChoice(task: Task, choice: ApprovalChoice, amendmen
 
 function scoutReport(outcomes: ScoutOutcome[], verifying: boolean): string {
   const assessment = assessReconnaissance(outcomes);
+  const pushbacks = outcomes.map((outcome) => pushbackLine(outcome.result.pushback, outcome.result.domain)).filter(Boolean);
   const shared = detectSharedFiles(outcomes);
   return [
     verifying ? "Targeted verification results:" : "Scout results:",
@@ -184,6 +185,7 @@ function scoutReport(outcomes: ScoutOutcome[], verifying: boolean): string {
       ? `Files reported by multiple domains: ${shared.map((entry) => `${entry.path} (${entry.domains.join("/")})`).join(", ")}`
       : "",
     assessment.warnings.length > 0 ? `Gaps to verify: ${assessment.warnings.join("; ")}` : "",
+    pushbacks.length > 0 ? `Pushbacks recorded: ${pushbacks.join("; ")}` : "",
     verifying
       ? "Use this to confirm or correct the claim, then continue with action=propose."
       : "Next: synthesize these findings, target-verify anything important, then call action=propose.",
@@ -228,6 +230,7 @@ async function handleScout(task: Task, params: OrchestrateParams, deps: Workflow
   if (!verifying) transition(task, "synthesizing");
   const involved = outcomes.filter((outcome) => outcome.usable).map((outcome) => outcome.result.domain);
   task.domains = [...new Set([...task.domains, ...involved])];
+  recordAdvisoryPushbacks(task, outcomes.map((outcome) => ({ pushback: outcome.result.pushback, who: outcome.result.domain })));
   return scoutReport(outcomes, verifying);
 }
 
@@ -294,6 +297,7 @@ function researchReport(outcome: ResearchOutcome, artifact: string): string {
     sourceSection(result),
     bulletSection("Unverified", result.unverified, 8),
     `Artifact: ${artifact}`,
+    pushbackLine(result.pushback, result.domain),
     "Research is evidence only: it is not injected into worker, reviewer, or QA prompts, and nothing enters persistent knowledge until you record it with action=knowledge.",
   ]
     .filter((line) => line.length > 0)
@@ -327,6 +331,7 @@ async function handleResearch(task: Task, params: OrchestrateParams, deps: Workf
   const taskDir = taskDirFor(deps.root, deps.configDir, task.id);
   const outcome = await runResearch(researchRequestFor(deps, task, domain, instruction, taskDir), deps.runProcess ?? spawnPiProcess);
   appendResearchLog(taskDir, domain, outcome);
+  recordAdvisoryPushbacks(task, [{ pushback: outcome.result.pushback, who: domain }]);
   return researchReport(outcome, researchResultPath(taskDir, domain));
 }
 
@@ -378,8 +383,34 @@ function recordWorkerApprovals(task: Task, outcome: WorkerOutcome, config: BotLo
   return created;
 }
 
-function workerReport(outcome: WorkerOutcome, approvals: Approval[]): string {
+/** One line naming a pushback for a report, or "" when there is none. */
+function pushbackLine(pushback: Pushback | undefined, who: string): string {
+  if (!pushback) return "";
+  const alternative = pushback.alternative ? ` (alternative: ${truncate(pushback.alternative, 160)})` : "";
+  return `${who} pushed back on ${truncate(pushback.request, 160)}: ${truncate(pushback.reason, 240)}${alternative}`;
+}
+
+/** Record a worker pushback as a pending approval that blocks its domain until the oracle resolves it. */
+function recordPushback(task: Task, outcome: WorkerOutcome): Approval | undefined {
+  const pushback = outcome.result.pushback;
+  if (!pushback) return undefined;
+  const detail = `${truncate(pushback.request, 160)} — ${truncate(pushback.reason, 240)}`;
+  const approval = requestApproval(task, "pushback", outcome.result.domain, detail);
+  pingApproval(outcome.result.domain, detail);
+  recordDecision(task, pushbackLine(pushback, outcome.result.domain), outcome.result.domain);
+  return approval;
+}
+
+/** Record advisory pushbacks from read-only roles; they inform the oracle but never gate work. */
+function recordAdvisoryPushbacks(task: Task, entries: Array<{ pushback?: Pushback; who: string }>): void {
+  for (const { pushback, who } of entries) {
+    if (pushback) recordDecision(task, pushbackLine(pushback, who));
+  }
+}
+
+function workerReport(outcome: WorkerOutcome, approvals: Approval[], pushback?: Approval): string {
   const { result, run, issues } = outcome;
+  const objection = result.pushback;
   return [
     `Worker ${result.domain}: ${run.status}${run.error ? ` (${run.error})` : ""}`,
     result.completed ? `Completed: ${truncate(result.completed, 1200)}` : "",
@@ -397,6 +428,9 @@ function workerReport(outcome: WorkerOutcome, approvals: Approval[]): string {
       ? `Knowledge proposals (accept with action=knowledge, or ignore): ${result.knowledgeProposals.map((proposal) => `${proposal.kind}: ${truncate(proposal.content, 160)}`).join("; ")}`
       : "",
     issues.length > 0 ? `Issues: ${issues.join("; ")}` : "",
+    pushback && objection
+      ? `Pushback recorded (${pushback.id}): ${truncate(objection.reason, 240)}. Resolve with action=resolve_approval before re-delegating ${result.domain}.`
+      : "",
     "Next: inspect the diff, then run action=qa once this domain's work is complete.",
   ]
     .filter((line) => line.length > 0)
@@ -451,9 +485,10 @@ async function handleImplement(task: Task, params: OrchestrateParams, deps: Work
   if (task.state !== "implementing") transition(task, "implementing");
   const outcome = await runWorker(workerRequest(deps, task, domain, instruction), deps.runProcess ?? spawnPiProcess);
   const approvals = recordWorkerApprovals(task, outcome, deps.config);
+  const pushback = recordPushback(task, outcome);
   task.blockers = [...task.blockers.filter((blocker) => blocker.domain !== domain), ...outcome.result.blockers];
   updateScratchpad(deps, task, outcome);
-  return workerReport(outcome, approvals);
+  return workerReport(outcome, approvals, pushback);
 }
 
 function handleResolveApproval(task: Task, params: OrchestrateParams): string {
@@ -465,6 +500,11 @@ function handleResolveApproval(task: Task, params: OrchestrateParams): string {
   const approval = resolveApproval(task, id, decision, params.note);
   if (!approval) throw new Error(`no pending approval "${id}"`);
   recordDecision(task, `${decision} ${approval.kind} for ${approval.domain}: ${approval.detail}`);
+  if (approval.kind === "pushback") {
+    return decision === "approved"
+      ? `${id} pushback accepted (${approval.detail}). Re-delegate without that change.`
+      : `${id} pushback overruled.${params.note ? ` Counter-argument: ${params.note}.` : ""} Re-delegate the original change to ${approval.domain}.`;
+  }
   return decision === "approved"
     ? `${id} approved. The ${approval.domain} worker may now proceed with: ${approval.detail}`
     : `${id} rejected. Instruct the ${approval.domain} worker to achieve the goal without that change.`;
@@ -527,6 +567,7 @@ function qaReport(outcome: ReviewerOutcome, decision: "accept" | "iterate" | "bl
       ? "The QA gate passed. Record any distilled knowledge, then call action=complete."
       : "The QA gate did not pass: delegate the required changes to the owning domain, then re-run action=qa.",
     decision === "blocked" ? "The review limit is reached: mark the task blocked and tell the user." : "",
+    result.pushback ? pushbackLine(result.pushback, "qa") : "",
     issues.length > 0 ? `Issues: ${issues.join("; ")}` : "",
   ]
     .filter((line) => line.length > 0)
@@ -542,6 +583,7 @@ async function handleQa(task: Task, params: OrchestrateParams, deps: WorkflowDep
   const outcome = await runReviewer(qaRequest(deps, task, diff, params.task), deps.runProcess ?? spawnPiProcess);
   task.qaVerdict = outcome.result.verdict;
   recordReview(task, "qa", outcome.result);
+  recordAdvisoryPushbacks(task, [{ pushback: outcome.result.pushback, who: "qa" }]);
   const decision = decideReviewLoop(outcome.result.verdict, iterations, deps.config.workflow.maxReviewIterations);
   if (decision === "accept") task.blockers = task.blockers.filter((blocker) => blocker.domain !== "qa");
   return qaReport(outcome, decision);

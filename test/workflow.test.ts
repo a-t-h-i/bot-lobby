@@ -105,6 +105,19 @@ test("scout runs the domains and moves to synthesizing", async () => {
   assert.deepEqual(task.domains, ["backend", "qa"]);
 });
 
+test("a scout pushback is recorded as a decision and does not gate the domain", async () => {
+  const text = ["## Scope", "x", "", "## Findings", "- found", "", "## Pushback", "**Request:** Cache sessions in the client", "**Reason:** It would leak credentials", "", "## Confidence", "High"].join("\n");
+  const stdout = JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], stopReason: "stop" } });
+  const deps = makeDeps({ runProcess: async () => ({ exitCode: 0, stdout, stderr: "", killed: false, timedOut: false }) });
+  withTask(deps, "clarifying");
+  const result = await act(deps, { action: "scout", domains: ["backend"] });
+  assert.equal(result.ok, true, result.message);
+  assert.match(result.message, /pushed back/);
+  const task = loadTask(deps.root, deps.configDir, "TASK-1")!;
+  assert.equal(pendingApprovals(task, "backend").length, 0, "an advisory pushback does not gate");
+  assert.match(task.decisions.map((decision) => decision.text).join("\n"), /pushed back/);
+});
+
 test("scout from synthesizing is a targeted verification that stays in synthesizing", async () => {
   const deps = makeDeps();
   withTask(deps, "synthesizing");

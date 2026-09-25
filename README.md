@@ -118,7 +118,7 @@ One tool, every workflow step. It is the Master's only way to move a task.
 | `qa` | implementing, reviewing | Run the QA gate — the only review — over the whole feature |
 | `knowledge` | any active | Record Master-approved knowledge or a decision |
 | `compact` | any active | Replace a knowledge file with a rewritten version (archived) |
-| `resolve_approval` | any active | Approve or reject a Worker's dependency/architecture request |
+| `resolve_approval` | any active | Approve or reject a Worker's dependency, architecture or pushback request |
 | `complete` | reviewing | Check every gate, record history, drop scratchpads, finish |
 | `block` / `resume` | implementing, reviewing / blocked | Escalate or continue |
 | `decide`, `status`, `cancel` | any active | Record a decision, inspect, abandon |
@@ -156,6 +156,7 @@ decide to record it with `action=knowledge`.
 | Scouts cannot modify anything | Spawned with `--tools read,grep,find,ls` |
 | The QA gate cannot modify implementation | Read-only Reviewer tools plus `bash` for tests/analysis |
 | Dependency and architecture changes need approval | Worker output is parsed; pending approvals block that domain until resolved |
+| An agent pushback blocks its domain until the oracle decides it | A pushback is recorded as a pending approval; `assertNoPendingApprovals` blocks that domain, and only the Master resolves it |
 | QA review loops are bounded | `maxReviewIterations`; exceeding it forces the blocked path |
 | Only the Master writes knowledge | Agents only propose; one dedup-aware write path |
 | Research never becomes knowledge by itself | Reports are artifacts; only the Master's `action=knowledge` writes persistent knowledge |
@@ -258,7 +259,7 @@ src/
 ├── workflow/
 │   ├── workflow.ts           The engine: every action, every guard
 │   ├── transitions.ts        Legal state machine
-│   └── approvals.ts          Dependency/architecture approval bookkeeping
+│   └── approvals.ts          Dependency/architecture/pushback approval bookkeeping
 ├── execution/
 │   ├── agent-runner.ts       Single/parallel/sequential runs, cancellation, retries
 │   ├── pi-runner.ts          Isolated `pi --mode json` subprocess + stream parsing

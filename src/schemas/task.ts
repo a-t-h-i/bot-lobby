@@ -34,9 +34,9 @@ export interface Decision {
   createdAt: string;
 }
 
-export type ApprovalKind = "dependency" | "architecture";
+export type ApprovalKind = "dependency" | "architecture" | "pushback";
 
-/** A Worker-requested exception the Master must resolve before proceeding. */
+/** A Worker-requested exception or pushback the Master must resolve before proceeding. */
 export interface Approval {
   id: string;
   kind: ApprovalKind;

@@ -34,3 +34,10 @@ performance where relevant, maintainability, and scope discipline.
 - expand the task
 
 If implementation changes are required, report them to the Master.
+
+## Pushback
+
+If the approved requirement or a requested change is itself unsound, add a
+`## Pushback` block (`**Request:**`, `**Reason:**`, optional `**Alternative:**`)
+and keep it separate from your findings. The Master decides how to resolve it;
+you must still not modify code.
