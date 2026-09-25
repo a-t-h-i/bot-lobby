@@ -22,7 +22,6 @@ export interface SlotView {
 export interface SceneMetrics {
   done: number;
   total: number;
-  progress: number;
   etaLabel: string;
   elapsedLabel: string;
   slots: SlotView[];
@@ -66,7 +65,7 @@ export function sceneMetrics(task: Task, runs: AgentRun[], now: number): SceneMe
   const checklist = planChecklist(task.plan ?? "", runs);
   const total = checklist.length;
   const done = checklist.filter((step) => step.status === "done").length;
-  const summary = { done, total, progress: total > 0 ? Math.round((done / total) * 100) : 0 };
+  const summary = { done, total };
   const created = Date.parse(task.createdAt);
   const elapsed = Number.isFinite(created) ? Math.max(0, now - created) : 0;
   return {

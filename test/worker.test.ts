@@ -174,6 +174,9 @@ test("a worker pushback blocks its domain and the oracle resolves it with a coun
   const blocked = await act(deps, { action: "implement", domain: "backend", task: "Step two." });
   assert.equal(blocked.ok, false);
   assert.match(blocked.message, /unresolved approvals/);
+  const refused = await act(deps, { action: "resolve_approval", approvalId: pending[0]!.id, decision: "rejected" });
+  assert.equal(refused.ok, false);
+  assert.match(refused.message, /requires note/);
   const overruled = await act(deps, { action: "resolve_approval", approvalId: pending[0]!.id, decision: "rejected", note: "Sessions drain at deploy." });
   assert.equal(overruled.ok, true, overruled.message);
   assert.match(overruled.message, /overruled/);

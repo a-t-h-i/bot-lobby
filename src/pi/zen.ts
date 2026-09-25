@@ -135,7 +135,7 @@ export function checklistWindow(steps: readonly PlanStep[], count: number, max =
   const size = Math.min(count, max);
   if (steps.length <= size) return steps.map((_step, index) => index);
   const found = steps.findIndex((step) => step.status === "current");
-  const current = found < 0 ? 0 : found;
+  const current = found < 0 ? steps.length - 1 : found;
   const start = Math.min(Math.max(current - Math.floor((size - 1) / 2), 0), steps.length - size);
   return Array.from({ length: size }, (_value, offset) => start + offset);
 }

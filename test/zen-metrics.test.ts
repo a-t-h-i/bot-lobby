@@ -82,7 +82,6 @@ test("a working slot's instruction sets the plan's completed/total progress", ()
   const metrics = sceneMetrics(task({ plan: planText }), runs, NOW);
   assert.equal(metrics.done, 1);
   assert.equal(metrics.total, 4);
-  assert.equal(metrics.progress, 25);
   assert.equal(metrics.etaLabel, `ETA ~${formatDuration(600_000 * 3)}`);
   assert.equal(metrics.elapsedLabel, "10m 00s");
 });
@@ -91,7 +90,6 @@ test("a zero plan reports no progress and an em-dash ETA estimate", () => {
   const metrics = sceneMetrics(task(), [run({ domain: "backend", role: "scout", status: "success", startedAt: "2026-01-01T00:01:00.000Z" })], NOW);
   assert.equal(metrics.done, 0);
   assert.equal(metrics.total, 0);
-  assert.equal(metrics.progress, 0);
   assert.equal(metrics.etaLabel, "ETA —");
   assert.equal(metrics.slots.find((slot) => slot.id === "dev")!.status, "done");
 });
@@ -102,7 +100,6 @@ test("the ETA stays an em-dash estimate until one plan step is done", () => {
   const runs = [run({ runId: "dev", domain: "backend", role: "worker", status: "running", instruction: "implement `src/c.ts` now", startedAt: "2026-01-01T00:09:00.000Z" })];
   const metrics = sceneMetrics(task({ plan: planText }), runs, NOW);
   assert.equal(metrics.done, 2);
-  assert.equal(metrics.progress, 67);
   assert.equal(metrics.etaLabel, `ETA ~${formatDuration((600_000 * 1) / 2)}`);
   assert.ok(metrics.etaLabel.startsWith("ETA ~"));
 });
@@ -113,7 +110,6 @@ test("a succeeded final step completes the plan, reaching 100% and an em-dash ET
   const metrics = sceneMetrics(task({ plan: planText }), runs, NOW);
   assert.equal(metrics.done, 2);
   assert.equal(metrics.total, 2);
-  assert.equal(metrics.progress, 100);
   assert.equal(metrics.etaLabel, "ETA —");
 });
 
@@ -127,6 +123,4 @@ test("an unparsable timestamp degrades to zero elapsed and an em-dash ETA", () =
   const metrics = sceneMetrics(task({ createdAt: "not-a-date" }), [run({ startedAt: "also-not-a-date" })], NOW);
   assert.equal(metrics.elapsedLabel, "0s");
   assert.equal(metrics.etaLabel, "ETA —");
-  assert.equal(metrics.progress, 0);
-  assert.ok(Number.isFinite(metrics.progress) && metrics.progress >= 0 && metrics.progress <= 100);
 });

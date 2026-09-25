@@ -5,7 +5,7 @@ import type { TaskState } from "../schemas/task.ts";
  * captions, status vocabulary, frame sets and tower templates are constants
  * that `zen.ts` and `zen-large.ts` compose. Every glyph is exactly one visible
  * column so the art stays narrow/ambiguous-width safe: the non-ASCII glyphs are
- * the house `⌂` in `BANNER_NARROW`, the panel's ◐/✓/✗ status family, and the
+ * the lobby `⌂` in `BANNER_NARROW`, the panel's ◐/✓/✗ status family, and the
  * box-drawing, bar and eye glyphs of the large scene (─ │ ┌ ┐ └ ┘ ├ ┤ ┬ ┴ ═ █ ▓ ░ ◉ ◍ ◎ ◌ ○).
  */
 

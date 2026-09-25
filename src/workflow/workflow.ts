@@ -497,13 +497,18 @@ function handleResolveApproval(task: Task, params: OrchestrateParams): string {
   if (!id || (decision !== "approved" && decision !== "rejected")) {
     throw new Error("resolve_approval requires approvalId and decision (approved|rejected)");
   }
-  const approval = resolveApproval(task, id, decision, params.note);
-  if (!approval) throw new Error(`no pending approval "${id}"`);
-  recordDecision(task, `${decision} ${approval.kind} for ${approval.domain}: ${approval.detail}`);
+  const pending = pendingApprovals(task).find((entry) => entry.id === id);
+  if (!pending) throw new Error(`no pending approval "${id}"`);
+  const note = params.note?.trim();
+  if (pending.kind === "pushback" && decision === "rejected" && !note) {
+    throw new Error("overruling a pushback requires note (the counter-argument)");
+  }
+  const approval = resolveApproval(task, id, decision, note)!;
+  recordDecision(task, `${decision} ${approval.kind} for ${approval.domain}: ${approval.detail}${note ? ` — ${note}` : ""}`);
   if (approval.kind === "pushback") {
     return decision === "approved"
       ? `${id} pushback accepted (${approval.detail}). Re-delegate without that change.`
-      : `${id} pushback overruled.${params.note ? ` Counter-argument: ${params.note}.` : ""} Re-delegate the original change to ${approval.domain}.`;
+      : `${id} pushback overruled. Counter-argument: ${note}. Re-delegate the original change to ${approval.domain}.`;
   }
   return decision === "approved"
     ? `${id} approved. The ${approval.domain} worker may now proceed with: ${approval.detail}`

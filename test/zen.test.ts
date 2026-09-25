@@ -235,6 +235,14 @@ test("the large tier lists the plan steps in a full-width TASKS checklist", () =
   assert.equal(checklistRows(lines).length, 0, "the large tier must not draw the compact checklist");
 });
 
+test("a completed plan windows the checklist on its final steps", () => {
+  const steps = Array.from({ length: 10 }, (_value, index) => `\`src/s${index}.ts\`: step ${index}`);
+  const runs = [run({ role: "worker", status: "success", instruction: "implement `src/s9.ts` now", finishedAt: "2026-01-01T00:09:55.000Z" })];
+  const lines = panelLines(task({ state: "implementing", plan: plan(...steps) }), runs, NOW, true, LARGE_OPTS);
+  assert.ok(lines.some((line) => line.includes("[x] `src/s9.ts`")), "the finished tail must be visible");
+  assert.ok(lines.some((line) => line.includes("(10/10 tasks)")), "the header counts every step");
+});
+
 test("a long plan windows around the current step in the large tier", () => {
   const steps = Array.from({ length: 10 }, (_value, index) => `\`src/s${index}.ts\`: step ${index}`);
   const runs = [run({ runId: "dev", domain: "backend", role: "worker", status: "running", instruction: "implement `src/s6.ts` now" })];
