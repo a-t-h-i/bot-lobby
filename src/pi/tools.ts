@@ -129,10 +129,10 @@ export function registerOrchestrateTool(pi: ExtensionAPI, configDir: string, run
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const root = detectProjectRoot(ctx.cwd, configDir);
       const deps = workflowDeps(ctx, configDir, signal, runReporter(onUpdate, (runs) => applyStatus(ctx, root, configDir, runs)), runProcess, pi.getThinkingLevel());
-      if (params.action === "propose" && params.proposal) {
+      const result = await runWorkflowAction(params as OrchestrateParams, deps);
+      if (params.action === "propose" && params.proposal && result.ok) {
         pi.appendEntry("bot-lobby", { kind: "proposal", taskId: params.taskId, text: params.proposal });
       }
-      const result = await runWorkflowAction(params as OrchestrateParams, deps);
       applyStatus(ctx, root, configDir);
       return {
         content: [{ type: "text", text: result.message }],
