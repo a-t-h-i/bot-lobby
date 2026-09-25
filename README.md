@@ -83,7 +83,7 @@ every in-flight subagent process.
 While the owning session has a task active, its transcript switches to a zen view: `orchestrate` rows
 and the built-in spinner are hidden, and a widget above the editor animates the
 task. At 72 columns and wider it draws a large scene: a header box with the task
-id, state, elapsed time and quiet-mode hint, an estimated ETA and progress bar; an
+id, state, elapsed time and quiet-mode hint, and a progress bar; an
 oracle tower with its ORC door, animated orb, window eyes and seven-column mouth;
 four animated slots — DEV, DESIGN, RESEARCH and QA — each with a status face, a
 caption and two status rows: while running, a braille spinner beside the agent's
@@ -101,7 +101,7 @@ expression plays — and their faces, colours and words follow each agent's stat
 (working, idle, done, failed). The large scene's rest and blink frames stay the
 five-column ASCII eyes, while its emote frames are status-aware kaomoji: nervous
 while working, happy when done (QA flexes and dances), scared on failure. The
-header progress bar is plan-derived; the ETA is an estimate.
+header progress bar is plan-derived.
 New tasks get a <=3-word title derived from the request (for example "create
 landing page") plus an id `TASK-<slug>` built from the full request, so the banner
 and header stay concise; older `TASK-<timestamp>` tasks keep loading untouched.

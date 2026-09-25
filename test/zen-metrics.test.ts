@@ -1,7 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runStatus, sceneMetrics } from "../src/pi/zen-metrics.ts";
-import { formatDuration } from "../src/pi/zen.ts";
 import { SLOT_IDS } from "../src/pi/mascot-art.ts";
 import { createTask, type Task } from "../src/schemas/task.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
@@ -69,7 +68,7 @@ test("a researcher run on any domain fills the RESEARCH column", () => {
   assert.equal(metrics.slots.find((slot) => slot.id === "dev")!.status, "idle");
 });
 
-// --- plan progress and ETA rules ---
+// --- plan progress rules ---
 
 test("a working slot's instruction sets the plan's completed/total progress", () => {
   const runs = [
@@ -82,35 +81,29 @@ test("a working slot's instruction sets the plan's completed/total progress", ()
   const metrics = sceneMetrics(task({ plan: planText }), runs, NOW);
   assert.equal(metrics.done, 1);
   assert.equal(metrics.total, 4);
-  assert.equal(metrics.etaLabel, `ETA ~${formatDuration(600_000 * 3)}`);
   assert.equal(metrics.elapsedLabel, "10m 00s");
 });
 
-test("a zero plan reports no progress and an em-dash ETA estimate", () => {
+test("a zero plan reports no progress", () => {
   const metrics = sceneMetrics(task(), [run({ domain: "backend", role: "scout", status: "success", startedAt: "2026-01-01T00:01:00.000Z" })], NOW);
   assert.equal(metrics.done, 0);
   assert.equal(metrics.total, 0);
-  assert.equal(metrics.etaLabel, "ETA —");
   assert.equal(metrics.slots.find((slot) => slot.id === "dev")!.status, "done");
 });
 
-test("the ETA needs a completed plan step before it shows a numeric estimate", () => {
+test("a running worker matched to the third step reports two steps done", () => {
   const planText = plan("`src/a.ts`: first", "`src/b.ts`: second", "`src/c.ts`: third");
-  assert.equal(sceneMetrics(task({ plan: planText }), [], NOW).etaLabel, "ETA —");
   const runs = [run({ runId: "dev", domain: "backend", role: "worker", status: "running", instruction: "implement `src/c.ts` now", startedAt: "2026-01-01T00:09:00.000Z" })];
   const metrics = sceneMetrics(task({ plan: planText }), runs, NOW);
   assert.equal(metrics.done, 2);
-  assert.equal(metrics.etaLabel, `ETA ~${formatDuration((600_000 * 1) / 2)}`);
-  assert.ok(metrics.etaLabel.startsWith("ETA ~"));
 });
 
-test("a succeeded final step completes the plan, reaching 100% and an em-dash ETA", () => {
+test("a succeeded final step completes the plan", () => {
   const planText = plan("`src/a.ts`: first", "`src/b.ts`: second");
   const runs = [run({ runId: "dev", domain: "backend", role: "worker", status: "success", instruction: "implement `src/b.ts`", finishedAt: "2026-01-01T00:09:30.000Z" })];
   const metrics = sceneMetrics(task({ plan: planText }), runs, NOW);
   assert.equal(metrics.done, 2);
   assert.equal(metrics.total, 2);
-  assert.equal(metrics.etaLabel, "ETA —");
 });
 
 test("the elapsed label measures from the task's created time", () => {
@@ -119,10 +112,9 @@ test("the elapsed label measures from the task's created time", () => {
   assert.equal(sceneMetrics(task({ createdAt: "2026-01-01T01:00:00.000Z" }), [], NOW).elapsedLabel, "0s");
 });
 
-test("an unparsable timestamp degrades to zero elapsed and an em-dash ETA", () => {
+test("an unparsable timestamp degrades to zero elapsed", () => {
   const metrics = sceneMetrics(task({ createdAt: "not-a-date" }), [run({ startedAt: "also-not-a-date" })], NOW);
   assert.equal(metrics.elapsedLabel, "0s");
-  assert.equal(metrics.etaLabel, "ETA —");
 });
 
 // --- per-slot activity and elapsed ---
