@@ -38,6 +38,24 @@ Or run it for a single session without installing: `pi -e ./src/index.ts`.
 The extension finds its `prompts/` directory relative to its own source files, so
 the checkout needs to stay where it is.
 
+## Recommended companion: ask-user-question
+
+Bot-lobby's `clarify` step and proposal ceremony work best when the Master can ask
+you a concrete question with typed options instead of guessing. The
+[ask-user-question](https://github.com/juicesharp/rpiv-mono) extension adds an
+`ask_user_question` tool — one or more questions, each with described options and
+a free-form answer, and optional previews — which fits this system directly: the
+Master asks during `clarify`, you answer in a single panel, and the decision is
+recorded in the task.
+
+```bash
+pi install npm:@juicesharp/rpiv-ask-user-question
+```
+
+It is optional. Without it `clarify` still works through Pi's built-in
+`select`/`input` prompts (or the Master asks in plain text), just with less
+structure.
+
 ## Usage
 
 ```
@@ -238,6 +256,25 @@ the defaults; `BOT_LOBBY_CONFIG_DIR` overrides the config directory.
 
 The model picker is searchable: type to fuzzy-filter by `provider/id` or model
 name, `inherit` and `custom…` stay reachable, and ↑↓/enter/esc behave as before.
+
+### Prompts and custom instructions
+
+Every agent's system prompt is composed, never duplicated, from the baked-in
+Markdown in `prompts/`: `global.md`, the domain file (`designer.md`,
+`backend.md`, `qa.md`), the role file (`scout.md`, `worker.md`, `reviewer.md`,
+`researcher.md`) with that role's output contract, and then the task context,
+selected standards/knowledge/decisions, and workflow context. `src/prompts/compiler.ts`
+joins the layers and drops empty ones, so an agent never sees an empty heading.
+`prompts/master.md` is the Master's operating prompt and is injected only into the
+live session that owns the task.
+
+Your own prompt is injected as a `Custom Instructions` layer on top of those
+built-ins. Set it per agent — `master`, `designer`, `backend`, `qa` — either in
+config (`instructions`) or via `/bot-lobby settings` → Instructions. It applies to
+every run of that agent: the Master's instructions to the orchestrating session,
+and a domain's instructions to its Scouts, Workers and (for QA) the Reviewer. The
+layer is additive — the built-in prompts still define role boundaries, permissions
+and the output contract — and an empty layer is dropped.
 
 ## On-disk layout
 
