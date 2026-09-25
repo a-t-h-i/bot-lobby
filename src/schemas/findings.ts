@@ -98,6 +98,8 @@ export interface AgentRun {
   status: "running" | "success" | "failed" | "cancelled" | "timeout";
   /** Concrete instruction sent for this run; lets the panel map it to a plan step. */
   instruction?: string;
+  /** One word for the tool action in flight (reading, editing, running, ...). */
+  activity?: string;
   output: string;
   error?: string;
   /** How many attempts were made; > 1 means the retry policy kicked in. */

@@ -45,10 +45,10 @@ function scene(overrides: Partial<LargeSceneInput> = {}): LargeSceneInput {
     done: 3,
     total: 6,
     slots: [
-      { id: "dev", label: SLOT_LABELS.dev, status: "working", frame: 0 },
-      { id: "design", label: SLOT_LABELS.design, status: "idle", frame: 1 },
-      { id: "research", label: SLOT_LABELS.research, status: "done", frame: 2 },
-      { id: "qa", label: SLOT_LABELS.qa, status: "failed", frame: 3 },
+      { id: "dev", label: SLOT_LABELS.dev, status: "working", frame: 0, activity: "reading", elapsedLabel: "12s" },
+      { id: "design", label: SLOT_LABELS.design, status: "idle", frame: 1, elapsedLabel: "—" },
+      { id: "research", label: SLOT_LABELS.research, status: "done", frame: 2, elapsedLabel: "1m 05s" },
+      { id: "qa", label: SLOT_LABELS.qa, status: "failed", frame: 3, elapsedLabel: "42s" },
     ],
     tasks: [
       { text: "Research reqs", status: "done" },
@@ -65,7 +65,8 @@ function scene(overrides: Partial<LargeSceneInput> = {}): LargeSceneInput {
 }
 
 function withStatus(status: LargeSceneInput["slots"][number]["status"], frame = 0): LargeSceneInput {
-  const slots = scene().slots.map((slot) => ({ ...slot, status, frame }));
+  const activity = status === "working" ? "reading" : undefined;
+  const slots = scene().slots.map((slot) => ({ ...slot, status, frame, activity }));
   return scene({ slots });
 }
 
@@ -231,7 +232,8 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
     "           │               │               │               │",
     "         (^_^)           (u_u)          (✿^‿^)         (〒﹏〒)    ",
     "          DEV           DESIGN         RESEARCH           QA       ",
-    "     ⠋ working...       · idle          ✓ done         ✗ failed    ",
+    "       ⠋ reading        · idle          ✓ done         ✗ failed    ",
+    "          12s              —            1m 05s            42s      ",
     "     TASKS",
     "    [x] Research reqs                                          ",
     "    [x] Design architecture                                    ",
@@ -266,7 +268,8 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
     "                         │               │               │               │",
     "                       (^_^)           (u_u)          (✿^‿^)         (〒﹏〒)    ",
     "                        DEV           DESIGN         RESEARCH           QA       ",
-    "                   ⠋ working...       · idle          ✓ done         ✗ failed    ",
+    "                     ⠋ reading        · idle          ✓ done         ✗ failed    ",
+    "                        12s              —            1m 05s            42s      ",
     "                   TASKS",
     "                  [x] Research reqs                                          ",
     "                  [x] Design architecture                                    ",
@@ -348,21 +351,35 @@ test("the same input and frame render identically, and a new frame moves the eye
   assert.ok(negative.some((line) => line.includes(SLOT_FRAMES.dev.working.at(-3)![0]!)), "negative frames wrap from the end");
 });
 
-test("a working agent shows the braille spinner with 'working...' and animates off the injected tick", () => {
-  const rows = (tick: number) => largeLines(scene({ tick }), 72, 40).filter((line) => line.includes("working..."));
+test("a working agent shows the braille spinner with its live activity and animates off the injected tick", () => {
+  const rows = (tick: number) => largeLines(scene({ tick }), 72, 40).filter((line) => line.includes("reading"));
   const base = rows(0);
   assert.equal(base.length, 1, "one status row");
-  assert.ok(base[0]!.includes(`${SPIN_FRAMES[0]} working...`));
-  assert.ok(rows(1)[0]!.includes(`${SPIN_FRAMES[1]} working...`));
-  assert.ok(rows(SPIN_FRAMES.length)[0]!.includes(`${SPIN_FRAMES[0]} working...`), "the tick wraps");
-  assert.ok(rows(-1)[0]!.includes(`${SPIN_FRAMES.at(-1)} working...`), "negative ticks wrap from the end");
-  assert.ok(!largeLines(withStatus("done"), 72, 40).some((line) => line.includes("working...")));
+  assert.ok(base[0]!.includes(`${SPIN_FRAMES[0]} reading`));
+  assert.ok(rows(1)[0]!.includes(`${SPIN_FRAMES[1]} reading`));
+  assert.ok(rows(SPIN_FRAMES.length)[0]!.includes(`${SPIN_FRAMES[0]} reading`), "the tick wraps");
+  assert.ok(rows(-1)[0]!.includes(`${SPIN_FRAMES.at(-1)} reading`), "negative ticks wrap from the end");
+  assert.ok(!largeLines(withStatus("done"), 72, 40).some((line) => line.includes("reading")), "done agents drop the activity word");
+});
+
+test("a working agent without an activity word falls back to the state word", () => {
+  const bare = scene({ slots: scene().slots.map((slot) => ({ ...slot, activity: undefined })) });
+  assert.ok(largeLines(bare, 72, 40).some((line) => line.includes(`${SPIN_FRAMES[0]} ${SLOT_STATE_WORDS.working}`)));
+});
+
+test("the longest activity word fits its cell beside the braille spinner", () => {
+  const slots = scene().slots.map((slot) => ({ ...slot, status: "working" as const, activity: "orchestrating" }));
+  const row = largeLines(scene({ slots }), 72, 40).find((line) => line.includes("orchestrating"))!;
+  assert.ok(row.includes(`${SPIN_FRAMES[0]} orchestrating`), "the word must not truncate");
+  assert.equal(row.split("orchestrating").length - 1, 4, "every column shows the word");
+  assert.ok(visibleWidth(`${SPIN_FRAMES[0]} orchestrating`) <= SLOT_CELL, "the status cell must hold the word");
 });
 
 test("faces and state words follow each slot status", () => {
   for (const status of SLOT_STATES) {
+    const word = status === "working" ? "reading" : SLOT_STATE_WORDS[status];
     const lines = largeLines(withStatus(status), 72, 40);
-    assert.ok(lines.some((line) => line.includes(SLOT_STATE_WORDS[status])), status);
+    assert.ok(lines.some((line) => line.includes(word)), `${status} word`);
     for (const id of SLOT_IDS) {
       const face = SLOT_FRAMES[id][status][0]![0]!;
       assert.ok(lines.some((line) => line.includes(face)), `${id}/${status} face`);
@@ -408,7 +425,7 @@ test("the theme paints every status and keeps the geometry identical", () => {
   const headerBar = colored.find((line) => stripAnsi(line).includes("(3/6 tasks)"))!;
   assert.ok(headerBar.includes(`\x1b[1m\x1b[${CODES.accent}m${BAR.filled.repeat(5)}`), "header bar fill");
   assert.ok(headerBar.includes(`\x1b[${CODES.dim}m${BAR.empty.repeat(5)}`), "header bar track");
-  const spinnerRow = colored.find((line) => stripAnsi(line).includes("working..."))!;
+  const spinnerRow = colored.find((line) => stripAnsi(line).includes("reading"))!;
   assert.ok(spinnerRow.includes(`\x1b[1m`), "working row bold");
   const orbRow = colored.find((line) => stripAnsi(line).includes("─◉─"))!;
   assert.ok(orbRow.includes(`\x1b[${CODES.accent}m◉\x1b[0m`), "oracle orb colour");
@@ -417,7 +434,7 @@ test("the theme paints every status and keeps the geometry identical", () => {
 test("each agent column renders its status in one row", () => {
   for (const status of SLOT_STATES) {
     const lines = largeLines(withStatus(status), 72, 34);
-    const marker = status === "working" ? "working..." : `${SLOT_STATE_GLYPHS[status]} ${SLOT_STATE_WORDS[status]}`;
+    const marker = status === "working" ? "reading" : `${SLOT_STATE_GLYPHS[status]} ${SLOT_STATE_WORDS[status]}`;
     const rows = lines.filter((line) => line.includes(marker));
     assert.equal(rows.length, 1, `${status} status row`);
     assert.equal(rows[0]!.split(marker).length - 1, 4, `${status} marker in every column`);
@@ -425,10 +442,20 @@ test("each agent column renders its status in one row", () => {
   }
 });
 
+test("each agent column renders its elapsed label on a dim fourth row", () => {
+  const row = largeLines(scene(), 72, 40).find((line) => line.includes("1m 05s") && line.includes("42s"))!;
+  for (const label of ["12s", "—", "1m 05s", "42s"]) assert.ok(row.includes(label), label);
+  assert.ok(visibleWidth(row) <= 72, "the elapsed row stays inside the terminal");
+  const themed = largeLines(scene(), 72, 40, ANSI_THEME).find((line) => stripAnsi(line).includes("1m 05s"))!;
+  assert.ok(themed.includes(`\x1b[${CODES.dim}m`), "the elapsed row is dim");
+  const idle = largeLines(scene({ slots: scene().slots.map((slot) => ({ ...slot, status: "idle" })) }), 72, 40);
+  assert.ok(idle.some((line) => line.includes("—")), "an idle agent reads an em-dash");
+});
+
 test("the status glyph, state word or spinner shares the status colour and weight", () => {
   for (const status of SLOT_STATES) {
     const style = SLOT_STATE_COLORS[status];
-    const marker = status === "working" ? `${SPIN_FRAMES[0]} working...` : `${SLOT_STATE_GLYPHS[status]} ${SLOT_STATE_WORDS[status]}`;
+    const marker = status === "working" ? `${SPIN_FRAMES[0]} reading` : `${SLOT_STATE_GLYPHS[status]} ${SLOT_STATE_WORDS[status]}`;
     const row = largeLines(withStatus(status), 72, 34, ANSI_THEME).find((line) => stripAnsi(line).includes(marker))!;
     assert.match(row, new RegExp(`\\x1b\\[${CODES[style.color]}m[^\\x1b]*${escapeRegExp(marker)}`), `${status} colour`);
     if (style.bold) assert.ok(row.includes(`\x1b[1m`), `${status} bold`);

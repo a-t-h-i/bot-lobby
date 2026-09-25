@@ -58,7 +58,7 @@ function statusRuns(): AgentRun[] {
     run({ runId: "b-new", startedAt: "2026-01-01T00:09:50.000Z" }),
     run({ runId: "d", domain: "designer", role: "worker", status: "failed", startedAt: "2026-01-01T00:09:30.000Z" }),
     run({ runId: "rs", domain: "qa", role: "researcher", status: "success", startedAt: "2026-01-01T00:09:40.000Z", finishedAt: "2026-01-01T00:09:45.000Z" }),
-    run({ runId: "q", domain: "qa", role: "worker", status: "success", startedAt: "2026-01-01T00:09:20.000Z", finishedAt: "2026-01-01T00:09:25.000Z" }),
+    run({ runId: "q", domain: "qa", role: "reviewer", status: "success", startedAt: "2026-01-01T00:09:20.000Z", finishedAt: "2026-01-01T00:09:25.000Z" }),
   ];
 }
 
@@ -145,7 +145,7 @@ test("short terminals fall back to the compact strip", () => {
 });
 
 test("largeLineBudget is a clamped fraction of the terminal rows", () => {
-  assert.equal(MAX_LARGE_LINES, 33);
+  assert.equal(MAX_LARGE_LINES, 34);
   assert.equal(largeLineBudget(200), MAX_LARGE_LINES);
   assert.equal(largeLineBudget(40), 30);
   assert.equal(largeLineBudget(18), 13);
@@ -294,13 +294,20 @@ test("faces and state words follow each slot status in both tiers", () => {
   const runs = statusRuns();
   const large = panelLines(task({ state: "implementing" }), runs, NOW, true, LARGE_OPTS);
   for (const status of ["working", "done", "failed"] as const) {
-    const label = status === "working" ? "working..." : `${SLOT_STATE_GLYPHS[status]} ${SLOT_STATE_WORDS[status]}`;
+    const label = status === "working" ? `${SPIN_FRAMES[0]} ${SLOT_STATE_WORDS.working}` : `${SLOT_STATE_GLYPHS[status]} ${SLOT_STATE_WORDS[status]}`;
     assert.ok(large.some((line) => line.includes(label)), `large tier lost the ${label} label`);
   }
   const idle = panelLines(task({ state: "implementing" }), [], NOW, true, LARGE_OPTS);
   assert.ok(idle.some((line) => line.includes(`${SLOT_STATE_GLYPHS.idle} idle`)), "large tier lost the idle label");
   const compact = panelLines(task({ state: "implementing" }), runs, NOW, true, COMPACT_OPTS);
   assert.ok(stripRows(compact)[2]!.includes(SLOT_STATE_GLYPHS.working), "the compact layer lost the active marker");
+});
+
+test("the large tier shows the live activity word and per-agent elapsed", () => {
+  const busy = run({ runId: "a", domain: "backend", role: "worker", activity: "editing", startedAt: "2026-01-01T00:09:40.000Z" });
+  const lines = panelLines(task({ state: "implementing" }), [busy], NOW, true, LARGE_OPTS);
+  assert.ok(lines.some((line) => line.includes(`${SPIN_FRAMES[0]} editing`)), "the activity word is missing");
+  assert.ok(lines.some((line) => line.includes("20s")), "the per-agent elapsed row is missing");
 });
 
 test("a theme recolours both tiers without changing a single visible column", () => {
@@ -316,7 +323,7 @@ test("a theme recolours both tiers without changing a single visible column", ()
   }
   const colored = panelLines(sceneTask, statusRuns(), NOW, true, { ...LARGE_OPTS, theme: ANSI_THEME });
   const coloured = (word: string) => new RegExp(`\\x1b\\[[0-9;]*m[^\\x1b]*${word}`);
-  const workingRow = colored.find((line) => stripAnsi(line).includes("working..."))!;
+  const workingRow = colored.find((line) => stripAnsi(line).includes(SLOT_STATE_WORDS.working))!;
   assert.ok(workingRow.includes(`\x1b[${ANSI_CODES.accent}m`), "the working row lost its accent colour");
   assert.match(colored.find((line) => stripAnsi(line).includes("✓ done"))!, coloured("✓ done"));
   assert.match(colored.find((line) => stripAnsi(line).includes("✗ failed"))!, coloured("✗ failed"));
@@ -406,11 +413,40 @@ test("planSteps keeps numbered steps and ignores everything else", () => {
   assert.deepEqual(steps, ["`src/a.ts`: add the thing", "`src/b.ts`: wire it up", "`src/c.ts`: test it"]);
 });
 
+test("planSteps accepts both `1.` and `1)` numbering", () => {
+  const steps = planSteps(["1) `src/a.ts`: first", "  2. `src/b.ts`: second", "3) `src/c.ts`: third"].join("\n"));
+  assert.deepEqual(steps, ["`src/a.ts`: first", "`src/b.ts`: second", "`src/c.ts`: third"]);
+});
+
 test("planSteps caps the number of parsed steps", () => {
   const many = Array.from({ length: MAX_PLAN_STEPS + 20 }, (_value, index) => `${index + 1}. \`src/f${index}.ts\`: step`).join("\n");
   const steps = planSteps(many);
   assert.equal(steps.length, MAX_PLAN_STEPS);
   assert.equal(steps.at(-1), `\`src/f${MAX_PLAN_STEPS - 1}.ts\`: step`);
+});
+
+test("planSteps parses a top-level bullet plan when no numbered steps exist", () => {
+  const steps = planSteps(["- `src/x.ts`: one", "- `src/y.ts`: two"].join("\n"));
+  assert.deepEqual(steps, ["`src/x.ts`: one", "`src/y.ts`: two"]);
+});
+
+test("planSteps reads only the sequence section and skips unrelated bullets", () => {
+  const text = [
+    "# Objective",
+    "- ship the feature quickly",
+    "- keep the change small",
+    "",
+    "## Files",
+    "- `src/ignored.ts`",
+    "",
+    "## Sequence",
+    "1. `src/a.ts`: first",
+    "- `src/b.ts`: second",
+    "",
+    "## Notes",
+    "- not a step",
+  ].join("\n");
+  assert.deepEqual(planSteps(text), ["`src/a.ts`: first", "`src/b.ts`: second"]);
 });
 
 test("planChecklist marks earlier steps done and the matched step current", () => {
@@ -430,6 +466,18 @@ test("planChecklist falls back to the first step as current when nothing matches
   const steps = plan("`src/a.ts`: first", "`src/b.ts`: second");
   const unmatched = planChecklist(steps, [run({ role: "worker", instruction: "do something unrelated" })]);
   assert.deepEqual(unmatched.map((step) => step.status), ["current", "pending"]);
+});
+
+test("planChecklist advances by successful worker runs when a later call matches nothing", () => {
+  const steps = plan("`src/a.ts`: first", "`src/b.ts`: second", "`src/c.ts`: third");
+  const workers = [
+    run({ runId: "w1", role: "worker", status: "success", instruction: "apply the approved plan change", startedAt: "2026-01-01T00:09:20.000Z", finishedAt: "2026-01-01T00:09:30.000Z" }),
+    run({ runId: "w2", role: "worker", status: "success", instruction: "and keep going", startedAt: "2026-01-01T00:09:35.000Z", finishedAt: "2026-01-01T00:09:40.000Z" }),
+  ];
+  const qa = run({ runId: "q1", domain: "qa", role: "reviewer", instruction: "verify the change", startedAt: "2026-01-01T00:09:50.000Z" });
+  assert.deepEqual(planChecklist(steps, [workers[0]!]).map((step) => step.status), ["done", "current", "pending"]);
+  assert.deepEqual(planChecklist(steps, workers).map((step) => step.status), ["done", "done", "current"]);
+  assert.deepEqual(planChecklist(steps, [...workers, qa]).map((step) => step.status), ["done", "done", "current"]);
 });
 
 test("planChecklist with no worker run marks the first step current", () => {
@@ -467,15 +515,41 @@ test("planChecklist keeps a failed step current", () => {
   assert.deepEqual(planChecklist(steps, runs).map((step) => step.status), ["done", "current"]);
 });
 
-test("workingLine spins through the braille frames and names the running agent", () => {
+test("planChecklist never reverts when a later run names an earlier step", () => {
+  const steps = plan("`src/a.ts`: first", "`src/b.ts`: second", "`src/c.ts`: third");
+  const finished = run({ runId: "w1", role: "worker", status: "success", instruction: "implement `src/b.ts`", startedAt: "2026-01-01T00:09:20.000Z", finishedAt: "2026-01-01T00:09:30.000Z" });
+  const later = run({ runId: "w2", role: "worker", status: "running", instruction: "revisit `src/a.ts`", startedAt: "2026-01-01T00:09:50.000Z" });
+  assert.deepEqual(planChecklist(steps, [finished]).map((step) => step.status), ["done", "done", "current"]);
+  assert.deepEqual(planChecklist(steps, [finished, later]).map((step) => step.status), ["done", "done", "current"]);
+});
+
+test("planChecklist keeps completed steps through a later QA reviewer call", () => {
+  const steps = plan("`src/a.ts`: first", "`src/b.ts`: second", "`src/c.ts`: third");
+  const finished = run({ runId: "w1", role: "worker", status: "success", instruction: "apply the approved plan change", startedAt: "2026-01-01T00:09:20.000Z", finishedAt: "2026-01-01T00:09:30.000Z" });
+  const qa = run({ runId: "q1", domain: "qa", role: "reviewer", instruction: "verify `src/a.ts`", startedAt: "2026-01-01T00:09:50.000Z" });
+  assert.deepEqual(planChecklist(steps, [finished]).map((step) => step.status), ["done", "current", "pending"]);
+  assert.deepEqual(planChecklist(steps, [finished, qa]).map((step) => step.status), ["done", "current", "pending"]);
+});
+
+test("planChecklist does not tick a step for a failed or unmatched run", () => {
+  const steps = plan("`src/a.ts`: first", "`src/b.ts`: second", "`src/c.ts`: third");
+  const failed = run({ role: "worker", status: "failed", instruction: "do something unrelated" });
+  assert.deepEqual(planChecklist(steps, [failed]).map((step) => step.status), ["current", "pending", "pending"]);
+  const finished = run({ runId: "w1", role: "worker", status: "success", instruction: "implement `src/a.ts`", startedAt: "2026-01-01T00:09:20.000Z", finishedAt: "2026-01-01T00:09:30.000Z" });
+  assert.deepEqual(planChecklist(steps, [finished, failed]).map((step) => step.status), ["done", "current", "pending"]);
+});
+
+test("workingLine spins through the braille frames and names the running agent's activity", () => {
   const runs = [run({ domain: "qa", role: "worker" })];
   const frames = [...SPIN_FRAMES];
   frames.forEach((frame, tick) => {
-    assert.equal(workingLine(runs, tick, undefined, NOW), `  ${frame} agents working (1) · qa/worker running 10s`);
+    assert.equal(workingLine(runs, tick, undefined, NOW), `  ${frame} agents working (1) · qa/worker ${SLOT_STATE_WORDS.working} 10s`);
   });
   assert.ok(workingLine(runs, SPIN_FRAMES.length, undefined, NOW).startsWith(`  ${SPIN_FRAMES[0]}`));
   assert.ok(workingLine(runs, -1, undefined, NOW).startsWith(`  ${SPIN_FRAMES[1]}`));
   assert.match(workingLine([...runs, run({ runId: "r2" })], 0, undefined, NOW), /agents working \(2\)/);
+  const busy = [run({ domain: "designer", role: "worker", activity: "editing", startedAt: "2026-01-01T00:09:30.000Z" })];
+  assert.equal(workingLine(busy, 0, undefined, NOW), `  ${SPIN_FRAMES[0]} agents working (1) · designer/worker editing 30s`);
 });
 
 test("workingLine reports the last finished run when nothing is running", () => {

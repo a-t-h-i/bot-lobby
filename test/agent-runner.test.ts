@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runAgent, runParallel, runSequential, cancelAllRuns, type AgentRequest } from "../src/execution/agent-runner.ts";
 import type { ProcessOutcome, ProcessRunner } from "../src/execution/pi-runner.ts";
+import type { AgentRun } from "../src/schemas/findings.ts";
 
 function reply(text: string): string {
   return JSON.stringify({
@@ -111,4 +112,18 @@ test("runSequential substitutes {previous} and stops on failure", async () => {
   assert.equal(results[1]!.status, "failed");
   assert.equal(instructions.length, 2);
   assert.ok(instructions[1]!.includes("first output"), "prior output substituted");
+});
+
+test("runAgent streams deduped activity on the same runId", async () => {
+  const seen: AgentRun[] = [];
+  const streaming: ProcessRunner = async (_args, options) => {
+    options.onEvent?.({ type: "tool_execution_start", toolName: "read" });
+    options.onEvent?.({ type: "tool_execution_start", toolName: "read" });
+    options.onEvent?.({ type: "tool_execution_start", toolName: "bash" });
+    return ok(reply("done"));
+  };
+  const run = await runAgent(request({ onUpdate: (update) => seen.push(update) }), streaming);
+  assert.equal(run.status, "success");
+  assert.deepEqual(seen.filter((update) => update.activity).map((update) => update.activity), ["reading", "running"]);
+  assert.ok(seen.every((update) => update.runId === run.runId));
 });

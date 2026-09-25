@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { IDLE_TICK_MS, LIVE_TICK_MS, expressionTickDelay, statusText, summarizeRun } from "../src/pi/ui.ts";
+import { IDLE_TICK_MS, LIVE_TICK_MS, MAX_RETAINED_RUNS, expressionTickDelay, mergeRuns, statusText, summarizeRun } from "../src/pi/ui.ts";
 import { BLINK_MS, FAST_TICK_MS } from "../src/pi/expressions.ts";
 import { setQuiet } from "../src/pi/quiet.ts";
 import { createTask, type Task } from "../src/schemas/task.ts";
@@ -55,4 +55,36 @@ test("the zen clock speeds up while an expression plays", () => {
   assert.equal(expressionTickDelay([resting, blinking], 0, true), FAST_TICK_MS);
   assert.ok(FAST_TICK_MS < BLINK_MS, "a blink must survive one fast tick");
   assert.equal(expressionTickDelay([resting], Number.NaN, true), LIVE_TICK_MS);
+});
+
+test("mergeRuns returns a fresh copy of the previous set when nothing arrives", () => {
+  const previous = [run({ runId: "r1" })];
+  const merged = mergeRuns(previous, []);
+  assert.deepEqual(merged, previous);
+  assert.notEqual(merged, previous, "the retained set must not be aliased");
+  assert.deepEqual(mergeRuns([], []), []);
+});
+
+test("mergeRuns updates a run in place and moves it to the end", () => {
+  const first = run({ runId: "r1", status: "running" });
+  const second = run({ runId: "r2", status: "running" });
+  const updated = run({ runId: "r1", status: "success" });
+  const merged = mergeRuns([first, second], [updated]);
+  assert.deepEqual(merged.map((entry) => entry.runId), ["r2", "r1"]);
+  assert.equal(merged.at(-1), updated, "the newest entry stays last");
+});
+
+test("mergeRuns accumulates runs reported by later orchestrate calls", () => {
+  const previous = [run({ runId: "r1", taskId: "TASK-1", role: "worker", status: "success" })];
+  const incoming = [run({ runId: "q1", taskId: "TASK-2", domain: "qa", role: "reviewer", status: "running" })];
+  const merged = mergeRuns(previous, incoming);
+  assert.deepEqual(merged.map((entry) => entry.runId), ["r1", "q1"]);
+});
+
+test("mergeRuns caps retention and keeps the newest runs", () => {
+  const incoming = Array.from({ length: MAX_RETAINED_RUNS + 10 }, (_value, index) => run({ runId: `r${index}` }));
+  const merged = mergeRuns([], incoming);
+  assert.equal(merged.length, MAX_RETAINED_RUNS);
+  assert.equal(merged[0]!.runId, "r10");
+  assert.equal(merged.at(-1)!.runId, `r${MAX_RETAINED_RUNS + 9}`);
 });
