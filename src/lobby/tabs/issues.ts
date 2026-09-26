@@ -31,7 +31,7 @@ export function issueDetailLines(issue: IssueDetail, width: number, now: number,
   ].filter(Boolean);
   const lines = [...wrap(bold(theme, `#${issue.number} ${issue.title}`), width), facts.join(paint(theme, "dim", " · "))];
   if (issue.url) lines.push(paint(theme, "dim", issue.url));
-  lines.push("", paint(theme, "dim", "p plans it with the planner, then save it as a task"), "", ...wrap(issue.body.trim() || paint(theme, "dim", "(no description)"), width));
+  lines.push("", paint(theme, "dim", "p plans it with the planning panel, then save it as a task"), "", ...wrap(issue.body.trim() || paint(theme, "dim", "(no description)"), width));
   for (const comment of issue.comments) {
     lines.push("", rule(width, comment.author ?? "comment", theme, comment.createdAt ? since(now - Date.parse(comment.createdAt)) : ""), ...wrap(comment.body.trim(), width));
   }
