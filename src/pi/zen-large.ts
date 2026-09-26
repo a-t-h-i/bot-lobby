@@ -42,6 +42,7 @@ import {
 } from "./mascot-art.ts";
 import type { PanelTheme } from "./zen.ts";
 import type { SlotFlag } from "./zen-metrics.ts";
+import { EMOTE_FRAME } from "./expressions.ts";
 import type { FeedLine } from "./run-summary.ts";
 import { shortDuration } from "../text.ts";
 
@@ -78,6 +79,8 @@ export interface LargeSlot {
   elapsedLabel: string;
   /** Waiting on a file, gone quiet or retrying; replaces the activity word while set. */
   flag?: SlotFlag;
+  /** This expression's emote frames (open, blink, action, action); the status default when absent. */
+  emote?: readonly string[];
 }
 
 export interface LargeTaskRow {
@@ -584,7 +587,9 @@ function slotLines(input: LargeSceneInput, width: number, theme?: PanelTheme): s
 
 function slotFrame(slot: LargeSlot): readonly string[] {
   const frames = SLOT_FRAMES[slot.id][slot.status];
-  return frames[mod(slot.frame, frames.length)] ?? [];
+  const index = mod(slot.frame, frames.length);
+  const live = index >= EMOTE_FRAME ? slot.emote?.[index - EMOTE_FRAME] : undefined;
+  return live !== undefined ? [live] : frames[index] ?? [];
 }
 
 function faceCells(slots: readonly LargeSlot[], offsets: readonly number[], theme?: PanelTheme): Cell[] {

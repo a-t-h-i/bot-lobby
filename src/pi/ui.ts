@@ -13,11 +13,16 @@ import {
   ORACLE_GAP,
   SLOT_GAP,
   talkFrame,
+  triggerEmote,
+  WORKING_BLINK_CHANCE,
+  WORKING_GAP,
   type ExpressionGap,
   type ExpressionState,
 } from "./expressions.ts";
 import { ORACLE_THINKING } from "./activity.ts";
-import { SLOT_IDS } from "./mascot-art.ts";
+import { SLOT_IDS, type SlotId } from "./mascot-art.ts";
+import { slotSituations } from "./zen-metrics.ts";
+import type { Situation } from "./kaomoji.ts";
 import { isQuiet, isSubagentProcess, toggleQuiet } from "./quiet.ts";
 import { panelLines, type ExpressionFrames, type OracleMotion } from "./zen.ts";
 
@@ -159,9 +164,31 @@ export function expressionTickDelay(states: readonly ExpressionState[], now: num
 type ExpressionKey = keyof ExpressionFrames;
 const EXPRESSION_KEYS: readonly ExpressionKey[] = [...SLOT_IDS, "oracle"];
 
-/** The oracle keeps a livelier schedule than the agent slots. */
-function gapFor(key: ExpressionKey): ExpressionGap {
-  return key === "oracle" ? ORACLE_GAP : SLOT_GAP;
+/** The oracle keeps its own schedule; working agents are livelier than idle ones. */
+function gapFor(key: ExpressionKey, situations?: Record<SlotId, Situation>): ExpressionGap {
+  if (key === "oracle") return ORACLE_GAP;
+  return situations?.[key].status === "working" ? WORKING_GAP : SLOT_GAP;
+}
+
+function blinkChanceFor(key: ExpressionKey, situations?: Record<SlotId, Situation>): number | undefined {
+  return key !== "oracle" && situations?.[key].status === "working" ? WORKING_BLINK_CHANCE : undefined;
+}
+
+/** A compact fingerprint of what a slot is going through; a change may earn a reaction. */
+export function situationKey(situation: Situation): string {
+  return [situation.status, situation.flag ?? "", situation.handover ? "handover" : "", situation.wrappedUp ? "wrapped" : ""].join("|");
+}
+
+/**
+ * Whether a slot's change of situation deserves an immediate emote: it started
+ * work, finished, failed, got flagged (waiting, quiet, retrying) or received a
+ * file. Going idle, or a flag clearing, passes quietly.
+ */
+export function isReaction(previous: string | undefined, next: Situation): boolean {
+  if (previous === undefined || previous === situationKey(next)) return false;
+  if (next.status === "idle") return false;
+  if (next.status !== "working") return true;
+  return !previous.startsWith("working|") || next.flag !== undefined || next.handover === true;
 }
 
 /** Animated zen scene + plan checklist shown above the editor while a task is active. */
@@ -172,6 +199,7 @@ class ZenWidget implements Component {
   private timer: ReturnType<typeof setInterval>;
   private disposed = false;
   private readonly expressions: Record<ExpressionKey, ExpressionState>;
+  private readonly situations: Partial<Record<SlotId, string>> = {};
   private readonly tui: TUI;
   private readonly theme: () => Theme;
   private readonly rng: () => number;
@@ -202,7 +230,15 @@ class ZenWidget implements Component {
   }
 
   private play(now: number): void {
-    for (const key of EXPRESSION_KEYS) this.expressions[key] = advanceExpression(this.expressions[key], now, this.rng, gapFor(key));
+    const situations = slotSituations(zenState.runs, now);
+    for (const key of EXPRESSION_KEYS) {
+      this.expressions[key] = advanceExpression(this.expressions[key], now, this.rng, gapFor(key, situations), blinkChanceFor(key, situations));
+    }
+    for (const id of SLOT_IDS) {
+      const situation = situations[id];
+      if (isReaction(this.situations[id], situation)) this.expressions[id] = triggerEmote(now, this.rng, gapFor(id, situations));
+      this.situations[id] = situationKey(situation);
+    }
   }
 
   /** One interval, retimed when work starts or stops or an expression plays. */
@@ -222,6 +258,10 @@ class ZenWidget implements Component {
     return Object.fromEntries(EXPRESSION_KEYS.map((key) => [key, this.expressions[key].frame]));
   }
 
+  private variants(): Partial<Record<SlotId, number>> {
+    return Object.fromEntries(SLOT_IDS.map((id) => [id, this.expressions[id].variant]));
+  }
+
   /**
    * The panel only changes with the tick, an expression frame, the widget state or
    * the elapsed second, so every other repaint (typing in the editor, streaming
@@ -233,11 +273,12 @@ class ZenWidget implements Component {
     const theme = this.theme();
     const expressions = this.frames();
     const quiet = isQuiet();
-    const frameKey = EXPRESSION_KEYS.map((key) => expressions[key] ?? 0).join(",");
+    const variants = this.variants();
+    const frameKey = [...EXPRESSION_KEYS.map((key) => expressions[key] ?? 0), ...SLOT_IDS.map((id) => variants[id] ?? 0)].join(",");
     const motion = this.motion(now);
     const key = `${width}|${rows}|${this.tick}|${frameKey}|${motion.phase}|${motion.talk}|${zenVersion}|${Math.floor(now / 1000)}|${quiet}`;
     if (this.cache && this.cache.key === key && this.cache.theme === theme) return this.cache.lines;
-    const opts = { width, rows, tick: this.tick, theme, expressions, oracleActivity, oracleMotion: motion };
+    const opts = { width, rows, tick: this.tick, theme, expressions, variants, oracleActivity, oracleMotion: motion };
     const lines = panelLines(zenState.task, zenState.runs, now, quiet, opts).map((line) => truncateToWidth(line, width));
     this.cache = { key, theme, lines };
     return lines;
