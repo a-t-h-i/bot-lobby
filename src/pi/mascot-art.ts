@@ -1,4 +1,5 @@
 import type { TaskState } from "../schemas/task.ts";
+import { slotEmote } from "./kaomoji.ts";
 
 /**
  * Pure ASCII art data for the scene-based zen panel. No logic lives here: the
@@ -258,33 +259,22 @@ const FACE_FRAMES: Record<SlotState, readonly string[]> = {
   failed: ["(>_<)", "(x_x)", "(T_T)", "(;_;)"],
 };
 
-/** Kaomoji emotes for the large scene: working nervous, done happy, failed scared. */
-const EMOTE_FACES: Record<SlotState, readonly string[]> = {
-  working: ["(٥↼_↼)", "(●´⌓`●)"],
-  idle: ["(-.-)", "(u.u)"],
-  done: ["(✿^‿^)", "(っ˘з(˘⌣˘ )"],
-  failed: ["ಥ_ಥ", "(〒﹏〒)"],
-};
-
-/** QA's success emotes are a flex and a victory dance rather than a smile. */
-const QA_DONE_FACES: readonly string[] = ["ᕙ( • ‿ • )ᕗ", "ᕕ( ᐛ )ᕗ"];
-
 /** Every compact face is five columns, so a centered column never shifts between frames. */
 export const FACE_WIDTH = 5;
 
 function buildSlotFrames(id: SlotId): Record<SlotState, readonly string[][]> {
   const frames = {} as Record<SlotState, readonly string[][]>;
   for (const state of SLOT_STATES) {
-    const emotes = id === "qa" && state === "done" ? QA_DONE_FACES : EMOTE_FACES[state];
-    frames[state] = [...FACE_FRAMES[state].slice(0, 2), ...emotes].map((face) => [face]);
+    frames[state] = [...FACE_FRAMES[state].slice(0, 2), ...slotEmote(id, { status: state }, 0)].map((face) => [face]);
   }
   return frames;
 }
 
 /**
  * Animated faces per slot: one row each. Rest (0) and blink (1) stay the five-column
- * ASCII eyes; the emote frames (2+) are status-aware kaomoji, wider than five columns,
- * so the scene centres each frame inside its fixed slot cell.
+ * ASCII eyes; the emote frames (2+) are the slot's default kaomoji for the status
+ * (open, blink, action). The live scene swaps in a situation-aware emote per
+ * expression (see kaomoji.ts); either way the scene centres each frame in its cell.
  */
 export const SLOT_FRAMES: Record<SlotId, Record<SlotState, readonly string[][]>> = {
   dev: buildSlotFrames("dev"),
