@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { Domain } from "../schemas/agent.ts";
 import type { BotLobbyConfig } from "../schemas/configuration.ts";
 import type { AgentRun, ResearchResult } from "../schemas/findings.ts";
-import { runAgent, type AgentRequest } from "../execution/agent-runner.ts";
+import { runAgent, watchdogOptions, type AgentRequest } from "../execution/agent-runner.ts";
 import { spawnPiProcess, type ProcessRunner } from "../execution/pi-runner.ts";
 import { writeFileEnsured } from "../knowledge/store.ts";
 import { isResearchResultUsable, parseResearchResult, validateResearchResult } from "../roles/researcher.ts";
@@ -88,7 +88,7 @@ export async function runResearch(request: ResearchRequest, run: ProcessRunner =
       cwd: request.cwd,
       signal: request.signal,
       onUpdate: request.onUpdate,
-      retries: request.config.workflow.maxAgentRetries,
+      ...watchdogOptions(request.config.workflow),
     },
     run,
   );
