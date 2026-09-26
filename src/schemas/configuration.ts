@@ -40,8 +40,14 @@ export interface ScoutConfig {
 }
 
 /** Subagent kinds with their own settings entry. */
-export const SUBAGENT_KINDS = ["designer", "backend", "qa", "scout", "researcher"] as const;
+export const SUBAGENT_KINDS = ["designer", "backend", "qa", "scout", "researcher", "quickfix", "planner"] as const;
 export type SubagentKind = (typeof SUBAGENT_KINDS)[number];
+
+/** Lobby agents that run outside the workflow: direct quick fixes and the task planner. */
+export type LobbyAgentKind = "quickfix" | "planner";
+
+/** Settings kinds a workflow run (domain + role) can draw from. */
+export type WorkflowProfileKind = Domain | "scout" | "researcher";
 
 export interface WorkflowConfig {
   maxReviewIterations: number;
@@ -69,13 +75,23 @@ export interface KnowledgeConfig {
   scratchpadMaxChars: number;
 }
 
+/** The full-screen lobby: whether it opens by itself when this session starts or resumes a task. */
+export interface LobbyConfig {
+  autoOpen: boolean;
+}
+
 export interface BotLobbyConfig {
   master: AgentModelConfig;
   agents: Record<"designer" | "backend" | "qa", AgentModelConfig>;
   scout: ScoutConfig;
   researcher: AgentModelConfig;
+  /** Direct quick fixes from the lobby: no scouting, planning or review. */
+  quickFix: AgentModelConfig;
+  /** The task planner that grills the user until a plan is clear; `timeoutMs` bounds one turn. */
+  planner: AgentModelConfig;
   workflow: WorkflowConfig;
   knowledge: KnowledgeConfig;
+  lobby: LobbyConfig;
 }
 
 export const DEFAULT_CONFIG: BotLobbyConfig = {
@@ -87,6 +103,8 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
   },
   scout: { model: INHERIT_MODEL, timeoutMs: 8 * 60 * 1000 },
   researcher: { model: INHERIT_MODEL, thinking: "low", instructions: "", timeoutMs: 10 * 60 * 1000 },
+  quickFix: { model: INHERIT_MODEL, thinking: "low", instructions: "", timeoutMs: 10 * 60 * 1000 },
+  planner: { model: INHERIT_MODEL, thinking: "high", instructions: "", timeoutMs: 5 * 60 * 1000 },
   workflow: {
     maxReviewIterations: 2,
     maxParallelScouts: 3,
@@ -106,6 +124,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     scratchpadMaxParagraphs: 4,
     scratchpadMaxChars: 2000,
   },
+  lobby: { autoOpen: true },
 };
 
 function positive(value: unknown): number | undefined {
@@ -129,6 +148,11 @@ function normalizeScout(override: Partial<ScoutConfig> | undefined): ScoutConfig
   };
 }
 
+function normalizeLobby(value: unknown): LobbyConfig {
+  const autoOpen = (value as Partial<LobbyConfig> | undefined)?.autoOpen;
+  return { autoOpen: typeof autoOpen === "boolean" ? autoOpen : DEFAULT_CONFIG.lobby.autoOpen };
+}
+
 /** Deep-merge user config over defaults, keeping unknown keys out. */
 export function resolveConfig(partial: unknown): BotLobbyConfig {
   const src = (partial ?? {}) as Record<string, unknown>;
@@ -144,8 +168,11 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
     },
     scout: normalizeScout(src.scout as Partial<ScoutConfig> | undefined),
     researcher: normalizeAgent(DEFAULT_CONFIG.researcher, src.researcher as Partial<AgentModelConfig> | undefined),
+    quickFix: normalizeAgent(DEFAULT_CONFIG.quickFix, src.quickFix as Partial<AgentModelConfig> | undefined),
+    planner: normalizeAgent(DEFAULT_CONFIG.planner, src.planner as Partial<AgentModelConfig> | undefined),
     workflow,
     knowledge,
+    lobby: normalizeLobby(src.lobby),
   };
 }
 
@@ -157,7 +184,7 @@ export function hasScoutThinking(partial: unknown): boolean {
 
 /** What one subagent run uses: model (undefined = not configured), thinking and time limit. */
 export interface AgentProfile {
-  kind: SubagentKind;
+  kind: WorkflowProfileKind;
   model?: string;
   thinking: string;
   timeoutMs: number;
@@ -165,7 +192,7 @@ export interface AgentProfile {
 }
 
 /** The settings entry a domain/role run draws from. */
-export function profileKind(domain: Domain, role: Role): SubagentKind {
+export function profileKind(domain: Domain, role: Role): WorkflowProfileKind {
   if (role === "scout") return "scout";
   if (role === "researcher") return "researcher";
   return domain;
@@ -190,6 +217,17 @@ export function agentProfile(config: BotLobbyConfig, domain: Domain, role: Role)
   }
   const entry = kind === "researcher" ? config.researcher : config.agents[kind];
   return { kind, model: modelOf(entry.model), thinking: entry.thinking, timeoutMs: entry.timeoutMs ?? fallback, instructions };
+}
+
+/** The settings entry of a lobby agent (quick fix or planner). */
+export function lobbyAgentConfig(config: BotLobbyConfig, kind: LobbyAgentKind): AgentModelConfig {
+  return kind === "quickfix" ? config.quickFix : config.planner;
+}
+
+/** Profile for a lobby agent run, from settings alone; `model` is undefined while unset. */
+export function lobbyAgentProfile(config: BotLobbyConfig, kind: LobbyAgentKind): { model?: string; thinking: string; timeoutMs: number; instructions?: string } {
+  const entry = lobbyAgentConfig(config, kind);
+  return { model: modelOf(entry.model), thinking: entry.thinking, timeoutMs: entry.timeoutMs ?? config.workflow.agentTimeoutMs, instructions: entry.instructions };
 }
 
 /** Resolves the model, thinking and time limit one subagent run uses. */
