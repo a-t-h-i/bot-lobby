@@ -1,7 +1,6 @@
-import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { TERMINAL_STATES, createTask, taskRequest, type Task } from "../schemas/task.ts";
+import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { detectProjectRoot, globalConfigPath, loadConfig, readDataRoots, readRawConfig } from "../state/project.ts";
 import { hasScoutThinking, SCOUT_THINKING } from "../schemas/configuration.ts";
 import {
@@ -9,12 +8,8 @@ import {
   claimTask,
   ownedTask,
   ownerlessTask,
-  createTaskDir,
-  ensureProjectStructure,
-  nextTaskId,
   saveTask,
   selectTask,
-  taskDirFor,
   taskHealth,
 } from "../state/persistence.ts";
 import { transition } from "../state/task-state.ts";
@@ -22,14 +17,16 @@ import { AGENT_DIR_NAMES, KNOWLEDGE_FILES, knowledgeDir, type KnowledgeAgent } f
 import { readFirstExisting } from "../knowledge/store.ts";
 import { overThreshold } from "../knowledge/compactor.ts";
 import { applyApprovalChoice, describeTask, describeOversizedKnowledge, type ApprovalChoice } from "../workflow/workflow.ts";
-import { shortTitle } from "../text.ts";
 import { applyStatus, registerRevealShortcut, setMinimized } from "./ui.ts";
-import { applyMasterModel, openSettings } from "./settings-ui.ts";
+import { openSettings } from "./settings-ui.ts";
+import { kickoff, startTask } from "./start-task.ts";
+import { autoOpenLobby, showLobby } from "../lobby/runtime.ts";
 import { modelRef, thinkingMismatches } from "./model-support.ts";
 import { describeRun, runFromLog } from "./run-summary.ts";
 import { modelLookup } from "./tools.ts";
 
 const HELP = [
+  "/bot-lobby                  Open the lobby: tasks, plan, quick fix, issues, metrics (alt+l)",
   "/bot-lobby <request>        Start a task through the workflow",
   "/bot-lobby status [taskId]  Show the active task",
   "/bot-lobby tasks            List tasks",
@@ -42,10 +39,11 @@ const HELP = [
   "/bot-lobby config           Show effective configuration",
   "/bot-lobby minimize|restore   Hide or restore bot-lobby for this session (ctrl+shift+m)",
   "/bot-lobby claim <taskId>    Take ownership of an orphaned task",
+  "/bot-lobby help             This help",
 ].join("\n");
 
 /** Subcommands only win when no free-form text follows (so tasks still start). */
-const SUBCOMMANDS = new Set(["status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "knowledge", "config", "settings", "minimize", "restore", "claim"]);
+const SUBCOMMANDS = new Set(["lobby", "help", "status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "knowledge", "config", "settings", "minimize", "restore", "claim"]);
 
 function isTaskId(value: string | undefined): boolean {
   return Boolean(value && /^TASK-/.test(value));
@@ -61,52 +59,7 @@ function parseCommand(args: string): { sub: string | undefined; rest: string[]; 
   return { sub, rest, restText: trimmed.slice(sub.length).trim() };
 }
 
-function uniqueTaskId(root: string, configDir: string, request: string): string {
-  const base = nextTaskId(request);
-  let id = base;
-  let suffix = 2;
-  while (existsSync(taskDirFor(root, configDir, id))) id = `${base}-${suffix++}`;
-  return id;
-}
-
-export function kickoff(task: Task): string {
-  return [
-    `A bot-lobby task is active: ${task.id}`,
-    `Title: ${task.title}`,
-    `Request: ${taskRequest(task)}`,
-    `State: ${task.state}`,
-    "",
-    "Drive it with the orchestrate tool:",
-    "1. clarify if the request is genuinely ambiguous,",
-    "2. scout the domains the request touches,",
-    "3. synthesize the findings and propose a short `- ` bullet list for approval.",
-    "Do not implement anything before the user approves the proposal.",
-  ].join("\n");
-}
-
-async function startTask(
-  pi: ExtensionAPI,
-  ctx: ExtensionCommandContext,
-  configDir: string,
-  request: string,
-): Promise<void> {
-  const root = detectProjectRoot(ctx.cwd, configDir);
-  ensureProjectStructure(root, configDir);
-  const sessionId = ctx.sessionManager.getSessionId();
-  const existing = ownedTask(root, configDir, sessionId);
-  if (existing) {
-    ctx.ui.notify(`bot-lobby ${existing.id} is already active in this session. Finish it or run /bot-lobby cancel ${existing.id} first.`, "warning");
-    return;
-  }
-  const task = createTask(uniqueTaskId(root, configDir, request), shortTitle(request), new Date().toISOString(), request, sessionId);
-  createTaskDir(root, configDir, task);
-  transition(task, "clarifying");
-  saveTask(root, configDir, task);
-  applyStatus(ctx, root, configDir);
-  await applyMasterModel(pi, ctx, loadConfig());
-  ctx.ui.notify(`bot-lobby ${task.id} started`, "info");
-  pi.sendUserMessage(kickoff(task));
-}
+export { kickoff };
 
 function showStatus(ctx: ExtensionCommandContext, configDir: string, taskId?: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
@@ -246,10 +199,19 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
     handler: async (args, ctx) => {
       const { sub, rest, restText } = parseCommand(args ?? "");
       if (!sub) {
-        if (!restText) return ctx.ui.notify(HELP, "info");
-        return startTask(pi, ctx, configDir, restText);
+        if (!restText) {
+          if (!showLobby()) ctx.ui.notify(HELP, "info");
+          return;
+        }
+        if (await startTask(pi, ctx, configDir, restText)) autoOpenLobby();
+        return;
       }
       switch (sub) {
+        case "lobby":
+          if (!showLobby()) ctx.ui.notify("The lobby needs pi's interactive terminal UI.", "warning");
+          return;
+        case "help":
+          return ctx.ui.notify(HELP, "info");
         case "status":
           return showStatus(ctx, configDir, rest[0]);
         case "tasks":
