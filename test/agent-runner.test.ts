@@ -44,10 +44,12 @@ test("runAgent returns metadata and role-restricted tools", async () => {
   assert.ok(run.finishedAt);
 });
 
-test("worker agents are not tool-restricted", async () => {
-  const capture: ProcessRunner = async (args) => ok(reply(args.includes("--tools") ? "restricted" : "unrestricted"));
+test("workers get the full built-in tool set plus any extra tools", async () => {
+  const capture: ProcessRunner = async (args) => ok(reply(args[args.indexOf("--tools") + 1]!));
   const run = await runAgent(request({ role: "worker" }), capture);
-  assert.equal(run.output, "unrestricted");
+  assert.equal(run.output, "read,bash,edit,write,grep,find,ls");
+  const desk = await runAgent(request({ role: "worker", extraTools: ["claim_file"] }), capture);
+  assert.equal(desk.output, "read,bash,edit,write,grep,find,ls,claim_file");
 });
 
 test("runAgent reports a failed run without throwing", async () => {
