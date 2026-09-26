@@ -2,6 +2,7 @@ import { join } from "node:path";
 import type { BotLobbyConfig, ProfileResolver } from "../schemas/configuration.ts";
 import type { AgentRun, Pushback, ResearchResult, ReviewResult } from "../schemas/findings.ts";
 import {
+  MAX_RUN_LOG,
   MAX_WORKER_RECORDS,
   TASK_STATES,
   TERMINAL_STATES,
@@ -39,6 +40,7 @@ import { detectSharedFiles, summarizeOutcomes } from "../master/synthesis.ts";
 import { truncate } from "../text.ts";
 import { assertNoPendingApprovals, pendingApprovals, requestApproval, resolveApproval } from "./approvals.ts";
 import { pingApproval } from "../pi/notify.ts";
+import { describeRun, runLogEntry } from "../pi/run-summary.ts";
 import { nextStates } from "./transitions.ts";
 
 export const ORCHESTRATE_ACTIONS = [
@@ -112,6 +114,8 @@ export interface WorkflowResult {
   taskId: string;
   state: TaskState;
   message: string;
+  /** Subagent runs that finished during this action, oldest first. */
+  runs?: AgentRun[];
 }
 
 export type ApprovalChoice = "approve" | "amend" | "decline";
@@ -790,12 +794,35 @@ export async function runWorkflowAction(params: OrchestrateParams, deps: Workflo
   if (!handler) {
     return { ok: false, taskId: task.id, state: task.state, message: `Unknown action "${params.action}".` };
   }
+  const finished = new Map<string, AgentRun>();
+  const tracked: WorkflowDeps = {
+    ...deps,
+    onUpdate: (run) => {
+      if (run.status !== "running") finished.set(run.runId, run);
+      deps.onUpdate?.(run);
+    },
+  };
   try {
-    const message = await handler(task, params, deps);
+    const message = await handler(task, params, tracked);
+    const runs = recordRunLog(task, finished);
     saveTask(deps.root, deps.configDir, task);
-    return { ok: true, taskId: task.id, state: task.state, message };
+    return { ok: true, taskId: task.id, state: task.state, message: `${message}${runsFooter(runs)}`, runs };
   } catch (error) {
+    const runs = recordRunLog(task, finished);
     saveTask(deps.root, deps.configDir, task);
-    return { ok: false, taskId: task.id, state: task.state, message: `Rejected: ${(error as Error).message}` };
+    return { ok: false, taskId: task.id, state: task.state, message: `Rejected: ${(error as Error).message}`, runs };
   }
+}
+
+/** Append this action's finished runs to the task's bounded run log. */
+function recordRunLog(task: Task, finished: ReadonlyMap<string, AgentRun>): AgentRun[] {
+  const runs = [...finished.values()];
+  if (runs.length > 0) task.runLog = [...(task.runLog ?? []), ...runs.map(runLogEntry)].slice(-MAX_RUN_LOG);
+  return runs;
+}
+
+/** One line per run so the Master sees timing, model and any partial-report flag. */
+function runsFooter(runs: readonly AgentRun[]): string {
+  if (runs.length === 0) return "";
+  return `\n\nRuns:\n${runs.map((run) => `- ${describeRun(run)}`).join("\n")}`;
 }

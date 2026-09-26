@@ -26,6 +26,7 @@ import { shortTitle } from "../text.ts";
 import { applyStatus, registerRevealShortcut, setMinimized } from "./ui.ts";
 import { applyMasterModel, openSettings } from "./settings-ui.ts";
 import { modelRef, thinkingMismatches } from "./model-support.ts";
+import { describeRun, runFromLog } from "./run-summary.ts";
 import { modelLookup } from "./tools.ts";
 
 const HELP = [
@@ -36,6 +37,7 @@ const HELP = [
   "/bot-lobby cancel [taskId]  Abandon a task",
   "/bot-lobby approve|amend <text>|decline   Answer the current proposal",
   "/bot-lobby knowledge        Show persistent knowledge files",
+  "/bot-lobby runs [taskId]    Recent subagent runs: time, turns, tokens, cost, model",
   "/bot-lobby settings         Edit per-agent model/thinking/instructions",
   "/bot-lobby config           Show effective configuration",
   "/bot-lobby minimize|restore   Hide or restore bot-lobby for this session (ctrl+shift+m)",
@@ -43,7 +45,7 @@ const HELP = [
 ].join("\n");
 
 /** Subcommands only win when no free-form text follows (so tasks still start). */
-const SUBCOMMANDS = new Set(["status", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "knowledge", "config", "settings", "minimize", "restore", "claim"]);
+const SUBCOMMANDS = new Set(["status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "knowledge", "config", "settings", "minimize", "restore", "claim"]);
 
 function isTaskId(value: string | undefined): boolean {
   return Boolean(value && /^TASK-/.test(value));
@@ -119,6 +121,20 @@ function showStatus(ctx: ExtensionCommandContext, configDir: string, taskId?: st
   ].filter(Boolean).join("\n");
   const footer = knowledge ? `\n${knowledge}` : "";
   ctx.ui.notify(task ? `${describeTask(task)}${footer}` : `No bot-lobby task found in ${root}.${footer}`, task ? "info" : "warning");
+}
+
+/** Recent runs of the active (or named) task, newest last, so slow models are easy to spot. */
+export function runsReport(task: Task | undefined, limit = 20): string {
+  if (!task) return "No bot-lobby task found.";
+  const entries = (task.runLog ?? []).slice(-limit);
+  if (entries.length === 0) return `${task.id}: no finished subagent runs yet.`;
+  return [`${task.id} — last ${entries.length} run${entries.length === 1 ? "" : "s"}:`, ...entries.map((entry) => describeRun(runFromLog(entry, task.id)))].join("\n");
+}
+
+function showRuns(ctx: ExtensionCommandContext, configDir: string, taskId?: string): void {
+  const root = detectProjectRoot(ctx.cwd, configDir);
+  const task = selectTask(root, configDir, taskId, ctx.sessionManager.getSessionId()) ?? (taskId ? undefined : ownerlessTask(root, configDir));
+  ctx.ui.notify(runsReport(task), task ? "info" : "warning");
 }
 
 function showTasks(ctx: ExtensionCommandContext, configDir: string): void {
@@ -238,6 +254,8 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
           return showStatus(ctx, configDir, rest[0]);
         case "tasks":
           return showTasks(ctx, configDir);
+        case "runs":
+          return showRuns(ctx, configDir, rest[0]);
         case "pause":
           return setPaused(ctx, configDir, true, rest[0]);
         case "resume":
