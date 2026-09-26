@@ -37,6 +37,8 @@ import {
   type LargeTaskRow,
 } from "./zen-large.ts";
 import { runStatus, sceneMetrics, type SceneMetrics, type SlotView } from "./zen-metrics.ts";
+import { feedLine, QUIET_MS, quietFor } from "./run-summary.ts";
+import { shortDuration } from "../text.ts";
 
 /** Minimal slice of pi's Theme the panel needs; keeps zen.ts decoupled from the agent. */
 export interface PanelTheme {
@@ -412,8 +414,10 @@ export function workingLine(runs: AgentRun[], tick: number, theme?: PanelTheme, 
   if (running.length > 0) {
     const run = running.at(-1)!;
     const spinner = theme ? theme.fg("accent", spin) : spin;
-    const activity = run.activity ?? "working";
-    return `  ${spinner} agents working (${running.length}) · ${run.domain}/${run.role} ${activity} ${formatDuration(runElapsed(run, now))}`;
+    const activity = `${run.activity ?? "working"}${run.detail ? ` ${run.detail}` : ""}`;
+    const quiet = quietFor(run, now);
+    const warning = run.waitingFor ? ` · waiting for ${run.waitingFor}` : quiet >= QUIET_MS ? ` · quiet ${shortDuration(quiet)}` : "";
+    return `  ${spinner} agents working (${running.length}) · ${run.domain}/${run.role} ${activity} ${formatDuration(runElapsed(run, now))}${warning}`;
   }
   const last = runs.at(-1);
   if (!last) return "  ○ waiting for the first agent…";
@@ -576,6 +580,7 @@ function sceneInput(
     caption: task.paused ? "task paused" : SCENE_PROPS[task.state],
     alert: alert?.text,
     alertKind: alert?.kind,
+    feed: feedLine(runs, now, tick),
   };
 }
 
