@@ -2,7 +2,7 @@ import type { Domain, Role } from "../schemas/agent.ts";
 import type { AgentRun } from "../schemas/findings.ts";
 import { roleSpec } from "../roles/registry.ts";
 import { compilePrompt } from "../prompts/compiler.ts";
-import { activityDetail, activityWord } from "../pi/activity.ts";
+import { activityDetail, activityWord, describeToolCall } from "../pi/activity.ts";
 import { shortDuration, truncate } from "../text.ts";
 import { runPiAgent, spawnPiProcess, type PiStreamEvent, type ProcessRunner } from "./pi-runner.ts";
 
@@ -114,6 +114,7 @@ function baseRun(request: AgentRequest, runId: string, startedAt: string, attemp
     output: "",
     attempts,
     startedAt,
+    ...(request.thinking ? { thinking: request.thinking } : {}),
     ...(attempts > 1 ? { note: `retry ${attempts - 1} of ${(request.retries ?? 0)}`, noteKind: "warning" as const } : {}),
   };
 }
@@ -208,9 +209,13 @@ function createLiveRun(base: AgentRun, request: AgentRequest) {
       case "tool_execution_start": {
         const activity = activityWord(event.toolName);
         const detail = activityDetail(event.toolName, event.args);
-        emit({ activity, detail, tools: (state.tools ?? 0) + 1 }, changed(activity, detail));
+        const step = describeToolCall(event.toolName, event.args);
+        emit({ activity, detail, step, tools: (state.tools ?? 0) + 1 }, changed(activity, detail) || step !== state.step);
         return;
       }
+      case "thought":
+        emit({ thought: event.text }, true);
+        return;
       case "thinking":
       case "writing":
         emit({ activity: event.type, detail: undefined }, changed(event.type, undefined));

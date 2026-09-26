@@ -106,3 +106,123 @@ export function activityDetail(toolName: string, args?: unknown): string | undef
   const query = field(args, "query", "url", "path");
   return query ? clip(query) : undefined;
 }
+
+const STEP_CHARS = 60;
+
+function clipTo(text: string, max: number): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+}
+
+/** `https://example.com/docs/page?q=1` reads `example.com/docs/page`. */
+function shortUrl(url: string): string {
+  return url.replace(/^[a-z]+:\/\//i, "").replace(/[?#].*$/, "").replace(/\/$/, "");
+}
+
+function list(value: unknown): string | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items = value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+  return items.length > 0 ? items.join(", ") : undefined;
+}
+
+/** What the Master is doing with one `orchestrate` call, in words. */
+function orchestrateStep(args: unknown): string {
+  const action = orchestrateAction(args);
+  const text = (...names: string[]) => field(args, ...names);
+  switch (action) {
+    case "clarify":
+      return `asking you: ${clipTo(text("question") ?? "a question", STEP_CHARS)}`;
+    case "scout":
+      return `scouting ${list((args as { domains?: unknown }).domains) ?? "the codebase"}`;
+    case "research":
+      return `summoning research${text("instruction") ? ` on ${clipTo(text("instruction")!, STEP_CHARS - 20)}` : ""}`;
+    case "propose":
+      return "proposing the change for your approval";
+    case "plan":
+      return "writing the plan";
+    case "implement": {
+      const assignments = (args as { assignments?: Array<{ domain?: unknown }> }).assignments;
+      const domains = Array.isArray(assignments) ? list(assignments.map((entry) => entry?.domain)) : text("domain");
+      const task = text("task");
+      return `delegating to ${domains ?? "a worker"}${task ? `: ${clipTo(task, STEP_CHARS - 20)}` : ""}`;
+    }
+    case "qa":
+      return "running the QA gate";
+    case "knowledge":
+      return "recording knowledge";
+    case "compact":
+      return `compacting ${text("file") ?? "knowledge"}`;
+    case "resolve_approval":
+      return `${text("decision") === "rejected" ? "rejecting" : "approving"} ${text("approvalId") ?? "a request"}`;
+    case "complete":
+      return "wrapping up the task";
+    case "block":
+      return `blocking the task${text("reason") ? `: ${clipTo(text("reason")!, STEP_CHARS - 20)}` : ""}`;
+    case "resume":
+      return "resuming the task";
+    case "decide":
+      return "recording a decision";
+    case "status":
+      return "checking the task status";
+    case "cancel":
+      return "cancelling the task";
+    default:
+      return "orchestrating";
+  }
+}
+
+/**
+ * One plain-words line for a tool call, the way a person would narrate it:
+ * `reading index.html`, `searching for "router" in src`, `running npm test`,
+ * `delegating to backend: Step 2 …`. Pure; unknown tools read `using <name>`.
+ */
+export function describeToolCall(toolName: string, args?: unknown): string {
+  const tool = toolName.trim().toLowerCase();
+  const path = field(args, "path", "file_path", "file");
+  switch (tool) {
+    case "read":
+      return `reading ${path ? baseName(path) : "a file"}`;
+    case "edit":
+      return `editing ${path ? baseName(path) : "a file"}`;
+    case "write":
+      return `writing ${path ? baseName(path) : "a file"}`;
+    case "ls":
+      return `listing ${path ? clipTo(path, STEP_CHARS) : "the folder"}`;
+    case "grep": {
+      const pattern = field(args, "pattern", "query");
+      return `searching for ${pattern ? `"${clipTo(pattern, 40)}"` : "a pattern"}${path ? ` in ${baseName(path)}` : ""}`;
+    }
+    case "find": {
+      const pattern = field(args, "pattern", "glob", "query");
+      return `finding ${pattern ? clipTo(pattern, 40) : "files"}${path ? ` in ${baseName(path)}` : ""}`;
+    }
+    case "bash": {
+      const command = field(args, "command", "cmd");
+      return command ? `running ${clipTo(command, STEP_CHARS)}` : "running a command";
+    }
+    case "web_search":
+      return `searching the web for "${clipTo(field(args, "query") ?? "…", 48)}"`;
+    case "fetch_content":
+    case "web_fetch":
+    case "fetch": {
+      const url = field(args, "url");
+      return `fetching ${url ? clipTo(shortUrl(url), STEP_CHARS) : "a page"}`;
+    }
+    case "get_search_content":
+      return "reading search results";
+    case "source_check":
+      return "checking sources";
+    case "claim_file":
+      return `claiming ${path ? baseName(path) : "a file"}`;
+    case "handover_file":
+      return `handing over ${path ? baseName(path) : "a file"}`;
+    case "wait_for_files":
+      return "waiting for files";
+    case "my_files":
+      return "checking its files";
+    case "orchestrate":
+      return orchestrateStep(args);
+    default:
+      return `using ${toolName.trim() || "a tool"}`;
+  }
+}

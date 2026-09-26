@@ -74,6 +74,7 @@ structure.
 ## Usage
 
 ```
+/bot-lobby                      Open the lobby (alt+l): tasks, planning, quick fixes, issues, metrics
 /bot-lobby <request>            Start a task and hand it to the Master
 /bot-lobby status [taskId]      Active task, state, approvals, blockers, legal next states
 /bot-lobby tasks                Task list (plus any unreadable task state)
@@ -89,7 +90,110 @@ structure.
 /bot-lobby-settings             Same as the settings subcommand
 /bot-lobby minimize|restore     Hide or restore bot-lobby for this session (ctrl+shift+m)
 /bot-lobby claim <taskId>      Take ownership of an orphaned task
+/bot-lobby lobby | help         Open the lobby, or show this list
 ```
+
+## The lobby
+
+The lobby is bot-lobby's full-screen home: a tabbed view over every task in the
+project, your planning, quick fixes, GitHub issues and model performance, with
+one prompt at the bottom whose target follows the tab. It opens by itself when
+this session starts (or resumes) a task — the small zen widget returns whenever
+you hide it — and `alt+l` or `/bot-lobby` opens and hides it at any time, with
+or without a task.
+
+```
+ ◆ bot-lobby │ 1 Lobby  2 Tasks 2  3 Plan  4 Quick fix ⠋  5 Issues  6 Metrics        ⠋ TASK-add-login implementing
+ ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+                    (the zen scene: the oracle, DEV · DESIGN · RESEARCH · QA, the plan checklist)
+ ── Conversation · TASK-add-login ──────────────────── ┬ ── Activity ───────────────────────────────────────
+ you ▸ add a login page with email + password           │ 12:04 MASTER    ✓ scouting designer, backend
+ oracle ▸ Proposal:                                     │ 12:06 DEV       ⠋ reading auth.ts…
+          - LoginForm component                         │ 12:06 DESIGN    ⠋ editing LoginForm.tsx…
+          - POST /api/login with rate limiting          │ 12:06 QUICK FIX ✓ done: rename getUser
+ ── Thinking ───────────────────────────────────────────────────────────────────────── DEV · 12s ago ──
+ The auth module already exposes a session helper; reuse it rather than adding a new one.
+ ── message the oracle ─────────────────────────────────────────────────────────────────────────────────
+  _
+ TYPE  enter send · shift+enter newline · esc browse · tab next tab · alt+l hide lobby
+```
+
+- **1 Lobby** — the task's zen scene, then the conversation with the oracle
+  (its text only: no tool rows, no thinking), an activity log that narrates
+  every tool call in plain words (`reading index.html…`, `searching for
+  "router" in src`, `running npm test`, `delegating to backend: Step 2 …`) from
+  the Master and every subagent, and a single **Thinking** pane — the one place
+  thoughts show up: the oracle's live thought as it streams, and each finished
+  thought from a subagent, quick fix or the planner (pi's own transcript,
+  behind the lobby, still carries the oracle's thinking blocks; `ctrl+t`
+  collapses them there). The prompt talks to the
+  oracle (while it works, enter steers the running turn; `esc` stops it); with
+  no task, it starts one.
+- **2 Tasks** — every task in the project: this session's, the ones other pi
+  sessions are driving, pending plans saved from the planner, and recently
+  finished ones. The detail pane shows the request, the approved plan with its
+  step checklist, your comments on it, amendments, what the task waits on and
+  its recent runs. `c` comments on the selected task's plan (see below), `s`
+  starts a pending plan as a task in this session, `d` twice discards one.
+- **3 Plan** — task planning mode with a planning panel. Describe what you
+  want and every seat grills you from its own domain, on the model and
+  thinking level its settings name: **DEV** (APIs, data, errors, security,
+  performance), **DESIGN** (flows, states, copy, visual language,
+  accessibility), **QA** (acceptance criteria, test strategy, edge cases,
+  definition of done) and **RESEARCH** (libraries, versions, docs and prior
+  art, with the web tools when `pi-web-access` is installed). The **oracle**
+  chairs on the Planner model: it reads the seats' questions and notes, folds
+  every answer into the draft plan (with a *Decisions by domain* section) and
+  asks only what no single seat owns. Each round the seats run in parallel,
+  read-only, then the oracle; the questions arrive numbered and attributed
+  (`3. QA  Which browsers must pass?`), you answer them all in one message,
+  and every seat reads every answer the next round — so the agents that later
+  build the task start aligned. A roster shows what each seat is doing and
+  whether it is READY; the plan is READY only when every seat and the oracle
+  agree, and the draft pane lists what each seat said the plan must respect.
+  While browsing, `1`–`4` seat or unseat DEV, DESIGN, QA and RESEARCH for the
+  next round, `enter` switches between the conversation and the draft, `s`
+  saves the plan to the pending tasks list, `n` starts over, `r` retries a
+  round that failed or lost a seat, and `x` stops one.
+- **4 Quick fix** — a direct prompt, the way you would ask pi, that skips the
+  whole workflow: one coding agent (full tools) makes the change right away
+  while any task keeps running. Quick fixes run one at a time in the order you
+  send them; each shows its steps and final report, and `x` cancels one. A
+  request that turns out to be large is reported back instead of attempted.
+- **5 Issues** — the repository's open GitHub issues through the `gh` CLI (it
+  owns sign-in; bot-lobby stores no token). `enter` reads one with its
+  comments, `n` files a new one (first line is the title), `r` refreshes, and
+  `p` plans it: the Plan tab opens seeded with the issue, and the saved plan
+  keeps a link to it, so an issue becomes a task only after it has been
+  planned.
+- **6 Metrics** — model performance across every Master turn, subagent run,
+  quick fix, planning seat and oracle planning turn: per model and thinking level, the number of runs,
+  success rate, mean/median/p90 time, turns, tools, tokens, output tokens per
+  second and cost (columns drop from the right on narrow terminals); how long a
+  task takes from request to done by the oracle's model and thinking level; and
+  where the time goes by agent. `g` splits the table by agent, `s` cycles the
+  sort (runs, average time, success, cost).
+
+**Keys.** Like a modal editor, the lobby has a typing mode (keys go to the
+prompt) and a browsing mode (`esc`; arrows move through lists, single keys run
+the tab's commands, and on Lobby, Plan and Quick fix any other key resumes
+typing). Everywhere: `tab`/`shift+tab` or `alt+1`…`alt+6` switch tabs,
+`pageup`/`pagedown` scroll, `ctrl+c` clears the prompt (or hides the lobby
+when it is empty) and `alt+l` hides the lobby. Anything that needs pi itself —
+built-in slash commands, `/model`, the tool-row toggle — works with the lobby
+hidden; bot-lobby's own `/bot-lobby …` commands also work from the Lobby
+prompt. When the Master asks you something (an approval, a clarifying
+question), the lobby steps aside for the dialog and comes back once you answer.
+
+**Plan comments.** A comment on a task's plan is saved beside the task
+(`comments.jsonl`) from any session, and the session that owns the task passes
+new comments to its oracle — right away when you comment in that session,
+within a few seconds from another one, held while the task is paused or the
+session is minimized. The oracle treats a comment like an amendment and calls
+`orchestrate action=plan` with the full revised plan, which replaces the
+approved plan while implementing or reviewing, keeps finished steps done and
+marks the comments addressed (`○` waiting, `◐` sent to the oracle, `✓` plan
+amended). Before a plan exists, a comment asks for a revised proposal instead.
 
 ## Sessions and ownership
 
@@ -116,7 +220,8 @@ every in-flight subagent process.
 
 While the owning session has a task active, its transcript switches to a zen view: `orchestrate` rows
 and the built-in spinner are hidden, and a widget above the editor animates the
-task. At 72 columns and wider it draws a large scene: a header box with the task
+task (the same scene heads the lobby's first tab; the widget shows while the
+lobby is hidden). At 72 columns and wider it draws a large scene: a header box with the task
 title and state in its top border, a progress bar, and a metadata row with
 elapsed time, quiet-mode hint and task id; an oracle tower with a twinkling
 aura (drifting z's while dormant), a radiant orb crown, two window eyes, a
@@ -214,7 +319,7 @@ One tool, every workflow step. It is the Master's only way to move a task.
 | `scout` | created…synthesizing | Run domain reconnaissance in parallel; repeat later to target-verify a claim |
 | `research` | any active | Summon the read-only Researcher (domain + instruction) for cited internet evidence; persists the report for audit |
 | `propose` | created…awaiting_approval | Record the proposal, request approval, handle approve/amend/decline |
-| `plan` | planning | Record the internal plan (all §12 areas required) |
+| `plan` | planning, implementing, reviewing | Record the internal plan (all §12 areas required); later, replace it with an amended plan (addresses lobby comments) |
 | `implement` | planning, implementing, reviewing | Delegate a step to a domain Worker, or several domains at once with `assignments` (parallel, sharing files through the file desk) |
 | `qa` | implementing, reviewing | Run the QA gate — the only review — over the whole feature |
 | `knowledge` | any active | Record Master-approved knowledge or a decision |
@@ -339,6 +444,9 @@ top-level `/bot-lobby-settings`) and persist globally to
   },
   "scout": { "model": "anthropic/claude-haiku-4-5-20251001", "timeoutMs": 480000 },
   "researcher": { "model": "anthropic/claude-sonnet-5", "thinking": "low", "instructions": "", "timeoutMs": 600000 },
+  "quickFix": { "model": "anthropic/claude-sonnet-5", "thinking": "low", "instructions": "", "timeoutMs": 600000 },
+  "planner": { "model": "anthropic/claude-sonnet-5", "thinking": "high", "instructions": "", "timeoutMs": 300000 },
+  "lobby": { "autoOpen": true, "planningPanel": ["backend", "designer", "qa", "researcher"] },
   "workflow": {
     "maxReviewIterations": 2,
     "maxParallelScouts": 3,
@@ -372,6 +480,19 @@ whose model is not set yet runs on the session's model, and opening
 visible; only the master keeps `inherit`, since it is the session itself.
 Each subagent entry has a `timeoutMs` (default 15 min; scouts 8, researcher 10),
 falling back to `workflow.agentTimeoutMs`.
+
+The lobby's two agents have entries of their own: `quickFix` (the direct-change
+agent, `low` thinking and 10 minutes by default) and `planner` (the oracle
+chairing the planning panel, `high` thinking; its time limit bounds one round
+for every seat, 5 minutes by default). Both appear in `/bot-lobby settings`,
+take custom instructions, and run on the session's model until you pin one.
+Planning seats reuse their domain's entry — DEV the Backend's, DESIGN the
+Designer's, QA the QA's, RESEARCH the Researcher's model, thinking and
+instructions — so a seat plans on the model that will later build its part.
+`lobby.planningPanel` names the seats a new planning session starts with
+(every seat by default; `[]` lets the oracle plan alone), and
+`lobby.autoOpen` (default `true`) opens the lobby by itself when this session
+starts or resumes a task.
 
 `thinking` must be one of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`,
 `max`; a legacy `inherit` or unknown value falls back to `medium`. The thinking
@@ -416,8 +537,11 @@ and the output contract — and an empty layer is dropped.
 ├── Backend/knowledge/          knowledge.md, engineering-standards.md, decisions.md, completed-tasks.md
 ├── QA/knowledge/               knowledge.md, testing-standards.md, decisions.md, completed-tasks.md
 ├── archive/<Agent>/            previous knowledge versions (outside all retrieval paths)
+├── backlog/PLAN-<slug>.json    pending tasks saved from the planner (optionally linked to an issue)
+├── metrics.jsonl               one line per finished run of any agent, for the Metrics tab
 └── tasks/TASK-<stamp>/
     ├── state.json              the task record (kept after completion)
+    ├── comments.jsonl          your lobby comments on the plan and their delivery (append-only)
     ├── proposal.md             scratchpads: deleted on completion
     ├── plan.md
     ├── designer.md backend.md qa.md
@@ -465,10 +589,19 @@ src/
 ├── desk/                     File desk for parallel workers: checkout table, socket, worker extension
 ├── knowledge/                Paths, store (single write path), selector, compactor
 ├── prompts/                  Layer loader + compiler
-├── state/                    Project root, config, task persistence, state mutation
+├── lobby/
+│   ├── runtime.ts            Mounts the full-screen lobby on pi's TUI, dialogs hand-off, comment delivery, Master metrics
+│   ├── view.ts               The tabbed view: tab bar, per-tab prompt, typing/browsing modes, keys
+│   ├── tabs/                 Pure renderers: home, tasks, plan, quickfix, issues, metrics
+│   ├── feed.ts               Activity log, thinking pane and conversation store
+│   ├── quickfix.ts           Direct-change jobs, one at a time
+│   ├── planner.ts            The planning panel: seats and the oracle per round, reply parsing, saving a plan
+│   ├── issues.ts             GitHub issues through the gh CLI
+│   └── layout.ts             Exact-width columns, rules, wrapping and scroll windows
+├── state/                    Project root, config, task persistence, state mutation, comments, backlog, metrics
 ├── schemas/                  Task, agent, findings, configuration types
 └── pi/                       Commands, lifecycle, orchestrate tool, status widget
-prompts/                      global, master, designer, backend, qa, scout, worker, reviewer, researcher
+prompts/                      global, master, designer, backend, qa, scout, worker, reviewer, researcher, quickfix, planner, panel
 ```
 
 Prompts are composed, never duplicated: `global + domain + role + task context +
@@ -518,7 +651,7 @@ compaction, bounded review loops, dependency/architecture approval, retries,
 cancellation, corrupted-state detection, and the commands/status UI.
 
 Deliberately deferred (matching the build plan): worktree-based isolation for
-parallel Workers (they share one working tree through the file desk), a large
-dashboard, cost/token analytics beyond per-run usage, and
+parallel Workers (they share one working tree through the file desk) and
 cross-platform runtime abstractions. The internal module boundaries keep those
-extractable.
+extractable. The lobby (see above) has since added the full-screen dashboard
+and per-model performance analytics.
