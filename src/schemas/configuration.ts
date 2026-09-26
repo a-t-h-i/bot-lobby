@@ -95,7 +95,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     requireApprovalForArchitectureChanges: true,
     agentTimeoutMs: 15 * 60 * 1000,
     maxAgentRetries: 1,
-    stallTimeoutMs: 3 * 60 * 1000,
+    stallTimeoutMs: 5 * 60 * 1000,
     toolStallTimeoutMs: 10 * 60 * 1000,
     wrapUpAt: 0.75,
     maxParallelWorkers: 3,

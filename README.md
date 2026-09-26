@@ -261,7 +261,7 @@ The runner watches every run:
 - **Deadline.** At the time limit the agent is aborted, then killed after a short
   grace. A spent deadline is never retried.
 - **Stall watchdog.** An agent that produces no output for `stallTimeoutMs`
-  (3 min) — or `toolStallTimeoutMs` (10 min) during a single tool call such as a
+  (5 min) — or `toolStallTimeoutMs` (10 min) during a single tool call such as a
   test run — is killed as stalled and retried once. pi's own provider retry
   backoff extends the allowance.
 - **Clean kills.** Each subagent leads its own process group, so a kill takes any
@@ -348,7 +348,7 @@ top-level `/bot-lobby-settings`) and persist globally to
     "requireApprovalForArchitectureChanges": true,
     "agentTimeoutMs": 900000,
     "maxAgentRetries": 1,
-    "stallTimeoutMs": 180000,
+    "stallTimeoutMs": 300000,
     "toolStallTimeoutMs": 600000,
     "wrapUpAt": 0.75
   },
