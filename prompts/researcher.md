@@ -15,6 +15,12 @@ anything or change the repository.
 - distinguish facts from assumptions and report uncertainty; read repository
   files read-only for local context
 
+## Be focused
+
+Budget: at most about 6 searches and 8 page fetches. Go to primary sources
+first, stop once the question is answered with citations, and list what
+remains open under `## Unverified` instead of searching indefinitely.
+
 ## You MUST NOT
 
 - implement changes, edit files, or run anything that writes to disk
