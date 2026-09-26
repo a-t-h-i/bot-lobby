@@ -61,7 +61,12 @@ export type PiStreamEvent =
   | { type: "compaction" }
   | { type: "usage"; input: number; output: number; cost: number; model?: string }
   | { type: "wrap_up" }
+  /** One finished thinking block, bounded to `MAX_THOUGHT_CHARS`. */
+  | { type: "thought"; text: string }
   | { type: "heartbeat" };
+
+/** Longest thought forwarded from a subagent stream. */
+export const MAX_THOUGHT_CHARS = 1500;
 
 export interface ProcessRunOptions {
   cwd: string;
@@ -215,6 +220,11 @@ export function createStreamCollector(
       phase = next;
       onEvent?.({ type: next });
     }
+    // One parse per finished thinking block (not per token) forwards the thought itself.
+    if (onEvent && line.includes('"thinking_end"')) {
+      const thought = finishedThought(line);
+      if (thought) onEvent({ type: "thought", text: thought });
+    }
   };
   const keep = (line: string) => {
     deltaPhase(line);
@@ -259,6 +269,21 @@ export function createStreamCollector(
       return kept.join("\n");
     },
   };
+}
+
+/** The text of a `thinking_end` message update, trimmed and bounded; undefined for anything else. */
+export function finishedThought(line: string): string | undefined {
+  let event: { assistantMessageEvent?: { type?: string; content?: unknown } };
+  try {
+    event = JSON.parse(line) as typeof event;
+  } catch {
+    return undefined;
+  }
+  const update = event?.assistantMessageEvent;
+  if (update?.type !== "thinking_end" || typeof update.content !== "string") return undefined;
+  const text = update.content.trim();
+  if (!text) return undefined;
+  return text.length > MAX_THOUGHT_CHARS ? `${text.slice(0, MAX_THOUGHT_CHARS - 1)}…` : text;
 }
 
 /** Build the `pi` argv for one isolated, headless RPC agent run; the task goes over stdin. */
