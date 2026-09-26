@@ -9,6 +9,7 @@ import { truncate } from "../text.ts";
 import { applyStatus, reportRuns, summarizeRun } from "./ui.ts";
 import { isQuiet } from "./quiet.ts";
 import { createProfileResolver, modelRef, type ModelLookup } from "./model-support.ts";
+import { agentName, describeRun } from "./run-summary.ts";
 import {
   ORCHESTRATE_ACTIONS,
   runWorkflowAction,
@@ -123,11 +124,26 @@ function runReporter(
 /** TUI-only transcript entries; these never enter the model's context. */
 function registerBotLobbyEntries(pi: ExtensionAPI): void {
   pi.registerEntryRenderer("bot-lobby", (entry, { expanded }, theme) => {
-    const data = entry.data as { kind?: string; taskId?: string; text?: string } | undefined;
+    const data = entry.data as { kind?: string; taskId?: string; text?: string; ok?: boolean } | undefined;
+    if (data?.kind === "run") {
+      // One compact line per finished subagent run.
+      return new Text(theme.fg(data.ok ? "dim" : "warning", data.text ?? ""), 0, 0);
+    }
     const header = `bot-lobby ${data?.taskId ?? ""} — ${data?.kind ?? "note"}`.trim();
     const body = data?.text ?? "";
     return new Text(`${theme.fg("accent", theme.bold(header))}\n${theme.fg("toolOutput", expanded ? body : truncate(body, 600))}`, 0, 0);
   });
+}
+
+/** A transcript line per finished run, plus a warning for anything that stalled or ran out of time. */
+function reportFinishedRuns(pi: ExtensionAPI, ctx: ExtensionContext, result: WorkflowResult): void {
+  for (const run of result.runs ?? []) {
+    const ok = run.status === "success" && !run.wrappedUp;
+    pi.appendEntry("bot-lobby", { kind: "run", taskId: result.taskId, text: describeRun(run), ok });
+    if (!ctx.hasUI) continue;
+    if (run.stalled) ctx.ui.notify(`bot-lobby: ${agentName(run)} ${run.role} stalled — ${run.error ?? "no output"}`, "warning");
+    else if (run.status === "timeout") ctx.ui.notify(`bot-lobby: ${agentName(run)} ${run.role} ${run.error ?? "hit its time limit"}`, "warning");
+  }
 }
 
 export function registerOrchestrateTool(pi: ExtensionAPI, configDir: string, runProcess?: ProcessRunner): void {
@@ -150,6 +166,7 @@ export function registerOrchestrateTool(pi: ExtensionAPI, configDir: string, run
       if (params.action === "propose" && params.proposal && result.ok) {
         pi.appendEntry("bot-lobby", { kind: "proposal", taskId: params.taskId, text: params.proposal });
       }
+      reportFinishedRuns(pi, ctx, result);
       applyStatus(ctx, root, configDir);
       return {
         content: [{ type: "text", text: result.message }],

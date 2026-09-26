@@ -41,6 +41,9 @@ import {
   type SlotState,
 } from "./mascot-art.ts";
 import type { PanelTheme } from "./zen.ts";
+import type { SlotFlag } from "./zen-metrics.ts";
+import type { FeedLine } from "./run-summary.ts";
+import { shortDuration } from "../text.ts";
 
 /**
  * The large animated zen scene: a header box, the oracle tower with its speech
@@ -73,6 +76,8 @@ export interface LargeSlot {
   activity?: string;
   /** Run duration label rendered under the status row; "—" when idle. */
   elapsedLabel: string;
+  /** Waiting on a file, gone quiet or retrying; replaces the activity word while set. */
+  flag?: SlotFlag;
 }
 
 export interface LargeTaskRow {
@@ -115,6 +120,8 @@ export interface LargeSceneInput {
   alertKind?: "warning" | "error";
   /** Name over the tower door, `TOWER_DOOR` when omitted. */
   doorLabel?: string;
+  /** Live feed row under the agents: what the busiest agent is doing right now. */
+  feed?: FeedLine;
 }
 
 export const SLOT_CELL = 15;
@@ -315,12 +322,24 @@ function bodyLines(
   const sections = input.tasks.length > 0;
   const plan = pickPlan(avail, sections);
   const entries = plan.section ? clamp(avail - blockRows(plan) - 1, 0, MAX_TASK_ROWS) : 0;
+  const section = sectionLines(input, width, theme, entries);
+  // The feed row takes a spare row only: it never costs the tower, the agents or a checklist row.
+  const spare = avail - blockRows(plan) - section.length;
+  const feed = input.feed && plan.strip && spare >= 1 ? [feedRow(input.feed, width, theme)] : [];
   return [
     ...towerLines(input, width, theme, plan.tower),
     ...(plan.branch ? branchLines(input, width, theme) : []),
     ...(plan.strip ? slotLines(input, width, theme) : []),
-    ...sectionLines(input, width, theme, entries),
+    ...feed,
+    ...section,
   ];
+}
+
+/** One dim line under the agent strip; warnings take the warning colour. */
+function feedRow(feed: FeedLine, width: number, theme?: PanelTheme): string {
+  const left = sceneLeft(width) + 1;
+  const text = truncateToWidth(feed.text, Math.max(0, Math.min(SCENE_WIDTH - 2, width - left)), "…");
+  return " ".repeat(left) + (feed.kind === "warning" ? paint(text, "warning", theme) : paint(text, "dim", theme));
 }
 
 function blockRows(plan: LayoutPlan): number {
@@ -588,7 +607,7 @@ function wordCells(slots: readonly LargeSlot[], offsets: readonly number[], tick
   return slots.map((slot, index) => ({
     offset: offsets[index]!,
     text: centre(slotStatusText(slot, tick), SLOT_CELL),
-    paint: statusPaint(slot.status, theme),
+    paint: wordPaint(slot, theme),
   }));
 }
 
@@ -600,10 +619,23 @@ function elapsedCells(slots: readonly LargeSlot[], offsets: readonly number[], t
   }));
 }
 
-/** Working agents show the braille spinner with their live activity; every other state keeps its glyph and word. */
+/**
+ * Working agents show the braille spinner with their live activity, or a flag
+ * when they wait on a file, go quiet or retry; every other state keeps its
+ * glyph and word.
+ */
 function slotStatusText(slot: LargeSlot, tick: number): string {
   if (slot.status !== "working") return `${SLOT_STATE_GLYPHS[slot.status]} ${SLOT_STATE_WORDS[slot.status]}`;
+  if (slot.flag?.kind === "waiting") return "⧗ waiting";
+  if (slot.flag?.kind === "quiet") return `! quiet ${shortDuration(slot.flag.ms)}`;
+  if (slot.flag?.kind === "retry") return "↻ retrying";
   return `${SPIN_FRAMES[mod(tick, SPIN_FRAMES.length)]!} ${slot.activity ?? SLOT_STATE_WORDS.working}`;
+}
+
+/** Flagged working agents paint their status row in the warning colour. */
+function wordPaint(slot: LargeSlot, theme?: PanelTheme): ((text: string) => string) | undefined {
+  if (slot.status === "working" && slot.flag && theme) return (text) => paint(text, "warning", theme, true);
+  return statusPaint(slot.status, theme);
 }
 
 /** The elapsed row stays dim so the status row keeps the colour. */

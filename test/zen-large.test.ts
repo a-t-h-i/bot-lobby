@@ -758,3 +758,40 @@ test("every eye, lid and mouth combination keeps the tower exactly TOWER_WIDTH w
   }
   for (const glyph of Object.values(ORACLE_PUPILS)) assert.equal(visibleWidth(glyph), 1, glyph);
 });
+
+// --- live feed row and flagged status rows ---
+
+test("the feed row sits under the agents when a spare row exists, and never costs a checklist row", () => {
+  const withFeed = scene({ feed: { text: "▸ DEV editing users.ts · turn 4 · 12 tools", kind: "info" } });
+  const tall = largeLines(withFeed, 72, 40);
+  const at = tall.findIndex((line) => line.includes("▸ DEV editing users.ts"));
+  assert.ok(at > 0, "the feed row renders");
+  assert.ok(tall[at - 1]!.includes("12s"), "right under the elapsed row");
+  assert.ok(tall[at + 1]!.includes("TASKS"), "right above TASKS");
+  assert.equal(tall.length, FULL_SCENE_LINES + 1);
+  for (let budget = 0; budget <= 40; budget += 1) {
+    const plain = largeLines(scene(), 72, budget);
+    const fed = largeLines(withFeed, 72, budget);
+    assert.equal(fed.filter((line) => TASK_ROW.test(line)).length, plain.filter((line) => TASK_ROW.test(line)).length, `tasks at ${budget}`);
+    assert.ok(fed.length <= Math.max(budget, 5) && fed.length <= MAX_LARGE_LINES, `budget at ${budget}`);
+    assert.ok(fed.every((line) => visibleWidth(line) <= 72), `width at ${budget}`);
+  }
+});
+
+test("a long feed line is truncated inside the scene", () => {
+  const lines = largeLines(scene({ feed: { text: `▸ DEV ${"x".repeat(200)}`, kind: "warning" } }), 72, 40);
+  const row = lines.find((line) => line.includes("▸ DEV"))!;
+  assert.ok(visibleWidth(row) <= 72);
+  assert.ok(row.includes("…"));
+});
+
+test("a working agent's status row flags waiting, quiet and retrying", () => {
+  const flagged = (flag: NonNullable<LargeSceneInput["slots"][number]["flag"]>) =>
+    largeLines(scene({ slots: scene().slots.map((slot) => (slot.id === "dev" ? { ...slot, flag } : slot)) }), 72, 40);
+  assert.ok(flagged({ kind: "waiting" }).some((line) => line.includes("⧗ waiting")));
+  assert.ok(flagged({ kind: "quiet", ms: 95_000 }).some((line) => line.includes("! quiet 1m 35s")));
+  assert.ok(flagged({ kind: "retry" }).some((line) => line.includes("↻ retrying")));
+  for (const flag of [{ kind: "waiting" }, { kind: "quiet", ms: 3_599_000 }, { kind: "retry" }] as const) {
+    assert.ok(flagged(flag).every((line) => visibleWidth(line) <= 72));
+  }
+});

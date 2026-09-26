@@ -1,4 +1,4 @@
-import type { Domain } from "./agent.ts";
+import type { Domain, Role } from "./agent.ts";
 
 export const TASK_STATES = [
   "created",
@@ -70,6 +70,29 @@ export interface WorkerRunRecord {
 /** Upper bound on persisted worker records; plans cap at 50 steps. */
 export const MAX_WORKER_RECORDS = 64;
 
+/** One finished subagent run of any role, kept for `/bot-lobby runs`. */
+export interface RunLogEntry {
+  runId: string;
+  domain: Domain;
+  role: Role;
+  status: "running" | "success" | "failed" | "cancelled" | "timeout";
+  startedAt: string;
+  finishedAt?: string;
+  model?: string;
+  turns?: number;
+  tools?: number;
+  input?: number;
+  output?: number;
+  cost?: number;
+  attempts?: number;
+  stalled?: boolean;
+  wrappedUp?: boolean;
+  error?: string;
+}
+
+/** Upper bound on persisted run-log entries. */
+export const MAX_RUN_LOG = 64;
+
 export interface Task {
   id: string;
   title: string;
@@ -89,6 +112,8 @@ export interface Task {
   approvals: Approval[];
   /** Worker delegations in start order; absent on tasks created before tracking. */
   workerRuns?: WorkerRunRecord[];
+  /** Recent finished runs of every role, newest last. */
+  runLog?: RunLogEntry[];
   createdAt: string;
   updatedAt: string;
   /** The pi session (ctx.sessionManager id) that owns this task; absent on legacy tasks. */
