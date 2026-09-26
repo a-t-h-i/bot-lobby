@@ -12,14 +12,17 @@ import { ORACLE_THINKING, oracleActivityWord } from "./activity.ts";
 import { isSubagentProcess, visibleTools } from "./quiet.ts";
 import { registerQuietTools } from "./tool-renderers.ts";
 import { taskRequest, type Task } from "../schemas/task.ts";
+import { pendingComments, readPlanComments, type PlanComment } from "../state/comments.ts";
 
-function masterTaskContext(task: Task): string {
+export function masterTaskContext(task: Task, comments: readonly PlanComment[] = []): string {
+  const open = pendingComments(comments);
   return [
     `Task ${task.id}: ${task.title}`,
     `Request: ${truncate(taskRequest(task), 2000)}`,
     task.proposal ? `Current proposal:\n${truncate(task.proposal, 2000)}` : "",
     task.plan ? `Approved plan:\n${truncate(task.plan, 3000)}` : "",
     task.amendments.length > 0 ? `User amendments:\n${task.amendments.map((entry) => `- ${entry}`).join("\n")}` : "",
+    open.length > 0 ? `Open plan comments (from the lobby):\n${open.map((comment) => `- ${truncate(comment.text, 600)}`).join("\n")}` : "",
   ]
     .filter((line) => line.length > 0)
     .join("\n\n");
@@ -86,7 +89,7 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
     const selected = selectKnowledge(`${taskRequest(task)} ${task.proposal ?? ""}`, slices);
     event.systemPromptOptions.sections["bot-lobby"] = compilePrompt({
       domain: "master",
-      task: masterTaskContext(task),
+      task: masterTaskContext(task, readPlanComments(root, configDir, task.id)),
       standards: selected.standards,
       knowledge: selected.knowledge,
       decisions: selected.decisions,
