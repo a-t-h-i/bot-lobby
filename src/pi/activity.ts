@@ -61,3 +61,48 @@ export function oracleActivityWord(toolName: string, args?: unknown): string {
   const action = orchestrateAction(args);
   return (action && ORACLE_ACTION_WORDS[action]) || FALLBACK_WORD;
 }
+
+const DETAIL_CHARS = 28;
+
+function clip(text: string): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > DETAIL_CHARS ? `${flat.slice(0, DETAIL_CHARS - 1)}…` : flat;
+}
+
+function field(args: unknown, ...names: string[]): string | undefined {
+  if (!args || typeof args !== "object") return undefined;
+  for (const name of names) {
+    const value = (args as Record<string, unknown>)[name];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return undefined;
+}
+
+/** Last path segment, so `src/pi/zen.ts` reads `zen.ts`. */
+function baseName(path: string): string {
+  const parts = path.replace(/[\\/]+$/, "").split(/[\\/]/);
+  return parts.at(-1) || path;
+}
+
+/**
+ * A short target for what a tool call touches: the file for read/edit/write,
+ * the command head for bash, the pattern for grep, the query for web search.
+ * Pure; undefined when the arguments name nothing useful.
+ */
+export function activityDetail(toolName: string, args?: unknown): string | undefined {
+  const tool = toolName.trim().toLowerCase();
+  if (tool === "read" || tool === "edit" || tool === "write" || tool === "ls") {
+    const path = field(args, "path", "file_path", "file");
+    return path ? clip(baseName(path)) : undefined;
+  }
+  if (tool === "bash") {
+    const command = field(args, "command", "cmd");
+    return command ? clip(command) : undefined;
+  }
+  if (tool === "grep" || tool === "find") {
+    const pattern = field(args, "pattern", "query", "glob");
+    return pattern ? clip(`"${pattern}"`) : undefined;
+  }
+  const query = field(args, "query", "url", "path");
+  return query ? clip(query) : undefined;
+}
