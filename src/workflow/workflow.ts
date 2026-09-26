@@ -46,6 +46,8 @@ import { assertNoPendingApprovals, pendingApprovals, requestApproval, resolveApp
 import { pingApproval } from "../pi/notify.ts";
 import { describeRun, runLogEntry } from "../pi/run-summary.ts";
 import { nextStates } from "./transitions.ts";
+import { appendMetrics, metricFromRun } from "../state/metrics.ts";
+import { markCommentsAddressed, pendingComments, readPlanComments } from "../state/comments.ts";
 
 export const ORCHESTRATE_ACTIONS = [
   "clarify",
@@ -387,6 +389,8 @@ async function handlePropose(task: Task, params: OrchestrateParams, deps: Workfl
   if (task.state === "clarifying") transition(task, "awaiting_approval");
   task.proposal = proposal;
   writeFileEnsured(join(taskDirFor(deps.root, deps.configDir, task.id), "proposal.md"), proposal);
+  // A new proposal answers any lobby comments left on the previous one.
+  if (!task.plan) addressComments(task, deps);
   for (const concern of params.concerns ?? []) recordDecision(task, `Concern: ${concern}`);
   transition(task, "awaiting_approval");
   if (!deps.config.workflow.requireApprovalForFeatures) return applyApprovalChoice(task, "approve");
@@ -398,15 +402,40 @@ async function handlePropose(task: Task, params: OrchestrateParams, deps: Workfl
   return applyApprovalChoice(task, "amend", await deps.ask("What should change?"));
 }
 
+/** States in which `plan` replaces an approved plan instead of recording the first one. */
+const AMEND_PLAN_STATES: readonly TaskState[] = ["implementing", "reviewing"];
+
+/** Mark the user's outstanding lobby comments on this task as addressed; returns how many. */
+function addressComments(task: Task, deps: WorkflowDeps): number {
+  const pending = pendingComments(readPlanComments(deps.root, deps.configDir, task.id));
+  if (pending.length > 0) markCommentsAddressed(deps.root, deps.configDir, task.id, pending.map((comment) => comment.id));
+  return pending.length;
+}
+
+function commentsNote(count: number): string {
+  return count > 0 ? ` ${count} lobby comment${count === 1 ? "" : "s"} marked addressed.` : "";
+}
+
+/**
+ * Record the internal plan while planning, or amend it later (for example when
+ * the user comments on it from the lobby): an amendment replaces the plan and
+ * keeps the task where it is, so finished steps stay done.
+ */
 function handlePlan(task: Task, params: OrchestrateParams, deps: WorkflowDeps): string {
-  requireState(task, ["planning"]);
+  requireState(task, ["planning", ...AMEND_PLAN_STATES]);
   const plan = params.plan?.trim();
   if (!plan) throw new Error("plan requires the plan text");
   const missing = validatePlan(plan);
   if (missing.length > 0) throw new Error(`plan is missing: ${missing.join(", ")}`);
+  const amending = AMEND_PLAN_STATES.includes(task.state);
   task.plan = plan;
   writeFileEnsured(join(taskDirFor(deps.root, deps.configDir, task.id), "plan.md"), plan);
-  return "Plan recorded. Next: call action=implement with domain and task for the first step.";
+  const addressed = addressComments(task, deps);
+  if (amending) {
+    recordDecision(task, `Plan amended${addressed > 0 ? ` for ${addressed} user comment${addressed === 1 ? "" : "s"}` : ""}.`);
+    return `Plan amended.${commentsNote(addressed)} Next: continue with action=implement for the next open step (or action=qa when the work is complete).`;
+  }
+  return `Plan recorded.${commentsNote(addressed)} Next: call action=implement with domain and task for the first step.`;
 }
 
 /** Record approvals a worker asked for; auto-approve when config allows it. */
@@ -888,20 +917,23 @@ export async function runWorkflowAction(params: OrchestrateParams, deps: Workflo
   };
   try {
     const message = await handler(task, params, tracked);
-    const runs = recordRunLog(task, finished);
+    const runs = recordRunLog(task, finished, deps);
     saveTask(deps.root, deps.configDir, task);
     return { ok: true, taskId: task.id, state: task.state, message: `${message}${runsFooter(runs)}`, runs };
   } catch (error) {
-    const runs = recordRunLog(task, finished);
+    const runs = recordRunLog(task, finished, deps);
     saveTask(deps.root, deps.configDir, task);
     return { ok: false, taskId: task.id, state: task.state, message: `Rejected: ${(error as Error).message}`, runs };
   }
 }
 
-/** Append this action's finished runs to the task's bounded run log. */
-function recordRunLog(task: Task, finished: ReadonlyMap<string, AgentRun>): AgentRun[] {
+/** Append this action's finished runs to the task's bounded run log and the project's metrics log. */
+function recordRunLog(task: Task, finished: ReadonlyMap<string, AgentRun>, deps: WorkflowDeps): AgentRun[] {
   const runs = [...finished.values()];
-  if (runs.length > 0) task.runLog = [...(task.runLog ?? []), ...runs.map(runLogEntry)].slice(-MAX_RUN_LOG);
+  if (runs.length > 0) {
+    task.runLog = [...(task.runLog ?? []), ...runs.map(runLogEntry)].slice(-MAX_RUN_LOG);
+    appendMetrics(deps.root, deps.configDir, runs.map(metricFromRun));
+  }
   return runs;
 }
 

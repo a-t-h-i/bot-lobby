@@ -129,8 +129,17 @@ export function isMinimized(): boolean {
   return minimized;
 }
 
+/** Told when minimize changes, so the lobby can step aside too. */
+let minimizeListener: ((value: boolean) => void) | undefined;
+
+export function onMinimizeChange(listener: ((value: boolean) => void) | undefined): void {
+  minimizeListener = listener;
+}
+
 export function setMinimized(value: boolean): void {
+  if (minimized === value) return;
   minimized = value;
+  minimizeListener?.(value);
 }
 
 /** Flip minimize/restore and refresh the footer; the session is unchanged. */
@@ -191,45 +200,27 @@ export function isReaction(previous: string | undefined, next: Situation): boole
   return !previous.startsWith("working|") || next.flag !== undefined || next.handover === true;
 }
 
-/** Animated zen scene + plan checklist shown above the editor while a task is active. */
-class ZenWidget implements Component {
-  private tick = 0;
-  private cache: { key: string; theme: Theme; lines: string[] } | undefined;
-  private delay = liveTickDelay();
-  private timer: ReturnType<typeof setInterval>;
-  private disposed = false;
+/**
+ * The animated zen scene: the tick, each sprite's expression schedule and the
+ * reactions to what the agents go through. The widget and the lobby's home tab
+ * each own one and advance it from their own clock.
+ */
+export class ZenScene {
+  tick = 0;
   private readonly expressions: Record<ExpressionKey, ExpressionState>;
   private readonly situations: Partial<Record<SlotId, string>> = {};
-  private readonly tui: TUI;
-  private readonly theme: () => Theme;
   private readonly rng: () => number;
+  private cache: { key: string; theme: Theme | undefined; lines: string[] } | undefined;
 
-  constructor(tui: TUI, theme: () => Theme, rng: () => number = Math.random) {
-    this.tui = tui;
-    this.theme = theme;
+  constructor(rng: () => number = Math.random, now = Date.now()) {
     this.rng = rng;
-    const now = Date.now();
     const entries = EXPRESSION_KEYS.map((key) => [key, createExpression(now, rng, gapFor(key))] as const);
     this.expressions = Object.fromEntries(entries) as Record<ExpressionKey, ExpressionState>;
-    this.timer = setInterval(() => this.advance(), this.delay);
-    mountedWidget = this;
   }
 
-  /** Repaint now: state changed between ticks. */
-  refresh(): void {
-    if (!this.disposed) this.tui.requestRender();
-  }
-
-  private advance(): void {
-    if (this.disposed) return;
+  /** One clock step: expressions advance and agents react to their new situations. */
+  advance(now = Date.now()): void {
     this.tick += 1;
-    const now = Date.now();
-    this.play(now);
-    this.retime(now);
-    this.tui.requestRender();
-  }
-
-  private play(now: number): void {
     const situations = slotSituations(zenState.runs, now);
     for (const key of EXPRESSION_KEYS) {
       this.expressions[key] = advanceExpression(this.expressions[key], now, this.rng, gapFor(key, situations), blinkChanceFor(key, situations));
@@ -241,39 +232,24 @@ class ZenWidget implements Component {
     }
   }
 
-  /** One interval, retimed when work starts or stops or an expression plays. */
-  private retime(now: number): void {
-    const delay = expressionTickDelay(Object.values(this.expressions), now, isLive(), talkFrame(oracleSpokeAt, now) !== undefined);
-    if (delay === this.delay) return;
-    this.delay = delay;
-    clearInterval(this.timer);
-    this.timer = setInterval(() => this.advance(), delay);
+  /** The delay until the next step: fast while an expression plays or the oracle talks. */
+  delay(now = Date.now()): number {
+    return expressionTickDelay(Object.values(this.expressions), now, isLive(), talkFrame(oracleSpokeAt, now) !== undefined);
   }
 
   private motion(now: number): OracleMotion {
     return { phase: expressionPhase(this.expressions.oracle, now), talk: talkFrame(oracleSpokeAt, now) };
   }
 
-  private frames(): Partial<Record<ExpressionKey, number>> {
-    return Object.fromEntries(EXPRESSION_KEYS.map((key) => [key, this.expressions[key].frame]));
-  }
-
-  private variants(): Partial<Record<SlotId, number>> {
-    return Object.fromEntries(SLOT_IDS.map((id) => [id, this.expressions[id].variant]));
-  }
-
   /**
-   * The panel only changes with the tick, an expression frame, the widget state or
-   * the elapsed second, so every other repaint (typing in the editor, streaming
-   * output) reuses the last lines instead of recomposing the scene.
+   * The scene lines for the current zen state. They only change with the tick,
+   * an expression frame, the widget state or the elapsed second, so any other
+   * repaint (typing, streaming output) reuses the last lines.
    */
-  render(width: number): string[] {
-    const now = Date.now();
-    const rows = this.tui.terminal.rows;
-    const theme = this.theme();
-    const expressions = this.frames();
+  lines(width: number, rows: number, theme: Theme | undefined, now = Date.now()): string[] {
+    const expressions = Object.fromEntries(EXPRESSION_KEYS.map((key) => [key, this.expressions[key].frame])) as Partial<Record<ExpressionKey, number>>;
+    const variants = Object.fromEntries(SLOT_IDS.map((id) => [id, this.expressions[id].variant])) as Partial<Record<SlotId, number>>;
     const quiet = isQuiet();
-    const variants = this.variants();
     const frameKey = [...EXPRESSION_KEYS.map((key) => expressions[key] ?? 0), ...SLOT_IDS.map((id) => variants[id] ?? 0)].join(",");
     const motion = this.motion(now);
     const key = `${width}|${rows}|${this.tick}|${frameKey}|${motion.phase}|${motion.talk}|${zenVersion}|${Math.floor(now / 1000)}|${quiet}`;
@@ -287,12 +263,80 @@ class ZenWidget implements Component {
   invalidate(): void {
     this.cache = undefined;
   }
+}
+
+/** The zen state as the lobby reads it: the session's active task and its runs. */
+export function zenSnapshot(): { task: Task | undefined; runs: readonly AgentRun[]; version: number; oracleActivity: string | undefined } {
+  return { task: zenState.task, runs: zenState.runs, version: zenVersion, oracleActivity };
+}
+
+/** Zen scene + plan checklist shown above the editor while a task is active and the lobby is closed. */
+class ZenWidget implements Component {
+  private readonly scene: ZenScene;
+  private delay = liveTickDelay();
+  private timer: ReturnType<typeof setInterval>;
+  private disposed = false;
+  private readonly tui: TUI;
+  private readonly theme: () => Theme;
+
+  constructor(tui: TUI, theme: () => Theme, rng: () => number = Math.random) {
+    this.tui = tui;
+    this.theme = theme;
+    this.scene = new ZenScene(rng);
+    this.timer = setInterval(() => this.advance(), this.delay);
+    mountedWidget = this;
+  }
+
+  /** Repaint now: state changed between ticks. */
+  refresh(): void {
+    if (!this.disposed) this.tui.requestRender();
+  }
+
+  private advance(): void {
+    if (this.disposed) return;
+    const now = Date.now();
+    this.scene.advance(now);
+    this.retime(now);
+    this.tui.requestRender();
+  }
+
+  /** One interval, retimed when work starts or stops or an expression plays. */
+  private retime(now: number): void {
+    const delay = this.scene.delay(now);
+    if (delay === this.delay) return;
+    this.delay = delay;
+    clearInterval(this.timer);
+    this.timer = setInterval(() => this.advance(), delay);
+  }
+
+  render(width: number): string[] {
+    return this.scene.lines(width, this.tui.terminal.rows, this.theme());
+  }
+
+  invalidate(): void {
+    this.scene.invalidate();
+  }
 
   dispose(): void {
     this.disposed = true;
     clearInterval(this.timer);
     if (mountedWidget === this) mountedWidget = undefined;
   }
+}
+
+/** True while the full-screen lobby is showing; the small widget then stays unmounted. */
+let widgetSuppressed: () => boolean = () => false;
+let widgetMounted = false;
+
+/** The lobby registers how to tell whether it covers the screen. */
+export function setWidgetSuppressor(check: () => boolean): void {
+  widgetSuppressed = check;
+}
+
+function unmountWidget(ctx: ExtensionContext): void {
+  if (!widgetMounted) return;
+  widgetMounted = false;
+  ctx.ui.setWidget(STATUS_KEY, undefined);
 }
 
 function leaveZen(ctx: ExtensionContext): void {
@@ -317,15 +361,30 @@ export function applyStatus(ctx: ExtensionContext, root: string, configDir: stri
   const active = Boolean(task && !TERMINAL_STATES.includes(task.state));
   if (!active) {
     leaveZen(ctx);
+    widgetMounted = false;
     ctx.ui.setWidget(STATUS_KEY, undefined);
     return;
   }
+  zenOn = true;
   ctx.ui.setWorkingVisible(false);
   ctx.ui.setWorkingIndicator({ frames: [] });
-  if (!zenOn) {
-    zenOn = true;
+  if (widgetSuppressed()) return unmountWidget(ctx);
+  if (!widgetMounted) {
+    widgetMounted = true;
     ctx.ui.setWidget(STATUS_KEY, (tui) => new ZenWidget(tui, () => ctx.ui.theme));
   }
+}
+
+/** The session's active task as the widget last loaded it (undefined when none or minimized). */
+export function currentZenTask(): Task | undefined {
+  return zenState.task;
+}
+
+/** Called with every streamed run update, so the lobby's activity log can follow the agents. */
+let runListener: ((runs: readonly AgentRun[]) => void) | undefined;
+
+export function onRunUpdates(listener: ((runs: readonly AgentRun[]) => void) | undefined): void {
+  runListener = listener;
 }
 
 /**
@@ -335,6 +394,7 @@ export function applyStatus(ctx: ExtensionContext, root: string, configDir: stri
  * Before any task is loaded it falls back to `applyStatus` so the widget appears.
  */
 export function reportRuns(ctx: ExtensionContext, root: string, configDir: string, runs: AgentRun[]): void {
+  runListener?.(runs);
   if (!zenState.task && !minimized) {
     applyStatus(ctx, root, configDir, runs);
     return;
@@ -344,6 +404,7 @@ export function reportRuns(ctx: ExtensionContext, root: string, configDir: strin
 
 export function clearStatus(ctx: ExtensionContext): void {
   leaveZen(ctx);
+  widgetMounted = false;
   oracleActivity = undefined;
   zenState = { task: undefined, live: [], runs: [] };
   ctx.ui.setStatus(STATUS_KEY, undefined);

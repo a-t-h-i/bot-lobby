@@ -173,8 +173,10 @@ test("patchEntry never stores a thinking level on scouts", () => {
 test("prefillModels pins every unset subagent model to the session model and leaves set ones", () => {
   const config = resolveConfig({ agents: { qa: { model: "p/qa" } } });
   const { config: next, filled } = prefillModels(config, "p/session");
-  assert.deepEqual(filled, ["designer", "backend", "scout", "researcher"]);
+  assert.deepEqual(filled, ["designer", "backend", "scout", "researcher", "quickfix", "planner"]);
   assert.equal(next.agents.qa.model, "p/qa");
+  assert.equal(next.quickFix.model, "p/session");
+  assert.equal(next.planner.model, "p/session");
   assert.equal(next.agents.designer.model, "p/session");
   assert.equal(next.scout.model, "p/session");
   assert.equal(next.master.model, "inherit", "the master is the session itself");
@@ -191,4 +193,18 @@ test("subagent model pickers do not offer inherit", () => {
   const ctx = ctxWithModels([{ provider: "p", id: "m", name: "m" }]);
   assert.ok(!modelItems(ctx, "p/m", false).some((item) => item.value === "inherit"));
   assert.ok(modelItems(ctx, "p/m").some((item) => item.value === "inherit"));
+});
+
+test("quick fix and planner have their own entries, and the lobby's auto-open flag survives a bad value", () => {
+  const config = resolveConfig({ quickFix: { model: "p/fast", thinking: "bogus" }, planner: { thinking: "xhigh" }, lobby: { autoOpen: "yes" } });
+  assert.equal(config.quickFix.model, "p/fast");
+  assert.equal(config.quickFix.thinking, DEFAULT_CONFIG.quickFix.thinking, "an unknown level falls back to the default");
+  assert.equal(config.planner.thinking, "xhigh");
+  assert.equal(config.lobby.autoOpen, true);
+  assert.equal(resolveConfig({ lobby: { autoOpen: false } }).lobby.autoOpen, false);
+  const patched = patchEntry(DEFAULT_CONFIG, "quickfix", { model: "p/q", instructions: "tiny diffs" });
+  assert.equal(patched.quickFix.model, "p/q");
+  assert.equal(patched.quickFix.instructions, "tiny diffs");
+  assert.equal(patchEntry(DEFAULT_CONFIG, "planner", { thinking: "max" }).planner.thinking, "max");
+  assert.ok(entryItems("planner", DEFAULT_CONFIG.planner).some((item) => item.value === "instructions"));
 });

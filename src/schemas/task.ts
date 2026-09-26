@@ -79,6 +79,7 @@ export interface RunLogEntry {
   startedAt: string;
   finishedAt?: string;
   model?: string;
+  thinking?: string;
   turns?: number;
   tools?: number;
   input?: number;

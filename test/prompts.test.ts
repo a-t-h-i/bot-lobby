@@ -9,6 +9,7 @@ test("all prompt layers load and are non-empty", () => {
   const files = [
     "global.md", "master.md", "designer.md", "backend.md", "qa.md",
     "scout.md", "worker.md", "reviewer.md", "researcher.md",
+    "quickfix.md", "planner.md",
   ];
   for (const file of files) {
     assert.ok(loadPrompt(file).length > 0, `${file} should be non-empty`);
