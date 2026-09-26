@@ -111,6 +111,10 @@ export interface AgentRun {
   finishedAt?: string;
   /** Short target of the activity in flight: a file, command head or pattern. */
   detail?: string;
+  /** The tool call in flight in plain words (`reading users.ts`); feeds the lobby's activity log. */
+  step?: string;
+  /** The agent's latest finished thought, bounded; the lobby shows it in its thinking pane. */
+  thought?: string;
   /** Assistant turns and tool calls so far. */
   turns?: number;
   tools?: number;
@@ -121,6 +125,8 @@ export interface AgentRun {
   noteKind?: "info" | "warning";
   /** Model that actually served the run. */
   model?: string;
+  /** Thinking level the run was started with. */
+  thinking?: string;
   /** Killed by the stall watchdog after going silent. */
   stalled?: boolean;
   /** Asked to wrap up before its deadline; the report may be partial. */
