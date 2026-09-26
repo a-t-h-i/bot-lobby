@@ -67,6 +67,8 @@ export interface ReviewResult {
   requiredChanges: string[];
   optionalImprovements: string[];
   pushback?: Pushback;
+  /** Set when the engine downgraded an unsupported PASS. */
+  downgraded?: string;
   raw: string;
 }
 
@@ -107,4 +109,22 @@ export interface AgentRun {
   usage?: { input: number; output: number; cost: number; turns: number };
   startedAt: string;
   finishedAt?: string;
+  /** Short target of the activity in flight: a file, command head or pattern. */
+  detail?: string;
+  /** Assistant turns and tool calls so far. */
+  turns?: number;
+  tools?: number;
+  /** Epoch ms of the last streamed output; drives the "quiet" warning. */
+  lastEventAt?: number;
+  /** Transient status worth surfacing: retrying, compacting, wrapping up, waiting on a file. */
+  note?: string;
+  noteKind?: "info" | "warning";
+  /** Model that actually served the run. */
+  model?: string;
+  /** Killed by the stall watchdog after going silent. */
+  stalled?: boolean;
+  /** Asked to wrap up before its deadline; the report may be partial. */
+  wrappedUp?: boolean;
+  /** File this worker is queued for at the file desk. */
+  waitingFor?: string;
 }

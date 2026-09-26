@@ -26,7 +26,8 @@ import {
   type SlotId,
   type SlotState,
 } from "./mascot-art.ts";
-import { REST_FRAME } from "./expressions.ts";
+import { EMOTE_FRAME, REST_FRAME } from "./expressions.ts";
+import { slotEmote } from "./kaomoji.ts";
 import {
   LARGE_MIN_WIDTH,
   MAX_LARGE_LINES,
@@ -36,7 +37,9 @@ import {
   type LargeSlot,
   type LargeTaskRow,
 } from "./zen-large.ts";
-import { runStatus, sceneMetrics, type SceneMetrics, type SlotView } from "./zen-metrics.ts";
+import { runStatus, sceneMetrics, slotSituation, type SceneMetrics, type SlotView } from "./zen-metrics.ts";
+import { feedLine, QUIET_MS, quietFor } from "./run-summary.ts";
+import { shortDuration } from "../text.ts";
 
 /** Minimal slice of pi's Theme the panel needs; keeps zen.ts decoupled from the agent. */
 export interface PanelTheme {
@@ -412,8 +415,10 @@ export function workingLine(runs: AgentRun[], tick: number, theme?: PanelTheme, 
   if (running.length > 0) {
     const run = running.at(-1)!;
     const spinner = theme ? theme.fg("accent", spin) : spin;
-    const activity = run.activity ?? "working";
-    return `  ${spinner} agents working (${running.length}) · ${run.domain}/${run.role} ${activity} ${formatDuration(runElapsed(run, now))}`;
+    const activity = `${run.activity ?? "working"}${run.detail ? ` ${run.detail}` : ""}`;
+    const quiet = quietFor(run, now);
+    const warning = run.waitingFor ? ` · waiting for ${run.waitingFor}` : quiet >= QUIET_MS ? ` · quiet ${shortDuration(quiet)}` : "";
+    return `  ${spinner} agents working (${running.length}) · ${run.domain}/${run.role} ${activity} ${formatDuration(runElapsed(run, now))}${warning}`;
   }
   const last = runs.at(-1);
   if (!last) return "  ○ waiting for the first agent…";
@@ -437,6 +442,18 @@ function paintStatus(status: SlotState, text: string, theme?: PanelTheme): strin
 /** Caller-chosen expression frame per slot and the oracle; absent reads as rest. */
 export type ExpressionFrames = Partial<Record<SlotId | "oracle", number>>;
 
+/** Per-expression variant per slot; picks which kaomoji an emote shows. */
+export type ExpressionVariants = Partial<Record<SlotId, number>>;
+
+/**
+ * The oracle and the compact strip keep their original two emote steps: the
+ * four emote frames (open, blink, action, action) fold onto them pairwise.
+ */
+export function foldEmoteFrame(frame: number): number {
+  if (!Number.isFinite(frame) || frame < EMOTE_FRAME) return frame;
+  return EMOTE_FRAME + Math.min(1, Math.floor((frame - EMOTE_FRAME) / 2));
+}
+
 /** Frame `index` wrapped into the art's frame list; a non-finite index rests. */
 function frameAt(frames: readonly string[], index: number): string {
   if (frames.length === 0) return "";
@@ -455,7 +472,7 @@ const COMPACT_INNER = SLOT_IDS.length * COMPACT_WIDTH + (SLOT_IDS.length - 1) * 
 const COMPACT_STATUS_GAP = " ".repeat(COMPACT_WIDTH + COMPACT_GAP - 1);
 
 function compactFrame(slot: SlotView, expressions: ExpressionFrames): string {
-  return frameAt(COMPACT_FRAMES[slot.id][slot.status], expressions[slot.id] ?? REST_FRAME);
+  return frameAt(COMPACT_FRAMES[slot.id][slot.status], foldEmoteFrame(expressions[slot.id] ?? REST_FRAME));
 }
 
 function compactRow(content: string, color: PanelColor, theme?: PanelTheme): string {
@@ -530,16 +547,17 @@ function oraclePose(task: Task): OraclePose {
   return task.paused || TERMINAL_STATES.includes(task.state) ? "dormant" : "orchestrating";
 }
 
-function sceneSlots(metrics: SceneMetrics, expressions: ExpressionFrames): LargeSlot[] {
+function sceneSlots(metrics: SceneMetrics, expressions: ExpressionFrames, variants: ExpressionVariants): LargeSlot[] {
   return metrics.slots.map((slot) => ({
     ...slot,
     frame: expressions[slot.id] ?? REST_FRAME,
+    emote: slotEmote(slot.id, slotSituation(slot), variants[slot.id] ?? 0),
   }));
 }
 
 function oracleSlot(task: Task, expressions: ExpressionFrames, motion: OracleMotion): LargeSceneInput["oracle"] {
   const pose = oraclePose(task);
-  return { pose, frame: expressions.oracle ?? REST_FRAME, ...motion };
+  return { pose, frame: foldEmoteFrame(expressions.oracle ?? REST_FRAME), ...motion };
 }
 
 function sceneTasks(steps: readonly PlanStep[]): LargeTaskRow[] {
@@ -569,13 +587,14 @@ function sceneInput(
     tick,
     done: metrics.done,
     total: metrics.total,
-    slots: sceneSlots(metrics, opts.expressions ?? {}),
+    slots: sceneSlots(metrics, opts.expressions ?? {}, opts.variants ?? {}),
     tasks: sceneTasks(steps),
     oracle: oracleSlot(task, opts.expressions ?? {}, opts.oracleMotion ?? {}),
     oracleActivity: opts.oracleActivity,
     caption: task.paused ? "task paused" : SCENE_PROPS[task.state],
     alert: alert?.text,
     alertKind: alert?.kind,
+    feed: feedLine(runs, now, tick),
   };
 }
 
@@ -588,6 +607,8 @@ export interface PanelOptions {
   theme?: PanelTheme;
   /** Caller-scheduled expression frame per slot and the oracle; absent means rest. */
   expressions?: ExpressionFrames;
+  /** Caller-drawn variant per slot expression; picks the emote's face. */
+  variants?: ExpressionVariants;
   /** Live master activity word for the oracle's speech bubble; absent means it waits on the user. */
   oracleActivity?: string;
   /** Caller-clocked oracle animation: the expression's sub-step and the lip-sync shape. */

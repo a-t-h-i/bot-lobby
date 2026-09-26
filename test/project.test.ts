@@ -14,7 +14,7 @@ import {
   loadConfig,
   saveConfig,
 } from "../src/state/project.ts";
-import { DEFAULT_CONFIG, INHERIT_THINKING, inheritThinking, resolveConfig } from "../src/schemas/configuration.ts";
+import { agentProfile, DEFAULT_CONFIG, hasScoutThinking, INHERIT_THINKING, resolveConfig, SCOUT_THINKING } from "../src/schemas/configuration.ts";
 
 /** Point the global config at a temp dir for the duration of one test. */
 function withConfig(dir: string, run: () => void): void {
@@ -145,30 +145,37 @@ test("saveConfig round-trips through loadConfig", () => {
   });
 });
 
-test("resolveConfig keeps the inherit thinking sentinel but still rejects unknown levels", () => {
-  const cfg = resolveConfig({ agents: { designer: { thinking: INHERIT_THINKING }, backend: { thinking: "turbo" } } });
-  assert.equal(cfg.agents.designer.thinking, INHERIT_THINKING);
-  assert.equal(DEFAULT_CONFIG.agents.designer.thinking, INHERIT_THINKING);
-  assert.equal(cfg.agents.backend.thinking, DEFAULT_CONFIG.agents.backend.thinking);
+test("thinking never inherits: legacy inherit and unknown levels fall back to the default level", () => {
+  const cfg = resolveConfig({ agents: { designer: { thinking: INHERIT_THINKING }, backend: { thinking: "turbo" }, qa: { thinking: "max" } } });
+  assert.equal(cfg.agents.designer.thinking, "medium");
+  assert.equal(cfg.agents.backend.thinking, "medium");
+  assert.equal(cfg.agents.qa.thinking, "max", "an explicit level is kept");
+  for (const agent of Object.values(DEFAULT_CONFIG.agents)) assert.equal(agent.thinking, "medium");
 });
 
-test("inheritThinking resolves inherit agents from the live session level", () => {
-  const cfg = inheritThinking(DEFAULT_CONFIG, "low");
-  assert.equal(cfg.agents.designer.thinking, "low");
-  assert.equal(cfg.agents.backend.thinking, "low");
-  assert.equal(cfg.agents.qa.thinking, "low");
-  assert.equal(cfg.master.thinking, DEFAULT_CONFIG.master.thinking);
-  assert.equal(DEFAULT_CONFIG.agents.designer.thinking, INHERIT_THINKING, "input is not mutated");
-  assert.notEqual(cfg.agents, DEFAULT_CONFIG.agents);
-  assert.notEqual(cfg.agents.designer, DEFAULT_CONFIG.agents.designer);
+test("every agent's thinking is configurable except scouts, which always run low", () => {
+  const cfg = resolveConfig({
+    agents: { designer: { thinking: "high" } },
+    researcher: { thinking: "xhigh" },
+    scout: { model: "p/fast", thinking: "max", timeoutMs: 60_000 },
+  });
+  assert.equal(agentProfile(cfg, "designer", "worker").thinking, "high");
+  assert.equal(agentProfile(cfg, "backend", "researcher").thinking, "xhigh");
+  const scout = agentProfile(cfg, "designer", "scout");
+  assert.equal(scout.thinking, SCOUT_THINKING);
+  assert.equal(scout.model, "p/fast");
+  assert.equal(scout.timeoutMs, 60_000);
+  assert.ok(!("thinking" in cfg.scout), "a scout thinking value is dropped");
+  assert.ok(hasScoutThinking({ scout: { thinking: "max" } }));
+  assert.ok(!hasScoutThinking({ scout: { model: "x" } }));
 });
 
-test("inheritThinking omits the flag for a missing or invalid level and leaves explicit levels alone", () => {
-  for (const level of [undefined, "turbo"]) {
-    const cfg = inheritThinking(DEFAULT_CONFIG, level);
-    assert.equal(cfg.agents.designer.thinking, "");
-    assert.equal(cfg.agents.qa.thinking, "");
-  }
-  const explicit = resolveConfig({ agents: { qa: { thinking: "max" } } });
-  assert.equal(inheritThinking(explicit, "low").agents.qa.thinking, "max");
+test("agentProfile draws workers and the QA gate from their domain, with per-agent time limits", () => {
+  const cfg = resolveConfig({ agents: { qa: { model: "p/qa-model", thinking: "low", timeoutMs: 120_000 } } });
+  const gate = agentProfile(cfg, "qa", "reviewer");
+  assert.deepEqual([gate.kind, gate.model, gate.thinking, gate.timeoutMs], ["qa", "p/qa-model", "low", 120_000]);
+  assert.equal(agentProfile(cfg, "backend", "worker").model, undefined, "an unset model stays unset");
+  assert.equal(agentProfile(cfg, "backend", "worker").timeoutMs, 15 * 60 * 1000);
+  assert.equal(agentProfile(DEFAULT_CONFIG, "backend", "scout").timeoutMs, 8 * 60 * 1000);
+  assert.equal(agentProfile(DEFAULT_CONFIG, "backend", "researcher").thinking, "low");
 });

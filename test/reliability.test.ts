@@ -58,15 +58,30 @@ test("retries are bounded and report the last failure", async () => {
   assert.equal(run.attempts, 3);
 });
 
-test("timeouts are retried but never reported as success", async () => {
+test("a spent deadline is never retried and never reported as success", async () => {
   let calls = 0;
   const slow: ProcessRunner = async () => {
     calls += 1;
     return outcome(reply("partial"), { killed: true, timedOut: true });
   };
   const run = await runAgent(request({ retries: 1 }), slow);
+  assert.equal(calls, 1, "a deadline timeout would only time out again");
+  assert.equal(run.status, "timeout");
+  assert.equal(run.output, "partial", "partial output is kept");
+});
+
+test("a stalled agent is retried once, then reported with what it was doing", async () => {
+  let calls = 0;
+  const silent: ProcessRunner = async (_args, options) => {
+    calls += 1;
+    options.onEvent?.({ type: "tool_execution_start", toolName: "bash", args: { command: "npm test" } });
+    return outcome("", { killed: true, stalled: true });
+  };
+  const run = await runAgent(request({ retries: 1, stallTimeoutMs: 180_000 }), silent);
   assert.equal(calls, 2);
   assert.equal(run.status, "timeout");
+  assert.equal(run.stalled, true);
+  assert.match(run.error!, /stalled: no output for 3m while running npm test/);
 });
 
 test("cancellation is never retried", async () => {

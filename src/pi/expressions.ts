@@ -20,12 +20,19 @@ export const FAST_TICK_MS = 120;
 export const REST_FRAME = 0;
 export const BLINK_FRAME = 1;
 export const EMOTE_FRAME = 2;
-/** Emote frame range: `EMOTE_FRAME .. EMOTE_FRAME + EMOTE_FRAMES - 1`; an emote steps through them. */
-export const EMOTE_FRAMES = 2;
+/**
+ * Emote frame range: `EMOTE_FRAME .. EMOTE_FRAME + EMOTE_FRAMES - 1`; an emote
+ * steps through them: the open face, a blink, then its action (see kaomoji.ts).
+ */
+export const EMOTE_FRAMES = 4;
 /** Each emote frame is held this long, so an emote steps through its frames. */
 export const EMOTE_STEP_MS = Math.floor(EMOTE_MS / EMOTE_FRAMES);
 
 const BLINK_CHANCE = 0.65;
+/** Working agents emote as often as they blink. */
+export const WORKING_BLINK_CHANCE = 0.5;
+/** Upper bound (exclusive) of an expression's variant. */
+const VARIANT_SPAN = 2 ** 30;
 
 export interface ExpressionState {
   /** Earliest `now` the next expression may start. */
@@ -36,6 +43,8 @@ export interface ExpressionState {
   startedAt: number;
   /** Frame index for the art: 0 rest, 1 blink, 2+ emote. */
   frame: number;
+  /** Drawn once per expression; picks which face an emote shows (see kaomoji.ts). */
+  variant: number;
 }
 
 /** A random draw clamped to `[0, 1]`, so a non-finite source value can never leak. */
@@ -50,8 +59,10 @@ export interface ExpressionGap {
   max: number;
 }
 
-/** Agent slots rest 20-30 s between expressions. */
+/** Idle agent slots rest 20-30 s between expressions. */
 export const SLOT_GAP: ExpressionGap = { min: BLINK_MIN_MS, max: BLINK_MAX_MS };
+/** Working agents are livelier: 8-15 s between expressions. */
+export const WORKING_GAP: ExpressionGap = { min: 8_000, max: 15_000 };
 /** The oracle is the scene's centrepiece: it blinks and emotes every 6-12 s. */
 export const ORACLE_GAP: ExpressionGap = { min: 6_000, max: 12_000 };
 
@@ -60,15 +71,19 @@ export function nextGap(rng: () => number, gap: ExpressionGap = SLOT_GAP): numbe
   return gap.min + Math.round(unit(rng) * (gap.max - gap.min));
 }
 
-/** Whether the next expression blinks (~65%) or emotes (~35%). */
-export function pickEvent(rng: () => number): "blink" | "emote" {
-  return unit(rng) < BLINK_CHANCE ? "blink" : "emote";
+/** Whether the next expression blinks (~65% by default) or emotes. */
+export function pickEvent(rng: () => number, blinkChance = BLINK_CHANCE): "blink" | "emote" {
+  return unit(rng) < blinkChance ? "blink" : "emote";
+}
+
+function drawVariant(rng: () => number): number {
+  return Math.floor(unit(rng) * (VARIANT_SPAN - 1));
 }
 
 /** A freshly rested expression that fires for the first time after one random gap. */
 export function createExpression(now: number, rng: () => number, gap: ExpressionGap = SLOT_GAP): ExpressionState {
   const start = Number.isFinite(now) ? now : 0;
-  return { nextAt: start + nextGap(rng, gap), until: start, startedAt: start, frame: REST_FRAME };
+  return { nextAt: start + nextGap(rng, gap), until: start, startedAt: start, frame: REST_FRAME, variant: 0 };
 }
 
 /** True while `now` is inside a playing blink or emote. */
@@ -90,17 +105,33 @@ export function advanceExpression(
   now: number,
   rng: () => number,
   gap: ExpressionGap = SLOT_GAP,
+  blinkChance = BLINK_CHANCE,
 ): ExpressionState {
   if (!Number.isFinite(now)) return state;
   if (now < state.until) return state.frame >= EMOTE_FRAME ? steppedEmote(state, now) : state;
   if (now < state.nextAt) return state.frame === REST_FRAME ? state : { ...state, frame: REST_FRAME };
-  return play(now, rng, gap);
+  return play(now, rng, gap, blinkChance);
 }
 
-function play(now: number, rng: () => number, gap: ExpressionGap): ExpressionState {
-  const blink = pickEvent(rng) === "blink";
-  const until = now + (blink ? BLINK_MS : EMOTE_MS);
-  return { nextAt: until + nextGap(rng, gap), until, startedAt: now, frame: blink ? BLINK_FRAME : EMOTE_FRAME };
+function play(now: number, rng: () => number, gap: ExpressionGap, blinkChance: number): ExpressionState {
+  const blink = pickEvent(rng, blinkChance) === "blink";
+  return blink ? startBlink(now, rng, gap) : triggerEmote(now, rng, gap);
+}
+
+function startBlink(now: number, rng: () => number, gap: ExpressionGap): ExpressionState {
+  const until = now + BLINK_MS;
+  return { nextAt: until + nextGap(rng, gap), until, startedAt: now, frame: BLINK_FRAME, variant: drawVariant(rng) };
+}
+
+/**
+ * Start an emote right now, whatever the sprite was doing: the reaction when a
+ * slot's situation changes (it starts, finishes, fails, stalls, waits or
+ * receives a file). The next scheduled expression follows one gap later.
+ */
+export function triggerEmote(now: number, rng: () => number, gap: ExpressionGap = SLOT_GAP): ExpressionState {
+  const start = Number.isFinite(now) ? now : 0;
+  const until = start + EMOTE_MS;
+  return { nextAt: until + nextGap(rng, gap), until, startedAt: start, frame: EMOTE_FRAME, variant: drawVariant(rng) };
 }
 
 /** One sub-step of a playing expression; the oracle's blink and glance step through these. */
