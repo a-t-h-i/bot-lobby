@@ -135,12 +135,26 @@ or without a task.
   step checklist, your comments on it, amendments, what the task waits on and
   its recent runs. `c` comments on the selected task's plan (see below), `s`
   starts a pending plan as a task in this session, `d` twice discards one.
-- **3 Plan** — task planning mode. Describe what you want and the planner model
-  grills you: a few pointed questions per turn about scope, edge cases,
-  contracts, tests and rollout, grounded in files it reads (read-only), with a
-  draft plan converging beside the conversation until it says READY. `s` saves
-  the plan to the pending tasks list, `n` starts over, `r` retries a failed
-  turn, `x` stops one.
+- **3 Plan** — task planning mode with a planning panel. Describe what you
+  want and every seat grills you from its own domain, on the model and
+  thinking level its settings name: **DEV** (APIs, data, errors, security,
+  performance), **DESIGN** (flows, states, copy, visual language,
+  accessibility), **QA** (acceptance criteria, test strategy, edge cases,
+  definition of done) and **RESEARCH** (libraries, versions, docs and prior
+  art, with the web tools when `pi-web-access` is installed). The **oracle**
+  chairs on the Planner model: it reads the seats' questions and notes, folds
+  every answer into the draft plan (with a *Decisions by domain* section) and
+  asks only what no single seat owns. Each round the seats run in parallel,
+  read-only, then the oracle; the questions arrive numbered and attributed
+  (`3. QA  Which browsers must pass?`), you answer them all in one message,
+  and every seat reads every answer the next round — so the agents that later
+  build the task start aligned. A roster shows what each seat is doing and
+  whether it is READY; the plan is READY only when every seat and the oracle
+  agree, and the draft pane lists what each seat said the plan must respect.
+  While browsing, `1`–`4` seat or unseat DEV, DESIGN, QA and RESEARCH for the
+  next round, `enter` switches between the conversation and the draft, `s`
+  saves the plan to the pending tasks list, `n` starts over, `r` retries a
+  round that failed or lost a seat, and `x` stops one.
 - **4 Quick fix** — a direct prompt, the way you would ask pi, that skips the
   whole workflow: one coding agent (full tools) makes the change right away
   while any task keeps running. Quick fixes run one at a time in the order you
@@ -153,7 +167,7 @@ or without a task.
   keeps a link to it, so an issue becomes a task only after it has been
   planned.
 - **6 Metrics** — model performance across every Master turn, subagent run,
-  quick fix and planner turn: per model and thinking level, the number of runs,
+  quick fix, planning seat and oracle planning turn: per model and thinking level, the number of runs,
   success rate, mean/median/p90 time, turns, tools, tokens, output tokens per
   second and cost (columns drop from the right on narrow terminals); how long a
   task takes from request to done by the oracle's model and thinking level; and
@@ -432,7 +446,7 @@ top-level `/bot-lobby-settings`) and persist globally to
   "researcher": { "model": "anthropic/claude-sonnet-5", "thinking": "low", "instructions": "", "timeoutMs": 600000 },
   "quickFix": { "model": "anthropic/claude-sonnet-5", "thinking": "low", "instructions": "", "timeoutMs": 600000 },
   "planner": { "model": "anthropic/claude-sonnet-5", "thinking": "high", "instructions": "", "timeoutMs": 300000 },
-  "lobby": { "autoOpen": true },
+  "lobby": { "autoOpen": true, "planningPanel": ["backend", "designer", "qa", "researcher"] },
   "workflow": {
     "maxReviewIterations": 2,
     "maxParallelScouts": 3,
@@ -468,11 +482,17 @@ Each subagent entry has a `timeoutMs` (default 15 min; scouts 8, researcher 10),
 falling back to `workflow.agentTimeoutMs`.
 
 The lobby's two agents have entries of their own: `quickFix` (the direct-change
-agent, `low` thinking and 10 minutes by default) and `planner` (the grilling
-planner, `high` thinking; its time limit bounds one turn, 5 minutes by
-default). Both appear in `/bot-lobby settings`, take custom instructions, and
-run on the session's model until you pin one. `lobby.autoOpen` (default
-`true`) opens the lobby by itself when this session starts or resumes a task.
+agent, `low` thinking and 10 minutes by default) and `planner` (the oracle
+chairing the planning panel, `high` thinking; its time limit bounds one round
+for every seat, 5 minutes by default). Both appear in `/bot-lobby settings`,
+take custom instructions, and run on the session's model until you pin one.
+Planning seats reuse their domain's entry — DEV the Backend's, DESIGN the
+Designer's, QA the QA's, RESEARCH the Researcher's model, thinking and
+instructions — so a seat plans on the model that will later build its part.
+`lobby.planningPanel` names the seats a new planning session starts with
+(every seat by default; `[]` lets the oracle plan alone), and
+`lobby.autoOpen` (default `true`) opens the lobby by itself when this session
+starts or resumes a task.
 
 `thinking` must be one of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`,
 `max`; a legacy `inherit` or unknown value falls back to `medium`. The thinking
@@ -575,13 +595,13 @@ src/
 │   ├── tabs/                 Pure renderers: home, tasks, plan, quickfix, issues, metrics
 │   ├── feed.ts               Activity log, thinking pane and conversation store
 │   ├── quickfix.ts           Direct-change jobs, one at a time
-│   ├── planner.ts            The grilling planner: turns, reply parsing, saving a plan
+│   ├── planner.ts            The planning panel: seats and the oracle per round, reply parsing, saving a plan
 │   ├── issues.ts             GitHub issues through the gh CLI
 │   └── layout.ts             Exact-width columns, rules, wrapping and scroll windows
 ├── state/                    Project root, config, task persistence, state mutation, comments, backlog, metrics
 ├── schemas/                  Task, agent, findings, configuration types
 └── pi/                       Commands, lifecycle, orchestrate tool, status widget
-prompts/                      global, master, designer, backend, qa, scout, worker, reviewer, researcher, quickfix, planner
+prompts/                      global, master, designer, backend, qa, scout, worker, reviewer, researcher, quickfix, planner, panel
 ```
 
 Prompts are composed, never duplicated: `global + domain + role + task context +

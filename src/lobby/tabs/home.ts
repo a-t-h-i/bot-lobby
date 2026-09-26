@@ -41,7 +41,7 @@ const SOURCE_COLORS: Record<string, LobbyColor> = {
   QA: "warning",
   RESEARCH: "toolTitle",
   "QUICK FIX": "mdCode",
-  PLANNER: "toolTitle",
+  ORACLE: "accent",
   LOBBY: "muted",
 };
 
@@ -95,7 +95,7 @@ function emptyChat(input: HomeInput, width: number, theme?: LobbyTheme): string[
         bold(theme, "No task is running in this session."),
         "",
         "Type a request below and press enter to start one: the oracle scouts, proposes, plans and delegates.",
-        `Or plan it first with the planner in ${bold(theme, "3 Plan")}, or make a direct change in ${bold(theme, "4 Quick fix")}.`,
+        `Or plan it first with the whole planning panel in ${bold(theme, "3 Plan")}, or make a direct change in ${bold(theme, "4 Quick fix")}.`,
       ];
   const extra: string[] = [];
   if (input.others > 0) extra.push(`${input.others} task${input.others === 1 ? " is" : "s are"} running in other sessions — see ${bold(theme, "2 Tasks")}.`);

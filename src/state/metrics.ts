@@ -1,7 +1,7 @@
 /**
  * Model performance records: one line per finished run of any agent — the
- * Master's own turns, scouts, workers, the QA gate, researchers, quick fixes
- * and planner turns — so the lobby can show how long each model takes at each
+ * Master's own turns, scouts, workers, the QA gate, researchers, quick fixes,
+ * planner turns and planning panel seats — so the lobby can show how long each model takes at each
  * thinking level, how often it succeeds and what it costs. Append-only JSON
  * lines per project; reads keep the newest `MAX_READ` records.
  */
@@ -11,7 +11,7 @@ import type { AgentRun } from "../schemas/findings.ts";
 import type { RunLogEntry, Task } from "../schemas/task.ts";
 import { dataRoot } from "./project.ts";
 
-export const METRIC_KINDS = ["master", "scout", "worker", "reviewer", "researcher", "quickfix", "planner"] as const;
+export const METRIC_KINDS = ["master", "scout", "worker", "reviewer", "researcher", "quickfix", "planner", "panel"] as const;
 export type MetricKind = (typeof METRIC_KINDS)[number];
 
 export type MetricStatus = "success" | "failed" | "cancelled" | "timeout";
@@ -19,7 +19,7 @@ export type MetricStatus = "success" | "failed" | "cancelled" | "timeout";
 export interface MetricRecord {
   id: string;
   kind: MetricKind;
-  /** Display name of the agent: MASTER, DEV, DESIGN, QA, RESEARCH, QUICK FIX, PLANNER. */
+  /** Display name of the agent: MASTER, DEV, DESIGN, QA, RESEARCH, QUICK FIX, ORACLE (planning). */
   agent: string;
   model?: string;
   thinking?: string;

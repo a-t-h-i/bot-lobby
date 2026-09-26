@@ -7,7 +7,7 @@ import { describeToolCall } from "../src/pi/activity.ts";
 import { createStreamCollector, finishedThought, MAX_THOUGHT_CHARS, type PiStreamEvent, type ProcessOutcome, type ProcessRunner, type ProcessRunOptions } from "../src/execution/pi-runner.ts";
 import { chatFromEntries, chatText, LobbyFeed, textOf } from "../src/lobby/feed.ts";
 import { QUICK_FIX_TOOLS, QuickFixQueue, jobTitle, quickFixPrompt } from "../src/lobby/quickfix.ts";
-import { PLANNER_TOOLS, PlanningSession, parsePlannerReply, plannerSays, plannerTranscript } from "../src/lobby/planner.ts";
+import { PLANNER_TOOLS, RESEARCH_PANEL_TOOLS, PlanningSession, memberPrompt, panelSection, parseMemberReply, parsePlannerReply, plannerSays, plannerTranscript } from "../src/lobby/planner.ts";
 import { createIssue, ghError, IssuesState, issueText, listIssues, splitIssueText, viewIssue, type Exec } from "../src/lobby/issues.ts";
 import { listPlannedTasks } from "../src/state/backlog.ts";
 import { readMetrics } from "../src/state/metrics.ts";
@@ -167,57 +167,130 @@ const READY_REPLY = [
   "## Status", "READY", "", "## Title", "Dark mode toggle", "", "## Plan", "### Objective", "Add a toggle.", "### Steps", "1. tokens", "2. toggle",
 ].join("\n");
 
-test("the planner reply parses status, title, questions and plan, and degrades gracefully", () => {
+test("the oracle's and the seats' replies parse forgivingly", () => {
   const grilling = parsePlannerReply(["## Status", "GRILLING", "## Title", "**Dark mode**", "## Questions", "1. Which pages?", "   All of them?", "2. Persist the choice?", "## Plan", "draft"].join("\n"));
   assert.deepEqual(grilling, { status: "grilling", title: "Dark mode", questions: ["Which pages? All of them?", "Persist the choice?"], plan: "draft" });
   assert.equal(parsePlannerReply(READY_REPLY).status, "ready");
   assert.deepEqual(parsePlannerReply("What do you mean by fast?"), { status: "grilling", questions: ["What do you mean by fast?"] });
-  assert.equal(plannerSays({ status: "grilling", questions: ["A?", "B?"] }), "1. A?\n2. B?");
-  assert.match(plannerSays({ status: "ready", questions: [] }), /Press s to save/);
+  assert.deepEqual(parseMemberReply("## Status\nOPEN\n## Questions\n1. REST or RPC?\n## Notes\n- api lives in src/api"), { status: "open", questions: ["REST or RPC?"], notes: ["api lives in src/api"] });
+  assert.deepEqual(parseMemberReply("## Status\nREADY\n## Questions\n1. stray?\n## Notes\n- ok"), { status: "ready", questions: [], notes: ["ok"] }, "a READY seat asks nothing");
+  assert.equal(plannerSays(false, [{ from: "ORACLE", text: "A?" }, { from: "QA", text: "B?" }]), "1. [ORACLE] A?\n2. [QA] B?");
+  assert.match(plannerSays(true, []), /panel agrees/);
 });
 
-test("the planner transcript carries the issue, every turn and the current draft", () => {
+test("the transcript carries the issue, every attributed question and the current draft", () => {
   const transcript = plannerTranscript(
-    [{ role: "you", text: "add dark mode", at: 0 }, { role: "planner", text: "1. Which pages?", at: 1 }, { role: "you", text: "all", at: 2 }],
+    [
+      { role: "you", text: "add dark mode", at: 0 },
+      { role: "planner", text: "ignored", at: 1, questions: [{ from: "DESIGN", text: "Which pages?" }, { from: "QA", text: "Which browsers?" }] },
+      { role: "you", text: "1. all 2. chrome", at: 2 },
+    ],
     { issue: { number: 7, title: "Dark mode" }, body: "Please add it" },
     "### Steps\n1. tokens",
   );
   assert.match(transcript, /^## Source: GitHub issue #7 — Dark mode\n\nPlease add it/);
-  assert.match(transcript, /### User\n\nadd dark mode\n\n### Planner\n\n1\. Which pages\?\n\n### User\n\nall/);
-  assert.match(transcript, /## Your current draft plan\n\n### Steps\n1\. tokens/);
+  assert.match(transcript, /### User\n\nadd dark mode\n\n### Panel\n\n1\. \[DESIGN\] Which pages\?\n2\. \[QA\] Which browsers\?\n\n### User\n\n1\. all 2\. chrome/);
+  assert.match(transcript, /## The oracle's current draft plan\n\n### Steps\n1\. tokens/);
+  assert.match(panelSection([{ member: "qa", reply: { status: "ready", questions: [], notes: ["e2e in tests/e2e"] } }, { member: "researcher", error: "timeout" }]), /### QA — READY\nNotes:\n- e2e in tests\/e2e\n\n### RESEARCH — no answer this round \(timeout\)/);
 });
 
-test("a planning session grills over read-only tools and saves the agreed plan as a pending task", async () => {
+test("each seat gets its domain's prompt layers, the panel role and its seat", () => {
+  const dev = memberPrompt("backend", "prefer REST");
+  assert.match(dev, /Global Engineering Agent[\s\S]*Backend Domain Agent[\s\S]*## Custom Instructions\n\nprefer REST[\s\S]*Planning Panel Member[\s\S]*## Your seat\n\nYou are DEV/);
+  assert.match(memberPrompt("researcher"), /Global Engineering Agent[\s\S]*Planning Panel Member[\s\S]*You are RESEARCH/);
+  assert.doesNotMatch(memberPrompt("researcher"), /Backend Domain Agent/);
+});
+
+/** A fake pi that answers as whichever seat (or the oracle) the task names. */
+function panelRunner(answers: Record<string, string | undefined>, seen: Array<{ who: string; args: string[]; prompt: string }>): ProcessRunner {
+  return (args, options) => {
+    const prompt = options.prompt ?? "";
+    const who = /You are (DEV|DESIGN|QA|RESEARCH) on the planning panel/.exec(prompt)?.[1] ?? "ORACLE";
+    seen.push({ who, args, prompt });
+    const text = answers[who];
+    if (text === undefined) return Promise.resolve({ exitCode: 1, stdout: "", stderr: `${who} crashed`, killed: false, timedOut: false });
+    return fakeRunner(text)(args, options);
+  };
+}
+
+test("a panel round asks every seat on its own model, then lets the oracle fold them into the plan", async () => {
   const root = tempRoot();
-  const seen: Array<{ args: string[]; options: ProcessRunOptions }> = [];
-  let answer = "## Status\nGRILLING\n## Title\nDark mode\n## Questions\n1. Which pages?\n## Plan\n### Steps\n1. draft";
-  const runner: ProcessRunner = (args, options) => fakeRunner(answer, [], seen)(args, options);
+  const seen: Array<{ who: string; args: string[]; prompt: string }> = [];
+  const answers: Record<string, string | undefined> = {
+    DEV: "## Status\nOPEN\n## Questions\n1. REST or RPC?\n## Notes\n- routes live in src/api",
+    QA: "## Status\nREADY\n## Notes\n- e2e tests in tests/e2e",
+    RESEARCH: "## Status\nOPEN\n## Questions\n1. prefers-color-scheme only, or a stored override?",
+    ORACLE: "## Status\nGRILLING\n## Title\nDark mode\n## Questions\n1. Ship behind a flag?\n## Plan\n### Steps\n1. draft",
+  };
+  const models: Record<string, string> = { backend: "p/dev", qa: "p/qa", researcher: "p/research" };
   const session = new PlanningSession(
-    { cwd: root, root, configDir: ".pi", profile: () => ({ model: "p/plan", thinking: "high", timeoutMs: 60_000 }), runProcess: runner },
+    {
+      cwd: root, root, configDir: ".pi",
+      profile: () => ({ model: "p/oracle", thinking: "high", timeoutMs: 60_000 }),
+      memberProfile: (member) => ({ model: models[member], thinking: "medium", timeoutMs: 60_000 }),
+      panel: ["backend", "qa", "researcher"],
+      runProcess: panelRunner(answers, seen),
+    },
     { issue: { number: 7, title: "Dark mode please", url: "https://x/7" }, body: "Please add it" },
   );
   await session.send("add dark mode");
+  assert.equal(session.error, undefined);
+  assert.deepEqual(seen.map((call) => call.who), ["DEV", "QA", "RESEARCH", "ORACLE"], "seats first, then the oracle");
+  const arg = (call: { args: string[] }, flag: string) => call.args[call.args.indexOf(flag) + 1];
+  assert.deepEqual(seen.map((call) => arg(call, "--model")), ["p/dev", "p/qa", "p/research", "p/oracle"], "every seat runs on its own model");
+  assert.equal(arg(seen[0]!, "--tools"), PLANNER_TOOLS.join(","));
+  assert.equal(arg(seen[2]!, "--tools"), RESEARCH_PANEL_TOOLS.join(","), "RESEARCH may use the web tools");
+  assert.match(seen[3]!.prompt, /### DEV — OPEN\nQuestions asked of the user:\n- REST or RPC\?\nNotes:\n- routes live in src\/api/);
+  assert.match(seen[3]!.prompt, /### QA — READY/);
+  assert.deepEqual(session.questions, [
+    { from: "ORACLE", text: "Ship behind a flag?" },
+    { from: "DEV", text: "REST or RPC?" },
+    { from: "RESEARCH", text: "prefers-color-scheme only, or a stored override?" },
+  ]);
+  assert.deepEqual(session.messages.at(-1)!.questions, session.questions);
+  assert.deepEqual(session.notes, [{ from: "DEV", text: "routes live in src/api" }, { from: "QA", text: "e2e tests in tests/e2e" }]);
   assert.equal(session.reply?.status, "grilling");
-  assert.deepEqual(session.messages.map((message) => message.role), ["you", "planner"]);
-  const args = seen[0]!.args;
-  assert.equal(args[args.indexOf("--tools") + 1], PLANNER_TOOLS.join(","));
-  answer = "## Status\nREADY\n## Title\nDark mode toggle";
-  await session.send("all pages");
+
+  // Everyone settles: DEV and RESEARCH go READY, the oracle too; the answers reach every seat.
+  answers.DEV = "## Status\nREADY\n## Notes\n- REST, as the user chose";
+  answers.RESEARCH = "## Status\nREADY";
+  answers.ORACLE = "## Status\nREADY\n## Title\nDark mode toggle";
+  await session.send("1. no flag 2. REST 3. stored override");
+  assert.ok(seen.slice(4, 7).every((call) => call.prompt.includes("1. no flag 2. REST 3. stored override")), "every seat reads every answer");
   assert.equal(session.reply?.status, "ready");
-  assert.equal(session.reply?.plan, "### Steps\n1. draft", "a turn without a plan keeps the previous draft");
-  assert.match(seen[1]!.options.prompt!, /## Your current draft plan/);
+  assert.deepEqual(session.questions, []);
+  assert.equal(session.reply?.plan, "### Steps\n1. draft", "a round without a plan keeps the previous draft");
+  assert.deepEqual(session.notes.map((note) => note.text), ["REST, as the user chose", "e2e tests in tests/e2e"], "each seat's latest notes; RESEARCH had none");
   const saved = session.save(new Date("2026-02-01T00:00:00Z"));
   assert.equal(saved.id, "PLAN-dark-mode-toggle");
   assert.deepEqual(listPlannedTasks(root, ".pi")[0]!.issue, { number: 7, title: "Dark mode please", url: "https://x/7" });
-  assert.deepEqual(readMetrics(root, ".pi").map((metric) => [metric.kind, metric.thinking]), [["planner", "high"], ["planner", "high"]]);
+  const metrics = readMetrics(root, ".pi");
+  assert.deepEqual(metrics.slice(0, 4).map((metric) => [metric.kind, metric.agent]).sort(), [["panel", "DEV"], ["panel", "QA"], ["panel", "RESEARCH"], ["planner", "ORACLE"]]);
 });
 
-test("a failed planner turn keeps the conversation and reports the error", async () => {
+test("a seat that fails does not sink the round, but keeps the plan from READY", async () => {
+  const root = tempRoot();
+  const seen: Array<{ who: string; args: string[]; prompt: string }> = [];
+  const answers: Record<string, string | undefined> = { DEV: "## Status\nREADY", ORACLE: "## Status\nREADY\n## Plan\n1. x" };
+  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high", timeoutMs: 60_000 }), panel: ["backend", "qa"], runProcess: panelRunner(answers, seen) });
+  await session.send("idea");
+  assert.deepEqual(session.members.map((member) => [member.member, member.status]), [["backend", "done"], ["qa", "failed"]]);
+  assert.match(seen.at(-1)!.prompt, /### QA — no answer this round \(QA crashed\)/);
+  assert.equal(session.reply?.status, "grilling", "READY needs every seat");
+  assert.equal(session.retryable, true, "a round that lost a seat can be retried");
+  assert.equal(session.toggle("qa"), false);
+  await session.retry();
+  assert.deepEqual(session.messages.map((message) => message.role), ["you", "planner"], "the retried round replaces the old one");
+  assert.equal(session.reply?.status, "ready", "without QA seated the panel can agree");
+  assert.deepEqual(seen.slice(3).map((call) => call.who), ["DEV", "ORACLE"]);
+});
+
+test("a failed oracle keeps the conversation and reports the error", async () => {
   const root = tempRoot();
   const runner: ProcessRunner = async () => ({ exitCode: 1, stdout: "", stderr: "boom", killed: false, timedOut: false });
-  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high", timeoutMs: 60_000 }), runProcess: runner });
+  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high", timeoutMs: 60_000 }), panel: [], runProcess: runner });
   await session.send("idea");
-  assert.equal(session.error, "boom");
+  assert.match(session.error!, /the oracle's part of the round failed — boom/);
   assert.equal(session.status, "idle");
   assert.deepEqual(session.messages.map((message) => message.role), ["you"]);
   assert.throws(() => session.save(), /no draft plan/);

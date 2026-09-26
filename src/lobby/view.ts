@@ -13,15 +13,15 @@ import type { AgentRun } from "../schemas/findings.ts";
 import type { PlannedTask } from "../state/backlog.ts";
 import type { PlanComment } from "../state/comments.ts";
 import { aggregateMetrics, collectMetrics, SORT_KEYS, sortGroups, taskStats, taskTimesByModel, type GroupBy, type MetricRecord, type SortKey } from "../state/metrics.ts";
-import type { LobbyAgentKind } from "../schemas/configuration.ts";
+import { PANEL_MEMBERS, type LobbyAgentKind, type PanelMember } from "../schemas/configuration.ts";
 import type { LobbyFeed } from "./feed.ts";
 import type { QuickFixQueue } from "./quickfix.ts";
-import type { PlannerSeed, PlanningSession } from "./planner.ts";
+import { MEMBER_LABELS, ORACLE_LABEL, type PlannerSeed, type PlanningSession } from "./planner.ts";
 import { issueText, type IssuesState } from "./issues.ts";
 import { bold, fit, paint, spinner, type LobbyTheme } from "./layout.ts";
 import { renderHome } from "./tabs/home.ts";
 import { planDetailLines, renderTasks, taskDetailLines, taskRows, type TaskRow } from "./tabs/tasks.ts";
-import { renderPlan } from "./tabs/plan.ts";
+import { renderPlan, type PlanView, type SeatView } from "./tabs/plan.ts";
 import { newestFirst, renderQuickFix } from "./tabs/quickfix.ts";
 import { renderIssues } from "./tabs/issues.ts";
 import { renderMetrics } from "./tabs/metrics.ts";
@@ -69,7 +69,12 @@ export interface LobbyHost {
   hide(): void;
   quickfix: QuickFixQueue;
   planner(): PlanningSession | undefined;
-  newPlanner(seed?: PlannerSeed): PlanningSession;
+  /** Start a planning session (replacing any other) with these seats on the panel. */
+  newPlanner(seed?: PlannerSeed, seats?: readonly PanelMember[]): PlanningSession;
+  /** The seats a new session starts with, from settings. */
+  defaultPanel(): readonly PanelMember[];
+  /** `model · thinking` a panel seat runs on. */
+  seatLabel(member: PanelMember): string;
   issues: IssuesState;
   profileLabel(kind: LobbyAgentKind): string;
   requestRender(): void;
@@ -133,6 +138,10 @@ export class LobbyView implements Component, Focusable {
   private tasksDetailOffset = 0;
   private commentTarget: string | undefined;
   private planOffset = 0;
+  private planFocus: "talk" | "draft" = "talk";
+  private planDraftOffset = 0;
+  /** Seats for the next planning session, until one exists. */
+  private seats: Set<PanelMember> | undefined;
   private fixSelected = 0;
   private fixFocus: "list" | "detail" = "list";
   private fixDetailOffset = 0;
@@ -282,8 +291,8 @@ export class LobbyView implements Component, Focusable {
   async planIssue(number: number): Promise<void> {
     const detail = await this.host.issues.detail(number);
     if (!detail) return this.say(`could not load issue #${number}`, "warning");
-    const session = this.host.newPlanner({ issue: { number: detail.number, title: detail.title, ...(detail.url ? { url: detail.url } : {}) }, body: issueText(detail) });
-    this.planOffset = 0;
+    const session = this.host.newPlanner({ issue: { number: detail.number, title: detail.title, ...(detail.url ? { url: detail.url } : {}) }, body: issueText(detail) }, [...this.seatSet()]);
+    this.resetPlanScroll();
     this.setTab("plan");
     void session.open();
   }
@@ -345,7 +354,8 @@ export class LobbyView implements Component, Focusable {
         this.chatOffset = Math.max(0, this.chatOffset - delta);
         return;
       case "plan":
-        this.planOffset = Math.max(0, this.planOffset - delta);
+        if (this.planFocus === "draft") this.planDraftOffset = Math.max(0, this.planDraftOffset + delta);
+        else this.planOffset = Math.max(0, this.planOffset - delta);
         return;
       case "tasks":
         if (this.tasksFocus === "detail" || Math.abs(delta) > 1) this.tasksDetailOffset = Math.max(0, this.tasksDetailOffset + delta);
@@ -405,7 +415,7 @@ export class LobbyView implements Component, Focusable {
       case "tasks":
         return this.tasksCommand(data, enter, escape);
       case "plan":
-        return this.planCommand(data, escape);
+        return this.planCommand(data, enter, escape);
       case "quickfix":
         if (enter) return (this.fixFocus = this.fixFocus === "list" ? "detail" : "list"), true;
         if (escape && this.fixFocus === "detail") return (this.fixFocus = "list"), true;
@@ -462,17 +472,43 @@ export class LobbyView implements Component, Focusable {
     return false;
   }
 
-  private planCommand(data: string, escape: boolean): boolean {
+  /** Seats for the next round: the session's, or the ones chosen before it started. */
+  private seatSet(): Set<PanelMember> {
     const session = this.host.planner();
+    if (session) return session.seats;
+    this.seats ??= new Set(this.host.defaultPanel());
+    return this.seats;
+  }
+
+  private resetPlanScroll(): void {
+    this.planOffset = 0;
+    this.planDraftOffset = 0;
+  }
+
+  private planCommand(data: string, enter: boolean, escape: boolean): boolean {
+    const session = this.host.planner();
+    if (enter) return (this.planFocus = this.planFocus === "talk" ? "draft" : "talk"), true;
+    const seat = /^[1-4]$/.test(data) ? PANEL_MEMBERS[Number(data) - 1] : undefined;
+    if (seat) {
+      let seated: boolean;
+      if (session) seated = session.toggle(seat);
+      else {
+        const seats = this.seatSet();
+        seated = !seats.delete(seat);
+        if (seated) seats.add(seat);
+      }
+      this.say(`${MEMBER_LABELS[seat]} ${seated ? "joins" : "leaves"} the panel from the next round`);
+      return true;
+    }
     if (data === "x" || (escape && session?.busy)) {
       if (session?.busy) {
         session.cancel();
-        this.say("stopping the planner…");
+        this.say("stopping the panel…");
       }
       return true;
     }
     if (data === "r") {
-      if (session && !session.busy && session.messages.at(-1)?.role === "you") void session.retry();
+      if (session?.retryable) void session.retry();
       else this.say("nothing to retry", "warning");
       return true;
     }
@@ -495,8 +531,8 @@ export class LobbyView implements Component, Focusable {
       }
       this.armed = undefined;
       session?.cancel();
-      this.host.newPlanner();
-      this.planOffset = 0;
+      this.host.newPlanner(undefined, [...this.seatSet()]);
+      this.resetPlanScroll();
       this.setMode("type");
       return true;
     }
@@ -552,12 +588,12 @@ export class LobbyView implements Component, Focusable {
         this.refreshData(true);
         return;
       case "plan": {
-        const session = this.host.planner() ?? this.host.newPlanner();
+        const session = this.host.planner() ?? this.host.newPlanner(undefined, [...this.seatSet()]);
         if (session.busy) {
           this.editor.setText(body);
-          return this.say("the planner is still thinking — x stops it", "warning");
+          return this.say("the panel is still thinking — x stops it", "warning");
         }
-        this.planOffset = 0;
+        this.resetPlanScroll();
         session.send(body).catch((error: Error) => this.say(error.message, "warning"));
         return;
       }
@@ -628,8 +664,8 @@ export class LobbyView implements Component, Focusable {
         return this.commentTarget ? `comment on ${this.commentTarget}'s plan · enter sends it to the oracle` : "c comments on the selected task's plan";
       case "plan": {
         const session = this.host.planner();
-        if (session?.busy) return "the planner is thinking · x stops it";
-        return session && session.messages.length > 0 ? "answer the planner" : "describe the task you want to plan";
+        if (session?.busy) return "the panel is thinking · x stops it";
+        return session && session.messages.length > 0 ? "answer the panel · number your answers to match the questions" : "describe the task you want to plan";
       }
       case "quickfix":
         return this.host.quickfix.running ? "describe a quick change · queues behind the running one" : "describe a quick change · runs now, beside any task";
@@ -662,7 +698,7 @@ export class LobbyView implements Component, Focusable {
       case "tasks":
         return `↑↓ select · enter detail · c comment · s start plan · d discard plan · r refresh · ${common}`;
       case "plan":
-        return `type to answer · s save as pending task · n new plan · x stop · r retry · ↑↓ scroll · ${common}`;
+        return `type to answer · 1-4 seat DEV DESIGN QA RESEARCH · s save · n new · x stop · r retry · enter switch pane · ${common}`;
       case "quickfix":
         return `type a change · ↑↓ select · enter detail · x cancel · ${common}`;
       case "issues":
@@ -686,15 +722,16 @@ export class LobbyView implements Component, Focusable {
         return this.homeBody(width, height, theme, now);
       case "tasks":
         return this.tasksBody(width, height, theme, now);
-      case "plan": {
-        const session = this.host.planner();
+      case "plan":
         return renderPlan({
-          ...(session ? { session: { messages: session.messages, ...(session.reply ? { reply: session.reply } : {}), busy: session.busy, ...(session.step ? { step: session.step } : {}), ...(session.error ? { error: session.error } : {}), turns: session.turns, ...(session.seed ? { seed: session.seed } : {}), ...(session.saved ? { saved: session.saved } : {}), ...(session.title ? { title: session.title } : {}) } } : {}),
+          ...(this.host.planner() ? { session: this.planView(this.host.planner()!) } : {}),
           profile: this.host.profileLabel("planner"),
+          seats: this.seatViews(undefined),
           offset: this.planOffset,
+          focus: this.planFocus,
+          draftOffset: this.planDraftOffset,
           tick: this.tick,
         }, width, height, theme);
-      }
       case "quickfix":
         this.fixSelected = Math.min(this.fixSelected, Math.max(0, this.host.quickfix.jobs.length - 1));
         return renderQuickFix({ jobs: this.host.quickfix.jobs, selected: this.fixSelected, focus: this.fixFocus, detailOffset: this.fixDetailOffset, profile: this.host.profileLabel("quickfix"), tick: this.tick, now }, width, height, theme);
@@ -716,6 +753,53 @@ export class LobbyView implements Component, Focusable {
         return renderMetrics({ groups, taskTimes, records, stats: taskStats(this.data.tasks), by: this.metricsBy, sort: this.metricsSort, selected: this.metricsSelected }, width, height, theme);
       }
     }
+  }
+
+  /** The roster: the oracle chairing, then every domain seat in order, seated or not. */
+  private seatViews(session: PlanningSession | undefined): SeatView[] {
+    const seats = session?.seats ?? this.seatSet();
+    const oracleQuestions = session?.questions.filter((question) => question.from === ORACLE_LABEL).length ?? 0;
+    // While the seats work the oracle waits for them; its own part fails only when the round reports an error.
+    const status: SeatView["status"] = !session || session.turns === 0 ? "idle" : session.busy ? "thinking" : session.error ? "failed" : "done";
+    const oracle: SeatView = {
+      label: ORACLE_LABEL,
+      seated: true,
+      status,
+      ...(session?.busy && session.step ? { step: session.step } : {}),
+      questions: oracleQuestions,
+      ready: session?.reply?.status === "ready",
+      profile: this.host.profileLabel("planner"),
+    };
+    const members = PANEL_MEMBERS.map((member): SeatView => {
+      const state = session?.members.find((entry) => entry.member === member);
+      return {
+        label: MEMBER_LABELS[member],
+        seated: seats.has(member),
+        status: state ? (state.status === "thinking" ? "thinking" : state.status) : "idle",
+        ...(state?.step ? { step: state.step } : {}),
+        questions: state?.reply?.questions.length ?? 0,
+        ready: state?.reply?.status === "ready",
+        profile: this.host.seatLabel(member),
+      };
+    });
+    return [oracle, ...members];
+  }
+
+  private planView(session: PlanningSession): PlanView {
+    return {
+      messages: session.messages,
+      ...(session.reply ? { reply: session.reply } : {}),
+      questions: session.questions,
+      notes: session.notes,
+      seats: this.seatViews(session),
+      busy: session.busy,
+      ...(session.step ? { step: session.step } : {}),
+      ...(session.error ? { error: session.error } : {}),
+      turns: session.turns,
+      ...(session.seed ? { seed: session.seed } : {}),
+      ...(session.saved ? { saved: session.saved } : {}),
+      ...(session.title ? { title: session.title } : {}),
+    };
   }
 
   private homeBody(width: number, height: number, theme: LobbyTheme, now: number): string[] {

@@ -208,3 +208,10 @@ test("quick fix and planner have their own entries, and the lobby's auto-open fl
   assert.equal(patchEntry(DEFAULT_CONFIG, "planner", { thinking: "max" }).planner.thinking, "max");
   assert.ok(entryItems("planner", DEFAULT_CONFIG.planner).some((item) => item.value === "instructions"));
 });
+
+test("the planning panel keeps known seats in order and drops the rest", () => {
+  assert.deepEqual(DEFAULT_CONFIG.lobby.planningPanel, ["backend", "designer", "qa", "researcher"]);
+  assert.deepEqual(resolveConfig({ lobby: { planningPanel: ["qa", "bogus", "backend", "qa"] } }).lobby.planningPanel, ["backend", "qa"]);
+  assert.deepEqual(resolveConfig({ lobby: { planningPanel: [] } }).lobby.planningPanel, [], "an empty panel means the oracle plans alone");
+  assert.deepEqual(resolveConfig({ lobby: { planningPanel: "qa" } }).lobby.planningPanel, DEFAULT_CONFIG.lobby.planningPanel);
+});

@@ -48,7 +48,8 @@ const KIND_LABELS: Record<string, string> = {
   reviewer: "QA gate",
   researcher: "research",
   quickfix: "quick fix",
-  planner: "planner",
+  planner: "oracle (plan)",
+  panel: "panel",
 };
 
 /** Columns in priority order; the table keeps as many as the width allows. */
@@ -151,7 +152,7 @@ export function renderMetrics(input: MetricsTabInput, width: number, height: num
   if (input.groups.length === 0) {
     return fill([
       ...head, "", rule(width, "Model performance", theme),
-      paint(theme, "dim", "No runs recorded yet. Every Master turn, subagent run, quick fix and planner turn lands here with its model, thinking level, time, tokens and cost."),
+      paint(theme, "dim", "No runs recorded yet. Every Master turn, subagent run, quick fix and planning round lands here with its model, thinking level, time, tokens and cost."),
     ], height, width);
   }
   const table = tableLines(input, width, theme);
