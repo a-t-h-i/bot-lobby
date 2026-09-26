@@ -49,3 +49,12 @@ export function shortTitle(request: string, maxWords = 3): string {
   const content = words.filter((word) => !FILLER_WORDS.has(fillerKey(word)));
   return (content.length > 0 ? content : words).slice(0, maxWords).join(" ");
 }
+
+/** Compact duration such as "45s", "3m" or "2m 05s"; a non-finite input reads "0s". */
+export function shortDuration(ms: number): string {
+  const seconds = Number.isFinite(ms) ? Math.max(0, Math.round(ms / 1000)) : 0;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes === 0) return `${seconds}s`;
+  const rest = seconds % 60;
+  return rest === 0 ? `${minutes}m` : `${minutes}m ${String(rest).padStart(2, "0")}s`;
+}
