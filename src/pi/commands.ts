@@ -2,7 +2,8 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { TERMINAL_STATES, createTask, taskRequest, type Task } from "../schemas/task.ts";
-import { detectProjectRoot, globalConfigPath, loadConfig, readDataRoots } from "../state/project.ts";
+import { detectProjectRoot, globalConfigPath, loadConfig, readDataRoots, readRawConfig } from "../state/project.ts";
+import { hasScoutThinking, SCOUT_THINKING } from "../schemas/configuration.ts";
 import {
   activeTask,
   claimTask,
@@ -24,6 +25,8 @@ import { applyApprovalChoice, describeTask, describeOversizedKnowledge, type App
 import { shortTitle } from "../text.ts";
 import { applyStatus, registerRevealShortcut, setMinimized } from "./ui.ts";
 import { applyMasterModel, openSettings } from "./settings-ui.ts";
+import { modelRef, thinkingMismatches } from "./model-support.ts";
+import { modelLookup } from "./tools.ts";
 
 const HELP = [
   "/bot-lobby <request>        Start a task through the workflow",
@@ -208,7 +211,11 @@ function showKnowledge(ctx: ExtensionCommandContext, configDir: string): void {
 }
 
 function showConfig(ctx: ExtensionCommandContext): void {
-  ctx.ui.notify(`${globalConfigPath()}\n${JSON.stringify(loadConfig(), null, 2)}`, "info");
+  const config = loadConfig();
+  const warnings = thinkingMismatches(config, modelLookup(ctx), ctx.model ? modelRef(ctx.model) : undefined);
+  if (hasScoutThinking(readRawConfig())) warnings.push(`Scout: thinking is fixed at "${SCOUT_THINKING}"; the scout.thinking value in the file is ignored.`);
+  const notes = warnings.length > 0 ? `\n\nWarnings:\n${warnings.map((line) => `- ${line}`).join("\n")}` : "";
+  ctx.ui.notify(`${globalConfigPath()}\n${JSON.stringify(config, null, 2)}${notes}`, warnings.length > 0 ? "warning" : "info");
 }
 
 export function registerCommands(pi: ExtensionAPI, configDir: string): void {

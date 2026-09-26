@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { BotLobbyConfig } from "../schemas/configuration.ts";
+import type { BotLobbyConfig, ProfileResolver } from "../schemas/configuration.ts";
 import type { AgentRun, Pushback, ResearchResult, ReviewResult } from "../schemas/findings.ts";
 import {
   MAX_WORKER_RECORDS,
@@ -97,6 +97,8 @@ export interface WorkflowDeps {
   /** The pi session driving this workflow; task ownership is skipped when absent (tests, headless use). */
   sessionId?: string;
   config: BotLobbyConfig;
+  /** Per-run model/thinking/time limit, clamped to each model; plain settings when absent. */
+  profile?: ProfileResolver;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
   ask: (question: string) => Promise<string | undefined>;
@@ -250,6 +252,7 @@ async function handleScout(task: Task, params: OrchestrateParams, deps: Workflow
       dataRoots: readDataRoots(deps.root, deps.configDir),
       taskDir: taskDirFor(deps.root, deps.configDir, task.id),
       config: deps.config,
+      profile: deps.profile,
       signal: deps.signal,
       onUpdate: deps.onUpdate,
     },
@@ -344,6 +347,7 @@ function researchRequestFor(
     domain,
     instruction,
     config: deps.config,
+    profile: deps.profile,
     cwd: deps.cwd,
     taskDir,
     signal: deps.signal,
@@ -500,6 +504,7 @@ function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instructi
     cwd: deps.cwd,
     dataRoots: readDataRoots(deps.root, deps.configDir),
     config: deps.config,
+    profile: deps.profile,
     signal: deps.signal,
     onUpdate: deps.onUpdate,
   };
@@ -597,6 +602,7 @@ function qaRequest(deps: WorkflowDeps, task: Task, diff: string, instruction?: s
     cwd: deps.cwd,
     dataRoots: readDataRoots(deps.root, deps.configDir),
     config: deps.config,
+    profile: deps.profile,
     signal: deps.signal,
     onUpdate: deps.onUpdate,
   };

@@ -80,6 +80,15 @@ function configSourcePath(): string {
   return candidates.find((path) => existsSync(path)) ?? candidates[0]!;
 }
 
+/** The config file as written, unresolved; undefined when missing or unreadable. */
+export function readRawConfig(): unknown {
+  try {
+    return JSON.parse(readFileSync(configSourcePath(), "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
 /** Load the global config; fall back to defaults on any read/parse error. */
 export function loadConfig(): BotLobbyConfig {
   try {

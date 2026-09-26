@@ -4,11 +4,11 @@ import { Container, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import type { AgentRun } from "../schemas/findings.ts";
 import type { ProcessRunner } from "../execution/pi-runner.ts";
-import { inheritThinking } from "../schemas/configuration.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { truncate } from "../text.ts";
 import { applyStatus, reportRuns, summarizeRun } from "./ui.ts";
 import { isQuiet } from "./quiet.ts";
+import { createProfileResolver, modelRef, type ModelLookup } from "./model-support.ts";
 import {
   ORCHESTRATE_ACTIONS,
   runWorkflowAction,
@@ -57,22 +57,39 @@ const DESCRIPTION = [
   "The engine validates every step against the task state machine, so a rejected action means the workflow is not at that step yet.",
 ].join(" ");
 
-/** Build the engine dependencies from the current Pi context. `thinking` is the live session level used by agents configured to inherit it. */
+/** Resolve a `provider/id` (or bare id) against the models this session knows. */
+export function modelLookup(ctx: ExtensionContext): ModelLookup {
+  return (ref) => {
+    const slash = ref.indexOf("/");
+    if (slash > 0) return ctx.modelRegistry.find(ref.slice(0, slash), ref.slice(slash + 1));
+    return ctx.modelRegistry.getAvailable().find((model) => model.id === ref);
+  };
+}
+
+/** Build the engine dependencies from the current Pi context; every agent's model and thinking come from settings. */
 export function workflowDeps(
   ctx: ExtensionContext,
   configDir: string,
   signal: AbortSignal | undefined,
   onUpdate: ((run: AgentRun) => void) | undefined,
   runProcess?: ProcessRunner,
-  thinking?: string,
 ): WorkflowDeps {
   const root = detectProjectRoot(ctx.cwd, configDir);
   const hasUI = ctx.hasUI;
+  const config = loadConfig();
+  const warn = (message: string) => {
+    if (hasUI) ctx.ui.notify(message, "warning");
+  };
   return {
     root,
     configDir,
     cwd: ctx.cwd,
-    config: inheritThinking(loadConfig(), thinking),
+    config,
+    profile: createProfileResolver(config, {
+      lookup: modelLookup(ctx),
+      sessionModel: ctx.model ? modelRef(ctx.model) : undefined,
+      warn,
+    }),
     sessionId: ctx.sessionManager.getSessionId(),
     signal,
     onUpdate,
@@ -128,7 +145,7 @@ export function registerOrchestrateTool(pi: ExtensionAPI, configDir: string, run
     renderShell: "self",
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const root = detectProjectRoot(ctx.cwd, configDir);
-      const deps = workflowDeps(ctx, configDir, signal, runReporter(onUpdate, (runs) => reportRuns(ctx, root, configDir, runs)), runProcess, pi.getThinkingLevel());
+      const deps = workflowDeps(ctx, configDir, signal, runReporter(onUpdate, (runs) => reportRuns(ctx, root, configDir, runs)), runProcess);
       const result = await runWorkflowAction(params as OrchestrateParams, deps);
       if (params.action === "propose" && params.proposal && result.ok) {
         pi.appendEntry("bot-lobby", { kind: "proposal", taskId: params.taskId, text: params.proposal });
