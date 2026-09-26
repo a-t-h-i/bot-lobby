@@ -3,10 +3,16 @@ import type { Blocker } from "../schemas/task.ts";
 import type { FileChange, KnowledgeProposal, WorkerResult } from "../schemas/findings.ts";
 import { bullets, fieldValue, findSection, parseFileBullet, parsePushback, parseSections } from "./markdown.ts";
 
-/** Worker has no tool allowlist: it needs the full set to implement. */
+/**
+ * Workers implement, so they get the full built-in set, including the fast
+ * search tools; the file desk adds its own tools when workers run in parallel.
+ */
+export const WORKER_TOOLS: readonly string[] = ["read", "bash", "edit", "write", "grep", "find", "ls"];
+
 export const workerSpec: RoleSpec = {
   role: "worker",
   promptFile: "worker.md",
+  tools: WORKER_TOOLS,
   contract: [
     "### Output contract",
     "Respond with exactly these sections and nothing else: `## Completed`, `## Files Changed`,",

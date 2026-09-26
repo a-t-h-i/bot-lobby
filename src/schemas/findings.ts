@@ -67,6 +67,8 @@ export interface ReviewResult {
   requiredChanges: string[];
   optionalImprovements: string[];
   pushback?: Pushback;
+  /** Set when the engine downgraded an unsupported PASS. */
+  downgraded?: string;
   raw: string;
 }
 
