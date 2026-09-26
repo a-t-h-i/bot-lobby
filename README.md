@@ -83,8 +83,9 @@ structure.
 /bot-lobby amend <text>         Record an amendment; the Master re-proposes
 /bot-lobby decline              Decline the proposal and abandon the task
 /bot-lobby knowledge            Knowledge file sizes vs. the compaction threshold
+/bot-lobby runs [taskId]        Recent subagent runs: time, turns, tools, tokens, cost, model
 /bot-lobby config               Effective configuration and its file path
-/bot-lobby settings             Edit per-agent model, thinking, and instructions
+/bot-lobby settings             Edit each agent's model, thinking, time limit and instructions
 /bot-lobby-settings             Same as the settings subcommand
 /bot-lobby minimize|restore     Hide or restore bot-lobby for this session (ctrl+shift+m)
 /bot-lobby claim <taskId>      Take ownership of an orphaned task
@@ -136,19 +137,41 @@ four animated slots — DEV, DESIGN, RESEARCH and QA — each with a status face
 caption and two status rows: while running, a braille spinner beside the agent's
 live one-word activity (for example `⠋ reading` or `⠋ editing`) with its elapsed
 time on the row beneath; otherwise the coloured status glyph and state word over
-that elapsed time; and a full-width TASKS checklist windowed on the current
-step. Narrower
-terminals keep the
-boxed banner, header and compact animated strip, whose working line names the
-newest running agent's activity and elapsed time. Each sprite rests on one calm
-face and, independently every 20–30 s, briefly blinks (~500 ms) or emotes
-(~2 s, stepping through its kaomoji frames), all on one
-adaptive clock — 250 ms while work is live, 1 s when idle and ~120 ms while an
-expression plays or the oracle talks — and their faces, colours and words follow each agent's status
-(working, idle, done, failed). The large scene's rest and blink frames stay the
-five-column ASCII eyes, while its emote frames are status-aware kaomoji: nervous
-while working, happy when done (QA flexes and dances), scared on failure. The
-header progress bar is plan-derived.
+that elapsed time. A working agent's status row turns into a warning when it is
+waiting on a file (`⧗ waiting`), has gone quiet (`! quiet 1m`) or is retrying a
+provider call (`↻ retrying`). Under the agents, a live feed row says exactly what
+one of them is doing — `▸ DEV editing users.ts · turn 4 · 12 tools · 41k tok` —
+rotating between working agents every few seconds and putting warnings first
+(gone quiet, waiting on a file, asked to wrap up); once nothing runs it shows the
+last run's receipt. It only takes a spare line, so it never costs the tower, the
+agents or a checklist row. A full-width TASKS checklist windowed on the current
+step closes the scene. Narrower terminals keep the boxed banner, header and
+compact animated strip, whose working line names the newest running agent's
+activity, its target and elapsed time.
+
+Each agent has a kaomoji personality. About 300 faces across 15 emotions (happy,
+proud, love, excited, focused, curious, thinking, nervous, confused, sleepy, sad,
+angry, waiting, surprised, grateful) come from a shared pool every agent can use
+plus each agent's own set of at least four faces per emotion: DEV wears shades,
+flexes and flips tables `(╯°□°)╯︵ ┻━┻`; DESIGN sparkles `✧(◕‿◕✿)`; RESEARCH
+takes notes `φ(．．)` and shrugs `¯\_(ツ)_/¯`; QA side-eyes everything `(ಠ_ಠ)`,
+then flexes `ᕙ( • ‿ • )ᕗ` and dances `ᕕ( ᐛ )ᕗ` on a pass. The face follows what
+the agent is going through — curious while reading, nervous while tests run,
+confused when quiet, grateful when handed a file, happy or proud when done, sad
+or angry on failure — and every emote blinks: open face, a same-width blink, then
+its action (the flip, the sparkle, the bow). Each sprite rests on one calm
+five-column face and blinks (~500 ms) or emotes (~2 s) on its own schedule —
+every 8–15 s while working, 20–30 s when idle — and reacts immediately when its
+agent starts, finishes, fails, gets flagged or receives a file. Everything runs
+on one adaptive clock — 250 ms while work is live, 1 s when idle and ~120 ms
+while an expression plays or the oracle talks. The header progress bar is
+plan-derived.
+
+Every finished subagent run also leaves a one-line receipt in the transcript,
+for example `✓ DEV worker · 3m 12s · 9 turns · 23 tools · 41k↑ 6k↓ · $0.12 ·
+provider/model`, flagged when it stalled, hit its time limit or wrapped up early,
+and a stall or deadline raises a warning. `/bot-lobby runs` lists the task's
+recent runs the same way, which makes a slow model easy to spot.
 
 The checklist follows the workers through the plan. Plan steps are read from
 `Step N` headings, a `Steps`/`Sequence`/`Order` section, or numbered lines, and
@@ -192,7 +215,7 @@ One tool, every workflow step. It is the Master's only way to move a task.
 | `research` | any active | Summon the read-only Researcher (domain + instruction) for cited internet evidence; persists the report for audit |
 | `propose` | created…awaiting_approval | Record the proposal, request approval, handle approve/amend/decline |
 | `plan` | planning | Record the internal plan (all §12 areas required) |
-| `implement` | planning, implementing, reviewing | Delegate one step to a domain Worker |
+| `implement` | planning, implementing, reviewing | Delegate a step to a domain Worker, or several domains at once with `assignments` (parallel, sharing files through the file desk) |
 | `qa` | implementing, reviewing | Run the QA gate — the only review — over the whole feature |
 | `knowledge` | any active | Record Master-approved knowledge or a decision |
 | `compact` | any active | Replace a knowledge file with a rewritten version (archived) |
@@ -225,6 +248,53 @@ Research is evidence only: it is not injected into worker, reviewer, or QA
 prompts, and it never enters persistent knowledge automatically. The Master must
 decide to record it with `action=knowledge`.
 
+## Subagent runtime
+
+Every scout, worker, reviewer and researcher is an isolated `pi --mode rpc`
+process: the task goes in over stdin, and the run ends when the agent settles.
+The runner watches every run:
+
+- **Wrap-up nudge.** At 75% of its time limit (`workflow.wrapUpAt`) the agent is
+  steered to stop exploring, leave its files consistent and report now, so a
+  slow agent returns partial work instead of nothing. The receipt and the
+  Master's report flag the run as wrapped up early.
+- **Deadline.** At the time limit the agent is aborted, then killed after a short
+  grace. A spent deadline is never retried.
+- **Stall watchdog.** An agent that produces no output for `stallTimeoutMs`
+  (3 min) — or `toolStallTimeoutMs` (10 min) during a single tool call such as a
+  test run — is killed as stalled and retried once. pi's own provider retry
+  backoff extends the allowance.
+- **Clean kills.** Each subagent leads its own process group, so a kill takes any
+  dev server or watch-mode test it started with it, and a run ends on process
+  exit even if a leftover process still holds its output pipe.
+- **No dead ends.** Dialogs from other extensions are auto-cancelled inside
+  subagents, and startup network checks are skipped (`PI_OFFLINE`,
+  `PI_SKIP_VERSION_CHECK`) to cut spawn time.
+
+## Parallel workers and the file desk
+
+`orchestrate action=implement` with `assignments` (one entry per domain) runs
+those workers at the same time. They share the working tree through a file desk
+kept in the Master's process, like people sharing a physical document:
+
+- Before editing a file a worker calls `claim_file` with the path and a one-line
+  intent. A free file is granted at once; an `edit`/`write` on an unclaimed file
+  is refused. Reading never needs a claim.
+- A busy file queues the claimant, who keeps working on its other files. The
+  holder is told the queue in order, with each worker's intent (`my_files` shows
+  it any time).
+- `handover_file` passes the file to whoever is next, with a note written for
+  that worker's intent; the receiver is told what changed and who waits behind
+  it, and re-reads the file before editing.
+- A worker that finishes or crashes hands over everything it still holds, with a
+  note built from its report. `wait_for_files` refuses while the caller owes a
+  file someone else waits for, which breaks deadlock cycles.
+
+Workers reach the desk over a private Unix socket (a named pipe on Windows)
+through bot-lobby's own extension, which loads inside every subagent; the Master
+is warned if a worker never checked in. Edits made through bash commands are
+governed by the prompt, not enforced.
+
 ## What the engine enforces (not just prompts)
 
 | Rule | Enforcement |
@@ -241,12 +311,17 @@ decide to record it with `action=knowledge`.
 | Completion is gated | Plan, passing QA gate, no blockers or pending approvals |
 | A task has one owning session | Ownership is stamped at start; a foreign session is rejected unless it claims the task |
 | Proposals are short and scannable | `validateProposal` rejects non-bullet or over-long proposals before they reach the user |
-| Failure is never success | Unknown verdicts, empty output, crashes, and timeouts map to failed/timeout/blocked |
+| Failure is never success | Unknown verdicts, empty output, crashes, stalls and timeouts map to failed/timeout/blocked |
+| The QA gate never passes by default | A PASS that cites no executed check under `## Verification` is downgraded to CHANGES_REQUIRED |
+| Parallel workers never edit the same file at once | `edit`/`write` need a claim from the file desk; busy files queue and are handed over with notes |
+| A hung agent cannot hold a step | Stall watchdog, wrap-up nudge, deadline abort and process-group kill; deadlines are never retried |
 | Task state is never corrupted by a crash | Single mutation point + disk state; interrupted tasks resume from their state |
 
 Domain boundaries between *writers* remain prompt-enforced and Master
-coordinated: Workers run sequentially and only the affected domain is asked to
-change its own code. Worktree isolation is deferred (§14 of the plan).
+coordinated: only the affected domain is asked to change its own code. Workers
+run one at a time unless the Master delegates several domains together, in
+which case the file desk serialises edits per file. Worktree isolation is
+deferred (§14 of the plan).
 
 ## Configuration
 
@@ -258,18 +333,24 @@ top-level `/bot-lobby-settings`) and persist globally to
 {
   "master": { "model": "inherit", "thinking": "high", "instructions": "" },
   "agents": {
-    "designer": { "model": "inherit", "thinking": "medium", "instructions": "" },
-    "backend": { "model": "inherit", "thinking": "medium", "instructions": "" },
-    "qa": { "model": "inherit", "thinking": "high", "instructions": "" }
+    "designer": { "model": "anthropic/claude-sonnet-5", "thinking": "medium", "instructions": "", "timeoutMs": 900000 },
+    "backend": { "model": "anthropic/claude-sonnet-5", "thinking": "medium", "instructions": "", "timeoutMs": 900000 },
+    "qa": { "model": "anthropic/claude-sonnet-5", "thinking": "medium", "instructions": "", "timeoutMs": 900000 }
   },
+  "scout": { "model": "anthropic/claude-haiku-4-5-20251001", "timeoutMs": 480000 },
+  "researcher": { "model": "anthropic/claude-sonnet-5", "thinking": "low", "instructions": "", "timeoutMs": 600000 },
   "workflow": {
     "maxReviewIterations": 2,
     "maxParallelScouts": 3,
+    "maxParallelWorkers": 3,
     "requireApprovalForFeatures": true,
     "requireApprovalForDependencies": true,
     "requireApprovalForArchitectureChanges": true,
     "agentTimeoutMs": 900000,
-    "maxAgentRetries": 1
+    "maxAgentRetries": 1,
+    "stallTimeoutMs": 180000,
+    "toolStallTimeoutMs": 600000,
+    "wrapUpAt": 0.75
   },
   "knowledge": {
     "compactionThreshold": 20000,
@@ -280,10 +361,25 @@ top-level `/bot-lobby-settings`) and persist globally to
 }
 ```
 
-`"model": "inherit"` uses the session's model; any other value is passed to the
-subagent as `--model` (e.g. `"anthropic/claude-sonnet-4-5"`). `thinking` must be
-one of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`; an invalid value
-falls back to the default. `instructions` is appended to that agent's compiled
+Every agent runs on the model and thinking level its settings name — nothing
+inherits the live session's thinking level. Designer and Backend workers use
+their domain's entry, QA's workers and the QA gate use QA's, and scouts and the
+researcher have their own entries. Scouts always run at `low` thinking (their
+entry offers a model and a time limit only); every other agent's thinking is
+yours to set, defaulting to `medium` (`low` for the researcher). A subagent
+whose model is not set yet runs on the session's model, and opening
+`/bot-lobby settings` pins such entries to that model so the choice is always
+visible; only the master keeps `inherit`, since it is the session itself.
+Each subagent entry has a `timeoutMs` (default 15 min; scouts 8, researcher 10),
+falling back to `workflow.agentTimeoutMs`.
+
+`thinking` must be one of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`,
+`max`; a legacy `inherit` or unknown value falls back to `medium`. The thinking
+picker lists only the levels the selected model supports. Switching to a model
+that cannot run the saved level warns ("\"xhigh\" thinking isn't supported by
+provider/model — using \"high\"") and saves the nearest supported level; a run
+whose level its model cannot use is clamped the same way with a one-time
+warning, and `/bot-lobby config` lists any mismatch. `instructions` is appended to that agent's compiled
 system prompt as a `Custom Instructions` layer (empty layers are dropped). The
 master's model and thinking are applied to the live session when a task starts
 and when you change them in the settings TUI. A malformed config falls back to
@@ -363,9 +459,10 @@ src/
 │   ├── transitions.ts        Legal state machine
 │   └── approvals.ts          Dependency/architecture/pushback approval bookkeeping
 ├── execution/
-│   ├── agent-runner.ts       Single/parallel/sequential runs, cancellation, retries
-│   ├── pi-runner.ts          Isolated `pi --mode json` subprocess + stream parsing
+│   ├── agent-runner.ts       Single/parallel/sequential runs, live run state, cancellation, retries
+│   ├── pi-runner.ts          Isolated `pi --mode rpc` subprocess, watchdog, stream parsing
 │   └── git.ts                Diff evidence for reviewers
+├── desk/                     File desk for parallel workers: checkout table, socket, worker extension
 ├── knowledge/                Paths, store (single write path), selector, compactor
 ├── prompts/                  Layer loader + compiler
 ├── state/                    Project root, config, task persistence, state mutation
@@ -420,7 +517,8 @@ Included: the full workflow above, persistent knowledge with governance and
 compaction, bounded review loops, dependency/architecture approval, retries,
 cancellation, corrupted-state detection, and the commands/status UI.
 
-Deliberately deferred (matching the build plan): worktree-based parallel
-Workers, a large dashboard, cost/token analytics beyond per-run usage, and
+Deliberately deferred (matching the build plan): worktree-based isolation for
+parallel Workers (they share one working tree through the file desk), a large
+dashboard, cost/token analytics beyond per-run usage, and
 cross-platform runtime abstractions. The internal module boundaries keep those
 extractable.
