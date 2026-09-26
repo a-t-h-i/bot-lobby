@@ -30,6 +30,15 @@ const OrchestrateSchema = Type.Object({
   plan: Type.Optional(Type.String({ description: "plan: the detailed internal plan" })),
   domain: Type.Optional(Type.String({ description: "implement/research: designer, backend, or qa" })),
   task: Type.Optional(Type.String({ description: "implement: the concrete step for that domain's worker" })),
+  assignments: Type.Optional(
+    Type.Array(
+      Type.Object({
+        domain: Type.String({ description: "designer, backend, or qa" }),
+        task: Type.String({ description: "the concrete step(s) for that domain's worker" }),
+      }),
+      { description: "implement: run several domains in parallel (distinct domains); workers share files through the file desk" },
+    ),
+  ),
   approvalId: Type.Optional(Type.String({ description: "resolve_approval: the approval id from a worker result" })),
   decision: Type.Optional(
     StringEnum(["approved", "rejected"] as const, { description: "resolve_approval: approve or reject the request" }),
@@ -50,7 +59,7 @@ const DESCRIPTION = [
   "Actions: clarify (ask the user), scout (domain reconnaissance in parallel), research (summon the",
   "read-only researcher for cited internet evidence on a complex change, tool, plugin, doc set or",
   "dependency), propose (record the proposal and request approval), plan (record the internal",
-  "plan), implement (delegate one step to a domain worker), qa (final quality gate and the only",
+  "plan), implement (delegate a step to a domain worker, or several domains in parallel with assignments), qa (final quality gate and the only",
   "review), knowledge (record approved knowledge or a decision),",
   "compact (replace a knowledge file with a rewritten version, archiving the old one),",
   "resolve_approval (approve or reject a request), complete (declare the task done after the gates",

@@ -136,6 +136,8 @@ export interface WorkerOutcome {
 }
 
 export interface WorkerRequest {
+  /** Extra run wiring for parallel batches: the file desk's env, tools and hooks. */
+  agent?: Pick<AgentRequest, "env" | "extraTools" | "onStart" | "onAttemptEnd">;
   taskId: string;
   domain: Domain;
   /** What the Master wants implemented. */
@@ -191,6 +193,7 @@ export async function runWorker(
       signal: request.signal,
       onUpdate: request.onUpdate,
       ...watchdogOptions(request.config.workflow),
+      ...request.agent,
     },
     run,
   );
