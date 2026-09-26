@@ -1,6 +1,6 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -53,26 +53,25 @@ test("only real pi launchers are treated as pi", () => {
   assert.ok(!isPiLauncher("/root/proj/test/e2e.test.ts"));
 });
 
-test("buildPiArgs contains isolation flags, role tools, and the task", () => {
+test("buildPiArgs contains RPC isolation flags and role tools, never the task", () => {
   const args = buildPiArgs({
     cwd: "/proj",
-    task: "Do the thing",
     tools: ["read", "grep"],
     model: "provider/model",
     thinking: "high",
     timeoutMs: 1000,
     systemPromptFile: "/tmp/system.md",
   });
-  assert.deepEqual(args.slice(0, 4), ["--mode", "json", "-p", "--no-session"]);
+  assert.deepEqual(args.slice(0, 5), ["--mode", "rpc", "--no-session", "--no-prompt-templates", "--no-themes"]);
   assert.ok(args.includes("--tools"));
   assert.equal(args[args.indexOf("--tools") + 1], "read,grep");
   assert.equal(args[args.indexOf("--model") + 1], "provider/model");
   assert.equal(args[args.indexOf("--append-system-prompt") + 1], "/tmp/system.md");
-  assert.equal(args.at(-1), "Task: Do the thing");
+  assert.ok(!args.some((arg) => arg.includes("Do the thing")));
 });
 
 test("buildPiArgs omits --model when inheriting", () => {
-  const args = buildPiArgs({ cwd: "/p", task: "t", model: "inherit", timeoutMs: 1 });
+  const args = buildPiArgs({ cwd: "/p", model: "inherit", timeoutMs: 1 });
   assert.ok(!args.includes("--model"));
 });
 
@@ -238,7 +237,9 @@ function activityScript(): string {
 
 test("stream collector forwards tool starts while keeping only the report", () => {
   const tools: string[] = [];
-  const collector = createStreamCollector((event) => tools.push(event.toolName));
+  const collector = createStreamCollector((event) => {
+    if (event.type === "tool_execution_start") tools.push(event.toolName);
+  });
   const toolLine = JSON.stringify({ type: "tool_execution_start", toolCallId: "1", toolName: "grep" });
   const report = assistantEvent("report");
   collector.push(`${toolLine}\n${report.slice(0, 10)}`);
@@ -294,11 +295,199 @@ test("absent onEvent and onActivity callbacks are optional", async () => {
 
 test("stream collector joins a line split over many chunks and several lines in one chunk", () => {
   const tools: string[] = [];
-  const collector = createStreamCollector((event) => tools.push(event.toolName));
+  const collector = createStreamCollector((event) => {
+    if (event.type === "tool_execution_start") tools.push(event.toolName);
+  });
   const report = assistantEvent("many chunks — ünïcode report");
   for (let at = 0; at < report.length; at += 3) collector.push(report.slice(at, at + 3));
   const tool = JSON.stringify({ type: "tool_execution_start", toolCallId: "1", toolName: "read" });
   collector.push(`\n${tool}\n${JSON.stringify({ type: "message_update", usage: {} })}\n`);
   assert.equal(parsePiStream(collector.finish()).text, "many chunks — ünïcode report");
   assert.deepEqual(tools, ["read"]);
+});
+
+/* -------------------------------------------------------------------------
+ * RPC transport: stub pi processes that speak the stdin/stdout protocol.
+ * ---------------------------------------------------------------------- */
+
+/** A stub pi whose `onCommand(cmd, emit)` body reacts to each RPC command; stdin end exits. */
+function rpcStub(body: string, preamble = ""): string {
+  return [
+    "#!/usr/bin/env node",
+    'import { appendFileSync } from "node:fs";',
+    preamble,
+    "const log = process.env.STUB_LOG;",
+    "const emit = (event) => process.stdout.write(JSON.stringify(event) + '\\n');",
+    `const report = (text) => emit(${JSON.stringify(JSON.parse(assistantEvent("__TEXT__")))});`.replace(
+      '"__TEXT__"',
+      "text",
+    ),
+    "const settle = () => { emit({ type: 'agent_end', messages: [], willRetry: false }); emit({ type: 'agent_settled' }); };",
+    "async function onCommand(cmd) {",
+    body,
+    "}",
+    "let buffer = '';",
+    "process.stdin.setEncoding('utf8');",
+    "process.stdin.on('data', (chunk) => {",
+    "  buffer += chunk;",
+    "  let at;",
+    "  while ((at = buffer.indexOf('\\n')) >= 0) {",
+    "    const line = buffer.slice(0, at); buffer = buffer.slice(at + 1);",
+    "    if (!line) continue;",
+    "    const cmd = JSON.parse(line);",
+    "    if (log) appendFileSync(log, JSON.stringify(cmd) + '\\n');",
+    "    void onCommand(cmd);",
+    "  }",
+    "});",
+    "process.stdin.on('end', () => process.exit(0));",
+  ].join("\n");
+}
+
+function commandLog(): { path: string; read(): Array<Record<string, unknown>> } {
+  const path = join(mkdtempSync(join(tmpdir(), "dh-rpc-log-")), "commands.jsonl");
+  return {
+    path,
+    read() {
+      try {
+        return readFileSync(path, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+      } catch {
+        return [];
+      }
+    },
+  };
+}
+
+async function withStub<T>(script: string, fn: (log: ReturnType<typeof commandLog>) => Promise<T>): Promise<T> {
+  const cleanup = withFakePi(script);
+  const log = commandLog();
+  const previous = process.env.STUB_LOG;
+  process.env.STUB_LOG = log.path;
+  try {
+    return await fn(log);
+  } finally {
+    if (previous === undefined) delete process.env.STUB_LOG;
+    else process.env.STUB_LOG = previous;
+    cleanup();
+  }
+}
+
+test("rpc: the task arrives as a prompt on stdin and agent_settled ends the run", async () => {
+  const script = rpcStub(`
+    if (cmd.type !== "prompt") return;
+    emit({ type: "turn_start" });
+    emit({ type: "tool_execution_start", toolCallId: "1", toolName: "read", args: { path: "src/app.ts" } });
+    emit({ type: "tool_execution_end", toolCallId: "1", toolName: "read", isError: false });
+    emit({ type: "message_update", assistantMessageEvent: { type: "thinking_delta", delta: "hm" } });
+    emit({ type: "message_update", assistantMessageEvent: { type: "thinking_delta", delta: "m" } });
+    emit({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "ok" } });
+    report("## done " + cmd.message);
+    settle();`);
+  await withStub(script, async (log) => {
+    const events: string[] = [];
+    const result = await runPiAgent({ cwd: process.cwd(), task: "ship it", timeoutMs: 20_000, onEvent: (event) => events.push(event.type) });
+    assert.equal(result.status, "success");
+    assert.match(result.output, /## done Task: ship it/);
+    const commands = log.read();
+    assert.equal(commands[0]!.type, "prompt");
+    assert.equal(commands[0]!.message, "Task: ship it");
+    for (const type of ["turn_start", "tool_execution_start", "tool_execution_end", "thinking", "writing", "usage"]) {
+      assert.ok(events.includes(type), `${type} forwarded`);
+    }
+    assert.equal(events.filter((type) => type === "thinking").length, 1, "thinking reported once per phase");
+  });
+});
+
+test("rpc: a silent agent is killed as stalled", async () => {
+  const script = rpcStub("", "setInterval(() => {}, 1000);");
+  await withStub(script, async () => {
+    const started = Date.now();
+    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 20_000, stallTimeoutMs: 300 });
+    assert.equal(result.status, "timeout");
+    assert.equal(result.stalled, true);
+    assert.match(result.error!, /stalled: no output/);
+    assert.ok(Date.now() - started < 10_000, "stall detection is prompt");
+  });
+});
+
+test("rpc: provider retries extend the silence allowance and are forwarded", async () => {
+  const script = rpcStub(`
+    if (cmd.type !== "prompt") return;
+    emit({ type: "auto_retry_start", attempt: 1, maxAttempts: 3, delayMs: 600, errorMessage: "429 rate limited" });
+    emit({ type: "compaction_start", reason: "threshold" });
+    setTimeout(() => { emit({ type: "auto_retry_end", success: true, attempt: 1 }); report("## done"); settle(); }, 500);`);
+  await withStub(script, async () => {
+    const events: string[] = [];
+    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 20_000, stallTimeoutMs: 250, onEvent: (event) => events.push(event.type) });
+    assert.equal(result.status, "success", result.error);
+    assert.ok(events.includes("retry") && events.includes("retry_end") && events.includes("compaction"));
+  });
+});
+
+test("rpc: the agent is steered to wrap up before the deadline and its report is kept", async () => {
+  const script = rpcStub(`
+    if (cmd.type === "steer") { report("## partial report"); settle(); }`, "setInterval(() => {}, 1000);");
+  await withStub(script, async (log) => {
+    const events: string[] = [];
+    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 10_000, wrapUpAtMs: 200, onEvent: (event) => events.push(event.type) });
+    assert.equal(result.status, "success");
+    assert.equal(result.wrappedUp, true);
+    assert.match(result.output, /partial report/);
+    assert.ok(events.includes("wrap_up"));
+    assert.ok(log.read().some((command) => command.type === "steer"));
+  });
+});
+
+test("rpc: the deadline aborts the agent and times it out", async () => {
+  const script = rpcStub("", "setInterval(() => emit({ type: 'turn_start' }), 50); process.stdin.removeAllListeners('end');");
+  await withStub(script, async (log) => {
+    const pending = spawnPiProcess([], { cwd: process.cwd(), timeoutMs: 300, prompt: "Task: t", graceMs: 100 });
+    const outcome = await pending;
+    assert.equal(outcome.timedOut, true);
+    assert.ok(log.read().some((command) => command.type === "abort"), "abort sent before the kill");
+  });
+});
+
+test("rpc: a grandchild holding stdout does not hang the run", async () => {
+  const script = rpcStub(`
+    if (cmd.type !== "prompt") return;
+    spawn("sleep", ["30"], { stdio: ["ignore", "inherit", "inherit"] });
+    report("## done");
+    settle();`, 'import { spawn } from "node:child_process";');
+  await withStub(script, async () => {
+    const started = Date.now();
+    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 20_000 });
+    assert.equal(result.status, "success");
+    assert.ok(Date.now() - started < 8_000, `finished in ${Date.now() - started}ms`);
+  });
+});
+
+test("rpc: extension dialogs are cancelled instead of blocking the agent", async () => {
+  const script = rpcStub(`
+    if (cmd.type === "prompt") emit({ type: "extension_ui_request", id: "d1", method: "select", title: "Pick", options: ["a"] });
+    if (cmd.type === "extension_ui_response" && cmd.id === "d1" && cmd.cancelled) { report("## unblocked"); settle(); }`);
+  await withStub(script, async () => {
+    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 20_000 });
+    assert.equal(result.status, "success");
+    assert.match(result.output, /unblocked/);
+  });
+});
+
+test("rpc: a rejected prompt fails the run with the host's reason", async () => {
+  const script = rpcStub(`
+    if (cmd.type === "prompt") emit({ type: "response", id: cmd.id, command: "prompt", success: false, error: "model not found" });`);
+  await withStub(script, async () => {
+    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 20_000 });
+    assert.equal(result.status, "failed");
+    assert.match(result.error!, /model not found/);
+  });
+});
+
+test("rpc: onStart exposes a steering handle", async () => {
+  const script = rpcStub(`
+    if (cmd.type === "steer" && cmd.message === "hello worker") { report("## steered"); settle(); }`, "setInterval(() => {}, 1000);");
+  await withStub(script, async () => {
+    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 20_000, onStart: (handle) => handle.steer("hello worker") });
+    assert.equal(result.status, "success");
+    assert.match(result.output, /steered/);
+  });
 });
