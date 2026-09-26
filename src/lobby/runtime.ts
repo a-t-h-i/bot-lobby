@@ -18,10 +18,10 @@ import { appendMetrics, readMetrics, type MetricStatus } from "../state/metrics.
 import { describeToolCall } from "../pi/activity.ts";
 import { applyStatus, currentZenTask, isMinimized, onMinimizeChange, onRunUpdates, setMinimized, setWidgetSuppressor, ZenScene, zenSnapshot } from "../pi/ui.ts";
 import { isSubagentProcess } from "../pi/quiet.ts";
-import { modelRef, resolveLobbyProfile } from "../pi/model-support.ts";
+import { modelRef, resolveLobbyProfile, resolvePanelProfile } from "../pi/model-support.ts";
 import { modelLookup } from "../pi/tools.ts";
 import { startTask } from "../pi/start-task.ts";
-import type { LobbyAgentKind } from "../schemas/configuration.ts";
+import type { LobbyAgentKind, PanelMember } from "../schemas/configuration.ts";
 import { chatFromEntries, chatText, lobbyFeed, textOf } from "./feed.ts";
 import { QuickFixQueue } from "./quickfix.ts";
 import { PlanningSession, type PlannerSeed } from "./planner.ts";
@@ -141,14 +141,25 @@ function startPlanned(state: Runtime, plan: PlannedTask): string {
   return `starting ${plan.id} as a task…`;
 }
 
-function newPlanner(state: Runtime, seed?: PlannerSeed): PlanningSession {
+function seatProfile(state: Runtime, member: PanelMember) {
+  return resolvePanelProfile(loadConfig(), member, {
+    lookup: modelLookup(state.ctx),
+    sessionModel: sessionModel(state.ctx),
+    warn: (message) => state.ctx.ui.notify(message, "warning"),
+  });
+}
+
+function newPlanner(state: Runtime, seed?: PlannerSeed, seats?: readonly PanelMember[]): PlanningSession {
   state.planner?.cancel();
-  const workflow = loadConfig().workflow;
+  const config = loadConfig();
+  const workflow = config.workflow;
   state.planner = new PlanningSession({
     cwd: state.ctx.cwd,
     root: state.root,
     configDir: state.configDir,
     profile: () => lobbyProfile(state, "planner"),
+    memberProfile: (member) => seatProfile(state, member),
+    panel: seats ?? config.lobby.planningPanel,
     stallTimeoutMs: workflow.stallTimeoutMs,
     toolStallTimeoutMs: workflow.toolStallTimeoutMs,
     feed: lobbyFeed,
@@ -186,7 +197,12 @@ function host(state: Runtime, tui: TUI): LobbyHost {
     hide: () => hideLobby(),
     quickfix: state.quickfix,
     planner: () => state.planner,
-    newPlanner: (seed) => newPlanner(state, seed),
+    newPlanner: (seed, seats) => newPlanner(state, seed, seats),
+    defaultPanel: () => loadConfig().lobby.planningPanel,
+    seatLabel: (member) => {
+      const profile = seatProfile(state, member);
+      return `${profile.model ?? "session model"} · ${profile.thinking}`;
+    },
     issues: state.issues,
     profileLabel: (kind) => {
       const profile = lobbyProfile(state, kind);

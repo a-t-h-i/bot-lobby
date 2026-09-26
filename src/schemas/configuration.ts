@@ -75,9 +75,20 @@ export interface KnowledgeConfig {
   scratchpadMaxChars: number;
 }
 
-/** The full-screen lobby: whether it opens by itself when this session starts or resumes a task. */
+/** Planning panel seats: each domain agent, plus the researcher, questions the user in plan mode. */
+export const PANEL_MEMBERS = ["backend", "designer", "qa", "researcher"] as const;
+export type PanelMember = (typeof PANEL_MEMBERS)[number];
+
+export function isPanelMember(value: string): value is PanelMember {
+  return (PANEL_MEMBERS as readonly string[]).includes(value);
+}
+
+/** The full-screen lobby. */
 export interface LobbyConfig {
+  /** Open by itself when this session starts or resumes a task. */
   autoOpen: boolean;
+  /** Who sits on the planning panel next to the oracle, until toggled in the Plan tab. */
+  planningPanel: PanelMember[];
 }
 
 export interface BotLobbyConfig {
@@ -124,7 +135,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     scratchpadMaxParagraphs: 4,
     scratchpadMaxChars: 2000,
   },
-  lobby: { autoOpen: true },
+  lobby: { autoOpen: true, planningPanel: [...PANEL_MEMBERS] },
 };
 
 function positive(value: unknown): number | undefined {
@@ -149,8 +160,14 @@ function normalizeScout(override: Partial<ScoutConfig> | undefined): ScoutConfig
 }
 
 function normalizeLobby(value: unknown): LobbyConfig {
-  const autoOpen = (value as Partial<LobbyConfig> | undefined)?.autoOpen;
-  return { autoOpen: typeof autoOpen === "boolean" ? autoOpen : DEFAULT_CONFIG.lobby.autoOpen };
+  const source = value as { autoOpen?: unknown; planningPanel?: unknown } | undefined;
+  const panel = Array.isArray(source?.planningPanel)
+    ? [...new Set(source.planningPanel.filter((entry): entry is PanelMember => typeof entry === "string" && isPanelMember(entry)))]
+    : [...DEFAULT_CONFIG.lobby.planningPanel];
+  return {
+    autoOpen: typeof source?.autoOpen === "boolean" ? source.autoOpen : DEFAULT_CONFIG.lobby.autoOpen,
+    planningPanel: PANEL_MEMBERS.filter((member) => panel.includes(member)),
+  };
 }
 
 /** Deep-merge user config over defaults, keeping unknown keys out. */
@@ -228,6 +245,16 @@ export function lobbyAgentConfig(config: BotLobbyConfig, kind: LobbyAgentKind): 
 export function lobbyAgentProfile(config: BotLobbyConfig, kind: LobbyAgentKind): { model?: string; thinking: string; timeoutMs: number; instructions?: string } {
   const entry = lobbyAgentConfig(config, kind);
   return { model: modelOf(entry.model), thinking: entry.thinking, timeoutMs: entry.timeoutMs ?? config.workflow.agentTimeoutMs, instructions: entry.instructions };
+}
+
+/**
+ * A planning panel seat's profile: the domain's (or the researcher's) model,
+ * thinking and custom instructions, bounded by the planner's per-turn limit.
+ */
+export function panelMemberProfile(config: BotLobbyConfig, member: PanelMember): { model?: string; thinking: string; timeoutMs: number; instructions?: string } {
+  const entry = member === "researcher" ? config.researcher : config.agents[member];
+  const timeoutMs = config.planner.timeoutMs ?? config.workflow.agentTimeoutMs;
+  return { model: modelOf(entry.model), thinking: entry.thinking, timeoutMs, instructions: entry.instructions };
 }
 
 /** Resolves the model, thinking and time limit one subagent run uses. */
