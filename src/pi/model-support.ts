@@ -3,7 +3,9 @@ import {
   agentProfile,
   isThinkingLevel,
   lobbyAgentProfile,
+  panelMemberProfile,
   type LobbyAgentKind,
+  type PanelMember,
   THINKING_LEVELS,
   type BotLobbyConfig,
   type ProfileResolver,
@@ -88,19 +90,30 @@ export function createProfileResolver(config: BotLobbyConfig, options: ResolverO
   };
 }
 
-/** A lobby agent's model, thinking and time limit: unset models run on the session's, thinking is clamped. */
-export function resolveLobbyProfile(config: BotLobbyConfig, kind: LobbyAgentKind, options: ResolverOptions): { model?: string; thinking: string; timeoutMs: number; instructions?: string } {
-  const profile = lobbyAgentProfile(config, kind);
+type RunProfile = { model?: string; thinking: string; timeoutMs: number; instructions?: string };
+
+/** Unset models run on the session's; thinking is clamped to the model, with a one-time warning. */
+function resolveRunProfile(profile: RunProfile, label: string, options: ResolverOptions): RunProfile {
   const model = profile.model ?? options.sessionModel;
   const check = checkThinking(model ? options.lookup(model) : undefined, profile.thinking);
   if (check.warning) {
-    const message = `bot-lobby: ${kindLabel(kind)} — ${check.warning}. Change it in /bot-lobby settings.`;
+    const message = `bot-lobby: ${label} — ${check.warning}. Change it in /bot-lobby settings.`;
     if (!warned.has(message)) {
       warned.add(message);
       options.warn?.(message);
     }
   }
   return { ...profile, model, thinking: check.level };
+}
+
+/** A lobby agent's model, thinking and time limit. */
+export function resolveLobbyProfile(config: BotLobbyConfig, kind: LobbyAgentKind, options: ResolverOptions): RunProfile {
+  return resolveRunProfile(lobbyAgentProfile(config, kind), kindLabel(kind), options);
+}
+
+/** A planning panel seat's model, thinking and time limit, from its domain's (or the researcher's) settings. */
+export function resolvePanelProfile(config: BotLobbyConfig, member: PanelMember, options: ResolverOptions): RunProfile {
+  return resolveRunProfile(panelMemberProfile(config, member), kindLabel(member), options);
 }
 
 /** Every configured subagent whose thinking level its model does not support, for `/bot-lobby config`. */

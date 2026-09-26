@@ -16,7 +16,7 @@ import type { MetricRecord } from "../src/state/metrics.ts";
 import type { ProcessRunner } from "../src/execution/pi-runner.ts";
 import { activityLine, chatLines, renderHome } from "../src/lobby/tabs/home.ts";
 import { renderTasks, taskDetailLines, taskRows } from "../src/lobby/tabs/tasks.ts";
-import { renderPlan } from "../src/lobby/tabs/plan.ts";
+import { renderPlan, type SeatView } from "../src/lobby/tabs/plan.ts";
 import { jobDetailLines } from "../src/lobby/tabs/quickfix.ts";
 import { renderIssues } from "../src/lobby/tabs/issues.ts";
 import { fittedColumns, renderMetrics } from "../src/lobby/tabs/metrics.ts";
@@ -47,11 +47,12 @@ interface Calls {
   aborted: number;
   hidden: number;
   seeds: Array<PlannerSeed | undefined>;
+  seats: Array<string[] | undefined>;
 }
 
 function makeView(options: { rows?: number; busy?: boolean; task?: Task; tasks?: Task[]; plans?: PlannedTask[]; exec?: Exec } = {}) {
   const root = mkdtempSync(join(tmpdir(), "bl-view-"));
-  const calls: Calls = { oracle: [], comments: [], started: [], discarded: [], aborted: 0, hidden: 0, seeds: [] };
+  const calls: Calls = { oracle: [], comments: [], started: [], discarded: [], aborted: 0, hidden: 0, seeds: [], seats: [] };
   const rows = options.rows ?? 40;
   const tui = { terminal: { rows, columns: 120 }, requestRender() {} } as unknown as TUI;
   const feed = new LobbyFeed();
@@ -88,11 +89,14 @@ function makeView(options: { rows?: number; busy?: boolean; task?: Task; tasks?:
     hide: () => void (calls.hidden += 1),
     quickfix,
     planner: () => planner,
-    newPlanner: (seed) => {
+    newPlanner: (seed, seats) => {
       calls.seeds.push(seed);
-      planner = new PlanningSession({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high", timeoutMs: 1000 }), runProcess: hangingRunner }, seed);
+      calls.seats.push(seats ? [...seats] : undefined);
+      planner = new PlanningSession({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high", timeoutMs: 1000 }), ...(seats ? { panel: seats } : {}), runProcess: hangingRunner }, seed);
       return planner;
     },
+    defaultPanel: () => ["backend", "designer", "qa", "researcher"],
+    seatLabel: (member) => `p/${member} · medium`,
     issues,
     profileLabel: () => "p/model · high",
     requestRender: () => {},
@@ -236,7 +240,7 @@ test("the Plan prompt starts a planning session; s without a draft warns", () =>
   view.handleInput("s");
   assert.ok(view.render(120).at(-1)!.includes("there is no draft plan to save yet"));
   view.handleInput("x");
-  assert.ok(view.render(120).at(-1)!.includes("stopping the planner"));
+  assert.ok(view.render(120).at(-1)!.includes("stopping the panel"));
 });
 
 test("n files an issue and p plans the selected one", async () => {
@@ -330,18 +334,65 @@ test("task detail shows plan progress, comment status, and recent runs", () => {
   assert.ok(lines.some((line) => line.includes("Comments") && line.includes("1 open")));
 });
 
-test("the plan tab shows the verdict, the conversation and the draft", () => {
+test("the plan tab shows the verdict, the roster, attributed questions, the draft and each seat's needs", () => {
+  const seat = (label: string, extra: Partial<SeatView> = {}): SeatView => ({ label, seated: true, status: "done", questions: 0, ready: false, ...extra });
   const lines = renderPlan({
-    session: { messages: [{ role: "you", text: "dark mode", at: 0 }, { role: "planner", text: "1. Which pages?", at: 1 }], reply: { status: "grilling", questions: ["Which pages?"], plan: "### Steps\n1. tokens" }, busy: false, turns: 1, title: "Dark mode" },
+    session: {
+      messages: [
+        { role: "you", text: "dark mode", at: 0 },
+        { role: "planner", text: "", at: 1, questions: [{ from: "ORACLE", text: "Ship behind a flag?" }, { from: "DESIGN", text: "Which pages?" }] },
+      ],
+      reply: { status: "grilling", questions: ["Ship behind a flag?"], plan: "### Steps\n1. tokens" },
+      questions: [{ from: "ORACLE", text: "Ship behind a flag?" }, { from: "DESIGN", text: "Which pages?" }],
+      notes: [{ from: "QA", text: "e2e tests in tests/e2e" }],
+      seats: [seat("ORACLE", { questions: 1 }), seat("DEV", { status: "thinking", step: "reading api.ts" }), seat("DESIGN", { questions: 1 }), seat("QA", { ready: true }), seat("RESEARCH", { seated: false, status: "idle" })],
+      busy: false,
+      turns: 1,
+      title: "Dark mode",
+    },
     profile: "p/m · high",
+    seats: [],
     offset: 0,
+    focus: "talk",
+    draftOffset: 0,
     tick: 0,
-  }, 120, 14);
+  }, 140, 16);
   assert.ok(lines.some((line) => line.includes("Planning · Dark mode")));
-  assert.ok(lines.some((line) => line.includes("● GRILLING · 1 open question")));
-  assert.ok(lines.some((line) => line.includes("planner ▸ 1. Which pages?")));
-  assert.ok(lines.some((line) => line.includes("── Draft plan") && line.includes("── Conversation")));
-  assert.ok(lines.some((line) => line.trimEnd().endsWith("Steps")), "draft headings lose their #");
+  assert.ok(lines.some((line) => line.includes("● GRILLING · 2 open questions")));
+  assert.ok(lines.some((line) => line.includes("panel  ORACLE 1 question · DEV ⠋ reading api.ts · DESIGN 1 question · QA ✓ ready · RESEARCH off")));
+  assert.ok(lines.some((line) => line.includes(" 1. ORACLE   Ship behind a flag?")));
+  assert.ok(lines.some((line) => line.includes(" 2. DESIGN   Which pages?")));
+  assert.ok(lines.some((line) => line.includes("What each seat needs")));
+  assert.ok(lines.some((line) => line.includes("QA       e2e tests in tests/e2e")));
+  assert.ok(lines.some((line) => line.includes("── Conversation ◂")), "the focused pane is marked");
+});
+
+test("before a session, 1-4 choose the seats the next session starts with", () => {
+  const { view, calls } = makeView();
+  view.setTab("plan");
+  assert.match(view.render(140).map((line) => line.trim()).join(" "), /the oracle chairing, with DEV, DESIGN, QA, RESEARCH/);
+  view.handleInput(KEY.escape);
+  view.handleInput("2");
+  view.handleInput("4");
+  assert.ok(view.render(140).at(-1)!.includes("RESEARCH leaves the panel from the next round"));
+  view.handleInput("i");
+  type(view, "dark mode");
+  view.handleInput(KEY.enter);
+  assert.deepEqual(calls.seats.at(-1), ["backend", "qa"]);
+});
+
+test("during a session, 1-4 seat and unseat members for the next round", () => {
+  const { view, planner } = makeView();
+  view.setTab("plan");
+  type(view, "dark mode");
+  view.handleInput(KEY.enter);
+  planner()!.cancel();
+  view.handleInput(KEY.escape);
+  view.handleInput("3");
+  assert.equal(planner()!.seats.has("qa"), false);
+  view.handleInput("3");
+  assert.equal(planner()!.seats.has("qa"), true);
+  assert.ok(view.render(140).some((line) => line.includes("panel  ORACLE")));
 });
 
 test("a quick fix detail lists its steps and its report", () => {
