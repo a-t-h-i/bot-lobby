@@ -2,6 +2,10 @@ import { clampThinkingLevel, getSupportedThinkingLevels, type Api, type Model, t
 import {
   agentProfile,
   isThinkingLevel,
+  lobbyAgentProfile,
+  panelMemberProfile,
+  type LobbyAgentKind,
+  type PanelMember,
   THINKING_LEVELS,
   type BotLobbyConfig,
   type ProfileResolver,
@@ -47,6 +51,8 @@ const LABELS: Record<SubagentKind | "master", string> = {
   qa: "QA",
   scout: "Scout",
   researcher: "Researcher",
+  quickfix: "Quick fix",
+  planner: "Planner",
 };
 
 export function kindLabel(kind: SubagentKind | "master"): string {
@@ -84,6 +90,32 @@ export function createProfileResolver(config: BotLobbyConfig, options: ResolverO
   };
 }
 
+type RunProfile = { model?: string; thinking: string; timeoutMs: number; instructions?: string };
+
+/** Unset models run on the session's; thinking is clamped to the model, with a one-time warning. */
+function resolveRunProfile(profile: RunProfile, label: string, options: ResolverOptions): RunProfile {
+  const model = profile.model ?? options.sessionModel;
+  const check = checkThinking(model ? options.lookup(model) : undefined, profile.thinking);
+  if (check.warning) {
+    const message = `bot-lobby: ${label} — ${check.warning}. Change it in /bot-lobby settings.`;
+    if (!warned.has(message)) {
+      warned.add(message);
+      options.warn?.(message);
+    }
+  }
+  return { ...profile, model, thinking: check.level };
+}
+
+/** A lobby agent's model, thinking and time limit. */
+export function resolveLobbyProfile(config: BotLobbyConfig, kind: LobbyAgentKind, options: ResolverOptions): RunProfile {
+  return resolveRunProfile(lobbyAgentProfile(config, kind), kindLabel(kind), options);
+}
+
+/** A planning panel seat's model, thinking and time limit, from its domain's (or the researcher's) settings. */
+export function resolvePanelProfile(config: BotLobbyConfig, member: PanelMember, options: ResolverOptions): RunProfile {
+  return resolveRunProfile(panelMemberProfile(config, member), kindLabel(member), options);
+}
+
 /** Every configured subagent whose thinking level its model does not support, for `/bot-lobby config`. */
 export function thinkingMismatches(config: BotLobbyConfig, lookup: ModelLookup, sessionModel?: string): string[] {
   const entries: Array<[SubagentKind | "master", string, string]> = [
@@ -92,6 +124,8 @@ export function thinkingMismatches(config: BotLobbyConfig, lookup: ModelLookup, 
     ["backend", config.agents.backend.model, config.agents.backend.thinking],
     ["qa", config.agents.qa.model, config.agents.qa.thinking],
     ["researcher", config.researcher.model, config.researcher.thinking],
+    ["quickfix", config.quickFix.model, config.quickFix.thinking],
+    ["planner", config.planner.model, config.planner.thinking],
   ];
   return entries.flatMap(([kind, ref, level]) => {
     const model = ref === "inherit" ? sessionModel : ref;
