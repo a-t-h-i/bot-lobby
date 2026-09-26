@@ -48,8 +48,8 @@ test("summarizeRun marks running, success, and failure", () => {
 });
 
 test("the zen clock speeds up while an expression plays", () => {
-  const resting = { nextAt: 10_000, until: 0, startedAt: 0, frame: 0 };
-  const blinking = { nextAt: 10_000, until: 1_000, startedAt: 0, frame: 1 };
+  const resting = { nextAt: 10_000, until: 0, startedAt: 0, frame: 0, variant: 0 };
+  const blinking = { nextAt: 10_000, until: 1_000, startedAt: 0, frame: 1, variant: 0 };
   assert.equal(expressionTickDelay([resting], 0, true), LIVE_TICK_MS);
   assert.equal(expressionTickDelay([resting], 0, false), IDLE_TICK_MS);
   assert.equal(expressionTickDelay([blinking], 0, false), FAST_TICK_MS);
@@ -110,4 +110,20 @@ test("persisted worker records replay the checklist after a reload, and live cop
   assert.equal(merged.at(-1)!.activity, "editing");
   assert.deepEqual(persistedRuns(task()), []);
   assert.deepEqual(persistedRuns(undefined), []);
+});
+
+import { isReaction, situationKey } from "../src/pi/ui.ts";
+
+test("agents react to starting, finishing, failing, flags and handovers, but not to going idle", () => {
+  const working = situationKey({ status: "working" });
+  assert.equal(isReaction(undefined, { status: "working" }), false, "no reaction on the first sighting");
+  assert.equal(isReaction(situationKey({ status: "idle" }), { status: "working" }), true, "starts work");
+  assert.equal(isReaction(working, { status: "done" }), true, "finishes");
+  assert.equal(isReaction(working, { status: "failed" }), true, "fails");
+  assert.equal(isReaction(working, { status: "working", flag: "quiet" }), true, "goes quiet");
+  assert.equal(isReaction(working, { status: "working", flag: "waiting" }), true, "starts waiting");
+  assert.equal(isReaction(working, { status: "working", handover: true }), true, "receives a file");
+  assert.equal(isReaction(situationKey({ status: "working", flag: "quiet" }), { status: "working" }), false, "a flag clearing is quiet");
+  assert.equal(isReaction(situationKey({ status: "done" }), { status: "idle" }), false, "going idle is quiet");
+  assert.equal(isReaction(working, { status: "working" }), false, "no change, no reaction");
 });
