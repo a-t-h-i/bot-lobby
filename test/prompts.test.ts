@@ -98,5 +98,5 @@ test("read-only roles keep their tool restrictions", () => {
     "read", "grep", "find", "ls",
     "web_search", "fetch_content", "source_check", "get_search_content",
   ]);
-  assert.equal(ROLE_SPECS.worker.tools, undefined);
+  assert.deepEqual(ROLE_SPECS.worker.tools, ["read", "bash", "edit", "write", "grep", "find", "ls"]);
 });

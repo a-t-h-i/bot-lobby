@@ -1,13 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Domain } from "../schemas/agent.ts";
-import type { BotLobbyConfig } from "../schemas/configuration.ts";
+import { profileFor, type BotLobbyConfig, type ProfileResolver } from "../schemas/configuration.ts";
 import type { AgentRun, ResearchResult } from "../schemas/findings.ts";
-import { runAgent, type AgentRequest } from "../execution/agent-runner.ts";
+import { runAgent, watchdogOptions, type AgentRequest } from "../execution/agent-runner.ts";
 import { spawnPiProcess, type ProcessRunner } from "../execution/pi-runner.ts";
 import { writeFileEnsured } from "../knowledge/store.ts";
 import { isResearchResultUsable, parseResearchResult, validateResearchResult } from "../roles/researcher.ts";
-import { resolveModel } from "./master.ts";
 
 export interface ResearchOutcome {
   result: ResearchResult;
@@ -25,6 +24,7 @@ export interface ResearchRequest {
   cwd: string;
   taskDir: string;
   config: BotLobbyConfig;
+  profile?: ProfileResolver;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
 }
@@ -75,6 +75,7 @@ function toOutcome(run: AgentRun, domain: Domain): ResearchOutcome {
 
 /** Run the researcher for one domain and persist its report for audit. */
 export async function runResearch(request: ResearchRequest, run: ProcessRunner = spawnPiProcess): Promise<ResearchOutcome> {
+  const profile = profileFor(request.config, request.profile, request.domain, "researcher");
   const agentRun = await runAgent(
     {
       taskId: request.taskId,
@@ -82,13 +83,13 @@ export async function runResearch(request: ResearchRequest, run: ProcessRunner =
       role: "researcher",
       instruction: request.instruction,
       context: researchContext(request),
-      model: resolveModel(request.config, request.domain),
-      thinking: request.config.agents[request.domain].thinking,
-      timeoutMs: request.config.workflow.agentTimeoutMs,
+      model: profile.model,
+      thinking: profile.thinking,
+      timeoutMs: profile.timeoutMs,
       cwd: request.cwd,
       signal: request.signal,
       onUpdate: request.onUpdate,
-      retries: request.config.workflow.maxAgentRetries,
+      ...watchdogOptions(request.config.workflow),
     },
     run,
   );
