@@ -13,7 +13,8 @@ export const reviewerSpec: RoleSpec = {
     "Begin with `## Verdict` followed by exactly one of `PASS`, `CHANGES_REQUIRED`, or `BLOCKED`.",
     "Then `## Findings`, `## Verification`, `## Required Changes`, `## Optional Improvements`.",
     "Findings entries are `- [severity] text — \\`path:line\\``.",
-    "Verification entries are `- command — result`.",
+    "Verification entries are `- command — result` for checks you actually executed; a PASS without them is",
+    "treated as CHANGES_REQUIRED.",
     "You must not modify implementation files. Report required changes instead.",
     "An optional `## Pushback` (`**Request:**`, `**Reason:**`, optional `**Alternative:**`) flags a change request you",
     "believe is wrong, with your reason; keep it separate from your findings.",
@@ -35,18 +36,36 @@ function parseFinding(text: string): ReviewFinding {
   return { severity, text: (match?.[2] ?? text).trim() };
 }
 
+/** The QA gate never passes by default: a PASS must cite at least one executed check. */
+export const UNVERIFIED_PASS = "unverified pass: PASS without executed checks under ## Verification, downgraded to CHANGES_REQUIRED";
+
+/** A verification bullet names a command or check and its result (`- cmd — result`). */
+function executedChecks(verification: string): string[] {
+  return bullets(verification).filter((entry) => /\S\s*(?:—|–|-{1,2}|:|=>|→)\s*\S/.test(entry));
+}
+
 /** Parse a reviewer's markdown into a structured verdict (never throws). */
 export function parseReviewResult(domain: Domain, raw: string): ReviewResult {
   const sections = parseSections(raw);
+  const verification = findSection(sections, "verification") ?? "";
+  const requiredChanges = bullets(findSection(sections, "required changes"));
+  let verdict = parseVerdict(findSection(sections, "verdict"));
+  let downgraded: string | undefined;
+  if (verdict === "pass" && executedChecks(verification).length === 0) {
+    verdict = "changes_required";
+    downgraded = UNVERIFIED_PASS;
+    requiredChanges.push("Re-run the QA gate and record the checks actually executed, each as `- command — result`.");
+  }
   return {
     domain,
     role: "reviewer",
-    verdict: parseVerdict(findSection(sections, "verdict")),
+    verdict,
     findings: bullets(findSection(sections, "findings")).map(parseFinding),
-    verification: findSection(sections, "verification") ?? "",
-    requiredChanges: bullets(findSection(sections, "required changes")),
+    verification,
+    requiredChanges,
     optionalImprovements: bullets(findSection(sections, "optional improvements")),
     pushback: parsePushback(sections),
+    ...(downgraded ? { downgraded } : {}),
     raw,
   };
 }
@@ -55,6 +74,7 @@ export function parseReviewResult(domain: Domain, raw: string): ReviewResult {
 export function validateReviewResult(result: ReviewResult): string[] {
   const issues: string[] = [];
   if (!/##\s*verdict/i.test(result.raw)) issues.push("missing Verdict section");
+  if (result.downgraded) issues.push(result.downgraded);
   if (result.verdict !== "pass" && result.findings.length === 0 && result.requiredChanges.length === 0) {
     issues.push("non-pass verdict without findings or required changes");
   }

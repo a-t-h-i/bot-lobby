@@ -117,21 +117,26 @@ test("every slot frame is one row that fits its cell, and the eyes stay five-col
   }
 });
 
-test("emote frames are status-aware kaomoji with no zero-width joiners", () => {
-  const emotes = (id: (typeof SLOT_IDS)[number], status: (typeof SLOT_STATES)[number]) =>
-    SLOT_FRAMES[id][status].slice(EMOTE_FRAME, EMOTE_FRAME + EMOTE_FRAMES).map((frame) => frame[0]!);
+test("default emote frames are each slot's kaomoji: open, a same-width blink, then the action", () => {
   for (const id of SLOT_IDS) {
     for (const status of SLOT_STATES) {
-      for (const face of emotes(id, status)) assert.doesNotMatch(face, /[\u2060\u2063]/);
+      const [open, blink, action, hold] = SLOT_FRAMES[id][status].slice(EMOTE_FRAME).map((frame) => frame[0]!);
+      assert.notEqual(blink, open, `${id}/${status} blinks`);
+      assert.equal(visibleWidth(blink!), visibleWidth(open!), `${id}/${status} blink keeps its width`);
+      assert.equal(action, hold, `${id}/${status} holds its action`);
+      assert.doesNotMatch(`${open}${blink}${action}`, /[\u2060\u2063\u200d]/);
     }
   }
-  assert.ok(emotes("dev", "working")[0]!.includes("٥"), "working emotes are nervous");
-  assert.ok(emotes("dev", "done")[0]!.includes("✿"), "done emotes are happy");
-  assert.ok(emotes("dev", "done")[1]!.includes("っ"), "done emotes include in-love");
-  assert.ok(emotes("dev", "failed")[0]!.includes("ಥ"), "failed emotes are scared");
-  assert.ok(emotes("qa", "done")[0]!.includes("ᕙ"), "qa flexes on success");
-  assert.ok(emotes("qa", "done").some((face) => face.includes("ᕕ( ᐛ )ᕗ")), "qa dances on success");
-  assert.notDeepEqual(emotes("qa", "done"), emotes("dev", "done"));
+});
+
+test("a live emote replaces the default for its expression and falls back when absent", () => {
+  const emote = ["(╯°□°)╯", "(╯-□-)╯", "(╯°□°)╯︵ ┻━┻", "(╯°□°)╯︵ ┻━┻"];
+  const withEmote = (frame: number) =>
+    largeLines(scene({ slots: scene().slots.map((slot) => (slot.id === "dev" ? { ...slot, status: "failed" as const, frame, emote } : slot)) }), 72, 40);
+  assert.ok(withEmote(EMOTE_FRAME).some((line) => line.includes("(╯°□°)╯ ")));
+  assert.ok(withEmote(EMOTE_FRAME + 1).some((line) => line.includes("(╯-□-)╯")));
+  assert.ok(withEmote(EMOTE_FRAME + 2).some((line) => line.includes("(╯°□°)╯︵ ┻━┻")));
+  assert.ok(withEmote(0).some((line) => line.includes(SLOT_FRAMES.dev.failed[0]![0]!)), "rest frames never use the emote");
 });
 
 test("eye frames differ within every status and across statuses", () => {
@@ -253,7 +258,7 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
     "                                   │                        ",
     "           ┌───────────────┬───────┴───────┬───────────────┐",
     "           │               │               │               │",
-    "         (^_^)           (u_u)          (✿^‿^)         (〒﹏〒)    ",
+    "         (^_^)           (u_u)          φ(^▽^)          (-_-)✗     ",
     "          DEV           DESIGN         RESEARCH           QA       ",
     "       ⠋ reading        · idle          ✓ done         ✗ failed    ",
     "          12s              —            1m 05s            42s      ",
@@ -287,7 +292,7 @@ test("the large scene is byte-identical to the locked art at 72 and 100 columns"
     "                                                 │                        ",
     "                         ┌───────────────┬───────┴───────┬───────────────┐",
     "                         │               │               │               │",
-    "                       (^_^)           (u_u)          (✿^‿^)         (〒﹏〒)    ",
+    "                       (^_^)           (u_u)          φ(^▽^)          (-_-)✗     ",
     "                        DEV           DESIGN         RESEARCH           QA       ",
     "                     ⠋ reading        · idle          ✓ done         ✗ failed    ",
     "                        12s              —            1m 05s            42s      ",
@@ -757,4 +762,41 @@ test("every eye, lid and mouth combination keeps the tower exactly TOWER_WIDTH w
     }
   }
   for (const glyph of Object.values(ORACLE_PUPILS)) assert.equal(visibleWidth(glyph), 1, glyph);
+});
+
+// --- live feed row and flagged status rows ---
+
+test("the feed row sits under the agents when a spare row exists, and never costs a checklist row", () => {
+  const withFeed = scene({ feed: { text: "▸ DEV editing users.ts · turn 4 · 12 tools", kind: "info" } });
+  const tall = largeLines(withFeed, 72, 40);
+  const at = tall.findIndex((line) => line.includes("▸ DEV editing users.ts"));
+  assert.ok(at > 0, "the feed row renders");
+  assert.ok(tall[at - 1]!.includes("12s"), "right under the elapsed row");
+  assert.ok(tall[at + 1]!.includes("TASKS"), "right above TASKS");
+  assert.equal(tall.length, FULL_SCENE_LINES + 1);
+  for (let budget = 0; budget <= 40; budget += 1) {
+    const plain = largeLines(scene(), 72, budget);
+    const fed = largeLines(withFeed, 72, budget);
+    assert.equal(fed.filter((line) => TASK_ROW.test(line)).length, plain.filter((line) => TASK_ROW.test(line)).length, `tasks at ${budget}`);
+    assert.ok(fed.length <= Math.max(budget, 5) && fed.length <= MAX_LARGE_LINES, `budget at ${budget}`);
+    assert.ok(fed.every((line) => visibleWidth(line) <= 72), `width at ${budget}`);
+  }
+});
+
+test("a long feed line is truncated inside the scene", () => {
+  const lines = largeLines(scene({ feed: { text: `▸ DEV ${"x".repeat(200)}`, kind: "warning" } }), 72, 40);
+  const row = lines.find((line) => line.includes("▸ DEV"))!;
+  assert.ok(visibleWidth(row) <= 72);
+  assert.ok(row.includes("…"));
+});
+
+test("a working agent's status row flags waiting, quiet and retrying", () => {
+  const flagged = (flag: NonNullable<LargeSceneInput["slots"][number]["flag"]>) =>
+    largeLines(scene({ slots: scene().slots.map((slot) => (slot.id === "dev" ? { ...slot, flag } : slot)) }), 72, 40);
+  assert.ok(flagged({ kind: "waiting" }).some((line) => line.includes("⧗ waiting")));
+  assert.ok(flagged({ kind: "quiet", ms: 95_000 }).some((line) => line.includes("! quiet 1m 35s")));
+  assert.ok(flagged({ kind: "retry" }).some((line) => line.includes("↻ retrying")));
+  for (const flag of [{ kind: "waiting" }, { kind: "quiet", ms: 3_599_000 }, { kind: "retry" }] as const) {
+    assert.ok(flagged(flag).every((line) => visibleWidth(line) <= 72));
+  }
 });

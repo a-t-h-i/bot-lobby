@@ -6,6 +6,7 @@ import {
   BLINK_MIN_MS,
   BLINK_MS,
   EMOTE_FRAME,
+  EMOTE_FRAMES,
   EMOTE_MS,
   EMOTE_STEP_MS,
   FAST_TICK_MS,
@@ -20,6 +21,9 @@ import {
   createExpression,
   expressionPhase,
   talkFrame,
+  triggerEmote,
+  WORKING_BLINK_CHANCE,
+  WORKING_GAP,
   isPlaying,
   nextGap,
   pickEvent,
@@ -90,7 +94,7 @@ test("an emote lasts EMOTE_MS and steps through its frames", () => {
   assert.equal(advanceExpression(first, at + EMOTE_STEP_MS - 1, fake(0)), first, "the first frame is held");
   const stepped = advanceExpression(first, at + EMOTE_STEP_MS, fake(0));
   assert.equal(stepped.frame, EMOTE_FRAME + 1);
-  assert.equal(advanceExpression(stepped, at + EMOTE_MS - 1, fake(0)).frame, EMOTE_FRAME + 1, "the last frame holds to the end");
+  assert.equal(advanceExpression(stepped, at + EMOTE_MS - 1, fake(0)).frame, EMOTE_FRAME + EMOTE_FRAMES - 1, "the last frame holds to the end");
   assert.equal(isPlaying(first, at + EMOTE_MS - 1), true);
   assert.equal(isPlaying(first, at + EMOTE_MS), false);
 });
@@ -121,7 +125,27 @@ test("a non-finite clock or source never yields NaN", () => {
 test("the expression durations are pinned so the README cannot drift", () => {
   assert.equal(BLINK_MS, 500);
   assert.equal(EMOTE_MS, 2000);
-  assert.equal(EMOTE_STEP_MS, 1000);
+  assert.equal(EMOTE_FRAMES, 4, "open, blink, action, action");
+  assert.equal(EMOTE_STEP_MS, 500);
+});
+
+test("every expression draws a variant, and a reaction starts an emote at once", () => {
+  const rested = createExpression(0, fake(0.5));
+  assert.equal(rested.variant, 0);
+  const emote = advanceExpression(rested, rested.nextAt, fake(0.9, 0.25, 0.3));
+  assert.equal(emote.frame, EMOTE_FRAME);
+  assert.ok(Number.isInteger(emote.variant) && emote.variant > 0);
+  const reaction = triggerEmote(1234, fake(0.5, 0.75));
+  assert.deepEqual([reaction.frame, reaction.startedAt, reaction.until], [EMOTE_FRAME, 1234, 1234 + EMOTE_MS]);
+  assert.ok(reaction.nextAt >= reaction.until + SLOT_GAP.min);
+  assert.equal(triggerEmote(Number.NaN, fake(0)).startedAt, 0);
+});
+
+test("working slots are livelier: a shorter gap and an even blink/emote split", () => {
+  assert.deepEqual(WORKING_GAP, { min: 8_000, max: 15_000 });
+  assert.ok(WORKING_GAP.max < SLOT_GAP.min);
+  assert.equal(pickEvent(fake(0.55), WORKING_BLINK_CHANCE), "emote");
+  assert.equal(pickEvent(fake(0.55)), "blink");
 });
 
 test("the fast tick is shorter than a blink and an emote step, so none is skipped", () => {
