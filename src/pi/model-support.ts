@@ -2,6 +2,8 @@ import { clampThinkingLevel, getSupportedThinkingLevels, type Api, type Model, t
 import {
   agentProfile,
   isThinkingLevel,
+  lobbyAgentProfile,
+  type LobbyAgentKind,
   THINKING_LEVELS,
   type BotLobbyConfig,
   type ProfileResolver,
@@ -47,6 +49,8 @@ const LABELS: Record<SubagentKind | "master", string> = {
   qa: "QA",
   scout: "Scout",
   researcher: "Researcher",
+  quickfix: "Quick fix",
+  planner: "Planner",
 };
 
 export function kindLabel(kind: SubagentKind | "master"): string {
@@ -84,6 +88,21 @@ export function createProfileResolver(config: BotLobbyConfig, options: ResolverO
   };
 }
 
+/** A lobby agent's model, thinking and time limit: unset models run on the session's, thinking is clamped. */
+export function resolveLobbyProfile(config: BotLobbyConfig, kind: LobbyAgentKind, options: ResolverOptions): { model?: string; thinking: string; timeoutMs: number; instructions?: string } {
+  const profile = lobbyAgentProfile(config, kind);
+  const model = profile.model ?? options.sessionModel;
+  const check = checkThinking(model ? options.lookup(model) : undefined, profile.thinking);
+  if (check.warning) {
+    const message = `bot-lobby: ${kindLabel(kind)} — ${check.warning}. Change it in /bot-lobby settings.`;
+    if (!warned.has(message)) {
+      warned.add(message);
+      options.warn?.(message);
+    }
+  }
+  return { ...profile, model, thinking: check.level };
+}
+
 /** Every configured subagent whose thinking level its model does not support, for `/bot-lobby config`. */
 export function thinkingMismatches(config: BotLobbyConfig, lookup: ModelLookup, sessionModel?: string): string[] {
   const entries: Array<[SubagentKind | "master", string, string]> = [
@@ -92,6 +111,8 @@ export function thinkingMismatches(config: BotLobbyConfig, lookup: ModelLookup, 
     ["backend", config.agents.backend.model, config.agents.backend.thinking],
     ["qa", config.agents.qa.model, config.agents.qa.thinking],
     ["researcher", config.researcher.model, config.researcher.thinking],
+    ["quickfix", config.quickFix.model, config.quickFix.thinking],
+    ["planner", config.planner.model, config.planner.thinking],
   ];
   return entries.flatMap(([kind, ref, level]) => {
     const model = ref === "inherit" ? sessionModel : ref;
