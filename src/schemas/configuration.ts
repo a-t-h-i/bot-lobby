@@ -27,8 +27,16 @@ export interface WorkflowConfig {
   requireApprovalForDependencies: boolean;
   requireApprovalForArchitectureChanges: boolean;
   agentTimeoutMs: number;
-  /** Bounded retries for transient agent failures (crash/timeout), §59. */
+  /** Bounded retries for transient agent failures (crash/stall), §59. A spent deadline never retries. */
   maxAgentRetries: number;
+  /** Kill a subagent after this long without any output; 0 disables. */
+  stallTimeoutMs: number;
+  /** Silence allowed while a single tool call runs (tests, builds); 0 disables. */
+  toolStallTimeoutMs: number;
+  /** Fraction of the time limit at which an agent is asked to wrap up and report; 0 disables. */
+  wrapUpAt: number;
+  /** Workers that may run at once when the Master delegates several domains together. */
+  maxParallelWorkers: number;
 }
 
 export interface KnowledgeConfig {
@@ -60,6 +68,10 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     requireApprovalForArchitectureChanges: true,
     agentTimeoutMs: 15 * 60 * 1000,
     maxAgentRetries: 1,
+    stallTimeoutMs: 3 * 60 * 1000,
+    toolStallTimeoutMs: 10 * 60 * 1000,
+    wrapUpAt: 0.75,
+    maxParallelWorkers: 3,
   },
   knowledge: {
     compactionThreshold: 20000,

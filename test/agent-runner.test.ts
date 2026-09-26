@@ -77,12 +77,12 @@ test("runAgent aborts when cancelled via the registry", async () => {
 test("runParallel runs all requests and preserves order", async () => {
   let active = 0;
   let maxActive = 0;
-  const slow: ProcessRunner = async (args) => {
+  const slow: ProcessRunner = async (_args, options) => {
     active += 1;
     maxActive = Math.max(maxActive, active);
     await new Promise((resolve) => setTimeout(resolve, 10));
     active -= 1;
-    return ok(reply(String(args.at(-1))));
+    return ok(reply(String(options.prompt)));
   };
   const results = await runParallel(
     [request({ instruction: "a" }), request({ instruction: "b" }), request({ instruction: "c" })],
@@ -97,8 +97,8 @@ test("runParallel runs all requests and preserves order", async () => {
 
 test("runSequential substitutes {previous} and stops on failure", async () => {
   const instructions: string[] = [];
-  const chain: ProcessRunner = async (args) => {
-    const task = String(args.at(-1));
+  const chain: ProcessRunner = async (_args, options) => {
+    const task = String(options.prompt);
     instructions.push(task);
     if (task.includes("second")) return { exitCode: 1, stdout: "", stderr: "nope", killed: false, timedOut: false };
     return ok(reply("first output"));

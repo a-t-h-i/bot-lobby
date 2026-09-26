@@ -4,7 +4,7 @@ import type { BotLobbyConfig } from "../schemas/configuration.ts";
 import type { Domain } from "../schemas/agent.ts";
 import type { AgentRun, ReviewResult, ScoutResult, WorkerResult } from "../schemas/findings.ts";
 import { domainSpec } from "../agents/registry.ts";
-import { runAgent, runParallel, type AgentRequest } from "../execution/agent-runner.ts";
+import { runAgent, runParallel, watchdogOptions, type AgentRequest } from "../execution/agent-runner.ts";
 import { spawnPiProcess, type ProcessRunner } from "../execution/pi-runner.ts";
 import { readAgentKnowledge, writeFileEnsured } from "../knowledge/store.ts";
 import { selectKnowledge, type KnowledgeSelection } from "../knowledge/selector.ts";
@@ -88,7 +88,7 @@ export async function runScouts(request: ScoutRequest, run: ProcessRunner = spaw
     cwd: request.cwd,
     signal: request.signal,
     onUpdate: request.onUpdate,
-    retries: request.config.workflow.maxAgentRetries,
+    ...watchdogOptions(request.config.workflow),
   }));
   const runs = await runParallel(requests, request.config.workflow.maxParallelScouts, run);
   const outcomes = runs.map((agentRun) => toOutcome(agentRun, agentRun.domain));
@@ -190,7 +190,7 @@ export async function runWorker(
       cwd: request.cwd,
       signal: request.signal,
       onUpdate: request.onUpdate,
-      retries: request.config.workflow.maxAgentRetries,
+      ...watchdogOptions(request.config.workflow),
     },
     run,
   );
@@ -268,6 +268,7 @@ function reviewerAgentRequest(request: ReviewerRequest, selected: KnowledgeSelec
     cwd: request.cwd,
     signal: request.signal,
     onUpdate: request.onUpdate,
+    ...watchdogOptions(request.config.workflow),
     retries: 0,
   };
 }
