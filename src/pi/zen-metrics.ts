@@ -9,6 +9,8 @@ import type { AgentRun } from "../schemas/findings.ts";
 import type { Task } from "../schemas/task.ts";
 import { SLOT_IDS, SLOT_LABELS, type SlotId, type SlotState } from "./mascot-art.ts";
 import { formatDuration, planChecklist } from "./zen.ts";
+import { QUIET_MS, quietFor, slotOf } from "./run-summary.ts";
+import type { Situation } from "./kaomoji.ts";
 
 export type { SlotId, SlotState };
 
@@ -21,6 +23,24 @@ export interface SlotView {
   activity?: string;
   /** "—" without a run, live since `startedAt` while running, fixed once terminal. */
   elapsedLabel: string;
+  /** Something about a working agent worth flagging in its status row. */
+  flag?: SlotFlag;
+  /** The run was asked to wrap up early. */
+  wrappedUp?: boolean;
+  /** A file was just handed to this agent by the file desk. */
+  handover?: boolean;
+}
+
+/** Status-row flags for a working agent, in priority order: waiting on a file, gone quiet, retrying. */
+export type SlotFlag = { kind: "waiting" } | { kind: "quiet"; ms: number } | { kind: "retry" };
+
+function slotFlag(run: AgentRun | undefined, now: number): SlotFlag | undefined {
+  if (!run || run.status !== "running") return undefined;
+  if (run.waitingFor) return { kind: "waiting" };
+  const quiet = quietFor(run, now);
+  if (quiet >= QUIET_MS) return { kind: "quiet", ms: quiet };
+  if (run.noteKind === "warning" && run.note && /retry/.test(run.note)) return { kind: "retry" };
+  return undefined;
 }
 
 export interface SceneMetrics {
@@ -36,12 +56,6 @@ export function runStatus(status: AgentRun["status"]): SlotState {
   return status === "success" ? "done" : "failed";
 }
 
-/** The column a run belongs to; a researcher reports under RESEARCH from any domain. */
-function slotOf(run: AgentRun): SlotId {
-  if (run.role === "researcher") return "research";
-  if (run.domain === "backend") return "dev";
-  return run.domain === "designer" ? "design" : "qa";
-}
 
 function latestRunFor(runs: AgentRun[], id: SlotId): AgentRun | undefined {
   let latest: AgentRun | undefined;
@@ -62,7 +76,17 @@ function runElapsedLabel(run: AgentRun | undefined, now: number): string {
 function slotView(id: SlotId, runs: AgentRun[], now: number): SlotView {
   const run = latestRunFor(runs, id);
   const status: SlotState = run ? runStatus(run.status) : "idle";
-  return { id, label: SLOT_LABELS[id], status, activity: run?.activity, elapsedLabel: runElapsedLabel(run, now) };
+  const flag = slotFlag(run, now);
+  return {
+    id,
+    label: SLOT_LABELS[id],
+    status,
+    activity: run?.activity,
+    elapsedLabel: runElapsedLabel(run, now),
+    ...(flag ? { flag } : {}),
+    ...(run?.wrappedUp ? { wrappedUp: true } : {}),
+    ...(run?.status === "running" && run.note?.startsWith("got ") ? { handover: true } : {}),
+  };
 }
 
 export function sceneMetrics(task: Task, runs: AgentRun[], now: number): SceneMetrics {
@@ -77,4 +101,20 @@ export function sceneMetrics(task: Task, runs: AgentRun[], now: number): SceneMe
     elapsedLabel: formatDuration(elapsed),
     slots: SLOT_IDS.map((id) => slotView(id, runs, now)),
   };
+}
+
+/** Each slot's situation for its face: status, activity and flags (see kaomoji.ts). */
+export function slotSituation(slot: SlotView): Situation {
+  return {
+    status: slot.status,
+    ...(slot.activity ? { activity: slot.activity } : {}),
+    ...(slot.flag ? { flag: slot.flag.kind } : {}),
+    ...(slot.wrappedUp ? { wrappedUp: true } : {}),
+    ...(slot.handover ? { handover: true } : {}),
+  };
+}
+
+/** Per-slot situations straight from runs, for the widget's reaction triggers. */
+export function slotSituations(runs: AgentRun[], now: number): Record<SlotId, Situation> {
+  return Object.fromEntries(SLOT_IDS.map((id) => [id, slotSituation(slotView(id, runs, now))])) as Record<SlotId, Situation>;
 }

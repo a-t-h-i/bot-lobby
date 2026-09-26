@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseReviewResult, validateReviewResult } from "../src/roles/reviewer.ts";
+import { parseReviewResult, UNVERIFIED_PASS, validateReviewResult } from "../src/roles/reviewer.ts";
 import { decideReviewLoop } from "../src/master/decisions.ts";
 import { DEFAULT_CONFIG, type BotLobbyConfig } from "../src/schemas/configuration.ts";
 import { createTask, type Task, type TaskState } from "../src/schemas/task.ts";
@@ -89,7 +89,7 @@ test("an unknown or missing verdict is never treated as a pass", () => {
 });
 
 test("a pass with critical findings is flagged", () => {
-  const result = parseReviewResult("backend", "## Verdict\nPASS\n\n## Findings\n- [critical] data loss — `x.ts:1`");
+  const result = parseReviewResult("backend", "## Verdict\nPASS\n\n## Findings\n- [critical] data loss — `x.ts:1`\n\n## Verification\n- `npm test` — 12 passing");
   assert.equal(result.verdict, "pass");
   assert.ok(validateReviewResult(result).includes("PASS declared with critical findings"));
 });
@@ -192,4 +192,21 @@ test("a cancelled reviewer run is never retried", async () => {
   const result = await runReviewer(reviewerRequest(), runner);
   assert.equal(calls, 1);
   assert.equal(result.run.status, "cancelled");
+});
+
+test("a PASS without executed checks is downgraded, never accepted by default", () => {
+  for (const raw of [
+    "## Verdict\nPASS",
+    "## Verdict\nPASS\n\n## Verification\nLooks good.",
+    "## Verdict\nPASS\n\n## Verification\n- npm test",
+  ]) {
+    const result = parseReviewResult("qa", raw);
+    assert.equal(result.verdict, "changes_required", raw);
+    assert.equal(result.downgraded, UNVERIFIED_PASS);
+    assert.ok(validateReviewResult(result).includes(UNVERIFIED_PASS));
+    assert.ok(result.requiredChanges.some((change) => /Re-run the QA gate/.test(change)));
+  }
+  const verified = parseReviewResult("qa", "## Verdict\nPASS\n\n## Verification\n- `npm test` — 42 passing\n- `curl -s /health` → 200");
+  assert.equal(verified.verdict, "pass");
+  assert.equal(verified.downgraded, undefined);
 });

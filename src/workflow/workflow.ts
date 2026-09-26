@@ -1,7 +1,8 @@
 import { join } from "node:path";
-import type { BotLobbyConfig } from "../schemas/configuration.ts";
+import type { BotLobbyConfig, ProfileResolver } from "../schemas/configuration.ts";
 import type { AgentRun, Pushback, ResearchResult, ReviewResult } from "../schemas/findings.ts";
 import {
+  MAX_RUN_LOG,
   MAX_WORKER_RECORDS,
   TASK_STATES,
   TERMINAL_STATES,
@@ -21,6 +22,10 @@ import { compactKnowledgeFile, overThreshold } from "../knowledge/compactor.ts";
 import { knowledgeDir, type KnowledgeAgent } from "../knowledge/paths.ts";
 import { writeScratchpad } from "../state/persistence.ts";
 import { spawnPiProcess, type ProcessRunner } from "../execution/pi-runner.ts";
+import { mapConcurrent } from "../execution/agent-runner.ts";
+import { parseWorkerResult } from "../roles/worker.ts";
+import { autoNote, DESK_TOOLS, DeskSession } from "../desk/session.ts";
+import type { Handover } from "../desk/desk.ts";
 import { readRepositoryDiff } from "../execution/git.ts";
 import {
   loadScoutResults,
@@ -39,6 +44,7 @@ import { detectSharedFiles, summarizeOutcomes } from "../master/synthesis.ts";
 import { truncate } from "../text.ts";
 import { assertNoPendingApprovals, pendingApprovals, requestApproval, resolveApproval } from "./approvals.ts";
 import { pingApproval } from "../pi/notify.ts";
+import { describeRun, runLogEntry } from "../pi/run-summary.ts";
 import { nextStates } from "./transitions.ts";
 
 export const ORCHESTRATE_ACTIONS = [
@@ -79,6 +85,8 @@ export interface OrchestrateParams {
   domain?: string;
   /** implement: the concrete instruction for the worker. */
   task?: string;
+  /** implement: several domains at once, run in parallel through the file desk. */
+  assignments?: Array<{ domain: string; task: string }>;
   /** knowledge: which persistent file the text belongs to. */
   kind?: KnowledgeKind;
   /** compact: the knowledge file being rewritten. */
@@ -97,6 +105,8 @@ export interface WorkflowDeps {
   /** The pi session driving this workflow; task ownership is skipped when absent (tests, headless use). */
   sessionId?: string;
   config: BotLobbyConfig;
+  /** Per-run model/thinking/time limit, clamped to each model; plain settings when absent. */
+  profile?: ProfileResolver;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
   ask: (question: string) => Promise<string | undefined>;
@@ -110,6 +120,8 @@ export interface WorkflowResult {
   taskId: string;
   state: TaskState;
   message: string;
+  /** Subagent runs that finished during this action, oldest first. */
+  runs?: AgentRun[];
 }
 
 export type ApprovalChoice = "approve" | "amend" | "decline";
@@ -250,6 +262,7 @@ async function handleScout(task: Task, params: OrchestrateParams, deps: Workflow
       dataRoots: readDataRoots(deps.root, deps.configDir),
       taskDir: taskDirFor(deps.root, deps.configDir, task.id),
       config: deps.config,
+      profile: deps.profile,
       signal: deps.signal,
       onUpdate: deps.onUpdate,
     },
@@ -344,6 +357,7 @@ function researchRequestFor(
     domain,
     instruction,
     config: deps.config,
+    profile: deps.profile,
     cwd: deps.cwd,
     taskDir,
     signal: deps.signal,
@@ -500,6 +514,7 @@ function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instructi
     cwd: deps.cwd,
     dataRoots: readDataRoots(deps.root, deps.configDir),
     config: deps.config,
+    profile: deps.profile,
     signal: deps.signal,
     onUpdate: deps.onUpdate,
   };
@@ -518,21 +533,99 @@ function recordWorkerRun(task: Task, run: AgentRun): void {
   task.workerRuns = [...(task.workerRuns ?? []), record].slice(-MAX_WORKER_RECORDS);
 }
 
-async function handleImplement(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
-  requireState(task, ["planning", "implementing", "reviewing"]);
+interface Assignment {
+  domain: Domain;
+  instruction: string;
+}
+
+/** The delegation as a list: `assignments` for a parallel batch, otherwise the single domain/task. */
+function parseAssignments(params: OrchestrateParams): Assignment[] {
+  if (params.assignments && params.assignments.length > 0) {
+    const list = params.assignments.map((entry) => {
+      const instruction = entry.task?.trim();
+      if (!instruction) throw new Error("every assignment needs a task (what to implement)");
+      return { domain: parseDomain(entry.domain, "implement"), instruction };
+    });
+    const domains = list.map((entry) => entry.domain);
+    if (new Set(domains).size !== domains.length) throw new Error("parallel assignments need distinct domains (one worker per domain)");
+    return list;
+  }
   const domain = parseDomain(params.domain, "implement");
   const instruction = params.task?.trim();
   if (!instruction) throw new Error("implement requires task (what to implement)");
-  assertNoPendingApprovals(task, domain);
-  if (!task.domains.includes(domain)) task.domains.push(domain);
-  if (task.state !== "implementing") transition(task, "implementing");
-  const outcome = await runWorker(workerRequest(deps, task, domain, instruction), deps.runProcess ?? spawnPiProcess);
+  return [{ domain, instruction }];
+}
+
+/** Record one worker's outcome on the task and return its report for the Master. */
+function absorbWorkerOutcome(task: Task, deps: WorkflowDeps, outcome: WorkerOutcome): string {
+  const domain = outcome.result.domain;
   recordWorkerRun(task, outcome.run);
   const approvals = recordWorkerApprovals(task, outcome, deps.config);
   const pushback = recordPushback(task, outcome);
   task.blockers = [...task.blockers.filter((blocker) => blocker.domain !== domain), ...outcome.result.blockers];
   updateScratchpad(deps, task, outcome);
   return workerReport(outcome, approvals, pushback);
+}
+
+async function handleImplement(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
+  requireState(task, ["planning", "implementing", "reviewing"]);
+  const assignments = parseAssignments(params);
+  for (const { domain } of assignments) assertNoPendingApprovals(task, domain);
+  for (const { domain } of assignments) if (!task.domains.includes(domain)) task.domains.push(domain);
+  if (task.state !== "implementing") transition(task, "implementing");
+  if (assignments.length === 1) {
+    const { domain, instruction } = assignments[0]!;
+    const outcome = await runWorker(workerRequest(deps, task, domain, instruction), deps.runProcess ?? spawnPiProcess);
+    return absorbWorkerOutcome(task, deps, outcome);
+  }
+  return runParallelWorkers(task, deps, assignments);
+}
+
+/**
+ * Several domains at once. The workers share one file desk: each claims a file
+ * before editing it, queues for a busy one, and hands it over with a note; a
+ * worker that finishes hands over whatever it still holds automatically.
+ */
+async function runParallelWorkers(task: Task, deps: WorkflowDeps, assignments: Assignment[]): Promise<string> {
+  const session = new DeskSession({ cwd: deps.cwd });
+  await session.open();
+  let outcomes: WorkerOutcome[];
+  let unenforced: Domain[];
+  try {
+    outcomes = await mapConcurrent(assignments, deps.config.workflow.maxParallelWorkers, ({ domain, instruction }) => {
+      const request = workerRequest(deps, task, domain, instruction);
+      request.agent = {
+        env: session.env(domain),
+        extraTools: DESK_TOOLS,
+        onStart: (handle) => session.attach(domain, handle),
+        onAttemptEnd: (run) => {
+          const result = parseWorkerResult(domain, run.output);
+          session.release(domain, (path, next) => autoNote(domain, path, next, result.filesChanged, result.completed));
+        },
+      };
+      return runWorker(request, deps.runProcess ?? spawnPiProcess);
+    });
+    unenforced = assignments.map((entry) => entry.domain).filter((domain) => !session.greetedBy(domain));
+  } finally {
+    await session.close();
+  }
+  const reports = outcomes.map((outcome) => absorbWorkerOutcome(task, deps, outcome));
+  return [
+    `Parallel batch: ${assignments.map((entry) => entry.domain).join(", ")}.`,
+    ...reports,
+    handoverLog(session.handovers()),
+    unenforced.length > 0
+      ? `File checkout was not enforced for ${unenforced.join(", ")} (bot-lobby did not load in those workers); inspect the diff for overlapping edits.`
+      : "",
+  ]
+    .filter((line) => line.length > 0)
+    .join("\n\n");
+}
+
+function handoverLog(handovers: readonly Handover[]): string {
+  if (handovers.length === 0) return "";
+  const lines = handovers.map((entry) => `- ${entry.path}: ${entry.from} → ${entry.to}${entry.auto ? " (on finish)" : ""} — ${truncate(entry.note, 200)}`);
+  return `File handovers:\n${lines.join("\n")}`;
 }
 
 function handleResolveApproval(task: Task, params: OrchestrateParams): string {
@@ -597,6 +690,7 @@ function qaRequest(deps: WorkflowDeps, task: Task, diff: string, instruction?: s
     cwd: deps.cwd,
     dataRoots: readDataRoots(deps.root, deps.configDir),
     config: deps.config,
+    profile: deps.profile,
     signal: deps.signal,
     onUpdate: deps.onUpdate,
   };
@@ -784,12 +878,35 @@ export async function runWorkflowAction(params: OrchestrateParams, deps: Workflo
   if (!handler) {
     return { ok: false, taskId: task.id, state: task.state, message: `Unknown action "${params.action}".` };
   }
+  const finished = new Map<string, AgentRun>();
+  const tracked: WorkflowDeps = {
+    ...deps,
+    onUpdate: (run) => {
+      if (run.status !== "running") finished.set(run.runId, run);
+      deps.onUpdate?.(run);
+    },
+  };
   try {
-    const message = await handler(task, params, deps);
+    const message = await handler(task, params, tracked);
+    const runs = recordRunLog(task, finished);
     saveTask(deps.root, deps.configDir, task);
-    return { ok: true, taskId: task.id, state: task.state, message };
+    return { ok: true, taskId: task.id, state: task.state, message: `${message}${runsFooter(runs)}`, runs };
   } catch (error) {
+    const runs = recordRunLog(task, finished);
     saveTask(deps.root, deps.configDir, task);
-    return { ok: false, taskId: task.id, state: task.state, message: `Rejected: ${(error as Error).message}` };
+    return { ok: false, taskId: task.id, state: task.state, message: `Rejected: ${(error as Error).message}`, runs };
   }
+}
+
+/** Append this action's finished runs to the task's bounded run log. */
+function recordRunLog(task: Task, finished: ReadonlyMap<string, AgentRun>): AgentRun[] {
+  const runs = [...finished.values()];
+  if (runs.length > 0) task.runLog = [...(task.runLog ?? []), ...runs.map(runLogEntry)].slice(-MAX_RUN_LOG);
+  return runs;
+}
+
+/** One line per run so the Master sees timing, model and any partial-report flag. */
+function runsFooter(runs: readonly AgentRun[]): string {
+  if (runs.length === 0) return "";
+  return `\n\nRuns:\n${runs.map((run) => `- ${describeRun(run)}`).join("\n")}`;
 }

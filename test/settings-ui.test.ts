@@ -147,3 +147,48 @@ test("render shows the no-match text for a zero-match query", () => {
   typeQuery(picker, "zzqzzq");
   assert.match(picker.render(60).join("\n"), /No matching commands/);
 });
+
+// --- profiles: scouts have fixed thinking, subagents never inherit a model ---
+
+import { entryItems, patchEntry, prefillModels, thinkingItems } from "../src/pi/settings-ui.ts";
+import { DEFAULT_CONFIG, resolveConfig } from "../src/schemas/configuration.ts";
+
+test("the scout entry offers model and time limit but no thinking choice", () => {
+  const values = entryItems("scout", { model: "p/fast", timeoutMs: 480_000 }).map((item) => item.value);
+  assert.ok(values.includes("model") && values.includes("timeout"));
+  assert.ok(!values.includes("thinking"));
+  assert.ok(values.includes("fixed"), "the fixed level is still shown");
+  for (const kind of ["master", "designer", "backend", "qa", "researcher"] as const) {
+    assert.ok(entryItems(kind, { model: "m", thinking: "medium" }).some((item) => item.value === "thinking"), kind);
+  }
+});
+
+test("patchEntry never stores a thinking level on scouts", () => {
+  const next = patchEntry(DEFAULT_CONFIG, "scout", { model: "p/fast", thinking: "max" });
+  assert.deepEqual(next.scout, { model: "p/fast", timeoutMs: DEFAULT_CONFIG.scout.timeoutMs });
+  assert.equal(patchEntry(DEFAULT_CONFIG, "researcher", { thinking: "high" }).researcher.thinking, "high");
+  assert.equal(DEFAULT_CONFIG.researcher.thinking, "low", "the input is not mutated");
+});
+
+test("prefillModels pins every unset subagent model to the session model and leaves set ones", () => {
+  const config = resolveConfig({ agents: { qa: { model: "p/qa" } } });
+  const { config: next, filled } = prefillModels(config, "p/session");
+  assert.deepEqual(filled, ["designer", "backend", "scout", "researcher"]);
+  assert.equal(next.agents.qa.model, "p/qa");
+  assert.equal(next.agents.designer.model, "p/session");
+  assert.equal(next.scout.model, "p/session");
+  assert.equal(next.master.model, "inherit", "the master is the session itself");
+  assert.deepEqual(prefillModels(config, undefined).filled, []);
+});
+
+test("thinking choices are the supported levels with the current one ticked", () => {
+  const items = thinkingItems(["off", "low", "high"], "low");
+  assert.deepEqual(items.map((item) => item.value), ["off", "low", "high"]);
+  assert.equal(items[1]!.label, "low ✓");
+});
+
+test("subagent model pickers do not offer inherit", () => {
+  const ctx = ctxWithModels([{ provider: "p", id: "m", name: "m" }]);
+  assert.ok(!modelItems(ctx, "p/m", false).some((item) => item.value === "inherit"));
+  assert.ok(modelItems(ctx, "p/m").some((item) => item.value === "inherit"));
+});

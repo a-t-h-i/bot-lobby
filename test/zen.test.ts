@@ -5,6 +5,7 @@ import {
   MAX_PANEL_LINES,
   MAX_PLAN_STEPS,
   bannerLines,
+  foldEmoteFrame,
   formatDuration,
   largeLineBudget,
   panelLines,
@@ -198,7 +199,7 @@ test("the four slots render their own expression frame independently", () => {
   const sprites = [1, 11, 21, 31].map((offset) => strip[1]!.slice(offset, offset + COMPACT_WIDTH));
   assert.equal(new Set(sprites).size, SLOT_IDS.length, `slots shared a frame: ${JSON.stringify(sprites)}`);
   for (const [index, id] of SLOT_IDS.entries()) {
-    assert.equal(sprites[index], COMPACT_FRAMES[id].working[expressions[id]], `${id} drew a foreign frame`);
+    assert.equal(sprites[index], COMPACT_FRAMES[id].working[foldEmoteFrame(expressions[id])], `${id} drew a foreign frame`);
   }
 });
 

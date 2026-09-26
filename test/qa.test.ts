@@ -176,3 +176,20 @@ test("legacy per-domain review state still loads and completes after a qa pass",
   assert.equal(task.state, "completed");
   assert.deepEqual(task.reviewIterations, { qa: 1 });
 });
+
+test("each action records its finished runs in the task's run log and the Master's report", async () => {
+  const deps = makeDeps();
+  withTask(deps);
+  const result = await act(deps, { action: "qa" });
+  assert.equal(result.runs?.length, 1);
+  assert.match(result.message, /\n\nRuns:\n- ✓ QA reviewer · /);
+  const saved = loadTask(deps.root, deps.configDir, "TASK-1")!;
+  assert.equal(saved.runLog?.length, 1);
+  assert.equal(saved.runLog![0]!.role, "reviewer");
+  assert.equal(saved.runLog![0]!.status, "success");
+  const again = await act(deps, { action: "qa" });
+  assert.equal(again.runs?.length, 1);
+  assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.runLog?.length, 2);
+  const status = await act(deps, { action: "status" });
+  assert.ok(!status.message.includes("Runs:"), "actions without subagents carry no footer");
+});

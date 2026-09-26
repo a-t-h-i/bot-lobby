@@ -4,11 +4,12 @@ import { Container, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import type { AgentRun } from "../schemas/findings.ts";
 import type { ProcessRunner } from "../execution/pi-runner.ts";
-import { inheritThinking } from "../schemas/configuration.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { truncate } from "../text.ts";
 import { applyStatus, reportRuns, summarizeRun } from "./ui.ts";
 import { isQuiet } from "./quiet.ts";
+import { createProfileResolver, modelRef, type ModelLookup } from "./model-support.ts";
+import { agentName, describeRun } from "./run-summary.ts";
 import {
   ORCHESTRATE_ACTIONS,
   runWorkflowAction,
@@ -29,6 +30,15 @@ const OrchestrateSchema = Type.Object({
   plan: Type.Optional(Type.String({ description: "plan: the detailed internal plan" })),
   domain: Type.Optional(Type.String({ description: "implement/research: designer, backend, or qa" })),
   task: Type.Optional(Type.String({ description: "implement: the concrete step for that domain's worker" })),
+  assignments: Type.Optional(
+    Type.Array(
+      Type.Object({
+        domain: Type.String({ description: "designer, backend, or qa" }),
+        task: Type.String({ description: "the concrete step(s) for that domain's worker" }),
+      }),
+      { description: "implement: run several domains in parallel (distinct domains); workers share files through the file desk" },
+    ),
+  ),
   approvalId: Type.Optional(Type.String({ description: "resolve_approval: the approval id from a worker result" })),
   decision: Type.Optional(
     StringEnum(["approved", "rejected"] as const, { description: "resolve_approval: approve or reject the request" }),
@@ -49,7 +59,7 @@ const DESCRIPTION = [
   "Actions: clarify (ask the user), scout (domain reconnaissance in parallel), research (summon the",
   "read-only researcher for cited internet evidence on a complex change, tool, plugin, doc set or",
   "dependency), propose (record the proposal and request approval), plan (record the internal",
-  "plan), implement (delegate one step to a domain worker), qa (final quality gate and the only",
+  "plan), implement (delegate a step to a domain worker, or several domains in parallel with assignments), qa (final quality gate and the only",
   "review), knowledge (record approved knowledge or a decision),",
   "compact (replace a knowledge file with a rewritten version, archiving the old one),",
   "resolve_approval (approve or reject a request), complete (declare the task done after the gates",
@@ -57,22 +67,39 @@ const DESCRIPTION = [
   "The engine validates every step against the task state machine, so a rejected action means the workflow is not at that step yet.",
 ].join(" ");
 
-/** Build the engine dependencies from the current Pi context. `thinking` is the live session level used by agents configured to inherit it. */
+/** Resolve a `provider/id` (or bare id) against the models this session knows. */
+export function modelLookup(ctx: ExtensionContext): ModelLookup {
+  return (ref) => {
+    const slash = ref.indexOf("/");
+    if (slash > 0) return ctx.modelRegistry.find(ref.slice(0, slash), ref.slice(slash + 1));
+    return ctx.modelRegistry.getAvailable().find((model) => model.id === ref);
+  };
+}
+
+/** Build the engine dependencies from the current Pi context; every agent's model and thinking come from settings. */
 export function workflowDeps(
   ctx: ExtensionContext,
   configDir: string,
   signal: AbortSignal | undefined,
   onUpdate: ((run: AgentRun) => void) | undefined,
   runProcess?: ProcessRunner,
-  thinking?: string,
 ): WorkflowDeps {
   const root = detectProjectRoot(ctx.cwd, configDir);
   const hasUI = ctx.hasUI;
+  const config = loadConfig();
+  const warn = (message: string) => {
+    if (hasUI) ctx.ui.notify(message, "warning");
+  };
   return {
     root,
     configDir,
     cwd: ctx.cwd,
-    config: inheritThinking(loadConfig(), thinking),
+    config,
+    profile: createProfileResolver(config, {
+      lookup: modelLookup(ctx),
+      sessionModel: ctx.model ? modelRef(ctx.model) : undefined,
+      warn,
+    }),
     sessionId: ctx.sessionManager.getSessionId(),
     signal,
     onUpdate,
@@ -106,11 +133,26 @@ function runReporter(
 /** TUI-only transcript entries; these never enter the model's context. */
 function registerBotLobbyEntries(pi: ExtensionAPI): void {
   pi.registerEntryRenderer("bot-lobby", (entry, { expanded }, theme) => {
-    const data = entry.data as { kind?: string; taskId?: string; text?: string } | undefined;
+    const data = entry.data as { kind?: string; taskId?: string; text?: string; ok?: boolean } | undefined;
+    if (data?.kind === "run") {
+      // One compact line per finished subagent run.
+      return new Text(theme.fg(data.ok ? "dim" : "warning", data.text ?? ""), 0, 0);
+    }
     const header = `bot-lobby ${data?.taskId ?? ""} — ${data?.kind ?? "note"}`.trim();
     const body = data?.text ?? "";
     return new Text(`${theme.fg("accent", theme.bold(header))}\n${theme.fg("toolOutput", expanded ? body : truncate(body, 600))}`, 0, 0);
   });
+}
+
+/** A transcript line per finished run, plus a warning for anything that stalled or ran out of time. */
+function reportFinishedRuns(pi: ExtensionAPI, ctx: ExtensionContext, result: WorkflowResult): void {
+  for (const run of result.runs ?? []) {
+    const ok = run.status === "success" && !run.wrappedUp;
+    pi.appendEntry("bot-lobby", { kind: "run", taskId: result.taskId, text: describeRun(run), ok });
+    if (!ctx.hasUI) continue;
+    if (run.stalled) ctx.ui.notify(`bot-lobby: ${agentName(run)} ${run.role} stalled — ${run.error ?? "no output"}`, "warning");
+    else if (run.status === "timeout") ctx.ui.notify(`bot-lobby: ${agentName(run)} ${run.role} ${run.error ?? "hit its time limit"}`, "warning");
+  }
 }
 
 export function registerOrchestrateTool(pi: ExtensionAPI, configDir: string, runProcess?: ProcessRunner): void {
@@ -128,11 +170,12 @@ export function registerOrchestrateTool(pi: ExtensionAPI, configDir: string, run
     renderShell: "self",
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const root = detectProjectRoot(ctx.cwd, configDir);
-      const deps = workflowDeps(ctx, configDir, signal, runReporter(onUpdate, (runs) => reportRuns(ctx, root, configDir, runs)), runProcess, pi.getThinkingLevel());
+      const deps = workflowDeps(ctx, configDir, signal, runReporter(onUpdate, (runs) => reportRuns(ctx, root, configDir, runs)), runProcess);
       const result = await runWorkflowAction(params as OrchestrateParams, deps);
       if (params.action === "propose" && params.proposal && result.ok) {
         pi.appendEntry("bot-lobby", { kind: "proposal", taskId: params.taskId, text: params.proposal });
       }
+      reportFinishedRuns(pi, ctx, result);
       applyStatus(ctx, root, configDir);
       return {
         content: [{ type: "text", text: result.message }],

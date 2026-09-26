@@ -1,10 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { BotLobbyConfig } from "../schemas/configuration.ts";
+import { profileFor, type BotLobbyConfig, type ProfileResolver } from "../schemas/configuration.ts";
 import type { Domain } from "../schemas/agent.ts";
 import type { AgentRun, ReviewResult, ScoutResult, WorkerResult } from "../schemas/findings.ts";
 import { domainSpec } from "../agents/registry.ts";
-import { runAgent, runParallel, type AgentRequest } from "../execution/agent-runner.ts";
+import { runAgent, runParallel, watchdogOptions, type AgentRequest } from "../execution/agent-runner.ts";
 import { spawnPiProcess, type ProcessRunner } from "../execution/pi-runner.ts";
 import { readAgentKnowledge, writeFileEnsured } from "../knowledge/store.ts";
 import { selectKnowledge, type KnowledgeSelection } from "../knowledge/selector.ts";
@@ -32,14 +32,16 @@ export interface ScoutRequest {
   dataRoots: readonly string[];
   taskDir: string;
   config: BotLobbyConfig;
+  /** Settings-derived model/thinking/time limit, clamped to the model; plain settings when absent. */
+  profile?: ProfileResolver;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
 }
 
-/** Models are inherited from the session unless the config pins one. */
-export function resolveModel(config: BotLobbyConfig, domain: Domain): string | undefined {
-  const model = config.agents[domain].model;
-  return model === "inherit" ? undefined : model;
+/** Model, thinking and time limit for one run, from settings. */
+function profileFields(config: BotLobbyConfig, resolver: ProfileResolver | undefined, domain: Domain, role: AgentRequest["role"]) {
+  const profile = profileFor(config, resolver, domain, role);
+  return { model: profile.model, thinking: profile.thinking, timeoutMs: profile.timeoutMs };
 }
 
 function scoutInstruction(request: ScoutRequest, domain: Domain): string {
@@ -82,13 +84,11 @@ export async function runScouts(request: ScoutRequest, run: ProcessRunner = spaw
     role: "scout",
     instruction: scoutInstruction(request, domain),
     context: scoutContext(request, domain),
-    model: resolveModel(request.config, domain),
-    thinking: request.config.agents[domain].thinking,
-    timeoutMs: request.config.workflow.agentTimeoutMs,
+    ...profileFields(request.config, request.profile, domain, "scout"),
     cwd: request.cwd,
     signal: request.signal,
     onUpdate: request.onUpdate,
-    retries: request.config.workflow.maxAgentRetries,
+    ...watchdogOptions(request.config.workflow),
   }));
   const runs = await runParallel(requests, request.config.workflow.maxParallelScouts, run);
   const outcomes = runs.map((agentRun) => toOutcome(agentRun, agentRun.domain));
@@ -136,6 +136,8 @@ export interface WorkerOutcome {
 }
 
 export interface WorkerRequest {
+  /** Extra run wiring for parallel batches: the file desk's env, tools and hooks. */
+  agent?: Pick<AgentRequest, "env" | "extraTools" | "onStart" | "onAttemptEnd">;
   taskId: string;
   domain: Domain;
   /** What the Master wants implemented. */
@@ -146,6 +148,8 @@ export interface WorkerRequest {
   cwd: string;
   dataRoots: readonly string[];
   config: BotLobbyConfig;
+  /** Settings-derived model/thinking/time limit, clamped to the model; plain settings when absent. */
+  profile?: ProfileResolver;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
 }
@@ -184,13 +188,12 @@ export async function runWorker(
         instructions: request.config.agents[request.domain].instructions,
         workflowContext: workerWorkflowContext(request),
       },
-      model: resolveModel(request.config, request.domain),
-      thinking: request.config.agents[request.domain].thinking,
-      timeoutMs: request.config.workflow.agentTimeoutMs,
+      ...profileFields(request.config, request.profile, request.domain, "worker"),
       cwd: request.cwd,
       signal: request.signal,
       onUpdate: request.onUpdate,
-      retries: request.config.workflow.maxAgentRetries,
+      ...watchdogOptions(request.config.workflow),
+      ...request.agent,
     },
     run,
   );
@@ -219,6 +222,8 @@ export interface ReviewerRequest {
   cwd: string;
   dataRoots: readonly string[];
   config: BotLobbyConfig;
+  /** Settings-derived model/thinking/time limit, clamped to the model; plain settings when absent. */
+  profile?: ProfileResolver;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
 }
@@ -262,12 +267,11 @@ function reviewerAgentRequest(request: ReviewerRequest, selected: KnowledgeSelec
       instructions: request.config.agents[request.domain].instructions,
       workflowContext: reviewerContext(request),
     },
-    model: resolveModel(request.config, request.domain),
-    thinking: request.config.agents[request.domain].thinking,
-    timeoutMs: request.config.workflow.agentTimeoutMs,
+    ...profileFields(request.config, request.profile, request.domain, "reviewer"),
     cwd: request.cwd,
     signal: request.signal,
     onUpdate: request.onUpdate,
+    ...watchdogOptions(request.config.workflow),
     retries: 0,
   };
 }
