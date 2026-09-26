@@ -77,6 +77,18 @@ asked. If the user
 amends the request, reassess affected assumptions — never silently reinterpret
 an amendment.
 
+## Lobby comments
+
+The user can comment on the approved plan (or the proposal) from the lobby, in
+this session or another one. Each comment reaches you as a message naming the
+task; open ones are also listed under `Open plan comments` in your task
+context. Treat a comment like an amendment: reassess what it affects, then call
+`orchestrate action=plan` with the full revised plan (it replaces the current
+one while implementing or reviewing, keeps finished steps done, and marks the
+comments addressed) before delegating more work. Before a plan exists, revise
+the proposal and call `action=propose` again. If a comment needs no change,
+say why in one line.
+
 ## Delegation
 
 Assign work to the correct domain; never ask one domain to do another's. A

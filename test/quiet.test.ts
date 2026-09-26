@@ -97,7 +97,7 @@ function makeCtx(cwd: string, expanded = false, sessionId = "session-1") {
       ui.notifications.push({ message, type });
     },
   };
-  return { ctx: { cwd, ui, sessionManager: { getSessionId: () => sessionId } } as unknown as ExtensionContext, ui };
+  return { ctx: { cwd, ui, sessionManager: { getSessionId: () => sessionId }, isIdle: () => true } as unknown as ExtensionContext, ui };
 }
 
 function tempDir(prefix: string): string {
