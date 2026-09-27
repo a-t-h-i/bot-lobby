@@ -52,7 +52,7 @@ const PROMPT_FIRST: ReadonlySet<TabId> = new Set(["lobby", "plan", "quickfix"]);
 export type LobbyMode = "type" | "browse";
 
 /** What each pane toggle is called in notices and help. */
-const PANEL_NAMES: Record<LobbyPanel, string> = { scene: "zen scene", conversation: "conversation", activity: "activity log", thinking: "thinking" };
+const PANEL_NAMES: Record<LobbyPanel, string> = { scene: "oracle and agent animations", conversation: "conversation", activity: "activity log", thinking: "thinking" };
 const PANEL_ACTIONS: Record<LobbyPanel, LobbyAction> = { scene: "toggleScene", conversation: "toggleConversation", activity: "toggleActivity", thinking: "toggleThinking" };
 
 /** Everything the view needs from pi and bot-lobby. */
@@ -62,8 +62,8 @@ export interface LobbyHost {
   sessionId(): string | undefined;
   /** This session's active task and its runs, as the zen widget sees them. */
   zen(): { task?: Task; runs: readonly AgentRun[] };
-  /** Draw the zen scene into at most `height` lines. */
-  scene(width: number, height: number): string[];
+  /** Draw the zen scene into at most `height` lines: animated, or only the task's status when `animated` is false. */
+  scene(width: number, height: number, animated: boolean): string[];
   /** Advance the scene's clock; returns the delay it wants until the next step. */
   advanceScene(now: number): number;
   feed: LobbyFeed;
@@ -137,11 +137,10 @@ interface Notice {
   kind: "info" | "warning";
 }
 
-/** A key and what it does, for the help screen; `hint` is the short form on the hint line. */
+/** A key and what it does, for the help screen. */
 interface KeyHelp {
   key: string;
   text: string;
-  hint?: string;
 }
 
 function isPrintable(data: string): string | undefined {
@@ -1266,17 +1265,17 @@ export class LobbyView implements Component, Focusable {
       case "tasks":
         return this.commentTarget ? `comment on ${this.commentTarget}'s plan · enter sends it to the oracle` : "c comments on the selected task's plan";
       case "plan": {
-        if (this.lineTarget) return `comment on “${clip(this.lineTarget, 48)}” · enter adds it`;
+        if (this.lineTarget) return `comment on “${clip(this.lineTarget, 48)}”`;
         const session = this.host.planner();
-        if (session?.busy) return "the panel is thinking · x stops it";
+        if (session?.busy) return "the panel is thinking";
         if (session?.awaitingAnswers) {
           const count = session.questions.length;
-          return `enter answers the panel's ${count} question${count === 1 ? "" : "s"} one at a time · or type a reply`;
+          return `press enter to answer ${count} question${count === 1 ? "" : "s"}, or type a reply`;
         }
-        return session && session.messages.length > 0 ? "reply to the panel" : "describe the task you want to plan";
+        return session && session.messages.length > 0 ? "reply to the panel" : "describe the task to plan";
       }
       case "quickfix":
-        return this.host.quickfix.running ? "describe a quick change · queues behind the running one" : "describe a quick change · runs now, beside any task";
+        return this.host.quickfix.running ? "describe a quick change; it runs after the current one" : "describe a quick change";
       case "issues":
         return this.issueDraft ? "new issue · first line is the title" : "n files a new issue";
       case "metrics":
@@ -1310,61 +1309,60 @@ export class LobbyView implements Component, Focusable {
 
   /** Every key the current tab understands while browsing. */
   private tabKeys(): KeyHelp[] {
-    const session = this.host.planner();
     switch (this.tab) {
       case "lobby":
         return [
-          { key: "type", text: "talk to the oracle (starts a task when none is running)", hint: "talk" },
-          { key: "↑ ↓", text: "scroll the focused pane (PageUp/PageDown a page)", hint: "scroll" },
-          { key: "← →", text: "move between the conversation, activity log and thinking", hint: "pane" },
+          { key: "type", text: "talk to the oracle (starts a task when none is running)" },
+          { key: "↑ ↓", text: "scroll the focused pane (PageUp/PageDown a page)" },
+          { key: "← →", text: "move between the conversation, activity log and thinking" },
           { key: "Home End", text: "the oldest lines, or back to the newest" },
-          { key: "c", text: "comment on this task's plan", hint: "comment on plan" },
+          { key: "c", text: "comment on this task's plan" },
           { key: "esc", text: "stop the oracle while it works" },
         ];
       case "tasks":
         return [
-          { key: "↑ ↓", text: "select a task or plan, or scroll the detail (PageUp/PageDown)", hint: "select" },
-          { key: "enter / ← →", text: "move between the list and the detail", hint: "detail" },
-          { key: "c", text: "comment on the selected task's plan", hint: "comment" },
-          { key: "s", text: "start the selected planned task", hint: "start" },
-          { key: "d d", text: "discard the selected planned task", hint: "discard" },
+          { key: "↑ ↓", text: "select a task or plan, or scroll the detail (PageUp/PageDown)" },
+          { key: "enter / ← →", text: "move between the list and the detail" },
+          { key: "c", text: "comment on the selected task's plan" },
+          { key: "s", text: "start the selected planned task" },
+          { key: "d d", text: "discard the selected planned task" },
           { key: "r", text: "reread tasks from disk" },
         ];
       case "plan":
         return [
-          { key: "a", text: "answer the panel's questions, one questionnaire at a time (enter on an empty prompt too)", ...(session?.awaitingAnswers ? { hint: "answer questions" } : {}) },
-          { key: "enter / ← →", text: "move between the conversation and the draft", hint: "pane" },
-          { key: "↑ ↓", text: "pick a draft line (draft) or scroll (conversation); PageUp/PageDown a page", hint: "line" },
-          { key: "c / click", text: "comment on the picked draft line", hint: "comment on line" },
-          { key: "1-4", text: "seat or unseat DEV, DESIGN, QA, RESEARCH", hint: "seats" },
-          { key: "s", text: "save the plan to the pending tasks", hint: "save" },
-          { key: "n", text: "start a new plan", hint: "new" },
+          { key: "a", text: "answer the panel's questions, one questionnaire at a time (enter on an empty prompt too)" },
+          { key: "enter / ← →", text: "move between the conversation and the draft" },
+          { key: "↑ ↓", text: "pick a draft line (draft) or scroll (conversation); PageUp/PageDown a page" },
+          { key: "c / click", text: "comment on the picked draft line" },
+          { key: "1-4", text: "seat or unseat DEV, DESIGN, QA, RESEARCH" },
+          { key: "s", text: "save the plan to the pending tasks" },
+          { key: "n", text: "start a new plan" },
           { key: "x", text: "stop the round" },
           { key: "r", text: "retry a failed round or seat" },
           { key: "m", text: "the oracle's model, thinking and time limit (Planner settings)" },
         ];
       case "quickfix":
         return [
-          { key: "type", text: "describe a quick change", hint: "new fix" },
-          { key: "↑ ↓", text: "select a quick fix, or scroll the detail (PageUp/PageDown)", hint: "select" },
-          { key: "enter / ← →", text: "move between the list and the detail", hint: "detail" },
-          { key: "x", text: "cancel the selected quick fix", hint: "cancel" },
-          { key: "m", text: "the quick fix agent's model, thinking, time limit and instructions", hint: "model" },
+          { key: "type", text: "describe a quick change" },
+          { key: "↑ ↓", text: "select a quick fix, or scroll the detail (PageUp/PageDown)" },
+          { key: "enter / ← →", text: "move between the list and the detail" },
+          { key: "x", text: "cancel the selected quick fix" },
+          { key: "m", text: "the quick fix agent's model, thinking, time limit and instructions" },
         ];
       case "issues":
         return [
-          { key: "↑ ↓", text: "select an issue", hint: "select" },
-          { key: "enter", text: "read the selected issue", hint: "read" },
-          { key: "p", text: "plan the selected issue", hint: "plan it" },
-          { key: "n", text: "file a new issue", hint: "new" },
-          { key: "r", text: "reload issues", hint: "refresh" },
+          { key: "↑ ↓", text: "select an issue" },
+          { key: "enter", text: "read the selected issue" },
+          { key: "p", text: "plan the selected issue" },
+          { key: "n", text: "file a new issue" },
+          { key: "r", text: "reload issues" },
         ];
       case "metrics":
         return [
-          { key: "↑ ↓", text: "select a row of the table", hint: "select" },
-          { key: "g", text: "group by model, or by model and agent", hint: "group" },
-          { key: "s", text: "change the sort", hint: "sort" },
-          { key: "r", text: "reread the metrics log", hint: "refresh" },
+          { key: "↑ ↓", text: "select a row of the table" },
+          { key: "g", text: "group by model, or by model and agent" },
+          { key: "s", text: "change the sort" },
+          { key: "r", text: "reread the metrics log" },
         ];
     }
   }
@@ -1383,14 +1381,55 @@ export class LobbyView implements Component, Focusable {
     };
     if (this.help) return fit(`${badge("KEYS", "accent")} ${this.chips([["any key", "closes"]], theme)}`, width);
     if (this.searching) return fit(`${badge("SEARCH", "warning")} ${this.chips([["enter", "keep"], ["esc", "clear"], ["↑↓", "results"], [k("nextTab"), "next tab"]], theme)}`, width);
+    const mode = this.mode === "type" ? badge("TYPE", "accent") : badge("BROWSE", "muted");
+    return fit(`${mode} ${this.chips(this.hintChips(), theme)}`, width);
+  }
+
+  /**
+   * The few keys that matter right now, most useful first: typing names what
+   * enter does here; browsing names the tab's main commands, only those that
+   * apply. Everything else is one `?` away.
+   */
+  private hintChips(): Array<[string, string]> {
+    const k = (action: LobbyAction) => keyLabel(this.keys[action]).toLowerCase();
+    const session = this.host.planner();
     if (this.mode === "type") {
-      const esc = this.tab === "lobby" && this.host.masterBusy() ? "stop the oracle" : this.lineTarget ? "cancel" : "browse";
-      const extra: Array<[string, string]> = this.tab === "plan" && this.host.planner()?.awaitingAnswers && !this.lineTarget ? [["enter", "answer questions"]] : [["enter", "send"]];
-      return fit(`${badge("TYPE", "accent")} ${this.chips([...extra, ["shift+enter", "newline"], ["esc", esc], [k("nextTab"), "next tab"], [k("help"), "keys"], [k("hide"), "hide"]], theme)}`, width);
+      if (this.tab === "lobby" && this.host.masterBusy()) return [["enter", "steer"], ["esc", "stop the oracle"], [k("hide"), "hide"]];
+      if (this.tab === "plan" && this.lineTarget) return [["enter", "add the comment"], ["esc", "cancel"]];
+      const enter = this.tab === "plan" && session?.awaitingAnswers && !this.editor.getText().trim() ? "answer questions" : this.tab === "quickfix" ? "run it" : "send";
+      return [["enter", enter], ["esc", "browse"], [k("hide"), "hide"]];
     }
-    const tabHints = this.tabKeys().filter((entry) => entry.hint).map((entry) => [entry.key, entry.hint!] as const);
-    const panes: Array<[string, string]> = this.tab === "lobby" ? [[k("toggleActivity"), "activity"], [k("toggleThinking"), "thinking"]] : [];
-    return fit(`${badge("BROWSE", "muted")} ${this.chips([...tabHints, ...panes, ["/", "search"], ["?", "keys"], [k("hide"), "hide"]], theme)}`, width);
+    const keys: Array<[string, string]> = [];
+    switch (this.tab) {
+      case "lobby":
+        keys.push(["←→", "pane"], ["↑↓", "scroll"], [k("toggleScene"), "animations"]);
+        if (this.host.zen().task) keys.push(["c", "comment on plan"]);
+        break;
+      case "tasks": {
+        const row = this.taskRowList()[this.tasksSelected];
+        keys.push(["↑↓", "select"], ["enter", "detail"]);
+        if (row?.kind === "task") keys.push(["c", "comment"]);
+        if (row?.kind === "plan") keys.push(["s", "start"], ["d", "discard"]);
+        break;
+      }
+      case "plan":
+        if (session?.awaitingAnswers) keys.push(["a", "answer"]);
+        if (session?.reply?.plan) keys.push(["c", "comment on a line"], ["s", "save"]);
+        if (session?.busy) keys.push(["x", "stop"]);
+        keys.push(["n", "new"], ["1-4", "seats"]);
+        break;
+      case "quickfix":
+        if (this.host.quickfix.jobs.length > 0) keys.push(["↑↓", "select"], ["x", "cancel"]);
+        keys.push(["m", "model"]);
+        break;
+      case "issues":
+        keys.push(["↑↓", "select"], ["p", "plan it"], ["n", "new"]);
+        break;
+      case "metrics":
+        keys.push(["↑↓", "select"], ["g", "group"], ["s", "sort"]);
+        break;
+    }
+    return [...keys, ["?", "all keys"]];
   }
 
   /** The help screen: every shortcut, the typing and browsing keys, and this tab's commands. */
@@ -1544,7 +1583,7 @@ export class LobbyView implements Component, Focusable {
     const others = this.data.tasks.filter((task) => !TERMINAL_STATES.includes(task.state) && task.ownerSessionId !== sessionId).length;
     const query = this.query();
     return renderHome({
-      ...(zen.task ? { task: zen.task, scene: (w: number, h: number) => this.host.scene(w, h) } : {}),
+      ...(zen.task ? { task: zen.task, scene: (w: number, h: number, animated: boolean) => this.host.scene(w, h, animated) } : {}),
       chat: feed.chat,
       ...(feed.reply ? { liveReply: feed.reply } : {}),
       activity: feed.activity,
