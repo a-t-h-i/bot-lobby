@@ -119,6 +119,8 @@ export interface Task {
   updatedAt: string;
   /** The pi session (ctx.sessionManager id) that owns this task; absent on legacy tasks. */
   ownerSessionId?: string;
+  /** The planned task (PLAN-…) whose plan the user agreed in the planning panel: its proposal needs no approval. */
+  approvedPlan?: string;
 }
 
 export function createTask(

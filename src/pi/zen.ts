@@ -520,7 +520,8 @@ function compactPanel(
 ): string[] {
   const metrics = sceneMetrics(task, runs, now);
   const expressions = opts.expressions ?? {};
-  const fixed = [...bannerLines(width), headerLine(task, now, quiet), ...compactStrip(task.state, metrics.slots, expressions, opts.theme)];
+  const strip = opts.still ? [] : compactStrip(task.state, metrics.slots, expressions, opts.theme);
+  const fixed = [...bannerLines(width), headerLine(task, now, quiet), ...strip];
   const tail = tailLines(task, runs, now, tick, steps, opts.theme);
   const room = Math.max(0, MAX_PANEL_LINES - fixed.length - tail.length);
   return [...fixed, ...tail, ...checklistLines(steps, room)].map((line) => truncateToWidth(line, width));
@@ -613,6 +614,8 @@ export interface PanelOptions {
   oracleActivity?: string;
   /** Caller-clocked oracle animation: the expression's sub-step and the lip-sync shape. */
   oracleMotion?: OracleMotion;
+  /** Leave out the oracle and agent animations: status, alert, activity and checklist only. */
+  still?: boolean;
 }
 
 /** The oracle's clocked animation state beyond its expression frame (see expressions.ts). */
@@ -640,8 +643,9 @@ export function panelLines(
   const tick = opts.tick ?? 0;
   const steps = planChecklist(task.plan ?? "", runs);
   const budget = largeLineBudget(opts.rows ?? DEFAULT_ROWS);
-  if (width >= LARGE_MIN_WIDTH && budget >= MIN_LARGE_LINES) {
-    const scene = largeLines(sceneInput(task, runs, now, quiet, tick, steps, opts), width, budget, opts.theme);
+  // The still scene has no tower or agent strip to fit, so any height keeps the large tier's status box.
+  if (width >= LARGE_MIN_WIDTH && (budget >= MIN_LARGE_LINES || opts.still)) {
+    const scene = largeLines(sceneInput(task, runs, now, quiet, tick, steps, opts), width, budget, opts.theme, opts.still);
     return scene.map((line) => truncateToWidth(line, width));
   }
   return compactPanel(task, runs, now, quiet, tick, steps, opts, width);

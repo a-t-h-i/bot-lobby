@@ -9,8 +9,8 @@
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { ORACLE_LABEL, type LineComment, type PanelNote, type PanelQuestion, type PlannerMessage, type PlannerReply, type PlannerSeed } from "../planner.ts";
 import type { PlannedTask } from "../../state/backlog.ts";
-import { beside, bold, box, fill, italic, markdownLines, notePane, paint, selectRow, spinner, wrap, wrapHanging, type LobbyTheme, type PaneLayout } from "../layout.ts";
-import { sourceColor, tailWindow } from "./home.ts";
+import { beside, bold, box, clock, fill, fit, italic, markdownLines, notePane, paint, selectRow, spinner, wrap, wrapHanging, type LobbyTheme, type PaneLayout } from "../layout.ts";
+import { sourceColor, speakerLine, tailWindow, youLines } from "./home.ts";
 
 export interface SeatView {
   label: string;
@@ -77,43 +77,34 @@ export interface PlanTabInput {
   layout?: PlanLayout;
   /** Filled with where the conversation (`talk`) and the draft landed, for scrolling. */
   panes?: PaneLayout;
+  /** The key that saves the plan, as the status line names it. */
+  saveKey?: string;
 }
 
 export const PLAN_COLUMNS_MIN = 100;
 const LABEL_WIDTH = 8;
 
+/** Before a session: one sentence, then who sits on the panel and the model each runs on. */
 function intro(input: PlanTabInput, width: number, theme?: LobbyTheme): string[] {
-  // The roster leads with the chair; the intro names it separately.
-  const members = input.seats.filter((seat) => seat.label !== ORACLE_LABEL);
-  const seats = members.filter((seat) => seat.seated).map((seat) => seat.label);
-  const text = [
-    bold(theme, "Plan a task with the whole team before anyone writes code."),
-    "",
-    `Describe what you want below. The planning panel — the oracle chairing${seats.length > 0 ? `, with ${seats.join(", ")}` : ""} — reads the codebase and questions you, each seat from its own domain: contracts and data, flows and states, acceptance criteria and tests, libraries and prior art.`,
-    "",
-    "After each round the oracle puts the panel's questions to you one at a time, each with options and room for your own answer, and folds every answer into the draft plan, so all the agents start from the same decisions.",
-    "",
-    "Comment on any line of the draft: enter moves to the draft, ↑↓ pick a line (or click it), c comments. When the panel agrees, s saves the plan to the pending tasks list. While browsing (esc), 1-4 seat or unseat DEV, DESIGN, QA and RESEARCH.",
-    "",
-    paint(theme, "dim", `oracle: ${input.profile} (m changes it; each seat uses its domain's settings, alt+s)`),
-    ...members.map((seat) => paint(theme, "dim", `${seat.label.toLowerCase()}: ${seat.seated ? seat.profile ?? "" : "not seated"}`)),
-  ];
-  return text.flatMap((line) => wrap(line, width));
+  const rows = input.seats.map((seat) => {
+    const name = paint(theme, seat.seated ? sourceColor(seat.label) : "dim", seat.label.padEnd(LABEL_WIDTH + 2));
+    const model = seat.label === ORACLE_LABEL ? input.profile : seat.seated ? seat.profile ?? "" : "not seated";
+    return fit(`${name}${paint(theme, seat.seated ? "muted" : "dim", model)}`, width);
+  });
+  return [...wrap(bold(theme, "Describe a task below and the panel questions you until the plan is clear."), width), "", ...rows];
 }
 
 function statusLine(view: PlanView, input: PlanTabInput, theme?: LobbyTheme): string {
   const parts: string[] = [];
+  const count = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
   if (view.busy) parts.push(`${paint(theme, "accent", spinner(input.tick))} round ${view.turns}`);
-  else if (view.error) parts.push(paint(theme, "error", `✗ ${view.error.split("\n")[0]} — esc, then r retries`));
-  else if (view.reply?.status === "ready") parts.push(paint(theme, "success", "✓ READY — the panel agrees; s saves it as a pending task"));
-  else if (view.awaitingAnswers) {
-    const left = view.answeredChunks > 0 ? " (some answered — enter resumes)" : " — enter answers them one at a time";
-    parts.push(paint(theme, "warning", `● ${view.questions.length} question${view.questions.length === 1 ? "" : "s"} for you${left}`));
-  }
-  if (view.lineComments.length > 0) parts.push(paint(theme, "accent", `◆ ${view.lineComments.length} line comment${view.lineComments.length === 1 ? "" : "s"} to send`));
+  else if (view.error) parts.push(paint(theme, "error", `✗ ${view.error.split("\n")[0]} — r retries`));
+  else if (view.reply?.status === "ready") parts.push(paint(theme, "success", `✓ ready — ${input.saveKey ?? "Ctrl+S"} saves it`));
+  else if (view.awaitingAnswers) parts.push(paint(theme, "warning", `● ${count(view.questions.length, "question")} — enter ${view.answeredChunks > 0 ? "resumes" : "answers them"}`));
+  if (view.lineComments.length > 0) parts.push(paint(theme, "accent", `◆ ${count(view.lineComments.length, "comment")} to send`));
   if (view.saved) parts.push(paint(theme, "success", `saved as ${view.saved.id}`));
   if (!view.busy && view.turns > 0) parts.push(paint(theme, "dim", `round ${view.turns}`));
-  return parts.join(paint(theme, "dim", " · ")) || paint(theme, "dim", "Answer below; enter sends.");
+  return parts.join(paint(theme, "dim", " · "));
 }
 
 /** One seat on the roster: a spinner and its step while it works, then ready, its question count or a failure. */
@@ -124,6 +115,8 @@ function seatCell(seat: SeatView, tick: number, theme?: LobbyTheme): string {
   if (seat.status === "failed") return `${name} ${paint(theme, "error", "✗ failed — r retries")}`;
   if (seat.status === "idle") return `${name} ${paint(theme, "dim", "·")}`;
   if (seat.ready) return `${name} ${paint(theme, "success", "✓ ready")}`;
+  // A seat whose questions the oracle settled itself has nothing waiting on you.
+  if (seat.questions === 0) return `${name} ${paint(theme, "dim", "done")}`;
   return `${name} ${paint(theme, "warning", `${seat.questions} question${seat.questions === 1 ? "" : "s"}`)}`;
 }
 
@@ -158,12 +151,14 @@ export function conversationLines(view: PlanView, width: number, theme?: LobbyTh
       .filter(({ question }) => matches(`${question.from} ${question.text} ${question.options.map((option) => option.label).join(" ")}`, query));
     if (message.role === "you" ? !matches(message.text, query) : message.questions?.length ? questions.length === 0 : !matches(message.text, query)) continue;
     if (lines.length > 0 && lines.at(-1) !== "") lines.push("");
+    // The same turns as the Lobby's conversation: who speaks and when, your words in a band.
+    const time = message.at > 0 ? clock(message.at) : "";
     if (message.role === "you") {
-      lines.push(...wrapHanging(`${bold(theme, paint(theme, "accent", "you"))} ${paint(theme, "dim", "▸")} `, message.text, width));
+      lines.push(speakerLine("you", width, theme, time), ...youLines(message.text, width, theme));
       continue;
     }
-    lines.push(`${bold(theme, paint(theme, "toolTitle", "panel"))} ${paint(theme, "dim", "▸")}`);
-    lines.push(...(questions.length > 0 ? questionLines(questions, width, theme) : wrap(message.text, width)));
+    lines.push(speakerLine("panel", width, theme, time));
+    lines.push(...(questions.length > 0 ? questionLines(questions, width, theme) : wrap(message.text, width).map((line) => (line ? `  ${line}` : ""))));
   }
   if (query && lines.length === 0) return wrap(paint(theme, "dim", `Nothing in the conversation matches "${query}".`), width);
   return lines;
@@ -201,7 +196,7 @@ export function renderPlan(input: PlanTabInput, width: number, height: number, t
   if (height <= 0) return [];
   const notice = input.notice ? [paint(theme, "accent", input.notice)] : [];
   const view = input.session;
-  if (!view) return fill([...notice, ...box(width, height - notice.length, intro(input, width - 4, theme), { title: "Plan", right: input.profile, theme })], height, width);
+  if (!view) return fill([...notice, ...box(width, height - notice.length, intro(input, width - 4, theme), { title: "Plan", theme })], height, width);
   const header = [
     ...notice,
     ...wrap(`${bold(theme, view.title ? `Planning · ${view.title}` : "Planning")}  ${statusLine(view, input, theme)}`, width),

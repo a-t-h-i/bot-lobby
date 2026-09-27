@@ -22,7 +22,7 @@ import { PANEL_MEMBERS, type PanelMember } from "../schemas/configuration.ts";
 import { truncate } from "../text.ts";
 import type { LobbyFeed } from "./feed.ts";
 import type { QuickFixProfile } from "./quickfix.ts";
-import type { AskResult } from "./ask.ts";
+import { MAX_QUESTIONS, type AskResult } from "./ask.ts";
 
 /** Seats and the oracle read the repository to ask informed questions; they never edit. */
 export const PLANNER_TOOLS: readonly string[] = ["read", "grep", "find", "ls"];
@@ -192,6 +192,17 @@ export function questionItems(body: string | undefined): AskedQuestion[] {
   return items.map(inlineOptions);
 }
 
+/**
+ * The round's questions for the user. The oracle chooses them from its own
+ * and the seats' (tagged with the seat each serves) and decides the rest; only
+ * when its part failed do the seats' own questions go through. Never more than
+ * `MAX_QUESTIONS`, so a round is answered in one questionnaire.
+ */
+export function roundQuestions(reply: PlannerReply | undefined, seatQuestions: readonly PanelQuestion[]): PanelQuestion[] {
+  const chosen = reply ? reply.questions.map((question) => tagged(question, ORACLE_LABEL)) : [...seatQuestions];
+  return chosen.slice(0, MAX_QUESTIONS);
+}
+
 /** A leading `[SEAT]` tag names who asked; the oracle uses it when it relays a seat. */
 function tagged(question: AskedQuestion, fallback: string): PanelQuestion {
   const tag = /^\[(DEV|DESIGN|QA|RESEARCH|ORACLE)\]\s*/i.exec(question.text);
@@ -283,8 +294,8 @@ export function commentBlock(comments: readonly LineComment[]): string {
 
 /** What the panel said in a round, as the conversation shows it. */
 export function plannerSays(ready: boolean, questions: readonly PanelQuestion[]): string {
-  if (ready) return "The panel agrees the plan is clear. Press s to save it as a pending task, or keep refining.";
-  if (questions.length === 0) return "No open questions this round. Press s to save the draft, or add detail.";
+  if (ready) return "The panel agrees the plan is clear. Save it as a pending task, or keep refining.";
+  if (questions.length === 0) return "No open questions this round. Save the draft, or add detail.";
   return questions.map(questionLine).join("\n");
 }
 
@@ -532,11 +543,11 @@ export class PlanningSession {
     if (!this.error && !this.busy && this.questions.length === 0 && this.lineComments.length > 0) await this.send("");
   }
 
-  /** Merge the seats' and the oracle's answers into the round's questions, verdict and draft. */
+  /** The oracle's reply sets the round's questions (chosen from the seats' and its own), verdict and draft. */
   private finishRound(outcomes: readonly MemberOutcome[], lead: RunOutcome): void {
     const reply = lead.status === "success" ? parsePlannerReply(lead.output) : undefined;
     const seatQuestions = outcomes.flatMap((outcome) => (outcome.reply?.questions ?? []).map((question) => ({ ...question, from: MEMBER_LABELS[outcome.member] })));
-    const questions = [...(reply?.questions ?? []).map((question) => tagged(question, ORACLE_LABEL)), ...seatQuestions];
+    const questions = roundQuestions(reply, seatQuestions);
     const seatsReady = outcomes.every((outcome) => outcome.reply?.status === "ready");
     const ready = Boolean(reply && reply.status === "ready" && seatsReady);
     if (reply) {
