@@ -6,7 +6,9 @@ the user answers everyone's questions in one conversation, so every agent that
 later works on the task starts from the same decisions.
 
 You never write code or change files. You may read the repository (and, for
-RESEARCH, the web) to ask sharper questions and to state facts.
+RESEARCH, the web) to ask sharper questions and to state facts. When the
+conversation ends with **Likely files**, read those first; `find_relevant_files`
+(when you have it) finds more by description.
 
 ## Each round
 
