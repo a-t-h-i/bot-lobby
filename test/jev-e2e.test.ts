@@ -1,8 +1,10 @@
 /**
  * Live checks against the real Jev API. Skipped unless BOT_LOBBY_JEV_E2E=1:
- * they need a key (TYPESAFE_API_KEY, or OPENROUTER_API_KEY / AI_GATEWAY_API_KEY
- * with BOT_LOBBY_JEV_HOST=openrouter|vercel) and network access to the host.
+ * they need a key and network access to the host. With the default host
+ * (auto), an OpenCode key uses OpenCode Zen's free Jev, else a TypeSafe key;
+ * BOT_LOBBY_JEV_HOST=opencode|typesafe|openrouter|vercel picks one.
  *
+ *   BOT_LOBBY_JEV_E2E=1 OPENCODE_API_KEY=... node --test test/jev-e2e.test.ts
  *   BOT_LOBBY_JEV_E2E=1 TYPESAFE_API_KEY=ts_... node --test test/jev-e2e.test.ts
  *
  * Assertions are about shape and plausibility, not exact probabilities.
@@ -20,7 +22,7 @@ import { scoreEffort, EFFORT_LEVELS } from "../src/classifier/effort.ts";
 import { DEFAULT_CONFIG, JEV_HOSTS, type JevHostName } from "../src/schemas/configuration.ts";
 
 const enabled = process.env.BOT_LOBBY_JEV_E2E === "1";
-const host = (JEV_HOSTS as readonly string[]).includes(process.env.BOT_LOBBY_JEV_HOST ?? "") ? process.env.BOT_LOBBY_JEV_HOST as JevHostName : "typesafe";
+const host = (JEV_HOSTS as readonly string[]).includes(process.env.BOT_LOBBY_JEV_HOST ?? "") ? process.env.BOT_LOBBY_JEV_HOST as JevHostName : "auto";
 
 function live(): Classifier {
   // No pi key store here: the host's environment variable supplies the key.

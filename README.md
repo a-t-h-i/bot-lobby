@@ -670,16 +670,14 @@ what it always did.
 **Turn it on.** `/bot-lobby settings` → **Classifier (Jev)** → *Classifier*.
 It is off by default.
 
-**The key lives with pi's other keys.** bot-lobby registers a `typesafe`
-provider with pi (no chat models, so nothing is added to `/model`): run
-`/login typesafe` and choose *Use an API key*, and pi saves it in
-`~/.pi/agent/auth.json` like any other key (`/logout` removes it), or export
-`TYPESAFE_API_KEY`. *Host* switches to OpenRouter or Vercel AI Gateway, which
-use the key pi already holds for that provider. *API key* in the menu says
-where the key comes from (never the key; `ts_ab…cd` at most), and *Test
-connection* makes one tiny call and shows the model and the time it took.
-Subagents resolve the key the same way, so it is never passed through the
-environment.
+**The key is one pi already holds.** The default host, *Auto*, uses
+**OpenCode Zen's free Jev** (`jev-1.13-free`) whenever pi has an OpenCode key
+— the one you use for Zen or Go models (`/login opencode` or `opencode-go`,
+or `OPENCODE_API_KEY`) — and TypeSafe otherwise: `/login typesafe` → *Use an
+API key* (bot-lobby registers that login entry) or `TYPESAFE_API_KEY`. *Host*
+can pin OpenCode Zen, TypeSafe, OpenRouter or Vercel AI Gateway; *Model*
+switches to the paid `jev-1.13` if OpenCode ends the free one (bot-lobby says
+so rather than switching). *Test connection* makes one tiny call.
 
 **It never gets in the way.** Every call has a time limit
 (`classifier.timeoutMs`, 4 s) and one retry; a missing key, an error or a
@@ -775,7 +773,7 @@ top-level `/bot-lobby-settings`) and persist globally to
   "lobby": { "autoOpen": true, "planningPanel": ["backend", "designer", "qa", "researcher"], "autoAsk": true, "issues": false, "mouse": true, "maxPlanningRounds": 5 },
   "classifier": {
     "enabled": false,
-    "provider": "typesafe",
+    "provider": "auto",
     "model": "",
     "baseUrl": "",
     "timeoutMs": 4000,

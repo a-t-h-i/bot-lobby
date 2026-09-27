@@ -119,8 +119,8 @@ export interface LobbyConfig {
 export const CLASSIFIER_FEATURES = ["seats", "answers", "files", "triage", "effort"] as const;
 export type ClassifierFeature = (typeof CLASSIFIER_FEATURES)[number];
 
-/** Hosts that serve Jev behind the same System One API. */
-export const JEV_HOSTS = ["typesafe", "openrouter", "vercel"] as const;
+/** Hosts that serve Jev behind the same System One API; `auto` takes OpenCode's free Jev when pi holds an OpenCode key, else TypeSafe. */
+export const JEV_HOSTS = ["auto", "opencode", "typesafe", "openrouter", "vercel"] as const;
 export type JevHostName = (typeof JEV_HOSTS)[number];
 
 /** Probability and confidence cut-offs, 0 to 1; edited in the config file only. */
@@ -220,7 +220,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
   },
   classifier: {
     enabled: false,
-    provider: "typesafe",
+    provider: "auto",
     model: "",
     baseUrl: "",
     timeoutMs: 4000,
