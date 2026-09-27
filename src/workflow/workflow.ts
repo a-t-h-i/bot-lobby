@@ -47,6 +47,7 @@ import { assertNoPendingApprovals, pendingApprovals, requestApproval, resolveApp
 import { pingApproval } from "../pi/notify.ts";
 import { describeRun, runLogEntry } from "../pi/run-summary.ts";
 import { nextStates } from "./transitions.ts";
+import type { FileHinter } from "../classifier/files.ts";
 import { appendMetrics, metricFromRun } from "../state/metrics.ts";
 import { markCommentsAddressed, pendingComments, readPlanComments } from "../state/comments.ts";
 
@@ -116,6 +117,8 @@ export interface WorkflowDeps {
   choose: (title: string, options: string[]) => Promise<string | undefined>;
   notify: (message: string, level?: "info" | "warning" | "error") => void;
   runProcess?: ProcessRunner;
+  /** Likely files for scouts and workers, while the classifier's file hints are on. */
+  hints?: FileHinter;
 }
 
 export interface WorkflowResult {
@@ -284,6 +287,7 @@ async function handleScout(task: Task, params: OrchestrateParams, deps: Workflow
       profile: deps.profile,
       signal: deps.signal,
       onUpdate: deps.onUpdate,
+      ...(deps.hints ? { hints: deps.hints } : {}),
     },
     deps.runProcess ?? spawnPiProcess,
   );
@@ -570,6 +574,7 @@ function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instructi
     profile: deps.profile,
     signal: deps.signal,
     onUpdate: deps.onUpdate,
+    ...(deps.hints ? { hints: deps.hints } : {}),
   };
 }
 
