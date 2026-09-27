@@ -13,8 +13,9 @@ import { isSubagentProcess, visibleTools } from "./quiet.ts";
 import { registerQuietTools } from "./tool-renderers.ts";
 import { taskRequest, type Task } from "../schemas/task.ts";
 import { pendingComments, readPlanComments, type PlanComment } from "../state/comments.ts";
+import { isAutoMode } from "../state/auto.ts";
 
-export function masterTaskContext(task: Task, comments: readonly PlanComment[] = []): string {
+export function masterTaskContext(task: Task, comments: readonly PlanComment[] = [], auto = false): string {
   const open = pendingComments(comments);
   return [
     `Task ${task.id}: ${task.title}`,
@@ -23,6 +24,8 @@ export function masterTaskContext(task: Task, comments: readonly PlanComment[] =
     task.plan ? `Approved plan:\n${truncate(task.plan, 3000)}` : "",
     task.amendments.length > 0 ? `User amendments:\n${task.amendments.map((entry) => `- ${entry}`).join("\n")}` : "",
     open.length > 0 ? `Open plan comments (from the lobby):\n${open.map((comment) => `- ${truncate(comment.text, 600)}`).join("\n")}` : "",
+    task.approvedPlan ? `The user agreed this task's plan in the planning panel (${task.approvedPlan}): follow it, do not ask them to approve a proposal (propose is approved automatically), and answer open questions from the plan.` : "",
+    auto ? "AUTO MODE is on: drive this task to completion without the user. Do not ask them anything (clarify and ask_user_question are not answered); decide yourself, record each decision, and keep calling the orchestrate tool until the task is complete or truly blocked." : "",
   ]
     .filter((line) => line.length > 0)
     .join("\n\n");
@@ -89,7 +92,7 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
     const selected = selectKnowledge(`${taskRequest(task)} ${task.proposal ?? ""}`, slices);
     event.systemPromptOptions.sections["bot-lobby"] = compilePrompt({
       domain: "master",
-      task: masterTaskContext(task, readPlanComments(root, configDir, task.id)),
+      task: masterTaskContext(task, readPlanComments(root, configDir, task.id), isAutoMode(root, configDir, task.id)),
       standards: selected.standards,
       knowledge: selected.knowledge,
       decisions: selected.decisions,

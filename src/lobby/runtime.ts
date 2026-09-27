@@ -7,22 +7,28 @@
  * records each Master turn in the metrics log.
  */
 import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { getSelectListTheme } from "@earendil-works/pi-coding-agent";
+import { getSelectListTheme, SessionManager } from "@earendil-works/pi-coding-agent";
 import { Key, type OverlayHandle, type TUI } from "@earendil-works/pi-tui";
-import { TERMINAL_STATES } from "../schemas/task.ts";
+import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { listTasks, loadTask } from "../state/persistence.ts";
 import { detectProjectRoot, loadConfig, saveConfig } from "../state/project.ts";
-import { addPlanComment, commentMessage, markCommentsDelivered, readPlanComments, undeliveredComments } from "../state/comments.ts";
-import { discardPlannedTask, listPlannedTasks, markPlannedTaskStarted, plannedTaskRequest, type PlannedTask } from "../state/backlog.ts";
+import { addPlanComment, readPlanComments } from "../state/comments.ts";
+import { isAutoMode } from "../state/auto.ts";
+import { sendToInbox } from "../state/inbox.ts";
+import { discardPlannedTask, listPlannedTasks, type PlannedTask } from "../state/backlog.ts";
 import { appendMetrics, readMetrics, type MetricStatus } from "../state/metrics.ts";
 import { describeToolCall } from "../pi/activity.ts";
-import { applyStatus, currentZenTask, isMinimized, onMinimizeChange, onRunUpdates, setMinimized, setWidgetSuppressor, ZenScene, zenSnapshot } from "../pi/ui.ts";
+import { applyStatus, currentZenTask, isMinimized, onMinimizeChange, onRunUpdates, persistedRuns, setMinimized, setWidgetSuppressor, ZenScene, zenSnapshot } from "../pi/ui.ts";
+import { panelLines } from "../pi/zen.ts";
+import { shortTitle } from "../text.ts";
 import { isSubagentProcess } from "../pi/quiet.ts";
 import { modelRef, resolveLobbyProfile, resolvePanelProfile } from "../pi/model-support.ts";
 import { modelLookup } from "../pi/tools.ts";
-import { startTask } from "../pi/start-task.ts";
+import { startPlannedTask, startTask } from "../pi/start-task.ts";
 import type { LobbyAgentKind, LobbyPanel, PanelMember } from "../schemas/configuration.ts";
-import { chatFromEntries, chatText, lobbyFeed, textOf } from "./feed.ts";
+import { chatFromEntries, lobbyFeed, narrateEvent, type AgentEventLike } from "./feed.ts";
+import { launchPi, SessionRegistry, type BackgroundSession, type SessionLauncher } from "./sessions.ts";
+import { SessionChats } from "./session-files.ts";
 import { answerMessage, dialogAsker, loadAskTool, questionnaires, toolAsker, type Asker } from "./ask.ts";
 import { QuickFixQueue } from "./quickfix.ts";
 import { PlanningSession, type PlannerSeed } from "./planner.ts";
@@ -30,11 +36,11 @@ import { execCommand, IssuesState } from "./issues.ts";
 import { LobbyView, type LobbyHost, type TabId } from "./view.ts";
 import type { LobbyTheme } from "./layout.ts";
 import { createMarkdownRenderer } from "./markdown.ts";
+import { deliverComments, onOwnerEvent, setAuto } from "../pi/owner.ts";
 import { openEntrySettings, openSettings } from "../pi/settings-ui.ts";
 
 export const ANCHOR_KEY = "bot-lobby-anchor";
-/** How often the owning session looks for new plan comments. */
-export const COMMENT_POLL_MS = 3000;
+export { deliverComments };
 
 interface Runtime {
   pi: ExtensionAPI;
@@ -51,7 +57,6 @@ interface Runtime {
   quickfix: QuickFixQueue;
   planner?: PlanningSession;
   issues: IssuesState;
-  poll?: ReturnType<typeof setInterval>;
   unsubscribeFeed?: () => void;
   /** The ask-user-question tool (or pi's dialogs), loaded once on first use. */
   asker?: Promise<Asker>;
@@ -69,6 +74,11 @@ export function isLobbyVisible(): boolean {
   return runtime?.visible === true;
 }
 
+/** The lobby's view, once it has been shown (tests drive it through this). */
+export function lobbyView(): LobbyView | undefined {
+  return runtime?.view;
+}
+
 function rerender(): void {
   if (runtime?.visible) runtime.tui?.requestRender();
 }
@@ -83,21 +93,6 @@ function lobbyProfile(state: Runtime, kind: LobbyAgentKind) {
     sessionModel: sessionModel(state.ctx),
     warn: (message) => state.ctx.ui.notify(message, "warning"),
   });
-}
-
-/** Pass new comments on this session's task to its Master (held while minimized or paused). */
-export function deliverComments(): number {
-  const state = runtime;
-  if (!state || isMinimized()) return 0;
-  const task = currentZenTask();
-  if (!task || task.paused || TERMINAL_STATES.includes(task.state)) return 0;
-  const fresh = undeliveredComments(readPlanComments(state.root, state.configDir, task.id));
-  if (fresh.length === 0) return 0;
-  const current = loadTask(state.root, state.configDir, task.id) ?? task;
-  state.pi.sendUserMessage(commentMessage(task.id, fresh, Boolean(current.plan)), state.ctx.isIdle() ? undefined : { deliverAs: "steer" });
-  markCommentsDelivered(state.root, state.configDir, task.id, fresh.map((comment) => comment.id));
-  lobbyFeed.log("LOBBY", `passed ${fresh.length} plan comment${fresh.length === 1 ? "" : "s"} on ${task.id} to the oracle`, "info");
-  return fresh.length;
 }
 
 function addComment(state: Runtime, taskId: string, text: string): string {
@@ -141,15 +136,155 @@ function toOracle(state: Runtime, text: string): string | undefined {
 function startPlanned(state: Runtime, plan: PlannedTask): string {
   const current = currentZenTask();
   if (current) return `this session already drives ${current.id}; finish or cancel it first, or start ${plan.id} from another session`;
-  startTask(state.pi, state.ctx, state.configDir, plannedTaskRequest(plan))
+  startPlannedTask(state.pi, state.ctx, state.configDir, plan.id)
     .then((task) => {
-      if (!task) return;
-      markPlannedTaskStarted(state.root, state.configDir, plan.id, task.id);
+      if (typeof task === "string") return failed(state, `could not start ${plan.id}`, new Error(task));
       state.view?.setTab("lobby");
       rerender();
     })
     .catch((error: Error) => failed(state, `could not start ${plan.id}`, error));
-  return `starting ${plan.id} as a task…`;
+  return `starting ${plan.id} here — its agreed plan needs no approval…`;
+}
+
+/* ------------------------------------------------- background sessions */
+
+let launcher: SessionLauncher = launchPi;
+let registry: SessionRegistry | undefined;
+let exitHooked = false;
+/** How many questions of each session were already announced, and which exits, so each is said once. */
+const announced = new Map<string, number>();
+const exitsSaid = new Set<string>();
+/** Other sessions' conversations, read from their files. */
+const chats = new SessionChats(async () => {
+  const state = runtime;
+  if (!state) return [];
+  const dirs = new Map<string, string | undefined>([[state.ctx.cwd, state.ctx.sessionManager.getSessionDir()]]);
+  if (!dirs.has(state.root)) dirs.set(state.root, undefined);
+  const lists = await Promise.all([...dirs].map(([cwd, dir]) => SessionManager.list(cwd, dir).catch(() => [])));
+  return lists.flat();
+}, () => rerender());
+
+/** Launch background sessions with something else (tests); resets the registry. */
+export function setSessionLauncher(next: SessionLauncher | undefined): void {
+  registry?.stopAll();
+  registry = undefined;
+  launcher = next ?? launchPi;
+  announced.clear();
+  exitsSaid.clear();
+}
+
+/**
+ * The background sessions this window started. The registry belongs to the
+ * process, not to one pi session, so switching sessions here keeps them
+ * running; they stop when pi exits (each is a saved session `/resume` finds).
+ */
+function sessionRegistry(): SessionRegistry {
+  if (!registry) registry = new SessionRegistry(launcher, sessionsChanged);
+  if (!exitHooked) {
+    exitHooked = true;
+    process.once("exit", () => registry?.stopAll());
+  }
+  return registry;
+}
+
+export function backgroundSessions(): readonly BackgroundSession[] {
+  return registry?.sessions ?? [];
+}
+
+/** A background session changed: redraw, and say so when one asks something or fails while the lobby is hidden. */
+function sessionsChanged(): void {
+  const state = runtime;
+  for (const session of registry?.sessions ?? []) {
+    if (session.sessionId && session.sessionFile) chats.remember(session.sessionId, session.sessionFile);
+    const seen = announced.get(session.key) ?? 0;
+    announced.set(session.key, session.dialogs.length);
+    if (!state || state.visible) continue;
+    if (session.dialogs.length > seen) state.ctx.ui.notify(`bot-lobby: ${session.name} is waiting for you — alt+l opens the lobby`, "info");
+    if (!session.alive && !exitsSaid.has(session.key)) {
+      exitsSaid.add(session.key);
+      if (session.exitCode) state.ctx.ui.notify(`bot-lobby: ${session.name} exited (${session.exitCode})${session.lastError() ? `: ${session.lastError()}` : ""}`, "warning");
+    }
+  }
+  rerender();
+}
+
+/** Start a task in its own new pi session, named after the task; the session, or why not. */
+function startSession(state: Runtime, start: { request?: string; plan?: PlannedTask; auto?: boolean }): BackgroundSession | string {
+  const request = start.request?.trim();
+  const plan = start.plan;
+  if (!plan && !request) return "describe the task first";
+  if (!plan && request!.startsWith("/")) return "a new session starts from a task description, not a command";
+  if (plan) {
+    if (plan.status !== "pending") return `${plan.id} was already started${plan.startedTaskId ? ` as ${plan.startedTaskId}` : ""}`;
+    const starting = backgroundSessions().find((session) => session.alive && session.planId === plan.id);
+    if (starting) return `${plan.id} is already starting in ${starting.name}`;
+  }
+  const name = plan?.title ?? shortTitle(request!);
+  try {
+    const session = sessionRegistry().start(state.ctx.cwd, { name, ...(plan ? { planId: plan.id } : { request: request! }), ...(start.auto ? { auto: true } : {}) }, sessionModel(state.ctx));
+    lobbyFeed.log("LOBBY", `started "${name}" in a new session`, "success");
+    return session;
+  } catch (error) {
+    return `could not start a new session — ${(error as Error).message}`;
+  }
+}
+
+/** Put the oldest question a background session waits on to the user, with pi's own dialogs; escape cancels it as it would there. */
+async function answerDialog(state: Runtime, session: BackgroundSession): Promise<void> {
+  const dialog = session.dialogs[0];
+  if (!dialog) return;
+  const title = `${session.name} — ${dialog.title}`;
+  const ui = state.ctx.ui;
+  try {
+    if (dialog.method === "select") {
+      const value = await ui.select(title, dialog.options ?? []);
+      session.answer(dialog.id, value === undefined ? { cancelled: true } : { value });
+    } else if (dialog.method === "confirm") {
+      session.answer(dialog.id, { confirmed: await ui.confirm(title, dialog.message ?? "") });
+    } else {
+      const value = dialog.method === "input" ? await ui.input(title, dialog.placeholder) : await ui.editor(title, dialog.prefill);
+      session.answer(dialog.id, value === undefined ? { cancelled: true } : { value });
+    }
+  } catch (error) {
+    failed(state, `could not answer ${session.name}`, error as Error);
+  }
+}
+
+/** Leave a message for a task another terminal's session drives; its owner passes it to the oracle. */
+function sendToTask(state: Runtime, taskId: string, text: string): string {
+  const task = loadTask(state.root, state.configDir, taskId);
+  if (!task) return `no task ${taskId}`;
+  if (TERMINAL_STATES.includes(task.state)) return `${taskId} is ${task.state}`;
+  try {
+    sendToInbox(state.root, state.configDir, taskId, text, state.ctx.sessionManager.getSessionId());
+  } catch (error) {
+    return (error as Error).message;
+  }
+  lobbyFeed.log("LOBBY", `message for ${taskId}'s oracle saved`, "info");
+  return task.ownerSessionId ? `sent — the session driving ${taskId} passes it to its oracle` : `saved — ${taskId} has no owning session; its oracle gets it once a session claims it`;
+}
+
+/** Auto mode as the lobby last read it, per task: every frame asks, the file is read at most once a second. */
+const autoSeen = new Map<string, { at: number; on: boolean }>();
+const AUTO_READ_MS = 1000;
+
+function autoFor(state: Runtime, taskId: string): boolean {
+  const now = Date.now();
+  const seen = autoSeen.get(taskId);
+  if (seen && now - seen.at < AUTO_READ_MS) return seen.on;
+  const on = isAutoMode(state.root, state.configDir, taskId);
+  autoSeen.set(taskId, { at: now, on });
+  return on;
+}
+
+function switchAuto(state: Runtime, taskId: string, on: boolean): void {
+  setAuto(state.root, state.configDir, taskId, on, state.ctx.sessionManager.getSessionId());
+  autoSeen.set(taskId, { at: Date.now(), on });
+}
+
+/** A task's status box without animations, for a session other than this window's. */
+function taskScene(state: Runtime, task: Task, width: number, height: number): string[] {
+  return panelLines(task, persistedRuns(task), Date.now(), false, { width, rows: Math.floor(height / 0.75), still: true, theme: state.ctx.ui.theme });
 }
 
 function seatProfile(state: Runtime, member: PanelMember) {
@@ -241,6 +376,7 @@ function lobbyTheme(theme: Theme): LobbyTheme {
       italic: (text) => theme.italic(text),
       bg: (color, text) => theme.bg(color, text),
       markdown: renderMarkdown,
+      strike: (text) => theme.strikethrough(text),
     };
     lobbyThemes.set(theme, wrapped);
   }
@@ -257,7 +393,7 @@ function host(state: Runtime, tui: TUI): LobbyHost {
       return { ...(snapshot.task ? { task: snapshot.task } : {}), runs: snapshot.runs };
     },
     // The scene's height budget is 3/4 of the rows it is given.
-    scene: (width, height) => state.scene.lines(width, Math.floor(height / 0.75), state.ctx.ui.theme),
+    scene: (width, height, animated) => state.scene.lines(width, Math.floor(height / 0.75), state.ctx.ui.theme, Date.now(), !animated),
     advanceScene: (now) => {
       state.scene.advance(now);
       return state.scene.delay(now);
@@ -293,6 +429,15 @@ function host(state: Runtime, tui: TUI): LobbyHost {
       const profile = lobbyProfile(state, kind);
       return `${profile.model ?? "session model"} · ${profile.thinking}`;
     },
+    sessionName: () => state.pi.getSessionName(),
+    sessions: () => backgroundSessions(),
+    startSession: (start) => startSession(state, start),
+    answerDialog: (session) => answerDialog(state, session),
+    isAuto: (taskId) => autoFor(state, taskId),
+    setAuto: (taskId, on) => switchAuto(state, taskId, on),
+    sendToTask: (taskId, text) => sendToTask(state, taskId, text),
+    sessionChat: (sessionId) => chats.chat(sessionId),
+    taskScene: (task, width, height) => taskScene(state, task, width, height),
     requestRender: () => tui.requestRender(),
   };
 }
@@ -424,7 +569,6 @@ function shutdown(): void {
   const state = runtime;
   if (!state) return;
   runtime = undefined;
-  if (state.poll) clearInterval(state.poll);
   setMouse(state, false);
   state.unsubscribeFeed?.();
   state.quickfix.cancelAll();
@@ -483,8 +627,15 @@ export function initLobby(pi: ExtensionAPI, ctx: ExtensionContext, configDir: st
     state.tui = tui;
     return { render: () => [], invalidate: () => {} };
   }, { placement: "belowEditor" });
-  state.poll = setInterval(() => deliverComments(), COMMENT_POLL_MS);
-  state.poll.unref?.();
+  // The owner's clock (pi/owner.ts) delivers comments and messages and drives auto mode; the lobby logs what it did.
+  onOwnerEvent((event) => {
+    if (event.kind === "comments") lobbyFeed.log("LOBBY", `passed ${event.count} plan comment${event.count === 1 ? "" : "s"} on ${event.taskId} to the oracle`, "info");
+    else if (event.kind === "inbox") lobbyFeed.log("LOBBY", `passed ${event.count} message${event.count === 1 ? "" : "s"} from another session to the oracle`, "info");
+    else if (event.kind === "auto") lobbyFeed.log("LOBBY", `auto mode ${event.on ? "on" : "off"} for ${event.taskId}`, event.on ? "success" : "info");
+    else if (event.kind === "nudge") lobbyFeed.log("LOBBY", `auto mode: keeping the oracle going on ${event.taskId}`, "info");
+    else lobbyFeed.log("LOBBY", `auto mode: no progress on ${event.taskId} — it needs you`, "warning");
+    rerender();
+  });
 }
 
 interface MasterTurn {
@@ -532,37 +683,22 @@ export function registerLobbyEvents(pi: ExtensionAPI, configDir: string): void {
     const taskId = currentZenTask()?.id;
     turn = { startedAt: Date.now(), ...(taskId ? { taskId } : {}), ...(ctx.model ? { model: modelRef(ctx.model) } : {}), thinking: pi.getThinkingLevel(), tools: 0, turns: 0, input: 0, output: 0, cost: 0 };
   });
+  const narrate = (event: AgentEventLike) => narrateEvent(lobbyFeed, event, describeToolCall);
   pi.on("tool_execution_start", (event) => {
     if (turn) turn.tools += 1;
-    lobbyFeed.begin("MASTER", describeToolCall(event.toolName, event.args), event.toolCallId);
+    narrate(event);
   });
-  pi.on("tool_execution_end", (event) => lobbyFeed.end(event.toolCallId, event.isError));
-  pi.on("message_update", (event) => {
-    const update = event.assistantMessageEvent;
-    if (update.type === "thinking_delta") lobbyFeed.thinkDelta("MASTER", update.delta);
-    else if (update.type === "thinking_end") lobbyFeed.thinkEnd("MASTER", update.content);
-    else if (update.type === "text_delta") lobbyFeed.replyDelta(update.delta);
-  });
+  pi.on("tool_execution_end", (event) => narrate(event));
+  pi.on("message_update", (event) => narrate(event as AgentEventLike));
   pi.on("message_end", (event) => {
-    const message = event.message as { role?: string; content?: unknown; stopReason?: string; errorMessage?: string; usage?: { input?: number; output?: number; cost?: { total?: number } } };
-    if (message.role === "assistant") {
-      lobbyFeed.replyEnd();
-      lobbyFeed.thinkEnd("MASTER");
-      if (message.stopReason === "error") {
-        const error = (message.errorMessage ?? "the model call failed").split("\n")[0]!;
-        lobbyFeed.say("note", `✗ the oracle's turn failed: ${error}`);
-        lobbyFeed.log("MASTER", `turn failed — ${error}`, "error");
-      }
-      if (turn) {
-        turn.turns += 1;
-        turn.input += message.usage?.input ?? 0;
-        turn.output += message.usage?.output ?? 0;
-        turn.cost += message.usage?.cost?.total ?? 0;
-      }
+    const message = event.message as { role?: string; usage?: { input?: number; output?: number; cost?: { total?: number } } };
+    if (message.role === "assistant" && turn) {
+      turn.turns += 1;
+      turn.input += message.usage?.input ?? 0;
+      turn.output += message.usage?.output ?? 0;
+      turn.cost += message.usage?.cost?.total ?? 0;
     }
-    if (message.role !== "user" && message.role !== "assistant") return;
-    const line = chatText(message.role, textOf(message.content));
-    if (line) lobbyFeed.say(line.role, line.text);
+    narrate(event as AgentEventLike);
   });
   pi.on("agent_end", (event, ctx) => {
     track(ctx);
