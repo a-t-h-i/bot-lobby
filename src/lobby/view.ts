@@ -22,9 +22,9 @@ import type { QuickFixQueue } from "./quickfix.ts";
 import { MEMBER_LABELS, ORACLE_LABEL, type PlannerSeed, type PlanningSession } from "./planner.ts";
 import { issueText, type IssuesState } from "./issues.ts";
 import { actionFor, keyLabel, keyMap, LOBBY_ACTIONS, type KeyMap, type LobbyAction } from "./keys.ts";
-import { beside, bold, box, fit, highlight, paint, selectRow, spinner, wrap, wrapHanging, type LobbyTheme, type PaneLayout } from "./layout.ts";
-import { HOME_PANES, renderHome, type HomePane } from "./tabs/home.ts";
-import { filterRows, planDetailLines, renderTasks, taskDetailLines, taskRows, tasksWidths, type TaskRow } from "./tabs/tasks.ts";
+import { beside, bold, box, fit, highlight, paint, rule, selectRow, spinner, spread, windowStart, wrap, wrapHanging, type LobbyTheme, type PaneLayout } from "./layout.ts";
+import { chatLines, HOME_PANES, renderHome, type HomePane } from "./tabs/home.ts";
+import { filterRows, pips, planDetailLines, renderTasks, taskDetailLines, taskProgress, taskRows, tasksWidths, type TaskRow } from "./tabs/tasks.ts";
 import { renderPlan, type PlanLayout, type PlanView, type SeatView } from "./tabs/plan.ts";
 import { filterJobs, newestFirst, renderQuickFix } from "./tabs/quickfix.ts";
 import { renderIssues } from "./tabs/issues.ts";
@@ -56,21 +56,65 @@ export type LobbyMode = "type" | "browse";
 const PANEL_NAMES: Record<LobbyPanel, string> = { animations: "oracle and agent animations", conversation: "conversation", activity: "activity log", thinking: "thinking" };
 const PANEL_ACTIONS: Record<LobbyPanel, LobbyAction> = { animations: "toggleScene", conversation: "toggleConversation", activity: "toggleActivity", thinking: "toggleThinking" };
 
-/** Which session the Lobby tab shows and talks to: this window, one it started in the background, or one in another terminal. */
-export type SessionView = { kind: "here" } | { kind: "background"; key: string } | { kind: "other"; taskId: string };
+/**
+ * Which session the Lobby tab shows and talks to: this window, one it started
+ * in the background, one running in another terminal, or a task whose
+ * session is not running at all.
+ */
+export type SessionView =
+  | { kind: "here" }
+  | { kind: "background"; key: string }
+  | { kind: "other"; sessionId: string }
+  | { kind: "idle"; taskId: string };
 
-/** One row of the session switcher. */
+export type SessionWhere = "this window" | "background" | "other terminal" | "not running";
+
+/** One row of the session browser. */
 export interface SessionEntry {
   view: SessionView;
   name: string;
-  where: "this window" | "background" | "other terminal";
+  where: SessionWhere;
   task?: Task;
   /** What it is doing: working, idle, starting, ended, or its task's state. */
   status: string;
   auto: boolean;
   /** Questions it waits on you for. */
   waiting: number;
+  /** The pi session it is (absent for a task no session ever owned). */
+  sessionId?: string;
+  /** The process running it, for sessions in other terminals. */
+  pid?: number;
 }
+
+/** A session running in this project, as its heartbeat tells (see state/presence.ts). */
+export interface LiveSession {
+  sessionId: string;
+  pid: number;
+  name?: string;
+  taskId?: string;
+  mode: string;
+}
+
+/** What `switchTo` needs: the session to run in this window, and the background process to stop first. */
+export interface SwitchTarget {
+  name: string;
+  sessionId?: string;
+  background?: BackgroundSession;
+  /** A task no session owns: this window claims it instead. */
+  claimTaskId?: string;
+}
+
+/** Two views show the same session. */
+function sameView(a: SessionView, b: SessionView): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === "background" && b.kind === "background") return a.key === b.key;
+  if (a.kind === "other" && b.kind === "other") return a.sessionId === b.sessionId;
+  if (a.kind === "idle" && b.kind === "idle") return a.taskId === b.taskId;
+  return true;
+}
+
+const SECTION_OF: Record<SessionWhere, string> = { "this window": "THIS WINDOW", background: "BACKGROUND", "other terminal": "OTHER TERMINALS", "not running": "NOT RUNNING" };
+const WHERE_MARKS: Record<SessionWhere, string> = { "this window": "●", background: "◆", "other terminal": "◇", "not running": "○" };
 
 /** Everything the view needs from pi and bot-lobby. */
 export interface LobbyHost {
@@ -127,8 +171,20 @@ export interface LobbyHost {
   /** Auto mode for any task, whichever session drives it. */
   isAuto(taskId: string): boolean;
   setAuto(taskId: string, on: boolean): void;
-  /** Leave a message for the oracle of a task another terminal's session drives; returns a notice. */
+  /** Leave a message for a task's oracle, delivered by whichever session drives it (now or once one resumes it); returns a notice. */
   sendToTask(taskId: string, text: string): string;
+  /** Leave a message for a session running in another terminal; it delivers it within seconds. Returns a notice. */
+  sendToSession(sessionId: string, text: string): string;
+  /** Sessions running in this project, other than this window's, from their heartbeats. */
+  liveSessions(): readonly LiveSession[];
+  /** Run another session in this window (stopping its background process first); resolves to a notice. */
+  switchTo(target: SwitchTarget): Promise<string>;
+  /** Archived tasks, most recently archived first. */
+  archivedTasks(): Task[];
+  /** Archive, restore or delete a task; each returns a notice. */
+  archiveTask(taskId: string): string;
+  restoreTask(taskId: string): string;
+  deleteTask(taskId: string, where: "list" | "archive"): string;
   /** Another session's conversation, read from its saved session file. */
   sessionChat(sessionId: string): ChatEntry[];
   /** A task's status without animations, for a session other than this window's. */
@@ -278,9 +334,12 @@ export class LobbyView implements Component, Focusable {
   private metricsBy: GroupBy = "model";
   private metricsSort: SortKey = "runs";
 
-  private data: { tasks: Task[]; plans: PlannedTask[]; comments: Map<string, PlanComment[]>; metrics: MetricRecord[]; at: number } = {
+  /** The Tasks tab lists archived tasks too (v). */
+  showArchived = false;
+  private data: { tasks: Task[]; plans: PlannedTask[]; archived: Task[]; comments: Map<string, PlanComment[]>; metrics: MetricRecord[]; at: number } = {
     tasks: [],
     plans: [],
+    archived: [],
     comments: new Map(),
     metrics: [],
     at: 0,
@@ -369,6 +428,7 @@ export class LobbyView implements Component, Focusable {
     this.data = {
       tasks: this.host.tasks(),
       plans: this.host.plans(),
+      archived: this.showArchived ? this.host.archivedTasks() : [],
       comments: new Map(),
       metrics: this.tab === "metrics" ? this.host.metrics() : this.data.metrics,
       at: now,
@@ -919,6 +979,10 @@ export class LobbyView implements Component, Focusable {
           else this.say("no task in this session to comment on", "warning");
           return true;
         }
+        if (data === "s" && this.viewing.kind !== "here") {
+          this.switchTo(this.viewedEntry());
+          return true;
+        }
         return enter ? (this.setMode("type"), true) : false;
       }
       case "tasks":
@@ -951,7 +1015,17 @@ export class LobbyView implements Component, Focusable {
     if (escape) return (this.tasksFocus = "list"), true;
     if (data === "r") return this.refreshData(true), true;
     if (data === "n") return this.startNewSessionPrompt(), true;
+    if (data === "v") {
+      this.showArchived = !this.showArchived;
+      this.refreshData(true);
+      const count = this.data.archived.length;
+      this.say(this.showArchived ? (count > 0 ? `showing ${count} archived task${count === 1 ? "" : "s"} — a restores one, d d deletes it` : "the archive is empty") : "archived tasks hidden");
+      return true;
+    }
+    if (data === "A") return this.archiveFinished(), true;
     if (!row) return false;
+    if (row.kind === "archived") return this.archivedCommand(row, data);
+    if ((data === "a" || data === "d") && row.kind === "task") return this.archiveOrDelete(row, data === "a" ? "archive" : "delete"), true;
     if (data === "c") {
       const task = this.data.tasks.find((entry) => entry.id === row.id);
       if (row.kind !== "task" || !task) this.say("pick a task to comment on its plan", "warning");
@@ -1011,6 +1085,65 @@ export class LobbyView implements Component, Focusable {
     return false;
   }
 
+  /**
+   * Archive (a) or delete (d d) a task on the list. Deleting always asks for
+   * the key twice; archiving a task still under way does too, since it is
+   * abandoned first.
+   */
+  private archiveOrDelete(row: TaskRow, action: "archive" | "delete"): void {
+    const task = this.data.tasks.find((entry) => entry.id === row.id);
+    if (!task) return;
+    const open = !TERMINAL_STATES.includes(task.state);
+    const armed = `${action}:${task.id}`;
+    if ((action === "delete" || open) && this.armed !== armed) {
+      this.armed = armed;
+      const key = action === "delete" ? "d" : "a";
+      this.say(action === "delete" ? `press ${key} again to delete ${task.id} for good` : `${task.id} is ${task.state.replace(/_/g, " ")} — press a again to abandon and archive it`, "warning");
+      return;
+    }
+    this.armed = undefined;
+    const notice = action === "archive" ? this.host.archiveTask(task.id) : this.host.deleteTask(task.id, "list");
+    this.say(notice, /^(archived|deleted)/.test(notice) ? "info" : "warning");
+    this.refreshData(true);
+  }
+
+  /** Keys on an archived task: a restores it, d d deletes it. */
+  private archivedCommand(row: TaskRow, data: string): boolean {
+    if (data === "a") {
+      const notice = this.host.restoreTask(row.id);
+      this.say(notice, notice.startsWith("restored") ? "info" : "warning");
+      this.refreshData(true);
+      return true;
+    }
+    if (data === "d") {
+      if (this.armed !== `purge:${row.id}`) {
+        this.armed = `purge:${row.id}`;
+        this.say(`press d again to delete ${row.id} for good`, "warning");
+        return true;
+      }
+      this.armed = undefined;
+      const notice = this.host.deleteTask(row.id, "archive");
+      this.say(notice, notice.startsWith("deleted") ? "info" : "warning");
+      this.refreshData(true);
+      return true;
+    }
+    return false;
+  }
+
+  /** Archive every finished task at once (A twice). */
+  private archiveFinished(): void {
+    const finished = this.data.tasks.filter((task) => TERMINAL_STATES.includes(task.state));
+    if (finished.length === 0) return this.say("no finished tasks to archive", "warning");
+    if (this.armed !== "archive-all") {
+      this.armed = "archive-all";
+      return this.say(`press A again to archive all ${finished.length} finished task${finished.length === 1 ? "" : "s"}`, "warning");
+    }
+    this.armed = undefined;
+    const failed = finished.map((task) => this.host.archiveTask(task.id)).filter((notice) => !notice.startsWith("archived"));
+    this.refreshData(true);
+    this.say(failed.length === 0 ? `archived ${finished.length} finished task${finished.length === 1 ? "" : "s"} — v shows them` : `archived ${finished.length - failed.length}; ${failed[0]}`, failed.length === 0 ? "info" : "warning");
+  }
+
   /** Seats for the next round: the session's, or the ones chosen before it started. */
   private seatSet(): Set<PanelMember> {
     const session = this.host.planner();
@@ -1042,7 +1175,8 @@ export class LobbyView implements Component, Focusable {
       session.send(body);
       return;
     }
-    if (view.kind === "other") return this.say(this.host.sendToTask(view.taskId, body));
+    if (view.kind === "other") return this.say(this.host.sendToSession(view.sessionId, body));
+    if (view.kind === "idle") return this.say(this.host.sendToTask(view.taskId, body));
     const notice = this.host.toOracle(body);
     if (notice) this.say(notice);
   }
@@ -1072,24 +1206,40 @@ export class LobbyView implements Component, Focusable {
       auto: auto(zen.task),
       waiting: 0,
     }];
+    const active = (sessionId: string | undefined) => (sessionId ? this.data.tasks.find((task) => task.ownerSessionId === sessionId && !TERMINAL_STATES.includes(task.state)) : undefined);
     for (const session of background) {
-      const task = session.sessionId ? this.data.tasks.find((entry) => entry.ownerSessionId === session.sessionId) : undefined;
+      const task = active(session.sessionId);
       const status = session.status === "exited" ? "ended" : session.status === "starting" ? "starting" : session.busy ? "working" : task?.state ?? "idle";
-      entries.push({ view: { kind: "background", key: session.key }, name: session.name, where: "background", ...(task ? { task } : {}), status, auto: auto(task), waiting: session.dialogs.length });
+      entries.push({ view: { kind: "background", key: session.key }, name: session.name, where: "background", ...(task ? { task } : {}), status, auto: auto(task), waiting: session.dialogs.length, ...(session.sessionId ? { sessionId: session.sessionId } : {}) });
     }
+    const running = new Set<string>([...(me ? [me] : []), ...started]);
+    for (const live of this.host.liveSessions()) {
+      if (running.has(live.sessionId)) continue;
+      running.add(live.sessionId);
+      const task = active(live.sessionId);
+      entries.push({ view: { kind: "other", sessionId: live.sessionId }, name: live.name ?? task?.title ?? "unnamed session", where: "other terminal", ...(task ? { task } : {}), status: task?.state ?? "no task", auto: auto(task), waiting: 0, sessionId: live.sessionId, pid: live.pid });
+    }
+    // Tasks under way whose session is not running (it ended, or none ever owned them): they can be resumed here.
     for (const task of this.data.tasks) {
-      if (TERMINAL_STATES.includes(task.state) || !task.ownerSessionId || task.ownerSessionId === me || started.has(task.ownerSessionId)) continue;
-      entries.push({ view: { kind: "other", taskId: task.id }, name: task.title, where: "other terminal", task, status: task.state, auto: auto(task), waiting: 0 });
+      if (TERMINAL_STATES.includes(task.state) || (task.ownerSessionId && running.has(task.ownerSessionId))) continue;
+      entries.push({ view: { kind: "idle", taskId: task.id }, name: task.title, where: "not running", task, status: task.state, auto: auto(task), waiting: 0, ...(task.ownerSessionId ? { sessionId: task.ownerSessionId } : {}) });
     }
     return entries;
   }
 
-  /** The entry the Lobby tab shows, falling back to this window when that session is gone. */
+  /**
+   * The entry the Lobby tab shows. A task that was not running follows its
+   * session once one picks it up; a session that is gone falls back to this
+   * window.
+   */
   viewedEntry(): SessionEntry {
     const entries = this.sessionEntries();
     const view = this.viewing;
-    const found = view.kind === "here" ? undefined : entries.find((entry) => (entry.view.kind === "background" && view.kind === "background" && entry.view.key === view.key) || (entry.view.kind === "other" && view.kind === "other" && entry.view.taskId === view.taskId));
-    if (!found && view.kind !== "here") this.viewing = { kind: "here" };
+    if (view.kind === "here") return entries[0]!;
+    let found = entries.find((entry) => sameView(entry.view, view));
+    if (!found && view.kind === "idle") found = entries.find((entry) => entry.task?.id === view.taskId);
+    if (!found) this.viewing = { kind: "here" };
+    else this.viewing = found.view;
     return found ?? entries[0]!;
   }
 
@@ -1113,7 +1263,32 @@ export class LobbyView implements Component, Focusable {
     this.picking = true;
     const entries = this.sessionEntries();
     const current = this.viewedEntry();
-    this.pickIndex = Math.max(0, entries.findIndex((entry) => entry.name === current.name && entry.where === current.where));
+    this.pickIndex = Math.max(0, entries.findIndex((entry) => sameView(entry.view, current.view)));
+  }
+
+  /**
+   * Run a session in this window: a background one is stopped and resumed
+   * here, a task nobody runs is resumed (or claimed) here. A session running
+   * in another terminal stays there — two pi processes must not write one
+   * session.
+   */
+  switchTo(entry: SessionEntry): void {
+    if (entry.view.kind === "here") return this.say("this is this window's session");
+    if (entry.where === "other terminal") return this.say(`${entry.name} is running in another terminal${entry.pid ? ` (pid ${entry.pid})` : ""} — switch there, or close it first and resume it here`, "warning");
+    if (this.host.masterBusy()) return this.say("this window's oracle is working — esc stops it, then switch", "warning");
+    const background = entry.view.kind === "background" ? this.host.sessions().find((session) => entry.view.kind === "background" && session.key === entry.view.key) : undefined;
+    const target: SwitchTarget = {
+      name: entry.name,
+      ...(entry.sessionId ? { sessionId: entry.sessionId } : {}),
+      ...(background ? { background } : {}),
+      ...(!entry.sessionId && entry.task ? { claimTaskId: entry.task.id } : {}),
+    };
+    this.picking = false;
+    this.say(background ? `stopping ${entry.name}'s background process to resume it here…` : `switching this window to ${entry.name}…`);
+    void this.host.switchTo(target).then((notice) => {
+      this.say(notice);
+      this.host.requestRender();
+    });
   }
 
   /** Keys while the session switcher is open; true when the key was handled. */
@@ -1130,6 +1305,10 @@ export class LobbyView implements Component, Focusable {
     if (matchesKey(data, Key.enter) && entry) {
       this.view(entry.view);
       this.say(entry.view.kind === "here" ? "back to this window" : `showing ${entry.name} — you talk to its oracle from here`);
+      return true;
+    }
+    if (data === "s" && entry) {
+      this.switchTo(entry);
       return true;
     }
     if (data === "n" || action === "newSession") {
@@ -1466,7 +1645,8 @@ export class LobbyView implements Component, Focusable {
     const names = new Map<string, string>();
     for (const session of this.host.sessions()) if (session.sessionId && session.alive) names.set(session.sessionId, session.name);
     const auto = new Set(this.data.tasks.filter((task) => !TERMINAL_STATES.includes(task.state) && this.host.isAuto(task.id)).map((task) => task.id));
-    const rows = taskRows(this.data.tasks, this.data.plans, this.host.sessionId(), this.now(), { names, auto });
+    const live = new Set(this.host.liveSessions().map((session) => session.sessionId));
+    const rows = taskRows(this.data.tasks, this.data.plans, this.host.sessionId(), this.now(), { names, auto, live, archived: this.data.archived });
     return filterRows(rows, this.data.tasks, this.data.plans, this.queries.tasks);
   }
 
@@ -1536,6 +1716,7 @@ export class LobbyView implements Component, Focusable {
           const session = this.viewedSession();
           if (session && !session.alive) return `${entry.name} has ended`;
           if (session?.dialogs.length) return `press enter to answer ${entry.name}'s question, or type a message`;
+          if (entry.where === "not running") return `leave ${entry.name} a message for when it resumes · esc, s resumes it here`;
           return entry.where === "other terminal" ? `message ${entry.name}'s oracle (its own session delivers it)` : `message ${entry.name}'s oracle`;
         }
         if (!zen.task) return browsing ? "describe a task to start — i to type" : "describe a task to start · enter starts it";
@@ -1594,6 +1775,7 @@ export class LobbyView implements Component, Focusable {
         return [
           { key: "type", text: "talk to the oracle of the session in view (in this window, starts a task when none is running)" },
           { key: "enter", text: "on an empty prompt: answer the question a background session waits on" },
+          { key: "s", text: "run the session in view in this window: a background one moves here, a task nobody runs resumes here" },
           { key: "↑ ↓", text: "scroll the focused pane (PageUp/PageDown a page)" },
           { key: "← →", text: "move between the conversation, activity log and thinking" },
           { key: "Home End", text: "the oldest lines, or back to the newest" },
@@ -1610,7 +1792,10 @@ export class LobbyView implements Component, Focusable {
           { key: "n", text: "type a new task that starts in its own session" },
           { key: "o", text: "show the session driving the selected task in the Lobby tab" },
           { key: "x x", text: "stop the background session driving the selected task" },
-          { key: "d d", text: "discard the selected planned task" },
+          { key: "d d", text: "discard the selected planned task, or delete the selected task for good" },
+          { key: "a", text: "archive the selected task (a task under way is abandoned first: a twice), or restore an archived one" },
+          { key: "A A", text: "archive every finished task" },
+          { key: "v", text: "show or hide archived tasks" },
           { key: "r", text: "reread tasks from disk" },
         ];
       case "plan":
@@ -1677,6 +1862,7 @@ export class LobbyView implements Component, Focusable {
   private hintChips(): Array<[string, string]> {
     const k = (action: LobbyAction) => keyLabel(this.keys[action]).toLowerCase();
     const session = this.host.planner();
+    if (this.picking) return [["↑↓", "browse"], ["enter", "view"], ["s", "switch here"], ["x x", "stop"], ["n", "new"], ["esc", "close"]];
     if (this.mode === "type") {
       if (this.tab === "lobby" && this.newSession) return [["enter", "start in a new session"], ["esc", "cancel"]];
       if (this.tab === "lobby" && this.viewing.kind !== "here") {
@@ -1693,14 +1879,18 @@ export class LobbyView implements Component, Focusable {
     switch (this.tab) {
       case "lobby":
         keys.push(["←→", "pane"], ["↑↓", "scroll"], [k("sessions"), "sessions"], [k("newSession"), "new session"]);
+        if (this.viewing.kind === "background" || this.viewing.kind === "idle") keys.push(["s", "switch here"]);
         if (this.viewedEntry().task) keys.push([k("toggleAuto"), "auto"], ["c", "comment on plan"]);
         break;
       case "tasks": {
         const row = this.taskRowList()[this.tasksSelected];
         keys.push(["↑↓", "select"]);
-        if (row?.kind === "task") keys.push(["c", "comment"], ["o", "open its session"], [k("toggleAuto"), "auto"]);
+        const finished = row?.kind === "task" && TERMINAL_STATES.includes(row.status as Task["state"]);
+        if (row?.kind === "task" && !finished) keys.push(["c", "comment"], ["o", "open its session"], [k("toggleAuto"), "auto"]);
+        if (row?.kind === "task") keys.push(["a", "archive"], ["d d", "delete"]);
+        if (row?.kind === "archived") keys.push(["a", "restore"], ["d d", "delete"]);
         if (row?.kind === "plan") keys.push(["s", "start in a new session"], ["h", "start here"], ["d", "discard"]);
-        keys.push(["n", "new task"]);
+        keys.push(["v", this.showArchived ? "hide archived" : "archived"], ["n", "new task"]);
         break;
       }
       case "plan":
@@ -1869,24 +2059,88 @@ export class LobbyView implements Component, Focusable {
     };
   }
 
-  /** The session switcher: every session this window can show, with what each is doing. */
+  /**
+   * The session browser: every session this window can show, grouped by
+   * where it runs, with a preview of the one picked — its task, what it is
+   * doing and the last of its conversation.
+   */
   private pickerBody(width: number, height: number, theme: LobbyTheme): string[] {
     const entries = this.sessionEntries();
     this.pickIndex = Math.min(this.pickIndex, Math.max(0, entries.length - 1));
-    const inner = width - 4;
-    const nameWidth = Math.min(34, Math.max(14, Math.floor(inner * 0.36)));
-    const marks = { "this window": "●", background: "◆", "other terminal": "◇" } as const;
-    const lines = entries.map((entry, index) => {
+    const wide = width >= 90;
+    const listWidth = wide ? Math.max(38, Math.round((width - 1) * 0.42)) : width;
+    const inner = listWidth - 4;
+    const lines: string[] = [];
+    let selectedLine = 0;
+    let section: SessionWhere | undefined;
+    const counts = new Map<SessionWhere, number>();
+    for (const entry of entries) counts.set(entry.where, (counts.get(entry.where) ?? 0) + 1);
+    entries.forEach((entry, index) => {
+      if (entry.where !== section) {
+        section = entry.where;
+        if (lines.length > 0) lines.push("");
+        lines.push(rule(inner, SECTION_OF[section], theme, String(counts.get(section) ?? 0)));
+      }
       const selected = index === this.pickIndex;
-      const mark = paint(theme, entry.where === "this window" ? "accent" : "toolTitle", marks[entry.where]);
-      const name = fit(selected ? bold(theme, entry.name) : entry.name, nameWidth);
-      const status = paint(theme, entry.status === "working" ? "accent" : entry.status === "ended" ? "dim" : "muted", entry.status.replace(/_/g, " "));
-      const badges = [entry.auto ? paint(theme, "success", "⟳ auto") : "", entry.waiting > 0 ? paint(theme, "warning", `● ${entry.waiting} waiting`) : ""].filter(Boolean).join(" ");
-      const where = paint(theme, "dim", entry.where);
-      return selectRow(theme, `${selected ? paint(theme, "accent", "▸") : " "} ${mark} ${name} ${where} ${paint(theme, "dim", "·")} ${status}${badges ? ` ${badges}` : ""}`, inner, selected, true);
+      if (selected) selectedLine = lines.length;
+      const mark = paint(theme, entry.where === "this window" ? "accent" : entry.where === "not running" ? "dim" : "toolTitle", WHERE_MARKS[entry.where]);
+      const name = selected ? bold(theme, entry.name) : entry.where === "not running" ? paint(theme, "muted", entry.name) : entry.name;
+      const status = paint(theme, entry.status === "working" ? "accent" : entry.status === "ended" || entry.status === "no task" ? "dim" : "muted", entry.status.replace(/_/g, " "));
+      const badges = [entry.auto ? paint(theme, "success", "⟳") : "", entry.waiting > 0 ? paint(theme, "warning", `● ${entry.waiting}`) : ""].filter(Boolean).join(" ");
+      const head = `${selected ? paint(theme, "accent", "▸") : " "} ${mark} ${name}`;
+      lines.push(selectRow(theme, spread(head, `${status}${badges ? ` ${badges}` : ""}`, inner), inner, selected, true));
     });
-    const help = paint(theme, "dim", "enter shows it here · n new task in a new session · x x stops a background session · esc closes");
-    return box(width, height, [...lines, "", ...wrap(help, inner)], { title: "Sessions", right: `${entries.length}`, focused: true, theme });
+    const rows = Math.max(0, height - 2);
+    const start = windowStart(selectedLine, lines.length, rows);
+    const list = box(listWidth, height, lines.slice(start), { title: "Sessions", right: `${entries.length}`, focused: true, scroll: { total: lines.length, start }, theme });
+    if (!wide) return list;
+    const previewWidth = width - 1 - listWidth;
+    const picked = entries[this.pickIndex];
+    const preview = picked ? this.sessionPreview(picked, previewWidth - 4, rows, theme) : [];
+    return beside([list, box(previewWidth, height, preview, { title: "Preview", theme })]);
+  }
+
+  /** What the browser shows of one session: who and where, its task, what `enter` and `s` do, then the end of its conversation. */
+  private sessionPreview(entry: SessionEntry, width: number, height: number, theme: LobbyTheme): string[] {
+    const dot = paint(theme, "dim", " · ");
+    const task = entry.task;
+    const lines = [
+      ...wrapHanging(`${paint(theme, entry.where === "this window" ? "accent" : "toolTitle", WHERE_MARKS[entry.where])} `, bold(theme, entry.name), width),
+      ...wrapHanging("  ", [paint(theme, "muted", entry.where), paint(theme, entry.status === "working" ? "accent" : "muted", entry.status.replace(/_/g, " ")), entry.pid ? paint(theme, "dim", `pid ${entry.pid}`) : ""].filter(Boolean).join(dot), width),
+    ];
+    if (task) {
+      const progress = taskProgress(task);
+      lines.push(...wrapHanging("  ", [paint(theme, "dim", task.id), progress ? `${pips(progress.done, progress.total, Math.min(progress.total, 8), theme)} ${paint(theme, "muted", `${progress.done}/${progress.total}`)}` : ""].filter(Boolean).join(dot), width));
+    }
+    const flags = [entry.auto ? paint(theme, "success", "⟳ auto mode") : "", entry.waiting > 0 ? paint(theme, "warning", `● ${entry.waiting} question${entry.waiting === 1 ? "" : "s"} waiting for you`) : ""].filter(Boolean);
+    if (flags.length > 0) lines.push(...wrapHanging("  ", flags.join(dot), width));
+    const key = (text: string) => paint(theme, "accent", text);
+    const does: Record<SessionWhere, string> = {
+      "this window": `${key("enter")} ${paint(theme, "muted", "back to this window")}`,
+      background: `${key("enter")} ${paint(theme, "muted", "view it")}   ${key("s")} ${paint(theme, "muted", "move it into this window")}   ${key("x x")} ${paint(theme, "muted", "stop it")}`,
+      "other terminal": `${key("enter")} ${paint(theme, "muted", "view it and message it")}   ${paint(theme, "dim", "switch in its own terminal")}`,
+      "not running": `${key("enter")} ${paint(theme, "muted", "view it")}   ${key("s")} ${paint(theme, "muted", entry.sessionId ? "resume it in this window" : "take it over in this window")}`,
+    };
+    lines.push("", ...wrapHanging("  ", does[entry.where], width));
+    const chat = this.previewChat(entry);
+    const room = height - lines.length - 2;
+    if (room > 2) {
+      lines.push("", rule(width, "Conversation", theme));
+      const talk = chat.length > 0 ? chatLines(chat, width, theme) : [paint(theme, "dim", "Nothing said yet.")];
+      lines.push(...talk.slice(-(room - 1)));
+    }
+    return lines;
+  }
+
+  /** The conversation behind an entry: this window's feed, a background session's, or a saved session file. */
+  private previewChat(entry: SessionEntry): readonly ChatEntry[] {
+    if (entry.view.kind === "here") return this.host.feed.chat;
+    if (entry.view.kind === "background") return this.viewedSessionFor(entry.view.key)?.feed.chat ?? [];
+    return entry.sessionId ? this.host.sessionChat(entry.sessionId) : [];
+  }
+
+  private viewedSessionFor(key: string): BackgroundSession | undefined {
+    return this.host.sessions().find((session) => session.key === key);
   }
 
   private homeBody(width: number, height: number, theme: LobbyTheme, now: number): string[] {
@@ -1962,14 +2216,17 @@ export class LobbyView implements Component, Focusable {
         emptyNote,
       }, width, height, theme);
     }
+    const running = entry.where === "other terminal";
     return renderHome({
       ...common,
-      chat: task?.ownerSessionId ? this.host.sessionChat(task.ownerSessionId) : [],
+      chat: entry.sessionId ? this.host.sessionChat(entry.sessionId) : [],
       activity: [],
       thoughts: [],
       busy: false,
-      emptyNote: "Nothing said in this session yet.",
-      activityNote: "This session runs in another terminal: its conversation shows here and your messages reach its oracle, but live activity only streams from sessions started in this window.",
+      emptyNote: running ? "Nothing said in this session yet." : entry.sessionId ? "Nothing was said in its session." : "No session has driven this task yet.",
+      activityNote: running
+        ? "This session runs in another terminal: its conversation shows here and your messages reach its oracle within seconds, but live activity only streams from sessions started in this window."
+        : `No session is running this task. Press esc, then s to ${entry.sessionId ? "resume it" : "take it over"} in this window; a message you send now waits until a session picks it up.`,
     }, width, height, theme);
   }
 
@@ -1985,6 +2242,18 @@ export class LobbyView implements Component, Focusable {
     } else if (row?.kind === "plan") {
       const plan = this.data.plans.find((entry) => entry.id === row.id);
       if (plan) detail = planDetailLines(plan, detailWidth, now, theme);
+    } else if (row?.kind === "archived") {
+      const task = this.data.archived.find((entry) => entry.id === row.id);
+      const key = (text: string) => paint(theme, "accent", text);
+      if (task) {
+        detail = [
+          ...taskDetailLines(task, [], this.host.sessionId(), detailWidth, now, theme).slice(0, 3),
+          ...wrapHanging("  ", paint(theme, "warning", `archived ${row.age === "now" ? "just now" : `${row.age} ago`}`), detailWidth),
+          "",
+          ...wrapHanging("  ", `${key("a")} ${paint(theme, "muted", "restore it to the list")}   ${key("d d")} ${paint(theme, "muted", "delete it for good")}`, detailWidth),
+          ...taskDetailLines(task, [], this.host.sessionId(), detailWidth, now, theme).slice(3),
+        ];
+      }
     }
     const query = this.query();
     return renderTasks({ rows, selected: this.tasksSelected, detail, focus: this.tasksFocus, detailOffset: this.tasksDetailOffset, ...(query ? { query } : {}), panes: this.panes }, width, height, theme);
