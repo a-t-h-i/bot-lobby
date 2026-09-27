@@ -23,6 +23,10 @@ export interface SeatView {
   ready: boolean;
   /** `provider/model · thinking` the seat runs on. */
   profile?: string;
+  /** The classifier left it out of the latest round: how likely it judged the seat needed. */
+  satOut?: number;
+  /** Seated with a key press: it sits every round, whatever the classifier says. */
+  pinned?: boolean;
 }
 
 export interface PlanView {
@@ -126,6 +130,7 @@ function statusLine(view: PlanView, input: PlanTabInput, theme?: LobbyTheme): st
 function seatCell(seat: SeatView, tick: number, theme?: LobbyTheme): string {
   const name = paint(theme, seat.seated ? sourceColor(seat.label) : "dim", seat.label);
   if (!seat.seated) return `${name} ${paint(theme, "dim", "off")}`;
+  if (seat.satOut !== undefined && seat.status !== "thinking") return `${name} ${paint(theme, "dim", `sat out · ${seat.satOut.toFixed(2)}`)}`;
   if (seat.status === "thinking") return `${name} ${paint(theme, "accent", spinner(tick))} ${paint(theme, "muted", seat.step ?? "thinking")}`;
   if (seat.status === "failed") return `${name} ${paint(theme, "error", "✗ failed — r retries")}`;
   if (seat.status === "idle") return `${name} ${paint(theme, "dim", "·")}`;
@@ -174,6 +179,9 @@ export function conversationLines(view: PlanView, width: number, theme?: LobbyTh
     }
     lines.push(speakerLine("panel", width, theme, time));
     lines.push(...(questions.length > 0 ? questionLines(questions, width, theme) : wrap(message.text, width).map((line) => (line ? `  ${line}` : ""))));
+    for (const entry of message.decided ?? []) {
+      lines.push(...wrapHanging(`  ${paint(theme, "success", "✓")} `, `${paint(theme, sourceColor(entry.from), `[${entry.from}]`)} ${entry.question} → ${bold(theme, entry.answer)} ${paint(theme, "dim", `· decided by the classifier (${entry.probability.toFixed(2)}); comment on the plan to overrule`)}`, width));
+    }
   }
   if (query && lines.length === 0) return wrap(paint(theme, "dim", `Nothing in the conversation matches "${query}".`), width);
   return lines;

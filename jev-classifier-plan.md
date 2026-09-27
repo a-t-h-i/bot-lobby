@@ -6,9 +6,10 @@ Branch `claude/dev-lobby-jev-classifier-g4neej`.
 ## Progress
 
 - Phase 1 — round limiter: merged (#7).
-- Phase 2 — classifier core: client, hosts and keys (pi's `/login
-  typesafe`), facade with breaker and metrics, settings entry and connection
-  test.
+- Phase 2 — classifier core: merged (#8).
+- Phase 3 — planning seats (per round, pins) and obvious answers (confident
+  and the recommended option; one automatic round when every question is
+  settled).
 
 ## Phase 0 findings (spike)
 

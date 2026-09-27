@@ -29,6 +29,7 @@ import { modelLookup } from "../pi/tools.ts";
 import { startPlannedTask, startTask } from "../pi/start-task.ts";
 import type { LobbyAgentKind, LobbyPanel, PanelMember } from "../schemas/configuration.ts";
 import { chatFromEntries, lobbyFeed, narrateEvent, type AgentEventLike } from "./feed.ts";
+import { classifier } from "../classifier/instance.ts";
 import { launchPi, SessionRegistry, type BackgroundSession, type SessionLauncher } from "./sessions.ts";
 import { SessionChats } from "./session-files.ts";
 import { answerMessage, dialogAsker, loadAskTool, questionnaires, toolAsker, type Asker } from "./ask.ts";
@@ -416,6 +417,7 @@ function newPlanner(state: Runtime, seed?: PlannerSeed, seats?: readonly PanelMe
     memberProfile: (member) => seatProfile(state, member),
     panel: seats ?? config.lobby.planningPanel,
     maxRounds: () => loadConfig().lobby.maxPlanningRounds,
+    classifier: classifier(),
     stallTimeoutMs: workflow.stallTimeoutMs,
     toolStallTimeoutMs: workflow.toolStallTimeoutMs,
     feed: lobbyFeed,

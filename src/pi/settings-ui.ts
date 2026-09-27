@@ -429,7 +429,10 @@ function lobbySummary(config: BotLobbyConfig): string {
  * Classifier decisions that exist so far, as the settings menu lists them.
  * Each phase of the classifier work adds its own entry.
  */
-export const CLASSIFIER_FEATURE_ITEMS: ReadonlyArray<{ id: ClassifierFeature; label: string; help: string }> = [];
+export const CLASSIFIER_FEATURE_ITEMS: ReadonlyArray<{ id: ClassifierFeature; label: string; help: string }> = [
+  { id: "seats", label: "Planning seats", help: "each round, only the seats your idea or latest answers touch sit; 1-4 in the Plan tab pins one" },
+  { id: "answers", label: "Obvious answers", help: "a panel question whose recommended option the conversation already makes clearly right is answered for you (listed under Assumptions)" },
+];
 
 /** The next Jev host in the menu's cycle. */
 export function nextJevHost(current: JevHostName): JevHostName {
