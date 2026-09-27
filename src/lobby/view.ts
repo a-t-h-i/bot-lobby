@@ -21,8 +21,8 @@ import type { QuickFixQueue } from "./quickfix.ts";
 import { MEMBER_LABELS, ORACLE_LABEL, type PlannerSeed, type PlanningSession } from "./planner.ts";
 import { issueText, type IssuesState } from "./issues.ts";
 import { actionFor, keyLabel, keyMap, LOBBY_ACTIONS, type KeyMap, type LobbyAction } from "./keys.ts";
-import { beside, bold, box, fit, highlight, paint, spinner, wrapHanging, type LobbyTheme } from "./layout.ts";
-import { renderHome } from "./tabs/home.ts";
+import { beside, bold, box, fit, highlight, paint, spinner, wrapHanging, type LobbyTheme, type PaneLayout } from "./layout.ts";
+import { HOME_PANES, renderHome, type HomePane } from "./tabs/home.ts";
 import { filterRows, planDetailLines, renderTasks, taskDetailLines, taskRows, tasksWidths, type TaskRow } from "./tabs/tasks.ts";
 import { renderPlan, type PlanLayout, type PlanView, type SeatView } from "./tabs/plan.ts";
 import { filterJobs, newestFirst, renderQuickFix } from "./tabs/quickfix.ts";
@@ -97,6 +97,8 @@ export interface LobbyHost {
   savePanels(panels: Record<LobbyPanel, boolean>): void;
   /** Key overrides from the config (`lobby.keys`). */
   keys(): Readonly<Record<string, string>>;
+  /** Open bot-lobby's settings (or one agent's entry); the lobby steps aside and rereads the config after. */
+  openSettings(entry?: "quickfix" | "planner"): Promise<void>;
   profileLabel(kind: LobbyAgentKind): string;
   requestRender(): void;
   now?(): number;
@@ -191,9 +193,9 @@ export class LobbyView implements Component, Focusable {
   /** Double-press confirmations, such as discarding a plan. */
   private armed: string | undefined;
   /** The keys, the panes on show and whether Issues is on, read once from the config. */
-  private readonly keys: KeyMap;
+  private keys: KeyMap;
   private panels: Record<LobbyPanel, boolean>;
-  private readonly issuesOn: boolean;
+  private issuesOn: boolean;
   /** The help screen covers the body. */
   help = false;
   /** The search bar has the keys. */
@@ -205,7 +207,13 @@ export class LobbyView implements Component, Focusable {
   private promptTop = Number.POSITIVE_INFINITY;
   private tabSpans: Array<{ tab: TabId; from: number; to: number }> = [];
 
-  private chatOffset = 0;
+  /** Each Lobby pane's scroll, in lines back from its newest, and the pane the keys scroll. */
+  private readonly homeOffsets: Record<HomePane, number> = { conversation: 0, activity: 0, thinking: 0 };
+  homeFocus: HomePane = "conversation";
+  /** How many lines each pane held last frame, so a pane scrolled back stays on what you are reading as lines arrive. */
+  private readonly seenTotals = new Map<string, number>();
+  /** Where the current tab's scrollable panes landed in the last frame. */
+  private readonly panes: PaneLayout = new Map();
   private tasksSelected = 0;
   private tasksFocus: "list" | "detail" = "list";
   private tasksDetailOffset = 0;
@@ -410,6 +418,18 @@ export class LobbyView implements Component, Focusable {
     return this.panels[panel];
   }
 
+  /** Reread keys, panes and the Issues switch, after the settings changed them. */
+  reloadConfig(): void {
+    this.keys = keyMap(this.host.keys());
+    this.panels = { ...this.host.panels() };
+    this.issuesOn = this.host.issuesEnabled();
+    if (!this.tabs().includes(this.tab)) this.setTab("lobby");
+  }
+
+  private openSettings(entry?: "quickfix" | "planner"): void {
+    void this.host.openSettings(entry).then(() => this.host.requestRender());
+  }
+
   /* -------------------------------------------------------------- search */
 
   private openSearch(): void {
@@ -451,7 +471,7 @@ export class LobbyView implements Component, Focusable {
 
   /** A new search starts every list at its top. */
   private resetSelections(): void {
-    this.chatOffset = 0;
+    for (const pane of HOME_PANES) this.homeOffsets[pane] = 0;
     this.planOffset = 0;
     switch (this.tab) {
       case "tasks":
@@ -508,6 +528,8 @@ export class LobbyView implements Component, Focusable {
       case "help":
         this.help = !this.help;
         return;
+      case "settings":
+        return this.openSettings();
       case "search":
         return this.searching ? this.closeSearch() : this.openSearch();
       case "nextTab":
@@ -523,9 +545,9 @@ export class LobbyView implements Component, Focusable {
       case "toggleThinking":
         return this.togglePanel("thinking");
       case "scrollUp":
-        return this.scroll(-10);
+        return this.scroll(-this.pageSize());
       case "scrollDown":
-        return this.scroll(10);
+        return this.scroll(this.pageSize());
     }
   }
 
@@ -558,6 +580,8 @@ export class LobbyView implements Component, Focusable {
     }
     if (matchesKey(data, Key.up) || (!PROMPT_FIRST.has(this.tab) && data === "k")) return this.scroll(-1);
     if (matchesKey(data, Key.down) || (!PROMPT_FIRST.has(this.tab) && data === "j")) return this.scroll(1);
+    if (matchesKey(data, Key.left) || matchesKey(data, Key.right)) return this.movePaneFocus(matchesKey(data, Key.left) ? -1 : 1);
+    if (matchesKey(data, Key.home) || matchesKey(data, Key.end)) return this.scrollToEdge(matchesKey(data, Key.home));
     const tabs = this.tabs();
     if (!PROMPT_FIRST.has(this.tab) && /^[1-9]$/.test(data) && Number(data) <= tabs.length) return this.setTab(tabs[Number(data) - 1]!);
     if (data === "i" && this.tab !== "metrics" && this.tab !== "tasks" && this.tab !== "issues") return this.setMode("type");
@@ -569,27 +593,82 @@ export class LobbyView implements Component, Focusable {
     }
   }
 
-  /** Arrow keys and page keys: scroll or select, depending on the tab and its focus. */
+  /** The pane the keys scroll on this tab. */
+  private focusedPane(): string {
+    switch (this.tab) {
+      case "lobby":
+        return this.homePane();
+      case "plan":
+        return this.planFocus;
+      case "tasks":
+        return this.tasksFocus;
+      case "quickfix":
+        return this.fixFocus;
+      case "issues":
+        return this.issueFocus;
+      case "metrics":
+        return "table";
+    }
+  }
+
+  /** The focused Lobby pane, or the first one showing when it is hidden. */
+  private homePane(): HomePane {
+    const shown = this.shownHomePanes();
+    if (!shown.includes(this.homeFocus) && shown.length > 0) this.homeFocus = shown[0]!;
+    return this.homeFocus;
+  }
+
+  private shownHomePanes(): HomePane[] {
+    const drawn = HOME_PANES.filter((pane) => this.tab === "lobby" && this.panes.has(pane));
+    return drawn.length > 0 ? drawn : HOME_PANES.filter((pane) => this.panels[pane]);
+  }
+
+  /** A page of the focused pane: its rows less one, so a line of context carries over. */
+  private pageSize(): number {
+    const pane = this.panes.get(this.focusedPane());
+    return pane && pane.rows > 2 ? pane.rows - 1 : 10;
+  }
+
+  /** ← → move between the tab's panes. */
+  private movePaneFocus(direction: -1 | 1): void {
+    switch (this.tab) {
+      case "lobby": {
+        const shown = this.shownHomePanes();
+        if (shown.length === 0) return;
+        const index = Math.max(0, shown.indexOf(this.homePane()));
+        this.homeFocus = shown[(index + direction + shown.length) % shown.length]!;
+        return;
+      }
+      case "plan":
+        this.planFocus = direction < 0 ? "talk" : "draft";
+        if (this.planFocus === "draft") this.cursorToView();
+        return;
+      case "tasks":
+        this.tasksFocus = direction < 0 ? "list" : "detail";
+        return;
+      case "quickfix":
+        this.fixFocus = direction < 0 ? "list" : "detail";
+        return;
+      case "issues":
+        this.issueFocus = direction < 0 ? "list" : "detail";
+        return;
+      case "metrics":
+        return;
+    }
+  }
+
+  /** Arrow keys (±1) and page keys (± a page): scroll or select in the tab's focused pane. */
   private scroll(delta: number): void {
     switch (this.tab) {
       case "lobby":
-        this.chatOffset = Math.max(0, this.chatOffset - delta);
-        return;
+        return this.scrollPane(this.homePane(), delta);
       case "plan":
-        if (this.planFocus === "draft") this.moveCursor(delta);
-        else this.planOffset = Math.max(0, this.planOffset - delta);
-        return;
+        return this.scrollPane(this.planFocus, delta);
       case "tasks":
-        if (this.tasksFocus === "detail" || Math.abs(delta) > 1) this.tasksDetailOffset = Math.max(0, this.tasksDetailOffset + delta);
-        else this.selectTask(this.tasksSelected + delta);
-        return;
+        // Page keys always page the detail; the arrows follow the focus.
+        return this.scrollPane(Math.abs(delta) > 1 ? "detail" : this.tasksFocus, delta);
       case "quickfix":
-        if (this.fixFocus === "detail" || Math.abs(delta) > 1) this.fixDetailOffset = Math.max(0, this.fixDetailOffset + delta);
-        else {
-          this.fixSelected = Math.max(0, Math.min(this.fixJobs().length - 1, this.fixSelected + delta));
-          this.fixDetailOffset = 0;
-        }
-        return;
+        return this.scrollPane(Math.abs(delta) > 1 ? "detail" : this.fixFocus, delta);
       case "issues":
         if (this.issueFocus === "detail" || Math.abs(delta) > 1) this.issueDetailOffset = Math.max(0, this.issueDetailOffset + delta);
         else {
@@ -599,9 +678,116 @@ export class LobbyView implements Component, Focusable {
         }
         return;
       case "metrics":
-        this.metricsSelected = Math.max(0, this.metricsSelected + delta);
-        return;
+        return this.scrollPane("table", delta);
     }
+  }
+
+  /**
+   * Scroll one pane of the current tab by `delta` lines, positive toward its
+   * end. Lists move their selection instead; the draft moves its cursor (the
+   * wheel scrolls it and the cursor follows only when it would leave the screen).
+   */
+  private scrollPane(pane: string, delta: number, wheel = false): void {
+    if (delta === 0) return;
+    switch (pane) {
+      case "conversation":
+      case "activity":
+      case "thinking":
+        this.homeOffsets[pane] = Math.max(0, this.homeOffsets[pane] - delta);
+        break;
+      case "talk":
+        this.planOffset = Math.max(0, this.planOffset - delta);
+        break;
+      case "draft":
+        if (wheel) this.wheelDraft(delta);
+        else this.moveCursor(delta);
+        break;
+      case "list":
+        if (this.tab === "tasks") this.selectTask(this.tasksSelected + Math.sign(delta));
+        else if (this.tab === "quickfix") {
+          this.fixSelected = Math.max(0, Math.min(this.fixJobs().length - 1, this.fixSelected + Math.sign(delta)));
+          this.fixDetailOffset = 0;
+        }
+        break;
+      case "detail":
+        if (this.tab === "tasks") this.tasksDetailOffset = Math.max(0, this.tasksDetailOffset + delta);
+        else if (this.tab === "quickfix") this.fixDetailOffset = Math.max(0, this.fixDetailOffset + delta);
+        break;
+      case "table":
+        this.metricsSelected = Math.max(0, this.metricsSelected + (wheel ? Math.sign(delta) : delta));
+        break;
+    }
+    this.clampScroll();
+  }
+
+  /** Home and End: the oldest or first line of the focused pane, or back to its newest or last. */
+  private scrollToEdge(start: boolean): void {
+    const pane = this.focusedPane();
+    const far = start ? -1e9 : 1e9;
+    if (pane === "draft") {
+      const last = this.planLayout.draftText.length - 1;
+      this.planCursor = start ? 0 : Math.max(0, last);
+      this.moveCursor(0);
+      return;
+    }
+    if (pane === "list" && this.tab === "tasks") return this.selectTask(start ? 0 : this.taskRowList().length - 1);
+    if (pane === "list" && this.tab === "quickfix") {
+      this.fixSelected = start ? 0 : Math.max(0, this.fixJobs().length - 1);
+      this.fixDetailOffset = 0;
+      return;
+    }
+    if (pane === "table") {
+      this.metricsSelected = start ? 0 : Number.MAX_SAFE_INTEGER;
+      return;
+    }
+    this.scrollPane(pane, far);
+  }
+
+  /** The wheel over the draft scrolls it; the cursor follows only when it would leave the screen. */
+  private wheelDraft(delta: number): void {
+    const rows = Math.max(1, this.planLayout.draftRows);
+    const max = Math.max(0, this.planLayout.draftText.length - rows);
+    this.planDraftOffset = Math.max(0, Math.min(max, this.planLayout.draftStart + delta));
+    if (this.planCursor < this.planDraftOffset) this.planCursor = this.planDraftOffset;
+    if (this.planCursor >= this.planDraftOffset + rows) this.planCursor = this.planDraftOffset + rows - 1;
+  }
+
+  /**
+   * Keep every offset within what its pane holds, so scrolling back the other
+   * way responds at once; a pane scrolled back from its newest line stays on
+   * the lines being read as new ones arrive. True when that moved a pane.
+   */
+  private clampScroll(): boolean {
+    let moved = false;
+    const limit = (name: string, offset: number, anchored: boolean): number => {
+      const pane = this.panes.get(name);
+      if (!pane) return offset;
+      const seen = this.seenTotals.get(name);
+      this.seenTotals.set(name, pane.total);
+      let next = offset;
+      if (anchored && next > 0 && seen !== undefined && pane.total > seen) {
+        next += pane.total - seen;
+        moved = true;
+      }
+      return Math.min(next, Math.max(0, pane.total - pane.rows));
+    };
+    switch (this.tab) {
+      case "lobby":
+        for (const pane of HOME_PANES) this.homeOffsets[pane] = limit(pane, this.homeOffsets[pane], true);
+        break;
+      case "plan":
+        this.planOffset = limit("talk", this.planOffset, true);
+        break;
+      case "tasks":
+        this.tasksDetailOffset = limit("detail", this.tasksDetailOffset, false);
+        break;
+      case "quickfix":
+        this.fixDetailOffset = limit("detail", this.fixDetailOffset, false);
+        break;
+      default:
+        break;
+    }
+    return moved;
   }
 
   /** Move the draft cursor by `delta` lines, skipping blank ones, and keep it on screen. */
@@ -686,6 +872,7 @@ export class LobbyView implements Component, Focusable {
           if (job && this.host.quickfix.cancel(job.id)) this.say(`cancelling ${job.id}`);
           return true;
         }
+        if (data === "m") return this.openSettings("quickfix"), true;
         return false;
       case "issues":
         return this.issuesCommand(data, enter, escape);
@@ -776,6 +963,10 @@ export class LobbyView implements Component, Focusable {
     }
     if (data === "a") {
       this.answerQuestions();
+      return true;
+    }
+    if (data === "m") {
+      this.openSettings("planner");
       return true;
     }
     if (data === "c") {
@@ -872,7 +1063,7 @@ export class LobbyView implements Component, Focusable {
 
   /** Mouse events when pi runs full screen (pi-tui dispatches them to the overlay). */
   handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
-    if (event.type === "wheel") this.wheel(Math.sign(event.wheelDelta ?? 0) || 1);
+    if (event.type === "wheel") this.wheel(Math.sign(event.wheelDelta ?? 0) || 1, event.x, event.y);
     else if (event.type === "click" && event.button === "left") this.click(event.x, event.y);
     else return undefined;
     this.host.requestRender();
@@ -881,22 +1072,24 @@ export class LobbyView implements Component, Focusable {
 
   /** Mouse reports in pi's regular screen, where the lobby turns reporting on itself. */
   private mouseReport(report: MouseReport): void {
-    if (report.kind === "wheel") this.wheel(report.delta);
+    if (report.kind === "wheel") this.wheel(report.delta, report.x, report.y);
     else if (report.kind === "press" && report.button === 0) this.click(report.x, report.y);
   }
 
-  private wheel(direction: number): void {
-    if (this.help) return;
-    if (this.tab === "plan" && this.planFocus === "draft") {
-      // The wheel scrolls the draft; the cursor follows only when it would leave the screen.
-      const rows = Math.max(1, this.planLayout.draftRows);
-      const max = Math.max(0, this.planLayout.draftText.length - rows);
-      this.planDraftOffset = Math.max(0, Math.min(max, this.planLayout.draftStart + direction * WHEEL_LINES));
-      if (this.planCursor < this.planDraftOffset) this.planCursor = this.planDraftOffset;
-      if (this.planCursor >= this.planDraftOffset + rows) this.planCursor = this.planDraftOffset + rows - 1;
-      return;
+  /** The pane of the current tab under a body cell, if any. */
+  private paneAt(x: number, y: number): string | undefined {
+    const row = y - this.bodyTop;
+    for (const [name, pane] of this.panes) {
+      if (row >= pane.top && row < pane.top + pane.height && x >= pane.left && x < pane.left + pane.width) return name;
     }
-    this.scroll(direction * WHEEL_LINES);
+    return undefined;
+  }
+
+  /** The wheel scrolls the pane under the pointer (the focused one when it is over none). */
+  private wheel(direction: number, x = -1, y = -1): void {
+    if (this.help) return;
+    if (this.tab === "issues") return this.scroll(direction * WHEEL_LINES);
+    this.scrollPane(this.paneAt(x, y) ?? this.focusedPane(), direction * WHEEL_LINES, true);
   }
 
   /** A click: a tab in the tab bar, the prompt, or a line of the draft plan to comment on. */
@@ -913,6 +1106,11 @@ export class LobbyView implements Component, Focusable {
       return;
     }
     const row = y - this.bodyTop;
+    // A click on a pane gives it the keys.
+    const pane = this.paneAt(x, y);
+    if (this.tab === "lobby" && pane) this.homeFocus = pane as HomePane;
+    if (this.tab === "tasks" && (pane === "list" || pane === "detail")) this.tasksFocus = pane;
+    if (this.tab === "quickfix" && (pane === "list" || pane === "detail")) this.fixFocus = pane;
     if (this.tab !== "plan" || row < 0 || !this.host.planner()) return;
     const layout = this.planLayout;
     // The draft pane: its border sits one row above its first line and two columns left of its text.
@@ -946,7 +1144,7 @@ export class LobbyView implements Component, Focusable {
       case "lobby": {
         const notice = this.host.toOracle(body);
         if (notice) this.say(notice);
-        this.chatOffset = 0;
+        this.homeOffsets.conversation = 0;
         return;
       }
       case "tasks":
@@ -1117,14 +1315,16 @@ export class LobbyView implements Component, Focusable {
       case "lobby":
         return [
           { key: "type", text: "talk to the oracle (starts a task when none is running)", hint: "talk" },
-          { key: "↑ ↓", text: "scroll the conversation", hint: "scroll" },
+          { key: "↑ ↓", text: "scroll the focused pane (PageUp/PageDown a page)", hint: "scroll" },
+          { key: "← →", text: "move between the conversation, activity log and thinking", hint: "pane" },
+          { key: "Home End", text: "the oldest lines, or back to the newest" },
           { key: "c", text: "comment on this task's plan", hint: "comment on plan" },
           { key: "esc", text: "stop the oracle while it works" },
         ];
       case "tasks":
         return [
-          { key: "↑ ↓", text: "select a task or plan", hint: "select" },
-          { key: "enter", text: "move between the list and the detail", hint: "detail" },
+          { key: "↑ ↓", text: "select a task or plan, or scroll the detail (PageUp/PageDown)", hint: "select" },
+          { key: "enter / ← →", text: "move between the list and the detail", hint: "detail" },
           { key: "c", text: "comment on the selected task's plan", hint: "comment" },
           { key: "s", text: "start the selected planned task", hint: "start" },
           { key: "d d", text: "discard the selected planned task", hint: "discard" },
@@ -1133,21 +1333,23 @@ export class LobbyView implements Component, Focusable {
       case "plan":
         return [
           { key: "a", text: "answer the panel's questions, one questionnaire at a time (enter on an empty prompt too)", ...(session?.awaitingAnswers ? { hint: "answer questions" } : {}) },
-          { key: "enter", text: "move between the conversation and the draft", hint: "pane" },
-          { key: "↑ ↓", text: "pick a draft line (draft) or scroll (conversation)", hint: "line" },
+          { key: "enter / ← →", text: "move between the conversation and the draft", hint: "pane" },
+          { key: "↑ ↓", text: "pick a draft line (draft) or scroll (conversation); PageUp/PageDown a page", hint: "line" },
           { key: "c / click", text: "comment on the picked draft line", hint: "comment on line" },
           { key: "1-4", text: "seat or unseat DEV, DESIGN, QA, RESEARCH", hint: "seats" },
           { key: "s", text: "save the plan to the pending tasks", hint: "save" },
           { key: "n", text: "start a new plan", hint: "new" },
           { key: "x", text: "stop the round" },
           { key: "r", text: "retry a failed round or seat" },
+          { key: "m", text: "the oracle's model, thinking and time limit (Planner settings)" },
         ];
       case "quickfix":
         return [
           { key: "type", text: "describe a quick change", hint: "new fix" },
-          { key: "↑ ↓", text: "select a quick fix", hint: "select" },
-          { key: "enter", text: "move between the list and the detail", hint: "detail" },
+          { key: "↑ ↓", text: "select a quick fix, or scroll the detail (PageUp/PageDown)", hint: "select" },
+          { key: "enter / ← →", text: "move between the list and the detail", hint: "detail" },
           { key: "x", text: "cancel the selected quick fix", hint: "cancel" },
+          { key: "m", text: "the quick fix agent's model, thinking, time limit and instructions", hint: "model" },
         ];
       case "issues":
         return [
@@ -1202,7 +1404,8 @@ export class LobbyView implements Component, Focusable {
       ...(Object.keys(LOBBY_ACTIONS) as LobbyAction[]).flatMap((action) => row(keyLabel(this.keys[action]), LOBBY_ACTIONS[action].help, inner)),
       ...row(`Alt+1…${tabs.length}`, "jump to a tab", inner),
       ...row("Ctrl+C", "clear the prompt, or hide the lobby", inner),
-      ...row("click", "a tab to open it; a draft plan line to comment on it", inner),
+      ...row("click", "a tab to open it, a pane to give it the keys, a draft plan line to comment on it", inner),
+      ...row("wheel", "scroll the pane under the pointer", inner),
     ];
     const modes = (inner: number) => [
       section("Typing"),
@@ -1236,6 +1439,7 @@ export class LobbyView implements Component, Focusable {
   private body(width: number, height: number, theme: LobbyTheme): string[] {
     const now = this.now();
     const query = this.query();
+    this.panes.clear();
     switch (this.tab) {
       case "lobby":
         return this.homeBody(width, height, theme, now);
@@ -1254,6 +1458,7 @@ export class LobbyView implements Component, Focusable {
           tick: this.tick,
           ...(query ? { query } : {}),
           layout: this.planLayout,
+          panes: this.panes,
         }, width, height, theme);
         if (!session) Object.assign(this.planLayout, { draftRows: 0, draftStart: 0, draftText: [] });
         this.planCursor = Math.min(this.planCursor, Math.max(0, this.planLayout.draftText.length - 1));
@@ -1261,7 +1466,7 @@ export class LobbyView implements Component, Focusable {
       }
       case "quickfix":
         this.fixSelected = Math.min(this.fixSelected, Math.max(0, this.fixJobs().length - 1));
-        return renderQuickFix({ jobs: this.host.quickfix.jobs, selected: this.fixSelected, focus: this.fixFocus, detailOffset: this.fixDetailOffset, profile: this.host.profileLabel("quickfix"), tick: this.tick, now, ...(query ? { query } : {}) }, width, height, theme);
+        return renderQuickFix({ jobs: this.host.quickfix.jobs, selected: this.fixSelected, focus: this.fixFocus, detailOffset: this.fixDetailOffset, profile: this.host.profileLabel("quickfix"), tick: this.tick, now, ...(query ? { query } : {}), panes: this.panes }, width, height, theme);
       case "issues": {
         const issues = this.host.issues;
         this.issueSelected = Math.min(this.issueSelected, Math.max(0, issues.issues.length - 1));
@@ -1277,7 +1482,7 @@ export class LobbyView implements Component, Focusable {
         const groups = sortGroups(aggregateMetrics(records, this.metricsBy), this.metricsSort);
         this.metricsSelected = Math.min(this.metricsSelected, Math.max(0, groups.length - 1));
         const taskTimes = taskTimesByModel(this.data.tasks, records);
-        return renderMetrics({ groups, taskTimes, records, stats: taskStats(this.data.tasks), by: this.metricsBy, sort: this.metricsSort, selected: this.metricsSelected, ...(query ? { query } : {}) }, width, height, theme);
+        return renderMetrics({ groups, taskTimes, records, stats: taskStats(this.data.tasks), by: this.metricsBy, sort: this.metricsSort, selected: this.metricsSelected, ...(query ? { query } : {}), panes: this.panes }, width, height, theme);
       }
     }
   }
@@ -1347,7 +1552,9 @@ export class LobbyView implements Component, Focusable {
       busy: this.host.masterBusy(),
       others,
       pending: this.data.plans.filter((plan) => plan.status === "pending").length,
-      chatOffset: this.chatOffset,
+      offsets: this.homeOffsets,
+      ...(this.mode === "browse" ? { focus: this.homeFocus } : {}),
+      panes: this.panes,
       tick: this.tick,
       now,
       panels: this.panels,
@@ -1375,7 +1582,7 @@ export class LobbyView implements Component, Focusable {
       if (plan) detail = planDetailLines(plan, detailWidth, now, theme);
     }
     const query = this.query();
-    return renderTasks({ rows, selected: this.tasksSelected, detail, focus: this.tasksFocus, detailOffset: this.tasksDetailOffset, ...(query ? { query } : {}) }, width, height, theme);
+    return renderTasks({ rows, selected: this.tasksSelected, detail, focus: this.tasksFocus, detailOffset: this.tasksDetailOffset, ...(query ? { query } : {}), panes: this.panes }, width, height, theme);
   }
 
   render(width: number): string[] {
@@ -1389,6 +1596,8 @@ export class LobbyView implements Component, Focusable {
     this.bodyTop = top.length;
     this.promptTop = top.length + bodyHeight + search.length;
     let body = this.help ? this.helpBody(width, bodyHeight, theme) : this.body(width, bodyHeight, theme);
+    // A pane scrolled back that gained lines moves with them, so it keeps showing what was being read.
+    if (!this.help && this.clampScroll()) body = this.body(width, bodyHeight, theme);
     const query = this.query();
     if (query && !this.help) body = body.map((line) => highlight(line, query));
     return [...top, ...body, ...search, ...prompt, hint].slice(0, rows).map((line) => fit(line, width));

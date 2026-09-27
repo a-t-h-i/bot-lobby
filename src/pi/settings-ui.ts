@@ -316,6 +316,15 @@ async function editEntry(pi: ExtensionAPI, ctx: ExtensionContext, kind: Settings
   }
 }
 
+/** One agent's settings on their own: the lobby's Quick fix and Plan tabs open their agent's entry directly. */
+export async function openEntrySettings(pi: ExtensionAPI, ctx: ExtensionContext, kind: SettingsKind): Promise<void> {
+  if (ctx.mode !== "tui") {
+    ctx.ui.notify(`bot-lobby settings live in ${globalConfigPath()}; edit that file outside the TUI.`, "info");
+    return;
+  }
+  await editEntry(pi, ctx, kind);
+}
+
 /**
  * Subagents never inherit silently: any subagent whose model is still unset is
  * pinned to the session's current model and saved, so settings always show

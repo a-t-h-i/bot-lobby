@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { stripTerminalSequences, visibleWidth, type MarkdownTheme } from "@earendil-works/pi-tui";
-import { bar, beside, box, highlight, markdownHanging, markdownLines, meter, sparkline, stackedBar, type LobbyTheme } from "../src/lobby/layout.ts";
+import { bar, beside, box, detailWindow, highlight, markdownHanging, markdownLines, meter, notePane, position, scrollThumb, sparkline, stackedBar, type LobbyTheme } from "../src/lobby/layout.ts";
+import { tailWindow } from "../src/lobby/tabs/home.ts";
 import { createMarkdownRenderer, tidyHeading } from "../src/lobby/markdown.ts";
 import { actionFor, keyLabel, keyMap, LOBBY_ACTIONS } from "../src/lobby/keys.ts";
 import { DEFAULT_CONFIG, resolveConfig } from "../src/schemas/configuration.ts";
@@ -119,4 +120,21 @@ test("the settings menu flips each lobby switch", () => {
   const issues = toggleLobbySwitch(DEFAULT_CONFIG, "issues");
   assert.equal(issues.lobby.issues, true);
   assert.equal(lobbySwitch(toggleLobbySwitch(issues, "issues"), "issues"), false);
+});
+
+test("scroll windows, thumbs and positions stay inside their panes", () => {
+  assert.equal(scrollThumb(10, 20, 0), undefined, "everything fits: no thumb");
+  assert.deepEqual(scrollThumb(100, 10, 0), { from: 0, to: 1 });
+  assert.deepEqual(scrollThumb(100, 10, 90), { from: 9, to: 10 });
+  assert.deepEqual(scrollThumb(20, 10, 5), { from: 3, to: 8 });
+  assert.equal(detailWindow(50, 10, 100), 40, "a detail stops when its last line shows");
+  assert.equal(detailWindow(5, 10, 3), 0);
+  assert.equal(position(40, 10, 50), "41–50/50");
+  assert.deepEqual(tailWindow(["a", "b", "c", "d", "e"], 2, 0), { shown: ["d", "e"], start: 3, offset: 0 });
+  assert.deepEqual(tailWindow(["a", "b", "c", "d", "e"], 2, 99), { shown: ["a", "b"], start: 0, offset: 3 });
+  const scrolled = box(10, 6, ["1", "2", "3", "4"], { scroll: { total: 8, start: 4 } });
+  assert.deepEqual(scrolled.slice(1, 5).map((line) => line.at(-1)), ["│", "│", "┃", "┃"], "the thumb sits at the bottom of the track");
+  const panes = new Map();
+  notePane(panes, "detail", 1, 20, 30, 12, 99);
+  assert.deepEqual(panes.get("detail"), { top: 1, left: 20, width: 30, height: 12, total: 99, rows: 10 });
 });

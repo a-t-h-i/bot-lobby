@@ -9,8 +9,8 @@
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { ORACLE_LABEL, type LineComment, type PanelNote, type PanelQuestion, type PlannerMessage, type PlannerReply, type PlannerSeed } from "../planner.ts";
 import type { PlannedTask } from "../../state/backlog.ts";
-import { beside, bold, box, fill, italic, markdownLines, paint, selectRow, spinner, tail, wrap, wrapHanging, type LobbyTheme } from "../layout.ts";
-import { sourceColor } from "./home.ts";
+import { beside, bold, box, fill, italic, markdownLines, notePane, paint, selectRow, spinner, wrap, wrapHanging, type LobbyTheme, type PaneLayout } from "../layout.ts";
+import { sourceColor, tailWindow } from "./home.ts";
 
 export interface SeatView {
   label: string;
@@ -75,6 +75,8 @@ export interface PlanTabInput {
   query?: string;
   /** Filled with the draft pane's geometry during render. */
   layout?: PlanLayout;
+  /** Filled with where the conversation (`talk`) and the draft landed, for scrolling. */
+  panes?: PaneLayout;
 }
 
 export const PLAN_COLUMNS_MIN = 100;
@@ -93,7 +95,7 @@ function intro(input: PlanTabInput, width: number, theme?: LobbyTheme): string[]
     "",
     "Comment on any line of the draft: enter moves to the draft, ↑↓ pick a line (or click it), c comments. When the panel agrees, s saves the plan to the pending tasks list. While browsing (esc), 1-4 seat or unseat DEV, DESIGN, QA and RESEARCH.",
     "",
-    paint(theme, "dim", `oracle: ${input.profile}`),
+    paint(theme, "dim", `oracle: ${input.profile} (m changes it; each seat uses its domain's settings, alt+s)`),
     ...members.map((seat) => paint(theme, "dim", `${seat.label.toLowerCase()}: ${seat.seated ? seat.profile ?? "" : "not seated"}`)),
   ];
   return text.flatMap((line) => wrap(line, width));
@@ -212,7 +214,10 @@ export function renderPlan(input: PlanTabInput, width: number, height: number, t
   const talkHeight = wide ? bodyHeight : Math.max(3, Math.ceil(bodyHeight * 0.5));
   const draftHeight = wide ? bodyHeight : bodyHeight - talkHeight;
   const talkLines = conversationLines(view, talkWidth - 4, theme, input.query);
-  const talk = box(talkWidth, talkHeight, tail(talkLines, talkHeight - 2, input.offset), { title: "Conversation", ...(input.query ? { right: "filtered" } : {}), focused: input.focus === "talk", theme });
+  const talkView = tailWindow(talkLines, talkHeight - 2, input.offset);
+  const talkNote = [talkView.offset > 0 ? `↓${talkView.offset}` : "", input.query ? "filtered" : ""].filter(Boolean).join(" · ");
+  const talk = box(talkWidth, talkHeight, talkView.shown, { title: "Conversation", ...(talkNote ? { right: talkNote } : {}), focused: input.focus === "talk", scroll: { total: talkLines.length, start: talkView.start }, theme });
+  notePane(input.panes, "talk", header.length, 0, talkWidth, talkHeight, talkLines.length);
   const draft = draftLines(view, draftWidth - 4, theme);
   const rows = Math.max(0, draftHeight - 2);
   const start = Math.max(0, Math.min(input.draftOffset, Math.max(0, draft.length - rows)));
@@ -220,7 +225,8 @@ export function renderPlan(input: PlanTabInput, width: number, height: number, t
   const shown = draft.slice(start, start + rows).map((entry, index) => selectRow(theme, entry.text, draftWidth - 4, start + index === cursor, true));
   const draftTitle = view.reply?.status === "ready" ? "Plan ✓" : "Draft plan";
   const position = draft.length > rows ? `${start + 1}-${Math.min(draft.length, start + rows)}/${draft.length}` : "";
-  const draftPane = draftHeight >= 3 ? box(draftWidth, draftHeight, shown, { title: draftTitle, ...(position ? { right: position } : {}), focused: input.focus === "draft", theme }) : [];
+  const draftPane = draftHeight >= 3 ? box(draftWidth, draftHeight, shown, { title: draftTitle, ...(position ? { right: position } : {}), focused: input.focus === "draft", scroll: { total: draft.length, start }, theme }) : [];
+  if (draftHeight >= 3) notePane(input.panes, "draft", header.length + (wide ? 0 : talkHeight), wide ? talkWidth + 1 : 0, draftWidth, draftHeight, draft.length);
   if (input.layout) {
     Object.assign(input.layout, {
       draftTop: header.length + (wide ? 0 : talkHeight) + 1,

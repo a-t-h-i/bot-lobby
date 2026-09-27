@@ -9,6 +9,7 @@ import { matchesKey, type KeyId } from "@earendil-works/pi-tui";
 export const LOBBY_ACTIONS = {
   hide: { key: "alt+l", help: "hide the lobby (back to pi)" },
   help: { key: "alt+h", help: "show or hide these keys" },
+  settings: { key: "alt+s", help: "bot-lobby settings: each agent's model and thinking, the lobby" },
   search: { key: "ctrl+f", help: "search the current tab" },
   nextTab: { key: "tab", help: "next tab" },
   prevTab: { key: "shift+tab", help: "previous tab" },

@@ -7,7 +7,11 @@
 import type { Task } from "../../schemas/task.ts";
 import type { ActivityEntry, ChatEntry, ThoughtEntry } from "../feed.ts";
 import type { LobbyPanel } from "../../schemas/configuration.ts";
-import { beside, bold, box, clock, fill, italic, markdownHanging, paint, since, spinner, tail, wrap, wrapHanging, type LobbyColor, type LobbyTheme } from "../layout.ts";
+import { beside, bold, box, clock, fill, italic, markdownHanging, notePane, paint, since, spinner, wrap, wrapHanging, type LobbyColor, type LobbyTheme, type PaneLayout } from "../layout.ts";
+
+/** The Lobby tab's scrollable panes. */
+export const HOME_PANES = ["conversation", "activity", "thinking"] as const;
+export type HomePane = (typeof HOME_PANES)[number];
 
 export interface HomeInput {
   task?: Task;
@@ -23,8 +27,12 @@ export interface HomeInput {
   /** Active tasks owned by other sessions, and saved plans waiting to start. */
   others: number;
   pending: number;
-  /** Lines of conversation scrollback. */
-  chatOffset: number;
+  /** How far each pane is scrolled back, in lines from its newest; 0 follows the newest. */
+  offsets?: Partial<Record<HomePane, number>>;
+  /** The pane the arrow keys scroll; its border lights up. */
+  focus?: HomePane;
+  /** Filled with where each pane landed and how much it holds. */
+  panes?: PaneLayout;
   tick: number;
   now: number;
   /** Which panes show. */
@@ -131,17 +139,24 @@ export function filterFeed(input: Pick<HomeInput, "chat" | "activity" | "thought
   };
 }
 
-function conversation(input: HomeInput, chat: readonly ChatEntry[], width: number, height: number, theme?: LobbyTheme): string[] {
+function conversation(input: HomeInput, chat: readonly ChatEntry[], width: number, theme?: LobbyTheme): string[] {
   const searching = Boolean(input.query);
   const live = searching ? undefined : input.liveReply;
   const busy = !searching && input.busy;
-  const all = chat.length > 0 || live || busy ? chatLines(chat, width, theme, live, busy, input.tick) : emptyChat(input, width, theme);
-  return tail(all, height, input.chatOffset);
+  return chat.length > 0 || live || busy ? chatLines(chat, width, theme, live, busy, input.tick) : emptyChat(input, width, theme);
 }
 
-function activity(input: HomeInput, entries: readonly ActivityEntry[], width: number, height: number, theme?: LobbyTheme): string[] {
+function activity(input: HomeInput, entries: readonly ActivityEntry[], width: number, theme?: LobbyTheme): string[] {
   if (entries.length === 0) return [paint(theme, "dim", input.query ? `No activity matches "${input.query}".` : "No activity yet.")];
-  return tail(entries.slice(-Math.max(height, 1)).map((entry) => activityLine(entry, width, input.tick, theme)), height);
+  return entries.map((entry) => activityLine(entry, width, input.tick, theme));
+}
+
+/** The last `rows` lines, `offset` lines back from the newest (clamped), and where they start. */
+export function tailWindow(lines: readonly string[], rows: number, offset = 0): { shown: string[]; start: number; offset: number } {
+  const max = Math.max(0, lines.length - rows);
+  const back = Math.min(Math.max(0, offset), max);
+  const start = max - back;
+  return { shown: lines.slice(start, start + Math.max(0, rows)), start, offset: back };
 }
 
 /** The thought to show: a live one first, otherwise the newest. */
@@ -149,14 +164,17 @@ export function currentThought(thoughts: readonly ThoughtEntry[]): ThoughtEntry 
   return [...thoughts].reverse().find((entry) => entry.live) ?? thoughts.at(-1);
 }
 
-function thinking(input: HomeInput, thoughts: readonly ThoughtEntry[], width: number, height: number, theme?: LobbyTheme): string[] {
-  const thought = currentThought(thoughts);
-  const right = thought ? `${thought.source} · ${thought.live ? "thinking" : since(input.now - thought.at)}` : input.keys?.thinking;
-  const inner = Math.max(1, width - 4);
-  const body = thought
-    ? tail(wrap(thought.text, inner).map((line) => italic(theme, paint(theme, "dim", line))), height - 2)
-    : [paint(theme, "dim", input.query ? `No thought matches "${input.query}".` : "Thoughts from the oracle and every agent appear here, and only here.")];
-  return box(width, height, body, { title: "Thinking", ...(right ? { right } : {}), theme });
+/** Every thought, oldest first: who thought it, then the thought, dimmed. */
+export function thoughtLines(thoughts: readonly ThoughtEntry[], width: number, theme?: LobbyTheme): string[] {
+  return thoughts.flatMap((thought) => {
+    const lead = `${paint(theme, sourceColor(thought.source), thought.source.padEnd(SOURCE_WIDTH).slice(0, SOURCE_WIDTH))} `;
+    return wrapHanging(lead, italic(theme, paint(theme, "dim", thought.text.replace(/\s*\n\s*/g, " "))), width);
+  });
+}
+
+function thinkingContent(input: HomeInput, thoughts: readonly ThoughtEntry[], width: number, theme?: LobbyTheme): string[] {
+  if (thoughts.length > 0) return thoughtLines(thoughts, width, theme);
+  return [paint(theme, "dim", input.query ? `No thought matches "${input.query}".` : "Thoughts from the oracle and every agent appear here, and only here.")];
 }
 
 function sceneLines(input: HomeInput, width: number, height: number): string[] {
@@ -176,6 +194,12 @@ function hiddenHint(input: HomeInput, width: number, height: number, theme?: Lob
   return fill([...Array.from({ length: top }, () => ""), ...lines], height, width);
 }
 
+/** `↓12` when a pane is scrolled back from its newest line, before the pane's usual note. */
+function rightNote(offset: number, note: string | undefined): string | undefined {
+  const parts = [offset > 0 ? `↓${offset}` : "", note ?? ""].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : undefined;
+}
+
 /** The whole tab, exactly `height` lines of `width` columns; hidden panes give their room to the rest. */
 export function renderHome(input: HomeInput, width: number, height: number, theme?: LobbyTheme): string[] {
   if (height <= 0) return [];
@@ -187,22 +211,32 @@ export function renderHome(input: HomeInput, width: number, height: number, them
   const thinkHeight = !panels.thinking ? 0 : !showMain ? rest : rest >= 18 ? Math.max(5, Math.floor(rest * 0.25)) : rest >= 10 ? 4 : 0;
   const main = rest - thinkHeight;
   if (!showMain && !panels.thinking) return fill([...scene, ...hiddenHint(input, width, rest, theme)], height, width);
-  const searchNote = input.query ? `${feed.chat.length} match${feed.chat.length === 1 ? "" : "es"}` : input.keys?.conversation;
-  const chatTitle = input.task ? `Conversation · ${input.task.id}` : "Conversation";
-  const chatBox = (w: number, h: number) => box(w, h, conversation(input, feed.chat, w - 4, h - 2, theme), { title: chatTitle, ...(searchNote ? { right: searchNote } : {}), theme });
-  const activityNote = input.query ? `${feed.activity.length} match${feed.activity.length === 1 ? "" : "es"}` : input.keys?.activity;
-  const activityBox = (w: number, h: number) => box(w, h, activity(input, feed.activity, w - 4, h - 2, theme), { title: "Activity", ...(activityNote ? { right: activityNote } : {}), theme });
+  const matches = (count: number) => `${count} match${count === 1 ? "" : "es"}`;
+  /** One scrollable pane: its lines, tailed to its rows and scrolled back by its offset, in a box that records where it sits. */
+  const pane = (name: HomePane, title: string, note: string | undefined, lines: (inner: number) => string[]) => (top: number, left: number, w: number, h: number): string[] => {
+    const all = lines(Math.max(1, w - 4));
+    const view = tailWindow(all, h - 2, input.offsets?.[name] ?? 0);
+    notePane(input.panes, name, top, left, w, h, all.length);
+    const right = rightNote(view.offset, note);
+    return box(w, h, view.shown, { title, ...(right ? { right } : {}), focused: input.focus === name, scroll: { total: all.length, start: view.start }, theme });
+  };
+  const chatBox = pane("conversation", input.task ? `Conversation · ${input.task.id}` : "Conversation", input.query ? matches(feed.chat.length) : input.keys?.conversation, (inner) => conversation(input, feed.chat, inner, theme));
+  const activityBox = pane("activity", "Activity", input.query ? matches(feed.activity.length) : input.keys?.activity, (inner) => activity(input, feed.activity, inner, theme));
+  const thought = currentThought(feed.thoughts);
+  const thinkingNote = thought ? `${thought.source} · ${thought.live ? "thinking" : since(input.now - thought.at)}` : input.keys?.thinking;
+  const thinkingBox = pane("thinking", "Thinking", thinkingNote, (inner) => thinkingContent(input, feed.thoughts, inner, theme));
+  const top = scene.length;
   let body: string[] = [];
   if (main > 0 && panels.conversation && panels.activity) {
     if (width >= HOME_COLUMNS_MIN) {
       const left = Math.round((width - 1) * 0.56);
-      body = beside([chatBox(left, main), activityBox(width - 1 - left, main)]);
+      body = beside([chatBox(top, 0, left, main), activityBox(top, left + 1, width - 1 - left, main)]);
     } else {
       const chatHeight = Math.max(3, Math.ceil(main * 0.6));
-      body = [...chatBox(width, chatHeight), ...(main - chatHeight >= 3 ? activityBox(width, main - chatHeight) : [])];
+      body = [...chatBox(top, 0, width, chatHeight), ...(main - chatHeight >= 3 ? activityBox(top + chatHeight, 0, width, main - chatHeight) : [])];
     }
-  } else if (main > 0 && panels.conversation) body = chatBox(width, main);
-  else if (main > 0 && panels.activity) body = activityBox(width, main);
-  const think = thinkHeight >= 3 ? thinking(input, feed.thoughts, width, thinkHeight, theme) : [];
+  } else if (main > 0 && panels.conversation) body = chatBox(top, 0, width, main);
+  else if (main > 0 && panels.activity) body = activityBox(top, 0, width, main);
+  const think = thinkHeight >= 3 ? thinkingBox(top + main, 0, width, thinkHeight) : [];
   return fill([...scene, ...fill(body, main), ...think], height, width);
 }

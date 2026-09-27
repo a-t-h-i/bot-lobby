@@ -30,6 +30,7 @@ import { execCommand, IssuesState } from "./issues.ts";
 import { LobbyView, type LobbyHost, type TabId } from "./view.ts";
 import type { LobbyTheme } from "./layout.ts";
 import { createMarkdownRenderer } from "./markdown.ts";
+import { openEntrySettings, openSettings } from "../pi/settings-ui.ts";
 
 export const ANCHOR_KEY = "bot-lobby-anchor";
 /** How often the owning session looks for new plan comments. */
@@ -58,6 +59,8 @@ interface Runtime {
   asking: boolean;
   /** The lobby turned the terminal's mouse reporting on (pi's regular screen only). */
   mouse: boolean;
+  /** Settings opened from the lobby are on screen; the lobby stays aside until they close. */
+  inSettings: boolean;
 }
 
 let runtime: Runtime | undefined;
@@ -280,6 +283,7 @@ function host(state: Runtime, tui: TUI): LobbyHost {
     panels: () => loadConfig().lobby.panels,
     savePanels: (panels) => savePanels(panels),
     keys: () => loadConfig().lobby.keys,
+    openSettings: (entry) => lobbySettings(state, entry),
     seatLabel: (member) => {
       const profile = seatProfile(state, member);
       return `${profile.model ?? "session model"} · ${profile.thinking}`;
@@ -291,6 +295,34 @@ function host(state: Runtime, tui: TUI): LobbyHost {
     },
     requestRender: () => tui.requestRender(),
   };
+}
+
+/**
+ * bot-lobby's settings (or one agent's entry) from inside the lobby. The
+ * lobby stays aside for the whole visit, not only for each menu, so it does
+ * not flash between them, and rereads the config when it comes back.
+ */
+async function lobbySettings(state: Runtime, entry?: "quickfix" | "planner"): Promise<void> {
+  if (state.inSettings) return;
+  state.inSettings = true;
+  setMouse(state, false);
+  state.handle?.setHidden(true);
+  try {
+    if (entry) await openEntrySettings(state.pi, state.ctx, entry);
+    else await openSettings(state.pi, state.ctx);
+  } catch (error) {
+    state.ctx.ui.notify(`bot-lobby: settings failed — ${(error as Error).message}`, "warning");
+  } finally {
+    state.inSettings = false;
+    state.asideForPrompt = false;
+    if (state.visible && state.handle) {
+      state.handle.setHidden(false);
+      state.handle.focus();
+      setMouse(state, true);
+    }
+    state.view?.reloadConfig();
+    rerender();
+  }
 }
 
 /** Remember which panes show, keeping every other setting as the file has it now. */
@@ -373,7 +405,7 @@ export function autoOpenLobby(): void {
 /** Step aside while pi shows a dialog (an approval, a question), and come back after. */
 function promptStarted(): void {
   const state = runtime;
-  if (!state?.visible || !state.handle) return;
+  if (!state?.visible || !state.handle || state.inSettings) return;
   state.asideForPrompt = true;
   setMouse(state, false);
   state.handle.setHidden(true);
@@ -381,7 +413,7 @@ function promptStarted(): void {
 
 function promptEnded(): void {
   const state = runtime;
-  if (!state?.asideForPrompt || !state.handle) return;
+  if (!state?.asideForPrompt || !state.handle || state.inSettings) return;
   state.asideForPrompt = false;
   if (!state.visible) return;
   state.handle.setHidden(false);
@@ -419,6 +451,7 @@ export function initLobby(pi: ExtensionAPI, ctx: ExtensionContext, configDir: st
     asideForPrompt: false,
     asking: false,
     mouse: false,
+    inSettings: false,
     scene: new ZenScene(),
     quickfix: undefined as unknown as QuickFixQueue,
     issues: new IssuesState(execCommand, ctx.cwd, rerender),

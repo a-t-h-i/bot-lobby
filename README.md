@@ -133,7 +133,9 @@ or without a task.
   collapses them there). The oracle's replies render as Markdown. Every pane
   can be hidden and brought back — `alt+z` the scene, `alt+c` the
   conversation, `alt+a` the activity log, `alt+k` thinking — and the rest take
-  its room; the choice is remembered (`lobby.panels`). The prompt talks to the
+  its room; the choice is remembered (`lobby.panels`). Each pane scrolls on
+  its own (see **Scrolling** below), and a pane scrolled back stays on what
+  you are reading while new lines arrive. The prompt talks to the
   oracle (while it works, enter steers the running turn; `esc` stops it); with
   no task, it starts one.
 - **2 Tasks** — every task in the project: this session's, the ones other pi
@@ -175,12 +177,16 @@ or without a task.
   panel with your answers — or starts a round by itself when no question is
   open. While browsing, `1`–`4` seat or unseat DEV, DESIGN, QA and RESEARCH
   for the next round, `s` saves the plan to the pending tasks list, `n` starts
-  over, `r` retries a round that failed or lost a seat, and `x` stops one.
+  over, `r` retries a round that failed or lost a seat, `x` stops one, and `m`
+  opens the oracle's (Planner) settings.
 - **4 Quick fix** — a direct prompt, the way you would ask pi, that skips the
   whole workflow: one coding agent (full tools) makes the change right away
   while any task keeps running. Quick fixes run one at a time in the order you
   send them; each shows its steps and final report, and `x` cancels one. A
   request that turns out to be large is reported back instead of attempted.
+  `m` opens the quick fix agent's settings — model, thinking level, time
+  limit and instructions — right there (the same entry as in
+  `/bot-lobby settings`); the tab shows what it runs on.
 - **5 Metrics** — model performance across every Master turn, subagent run,
   quick fix, planning seat and oracle planning turn, as a dashboard: tiles for
   runs (with a sparkline of recent run times), success rate, average and p90
@@ -206,17 +212,30 @@ typing). These work in both modes:
 | --- | --- |
 | `alt+l` | hide the lobby (back to pi) |
 | `alt+h` (or `?` while browsing) | show every key, and the current tab's |
+| `alt+s` | bot-lobby settings: every agent's model, thinking and time limit, and the lobby's switches |
 | `ctrl+f` (or `/` while browsing) | search the current tab |
 | `tab` / `shift+tab`, `alt+1`…`alt+5` | switch tabs |
 | `alt+z` / `alt+c` / `alt+a` / `alt+k` | show or hide the zen scene / conversation / activity log / thinking |
-| `pageup` / `pagedown` | scroll a page |
+| `pageup` / `pagedown` | scroll the focused pane a page |
 | `ctrl+c` | clear the prompt, or hide the lobby when it is empty |
 
 Every shortcut can be rebound under `lobby.keys` in the config, by action name:
-`hide`, `help`, `search`, `nextTab`, `prevTab`, `toggleScene`,
+`hide`, `help`, `settings`, `search`, `nextTab`, `prevTab`, `toggleScene`,
 `toggleConversation`, `toggleActivity`, `toggleThinking`, `scrollUp`,
 `scrollDown` — e.g. `"keys": { "toggleThinking": "alt+t" }`. Pick keys that
 never type a character (`alt+…`, `ctrl+…`, `f1`…).
+
+**Scrolling.** Every pane scrolls on its own and shows a scrollbar in its
+right border when it holds more than fits. While browsing, `←`/`→` move
+between the tab's panes (the conversation, activity log and thinking on
+Lobby; the conversation and draft on Plan; the list and detail on Tasks and
+Quick fix) and the focused one lights up; `↑`/`↓` scroll it a line (or move
+a list's selection, or the draft's cursor), `pageup`/`pagedown` a page, and
+`home`/`end` jump to its oldest line or back to its newest. The conversation,
+activity log and thinking are newest-last: scrolled back, a pane shows `↓N`
+for the lines below it and holds still while new ones arrive; `end` follows
+the newest again. Details stop at their last line. The Thinking pane keeps
+every recent thought, so earlier ones are a scroll away.
 
 **Search.** `ctrl+f` opens a search bar above the prompt; as you type, the tab
 narrows to what matches and every match is highlighted: the conversation,
@@ -226,8 +245,9 @@ highlighted); jobs on Quick fix; runs (by agent, model, thinking level, kind or
 task) on Metrics. `enter` keeps the search while you browse the results,
 `esc` clears it, and each tab keeps its own.
 
-**Mouse.** Clicking a tab opens it, clicking a draft plan line comments on it,
-clicking the prompt starts typing, and the wheel scrolls. In pi's regular
+**Mouse.** Clicking a tab opens it, clicking a pane gives it the keys,
+clicking a draft plan line comments on it, clicking the prompt starts typing,
+and the wheel scrolls whichever pane is under the pointer. In pi's regular
 screen the lobby turns mouse reporting on only while it is showing (hold
 `shift` to select text with the mouse); in full-screen pi, pi reports the
 mouse itself. `"lobby": { "mouse": false }` turns clicks off.
