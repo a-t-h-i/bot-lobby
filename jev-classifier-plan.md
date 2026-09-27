@@ -7,9 +7,10 @@ Branch `claude/dev-lobby-jev-classifier-g4neej`.
 
 - Phase 1 — round limiter: merged (#7).
 - Phase 2 — classifier core: merged (#8).
-- Phase 3 — planning seats (per round, pins) and obvious answers (confident
-  and the recommended option; one automatic round when every question is
-  settled).
+- Phase 3 — planning seats and obvious answers: merged (#9).
+- Phase 4 — likely files for scouts, workers, quick fixes and planning
+  rounds, plus `find_relevant_files` inside subagents; secrets never
+  indexed.
 
 ## Phase 0 findings (spike)
 

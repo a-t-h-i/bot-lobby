@@ -9,6 +9,7 @@ import { registerDeskClient } from "./desk/client-extension.ts";
 import { registerLobbyEvents } from "./lobby/runtime.ts";
 import { registerOwner } from "./pi/owner.ts";
 import { registerClassifier } from "./classifier/instance.ts";
+import { registerClassifierTools } from "./classifier/tools.ts";
 
 export default function (pi: ExtensionAPI): void {
   // First, so every session_start handler below finds the classifier bound to this session's keys.
@@ -22,4 +23,6 @@ export default function (pi: ExtensionAPI): void {
   registerOrchestrateTool(pi, CONFIG_DIR_NAME);
   // Parallel workers share files through the master's file desk.
   if (isSubagentProcess()) registerDeskClient(pi);
+  // Subagents look files up with the classifier (the engine allows the tool only while file hints are on).
+  if (isSubagentProcess()) registerClassifierTools(pi);
 }

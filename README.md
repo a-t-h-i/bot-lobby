@@ -697,6 +697,21 @@ what it decided, its time and its tokens) and kept out of the agent tables.
   its pick *is* the recommended option, at `autoAnswerAt` (0.9) and ahead of
   the runner-up by `autoAnswerMargin` (0.5). Approvals are never answered
   for you.
+- **File hints** (`files`): before a scout, worker, quick fix or planning
+  round starts, the repository's files are ranked against its instruction
+  and the agent gets a short **Likely files** list (at most
+  `fileHints.topK`, 8, each at `fileRelevantAt` 0.5 or more) to open before
+  it searches. Each file is judged on an excerpt of at most 400 characters —
+  its leading comment, imports and signatures (headings for Markdown) —
+  cached in `.pi/bot-lobby/cache/files.json` and refreshed by size and
+  modification time. A large repository is first narrowed by shared words
+  (`fileHints.maxCandidates`, 480), then judged in parallel batches. Ranking
+  gets `fileHints.budgetMs` (1.5 s); after that the agent starts without it.
+  No list is shown when nothing stands out. Agents also get a
+  `find_relevant_files` tool: describe what you need in plain words and it
+  returns the ranked paths. Files git ignores, bot-lobby's own state,
+  binaries, lockfiles and secrets (`.env*`, keys, certificates, `secrets/`,
+  `.ssh/`, `.npmrc` …) are never indexed.
 
 **What leaves your machine.** Only what a decision needs, clipped: the
 planning conversation and draft for seats and answers, a request or step
@@ -919,7 +934,7 @@ src/
 │   ├── planner.ts            The planning panel: seats and the oracle per round, reply parsing, saving a plan
 │   ├── issues.ts             GitHub issues through the gh CLI
 │   └── layout.ts             Boxes, exact-width columns, wrapping, highlights, bars, meters and sparklines
-├── classifier/               Jev: the System One client, hosts and keys (pi's /login typesafe), the facade every decision calls
+├── classifier/               Jev: the System One client, hosts and keys (pi's /login typesafe), the facade every decision calls; planning seats, obvious answers, likely files and find_relevant_files
 ├── state/                    Project root, config, task persistence, state mutation, comments, inbox, auto mode, backlog, metrics
 ├── schemas/                  Task, agent, findings, configuration types
 └── pi/                       Commands, lifecycle, orchestrate tool, status widget, the owner's clock (deliveries, auto mode)

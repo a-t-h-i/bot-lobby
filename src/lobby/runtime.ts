@@ -29,7 +29,7 @@ import { modelLookup } from "../pi/tools.ts";
 import { startPlannedTask, startTask } from "../pi/start-task.ts";
 import type { LobbyAgentKind, LobbyPanel, PanelMember } from "../schemas/configuration.ts";
 import { chatFromEntries, lobbyFeed, narrateEvent, type AgentEventLike } from "./feed.ts";
-import { classifier } from "../classifier/instance.ts";
+import { classifier, hintsFor } from "../classifier/instance.ts";
 import { launchPi, SessionRegistry, type BackgroundSession, type SessionLauncher } from "./sessions.ts";
 import { SessionChats } from "./session-files.ts";
 import { answerMessage, dialogAsker, loadAskTool, questionnaires, toolAsker, type Asker } from "./ask.ts";
@@ -418,6 +418,7 @@ function newPlanner(state: Runtime, seed?: PlannerSeed, seats?: readonly PanelMe
     panel: seats ?? config.lobby.planningPanel,
     maxRounds: () => loadConfig().lobby.maxPlanningRounds,
     classifier: classifier(),
+    hints: hintsFor({ cwd: state.ctx.cwd, root: state.root, configDir: state.configDir }),
     stallTimeoutMs: workflow.stallTimeoutMs,
     toolStallTimeoutMs: workflow.toolStallTimeoutMs,
     feed: lobbyFeed,
@@ -732,6 +733,7 @@ export function initLobby(pi: ExtensionAPI, ctx: ExtensionContext, configDir: st
     notify: (message, level) => {
       if (!state.visible) ctx.ui.notify(message, level);
     },
+    hints: hintsFor({ cwd: ctx.cwd, root, configDir }),
   });
   runtime = state;
   lobbyFeed.clear();

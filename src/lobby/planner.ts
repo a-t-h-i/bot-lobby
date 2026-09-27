@@ -32,6 +32,7 @@ import { MAX_QUESTIONS, type AskResult } from "./ask.ts";
 import type { Classifier } from "../classifier/classifier.ts";
 import { chooseSeats } from "../classifier/seats.ts";
 import { autoAnswer, type AutoAnswer } from "../classifier/answers.ts";
+import type { FileHinter } from "../classifier/files.ts";
 
 /** Seats and the oracle read the repository to ask informed questions; they never edit. */
 export const PLANNER_TOOLS: readonly string[] = ["read", "grep", "find", "ls"];
@@ -133,6 +134,8 @@ export interface PlannerDeps {
   maxRounds?: () => number;
   /** Chooses the round's seats and answers obvious questions when it is on; absent, every seat sits and you answer everything. */
   classifier?: Classifier;
+  /** Likely files for the round (idea and latest answers), and the lookup tool, while file hints are on. */
+  hints?: FileHinter;
 }
 
 /** What the user's turn says when the classifier settled every question of a round. */
@@ -610,6 +613,22 @@ export class PlanningSession {
     return outcome;
   }
 
+  /** The read-only tools a seat (or the oracle) gets, plus the file lookup while hints are on. */
+  private tools(base: readonly string[]): readonly string[] {
+    const extra = this.deps.hints?.tools() ?? [];
+    return extra.length > 0 ? [...base, ...extra] : base;
+  }
+
+  /** The round's Likely files, ranked once against the idea and the latest answers. */
+  private async likely(signal: AbortSignal): Promise<string> {
+    if (!this.deps.hints) return "";
+    try {
+      return await this.deps.hints.block(`${this.idea()}\n\n${this.latest()}`, signal);
+    } catch {
+      return "";
+    }
+  }
+
   private async runMember(state: MemberState, transcript: string, signal: AbortSignal): Promise<MemberOutcome> {
     const member = state.member;
     const label = MEMBER_LABELS[member];
@@ -617,7 +636,7 @@ export class PlanningSession {
     const outcome = await this.run(label, "panel", profile, {
       task: `${transcript}\n\nYou are ${label} on the planning panel${roundNote(this.turns, this.limit)}: ask your seat's open questions, or declare READY.`,
       systemPrompt: memberPrompt(member, profile.instructions),
-      tools: member === "researcher" ? RESEARCH_PANEL_TOOLS : PLANNER_TOOLS,
+      tools: this.tools(member === "researcher" ? RESEARCH_PANEL_TOOLS : PLANNER_TOOLS),
     }, signal, (step) => (state.step = step));
     if (outcome.status === "success") {
       state.reply = parseMemberReply(outcome.output);
@@ -652,12 +671,12 @@ export class PlanningSession {
     this.step = "reading the conversation";
     this.deps.onChange?.();
     try {
-      const seated = await this.chooseSeats(eligible, controller.signal);
+      const [seated, likely] = await Promise.all([this.chooseSeats(eligible, controller.signal), this.likely(controller.signal)]);
       if (controller.signal.aborted) throw new Error("stopped");
       this.members = seated.map((member) => ({ member, status: "thinking", step: "reading the conversation" }));
       this.step = this.members.length > 0 ? "waiting for the panel" : "reading the conversation";
       this.deps.onChange?.();
-      const transcript = plannerTranscript(this.messages, this.seed, this.reply?.plan, "");
+      const transcript = [plannerTranscript(this.messages, this.seed, this.reply?.plan, ""), likely].filter(Boolean).join("\n\n");
       const outcomes = await Promise.all(this.members.map((state) => this.runMember(state, transcript, controller.signal)));
       if (controller.signal.aborted) throw new Error("stopped");
       this.notes = PANEL_MEMBERS.flatMap((member) => (this.memberNotes.get(member) ?? []).map((text) => ({ from: MEMBER_LABELS[member], text })));
@@ -665,9 +684,9 @@ export class PlanningSession {
       this.deps.onChange?.();
       const profile = this.deps.profile();
       const lead = await this.run(ORACLE_LABEL, "planner", profile, {
-        task: `${plannerTranscript(this.messages, this.seed, this.reply?.plan, "")}\n\n${panelSection(outcomes)}\n\n${oracleClosing(mode, this.turns, limit)}`,
+        task: `${transcript}\n\n${panelSection(outcomes)}\n\n${oracleClosing(mode, this.turns, limit)}`,
         systemPrompt: plannerPrompt(profile.instructions),
-        tools: PLANNER_TOOLS,
+        tools: this.tools(PLANNER_TOOLS),
       }, controller.signal, (step) => (this.step = step));
       if (controller.signal.aborted) throw new Error("stopped");
       this.finishRound(outcomes, lead, mode);
