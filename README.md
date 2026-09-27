@@ -713,6 +713,22 @@ what it decided, its time and its tokens) and kept out of the agent tables.
   `quickFixLargeAt` (0.8) is **held** instead of started (`‖ looks like a
   task`): on the Quick fix tab `r` runs it anyway and `t` starts it as a
   task in a new session.
+- **Effort routing** (`effort`): before a worker, scout, quick fix or
+  planning seat runs, one call scores how much reasoning the step needs
+  (trivial, simple, moderate, complex). A **simple** step (at `simpleAt`,
+  0.7) runs one thinking level lower, never below `low`; a **trivial** one
+  (at `trivialAt`, 0.8) runs on the *Cheaper model* you pick under
+  Classifier (`classifier.effort.cheapModel`) at `low` thinking, clamped to
+  what that model supports — with none set, it only drops a thinking level.
+  Your configured model and thinking are the ceiling: a route only goes
+  down. A routed run that falls short (fails, stalls, times out, wraps up
+  early or returns an unusable report) runs again on the configured profile
+  — that is its retry — and the QA gate reviews everything as before.
+  Scouts keep their fixed thinking and may only change model; a planning
+  round scores once for every seat. The Master, the oracle, the QA gate and
+  the researcher are never routed. Receipts say `routed trivial 0.88: p/big ·
+  medium → p/cheap · low`, and every routed run's metric carries
+  `routedFrom`, so you can compare how routed runs fare.
 - **File hints** (`files`): before a scout, worker, quick fix or planning
   round starts, the repository's files are ranked against its instruction
   and the agent gets a short **Likely files** list (at most

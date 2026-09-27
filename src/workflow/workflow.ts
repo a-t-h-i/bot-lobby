@@ -49,6 +49,7 @@ import { describeRun, runLogEntry } from "../pi/run-summary.ts";
 import { nextStates } from "./transitions.ts";
 import type { FileHinter } from "../classifier/files.ts";
 import type { Classifier } from "../classifier/classifier.ts";
+import type { EffortRouter } from "../classifier/effort.ts";
 import { answerClarify } from "../classifier/triage.ts";
 import { appendMetrics, metricFromRun } from "../state/metrics.ts";
 import { markCommentsAddressed, pendingComments, readPlanComments } from "../state/comments.ts";
@@ -125,6 +126,8 @@ export interface WorkflowDeps {
   classifier?: Classifier;
   /** Re-reads a request after an amendment (the task's triage), when the classifier is on. */
   triage?: (request: string, signal?: AbortSignal) => Promise<Task["triage"]>;
+  /** Lowers thinking or the model for scouts and workers on steps the classifier judges simple or trivial. */
+  effort?: EffortRouter;
 }
 
 export interface WorkflowResult {
@@ -313,6 +316,7 @@ async function handleScout(task: Task, params: OrchestrateParams, deps: Workflow
       signal: deps.signal,
       onUpdate: deps.onUpdate,
       ...(deps.hints ? { hints: deps.hints } : {}),
+      ...(deps.effort ? { effort: deps.effort } : {}),
     },
     deps.runProcess ?? spawnPiProcess,
   );
@@ -613,6 +617,7 @@ function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instructi
     signal: deps.signal,
     onUpdate: deps.onUpdate,
     ...(deps.hints ? { hints: deps.hints } : {}),
+    ...(deps.effort ? { effort: deps.effort } : {}),
   };
 }
 
