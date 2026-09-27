@@ -77,6 +77,8 @@ export interface PlanTabInput {
   layout?: PlanLayout;
   /** Filled with where the conversation (`talk`) and the draft landed, for scrolling. */
   panes?: PaneLayout;
+  /** The key that saves the plan, as the status line names it. */
+  saveKey?: string;
 }
 
 export const PLAN_COLUMNS_MIN = 100;
@@ -97,7 +99,7 @@ function statusLine(view: PlanView, input: PlanTabInput, theme?: LobbyTheme): st
   const count = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
   if (view.busy) parts.push(`${paint(theme, "accent", spinner(input.tick))} round ${view.turns}`);
   else if (view.error) parts.push(paint(theme, "error", `✗ ${view.error.split("\n")[0]} — r retries`));
-  else if (view.reply?.status === "ready") parts.push(paint(theme, "success", "✓ ready — s saves it"));
+  else if (view.reply?.status === "ready") parts.push(paint(theme, "success", `✓ ready — ${input.saveKey ?? "Ctrl+S"} saves it`));
   else if (view.awaitingAnswers) parts.push(paint(theme, "warning", `● ${count(view.questions.length, "question")} — enter ${view.answeredChunks > 0 ? "resumes" : "answers them"}`));
   if (view.lineComments.length > 0) parts.push(paint(theme, "accent", `◆ ${count(view.lineComments.length, "comment")} to send`));
   if (view.saved) parts.push(paint(theme, "success", `saved as ${view.saved.id}`));

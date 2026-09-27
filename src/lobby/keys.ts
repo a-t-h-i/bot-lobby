@@ -11,6 +11,7 @@ export const LOBBY_ACTIONS = {
   help: { key: "alt+h", help: "show or hide these keys" },
   settings: { key: "alt+s", help: "bot-lobby settings: each agent's model and thinking, the lobby" },
   search: { key: "ctrl+f", help: "search the current tab" },
+  savePlan: { key: "ctrl+s", help: "save the plan being made in the Plan tab to the pending tasks" },
   nextTab: { key: "tab", help: "next tab" },
   prevTab: { key: "shift+tab", help: "previous tab" },
   toggleScene: { key: "alt+z", help: "show or hide the oracle and agent animations" },
