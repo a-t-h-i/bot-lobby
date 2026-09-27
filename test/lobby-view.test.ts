@@ -11,7 +11,7 @@ import { QuickFixQueue } from "../src/lobby/quickfix.ts";
 import { IssuesState, type Exec } from "../src/lobby/issues.ts";
 import { PlanningSession, type PlannerSeed } from "../src/lobby/planner.ts";
 import { createTask, type Task } from "../src/schemas/task.ts";
-import type { PlannedTask } from "../src/state/backlog.ts";
+import { listPlannedTasks, type PlannedTask } from "../src/state/backlog.ts";
 import type { PlanComment } from "../src/state/comments.ts";
 import type { MetricRecord } from "../src/state/metrics.ts";
 import type { ProcessRunner } from "../src/execution/pi-runner.ts";
@@ -30,6 +30,7 @@ const KEY = {
   escape: "\x1b",
   enter: "\r",
   ctrlC: "\x03",
+  ctrlS: "\x13",
   up: "\x1b[A",
   down: "\x1b[B",
   alt: (key: string) => `\x1b${key}`,
@@ -312,16 +313,16 @@ test("the Quick fix prompt queues a job and x cancels the selected one", async (
   assert.ok(view.render(120).at(-1)!.includes("cancelling QF-1"));
 });
 
-test("the Plan prompt starts a planning session; s without a draft warns", () => {
+test("the Plan prompt starts a planning session; saving without a draft warns", () => {
   const { view, planner } = makeView();
   view.setTab("plan");
   type(view, "add dark mode");
   view.handleInput(KEY.enter);
   assert.equal(planner()?.messages[0]?.text, "add dark mode");
   assert.equal(planner()?.busy, true);
+  view.handleInput(KEY.ctrlS);
+  assert.ok(view.render(120).at(-1)!.includes("the first draft is still being written"));
   view.handleInput(KEY.escape);
-  view.handleInput("s");
-  assert.ok(view.render(120).at(-1)!.includes("there is no draft plan to save yet"));
   view.handleInput("x");
   assert.ok(view.render(120).at(-1)!.includes("stopping the panel"));
 });
@@ -870,4 +871,31 @@ test("alt+s opens bot-lobby's settings; m opens the quick fix or planner entry; 
   view.setTab("lobby");
   view.handleInput(KEY.alt("t"));
   assert.equal(view.panelShown("thinking"), false, "a key rebound in the settings works at once");
+});
+
+test("ctrl+s saves the plan while typing and from any tab; the Plan tab names the key", async () => {
+  const ready = ORACLE_REPLY.replace("GRILLING", "READY").replace(/## Questions[\s\S]*?## Plan/, "## Plan");
+  const { view, planner, root } = makeView({ panel: [], runProcess: answering(ready) });
+  view.setTab("plan");
+  type(view, "login page");
+  view.handleInput(KEY.enter);
+  await settle();
+  assert.equal(planner()!.reply?.status, "ready");
+  const lines = view.render(140);
+  assert.ok(lines.some((line) => line.includes("✓ ready — Ctrl+S saves it")), "the status line names the key");
+  assert.ok(lines.some((line) => line.includes("the plan is ready — Ctrl+S saves it, or reply to refine it")));
+  assert.equal(view.mode, "type");
+  type(view, "half a reply");
+  view.handleInput(KEY.ctrlS);
+  assert.equal(planner()!.saved?.id, "PLAN-login");
+  assert.match(view.render(140).at(-1)!.trimEnd(), /saved PLAN-login to the pending tasks — start it from the Tasks tab$/);
+  assert.ok(view.render(140).some((line) => line.includes("half a reply")), "the draft reply is left alone");
+  assert.ok(listPlannedTasks(root, ".pi").some((plan) => plan.id === "PLAN-login"));
+  view.setTab("tasks");
+  view.handleInput(KEY.ctrlS);
+  assert.match(view.render(140).at(-1)!, /saved PLAN-login/, "it works from another tab too");
+  const rebound = makeView({ keys: { savePlan: "alt+w" } }).view;
+  rebound.setTab("plan");
+  rebound.handleInput(KEY.alt("w"));
+  assert.match(rebound.render(140).at(-1)!, /no plan to save yet/, "lobby.keys rebinds it; with no session there is nothing to save");
 });

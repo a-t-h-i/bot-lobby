@@ -294,8 +294,8 @@ export function commentBlock(comments: readonly LineComment[]): string {
 
 /** What the panel said in a round, as the conversation shows it. */
 export function plannerSays(ready: boolean, questions: readonly PanelQuestion[]): string {
-  if (ready) return "The panel agrees the plan is clear. Press s to save it as a pending task, or keep refining.";
-  if (questions.length === 0) return "No open questions this round. Press s to save the draft, or add detail.";
+  if (ready) return "The panel agrees the plan is clear. Save it as a pending task, or keep refining.";
+  if (questions.length === 0) return "No open questions this round. Save the draft, or add detail.";
   return questions.map(questionLine).join("\n");
 }
 

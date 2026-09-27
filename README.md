@@ -181,8 +181,7 @@ or without a task.
   line is marked `◆` with your comment beneath it, and the comment goes to the
   panel with your answers — or starts a round by itself when no question is
   open. While browsing, `1`–`4` seat or unseat DEV, DESIGN, QA and RESEARCH
-  for the next round, `s` saves the plan to the pending tasks list, `n` starts
-  over, `r` retries a round that failed or lost a seat, `x` stops one, and `m`
+  for the next round, `n` starts over, `r` retries a round that failed or lost a seat, `x` stops one, and `m`
   opens the oracle's (Planner) settings.
 - **4 Quick fix** — a direct prompt, the way you would ask pi, that skips the
   whole workflow: one coding agent (full tools) makes the change right away
@@ -219,6 +218,7 @@ typing). These work in both modes:
 | `alt+h` (or `?` while browsing) | show every key, and the current tab's |
 | `alt+s` | bot-lobby settings: every agent's model, thinking and time limit, and the lobby's switches |
 | `ctrl+f` (or `/` while browsing) | search the current tab |
+| `ctrl+s` | save the plan from the Plan tab to the pending tasks — while typing too, from any tab |
 | `tab` / `shift+tab`, `alt+1`…`alt+5` | switch tabs |
 | `alt+z` | show or hide the oracle and agent animations (the task's status stays) |
 | `alt+c` / `alt+a` / `alt+k` | show or hide the conversation / activity log / thinking |
@@ -226,7 +226,7 @@ typing). These work in both modes:
 | `ctrl+c` | clear the prompt, or hide the lobby when it is empty |
 
 Every shortcut can be rebound under `lobby.keys` in the config, by action name:
-`hide`, `help`, `settings`, `search`, `nextTab`, `prevTab`, `toggleScene`,
+`hide`, `help`, `settings`, `search`, `savePlan`, `nextTab`, `prevTab`, `toggleScene`,
 `toggleConversation`, `toggleActivity`, `toggleThinking`, `scrollUp`,
 `scrollDown` — e.g. `"keys": { "toggleThinking": "alt+t" }`. Pick keys that
 never type a character (`alt+…`, `ctrl+…`, `f1`…).

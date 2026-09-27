@@ -529,6 +529,8 @@ export class LobbyView implements Component, Focusable {
         return;
       case "settings":
         return this.openSettings();
+      case "savePlan":
+        return this.savePlan();
       case "search":
         return this.searching ? this.closeSearch() : this.openSearch();
       case "nextTab":
@@ -934,6 +936,19 @@ export class LobbyView implements Component, Focusable {
     this.planCursor = 0;
   }
 
+  /** Save the planning session's draft to the pending tasks, from any tab and in either mode. */
+  savePlan(): void {
+    const session = this.host.planner();
+    if (!session?.reply?.plan) return this.say(session?.busy ? "the first draft is still being written" : "no plan to save yet — describe a task in the Plan tab", "warning");
+    try {
+      const saved = session.save();
+      this.say(`saved ${saved.id} to the pending tasks — start it from the Tasks tab${session.reply.status === "ready" ? "" : " (the panel had not agreed yet)"}`);
+    } catch (error) {
+      this.say((error as Error).message, "warning");
+    }
+    this.refreshData(true);
+  }
+
   /** The oracle puts the round's questions to the user through the questionnaire. */
   answerQuestions(): void {
     const session = this.host.planner();
@@ -1004,16 +1019,6 @@ export class LobbyView implements Component, Focusable {
     if (data === "r") {
       if (session?.retryable) void session.retry();
       else this.say("nothing to retry", "warning");
-      return true;
-    }
-    if (data === "s") {
-      try {
-        const saved = session?.save();
-        this.say(saved ? `saved ${saved.id} — start it from the Tasks tab when you are ready` : "nothing to save yet", saved ? "info" : "warning");
-      } catch (error) {
-        this.say((error as Error).message, "warning");
-      }
-      this.refreshData(true);
       return true;
     }
     if (data === "n") {
@@ -1272,6 +1277,7 @@ export class LobbyView implements Component, Focusable {
           const count = session.questions.length;
           return `press enter to answer ${count} question${count === 1 ? "" : "s"}, or type a reply`;
         }
+        if (session?.reply?.status === "ready") return `the plan is ready — ${keyLabel(this.keys.savePlan)} saves it, or reply to refine it`;
         return session && session.messages.length > 0 ? "reply to the panel" : "describe the task to plan";
       }
       case "quickfix":
@@ -1335,7 +1341,6 @@ export class LobbyView implements Component, Focusable {
           { key: "↑ ↓", text: "pick a draft line (draft) or scroll (conversation); PageUp/PageDown a page" },
           { key: "c / click", text: "comment on the picked draft line" },
           { key: "1-4", text: "seat or unseat DEV, DESIGN, QA, RESEARCH" },
-          { key: "s", text: "save the plan to the pending tasks" },
           { key: "n", text: "start a new plan" },
           { key: "x", text: "stop the round" },
           { key: "r", text: "retry a failed round or seat" },
@@ -1414,7 +1419,7 @@ export class LobbyView implements Component, Focusable {
       }
       case "plan":
         if (session?.awaitingAnswers) keys.push(["a", "answer"]);
-        if (session?.reply?.plan) keys.push(["c", "comment on a line"], ["s", "save"]);
+        if (session?.reply?.plan) keys.push([k("savePlan"), "save"], ["c", "comment on a line"]);
         if (session?.busy) keys.push(["x", "stop"]);
         keys.push(["n", "new"], ["1-4", "seats"]);
         break;
@@ -1498,6 +1503,7 @@ export class LobbyView implements Component, Focusable {
           ...(query ? { query } : {}),
           layout: this.planLayout,
           panes: this.panes,
+          saveKey: keyLabel(this.keys.savePlan),
         }, width, height, theme);
         if (!session) Object.assign(this.planLayout, { draftRows: 0, draftStart: 0, draftText: [] });
         this.planCursor = Math.min(this.planCursor, Math.max(0, this.planLayout.draftText.length - 1));
