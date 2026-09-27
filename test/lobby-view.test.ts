@@ -17,7 +17,7 @@ import type { MetricRecord } from "../src/state/metrics.ts";
 import type { ProcessRunner } from "../src/execution/pi-runner.ts";
 import { activityLine, chatLines, renderHome } from "../src/lobby/tabs/home.ts";
 import { renderTasks, taskDetailLines, taskRows } from "../src/lobby/tabs/tasks.ts";
-import { renderPlan, type PlanLayout, type PlanView, type SeatView } from "../src/lobby/tabs/plan.ts";
+import { renderPlan, rosterLines, type PlanLayout, type PlanView, type SeatView } from "../src/lobby/tabs/plan.ts";
 import { jobDetailLines } from "../src/lobby/tabs/quickfix.ts";
 import { renderIssues } from "../src/lobby/tabs/issues.ts";
 import { filterRecords, fittedColumns, renderMetrics } from "../src/lobby/tabs/metrics.ts";
@@ -369,7 +369,7 @@ test("the home tab puts the scene first, the thinking pane last, and stacks pane
   const input = { task: activeTask(), scene: () => ["SCENE"], chat: feed.chat, activity: feed.activity, thoughts: feed.thoughts, busy: false, others: 0, pending: 0, tick: 0, now: NOW, panels: ALL_PANELS };
   const wide = renderHome(input, 120, 30);
   assert.equal(wide[0], fit("SCENE", 120));
-  assert.ok(wide.some((line) => line.includes("╭ Conversation · TASK-login") && line.includes("╭ Activity")));
+  assert.ok(wide.some((line) => line.includes("╭ Conversation ─") && line.includes("╭ Activity")), "the task id lives in the tab bar, not the pane title");
   assert.ok(wide.some((line) => line.includes("╭ Thinking") && line.includes("DEV · just now")));
   assert.ok(wide.some((line) => line.includes("the router lives in a.ts")));
   const narrow = renderHome(input, 70, 30);
@@ -397,7 +397,7 @@ test("hidden panes give their room to the rest, and a search narrows every pane"
   const none = renderHome({ ...input, panels: { scene: false, conversation: false, activity: false, thinking: false } }, 120, 20);
   assert.ok(none.some((line) => line.includes("Every pane is hidden — Alt+C conversation · Alt+A activity · Alt+K thinking")));
   const searched = renderHome({ ...input, query: "router" }, 120, 20);
-  assert.ok(searched.some((line) => line.includes("you ▸ build the router")));
+  assert.ok(searched.some((line) => line.includes("● You")) && searched.some((line) => line.includes("▌ build the router")));
   assert.ok(!searched.some((line) => line.includes("On it.")));
   assert.ok(searched.some((line) => line.includes("editing router.ts")));
   assert.ok(!searched.some((line) => line.includes("reading a.ts")));
@@ -409,7 +409,7 @@ test("activity lines spin while pending and mark how a step ended", () => {
   assert.match(activityLine(base, 80, 0), /DEV {7}⠋ reading a\.ts…$/);
   assert.match(activityLine({ ...base, pending: false, kind: "error" }, 80, 0), /✗ reading a\.ts$/);
   assert.match(activityLine({ ...base, pending: false, kind: "success" }, 80, 0), /✓ reading a\.ts$/);
-  assert.deepEqual(chatLines([], 40, undefined, undefined, true, 0), ["oracle ▸ ⠋ working…"]);
+  assert.deepEqual(chatLines([], 40, undefined, undefined, true, 0), ["◆ Oracle                      ⠋ working…"]);
 });
 
 test("task rows group this session, other sessions, pending plans and recent tasks", () => {
@@ -477,6 +477,8 @@ test("the plan tab shows the roster, attributed questions with their options, th
   assert.equal(lines.length, 20);
   assert.ok(lines.some((line) => line.includes("Planning · Dark mode") && line.includes("● 2 questions — enter answers them")));
   assert.ok(lines.some((line) => line.includes("panel  ORACLE 1 question · DEV ⠋ reading api.ts · DESIGN 1 question · QA ✓ ready · RESEARCH off")));
+  const settled = planSession({ seats: [{ label: "DESIGN", seated: true, status: "done", questions: 0, ready: false }] });
+  assert.deepEqual(rosterLines(settled, 80, 0), ["panel  DESIGN done"], "a seat the oracle answered for is done, not '0 questions'");
   assert.ok(lines.some((line) => line.includes(" 1. ORACLE   Ship behind a flag?")));
   assert.ok(lines.some((line) => line.includes("○ Yes (Recommended) — ship dark first")));
   assert.ok(lines.some((line) => line.includes(" 2. DESIGN   Which pages?")));
@@ -898,4 +900,41 @@ test("ctrl+s saves the plan while typing and from any tab; the Plan tab names th
   rebound.setTab("plan");
   rebound.handleInput(KEY.alt("w"));
   assert.match(rebound.render(140).at(-1)!, /no plan to save yet/, "lobby.keys rebinds it; with no session there is nothing to save");
+});
+
+test("the conversation shows each turn under a speaker line with its time, your words in a band, events as rules", () => {
+  const at = new Date(2026, 8, 27, 12, 4).getTime();
+  const chat = [
+    { id: 1, at, role: "note" as const, text: "task started · add login" },
+    { id: 2, at, role: "you" as const, text: "add a login page" },
+    { id: 3, at: at + 60_000, role: "oracle" as const, text: "Proposal:\n\n- a form" },
+    { id: 4, at: at + 120_000, role: "you" as const, text: "use port 8080" },
+    { id: 5, at: at + 130_000, role: "you" as const, text: "and dark mode" },
+    { id: 6, at: at + 140_000, role: "note" as const, text: "✗ the oracle's turn failed: 429" },
+  ];
+  const lines = chatLines(chat, 44);
+  const header = (who: string, time: string) => `${who.padEnd(44 - time.length)}${time}`;
+  assert.deepEqual(lines, [
+    "───── task started · add login · 12:04 ─────",
+    "",
+    header("● You", "12:04"),
+    "  ▌ add a login page",
+    "",
+    header("◆ Oracle", "12:05"),
+    "  Proposal:",
+    "",
+    "  - a form",
+    "",
+    header("● You", "12:06"),
+    "  ▌ use port 8080",
+    "",
+    "  ▌ and dark mode",
+    "",
+    "✗ the oracle's turn failed: 429",
+  ], "a second message within minutes shares the header; failures stand out instead of becoming a rule");
+  const live = chatLines(chat.slice(0, 2), 44, undefined, "Writing the **plan**", true, 0);
+  assert.deepEqual(live.slice(-2), [header("◆ Oracle", "⠋ writing"), "  Writing the **plan**"]);
+  // With a theme that has backgrounds, your words sit in pi's user-message band.
+  const banded = chatLines(chat.slice(1, 2), 30, { fg: (_color, text) => text, bold: (text) => text, bg: (color, text) => `<${color}>${text}</${color}>` });
+  assert.equal(banded[1], `  <userMessageBg> ${"add a login page".padEnd(26)} </userMessageBg>`);
 });

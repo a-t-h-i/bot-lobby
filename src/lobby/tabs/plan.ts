@@ -9,8 +9,8 @@
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { ORACLE_LABEL, type LineComment, type PanelNote, type PanelQuestion, type PlannerMessage, type PlannerReply, type PlannerSeed } from "../planner.ts";
 import type { PlannedTask } from "../../state/backlog.ts";
-import { beside, bold, box, fill, fit, italic, markdownLines, notePane, paint, selectRow, spinner, wrap, wrapHanging, type LobbyTheme, type PaneLayout } from "../layout.ts";
-import { sourceColor, tailWindow } from "./home.ts";
+import { beside, bold, box, clock, fill, fit, italic, markdownLines, notePane, paint, selectRow, spinner, wrap, wrapHanging, type LobbyTheme, type PaneLayout } from "../layout.ts";
+import { sourceColor, speakerLine, tailWindow, youLines } from "./home.ts";
 
 export interface SeatView {
   label: string;
@@ -115,6 +115,8 @@ function seatCell(seat: SeatView, tick: number, theme?: LobbyTheme): string {
   if (seat.status === "failed") return `${name} ${paint(theme, "error", "✗ failed — r retries")}`;
   if (seat.status === "idle") return `${name} ${paint(theme, "dim", "·")}`;
   if (seat.ready) return `${name} ${paint(theme, "success", "✓ ready")}`;
+  // A seat whose questions the oracle settled itself has nothing waiting on you.
+  if (seat.questions === 0) return `${name} ${paint(theme, "dim", "done")}`;
   return `${name} ${paint(theme, "warning", `${seat.questions} question${seat.questions === 1 ? "" : "s"}`)}`;
 }
 
@@ -149,12 +151,14 @@ export function conversationLines(view: PlanView, width: number, theme?: LobbyTh
       .filter(({ question }) => matches(`${question.from} ${question.text} ${question.options.map((option) => option.label).join(" ")}`, query));
     if (message.role === "you" ? !matches(message.text, query) : message.questions?.length ? questions.length === 0 : !matches(message.text, query)) continue;
     if (lines.length > 0 && lines.at(-1) !== "") lines.push("");
+    // The same turns as the Lobby's conversation: who speaks and when, your words in a band.
+    const time = message.at > 0 ? clock(message.at) : "";
     if (message.role === "you") {
-      lines.push(...wrapHanging(`${bold(theme, paint(theme, "accent", "you"))} ${paint(theme, "dim", "▸")} `, message.text, width));
+      lines.push(speakerLine("you", width, theme, time), ...youLines(message.text, width, theme));
       continue;
     }
-    lines.push(`${bold(theme, paint(theme, "toolTitle", "panel"))} ${paint(theme, "dim", "▸")}`);
-    lines.push(...(questions.length > 0 ? questionLines(questions, width, theme) : wrap(message.text, width)));
+    lines.push(speakerLine("panel", width, theme, time));
+    lines.push(...(questions.length > 0 ? questionLines(questions, width, theme) : wrap(message.text, width).map((line) => (line ? `  ${line}` : ""))));
   }
   if (query && lines.length === 0) return wrap(paint(theme, "dim", `Nothing in the conversation matches "${query}".`), width);
   return lines;
