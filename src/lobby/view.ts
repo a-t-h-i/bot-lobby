@@ -148,6 +148,8 @@ export interface LobbyHost {
   answerPanel(): Promise<string>;
   /** The seats a new session starts with, from settings. */
   defaultPanel(): readonly PanelMember[];
+  /** Planning rounds before the oracle finalizes alone (`lobby.maxPlanningRounds`); 0 = unlimited. */
+  planningRounds?(): number;
   /** `model · thinking` a panel seat runs on. */
   seatLabel(member: PanelMember): string;
   issues: IssuesState;
@@ -1971,6 +1973,7 @@ export class LobbyView implements Component, Focusable {
           ...(session ? { session: this.planView(session) } : {}),
           profile: this.host.profileLabel("planner"),
           seats: this.seatViews(undefined),
+          limit: this.host.planningRounds?.() ?? 0,
           offset: this.planOffset,
           focus: this.planFocus,
           draftOffset: this.planDraftOffset,
@@ -2050,6 +2053,8 @@ export class LobbyView implements Component, Focusable {
       ...(session.step ? { step: session.step } : {}),
       ...(session.error ? { error: session.error } : {}),
       turns: session.turns,
+      limit: session.limit,
+      nextMode: session.nextMode,
       ...(session.seed ? { seed: session.seed } : {}),
       ...(session.saved ? { saved: session.saved } : {}),
       ...(session.title ? { title: session.title } : {}),
