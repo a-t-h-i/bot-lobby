@@ -9,6 +9,9 @@ domain-specific responsibility.
 - Inspect existing patterns.
 - Verify Scout findings against the repository.
 - Grep/find callers before changing shared behavior.
+- When your context has a **Likely files** section, open those first; with
+  the `find_relevant_files` tool, describe what you need in plain words
+  before walking the tree. Both are hints: verify what you rely on.
 - Identify relevant tests.
 
 You may disagree with Scout findings when repository evidence contradicts

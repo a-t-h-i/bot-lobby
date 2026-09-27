@@ -10,8 +10,11 @@ import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { isSubagentProcess } from "../pi/quiet.ts";
 import { Classifier } from "./classifier.ts";
 import { registerJevProvider, type KeySource, type KeyStatus } from "./hosts.ts";
+import { fileHinter, type FileHinter, type FileScope } from "./files.ts";
+import { lobbyFeed } from "../lobby/feed.ts";
 
 interface Binding {
+  cwd: string;
   root: string;
   configDir: string;
   keys: KeySource;
@@ -34,6 +37,16 @@ export function classifier(): Classifier {
   return instance;
 }
 
+/** Likely files for agents working in a tree, with what was found logged to the lobby's activity feed. */
+export function hintsFor(scope: FileScope): FileHinter {
+  return fileHinter(classifier(), scope, (text) => lobbyFeed.log("CLASSIFIER", text, "info"));
+}
+
+/** The tree this process's session works in, once it has started. */
+export function sessionScope(): FileScope | undefined {
+  return binding ? { cwd: binding.cwd, root: binding.root, configDir: binding.configDir } : undefined;
+}
+
 /** Where a pi provider's key comes from (never the key), once a session has started. */
 export function keyStatus(piProvider: string): KeyStatus | undefined {
   return binding?.status(piProvider);
@@ -49,6 +62,7 @@ export function registerClassifier(pi: ExtensionAPI, configDir: string): void {
   registerJevProvider(pi);
   pi.on("session_start", (_event, ctx) => {
     binding = {
+      cwd: ctx.cwd,
       root: detectProjectRoot(ctx.cwd, configDir),
       configDir,
       keys: (piProvider) => ctx.modelRegistry.getApiKeyForProvider(piProvider),
