@@ -376,6 +376,7 @@ function lobbyTheme(theme: Theme): LobbyTheme {
       italic: (text) => theme.italic(text),
       bg: (color, text) => theme.bg(color, text),
       markdown: renderMarkdown,
+      strike: (text) => theme.strikethrough(text),
     };
     lobbyThemes.set(theme, wrapped);
   }
