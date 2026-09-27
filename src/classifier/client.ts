@@ -6,7 +6,8 @@
  * it for decisions that do not need a large model.
  *
  * Kept dependency-free: one request type, an injectable `fetch` for tests,
- * a time limit per attempt and one retry on rate limits and server errors.
+ * a time limit per attempt and one retry on rate limits, server errors and
+ * unreachable hosts (a timeout is not retried).
  */
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
@@ -195,7 +196,8 @@ async function attempt(url: string, body: string, options: JevCallOptions): Prom
       });
     } catch (error) {
       if (options.signal?.aborted) throw error;
-      if (timedOut) throw new JevError(`timed out after ${options.timeoutMs} ms`, true);
+      // Not retried: the time limit already bounds an interactive decision, and every caller has a fallback.
+      if (timedOut) throw new JevError(`timed out after ${options.timeoutMs} ms`, false);
       throw new JevError(`could not reach ${url}: ${(error as Error).message}`, true);
     }
     const text = await response.text();
