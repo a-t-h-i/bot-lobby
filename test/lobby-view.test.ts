@@ -4,7 +4,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { visibleWidth, type TUI } from "@earendil-works/pi-tui";
-import { LobbyView, parseMouse, TAB_IDS, visibleTabs, type LobbyHost } from "../src/lobby/view.ts";
+import { LobbyView, parseMouse, TAB_IDS, visibleTabs, type LiveSession, type LobbyHost, type SwitchTarget } from "../src/lobby/view.ts";
 import { DEFAULT_CONFIG, type LobbyPanel, type PanelMember } from "../src/schemas/configuration.ts";
 import { LobbyFeed } from "../src/lobby/feed.ts";
 import { QuickFixQueue } from "../src/lobby/quickfix.ts";
@@ -59,7 +59,12 @@ interface Calls {
   sessionStarts: Array<{ request?: string; plan?: string; auto?: boolean }>;
   auto: Array<[string, boolean]>;
   inbox: Array<[string, string]>;
+  sessionInbox: Array<[string, string]>;
+  switches: SwitchTarget[];
   dialogs: string[];
+  archived: string[];
+  restored: string[];
+  deleted: Array<[string, "list" | "archive"]>;
 }
 
 interface ViewOptions {
@@ -77,11 +82,16 @@ interface ViewOptions {
   panel?: PanelMember[];
   /** Chats of other sessions, by pi session id. */
   chats?: Record<string, ChatEntry[]>;
+  /** Sessions running in other terminals. */
+  live?: LiveSession[];
+  archivedTasks?: Task[];
 }
 
 function makeView(options: ViewOptions = {}) {
   const root = mkdtempSync(join(tmpdir(), "bl-view-"));
-  const calls: Calls = { settings: [], answered: 0, savedPanels: [], oracle: [], comments: [], started: [], discarded: [], aborted: 0, hidden: 0, seeds: [], seats: [], sessionStarts: [], auto: [], inbox: [], dialogs: [] };
+  const calls: Calls = { settings: [], answered: 0, savedPanels: [], oracle: [], comments: [], started: [], discarded: [], aborted: 0, hidden: 0, seeds: [], seats: [], sessionStarts: [], auto: [], inbox: [], sessionInbox: [], switches: [], dialogs: [], archived: [], restored: [], deleted: [] };
+  let taskList: Task[] = options.tasks ?? (options.task ? [options.task] : []);
+  let archivedList: Task[] = options.archivedTasks ?? [];
   const sessions: BackgroundSession[] = [];
   const procs: FakeSessionProcess[] = [];
   const autoOn = new Set<string>();
@@ -101,7 +111,7 @@ function makeView(options: ViewOptions = {}) {
     advanceScene: () => 250,
     feed,
     masterBusy: () => options.busy === true,
-    tasks: () => options.tasks ?? (options.task ? [options.task] : []),
+    tasks: () => taskList,
     plans: () => options.plans ?? [],
     comments: (): PlanComment[] => [],
     metrics: (): MetricRecord[] => options.metrics ?? [],
@@ -167,6 +177,38 @@ function makeView(options: ViewOptions = {}) {
     sendToTask: (taskId, text) => {
       calls.inbox.push([taskId, text]);
       return `sent — the session driving ${taskId} passes it to its oracle`;
+    },
+    sendToSession: (sessionId, text) => {
+      calls.sessionInbox.push([sessionId, text]);
+      return "sent — that session passes it to its oracle within a few seconds";
+    },
+    liveSessions: () => options.live ?? [],
+    switchTo: async (target) => {
+      calls.switches.push(target);
+      return `switching this window to ${target.name}…`;
+    },
+    archivedTasks: () => archivedList,
+    archiveTask: (taskId) => {
+      const task = taskList.find((entry) => entry.id === taskId);
+      if (!task) return `no task ${taskId}`;
+      calls.archived.push(taskId);
+      taskList = taskList.filter((entry) => entry !== task);
+      archivedList = [{ ...task, archivedAt: new Date(NOW).toISOString() }, ...archivedList];
+      return `archived ${taskId}`;
+    },
+    restoreTask: (taskId) => {
+      const task = archivedList.find((entry) => entry.id === taskId);
+      if (!task) return `${taskId} is not in the archive`;
+      calls.restored.push(taskId);
+      archivedList = archivedList.filter((entry) => entry !== task);
+      taskList = [task, ...taskList];
+      return `restored ${taskId} to the task list`;
+    },
+    deleteTask: (taskId, where) => {
+      calls.deleted.push([taskId, where]);
+      if (where === "archive") archivedList = archivedList.filter((entry) => entry.id !== taskId);
+      else taskList = taskList.filter((entry) => entry.id !== taskId);
+      return `deleted ${taskId} for good`;
     },
     sessionChat: (sessionId) => options.chats?.[sessionId] ?? [],
     taskScene: (task, _width, height) => Array.from({ length: Math.min(height, 2) }, (_, index) => `status of ${task.id} ${index}`),
@@ -443,7 +485,7 @@ test("hidden panes give their room to the rest, and a search narrows every pane"
   const none = renderHome({ ...input, panels: { animations: false, conversation: false, activity: false, thinking: false } }, 120, 20);
   assert.ok(none.some((line) => line.includes("Every pane is hidden — Alt+C conversation · Alt+A activity · Alt+K thinking")));
   const searched = renderHome({ ...input, query: "router" }, 120, 20);
-  assert.ok(searched.some((line) => line.includes("● You")) && searched.some((line) => line.includes("▌ build the router")));
+  assert.ok(searched.some((line) => line.includes("You ●")) && searched.some((line) => line.includes("build the router ▐")));
   assert.ok(!searched.some((line) => line.includes("On it.")));
   assert.ok(searched.some((line) => line.includes("editing router.ts")));
   assert.ok(!searched.some((line) => line.includes("reading a.ts")));
@@ -995,30 +1037,39 @@ test("the conversation shows each turn under a speaker line with its time, your 
     { id: 6, at: at + 140_000, role: "note" as const, text: "✗ the oracle's turn failed: 429" },
   ];
   const lines = chatLines(chat, 44);
-  const header = (who: string, time: string) => `${who.padEnd(44 - time.length)}${time}`;
+  const oracle = (time: string) => `${"◆ Oracle".padEnd(44 - time.length)}${time}`;
+  const you = (time: string) => `${time}  You ●`.padStart(44);
+  const bubble = (text: string) => `${text} ▐`.padStart(44);
   assert.deepEqual(lines, [
     "───── task started · add login · 12:04 ─────",
     "",
-    header("● You", "12:04"),
-    "  ▌ add a login page",
+    you("12:04"),
+    bubble("add a login page"),
     "",
-    header("◆ Oracle", "12:05"),
+    oracle("12:05"),
     "  Proposal:",
     "",
     "  - a form",
     "",
-    header("● You", "12:06"),
-    "  ▌ use port 8080",
+    you("12:06"),
+    bubble("use port 8080"),
     "",
-    "  ▌ and dark mode",
+    bubble("and dark mode"),
     "",
     "✗ the oracle's turn failed: 429",
-  ], "a second message within minutes shares the header; failures stand out instead of becoming a rule");
+  ], "you on the right, the oracle on the left; a second message within minutes shares the header; failures stand out instead of becoming a rule");
   const live = chatLines(chat.slice(0, 2), 44, undefined, "Writing the **plan**", true, 0);
-  assert.deepEqual(live.slice(-2), [header("◆ Oracle", "⠋ writing"), "  Writing the **plan**"]);
-  // With a theme that has backgrounds, your words sit in pi's user-message band.
-  const banded = chatLines(chat.slice(1, 2), 30, { fg: (_color, text) => text, bold: (text) => text, bg: (color, text) => `<${color}>${text}</${color}>` });
-  assert.equal(banded[1], `  <userMessageBg> ${"add a login page".padEnd(26)} </userMessageBg>`);
+  assert.deepEqual(live.slice(-2), [oracle("⠋ writing"), "  Writing the **plan**"]);
+  // With a theme that has backgrounds, your words sit in a bubble of pi's user-message background, in the accent colour, only as wide as they are.
+  const colours: string[] = [];
+  const banded = chatLines(chat.slice(1, 2), 30, { fg: (color, text) => (colours.push(color), text), bold: (text) => text, bg: (color, text) => `<${color}>${text}</${color}>` });
+  assert.equal(banded[1], `${" ".repeat(12)}<userMessageBg> add a login page </userMessageBg>`);
+  assert.ok(colours.includes("accent"));
+  // A long message wraps inside a bubble at most ~72% of a wide pane, flush with the right edge.
+  const wide = chatLines([{ id: 1, at, role: "you" as const, text: "add a login page with email and password, and keep the session for a week" }], 80);
+  const body = wide.slice(1);
+  assert.ok(body.length > 1 && body.every((line) => line.endsWith(" ▐") && line.length === 80));
+  assert.ok(body.every((line) => line.trimStart().length <= Math.floor(80 * 0.72)), "the bubble leaves the left of the pane to the oracle");
 });
 
 function task(id: string, owner: string, state: Task["state"], title = id): Task {
@@ -1064,42 +1115,72 @@ test("alt+n starts a task in its own session named after it; the Lobby then show
   assert.equal(view.viewedEntry().name, "add a login page", "a failed start keeps the session in view");
 });
 
-test("alt+o switches between this window, background sessions and tasks other terminals drive", () => {
-  const other = task("TASK-api", "other-terminal", "implementing", "rate limits");
+test("alt+o browses sessions by where they run, previews the picked one, and views, messages or switches to it", () => {
+  const elsewhere = task("TASK-api", "term-2", "implementing", "rate limits");
+  const orphan = task("TASK-old", "gone-session", "clarifying", "old login");
   const chat: ChatEntry[] = [{ id: 1, at: NOW, role: "oracle", text: "Rate limits are in." }];
-  const { view, calls, procs } = makeView({ tasks: [other], chats: { "other-terminal": chat } });
+  const live: LiveSession[] = [
+    { sessionId: "term-2", pid: 4242, name: "rate limits", taskId: "TASK-api", mode: "tui" },
+    { sessionId: "term-3", pid: 4343, mode: "tui" },
+  ];
+  const { view, calls, procs } = makeView({ tasks: [elsewhere, orphan], chats: { "term-2": chat, "gone-session": [{ id: 1, at: NOW, role: "you", text: "add login" }] }, live });
   view.handleInput(KEY.alt("n"));
   type(view, "add a login page");
   view.handleInput(KEY.enter);
 
   view.handleInput(KEY.alt("o"));
-  let screen = view.render(120);
-  assert.ok(screen.some((line) => line.includes("Sessions")));
-  const rowOf = (name: string) => screen.slice(1).find((line) => line.includes(name)) ?? "";
-  assert.match(rowOf("my window"), /this window/);
-  assert.match(rowOf("add a login page"), /background · starting/);
-  assert.match(rowOf("rate limits"), /other terminal · implementing/);
-  assert.ok(rowOf("add a login page").includes("▸"), "the session in view is picked");
+  let screen = view.render(140);
+  const has = (pattern: RegExp) => screen.some((line) => pattern.test(line));
+  assert.ok(has(/╭ Sessions/) && has(/╭ Preview/), "a list and a preview");
+  assert.ok(has(/── THIS WINDOW ─+ 1 ──/) && has(/── BACKGROUND ─+ 1 ──/) && has(/── OTHER TERMINALS ─+ 2 ──/) && has(/── NOT RUNNING ─+ 1 ──/));
+  assert.ok(has(/◇ rate limits\s+implementing/) && has(/◇ unnamed session\s+no task/) && has(/○ old login\s+clarifying/));
+  assert.ok(has(/▸ ◆ add a login page/), "the session in view is picked");
+  assert.ok(has(/move it into this window/), "the preview says what s does");
 
+  // A session in another terminal: previewed with its pid and conversation; enter views it, messages reach its own inbox; s is refused.
   view.handleInput(KEY.down);
+  screen = view.render(140);
+  assert.ok(has(/other terminal · implementing · pid 4242/) && has(/Rate limits are in\./) && has(/TASK-api/));
+  view.handleInput("s");
+  assert.equal(calls.switches.length, 0);
+  assert.match(view.render(140).at(-1)!, /running in another terminal \(pid 4242\) — switch there/);
   view.handleInput(KEY.enter);
   assert.equal(view.viewedEntry().name, "rate limits");
-  screen = view.render(120);
-  assert.ok(screen.some((line) => line.includes("Rate limits are in.")), "its conversation comes from its session file");
-  assert.ok(screen.some((line) => line.includes("status of TASK-api")), "its task's status, without animations");
   type(view, "also cap bursts");
   view.handleInput(KEY.enter);
-  assert.deepEqual(calls.inbox, [["TASK-api", "also cap bursts"]]);
+  assert.deepEqual(calls.sessionInbox, [["term-2", "also cap bursts"]]);
 
+  // A task whose session is not running: its messages wait in the task's inbox, and s resumes its session here.
+  view.handleInput(KEY.alt("o"));
+  view.handleInput(KEY.down);
+  view.handleInput(KEY.down);
+  screen = view.render(140);
+  assert.ok(has(/not running · clarifying/) && has(/resume it in this window/));
+  view.handleInput(KEY.enter);
+  assert.equal(view.viewedEntry().where, "not running");
+  assert.ok(view.render(140).some((line) => line.includes("leave old login a message for when it resumes")));
+  type(view, "use sessions");
+  view.handleInput(KEY.enter);
+  assert.deepEqual(calls.inbox, [["TASK-old", "use sessions"]]);
+  view.handleInput(KEY.escape);
+  view.handleInput("s");
+  assert.deepEqual(calls.switches.map((target) => [target.name, target.sessionId, Boolean(target.background)]), [["old login", "gone-session", false]]);
+
+  // A background session moves into this window: s hands the switch its process to stop first.
   view.handleInput(KEY.alt("o"));
   view.handleInput(KEY.up);
   view.handleInput(KEY.up);
+  view.handleInput(KEY.up);
+  assert.ok(view.render(140).some((line) => line.includes("▸ ◆ add a login page")));
+  procs[0]!.emit({ type: "response", command: "get_state", success: true, data: { sessionId: "child-1" } });
+  view.handleInput("s");
+  assert.equal(calls.switches.at(-1)!.sessionId, "child-1");
+  assert.ok(calls.switches.at(-1)!.background, "the background process is stopped before the switch");
+
+  view.handleInput(KEY.alt("o"));
+  for (let index = 0; index < 5; index += 1) view.handleInput(KEY.up);
   view.handleInput(KEY.enter);
   assert.equal(view.viewedEntry().where, "this window");
-  type(view, "hello");
-  view.handleInput(KEY.enter);
-  assert.deepEqual(calls.oracle, ["hello"]);
-
   view.handleInput(KEY.alt("o"));
   view.handleInput(KEY.down);
   view.handleInput("x");
@@ -1107,8 +1188,29 @@ test("alt+o switches between this window, background sessions and tasks other te
   view.handleInput("x");
   assert.deepEqual(procs[0]!.signals, ["SIGTERM"]);
   view.handleInput(KEY.escape);
-  assert.ok(!view.render(120).some((line) => line.includes("enter shows it here")), "esc closes the switcher");
+  assert.ok(!view.render(140).some((line) => line.includes("╭ Preview")), "esc closes the browser");
 });
+
+test("a task nobody ever owned is taken over, not resumed", () => {
+  const unowned = { ...createTask("TASK-free", "free task", "2026-09-26T10:00:00.000Z", "x"), state: "clarifying" as const };
+  const { view, calls } = makeView({ tasks: [unowned] });
+  view.handleInput(KEY.alt("o"));
+  view.handleInput(KEY.down);
+  assert.ok(view.render(140).some((line) => line.includes("take it over in this window")));
+  view.handleInput("s");
+  assert.deepEqual(calls.switches, [{ name: "free task", claimTaskId: "TASK-free" }]);
+});
+
+test("the browser will not switch while this window's oracle is working", () => {
+  const orphan = task("TASK-old", "gone-session", "clarifying", "old login");
+  const { view, calls } = makeView({ tasks: [orphan], busy: true });
+  view.handleInput(KEY.alt("o"));
+  view.handleInput(KEY.down);
+  view.handleInput("s");
+  assert.deepEqual(calls.switches, []);
+  assert.match(view.render(140).at(-1)!, /oracle is working — esc stops it, then switch/);
+});
+
 
 test("alt+g switches auto mode for the task in view; the tab bar and the Tasks list mark it", () => {
   const mine = task("TASK-login", "me", "implementing", "login");
@@ -1148,4 +1250,63 @@ test("on the Tasks tab o shows the session driving a task, and n types a task fo
   assert.ok(view.render(120).some((line) => line.includes("new task — it starts in its own session")));
   view.handleInput(KEY.escape);
   assert.ok(!view.render(120).some((line) => line.includes("new task — it starts in its own session")), "esc drops the new-session prompt");
+});
+
+test("on the Tasks tab a archives a task, v shows the archive, a restores and d d deletes; A A archives everything finished", () => {
+  const open = task("TASK-open", "gone-session", "clarifying", "stale login");
+  const done = { ...task("TASK-done", "x", "completed", "rename getUser"), updatedAt: "2026-09-26T10:00:00.000Z" };
+  const dropped = { ...task("TASK-drop", "x", "abandoned", "migrate to vite"), updatedAt: "2026-09-25T10:00:00.000Z" };
+  const { view, calls } = makeView({ tasks: [open, done, dropped] });
+  view.setTab("tasks");
+  let screen = view.render(140);
+  assert.ok(screen.some((line) => line.includes("clarifying · not running")), "a task whose session ended says so");
+  assert.ok(screen[1]!.includes("1 open · 2 finished"));
+
+  // An open task is abandoned by archiving, so a asks twice.
+  view.handleInput("a");
+  assert.deepEqual(calls.archived, []);
+  assert.match(view.render(140).at(-1)!, /TASK-open is clarifying — press a again to abandon and archive it/);
+  view.handleInput("a");
+  assert.deepEqual(calls.archived, ["TASK-open"]);
+
+  // A finished one goes at once.
+  view.handleInput("a");
+  assert.deepEqual(calls.archived, ["TASK-open", "TASK-done"]);
+  screen = view.render(140);
+  assert.ok(!screen.some((line) => line.includes("rename getUser")));
+  assert.match(view.render(140).at(-1)!, /archived TASK-done/);
+
+  view.handleInput("v");
+  screen = view.render(140);
+  assert.ok(screen.some((line) => /── ARCHIVED ─+ 2 ──/.test(line)));
+  assert.ok(screen[1]!.includes("1 finished · 2 archived"));
+  view.handleInput(KEY.down);
+  screen = view.render(140);
+  assert.ok(screen.some((line) => line.includes("▸ ☑ rename getUser")) && screen.some((line) => line.includes("archived just now")) && screen.some((line) => line.includes("restore it to the list")));
+  view.handleInput("a");
+  assert.deepEqual(calls.restored, ["TASK-done"]);
+  view.handleInput(KEY.down);
+  view.handleInput(KEY.down);
+  view.handleInput("d");
+  assert.deepEqual(calls.deleted, []);
+  view.handleInput("d");
+  assert.deepEqual(calls.deleted, [["TASK-open", "archive"]], "d d deletes an archived task for good");
+
+  view.handleInput("A");
+  assert.match(view.render(140).at(-1)!, /press A again to archive all 2 finished tasks/);
+  view.handleInput("A");
+  assert.deepEqual(calls.archived.slice(-2).sort(), ["TASK-done", "TASK-drop"]);
+  view.handleInput("v");
+  assert.match(view.render(140).at(-1)!, /archived tasks hidden/);
+  assert.ok(view.render(140).some((line) => line.includes("No tasks yet")));
+});
+
+test("d d deletes a task on the list for good", () => {
+  const done = task("TASK-done", "x", "completed", "rename getUser");
+  const { view, calls } = makeView({ tasks: [done] });
+  view.setTab("tasks");
+  view.handleInput("d");
+  assert.match(view.render(140).at(-1)!, /press d again to delete TASK-done for good/);
+  view.handleInput("d");
+  assert.deepEqual(calls.deleted, [["TASK-done", "list"]]);
 });

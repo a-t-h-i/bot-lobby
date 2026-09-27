@@ -281,7 +281,7 @@ test("the lobby starts a task in a named background session, relays its question
 
     // Another terminal's task: messages go to its inbox, and auto mode is switched in its folder.
     showLobby("lobby");
-    view.view({ kind: "other", taskId: "TASK-api" });
+    view.view({ kind: "idle", taskId: "TASK-api" });
     for (const char of "cap bursts") view.handleInput(char);
     view.handleInput("\r");
     assert.deepEqual(readInbox(root, ".pi", "TASK-api").map((message) => [message.text, message.by]), [["cap bursts", "session-1"]]);
@@ -293,4 +293,29 @@ test("the lobby starts a task in a named background session, relays its question
     setSessionLauncher(undefined);
   }
   assert.ok(launched[0]!.proc.signals.length === 1, "resetting the launcher stops the sessions it started");
+});
+
+test("switching to a background session stops its process, then asks pi to run its session file here", async () => {
+  const launched: FakeSessionProcess[] = [];
+  setSessionLauncher(() => {
+    const proc = new FakeSessionProcess();
+    launched.push(proc);
+    return proc;
+  });
+  const { fake, ctx } = await start(false);
+  try {
+    assert.equal(showLobby("lobby"), true);
+    const view = lobbyView()!;
+    view.handleInput("\x1bn");
+    for (const char of "add a footer") view.handleInput(char);
+    view.handleInput("\r");
+    launched[0]!.emit({ type: "response", command: "get_state", success: true, data: { sessionId: "child-1", sessionFile: "/sessions/child-1.jsonl" } });
+    view.switchTo(view.viewedEntry());
+    for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(launched[0]!.signals, ["SIGTERM"], "the background process ends first");
+    assert.deepEqual(fake.sent.at(-1), { text: "/bot-lobby switch /sessions/child-1.jsonl", options: { expandPromptTemplates: true } });
+  } finally {
+    await stop(fake, ctx);
+    setSessionLauncher(undefined);
+  }
 });
