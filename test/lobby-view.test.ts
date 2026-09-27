@@ -83,7 +83,8 @@ function makeView(options: ViewOptions = {}) {
     theme: () => ({ fg: (_color, text) => text, bold: (text) => text }),
     sessionId: () => "me",
     zen: () => ({ ...(options.task ? { task: options.task } : {}), runs: [] }),
-    scene: (_width, height) => Array.from({ length: Math.min(height, 12) }, (_, index) => `scene ${index}`),
+    // Animated, the fake scene fills 12 lines; still, it keeps 3 lines of status.
+    scene: (_width, height, animated) => Array.from({ length: Math.min(height, animated ? 12 : 3) }, (_, index) => `${animated ? "scene" : "still"} ${index}`),
     advanceScene: () => 250,
     feed,
     masterBusy: () => options.busy === true,
@@ -473,7 +474,7 @@ test("the plan tab shows the roster, attributed questions with their options, th
   const input = { session: planSession(), profile: "p/m · high", seats: [], offset: 0, focus: "talk" as const, draftOffset: 0, tick: 0, layout };
   const lines = renderPlan(input, 140, 20);
   assert.equal(lines.length, 20);
-  assert.ok(lines.some((line) => line.includes("Planning · Dark mode") && line.includes("● 2 questions for you — enter answers them one at a time")));
+  assert.ok(lines.some((line) => line.includes("Planning · Dark mode") && line.includes("● 2 questions — enter answers them")));
   assert.ok(lines.some((line) => line.includes("panel  ORACLE 1 question · DEV ⠋ reading api.ts · DESIGN 1 question · QA ✓ ready · RESEARCH off")));
   assert.ok(lines.some((line) => line.includes(" 1. ORACLE   Ship behind a flag?")));
   assert.ok(lines.some((line) => line.includes("○ Yes (Recommended) — ship dark first")));
@@ -486,7 +487,7 @@ test("the plan tab shows the roster, attributed questions with their options, th
   assert.equal(row, layout.draftTop + 1, "the layout says where each draft line landed");
   assert.equal(lines[row]!.indexOf("1. tokens"), layout.draftLeft + 2, "text starts after the comment marker column");
   const partial = renderPlan({ ...input, session: planSession({ answeredChunks: 1, lineComments: [{ line: "1. tokens", text: "name them per theme" }] }) }, 140, 20);
-  assert.ok(partial.some((line) => line.includes("some answered — enter resumes") && line.includes("◆ 1 line comment to send")));
+  assert.ok(partial.some((line) => line.includes("● 2 questions — enter resumes") && line.includes("◆ 1 comment to send")));
   assert.ok(partial.some((line) => line.includes("◆ 1. tokens")));
   assert.ok(partial.some((line) => line.includes("↳ name them per theme")));
   const filtered = renderPlan({ ...input, query: "pages" }, 140, 20);
@@ -497,7 +498,12 @@ test("the plan tab shows the roster, attributed questions with their options, th
 test("before a session, 1-4 choose the seats the next session starts with", () => {
   const { view, calls } = makeView();
   view.setTab("plan");
-  assert.match(view.render(140).map((line) => line.trim()).join(" "), /the oracle chairing, with DEV, DESIGN, QA, RESEARCH/);
+  let lines = view.render(140);
+  assert.ok(lines.some((line) => line.includes("Describe a task below and the panel questions you until the plan is clear.")), "one sentence says what to do");
+  const roster: Array<[string, string]> = [["ORACLE", "p/model · high"], ["DEV", "p/backend · medium"], ["DESIGN", "p/designer · medium"], ["QA", "p/qa · medium"], ["RESEARCH", "p/researcher · medium"]];
+  for (const [seat, model] of roster) {
+    assert.ok(lines.some((line) => line.includes(`│ ${seat.padEnd(10)}${model}`)), `${seat} and its model line up`);
+  }
   view.handleInput(KEY.escape);
   view.handleInput("2");
   view.handleInput("4");
@@ -506,6 +512,8 @@ test("before a session, 1-4 choose the seats the next session starts with", () =
   type(view, "dark mode");
   view.handleInput(KEY.enter);
   assert.deepEqual(calls.seats.at(-1), ["backend", "qa"]);
+  lines = view.render(140);
+  assert.ok(lines.some((line) => line.includes("reply to the panel") || line.includes("the panel is thinking")));
 });
 
 test("during a session, 1-4 seat and unseat members for the next round", () => {
@@ -581,6 +589,7 @@ test("alt+a, alt+k, alt+c and alt+z show and hide panes, and the choice is remem
   const { view, calls } = makeView({ task: activeTask() });
   const has = (text: string) => view.render(120).some((line) => line.includes(text));
   assert.ok(has("╭ Activity") && has("╭ Thinking") && has("scene 0"));
+  assert.ok(view.render(120)[1]!.trimEnd().endsWith("Alt+Z hides animations"), "the scene names its key");
   view.handleInput(KEY.alt("a"));
   assert.ok(!has("╭ Activity"));
   assert.match(view.render(120).at(-1)!, /activity log hidden · Alt\+A shows it/);
@@ -588,7 +597,9 @@ test("alt+a, alt+k, alt+c and alt+z show and hide panes, and the choice is remem
   view.handleInput(KEY.alt("k"));
   assert.ok(!has("╭ Thinking"));
   view.handleInput(KEY.alt("z"));
-  assert.ok(!has("scene 0"));
+  assert.ok(!has("scene 0") && has("still 0"), "without animations the task's status stays");
+  assert.ok(view.render(120)[1]!.trimEnd().endsWith("Alt+Z shows animations"));
+  assert.match(view.render(120).at(-1)!, /oracle and agent animations hidden · Alt\+Z shows it/);
   view.handleInput(KEY.alt("c"));
   assert.ok(has("Every pane is hidden"));
   view.handleInput(KEY.alt("a"));
@@ -665,7 +676,8 @@ test("ctrl+f and / search the current tab: filtered, highlighted, kept per tab, 
 test("enter on an empty Plan prompt, or a while browsing, puts the panel's questions to the user", async () => {
   const { view, calls } = await planned();
   assert.ok(view.render(140)[0]!.includes("Plan 1?"), "the tab bar counts the open questions");
-  assert.ok(view.render(140).some((line) => line.includes("enter answers the panel's 1 question one at a time")));
+  assert.ok(view.render(140).some((line) => line.includes("press enter to answer 1 question, or type a reply")));
+  assert.ok(view.render(140).at(-1)!.includes("enter answer questions"), "the hint line says what enter does here");
   view.handleInput(KEY.enter);
   assert.equal(calls.answered, 1);
   await settle();
@@ -686,7 +698,8 @@ test("↑↓ pick a draft line and c comments on it; the comment waits for the a
   view.handleInput(KEY.down);
   view.handleInput("c");
   assert.equal(view.mode, "type");
-  assert.ok(view.render(140).some((line) => line.includes("comment on “1. Add the form” · enter adds it")));
+  assert.ok(view.render(140).some((line) => line.includes("comment on “1. Add the form”")));
+  assert.match(view.render(140).at(-1)!, /enter add the comment {2}esc cancel/);
   type(view, "use a modal");
   view.handleInput(KEY.enter);
   assert.deepEqual(planner()!.lineComments, [{ line: "1. Add the form", text: "use a modal" }]);
@@ -844,7 +857,10 @@ test("alt+s opens bot-lobby's settings; m opens the quick fix or planner entry; 
   view.handleInput(KEY.escape);
   view.handleInput("m");
   assert.deepEqual(calls.settings, ["all", "quickfix"]);
-  assert.ok(view.render(120).some((line) => line.includes("m changes the model")), "the Quick fix tab says how");
+  const intro = view.render(120);
+  assert.ok(intro.some((line) => line.includes("Describe a small change below and one agent makes it now, beside any running task.")));
+  assert.ok(intro.some((line) => line.includes("QUICK FIX  p/model · high")), "the agent and its model");
+  assert.match(intro.at(-1)!, /BROWSE {2}m model {2}\? all keys/, "the hint line offers the model key");
   view.setTab("plan");
   view.handleInput(KEY.escape);
   view.handleInput("m");
