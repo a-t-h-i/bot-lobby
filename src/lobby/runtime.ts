@@ -14,7 +14,9 @@ import { listTasks, loadTask } from "../state/persistence.ts";
 import { detectProjectRoot, loadConfig, saveConfig } from "../state/project.ts";
 import { addPlanComment, readPlanComments } from "../state/comments.ts";
 import { isAutoMode } from "../state/auto.ts";
-import { sendToInbox } from "../state/inbox.ts";
+import { sendToInbox, sendToSession as leaveForSession } from "../state/inbox.ts";
+import { livePresence } from "../state/presence.ts";
+import { archiveTask as archiveTaskOnDisk, deleteTask as deleteTaskOnDisk, listArchivedTasks, restoreTask as restoreTaskOnDisk } from "../state/archive.ts";
 import { discardPlannedTask, listPlannedTasks, type PlannedTask } from "../state/backlog.ts";
 import { appendMetrics, readMetrics, type MetricStatus } from "../state/metrics.ts";
 import { describeToolCall } from "../pi/activity.ts";
@@ -33,7 +35,7 @@ import { answerMessage, dialogAsker, loadAskTool, questionnaires, toolAsker, typ
 import { QuickFixQueue } from "./quickfix.ts";
 import { PlanningSession, type PlannerSeed } from "./planner.ts";
 import { execCommand, IssuesState } from "./issues.ts";
-import { LobbyView, type LobbyHost, type TabId } from "./view.ts";
+import { LobbyView, type LiveSession, type LobbyHost, type SwitchTarget, type TabId } from "./view.ts";
 import type { LobbyTheme } from "./layout.ts";
 import { createMarkdownRenderer } from "./markdown.ts";
 import { deliverComments, onOwnerEvent, setAuto } from "../pi/owner.ts";
@@ -282,6 +284,113 @@ function switchAuto(state: Runtime, taskId: string, on: boolean): void {
   autoSeen.set(taskId, { at: Date.now(), on });
 }
 
+/** Heartbeats of the other sessions running in this project, reread at most once a second (every frame asks). */
+let liveSeen: { at: number; root: string; sessions: LiveSession[] } | undefined;
+const LIVE_READ_MS = 1000;
+
+function liveSessions(state: Runtime): LiveSession[] {
+  const now = Date.now();
+  if (liveSeen && liveSeen.root === state.root && now - liveSeen.at < LIVE_READ_MS) return liveSeen.sessions;
+  const me = state.ctx.sessionManager.getSessionId();
+  let sessions: LiveSession[] = [];
+  try {
+    sessions = livePresence(state.root, state.configDir, now).filter((presence) => presence.sessionId !== me);
+  } catch {
+    // An unreadable folder only means no other sessions are listed.
+  }
+  liveSeen = { at: now, root: state.root, sessions };
+  return sessions;
+}
+
+/** Leave a message for a session running in another terminal. */
+function sendToSession(state: Runtime, sessionId: string, text: string): string {
+  try {
+    leaveForSession(state.root, state.configDir, sessionId, text, state.ctx.sessionManager.getSessionId());
+  } catch (error) {
+    return (error as Error).message;
+  }
+  lobbyFeed.log("LOBBY", "message for another session's oracle saved", "info");
+  return "sent — that session passes it to its oracle within a few seconds";
+}
+
+/** The lobby reopens on the session this window switches to (set just before asking pi to switch). */
+let reopenAfterSwitch = false;
+
+/**
+ * Run another session in this window through `/bot-lobby switch`, which pi
+ * runs with a command context (the only one that may replace the session).
+ * A background session is stopped first, so one process writes its file; a
+ * task no session owns is claimed instead.
+ */
+async function switchTo(state: Runtime, target: SwitchTarget): Promise<string> {
+  if (!state.ctx.isIdle()) return "this window's oracle is working — esc stops it, then switch";
+  if (target.claimTaskId) {
+    reopenAfterSwitch = false;
+    state.pi.sendUserMessage(`/bot-lobby claim ${target.claimTaskId}`, { expandPromptTemplates: true });
+    return `taking ${target.claimTaskId} over in this window`;
+  }
+  let file = target.background?.sessionFile;
+  if (target.background) {
+    target.background.stop();
+    await target.background.whenExited();
+  }
+  file ??= target.sessionId ? await chats.locate(target.sessionId) : undefined;
+  if (!file) return `could not find ${target.name}'s session file — /resume lists every saved session`;
+  reopenAfterSwitch = true;
+  state.pi.sendUserMessage(`/bot-lobby switch ${file}`, { expandPromptTemplates: true });
+  return `switching this window to ${target.name}…`;
+}
+
+/** Why a task cannot be archived or deleted now: a running session drives it. */
+function drivenElsewhere(state: Runtime, task: Task): string | undefined {
+  if (TERMINAL_STATES.includes(task.state) || !task.ownerSessionId) return undefined;
+  if (task.ownerSessionId === state.ctx.sessionManager.getSessionId()) return `this window drives ${task.id} — cancel it first (/bot-lobby cancel ${task.id})`;
+  const background = backgroundSessions().find((session) => session.alive && session.sessionId === task.ownerSessionId);
+  if (background) return `${background.name} is driving ${task.id} in the background — stop it first (x x)`;
+  if (liveSessions(state).some((session) => session.sessionId === task.ownerSessionId)) return `a session in another terminal is driving ${task.id} — finish or cancel it there first`;
+  return undefined;
+}
+
+function archiveTask(state: Runtime, taskId: string): string {
+  const task = loadTask(state.root, state.configDir, taskId);
+  if (!task) return `no task ${taskId}`;
+  const busy = drivenElsewhere(state, task);
+  if (busy) return busy;
+  try {
+    archiveTaskOnDisk(state.root, state.configDir, taskId);
+  } catch (error) {
+    return (error as Error).message;
+  }
+  lobbyFeed.log("LOBBY", `archived ${taskId}`, "info");
+  return `archived ${taskId}${TERMINAL_STATES.includes(task.state) ? "" : " (abandoned first)"} — v shows archived tasks, a restores one`;
+}
+
+function restoreTask(state: Runtime, taskId: string): string {
+  try {
+    restoreTaskOnDisk(state.root, state.configDir, taskId);
+  } catch (error) {
+    return (error as Error).message;
+  }
+  lobbyFeed.log("LOBBY", `restored ${taskId}`, "info");
+  return `restored ${taskId} to the task list`;
+}
+
+function deleteTask(state: Runtime, taskId: string, where: "list" | "archive"): string {
+  if (where === "list") {
+    const task = loadTask(state.root, state.configDir, taskId);
+    if (!task) return `no task ${taskId}`;
+    const busy = drivenElsewhere(state, task);
+    if (busy) return busy;
+  }
+  try {
+    deleteTaskOnDisk(state.root, state.configDir, taskId, where);
+  } catch (error) {
+    return (error as Error).message;
+  }
+  lobbyFeed.log("LOBBY", `deleted ${taskId}`, "warning");
+  return `deleted ${taskId} for good`;
+}
+
 /** A task's status box without animations, for a session other than this window's. */
 function taskScene(state: Runtime, task: Task, width: number, height: number): string[] {
   return panelLines(task, persistedRuns(task), Date.now(), false, { width, rows: Math.floor(height / 0.75), still: true, theme: state.ctx.ui.theme });
@@ -436,6 +545,13 @@ function host(state: Runtime, tui: TUI): LobbyHost {
     isAuto: (taskId) => autoFor(state, taskId),
     setAuto: (taskId, on) => switchAuto(state, taskId, on),
     sendToTask: (taskId, text) => sendToTask(state, taskId, text),
+    sendToSession: (sessionId, text) => sendToSession(state, sessionId, text),
+    liveSessions: () => liveSessions(state),
+    switchTo: (target) => switchTo(state, target),
+    archivedTasks: () => listArchivedTasks(state.root, state.configDir),
+    archiveTask: (taskId) => archiveTask(state, taskId),
+    restoreTask: (taskId) => restoreTask(state, taskId),
+    deleteTask: (taskId, where) => deleteTask(state, taskId, where),
     sessionChat: (sessionId) => chats.chat(sessionId),
     taskScene: (task, width, height) => taskScene(state, task, width, height),
     requestRender: () => tui.requestRender(),
@@ -630,7 +746,7 @@ export function initLobby(pi: ExtensionAPI, ctx: ExtensionContext, configDir: st
   // The owner's clock (pi/owner.ts) delivers comments and messages and drives auto mode; the lobby logs what it did.
   onOwnerEvent((event) => {
     if (event.kind === "comments") lobbyFeed.log("LOBBY", `passed ${event.count} plan comment${event.count === 1 ? "" : "s"} on ${event.taskId} to the oracle`, "info");
-    else if (event.kind === "inbox") lobbyFeed.log("LOBBY", `passed ${event.count} message${event.count === 1 ? "" : "s"} from another session to the oracle`, "info");
+    else if (event.kind === "inbox" || event.kind === "messages") lobbyFeed.log("LOBBY", `passed ${event.count} message${event.count === 1 ? "" : "s"} from another session to the oracle`, "info");
     else if (event.kind === "auto") lobbyFeed.log("LOBBY", `auto mode ${event.on ? "on" : "off"} for ${event.taskId}`, event.on ? "success" : "info");
     else if (event.kind === "nudge") lobbyFeed.log("LOBBY", `auto mode: keeping the oracle going on ${event.taskId}`, "info");
     else lobbyFeed.log("LOBBY", `auto mode: no progress on ${event.taskId} — it needs you`, "warning");
@@ -673,7 +789,11 @@ export function registerLobbyEvents(pi: ExtensionAPI, configDir: string): void {
   });
   pi.on("session_start", (_event, ctx) => {
     initLobby(pi, ctx, configDir);
-    autoOpenLobby();
+    // A switch asked for from the lobby lands back in the lobby, on the session it switched to.
+    if (reopenAfterSwitch) {
+      reopenAfterSwitch = false;
+      showLobby("lobby");
+    } else autoOpenLobby();
   });
   pi.on("session_shutdown", () => shutdown());
   pi.on("ui_prompt_start", () => promptStarted());

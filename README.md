@@ -96,6 +96,7 @@ for the Master (see [The lobby](#the-lobby)).
 /bot-lobby claim <taskId>      Take ownership of an orphaned task
 /bot-lobby auto [on|off]        Auto mode: the oracle drives this session's task to completion (alt+g)
 /bot-lobby start-plan PLAN-… [auto]   Start a saved plan here; its agreed plan needs no approval
+/bot-lobby switch <session.jsonl>     Run a saved session in this window (the session browser's s)
 /bot-lobby lobby | help         Open the lobby, or show this list
 ```
 
@@ -167,8 +168,16 @@ or without a task.
   twice discards one. `n` types a new task that starts in its own session, `o`
   shows the session driving the selected task, `x` twice stops a background
   session, and `alt+g` switches auto mode for the selected task. Rows say who
-  drives each task (`this session`, `background`, another session's id) and
-  mark auto mode `⟳ auto`.
+  drives each task (`this session`, `background`, another running session, or
+  `not running` once its session has ended) and mark auto mode `⟳ auto`.
+  **Cleaning up:** every finished task is listed, and `a` archives the
+  selected one — it leaves every list and moves, folder and all, to
+  `.pi/bot-lobby/archive/tasks/` (a task still under way is abandoned first,
+  so `a` asks twice). `A` twice archives every finished task at once. `v`
+  shows the archive as an ARCHIVED section, where `a` restores a task as it
+  was. `d` twice deletes a task, on the list or in the archive, for good. A
+  task a running session drives (this window's, a background one, or another
+  terminal's) is left alone until that session stops or cancels it.
 - **3 Plan** — task planning mode with a planning panel. Describe what you
   want and every seat grills you from its own domain, on the model and
   thinking level its settings name: **DEV** (APIs, data, errors, security,
@@ -242,7 +251,7 @@ typing). These work in both modes:
 | `alt+s` | bot-lobby settings: every agent's model, thinking and time limit, and the lobby's switches |
 | `ctrl+f` (or `/` while browsing) | search the current tab |
 | `ctrl+s` | save the plan from the Plan tab to the pending tasks — while typing too, from any tab |
-| `alt+o` | the session switcher: this window, its background sessions, and tasks other terminals drive |
+| `alt+o` | the session browser: view, message or switch to any session in the project |
 | `alt+n` | type a new task that starts in its own session, named after it |
 | `alt+g` | auto mode on or off for the task in view (the selected one on Tasks) |
 | `tab` / `shift+tab`, `alt+1`…`alt+5` | switch tabs |
@@ -322,14 +331,35 @@ between sessions from the lobby.
   empty prompt puts the question to you in this window with pi's own dialog
   (`esc` there cancels it, as it would in that session). With the lobby
   hidden, a notice says who is waiting.
-- **Switch.** `alt+o` opens the switcher: this window, every background
-  session it started (working, idle, ended; `⟳ auto`; questions waiting), and
-  tasks that sessions in other terminals drive. `enter` shows one in the Lobby
-  tab, `n` starts a new one, `x` twice stops a background session. For a task
-  another terminal drives, the Lobby shows its conversation from its session
-  file, and your messages go to its task inbox (`inbox.jsonl`) — its own
-  session passes them to its oracle within a few seconds — while its live
-  activity stays in that terminal.
+- **Browse.** `alt+o` opens the session browser: every session in the
+  project, grouped by where it runs — **this window**, the **background**
+  sessions it started (working, idle or ended, `⟳` auto mode, `●` questions
+  waiting), sessions running in **other terminals** (with or without a task),
+  and tasks whose session is **not running** (it ended, or none ever took
+  the task). Beside the list, a preview of the one picked: where it runs, its
+  task and progress, what `enter` and `s` do with it, and the end of its
+  conversation. Every running session keeps a heartbeat in
+  `.pi/bot-lobby/sessions/` so the others can see it; one that goes quiet or
+  whose process ends drops off.
+- **View.** `enter` shows the picked session in the Lobby tab. A background
+  session streams live; for another terminal's session or a task that is not
+  running, the conversation comes from its saved session file. What you type
+  goes to its oracle: a background session is steered directly, another
+  terminal's session gets it through its inbox within a few seconds, and a
+  task that is not running keeps it in its task inbox (`inbox.jsonl`) until a
+  session picks the task up.
+- **Switch.** `s` — in the browser, or while browsing a session shown in the
+  Lobby tab — runs that session in this window with pi's own session switch
+  (through `/bot-lobby switch`), and the lobby comes back on it. A background
+  session's process is stopped first, so only this window writes its
+  session; a task that is not running resumes its session here (one that no
+  session ever owned is taken over instead, like `/bot-lobby claim`). A
+  session running in another terminal stays there: switch in that terminal,
+  or close it and resume it here. Not while this window's oracle is working.
+  The session this window leaves keeps its task, which then shows as not
+  running until you switch back.
+- **Stop or start.** `x` twice stops a background session; `n` starts a new
+  task in a new session.
 
 Background sessions belong to the window that started them: they keep running
 while you switch pi sessions there, and stop when that pi exits. Their tasks
@@ -728,6 +758,9 @@ and the output contract — and an empty layer is dropped.
 ├── Backend/knowledge/          knowledge.md, engineering-standards.md, decisions.md, completed-tasks.md
 ├── QA/knowledge/               knowledge.md, testing-standards.md, decisions.md, completed-tasks.md
 ├── archive/<Agent>/            previous knowledge versions (outside all retrieval paths)
+├── archive/tasks/TASK-…/       archived tasks, whole, out of every list until restored
+├── sessions/<id>.json          heartbeats of the pi sessions running in the project
+├── sessions/<id>.inbox.jsonl   messages for a running session's oracle, and their delivery
 ├── backlog/PLAN-<slug>.json    pending tasks saved from the planner (optionally linked to an issue)
 ├── metrics.jsonl               one line per finished run of any agent, for the Metrics tab
 └── tasks/TASK-<stamp>/

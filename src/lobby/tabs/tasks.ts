@@ -13,13 +13,14 @@ import { describeRun, runFromLog } from "../../pi/run-summary.ts";
 import { pendingApprovals } from "../../workflow/approvals.ts";
 import { ago, beside, bold, box, detailWindow, fill, markdownLines, notePane, paint, position, rule, selectRow, since, spread, strike, windowStart, wrap, wrapHanging, type LobbyColor, type LobbyTheme, type PaneLayout } from "../layout.ts";
 
-export type TaskSection = "mine" | "others" | "pending" | "recent";
+export type TaskSection = "mine" | "others" | "pending" | "recent" | "archived";
 
 /** How a row is ticked off: still to do (a plan, or a task under way), completed, or abandoned. */
 export type CheckState = "open" | "done" | "dropped";
 
 export interface TaskRow {
-  kind: "task" | "plan";
+  /** A task on the list, a saved plan, or a task in the archive. */
+  kind: "task" | "plan" | "archived";
   id: string;
   title: string;
   section: TaskSection;
@@ -31,7 +32,7 @@ export interface TaskRow {
   progress?: { done: number; total: number };
   /** Who drives it, for tasks other sessions own. */
   owner?: string;
-  /** How long ago it finished (finished tasks) or was saved (plans), as `3h`. */
+  /** How long ago it finished (finished tasks), was saved (plans) or was archived, as `3h`. */
   age?: string;
   /** The GitHub issue a plan came from. */
   issue?: number;
@@ -45,6 +46,10 @@ export interface RowContext {
   names?: ReadonlyMap<string, string>;
   /** Tasks with auto mode on. */
   auto?: ReadonlySet<string>;
+  /** Sessions running now (from their heartbeats); a task whose owner is not among them says so. */
+  live?: ReadonlySet<string>;
+  /** Archived tasks, listed last when shown. */
+  archived?: readonly Task[];
 }
 
 export const SECTION_TITLES: Record<TaskSection, string> = {
@@ -52,6 +57,7 @@ export const SECTION_TITLES: Record<TaskSection, string> = {
   others: "OTHER SESSIONS",
   pending: "PENDING",
   recent: "FINISHED",
+  archived: "ARCHIVED",
 };
 
 /** The box each row wears: empty while there is work to do, ticked when completed, crossed when abandoned. */
@@ -63,9 +69,6 @@ export function checkState(task: Task): CheckState {
   return "open";
 }
 
-/** Finished tasks listed under RECENT. */
-export const RECENT_LIMIT = 8;
-
 /** Checklist progress as `3/7`, or undefined before a plan exists. */
 export function taskProgress(task: Task): { done: number; total: number } | undefined {
   if (!task.plan) return undefined;
@@ -74,13 +77,14 @@ export function taskProgress(task: Task): { done: number; total: number } | unde
   return { done: steps.filter((step) => step.status === "done").length, total: steps.length };
 }
 
-function ownerLabel(task: Task, sessionId: string | undefined, names?: ReadonlyMap<string, string>): string {
-  if (!task.ownerSessionId) return "no owner";
+function ownerLabel(task: Task, sessionId: string | undefined, names?: ReadonlyMap<string, string>, live?: ReadonlySet<string>): string {
+  if (!task.ownerSessionId) return "not running";
   if (task.ownerSessionId === sessionId) return "this session";
   const name = names?.get(task.ownerSessionId);
   // A background session is named after its task, so the row's title already says which one.
   if (name) return name === task.title ? "background" : `background · ${name}`;
-  return `session ${task.ownerSessionId.slice(0, 8)}`;
+  // An ended session's id tells nobody anything: say that nothing runs the task.
+  return live && !live.has(task.ownerSessionId) ? "not running" : `session ${task.ownerSessionId.slice(0, 8)}`;
 }
 
 /** Rows in display order: this session's task, other sessions', pending plans, then recent finished tasks. */
@@ -98,7 +102,7 @@ export function taskRows(tasks: readonly Task[], plans: readonly PlannedTask[], 
       ...(task.paused && section !== "recent" ? { paused: true } : {}),
       check: checkState(task),
       ...(progress ? { progress } : {}),
-      ...(section === "others" ? { owner: ownerLabel(task, sessionId, context.names) } : {}),
+      ...(section === "others" ? { owner: ownerLabel(task, sessionId, context.names, context.live) } : {}),
       ...(section === "recent" ? { age: ago(now - Date.parse(task.updatedAt)) } : {}),
       ...(auto ? { auto: true } : {}),
     };
@@ -116,7 +120,16 @@ export function taskRows(tasks: readonly Task[], plans: readonly PlannedTask[], 
       ...(plan.createdAt ? { age: ago(now - Date.parse(plan.createdAt)) } : {}),
       ...(plan.issue ? { issue: plan.issue.number } : {}),
     })),
-    ...tasks.filter((task) => TERMINAL_STATES.includes(task.state)).slice(0, RECENT_LIMIT).map((task) => row(task, "recent")),
+    ...tasks.filter((task) => TERMINAL_STATES.includes(task.state)).map((task) => row(task, "recent")),
+    ...(context.archived ?? []).map((task): TaskRow => ({
+      kind: "archived",
+      id: task.id,
+      title: task.title,
+      section: "archived",
+      status: task.state,
+      check: checkState(task),
+      age: ago(now - Date.parse(task.archivedAt ?? task.updatedAt)),
+    })),
   ];
 }
 
@@ -151,6 +164,7 @@ export function checkMark(row: Pick<TaskRow, "check" | "status" | "paused">, the
 /** A title as its box says: struck through and dim once abandoned, bold while selected. */
 function rowTitle(row: TaskRow, selected: boolean, theme?: LobbyTheme): string {
   if (row.check === "dropped") return paint(theme, "dim", strike(theme, row.title));
+  if (row.kind === "archived") return selected ? bold(theme, row.title) : paint(theme, "dim", row.title);
   if (row.check === "done") return selected ? bold(theme, row.title) : paint(theme, "muted", row.title);
   return selected ? bold(theme, row.title) : row.title;
 }
@@ -216,9 +230,11 @@ export function listLines(rows: readonly TaskRow[], selected: number, width: num
 /** The list pane's right-hand count: what is open and what is finished, or how many rows match a search. */
 export function listCount(rows: readonly TaskRow[], query?: string): string {
   if (query) return `${rows.length} match${rows.length === 1 ? "" : "es"}`;
-  const open = rows.filter((row) => row.check === "open").length;
-  const finished = rows.length - open;
-  return [open ? `${open} open` : "", finished ? `${finished} finished` : ""].filter(Boolean).join(" · ") || "0";
+  const listed = rows.filter((row) => row.kind !== "archived");
+  const open = listed.filter((row) => row.check === "open").length;
+  const finished = listed.length - open;
+  const archived = rows.length - listed.length;
+  return [open ? `${open} open` : "", finished ? `${finished} finished` : "", archived ? `${archived} archived` : ""].filter(Boolean).join(" · ") || "0";
 }
 
 const COMMENT_MARKS: Record<PlanComment["status"], string> = { open: "○", delivered: "◐", addressed: "✓" };

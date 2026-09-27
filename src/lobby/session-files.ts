@@ -78,6 +78,18 @@ export class SessionChats {
     this.now = now;
   }
 
+  /** A session's file, asking pi's list at once when it is not known yet. */
+  async locate(sessionId: string): Promise<string | undefined> {
+    const known = this.paths.get(sessionId);
+    if (known) return known;
+    try {
+      for (const session of await this.list()) this.paths.set(session.id, session.path);
+    } catch {
+      return undefined;
+    }
+    return this.paths.get(sessionId);
+  }
+
   /** Tell the cache where a session's file is (a background session reports it). */
   remember(sessionId: string, path: string): void {
     this.paths.set(sessionId, path);
