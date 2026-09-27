@@ -9,7 +9,7 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 import type { Task } from "../../schemas/task.ts";
 import type { ActivityEntry, ChatEntry, ThoughtEntry } from "../feed.ts";
 import type { LobbyPanel } from "../../schemas/configuration.ts";
-import { beside, bold, box, clock, fill, italic, markdownHanging, notePane, paint, since, spinner, wrap, wrapHanging, type LobbyColor, type LobbyTheme, type PaneLayout } from "../layout.ts";
+import { beside, bold, box, clock, fill, fit, italic, markdownLines, notePane, paint, since, spinner, wrap, wrapHanging, type LobbyColor, type LobbyTheme, type PaneLayout } from "../layout.ts";
 
 /** The Lobby tab's scrollable panes. */
 export const HOME_PANES = ["conversation", "activity", "thinking"] as const;
@@ -86,28 +86,86 @@ export function activityLine(entry: ActivityEntry, width: number, tick: number, 
   return `${paint(theme, "dim", clock(entry.at))} ${who} ${mark} ${body}`;
 }
 
-function chatLead(role: ChatEntry["role"], theme?: LobbyTheme): string {
-  if (role === "you") return `${bold(theme, paint(theme, "accent", "you"))} ${paint(theme, "dim", "▸")} `;
-  if (role === "oracle") return `${bold(theme, paint(theme, "toolTitle", "oracle"))} ${paint(theme, "dim", "▸")} `;
-  return `${paint(theme, "dim", "·")} `;
+/** How each speaker is shown: a mark and a name in its colour. */
+export const SPEAKERS = {
+  you: { mark: "●", name: "You", color: "accent" },
+  oracle: { mark: "◆", name: "Oracle", color: "toolTitle" },
+  panel: { mark: "◆", name: "Panel", color: "toolTitle" },
+} as const satisfies Record<string, { mark: string; name: string; color: LobbyColor }>;
+export type Speaker = keyof typeof SPEAKERS;
+
+/** Messages from one speaker within this long of each other share a header. */
+const GROUP_MS = 5 * 60_000;
+/** Message bodies sit under the speaker's name, past its mark. */
+const BODY_INDENT = 2;
+
+/** `◆ Oracle ············ 12:04`: who speaks on the left; when, or what they are doing, on the right. */
+export function speakerLine(speaker: Speaker, width: number, theme?: LobbyTheme, right = ""): string {
+  const { mark, name, color } = SPEAKERS[speaker];
+  const left = `${paint(theme, color, mark)} ${bold(theme, paint(theme, color, name))}`;
+  const note = right ? paint(theme, "dim", right) : "";
+  const gap = width - visibleWidth(left) - visibleWidth(note);
+  return gap >= 1 && note ? `${left}${" ".repeat(gap)}${note}` : left;
 }
 
-/** The conversation as wrapped lines, oldest first, a blank line between turns. */
+/**
+ * What you wrote, as pi shows it: a band in the user-message background with
+ * a column of padding (a bar in its colour where the theme has no background).
+ */
+export function youLines(text: string, width: number, theme?: LobbyTheme): string[] {
+  const inner = Math.max(1, width - BODY_INDENT - 2);
+  const indent = " ".repeat(BODY_INDENT);
+  const band = theme?.bg
+    ? (line: string) => theme.bg!("userMessageBg", ` ${fit(paint(theme, "userMessageText", line), inner)} `)
+    : (line: string) => `${paint(theme, "accent", "▌")} ${line}`;
+  return wrap(text, inner).map((line) => `${indent}${band(line)}`);
+}
+
+/** The oracle's reply as Markdown, under its name. */
+function oracleLines(text: string, width: number, theme?: LobbyTheme): string[] {
+  const indent = " ".repeat(BODY_INDENT);
+  return markdownLines(text, Math.max(1, width - BODY_INDENT), theme).map((line) => (line ? `${indent}${line}` : ""));
+}
+
+/** An event in the conversation (a task starting, a comment sent) as a centred rule; failures stand out instead. */
+export function eventLines(text: string, at: number, width: number, theme?: LobbyTheme): string[] {
+  if (text.startsWith("✗")) return wrap(paint(theme, "error", text), width);
+  const label = ` ${text}${at > 0 ? ` · ${clock(at)}` : ""} `;
+  const room = width - visibleWidth(label);
+  if (room < 6) return wrap(paint(theme, "dim", text), width);
+  const left = Math.floor(room / 2);
+  return [paint(theme, "dim", `${"─".repeat(left)}${label}${"─".repeat(room - left)}`)];
+}
+
+/**
+ * The conversation, oldest first: each turn under a speaker line with its
+ * time, your messages in a band, the oracle's in Markdown, events as rules,
+ * and while the oracle works its header says so (streaming the reply under it).
+ */
 export function chatLines(chat: readonly ChatEntry[], width: number, theme?: LobbyTheme, live?: string, busy = false, tick = 0): string[] {
   const lines: string[] = [];
-  const push = (role: ChatEntry["role"], text: string) => {
-    if (lines.length > 0) lines.push("");
-    // The oracle writes Markdown; what you typed and notes are shown as written.
-    if (role === "oracle") lines.push(...markdownHanging(chatLead(role, theme), text, width, theme));
-    else lines.push(...wrapHanging(chatLead(role, theme), role === "note" ? paint(theme, "dim", text) : text, width));
+  const gap = () => {
+    if (lines.length > 0 && lines.at(-1) !== "") lines.push("");
   };
-  for (const entry of chat) push(entry.role, entry.text);
+  let last: ChatEntry | undefined;
+  for (const entry of chat) {
+    gap();
+    if (entry.role === "note") {
+      lines.push(...eventLines(entry.text, entry.at, width, theme));
+      last = undefined;
+      continue;
+    }
+    const grouped = last?.role === entry.role && entry.at >= last.at && entry.at - last.at < GROUP_MS;
+    if (!grouped) lines.push(speakerLine(entry.role, width, theme, entry.at > 0 ? clock(entry.at) : ""));
+    lines.push(...(entry.role === "you" ? youLines(entry.text, width, theme) : oracleLines(entry.text, width, theme)));
+    last = entry;
+  }
   if (live?.trim()) {
-    push("oracle", live.trim());
-    lines[lines.length - 1] = `${lines.at(-1)!.trimEnd()} ${paint(theme, "accent", spinner(tick))}`;
+    gap();
+    lines.push(speakerLine("oracle", width, theme, `${spinner(tick)} writing`), ...oracleLines(live.trim(), width, theme));
   } else if (busy) {
-    if (lines.length > 0) lines.push("");
-    lines.push(...wrapHanging(chatLead("oracle", theme), paint(theme, "dim", `${spinner(tick)} working…`), width));
+    gap();
+    lines.push(speakerLine("oracle", width, theme, `${spinner(tick)} working…`));
   }
   return lines;
 }
@@ -240,7 +298,7 @@ export function renderHome(input: HomeInput, width: number, height: number, them
     const right = rightNote(view.offset, note);
     return box(w, h, view.shown, { title, ...(right ? { right } : {}), focused: input.focus === name, scroll: { total: all.length, start: view.start }, theme });
   };
-  const chatBox = pane("conversation", input.task ? `Conversation · ${input.task.id}` : "Conversation", input.query ? matches(feed.chat.length) : input.keys?.conversation, (inner) => conversation(input, feed.chat, inner, theme));
+  const chatBox = pane("conversation", "Conversation", input.query ? matches(feed.chat.length) : input.keys?.conversation, (inner) => conversation(input, feed.chat, inner, theme));
   const activityBox = pane("activity", "Activity", input.query ? matches(feed.activity.length) : input.keys?.activity, (inner) => activity(input, feed.activity, inner, theme));
   const thought = currentThought(feed.thoughts);
   const thinkingNote = thought ? `${thought.source} · ${thought.live ? "thinking" : since(input.now - thought.at)}` : input.keys?.thinking;

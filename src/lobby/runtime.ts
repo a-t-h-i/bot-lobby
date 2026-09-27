@@ -561,8 +561,7 @@ export function registerLobbyEvents(pi: ExtensionAPI, configDir: string): void {
       }
     }
     if (message.role !== "user" && message.role !== "assistant") return;
-    const line = chatText(message.role, textOf(message.content));
-    if (line) lobbyFeed.say(line.role, line.text);
+    for (const line of chatText(message.role, textOf(message.content))) lobbyFeed.say(line.role, line.text);
   });
   pi.on("agent_end", (event, ctx) => {
     track(ctx);
