@@ -43,6 +43,14 @@ export interface HomeInput {
   query?: string;
   /** Key labels for the pane toggles, shown on the panes. */
   keys?: Record<LobbyPanel, string>;
+  /** Another session is shown: its name titles the conversation. */
+  title?: string;
+  /** The scene is another session's still status (no animations to toggle). */
+  stillScene?: boolean;
+  /** What the empty conversation says instead of the default (a session starting, say). */
+  emptyNote?: string;
+  /** What the empty activity log says instead of "No activity yet.". */
+  activityNote?: string;
 }
 
 /** Wide terminals put the conversation and the activity log side by side. */
@@ -172,6 +180,7 @@ export function chatLines(chat: readonly ChatEntry[], width: number, theme?: Lob
 
 function emptyChat(input: HomeInput, width: number, theme?: LobbyTheme): string[] {
   if (input.query) return wrap(paint(theme, "dim", `Nothing in the conversation matches "${input.query}".`), width);
+  if (input.emptyNote) return wrap(paint(theme, "dim", input.emptyNote), width);
   const lines = input.task
     ? [paint(theme, "dim", "Nothing said yet. Type below to talk to the oracle about this task.")]
     : [
@@ -208,7 +217,7 @@ function conversation(input: HomeInput, chat: readonly ChatEntry[], width: numbe
 }
 
 function activity(input: HomeInput, entries: readonly ActivityEntry[], width: number, theme?: LobbyTheme): string[] {
-  if (entries.length === 0) return [paint(theme, "dim", input.query ? `No activity matches "${input.query}".` : "No activity yet.")];
+  if (entries.length === 0) return wrap(paint(theme, "dim", input.query ? `No activity matches "${input.query}".` : input.activityNote ?? "No activity yet."), width);
   return entries.map((entry) => activityLine(entry, width, input.tick, theme));
 }
 
@@ -245,11 +254,11 @@ function thinkingContent(input: HomeInput, thoughts: readonly ThoughtEntry[], wi
  */
 function sceneLines(input: HomeInput, width: number, height: number, theme?: LobbyTheme): string[] {
   if (!input.task || !input.scene) return [];
-  const animated = input.panels.scene;
+  const animated = input.panels.scene && !input.stillScene;
   const budget = Math.min(animated ? MAX_SCENE : MAX_STILL, Math.floor(height * SCENE_SHARE));
   if (budget < (animated ? 6 : 4)) return [];
   const lines = input.scene(width, budget, animated).slice(0, budget);
-  const note = input.keys ? `${input.keys.scene} ${animated ? "hides" : "shows"} animations` : undefined;
+  const note = input.keys && !input.stillScene ? `${input.keys.scene} ${animated ? "hides" : "shows"} animations` : undefined;
   return keyNote(lines, width, note, theme);
 }
 
@@ -298,7 +307,7 @@ export function renderHome(input: HomeInput, width: number, height: number, them
     const right = rightNote(view.offset, note);
     return box(w, h, view.shown, { title, ...(right ? { right } : {}), focused: input.focus === name, scroll: { total: all.length, start: view.start }, theme });
   };
-  const chatBox = pane("conversation", "Conversation", input.query ? matches(feed.chat.length) : input.keys?.conversation, (inner) => conversation(input, feed.chat, inner, theme));
+  const chatBox = pane("conversation", input.title ? `Conversation · ${input.title}` : "Conversation", input.query ? matches(feed.chat.length) : input.keys?.conversation, (inner) => conversation(input, feed.chat, inner, theme));
   const activityBox = pane("activity", "Activity", input.query ? matches(feed.activity.length) : input.keys?.activity, (inner) => activity(input, feed.activity, inner, theme));
   const thought = currentThought(feed.thoughts);
   const thinkingNote = thought ? `${thought.source} · ${thought.live ? "thinking" : since(input.now - thought.at)}` : input.keys?.thinking;

@@ -35,6 +35,24 @@ export function ping(state: TaskState, title: string): void {
   if (payload) process.stderr.write(payload);
 }
 
+const waiting = new Set<string>();
+
+/**
+ * Ping for a task's new state. A proposal approved without asking (auto mode,
+ * a plan agreed in the planning panel, or approvals switched off) passes
+ * through awaiting_approval within one step, so that ping waits a tick and
+ * fires once, only if the task still waits for the user.
+ */
+export function pingTransition(task: { id: string; state: TaskState; title: string }, later: (fn: () => void) => void = queueMicrotask): void {
+  if (task.state !== "awaiting_approval") return ping(task.state, task.title);
+  if (waiting.has(task.id)) return;
+  waiting.add(task.id);
+  later(() => {
+    waiting.delete(task.id);
+    if (task.state === "awaiting_approval") ping(task.state, task.title);
+  });
+}
+
 /** Emit one ping when an approval is first recorded; never from a subagent. */
 export function pingApproval(domain: string, detail: string): void {
   if (isSubagentProcess()) return;

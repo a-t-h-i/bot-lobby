@@ -31,6 +31,13 @@ function makePi(available: string[], active: string[] = [...available]) {
     setThinkingLevel(level: unknown): void {
       state.thinkingLevels.push(level);
     },
+    sessionName: undefined as string | undefined,
+    getSessionName(): string | undefined {
+      return state.sessionName;
+    },
+    setSessionName(name: string): void {
+      state.sessionName = name;
+    },
     handlers: new Map<string, (...args: unknown[]) => unknown>(),
     shortcutHandler: undefined as ((ctx: ExtensionContext) => unknown) | undefined,
     shortcutHandlers: {} as Record<string, (ctx: ExtensionContext) => unknown>,
@@ -382,6 +389,7 @@ test("/bot-lobby <request> stamps the starting session as owner", async () => {
     const { ctx } = makeCtx(root, false, "session-stamp");
     await fake.commandHandlers["bot-lobby"]!("ship the redesign", ctx);
     assert.equal(listTasks(root, ".pi")[0]!.ownerSessionId, "session-stamp");
+    assert.equal(fake.sessionName, listTasks(root, ".pi")[0]!.title, "the session is named after its task");
   } finally {
     if (previous === undefined) delete process.env.BOT_LOBBY_CONFIG_DIR;
     else process.env.BOT_LOBBY_CONFIG_DIR = previous;

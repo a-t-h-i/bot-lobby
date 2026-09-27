@@ -10,8 +10,12 @@ import { transition } from "../src/state/task-state.ts";
 import { addPlanComment, readPlanComments } from "../src/state/comments.ts";
 import { readMetrics } from "../src/state/metrics.ts";
 import { applyStatus, clearStatus, setMinimized } from "../src/pi/ui.ts";
-import { ANCHOR_KEY, deliverComments, hideLobby, isLobbyVisible, registerLobbyEvents, showLobby } from "../src/lobby/runtime.ts";
+import { ANCHOR_KEY, backgroundSessions, deliverComments, hideLobby, isLobbyVisible, lobbyView, registerLobbyEvents, setSessionLauncher, showLobby } from "../src/lobby/runtime.ts";
+import { isAutoMode } from "../src/state/auto.ts";
+import { readInbox } from "../src/state/inbox.ts";
+import { FakeSessionProcess } from "./fake-session.ts";
 import { lobbyFeed } from "../src/lobby/feed.ts";
+import { registerOwner } from "../src/pi/owner.ts";
 
 let ambientSubagent: string | undefined;
 let ambientConfig: string | undefined;
@@ -46,6 +50,7 @@ function fakePi() {
       sent.push({ text, options });
     },
     getThinkingLevel: () => "high",
+    getSessionName: () => "my window",
   };
   const emit = async (event: string, payload: unknown, ctx: ExtensionContext) => {
     for (const handler of handlers.get(event) ?? []) await handler(payload, ctx);
@@ -88,6 +93,11 @@ function fakeUi() {
     notify(message: string) {
       notes.push(message);
     },
+    asked: [] as string[],
+    async select(title: string, options: string[]) {
+      ui.asked.push(title);
+      return options[0];
+    },
   };
   return { ui, overlay, widgets, notes, written };
 }
@@ -113,7 +123,7 @@ function context(root: string, ui: ReturnType<typeof fakeUi>["ui"], idle = true)
     ui,
     model: { provider: "p", id: "master-model" },
     modelRegistry: { find: () => undefined, getAvailable: () => [] },
-    sessionManager: { getSessionId: () => "session-1", getBranch: () => [{ type: "message", message: { role: "user", content: "hello" } }] },
+    sessionManager: { getSessionId: () => "session-1", getSessionDir: () => join(root, "sessions"), getBranch: () => [{ type: "message", message: { role: "user", content: "hello" } }] },
     isIdle: () => idle,
     abort: () => void (aborted += 1),
   } as unknown as ExtensionContext;
@@ -127,6 +137,7 @@ async function start(owned: boolean, idle = true) {
   const ui = fakeUi();
   const { ctx } = context(root, ui.ui, idle);
   registerLobbyEvents(fake.pi, ".pi");
+  registerOwner(fake.pi, ".pi");
   applyStatus(ctx, root, ".pi");
   await fake.emit("session_start", { type: "session_start" }, ctx);
   return { root, fake, ui, ctx };
@@ -230,4 +241,56 @@ test("a failed Master turn shows up in the lobby, not only in pi's chat", async 
   } finally {
     await stop(fake, ctx);
   }
+});
+
+test("the lobby starts a task in a named background session, relays its questions and messages other sessions' tasks", async () => {
+  const launched: Array<{ args: string[]; cwd: string; proc: FakeSessionProcess }> = [];
+  setSessionLauncher((args, cwd) => {
+    const proc = new FakeSessionProcess();
+    launched.push({ args, cwd, proc });
+    return proc;
+  });
+  const { root, fake, ui, ctx } = await start(false);
+  try {
+    const elsewhere = createTask("TASK-api", "rate limits", new Date().toISOString(), "add rate limits", "other-terminal");
+    createTaskDir(root, ".pi", elsewhere);
+    transition(elsewhere, "clarifying");
+    saveTask(root, ".pi", elsewhere);
+    assert.equal(showLobby("lobby"), true);
+    const view = lobbyView()!;
+    view.handleInput("\x1bn");
+    for (const char of "add a login page") view.handleInput(char);
+    view.handleInput("\r");
+    assert.equal(launched.length, 1);
+    assert.deepEqual(launched[0]!.args.slice(0, 6), ["--mode", "rpc", "--name", "add login page", "--model", "p/master-model"]);
+    assert.equal(launched[0]!.cwd, root);
+    const session = backgroundSessions()[0]!;
+    assert.equal(view.viewedEntry().name, "add login page", "named as its task will be");
+
+    // A question while the lobby is up waits in it; enter on an empty prompt puts it to the user with pi's dialog.
+    launched[0]!.proc.emit({ type: "extension_ui_request", id: "q1", method: "select", title: "Approve the proposal?", options: ["Approve", "Decline"] });
+    view.handleInput("\r");
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(ui.ui.asked, ["add login page — Approve the proposal?"]);
+    assert.deepEqual(launched[0]!.proc.commands("extension_ui_response"), [{ type: "extension_ui_response", id: "q1", value: "Approve" }]);
+
+    // With the lobby hidden, a new question is announced.
+    hideLobby();
+    launched[0]!.proc.emit({ type: "extension_ui_request", id: "q2", method: "confirm", title: "Sure?", message: "" });
+    assert.ok(ui.notes.some((note) => note.includes("add login page is waiting for you")));
+
+    // Another terminal's task: messages go to its inbox, and auto mode is switched in its folder.
+    showLobby("lobby");
+    view.view({ kind: "other", taskId: "TASK-api" });
+    for (const char of "cap bursts") view.handleInput(char);
+    view.handleInput("\r");
+    assert.deepEqual(readInbox(root, ".pi", "TASK-api").map((message) => [message.text, message.by]), [["cap bursts", "session-1"]]);
+    view.handleInput("\x1bg");
+    assert.equal(isAutoMode(root, ".pi", "TASK-api"), true);
+    assert.equal(session.alive, true);
+  } finally {
+    await stop(fake, ctx);
+    setSessionLauncher(undefined);
+  }
+  assert.ok(launched[0]!.proc.signals.length === 1, "resetting the launcher stops the sessions it started");
 });
