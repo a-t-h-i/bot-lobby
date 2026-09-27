@@ -73,16 +73,13 @@ export function jobDetailLines(job: QuickFixJob, width: number, tick: number, no
   return lines;
 }
 
+/** Before the first fix: one sentence, then the agent and the model it runs on. */
 function intro(input: QuickFixTabInput, width: number, theme?: LobbyTheme): string[] {
   return [
-    bold(theme, "Make a direct change, the way you would ask pi."),
+    ...wrap(bold(theme, "Describe a small change below and one agent makes it now, beside any running task."), width),
     "",
-    "Type what you want below and press enter. One coding agent makes the change right away — no scouting, proposal, plan or review — while any bot-lobby task keeps running. Quick fixes run one at a time in the order you send them.",
-    "",
-    "Keep them small: a rename, a typo, a one-function fix. If it turns out bigger, the agent stops and says so, and you can plan it as a task.",
-    "",
-    paint(theme, "dim", `quick fix: ${input.profile} — esc, then m changes the model, thinking, time limit and instructions (alt+s: all settings)`),
-  ].flatMap((line) => wrap(line, width));
+    `${paint(theme, "mdCode", "QUICK FIX".padEnd(11))}${paint(theme, "muted", input.profile)}`,
+  ];
 }
 
 /** Jobs whose prompt, steps or report mention `query`. */
@@ -104,7 +101,7 @@ export function renderQuickFix(input: QuickFixTabInput, width: number, height: n
   const jobs = newestFirst(filterJobs(input.jobs, input.query));
   if (jobs.length === 0) {
     const content = input.query && input.jobs.length > 0 ? [paint(theme, "dim", `No quick fix mentions "${input.query}".`)] : intro(input, width - 4, theme);
-    return box(width, height, content, { title: "Quick fix", right: input.profile, theme });
+    return box(width, height, content, { title: "Quick fix", ...(input.query ? { right: input.profile } : {}), theme });
   }
   const selected = Math.min(Math.max(0, input.selected), jobs.length - 1);
   const { list: listWidth, detail: detailWidth, wide } = quickFixWidths(width);

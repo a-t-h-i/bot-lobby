@@ -12,6 +12,8 @@ import { transition } from "../state/task-state.ts";
 import { shortTitle } from "../text.ts";
 import { applyStatus } from "./ui.ts";
 import { applyMasterModel } from "./settings-ui.ts";
+import { setAutoMode } from "../state/auto.ts";
+import { loadPlannedTask, markPlannedTaskStarted, plannedTaskRequest } from "../state/backlog.ts";
 
 function uniqueTaskId(root: string, configDir: string, request: string): string {
   const base = nextTaskId(request);
@@ -41,7 +43,16 @@ export function kickoff(task: Task): string {
  * Returns the task, or undefined (with a warning) when this session already
  * owns an active one.
  */
-export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configDir: string, request: string): Promise<Task | undefined> {
+export interface StartOptions {
+  /** The planned task (PLAN-…) this task starts from: the user agreed its plan, so its proposal needs no approval. */
+  approvedPlan?: string;
+  /** Start in auto mode: the oracle drives it to completion without asking. */
+  auto?: boolean;
+  /** The task's short title (a planned task's own title); derived from the request otherwise. */
+  title?: string;
+}
+
+export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configDir: string, request: string, options: StartOptions = {}): Promise<Task | undefined> {
   const root = detectProjectRoot(ctx.cwd, configDir);
   ensureProjectStructure(root, configDir);
   const sessionId = ctx.sessionManager.getSessionId();
@@ -50,14 +61,34 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
     ctx.ui.notify(`bot-lobby ${existing.id} is already active in this session. Finish it or run /bot-lobby cancel ${existing.id} first.`, "warning");
     return undefined;
   }
-  const task = createTask(uniqueTaskId(root, configDir, request), shortTitle(request), new Date().toISOString(), request, sessionId);
+  const task = createTask(uniqueTaskId(root, configDir, options.title ?? request), options.title ?? shortTitle(request), new Date().toISOString(), request, sessionId);
+  if (options.approvedPlan) task.approvedPlan = options.approvedPlan;
   createTaskDir(root, configDir, task);
   transition(task, "clarifying");
   saveTask(root, configDir, task);
+  if (options.auto) setAutoMode(root, configDir, task.id, true, sessionId);
+  // A session that starts a task is named after it, so /resume and the lobby list it by name.
+  if (!pi.getSessionName()) pi.setSessionName(task.title);
   applyStatus(ctx, root, configDir);
   await applyMasterModel(pi, ctx, loadConfig());
   ctx.ui.notify(`bot-lobby ${task.id} started`, "info");
   // A kickoff while pi is still busy (another turn) queues behind it instead of throwing.
   pi.sendUserMessage(kickoff(task), ctx.isIdle() ? undefined : { deliverAs: "followUp" });
+  return task;
+}
+
+/**
+ * Start a task saved from the planning panel in this session. The user
+ * already agreed its plan, so the task carries it as approved and its
+ * proposal goes through without asking. Returns the task, or a reason.
+ */
+export async function startPlannedTask(pi: ExtensionAPI, ctx: ExtensionContext, configDir: string, planId: string, options: { auto?: boolean } = {}): Promise<Task | string> {
+  const root = detectProjectRoot(ctx.cwd, configDir);
+  const plan = loadPlannedTask(root, configDir, planId);
+  if (!plan) return `no planned task ${planId}`;
+  if (plan.status !== "pending") return `${planId} was already started${plan.startedTaskId ? ` as ${plan.startedTaskId}` : ""}`;
+  const task = await startTask(pi, ctx, configDir, plannedTaskRequest(plan), { approvedPlan: plan.id, title: plan.title, ...(options.auto ? { auto: true } : {}) });
+  if (!task) return `this session already drives a task; finish or cancel it first`;
+  markPlannedTaskStarted(root, configDir, plan.id, task.id);
   return task;
 }

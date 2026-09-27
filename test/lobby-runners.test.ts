@@ -7,7 +7,8 @@ import { describeToolCall } from "../src/pi/activity.ts";
 import { createStreamCollector, finishedThought, MAX_THOUGHT_CHARS, type PiStreamEvent, type ProcessOutcome, type ProcessRunner, type ProcessRunOptions } from "../src/execution/pi-runner.ts";
 import { chatFromEntries, chatText, LobbyFeed, textOf } from "../src/lobby/feed.ts";
 import { QUICK_FIX_TOOLS, QuickFixQueue, jobTitle, quickFixPrompt } from "../src/lobby/quickfix.ts";
-import { PLANNER_TOOLS, RESEARCH_PANEL_TOOLS, PlanningSession, commentBlock, memberPrompt, panelSection, parseMemberReply, parseOption, parsePlannerReply, plannerSays, plannerTranscript } from "../src/lobby/planner.ts";
+import { PLANNER_TOOLS, RESEARCH_PANEL_TOOLS, PlanningSession, commentBlock, memberPrompt, panelSection, parseMemberReply, parseOption, parsePlannerReply, plannerSays, plannerTranscript, roundQuestions } from "../src/lobby/planner.ts";
+import { MAX_QUESTIONS } from "../src/lobby/ask.ts";
 import { createIssue, ghError, IssuesState, issueText, listIssues, splitIssueText, viewIssue, type Exec } from "../src/lobby/issues.ts";
 import { listPlannedTasks } from "../src/state/backlog.ts";
 import { readMetrics } from "../src/state/metrics.ts";
@@ -99,10 +100,15 @@ test("the feed streams the Master's thought into one entry and closes it", () =>
   assert.deepEqual(feed.activity.map((entry) => [entry.pending, entry.kind]), [[false, "error"]]);
 });
 
-test("the conversation keeps text only and shortens bot-lobby's own kickoff", () => {
+test("the conversation keeps text only and turns bot-lobby's kickoff into the task starting and your request", () => {
   assert.equal(textOf([{ type: "thinking", thinking: "hidden" }, { type: "text", text: "Hello" }, { type: "toolCall", name: "read" }]), "Hello");
-  assert.deepEqual(chatText("user", "A bot-lobby task is active: TASK-x\nTitle: add login\nRequest: ..."), { role: "note", text: "task TASK-x started — add login" });
-  assert.deepEqual(chatText("assistant", "  Two questions.  "), { role: "oracle", text: "Two questions." });
+  assert.deepEqual(chatText("user", "A bot-lobby task is active: TASK-x\nTitle: add login\nRequest: add a login page\nwith email\nState: clarifying\n\nDrive it…"), [
+    { role: "note", text: "task started · add login" },
+    { role: "you", text: "add a login page\nwith email" },
+  ]);
+  assert.deepEqual(chatText("user", "The user left a comment on the proposal of TASK-x from the lobby:\n- cap it"), [{ role: "note", text: "your comment on the proposal went to the oracle" }]);
+  assert.deepEqual(chatText("assistant", "  Two questions.  "), [{ role: "oracle", text: "Two questions." }]);
+  assert.deepEqual(chatText("user", "   "), []);
   const chat = chatFromEntries([
     { type: "message", timestamp: "2026-01-01T00:00:00.000Z", message: { role: "user", content: "build a page" } },
     { type: "message", message: { role: "toolResult", content: "x" } },
@@ -242,7 +248,8 @@ test("a panel round asks every seat on its own model, then lets the oracle fold 
     DEV: "## Status\nOPEN\n## Questions\n1. REST or RPC?\n## Notes\n- routes live in src/api",
     QA: "## Status\nREADY\n## Notes\n- e2e tests in tests/e2e",
     RESEARCH: "## Status\nOPEN\n## Questions\n1. prefers-color-scheme only, or a stored override?",
-    ORACLE: "## Status\nGRILLING\n## Title\nDark mode\n## Questions\n1. Ship behind a flag?\n## Plan\n### Steps\n1. draft",
+    // The oracle relays DEV's question, adds its own, and decides RESEARCH's (an assumption in the plan).
+    ORACLE: "## Status\nGRILLING\n## Title\nDark mode\n## Questions\n1. [DEV] REST or RPC?\n2. [ORACLE] Ship behind a flag?\n## Plan\n### Steps\n1. draft\n### Assumptions\n- [RESEARCH] Stored override",
   };
   const models: Record<string, string> = { backend: "p/dev", qa: "p/qa", researcher: "p/research" };
   const session = new PlanningSession(
@@ -265,10 +272,9 @@ test("a panel round asks every seat on its own model, then lets the oracle fold 
   assert.match(seen[3]!.prompt, /### DEV — OPEN\nQuestions for the user:\n- REST or RPC\?\nNotes:\n- routes live in src\/api/);
   assert.match(seen[3]!.prompt, /### QA — READY/);
   assert.deepEqual(session.questions, [
-    { from: "ORACLE", text: "Ship behind a flag?", options: [] },
     { from: "DEV", text: "REST or RPC?", options: [] },
-    { from: "RESEARCH", text: "prefers-color-scheme only, or a stored override?", options: [] },
-  ]);
+    { from: "ORACLE", text: "Ship behind a flag?", options: [] },
+  ], "the oracle chooses what reaches the user; RESEARCH's question became an assumption");
   assert.equal(session.awaitingAnswers, true);
   assert.deepEqual(session.messages.at(-1)!.questions, session.questions);
   assert.deepEqual(session.notes, [{ from: "DEV", text: "routes live in src/api" }, { from: "QA", text: "e2e tests in tests/e2e" }]);
@@ -282,13 +288,23 @@ test("a panel round asks every seat on its own model, then lets the oracle fold 
   assert.ok(seen.slice(4, 7).every((call) => call.prompt.includes("1. no flag 2. REST 3. stored override")), "every seat reads every answer");
   assert.equal(session.reply?.status, "ready");
   assert.deepEqual(session.questions, []);
-  assert.equal(session.reply?.plan, "### Steps\n1. draft", "a round without a plan keeps the previous draft");
+  assert.equal(session.reply?.plan, "### Steps\n1. draft\n### Assumptions\n- [RESEARCH] Stored override", "a round without a plan keeps the previous draft");
   assert.deepEqual(session.notes.map((note) => note.text), ["REST, as the user chose", "e2e tests in tests/e2e"], "each seat's latest notes; RESEARCH had none");
   const saved = session.save(new Date("2026-02-01T00:00:00Z"));
   assert.equal(saved.id, "PLAN-dark-mode-toggle");
   assert.deepEqual(listPlannedTasks(root, ".pi")[0]!.issue, { number: 7, title: "Dark mode please", url: "https://x/7" });
   const metrics = readMetrics(root, ".pi");
   assert.deepEqual(metrics.slice(0, 4).map((metric) => [metric.kind, metric.agent]).sort(), [["panel", "DEV"], ["panel", "QA"], ["panel", "RESEARCH"], ["planner", "ORACLE"]]);
+});
+
+test("a round never puts more than four questions to the user; seats' own go through only when the oracle fails", () => {
+  const asked = (text: string) => ({ text, options: [] });
+  const reply = { status: "grilling" as const, questions: ["[QA] One?", "[DEV] Two?", "Three?", "[DESIGN] Four?", "[RESEARCH] Five?"].map(asked) };
+  const seats = [{ from: "DEV", ...asked("Seat one?") }, { from: "QA", ...asked("Seat two?") }];
+  assert.deepEqual(roundQuestions(reply, seats).map((question) => `${question.from} ${question.text}`), ["QA One?", "DEV Two?", "ORACLE Three?", "DESIGN Four?"]);
+  assert.deepEqual(roundQuestions({ status: "grilling", questions: [] }, seats), [], "the oracle decided everything itself");
+  assert.deepEqual(roundQuestions(undefined, seats).map((question) => question.text), ["Seat one?", "Seat two?"], "a failed oracle lets the seats ask");
+  assert.equal(MAX_QUESTIONS, 4, "one questionnaire holds a whole round");
 });
 
 test("a seat that fails does not sink the round, but keeps the plan from READY", async () => {

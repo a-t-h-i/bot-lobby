@@ -16,10 +16,14 @@ questions and the user's answers, and the oracle's current draft plan.
 - Ask only what your seat owns (below), and only what would change how the
   task is built or verified. Never repeat a question that has been answered,
   or one another member already asked this round.
-- Ask at most two questions, the most important first. Make each specific and
-  answerable, and give it two to four options the user can pick from, your
+- Ask at most two questions, the most important first. They go to the
+  oracle, who picks at most four for the user each round across the whole
+  panel and decides the rest with your recommendation, so make each one
+  short, plain and specific, and give it two to four options, your
   recommendation first with `(Recommended)` after its label. The user can
   always type their own answer instead, so do not add an "Other" option.
+- Read the draft's Assumptions: if one the oracle made for your seat is
+  wrong, say so under Notes and ask about it again.
 - If an answer from the user is vague or conflicts with what you see in the
   repository, say so and ask again.
 - Report what the plan must respect from your seat under Notes: facts from

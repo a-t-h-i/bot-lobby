@@ -348,7 +348,7 @@ export function parsePiStream(stdout: string): ParsedStream {
  * every child process, including test runners and scripts, where argv[1] is
  * not pi at all.
  */
-function resolvePiInvocation(args: string[]): { command: string; args: string[] } {
+export function resolvePiInvocation(args: string[]): { command: string; args: string[] } {
   const launcher = process.argv[1];
   if (launcher && existsSync(launcher) && isPiLauncher(launcher)) {
     return { command: launcher, args };

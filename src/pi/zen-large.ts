@@ -202,12 +202,20 @@ export function largeLines(
   width: number,
   budget: number,
   theme?: PanelTheme,
+  still = false,
 ): string[] {
   if (width < LARGE_MIN_WIDTH) return [];
   const head = boxLines(input, width, theme);
   const alert = input.alert ? [alertLine(input.alert, width, theme, input.alertKind ?? "warning")] : [];
   const avail = Math.max(0, lineBudget(budget) - head.length - alert.length);
-  return [...head, ...alert, ...bodyLines(input, width, theme, avail)];
+  return [...head, ...alert, ...(still ? stillLines(input, width, theme, avail) : bodyLines(input, width, theme, avail))];
+}
+
+/** The scene without its animations: what the agents are doing, then the task checklist. */
+function stillLines(input: LargeSceneInput, width: number, theme: PanelTheme | undefined, avail: number): string[] {
+  const feed = input.feed && avail >= 1 ? [feedRow(input.feed, width, theme)] : [];
+  const entries = clamp(avail - feed.length - 1, 0, MAX_TASK_ROWS);
+  return [...feed, ...sectionLines(input, width, theme, entries)];
 }
 
 /** Clamp a caller line budget to the scene cap, ignoring non-finite input. */

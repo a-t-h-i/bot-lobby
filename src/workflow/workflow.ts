@@ -42,6 +42,7 @@ import { researchResultPath, runResearch, type ResearchOutcome, type ResearchReq
 import { assessReconnaissance, completionBlockers, decideReviewLoop, recordDecision } from "../master/decisions.ts";
 import { detectSharedFiles, summarizeOutcomes } from "../master/synthesis.ts";
 import { truncate } from "../text.ts";
+import { isAutoMode } from "../state/auto.ts";
 import { assertNoPendingApprovals, pendingApprovals, requestApproval, resolveApproval } from "./approvals.ts";
 import { pingApproval } from "../pi/notify.ts";
 import { describeRun, runLogEntry } from "../pi/run-summary.ts";
@@ -196,6 +197,17 @@ export function describeOversizedKnowledge(dataRoots: readonly string[], thresho
   return overThreshold(dataRoots, threshold).map((entry) => `${entry.agent}/${entry.file} (${entry.chars} chars)`);
 }
 
+/**
+ * Why the user is not asked on this task, if they are not: auto mode drives
+ * it unattended, and a plan the user agreed in the planning panel needs no
+ * second approval.
+ */
+export function unattendedReason(task: Task, auto: boolean): "auto mode" | "approved plan" | undefined {
+  if (auto) return "auto mode";
+  if (task.approvedPlan) return "approved plan";
+  return undefined;
+}
+
 /** Apply the user's approve/amend/decline decision to an awaiting-approval task. */
 export function applyApprovalChoice(task: Task, choice: ApprovalChoice, amendment?: string): string {
   requireState(task, ["awaiting_approval"]);
@@ -241,6 +253,11 @@ async function handleClarify(task: Task, params: OrchestrateParams, deps: Workfl
   const question = params.question?.trim();
   if (!question) throw new Error("clarify requires a question");
   transition(task, "clarifying");
+  const unattended = unattendedReason(task, isAutoMode(deps.root, deps.configDir, task.id));
+  if (unattended) {
+    recordDecision(task, `Not asked (${unattended}): ${truncate(question, 300)}`);
+    return `${unattended === "auto mode" ? "Auto mode is on, so nobody will answer." : "The user agreed this plan in the planning panel."} Do not ask the user: answer this yourself from the request${task.approvedPlan ? ", the agreed plan" : ""} and your reconnaissance, say what you decided in your proposal, and continue.\n\nQuestion: ${question}`;
+  }
   const answer = params.options?.length ? await deps.choose(question, params.options) : await deps.ask(question);
   if (answer === undefined) {
     return `No answer captured. Ask the user this in your reply, then continue.\n\nQuestion: ${question}`;
@@ -394,6 +411,11 @@ async function handlePropose(task: Task, params: OrchestrateParams, deps: Workfl
   for (const concern of params.concerns ?? []) recordDecision(task, `Concern: ${concern}`);
   transition(task, "awaiting_approval");
   if (!deps.config.workflow.requireApprovalForFeatures) return applyApprovalChoice(task, "approve");
+  const unattended = unattendedReason(task, isAutoMode(deps.root, deps.configDir, task.id));
+  if (unattended) {
+    recordDecision(task, `Proposal approved without asking (${unattended}).`);
+    return `${applyApprovalChoice(task, "approve")} (No approval needed: ${unattended === "auto mode" ? "auto mode is on" : `the user agreed this plan in the planning panel (${task.approvedPlan})`}.)`;
+  }
   const choice = await deps.choose(`Approve this proposal?\n\n${truncate(proposal, 2000)}`, APPROVAL_OPTIONS);
   if (!choice) return `Awaiting approval. Present the proposal to the user and continue after they respond.\n\n${proposal}`;
   const lower = choice.toLowerCase();
@@ -439,7 +461,7 @@ function handlePlan(task: Task, params: OrchestrateParams, deps: WorkflowDeps): 
 }
 
 /** Record approvals a worker asked for; auto-approve when config allows it. */
-function recordWorkerApprovals(task: Task, outcome: WorkerOutcome, config: BotLobbyConfig): Approval[] {
+function recordWorkerApprovals(task: Task, outcome: WorkerOutcome, config: BotLobbyConfig, auto = false): Approval[] {
   const created: Approval[] = [];
   const kinds: Array<[ApprovalKind, string, string[], boolean]> = [
     ["dependency", "dependencies", outcome.result.dependencyNeeds, config.workflow.requireApprovalForDependencies],
@@ -447,7 +469,9 @@ function recordWorkerApprovals(task: Task, outcome: WorkerOutcome, config: BotLo
   ];
   for (const [kind, label, items, required] of kinds) {
     for (const detail of items) {
-      if (required) {
+      // Auto mode has nobody to ask: the request is approved and recorded where the user can review it.
+      if (required && auto) recordDecision(task, `Auto-approved ${label} (auto mode): ${detail}`, outcome.result.domain);
+      else if (required) {
         created.push(requestApproval(task, kind, outcome.result.domain, detail));
         pingApproval(outcome.result.domain, detail);
       } else recordDecision(task, `Auto-approved ${label}: ${detail}`, outcome.result.domain);
@@ -589,7 +613,7 @@ function parseAssignments(params: OrchestrateParams): Assignment[] {
 function absorbWorkerOutcome(task: Task, deps: WorkflowDeps, outcome: WorkerOutcome): string {
   const domain = outcome.result.domain;
   recordWorkerRun(task, outcome.run);
-  const approvals = recordWorkerApprovals(task, outcome, deps.config);
+  const approvals = recordWorkerApprovals(task, outcome, deps.config, isAutoMode(deps.root, deps.configDir, task.id));
   const pushback = recordPushback(task, outcome);
   task.blockers = [...task.blockers.filter((blocker) => blocker.domain !== domain), ...outcome.result.blockers];
   updateScratchpad(deps, task, outcome);
