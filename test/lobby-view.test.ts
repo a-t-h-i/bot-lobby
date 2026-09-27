@@ -41,6 +41,7 @@ const hangingRunner: ProcessRunner = () => new Promise(() => {});
 const PLAN = "## Objective\nLogin.\n## Steps\n1. Add the form\n2. Wire the API\n## Testing\nunit";
 
 interface Calls {
+  settings: string[];
   answered: number;
   savedPanels: Array<Record<LobbyPanel, boolean>>;
   oracle: string[];
@@ -70,7 +71,7 @@ interface ViewOptions {
 
 function makeView(options: ViewOptions = {}) {
   const root = mkdtempSync(join(tmpdir(), "bl-view-"));
-  const calls: Calls = { answered: 0, savedPanels: [], oracle: [], comments: [], started: [], discarded: [], aborted: 0, hidden: 0, seeds: [], seats: [] };
+  const calls: Calls = { settings: [], answered: 0, savedPanels: [], oracle: [], comments: [], started: [], discarded: [], aborted: 0, hidden: 0, seeds: [], seats: [] };
   const rows = options.rows ?? 40;
   const tui = { terminal: { rows, columns: 120 }, requestRender() {} } as unknown as TUI;
   const feed = new LobbyFeed();
@@ -121,6 +122,7 @@ function makeView(options: ViewOptions = {}) {
     panels: () => ({ scene: true, conversation: true, activity: true, thinking: true, ...options.panels }),
     savePanels: (panels) => void calls.savedPanels.push({ ...panels }),
     keys: () => options.keys ?? {},
+    openSettings: async (entry) => void calls.settings.push(entry ?? "all"),
     defaultPanel: () => options.panel ?? ["backend", "designer", "qa", "researcher"],
     seatLabel: (member) => `p/${member} · medium`,
     issues,
@@ -362,7 +364,7 @@ test("the home tab puts the scene first, the thinking pane last, and stacks pane
   feed.say("you", "build it");
   feed.log("DEV", "reading a.ts", "info", NOW);
   feed.thought("DEV", "the router lives in a.ts");
-  const input = { task: activeTask(), scene: () => ["SCENE"], chat: feed.chat, activity: feed.activity, thoughts: feed.thoughts, busy: false, others: 0, pending: 0, chatOffset: 0, tick: 0, now: NOW, panels: ALL_PANELS };
+  const input = { task: activeTask(), scene: () => ["SCENE"], chat: feed.chat, activity: feed.activity, thoughts: feed.thoughts, busy: false, others: 0, pending: 0, tick: 0, now: NOW, panels: ALL_PANELS };
   const wide = renderHome(input, 120, 30);
   assert.equal(wide[0], fit("SCENE", 120));
   assert.ok(wide.some((line) => line.includes("╭ Conversation · TASK-login") && line.includes("╭ Activity")));
@@ -383,7 +385,7 @@ test("hidden panes give their room to the rest, and a search narrows every pane"
   feed.log("DEV", "editing router.ts", "info", NOW);
   feed.thought("DEV", "the router lives in a.ts");
   const keys = { scene: "Alt+Z", conversation: "Alt+C", activity: "Alt+A", thinking: "Alt+K" };
-  const input = { chat: feed.chat, activity: feed.activity, thoughts: feed.thoughts, busy: false, others: 0, pending: 0, chatOffset: 0, tick: 0, now: NOW, panels: ALL_PANELS, keys };
+  const input = { chat: feed.chat, activity: feed.activity, thoughts: feed.thoughts, busy: false, others: 0, pending: 0, tick: 0, now: NOW, panels: ALL_PANELS, keys };
   const quiet = renderHome({ ...input, panels: { ...ALL_PANELS, activity: false, thinking: false } }, 120, 20);
   assert.equal(quiet.length, 20);
   assert.ok(!quiet.some((line) => line.includes("Activity") || line.includes("Thinking")));
@@ -730,4 +732,126 @@ test("mouse reports parse as clicks and wheel turns", () => {
   view.handleInput("\x1b[<65;1;5M");
   assert.equal(view.mode, "type", "a wheel turn is not typed into the prompt");
   assert.ok(!view.render(100).some((line) => line.includes("[<65")));
+});
+
+const KEYS = { left: "\x1b[D", right: "\x1b[C", home: "\x1b[H", end: "\x1b[F", pageUp: "\x1b[5~", pageDown: "\x1b[6~" };
+
+/** The SGR report for a wheel turn at zero-based `x`, `y` (up is -1). */
+function wheelAt(x: number, y: number, direction: -1 | 1): string {
+  return `\x1b[<${direction < 0 ? 64 : 65};${x + 1};${y + 1}M`;
+}
+
+function busyFeed(feed: LobbyFeed, count = 60): void {
+  feed.say("you", "build it");
+  feed.say("oracle", "On it.");
+  for (let index = 0; index < count; index += 1) feed.log("DEV", `reading file-${index}.ts`, "info", NOW);
+}
+
+test("each Lobby pane scrolls on its own: ← → pick the pane, ↑↓ and page keys scroll it, Home and End jump", () => {
+  const { view, feed } = makeView();
+  busyFeed(feed);
+  view.handleInput(KEY.escape);
+  const shows = (text: string) => view.render(120).some((line) => line.includes(text));
+  assert.ok(shows("file-59.ts") && !shows("file-20.ts"), "panes start on their newest lines");
+  view.handleInput(KEYS.right);
+  assert.equal(view.homeFocus, "activity");
+  view.handleInput(KEY.up);
+  assert.ok(!shows("file-59.ts") && shows("file-58.ts"));
+  assert.ok(view.render(120).some((line) => line.includes("╭ Activity") && line.includes("↓1")));
+  assert.ok(shows("On it."), "the conversation did not move");
+  view.handleInput(KEYS.home);
+  assert.ok(shows("file-0.ts") && !shows("file-59.ts"));
+  view.handleInput(KEY.down);
+  assert.ok(!shows("file-0.ts"), "at the top, one step down responds at once (the offset is clamped)");
+  view.handleInput(KEYS.end);
+  assert.ok(shows("file-59.ts"));
+  view.handleInput(KEYS.pageUp);
+  const paged = Number(/↓(\d+)/.exec(view.render(120).find((line) => line.includes("╭ Activity"))!)?.[1]);
+  const rows = view.render(120).filter((line) => line.includes("reading file-")).length;
+  assert.equal(paged, rows - 1, "a page is the pane's rows less one line of context");
+  view.handleInput(KEYS.right);
+  assert.equal(view.homeFocus, "thinking");
+  view.handleInput(KEY.alt("k"));
+  assert.equal(view.render(120) && view.homeFocus, "thinking");
+  view.handleInput(KEY.up);
+  assert.equal(view.homeFocus, "conversation", "a hidden pane hands the keys to the first one showing");
+});
+
+test("the wheel scrolls the pane under the pointer, and a scrolled-back pane holds its place as lines arrive", () => {
+  const { view, feed } = makeView();
+  busyFeed(feed);
+  let lines = view.render(120);
+  const top = lines.findIndex((line) => line.includes("╭ Activity"));
+  const x = lines[top]!.indexOf("╭ Activity") + 5;
+  view.handleInput(wheelAt(x, top + 3, -1));
+  lines = view.render(120);
+  assert.ok(!lines.some((line) => line.includes("file-59.ts")) && lines.some((line) => line.includes("file-56.ts")), "three lines back");
+  assert.equal(view.homeFocus, "conversation", "the wheel does not move the keys");
+  const content = (line: string) => line.slice(x - 5).replace(/[│┃]\s*$/, "");
+  const before = lines.filter((line) => line.includes("reading file-")).map(content);
+  feed.log("DEV", "reading late.ts", "info", NOW);
+  feed.log("DEV", "reading later.ts", "info", NOW);
+  const after = view.render(120).filter((line) => line.includes("reading file-")).map(content);
+  assert.deepEqual(after, before, "new lines arrive below without moving what is being read");
+  assert.ok(view.render(120).some((line) => line.includes("╭ Activity") && line.includes("↓5")));
+  view.handleInput(wheelAt(2, top + 3, -1));
+  const header = view.render(120).find((line) => line.includes("╭ Conversation"))!;
+  assert.ok(!header.slice(0, header.indexOf("╭ Activity")).includes("↓"), "the conversation fits, so it does not scroll");
+  view.handleInput(click(x, top + 2));
+  assert.equal(view.homeFocus, "activity", "a click gives the pane the keys");
+});
+
+test("task and quick fix details scroll to their last line and no further; the wheel works on both panes", async () => {
+  const task = { ...activeTask(), plan: Array.from({ length: 60 }, (_, index) => `${index + 1}. step number ${index + 1}`).join("\n") };
+  const { view } = makeView({ tasks: [task, { ...createTask("TASK-two", "second", "2026-09-26T10:00:00.000Z"), state: "implementing" as const }] });
+  view.setTab("tasks");
+  view.handleInput(KEY.enter);
+  for (let index = 0; index < 20; index += 1) view.handleInput(KEYS.pageDown);
+  let lines = view.render(120);
+  assert.ok(lines.some((line) => line.includes("60. step number 60")));
+  const detail = lines.find((line) => line.includes("╭ Detail"))!;
+  assert.match(detail, /\d+–(\d+)\/\1 /, "the position reads the last line");
+  view.handleInput(KEYS.pageUp);
+  assert.ok(!view.render(120).some((line) => line.includes("60. step number 60")), "one page up moves at once");
+  view.handleInput(KEYS.home);
+  assert.ok(view.render(120).some((line) => line.includes("add login") || line.includes("Add a login page")));
+  lines = view.render(120);
+  const row = lines.findIndex((line) => line.includes("TASK-two") || line.includes("second"));
+  view.handleInput(wheelAt(3, row, 1));
+  assert.ok(view.render(120).some((line) => line.includes("▸ second")), "the wheel over the list moves the selection");
+});
+
+test("the Plan conversation scrolls with the wheel while the draft keeps its cursor", async () => {
+  const { view } = await planned();
+  const lines = view.render(140);
+  const top = lines.findIndex((line) => line.includes("╭ Conversation"));
+  view.handleInput(wheelAt(3, top + 2, -1));
+  assert.ok(view.render(140).some((line) => line.includes("╭ Conversation")));
+  view.handleInput(KEY.escape);
+  view.handleInput(KEYS.right);
+  view.handleInput(KEYS.end);
+  assert.ok(view.planCursor > 0, "End puts the draft cursor on the last line");
+  view.handleInput(KEYS.home);
+  assert.equal(view.planCursor, 0);
+});
+
+test("alt+s opens bot-lobby's settings; m opens the quick fix or planner entry; the lobby rereads the config after", async () => {
+  const keys: Record<string, string> = {};
+  const { view, calls } = makeView({ keys });
+  view.handleInput(KEY.alt("s"));
+  assert.deepEqual(calls.settings, ["all"]);
+  view.setTab("quickfix");
+  view.handleInput(KEY.escape);
+  view.handleInput("m");
+  assert.deepEqual(calls.settings, ["all", "quickfix"]);
+  assert.ok(view.render(120).some((line) => line.includes("m changes the model")), "the Quick fix tab says how");
+  view.setTab("plan");
+  view.handleInput(KEY.escape);
+  view.handleInput("m");
+  assert.deepEqual(calls.settings, ["all", "quickfix", "planner"]);
+  keys.toggleThinking = "alt+t";
+  view.reloadConfig();
+  view.setTab("lobby");
+  view.handleInput(KEY.alt("t"));
+  assert.equal(view.panelShown("thinking"), false, "a key rebound in the settings works at once");
 });
