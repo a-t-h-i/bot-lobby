@@ -9,10 +9,12 @@ import { Container, type Component, type Focusable, fuzzyFilter, getKeybindings,
 import {
   INHERIT_MODEL,
   isThinkingLevel,
+  LOBBY_PANELS,
   SCOUT_THINKING,
   SUBAGENT_KINDS,
   type AgentModelConfig,
   type BotLobbyConfig,
+  type LobbyPanel,
   type SubagentKind,
 } from "../schemas/configuration.ts";
 import { globalConfigPath, loadConfig, saveConfig } from "../state/project.ts";
@@ -338,6 +340,57 @@ function entryDescription(kind: SettingsKind, view: EntryView): string {
   return `${view.model} · ${thinking}${limit}${custom}`;
 }
 
+/** The lobby's on/off settings as the settings menu lists them; `panel:*` are the Lobby tab's panes. */
+export type LobbySwitch = "autoOpen" | "autoAsk" | "mouse" | "issues" | `panel:${LobbyPanel}`;
+
+const PANEL_SWITCH_LABELS: Record<LobbyPanel, string> = { scene: "Zen scene pane", conversation: "Conversation pane", activity: "Activity log pane", thinking: "Thinking pane" };
+
+export const LOBBY_SWITCHES: ReadonlyArray<{ id: LobbySwitch; label: string; help: string }> = [
+  { id: "autoOpen", label: "Open with a task", help: "open the lobby when this session starts or resumes a task" },
+  { id: "autoAsk", label: "Ask at once", help: "put the panel's questions to you as soon as a round ends, while the Plan tab is open" },
+  { id: "mouse", label: "Mouse", help: "click tabs and draft lines, scroll with the wheel (shift+drag still selects text)" },
+  { id: "issues", label: "Issues tab", help: "the GitHub Issues tab" },
+  ...LOBBY_PANELS.map((panel) => ({ id: `panel:${panel}` as const, label: PANEL_SWITCH_LABELS[panel], help: "shown on the Lobby tab; its key in the lobby toggles it too" })),
+];
+
+export function lobbySwitch(config: BotLobbyConfig, id: LobbySwitch): boolean {
+  if (id.startsWith("panel:")) return config.lobby.panels[id.slice("panel:".length) as LobbyPanel];
+  return config.lobby[id as Exclude<LobbySwitch, `panel:${string}`>];
+}
+
+/** The config with one lobby setting flipped. */
+export function toggleLobbySwitch(config: BotLobbyConfig, id: LobbySwitch): BotLobbyConfig {
+  const value = !lobbySwitch(config, id);
+  if (id.startsWith("panel:")) {
+    const panel = id.slice("panel:".length) as LobbyPanel;
+    return { ...config, lobby: { ...config.lobby, panels: { ...config.lobby.panels, [panel]: value } } };
+  }
+  return { ...config, lobby: { ...config.lobby, [id]: value } };
+}
+
+/** On/off settings for the lobby; enter flips one and saves it. Key rebinding stays in the file (lobby.keys). */
+async function editLobby(ctx: ExtensionContext): Promise<void> {
+  for (;;) {
+    const config = loadConfig();
+    const items: SelectItem[] = LOBBY_SWITCHES.map((entry) => ({ value: entry.id, label: entry.label, description: `${lobbySwitch(config, entry.id) ? "on" : "off"} · ${entry.help}` }));
+    items.push({ value: "back", label: "Back", description: `keys: lobby.keys in ${globalConfigPath()}` });
+    const choice = await pick(ctx, "bot-lobby settings · Lobby", items);
+    if (!choice || choice === "back") return;
+    saveConfig(toggleLobbySwitch(config, choice as LobbySwitch));
+  }
+}
+
+function lobbySummary(config: BotLobbyConfig): string {
+  const hidden = LOBBY_PANELS.filter((panel) => !config.lobby.panels[panel]);
+  return [
+    config.lobby.autoOpen ? "opens with a task" : "opens on alt+l",
+    config.lobby.autoAsk ? "asks at once" : "asks on enter",
+    config.lobby.mouse ? "mouse" : "no mouse",
+    ...(config.lobby.issues ? ["issues tab"] : []),
+    ...(hidden.length > 0 ? [`hidden: ${hidden.join(", ")}`] : []),
+  ].join(" · ");
+}
+
 /** Open the per-agent settings editor; every change is written to the global config. */
 export async function openSettings(pi: ExtensionAPI, ctx: ExtensionContext): Promise<void> {
   if (ctx.mode !== "tui") {
@@ -352,9 +405,11 @@ export async function openSettings(pi: ExtensionAPI, ctx: ExtensionContext): Pro
   for (;;) {
     const config = loadConfig();
     const items: SelectItem[] = SETTINGS_KINDS.map((kind) => ({ value: kind, label: kindLabel(kind), description: entryDescription(kind, entryView(config, kind)) }));
+    items.push({ value: "lobby", label: "Lobby", description: lobbySummary(config) });
     items.push({ value: "close", label: "Close" });
     const choice = await pick(ctx, "bot-lobby settings", items);
     if (!choice || choice === "close") return;
-    await editEntry(pi, ctx, choice as SettingsKind);
+    if (choice === "lobby") await editLobby(ctx);
+    else await editEntry(pi, ctx, choice as SettingsKind);
   }
 }

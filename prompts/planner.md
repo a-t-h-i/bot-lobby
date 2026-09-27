@@ -23,8 +23,10 @@ below.
   only cross-cutting ones the members did not ask: scope and non-goals,
   priorities, trade-offs between domains, sequencing, rollout and rollback.
   Never repeat a member's question. Each one must be specific and answerable.
-- Offer concrete options when they help (`a) …  b) …`), and say which you
-  would pick and why.
+- Give every question two to four options the user can pick from, your
+  recommendation first with `(Recommended)` after its label. The user answers
+  the panel's questions one at a time and can always type their own answer,
+  so never add an "Other" option.
 - Challenge answers that are vague, contradictory or risky, and ask again.
   Do not accept "whatever you think" for a decision with real trade-offs:
   propose one and ask the user to confirm it.
@@ -44,10 +46,13 @@ GRILLING or READY
 Three to six words naming the task.
 
 ## Questions
-1. The most important open question.
+1. The most important open question?
+   - Short label (Recommended) — what choosing it means
+   - Another label — what choosing it means
 2. …
 
-(Omit the Questions section when READY.)
+(Two to four options per question, labels of one to five words. Omit the
+Questions section when READY.)
 
 ## Plan
 The current draft, in Markdown:
