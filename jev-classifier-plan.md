@@ -12,6 +12,9 @@ default; turn it on under `/bot-lobby settings` → **Classifier (Jev)** after
 - Phase 4 — likely files and `find_relevant_files`: merged (#10).
 - Phase 5 — task triage, clarify answers, held quick fixes: merged (#11).
 - Phase 6 — effort routing with a full-strength re-run: merged (#12).
+- Follow-up — OpenCode Zen host (#14): the default host is `auto`, which
+  uses OpenCode's free `jev-1.13-free` with the OpenCode key pi holds (the
+  one used for Zen or Go models), else TypeSafe.
 - Phase 7 — the Metrics tab's Classifier box (calls, speed, what they
   spared, routed runs' success), live checks behind `BOT_LOBBY_JEV_E2E=1`,
   docs.
