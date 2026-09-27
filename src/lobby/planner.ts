@@ -12,6 +12,10 @@
  * conversation, so one can be stopped or retried without losing the session.
  * A round limit bounds the grilling: the last round skips the seats and the
  * oracle decides whatever is still open, and later replies only revise.
+ * With the classifier on, each round seats only the members whose domain the
+ * idea or the latest answers touch (a key press pins a seat on or off), and
+ * questions whose recommended option the conversation already makes clearly
+ * right are answered without asking.
  * The agreed plan is saved as a pending task.
  */
 import { loadPrompt } from "../prompts/loader.ts";
@@ -25,6 +29,9 @@ import { truncate } from "../text.ts";
 import type { LobbyFeed } from "./feed.ts";
 import type { QuickFixProfile } from "./quickfix.ts";
 import { MAX_QUESTIONS, type AskResult } from "./ask.ts";
+import type { Classifier } from "../classifier/classifier.ts";
+import { chooseSeats } from "../classifier/seats.ts";
+import { autoAnswer, type AutoAnswer } from "../classifier/answers.ts";
 
 /** Seats and the oracle read the repository to ask informed questions; they never edit. */
 export const PLANNER_TOOLS: readonly string[] = ["read", "grep", "find", "ls"];
@@ -67,6 +74,8 @@ export interface PlannerMessage {
   at: number;
   /** The round's questions, attributed, when the panel asked any. */
   questions?: PanelQuestion[];
+  /** Questions the classifier answered with their recommended option instead of asking. */
+  decided?: AutoAnswer[];
 }
 
 /** The oracle's reply: its verdict, title, own questions and the draft plan. */
@@ -122,7 +131,12 @@ export interface PlannerDeps {
   onRound?: (session: PlanningSession) => void;
   /** Rounds before the oracle finalizes alone (0 or absent = unlimited); read as each round starts. */
   maxRounds?: () => number;
+  /** Chooses the round's seats and answers obvious questions when it is on; absent, every seat sits and you answer everything. */
+  classifier?: Classifier;
 }
+
+/** What the user's turn says when the classifier settled every question of a round. */
+export const CLASSIFIER_CONTINUE = "(No answers needed from me this round: the classifier settled the questions above. Continue.)";
 
 /**
  * How a round runs under the limit: `normal` grilling with the seats, the
@@ -314,6 +328,7 @@ export function plannerTranscript(messages: readonly PlannerMessage[], seed?: Pl
   for (const message of messages) {
     const body = message.questions && message.questions.length > 0 ? message.questions.map(questionLine).join("\n") : message.text.trim();
     lines.push(message.role === "you" ? "### User" : "### Panel", "", body, "");
+    if (message.decided && message.decided.length > 0) lines.push(decidedBlock(message.decided), "");
   }
   if (draft) lines.push("## The oracle's current draft plan", "", truncate(draft, 8000), "");
   lines.push(closing);
@@ -324,6 +339,14 @@ export interface MemberOutcome {
   member: PanelMember;
   reply?: MemberReply;
   error?: string;
+}
+
+/** Questions the classifier answered, as every seat and the oracle read them. */
+export function decidedBlock(decided: readonly AutoAnswer[]): string {
+  return [
+    "Decided by the classifier (each is the recommended option, which the conversation already makes clearly right; list them under Assumptions, the user can overrule them):",
+    ...decided.map((entry) => `- [${entry.from}] ${entry.question} → ${entry.answer} (${entry.probability.toFixed(2)})`),
+  ].join("\n");
 }
 
 /** The seats' output for the oracle: each seat's status, questions and notes, or its failure. */
@@ -413,6 +436,14 @@ export class PlanningSession {
   lineComments: LineComment[] = [];
   /** How the latest round ran under the round limit. */
   mode: RoundMode = "normal";
+  /** Seats pinned on with a key press: they sit every round, whatever the classifier says. */
+  readonly pins = new Set<PanelMember>();
+  /** Seats the classifier left out of the latest round, with how likely it judged them needed. */
+  satOut = new Map<PanelMember, number>();
+  /** How each seat left the last round it sat. */
+  private readonly lastStatus = new Map<PanelMember, "ready" | "open">();
+  /** The last round was started by the classifier settling every question; the next one waits for the user. */
+  private autoContinued = false;
   private controller?: AbortController;
   /** Round attempts, retries included, so each attempt's feed steps stay apart. */
   private attempts = 0;
@@ -443,16 +474,30 @@ export class PlanningSession {
     return roundMode(this.turns + 1, this.limit);
   }
 
-  /** Seat or unseat a member for the next round; returns whether it now sits. */
+  /**
+   * Seat or unseat a member for the next round; returns whether it now sits.
+   * Seating one pins it (it sits every round, whatever the classifier says);
+   * unseating keeps it off until seated again.
+   */
   toggle(member: PanelMember): boolean {
-    if (this.seats.has(member)) this.seats.delete(member);
-    else this.seats.add(member);
+    if (this.seats.has(member)) {
+      this.seats.delete(member);
+      this.pins.delete(member);
+    } else {
+      this.seats.add(member);
+      this.pins.add(member);
+    }
     this.deps.onChange?.();
     return this.seats.has(member);
   }
 
   /** Add the user's message (the idea, or answers), with any line comments, and run a round. */
   async send(text: string): Promise<void> {
+    this.autoContinued = false;
+    await this.post(text);
+  }
+
+  private async post(text: string): Promise<void> {
     const body = [text.trim(), commentBlock(this.lineComments)].filter(Boolean).join("\n\n");
     if (!body) return;
     if (this.busy) throw new Error("the panel is still thinking");
@@ -578,6 +623,7 @@ export class PlanningSession {
       state.reply = parseMemberReply(outcome.output);
       state.status = "done";
       this.memberNotes.set(member, state.reply.notes);
+      this.lastStatus.set(member, state.reply.status === "ready" ? "ready" : "open");
     } else {
       state.status = "failed";
       state.error = outcome.error ?? outcome.status;
@@ -600,11 +646,17 @@ export class PlanningSession {
     const mode = roundMode(this.turns, limit);
     this.mode = mode;
     // At and past the limit the oracle works alone: the seats have had their rounds.
-    const seated = mode === "normal" ? PANEL_MEMBERS.filter((member) => this.seats.has(member)) : [];
-    this.members = seated.map((member) => ({ member, status: "thinking", step: "reading the conversation" }));
-    this.step = this.members.length > 0 ? "waiting for the panel" : "reading the conversation";
+    const eligible = mode === "normal" ? PANEL_MEMBERS.filter((member) => this.seats.has(member)) : [];
+    this.members = [];
+    this.satOut = new Map();
+    this.step = "reading the conversation";
     this.deps.onChange?.();
     try {
+      const seated = await this.chooseSeats(eligible, controller.signal);
+      if (controller.signal.aborted) throw new Error("stopped");
+      this.members = seated.map((member) => ({ member, status: "thinking", step: "reading the conversation" }));
+      this.step = this.members.length > 0 ? "waiting for the panel" : "reading the conversation";
+      this.deps.onChange?.();
       const transcript = plannerTranscript(this.messages, this.seed, this.reply?.plan, "");
       const outcomes = await Promise.all(this.members.map((state) => this.runMember(state, transcript, controller.signal)));
       if (controller.signal.aborted) throw new Error("stopped");
@@ -619,6 +671,7 @@ export class PlanningSession {
       }, controller.signal, (step) => (this.step = step));
       if (controller.signal.aborted) throw new Error("stopped");
       this.finishRound(outcomes, lead, mode);
+      if (mode === "normal" && this.questions.length > 0) await this.answerObvious(controller.signal);
     } catch (error) {
       this.error = (error as Error).message;
     } finally {
@@ -630,7 +683,91 @@ export class PlanningSession {
       this.deps.onRound?.(this);
     }
     // Comments left on draft lines during the round go to the panel now, unless questions wait (they ride with the answers).
-    if (!this.error && !this.busy && this.questions.length === 0 && this.lineComments.length > 0) await this.send("");
+    if (!this.error && !this.busy && this.questions.length === 0 && this.lineComments.length > 0) {
+      await this.send("");
+      return;
+    }
+    // The classifier settled every question: the panel folds those answers in without waiting for you, once in a row.
+    const settled = this.messages.at(-1)?.decided?.length ?? 0;
+    if (!this.error && !this.busy && settled > 0 && this.questions.length === 0 && this.reply?.status !== "ready" && !this.autoContinued) {
+      this.autoContinued = true;
+      await this.post(CLASSIFIER_CONTINUE);
+    }
+  }
+
+  /** The idea as first described, with the source issue. */
+  private idea(): string {
+    const first = this.messages.find((message) => message.role === "you")?.text ?? "";
+    return this.seed ? `Issue #${this.seed.issue.number}: ${this.seed.issue.title}\n\n${this.seed.body}\n\n${first}`.trim() : first;
+  }
+
+  /** The user's newest message, with any answers the classifier gave in the round before it. */
+  private latest(): string {
+    let index = this.messages.length - 1;
+    while (index >= 0 && this.messages[index]!.role !== "you") index -= 1;
+    if (index < 0) return "";
+    const decided = this.messages[index - 1]?.decided;
+    return [decided && decided.length > 0 ? decidedBlock(decided) : "", this.messages[index]!.text].filter(Boolean).join("\n\n");
+  }
+
+  /**
+   * The seats that sit this round: every eligible seat, unless the classifier
+   * judges some unpinned ones not needed. Pinned seats always sit; a failure
+   * or a classifier that is off seats everyone.
+   */
+  private async chooseSeats(eligible: readonly PanelMember[], signal: AbortSignal): Promise<PanelMember[]> {
+    const jev = this.deps.classifier;
+    const open = eligible.filter((member) => !this.pins.has(member));
+    if (!jev || open.length === 0 || !jev.enabled("seats")) return [...eligible];
+    this.step = "choosing seats";
+    this.deps.onChange?.();
+    const decision = await chooseSeats(jev, {
+      round: this.turns,
+      idea: this.idea(),
+      latest: this.latest(),
+      ...(this.reply?.plan ? { draft: this.reply.plan } : {}),
+      candidates: open.map((member) => ({
+        member,
+        label: MEMBER_LABELS[member],
+        owns: MEMBER_SEATS[member],
+        ...(this.lastStatus.has(member) ? { lastStatus: this.lastStatus.get(member)! } : {}),
+        notes: this.memberNotes.get(member) ?? [],
+      })),
+    }, signal);
+    if (!decision) return [...eligible];
+    const seated = eligible.filter((member) => this.pins.has(member) || decision.seat.has(member));
+    for (const member of open) if (!decision.seat.has(member)) this.satOut.set(member, decision.probabilities.get(member) ?? 0);
+    const out = [...this.satOut].map(([member, probability]) => `${MEMBER_LABELS[member]} sat out (${probability.toFixed(2)})`);
+    this.deps.feed?.log("CLASSIFIER", [`seated ${seated.length > 0 ? seated.map((member) => MEMBER_LABELS[member]).join(", ") : "nobody (the oracle plans alone)"}`, ...out, `${decision.ms} ms`].join(" · "), "info");
+    return seated;
+  }
+
+  /**
+   * Answer the round's questions the conversation already settles: the
+   * classifier's pick must be the recommended option, confident and clearly
+   * ahead. They leave the questionnaire and are recorded on the round's
+   * message, so every seat and the oracle read them as decided.
+   */
+  private async answerObvious(signal: AbortSignal): Promise<void> {
+    const jev = this.deps.classifier;
+    if (!jev?.enabled("answers")) return;
+    this.step = "checking for obvious answers";
+    this.deps.onChange?.();
+    const candidates = this.questions.map((question, index) => {
+      const recommended = recommendedOption(question);
+      return { index, from: question.from, text: question.text, options: question.options.map((option) => ({ label: optionLabel(option), description: option.description })), recommended: recommended ? optionLabel(recommended) : "" };
+    });
+    const decided = await autoAnswer(jev, candidates, { request: this.idea(), conversation: plannerTranscript(this.messages.slice(0, -1), this.seed, undefined, ""), ...(this.reply?.plan ? { draft: this.reply.plan } : {}) }, signal);
+    if (!decided || decided.length === 0 || signal.aborted) return;
+    const settled = new Set(decided.map((entry) => entry.index));
+    this.questions = this.questions.filter((_question, index) => !settled.has(index));
+    const last = this.messages.at(-1);
+    if (last?.role === "planner") {
+      const { questions: _asked, ...rest } = last;
+      const text = this.questions.length > 0 ? plannerSays(false, this.questions) : "The classifier settled this round's questions with the recommended options; the panel folds them in next.";
+      this.messages = [...this.messages.slice(0, -1), { ...rest, text, decided, ...(this.questions.length > 0 ? { questions: this.questions } : {}) }];
+    }
+    this.deps.feed?.log("CLASSIFIER", `answered ${decided.map((entry) => `[${entry.from}] ${entry.answer} (${entry.probability.toFixed(2)})`).join(", ")}; ${this.questions.length} left for you`, "info");
   }
 
   /**
