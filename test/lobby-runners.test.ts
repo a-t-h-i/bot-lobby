@@ -7,7 +7,8 @@ import { describeToolCall } from "../src/pi/activity.ts";
 import { createStreamCollector, finishedThought, MAX_THOUGHT_CHARS, type PiStreamEvent, type ProcessOutcome, type ProcessRunner, type ProcessRunOptions } from "../src/execution/pi-runner.ts";
 import { chatFromEntries, chatText, LobbyFeed, textOf } from "../src/lobby/feed.ts";
 import { QUICK_FIX_TOOLS, QuickFixQueue, jobTitle, quickFixPrompt } from "../src/lobby/quickfix.ts";
-import { PLANNER_TOOLS, RESEARCH_PANEL_TOOLS, PlanningSession, commentBlock, memberPrompt, panelSection, parseMemberReply, parseOption, parsePlannerReply, plannerSays, plannerTranscript, roundQuestions } from "../src/lobby/planner.ts";
+import { PLANNER_TOOLS, RESEARCH_PANEL_TOOLS, PlanningSession, appendAssumptions, commentBlock, memberPrompt, oracleClosing, optionLabel, panelSection, parseMemberReply, parseOption, parsePlannerReply, plannerSays, plannerTranscript, recommendedOption, roundMode, roundQuestions } from "../src/lobby/planner.ts";
+import { roundLabel } from "../src/lobby/tabs/plan.ts";
 import { MAX_QUESTIONS } from "../src/lobby/ask.ts";
 import { createIssue, ghError, IssuesState, issueText, listIssues, splitIssueText, viewIssue, type Exec } from "../src/lobby/issues.ts";
 import { listPlannedTasks } from "../src/state/backlog.ts";
@@ -366,6 +367,78 @@ test("line comments wait for the answers when questions are open, and start a ro
   assert.equal(session.turns, 3);
   assert.match(seen.at(-1)!.prompt, /### User\n\nComments on the draft plan:\n- On "1\. Add the modal": name it LoginDialog/);
   assert.equal(session.commentOnLine("  ", "x"), false);
+});
+
+test("the round limit: normal rounds, then the final round, then revisions; 0 means unlimited", () => {
+  assert.deepEqual([1, 2, 3, 4].map((round) => roundMode(round, 3)), ["normal", "normal", "final", "revise"]);
+  assert.deepEqual([1, 9, 50].map((round) => roundMode(round, 0)), ["normal", "normal", "normal"]);
+  assert.match(oracleClosing("normal", 2, 5), /^Round 2 of 5; in round 5 you settle whatever is still open alone/);
+  assert.doesNotMatch(oracleClosing("normal", 2, 0), /Round/);
+  assert.match(oracleClosing("final", 5, 5), /Final round \(5 of 5\)[\s\S]*decide every point still open with its recommended option[\s\S]*Status READY/);
+  assert.match(oracleClosing("revise", 6, 5), /round limit \(5\) is reached[\s\S]*Ask nothing/);
+  assert.deepEqual([[3, 5], [5, 5], [6, 5], [4, 0]].map(([turns, limit]) => roundLabel(turns!, limit)), ["round 3/5", "final round 5/5", "round 6 · past the limit, revising", "round 4"]);
+});
+
+test("questions left at the limit become assumptions decided with the recommended option", () => {
+  const question = (from: string, text: string, labels: string[]) => ({ from, text, options: labels.map((label) => ({ label, description: "" })) });
+  const flag = question("DEV", "Behind a flag?", ["No", "Yes (Recommended)"]);
+  const browsers = question("QA", "Which browsers?", ["Evergreen", "All"]);
+  assert.equal(optionLabel(recommendedOption(flag)!), "Yes", "the marked option wins over the first");
+  assert.equal(recommendedOption(browsers)!.label, "Evergreen", "otherwise the first");
+  const plan = "### Objective\nx\n### Assumptions\n- [QA] Evergreen\n\n### Steps\n1. y";
+  assert.equal(appendAssumptions(plan, [flag, question("ORACLE", "Anything else?", [])], "decided at the round limit"),
+    "### Objective\nx\n### Assumptions\n- [QA] Evergreen\n- [DEV] Behind a flag? → Yes (decided at the round limit)\n- [ORACLE] Anything else? → the oracle's call (decided at the round limit)\n\n### Steps\n1. y");
+  assert.equal(appendAssumptions("### Steps\n1. y\n", [browsers], "why"), "### Steps\n1. y\n\n### Assumptions\n- [QA] Which browsers? → Evergreen (why)");
+  assert.equal(appendAssumptions(plan, [], "why"), plan);
+});
+
+test("at the round limit the oracle settles the plan alone, and later replies only revise it", async () => {
+  const root = tempRoot();
+  const seen: Array<{ who: string; args: string[]; prompt: string }> = [];
+  const grilling = "## Status\nGRILLING\n## Questions\n1. [DEV] REST or RPC?\n   - RPC — one endpoint\n   - REST (Recommended) — follows the API\n## Plan\n### Steps\n1. Build it\n### Assumptions\n- [QA] Evergreen";
+  const answers: Record<string, string | undefined> = { DEV: "## Status\nOPEN\n## Questions\n1. REST or RPC?", ORACLE: grilling };
+  let limit = 2;
+  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: ["backend"], maxRounds: () => limit, profile: () => ({ thinking: "high", timeoutMs: 60_000 }), runProcess: panelRunner(answers, seen) });
+  assert.equal(session.nextMode, "normal");
+  await session.send("an API");
+  assert.deepEqual(seen.map((call) => call.who), ["DEV", "ORACLE"]);
+  assert.match(seen[0]!.prompt, /You are DEV on the planning panel \(round 1 of 2\)/);
+  assert.match(seen[1]!.prompt, /Round 1 of 2; in round 2 you settle/);
+  assert.equal(session.questions.length, 1);
+  assert.equal(session.nextMode, "final");
+
+  // The final round: no seat runs, and the question the oracle still asks is decided for it.
+  await session.send("1. not sure");
+  assert.deepEqual(seen.slice(2).map((call) => call.who), ["ORACLE"], "the seats have had their rounds");
+  assert.match(seen[2]!.prompt, /No domain seats this round[\s\S]*Final round \(2 of 2\)/);
+  assert.equal(session.mode, "final");
+  assert.equal(session.reply?.status, "ready");
+  assert.deepEqual(session.questions, []);
+  assert.equal(session.awaitingAnswers, false);
+  assert.match(session.reply!.plan!, /### Assumptions\n- \[QA\] Evergreen\n- \[DEV\] REST or RPC\? → REST \(decided at the round limit\)$/);
+  assert.match(session.messages.at(-1)!.text, /round limit is reached/);
+
+  // Past the limit: a reply revises, alone, without questions; a retry does not use up a round.
+  answers.ORACLE = "## Status\nREADY\n## Plan\n### Steps\n1. Build it with REST";
+  await session.send("use REST");
+  assert.equal(session.turns, 3);
+  assert.equal(session.mode, "revise");
+  assert.deepEqual(seen.slice(3).map((call) => call.who), ["ORACLE"]);
+  assert.match(seen[3]!.prompt, /round limit \(2\) is reached: revise the plan/);
+  assert.equal(session.reply?.plan, "### Steps\n1. Build it with REST");
+  answers.ORACLE = undefined;
+  await session.send("one more thing");
+  assert.ok(session.retryable);
+  answers.ORACLE = "## Status\nREADY\n## Plan\n1. z";
+  await session.retry();
+  assert.equal(session.turns, 4, "the retried round keeps its number");
+  assert.equal(session.reply?.plan, "1. z");
+
+  // Raising the limit mid-session brings the seats back.
+  limit = 0;
+  answers.DEV = "## Status\nREADY";
+  await session.send("more");
+  assert.equal(seen.at(-2)!.who, "DEV");
 });
 
 function fakeExec(responses: Record<string, { stdout?: string; stderr?: string; code?: number }>, calls: string[][] = []): Exec {
