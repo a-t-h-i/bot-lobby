@@ -14,7 +14,7 @@ import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import type { AgentRun } from "../schemas/findings.ts";
 import type { PlannedTask } from "../state/backlog.ts";
 import type { PlanComment } from "../state/comments.ts";
-import { aggregateMetrics, collectMetrics, SORT_KEYS, sortGroups, taskStats, taskTimesByModel, type GroupBy, type MetricRecord, type SortKey } from "../state/metrics.ts";
+import { aggregateMetrics, collectMetrics, SORT_KEYS, sortGroups, summarizeClassifier, taskStats, taskTimesByModel, type GroupBy, type MetricRecord, type SortKey } from "../state/metrics.ts";
 import { PANEL_MEMBERS, type LobbyAgentKind, type LobbyPanel, type PanelMember } from "../schemas/configuration.ts";
 import type { ChatEntry, LobbyFeed } from "./feed.ts";
 import type { BackgroundSession } from "./sessions.ts";
@@ -133,6 +133,8 @@ export interface LobbyHost {
   plans(): PlannedTask[];
   comments(taskId: string): PlanComment[];
   metrics(): MetricRecord[];
+  /** Classifier calls (kind `classifier`), kept out of the agent tables. */
+  classifierMetrics?(): MetricRecord[];
   /** Send text to the oracle, or start a task when none is active; returns a notice. */
   toOracle(text: string): string | undefined;
   comment(taskId: string, text: string): string;
@@ -338,12 +340,13 @@ export class LobbyView implements Component, Focusable {
 
   /** The Tasks tab lists archived tasks too (v). */
   showArchived = false;
-  private data: { tasks: Task[]; plans: PlannedTask[]; archived: Task[]; comments: Map<string, PlanComment[]>; metrics: MetricRecord[]; at: number } = {
+  private data: { tasks: Task[]; plans: PlannedTask[]; archived: Task[]; comments: Map<string, PlanComment[]>; metrics: MetricRecord[]; classifierMetrics: MetricRecord[]; at: number } = {
     tasks: [],
     plans: [],
     archived: [],
     comments: new Map(),
     metrics: [],
+    classifierMetrics: [],
     at: 0,
   };
 
@@ -433,6 +436,7 @@ export class LobbyView implements Component, Focusable {
       archived: this.showArchived ? this.host.archivedTasks() : [],
       comments: new Map(),
       metrics: this.tab === "metrics" ? this.host.metrics() : this.data.metrics,
+      classifierMetrics: this.tab === "metrics" ? this.host.classifierMetrics?.() ?? [] : this.data.classifierMetrics,
       at: now,
     };
     if (this.tab === "tasks") {
@@ -2018,7 +2022,8 @@ export class LobbyView implements Component, Focusable {
         const groups = sortGroups(aggregateMetrics(records, this.metricsBy), this.metricsSort);
         this.metricsSelected = Math.min(this.metricsSelected, Math.max(0, groups.length - 1));
         const taskTimes = taskTimesByModel(this.data.tasks, records);
-        return renderMetrics({ groups, taskTimes, records, stats: taskStats(this.data.tasks), by: this.metricsBy, sort: this.metricsSort, selected: this.metricsSelected, ...(query ? { query } : {}), panes: this.panes }, width, height, theme);
+        const jev = summarizeClassifier(this.data.classifierMetrics, records);
+        return renderMetrics({ groups, taskTimes, records, stats: taskStats(this.data.tasks), by: this.metricsBy, sort: this.metricsSort, selected: this.metricsSelected, ...(query ? { query } : {}), panes: this.panes, ...(jev ? { classifier: jev } : {}) }, width, height, theme);
       }
     }
   }
