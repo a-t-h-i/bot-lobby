@@ -3,6 +3,13 @@
 Status: agreed design, implemented phase by phase (one PR per phase).
 Branch `claude/dev-lobby-jev-classifier-g4neej`.
 
+## Progress
+
+- Phase 1 — round limiter: merged (#7).
+- Phase 2 — classifier core: client, hosts and keys (pi's `/login
+  typesafe`), facade with breaker and metrics, settings entry and connection
+  test.
+
 ## Phase 0 findings (spike)
 
 Checked against pi 0.87 by running a throwaway extension in a real `pi --mode

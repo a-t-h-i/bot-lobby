@@ -19,7 +19,9 @@ import { readFirstExisting } from "../knowledge/store.ts";
 import { overThreshold } from "../knowledge/compactor.ts";
 import { applyApprovalChoice, describeTask, describeOversizedKnowledge, type ApprovalChoice } from "../workflow/workflow.ts";
 import { applyStatus, registerRevealShortcut, setMinimized } from "./ui.ts";
-import { openSettings } from "./settings-ui.ts";
+import { classifierSummary, openSettings } from "./settings-ui.ts";
+import { keyStatus } from "../classifier/instance.ts";
+import { jevEndpoint } from "../classifier/hosts.ts";
 import { kickoff, startPlannedTask, startTask } from "./start-task.ts";
 import { setAuto, toggleOwnAuto } from "./owner.ts";
 import { autoOpenLobby, showLobby } from "../lobby/runtime.ts";
@@ -197,7 +199,8 @@ function showConfig(ctx: ExtensionCommandContext): void {
   const warnings = thinkingMismatches(config, modelLookup(ctx), ctx.model ? modelRef(ctx.model) : undefined);
   if (hasScoutThinking(readRawConfig())) warnings.push(`Scout: thinking is fixed at "${SCOUT_THINKING}"; the scout.thinking value in the file is ignored.`);
   const notes = warnings.length > 0 ? `\n\nWarnings:\n${warnings.map((line) => `- ${line}`).join("\n")}` : "";
-  ctx.ui.notify(`${globalConfigPath()}\n${JSON.stringify(config, null, 2)}${notes}`, warnings.length > 0 ? "warning" : "info");
+  const jev = `Classifier: ${classifierSummary(config, keyStatus(jevEndpoint(config.classifier).host.piProvider))}`;
+  ctx.ui.notify(`${globalConfigPath()}\n${jev}\n${JSON.stringify(config, null, 2)}${notes}`, warnings.length > 0 ? "warning" : "info");
 }
 
 /**

@@ -7,6 +7,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Container, type Component, type Focusable, fuzzyFilter, getKeybindings, Input, type SelectItem, SelectList, Text } from "@earendil-works/pi-tui";
 import {
+  JEV_HOSTS,
   INHERIT_MODEL,
   isThinkingLevel,
   LOBBY_PANELS,
@@ -15,12 +16,16 @@ import {
   SUBAGENT_KINDS,
   type AgentModelConfig,
   type BotLobbyConfig,
+  type ClassifierFeature,
+  type JevHostName,
   type LobbyPanel,
   type SubagentKind,
 } from "../schemas/configuration.ts";
 import { globalConfigPath, loadConfig, saveConfig } from "../state/project.ts";
 import { checkThinking, kindLabel, modelRef, supportedThinking } from "./model-support.ts";
 import { modelLookup } from "./tools.ts";
+import { classifier } from "../classifier/instance.ts";
+import { describeKey, JEV_HOST_TABLE, jevEndpoint, maskKey, type KeyStatus } from "../classifier/hosts.ts";
 
 const CUSTOM_MODEL = "__custom__";
 const MAX_VISIBLE = 12;
@@ -420,6 +425,79 @@ function lobbySummary(config: BotLobbyConfig): string {
   ].join(" · ");
 }
 
+/**
+ * Classifier decisions that exist so far, as the settings menu lists them.
+ * Each phase of the classifier work adds its own entry.
+ */
+export const CLASSIFIER_FEATURE_ITEMS: ReadonlyArray<{ id: ClassifierFeature; label: string; help: string }> = [];
+
+/** The next Jev host in the menu's cycle. */
+export function nextJevHost(current: JevHostName): JevHostName {
+  return JEV_HOSTS[(JEV_HOSTS.indexOf(current) + 1) % JEV_HOSTS.length]!;
+}
+
+/** The config with one classifier decision switched on or off. */
+export function toggleClassifierFeature(config: BotLobbyConfig, feature: ClassifierFeature): BotLobbyConfig {
+  const features = { ...config.classifier.features, [feature]: !config.classifier.features[feature] };
+  return { ...config, classifier: { ...config.classifier, features } };
+}
+
+/** `on · TypeSafe · key stored in pi`, for the settings menu and `/bot-lobby config`. */
+export function classifierSummary(config: BotLobbyConfig, status: KeyStatus | undefined): string {
+  const { host } = jevEndpoint(config.classifier);
+  return [config.classifier.enabled ? "on" : "off", host.label, `key ${describeKey(host, status)}`].join(" · ");
+}
+
+function authStatus(ctx: ExtensionContext, piProvider: string): KeyStatus | undefined {
+  try {
+    return ctx.modelRegistry.getProviderAuthStatus(piProvider);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Where the key lives and how to set it, with the loaded key masked. */
+async function keyHelp(ctx: ExtensionContext, config: BotLobbyConfig): Promise<string> {
+  const { host } = jevEndpoint(config.classifier);
+  let masked = "";
+  try {
+    const key = await ctx.modelRegistry.getApiKeyForProvider(host.piProvider);
+    if (key) masked = ` Loaded: ${maskKey(key)}.`;
+  } catch {
+    // No key to show.
+  }
+  const how = host.name === "typesafe"
+    ? `run /login ${host.piProvider} and choose "Use an API key" (it is saved in pi's auth.json with your other keys), or export ${host.env}.`
+    : `bot-lobby uses the key pi already holds for ${host.label} (/login ${host.piProvider}, or ${host.env}).`;
+  return `Jev key (${host.label}): ${describeKey(host, authStatus(ctx, host.piProvider))}.${masked} To set it, ${how}`;
+}
+
+/** The classifier: on/off, where Jev is called, its key, which decisions it makes, and a connection test. */
+async function editClassifier(ctx: ExtensionContext): Promise<void> {
+  for (;;) {
+    const config = loadConfig();
+    const settings = config.classifier;
+    const { host } = jevEndpoint(settings);
+    const items: SelectItem[] = [
+      { value: "enabled", label: "Classifier", description: `${settings.enabled ? "on" : "off"} · Jev makes the obvious decisions so large models spend fewer tokens on them` },
+      { value: "host", label: "Host", description: `${host.label} · enter cycles ${JEV_HOSTS.map((name) => JEV_HOST_TABLE[name].label).join(", ")}` },
+      { value: "key", label: "API key", description: describeKey(host, authStatus(ctx, host.piProvider)) },
+      ...CLASSIFIER_FEATURE_ITEMS.map((entry) => ({ value: `feature:${entry.id}`, label: entry.label, description: `${settings.features[entry.id] ? "on" : "off"} · ${entry.help}` })),
+      { value: "test", label: "Test connection", description: "one tiny call: shows the model and how long it took" },
+      { value: "back", label: "Back", description: `thresholds and limits: classifier in ${globalConfigPath()}` },
+    ];
+    const choice = await pick(ctx, "bot-lobby settings · Classifier (Jev)", items);
+    if (!choice || choice === "back") return;
+    if (choice === "enabled") saveConfig({ ...config, classifier: { ...settings, enabled: !settings.enabled } });
+    else if (choice === "host") saveConfig({ ...config, classifier: { ...settings, provider: nextJevHost(settings.provider) } });
+    else if (choice === "key") ctx.ui.notify(await keyHelp(ctx, config), "info");
+    else if (choice === "test") {
+      const result = await classifier().test();
+      ctx.ui.notify(result.ok ? `Jev answered in ${result.ms} ms (${result.model}).` : `Jev test failed: ${result.error}`, result.ok ? "info" : "error");
+    } else if (choice.startsWith("feature:")) saveConfig(toggleClassifierFeature(config, choice.slice("feature:".length) as ClassifierFeature));
+  }
+}
+
 /** Open the per-agent settings editor; every change is written to the global config. */
 export async function openSettings(pi: ExtensionAPI, ctx: ExtensionContext): Promise<void> {
   if (ctx.mode !== "tui") {
@@ -435,10 +513,12 @@ export async function openSettings(pi: ExtensionAPI, ctx: ExtensionContext): Pro
     const config = loadConfig();
     const items: SelectItem[] = SETTINGS_KINDS.map((kind) => ({ value: kind, label: kindLabel(kind), description: entryDescription(kind, entryView(config, kind)) }));
     items.push({ value: "lobby", label: "Lobby", description: lobbySummary(config) });
+    items.push({ value: "classifier", label: "Classifier (Jev)", description: classifierSummary(config, authStatus(ctx, jevEndpoint(config.classifier).host.piProvider)) });
     items.push({ value: "close", label: "Close" });
     const choice = await pick(ctx, "bot-lobby settings", items);
     if (!choice || choice === "close") return;
     if (choice === "lobby") await editLobby(ctx);
+    else if (choice === "classifier") await editClassifier(ctx);
     else await editEntry(pi, ctx, choice as SettingsKind);
   }
 }

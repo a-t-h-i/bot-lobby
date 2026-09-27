@@ -638,6 +638,44 @@ run one at a time unless the Master delegates several domains together, in
 which case the file desk serialises edits per file. Worktree isolation is
 deferred (§14 of the plan).
 
+## The classifier (Jev)
+
+Some decisions do not need a large model: which planning seats have anything
+to ask, which files an agent should open first, how big a task is, which
+answer to an obvious question is right, and how much model a simple step
+needs. With the classifier on, bot-lobby asks
+[Jev](https://github.com/FrancoisChastel/jev-code) — TypeSafe's "System One"
+model, which answers typed questions (yes/no, one of a set, a score) with
+calibrated probabilities in a few hundred milliseconds instead of writing
+text — and acts on the answer only when it is confident; otherwise it does
+what it always did.
+
+**Turn it on.** `/bot-lobby settings` → **Classifier (Jev)** → *Classifier*.
+It is off by default.
+
+**The key lives with pi's other keys.** bot-lobby registers a `typesafe`
+provider with pi (no chat models, so nothing is added to `/model`): run
+`/login typesafe` and choose *Use an API key*, and pi saves it in
+`~/.pi/agent/auth.json` like any other key (`/logout` removes it), or export
+`TYPESAFE_API_KEY`. *Host* switches to OpenRouter or Vercel AI Gateway, which
+use the key pi already holds for that provider. *API key* in the menu says
+where the key comes from (never the key; `ts_ab…cd` at most), and *Test
+connection* makes one tiny call and shows the model and the time it took.
+Subagents resolve the key the same way, so it is never passed through the
+environment.
+
+**It never gets in the way.** Every call has a time limit
+(`classifier.timeoutMs`, 4 s) and one retry; a missing key, an error or a
+timeout means bot-lobby decides without it (a missing key is said once).
+Three failures in a row pause the classifier for ten minutes with one
+warning. Each call is recorded in `metrics.jsonl` (kind `classifier`, with
+what it decided, its time and its tokens) and kept out of the agent tables.
+
+**What leaves your machine.** Only what a decision needs, clipped: the
+planning conversation and draft for seats and answers, a request or step
+instruction for triage and effort, and short file excerpts (never whole
+files) for file hints. Paths matching `classifier.exclude` are never sent.
+
 ## Configuration
 
 Per-agent settings are edited interactively with `/bot-lobby settings` (or the
@@ -657,6 +695,18 @@ top-level `/bot-lobby-settings`) and persist globally to
   "quickFix": { "model": "anthropic/claude-sonnet-5", "thinking": "low", "instructions": "", "timeoutMs": 600000 },
   "planner": { "model": "anthropic/claude-sonnet-5", "thinking": "high", "instructions": "", "timeoutMs": 300000 },
   "lobby": { "autoOpen": true, "planningPanel": ["backend", "designer", "qa", "researcher"], "autoAsk": true, "issues": false, "mouse": true, "maxPlanningRounds": 5 },
+  "classifier": {
+    "enabled": false,
+    "provider": "typesafe",
+    "model": "",
+    "baseUrl": "",
+    "timeoutMs": 4000,
+    "features": { "seats": true, "answers": true, "files": true, "triage": true, "effort": true },
+    "thresholds": { "seatAt": 0.35, "reseatReadyAt": 0.6, "autoAnswerAt": 0.9, "autoAnswerMargin": 0.5, "fileRelevantAt": 0.5, "simpleAt": 0.7, "trivialAt": 0.8, "quickFixLargeAt": 0.8 },
+    "fileHints": { "topK": 8, "maxCandidates": 480, "budgetMs": 1500 },
+    "effort": { "cheapModel": "inherit" },
+    "exclude": []
+  },
   "workflow": {
     "maxReviewIterations": 2,
     "maxParallelScouts": 3,
@@ -842,6 +892,7 @@ src/
 │   ├── planner.ts            The planning panel: seats and the oracle per round, reply parsing, saving a plan
 │   ├── issues.ts             GitHub issues through the gh CLI
 │   └── layout.ts             Boxes, exact-width columns, wrapping, highlights, bars, meters and sparklines
+├── classifier/               Jev: the System One client, hosts and keys (pi's /login typesafe), the facade every decision calls
 ├── state/                    Project root, config, task persistence, state mutation, comments, inbox, auto mode, backlog, metrics
 ├── schemas/                  Task, agent, findings, configuration types
 └── pi/                       Commands, lifecycle, orchestrate tool, status widget, the owner's clock (deliveries, auto mode)
