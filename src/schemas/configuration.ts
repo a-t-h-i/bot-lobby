@@ -115,6 +115,54 @@ export interface LobbyConfig {
   maxPlanningRounds: number;
 }
 
+/** Decisions the classifier can make, each switched on or off on its own. */
+export const CLASSIFIER_FEATURES = ["seats", "answers", "files", "triage", "effort"] as const;
+export type ClassifierFeature = (typeof CLASSIFIER_FEATURES)[number];
+
+/** Hosts that serve Jev behind the same System One API. */
+export const JEV_HOSTS = ["typesafe", "openrouter", "vercel"] as const;
+export type JevHostName = (typeof JEV_HOSTS)[number];
+
+/** Probability and confidence cut-offs, 0 to 1; edited in the config file only. */
+export interface ClassifierThresholds {
+  /** A planning seat runs when the idea or the latest answers touch its domain at least this likely. */
+  seatAt: number;
+  /** A seat that was READY comes back only at this probability. */
+  reseatReadyAt: number;
+  /** An obvious question is answered for you at this probability, when the pick is the recommended option… */
+  autoAnswerAt: number;
+  /** …and leads the runner-up by at least this much. */
+  autoAnswerMargin: number;
+  /** A file is a likely file at this relevance. */
+  fileRelevantAt: number;
+  /** A step scored simple at this confidence runs one thinking level lower. */
+  simpleAt: number;
+  /** A step scored trivial at this confidence runs on the cheaper model. */
+  trivialAt: number;
+  /** A quick fix scored large at this confidence is held instead of started. */
+  quickFixLargeAt: number;
+}
+
+/** The Jev classifier: a fast model for obvious decisions, so large models spend fewer tokens on them. */
+export interface ClassifierConfig {
+  enabled: boolean;
+  /** Where Jev is called; the key comes from pi's own key store for that host. */
+  provider: JevHostName;
+  /** A pinned Jev model; empty uses the host's default. */
+  model: string;
+  /** A base URL override (a proxy); empty uses the host's. */
+  baseUrl: string;
+  /** Time limit per classifier call. */
+  timeoutMs: number;
+  features: Record<ClassifierFeature, boolean>;
+  thresholds: ClassifierThresholds;
+  fileHints: { topK: number; maxCandidates: number; budgetMs: number };
+  /** The cheaper model trivial steps run on; `inherit` keeps the configured model and only lowers thinking. */
+  effort: { cheapModel: ModelRef };
+  /** Path globs never sent to the classifier (file hints). */
+  exclude: string[];
+}
+
 export interface BotLobbyConfig {
   master: AgentModelConfig;
   agents: Record<"designer" | "backend" | "qa", AgentModelConfig>;
@@ -127,6 +175,7 @@ export interface BotLobbyConfig {
   workflow: WorkflowConfig;
   knowledge: KnowledgeConfig;
   lobby: LobbyConfig;
+  classifier: ClassifierConfig;
 }
 
 export const DEFAULT_CONFIG: BotLobbyConfig = {
@@ -168,6 +217,27 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     keys: {},
     mouse: true,
     maxPlanningRounds: 5,
+  },
+  classifier: {
+    enabled: false,
+    provider: "typesafe",
+    model: "",
+    baseUrl: "",
+    timeoutMs: 4000,
+    features: { seats: true, answers: true, files: true, triage: true, effort: true },
+    thresholds: {
+      seatAt: 0.35,
+      reseatReadyAt: 0.6,
+      autoAnswerAt: 0.9,
+      autoAnswerMargin: 0.5,
+      fileRelevantAt: 0.5,
+      simpleAt: 0.7,
+      trivialAt: 0.8,
+      quickFixLargeAt: 0.8,
+    },
+    fileHints: { topK: 8, maxCandidates: 480, budgetMs: 1500 },
+    effort: { cheapModel: INHERIT_MODEL },
+    exclude: [],
   },
 };
 
@@ -224,6 +294,44 @@ function roundLimit(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : fallback;
 }
 
+function probability(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1 ? value : fallback;
+}
+
+function count(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+function text(value: unknown, fallback: string): string {
+  return typeof value === "string" ? value.trim() : fallback;
+}
+
+function normalizeClassifier(value: unknown): ClassifierConfig {
+  const source = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
+  const defaults = DEFAULT_CONFIG.classifier;
+  const features = (source.features ?? {}) as Partial<Record<ClassifierFeature, unknown>>;
+  const thresholds = (source.thresholds ?? {}) as Partial<Record<keyof ClassifierThresholds, unknown>>;
+  const hints = (source.fileHints ?? {}) as Record<string, unknown>;
+  const effort = (source.effort ?? {}) as Record<string, unknown>;
+  const provider = typeof source.provider === "string" && (JEV_HOSTS as readonly string[]).includes(source.provider) ? source.provider as JevHostName : defaults.provider;
+  return {
+    enabled: flag(source.enabled, defaults.enabled),
+    provider,
+    model: text(source.model, defaults.model),
+    baseUrl: text(source.baseUrl, defaults.baseUrl),
+    timeoutMs: count(source.timeoutMs, defaults.timeoutMs),
+    features: Object.fromEntries(CLASSIFIER_FEATURES.map((name) => [name, flag(features[name], defaults.features[name])])) as Record<ClassifierFeature, boolean>,
+    thresholds: Object.fromEntries(Object.entries(defaults.thresholds).map(([name, fallback]) => [name, probability(thresholds[name as keyof ClassifierThresholds], fallback)])) as unknown as ClassifierThresholds,
+    fileHints: {
+      topK: count(hints.topK, defaults.fileHints.topK),
+      maxCandidates: count(hints.maxCandidates, defaults.fileHints.maxCandidates),
+      budgetMs: count(hints.budgetMs, defaults.fileHints.budgetMs),
+    },
+    effort: { cheapModel: typeof effort.cheapModel === "string" && effort.cheapModel.trim() ? effort.cheapModel.trim() : defaults.effort.cheapModel },
+    exclude: Array.isArray(source.exclude) ? source.exclude.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0) : [...defaults.exclude],
+  };
+}
+
 /** Deep-merge user config over defaults, keeping unknown keys out. */
 export function resolveConfig(partial: unknown): BotLobbyConfig {
   const src = (partial ?? {}) as Record<string, unknown>;
@@ -244,6 +352,7 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
     workflow,
     knowledge,
     lobby: normalizeLobby(src.lobby),
+    classifier: normalizeClassifier(src.classifier),
   };
 }
 
