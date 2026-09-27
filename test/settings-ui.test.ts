@@ -150,7 +150,7 @@ test("render shows the no-match text for a zero-match query", () => {
 
 // --- profiles: scouts have fixed thinking, subagents never inherit a model ---
 
-import { entryItems, patchEntry, prefillModels, thinkingItems } from "../src/pi/settings-ui.ts";
+import { entryItems, nextRoundLimit, patchEntry, prefillModels, roundLimitLabel, thinkingItems } from "../src/pi/settings-ui.ts";
 import { DEFAULT_CONFIG, resolveConfig } from "../src/schemas/configuration.ts";
 
 test("the scout entry offers model and time limit but no thinking choice", () => {
@@ -214,4 +214,15 @@ test("the planning panel keeps known seats in order and drops the rest", () => {
   assert.deepEqual(resolveConfig({ lobby: { planningPanel: ["qa", "bogus", "backend", "qa"] } }).lobby.planningPanel, ["backend", "qa"]);
   assert.deepEqual(resolveConfig({ lobby: { planningPanel: [] } }).lobby.planningPanel, [], "an empty panel means the oracle plans alone");
   assert.deepEqual(resolveConfig({ lobby: { planningPanel: "qa" } }).lobby.planningPanel, DEFAULT_CONFIG.lobby.planningPanel);
+});
+
+test("the planning round limit defaults to 5, keeps whole numbers (0 = unlimited) and cycles in the menu", () => {
+  assert.equal(DEFAULT_CONFIG.lobby.maxPlanningRounds, 5);
+  assert.equal(resolveConfig({ lobby: { maxPlanningRounds: 3 } }).lobby.maxPlanningRounds, 3);
+  assert.equal(resolveConfig({ lobby: { maxPlanningRounds: 0 } }).lobby.maxPlanningRounds, 0);
+  for (const bad of [-1, 2.5, "4", null]) assert.equal(resolveConfig({ lobby: { maxPlanningRounds: bad } }).lobby.maxPlanningRounds, 5);
+  assert.deepEqual([2, 3, 5, 8, 0].map(nextRoundLimit), [3, 5, 8, 0, 2]);
+  assert.equal(nextRoundLimit(4), 5, "a hand-edited value rejoins the cycle");
+  assert.equal(nextRoundLimit(12), 0);
+  assert.deepEqual([1, 5, 0].map(roundLimitLabel), ["1 round", "5 rounds", "unlimited"]);
 });
