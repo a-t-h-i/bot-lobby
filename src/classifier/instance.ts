@@ -12,6 +12,8 @@ import { Classifier } from "./classifier.ts";
 import { registerJevProvider, type KeySource, type KeyStatus } from "./hosts.ts";
 import { fileHinter, type FileHinter, type FileScope } from "./files.ts";
 import { lobbyFeed } from "../lobby/feed.ts";
+import { triageLine, triageWithContext } from "./triage.ts";
+import type { TaskTriage } from "../schemas/task.ts";
 
 interface Binding {
   cwd: string;
@@ -40,6 +42,13 @@ export function classifier(): Classifier {
 /** Likely files for agents working in a tree, with what was found logged to the lobby's activity feed. */
 export function hintsFor(scope: FileScope): FileHinter {
   return fileHinter(classifier(), scope, (text) => lobbyFeed.log("CLASSIFIER", text, "info"));
+}
+
+/** Triage a request for a task in a tree, logged to the lobby's activity feed; undefined when triage is off or fails. */
+export async function triageFor(scope: FileScope, request: string, signal?: AbortSignal): Promise<TaskTriage | undefined> {
+  const triage = await triageWithContext(classifier(), scope, request, signal);
+  if (triage) lobbyFeed.log("CLASSIFIER", triageLine(triage), "info");
+  return triage;
 }
 
 /** The tree this process's session works in, once it has started. */

@@ -432,6 +432,7 @@ function lobbySummary(config: BotLobbyConfig): string {
 export const CLASSIFIER_FEATURE_ITEMS: ReadonlyArray<{ id: ClassifierFeature; label: string; help: string }> = [
   { id: "seats", label: "Planning seats", help: "each round, only the seats your idea or latest answers touch sit; 1-4 in the Plan tab pins one" },
   { id: "answers", label: "Obvious answers", help: "a panel question whose recommended option the conversation already makes clearly right is answered for you (listed under Assumptions)" },
+  { id: "triage", label: "Task triage", help: "a new task's size, domains and research need reach the Master as hints; a quick fix that is really a task is held for you" },
   { id: "files", label: "File hints", help: "scouts, workers, quick fixes and the planning panel start with the files most likely needed, and can look more up with find_relevant_files" },
 ];
 

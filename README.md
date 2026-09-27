@@ -240,7 +240,9 @@ or without a task.
   whole workflow: one coding agent (full tools) makes the change right away
   while any task keeps running. Quick fixes run one at a time in the order you
   send them; each shows its steps and final report, and `x` cancels one. A
-  request that turns out to be large is reported back instead of attempted.
+  request that turns out to be large is reported back instead of attempted
+  (with the classifier on, one it judges large is held before any run: `r`
+  runs it anyway, `t` makes it a task).
   `m` opens the quick fix agent's settings — model, thinking level, time
   limit and instructions — right there (the same entry as in
   `/bot-lobby settings`); the tab shows what it runs on.
@@ -697,6 +699,20 @@ what it decided, its time and its tokens) and kept out of the agent tables.
   its pick *is* the recommended option, at `autoAnswerAt` (0.9) and ahead of
   the runner-up by `autoAnswerMargin` (0.5). Approvals are never answered
   for you.
+- **Task triage** (`triage`): when a task starts, one call reads the
+  request — its size (trivial, small, medium, large), which domains it
+  touches, whether it needs outside research, whether it is ambiguous as
+  written, its kind — with the repository's layout, and attaches its likely
+  files. The Master gets it as *Classifier triage* with a suggested path
+  (for example the single-domain shortcut for a small backend fix) while the
+  task is being shaped, and skips the reasoning and scouts it does not need;
+  it stays a hint, and an amendment re-reads the request. A `clarify`
+  question with options (recommended first) that the request already settles
+  is answered the same way as an obvious panel question, and recorded as a
+  decision. A quick fix the classifier judges **large** at
+  `quickFixLargeAt` (0.8) is **held** instead of started (`‖ looks like a
+  task`): on the Quick fix tab `r` runs it anyway and `t` starts it as a
+  task in a new session.
 - **File hints** (`files`): before a scout, worker, quick fix or planning
   round starts, the repository's files are ranked against its instruction
   and the agent gets a short **Likely files** list (at most
