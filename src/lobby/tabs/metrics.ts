@@ -9,7 +9,7 @@
 import { shortDuration } from "../../text.ts";
 import { tokens } from "../../pi/run-summary.ts";
 import type { GroupBy, MetricGroup, MetricRecord, SortKey, TaskStats, TaskTimeGroup } from "../../state/metrics.ts";
-import { bar, beside, bold, box, fill, fit, meter, paint, selectRow, sparkline, stackedBar, windowStart, wrap, type LobbyTheme } from "../layout.ts";
+import { bar, beside, bold, box, fill, fit, meter, notePane, paint, selectRow, sparkline, stackedBar, windowStart, wrap, type LobbyTheme, type PaneLayout } from "../layout.ts";
 import { sourceColor } from "./home.ts";
 
 export interface MetricsTabInput {
@@ -23,6 +23,8 @@ export interface MetricsTabInput {
   selected: number;
   /** The search in force; records and groups are already narrowed by it. */
   query?: string;
+  /** Filled with where the table landed, for the wheel. */
+  panes?: PaneLayout;
 }
 
 interface Column {
@@ -260,7 +262,8 @@ export function renderMetrics(input: MetricsTabInput, width: number, height: num
   const tableRows = Math.max(0, room - 3);
   const start = windowStart(input.selected, table.rows.length, tableRows);
   const grouping = input.by === "model" ? "by model · thinking" : "by model · thinking · agent";
-  sections.push(...box(width, room, [table.header, ...table.rows.slice(start, start + tableRows)], { title: "All models", right: `${grouping} · sorted by ${input.sort} · g s`, theme }));
+  notePane(input.panes, "table", sections.length, 0, width, room, table.rows.length);
+  sections.push(...box(width, room, [table.header, ...table.rows.slice(start, start + tableRows)], { title: "All models", right: `${grouping} · sorted by ${input.sort} · g s`, scroll: { total: table.rows.length + 1, start }, theme }));
   return fill(sections, height, width);
 }
 
