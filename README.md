@@ -113,8 +113,8 @@ or without a task.
                     (the task's status: state, what the agents are doing, the plan checklist)
 ╭ Conversation ──────────────────────────────── Alt+C ╮ ╭ Activity ──────────────────────────────── Alt+A ╮
 │ ──────── task started · add login · 12:04 ───────── │ │ 12:04 MASTER    ✓ scouting designer, backend    │
-│ ● You                                         12:04 │ │ 12:06 DEV       ⠋ reading auth.ts…              │
-│   ▌ add a login page with email + password          │ │ 12:06 DESIGN    ⠋ editing LoginForm.tsx…        │
+│                                        12:04  You ● │ │ 12:06 DEV       ⠋ reading auth.ts…              │
+│        add a login page with email + password ▐     │ │ 12:06 DESIGN    ⠋ editing LoginForm.tsx…        │
 │ ◆ Oracle                                      12:06 │ │ 12:06 QUICK FIX ✓ done: rename getUser          │
 │   Proposal                                          │ │                                                 │
 │   • LoginForm component                             │ │                                                 │
@@ -130,10 +130,12 @@ or without a task.
 
 - **1 Lobby** — the task's status (its state box, what the agents are
   doing and the plan checklist), then the conversation with the oracle
-  (its text only: no tool rows, no thinking; each turn under a `● You` or
-  `◆ Oracle` line with its time, your words in pi's user-message band, the
-  oracle's replies as Markdown, and events such as a task starting as a
-  rule), an activity log that narrates
+  laid out like a chat (its text only: no tool rows, no thinking): your
+  messages on the right as bubbles in the accent colour on pi's
+  user-message background, each only as wide as its text (at most about
+  three quarters of the pane), under `12:04  You ●`; the oracle's replies on
+  the left as Markdown under `◆ Oracle  12:06`; and events such as a task
+  starting as a centred rule), an activity log that narrates
   every tool call in plain words (`reading index.html…`, `searching for
   "router" in src`, `running npm test`, `delegating to backend: Step 2 …`) from
   the Master and every subagent, and a single **Thinking** pane — the one place
