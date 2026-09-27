@@ -8,7 +8,7 @@
  */
 import { shortDuration } from "../../text.ts";
 import { tokens } from "../../pi/run-summary.ts";
-import type { GroupBy, MetricGroup, MetricRecord, SortKey, TaskStats, TaskTimeGroup } from "../../state/metrics.ts";
+import type { ClassifierSummary, GroupBy, MetricGroup, MetricRecord, SortKey, TaskStats, TaskTimeGroup } from "../../state/metrics.ts";
 import { bar, beside, bold, box, fill, fit, meter, notePane, paint, selectRow, sparkline, stackedBar, windowStart, wrap, type LobbyTheme, type PaneLayout } from "../layout.ts";
 import { sourceColor } from "./home.ts";
 
@@ -25,6 +25,8 @@ export interface MetricsTabInput {
   query?: string;
   /** Filled with where the table landed, for the wheel. */
   panes?: PaneLayout;
+  /** What the classifier did and spared, when it has run. */
+  classifier?: ClassifierSummary;
 }
 
 interface Column {
@@ -230,6 +232,27 @@ export function timeShare(records: readonly MetricRecord[], taskTimes: readonly 
 }
 
 /** The metrics dashboard: KPI tiles, the charts, and the full table filling what is left. */
+/** Milliseconds as `180 ms` or `1.2s`: classifier calls are short. */
+function millis(ms: number): string {
+  return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)}s`;
+}
+
+/** The classifier's box: its calls and speed, then what its decisions spared. */
+export function classifierLines(summary: ClassifierSummary, width: number, theme?: LobbyTheme): string[] {
+  const inner = width - 4;
+  const purposes = Object.entries(summary.byPurpose).sort((a, b) => b[1] - a[1]).map(([purpose, count]) => `${purpose} ${count}`).join(" · ");
+  const calls = summary.calls > 0
+    ? [`${summary.calls} call${summary.calls === 1 ? "" : "s"}`, `${percent(summary.ok, summary.calls)} ok`, `p50 ${millis(summary.p50Ms)}`, `p90 ${millis(summary.p90Ms)}`, summary.input > 0 ? `${tokens(summary.input)} tokens read` : "", purposes].filter(Boolean).join(paint(theme, "dim", " · "))
+    : paint(theme, "dim", "no calls recorded");
+  const spared = [
+    `${summary.seatRunsSkipped} seat run${summary.seatRunsSkipped === 1 ? "" : "s"} skipped`,
+    `${summary.questionsAnswered} question${summary.questionsAnswered === 1 ? "" : "s"} answered`,
+    `${summary.quickFixesHeld} quick fix${summary.quickFixesHeld === 1 ? "" : "es"} held`,
+    summary.routed > 0 ? `${summary.routed} run${summary.routed === 1 ? "" : "s"} routed down, ${percent(summary.routedOk, summary.routed)} ok` : "no runs routed",
+  ].join(paint(theme, "dim", " · "));
+  return box(width, 4, [fit(calls, inner), fit(`${paint(theme, "success", "spared")} ${spared}`, inner)], { title: "Classifier (Jev)", theme });
+}
+
 export function renderMetrics(input: MetricsTabInput, width: number, height: number, theme?: LobbyTheme): string[] {
   if (height <= 0) return [];
   if (input.records.length === 0) {
@@ -240,6 +263,10 @@ export function renderMetrics(input: MetricsTabInput, width: number, height: num
   let room = height;
   if (room >= 16) {
     sections.push(...tileRow(input, width, theme));
+    room -= 4;
+  }
+  if (input.classifier && room >= 14) {
+    sections.push(...classifierLines(input.classifier, width, theme));
     room -= 4;
   }
   const chartHeight = Math.min(input.groups.length + 2, 8);

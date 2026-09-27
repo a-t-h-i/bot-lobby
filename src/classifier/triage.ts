@@ -134,7 +134,14 @@ export async function triageWithContext(classifier: Classifier, scope: FileScope
 /** The size of a quick fix prompt, or undefined when the classifier is off or fails. */
 export async function quickFixSize(classifier: Classifier, prompt: string, signal?: AbortSignal): Promise<{ size: TriageSize; confidence: number } | undefined> {
   if (!classifier.enabled("triage")) return undefined;
-  const result = await classifier.ask("triage", { state: { prompt: clip(prompt, 6000) }, questions: { size: sizeQuestion("`prompt`") } }, signal ? { signal } : {});
+  const largeAt = classifier.config.thresholds.quickFixLargeAt;
+  const result = await classifier.ask("triage", { state: { prompt: clip(prompt, 6000) }, questions: { size: sizeQuestion("`prompt`") } }, {
+    ...(signal ? { signal } : {}),
+    saved: (answers) => {
+      const sized = scoreOf(answers, "size");
+      return sized && sized.level >= TRIAGE_SIZES.length - 1 && sized.confidence >= largeAt ? 1 : 0;
+    },
+  });
   const size = scoreOf(result?.answers, "size");
   if (!size) return undefined;
   return { size: TRIAGE_SIZES[Math.max(0, Math.min(TRIAGE_SIZES.length - 1, size.level))]!, confidence: size.confidence };

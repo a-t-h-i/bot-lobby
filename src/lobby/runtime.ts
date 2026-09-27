@@ -18,7 +18,7 @@ import { sendToInbox, sendToSession as leaveForSession } from "../state/inbox.ts
 import { livePresence } from "../state/presence.ts";
 import { archiveTask as archiveTaskOnDisk, deleteTask as deleteTaskOnDisk, listArchivedTasks, restoreTask as restoreTaskOnDisk } from "../state/archive.ts";
 import { discardPlannedTask, listPlannedTasks, type PlannedTask } from "../state/backlog.ts";
-import { appendMetrics, readMetrics, type MetricStatus } from "../state/metrics.ts";
+import { appendMetrics, readClassifierMetrics, readMetrics, type MetricStatus } from "../state/metrics.ts";
 import { describeToolCall } from "../pi/activity.ts";
 import { applyStatus, currentZenTask, isMinimized, onMinimizeChange, onRunUpdates, persistedRuns, setMinimized, setWidgetSuppressor, ZenScene, zenSnapshot } from "../pi/ui.ts";
 import { panelLines } from "../pi/zen.ts";
@@ -519,6 +519,7 @@ function host(state: Runtime, tui: TUI): LobbyHost {
     plans: () => listPlannedTasks(state.root, state.configDir),
     comments: (taskId) => readPlanComments(state.root, state.configDir, taskId),
     metrics: () => readMetrics(state.root, state.configDir),
+    classifierMetrics: () => readClassifierMetrics(state.root, state.configDir),
     toOracle: (text) => toOracle(state, text),
     comment: (taskId, text) => addComment(state, taskId, text),
     startPlanned: (plan) => startPlanned(state, plan),

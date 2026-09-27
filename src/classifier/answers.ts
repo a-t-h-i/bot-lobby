@@ -103,7 +103,8 @@ export function decideAnswers(answers: Record<string, Answer> | undefined, candi
 export async function autoAnswer(classifier: Classifier, candidates: readonly AnswerCandidate[], context: AnswerContext, signal?: AbortSignal): Promise<AutoAnswer[] | undefined> {
   const eligible = candidates.filter((candidate) => candidate.options.length >= 2 && candidate.recommended);
   if (eligible.length === 0) return undefined;
-  const result = await classifier.ask("answers", answerRequest(eligible, context), signal ? { signal } : {});
+  const thresholds = classifier.config.thresholds;
+  const result = await classifier.ask("answers", answerRequest(eligible, context), { ...(signal ? { signal } : {}), saved: (answers) => decideAnswers(answers, eligible, thresholds).length });
   if (!result) return undefined;
   return decideAnswers(result.answers, eligible, classifier.config.thresholds);
 }
