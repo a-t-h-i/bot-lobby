@@ -83,12 +83,26 @@ export function isPanelMember(value: string): value is PanelMember {
   return (PANEL_MEMBERS as readonly string[]).includes(value);
 }
 
+/** Lobby panes that can be shown or hidden (the Lobby tab's scene, conversation, activity log and thinking). */
+export const LOBBY_PANELS = ["scene", "conversation", "activity", "thinking"] as const;
+export type LobbyPanel = (typeof LOBBY_PANELS)[number];
+
 /** The full-screen lobby. */
 export interface LobbyConfig {
   /** Open by itself when this session starts or resumes a task. */
   autoOpen: boolean;
   /** Who sits on the planning panel next to the oracle, until toggled in the Plan tab. */
   planningPanel: PanelMember[];
+  /** Put the panel's questions to the user as soon as a round ends, while the Plan tab is open. */
+  autoAsk: boolean;
+  /** Show the GitHub Issues tab (off for now). */
+  issues: boolean;
+  /** Which panes show; toggled with keys in the lobby and remembered here. */
+  panels: Record<LobbyPanel, boolean>;
+  /** Key overrides by action name, e.g. `{ "toggleThinking": "alt+t" }`. */
+  keys: Record<string, string>;
+  /** Clicks and the wheel work in the lobby (click a draft line to comment on it); shift+drag still selects text. */
+  mouse: boolean;
 }
 
 export interface BotLobbyConfig {
@@ -135,7 +149,15 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     scratchpadMaxParagraphs: 4,
     scratchpadMaxChars: 2000,
   },
-  lobby: { autoOpen: true, planningPanel: [...PANEL_MEMBERS] },
+  lobby: {
+    autoOpen: true,
+    planningPanel: [...PANEL_MEMBERS],
+    autoAsk: true,
+    issues: false,
+    panels: { scene: true, conversation: true, activity: true, thinking: true },
+    keys: {},
+    mouse: true,
+  },
 };
 
 function positive(value: unknown): number | undefined {
@@ -159,14 +181,26 @@ function normalizeScout(override: Partial<ScoutConfig> | undefined): ScoutConfig
   };
 }
 
+function flag(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function normalizeLobby(value: unknown): LobbyConfig {
-  const source = value as { autoOpen?: unknown; planningPanel?: unknown } | undefined;
+  const source = value as { autoOpen?: unknown; planningPanel?: unknown; autoAsk?: unknown; issues?: unknown; panels?: unknown; keys?: unknown; mouse?: unknown } | undefined;
+  const defaults = DEFAULT_CONFIG.lobby;
   const panel = Array.isArray(source?.planningPanel)
     ? [...new Set(source.planningPanel.filter((entry): entry is PanelMember => typeof entry === "string" && isPanelMember(entry)))]
-    : [...DEFAULT_CONFIG.lobby.planningPanel];
+    : [...defaults.planningPanel];
+  const panels = (source?.panels ?? {}) as Partial<Record<LobbyPanel, unknown>>;
+  const keys = source?.keys && typeof source.keys === "object" ? source.keys as Record<string, unknown> : {};
   return {
-    autoOpen: typeof source?.autoOpen === "boolean" ? source.autoOpen : DEFAULT_CONFIG.lobby.autoOpen,
+    autoOpen: flag(source?.autoOpen, defaults.autoOpen),
     planningPanel: PANEL_MEMBERS.filter((member) => panel.includes(member)),
+    autoAsk: flag(source?.autoAsk, defaults.autoAsk),
+    issues: flag(source?.issues, defaults.issues),
+    panels: Object.fromEntries(LOBBY_PANELS.map((name) => [name, flag(panels[name], defaults.panels[name])])) as Record<LobbyPanel, boolean>,
+    keys: Object.fromEntries(Object.entries(keys).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0)),
+    mouse: flag(source?.mouse, defaults.mouse),
   };
 }
 

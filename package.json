@@ -38,11 +38,14 @@
     "typebox": "*"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "0.87.0",
     "@earendil-works/pi-ai": "0.87.0",
+    "@earendil-works/pi-coding-agent": "0.87.0",
     "@earendil-works/pi-tui": "0.87.0",
     "@types/node": "^22.10.0",
     "typebox": "1.3.27",
     "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "@juicesharp/rpiv-ask-user-question": "^2.11.0"
   }
 }

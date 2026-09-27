@@ -55,8 +55,10 @@ function fakePi() {
 
 function fakeUi() {
   const overlay = { shown: 0, hidden: [] as boolean[], focused: 0, removed: 0 };
+  const written: string[] = [];
   const tui = {
-    terminal: { rows: 30, columns: 100 },
+    mode: "regular",
+    terminal: { rows: 30, columns: 100, write: (data: string) => void written.push(data) },
     requestRender() {},
     showOverlay() {
       overlay.shown += 1;
@@ -87,7 +89,7 @@ function fakeUi() {
       notes.push(message);
     },
   };
-  return { ui, overlay, widgets, notes };
+  return { ui, overlay, widgets, notes, written };
 }
 
 function project(owned: boolean) {
@@ -159,7 +161,10 @@ test("the lobby stays closed without a task, opens on demand and steps aside for
     await fake.emit("ui_prompt_start", { type: "ui_prompt_start", reason: "ui_prompt", kind: "select" }, ctx);
     await fake.emit("ui_prompt_end", { type: "ui_prompt_end", reason: "ui_prompt", kind: "select" }, ctx);
     assert.deepEqual(ui.overlay.hidden, [true, false], "hidden during the dialog, back after it");
+    // Mouse reporting is on only while the lobby shows: off for the dialog, back after it.
+    assert.deepEqual(ui.written, ["\x1b[?1000h\x1b[?1006h", "\x1b[?1006l\x1b[?1000l", "\x1b[?1000h\x1b[?1006h"]);
     hideLobby();
+    assert.equal(ui.written.at(-1), "\x1b[?1006l\x1b[?1000l");
     assert.equal(isLobbyVisible(), false);
     await fake.emit("ui_prompt_start", { type: "ui_prompt_start", reason: "ui_prompt", kind: "select" }, ctx);
     await fake.emit("ui_prompt_end", { type: "ui_prompt_end", reason: "ui_prompt", kind: "select" }, ctx);

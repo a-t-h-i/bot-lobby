@@ -26,7 +26,7 @@ import { describeRun, runFromLog } from "./run-summary.ts";
 import { modelLookup } from "./tools.ts";
 
 const HELP = [
-  "/bot-lobby                  Open the lobby: tasks, plan, quick fix, issues, metrics (alt+l)",
+  "/bot-lobby                  Open the lobby: tasks, plan, quick fix, metrics (alt+l)",
   "/bot-lobby <request>        Start a task through the workflow",
   "/bot-lobby status [taskId]  Show the active task",
   "/bot-lobby tasks            List tasks",

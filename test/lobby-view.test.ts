@@ -4,7 +4,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { visibleWidth, type TUI } from "@earendil-works/pi-tui";
-import { LobbyView, TAB_IDS, type LobbyHost } from "../src/lobby/view.ts";
+import { LobbyView, parseMouse, TAB_IDS, visibleTabs, type LobbyHost } from "../src/lobby/view.ts";
+import type { LobbyPanel, PanelMember } from "../src/schemas/configuration.ts";
 import { LobbyFeed } from "../src/lobby/feed.ts";
 import { QuickFixQueue } from "../src/lobby/quickfix.ts";
 import { IssuesState, type Exec } from "../src/lobby/issues.ts";
@@ -16,10 +17,10 @@ import type { MetricRecord } from "../src/state/metrics.ts";
 import type { ProcessRunner } from "../src/execution/pi-runner.ts";
 import { activityLine, chatLines, renderHome } from "../src/lobby/tabs/home.ts";
 import { renderTasks, taskDetailLines, taskRows } from "../src/lobby/tabs/tasks.ts";
-import { renderPlan, type SeatView } from "../src/lobby/tabs/plan.ts";
+import { renderPlan, type PlanLayout, type PlanView, type SeatView } from "../src/lobby/tabs/plan.ts";
 import { jobDetailLines } from "../src/lobby/tabs/quickfix.ts";
 import { renderIssues } from "../src/lobby/tabs/issues.ts";
-import { fittedColumns, renderMetrics } from "../src/lobby/tabs/metrics.ts";
+import { filterRecords, fittedColumns, renderMetrics } from "../src/lobby/tabs/metrics.ts";
 import { aggregateMetrics, taskStats } from "../src/state/metrics.ts";
 import { fit, rule, tail, windowStart, wrapHanging } from "../src/lobby/layout.ts";
 
@@ -40,6 +41,9 @@ const hangingRunner: ProcessRunner = () => new Promise(() => {});
 const PLAN = "## Objective\nLogin.\n## Steps\n1. Add the form\n2. Wire the API\n## Testing\nunit";
 
 interface Calls {
+  settings: string[];
+  answered: number;
+  savedPanels: Array<Record<LobbyPanel, boolean>>;
   oracle: string[];
   comments: Array<[string, string]>;
   started: string[];
@@ -50,9 +54,24 @@ interface Calls {
   seats: Array<string[] | undefined>;
 }
 
-function makeView(options: { rows?: number; busy?: boolean; task?: Task; tasks?: Task[]; plans?: PlannedTask[]; exec?: Exec } = {}) {
+interface ViewOptions {
+  rows?: number;
+  busy?: boolean;
+  task?: Task;
+  tasks?: Task[];
+  plans?: PlannedTask[];
+  exec?: Exec;
+  issues?: boolean;
+  panels?: Partial<Record<LobbyPanel, boolean>>;
+  keys?: Record<string, string>;
+  metrics?: MetricRecord[];
+  runProcess?: ProcessRunner;
+  panel?: PanelMember[];
+}
+
+function makeView(options: ViewOptions = {}) {
   const root = mkdtempSync(join(tmpdir(), "bl-view-"));
-  const calls: Calls = { oracle: [], comments: [], started: [], discarded: [], aborted: 0, hidden: 0, seeds: [], seats: [] };
+  const calls: Calls = { settings: [], answered: 0, savedPanels: [], oracle: [], comments: [], started: [], discarded: [], aborted: 0, hidden: 0, seeds: [], seats: [] };
   const rows = options.rows ?? 40;
   const tui = { terminal: { rows, columns: 120 }, requestRender() {} } as unknown as TUI;
   const feed = new LobbyFeed();
@@ -71,7 +90,7 @@ function makeView(options: { rows?: number; busy?: boolean; task?: Task; tasks?:
     tasks: () => options.tasks ?? (options.task ? [options.task] : []),
     plans: () => options.plans ?? [],
     comments: (): PlanComment[] => [],
-    metrics: (): MetricRecord[] => [],
+    metrics: (): MetricRecord[] => options.metrics ?? [],
     toOracle: (text) => {
       calls.oracle.push(text);
       return undefined;
@@ -92,10 +111,19 @@ function makeView(options: { rows?: number; busy?: boolean; task?: Task; tasks?:
     newPlanner: (seed, seats) => {
       calls.seeds.push(seed);
       calls.seats.push(seats ? [...seats] : undefined);
-      planner = new PlanningSession({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high", timeoutMs: 1000 }), ...(seats ? { panel: seats } : {}), runProcess: hangingRunner }, seed);
+      planner = new PlanningSession({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high", timeoutMs: 1000 }), ...(seats ? { panel: seats } : {}), runProcess: options.runProcess ?? hangingRunner }, seed);
       return planner;
     },
-    defaultPanel: () => ["backend", "designer", "qa", "researcher"],
+    answerPanel: async () => {
+      calls.answered += 1;
+      return "answers sent — the panel is on the next round";
+    },
+    issuesEnabled: () => options.issues === true,
+    panels: () => ({ scene: true, conversation: true, activity: true, thinking: true, ...options.panels }),
+    savePanels: (panels) => void calls.savedPanels.push({ ...panels }),
+    keys: () => options.keys ?? {},
+    openSettings: async (entry) => void calls.settings.push(entry ?? "all"),
+    defaultPanel: () => options.panel ?? ["backend", "designer", "qa", "researcher"],
     seatLabel: (member) => `p/${member} · medium`,
     issues,
     profileLabel: () => "p/model · high",
@@ -109,6 +137,39 @@ function makeView(options: { rows?: number; busy?: boolean; task?: Task; tasks?:
   return { view, calls, feed, quickfix, issues, root, planner: () => planner };
 }
 
+/** A fake pi whose every run answers `text` as the assistant. */
+function answering(text: string): ProcessRunner {
+  const stdout = JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], model: "p/served", stopReason: "stop", usage: { input: 1, output: 1 } } });
+  return async () => ({ exitCode: 0, stdout, stderr: "", killed: false, timedOut: false });
+}
+
+const ORACLE_REPLY = [
+  "## Status", "GRILLING", "## Title", "Login",
+  "## Questions", "1. Behind a flag?", "   - Yes (Recommended) — ship dark", "   - No — ship to everyone",
+  "## Plan", "### Steps", "1. Add the form", "2. Wire the API",
+].join("\n");
+
+async function settle(): Promise<void> {
+  for (let i = 0; i < 10; i++) await new Promise((resolve) => setImmediate(resolve));
+}
+
+/** A lobby on the Plan tab whose panel has answered one round with a question and a draft. */
+async function planned(options: ViewOptions = {}) {
+  const made = makeView({ panel: [], runProcess: answering(ORACLE_REPLY), ...options });
+  made.view.setTab("plan");
+  type(made.view, "login page");
+  made.view.handleInput(KEY.enter);
+  await settle();
+  assert.equal(made.planner()?.awaitingAnswers, true);
+  made.view.render(140);
+  return made;
+}
+
+/** The SGR report a terminal sends for a left click at zero-based `x`, `y`. */
+function click(x: number, y: number): string {
+  return `\x1b[<0;${x + 1};${y + 1}M`;
+}
+
 function type(view: LobbyView, text: string): void {
   for (const char of text) view.handleInput(char);
 }
@@ -119,12 +180,19 @@ function activeTask(): Task {
 
 test("every tab fills the terminal exactly, at wide and narrow sizes", () => {
   for (const [width, rows] of [[120, 40], [80, 24], [60, 16]] as const) {
-    const { view } = makeView({ rows, task: activeTask() });
+    const { view } = makeView({ rows, task: activeTask(), issues: true });
     for (const tab of TAB_IDS) {
       view.setTab(tab);
-      const lines = view.render(width);
-      assert.equal(lines.length, rows, `${tab} at ${width}x${rows}`);
-      for (const line of lines) assert.ok(visibleWidth(line) <= width, `${tab} at ${width}: "${line}"`);
+      assert.equal(view.tab, tab);
+      for (const state of ["plain", "help", "search"] as const) {
+        if (state === "help") view.handleInput(KEY.alt("h"));
+        if (state === "search") type(view, "\x06login");
+        const lines = view.render(width);
+        assert.equal(lines.length, rows, `${tab} (${state}) at ${width}x${rows}`);
+        for (const line of lines) assert.ok(visibleWidth(line) <= width, `${tab} (${state}) at ${width}: "${line}"`);
+        if (state === "help") view.handleInput(KEY.escape);
+        if (state === "search") view.handleInput(KEY.escape);
+      }
     }
   }
 });
@@ -139,10 +207,24 @@ test("tab and alt+digit switch tabs; prompt tabs open in typing mode, list tabs 
   assert.equal(view.tab, "lobby");
   view.handleInput(KEY.alt("4"));
   assert.deepEqual([view.tab, view.mode], ["quickfix", "type"]);
-  view.handleInput(KEY.alt("6"));
-  assert.deepEqual([view.tab, view.mode], ["metrics", "browse"]);
+  view.handleInput(KEY.alt("5"));
+  assert.deepEqual([view.tab, view.mode], ["metrics", "browse"], "Issues is off, so Metrics is the fifth tab");
   view.handleInput("3");
   assert.equal(view.tab, "plan", "digits switch tabs while browsing a list tab");
+});
+
+test("the Issues tab is off unless lobby.issues turns it on", () => {
+  assert.deepEqual(visibleTabs(false), ["lobby", "tasks", "plan", "quickfix", "metrics"]);
+  assert.deepEqual(visibleTabs(true), [...TAB_IDS]);
+  const { view } = makeView();
+  assert.ok(!view.render(140)[0]!.includes("Issues"));
+  view.setTab("issues");
+  assert.equal(view.tab, "lobby");
+  assert.match(view.render(140).at(-1)!, /the Issues tab is off — set lobby\.issues to true/);
+  const on = makeView({ issues: true }).view;
+  assert.ok(on.render(140)[0]!.includes("5 Issues"));
+  on.handleInput(KEY.alt("6"));
+  assert.equal(on.tab, "metrics");
 });
 
 test("drafts stay with their tab", () => {
@@ -251,7 +333,7 @@ test("n files an issue and p plans the selected one", async () => {
     if (args[1] === "view") return { stdout: JSON.stringify({ number: 5, title: "Crash", body: "it crashes", labels: [], comments: [] }), stderr: "", code: 0 };
     return { stdout: "https://github.com/o/r/issues/6\n", stderr: "", code: 0 };
   };
-  const { view, calls: host } = makeView({ exec });
+  const { view, calls: host } = makeView({ exec, issues: true });
   view.setTab("issues");
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.ok(view.render(120).some((line) => line.includes("#5 Crash")));
@@ -267,30 +349,57 @@ test("n files an issue and p plans the selected one", async () => {
 });
 
 test("g and s regroup and resort the metrics table", () => {
-  const { view } = makeView();
+  const { view } = makeView({ metrics: [{ id: "1", kind: "worker", agent: "DEV", model: "p/fast", thinking: "low", status: "success", startedAt: "2026-09-26T11:00:00.000Z", durationMs: 90_000 }] });
   view.setTab("metrics");
-  assert.ok(view.render(140).some((line) => line.includes("grouped by model + thinking · sorted by runs")));
+  assert.ok(view.render(140).some((line) => line.includes("by model · thinking · sorted by runs")));
   view.handleInput("g");
   view.handleInput("s");
-  assert.ok(view.render(140).some((line) => line.includes("grouped by model + thinking + agent · sorted by avg")));
+  assert.ok(view.render(140).some((line) => line.includes("by model · thinking · agent · sorted by avg")));
 });
+
+const ALL_PANELS = { scene: true, conversation: true, activity: true, thinking: true };
 
 test("the home tab puts the scene first, the thinking pane last, and stacks panes when narrow", () => {
   const feed = new LobbyFeed();
   feed.say("you", "build it");
   feed.log("DEV", "reading a.ts", "info", NOW);
   feed.thought("DEV", "the router lives in a.ts");
-  const input = { task: activeTask(), scene: () => ["SCENE"], chat: feed.chat, activity: feed.activity, thoughts: feed.thoughts, busy: false, others: 0, pending: 0, chatOffset: 0, tick: 0, now: NOW };
+  const input = { task: activeTask(), scene: () => ["SCENE"], chat: feed.chat, activity: feed.activity, thoughts: feed.thoughts, busy: false, others: 0, pending: 0, tick: 0, now: NOW, panels: ALL_PANELS };
   const wide = renderHome(input, 120, 30);
   assert.equal(wide[0], fit("SCENE", 120));
-  assert.ok(wide.some((line) => line.includes("Conversation · TASK-login") && line.includes("Activity")));
-  assert.ok(wide.some((line) => line.includes("── Thinking") && line.includes("DEV")));
+  assert.ok(wide.some((line) => line.includes("╭ Conversation · TASK-login") && line.includes("╭ Activity")));
+  assert.ok(wide.some((line) => line.includes("╭ Thinking") && line.includes("DEV · just now")));
   assert.ok(wide.some((line) => line.includes("the router lives in a.ts")));
   const narrow = renderHome(input, 70, 30);
-  assert.ok(narrow.some((line) => line.startsWith("── Activity")), "narrow terminals stack the activity log under the conversation");
+  assert.ok(narrow.some((line) => line.startsWith("╭ Activity")), "narrow terminals stack the activity log under the conversation");
   const empty = renderHome({ ...input, task: undefined, chat: [], activity: [], thoughts: [], others: 2, pending: 1 }, 100, 20);
   assert.ok(empty.some((line) => line.includes("No task is running in this session.")));
   assert.ok(empty.some((line) => line.includes("2 tasks are running in other sessions")));
+});
+
+test("hidden panes give their room to the rest, and a search narrows every pane", () => {
+  const feed = new LobbyFeed();
+  feed.say("you", "build the router");
+  feed.say("oracle", "On it.");
+  feed.log("DEV", "reading a.ts", "info", NOW);
+  feed.log("DEV", "editing router.ts", "info", NOW);
+  feed.thought("DEV", "the router lives in a.ts");
+  const keys = { scene: "Alt+Z", conversation: "Alt+C", activity: "Alt+A", thinking: "Alt+K" };
+  const input = { chat: feed.chat, activity: feed.activity, thoughts: feed.thoughts, busy: false, others: 0, pending: 0, tick: 0, now: NOW, panels: ALL_PANELS, keys };
+  const quiet = renderHome({ ...input, panels: { ...ALL_PANELS, activity: false, thinking: false } }, 120, 20);
+  assert.equal(quiet.length, 20);
+  assert.ok(!quiet.some((line) => line.includes("Activity") || line.includes("Thinking")));
+  assert.ok(quiet[0]!.startsWith("╭ Conversation") && quiet[0]!.endsWith("Alt+C ╮"), "the pane names its toggle");
+  const onlyThinking = renderHome({ ...input, panels: { ...ALL_PANELS, conversation: false, activity: false } }, 120, 20);
+  assert.ok(onlyThinking[0]!.startsWith("╭ Thinking"), "thinking takes the whole tab when it is all that shows");
+  const none = renderHome({ ...input, panels: { scene: false, conversation: false, activity: false, thinking: false } }, 120, 20);
+  assert.ok(none.some((line) => line.includes("Every pane is hidden — Alt+C conversation · Alt+A activity · Alt+K thinking")));
+  const searched = renderHome({ ...input, query: "router" }, 120, 20);
+  assert.ok(searched.some((line) => line.includes("you ▸ build the router")));
+  assert.ok(!searched.some((line) => line.includes("On it.")));
+  assert.ok(searched.some((line) => line.includes("editing router.ts")));
+  assert.ok(!searched.some((line) => line.includes("reading a.ts")));
+  assert.ok(searched[0]!.includes("1 match"));
 });
 
 test("activity lines spin while pending and mark how a step ended", () => {
@@ -334,37 +443,55 @@ test("task detail shows plan progress, comment status, and recent runs", () => {
   assert.ok(lines.some((line) => line.includes("Comments") && line.includes("1 open")));
 });
 
-test("the plan tab shows the verdict, the roster, attributed questions, the draft and each seat's needs", () => {
-  const seat = (label: string, extra: Partial<SeatView> = {}): SeatView => ({ label, seated: true, status: "done", questions: 0, ready: false, ...extra });
-  const lines = renderPlan({
-    session: {
-      messages: [
-        { role: "you", text: "dark mode", at: 0 },
-        { role: "planner", text: "", at: 1, questions: [{ from: "ORACLE", text: "Ship behind a flag?" }, { from: "DESIGN", text: "Which pages?" }] },
-      ],
-      reply: { status: "grilling", questions: ["Ship behind a flag?"], plan: "### Steps\n1. tokens" },
-      questions: [{ from: "ORACLE", text: "Ship behind a flag?" }, { from: "DESIGN", text: "Which pages?" }],
-      notes: [{ from: "QA", text: "e2e tests in tests/e2e" }],
-      seats: [seat("ORACLE", { questions: 1 }), seat("DEV", { status: "thinking", step: "reading api.ts" }), seat("DESIGN", { questions: 1 }), seat("QA", { ready: true }), seat("RESEARCH", { seated: false, status: "idle" })],
-      busy: false,
-      turns: 1,
-      title: "Dark mode",
-    },
-    profile: "p/m · high",
-    seats: [],
-    offset: 0,
-    focus: "talk",
-    draftOffset: 0,
-    tick: 0,
-  }, 140, 16);
-  assert.ok(lines.some((line) => line.includes("Planning · Dark mode")));
-  assert.ok(lines.some((line) => line.includes("● GRILLING · 2 open questions")));
+function planSession(extra: Partial<PlanView> = {}): PlanView {
+  const seat = (label: string, more: Partial<SeatView> = {}): SeatView => ({ label, seated: true, status: "done", questions: 0, ready: false, ...more });
+  const questions = [
+    { from: "ORACLE", text: "Ship behind a flag?", options: [{ label: "Yes (Recommended)", description: "ship dark first" }, { label: "No", description: "" }] },
+    { from: "DESIGN", text: "Which pages?", options: [] },
+  ];
+  return {
+    messages: [
+      { role: "you", text: "dark mode", at: 0 },
+      { role: "planner", text: "", at: 1, questions },
+    ],
+    reply: { status: "grilling", questions: [], plan: "### Steps\n1. tokens\n2. toggle" },
+    questions,
+    notes: [{ from: "QA", text: "e2e tests in tests/e2e" }],
+    seats: [seat("ORACLE", { questions: 1 }), seat("DEV", { status: "thinking", step: "reading api.ts" }), seat("DESIGN", { questions: 1 }), seat("QA", { ready: true }), seat("RESEARCH", { seated: false, status: "idle" })],
+    busy: false,
+    turns: 1,
+    title: "Dark mode",
+    awaitingAnswers: true,
+    answeredChunks: 0,
+    lineComments: [],
+    ...extra,
+  };
+}
+
+test("the plan tab shows the roster, attributed questions with their options, the draft and each seat's needs", () => {
+  const layout: PlanLayout = { draftTop: 0, draftLeft: 0, draftWidth: 0, draftRows: 0, draftStart: 0, draftText: [] };
+  const input = { session: planSession(), profile: "p/m · high", seats: [], offset: 0, focus: "talk" as const, draftOffset: 0, tick: 0, layout };
+  const lines = renderPlan(input, 140, 20);
+  assert.equal(lines.length, 20);
+  assert.ok(lines.some((line) => line.includes("Planning · Dark mode") && line.includes("● 2 questions for you — enter answers them one at a time")));
   assert.ok(lines.some((line) => line.includes("panel  ORACLE 1 question · DEV ⠋ reading api.ts · DESIGN 1 question · QA ✓ ready · RESEARCH off")));
   assert.ok(lines.some((line) => line.includes(" 1. ORACLE   Ship behind a flag?")));
+  assert.ok(lines.some((line) => line.includes("○ Yes (Recommended) — ship dark first")));
   assert.ok(lines.some((line) => line.includes(" 2. DESIGN   Which pages?")));
+  assert.ok(lines.some((line) => line.includes("╭ Draft plan")));
   assert.ok(lines.some((line) => line.includes("What each seat needs")));
   assert.ok(lines.some((line) => line.includes("QA       e2e tests in tests/e2e")));
-  assert.ok(lines.some((line) => line.includes("── Conversation ◂")), "the focused pane is marked");
+  assert.deepEqual(layout.draftText.slice(0, 3), ["Steps", "1. tokens", "2. toggle"]);
+  const row = lines.findIndex((line) => line.includes("1. tokens"));
+  assert.equal(row, layout.draftTop + 1, "the layout says where each draft line landed");
+  assert.equal(lines[row]!.indexOf("1. tokens"), layout.draftLeft + 2, "text starts after the comment marker column");
+  const partial = renderPlan({ ...input, session: planSession({ answeredChunks: 1, lineComments: [{ line: "1. tokens", text: "name them per theme" }] }) }, 140, 20);
+  assert.ok(partial.some((line) => line.includes("some answered — enter resumes") && line.includes("◆ 1 line comment to send")));
+  assert.ok(partial.some((line) => line.includes("◆ 1. tokens")));
+  assert.ok(partial.some((line) => line.includes("↳ name them per theme")));
+  const filtered = renderPlan({ ...input, query: "pages" }, 140, 20);
+  assert.ok(filtered.some((line) => line.includes(" 2. DESIGN   Which pages?")), "a filtered question keeps its number");
+  assert.ok(!filtered.some((line) => line.includes("Ship behind a flag?")), "a search narrows the conversation");
 });
 
 test("before a session, 1-4 choose the seats the next session starts with", () => {
@@ -413,8 +540,29 @@ test("metrics columns drop from the right as the terminal narrows", () => {
   assert.equal(fittedColumns(50).length, 0, "model, thinking and agents always stay");
   const records: MetricRecord[] = [{ id: "1", kind: "worker", agent: "DEV", model: "p/fast", thinking: "low", status: "success", startedAt: "", durationMs: 90_000 }];
   const lines = renderMetrics({ groups: aggregateMetrics(records), records, stats: taskStats([]), by: "model", sort: "runs", selected: 0 }, 120, 10);
-  assert.ok(lines.some((line) => line.startsWith("fast") && line.includes("worker") && line.includes("1m 30s")));
-  assert.ok(lines.some((line) => line.includes("Avg by agent DEV 1m 30s ×1")));
+  assert.equal(lines.length, 10);
+  assert.ok(lines.some((line) => line.startsWith("│ fast") && line.includes("worker") && line.includes("1m 30s")));
+  assert.ok(lines.some((line) => line.includes("■ DEV 100% avg 1m 30s ×1")));
+});
+
+test("the metrics dashboard leads with tiles and charts when there is room", () => {
+  const records: MetricRecord[] = [
+    { id: "1", kind: "worker", agent: "DEV", model: "p/fast", thinking: "low", status: "success", startedAt: "", durationMs: 90_000, cost: 0.1 },
+    { id: "2", kind: "worker", agent: "QA", model: "p/fast", thinking: "low", status: "failed", startedAt: "", durationMs: 30_000 },
+    { id: "3", kind: "master", agent: "MASTER", model: "p/big", thinking: "high", status: "success", startedAt: "", durationMs: 240_000, cost: 0.5 },
+  ];
+  const lines = renderMetrics({ groups: aggregateMetrics(records), records, stats: taskStats([]), by: "model", sort: "runs", selected: 0 }, 120, 36);
+  assert.equal(lines.length, 36);
+  for (const title of ["╭ Runs", "╭ Success", "╭ Avg run", "╭ Cost", "╭ Tasks", "╭ Average run time", "╭ Success rate", "╭ Where the time goes", "╭ All models"]) {
+    assert.ok(lines.some((line) => line.includes(title)), title);
+  }
+  assert.ok(lines.some((line) => line.includes("✗  50%")), "a failing model shows an icon, not only a colour");
+  assert.ok(lines.some((line) => line.includes("✓ 100%")));
+  assert.ok(lines.some((line) => line.includes("$0.60")));
+  assert.deepEqual(filterRecords(records, "master").map((record) => record.id), ["3"]);
+  assert.deepEqual(filterRecords(records, "LOW").map((record) => record.id), ["1", "2"]);
+  const empty = renderMetrics({ groups: [], records: [], stats: taskStats([]), by: "model", sort: "runs", selected: 0, query: "nothing" }, 100, 12);
+  assert.ok(empty.some((line) => line.includes('No run matches "nothing".')));
 });
 
 test("layout helpers keep exact widths, tails and windows", () => {
@@ -427,4 +575,283 @@ test("layout helpers keep exact widths, tails and windows", () => {
   assert.equal(windowStart(0, 10, 4), 0);
   assert.deepEqual(wrapHanging("you ▸ ", "one two three", 12), ["you ▸ one", "      two", "      three"]);
   assert.equal(visibleWidth(rule(30, "Title", undefined, "right")), 30);
+});
+
+test("alt+a, alt+k, alt+c and alt+z show and hide panes, and the choice is remembered", () => {
+  const { view, calls } = makeView({ task: activeTask() });
+  const has = (text: string) => view.render(120).some((line) => line.includes(text));
+  assert.ok(has("╭ Activity") && has("╭ Thinking") && has("scene 0"));
+  view.handleInput(KEY.alt("a"));
+  assert.ok(!has("╭ Activity"));
+  assert.match(view.render(120).at(-1)!, /activity log hidden · Alt\+A shows it/);
+  assert.deepEqual(calls.savedPanels.at(-1), { scene: true, conversation: true, activity: false, thinking: true });
+  view.handleInput(KEY.alt("k"));
+  assert.ok(!has("╭ Thinking"));
+  view.handleInput(KEY.alt("z"));
+  assert.ok(!has("scene 0"));
+  view.handleInput(KEY.alt("c"));
+  assert.ok(has("Every pane is hidden"));
+  view.handleInput(KEY.alt("a"));
+  assert.ok(has("╭ Activity"));
+  assert.equal(view.mode, "type", "pane keys work while typing and leave the prompt alone");
+  view.setTab("tasks");
+  view.handleInput(KEY.alt("k"));
+  assert.match(view.render(120).at(-1)!, /thinking shown on the Lobby tab/);
+});
+
+test("panes start as the config left them, and lobby.keys rebinds the shortcuts", () => {
+  const { view } = makeView({ panels: { thinking: false }, keys: { toggleThinking: "alt+t", help: "f1" } });
+  const has = (text: string) => view.render(120).some((line) => line.includes(text));
+  assert.ok(!has("╭ Thinking"));
+  view.handleInput(KEY.alt("k"));
+  assert.ok(!has("╭ Thinking"), "the default key no longer toggles");
+  view.handleInput(KEY.alt("t"));
+  assert.ok(has("╭ Thinking"));
+  assert.ok(view.render(120)[0]!.includes("F1 keys"), "the tab bar names the help key");
+  view.handleInput("\x1bOP");
+  assert.equal(view.help, true);
+  assert.ok(has("Alt+T") && has("show or hide thinking"));
+});
+
+test("the help screen lists every shortcut and this tab's keys; any key closes it", () => {
+  const { view } = makeView();
+  view.setTab("plan");
+  view.handleInput(KEY.escape);
+  view.handleInput("?");
+  const lines = view.render(140);
+  assert.ok(lines.some((line) => line.includes("╭ Keys")));
+  for (const text of ["Alt+A", "show or hide the activity log", "Alt+K", "Ctrl+F", "search the current tab", "Plan tab", "comment on the picked draft line", "lobby.keys"]) {
+    assert.ok(lines.some((line) => line.includes(text)), text);
+  }
+  view.handleInput("q");
+  assert.equal(view.help, false);
+  view.handleInput(KEY.alt("h"));
+  assert.equal(view.help, true);
+  view.handleInput(KEY.down);
+  assert.equal(view.help, false, "other keys close it and still do their job");
+});
+
+test("ctrl+f and / search the current tab: filtered, highlighted, kept per tab, cleared with esc", () => {
+  const cache = { ...createTask("TASK-cache", "fix cache", "2026-09-26T09:00:00.000Z", "fix the cache", "other"), state: "reviewing" as const };
+  const { view, feed } = makeView({ tasks: [activeTask(), cache] });
+  feed.say("you", "build the router");
+  feed.say("oracle", "On it.");
+  view.handleInput("\x06");
+  assert.equal(view.searching, true);
+  type(view, "router");
+  let lines = view.render(120);
+  assert.ok(lines.some((line) => line.includes("\x1b[7mrouter\x1b[27m")), "matches are highlighted");
+  assert.ok(!lines.some((line) => line.includes("On it.")));
+  assert.ok(lines.some((line) => line.includes(" / ") && line.includes("enter keep · esc clear")));
+  view.handleInput(KEY.enter);
+  assert.deepEqual([view.searching, view.query()], [false, "router"]);
+  assert.ok(view.render(120).some((line) => line.includes("Ctrl+F or / edits")));
+  view.setTab("tasks");
+  assert.equal(view.query(), undefined, "each tab has its own search");
+  view.handleInput("/");
+  type(view, "cache");
+  view.handleInput(KEY.enter);
+  lines = view.render(120);
+  assert.ok(lines.some((line) => line.includes("fix ") && line.includes("cache")));
+  assert.ok(!lines.some((line) => line.includes("add login")));
+  assert.ok(lines.some((line) => line.includes("1 match")));
+  view.handleInput(KEY.escape);
+  assert.equal(view.query(), undefined);
+  assert.ok(view.render(120).some((line) => line.includes("add login")));
+  view.setTab("lobby");
+  assert.equal(view.query(), "router", "the Lobby search waited");
+});
+
+test("enter on an empty Plan prompt, or a while browsing, puts the panel's questions to the user", async () => {
+  const { view, calls } = await planned();
+  assert.ok(view.render(140)[0]!.includes("Plan 1?"), "the tab bar counts the open questions");
+  assert.ok(view.render(140).some((line) => line.includes("enter answers the panel's 1 question one at a time")));
+  view.handleInput(KEY.enter);
+  assert.equal(calls.answered, 1);
+  await settle();
+  assert.match(view.render(140).at(-1)!, /answers sent — the panel is on the next round/);
+  view.handleInput(KEY.escape);
+  view.handleInput("a");
+  assert.equal(calls.answered, 2);
+  type(view, "i");
+  type(view, "just use a flag");
+  view.handleInput(KEY.enter);
+  assert.equal(calls.answered, 2, "typed text is a reply, not a questionnaire");
+});
+
+test("↑↓ pick a draft line and c comments on it; the comment waits for the answers", async () => {
+  const { view, planner } = await planned();
+  view.handleInput(KEY.escape);
+  view.handleInput(KEY.enter);
+  view.handleInput(KEY.down);
+  view.handleInput("c");
+  assert.equal(view.mode, "type");
+  assert.ok(view.render(140).some((line) => line.includes("comment on “1. Add the form” · enter adds it")));
+  type(view, "use a modal");
+  view.handleInput(KEY.enter);
+  assert.deepEqual(planner()!.lineComments, [{ line: "1. Add the form", text: "use a modal" }]);
+  assert.match(view.render(140).at(-1)!, /comment kept — it goes with your answers/);
+  const lines = view.render(140);
+  assert.ok(lines.some((line) => line.includes("◆ 1. Add the form")));
+  assert.ok(lines.some((line) => line.includes("↳ use a modal")));
+  view.handleInput(KEY.down);
+  view.handleInput("c");
+  view.handleInput(KEY.escape);
+  assert.equal(view.mode, "browse", "esc drops a comment being written");
+  assert.equal(planner()!.lineComments.length, 1);
+});
+
+test("clicking a draft line opens a comment on it; clicking a tab opens the tab", async () => {
+  const { view, planner } = await planned();
+  const lines = view.render(140);
+  const y = lines.findIndex((line) => line.includes("2. Wire the API"));
+  const x = lines[y]!.indexOf("2. Wire the API");
+  view.handleInput(click(x + 3, y));
+  assert.equal(view.mode, "type");
+  assert.ok(view.render(140).some((line) => line.includes("comment on “2. Wire the API”")));
+  type(view, "retry on 503");
+  view.handleInput(KEY.enter);
+  assert.deepEqual(planner()!.lineComments, [{ line: "2. Wire the API", text: "retry on 503" }]);
+  // Full-screen pi hands over normalized mouse events instead.
+  const heading = view.render(140).findIndex((line) => line.includes("1. Add the form"));
+  view.handleMouse({ type: "click", button: "left", x: lines[heading]!.indexOf("1. Add the form"), y: heading, screenX: 0, screenY: 0, width: 140, height: 40, shift: false, alt: false, ctrl: false });
+  assert.ok(view.render(140).some((line) => line.includes("comment on “1. Add the form”")));
+  view.handleInput(KEY.escape);
+  const bar = view.render(140)[0]!;
+  view.handleInput(click(bar.indexOf("Tasks"), 0));
+  assert.equal(view.tab, "tasks");
+});
+
+test("mouse reports parse as clicks and wheel turns", () => {
+  assert.deepEqual(parseMouse("\x1b[<0;10;5M"), { kind: "press", button: 0, x: 9, y: 4, delta: 0 });
+  assert.deepEqual(parseMouse("\x1b[<0;10;5m"), { kind: "release", button: 0, x: 9, y: 4, delta: 0 });
+  assert.equal(parseMouse("\x1b[<64;1;1M")?.delta, -1);
+  assert.equal(parseMouse("\x1b[<65;1;1M")?.delta, 1);
+  assert.equal(parseMouse("\x1b[A"), undefined);
+  const { view } = makeView();
+  view.handleInput("\x1b[<65;1;5M");
+  assert.equal(view.mode, "type", "a wheel turn is not typed into the prompt");
+  assert.ok(!view.render(100).some((line) => line.includes("[<65")));
+});
+
+const KEYS = { left: "\x1b[D", right: "\x1b[C", home: "\x1b[H", end: "\x1b[F", pageUp: "\x1b[5~", pageDown: "\x1b[6~" };
+
+/** The SGR report for a wheel turn at zero-based `x`, `y` (up is -1). */
+function wheelAt(x: number, y: number, direction: -1 | 1): string {
+  return `\x1b[<${direction < 0 ? 64 : 65};${x + 1};${y + 1}M`;
+}
+
+function busyFeed(feed: LobbyFeed, count = 60): void {
+  feed.say("you", "build it");
+  feed.say("oracle", "On it.");
+  for (let index = 0; index < count; index += 1) feed.log("DEV", `reading file-${index}.ts`, "info", NOW);
+}
+
+test("each Lobby pane scrolls on its own: ← → pick the pane, ↑↓ and page keys scroll it, Home and End jump", () => {
+  const { view, feed } = makeView();
+  busyFeed(feed);
+  view.handleInput(KEY.escape);
+  const shows = (text: string) => view.render(120).some((line) => line.includes(text));
+  assert.ok(shows("file-59.ts") && !shows("file-20.ts"), "panes start on their newest lines");
+  view.handleInput(KEYS.right);
+  assert.equal(view.homeFocus, "activity");
+  view.handleInput(KEY.up);
+  assert.ok(!shows("file-59.ts") && shows("file-58.ts"));
+  assert.ok(view.render(120).some((line) => line.includes("╭ Activity") && line.includes("↓1")));
+  assert.ok(shows("On it."), "the conversation did not move");
+  view.handleInput(KEYS.home);
+  assert.ok(shows("file-0.ts") && !shows("file-59.ts"));
+  view.handleInput(KEY.down);
+  assert.ok(!shows("file-0.ts"), "at the top, one step down responds at once (the offset is clamped)");
+  view.handleInput(KEYS.end);
+  assert.ok(shows("file-59.ts"));
+  view.handleInput(KEYS.pageUp);
+  const paged = Number(/↓(\d+)/.exec(view.render(120).find((line) => line.includes("╭ Activity"))!)?.[1]);
+  const rows = view.render(120).filter((line) => line.includes("reading file-")).length;
+  assert.equal(paged, rows - 1, "a page is the pane's rows less one line of context");
+  view.handleInput(KEYS.right);
+  assert.equal(view.homeFocus, "thinking");
+  view.handleInput(KEY.alt("k"));
+  assert.equal(view.render(120) && view.homeFocus, "thinking");
+  view.handleInput(KEY.up);
+  assert.equal(view.homeFocus, "conversation", "a hidden pane hands the keys to the first one showing");
+});
+
+test("the wheel scrolls the pane under the pointer, and a scrolled-back pane holds its place as lines arrive", () => {
+  const { view, feed } = makeView();
+  busyFeed(feed);
+  let lines = view.render(120);
+  const top = lines.findIndex((line) => line.includes("╭ Activity"));
+  const x = lines[top]!.indexOf("╭ Activity") + 5;
+  view.handleInput(wheelAt(x, top + 3, -1));
+  lines = view.render(120);
+  assert.ok(!lines.some((line) => line.includes("file-59.ts")) && lines.some((line) => line.includes("file-56.ts")), "three lines back");
+  assert.equal(view.homeFocus, "conversation", "the wheel does not move the keys");
+  const content = (line: string) => line.slice(x - 5).replace(/[│┃]\s*$/, "");
+  const before = lines.filter((line) => line.includes("reading file-")).map(content);
+  feed.log("DEV", "reading late.ts", "info", NOW);
+  feed.log("DEV", "reading later.ts", "info", NOW);
+  const after = view.render(120).filter((line) => line.includes("reading file-")).map(content);
+  assert.deepEqual(after, before, "new lines arrive below without moving what is being read");
+  assert.ok(view.render(120).some((line) => line.includes("╭ Activity") && line.includes("↓5")));
+  view.handleInput(wheelAt(2, top + 3, -1));
+  const header = view.render(120).find((line) => line.includes("╭ Conversation"))!;
+  assert.ok(!header.slice(0, header.indexOf("╭ Activity")).includes("↓"), "the conversation fits, so it does not scroll");
+  view.handleInput(click(x, top + 2));
+  assert.equal(view.homeFocus, "activity", "a click gives the pane the keys");
+});
+
+test("task and quick fix details scroll to their last line and no further; the wheel works on both panes", async () => {
+  const task = { ...activeTask(), plan: Array.from({ length: 60 }, (_, index) => `${index + 1}. step number ${index + 1}`).join("\n") };
+  const { view } = makeView({ tasks: [task, { ...createTask("TASK-two", "second", "2026-09-26T10:00:00.000Z"), state: "implementing" as const }] });
+  view.setTab("tasks");
+  view.handleInput(KEY.enter);
+  for (let index = 0; index < 20; index += 1) view.handleInput(KEYS.pageDown);
+  let lines = view.render(120);
+  assert.ok(lines.some((line) => line.includes("60. step number 60")));
+  const detail = lines.find((line) => line.includes("╭ Detail"))!;
+  assert.match(detail, /\d+–(\d+)\/\1 /, "the position reads the last line");
+  view.handleInput(KEYS.pageUp);
+  assert.ok(!view.render(120).some((line) => line.includes("60. step number 60")), "one page up moves at once");
+  view.handleInput(KEYS.home);
+  assert.ok(view.render(120).some((line) => line.includes("add login") || line.includes("Add a login page")));
+  lines = view.render(120);
+  const row = lines.findIndex((line) => line.includes("TASK-two") || line.includes("second"));
+  view.handleInput(wheelAt(3, row, 1));
+  assert.ok(view.render(120).some((line) => line.includes("▸ second")), "the wheel over the list moves the selection");
+});
+
+test("the Plan conversation scrolls with the wheel while the draft keeps its cursor", async () => {
+  const { view } = await planned();
+  const lines = view.render(140);
+  const top = lines.findIndex((line) => line.includes("╭ Conversation"));
+  view.handleInput(wheelAt(3, top + 2, -1));
+  assert.ok(view.render(140).some((line) => line.includes("╭ Conversation")));
+  view.handleInput(KEY.escape);
+  view.handleInput(KEYS.right);
+  view.handleInput(KEYS.end);
+  assert.ok(view.planCursor > 0, "End puts the draft cursor on the last line");
+  view.handleInput(KEYS.home);
+  assert.equal(view.planCursor, 0);
+});
+
+test("alt+s opens bot-lobby's settings; m opens the quick fix or planner entry; the lobby rereads the config after", async () => {
+  const keys: Record<string, string> = {};
+  const { view, calls } = makeView({ keys });
+  view.handleInput(KEY.alt("s"));
+  assert.deepEqual(calls.settings, ["all"]);
+  view.setTab("quickfix");
+  view.handleInput(KEY.escape);
+  view.handleInput("m");
+  assert.deepEqual(calls.settings, ["all", "quickfix"]);
+  assert.ok(view.render(120).some((line) => line.includes("m changes the model")), "the Quick fix tab says how");
+  view.setTab("plan");
+  view.handleInput(KEY.escape);
+  view.handleInput("m");
+  assert.deepEqual(calls.settings, ["all", "quickfix", "planner"]);
+  keys.toggleThinking = "alt+t";
+  view.reloadConfig();
+  view.setTab("lobby");
+  view.handleInput(KEY.alt("t"));
+  assert.equal(view.panelShown("thinking"), false, "a key rebound in the settings works at once");
 });

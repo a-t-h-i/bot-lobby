@@ -11,7 +11,7 @@ import { planChecklist } from "../../pi/zen.ts";
 import { persistedRuns } from "../../pi/ui.ts";
 import { describeRun, runFromLog } from "../../pi/run-summary.ts";
 import { pendingApprovals } from "../../workflow/approvals.ts";
-import { ago, bold, columns, fill, markdownLines, paint, rule, selectRow, since, split, windowStart, wrap, wrapHanging, type LobbyTheme } from "../layout.ts";
+import { ago, beside, bold, box, detailWindow, fill, markdownLines, notePane, paint, position, rule, selectRow, since, windowStart, wrap, wrapHanging, type LobbyTheme, type PaneLayout } from "../layout.ts";
 
 export type TaskSection = "mine" | "others" | "pending" | "recent";
 
@@ -180,30 +180,64 @@ export function planDetailLines(plan: PlannedTask, width: number, now: number, t
 export interface TasksInput {
   rows: readonly TaskRow[];
   selected: number;
-  /** Detail lines for the selected row. */
+  /** Detail lines for the selected row, already fitted to the detail pane. */
   detail: readonly string[];
   focus: "list" | "detail";
   detailOffset: number;
   notice?: string;
+  /** The search in force; the rows are already filtered by it. */
+  query?: string;
+  /** Filled with where the list and the detail landed, for scrolling. */
+  panes?: PaneLayout;
 }
 
 /** Narrow terminals show the list or the detail, not both. */
 export const TASKS_COLUMNS_MIN = 90;
+
+/** Outer widths of the list and detail panes (the detail's text is 4 columns narrower). */
+export function tasksWidths(width: number): { list: number; detail: number; wide: boolean } {
+  if (width < TASKS_COLUMNS_MIN) return { list: width, detail: width, wide: false };
+  const list = Math.max(36, Math.round((width - 1) * 0.36));
+  return { list, detail: width - 1 - list, wide: true };
+}
+
+/** Everything a search looks at for one row: id, title, request, proposal, plan. */
+function rowText(row: TaskRow, tasks: readonly Task[], plans: readonly PlannedTask[]): string {
+  if (row.kind === "plan") {
+    const plan = plans.find((entry) => entry.id === row.id);
+    return [row.id, row.title, plan?.brief ?? "", plan?.issue?.title ?? ""].join("\n");
+  }
+  const task = tasks.find((entry) => entry.id === row.id);
+  return [row.id, row.title, row.status, task ? taskRequest(task) : "", task?.proposal ?? "", task?.plan ?? ""].join("\n");
+}
+
+/** The rows whose task or plan mentions `query` anywhere. */
+export function filterRows(rows: readonly TaskRow[], tasks: readonly Task[], plans: readonly PlannedTask[], query: string | undefined): TaskRow[] {
+  const needle = query?.trim().toLowerCase();
+  if (!needle) return [...rows];
+  return rows.filter((row) => rowText(row, tasks, plans).toLowerCase().includes(needle));
+}
 
 export function renderTasks(input: TasksInput, width: number, height: number, theme?: LobbyTheme): string[] {
   if (height <= 0) return [];
   const notice = input.notice ? [paint(theme, "accent", input.notice)] : [];
   const bodyHeight = height - notice.length;
   if (input.rows.length === 0) {
-    return fill([...notice, paint(theme, "dim", "No tasks yet. Start one from the Lobby tab, or plan one in the Plan tab.")], height, width);
+    const empty = input.query ? `No task or plan mentions "${input.query}".` : "No tasks yet. Start one from the Lobby tab, or plan one in the Plan tab.";
+    return fill([...notice, ...box(width, bodyHeight, [paint(theme, "dim", empty)], { title: "Tasks", theme })], height, width);
   }
-  const wide = width >= TASKS_COLUMNS_MIN;
-  const [listWidth, detailWidth] = wide ? split(width, 0.38, 3, 40) : [width, width];
-  const list = listLines(input.rows, input.selected, listWidth, input.focus === "list", theme);
-  const listShown = list.lines.slice(windowStart(list.selectedLine, list.lines.length, bodyHeight - 1));
-  const detailShown = input.detail.slice(Math.max(0, Math.min(input.detailOffset, input.detail.length - 1)));
-  const listPane = fill([rule(listWidth, "Tasks", theme, `${input.rows.length}`), ...listShown], bodyHeight);
-  const detailPane = fill([rule(detailWidth, input.focus === "detail" ? "Detail ◂" : "Detail", theme), ...detailShown], bodyHeight);
-  if (!wide) return fill([...notice, ...(input.focus === "detail" ? detailPane : listPane)], height, width);
-  return fill([...notice, ...columns(listPane, detailPane, listWidth, detailWidth, " │ ", theme)], height, width);
+  const { list: listWidth, detail: detailWidth, wide } = tasksWidths(width);
+  const list = listLines(input.rows, input.selected, listWidth - 4, input.focus === "list", theme);
+  const rows = Math.max(0, bodyHeight - 2);
+  const listStart = windowStart(list.selectedLine, list.lines.length, rows);
+  const count = input.query ? `${input.rows.length} match${input.rows.length === 1 ? "" : "es"}` : `${input.rows.length}`;
+  const listPane = box(listWidth, bodyHeight, list.lines.slice(listStart), { title: "Tasks", right: count, focused: input.focus === "list", scroll: { total: list.lines.length, start: listStart }, theme });
+  const detailStart = detailWindow(input.detail.length, rows, input.detailOffset);
+  const detailPane = box(detailWidth, bodyHeight, input.detail.slice(detailStart), { title: "Detail", ...(input.detail.length > rows ? { right: position(detailStart, rows, input.detail.length) } : {}), focused: input.focus === "detail", scroll: { total: input.detail.length, start: detailStart }, theme });
+  const showList = wide || input.focus !== "detail";
+  const showDetail = wide || input.focus === "detail";
+  if (showList) notePane(input.panes, "list", notice.length, 0, listWidth, bodyHeight, list.lines.length);
+  if (showDetail) notePane(input.panes, "detail", notice.length, wide ? listWidth + 1 : 0, detailWidth, bodyHeight, input.detail.length);
+  if (!wide) return fill([...notice, ...(showDetail ? detailPane : listPane)], height, width);
+  return fill([...notice, ...beside([listPane, detailPane])], height, width);
 }

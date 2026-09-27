@@ -6,12 +6,12 @@
  * turn into the feed, passes plan comments to the Master that owns a task and
  * records each Master turn in the metrics log.
  */
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { getSelectListTheme } from "@earendil-works/pi-coding-agent";
 import { Key, type OverlayHandle, type TUI } from "@earendil-works/pi-tui";
 import { TERMINAL_STATES } from "../schemas/task.ts";
 import { listTasks, loadTask } from "../state/persistence.ts";
-import { detectProjectRoot, loadConfig } from "../state/project.ts";
+import { detectProjectRoot, loadConfig, saveConfig } from "../state/project.ts";
 import { addPlanComment, commentMessage, markCommentsDelivered, readPlanComments, undeliveredComments } from "../state/comments.ts";
 import { discardPlannedTask, listPlannedTasks, markPlannedTaskStarted, plannedTaskRequest, type PlannedTask } from "../state/backlog.ts";
 import { appendMetrics, readMetrics, type MetricStatus } from "../state/metrics.ts";
@@ -21,13 +21,16 @@ import { isSubagentProcess } from "../pi/quiet.ts";
 import { modelRef, resolveLobbyProfile, resolvePanelProfile } from "../pi/model-support.ts";
 import { modelLookup } from "../pi/tools.ts";
 import { startTask } from "../pi/start-task.ts";
-import type { LobbyAgentKind, PanelMember } from "../schemas/configuration.ts";
+import type { LobbyAgentKind, LobbyPanel, PanelMember } from "../schemas/configuration.ts";
 import { chatFromEntries, chatText, lobbyFeed, textOf } from "./feed.ts";
+import { answerMessage, dialogAsker, loadAskTool, questionnaires, toolAsker, type Asker } from "./ask.ts";
 import { QuickFixQueue } from "./quickfix.ts";
 import { PlanningSession, type PlannerSeed } from "./planner.ts";
 import { execCommand, IssuesState } from "./issues.ts";
 import { LobbyView, type LobbyHost, type TabId } from "./view.ts";
 import type { LobbyTheme } from "./layout.ts";
+import { createMarkdownRenderer } from "./markdown.ts";
+import { openEntrySettings, openSettings } from "../pi/settings-ui.ts";
 
 export const ANCHOR_KEY = "bot-lobby-anchor";
 /** How often the owning session looks for new plan comments. */
@@ -50,6 +53,14 @@ interface Runtime {
   issues: IssuesState;
   poll?: ReturnType<typeof setInterval>;
   unsubscribeFeed?: () => void;
+  /** The ask-user-question tool (or pi's dialogs), loaded once on first use. */
+  asker?: Promise<Asker>;
+  /** A questionnaire is on screen. */
+  asking: boolean;
+  /** The lobby turned the terminal's mouse reporting on (pi's regular screen only). */
+  mouse: boolean;
+  /** Settings opened from the lobby are on screen; the lobby stays aside until they close. */
+  inSettings: boolean;
 }
 
 let runtime: Runtime | undefined;
@@ -164,14 +175,82 @@ function newPlanner(state: Runtime, seed?: PlannerSeed, seats?: readonly PanelMe
     toolStallTimeoutMs: workflow.toolStallTimeoutMs,
     feed: lobbyFeed,
     onChange: rerender,
+    onRound: (session) => {
+      // Put the questions to the user at once when they are looking at the Plan tab.
+      if (loadConfig().lobby.autoAsk && state.visible && state.view?.tab === "plan" && session.awaitingAnswers) void answerPanel(state);
+    },
   }, seed);
   return state.planner;
+}
+
+/** The library's questionnaire when it loads, pi's own dialogs otherwise. */
+function panelAsker(state: Runtime): Promise<Asker> {
+  state.asker ??= loadAskTool(state.pi).then((tool) => (tool ? toolAsker(tool) : dialogAsker()));
+  return state.asker;
+}
+
+/**
+ * The oracle puts the round's questions to the user, one at a time; answered
+ * questionnaires are kept if the user stops, so the next call resumes there.
+ * Once every questionnaire is done, the answers (and any line comments) start
+ * the next round. Returns a notice for the lobby.
+ */
+export async function answerPanel(state: Runtime | undefined = runtime): Promise<string> {
+  const session = state?.planner;
+  if (!state || !session) return "no planning session";
+  if (session.busy) return "the panel is still thinking";
+  if (session.questions.length === 0) return "no open questions";
+  if (state.asking) return "the questions are already open";
+  state.asking = true;
+  try {
+    const asker = await panelAsker(state);
+    const chunks = questionnaires(session.questions);
+    for (let index = session.answered.length; index < chunks.length; index++) {
+      const result = await asker(chunks[index]!, state.ctx);
+      if (result.cancelled) {
+        rerender();
+        return session.answered.length > 0 ? `answers kept — ${chunks.length - session.answered.length} questionnaire${chunks.length - session.answered.length === 1 ? "" : "s"} left; enter resumes` : "questions put away — enter brings them back";
+      }
+      session.answered = [...session.answered, result];
+    }
+    const message = answerMessage(session.questions, session.answered);
+    if (!message) {
+      session.answered = [];
+      return "nothing was answered — the questions stay open";
+    }
+    void session.send(message);
+    return "answers sent — the panel is on the next round";
+  } catch (error) {
+    return `could not put the questions: ${(error as Error).message}`;
+  } finally {
+    state.asking = false;
+    rerender();
+  }
+}
+
+const renderMarkdown = createMarkdownRenderer();
+const lobbyThemes = new WeakMap<Theme, LobbyTheme>();
+
+/** pi's theme as the lobby draws with it, plus Markdown rendering; one wrapper per theme so caches stay warm. */
+function lobbyTheme(theme: Theme): LobbyTheme {
+  let wrapped = lobbyThemes.get(theme);
+  if (!wrapped) {
+    wrapped = {
+      fg: (color, text) => theme.fg(color, text),
+      bold: (text) => theme.bold(text),
+      italic: (text) => theme.italic(text),
+      bg: (color, text) => theme.bg(color, text),
+      markdown: renderMarkdown,
+    };
+    lobbyThemes.set(theme, wrapped);
+  }
+  return wrapped;
 }
 
 function host(state: Runtime, tui: TUI): LobbyHost {
   return {
     rows: () => tui.terminal.rows,
-    theme: () => state.ctx.ui.theme as LobbyTheme,
+    theme: () => lobbyTheme(state.ctx.ui.theme),
     sessionId: () => state.ctx.sessionManager.getSessionId(),
     zen: () => {
       const snapshot = zenSnapshot();
@@ -198,7 +277,13 @@ function host(state: Runtime, tui: TUI): LobbyHost {
     quickfix: state.quickfix,
     planner: () => state.planner,
     newPlanner: (seed, seats) => newPlanner(state, seed, seats),
+    answerPanel: () => answerPanel(state),
     defaultPanel: () => loadConfig().lobby.planningPanel,
+    issuesEnabled: () => loadConfig().lobby.issues,
+    panels: () => loadConfig().lobby.panels,
+    savePanels: (panels) => savePanels(panels),
+    keys: () => loadConfig().lobby.keys,
+    openSettings: (entry) => lobbySettings(state, entry),
     seatLabel: (member) => {
       const profile = seatProfile(state, member);
       return `${profile.model ?? "session model"} · ${profile.thinking}`;
@@ -210,6 +295,63 @@ function host(state: Runtime, tui: TUI): LobbyHost {
     },
     requestRender: () => tui.requestRender(),
   };
+}
+
+/**
+ * bot-lobby's settings (or one agent's entry) from inside the lobby. The
+ * lobby stays aside for the whole visit, not only for each menu, so it does
+ * not flash between them, and rereads the config when it comes back.
+ */
+async function lobbySettings(state: Runtime, entry?: "quickfix" | "planner"): Promise<void> {
+  if (state.inSettings) return;
+  state.inSettings = true;
+  setMouse(state, false);
+  state.handle?.setHidden(true);
+  try {
+    if (entry) await openEntrySettings(state.pi, state.ctx, entry);
+    else await openSettings(state.pi, state.ctx);
+  } catch (error) {
+    state.ctx.ui.notify(`bot-lobby: settings failed — ${(error as Error).message}`, "warning");
+  } finally {
+    state.inSettings = false;
+    state.asideForPrompt = false;
+    if (state.visible && state.handle) {
+      state.handle.setHidden(false);
+      state.handle.focus();
+      setMouse(state, true);
+    }
+    state.view?.reloadConfig();
+    rerender();
+  }
+}
+
+/** Remember which panes show, keeping every other setting as the file has it now. */
+function savePanels(panels: Record<LobbyPanel, boolean>): void {
+  try {
+    const config = loadConfig();
+    saveConfig({ ...config, lobby: { ...config.lobby, panels: { ...panels } } });
+  } catch {
+    // A read-only config only means the choice lasts for this session.
+  }
+}
+
+/** SGR mouse reporting: presses, releases and the wheel, in cell coordinates. */
+const MOUSE_ON = "\x1b[?1000h\x1b[?1006h";
+const MOUSE_OFF = "\x1b[?1006l\x1b[?1000l";
+
+/**
+ * In pi's regular screen nothing reports the mouse, so the lobby turns
+ * reporting on while it is up (clicks pick tabs and draft lines, the wheel
+ * scrolls) and off whenever it steps aside. Full-screen pi reports the mouse
+ * itself and hands the events to the lobby.
+ */
+function setMouse(state: Runtime, on: boolean): void {
+  const tui = state.tui;
+  if (!tui || tui.mode === "fullscreen") return;
+  const want = on && loadConfig().lobby.mouse;
+  if (want === state.mouse) return;
+  state.mouse = want;
+  tui.terminal.write(want ? MOUSE_ON : MOUSE_OFF);
 }
 
 /** Show the lobby (optionally on `tab`); false when there is no interactive TUI. */
@@ -229,6 +371,7 @@ export function showLobby(tab?: TabId): boolean {
   state.asideForPrompt = false;
   if (tab) state.view.setTab(tab);
   state.view.start();
+  setMouse(state, true);
   applyStatus(state.ctx, state.root, state.configDir);
   state.tui.requestRender();
   return true;
@@ -239,6 +382,7 @@ export function hideLobby(): void {
   if (!state?.view || !state.visible) return;
   state.visible = false;
   state.asideForPrompt = false;
+  setMouse(state, false);
   state.view.stop();
   state.handle?.setHidden(true);
   applyStatus(state.ctx, state.root, state.configDir);
@@ -261,16 +405,19 @@ export function autoOpenLobby(): void {
 /** Step aside while pi shows a dialog (an approval, a question), and come back after. */
 function promptStarted(): void {
   const state = runtime;
-  if (!state?.visible || !state.handle) return;
+  if (!state?.visible || !state.handle || state.inSettings) return;
   state.asideForPrompt = true;
+  setMouse(state, false);
   state.handle.setHidden(true);
 }
 
 function promptEnded(): void {
   const state = runtime;
-  if (!state?.asideForPrompt || !state.handle) return;
+  if (!state?.asideForPrompt || !state.handle || state.inSettings) return;
   state.asideForPrompt = false;
-  if (state.visible) state.handle.setHidden(false);
+  if (!state.visible) return;
+  state.handle.setHidden(false);
+  setMouse(state, true);
 }
 
 function shutdown(): void {
@@ -278,6 +425,7 @@ function shutdown(): void {
   if (!state) return;
   runtime = undefined;
   if (state.poll) clearInterval(state.poll);
+  setMouse(state, false);
   state.unsubscribeFeed?.();
   state.quickfix.cancelAll();
   state.planner?.cancel();
@@ -301,6 +449,9 @@ export function initLobby(pi: ExtensionAPI, ctx: ExtensionContext, configDir: st
     root,
     visible: false,
     asideForPrompt: false,
+    asking: false,
+    mouse: false,
+    inSettings: false,
     scene: new ZenScene(),
     quickfix: undefined as unknown as QuickFixQueue,
     issues: new IssuesState(execCommand, ctx.cwd, rerender),
