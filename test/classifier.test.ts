@@ -63,7 +63,10 @@ test("systemOne retries once on a rate limit, honouring retry-after (capped), an
 
 test("systemOne times out, aborts, and rejects bodies without answers", async () => {
   const hang: FetchLike = (_url, init) => new Promise((_resolve, reject) => init.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true }));
-  await assert.rejects(systemOne({ state: "x", questions: {} }, { ...options, timeoutMs: 10, retries: 0, fetch: hang }), /timed out after 10 ms/);
+  const hung: Sent[] = [];
+  const counting: FetchLike = (url, init) => (hung.push({ url, init, body: {} }), hang(url, init));
+  await assert.rejects(systemOne({ state: "x", questions: {} }, { ...options, timeoutMs: 10, fetch: counting }), /timed out after 10 ms/);
+  assert.equal(hung.length, 1, "a timeout is not retried: the time limit already bounds the decision");
   const controller = new AbortController();
   const pending = systemOne({ state: "x", questions: {} }, { ...options, signal: controller.signal, fetch: hang });
   controller.abort(new Error("user pressed esc"));
