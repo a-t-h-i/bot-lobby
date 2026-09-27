@@ -10,6 +10,7 @@ import { runPiAgent, spawnPiProcess, type PiStreamEvent, type ProcessRunner } fr
 import { describeToolCall } from "../pi/activity.ts";
 import { appendMetrics, type MetricRecord } from "../state/metrics.ts";
 import type { LobbyFeed } from "./feed.ts";
+import type { FileHinter } from "../classifier/files.ts";
 
 /** A quick fix edits code, so it gets the full coding tool set. */
 export const QUICK_FIX_TOOLS: readonly string[] = ["read", "bash", "edit", "write", "grep", "find", "ls"];
@@ -61,6 +62,8 @@ export interface QuickFixDeps {
   /** Called after every change so the lobby can repaint. */
   onChange?: () => void;
   notify?: (message: string, level: "info" | "warning" | "error") => void;
+  /** Likely files for the prompt, and the lookup tool, while the classifier's file hints are on. */
+  hints?: FileHinter;
 }
 
 export const MAX_JOBS = 30;
@@ -165,12 +168,13 @@ export class QuickFixQueue {
     this.deps.feed?.log(QUICK_FIX_SOURCE, `started: ${jobTitle(job)}`, "info", job.startedAt);
     this.changed();
     try {
+      const likely = await this.likely(job.prompt, controller.signal);
       const result = await runPiAgent(
         {
           cwd: this.deps.cwd,
-          task: job.prompt,
+          task: likely ? `${job.prompt}\n\n${likely}` : job.prompt,
           systemPrompt: quickFixPrompt(profile.instructions),
-          tools: QUICK_FIX_TOOLS,
+          tools: [...QUICK_FIX_TOOLS, ...(this.deps.hints?.tools() ?? [])],
           model: profile.model,
           thinking: profile.thinking,
           timeoutMs: profile.timeoutMs,
@@ -192,6 +196,15 @@ export class QuickFixQueue {
     } finally {
       this.controllers.delete(job.id);
       this.finish(job);
+    }
+  }
+
+  /** The Likely files block for a prompt, or "" (no hints, nothing stands out, out of time). */
+  private async likely(prompt: string, signal: AbortSignal): Promise<string> {
+    try {
+      return (await this.deps.hints?.block(prompt, signal)) ?? "";
+    } catch {
+      return "";
     }
   }
 
