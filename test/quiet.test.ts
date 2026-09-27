@@ -1,6 +1,6 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
@@ -417,4 +417,32 @@ test("commands registration wires alt+t through the reveal shortcut", () => {
   registerCommands(asPi(fake), ".pi");
   assert.ok(fake.shortcuts.includes("alt+t"));
   assert.ok(fake.commands.includes("bot-lobby"));
+});
+
+test("/bot-lobby switch runs a saved session in this window, and only when the oracle is idle and the file exists", async () => {
+  const root = tempDir("dh-switch-");
+  const file = join(root, "other.jsonl");
+  writeFileSync(file, "");
+  const fake = makePi(["read"]);
+  registerCommands(asPi(fake), ".pi");
+  const switched: string[] = [];
+  const made = makeCtx(root, false, "session-1");
+  let idle = true;
+  const ctx = {
+    ...made.ctx,
+    isIdle: () => idle,
+    sessionManager: { getSessionId: () => "session-1", getSessionFile: () => join(root, "mine.jsonl") },
+    switchSession: async (path: string) => {
+      switched.push(path);
+      return { cancelled: false };
+    },
+  } as unknown as ExtensionContext;
+  await fake.commandHandlers["bot-lobby"]!(`switch ${file}`, ctx);
+  assert.deepEqual(switched, [file]);
+  await fake.commandHandlers["bot-lobby"]!(`switch ${join(root, "missing.jsonl")}`, ctx);
+  assert.ok(made.ui.notifications.at(-1)!.message.includes("no session file"));
+  idle = false;
+  await fake.commandHandlers["bot-lobby"]!(`switch ${file}`, ctx);
+  assert.equal(switched.length, 1, "not while the oracle works");
+  assert.ok(made.ui.notifications.at(-1)!.message.includes("the oracle is working"));
 });

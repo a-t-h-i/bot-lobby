@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
@@ -43,11 +44,12 @@ const HELP = [
   "/bot-lobby claim <taskId>    Take ownership of an orphaned task",
   "/bot-lobby auto [on|off]    Auto mode: the oracle drives this session's task without asking (alt+g)",
   "/bot-lobby start-plan PLAN-… [auto]   Start a planned task here; its agreed plan needs no approval",
+  "/bot-lobby switch <session.jsonl>   Run a saved session in this window (the lobby's session browser uses it: alt+o, s)",
   "/bot-lobby help             This help",
 ].join("\n");
 
 /** Subcommands only win when no free-form text follows (so tasks still start). */
-const SUBCOMMANDS = new Set(["lobby", "help", "status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "knowledge", "config", "settings", "minimize", "restore", "claim", "auto", "start-plan"]);
+const SUBCOMMANDS = new Set(["lobby", "help", "status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "knowledge", "config", "settings", "minimize", "restore", "claim", "auto", "start-plan", "switch"]);
 
 function isTaskId(value: string | undefined): boolean {
   return Boolean(value && /^TASK-/.test(value));
@@ -62,7 +64,8 @@ export function parseCommand(args: string): { sub: string | undefined; rest: str
   if (!sub || !SUBCOMMANDS.has(sub)) return { sub: undefined, rest: [], restText: trimmed };
   const takesArgs = sub === "amend" || sub === "claim"
     || (sub === "auto" && rest.length === 1 && /^(on|off)$/i.test(rest[0]!))
-    || (sub === "start-plan" && rest.length >= 1 && rest.length <= 2 && /^PLAN-/.test(rest[0]!) && (rest.length === 1 || rest[1] === "auto"));
+    || (sub === "start-plan" && rest.length >= 1 && rest.length <= 2 && /^PLAN-/.test(rest[0]!) && (rest.length === 1 || rest[1] === "auto"))
+    || (sub === "switch" && rest.length >= 1 && /\.jsonl$/.test(rest.join(" ")));
   if (!takesArgs && rest.length > 0 && !(rest.length === 1 && isTaskId(rest[0]))) {
     return { sub: undefined, rest: [], restText: trimmed };
   }
@@ -197,6 +200,19 @@ function showConfig(ctx: ExtensionCommandContext): void {
   ctx.ui.notify(`${globalConfigPath()}\n${JSON.stringify(config, null, 2)}${notes}`, warnings.length > 0 ? "warning" : "info");
 }
 
+/**
+ * `/bot-lobby switch <file>`: run a saved session in this window. Only a
+ * command context may replace the session, so the lobby's browser asks for a
+ * switch through this command. The context is stale once the switch starts.
+ */
+async function switchCommand(ctx: ExtensionCommandContext, path: string): Promise<void> {
+  if (!existsSync(path)) return ctx.ui.notify(`bot-lobby: no session file at ${path}`, "warning");
+  if (ctx.sessionManager.getSessionFile() === path) return ctx.ui.notify("bot-lobby: this window already runs that session", "info");
+  if (!ctx.isIdle()) return ctx.ui.notify("bot-lobby: the oracle is working — esc stops it, then switch", "warning");
+  const result = await ctx.switchSession(path);
+  if (result.cancelled) ctx.ui.notify("bot-lobby: the switch was cancelled", "warning");
+}
+
 /** `/bot-lobby auto [on|off]`: switch (or set) auto mode for this session's task. */
 function autoCommand(ctx: ExtensionCommandContext, configDir: string, value: string | undefined): void {
   if (!value) return ctx.ui.notify(`bot-lobby: ${toggleOwnAuto()}`, "info");
@@ -265,6 +281,8 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
           return claimTaskCommand(ctx, configDir, rest[0]);
         case "auto":
           return autoCommand(ctx, configDir, rest[0]);
+        case "switch":
+          return switchCommand(ctx, restText);
         case "start-plan": {
           const started = await startPlannedTask(pi, ctx, configDir, rest[0]!, { auto: rest[1] === "auto" });
           if (typeof started === "string") return ctx.ui.notify(`bot-lobby: ${started}`, "warning");
