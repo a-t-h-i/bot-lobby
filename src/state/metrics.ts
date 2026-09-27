@@ -35,6 +35,8 @@ export interface MetricRecord {
   stalled?: boolean;
   /** Classifier calls: what the call decided (seats, answers, files, triage, effort, test). */
   purpose?: string;
+  /** A run the classifier routed down: the configured profile it came from. */
+  routedFrom?: string;
 }
 
 /** Newest records kept in memory for aggregation. */
@@ -122,6 +124,7 @@ export function metricFromRun(run: AgentRun): MetricRecord {
     ...(run.usage ? { input: run.usage.input, output: run.usage.output, cost: run.usage.cost } : {}),
     taskId: run.taskId,
     ...(run.stalled ? { stalled: true } : {}),
+    ...(run.routedFrom ? { routedFrom: run.routedFrom } : {}),
   };
 }
 
@@ -142,6 +145,7 @@ export function metricFromLog(entry: RunLogEntry, taskId: string): MetricRecord 
     ...(entry.input !== undefined ? { input: entry.input, output: entry.output ?? 0, cost: entry.cost ?? 0 } : {}),
     taskId,
     ...(entry.stalled ? { stalled: true } : {}),
+    ...(entry.routedFrom ? { routedFrom: entry.routedFrom } : {}),
   };
 }
 
