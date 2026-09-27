@@ -734,6 +734,7 @@ export function initLobby(pi: ExtensionAPI, ctx: ExtensionContext, configDir: st
       if (!state.visible) ctx.ui.notify(message, level);
     },
     hints: hintsFor({ cwd: ctx.cwd, root, configDir }),
+    classifier: classifier(),
   });
   runtime = state;
   lobbyFeed.clear();
