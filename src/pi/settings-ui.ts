@@ -10,6 +10,7 @@ import {
   INHERIT_MODEL,
   isThinkingLevel,
   LOBBY_PANELS,
+  PLANNING_ROUND_CHOICES,
   SCOUT_THINKING,
   SUBAGENT_KINDS,
   type AgentModelConfig,
@@ -381,15 +382,29 @@ export function toggleLobbySwitch(config: BotLobbyConfig, id: LobbySwitch): BotL
   return { ...config, lobby: { ...config.lobby, [id]: value } };
 }
 
-/** On/off settings for the lobby; enter flips one and saves it. Key rebinding stays in the file (lobby.keys). */
+/** `5 rounds`, or `unlimited` for 0. */
+export function roundLimitLabel(limit: number): string {
+  return limit > 0 ? `${limit} round${limit === 1 ? "" : "s"}` : "unlimited";
+}
+
+/** The next planning round limit in the menu's cycle (2, 3, 5, 8, unlimited); a hand-edited value rejoins it. */
+export function nextRoundLimit(current: number): number {
+  const index = PLANNING_ROUND_CHOICES.indexOf(current as (typeof PLANNING_ROUND_CHOICES)[number]);
+  if (index >= 0) return PLANNING_ROUND_CHOICES[(index + 1) % PLANNING_ROUND_CHOICES.length]!;
+  return PLANNING_ROUND_CHOICES.find((choice) => choice > current) ?? 0;
+}
+
+/** On/off settings for the lobby, and the planning round limit; enter flips or cycles one and saves it. Key rebinding stays in the file (lobby.keys). */
 async function editLobby(ctx: ExtensionContext): Promise<void> {
   for (;;) {
     const config = loadConfig();
     const items: SelectItem[] = LOBBY_SWITCHES.map((entry) => ({ value: entry.id, label: entry.label, description: `${lobbySwitch(config, entry.id) ? "on" : "off"} · ${entry.help}` }));
+    items.push({ value: "rounds", label: "Planning rounds", description: `${roundLimitLabel(config.lobby.maxPlanningRounds)} · enter cycles 2, 3, 5, 8, unlimited; the last round the oracle settles alone` });
     items.push({ value: "back", label: "Back", description: `keys: lobby.keys in ${globalConfigPath()}` });
     const choice = await pick(ctx, "bot-lobby settings · Lobby", items);
     if (!choice || choice === "back") return;
-    saveConfig(toggleLobbySwitch(config, choice as LobbySwitch));
+    if (choice === "rounds") saveConfig({ ...config, lobby: { ...config.lobby, maxPlanningRounds: nextRoundLimit(config.lobby.maxPlanningRounds) } });
+    else saveConfig(toggleLobbySwitch(config, choice as LobbySwitch));
   }
 }
 
@@ -399,6 +414,7 @@ function lobbySummary(config: BotLobbyConfig): string {
     config.lobby.autoOpen ? "opens with a task" : "opens on alt+l",
     config.lobby.autoAsk ? "asks at once" : "asks on enter",
     config.lobby.mouse ? "mouse" : "no mouse",
+    `planning: ${roundLimitLabel(config.lobby.maxPlanningRounds)}`,
     ...(config.lobby.issues ? ["issues tab"] : []),
     ...(hidden.length > 0 ? [`hidden: ${hidden.join(", ")}`] : []),
   ].join(" · ");

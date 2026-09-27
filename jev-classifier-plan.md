@@ -1,7 +1,33 @@
 # Jev classifier in bot-lobby — implementation plan
 
-Status: agreed design, not yet implemented. Branch
-`claude/dev-lobby-jev-classifier-g4neej`.
+Status: agreed design, implemented phase by phase (one PR per phase).
+Branch `claude/dev-lobby-jev-classifier-g4neej`.
+
+## Phase 0 findings (spike)
+
+Checked against pi 0.87 by running a throwaway extension in a real `pi --mode
+rpc` process:
+
+- **Path A works.** `pi.registerProvider("typesafe", { name, apiKey:
+  "$TYPESAFE_API_KEY", baseUrl, models: [] })` is accepted (an empty model
+  list passes validation, so nothing appears in `/model`). `/login` lists every
+  provider with API-key auth, so `/login typesafe` → *Use an API key* stores
+  `{ "type": "api_key", "key": "…" }` in `~/.pi/agent/auth.json` under pi's
+  own lock.
+- **Key resolution is pi's.** `ctx.modelRegistry.getApiKeyForProvider("typesafe")`
+  returns the stored key first, then `$TYPESAFE_API_KEY`, and resolves `!command`
+  and `$ENV` references inside a stored key. The env reference must be written
+  `$TYPESAFE_API_KEY` (a bare name is taken literally).
+  `getProviderAuthStatus` reports `stored` / `environment` / not configured
+  without exposing the key. So bot-lobby writes no key file of its own (path B
+  is not needed), and subagents, which load bot-lobby too, resolve the key the
+  same way.
+- **`PI_OFFLINE` does not block `fetch`.** It only skips model-catalog
+  refresh and the package manager's network checks.
+- **Not verified here:** a live `POST /v1/systemone`. This cloud
+  environment's network policy blocks `api.typesafe.ai`, so the client is
+  built to the shapes in `jev-code`'s client and tested against a fake API; a
+  live check sits behind `BOT_LOBBY_JEV_E2E=1`.
 
 ## Goal
 
