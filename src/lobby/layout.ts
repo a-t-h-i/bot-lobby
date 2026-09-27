@@ -191,6 +191,46 @@ export interface BoxOptions {
   /** The box that has the keyboard: its border takes the accent colour. */
   focused?: boolean;
   theme?: LobbyTheme;
+  /** Content longer than the box: `total` lines, the first shown at `start`; drawn as a thumb on the right border. */
+  scroll?: { total: number; start: number };
+}
+
+/** A scrollable pane as a render laid it out: its box in body cells, and its content against its rows. */
+export interface PaneBox {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+  /** Lines of content, and rows showing them at once. */
+  total: number;
+  rows: number;
+}
+
+/** Scrollable panes by name, filled in by a tab's render so the lobby can clamp offsets and route the wheel. */
+export type PaneLayout = Map<string, PaneBox>;
+
+/** Record a pane that sits at `top`/`left` in the body, `width` × `height`, showing `total` lines. */
+export function notePane(panes: PaneLayout | undefined, name: string, top: number, left: number, width: number, height: number, total: number): void {
+  panes?.set(name, { top, left, width, height, total, rows: Math.max(0, height - 2) });
+}
+
+/** First line of a top-anchored pane scrolled `offset` lines down, stopping when its last line shows. */
+export function detailWindow(total: number, rows: number, offset: number): number {
+  return Math.max(0, Math.min(offset, total - Math.max(1, rows)));
+}
+
+/** `12–40/96`: the lines a pane shows out of all it holds. */
+export function position(start: number, rows: number, total: number): string {
+  return `${start + 1}–${Math.min(total, start + rows)}/${total}`;
+}
+
+/** The rows of a `rows`-tall track that the thumb covers, or undefined when everything fits. */
+export function scrollThumb(total: number, rows: number, start: number): { from: number; to: number } | undefined {
+  if (rows <= 0 || total <= rows) return undefined;
+  const size = Math.max(1, Math.round((rows * rows) / total));
+  const max = total - rows;
+  const from = Math.round((Math.min(max, Math.max(0, start)) / max) * (rows - size));
+  return { from, to: from + size };
 }
 
 /**
@@ -213,7 +253,9 @@ export function box(width: number, height: number, content: readonly string[], o
   const fillWidth = Math.max(0, width - 2 - visibleWidth(titled) - visibleWidth(shownRight));
   const paintedTitle = titled ? bold(theme, paint(theme, focused ? "accent" : "text", titled)) : "";
   const top = `${edge("╭")}${paintedTitle}${edge("─".repeat(fillWidth))}${shownRight ? paint(theme, "dim", shownRight) : ""}${edge("╮")}`;
-  const rows = fill(content, height - 2).map((line) => `${edge("│")} ${fit(line, inner)} ${edge("│")}`);
+  const thumb = options.scroll ? scrollThumb(options.scroll.total, height - 2, options.scroll.start) : undefined;
+  const rightEdge = (row: number) => (thumb && row >= thumb.from && row < thumb.to ? paint(theme, focused ? "accent" : "muted", "┃") : edge("│"));
+  const rows = fill(content, height - 2).map((line, row) => `${edge("│")} ${fit(line, inner)} ${rightEdge(row)}`);
   return [top, ...rows, `${edge("╰")}${edge("─".repeat(width - 2))}${edge("╯")}`];
 }
 
