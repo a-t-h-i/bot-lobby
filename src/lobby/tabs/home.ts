@@ -248,17 +248,18 @@ function thinkingContent(input: HomeInput, thoughts: readonly ThoughtEntry[], wi
 }
 
 /**
- * The scene: the animated oracle and agents, or with animations off (the
- * `scene` panel) only the task's status box, what the agents are doing and
- * the checklist. Its first line names the key that toggles the animations.
+ * The scene: with animations off (the `animations` panel, off by default)
+ * only the task's status box, what the agents are doing and the checklist;
+ * with them on, the animated oracle and agents too. Its first line names the
+ * key that toggles the animations.
  */
 function sceneLines(input: HomeInput, width: number, height: number, theme?: LobbyTheme): string[] {
   if (!input.task || !input.scene) return [];
-  const animated = input.panels.scene && !input.stillScene;
+  const animated = input.panels.animations && !input.stillScene;
   const budget = Math.min(animated ? MAX_SCENE : MAX_STILL, Math.floor(height * SCENE_SHARE));
   if (budget < (animated ? 6 : 4)) return [];
   const lines = input.scene(width, budget, animated).slice(0, budget);
-  const note = input.keys && !input.stillScene ? `${input.keys.scene} ${animated ? "hides" : "shows"} animations` : undefined;
+  const note = input.keys && !input.stillScene ? `${input.keys.animations} ${animated ? "hides" : "shows"} animations` : undefined;
   return keyNote(lines, width, note, theme);
 }
 

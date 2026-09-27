@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { visibleWidth, type TUI } from "@earendil-works/pi-tui";
 import { LobbyView, parseMouse, TAB_IDS, visibleTabs, type LobbyHost } from "../src/lobby/view.ts";
-import type { LobbyPanel, PanelMember } from "../src/schemas/configuration.ts";
+import { DEFAULT_CONFIG, type LobbyPanel, type PanelMember } from "../src/schemas/configuration.ts";
 import { LobbyFeed } from "../src/lobby/feed.ts";
 import { QuickFixQueue } from "../src/lobby/quickfix.ts";
 import { IssuesState, type Exec } from "../src/lobby/issues.ts";
@@ -133,7 +133,7 @@ function makeView(options: ViewOptions = {}) {
       return "answers sent — the panel is on the next round";
     },
     issuesEnabled: () => options.issues === true,
-    panels: () => ({ scene: true, conversation: true, activity: true, thinking: true, ...options.panels }),
+    panels: () => ({ ...DEFAULT_CONFIG.lobby.panels, ...options.panels }),
     savePanels: (panels) => void calls.savedPanels.push({ ...panels }),
     keys: () => options.keys ?? {},
     openSettings: async (entry) => void calls.settings.push(entry ?? "all"),
@@ -405,7 +405,7 @@ test("g and s regroup and resort the metrics table", () => {
   assert.ok(view.render(140).some((line) => line.includes("by model · thinking · agent · sorted by avg")));
 });
 
-const ALL_PANELS = { scene: true, conversation: true, activity: true, thinking: true };
+const ALL_PANELS = { animations: true, conversation: true, activity: true, thinking: true };
 
 test("the home tab puts the scene first, the thinking pane last, and stacks panes when narrow", () => {
   const feed = new LobbyFeed();
@@ -432,7 +432,7 @@ test("hidden panes give their room to the rest, and a search narrows every pane"
   feed.log("DEV", "reading a.ts", "info", NOW);
   feed.log("DEV", "editing router.ts", "info", NOW);
   feed.thought("DEV", "the router lives in a.ts");
-  const keys = { scene: "Alt+Z", conversation: "Alt+C", activity: "Alt+A", thinking: "Alt+K" };
+  const keys = { animations: "Alt+Z", conversation: "Alt+C", activity: "Alt+A", thinking: "Alt+K" };
   const input = { chat: feed.chat, activity: feed.activity, thoughts: feed.thoughts, busy: false, others: 0, pending: 0, tick: 0, now: NOW, panels: ALL_PANELS, keys };
   const quiet = renderHome({ ...input, panels: { ...ALL_PANELS, activity: false, thinking: false } }, 120, 20);
   assert.equal(quiet.length, 20);
@@ -440,7 +440,7 @@ test("hidden panes give their room to the rest, and a search narrows every pane"
   assert.ok(quiet[0]!.startsWith("╭ Conversation") && quiet[0]!.endsWith("Alt+C ╮"), "the pane names its toggle");
   const onlyThinking = renderHome({ ...input, panels: { ...ALL_PANELS, conversation: false, activity: false } }, 120, 20);
   assert.ok(onlyThinking[0]!.startsWith("╭ Thinking"), "thinking takes the whole tab when it is all that shows");
-  const none = renderHome({ ...input, panels: { scene: false, conversation: false, activity: false, thinking: false } }, 120, 20);
+  const none = renderHome({ ...input, panels: { animations: false, conversation: false, activity: false, thinking: false } }, 120, 20);
   assert.ok(none.some((line) => line.includes("Every pane is hidden — Alt+C conversation · Alt+A activity · Alt+K thinking")));
   const searched = renderHome({ ...input, query: "router" }, 120, 20);
   assert.ok(searched.some((line) => line.includes("● You")) && searched.some((line) => line.includes("▌ build the router")));
@@ -668,17 +668,22 @@ test("layout helpers keep exact widths, tails and windows", () => {
 test("alt+a, alt+k, alt+c and alt+z show and hide panes, and the choice is remembered", () => {
   const { view, calls } = makeView({ task: activeTask() });
   const has = (text: string) => view.render(120).some((line) => line.includes(text));
-  assert.ok(has("╭ Activity") && has("╭ Thinking") && has("scene 0"));
-  assert.ok(view.render(120)[1]!.trimEnd().endsWith("Alt+Z hides animations"), "the scene names its key");
+  assert.ok(has("╭ Activity") && has("╭ Thinking"));
+  assert.ok(!has("scene 0") && has("still 0"), "by default the lobby shows the task's status without the animations");
+  assert.ok(view.render(120)[1]!.trimEnd().endsWith("Alt+Z shows animations"), "the status names the key that brings them");
+  view.handleInput(KEY.alt("z"));
+  assert.ok(has("scene 0"), "alt+z shows the animated oracle and agents");
+  assert.ok(view.render(120)[1]!.trimEnd().endsWith("Alt+Z hides animations"));
+  assert.match(view.render(120).at(-1)!, /oracle and agent animations shown · Alt\+Z hides it/);
+  assert.deepEqual(calls.savedPanels.at(-1), { animations: true, conversation: true, activity: true, thinking: true });
   view.handleInput(KEY.alt("a"));
   assert.ok(!has("╭ Activity"));
   assert.match(view.render(120).at(-1)!, /activity log hidden · Alt\+A shows it/);
-  assert.deepEqual(calls.savedPanels.at(-1), { scene: true, conversation: true, activity: false, thinking: true });
+  assert.deepEqual(calls.savedPanels.at(-1), { animations: true, conversation: true, activity: false, thinking: true });
   view.handleInput(KEY.alt("k"));
   assert.ok(!has("╭ Thinking"));
   view.handleInput(KEY.alt("z"));
   assert.ok(!has("scene 0") && has("still 0"), "without animations the task's status stays");
-  assert.ok(view.render(120)[1]!.trimEnd().endsWith("Alt+Z shows animations"));
   assert.match(view.render(120).at(-1)!, /oracle and agent animations hidden · Alt\+Z shows it/);
   view.handleInput(KEY.alt("c"));
   assert.ok(has("Every pane is hidden"));
