@@ -1435,7 +1435,7 @@ export class LobbyView implements Component, Focusable {
         seated = !seats.delete(seat);
         if (seated) seats.add(seat);
       }
-      this.say(`${MEMBER_LABELS[seat]} ${seated ? "joins" : "leaves"} the panel from the next round`);
+      this.say(`${MEMBER_LABELS[seat]} ${seated ? "joins the panel from the next round and sits every round" : "leaves the panel from the next round"}`);
       return true;
     }
     if (data === "x" || (escape && session?.busy)) {
@@ -2037,6 +2037,8 @@ export class LobbyView implements Component, Focusable {
         questions: session?.questions.filter((question) => question.from === MEMBER_LABELS[member]).length ?? 0,
         ready: state?.reply?.status === "ready",
         profile: this.host.seatLabel(member),
+        ...(!state && session?.satOut.has(member) ? { satOut: session.satOut.get(member)! } : {}),
+        ...(session?.pins.has(member) ? { pinned: true } : {}),
       };
     });
     return [oracle, ...members];
