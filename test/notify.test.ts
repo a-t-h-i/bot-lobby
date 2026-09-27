@@ -1,7 +1,7 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
-import { createTask } from "../src/schemas/task.ts";
-import { formatApprovalNotice, formatNotice, ping, pingApproval } from "../src/pi/notify.ts";
+import { createTask, type Task } from "../src/schemas/task.ts";
+import { formatApprovalNotice, formatNotice, ping, pingApproval, pingTransition } from "../src/pi/notify.ts";
 import { onTransition, transition } from "../src/state/task-state.ts";
 
 // The suite can run inside a subagent process (BOT_LOBBY_SUBAGENT=1); park the
@@ -101,4 +101,30 @@ test("transition notifies the registered listener once with the new state", () =
   transition(task, "clarifying");
   transition(task, "clarifying");
   assert.deepEqual(seen, ["TASK-1:clarifying", "TASK-1:clarifying"]);
+});
+
+test("awaiting approval pings once, and not at all when the proposal is approved in the same step", () => {
+  const capture = captureStderr();
+  try {
+    const queued: Array<() => void> = [];
+    const later = (fn: () => void) => void queued.push(fn);
+    const task = { ...createTask("TASK-7", "Login"), state: "awaiting_approval" as const };
+    pingTransition(task, later);
+    pingTransition(task, later);
+    assert.equal(queued.length, 1, "one ping per wait");
+    queued.shift()!();
+    assert.equal(capture.writes.length, 1);
+    assert.match(capture.writes[0]!, /Login needs approval/);
+
+    const approved = { ...createTask("TASK-8", "Auto"), state: "awaiting_approval" as Task["state"] };
+    pingTransition(approved, later);
+    approved.state = "planning";
+    queued.shift()!();
+    assert.equal(capture.writes.length, 1, "approved without asking: no ping");
+
+    pingTransition({ ...createTask("TASK-9", "Done"), state: "completed" }, later);
+    assert.equal(capture.writes.length, 2, "other states ping at once");
+  } finally {
+    capture.restore();
+  }
 });
