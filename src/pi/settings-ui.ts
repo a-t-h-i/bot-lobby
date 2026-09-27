@@ -25,7 +25,7 @@ import { globalConfigPath, loadConfig, saveConfig } from "../state/project.ts";
 import { checkThinking, kindLabel, modelRef, supportedThinking } from "./model-support.ts";
 import { modelLookup } from "./tools.ts";
 import { classifier } from "../classifier/instance.ts";
-import { describeKey, JEV_HOST_TABLE, jevEndpoint, maskKey, type KeyStatus } from "../classifier/hosts.ts";
+import { describeKey, hostLabel, jevEndpoint, keyHint, maskKey, resolveKey, type StatusSource } from "../classifier/hosts.ts";
 
 const CUSTOM_MODEL = "__custom__";
 const MAX_VISIBLE = 12;
@@ -448,34 +448,50 @@ export function toggleClassifierFeature(config: BotLobbyConfig, feature: Classif
   return { ...config, classifier: { ...config.classifier, features } };
 }
 
-/** `on · TypeSafe · key stored in pi`, for the settings menu and `/bot-lobby config`. */
-export function classifierSummary(config: BotLobbyConfig, status: KeyStatus | undefined): string {
-  const { host } = jevEndpoint(config.classifier);
-  return [config.classifier.enabled ? "on" : "off", host.label, `key ${describeKey(host, status)}`].join(" · ");
+/** `on · OpenCode Zen · jev-1.13-free · key stored in pi`, for the settings menu and `/bot-lobby config`. */
+export function classifierSummary(config: BotLobbyConfig, status: StatusSource | undefined): string {
+  const { host, model } = jevEndpoint(config.classifier, status);
+  const via = config.classifier.provider === "auto" ? `${host.label} (auto)` : host.label;
+  return [config.classifier.enabled ? "on" : "off", via, model, `key ${describeKey(host, status)}`].join(" · ");
 }
 
-function authStatus(ctx: ExtensionContext, piProvider: string): KeyStatus | undefined {
-  try {
-    return ctx.modelRegistry.getProviderAuthStatus(piProvider);
-  } catch {
-    return undefined;
-  }
+/** pi's auth status per provider, never throwing. */
+function authStatus(ctx: ExtensionContext): StatusSource {
+  return (piProvider) => {
+    try {
+      return ctx.modelRegistry.getProviderAuthStatus(piProvider);
+    } catch {
+      return undefined;
+    }
+  };
 }
 
 /** Where the key lives and how to set it, with the loaded key masked. */
 async function keyHelp(ctx: ExtensionContext, config: BotLobbyConfig): Promise<string> {
-  const { host } = jevEndpoint(config.classifier);
+  const status = authStatus(ctx);
+  const { host } = jevEndpoint(config.classifier, status);
   let masked = "";
   try {
-    const key = await ctx.modelRegistry.getApiKeyForProvider(host.piProvider);
+    const key = await resolveKey(host, (provider) => ctx.modelRegistry.getApiKeyForProvider(provider));
     if (key) masked = ` Loaded: ${maskKey(key)}.`;
   } catch {
     // No key to show.
   }
-  const how = host.name === "typesafe"
-    ? `run /login ${host.piProvider} and choose "Use an API key" (it is saved in pi's auth.json with your other keys), or export ${host.env}.`
-    : `bot-lobby uses the key pi already holds for ${host.label} (/login ${host.piProvider}, or ${host.env}).`;
-  return `Jev key (${host.label}): ${describeKey(host, authStatus(ctx, host.piProvider))}.${masked} To set it, ${how}`;
+  const where = host.name === "opencode"
+    ? "it is the OpenCode key pi already uses for Zen and Go models"
+    : host.name === "typesafe" ? "it is saved in pi's auth.json with your other keys" : `it is the key pi already holds for ${host.label}`;
+  return `Jev via ${host.label}: key ${describeKey(host, status)}.${masked} To set it, ${keyHint(config.classifier)}; ${where}.`;
+}
+
+/** Type a Jev model id; empty uses the host's default (OpenCode: the free jev-1.13-free). */
+async function editJevModel(ctx: ExtensionContext): Promise<void> {
+  const config = loadConfig();
+  const { host } = jevEndpoint(config.classifier, authStatus(ctx));
+  const typed = await ctx.ui.input(`Jev model (empty: ${host.label}'s default, ${host.model})`, config.classifier.model || host.model);
+  if (typed === undefined) return;
+  const model = typed.trim() === host.model ? "" : typed.trim();
+  saveConfig({ ...config, classifier: { ...config.classifier, model } });
+  ctx.ui.notify(`bot-lobby: Jev model → ${model || `${host.model} (${host.label}'s default)`} — saved to ${globalConfigPath()}`, "info");
 }
 
 /** The model trivial steps run on; `none` keeps each agent's model and only lowers thinking. */
@@ -496,11 +512,13 @@ async function editClassifier(ctx: ExtensionContext): Promise<void> {
   for (;;) {
     const config = loadConfig();
     const settings = config.classifier;
-    const { host } = jevEndpoint(settings);
+    const status = authStatus(ctx);
+    const { host, model } = jevEndpoint(settings, status);
     const items: SelectItem[] = [
       { value: "enabled", label: "Classifier", description: `${settings.enabled ? "on" : "off"} · Jev makes the obvious decisions so large models spend fewer tokens on them` },
-      { value: "host", label: "Host", description: `${host.label} · enter cycles ${JEV_HOSTS.map((name) => JEV_HOST_TABLE[name].label).join(", ")}` },
-      { value: "key", label: "API key", description: describeKey(host, authStatus(ctx, host.piProvider)) },
+      { value: "host", label: "Host", description: `${hostLabel(settings.provider)}${settings.provider === "auto" ? ` → ${host.label}` : ""} · enter cycles ${JEV_HOSTS.map(hostLabel).join(", ")}` },
+      { value: "key", label: "API key", description: describeKey(host, status) },
+      { value: "model", label: "Model", description: `${model}${settings.model ? "" : " (the host's default)"} · e.g. jev-1.13 once OpenCode's free jev-1.13-free ends` },
       ...CLASSIFIER_FEATURE_ITEMS.map((entry) => ({ value: `feature:${entry.id}`, label: entry.label, description: `${settings.features[entry.id] ? "on" : "off"} · ${entry.help}` })),
       { value: "cheap", label: "Cheaper model", description: `${settings.effort.cheapModel === INHERIT_MODEL ? "none: trivial steps keep their model and drop a thinking level" : settings.effort.cheapModel} · what effort routing runs trivial steps on` },
       { value: "test", label: "Test connection", description: "one tiny call: shows the model and how long it took" },
@@ -511,6 +529,7 @@ async function editClassifier(ctx: ExtensionContext): Promise<void> {
     if (choice === "enabled") saveConfig({ ...config, classifier: { ...settings, enabled: !settings.enabled } });
     else if (choice === "host") saveConfig({ ...config, classifier: { ...settings, provider: nextJevHost(settings.provider) } });
     else if (choice === "key") ctx.ui.notify(await keyHelp(ctx, config), "info");
+    else if (choice === "model") await editJevModel(ctx);
     else if (choice === "cheap") await editCheapModel(ctx);
     else if (choice === "test") {
       const result = await classifier().test();
@@ -534,7 +553,7 @@ export async function openSettings(pi: ExtensionAPI, ctx: ExtensionContext): Pro
     const config = loadConfig();
     const items: SelectItem[] = SETTINGS_KINDS.map((kind) => ({ value: kind, label: kindLabel(kind), description: entryDescription(kind, entryView(config, kind)) }));
     items.push({ value: "lobby", label: "Lobby", description: lobbySummary(config) });
-    items.push({ value: "classifier", label: "Classifier (Jev)", description: classifierSummary(config, authStatus(ctx, jevEndpoint(config.classifier).host.piProvider)) });
+    items.push({ value: "classifier", label: "Classifier (Jev)", description: classifierSummary(config, authStatus(ctx)) });
     items.push({ value: "close", label: "Close" });
     const choice = await pick(ctx, "bot-lobby settings", items);
     if (!choice || choice === "close") return;
