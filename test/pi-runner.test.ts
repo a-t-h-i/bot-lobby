@@ -412,12 +412,12 @@ test("rpc: a silent agent is killed as stalled", async () => {
 test("rpc: provider retries extend the silence allowance and are forwarded", async () => {
   const script = rpcStub(`
     if (cmd.type !== "prompt") return;
-    emit({ type: "auto_retry_start", attempt: 1, maxAttempts: 3, delayMs: 600, errorMessage: "429 rate limited" });
+    emit({ type: "auto_retry_start", attempt: 1, maxAttempts: 3, delayMs: 800, errorMessage: "429 rate limited" });
     emit({ type: "compaction_start", reason: "threshold" });
-    setTimeout(() => { emit({ type: "auto_retry_end", success: true, attempt: 1 }); report("## done"); settle(); }, 500);`);
+    setTimeout(() => { emit({ type: "auto_retry_end", success: true, attempt: 1 }); report("## done"); settle(); }, 600);`);
   await withStub(script, async () => {
     const events: string[] = [];
-    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 20_000, stallTimeoutMs: 250, onEvent: (event) => events.push(event.type) });
+    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 20_000, stallTimeoutMs: 400, onEvent: (event) => events.push(event.type) });
     assert.equal(result.status, "success", result.error);
     assert.ok(events.includes("retry") && events.includes("retry_end") && events.includes("compaction"));
   });
