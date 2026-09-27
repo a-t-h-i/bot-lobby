@@ -119,7 +119,7 @@ or without a task.
 ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────╯
  ── message the oracle ───────────────────────────────────────────────────────────────────────────────────────
   _
-  TYPE  enter send  shift+enter newline  esc browse  tab next tab  alt+h keys  alt+l hide
+  TYPE  enter send  esc browse  alt+l hide
 ```
 
 - **1 Lobby** — the task's zen scene, then the conversation with the oracle
@@ -130,10 +130,12 @@ or without a task.
   thoughts show up: the oracle's live thought as it streams, and each finished
   thought from a subagent, quick fix or the planner (pi's own transcript,
   behind the lobby, still carries the oracle's thinking blocks; `ctrl+t`
-  collapses them there). The oracle's replies render as Markdown. Every pane
-  can be hidden and brought back — `alt+z` the scene, `alt+c` the
-  conversation, `alt+a` the activity log, `alt+k` thinking — and the rest take
-  its room; the choice is remembered (`lobby.panels`). Each pane scrolls on
+  collapses them there). The oracle's replies render as Markdown. `alt+z`
+  hides the oracle and agent animations, leaving just the task's status box,
+  what the agents are doing and the checklist (the scene names the key in its
+  corner). `alt+c`, `alt+a` and `alt+k` hide or bring back the conversation,
+  the activity log and thinking, and the rest take their room; every choice is
+  remembered (`lobby.panels`). Each pane scrolls on
   its own (see **Scrolling** below), and a pane scrolled back stays on what
   you are reading while new lines arrive. The prompt talks to the
   oracle (while it works, enter steers the running turn; `esc` stops it); with
@@ -215,7 +217,8 @@ typing). These work in both modes:
 | `alt+s` | bot-lobby settings: every agent's model, thinking and time limit, and the lobby's switches |
 | `ctrl+f` (or `/` while browsing) | search the current tab |
 | `tab` / `shift+tab`, `alt+1`…`alt+5` | switch tabs |
-| `alt+z` / `alt+c` / `alt+a` / `alt+k` | show or hide the zen scene / conversation / activity log / thinking |
+| `alt+z` | show or hide the oracle and agent animations (the task's status stays) |
+| `alt+c` / `alt+a` / `alt+k` | show or hide the conversation / activity log / thinking |
 | `pageup` / `pagedown` | scroll the focused pane a page |
 | `ctrl+c` | clear the prompt, or hide the lobby when it is empty |
 
@@ -583,7 +586,8 @@ by itself when this session starts or resumes a task; `autoAsk` puts the
 panel's questions to you as soon as a round ends while the Plan tab is
 showing (otherwise `enter` on the empty prompt does); `issues` shows the
 GitHub Issues tab (off for now); `mouse` turns clicks and the wheel on;
-`panels` is which Lobby panes show (the pane keys update it); `keys` rebinds
+`panels` is which Lobby panes show, with `scene: false` meaning no oracle
+and agent animations (the pane keys update it); `keys` rebinds
 shortcuts by action name.
 
 `thinking` must be one of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`,

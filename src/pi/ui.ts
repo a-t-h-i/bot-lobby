@@ -246,15 +246,15 @@ export class ZenScene {
    * an expression frame, the widget state or the elapsed second, so any other
    * repaint (typing, streaming output) reuses the last lines.
    */
-  lines(width: number, rows: number, theme: Theme | undefined, now = Date.now()): string[] {
+  lines(width: number, rows: number, theme: Theme | undefined, now = Date.now(), still = false): string[] {
     const expressions = Object.fromEntries(EXPRESSION_KEYS.map((key) => [key, this.expressions[key].frame])) as Partial<Record<ExpressionKey, number>>;
     const variants = Object.fromEntries(SLOT_IDS.map((id) => [id, this.expressions[id].variant])) as Partial<Record<SlotId, number>>;
     const quiet = isQuiet();
     const frameKey = [...EXPRESSION_KEYS.map((key) => expressions[key] ?? 0), ...SLOT_IDS.map((id) => variants[id] ?? 0)].join(",");
     const motion = this.motion(now);
-    const key = `${width}|${rows}|${this.tick}|${frameKey}|${motion.phase}|${motion.talk}|${zenVersion}|${Math.floor(now / 1000)}|${quiet}`;
+    const key = `${width}|${rows}|${this.tick}|${frameKey}|${motion.phase}|${motion.talk}|${zenVersion}|${Math.floor(now / 1000)}|${quiet}|${still}`;
     if (this.cache && this.cache.key === key && this.cache.theme === theme) return this.cache.lines;
-    const opts = { width, rows, tick: this.tick, theme, expressions, variants, oracleActivity, oracleMotion: motion };
+    const opts = { width, rows, tick: this.tick, theme, expressions, variants, oracleActivity, oracleMotion: motion, still };
     const lines = panelLines(zenState.task, zenState.runs, now, quiet, opts).map((line) => truncateToWidth(line, width));
     this.cache = { key, theme, lines };
     return lines;

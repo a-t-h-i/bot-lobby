@@ -146,6 +146,22 @@ test("short terminals fall back to the compact strip", () => {
   assert.equal(boxLines(tall).length, 1);
 });
 
+test("a still scene keeps the status box, alert and checklist, and leaves out the oracle and agents", () => {
+  const planned = task({ state: "implementing", plan: "## Steps\n1. Add the form\n2. Wire the API" });
+  const animated = panelLines(planned, [], NOW, true, { width: 120, rows: 50 });
+  const still = panelLines(planned, [], NOW, true, { width: 120, rows: 50, still: true });
+  assert.ok(animated.some((line) => line.includes("╭─────┴─────╮")), "the animated scene draws the tower");
+  assert.ok(!still.some((line) => line.includes("╭─────┴─────╮") || line.includes("DESIGN")), "no tower and no agent strip");
+  assert.ok(still.some((line) => line.includes("BOT-LOBBY")), "the status box stays");
+  assert.ok(still.some((line) => line.includes("TASKS")) && still.some((line) => line.includes("Add the form")), "the checklist stays");
+  assert.ok(still.length < animated.length);
+  const short = panelLines(planned, [], NOW, true, { width: 120, rows: 12, still: true });
+  assert.ok(short.some((line) => line.includes("┌─ BOT-LOBBY")), "a short still scene keeps the same status box");
+  const compact = panelLines(planned, [], NOW, true, { width: LARGE_MIN_WIDTH - 1, rows: 50, still: true });
+  assert.equal(stripRows(compact).length, 0, "the compact tier drops its sprites too");
+  for (const line of [...still, ...compact]) assert.ok(visibleWidth(line) <= 120);
+});
+
 test("largeLineBudget is a clamped fraction of the terminal rows", () => {
   assert.equal(MAX_LARGE_LINES, 35);
   assert.equal(largeLineBudget(200), MAX_LARGE_LINES);

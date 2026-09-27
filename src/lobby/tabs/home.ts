@@ -1,9 +1,11 @@
 /**
- * The Lobby tab: the zen scene of this session's task on top, then the
+ * The Lobby tab: the zen scene of this session's task on top (the oracle
+ * and agent animations, or just their status when animations are off), then the
  * conversation with the oracle (text only, no tool rows, no thinking), the
  * activity log of plain-words steps from every agent, and the one place where
  * thoughts show up. Pure: the scene arrives as a callback, the clock as `now`.
  */
+import { visibleWidth } from "@earendil-works/pi-tui";
 import type { Task } from "../../schemas/task.ts";
 import type { ActivityEntry, ChatEntry, ThoughtEntry } from "../feed.ts";
 import type { LobbyPanel } from "../../schemas/configuration.ts";
@@ -15,8 +17,8 @@ export type HomePane = (typeof HOME_PANES)[number];
 
 export interface HomeInput {
   task?: Task;
-  /** Draws the zen scene into at most `height` lines; absent when no task is active. */
-  scene?: (width: number, height: number) => string[];
+  /** Draws the zen scene into at most `height` lines, animated or still; absent when no task is active. */
+  scene?: (width: number, height: number, animated: boolean) => string[];
   chat: readonly ChatEntry[];
   /** The oracle's reply while it streams. */
   liveReply?: string;
@@ -45,9 +47,10 @@ export interface HomeInput {
 
 /** Wide terminals put the conversation and the activity log side by side. */
 export const HOME_COLUMNS_MIN = 100;
-/** Most lines the scene may take, and its share of the body. */
+/** Most lines the scene may take, and its share of the body; the still status needs far fewer. */
 const SCENE_SHARE = 0.45;
 const MAX_SCENE = 36;
+const MAX_STILL = 10;
 
 const SOURCE_COLORS: Record<string, LobbyColor> = {
   MASTER: "accent",
@@ -177,17 +180,34 @@ function thinkingContent(input: HomeInput, thoughts: readonly ThoughtEntry[], wi
   return [paint(theme, "dim", input.query ? `No thought matches "${input.query}".` : "Thoughts from the oracle and every agent appear here, and only here.")];
 }
 
-function sceneLines(input: HomeInput, width: number, height: number): string[] {
-  if (!input.task || !input.scene || !input.panels.scene) return [];
-  const budget = Math.min(MAX_SCENE, Math.floor(height * SCENE_SHARE));
-  if (budget < 6) return [];
-  return input.scene(width, budget).slice(0, budget);
+/**
+ * The scene: the animated oracle and agents, or with animations off (the
+ * `scene` panel) only the task's status box, what the agents are doing and
+ * the checklist. Its first line names the key that toggles the animations.
+ */
+function sceneLines(input: HomeInput, width: number, height: number, theme?: LobbyTheme): string[] {
+  if (!input.task || !input.scene) return [];
+  const animated = input.panels.scene;
+  const budget = Math.min(animated ? MAX_SCENE : MAX_STILL, Math.floor(height * SCENE_SHARE));
+  if (budget < (animated ? 6 : 4)) return [];
+  const lines = input.scene(width, budget, animated).slice(0, budget);
+  const note = input.keys ? `${input.keys.scene} ${animated ? "hides" : "shows"} animations` : undefined;
+  return keyNote(lines, width, note, theme);
+}
+
+/** `note` at the right end of the first line, dimmed, when it fits beside what is there. */
+function keyNote(lines: readonly string[], width: number, note: string | undefined, theme?: LobbyTheme): string[] {
+  const first = lines[0];
+  if (!note || first === undefined) return [...lines];
+  const gap = width - visibleWidth(first) - visibleWidth(note) - 1;
+  if (gap < 2) return [...lines];
+  return [`${first}${" ".repeat(gap)}${paint(theme, "dim", note)}`, ...lines.slice(1)];
 }
 
 function hiddenHint(input: HomeInput, width: number, height: number, theme?: LobbyTheme): string[] {
   const keys = input.keys;
   const text = keys
-    ? `Every pane is hidden — ${keys.conversation} conversation · ${keys.activity} activity · ${keys.thinking} thinking${input.task ? ` · ${keys.scene} scene` : ""}`
+    ? `Every pane is hidden — ${keys.conversation} conversation · ${keys.activity} activity · ${keys.thinking} thinking`
     : "Every pane is hidden.";
   const lines = wrap(paint(theme, "dim", text), width);
   const top = Math.max(0, Math.floor((height - lines.length) / 2));
@@ -205,7 +225,7 @@ export function renderHome(input: HomeInput, width: number, height: number, them
   if (height <= 0) return [];
   const { panels } = input;
   const feed = filterFeed(input);
-  const scene = sceneLines(input, width, height);
+  const scene = sceneLines(input, width, height, theme);
   const rest = height - scene.length;
   const showMain = panels.conversation || panels.activity;
   const thinkHeight = !panels.thinking ? 0 : !showMain ? rest : rest >= 18 ? Math.max(5, Math.floor(rest * 0.25)) : rest >= 10 ? 4 : 0;
