@@ -20,13 +20,14 @@ export type LobbyColor =
   | "borderMuted"
   | "toolTitle"
   | "mdHeading"
-  | "mdCode";
+  | "mdCode"
+  | "userMessageText";
 
 export interface LobbyTheme {
   fg(color: LobbyColor, text: string): string;
   bold(text: string): string;
   italic?(text: string): string;
-  bg?(color: "selectedBg" | "searchMatchBg", text: string): string;
+  bg?(color: "selectedBg" | "searchMatchBg" | "userMessageBg", text: string): string;
   /** Render Markdown to styled lines; plain wrapping without it (tests). */
   markdown?(text: string, width: number): string[];
 }

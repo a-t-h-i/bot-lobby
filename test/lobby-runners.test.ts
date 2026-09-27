@@ -100,10 +100,15 @@ test("the feed streams the Master's thought into one entry and closes it", () =>
   assert.deepEqual(feed.activity.map((entry) => [entry.pending, entry.kind]), [[false, "error"]]);
 });
 
-test("the conversation keeps text only and shortens bot-lobby's own kickoff", () => {
+test("the conversation keeps text only and turns bot-lobby's kickoff into the task starting and your request", () => {
   assert.equal(textOf([{ type: "thinking", thinking: "hidden" }, { type: "text", text: "Hello" }, { type: "toolCall", name: "read" }]), "Hello");
-  assert.deepEqual(chatText("user", "A bot-lobby task is active: TASK-x\nTitle: add login\nRequest: ..."), { role: "note", text: "task TASK-x started — add login" });
-  assert.deepEqual(chatText("assistant", "  Two questions.  "), { role: "oracle", text: "Two questions." });
+  assert.deepEqual(chatText("user", "A bot-lobby task is active: TASK-x\nTitle: add login\nRequest: add a login page\nwith email\nState: clarifying\n\nDrive it…"), [
+    { role: "note", text: "task started · add login" },
+    { role: "you", text: "add a login page\nwith email" },
+  ]);
+  assert.deepEqual(chatText("user", "The user left a comment on the proposal of TASK-x from the lobby:\n- cap it"), [{ role: "note", text: "your comment on the proposal went to the oracle" }]);
+  assert.deepEqual(chatText("assistant", "  Two questions.  "), [{ role: "oracle", text: "Two questions." }]);
+  assert.deepEqual(chatText("user", "   "), []);
   const chat = chatFromEntries([
     { type: "message", timestamp: "2026-01-01T00:00:00.000Z", message: { role: "user", content: "build a page" } },
     { type: "message", message: { role: "toolResult", content: "x" } },
