@@ -53,8 +53,8 @@ const PROMPT_FIRST: ReadonlySet<TabId> = new Set(["lobby", "plan", "quickfix"]);
 export type LobbyMode = "type" | "browse";
 
 /** What each pane toggle is called in notices and help. */
-const PANEL_NAMES: Record<LobbyPanel, string> = { scene: "oracle and agent animations", conversation: "conversation", activity: "activity log", thinking: "thinking" };
-const PANEL_ACTIONS: Record<LobbyPanel, LobbyAction> = { scene: "toggleScene", conversation: "toggleConversation", activity: "toggleActivity", thinking: "toggleThinking" };
+const PANEL_NAMES: Record<LobbyPanel, string> = { animations: "oracle and agent animations", conversation: "conversation", activity: "activity log", thinking: "thinking" };
+const PANEL_ACTIONS: Record<LobbyPanel, LobbyAction> = { animations: "toggleScene", conversation: "toggleConversation", activity: "toggleActivity", thinking: "toggleThinking" };
 
 /** Which session the Lobby tab shows and talks to: this window, one it started in the background, or one in another terminal. */
 export type SessionView = { kind: "here" } | { kind: "background"; key: string } | { kind: "other"; taskId: string };
@@ -356,7 +356,7 @@ export class LobbyView implements Component, Focusable {
     const now = this.now();
     this.tick += 1;
     let delay = this.isLive() ? LIVE_MS : IDLE_MS;
-    if (this.tab === "lobby" && this.panels.scene && this.host.zen().task) delay = Math.min(delay, this.host.advanceScene(now));
+    if (this.tab === "lobby" && this.panels.animations && this.host.zen().task) delay = Math.min(delay, this.host.advanceScene(now));
     this.refreshData(false);
     this.host.requestRender();
     this.schedule(delay);
@@ -590,7 +590,7 @@ export class LobbyView implements Component, Focusable {
       case "prevTab":
         return this.cycleTab(-1);
       case "toggleScene":
-        return this.togglePanel("scene");
+        return this.togglePanel("animations");
       case "toggleConversation":
         return this.togglePanel("conversation");
       case "toggleActivity":
@@ -1914,7 +1914,7 @@ export class LobbyView implements Component, Focusable {
       panels: this.panels,
       ...(query ? { query } : {}),
       keys: {
-        scene: keyLabel(this.keys.toggleScene),
+        animations: keyLabel(this.keys.toggleScene),
         conversation: keyLabel(this.keys.toggleConversation),
         activity: keyLabel(this.keys.toggleActivity),
         thinking: keyLabel(this.keys.toggleThinking),
@@ -1944,7 +1944,7 @@ export class LobbyView implements Component, Focusable {
       ...(query ? { query } : {}),
       title: entry.name,
       keys: {
-        scene: keyLabel(this.keys.toggleScene),
+        animations: keyLabel(this.keys.toggleScene),
         conversation: keyLabel(this.keys.toggleConversation),
         activity: keyLabel(this.keys.toggleActivity),
         thinking: keyLabel(this.keys.toggleThinking),
