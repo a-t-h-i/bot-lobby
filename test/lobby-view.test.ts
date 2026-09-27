@@ -443,7 +443,7 @@ test("hidden panes give their room to the rest, and a search narrows every pane"
   const none = renderHome({ ...input, panels: { animations: false, conversation: false, activity: false, thinking: false } }, 120, 20);
   assert.ok(none.some((line) => line.includes("Every pane is hidden — Alt+C conversation · Alt+A activity · Alt+K thinking")));
   const searched = renderHome({ ...input, query: "router" }, 120, 20);
-  assert.ok(searched.some((line) => line.includes("● You")) && searched.some((line) => line.includes("▌ build the router")));
+  assert.ok(searched.some((line) => line.includes("You ●")) && searched.some((line) => line.includes("build the router ▐")));
   assert.ok(!searched.some((line) => line.includes("On it.")));
   assert.ok(searched.some((line) => line.includes("editing router.ts")));
   assert.ok(!searched.some((line) => line.includes("reading a.ts")));
@@ -995,30 +995,39 @@ test("the conversation shows each turn under a speaker line with its time, your 
     { id: 6, at: at + 140_000, role: "note" as const, text: "✗ the oracle's turn failed: 429" },
   ];
   const lines = chatLines(chat, 44);
-  const header = (who: string, time: string) => `${who.padEnd(44 - time.length)}${time}`;
+  const oracle = (time: string) => `${"◆ Oracle".padEnd(44 - time.length)}${time}`;
+  const you = (time: string) => `${time}  You ●`.padStart(44);
+  const bubble = (text: string) => `${text} ▐`.padStart(44);
   assert.deepEqual(lines, [
     "───── task started · add login · 12:04 ─────",
     "",
-    header("● You", "12:04"),
-    "  ▌ add a login page",
+    you("12:04"),
+    bubble("add a login page"),
     "",
-    header("◆ Oracle", "12:05"),
+    oracle("12:05"),
     "  Proposal:",
     "",
     "  - a form",
     "",
-    header("● You", "12:06"),
-    "  ▌ use port 8080",
+    you("12:06"),
+    bubble("use port 8080"),
     "",
-    "  ▌ and dark mode",
+    bubble("and dark mode"),
     "",
     "✗ the oracle's turn failed: 429",
-  ], "a second message within minutes shares the header; failures stand out instead of becoming a rule");
+  ], "you on the right, the oracle on the left; a second message within minutes shares the header; failures stand out instead of becoming a rule");
   const live = chatLines(chat.slice(0, 2), 44, undefined, "Writing the **plan**", true, 0);
-  assert.deepEqual(live.slice(-2), [header("◆ Oracle", "⠋ writing"), "  Writing the **plan**"]);
-  // With a theme that has backgrounds, your words sit in pi's user-message band.
-  const banded = chatLines(chat.slice(1, 2), 30, { fg: (_color, text) => text, bold: (text) => text, bg: (color, text) => `<${color}>${text}</${color}>` });
-  assert.equal(banded[1], `  <userMessageBg> ${"add a login page".padEnd(26)} </userMessageBg>`);
+  assert.deepEqual(live.slice(-2), [oracle("⠋ writing"), "  Writing the **plan**"]);
+  // With a theme that has backgrounds, your words sit in a bubble of pi's user-message background, in the accent colour, only as wide as they are.
+  const colours: string[] = [];
+  const banded = chatLines(chat.slice(1, 2), 30, { fg: (color, text) => (colours.push(color), text), bold: (text) => text, bg: (color, text) => `<${color}>${text}</${color}>` });
+  assert.equal(banded[1], `${" ".repeat(12)}<userMessageBg> add a login page </userMessageBg>`);
+  assert.ok(colours.includes("accent"));
+  // A long message wraps inside a bubble at most ~72% of a wide pane, flush with the right edge.
+  const wide = chatLines([{ id: 1, at, role: "you" as const, text: "add a login page with email and password, and keep the session for a week" }], 80);
+  const body = wide.slice(1);
+  assert.ok(body.length > 1 && body.every((line) => line.endsWith(" ▐") && line.length === 80));
+  assert.ok(body.every((line) => line.trimStart().length <= Math.floor(80 * 0.72)), "the bubble leaves the left of the pane to the oracle");
 });
 
 function task(id: string, owner: string, state: Task["state"], title = id): Task {
