@@ -37,6 +37,63 @@ export interface MetricRecord {
   purpose?: string;
   /** A run the classifier routed down: the configured profile it came from. */
   routedFrom?: string;
+  /** Classifier calls: what the decision spared (seat runs skipped, questions answered, quick fixes held). */
+  saved?: number;
+}
+
+/** What the classifier did and spared, for the Metrics tab. */
+export interface ClassifierSummary {
+  calls: number;
+  ok: number;
+  p50Ms: number;
+  p90Ms: number;
+  /** Tokens Jev read across every call. */
+  input: number;
+  /** Calls per decision (seats, answers, files, triage, effort, test). */
+  byPurpose: Record<string, number>;
+  seatRunsSkipped: number;
+  questionsAnswered: number;
+  quickFixesHeld: number;
+  /** Agent runs the classifier routed down, and how many of them succeeded. */
+  routed: number;
+  routedOk: number;
+}
+
+function quantile(sorted: readonly number[], q: number): number {
+  if (sorted.length === 0) return 0;
+  return sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]!;
+}
+
+/** Classifier calls and the agent runs it routed, summarised; undefined when it never ran. */
+export function summarizeClassifier(calls: readonly MetricRecord[], runs: readonly MetricRecord[]): ClassifierSummary | undefined {
+  const routed = runs.filter((record) => record.routedFrom);
+  if (calls.length === 0 && routed.length === 0) return undefined;
+  const times = calls.map((record) => record.durationMs).sort((a, b) => a - b);
+  const byPurpose: Record<string, number> = {};
+  let seatRunsSkipped = 0;
+  let questionsAnswered = 0;
+  let quickFixesHeld = 0;
+  for (const record of calls) {
+    const purpose = record.purpose ?? "other";
+    byPurpose[purpose] = (byPurpose[purpose] ?? 0) + 1;
+    const saved = record.saved ?? 0;
+    if (purpose === "seats") seatRunsSkipped += saved;
+    else if (purpose === "answers") questionsAnswered += saved;
+    else if (purpose === "triage") quickFixesHeld += saved;
+  }
+  return {
+    calls: calls.length,
+    ok: calls.filter((record) => record.status === "success").length,
+    p50Ms: quantile(times, 0.5),
+    p90Ms: quantile(times, 0.9),
+    input: calls.reduce((total, record) => total + (record.input ?? 0), 0),
+    byPurpose,
+    seatRunsSkipped,
+    questionsAnswered,
+    quickFixesHeld,
+    routed: routed.length,
+    routedOk: routed.filter((record) => record.status === "success").length,
+  };
 }
 
 /** Newest records kept in memory for aggregation. */
