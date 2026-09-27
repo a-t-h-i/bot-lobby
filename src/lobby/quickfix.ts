@@ -13,6 +13,7 @@ import type { LobbyFeed } from "./feed.ts";
 import type { FileHinter } from "../classifier/files.ts";
 import type { Classifier } from "../classifier/classifier.ts";
 import { quickFixSize } from "../classifier/triage.ts";
+import { fellShort, profileLabel, routeLabel, type EffortRoute, type EffortRouter } from "../classifier/effort.ts";
 
 /** A quick fix edits code, so it gets the full coding tool set. */
 export const QUICK_FIX_TOOLS: readonly string[] = ["read", "bash", "edit", "write", "grep", "find", "ls"];
@@ -47,6 +48,9 @@ export interface QuickFixJob {
   note?: string;
   /** Run even if the classifier judges it large (r on a held job). */
   force?: boolean;
+  /** The classifier routed it down (`trivial 0.88: p/big · low → p/cheap · low`); cleared when it re-ran on the configured profile. */
+  route?: string;
+  routedFrom?: string;
 }
 
 export interface QuickFixProfile {
@@ -73,6 +77,8 @@ export interface QuickFixDeps {
   hints?: FileHinter;
   /** Holds a request it judges large (a task, not a quick fix) instead of spending a run on it. */
   classifier?: Classifier;
+  /** Lowers thinking or the model for a request the classifier judges simple or trivial. */
+  effort?: EffortRouter;
 }
 
 export const MAX_JOBS = 30;
@@ -206,15 +212,15 @@ export class QuickFixQueue {
     }
     this.deps.feed?.log(QUICK_FIX_SOURCE, `started: ${jobTitle(job)}`, "info", job.startedAt);
     try {
-      const likely = await this.likely(job.prompt, controller.signal);
-      const result = await runPiAgent(
+      const [likely, route] = await Promise.all([this.likely(job.prompt, controller.signal), this.route(job.prompt, profile, controller.signal)]);
+      const attempt = (model: string | undefined, thinking: string) => runPiAgent(
         {
           cwd: this.deps.cwd,
           task: likely ? `${job.prompt}\n\n${likely}` : job.prompt,
           systemPrompt: quickFixPrompt(profile.instructions),
           tools: [...QUICK_FIX_TOOLS, ...(this.deps.hints?.tools() ?? [])],
-          model: profile.model,
-          thinking: profile.thinking,
+          model,
+          thinking,
           timeoutMs: profile.timeoutMs,
           signal: controller.signal,
           stallTimeoutMs: this.deps.stallTimeoutMs,
@@ -223,6 +229,27 @@ export class QuickFixQueue {
         },
         this.deps.runProcess ?? spawnPiProcess,
       );
+      let result;
+      if (route) {
+        job.route = routeLabel(route);
+        job.routedFrom = profileLabel(route.from);
+        job.thinking = route.thinking;
+        if (route.model) job.model = route.model;
+        this.changed();
+        result = await attempt(route.model, route.thinking);
+        if (fellShort(result) && !controller.signal.aborted) {
+          // The routed attempt counts in the metrics on its own; the job re-runs on the configured profile.
+          appendMetrics(this.deps.root, this.deps.configDir, [{ ...quickFixMetric({ ...job, status: result.status, finishedAt: Date.now(), usage: result.usage, ...(result.model ? { model: result.model } : {}) }), id: `${job.id}-routed-${job.startedAt}` }]);
+          this.addStep(job, "the routed attempt fell short; running again on the configured model and thinking", Date.now());
+          delete job.route;
+          delete job.routedFrom;
+          job.thinking = profile.thinking;
+          if (profile.model) job.model = profile.model;
+          result = await attempt(profile.model, profile.thinking);
+        }
+      } else {
+        result = await attempt(profile.model, profile.thinking);
+      }
       job.status = result.status;
       job.report = result.output.trim() || undefined;
       job.error = result.error;
@@ -234,6 +261,15 @@ export class QuickFixQueue {
     } finally {
       this.controllers.delete(job.id);
       this.finish(job);
+    }
+  }
+
+  /** Where the classifier routes this request, or undefined. */
+  private async route(prompt: string, profile: QuickFixProfile, signal: AbortSignal): Promise<EffortRoute | undefined> {
+    try {
+      return await this.deps.effort?.route(prompt, { ...(profile.model ? { model: profile.model } : {}), thinking: profile.thinking }, { signal });
+    } catch {
+      return undefined;
     }
   }
 
@@ -298,5 +334,6 @@ export function quickFixMetric(job: QuickFixJob): MetricRecord {
     turns: job.usage?.turns || job.turns || undefined,
     tools: job.tools,
     ...(job.usage ? { input: job.usage.input, output: job.usage.output, cost: job.usage.cost } : {}),
+    ...(job.routedFrom ? { routedFrom: job.routedFrom } : {}),
   };
 }

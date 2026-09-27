@@ -433,6 +433,7 @@ export const CLASSIFIER_FEATURE_ITEMS: ReadonlyArray<{ id: ClassifierFeature; la
   { id: "seats", label: "Planning seats", help: "each round, only the seats your idea or latest answers touch sit; 1-4 in the Plan tab pins one" },
   { id: "answers", label: "Obvious answers", help: "a panel question whose recommended option the conversation already makes clearly right is answered for you (listed under Assumptions)" },
   { id: "triage", label: "Task triage", help: "a new task's size, domains and research need reach the Master as hints; a quick fix that is really a task is held for you" },
+  { id: "effort", label: "Effort routing", help: "a simple step runs one thinking level lower, a trivial one on the cheaper model below; a routed run that falls short runs again on your settings" },
   { id: "files", label: "File hints", help: "scouts, workers, quick fixes and the planning panel start with the files most likely needed, and can look more up with find_relevant_files" },
 ];
 
@@ -477,6 +478,19 @@ async function keyHelp(ctx: ExtensionContext, config: BotLobbyConfig): Promise<s
   return `Jev key (${host.label}): ${describeKey(host, authStatus(ctx, host.piProvider))}.${masked} To set it, ${how}`;
 }
 
+/** The model trivial steps run on; `none` keeps each agent's model and only lowers thinking. */
+async function editCheapModel(ctx: ExtensionContext): Promise<void> {
+  const config = loadConfig();
+  const current = config.classifier.effort.cheapModel;
+  const none: SelectItem = { value: INHERIT_MODEL, label: current === INHERIT_MODEL ? "none ✓" : "none", description: "Trivial steps keep their model and run one thinking level lower" };
+  const choice = await pick(ctx, "Cheaper model for trivial steps", [none, ...modelItems(ctx, current, false)], { search: true });
+  if (choice === undefined) return;
+  const typed = choice === CUSTOM_MODEL ? (await ctx.ui.input("Model id", "provider/model"))?.trim() : choice;
+  if (!typed) return;
+  saveConfig({ ...config, classifier: { ...config.classifier, effort: { cheapModel: typed } } });
+  ctx.ui.notify(`bot-lobby: trivial steps run on ${typed === INHERIT_MODEL ? "their own model, one thinking level lower" : typed} — saved to ${globalConfigPath()}`, "info");
+}
+
 /** The classifier: on/off, where Jev is called, its key, which decisions it makes, and a connection test. */
 async function editClassifier(ctx: ExtensionContext): Promise<void> {
   for (;;) {
@@ -488,6 +502,7 @@ async function editClassifier(ctx: ExtensionContext): Promise<void> {
       { value: "host", label: "Host", description: `${host.label} · enter cycles ${JEV_HOSTS.map((name) => JEV_HOST_TABLE[name].label).join(", ")}` },
       { value: "key", label: "API key", description: describeKey(host, authStatus(ctx, host.piProvider)) },
       ...CLASSIFIER_FEATURE_ITEMS.map((entry) => ({ value: `feature:${entry.id}`, label: entry.label, description: `${settings.features[entry.id] ? "on" : "off"} · ${entry.help}` })),
+      { value: "cheap", label: "Cheaper model", description: `${settings.effort.cheapModel === INHERIT_MODEL ? "none: trivial steps keep their model and drop a thinking level" : settings.effort.cheapModel} · what effort routing runs trivial steps on` },
       { value: "test", label: "Test connection", description: "one tiny call: shows the model and how long it took" },
       { value: "back", label: "Back", description: `thresholds and limits: classifier in ${globalConfigPath()}` },
     ];
@@ -496,6 +511,7 @@ async function editClassifier(ctx: ExtensionContext): Promise<void> {
     if (choice === "enabled") saveConfig({ ...config, classifier: { ...settings, enabled: !settings.enabled } });
     else if (choice === "host") saveConfig({ ...config, classifier: { ...settings, provider: nextJevHost(settings.provider) } });
     else if (choice === "key") ctx.ui.notify(await keyHelp(ctx, config), "info");
+    else if (choice === "cheap") await editCheapModel(ctx);
     else if (choice === "test") {
       const result = await classifier().test();
       ctx.ui.notify(result.ok ? `Jev answered in ${result.ms} ms (${result.model}).` : `Jev test failed: ${result.error}`, result.ok ? "info" : "error");

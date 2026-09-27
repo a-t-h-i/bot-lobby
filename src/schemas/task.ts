@@ -89,6 +89,8 @@ export interface RunLogEntry {
   stalled?: boolean;
   wrappedUp?: boolean;
   error?: string;
+  /** The classifier routed this run down from this configured profile. */
+  routedFrom?: string;
 }
 
 /** Upper bound on persisted run-log entries. */

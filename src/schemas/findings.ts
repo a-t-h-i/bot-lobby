@@ -133,4 +133,8 @@ export interface AgentRun {
   wrappedUp?: boolean;
   /** File this worker is queued for at the file desk. */
   waitingFor?: string;
+  /** The classifier routed this run down: the configured profile it came from (`p/big · medium`). */
+  routedFrom?: string;
+  /** Why and where it was routed (`trivial 0.88: p/big · medium → p/cheap · low`). */
+  route?: string;
 }

@@ -9,9 +9,11 @@ Branch `claude/dev-lobby-jev-classifier-g4neej`.
 - Phase 2 — classifier core: merged (#8).
 - Phase 3 — planning seats and obvious answers: merged (#9).
 - Phase 4 — likely files and `find_relevant_files`: merged (#10).
-- Phase 5 — task triage in the Master's context (early states only),
-  clarify answered by the classifier, re-triage after an amendment, quick
-  fixes held when they look like a task.
+- Phase 5 — task triage, clarify answers, held quick fixes: merged (#11).
+- Phase 6 — effort routing for workers, scouts, quick fixes and planning
+  seats (one thinking level down for simple steps, the cheaper model for
+  trivial ones), re-run on the configured profile when a routed run falls
+  short; routes in receipts and metrics.
 
 ## Phase 0 findings (spike)
 

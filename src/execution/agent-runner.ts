@@ -55,6 +55,9 @@ export interface AgentRequest {
   onStart?: (handle: AgentHandle) => void;
   /** Called once per attempt after it ends, before any retry. */
   onAttemptEnd?: (run: AgentRun) => void;
+  /** The classifier routed this run down from this configured profile (receipts and metrics show it). */
+  routedFrom?: string;
+  route?: string;
 }
 
 /** The watchdog fields of an AgentRequest, taken from the workflow config. */
@@ -115,6 +118,8 @@ function baseRun(request: AgentRequest, runId: string, startedAt: string, attemp
     attempts,
     startedAt,
     ...(request.thinking ? { thinking: request.thinking } : {}),
+    ...(request.routedFrom ? { routedFrom: request.routedFrom } : {}),
+    ...(request.route ? { route: request.route } : {}),
     ...(attempts > 1 ? { note: `retry ${attempts - 1} of ${(request.retries ?? 0)}`, noteKind: "warning" as const } : {}),
   };
 }
