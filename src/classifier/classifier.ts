@@ -78,7 +78,7 @@ export class Classifier {
    * is off, the key is missing, the request is over budget, the call fails or
    * `signal` aborts it.
    */
-  async ask(purpose: ClassifierFeature, request: SystemOneRequest, options: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<Classified | undefined> {
+  async ask(purpose: ClassifierFeature, request: SystemOneRequest, options: { signal?: AbortSignal; timeoutMs?: number; saved?: (answers: Record<string, Answer>) => number } = {}): Promise<Classified | undefined> {
     if (!this.enabled(purpose)) return undefined;
     if (!fitsBudget(request)) {
       this.record(purpose, "failed", this.now(), 0);
@@ -95,7 +95,7 @@ export class Classifier {
     return result.ok ? { ok: true, model: result.value.model, ms: result.value.ms } : { ok: false, error: result.error };
   }
 
-  private async call(purpose: ClassifierPurpose, request: SystemOneRequest, options: { signal?: AbortSignal; timeoutMs?: number; force?: boolean }): Promise<{ ok: true; value: Classified } | { ok: false; error: string }> {
+  private async call(purpose: ClassifierPurpose, request: SystemOneRequest, options: { signal?: AbortSignal; timeoutMs?: number; force?: boolean; saved?: (answers: Record<string, Answer>) => number }): Promise<{ ok: true; value: Classified } | { ok: false; error: string }> {
     const config = this.deps.config();
     const { host, baseUrl, model } = jevEndpoint(config);
     const key = await resolveKey(host, this.deps.keys, this.deps.env);
@@ -121,7 +121,13 @@ export class Classifier {
       });
       const ms = Math.max(0, this.now() - started);
       this.failures = 0;
-      this.record(purpose, "success", started, ms, response.model, response.usage);
+      let saved = 0;
+      try {
+        saved = options.saved?.(response.answers) ?? 0;
+      } catch {
+        saved = 0;
+      }
+      this.record(purpose, "success", started, ms, response.model, response.usage, saved);
       return { ok: true, value: { answers: response.answers, model: response.model, ms } };
     } catch (error) {
       const ms = Math.max(0, this.now() - started);
@@ -144,7 +150,7 @@ export class Classifier {
     this.deps.warn?.(`bot-lobby classifier paused for ${BREAKER_PAUSE_MS / 60_000} minutes after ${BREAKER_FAILURES} failures in a row (${message.split("\n")[0]}). bot-lobby decides without it meanwhile.`);
   }
 
-  private record(purpose: ClassifierPurpose, status: MetricRecord["status"], started: number, ms: number, model?: string, usage?: { input_tokens: number; output_tokens: number }): void {
+  private record(purpose: ClassifierPurpose, status: MetricRecord["status"], started: number, ms: number, model?: string, usage?: { input_tokens: number; output_tokens: number }, saved = 0): void {
     this.calls += 1;
     this.deps.metrics?.({
       id: `classifier-${purpose}-${started}-${this.calls}`,
@@ -156,6 +162,7 @@ export class Classifier {
       startedAt: new Date(started).toISOString(),
       durationMs: ms,
       ...(usage ? { input: usage.input_tokens, output: usage.output_tokens } : {}),
+      ...(saved > 0 ? { saved } : {}),
     });
   }
 }
