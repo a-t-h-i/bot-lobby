@@ -95,7 +95,8 @@ export function decideSeats(answers: Record<string, Answer> | undefined, input: 
 /** One call for every candidate seat; undefined when the classifier is off or fails. */
 export async function chooseSeats(classifier: Classifier, input: SeatInput, signal?: AbortSignal): Promise<SeatDecision | undefined> {
   if (input.candidates.length === 0) return undefined;
-  const result = await classifier.ask("seats", seatRequest(input), signal ? { signal } : {});
+  const thresholds = classifier.config.thresholds;
+  const result = await classifier.ask("seats", seatRequest(input), { ...(signal ? { signal } : {}), saved: (answers) => input.candidates.length - decideSeats(answers, input, thresholds).seat.size });
   if (!result) return undefined;
   return { ...decideSeats(result.answers, input, classifier.config.thresholds), ms: result.ms };
 }

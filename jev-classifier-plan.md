@@ -1,7 +1,8 @@
 # Jev classifier in bot-lobby — implementation plan
 
-Status: agreed design, implemented phase by phase (one PR per phase).
-Branch `claude/dev-lobby-jev-classifier-g4neej`.
+Status: implemented, one PR per phase (#7–#13). The classifier is off by
+default; turn it on under `/bot-lobby settings` → **Classifier (Jev)** after
+`/login typesafe`. Branch `claude/dev-lobby-jev-classifier-g4neej`.
 
 ## Progress
 
@@ -10,10 +11,31 @@ Branch `claude/dev-lobby-jev-classifier-g4neej`.
 - Phase 3 — planning seats and obvious answers: merged (#9).
 - Phase 4 — likely files and `find_relevant_files`: merged (#10).
 - Phase 5 — task triage, clarify answers, held quick fixes: merged (#11).
-- Phase 6 — effort routing for workers, scouts, quick fixes and planning
-  seats (one thinking level down for simple steps, the cheaper model for
-  trivial ones), re-run on the configured profile when a routed run falls
-  short; routes in receipts and metrics.
+- Phase 6 — effort routing with a full-strength re-run: merged (#12).
+- Phase 7 — the Metrics tab's Classifier box (calls, speed, what they
+  spared, routed runs' success), live checks behind `BOT_LOBBY_JEV_E2E=1`,
+  docs.
+
+### Deviations from the design, and why
+
+- **Key storage** took path A (pi's own `/login typesafe`), so bot-lobby never
+  writes a key file; see the phase 0 findings.
+- **Effort scoring** is its own call, run in parallel with the file ranking
+  rather than inside the same request: ranking is split into batches, and a
+  separate call keeps both simple without adding latency.
+- **Timeouts are not retried** (rate limits, 5xx and unreachable hosts still
+  retry once): a retry after a 4 s timeout would double the wait on the
+  interactive path, for example before a task's kickoff.
+- **Secret excludes** are built in (`.env*`, keys, certificates, `secrets/`,
+  `.ssh/`, `.aws/`, `.npmrc`…) on top of `classifier.exclude`.
+
+### Still to check with a live key
+
+Thresholds are the plan's starting points and have only been exercised
+against a fake API (this build environment blocks `api.typesafe.ai`). Run
+`BOT_LOBBY_JEV_E2E=1 TYPESAFE_API_KEY=… node --test test/jev-e2e.test.ts`,
+then watch the Metrics tab's Classifier box (routed runs' success rate,
+seat runs skipped) and tune `classifier.thresholds` from real use.
 
 ## Phase 0 findings (spike)
 

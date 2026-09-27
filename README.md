@@ -256,7 +256,11 @@ or without a task.
   runs, success, mean/median/p90 time, turns, tools, tokens, output tokens per
   second and cost (columns drop from the right on narrow terminals). `g`
   splits the table by agent, `s` cycles the sort (runs, average time, success,
-  cost).
+  cost). With the classifier on, a **Classifier (Jev)** box under the tiles
+  shows its calls (success rate, p50/p90 time, tokens read, calls per
+  decision) and what they spared: seat runs skipped, questions answered,
+  quick fixes held, and runs routed down with their success rate. Classifier
+  calls stay out of the model table.
 
 The **Issues** tab (GitHub issues through the `gh` CLI, planned into tasks
 through the Plan tab) is switched off for now; `"lobby": { "issues": true }`
@@ -899,7 +903,8 @@ and the output contract — and an empty layer is dropped.
 ├── sessions/<id>.json          heartbeats of the pi sessions running in the project
 ├── sessions/<id>.inbox.jsonl   messages for a running session's oracle, and their delivery
 ├── backlog/PLAN-<slug>.json    pending tasks saved from the planner (optionally linked to an issue)
-├── metrics.jsonl               one line per finished run of any agent, for the Metrics tab
+├── metrics.jsonl               one line per finished run of any agent (and per classifier call), for the Metrics tab
+├── cache/files.json            the classifier's file excerpts for likely files, refreshed by size and mtime
 └── tasks/TASK-<stamp>/
     ├── state.json              the task record (kept after completion)
     ├── comments.jsonl          your lobby comments on the plan and their delivery (append-only)
@@ -993,6 +998,17 @@ BOT_LOBBY_E2E=1 npx tsx --test test/e2e.test.ts  # or: node --test test/e2e.test
 
 They cover: a real isolated subagent run, a real workflow-level scout that
 advances the task state, and the Master prompt injection in a real Pi session.
+
+Live classifier checks call the real Jev API (a key and network access to
+`api.typesafe.ai` are needed; `BOT_LOBBY_JEV_HOST=openrouter|vercel` with that
+host's key tries the gateways):
+
+```bash
+BOT_LOBBY_JEV_E2E=1 TYPESAFE_API_KEY=ts_... node --test test/jev-e2e.test.ts
+```
+
+They cover the connection, seat selection for a backend-only idea, triage and
+effort on a small fix, and file ranking on this repository.
 
 ## Publishing (maintainers)
 
