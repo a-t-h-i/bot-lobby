@@ -22,6 +22,7 @@ import { PANEL_MEMBERS, type PanelMember } from "../schemas/configuration.ts";
 import { truncate } from "../text.ts";
 import type { LobbyFeed } from "./feed.ts";
 import type { QuickFixProfile } from "./quickfix.ts";
+import type { AskResult } from "./ask.ts";
 
 /** Seats and the oracle read the repository to ask informed questions; they never edit. */
 export const PLANNER_TOOLS: readonly string[] = ["read", "grep", "find", "ls"];
@@ -41,10 +42,21 @@ const MEMBER_SEATS: Record<PanelMember, string> = {
   researcher: "You are RESEARCH: facts outside the repository — libraries and versions, standards, APIs and documentation, known pitfalls and prior art. Use the web tools when you have them and cite a URL for every external claim; ask the user to choose where the options you found really differ.",
 };
 
-export interface PanelQuestion {
+/** One answer the asker offers: a short label and what choosing it means. */
+export interface PanelOption {
+  label: string;
+  description: string;
+}
+
+/** A question as a seat or the oracle wrote it, with the options it offers (recommended first). */
+export interface AskedQuestion {
+  text: string;
+  options: PanelOption[];
+}
+
+export interface PanelQuestion extends AskedQuestion {
   /** DEV, DESIGN, QA, RESEARCH or ORACLE. */
   from: string;
-  text: string;
 }
 
 export interface PlannerMessage {
@@ -59,14 +71,14 @@ export interface PlannerMessage {
 export interface PlannerReply {
   status: "grilling" | "ready";
   title?: string;
-  questions: string[];
+  questions: AskedQuestion[];
   plan?: string;
 }
 
 /** A seat's reply: whether its domain is settled, its questions and what the plan must respect. */
 export interface MemberReply {
   status: "open" | "ready";
-  questions: string[];
+  questions: AskedQuestion[];
   notes: string[];
 }
 
@@ -104,6 +116,8 @@ export interface PlannerDeps {
   feed?: LobbyFeed;
   runProcess?: ProcessRunner;
   onChange?: () => void;
+  /** Called when a round ends (answered, failed or stopped), so the lobby can put the questions to the user. */
+  onRound?: (session: PlanningSession) => void;
 }
 
 /** Split a reply into its top-level `## Section` bodies, keyed by lower-case title. */
@@ -137,6 +151,53 @@ function listItems(body: string | undefined): string[] {
   return items;
 }
 
+/** `Label — what it means` (or `Label: …`, `Label - …`); bold markers dropped. */
+export function parseOption(text: string): PanelOption {
+  const flat = text.replace(/\*\*/g, "").trim();
+  const split = /^(.*?)\s+(?:—|–|-)\s+(.+)$/.exec(flat) ?? /^([^:]{1,60}):\s+(.+)$/.exec(flat);
+  return split ? { label: split[1]!.trim(), description: split[2]!.trim() } : { label: flat, description: "" };
+}
+
+/** Inline `a) … b) …` choices, when a question carries its options in its own text. */
+function inlineOptions(question: AskedQuestion): AskedQuestion {
+  if (question.options.length > 0) return question;
+  const parts = question.text.split(/\s(?=[a-d]\)\s)/);
+  if (parts.length < 3) return question;
+  const options = parts.slice(1).map((part) => parseOption(part.replace(/^[a-d]\)\s+/, "").replace(/[;,.]\s*$/, "")));
+  return { text: parts[0]!.trim(), options };
+}
+
+/**
+ * Numbered or bulleted questions, each with the options indented beneath it
+ * (`   - Users table (Recommended) — follows the user`); continuation lines
+ * join the question or the option they follow.
+ */
+export function questionItems(body: string | undefined): AskedQuestion[] {
+  if (!body) return [];
+  const items: AskedQuestion[] = [];
+  let current: AskedQuestion | undefined;
+  for (const line of body.split("\n")) {
+    const match = /^(\s*)(?:\d+[.)]|[-*])\s+(.*\S)\s*$/.exec(line);
+    if (match && (match[1]!.length === 0 || !current)) {
+      current = { text: match[2]!.replace(/\*\*/g, ""), options: [] };
+      items.push(current);
+    } else if (match && current) {
+      current.options.push(parseOption(match[2]!));
+    } else if (line.trim() && current) {
+      const last = current.options.at(-1);
+      if (last) last.description = `${last.description} ${line.trim()}`.trim();
+      else current.text = `${current.text} ${line.trim()}`;
+    }
+  }
+  return items.map(inlineOptions);
+}
+
+/** A leading `[SEAT]` tag names who asked; the oracle uses it when it relays a seat. */
+function tagged(question: AskedQuestion, fallback: string): PanelQuestion {
+  const tag = /^\[(DEV|DESIGN|QA|RESEARCH|ORACLE)\]\s*/i.exec(question.text);
+  return tag ? { ...question, from: tag[1]!.toUpperCase(), text: question.text.slice(tag[0].length) } : { ...question, from: fallback };
+}
+
 /**
  * Read the oracle's reply. Missing sections degrade gracefully: no status
  * reads as grilling, and a reply with no sections at all becomes one question
@@ -147,8 +208,8 @@ export function parsePlannerReply(text: string): PlannerReply {
   const status = /\bready\b/i.test(parts.get("status") ?? "") ? "ready" : "grilling";
   const title = parts.get("title")?.split("\n").find((line) => line.trim())?.replace(/^[#*\s]+|[*\s]+$/g, "");
   const plan = parts.get("plan") ?? parts.get("draft plan");
-  let questions = listItems(parts.get("questions"));
-  if (parts.size === 0 && text.trim()) questions = [text.trim()];
+  let questions = questionItems(parts.get("questions"));
+  if (parts.size === 0 && text.trim()) questions = [{ text: text.trim(), options: [] }];
   return { status, questions, ...(title ? { title } : {}), ...(plan ? { plan } : {}) };
 }
 
@@ -156,13 +217,17 @@ export function parsePlannerReply(text: string): PlannerReply {
 export function parseMemberReply(text: string): MemberReply {
   const parts = sections(text);
   const ready = /\bready\b/i.test(parts.get("status") ?? "");
-  let questions = ready ? [] : listItems(parts.get("questions"));
-  if (parts.size === 0 && text.trim()) questions = [text.trim()];
+  let questions = ready ? [] : questionItems(parts.get("questions"));
+  if (parts.size === 0 && text.trim()) questions = [{ text: text.trim(), options: [] }];
   return { status: ready ? "ready" : "open", questions, notes: listItems(parts.get("notes")) };
 }
 
+function optionLines(options: readonly PanelOption[]): string[] {
+  return options.map((option) => `   - ${option.label}${option.description ? ` — ${option.description}` : ""}`);
+}
+
 function questionLine(question: PanelQuestion, index: number): string {
-  return `${index + 1}. [${question.from}] ${question.text}`;
+  return [`${index + 1}. [${question.from}] ${question.text}`, ...optionLines(question.options)].join("\n");
 }
 
 /** The conversation, the source issue and the current draft: what every seat and the oracle read. */
@@ -196,11 +261,24 @@ export function panelSection(outcomes: readonly MemberOutcome[]): string {
     const { status, questions, notes } = outcome.reply;
     return [
       `### ${label} — ${status === "ready" ? "READY" : "OPEN"}`,
-      questions.length > 0 ? `Questions asked of the user:\n${questions.map((question) => `- ${question}`).join("\n")}` : "",
+      questions.length > 0 ? `Questions for the user:\n${questions.map((question) => [`- ${question.text}`, ...optionLines(question.options)].join("\n")).join("\n")}` : "",
       notes.length > 0 ? `Notes:\n${notes.map((note) => `- ${note}`).join("\n")}` : "",
     ].filter(Boolean).join("\n");
   });
   return ["## Panel this round", "", ...blocks].join("\n\n");
+}
+
+/** A comment the user left on one line of the draft plan. */
+export interface LineComment {
+  /** The line as shown, without styling. */
+  line: string;
+  text: string;
+}
+
+/** Line comments as part of the user's next turn. */
+export function commentBlock(comments: readonly LineComment[]): string {
+  if (comments.length === 0) return "";
+  return ["Comments on the draft plan:", ...comments.map((comment) => `- On "${comment.line.replace(/\s+/g, " ").trim()}": ${comment.text.trim()}`)].join("\n");
 }
 
 /** What the panel said in a round, as the conversation shows it. */
@@ -250,6 +328,10 @@ export class PlanningSession {
   error?: string;
   turns = 0;
   saved?: PlannedTask;
+  /** Questionnaires answered so far for this round's questions, so stopping one resumes where it left off. */
+  answered: AskResult[] = [];
+  /** Comments on draft lines, sent with the user's next turn. */
+  lineComments: LineComment[] = [];
   private controller?: AbortController;
   private readonly deps: PlannerDeps;
   private readonly memberNotes = new Map<PanelMember, string[]>();
@@ -276,13 +358,34 @@ export class PlanningSession {
     return this.seats.has(member);
   }
 
-  /** Add the user's message (the idea, or answers) and run a round. */
+  /** Add the user's message (the idea, or answers), with any line comments, and run a round. */
   async send(text: string): Promise<void> {
-    const body = text.trim();
+    const body = [text.trim(), commentBlock(this.lineComments)].filter(Boolean).join("\n\n");
     if (!body) return;
     if (this.busy) throw new Error("the panel is still thinking");
+    this.lineComments = [];
     this.messages = [...this.messages, { role: "you", text: body, at: Date.now() }];
     await this.turn();
+  }
+
+  /** The round's questions still wait for answers. */
+  get awaitingAnswers(): boolean {
+    return !this.busy && this.questions.length > 0;
+  }
+
+  /**
+   * Comment on one line of the draft. While questions wait for answers the
+   * comment rides along with them; otherwise it goes to the panel now.
+   * Returns whether a round started.
+   */
+  commentOnLine(line: string, text: string): boolean {
+    const body = text.trim();
+    if (!body || !line.trim()) return false;
+    this.lineComments = [...this.lineComments, { line: line.trim(), text: body }];
+    this.deps.onChange?.();
+    if (this.busy || this.awaitingAnswers) return false;
+    void this.send("");
+    return true;
   }
 
   /** Start from the seed alone (an issue) without a user message. */
@@ -396,6 +499,7 @@ export class PlanningSession {
     this.status = "thinking";
     this.error = undefined;
     this.turns += 1;
+    this.answered = [];
     this.members = PANEL_MEMBERS.filter((member) => this.seats.has(member)).map((member) => ({ member, status: "thinking", step: "reading the conversation" }));
     this.step = this.members.length > 0 ? "waiting for the panel" : "reading the conversation";
     this.deps.onChange?.();
@@ -422,14 +526,17 @@ export class PlanningSession {
       this.controller = undefined;
       if (this.error) this.deps.feed?.log(ORACLE_LABEL, `planning round failed — ${this.error.split("\n")[0]}`, "error");
       this.deps.onChange?.();
+      this.deps.onRound?.(this);
     }
+    // Comments left on draft lines during the round go to the panel now, unless questions wait (they ride with the answers).
+    if (!this.error && !this.busy && this.questions.length === 0 && this.lineComments.length > 0) await this.send("");
   }
 
   /** Merge the seats' and the oracle's answers into the round's questions, verdict and draft. */
   private finishRound(outcomes: readonly MemberOutcome[], lead: RunOutcome): void {
     const reply = lead.status === "success" ? parsePlannerReply(lead.output) : undefined;
-    const seatQuestions = outcomes.flatMap((outcome) => (outcome.reply?.questions ?? []).map((text) => ({ from: MEMBER_LABELS[outcome.member], text })));
-    const questions = [...(reply?.questions ?? []).map((text) => ({ from: ORACLE_LABEL, text })), ...seatQuestions];
+    const seatQuestions = outcomes.flatMap((outcome) => (outcome.reply?.questions ?? []).map((question) => ({ ...question, from: MEMBER_LABELS[outcome.member] })));
+    const questions = [...(reply?.questions ?? []).map((question) => tagged(question, ORACLE_LABEL)), ...seatQuestions];
     const seatsReady = outcomes.every((outcome) => outcome.reply?.status === "ready");
     const ready = Boolean(reply && reply.status === "ready" && seatsReady);
     if (reply) {
