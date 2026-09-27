@@ -7,7 +7,7 @@
  * said the plan must respect.
  */
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
-import { ORACLE_LABEL, type LineComment, type PanelNote, type PanelQuestion, type PlannerMessage, type PlannerReply, type PlannerSeed } from "../planner.ts";
+import { ORACLE_LABEL, type LineComment, type PanelNote, type PanelQuestion, type PlannerMessage, type PlannerReply, type PlannerSeed, type RoundMode } from "../planner.ts";
 import type { PlannedTask } from "../../state/backlog.ts";
 import { beside, bold, box, clock, fill, fit, italic, markdownLines, notePane, paint, selectRow, spinner, wrap, wrapHanging, type LobbyTheme, type PaneLayout } from "../layout.ts";
 import { sourceColor, speakerLine, tailWindow, youLines } from "./home.ts";
@@ -35,6 +35,10 @@ export interface PlanView {
   step?: string;
   error?: string;
   turns: number;
+  /** Rounds before the oracle finalizes alone; 0 = unlimited. */
+  limit?: number;
+  /** How the next round will run under the limit. */
+  nextMode?: RoundMode;
   seed?: PlannerSeed;
   saved?: PlannedTask;
   title?: string;
@@ -79,6 +83,8 @@ export interface PlanTabInput {
   panes?: PaneLayout;
   /** The key that saves the plan, as the status line names it. */
   saveKey?: string;
+  /** The planning round limit before a session exists; 0 = unlimited. */
+  limit?: number;
 }
 
 export const PLAN_COLUMNS_MIN = 100;
@@ -91,19 +97,28 @@ function intro(input: PlanTabInput, width: number, theme?: LobbyTheme): string[]
     const model = seat.label === ORACLE_LABEL ? input.profile : seat.seated ? seat.profile ?? "" : "not seated";
     return fit(`${name}${paint(theme, seat.seated ? "muted" : "dim", model)}`, width);
   });
-  return [...wrap(bold(theme, "Describe a task below and the panel questions you until the plan is clear."), width), "", ...rows];
+  const bound = input.limit && input.limit > 0 ? ` (at most ${input.limit} rounds; the last one the oracle settles alone)` : "";
+  return [...wrap(bold(theme, `Describe a task below and the panel questions you until the plan is clear${bound}.`), width), "", ...rows];
+}
+
+/** `round 3/5`, `final round 5/5` or `round 6 · revising` under a limit; `round 3` without one. */
+export function roundLabel(turns: number, limit = 0): string {
+  if (limit <= 0) return `round ${turns}`;
+  if (turns > limit) return `round ${turns} · past the limit, revising`;
+  return turns === limit ? `final round ${turns}/${limit}` : `round ${turns}/${limit}`;
 }
 
 function statusLine(view: PlanView, input: PlanTabInput, theme?: LobbyTheme): string {
   const parts: string[] = [];
   const count = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
-  if (view.busy) parts.push(`${paint(theme, "accent", spinner(input.tick))} round ${view.turns}`);
+  if (view.busy) parts.push(`${paint(theme, "accent", spinner(input.tick))} ${roundLabel(view.turns, view.limit)}`);
   else if (view.error) parts.push(paint(theme, "error", `✗ ${view.error.split("\n")[0]} — r retries`));
   else if (view.reply?.status === "ready") parts.push(paint(theme, "success", `✓ ready — ${input.saveKey ?? "Ctrl+S"} saves it`));
   else if (view.awaitingAnswers) parts.push(paint(theme, "warning", `● ${count(view.questions.length, "question")} — enter ${view.answeredChunks > 0 ? "resumes" : "answers them"}`));
   if (view.lineComments.length > 0) parts.push(paint(theme, "accent", `◆ ${count(view.lineComments.length, "comment")} to send`));
   if (view.saved) parts.push(paint(theme, "success", `saved as ${view.saved.id}`));
-  if (!view.busy && view.turns > 0) parts.push(paint(theme, "dim", `round ${view.turns}`));
+  if (!view.busy && view.turns > 0) parts.push(paint(theme, "dim", roundLabel(view.turns, view.limit)));
+  if (!view.busy && view.nextMode === "final") parts.push(paint(theme, "warning", "the next round is the last: the oracle settles the rest"));
   return parts.join(paint(theme, "dim", " · "));
 }
 

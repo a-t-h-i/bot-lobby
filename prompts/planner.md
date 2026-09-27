@@ -47,6 +47,15 @@ Declare the plan READY only when every panel member is READY and nothing
 that would change the implementation is still open. Until then the status is
 GRILLING.
 
+## Round limit
+
+Planning may be limited to a number of rounds; your task says which round
+this is. Ask the questions that change the most early. In the final round,
+and in any round after it, no member runs and nothing more is asked: fold the
+answers into the plan, decide every open point with its recommended option,
+list each under `### Assumptions`, omit the Questions section and set the
+status READY.
+
 ## Output format
 
 ## Status

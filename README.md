@@ -215,6 +215,16 @@ or without a task.
   open. While browsing, `1`–`4` seat or unseat DEV, DESIGN, QA and RESEARCH
   for the next round, `n` starts over, `r` retries a round that failed or lost a seat, `x` stops one, and `m`
   opens the oracle's (Planner) settings.
+  **Round limit.** Planning is bounded (`lobby.maxPlanningRounds`, 5 by
+  default; `/bot-lobby settings` → **Lobby** → *Planning rounds*). Every seat
+  and the oracle are told which round it is, the status line counts
+  `round 3/5`, and it warns when the next round is the last. The last round
+  skips the seats: the oracle alone folds in your answers, decides every
+  point still open with its recommended option (listed under *Assumptions*)
+  and marks the plan READY; any question it still writes is decided the same
+  way by the engine. After the limit, a reply or a line comment still revises
+  the plan, the oracle alone and without questions. A retried round keeps its
+  number.
 - **4 Quick fix** — a direct prompt, the way you would ask pi, that skips the
   whole workflow: one coding agent (full tools) makes the change right away
   while any task keeps running. Quick fixes run one at a time in the order you
@@ -646,7 +656,7 @@ top-level `/bot-lobby-settings`) and persist globally to
   "researcher": { "model": "anthropic/claude-sonnet-5", "thinking": "low", "instructions": "", "timeoutMs": 600000 },
   "quickFix": { "model": "anthropic/claude-sonnet-5", "thinking": "low", "instructions": "", "timeoutMs": 600000 },
   "planner": { "model": "anthropic/claude-sonnet-5", "thinking": "high", "instructions": "", "timeoutMs": 300000 },
-  "lobby": { "autoOpen": true, "planningPanel": ["backend", "designer", "qa", "researcher"], "autoAsk": true, "issues": false, "mouse": true },
+  "lobby": { "autoOpen": true, "planningPanel": ["backend", "designer", "qa", "researcher"], "autoAsk": true, "issues": false, "mouse": true, "maxPlanningRounds": 5 },
   "workflow": {
     "maxReviewIterations": 2,
     "maxParallelScouts": 3,
@@ -699,6 +709,7 @@ flips its switches, and key rebinding lives in the file:
   "autoAsk": true,
   "issues": false,
   "mouse": true,
+  "maxPlanningRounds": 5,
   "panels": { "animations": false, "conversation": true, "activity": true, "thinking": true },
   "keys": { "toggleThinking": "alt+t" }
 }
@@ -710,6 +721,8 @@ by itself when this session starts or resumes a task; `autoAsk` puts the
 panel's questions to you as soon as a round ends while the Plan tab is
 showing (otherwise `enter` on the empty prompt does); `issues` shows the
 GitHub Issues tab (off for now); `mouse` turns clicks and the wheel on;
+`maxPlanningRounds` bounds a planning session (the last round the oracle
+settles alone; `0` is unlimited);
 `panels` is which Lobby panes show, with `animations: true` bringing the
 animated oracle and agents into the lobby (off by default; the older
 `scene` key is no longer read, and the pane keys update it); `keys` rebinds
