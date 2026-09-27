@@ -464,16 +464,43 @@ test("task rows group this session, other sessions, pending plans and recent tas
   const done = { ...createTask("TASK-old", "old", "2026-09-20T00:00:00.000Z"), state: "completed" as const, updatedAt: "2026-09-25T12:00:00.000Z" };
   const plan: PlannedTask = { id: "PLAN-x", title: "x", brief: "b", createdAt: "", updatedAt: "", status: "pending", issue: { number: 3, title: "t" } };
   const rows = taskRows([mine, theirs, done], [plan], "me", NOW);
-  assert.deepEqual(rows.map((row) => [row.section, row.id, row.meta]), [
-    ["mine", "TASK-login", "0/2"],
-    ["others", "TASK-cache", "session someone-"],
-    ["pending", "PLAN-x", "#3"],
-    ["recent", "TASK-old", "24h"],
+  assert.deepEqual(rows.map((row) => [row.section, row.id, row.check, row.progress ? `${row.progress.done}/${row.progress.total}` : "", row.owner ?? "", row.age ?? "", row.issue ?? ""]), [
+    ["mine", "TASK-login", "open", "0/2", "", "", ""],
+    ["others", "TASK-cache", "open", "", "session someone-", "", ""],
+    ["pending", "PLAN-x", "open", "", "", "", 3],
+    ["recent", "TASK-old", "done", "", "", "24h", ""],
   ]);
-  const lines = renderTasks({ rows, selected: 1, detail: ["DETAIL"], focus: "list", detailOffset: 0 }, 120, 12);
-  assert.equal(lines.length, 12);
-  assert.ok(lines.some((line) => line.includes("OTHER SESSIONS")));
-  assert.ok(lines.some((line) => line.includes("▸ fix cache")));
+  const lines = renderTasks({ rows, selected: 1, detail: ["DETAIL"], focus: "list", detailOffset: 0 }, 120, 16);
+  assert.equal(lines.length, 16);
+  assert.ok(lines[0]!.includes("3 open · 1 finished"), "the list counts what is open and what is finished");
+  assert.ok(lines.some((line) => /── OTHER SESSIONS ─+ 1 ──/.test(line)), "each section is a rule with its count");
+  assert.ok(lines.some((line) => line.includes("▸ ☐ fix cache")));
+  assert.ok(lines.some((line) => line.includes("reviewing · session someone-")), "an open row's second line says its state and owner");
+  assert.ok(lines.some((line) => /☐ add login\s+▱▱ 0\/2/.test(line)), "plan progress sits on the right as a pip per step");
+});
+
+test("pending tasks wear an empty box, completed ones a ticked box, abandoned ones a crossed box and a struck title", () => {
+  const theme = { fg: (_color: string, text: string) => text, bold: (text: string) => text, strike: (text: string) => `~${text}~` };
+  const open = { ...createTask("TASK-open", "add search", "2026-09-26T09:00:00.000Z", "x", "me"), state: "implementing" as const };
+  const done = { ...createTask("TASK-done", "rename getUser", "2026-09-20T00:00:00.000Z"), state: "completed" as const, updatedAt: "2026-09-26T10:00:00.000Z" };
+  const dropped = { ...createTask("TASK-drop", "migrate to vite", "2026-09-20T00:00:00.000Z"), state: "abandoned" as const, updatedAt: "2026-09-24T12:00:00.000Z" };
+  const plan: PlannedTask = { id: "PLAN-dark", title: "dark mode", brief: "b", createdAt: "2026-09-26T10:00:00.000Z", updatedAt: "", status: "pending" };
+  const rows = taskRows([open, done, dropped], [plan], "me", NOW);
+  assert.deepEqual(rows.map((row) => [row.id, row.check]), [["TASK-open", "open"], ["PLAN-dark", "open"], ["TASK-done", "done"], ["TASK-drop", "dropped"]]);
+  const lines = renderTasks({ rows, selected: 0, detail: [], focus: "list", detailOffset: 0 }, 120, 20, theme as never);
+  const row = (text: string) => lines.find((line) => line.includes(text)) ?? "";
+  assert.match(row("add search"), /☐ add search/);
+  assert.match(row("dark mode"), /☐ dark mode/);
+  assert.ok(row("planned · saved 2h ago"), "a saved plan says when it was saved");
+  assert.match(row("rename getUser"), /☑ rename getUser\s+2h/);
+  assert.match(row("migrate to vite"), /☒ ~migrate to vite~\s+2d/);
+  assert.ok(lines.some((line) => /── FINISHED ─+ 2 ──/.test(line)));
+
+  const struck = taskDetailLines(dropped, [], "me", 80, NOW, theme as never);
+  assert.equal(struck[0]!.trimEnd(), "☒ ~migrate to vite~");
+  assert.match(struck[1]!, /abandoned · started 6d ago · dropped 2d ago/);
+  assert.ok(struck.some((line) => line.includes("It ended before a plan was made.")));
+  assert.equal(taskDetailLines(done, [], "me", 80, NOW, theme as never)[0]!.trimEnd(), "☑ rename getUser");
 });
 
 test("task detail shows plan progress, comment status, and recent runs", () => {
@@ -483,9 +510,13 @@ test("task detail shows plan progress, comment status, and recent runs", () => {
     { id: "b", taskId: "TASK-login", text: "older", createdAt: "2026-09-26T11:00:00.000Z", status: "addressed" },
   ];
   const lines = taskDetailLines(task, comments, "me", 80, NOW);
-  assert.ok(lines.some((line) => line.includes("Approved plan") && line.includes("1/2 steps")));
-  assert.ok(lines.includes("✓ 1. Add the form"));
-  assert.ok(lines.includes("▸ 2. Wire the API"));
+  assert.equal(lines[0], "☐ add login");
+  assert.match(lines[1]!, /^ {2}implementing · this session · started 1h ago/);
+  assert.ok(lines.some((line) => /^ {2}▰+▱+ 1 of 2 steps$/.test(line)), "a pip bar shows how far the plan is");
+  assert.ok(lines.some((line) => line.includes("Progress") && line.includes("1/2 steps")));
+  assert.ok(lines.includes("☑ 1. Add the form"));
+  assert.ok(lines.includes("☐ 2. Wire the API ◂ now"));
+  assert.ok(lines.some((line) => line.includes("Approved plan")));
   assert.ok(lines.some((line) => line.startsWith("◐ cap page size — sent to the oracle, 1m ago")));
   assert.ok(lines.some((line) => line.startsWith("✓ older — plan amended")));
   assert.ok(lines.some((line) => line.includes("Comments") && line.includes("1 open")));
@@ -880,7 +911,7 @@ test("task and quick fix details scroll to their last line and no further; the w
   lines = view.render(120);
   const row = lines.findIndex((line) => line.includes("TASK-two") || line.includes("second"));
   view.handleInput(wheelAt(3, row, 1));
-  assert.ok(view.render(120).some((line) => line.includes("▸ second")), "the wheel over the list moves the selection");
+  assert.ok(view.render(120).some((line) => line.includes("▸ ☐ second")), "the wheel over the list moves the selection");
 });
 
 test("the Plan conversation scrolls with the wheel while the draft keeps its cursor", async () => {
