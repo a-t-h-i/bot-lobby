@@ -67,14 +67,17 @@ recorded in the task.
 pi install npm:@juicesharp/rpiv-ask-user-question
 ```
 
-It is optional. Without it `clarify` still works through Pi's built-in
-`select`/`input` prompts (or the Master asks in plain text), just with less
-structure.
+It is optional for the Master. Without it `clarify` still works through Pi's
+built-in `select`/`input` prompts (or the Master asks in plain text), just with
+less structure. The lobby's planning panel uses the same questionnaire on its
+own — the library ships as a bot-lobby dependency, so the panel's questions
+arrive one at a time with options whether or not you install the tool for the
+Master (see [The lobby](#the-lobby)).
 
 ## Usage
 
 ```
-/bot-lobby                      Open the lobby (alt+l): tasks, planning, quick fixes, issues, metrics
+/bot-lobby                      Open the lobby (alt+l): tasks, planning, quick fixes, metrics
 /bot-lobby <request>            Start a task and hand it to the Master
 /bot-lobby status [taskId]      Active task, state, approvals, blockers, legal next states
 /bot-lobby tasks                Task list (plus any unreadable task state)
@@ -96,26 +99,27 @@ structure.
 ## The lobby
 
 The lobby is bot-lobby's full-screen home: a tabbed view over every task in the
-project, your planning, quick fixes, GitHub issues and model performance, with
-one prompt at the bottom whose target follows the tab. It opens by itself when
+project, your planning, quick fixes and model performance, with one prompt at
+the bottom whose target follows the tab. It opens by itself when
 this session starts (or resumes) a task — the small zen widget returns whenever
 you hide it — and `alt+l` or `/bot-lobby` opens and hides it at any time, with
 or without a task.
 
 ```
- ◆ bot-lobby │ 1 Lobby  2 Tasks 2  3 Plan  4 Quick fix ⠋  5 Issues  6 Metrics        ⠋ TASK-add-login implementing
- ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ◆ bot-lobby │ 1 Lobby  2 Tasks 2  3 Plan 2?  4 Quick fix ⠋  5 Metrics      ⠋ TASK-add-login implementing  Alt+H keys
                     (the zen scene: the oracle, DEV · DESIGN · RESEARCH · QA, the plan checklist)
- ── Conversation · TASK-add-login ──────────────────── ┬ ── Activity ───────────────────────────────────────
- you ▸ add a login page with email + password           │ 12:04 MASTER    ✓ scouting designer, backend
- oracle ▸ Proposal:                                     │ 12:06 DEV       ⠋ reading auth.ts…
-          - LoginForm component                         │ 12:06 DESIGN    ⠋ editing LoginForm.tsx…
-          - POST /api/login with rate limiting          │ 12:06 QUICK FIX ✓ done: rename getUser
- ── Thinking ───────────────────────────────────────────────────────────────────────── DEV · 12s ago ──
- The auth module already exposes a session helper; reuse it rather than adding a new one.
- ── message the oracle ─────────────────────────────────────────────────────────────────────────────────
+╭ Conversation · TASK-add-login ─────────────── Alt+C ╮ ╭ Activity ──────────────────────────────── Alt+A ╮
+│ you ▸ add a login page with email + password         │ │ 12:04 MASTER    ✓ scouting designer, backend    │
+│ oracle ▸ Proposal                                    │ │ 12:06 DEV       ⠋ reading auth.ts…              │
+│          • LoginForm component                       │ │ 12:06 DESIGN    ⠋ editing LoginForm.tsx…        │
+│          • POST /api/login with rate limiting        │ │ 12:06 QUICK FIX ✓ done: rename getUser          │
+╰──────────────────────────────────────────────────────╯ ╰─────────────────────────────────────────────────╯
+╭ Thinking ────────────────────────────────────────────────────────────────────────────────── DEV · 12s ago ╮
+│ The auth module already exposes a session helper; reuse it rather than adding a new one.                  │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ ── message the oracle ───────────────────────────────────────────────────────────────────────────────────────
   _
- TYPE  enter send · shift+enter newline · esc browse · tab next tab · alt+l hide lobby
+  TYPE  enter send  shift+enter newline  esc browse  tab next tab  alt+h keys  alt+l hide
 ```
 
 - **1 Lobby** — the task's zen scene, then the conversation with the oracle
@@ -126,7 +130,10 @@ or without a task.
   thoughts show up: the oracle's live thought as it streams, and each finished
   thought from a subagent, quick fix or the planner (pi's own transcript,
   behind the lobby, still carries the oracle's thinking blocks; `ctrl+t`
-  collapses them there). The prompt talks to the
+  collapses them there). The oracle's replies render as Markdown. Every pane
+  can be hidden and brought back — `alt+z` the scene, `alt+c` the
+  conversation, `alt+a` the activity log, `alt+k` thinking — and the rest take
+  its room; the choice is remembered (`lobby.panels`). The prompt talks to the
   oracle (while it works, enter steers the running turn; `esc` stops it); with
   no task, it starts one.
 - **2 Tasks** — every task in the project: this session's, the ones other pi
@@ -145,41 +152,87 @@ or without a task.
   chairs on the Planner model: it reads the seats' questions and notes, folds
   every answer into the draft plan (with a *Decisions by domain* section) and
   asks only what no single seat owns. Each round the seats run in parallel,
-  read-only, then the oracle; the questions arrive numbered and attributed
-  (`3. QA  Which browsers must pass?`), you answer them all in one message,
-  and every seat reads every answer the next round — so the agents that later
-  build the task start aligned. A roster shows what each seat is doing and
-  whether it is READY; the plan is READY only when every seat and the oracle
-  agree, and the draft pane lists what each seat said the plan must respect.
-  While browsing, `1`–`4` seat or unseat DEV, DESIGN, QA and RESEARCH for the
-  next round, `enter` switches between the conversation and the draft, `s`
-  saves the plan to the pending tasks list, `n` starts over, `r` retries a
-  round that failed or lost a seat, and `x` stops one.
+  read-only, then the oracle. Every question comes with two to four options,
+  the seat's recommendation first, and the oracle puts them to you **one at a
+  time** through the ask-user-question questionnaire: a tab per question
+  labelled with the seat that asked it (`QA`, `DEV`…), its options with what
+  each means, and a row to type your own answer or add a note (four questions
+  per questionnaire; more follow in the next one). It opens by itself when a
+  round ends while the Plan tab is showing (`lobby.autoAsk`), and otherwise
+  when you press `enter` on the empty prompt or `a` while browsing; `esc` puts
+  it away with your answers so far kept, and `enter` resumes. Your answers go
+  back attributed (`3. [QA] Which browsers must pass? → evergreen only`), and
+  every seat reads every answer the next round — so the agents that later
+  build the task start aligned. You can still type a free reply instead.
+  Without the library the same questions come through pi's own select and
+  input dialogs. A roster shows what each seat is doing and whether it is
+  READY; the plan is READY only when every seat and the oracle agree. The
+  draft plan renders as Markdown (headings, lists, code, tables) beside the
+  conversation, followed by what each seat said the plan must respect.
+  **Comment on any line of the draft**: click it, or press `enter` to move to
+  the draft, pick a line with `↑↓` and press `c`, then type the comment. The
+  line is marked `◆` with your comment beneath it, and the comment goes to the
+  panel with your answers — or starts a round by itself when no question is
+  open. While browsing, `1`–`4` seat or unseat DEV, DESIGN, QA and RESEARCH
+  for the next round, `s` saves the plan to the pending tasks list, `n` starts
+  over, `r` retries a round that failed or lost a seat, and `x` stops one.
 - **4 Quick fix** — a direct prompt, the way you would ask pi, that skips the
   whole workflow: one coding agent (full tools) makes the change right away
   while any task keeps running. Quick fixes run one at a time in the order you
   send them; each shows its steps and final report, and `x` cancels one. A
   request that turns out to be large is reported back instead of attempted.
-- **5 Issues** — the repository's open GitHub issues through the `gh` CLI (it
-  owns sign-in; bot-lobby stores no token). `enter` reads one with its
-  comments, `n` files a new one (first line is the title), `r` refreshes, and
-  `p` plans it: the Plan tab opens seeded with the issue, and the saved plan
-  keeps a link to it, so an issue becomes a task only after it has been
-  planned.
-- **6 Metrics** — model performance across every Master turn, subagent run,
-  quick fix, planning seat and oracle planning turn: per model and thinking level, the number of runs,
-  success rate, mean/median/p90 time, turns, tools, tokens, output tokens per
-  second and cost (columns drop from the right on narrow terminals); how long a
-  task takes from request to done by the oracle's model and thinking level; and
-  where the time goes by agent. `g` splits the table by agent, `s` cycles the
-  sort (runs, average time, success, cost).
+- **5 Metrics** — model performance across every Master turn, subagent run,
+  quick fix, planning seat and oracle planning turn, as a dashboard: tiles for
+  runs (with a sparkline of recent run times), success rate, average and p90
+  run time, cost and tasks; average run time per model and thinking level as
+  bars; success rate per model as meters marked `✓` (≥90%), `!` (≥70%) or `✗`;
+  where the time goes as one bar split by agent, with a legend, and how long a
+  task takes from request to done by the oracle's model; then the full table —
+  runs, success, mean/median/p90 time, turns, tools, tokens, output tokens per
+  second and cost (columns drop from the right on narrow terminals). `g`
+  splits the table by agent, `s` cycles the sort (runs, average time, success,
+  cost).
+
+The **Issues** tab (GitHub issues through the `gh` CLI, planned into tasks
+through the Plan tab) is switched off for now; `"lobby": { "issues": true }`
+brings it back as tab 5.
 
 **Keys.** Like a modal editor, the lobby has a typing mode (keys go to the
 prompt) and a browsing mode (`esc`; arrows move through lists, single keys run
 the tab's commands, and on Lobby, Plan and Quick fix any other key resumes
-typing). Everywhere: `tab`/`shift+tab` or `alt+1`…`alt+6` switch tabs,
-`pageup`/`pagedown` scroll, `ctrl+c` clears the prompt (or hides the lobby
-when it is empty) and `alt+l` hides the lobby. Anything that needs pi itself —
+typing). These work in both modes:
+
+| Key | Does |
+| --- | --- |
+| `alt+l` | hide the lobby (back to pi) |
+| `alt+h` (or `?` while browsing) | show every key, and the current tab's |
+| `ctrl+f` (or `/` while browsing) | search the current tab |
+| `tab` / `shift+tab`, `alt+1`…`alt+5` | switch tabs |
+| `alt+z` / `alt+c` / `alt+a` / `alt+k` | show or hide the zen scene / conversation / activity log / thinking |
+| `pageup` / `pagedown` | scroll a page |
+| `ctrl+c` | clear the prompt, or hide the lobby when it is empty |
+
+Every shortcut can be rebound under `lobby.keys` in the config, by action name:
+`hide`, `help`, `search`, `nextTab`, `prevTab`, `toggleScene`,
+`toggleConversation`, `toggleActivity`, `toggleThinking`, `scrollUp`,
+`scrollDown` — e.g. `"keys": { "toggleThinking": "alt+t" }`. Pick keys that
+never type a character (`alt+…`, `ctrl+…`, `f1`…).
+
+**Search.** `ctrl+f` opens a search bar above the prompt; as you type, the tab
+narrows to what matches and every match is highlighted: the conversation,
+activity log and thoughts on Lobby; tasks and plans (by id, title, request,
+proposal or plan) on Tasks; the conversation on Plan (the draft stays whole,
+highlighted); jobs on Quick fix; runs (by agent, model, thinking level, kind or
+task) on Metrics. `enter` keeps the search while you browse the results,
+`esc` clears it, and each tab keeps its own.
+
+**Mouse.** Clicking a tab opens it, clicking a draft plan line comments on it,
+clicking the prompt starts typing, and the wheel scrolls. In pi's regular
+screen the lobby turns mouse reporting on only while it is showing (hold
+`shift` to select text with the mouse); in full-screen pi, pi reports the
+mouse itself. `"lobby": { "mouse": false }` turns clicks off.
+
+Anything that needs pi itself —
 built-in slash commands, `/model`, the tool-row toggle — works with the lobby
 hidden; bot-lobby's own `/bot-lobby …` commands also work from the Lobby
 prompt. When the Master asks you something (an approval, a clarifying
@@ -446,7 +499,7 @@ top-level `/bot-lobby-settings`) and persist globally to
   "researcher": { "model": "anthropic/claude-sonnet-5", "thinking": "low", "instructions": "", "timeoutMs": 600000 },
   "quickFix": { "model": "anthropic/claude-sonnet-5", "thinking": "low", "instructions": "", "timeoutMs": 600000 },
   "planner": { "model": "anthropic/claude-sonnet-5", "thinking": "high", "instructions": "", "timeoutMs": 300000 },
-  "lobby": { "autoOpen": true, "planningPanel": ["backend", "designer", "qa", "researcher"] },
+  "lobby": { "autoOpen": true, "planningPanel": ["backend", "designer", "qa", "researcher"], "autoAsk": true, "issues": false, "mouse": true },
   "workflow": {
     "maxReviewIterations": 2,
     "maxParallelScouts": 3,
@@ -489,10 +542,29 @@ take custom instructions, and run on the session's model until you pin one.
 Planning seats reuse their domain's entry — DEV the Backend's, DESIGN the
 Designer's, QA the QA's, RESEARCH the Researcher's model, thinking and
 instructions — so a seat plans on the model that will later build its part.
-`lobby.planningPanel` names the seats a new planning session starts with
-(every seat by default; `[]` lets the oracle plan alone), and
-`lobby.autoOpen` (default `true`) opens the lobby by itself when this session
-starts or resumes a task.
+The `lobby` entry shapes the lobby itself; `/bot-lobby settings` → **Lobby**
+flips its switches, and key rebinding lives in the file:
+
+```json
+"lobby": {
+  "autoOpen": true,
+  "planningPanel": ["backend", "designer", "qa", "researcher"],
+  "autoAsk": true,
+  "issues": false,
+  "mouse": true,
+  "panels": { "scene": true, "conversation": true, "activity": true, "thinking": true },
+  "keys": { "toggleThinking": "alt+t" }
+}
+```
+
+`planningPanel` names the seats a new planning session starts with (every
+seat by default; `[]` lets the oracle plan alone); `autoOpen` opens the lobby
+by itself when this session starts or resumes a task; `autoAsk` puts the
+panel's questions to you as soon as a round ends while the Plan tab is
+showing (otherwise `enter` on the empty prompt does); `issues` shows the
+GitHub Issues tab (off for now); `mouse` turns clicks and the wheel on;
+`panels` is which Lobby panes show (the pane keys update it); `keys` rebinds
+shortcuts by action name.
 
 `thinking` must be one of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`,
 `max`; a legacy `inherit` or unknown value falls back to `medium`. The thinking
@@ -591,13 +663,16 @@ src/
 ├── prompts/                  Layer loader + compiler
 ├── lobby/
 │   ├── runtime.ts            Mounts the full-screen lobby on pi's TUI, dialogs hand-off, comment delivery, Master metrics
-│   ├── view.ts               The tabbed view: tab bar, per-tab prompt, typing/browsing modes, keys
+│   ├── view.ts               The tabbed view: tab bar, per-tab prompt, typing/browsing modes, search, help, mouse
+│   ├── keys.ts               The shortcut table and its config overrides
+│   ├── ask.ts                The panel's questions through the ask-user-question questionnaire (or pi's dialogs)
+│   ├── markdown.ts           Markdown through pi's renderer, cached per theme and width
 │   ├── tabs/                 Pure renderers: home, tasks, plan, quickfix, issues, metrics
 │   ├── feed.ts               Activity log, thinking pane and conversation store
 │   ├── quickfix.ts           Direct-change jobs, one at a time
 │   ├── planner.ts            The planning panel: seats and the oracle per round, reply parsing, saving a plan
 │   ├── issues.ts             GitHub issues through the gh CLI
-│   └── layout.ts             Exact-width columns, rules, wrapping and scroll windows
+│   └── layout.ts             Boxes, exact-width columns, wrapping, highlights, bars, meters and sparklines
 ├── state/                    Project root, config, task persistence, state mutation, comments, backlog, metrics
 ├── schemas/                  Task, agent, findings, configuration types
 └── pi/                       Commands, lifecycle, orchestrate tool, status widget
