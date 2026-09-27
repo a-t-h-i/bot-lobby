@@ -11,7 +11,7 @@ import type { AgentRun } from "../schemas/findings.ts";
 import type { RunLogEntry, Task } from "../schemas/task.ts";
 import { dataRoot } from "./project.ts";
 
-export const METRIC_KINDS = ["master", "scout", "worker", "reviewer", "researcher", "quickfix", "planner", "panel"] as const;
+export const METRIC_KINDS = ["master", "scout", "worker", "reviewer", "researcher", "quickfix", "planner", "panel", "classifier"] as const;
 export type MetricKind = (typeof METRIC_KINDS)[number];
 
 export type MetricStatus = "success" | "failed" | "cancelled" | "timeout";
@@ -33,6 +33,8 @@ export interface MetricRecord {
   cost?: number;
   taskId?: string;
   stalled?: boolean;
+  /** Classifier calls: what the call decided (seats, answers, files, triage, effort, test). */
+  purpose?: string;
 }
 
 /** Newest records kept in memory for aggregation. */
@@ -58,7 +60,17 @@ function isRecord(value: unknown): value is MetricRecord {
   return Boolean(record && typeof record.id === "string" && typeof record.kind === "string" && typeof record.durationMs === "number");
 }
 
+/** Agent runs for the Metrics tab; classifier calls, a few hundred milliseconds each, are read apart. */
 export function readMetrics(root: string, configDir: string, limit = MAX_READ): MetricRecord[] {
+  return readRecords(root, configDir, limit).filter((record) => record.kind !== "classifier");
+}
+
+/** Classifier calls only. */
+export function readClassifierMetrics(root: string, configDir: string, limit = MAX_READ): MetricRecord[] {
+  return readRecords(root, configDir, limit).filter((record) => record.kind === "classifier");
+}
+
+function readRecords(root: string, configDir: string, limit: number): MetricRecord[] {
   const path = metricsPath(root, configDir);
   if (!existsSync(path)) return [];
   let text: string;
