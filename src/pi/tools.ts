@@ -5,7 +5,7 @@ import { Type } from "typebox";
 import type { AgentRun } from "../schemas/findings.ts";
 import type { ProcessRunner } from "../execution/pi-runner.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
-import { hintsFor } from "../classifier/instance.ts";
+import { classifier, hintsFor, triageFor } from "../classifier/instance.ts";
 import { truncate } from "../text.ts";
 import { applyStatus, reportRuns, summarizeRun } from "./ui.ts";
 import { isQuiet } from "./quiet.ts";
@@ -23,7 +23,7 @@ const OrchestrateSchema = Type.Object({
   action: StringEnum(ORCHESTRATE_ACTIONS, { description: "Workflow step to run" }),
   taskId: Type.Optional(Type.String({ description: "Task id; defaults to the active task" })),
   question: Type.Optional(Type.String({ description: "clarify: question for the user" })),
-  options: Type.Optional(Type.Array(Type.String(), { description: "clarify: optional answer choices" })),
+  options: Type.Optional(Type.Array(Type.String(), { description: "clarify: optional answer choices; put your recommended one first and mark it (Recommended)" })),
   domains: Type.Optional(Type.Array(Type.String(), { description: "scout: any of designer, backend, qa" })),
   instruction: Type.Optional(Type.String({ description: "scout/research: what to investigate (for scout, also used to target-verify a claim)" })),
   proposal: Type.Optional(Type.String({ description: "propose: the user-facing proposal as a short `- ` bullet list, one line per change" })),
@@ -106,6 +106,8 @@ export function workflowDeps(
     onUpdate,
     runProcess,
     hints: hintsFor({ cwd: ctx.cwd, root, configDir }),
+    classifier: classifier(),
+    triage: (request, triageSignal) => triageFor({ cwd: ctx.cwd, root, configDir }, request, triageSignal),
     ask: async (question) => (hasUI ? ctx.ui.input(question) : undefined),
     choose: async (title, options) => (hasUI ? ctx.ui.select(title, options) : undefined),
     notify: (message, level = "info") => {
