@@ -225,6 +225,17 @@ or without a task.
   way by the engine. After the limit, a reply or a line comment still revises
   the plan, the oracle alone and without questions. A retried round keeps its
   number.
+  **With the classifier on** (see [The classifier](#the-classifier-jev)),
+  each round seats only the members your idea (round 1) or your latest
+  answers touch; the others show `sat out · 0.07` with how likely the
+  classifier judged them needed, and a seat that was READY needs stronger
+  evidence to come back. Seating a member with `1`–`4` pins it: it sits every
+  round whatever the classifier says. After the oracle picks the round's
+  questions, any whose recommended option the conversation already makes
+  clearly right is answered for you (`✓ [QA] … → Evergreen · decided by the
+  classifier`), leaves the dialog, and is listed under *Assumptions*, where a
+  line comment overrules it. When it settles every question, the panel folds
+  them in with one more round on its own, then waits for you.
 - **4 Quick fix** — a direct prompt, the way you would ask pi, that skips the
   whole workflow: one coding agent (full tools) makes the change right away
   while any task keeps running. Quick fixes run one at a time in the order you
@@ -670,6 +681,22 @@ timeout means bot-lobby decides without it (a missing key is said once).
 Three failures in a row pause the classifier for ten minutes with one
 warning. Each call is recorded in `metrics.jsonl` (kind `classifier`, with
 what it decided, its time and its tokens) and kept out of the agent tables.
+
+**What it decides.** Each decision has its own switch under *Classifier
+(Jev)* (`classifier.features`) and its own thresholds
+(`classifier.thresholds`):
+
+- **Planning seats** (`seats`): each round, one call asks per seat whether
+  the idea or your latest answers touch its domain; a seat sits at
+  `seatAt` (0.35, inclusive on purpose: a missing seat costs a wrong plan,
+  an extra one only a run), a seat that was READY only at `reseatReadyAt`
+  (0.6). Pinned seats are never asked about; a failed call seats everyone.
+- **Obvious answers** (`answers`): one call per round asks, for every
+  question with options, which answer the conversation and the draft make
+  clearly right — or whether it is really your call. It answers only when
+  its pick *is* the recommended option, at `autoAnswerAt` (0.9) and ahead of
+  the runner-up by `autoAnswerMargin` (0.5). Approvals are never answered
+  for you.
 
 **What leaves your machine.** Only what a decision needs, clipped: the
 planning conversation and draft for seats and answers, a request or step
