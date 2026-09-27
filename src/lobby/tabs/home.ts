@@ -94,45 +94,72 @@ export function activityLine(entry: ActivityEntry, width: number, tick: number, 
   return `${paint(theme, "dim", clock(entry.at))} ${who} ${mark} ${body}`;
 }
 
-/** How each speaker is shown: a mark and a name in its colour. */
+/**
+ * How each speaker is shown: a mark and a name in its colour, and the side of
+ * the conversation it speaks from — you on the right, the oracle on the left.
+ */
 export const SPEAKERS = {
-  you: { mark: "●", name: "You", color: "accent" },
-  oracle: { mark: "◆", name: "Oracle", color: "toolTitle" },
-  panel: { mark: "◆", name: "Panel", color: "toolTitle" },
-} as const satisfies Record<string, { mark: string; name: string; color: LobbyColor }>;
+  you: { mark: "●", name: "You", color: "accent", side: "right" },
+  oracle: { mark: "◆", name: "Oracle", color: "toolTitle", side: "left" },
+  panel: { mark: "◆", name: "Panel", color: "toolTitle", side: "left" },
+} as const satisfies Record<string, { mark: string; name: string; color: LobbyColor; side: "left" | "right" }>;
 export type Speaker = keyof typeof SPEAKERS;
 
 /** Messages from one speaker within this long of each other share a header. */
 const GROUP_MS = 5 * 60_000;
-/** Message bodies sit under the speaker's name, past its mark. */
+/** The oracle's replies sit under its name, past its mark. */
 const BODY_INDENT = 2;
+/** Your messages take at most this share of the pane, the oracle's this much, so the two sides read apart. */
+const YOU_SHARE = 0.72;
+const ORACLE_SHARE = 0.86;
+/** Narrower panes give every message (nearly) the full width. */
+const NARROW = 48;
 
-/** `◆ Oracle ············ 12:04`: who speaks on the left; when, or what they are doing, on the right. */
-export function speakerLine(speaker: Speaker, width: number, theme?: LobbyTheme, right = ""): string {
-  const { mark, name, color } = SPEAKERS[speaker];
-  const left = `${paint(theme, color, mark)} ${bold(theme, paint(theme, color, name))}`;
-  const note = right ? paint(theme, "dim", right) : "";
-  const gap = width - visibleWidth(left) - visibleWidth(note);
-  return gap >= 1 && note ? `${left}${" ".repeat(gap)}${note}` : left;
+/** The widest a message from one side may be in a pane `width` wide. */
+function messageWidth(width: number, share: number, margin: number): number {
+  return Math.max(1, width < NARROW ? width - margin : Math.floor(width * share));
 }
 
 /**
- * What you wrote, as pi shows it: a band in the user-message background with
- * a column of padding (a bar in its colour where the theme has no background).
+ * Who speaks and when: `◆ Oracle ········ 12:04` on the left for the oracle,
+ * `12:04  You ●` on the right for you. `note` is the time, or what the
+ * speaker is doing (`⠋ writing`).
  */
-export function youLines(text: string, width: number, theme?: LobbyTheme): string[] {
-  const inner = Math.max(1, width - BODY_INDENT - 2);
-  const indent = " ".repeat(BODY_INDENT);
-  const band = theme?.bg
-    ? (line: string) => theme.bg!("userMessageBg", ` ${fit(paint(theme, "userMessageText", line), inner)} `)
-    : (line: string) => `${paint(theme, "accent", "▌")} ${line}`;
-  return wrap(text, inner).map((line) => `${indent}${band(line)}`);
+export function speakerLine(speaker: Speaker, width: number, theme?: LobbyTheme, note = ""): string {
+  const { mark, name, color, side } = SPEAKERS[speaker];
+  const who = paint(theme, color, mark);
+  const label = bold(theme, paint(theme, color, name));
+  const dimmed = note ? paint(theme, "dim", note) : "";
+  if (side === "right") {
+    const head = dimmed ? `${dimmed}  ${label} ${who}` : `${label} ${who}`;
+    return `${" ".repeat(Math.max(0, width - visibleWidth(head)))}${head}`;
+  }
+  const left = `${who} ${label}`;
+  const gap = width - visibleWidth(left) - visibleWidth(dimmed);
+  return gap >= 1 && dimmed ? `${left}${" ".repeat(gap)}${dimmed}` : left;
 }
 
-/** The oracle's reply as Markdown, under its name. */
+/**
+ * What you wrote: a bubble on the right, only as wide as its longest line (up
+ * to `YOU_SHARE` of the pane), your words in the accent colour on pi's
+ * user-message background — or, where the theme has no background, closed
+ * by a bar in that colour.
+ */
+export function youLines(text: string, width: number, theme?: LobbyTheme): string[] {
+  const most = Math.max(1, messageWidth(width, YOU_SHARE, 4) - 2);
+  const lines = wrap(text, most);
+  const inner = Math.max(1, ...lines.map((line) => visibleWidth(line)));
+  const pad = " ".repeat(Math.max(0, width - inner - 2));
+  const bubble = theme?.bg
+    ? (line: string) => theme.bg!("userMessageBg", ` ${fit(paint(theme, "accent", line), inner)} `)
+    : (line: string) => `${fit(paint(theme, "accent", line), inner)} ${paint(theme, "accent", "▐")}`;
+  return lines.map((line) => `${pad}${bubble(line)}`);
+}
+
+/** The oracle's reply as Markdown on the left, under its name. */
 function oracleLines(text: string, width: number, theme?: LobbyTheme): string[] {
   const indent = " ".repeat(BODY_INDENT);
-  return markdownLines(text, Math.max(1, width - BODY_INDENT), theme).map((line) => (line ? `${indent}${line}` : ""));
+  return markdownLines(text, Math.max(1, messageWidth(width, ORACLE_SHARE, 0) - BODY_INDENT), theme).map((line) => (line ? `${indent}${line}` : ""));
 }
 
 /** An event in the conversation (a task starting, a comment sent) as a centred rule; failures stand out instead. */
@@ -146,9 +173,10 @@ export function eventLines(text: string, at: number, width: number, theme?: Lobb
 }
 
 /**
- * The conversation, oldest first: each turn under a speaker line with its
- * time, your messages in a band, the oracle's in Markdown, events as rules,
- * and while the oracle works its header says so (streaming the reply under it).
+ * The conversation, oldest first, like a chat: your messages as bubbles on
+ * the right, the oracle's replies in Markdown on the left, each turn under a
+ * line naming its speaker and time, events as centred rules, and while the
+ * oracle works its header says so (streaming the reply under it).
  */
 export function chatLines(chat: readonly ChatEntry[], width: number, theme?: LobbyTheme, live?: string, busy = false, tick = 0): string[] {
   const lines: string[] = [];
