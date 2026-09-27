@@ -19,7 +19,8 @@ import { overThreshold } from "../knowledge/compactor.ts";
 import { applyApprovalChoice, describeTask, describeOversizedKnowledge, type ApprovalChoice } from "../workflow/workflow.ts";
 import { applyStatus, registerRevealShortcut, setMinimized } from "./ui.ts";
 import { openSettings } from "./settings-ui.ts";
-import { kickoff, startTask } from "./start-task.ts";
+import { kickoff, startPlannedTask, startTask } from "./start-task.ts";
+import { setAuto, toggleOwnAuto } from "./owner.ts";
 import { autoOpenLobby, showLobby } from "../lobby/runtime.ts";
 import { modelRef, thinkingMismatches } from "./model-support.ts";
 import { describeRun, runFromLog } from "./run-summary.ts";
@@ -28,6 +29,7 @@ import { modelLookup } from "./tools.ts";
 const HELP = [
   "/bot-lobby                  Open the lobby: tasks, plan, quick fix, metrics (alt+l)",
   "/bot-lobby <request>        Start a task through the workflow",
+  "/bot-lobby --task [--auto] <request>   Start a task even when the request begins with a subcommand word",
   "/bot-lobby status [taskId]  Show the active task",
   "/bot-lobby tasks            List tasks",
   "/bot-lobby pause|resume     Pause or resume the active task",
@@ -39,21 +41,29 @@ const HELP = [
   "/bot-lobby config           Show effective configuration",
   "/bot-lobby minimize|restore   Hide or restore bot-lobby for this session (ctrl+shift+m)",
   "/bot-lobby claim <taskId>    Take ownership of an orphaned task",
+  "/bot-lobby auto [on|off]    Auto mode: the oracle drives this session's task without asking (alt+g)",
+  "/bot-lobby start-plan PLAN-… [auto]   Start a planned task here; its agreed plan needs no approval",
   "/bot-lobby help             This help",
 ].join("\n");
 
 /** Subcommands only win when no free-form text follows (so tasks still start). */
-const SUBCOMMANDS = new Set(["lobby", "help", "status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "knowledge", "config", "settings", "minimize", "restore", "claim"]);
+const SUBCOMMANDS = new Set(["lobby", "help", "status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "knowledge", "config", "settings", "minimize", "restore", "claim", "auto", "start-plan"]);
 
 function isTaskId(value: string | undefined): boolean {
   return Boolean(value && /^TASK-/.test(value));
 }
 
-function parseCommand(args: string): { sub: string | undefined; rest: string[]; restText: string } {
+export function parseCommand(args: string): { sub: string | undefined; rest: string[]; restText: string; auto?: boolean } {
   const trimmed = args.trim();
+  // `--task [--auto] <request>` always starts a task (a background session started from the lobby sends this).
+  const forced = /^--task(\s+--auto)?(?:\s+([\s\S]*))?$/.exec(trimmed);
+  if (forced) return { sub: undefined, rest: [], restText: (forced[2] ?? "").trim(), ...(forced[1] ? { auto: true } : {}) };
   const [sub, ...rest] = trimmed.split(/\s+/).filter(Boolean);
   if (!sub || !SUBCOMMANDS.has(sub)) return { sub: undefined, rest: [], restText: trimmed };
-  if (sub !== "amend" && sub !== "claim" && rest.length > 0 && !(rest.length === 1 && isTaskId(rest[0]))) {
+  const takesArgs = sub === "amend" || sub === "claim"
+    || (sub === "auto" && rest.length === 1 && /^(on|off)$/i.test(rest[0]!))
+    || (sub === "start-plan" && rest.length >= 1 && rest.length <= 2 && /^PLAN-/.test(rest[0]!) && (rest.length === 1 || rest[1] === "auto"));
+  if (!takesArgs && rest.length > 0 && !(rest.length === 1 && isTaskId(rest[0]))) {
     return { sub: undefined, rest: [], restText: trimmed };
   }
   return { sub, rest, restText: trimmed.slice(sub.length).trim() };
@@ -187,6 +197,17 @@ function showConfig(ctx: ExtensionCommandContext): void {
   ctx.ui.notify(`${globalConfigPath()}\n${JSON.stringify(config, null, 2)}${notes}`, warnings.length > 0 ? "warning" : "info");
 }
 
+/** `/bot-lobby auto [on|off]`: switch (or set) auto mode for this session's task. */
+function autoCommand(ctx: ExtensionCommandContext, configDir: string, value: string | undefined): void {
+  if (!value) return ctx.ui.notify(`bot-lobby: ${toggleOwnAuto()}`, "info");
+  const root = detectProjectRoot(ctx.cwd, configDir);
+  const task = activeTask(root, configDir, ctx.sessionManager.getSessionId());
+  if (!task) return ctx.ui.notify("bot-lobby: no active task in this session — auto mode applies to a task", "warning");
+  const on = value.toLowerCase() === "on";
+  setAuto(root, configDir, task.id, on, ctx.sessionManager.getSessionId());
+  ctx.ui.notify(`bot-lobby: auto mode ${on ? "on" : "off"} for ${task.id}`, "info");
+}
+
 export function registerCommands(pi: ExtensionAPI, configDir: string): void {
   registerRevealShortcut(pi, configDir);
   pi.registerCommand("bot-lobby", {
@@ -197,13 +218,13 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
       return filtered.length > 0 ? filtered : null;
     },
     handler: async (args, ctx) => {
-      const { sub, rest, restText } = parseCommand(args ?? "");
+      const { sub, rest, restText, auto } = parseCommand(args ?? "");
       if (!sub) {
         if (!restText) {
           if (!showLobby()) ctx.ui.notify(HELP, "info");
           return;
         }
-        if (await startTask(pi, ctx, configDir, restText)) autoOpenLobby();
+        if (await startTask(pi, ctx, configDir, restText, auto ? { auto } : {})) autoOpenLobby();
         return;
       }
       switch (sub) {
@@ -242,6 +263,13 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
           return applyStatus(ctx, detectProjectRoot(ctx.cwd, configDir), configDir);
         case "claim":
           return claimTaskCommand(ctx, configDir, rest[0]);
+        case "auto":
+          return autoCommand(ctx, configDir, rest[0]);
+        case "start-plan": {
+          const started = await startPlannedTask(pi, ctx, configDir, rest[0]!, { auto: rest[1] === "auto" });
+          if (typeof started === "string") return ctx.ui.notify(`bot-lobby: ${started}`, "warning");
+          return autoOpenLobby();
+        }
         default:
           return showConfig(ctx);
       }
