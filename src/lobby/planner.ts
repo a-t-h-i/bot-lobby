@@ -33,6 +33,7 @@ import type { Classifier } from "../classifier/classifier.ts";
 import { chooseSeats } from "../classifier/seats.ts";
 import { autoAnswer, type AutoAnswer } from "../classifier/answers.ts";
 import type { FileHinter } from "../classifier/files.ts";
+import { fellShort, profileLabel, type EffortRouter, type EffortScore } from "../classifier/effort.ts";
 
 /** Seats and the oracle read the repository to ask informed questions; they never edit. */
 export const PLANNER_TOOLS: readonly string[] = ["read", "grep", "find", "ls"];
@@ -136,6 +137,8 @@ export interface PlannerDeps {
   classifier?: Classifier;
   /** Likely files for the round (idea and latest answers), and the lookup tool, while file hints are on. */
   hints?: FileHinter;
+  /** Lowers a seat's thinking (or model) when the classifier judges the idea simple or trivial; the oracle is never routed. */
+  effort?: EffortRouter;
 }
 
 /** What the user's turn says when the classifier settled every question of a round. */
@@ -586,7 +589,7 @@ export class PlanningSession {
     this.deps.onChange?.();
   }
 
-  private async run(label: string, kind: "planner" | "panel", profile: QuickFixProfile, request: { task: string; systemPrompt: string; tools: readonly string[] }, signal: AbortSignal, setStep: (step: string) => void): Promise<RunOutcome> {
+  private async run(label: string, kind: "planner" | "panel", profile: QuickFixProfile, request: { task: string; systemPrompt: string; tools: readonly string[] }, signal: AbortSignal, setStep: (step: string) => void, routedFrom?: string): Promise<RunOutcome> {
     const startedAt = Date.now();
     let outcome: RunOutcome;
     try {
@@ -609,7 +612,8 @@ export class PlanningSession {
       outcome = { status: "failed", output: "", error: (error as Error).message, usage: { input: 0, output: 0, cost: 0, turns: 0 } };
     }
     this.deps.feed?.end(this.stepKey(label), outcome.status !== "success");
-    appendMetrics(this.deps.root, this.deps.configDir, [planningMetric(kind, label, this.turns, startedAt, outcome.status, profile, outcome.model, outcome.usage)]);
+    const metric = planningMetric(kind, label, this.turns, startedAt, outcome.status, profile, outcome.model, outcome.usage);
+    appendMetrics(this.deps.root, this.deps.configDir, [routedFrom ? { ...metric, routedFrom } : metric]);
     return outcome;
   }
 
@@ -629,15 +633,29 @@ export class PlanningSession {
     }
   }
 
-  private async runMember(state: MemberState, transcript: string, signal: AbortSignal): Promise<MemberOutcome> {
+  /** How hard the round's idea is, scored once and shared by every seat. */
+  private async scoreRound(signal: AbortSignal): Promise<EffortScore | undefined> {
+    if (!this.deps.effort) return undefined;
+    try {
+      return await this.deps.effort.score(`Plan this with the user, asking only what changes how it is built:\n${this.idea()}\n\n${this.latest()}`, { signal });
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async runMember(state: MemberState, transcript: string, signal: AbortSignal, effort?: EffortScore): Promise<MemberOutcome> {
     const member = state.member;
     const label = MEMBER_LABELS[member];
     const profile = this.deps.memberProfile?.(member) ?? this.deps.profile();
-    const outcome = await this.run(label, "panel", profile, {
+    const request = {
       task: `${transcript}\n\nYou are ${label} on the planning panel${roundNote(this.turns, this.limit)}: ask your seat's open questions, or declare READY.`,
       systemPrompt: memberPrompt(member, profile.instructions),
       tools: this.tools(member === "researcher" ? RESEARCH_PANEL_TOOLS : PLANNER_TOOLS),
-    }, signal, (step) => (state.step = step));
+    };
+    const route = effort ? this.deps.effort?.plan(effort, { ...(profile.model ? { model: profile.model } : {}), thinking: profile.thinking }) : undefined;
+    let outcome = await this.run(label, "panel", route ? { ...profile, model: route.model, thinking: route.thinking } : profile, request, signal, (step) => (state.step = step), route ? profileLabel(route.from) : undefined);
+    // A routed seat that fails asks again on its configured model and thinking.
+    if (route && fellShort(outcome) && !signal.aborted) outcome = await this.run(label, "panel", profile, request, signal, (step) => (state.step = step));
     if (outcome.status === "success") {
       state.reply = parseMemberReply(outcome.output);
       state.status = "done";
@@ -671,13 +689,13 @@ export class PlanningSession {
     this.step = "reading the conversation";
     this.deps.onChange?.();
     try {
-      const [seated, likely] = await Promise.all([this.chooseSeats(eligible, controller.signal), this.likely(controller.signal)]);
+      const [seated, likely, effort] = await Promise.all([this.chooseSeats(eligible, controller.signal), this.likely(controller.signal), eligible.length > 0 ? this.scoreRound(controller.signal) : undefined]);
       if (controller.signal.aborted) throw new Error("stopped");
       this.members = seated.map((member) => ({ member, status: "thinking", step: "reading the conversation" }));
       this.step = this.members.length > 0 ? "waiting for the panel" : "reading the conversation";
       this.deps.onChange?.();
       const transcript = [plannerTranscript(this.messages, this.seed, this.reply?.plan, ""), likely].filter(Boolean).join("\n\n");
-      const outcomes = await Promise.all(this.members.map((state) => this.runMember(state, transcript, controller.signal)));
+      const outcomes = await Promise.all(this.members.map((state) => this.runMember(state, transcript, controller.signal, effort)));
       if (controller.signal.aborted) throw new Error("stopped");
       this.notes = PANEL_MEMBERS.flatMap((member) => (this.memberNotes.get(member) ?? []).map((text) => ({ from: MEMBER_LABELS[member], text })));
       this.step = "writing the plan";
