@@ -1548,7 +1548,8 @@ export class LobbyView implements Component, Focusable {
         seated: seats.has(member),
         status: state ? (state.status === "thinking" ? "thinking" : state.status) : "idle",
         ...(state?.step ? { step: state.step } : {}),
-        questions: state?.reply?.questions.length ?? 0,
+        // The questions from this seat that reached the user this round.
+        questions: session?.questions.filter((question) => question.from === MEMBER_LABELS[member]).length ?? 0,
         ready: state?.reply?.status === "ready",
         profile: this.host.seatLabel(member),
       };

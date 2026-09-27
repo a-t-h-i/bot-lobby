@@ -70,9 +70,9 @@ pi install npm:@juicesharp/rpiv-ask-user-question
 It is optional for the Master. Without it `clarify` still works through Pi's
 built-in `select`/`input` prompts (or the Master asks in plain text), just with
 less structure. The lobby's planning panel uses the same questionnaire on its
-own — the library ships as a bot-lobby dependency, so the panel's questions
-arrive one at a time with options whether or not you install the tool for the
-Master (see [The lobby](#the-lobby)).
+own — the library ships as a bot-lobby dependency, so each round's questions
+arrive together in one dialog with options whether or not you install the tool
+for the Master (see [The lobby](#the-lobby)).
 
 ## Usage
 
@@ -153,15 +153,18 @@ or without a task.
   accessibility), **QA** (acceptance criteria, test strategy, edge cases,
   definition of done) and **RESEARCH** (libraries, versions, docs and prior
   art, with the web tools when `pi-web-access` is installed). The **oracle**
-  chairs on the Planner model: it reads the seats' questions and notes, folds
-  every answer into the draft plan (with a *Decisions by domain* section) and
-  asks only what no single seat owns. Each round the seats run in parallel,
-  read-only, then the oracle. Every question comes with two to four options,
-  the seat's recommendation first, and the oracle puts them to you **one at a
-  time** through the ask-user-question questionnaire: a tab per question
-  labelled with the seat that asked it (`QA`, `DEV`…), its options with what
-  each means, and a row to type your own answer or add a note (four questions
-  per questionnaire; more follow in the next one). It opens by itself when a
+  chairs on the Planner model: it reads the seats' questions and notes and
+  folds every answer into the draft plan (with a *Decisions by domain*
+  section). Each round the seats run in parallel, read-only, then the oracle,
+  which **chooses at most four questions** for you from the seats' and its own
+  — merged, in plain words, the most decisive first — and decides the rest
+  with the recommended option, listed under *Assumptions* in the draft so you
+  can see and overrule them (comment on the line). The round's questions come
+  in **one** ask-user-question dialog: a tab per question labelled with the
+  seat it serves (`QA`, `DEV`…), two to four options with what each means,
+  the recommendation first (so `enter` on each accepts it), a row to type your
+  own answer or add a note, and a Submit tab that reviews everything and lets
+  you leave a question blank (the oracle then takes its recommendation). It opens by itself when a
   round ends while the Plan tab is showing (`lobby.autoAsk`), and otherwise
   when you press `enter` on the empty prompt or `a` while browsing; `esc` puts
   it away with your answers so far kept, and `enter` resumes. Your answers go
