@@ -94,6 +94,24 @@ export interface RunLogEntry {
 /** Upper bound on persisted run-log entries. */
 export const MAX_RUN_LOG = 64;
 
+export type TriageSize = "trivial" | "small" | "medium" | "large";
+
+/** What the classifier made of the request when the task started: hints for the Master, never rules. */
+export interface TaskTriage {
+  size: TriageSize;
+  sizeConfidence: number;
+  /** How likely each domain is touched, 0 to 1. */
+  domains: Partial<Record<Domain, number>>;
+  /** How likely building it needs outside facts. */
+  research: number;
+  /** How likely it is ambiguous as written. */
+  ambiguous: number;
+  kind?: string;
+  kindProbability?: number;
+  likelyFiles?: string[];
+  at: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -123,6 +141,8 @@ export interface Task {
   approvedPlan?: string;
   /** When the task was archived from the lobby (it then lives under archive/tasks, out of every list). */
   archivedAt?: string;
+  /** The classifier's read of the request, when it was on as the task started. */
+  triage?: TaskTriage;
 }
 
 export function createTask(
