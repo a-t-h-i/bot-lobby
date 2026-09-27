@@ -5,6 +5,7 @@ import { Type } from "typebox";
 import type { AgentRun } from "../schemas/findings.ts";
 import type { ProcessRunner } from "../execution/pi-runner.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
+import { hintsFor } from "../classifier/instance.ts";
 import { truncate } from "../text.ts";
 import { applyStatus, reportRuns, summarizeRun } from "./ui.ts";
 import { isQuiet } from "./quiet.ts";
@@ -104,6 +105,7 @@ export function workflowDeps(
     signal,
     onUpdate,
     runProcess,
+    hints: hintsFor({ cwd: ctx.cwd, root, configDir }),
     ask: async (question) => (hasUI ? ctx.ui.input(question) : undefined),
     choose: async (title, options) => (hasUI ? ctx.ui.select(title, options) : undefined),
     notify: (message, level = "info") => {

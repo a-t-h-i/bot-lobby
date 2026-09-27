@@ -13,6 +13,7 @@ import { parseWorkerResult, validateWorkerResult } from "../roles/worker.ts";
 import { parseReviewResult, validateReviewResult } from "../roles/reviewer.ts";
 import { truncate } from "../text.ts";
 import { isScoutResultUsable, parseScoutResult, validateScoutResult } from "../roles/scout.ts";
+import type { FileHinter } from "../classifier/files.ts";
 
 export interface ScoutOutcome {
   result: ScoutResult;
@@ -36,6 +37,8 @@ export interface ScoutRequest {
   profile?: ProfileResolver;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
+  /** Likely files for each scout's context, and the lookup tool, while the classifier's file hints are on. */
+  hints?: FileHinter;
 }
 
 /** Model, thinking and time limit for one run, from settings. */
@@ -53,14 +56,24 @@ function scoutInstruction(request: ScoutRequest, domain: Domain): string {
   ].join("\n");
 }
 
-function scoutContext(request: ScoutRequest, domain: Domain): AgentRequest["context"] {
+function scoutContext(request: ScoutRequest, domain: Domain, likely = ""): AgentRequest["context"] {
   const slices = readAgentKnowledge(request.dataRoots, domain);
   return {
     task: request.taskText,
     ...selectKnowledge(`${request.taskText} ${domainSpec(domain).scoutFocus}`, slices),
     instructions: request.config.agents[domain].instructions,
-    workflowContext: `Task state: scouting. Domain: ${domain}. Read-only reconnaissance; no implementation.`,
+    workflowContext: [`Task state: scouting. Domain: ${domain}. Read-only reconnaissance; no implementation.`, likely].filter(Boolean).join("\n\n"),
   };
+}
+
+/** The Likely files block for one agent's step, or "" without hints. */
+async function likelyFor(hints: FileHinter | undefined, query: string, signal: AbortSignal | undefined, context?: string): Promise<string> {
+  if (!hints) return "";
+  try {
+    return await hints.block(query, signal, context);
+  } catch {
+    return "";
+  }
 }
 
 function toOutcome(run: AgentRun, domain: Domain): ScoutOutcome {
@@ -78,12 +91,16 @@ function toOutcome(run: AgentRun, domain: Domain): ScoutOutcome {
 
 /** Run the selected domain scouts concurrently and persist their findings. */
 export async function runScouts(request: ScoutRequest, run: ProcessRunner = spawnPiProcess): Promise<ScoutOutcome[]> {
-  const requests: AgentRequest[] = request.domains.map((domain) => ({
+  // Each scout gets the files most likely to answer its own instruction and focus.
+  const likely = await Promise.all(request.domains.map((domain) => likelyFor(request.hints, `${request.instruction}\n${domainSpec(domain).scoutFocus}`, request.signal, request.taskText)));
+  const extraTools = request.hints?.tools() ?? [];
+  const requests: AgentRequest[] = request.domains.map((domain, index) => ({
     taskId: request.taskId,
     domain,
     role: "scout",
     instruction: scoutInstruction(request, domain),
-    context: scoutContext(request, domain),
+    context: scoutContext(request, domain, likely[index]),
+    ...(extraTools.length > 0 ? { extraTools } : {}),
     ...profileFields(request.config, request.profile, domain, "scout"),
     cwd: request.cwd,
     signal: request.signal,
@@ -152,9 +169,11 @@ export interface WorkerRequest {
   profile?: ProfileResolver;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
+  /** Likely files for the worker's step, and the lookup tool, while the classifier's file hints are on. */
+  hints?: FileHinter;
 }
 
-function workerWorkflowContext(request: WorkerRequest): string {
+function workerWorkflowContext(request: WorkerRequest, likely = ""): string {
   const spec = domainSpec(request.domain);
   const own = request.scoutOutcomes.filter(
     (outcome) => outcome.result.domain === request.domain && outcome.usable,
@@ -166,7 +185,8 @@ function workerWorkflowContext(request: WorkerRequest): string {
     own.length > 0
       ? `Scout findings for your domain:\n${summarizeOutcomes(own, 1500)}`
       : "No scout findings were collected for your domain; verify the repository yourself.",
-  ].join("\n\n");
+    likely,
+  ].filter(Boolean).join("\n\n");
 }
 
 /** Delegate one implementation step to a domain worker. */
@@ -176,6 +196,9 @@ export async function runWorker(
 ): Promise<WorkerOutcome> {
   const slices = readAgentKnowledge(request.dataRoots, request.domain);
   const selected = selectKnowledge(`${request.taskText} ${request.instruction}`, slices);
+  const likely = await likelyFor(request.hints, request.instruction, request.signal, request.taskText);
+  const hintTools = request.hints?.tools() ?? [];
+  const extraTools = [...(request.agent?.extraTools ?? []), ...hintTools];
   const agentRun = await runAgent(
     {
       taskId: request.taskId,
@@ -186,7 +209,7 @@ export async function runWorker(
         task: request.taskText,
         ...selected,
         instructions: request.config.agents[request.domain].instructions,
-        workflowContext: workerWorkflowContext(request),
+        workflowContext: workerWorkflowContext(request, likely),
       },
       ...profileFields(request.config, request.profile, request.domain, "worker"),
       cwd: request.cwd,
@@ -194,6 +217,7 @@ export async function runWorker(
       onUpdate: request.onUpdate,
       ...watchdogOptions(request.config.workflow),
       ...request.agent,
+      ...(extraTools.length > 0 ? { extraTools } : {}),
     },
     run,
   );
