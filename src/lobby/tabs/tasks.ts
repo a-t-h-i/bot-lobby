@@ -11,7 +11,7 @@ import { planChecklist } from "../../pi/zen.ts";
 import { persistedRuns } from "../../pi/ui.ts";
 import { describeRun, runFromLog } from "../../pi/run-summary.ts";
 import { pendingApprovals } from "../../workflow/approvals.ts";
-import { ago, beside, bold, box, fill, markdownLines, paint, rule, selectRow, since, windowStart, wrap, wrapHanging, type LobbyTheme } from "../layout.ts";
+import { ago, beside, bold, box, detailWindow, fill, markdownLines, notePane, paint, position, rule, selectRow, since, windowStart, wrap, wrapHanging, type LobbyTheme, type PaneLayout } from "../layout.ts";
 
 export type TaskSection = "mine" | "others" | "pending" | "recent";
 
@@ -187,6 +187,8 @@ export interface TasksInput {
   notice?: string;
   /** The search in force; the rows are already filtered by it. */
   query?: string;
+  /** Filled with where the list and the detail landed, for scrolling. */
+  panes?: PaneLayout;
 }
 
 /** Narrow terminals show the list or the detail, not both. */
@@ -226,12 +228,16 @@ export function renderTasks(input: TasksInput, width: number, height: number, th
   }
   const { list: listWidth, detail: detailWidth, wide } = tasksWidths(width);
   const list = listLines(input.rows, input.selected, listWidth - 4, input.focus === "list", theme);
-  const listShown = list.lines.slice(windowStart(list.selectedLine, list.lines.length, bodyHeight - 2));
-  const detailShown = input.detail.slice(Math.max(0, Math.min(input.detailOffset, input.detail.length - 1)));
+  const rows = Math.max(0, bodyHeight - 2);
+  const listStart = windowStart(list.selectedLine, list.lines.length, rows);
   const count = input.query ? `${input.rows.length} match${input.rows.length === 1 ? "" : "es"}` : `${input.rows.length}`;
-  const listPane = box(listWidth, bodyHeight, listShown, { title: "Tasks", right: count, focused: input.focus === "list", theme });
-  const scrolled = input.detail.length > bodyHeight - 2 ? `${Math.min(input.detailOffset + 1, input.detail.length)}/${input.detail.length}` : "";
-  const detailPane = box(detailWidth, bodyHeight, detailShown, { title: "Detail", ...(scrolled ? { right: scrolled } : {}), focused: input.focus === "detail", theme });
-  if (!wide) return fill([...notice, ...(input.focus === "detail" ? detailPane : listPane)], height, width);
+  const listPane = box(listWidth, bodyHeight, list.lines.slice(listStart), { title: "Tasks", right: count, focused: input.focus === "list", scroll: { total: list.lines.length, start: listStart }, theme });
+  const detailStart = detailWindow(input.detail.length, rows, input.detailOffset);
+  const detailPane = box(detailWidth, bodyHeight, input.detail.slice(detailStart), { title: "Detail", ...(input.detail.length > rows ? { right: position(detailStart, rows, input.detail.length) } : {}), focused: input.focus === "detail", scroll: { total: input.detail.length, start: detailStart }, theme });
+  const showList = wide || input.focus !== "detail";
+  const showDetail = wide || input.focus === "detail";
+  if (showList) notePane(input.panes, "list", notice.length, 0, listWidth, bodyHeight, list.lines.length);
+  if (showDetail) notePane(input.panes, "detail", notice.length, wide ? listWidth + 1 : 0, detailWidth, bodyHeight, input.detail.length);
+  if (!wide) return fill([...notice, ...(showDetail ? detailPane : listPane)], height, width);
   return fill([...notice, ...beside([listPane, detailPane])], height, width);
 }
