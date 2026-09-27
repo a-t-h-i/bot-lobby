@@ -79,6 +79,7 @@ for the Master (see [The lobby](#the-lobby)).
 ```
 /bot-lobby                      Open the lobby (alt+l): tasks, planning, quick fixes, metrics
 /bot-lobby <request>            Start a task and hand it to the Master
+/bot-lobby --task [--auto] <request>   Start a task even when the request begins with a subcommand word
 /bot-lobby status [taskId]      Active task, state, approvals, blockers, legal next states
 /bot-lobby tasks                Task list (plus any unreadable task state)
 /bot-lobby pause | resume       Stop or allow further workflow steps
@@ -93,6 +94,8 @@ for the Master (see [The lobby](#the-lobby)).
 /bot-lobby-settings             Same as the settings subcommand
 /bot-lobby minimize|restore     Hide or restore bot-lobby for this session (ctrl+shift+m)
 /bot-lobby claim <taskId>      Take ownership of an orphaned task
+/bot-lobby auto [on|off]        Auto mode: the oracle drives this session's task to completion (alt+g)
+/bot-lobby start-plan PLAN-… [auto]   Start a saved plan here; its agreed plan needs no approval
 /bot-lobby lobby | help         Open the lobby, or show this list
 ```
 
@@ -151,7 +154,13 @@ or without a task.
   finished ones. The detail pane shows the request, the approved plan with its
   step checklist, your comments on it, amendments, what the task waits on and
   its recent runs. `c` comments on the selected task's plan (see below), `s`
-  starts a pending plan as a task in this session, `d` twice discards one.
+  starts a pending plan as a task **in a new session** and `h` starts it
+  here, in this window (either way its agreed plan needs no approval), `d`
+  twice discards one. `n` types a new task that starts in its own session, `o`
+  shows the session driving the selected task, `x` twice stops a background
+  session, and `alt+g` switches auto mode for the selected task. Rows say who
+  drives each task (`this session`, `background`, another session's id) and
+  mark auto mode `⟳ auto`.
 - **3 Plan** — task planning mode with a planning panel. Describe what you
   want and every seat grills you from its own domain, on the model and
   thinking level its settings name: **DEV** (APIs, data, errors, security,
@@ -225,6 +234,9 @@ typing). These work in both modes:
 | `alt+s` | bot-lobby settings: every agent's model, thinking and time limit, and the lobby's switches |
 | `ctrl+f` (or `/` while browsing) | search the current tab |
 | `ctrl+s` | save the plan from the Plan tab to the pending tasks — while typing too, from any tab |
+| `alt+o` | the session switcher: this window, its background sessions, and tasks other terminals drive |
+| `alt+n` | type a new task that starts in its own session, named after it |
+| `alt+g` | auto mode on or off for the task in view (the selected one on Tasks) |
 | `tab` / `shift+tab`, `alt+1`…`alt+5` | switch tabs |
 | `alt+z` | show or hide the oracle and agent animations (the task's status stays) |
 | `alt+c` / `alt+a` / `alt+k` | show or hide the conversation / activity log / thinking |
@@ -232,7 +244,8 @@ typing). These work in both modes:
 | `ctrl+c` | clear the prompt, or hide the lobby when it is empty |
 
 Every shortcut can be rebound under `lobby.keys` in the config, by action name:
-`hide`, `help`, `settings`, `search`, `savePlan`, `nextTab`, `prevTab`, `toggleScene`,
+`hide`, `help`, `settings`, `search`, `savePlan`, `sessions`, `newSession`,
+`toggleAuto`, `nextTab`, `prevTab`, `toggleScene`,
 `toggleConversation`, `toggleActivity`, `toggleThinking`, `scrollUp`,
 `scrollDown` — e.g. `"keys": { "toggleThinking": "alt+t" }`. Pick keys that
 never type a character (`alt+…`, `ctrl+…`, `f1`…).
@@ -279,6 +292,70 @@ session is minimized. The oracle treats a comment like an amendment and calls
 approved plan while implementing or reviewing, keeps finished steps done and
 marks the comments addressed (`○` waiting, `◐` sent to the oracle, `✓` plan
 amended). Before a plan exists, a comment asks for a revised proposal instead.
+
+## Several sessions from one window
+
+Start a task in a new session without leaving your terminal, and switch
+between sessions from the lobby.
+
+- **Start one.** `alt+n` (or `n` on the Tasks tab) opens the prompt for a new
+  task; `enter` starts it in its own pi session. `s` on a saved plan does the
+  same for the plan. The new session is a headless pi (`pi --mode rpc`) this
+  window launches with the same pi build, model and extensions, and it is an
+  ordinary saved session **named after its task** — `/resume` lists it by
+  that name. Sessions a task starts are named after it too (`/bot-lobby
+  <request>` in a fresh session names that session).
+- **Watch and talk to it.** The Lobby tab then shows that session: its task's
+  status, its conversation, activity log and thoughts, live. The tab bar names
+  the session in view (`◆ add signup form · working`), the prompt messages
+  its oracle (steering it while it works) and `esc` stops its running turn.
+- **Answer it.** When a background session asks something — an approval, a
+  clarifying question — the tab bar shows `● 1 waiting`, and `enter` on the
+  empty prompt puts the question to you in this window with pi's own dialog
+  (`esc` there cancels it, as it would in that session). With the lobby
+  hidden, a notice says who is waiting.
+- **Switch.** `alt+o` opens the switcher: this window, every background
+  session it started (working, idle, ended; `⟳ auto`; questions waiting), and
+  tasks that sessions in other terminals drive. `enter` shows one in the Lobby
+  tab, `n` starts a new one, `x` twice stops a background session. For a task
+  another terminal drives, the Lobby shows its conversation from its session
+  file, and your messages go to its task inbox (`inbox.jsonl`) — its own
+  session passes them to its oracle within a few seconds — while its live
+  activity stays in that terminal.
+
+Background sessions belong to the window that started them: they keep running
+while you switch pi sessions there, and stop when that pi exits. Their tasks
+keep their state, so `/resume` (by the task's name) or `/bot-lobby claim`
+picks one up later.
+
+## Auto mode
+
+Auto mode lets the oracle drive a task to completion without asking you
+anything. Switch it with `alt+g` — in the lobby for the task in view (or the
+one selected on Tasks), outside it for this session's task — or with
+`/bot-lobby auto [on|off]`; `/bot-lobby --task --auto <request>` and
+`/bot-lobby start-plan PLAN-… auto` start a task with it on. The tab bar shows
+`⟳ AUTO`. While it is on:
+
+- clarifying questions are not asked: the oracle decides from the request,
+  the plan and its reconnaissance, and each decision is recorded
+  (`Not asked (auto mode): …`); the ask-user-question tool is blocked with the
+  same instruction;
+- the proposal is approved without asking, and dependency and architecture
+  approvals a worker asks for are granted and recorded;
+- when the oracle's turn ends before the task is done, the session nudges it
+  to keep going. A nudge that changes nothing counts; after three in a row
+  auto mode pauses and says the task needs you, and it resumes as soon as the
+  task moves again.
+
+The switch lives beside the task (`auto.json`), so any session can flip it for
+any task and the session that drives it follows within a few seconds.
+
+**Agreed plans skip approval.** A task started from a plan saved in the Plan
+tab (`s`/`h` on Tasks, or `/bot-lobby start-plan`) records the plan it came
+from, and its proposal is approved without asking you again — you agreed the
+plan with the panel already. Clarifying questions are still decided by the
+oracle for such a task, since the plan answered them.
 
 ## Sessions and ownership
 
@@ -647,6 +724,8 @@ and the output contract — and an empty layer is dropped.
 └── tasks/TASK-<stamp>/
     ├── state.json              the task record (kept after completion)
     ├── comments.jsonl          your lobby comments on the plan and their delivery (append-only)
+    ├── inbox.jsonl             messages for the oracle from other sessions and their delivery (append-only)
+    ├── auto.json               auto mode, when switched on for the task
     ├── proposal.md             scratchpads: deleted on completion
     ├── plan.md
     ├── designer.md backend.md qa.md
@@ -695,8 +774,10 @@ src/
 ├── knowledge/                Paths, store (single write path), selector, compactor
 ├── prompts/                  Layer loader + compiler
 ├── lobby/
-│   ├── runtime.ts            Mounts the full-screen lobby on pi's TUI, dialogs hand-off, comment delivery, Master metrics
-│   ├── view.ts               The tabbed view: tab bar, per-tab prompt, typing/browsing modes, search, help, mouse
+│   ├── runtime.ts            Mounts the full-screen lobby on pi's TUI, dialogs hand-off, background sessions, Master metrics
+│   ├── view.ts               The tabbed view: tab bar, per-tab prompt, typing/browsing modes, session switcher, search, help, mouse
+│   ├── sessions.ts           Background sessions: headless pi children driven over RPC, their feeds and questions
+│   ├── session-files.ts      Other sessions' conversations, read from their saved session files
 │   ├── keys.ts               The shortcut table and its config overrides
 │   ├── ask.ts                The panel's questions through the ask-user-question questionnaire (or pi's dialogs)
 │   ├── markdown.ts           Markdown through pi's renderer, cached per theme and width
@@ -706,9 +787,9 @@ src/
 │   ├── planner.ts            The planning panel: seats and the oracle per round, reply parsing, saving a plan
 │   ├── issues.ts             GitHub issues through the gh CLI
 │   └── layout.ts             Boxes, exact-width columns, wrapping, highlights, bars, meters and sparklines
-├── state/                    Project root, config, task persistence, state mutation, comments, backlog, metrics
+├── state/                    Project root, config, task persistence, state mutation, comments, inbox, auto mode, backlog, metrics
 ├── schemas/                  Task, agent, findings, configuration types
-└── pi/                       Commands, lifecycle, orchestrate tool, status widget
+└── pi/                       Commands, lifecycle, orchestrate tool, status widget, the owner's clock (deliveries, auto mode)
 prompts/                      global, master, designer, backend, qa, scout, worker, reviewer, researcher, quickfix, planner, panel
 ```
 
