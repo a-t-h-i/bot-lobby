@@ -42,8 +42,9 @@ const STATUS_ICONS: Record<AgentRun["status"], string> = {
 };
 
 /** Why a run ended the way it did, in words, when that is not plain success. */
-export function runFlags(run: Pick<AgentRun, "status" | "stalled" | "wrappedUp" | "attempts">): string[] {
+export function runFlags(run: Pick<AgentRun, "status" | "stalled" | "wrappedUp" | "attempts" | "route">): string[] {
   const flags: string[] = [];
+  if (run.route) flags.push(`routed ${run.route}`);
   if (run.stalled) flags.push("stalled");
   else if (run.status === "timeout") flags.push("hit its time limit");
   else if (run.status === "failed") flags.push("failed");
@@ -88,6 +89,7 @@ export function runLogEntry(run: AgentRun): RunLogEntry {
     ...(run.stalled ? { stalled: true } : {}),
     ...(run.wrappedUp ? { wrappedUp: true } : {}),
     ...(run.error ? { error: run.error.split("\n")[0]!.slice(0, 200) } : {}),
+    ...(run.routedFrom ? { routedFrom: run.routedFrom } : {}),
   };
 }
 

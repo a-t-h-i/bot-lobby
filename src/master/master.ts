@@ -14,6 +14,7 @@ import { parseReviewResult, validateReviewResult } from "../roles/reviewer.ts";
 import { truncate } from "../text.ts";
 import { isScoutResultUsable, parseScoutResult, validateScoutResult } from "../roles/scout.ts";
 import type { FileHinter } from "../classifier/files.ts";
+import { fellShort, profileLabel, routeLabel, type EffortRoute, type EffortRouter } from "../classifier/effort.ts";
 
 export interface ScoutOutcome {
   result: ScoutResult;
@@ -39,6 +40,8 @@ export interface ScoutRequest {
   onUpdate?: (run: AgentRun) => void;
   /** Likely files for each scout's context, and the lookup tool, while the classifier's file hints are on. */
   hints?: FileHinter;
+  /** Moves a trivial scout to the cheaper model, while the classifier's effort routing is on. */
+  effort?: EffortRouter;
 }
 
 /** Model, thinking and time limit for one run, from settings. */
@@ -64,6 +67,21 @@ function scoutContext(request: ScoutRequest, domain: Domain, likely = ""): Agent
     instructions: request.config.agents[domain].instructions,
     workflowContext: [`Task state: scouting. Domain: ${domain}. Read-only reconnaissance; no implementation.`, likely].filter(Boolean).join("\n\n"),
   };
+}
+
+/** Where the classifier routes a run, or undefined (no router, no route, a failure). */
+async function routeFor(effort: EffortRouter | undefined, instruction: string, profile: { model?: string; thinking: string }, options: { thinkingFixed?: boolean; context?: string; signal?: AbortSignal }): Promise<EffortRoute | undefined> {
+  if (!effort) return undefined;
+  try {
+    return await effort.route(instruction, profile, options);
+  } catch {
+    return undefined;
+  }
+}
+
+/** The run fields a route changes: model, thinking, no in-place retry (the fallback is the retry), and its label. */
+function routedFields(route: EffortRoute): Pick<AgentRequest, "model" | "thinking" | "retries" | "routedFrom" | "route"> {
+  return { model: route.model, thinking: route.thinking, retries: 0, routedFrom: profileLabel(route.from), route: routeLabel(route) };
 }
 
 /** The Likely files block for one agent's step, or "" without hints. */
@@ -107,8 +125,20 @@ export async function runScouts(request: ScoutRequest, run: ProcessRunner = spaw
     onUpdate: request.onUpdate,
     ...watchdogOptions(request.config.workflow),
   }));
-  const runs = await runParallel(requests, request.config.workflow.maxParallelScouts, run);
-  const outcomes = runs.map((agentRun) => toOutcome(agentRun, agentRun.domain));
+  // Scouts think at a fixed level; a trivial one may move to the cheaper model.
+  const routes = await Promise.all(requests.map((entry) => routeFor(request.effort, entry.instruction, { ...(entry.model ? { model: entry.model } : {}), thinking: entry.thinking ?? "low" }, { thinkingFixed: true, context: request.taskText, ...(request.signal ? { signal: request.signal } : {}) })));
+  const first = requests.map((entry, index) => (routes[index] ? { ...entry, ...routedFields(routes[index]!) } : entry));
+  const runs = await runParallel(first, request.config.workflow.maxParallelScouts, run);
+  let outcomes = runs.map((agentRun) => toOutcome(agentRun, agentRun.domain));
+  // A routed scout that came back unusable runs again on its configured model.
+  const again = outcomes.map((outcome, index) => (routes[index] && !outcome.usable && outcome.run.status !== "cancelled" && !request.signal?.aborted ? index : -1)).filter((index) => index >= 0);
+  if (again.length > 0) {
+    const reruns = await runParallel(again.map((index) => requests[index]!), request.config.workflow.maxParallelScouts, run);
+    outcomes = outcomes.map((outcome, index) => {
+      const position = again.indexOf(index);
+      return position >= 0 ? toOutcome(reruns[position]!, reruns[position]!.domain) : outcome;
+    });
+  }
   saveScoutResults(request.taskDir, outcomes);
   return outcomes;
 }
@@ -171,6 +201,8 @@ export interface WorkerRequest {
   onUpdate?: (run: AgentRun) => void;
   /** Likely files for the worker's step, and the lookup tool, while the classifier's file hints are on. */
   hints?: FileHinter;
+  /** Lowers thinking (or the model) for a step the classifier judges simple or trivial. */
+  effort?: EffortRouter;
 }
 
 function workerWorkflowContext(request: WorkerRequest, likely = ""): string {
@@ -196,32 +228,42 @@ export async function runWorker(
 ): Promise<WorkerOutcome> {
   const slices = readAgentKnowledge(request.dataRoots, request.domain);
   const selected = selectKnowledge(`${request.taskText} ${request.instruction}`, slices);
-  const likely = await likelyFor(request.hints, request.instruction, request.signal, request.taskText);
+  const configured = profileFields(request.config, request.profile, request.domain, "worker");
+  const [likely, route] = await Promise.all([
+    likelyFor(request.hints, request.instruction, request.signal, request.taskText),
+    routeFor(request.effort, request.instruction, { ...(configured.model ? { model: configured.model } : {}), thinking: configured.thinking }, { context: request.taskText, ...(request.signal ? { signal: request.signal } : {}) }),
+  ]);
   const hintTools = request.hints?.tools() ?? [];
   const extraTools = [...(request.agent?.extraTools ?? []), ...hintTools];
-  const agentRun = await runAgent(
-    {
-      taskId: request.taskId,
-      domain: request.domain,
-      role: "worker",
-      instruction: request.instruction,
-      context: {
-        task: request.taskText,
-        ...selected,
-        instructions: request.config.agents[request.domain].instructions,
-        workflowContext: workerWorkflowContext(request, likely),
-      },
-      ...profileFields(request.config, request.profile, request.domain, "worker"),
-      cwd: request.cwd,
-      signal: request.signal,
-      onUpdate: request.onUpdate,
-      ...watchdogOptions(request.config.workflow),
-      ...request.agent,
-      ...(extraTools.length > 0 ? { extraTools } : {}),
+  const base: AgentRequest = {
+    taskId: request.taskId,
+    domain: request.domain,
+    role: "worker",
+    instruction: request.instruction,
+    context: {
+      task: request.taskText,
+      ...selected,
+      instructions: request.config.agents[request.domain].instructions,
+      workflowContext: workerWorkflowContext(request, likely),
     },
-    run,
-  );
-  const result = parseWorkerResult(request.domain, agentRun.output);
+    ...configured,
+    cwd: request.cwd,
+    signal: request.signal,
+    onUpdate: request.onUpdate,
+    ...watchdogOptions(request.config.workflow),
+    ...request.agent,
+    ...(extraTools.length > 0 ? { extraTools } : {}),
+  };
+  let outcome = workerOutcome(request.domain, await runAgent(route ? { ...base, ...routedFields(route) } : base, run));
+  // A routed step that fell short runs again at the configured model and thinking.
+  if (route && fellShort(outcome.run, outcome.issues) && !request.signal?.aborted) {
+    outcome = workerOutcome(request.domain, await runAgent(base, run));
+  }
+  return outcome;
+}
+
+function workerOutcome(domain: Domain, agentRun: AgentRun): WorkerOutcome {
+  const result = parseWorkerResult(domain, agentRun.output);
   const issues =
     agentRun.status === "success"
       ? validateWorkerResult(result)
