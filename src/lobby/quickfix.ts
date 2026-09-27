@@ -11,13 +11,16 @@ import { describeToolCall } from "../pi/activity.ts";
 import { appendMetrics, type MetricRecord } from "../state/metrics.ts";
 import type { LobbyFeed } from "./feed.ts";
 import type { FileHinter } from "../classifier/files.ts";
+import type { Classifier } from "../classifier/classifier.ts";
+import { quickFixSize } from "../classifier/triage.ts";
 
 /** A quick fix edits code, so it gets the full coding tool set. */
 export const QUICK_FIX_TOOLS: readonly string[] = ["read", "bash", "edit", "write", "grep", "find", "ls"];
 
 export const QUICK_FIX_SOURCE = "QUICK FIX";
 
-export type QuickFixStatus = "queued" | "running" | "success" | "failed" | "cancelled" | "timeout";
+/** `held`: the classifier judged the request a task, not a quick fix; it waits for you (r runs it anyway, t makes it a task). */
+export type QuickFixStatus = "queued" | "running" | "success" | "failed" | "cancelled" | "timeout" | "held";
 
 export interface QuickFixStep {
   at: number;
@@ -40,6 +43,10 @@ export interface QuickFixJob {
   report?: string;
   error?: string;
   usage?: { input: number; output: number; cost: number; turns: number };
+  /** Why the job was held, or what became of it. */
+  note?: string;
+  /** Run even if the classifier judges it large (r on a held job). */
+  force?: boolean;
 }
 
 export interface QuickFixProfile {
@@ -64,6 +71,8 @@ export interface QuickFixDeps {
   notify?: (message: string, level: "info" | "warning" | "error") => void;
   /** Likely files for the prompt, and the lookup tool, while the classifier's file hints are on. */
   hints?: FileHinter;
+  /** Holds a request it judges large (a task, not a quick fix) instead of spending a run on it. */
+  classifier?: Classifier;
 }
 
 export const MAX_JOBS = 30;
@@ -123,6 +132,30 @@ export class QuickFixQueue {
     return true;
   }
 
+  /** Run a held job anyway: it goes back in the queue and is not sized again. */
+  runAnyway(id: string): boolean {
+    const job = this.jobs.find((entry) => entry.id === id);
+    if (!job || job.status !== "held") return false;
+    job.status = "queued";
+    job.force = true;
+    delete job.note;
+    delete job.startedAt;
+    delete job.finishedAt;
+    this.changed();
+    this.pump();
+    return true;
+  }
+
+  /** A held job that became a task: it leaves the queue with a note. */
+  movedToTask(id: string): boolean {
+    const job = this.jobs.find((entry) => entry.id === id);
+    if (!job || job.status !== "held") return false;
+    job.status = "cancelled";
+    job.note = "started as a task in a new session";
+    this.changed();
+    return true;
+  }
+
   /** Abort everything (session shutdown). */
   cancelAll(): void {
     for (const job of this.jobs) if (job.status === "queued") job.status = "cancelled";
@@ -165,8 +198,13 @@ export class QuickFixQueue {
     job.startedAt = Date.now();
     job.thinking = profile.thinking;
     if (profile.model) job.model = profile.model;
-    this.deps.feed?.log(QUICK_FIX_SOURCE, `started: ${jobTitle(job)}`, "info", job.startedAt);
     this.changed();
+    const held = job.force ? undefined : await this.tooLarge(job, controller.signal);
+    if (held) {
+      this.controllers.delete(job.id);
+      return this.hold(job, held);
+    }
+    this.deps.feed?.log(QUICK_FIX_SOURCE, `started: ${jobTitle(job)}`, "info", job.startedAt);
     try {
       const likely = await this.likely(job.prompt, controller.signal);
       const result = await runPiAgent(
@@ -197,6 +235,30 @@ export class QuickFixQueue {
       this.controllers.delete(job.id);
       this.finish(job);
     }
+  }
+
+  /** Why a request is too large for a quick fix, when the classifier is sure; undefined runs it. */
+  private async tooLarge(job: QuickFixJob, signal: AbortSignal): Promise<string | undefined> {
+    const jev = this.deps.classifier;
+    if (!jev?.enabled("triage")) return undefined;
+    try {
+      const sized = await quickFixSize(jev, job.prompt, signal);
+      if (!sized || sized.size !== "large" || sized.confidence < jev.config.thresholds.quickFixLargeAt) return undefined;
+      return `looks like a task (large, ${sized.confidence.toFixed(2)})`;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Hold a job instead of running it; nothing ran, so nothing lands in the metrics. */
+  private hold(job: QuickFixJob, note: string): void {
+    job.status = "held";
+    job.note = note;
+    job.finishedAt = Date.now();
+    this.deps.feed?.log(QUICK_FIX_SOURCE, `held: ${jobTitle(job)} — ${note}; r runs it anyway, t makes it a task`, "warning", job.finishedAt);
+    this.deps.notify?.(`bot-lobby quick fix held: ${jobTitle(job)} ${note}`, "warning");
+    this.changed();
+    this.pump();
   }
 
   /** The Likely files block for a prompt, or "" (no hints, nothing stands out, out of time). */
@@ -230,7 +292,7 @@ export function quickFixMetric(job: QuickFixJob): MetricRecord {
     agent: QUICK_FIX_SOURCE,
     ...(job.model ? { model: job.model } : {}),
     ...(job.thinking ? { thinking: job.thinking } : {}),
-    status: job.status === "queued" || job.status === "running" ? "failed" : job.status,
+    status: job.status === "queued" || job.status === "running" ? "failed" : job.status === "held" ? "cancelled" : job.status,
     startedAt: new Date(started).toISOString(),
     durationMs: Math.max(0, (job.finishedAt ?? started) - started),
     turns: job.usage?.turns || job.turns || undefined,
