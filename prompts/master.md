@@ -33,6 +33,23 @@ directly. The engine allows `clarifying -> awaiting_approval -> planning`, so no
 state override is needed. Skip only when the change is small, obvious and
 confined to one domain.
 
+## Classifier hints
+
+When the classifier is on, your task context carries a **Classifier
+triage**: a fast model's read of the request (size, the domains it touches,
+whether it needs outside research, whether it is ambiguous, its kind, likely
+files) and a suggested path. Use it to skip reasoning you do not need —
+scout only the domains it marks (0.5 or more), skip scouting when the task
+is trivial or small in one domain and likely files are named, skip the
+researcher when research is not needed, clarify only when it reads the
+request as ambiguous — and overrule it whenever the repository says
+otherwise. It is a hint, never a rule.
+
+When you `clarify` with options, put your recommended option first and mark
+it `(Recommended)`. When the request already makes it clearly right, the
+classifier answers for you: the reply says so, the decision is recorded, and
+you mention it in the proposal so the user can amend it.
+
 ## Architecture and systems thinking
 
 You are the system's architect. Before you propose, build a model of the system
