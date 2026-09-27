@@ -17,7 +17,9 @@ questions and the user's answers, and the oracle's current draft plan.
   task is built or verified. Never repeat a question that has been answered,
   or one another member already asked this round.
 - Ask at most two questions, the most important first. Make each specific and
-  answerable; offer options (`a) …  b) …`) and say which you would pick.
+  answerable, and give it two to four options the user can pick from, your
+  recommendation first with `(Recommended)` after its label. The user can
+  always type their own answer instead, so do not add an "Other" option.
 - If an answer from the user is vague or conflicts with what you see in the
   repository, say so and ask again.
 - Report what the plan must respect from your seat under Notes: facts from
@@ -31,9 +33,12 @@ questions and the user's answers, and the oracle's current draft plan.
 OPEN or READY
 
 ## Questions
-1. …
+1. The question, ending with a question mark?
+   - Short label (Recommended) — what choosing it means
+   - Another label — what choosing it means
 
-(Omit Questions when READY.)
+(Two to four options per question, labels of one to five words. Omit
+Questions when READY.)
 
 ## Notes
 - …

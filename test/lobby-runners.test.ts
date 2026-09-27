@@ -7,7 +7,7 @@ import { describeToolCall } from "../src/pi/activity.ts";
 import { createStreamCollector, finishedThought, MAX_THOUGHT_CHARS, type PiStreamEvent, type ProcessOutcome, type ProcessRunner, type ProcessRunOptions } from "../src/execution/pi-runner.ts";
 import { chatFromEntries, chatText, LobbyFeed, textOf } from "../src/lobby/feed.ts";
 import { QUICK_FIX_TOOLS, QuickFixQueue, jobTitle, quickFixPrompt } from "../src/lobby/quickfix.ts";
-import { PLANNER_TOOLS, RESEARCH_PANEL_TOOLS, PlanningSession, memberPrompt, panelSection, parseMemberReply, parsePlannerReply, plannerSays, plannerTranscript } from "../src/lobby/planner.ts";
+import { PLANNER_TOOLS, RESEARCH_PANEL_TOOLS, PlanningSession, commentBlock, memberPrompt, panelSection, parseMemberReply, parseOption, parsePlannerReply, plannerSays, plannerTranscript } from "../src/lobby/planner.ts";
 import { createIssue, ghError, IssuesState, issueText, listIssues, splitIssueText, viewIssue, type Exec } from "../src/lobby/issues.ts";
 import { listPlannedTasks } from "../src/state/backlog.ts";
 import { readMetrics } from "../src/state/metrics.ts";
@@ -169,27 +169,49 @@ const READY_REPLY = [
 
 test("the oracle's and the seats' replies parse forgivingly", () => {
   const grilling = parsePlannerReply(["## Status", "GRILLING", "## Title", "**Dark mode**", "## Questions", "1. Which pages?", "   All of them?", "2. Persist the choice?", "## Plan", "draft"].join("\n"));
-  assert.deepEqual(grilling, { status: "grilling", title: "Dark mode", questions: ["Which pages? All of them?", "Persist the choice?"], plan: "draft" });
+  assert.deepEqual(grilling, { status: "grilling", title: "Dark mode", questions: [{ text: "Which pages? All of them?", options: [] }, { text: "Persist the choice?", options: [] }], plan: "draft" });
   assert.equal(parsePlannerReply(READY_REPLY).status, "ready");
-  assert.deepEqual(parsePlannerReply("What do you mean by fast?"), { status: "grilling", questions: ["What do you mean by fast?"] });
-  assert.deepEqual(parseMemberReply("## Status\nOPEN\n## Questions\n1. REST or RPC?\n## Notes\n- api lives in src/api"), { status: "open", questions: ["REST or RPC?"], notes: ["api lives in src/api"] });
+  assert.deepEqual(parsePlannerReply("What do you mean by fast?"), { status: "grilling", questions: [{ text: "What do you mean by fast?", options: [] }] });
+  assert.deepEqual(parseMemberReply("## Status\nOPEN\n## Questions\n1. REST or RPC?\n## Notes\n- api lives in src/api"), { status: "open", questions: [{ text: "REST or RPC?", options: [] }], notes: ["api lives in src/api"] });
   assert.deepEqual(parseMemberReply("## Status\nREADY\n## Questions\n1. stray?\n## Notes\n- ok"), { status: "ready", questions: [], notes: ["ok"] }, "a READY seat asks nothing");
-  assert.equal(plannerSays(false, [{ from: "ORACLE", text: "A?" }, { from: "QA", text: "B?" }]), "1. [ORACLE] A?\n2. [QA] B?");
+  assert.equal(plannerSays(false, [{ from: "ORACLE", text: "A?", options: [] }, { from: "QA", text: "B?", options: [{ label: "Yes", description: "do it" }] }]), "1. [ORACLE] A?\n2. [QA] B?\n   - Yes — do it");
   assert.match(plannerSays(true, []), /panel agrees/);
+});
+
+test("questions carry their options: indented bullets, inline a) b) choices, and a seat tag", () => {
+  const reply = parsePlannerReply([
+    "## Status", "GRILLING",
+    "## Questions",
+    "1. [DEV] Where do sessions live?",
+    "   - Users table (Recommended) — one row per user,",
+    "     easy to query",
+    "   - **Redis**: fast, but another service",
+    "2. Which browsers? a) evergreen only b) include Safari 15 c) everything",
+    "3. Anything else to know?",
+  ].join("\n"));
+  assert.deepEqual(reply.questions, [
+    { text: "[DEV] Where do sessions live?", options: [{ label: "Users table (Recommended)", description: "one row per user, easy to query" }, { label: "Redis", description: "fast, but another service" }] },
+    { text: "Which browsers?", options: [{ label: "evergreen only", description: "" }, { label: "include Safari 15", description: "" }, { label: "everything", description: "" }] },
+    { text: "Anything else to know?", options: [] },
+  ]);
+  assert.deepEqual(parseOption("Keep it - no change"), { label: "Keep it", description: "no change" });
+  assert.deepEqual(parseOption("Just a label"), { label: "Just a label", description: "" });
+  assert.equal(commentBlock([]), "");
+  assert.equal(commentBlock([{ line: "1. Add   the form", text: "use a modal" }]), 'Comments on the draft plan:\n- On "1. Add the form": use a modal');
 });
 
 test("the transcript carries the issue, every attributed question and the current draft", () => {
   const transcript = plannerTranscript(
     [
       { role: "you", text: "add dark mode", at: 0 },
-      { role: "planner", text: "ignored", at: 1, questions: [{ from: "DESIGN", text: "Which pages?" }, { from: "QA", text: "Which browsers?" }] },
+      { role: "planner", text: "ignored", at: 1, questions: [{ from: "DESIGN", text: "Which pages?", options: [{ label: "All (Recommended)", description: "every page" }, { label: "Settings only", description: "" }] }, { from: "QA", text: "Which browsers?", options: [] }] },
       { role: "you", text: "1. all 2. chrome", at: 2 },
     ],
     { issue: { number: 7, title: "Dark mode" }, body: "Please add it" },
     "### Steps\n1. tokens",
   );
   assert.match(transcript, /^## Source: GitHub issue #7 — Dark mode\n\nPlease add it/);
-  assert.match(transcript, /### User\n\nadd dark mode\n\n### Panel\n\n1\. \[DESIGN\] Which pages\?\n2\. \[QA\] Which browsers\?\n\n### User\n\n1\. all 2\. chrome/);
+  assert.match(transcript, /### User\n\nadd dark mode\n\n### Panel\n\n1\. \[DESIGN\] Which pages\?\n   - All \(Recommended\) — every page\n   - Settings only\n2\. \[QA\] Which browsers\?\n\n### User\n\n1\. all 2\. chrome/);
   assert.match(transcript, /## The oracle's current draft plan\n\n### Steps\n1\. tokens/);
   assert.match(panelSection([{ member: "qa", reply: { status: "ready", questions: [], notes: ["e2e in tests/e2e"] } }, { member: "researcher", error: "timeout" }]), /### QA — READY\nNotes:\n- e2e in tests\/e2e\n\n### RESEARCH — no answer this round \(timeout\)/);
 });
@@ -240,13 +262,14 @@ test("a panel round asks every seat on its own model, then lets the oracle fold 
   assert.deepEqual(seen.map((call) => arg(call, "--model")), ["p/dev", "p/qa", "p/research", "p/oracle"], "every seat runs on its own model");
   assert.equal(arg(seen[0]!, "--tools"), PLANNER_TOOLS.join(","));
   assert.equal(arg(seen[2]!, "--tools"), RESEARCH_PANEL_TOOLS.join(","), "RESEARCH may use the web tools");
-  assert.match(seen[3]!.prompt, /### DEV — OPEN\nQuestions asked of the user:\n- REST or RPC\?\nNotes:\n- routes live in src\/api/);
+  assert.match(seen[3]!.prompt, /### DEV — OPEN\nQuestions for the user:\n- REST or RPC\?\nNotes:\n- routes live in src\/api/);
   assert.match(seen[3]!.prompt, /### QA — READY/);
   assert.deepEqual(session.questions, [
-    { from: "ORACLE", text: "Ship behind a flag?" },
-    { from: "DEV", text: "REST or RPC?" },
-    { from: "RESEARCH", text: "prefers-color-scheme only, or a stored override?" },
+    { from: "ORACLE", text: "Ship behind a flag?", options: [] },
+    { from: "DEV", text: "REST or RPC?", options: [] },
+    { from: "RESEARCH", text: "prefers-color-scheme only, or a stored override?", options: [] },
   ]);
+  assert.equal(session.awaitingAnswers, true);
   assert.deepEqual(session.messages.at(-1)!.questions, session.questions);
   assert.deepEqual(session.notes, [{ from: "DEV", text: "routes live in src/api" }, { from: "QA", text: "e2e tests in tests/e2e" }]);
   assert.equal(session.reply?.status, "grilling");
@@ -294,6 +317,39 @@ test("a failed oracle keeps the conversation and reports the error", async () =>
   assert.equal(session.status, "idle");
   assert.deepEqual(session.messages.map((message) => message.role), ["you"]);
   assert.throws(() => session.save(), /no draft plan/);
+});
+
+test("line comments wait for the answers when questions are open, and start a round of their own otherwise", async () => {
+  const root = tempRoot();
+  const seen: Array<{ who: string; args: string[]; prompt: string }> = [];
+  const answers: Record<string, string | undefined> = {
+    ORACLE: "## Status\nGRILLING\n## Questions\n1. Behind a flag?\n   - Yes (Recommended) — ship dark\n   - No — ship to everyone\n## Plan\n### Steps\n1. Add the form",
+  };
+  const rounds: Array<[number, boolean]> = [];
+  const session = new PlanningSession({
+    cwd: root, root, configDir: ".pi", panel: [],
+    profile: () => ({ thinking: "high", timeoutMs: 60_000 }),
+    runProcess: panelRunner(answers, seen),
+    onRound: (current) => rounds.push([current.turns, current.awaitingAnswers]),
+  });
+  await session.send("login page");
+  assert.deepEqual(rounds, [[1, true]], "the lobby hears when a round ends with questions");
+  assert.deepEqual(session.questions[0]!.options.map((option) => option.label), ["Yes (Recommended)", "No"]);
+  assert.equal(session.commentOnLine("1. Add the form", "use a modal"), false, "open questions hold the comment");
+  assert.equal(session.lineComments.length, 1);
+  session.answered = [{ answers: [], cancelled: false }];
+  answers.ORACLE = "## Status\nGRILLING\n## Plan\n### Steps\n1. Add the modal";
+  await session.send("1. Yes");
+  assert.match(seen.at(-1)!.prompt, /### User\n\n1\. Yes\n\nComments on the draft plan:\n- On "1\. Add the form": use a modal/);
+  assert.deepEqual(session.lineComments, []);
+  assert.deepEqual(session.answered, [], "a new round starts a new questionnaire");
+  assert.equal(session.awaitingAnswers, false);
+  assert.equal(session.commentOnLine("1. Add the modal", "name it LoginDialog"), true, "nothing open: the comment starts a round");
+  await settle();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(session.turns, 3);
+  assert.match(seen.at(-1)!.prompt, /### User\n\nComments on the draft plan:\n- On "1\. Add the modal": name it LoginDialog/);
+  assert.equal(session.commentOnLine("  ", "x"), false);
 });
 
 function fakeExec(responses: Record<string, { stdout?: string; stderr?: string; code?: number }>, calls: string[][] = []): Exec {
