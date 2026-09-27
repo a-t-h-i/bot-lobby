@@ -5,11 +5,11 @@ import { Type } from "typebox";
 import type { AgentRun } from "../schemas/findings.ts";
 import type { ProcessRunner } from "../execution/pi-runner.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
-import { classifier, hintsFor, triageFor } from "../classifier/instance.ts";
+import { classifier, effortFor, hintsFor, triageFor } from "../classifier/instance.ts";
 import { truncate } from "../text.ts";
 import { applyStatus, reportRuns, summarizeRun } from "./ui.ts";
 import { isQuiet } from "./quiet.ts";
-import { createProfileResolver, modelRef, type ModelLookup } from "./model-support.ts";
+import { checkThinking, createProfileResolver, modelRef, type ModelLookup } from "./model-support.ts";
 import { agentName, describeRun } from "./run-summary.ts";
 import {
   ORCHESTRATE_ACTIONS,
@@ -108,6 +108,7 @@ export function workflowDeps(
     hints: hintsFor({ cwd: ctx.cwd, root, configDir }),
     classifier: classifier(),
     triage: (request, triageSignal) => triageFor({ cwd: ctx.cwd, root, configDir }, request, triageSignal),
+    effort: effortFor((model, thinking) => checkThinking(modelLookup(ctx)(model), thinking).level),
     ask: async (question) => (hasUI ? ctx.ui.input(question) : undefined),
     choose: async (title, options) => (hasUI ? ctx.ui.select(title, options) : undefined),
     notify: (message, level = "info") => {

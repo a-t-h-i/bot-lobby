@@ -14,6 +14,7 @@ import { fileHinter, type FileHinter, type FileScope } from "./files.ts";
 import { lobbyFeed } from "../lobby/feed.ts";
 import { triageLine, triageWithContext } from "./triage.ts";
 import type { TaskTriage } from "../schemas/task.ts";
+import { effortRouter, type EffortRouter } from "./effort.ts";
 
 interface Binding {
   cwd: string;
@@ -49,6 +50,14 @@ export async function triageFor(scope: FileScope, request: string, signal?: Abor
   const triage = await triageWithContext(classifier(), scope, request, signal);
   if (triage) lobbyFeed.log("CLASSIFIER", triageLine(triage), "info");
   return triage;
+}
+
+/**
+ * Effort routing for the process's classifier; `clamp` fits a thinking level
+ * to what a model supports. Routes are logged to the lobby's activity feed.
+ */
+export function effortFor(clamp?: (model: string, thinking: string) => string): EffortRouter {
+  return effortRouter(classifier(), { ...(clamp ? { clamp } : {}), log: (text) => lobbyFeed.log("CLASSIFIER", text, "info") });
 }
 
 /** The tree this process's session works in, once it has started. */
