@@ -253,3 +253,57 @@ export function chatFromEntries(entries: readonly unknown[], max = MAX_CHAT): Ar
   }
   return chat.slice(-max);
 }
+
+/** The parts of pi's agent events the lobby narrates; the same shape in process and over RPC. */
+export interface AgentEventLike {
+  type: string;
+  toolName?: string;
+  args?: unknown;
+  toolCallId?: string;
+  isError?: boolean;
+  assistantMessageEvent?: { type: string; delta?: string; content?: string };
+  message?: { role?: string; content?: unknown; stopReason?: string; errorMessage?: string };
+}
+
+/**
+ * One of a Master's agent events into a feed: tool calls become plain-words
+ * activity, thinking goes to the thinking pane, the reply streams, and
+ * finished messages join the conversation (a failed turn says so there too).
+ */
+export function narrateEvent(feed: LobbyFeed, event: AgentEventLike, describe: (toolName: string, args: unknown) => string): void {
+  switch (event.type) {
+    case "tool_execution_start":
+      feed.begin("MASTER", describe(event.toolName ?? "tool", event.args), event.toolCallId);
+      return;
+    case "tool_execution_end":
+      if (event.toolCallId) feed.end(event.toolCallId, event.isError === true);
+      return;
+    case "message_update": {
+      const update = event.assistantMessageEvent;
+      if (update?.type === "thinking_delta" && update.delta) feed.thinkDelta("MASTER", update.delta);
+      else if (update?.type === "thinking_end") feed.thinkEnd("MASTER", update.content);
+      else if (update?.type === "text_delta" && update.delta) feed.replyDelta(update.delta);
+      return;
+    }
+    case "message_end": {
+      const message = event.message ?? {};
+      if (message.role === "assistant") {
+        feed.replyEnd();
+        feed.thinkEnd("MASTER");
+        if (message.stopReason === "error") {
+          const error = (message.errorMessage ?? "the model call failed").split("\n")[0]!;
+          feed.say("note", `✗ the oracle's turn failed: ${error}`);
+          feed.log("MASTER", `turn failed — ${error}`, "error");
+        }
+      }
+      if (message.role !== "user" && message.role !== "assistant") return;
+      for (const line of chatText(message.role, textOf(message.content))) feed.say(line.role, line.text);
+      return;
+    }
+    case "agent_end":
+      feed.replyEnd();
+      return;
+    default:
+      return;
+  }
+}
