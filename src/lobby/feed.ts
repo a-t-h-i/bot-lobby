@@ -225,15 +225,19 @@ export function textOf(content: unknown): string {
 }
 
 /** The long kickoff message bot-lobby sends reads as a short note in the conversation. */
-export function chatText(role: "user" | "assistant", text: string): { role: ChatRole; text: string } | undefined {
+export function chatText(role: "user" | "assistant", text: string): Array<{ role: ChatRole; text: string }> {
   const body = text.trim();
-  if (!body) return undefined;
-  if (role === "assistant") return { role: "oracle", text: body };
+  if (!body) return [];
+  if (role === "assistant") return [{ role: "oracle", text: body }];
+  // bot-lobby's kickoff: the task starting, then what the user asked for, in their words.
   const kickoff = /^A bot-lobby task is active: (\S+)\nTitle: (.*)/.exec(body);
-  if (kickoff) return { role: "note", text: `task ${kickoff[1]} started — ${kickoff[2]}` };
+  if (kickoff) {
+    const request = /\nRequest: ([\s\S]*?)(?:\nState: |$)/.exec(body)?.[1]?.trim();
+    return [{ role: "note", text: `task started · ${kickoff[2]}` }, ...(request ? [{ role: "you" as const, text: request }] : [])];
+  }
   const comment = /^The user left (?:a comment|\d+ comments) on (the approved plan|the proposal) of (\S+) from the lobby:/.exec(body);
-  if (comment) return { role: "note", text: `plan comment sent to the oracle for ${comment[2]}` };
-  return { role: "you", text: body };
+  if (comment) return [{ role: "note", text: `your comment on ${comment[1]} went to the oracle` }];
+  return [{ role: "you", text: body }];
 }
 
 /** Session entries (`{ type: "message", message }`) as conversation entries, oldest first. */
@@ -244,10 +248,8 @@ export function chatFromEntries(entries: readonly unknown[], max = MAX_CHAT): Ar
     if (record?.type !== "message") continue;
     const role = record.message?.role;
     if (role !== "user" && role !== "assistant") continue;
-    const line = chatText(role, textOf(record.message?.content));
-    if (!line) continue;
     const at = record.timestamp ? Date.parse(record.timestamp) : undefined;
-    chat.push({ ...line, ...(at !== undefined && Number.isFinite(at) ? { at } : {}) });
+    for (const line of chatText(role, textOf(record.message?.content))) chat.push({ ...line, ...(at !== undefined && Number.isFinite(at) ? { at } : {}) });
   }
   return chat.slice(-max);
 }
