@@ -15,6 +15,9 @@ import { listPlannedTasks, type PlannedTask } from "../src/state/backlog.ts";
 import type { PlanComment } from "../src/state/comments.ts";
 import type { MetricRecord } from "../src/state/metrics.ts";
 import type { ProcessRunner } from "../src/execution/pi-runner.ts";
+import { BackgroundSession } from "../src/lobby/sessions.ts";
+import type { ChatEntry } from "../src/lobby/feed.ts";
+import { FakeSessionProcess } from "./fake-session.ts";
 import { activityLine, chatLines, renderHome } from "../src/lobby/tabs/home.ts";
 import { renderTasks, taskDetailLines, taskRows } from "../src/lobby/tabs/tasks.ts";
 import { renderPlan, rosterLines, type PlanLayout, type PlanView, type SeatView } from "../src/lobby/tabs/plan.ts";
@@ -53,6 +56,10 @@ interface Calls {
   hidden: number;
   seeds: Array<PlannerSeed | undefined>;
   seats: Array<string[] | undefined>;
+  sessionStarts: Array<{ request?: string; plan?: string; auto?: boolean }>;
+  auto: Array<[string, boolean]>;
+  inbox: Array<[string, string]>;
+  dialogs: string[];
 }
 
 interface ViewOptions {
@@ -68,11 +75,16 @@ interface ViewOptions {
   metrics?: MetricRecord[];
   runProcess?: ProcessRunner;
   panel?: PanelMember[];
+  /** Chats of other sessions, by pi session id. */
+  chats?: Record<string, ChatEntry[]>;
 }
 
 function makeView(options: ViewOptions = {}) {
   const root = mkdtempSync(join(tmpdir(), "bl-view-"));
-  const calls: Calls = { settings: [], answered: 0, savedPanels: [], oracle: [], comments: [], started: [], discarded: [], aborted: 0, hidden: 0, seeds: [], seats: [] };
+  const calls: Calls = { settings: [], answered: 0, savedPanels: [], oracle: [], comments: [], started: [], discarded: [], aborted: 0, hidden: 0, seeds: [], seats: [], sessionStarts: [], auto: [], inbox: [], dialogs: [] };
+  const sessions: BackgroundSession[] = [];
+  const procs: FakeSessionProcess[] = [];
+  const autoOn = new Set<string>();
   const rows = options.rows ?? 40;
   const tui = { terminal: { rows, columns: 120 }, requestRender() {} } as unknown as TUI;
   const feed = new LobbyFeed();
@@ -129,6 +141,35 @@ function makeView(options: ViewOptions = {}) {
     seatLabel: (member) => `p/${member} · medium`,
     issues,
     profileLabel: () => "p/model · high",
+    sessionName: () => "my window",
+    sessions: () => sessions,
+    startSession: (start) => {
+      calls.sessionStarts.push({ ...(start.request ? { request: start.request } : {}), ...(start.plan ? { plan: start.plan.id } : {}), ...(start.auto ? { auto: true } : {}) });
+      if (start.request === "fail") return "could not start a new session — no pi";
+      const proc = new FakeSessionProcess();
+      procs.push(proc);
+      const session = new BackgroundSession(proc, { name: start.plan?.title ?? start.request!, ...(start.plan ? { planId: start.plan.id } : { request: start.request! }) });
+      sessions.push(session);
+      return session;
+    },
+    answerDialog: async (session) => {
+      const dialog = session.dialogs[0];
+      if (!dialog) return;
+      calls.dialogs.push(dialog.title);
+      session.answer(dialog.id, { value: dialog.options?.[0] ?? "" });
+    },
+    isAuto: (taskId) => autoOn.has(taskId),
+    setAuto: (taskId, on) => {
+      calls.auto.push([taskId, on]);
+      if (on) autoOn.add(taskId);
+      else autoOn.delete(taskId);
+    },
+    sendToTask: (taskId, text) => {
+      calls.inbox.push([taskId, text]);
+      return `sent — the session driving ${taskId} passes it to its oracle`;
+    },
+    sessionChat: (sessionId) => options.chats?.[sessionId] ?? [],
+    taskScene: (task, _width, height) => Array.from({ length: Math.min(height, 2) }, (_, index) => `status of ${task.id} ${index}`),
     requestRender: () => {},
     now: () => NOW,
   };
@@ -136,7 +177,7 @@ function makeView(options: ViewOptions = {}) {
   const view = new LobbyView(tui, host, { borderColor: noop, selectList: { selectedPrefix: noop, selectedText: noop, description: noop, scrollInfo: noop, noMatch: noop } });
   view.focused = true;
   view.refreshData(true);
-  return { view, calls, feed, quickfix, issues, root, planner: () => planner };
+  return { view, calls, feed, quickfix, issues, root, planner: () => planner, sessions, procs };
 }
 
 /** A fake pi whose every run answers `text` as the assistant. */
@@ -288,11 +329,16 @@ test("c comments on the selected task's plan; finished tasks refuse", () => {
   assert.ok(view.render(120).at(-1)!.includes("is completed"));
 });
 
-test("pending plans start with s and are discarded with a double d", () => {
+test("pending plans start in a new session with s, here with h, and are discarded with a double d", () => {
   const plan: PlannedTask = { id: "PLAN-dark", title: "dark mode", brief: "## Steps\n1. tokens", createdAt: "2026-09-26T10:00:00.000Z", updatedAt: "2026-09-26T10:00:00.000Z", status: "pending" };
   const { view, calls } = makeView({ plans: [plan] });
   view.setTab("tasks");
   view.handleInput("s");
+  assert.deepEqual(calls.sessionStarts, [{ plan: "PLAN-dark" }]);
+  assert.equal(view.tab, "lobby", "the new session is shown at once");
+  assert.equal(view.viewedEntry().name, "dark mode", "named after the task");
+  view.setTab("tasks");
+  view.handleInput("h");
   assert.deepEqual(calls.started, ["PLAN-dark"]);
   view.handleInput("d");
   assert.deepEqual(calls.discarded, []);
@@ -937,4 +983,133 @@ test("the conversation shows each turn under a speaker line with its time, your 
   // With a theme that has backgrounds, your words sit in pi's user-message band.
   const banded = chatLines(chat.slice(1, 2), 30, { fg: (_color, text) => text, bold: (text) => text, bg: (color, text) => `<${color}>${text}</${color}>` });
   assert.equal(banded[1], `  <userMessageBg> ${"add a login page".padEnd(26)} </userMessageBg>`);
+});
+
+function task(id: string, owner: string, state: Task["state"], title = id): Task {
+  return { ...createTask(id, title, "2026-09-26T10:00:00.000Z", `do ${title}`, owner), state };
+}
+
+test("alt+n starts a task in its own session named after it; the Lobby then shows and talks to that session", async () => {
+  const { view, calls, procs } = makeView();
+  view.handleInput(KEY.alt("n"));
+  assert.ok(view.render(120).some((line) => line.includes("new task — it starts in its own session, named after it")));
+  type(view, "add a login page");
+  view.handleInput(KEY.enter);
+  assert.deepEqual(calls.sessionStarts, [{ request: "add a login page" }]);
+  assert.deepEqual(calls.oracle, [], "nothing went to this window's oracle");
+  assert.deepEqual(procs[0]!.commands("prompt").map((command) => command.message), ["/bot-lobby --task add a login page"]);
+  assert.equal(view.viewedEntry().where, "background");
+  assert.ok(view.render(120)[0]!.includes("add a login page · starting"), "the tab bar names the session in view");
+
+  procs[0]!.emit(
+    { type: "response", command: "get_state", success: true, data: { sessionId: "child-1" } },
+    { type: "agent_start" },
+    { type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "Scouting the auth code." }], stopReason: "stop" } },
+  );
+  assert.ok(view.render(120).some((line) => line.includes("Scouting the auth code.")));
+  type(view, "use port 8080");
+  view.handleInput(KEY.enter);
+  assert.deepEqual(procs[0]!.commands("prompt").at(-1)!.message, "use port 8080");
+  assert.equal(procs[0]!.commands("prompt").at(-1)!.streamingBehavior, "steer", "a working session is steered");
+
+  procs[0]!.emit({ type: "extension_ui_request", id: "q1", method: "select", title: "Approve the proposal?", options: ["Approve", "Decline"] });
+  const screen = view.render(120);
+  assert.ok(screen[0]!.includes("● 1 waiting"));
+  assert.ok(screen.some((line) => line.includes("press enter to answer add a login page's question")));
+  view.handleInput(KEY.enter);
+  await settle();
+  assert.deepEqual(calls.dialogs, ["Approve the proposal?"]);
+  assert.deepEqual(procs[0]!.commands("extension_ui_response"), [{ type: "extension_ui_response", id: "q1", value: "Approve" }]);
+
+  view.handleInput(KEY.alt("n"));
+  type(view, "fail");
+  view.handleInput(KEY.enter);
+  assert.ok(view.render(120).at(-1)!.includes("could not start a new session — no pi"));
+  assert.equal(view.viewedEntry().name, "add a login page", "a failed start keeps the session in view");
+});
+
+test("alt+o switches between this window, background sessions and tasks other terminals drive", () => {
+  const other = task("TASK-api", "other-terminal", "implementing", "rate limits");
+  const chat: ChatEntry[] = [{ id: 1, at: NOW, role: "oracle", text: "Rate limits are in." }];
+  const { view, calls, procs } = makeView({ tasks: [other], chats: { "other-terminal": chat } });
+  view.handleInput(KEY.alt("n"));
+  type(view, "add a login page");
+  view.handleInput(KEY.enter);
+
+  view.handleInput(KEY.alt("o"));
+  let screen = view.render(120);
+  assert.ok(screen.some((line) => line.includes("Sessions")));
+  const rowOf = (name: string) => screen.slice(1).find((line) => line.includes(name)) ?? "";
+  assert.match(rowOf("my window"), /this window/);
+  assert.match(rowOf("add a login page"), /background · starting/);
+  assert.match(rowOf("rate limits"), /other terminal · implementing/);
+  assert.ok(rowOf("add a login page").includes("▸"), "the session in view is picked");
+
+  view.handleInput(KEY.down);
+  view.handleInput(KEY.enter);
+  assert.equal(view.viewedEntry().name, "rate limits");
+  screen = view.render(120);
+  assert.ok(screen.some((line) => line.includes("Rate limits are in.")), "its conversation comes from its session file");
+  assert.ok(screen.some((line) => line.includes("status of TASK-api")), "its task's status, without animations");
+  type(view, "also cap bursts");
+  view.handleInput(KEY.enter);
+  assert.deepEqual(calls.inbox, [["TASK-api", "also cap bursts"]]);
+
+  view.handleInput(KEY.alt("o"));
+  view.handleInput(KEY.up);
+  view.handleInput(KEY.up);
+  view.handleInput(KEY.enter);
+  assert.equal(view.viewedEntry().where, "this window");
+  type(view, "hello");
+  view.handleInput(KEY.enter);
+  assert.deepEqual(calls.oracle, ["hello"]);
+
+  view.handleInput(KEY.alt("o"));
+  view.handleInput(KEY.down);
+  view.handleInput("x");
+  assert.deepEqual(procs[0]!.signals, [], "one x only arms it");
+  view.handleInput("x");
+  assert.deepEqual(procs[0]!.signals, ["SIGTERM"]);
+  view.handleInput(KEY.escape);
+  assert.ok(!view.render(120).some((line) => line.includes("enter shows it here")), "esc closes the switcher");
+});
+
+test("alt+g switches auto mode for the task in view; the tab bar and the Tasks list mark it", () => {
+  const mine = task("TASK-login", "me", "implementing", "login");
+  const { view, calls } = makeView({ task: mine });
+  view.handleInput(KEY.alt("g"));
+  assert.deepEqual(calls.auto, [["TASK-login", true]]);
+  assert.ok(view.render(120)[0]!.includes("⟳ AUTO"));
+  assert.ok(view.render(120).at(-1)!.includes("auto mode on"));
+  view.setTab("tasks");
+  assert.ok(view.render(120).some((line) => line.includes("TASK-login") && line.includes("⟳ auto")));
+  view.handleInput(KEY.alt("g"));
+  assert.deepEqual(calls.auto.at(-1), ["TASK-login", false]);
+  assert.ok(!view.render(120)[0]!.includes("⟳ AUTO"));
+
+  const idle = makeView();
+  idle.view.handleInput(KEY.alt("g"));
+  assert.deepEqual(idle.calls.auto, []);
+  assert.ok(idle.view.render(120).at(-1)!.includes("no active task here"));
+});
+
+test("on the Tasks tab o shows the session driving a task, and n types a task for a new session", () => {
+  const other = task("TASK-api", "other-terminal", "implementing", "rate limits");
+  const done = task("TASK-old", "gone", "completed", "old work");
+  const { view } = makeView({ tasks: [other, done] });
+  view.setTab("tasks");
+  const rows = view.render(120);
+  assert.ok(rows.some((line) => line.includes("TASK-api")));
+  view.handleInput("o");
+  assert.equal(view.tab, "lobby");
+  assert.equal(view.viewedEntry().name, "rate limits");
+  view.setTab("tasks");
+  view.handleInput(KEY.down);
+  view.handleInput("o");
+  assert.ok(view.render(120).at(-1)!.includes("is not running in any session now"));
+  view.handleInput("n");
+  assert.equal(view.tab, "lobby");
+  assert.ok(view.render(120).some((line) => line.includes("new task — it starts in its own session")));
+  view.handleInput(KEY.escape);
+  assert.ok(!view.render(120).some((line) => line.includes("new task — it starts in its own session")), "esc drops the new-session prompt");
 });

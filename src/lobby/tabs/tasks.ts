@@ -24,6 +24,16 @@ export interface TaskRow {
   status: string;
   /** Right-hand note: progress, owner or issue. */
   meta: string;
+  /** Auto mode is on: the oracle drives it without asking. */
+  auto?: boolean;
+}
+
+/** What the lobby knows about sessions beyond this one: background sessions' names, tasks in auto mode. */
+export interface RowContext {
+  /** Background sessions this window started, by pi session id. */
+  names?: ReadonlyMap<string, string>;
+  /** Tasks with auto mode on. */
+  auto?: ReadonlySet<string>;
 }
 
 export const SECTION_TITLES: Record<TaskSection, string> = {
@@ -44,19 +54,24 @@ export function taskProgress(task: Task): { done: number; total: number } | unde
   return { done: steps.filter((step) => step.status === "done").length, total: steps.length };
 }
 
-function ownerLabel(task: Task, sessionId: string | undefined): string {
+function ownerLabel(task: Task, sessionId: string | undefined, names?: ReadonlyMap<string, string>): string {
   if (!task.ownerSessionId) return "no owner";
   if (task.ownerSessionId === sessionId) return "this session";
+  const name = names?.get(task.ownerSessionId);
+  // A background session is named after its task, so the row's title already says which one.
+  if (name) return name === task.title ? "background" : `background · ${name}`;
   return `session ${task.ownerSessionId.slice(0, 8)}`;
 }
 
 /** Rows in display order: this session's task, other sessions', pending plans, then recent finished tasks. */
-export function taskRows(tasks: readonly Task[], plans: readonly PlannedTask[], sessionId: string | undefined, now: number): TaskRow[] {
+export function taskRows(tasks: readonly Task[], plans: readonly PlannedTask[], sessionId: string | undefined, now: number, context: RowContext = {}): TaskRow[] {
   const active = tasks.filter((task) => !TERMINAL_STATES.includes(task.state));
   const row = (task: Task, section: TaskSection): TaskRow => {
     const progress = taskProgress(task);
-    const meta = section === "recent" ? ago(now - Date.parse(task.updatedAt)) : progress ? `${progress.done}/${progress.total}` : section === "others" ? ownerLabel(task, sessionId) : "";
-    return { kind: "task", id: task.id, title: task.title, section, status: task.paused ? `${task.state} (paused)` : task.state, meta };
+    const owner = section === "others" ? ownerLabel(task, sessionId, context.names) : "";
+    const meta = section === "recent" ? ago(now - Date.parse(task.updatedAt)) : [progress ? `${progress.done}/${progress.total}` : "", owner].filter(Boolean).join(" · ");
+    const auto = section !== "recent" && context.auto?.has(task.id);
+    return { kind: "task", id: task.id, title: task.title, section, status: task.paused ? `${task.state} (paused)` : task.state, meta, ...(auto ? { auto: true } : {}) };
   };
   return [
     ...active.filter((task) => sessionId && task.ownerSessionId === sessionId).map((task) => row(task, "mine")),
@@ -96,9 +111,10 @@ export function listLines(rows: readonly TaskRow[], selected: number, width: num
     const marker = index === selected ? paint(theme, "accent", "▸ ") : "  ";
     const status = paint(theme, statusColor(row.status), row.status.replace(/_/g, " "));
     const meta = row.meta ? ` ${paint(theme, "dim", row.meta)}` : "";
+    const auto = row.auto ? ` ${paint(theme, "success", "⟳ auto")}` : "";
     const title = index === selected ? bold(theme, row.title) : row.title;
     if (index === selected) selectedLine = lines.length;
-    lines.push(selectRow(theme, `${marker}${title} ${paint(theme, "dim", "·")} ${status}${meta}`, width, index === selected, focused));
+    lines.push(selectRow(theme, `${marker}${title} ${paint(theme, "dim", "·")} ${status}${auto}${meta}`, width, index === selected, focused));
   });
   return { lines, selectedLine };
 }

@@ -16,12 +16,13 @@ import type { PlannedTask } from "../state/backlog.ts";
 import type { PlanComment } from "../state/comments.ts";
 import { aggregateMetrics, collectMetrics, SORT_KEYS, sortGroups, taskStats, taskTimesByModel, type GroupBy, type MetricRecord, type SortKey } from "../state/metrics.ts";
 import { PANEL_MEMBERS, type LobbyAgentKind, type LobbyPanel, type PanelMember } from "../schemas/configuration.ts";
-import type { LobbyFeed } from "./feed.ts";
+import type { ChatEntry, LobbyFeed } from "./feed.ts";
+import type { BackgroundSession } from "./sessions.ts";
 import type { QuickFixQueue } from "./quickfix.ts";
 import { MEMBER_LABELS, ORACLE_LABEL, type PlannerSeed, type PlanningSession } from "./planner.ts";
 import { issueText, type IssuesState } from "./issues.ts";
 import { actionFor, keyLabel, keyMap, LOBBY_ACTIONS, type KeyMap, type LobbyAction } from "./keys.ts";
-import { beside, bold, box, fit, highlight, paint, spinner, wrapHanging, type LobbyTheme, type PaneLayout } from "./layout.ts";
+import { beside, bold, box, fit, highlight, paint, selectRow, spinner, wrap, wrapHanging, type LobbyTheme, type PaneLayout } from "./layout.ts";
 import { HOME_PANES, renderHome, type HomePane } from "./tabs/home.ts";
 import { filterRows, planDetailLines, renderTasks, taskDetailLines, taskRows, tasksWidths, type TaskRow } from "./tabs/tasks.ts";
 import { renderPlan, type PlanLayout, type PlanView, type SeatView } from "./tabs/plan.ts";
@@ -54,6 +55,22 @@ export type LobbyMode = "type" | "browse";
 /** What each pane toggle is called in notices and help. */
 const PANEL_NAMES: Record<LobbyPanel, string> = { scene: "oracle and agent animations", conversation: "conversation", activity: "activity log", thinking: "thinking" };
 const PANEL_ACTIONS: Record<LobbyPanel, LobbyAction> = { scene: "toggleScene", conversation: "toggleConversation", activity: "toggleActivity", thinking: "toggleThinking" };
+
+/** Which session the Lobby tab shows and talks to: this window, one it started in the background, or one in another terminal. */
+export type SessionView = { kind: "here" } | { kind: "background"; key: string } | { kind: "other"; taskId: string };
+
+/** One row of the session switcher. */
+export interface SessionEntry {
+  view: SessionView;
+  name: string;
+  where: "this window" | "background" | "other terminal";
+  task?: Task;
+  /** What it is doing: working, idle, starting, ended, or its task's state. */
+  status: string;
+  auto: boolean;
+  /** Questions it waits on you for. */
+  waiting: number;
+}
 
 /** Everything the view needs from pi and bot-lobby. */
 export interface LobbyHost {
@@ -99,6 +116,23 @@ export interface LobbyHost {
   keys(): Readonly<Record<string, string>>;
   /** Open bot-lobby's settings (or one agent's entry); the lobby steps aside and rereads the config after. */
   openSettings(entry?: "quickfix" | "planner"): Promise<void>;
+  /** This window's pi session name, when it has one. */
+  sessionName(): string | undefined;
+  /** Background sessions this window started, oldest first. */
+  sessions(): readonly BackgroundSession[];
+  /** Start a task in a new background session, named after the task; the session, or why not. */
+  startSession(start: { request?: string; plan?: PlannedTask; auto?: boolean }): BackgroundSession | string;
+  /** Put the oldest question a background session waits on to the user in this window. */
+  answerDialog(session: BackgroundSession): Promise<void>;
+  /** Auto mode for any task, whichever session drives it. */
+  isAuto(taskId: string): boolean;
+  setAuto(taskId: string, on: boolean): void;
+  /** Leave a message for the oracle of a task another terminal's session drives; returns a notice. */
+  sendToTask(taskId: string, text: string): string;
+  /** Another session's conversation, read from its saved session file. */
+  sessionChat(sessionId: string): ChatEntry[];
+  /** A task's status without animations, for a session other than this window's. */
+  taskScene(task: Task, width: number, height: number): string[];
   profileLabel(kind: LobbyAgentKind): string;
   requestRender(): void;
   now?(): number;
@@ -197,6 +231,13 @@ export class LobbyView implements Component, Focusable {
   private issuesOn: boolean;
   /** The help screen covers the body. */
   help = false;
+  /** The session switcher covers the body. */
+  picking = false;
+  private pickIndex = 0;
+  /** The session the Lobby tab shows and talks to. */
+  viewing: SessionView = { kind: "here" };
+  /** The Lobby prompt starts a task in a new session instead of talking to an oracle. */
+  newSession = false;
   /** The search bar has the keys. */
   searching = false;
   /** Each tab's search, kept while you move between tabs. */
@@ -303,6 +344,7 @@ export class LobbyView implements Component, Focusable {
     return this.host.masterBusy()
       || Boolean(this.host.quickfix.running)
       || Boolean(this.host.planner()?.busy)
+      || this.host.sessions().some((session) => session.busy)
       || (this.issuesOn && this.host.issues.loading)
       || zen.runs.some((run) => run.status === "running")
       || Boolean(zen.task && !zen.task.paused && !TERMINAL_STATES.includes(zen.task.state));
@@ -363,6 +405,8 @@ export class LobbyView implements Component, Focusable {
     this.issueDraft = false;
     this.armed = undefined;
     this.help = false;
+    this.picking = false;
+    this.newSession = false;
     this.closeSearch();
     this.setMode(PROMPT_FIRST.has(tab) ? "type" : "browse");
     this.refreshData(true);
@@ -505,6 +549,8 @@ export class LobbyView implements Component, Focusable {
       // Esc, ?, q and the help key only close it; anything else also does its job.
       if (action === "help" || matchesKey(data, Key.escape) || data === "?" || data === "q" || matchesKey(data, Key.enter)) return;
     }
+    // The session switcher takes the keys while it is open (shortcuts other than its own still work).
+    if (this.picking && (!action || action === "sessions" || action === "newSession") && this.pickerKey(data, action)) return;
     // While searching, the shortcuts still work; everything else edits the query.
     if (this.searching) return action ? this.runAction(action) : this.searchKey(data);
     if (action) return this.runAction(action);
@@ -531,6 +577,12 @@ export class LobbyView implements Component, Focusable {
         return this.openSettings();
       case "savePlan":
         return this.savePlan();
+      case "sessions":
+        return this.picking ? void (this.picking = false) : this.openPicker();
+      case "newSession":
+        return this.startNewSessionPrompt();
+      case "toggleAuto":
+        return this.toggleAuto();
       case "search":
         return this.searching ? this.closeSearch() : this.openSearch();
       case "nextTab":
@@ -560,6 +612,7 @@ export class LobbyView implements Component, Focusable {
       }
       this.commentTarget = undefined;
       this.issueDraft = false;
+      this.newSession = false;
       if (this.lineTarget) {
         this.lineTarget = undefined;
         this.planFocus = "draft";
@@ -848,19 +901,26 @@ export class LobbyView implements Component, Focusable {
     const enter = matchesKey(data, Key.enter);
     const escape = matchesKey(data, Key.escape);
     switch (this.tab) {
-      case "lobby":
-        if (escape && this.host.masterBusy()) {
+      case "lobby": {
+        const background = this.viewedSession();
+        if (escape && background?.busy) {
+          background.abort();
+          this.say(`stopping ${background.name}'s oracle…`);
+          return true;
+        }
+        if (escape && this.viewing.kind === "here" && this.host.masterBusy()) {
           this.host.abortMaster();
           this.say("stopping the oracle…");
           return true;
         }
         if (data === "c") {
-          const task = this.host.zen().task;
-          if (task) this.commentOn(task.id);
+          const task = this.viewedEntry().task;
+          if (task && !TERMINAL_STATES.includes(task.state)) this.commentOn(task.id);
           else this.say("no task in this session to comment on", "warning");
           return true;
         }
         return enter ? (this.setMode("type"), true) : false;
+      }
       case "tasks":
         return this.tasksCommand(data, enter, escape);
       case "plan":
@@ -890,6 +950,7 @@ export class LobbyView implements Component, Focusable {
     if (enter) return (this.tasksFocus = this.tasksFocus === "list" ? "detail" : "list"), true;
     if (escape) return (this.tasksFocus = "list"), true;
     if (data === "r") return this.refreshData(true), true;
+    if (data === "n") return this.startNewSessionPrompt(), true;
     if (!row) return false;
     if (data === "c") {
       const task = this.data.tasks.find((entry) => entry.id === row.id);
@@ -902,9 +963,37 @@ export class LobbyView implements Component, Focusable {
       return true;
     }
     const plan = row.kind === "plan" ? this.data.plans.find((entry) => entry.id === row.id) : undefined;
+    // A planned task starts in a new session of its own (s), or in this window (h).
     if (data === "s" && plan) {
+      this.startInNewSession({ plan });
+      return true;
+    }
+    if (data === "h" && plan) {
       this.say(this.host.startPlanned(plan));
       this.refreshData(true);
+      return true;
+    }
+    const task = row.kind === "task" ? this.data.tasks.find((entry) => entry.id === row.id) : undefined;
+    if (data === "o" && task) {
+      const target = this.sessionEntries().find((entry) => entry.task?.id === task.id);
+      if (!target) this.say(`${task.id} is not running in any session now`, "warning");
+      else {
+        this.view(target.view);
+        this.say(target.view.kind === "here" ? "this window's task" : `showing ${target.name}`);
+      }
+      return true;
+    }
+    if (data === "x" && task) {
+      const session = this.host.sessions().find((entry) => entry.alive && entry.sessionId === task.ownerSessionId);
+      if (!session) return this.say("only a background session this window started can be stopped from here", "warning"), true;
+      if (this.armed !== `stop:${session.key}`) {
+        this.armed = `stop:${session.key}`;
+        this.say(`press x again to stop ${session.name} (its task keeps its state)`, "warning");
+        return true;
+      }
+      this.armed = undefined;
+      session.stop();
+      this.say(`stopping ${session.name}`);
       return true;
     }
     if (data === "d" && plan) {
@@ -934,6 +1023,169 @@ export class LobbyView implements Component, Focusable {
     this.planOffset = 0;
     this.planDraftOffset = 0;
     this.planCursor = 0;
+  }
+
+  /** The Lobby prompt: a new task in its own session, or a message to the session in view. */
+  private submitLobby(body: string): void {
+    this.homeOffsets.conversation = 0;
+    if (this.newSession) {
+      this.newSession = false;
+      return this.startInNewSession({ request: body });
+    }
+    const view = this.viewing;
+    if (view.kind === "background") {
+      const session = this.viewedSession();
+      if (!session?.alive) {
+        this.editor.setText(body);
+        return this.say(`${session?.name ?? "that session"} has ended — alt+n starts a new one`, "warning");
+      }
+      session.send(body);
+      return;
+    }
+    if (view.kind === "other") return this.say(this.host.sendToTask(view.taskId, body));
+    const notice = this.host.toOracle(body);
+    if (notice) this.say(notice);
+  }
+
+  /** Put the question the background session in view waits on to the user. */
+  private answerSessionDialog(): void {
+    const session = this.viewedSession();
+    if (!session?.dialogs.length) return;
+    void this.host.answerDialog(session).then(() => this.host.requestRender());
+  }
+
+  /* ------------------------------------------------------------ sessions */
+
+  /** Every session the lobby can show: this window, the background sessions it started, then tasks other terminals drive. */
+  sessionEntries(): SessionEntry[] {
+    const me = this.host.sessionId();
+    const zen = this.host.zen();
+    const background = this.host.sessions();
+    const started = new Set(background.map((session) => session.sessionId).filter((id): id is string => Boolean(id)));
+    const auto = (task: Task | undefined) => Boolean(task && !TERMINAL_STATES.includes(task.state) && this.host.isAuto(task.id));
+    const entries: SessionEntry[] = [{
+      view: { kind: "here" },
+      name: this.host.sessionName() ?? zen.task?.title ?? "unnamed session",
+      where: "this window",
+      ...(zen.task ? { task: zen.task } : {}),
+      status: this.host.masterBusy() ? "working" : zen.task?.state ?? "no task",
+      auto: auto(zen.task),
+      waiting: 0,
+    }];
+    for (const session of background) {
+      const task = session.sessionId ? this.data.tasks.find((entry) => entry.ownerSessionId === session.sessionId) : undefined;
+      const status = session.status === "exited" ? "ended" : session.status === "starting" ? "starting" : session.busy ? "working" : task?.state ?? "idle";
+      entries.push({ view: { kind: "background", key: session.key }, name: session.name, where: "background", ...(task ? { task } : {}), status, auto: auto(task), waiting: session.dialogs.length });
+    }
+    for (const task of this.data.tasks) {
+      if (TERMINAL_STATES.includes(task.state) || !task.ownerSessionId || task.ownerSessionId === me || started.has(task.ownerSessionId)) continue;
+      entries.push({ view: { kind: "other", taskId: task.id }, name: task.title, where: "other terminal", task, status: task.state, auto: auto(task), waiting: 0 });
+    }
+    return entries;
+  }
+
+  /** The entry the Lobby tab shows, falling back to this window when that session is gone. */
+  viewedEntry(): SessionEntry {
+    const entries = this.sessionEntries();
+    const view = this.viewing;
+    const found = view.kind === "here" ? undefined : entries.find((entry) => (entry.view.kind === "background" && view.kind === "background" && entry.view.key === view.key) || (entry.view.kind === "other" && view.kind === "other" && entry.view.taskId === view.taskId));
+    if (!found && view.kind !== "here") this.viewing = { kind: "here" };
+    return found ?? entries[0]!;
+  }
+
+  private viewedSession(): BackgroundSession | undefined {
+    const view = this.viewing;
+    return view.kind === "background" ? this.host.sessions().find((session) => session.key === view.key) : undefined;
+  }
+
+  /** Show a session in the Lobby tab, and talk to it from there. */
+  view(target: SessionView): void {
+    this.viewing = target;
+    this.picking = false;
+    this.newSession = false;
+    for (const pane of HOME_PANES) this.homeOffsets[pane] = 0;
+    if (this.tab !== "lobby") this.setTab("lobby");
+    this.setMode("type");
+  }
+
+  private openPicker(): void {
+    this.help = false;
+    this.picking = true;
+    const entries = this.sessionEntries();
+    const current = this.viewedEntry();
+    this.pickIndex = Math.max(0, entries.findIndex((entry) => entry.name === current.name && entry.where === current.where));
+  }
+
+  /** Keys while the session switcher is open; true when the key was handled. */
+  private pickerKey(data: string, action: LobbyAction | undefined): boolean {
+    const entries = this.sessionEntries();
+    this.pickIndex = Math.min(this.pickIndex, Math.max(0, entries.length - 1));
+    if (matchesKey(data, Key.escape) || action === "sessions") {
+      this.picking = false;
+      return true;
+    }
+    if (matchesKey(data, Key.up) || data === "k") return (this.pickIndex = Math.max(0, this.pickIndex - 1)), true;
+    if (matchesKey(data, Key.down) || data === "j") return (this.pickIndex = Math.min(entries.length - 1, this.pickIndex + 1)), true;
+    const entry = entries[this.pickIndex];
+    if (matchesKey(data, Key.enter) && entry) {
+      this.view(entry.view);
+      this.say(entry.view.kind === "here" ? "back to this window" : `showing ${entry.name} — you talk to its oracle from here`);
+      return true;
+    }
+    if (data === "n" || action === "newSession") {
+      this.picking = false;
+      this.startNewSessionPrompt();
+      return true;
+    }
+    if (data === "x" && entry?.view.kind === "background") {
+      const key = entry.view.key;
+      if (this.armed !== `stop:${key}`) {
+        this.armed = `stop:${key}`;
+        this.say(`press x again to stop ${entry.name} (its task keeps its state)`, "warning");
+        return true;
+      }
+      this.armed = undefined;
+      this.host.sessions().find((session) => session.key === key)?.stop();
+      this.say(`stopping ${entry.name}`);
+      return true;
+    }
+    return true;
+  }
+
+  /** Start typing a task that begins in its own new session. */
+  startNewSessionPrompt(): void {
+    this.picking = false;
+    this.help = false;
+    if (this.tab !== "lobby") this.setTab("lobby");
+    this.newSession = true;
+    this.setMode("type");
+  }
+
+  /** Start a task in a new background session and show it. */
+  startInNewSession(start: { request?: string; plan?: PlannedTask }): void {
+    const session = this.host.startSession(start);
+    if (typeof session === "string") return this.say(session, "warning");
+    this.view({ kind: "background", key: session.key });
+    this.say(`started ${session.name} in a new session — alt+o switches back`);
+    this.refreshData(true);
+  }
+
+  /** The task auto mode applies to: the selected row on the Tasks tab, the viewed session's task elsewhere. */
+  private autoTarget(): Task | undefined {
+    if (this.tab === "tasks") {
+      const row = this.taskRowList()[this.tasksSelected];
+      return row?.kind === "task" ? this.data.tasks.find((task) => task.id === row.id) : undefined;
+    }
+    return this.viewedEntry().task;
+  }
+
+  /** Switch auto mode for the task in view. */
+  toggleAuto(): void {
+    const task = this.autoTarget();
+    if (!task || TERMINAL_STATES.includes(task.state)) return this.say("no active task here — auto mode applies to a task", "warning");
+    const on = !this.host.isAuto(task.id);
+    this.host.setAuto(task.id, on);
+    this.say(on ? `auto mode on — the oracle drives ${task.id} to completion without asking` : `auto mode off — the oracle asks you again on ${task.id}`);
   }
 
   /** Save the planning session's draft to the pending tasks, from any tab and in either mode. */
@@ -1139,18 +1391,15 @@ export class LobbyView implements Component, Focusable {
   private submit(text: string): void {
     const body = text.trim();
     if (!body) {
-      // An empty enter on the Plan tab opens the panel's questions.
+      // An empty enter on the Plan tab opens the panel's questions; on the Lobby, a background session's question.
       if (this.tab === "plan" && !this.lineTarget && this.host.planner()?.awaitingAnswers) this.answerQuestions();
+      if (this.tab === "lobby" && !this.newSession) this.answerSessionDialog();
       return;
     }
     this.editor.addToHistory(body);
     switch (this.tab) {
-      case "lobby": {
-        const notice = this.host.toOracle(body);
-        if (notice) this.say(notice);
-        this.homeOffsets.conversation = 0;
-        return;
-      }
+      case "lobby":
+        return this.submitLobby(body);
       case "tasks":
         if (!this.commentTarget) {
           this.editor.setText(body);
@@ -1214,7 +1463,10 @@ export class LobbyView implements Component, Focusable {
 
   /** Task rows, narrowed by the Tasks tab's search. */
   private taskRowList(): TaskRow[] {
-    const rows = taskRows(this.data.tasks, this.data.plans, this.host.sessionId(), this.now());
+    const names = new Map<string, string>();
+    for (const session of this.host.sessions()) if (session.sessionId && session.alive) names.set(session.sessionId, session.name);
+    const auto = new Set(this.data.tasks.filter((task) => !TERMINAL_STATES.includes(task.state) && this.host.isAuto(task.id)).map((task) => task.id));
+    const rows = taskRows(this.data.tasks, this.data.plans, this.host.sessionId(), this.now(), { names, auto });
     return filterRows(rows, this.data.tasks, this.data.plans, this.queries.tasks);
   }
 
@@ -1248,13 +1500,26 @@ export class LobbyView implements Component, Focusable {
     }
     this.tabSpans = spans;
     const room = width - visibleWidth(left) - 1;
-    const dot = paint(theme, this.host.masterBusy() ? "accent" : "dim", this.host.masterBusy() ? spinner(this.tick) : "●");
-    const state = zen.task ? paint(theme, "muted", zen.task.paused ? `${zen.task.state} (paused)` : zen.task.state) : "";
+    const entry = this.viewedEntry();
     const help = paint(theme, "dim", `${keyLabel(this.keys.help)} keys `);
-    // Long task ids give way to the state, then to the dot alone.
-    const choices = zen.task
-      ? [`${dot} ${zen.task.id} ${state}  ${help}`, `${dot} ${zen.task.id} ${state} `, `${dot} ${state} `, `${dot} `]
-      : [`${paint(theme, "dim", "no task in this session")}  ${help}`, paint(theme, "dim", "no task in this session "), help, ""];
+    const auto = entry.auto ? ` ${bold(theme, paint(theme, "success", "⟳ AUTO"))}` : "";
+    const waiting = this.host.sessions().reduce((count, session) => count + session.dialogs.length, 0);
+    const asking = waiting > 0 ? ` ${paint(theme, "warning", `● ${waiting} waiting · ${keyLabel(this.keys.sessions)}`)}` : "";
+    let choices: string[];
+    if (entry.view.kind !== "here") {
+      // Another session in view: its name and what it is doing lead, so it is never mistaken for this window.
+      const working = entry.status === "working";
+      const dot = paint(theme, working ? "accent" : "dim", working ? spinner(this.tick) : "◆");
+      const where = paint(theme, "muted", `${entry.name} · ${entry.status}`);
+      choices = [`${dot} ${where}${auto}${asking}  ${help}`, `${dot} ${where}${auto}${asking} `, `${dot} ${where}${auto} `, `${dot}${auto} `];
+    } else {
+      const dot = paint(theme, this.host.masterBusy() ? "accent" : "dim", this.host.masterBusy() ? spinner(this.tick) : "●");
+      const state = zen.task ? paint(theme, "muted", zen.task.paused ? `${zen.task.state} (paused)` : zen.task.state) : "";
+      // Long task ids give way to the state, then to the dot alone.
+      choices = zen.task
+        ? [`${dot} ${zen.task.id} ${state}${auto}${asking}  ${help}`, `${dot} ${zen.task.id} ${state}${auto}${asking} `, `${dot} ${state}${auto} `, `${dot}${auto} `]
+        : [`${paint(theme, "dim", "no task in this session")}${asking}  ${help}`, `${paint(theme, "dim", "no task in this session")}${asking} `, help, ""];
+    }
     const status = choices.find((choice) => visibleWidth(choice) <= room) ?? "";
     const gap = width - visibleWidth(left) - visibleWidth(status);
     return gap >= 1 ? `${left}${" ".repeat(gap)}${status}` : fit(left, width);
@@ -1264,9 +1529,18 @@ export class LobbyView implements Component, Focusable {
     const zen = this.host.zen();
     const browsing = this.mode === "browse";
     switch (this.tab) {
-      case "lobby":
+      case "lobby": {
+        if (this.newSession) return "new task — it starts in its own session, named after it";
+        if (this.viewing.kind !== "here") {
+          const entry = this.viewedEntry();
+          const session = this.viewedSession();
+          if (session && !session.alive) return `${entry.name} has ended`;
+          if (session?.dialogs.length) return `press enter to answer ${entry.name}'s question, or type a message`;
+          return entry.where === "other terminal" ? `message ${entry.name}'s oracle (its own session delivers it)` : `message ${entry.name}'s oracle`;
+        }
         if (!zen.task) return browsing ? "describe a task to start — i to type" : "describe a task to start · enter starts it";
         return browsing ? "message the oracle — i to type" : this.host.masterBusy() ? "message the oracle · enter steers the running turn" : "message the oracle";
+      }
       case "tasks":
         return this.commentTarget ? `comment on ${this.commentTarget}'s plan · enter sends it to the oracle` : "c comments on the selected task's plan";
       case "plan": {
@@ -1318,7 +1592,8 @@ export class LobbyView implements Component, Focusable {
     switch (this.tab) {
       case "lobby":
         return [
-          { key: "type", text: "talk to the oracle (starts a task when none is running)" },
+          { key: "type", text: "talk to the oracle of the session in view (in this window, starts a task when none is running)" },
+          { key: "enter", text: "on an empty prompt: answer the question a background session waits on" },
           { key: "↑ ↓", text: "scroll the focused pane (PageUp/PageDown a page)" },
           { key: "← →", text: "move between the conversation, activity log and thinking" },
           { key: "Home End", text: "the oldest lines, or back to the newest" },
@@ -1330,7 +1605,11 @@ export class LobbyView implements Component, Focusable {
           { key: "↑ ↓", text: "select a task or plan, or scroll the detail (PageUp/PageDown)" },
           { key: "enter / ← →", text: "move between the list and the detail" },
           { key: "c", text: "comment on the selected task's plan" },
-          { key: "s", text: "start the selected planned task" },
+          { key: "s", text: "start the selected planned task in a new session, named after it" },
+          { key: "h", text: "start the selected planned task here, in this window" },
+          { key: "n", text: "type a new task that starts in its own session" },
+          { key: "o", text: "show the session driving the selected task in the Lobby tab" },
+          { key: "x x", text: "stop the background session driving the selected task" },
           { key: "d d", text: "discard the selected planned task" },
           { key: "r", text: "reread tasks from disk" },
         ];
@@ -1399,6 +1678,12 @@ export class LobbyView implements Component, Focusable {
     const k = (action: LobbyAction) => keyLabel(this.keys[action]).toLowerCase();
     const session = this.host.planner();
     if (this.mode === "type") {
+      if (this.tab === "lobby" && this.newSession) return [["enter", "start in a new session"], ["esc", "cancel"]];
+      if (this.tab === "lobby" && this.viewing.kind !== "here") {
+        const background = this.viewedSession();
+        if (background?.dialogs.length && !this.editor.getText().trim()) return [["enter", "answer its question"], [k("sessions"), "sessions"], [k("hide"), "hide"]];
+        return [["enter", background?.busy ? "steer" : "send"], [k("sessions"), "sessions"], [k("toggleAuto"), "auto"]];
+      }
       if (this.tab === "lobby" && this.host.masterBusy()) return [["enter", "steer"], ["esc", "stop the oracle"], [k("hide"), "hide"]];
       if (this.tab === "plan" && this.lineTarget) return [["enter", "add the comment"], ["esc", "cancel"]];
       const enter = this.tab === "plan" && session?.awaitingAnswers && !this.editor.getText().trim() ? "answer questions" : this.tab === "quickfix" ? "run it" : "send";
@@ -1407,14 +1692,15 @@ export class LobbyView implements Component, Focusable {
     const keys: Array<[string, string]> = [];
     switch (this.tab) {
       case "lobby":
-        keys.push(["←→", "pane"], ["↑↓", "scroll"], [k("toggleScene"), "animations"]);
-        if (this.host.zen().task) keys.push(["c", "comment on plan"]);
+        keys.push(["←→", "pane"], ["↑↓", "scroll"], [k("sessions"), "sessions"], [k("newSession"), "new session"]);
+        if (this.viewedEntry().task) keys.push([k("toggleAuto"), "auto"], ["c", "comment on plan"]);
         break;
       case "tasks": {
         const row = this.taskRowList()[this.tasksSelected];
-        keys.push(["↑↓", "select"], ["enter", "detail"]);
-        if (row?.kind === "task") keys.push(["c", "comment"]);
-        if (row?.kind === "plan") keys.push(["s", "start"], ["d", "discard"]);
+        keys.push(["↑↓", "select"]);
+        if (row?.kind === "task") keys.push(["c", "comment"], ["o", "open its session"], [k("toggleAuto"), "auto"]);
+        if (row?.kind === "plan") keys.push(["s", "start in a new session"], ["h", "start here"], ["d", "discard"]);
+        keys.push(["n", "new task"]);
         break;
       }
       case "plan":
@@ -1583,12 +1869,34 @@ export class LobbyView implements Component, Focusable {
     };
   }
 
+  /** The session switcher: every session this window can show, with what each is doing. */
+  private pickerBody(width: number, height: number, theme: LobbyTheme): string[] {
+    const entries = this.sessionEntries();
+    this.pickIndex = Math.min(this.pickIndex, Math.max(0, entries.length - 1));
+    const inner = width - 4;
+    const nameWidth = Math.min(34, Math.max(14, Math.floor(inner * 0.36)));
+    const marks = { "this window": "●", background: "◆", "other terminal": "◇" } as const;
+    const lines = entries.map((entry, index) => {
+      const selected = index === this.pickIndex;
+      const mark = paint(theme, entry.where === "this window" ? "accent" : "toolTitle", marks[entry.where]);
+      const name = fit(selected ? bold(theme, entry.name) : entry.name, nameWidth);
+      const status = paint(theme, entry.status === "working" ? "accent" : entry.status === "ended" ? "dim" : "muted", entry.status.replace(/_/g, " "));
+      const badges = [entry.auto ? paint(theme, "success", "⟳ auto") : "", entry.waiting > 0 ? paint(theme, "warning", `● ${entry.waiting} waiting`) : ""].filter(Boolean).join(" ");
+      const where = paint(theme, "dim", entry.where);
+      return selectRow(theme, `${selected ? paint(theme, "accent", "▸") : " "} ${mark} ${name} ${where} ${paint(theme, "dim", "·")} ${status}${badges ? ` ${badges}` : ""}`, inner, selected, true);
+    });
+    const help = paint(theme, "dim", "enter shows it here · n new task in a new session · x x stops a background session · esc closes");
+    return box(width, height, [...lines, "", ...wrap(help, inner)], { title: "Sessions", right: `${entries.length}`, focused: true, theme });
+  }
+
   private homeBody(width: number, height: number, theme: LobbyTheme, now: number): string[] {
     const zen = this.host.zen();
     const feed = this.host.feed;
     const sessionId = this.host.sessionId();
     const others = this.data.tasks.filter((task) => !TERMINAL_STATES.includes(task.state) && task.ownerSessionId !== sessionId).length;
     const query = this.query();
+    const entry = this.viewedEntry();
+    if (entry.view.kind !== "here") return this.otherSessionBody(entry, width, height, theme, now);
     return renderHome({
       ...(zen.task ? { task: zen.task, scene: (w: number, h: number, animated: boolean) => this.host.scene(w, h, animated) } : {}),
       chat: feed.chat,
@@ -1611,6 +1919,57 @@ export class LobbyView implements Component, Focusable {
         activity: keyLabel(this.keys.toggleActivity),
         thinking: keyLabel(this.keys.toggleThinking),
       },
+    }, width, height, theme);
+  }
+
+  /**
+   * Another session on the Lobby tab: a background session's live feed, or an
+   * other terminal's conversation read from its session file; the task's
+   * status sits on top without animations.
+   */
+  private otherSessionBody(entry: SessionEntry, width: number, height: number, theme: LobbyTheme, now: number): string[] {
+    const session = this.viewedSession();
+    const task = entry.task;
+    const query = this.query();
+    const common = {
+      ...(task ? { task, scene: (w: number, h: number) => this.host.taskScene(task, w, h), stillScene: true } : {}),
+      others: 0,
+      pending: 0,
+      offsets: this.homeOffsets,
+      ...(this.mode === "browse" ? { focus: this.homeFocus } : {}),
+      panes: this.panes,
+      tick: this.tick,
+      now,
+      panels: this.panels,
+      ...(query ? { query } : {}),
+      title: entry.name,
+      keys: {
+        scene: keyLabel(this.keys.toggleScene),
+        conversation: keyLabel(this.keys.toggleConversation),
+        activity: keyLabel(this.keys.toggleActivity),
+        thinking: keyLabel(this.keys.toggleThinking),
+      },
+    };
+    if (session) {
+      const emptyNote = session.status === "starting" ? `starting ${session.name}…` : !session.alive ? `${session.name} has ended.` : `${session.name} has not said anything yet.`;
+      return renderHome({
+        ...common,
+        chat: session.feed.chat,
+        ...(session.feed.reply ? { liveReply: session.feed.reply } : {}),
+        activity: session.feed.activity,
+        thoughts: session.feed.thoughts,
+        busy: session.busy,
+        emptyNote,
+      }, width, height, theme);
+    }
+    return renderHome({
+      ...common,
+      chat: task?.ownerSessionId ? this.host.sessionChat(task.ownerSessionId) : [],
+      activity: [],
+      thoughts: [],
+      busy: false,
+      emptyNote: "Nothing said in this session yet.",
+      activityNote: "This session runs in another terminal: its conversation shows here and your messages reach its oracle, but live activity only streams from sessions started in this window.",
     }, width, height, theme);
   }
 
@@ -1641,9 +2000,9 @@ export class LobbyView implements Component, Focusable {
     const bodyHeight = Math.max(0, rows - top.length - search.length - prompt.length - 1);
     this.bodyTop = top.length;
     this.promptTop = top.length + bodyHeight + search.length;
-    let body = this.help ? this.helpBody(width, bodyHeight, theme) : this.body(width, bodyHeight, theme);
+    let body = this.help ? this.helpBody(width, bodyHeight, theme) : this.picking ? this.pickerBody(width, bodyHeight, theme) : this.body(width, bodyHeight, theme);
     // A pane scrolled back that gained lines moves with them, so it keeps showing what was being read.
-    if (!this.help && this.clampScroll()) body = this.body(width, bodyHeight, theme);
+    if (!this.help && !this.picking && this.clampScroll()) body = this.body(width, bodyHeight, theme);
     const query = this.query();
     if (query && !this.help) body = body.map((line) => highlight(line, query));
     return [...top, ...body, ...search, ...prompt, hint].slice(0, rows).map((line) => fit(line, width));
