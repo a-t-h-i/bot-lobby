@@ -30,6 +30,8 @@ export interface LobbyTheme {
   bg?(color: "selectedBg" | "searchMatchBg" | "userMessageBg", text: string): string;
   /** Render Markdown to styled lines; plain wrapping without it (tests). */
   markdown?(text: string, width: number): string[];
+  /** Strike text through (an abandoned task's title); plain without it (tests). */
+  strike?(text: string): string;
 }
 
 /** Paint only when a theme is present; tests without one get plain text. */
@@ -43,6 +45,18 @@ export function bold(theme: LobbyTheme | undefined, text: string): string {
 
 export function italic(theme: LobbyTheme | undefined, text: string): string {
   return theme?.italic && text ? theme.italic(text) : text;
+}
+
+export function strike(theme: LobbyTheme | undefined, text: string): string {
+  return theme?.strike && text ? theme.strike(text) : text;
+}
+
+/** `left` and `right` on one line of exactly `width` columns: the left side gives way first. */
+export function spread(left: string, right: string, width: number): string {
+  if (!right) return fit(left, width);
+  const room = width - visibleWidth(right) - 1;
+  if (room < 4) return fit(left, width);
+  return `${fit(left, room)} ${right}`;
 }
 
 /** Exactly `width` columns: truncated with an ellipsis, or padded with spaces. */

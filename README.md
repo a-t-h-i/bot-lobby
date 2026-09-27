@@ -149,11 +149,16 @@ or without a task.
   you are reading while new lines arrive. The prompt talks to the
   oracle (while it works, enter steers the running turn; `esc` stops it); with
   no task, it starts one.
-- **2 Tasks** — every task in the project: this session's, the ones other pi
-  sessions are driving, pending plans saved from the planner, and recently
-  finished ones. The detail pane shows the request, the approved plan with its
-  step checklist, your comments on it, amendments, what the task waits on and
-  its recent runs. `c` comments on the selected task's plan (see below), `s`
+- **2 Tasks** — every task in the project as a checklist: this session's, the
+  ones other pi sessions are driving, pending plans saved from the planner, and
+  recently finished ones, each section under a rule with its count. A task or
+  plan still to do wears an empty box `☐` (coloured by its state) with its
+  state, auto mode and owner beneath and its plan progress as pips
+  (`▰▰▱▱ 2/4`); a completed task is ticked `☑`, and an abandoned one is crossed
+  `☒` with its title struck through. The detail pane shows the task's box,
+  state and progress bar, then the request, the plan's steps (`☑` done, `☐`
+  to do, `◂ now` on the current one), the approved plan, your comments on it,
+  amendments, what the task waits on and its recent runs. `c` comments on the selected task's plan (see below), `s`
   starts a pending plan as a task **in a new session** and `h` starts it
   here, in this window (either way its agreed plan needs no approval), `d`
   twice discards one. `n` types a new task that starts in its own session, `o`
