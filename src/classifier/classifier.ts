@@ -55,6 +55,11 @@ export class Classifier {
     return this.deps.now?.() ?? Date.now();
   }
 
+  /** The current settings (thresholds, limits), read live. */
+  get config(): ClassifierConfig {
+    return this.deps.config();
+  }
+
   /** Switched on (and, given a feature, that feature too) and not paused after failures. */
   enabled(feature?: ClassifierFeature): boolean {
     const config = this.deps.config();
