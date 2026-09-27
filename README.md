@@ -110,7 +110,7 @@ or without a task.
 
 ```
  ◆ bot-lobby │ 1 Lobby  2 Tasks 2  3 Plan 2?  4 Quick fix ⠋  5 Metrics      ⠋ TASK-add-login implementing  Alt+H keys
-                    (the zen scene: the oracle, DEV · DESIGN · RESEARCH · QA, the plan checklist)
+                    (the task's status: state, what the agents are doing, the plan checklist)
 ╭ Conversation ──────────────────────────────── Alt+C ╮ ╭ Activity ──────────────────────────────── Alt+A ╮
 │ ──────── task started · add login · 12:04 ───────── │ │ 12:04 MASTER    ✓ scouting designer, backend    │
 │ ● You                                         12:04 │ │ 12:06 DEV       ⠋ reading auth.ts…              │
@@ -128,7 +128,8 @@ or without a task.
   TYPE  enter send  esc browse  alt+l hide
 ```
 
-- **1 Lobby** — the task's zen scene, then the conversation with the oracle
+- **1 Lobby** — the task's status (its state box, what the agents are
+  doing and the plan checklist), then the conversation with the oracle
   (its text only: no tool rows, no thinking; each turn under a `● You` or
   `◆ Oracle` line with its time, your words in pi's user-message band, the
   oracle's replies as Markdown, and events such as a task starting as a
@@ -139,10 +140,10 @@ or without a task.
   thoughts show up: the oracle's live thought as it streams, and each finished
   thought from a subagent, quick fix or the planner (pi's own transcript,
   behind the lobby, still carries the oracle's thinking blocks; `ctrl+t`
-  collapses them there). The oracle's replies render as Markdown. `alt+z`
-  hides the oracle and agent animations, leaving just the task's status box,
-  what the agents are doing and the checklist (the scene names the key in its
-  corner). `alt+c`, `alt+a` and `alt+k` hide or bring back the conversation,
+  collapses them there). The oracle's replies render as Markdown. To keep
+  the lobby clean, the animated oracle and agents stay out of it by default:
+  they show above pi's editor while the lobby is hidden, and `alt+z` brings
+  them into the lobby too (the status box names the key in its corner). `alt+c`, `alt+a` and `alt+k` hide or bring back the conversation,
   the activity log and thinking, and the rest take their room; every choice is
   remembered (`lobby.panels`). Each pane scrolls on
   its own (see **Scrolling** below), and a pane scrolled back stays on what
@@ -243,7 +244,7 @@ typing). These work in both modes:
 | `alt+n` | type a new task that starts in its own session, named after it |
 | `alt+g` | auto mode on or off for the task in view (the selected one on Tasks) |
 | `tab` / `shift+tab`, `alt+1`…`alt+5` | switch tabs |
-| `alt+z` | show or hide the oracle and agent animations (the task's status stays) |
+| `alt+z` | show or hide the oracle and agent animations in the lobby (off by default; the task's status always shows) |
 | `alt+c` / `alt+a` / `alt+k` | show or hide the conversation / activity log / thinking |
 | `pageup` / `pagedown` | scroll the focused pane a page |
 | `ctrl+c` | clear the prompt, or hide the lobby when it is empty |
@@ -387,8 +388,8 @@ every in-flight subagent process.
 
 While the owning session has a task active, its transcript switches to a zen view: `orchestrate` rows
 and the built-in spinner are hidden, and a widget above the editor animates the
-task (the same scene heads the lobby's first tab; the widget shows while the
-lobby is hidden). At 72 columns and wider it draws a large scene: a header box with the task
+task (the widget shows while the lobby is hidden; inside the lobby the same
+scene shows only with `alt+z`, its status box otherwise). At 72 columns and wider it draws a large scene: a header box with the task
 title and state in its top border, a progress bar, and a metadata row with
 elapsed time, quiet-mode hint and task id; an oracle tower with a twinkling
 aura (drifting z's while dormant), a radiant orb crown, two window eyes, a
@@ -666,7 +667,7 @@ flips its switches, and key rebinding lives in the file:
   "autoAsk": true,
   "issues": false,
   "mouse": true,
-  "panels": { "scene": true, "conversation": true, "activity": true, "thinking": true },
+  "panels": { "animations": false, "conversation": true, "activity": true, "thinking": true },
   "keys": { "toggleThinking": "alt+t" }
 }
 ```
@@ -677,8 +678,9 @@ by itself when this session starts or resumes a task; `autoAsk` puts the
 panel's questions to you as soon as a round ends while the Plan tab is
 showing (otherwise `enter` on the empty prompt does); `issues` shows the
 GitHub Issues tab (off for now); `mouse` turns clicks and the wheel on;
-`panels` is which Lobby panes show, with `scene: false` meaning no oracle
-and agent animations (the pane keys update it); `keys` rebinds
+`panels` is which Lobby panes show, with `animations: true` bringing the
+animated oracle and agents into the lobby (off by default; the older
+`scene` key is no longer read, and the pane keys update it); `keys` rebinds
 shortcuts by action name.
 
 `thinking` must be one of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`,
