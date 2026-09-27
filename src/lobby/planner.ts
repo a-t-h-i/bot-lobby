@@ -10,6 +10,8 @@
  * Each round runs the seats in parallel (read-only; RESEARCH may also use the
  * web tools), then the oracle over their output. Rounds replay the whole
  * conversation, so one can be stopped or retried without losing the session.
+ * A round limit bounds the grilling: the last round skips the seats and the
+ * oracle decides whatever is still open, and later replies only revise.
  * The agreed plan is saved as a pending task.
  */
 import { loadPrompt } from "../prompts/loader.ts";
@@ -118,6 +120,37 @@ export interface PlannerDeps {
   onChange?: () => void;
   /** Called when a round ends (answered, failed or stopped), so the lobby can put the questions to the user. */
   onRound?: (session: PlanningSession) => void;
+  /** Rounds before the oracle finalizes alone (0 or absent = unlimited); read as each round starts. */
+  maxRounds?: () => number;
+}
+
+/**
+ * How a round runs under the limit: `normal` grilling with the seats, the
+ * `final` round (the oracle alone, deciding what is open), or `revise` once
+ * past the limit (the oracle alone, revising for the user's latest message).
+ */
+export type RoundMode = "normal" | "final" | "revise";
+
+export function roundMode(round: number, limit: number): RoundMode {
+  if (limit <= 0 || round < limit) return "normal";
+  return round === limit ? "final" : "revise";
+}
+
+/** What the oracle is told to do at the end of its task, by round mode. */
+export function oracleClosing(mode: RoundMode, round: number, limit: number): string {
+  if (mode === "final") {
+    return `Final round (${round} of ${limit}): no seat runs this round and nothing more is asked. Fold the user's answers into the plan, decide every point still open with its recommended option and list each under ### Assumptions, and set Status READY. Omit the Questions section. Reply in the required output format.`;
+  }
+  if (mode === "revise") {
+    return `The planning round limit (${limit}) is reached: revise the plan for the user's latest message and comments. Ask nothing; decide anything open with its recommended option under ### Assumptions, and keep Status READY. Omit the Questions section. Reply in the required output format.`;
+  }
+  const bound = limit > 0 ? `Round ${round} of ${limit}; in round ${limit} you settle whatever is still open alone, so ask the decisive questions now. ` : "";
+  return `${bound}Continue: fold the panel's notes and the user's answers into the plan, ask what no seat owns, or declare the plan READY. Reply in the required output format.`;
+}
+
+/** `round 2 of 5`, for a seat's task; empty without a limit. */
+function roundNote(round: number, limit: number): string {
+  return limit > 0 ? ` (round ${round} of ${limit})` : "";
 }
 
 /** Split a reply into its top-level `## Section` bodies, keyed by lower-case title. */
@@ -156,6 +189,36 @@ export function parseOption(text: string): PanelOption {
   const flat = text.replace(/\*\*/g, "").trim();
   const split = /^(.*?)\s+(?:—|–|-)\s+(.+)$/.exec(flat) ?? /^([^:]{1,60}):\s+(.+)$/.exec(flat);
   return split ? { label: split[1]!.trim(), description: split[2]!.trim() } : { label: flat, description: "" };
+}
+
+/** The option the asker recommends: the one marked `(Recommended)`, else the first. */
+export function recommendedOption(question: AskedQuestion): PanelOption | undefined {
+  return question.options.find((option) => /\(recommended\)/i.test(option.label)) ?? question.options[0];
+}
+
+/** An option's label without its `(Recommended)` marker. */
+export function optionLabel(option: PanelOption): string {
+  return option.label.replace(/\s*\(recommended\)\s*/i, " ").trim();
+}
+
+/**
+ * Record questions nobody will ask any more as assumptions in the plan, each
+ * decided with its recommended option: under the plan's `### Assumptions`
+ * section when it has one, otherwise in a new one at the end.
+ */
+export function appendAssumptions(plan: string, questions: readonly PanelQuestion[], why: string): string {
+  if (questions.length === 0) return plan;
+  const lines = questions.map((question) => {
+    const pick = recommendedOption(question);
+    return `- [${question.from}] ${question.text} → ${pick ? optionLabel(pick) : "the oracle's call"} (${why})`;
+  });
+  const rows = plan.split("\n");
+  const heading = rows.findIndex((row) => /^#{2,3}\s+assumptions\s*$/i.test(row.trim()));
+  if (heading < 0) return `${plan.trimEnd()}\n\n### Assumptions\n${lines.join("\n")}`;
+  let end = rows.findIndex((row, index) => index > heading && /^#{1,3}\s/.test(row));
+  if (end < 0) end = rows.length;
+  while (end > heading + 1 && rows[end - 1]!.trim() === "") end -= 1;
+  return [...rows.slice(0, end), ...lines, ...rows.slice(end)].join("\n");
 }
 
 /** Inline `a) … b) …` choices, when a question carries its options in its own text. */
@@ -293,7 +356,12 @@ export function commentBlock(comments: readonly LineComment[]): string {
 }
 
 /** What the panel said in a round, as the conversation shows it. */
-export function plannerSays(ready: boolean, questions: readonly PanelQuestion[]): string {
+export function plannerSays(ready: boolean, questions: readonly PanelQuestion[], mode: RoundMode = "normal"): string {
+  if (mode !== "normal") {
+    return ready
+      ? "The round limit is reached: the oracle decided what was still open (see Assumptions). Save the plan, or comment on a line to revise it."
+      : "The round limit is reached, but there is no draft yet. Reply or retry to let the oracle write one.";
+  }
   if (ready) return "The panel agrees the plan is clear. Save it as a pending task, or keep refining.";
   if (questions.length === 0) return "No open questions this round. Save the draft, or add detail.";
   return questions.map(questionLine).join("\n");
@@ -343,7 +411,11 @@ export class PlanningSession {
   answered: AskResult[] = [];
   /** Comments on draft lines, sent with the user's next turn. */
   lineComments: LineComment[] = [];
+  /** How the latest round ran under the round limit. */
+  mode: RoundMode = "normal";
   private controller?: AbortController;
+  /** Round attempts, retries included, so each attempt's feed steps stay apart. */
+  private attempts = 0;
   private readonly deps: PlannerDeps;
   private readonly memberNotes = new Map<PanelMember, string[]>();
 
@@ -359,6 +431,16 @@ export class PlanningSession {
 
   get busy(): boolean {
     return this.status === "thinking";
+  }
+
+  /** Rounds before the oracle finalizes alone; 0 = unlimited. */
+  get limit(): number {
+    return Math.max(0, this.deps.maxRounds?.() ?? 0);
+  }
+
+  /** How the next round will run. */
+  get nextMode(): RoundMode {
+    return roundMode(this.turns + 1, this.limit);
   }
 
   /** Seat or unseat a member for the next round; returns whether it now sits. */
@@ -417,6 +499,8 @@ export class PlanningSession {
   async retry(): Promise<void> {
     if (!this.retryable) return;
     if (this.messages.at(-1)?.role === "planner") this.messages = this.messages.slice(0, -1);
+    // A retry replays the same round; it does not use up another one.
+    this.turns = Math.max(0, this.turns - 1);
     await this.turn();
   }
 
@@ -439,7 +523,7 @@ export class PlanningSession {
   }
 
   private stepKey(who: string): string {
-    return `plan-${who}-${this.turns}`;
+    return `plan-${who}-${this.attempts}`;
   }
 
   /** Stream one agent's steps and thoughts into its state and the lobby feed. */
@@ -486,7 +570,7 @@ export class PlanningSession {
     const label = MEMBER_LABELS[member];
     const profile = this.deps.memberProfile?.(member) ?? this.deps.profile();
     const outcome = await this.run(label, "panel", profile, {
-      task: `${transcript}\n\nYou are ${label} on the planning panel: ask your seat's open questions, or declare READY.`,
+      task: `${transcript}\n\nYou are ${label} on the planning panel${roundNote(this.turns, this.limit)}: ask your seat's open questions, or declare READY.`,
       systemPrompt: memberPrompt(member, profile.instructions),
       tools: member === "researcher" ? RESEARCH_PANEL_TOOLS : PLANNER_TOOLS,
     }, signal, (step) => (state.step = step));
@@ -510,8 +594,14 @@ export class PlanningSession {
     this.status = "thinking";
     this.error = undefined;
     this.turns += 1;
+    this.attempts += 1;
     this.answered = [];
-    this.members = PANEL_MEMBERS.filter((member) => this.seats.has(member)).map((member) => ({ member, status: "thinking", step: "reading the conversation" }));
+    const limit = this.limit;
+    const mode = roundMode(this.turns, limit);
+    this.mode = mode;
+    // At and past the limit the oracle works alone: the seats have had their rounds.
+    const seated = mode === "normal" ? PANEL_MEMBERS.filter((member) => this.seats.has(member)) : [];
+    this.members = seated.map((member) => ({ member, status: "thinking", step: "reading the conversation" }));
     this.step = this.members.length > 0 ? "waiting for the panel" : "reading the conversation";
     this.deps.onChange?.();
     try {
@@ -523,12 +613,12 @@ export class PlanningSession {
       this.deps.onChange?.();
       const profile = this.deps.profile();
       const lead = await this.run(ORACLE_LABEL, "planner", profile, {
-        task: `${plannerTranscript(this.messages, this.seed, this.reply?.plan, "")}\n\n${panelSection(outcomes)}\n\nContinue: fold the panel's notes and the user's answers into the plan, ask what no seat owns, or declare the plan READY. Reply in the required output format.`,
+        task: `${plannerTranscript(this.messages, this.seed, this.reply?.plan, "")}\n\n${panelSection(outcomes)}\n\n${oracleClosing(mode, this.turns, limit)}`,
         systemPrompt: plannerPrompt(profile.instructions),
         tools: PLANNER_TOOLS,
       }, controller.signal, (step) => (this.step = step));
       if (controller.signal.aborted) throw new Error("stopped");
-      this.finishRound(outcomes, lead);
+      this.finishRound(outcomes, lead, mode);
     } catch (error) {
       this.error = (error as Error).message;
     } finally {
@@ -543,23 +633,37 @@ export class PlanningSession {
     if (!this.error && !this.busy && this.questions.length === 0 && this.lineComments.length > 0) await this.send("");
   }
 
-  /** The oracle's reply sets the round's questions (chosen from the seats' and its own), verdict and draft. */
-  private finishRound(outcomes: readonly MemberOutcome[], lead: RunOutcome): void {
+  /**
+   * The oracle's reply sets the round's questions (chosen from the seats' and
+   * its own), verdict and draft. At and past the round limit nothing more is
+   * asked: any question the oracle still wrote is decided with its
+   * recommended option and recorded in the plan's Assumptions, and a plan
+   * that exists is READY.
+   */
+  private finishRound(outcomes: readonly MemberOutcome[], lead: RunOutcome, mode: RoundMode): void {
     const reply = lead.status === "success" ? parsePlannerReply(lead.output) : undefined;
     const seatQuestions = outcomes.flatMap((outcome) => (outcome.reply?.questions ?? []).map((question) => ({ ...question, from: MEMBER_LABELS[outcome.member] })));
-    const questions = roundQuestions(reply, seatQuestions);
+    let questions = roundQuestions(reply, seatQuestions);
     const seatsReady = outcomes.every((outcome) => outcome.reply?.status === "ready");
-    const ready = Boolean(reply && reply.status === "ready" && seatsReady);
+    let ready = Boolean(reply && reply.status === "ready" && seatsReady);
     if (reply) {
       // A round without a plan keeps the previous draft.
-      const plan = reply.plan ?? this.reply?.plan;
-      this.reply = { ...reply, status: ready ? "ready" : "grilling", ...(plan ? { plan } : {}) };
+      let plan = reply.plan ?? this.reply?.plan;
+      if (mode !== "normal") {
+        if (plan && questions.length > 0) {
+          plan = appendAssumptions(plan, questions, "decided at the round limit");
+          this.deps.feed?.log(ORACLE_LABEL, `round limit: decided ${questions.length} open question${questions.length === 1 ? "" : "s"} with the recommended option`, "info");
+        }
+        questions = [];
+        ready = Boolean(plan);
+      }
+      this.reply = { ...reply, status: ready ? "ready" : "grilling", ...(mode !== "normal" ? { questions: [] } : {}), ...(plan ? { plan } : {}) };
     } else {
       this.error = `the oracle's part of the round failed — ${lead.error ?? lead.status}`;
     }
     if (!reply && seatQuestions.length === 0) return;
     this.questions = ready ? [] : questions;
-    this.messages = [...this.messages, { role: "planner", text: plannerSays(ready, this.questions), at: Date.now(), ...(this.questions.length > 0 ? { questions: this.questions } : {}) }];
+    this.messages = [...this.messages, { role: "planner", text: plannerSays(ready, this.questions, mode), at: Date.now(), ...(this.questions.length > 0 ? { questions: this.questions } : {}) }];
   }
 }
 
