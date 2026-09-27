@@ -10,7 +10,7 @@ import type { ClassifierConfig, ClassifierFeature } from "../schemas/configurati
 import type { MetricRecord } from "../state/metrics.ts";
 import { JevError, noul, systemOne, type Answer, type FetchLike, type SystemOneRequest } from "./client.ts";
 import { fitsBudget, requestSize, LIMITS } from "./limits.ts";
-import { jevEndpoint, resolveKey, type KeySource } from "./hosts.ts";
+import { keyHint, resolveTarget, type KeySource } from "./hosts.ts";
 
 export type ClassifierPurpose = ClassifierFeature | "test";
 
@@ -97,10 +97,9 @@ export class Classifier {
 
   private async call(purpose: ClassifierPurpose, request: SystemOneRequest, options: { signal?: AbortSignal; timeoutMs?: number; force?: boolean; saved?: (answers: Record<string, Answer>) => number }): Promise<{ ok: true; value: Classified } | { ok: false; error: string }> {
     const config = this.deps.config();
-    const { host, baseUrl, model } = jevEndpoint(config);
-    const key = await resolveKey(host, this.deps.keys, this.deps.env);
+    const { host, baseUrl, model, key } = await resolveTarget(config, this.deps.keys, this.deps.env);
     if (!key) {
-      const error = `no ${host.label} key: run /login ${host.piProvider} (Use an API key) or set ${host.env}`;
+      const error = `no Jev key: ${keyHint(config)}`;
       if (!options.force && !this.warnedNoKey) {
         this.warnedNoKey = true;
         this.deps.warn?.(`bot-lobby classifier is on but has ${error}. Until then bot-lobby decides without it.`);
@@ -135,7 +134,11 @@ export class Classifier {
         this.record(purpose, "cancelled", started, ms, model);
         return { ok: false, error: "cancelled" };
       }
-      const message = error instanceof JevError || error instanceof Error ? error.message : String(error);
+      let message = error instanceof JevError || error instanceof Error ? error.message : String(error);
+      // A limited-time free model that ends answers 404/410; never switch to the paid one silently.
+      if (error instanceof JevError && (error.status === 404 || error.status === 410) && model.endsWith("-free")) {
+        message += ` — ${host.label}'s free ${model} may have ended; set the classifier's model to ${model.replace(/-free$/, "")} (paid) in /bot-lobby settings to keep using Jev there`;
+      }
       this.record(purpose, error instanceof JevError && /timed out/.test(message) ? "timeout" : "failed", started, ms, model);
       if (!options.force) this.fail(message);
       return { ok: false, error: message };

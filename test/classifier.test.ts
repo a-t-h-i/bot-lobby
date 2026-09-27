@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { choice, choiceOf, JevError, noul, score, scoreOf, systemOne, yesOf, type FetchLike } from "../src/classifier/client.ts";
 import { BREAKER_FAILURES, BREAKER_PAUSE_MS, Classifier } from "../src/classifier/classifier.ts";
 import { clip, clipTail, fitsBudget, LIMITS } from "../src/classifier/limits.ts";
-import { describeKey, JEV_HOST_TABLE, jevEndpoint, maskKey, registerJevProvider, resolveKey } from "../src/classifier/hosts.ts";
+import { chooseHost, describeKey, JEV_HOST_TABLE, jevEndpoint, keyHint, maskKey, registerJevProvider, resolveKey, resolveTarget, type StatusSource } from "../src/classifier/hosts.ts";
 import { DEFAULT_CONFIG, resolveConfig, type ClassifierConfig } from "../src/schemas/configuration.ts";
 import { appendMetrics, readClassifierMetrics, readMetrics, type MetricRecord } from "../src/state/metrics.ts";
 import { classifierSummary, nextJevHost, toggleClassifierFeature } from "../src/pi/settings-ui.ts";
@@ -122,7 +122,7 @@ test("the classifier stays silent when off, and warns once when it has no key", 
   assert.equal(await jev.ask("seats", { state: "x", questions: {} }), undefined);
   assert.equal(sent.length, 0);
   assert.equal(warnings.length, 1);
-  assert.match(warnings[0]!, /no TypeSafe key: run \/login typesafe \(Use an API key\) or set TYPESAFE_API_KEY/);
+  assert.match(warnings[0]!, /no Jev key: sign in to OpenCode for its free Jev \(\/login opencode or set OPENCODE_API_KEY\), or \/login typesafe \(Use an API key\) or set TYPESAFE_API_KEY/);
 });
 
 test("the classifier uses pi's key for the chosen host, records every call, and skips requests over budget", async () => {
@@ -196,29 +196,67 @@ test("a cancelled call is not a failure, and the connection test reports its err
   assert.equal(result.ok && result.model, "jev-1.13");
 });
 
-test("hosts: TypeSafe by default, keys resolved through pi then the environment, and masked", async () => {
-  assert.deepEqual(jevEndpoint(DEFAULT_CONFIG.classifier), { host: JEV_HOST_TABLE.typesafe, baseUrl: "https://api.typesafe.ai", model: "jev-latest" });
-  assert.equal(jevEndpoint(config({ provider: "vercel" })).host.piProvider, "vercel-ai-gateway");
-  assert.equal(jevEndpoint(config({ baseUrl: "https://proxy.local" })).baseUrl, "https://proxy.local");
+/** pi's auth status for the providers named, as `getProviderAuthStatus` reports it. */
+function statusOf(entries: Record<string, { source: string; label?: string }>): StatusSource {
+  return (provider) => (entries[provider] ? { configured: true, ...entries[provider] } : { configured: false });
+}
+
+test("hosts: auto takes OpenCode's free Jev when pi holds an OpenCode key, else TypeSafe; keys resolve through pi then the environment", async () => {
+  assert.equal(DEFAULT_CONFIG.classifier.provider, "auto");
+  assert.equal(chooseHost(DEFAULT_CONFIG.classifier, statusOf({ "opencode-go": { source: "stored" } }), {}).name, "opencode", "an OpenCode Go key is the same OpenCode key");
+  assert.equal(chooseHost(DEFAULT_CONFIG.classifier, statusOf({ typesafe: { source: "stored" } }), {}).name, "typesafe");
+  assert.equal(chooseHost(DEFAULT_CONFIG.classifier, statusOf({}), { OPENCODE_API_KEY: "x" }).name, "opencode");
+  assert.equal(chooseHost(DEFAULT_CONFIG.classifier, statusOf({}), {}).name, "typesafe", "nothing set: TypeSafe, whose /login entry bot-lobby adds");
+  assert.deepEqual(jevEndpoint(DEFAULT_CONFIG.classifier, statusOf({ opencode: { source: "stored" } }), {}), { host: JEV_HOST_TABLE.opencode, baseUrl: "https://opencode.ai/zen", model: "jev-1.13-free" });
+  assert.equal(jevEndpoint(config({ provider: "vercel" })).host.piProviders[0], "vercel-ai-gateway");
+  assert.equal(jevEndpoint(config({ provider: "typesafe", baseUrl: "https://proxy.local", model: "jev-1.13" })).baseUrl, "https://proxy.local");
+
+  // The classifier resolves the key itself: the first auto host with one wins.
+  const asked: string[] = [];
+  const target = await resolveTarget(config(), async (provider) => (asked.push(provider), provider === "opencode-go" ? "oc_key" : undefined), {});
+  assert.deepEqual(asked, ["opencode", "opencode-go"]);
+  assert.deepEqual(target, { host: JEV_HOST_TABLE.opencode, baseUrl: "https://opencode.ai/zen", model: "jev-1.13-free", key: "oc_key" });
+  assert.equal((await resolveTarget(config(), async (provider) => (provider === "typesafe" ? "ts_key" : undefined), {})).host.name, "typesafe");
+  assert.equal((await resolveTarget(config(), async () => undefined, {})).key, undefined);
+  assert.equal((await resolveTarget(config({ provider: "opencode", model: "jev-1.13" }), async () => "oc", {})).model, "jev-1.13", "the paid model once the free one ends");
+
   assert.equal(await resolveKey(JEV_HOST_TABLE.typesafe, async () => " ts_pi ", {}), "ts_pi");
   assert.equal(await resolveKey(JEV_HOST_TABLE.typesafe, async () => undefined, { TYPESAFE_API_KEY: "ts_env" }), "ts_env");
   assert.equal(await resolveKey(JEV_HOST_TABLE.typesafe, async () => { throw new Error("no registry"); }, {}), undefined);
   assert.equal(maskKey("ts_abcdefgh1234"), "ts_a…1234");
   assert.equal(maskKey("short"), "*****");
-  assert.equal(describeKey(JEV_HOST_TABLE.typesafe, { configured: true, source: "stored" }, {}), "stored in pi (/login typesafe)");
-  assert.equal(describeKey(JEV_HOST_TABLE.typesafe, { configured: true, source: "environment", label: "TYPESAFE_API_KEY" }, {}), "from TYPESAFE_API_KEY");
-  assert.equal(describeKey(JEV_HOST_TABLE.typesafe, { configured: false }, {}), "missing: /login typesafe → Use an API key, or set TYPESAFE_API_KEY");
+  assert.equal(describeKey(JEV_HOST_TABLE.typesafe, statusOf({ typesafe: { source: "stored" } }), {}), "stored in pi (/login typesafe)");
+  assert.equal(describeKey(JEV_HOST_TABLE.opencode, statusOf({ "opencode-go": { source: "stored" } }), {}), "stored in pi (/login opencode-go)");
+  assert.equal(describeKey(JEV_HOST_TABLE.typesafe, statusOf({ typesafe: { source: "environment", label: "TYPESAFE_API_KEY" } }), {}), "from TYPESAFE_API_KEY");
+  assert.equal(describeKey(JEV_HOST_TABLE.typesafe, statusOf({}), {}), "missing: /login typesafe → Use an API key, or set TYPESAFE_API_KEY");
+  assert.equal(describeKey(JEV_HOST_TABLE.opencode, statusOf({}), {}), "missing: /login opencode, or set OPENCODE_API_KEY");
+  assert.equal(keyHint({ provider: "opencode" }), "/login opencode or set OPENCODE_API_KEY");
   const registered: Array<[string, unknown]> = [];
   assert.equal(registerJevProvider({ registerProvider: (name: string, cfg: unknown) => registered.push([name, cfg]) } as never), true);
   assert.deepEqual(registered, [["typesafe", { name: "TypeSafe (Jev classifier)", baseUrl: "https://api.typesafe.ai", apiKey: "$TYPESAFE_API_KEY", models: [] }]], "a login entry with no chat models; the key reference is pi's $ENV form");
   assert.equal(registerJevProvider({ registerProvider: () => { throw new Error("old pi"); } } as never), false);
 });
 
+test("OpenCode's free Jev is called at the Zen endpoint, and when it ends the classifier says to pick the paid model instead of switching", async () => {
+  const sent: Sent[] = [];
+  const warnings: string[] = [];
+  const gone = () => new Response(JSON.stringify({ error: { message: "model not found" } }), { status: 404 });
+  const jev = new Classifier({ config: () => config(), keys: async (provider) => (provider === "opencode" ? "oc_key" : undefined), fetch: fakeFetch([OK, gone(), gone(), gone()], sent), warn: (message) => warnings.push(message), sleep: async () => {}, env: {} });
+  assert.ok(await jev.ask("seats", { state: "x", questions: {} }));
+  assert.equal(sent[0]!.url, "https://opencode.ai/zen/v1/systemone");
+  assert.equal(sent[0]!.body.model, "jev-1.13-free");
+  assert.equal((sent[0]!.init.headers as Record<string, string>).Authorization, "Bearer oc_key");
+  for (let i = 0; i < 3; i++) await jev.ask("seats", { state: "x", questions: {} });
+  assert.equal(sent.length, 4, "never retried on the paid model");
+  assert.ok(sent.every((entry) => entry.body.model === "jev-1.13-free"));
+  assert.match(warnings[0]!, /OpenCode Zen's free jev-1\.13-free may have ended; set the classifier's model to jev-1\.13 \(paid\)/);
+});
+
 test("the classifier config is off by default and normalises every field", () => {
   assert.equal(DEFAULT_CONFIG.classifier.enabled, false);
   const resolved = resolveConfig({ classifier: { enabled: true, provider: "bogus", timeoutMs: -1, model: " jev-1.13 ", features: { effort: false, nope: true }, thresholds: { seatAt: 0.2, autoAnswerAt: 7 }, fileHints: { topK: 3, budgetMs: 0 }, effort: { cheapModel: "p/cheap" }, exclude: ["secrets/**", 4, ""] } }).classifier;
   assert.equal(resolved.enabled, true);
-  assert.equal(resolved.provider, "typesafe");
+  assert.equal(resolved.provider, "auto");
   assert.equal(resolved.timeoutMs, 4000);
   assert.equal(resolved.model, "jev-1.13");
   assert.deepEqual(resolved.features, { seats: true, answers: true, files: true, triage: true, effort: false });
@@ -228,9 +266,10 @@ test("the classifier config is off by default and normalises every field", () =>
   assert.equal(resolved.effort.cheapModel, "p/cheap");
   assert.deepEqual(resolved.exclude, ["secrets/**"]);
   assert.deepEqual(resolveConfig({}).classifier, DEFAULT_CONFIG.classifier);
-  assert.deepEqual(["typesafe", "openrouter", "vercel"].map((name) => nextJevHost(name as never)), ["openrouter", "vercel", "typesafe"]);
+  assert.deepEqual(["auto", "opencode", "typesafe", "openrouter", "vercel"].map((name) => nextJevHost(name as never)), ["opencode", "typesafe", "openrouter", "vercel", "auto"]);
   assert.equal(toggleClassifierFeature(DEFAULT_CONFIG, "files").classifier.features.files, false);
-  assert.equal(classifierSummary(DEFAULT_CONFIG, { configured: true, source: "stored" }), "off · TypeSafe · key stored in pi (/login typesafe)");
+  assert.equal(classifierSummary(DEFAULT_CONFIG, statusOf({ opencode: { source: "stored" } })), "off · OpenCode Zen (auto) · jev-1.13-free · key stored in pi (/login opencode)");
+  assert.equal(classifierSummary({ ...DEFAULT_CONFIG, classifier: { ...DEFAULT_CONFIG.classifier, provider: "typesafe" } }, statusOf({ typesafe: { source: "stored" } })), "off · TypeSafe · jev-latest · key stored in pi (/login typesafe)");
 });
 
 test("classifier calls share the metrics log but stay out of the agent tables", () => {
