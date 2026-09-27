@@ -49,6 +49,9 @@ export interface SessionStart {
 
 let counter = 0;
 
+/** How long a stopped session gets to end before it is killed. */
+export const STOP_GRACE_MS = 5000;
+
 export class BackgroundSession {
   readonly key: string;
   readonly name: string;
@@ -69,6 +72,8 @@ export class BackgroundSession {
   private stderr = "";
   private nextId = 0;
   private readonly onChange: () => void;
+  private readonly exitWaiters: Array<() => void> = [];
+  private killTimer?: ReturnType<typeof setTimeout>;
 
   constructor(proc: SessionProcess, start: SessionStart, onChange: () => void = () => {}) {
     counter += 1;
@@ -98,8 +103,16 @@ export class BackgroundSession {
     this.status = "exited";
     this.exitCode = code;
     this.dialogs.length = 0;
+    if (this.killTimer) clearTimeout(this.killTimer);
     this.feed.say("note", reason);
+    for (const resolve of this.exitWaiters.splice(0)) resolve();
     this.onChange();
+  }
+
+  /** Resolves once the process has ended (at once if it already has). */
+  whenExited(): Promise<void> {
+    if (!this.alive) return Promise.resolve();
+    return new Promise((resolve) => this.exitWaiters.push(resolve));
   }
 
   get alive(): boolean {
@@ -147,8 +160,11 @@ export class BackgroundSession {
     this.onChange();
   }
 
-  /** Stop the session: its process ends (its task keeps its state and can be resumed or claimed later). */
-  stop(): void {
+  /**
+   * Stop the session: its process ends (its task keeps its state and can be
+   * resumed or claimed later). One that does not end within `graceMs` is killed.
+   */
+  stop(graceMs = STOP_GRACE_MS): void {
     if (!this.alive) return;
     try {
       this.proc.stdin?.end();
@@ -160,6 +176,16 @@ export class BackgroundSession {
     } catch {
       // Already gone.
     }
+    if (this.killTimer || graceMs <= 0) return;
+    this.killTimer = setTimeout(() => {
+      if (!this.alive) return;
+      try {
+        this.proc.kill("SIGKILL");
+      } catch {
+        // Already gone.
+      }
+    }, graceMs);
+    this.killTimer.unref?.();
   }
 
   /** Split stdout into JSON lines (LF only, as pi's RPC framing requires) and handle each. */

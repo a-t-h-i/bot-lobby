@@ -187,3 +187,8 @@ test("--task always starts a task, even when the request begins with a subcomman
   assert.deepEqual(parseCommand("auto off"), { sub: "auto", rest: ["off"], restText: "off" });
   assert.equal(parseCommand("auto deploy on merge").sub, undefined);
 });
+
+test("switch takes a session file, so free text starting with the word still starts a task", () => {
+  assert.deepEqual(parseCommand("switch /home/me/.pi/sessions/a b.jsonl"), { sub: "switch", rest: ["/home/me/.pi/sessions/a", "b.jsonl"], restText: "/home/me/.pi/sessions/a b.jsonl" });
+  assert.equal(parseCommand("switch the header to a sticky one").sub, undefined);
+});

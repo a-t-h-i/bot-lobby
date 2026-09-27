@@ -12,7 +12,7 @@ export const LOBBY_ACTIONS = {
   settings: { key: "alt+s", help: "bot-lobby settings: each agent's model and thinking, the lobby" },
   search: { key: "ctrl+f", help: "search the current tab" },
   savePlan: { key: "ctrl+s", help: "save the plan being made in the Plan tab to the pending tasks" },
-  sessions: { key: "alt+o", help: "switch session: this window, background sessions, other terminals" },
+  sessions: { key: "alt+o", help: "browse sessions: view one, message it, or switch this window to it" },
   newSession: { key: "alt+n", help: "start a task in a new session, named after it" },
   toggleAuto: { key: "alt+g", help: "auto mode: the oracle drives the task to completion without asking" },
   nextTab: { key: "tab", help: "next tab" },

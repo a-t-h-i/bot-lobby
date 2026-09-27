@@ -1,10 +1,11 @@
 /**
- * What a session does for the task it drives, on its own clock. Every few
- * seconds a session that owns a task (in the terminal or headless, started
- * from another window's lobby) passes on what other sessions left for its
- * oracle, plan comments and inbox messages, and in auto mode keeps the oracle
- * going whenever its turn ends before the task is done. Subagents never own
- * tasks, so none of this runs in them.
+ * What a session does on its own clock. Every few seconds a session (in the
+ * terminal or headless, started from another window's lobby) refreshes its
+ * heartbeat so other windows see it running, passes on what other sessions
+ * left for its oracle — plan comments, messages for its task or for the
+ * session itself — and in auto mode keeps the oracle going whenever its turn
+ * ends before the task is done. Subagents never own tasks or show up as
+ * sessions, so none of this runs in them.
  */
 import type { KeyId } from "@earendil-works/pi-tui";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -12,7 +13,8 @@ import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { activeTask, loadTask } from "../state/persistence.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { commentMessage, markCommentsDelivered, readPlanComments, undeliveredComments } from "../state/comments.ts";
-import { inboxMessage, markInboxDelivered, readInbox } from "../state/inbox.ts";
+import { inboxMessage, markInboxDelivered, markSessionInboxDelivered, readInbox, readSessionInbox } from "../state/inbox.ts";
+import { removePresence, writePresence } from "../state/presence.ts";
 import { isAutoMode, setAutoMode } from "../state/auto.ts";
 import { isSubagentProcess } from "./quiet.ts";
 import { isMinimized } from "./ui.ts";
@@ -26,6 +28,7 @@ export const AUTO_KEY = "alt+g";
 
 export type OwnerEvent =
   | { kind: "comments" | "inbox"; taskId: string; count: number }
+  | { kind: "messages"; count: number }
   | { kind: "auto"; taskId: string; on: boolean }
   | { kind: "nudge"; taskId: string }
   | { kind: "stalled"; taskId: string };
@@ -33,6 +36,8 @@ export type OwnerEvent =
 interface Owner {
   pi: ExtensionAPI;
   ctx: ExtensionContext;
+  /** The session this clock runs for, kept so its heartbeat can be removed after its context goes stale. */
+  sessionId: string;
   root: string;
   configDir: string;
   timer?: ReturnType<typeof setInterval>;
@@ -82,6 +87,40 @@ export function deliverInbox(): number {
   markInboxDelivered(state.root, state.configDir, task.id, fresh.map((message) => message.id));
   listener?.({ kind: "inbox", taskId: task.id, count: fresh.length });
   return fresh.length;
+}
+
+/** Pass messages other sessions left for this session itself (it may have no task) to its Master. */
+export function deliverSessionInbox(): number {
+  const state = owner;
+  if (!state) return 0;
+  const sessionId = state.ctx.sessionManager.getSessionId();
+  const fresh = readSessionInbox(state.root, state.configDir, sessionId).filter((message) => !message.delivered);
+  if (fresh.length === 0) return 0;
+  state.pi.sendUserMessage(inboxMessage(fresh), state.ctx.isIdle() ? undefined : { deliverAs: "steer" });
+  markSessionInboxDelivered(state.root, state.configDir, sessionId, fresh.map((message) => message.id));
+  listener?.({ kind: "messages", count: fresh.length });
+  return fresh.length;
+}
+
+/** Tell other windows this session is running: its name, file, task and process. */
+export function heartbeat(): void {
+  const state = owner;
+  if (!state) return;
+  const name = state.pi.getSessionName?.();
+  const sessionFile = state.ctx.sessionManager.getSessionFile?.();
+  const task = ownTask(state);
+  try {
+    writePresence(state.root, state.configDir, {
+      sessionId: state.ctx.sessionManager.getSessionId(),
+      pid: process.pid,
+      mode: state.ctx.mode ?? "tui",
+      ...(name ? { name } : {}),
+      ...(sessionFile ? { sessionFile } : {}),
+      ...(live(task) ? { taskId: task.id } : {}),
+    });
+  } catch {
+    // A read-only project only means other windows do not see this one.
+  }
 }
 
 /** What auto mode remembers between nudges: the task as it was, and how many nudges changed nothing. */
@@ -172,13 +211,22 @@ export function toggleOwnAuto(): string {
 
 /** One tick of the owner's clock. */
 export function ownerTick(): void {
+  heartbeat();
   deliverComments();
   deliverInbox();
+  deliverSessionInbox();
   driveAuto();
 }
 
 function stop(): void {
   if (owner?.timer) clearInterval(owner.timer);
+  if (owner) {
+    try {
+      removePresence(owner.root, owner.configDir, owner.sessionId);
+    } catch {
+      // The heartbeat goes stale on its own.
+    }
+  }
   owner = undefined;
 }
 
@@ -186,7 +234,8 @@ function stop(): void {
 export function startOwner(pi: ExtensionAPI, ctx: ExtensionContext, configDir: string, pollMs = OWNER_POLL_MS): void {
   stop();
   if (isSubagentProcess()) return;
-  owner = { pi, ctx, root: detectProjectRoot(ctx.cwd, configDir), configDir };
+  owner = { pi, ctx, sessionId: ctx.sessionManager.getSessionId(), root: detectProjectRoot(ctx.cwd, configDir), configDir };
+  heartbeat();
   if (pollMs > 0) {
     owner.timer = setInterval(() => ownerTick(), pollMs);
     owner.timer.unref?.();
