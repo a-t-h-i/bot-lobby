@@ -121,6 +121,8 @@ export interface Task {
   ownerSessionId?: string;
   /** The planned task (PLAN-…) whose plan the user agreed in the planning panel: its proposal needs no approval. */
   approvedPlan?: string;
+  /** When the task was archived from the lobby (it then lives under archive/tasks, out of every list). */
+  archivedAt?: string;
 }
 
 export function createTask(
