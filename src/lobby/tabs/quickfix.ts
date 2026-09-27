@@ -5,7 +5,7 @@
  */
 import { shortDuration } from "../../text.ts";
 import { jobTitle, type QuickFixJob } from "../quickfix.ts";
-import { bold, clock, columns, fill, markdownLines, paint, rule, selectRow, spinner, split, windowStart, wrap, wrapHanging, type LobbyTheme } from "../layout.ts";
+import { beside, bold, box, clock, fill, markdownLines, paint, rule, selectRow, spinner, windowStart, wrap, wrapHanging, type LobbyTheme } from "../layout.ts";
 
 export interface QuickFixTabInput {
   jobs: readonly QuickFixJob[];
@@ -16,6 +16,8 @@ export interface QuickFixTabInput {
   profile: string;
   tick: number;
   now: number;
+  /** The search in force: only jobs that mention it are listed. */
+  query?: string;
 }
 
 export const QUICKFIX_COLUMNS_MIN = 90;
@@ -81,21 +83,38 @@ function intro(input: QuickFixTabInput, width: number, theme?: LobbyTheme): stri
   ].flatMap((line) => wrap(line, width));
 }
 
+/** Jobs whose prompt, steps or report mention `query`. */
+export function filterJobs(jobs: readonly QuickFixJob[], query: string | undefined): QuickFixJob[] {
+  const needle = query?.trim().toLowerCase();
+  if (!needle) return [...jobs];
+  return jobs.filter((job) => [job.prompt, job.report ?? "", job.error ?? "", ...job.steps.map((step) => step.text)].join("\n").toLowerCase().includes(needle));
+}
+
+/** Outer widths of the list and detail panes. */
+export function quickFixWidths(width: number): { list: number; detail: number; wide: boolean } {
+  if (width < QUICKFIX_COLUMNS_MIN) return { list: width, detail: width, wide: false };
+  const list = Math.max(36, Math.round((width - 1) * 0.36));
+  return { list, detail: width - 1 - list, wide: true };
+}
+
 export function renderQuickFix(input: QuickFixTabInput, width: number, height: number, theme?: LobbyTheme): string[] {
   if (height <= 0) return [];
-  if (input.jobs.length === 0) return fill([rule(width, "Quick fix", theme, input.profile), ...intro(input, width, theme)], height, width);
-  const jobs = newestFirst(input.jobs);
+  const jobs = newestFirst(filterJobs(input.jobs, input.query));
+  if (jobs.length === 0) {
+    const content = input.query && input.jobs.length > 0 ? [paint(theme, "dim", `No quick fix mentions "${input.query}".`)] : intro(input, width - 4, theme);
+    return box(width, height, content, { title: "Quick fix", right: input.profile, theme });
+  }
   const selected = Math.min(Math.max(0, input.selected), jobs.length - 1);
-  const wide = width >= QUICKFIX_COLUMNS_MIN;
-  const [listWidth, detailWidth] = wide ? split(width, 0.38, 3, 40) : [width, width];
+  const { list: listWidth, detail: detailWidth, wide } = quickFixWidths(width);
   const rows = jobs.map((job, index) => {
     const time = elapsed(job, input.now);
     const text = `${mark(job, input.tick, theme)} ${index === selected ? bold(theme, jobTitle(job)) : jobTitle(job)}${time ? ` ${paint(theme, "dim", time)}` : ""}`;
-    return selectRow(theme, text, listWidth, index === selected, input.focus === "list");
+    return selectRow(theme, text, listWidth - 4, index === selected, input.focus === "list");
   });
-  const listPane = fill([rule(listWidth, "Quick fixes", theme, `${jobs.length}`), ...rows.slice(windowStart(selected, rows.length, height - 1))], height);
-  const detail = jobDetailLines(jobs[selected]!, detailWidth, input.tick, input.now, theme);
-  const detailPane = fill([rule(detailWidth, input.focus === "detail" ? "Detail ◂" : "Detail", theme, input.profile), ...detail.slice(Math.max(0, Math.min(input.detailOffset, detail.length - 1)))], height);
+  const count = input.query ? `${jobs.length} match${jobs.length === 1 ? "" : "es"}` : `${jobs.length}`;
+  const listPane = box(listWidth, height, rows.slice(windowStart(selected, rows.length, height - 2)), { title: "Quick fixes", right: count, focused: input.focus === "list", theme });
+  const detail = jobDetailLines(jobs[selected]!, detailWidth - 4, input.tick, input.now, theme);
+  const detailPane = box(detailWidth, height, detail.slice(Math.max(0, Math.min(input.detailOffset, detail.length - 1))), { title: "Detail", right: input.profile, focused: input.focus === "detail", theme });
   if (!wide) return fill(input.focus === "detail" ? detailPane : listPane, height, width);
-  return fill(columns(listPane, detailPane, listWidth, detailWidth, " │ ", theme), height, width);
+  return fill(beside([listPane, detailPane]), height, width);
 }
