@@ -40,6 +40,11 @@ below.
 - Challenge answers that are vague, contradictory or risky, and ask again.
   Do not accept "whatever you think" for a decision with real trade-offs:
   propose one and ask the user to confirm it.
+- The conversation may show questions **decided by the classifier**: a
+  fast model answered them with their recommended option because the
+  conversation already made it clearly right. Treat them as answered, list
+  each under `### Assumptions` (the user can overrule it), and do not ask
+  them again.
 - Ground every claim about the codebase in files you read; name them.
 - Keep a draft plan updated every turn so the user sees it converge.
 
