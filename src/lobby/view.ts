@@ -1000,6 +1000,17 @@ export class LobbyView implements Component, Focusable {
           return true;
         }
         if (data === "m") return this.openSettings("quickfix"), true;
+        if (data === "r" || data === "t") {
+          const job = this.fixJobs()[this.fixSelected];
+          // Only a held job takes r and t; otherwise the key resumes typing like any other.
+          if (!job || job.status !== "held") return false;
+          if (data === "r" && this.host.quickfix.runAnyway(job.id)) this.say(`running ${job.id} anyway`);
+          if (data === "t") {
+            this.startInNewSession({ request: job.prompt });
+            this.host.quickfix.movedToTask(job.id);
+          }
+          return true;
+        }
         return false;
       case "issues":
         return this.issuesCommand(data, enter, escape);
@@ -1903,6 +1914,7 @@ export class LobbyView implements Component, Focusable {
         break;
       case "quickfix":
         if (this.host.quickfix.jobs.length > 0) keys.push(["↑↓", "select"], ["x", "cancel"]);
+        if (this.fixJobs()[this.fixSelected]?.status === "held") keys.push(["r", "run anyway"], ["t", "as a task"]);
         keys.push(["m", "model"]);
         break;
       case "issues":

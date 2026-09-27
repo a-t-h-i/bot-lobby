@@ -11,9 +11,18 @@ import { applyStatus, clearStatus, isMinimized, setMinimized, setOracleActivity 
 import { ORACLE_THINKING, oracleActivityWord } from "./activity.ts";
 import { isSubagentProcess, visibleTools } from "./quiet.ts";
 import { registerQuietTools } from "./tool-renderers.ts";
-import { taskRequest, type Task } from "../schemas/task.ts";
+import { taskRequest, type Task, type TaskState } from "../schemas/task.ts";
 import { pendingComments, readPlanComments, type PlanComment } from "../state/comments.ts";
 import { isAutoMode } from "../state/auto.ts";
+import { triageContext } from "../classifier/triage.ts";
+
+/** States in which the triage still helps the Master shape the task; once it is planned, the hints are noise. */
+const SHAPING_STATES: ReadonlySet<TaskState> = new Set(["created", "clarifying", "scouting", "synthesizing", "awaiting_approval"]);
+
+/** The Master's workflow context: the task's state, plus the classifier's triage while the task is being shaped. */
+export function masterWorkflowContext(task: Task): string {
+  return [describeTask(task), SHAPING_STATES.has(task.state) ? triageContext(task.triage) : ""].filter(Boolean).join("\n\n");
+}
 
 export function masterTaskContext(task: Task, comments: readonly PlanComment[] = [], auto = false): string {
   const open = pendingComments(comments);
@@ -96,7 +105,7 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
       standards: selected.standards,
       knowledge: selected.knowledge,
       decisions: selected.decisions,
-      workflowContext: describeTask(task),
+      workflowContext: masterWorkflowContext(task),
       instructions: loadConfig().master.instructions,
     });
   });

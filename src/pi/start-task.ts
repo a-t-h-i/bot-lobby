@@ -14,6 +14,7 @@ import { applyStatus } from "./ui.ts";
 import { applyMasterModel } from "./settings-ui.ts";
 import { setAutoMode } from "../state/auto.ts";
 import { loadPlannedTask, markPlannedTaskStarted, plannedTaskRequest } from "../state/backlog.ts";
+import { triageFor } from "../classifier/instance.ts";
 
 function uniqueTaskId(root: string, configDir: string, request: string): string {
   const base = nextTaskId(request);
@@ -65,6 +66,9 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   if (options.approvedPlan) task.approvedPlan = options.approvedPlan;
   createTaskDir(root, configDir, task);
   transition(task, "clarifying");
+  // The classifier's read of the request (when it is on) reaches the Master's very first turn.
+  const triage = await triageFor({ cwd: ctx.cwd, root, configDir }, request);
+  if (triage) task.triage = triage;
   saveTask(root, configDir, task);
   if (options.auto) setAutoMode(root, configDir, task.id, true, sessionId);
   // A session that starts a task is named after it, so /resume and the lobby list it by name.

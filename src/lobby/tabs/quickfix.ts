@@ -31,6 +31,7 @@ const STATUS_COLORS: Record<QuickFixJob["status"], "accent" | "success" | "error
   failed: "error",
   timeout: "error",
   cancelled: "warning",
+  held: "warning",
 };
 
 function mark(job: QuickFixJob, tick: number, theme?: LobbyTheme): string {
@@ -38,6 +39,7 @@ function mark(job: QuickFixJob, tick: number, theme?: LobbyTheme): string {
   if (job.status === "queued") return paint(theme, "muted", "…");
   if (job.status === "success") return paint(theme, "success", "✓");
   if (job.status === "cancelled") return paint(theme, "warning", "·");
+  if (job.status === "held") return paint(theme, "warning", "‖");
   return paint(theme, "error", "✗");
 }
 
@@ -60,8 +62,9 @@ export function jobDetailLines(job: QuickFixJob, width: number, tick: number, no
     job.usage?.cost ? `$${job.usage.cost.toFixed(2)}` : "",
   ].filter(Boolean);
   const lines = [paint(theme, "dim", job.id), facts.join(paint(theme, "dim", " · ")), "", ...wrap(bold(theme, job.prompt), width)];
+  if (job.note) lines.push("", ...wrap(paint(theme, "warning", job.status === "held" ? `‖ Held: ${job.note}. r runs it anyway · t starts it as a task in a new session.` : job.note), width));
   lines.push("", rule(width, "Steps", theme));
-  if (job.steps.length === 0) lines.push(paint(theme, "dim", job.status === "queued" ? "Waiting for the quick fix ahead of it." : job.status === "running" ? `${spinner(tick)} starting…` : "No tool calls."));
+  if (job.steps.length === 0) lines.push(paint(theme, "dim", job.status === "queued" ? "Waiting for the quick fix ahead of it." : job.status === "running" ? `${spinner(tick)} starting…` : job.status === "held" ? "Not started." : "No tool calls."));
   for (const step of job.steps) {
     const lead = `${paint(theme, "dim", clock(step.at))} ${step.pending && job.status === "running" ? paint(theme, "accent", spinner(tick)) : paint(theme, "dim", "·")} `;
     lines.push(...wrapHanging(lead, step.pending && job.status === "running" ? `${step.text}…` : paint(theme, "muted", step.text), width));

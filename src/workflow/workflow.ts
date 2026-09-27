@@ -48,6 +48,8 @@ import { pingApproval } from "../pi/notify.ts";
 import { describeRun, runLogEntry } from "../pi/run-summary.ts";
 import { nextStates } from "./transitions.ts";
 import type { FileHinter } from "../classifier/files.ts";
+import type { Classifier } from "../classifier/classifier.ts";
+import { answerClarify } from "../classifier/triage.ts";
 import { appendMetrics, metricFromRun } from "../state/metrics.ts";
 import { markCommentsAddressed, pendingComments, readPlanComments } from "../state/comments.ts";
 
@@ -119,6 +121,10 @@ export interface WorkflowDeps {
   runProcess?: ProcessRunner;
   /** Likely files for scouts and workers, while the classifier's file hints are on. */
   hints?: FileHinter;
+  /** Answers a clarify question whose recommended option is clearly right, when it is on. */
+  classifier?: Classifier;
+  /** Re-reads a request after an amendment (the task's triage), when the classifier is on. */
+  triage?: (request: string, signal?: AbortSignal) => Promise<Task["triage"]>;
 }
 
 export interface WorkflowResult {
@@ -256,6 +262,11 @@ async function handleClarify(task: Task, params: OrchestrateParams, deps: Workfl
   const question = params.question?.trim();
   if (!question) throw new Error("clarify requires a question");
   transition(task, "clarifying");
+  const settled = await clarifyByClassifier(task, question, params.options ?? [], deps);
+  if (settled) {
+    recordDecision(task, `Answered by the classifier (${settled.probability.toFixed(2)}): ${truncate(question, 300)} → ${settled.answer}`);
+    return `Answered by the classifier with your recommended option (${settled.probability.toFixed(2)}): ${settled.answer}. It is recorded as a decision; mention it in your proposal so the user can amend it, and continue.`;
+  }
   const unattended = unattendedReason(task, isAutoMode(deps.root, deps.configDir, task.id));
   if (unattended) {
     recordDecision(task, `Not asked (${unattended}): ${truncate(question, 300)}`);
@@ -266,6 +277,20 @@ async function handleClarify(task: Task, params: OrchestrateParams, deps: Workfl
     return `No answer captured. Ask the user this in your reply, then continue.\n\nQuestion: ${question}`;
   }
   return `User answered: ${answer}`;
+}
+
+/** The classifier's answer to a clarify question with options, when the request already settles it. */
+async function clarifyByClassifier(task: Task, question: string, options: readonly string[], deps: WorkflowDeps): Promise<{ answer: string; probability: number } | undefined> {
+  if (!deps.classifier || options.length < 2) return undefined;
+  const notes = [
+    ...task.amendments.map((text) => `Amendment: ${text}`),
+    ...task.decisions.slice(-12).map((decision) => `Decision: ${decision.text}`),
+  ].join("\n");
+  try {
+    return await answerClarify(deps.classifier, question, options, { request: taskRequest(task), notes, ...(task.proposal ? { proposal: task.proposal } : {}) }, deps.signal);
+  } catch {
+    return undefined;
+  }
 }
 
 async function handleScout(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
@@ -425,7 +450,20 @@ async function handlePropose(task: Task, params: OrchestrateParams, deps: Workfl
   const lower = choice.toLowerCase();
   if (lower.startsWith("approve")) return applyApprovalChoice(task, "approve");
   if (lower.startsWith("decline")) return applyApprovalChoice(task, "decline");
-  return applyApprovalChoice(task, "amend", await deps.ask("What should change?"));
+  const result = applyApprovalChoice(task, "amend", await deps.ask("What should change?"));
+  await retriage(task, deps);
+  return result;
+}
+
+/** After an amendment, the classifier reads the request again, so the Master's hints follow the change. */
+async function retriage(task: Task, deps: WorkflowDeps): Promise<void> {
+  if (!deps.triage || !task.triage) return;
+  try {
+    const next = await deps.triage([taskRequest(task), ...task.amendments.map((text) => `Amendment: ${text}`)].join("\n\n"), deps.signal);
+    if (next) task.triage = next;
+  } catch {
+    // Hints only: the old triage stays.
+  }
 }
 
 /** States in which `plan` replaces an approved plan instead of recording the first one. */
