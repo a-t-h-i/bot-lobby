@@ -9,7 +9,8 @@
  * pane toggles, paging) work in both. Everything bot-lobby-specific arrives
  * through `LobbyHost`, so the view renders and reacts the same in tests.
  */
-import { decodeKittyPrintable, Editor, Input, Key, matchesKey, visibleWidth, type Component, type EditorTheme, type Focusable, type TUI, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
+import { decodeKittyPrintable, Editor, Input, Key, matchesKey, type Component, type EditorTheme, type Focusable, type TUI, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
+import { textWidth } from "../width.ts";
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import type { AgentRun } from "../schemas/findings.ts";
 import type { PlannedTask } from "../state/backlog.ts";
@@ -223,7 +224,7 @@ class LobbyEditor extends Editor {
     if (!this.label) return super.renderTopBorder(width, hiddenLineCount);
     const label = ` ${this.label} `;
     const more = hiddenLineCount > 0 ? ` ↑${hiddenLineCount} ` : "";
-    const rest = width - 2 - visibleWidth(label) - visibleWidth(more);
+    const rest = width - 2 - textWidth(label) - textWidth(more);
     if (rest < 1) return super.renderTopBorder(width, hiddenLineCount);
     return `${this.borderColor("──")}${this.paintLabel(label)}${this.borderColor("─".repeat(rest))}${more ? this.borderColor(more) : ""}`;
   }
@@ -965,7 +966,9 @@ export class LobbyView implements Component, Focusable {
     const rows = this.taskRowList();
     this.tasksSelected = Math.max(0, Math.min(rows.length - 1, index));
     this.tasksDetailOffset = 0;
-    this.refreshData(true);
+    // Only the newly selected task's comments: moving through the list must not reread every task from disk.
+    const row = rows[this.tasksSelected];
+    if (row?.kind === "task" && !this.data.comments.has(row.id)) this.data.comments.set(row.id, this.host.comments(row.id));
   }
 
   private async loadIssueDetail(): Promise<void> {
@@ -1718,6 +1721,26 @@ export class LobbyView implements Component, Focusable {
   /** Task rows as last built: several parts of a frame ask, and they only change with the data, the search or the clock. */
   private rowsMemo?: { key: string; rows: TaskRow[] };
 
+  /** The Metrics tab's figures as last computed: they change only with the data, the grouping, the order or the search. */
+  private metricsMemo?: { key: string; figures: ReturnType<LobbyView["computeMetrics"]> };
+
+  private metricsFigures(query: string | undefined) {
+    const key = `${this.dataVersion}|${this.metricsBy}|${this.metricsSort}|${query ?? ""}`;
+    if (this.metricsMemo?.key !== key) this.metricsMemo = { key, figures: this.computeMetrics(query) };
+    return this.metricsMemo.figures;
+  }
+
+  private computeMetrics(query: string | undefined) {
+    const records = filterRecords(collectMetrics(this.data.metrics, this.data.tasks), query);
+    return {
+      records,
+      groups: sortGroups(aggregateMetrics(records, this.metricsBy), this.metricsSort),
+      taskTimes: taskTimesByModel(this.data.tasks, records),
+      stats: taskStats(this.data.tasks),
+      jev: summarizeClassifier(this.data.classifierMetrics, records),
+    };
+  }
+
   /** Task rows, narrowed by the Tasks tab's search. */
   private taskRowList(): TaskRow[] {
     const key = `${this.dataVersion}|${this.tick}|${this.showArchived}|${this.queries.tasks ?? ""}`;
@@ -1760,12 +1783,12 @@ export class LobbyView implements Component, Focusable {
       const badge = badges[tab] ? ` ${paint(theme, tab === "plan" && session?.awaitingAnswers ? "warning" : "accent", badges[tab]!)}` : "";
       let cell = ` ${number} ${name}${badge} `;
       if (tab === this.tab) cell = theme.bg ? theme.bg("selectedBg", cell) : `[${cell}]`;
-      const from = visibleWidth(left);
+      const from = textWidth(left);
       left += cell;
-      spans.push({ tab, from, to: visibleWidth(left) });
+      spans.push({ tab, from, to: textWidth(left) });
     }
     this.tabSpans = spans;
-    const room = width - visibleWidth(left) - 1;
+    const room = width - textWidth(left) - 1;
     const entry = this.viewedEntry();
     const help = paint(theme, "dim", `${keyLabel(this.keys.help)} keys `);
     const auto = entry.auto ? ` ${bold(theme, paint(theme, "success", "⟳ AUTO"))}` : "";
@@ -1786,8 +1809,8 @@ export class LobbyView implements Component, Focusable {
         ? [`${dot} ${zen.task.id} ${state}${auto}${asking}  ${help}`, `${dot} ${zen.task.id} ${state}${auto}${asking} `, `${dot} ${state}${auto} `, `${dot}${auto} `]
         : [`${paint(theme, "dim", "no task in this session")}${asking}  ${help}`, `${paint(theme, "dim", "no task in this session")}${asking} `, help, ""];
     }
-    const status = choices.find((choice) => visibleWidth(choice) <= room) ?? "";
-    const gap = width - visibleWidth(left) - visibleWidth(status);
+    const status = choices.find((choice) => textWidth(choice) <= room) ?? "";
+    const gap = width - textWidth(left) - textWidth(status);
     return gap >= 1 ? `${left}${" ".repeat(gap)}${status}` : fit(left, width);
   }
 
@@ -1849,7 +1872,7 @@ export class LobbyView implements Component, Focusable {
     const tail = this.searching
       ? paint(theme, "dim", " enter keep · esc clear · ↑↓ browse results ")
       : paint(theme, "dim", ` ${keyLabel(this.keys.search)} or / edits · esc clears `);
-    const room = Math.max(4, width - visibleWidth(lead) - visibleWidth(tail));
+    const room = Math.max(4, width - textWidth(lead) - textWidth(tail));
     const field = this.searching ? this.search.render(room)[0] ?? "" : bold(theme, fit(query ?? "", room));
     return [fit(`${lead}${fit(field, room)}${tail}`, width)];
   }
@@ -2087,12 +2110,9 @@ export class LobbyView implements Component, Focusable {
         }, width, height, theme);
       }
       case "metrics": {
-        const records = filterRecords(collectMetrics(this.data.metrics, this.data.tasks), query);
-        const groups = sortGroups(aggregateMetrics(records, this.metricsBy), this.metricsSort);
+        const { records, groups, taskTimes, stats, jev } = this.metricsFigures(query);
         this.metricsSelected = Math.min(this.metricsSelected, Math.max(0, groups.length - 1));
-        const taskTimes = taskTimesByModel(this.data.tasks, records);
-        const jev = summarizeClassifier(this.data.classifierMetrics, records);
-        return renderMetrics({ groups, taskTimes, records, stats: taskStats(this.data.tasks), by: this.metricsBy, sort: this.metricsSort, selected: this.metricsSelected, ...(query ? { query } : {}), panes: this.panes, ...(jev ? { classifier: jev } : {}) }, width, height, theme);
+        return renderMetrics({ groups, taskTimes, records, stats, by: this.metricsBy, sort: this.metricsSort, selected: this.metricsSelected, ...(query ? { query } : {}), panes: this.panes, ...(jev ? { classifier: jev } : {}) }, width, height, theme);
       }
     }
   }

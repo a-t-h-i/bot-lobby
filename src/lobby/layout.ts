@@ -4,7 +4,8 @@
  * its widths and heights explicitly and never reads a clock or the terminal,
  * so each tab renders deterministically in tests.
  */
-import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { textWidth } from "../width.ts";
 
 /** Colours the lobby uses; a subset of pi's theme so tests can pass a plain stub. */
 export type LobbyColor =
@@ -29,7 +30,7 @@ export interface LobbyTheme {
   italic?(text: string): string;
   bg?(color: "selectedBg" | "searchMatchBg" | "userMessageBg", text: string): string;
   /** Render Markdown to styled lines; plain wrapping without it (tests). */
-  markdown?(text: string, width: number): string[];
+  markdown?(text: string, width: number, keep?: boolean): string[];
   /** Strike text through (an abandoned task's title); plain without it (tests). */
   strike?(text: string): string;
 }
@@ -54,7 +55,7 @@ export function strike(theme: LobbyTheme | undefined, text: string): string {
 /** `left` and `right` on one line of exactly `width` columns: the left side gives way first. */
 export function spread(left: string, right: string, width: number): string {
   if (!right) return fit(left, width);
-  const room = width - visibleWidth(right) - 1;
+  const room = width - textWidth(right) - 1;
   if (room < 4) return fit(left, width);
   return `${fit(left, room)} ${right}`;
 }
@@ -62,8 +63,8 @@ export function spread(left: string, right: string, width: number): string {
 /** Exactly `width` columns: truncated with an ellipsis, or padded with spaces. */
 export function fit(text: string, width: number): string {
   if (width <= 0) return "";
-  const cut = visibleWidth(text) > width ? truncateToWidth(text, width, "…") : text;
-  const pad = width - visibleWidth(cut);
+  const cut = textWidth(text) > width ? truncateToWidth(text, width, "…") : text;
+  const pad = width - textWidth(cut);
   return pad > 0 ? `${cut}${" ".repeat(pad)}` : cut;
 }
 
@@ -83,7 +84,7 @@ export function wrap(text: string, width: number): string[] {
 
 /** Wrap with a hanging indent: the first line carries `lead`, the rest align under it. */
 export function wrapHanging(lead: string, text: string, width: number): string[] {
-  const indent = visibleWidth(lead);
+  const indent = textWidth(lead);
   const body = wrap(text, Math.max(1, width - indent));
   if (body.length === 0) return [lead];
   return body.map((line, index) => `${index === 0 ? lead : " ".repeat(indent)}${line}`);
@@ -94,7 +95,7 @@ export function rule(width: number, title = "", theme?: LobbyTheme, right = "", 
   if (width <= 0) return "";
   const head = title ? `── ${title} ` : "";
   const tail = right ? ` ${right} ──` : "";
-  const fill = width - visibleWidth(head) - visibleWidth(tail);
+  const fill = width - textWidth(head) - textWidth(tail);
   if (fill < 1) return fit(paint(theme, color, head.trimEnd() || "─".repeat(width)), width);
   const titled = title ? `${paint(theme, color, "── ")}${bold(theme, paint(theme, "accent", title))}${paint(theme, color, " ")}` : "";
   const ending = right ? `${paint(theme, color, " ")}${paint(theme, "muted", right)}${paint(theme, color, " ──")}` : "";
@@ -183,8 +184,8 @@ export function spinner(tick: number): string {
 }
 
 /** Markdown for plans, reports and replies: the theme's renderer, or headings bold without their `#` and the rest wrapped. */
-export function markdownLines(text: string, width: number, theme?: LobbyTheme): string[] {
-  if (theme?.markdown) return theme.markdown(text, width);
+export function markdownLines(text: string, width: number, theme?: LobbyTheme, keep = true): string[] {
+  if (theme?.markdown) return theme.markdown(text, width, keep);
   return text.split("\n").flatMap((line) => {
     const heading = /^#{1,6}\s+(.*)$/.exec(line);
     return wrap(heading ? bold(theme, paint(theme, "mdHeading", heading[1]!)) : line, width);
@@ -193,7 +194,7 @@ export function markdownLines(text: string, width: number, theme?: LobbyTheme): 
 
 /** Markdown behind a hanging lead (`oracle ▸ `): the first line carries the lead, the rest align under it. */
 export function markdownHanging(lead: string, text: string, width: number, theme?: LobbyTheme): string[] {
-  const indent = visibleWidth(lead);
+  const indent = textWidth(lead);
   const body = markdownLines(text, Math.max(1, width - indent), theme);
   if (body.length === 0) return [lead];
   return body.map((line, index) => (index === 0 ? `${lead}${line}` : line ? `${" ".repeat(indent)}${line}` : ""));
@@ -261,11 +262,11 @@ export function box(width: number, height: number, content: readonly string[], o
   const inner = width - 4;
   const title = options.title ? ` ${options.title} ` : "";
   const right = options.right ? ` ${options.right} ` : "";
-  let room = width - 2 - visibleWidth(title) - visibleWidth(right);
+  let room = width - 2 - textWidth(title) - textWidth(right);
   const shownRight = room >= 1 ? right : "";
-  room = width - 2 - visibleWidth(title) - visibleWidth(shownRight);
+  room = width - 2 - textWidth(title) - textWidth(shownRight);
   const titled = room >= 1 ? title : fit(title, Math.max(0, width - 3));
-  const fillWidth = Math.max(0, width - 2 - visibleWidth(titled) - visibleWidth(shownRight));
+  const fillWidth = Math.max(0, width - 2 - textWidth(titled) - textWidth(shownRight));
   const paintedTitle = titled ? bold(theme, paint(theme, focused ? "accent" : "text", titled)) : "";
   const top = `${edge("╭")}${paintedTitle}${edge("─".repeat(fillWidth))}${shownRight ? paint(theme, "dim", shownRight) : ""}${edge("╮")}`;
   const thumb = options.scroll ? scrollThumb(options.scroll.total, height - 2, options.scroll.start) : undefined;
