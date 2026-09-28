@@ -1,6 +1,5 @@
 /**
- * The Lobby tab: the zen scene of this session's task on top (the oracle
- * and agent animations, or just their status when animations are off), then the
+ * The Lobby tab: the status of this session's task on top, then the
  * conversation with the oracle (text only, no tool rows, no thinking), the
  * activity log of plain-words steps from every agent, and the one place where
  * thoughts show up. Pure: the scene arrives as a callback, the clock as `now`.
@@ -19,7 +18,7 @@ export type HomePane = (typeof HOME_PANES)[number];
 export interface HomeInput {
   task?: Task;
   /** Draws the zen scene into at most `height` lines, animated or still; absent when no task is active. */
-  scene?: (width: number, height: number, animated: boolean) => string[];
+  scene?: (width: number, height: number) => string[];
   chat: readonly ChatEntry[];
   /** The oracle's reply while it streams. */
   liveReply?: string;
@@ -48,7 +47,7 @@ export interface HomeInput {
   keys?: Record<LobbyPanel, string>;
   /** Another session is shown: its name titles the conversation. */
   title?: string;
-  /** The scene is another session's still status (no animations to toggle). */
+  /** The scene is another session's still status. */
   stillScene?: boolean;
   /** What the empty conversation says instead of the default (a session starting, say). */
   emptyNote?: string;
@@ -62,7 +61,6 @@ export interface HomeInput {
 export const HOME_COLUMNS_MIN = 100;
 /** Most lines the scene may take, and its share of the body; the still status needs far fewer. */
 const SCENE_SHARE = 0.45;
-const MAX_SCENE = 36;
 const MAX_STILL = 10;
 
 const SOURCE_COLORS: Record<string, LobbyColor> = {
@@ -491,28 +489,14 @@ function thinkingContent(input: HomeInput, thoughts: readonly ThoughtEntry[], wi
 }
 
 /**
- * The scene: with animations off (the `animations` panel, off by default)
- * only the task's status box, what the agents are doing and the checklist;
- * with them on, the animated oracle and agents too. Its first line names the
- * key that toggles the animations.
+ * The scene: the task's status box, what the agents are doing and the
+ * checklist.
  */
 function sceneLines(input: HomeInput, width: number, height: number, theme?: LobbyTheme): string[] {
   if (!input.task || !input.scene) return [];
-  const animated = input.panels.animations && !input.stillScene;
-  const budget = Math.min(animated ? MAX_SCENE : MAX_STILL, Math.floor(height * SCENE_SHARE));
-  if (budget < (animated ? 6 : 4)) return [];
-  const lines = input.scene(width, budget, animated).slice(0, budget);
-  const note = input.keys && !input.stillScene ? `${input.keys.animations} ${animated ? "hides" : "shows"} animations` : undefined;
-  return keyNote(lines, width, note, theme);
-}
-
-/** `note` at the right end of the first line, dimmed, when it fits beside what is there. */
-function keyNote(lines: readonly string[], width: number, note: string | undefined, theme?: LobbyTheme): string[] {
-  const first = lines[0];
-  if (!note || first === undefined) return [...lines];
-  const gap = width - textWidth(first) - textWidth(note) - 1;
-  if (gap < 2) return [...lines];
-  return [`${first}${" ".repeat(gap)}${paint(theme, "dim", note)}`, ...lines.slice(1)];
+  const budget = Math.min(MAX_STILL, Math.floor(height * SCENE_SHARE));
+  if (budget < 4) return [];
+  return input.scene(width, budget).slice(0, budget);
 }
 
 function hiddenHint(input: HomeInput, width: number, height: number, theme?: LobbyTheme): string[] {
