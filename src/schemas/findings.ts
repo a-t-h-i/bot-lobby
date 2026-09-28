@@ -69,6 +69,8 @@ export interface ReviewResult {
   pushback?: Pushback;
   /** Set when the engine downgraded an unsupported PASS. */
   downgraded?: string;
+  /** Set when the engine passed a CHANGES_REQUIRED that named only minor or info findings. */
+  relaxed?: string;
   raw: string;
 }
 
