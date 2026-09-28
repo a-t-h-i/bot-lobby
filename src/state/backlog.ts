@@ -6,8 +6,9 @@
  * saving at once cannot overwrite each other.
  */
 import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { writeFileEnsured } from "../knowledge/store.ts";
+import { forgetCachedUnder, readJsonCached } from "./file-cache.ts";
 import { dataRoot } from "./project.ts";
 import { taskSlug } from "./persistence.ts";
 
@@ -71,16 +72,25 @@ export function loadPlannedTask(root: string, configDir: string, id: string): Pl
   }
 }
 
-/** Every saved entry, pending first, newest first within each group; unreadable files are skipped. */
+/**
+ * Every saved entry, pending first, newest first within each group;
+ * unreadable files are skipped. Files are parsed again only when they change,
+ * and the entries are shared: for reading (the lobby lists them every few
+ * seconds); `loadPlannedTask` gives a copy of one's own.
+ */
 export function listPlannedTasks(root: string, configDir: string): PlannedTask[] {
   const dir = backlogDir(root, configDir);
   if (!existsSync(dir)) return [];
   const entries: PlannedTask[] = [];
+  const seen = new Set<string>();
   for (const file of readdirSync(dir)) {
     if (!file.endsWith(".json")) continue;
-    const entry = loadPlannedTask(root, configDir, file.slice(0, -".json".length));
+    const path = join(dir, file);
+    seen.add(path);
+    const entry = readJsonCached(path, isPlannedTask);
     if (entry) entries.push(entry);
   }
+  forgetCachedUnder(`${dir}${sep}`, seen);
   return entries.sort((a, b) => {
     if (a.status !== b.status) return a.status === "pending" ? -1 : 1;
     return b.updatedAt.localeCompare(a.updatedAt);

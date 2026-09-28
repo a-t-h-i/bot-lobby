@@ -74,6 +74,13 @@ agreed in the Plan tab skips approval too.
 **Safety nets:** every agent has a time limit (asked to wrap up at 75%), a
 stall watchdog and one retry; `Esc` aborts every running agent.
 
+**A fresh context per task.** Every agent runs in its own Pi process with its
+own context. The oracle, which is your session, starts each task clean: its
+model sees only the conversation since the task started, and once a task ends
+your next request starts fresh (the lobby shows *context cleared*, and the
+oracle is told where the finished task's record is). The session file keeps
+everything. `workflow.freshContext: false` in the config turns this off.
+
 ## The lobby
 
 A full-screen view with a prompt at the bottom that talks to whatever tab is
@@ -95,6 +102,9 @@ Rebind any key under `lobby.keys` in the config.
 **Several sessions from one window.** `alt+n` starts a task in a background
 Pi session. The Lobby tab can show any session, and your prompt steers it;
 `● waiting` in the tab bar means one has a question for you.
+
+The conversation keeps its newest 100 messages in memory; scroll to the top
+to load the rest.
 
 ## Planning
 

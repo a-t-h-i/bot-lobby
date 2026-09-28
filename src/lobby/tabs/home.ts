@@ -5,10 +5,11 @@
  * activity log of plain-words steps from every agent, and the one place where
  * thoughts show up. Pure: the scene arrives as a callback, the clock as `now`.
  */
-import { visibleWidth } from "@earendil-works/pi-tui";
+import { textWidth } from "../../width.ts";
 import type { Task } from "../../schemas/task.ts";
 import type { ActivityEntry, ChatEntry, ThoughtEntry } from "../feed.ts";
 import type { LobbyPanel } from "../../schemas/configuration.ts";
+import { markdownBlocks } from "../markdown.ts";
 import { beside, bold, box, clock, fill, fit, italic, markdownLines, notePane, paint, since, spinner, wrap, wrapHanging, type LobbyColor, type LobbyTheme, type PaneLayout } from "../layout.ts";
 
 /** The Lobby tab's scrollable panes. */
@@ -51,6 +52,8 @@ export interface HomeInput {
   emptyNote?: string;
   /** What the empty activity log says instead of "No activity yet.". */
   activityNote?: string;
+  /** Tops the conversation when earlier messages are not loaded (scrolling up loads them). */
+  olderNote?: string;
 }
 
 /** Wide terminals put the conversation and the activity log side by side. */
@@ -132,10 +135,10 @@ export function speakerLine(speaker: Speaker, width: number, theme?: LobbyTheme,
   const dimmed = note ? paint(theme, "dim", note) : "";
   if (side === "right") {
     const head = dimmed ? `${dimmed}  ${label} ${who}` : `${label} ${who}`;
-    return `${" ".repeat(Math.max(0, width - visibleWidth(head)))}${head}`;
+    return `${" ".repeat(Math.max(0, width - textWidth(head)))}${head}`;
   }
   const left = `${who} ${label}`;
-  const gap = width - visibleWidth(left) - visibleWidth(dimmed);
+  const gap = width - textWidth(left) - textWidth(dimmed);
   return gap >= 1 && dimmed ? `${left}${" ".repeat(gap)}${dimmed}` : left;
 }
 
@@ -148,7 +151,7 @@ export function speakerLine(speaker: Speaker, width: number, theme?: LobbyTheme,
 export function youLines(text: string, width: number, theme?: LobbyTheme): string[] {
   const most = Math.max(1, messageWidth(width, YOU_SHARE, 4) - 2);
   const lines = wrap(text, most);
-  const inner = Math.max(1, ...lines.map((line) => visibleWidth(line)));
+  const inner = Math.max(1, ...lines.map((line) => textWidth(line)));
   const pad = " ".repeat(Math.max(0, width - inner - 2));
   const bubble = theme?.bg
     ? (line: string) => theme.bg!("userMessageBg", ` ${fit(paint(theme, "accent", line), inner)} `)
@@ -157,53 +160,143 @@ export function youLines(text: string, width: number, theme?: LobbyTheme): strin
 }
 
 /** The oracle's reply as Markdown on the left, under its name. */
-function oracleLines(text: string, width: number, theme?: LobbyTheme): string[] {
+function oracleLines(text: string, width: number, theme?: LobbyTheme, keep = true): string[] {
   const indent = " ".repeat(BODY_INDENT);
-  return markdownLines(text, Math.max(1, messageWidth(width, ORACLE_SHARE, 0) - BODY_INDENT), theme).map((line) => (line ? `${indent}${line}` : ""));
+  return markdownLines(text, Math.max(1, messageWidth(width, ORACLE_SHARE, 0) - BODY_INDENT), theme, keep).map((line) => (line ? `${indent}${line}` : ""));
+}
+
+/** An open block this long is drawn again at most every `BIG_BLOCK_MS` while it grows (a long code block, say). */
+const BIG_BLOCK = 1500;
+const BIG_BLOCK_MS = 100;
+let lastOpen: { text: string; width: number; theme: object; lines: string[]; at: number } | undefined;
+
+/** The block the oracle is writing: drawn afresh (and not cached), except that a big one is redrawn only a few times a second. */
+function openBlockLines(text: string, width: number, theme: LobbyTheme | undefined): string[] {
+  const now = performance.now();
+  const key = theme ?? PLAIN;
+  if (text.length > BIG_BLOCK && lastOpen && lastOpen.width === width && lastOpen.theme === key && now - lastOpen.at < BIG_BLOCK_MS && text.startsWith(lastOpen.text)) return lastOpen.lines;
+  const lines = oracleLines(text, width, theme, false);
+  lastOpen = text.length > BIG_BLOCK ? { text, width, theme: key, lines, at: now } : undefined;
+  return lines;
+}
+
+/**
+ * The newest `need` lines (or a few more) of the reply the oracle is still
+ * writing. It is drawn block by block (see `markdownBlocks`): finished blocks
+ * come from the Markdown cache, only the one being written is rendered on
+ * each frame, and blocks above what the pane shows are not drawn at all.
+ */
+function liveLines(text: string, width: number, theme: LobbyTheme | undefined, need: number): string[] {
+  const blocks = markdownBlocks(text);
+  const parts: string[][] = [];
+  let count = 0;
+  for (let index = blocks.length - 1; index >= 0 && count < need; index -= 1) {
+    const lines = index === blocks.length - 1 ? openBlockLines(blocks[index]!, width, theme) : oracleLines(blocks[index]!, width, theme);
+    if (lines.length === 0) continue;
+    parts.push(lines);
+    count += lines.length + 1;
+  }
+  const lines: string[] = [];
+  for (let part = parts.length - 1; part >= 0; part -= 1) {
+    if (lines.length > 0) lines.push("");
+    for (const line of parts[part]!) lines.push(line);
+  }
+  return lines;
 }
 
 /** An event in the conversation (a task starting, a comment sent) as a centred rule; failures stand out instead. */
 export function eventLines(text: string, at: number, width: number, theme?: LobbyTheme): string[] {
   if (text.startsWith("✗")) return wrap(paint(theme, "error", text), width);
   const label = ` ${text}${at > 0 ? ` · ${clock(at)}` : ""} `;
-  const room = width - visibleWidth(label);
+  const room = width - textWidth(label);
   if (room < 6) return wrap(paint(theme, "dim", text), width);
   const left = Math.floor(room / 2);
   return [paint(theme, "dim", `${"─".repeat(left)}${label}${"─".repeat(room - left)}`)];
 }
 
+/** The newest lines of a pane, and how many it holds in all (estimated when only the newest were drawn). */
+export interface PaneLines {
+  lines: string[];
+  total: number;
+}
+
+/** A message's drawn lines, kept until the pane's width, the theme or its grouping changes. */
+interface Block {
+  width: number;
+  grouped: boolean;
+  lines: string[];
+}
+
 /**
- * The conversation, oldest first, like a chat: your messages as bubbles on
- * the right, the oracle's replies in Markdown on the left, each turn under a
- * line naming its speaker and time, events as centred rules, and while the
- * oracle works its header says so (streaming the reply under it).
+ * Drawn messages, per theme and per message: a message is drawn once (its
+ * Markdown is the costly part) and reused on every later frame. Messages
+ * that leave the feed are forgotten with it.
  */
-export function chatLines(chat: readonly ChatEntry[], width: number, theme?: LobbyTheme, live?: string, busy = false, tick = 0): string[] {
-  const lines: string[] = [];
-  const gap = () => {
-    if (lines.length > 0 && lines.at(-1) !== "") lines.push("");
-  };
-  let last: ChatEntry | undefined;
-  for (const entry of chat) {
-    gap();
-    if (entry.role === "note") {
-      lines.push(...eventLines(entry.text, entry.at, width, theme));
-      last = undefined;
-      continue;
-    }
-    const grouped = last?.role === entry.role && entry.at >= last.at && entry.at - last.at < GROUP_MS;
-    if (!grouped) lines.push(speakerLine(entry.role, width, theme, entry.at > 0 ? clock(entry.at) : ""));
-    lines.push(...(entry.role === "you" ? youLines(entry.text, width, theme) : oracleLines(entry.text, width, theme)));
-    last = entry;
+const blocks = new WeakMap<object, WeakMap<ChatEntry, Block>>();
+const PLAIN = {};
+
+/** Whether `entry` shares the speaker line of the message before it (same speaker, within minutes). */
+function isGrouped(entry: ChatEntry, before: ChatEntry | undefined): boolean {
+  return entry.role !== "note" && before !== undefined && before.role === entry.role && entry.at >= before.at && entry.at - before.at < GROUP_MS;
+}
+
+function entryBlock(entry: ChatEntry, before: ChatEntry | undefined, width: number, theme?: LobbyTheme): string[] {
+  const grouped = isGrouped(entry, before);
+  let cache = blocks.get(theme ?? PLAIN);
+  if (!cache) {
+    cache = new WeakMap();
+    blocks.set(theme ?? PLAIN, cache);
   }
-  if (live?.trim()) {
-    gap();
-    lines.push(speakerLine("oracle", width, theme, `${spinner(tick)} writing`), ...oracleLines(live.trim(), width, theme));
-  } else if (busy) {
-    gap();
-    lines.push(speakerLine("oracle", width, theme, `${spinner(tick)} working…`));
-  }
+  const hit = cache.get(entry);
+  if (hit && hit.width === width && hit.grouped === grouped) return hit.lines;
+  const lines = entry.role === "note"
+    ? eventLines(entry.text, entry.at, width, theme)
+    : [
+        ...(grouped ? [] : [speakerLine(entry.role, width, theme, entry.at > 0 ? clock(entry.at) : "")]),
+        ...(entry.role === "you" ? youLines(entry.text, width, theme) : oracleLines(entry.text, width, theme)),
+      ];
+  cache.set(entry, { width, grouped, lines });
   return lines;
+}
+
+/**
+ * The newest `need` lines of the conversation, like a chat: your messages as
+ * bubbles on the right, the oracle's replies in Markdown on the left, each
+ * turn under a line naming its speaker and time, events as centred rules,
+ * and while the oracle works its header says so (streaming the reply under
+ * it). Only the messages those lines reach are drawn — scrolling back draws
+ * more — and each is drawn once; the total is estimated from them until the
+ * whole conversation has been drawn. `older` tops a conversation that has
+ * earlier messages still to load.
+ */
+export function chatTail(chat: readonly ChatEntry[], width: number, theme: LobbyTheme | undefined, need: number, live?: string, busy = false, tick = 0, older?: string): PaneLines {
+  const parts: string[][] = [];
+  let count = 0;
+  const add = (lines: string[]) => {
+    if (lines.length === 0) return;
+    count += lines.length + (parts.length > 0 ? 1 : 0);
+    parts.push(lines);
+  };
+  if (live?.trim()) add([speakerLine("oracle", width, theme, `${spinner(tick)} writing`), ...liveLines(live.trim(), width, theme, need)]);
+  else if (busy) add([speakerLine("oracle", width, theme, `${spinner(tick)} working…`)]);
+  let index = chat.length - 1;
+  for (; index >= 0 && count < need; index -= 1) add(entryBlock(chat[index]!, chat[index - 1], width, theme));
+  const drawn = chat.length - 1 - index;
+  if (index < 0 && older) add(wrap(paint(theme, "dim", older), width));
+  const lines: string[] = [];
+  for (let part = parts.length - 1; part >= 0; part -= 1) {
+    if (lines.length > 0) lines.push("");
+    for (const line of parts[part]!) lines.push(line);
+  }
+  // Messages not drawn yet count at the average height of those that were.
+  const rest = index + 1;
+  const total = rest > 0 && drawn > 0 ? lines.length + Math.ceil((rest * lines.length) / drawn) : lines.length;
+  return { lines, total };
+}
+
+/** The whole conversation drawn (the session browser's preview and tests; the Lobby tab draws only what shows). */
+export function chatLines(chat: readonly ChatEntry[], width: number, theme?: LobbyTheme, live?: string, busy = false, tick = 0): string[] {
+  return chatTail(chat, width, theme, Number.POSITIVE_INFINITY, live, busy, tick).lines;
 }
 
 function emptyChat(input: HomeInput, width: number, theme?: LobbyTheme): string[] {
@@ -237,24 +330,43 @@ export function filterFeed(input: Pick<HomeInput, "chat" | "activity" | "thought
   };
 }
 
-function conversation(input: HomeInput, chat: readonly ChatEntry[], width: number, theme?: LobbyTheme): string[] {
+function whole(lines: string[]): PaneLines {
+  return { lines, total: lines.length };
+}
+
+function conversation(input: HomeInput, chat: readonly ChatEntry[], width: number, need: number, theme?: LobbyTheme): PaneLines {
   const searching = Boolean(input.query);
   const live = searching ? undefined : input.liveReply;
   const busy = !searching && input.busy;
-  return chat.length > 0 || live || busy ? chatLines(chat, width, theme, live, busy, input.tick) : emptyChat(input, width, theme);
+  if (chat.length === 0 && !live && !busy) return whole(emptyChat(input, width, theme));
+  return chatTail(chat, width, theme, need, live, busy, input.tick, searching ? undefined : input.olderNote);
 }
 
-function activity(input: HomeInput, entries: readonly ActivityEntry[], width: number, theme?: LobbyTheme): string[] {
-  if (entries.length === 0) return wrap(paint(theme, "dim", input.query ? `No activity matches "${input.query}".` : input.activityNote ?? "No activity yet."), width);
-  return entries.map((entry) => activityLine(entry, width, input.tick, theme));
+/** The newest `need` activity lines (one per entry), drawn only as far back as the pane shows. */
+function activity(input: HomeInput, entries: readonly ActivityEntry[], width: number, need: number, theme?: LobbyTheme): PaneLines {
+  if (entries.length === 0) return whole(wrap(paint(theme, "dim", input.query ? `No activity matches "${input.query}".` : input.activityNote ?? "No activity yet."), width));
+  const shown = Number.isFinite(need) ? entries.slice(-Math.max(0, need)) : entries;
+  return { lines: shown.map((entry) => activityLine(entry, width, input.tick, theme)), total: entries.length };
 }
 
 /** The last `rows` lines, `offset` lines back from the newest (clamped), and where they start. */
 export function tailWindow(lines: readonly string[], rows: number, offset = 0): { shown: string[]; start: number; offset: number } {
-  const max = Math.max(0, lines.length - rows);
-  const back = Math.min(Math.max(0, offset), max);
-  const start = max - back;
-  return { shown: lines.slice(start, start + Math.max(0, rows)), start, offset: back };
+  return paneWindow({ lines: [...lines], total: lines.length }, rows, offset);
+}
+
+/**
+ * `rows` lines of a pane `offset` lines back from its newest (clamped), when
+ * only its newest lines were drawn: where they start in the whole pane, for
+ * the scrollbar.
+ */
+export function paneWindow(content: PaneLines, rows: number, offset = 0): { shown: string[]; start: number; offset: number } {
+  const { lines } = content;
+  const total = Math.max(content.total, lines.length);
+  const height = Math.max(0, rows);
+  const back = Math.min(Math.max(0, offset), Math.max(0, total - height));
+  const end = Math.max(0, lines.length - back);
+  const begin = Math.max(0, end - height);
+  return { shown: lines.slice(begin, end), start: Math.max(0, total - back - height), offset: back };
 }
 
 /** The thought to show: a live one first, otherwise the newest. */
@@ -262,17 +374,57 @@ export function currentThought(thoughts: readonly ThoughtEntry[]): ThoughtEntry 
   return [...thoughts].reverse().find((entry) => entry.live) ?? thoughts.at(-1);
 }
 
-/** Every thought, oldest first: who thought it, then the thought, dimmed. */
-export function thoughtLines(thoughts: readonly ThoughtEntry[], width: number, theme?: LobbyTheme): string[] {
-  return thoughts.flatMap((thought) => {
-    const lead = `${paint(theme, sourceColor(thought.source), thought.source.padEnd(SOURCE_WIDTH).slice(0, SOURCE_WIDTH))} `;
-    return wrapHanging(lead, italic(theme, paint(theme, "dim", thought.text.replace(/\s*\n\s*/g, " "))), width);
-  });
+/**
+ * Drawn thoughts, per theme and per thought, kept while the thought's text
+ * and the width stay the same (a live thought grows, so it is drawn again as
+ * it streams; settled ones are wrapped once).
+ */
+const thoughtBlocks = new WeakMap<object, WeakMap<ThoughtEntry, { width: number; text: string; lines: string[]; at: number }>>();
+
+/** A live thought this long is wrapped again at most every `LONG_THOUGHT_MS` while it streams. */
+const LONG_THOUGHT = 1000;
+const LONG_THOUGHT_MS = 150;
+
+function thoughtBlock(thought: ThoughtEntry, width: number, theme?: LobbyTheme): string[] {
+  let cache = thoughtBlocks.get(theme ?? PLAIN);
+  if (!cache) {
+    cache = new WeakMap();
+    thoughtBlocks.set(theme ?? PLAIN, cache);
+  }
+  const hit = cache.get(thought);
+  const now = performance.now();
+  if (hit && hit.width === width && (hit.text === thought.text || (thought.live && thought.text.length > LONG_THOUGHT && now - hit.at < LONG_THOUGHT_MS))) return hit.lines;
+  const lead = `${paint(theme, sourceColor(thought.source), thought.source.padEnd(SOURCE_WIDTH).slice(0, SOURCE_WIDTH))} `;
+  const lines = wrapHanging(lead, italic(theme, paint(theme, "dim", thought.text.replace(/\s*\n\s*/g, " "))), width);
+  cache.set(thought, { width, text: thought.text, lines, at: now });
+  return lines;
 }
 
-function thinkingContent(input: HomeInput, thoughts: readonly ThoughtEntry[], width: number, theme?: LobbyTheme): string[] {
-  if (thoughts.length > 0) return thoughtLines(thoughts, width, theme);
-  return [paint(theme, "dim", input.query ? `No thought matches "${input.query}".` : "Thoughts from the oracle and every agent appear here, and only here.")];
+/** The newest `need` lines of the thoughts, oldest first: only the thoughts they reach are drawn, and the rest estimated. */
+export function thoughtTail(thoughts: readonly ThoughtEntry[], width: number, theme: LobbyTheme | undefined, need: number): PaneLines {
+  const parts: string[][] = [];
+  let count = 0;
+  let index = thoughts.length - 1;
+  for (; index >= 0 && count < need; index -= 1) {
+    const lines = thoughtBlock(thoughts[index]!, width, theme);
+    parts.push(lines);
+    count += lines.length;
+  }
+  const lines: string[] = [];
+  for (let part = parts.length - 1; part >= 0; part -= 1) for (const line of parts[part]!) lines.push(line);
+  const rest = index + 1;
+  const drawn = parts.length;
+  return { lines, total: rest > 0 && drawn > 0 ? lines.length + Math.ceil((rest * lines.length) / drawn) : lines.length };
+}
+
+/** Every thought, oldest first: who thought it, then the thought, dimmed. */
+export function thoughtLines(thoughts: readonly ThoughtEntry[], width: number, theme?: LobbyTheme): string[] {
+  return thoughtTail(thoughts, width, theme, Number.POSITIVE_INFINITY).lines;
+}
+
+function thinkingContent(input: HomeInput, thoughts: readonly ThoughtEntry[], width: number, need: number, theme?: LobbyTheme): PaneLines {
+  if (thoughts.length > 0) return thoughtTail(thoughts, width, theme, need);
+  return whole([paint(theme, "dim", input.query ? `No thought matches "${input.query}".` : "Thoughts from the oracle and every agent appear here, and only here.")]);
 }
 
 /**
@@ -295,7 +447,7 @@ function sceneLines(input: HomeInput, width: number, height: number, theme?: Lob
 function keyNote(lines: readonly string[], width: number, note: string | undefined, theme?: LobbyTheme): string[] {
   const first = lines[0];
   if (!note || first === undefined) return [...lines];
-  const gap = width - visibleWidth(first) - visibleWidth(note) - 1;
+  const gap = width - textWidth(first) - textWidth(note) - 1;
   if (gap < 2) return [...lines];
   return [`${first}${" ".repeat(gap)}${paint(theme, "dim", note)}`, ...lines.slice(1)];
 }
@@ -328,19 +480,25 @@ export function renderHome(input: HomeInput, width: number, height: number, them
   const main = rest - thinkHeight;
   if (!showMain && !panels.thinking) return fill([...scene, ...hiddenHint(input, width, rest, theme)], height, width);
   const matches = (count: number) => `${count} match${count === 1 ? "" : "es"}`;
-  /** One scrollable pane: its lines, tailed to its rows and scrolled back by its offset, in a box that records where it sits. */
-  const pane = (name: HomePane, title: string, note: string | undefined, lines: (inner: number) => string[]) => (top: number, left: number, w: number, h: number): string[] => {
-    const all = lines(Math.max(1, w - 4));
-    const view = tailWindow(all, h - 2, input.offsets?.[name] ?? 0);
-    notePane(input.panes, name, top, left, w, h, all.length);
+  /**
+   * One scrollable pane: only the lines it shows are drawn — its newest, or
+   * as far back as it is scrolled — in a box that records where it sits.
+   */
+  const pane = (name: HomePane, title: string, note: string | undefined, content: (inner: number, need: number) => PaneLines) => (top: number, left: number, w: number, h: number): string[] => {
+    const rows = Math.max(0, h - 2);
+    const offset = input.offsets?.[name] ?? 0;
+    const drawn = content(Math.max(1, w - 4), rows + offset);
+    const view = paneWindow(drawn, rows, offset);
+    const total = Math.max(drawn.total, drawn.lines.length);
+    notePane(input.panes, name, top, left, w, h, total);
     const right = rightNote(view.offset, note);
-    return box(w, h, view.shown, { title, ...(right ? { right } : {}), focused: input.focus === name, scroll: { total: all.length, start: view.start }, theme });
+    return box(w, h, view.shown, { title, ...(right ? { right } : {}), focused: input.focus === name, scroll: { total, start: view.start }, theme });
   };
-  const chatBox = pane("conversation", input.title ? `Conversation · ${input.title}` : "Conversation", input.query ? matches(feed.chat.length) : input.keys?.conversation, (inner) => conversation(input, feed.chat, inner, theme));
-  const activityBox = pane("activity", "Activity", input.query ? matches(feed.activity.length) : input.keys?.activity, (inner) => activity(input, feed.activity, inner, theme));
+  const chatBox = pane("conversation", input.title ? `Conversation · ${input.title}` : "Conversation", input.query ? matches(feed.chat.length) : input.keys?.conversation, (inner, need) => conversation(input, feed.chat, inner, need, theme));
+  const activityBox = pane("activity", "Activity", input.query ? matches(feed.activity.length) : input.keys?.activity, (inner, need) => activity(input, feed.activity, inner, need, theme));
   const thought = currentThought(feed.thoughts);
   const thinkingNote = thought ? `${thought.source} · ${thought.live ? "thinking" : since(input.now - thought.at)}` : input.keys?.thinking;
-  const thinkingBox = pane("thinking", "Thinking", thinkingNote, (inner) => thinkingContent(input, feed.thoughts, inner, theme));
+  const thinkingBox = pane("thinking", "Thinking", thinkingNote, (inner, need) => thinkingContent(input, feed.thoughts, inner, need, theme));
   const top = scene.length;
   let body: string[] = [];
   if (main > 0 && panels.conversation && panels.activity) {

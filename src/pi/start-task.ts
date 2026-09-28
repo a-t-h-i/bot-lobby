@@ -15,6 +15,7 @@ import { applyMasterModel } from "./settings-ui.ts";
 import { setAutoMode } from "../state/auto.ts";
 import { loadPlannedTask, markPlannedTaskStarted, plannedTaskRequest } from "../state/backlog.ts";
 import { triageFor } from "../classifier/instance.ts";
+import { freshContextOn, markContext } from "./fresh-context.ts";
 
 function uniqueTaskId(root: string, configDir: string, request: string): string {
   const base = nextTaskId(request);
@@ -76,6 +77,8 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   applyStatus(ctx, root, configDir);
   await applyMasterModel(pi, ctx, loadConfig());
   ctx.ui.notify(`bot-lobby ${task.id} started`, "info");
+  // The oracle takes the task on with a clean context: nothing said before the kickoff is sent to its model.
+  if (freshContextOn()) markContext(pi, { kind: "start", taskId: task.id, at: Date.now() });
   // A kickoff while pi is still busy (another turn) queues behind it instead of throwing.
   pi.sendUserMessage(kickoff(task), ctx.isIdle() ? undefined : { deliverAs: "followUp" });
   return task;

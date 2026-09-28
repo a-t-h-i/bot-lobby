@@ -10,7 +10,7 @@
 import type { KeyId } from "@earendil-works/pi-tui";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
-import { activeTask, loadTask } from "../state/persistence.ts";
+import { peekOwnedTask } from "../state/persistence.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { commentMessage, markCommentsDelivered, readPlanComments, undeliveredComments } from "../state/comments.ts";
 import { inboxMessage, markInboxDelivered, markSessionInboxDelivered, readInbox, readSessionInbox } from "../state/inbox.ts";
@@ -42,6 +42,8 @@ interface Owner {
   configDir: string;
   timer?: ReturnType<typeof setInterval>;
   auto?: AutoTrack;
+  /** The session's task as this tick read it: one read serves the whole tick. */
+  tick?: { task: Task | undefined };
 }
 
 let owner: Owner | undefined;
@@ -53,7 +55,8 @@ export function onOwnerEvent(fn: ((event: OwnerEvent) => void) | undefined): voi
 }
 
 function ownTask(state: Owner): Task | undefined {
-  return activeTask(state.root, state.configDir, state.ctx.sessionManager.getSessionId());
+  if (state.tick) return state.tick.task;
+  return peekOwnedTask(state.root, state.configDir, state.ctx.sessionManager.getSessionId());
 }
 
 function live(task: Task | undefined): task is Task {
@@ -68,8 +71,7 @@ export function deliverComments(): number {
   if (!live(task) || task.paused) return 0;
   const fresh = undeliveredComments(readPlanComments(state.root, state.configDir, task.id));
   if (fresh.length === 0) return 0;
-  const current = loadTask(state.root, state.configDir, task.id) ?? task;
-  state.pi.sendUserMessage(commentMessage(task.id, fresh, Boolean(current.plan)), state.ctx.isIdle() ? undefined : { deliverAs: "steer" });
+  state.pi.sendUserMessage(commentMessage(task.id, fresh, Boolean(task.plan)), state.ctx.isIdle() ? undefined : { deliverAs: "steer" });
   markCommentsDelivered(state.root, state.configDir, task.id, fresh.map((comment) => comment.id));
   listener?.({ kind: "comments", taskId: task.id, count: fresh.length });
   return fresh.length;
@@ -211,11 +213,18 @@ export function toggleOwnAuto(): string {
 
 /** One tick of the owner's clock. */
 export function ownerTick(): void {
-  heartbeat();
-  deliverComments();
-  deliverInbox();
-  deliverSessionInbox();
-  driveAuto();
+  const state = owner;
+  if (!state) return;
+  state.tick = { task: ownTask(state) };
+  try {
+    heartbeat();
+    deliverComments();
+    deliverInbox();
+    deliverSessionInbox();
+    driveAuto();
+  } finally {
+    state.tick = undefined;
+  }
 }
 
 function stop(): void {
@@ -254,7 +263,7 @@ export function registerOwner(pi: ExtensionAPI, configDir: string): void {
   // Auto mode has nobody to answer a question: tell the oracle to decide instead.
   pi.on("tool_call", (event, ctx) => {
     if (event.toolName !== "ask_user_question" || !owner) return undefined;
-    const task = activeTask(owner.root, owner.configDir, ctx.sessionManager.getSessionId());
+    const task = peekOwnedTask(owner.root, owner.configDir, ctx.sessionManager.getSessionId());
     if (!live(task) || !isAutoMode(owner.root, owner.configDir, task.id)) return undefined;
     return { block: true, reason: `Auto mode is on for ${task.id}: nobody will answer. Decide this yourself from the request, the plan and your reconnaissance, record the decision, and continue.` };
   });
