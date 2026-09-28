@@ -168,6 +168,15 @@ it once the implementation steps are complete. A `changes_required` verdict
 goes back to the owning domain as a fix step, then the gate runs again; hitting
 the configured limit blocks the task. On a pass, record knowledge and continue.
 
+Not every change in the tree is this task's. Worker and QA reports end with
+who changed each file, from bot-lobby's record of every agent's edits:
+**planned** (this task's workers), **quick fix** (the user's own direct
+requests from the lobby: authorised, so never revert them or send them back as
+fixes), **pre-existing** and **another task** (not this task's), and
+**unattributed** (no agent recorded it: ask the user before counting it in or
+reverting it). A QA finding about a quick fix is yours to act on only when it
+breaks this task.
+
 ## Completion
 
 Only you declare completion, and only after requirements are satisfied,

@@ -4,6 +4,7 @@ import { roleSpec } from "../roles/registry.ts";
 import { compilePrompt } from "../prompts/compiler.ts";
 import { activityDetail, activityWord, describeToolCall } from "../pi/activity.ts";
 import { shortDuration, truncate } from "../text.ts";
+import { EditLog } from "../state/changes.ts";
 import { runPiAgent, spawnPiProcess, type PiStreamEvent, type ProcessRunner } from "./pi-runner.ts";
 
 export interface AgentContext {
@@ -91,13 +92,16 @@ function retryable(run: AgentRun): boolean {
 export async function runAgent(request: AgentRequest, run: ProcessRunner = spawnPiProcess): Promise<AgentRun> {
   const startedAt = new Date().toISOString();
   const attempts = Math.max(1, (request.retries ?? 0) + 1);
+  // A failed attempt may have edited files before the retry: the run owns every edit.
+  const edits = new EditLog(request.cwd);
   let last: AgentRun | undefined;
   for (let attempt = 1; attempt <= attempts; attempt++) {
-    last = await runAgentOnce(request, run, attempt, startedAt);
+    last = await runAgentOnce(request, run, attempt, startedAt, edits);
     request.onAttemptEnd?.(last);
     if (!retryable(last)) break;
   }
-  return last!;
+  const edited = edits.list();
+  return edited.length > 0 ? { ...last!, edited } : last!;
 }
 
 /** Abort every in-flight subagent (session shutdown, user cancel). */
@@ -134,10 +138,10 @@ function toolsFor(request: AgentRequest): readonly string[] | undefined {
  * Run one domain/role agent in an isolated pi process. The role's tool
  * allowlist comes from its spec, so read-only roles cannot modify anything.
  */
-async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: number, startedAt: string): Promise<AgentRun> {
+async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: number, startedAt: string, edits: EditLog): Promise<AgentRun> {
   const base = baseRun(request, `${request.taskId}:${request.domain}:${request.role}:${Date.now().toString(36)}`, startedAt, attempt);
   request.onUpdate?.(base);
-  const live = createLiveRun(base, request);
+  const live = createLiveRun(base, request, edits);
 
   const controller = new AbortController();
   activeControllers.add(controller);
@@ -198,7 +202,7 @@ const THROTTLE_MS = 2000;
  * `onUpdate`: activity changes, retries and notes immediately, counters and
  * heartbeats at most every couple of seconds.
  */
-function createLiveRun(base: AgentRun, request: AgentRequest) {
+function createLiveRun(base: AgentRun, request: AgentRequest, edits: EditLog) {
   let state: AgentRun = base;
   let lastEmit = 0;
   const emit = (patch: Partial<AgentRun>, force: boolean) => {
@@ -212,6 +216,7 @@ function createLiveRun(base: AgentRun, request: AgentRequest) {
   const onEvent = (event: PiStreamEvent) => {
     switch (event.type) {
       case "tool_execution_start": {
+        edits.note(event.toolName, event.args);
         const activity = activityWord(event.toolName);
         const detail = activityDetail(event.toolName, event.args);
         const step = describeToolCall(event.toolName, event.args);

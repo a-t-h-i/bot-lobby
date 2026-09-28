@@ -40,3 +40,29 @@ export async function readRepositoryDiff(cwd: string, limitChars = 20_000): Prom
     return `Unable to read git state: ${(error as Error).message}`;
   }
 }
+
+/** Most changed files one look reports; the rest are summarised by the diff. */
+export const MAX_CHANGED_FILES = 400;
+
+/**
+ * The repository's top folder and every file `git status` reports changed,
+ * relative to it (renames by their new path, untracked files one by one), or
+ * undefined when git is unusable here.
+ */
+export async function changedFiles(cwd: string): Promise<{ top: string; files: string[] } | undefined> {
+  try {
+    const [top, status] = await Promise.all([git(cwd, ["rev-parse", "--show-toplevel"]), run("git", ["status", "--porcelain", "-z", "--untracked-files=all"], { cwd, maxBuffer: MAX_BUFFER })]);
+    const entries = status.stdout.split("\0");
+    const files: string[] = [];
+    for (let index = 0; index < entries.length && files.length < MAX_CHANGED_FILES; index += 1) {
+      const entry = entries[index]!;
+      if (entry.length < 4) continue;
+      files.push(entry.slice(3));
+      // A rename or copy is followed by the path it came from.
+      if (/[RC]/.test(entry.slice(0, 2))) index += 1;
+    }
+    return { top, files };
+  } catch {
+    return undefined;
+  }
+}

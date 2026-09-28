@@ -257,7 +257,11 @@ export async function runWorker(
   let outcome = workerOutcome(request.domain, await runAgent(route ? { ...base, ...routedFields(route) } : base, run));
   // A routed step that fell short runs again at the configured model and thinking.
   if (route && fellShort(outcome.run, outcome.issues) && !request.signal?.aborted) {
+    const routed = outcome.run.edited ?? [];
     outcome = workerOutcome(request.domain, await runAgent(base, run));
+    // The step owns what the routed attempt edited too.
+    const edited = [...new Set([...routed, ...(outcome.run.edited ?? [])])];
+    if (edited.length > 0) outcome = { ...outcome, run: { ...outcome.run, edited } };
   }
   return outcome;
 }
@@ -284,6 +288,8 @@ export interface ReviewerRequest {
   workerSummary: string;
   scoutOutcomes: ScoutOutcome[];
   diff: string;
+  /** Who changed each changed file (planned, quick fix, pre-existing, …), one line each. */
+  provenance?: string;
   instruction?: string;
   cwd: string;
   dataRoots: readonly string[];
@@ -303,6 +309,7 @@ function reviewerContext(request: ReviewerRequest): string {
     "You may not modify implementation. Report required changes instead.",
     request.workerSummary ? `Worker summary:\n${truncate(request.workerSummary, 2000)}` : "No worker summary available.",
     owns.length > 0 ? `Scout findings:\n${summarizeOutcomes(owns, 1200)}` : "",
+    request.provenance ? `Who changed each file (bot-lobby's record of every agent's edit and write calls; judge each as your role's Change provenance says):\n${request.provenance}` : "",
     `Repository changes:\n${request.diff}`,
   ]
     .filter((line) => line.length > 0)
