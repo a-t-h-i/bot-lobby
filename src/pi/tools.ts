@@ -8,6 +8,7 @@ import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { classifier, effortFor, hintsFor, triageFor } from "../classifier/instance.ts";
 import { truncate } from "../text.ts";
 import { applyStatus, reportRuns, summarizeRun } from "./ui.ts";
+import { whileAsking } from "../state/budget.ts";
 import { isQuiet } from "./quiet.ts";
 import { checkThinking, createProfileResolver, modelRef, type ModelLookup } from "./model-support.ts";
 import { agentName, describeRun } from "./run-summary.ts";
@@ -36,16 +37,18 @@ const OrchestrateSchema = Type.Object({
       Type.Object({
         domain: Type.String({ description: "designer, backend, or qa" }),
         task: Type.String({ description: "the concrete step(s) for that domain's worker" }),
+        minutes: Type.Optional(Type.Number({ description: "under a time budget: minutes for this worker, by its scope" })),
       }),
       { description: "implement: run several domains in parallel (distinct domains); workers share files through the file desk" },
     ),
   ),
+  minutes: Type.Optional(Type.Number({ description: "implement (under a time budget): minutes for this step, by its scope; budget: more minutes to ask the user for" })),
   approvalId: Type.Optional(Type.String({ description: "resolve_approval: the approval id from a worker result" })),
   decision: Type.Optional(
     StringEnum(["approved", "rejected"] as const, { description: "resolve_approval: approve or reject the request" }),
   ),
   note: Type.Optional(Type.String({ description: "resolve_approval: rationale, or what to do instead when rejected" })),
-  reason: Type.Optional(Type.String({ description: "block: why the task cannot continue" })),
+  reason: Type.Optional(Type.String({ description: "block: why the task cannot continue; budget: why the task needs more time" })),
   text: Type.Optional(Type.String({ description: "decide/complete/knowledge: the decision, completion summary, or knowledge text" })),
   file: Type.Optional(Type.String({ description: "compact: the knowledge file to rewrite, e.g. knowledge.md" })),
   kind: Type.Optional(
@@ -64,7 +67,8 @@ const DESCRIPTION = [
   "review), knowledge (record approved knowledge or a decision),",
   "compact (replace a knowledge file with a rewritten version, archiving the old one),",
   "resolve_approval (approve or reject a request), complete (declare the task done after the gates",
-  "pass), block/resume (escalate or continue), status, cancel.",
+  "pass), block/resume (escalate or continue), budget (under a time budget: where it stands, or ask the",
+  "user for more minutes with a reason), status, cancel.",
   "The engine validates every step against the task state machine, so a rejected action means the workflow is not at that step yet.",
 ].join(" ");
 
@@ -109,8 +113,9 @@ export function workflowDeps(
     classifier: classifier(),
     triage: (request, triageSignal) => triageFor({ cwd: ctx.cwd, root, configDir }, request, triageSignal),
     effort: effortFor((model, thinking) => checkThinking(modelLookup(ctx)(model), thinking).level),
-    ask: async (question) => (hasUI ? ctx.ui.input(question) : undefined),
-    choose: async (title, options) => (hasUI ? ctx.ui.select(title, options) : undefined),
+    // Time spent waiting on the user is not the task's: its budget clock waits too.
+    ask: async (question) => (hasUI ? whileAsking(() => ctx.ui.input(question)) : undefined),
+    choose: async (title, options) => (hasUI ? whileAsking(() => ctx.ui.select(title, options)) : undefined),
     notify: (message, level = "info") => {
       if (hasUI) ctx.ui.notify(message, level);
     },

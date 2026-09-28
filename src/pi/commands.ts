@@ -27,11 +27,14 @@ import { autoOpenLobby, showLobby } from "../lobby/runtime.ts";
 import { modelRef, thinkingMismatches } from "./model-support.ts";
 import { describeRun, runFromLog } from "./run-summary.ts";
 import { modelLookup } from "./tools.ts";
+import { budgetLine, budgetState, parseMinutes, readBudget, setBudget, startClock } from "../state/budget.ts";
 
 const HELP = [
   "/bot-lobby                  Open the lobby: tasks, plan, quick fix, metrics (alt+l)",
   "/bot-lobby <request>        Start a task through the workflow",
   "/bot-lobby --task [--auto] <request>   Start a task even when the request begins with a subcommand word",
+  "/bot-lobby --budget 90m <request>   Start a task with a time budget the oracle divides between its agents",
+  "/bot-lobby budget [90m|off]  Show or set this session's task time budget",
   "/bot-lobby status [taskId]  Show the active task",
   "/bot-lobby tasks            List tasks",
   "/bot-lobby pause|resume     Pause or resume the active task",
@@ -51,21 +54,48 @@ const HELP = [
 ].join("\n");
 
 /** Subcommands only win when no free-form text follows (so tasks still start). */
-const SUBCOMMANDS = new Set(["lobby", "help", "status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "accept", "knowledge", "config", "settings", "minimize", "restore", "claim", "auto", "start-plan", "switch"]);
+const SUBCOMMANDS = new Set(["lobby", "help", "status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "accept", "budget", "knowledge", "config", "settings", "minimize", "restore", "claim", "auto", "start-plan", "switch"]);
 
 function isTaskId(value: string | undefined): boolean {
   return Boolean(value && /^TASK-/.test(value));
 }
 
-export function parseCommand(args: string): { sub: string | undefined; rest: string[]; restText: string; auto?: boolean } {
-  const trimmed = args.trim();
-  // `--task [--auto] <request>` always starts a task (a background session started from the lobby sends this).
-  const forced = /^--task(\s+--auto)?(?:\s+([\s\S]*))?$/.exec(trimmed);
-  if (forced) return { sub: undefined, rest: [], restText: (forced[2] ?? "").trim(), ...(forced[1] ? { auto: true } : {}) };
+/** A task start's leading flags: `--task` (always a task), `--auto`, `--budget <time>` (or `--budget=<time>`). */
+const START_FLAG = /^--(task|auto)(?=\s|$)\s*|^--budget(?:=|\s+)(\S+)\s*/;
+
+export interface ParsedCommand {
+  sub: string | undefined;
+  rest: string[];
+  restText: string;
+  auto?: boolean;
+  /** Minutes from `--budget`. */
+  budget?: number;
+  /** `--budget` with something that is not a time. */
+  budgetError?: string;
+}
+
+export function parseCommand(args: string): ParsedCommand {
+  let trimmed = args.trim();
+  // Leading flags start a task: what follows is its request, even when it begins with a subcommand word
+  // (a background session started from the lobby sends `--task [--auto] <request>`).
+  let flagged = false;
+  const extras: Pick<ParsedCommand, "auto" | "budget" | "budgetError"> = {};
+  for (let match = START_FLAG.exec(trimmed); match; match = START_FLAG.exec(trimmed)) {
+    flagged = true;
+    if (match[1] === "auto") extras.auto = true;
+    else if (match[2] !== undefined) {
+      const minutes = parseMinutes(match[2]);
+      if (minutes) extras.budget = minutes;
+      else extras.budgetError = `"${match[2]}" is not a time budget (try 90m, 1h or 1h30m)`;
+    }
+    trimmed = trimmed.slice(match[0].length);
+  }
+  if (flagged) return { sub: undefined, rest: [], restText: trimmed.trim(), ...extras };
   const [sub, ...rest] = trimmed.split(/\s+/).filter(Boolean);
   if (!sub || !SUBCOMMANDS.has(sub)) return { sub: undefined, rest: [], restText: trimmed };
   const takesArgs = sub === "amend" || sub === "claim"
     || (sub === "auto" && rest.length === 1 && /^(on|off)$/i.test(rest[0]!))
+    || (sub === "budget" && rest.length >= 1 && rest.length <= 2 && (/^off$/i.test(rest[0]!) || parseMinutes(rest.join("")) !== undefined))
     || (sub === "start-plan" && rest.length >= 1 && rest.length <= 2 && /^PLAN-/.test(rest[0]!) && (rest.length === 1 || rest[1] === "auto"))
     || (sub === "switch" && rest.length >= 1 && /\.jsonl$/.test(rest.join(" ")));
   if (!takesArgs && rest.length > 0 && !(rest.length === 1 && isTaskId(rest[0]))) {
@@ -88,7 +118,9 @@ function showStatus(ctx: ExtensionCommandContext, configDir: string, taskId?: st
     broken.length > 0 ? `Unreadable task state: ${broken.join(", ")}` : "",
   ].filter(Boolean).join("\n");
   const footer = knowledge ? `\n${knowledge}` : "";
-  ctx.ui.notify(task ? `${describeTask(task)}${footer}` : `No bot-lobby task found in ${root}.${footer}`, task ? "info" : "warning");
+  const budget = task ? readBudget(root, configDir, task.id) : undefined;
+  const time = task && budget ? `\n${budgetLine(budget, budgetState(task.id, budget, task.qaVerdict === "pass"))}` : "";
+  ctx.ui.notify(task ? `${describeTask(task)}${time}${footer}` : `No bot-lobby task found in ${root}.${footer}`, task ? "info" : "warning");
 }
 
 /** Recent runs of the active (or named) task, newest last, so slow models are easy to spot. */
@@ -200,6 +232,28 @@ function acceptWork(pi: ExtensionAPI, ctx: ExtensionCommandContext, configDir: s
   pi.sendUserMessage(message, ctx.isIdle() ? undefined : { deliverAs: "followUp" });
 }
 
+/**
+ * `/bot-lobby budget [time|off]`: show, set or remove the time budget of this
+ * session's task. Time already spent is kept; the oracle sees the change on
+ * its next step.
+ */
+function budgetCommand(ctx: ExtensionCommandContext, configDir: string, value: string): void {
+  const root = detectProjectRoot(ctx.cwd, configDir);
+  const task = activeTask(root, configDir, ctx.sessionManager.getSessionId());
+  if (!task) return ctx.ui.notify("bot-lobby: no active task in this session — a time budget applies to a task (start one with /bot-lobby --budget 90m <request>)", "warning");
+  if (!value) {
+    const budget = readBudget(root, configDir, task.id);
+    return ctx.ui.notify(budget ? `${task.id} — ${budgetLine(budget, budgetState(task.id, budget, task.qaVerdict === "pass"))}` : `${task.id} has no time budget. Set one with /bot-lobby budget 90m.`, "info");
+  }
+  const minutes = /^off$/i.test(value) ? 0 : parseMinutes(value);
+  if (minutes === undefined) return ctx.ui.notify(`bot-lobby: "${value}" is not a time budget (try 90m, 1h or 1h30m)`, "warning");
+  const budget = setBudget(root, configDir, task.id, minutes);
+  // Set while the oracle works: its clock runs from now, not from its next turn.
+  if (budget && !ctx.isIdle()) startClock(root, configDir, task.id);
+  applyStatus(ctx, root, configDir);
+  ctx.ui.notify(budget ? `bot-lobby: ${task.id} — ${budgetLine(budget, budgetState(task.id, budget, task.qaVerdict === "pass"))}` : `bot-lobby: ${task.id} has no time budget now.`, "info");
+}
+
 function showKnowledge(ctx: ExtensionCommandContext, configDir: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
   const cfg = loadConfig();
@@ -261,13 +315,14 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
       return filtered.length > 0 ? filtered : null;
     },
     handler: async (args, ctx) => {
-      const { sub, rest, restText, auto } = parseCommand(args ?? "");
+      const { sub, rest, restText, auto, budget, budgetError } = parseCommand(args ?? "");
+      if (budgetError) return ctx.ui.notify(`bot-lobby: ${budgetError}`, "warning");
       if (!sub) {
         if (!restText) {
           if (!showLobby()) ctx.ui.notify(HELP, "info");
           return;
         }
-        if (await startTask(pi, ctx, configDir, restText, auto ? { auto } : {})) autoOpenLobby();
+        if (await startTask(pi, ctx, configDir, restText, { ...(auto ? { auto } : {}), ...(budget ? { budget } : {}) })) autoOpenLobby();
         return;
       }
       switch (sub) {
@@ -296,6 +351,8 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
           return answerProposal(ctx, configDir, "decline");
         case "accept":
           return acceptWork(pi, ctx, configDir, rest[0]);
+        case "budget":
+          return budgetCommand(ctx, configDir, rest.join(""));
         case "knowledge":
           return showKnowledge(ctx, configDir);
         case "settings":
