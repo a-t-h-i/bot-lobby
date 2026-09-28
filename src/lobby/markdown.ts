@@ -7,7 +7,8 @@
 import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
 import { Markdown, stripTerminalSequences, type MarkdownTheme } from "@earendil-works/pi-tui";
 
-export type MarkdownRenderer = (text: string, width: number) => string[];
+/** Markdown rendered to lines at a width; `keep: false` for text seen once (a reply still streaming), so it does not crowd the cache. */
+export type MarkdownRenderer = (text: string, width: number, keep?: boolean) => string[];
 
 /** A heading line as pi renders it: optional styling, then `#`…`######` and a space. */
 const HEADING_HASHES = /^((?:\x1b\[[0-9;]*m)*)#{1,6} ((?:\x1b\[[0-9;]*m)*)/;
@@ -30,7 +31,7 @@ export const CACHE_LIMIT = 512;
  */
 export function createMarkdownRenderer(theme: MarkdownTheme = getMarkdownTheme()): MarkdownRenderer {
   const cache = new Map<string, string[]>();
-  return (text, width) => {
+  return (text, width, keep = true) => {
     const key = `${width}\0${text}`;
     const hit = cache.get(key);
     if (hit) {
@@ -43,8 +44,48 @@ export function createMarkdownRenderer(theme: MarkdownTheme = getMarkdownTheme()
     // Drop the blank lines pi pads the render with at either end.
     while (lines.length > 0 && !lines[0]!.trim()) lines.shift();
     while (lines.length > 0 && !lines.at(-1)!.trim()) lines.pop();
+    if (!keep) return lines;
     cache.set(key, lines);
     if (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value!);
     return lines;
   };
+}
+
+/** A fenced code block's opening or closing line. */
+const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+/** A list item's first line: after a blank line it continues the list above, so blocks never split there. */
+const LIST_ITEM = /^(?:[-*+]|\d{1,9}[.)])(?:\s|$)/;
+
+/**
+ * Markdown split into blocks that render, one by one, into the same lines as
+ * the whole (each block's lines, a blank line between blocks, blocks that
+ * render to nothing left out). A split falls on a blank line outside code
+ * fences that is followed by an unindented line that does not start a list
+ * item — the only places where one block can never run into the next. A
+ * streaming reply can then keep its finished blocks rendered and render only
+ * the one still being written.
+ */
+export function markdownBlocks(text: string): string[] {
+  const lines = text.split("\n");
+  const blocks: string[] = [];
+  let fence: string | undefined;
+  let start = 0;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]!;
+    const marker = FENCE.exec(line)?.[1];
+    if (marker) {
+      if (!fence) fence = marker;
+      else if (marker[0] === fence[0] && marker.length >= fence.length) fence = undefined;
+      continue;
+    }
+    if (fence || line.trim() || index === 0) continue;
+    const next = lines[index + 1];
+    if (next === undefined || !/^\S/.test(next) || LIST_ITEM.test(next)) continue;
+    const block = lines.slice(start, index).join("\n");
+    if (block.trim()) blocks.push(block);
+    start = index + 1;
+  }
+  const last = lines.slice(start).join("\n");
+  if (last.trim()) blocks.push(last);
+  return blocks;
 }

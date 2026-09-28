@@ -5,7 +5,7 @@
  * thinking level, how often it succeeds and what it costs. Append-only JSON
  * lines per project; reads keep the newest `MAX_READ` records.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, closeSync, mkdirSync, openSync, readSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { AgentRun } from "../schemas/findings.ts";
 import type { RunLogEntry, Task } from "../schemas/task.ts";
@@ -119,6 +119,20 @@ function isRecord(value: unknown): value is MetricRecord {
   return Boolean(record && typeof record.id === "string" && typeof record.kind === "string" && typeof record.durationMs === "number");
 }
 
+/** How much of a long log's end the first read takes: far more than `MAX_READ` records need. */
+const TAIL_BYTES = 4 * 1024 * 1024;
+
+/** A metrics log as followed so far: the file it was, how far it was read, and its newest records. */
+interface Followed {
+  ino: bigint;
+  offset: number;
+  records: MetricRecord[];
+  /** The first read starts inside the file, part way through a line. */
+  midLine: boolean;
+}
+
+const followed = new Map<string, Followed>();
+
 /** Agent runs for the Metrics tab; classifier calls, a few hundred milliseconds each, are read apart. */
 export function readMetrics(root: string, configDir: string, limit = MAX_READ): MetricRecord[] {
   return readRecords(root, configDir, limit).filter((record) => record.kind !== "classifier");
@@ -129,26 +143,62 @@ export function readClassifierMetrics(root: string, configDir: string, limit = M
   return readRecords(root, configDir, limit).filter((record) => record.kind === "classifier");
 }
 
+/**
+ * The newest records of the project's log, agent runs and classifier calls
+ * alike. The log only grows, so after the first read (of its end only) each
+ * read parses just the lines appended since; a log that shrank or was
+ * replaced is read afresh.
+ */
 function readRecords(root: string, configDir: string, limit: number): MetricRecord[] {
   const path = metricsPath(root, configDir);
-  if (!existsSync(path)) return [];
-  let text: string;
+  let ino: bigint;
+  let size: number;
   try {
-    text = readFileSync(path, "utf8");
+    const stat = statSync(path, { bigint: true });
+    ino = stat.ino;
+    size = Number(stat.size);
   } catch {
+    followed.delete(path);
     return [];
   }
-  const records: MetricRecord[] = [];
-  for (const line of text.split("\n").slice(-limit - 1)) {
-    if (!line.trim()) continue;
-    try {
-      const value = JSON.parse(line) as unknown;
-      if (isRecord(value)) records.push(value);
-    } catch {
-      // Torn lines are skipped.
-    }
+  let log = followed.get(path);
+  if (!log || log.ino !== ino || size < log.offset) {
+    const offset = Math.max(0, size - TAIL_BYTES);
+    log = { ino, offset, records: [], midLine: offset > 0 };
+    followed.set(path, log);
   }
-  return records.slice(-limit);
+  if (size > log.offset) readAppended(path, log, size);
+  return log.records.length > limit ? log.records.slice(-limit) : [...log.records];
+}
+
+function readAppended(path: string, log: Followed, size: number): void {
+  let fd: number | undefined;
+  try {
+    fd = openSync(path, "r");
+    const buffer = Buffer.alloc(size - log.offset);
+    const read = readSync(fd, buffer, 0, buffer.length, log.offset);
+    // Whole lines only: one still being appended is read next time.
+    const end = buffer.lastIndexOf(0x0a, read - 1);
+    if (end < 0) return;
+    const lines = buffer.toString("utf8", 0, end).split("\n");
+    if (log.midLine) lines.shift();
+    log.midLine = false;
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const value = JSON.parse(line) as unknown;
+        if (isRecord(value)) log.records.push(value);
+      } catch {
+        // Torn lines are skipped.
+      }
+    }
+    if (log.records.length > MAX_READ) log.records.splice(0, log.records.length - MAX_READ);
+    log.offset += end + 1;
+  } catch {
+    // Unreadable for now; the next read tries again.
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
 }
 
 const AGENT_NAMES: Record<string, string> = { backend: "DEV", designer: "DESIGN", qa: "QA" };

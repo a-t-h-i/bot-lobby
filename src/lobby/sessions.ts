@@ -190,14 +190,14 @@ export class BackgroundSession {
 
   /** Split stdout into JSON lines (LF only, as pi's RPC framing requires) and handle each. */
   private receive(chunk: string): void {
-    this.buffer += chunk;
-    let newline = this.buffer.indexOf("\n");
-    while (newline >= 0) {
-      const line = this.buffer.slice(0, newline).replace(/\r$/, "");
-      this.buffer = this.buffer.slice(newline + 1);
+    const text = this.buffer + chunk;
+    let start = 0;
+    for (let newline = text.indexOf("\n"); newline >= 0; newline = text.indexOf("\n", start)) {
+      const line = text.slice(start, newline).replace(/\r$/, "");
+      start = newline + 1;
       if (line.trim()) this.handle(line);
-      newline = this.buffer.indexOf("\n");
     }
+    this.buffer = text.slice(start);
   }
 
   private handle(line: string): void {
@@ -280,7 +280,10 @@ export const launchPi: SessionLauncher = (args, cwd) => {
   return proc as unknown as SessionProcess;
 };
 
-/** Every background session this window started, oldest first. */
+/** Ended background sessions kept in the list (with their feeds); older ones are let go. */
+export const MAX_ENDED = 6;
+
+/** Every background session this window started, oldest first (ended ones beyond the newest few let go). */
 export class SessionRegistry {
   readonly sessions: BackgroundSession[] = [];
   private readonly launcher: SessionLauncher;
@@ -295,8 +298,19 @@ export class SessionRegistry {
     const proc = this.launcher(sessionArgs(start.name, model), cwd);
     const session = new BackgroundSession(proc, start, this.onChange);
     this.sessions.push(session);
+    this.prune();
     this.onChange();
     return session;
+  }
+
+  /** Let go of all but the newest `MAX_ENDED` sessions that have ended (their conversations stay in their session files). */
+  private prune(): void {
+    let ended = 0;
+    for (let index = this.sessions.length - 1; index >= 0; index -= 1) {
+      if (this.sessions[index]!.alive) continue;
+      ended += 1;
+      if (ended > MAX_ENDED) this.sessions.splice(index, 1);
+    }
   }
 
   get(key: string): BackgroundSession | undefined {

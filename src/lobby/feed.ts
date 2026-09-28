@@ -7,6 +7,7 @@
  */
 import type { AgentRun } from "../schemas/findings.ts";
 import { agentName } from "../pi/run-summary.ts";
+import { markdownBlocks } from "./markdown.ts";
 
 export type ActivityKind = "info" | "success" | "warning" | "error";
 
@@ -47,6 +48,8 @@ export const MAX_THOUGHTS = 40;
 export const MAX_CHAT = 100;
 /** Longest thought kept; a streaming thought keeps its newest text. */
 export const MAX_THOUGHT_TEXT = 4000;
+/** The streaming reply kept: several panes' worth; past it, whole blocks are dropped from its start. */
+export const MAX_REPLY_TEXT = 8000;
 
 function bounded<T>(list: T[], max: number): T[] {
   return list.length > max ? list.slice(-max) : list;
@@ -125,7 +128,7 @@ export class LobbyFeed {
     const last = this.thoughts.at(-1);
     if (last && last.live && last.source === source) {
       const text = last.text + delta;
-      last.text = text.length > MAX_THOUGHT_TEXT ? text.slice(-MAX_THOUGHT_TEXT) : text;
+      last.text = text.length > MAX_THOUGHT_TEXT ? trimThought(text) : text;
     } else {
       this.thoughts = bounded([...this.thoughts, { id: this.nextId++, at, source, text: delta.slice(-MAX_THOUGHT_TEXT), live: true }], MAX_THOUGHTS);
     }
@@ -155,7 +158,7 @@ export class LobbyFeed {
 
   /** Stream the oracle's reply text as it arrives. */
   replyDelta(delta: string): void {
-    this.reply = (this.reply + delta).slice(-MAX_THOUGHT_TEXT);
+    this.reply = trimReply(this.reply + delta);
     this.touch();
   }
 
@@ -224,6 +227,38 @@ export class LobbyFeed {
     this.runStatus.clear();
     this.touch();
   }
+}
+
+/** A streaming thought past `MAX_THOUGHT_TEXT` cut to three quarters of it from a word's start, so its start then holds still a while. */
+function trimThought(text: string): string {
+  const cut = text.slice(-Math.floor(MAX_THOUGHT_TEXT * 0.75));
+  const space = cut.search(/\s/);
+  return space >= 0 && space < 80 ? cut.slice(space + 1) : cut;
+}
+
+/**
+ * A streaming reply past `max` characters cut down to three quarters of that
+ * (so its start then holds still for a while) by dropping whole Markdown
+ * blocks from its start, so what is left renders as it did (a cut inside a
+ * code block would turn the rest of the reply inside out). A single block
+ * longer than that keeps its end, and its opening fence if it is code.
+ */
+export function trimReply(text: string, max = MAX_REPLY_TEXT): string {
+  if (text.length <= max) return text;
+  const target = Math.floor(max * 0.75);
+  const blocks = markdownBlocks(text);
+  let length = text.length;
+  let first = 0;
+  // Each dropped block takes the blank line after it too.
+  while (first < blocks.length - 1 && length > target) length -= blocks[first++]!.length + 2;
+  if (length <= target) return blocks.slice(first).join("\n\n");
+  const last = blocks.at(-1) ?? text;
+  const opener = /^ {0,3}(?:`{3,}|~{3,}).*\n/.exec(last)?.[0] ?? "";
+  const rest = last.slice(opener.length);
+  const cut = rest.slice(-(target - opener.length));
+  // From a line start, so no line (or code) is shown half cut.
+  const line = cut.indexOf("\n");
+  return `${opener}${line >= 0 && line < cut.length - 1 ? cut.slice(line + 1) : cut}`;
 }
 
 /** The process-wide lobby feed; the Master session is the only writer that matters. */
