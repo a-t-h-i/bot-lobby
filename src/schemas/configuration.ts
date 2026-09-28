@@ -68,6 +68,8 @@ export interface WorkflowConfig {
   maxParallelWorkers: number;
   /** The oracle starts each task with a clean context: its model is sent only the conversation since the task started, or since the last one ended. */
   freshContext: boolean;
+  /** Minutes of work time a new task gets unless it is started with its own (`--budget`); 0 = no budget. */
+  taskBudgetMinutes: number;
 }
 
 export interface KnowledgeConfig {
@@ -204,6 +206,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     wrapUpAt: 0.75,
     maxParallelWorkers: 3,
     freshContext: true,
+    taskBudgetMinutes: 0,
   },
   knowledge: {
     compactionThreshold: 20000,
@@ -340,6 +343,7 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
   const src = (partial ?? {}) as Record<string, unknown>;
   const workflow = { ...DEFAULT_CONFIG.workflow, ...(src.workflow as Partial<WorkflowConfig> | undefined) };
   workflow.freshContext = workflow.freshContext !== false;
+  workflow.taskBudgetMinutes = typeof workflow.taskBudgetMinutes === "number" && workflow.taskBudgetMinutes > 0 ? Math.min(24 * 60, Math.round(workflow.taskBudgetMinutes)) : 0;
   const knowledge = { ...DEFAULT_CONFIG.knowledge, ...(src.knowledge as Partial<KnowledgeConfig> | undefined) };
   const srcAgents = (src.agents ?? {}) as Partial<BotLobbyConfig["agents"]>;
   return {

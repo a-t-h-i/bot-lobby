@@ -4,7 +4,7 @@ import { profileFor, type BotLobbyConfig, type ProfileResolver } from "../schema
 import type { Domain } from "../schemas/agent.ts";
 import type { AgentRun, ReviewResult, ScoutResult, WorkerResult } from "../schemas/findings.ts";
 import { domainSpec } from "../agents/registry.ts";
-import { runAgent, runParallel, watchdogOptions, type AgentRequest } from "../execution/agent-runner.ts";
+import { runAgent, runParallel, watchdogOptions, type AgentRequest, type AgentTime } from "../execution/agent-runner.ts";
 import { spawnPiProcess, type ProcessRunner } from "../execution/pi-runner.ts";
 import { readAgentKnowledge, writeFileEnsured } from "../knowledge/store.ts";
 import { selectKnowledge, type KnowledgeSelection } from "../knowledge/selector.ts";
@@ -24,6 +24,8 @@ export interface ScoutOutcome {
 }
 
 export interface ScoutRequest {
+  /** Under a task time budget: the batch's time (every scout runs within it). */
+  time?: AgentTime;
   taskId: string;
   /** Requirements/objective text used for context selection. */
   taskText: string;
@@ -65,7 +67,7 @@ function scoutContext(request: ScoutRequest, domain: Domain, likely = ""): Agent
     task: request.taskText,
     ...selectKnowledge(`${request.taskText} ${domainSpec(domain).scoutFocus}`, slices),
     instructions: request.config.agents[domain].instructions,
-    workflowContext: [`Task state: scouting. Domain: ${domain}. Read-only reconnaissance; no implementation.`, likely].filter(Boolean).join("\n\n"),
+    workflowContext: [`Task state: scouting. Domain: ${domain}. Read-only reconnaissance; no implementation.`, likely, request.time?.note ?? ""].filter(Boolean).join("\n\n"),
   };
 }
 
@@ -120,6 +122,7 @@ export async function runScouts(request: ScoutRequest, run: ProcessRunner = spaw
     context: scoutContext(request, domain, likely[index]),
     ...(extraTools.length > 0 ? { extraTools } : {}),
     ...profileFields(request.config, request.profile, domain, "scout"),
+    ...(request.time ? { time: { ...request.time } } : {}),
     cwd: request.cwd,
     signal: request.signal,
     onUpdate: request.onUpdate,
@@ -203,6 +206,8 @@ export interface WorkerRequest {
   hints?: FileHinter;
   /** Lowers thinking (or the model) for a step the classifier judges simple or trivial. */
   effort?: EffortRouter;
+  /** Under a task time budget: the step's time, and who decides on more when it runs out. */
+  time?: AgentTime;
 }
 
 function workerWorkflowContext(request: WorkerRequest, likely = ""): string {
@@ -218,6 +223,7 @@ function workerWorkflowContext(request: WorkerRequest, likely = ""): string {
       ? `Scout findings for your domain:\n${summarizeOutcomes(own, 1500)}`
       : "No scout findings were collected for your domain; verify the repository yourself.",
     likely,
+    request.time?.note ?? "",
   ].filter(Boolean).join("\n\n");
 }
 
@@ -253,6 +259,8 @@ export async function runWorker(
     ...watchdogOptions(request.config.workflow),
     ...request.agent,
     ...(extraTools.length > 0 ? { extraTools } : {}),
+    // One allotment for the step: a routed attempt that falls short re-runs on what is left of it.
+    ...(request.time ? { time: request.time } : {}),
   };
   let outcome = workerOutcome(request.domain, await runAgent(route ? { ...base, ...routedFields(route) } : base, run));
   // A routed step that fell short runs again at the configured model and thinking.
@@ -292,6 +300,8 @@ export interface ReviewerRequest {
   provenance?: string;
   /** What the previous QA round asked for, when there was one: this round verifies it. */
   previousRound?: string;
+  /** Under a task time budget: the gate's time. */
+  time?: AgentTime;
   instruction?: string;
   cwd: string;
   dataRoots: readonly string[];
@@ -313,6 +323,7 @@ function reviewerContext(request: ReviewerRequest): string {
     request.workerSummary ? `Worker summary (each domain's newest entries):\n${truncate(request.workerSummary, 4800)}` : "No worker summary available.",
     owns.length > 0 ? `Scout findings:\n${summarizeOutcomes(owns, 1200)}` : "",
     request.provenance ? `Who changed each file (bot-lobby's record of every agent's edit and write calls; judge each as your role's Change provenance says):\n${request.provenance}` : "",
+    request.time?.note ?? "",
     `Repository changes:\n${request.diff}`,
   ]
     .filter((line) => line.length > 0)
@@ -344,6 +355,7 @@ function reviewerAgentRequest(request: ReviewerRequest, selected: KnowledgeSelec
       workflowContext: reviewerContext(request),
     },
     ...profileFields(request.config, request.profile, request.domain, "reviewer"),
+    ...(request.time ? { time: request.time } : {}),
     cwd: request.cwd,
     signal: request.signal,
     onUpdate: request.onUpdate,

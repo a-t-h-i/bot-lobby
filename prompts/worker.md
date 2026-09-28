@@ -43,6 +43,13 @@ Work efficiently: read what you need, make the change, verify, report. If the
 engine asks you to wrap up, stop exploring, leave every file consistent, and
 write your report with anything unfinished under Blockers or Notes.
 
+When your context has a **Time** section, the step has that many minutes. Land
+the most important part first and keep files consistent as you go. When the
+time is up you are told to stop: finish or revert the edit in progress, then
+report with `## Left Off` (what you were doing, what is still to do) and
+`## More Time` (`N minutes — why`), honestly sized. If the user gives you more,
+you carry on from where you stopped.
+
 ## Working alongside other workers (file desk)
 
 When the `claim_file` tool is available, other workers are editing the same

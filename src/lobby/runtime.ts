@@ -42,6 +42,7 @@ import type { LobbyTheme } from "./layout.ts";
 import { createMarkdownRenderer } from "./markdown.ts";
 import { deliverComments, onOwnerEvent, setAuto } from "../pi/owner.ts";
 import { openEntrySettings, openSettings } from "../pi/settings-ui.ts";
+import { budgetClock } from "../state/budget.ts";
 
 export const ANCHOR_KEY = "bot-lobby-anchor";
 export { deliverComments };
@@ -425,7 +426,9 @@ function deleteTask(state: Runtime, taskId: string, where: "list" | "archive"): 
 
 /** A task's status box without animations, for a session other than this window's. */
 function taskScene(state: Runtime, task: Task, width: number, height: number): string[] {
-  return panelLines(task, persistedRuns(task), Date.now(), false, { width, rows: Math.floor(height / 0.75), still: true, theme: state.ctx.ui.theme });
+  const now = Date.now();
+  const time = budgetClock(state.root, state.configDir, task.id, now);
+  return panelLines(task, persistedRuns(task), now, false, { width, rows: Math.floor(height / 0.75), still: true, theme: state.ctx.ui.theme, ...(time ? { time } : {}) });
 }
 
 function seatProfile(state: Runtime, member: PanelMember) {

@@ -11,6 +11,13 @@ import { SLOT_IDS, SLOT_LABELS, type SlotId, type SlotState } from "./mascot-art
 import { formatDuration, planChecklist } from "./zen.ts";
 import { QUIET_MS, quietFor, slotOf } from "./run-summary.ts";
 import type { Situation } from "./kaomoji.ts";
+import { formatMinutes } from "../state/budget.ts";
+
+/** A task's time budget as the scene shows it: work time spent of the whole. */
+export interface SceneTime {
+  usedMs: number;
+  totalMs: number;
+}
 
 export type { SlotId, SlotState };
 
@@ -70,7 +77,10 @@ function latestRunFor(runs: AgentRun[], id: SlotId): AgentRun | undefined {
 function runElapsedLabel(run: AgentRun | undefined, now: number): string {
   if (!run) return "—";
   const end = run.finishedAt ? Date.parse(run.finishedAt) : now;
-  return formatDuration(end - Date.parse(run.startedAt));
+  const elapsed = end - Date.parse(run.startedAt);
+  // Under a time budget: minutes spent of the minutes given (`12/30m`).
+  if (run.allotMs) return `${Math.max(0, Math.floor(elapsed / 60_000))}/${Math.round((run.allotMs + (run.extendedMs ?? 0)) / 60_000)}m`;
+  return formatDuration(elapsed);
 }
 
 function slotView(id: SlotId, runs: AgentRun[], now: number): SlotView {
@@ -89,7 +99,7 @@ function slotView(id: SlotId, runs: AgentRun[], now: number): SlotView {
   };
 }
 
-export function sceneMetrics(task: Task, runs: AgentRun[], now: number): SceneMetrics {
+export function sceneMetrics(task: Task, runs: AgentRun[], now: number, time?: SceneTime): SceneMetrics {
   const checklist = planChecklist(task.plan ?? "", runs);
   const total = checklist.length;
   const done = checklist.filter((step) => step.status === "done").length;
@@ -98,7 +108,7 @@ export function sceneMetrics(task: Task, runs: AgentRun[], now: number): SceneMe
   const elapsed = Number.isFinite(created) ? Math.max(0, now - created) : 0;
   return {
     ...summary,
-    elapsedLabel: formatDuration(elapsed),
+    elapsedLabel: time ? `${formatMinutes(time.usedMs)} of ${formatMinutes(time.totalMs)}` : formatDuration(elapsed),
     slots: SLOT_IDS.map((id) => slotView(id, runs, now)),
   };
 }

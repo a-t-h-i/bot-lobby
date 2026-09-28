@@ -39,7 +39,8 @@ extra instructions.
 | Command | Does |
 | --- | --- |
 | `/bot-lobby` | Open the lobby (`alt+l`) |
-| `/bot-lobby <request>` | Start a task (`--task` if it begins with a command word, `--auto` to run unattended) |
+| `/bot-lobby <request>` | Start a task (`--task` if it begins with a command word, `--auto` to run unattended, `--budget 90m` to give it a time budget) |
+| `/bot-lobby budget [90m\|off]` | Show or set this session's task time budget |
 | `/bot-lobby status \| tasks \| runs [id]` | Current task, all tasks, recent agent runs |
 | `/bot-lobby approve \| amend <text> \| decline` | Answer the proposal |
 | `/bot-lobby accept [id]` | Accept a task's work as it is, without a QA pass; the oracle then completes it |
@@ -83,6 +84,26 @@ agreed in the Plan tab skips approval too.
 
 **Safety nets:** every agent has a time limit (asked to wrap up at 75%), a
 stall watchdog and one retry; `Esc` aborts every running agent.
+
+## Time budget
+
+`/bot-lobby --budget 90m <request>` (or `/bot-lobby budget 90m` on the task in
+hand, or `workflow.taskBudgetMinutes` for every task) gives a task 90 minutes
+of work time, for the oracle and every agent. The clock runs while the oracle
+works and stops while it waits on you.
+
+- The oracle divides the time by scope: each step gets its minutes, and the
+  QA gate keeps a reserve. Every agent is told how long it has and gets a
+  heads-up at 75%.
+- When a worker's time is up it stops, keeps its files consistent, and
+  reports what it did, where it left off and how much more it needs. You are
+  asked: *DEV was busy with …; left to do: …; it needs 10 more minutes.* Give
+  it the time (or another amount) and the same agent carries on where it
+  stopped, its context intact; or stop it there.
+- Once the budget is spent no new work starts: the oracle asks you for more
+  (with a reason) or wraps up with what is done. Auto mode gives an agent more
+  once, only from time the task still has, and never grows the budget.
+- The lobby shows `34m of 1h 30m`, and each agent's `12/30m`.
 
 **A fresh context per task.** Every agent runs in its own Pi process with its
 own context. The oracle, which is your session, starts each task clean: its
@@ -186,7 +207,7 @@ the result.
   "scout": { "model": "anthropic/claude-haiku-4-5-20251001", "timeoutMs": 480000 },
   "planner": { "thinking": "high", "timeoutMs": 300000 },
   "lobby": { "planningPanel": ["backend", "designer", "qa", "researcher"], "maxPlanningRounds": 5 },
-  "workflow": { "maxReviewIterations": 2, "maxParallelWorkers": 3, "stallTimeoutMs": 300000, "wrapUpAt": 0.75 },
+  "workflow": { "maxReviewIterations": 2, "maxParallelWorkers": 3, "stallTimeoutMs": 300000, "wrapUpAt": 0.75, "taskBudgetMinutes": 0 },
   "classifier": { "enabled": false, "provider": "auto", "effort": { "cheapModel": "inherit" } }
 }
 ```
@@ -218,7 +239,7 @@ the result.
 ```
 .pi/bot-lobby/
 ├── <Agent>/knowledge/      knowledge, standards and decisions per agent
-├── tasks/TASK-…/           state.json, scratchpads, scout and research reports
+├── tasks/TASK-…/           state.json, budget.json, scratchpads, scout and research reports
 ├── backlog/PLAN-….json     plans saved from the Plan tab
 ├── archive/                archived tasks and old knowledge
 ├── sessions/               heartbeats of running Pi sessions

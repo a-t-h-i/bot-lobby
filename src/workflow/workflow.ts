@@ -1,7 +1,7 @@
 import { realpathSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
 import type { BotLobbyConfig, ProfileResolver } from "../schemas/configuration.ts";
-import type { AgentRun, Pushback, ResearchResult, ReviewResult } from "../schemas/findings.ts";
+import type { AgentRun, Pushback, ResearchResult, ReviewResult, WorkerResult } from "../schemas/findings.ts";
 import {
   MAX_RUN_LOG,
   MAX_WORKER_RECORDS,
@@ -29,6 +29,8 @@ import { autoNote, DESK_TOOLS, DeskSession } from "../desk/session.ts";
 import type { Handover } from "../desk/desk.ts";
 import { changedFiles, commitBefore, headCommit, readRepositoryDiff } from "../execution/git.ts";
 import { appendChange, explainChanges, provenanceLines, provenanceSummary, readChanges, type FileProvenance } from "../state/changes.ts";
+import { budgetLine, budgetState, formatMinutes, MIN_READ_MS, parseMinutes, qaAllotment, readBudget, readerAllotment, updateBudget, workerAllotment, type Allotment, type BudgetState, type TaskBudget } from "../state/budget.ts";
+import type { AgentTime } from "../execution/agent-runner.ts";
 import {
   loadScoutResults,
   runReviewer,
@@ -71,6 +73,7 @@ export const ORCHESTRATE_ACTIONS = [
   "block",
   "resume",
   "decide",
+  "budget",
   "status",
   "cancel",
 ] as const;
@@ -95,7 +98,9 @@ export interface OrchestrateParams {
   /** implement: the concrete instruction for the worker. */
   task?: string;
   /** implement: several domains at once, run in parallel through the file desk. */
-  assignments?: Array<{ domain: string; task: string }>;
+  assignments?: Array<{ domain: string; task: string; minutes?: number }>;
+  /** implement: minutes the step may take under the task's time budget; budget: extra minutes to ask the user for. */
+  minutes?: number;
   /** knowledge: which persistent file the text belongs to. */
   kind?: KnowledgeKind;
   /** compact: the knowledge file being rewritten. */
@@ -304,11 +309,14 @@ async function handleScout(task: Task, params: OrchestrateParams, deps: Workflow
   if (task.state === "created") transition(task, "clarifying");
   if (task.state === "clarifying") transition(task, "scouting");
   const verifying = task.state === "synthesizing";
+  const instruction = params.instruction?.trim() || "Investigate this request and report findings the Master needs.";
+  const time = readerTime(task, deps, "SCOUTS", instruction, SCOUT_SHARE, deps.config.scout.timeoutMs, "scouting");
   const outcomes = await runScouts(
     {
       taskId: task.id,
       taskText: taskRequest(task),
-      instruction: params.instruction?.trim() || "Investigate this request and report findings the Master needs.",
+      instruction,
+      ...(time ? { time } : {}),
       domains,
       cwd: deps.cwd,
       dataRoots: readDataRoots(deps.root, deps.configDir),
@@ -322,6 +330,7 @@ async function handleScout(task: Task, params: OrchestrateParams, deps: Workflow
     },
     deps.runProcess ?? spawnPiProcess,
   );
+  if (time) settleAllotment(task, deps, time.id, "finished");
   if (!verifying) transition(task, "synthesizing");
   const involved = outcomes.filter((outcome) => outcome.usable).map((outcome) => outcome.result.domain);
   task.domains = [...new Set([...task.domains, ...involved])];
@@ -405,11 +414,13 @@ function researchRequestFor(
   domain: Domain,
   instruction: string,
   taskDir: string,
+  time?: AgentTime,
 ): ResearchRequest {
   return {
     taskId: task.id,
     domain,
     instruction,
+    ...(time ? { time } : {}),
     config: deps.config,
     profile: deps.profile,
     cwd: deps.cwd,
@@ -425,7 +436,9 @@ async function handleResearch(task: Task, params: OrchestrateParams, deps: Workf
   const instruction = params.instruction?.trim();
   if (!instruction) throw new Error("research requires instruction (the question to investigate)");
   const taskDir = taskDirFor(deps.root, deps.configDir, task.id);
-  const outcome = await runResearch(researchRequestFor(deps, task, domain, instruction, taskDir), deps.runProcess ?? spawnPiProcess);
+  const time = readerTime(task, deps, "RESEARCH", instruction, RESEARCH_SHARE, deps.config.researcher.timeoutMs ?? deps.config.workflow.agentTimeoutMs, "research");
+  const outcome = await runResearch(researchRequestFor(deps, task, domain, instruction, taskDir, time), deps.runProcess ?? spawnPiProcess);
+  if (time) settleAllotment(task, deps, time.id, "finished");
   appendResearchLog(taskDir, domain, outcome);
   recordAdvisoryPushbacks(task, [{ pushback: outcome.result.pushback, who: domain }]);
   return researchReport(outcome, researchResultPath(taskDir, domain));
@@ -631,8 +644,9 @@ function workerTaskText(task: Task, planBudget = 6000): string {
     .join("\n\n");
 }
 
-function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instruction: string): WorkerRequest {
+function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instruction: string, time?: AgentTime): WorkerRequest {
   return {
+    ...(time ? { time } : {}),
     taskId: task.id,
     domain,
     instruction,
@@ -665,6 +679,8 @@ function recordWorkerRun(task: Task, run: AgentRun): void {
 interface Assignment {
   domain: Domain;
   instruction: string;
+  /** Minutes the oracle gave the step, under a time budget. */
+  minutes?: number;
 }
 
 /** The delegation as a list: `assignments` for a parallel batch, otherwise the single domain/task. */
@@ -673,7 +689,7 @@ function parseAssignments(params: OrchestrateParams): Assignment[] {
     const list = params.assignments.map((entry) => {
       const instruction = entry.task?.trim();
       if (!instruction) throw new Error("every assignment needs a task (what to implement)");
-      return { domain: parseDomain(entry.domain, "implement"), instruction };
+      return { domain: parseDomain(entry.domain, "implement"), instruction, ...(entry.minutes ? { minutes: entry.minutes } : {}) };
     });
     const domains = list.map((entry) => entry.domain);
     if (new Set(domains).size !== domains.length) throw new Error("parallel assignments need distinct domains (one worker per domain)");
@@ -682,7 +698,7 @@ function parseAssignments(params: OrchestrateParams): Assignment[] {
   const domain = parseDomain(params.domain, "implement");
   const instruction = params.task?.trim();
   if (!instruction) throw new Error("implement requires task (what to implement)");
-  return [{ domain, instruction }];
+  return [{ domain, instruction, ...(params.minutes ? { minutes: params.minutes } : {}) }];
 }
 
 /**
@@ -751,9 +767,10 @@ function provenanceNote(files: readonly FileProvenance[] | undefined): string {
 }
 
 /** Record one worker's outcome on the task and return its report for the Master. */
-function absorbWorkerOutcome(task: Task, deps: WorkflowDeps, outcome: WorkerOutcome): string {
+function absorbWorkerOutcome(task: Task, deps: WorkflowDeps, outcome: WorkerOutcome, time?: WorkerTime): string {
   const domain = outcome.result.domain;
   recordWorkerRun(task, outcome.run);
+  if (time) settleAllotment(task, deps, time.id, stoppedForTime(outcome) ? "out of time" : outcome.run.status === "success" ? "finished" : "stopped");
   appendChange(deps.root, deps.configDir, {
     source: "worker",
     id: outcome.run.runId,
@@ -769,7 +786,8 @@ function absorbWorkerOutcome(task: Task, deps: WorkflowDeps, outcome: WorkerOutc
   const pushback = recordPushback(task, outcome);
   task.blockers = [...task.blockers.filter((blocker) => blocker.domain !== domain), ...outcome.result.blockers];
   updateScratchpad(deps, task, outcome);
-  return workerReport(outcome, approvals, pushback);
+  const spent = timeReport(outcome);
+  return spent ? `${workerReport(outcome, approvals, pushback)}\n${spent}` : workerReport(outcome, approvals, pushback);
 }
 
 async function handleImplement(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
@@ -777,14 +795,21 @@ async function handleImplement(task: Task, params: OrchestrateParams, deps: Work
   const assignments = parseAssignments(params);
   for (const { domain } of assignments) assertNoPendingApprovals(task, domain);
   for (const { domain } of assignments) if (!task.domains.includes(domain)) task.domains.push(domain);
+  // Under a time budget every step is given its share before any starts; a spent budget starts none.
+  const times = workerTimes(task, deps, assignments);
   if (task.state !== "implementing") transition(task, "implementing");
   await takeBaseline(task, deps);
   let report: string;
-  if (assignments.length === 1) {
-    const { domain, instruction } = assignments[0]!;
-    const outcome = await runWorker(workerRequest(deps, task, domain, instruction), deps.runProcess ?? spawnPiProcess);
-    report = absorbWorkerOutcome(task, deps, outcome);
-  } else report = await runParallelWorkers(task, deps, assignments);
+  try {
+    if (assignments.length === 1) {
+      const { domain, instruction } = assignments[0]!;
+      const outcome = await runWorker(workerRequest(deps, task, domain, instruction, times.get(domain)), deps.runProcess ?? spawnPiProcess);
+      report = absorbWorkerOutcome(task, deps, outcome, times.get(domain));
+    } else report = await runParallelWorkers(task, deps, assignments, times);
+  } finally {
+    // A step that never reported (the call failed) does not stay "running" in the budget.
+    for (const time of times.values()) settleAllotment(task, deps, time.id, "stopped");
+  }
   const note = provenanceNote(await changeProvenance(deps, task, task.baseline?.head));
   return note ? `${report}\n\n${note}` : report;
 }
@@ -794,14 +819,14 @@ async function handleImplement(task: Task, params: OrchestrateParams, deps: Work
  * before editing it, queues for a busy one, and hands it over with a note; a
  * worker that finishes hands over whatever it still holds automatically.
  */
-async function runParallelWorkers(task: Task, deps: WorkflowDeps, assignments: Assignment[]): Promise<string> {
+async function runParallelWorkers(task: Task, deps: WorkflowDeps, assignments: Assignment[], times: ReadonlyMap<Domain, WorkerTime>): Promise<string> {
   const session = new DeskSession({ cwd: deps.cwd });
   await session.open();
   let outcomes: WorkerOutcome[];
   let unenforced: Domain[];
   try {
     outcomes = await mapConcurrent(assignments, deps.config.workflow.maxParallelWorkers, ({ domain, instruction }) => {
-      const request = workerRequest(deps, task, domain, instruction);
+      const request = workerRequest(deps, task, domain, instruction, times.get(domain));
       request.agent = {
         env: session.env(domain),
         extraTools: DESK_TOOLS,
@@ -817,7 +842,7 @@ async function runParallelWorkers(task: Task, deps: WorkflowDeps, assignments: A
   } finally {
     await session.close();
   }
-  const reports = outcomes.map((outcome) => absorbWorkerOutcome(task, deps, outcome));
+  const reports = outcomes.map((outcome) => absorbWorkerOutcome(task, deps, outcome, times.get(outcome.result.domain)));
   return [
     `Parallel batch: ${assignments.map((entry) => entry.domain).join(", ")}.`,
     ...reports,
@@ -962,12 +987,14 @@ async function handleQa(task: Task, params: OrchestrateParams, deps: WorkflowDep
   if (task.state !== "reviewing") transition(task, "reviewing");
   const iterations = (task.reviewIterations?.qa ?? 0) + 1;
   task.reviewIterations = { qa: iterations };
+  const time = qaTime(task, deps);
   const base = await reviewBase(task, deps);
   const [diff, provenance] = await Promise.all([
     readRepositoryDiff(deps.cwd, { ...(base ? { base } : {}), exclude: ownRecords(deps) }),
     changeProvenance(deps, task, base),
   ]);
-  const outcome = await runReviewer(qaRequest(deps, task, diff, params.task, provenance), deps.runProcess ?? spawnPiProcess);
+  const outcome = await runReviewer({ ...qaRequest(deps, task, diff, params.task, provenance), ...(time ? { time } : {}) }, deps.runProcess ?? spawnPiProcess);
+  if (time) settleAllotment(task, deps, time.id, "finished");
   task.qaVerdict = outcome.result.verdict;
   recordReview(task, "qa", outcome.result);
   recordAdvisoryPushbacks(task, [{ pushback: outcome.result.pushback, who: "qa" }]);
@@ -1164,6 +1191,251 @@ function handleCancel(task: Task): string {
   return `Task ${task.id} abandoned. Its scratchpad is kept until the task is formally resolved.`;
 }
 
+/* ------------------------------------------------------------ time budget */
+
+/** Shares of what is left that a scout batch and the researcher are given (within their configured limits). */
+const SCOUT_SHARE = 0.1;
+const RESEARCH_SHARE = 0.15;
+/** Minutes a worker out of time is taken to ask for when its report names none. */
+const DEFAULT_MORE_MINUTES = 10;
+
+/** A delegation's time, with the allotment it is recorded under. */
+type WorkerTime = AgentTime & { id: string };
+
+/** The task's budget and where it stands, when it has one. */
+function budgetFor(task: Task, deps: WorkflowDeps): { budget: TaskBudget; state: BudgetState } | undefined {
+  const budget = readBudget(deps.root, deps.configDir, task.id);
+  return budget ? { budget, state: budgetState(task.id, budget, task.qaVerdict === "pass") } : undefined;
+}
+
+/** No new work starts once the budget is spent: the oracle asks the user for more, or wraps up. */
+function budgetSpent(state: BudgetState, what: string): Error {
+  const reserve = state.reserveMs > 0 ? `, ${formatMinutes(state.reserveMs)} of it kept for the QA gate` : "";
+  const wrap = state.reserveMs >= MIN_READ_MS ? "run action=qa on what is done" : "complete or block with what is done";
+  return new Error(`the task's time budget has no room for ${what}: ${formatMinutes(state.usedMs)} of ${formatMinutes(state.totalMs)} used, ${formatMinutes(state.leftMs)} left${reserve}. Ask the user for more time with action=budget (minutes and reason), or wrap up: ${wrap}.`);
+}
+
+/** What an agent is told about its time. */
+function timeNote(allotMs: number, state: BudgetState, worker: boolean): string {
+  return [
+    "## Time",
+    `You have ${formatMinutes(allotMs)} for this ${worker ? "step" : "work"}; the task has ${formatMinutes(state.leftMs)} of its ${formatMinutes(state.totalMs)} left.`,
+    worker
+      ? "At about 75% you get a heads-up. When the time is up you are asked to stop and report where you left off (`## Left Off`) and how much more you need (`## More Time`); the user decides whether you get it. Land the most important part first, and keep every file consistent as you go."
+      : "When the time is up you are asked to stop and report what you have, so cover the most important questions first.",
+  ].join("\n");
+}
+
+function recordAllotment(task: Task, deps: WorkflowDeps, entry: Omit<Allotment, "startedAt" | "granted">): void {
+  updateBudget(deps.root, deps.configDir, task.id, (budget) => {
+    budget.allotments.push({ ...entry, granted: 0, startedAt: new Date().toISOString() });
+  });
+}
+
+function settleAllotment(task: Task, deps: WorkflowDeps, id: string, outcome: NonNullable<Allotment["outcome"]>): void {
+  updateBudget(deps.root, deps.configDir, task.id, (budget) => {
+    const entry = budget.allotments.find((allotment) => allotment.id === id);
+    if (entry && !entry.endedAt) Object.assign(entry, { endedAt: new Date().toISOString(), outcome });
+  });
+}
+
+function oneLine(text: string, max: number): string {
+  return truncate(text.replace(/\s+/g, " ").trim(), max).replace(/\n\[\.\.\.\d+ characters omitted\]$/, "…");
+}
+
+/** A read-only batch's time (scouts, the researcher): a share of what is left, within its configured limit. */
+function readerTime(task: Task, deps: WorkflowDeps, who: string, what: string, share: number, limitMs: number, label: string): WorkerTime | undefined {
+  const now = budgetFor(task, deps);
+  if (!now) return undefined;
+  const ms = readerAllotment(now.state, share, limitMs);
+  if (ms === undefined) throw budgetSpent(now.state, label);
+  const id = `${who.toLowerCase()}-${Date.now().toString(36)}`;
+  recordAllotment(task, deps, { id, who, what: oneLine(what, 120), minutes: Math.round(ms / 60_000) });
+  return { id, endsAt: Date.now() + ms, allotMs: ms, note: timeNote(ms, now.state, false) };
+}
+
+/** The QA gate's time: its reserve at least, never more than is left. */
+function qaTime(task: Task, deps: WorkflowDeps): WorkerTime | undefined {
+  const now = budgetFor(task, deps);
+  if (!now) return undefined;
+  const ms = qaAllotment(now.state, deps.config.agents.qa.timeoutMs ?? deps.config.workflow.agentTimeoutMs);
+  if (ms === undefined) throw budgetSpent(now.state, "the QA gate");
+  const id = `qa-${Date.now().toString(36)}`;
+  recordAllotment(task, deps, { id, who: "QA gate", what: "review the task's work", minutes: Math.round(ms / 60_000) });
+  return { id, endsAt: Date.now() + ms, allotMs: ms, note: timeNote(ms, now.state, false) };
+}
+
+/** Plan domains still to build, the batch counted once: what is left before the QA reserve is split across them by default. */
+function openSlots(task: Task, batch: readonly Domain[]): number {
+  const built = new Set((task.workerRuns ?? []).filter((run) => run.status === "success").map((run) => run.domain));
+  return task.domains.filter((domain) => !built.has(domain) && !batch.includes(domain)).length + 1;
+}
+
+/**
+ * Each step's time, given before any starts: the minutes the oracle asked
+ * for (it divides by scope) or an even share, never past what is left before
+ * the QA gate's reserve. A spent budget starts nothing.
+ */
+function workerTimes(task: Task, deps: WorkflowDeps, assignments: readonly Assignment[]): Map<Domain, WorkerTime> {
+  const times = new Map<Domain, WorkerTime>();
+  const now = budgetFor(task, deps);
+  if (!now) return times;
+  const slots = openSlots(task, assignments.map((entry) => entry.domain));
+  for (const { domain, instruction, minutes } of assignments) {
+    const given = workerAllotment(now.state, minutes, slots);
+    if (!given) throw budgetSpent(now.state, `the ${domain} step`);
+    const id = `${domain}-${Date.now().toString(36)}`;
+    recordAllotment(task, deps, { id, who: AGENT_LABELS[domain], what: oneLine(instruction, 120), minutes: Math.round(given.ms / 60_000) });
+    if (given.note) recordDecision(task, `${AGENT_LABELS[domain]}'s step: ${given.note}.`);
+    times.set(domain, { id, endsAt: Date.now() + given.ms, allotMs: given.ms, note: timeNote(given.ms, now.state, true), onTimeUp: moreTimeFor(task, deps, domain, instruction, id) });
+  }
+  return times;
+}
+
+const AGENT_LABELS: Record<Domain, string> = { backend: "DEV", designer: "DESIGN", qa: "QA" };
+
+/** Out-of-time questions one at a time, even when parallel workers run out together. */
+let asking: Promise<unknown> = Promise.resolve();
+function oneAtATime<T>(ask: () => Promise<T>): Promise<T> {
+  const next = asking.then(ask, ask);
+  asking = next.catch(() => undefined);
+  return next;
+}
+
+/**
+ * A worker out of time has reported what it did, where it left off and how
+ * much more it needs. The user decides (auto mode: once, and only from what
+ * is left before the QA gate's reserve); a grant past that grows the budget,
+ * and the same agent carries on. Resolves with the ms granted, 0 to stop it.
+ */
+function moreTimeFor(task: Task, deps: WorkflowDeps, domain: Domain, instruction: string, id: string): NonNullable<AgentTime["onTimeUp"]> {
+  let asked = 0;
+  return (run, report) => oneAtATime(async () => {
+    const result = parseWorkerResult(domain, report);
+    // A report with nothing left to do finished in time.
+    if (!result.leftOff && !result.moreTime) return 0;
+    asked += 1;
+    const label = AGENT_LABELS[domain];
+    const wanted = result.moreTime?.minutes ?? DEFAULT_MORE_MINUTES;
+    const now = budgetFor(task, deps);
+    if (!now) return 0;
+    const minutes = await decideMoreTime(task, deps, { label, instruction, result, wanted, run, asked, state: now.state });
+    if (minutes <= 0) return 0;
+    const over = Math.max(0, Math.ceil((minutes * 60_000 - now.state.windowMs) / 60_000));
+    updateBudget(deps.root, deps.configDir, task.id, (budget) => {
+      budget.granted += over;
+      const entry = budget.allotments.find((allotment) => allotment.id === id);
+      if (entry) Object.assign(entry, { minutes: entry.minutes + minutes, granted: entry.granted + minutes });
+    });
+    recordDecision(task, `${label} ran out of time; ${isAutoMode(deps.root, deps.configDir, task.id) ? "auto mode gave it" : "the user gave it"} ${minutes} more minutes${over > 0 ? `, ${over} of them added to the task's budget` : ""}. Left off: ${oneLine(result.leftOff ?? result.moreTime?.reason ?? "", 200)}`);
+    return minutes * 60_000;
+  });
+}
+
+interface MoreTimeAsk {
+  label: string;
+  instruction: string;
+  result: WorkerResult;
+  wanted: number;
+  run: AgentRun;
+  asked: number;
+  state: BudgetState;
+}
+
+const MORE_TIME = "Give it the time it asks for";
+const OTHER_TIME = "Give a different amount";
+
+async function decideMoreTime(task: Task, deps: WorkflowDeps, ask: MoreTimeAsk): Promise<number> {
+  const { label, instruction, result, wanted, run, asked, state } = ask;
+  if (isAutoMode(deps.root, deps.configDir, task.id)) {
+    // Nobody to ask: once, and only from time the task still has before the QA gate's reserve.
+    if (asked === 1 && wanted * 60_000 <= state.windowMs) return wanted;
+    recordDecision(task, `Auto mode: ${label} ran out of time and was not given more (${asked > 1 ? "it already had more once" : `it asked for ${wanted} minutes, ${formatMinutes(state.windowMs)} were left`}).`);
+    return 0;
+  }
+  const over = Math.max(0, Math.ceil((wanted * 60_000 - state.windowMs) / 60_000));
+  const had = run.allotMs ?? 0;
+  const choice = await deps.choose(
+    [
+      `${label} is out of time: it had ${formatMinutes(had + (run.extendedMs ?? 0))} for "${oneLine(instruction, 160)}".`,
+      result.completed ? `Done so far: ${oneLine(result.completed, 400)}` : "",
+      result.leftOff ? `Left to do: ${oneLine(result.leftOff, 400)}` : "",
+      `It needs about ${wanted} more minutes${result.moreTime?.reason ? `: ${oneLine(result.moreTime.reason, 200)}` : ""}.`,
+      `The task has used ${formatMinutes(state.usedMs)} of ${formatMinutes(state.totalMs)} (${formatMinutes(state.leftMs)} left)${over > 0 ? `; ${wanted} more minutes adds ${over} to its budget` : ""}.`,
+      `Give ${label} ${wanted} more minutes to finish?`,
+    ].filter(Boolean).join("\n\n"),
+    [MORE_TIME, OTHER_TIME, `Stop ${label} here`],
+  );
+  if (choice === MORE_TIME) return wanted;
+  if (choice === OTHER_TIME) return parseMinutes((await deps.ask(`How many more minutes for ${label}?`)) ?? "") ?? 0;
+  recordDecision(task, `The user stopped ${label} at its time limit. Left off: ${oneLine(result.leftOff ?? "", 200)}`);
+  return 0;
+}
+
+/** Stopped at its time with work left: a report that finished everything as time ran out is not. */
+function stoppedForTime(outcome: WorkerOutcome): boolean {
+  return Boolean(outcome.run.timeUp && (outcome.result.leftOff || outcome.result.moreTime));
+}
+
+/** How a step's time went, for the oracle: out of time and stopped, or given more. */
+function timeReport(outcome: WorkerOutcome): string {
+  const { run, result } = outcome;
+  const label = AGENT_LABELS[result.domain];
+  if (stoppedForTime(outcome)) {
+    return [
+      `${label} ran out of its time and was not given more: this step is unfinished.`,
+      result.leftOff ? `Left off: ${oneLine(result.leftOff, 600)}` : "",
+      result.moreTime ? `It asked for ${result.moreTime.minutes ?? "more"} minutes${result.moreTime.reason ? `: ${oneLine(result.moreTime.reason, 300)}` : ""}.` : "",
+      "Decide with the user: trim the scope, ask for task time with action=budget, or wrap up with what is done.",
+    ].filter(Boolean).join("\n");
+  }
+  return run.extendedMs ? `${label} ran out of its ${formatMinutes(run.allotMs ?? 0)} and was given ${formatMinutes(run.extendedMs)} more.` : "";
+}
+
+/**
+ * `action=budget`: with no minutes, where the budget stands; with minutes and
+ * a reason, the oracle asks the user for more task time. Only the user can
+ * grant it; in auto mode nobody can, and the task wraps up.
+ */
+async function handleBudget(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
+  const now = budgetFor(task, deps);
+  if (!now) return "This task has no time budget. The user sets one with /bot-lobby budget <minutes>.";
+  const minutes = params.minutes;
+  if (!minutes || minutes <= 0) return allotmentReport(now.budget);
+  const reason = params.reason?.trim() || params.text?.trim();
+  if (!reason) throw new Error("budget requires reason: why the task needs more time");
+  if (isAutoMode(deps.root, deps.configDir, task.id)) {
+    recordDecision(task, `Auto mode: asked for ${minutes} more minutes (${oneLine(reason, 160)}), which only the user can give.`);
+    return "Auto mode: nobody can give the task more time. Wrap up with what is done: finish or drop the step in hand, run the QA gate if there is room, and tell the user what is left.";
+  }
+  const choice = await deps.choose(
+    [`The oracle asks for ${minutes} more minutes on ${task.id}: ${oneLine(reason, 400)}`, budgetLine(now.budget, now.state)].join("\n\n"),
+    [`Give ${minutes} more minutes`, OTHER_TIME, "No"],
+  );
+  const granted = choice === `Give ${minutes} more minutes` ? minutes : choice === OTHER_TIME ? parseMinutes((await deps.ask(`How many more minutes for ${task.id}?`)) ?? "") ?? 0 : 0;
+  if (granted <= 0) {
+    recordDecision(task, `The user did not give ${minutes} more minutes: ${oneLine(reason, 200)}`);
+    return "The user did not give more time. Wrap up with what is done and tell them what is left.";
+  }
+  updateBudget(deps.root, deps.configDir, task.id, (budget) => {
+    budget.granted += granted;
+  });
+  recordDecision(task, `The user gave the task ${granted} more minutes: ${oneLine(reason, 200)}`);
+  return `The user gave the task ${granted} more minutes.`;
+}
+
+/** What each delegation was given, newest last. */
+function allotmentReport(budget: TaskBudget): string {
+  const rows = budget.allotments.slice(-8).map((entry) => `- ${entry.who}: ${entry.minutes}m${entry.granted > 0 ? ` (${entry.granted} granted)` : ""} — ${entry.what}${entry.outcome ? ` · ${entry.outcome}` : entry.endedAt ? "" : " · running"}`);
+  return rows.length > 0 ? `Allotted so far:\n${rows.join("\n")}` : "Nothing allotted yet.";
+}
+
+/** Every orchestrate result ends with where the budget stands, when the task has one. */
+function budgetFooter(task: Task, deps: WorkflowDeps): string {
+  const now = budgetFor(task, deps);
+  return now ? `\n\n${budgetLine(now.budget, now.state)}` : "";
+}
+
 const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams, deps: WorkflowDeps) => Promise<string> | string> = {
   clarify: handleClarify,
   scout: handleScout,
@@ -1179,6 +1451,7 @@ const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams
   block: handleBlock,
   resume: handleResume,
   decide: handleDecide,
+  budget: handleBudget,
   status: (task) => describeTask(task),
   cancel: handleCancel,
 };
@@ -1219,11 +1492,11 @@ export async function runWorkflowAction(params: OrchestrateParams, deps: Workflo
     const message = await handler(task, params, tracked);
     const runs = recordRunLog(task, finished, deps);
     saveTask(deps.root, deps.configDir, task);
-    return { ok: true, taskId: task.id, state: task.state, message: `${message}${runsFooter(runs)}`, runs };
+    return { ok: true, taskId: task.id, state: task.state, message: `${message}${runsFooter(runs)}${budgetFooter(task, deps)}`, runs };
   } catch (error) {
     const runs = recordRunLog(task, finished, deps);
     saveTask(deps.root, deps.configDir, task);
-    return { ok: false, taskId: task.id, state: task.state, message: `Rejected: ${(error as Error).message}`, runs };
+    return { ok: false, taskId: task.id, state: task.state, message: `Rejected: ${(error as Error).message}${budgetFooter(task, deps)}`, runs };
   }
 }
 
