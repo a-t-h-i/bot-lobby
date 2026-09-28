@@ -37,7 +37,7 @@ import { fellShort, profileLabel, type EffortRouter, type EffortScore } from "..
 
 /** Seats and the oracle read the repository to ask informed questions; they never edit. */
 export const PLANNER_TOOLS: readonly string[] = ["read", "grep", "find", "ls"];
-/** RESEARCH also gets the web tools (from pi-web-access; pi ignores them when it is not installed). */
+/** RESEARCH also gets bot-lobby's web tools (src/web/tools.ts). */
 export const RESEARCH_PANEL_TOOLS: readonly string[] = [...PLANNER_TOOLS, "web_search", "fetch_content", "source_check", "get_search_content"];
 
 /** The chair of the panel, as the Plan tab, the feed and the metrics name it. */

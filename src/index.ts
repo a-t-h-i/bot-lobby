@@ -11,6 +11,8 @@ import { registerOwner } from "./pi/owner.ts";
 import { registerClassifier } from "./classifier/instance.ts";
 import { registerClassifierTools } from "./classifier/tools.ts";
 import { registerFreshContext } from "./pi/fresh-context.ts";
+import { registerAskTool } from "./ask/tool.ts";
+import { registerWebTools } from "./web/tools.ts";
 
 export default function (pi: ExtensionAPI): void {
   // First, so every session_start handler below finds the classifier bound to this session's keys.
@@ -24,6 +26,10 @@ export default function (pi: ExtensionAPI): void {
   onTransition((task) => pingTransition(task));
   registerCommands(pi, CONFIG_DIR_NAME);
   registerOrchestrateTool(pi, CONFIG_DIR_NAME);
+  // The questionnaire the oracle (and pi without a task) asks the user with; no other extension is needed for it.
+  registerAskTool(pi);
+  // The web tools, for the researcher and for pi without a task (the oracle leaves them to the researcher).
+  registerWebTools(pi);
   // Parallel workers share files through the master's file desk.
   if (isSubagentProcess()) registerDeskClient(pi);
   // Subagents look files up with the classifier (the engine allows the tool only while file hints are on).

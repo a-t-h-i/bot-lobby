@@ -44,8 +44,5 @@
     "@types/node": "^22.10.0",
     "typebox": "1.3.27",
     "typescript": "^5.7.0"
-  },
-  "dependencies": {
-    "@juicesharp/rpiv-ask-user-question": "^2.11.0"
   }
 }

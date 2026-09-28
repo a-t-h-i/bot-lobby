@@ -21,9 +21,11 @@ pi install npm:@a-t-h-i/bot-lobby
 Try it once without installing: `pi -e npm:@a-t-h-i/bot-lobby`. From a source
 checkout: `pi -e ./src/index.ts` (keep `prompts/` next to `src/`).
 
-Optional: [`@juicesharp/rpiv-ask-user-question`](https://github.com/juicesharp/rpiv-mono)
-gives the Master a structured question dialog. Without it, Pi's own prompts
-are used.
+Nothing else to install: bot-lobby brings its own
+[questionnaire and web tools](#questions-and-the-web), and they work in plain
+Pi too, with or without a task. If you installed `pi-web-access` or
+`rpiv-ask-user-question` for bot-lobby, remove them: they register the same
+tool names.
 
 ## Quick start
 
@@ -75,8 +77,8 @@ request → clarify → scout → propose → approve → plan → implement →
   there before the task (**pre-existing**), another task, or no agent at all
   (**unattributed**, which the Master asks you about). Quick fixes are never
   treated as rogue changes or reverted.
-- A **researcher** can be summoned for cited web evidence (needs
-  [`pi-web-access`](https://pi.dev/packages)).
+- A **researcher** can be summoned for cited web evidence, through
+  bot-lobby's [web tools](#the-web).
 
 **Auto mode** approves proposals and answers clarifying questions for you;
 after three nudges without progress it pauses. A task started from a plan
@@ -151,6 +153,47 @@ you don't answer is decided with the recommendation and listed under
 - **Round limit:** 5 by default (`lobby.maxPlanningRounds`, 0 = unlimited).
   In the last round the oracle alone settles everything still open.
 - `ctrl+s` saves the plan as a pending task.
+
+## Questions and the web
+
+bot-lobby registers these tools in every Pi session it loads in, so plain Pi
+has them as well.
+
+### The questionnaire
+
+`ask_user_question` puts up to four questions to you in one overlay, each with
+two to four options (the recommended one first). Questions, option
+descriptions and **previews** are Markdown: an option's preview (a layout
+sketch, a component mockup, a code snippet, a config) shows beside the list
+while that option is focused, under it in a narrow terminal, so design choices
+can be compared by looking at them.
+
+`↑↓` move · `enter` choose · `space` pick several (multi-select) · `1`–`4`
+pick · `←→` between questions · the last row takes an answer in your own words
+· `esc` puts the questions away (what you answered is kept). Editor hosts that
+run Pi in RPC mode get the same questions through Pi's own dialogs.
+
+### The web
+
+| Tool | Does |
+| --- | --- |
+| `web_search` | Numbered results (title, URL, snippet, date) under a search id; filters for recency and sites |
+| `get_search_content` | Reads several results of a search at once |
+| `fetch_content` | Reads one page as Markdown with its title and dates; long pages in parts |
+| `source_check` | Before citing: reachable?, final URL, title, the date the page states |
+
+Search uses the first provider set up: `BRAVE_API_KEY`, `TAVILY_API_KEY`,
+`EXA_API_KEY`, `SEARXNG_URL` (your own instance), else DuckDuckGo, which needs
+no key but throttles automated searches; `BOT_LOBBY_SEARCH=<provider>` picks
+one. A provider that fails hands over to the next, and the result says so.
+
+Pages are read as Markdown without menus, scripts, forms or cookie banners,
+and marked as untrusted content that is never to be followed as instructions.
+Only public `http(s)` addresses are fetched, redirects included (no
+localhost, private networks or cloud metadata endpoints;
+`BOT_LOBBY_WEB_ALLOW_PRIVATE=1` lifts that, e.g. for a local docs server).
+PDFs and images are not read. While a task runs, the oracle leaves the web to
+the researcher; the tools come back once the task ends.
 
 ## The classifier (Jev)
 
@@ -260,12 +303,14 @@ Live checks (spend tokens or need a key and network):
 
 ```bash
 BOT_LOBBY_E2E=1 node --test test/e2e.test.ts
+BOT_LOBBY_LIVE_WEB=1 node --test test/web.test.ts
 BOT_LOBBY_JEV_E2E=1 OPENCODE_API_KEY=… node --test test/jev-e2e.test.ts
 ```
 
 Source layout: `src/workflow` (engine), `src/master` (delegation),
 `src/execution` (subagent processes), `src/lobby` (the UI),
-`src/classifier` (Jev), `src/state` (persistence), `prompts/` (agent prompts).
+`src/classifier` (Jev), `src/state` (persistence), `src/ask` (the
+questionnaire), `src/web` (the web tools), `prompts/` (agent prompts).
 
 ## Publishing
 

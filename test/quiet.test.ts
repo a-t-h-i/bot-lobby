@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { isQuiet, isSubagentProcess, setQuiet, toggleQuiet, visibleTools, WEB_TOOL_NAMES } from "../src/pi/quiet.ts";
+import { isQuiet, isSubagentProcess, setQuiet, toggleQuiet, visibleTools, WEB_TOOL_NAMES, webToolsFor } from "../src/pi/quiet.ts";
 import { registerQuietTools } from "../src/pi/tool-renderers.ts";
 import { registerLifecycle } from "../src/pi/events.ts";
 import { applyStatus, isMinimized, registerRevealShortcut, setMinimized, STATUS_KEY } from "../src/pi/ui.ts";
@@ -202,31 +202,42 @@ test("quiet tool renderers render nothing and reveal one compact summary line", 
   setQuiet(true);
 });
 
-test("session_start registers quiet built-ins and filters the web tools", () => {
+test("session_start registers quiet built-ins and leaves the web tools to pi", () => {
   setQuiet(true);
   const available = ["read", "bash", "grep", "web_search", "fetch_content", "source_check", "get_search_content", "custom_tool"];
   const fake = makePi(available);
   registerLifecycle(asPi(fake), ".pi");
   const { ctx, ui } = makeCtx(tempDir("dh-quiet-"));
   fake.handlers.get("session_start")!({ type: "session_start", reason: "startup" }, ctx);
-  assert.deepEqual(fake.active, ["read", "bash", "grep", "custom_tool"]);
+  assert.deepEqual(fake.active, available, "without a task pi has the web tools");
+  assert.equal(fake.activeCalls.length, 0);
   assert.deepEqual(fake.tools.map((tool) => tool.name).sort(), ["bash", "grep", "read"]);
   assert.ok(fake.tools.every((tool) => tool.renderShell === "self"));
   assert.ok(ui.statuses.some((entry) => entry.key === STATUS_KEY && entry.text?.includes("tools hidden")));
 });
 
-test("session_start never re-adds the web tools across reloads", () => {
-  setQuiet(true);
-  const available = ["read", "web_search", "fetch_content", "source_check", "get_search_content"];
-  const fake = makePi(available);
+test("while a task is active the oracle leaves the web tools to the researcher, and gets back only those it put away", () => {
+  setMinimized(false);
+  const root = ownedProject("session-a", "dh-quiet-web-");
+  const fake = makePi(["read", "web_search", "fetch_content", "source_check", "get_search_content"], ["read", "web_search", "fetch_content"]);
   registerLifecycle(asPi(fake), ".pi");
-  const { ctx } = makeCtx(tempDir("dh-quiet-reload-"));
-  const handler = fake.handlers.get("session_start")!;
-  handler({ type: "session_start", reason: "startup" }, ctx);
-  handler({ type: "session_start", reason: "reload" }, ctx);
-  assert.deepEqual(fake.active, ["read"]);
+  const turn = (sessionId: string) => fake.handlers.get("before_agent_start")!({ systemPromptOptions: { sections: {} as Record<string, string> } }, makeCtx(root, false, sessionId).ctx);
+  turn("session-a");
+  assert.deepEqual(fake.active, ["read"], "the task's oracle has no web tools");
+  turn("session-a");
+  assert.equal(fake.activeCalls.length, 1, "nothing to change on the next turn");
+  turn("session-b");
+  assert.deepEqual(fake.active, ["read", "web_search", "fetch_content"], "without a task they come back; the ones the user had off stay off");
+  turn("session-b");
   assert.equal(fake.activeCalls.length, 2);
-  assert.ok(fake.activeCalls.every((call) => call.every((name) => !WEB_TOOL_NAMES.includes(name))));
+});
+
+test("webToolsFor hides for a task and restores after it, without duplicates", () => {
+  assert.equal(webToolsFor(["read"], true, []), undefined);
+  assert.equal(webToolsFor(["read", "web_search"], false, []), undefined, "never adds what it did not take");
+  const hidden = webToolsFor(["read", "web_search", "bash"], true, []);
+  assert.deepEqual(hidden, { active: ["read", "bash"], hidden: ["web_search"] });
+  assert.deepEqual(webToolsFor(["read", "bash", "web_search"], false, ["web_search"]), { active: ["read", "bash", "web_search"], hidden: [] }, "a tool already back is not added twice");
 });
 
 test("a subagent process skips registration, filtering, and the reveal shortcut", () => {

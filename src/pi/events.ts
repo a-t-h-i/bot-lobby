@@ -9,7 +9,7 @@ import { describeTask } from "../workflow/workflow.ts";
 import { truncate } from "../text.ts";
 import { applyStatus, clearStatus, isMinimized, setMinimized, setOracleActivity } from "./ui.ts";
 import { ORACLE_THINKING, oracleActivityWord } from "./activity.ts";
-import { isSubagentProcess, visibleTools } from "./quiet.ts";
+import { isSubagentProcess, webToolsFor } from "./quiet.ts";
 import { registerQuietTools } from "./tool-renderers.ts";
 import { taskRequest, type Task, type TaskState } from "../schemas/task.ts";
 import { pendingComments, readPlanComments, type PlanComment } from "../state/comments.ts";
@@ -64,12 +64,11 @@ export function masterTaskContext(task: Task, comments: readonly PlanComment[] =
  * section rather than replacing the whole prompt.
  */
 export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
+  // Web tools the oracle put away for the task in hand, given back when it ends.
+  let hiddenWeb: string[] = [];
   pi.on("session_start", (_event, ctx) => {
     // Master-only: subagents keep their own --tools allowlist (see quiet.ts).
-    if (!isSubagentProcess()) {
-      registerQuietTools(pi);
-      pi.setActiveTools(visibleTools(pi.getActiveTools()));
-    }
+    if (!isSubagentProcess()) registerQuietTools(pi);
     const root = detectProjectRoot(ctx.cwd, configDir);
     setMinimized(false);
     applyStatus(ctx, root, configDir);
@@ -125,6 +124,14 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
     const sessionId = ctx.sessionManager.getSessionId();
     const hidden = isSubagentProcess() || isMinimized();
     const task = hidden ? undefined : activeTask(root, configDir, sessionId);
+    if (!isSubagentProcess()) {
+      // The researcher is the task's only web path; without a task pi keeps them.
+      const tools = webToolsFor(pi.getActiveTools(), Boolean(task), hiddenWeb);
+      if (tools) {
+        hiddenWeb = tools.hidden;
+        pi.setActiveTools(tools.active);
+      }
+    }
     if (!task) {
       // After a task ended and cleared the context, a line on where its record is, in case the user refers back to it.
       const previous = hidden ? undefined : previousTaskNote(ctx, configDir);
