@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join, sep } from "node:path";
 import type { KnowledgeConfig } from "../schemas/configuration.ts";
 import type { Domain } from "../schemas/agent.ts";
@@ -14,6 +14,7 @@ import {
   type KnowledgeAgent,
 } from "../knowledge/paths.ts";
 import { DEFAULT_KNOWLEDGE_CONTENT, ensureFile, readFileOr, writeFileEnsured } from "../knowledge/store.ts";
+import { forgetCached, forgetCachedUnder, readJsonCached } from "./file-cache.ts";
 
 /** Idempotently create the full knowledge + tasks layout with seed files. */
 export function ensureProjectStructure(root: string, configDir: string): void {
@@ -36,7 +37,7 @@ export function ensureProjectStructure(root: string, configDir: string): void {
 export function createTaskDir(root: string, configDir: string, task: Task): void {
   const dir = taskDir(dataRoot(root, configDir), task.id);
   mkdirSync(dir, { recursive: true });
-  snapshots.delete(join(dir, "state.json"));
+  forgetCached(join(dir, "state.json"));
   writeFileEnsured(join(dir, "state.json"), JSON.stringify(task, null, 2));
   ensureFile(join(dir, "proposal.md"), "");
   ensureFile(join(dir, "plan.md"), "");
@@ -79,7 +80,7 @@ export function readTaskArtifact(
 
 export function saveTask(root: string, configDir: string, task: Task): void {
   const path = join(taskDir(dataRoot(root, configDir), task.id), "state.json");
-  snapshots.delete(path);
+  forgetCached(path);
   writeFileEnsured(path, JSON.stringify(task, null, 2));
 }
 
@@ -150,35 +151,9 @@ export function listTasks(root: string, configDir: string): Task[] {
   return tasks.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-/**
- * Tasks as last read, by state.json path, with the file's stat at that read.
- * The owner's clock and the lobby look at every task every few seconds in
- * every session; a file is parsed again only when its stat changed. A file
- * written a moment ago is not kept (two writes that close together can share
- * a stat), and this process's own saves drop their entry at once.
- */
-const snapshots = new Map<string, { stamp: string; task: Task }>();
-/** How long ago a file must have been written for its read to be kept. */
-const SETTLE_MS = 1000;
-
-function peekTaskAt(dir: string): Task | undefined {
-  const path = join(dir, "state.json");
-  let stamp: string;
-  let settled: boolean;
-  try {
-    const stat = statSync(path, { bigint: true });
-    stamp = `${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`;
-    settled = Date.now() - Number(stat.mtimeMs) >= SETTLE_MS;
-  } catch {
-    snapshots.delete(path);
-    return undefined;
-  }
-  const hit = snapshots.get(path);
-  if (hit?.stamp === stamp) return hit.task;
-  const task = readTaskAt(dir);
-  if (task && settled) snapshots.set(path, { stamp, task });
-  else snapshots.delete(path);
-  return task;
+/** Any parsed JSON object counts as a task, as `readTaskAt` has it. */
+function isObject(value: unknown): value is Task {
+  return typeof value === "object" && value !== null;
 }
 
 /**
@@ -191,13 +166,13 @@ export function peekTasks(root: string, configDir: string): Task[] {
   const tasks: Task[] = [];
   const seen = new Set<string>();
   for (const { dir } of taskEntries(root, configDir)) {
-    seen.add(join(dir, "state.json"));
-    const task = peekTaskAt(dir);
+    const path = join(dir, "state.json");
+    seen.add(path);
+    const task = readJsonCached(path, isObject);
     if (task) tasks.push(task);
   }
   // Forget tasks that left these folders (deleted or archived).
-  const roots = readDataRoots(root, configDir).map((dr) => `${tasksRoot(dr)}${sep}`);
-  for (const path of snapshots.keys()) if (!seen.has(path) && roots.some((prefix) => path.startsWith(prefix))) snapshots.delete(path);
+  for (const dr of readDataRoots(root, configDir)) forgetCachedUnder(`${tasksRoot(dr)}${sep}`, seen);
   return tasks.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 

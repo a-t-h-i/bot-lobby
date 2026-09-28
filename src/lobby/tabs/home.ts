@@ -5,10 +5,11 @@
  * activity log of plain-words steps from every agent, and the one place where
  * thoughts show up. Pure: the scene arrives as a callback, the clock as `now`.
  */
-import { visibleWidth } from "@earendil-works/pi-tui";
+import { textWidth } from "../../width.ts";
 import type { Task } from "../../schemas/task.ts";
 import type { ActivityEntry, ChatEntry, ThoughtEntry } from "../feed.ts";
 import type { LobbyPanel } from "../../schemas/configuration.ts";
+import { markdownBlocks } from "../markdown.ts";
 import { beside, bold, box, clock, fill, fit, italic, markdownLines, notePane, paint, since, spinner, wrap, wrapHanging, type LobbyColor, type LobbyTheme, type PaneLayout } from "../layout.ts";
 
 /** The Lobby tab's scrollable panes. */
@@ -134,10 +135,10 @@ export function speakerLine(speaker: Speaker, width: number, theme?: LobbyTheme,
   const dimmed = note ? paint(theme, "dim", note) : "";
   if (side === "right") {
     const head = dimmed ? `${dimmed}  ${label} ${who}` : `${label} ${who}`;
-    return `${" ".repeat(Math.max(0, width - visibleWidth(head)))}${head}`;
+    return `${" ".repeat(Math.max(0, width - textWidth(head)))}${head}`;
   }
   const left = `${who} ${label}`;
-  const gap = width - visibleWidth(left) - visibleWidth(dimmed);
+  const gap = width - textWidth(left) - textWidth(dimmed);
   return gap >= 1 && dimmed ? `${left}${" ".repeat(gap)}${dimmed}` : left;
 }
 
@@ -150,7 +151,7 @@ export function speakerLine(speaker: Speaker, width: number, theme?: LobbyTheme,
 export function youLines(text: string, width: number, theme?: LobbyTheme): string[] {
   const most = Math.max(1, messageWidth(width, YOU_SHARE, 4) - 2);
   const lines = wrap(text, most);
-  const inner = Math.max(1, ...lines.map((line) => visibleWidth(line)));
+  const inner = Math.max(1, ...lines.map((line) => textWidth(line)));
   const pad = " ".repeat(Math.max(0, width - inner - 2));
   const bubble = theme?.bg
     ? (line: string) => theme.bg!("userMessageBg", ` ${fit(paint(theme, "accent", line), inner)} `)
@@ -159,16 +160,55 @@ export function youLines(text: string, width: number, theme?: LobbyTheme): strin
 }
 
 /** The oracle's reply as Markdown on the left, under its name. */
-function oracleLines(text: string, width: number, theme?: LobbyTheme): string[] {
+function oracleLines(text: string, width: number, theme?: LobbyTheme, keep = true): string[] {
   const indent = " ".repeat(BODY_INDENT);
-  return markdownLines(text, Math.max(1, messageWidth(width, ORACLE_SHARE, 0) - BODY_INDENT), theme).map((line) => (line ? `${indent}${line}` : ""));
+  return markdownLines(text, Math.max(1, messageWidth(width, ORACLE_SHARE, 0) - BODY_INDENT), theme, keep).map((line) => (line ? `${indent}${line}` : ""));
+}
+
+/** An open block this long is drawn again at most every `BIG_BLOCK_MS` while it grows (a long code block, say). */
+const BIG_BLOCK = 1500;
+const BIG_BLOCK_MS = 100;
+let lastOpen: { text: string; width: number; theme: object; lines: string[]; at: number } | undefined;
+
+/** The block the oracle is writing: drawn afresh (and not cached), except that a big one is redrawn only a few times a second. */
+function openBlockLines(text: string, width: number, theme: LobbyTheme | undefined): string[] {
+  const now = performance.now();
+  const key = theme ?? PLAIN;
+  if (text.length > BIG_BLOCK && lastOpen && lastOpen.width === width && lastOpen.theme === key && now - lastOpen.at < BIG_BLOCK_MS && text.startsWith(lastOpen.text)) return lastOpen.lines;
+  const lines = oracleLines(text, width, theme, false);
+  lastOpen = text.length > BIG_BLOCK ? { text, width, theme: key, lines, at: now } : undefined;
+  return lines;
+}
+
+/**
+ * The newest `need` lines (or a few more) of the reply the oracle is still
+ * writing. It is drawn block by block (see `markdownBlocks`): finished blocks
+ * come from the Markdown cache, only the one being written is rendered on
+ * each frame, and blocks above what the pane shows are not drawn at all.
+ */
+function liveLines(text: string, width: number, theme: LobbyTheme | undefined, need: number): string[] {
+  const blocks = markdownBlocks(text);
+  const parts: string[][] = [];
+  let count = 0;
+  for (let index = blocks.length - 1; index >= 0 && count < need; index -= 1) {
+    const lines = index === blocks.length - 1 ? openBlockLines(blocks[index]!, width, theme) : oracleLines(blocks[index]!, width, theme);
+    if (lines.length === 0) continue;
+    parts.push(lines);
+    count += lines.length + 1;
+  }
+  const lines: string[] = [];
+  for (let part = parts.length - 1; part >= 0; part -= 1) {
+    if (lines.length > 0) lines.push("");
+    for (const line of parts[part]!) lines.push(line);
+  }
+  return lines;
 }
 
 /** An event in the conversation (a task starting, a comment sent) as a centred rule; failures stand out instead. */
 export function eventLines(text: string, at: number, width: number, theme?: LobbyTheme): string[] {
   if (text.startsWith("✗")) return wrap(paint(theme, "error", text), width);
   const label = ` ${text}${at > 0 ? ` · ${clock(at)}` : ""} `;
-  const room = width - visibleWidth(label);
+  const room = width - textWidth(label);
   if (room < 6) return wrap(paint(theme, "dim", text), width);
   const left = Math.floor(room / 2);
   return [paint(theme, "dim", `${"─".repeat(left)}${label}${"─".repeat(room - left)}`)];
@@ -237,7 +277,7 @@ export function chatTail(chat: readonly ChatEntry[], width: number, theme: Lobby
     count += lines.length + (parts.length > 0 ? 1 : 0);
     parts.push(lines);
   };
-  if (live?.trim()) add([speakerLine("oracle", width, theme, `${spinner(tick)} writing`), ...oracleLines(live.trim(), width, theme)]);
+  if (live?.trim()) add([speakerLine("oracle", width, theme, `${spinner(tick)} writing`), ...liveLines(live.trim(), width, theme, need)]);
   else if (busy) add([speakerLine("oracle", width, theme, `${spinner(tick)} working…`)]);
   let index = chat.length - 1;
   for (; index >= 0 && count < need; index -= 1) add(entryBlock(chat[index]!, chat[index - 1], width, theme));
@@ -334,17 +374,57 @@ export function currentThought(thoughts: readonly ThoughtEntry[]): ThoughtEntry 
   return [...thoughts].reverse().find((entry) => entry.live) ?? thoughts.at(-1);
 }
 
-/** Every thought, oldest first: who thought it, then the thought, dimmed. */
-export function thoughtLines(thoughts: readonly ThoughtEntry[], width: number, theme?: LobbyTheme): string[] {
-  return thoughts.flatMap((thought) => {
-    const lead = `${paint(theme, sourceColor(thought.source), thought.source.padEnd(SOURCE_WIDTH).slice(0, SOURCE_WIDTH))} `;
-    return wrapHanging(lead, italic(theme, paint(theme, "dim", thought.text.replace(/\s*\n\s*/g, " "))), width);
-  });
+/**
+ * Drawn thoughts, per theme and per thought, kept while the thought's text
+ * and the width stay the same (a live thought grows, so it is drawn again as
+ * it streams; settled ones are wrapped once).
+ */
+const thoughtBlocks = new WeakMap<object, WeakMap<ThoughtEntry, { width: number; text: string; lines: string[]; at: number }>>();
+
+/** A live thought this long is wrapped again at most every `LONG_THOUGHT_MS` while it streams. */
+const LONG_THOUGHT = 1000;
+const LONG_THOUGHT_MS = 150;
+
+function thoughtBlock(thought: ThoughtEntry, width: number, theme?: LobbyTheme): string[] {
+  let cache = thoughtBlocks.get(theme ?? PLAIN);
+  if (!cache) {
+    cache = new WeakMap();
+    thoughtBlocks.set(theme ?? PLAIN, cache);
+  }
+  const hit = cache.get(thought);
+  const now = performance.now();
+  if (hit && hit.width === width && (hit.text === thought.text || (thought.live && thought.text.length > LONG_THOUGHT && now - hit.at < LONG_THOUGHT_MS))) return hit.lines;
+  const lead = `${paint(theme, sourceColor(thought.source), thought.source.padEnd(SOURCE_WIDTH).slice(0, SOURCE_WIDTH))} `;
+  const lines = wrapHanging(lead, italic(theme, paint(theme, "dim", thought.text.replace(/\s*\n\s*/g, " "))), width);
+  cache.set(thought, { width, text: thought.text, lines, at: now });
+  return lines;
 }
 
-function thinkingContent(input: HomeInput, thoughts: readonly ThoughtEntry[], width: number, theme?: LobbyTheme): string[] {
-  if (thoughts.length > 0) return thoughtLines(thoughts, width, theme);
-  return [paint(theme, "dim", input.query ? `No thought matches "${input.query}".` : "Thoughts from the oracle and every agent appear here, and only here.")];
+/** The newest `need` lines of the thoughts, oldest first: only the thoughts they reach are drawn, and the rest estimated. */
+export function thoughtTail(thoughts: readonly ThoughtEntry[], width: number, theme: LobbyTheme | undefined, need: number): PaneLines {
+  const parts: string[][] = [];
+  let count = 0;
+  let index = thoughts.length - 1;
+  for (; index >= 0 && count < need; index -= 1) {
+    const lines = thoughtBlock(thoughts[index]!, width, theme);
+    parts.push(lines);
+    count += lines.length;
+  }
+  const lines: string[] = [];
+  for (let part = parts.length - 1; part >= 0; part -= 1) for (const line of parts[part]!) lines.push(line);
+  const rest = index + 1;
+  const drawn = parts.length;
+  return { lines, total: rest > 0 && drawn > 0 ? lines.length + Math.ceil((rest * lines.length) / drawn) : lines.length };
+}
+
+/** Every thought, oldest first: who thought it, then the thought, dimmed. */
+export function thoughtLines(thoughts: readonly ThoughtEntry[], width: number, theme?: LobbyTheme): string[] {
+  return thoughtTail(thoughts, width, theme, Number.POSITIVE_INFINITY).lines;
+}
+
+function thinkingContent(input: HomeInput, thoughts: readonly ThoughtEntry[], width: number, need: number, theme?: LobbyTheme): PaneLines {
+  if (thoughts.length > 0) return thoughtTail(thoughts, width, theme, need);
+  return whole([paint(theme, "dim", input.query ? `No thought matches "${input.query}".` : "Thoughts from the oracle and every agent appear here, and only here.")]);
 }
 
 /**
@@ -367,7 +447,7 @@ function sceneLines(input: HomeInput, width: number, height: number, theme?: Lob
 function keyNote(lines: readonly string[], width: number, note: string | undefined, theme?: LobbyTheme): string[] {
   const first = lines[0];
   if (!note || first === undefined) return [...lines];
-  const gap = width - visibleWidth(first) - visibleWidth(note) - 1;
+  const gap = width - textWidth(first) - textWidth(note) - 1;
   if (gap < 2) return [...lines];
   return [`${first}${" ".repeat(gap)}${paint(theme, "dim", note)}`, ...lines.slice(1)];
 }
@@ -418,7 +498,7 @@ export function renderHome(input: HomeInput, width: number, height: number, them
   const activityBox = pane("activity", "Activity", input.query ? matches(feed.activity.length) : input.keys?.activity, (inner, need) => activity(input, feed.activity, inner, need, theme));
   const thought = currentThought(feed.thoughts);
   const thinkingNote = thought ? `${thought.source} · ${thought.live ? "thinking" : since(input.now - thought.at)}` : input.keys?.thinking;
-  const thinkingBox = pane("thinking", "Thinking", thinkingNote, (inner) => whole(thinkingContent(input, feed.thoughts, inner, theme)));
+  const thinkingBox = pane("thinking", "Thinking", thinkingNote, (inner, need) => thinkingContent(input, feed.thoughts, inner, need, theme));
   const top = scene.length;
   let body: string[] = [];
   if (main > 0 && panels.conversation && panels.activity) {

@@ -4,7 +4,8 @@ import { stripTerminalSequences, visibleWidth, type MarkdownTheme } from "@earen
 import { bar, beside, box, detailWindow, highlight, markdownHanging, markdownLines, meter, notePane, position, scrollThumb, sparkline, stackedBar, type LobbyTheme } from "../src/lobby/layout.ts";
 import { chatLines, chatTail, paneWindow, tailWindow } from "../src/lobby/tabs/home.ts";
 import type { ChatEntry } from "../src/lobby/feed.ts";
-import { createMarkdownRenderer, tidyHeading } from "../src/lobby/markdown.ts";
+import { createMarkdownRenderer, markdownBlocks, tidyHeading } from "../src/lobby/markdown.ts";
+import { trimReply } from "../src/lobby/feed.ts";
 import { actionFor, keyLabel, keyMap, LOBBY_ACTIONS } from "../src/lobby/keys.ts";
 import { DEFAULT_CONFIG, resolveConfig } from "../src/schemas/configuration.ts";
 import { LOBBY_SWITCHES, lobbySwitch, toggleLobbySwitch } from "../src/pi/settings-ui.ts";
@@ -111,6 +112,38 @@ test("a pane drawn only near its newest lines still scrolls and places its thumb
   assert.deepEqual(paneWindow(content, 3, 2), { shown: ["f", "g", "h"], start: 5, offset: 2 });
   assert.deepEqual(paneWindow(content, 3, 99), { shown: [], start: 0, offset: 7 }, "past what was drawn: the next frame draws further back");
   assert.deepEqual(paneWindow({ lines: ["a"], total: 0 }, 3, 5), { shown: ["a"], start: 0, offset: 0 });
+});
+
+test("a reply renders the same block by block as whole, at every point while it streams", () => {
+  const render = createMarkdownRenderer(plainMarkdown);
+  const pieces = [
+    "Para with **bold** and `code` text that is long enough to wrap around the pane width for sure.", "## Heading", "1. one\n2. two", "- a\n- b\n  - nested",
+    "```ts\nconst x = 1;\n\nconst y = 2;\n```", "> quote line\n> more", "| a | b |\n|---|---|\n| 1 | 2 |", "---", "Plain.", "1. First\n\n2. Second",
+    "- item\n\n  continued", "~~~\nx\n\ny\n~~~", "Text\n===", "* star\n* list", "    indented code\n\n    more code", "> quote\n\n> second quote",
+  ];
+  let seed = 11;
+  for (let sample = 0; sample < 40; sample += 1) {
+    const text = Array.from({ length: 7 }, () => pieces[(seed = (seed * 48271) % 0x7fffffff) % pieces.length]!).join("\n\n");
+    for (let end = 1; end <= text.length; end += 5) {
+      const shown = text.slice(0, end).trim();
+      const parts = markdownBlocks(shown).map((block) => render(block, 50, false)).filter((lines) => lines.length > 0);
+      const joined = parts.flatMap((lines, index) => (index === 0 ? lines : ["", ...lines]));
+      assert.deepEqual(joined, render(shown, 50, false), JSON.stringify(shown));
+    }
+  }
+  assert.deepEqual(markdownBlocks("a\n\n```\nx\n\ny\n```\n\n- l\n\n- m\n\nb"), ["a", "```\nx\n\ny\n```\n\n- l\n\n- m", "b"], "a list item never starts a block of its own");
+});
+
+test("a long streaming reply loses whole blocks from its start, never half a code block", () => {
+  const code = "```\n" + "line\n".repeat(30) + "```";
+  const reply = [code, "tail paragraph"].join("\n\n");
+  assert.equal(trimReply(reply, 1000), reply, "short enough: untouched");
+  assert.equal(trimReply(reply, 50), "tail paragraph", "the code block goes whole");
+  assert.equal(trimReply("x".repeat(80), 50), "x".repeat(37), "one long block: cut to three quarters, so its start holds still a while");
+  const long = `\`\`\`ts\n${Array.from({ length: 40 }, (_, index) => `const v${index} = ${index};`).join("\n")}`;
+  const kept = trimReply(long, 120);
+  assert.ok(kept.startsWith("```ts\nconst v"), "a code block too long on its own keeps its opening fence");
+  assert.ok(kept.endsWith("const v39 = 39;") && kept.length <= 120);
 });
 
 test("the key map has a default for every action, takes overrides and matches keys", () => {

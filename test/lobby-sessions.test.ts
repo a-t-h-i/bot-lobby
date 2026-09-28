@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, appendFileSync } from "node:fs";
 import { MAX_CHAT } from "../src/lobby/feed.ts";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BackgroundSession, extensionArgs, SessionRegistry, sessionArgs } from "../src/lobby/sessions.ts";
+import { BackgroundSession, extensionArgs, MAX_ENDED, SessionRegistry, sessionArgs } from "../src/lobby/sessions.ts";
 import { chatFromFile, currentBranch, SessionChats, SessionLog } from "../src/lobby/session-files.ts";
 import { parseCommand } from "../src/pi/commands.ts";
 import { FakeSessionProcess } from "./fake-session.ts";
@@ -129,6 +129,24 @@ test("the registry launches sessions in the project and finds them by pi session
   registry.stopAll();
   assert.ok(launched.every((entry) => entry.proc.signals.length === 1));
   assert.ok(changes >= 2);
+});
+
+test("the registry keeps every running session and only the newest few that ended", () => {
+  const procs: FakeSessionProcess[] = [];
+  const registry = new SessionRegistry(() => {
+    const proc = new FakeSessionProcess();
+    procs.push(proc);
+    return proc;
+  });
+  const first = registry.start("/repo", { name: "keeps running", request: "x" });
+  for (let index = 0; index < MAX_ENDED + 3; index += 1) {
+    registry.start("/repo", { name: `ended ${index}`, request: "x" });
+    procs.at(-1)!.exit(0);
+  }
+  registry.start("/repo", { name: "latest", request: "x" });
+  assert.equal(registry.sessions.length, 1 + MAX_ENDED + 1);
+  assert.equal(registry.sessions[0], first, "a running session is never let go");
+  assert.deepEqual(registry.sessions.slice(1, -1).map((session) => session.name), Array.from({ length: MAX_ENDED }, (_, index) => `ended ${index + 3}`));
 });
 
 function entry(id: string, parentId: string | null, role: "user" | "assistant", text: string): Record<string, unknown> {
