@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { Key, truncateToWidth, type Component, type TUI } from "@earendil-works/pi-tui";
+import { Key, type Component, type TUI } from "@earendil-works/pi-tui";
+import { clip } from "../width.ts";
 import type { AgentRun } from "../schemas/findings.ts";
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { activeTask } from "../state/persistence.ts";
@@ -255,7 +256,7 @@ export class ZenScene {
     const key = `${width}|${rows}|${this.tick}|${frameKey}|${motion.phase}|${motion.talk}|${zenVersion}|${Math.floor(now / 1000)}|${quiet}|${still}`;
     if (this.cache && this.cache.key === key && this.cache.theme === theme) return this.cache.lines;
     const opts = { width, rows, tick: this.tick, theme, expressions, variants, oracleActivity, oracleMotion: motion, still };
-    const lines = panelLines(zenState.task, zenState.runs, now, quiet, opts).map((line) => truncateToWidth(line, width));
+    const lines = panelLines(zenState.task, zenState.runs, now, quiet, opts).map((line) => clip(line, width));
     this.cache = { key, theme, lines };
     return lines;
   }
