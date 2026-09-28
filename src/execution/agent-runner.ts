@@ -4,6 +4,8 @@ import { roleSpec } from "../roles/registry.ts";
 import { compilePrompt } from "../prompts/compiler.ts";
 import { activityDetail, activityWord, describeToolCall } from "../pi/activity.ts";
 import { shortDuration, truncate } from "../text.ts";
+import { EditLog } from "../state/changes.ts";
+import { formatMinutes, REPORT_GRACE_MS } from "../state/budget.ts";
 import { runPiAgent, spawnPiProcess, type PiStreamEvent, type ProcessRunner } from "./pi-runner.ts";
 
 export interface AgentContext {
@@ -58,7 +60,46 @@ export interface AgentRequest {
   /** The classifier routed this run down from this configured profile (receipts and metrics show it). */
   routedFrom?: string;
   route?: string;
+  /** Under a task time budget: the run's allotted time, which replaces `timeoutMs`. */
+  time?: AgentTime;
 }
+
+/**
+ * A run under a task time budget. The agent is told its minutes up front,
+ * warned at 75%, and asked to stop and report when they run out. A worker
+ * then reports where it left off and how much more it needs; `onTimeUp`
+ * (the engine asking the user) grants more, and the same agent carries on.
+ */
+export interface AgentTime {
+  /** When the delegation's time runs out (epoch ms); moved out when more is granted, shared by retries and re-runs. */
+  endsAt: number;
+  /** The allotment, as the agent and the lobby see it. */
+  allotMs: number;
+  /** What the agent is told about its time, in its context. */
+  note?: string;
+  /** Workers only: decide on more time once it has reported where it left off; resolve with ms, 0 to stop it. */
+  onTimeUp?: (run: AgentRun, report: string) => Promise<number>;
+}
+
+/** The warning at 75% of an allotment. */
+export function headsUpMessage(leftMs: number, allotMs: number): string {
+  return `bot-lobby: about ${formatMinutes(leftMs)} of your ${formatMinutes(allotMs)} for this step are left. Finish what you have started and make sure it works; leave nice-to-haves.`;
+}
+
+/** The steer when an allotment is spent: a worker says where it left off and what more it needs; any other role reports what it has. */
+export function timeUpMessage(allotMs: number, canAskForMore: boolean): string {
+  return canAskForMore
+    ? `bot-lobby: your ${formatMinutes(allotMs)} for this step are up. Stop here: finish or revert the edit in progress so every file is consistent, start nothing new, and write your report now in the required format, adding \`## Left Off\` (what you were doing and what is still to do) and \`## More Time\` (how many more minutes you need, and why). The user decides whether you get more time to finish.`
+    : `bot-lobby: your ${formatMinutes(allotMs)} are up. Stop now and write your report in the required format with what you have.`;
+}
+
+/** The follow-up that sends an agent on once the user gave it more time. */
+export function carryOnMessage(extraMs: number): string {
+  return `bot-lobby: the user gave you ${formatMinutes(extraMs)} more. Carry on from where you left off and finish the step, then write your final report in the required format (leave out Left Off and More Time if you finish).`;
+}
+
+/** Least time an attempt starts with; a retry with less than this left is not started. */
+const MIN_ATTEMPT_MS = 60_000;
 
 /** The watchdog fields of an AgentRequest, taken from the workflow config. */
 export function watchdogOptions(workflow: {
@@ -91,13 +132,18 @@ function retryable(run: AgentRun): boolean {
 export async function runAgent(request: AgentRequest, run: ProcessRunner = spawnPiProcess): Promise<AgentRun> {
   const startedAt = new Date().toISOString();
   const attempts = Math.max(1, (request.retries ?? 0) + 1);
+  // A failed attempt may have edited files before the retry: the run owns every edit.
+  const edits = new EditLog(request.cwd);
   let last: AgentRun | undefined;
   for (let attempt = 1; attempt <= attempts; attempt++) {
-    last = await runAgentOnce(request, run, attempt, startedAt);
+    last = await runAgentOnce(request, run, attempt, startedAt, edits);
     request.onAttemptEnd?.(last);
     if (!retryable(last)) break;
+    // Under a budget a retry only uses what is left of the allotment.
+    if (request.time && request.time.endsAt - Date.now() < MIN_ATTEMPT_MS) break;
   }
-  return last!;
+  const edited = edits.list();
+  return edited.length > 0 ? { ...last!, edited } : last!;
 }
 
 /** Abort every in-flight subagent (session shutdown, user cancel). */
@@ -120,6 +166,7 @@ function baseRun(request: AgentRequest, runId: string, startedAt: string, attemp
     ...(request.thinking ? { thinking: request.thinking } : {}),
     ...(request.routedFrom ? { routedFrom: request.routedFrom } : {}),
     ...(request.route ? { route: request.route } : {}),
+    ...(request.time ? { allotMs: request.time.allotMs, endsAt: request.time.endsAt } : {}),
     ...(attempts > 1 ? { note: `retry ${attempts - 1} of ${(request.retries ?? 0)}`, noteKind: "warning" as const } : {}),
   };
 }
@@ -134,17 +181,20 @@ function toolsFor(request: AgentRequest): readonly string[] | undefined {
  * Run one domain/role agent in an isolated pi process. The role's tool
  * allowlist comes from its spec, so read-only roles cannot modify anything.
  */
-async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: number, startedAt: string): Promise<AgentRun> {
+async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: number, startedAt: string, edits: EditLog): Promise<AgentRun> {
   const base = baseRun(request, `${request.taskId}:${request.domain}:${request.role}:${Date.now().toString(36)}`, startedAt, attempt);
   request.onUpdate?.(base);
-  const live = createLiveRun(base, request);
+  const live = createLiveRun(base, request, edits);
 
   const controller = new AbortController();
   activeControllers.add(controller);
   const signal = request.signal ? AbortSignal.any([request.signal, controller.signal]) : controller.signal;
   try {
     const systemPrompt = compilePrompt({ domain: request.domain, role: request.role, ...request.context });
-    const wrapUp = request.wrapUpAt && request.wrapUpAt > 0 && request.wrapUpAt < 1 ? Math.floor(request.timeoutMs * request.wrapUpAt) : 0;
+    const time = request.time;
+    const left = time ? Math.max(MIN_ATTEMPT_MS, time.endsAt - Date.now()) : 0;
+    const wrapUp = time ? 0 : request.wrapUpAt && request.wrapUpAt > 0 && request.wrapUpAt < 1 ? Math.floor(request.timeoutMs * request.wrapUpAt) : 0;
+    const onTimeUp = time?.onTimeUp;
     const result = await runPiAgent({
       cwd: request.cwd,
       task: request.instruction,
@@ -152,7 +202,26 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
       tools: toolsFor(request),
       model: request.model,
       thinking: request.thinking,
-      timeoutMs: request.timeoutMs,
+      timeoutMs: time ? left + REPORT_GRACE_MS : request.timeoutMs,
+      ...(time ? {
+        time: {
+          upAtMs: left,
+          headsUpAtMs: left >= 4 * 60_000 ? Math.floor(left * 0.75) : 0,
+          headsUpMessage: headsUpMessage(left - Math.floor(left * 0.75), time.allotMs),
+          upMessage: timeUpMessage(time.allotMs, Boolean(onTimeUp)),
+          graceMs: REPORT_GRACE_MS,
+          ...(onTimeUp ? {
+            onTimeUp: async (report: string) => {
+              const extraMs = await onTimeUp(live.current(), report);
+              if (extraMs > 0) {
+                time.endsAt = Date.now() + extraMs;
+                live.annotate({ note: `given ${formatMinutes(extraMs)} more`, noteKind: "info" });
+              }
+              return { extraMs, message: carryOnMessage(extraMs) };
+            },
+          } : {}),
+        },
+      } : {}),
       signal,
       env: request.env,
       stallTimeoutMs: request.stallTimeoutMs,
@@ -174,6 +243,8 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
       model: result.model ?? current.model,
       ...(result.stalled ? { stalled: true } : {}),
       ...(result.wrappedUp ? { wrappedUp: true } : {}),
+      ...(result.timeUp ? { timeUp: true } : {}),
+      ...(result.extendedMs ? { extendedMs: result.extendedMs } : {}),
       note: undefined,
       noteKind: undefined,
     };
@@ -198,7 +269,7 @@ const THROTTLE_MS = 2000;
  * `onUpdate`: activity changes, retries and notes immediately, counters and
  * heartbeats at most every couple of seconds.
  */
-function createLiveRun(base: AgentRun, request: AgentRequest) {
+function createLiveRun(base: AgentRun, request: AgentRequest, edits: EditLog) {
   let state: AgentRun = base;
   let lastEmit = 0;
   const emit = (patch: Partial<AgentRun>, force: boolean) => {
@@ -212,6 +283,7 @@ function createLiveRun(base: AgentRun, request: AgentRequest) {
   const onEvent = (event: PiStreamEvent) => {
     switch (event.type) {
       case "tool_execution_start": {
+        edits.note(event.toolName, event.args);
         const activity = activityWord(event.toolName);
         const detail = activityDetail(event.toolName, event.args);
         const step = describeToolCall(event.toolName, event.args);
@@ -239,6 +311,12 @@ function createLiveRun(base: AgentRun, request: AgentRequest) {
         return;
       case "wrap_up":
         emit({ note: `asked to wrap up (${shortDuration(request.timeoutMs)} limit)`, noteKind: "warning", wrappedUp: true }, true);
+        return;
+      case "time_up":
+        emit({ note: request.time?.onTimeUp ? "out of time: reporting where it left off" : "out of time: reporting", noteKind: "warning" }, true);
+        return;
+      case "extended":
+        emit({ endsAt: request.time?.endsAt, extendedMs: (state.extendedMs ?? 0) + event.ms }, true);
         return;
       case "usage": {
         const usage = state.usage ?? { input: 0, output: 0, cost: 0, turns: 0 };

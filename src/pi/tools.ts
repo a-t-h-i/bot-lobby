@@ -1,6 +1,6 @@
 import { StringEnum } from "@earendil-works/pi-ai";
-import type { AgentToolUpdateCallback, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Container, Text } from "@earendil-works/pi-tui";
+import { getMarkdownTheme, type AgentToolUpdateCallback, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Container, Markdown, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import type { AgentRun } from "../schemas/findings.ts";
 import type { ProcessRunner } from "../execution/pi-runner.ts";
@@ -8,6 +8,8 @@ import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { classifier, effortFor, hintsFor, triageFor } from "../classifier/instance.ts";
 import { truncate } from "../text.ts";
 import { applyStatus, reportRuns, summarizeRun } from "./ui.ts";
+import { whileAsking } from "../state/budget.ts";
+import { unescapeBreaks } from "../lobby/markdown.ts";
 import { isQuiet } from "./quiet.ts";
 import { checkThinking, createProfileResolver, modelRef, type ModelLookup } from "./model-support.ts";
 import { agentName, describeRun } from "./run-summary.ts";
@@ -36,16 +38,18 @@ const OrchestrateSchema = Type.Object({
       Type.Object({
         domain: Type.String({ description: "designer, backend, or qa" }),
         task: Type.String({ description: "the concrete step(s) for that domain's worker" }),
+        minutes: Type.Optional(Type.Number({ description: "under a time budget: minutes for this worker, by its scope" })),
       }),
       { description: "implement: run several domains in parallel (distinct domains); workers share files through the file desk" },
     ),
   ),
+  minutes: Type.Optional(Type.Number({ description: "implement (under a time budget): minutes for this step, by its scope; budget: more minutes to ask the user for" })),
   approvalId: Type.Optional(Type.String({ description: "resolve_approval: the approval id from a worker result" })),
   decision: Type.Optional(
     StringEnum(["approved", "rejected"] as const, { description: "resolve_approval: approve or reject the request" }),
   ),
   note: Type.Optional(Type.String({ description: "resolve_approval: rationale, or what to do instead when rejected" })),
-  reason: Type.Optional(Type.String({ description: "block: why the task cannot continue" })),
+  reason: Type.Optional(Type.String({ description: "block: why the task cannot continue; budget: why the task needs more time" })),
   text: Type.Optional(Type.String({ description: "decide/complete/knowledge: the decision, completion summary, or knowledge text" })),
   file: Type.Optional(Type.String({ description: "compact: the knowledge file to rewrite, e.g. knowledge.md" })),
   kind: Type.Optional(
@@ -64,7 +68,8 @@ const DESCRIPTION = [
   "review), knowledge (record approved knowledge or a decision),",
   "compact (replace a knowledge file with a rewritten version, archiving the old one),",
   "resolve_approval (approve or reject a request), complete (declare the task done after the gates",
-  "pass), block/resume (escalate or continue), status, cancel.",
+  "pass), block/resume (escalate or continue), budget (under a time budget: where it stands, or ask the",
+  "user for more minutes with a reason), status, cancel.",
   "The engine validates every step against the task state machine, so a rejected action means the workflow is not at that step yet.",
 ].join(" ");
 
@@ -109,8 +114,9 @@ export function workflowDeps(
     classifier: classifier(),
     triage: (request, triageSignal) => triageFor({ cwd: ctx.cwd, root, configDir }, request, triageSignal),
     effort: effortFor((model, thinking) => checkThinking(modelLookup(ctx)(model), thinking).level),
-    ask: async (question) => (hasUI ? ctx.ui.input(question) : undefined),
-    choose: async (title, options) => (hasUI ? ctx.ui.select(title, options) : undefined),
+    // Time spent waiting on the user is not the task's: its budget clock waits too.
+    ask: async (question) => (hasUI ? whileAsking(() => ctx.ui.input(question)) : undefined),
+    choose: async (title, options) => (hasUI ? whileAsking(() => ctx.ui.select(title, options)) : undefined),
     notify: (message, level = "info") => {
       if (hasUI) ctx.ui.notify(message, level);
     },
@@ -135,6 +141,14 @@ function runReporter(
   };
 }
 
+/** A header line over Markdown, rendered as pi renders its own messages (a proposal's bullets, a report's code spans). */
+function headedMarkdown(header: string, body: string, color: (text: string) => string): Container {
+  const box = new Container();
+  box.addChild(new Text(header, 0, 0));
+  if (body.trim()) box.addChild(new Markdown(unescapeBreaks(body), 0, 0, getMarkdownTheme(), { color }));
+  return box;
+}
+
 /** TUI-only transcript entries; these never enter the model's context. */
 function registerBotLobbyEntries(pi: ExtensionAPI): void {
   pi.registerEntryRenderer("bot-lobby", (entry, { expanded }, theme) => {
@@ -145,7 +159,7 @@ function registerBotLobbyEntries(pi: ExtensionAPI): void {
     }
     const header = `bot-lobby ${data?.taskId ?? ""} — ${data?.kind ?? "note"}`.trim();
     const body = data?.text ?? "";
-    return new Text(`${theme.fg("accent", theme.bold(header))}\n${theme.fg("toolOutput", expanded ? body : truncate(body, 600))}`, 0, 0);
+    return headedMarkdown(theme.fg("accent", theme.bold(header)), expanded ? body : truncate(body, 600), (text) => theme.fg("toolOutput", text));
   });
 }
 
@@ -200,7 +214,7 @@ export function registerOrchestrateTool(pi: ExtensionAPI, configDir: string, run
       const body = result.content[0]?.type === "text" ? result.content[0].text : "";
       const icon = details?.ok ? theme.fg("success", "✓") : theme.fg("warning", "!");
       const header = `${icon} ${theme.fg("toolTitle", theme.bold("orchestrate"))} ${theme.fg("accent", details?.taskId ?? "")} ${theme.fg("muted", `→ ${details?.state ?? "?"}`)}`;
-      return new Text(expanded && body ? `${header}\n${theme.fg("dim", truncate(body, 2000))}` : header, 0, 0);
+      return expanded && body ? headedMarkdown(header, truncate(body, 2000), (text) => theme.fg("dim", text)) : new Text(header, 0, 0);
     },
   });
 }
