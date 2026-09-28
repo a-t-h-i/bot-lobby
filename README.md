@@ -2,6 +2,8 @@
 
 A [Pi](https://pi.dev) extension that turns Pi into a multi-agent software team.
 
+![The bot-lobby status scene: the oracle orchestrating DEV, DESIGN, RESEARCH and QA through a task's plan](https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/gallery.png)
+
 `/bot-lobby <request>` starts a task. Your Pi session becomes the **Master**
 (the "oracle"): it scouts the codebase, proposes a plan, and delegates the
 work to three domain agents — **Designer+Frontend**, **Backend** and **QA** —
