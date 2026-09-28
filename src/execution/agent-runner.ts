@@ -6,7 +6,9 @@ import { activityDetail, activityWord, describeToolCall } from "../pi/activity.t
 import { shortDuration, truncate } from "../text.ts";
 import { EditLog } from "../state/changes.ts";
 import { formatMinutes, REPORT_GRACE_MS } from "../state/budget.ts";
-import { runPiAgent, spawnPiProcess, type PiStreamEvent, type ProcessRunner } from "./pi-runner.ts";
+import { runPiAgent, spawnPiProcess, type PiStreamEvent, type ProcessRunner, type RelayAsk } from "./pi-runner.ts";
+import { ASK_ENV } from "../ask/relay.ts";
+import { ASK_TOOL } from "../ask/types.ts";
 
 export interface AgentContext {
   task: string;
@@ -62,6 +64,8 @@ export interface AgentRequest {
   route?: string;
   /** Under a task time budget: the run's allotted time, which replaces `timeoutMs`. */
   time?: AgentTime;
+  /** Lets the agent ask the user (ask_user_question, relayed through the master); its clocks wait for the answers. */
+  onAsk?: RelayAsk;
 }
 
 /**
@@ -173,8 +177,9 @@ function baseRun(request: AgentRequest, runId: string, startedAt: string, attemp
 
 function toolsFor(request: AgentRequest): readonly string[] | undefined {
   const tools = roleSpec(request.role).tools;
-  if (!request.extraTools?.length) return tools;
-  return [...(tools ?? []), ...request.extraTools];
+  const extra = [...(request.extraTools ?? []), ...(request.onAsk ? [ASK_TOOL] : [])];
+  if (extra.length === 0) return tools;
+  return [...(tools ?? []), ...extra];
 }
 
 /**
@@ -223,7 +228,8 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
         },
       } : {}),
       signal,
-      env: request.env,
+      ...(request.onAsk ? { onAsk: request.onAsk } : {}),
+      env: request.onAsk ? { ...request.env, [ASK_ENV]: "1" } : request.env,
       stallTimeoutMs: request.stallTimeoutMs,
       toolStallTimeoutMs: request.toolStallTimeoutMs,
       wrapUpAtMs: wrapUp,
@@ -317,6 +323,14 @@ function createLiveRun(base: AgentRun, request: AgentRequest, edits: EditLog) {
         return;
       case "extended":
         emit({ endsAt: request.time?.endsAt, extendedMs: (state.extendedMs ?? 0) + event.ms }, true);
+        return;
+      case "asking":
+        emit({ note: `waiting on you: ${event.questions} question${event.questions === 1 ? "" : "s"}`, noteKind: "info" }, true);
+        return;
+      case "answered":
+        // Its time waited with it.
+        if (request.time) request.time.endsAt += event.waitedMs;
+        emit({ note: "you answered; carrying on", noteKind: "info", ...(request.time ? { endsAt: request.time.endsAt } : {}) }, true);
         return;
       case "usage": {
         const usage = state.usage ?? { input: 0, output: 0, cost: 0, turns: 0 };

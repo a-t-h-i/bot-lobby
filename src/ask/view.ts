@@ -5,8 +5,10 @@
  * box beside them (or under them in a narrow terminal). Pure: state in, lines
  * out, exactly `width` columns and at most `height` rows.
  */
+import { basename } from "node:path";
 import { textWidth } from "../width.ts";
 import { beside, bold, box, fill, fit, markdownLines, paint, wrap, type LobbyTheme } from "../lobby/layout.ts";
+import { imageLines, type ImagePreview } from "./image.ts";
 import { isAnswered, type AskState } from "./state.ts";
 import { OWN_ANSWER, type AskQuestion } from "./types.ts";
 
@@ -15,6 +17,8 @@ export const SIDE_BY_SIDE_MIN = 96;
 /** Rows the preview box keeps at least, and at most. */
 const PREVIEW_MIN = 6;
 const PREVIEW_MAX = 40;
+/** A preview box needs this many inner rows to draw an image in; smaller ones name the file. */
+const IMAGE_MIN_ROWS = 6;
 /** Option descriptions sit under their label, past the marker and number. */
 const DESCRIPTION_INDENT = 7;
 
@@ -69,18 +73,39 @@ function optionLines(state: AskState, question: AskQuestion, width: number, them
   return lines;
 }
 
-/** The preview to show: the focused option's, when any option in the question has one. */
-function previewOf(state: AskState, question: AskQuestion): { label: string; text: string } | undefined {
-  if (!question.options.some((option) => option.preview?.trim())) return undefined;
+interface Preview {
+  label: string;
+  text: string;
+  image?: string;
+}
+
+/** The preview to show: the focused option's, when any option in the question has one (Markdown or an image). */
+function previewOf(state: AskState, question: AskQuestion): Preview | undefined {
+  if (!question.options.some((option) => option.preview?.trim() || option.image?.trim())) return undefined;
   const cursor = state.cursor[state.tab] ?? 0;
   const option = question.options[cursor];
   if (!option) return { label: OWN_ANSWER, text: "" };
-  return { label: option.label.replace(RECOMMENDED, ""), text: option.preview?.trim() ?? "" };
+  return { label: option.label.replace(RECOMMENDED, ""), text: option.preview?.trim() ?? "", ...(option.image?.trim() ? { image: option.image.trim() } : {}) };
 }
 
-function previewBox(preview: { label: string; text: string }, width: number, rows: number, theme?: LobbyTheme): string[] {
+/** The image part of a preview: drawn when the box has room, else named. It never takes the box's last rows from the text entirely. */
+function imageBlock(preview: Preview, inner: number, innerRows: number, textRows: number, frame: AskFrame, theme?: LobbyTheme): string[] {
+  if (!preview.image) return [];
+  const loaded = frame.images?.get(preview.image);
+  const textRoom = textRows > 0 ? Math.min(textRows + 1, Math.max(2, Math.floor(innerRows / 3))) : 0;
+  const rows = innerRows - textRoom;
+  if (!loaded) return [paint(theme, "muted", `Image: ${preview.image}`)];
+  if (rows < IMAGE_MIN_ROWS) return [paint(theme, "muted", `Image: ${basename(preview.image)} (the terminal is too small to draw it)`)];
+  return imageLines(loaded, inner, rows, theme);
+}
+
+/** The preview in a box at most `rows` tall; an image keeps within `fits` rows, which the terminal surely shows. */
+function previewBox(preview: Preview, width: number, rows: number, theme: LobbyTheme | undefined, frame: AskFrame, fits = rows): string[] {
   const inner = Math.max(1, width - 4);
-  const body = preview.text ? markdownLines(preview.text, inner, theme) : [paint(theme, "dim", "No preview for this one.")];
+  const text = preview.text ? markdownLines(preview.text, inner, theme) : [];
+  const image = imageBlock(preview, inner, Math.min(rows, fits) - 2, text.length, frame, theme);
+  const joined = [...image, ...(image.length > 0 && text.length > 0 ? [""] : []), ...text];
+  const body = joined.length > 0 ? joined : [paint(theme, "dim", "No preview for this one.")];
   const height = Math.max(3, Math.min(rows, body.length + 2));
   const more = body.length > height - 2 ? `${body.length - (height - 2)} more lines` : "";
   return box(width, height, body, { title: `Preview · ${preview.label}`, ...(more ? { right: more } : {}), theme });
@@ -99,8 +124,14 @@ function hints(state: AskState, question: AskQuestion, width: number, theme?: Lo
   return wrap(paint(theme, "dim", parts.join(" · ")), width);
 }
 
+/** Around the questions: who is asking (an agent the oracle relays for), and the option images, read beforehand. */
+export interface AskFrame {
+  from?: string;
+  images?: ReadonlyMap<string, ImagePreview>;
+}
+
 /** The whole questionnaire in a box, `width` wide and at most `height` rows. */
-export function renderAsk(state: AskState, width: number, height: number, theme?: LobbyTheme): string[] {
+export function renderAsk(state: AskState, width: number, height: number, theme?: LobbyTheme, frame: AskFrame = {}): string[] {
   const question = state.questions[state.tab];
   if (!question || width < 20 || height < 6) return [];
   const inner = width - 4;
@@ -112,16 +143,17 @@ export function renderAsk(state: AskState, width: number, height: number, theme?
     const left = Math.floor(inner * 0.42);
     const options = optionLines(state, question, left, theme);
     const rows = Math.max(PREVIEW_MIN, Math.min(PREVIEW_MAX, height - 2 - head.length - foot.length));
-    const side = previewBox(preview, inner - left - 2, Math.max(rows, Math.min(options.length, PREVIEW_MAX)), theme);
+    const side = previewBox(preview, inner - left - 2, Math.max(rows, Math.min(options.length, PREVIEW_MAX)), theme, frame, rows);
     body = beside([fill(options, Math.max(options.length, side.length), left), side], "  ");
   } else {
     const options = optionLines(state, question, inner, theme);
     const room = height - 2 - head.length - foot.length - options.length - 1;
-    body = preview && room >= 3 ? [...options, "", ...previewBox(preview, inner, Math.min(PREVIEW_MAX, room), theme)] : options;
+    body = preview && room >= 3 ? [...options, "", ...previewBox(preview, inner, Math.min(PREVIEW_MAX, room), theme, frame)] : options;
   }
   const content = [...head, ...body, ...foot];
   // Too tall for the terminal: the question and hints stay, the middle is cut.
   const fitted = content.length > height - 2 ? [...content.slice(0, height - 2 - foot.length), ...foot] : content;
-  const title = state.questions.length > 1 ? `Question ${state.tab + 1} of ${state.questions.length}` : "Question";
+  const count = state.questions.length > 1 ? `Question ${state.tab + 1} of ${state.questions.length}` : "Question";
+  const title = frame.from ? `${frame.from} asks · ${count}` : count;
   return box(width, fitted.length + 2, fitted.map((line) => fit(line, inner)), { title, focused: true, theme });
 }
