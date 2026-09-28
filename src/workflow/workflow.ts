@@ -342,7 +342,7 @@ async function handleScout(task: Task, params: OrchestrateParams, deps: Workflow
 const RESEARCH_STATES: TaskState[] = TASK_STATES.filter((state) => !TERMINAL_STATES.includes(state));
 
 const RESEARCH_DEGRADED =
-  "The researcher is spawned with read-only repository tools plus web_search, fetch_content, source_check and get_search_content. If pi-web-access is not installed, the pi CLI silently ignores those tool names, so research degrades to repository-only and cannot cite the internet.";
+  "The researcher is spawned with read-only repository tools plus bot-lobby's web tools (web_search, fetch_content, source_check, get_search_content). A run without sources usually means the web could not be reached or the search was refused: its tool errors say which (DuckDuckGo, the default, throttles automated searches; BRAVE_API_KEY, TAVILY_API_KEY, EXA_API_KEY or SEARXNG_URL gives a dependable search).";
 
 function bulletSection(label: string, items: string[], limit: number): string {
   if (items.length === 0) return "";

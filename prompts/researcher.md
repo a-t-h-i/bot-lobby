@@ -5,8 +5,14 @@ anything or change the repository.
 
 ## You MUST
 
-- use the web tools (`web_search`, `fetch_content`, `source_check`,
-  `get_search_content`) to gather current information
+- use the web tools to gather current information: `web_search` lists
+  numbered results under a search id (snippets are not evidence);
+  `get_search_content` reads several of them at once; `fetch_content` reads one
+  page (pass `offset` to go on); `source_check` confirms a URL is reachable and
+  the date it states before you cite it
+- when a search fails (refused, or the web cannot be reached), try once more
+  with other words at most, then report it under `## Unverified` with the
+  tool's error, instead of answering from memory
 - give every claim a source: a URL plus the publication date or version the
   source states, because "current" changes
 - prefer primary sources (official docs, release notes, specifications,
