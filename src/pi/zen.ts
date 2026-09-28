@@ -7,7 +7,7 @@
  * arrive on its run. Everything here is pure: expression frames and the spinner
  * tick arrive from the caller, and every timestamp arrives as `now`.
  */
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { clip, textWidth } from "../width.ts";
 import type { AgentRun } from "../schemas/findings.ts";
 import { TERMINAL_STATES, type Task, type TaskState } from "../schemas/task.ts";
 import { truncate } from "../text.ts";
@@ -399,9 +399,9 @@ const BANNER_MIN_WIDTH = 60;
 /** Boxed title for wide terminals, one-line title otherwise; never wider than `width`. */
 export function bannerLines(width: number): string[] {
   if (width < 1) return [];
-  if (width < BANNER_MIN_WIDTH) return [truncateToWidth(BANNER_NARROW, width, "")];
+  if (width < BANNER_MIN_WIDTH) return [clip(BANNER_NARROW, width, "")];
   const inner = BANNER_WIDTH - 2;
-  const titleWidth = visibleWidth(BANNER_TITLE);
+  const titleWidth = textWidth(BANNER_TITLE);
   const left = Math.floor((inner - titleWidth) / 2);
   const border = "─".repeat(inner);
   return [`┌${border}┐`, `│${" ".repeat(left)}${BANNER_TITLE}${" ".repeat(inner - titleWidth - left)}│`, `└${border}┘`];
@@ -476,7 +476,7 @@ function compactFrame(slot: SlotView, expressions: ExpressionFrames): string {
 }
 
 function compactRow(content: string, color: PanelColor, theme?: PanelTheme): string {
-  const body = truncateToWidth(content, COMPACT_INNER, "", true);
+  const body = clip(content, COMPACT_INNER, "", true);
   return `|${theme ? theme.fg(color, body) : body}|`;
 }
 
@@ -524,7 +524,7 @@ function compactPanel(
   const fixed = [...bannerLines(width), headerLine(task, now, quiet), ...strip];
   const tail = tailLines(task, runs, now, tick, steps, opts.theme);
   const room = Math.max(0, MAX_PANEL_LINES - fixed.length - tail.length);
-  return [...fixed, ...tail, ...checklistLines(steps, room)].map((line) => truncateToWidth(line, width));
+  return [...fixed, ...tail, ...checklistLines(steps, room)].map((line) => clip(line, width));
 }
 
 /* -------------------------------------------------------------------------
@@ -646,7 +646,7 @@ export function panelLines(
   // The still scene has no tower or agent strip to fit, so any height keeps the large tier's status box.
   if (width >= LARGE_MIN_WIDTH && (budget >= MIN_LARGE_LINES || opts.still)) {
     const scene = largeLines(sceneInput(task, runs, now, quiet, tick, steps, opts), width, budget, opts.theme, opts.still);
-    return scene.map((line) => truncateToWidth(line, width));
+    return scene.map((line) => clip(line, width));
   }
   return compactPanel(task, runs, now, quiet, tick, steps, opts, width);
 }
