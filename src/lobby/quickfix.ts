@@ -54,6 +54,19 @@ export interface QuickFixJob {
   routedFrom?: string;
   /** Files it changed with `edit`/`write`, as shown (relative to the project); the change ledger lets a running task's QA gate tell them from its own. */
   files?: string[];
+  /** Runs on this profile instead of the quick-fix settings: a quick feature the oracle routed here gets its builder's model, thinking and time. */
+  profile?: QuickFixProfile;
+  /** The oracle sent it here from a request typed to the lobby. */
+  routed?: boolean;
+}
+
+/** How a job enters the queue besides its prompt. */
+export interface SubmitOptions {
+  /** Skip the classifier's "looks like a task" hold (the oracle already routed it here). */
+  force?: boolean;
+  profile?: QuickFixProfile;
+  /** Shown with the job: where it came from. */
+  note?: string;
 }
 
 export interface QuickFixProfile {
@@ -118,10 +131,21 @@ export class QuickFixQueue {
   }
 
   /** Queue a quick fix; it starts at once when nothing else is running. */
-  submit(prompt: string, now = Date.now()): QuickFixJob {
+  submit(prompt: string, now = Date.now(), options: SubmitOptions = {}): QuickFixJob {
     const text = prompt.trim();
     if (!text) throw new Error("a quick fix needs a prompt");
-    const job: QuickFixJob = { id: `QF-${++this.counter}`, prompt: text, status: "queued", createdAt: now, steps: [], tools: 0, turns: 0 };
+    const job: QuickFixJob = {
+      id: `QF-${++this.counter}`,
+      prompt: text,
+      status: "queued",
+      createdAt: now,
+      steps: [],
+      tools: 0,
+      turns: 0,
+      ...(options.force ? { force: true, routed: true } : {}),
+      ...(options.profile ? { profile: options.profile } : {}),
+      ...(options.note ? { note: options.note } : {}),
+    };
     this.jobs = [...this.jobs, job].filter((entry, index, all) => isActive(entry) || index >= all.length - MAX_JOBS);
     this.changed();
     this.pump();
@@ -203,7 +227,7 @@ export class QuickFixQueue {
   }
 
   private async run(job: QuickFixJob): Promise<void> {
-    const profile = this.deps.profile();
+    const profile = job.profile ?? this.deps.profile();
     const controller = new AbortController();
     this.controllers.set(job.id, controller);
     job.status = "running";
@@ -287,6 +311,8 @@ export class QuickFixQueue {
     try {
       const sized = await quickFixSize(jev, job.prompt, signal);
       if (!sized || sized.size !== "large" || sized.confidence < jev.config.thresholds.quickFixLargeAt) return undefined;
+      // Large but still one engineer's work (a rich page in one file): it runs.
+      if ((sized.solo ?? 0) >= jev.config.thresholds.quickFixAt) return undefined;
       return `looks like a task (large, ${sized.confidence.toFixed(2)})`;
     } catch {
       return undefined;
