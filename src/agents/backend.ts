@@ -4,7 +4,7 @@ export const backendSpec: DomainSpec = {
   domain: "backend",
   promptFile: "backend.md",
   scoutFocus:
-    "API, business logic, data models, persistence, authentication/authorization, integrations, and backend reliability",
+    "server-side code: API, business logic, data models, persistence, authentication/authorization, integrations, and backend reliability",
   boundary:
-    "Stay inside backend code. Do not modify frontend implementation; report frontend requirements to the Master.",
+    "Stay inside server-side code. Do not modify browser code (pages, components, client-side logic or graphics); report frontend requirements to the Master.",
 };
