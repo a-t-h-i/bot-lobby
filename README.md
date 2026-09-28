@@ -42,6 +42,7 @@ extra instructions.
 | `/bot-lobby <request>` | Start a task (`--task` if it begins with a command word, `--auto` to run unattended) |
 | `/bot-lobby status \| tasks \| runs [id]` | Current task, all tasks, recent agent runs |
 | `/bot-lobby approve \| amend <text> \| decline` | Answer the proposal |
+| `/bot-lobby accept [id]` | Accept a task's work as it is, without a QA pass; the oracle then completes it |
 | `/bot-lobby pause \| resume \| cancel [id]` | Control a task |
 | `/bot-lobby auto [on\|off]` | Auto mode: the oracle finishes the task without asking (`alt+g`) |
 | `/bot-lobby claim <id>` | Take over a task another session owned |
@@ -63,7 +64,12 @@ request → clarify → scout → propose → approve → plan → implement →
   parallel; they share files through a **file desk** (claim a file, queue for
   a busy one, hand it over with a note).
 - The **QA gate** runs once at the end. A failed gate sends fixes back to the
-  owning domain, a bounded number of times. It knows who changed each file:
+  owning domain, a bounded number of times. Only critical or major findings
+  fail it, and a re-review checks what the last round asked for instead of
+  starting over. It reviews everything since the commit the task started
+  from, so committed fixes still count. At the round limit you decide: accept
+  the work as it is, one more round, or leave it blocked (`/bot-lobby accept`
+  works any time). It knows who changed each file:
   this task's workers (**planned**), a **quick fix** you ran, work that was
   there before the task (**pre-existing**), another task, or no agent at all
   (**unattributed**, which the Master asks you about). Quick fixes are never
@@ -203,7 +209,7 @@ the result.
 | Scouts and the QA gate can't edit code | Scouts get read-only tools; the QA gate adds only `bash` for tests |
 | New dependencies and architecture changes need approval | Parsed from worker reports; the domain is blocked until resolved |
 | Only the Master writes knowledge | Agents can only propose it |
-| "Done" is earned | Needs a plan, a passing QA gate that ran checks, and no open blockers |
+| "Done" is earned | Needs a plan, a passing QA gate that ran checks (or your explicit acceptance), and no open blockers |
 | Parallel workers don't clobber files | Edits need a file-desk claim |
 | A crash doesn't corrupt a task | State is on disk; tasks resume from their state |
 

@@ -75,6 +75,24 @@ If implementation changes are required, report them to the Master.
 - Always pass a bash `timeout` to test and build commands; never start watch
   mode or servers.
 
+## Verdict
+
+- **PASS** when the acceptance criteria are met and your checks pass. Minor
+  and info findings never block: list them, then PASS. (The engine passes a
+  CHANGES_REQUIRED whose findings are all tagged minor or info.)
+- **CHANGES_REQUIRED** only for a critical or major finding: broken
+  behaviour, a failing check, an unmet acceptance criterion, a security
+  problem. Tag every finding with its severity.
+- **BLOCKED** only when you cannot review at all (it does not build, the
+  checks cannot run).
+- **A re-review verifies; it does not start over.** When your context lists
+  what the previous round asked for, check each item first and say which are
+  addressed. Do not raise the bar between rounds: a new blocking finding must
+  be critical or major.
+- Work committed during the task counts. The diff you are given runs from the
+  commit the task started at, so committed fixes are in it; use `git log` and
+  `git diff` against that commit to look further.
+
 ## Pushback
 
 If the approved requirement or a requested change is itself unsound, add a

@@ -17,7 +17,7 @@ import { transition } from "../state/task-state.ts";
 import { AGENT_DIR_NAMES, KNOWLEDGE_FILES, knowledgeDir, type KnowledgeAgent } from "../knowledge/paths.ts";
 import { readFirstExisting } from "../knowledge/store.ts";
 import { overThreshold } from "../knowledge/compactor.ts";
-import { applyApprovalChoice, describeTask, describeOversizedKnowledge, type ApprovalChoice } from "../workflow/workflow.ts";
+import { applyApprovalChoice, describeTask, describeOversizedKnowledge, lastQaAsks, waiveQa, type ApprovalChoice } from "../workflow/workflow.ts";
 import { applyStatus, registerRevealShortcut, setMinimized } from "./ui.ts";
 import { classifierSummary, openSettings } from "./settings-ui.ts";
 import { keyStatus } from "../classifier/instance.ts";
@@ -37,6 +37,7 @@ const HELP = [
   "/bot-lobby pause|resume     Pause or resume the active task",
   "/bot-lobby cancel [taskId]  Abandon a task",
   "/bot-lobby approve|amend <text>|decline   Answer the current proposal",
+  "/bot-lobby accept [taskId]  Accept a task's work as it is, without a QA pass; the oracle then completes it",
   "/bot-lobby knowledge        Show persistent knowledge files",
   "/bot-lobby runs [taskId]    Recent subagent runs: time, turns, tokens, cost, model",
   "/bot-lobby settings         Edit per-agent model/thinking/instructions",
@@ -50,7 +51,7 @@ const HELP = [
 ].join("\n");
 
 /** Subcommands only win when no free-form text follows (so tasks still start). */
-const SUBCOMMANDS = new Set(["lobby", "help", "status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "knowledge", "config", "settings", "minimize", "restore", "claim", "auto", "start-plan", "switch"]);
+const SUBCOMMANDS = new Set(["lobby", "help", "status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "accept", "knowledge", "config", "settings", "minimize", "restore", "claim", "auto", "start-plan", "switch"]);
 
 function isTaskId(value: string | undefined): boolean {
   return Boolean(value && /^TASK-/.test(value));
@@ -175,6 +176,30 @@ function answerProposal(
   }
 }
 
+/**
+ * `/bot-lobby accept [taskId]`: the user accepts a task's work as it stands,
+ * without a QA pass (QA keeps asking for more, and the user has seen enough).
+ * The gate is waived and blockers cleared; the oracle is asked to complete it.
+ */
+function acceptWork(pi: ExtensionAPI, ctx: ExtensionCommandContext, configDir: string, taskId?: string): void {
+  const root = detectProjectRoot(ctx.cwd, configDir);
+  const sessionId = ctx.sessionManager.getSessionId();
+  const task = selectTask(root, configDir, taskId, sessionId);
+  if (!task || TERMINAL_STATES.includes(task.state)) return ctx.ui.notify("bot-lobby: no active task to accept.", "warning");
+  if (task.ownerSessionId && task.ownerSessionId !== sessionId) {
+    return ctx.ui.notify(`${task.id} is owned by another pi session; accept it there, or /bot-lobby claim ${task.id} first.`, "warning");
+  }
+  if (!["implementing", "reviewing", "blocked"].includes(task.state)) {
+    return ctx.ui.notify(`bot-lobby: ${task.id} is still ${task.state}; there is no work to accept yet.`, "warning");
+  }
+  if (task.qaVerdict !== "pass" && !task.qaWaiver) waiveQa(task, lastQaAsks(task), "with /bot-lobby accept");
+  saveTask(root, configDir, task);
+  applyStatus(ctx, root, configDir);
+  ctx.ui.notify(`bot-lobby: ${task.id} accepted as it is; the oracle will complete it.`, "info");
+  const message = `The user accepted ${task.id}'s work as it is (the QA gate is waived). Call orchestrate action=complete now with a short summary that names anything QA still asked for.`;
+  pi.sendUserMessage(message, ctx.isIdle() ? undefined : { deliverAs: "followUp" });
+}
+
 function showKnowledge(ctx: ExtensionCommandContext, configDir: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
   const cfg = loadConfig();
@@ -269,6 +294,8 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
           return answerProposal(ctx, configDir, "amend", restText);
         case "decline":
           return answerProposal(ctx, configDir, "decline");
+        case "accept":
+          return acceptWork(pi, ctx, configDir, rest[0]);
         case "knowledge":
           return showKnowledge(ctx, configDir);
         case "settings":

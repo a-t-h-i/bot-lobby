@@ -153,7 +153,8 @@ test("the QA gate and the Master are told which changes are planned, a quick fix
   assert.deepEqual(loadTask(dir, ".pi", "TASK-1")!.baseline?.files.sort(), ["src/pre.ts", "src/q.ts"], "the tree as the first worker found it, without bot-lobby's own folder");
   assert.match(implemented.message, /Changed files: 1 planned · 1 by quick fix \(QF-1\) · 2 pre-existing\./);
   assert.ok(readChanges(dir, ".pi").some((entry) => entry.source === "worker" && entry.taskId === "TASK-1" && entry.files.includes(join(dir, "src/a.ts"))), "the worker's edit is on record");
-  // Something no agent recorded appears.
+  // The worker's change is committed before QA (the fixes in a long task often are); something no agent recorded appears.
+  execFileSync("git", ["commit", "-q", "-m", "add a", "--", "src/a.ts"], { cwd: dir });
   writeFileSync(join(dir, "src/stray.ts"), "export {};\n");
   const qa = await act({ action: "qa" });
   assert.equal(qa.ok, true, qa.message);
@@ -161,7 +162,9 @@ test("the QA gate and the Master are told which changes are planned, a quick fix
   assert.match(reviewer, /## Change provenance/, "the reviewer's role says how to judge each source");
   assert.match(reviewer, /- src\/stray\.ts — unattributed: no bot-lobby agent recorded editing it/);
   assert.match(reviewer, /- src\/q\.ts — quick fix QF-1 at \d\d:\d\d, asked by the user: "rename q"; pre-existing/);
-  assert.match(reviewer, /- src\/a\.ts — planned: DEV — Add a to src\/a\.ts/);
+  assert.match(reviewer, /- src\/a\.ts — planned: DEV — Add a to src\/a\.ts/, "committed, it is still this task's work");
+  assert.match(reviewer, /Diff \(since [0-9a-f]{7}, where the task started[^\n]*\n[\s\S]*\+export const a = 1;/, "and its diff is still in front of the reviewer");
+  assert.match(reviewer, /New files \(untracked\):\n--- src\/stray\.ts/);
   assert.match(reviewer, /- src\/pre\.ts — pre-existing/);
   assert.doesNotMatch(reviewer, /\.pi\/bot-lobby/, "bot-lobby's own records are not changes");
   assert.match(qa.message, /Changed files: 1 planned · 1 by quick fix \(QF-1\) · 2 pre-existing · 1 unattributed \(src\/stray\.ts\)\. The user asked for the quick fixes directly: never revert them or send them back as fixes\. Pre-existing changes and other tasks' are not this task's to review or revert\. No agent recorded the unattributed edits: ask the user before counting them in or reverting them\./);
@@ -183,4 +186,35 @@ test("a task already under way before provenance existed is not misread", async 
   const qa = await runWorkflowAction({ action: "qa", taskId: "TASK-1" } as OrchestrateParams, deps);
   assert.equal(qa.ok, true, qa.message);
   assert.doesNotMatch(qa.message, /Changed files/, "without a baseline the gate reviews as it always did");
+});
+
+test("a task from before start commits were recorded is reviewed from the last commit before it began", async () => {
+  const dir = tempDir();
+  const git = (env: Record<string, string>, ...args: string[]) => execFileSync("git", args, { cwd: dir, stdio: "ignore", env: { ...process.env, ...env } });
+  git({}, "init", "-q");
+  git({}, "config", "user.email", "t@example.com");
+  git({}, "config", "user.name", "t");
+  writeFileSync(join(dir, "a.ts"), "export {};\n");
+  git({}, "add", ".");
+  const old = { GIT_AUTHOR_DATE: "2026-01-01T00:00:00Z", GIT_COMMITTER_DATE: "2026-01-01T00:00:00Z" };
+  git(old, "commit", "-q", "-m", "before the task");
+  const base = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
+  writeFileSync(join(dir, "a.ts"), "export const fixed = 1;\n");
+  git({ GIT_AUTHOR_DATE: "2026-03-01T00:00:00Z", GIT_COMMITTER_DATE: "2026-03-01T00:00:00Z" }, "commit", "-q", "-am", "a QA fix, committed");
+  const prompts: string[] = [];
+  const runProcess: ProcessRunner = async (args) => {
+    prompts.push(readFileSync(args[args.indexOf("--append-system-prompt") + 1]!, "utf8"));
+    return { exitCode: 0, stdout: reply("## Verdict\nPASS\n\n## Verification\n- `npm test` — passing"), stderr: "", killed: false, timedOut: false };
+  };
+  const deps: WorkflowDeps = { root: dir, configDir: ".pi", cwd: dir, config: DEFAULT_CONFIG, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess };
+  ensureProjectStructure(dir, ".pi");
+  const task = createTask("TASK-1", "Fix a", "2026-02-01T00:00:00.000Z");
+  createTaskDir(dir, ".pi", task);
+  for (const state of [...FLOW, "implementing", "reviewing"] as TaskState[]) transition(task, state);
+  task.domains = ["backend"];
+  task.plan = PLAN;
+  saveTask(dir, ".pi", task);
+  const qa = await runWorkflowAction({ action: "qa", taskId: "TASK-1" } as OrchestrateParams, deps);
+  assert.equal(qa.ok, true, qa.message);
+  assert.match(prompts[0]!, new RegExp(`Diff \\(since ${base.slice(0, 7)}, where the task started[^\\n]*\\n[\\s\\S]*\\+export const fixed = 1;`));
 });

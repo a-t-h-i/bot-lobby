@@ -27,7 +27,7 @@ import { mapConcurrent } from "../execution/agent-runner.ts";
 import { parseWorkerResult } from "../roles/worker.ts";
 import { autoNote, DESK_TOOLS, DeskSession } from "../desk/session.ts";
 import type { Handover } from "../desk/desk.ts";
-import { changedFiles, readRepositoryDiff } from "../execution/git.ts";
+import { changedFiles, commitBefore, headCommit, readRepositoryDiff } from "../execution/git.ts";
 import { appendChange, explainChanges, provenanceLines, provenanceSummary, readChanges, type FileProvenance } from "../state/changes.ts";
 import {
   loadScoutResults,
@@ -43,7 +43,7 @@ import {
 import { researchResultPath, runResearch, type ResearchOutcome, type ResearchRequest } from "../master/research.ts";
 import { assessReconnaissance, completionBlockers, decideReviewLoop, recordDecision } from "../master/decisions.ts";
 import { detectSharedFiles, summarizeOutcomes } from "../master/synthesis.ts";
-import { truncate } from "../text.ts";
+import { tail, truncate } from "../text.ts";
 import { isAutoMode } from "../state/auto.ts";
 import { assertNoPendingApprovals, pendingApprovals, requestApproval, resolveApproval } from "./approvals.ts";
 import { pingApproval } from "../pi/notify.ts";
@@ -594,11 +594,37 @@ function updateScratchpad(deps: WorkflowDeps, task: Task, outcome: WorkerOutcome
   writeScratchpad(dir, domain, [existing, entry].filter(Boolean).join("\n\n"), deps.config.knowledge);
 }
 
-function workerTaskText(task: Task): string {
+/** Plan sections a reader must never lose to a cut: what the work is for, and how it is judged. */
+const KEEP_PLAN_SECTIONS = /objective|goal|acceptance|criteria|testing|tests?\b/i;
+
+/**
+ * The plan within `budget` characters: whole when it fits; otherwise the
+ * objective, acceptance criteria and testing sections whole (a head cut used
+ * to drop them, as they come last), then the others in order while they fit,
+ * naming any left out.
+ */
+export function planWithin(plan: string, budget: number): string {
+  if (plan.length <= budget) return plan;
+  const sections = plan.split(/\n(?=#{1,4}\s)/);
+  const keep = sections.map((section) => KEEP_PLAN_SECTIONS.test(section.split("\n")[0] ?? ""));
+  let used = sections.reduce((total, section, index) => total + (keep[index] ? section.length + 1 : 0), 0);
+  const chosen = sections.map((section, index) => {
+    if (keep[index]) return true;
+    if (used + section.length + 1 > budget) return false;
+    used += section.length + 1;
+    return true;
+  });
+  const left = sections.filter((_, index) => !chosen[index]).map((section) => (section.split("\n")[0] ?? "").replace(/^#+\s*/, "").trim() || "preamble");
+  const text = sections.filter((_, index) => chosen[index]).join("\n");
+  const note = left.length > 0 ? `\n\n[Left out for length: ${left.join(", ")}. The whole plan is plan.md in the task folder.]` : "";
+  return `${truncate(text, budget)}${note}`;
+}
+
+function workerTaskText(task: Task, planBudget = 6000): string {
   return [
     `Requirements: ${taskRequest(task)}`,
     task.proposal ? `Approved objective: ${task.proposal}` : "",
-    task.plan ? `Approved plan:\n${truncate(task.plan, 6000)}` : "",
+    task.plan ? `Approved plan:\n${planWithin(task.plan, planBudget)}` : "",
     task.amendments.length > 0 ? `User amendments:\n${task.amendments.map((entry) => `- ${entry}`).join("\n")}` : "",
   ]
     .filter((line) => line.length > 0)
@@ -666,13 +692,29 @@ function parseAssignments(params: OrchestrateParams): Assignment[] {
  */
 async function takeBaseline(task: Task, deps: WorkflowDeps): Promise<void> {
   if (task.baseline || (task.workerRuns?.length ?? 0) > 0) return;
-  const tree = await treeChanges(deps);
-  task.baseline = { at: new Date().toISOString(), files: tree?.files ?? [] };
+  const [tree, head] = await Promise.all([treeChanges(deps), headCommit(deps.cwd)]);
+  task.baseline = { at: new Date().toISOString(), files: tree?.files ?? [], ...(head ? { head } : {}) };
+}
+
+/**
+ * The commit the task's work is measured from: HEAD when its first worker
+ * started, or, for a task begun before that was recorded, the newest commit
+ * before the task was created. Work committed since then is still the task's
+ * to review; a diff against HEAD alone showed it as nothing.
+ */
+async function reviewBase(task: Task, deps: WorkflowDeps): Promise<string | undefined> {
+  return task.baseline?.head ?? (await commitBefore(deps.cwd, task.createdAt));
+}
+
+/** bot-lobby's own records, relative to the working folder, when they sit inside it. */
+function ownRecords(deps: WorkflowDeps): string[] {
+  const own = relative(deps.cwd, dataRoot(deps.root, deps.configDir));
+  return own && !own.startsWith("..") && !isAbsolute(own) ? [own.split("\\").join("/")] : [];
 }
 
 /** The working tree's changed files, without bot-lobby's own records (its data folder may sit untracked in the project). */
-async function treeChanges(deps: WorkflowDeps): Promise<{ top: string; files: string[] } | undefined> {
-  const tree = await changedFiles(deps.cwd);
+async function treeChanges(deps: WorkflowDeps, base?: string): Promise<{ top: string; files: string[] } | undefined> {
+  const tree = await changedFiles(deps.cwd, base);
   if (!tree) return undefined;
   let data = dataRoot(deps.root, deps.configDir);
   try {
@@ -687,9 +729,9 @@ async function treeChanges(deps: WorkflowDeps): Promise<{ top: string; files: st
 }
 
 /** Every changed file of the working tree, explained for this task; undefined without a baseline or git. */
-async function changeProvenance(deps: WorkflowDeps, task: Task): Promise<FileProvenance[] | undefined> {
+async function changeProvenance(deps: WorkflowDeps, task: Task, base?: string): Promise<FileProvenance[] | undefined> {
   if (!task.baseline) return undefined;
-  const tree = await treeChanges(deps);
+  const tree = await treeChanges(deps, base);
   if (!tree) return undefined;
   return explainChanges(task, tree.files, tree.top, readChanges(deps.root, deps.configDir, task.createdAt));
 }
@@ -743,7 +785,7 @@ async function handleImplement(task: Task, params: OrchestrateParams, deps: Work
     const outcome = await runWorker(workerRequest(deps, task, domain, instruction), deps.runProcess ?? spawnPiProcess);
     report = absorbWorkerOutcome(task, deps, outcome);
   } else report = await runParallelWorkers(task, deps, assignments);
-  const note = provenanceNote(await changeProvenance(deps, task));
+  const note = provenanceNote(await changeProvenance(deps, task, task.baseline?.head));
   return note ? `${report}\n\n${note}` : report;
 }
 
@@ -830,11 +872,32 @@ function recordReview(task: Task, domain: Domain, result: ReviewResult): void {
     createdAt: new Date().toISOString(),
   });
 }
-function allScratchpads(deps: WorkflowDeps, task: Task): string {
+/** Each domain's scratchpad, its newest entries kept when it is long (the latest fix round matters most). */
+function allScratchpads(deps: WorkflowDeps, task: Task, perDomain = 1500): string {
   return (["designer", "backend", "qa"] as Domain[])
-    .map((domain) => scratchpadSummary(deps, task, domain).trim())
+    .map((domain) => tail(scratchpadSummary(deps, task, domain).trim(), perDomain))
     .filter((text) => text.length > 0)
     .join("\n\n---\n\n");
+}
+
+/**
+ * What the last QA round asked for, so the next one verifies it instead of
+ * reviewing everything from scratch (and finding new things each time).
+ */
+function previousRound(task: Task): string {
+  const rounds = task.reviewRecords.filter((record) => record.domain === "qa");
+  const last = rounds.at(-1);
+  if (!last || last.verdict === "pass") return "";
+  const asks = [
+    ...last.findings.filter((finding) => finding.severity === "critical" || finding.severity === "major").map((finding) => `[${finding.severity}] ${finding.text}`),
+    ...last.requiredChanges,
+  ];
+  if (asks.length === 0) return "";
+  return [
+    `This is QA round ${rounds.length + 1}. Round ${rounds.length} (${last.verdict.toUpperCase()}) asked for:`,
+    ...asks.slice(0, 20).map((ask) => `- ${truncate(ask, 300)}`),
+    "Verify each of these first and say which are addressed. Do not start the review over: a new blocking finding must be critical or major (a problem the fixes introduced, or an unmet acceptance criterion); anything else goes under Optional Improvements.",
+  ].join("\n");
 }
 
 const QA_INSTRUCTION = [
@@ -845,11 +908,13 @@ const QA_INSTRUCTION = [
 
 /** The QA gate looks at every domain's work, not just one worker's diff, knowing who changed each file. */
 function qaRequest(deps: WorkflowDeps, task: Task, diff: string, instruction?: string, provenance?: readonly FileProvenance[]): ReviewerRequest {
+  const rounds = previousRound(task);
   return {
     taskId: task.id,
     domain: "qa",
-    taskText: `${workerTaskText(task)}\n\nAcceptance criteria and plan:\n${truncate(task.plan ?? "", 5000)}`,
+    taskText: workerTaskText(task, 9000),
     workerSummary: allScratchpads(deps, task),
+    ...(rounds ? { previousRound: rounds } : {}),
     scoutOutcomes: loadScoutResults(taskReadDirs(deps.root, deps.configDir, task.id), [...new Set<Domain>(["qa", ...task.domains])]),
     diff,
     ...(provenance && provenance.length > 0 ? { provenance: provenanceLines(provenance) } : {}),
@@ -863,20 +928,27 @@ function qaRequest(deps: WorkflowDeps, task: Task, diff: string, instruction?: s
   };
 }
 
-function qaReport(outcome: ReviewerOutcome, decision: "accept" | "iterate" | "blocked", provenance?: readonly FileProvenance[]): string {
+/** What the loop does after a QA round: finish, fix and review again, stop, or (the user's call) accept the work as it is. */
+type LoopDecision = "accept" | "iterate" | "blocked" | "waived";
+
+function qaReport(outcome: ReviewerOutcome, decision: LoopDecision, provenance?: readonly FileProvenance[]): string {
   const { result, run, issues } = outcome;
+  const passed = result.verdict === "pass";
   return [
-    `QA gate: ${result.verdict.toUpperCase()} (run ${run.status}${run.error ? `: ${run.error}` : ""})`,
+    `QA gate: ${result.verdict.toUpperCase()} (run ${run.status}${run.error ? `: ${run.error}` : ""})${result.relaxed ? " — only minor findings, which never hold the gate" : ""}`,
     result.findings.length > 0
       ? `Findings:\n${result.findings.map((finding) => `- [${finding.severity}] ${truncate(finding.text, 300)}`).join("\n")}`
       : "",
     result.requiredChanges.length > 0
-      ? `Required changes:\n${result.requiredChanges.map((change) => `- ${truncate(change, 300)}`).join("\n")}`
+      ? `${passed ? "Follow-ups (not blocking; mention them to the user, do not start a fix round for them)" : "Required changes"}:\n${result.requiredChanges.map((change) => `- ${truncate(change, 300)}`).join("\n")}`
       : "",
     decision === "accept"
       ? "The QA gate passed. Record any distilled knowledge, then call action=complete."
-      : "The QA gate did not pass: delegate the required changes to the owning domain, then re-run action=qa.",
-    decision === "blocked" ? "The review limit is reached: mark the task blocked and tell the user." : "",
+      : decision === "waived"
+        ? "The user accepted the work as it is, without a QA pass. Call action=complete now with a short summary that names what QA still asked for."
+        : decision === "iterate"
+          ? "The QA gate did not pass: delegate the required changes to the owning domain, then re-run action=qa."
+          : "The review limit is reached and the user did not accept the work: mark the task blocked and tell the user what QA still asks for. They can accept it with /bot-lobby accept.",
     result.pushback ? pushbackLine(result.pushback, "qa") : "",
     issues.length > 0 ? `Issues: ${issues.join("; ")}` : "",
     provenanceNote(provenance),
@@ -890,14 +962,85 @@ async function handleQa(task: Task, params: OrchestrateParams, deps: WorkflowDep
   if (task.state !== "reviewing") transition(task, "reviewing");
   const iterations = (task.reviewIterations?.qa ?? 0) + 1;
   task.reviewIterations = { qa: iterations };
-  const [diff, provenance] = await Promise.all([readRepositoryDiff(deps.cwd), changeProvenance(deps, task)]);
+  const base = await reviewBase(task, deps);
+  const [diff, provenance] = await Promise.all([
+    readRepositoryDiff(deps.cwd, { ...(base ? { base } : {}), exclude: ownRecords(deps) }),
+    changeProvenance(deps, task, base),
+  ]);
   const outcome = await runReviewer(qaRequest(deps, task, diff, params.task, provenance), deps.runProcess ?? spawnPiProcess);
   task.qaVerdict = outcome.result.verdict;
   recordReview(task, "qa", outcome.result);
   recordAdvisoryPushbacks(task, [{ pushback: outcome.result.pushback, who: "qa" }]);
-  const decision = decideReviewLoop(outcome.result.verdict, iterations, deps.config.workflow.maxReviewIterations);
+  if (outcome.result.relaxed) recordDecision(task, `QA round ${iterations} passed: ${outcome.result.relaxed}.`, "qa");
+  let decision: LoopDecision = decideReviewLoop(outcome.result.verdict, iterations, reviewLimit(task, deps));
+  if (decision === "blocked") decision = await askAtReviewLimit(task, outcome.result, iterations, deps);
   if (decision === "accept") task.blockers = task.blockers.filter((blocker) => blocker.domain !== "qa");
   return qaReport(outcome, decision, provenance);
+}
+
+/** Review rounds allowed: the configured limit plus any the user granted. */
+function reviewLimit(task: Task, deps: WorkflowDeps): number {
+  return deps.config.workflow.maxReviewIterations + (task.extraReviewRounds ?? 0);
+}
+
+/** What QA still asks for, one line each: its blocking findings and required changes. */
+function openAsks(result: Pick<ReviewResult, "findings" | "requiredChanges">): string[] {
+  return [
+    ...result.findings.filter((finding) => finding.severity === "critical" || finding.severity === "major").map((finding) => `[${finding.severity}] ${finding.text}`),
+    ...result.requiredChanges,
+  ];
+}
+
+const ACCEPT_WORK = "Accept the work as it is and complete the task";
+const ONE_MORE_ROUND = "Run one more fix round";
+
+/**
+ * The review limit is reached (or QA says BLOCKED): the user decides, not the
+ * loop. They can accept the work as it is, grant one more fix round, or leave
+ * the task blocked. Nobody is asked in auto mode or without a UI: it blocks.
+ */
+async function askAtReviewLimit(task: Task, result: ReviewResult, iterations: number, deps: WorkflowDeps): Promise<LoopDecision> {
+  if (isAutoMode(deps.root, deps.configDir, task.id)) return "blocked";
+  const asks = openAsks(result);
+  const checks = result.verification.split("\n").map((line) => line.trim()).filter((line) => line.startsWith("-")).slice(0, 4);
+  const choice = await deps.choose(
+    [
+      `QA has not passed ${task.id} after ${iterations} round${iterations === 1 ? "" : "s"} (this one: ${result.verdict.toUpperCase()}).`,
+      asks.length > 0 ? `It still asks for:\n${asks.slice(0, 8).map((ask) => `- ${truncate(ask, 200)}`).join("\n")}` : "",
+      checks.length > 0 ? `Its checks:\n${checks.map((line) => truncate(line, 160)).join("\n")}` : "",
+    ].filter(Boolean).join("\n\n"),
+    [ACCEPT_WORK, ONE_MORE_ROUND, "Leave the task blocked"],
+  );
+  if (choice === ACCEPT_WORK) {
+    waiveQa(task, asks, `after ${iterations} QA round${iterations === 1 ? "" : "s"}`);
+    return "waived";
+  }
+  if (choice === ONE_MORE_ROUND) {
+    task.extraReviewRounds = (task.extraReviewRounds ?? 0) + 1;
+    recordDecision(task, `The user granted one more QA round after ${iterations}.`);
+    return "iterate";
+  }
+  return "blocked";
+}
+
+/**
+ * The user accepts the work as it stands: the QA gate is waived, blockers are
+ * cleared, and a blocked task returns to review so it can complete. Only the
+ * user's own choice (a dialog or /bot-lobby accept) ever gets here.
+ */
+export function waiveQa(task: Task, open: readonly string[], why: string): void {
+  task.qaWaiver = { at: new Date().toISOString(), open: open.map((ask) => truncate(ask, 300)) };
+  const cleared = task.blockers.map((blocker) => blocker.reason);
+  task.blockers = [];
+  if (task.state === "blocked") transition(task, "implementing");
+  if (task.state === "implementing") transition(task, "reviewing");
+  recordDecision(task, `The user accepted the work without a QA pass (${why}).${open.length > 0 ? ` QA still asked for: ${open.map((ask) => truncate(ask, 160)).join("; ")}.` : ""}${cleared.length > 0 ? ` Cleared blockers: ${cleared.join("; ")}.` : ""}`);
+}
+
+/** The last QA round's open asks, for a waiver made outside the loop. */
+export function lastQaAsks(task: Task): string[] {
+  const last = task.reviewRecords.filter((record) => record.domain === "qa").at(-1);
+  return last && last.verdict !== "pass" ? openAsks(last) : [];
 }
 
 /**
@@ -939,8 +1082,11 @@ function handleCompact(task: Task, params: OrchestrateParams, deps: WorkflowDeps
 }
 
 /** §63: record history, drop scratchpads, then mark the task completed. */
-function handleComplete(task: Task, params: OrchestrateParams, deps: WorkflowDeps): string {
-  requireState(task, ["reviewing"]);
+async function handleComplete(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
+  requireState(task, ["reviewing", "blocked"]);
+  // Without a QA pass only the user can let the task finish: they are asked, never overruled.
+  if (task.qaVerdict !== "pass" && !task.qaWaiver) await offerAcceptance(task, deps);
+  if (task.state === "blocked") throw new Error("cannot complete: the task is blocked, and the user did not accept its work as it is");
   const blockers = completionBlockers(task, pendingApprovals(task).length);
   if (blockers.length > 0) throw new Error(`cannot complete: ${blockers.join("; ")}`);
   const summary = params.text?.trim() || task.proposal || task.title;
@@ -955,6 +1101,21 @@ function handleComplete(task: Task, params: OrchestrateParams, deps: WorkflowDep
       ? `\nKnowledge files over the compaction threshold: ${oversized.map((entry) => `${entry.agent}/${entry.file} (${entry.chars})`).join(", ")}. Compact them with action=compact when convenient.`
       : "";
   return `Task ${task.id} completed. History recorded and temporary scratchpads removed.${advice}`;
+}
+
+/** Asked when the oracle completes a task QA has not passed (the user told it to finish, say). */
+async function offerAcceptance(task: Task, deps: WorkflowDeps): Promise<void> {
+  if (isAutoMode(deps.root, deps.configDir, task.id)) return;
+  const asks = lastQaAsks(task);
+  const rounds = task.reviewIterations.qa;
+  const choice = await deps.choose(
+    [
+      `Complete ${task.id} without a QA pass? ${rounds > 0 ? `QA ran ${rounds} round${rounds === 1 ? "" : "s"}; the last said ${(task.qaVerdict ?? "nothing").toUpperCase()}.` : "QA has not run."}`,
+      asks.length > 0 ? `It still asks for:\n${asks.slice(0, 8).map((ask) => `- ${truncate(ask, 200)}`).join("\n")}` : "",
+    ].filter(Boolean).join("\n\n"),
+    ["Complete it anyway", "Not yet"],
+  );
+  if (choice === "Complete it anyway") waiveQa(task, asks, "when the oracle completed it");
 }
 
 function flushDecisions(deps: WorkflowDeps, task: Task): void {

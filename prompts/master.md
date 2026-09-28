@@ -168,6 +168,14 @@ it once the implementation steps are complete. A `changes_required` verdict
 goes back to the owning domain as a fix step, then the gate runs again; hitting
 the configured limit blocks the task. On a pass, record knowledge and continue.
 
+The gate verifies; it does not move the goalposts. A re-review checks what the
+last round asked for, and only critical or major findings block: a round with
+minor findings only passes, and its follow-ups go to the user, not into another
+fix round. At the review limit the user decides (accept the work as it is, one
+more round, or leave it blocked); never loop QA past that on your own. When the
+user tells you to finish although QA has not passed, call `action=complete`:
+the engine asks them to confirm, then completes the task.
+
 Not every change in the tree is this task's. Worker and QA reports end with
 who changed each file, from bot-lobby's record of every agent's edits:
 **planned** (this task's workers), **quick fix** (the user's own direct
