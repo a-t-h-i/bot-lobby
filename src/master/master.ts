@@ -5,7 +5,7 @@ import type { Domain } from "../schemas/agent.ts";
 import type { AgentRun, ReviewResult, ScoutResult, WorkerResult } from "../schemas/findings.ts";
 import { domainSpec } from "../agents/registry.ts";
 import { runAgent, runParallel, watchdogOptions, type AgentRequest, type AgentTime } from "../execution/agent-runner.ts";
-import { spawnPiProcess, type ProcessRunner } from "../execution/pi-runner.ts";
+import { spawnPiProcess, type ProcessRunner, type RelayAsk } from "../execution/pi-runner.ts";
 import { readAgentKnowledge, writeFileEnsured } from "../knowledge/store.ts";
 import { selectKnowledge, type KnowledgeSelection } from "../knowledge/selector.ts";
 import { summarizeOutcomes } from "./synthesis.ts";
@@ -208,6 +208,19 @@ export interface WorkerRequest {
   effort?: EffortRouter;
   /** Under a task time budget: the step's time, and who decides on more when it runs out. */
   time?: AgentTime;
+  /** The worker may ask the user (the designer): its questions are relayed, and its images saved in `previews`. */
+  ask?: { onAsk: RelayAsk; previews: string };
+}
+
+/** What a worker that may ask the user is told about it. */
+function askGuidance(previews: string): string {
+  return [
+    "You can ask the user with ask_user_question: the oracle relays it, and your clock stops while they answer.",
+    "Ask when a design decision is genuinely theirs (a visual direction, a layout, a style), once, with all such questions together, before you build it; decide everything else yourself.",
+    "Show each option. Give it a `preview`: a Markdown wireframe (a fenced block drawn with box characters) or a short snippet of the component.",
+    `When you can render an option (a screenshot from the project's own tooling, a rendered mockup), save it as a PNG under ${previews} (never in the repository) and give its path as the option's \`image\`.`,
+    "Put the option you recommend first. The answers are recorded as the task's decisions: build what the user chose.",
+  ].join(" ");
 }
 
 function workerWorkflowContext(request: WorkerRequest, likely = ""): string {
@@ -224,6 +237,7 @@ function workerWorkflowContext(request: WorkerRequest, likely = ""): string {
       : "No scout findings were collected for your domain; verify the repository yourself.",
     likely,
     request.time?.note ?? "",
+    request.ask ? askGuidance(request.ask.previews) : "",
   ].filter(Boolean).join("\n\n");
 }
 
@@ -261,6 +275,7 @@ export async function runWorker(
     ...(extraTools.length > 0 ? { extraTools } : {}),
     // One allotment for the step: a routed attempt that falls short re-runs on what is left of it.
     ...(request.time ? { time: request.time } : {}),
+    ...(request.ask ? { onAsk: request.ask.onAsk } : {}),
   };
   let outcome = workerOutcome(request.domain, await runAgent(route ? { ...base, ...routedFields(route) } : base, run));
   // A routed step that fell short runs again at the configured model and thinking.

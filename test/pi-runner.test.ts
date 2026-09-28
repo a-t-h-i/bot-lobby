@@ -13,6 +13,7 @@ import {
   type ProcessOutcome,
   type ProcessRunner,
 } from "../src/execution/pi-runner.ts";
+import { RELAY_TITLE } from "../src/ask/relay.ts";
 
 
 // The suite can run inside a subagent process (BOT_LOBBY_SUBAGENT=1), where
@@ -534,5 +535,69 @@ test("rpc: while the user decides, neither the deadline nor the stall watchdog s
     });
     assert.equal(result.status, "success", result.error);
     assert.equal(result.output, "## Completed\nall of it");
+  });
+});
+
+const LAYOUT_QUESTIONS = [{ question: "Which layout?", header: "Layout", options: [{ label: "Sidebar" }, { label: "Top bar" }] }];
+
+/** A fake pi whose first turn asks the user through the relay and reports the answer it gets back. */
+function askingStub(): string {
+  const prefill = JSON.stringify({ questions: LAYOUT_QUESTIONS });
+  return rpcStub(`
+    if (cmd.type === "prompt") emit({ type: "extension_ui_request", id: "q1", method: "editor", title: ${JSON.stringify(RELAY_TITLE)}, prefill: ${JSON.stringify(prefill)} });
+    if (cmd.type === "extension_ui_response" && cmd.id === "q1") {
+      const got = cmd.cancelled ? { answers: [] } : JSON.parse(cmd.value);
+      report("## chose " + (got.answers[0]?.answer ?? "nothing"));
+      settle();
+    }`);
+}
+
+test("rpc: a relayed question waits on the user with the deadline, the allotment and the watchdog held, and the answers go back", async () => {
+  await withStub(askingStub(), async (log) => {
+    const events: string[] = [];
+    let asked: unknown;
+    const result = await runPiAgent({
+      cwd: process.cwd(),
+      task: "t",
+      timeoutMs: 700,
+      stallTimeoutMs: 250,
+      toolStallTimeoutMs: 250,
+      time: { upAtMs: 500, upMessage: "time is up", graceMs: 100 },
+      onEvent: (event) => events.push(event.type === "answered" ? `answered after ${event.waitedMs >= 900 ? "900+" : event.waitedMs}ms` : event.type),
+      onAsk: async (questions) => {
+        asked = questions;
+        await new Promise((done) => setTimeout(done, 1000));
+        return { cancelled: false, answers: [{ questionIndex: 0, question: "Which layout?", kind: "option", answer: "Sidebar" }] };
+      },
+    });
+    assert.equal(result.status, "success", result.error);
+    assert.match(result.output, /## chose Sidebar/);
+    assert.deepEqual(asked, LAYOUT_QUESTIONS);
+    assert.deepEqual(events.filter((type) => type.startsWith("ask") || type.startsWith("answered") || type === "time_up"), ["asking", "answered after 900+ms"]);
+    assert.ok(!log.read().some((command) => command.type === "steer" || command.type === "abort"), "no time-up steer and no abort while the user answered");
+  });
+});
+
+test("rpc: without a relay the agent's question is cancelled; a run that ends first puts the questions away", async () => {
+  await withStub(askingStub(), async () => {
+    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 20_000 });
+    assert.match(result.output, /## chose nothing/, "no relay: cancelled like any dialog");
+  });
+  await withStub(askingStub(), async () => {
+    const controller = new AbortController();
+    let signal: AbortSignal | undefined;
+    const result = await runPiAgent({
+      cwd: process.cwd(),
+      task: "t",
+      timeoutMs: 20_000,
+      signal: controller.signal,
+      onAsk: (_questions, asked) => {
+        signal = asked;
+        setTimeout(() => controller.abort(), 50);
+        return new Promise((done) => asked.addEventListener("abort", () => done({ answers: [], cancelled: true })));
+      },
+    });
+    assert.equal(result.status, "cancelled");
+    assert.equal(signal?.aborted, true, "the questionnaire is told to close");
   });
 });
