@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { appendFileSync, mkdtempSync, readFileSync } from "node:fs";
+import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
@@ -23,6 +23,7 @@ import {
   appendMetrics,
   collectMetrics,
   metricFromRun,
+  metricsPath,
   readMetrics,
   sortGroups,
   taskStats,
@@ -181,6 +182,22 @@ test("metrics aggregate per model and thinking level, keeping cancelled runs out
   assert.deepEqual(merged.map((group) => [group.model, group.runs]), [["m1", 2]], "provider/id and a bare id are the same model");
   const split = aggregateMetrics([record(), record({ kind: "scout", agent: "DEV" })], "model-kind");
   assert.equal(split.length, 2);
+});
+
+test("the metrics log is read as it grows: only appended lines are parsed, a torn one waits, a replaced log is read afresh", () => {
+  const root = tempRoot();
+  const record = (id: string) => ({ id, kind: "worker", agent: "DEV", status: "success", startedAt: "2026-01-01T00:00:00.000Z", durationMs: 1000 });
+  appendMetrics(root, ".pi", [record("a") as never, record("b") as never]);
+  assert.deepEqual(readMetrics(root, ".pi").map((entry) => entry.id), ["a", "b"]);
+  const path = metricsPath(root, ".pi");
+  const line = JSON.stringify(record("c"));
+  appendFileSync(path, line.slice(0, 10));
+  assert.deepEqual(readMetrics(root, ".pi").map((entry) => entry.id), ["a", "b"], "half a line waits");
+  appendFileSync(path, `${line.slice(10)}\n{"not":"a record"}\n`);
+  assert.deepEqual(readMetrics(root, ".pi").map((entry) => entry.id), ["a", "b", "c"]);
+  assert.deepEqual(readMetrics(root, ".pi", 2).map((entry) => entry.id), ["b", "c"], "the newest `limit`");
+  writeFileSync(path, `${JSON.stringify(record("z"))}\n`);
+  assert.deepEqual(readMetrics(root, ".pi").map((entry) => entry.id), ["z"], "a log that shrank is read again");
 });
 
 test("metrics persist as JSON lines and merge with task run logs by id", () => {
