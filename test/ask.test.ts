@@ -159,3 +159,18 @@ test("ask_user_question: registered outside subagents, refuses malformed questio
   else process.env.BOT_LOBBY_SUBAGENT = previous;
   assert.equal(sub.length, 0, "a subagent cannot reach the user");
 });
+
+test("questionnaires asked together open one at a time", async () => {
+  let open = 0;
+  let most = 0;
+  const custom = async () => {
+    open++;
+    most = Math.max(most, open);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    open--;
+    return { answers: [], cancelled: true } as AskResult;
+  };
+  const ctx = { hasUI: true, cwd: process.cwd(), ui: { custom } } as unknown as ExtensionContext;
+  await Promise.all([askUser([auth], ctx), askUser([auth], ctx), askUser([auth], ctx)]);
+  assert.equal(most, 1);
+});
