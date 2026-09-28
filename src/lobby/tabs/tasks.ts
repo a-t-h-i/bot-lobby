@@ -268,7 +268,8 @@ export function taskDetailLines(task: Task, comments: readonly PlanComment[], se
     finished ? paint(theme, "muted", `${task.state === "abandoned" ? "dropped" : "done"} ${since(now - Date.parse(task.updatedAt))}`) : "",
   ].filter(Boolean);
   lines.push(...wrapHanging("  ", facts.join(dot), width));
-  lines.push(...wrapHanging("  ", paint(theme, "dim", [task.id, task.domains.length > 0 ? task.domains.join(", ") : ""].filter(Boolean).join(" · ")), width));
+  const track = task.track ? (task.track.path === "fast" ? `fast track (${task.track.size})` : `full workflow (${task.track.size})`) : "";
+  lines.push(...wrapHanging("  ", paint(theme, "dim", [task.id, track, task.domains.length > 0 ? task.domains.join(", ") : ""].filter(Boolean).join(" · ")), width));
   const steps = task.plan ? planChecklist(task.plan, persistedRuns(task)) : [];
   const done = steps.filter((step) => step.status === "done").length;
   if (steps.length > 0) {

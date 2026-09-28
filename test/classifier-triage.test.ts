@@ -81,14 +81,14 @@ function triage(overrides: Partial<TaskTriage> = {}): TaskTriage {
   return { size: "small", sizeConfidence: 0.85, domains: { backend: 0.9, qa: 0.3, designer: 0.05 }, research: 0.05, ambiguous: 0.1, kind: "bugfix", kindProbability: 0.8, at: "2026-01-01T00:00:00Z", ...overrides };
 }
 
-test("the suggested path: a small one-domain task takes the shortcut; ambiguity clarifies first; research is named", () => {
-  assert.match(suggestedPath(triage()), /^single-domain shortcut \(backend\): skip the scout round and the proposal ceremony/);
+test("the suggested path: a small one-domain task takes the fast track; ambiguity clarifies first; research is named", () => {
+  assert.match(suggestedPath(triage()), /^fast track \(backend\): no scouts, proposal or plan; delegate straight away/);
   assert.equal(suggestedPath(triage({ size: "medium", domains: { backend: 0.9, designer: 0.7 } })), "scout only backend, designer.");
   assert.match(suggestedPath(triage({ ambiguous: 0.7 })), /^clarify first/);
   assert.match(suggestedPath(triage({ size: "large", research: 0.8 })), /scout only backend; summon the researcher/);
   assert.equal(suggestedPath(triage({ domains: {}, size: "medium" })), "no strong signal; decide from the request.");
   const block = triageContext(triage({ likelyFiles: ["src/auth.ts"] }));
-  assert.match(block, /^Classifier triage \(hints from a fast model; you decide\):\n- Size: small \(confidence 0\.85\)\n- Domains touched: backend 0\.90 · qa 0\.30 · designer 0\.05\n- Outside research: not needed \(0\.05\)\n- Clear as written \(0\.10\)\n- Kind: bugfix \(0\.80\)\n- Likely files: src\/auth\.ts\n- Suggested path: single-domain shortcut/);
+  assert.match(block, /^Classifier triage \(hints from a fast model; you decide\):\n- Size: small \(confidence 0\.85\)\n- Domains touched: backend 0\.90 · qa 0\.30 · designer 0\.05\n- Outside research: not needed \(0\.05\)\n- Clear as written \(0\.10\)\n- Kind: bugfix \(0\.80\)\n- Likely files: src\/auth\.ts\n- Suggested path: fast track/);
   assert.equal(triageContext(undefined), "");
   assert.equal(triageLine(triage()), "triage: small (0.85) · backend · bugfix");
 });

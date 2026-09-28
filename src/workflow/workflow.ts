@@ -59,6 +59,7 @@ import type { EffortRouter } from "../classifier/effort.ts";
 import { answerClarify } from "../classifier/triage.ts";
 import { appendMetrics, metricFromRun } from "../state/metrics.ts";
 import { markCommentsAddressed, pendingComments, readPlanComments } from "../state/comments.ts";
+import { fastNext, onFastTrack, parseRoster, qaRequired, qaStillDue, qaTookPart, rosterWords, trackSummary } from "./track.ts";
 
 export const ORCHESTRATE_ACTIONS = [
   "clarify",
@@ -76,6 +77,7 @@ export const ORCHESTRATE_ACTIONS = [
   "resume",
   "decide",
   "budget",
+  "track",
   "status",
   "cancel",
 ] as const;
@@ -112,6 +114,10 @@ export interface OrchestrateParams {
   note?: string;
   reason?: string;
   text?: string;
+  /** track: the path the task takes. */
+  track?: "fast" | "full";
+  /** track: who takes part (designer, backend, qa, researcher). */
+  roster?: string[];
 }
 
 export interface WorkflowDeps {
@@ -204,6 +210,7 @@ export function describeTask(task: Task): string {
     `${task.id} — state: ${task.state}${task.paused ? " (paused)" : ""}`,
     `Title: ${task.title}`,
     `Request: ${truncate(taskRequest(task), 200)}`,
+    task.track ? trackSummary(task.track) : "",
     task.domains.length > 0 ? `Domains: ${task.domains.join(", ")}` : "",
     `Review iterations: ${Object.entries(task.reviewIterations).map(([d, n]) => `${d}=${n}`).join(", ")}`,
     pendingApprovals(task).length > 0
@@ -512,10 +519,12 @@ function handlePlan(task: Task, params: OrchestrateParams, deps: WorkflowDeps): 
   requireState(task, ["planning", ...AMEND_PLAN_STATES]);
   const plan = params.plan?.trim();
   if (!plan) throw new Error("plan requires the plan text");
-  const missing = validatePlan(plan);
+  // The fast track keeps a short plan: the full plan's required areas are the full workflow's.
+  const missing = onFastTrack(task) ? [] : validatePlan(plan);
   if (missing.length > 0) throw new Error(`plan is missing: ${missing.join(", ")}`);
   const amending = AMEND_PLAN_STATES.includes(task.state);
   task.plan = plan;
+  if (task.track?.autoPlan) delete task.track.autoPlan;
   writeFileEnsured(join(taskDirFor(deps.root, deps.configDir, task.id), "plan.md"), plan);
   const addressed = addressComments(task, deps);
   if (amending) {
@@ -570,7 +579,9 @@ function recordAdvisoryPushbacks(task: Task, entries: Array<{ pushback?: Pushbac
   }
 }
 
-function workerReport(outcome: WorkerOutcome, approvals: Approval[], pushback?: Approval): string {
+const FULL_NEXT = "Next: inspect the diff, then run action=qa once this domain's work is complete.";
+
+function workerReport(outcome: WorkerOutcome, approvals: Approval[], pushback?: Approval, next = FULL_NEXT): string {
   const { result, run, issues } = outcome;
   const objection = result.pushback;
   return [
@@ -593,7 +604,7 @@ function workerReport(outcome: WorkerOutcome, approvals: Approval[], pushback?: 
     pushback && objection
       ? `Pushback recorded (${pushback.id}): ${truncate(objection.reason, 240)}. Resolve with action=resolve_approval before re-delegating ${result.domain}.`
       : "",
-    "Next: inspect the diff, then run action=qa once this domain's work is complete.",
+    next,
   ]
     .filter((line) => line.length > 0)
     .join("\n");
@@ -835,17 +846,44 @@ function absorbWorkerOutcome(task: Task, deps: WorkflowDeps, outcome: WorkerOutc
   const pushback = recordPushback(task, outcome);
   task.blockers = [...task.blockers.filter((blocker) => blocker.domain !== domain), ...outcome.result.blockers];
   updateScratchpad(deps, task, outcome);
-  const spent = timeReport(outcome);
-  return spent ? `${workerReport(outcome, approvals, pushback)}\n${spent}` : workerReport(outcome, approvals, pushback);
+  const grown = qaJoinsGrownFastTask(task, outcome);
+  const report = workerReport(outcome, approvals, pushback, onFastTrack(task) ? fastNext(task) : FULL_NEXT);
+  return [report, grown, timeReport(outcome)].filter(Boolean).join("\n");
 }
 
+/**
+ * A fast task whose worker asks for a new dependency or an architecture
+ * change is not the small change it read as: QA joins, so it is checked
+ * before it completes. Returns the line for the oracle, or "".
+ */
+function qaJoinsGrownFastTask(task: Task, outcome: WorkerOutcome): string {
+  const track = task.track;
+  if (!track || track.path !== "fast" || track.roster.includes("qa")) return "";
+  const asks = [...outcome.result.dependencyNeeds, ...outcome.result.architectureChanges];
+  if (asks.length === 0) return "";
+  track.roster = parseRoster([...track.roster, "qa"]);
+  track.reasons = [...track.reasons, `tests: ${AGENT_LABELS[outcome.result.domain]} asked for a dependency or an architecture change`];
+  recordDecision(task, `QA joined the fast track: ${AGENT_LABELS[outcome.result.domain]} asked for ${truncate(asks.join("; "), 200)}.`);
+  return "QA now takes part: a fast-track change that needs a new dependency or an architecture change is checked before it completes.";
+}
+
+/** States a fast task starts its work from: before anything is planned, and never while the user decides on a proposal. */
+const FAST_START_STATES: readonly TaskState[] = ["created", "clarifying", "scouting", "synthesizing"];
+
 async function handleImplement(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
-  requireState(task, ["planning", "implementing", "reviewing"]);
+  const starting = onFastTrack(task) && FAST_START_STATES.includes(task.state);
+  if (!starting && FAST_START_STATES.includes(task.state)) {
+    throw new Error(`action not allowed in state "${task.state}": on the full workflow the user approves a proposal first (a small, clear change can take the fast track: action=track track=fast)`);
+  }
+  if (!starting) requireState(task, ["planning", "implementing", "reviewing"]);
   const assignments = parseAssignments(params);
   for (const { domain } of assignments) assertNoPendingApprovals(task, domain);
   for (const { domain } of assignments) if (!task.domains.includes(domain)) task.domains.push(domain);
   // Under a time budget every step is given its share before any starts; a spent budget starts none.
   const times = workerTimes(task, deps, assignments);
+  if (task.track && onFastTrack(task)) task.track.roster = parseRoster([...task.track.roster, ...assignments.map((entry) => entry.domain)]);
+  if (starting) startFast(task);
+  if (task.track?.autoPlan) addFastSteps(task, deps, assignments);
   if (task.state !== "implementing") transition(task, "implementing");
   await takeBaseline(task, deps);
   let report: string;
@@ -861,6 +899,61 @@ async function handleImplement(task: Task, params: OrchestrateParams, deps: Work
   }
   const note = provenanceNote(await changeProvenance(deps, task, task.baseline?.head));
   return note ? `${report}\n\n${note}` : report;
+}
+
+/**
+ * The fast track's start: the request is small and clear, so it goes from
+ * shaping straight to planning without a proposal round (the engine walks the
+ * same states, so every transition stays legal), and the engine keeps a short
+ * plan whose steps are the delegations themselves.
+ */
+function startFast(task: Task): void {
+  const walk: Partial<Record<TaskState, TaskState[]>> = {
+    created: ["clarifying", "awaiting_approval", "planning"],
+    clarifying: ["awaiting_approval", "planning"],
+    scouting: ["synthesizing", "awaiting_approval", "planning"],
+    synthesizing: ["awaiting_approval", "planning"],
+  };
+  for (const state of walk[task.state] ?? []) transition(task, state);
+  const track = task.track!;
+  if (!task.plan) {
+    task.plan = [
+      "## Objective",
+      oneLine(taskRequest(task), 600),
+      "",
+      "## Track",
+      `Fast track (${track.size}): ${rosterWords(track.roster)}. No scouts, proposal round or plan review; ${qaRequired(task) ? "QA takes part before completion (its tests as the last step, or the QA gate)" : "no QA gate, as nothing here needs tests"}.`,
+      "",
+      "## Steps",
+    ].join("\n");
+    track.autoPlan = true;
+  }
+  recordDecision(task, `Fast track: started without a proposal round (${track.size}; ${rosterWords(track.roster)}).`);
+}
+
+/** `Step 3: …`, `Steps 2-4 — …` at the start of a delegation. */
+const STEP_PREFIX = /^\s*(?:\*\*)?steps?\s*#?\s*(\d+)(?:\s*(?:-|\u2013|\u2014|to|and|&)\s*#?\s*(\d+))?(?:\*\*)?\s*[:.)\u2013\u2014-]?\s*/i;
+
+/**
+ * The fast track's plan grows with its delegations: a delegation that does
+ * not name a step already in the plan adds one, so the lobby's checklist
+ * follows the work without a plan document.
+ */
+function addFastSteps(task: Task, deps: WorkflowDeps, assignments: readonly Assignment[]): void {
+  const plan = task.plan ?? "";
+  const lines = plan.split("\n");
+  const heading = lines.findIndex((line) => /^##\s+steps\s*$/i.test(line));
+  let count = heading < 0 ? 0 : lines.slice(heading + 1).filter((line) => /^\d+\.\s/.test(line)).length;
+  const added: string[] = [];
+  for (const { domain, instruction } of assignments) {
+    const named = STEP_PREFIX.exec(instruction);
+    if (named && Number(named[2] ?? named[1]) <= count) continue;
+    count += 1;
+    added.push(`${count}. ${AGENT_LABELS[domain]}: ${oneLine(instruction.replace(STEP_PREFIX, ""), 160) || "its part of the request"}`);
+  }
+  if (added.length === 0) return;
+  task.plan = `${plan.trimEnd()}\n${added.join("\n")}`;
+  writeFileEnsured(join(taskDirFor(deps.root, deps.configDir, task.id), "plan.md"), task.plan);
 }
 
 /**
@@ -1159,9 +1252,10 @@ function handleCompact(task: Task, params: OrchestrateParams, deps: WorkflowDeps
 
 /** §63: record history, drop scratchpads, then mark the task completed. */
 async function handleComplete(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
-  requireState(task, ["reviewing", "blocked"]);
-  // Without a QA pass only the user can let the task finish: they are asked, never overruled.
-  if (task.qaVerdict !== "pass" && !task.qaWaiver) await offerAcceptance(task, deps);
+  // The fast track completes straight from its work; the full workflow from review.
+  requireState(task, onFastTrack(task) ? ["implementing", "reviewing", "blocked"] : ["reviewing", "blocked"]);
+  // Without QA's part (where the track asks for it) only the user can let the task finish: they are asked, never overruled.
+  if (qaRequired(task) && !qaTookPart(task) && !task.qaWaiver) await offerAcceptance(task, deps);
   if (task.state === "blocked") throw new Error("cannot complete: the task is blocked, and the user did not accept its work as it is");
   const blockers = completionBlockers(task, pendingApprovals(task).length);
   if (blockers.length > 0) throw new Error(`cannot complete: ${blockers.join("; ")}`);
@@ -1170,6 +1264,7 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
   recordCompletion(deps, task, summary);
   removeTaskScratchpads(deps.root, deps.configDir, task.id);
   task.blockers = [];
+  if (task.state === "implementing") transition(task, "reviewing");
   transition(task, "completed");
   const oversized = overThreshold(readDataRoots(deps.root, deps.configDir), deps.config.knowledge.compactionThreshold);
   const advice =
@@ -1227,6 +1322,48 @@ function handleResume(task: Task, params: OrchestrateParams): string {
   return "Task resumed. Continue with action=implement.";
 }
 
+/**
+ * `action=track`: with neither `track` nor `roster`, the task's track; with
+ * them, the oracle corrects the engine's read of the request. The fast track
+ * is taken only before the work is planned, never against the user's --full
+ * or the settings; once work is under way a track only gets stricter (the
+ * full workflow, more members, QA never dropped).
+ */
+function handleTrack(task: Task, params: OrchestrateParams, deps: WorkflowDeps): string {
+  const current = task.track;
+  if (!params.track && !params.roster) return current ? trackSummary(current) : "This task began before tracks: it takes the full workflow.";
+  const reason = oneLine(params.reason?.trim() || params.text?.trim() || "", 240);
+  if (!reason) throw new Error("track requires reason: why the task takes that path, or needs those members");
+  const path = params.track ?? current?.path ?? "full";
+  const shaping = FAST_START_STATES.includes(task.state);
+  if (path === "fast" && current?.path !== "fast") {
+    if (!deps.config.workflow.fastTrack) throw new Error("the fast track is off in settings (workflow.fastTrack): this task takes the full workflow");
+    if (current?.userChoice === "full") throw new Error("the user asked for the full workflow on this task (--full)");
+    if (!shaping) throw new Error(`a task takes the fast track before its work is planned; this one is ${task.state}`);
+  }
+  const asked = params.roster ? parseRoster(params.roster) : [...(current?.roster ?? [])];
+  // The full workflow always ends with the QA gate.
+  const roster = path === "full" ? parseRoster([...asked, "qa"]) : asked;
+  if (!shaping && current?.roster.includes("qa") && !roster.includes("qa")) throw new Error("QA stays on the roster once the work is under way");
+  const grew = current?.path === "fast" && path === "full";
+  task.track = {
+    path,
+    size: current?.size ?? "small",
+    roster,
+    reasons: [`oracle: ${reason}`, ...(current?.reasons ?? [])].slice(0, 8),
+    source: "oracle",
+    ...(current?.userChoice ? { userChoice: current.userChoice } : {}),
+    ...(current?.autoPlan ? { autoPlan: true } : {}),
+    at: new Date().toISOString(),
+  };
+  recordDecision(task, `Track: ${path === "fast" ? "fast track" : "full workflow"}; ${rosterWords(roster)} — ${reason}`);
+  if (path === "fast") {
+    return `Fast track: ${rosterWords(roster)}. Delegate straight away with action=implement (open each task with "Step N:"); no scouts, proposal or plan. ${qaRequired(task) ? "QA takes part before completion: its tests as the last step, or action=qa." : "No QA gate: nothing here needs tests."} Then action=complete.`;
+  }
+  if (!shaping) return `Full workflow from here: ${rosterWords(roster)}. The QA gate runs before the task completes${grew ? "; tell the user in one line why the task grew" : ""}.`;
+  return `Full workflow: ${rosterWords(roster)}. Scout what the request touches, then propose a short bullet list for approval.`;
+}
+
 function handleDecide(task: Task, params: OrchestrateParams): string {
   const text = params.text?.trim();
   if (!text) throw new Error("decide requires text");
@@ -1254,7 +1391,7 @@ type WorkerTime = AgentTime & { id: string };
 /** The task's budget and where it stands, when it has one. */
 function budgetFor(task: Task, deps: WorkflowDeps): { budget: TaskBudget; state: BudgetState } | undefined {
   const budget = readBudget(deps.root, deps.configDir, task.id);
-  return budget ? { budget, state: budgetState(task.id, budget, task.qaVerdict === "pass") } : undefined;
+  return budget ? { budget, state: budgetState(task.id, budget, !qaStillDue(task)) } : undefined;
 }
 
 /** No new work starts once the budget is spent: the oracle asks the user for more, or wraps up. */
@@ -1501,6 +1638,7 @@ const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams
   resume: handleResume,
   decide: handleDecide,
   budget: handleBudget,
+  track: handleTrack,
   status: (task) => describeTask(task),
   cancel: handleCancel,
 };

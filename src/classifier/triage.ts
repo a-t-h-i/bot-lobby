@@ -155,7 +155,7 @@ export function suggestedPath(triage: TaskTriage): string {
   if (triage.ambiguous >= HINT) return "clarify first: the request as written probably misses a decision.";
   const smallish = (triage.size === "trivial" || triage.size === "small") && triage.sizeConfidence >= 0.6;
   const steps: string[] = [];
-  if (smallish && touched.length === 1) steps.push(`single-domain shortcut (${touched[0]}): skip the scout round and the proposal ceremony, state the short plan and delegate`);
+  if (smallish && touched.length === 1) steps.push(`fast track (${touched[0]}): no scouts, proposal or plan; delegate straight away`);
   else if (touched.length > 0) steps.push(`scout only ${touched.join(", ")}`);
   if (triage.research >= HINT) steps.push("summon the researcher for the outside facts");
   return steps.length > 0 ? `${steps.join("; ")}.` : "no strong signal; decide from the request.";
