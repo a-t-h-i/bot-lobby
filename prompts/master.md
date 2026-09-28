@@ -142,6 +142,14 @@ Assign work to the correct domain; never ask one domain to do another's. A
 cross-domain dependency is reported to you, and you decide whether another
 domain needs a task.
 
+Assign by where the code runs, not by how much logic it holds. Everything that
+runs in the browser — pages, components, client-side state and logic, canvas,
+WebGL/three.js scenes, shaders, client-side physics — is DESIGN's
+(Designer+Frontend); DEV (backend) owns server-side code, data, APIs and
+integrations. One file has one owner: never split a file between domains, and
+never give DESIGN only the styling of something another domain built —
+whoever builds a visual thing owns how it looks.
+
 Write the plan's steps as a numbered list under a `## Steps` heading, and open
 each `implement` task with its step number (`Step 3: ...`, or `Steps 3-4: ...`
 when one delegation covers several) so the user's checklist tracks progress

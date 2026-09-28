@@ -76,6 +76,14 @@ export function parseMoreTime(text: string): { minutes?: number; reason: string 
   return { ...(minutes && minutes > 0 ? { minutes } : {}), reason: reason || flat };
 }
 
+/** A bullet that says there is nothing: `None.`, `N/A`, `No new dependencies (three.js from a CDN)`. */
+const NOTHING = /^(?:\*\*|_)?(?:none|n\/?a|nil|nothing|not applicable|no(?:ne)?\s+(?:new\s+|additional\s+|extra\s+)?(?:dependenc|packages?|librar|architecture|architectural|changes?\b))/i;
+
+/** Asks that need the Master's approval: a report that lists "None." asks for nothing. */
+export function realAsks(items: readonly string[]): string[] {
+  return items.filter((item) => !NOTHING.test(item.trim()));
+}
+
 /** Parse a worker's markdown into a structured result (never throws). */
 export function parseWorkerResult(domain: Domain, raw: string, now = new Date().toISOString()): WorkerResult {
   const sections = parseSections(raw);
@@ -93,8 +101,8 @@ export function parseWorkerResult(domain: Domain, raw: string, now = new Date().
     blockers: parseBlockers(sections, domain, now),
     knowledgeProposals: parseKnowledgeProposals(domain, findSection(sections, "knowledge proposals")),
     pushback: parsePushback(sections),
-    dependencyNeeds: bullets(findSection(sections, "dependencies needed")),
-    architectureChanges: bullets(findSection(sections, "architecture changes")),
+    dependencyNeeds: realAsks(bullets(findSection(sections, "dependencies needed"))),
+    architectureChanges: realAsks(bullets(findSection(sections, "architecture changes"))),
     raw,
   };
 }
