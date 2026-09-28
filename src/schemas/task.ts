@@ -108,9 +108,38 @@ export interface TaskTriage {
   research: number;
   /** How likely it is ambiguous as written. */
   ambiguous: number;
+  /** How likely one engineer can do it alone, right away (a quick fix, not a task for the team). */
+  solo?: number;
   kind?: string;
   kindProbability?: number;
   likelyFiles?: string[];
+  at: string;
+}
+
+/** How much process a task gets: the fast track for a small, clear, low-risk change, the full workflow for the rest. */
+export type TrackPath = "fast" | "full";
+
+/** Who can take part in a task: the three domains and the researcher. */
+export type TrackMember = Domain | "researcher";
+
+/**
+ * How serious the request reads, and so who takes part and how much process
+ * it gets. The engine reads it as the task starts; the oracle may correct it
+ * (`action=track`) and the user may force the path (`--fast`, `--full`).
+ */
+export interface TaskTrack {
+  path: TrackPath;
+  size: TriageSize;
+  /** Who takes part: the domains that build, QA when the change needs tests, the researcher when it needs outside facts. */
+  roster: TrackMember[];
+  /** Why, a few words each. */
+  reasons: string[];
+  /** Who set it: the engine's rules, the classifier's triage, the user, the oracle, or a plan agreed in the planning panel. */
+  source: "rules" | "classifier" | "user" | "oracle" | "plan";
+  /** The path the user asked for with --fast or --full; the oracle never moves a task off it toward less process. */
+  userChoice?: TrackPath;
+  /** The engine keeps the plan (fast track): each delegation adds its step. */
+  autoPlan?: boolean;
   at: string;
 }
 
@@ -160,6 +189,8 @@ export interface Task {
   archivedAt?: string;
   /** The classifier's read of the request, when it was on as the task started. */
   triage?: TaskTriage;
+  /** The task's track; absent on tasks created before tracks, which take the full workflow. */
+  track?: TaskTrack;
   /** Files already changed when the first worker started: the QA gate reads them as pre-existing, not as this task's work. */
   baseline?: ChangeBaseline;
   /** Review rounds the user granted past `workflow.maxReviewIterations`. */

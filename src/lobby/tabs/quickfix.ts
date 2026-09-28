@@ -65,7 +65,7 @@ export function jobDetailLines(job: QuickFixJob, width: number, tick: number, no
   const asked = theme?.markdown ? markdownLines(job.prompt, width, theme, true, "you") : wrap(bold(theme, job.prompt), width);
   const lines = [paint(theme, "dim", job.id), facts.join(paint(theme, "dim", " · ")), "", ...asked];
   if (job.route) lines.push("", ...wrap(paint(theme, "dim", `↓ routed ${job.route}`), width));
-  if (job.note) lines.push("", ...wrap(paint(theme, "warning", job.status === "held" ? `‖ Held: ${job.note}. r runs it anyway · t starts it as a task in a new session.` : job.note), width));
+  if (job.note) lines.push("", ...wrap(paint(theme, job.status === "held" ? "warning" : job.routed ? "muted" : "warning", job.status === "held" ? `‖ Held: ${job.note}. r runs it anyway · t starts it as a task in a new session.` : job.note), width));
   lines.push("", rule(width, "Steps", theme));
   if (job.steps.length === 0) lines.push(paint(theme, "dim", job.status === "queued" ? "Waiting for the quick fix ahead of it." : job.status === "running" ? `${spinner(tick)} starting…` : job.status === "held" ? "Not started." : "No tool calls."));
   for (const step of job.steps) {
