@@ -65,6 +65,7 @@ interface Calls {
   archived: string[];
   restored: string[];
   deleted: Array<[string, "list" | "archive"]>;
+  historyLoads: string[];
 }
 
 interface ViewOptions {
@@ -84,12 +85,14 @@ interface ViewOptions {
   chats?: Record<string, ChatEntry[]>;
   /** Sessions running in other terminals. */
   live?: LiveSession[];
+  /** Whole conversations served when scrolled back: this window's under "", others' by session id. */
+  history?: Record<string, ChatEntry[]>;
   archivedTasks?: Task[];
 }
 
 function makeView(options: ViewOptions = {}) {
   const root = mkdtempSync(join(tmpdir(), "bl-view-"));
-  const calls: Calls = { settings: [], answered: 0, savedPanels: [], oracle: [], comments: [], started: [], discarded: [], aborted: 0, hidden: 0, seeds: [], seats: [], sessionStarts: [], auto: [], inbox: [], sessionInbox: [], switches: [], dialogs: [], archived: [], restored: [], deleted: [] };
+  const calls: Calls = { settings: [], answered: 0, savedPanels: [], oracle: [], comments: [], started: [], discarded: [], aborted: 0, hidden: 0, seeds: [], seats: [], sessionStarts: [], auto: [], inbox: [], sessionInbox: [], switches: [], dialogs: [], archived: [], restored: [], deleted: [], historyLoads: [] };
   let taskList: Task[] = options.tasks ?? (options.task ? [options.task] : []);
   let archivedList: Task[] = options.archivedTasks ?? [];
   const sessions: BackgroundSession[] = [];
@@ -211,6 +214,11 @@ function makeView(options: ViewOptions = {}) {
       return `deleted ${taskId} for good`;
     },
     sessionChat: (sessionId) => options.chats?.[sessionId] ?? [],
+    hasOlderChat: (sessionId) => (options.history?.[sessionId]?.length ?? 0) > (options.chats?.[sessionId]?.length ?? 0),
+    chatHistory: (sessionId) => {
+      calls.historyLoads.push(sessionId ?? "");
+      return options.history?.[sessionId ?? ""] ?? [];
+    },
     taskScene: (task, _width, height) => Array.from({ length: Math.min(height, 2) }, (_, index) => `status of ${task.id} ${index}`),
     requestRender: () => {},
     now: () => NOW,
@@ -1309,4 +1317,34 @@ test("d d deletes a task on the list for good", () => {
   assert.match(view.render(140).at(-1)!, /press d again to delete TASK-done for good/);
   view.handleInput("d");
   assert.deepEqual(calls.deleted, [["TASK-done", "list"]]);
+});
+
+test("the conversation keeps its newest messages; scrolling to the top loads the rest, and the newest lets it go", () => {
+  const all: ChatEntry[] = Array.from({ length: 150 }, (_, index) => ({ id: 1000 + index, at: NOW + index * 600_000, role: index % 2 === 0 ? "you" as const : "oracle" as const, text: `message ${index}` }));
+  const { view, feed, calls } = makeView({ history: { "": all } });
+  feed.seedChat(all);
+  assert.equal(feed.chat.length, 100, "only the newest are kept in memory");
+  assert.equal(feed.chatOlder, true);
+  view.handleInput(KEY.escape);
+  const shows = (text: string) => view.render(120).some((line) => line.includes(text));
+  assert.ok(shows("message 149") && !shows("message 49"));
+  const loaded = () => (view as unknown as { history?: unknown }).history !== undefined;
+  view.handleInput(KEY.up);
+  view.render(120);
+  assert.equal(loaded(), false, "scrolling a little stays within what is kept");
+  view.handleInput(KEYS.home);
+  view.render(120);
+  assert.deepEqual(calls.historyLoads, [""], "at the top, the rest is loaded once");
+  assert.ok(shows("message 0"), "Home goes on to the very first message");
+  assert.ok(!shows("earlier messages load"));
+  view.handleInput(KEYS.end);
+  view.render(120);
+  assert.ok(shows("message 149"));
+  assert.equal(loaded(), false, "back at the newest, the loaded history is let go");
+  for (let index = 0; index < 400 && !loaded(); index += 1) {
+    view.handleInput(KEY.up);
+    view.render(120);
+    if (!loaded() && shows("earlier messages load as you scroll up")) break;
+  }
+  assert.ok(shows("earlier messages load as you scroll up") || loaded(), "scrolling up line by line reaches the note at the top of what is kept");
 });
