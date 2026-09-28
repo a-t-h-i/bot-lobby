@@ -522,11 +522,7 @@ function host(state: Runtime, tui: TUI): LobbyHost {
       return { ...(snapshot.task ? { task: snapshot.task } : {}), runs: snapshot.runs };
     },
     // The scene's height budget is 3/4 of the rows it is given.
-    scene: (width, height, animated) => state.scene.lines(width, Math.floor(height / 0.75), state.ctx.ui.theme, Date.now(), !animated),
-    advanceScene: (now) => {
-      state.scene.advance(now);
-      return state.scene.delay(now);
-    },
+    scene: (width, height) => state.scene.lines(width, Math.floor(height / 0.75), state.ctx.ui.theme, Date.now(), true),
     feed: lobbyFeed,
     masterBusy: () => !state.ctx.isIdle(),
     tasks: () => peekTasks(state.root, state.configDir),

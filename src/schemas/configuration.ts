@@ -92,12 +92,10 @@ export function isPanelMember(value: string): value is PanelMember {
 }
 
 /**
- * Lobby panes that can be shown or hidden: the Lobby tab's animated oracle and
- * agents (off by default: the lobby keeps only the task's status, and the
- * animations show above pi's editor while the lobby is hidden), the
- * conversation, the activity log and thinking.
+ * Lobby panes that can be shown or hidden: the conversation, the activity log
+ * and thinking.
  */
-export const LOBBY_PANELS = ["animations", "conversation", "activity", "thinking"] as const;
+export const LOBBY_PANELS = ["conversation", "activity", "thinking"] as const;
 export type LobbyPanel = (typeof LOBBY_PANELS)[number];
 
 /** The full-screen lobby. */
@@ -227,7 +225,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     planningPanel: [...PANEL_MEMBERS],
     autoAsk: true,
     issues: false,
-    panels: { animations: false, conversation: true, activity: true, thinking: true },
+    panels: { conversation: true, activity: true, thinking: true },
     keys: {},
     mouse: true,
     maxPlanningRounds: 5,
