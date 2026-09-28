@@ -23,7 +23,7 @@ import type { QuickFixQueue } from "./quickfix.ts";
 import { MEMBER_LABELS, ORACLE_LABEL, type PlannerSeed, type PlanningSession } from "./planner.ts";
 import { issueText, type IssuesState } from "./issues.ts";
 import { actionFor, keyLabel, keyMap, LOBBY_ACTIONS, type KeyMap, type LobbyAction } from "./keys.ts";
-import { beside, bold, box, fit, highlight, paint, rule, selectRow, spinner, spread, windowStart, wrap, wrapHanging, type LobbyTheme, type PaneLayout } from "./layout.ts";
+import { beside, bold, box, fit, highlight, paint, rule, selectRow, spinner, spread, windowStart, wrap, wrapHanging, type LobbyTheme, type PaneBox, type PaneLayout, type PaneMark } from "./layout.ts";
 import { chatTail, HOME_PANES, renderHome, type HomePane } from "./tabs/home.ts";
 import { filterRows, pips, planDetailLines, renderTasks, taskDetailLines, taskProgress, taskRows, tasksWidths, type TaskRow } from "./tabs/tasks.ts";
 import { renderPlan, type PlanLayout, type PlanView, type SeatView } from "./tabs/plan.ts";
@@ -320,6 +320,8 @@ export class LobbyView implements Component, Focusable {
   homeFocus: HomePane = "conversation";
   /** How many lines each pane held last frame, so a pane scrolled back stays on what you are reading as lines arrive. */
   private readonly seenTotals = new Map<string, number>();
+  /** Each Lobby pane's newest entry last frame: those panes measure what arrived below it, as their totals are estimates. */
+  private readonly marks = new Map<string, PaneMark>();
   /** Where the current tab's scrollable panes landed in the last frame. */
   private readonly panes: PaneLayout = new Map();
   private tasksSelected = 0;
@@ -894,11 +896,10 @@ export class LobbyView implements Component, Focusable {
     const limit = (name: string, offset: number, anchored: boolean): number => {
       const pane = this.panes.get(name);
       if (!pane) return offset;
-      const seen = this.seenTotals.get(name);
-      this.seenTotals.set(name, pane.total);
+      const grew = this.grewBelow(name, pane);
       let next = offset;
-      if (anchored && next > 0 && seen !== undefined && pane.total > seen) {
-        next += pane.total - seen;
+      if (anchored && next > 0 && grew > 0) {
+        next += grew;
         moved = true;
       }
       return Math.min(next, Math.max(0, pane.total - pane.rows));
@@ -920,6 +921,25 @@ export class LobbyView implements Component, Focusable {
         break;
     }
     return moved;
+  }
+
+  /**
+   * Lines that arrived below a pane since it was last looked at, counted once.
+   * A pane that measures them from its newest entry says so; for the others
+   * (their totals exact) the total's growth stands in. An estimated total also
+   * moves as scrolling draws more or fewer of the entries it estimates, and
+   * following that pinned a pane scrolled to its top there.
+   */
+  private grewBelow(name: string, pane: PaneBox): number {
+    const seen = this.seenTotals.get(name);
+    this.seenTotals.set(name, pane.total);
+    const follow = pane.follow;
+    if (!follow) return seen === undefined ? 0 : pane.total - seen;
+    if (follow.mark) this.marks.set(name, follow.mark);
+    else this.marks.delete(name);
+    const grew = follow.grew;
+    follow.grew = 0;
+    return grew;
   }
 
   /** Move the draft cursor by `delta` lines, skipping blank ones, and keep it on screen. */
@@ -2276,6 +2296,7 @@ export class LobbyView implements Component, Focusable {
       others,
       pending: this.data.plans.filter((plan) => plan.status === "pending").length,
       offsets: this.homeOffsets,
+      anchors: this.marks,
       ...(this.mode === "browse" ? { focus: this.homeFocus } : {}),
       panes: this.panes,
       tick: this.tick,
@@ -2306,6 +2327,7 @@ export class LobbyView implements Component, Focusable {
       others: 0,
       pending: 0,
       offsets: this.homeOffsets,
+      anchors: this.marks,
       ...(this.mode === "browse" ? { focus: this.homeFocus } : {}),
       panes: this.panes,
       tick: this.tick,
