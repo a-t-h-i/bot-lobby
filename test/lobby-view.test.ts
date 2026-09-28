@@ -1348,3 +1348,46 @@ test("the conversation keeps its newest messages; scrolling to the top loads the
   }
   assert.ok(shows("earlier messages load as you scroll up") || loaded(), "scrolling up line by line reaches the note at the top of what is kept");
 });
+
+test("a conversation scrolled to its top scrolls down again, one line a press, and holds its place as messages arrive", () => {
+  // Messages of very different heights, so the estimated total moves a lot as scrolling draws more or fewer of them.
+  const long = Array.from({ length: 30 }, (_, line) => `line ${line} of a long answer`).join("\n\n");
+  const all: ChatEntry[] = Array.from({ length: 150 }, (_, index) => ({ id: 1000 + index, at: NOW + index * 600_000, role: index % 2 === 0 ? "you" as const : "oracle" as const, text: index % 7 === 3 ? `message ${index}\n\n${long}` : `message ${index}` }));
+  const { view, feed } = makeView({ history: { "": all } });
+  feed.seedChat(all);
+  view.handleInput(KEY.escape);
+  const offset = () => (view as unknown as { homeOffsets: { conversation: number } }).homeOffsets.conversation;
+  const press = (key: string) => {
+    view.handleInput(key);
+    view.render(120);
+  };
+  view.render(120);
+  for (let step = 0; step < 40; step += 1) {
+    const before = offset();
+    press(KEY.up);
+    assert.equal(offset(), before + 1, "each press up moves exactly one line");
+  }
+  press(KEYS.home);
+  press(KEYS.home);
+  assert.ok(view.render(120).some((line) => line.includes("message 0")), "at the very top");
+  const top = offset();
+  for (let step = 1; step <= 20; step += 1) {
+    press(KEY.down);
+    assert.equal(offset(), top - step, "each press down moves one line toward the newest");
+  }
+  press(KEYS.pageDown);
+  assert.ok(offset() < top - 20, "a page down moves on too");
+  press(KEYS.end);
+  assert.equal(offset(), 0);
+  // Within the messages kept in memory: one arriving below leaves what is being read where it is.
+  for (let step = 0; step < 30; step += 1) press(KEY.up);
+  const before = offset();
+  const content = () => view.render(120).filter((line) => line.includes("line ") || line.includes("message ")).join("\n");
+  const reading = content();
+  feed.say("oracle", `a new message below\n\n${long}`);
+  view.render(120);
+  assert.ok(offset() > before + 30, "a message arriving below pushes the offset back by its height");
+  assert.equal(content(), reading, "and what is being read stays put");
+  press(KEY.down);
+  assert.equal(content() === reading, false, "and it still scrolls");
+});
