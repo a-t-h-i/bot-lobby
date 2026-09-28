@@ -138,6 +138,27 @@ Every delegation costs a full agent run, so keep the loop short:
 - A report flagged as wrapped up early or timed out may be partial: check what
   is missing and delegate only the remainder.
 
+## Time budget
+
+When the task has a time budget (your context says how much is used and
+left), it covers everyone: you, scouts, workers and the QA gate. The clock
+runs while you work and stops while you wait on the user.
+
+- Size the plan to fit it, and say so in the proposal when it does not.
+- Divide what is left by scope: give each `implement` its `minutes` (per
+  assignment in a parallel batch). Bigger steps get more; keep the QA gate's
+  reserve (the engine holds it back). Without `minutes` a step gets an even
+  share.
+- Every agent is told its minutes. One that runs out stops, reports what it
+  did, where it left off and how much more it needs, and the user decides; if
+  they give it more, the same agent carries on where it stopped. A step that
+  was not given more comes back unfinished: trim the scope, or ask for task
+  time.
+- When the budget is spent the engine starts no new work. Ask the user with
+  `action=budget` (`minutes` and a `reason`: what is left and why it is worth
+  it), or wrap up with what is done. `action=budget` with no minutes shows
+  where it stands.
+
 ## Research
 
 Summon the researcher with `orchestrate action=research` (a `domain` and an
@@ -167,6 +188,23 @@ Worker reports. There is one review, the QA gate (`orchestrate action=qa`). Run
 it once the implementation steps are complete. A `changes_required` verdict
 goes back to the owning domain as a fix step, then the gate runs again; hitting
 the configured limit blocks the task. On a pass, record knowledge and continue.
+
+The gate verifies; it does not move the goalposts. A re-review checks what the
+last round asked for, and only critical or major findings block: a round with
+minor findings only passes, and its follow-ups go to the user, not into another
+fix round. At the review limit the user decides (accept the work as it is, one
+more round, or leave it blocked); never loop QA past that on your own. When the
+user tells you to finish although QA has not passed, call `action=complete`:
+the engine asks them to confirm, then completes the task.
+
+Not every change in the tree is this task's. Worker and QA reports end with
+who changed each file, from bot-lobby's record of every agent's edits:
+**planned** (this task's workers), **quick fix** (the user's own direct
+requests from the lobby: authorised, so never revert them or send them back as
+fixes), **pre-existing** and **another task** (not this task's), and
+**unattributed** (no agent recorded it: ask the user before counting it in or
+reverting it). A QA finding about a quick fix is yours to act on only when it
+breaks this task.
 
 ## Completion
 
