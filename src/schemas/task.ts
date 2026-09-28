@@ -114,10 +114,19 @@ export interface TaskTriage {
   at: string;
 }
 
-/** What the working tree held when a task's agents started editing: its changed files, repository-relative. */
+/** What the working tree held when a task's agents started editing: its changed files, repository-relative, and the commit it stood on. */
 export interface ChangeBaseline {
   at: string;
   files: string[];
+  /** HEAD when the first worker started: the QA gate reviews everything since, committed work included. */
+  head?: string;
+}
+
+/** The user accepted a task's work without a QA pass. */
+export interface QaWaiver {
+  at: string;
+  /** What QA still asked for when the user accepted. */
+  open: string[];
 }
 
 export interface Task {
@@ -153,6 +162,10 @@ export interface Task {
   triage?: TaskTriage;
   /** Files already changed when the first worker started: the QA gate reads them as pre-existing, not as this task's work. */
   baseline?: ChangeBaseline;
+  /** Review rounds the user granted past `workflow.maxReviewIterations`. */
+  extraReviewRounds?: number;
+  /** Set only by the user: the work is accepted without a QA pass, so the task may complete. */
+  qaWaiver?: QaWaiver;
 }
 
 export function createTask(
