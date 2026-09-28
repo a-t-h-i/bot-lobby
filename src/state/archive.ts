@@ -6,11 +6,12 @@
  * abandoned before it is archived, so it never comes back half-driven.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { taskDir, tasksRoot } from "../knowledge/paths.ts";
 import { transition } from "./task-state.ts";
 import { dataRoot, readDataRoots } from "./project.ts";
+import { forgetCachedUnder, readJsonCached } from "./file-cache.ts";
 
 export function archiveRoot(root: string, configDir: string): string {
   return join(dataRoot(root, configDir), "archive", "tasks");
@@ -43,15 +44,23 @@ function archivedDir(root: string, configDir: string, taskId: string): string {
   return join(archiveRoot(root, configDir), checkId(taskId));
 }
 
-/** Archived tasks, most recently archived first. */
+function isObject(value: unknown): value is Task {
+  return typeof value === "object" && value !== null;
+}
+
+/** Archived tasks, most recently archived first (parsed again only when a file changes; shared, for reading). */
 export function listArchivedTasks(root: string, configDir: string): Task[] {
   const dir = archiveRoot(root, configDir);
   if (!existsSync(dir)) return [];
   const tasks: Task[] = [];
+  const seen = new Set<string>();
   for (const entry of readdirSync(dir)) {
-    const task = readAt(join(dir, entry));
+    const path = join(dir, entry, "state.json");
+    seen.add(path);
+    const task = readJsonCached(path, isObject);
     if (task) tasks.push(task);
   }
+  forgetCachedUnder(`${dir}${sep}`, seen);
   return tasks.sort((a, b) => (b.archivedAt ?? b.updatedAt).localeCompare(a.archivedAt ?? a.updatedAt));
 }
 
