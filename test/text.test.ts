@@ -24,3 +24,17 @@ test("shortTitle is total and deterministic at the edges", () => {
   assert.equal(shortTitle("add a feature now", 0), "");
   assert.equal(shortTitle("add   a\nfeature now"), "add feature now");
 });
+
+test("shortTitle reads a Markdown request, escaped line breaks included, as words", () => {
+  // A request whose line breaks arrived written out as \n became the title "### Objective\nFour fixes:\n-".
+  assert.equal(shortTitle("### Objective\\nFour fixes:\\n- solid Save buttons keep their fill"), "Four fixes: solid");
+  assert.equal(shortTitle("### Objective\nFour fixes:\n- solid Save buttons"), "Four fixes: solid");
+  assert.equal(shortTitle("## Fix the `navbar` colours"), "Fix navbar colours");
+  assert.equal(shortTitle("Rework: the header"), "Rework: header");
+});
+
+test("tail keeps the newest end of a log", async () => {
+  const { tail } = await import("../src/text.ts");
+  assert.equal(tail("abcdef", 10), "abcdef");
+  assert.equal(tail("abcdef", 2), "[...4 earlier characters omitted]\nef");
+});
