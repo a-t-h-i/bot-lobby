@@ -491,3 +491,48 @@ test("rpc: onStart exposes a steering handle", async () => {
     assert.match(result.output, /steered/);
   });
 });
+
+/** A stub that works until told its time is up, reports where it left off, and finishes when sent on. */
+const TIMED_STUB = rpcStub(`
+  if (cmd.type === "prompt" && cmd.message.startsWith("Task:")) return;
+  if (cmd.type === "steer" && cmd.message === "time is up") { clearInterval(working); report("## Completed\\nhalf\\n\\n## Left Off\\ntests remain\\n\\n## More Time\\n10 minutes — the tests"); settle(); }
+  if (cmd.type === "prompt" && cmd.message === "carry on") { report("## Completed\\nall of it"); settle(); }`, "const working = setInterval(() => emit({ type: 'turn_start' }), 50);");
+
+test("rpc: out of time, the agent reports where it left off and, given more, the same process finishes", async () => {
+  await withStub(TIMED_STUB, async (log) => {
+    const reports: string[] = [];
+    const events: string[] = [];
+    const result = await runPiAgent({
+      cwd: process.cwd(), task: "build it", timeoutMs: 20_000,
+      onEvent: (event) => events.push(event.type),
+      time: { upAtMs: 150, upMessage: "time is up", graceMs: 5_000, onTimeUp: async (report) => (reports.push(report), { extraMs: 10_000, message: "carry on" }) },
+    });
+    assert.equal(result.status, "success", result.error);
+    assert.match(reports[0]!, /## Left Off\ntests remain/);
+    assert.equal(result.output, "## Completed\nall of it");
+    assert.equal(result.extendedMs, 10_000);
+    assert.equal(result.timeUp, undefined, "it finished in the time it was given");
+    assert.ok(events.includes("time_up") && events.includes("extended"));
+    assert.deepEqual(log.read().map((command) => [command.type, command.message]), [["prompt", "Task: build it"], ["steer", "time is up"], ["prompt", "carry on"]]);
+  });
+});
+
+test("rpc: out of time and not given more, the run ends with its left-off report", async () => {
+  await withStub(TIMED_STUB, async () => {
+    const result = await runPiAgent({ cwd: process.cwd(), task: "build it", timeoutMs: 20_000, time: { upAtMs: 150, upMessage: "time is up", graceMs: 5_000, onTimeUp: async () => ({ extraMs: 0 }) } });
+    assert.equal(result.status, "success");
+    assert.equal(result.timeUp, true);
+    assert.match(result.output, /## More Time\n10 minutes — the tests/);
+  });
+});
+
+test("rpc: while the user decides, neither the deadline nor the stall watchdog stops the waiting agent", async () => {
+  await withStub(TIMED_STUB, async () => {
+    const result = await runPiAgent({
+      cwd: process.cwd(), task: "build it", timeoutMs: 600, stallTimeoutMs: 300,
+      time: { upAtMs: 150, upMessage: "time is up", graceMs: 400, onTimeUp: () => new Promise((resolve) => setTimeout(() => resolve({ extraMs: 5_000, message: "carry on" }), 1_200)) },
+    });
+    assert.equal(result.status, "success", result.error);
+    assert.equal(result.output, "## Completed\nall of it");
+  });
+});
