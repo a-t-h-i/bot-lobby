@@ -48,6 +48,15 @@ function sizeQuestion(subject: string) {
   return score(`How big is the change ${subject} asks for, judged by what it would take to build and verify in this repository?`, SIZE_LEVELS);
 }
 
+/** Whether one agent can just do it: the quick fix or the team. */
+function soloQuestion(subject: string) {
+  return noul(
+    `Could one engineer do ${subject} alone, right away — in one file or one area of the code — with no contract to agree between frontend and backend, no unfamiliar codebase to survey first, no risky change (security, data, payments, migrations) and no decision the user must make first?`,
+    "Yes: one person can just do it now, even if it is a rich piece of work in one place.",
+    "No: it needs a team — several areas, a survey of the codebase, a plan to agree, or review before it lands.",
+  );
+}
+
 export function triageRequest(input: TriageInput): SystemOneRequest {
   const questions: SystemOneRequest["questions"] = {
     size: sizeQuestion("`request`"),
@@ -62,6 +71,7 @@ export function triageRequest(input: TriageInput): SystemOneRequest {
       "No: a competent engineer could build it as written, deciding details from the codebase.",
     ),
     kind: choice("What kind of work does `request` ask for?", TRIAGE_KINDS),
+    solo: soloQuestion("`request`"),
   };
   for (const { domain, owns } of input.domains) {
     questions[`domain_${domain}`] = noul(`Does building \`request\` require changes in this area: ${owns}?`);
@@ -85,12 +95,14 @@ export async function triageTask(classifier: Classifier, input: TriageInput, sig
     if (probability !== undefined) domains[domain] = probability;
   }
   const kind = choiceOf(result.answers, "kind");
+  const solo = yesOf(result.answers, "solo");
   return {
     size: TRIAGE_SIZES[Math.max(0, Math.min(TRIAGE_SIZES.length - 1, size.level))]!,
     sizeConfidence: size.confidence,
     domains,
     research: yesOf(result.answers, "needs_research") ?? 0,
     ambiguous: yesOf(result.answers, "ambiguous") ?? 0,
+    ...(solo !== undefined ? { solo } : {}),
     ...(kind ? { kind: kind.choice, kindProbability: kind.probability } : {}),
     at: new Date().toISOString(),
   };
@@ -131,20 +143,25 @@ export async function triageWithContext(classifier: Classifier, scope: FileScope
   return files.length > 0 ? { ...triage, likelyFiles: files } : triage;
 }
 
-/** The size of a quick fix prompt, or undefined when the classifier is off or fails. */
-export async function quickFixSize(classifier: Classifier, prompt: string, signal?: AbortSignal): Promise<{ size: TriageSize; confidence: number } | undefined> {
+/**
+ * The size of a quick fix prompt, and how likely one engineer can do it alone,
+ * or undefined when the classifier is off or fails. A large prompt is held as
+ * a task unless it is still one engineer's work (a rich page in one file).
+ */
+export async function quickFixSize(classifier: Classifier, prompt: string, signal?: AbortSignal): Promise<{ size: TriageSize; confidence: number; solo?: number } | undefined> {
   if (!classifier.enabled("triage")) return undefined;
-  const largeAt = classifier.config.thresholds.quickFixLargeAt;
-  const result = await classifier.ask("triage", { state: { prompt: clip(prompt, 6000) }, questions: { size: sizeQuestion("`prompt`") } }, {
+  const { quickFixLargeAt: largeAt, quickFixAt } = classifier.config.thresholds;
+  const result = await classifier.ask("triage", { state: { prompt: clip(prompt, 6000) }, questions: { size: sizeQuestion("`prompt`"), solo: soloQuestion("`prompt`") } }, {
     ...(signal ? { signal } : {}),
     saved: (answers) => {
       const sized = scoreOf(answers, "size");
-      return sized && sized.level >= TRIAGE_SIZES.length - 1 && sized.confidence >= largeAt ? 1 : 0;
+      return sized && sized.level >= TRIAGE_SIZES.length - 1 && sized.confidence >= largeAt && (yesOf(answers, "solo") ?? 0) < quickFixAt ? 1 : 0;
     },
   });
   const size = scoreOf(result?.answers, "size");
   if (!size) return undefined;
-  return { size: TRIAGE_SIZES[Math.max(0, Math.min(TRIAGE_SIZES.length - 1, size.level))]!, confidence: size.confidence };
+  const solo = yesOf(result?.answers, "solo");
+  return { size: TRIAGE_SIZES[Math.max(0, Math.min(TRIAGE_SIZES.length - 1, size.level))]!, confidence: size.confidence, ...(solo !== undefined ? { solo } : {}) };
 }
 
 const HINT = 0.5;
@@ -155,7 +172,7 @@ export function suggestedPath(triage: TaskTriage): string {
   if (triage.ambiguous >= HINT) return "clarify first: the request as written probably misses a decision.";
   const smallish = (triage.size === "trivial" || triage.size === "small") && triage.sizeConfidence >= 0.6;
   const steps: string[] = [];
-  if (smallish && touched.length === 1) steps.push(`single-domain shortcut (${touched[0]}): skip the scout round and the proposal ceremony, state the short plan and delegate`);
+  if (smallish && touched.length === 1) steps.push(`fast track (${touched[0]}): no scouts, proposal or plan; delegate straight away`);
   else if (touched.length > 0) steps.push(`scout only ${touched.join(", ")}`);
   if (triage.research >= HINT) steps.push("summon the researcher for the outside facts");
   return steps.length > 0 ? `${steps.join("; ")}.` : "no strong signal; decide from the request.";
