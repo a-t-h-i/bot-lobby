@@ -17,7 +17,6 @@ export const LOBBY_ACTIONS = {
   toggleAuto: { key: "alt+g", help: "auto mode: the oracle drives the task to completion without asking" },
   nextTab: { key: "tab", help: "next tab" },
   prevTab: { key: "shift+tab", help: "previous tab" },
-  toggleScene: { key: "alt+z", help: "show or hide the oracle and agent animations" },
   toggleConversation: { key: "alt+c", help: "show or hide the conversation" },
   toggleActivity: { key: "alt+a", help: "show or hide the activity log" },
   toggleThinking: { key: "alt+k", help: "show or hide thinking" },

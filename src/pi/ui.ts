@@ -163,10 +163,6 @@ function isLive(): boolean {
   return Boolean(task && !TERMINAL_STATES.includes(task.state) && !task.paused);
 }
 
-function liveTickDelay(): number {
-  return isLive() ? LIVE_TICK_MS : IDLE_TICK_MS;
-}
-
 /** Tick delay for the zen clock: fastest while an expression plays or the oracle talks, so no step is skipped. */
 export function expressionTickDelay(states: readonly ExpressionState[], now: number, live: boolean, talking = false): number {
   if (talking || anyPlaying(states, now)) return FAST_TICK_MS;
@@ -278,8 +274,7 @@ export function zenSnapshot(): { task: Task | undefined; runs: readonly AgentRun
 /** Zen scene + plan checklist shown above the editor while a task is active and the lobby is closed. */
 class ZenWidget implements Component {
   private readonly scene: ZenScene;
-  private delay = liveTickDelay();
-  private timer: ReturnType<typeof setInterval>;
+  private readonly timer: ReturnType<typeof setInterval>;
   private disposed = false;
   private readonly tui: TUI;
   private readonly theme: () => Theme;
@@ -288,7 +283,8 @@ class ZenWidget implements Component {
     this.tui = tui;
     this.theme = theme;
     this.scene = new ZenScene(rng);
-    this.timer = setInterval(() => this.advance(), this.delay);
+    // Nothing animates: a repaint each second keeps the elapsed time and spinner current.
+    this.timer = setInterval(() => this.advance(), 1000);
     mountedWidget = this;
   }
 
@@ -299,23 +295,12 @@ class ZenWidget implements Component {
 
   private advance(): void {
     if (this.disposed) return;
-    const now = Date.now();
-    this.scene.advance(now);
-    this.retime(now);
+    this.scene.tick += 1;
     this.tui.requestRender();
   }
 
-  /** One interval, retimed when work starts or stops or an expression plays. */
-  private retime(now: number): void {
-    const delay = this.scene.delay(now);
-    if (delay === this.delay) return;
-    this.delay = delay;
-    clearInterval(this.timer);
-    this.timer = setInterval(() => this.advance(), delay);
-  }
-
   render(width: number): string[] {
-    return this.scene.lines(width, this.tui.terminal.rows, this.theme());
+    return this.scene.lines(width, this.tui.terminal.rows, this.theme(), Date.now(), true);
   }
 
   invalidate(): void {
