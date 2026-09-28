@@ -11,7 +11,8 @@ import { planChecklist } from "../../pi/zen.ts";
 import { persistedRuns } from "../../pi/ui.ts";
 import { describeRun, runFromLog } from "../../pi/run-summary.ts";
 import { pendingApprovals } from "../../workflow/approvals.ts";
-import { ago, beside, bold, box, detailWindow, fill, markdownLines, notePane, paint, position, rule, selectRow, since, spread, strike, windowStart, wrap, wrapHanging, type LobbyColor, type LobbyTheme, type PaneLayout } from "../layout.ts";
+import { textWidth } from "../../width.ts";
+import { ago, beside, bold, box, detailWindow, fill, markdownHanging, markdownLines, notePane, paint, position, rule, selectRow, since, spread, strike, windowStart, wrap, wrapHanging, type LobbyColor, type LobbyTheme, type PaneLayout } from "../layout.ts";
 
 export type TaskSection = "mine" | "others" | "pending" | "recent" | "archived";
 
@@ -240,6 +241,13 @@ export function listCount(rows: readonly TaskRow[], query?: string): string {
 const COMMENT_MARKS: Record<PlanComment["status"], string> = { open: "○", delivered: "◐", addressed: "✓" };
 const COMMENT_WORDS: Record<PlanComment["status"], string> = { open: "waiting for the owning session", delivered: "sent to the oracle", addressed: "plan amended" };
 
+/** `note` at the end of the last line when it fits there, else on a line of its own under it. */
+function trailing(lines: string[], note: string, width: number): string[] {
+  const last = lines.at(-1) ?? "";
+  if (textWidth(last) + 1 + textWidth(note) <= width) return [...lines.slice(0, -1), `${last} ${note}`];
+  return [...lines, ...wrapHanging("  ", note, width)];
+}
+
 function section(title: string, width: number, theme?: LobbyTheme, right = ""): string[] {
   return ["", rule(width, title, theme, right)];
 }
@@ -268,7 +276,8 @@ export function taskDetailLines(task: Task, comments: readonly PlanComment[], se
     lines.push("", `  ${pips(done, steps.length, cells, theme)} ${paint(theme, "muted", `${done} of ${steps.length} steps`)}`);
   }
   const request = taskRequest(task);
-  if (request && request !== task.title) lines.push(...section("Request", width, theme), ...wrap(paint(theme, "muted", request), width));
+  // Requests are often Markdown: a plan agreed in the planning panel, an issue, a pasted spec.
+  if (request && request !== task.title) lines.push(...section("Request", width, theme), ...markdownLines(request, width, theme));
   if (task.plan) {
     if (steps.length > 0) {
       lines.push(...section("Progress", width, theme, `${done}/${steps.length} steps`));
@@ -291,11 +300,12 @@ export function taskDetailLines(task: Task, comments: readonly PlanComment[], se
   if (comments.length === 0) lines.push(paint(theme, "dim", TERMINAL_STATES.includes(task.state) ? "No comments." : "No comments yet — press c to comment on the plan; the oracle amends it."));
   for (const comment of comments) {
     const color = comment.status === "addressed" ? "success" : comment.status === "delivered" ? "accent" : "warning";
-    lines.push(...wrapHanging(`${paint(theme, color, COMMENT_MARKS[comment.status])} `, `${comment.text} ${paint(theme, "dim", `— ${COMMENT_WORDS[comment.status]}, ${since(now - Date.parse(comment.createdAt))}`)}`, width));
+    const said = markdownHanging(`${paint(theme, color, COMMENT_MARKS[comment.status])} `, comment.text, width, theme);
+    lines.push(...trailing(said, paint(theme, "dim", `— ${COMMENT_WORDS[comment.status]}, ${since(now - Date.parse(comment.createdAt))}`), width));
   }
   if (task.amendments.length > 0) {
     lines.push(...section("Amendments", width, theme));
-    for (const amendment of task.amendments) lines.push(...wrapHanging("- ", amendment, width));
+    for (const amendment of task.amendments) lines.push(...markdownHanging("- ", amendment, width, theme));
   }
   const approvals = pendingApprovals(task);
   if (approvals.length > 0 || task.blockers.length > 0) {

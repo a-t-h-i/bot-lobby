@@ -5,10 +5,37 @@
  * text, since the lobby repaints many times a second.
  */
 import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
-import { Markdown, stripTerminalSequences, type MarkdownTheme } from "@earendil-works/pi-tui";
+import { Markdown, stripTerminalSequences, type DefaultTextStyle, type MarkdownOptions, type MarkdownTheme } from "@earendil-works/pi-tui";
+
+/**
+ * Whose words a piece of Markdown is, which sets how its plain text reads, as
+ * pi draws the same things: an agent's reply in the theme's text colour, your
+ * own words in yours (list markers and backslash escapes kept as typed), a
+ * thought dimmed and in italics.
+ */
+export type MarkdownStyle = "reply" | "you" | "thought";
+
+/** The plain-text look of each style but a reply; the lobby takes them from the session's theme. */
+export type MarkdownStyles = Partial<Record<Exclude<MarkdownStyle, "reply">, DefaultTextStyle>>;
 
 /** Markdown rendered to lines at a width; `keep: false` for text seen once (a reply still streaming), so it does not crowd the cache. */
-export type MarkdownRenderer = (text: string, width: number, keep?: boolean) => string[];
+export type MarkdownRenderer = (text: string, width: number, keep?: boolean, style?: MarkdownStyle) => string[];
+
+/** How pi renders what you write: your ordered-list markers and backslash escapes stay as you typed them. */
+const YOUR_WORDS: MarkdownOptions = { preserveOrderedListMarkers: true, preserveBackslashEscapes: true };
+
+/**
+ * Line breaks a model wrote out as `\n` (text escaped twice on its way here,
+ * so a whole plan arrives as one line): made real when the text has no real
+ * line break at all, outside inline code, where `\n` is usually meant.
+ */
+export function unescapeBreaks(text: string): string {
+  if (text.includes("\n") || !text.includes("\\n")) return text;
+  return text
+    .split(/(`[^`\n]*`)/)
+    .map((part, index) => (index % 2 === 1 ? part : part.replace(/(?:\\r)?\\n/g, "\n")))
+    .join("");
+}
 
 /** A heading line as pi renders it: optional styling, then `#`…`######` and a space. */
 const HEADING_HASHES = /^((?:\x1b\[[0-9;]*m)*)#{1,6} ((?:\x1b\[[0-9;]*m)*)/;
@@ -29,10 +56,10 @@ export const CACHE_LIMIT = 512;
  * theme object on every call, so the theme is taken once, here: a theme
  * switch makes a new renderer (the lobby keeps one per pi theme).
  */
-export function createMarkdownRenderer(theme: MarkdownTheme = getMarkdownTheme()): MarkdownRenderer {
+export function createMarkdownRenderer(theme: MarkdownTheme = getMarkdownTheme(), styles: MarkdownStyles = {}): MarkdownRenderer {
   const cache = new Map<string, string[]>();
-  return (text, width, keep = true) => {
-    const key = `${width}\0${text}`;
+  return (text, width, keep = true, style = "reply") => {
+    const key = `${style}\0${width}\0${text}`;
     const hit = cache.get(key);
     if (hit) {
       // Most recently used last, so the oldest is the one dropped.
@@ -40,7 +67,10 @@ export function createMarkdownRenderer(theme: MarkdownTheme = getMarkdownTheme()
       cache.set(key, hit);
       return hit;
     }
-    const lines = new Markdown(text, 0, 0, theme).render(Math.max(1, width)).map((line) => tidyHeading(line.trimEnd(), theme.bold));
+    const look = style === "reply" ? undefined : styles[style];
+    const lines = new Markdown(unescapeBreaks(text), 0, 0, theme, look, style === "you" ? YOUR_WORDS : undefined)
+      .render(Math.max(1, width))
+      .map((line) => tidyHeading(line.trimEnd(), theme.bold));
     // Drop the blank lines pi pads the render with at either end.
     while (lines.length > 0 && !lines[0]!.trim()) lines.shift();
     while (lines.length > 0 && !lines.at(-1)!.trim()) lines.pop();

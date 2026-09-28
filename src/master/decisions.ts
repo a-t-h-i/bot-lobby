@@ -7,7 +7,7 @@ import { detectGaps, domainsInvolved } from "./synthesis.ts";
 export function completionBlockers(task: Task, pendingCount: number): string[] {
   const blockers: string[] = [];
   if (!task.plan) blockers.push("no approved plan is recorded");
-  if (task.qaVerdict !== "pass") blockers.push(`QA gate is ${task.qaVerdict ?? "not run"}`);
+  if (task.qaVerdict !== "pass" && !task.qaWaiver) blockers.push(`QA gate is ${task.qaVerdict ?? "not run"}`);
   if (pendingCount > 0) blockers.push(`${pendingCount} unresolved approval request(s)`);
   if (task.blockers.length > 0) blockers.push(`${task.blockers.length} unresolved blocker(s)`);
   return blockers;

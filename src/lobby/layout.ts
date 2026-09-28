@@ -6,6 +6,7 @@
  */
 import { truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { textWidth } from "../width.ts";
+import type { MarkdownStyle } from "./markdown.ts";
 
 /** Colours the lobby uses; a subset of pi's theme so tests can pass a plain stub. */
 export type LobbyColor =
@@ -29,8 +30,8 @@ export interface LobbyTheme {
   bold(text: string): string;
   italic?(text: string): string;
   bg?(color: "selectedBg" | "searchMatchBg" | "userMessageBg", text: string): string;
-  /** Render Markdown to styled lines; plain wrapping without it (tests). */
-  markdown?(text: string, width: number, keep?: boolean): string[];
+  /** Render Markdown to styled lines, in the look of whose words they are; plain wrapping without it (tests). */
+  markdown?(text: string, width: number, keep?: boolean, style?: MarkdownStyle): string[];
   /** Strike text through (an abandoned task's title); plain without it (tests). */
   strike?(text: string): string;
 }
@@ -184,8 +185,8 @@ export function spinner(tick: number): string {
 }
 
 /** Markdown for plans, reports and replies: the theme's renderer, or headings bold without their `#` and the rest wrapped. */
-export function markdownLines(text: string, width: number, theme?: LobbyTheme, keep = true): string[] {
-  if (theme?.markdown) return theme.markdown(text, width, keep);
+export function markdownLines(text: string, width: number, theme?: LobbyTheme, keep = true, style: MarkdownStyle = "reply"): string[] {
+  if (theme?.markdown) return theme.markdown(text, width, keep, style);
   return text.split("\n").flatMap((line) => {
     const heading = /^#{1,6}\s+(.*)$/.exec(line);
     return wrap(heading ? bold(theme, paint(theme, "mdHeading", heading[1]!)) : line, width);
@@ -193,9 +194,9 @@ export function markdownLines(text: string, width: number, theme?: LobbyTheme, k
 }
 
 /** Markdown behind a hanging lead (`oracle ▸ `): the first line carries the lead, the rest align under it. */
-export function markdownHanging(lead: string, text: string, width: number, theme?: LobbyTheme): string[] {
+export function markdownHanging(lead: string, text: string, width: number, theme?: LobbyTheme, style: MarkdownStyle = "reply"): string[] {
   const indent = textWidth(lead);
-  const body = markdownLines(text, Math.max(1, width - indent), theme);
+  const body = markdownLines(text, Math.max(1, width - indent), theme, true, style);
   if (body.length === 0) return [lead];
   return body.map((line, index) => (index === 0 ? `${lead}${line}` : line ? `${" ".repeat(indent)}${line}` : ""));
 }
@@ -211,6 +212,18 @@ export interface BoxOptions {
   scroll?: { total: number; start: number };
 }
 
+/** An entry of a pane (a message, a thought, an activity line) and how many lines run from its first line to the pane's end. */
+export interface PaneMark {
+  entry: object;
+  below: number;
+}
+
+/** A pane that measures what arrives below: its newest entry now, and the lines that arrived below the one marked the frame before. */
+export interface PaneFollow {
+  mark?: PaneMark;
+  grew: number;
+}
+
 /** A scrollable pane as a render laid it out: its box in body cells, and its content against its rows. */
 export interface PaneBox {
   top: number;
@@ -220,14 +233,20 @@ export interface PaneBox {
   /** Lines of content, and rows showing them at once. */
   total: number;
   rows: number;
+  /**
+   * Set by panes whose total is estimated: lines that arrived below since the
+   * frame before, measured from an entry, not from the total (which moves as
+   * scrolling draws more or fewer of the entries it estimates).
+   */
+  follow?: PaneFollow;
 }
 
 /** Scrollable panes by name, filled in by a tab's render so the lobby can clamp offsets and route the wheel. */
 export type PaneLayout = Map<string, PaneBox>;
 
 /** Record a pane that sits at `top`/`left` in the body, `width` × `height`, showing `total` lines. */
-export function notePane(panes: PaneLayout | undefined, name: string, top: number, left: number, width: number, height: number, total: number): void {
-  panes?.set(name, { top, left, width, height, total, rows: Math.max(0, height - 2) });
+export function notePane(panes: PaneLayout | undefined, name: string, top: number, left: number, width: number, height: number, total: number, follow?: PaneFollow): void {
+  panes?.set(name, { top, left, width, height, total, rows: Math.max(0, height - 2), ...(follow ? { follow } : {}) });
 }
 
 /** First line of a top-anchored pane scrolled `offset` lines down, stopping when its last line shows. */

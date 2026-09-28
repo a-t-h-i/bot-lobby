@@ -16,6 +16,7 @@ import { setAutoMode } from "../state/auto.ts";
 import { loadPlannedTask, markPlannedTaskStarted, plannedTaskRequest } from "../state/backlog.ts";
 import { triageFor } from "../classifier/instance.ts";
 import { freshContextOn, markContext } from "./fresh-context.ts";
+import { setBudget } from "../state/budget.ts";
 
 function uniqueTaskId(root: string, configDir: string, request: string): string {
   const base = nextTaskId(request);
@@ -25,12 +26,13 @@ function uniqueTaskId(root: string, configDir: string, request: string): string 
   return id;
 }
 
-export function kickoff(task: Task): string {
+export function kickoff(task: Task, budgetMinutes = 0): string {
   return [
     `A bot-lobby task is active: ${task.id}`,
     `Title: ${task.title}`,
     `Request: ${taskRequest(task)}`,
     `State: ${task.state}`,
+    ...(budgetMinutes > 0 ? [`Time budget: ${budgetMinutes} minutes of work, for you and every agent. Size the plan to fit it and divide it by scope (see Time budget in your prompt).`] : []),
     "",
     "Drive it with the orchestrate tool:",
     "1. clarify if the request is genuinely ambiguous,",
@@ -52,6 +54,8 @@ export interface StartOptions {
   auto?: boolean;
   /** The task's short title (a planned task's own title); derived from the request otherwise. */
   title?: string;
+  /** Minutes of work time the task gets; `workflow.taskBudgetMinutes` when absent. */
+  budget?: number;
 }
 
 export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configDir: string, request: string, options: StartOptions = {}): Promise<Task | undefined> {
@@ -71,6 +75,8 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   const triage = await triageFor({ cwd: ctx.cwd, root, configDir }, request);
   if (triage) task.triage = triage;
   saveTask(root, configDir, task);
+  const budgetMinutes = options.budget ?? loadConfig().workflow.taskBudgetMinutes;
+  if (budgetMinutes > 0) setBudget(root, configDir, task.id, budgetMinutes);
   if (options.auto) setAutoMode(root, configDir, task.id, true, sessionId);
   // A session that starts a task is named after it, so /resume and the lobby list it by name.
   if (!pi.getSessionName()) pi.setSessionName(task.title);
@@ -80,7 +86,7 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   // The oracle takes the task on with a clean context: nothing said before the kickoff is sent to its model.
   if (freshContextOn()) markContext(pi, { kind: "start", taskId: task.id, at: Date.now() });
   // A kickoff while pi is still busy (another turn) queues behind it instead of throwing.
-  pi.sendUserMessage(kickoff(task), ctx.isIdle() ? undefined : { deliverAs: "followUp" });
+  pi.sendUserMessage(kickoff(task, budgetMinutes), ctx.isIdle() ? undefined : { deliverAs: "followUp" });
   return task;
 }
 

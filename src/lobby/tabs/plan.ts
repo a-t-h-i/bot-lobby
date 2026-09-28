@@ -9,7 +9,7 @@
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { ORACLE_LABEL, type LineComment, type PanelNote, type PanelQuestion, type PlannerMessage, type PlannerReply, type PlannerSeed, type RoundMode } from "../planner.ts";
 import type { PlannedTask } from "../../state/backlog.ts";
-import { beside, bold, box, clock, fill, fit, italic, markdownLines, notePane, paint, selectRow, spinner, wrap, wrapHanging, type LobbyTheme, type PaneLayout } from "../layout.ts";
+import { beside, bold, box, clock, fill, fit, italic, markdownHanging, markdownLines, notePane, paint, selectRow, spinner, wrap, wrapHanging, type LobbyTheme, type PaneLayout } from "../layout.ts";
 import { sourceColor, speakerLine, tailWindow, youLines } from "./home.ts";
 
 export interface SeatView {
@@ -152,7 +152,7 @@ function questionLines(questions: ReadonlyArray<{ question: PanelQuestion; numbe
     const lead = `${paint(theme, "dim", `${String(number).padStart(2)}.`)} ${bold(theme, paint(theme, sourceColor(question.from), question.from.padEnd(LABEL_WIDTH)))} `;
     const indent = " ".repeat(4 + LABEL_WIDTH);
     const options = question.options.map((option) => wrapHanging(`${indent}${paint(theme, "dim", "○")} `, `${option.label}${option.description ? paint(theme, "dim", ` — ${option.description}`) : ""}`, width)).flat();
-    return [...wrapHanging(lead, question.text, width), ...options];
+    return [...markdownHanging(lead, question.text, width, theme), ...options];
   });
 }
 
@@ -178,7 +178,7 @@ export function conversationLines(view: PlanView, width: number, theme?: LobbyTh
       continue;
     }
     lines.push(speakerLine("panel", width, theme, time));
-    lines.push(...(questions.length > 0 ? questionLines(questions, width, theme) : wrap(message.text, width).map((line) => (line ? `  ${line}` : ""))));
+    lines.push(...(questions.length > 0 ? questionLines(questions, width, theme) : markdownLines(message.text, Math.max(1, width - 2), theme).map((line) => (line ? `  ${line}` : ""))));
     for (const entry of message.decided ?? []) {
       lines.push(...wrapHanging(`  ${paint(theme, "success", "✓")} `, `${paint(theme, sourceColor(entry.from), `[${entry.from}]`)} ${entry.question} → ${bold(theme, entry.answer)} ${paint(theme, "dim", `· decided by the classifier (${entry.probability.toFixed(2)}); comment on the plan to overrule`)}`, width));
     }
@@ -210,7 +210,7 @@ export function draftLines(view: PlanView, width: number, theme?: LobbyTheme): D
   }
   if (view.notes.length > 0) {
     lines.push(line(""), line(bold(theme, paint(theme, "mdHeading", "What each seat needs"))));
-    for (const note of view.notes) for (const wrapped of wrapHanging(`${paint(theme, sourceColor(note.from), note.from.padEnd(LABEL_WIDTH))} `, note.text, width)) lines.push(line(wrapped));
+    for (const note of view.notes) for (const wrapped of markdownHanging(`${paint(theme, sourceColor(note.from), note.from.padEnd(LABEL_WIDTH))} `, note.text, width, theme)) lines.push(line(wrapped));
   }
   return lines;
 }

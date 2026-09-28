@@ -26,6 +26,7 @@ import { slotSituations } from "./zen-metrics.ts";
 import type { Situation } from "./kaomoji.ts";
 import { isQuiet, isSubagentProcess, toggleQuiet } from "./quiet.ts";
 import { panelLines, type ExpressionFrames, type OracleMotion } from "./zen.ts";
+import { budgetClock } from "../state/budget.ts";
 
 export const STATUS_KEY = "bot-lobby";
 
@@ -52,6 +53,8 @@ let zenOn = false;
  * keys the widget's render cache.
  */
 let zenState: { task: Task | undefined; live: AgentRun[]; runs: AgentRun[] } = { task: undefined, live: [], runs: [] };
+/** Where the widget's task lives, so its time budget can be read. */
+let zenPaths: { root: string; configDir: string } | undefined;
 let zenVersion = 0;
 
 /** Latest master tool activity; the oracle's speech bubble shows it. */
@@ -255,7 +258,8 @@ export class ZenScene {
     const motion = this.motion(now);
     const key = `${width}|${rows}|${this.tick}|${frameKey}|${motion.phase}|${motion.talk}|${zenVersion}|${Math.floor(now / 1000)}|${quiet}|${still}`;
     if (this.cache && this.cache.key === key && this.cache.theme === theme) return this.cache.lines;
-    const opts = { width, rows, tick: this.tick, theme, expressions, variants, oracleActivity, oracleMotion: motion, still };
+    const time = zenState.task && zenPaths ? budgetClock(zenPaths.root, zenPaths.configDir, zenState.task.id, now) : undefined;
+    const opts = { width, rows, tick: this.tick, theme, expressions, variants, oracleActivity, oracleMotion: motion, still, ...(time ? { time } : {}) };
     const lines = panelLines(zenState.task, zenState.runs, now, quiet, opts).map((line) => clip(line, width));
     this.cache = { key, theme, lines };
     return lines;
@@ -356,6 +360,7 @@ function leaveZen(ctx: ExtensionContext): void {
 export function applyStatus(ctx: ExtensionContext, root: string, configDir: string, runs: AgentRun[] = []): void {
   const sessionId = ctx.sessionManager.getSessionId();
   const task = isSubagentProcess() || minimized ? undefined : activeTask(root, configDir, sessionId);
+  zenPaths = { root, configDir };
   const sameTask = zenState.task?.id === task?.id;
   setZenState(task, mergeRuns(sameTask ? zenState.live : [], slim(runs)));
   ctx.ui.setStatus(STATUS_KEY, statusText(task, minimized));

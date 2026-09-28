@@ -39,9 +39,11 @@ extra instructions.
 | Command | Does |
 | --- | --- |
 | `/bot-lobby` | Open the lobby (`alt+l`) |
-| `/bot-lobby <request>` | Start a task (`--task` if it begins with a command word, `--auto` to run unattended) |
+| `/bot-lobby <request>` | Start a task (`--task` if it begins with a command word, `--auto` to run unattended, `--budget 90m` to give it a time budget) |
+| `/bot-lobby budget [90m\|off]` | Show or set this session's task time budget |
 | `/bot-lobby status \| tasks \| runs [id]` | Current task, all tasks, recent agent runs |
 | `/bot-lobby approve \| amend <text> \| decline` | Answer the proposal |
+| `/bot-lobby accept [id]` | Accept a task's work as it is, without a QA pass; the oracle then completes it |
 | `/bot-lobby pause \| resume \| cancel [id]` | Control a task |
 | `/bot-lobby auto [on\|off]` | Auto mode: the oracle finishes the task without asking (`alt+g`) |
 | `/bot-lobby claim <id>` | Take over a task another session owned |
@@ -63,7 +65,16 @@ request → clarify → scout → propose → approve → plan → implement →
   parallel; they share files through a **file desk** (claim a file, queue for
   a busy one, hand it over with a note).
 - The **QA gate** runs once at the end. A failed gate sends fixes back to the
-  owning domain, a bounded number of times.
+  owning domain, a bounded number of times. Only critical or major findings
+  fail it, and a re-review checks what the last round asked for instead of
+  starting over. It reviews everything since the commit the task started
+  from, so committed fixes still count. At the round limit you decide: accept
+  the work as it is, one more round, or leave it blocked (`/bot-lobby accept`
+  works any time). It knows who changed each file:
+  this task's workers (**planned**), a **quick fix** you ran, work that was
+  there before the task (**pre-existing**), another task, or no agent at all
+  (**unattributed**, which the Master asks you about). Quick fixes are never
+  treated as rogue changes or reverted.
 - A **researcher** can be summoned for cited web evidence (needs
   [`pi-web-access`](https://pi.dev/packages)).
 
@@ -73,6 +84,26 @@ agreed in the Plan tab skips approval too.
 
 **Safety nets:** every agent has a time limit (asked to wrap up at 75%), a
 stall watchdog and one retry; `Esc` aborts every running agent.
+
+## Time budget
+
+`/bot-lobby --budget 90m <request>` (or `/bot-lobby budget 90m` on the task in
+hand, or `workflow.taskBudgetMinutes` for every task) gives a task 90 minutes
+of work time, for the oracle and every agent. The clock runs while the oracle
+works and stops while it waits on you.
+
+- The oracle divides the time by scope: each step gets its minutes, and the
+  QA gate keeps a reserve. Every agent is told how long it has and gets a
+  heads-up at 75%.
+- When a worker's time is up it stops, keeps its files consistent, and
+  reports what it did, where it left off and how much more it needs. You are
+  asked: *DEV was busy with …; left to do: …; it needs 10 more minutes.* Give
+  it the time (or another amount) and the same agent carries on where it
+  stopped, its context intact; or stop it there.
+- Once the budget is spent no new work starts: the oracle asks you for more
+  (with a reason) or wraps up with what is done. Auto mode gives an agent more
+  once, only from time the task still has, and never grows the budget.
+- The lobby shows `34m of 1h 30m`, and each agent's `12/30m`.
 
 **A fresh context per task.** Every agent runs in its own Pi process with its
 own context. The oracle, which is your session, starts each task clean: its
@@ -176,7 +207,7 @@ the result.
   "scout": { "model": "anthropic/claude-haiku-4-5-20251001", "timeoutMs": 480000 },
   "planner": { "thinking": "high", "timeoutMs": 300000 },
   "lobby": { "planningPanel": ["backend", "designer", "qa", "researcher"], "maxPlanningRounds": 5 },
-  "workflow": { "maxReviewIterations": 2, "maxParallelWorkers": 3, "stallTimeoutMs": 300000, "wrapUpAt": 0.75 },
+  "workflow": { "maxReviewIterations": 2, "maxParallelWorkers": 3, "stallTimeoutMs": 300000, "wrapUpAt": 0.75, "taskBudgetMinutes": 0 },
   "classifier": { "enabled": false, "provider": "auto", "effort": { "cheapModel": "inherit" } }
 }
 ```
@@ -199,7 +230,7 @@ the result.
 | Scouts and the QA gate can't edit code | Scouts get read-only tools; the QA gate adds only `bash` for tests |
 | New dependencies and architecture changes need approval | Parsed from worker reports; the domain is blocked until resolved |
 | Only the Master writes knowledge | Agents can only propose it |
-| "Done" is earned | Needs a plan, a passing QA gate that ran checks, and no open blockers |
+| "Done" is earned | Needs a plan, a passing QA gate that ran checks (or your explicit acceptance), and no open blockers |
 | Parallel workers don't clobber files | Edits need a file-desk claim |
 | A crash doesn't corrupt a task | State is on disk; tasks resume from their state |
 
@@ -208,11 +239,12 @@ the result.
 ```
 .pi/bot-lobby/
 ├── <Agent>/knowledge/      knowledge, standards and decisions per agent
-├── tasks/TASK-…/           state.json, scratchpads, scout and research reports
+├── tasks/TASK-…/           state.json, budget.json, scratchpads, scout and research reports
 ├── backlog/PLAN-….json     plans saved from the Plan tab
 ├── archive/                archived tasks and old knowledge
 ├── sessions/               heartbeats of running Pi sessions
 ├── cache/files.json        file excerpts for the classifier
+├── changes.jsonl           the files each quick fix and worker edited
 └── metrics.jsonl           one line per agent run and classifier call
 ```
 

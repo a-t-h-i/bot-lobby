@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describeToolCall } from "../src/pi/activity.ts";
@@ -13,6 +13,7 @@ import { MAX_QUESTIONS } from "../src/lobby/ask.ts";
 import { createIssue, ghError, IssuesState, issueText, listIssues, splitIssueText, viewIssue, type Exec } from "../src/lobby/issues.ts";
 import { listPlannedTasks } from "../src/state/backlog.ts";
 import { readMetrics } from "../src/state/metrics.ts";
+import { readChanges } from "../src/state/changes.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
 
 function tempRoot(): string {
@@ -153,6 +154,8 @@ test("quick fixes run one at a time with full tools and land in metrics", async 
   assert.equal(first.report, "## Done\nRenamed it.");
   assert.equal(first.model, "p/served");
   assert.deepEqual(first.steps.map((step) => [step.text, step.pending]), [["editing a.ts", false]]);
+  assert.deepEqual(first.files, ["src/a.ts"], "what it edited, as the Quick fix tab shows it");
+  assert.deepEqual(readChanges(root, ".pi").map((entry) => [entry.source, entry.id, entry.what, entry.files]), [["quickfix", "QF-1", "rename foo to bar", [join(realpathSync(root), "src/a.ts")]], ["quickfix", "QF-2", "fix the typo", [join(realpathSync(root), "src/a.ts")]]], "a running task's QA gate reads its edits as the user's request");
   assert.equal(second.status, "success");
   assert.equal(seen.length, 2);
   const args = seen[0]!.args;
