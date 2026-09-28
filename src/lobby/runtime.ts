@@ -6,8 +6,8 @@
  * turn into the feed, passes plan comments to the Master that owns a task and
  * records each Master turn in the metrics log.
  */
-import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { getMarkdownTheme, getSelectListTheme, SessionManager } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { getSelectListTheme, SessionManager } from "@earendil-works/pi-coding-agent";
 import { Key, type OverlayHandle, type TUI } from "@earendil-works/pi-tui";
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { loadTask, peekTasks } from "../state/persistence.ts";
@@ -33,13 +33,12 @@ import { classifier, effortFor, hintsFor } from "../classifier/instance.ts";
 import { checkThinking } from "../pi/model-support.ts";
 import { launchPi, SessionRegistry, type BackgroundSession, type SessionLauncher } from "./sessions.ts";
 import { SessionChats } from "./session-files.ts";
-import { answerMessage, dialogAsker, loadAskTool, questionnaires, toolAsker, type Asker } from "./ask.ts";
+import { answerMessage, askUser, questionnaires, type Asker } from "./ask.ts";
 import { QuickFixQueue } from "./quickfix.ts";
 import { PlanningSession, type PlannerSeed } from "./planner.ts";
 import { execCommand, IssuesState } from "./issues.ts";
 import { LobbyView, type LiveSession, type LobbyHost, type SwitchTarget, type TabId } from "./view.ts";
-import type { LobbyTheme } from "./layout.ts";
-import { createMarkdownRenderer } from "./markdown.ts";
+import { lobbyTheme } from "./theme.ts";
 import { deliverComments, onOwnerEvent, setAuto } from "../pi/owner.ts";
 import { openEntrySettings, openSettings } from "../pi/settings-ui.ts";
 import { budgetClock } from "../state/budget.ts";
@@ -63,8 +62,8 @@ interface Runtime {
   planner?: PlanningSession;
   issues: IssuesState;
   unsubscribeFeed?: () => void;
-  /** The ask-user-question tool (or pi's dialogs), loaded once on first use. */
-  asker?: Promise<Asker>;
+  /** Puts the panel's questions to the user: the questionnaire unless a test sets another. */
+  asker?: Asker;
   /** A questionnaire is on screen. */
   asking: boolean;
   /** The lobby turned the terminal's mouse reporting on (pi's regular screen only). */
@@ -466,10 +465,9 @@ function newPlanner(state: Runtime, seed?: PlannerSeed, seats?: readonly PanelMe
   return state.planner;
 }
 
-/** The library's questionnaire when it loads, pi's own dialogs otherwise. */
-function panelAsker(state: Runtime): Promise<Asker> {
-  state.asker ??= loadAskTool(state.pi).then((tool) => (tool ? toolAsker(tool) : dialogAsker()));
-  return state.asker;
+/** The questionnaire (pi's own dialogs where it cannot be drawn); tests swap it. */
+function panelAsker(state: Runtime): Asker {
+  return state.asker ?? askUser;
 }
 
 /**
@@ -486,7 +484,7 @@ export async function answerPanel(state: Runtime | undefined = runtime): Promise
   if (state.asking) return "the questions are already open";
   state.asking = true;
   try {
-    const asker = await panelAsker(state);
+    const asker = panelAsker(state);
     const chunks = questionnaires(session.questions);
     for (let index = session.answered.length; index < chunks.length; index++) {
       const result = await asker(chunks[index]!, state.ctx);
@@ -509,33 +507,6 @@ export async function answerPanel(state: Runtime | undefined = runtime): Promise
     state.asking = false;
     rerender();
   }
-}
-
-const lobbyThemes = new WeakMap<Theme, LobbyTheme>();
-
-/**
- * pi's theme as the lobby draws with it, plus Markdown rendering; one wrapper
- * (and one Markdown renderer with its cache) per theme, so caches stay warm
- * and a theme switch starts fresh.
- */
-function lobbyTheme(theme: Theme): LobbyTheme {
-  let wrapped = lobbyThemes.get(theme);
-  if (!wrapped) {
-    wrapped = {
-      fg: (color, text) => theme.fg(color, text),
-      bold: (text) => theme.bold(text),
-      italic: (text) => theme.italic(text),
-      bg: (color, text) => theme.bg(color, text),
-      // The same looks pi gives your messages and the thinking it shows.
-      markdown: createMarkdownRenderer(getMarkdownTheme(), {
-        you: { color: (text) => theme.fg("accent", text) },
-        thought: { color: (text) => theme.fg("thinkingText", text), italic: true },
-      }),
-      strike: (text) => theme.strikethrough(text),
-    };
-    lobbyThemes.set(theme, wrapped);
-  }
-  return wrapped;
 }
 
 function host(state: Runtime, tui: TUI): LobbyHost {
