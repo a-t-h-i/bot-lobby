@@ -30,14 +30,22 @@ function parseVerdict(text: string | undefined): Verdict {
   return "blocked";
 }
 
+/** The severity a finding was tagged with, or undefined when it carries none. */
+function taggedSeverity(text: string): Severity | undefined {
+  const match = /^\[([^\]]+)\]/.exec(text);
+  return SEVERITIES.find((candidate) => match?.[1]?.toLowerCase().includes(candidate));
+}
+
 function parseFinding(text: string): ReviewFinding {
   const match = /^\[([^\]]+)\]\s*(.*)$/.exec(text);
-  const severity = SEVERITIES.find((candidate) => match?.[1]?.toLowerCase().includes(candidate)) ?? "info";
-  return { severity, text: (match?.[2] ?? text).trim() };
+  return { severity: taggedSeverity(text) ?? "info", text: (match?.[2] ?? text).trim() };
 }
 
 /** The QA gate never passes by default: a PASS must cite at least one executed check. */
 export const UNVERIFIED_PASS = "unverified pass: PASS without executed checks under ## Verification, downgraded to CHANGES_REQUIRED";
+
+/** Minor and info findings never hold the gate; what the reviewer asked for is kept as follow-ups. */
+export const MINOR_ONLY = "CHANGES_REQUIRED for minor or info findings only: passed, its asks kept as follow-ups";
 
 /** A verification bullet names a command or check and its result (`- cmd — result`). */
 function executedChecks(verification: string): string[] {
@@ -49,23 +57,34 @@ export function parseReviewResult(domain: Domain, raw: string): ReviewResult {
   const sections = parseSections(raw);
   const verification = findSection(sections, "verification") ?? "";
   const requiredChanges = bullets(findSection(sections, "required changes"));
+  const entries = bullets(findSection(sections, "findings"));
   let verdict = parseVerdict(findSection(sections, "verdict"));
   let downgraded: string | undefined;
-  if (verdict === "pass" && executedChecks(verification).length === 0) {
+  let relaxed: string | undefined;
+  const checked = executedChecks(verification).length > 0;
+  if (verdict === "pass" && !checked) {
     verdict = "changes_required";
     downgraded = UNVERIFIED_PASS;
     requiredChanges.push("Re-run the QA gate and record the checks actually executed, each as `- command — result`.");
+  } else if (
+    verdict === "changes_required" && checked && entries.length > 0
+    // Only findings explicitly tagged minor or info: an untagged one may be serious.
+    && entries.every((entry) => { const severity = taggedSeverity(entry); return severity === "minor" || severity === "info"; })
+  ) {
+    verdict = "pass";
+    relaxed = MINOR_ONLY;
   }
   return {
     domain,
     role: "reviewer",
     verdict,
-    findings: bullets(findSection(sections, "findings")).map(parseFinding),
+    findings: entries.map(parseFinding),
     verification,
     requiredChanges,
     optionalImprovements: bullets(findSection(sections, "optional improvements")),
     pushback: parsePushback(sections),
     ...(downgraded ? { downgraded } : {}),
+    ...(relaxed ? { relaxed } : {}),
     raw,
   };
 }
