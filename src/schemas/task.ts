@@ -108,6 +108,8 @@ export interface TaskTriage {
   research: number;
   /** How likely it is ambiguous as written. */
   ambiguous: number;
+  /** How likely one engineer can do it alone, right away (a quick fix, not a task for the team). */
+  solo?: number;
   kind?: string;
   kindProbability?: number;
   likelyFiles?: string[];

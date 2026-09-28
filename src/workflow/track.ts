@@ -12,6 +12,7 @@
  * `action=track`; the user can force either path with `--fast` or `--full`.
  * Once work is under way a track only gets stricter.
  */
+import type { Domain } from "../schemas/agent.ts";
 import type { Task, TaskTrack, TaskTriage, TrackMember, TrackPath, TriageSize } from "../schemas/task.ts";
 
 export const TRACK_MEMBERS: readonly TrackMember[] = ["designer", "backend", "qa", "researcher"];
@@ -70,7 +71,8 @@ const FRONTEND = terms([
   "tab", "tabs", "landing page", "hero", "banner", "card", "cards", "placeholder", "label", "labels", "image", "images", "logo",
   "spacing", "padding", "margin", "align", "alignment", "accessibility", "a11y", "aria", "wireframe", "mockup", "hover",
   "scroll", "scrolling", "chart", "charts", "dashboard", "toast", "spinner", "loading state", "empty state", "checkbox",
-  "toggle", "carousel", "breadcrumb",
+  "toggle", "carousel", "breadcrumb", "three.js", "threejs", "webgl", "webgpu", "canvas", "shader", "shaders", "3d", "svg",
+  "game",
 ]);
 
 const BACKEND = terms([
@@ -135,7 +137,7 @@ const MEDIUM = terms([
 ]);
 
 /** A new capability: building a page, a flow, an endpoint or a system is more than a small change. */
-const FEATURE = /\b(?:add|adds|adding|create|build|implement|introduce|develop|design|set up|setup)\b[^.\n]{0,40}?\b(?:pages?|screens?|features?|flows?|endpoints?|apis?|services?|systems?|modules?|dashboards?|integrations?|wizards?|workflows?|pipelines?|onboarding|notifications?|reports?)\b/i;
+const FEATURE = /\b(?:add|adds|adding|create|build|implement|introduce|develop|design|set up|setup)\b(?:[^.\n]|\.(?=\S)){0,40}?\b(?:pages?|screens?|features?|flows?|endpoints?|apis?|services?|systems?|modules?|dashboards?|integrations?|wizards?|workflows?|pipelines?|onboarding|notifications?|reports?)\b/i;
 
 const TRIVIAL = terms([
   "typo", "typos", "spelling", "misspelled", "misspelling", "grammar", "wording", "reword", "rephrase", "rename", "renaming",
@@ -144,6 +146,12 @@ const TRIVIAL = terms([
   "placeholder", "tooltip", "broken link", "dead link", "docstring", "readme", "changelog", "bump", "version bump",
   "one-line", "one line", "one-liner", "unused import", "unused imports", "unused variable", "remove unused", "dead code",
   "lint", "linting", "formatting", "whitespace", "indentation", "log message", "error message",
+]);
+
+/** Self-contained: the whole thing lives in one place, so one agent can build it end to end. */
+const SOLO = terms([
+  "single file", "single-file", "one file", "in one file", "one html file", "single html", "single html file", "single page",
+  "single-page", "standalone", "stand-alone", "self-contained", "self contained", "one-off script",
 ]);
 
 const DOCS = terms(["readme", "docs", "documentation", "changelog", "docstring", "docstrings", "jsdoc", "comment", "comments"]);
@@ -172,6 +180,8 @@ export interface RequestReading {
   risk?: string;
   /** Why it reads unclear, when it does. */
   unclear?: string;
+  /** Why it is self-contained (one file, one page), when it says so. */
+  solo?: string;
   reasons: string[];
 }
 
@@ -236,8 +246,10 @@ export function readRequest(request: string): RequestReading {
       : undecided ? `leaves a decision open (${undecided})`
         : vague ? `vague (${vague})` : undefined;
   if (unclear) reasons.push(`unclear: ${unclear}`);
+  const solo = matched(SOLO, text);
+  if (solo) reasons.push(`self-contained: ${solo}`);
 
-  return { size, roster: TRACK_MEMBERS.filter((member) => roster.has(member)), ...(risk ? { risk } : {}), ...(unclear ? { unclear } : {}), reasons };
+  return { size, roster: TRACK_MEMBERS.filter((member) => roster.has(member)), ...(risk ? { risk } : {}), ...(unclear ? { unclear } : {}), ...(solo ? { solo } : {}), reasons };
 }
 
 /* ------------------------------------------------------------ choosing a track */
@@ -246,6 +258,8 @@ export function readRequest(request: string): RequestReading {
 const YES = 0.5;
 /** Below this the classifier's size is a guess, and the rules' size stands. */
 const SIZE_CONFIDENCE = 0.6;
+/** The classifier's "one engineer can do it alone" taken as a yes (`classifier.thresholds.quickFixAt`'s default). */
+const SOLO_YES = 0.7;
 
 export interface TrackOptions {
   /** `workflow.fastTrack`: false puts every task on the full workflow. */
@@ -279,7 +293,9 @@ export function chooseTrack(request: string, triage: TaskTriage | undefined, opt
     if (unclear) reasons.push(`unclear: ${unclear}`);
   }
   const source: TaskTrack["source"] = triage ? "classifier" : "rules";
-  const fast = (size === "trivial" || size === "small") && !rules.risk && !unclear;
+  // A self-contained build (one file, one page) needs no survey or plan round even when it is rich.
+  const selfContained = Boolean(rules.solo) || (triage?.solo ?? 0) >= SOLO_YES;
+  const fast = (size === "trivial" || size === "small" || (size === "medium" && selfContained)) && !rules.risk && !unclear;
   const [path, why, by]: [TrackPath, string[], TaskTrack["source"]] = options.forced
     ? [options.forced, [`the user asked for the ${options.forced === "fast" ? "fast track" : "full workflow"}`], "user"]
     : options.approvedPlan
@@ -298,6 +314,56 @@ export function chooseTrack(request: string, triage: TaskTriage | undefined, opt
     ...(options.forced ? { userChoice: options.forced } : {}),
     at: now,
   };
+}
+
+/* ------------------------------------------------------------ quick fix or task */
+
+/** Where a new request goes before any task exists: one agent now (the lobby's quick fix), or the team. */
+export interface RequestRoute {
+  to: "quickfix" | "task";
+  size: TriageSize;
+  /** The domain that would build it: a quick feature (medium or larger) runs on its model, thinking and time limit. */
+  builder: Domain;
+  /** Why, a few words each. */
+  reasons: string[];
+  source: "classifier" | "rules";
+}
+
+/**
+ * Whether one agent can do a new request alone, right away. The classifier's
+ * "one engineer, alone, now" answer decides when it is on and sure either way
+ * (`quickFixAt`); the rules decide otherwise: small and in one area, or
+ * self-contained (one file, one page) even when rich. Anything serious,
+ * unclear, large, spread across frontend and backend, or needing outside
+ * facts goes to the team. The oracle confirms a quick fix before it runs.
+ */
+export function chooseRoute(request: string, triage: TaskTriage | undefined, quickFixAt = SOLO_YES): RequestRoute {
+  const rules = readRequest(request);
+  const building = rules.roster.filter((member) => member === "designer" || member === "backend");
+  const against = [
+    rules.risk ? `serious: touches ${rules.risk}` : "",
+    rules.unclear ? `unclear: ${rules.unclear}` : "",
+    rules.size === "large" ? rules.reasons[0]! : "",
+    rules.size === "medium" && !rules.solo ? rules.reasons[0]! : "",
+    building.length > 1 ? "touches frontend and backend" : "",
+    rules.roster.includes("researcher") ? "needs outside facts (the researcher)" : "",
+  ].filter(Boolean);
+  const size = triage && triage.sizeConfidence >= SIZE_CONFIDENCE ? triage.size : rules.size;
+  const frontend = triage ? (triage.domains.designer ?? 0) >= Math.max(YES, triage.domains.backend ?? 0) : building.length === 1 && building[0] === "designer";
+  const builder: Domain = frontend ? "designer" : "backend";
+  const one = building.length === 1 ? (building[0] === "designer" ? "frontend" : "backend") : "one place";
+  const base = { size, builder };
+  const ruled: RequestRoute = against.length > 0
+    ? { ...base, to: "task", reasons: against, source: "rules" }
+    : { ...base, to: "quickfix", reasons: [rules.solo ? `self-contained (${rules.solo}): one agent can build it end to end` : `${rules.reasons[0]}, in ${one}`], source: "rules" };
+  const solo = triage?.solo;
+  if (!triage || solo === undefined) return ruled;
+  // Serious is serious, whatever the classifier makes of the work itself.
+  if (rules.risk) return { ...base, to: "task", reasons: [`serious: touches ${rules.risk}`], source: "rules" };
+  if (triage.ambiguous >= YES) return { ...base, to: "task", reasons: [`the classifier reads it as ambiguous (${triage.ambiguous.toFixed(2)})`], source: "classifier" };
+  if (solo >= quickFixAt) return { ...base, to: "quickfix", reasons: [`the classifier: one engineer can do it alone (${solo.toFixed(2)})`], source: "classifier" };
+  if (solo <= 1 - quickFixAt) return { ...base, to: "task", reasons: [`the classifier: it needs the team (one engineer alone: ${solo.toFixed(2)})`], source: "classifier" };
+  return { ...ruled, reasons: [...ruled.reasons, `the classifier is unsure (${solo.toFixed(2)})`] };
 }
 
 /* ------------------------------------------------------------ what a track asks of the engine */

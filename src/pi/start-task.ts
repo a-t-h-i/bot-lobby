@@ -5,7 +5,7 @@
  */
 import { existsSync } from "node:fs";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { createTask, taskRequest, type Task, type TaskTrack, type TrackPath } from "../schemas/task.ts";
+import { createTask, taskRequest, type Task, type TaskTrack, type TaskTriage, type TrackPath } from "../schemas/task.ts";
 import type { Domain } from "../schemas/agent.ts";
 import { chooseTrack, trackLine, trackSummary } from "../workflow/track.ts";
 import { lobbyFeed } from "../lobby/feed.ts";
@@ -29,6 +29,9 @@ function uniqueTaskId(root: string, configDir: string, request: string): string 
   return id;
 }
 
+/** In a kickoff after the oracle routed the request to the team (the lobby then shows the request once). */
+export const ROUTED_LINE = "Routed: you sent this request to the team.";
+
 /** The fast track's steps: straight to the agents the request needs, QA only for tests, then complete. */
 function fastSteps(track: TaskTrack): string[] {
   const building = track.roster.filter((member): member is Domain => member === "designer" || member === "backend");
@@ -49,13 +52,14 @@ function fastSteps(track: TaskTrack): string[] {
   ].filter(Boolean);
 }
 
-export function kickoff(task: Task, budgetMinutes = 0, options: { fastTrack?: boolean } = {}): string {
+export function kickoff(task: Task, budgetMinutes = 0, options: { fastTrack?: boolean; routed?: boolean } = {}): string {
   const track = task.track;
   const head = [
     `A bot-lobby task is active: ${task.id}`,
     `Title: ${task.title}`,
     `Request: ${taskRequest(task)}`,
     `State: ${task.state}`,
+    ...(options.routed ? [ROUTED_LINE] : []),
     ...(track ? [trackSummary(track)] : []),
     ...(budgetMinutes > 0 ? [`Time budget: ${budgetMinutes} minutes of work, for you and every agent. Size the plan to fit it and divide it by scope (see Time budget in your prompt).`] : []),
     "",
@@ -89,6 +93,11 @@ export interface StartOptions {
   budget?: number;
   /** The user's `--fast` or `--full`: the path the task takes, whatever its request reads as. */
   track?: TrackPath;
+  /** The classifier already read the request (routing did): `triage` is its read, or absent when it was off. */
+  triaged?: boolean;
+  triage?: TaskTriage;
+  /** The oracle sent this request to the team after the classifier read it as a quick fix. */
+  routed?: boolean;
 }
 
 export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configDir: string, request: string, options: StartOptions = {}): Promise<Task | undefined> {
@@ -105,7 +114,7 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   createTaskDir(root, configDir, task);
   transition(task, "clarifying");
   // The classifier's read of the request (when it is on) reaches the Master's very first turn.
-  const triage = await triageFor({ cwd: ctx.cwd, root, configDir }, request);
+  const triage = options.triaged ? options.triage : await triageFor({ cwd: ctx.cwd, root, configDir }, request);
   if (triage) task.triage = triage;
   // How serious the request reads: who takes part, and whether it takes the fast track or the full workflow.
   const config = loadConfig();
@@ -123,7 +132,7 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   // The oracle takes the task on with a clean context: nothing said before the kickoff is sent to its model.
   if (freshContextOn()) markContext(pi, { kind: "start", taskId: task.id, at: Date.now() });
   // A kickoff while pi is still busy (another turn) queues behind it instead of throwing.
-  pi.sendUserMessage(kickoff(task, budgetMinutes, { fastTrack: config.workflow.fastTrack }), ctx.isIdle() ? undefined : { deliverAs: "followUp" });
+  pi.sendUserMessage(kickoff(task, budgetMinutes, { fastTrack: config.workflow.fastTrack, ...(options.routed ? { routed: true } : {}) }), ctx.isIdle() ? undefined : { deliverAs: "followUp" });
   return task;
 }
 

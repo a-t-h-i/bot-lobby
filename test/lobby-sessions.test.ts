@@ -249,8 +249,8 @@ test("a session log keeps its newest messages ready and walks the whole history 
 });
 
 test("--task always starts a task, even when the request begins with a subcommand word", () => {
-  assert.deepEqual(parseCommand("--task amend the login flow"), { sub: undefined, rest: [], restText: "amend the login flow" });
-  assert.deepEqual(parseCommand("--task --auto status page\nwith charts"), { sub: undefined, rest: [], restText: "status page\nwith charts", auto: true });
+  assert.deepEqual(parseCommand("--task amend the login flow"), { sub: undefined, rest: [], restText: "amend the login flow", task: true });
+  assert.deepEqual(parseCommand("--task --auto status page\nwith charts"), { sub: undefined, rest: [], restText: "status page\nwith charts", auto: true, task: true });
   assert.equal(parseCommand("amend the login flow").sub, "amend");
   assert.deepEqual(parseCommand("start-plan PLAN-dark auto"), { sub: "start-plan", rest: ["PLAN-dark", "auto"], restText: "PLAN-dark auto" });
   assert.equal(parseCommand("start-plan the rollout").sub, undefined, "free text is a request");

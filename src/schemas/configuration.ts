@@ -72,6 +72,8 @@ export interface WorkflowConfig {
   taskBudgetMinutes: number;
   /** Small, clear, low-risk requests take the fast track (no scouts, proposal or plan; QA only when tests are needed); false puts every task on the full workflow. */
   fastTrack: boolean;
+  /** A new request that one agent can do alone goes to the quick-fix agent once the oracle confirms; false makes every request a task. */
+  routeQuickFixes: boolean;
 }
 
 export interface KnowledgeConfig {
@@ -145,6 +147,8 @@ export interface ClassifierThresholds {
   simpleAt: number;
   /** A step scored trivial at this confidence runs on the cheaper model. */
   trivialAt: number;
+  /** A new request goes to the quick-fix agent when one engineer can do it alone at least this likely (the oracle confirms). */
+  quickFixAt: number;
   /** A quick fix scored large at this confidence is held instead of started. */
   quickFixLargeAt: number;
 }
@@ -210,6 +214,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     freshContext: true,
     taskBudgetMinutes: 0,
     fastTrack: true,
+    routeQuickFixes: true,
   },
   knowledge: {
     compactionThreshold: 20000,
@@ -242,6 +247,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
       fileRelevantAt: 0.5,
       simpleAt: 0.7,
       trivialAt: 0.8,
+      quickFixAt: 0.7,
       quickFixLargeAt: 0.8,
     },
     fileHints: { topK: 8, maxCandidates: 480, budgetMs: 1500 },
@@ -347,6 +353,7 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
   const workflow = { ...DEFAULT_CONFIG.workflow, ...(src.workflow as Partial<WorkflowConfig> | undefined) };
   workflow.freshContext = workflow.freshContext !== false;
   workflow.fastTrack = workflow.fastTrack !== false;
+  workflow.routeQuickFixes = workflow.routeQuickFixes !== false;
   workflow.taskBudgetMinutes = typeof workflow.taskBudgetMinutes === "number" && workflow.taskBudgetMinutes > 0 ? Math.min(24 * 60, Math.round(workflow.taskBudgetMinutes)) : 0;
   const knowledge = { ...DEFAULT_CONFIG.knowledge, ...(src.knowledge as Partial<KnowledgeConfig> | undefined) };
   const srcAgents = (src.agents ?? {}) as Partial<BotLobbyConfig["agents"]>;

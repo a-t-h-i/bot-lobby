@@ -4,7 +4,9 @@ A [Pi](https://pi.dev) extension that turns Pi into a multi-agent software team.
 
 ![The bot-lobby status scene: the oracle orchestrating DEV, DESIGN, RESEARCH and QA through a task's plan](https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/gallery.png)
 
-`/bot-lobby <request>` starts a task. Your Pi session becomes the **Master**
+`/bot-lobby <request>` (or a request typed in the lobby) starts a task, unless
+one agent can simply do it: then it goes to the [quick-fix agent](#quick-fix-or-the-team).
+For a task, your Pi session becomes the **Master**
 (the "oracle"): it scouts the codebase, proposes a plan, and delegates the
 work to three domain agents — **Designer+Frontend**, **Backend** and **QA** —
 each running in its own isolated `pi` process. QA's reviewer is the quality
@@ -43,7 +45,7 @@ extra instructions.
 | Command | Does |
 | --- | --- |
 | `/bot-lobby` | Open the lobby (`alt+l`) |
-| `/bot-lobby <request>` | Start a task (`--task` if it begins with a command word, `--auto` to run unattended, `--budget 90m` to give it a time budget, `--fast` / `--full` to pick its [track](#fast-track-or-full-workflow)) |
+| `/bot-lobby <request>` | Start a request: a [quick fix](#quick-fix-or-the-team) when one agent can do it alone, else a task (`--task` to always make it a task, also when it begins with a command word; `--auto` to run unattended, `--budget 90m` to give it a time budget, `--fast` / `--full` to pick its [track](#fast-track-or-full-workflow)) |
 | `/bot-lobby budget [90m\|off]` | Show or set this session's task time budget |
 | `/bot-lobby status \| tasks \| runs [id]` | Current task, all tasks, recent agent runs |
 | `/bot-lobby approve \| amend <text> \| decline` | Answer the proposal |
@@ -55,6 +57,29 @@ extra instructions.
 | `/bot-lobby settings \| config` | Edit settings / show the effective config |
 | `/bot-lobby knowledge` | Knowledge file sizes |
 | `/bot-lobby minimize \| restore` | Hide bot-lobby in this session (`ctrl+shift+m`) |
+
+## Quick fix or the team
+
+Before any task exists, bot-lobby asks whether **one agent can just do it**:
+in one file or one area, with nothing to agree between frontend and backend,
+no unfamiliar codebase to survey, nothing risky and no decision you must make
+first. [Jev](#the-classifier-jev) answers when it is on (`classifier.thresholds.quickFixAt`,
+0.7); plain rules answer otherwise, and whenever Jev is unsure. A request that
+says it is self-contained ("a single page", "in one html file") counts even
+when it is rich.
+
+When it reads that way, the oracle confirms in one step, without reading
+files or planning (`route_request`), and says so: *this looks like a quick
+feature, the quick-fix agent is on it*. The lobby then hands the request to
+the quick-fix agent and switches to the **Quick fix** tab, where you follow
+it. No scouts, proposal, plan or QA. A quick feature (bigger than a small
+change, but in one place) runs on its builder's model, thinking and time limit
+(DESIGN's for a page) instead of the quick-fix defaults.
+
+Everything else, or anything the oracle judges needs the team, starts as a
+task below. `--task` always makes a task; `workflow.routeQuickFixes: false`
+turns routing off. Without the lobby (a background session, RPC mode) every
+request is a task.
 
 ## How a task runs
 
@@ -72,7 +97,7 @@ track** or the **full workflow**. The read is instant and costs no tokens
 
 | The request… | Who takes part |
 | --- | --- |
-| changes a screen, a component, styles or copy | DESIGN (frontend) |
+| changes anything that runs in the browser: screens, components, styles, copy, canvas or three.js graphics | DESIGN (frontend) |
 | changes an API, the database, auth, jobs or other server-side code | DEV (backend) |
 | needs tests: asks for them, fixes a bug, or changes backend logic | QA |
 | depends on outside facts: latest versions, docs, standards, third-party APIs | RESEARCH |
@@ -170,7 +195,7 @@ open. `alt+h` lists every key.
 | **1 Lobby** | The task's status, your conversation with the oracle, an activity log of every tool call, and each agent's latest thought |
 | **2 Tasks** | Every task and saved plan as a checklist. `s` starts a plan in a new session, `h` here; `c` comments on a plan; `a` archives, `d` deletes |
 | **3 Plan** | Plan a task with a panel of agents before building it (below) |
-| **4 Quick fix** | One agent makes a small change right away, beside any running task |
+| **4 Quick fix** | One agent makes a change right away, beside any running task; requests the oracle [routes here](#quick-fix-or-the-team) show up too |
 | **5 Metrics** | Run time, success rate, tokens and cost per model and agent |
 
 Common keys: `tab` switches tabs, `esc` browses (arrows, single-key
@@ -282,7 +307,8 @@ else TypeSafe.
 | Planning seats | Each round, only the seats the idea or your latest answers touch sit; `1`–`4` pins a seat |
 | Obvious answers | Answers a question itself when the conversation already makes the recommended option clearly right (≥ 0.9); listed under Assumptions |
 | File hints | Agents start with a short list of the files they most likely need, and get a `find_relevant_files` tool |
-| Task triage | The task's [track](#fast-track-or-full-workflow) and roster use its read (size, domains, research, ambiguity), and the Master gets it as hints; a quick fix that is really a task is held (`r` run anyway, `t` make it a task) |
+| Quick fix or task | Whether one engineer can do a new request alone decides whether it goes to the [quick-fix agent](#quick-fix-or-the-team) (the oracle confirms) |
+| Task triage | The task's [track](#fast-track-or-full-workflow) and roster use its read (size, domains, research, ambiguity), and the Master gets it as hints; a quick fix that is really a task (large, and not one engineer's work) is held (`r` run anyway, `t` make it a task) |
 | Effort routing | Simple steps run one thinking level lower; trivial ones on a **cheaper model** you pick. A routed run that falls short re-runs on your normal settings |
 
 **It never gets in the way:** any failure, timeout or missing key means
@@ -310,7 +336,7 @@ the result.
   "scout": { "model": "anthropic/claude-haiku-4-5-20251001", "timeoutMs": 480000 },
   "planner": { "thinking": "high", "timeoutMs": 300000 },
   "lobby": { "planningPanel": ["backend", "designer", "qa", "researcher"], "maxPlanningRounds": 5 },
-  "workflow": { "maxReviewIterations": 2, "maxParallelWorkers": 3, "stallTimeoutMs": 300000, "wrapUpAt": 0.75, "taskBudgetMinutes": 0, "fastTrack": true },
+  "workflow": { "maxReviewIterations": 2, "maxParallelWorkers": 3, "stallTimeoutMs": 300000, "wrapUpAt": 0.75, "taskBudgetMinutes": 0, "fastTrack": true, "routeQuickFixes": true },
   "classifier": { "enabled": false, "provider": "auto", "effort": { "cheapModel": "inherit" } }
 }
 ```

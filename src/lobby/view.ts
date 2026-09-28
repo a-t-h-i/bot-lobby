@@ -471,6 +471,15 @@ export class LobbyView implements Component, Focusable {
     return visibleTabs(this.issuesOn);
   }
 
+  /** Open the Quick fix tab on a job the oracle routed there, with a line saying so. */
+  showQuickFix(id: string): void {
+    this.setTab("quickfix");
+    delete this.queries.quickfix;
+    this.fixSelected = Math.max(0, this.fixJobs().findIndex((job) => job.id === id));
+    this.fixDetailOffset = 0;
+    this.say(`${id} — the oracle sent your request to the quick-fix agent`);
+  }
+
   setTab(tab: TabId): void {
     if (tab === this.tab) return;
     if (!this.tabs().includes(tab)) return this.say(`the ${TAB_LABELS[tab]} tab is off — set lobby.${tab} to true in the config to bring it back`, "warning");

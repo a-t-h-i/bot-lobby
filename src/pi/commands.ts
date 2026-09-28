@@ -21,7 +21,8 @@ import { applyApprovalChoice, describeTask, describeOversizedKnowledge, lastQaAs
 import { applyStatus, registerRevealShortcut, setMinimized } from "./ui.ts";
 import { classifierSummary, openSettings } from "./settings-ui.ts";
 import { keyStatus } from "../classifier/instance.ts";
-import { kickoff, startPlannedTask, startTask } from "./start-task.ts";
+import { kickoff, startPlannedTask } from "./start-task.ts";
+import { startRequest } from "./route.ts";
 import { setAuto, toggleOwnAuto } from "./owner.ts";
 import { autoOpenLobby, showLobby } from "../lobby/runtime.ts";
 import { modelRef, thinkingMismatches } from "./model-support.ts";
@@ -32,8 +33,8 @@ import { qaStillDue } from "../workflow/track.ts";
 
 const HELP = [
   "/bot-lobby                  Open the lobby: tasks, plan, quick fix, metrics (alt+l)",
-  "/bot-lobby <request>        Start a task through the workflow",
-  "/bot-lobby --task [--auto] <request>   Start a task even when the request begins with a subcommand word",
+  "/bot-lobby <request>        Start a request: a quick fix when one agent can do it alone (the oracle confirms), else a task",
+  "/bot-lobby --task [--auto] <request>   Always a task (also when the request begins with a subcommand word)",
   "/bot-lobby --budget 90m <request>   Start a task with a time budget the oracle divides between its agents",
   "/bot-lobby --fast|--full <request>   Start a task on the fast track (straight to the agents it needs) or the full workflow, whatever it reads as",
   "/bot-lobby budget [90m|off]  Show or set this session's task time budget",
@@ -76,6 +77,8 @@ export interface ParsedCommand {
   budgetError?: string;
   /** `--fast` or `--full`: the task's path, whatever its request reads as. */
   track?: "fast" | "full";
+  /** `--task`: a task, never routed to the quick-fix agent. */
+  task?: boolean;
 }
 
 export function parseCommand(args: string): ParsedCommand {
@@ -83,10 +86,11 @@ export function parseCommand(args: string): ParsedCommand {
   // Leading flags start a task: what follows is its request, even when it begins with a subcommand word
   // (a background session started from the lobby sends `--task [--auto] <request>`).
   let flagged = false;
-  const extras: Pick<ParsedCommand, "auto" | "budget" | "budgetError" | "track"> = {};
+  const extras: Pick<ParsedCommand, "auto" | "budget" | "budgetError" | "track" | "task"> = {};
   for (let match = START_FLAG.exec(trimmed); match; match = START_FLAG.exec(trimmed)) {
     flagged = true;
     if (match[1] === "auto") extras.auto = true;
+    else if (match[1] === "task") extras.task = true;
     else if (match[1] === "fast" || match[1] === "full") extras.track = match[1];
     else if (match[2] !== undefined) {
       const minutes = parseMinutes(match[2]);
@@ -320,14 +324,16 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
       return filtered.length > 0 ? filtered : null;
     },
     handler: async (args, ctx) => {
-      const { sub, rest, restText, auto, budget, budgetError, track } = parseCommand(args ?? "");
+      const { sub, rest, restText, auto, budget, budgetError, track, task } = parseCommand(args ?? "");
       if (budgetError) return ctx.ui.notify(`bot-lobby: ${budgetError}`, "warning");
       if (!sub) {
         if (!restText) {
           if (!showLobby()) ctx.ui.notify(HELP, "info");
           return;
         }
-        if (await startTask(pi, ctx, configDir, restText, { ...(auto ? { auto } : {}), ...(budget ? { budget } : {}), ...(track ? { track } : {}) })) autoOpenLobby();
+        // A request one agent can do alone may go to the quick-fix agent once the oracle confirms; the rest start as tasks.
+        const started = await startRequest(pi, ctx, configDir, restText, { ...(auto ? { auto } : {}), ...(budget ? { budget } : {}), ...(track ? { track } : {}), ...(task ? { task } : {}) });
+        if (started === "task") autoOpenLobby();
         return;
       }
       switch (sub) {

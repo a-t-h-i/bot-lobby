@@ -4,7 +4,7 @@ export const designerSpec: DomainSpec = {
   domain: "designer",
   promptFile: "designer.md",
   scoutFocus:
-    "UI/UX, frontend implementation, accessibility, responsive behavior, and the existing design language",
+    "UI/UX and everything that runs in the browser (pages, components, client-side logic, canvas and WebGL/three.js graphics), accessibility, responsive behavior, and the existing design language",
   boundary:
-    "Stay inside frontend/UI. Do not modify backend implementation; report backend dependencies to the Master.",
+    "Stay inside the frontend: everything that runs in the browser. Do not modify server-side code; report backend dependencies to the Master.",
 };

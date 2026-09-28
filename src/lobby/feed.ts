@@ -284,8 +284,13 @@ export function chatText(role: "user" | "assistant", text: string): Array<{ role
   const kickoff = /^A bot-lobby task is active: (\S+)\nTitle: (.*)/.exec(body);
   if (kickoff) {
     const request = /\nRequest: ([\s\S]*?)(?:\nState: |$)/.exec(body)?.[1]?.trim();
-    return [{ role: "note", text: `task started · ${kickoff[2]}` }, ...(request ? [{ role: "you" as const, text: request }] : [])];
+    // A request the oracle routed to the team is already in the conversation, under the routing note.
+    const shown = /\nRouted: /.test(body);
+    return [{ role: "note", text: `task started · ${kickoff[2]}` }, ...(request && !shown ? [{ role: "you" as const, text: request }] : [])];
   }
+  // A new request the classifier read as a quick fix, before the oracle confirms where it goes.
+  const routing = /^bot-lobby: a new request, not a task yet\.\nRequest: ([\s\S]*?)\nRead: /.exec(body);
+  if (routing) return [{ role: "you", text: routing[1]!.trim() }, { role: "note", text: "reads as a quick fix · the oracle confirms where it goes" }];
   const comment = /^The user left (?:a comment|\d+ comments) on (the approved plan|the proposal) of (\S+) from the lobby:/.exec(body);
   if (comment) return [{ role: "note", text: `your comment on ${comment[1]} went to the oracle` }];
   return [{ role: "you", text: body }];

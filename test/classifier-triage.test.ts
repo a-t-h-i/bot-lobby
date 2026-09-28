@@ -24,6 +24,7 @@ interface Script {
   domains?: Record<string, number>;
   research?: number;
   ambiguous?: number;
+  solo?: number;
   kind?: string;
   /** Choice picks by question text. */
   picks?: Record<string, [string, number]>;
@@ -42,6 +43,7 @@ function scriptedJev(script: Script, calls: Array<Record<string, Question>> = []
       else if (key.startsWith("domain_")) answers[key] = { type: "noul", noul: script.domains?.[key.slice(7)] ?? 0 };
       else if (key === "needs_research") answers[key] = { type: "noul", noul: script.research ?? 0.1 };
       else if (key === "ambiguous") answers[key] = { type: "noul", noul: script.ambiguous ?? 0.1 };
+      else if (key === "solo") answers[key] = { type: "noul", noul: script.solo ?? 0.5 };
       else if (key === "kind") answers[key] = { type: "choice", choice: script.kind ?? "feature", probabilities: { [script.kind ?? "feature"]: 0.8 }, confidence: 0.8 };
       else if (key === "any_relevant") answers[key] = { type: "noul", noul: 0.9 };
       else if (/^c\d+$/.test(key)) {
@@ -62,13 +64,14 @@ function jev(fetch: FetchLike, overrides: Partial<ClassifierConfig> = {}): Class
   return new Classifier({ config: () => ({ ...DEFAULT_CONFIG.classifier, enabled: true, ...overrides }), keys: async () => "ts_key", fetch, sleep: async () => {} });
 }
 
-test("triage asks size, domains, research, ambiguity and kind in one call and reads them back", async () => {
+test("triage asks size, domains, research, ambiguity, kind and one-engineer work in one call and reads them back", async () => {
   const request = triageRequest({ request: "fix the login redirect", layout: ["src/ (80 files)"], domains: DOMAINS });
-  assert.deepEqual(Object.keys(request.questions).sort(), ["ambiguous", "domain_backend", "domain_designer", "domain_qa", "kind", "needs_research", "size"]);
+  assert.deepEqual(Object.keys(request.questions).sort(), ["ambiguous", "domain_backend", "domain_designer", "domain_qa", "kind", "needs_research", "size", "solo"]);
   assert.equal((request.questions.size as Extract<Question, { type: "score" }>).criteria.length, 4);
   assert.deepEqual((request.state as Record<string, unknown>).repository_layout, "src/ (80 files)");
   const calls: Array<Record<string, Question>> = [];
-  const triage = await triageTask(jev(scriptedJev({ size: [0.8, 0.9], domains: { backend: 0.93, qa: 0.6, designer: 0.02 }, kind: "bugfix" }, calls)), { request: "fix the login redirect", domains: DOMAINS });
+  const triage = await triageTask(jev(scriptedJev({ size: [0.8, 0.9], domains: { backend: 0.93, qa: 0.6, designer: 0.02 }, kind: "bugfix", solo: 0.82 }, calls)), { request: "fix the login redirect", domains: DOMAINS });
+  assert.equal(triage!.solo, 0.82);
   assert.equal(calls.length, 1);
   assert.equal(triage!.size, "small", "0.8 rounds to level 1");
   assert.equal(triage!.sizeConfidence, 0.9);
@@ -213,4 +216,15 @@ test("a quick fix the classifier judges a task is held, not run; r runs it anywa
   assert.equal(other.note, "started as a task in a new session");
   assert.equal(queue.runAnyway(small.id), false, "only a held job runs anyway");
   assert.deepEqual(await quickFixSize(jev(scriptedJev({}), { enabled: false }), "x"), undefined);
+});
+
+test("a large quick fix that is still one engineer's work runs instead of being held", async () => {
+  const root = mkdtempSync(join(tmpdir(), "bl-qf-solo-"));
+  const runs: string[] = [];
+  const runner: ProcessRunner = async (_args, options) => (runs.push(options.prompt ?? ""), { exitCode: 0, stdout: reply("## Done\nx"), stderr: "", killed: false, timedOut: false });
+  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low", timeoutMs: 60_000 }), runProcess: runner, classifier: jev(scriptedJev({ size: [3, 0.95], solo: 0.9 })) });
+  const page = queue.submit("build a realistic three.js hourglass timer in one html file");
+  await drain(queue);
+  assert.equal(page.status, "success", "large, but one file one engineer can build");
+  assert.deepEqual(await quickFixSize(jev(scriptedJev({ size: [3, 0.95], solo: 0.2 })), "rewrite the billing system"), { size: "large", confidence: 0.95, solo: 0.2 });
 });
