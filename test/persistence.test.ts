@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -10,6 +10,8 @@ import {
   ensureProjectStructure,
   loadTask,
   listTasks,
+  peekOwnedTask,
+  peekTasks,
   taskHealth,
   ownedTask,
   ownerlessTask,
@@ -221,4 +223,40 @@ test("per-task artifacts fall back through the legacy trees, bot-lobby winning p
   createTaskDir(root, ".pi", createTask(id, "Artifacts"));
   writeFileSync(join(taskDirFor(root, ".pi", id), "backend.md"), "new scratchpad\n");
   assert.equal(readTaskArtifact(root, ".pi", id, "backend.md"), "new scratchpad\n", "the new tree wins per file");
+});
+
+test("peeked tasks are parsed once and read again only when their file changes", () => {
+  const root = mkdtempSync(join(tmpdir(), "bl-peek-"));
+  ensureProjectStructure(root, ".pi");
+  const task = createTask("TASK-peek", "peek", "2026-09-27T10:00:00.000Z", "x", "s-1");
+  createTaskDir(root, ".pi", task);
+  const path = join(taskDirFor(root, ".pi", "TASK-peek"), "state.json");
+  const settle = () => utimesSync(path, new Date(Date.now() - 5000), new Date(Date.now() - 5000));
+  settle();
+  const first = peekTasks(root, ".pi")[0];
+  assert.equal(first?.id, "TASK-peek");
+  assert.equal(peekTasks(root, ".pi")[0], first, "an unchanged file is not parsed again");
+  assert.equal(peekOwnedTask(root, ".pi", "s-1"), first);
+
+  // Another process writes it (no saveTask here), keeping the size: the stat still changes.
+  writeFileSync(path, readFileSync(path, "utf8").replace('"peek"', '"PEEK"'));
+  settle();
+  const second = peekTasks(root, ".pi")[0];
+  assert.notEqual(second, first);
+  assert.equal(second?.title, "PEEK");
+
+  // A file written a moment ago is reread every time until it settles.
+  writeFileSync(path, readFileSync(path, "utf8").replace('"PEEK"', '"Peek"'));
+  const fresh = peekTasks(root, ".pi")[0];
+  assert.equal(fresh?.title, "Peek");
+  assert.notEqual(peekTasks(root, ".pi")[0], fresh, "not kept while it may still change within the same clock tick");
+
+  settle();
+  const kept = peekTasks(root, ".pi")[0]!;
+  saveTask(root, ".pi", { ...kept, title: "saved here" });
+  assert.equal(peekTasks(root, ".pi")[0]?.title, "saved here", "this process's own save is seen at once");
+
+  rmSync(taskDirFor(root, ".pi", "TASK-peek"), { recursive: true });
+  assert.deepEqual(peekTasks(root, ".pi"), []);
+  assert.equal(peekOwnedTask(root, ".pi", "s-1"), undefined);
 });

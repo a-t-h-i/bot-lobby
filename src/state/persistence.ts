@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { join, sep } from "node:path";
 import type { KnowledgeConfig } from "../schemas/configuration.ts";
 import type { Domain } from "../schemas/agent.ts";
 import { TERMINAL_STATES, isTaskState, type Task } from "../schemas/task.ts";
@@ -36,6 +36,7 @@ export function ensureProjectStructure(root: string, configDir: string): void {
 export function createTaskDir(root: string, configDir: string, task: Task): void {
   const dir = taskDir(dataRoot(root, configDir), task.id);
   mkdirSync(dir, { recursive: true });
+  snapshots.delete(join(dir, "state.json"));
   writeFileEnsured(join(dir, "state.json"), JSON.stringify(task, null, 2));
   ensureFile(join(dir, "proposal.md"), "");
   ensureFile(join(dir, "plan.md"), "");
@@ -77,7 +78,9 @@ export function readTaskArtifact(
 }
 
 export function saveTask(root: string, configDir: string, task: Task): void {
-  writeFileEnsured(join(taskDir(dataRoot(root, configDir), task.id), "state.json"), JSON.stringify(task, null, 2));
+  const path = join(taskDir(dataRoot(root, configDir), task.id), "state.json");
+  snapshots.delete(path);
+  writeFileEnsured(path, JSON.stringify(task, null, 2));
 }
 
 /** Read a task state: the bot-lobby copy wins, else the newest pre-rename copy. */
@@ -145,6 +148,62 @@ export function listTasks(root: string, configDir: string): Task[] {
     if (task) tasks.push(task);
   }
   return tasks.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+/**
+ * Tasks as last read, by state.json path, with the file's stat at that read.
+ * The owner's clock and the lobby look at every task every few seconds in
+ * every session; a file is parsed again only when its stat changed. A file
+ * written a moment ago is not kept (two writes that close together can share
+ * a stat), and this process's own saves drop their entry at once.
+ */
+const snapshots = new Map<string, { stamp: string; task: Task }>();
+/** How long ago a file must have been written for its read to be kept. */
+const SETTLE_MS = 1000;
+
+function peekTaskAt(dir: string): Task | undefined {
+  const path = join(dir, "state.json");
+  let stamp: string;
+  let settled: boolean;
+  try {
+    const stat = statSync(path, { bigint: true });
+    stamp = `${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`;
+    settled = Date.now() - Number(stat.mtimeMs) >= SETTLE_MS;
+  } catch {
+    snapshots.delete(path);
+    return undefined;
+  }
+  const hit = snapshots.get(path);
+  if (hit?.stamp === stamp) return hit.task;
+  const task = readTaskAt(dir);
+  if (task && settled) snapshots.set(path, { stamp, task });
+  else snapshots.delete(path);
+  return task;
+}
+
+/**
+ * All tasks on disk, newest first, like `listTasks`, but a file is read only
+ * when it changed since the last look. The tasks are shared with every other
+ * caller, so they are for reading (the owner's clock, the lobby): whatever
+ * changes a task loads its own copy with `loadTask` and saves that.
+ */
+export function peekTasks(root: string, configDir: string): Task[] {
+  const tasks: Task[] = [];
+  const seen = new Set<string>();
+  for (const { dir } of taskEntries(root, configDir)) {
+    seen.add(join(dir, "state.json"));
+    const task = peekTaskAt(dir);
+    if (task) tasks.push(task);
+  }
+  // Forget tasks that left these folders (deleted or archived).
+  const roots = readDataRoots(root, configDir).map((dr) => `${tasksRoot(dr)}${sep}`);
+  for (const path of snapshots.keys()) if (!seen.has(path) && roots.some((prefix) => path.startsWith(prefix))) snapshots.delete(path);
+  return tasks.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+/** The non-terminal task a session owns, from `peekTasks` (for reading only). */
+export function peekOwnedTask(root: string, configDir: string, sessionId: string): Task | undefined {
+  return peekTasks(root, configDir).find((task) => !TERMINAL_STATES.includes(task.state) && task.ownerSessionId === sessionId);
 }
 
 /** Tasks on disk plus the ids whose state.json could not be read (§59). */

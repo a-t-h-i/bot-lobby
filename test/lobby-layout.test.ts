@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { stripTerminalSequences, visibleWidth, type MarkdownTheme } from "@earendil-works/pi-tui";
 import { bar, beside, box, detailWindow, highlight, markdownHanging, markdownLines, meter, notePane, position, scrollThumb, sparkline, stackedBar, type LobbyTheme } from "../src/lobby/layout.ts";
-import { tailWindow } from "../src/lobby/tabs/home.ts";
+import { chatLines, chatTail, paneWindow, tailWindow } from "../src/lobby/tabs/home.ts";
+import type { ChatEntry } from "../src/lobby/feed.ts";
 import { createMarkdownRenderer, tidyHeading } from "../src/lobby/markdown.ts";
 import { actionFor, keyLabel, keyMap, LOBBY_ACTIONS } from "../src/lobby/keys.ts";
 import { DEFAULT_CONFIG, resolveConfig } from "../src/schemas/configuration.ts";
@@ -68,7 +69,7 @@ test("bars, meters, sparklines and stacked bars fill exactly their cells", () =>
 });
 
 test("Markdown renders through pi's renderer with headings tidied, and falls back to plain wrapping", () => {
-  const render = createMarkdownRenderer(() => plainMarkdown);
+  const render = createMarkdownRenderer(plainMarkdown);
   const lines = render("## Steps\n\n1. Add **the form**\n2. Wire `api.ts`\n\n", 40);
   assert.equal(lines[0], "<h><b>Steps</b></h>");
   assert.ok(lines.some((line) => line.includes("1. Add <b>the form</b>")));
@@ -76,12 +77,40 @@ test("Markdown renders through pi's renderer with headings tidied, and falls bac
   assert.notEqual(lines.at(-1)!.trim(), "", "blank padding is trimmed");
   assert.equal(render("## Steps\n\n1. Add **the form**\n2. Wire `api.ts`\n\n", 40), lines, "renders are cached");
   assert.equal(tidyHeading("\x1b[1m### Title\x1b[0m", tag("b")), "<b>\x1b[1mTitle\x1b[0m</b>");
-  const ansi = createMarkdownRenderer(() => ({ ...plainMarkdown, heading: (text) => `\x1b[36m${text}\x1b[39m`, bold: (text) => `\x1b[1m${text}\x1b[22m` }));
+  const ansi = createMarkdownRenderer({ ...plainMarkdown, heading: (text) => `\x1b[36m${text}\x1b[39m`, bold: (text) => `\x1b[1m${text}\x1b[22m` });
   assert.deepEqual(ansi("### Deep heading", 40).map((line) => stripTerminalSequences(line)), ["Deep heading"], "pi keeps ### on deep headings; the lobby drops it");
   assert.equal(tidyHeading("plain", tag("b")), "plain");
   const theme: LobbyTheme = { fg: (_color, text) => text, bold: (text) => text, markdown: render };
   assert.deepEqual(markdownLines("**hi**", 20, theme), ["<b>hi</b>"]);
   assert.deepEqual(markdownHanging("oracle ▸ ", "**hi**\n\nthere", 30, theme), ["oracle ▸ <b>hi</b>", "", "         there"]);
+});
+
+test("the conversation draws only the messages its window reaches, each once, and estimates the rest", () => {
+  let renders = 0;
+  const theme: LobbyTheme = { fg: (_color, text) => text, bold: (text) => text, markdown: (text) => (renders += 1, text.split("\n")) };
+  const chat: ChatEntry[] = Array.from({ length: 50 }, (_, index) => ({ id: index + 1, at: index * 3_600_000, role: index % 2 === 0 ? "you" : "oracle", text: index % 2 === 0 ? `question ${index}` : `answer ${index}\nsecond line` }));
+  const tail = chatTail(chat, 60, theme, 10);
+  assert.ok(tail.lines.length >= 10 && tail.lines.length < 20, "a few messages past the window, not all fifty");
+  assert.deepEqual(tail.lines.slice(-10), chatLines(chat, 60, theme).slice(-10), "the same lines the whole conversation ends with");
+  const whole = chatLines(chat, 60, theme);
+  assert.ok(Math.abs(tail.total - whole.length) <= whole.length * 0.1, `estimate ${tail.total} is near ${whole.length}`);
+  const drawn = renders;
+  chatTail(chat, 60, theme, 10);
+  chatLines(chat, 60, theme);
+  assert.equal(renders, drawn, "later frames reuse every drawn message");
+  chatTail(chat, 50, theme, 10);
+  assert.ok(renders > drawn, "a new width draws again");
+  const older = chatTail(chat.slice(-2), 60, theme, 100, undefined, false, 0, "earlier messages load as you scroll up");
+  assert.equal(older.lines[0], "earlier messages load as you scroll up", "the note tops a conversation with earlier messages");
+  assert.equal(older.total, older.lines.length);
+});
+
+test("a pane drawn only near its newest lines still scrolls and places its thumb over the whole", () => {
+  const content = { lines: ["f", "g", "h", "i", "j"], total: 10 };
+  assert.deepEqual(paneWindow(content, 3, 0), { shown: ["h", "i", "j"], start: 7, offset: 0 });
+  assert.deepEqual(paneWindow(content, 3, 2), { shown: ["f", "g", "h"], start: 5, offset: 2 });
+  assert.deepEqual(paneWindow(content, 3, 99), { shown: [], start: 0, offset: 7 }, "past what was drawn: the next frame draws further back");
+  assert.deepEqual(paneWindow({ lines: ["a"], total: 0 }, 3, 5), { shown: ["a"], start: 0, offset: 0 });
 });
 
 test("the key map has a default for every action, takes overrides and matches keys", () => {

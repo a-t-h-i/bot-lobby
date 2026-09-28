@@ -23,7 +23,7 @@ import { MEMBER_LABELS, ORACLE_LABEL, type PlannerSeed, type PlanningSession } f
 import { issueText, type IssuesState } from "./issues.ts";
 import { actionFor, keyLabel, keyMap, LOBBY_ACTIONS, type KeyMap, type LobbyAction } from "./keys.ts";
 import { beside, bold, box, fit, highlight, paint, rule, selectRow, spinner, spread, windowStart, wrap, wrapHanging, type LobbyTheme, type PaneLayout } from "./layout.ts";
-import { chatLines, HOME_PANES, renderHome, type HomePane } from "./tabs/home.ts";
+import { chatTail, HOME_PANES, renderHome, type HomePane } from "./tabs/home.ts";
 import { filterRows, pips, planDetailLines, renderTasks, taskDetailLines, taskProgress, taskRows, tasksWidths, type TaskRow } from "./tabs/tasks.ts";
 import { renderPlan, type PlanLayout, type PlanView, type SeatView } from "./tabs/plan.ts";
 import { filterJobs, newestFirst, renderQuickFix } from "./tabs/quickfix.ts";
@@ -113,6 +113,9 @@ function sameView(a: SessionView, b: SessionView): boolean {
   return true;
 }
 
+/** Tops a conversation whose earlier messages are not in memory. */
+export const OLDER_NOTE = "↑ earlier messages load as you scroll up";
+
 const SECTION_OF: Record<SessionWhere, string> = { "this window": "THIS WINDOW", background: "BACKGROUND", "other terminal": "OTHER TERMINALS", "not running": "NOT RUNNING" };
 const WHERE_MARKS: Record<SessionWhere, string> = { "this window": "●", background: "◆", "other terminal": "◇", "not running": "○" };
 
@@ -189,8 +192,12 @@ export interface LobbyHost {
   archiveTask(taskId: string): string;
   restoreTask(taskId: string): string;
   deleteTask(taskId: string, where: "list" | "archive"): string;
-  /** Another session's conversation, read from its saved session file. */
+  /** Another session's conversation, read from its saved session file (its newest messages). */
   sessionChat(sessionId: string): ChatEntry[];
+  /** Whether another session has messages earlier than `sessionChat` returns. */
+  hasOlderChat(sessionId: string): boolean;
+  /** A session's whole conversation, oldest first: this window's (no id) or another's; loaded only while scrolled back to it. */
+  chatHistory(sessionId?: string): readonly ChatEntry[];
   /** A task's status without animations, for a session other than this window's. */
   taskScene(task: Task, width: number, height: number): string[];
   profileLabel(kind: LobbyAgentKind): string;
@@ -430,6 +437,7 @@ export class LobbyView implements Component, Focusable {
   refreshData(force: boolean): void {
     const now = this.now();
     if (!force && now - this.data.at < DATA_REFRESH_MS) return;
+    this.dataVersion += 1;
     this.data = {
       tasks: this.host.tasks(),
       plans: this.host.plans(),
@@ -838,6 +846,7 @@ export class LobbyView implements Component, Focusable {
         break;
     }
     this.clampScroll();
+    if (pane === "conversation") this.followHistory();
   }
 
   /** Home and End: the oldest or first line of the focused pane, or back to its newest or last. */
@@ -861,6 +870,8 @@ export class LobbyView implements Component, Focusable {
       return;
     }
     this.scrollPane(pane, far);
+    // Home loads earlier messages at the top; go on to the very first of them.
+    if (start && pane === "conversation" && this.history) this.homeOffsets.conversation = Number.MAX_SAFE_INTEGER;
   }
 
   /** The wheel over the draft scrolls it; the cursor follows only when it would leave the screen. */
@@ -1205,6 +1216,50 @@ export class LobbyView implements Component, Focusable {
     void this.host.answerDialog(session).then(() => this.host.requestRender());
   }
 
+  /* -------------------------------------------------------------- history */
+
+  /**
+   * The whole conversation of the session in view, loaded when the
+   * conversation pane is scrolled back past the messages kept in memory, and
+   * let go once it is back at the newest.
+   */
+  private history?: { view: SessionView; entries: readonly ChatEntry[] };
+
+  /** The conversation to draw for the session in view, and whether earlier messages wait to be loaded. */
+  private conversationFor(entry: SessionEntry): { chat: readonly ChatEntry[]; older: boolean } {
+    if (this.history && sameView(this.history.view, entry.view)) return { chat: this.history.entries, older: false };
+    if (entry.view.kind === "here") return { chat: this.host.feed.chat, older: this.host.feed.chatOlder };
+    if (entry.view.kind === "background") {
+      const session = this.viewedSessionFor(entry.view.key);
+      return { chat: session?.feed.chat ?? [], older: Boolean(session?.feed.chatOlder && session.sessionId) };
+    }
+    return entry.sessionId ? { chat: this.host.sessionChat(entry.sessionId), older: this.host.hasOlderChat(entry.sessionId) } : { chat: [], older: false };
+  }
+
+  /**
+   * After the conversation pane scrolls: at its top, with earlier messages
+   * waiting, load the whole conversation; back at its newest, let it go.
+   * True when history was loaded now.
+   */
+  private followHistory(): boolean {
+    if (this.tab !== "lobby") return false;
+    if (this.homeOffsets.conversation === 0) {
+      this.history = undefined;
+      return false;
+    }
+    if (this.history && sameView(this.history.view, this.viewing)) return false;
+    const pane = this.panes.get("conversation");
+    if (!pane || this.homeOffsets.conversation < pane.total - pane.rows) return false;
+    const entry = this.viewedEntry();
+    if (!this.conversationFor(entry).older) return false;
+    const sessionId = entry.view.kind === "here" ? undefined : entry.view.kind === "background" ? this.viewedSessionFor(entry.view.key)?.sessionId : entry.sessionId;
+    if (entry.view.kind !== "here" && !sessionId) return false;
+    const entries = this.host.chatHistory(sessionId);
+    if (entries.length === 0) return false;
+    this.history = { view: entry.view, entries };
+    return true;
+  }
+
   /* ------------------------------------------------------------ sessions */
 
   /** Every session the lobby can show: this window, the background sessions it started, then tasks other terminals drive. */
@@ -1270,6 +1325,7 @@ export class LobbyView implements Component, Focusable {
     this.viewing = target;
     this.picking = false;
     this.newSession = false;
+    this.history = undefined;
     for (const pane of HOME_PANES) this.homeOffsets[pane] = 0;
     if (this.tab !== "lobby") this.setTab("lobby");
     this.setMode("type");
@@ -1657,8 +1713,21 @@ export class LobbyView implements Component, Focusable {
 
   /* -------------------------------------------------------------- render */
 
+  /** Bumped each time the data is reread. */
+  private dataVersion = 0;
+  /** Task rows as last built: several parts of a frame ask, and they only change with the data, the search or the clock. */
+  private rowsMemo?: { key: string; rows: TaskRow[] };
+
   /** Task rows, narrowed by the Tasks tab's search. */
   private taskRowList(): TaskRow[] {
+    const key = `${this.dataVersion}|${this.tick}|${this.showArchived}|${this.queries.tasks ?? ""}`;
+    if (this.rowsMemo?.key === key) return this.rowsMemo.rows;
+    const rows = this.buildTaskRows();
+    this.rowsMemo = { key, rows };
+    return rows;
+  }
+
+  private buildTaskRows(): TaskRow[] {
     const names = new Map<string, string>();
     for (const session of this.host.sessions()) if (session.sessionId && session.alive) names.set(session.sessionId, session.name);
     const auto = new Set(this.data.tasks.filter((task) => !TERMINAL_STATES.includes(task.state) && this.host.isAuto(task.id)).map((task) => task.id));
@@ -2150,7 +2219,7 @@ export class LobbyView implements Component, Focusable {
     const room = height - lines.length - 2;
     if (room > 2) {
       lines.push("", rule(width, "Conversation", theme));
-      const talk = chat.length > 0 ? chatLines(chat, width, theme) : [paint(theme, "dim", "Nothing said yet.")];
+      const talk = chat.length > 0 ? chatTail(chat, width, theme, room - 1).lines : [paint(theme, "dim", "Nothing said yet.")];
       lines.push(...talk.slice(-(room - 1)));
     }
     return lines;
@@ -2175,9 +2244,11 @@ export class LobbyView implements Component, Focusable {
     const query = this.query();
     const entry = this.viewedEntry();
     if (entry.view.kind !== "here") return this.otherSessionBody(entry, width, height, theme, now);
+    const talk = this.conversationFor(entry);
     return renderHome({
       ...(zen.task ? { task: zen.task, scene: (w: number, h: number, animated: boolean) => this.host.scene(w, h, animated) } : {}),
-      chat: feed.chat,
+      chat: talk.chat,
+      ...(talk.older ? { olderNote: OLDER_NOTE } : {}),
       ...(feed.reply ? { liveReply: feed.reply } : {}),
       activity: feed.activity,
       thoughts: feed.thoughts,
@@ -2207,6 +2278,7 @@ export class LobbyView implements Component, Focusable {
    */
   private otherSessionBody(entry: SessionEntry, width: number, height: number, theme: LobbyTheme, now: number): string[] {
     const session = this.viewedSession();
+    const talk = this.conversationFor(entry);
     const task = entry.task;
     const query = this.query();
     const common = {
@@ -2232,7 +2304,8 @@ export class LobbyView implements Component, Focusable {
       const emptyNote = session.status === "starting" ? `starting ${session.name}…` : !session.alive ? `${session.name} has ended.` : `${session.name} has not said anything yet.`;
       return renderHome({
         ...common,
-        chat: session.feed.chat,
+        chat: talk.chat,
+        ...(talk.older ? { olderNote: OLDER_NOTE } : {}),
         ...(session.feed.reply ? { liveReply: session.feed.reply } : {}),
         activity: session.feed.activity,
         thoughts: session.feed.thoughts,
@@ -2243,7 +2316,8 @@ export class LobbyView implements Component, Focusable {
     const running = entry.where === "other terminal";
     return renderHome({
       ...common,
-      chat: entry.sessionId ? this.host.sessionChat(entry.sessionId) : [],
+      chat: talk.chat,
+      ...(talk.older ? { olderNote: OLDER_NOTE } : {}),
       activity: [],
       thoughts: [],
       busy: false,

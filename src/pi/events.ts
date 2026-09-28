@@ -15,6 +15,7 @@ import { taskRequest, type Task, type TaskState } from "../schemas/task.ts";
 import { pendingComments, readPlanComments, type PlanComment } from "../state/comments.ts";
 import { isAutoMode } from "../state/auto.ts";
 import { triageContext } from "../classifier/triage.ts";
+import { previousTaskNote } from "./fresh-context.ts";
 
 /** States in which the triage still helps the Master shape the task; once it is planned, the hints are noise. */
 const SHAPING_STATES: ReadonlySet<TaskState> = new Set(["created", "clarifying", "scouting", "synthesizing", "awaiting_approval"]);
@@ -92,9 +93,13 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
   pi.on("before_agent_start", (event, ctx) => {
     const root = detectProjectRoot(ctx.cwd, configDir);
     const sessionId = ctx.sessionManager.getSessionId();
-    const task = isSubagentProcess() || isMinimized() ? undefined : activeTask(root, configDir, sessionId);
+    const hidden = isSubagentProcess() || isMinimized();
+    const task = hidden ? undefined : activeTask(root, configDir, sessionId);
     if (!task) {
-      delete event.systemPromptOptions.sections["bot-lobby"];
+      // After a task ended and cleared the context, a line on where its record is, in case the user refers back to it.
+      const previous = hidden ? undefined : previousTaskNote(ctx, configDir);
+      if (previous) event.systemPromptOptions.sections["bot-lobby"] = previous;
+      else delete event.systemPromptOptions.sections["bot-lobby"];
       return;
     }
     const slices = readAgentKnowledge(readDataRoots(root, configDir), "master");

@@ -38,6 +38,10 @@ function makePi(available: string[], active: string[] = [...available]) {
     setSessionName(name: string): void {
       state.sessionName = name;
     },
+    entries: [] as Array<{ customType: string; data: unknown }>,
+    appendEntry(customType: string, data: unknown): void {
+      state.entries.push({ customType, data });
+    },
     handlers: new Map<string, (...args: unknown[]) => unknown>(),
     shortcutHandler: undefined as ((ctx: ExtensionContext) => unknown) | undefined,
     shortcutHandlers: {} as Record<string, (ctx: ExtensionContext) => unknown>,
@@ -104,7 +108,7 @@ function makeCtx(cwd: string, expanded = false, sessionId = "session-1") {
       ui.notifications.push({ message, type });
     },
   };
-  return { ctx: { cwd, ui, sessionManager: { getSessionId: () => sessionId }, isIdle: () => true } as unknown as ExtensionContext, ui };
+  return { ctx: { cwd, ui, sessionManager: { getSessionId: () => sessionId, getBranch: () => [] }, isIdle: () => true } as unknown as ExtensionContext, ui };
 }
 
 function tempDir(prefix: string): string {
@@ -390,6 +394,7 @@ test("/bot-lobby <request> stamps the starting session as owner", async () => {
     await fake.commandHandlers["bot-lobby"]!("ship the redesign", ctx);
     assert.equal(listTasks(root, ".pi")[0]!.ownerSessionId, "session-stamp");
     assert.equal(fake.sessionName, listTasks(root, ".pi")[0]!.title, "the session is named after its task");
+    assert.deepEqual(fake.entries.map((entry) => [entry.customType, (entry.data as { kind: string; taskId: string }).kind, (entry.data as { taskId: string }).taskId]), [["bot-lobby-context", "start", listTasks(root, ".pi")[0]!.id]], "the oracle takes the task on with a clean context");
   } finally {
     if (previous === undefined) delete process.env.BOT_LOBBY_CONFIG_DIR;
     else process.env.BOT_LOBBY_CONFIG_DIR = previous;
