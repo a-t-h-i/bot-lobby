@@ -6,6 +6,9 @@
  * diagram) shown beside the options.
  */
 
+/** The questionnaire tool's name, in this session and in the agents that may ask. */
+export const ASK_TOOL = "ask_user_question";
+
 export const MAX_QUESTIONS = 4;
 export const MIN_OPTIONS = 2;
 export const MAX_OPTIONS = 4;
@@ -23,6 +26,8 @@ export interface AskOption {
   description?: string;
   /** Markdown shown beside the options while this one is focused. */
   preview?: string;
+  /** An image file (PNG, JPEG, GIF or WebP) shown with the preview: a screenshot, a rendered mockup. */
+  image?: string;
 }
 
 export interface AskQuestion {
