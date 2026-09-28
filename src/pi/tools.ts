@@ -9,6 +9,8 @@ import { classifier, effortFor, hintsFor, triageFor } from "../classifier/instan
 import { truncate } from "../text.ts";
 import { applyStatus, reportRuns, summarizeRun } from "./ui.ts";
 import { whileAsking } from "../state/budget.ts";
+import { askUser } from "../ask/dialog.ts";
+import type { AskQuestion } from "../ask/types.ts";
 import { unescapeBreaks } from "../lobby/markdown.ts";
 import { isQuiet } from "./quiet.ts";
 import { checkThinking, createProfileResolver, modelRef, type ModelLookup } from "./model-support.ts";
@@ -117,6 +119,8 @@ export function workflowDeps(
     // Time spent waiting on the user is not the task's: its budget clock waits too.
     ask: async (question) => (hasUI ? whileAsking(() => ctx.ui.input(question)) : undefined),
     choose: async (title, options) => (hasUI ? whileAsking(() => ctx.ui.select(title, options)) : undefined),
+    // An agent's own questions (the designer's), relayed as the questionnaire.
+    ...(hasUI ? { askQuestions: (questions: AskQuestion[], from: string, askSignal?: AbortSignal) => whileAsking(() => askUser(questions, ctx, askSignal, from)) } : {}),
     notify: (message, level = "info") => {
       if (hasUI) ctx.ui.notify(message, level);
     },
