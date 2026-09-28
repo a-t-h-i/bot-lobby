@@ -2,22 +2,26 @@
  * `ask_user_question`: the model asks instead of guessing, with typed options
  * the user picks from (or answers in their own words). Registered by
  * bot-lobby in every pi session it loads in, the lobby's or not, so pi needs
- * no separate questionnaire extension. Subagents cannot reach the user and
- * do not get it.
+ * no separate questionnaire extension. A subagent has no terminal: it gets
+ * the tool only when the master lets it ask (the designer), and its questions
+ * are relayed through the master (see relay.ts).
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Container, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { isSubagentProcess } from "../pi/quiet.ts";
 import { askUser, type Asker } from "./dialog.ts";
-import { MAX_HEADER, MAX_LABEL, MAX_OPTIONS, MAX_QUESTIONS, MIN_OPTIONS, RESERVED, type AskQuestion, type AskResult } from "./types.ts";
+import { isImagePath } from "./image.ts";
+import { relayAsker, relayEnabled } from "./relay.ts";
+import { ASK_TOOL, MAX_HEADER, MAX_LABEL, MAX_OPTIONS, MAX_QUESTIONS, MIN_OPTIONS, RESERVED, type AskQuestion, type AskResult } from "./types.ts";
 
-export const ASK_TOOL = "ask_user_question";
+export { ASK_TOOL };
 
 const OptionSchema = Type.Object({
   label: Type.String({ maxLength: MAX_LABEL, description: `The option as the user sees and picks it: 1-5 words, at most ${MAX_LABEL} characters.` }),
   description: Type.Optional(Type.String({ description: "What choosing it means: its trade-offs or consequences. Markdown." })),
   preview: Type.Optional(Type.String({ description: "Markdown shown beside the options while this one is focused: a mockup, a code snippet, a diagram, a config. Only when seeing it helps the user compare." })),
+  image: Type.Optional(Type.String({ description: "Path to a PNG (or JPEG, GIF, WebP) shown with the preview: a screenshot or a rendered mockup of this option. Drawn as the image in terminals that can, as coloured blocks (PNG) elsewhere." })),
 });
 
 const QuestionSchema = Type.Object({
@@ -34,9 +38,11 @@ export const AskParams = Type.Object({
 const DESCRIPTION = [
   "Ask the user one to four questions with options to pick from, when the answer would change what you do and you would otherwise guess.",
   "Each question has 2-4 options (the one you recommend first, its label ending in \"(Recommended)\"); the user can pick one (or several with multiSelect), or answer in their own words.",
-  "Questions, descriptions and previews are Markdown. Give options a `preview` when the user needs to see them to choose: a UI mockup, a layout sketch, a code snippet, a config; the focused option's preview shows beside the list.",
+  "Questions, descriptions and previews are Markdown. Give options a `preview` when the user needs to see them to choose: a UI mockup, a layout sketch, a code snippet, a config; the focused option's preview shows beside the list. An option can also carry an `image` file (a screenshot, a rendered mockup).",
   "Do not use it for yes/no confirmations of what you were already told to do, or for questions the conversation already answers.",
 ].join(" ");
+
+const RELAYED = "Your questions reach the user through the oracle, and your clock stops while they answer. Ask only what is theirs to decide (a visual direction, a layout, a trade-off they care about), all at once; decide the rest yourself.";
 
 /** Why a set of questions cannot be asked as given, or undefined when it can. */
 export function invalidQuestions(questions: readonly AskQuestion[]): string | undefined {
@@ -52,6 +58,7 @@ export function invalidQuestions(questions: readonly AskQuestion[]): string | un
       if (!label) return `${at} has an option without a label`;
       if (RESERVED.has(label)) return `${at}: "${option.label}" is kept for the user's own answer; leave it out`;
       if (labels.has(label)) return `${at} has two options labelled "${option.label}"`;
+      if (option.image?.trim() && !isImagePath(option.image)) return `${at}: the image for "${option.label}" must be a .png, .jpg, .gif or .webp file`;
       labels.add(label);
     }
   }
@@ -61,6 +68,8 @@ export function invalidQuestions(questions: readonly AskQuestion[]): string | un
 /** What the model reads back: each question with its answer, or that it was skipped. */
 export function answerSummary(questions: readonly AskQuestion[], result: AskResult): string {
   if (result.cancelled && result.answers.length === 0) {
+    // A relay that could not ask anyone (auto mode) says why.
+    if (result.globalNote) return result.globalNote;
     return "The user put the questions away without answering. Do not ask the same again right away: go on with your best judgement and say what you assumed, or ask something narrower.";
   }
   const lines = questions.map((question, index) => {
@@ -77,13 +86,18 @@ export function answerSummary(questions: readonly AskQuestion[], result: AskResu
   ].join("\n");
 }
 
-/** Register `ask_user_question` in this pi session (never in a subagent). `ask` is swappable for tests. */
-export function registerAskTool(pi: ExtensionAPI, ask: Asker = askUser): void {
-  if (isSubagentProcess()) return;
+/**
+ * Register `ask_user_question` in this pi session; in a subagent only when
+ * the master relays its questions. `ask` is swappable for tests.
+ */
+export function registerAskTool(pi: ExtensionAPI, ask?: Asker): void {
+  const subagent = isSubagentProcess();
+  if (subagent && !relayEnabled()) return;
+  const asker = ask ?? (subagent ? relayAsker : askUser);
   pi.registerTool({
     name: ASK_TOOL,
     label: "Ask",
-    description: DESCRIPTION,
+    description: subagent ? `${DESCRIPTION} ${RELAYED}` : DESCRIPTION,
     promptSnippet: "Ask the user structured questions with options (and previews) instead of guessing",
     promptGuidelines: [
       "Use ask_user_question when a real decision is the user's and the answer changes your work; batch related questions (at most four) into one call.",
@@ -93,7 +107,7 @@ export function registerAskTool(pi: ExtensionAPI, ask: Asker = askUser): void {
       const questions = (params as { questions: AskQuestion[] }).questions;
       const invalid = invalidQuestions(questions);
       if (invalid) throw new Error(`${invalid}.`);
-      const result = await ask(questions, ctx, signal);
+      const result = await asker(questions, ctx, signal);
       return { content: [{ type: "text", text: answerSummary(questions, result) }], details: result };
     },
     renderCall(args, theme) {
