@@ -1,11 +1,19 @@
 {
   "name": "@a-t-h-i/bot-lobby",
-  "version": "0.6.2",
+  "version": "0.6.5",
   "description": "Structured multi-agent software engineering orchestrator for Pi",
   "type": "module",
   "license": "Apache-2.0",
   "keywords": [
-    "pi-package"
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "pi-coding-agent",
+    "multi-agent",
+    "subagents",
+    "orchestrator",
+    "code-review",
+    "web-search"
   ],
   "repository": {
     "type": "git",
@@ -25,7 +33,8 @@
   "pi": {
     "extensions": [
       "./src/index.ts"
-    ]
+    ],
+    "image": "https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/gallery.png"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
