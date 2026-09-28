@@ -70,6 +70,10 @@ export function jobDetailLines(job: QuickFixJob, width: number, tick: number, no
     const lead = `${paint(theme, "dim", clock(step.at))} ${step.pending && job.status === "running" ? paint(theme, "accent", spinner(tick)) : paint(theme, "dim", "·")} `;
     lines.push(...wrapHanging(lead, step.pending && job.status === "running" ? `${step.text}…` : paint(theme, "muted", step.text), width));
   }
+  if (job.files?.length) {
+    lines.push("", rule(width, "Edited", theme));
+    for (const file of job.files) lines.push(...wrapHanging(paint(theme, "dim", "· "), paint(theme, "muted", file), width));
+  }
   if (job.error) lines.push("", ...wrap(paint(theme, "error", `✗ ${job.error}`), width));
   if (job.report) {
     lines.push("", rule(width, "Report", theme), ...markdownLines(job.report, width, theme));

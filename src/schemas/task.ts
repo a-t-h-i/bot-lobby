@@ -114,6 +114,12 @@ export interface TaskTriage {
   at: string;
 }
 
+/** What the working tree held when a task's agents started editing: its changed files, repository-relative. */
+export interface ChangeBaseline {
+  at: string;
+  files: string[];
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -145,6 +151,8 @@ export interface Task {
   archivedAt?: string;
   /** The classifier's read of the request, when it was on as the task started. */
   triage?: TaskTriage;
+  /** Files already changed when the first worker started: the QA gate reads them as pre-existing, not as this task's work. */
+  baseline?: ChangeBaseline;
 }
 
 export function createTask(

@@ -1,4 +1,5 @@
-import { join } from "node:path";
+import { realpathSync } from "node:fs";
+import { isAbsolute, join, relative } from "node:path";
 import type { BotLobbyConfig, ProfileResolver } from "../schemas/configuration.ts";
 import type { AgentRun, Pushback, ResearchResult, ReviewResult } from "../schemas/findings.ts";
 import {
@@ -26,7 +27,8 @@ import { mapConcurrent } from "../execution/agent-runner.ts";
 import { parseWorkerResult } from "../roles/worker.ts";
 import { autoNote, DESK_TOOLS, DeskSession } from "../desk/session.ts";
 import type { Handover } from "../desk/desk.ts";
-import { readRepositoryDiff } from "../execution/git.ts";
+import { changedFiles, readRepositoryDiff } from "../execution/git.ts";
+import { appendChange, explainChanges, provenanceLines, provenanceSummary, readChanges, type FileProvenance } from "../state/changes.ts";
 import {
   loadScoutResults,
   runReviewer,
@@ -657,10 +659,70 @@ function parseAssignments(params: OrchestrateParams): Assignment[] {
   return [{ domain, instruction }];
 }
 
+/**
+ * What the working tree held when this task's agents started: the QA gate
+ * reads those files as pre-existing. Taken before the first worker only, so
+ * a task already under way when provenance arrived is not misread.
+ */
+async function takeBaseline(task: Task, deps: WorkflowDeps): Promise<void> {
+  if (task.baseline || (task.workerRuns?.length ?? 0) > 0) return;
+  const tree = await treeChanges(deps);
+  task.baseline = { at: new Date().toISOString(), files: tree?.files ?? [] };
+}
+
+/** The working tree's changed files, without bot-lobby's own records (its data folder may sit untracked in the project). */
+async function treeChanges(deps: WorkflowDeps): Promise<{ top: string; files: string[] } | undefined> {
+  const tree = await changedFiles(deps.cwd);
+  if (!tree) return undefined;
+  let data = dataRoot(deps.root, deps.configDir);
+  try {
+    data = realpathSync(data);
+  } catch {
+    // Not created yet: nothing of it can be in the tree.
+  }
+  const own = relative(tree.top, data);
+  if (!own || own.startsWith("..") || isAbsolute(own)) return tree;
+  const prefix = `${own.split("\\").join("/")}/`;
+  return { top: tree.top, files: tree.files.filter((file) => !file.startsWith(prefix)) };
+}
+
+/** Every changed file of the working tree, explained for this task; undefined without a baseline or git. */
+async function changeProvenance(deps: WorkflowDeps, task: Task): Promise<FileProvenance[] | undefined> {
+  if (!task.baseline) return undefined;
+  const tree = await treeChanges(deps);
+  if (!tree) return undefined;
+  return explainChanges(task, tree.files, tree.top, readChanges(deps.root, deps.configDir, task.createdAt));
+}
+
+/** Who changed the tree, for the Master: counts, and what the changes that are not this task's mean for it. */
+function provenanceNote(files: readonly FileProvenance[] | undefined): string {
+  if (!files || files.length === 0) return "";
+  const kinds = new Set(files.flatMap((file) => file.kinds));
+  return [
+    `Changed files: ${provenanceSummary(files)}.`,
+    kinds.has("quickfix") ? "The user asked for the quick fixes directly: never revert them or send them back as fixes." : "",
+    kinds.has("pre-existing") || kinds.has("other-task") ? "Pre-existing changes and other tasks' are not this task's to review or revert." : "",
+    kinds.has("unattributed") ? "No agent recorded the unattributed edits: ask the user before counting them in or reverting them." : "",
+  ]
+    .filter((line) => line.length > 0)
+    .join(" ");
+}
+
 /** Record one worker's outcome on the task and return its report for the Master. */
 function absorbWorkerOutcome(task: Task, deps: WorkflowDeps, outcome: WorkerOutcome): string {
   const domain = outcome.result.domain;
   recordWorkerRun(task, outcome.run);
+  appendChange(deps.root, deps.configDir, {
+    source: "worker",
+    id: outcome.run.runId,
+    taskId: task.id,
+    domain,
+    what: (outcome.run.instruction ?? "").split("\n").find((line) => line.trim())?.trim() ?? domain,
+    files: outcome.run.edited ?? [],
+    startedAt: outcome.run.startedAt,
+    finishedAt: outcome.run.finishedAt ?? new Date().toISOString(),
+    status: outcome.run.status,
+  });
   const approvals = recordWorkerApprovals(task, outcome, deps.config, isAutoMode(deps.root, deps.configDir, task.id));
   const pushback = recordPushback(task, outcome);
   task.blockers = [...task.blockers.filter((blocker) => blocker.domain !== domain), ...outcome.result.blockers];
@@ -674,12 +736,15 @@ async function handleImplement(task: Task, params: OrchestrateParams, deps: Work
   for (const { domain } of assignments) assertNoPendingApprovals(task, domain);
   for (const { domain } of assignments) if (!task.domains.includes(domain)) task.domains.push(domain);
   if (task.state !== "implementing") transition(task, "implementing");
+  await takeBaseline(task, deps);
+  let report: string;
   if (assignments.length === 1) {
     const { domain, instruction } = assignments[0]!;
     const outcome = await runWorker(workerRequest(deps, task, domain, instruction), deps.runProcess ?? spawnPiProcess);
-    return absorbWorkerOutcome(task, deps, outcome);
-  }
-  return runParallelWorkers(task, deps, assignments);
+    report = absorbWorkerOutcome(task, deps, outcome);
+  } else report = await runParallelWorkers(task, deps, assignments);
+  const note = provenanceNote(await changeProvenance(deps, task));
+  return note ? `${report}\n\n${note}` : report;
 }
 
 /**
@@ -778,8 +843,8 @@ const QA_INSTRUCTION = [
   "UX, reliability, and tests. Passing automated tests alone is not acceptance.",
 ].join(" ");
 
-/** The QA gate looks at every domain's work, not just one worker's diff. */
-function qaRequest(deps: WorkflowDeps, task: Task, diff: string, instruction?: string): ReviewerRequest {
+/** The QA gate looks at every domain's work, not just one worker's diff, knowing who changed each file. */
+function qaRequest(deps: WorkflowDeps, task: Task, diff: string, instruction?: string, provenance?: readonly FileProvenance[]): ReviewerRequest {
   return {
     taskId: task.id,
     domain: "qa",
@@ -787,6 +852,7 @@ function qaRequest(deps: WorkflowDeps, task: Task, diff: string, instruction?: s
     workerSummary: allScratchpads(deps, task),
     scoutOutcomes: loadScoutResults(taskReadDirs(deps.root, deps.configDir, task.id), [...new Set<Domain>(["qa", ...task.domains])]),
     diff,
+    ...(provenance && provenance.length > 0 ? { provenance: provenanceLines(provenance) } : {}),
     instruction: instruction?.trim() || QA_INSTRUCTION,
     cwd: deps.cwd,
     dataRoots: readDataRoots(deps.root, deps.configDir),
@@ -797,7 +863,7 @@ function qaRequest(deps: WorkflowDeps, task: Task, diff: string, instruction?: s
   };
 }
 
-function qaReport(outcome: ReviewerOutcome, decision: "accept" | "iterate" | "blocked"): string {
+function qaReport(outcome: ReviewerOutcome, decision: "accept" | "iterate" | "blocked", provenance?: readonly FileProvenance[]): string {
   const { result, run, issues } = outcome;
   return [
     `QA gate: ${result.verdict.toUpperCase()} (run ${run.status}${run.error ? `: ${run.error}` : ""})`,
@@ -813,6 +879,7 @@ function qaReport(outcome: ReviewerOutcome, decision: "accept" | "iterate" | "bl
     decision === "blocked" ? "The review limit is reached: mark the task blocked and tell the user." : "",
     result.pushback ? pushbackLine(result.pushback, "qa") : "",
     issues.length > 0 ? `Issues: ${issues.join("; ")}` : "",
+    provenanceNote(provenance),
   ]
     .filter((line) => line.length > 0)
     .join("\n");
@@ -823,14 +890,14 @@ async function handleQa(task: Task, params: OrchestrateParams, deps: WorkflowDep
   if (task.state !== "reviewing") transition(task, "reviewing");
   const iterations = (task.reviewIterations?.qa ?? 0) + 1;
   task.reviewIterations = { qa: iterations };
-  const diff = await readRepositoryDiff(deps.cwd);
-  const outcome = await runReviewer(qaRequest(deps, task, diff, params.task), deps.runProcess ?? spawnPiProcess);
+  const [diff, provenance] = await Promise.all([readRepositoryDiff(deps.cwd), changeProvenance(deps, task)]);
+  const outcome = await runReviewer(qaRequest(deps, task, diff, params.task, provenance), deps.runProcess ?? spawnPiProcess);
   task.qaVerdict = outcome.result.verdict;
   recordReview(task, "qa", outcome.result);
   recordAdvisoryPushbacks(task, [{ pushback: outcome.result.pushback, who: "qa" }]);
   const decision = decideReviewLoop(outcome.result.verdict, iterations, deps.config.workflow.maxReviewIterations);
   if (decision === "accept") task.blockers = task.blockers.filter((blocker) => blocker.domain !== "qa");
-  return qaReport(outcome, decision);
+  return qaReport(outcome, decision, provenance);
 }
 
 /**
