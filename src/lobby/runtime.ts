@@ -526,7 +526,11 @@ function lobbyTheme(theme: Theme): LobbyTheme {
       bold: (text) => theme.bold(text),
       italic: (text) => theme.italic(text),
       bg: (color, text) => theme.bg(color, text),
-      markdown: createMarkdownRenderer(getMarkdownTheme()),
+      // The same looks pi gives your messages and the thinking it shows.
+      markdown: createMarkdownRenderer(getMarkdownTheme(), {
+        you: { color: (text) => theme.fg("accent", text) },
+        thought: { color: (text) => theme.fg("thinkingText", text), italic: true },
+      }),
       strike: (text) => theme.strikethrough(text),
     };
     lobbyThemes.set(theme, wrapped);

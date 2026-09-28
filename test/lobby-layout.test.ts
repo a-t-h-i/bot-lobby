@@ -220,3 +220,66 @@ test("scroll windows, thumbs and positions stay inside their panes", () => {
   notePane(panes, "detail", 1, 20, 30, 12, 99);
   assert.deepEqual(panes.get("detail"), { top: 1, left: 20, width: 30, height: 12, total: 99, rows: 10 });
 });
+
+test("line breaks a model wrote out as \\n are made real, but not inside code or where real ones exist", async () => {
+  const { unescapeBreaks } = await import("../src/lobby/markdown.ts");
+  assert.equal(unescapeBreaks("### Objective\\nFour fixes:\\n- one"), "### Objective\nFour fixes:\n- one");
+  assert.equal(unescapeBreaks("split on `\\n` then\\njoin"), "split on `\\n` then\njoin");
+  assert.equal(unescapeBreaks("a real\nbreak and a written \\n"), "a real\nbreak and a written \\n");
+  const render = createMarkdownRenderer(plainMarkdown);
+  assert.deepEqual(render("## Objective\\n- **one**\\n- two", 40), ["<h><b>Objective</b></h>", "", "- <b>one</b>", "- two"]);
+});
+
+/** A lobby theme on the plain renderer, each style's plain text tagged so a test can see it. */
+function markdownTheme(): LobbyTheme {
+  const render = createMarkdownRenderer(plainMarkdown, { you: { color: tag("you") }, thought: { color: tag("thought"), italic: true } });
+  return { fg: (_color, text) => text, bold: (text) => text, italic: (text) => text, markdown: render };
+}
+
+const plainText = (lines: readonly string[]) => lines.map((line) => stripTerminalSequences(line)).join("\n");
+
+test("your messages render as Markdown in your colour, list markers and escapes as you typed them", async () => {
+  const { youLines } = await import("../src/lobby/tabs/home.ts");
+  const text = plainText(youLines("Please **fix** `a.ts`:\n\n1) first\n2) second \\*not bold\\*", 70, markdownTheme()));
+  assert.doesNotMatch(text, /\*\*fix/);
+  assert.match(text, /<b>.*fix.*<\/b>/);
+  assert.match(text, /<code>a\.ts<\/code>/);
+  assert.match(text, /1\) .*first/, "ordered markers kept as typed");
+  assert.match(text, /\\\*/, "backslash escapes kept as typed");
+  assert.doesNotMatch(text, /<i>not/, "an escaped star is not emphasis");
+  assert.match(text, /<you>/);
+  assert.deepEqual(youLines("", 40, markdownTheme()).length, 1, "an empty message still has its bubble");
+});
+
+test("a thought reads bold where the model wrote it bold, compact, after who thought it", async () => {
+  const { thoughtTail } = await import("../src/lobby/tabs/home.ts");
+  const thought = { id: 1, at: 0, source: "ORACLE", text: "**Checking the plan**\n\nThe `QA` round\nasked for tests.", live: false };
+  const lines = thoughtTail([thought], 60, markdownTheme(), 10).lines.map((line) => stripTerminalSequences(line));
+  assert.match(lines[0]!, /^ORACLE +<b>.*Checking the plan.*<\/b>/);
+  assert.ok(lines.every((line) => line.trim()), "no blank lines in the small pane");
+  assert.ok(lines.slice(1).every((line) => line.startsWith(" ".repeat(10))), "hanging under who thought it");
+  assert.match(lines.join("\n"), /<code>QA<\/code>/);
+  assert.doesNotMatch(lines.join("\n"), /\*\*/);
+});
+
+test("the planning panel, issues and task details render their Markdown", async () => {
+  const { conversationLines } = await import("../src/lobby/tabs/plan.ts");
+  const view = { messages: [{ role: "planner", text: "Two things:\n\n- **auth** first\n- then `routes`", at: 0 }, { role: "planner", text: "", at: 0, questions: [{ from: "DEV", text: "Use **zod** for `input`?", options: [] }] }] } as unknown as Parameters<typeof conversationLines>[0];
+  const panel = plainText(conversationLines(view, 60, markdownTheme()));
+  assert.match(panel, /- <b>auth<\/b> first/);
+  assert.match(panel, /<code>routes<\/code>/);
+  assert.match(panel, /Use <b>zod<\/b> for <code>input<\/code>\?/);
+  assert.doesNotMatch(panel, /\*\*/);
+  const { issueDetailLines } = await import("../src/lobby/tabs/issues.ts");
+  const issue = plainText(issueDetailLines({ number: 7, title: "Login fails", labels: [], body: "## Steps\n1. open `/login`\n2. submit", comments: [{ author: "sam", body: "Also **on mobile**." }] }, 60, 0, markdownTheme()));
+  assert.match(issue, /<h><b>Steps<\/b><\/h>\n\n1\. open <code>\/login<\/code>\n2\. submit/);
+  assert.match(issue, /Also <b>on mobile<\/b>\./);
+  const { taskDetailLines } = await import("../src/lobby/tabs/tasks.ts");
+  const { createTask } = await import("../src/schemas/task.ts");
+  const task = createTask("TASK-1", "Four fixes", new Date(0).toISOString(), "### Objective\nFour fixes:\n- **Save** buttons keep their fill\n- quick view focus");
+  task.amendments.push("keep the `Save` label");
+  const detail = plainText(taskDetailLines(task, [{ id: "c", taskId: "TASK-1", text: "use **tokens**", createdAt: new Date(0).toISOString(), status: "addressed" }], undefined, 70, 0, markdownTheme()));
+  assert.match(detail, /- <b>Save<\/b> buttons keep their fill/);
+  assert.match(detail, /keep the <code>Save<\/code> label/);
+  assert.match(detail, /✓ use <b>tokens<\/b> — plan amended/, "the comment's status stays on its line");
+});

@@ -6,6 +6,7 @@
  */
 import { truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { textWidth } from "../width.ts";
+import type { MarkdownStyle } from "./markdown.ts";
 
 /** Colours the lobby uses; a subset of pi's theme so tests can pass a plain stub. */
 export type LobbyColor =
@@ -29,8 +30,8 @@ export interface LobbyTheme {
   bold(text: string): string;
   italic?(text: string): string;
   bg?(color: "selectedBg" | "searchMatchBg" | "userMessageBg", text: string): string;
-  /** Render Markdown to styled lines; plain wrapping without it (tests). */
-  markdown?(text: string, width: number, keep?: boolean): string[];
+  /** Render Markdown to styled lines, in the look of whose words they are; plain wrapping without it (tests). */
+  markdown?(text: string, width: number, keep?: boolean, style?: MarkdownStyle): string[];
   /** Strike text through (an abandoned task's title); plain without it (tests). */
   strike?(text: string): string;
 }
@@ -184,8 +185,8 @@ export function spinner(tick: number): string {
 }
 
 /** Markdown for plans, reports and replies: the theme's renderer, or headings bold without their `#` and the rest wrapped. */
-export function markdownLines(text: string, width: number, theme?: LobbyTheme, keep = true): string[] {
-  if (theme?.markdown) return theme.markdown(text, width, keep);
+export function markdownLines(text: string, width: number, theme?: LobbyTheme, keep = true, style: MarkdownStyle = "reply"): string[] {
+  if (theme?.markdown) return theme.markdown(text, width, keep, style);
   return text.split("\n").flatMap((line) => {
     const heading = /^#{1,6}\s+(.*)$/.exec(line);
     return wrap(heading ? bold(theme, paint(theme, "mdHeading", heading[1]!)) : line, width);
@@ -193,9 +194,9 @@ export function markdownLines(text: string, width: number, theme?: LobbyTheme, k
 }
 
 /** Markdown behind a hanging lead (`oracle ▸ `): the first line carries the lead, the rest align under it. */
-export function markdownHanging(lead: string, text: string, width: number, theme?: LobbyTheme): string[] {
+export function markdownHanging(lead: string, text: string, width: number, theme?: LobbyTheme, style: MarkdownStyle = "reply"): string[] {
   const indent = textWidth(lead);
-  const body = markdownLines(text, Math.max(1, width - indent), theme);
+  const body = markdownLines(text, Math.max(1, width - indent), theme, true, style);
   if (body.length === 0) return [lead];
   return body.map((line, index) => (index === 0 ? `${lead}${line}` : line ? `${" ".repeat(indent)}${line}` : ""));
 }
