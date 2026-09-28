@@ -173,6 +173,20 @@ pick · `←→` between questions · the last row takes an answer in your own w
 · `esc` puts the questions away (what you answered is kept). Editor hosts that
 run Pi in RPC mode get the same questions through Pi's own dialogs.
 
+**Images.** An option can also carry an `image`: a PNG, JPEG, GIF or WebP
+file (a screenshot, a rendered mockup), shown above its preview text.
+Terminals with the Kitty graphics protocol (Kitty, Ghostty, WezTerm) show the
+image itself; other terminals draw PNGs as coloured half-blocks, and name the
+file for other formats. `BOT_LOBBY_IMAGES=blocks` always uses blocks, `off`
+never draws images.
+
+**The designer asks you directly.** During a task (not in auto mode) the
+designer worker can put its visual choices to you: its questions reach you
+through the oracle in the same questionnaire, titled *DESIGN asks*, with
+wireframes as previews and, when it can render them, screenshots of each
+option (saved outside the repository). Its clock and the task's budget stop
+while you answer, and your answers are recorded as the task's decisions.
+
 ### The web
 
 | Tool | Does |

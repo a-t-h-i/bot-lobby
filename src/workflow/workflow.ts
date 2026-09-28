@@ -1,4 +1,4 @@
-import { realpathSync } from "node:fs";
+import { mkdirSync, realpathSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
 import type { BotLobbyConfig, ProfileResolver } from "../schemas/configuration.ts";
 import type { AgentRun, Pushback, ResearchResult, ReviewResult, WorkerResult } from "../schemas/findings.ts";
@@ -22,7 +22,9 @@ import { appendCompletedTask, appendDecision, applyKnowledge, readFileOr, writeF
 import { compactKnowledgeFile, overThreshold } from "../knowledge/compactor.ts";
 import { knowledgeDir, type KnowledgeAgent } from "../knowledge/paths.ts";
 import { writeScratchpad } from "../state/persistence.ts";
-import { spawnPiProcess, type ProcessRunner } from "../execution/pi-runner.ts";
+import { spawnPiProcess, type ProcessRunner, type RelayAsk } from "../execution/pi-runner.ts";
+import { previewDir } from "../ask/relay.ts";
+import type { AskQuestion, AskResult } from "../ask/types.ts";
 import { mapConcurrent } from "../execution/agent-runner.ts";
 import { parseWorkerResult } from "../roles/worker.ts";
 import { autoNote, DESK_TOOLS, DeskSession } from "../desk/session.ts";
@@ -125,6 +127,8 @@ export interface WorkflowDeps {
   onUpdate?: (run: AgentRun) => void;
   ask: (question: string) => Promise<string | undefined>;
   choose: (title: string, options: string[]) => Promise<string | undefined>;
+  /** Puts an agent's questions to the user (the questionnaire, `from` naming the agent); absent without a UI. */
+  askQuestions?: (questions: AskQuestion[], from: string, signal?: AbortSignal) => Promise<AskResult>;
   notify: (message: string, level?: "info" | "warning" | "error") => void;
   runProcess?: ProcessRunner;
   /** Likely files for scouts and workers, while the classifier's file hints are on. */
@@ -645,8 +649,10 @@ function workerTaskText(task: Task, planBudget = 6000): string {
 }
 
 function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instruction: string, time?: AgentTime): WorkerRequest {
+  const ask = askRelay(task, deps, domain);
   return {
     ...(time ? { time } : {}),
+    ...(ask ? { ask } : {}),
     taskId: task.id,
     domain,
     instruction,
@@ -661,6 +667,49 @@ function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instructi
     ...(deps.hints ? { hints: deps.hints } : {}),
     ...(deps.effort ? { effort: deps.effort } : {}),
   };
+}
+
+/** Agents that may ask the user themselves: the designer, whose choices are the user's to see. */
+const ASKING_DOMAINS: ReadonlySet<Domain> = new Set(["designer"]);
+
+/**
+ * The relay for a worker allowed to ask the user: its questions wait their
+ * turn behind any other dialog, go to the user with every clock stopped, and
+ * the answers become task decisions. Never in auto mode (nobody to ask), and
+ * never without a UI.
+ */
+function askRelay(task: Task, deps: WorkflowDeps, domain: Domain): { onAsk: RelayAsk; previews: string } | undefined {
+  if (!ASKING_DOMAINS.has(domain) || !deps.askQuestions || isAutoMode(deps.root, deps.configDir, task.id)) return undefined;
+  const askQuestions = deps.askQuestions;
+  const label = AGENT_LABELS[domain];
+  const previews = previewDir(task.id);
+  try {
+    mkdirSync(previews, { recursive: true });
+  } catch {
+    // Without the folder it can still ask with Markdown previews.
+  }
+  const onAsk: RelayAsk = (questions, signal) =>
+    oneAtATime(async () => {
+      if (signal.aborted) return { answers: [], cancelled: true };
+      if (isAutoMode(deps.root, deps.configDir, task.id)) {
+        return { answers: [], cancelled: true, globalNote: "Auto mode is on, so nobody can answer: decide with the options you recommend and say in your report what you chose and why." };
+      }
+      const result = await askQuestions(questions, label, signal);
+      recordDecision(task, askedDecision(label, questions, result), domain);
+      return result;
+    });
+  return { onAsk, previews };
+}
+
+/** An agent's questions and the user's answers, as the task's decision record keeps them. */
+export function askedDecision(label: string, questions: readonly AskQuestion[], result: AskResult): string {
+  if (result.answers.length === 0) return `${label} asked the user about ${questions.map((question) => question.header).join(", ")}; they did not answer, so ${label} decides.`;
+  const lines = questions.map((question, index) => {
+    const answer = result.answers.find((entry) => entry.questionIndex === index);
+    const text = !answer ? "not answered" : answer.kind === "multi" ? (answer.selected ?? []).join(", ") : `${answer.answer ?? ""}${answer.kind === "custom" ? " (in their words)" : ""}`;
+    return `[${question.header}] ${oneLine(question.question, 120)} → ${oneLine(text, 200)}`;
+  });
+  return `${label} asked the user: ${lines.join("; ")}`;
 }
 
 /** Remember a worker delegation so the checklist replays it after a reload. */
