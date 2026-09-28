@@ -5,6 +5,13 @@ export function truncate(text: string, maxChars: number): string {
   return `${text.slice(0, maxChars)}\n[...${text.length - maxChars} characters omitted]`;
 }
 
+/** The end of `text` within a character budget (the newest entries of a log), marking how much was left out before it. */
+export function tail(text: string, maxChars: number): string {
+  if (maxChars <= 0) return "";
+  if (text.length <= maxChars) return text;
+  return `[...${text.length - maxChars} earlier characters omitted]\n${text.slice(text.length - maxChars)}`;
+}
+
 /** Filler and imperative words that carry no topic signal in a request. */
 const FILLER_WORDS = new Set([
   "let's",
@@ -45,9 +52,28 @@ function fillerKey(word: string): string {
  */
 export function shortTitle(request: string, maxWords = 3): string {
   if (maxWords <= 0) return "";
-  const words = request.trim().split(/\s+/).filter(Boolean);
+  const words = titleText(request).split(/\s+/).filter(Boolean);
   const content = words.filter((word) => !FILLER_WORDS.has(fillerKey(word)));
-  return (content.length > 0 ? content : words).slice(0, maxWords).join(" ");
+  return (content.length > 0 ? content : words).slice(0, maxWords).join(" ").replace(/[:;,]+$/, "");
+}
+
+/** Headings that only label a section (`### Objective`), not name the work. */
+const LABEL_HEADING = /^#{1,6}\s*(objective|goal|goals|summary|overview|task|request|context|background|description|plan)\s*:?\s*$/i;
+
+/**
+ * A request as words for a title: escaped line breaks (`\\n` written out by a
+ * model) read as breaks, label headings are skipped, and Markdown marks
+ * (`#`, `-`, `*`, `>`, backticks) are dropped.
+ */
+function titleText(request: string): string {
+  return request
+    .replace(/\\[nrt]/g, "\n")
+    .split("\n")
+    .filter((line) => !LABEL_HEADING.test(line.trim()))
+    .join(" ")
+    .replace(/[#*>`|]+/g, " ")
+    .replace(/(^|\s)[-+](?=\s|$)/g, " ")
+    .trim();
 }
 
 /** Compact duration such as "45s", "3m" or "2m 05s"; a non-finite input reads "0s". */

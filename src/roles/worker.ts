@@ -25,6 +25,8 @@ export const workerSpec: RoleSpec = {
     "the matching section instead. Do not narrate. Report only what you actually changed and verified.",
     "An optional `## Pushback` (`**Request:**`, `**Reason:**`, optional `**Alternative:**`) states a change you",
     "believe is wrong, with your reason, instead of doing it; still complete everything else you safely can.",
+    "Stopped because your time is up, also add `## Left Off` (what you were doing, what is still to do) and",
+    "`## More Time` (`N minutes — why`).",
   ].join(" "),
 };
 
@@ -65,6 +67,15 @@ export function parseBlockers(
   ];
 }
 
+/** `## More Time` as the minutes asked for (`15 minutes`, `1h`, `20m`) and the reason given. */
+export function parseMoreTime(text: string): { minutes?: number; reason: string } {
+  const flat = text.replace(/^[-*]\s*/gm, "").replace(/\s+/g, " ").trim();
+  const match = /(\d+(?:\.\d+)?)\s*(h|hrs?|hours?|m|mins?|minutes?)\b/i.exec(flat);
+  const minutes = match ? Math.round(Number(match[1]) * (/^h/i.test(match[2]!) ? 60 : 1)) : undefined;
+  const reason = match ? flat.slice(match.index + match[0].length).replace(/^\s*(?:—|–|-|:|,|because|to)?\s*/i, "").trim() : flat;
+  return { ...(minutes && minutes > 0 ? { minutes } : {}), reason: reason || flat };
+}
+
 /** Parse a worker's markdown into a structured result (never throws). */
 export function parseWorkerResult(domain: Domain, raw: string, now = new Date().toISOString()): WorkerResult {
   const sections = parseSections(raw);
@@ -72,6 +83,7 @@ export function parseWorkerResult(domain: Domain, raw: string, now = new Date().
     domain,
     role: "worker",
     completed: findSection(sections, "completed") ?? "",
+    ...leftOffFields(sections),
     filesChanged: bullets(findSection(sections, "files changed")).map((entry): FileChange => {
       const file = parseFileBullet(entry);
       return { path: file.path, change: file.reason };
@@ -85,6 +97,12 @@ export function parseWorkerResult(domain: Domain, raw: string, now = new Date().
     architectureChanges: bullets(findSection(sections, "architecture changes")),
     raw,
   };
+}
+
+function leftOffFields(sections: Map<string, string>): Pick<WorkerResult, "leftOff" | "moreTime"> {
+  const leftOff = findSection(sections, "left off")?.trim();
+  const more = findSection(sections, "more time")?.trim();
+  return { ...(leftOff ? { leftOff } : {}), ...(more ? { moreTime: parseMoreTime(more) } : {}) };
 }
 
 /** Report contract deviations so the Master does not accept unverified work. */

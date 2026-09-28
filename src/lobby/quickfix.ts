@@ -9,6 +9,7 @@ import { loadPrompt } from "../prompts/loader.ts";
 import { runPiAgent, spawnPiProcess, type PiStreamEvent, type ProcessRunner } from "../execution/pi-runner.ts";
 import { describeToolCall } from "../pi/activity.ts";
 import { appendMetrics, type MetricRecord } from "../state/metrics.ts";
+import { appendChange, EditLog } from "../state/changes.ts";
 import type { LobbyFeed } from "./feed.ts";
 import type { FileHinter } from "../classifier/files.ts";
 import type { Classifier } from "../classifier/classifier.ts";
@@ -51,6 +52,8 @@ export interface QuickFixJob {
   /** The classifier routed it down (`trivial 0.88: p/big · low → p/cheap · low`); cleared when it re-ran on the configured profile. */
   route?: string;
   routedFrom?: string;
+  /** Files it changed with `edit`/`write`, as shown (relative to the project); the change ledger lets a running task's QA gate tell them from its own. */
+  files?: string[];
 }
 
 export interface QuickFixProfile {
@@ -103,6 +106,7 @@ export class QuickFixQueue {
   jobs: QuickFixJob[] = [];
   private readonly deps: QuickFixDeps;
   private readonly controllers = new Map<string, AbortController>();
+  private readonly edits = new Map<string, EditLog>();
   private counter = 0;
 
   constructor(deps: QuickFixDeps) {
@@ -188,6 +192,8 @@ export class QuickFixQueue {
     const now = Date.now();
     if (event.type === "tool_execution_start") {
       job.tools += 1;
+      const edits = this.edits.get(job.id);
+      if (edits?.note(event.toolName, event.args)) job.files = edits.shown();
       this.addStep(job, describeToolCall(event.toolName, event.args), now);
     } else if (event.type === "turn_start") job.turns += 1;
     else if (event.type === "thought") this.deps.feed?.thought(QUICK_FIX_SOURCE, event.text, now);
@@ -211,6 +217,7 @@ export class QuickFixQueue {
       return this.hold(job, held);
     }
     this.deps.feed?.log(QUICK_FIX_SOURCE, `started: ${jobTitle(job)}`, "info", job.startedAt);
+    this.edits.set(job.id, new EditLog(this.deps.cwd));
     try {
       const [likely, route] = await Promise.all([this.likely(job.prompt, controller.signal), this.route(job.prompt, profile, controller.signal)]);
       const attempt = (model: string | undefined, thinking: string) => runPiAgent(
@@ -309,6 +316,20 @@ export class QuickFixQueue {
   private finish(job: QuickFixJob): void {
     job.finishedAt = Date.now();
     for (const step of job.steps) step.pending = false;
+    const edited = this.edits.get(job.id)?.list() ?? [];
+    this.edits.delete(job.id);
+    // Whatever it edited, even when it failed, is on record for a task's QA gate as the user's own request.
+    if (edited.length > 0) {
+      appendChange(this.deps.root, this.deps.configDir, {
+        source: "quickfix",
+        id: job.id,
+        what: jobTitle(job),
+        files: edited,
+        startedAt: new Date(job.startedAt ?? job.createdAt).toISOString(),
+        finishedAt: new Date(job.finishedAt).toISOString(),
+        status: job.status,
+      });
+    }
     this.deps.feed?.end(job.id, job.status !== "success");
     const ok = job.status === "success";
     const outcome = ok ? "done" : `${job.status}${job.error ? ` — ${job.error.split("\n")[0]}` : ""}`;
