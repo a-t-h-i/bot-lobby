@@ -137,4 +137,6 @@ export interface AgentRun {
   routedFrom?: string;
   /** Why and where it was routed (`trivial 0.88: p/big · medium → p/cheap · low`). */
   route?: string;
+  /** Files the run changed with `edit`/`write`, absolute, across its attempts. */
+  edited?: string[];
 }
