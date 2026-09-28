@@ -2,12 +2,20 @@ import type { Decision, Task, Verdict } from "../schemas/task.ts";
 import type { Domain } from "../schemas/agent.ts";
 import type { ScoutOutcome } from "./master.ts";
 import { detectGaps, domainsInvolved } from "./synthesis.ts";
+import { builtSomething, onFastTrack, qaRequired, qaTookPart } from "../workflow/track.ts";
 
-/** §19: everything the engine requires before completion may be declared. */
+/**
+ * §19: everything the engine requires before completion may be declared. The
+ * fast track asks for a finished worker step instead of a QA pass, and for
+ * QA's part only when the change needs tests.
+ */
 export function completionBlockers(task: Task, pendingCount: number): string[] {
   const blockers: string[] = [];
   if (!task.plan) blockers.push("no approved plan is recorded");
-  if (task.qaVerdict !== "pass" && !task.qaWaiver) blockers.push(`QA gate is ${task.qaVerdict ?? "not run"}`);
+  if (onFastTrack(task)) {
+    if (!builtSomething(task)) blockers.push("no worker step has finished yet");
+    if (qaRequired(task) && !qaTookPart(task) && !task.qaWaiver) blockers.push("QA has not taken part (give qa the tests as the last step, or run the QA gate)");
+  } else if (task.qaVerdict !== "pass" && !task.qaWaiver) blockers.push(`QA gate is ${task.qaVerdict ?? "not run"}`);
   if (pendingCount > 0) blockers.push(`${pendingCount} unresolved approval request(s)`);
   if (task.blockers.length > 0) blockers.push(`${task.blockers.length} unresolved blocker(s)`);
   return blockers;

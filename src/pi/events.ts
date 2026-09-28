@@ -15,6 +15,7 @@ import { taskRequest, type Task, type TaskState } from "../schemas/task.ts";
 import { pendingComments, readPlanComments, type PlanComment } from "../state/comments.ts";
 import { isAutoMode } from "../state/auto.ts";
 import { triageContext } from "../classifier/triage.ts";
+import { qaStillDue } from "../workflow/track.ts";
 import { previousTaskNote } from "./fresh-context.ts";
 import { budgetLine, budgetState, pauseClocks, readBudget, resumeClocks, startClock, stopClocks } from "../state/budget.ts";
 
@@ -33,7 +34,7 @@ export function masterWorkflowContext(task: Task, time = ""): string {
 export function budgetContext(root: string, configDir: string, task: Task): string {
   const budget = readBudget(root, configDir, task.id);
   if (!budget) return "";
-  const state = budgetState(task.id, budget, task.qaVerdict === "pass");
+  const state = budgetState(task.id, budget, !qaStillDue(task));
   const running = budget.allotments.filter((entry) => !entry.endedAt).map((entry) => `${entry.who} (${entry.minutes}m)`);
   return [
     budgetLine(budget, state),

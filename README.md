@@ -4,7 +4,9 @@ A [Pi](https://pi.dev) extension that turns Pi into a multi-agent software team.
 
 ![The bot-lobby status scene: the oracle orchestrating DEV, DESIGN, RESEARCH and QA through a task's plan](https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/gallery.png)
 
-`/bot-lobby <request>` starts a task. Your Pi session becomes the **Master**
+`/bot-lobby <request>` (or a request typed in the lobby) starts a task, unless
+one agent can simply do it: then it goes to the [quick-fix agent](#quick-fix-or-the-team).
+For a task, your Pi session becomes the **Master**
 (the "oracle"): it scouts the codebase, proposes a plan, and delegates the
 work to three domain agents — **Designer+Frontend**, **Backend** and **QA** —
 each running in its own isolated `pi` process. QA's reviewer is the quality
@@ -43,7 +45,7 @@ extra instructions.
 | Command | Does |
 | --- | --- |
 | `/bot-lobby` | Open the lobby (`alt+l`) |
-| `/bot-lobby <request>` | Start a task (`--task` if it begins with a command word, `--auto` to run unattended, `--budget 90m` to give it a time budget) |
+| `/bot-lobby <request>` | Start a request: a [quick fix](#quick-fix-or-the-team) when one agent can do it alone, else a task (`--task` to always make it a task, also when it begins with a command word; `--auto` to run unattended, `--budget 90m` to give it a time budget, `--fast` / `--full` to pick its [track](#fast-track-or-full-workflow)) |
 | `/bot-lobby budget [90m\|off]` | Show or set this session's task time budget |
 | `/bot-lobby status \| tasks \| runs [id]` | Current task, all tasks, recent agent runs |
 | `/bot-lobby approve \| amend <text> \| decline` | Answer the proposal |
@@ -56,15 +58,82 @@ extra instructions.
 | `/bot-lobby knowledge` | Knowledge file sizes |
 | `/bot-lobby minimize \| restore` | Hide bot-lobby in this session (`ctrl+shift+m`) |
 
+## Quick fix or the team
+
+Before any task exists, bot-lobby asks whether **one agent can just do it**:
+in one file or one area, with nothing to agree between frontend and backend,
+no unfamiliar codebase to survey, nothing risky and no decision you must make
+first. [Jev](#the-classifier-jev) answers when it is on (`classifier.thresholds.quickFixAt`,
+0.7); plain rules answer otherwise, and whenever Jev is unsure. A request that
+says it is self-contained ("a single page", "in one html file") counts even
+when it is rich.
+
+When it reads that way, the oracle confirms in one step, without reading
+files or planning (`route_request`), and says so: *this looks like a quick
+feature, the quick-fix agent is on it*. The lobby then hands the request to
+the quick-fix agent and switches to the **Quick fix** tab, where you follow
+it. No scouts, proposal, plan or QA. A quick feature (bigger than a small
+change, but in one place) runs on its builder's model, thinking and time limit
+(DESIGN's for a page) instead of the quick-fix defaults.
+
+Everything else, or anything the oracle judges needs the team, starts as a
+task below. `--task` always makes a task; `workflow.routeQuickFixes: false`
+turns routing off. Without the lobby (a background session, RPC mode) every
+request is a task.
+
 ## How a task runs
 
 ```
-request → clarify → scout → propose → approve → plan → implement → QA gate → complete
+full workflow:  request → clarify → scout → propose → approve → plan → implement → QA gate → complete
+fast track:     request → implement (only the agents it needs) → QA, if it needs tests → complete
 ```
+
+### Fast track or full workflow
+
+The moment a task starts, bot-lobby reads the request and decides how serious
+it is: its size, who has to take part, and whether it takes the **fast
+track** or the **full workflow**. The read is instant and costs no tokens
+(plain rules, refined by [Jev](#the-classifier-jev) when that is on).
+
+| The request… | Who takes part |
+| --- | --- |
+| changes anything that runs in the browser: screens, components, styles, copy, canvas or three.js graphics | DESIGN (frontend) |
+| changes an API, the database, auth, jobs or other server-side code | DEV (backend) |
+| needs tests: asks for them, fixes a bug, or changes backend logic | QA |
+| depends on outside facts: latest versions, docs, standards, third-party APIs | RESEARCH |
+
+A **small, clear, low-risk** request takes the fast track: the oracle hands
+it straight to those agents, with no scouts, no proposal to approve and no
+plan document (the engine keeps a short plan whose steps are the
+delegations, so the checklist still works). QA takes part only when the
+change needs tests (its worker writing and running them as the last step, or
+the QA gate); without it the task completes as soon as the work is in and
+checked. A copy change is one agent run.
+
+Everything else takes the full workflow below: anything **medium or large**
+(a new page, flow or endpoint, a refactor, an upgrade, a vague or
+many-part request), **serious** whatever its size (security, auth,
+passwords, payments, migrations, production, personal data), or **unclear**
+(too short, vague, or asking to investigate first).
+
+- The oracle glances at the read once and acts on it, or corrects it with
+  `orchestrate action=track`: the full workflow for a change bigger than it
+  reads, the fast track for one that is smaller (before its work is planned),
+  or a member added or dropped.
+- Once work is under way a track only gets stricter: the full workflow or
+  more members, never QA dropped. A fast task whose worker asks for a new
+  dependency or an architecture change gets QA.
+- `/bot-lobby --fast <request>` or `--full <request>` decides it yourself;
+  the oracle never moves a `--full` task to the fast track.
+  `workflow.fastTrack: false` puts every task on the full workflow.
+- The track shows in the lobby's activity log, the task's details on the
+  Tasks tab, and `/bot-lobby status`.
+
+### The full workflow
 
 - **Scouts** (read-only) investigate the domains the request touches.
 - The Master **proposes** a short bullet list; nothing is built until you
-  approve it. Small single-domain changes may skip scouting and the proposal.
+  approve it.
 - **Workers** implement plan steps, one domain each. Several can run in
   parallel; they share files through a **file desk** (claim a file, queue for
   a busy one, hand it over with a note).
@@ -126,7 +195,7 @@ open. `alt+h` lists every key.
 | **1 Lobby** | The task's status, your conversation with the oracle, an activity log of every tool call, and each agent's latest thought |
 | **2 Tasks** | Every task and saved plan as a checklist. `s` starts a plan in a new session, `h` here; `c` comments on a plan; `a` archives, `d` deletes |
 | **3 Plan** | Plan a task with a panel of agents before building it (below) |
-| **4 Quick fix** | One agent makes a small change right away, beside any running task |
+| **4 Quick fix** | One agent makes a change right away, beside any running task; requests the oracle [routes here](#quick-fix-or-the-team) show up too |
 | **5 Metrics** | Run time, success rate, tokens and cost per model and agent |
 
 Common keys: `tab` switches tabs, `esc` browses (arrows, single-key
@@ -238,7 +307,8 @@ else TypeSafe.
 | Planning seats | Each round, only the seats the idea or your latest answers touch sit; `1`–`4` pins a seat |
 | Obvious answers | Answers a question itself when the conversation already makes the recommended option clearly right (≥ 0.9); listed under Assumptions |
 | File hints | Agents start with a short list of the files they most likely need, and get a `find_relevant_files` tool |
-| Task triage | The Master gets hints (size, domains, research needed); a quick fix that is really a task is held (`r` run anyway, `t` make it a task) |
+| Quick fix or task | Whether one engineer can do a new request alone decides whether it goes to the [quick-fix agent](#quick-fix-or-the-team) (the oracle confirms) |
+| Task triage | The task's [track](#fast-track-or-full-workflow) and roster use its read (size, domains, research, ambiguity), and the Master gets it as hints; a quick fix that is really a task (large, and not one engineer's work) is held (`r` run anyway, `t` make it a task) |
 | Effort routing | Simple steps run one thinking level lower; trivial ones on a **cheaper model** you pick. A routed run that falls short re-runs on your normal settings |
 
 **It never gets in the way:** any failure, timeout or missing key means
@@ -266,7 +336,7 @@ the result.
   "scout": { "model": "anthropic/claude-haiku-4-5-20251001", "timeoutMs": 480000 },
   "planner": { "thinking": "high", "timeoutMs": 300000 },
   "lobby": { "planningPanel": ["backend", "designer", "qa", "researcher"], "maxPlanningRounds": 5 },
-  "workflow": { "maxReviewIterations": 2, "maxParallelWorkers": 3, "stallTimeoutMs": 300000, "wrapUpAt": 0.75, "taskBudgetMinutes": 0 },
+  "workflow": { "maxReviewIterations": 2, "maxParallelWorkers": 3, "stallTimeoutMs": 300000, "wrapUpAt": 0.75, "taskBudgetMinutes": 0, "fastTrack": true, "routeQuickFixes": true },
   "classifier": { "enabled": false, "provider": "auto", "effort": { "cheapModel": "inherit" } }
 }
 ```
@@ -285,11 +355,11 @@ the result.
 | Rule | How |
 | --- | --- |
 | Steps happen in order | A state machine validates every action |
-| Nothing is built before approval | `implement` refuses earlier states |
+| Nothing is built before approval | On the full workflow `implement` refuses earlier states; only a fast-track task (small, clear, low-risk) starts straight away |
 | Scouts and the QA gate can't edit code | Scouts get read-only tools; the QA gate adds only `bash` for tests |
 | New dependencies and architecture changes need approval | Parsed from worker reports; the domain is blocked until resolved |
 | Only the Master writes knowledge | Agents can only propose it |
-| "Done" is earned | Needs a plan, a passing QA gate that ran checks (or your explicit acceptance), and no open blockers |
+| "Done" is earned | Needs a plan, a passing QA gate that ran checks (or your explicit acceptance), and no open blockers; on the fast track, a finished worker step, and QA's part only when the change needs tests |
 | Parallel workers don't clobber files | Edits need a file-desk claim |
 | A crash doesn't corrupt a task | State is on disk; tasks resume from their state |
 

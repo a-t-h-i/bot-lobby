@@ -26,7 +26,9 @@ import { shortTitle } from "../text.ts";
 import { isSubagentProcess } from "../pi/quiet.ts";
 import { modelRef, resolveLobbyProfile, resolvePanelProfile } from "../pi/model-support.ts";
 import { modelLookup } from "../pi/tools.ts";
-import { startPlannedTask, startTask } from "../pi/start-task.ts";
+import { startPlannedTask } from "../pi/start-task.ts";
+import { pendingRequest, setQuickFixHandoff, startRequest } from "../pi/route.ts";
+import type { Domain } from "../schemas/agent.ts";
 import type { LobbyAgentKind, LobbyPanel, PanelMember } from "../schemas/configuration.ts";
 import { chatFromEntries, lobbyFeed, narrateEvent, type AgentEventLike, type ChatEntry } from "./feed.ts";
 import { classifier, effortFor, hintsFor } from "../classifier/instance.ts";
@@ -149,9 +151,10 @@ function toOracle(state: Runtime, text: string): string | undefined {
     state.pi.sendUserMessage(text, { expandPromptTemplates: true, ...(busy ? { deliverAs: "followUp" as const } : {}) });
     return `sent ${text.split(/\s+/)[0]} to pi (built-in commands need the lobby hidden: alt+l)`;
   }
-  if (!currentZenTask()) {
-    startTask(state.pi, state.ctx, state.configDir, text).catch((error: Error) => failed(state, "could not start the task", error));
-    return "starting a task — the oracle takes it from here";
+  // While the oracle decides where a request goes, what the user types joins that conversation.
+  if (!currentZenTask() && !pendingRequest()) {
+    startRequest(state.pi, state.ctx, state.configDir, text).catch((error: Error) => failed(state, "could not start the task", error));
+    return "reading your request — a quick fix or a task, the oracle takes it from here";
   }
   state.pi.sendUserMessage(text, busy ? { deliverAs: "steer" } : undefined);
   return undefined;
@@ -706,6 +709,7 @@ function shutdown(): void {
   const state = runtime;
   if (!state) return;
   runtime = undefined;
+  setQuickFixHandoff(undefined);
   setMouse(state, false);
   state.unsubscribeFeed?.();
   state.quickfix.cancelAll();
@@ -715,6 +719,24 @@ function shutdown(): void {
   setWidgetSuppressor(() => false);
   onRunUpdates(undefined);
   onMinimizeChange(undefined);
+}
+
+/**
+ * The oracle routed a request to the quick-fix agent: queue it (no "looks like
+ * a task" hold, the oracle already decided), on its builder's settings when it
+ * is a quick feature, and show it on the Quick fix tab.
+ */
+function handToQuickFix(state: Runtime, request: string, builder: Domain | undefined, reason: string): string {
+  const quick = lobbyProfile(state, "quickfix");
+  const profile = builder ? { ...seatProfile(state, builder), instructions: quick.instructions } : undefined;
+  const job = state.quickfix.submit(request, Date.now(), {
+    force: true,
+    ...(profile ? { profile } : {}),
+    note: `The oracle sent your request here: ${reason.replace(/[.\s]+$/, "")}.${builder ? ` A quick feature: it runs on ${builder === "designer" ? "DESIGN" : "DEV"}'s model, thinking and time limit.` : ""}`,
+  });
+  showLobby("quickfix");
+  state.view?.showQuickFix(job.id);
+  return job.id;
 }
 
 /** Create the session's lobby runtime (interactive master sessions only). */
@@ -754,6 +776,7 @@ export function initLobby(pi: ExtensionAPI, ctx: ExtensionContext, configDir: st
     effort: effortFor((model, thinking) => checkThinking(modelLookup(ctx)(model), thinking).level),
   });
   runtime = state;
+  setQuickFixHandoff((request, builder, reason) => (runtime === state ? handToQuickFix(state, request, builder, reason) : undefined));
   lobbyFeed.clear();
   // Only the newest messages are kept; the feed learns whether earlier ones exist, and loads them when scrolled to.
   lobbyFeed.seedChat(chatFromEntries(ctx.sessionManager.getBranch(), Number.POSITIVE_INFINITY));

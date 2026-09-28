@@ -51,7 +51,11 @@ const OrchestrateSchema = Type.Object({
     StringEnum(["approved", "rejected"] as const, { description: "resolve_approval: approve or reject the request" }),
   ),
   note: Type.Optional(Type.String({ description: "resolve_approval: rationale, or what to do instead when rejected" })),
-  reason: Type.Optional(Type.String({ description: "block: why the task cannot continue; budget: why the task needs more time" })),
+  reason: Type.Optional(Type.String({ description: "block: why the task cannot continue; budget: why the task needs more time; track: why the task takes that path or needs those members" })),
+  track: Type.Optional(
+    StringEnum(["fast", "full"] as const, { description: "track: fast (straight to the roster's agents, no scouts, proposal or plan; QA only for tests) or full (the whole workflow)" }),
+  ),
+  roster: Type.Optional(Type.Array(Type.String(), { description: "track: who takes part — any of designer, backend, qa, researcher" })),
   text: Type.Optional(Type.String({ description: "decide/complete/knowledge: the decision, completion summary, or knowledge text" })),
   file: Type.Optional(Type.String({ description: "compact: the knowledge file to rewrite, e.g. knowledge.md" })),
   kind: Type.Optional(
@@ -71,7 +75,8 @@ const DESCRIPTION = [
   "compact (replace a knowledge file with a rewritten version, archiving the old one),",
   "resolve_approval (approve or reject a request), complete (declare the task done after the gates",
   "pass), block/resume (escalate or continue), budget (under a time budget: where it stands, or ask the",
-  "user for more minutes with a reason), status, cancel.",
+  "user for more minutes with a reason), track (the task's path and who takes part: show it, or correct it with",
+  "track=fast|full, roster and a reason), status, cancel.",
   "The engine validates every step against the task state machine, so a rejected action means the workflow is not at that step yet.",
 ].join(" ");
 
@@ -184,7 +189,7 @@ export function registerOrchestrateTool(pi: ExtensionAPI, configDir: string, run
     name: "orchestrate",
     label: "Orchestrate",
     description: DESCRIPTION,
-    promptSnippet: "Run a bot-lobby workflow step (clarify, scout, propose, plan, decide, status, cancel)",
+    promptSnippet: "Run a bot-lobby workflow step (clarify, scout, propose, plan, implement, track, decide, status, cancel)",
     promptGuidelines: [
       "Use orchestrate for every bot-lobby workflow step; it enforces the task state machine and records results.",
     ],

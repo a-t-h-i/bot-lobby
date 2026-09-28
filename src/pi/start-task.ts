@@ -5,7 +5,10 @@
  */
 import { existsSync } from "node:fs";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { createTask, taskRequest, type Task } from "../schemas/task.ts";
+import { createTask, taskRequest, type Task, type TaskTrack, type TaskTriage, type TrackPath } from "../schemas/task.ts";
+import type { Domain } from "../schemas/agent.ts";
+import { chooseTrack, trackLine, trackSummary } from "../workflow/track.ts";
+import { lobbyFeed } from "../lobby/feed.ts";
 import { createTaskDir, ensureProjectStructure, nextTaskId, ownedTask, saveTask, taskDirFor } from "../state/persistence.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { transition } from "../state/task-state.ts";
@@ -26,19 +29,51 @@ function uniqueTaskId(root: string, configDir: string, request: string): string 
   return id;
 }
 
-export function kickoff(task: Task, budgetMinutes = 0): string {
+/** In a kickoff after the oracle routed the request to the team (the lobby then shows the request once). */
+export const ROUTED_LINE = "Routed: you sent this request to the team.";
+
+/** The fast track's steps: straight to the agents the request needs, QA only for tests, then complete. */
+function fastSteps(track: TaskTrack): string[] {
+  const building = track.roster.filter((member): member is Domain => member === "designer" || member === "backend");
+  const builders = building.length > 1
+    ? `one call with assignments for ${building.join(" and ")}, each task stating the contract between them`
+    : building.length === 1 ? `domain ${building[0]}` : track.roster.includes("qa") ? "domain qa (the change is its tests)" : "the one domain that owns the files";
+  const steps = [
+    ...(track.roster.includes("researcher") ? ["First summon the researcher for the outside facts it needs: orchestrate action=research with a domain and the question."] : []),
+    `Delegate now with orchestrate action=implement: ${builders}; open each task with "Step 1:" (the engine keeps the plan).`,
+    ...(track.roster.includes("qa") && building.length > 0 ? ["QA takes part (tests): once the change is in, give qa the tests as the last step (action=implement domain=qa), or run action=qa."] : []),
+    "Check `git diff --stat` and the report, then orchestrate action=complete with a one-line summary.",
+  ];
   return [
+    "Fast track: the request reads small and clear, so skip the ceremony: no scouts, no proposal, no plan document.",
+    ...steps.map((step, index) => `${index + 1}. ${step}`),
+    track.roster.includes("qa") ? "" : "No QA gate on this track: nothing here needs tests.",
+    "If the request is bigger, riskier or less clear than it reads, switch before delegating: orchestrate action=track track=full with a reason. Otherwise do not deliberate over the track.",
+  ].filter(Boolean);
+}
+
+export function kickoff(task: Task, budgetMinutes = 0, options: { fastTrack?: boolean; routed?: boolean } = {}): string {
+  const track = task.track;
+  const head = [
     `A bot-lobby task is active: ${task.id}`,
     `Title: ${task.title}`,
     `Request: ${taskRequest(task)}`,
     `State: ${task.state}`,
+    ...(options.routed ? [ROUTED_LINE] : []),
+    ...(track ? [trackSummary(track)] : []),
     ...(budgetMinutes > 0 ? [`Time budget: ${budgetMinutes} minutes of work, for you and every agent. Size the plan to fit it and divide it by scope (see Time budget in your prompt).`] : []),
     "",
+  ];
+  if (track?.path === "fast") return [...head, ...fastSteps(track)].join("\n");
+  const fastAllowed = Boolean(track) && options.fastTrack !== false && track?.userChoice !== "full" && track?.source !== "plan";
+  return [
+    ...head,
     "Drive it with the orchestrate tool:",
     "1. clarify if the request is genuinely ambiguous,",
     "2. scout the domains the request touches,",
     "3. synthesize the findings and propose a short `- ` bullet list for approval.",
     "Do not implement anything before the user approves the proposal.",
+    ...(fastAllowed ? ["If it is in fact a small, clear, low-risk change, take the fast track instead: orchestrate action=track track=fast with a reason."] : []),
   ].join("\n");
 }
 
@@ -56,6 +91,13 @@ export interface StartOptions {
   title?: string;
   /** Minutes of work time the task gets; `workflow.taskBudgetMinutes` when absent. */
   budget?: number;
+  /** The user's `--fast` or `--full`: the path the task takes, whatever its request reads as. */
+  track?: TrackPath;
+  /** The classifier already read the request (routing did): `triage` is its read, or absent when it was off. */
+  triaged?: boolean;
+  triage?: TaskTriage;
+  /** The oracle sent this request to the team after the classifier read it as a quick fix. */
+  routed?: boolean;
 }
 
 export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configDir: string, request: string, options: StartOptions = {}): Promise<Task | undefined> {
@@ -72,10 +114,14 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   createTaskDir(root, configDir, task);
   transition(task, "clarifying");
   // The classifier's read of the request (when it is on) reaches the Master's very first turn.
-  const triage = await triageFor({ cwd: ctx.cwd, root, configDir }, request);
+  const triage = options.triaged ? options.triage : await triageFor({ cwd: ctx.cwd, root, configDir }, request);
   if (triage) task.triage = triage;
+  // How serious the request reads: who takes part, and whether it takes the fast track or the full workflow.
+  const config = loadConfig();
+  task.track = chooseTrack(request, triage, { fastTrack: config.workflow.fastTrack, ...(options.track ? { forced: options.track } : {}), ...(options.approvedPlan ? { approvedPlan: true } : {}) });
+  lobbyFeed.log("LOBBY", trackLine(task.track), "info");
   saveTask(root, configDir, task);
-  const budgetMinutes = options.budget ?? loadConfig().workflow.taskBudgetMinutes;
+  const budgetMinutes = options.budget ?? config.workflow.taskBudgetMinutes;
   if (budgetMinutes > 0) setBudget(root, configDir, task.id, budgetMinutes);
   if (options.auto) setAutoMode(root, configDir, task.id, true, sessionId);
   // A session that starts a task is named after it, so /resume and the lobby list it by name.
@@ -86,7 +132,7 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   // The oracle takes the task on with a clean context: nothing said before the kickoff is sent to its model.
   if (freshContextOn()) markContext(pi, { kind: "start", taskId: task.id, at: Date.now() });
   // A kickoff while pi is still busy (another turn) queues behind it instead of throwing.
-  pi.sendUserMessage(kickoff(task, budgetMinutes), ctx.isIdle() ? undefined : { deliverAs: "followUp" });
+  pi.sendUserMessage(kickoff(task, budgetMinutes, { fastTrack: config.workflow.fastTrack, ...(options.routed ? { routed: true } : {}) }), ctx.isIdle() ? undefined : { deliverAs: "followUp" });
   return task;
 }
 
