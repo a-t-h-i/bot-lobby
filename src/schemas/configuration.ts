@@ -66,6 +66,8 @@ export interface WorkflowConfig {
   wrapUpAt: number;
   /** Workers that may run at once when the Master delegates several domains together. */
   maxParallelWorkers: number;
+  /** The oracle starts each task with a clean context: its model is sent only the conversation since the task started, or since the last one ended. */
+  freshContext: boolean;
 }
 
 export interface KnowledgeConfig {
@@ -201,6 +203,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     toolStallTimeoutMs: 10 * 60 * 1000,
     wrapUpAt: 0.75,
     maxParallelWorkers: 3,
+    freshContext: true,
   },
   knowledge: {
     compactionThreshold: 20000,
@@ -336,6 +339,7 @@ function normalizeClassifier(value: unknown): ClassifierConfig {
 export function resolveConfig(partial: unknown): BotLobbyConfig {
   const src = (partial ?? {}) as Record<string, unknown>;
   const workflow = { ...DEFAULT_CONFIG.workflow, ...(src.workflow as Partial<WorkflowConfig> | undefined) };
+  workflow.freshContext = workflow.freshContext !== false;
   const knowledge = { ...DEFAULT_CONFIG.knowledge, ...(src.knowledge as Partial<KnowledgeConfig> | undefined) };
   const srcAgents = (src.agents ?? {}) as Partial<BotLobbyConfig["agents"]>;
   return {

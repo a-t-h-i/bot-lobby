@@ -10,10 +10,13 @@ import { registerLobbyEvents } from "./lobby/runtime.ts";
 import { registerOwner } from "./pi/owner.ts";
 import { registerClassifier } from "./classifier/instance.ts";
 import { registerClassifierTools } from "./classifier/tools.ts";
+import { registerFreshContext } from "./pi/fresh-context.ts";
 
 export default function (pi: ExtensionAPI): void {
   // First, so every session_start handler below finds the classifier bound to this session's keys.
   registerClassifier(pi, CONFIG_DIR_NAME);
+  // Before the lifecycle, so a task that ended while the oracle was idle is closed before it builds the next turn's prompt.
+  registerFreshContext(pi, CONFIG_DIR_NAME);
   registerLifecycle(pi, CONFIG_DIR_NAME);
   // After the lifecycle, so the lobby opens over a task the widget state already knows.
   registerLobbyEvents(pi, CONFIG_DIR_NAME);
