@@ -1,4 +1,4 @@
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { clip, textWidth } from "../width.ts";
 import {
   BAR,
   BUBBLE,
@@ -243,11 +243,11 @@ function labelPaint(status: SlotState, theme?: PanelTheme): ((text: string) => s
 }
 
 function padTo(text: string, width: number): string {
-  return truncateToWidth(text, width, "", true);
+  return clip(text, width, "", true);
 }
 
 function centre(text: string, width: number): string {
-  return padTo(" ".repeat(Math.max(0, Math.floor((width - visibleWidth(text)) / 2))) + text, width);
+  return padTo(" ".repeat(Math.max(0, Math.floor((width - textWidth(text)) / 2))) + text, width);
 }
 
 function mod(index: number, length: number): number {
@@ -273,7 +273,7 @@ function sceneCentre(width: number): number {
 
 /** Place a row of at most `SCENE_WIDTH` columns on the scene's centre column. */
 function place(row: string, width: number): string {
-  return " ".repeat(Math.max(0, sceneLeft(width) + Math.floor((SCENE_WIDTH - visibleWidth(row)) / 2))) + row;
+  return " ".repeat(Math.max(0, sceneLeft(width) + Math.floor((SCENE_WIDTH - textWidth(row)) / 2))) + row;
 }
 
 function alertLine(
@@ -283,7 +283,7 @@ function alertLine(
   kind: "warning" | "error" = "warning",
 ): string {
   const left = sceneLeft(width);
-  const line = paint(truncateToWidth(`! ${alert}`, width - left, "…"), kind, theme, true);
+  const line = paint(clip(`! ${alert}`, width - left, "…"), kind, theme, true);
   return " ".repeat(left) + line;
 }
 
@@ -294,8 +294,8 @@ function boxLines(input: LargeSceneInput, width: number, theme?: PanelTheme): st
 
 function topBorder(input: LargeSceneInput, theme?: PanelTheme): string {
   const lead = "┌─ BOT-LOBBY ── ";
-  const label = truncateToWidth(`${input.taskTitle} · ${input.state} `, SCENE_WIDTH - 18, "…");
-  const tail = "─".repeat(Math.max(0, SCENE_WIDTH - 1 - visibleWidth(lead) - visibleWidth(label)));
+  const label = clip(`${input.taskTitle} · ${input.state} `, SCENE_WIDTH - 18, "…");
+  const tail = "─".repeat(Math.max(0, SCENE_WIDTH - 1 - textWidth(lead) - textWidth(label)));
   return paint(lead, "muted", theme) + paint(label, "accent", theme, true) + paint(`${tail}┐`, "muted", theme);
 }
 
@@ -349,7 +349,7 @@ function bodyLines(
 /** One dim line under the agent strip; warnings take the warning colour. */
 function feedRow(feed: FeedLine, width: number, theme?: PanelTheme): string {
   const left = sceneLeft(width) + 1;
-  const text = truncateToWidth(feed.text, Math.max(0, Math.min(SCENE_WIDTH - 2, width - left)), "…");
+  const text = clip(feed.text, Math.max(0, Math.min(SCENE_WIDTH - 2, width - left)), "…");
   return " ".repeat(left) + (feed.kind === "warning" ? paint(text, "warning", theme) : paint(text, "dim", theme));
 }
 
@@ -494,7 +494,7 @@ export function oracleAside(input: LargeSceneInput): string {
 function bubbleRows(input: LargeSceneInput, theme?: PanelTheme): string[] {
   const accent = ORACLE_COLORS[input.oracle.pose];
   const border = (text: string) => paint(text, "muted", theme);
-  const text = (value: string) => padTo(truncateToWidth(value, BUBBLE_TEXT, "…"), BUBBLE_TEXT);
+  const text = (value: string) => padTo(clip(value, BUBBLE_TEXT, "…"), BUBBLE_TEXT);
   const rule = "─".repeat(BUBBLE.width - 2);
   return [
     border(`╭${rule}╮`),
@@ -661,7 +661,7 @@ function assemble(end: number, cells: readonly Cell[]): string {
   let cursor = 0;
   for (const cell of cells) {
     row += " ".repeat(Math.max(0, cell.offset - cursor)) + (cell.paint ? cell.paint(cell.text) : cell.text);
-    cursor = cell.offset + visibleWidth(cell.text);
+    cursor = cell.offset + textWidth(cell.text);
   }
   return row + " ".repeat(Math.max(0, end - cursor));
 }
