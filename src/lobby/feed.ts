@@ -7,6 +7,7 @@
  */
 import type { AgentRun } from "../schemas/findings.ts";
 import { agentName } from "../pi/run-summary.ts";
+import { markdownBlocks } from "./markdown.ts";
 
 export type ActivityKind = "info" | "success" | "warning" | "error";
 
@@ -43,9 +44,12 @@ export interface ChatEntry {
 
 export const MAX_ACTIVITY = 400;
 export const MAX_THOUGHTS = 40;
-export const MAX_CHAT = 200;
+/** Messages the conversation keeps in memory; earlier ones are loaded from the session when scrolled to. */
+export const MAX_CHAT = 100;
 /** Longest thought kept; a streaming thought keeps its newest text. */
 export const MAX_THOUGHT_TEXT = 4000;
+/** The streaming reply kept: several panes' worth; past it, whole blocks are dropped from its start. */
+export const MAX_REPLY_TEXT = 8000;
 
 function bounded<T>(list: T[], max: number): T[] {
   return list.length > max ? list.slice(-max) : list;
@@ -57,6 +61,8 @@ export class LobbyFeed {
   chat: ChatEntry[] = [];
   /** The oracle's reply while it streams; cleared when the message ends. */
   reply = "";
+  /** Earlier messages than `chat` holds exist in the session (loaded only when scrolled back to). */
+  chatOlder = false;
   version = 0;
   private nextId = 1;
   private readonly listeners = new Set<() => void>();
@@ -90,14 +96,20 @@ export class LobbyFeed {
 
   /** A one-off entry that is already done (a receipt, a transition, a note). */
   log(source: string, text: string, kind: ActivityKind = "info", at = Date.now()): void {
-    this.activity = bounded([...this.activity, { id: this.nextId++, at, source, text, kind, pending: false }], MAX_ACTIVITY);
+    this.pushActivity({ id: this.nextId++, at, source, text, kind, pending: false });
     this.touch();
   }
 
   /** Open an in-flight step; `key` lets `end` settle exactly this one. */
   begin(source: string, text: string, key?: string, at = Date.now()): void {
-    this.activity = bounded([...this.activity, { id: this.nextId++, at, source, text, kind: "info", pending: true, ...(key ? { key } : {}) }], MAX_ACTIVITY);
+    this.pushActivity({ id: this.nextId++, at, source, text, kind: "info", pending: true, ...(key ? { key } : {}) });
     this.touch();
+  }
+
+  /** Append in place (a busy agent logs many steps a second), dropping the oldest past the limit. */
+  private pushActivity(entry: ActivityEntry): void {
+    this.activity.push(entry);
+    if (this.activity.length > MAX_ACTIVITY) this.activity.splice(0, this.activity.length - MAX_ACTIVITY);
   }
 
   /** Settle the step opened with `key`; an error marks it. */
@@ -116,7 +128,7 @@ export class LobbyFeed {
     const last = this.thoughts.at(-1);
     if (last && last.live && last.source === source) {
       const text = last.text + delta;
-      last.text = text.length > MAX_THOUGHT_TEXT ? text.slice(-MAX_THOUGHT_TEXT) : text;
+      last.text = text.length > MAX_THOUGHT_TEXT ? trimThought(text) : text;
     } else {
       this.thoughts = bounded([...this.thoughts, { id: this.nextId++, at, source, text: delta.slice(-MAX_THOUGHT_TEXT), live: true }], MAX_THOUGHTS);
     }
@@ -146,7 +158,7 @@ export class LobbyFeed {
 
   /** Stream the oracle's reply text as it arrives. */
   replyDelta(delta: string): void {
-    this.reply = (this.reply + delta).slice(-MAX_THOUGHT_TEXT);
+    this.reply = trimReply(this.reply + delta);
     this.touch();
   }
 
@@ -160,13 +172,19 @@ export class LobbyFeed {
   say(role: ChatRole, text: string, at = Date.now()): void {
     const body = text.trim();
     if (!body) return;
-    this.chat = bounded([...this.chat, { id: this.nextId++, at, role, text: body }], MAX_CHAT);
+    this.chat.push({ id: this.nextId++, at, role, text: body });
+    if (this.chat.length > MAX_CHAT) {
+      this.chat.splice(0, this.chat.length - MAX_CHAT);
+      this.chatOlder = true;
+    }
     this.touch();
   }
 
-  /** Replace the conversation (seeding from the session when the lobby first opens). */
+  /** Replace the conversation (seeding from the session when the lobby first opens); only the newest `MAX_CHAT` are kept. */
   seedChat(entries: ReadonlyArray<{ role: ChatRole; text: string; at?: number }>): void {
-    this.chat = bounded(entries.filter((entry) => entry.text.trim()).map((entry) => ({ id: this.nextId++, at: entry.at ?? 0, role: entry.role, text: entry.text.trim() })), MAX_CHAT);
+    const kept = entries.filter((entry) => entry.text.trim());
+    this.chatOlder = kept.length > MAX_CHAT;
+    this.chat = kept.slice(-MAX_CHAT).map((entry) => ({ id: this.nextId++, at: entry.at ?? 0, role: entry.role, text: entry.text.trim() }));
     this.touch();
   }
 
@@ -202,12 +220,45 @@ export class LobbyFeed {
     this.activity = [];
     this.thoughts = [];
     this.chat = [];
+    this.chatOlder = false;
     this.reply = "";
     this.runSteps.clear();
     this.runThoughts.clear();
     this.runStatus.clear();
     this.touch();
   }
+}
+
+/** A streaming thought past `MAX_THOUGHT_TEXT` cut to three quarters of it from a word's start, so its start then holds still a while. */
+function trimThought(text: string): string {
+  const cut = text.slice(-Math.floor(MAX_THOUGHT_TEXT * 0.75));
+  const space = cut.search(/\s/);
+  return space >= 0 && space < 80 ? cut.slice(space + 1) : cut;
+}
+
+/**
+ * A streaming reply past `max` characters cut down to three quarters of that
+ * (so its start then holds still for a while) by dropping whole Markdown
+ * blocks from its start, so what is left renders as it did (a cut inside a
+ * code block would turn the rest of the reply inside out). A single block
+ * longer than that keeps its end, and its opening fence if it is code.
+ */
+export function trimReply(text: string, max = MAX_REPLY_TEXT): string {
+  if (text.length <= max) return text;
+  const target = Math.floor(max * 0.75);
+  const blocks = markdownBlocks(text);
+  let length = text.length;
+  let first = 0;
+  // Each dropped block takes the blank line after it too.
+  while (first < blocks.length - 1 && length > target) length -= blocks[first++]!.length + 2;
+  if (length <= target) return blocks.slice(first).join("\n\n");
+  const last = blocks.at(-1) ?? text;
+  const opener = /^ {0,3}(?:`{3,}|~{3,}).*\n/.exec(last)?.[0] ?? "";
+  const rest = last.slice(opener.length);
+  const cut = rest.slice(-(target - opener.length));
+  // From a line start, so no line (or code) is shown half cut.
+  const line = cut.indexOf("\n");
+  return `${opener}${line >= 0 && line < cut.length - 1 ? cut.slice(line + 1) : cut}`;
 }
 
 /** The process-wide lobby feed; the Master session is the only writer that matters. */
@@ -240,11 +291,28 @@ export function chatText(role: "user" | "assistant", text: string): Array<{ role
   return [{ role: "you", text: body }];
 }
 
+/** The session entry bot-lobby leaves where the oracle's context starts over (see pi/fresh-context.ts). */
+export const CONTEXT_MARK = "bot-lobby-context";
+
+/** What the conversation shows where a task's end cleared the oracle's context. */
+export const CLEARED_NOTE = "context cleared · the next request starts fresh";
+
+/** Whether a session entry is where a finished task cleared the oracle's context. */
+export function isClearedMark(entry: unknown): boolean {
+  const record = entry as { type?: string; customType?: string; data?: { kind?: unknown } } | undefined;
+  return record?.type === "custom" && record.customType === CONTEXT_MARK && record.data?.kind === "end";
+}
+
 /** Session entries (`{ type: "message", message }`) as conversation entries, oldest first. */
 export function chatFromEntries(entries: readonly unknown[], max = MAX_CHAT): Array<{ role: ChatRole; text: string; at?: number }> {
   const chat: Array<{ role: ChatRole; text: string; at?: number }> = [];
   for (const entry of entries) {
     const record = entry as { type?: string; timestamp?: string; message?: { role?: string; content?: unknown } };
+    if (isClearedMark(entry)) {
+      const at = record.timestamp ? Date.parse(record.timestamp) : Number.NaN;
+      chat.push({ role: "note", text: CLEARED_NOTE, ...(Number.isFinite(at) ? { at } : {}) });
+      continue;
+    }
     if (record?.type !== "message") continue;
     const role = record.message?.role;
     if (role !== "user" && role !== "assistant") continue;

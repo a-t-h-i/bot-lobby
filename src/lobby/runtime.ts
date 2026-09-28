@@ -7,10 +7,10 @@
  * records each Master turn in the metrics log.
  */
 import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { getSelectListTheme, SessionManager } from "@earendil-works/pi-coding-agent";
+import { getMarkdownTheme, getSelectListTheme, SessionManager } from "@earendil-works/pi-coding-agent";
 import { Key, type OverlayHandle, type TUI } from "@earendil-works/pi-tui";
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
-import { listTasks, loadTask } from "../state/persistence.ts";
+import { loadTask, peekTasks } from "../state/persistence.ts";
 import { detectProjectRoot, loadConfig, saveConfig } from "../state/project.ts";
 import { addPlanComment, readPlanComments } from "../state/comments.ts";
 import { isAutoMode } from "../state/auto.ts";
@@ -28,7 +28,7 @@ import { modelRef, resolveLobbyProfile, resolvePanelProfile } from "../pi/model-
 import { modelLookup } from "../pi/tools.ts";
 import { startPlannedTask, startTask } from "../pi/start-task.ts";
 import type { LobbyAgentKind, LobbyPanel, PanelMember } from "../schemas/configuration.ts";
-import { chatFromEntries, lobbyFeed, narrateEvent, type AgentEventLike } from "./feed.ts";
+import { chatFromEntries, lobbyFeed, narrateEvent, type AgentEventLike, type ChatEntry } from "./feed.ts";
 import { classifier, effortFor, hintsFor } from "../classifier/instance.ts";
 import { checkThinking } from "../pi/model-support.ts";
 import { launchPi, SessionRegistry, type BackgroundSession, type SessionLauncher } from "./sessions.ts";
@@ -83,8 +83,28 @@ export function lobbyView(): LobbyView | undefined {
   return runtime?.view;
 }
 
+/** Repaints asked for by what happens in the background (a streamed token, a run update) come at most this often. */
+export const FRAME_MS = 40;
+let lastFrame = 0;
+let frameTimer: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * Repaint the lobby for something that happened in the background. A reply
+ * streams dozens of events a second; they share frames, at most one per
+ * `FRAME_MS`, instead of each asking for its own. Keys repaint at once
+ * through pi.
+ */
 function rerender(): void {
-  if (runtime?.visible) runtime.tui?.requestRender();
+  if (!runtime?.visible || frameTimer) return;
+  const wait = lastFrame + FRAME_MS - Date.now();
+  const paint = () => {
+    frameTimer = undefined;
+    lastFrame = Date.now();
+    if (runtime?.visible) runtime.tui?.requestRender();
+  };
+  if (wait <= 0) return paint();
+  frameTimer = setTimeout(paint, wait);
+  frameTimer.unref?.();
 }
 
 function sessionModel(ctx: ExtensionContext): string | undefined {
@@ -304,6 +324,16 @@ function liveSessions(state: Runtime): LiveSession[] {
   return sessions;
 }
 
+/**
+ * A session's whole conversation, oldest first: this window's from pi's
+ * branch (already in memory), another's from its session file. Loaded only
+ * while the lobby is scrolled back through it.
+ */
+function chatHistory(state: Runtime, sessionId?: string): ChatEntry[] {
+  if (sessionId) return chats.history(sessionId);
+  return chatFromEntries(state.ctx.sessionManager.getBranch(), Number.POSITIVE_INFINITY).map((line, index) => ({ id: -(index + 1), at: line.at ?? 0, role: line.role, text: line.text }));
+}
+
 /** Leave a message for a session running in another terminal. */
 function sendToSession(state: Runtime, sessionId: string, text: string): string {
   try {
@@ -478,10 +508,13 @@ export async function answerPanel(state: Runtime | undefined = runtime): Promise
   }
 }
 
-const renderMarkdown = createMarkdownRenderer();
 const lobbyThemes = new WeakMap<Theme, LobbyTheme>();
 
-/** pi's theme as the lobby draws with it, plus Markdown rendering; one wrapper per theme so caches stay warm. */
+/**
+ * pi's theme as the lobby draws with it, plus Markdown rendering; one wrapper
+ * (and one Markdown renderer with its cache) per theme, so caches stay warm
+ * and a theme switch starts fresh.
+ */
 function lobbyTheme(theme: Theme): LobbyTheme {
   let wrapped = lobbyThemes.get(theme);
   if (!wrapped) {
@@ -490,7 +523,7 @@ function lobbyTheme(theme: Theme): LobbyTheme {
       bold: (text) => theme.bold(text),
       italic: (text) => theme.italic(text),
       bg: (color, text) => theme.bg(color, text),
-      markdown: renderMarkdown,
+      markdown: createMarkdownRenderer(getMarkdownTheme()),
       strike: (text) => theme.strikethrough(text),
     };
     lobbyThemes.set(theme, wrapped);
@@ -515,7 +548,7 @@ function host(state: Runtime, tui: TUI): LobbyHost {
     },
     feed: lobbyFeed,
     masterBusy: () => !state.ctx.isIdle(),
-    tasks: () => listTasks(state.root, state.configDir),
+    tasks: () => peekTasks(state.root, state.configDir),
     plans: () => listPlannedTasks(state.root, state.configDir),
     comments: (taskId) => readPlanComments(state.root, state.configDir, taskId),
     metrics: () => readMetrics(state.root, state.configDir),
@@ -561,6 +594,8 @@ function host(state: Runtime, tui: TUI): LobbyHost {
     restoreTask: (taskId) => restoreTask(state, taskId),
     deleteTask: (taskId, where) => deleteTask(state, taskId, where),
     sessionChat: (sessionId) => chats.chat(sessionId),
+    hasOlderChat: (sessionId) => chats.hasOlder(sessionId),
+    chatHistory: (sessionId) => chatHistory(state, sessionId),
     taskScene: (task, width, height) => taskScene(state, task, width, height),
     requestRender: () => tui.requestRender(),
   };
@@ -742,7 +777,8 @@ export function initLobby(pi: ExtensionAPI, ctx: ExtensionContext, configDir: st
   });
   runtime = state;
   lobbyFeed.clear();
-  lobbyFeed.seedChat(chatFromEntries(ctx.sessionManager.getBranch()));
+  // Only the newest messages are kept; the feed learns whether earlier ones exist, and loads them when scrolled to.
+  lobbyFeed.seedChat(chatFromEntries(ctx.sessionManager.getBranch(), Number.POSITIVE_INFINITY));
   state.unsubscribeFeed = lobbyFeed.onChange(rerender);
   setWidgetSuppressor(() => runtime?.visible === true);
   onRunUpdates((runs) => lobbyFeed.runs(runs));

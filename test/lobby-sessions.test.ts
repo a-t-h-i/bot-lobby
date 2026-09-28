@@ -1,10 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, appendFileSync } from "node:fs";
+import { MAX_CHAT } from "../src/lobby/feed.ts";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BackgroundSession, extensionArgs, SessionRegistry, sessionArgs } from "../src/lobby/sessions.ts";
-import { chatFromFile, currentBranch, SessionChats } from "../src/lobby/session-files.ts";
+import { BackgroundSession, extensionArgs, MAX_ENDED, SessionRegistry, sessionArgs } from "../src/lobby/sessions.ts";
+import { chatFromFile, currentBranch, SessionChats, SessionLog } from "../src/lobby/session-files.ts";
 import { parseCommand } from "../src/pi/commands.ts";
 import { FakeSessionProcess } from "./fake-session.ts";
 
@@ -130,6 +131,24 @@ test("the registry launches sessions in the project and finds them by pi session
   assert.ok(changes >= 2);
 });
 
+test("the registry keeps every running session and only the newest few that ended", () => {
+  const procs: FakeSessionProcess[] = [];
+  const registry = new SessionRegistry(() => {
+    const proc = new FakeSessionProcess();
+    procs.push(proc);
+    return proc;
+  });
+  const first = registry.start("/repo", { name: "keeps running", request: "x" });
+  for (let index = 0; index < MAX_ENDED + 3; index += 1) {
+    registry.start("/repo", { name: `ended ${index}`, request: "x" });
+    procs.at(-1)!.exit(0);
+  }
+  registry.start("/repo", { name: "latest", request: "x" });
+  assert.equal(registry.sessions.length, 1 + MAX_ENDED + 1);
+  assert.equal(registry.sessions[0], first, "a running session is never let go");
+  assert.deepEqual(registry.sessions.slice(1, -1).map((session) => session.name), Array.from({ length: MAX_ENDED }, (_, index) => `ended ${index + 3}`));
+});
+
 function entry(id: string, parentId: string | null, role: "user" | "assistant", text: string): Record<string, unknown> {
   return { type: "message", id, parentId, timestamp: "2026-09-27T10:00:00.000Z", message: { role, content: [{ type: "text", text }] } };
 }
@@ -176,6 +195,57 @@ test("session chats are found through pi's list once, and reread only when the f
   assert.equal(lists, 2, "a few seconds later it looks again");
   chats.remember("mine", file);
   assert.equal(chats.chat("mine").length, 2);
+});
+
+test("a session log reads only what was appended, waits for torn lines and follows the branch", () => {
+  const dir = mkdtempSync(join(tmpdir(), "bl-log-"));
+  const file = join(dir, "s.jsonl");
+  const line = (item: Record<string, unknown>) => `${JSON.stringify(item)}\n`;
+  const log = new SessionLog(file);
+  assert.equal(log.update(), false, "no file yet");
+  writeFileSync(file, `${line({ type: "session", id: "h" })}${line(entry("a", null, "user", "add a login page"))}`);
+  assert.equal(log.update(), true);
+  assert.deepEqual(log.recent().entries.map((chat) => chat.text), ["add a login page"]);
+  const first = log.recent();
+  assert.equal(log.update(), false, "nothing new");
+  assert.equal(log.recent(), first, "kept until the file changes");
+
+  const torn = line(entry("b", "a", "assistant", "An older answer."));
+  appendFileSync(file, torn.slice(0, 20));
+  assert.equal(log.update(), false, "half a line waits");
+  appendFileSync(file, `${torn.slice(20)}${line(entry("c", "a", "assistant", "The answer on the branch."))}${line({ type: "message", id: "t", parentId: "c", message: { role: "toolResult", content: "x".repeat(500) } })}`);
+  assert.equal(log.update(), true);
+  assert.deepEqual(log.recent().entries.map((chat) => [chat.role, chat.text]), [["you", "add a login page"], ["oracle", "The answer on the branch."]], "the newest branch, without tool output");
+
+  writeFileSync(file, line(entry("z", null, "user", "a new file")));
+  log.update();
+  assert.deepEqual(log.recent().entries.map((chat) => chat.text), ["a new file"], "a file that shrank is read again from the start");
+});
+
+test("a session log keeps its newest messages ready and walks the whole history only when asked", () => {
+  const dir = mkdtempSync(join(tmpdir(), "bl-log-"));
+  const file = join(dir, "long.jsonl");
+  const count = MAX_CHAT + 30;
+  const lines = Array.from({ length: count }, (_, index) => JSON.stringify(entry(`m${index}`, index === 0 ? null : `m${index - 1}`, index % 2 === 0 ? "user" : "assistant", `message ${index}`)));
+  writeFileSync(file, `${lines.join("\n")}\n`);
+  const log = new SessionLog(file);
+  log.update();
+  const recent = log.recent();
+  assert.equal(recent.entries.length, MAX_CHAT);
+  assert.equal(recent.older, true);
+  assert.equal(recent.entries.at(-1)?.text, `message ${count - 1}`);
+  assert.deepEqual(log.recent(3).entries.map((chat) => chat.text), [`message ${count - 3}`, `message ${count - 2}`, `message ${count - 1}`]);
+  const history = log.history();
+  assert.equal(history.length, count);
+  assert.equal(history[0]?.text, "message 0");
+
+  const chats = new SessionChats(async () => []);
+  chats.remember("long", file);
+  assert.equal(chats.hasOlder("long"), true);
+  assert.equal(chats.chat("long").length, MAX_CHAT);
+  assert.equal(chats.history("long").length, count);
+  assert.equal(chats.hasOlder("nobody"), false);
+  assert.deepEqual(chats.history("nobody"), []);
 });
 
 test("--task always starts a task, even when the request begins with a subcommand word", () => {
