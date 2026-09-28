@@ -146,18 +146,20 @@ export function speakerLine(speaker: Speaker, width: number, theme?: LobbyTheme,
 
 /**
  * What you wrote: a bubble on the right, only as wide as its longest line (up
- * to `YOU_SHARE` of the pane), your words in the accent colour on pi's
- * user-message background — or, where the theme has no background, closed
- * by a bar in that colour.
+ * to `YOU_SHARE` of the pane), your words in Markdown as pi renders them, in
+ * the accent colour on pi's user-message background — or, where the theme
+ * has no background, closed by a bar in that colour.
  */
 export function youLines(text: string, width: number, theme?: LobbyTheme): string[] {
   const most = Math.max(1, messageWidth(width, YOU_SHARE, 4) - 2);
-  const lines = wrap(text, most);
+  // The renderer colours your words itself; without one (tests) they are wrapped and painted here.
+  const rendered = theme?.markdown ? markdownLines(text, most, theme, true, "you") : wrap(text, most).map((line) => paint(theme, "accent", line));
+  const lines = rendered.length > 0 ? rendered : [""];
   const inner = Math.max(1, ...lines.map((line) => textWidth(line)));
   const pad = " ".repeat(Math.max(0, width - inner - 2));
   const bubble = theme?.bg
-    ? (line: string) => theme.bg!("userMessageBg", ` ${fit(paint(theme, "accent", line), inner)} `)
-    : (line: string) => `${fit(paint(theme, "accent", line), inner)} ${paint(theme, "accent", "▐")}`;
+    ? (line: string) => theme.bg!("userMessageBg", ` ${fit(line, inner)} `)
+    : (line: string) => `${fit(line, inner)} ${paint(theme, "accent", "▐")}`;
   return lines.map((line) => `${pad}${bubble(line)}`);
 }
 
@@ -420,8 +422,9 @@ export function currentThought(thoughts: readonly ThoughtEntry[]): ThoughtEntry 
  */
 const thoughtBlocks = new WeakMap<object, WeakMap<ThoughtEntry, { width: number; text: string; lines: string[]; at: number }>>();
 
-/** A live thought this long is wrapped again at most every `LONG_THOUGHT_MS` while it streams. */
+/** A live thought this long is wrapped again at most every `LONG_THOUGHT_MS` while it streams; rendered as Markdown (costlier), from `LONG_THOUGHT_MARKDOWN`. */
 const LONG_THOUGHT = 1000;
+const LONG_THOUGHT_MARKDOWN = 300;
 const LONG_THOUGHT_MS = 150;
 
 function thoughtBlock(thought: ThoughtEntry, width: number, theme?: LobbyTheme): string[] {
@@ -432,11 +435,25 @@ function thoughtBlock(thought: ThoughtEntry, width: number, theme?: LobbyTheme):
   }
   const hit = cache.get(thought);
   const now = performance.now();
-  if (hit && hit.width === width && (hit.text === thought.text || (thought.live && thought.text.length > LONG_THOUGHT && now - hit.at < LONG_THOUGHT_MS))) return hit.lines;
+  const long = theme?.markdown ? LONG_THOUGHT_MARKDOWN : LONG_THOUGHT;
+  if (hit && hit.width === width && (hit.text === thought.text || (thought.live && thought.text.length > long && now - hit.at < LONG_THOUGHT_MS))) return hit.lines;
   const lead = `${paint(theme, sourceColor(thought.source), thought.source.padEnd(SOURCE_WIDTH).slice(0, SOURCE_WIDTH))} `;
-  const lines = wrapHanging(lead, italic(theme, paint(theme, "dim", thought.text.replace(/\s*\n\s*/g, " "))), width);
+  const lines = theme?.markdown ? thoughtMarkdown(lead, thought, width, theme) : wrapHanging(lead, italic(theme, paint(theme, "dim", thought.text.replace(/\s*\n\s*/g, " "))), width);
   cache.set(thought, { width, text: thought.text, lines, at: now });
   return lines;
+}
+
+/**
+ * A thought in Markdown as pi shows thinking (dimmed, in italics), after who
+ * thought it: a model's `**Checking the plan**` reads bold, not starred. The
+ * pane is small, so the blank lines between paragraphs are left out. A live
+ * thought is not kept in the renderer's cache; it changes as it streams.
+ */
+function thoughtMarkdown(lead: string, thought: ThoughtEntry, width: number, theme: LobbyTheme): string[] {
+  const indent = " ".repeat(textWidth(lead));
+  const body = markdownLines(thought.text, Math.max(1, width - textWidth(lead)), theme, !thought.live, "thought").filter((line) => line.trim());
+  if (body.length === 0) return [lead];
+  return body.map((line, index) => `${index === 0 ? lead : indent}${line}`);
 }
 
 /** The newest `need` lines of the thoughts, oldest first: only the thoughts they reach are drawn (and back to `anchor`), and the rest estimated. */
