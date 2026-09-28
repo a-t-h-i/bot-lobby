@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describeToolCall } from "../src/pi/activity.ts";
 import { createStreamCollector, finishedThought, MAX_THOUGHT_CHARS, type PiStreamEvent, type ProcessOutcome, type ProcessRunner, type ProcessRunOptions } from "../src/execution/pi-runner.ts";
-import { chatFromEntries, chatText, LobbyFeed, textOf } from "../src/lobby/feed.ts";
+import { chatFromEntries, chatText, LobbyFeed, MAX_CHAT, textOf } from "../src/lobby/feed.ts";
 import { QUICK_FIX_TOOLS, QuickFixQueue, jobTitle, quickFixPrompt } from "../src/lobby/quickfix.ts";
 import { PLANNER_TOOLS, RESEARCH_PANEL_TOOLS, PlanningSession, appendAssumptions, commentBlock, memberPrompt, oracleClosing, optionLabel, panelSection, parseMemberReply, parseOption, parsePlannerReply, plannerSays, plannerTranscript, recommendedOption, roundMode, roundQuestions } from "../src/lobby/planner.ts";
 import { roundLabel } from "../src/lobby/tabs/plan.ts";
@@ -119,6 +119,20 @@ test("the conversation keeps text only and turns bot-lobby's kickoff into the ta
   ]);
   assert.deepEqual(chat.map((entry) => [entry.role, entry.text]), [["you", "build a page"], ["oracle", "On it."]]);
   assert.equal(chat[0]!.at, Date.parse("2026-01-01T00:00:00.000Z"));
+});
+
+test("the conversation keeps only its newest messages and remembers that earlier ones exist", () => {
+  const feed = new LobbyFeed();
+  feed.seedChat(Array.from({ length: MAX_CHAT }, (_, index) => ({ role: "you" as const, text: `m${index}` })));
+  assert.equal(feed.chatOlder, false, "exactly full: nothing dropped");
+  const kept = feed.chat;
+  feed.say("oracle", "one more");
+  assert.equal(feed.chat, kept, "trimmed in place");
+  assert.deepEqual([feed.chat.length, feed.chat[0]?.text, feed.chat.at(-1)?.text, feed.chatOlder], [MAX_CHAT, "m1", "one more", true]);
+  feed.clear();
+  assert.equal(feed.chatOlder, false);
+  feed.seedChat(Array.from({ length: MAX_CHAT + 5 }, (_, index) => ({ role: "you" as const, text: `s${index}` })));
+  assert.deepEqual([feed.chat.length, feed.chat[0]?.text, feed.chatOlder], [MAX_CHAT, "s5", true]);
 });
 
 test("quick fixes run one at a time with full tools and land in metrics", async () => {
