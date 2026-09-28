@@ -4,11 +4,19 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { activityWord } from "../pi/activity.ts";
 import { shortDuration } from "../text.ts";
+import { readRelayRequest } from "../ask/relay.ts";
+import type { AskQuestion, AskResult } from "../ask/types.ts";
 
 /** Live control over one running subagent: queue a steering message for its next turn. */
 export interface RunHandle {
   steer(text: string): void;
 }
+
+/**
+ * Puts a subagent's relayed questions to the user (see ask/relay.ts). The
+ * signal aborts when the run ends first, so the questionnaire is put away.
+ */
+export type RelayAsk = (questions: AskQuestion[], signal: AbortSignal) => Promise<AskResult>;
 
 export interface PiRunOptions {
   cwd: string;
@@ -35,6 +43,8 @@ export interface PiRunOptions {
   onStart?: (handle: RunHandle) => void;
   /** Under a task time budget: when the agent is warned, when its time is up, and who decides on more (see ProcessRunOptions). */
   time?: TimeLimit;
+  /** Answers the agent's relayed questions; without it they are cancelled like any other dialog. */
+  onAsk?: RelayAsk;
 }
 
 /**
@@ -91,6 +101,10 @@ export type PiStreamEvent =
   | { type: "extended"; ms: number }
   /** One finished thinking block, bounded to `MAX_THOUGHT_CHARS`. */
   | { type: "thought"; text: string }
+  /** It asked the user (relayed); its clocks wait until the answers are back. */
+  | { type: "asking"; questions: number }
+  /** The answers went back after `waitedMs` of waiting on the user. */
+  | { type: "answered"; waitedMs: number }
   | { type: "heartbeat" };
 
 /** Longest thought forwarded from a subagent stream. */
@@ -113,6 +127,7 @@ export interface ProcessRunOptions {
   /** Grace between the deadline abort and the hard kill. */
   graceMs?: number;
   time?: TimeLimit;
+  onAsk?: RelayAsk;
 }
 
 export type ProcessRunner = (
@@ -165,6 +180,9 @@ export interface ControlEvent {
   method?: string;
   willRetry?: boolean;
   delayMs?: number;
+  /** extension_ui_request: the dialog's title and (editor) prefilled text. */
+  title?: string;
+  prefill?: string;
 }
 
 /** Buffers one JSON-mode stream, keeping only lines parsePiStream consumes. */
@@ -463,6 +481,8 @@ interface RunState {
   headsUp: boolean;
   /** Waiting on the decision: the agent is idle, so the deadline and the stall watchdog wait too. */
   deciding: boolean;
+  /** Relayed questions waiting on the user: every clock and the watchdog wait. */
+  asking: number;
   extendedMs: number;
 }
 
@@ -494,7 +514,7 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"],
     });
-    const state: RunState = { killed: false, timedOut: false, stalled: false, wrappedUp: false, settled: false, timeUp: false, headsUp: false, deciding: false, extendedMs: 0 };
+    const state: RunState = { killed: false, timedOut: false, stalled: false, wrappedUp: false, settled: false, timeUp: false, headsUp: false, deciding: false, asking: 0, extendedMs: 0 };
     const input = rpcInput(proc);
     const started = Date.now();
     const time = options.time;
@@ -509,6 +529,11 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
     let exitCode: number | undefined;
     let settleTimer: ReturnType<typeof setTimeout> | undefined;
     let done = false;
+    // Time spent waiting on the user's answers is not the agent's: its limits move out by it.
+    let deadlineAt = started + options.timeoutMs;
+    let askStarted = 0;
+    let pausedMs = 0;
+    const asks = new AbortController();
 
     const onEvent = (event: PiStreamEvent) => {
       if (event.type === "tool_execution_start") toolsInFlight += 1;
@@ -545,6 +570,7 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
         upAtMs = extraMs;
         // The user just named the time it has: no heads-up quoting the old allotment.
         headsUpAtMs = 0;
+        deadlineAt = Date.now() + extraMs + (time?.graceMs ?? 0);
         deadline = setTimeout(onDeadline, extraMs + (time?.graceMs ?? 0));
         input.send({ type: "prompt", message: message ?? "You have more time: carry on from where you left off and finish." });
         options.onEvent?.({ type: "extended", ms: extraMs });
@@ -553,10 +579,38 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
         input.close();
       });
     };
+    const relay = (id: string | undefined, questions: AskQuestion[], ask: RelayAsk) => {
+      state.asking += 1;
+      if (state.asking === 1) {
+        askStarted = Date.now();
+        clearTimeout(deadline);
+      }
+      options.onEvent?.({ type: "asking", questions: questions.length });
+      ask(questions, asks.signal)
+        .catch((): AskResult => ({ answers: [], cancelled: true }))
+        .then((result) => {
+          state.asking -= 1;
+          if (done || state.killed) return;
+          if (state.asking === 0) {
+            const now = Date.now();
+            const waited = now - askStarted;
+            pausedMs += waited;
+            deadlineAt += waited;
+            clockStart += waited;
+            lastOutput = now;
+            if (!state.deciding) deadline = setTimeout(onDeadline, Math.max(0, deadlineAt - now));
+            options.onEvent?.({ type: "answered", waitedMs: waited });
+          }
+          input.send({ type: "extension_ui_response", id, value: JSON.stringify(result) });
+        });
+    };
     const onControl = (event: ControlEvent) => {
+      const relayed = event.type === "extension_ui_request" && event.method === "editor" && options.onAsk ? readRelayRequest(event.title, event.prefill) : undefined;
       if (event.type === "response" && event.command === "prompt" && event.success === false) {
         state.protocolError = event.error ?? "the prompt was rejected";
         input.close();
+      } else if (relayed && options.onAsk) {
+        relay(event.id, relayed, options.onAsk);
       } else if (event.type === "extension_ui_request" && event.method && DIALOG_METHODS.has(event.method)) {
         // Nobody can answer a dialog inside a subagent; cancel it instead of blocking forever.
         input.send({ type: "extension_ui_response", id: event.id, cancelled: true });
@@ -585,6 +639,8 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
       clearTimeout(deadline);
       clearTimeout(settleTimer);
       clearInterval(watch);
+      // Questions still open when the run ends are put away.
+      asks.abort();
       options.signal?.removeEventListener("abort", onAbort);
       input.close();
       // Reap anything the agent left running in its group.
@@ -608,9 +664,9 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
     };
     let deadline = setTimeout(onDeadline, options.timeoutMs);
     const watch = setInterval(() => {
-      if (state.killed || done || state.deciding) return;
+      if (state.killed || done || state.deciding || state.asking > 0) return;
       const now = Date.now();
-      if (!state.wrappedUp && !state.settled && options.wrapUpAtMs && options.wrapUpAtMs > 0 && now - started >= options.wrapUpAtMs) {
+      if (!state.wrappedUp && !state.settled && options.wrapUpAtMs && options.wrapUpAtMs > 0 && now - started - pausedMs >= options.wrapUpAtMs) {
         state.wrappedUp = true;
         input.send({ type: "steer", message: options.wrapUpMessage ?? WRAP_UP_MESSAGE });
         options.onEvent?.({ type: "wrap_up" });
@@ -698,6 +754,7 @@ export async function runPiAgent(options: PiRunOptions, run: ProcessRunner = spa
       toolStallTimeoutMs: options.toolStallTimeoutMs,
       wrapUpAtMs: options.wrapUpAtMs,
       ...(options.time ? { time: options.time } : {}),
+      ...(options.onAsk ? { onAsk: options.onAsk } : {}),
       onStart: options.onStart,
       onEvent: (event) => {
         if (event.type === "tool_execution_start") options.onActivity?.(activityWord(event.toolName));
