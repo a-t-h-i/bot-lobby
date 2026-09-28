@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { answerMessage, askPanel, dialogAsker, loadAskTool, MAX_QUESTIONS, questionnaires, toAskQuestion, toolAsker, type AskQuestion, type AskResult } from "../src/lobby/ask.ts";
+import { answerMessage, askPanel, dialogAsker, MAX_QUESTIONS, questionnaires, toAskQuestion, type AskQuestion, type AskResult } from "../src/lobby/ask.ts";
 import type { PanelQuestion } from "../src/lobby/planner.ts";
 
 const question = (from: string, text: string, labels: string[] = []): PanelQuestion => ({ from, text, options: labels.map((label) => ({ label, description: `${label} it is` })) });
@@ -70,46 +70,7 @@ test("askPanel runs the questionnaires in order and stops at the first one the u
   assert.equal(outcome.results.length, 1, "what was answered before stopping is kept");
 });
 
-test("the library's tool is captured through its extension entry without registering anything", async () => {
-  const registered: string[] = [];
-  const handlers: string[] = [];
-  const pi = { registerTool: () => registered.push("real"), on: (event: string) => void handlers.push(event), exec: () => "passes through" } as unknown as ExtensionAPI;
-  let seenExec: unknown;
-  const tool = await loadAskTool(pi, async () => ({
-    default: (captured: ExtensionAPI & { exec: () => string }) => {
-      captured.on("session_start", () => {});
-      seenExec = captured.exec();
-      captured.registerTool({ name: "other_tool" } as never);
-      captured.registerTool({ name: "ask_user_question", execute: async () => ({ details: { answers: [], cancelled: false } }) } as never);
-    },
-  }));
-  assert.ok(tool, "the ask_user_question definition is kept");
-  assert.deepEqual(registered, [], "nothing reaches the real registerTool");
-  assert.deepEqual(handlers, [], "the library's own hooks are ignored");
-  assert.equal(seenExec, "passes through");
-  assert.equal(await loadAskTool(pi, async () => ({})), undefined, "a module without an entry yields nothing");
-  assert.equal(await loadAskTool(pi, async () => {
-    throw new Error("not installed");
-  }), undefined, "a missing library falls back quietly");
-});
-
-test("the captured tool runs one questionnaire and reads its details", async () => {
-  const calls: unknown[] = [];
-  const asker = toolAsker({
-    execute: async (_id, params) => {
-      calls.push(params);
-      return { details: { answers: [{ questionIndex: 0, question: "A?", kind: "option", answer: "Yes" }], cancelled: false, globalNote: "n" } };
-    },
-  });
-  const chunk: AskQuestion[] = [{ question: "A?", header: "DEV", options: [{ label: "Yes", description: "y" }, { label: "No", description: "n" }] }];
-  const result = await asker(chunk, ctx);
-  assert.deepEqual(calls, [{ questions: chunk }]);
-  assert.deepEqual(result, { answers: [{ questionIndex: 0, question: "A?", kind: "option", answer: "Yes" }], cancelled: false, globalNote: "n" });
-  const broken = toolAsker({ execute: async () => ({}) });
-  assert.equal((await broken(chunk, ctx)).cancelled, true, "no details reads as put away");
-});
-
-test("without the library, pi's dialogs ask the same questions: pick, type, skip, or esc", async () => {
+test("where the questionnaire cannot be drawn, pi's dialogs ask the same questions: pick, type, skip, or esc", async () => {
   const picks = ["Yes", "Type an answer…", "Skip", undefined];
   const typed = ["my own words"];
   const titles: string[] = [];
@@ -123,7 +84,7 @@ test("without the library, pi's dialogs ask the same questions: pick, type, skip
     },
   } as unknown as ExtensionContext;
   const chunk: AskQuestion[] = ["A?", "B?", "C?", "D?"].map((text) => ({ question: text, header: "DEV", options: [{ label: "Yes", description: "" }, { label: "No", description: "" }] }));
-  const result = await dialogAsker()(chunk, dialogCtx);
+  const result = await dialogAsker(chunk, dialogCtx);
   assert.equal(titles[0], "DEV · 1/4\n\nA?");
   assert.deepEqual(result, {
     cancelled: true,
