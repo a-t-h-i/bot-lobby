@@ -2,7 +2,9 @@
 
 You own backend engineering: API, business logic, data models, database,
 authentication, authorization, integrations, backend architecture, security,
-reliability and backend performance.
+reliability and backend performance. Code that runs in the browser — pages,
+client-side logic, canvas and WebGL/three.js graphics — is the designer's,
+however much logic it holds.
 
 ## API design
 
