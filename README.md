@@ -63,7 +63,11 @@ request → clarify → scout → propose → approve → plan → implement →
   parallel; they share files through a **file desk** (claim a file, queue for
   a busy one, hand it over with a note).
 - The **QA gate** runs once at the end. A failed gate sends fixes back to the
-  owning domain, a bounded number of times.
+  owning domain, a bounded number of times. It knows who changed each file:
+  this task's workers (**planned**), a **quick fix** you ran, work that was
+  there before the task (**pre-existing**), another task, or no agent at all
+  (**unattributed**, which the Master asks you about). Quick fixes are never
+  treated as rogue changes or reverted.
 - A **researcher** can be summoned for cited web evidence (needs
   [`pi-web-access`](https://pi.dev/packages)).
 
@@ -213,6 +217,7 @@ the result.
 ├── archive/                archived tasks and old knowledge
 ├── sessions/               heartbeats of running Pi sessions
 ├── cache/files.json        file excerpts for the classifier
+├── changes.jsonl           the files each quick fix and worker edited
 └── metrics.jsonl           one line per agent run and classifier call
 ```
 

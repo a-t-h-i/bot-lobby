@@ -660,10 +660,11 @@ test("during a session, 1-4 seat and unseat members for the next round", () => {
   assert.ok(view.render(140).some((line) => line.includes("panel  ORACLE")));
 });
 
-test("a quick fix detail lists its steps and its report", () => {
-  const lines = jobDetailLines({ id: "QF-1", prompt: "fix typo", status: "success", createdAt: NOW, startedAt: NOW, finishedAt: NOW + 65_000, model: "p/m", thinking: "low", steps: [{ at: NOW, text: "editing a.ts", pending: false }], tools: 1, turns: 2, report: "## Done\nFixed." }, 80, 0, NOW);
+test("a quick fix detail lists its steps, the files it edited, and its report", () => {
+  const lines = jobDetailLines({ id: "QF-1", prompt: "fix typo", status: "success", createdAt: NOW, startedAt: NOW, finishedAt: NOW + 65_000, model: "p/m", thinking: "low", steps: [{ at: NOW, text: "editing a.ts", pending: false }], tools: 1, turns: 2, report: "## Done\nFixed.", files: ["src/a.ts"] }, 80, 0, NOW);
   assert.ok(lines.includes("success · 1m 05s · p/m · low · 1 tool"));
   assert.ok(lines.some((line) => line.endsWith("· editing a.ts")));
+  assert.ok(lines.some((line) => line.includes("Edited")) && lines.includes("· src/a.ts"));
   assert.ok(lines.includes("Done"));
   assert.ok(lines.includes("Fixed."));
 });
