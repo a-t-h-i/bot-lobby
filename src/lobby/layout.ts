@@ -211,6 +211,18 @@ export interface BoxOptions {
   scroll?: { total: number; start: number };
 }
 
+/** An entry of a pane (a message, a thought, an activity line) and how many lines run from its first line to the pane's end. */
+export interface PaneMark {
+  entry: object;
+  below: number;
+}
+
+/** A pane that measures what arrives below: its newest entry now, and the lines that arrived below the one marked the frame before. */
+export interface PaneFollow {
+  mark?: PaneMark;
+  grew: number;
+}
+
 /** A scrollable pane as a render laid it out: its box in body cells, and its content against its rows. */
 export interface PaneBox {
   top: number;
@@ -220,14 +232,20 @@ export interface PaneBox {
   /** Lines of content, and rows showing them at once. */
   total: number;
   rows: number;
+  /**
+   * Set by panes whose total is estimated: lines that arrived below since the
+   * frame before, measured from an entry, not from the total (which moves as
+   * scrolling draws more or fewer of the entries it estimates).
+   */
+  follow?: PaneFollow;
 }
 
 /** Scrollable panes by name, filled in by a tab's render so the lobby can clamp offsets and route the wheel. */
 export type PaneLayout = Map<string, PaneBox>;
 
 /** Record a pane that sits at `top`/`left` in the body, `width` × `height`, showing `total` lines. */
-export function notePane(panes: PaneLayout | undefined, name: string, top: number, left: number, width: number, height: number, total: number): void {
-  panes?.set(name, { top, left, width, height, total, rows: Math.max(0, height - 2) });
+export function notePane(panes: PaneLayout | undefined, name: string, top: number, left: number, width: number, height: number, total: number, follow?: PaneFollow): void {
+  panes?.set(name, { top, left, width, height, total, rows: Math.max(0, height - 2), ...(follow ? { follow } : {}) });
 }
 
 /** First line of a top-anchored pane scrolled `offset` lines down, stopping when its last line shows. */

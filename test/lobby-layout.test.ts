@@ -101,9 +101,26 @@ test("the conversation draws only the messages its window reaches, each once, an
   assert.equal(renders, drawn, "later frames reuse every drawn message");
   chatTail(chat, 50, theme, 10);
   assert.ok(renders > drawn, "a new width draws again");
-  const older = chatTail(chat.slice(-2), 60, theme, 100, undefined, false, 0, "earlier messages load as you scroll up");
+  const older = chatTail(chat.slice(-2), 60, theme, 100, { older: "earlier messages load as you scroll up" });
   assert.equal(older.lines[0], "earlier messages load as you scroll up", "the note tops a conversation with earlier messages");
   assert.equal(older.total, older.lines.length);
+});
+
+test("the conversation measures what arrived below its newest message, however little of it is drawn", () => {
+  const theme: LobbyTheme = { fg: (_color, text) => text, bold: (text) => text, markdown: (text) => text.split("\n") };
+  const chat: ChatEntry[] = Array.from({ length: 50 }, (_, index) => ({ id: index + 1, at: index * 3_600_000, role: index % 2 === 0 ? "you" : "oracle", text: index % 5 === 0 ? `answer ${index}\n${"more\n".repeat(20)}` : `question ${index}` }));
+  const first = chatTail(chat, 60, theme, 5);
+  assert.equal(first.mark?.entry, chat.at(-1));
+  assert.equal(first.grew, undefined, "nothing to measure against yet");
+  const still = chatTail(chat, 60, theme, 40, { anchor: first.mark! });
+  assert.equal(still.grew, 0, "drawing further back is not growth, though the estimate moves");
+  assert.notEqual(still.total, first.total);
+  const more = [...chat, { id: 99, at: 0, role: "note" as const, text: "task started" }, { id: 100, at: 0, role: "oracle" as const, text: "one\ntwo\nthree" }];
+  const after = chatTail(more, 60, theme, 1, { anchor: first.mark! });
+  assert.equal(after.grew, 1 + 1 + 1 + 4, "the note and the reply (speaker line and three lines), each after a blank line");
+  const streaming = chatTail(more, 60, theme, 1, { anchor: after.mark!, live: "a\n\nb\n\nc" });
+  assert.equal(streaming.grew, 1 + 1 + 5, "a streaming reply counts whole, even past what the pane needs");
+  assert.equal(chatTail(chat.slice(0, 10), 60, theme, 5, { anchor: first.mark! }).grew, undefined, "an anchor that is gone measures nothing");
 });
 
 test("a pane drawn only near its newest lines still scrolls and places its thumb over the whole", () => {

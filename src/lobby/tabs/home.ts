@@ -10,7 +10,7 @@ import type { Task } from "../../schemas/task.ts";
 import type { ActivityEntry, ChatEntry, ThoughtEntry } from "../feed.ts";
 import type { LobbyPanel } from "../../schemas/configuration.ts";
 import { markdownBlocks } from "../markdown.ts";
-import { beside, bold, box, clock, fill, fit, italic, markdownLines, notePane, paint, since, spinner, wrap, wrapHanging, type LobbyColor, type LobbyTheme, type PaneLayout } from "../layout.ts";
+import { beside, bold, box, clock, fill, fit, italic, markdownLines, notePane, paint, since, spinner, wrap, wrapHanging, type LobbyColor, type LobbyTheme, type PaneLayout, type PaneMark } from "../layout.ts";
 
 /** The Lobby tab's scrollable panes. */
 export const HOME_PANES = ["conversation", "activity", "thinking"] as const;
@@ -36,6 +36,8 @@ export interface HomeInput {
   focus?: HomePane;
   /** Filled with where each pane landed and how much it holds. */
   panes?: PaneLayout;
+  /** Each pane's newest entry as the frame before marked it, so the pane can measure what arrived below since. */
+  anchors?: ReadonlyMap<string, PaneMark>;
   tick: number;
   now: number;
   /** Which panes show. */
@@ -181,25 +183,19 @@ function openBlockLines(text: string, width: number, theme: LobbyTheme | undefin
 }
 
 /**
- * The newest `need` lines (or a few more) of the reply the oracle is still
- * writing. It is drawn block by block (see `markdownBlocks`): finished blocks
- * come from the Markdown cache, only the one being written is rendered on
- * each frame, and blocks above what the pane shows are not drawn at all.
+ * The reply the oracle is still writing. It is drawn block by block (see
+ * `markdownBlocks`): finished blocks come from the Markdown cache and only the
+ * one being written is rendered on each frame. It is drawn whole (it is
+ * capped at `MAX_REPLY_TEXT`), so the pane knows exactly how far it reaches.
  */
-function liveLines(text: string, width: number, theme: LobbyTheme | undefined, need: number): string[] {
+function liveLines(text: string, width: number, theme: LobbyTheme | undefined): string[] {
   const blocks = markdownBlocks(text);
-  const parts: string[][] = [];
-  let count = 0;
-  for (let index = blocks.length - 1; index >= 0 && count < need; index -= 1) {
-    const lines = index === blocks.length - 1 ? openBlockLines(blocks[index]!, width, theme) : oracleLines(blocks[index]!, width, theme);
-    if (lines.length === 0) continue;
-    parts.push(lines);
-    count += lines.length + 1;
-  }
   const lines: string[] = [];
-  for (let part = parts.length - 1; part >= 0; part -= 1) {
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = index === blocks.length - 1 ? openBlockLines(blocks[index]!, width, theme) : oracleLines(blocks[index]!, width, theme);
+    if (block.length === 0) continue;
     if (lines.length > 0) lines.push("");
-    for (const line of parts[part]!) lines.push(line);
+    for (const line of block) lines.push(line);
   }
   return lines;
 }
@@ -218,6 +214,20 @@ export function eventLines(text: string, at: number, width: number, theme?: Lobb
 export interface PaneLines {
   lines: string[];
   total: number;
+  /** The newest entry and how many lines run from its first line to the end, for the next frame to measure against. */
+  mark?: PaneMark;
+  /** Lines that arrived below the anchor passed in since it was marked; absent when it is no longer there. */
+  grew?: number;
+}
+
+/**
+ * Where the anchor (an entry the frame before marked) sits in `entries`, so
+ * drawing goes on at least that far back; `entries.length` when it is gone.
+ * It is nearly always the last entry, so the search from the end is short.
+ */
+function reachOf<T extends object>(entries: readonly T[], anchor: PaneMark | undefined): { found: number; reach: number } {
+  const found = anchor ? entries.lastIndexOf(anchor.entry as T) : -1;
+  return { found, reach: found < 0 ? entries.length : found };
 }
 
 /** A message's drawn lines, kept until the pane's width, the theme or its grouping changes. */
@@ -259,6 +269,18 @@ function entryBlock(entry: ChatEntry, before: ChatEntry | undefined, width: numb
   return lines;
 }
 
+export interface ChatTailOptions {
+  /** The reply the oracle is still writing. */
+  live?: string;
+  /** The oracle's turn is running. */
+  busy?: boolean;
+  tick?: number;
+  /** Tops a conversation that has earlier messages still to load. */
+  older?: string;
+  /** The newest message as the frame before marked it: drawing reaches at least back to it, to measure what arrived below. */
+  anchor?: PaneMark;
+}
+
 /**
  * The newest `need` lines of the conversation, like a chat: your messages as
  * bubbles on the right, the oracle's replies in Markdown on the left, each
@@ -269,7 +291,8 @@ function entryBlock(entry: ChatEntry, before: ChatEntry | undefined, width: numb
  * whole conversation has been drawn. `older` tops a conversation that has
  * earlier messages still to load.
  */
-export function chatTail(chat: readonly ChatEntry[], width: number, theme: LobbyTheme | undefined, need: number, live?: string, busy = false, tick = 0, older?: string): PaneLines {
+export function chatTail(chat: readonly ChatEntry[], width: number, theme: LobbyTheme | undefined, need: number, options: ChatTailOptions = {}): PaneLines {
+  const { live, busy = false, tick = 0, older, anchor } = options;
   const parts: string[][] = [];
   let count = 0;
   const add = (lines: string[]) => {
@@ -277,10 +300,18 @@ export function chatTail(chat: readonly ChatEntry[], width: number, theme: Lobby
     count += lines.length + (parts.length > 0 ? 1 : 0);
     parts.push(lines);
   };
-  if (live?.trim()) add([speakerLine("oracle", width, theme, `${spinner(tick)} writing`), ...liveLines(live.trim(), width, theme, need)]);
+  if (live?.trim()) add([speakerLine("oracle", width, theme, `${spinner(tick)} writing`), ...liveLines(live.trim(), width, theme)]);
   else if (busy) add([speakerLine("oracle", width, theme, `${spinner(tick)} working…`)]);
+  const { found, reach } = reachOf(chat, anchor);
+  let mark: PaneMark | undefined;
+  let grew: number | undefined;
   let index = chat.length - 1;
-  for (; index >= 0 && count < need; index -= 1) add(entryBlock(chat[index]!, chat[index - 1], width, theme));
+  for (; index >= 0 && (count < need || index >= reach); index -= 1) {
+    const entry = chat[index]!;
+    add(entryBlock(entry, chat[index - 1], width, theme));
+    if (index === chat.length - 1) mark = { entry, below: count };
+    if (index === found) grew = count - anchor!.below;
+  }
   const drawn = chat.length - 1 - index;
   if (index < 0 && older) add(wrap(paint(theme, "dim", older), width));
   const lines: string[] = [];
@@ -291,12 +322,12 @@ export function chatTail(chat: readonly ChatEntry[], width: number, theme: Lobby
   // Messages not drawn yet count at the average height of those that were.
   const rest = index + 1;
   const total = rest > 0 && drawn > 0 ? lines.length + Math.ceil((rest * lines.length) / drawn) : lines.length;
-  return { lines, total };
+  return { lines, total, ...(mark ? { mark } : {}), ...(grew !== undefined ? { grew } : {}) };
 }
 
 /** The whole conversation drawn (the session browser's preview and tests; the Lobby tab draws only what shows). */
 export function chatLines(chat: readonly ChatEntry[], width: number, theme?: LobbyTheme, live?: string, busy = false, tick = 0): string[] {
-  return chatTail(chat, width, theme, Number.POSITIVE_INFINITY, live, busy, tick).lines;
+  return chatTail(chat, width, theme, Number.POSITIVE_INFINITY, { ...(live ? { live } : {}), busy, tick }).lines;
 }
 
 function emptyChat(input: HomeInput, width: number, theme?: LobbyTheme): string[] {
@@ -334,19 +365,27 @@ function whole(lines: string[]): PaneLines {
   return { lines, total: lines.length };
 }
 
-function conversation(input: HomeInput, chat: readonly ChatEntry[], width: number, need: number, theme?: LobbyTheme): PaneLines {
+function conversation(input: HomeInput, chat: readonly ChatEntry[], width: number, need: number, anchor: PaneMark | undefined, theme?: LobbyTheme): PaneLines {
   const searching = Boolean(input.query);
   const live = searching ? undefined : input.liveReply;
   const busy = !searching && input.busy;
   if (chat.length === 0 && !live && !busy) return whole(emptyChat(input, width, theme));
-  return chatTail(chat, width, theme, need, live, busy, input.tick, searching ? undefined : input.olderNote);
+  const older = searching ? undefined : input.olderNote;
+  return chatTail(chat, width, theme, need, { ...(live ? { live } : {}), busy, tick: input.tick, ...(older ? { older } : {}), ...(anchor ? { anchor } : {}) });
 }
 
 /** The newest `need` activity lines (one per entry), drawn only as far back as the pane shows. */
-function activity(input: HomeInput, entries: readonly ActivityEntry[], width: number, need: number, theme?: LobbyTheme): PaneLines {
+function activity(input: HomeInput, entries: readonly ActivityEntry[], width: number, need: number, anchor: PaneMark | undefined, theme?: LobbyTheme): PaneLines {
   if (entries.length === 0) return whole(wrap(paint(theme, "dim", input.query ? `No activity matches "${input.query}".` : input.activityNote ?? "No activity yet."), width));
   const shown = Number.isFinite(need) ? entries.slice(-Math.max(0, need)) : entries;
-  return { lines: shown.map((entry) => activityLine(entry, width, input.tick, theme)), total: entries.length };
+  // One line per entry: where the anchor sits is a count, nothing needs drawing to find it.
+  const { found } = reachOf(entries, anchor);
+  return {
+    lines: shown.map((entry) => activityLine(entry, width, input.tick, theme)),
+    total: entries.length,
+    mark: { entry: entries.at(-1)!, below: 1 },
+    ...(found >= 0 ? { grew: entries.length - found - anchor!.below } : {}),
+  };
 }
 
 /** The last `rows` lines, `offset` lines back from the newest (clamped), and where they start. */
@@ -400,21 +439,28 @@ function thoughtBlock(thought: ThoughtEntry, width: number, theme?: LobbyTheme):
   return lines;
 }
 
-/** The newest `need` lines of the thoughts, oldest first: only the thoughts they reach are drawn, and the rest estimated. */
-export function thoughtTail(thoughts: readonly ThoughtEntry[], width: number, theme: LobbyTheme | undefined, need: number): PaneLines {
+/** The newest `need` lines of the thoughts, oldest first: only the thoughts they reach are drawn (and back to `anchor`), and the rest estimated. */
+export function thoughtTail(thoughts: readonly ThoughtEntry[], width: number, theme: LobbyTheme | undefined, need: number, anchor?: PaneMark): PaneLines {
   const parts: string[][] = [];
   let count = 0;
+  const { found, reach } = reachOf(thoughts, anchor);
+  let mark: PaneMark | undefined;
+  let grew: number | undefined;
   let index = thoughts.length - 1;
-  for (; index >= 0 && count < need; index -= 1) {
-    const lines = thoughtBlock(thoughts[index]!, width, theme);
+  for (; index >= 0 && (count < need || index >= reach); index -= 1) {
+    const thought = thoughts[index]!;
+    const lines = thoughtBlock(thought, width, theme);
     parts.push(lines);
     count += lines.length;
+    if (index === thoughts.length - 1) mark = { entry: thought, below: count };
+    if (index === found) grew = count - anchor!.below;
   }
   const lines: string[] = [];
   for (let part = parts.length - 1; part >= 0; part -= 1) for (const line of parts[part]!) lines.push(line);
   const rest = index + 1;
   const drawn = parts.length;
-  return { lines, total: rest > 0 && drawn > 0 ? lines.length + Math.ceil((rest * lines.length) / drawn) : lines.length };
+  const total = rest > 0 && drawn > 0 ? lines.length + Math.ceil((rest * lines.length) / drawn) : lines.length;
+  return { lines, total, ...(mark ? { mark } : {}), ...(grew !== undefined ? { grew } : {}) };
 }
 
 /** Every thought, oldest first: who thought it, then the thought, dimmed. */
@@ -422,8 +468,8 @@ export function thoughtLines(thoughts: readonly ThoughtEntry[], width: number, t
   return thoughtTail(thoughts, width, theme, Number.POSITIVE_INFINITY).lines;
 }
 
-function thinkingContent(input: HomeInput, thoughts: readonly ThoughtEntry[], width: number, need: number, theme?: LobbyTheme): PaneLines {
-  if (thoughts.length > 0) return thoughtTail(thoughts, width, theme, need);
+function thinkingContent(input: HomeInput, thoughts: readonly ThoughtEntry[], width: number, need: number, anchor: PaneMark | undefined, theme?: LobbyTheme): PaneLines {
+  if (thoughts.length > 0) return thoughtTail(thoughts, width, theme, need, anchor);
   return whole([paint(theme, "dim", input.query ? `No thought matches "${input.query}".` : "Thoughts from the oracle and every agent appear here, and only here.")]);
 }
 
@@ -482,23 +528,24 @@ export function renderHome(input: HomeInput, width: number, height: number, them
   const matches = (count: number) => `${count} match${count === 1 ? "" : "es"}`;
   /**
    * One scrollable pane: only the lines it shows are drawn — its newest, or
-   * as far back as it is scrolled — in a box that records where it sits.
+   * as far back as it is scrolled — in a box that records where it sits, and
+   * how many lines arrived below since the frame before.
    */
-  const pane = (name: HomePane, title: string, note: string | undefined, content: (inner: number, need: number) => PaneLines) => (top: number, left: number, w: number, h: number): string[] => {
+  const pane = (name: HomePane, title: string, note: string | undefined, content: (inner: number, need: number, anchor: PaneMark | undefined) => PaneLines) => (top: number, left: number, w: number, h: number): string[] => {
     const rows = Math.max(0, h - 2);
     const offset = input.offsets?.[name] ?? 0;
-    const drawn = content(Math.max(1, w - 4), rows + offset);
+    const drawn = content(Math.max(1, w - 4), rows + offset, input.anchors?.get(name));
     const view = paneWindow(drawn, rows, offset);
     const total = Math.max(drawn.total, drawn.lines.length);
-    notePane(input.panes, name, top, left, w, h, total);
+    notePane(input.panes, name, top, left, w, h, total, { ...(drawn.mark ? { mark: drawn.mark } : {}), grew: drawn.grew ?? 0 });
     const right = rightNote(view.offset, note);
     return box(w, h, view.shown, { title, ...(right ? { right } : {}), focused: input.focus === name, scroll: { total, start: view.start }, theme });
   };
-  const chatBox = pane("conversation", input.title ? `Conversation · ${input.title}` : "Conversation", input.query ? matches(feed.chat.length) : input.keys?.conversation, (inner, need) => conversation(input, feed.chat, inner, need, theme));
-  const activityBox = pane("activity", "Activity", input.query ? matches(feed.activity.length) : input.keys?.activity, (inner, need) => activity(input, feed.activity, inner, need, theme));
+  const chatBox = pane("conversation", input.title ? `Conversation · ${input.title}` : "Conversation", input.query ? matches(feed.chat.length) : input.keys?.conversation, (inner, need, anchor) => conversation(input, feed.chat, inner, need, anchor, theme));
+  const activityBox = pane("activity", "Activity", input.query ? matches(feed.activity.length) : input.keys?.activity, (inner, need, anchor) => activity(input, feed.activity, inner, need, anchor, theme));
   const thought = currentThought(feed.thoughts);
   const thinkingNote = thought ? `${thought.source} · ${thought.live ? "thinking" : since(input.now - thought.at)}` : input.keys?.thinking;
-  const thinkingBox = pane("thinking", "Thinking", thinkingNote, (inner, need) => thinkingContent(input, feed.thoughts, inner, need, theme));
+  const thinkingBox = pane("thinking", "Thinking", thinkingNote, (inner, need, anchor) => thinkingContent(input, feed.thoughts, inner, need, anchor, theme));
   const top = scene.length;
   let body: string[] = [];
   if (main > 0 && panels.conversation && panels.activity) {
