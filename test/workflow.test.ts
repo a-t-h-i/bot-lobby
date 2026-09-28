@@ -356,7 +356,7 @@ test("an unusable research run is reported as degraded, never as findings", asyn
   const result = await act(deps, { action: "research", domain: "backend", instruction: "Why?" });
   assert.equal(result.ok, true);
   assert.match(result.message, /No usable cited research report/);
-  assert.match(result.message, /pi-web-access/);
+  assert.match(result.message, /bot-lobby's web tools/);
   assert.match(result.message, /no sources reported/);
   assert.doesNotMatch(result.message, /^Findings:/m);
 });
