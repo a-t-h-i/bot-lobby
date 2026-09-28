@@ -4,7 +4,7 @@
  * becomes a task.
  */
 import type { IssueDetail, IssueSummary } from "../issues.ts";
-import { bold, since, columns, fill, paint, rule, selectRow, spinner, split, windowStart, wrap, type LobbyTheme } from "../layout.ts";
+import { bold, since, columns, fill, markdownLines, paint, rule, selectRow, spinner, split, windowStart, wrap, type LobbyTheme } from "../layout.ts";
 
 export interface IssuesTabInput {
   issues: readonly IssueSummary[];
@@ -31,9 +31,10 @@ export function issueDetailLines(issue: IssueDetail, width: number, now: number,
   ].filter(Boolean);
   const lines = [...wrap(bold(theme, `#${issue.number} ${issue.title}`), width), facts.join(paint(theme, "dim", " · "))];
   if (issue.url) lines.push(paint(theme, "dim", issue.url));
-  lines.push("", paint(theme, "dim", "p plans it with the planning panel, then save it as a task"), "", ...wrap(issue.body.trim() || paint(theme, "dim", "(no description)"), width));
+  // Issues and their comments are GitHub Markdown.
+  lines.push("", paint(theme, "dim", "p plans it with the planning panel, then save it as a task"), "", ...(issue.body.trim() ? markdownLines(issue.body.trim(), width, theme) : [paint(theme, "dim", "(no description)")]));
   for (const comment of issue.comments) {
-    lines.push("", rule(width, comment.author ?? "comment", theme, comment.createdAt ? since(now - Date.parse(comment.createdAt)) : ""), ...wrap(comment.body.trim(), width));
+    lines.push("", rule(width, comment.author ?? "comment", theme, comment.createdAt ? since(now - Date.parse(comment.createdAt)) : ""), ...markdownLines(comment.body.trim(), width, theme));
   }
   return lines;
 }

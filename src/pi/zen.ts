@@ -37,7 +37,8 @@ import {
   type LargeSlot,
   type LargeTaskRow,
 } from "./zen-large.ts";
-import { runStatus, sceneMetrics, slotSituation, type SceneMetrics, type SlotView } from "./zen-metrics.ts";
+import { runStatus, sceneMetrics, slotSituation, type SceneMetrics, type SceneTime, type SlotView } from "./zen-metrics.ts";
+import { formatMinutes } from "../state/budget.ts";
 import { feedLine, QUIET_MS, quietFor } from "./run-summary.ts";
 import { shortDuration } from "../text.ts";
 
@@ -378,18 +379,22 @@ function checklistRow(step: PlanStep, ordinal: number): string {
   return `  ${icon} ${ordinal}. ${step.text}`;
 }
 
-function headerLine(task: Task, now: number, quiet: boolean): string {
+function headerLine(task: Task, now: number, quiet: boolean, time?: SceneTime): string {
   const paused = task.paused ? " (paused)" : "";
-  const elapsed = formatDuration(now - Date.parse(task.createdAt));
+  const elapsed = time ? `${formatMinutes(time.usedMs)} of ${formatMinutes(time.totalMs)}` : formatDuration(now - Date.parse(task.createdAt));
   const mode = quiet ? "tools hidden (alt+t)" : "tools shown";
   return `bot-lobby ${task.id} · ${task.state}${paused}   ⏱ ${elapsed} · ${mode}`;
 }
 
-/** The pending approval or blocker the user must resolve, with its severity. */
-function taskAlert(task: Task): { text: string; kind: "warning" | "error" } | undefined {
+/** The pending approval or blocker the user must resolve, with its severity; then a spent time budget. */
+function taskAlert(task: Task, time?: SceneTime): { text: string; kind: "warning" | "error" } | undefined {
   const pending = task.approvals.filter((approval) => approval.status === "pending");
   if (pending.length > 0) return { text: `approvals pending: ${pending.map((approval) => approval.id).join(", ")}`, kind: "warning" };
   if (task.blockers.length > 0) return { text: `blocked: ${truncate(task.blockers[0]!.reason, 60)}`, kind: "error" };
+  if (time && time.usedMs >= time.totalMs * 0.9) {
+    const spent = time.usedMs >= time.totalMs;
+    return { text: `time budget ${spent ? "spent" : "nearly spent"}: ${formatMinutes(time.usedMs)} of ${formatMinutes(time.totalMs)}`, kind: "warning" };
+  }
   return undefined;
 }
 
@@ -518,10 +523,10 @@ function compactPanel(
   opts: PanelOptions,
   width: number,
 ): string[] {
-  const metrics = sceneMetrics(task, runs, now);
+  const metrics = sceneMetrics(task, runs, now, opts.time);
   const expressions = opts.expressions ?? {};
   const strip = opts.still ? [] : compactStrip(task.state, metrics.slots, expressions, opts.theme);
-  const fixed = [...bannerLines(width), headerLine(task, now, quiet), ...strip];
+  const fixed = [...bannerLines(width), headerLine(task, now, quiet, opts.time), ...strip];
   const tail = tailLines(task, runs, now, tick, steps, opts.theme);
   const room = Math.max(0, MAX_PANEL_LINES - fixed.length - tail.length);
   return [...fixed, ...tail, ...checklistLines(steps, room)].map((line) => clip(line, width));
@@ -577,8 +582,8 @@ function sceneInput(
   steps: PlanStep[],
   opts: PanelOptions,
 ): LargeSceneInput {
-  const metrics = sceneMetrics(task, runs, now);
-  const alert = taskAlert(task);
+  const metrics = sceneMetrics(task, runs, now, opts.time);
+  const alert = taskAlert(task, opts.time);
   return {
     taskId: task.id,
     taskTitle: task.title,
@@ -616,6 +621,8 @@ export interface PanelOptions {
   oracleMotion?: OracleMotion;
   /** Leave out the oracle and agent animations: status, alert, activity and checklist only. */
   still?: boolean;
+  /** The task's time budget: the elapsed label reads against it. */
+  time?: SceneTime;
 }
 
 /** The oracle's clocked animation state beyond its expression frame (see expressions.ts). */
