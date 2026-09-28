@@ -61,7 +61,9 @@ export function jobDetailLines(job: QuickFixJob, width: number, tick: number, no
     job.tools ? `${job.tools} tool${job.tools === 1 ? "" : "s"}` : "",
     job.usage?.cost ? `$${job.usage.cost.toFixed(2)}` : "",
   ].filter(Boolean);
-  const lines = [paint(theme, "dim", job.id), facts.join(paint(theme, "dim", " · ")), "", ...wrap(bold(theme, job.prompt), width)];
+  // What you asked, in Markdown as your messages read in the conversation (a pasted snippet, a list of steps).
+  const asked = theme?.markdown ? markdownLines(job.prompt, width, theme, true, "you") : wrap(bold(theme, job.prompt), width);
+  const lines = [paint(theme, "dim", job.id), facts.join(paint(theme, "dim", " · ")), "", ...asked];
   if (job.route) lines.push("", ...wrap(paint(theme, "dim", `↓ routed ${job.route}`), width));
   if (job.note) lines.push("", ...wrap(paint(theme, "warning", job.status === "held" ? `‖ Held: ${job.note}. r runs it anyway · t starts it as a task in a new session.` : job.note), width));
   lines.push("", rule(width, "Steps", theme));
@@ -69,6 +71,10 @@ export function jobDetailLines(job: QuickFixJob, width: number, tick: number, no
   for (const step of job.steps) {
     const lead = `${paint(theme, "dim", clock(step.at))} ${step.pending && job.status === "running" ? paint(theme, "accent", spinner(tick)) : paint(theme, "dim", "·")} `;
     lines.push(...wrapHanging(lead, step.pending && job.status === "running" ? `${step.text}…` : paint(theme, "muted", step.text), width));
+  }
+  if (job.files?.length) {
+    lines.push("", rule(width, "Edited", theme));
+    for (const file of job.files) lines.push(...wrapHanging(paint(theme, "dim", "· "), paint(theme, "muted", file), width));
   }
   if (job.error) lines.push("", ...wrap(paint(theme, "error", `✗ ${job.error}`), width));
   if (job.report) {

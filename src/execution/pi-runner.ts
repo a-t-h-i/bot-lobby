@@ -33,6 +33,26 @@ export interface PiRunOptions {
   wrapUpAtMs?: number;
   /** Receives the steering handle once the process is running. */
   onStart?: (handle: RunHandle) => void;
+  /** Under a task time budget: when the agent is warned, when its time is up, and who decides on more (see ProcessRunOptions). */
+  time?: TimeLimit;
+}
+
+/**
+ * A run's allotted time under a task budget. At `headsUpAtMs` the agent is
+ * told how much is left; at `upAtMs` it is steered to stop and report where it
+ * left off. Once that report is in (its turn ended), `onTimeUp` decides: more
+ * ms keeps the same process going with its context (a follow-up prompt), 0
+ * ends it. The hard deadline (`timeoutMs`) and the stall watchdog wait while
+ * the decision is pending, and move out with any time granted.
+ */
+export interface TimeLimit {
+  upAtMs: number;
+  headsUpAtMs?: number;
+  headsUpMessage?: string;
+  upMessage: string;
+  onTimeUp?: (report: string) => Promise<{ extraMs: number; message?: string }>;
+  /** Time the agent gets to write its report after `upAtMs` before it is stopped. */
+  graceMs: number;
 }
 
 export interface ProcessOutcome {
@@ -47,6 +67,10 @@ export interface ProcessOutcome {
   wrappedUp?: boolean;
   /** The RPC host rejected the prompt itself. */
   protocolError?: string;
+  /** Stopped at its allotted time and not given more: its report says where it left off. */
+  timeUp?: boolean;
+  /** Time granted past its allotment, in ms. */
+  extendedMs?: number;
 }
 
 /** Streaming agent events forwarded as they arrive on stdout. */
@@ -61,6 +85,10 @@ export type PiStreamEvent =
   | { type: "compaction" }
   | { type: "usage"; input: number; output: number; cost: number; model?: string }
   | { type: "wrap_up" }
+  /** Its allotted time is up: it was asked to stop and report where it left off. */
+  | { type: "time_up" }
+  /** It was given `ms` more and carries on. */
+  | { type: "extended"; ms: number }
   /** One finished thinking block, bounded to `MAX_THOUGHT_CHARS`. */
   | { type: "thought"; text: string }
   | { type: "heartbeat" };
@@ -84,6 +112,7 @@ export interface ProcessRunOptions {
   onStart?: (handle: RunHandle) => void;
   /** Grace between the deadline abort and the hard kill. */
   graceMs?: number;
+  time?: TimeLimit;
 }
 
 export type ProcessRunner = (
@@ -99,6 +128,8 @@ export interface PiRunResult {
   model?: string;
   stalled?: boolean;
   wrappedUp?: boolean;
+  timeUp?: boolean;
+  extendedMs?: number;
 }
 
 export interface ParsedStream {
@@ -140,6 +171,8 @@ export interface ControlEvent {
 export interface StreamCollector {
   push(chunk: string): void;
   finish(): string;
+  /** What is kept so far, without ending the stream. */
+  peek(): string;
 }
 
 const INTERESTING = [
@@ -266,6 +299,9 @@ export function createStreamCollector(
     },
     finish() {
       if (partial.length > 0) keep(partial.splice(0).join(""));
+      return kept.join("\n");
+    },
+    peek() {
       return kept.join("\n");
     },
   };
@@ -422,6 +458,12 @@ interface RunState {
   wrappedUp: boolean;
   settled: boolean;
   protocolError?: string;
+  /** Told its time is up; its next turn end waits on the decision. */
+  timeUp: boolean;
+  headsUp: boolean;
+  /** Waiting on the decision: the agent is idle, so the deadline and the stall watchdog wait too. */
+  deciding: boolean;
+  extendedMs: number;
 }
 
 /** Smallest positive limit, used to pick a watchdog cadence that can see it. */
@@ -452,9 +494,14 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"],
     });
-    const state: RunState = { killed: false, timedOut: false, stalled: false, wrappedUp: false, settled: false };
+    const state: RunState = { killed: false, timedOut: false, stalled: false, wrappedUp: false, settled: false, timeUp: false, headsUp: false, deciding: false, extendedMs: 0 };
     const input = rpcInput(proc);
     const started = Date.now();
+    const time = options.time;
+    // The allotted time counts from here; a grant restarts it.
+    let clockStart = started;
+    let upAtMs = time?.upAtMs ?? 0;
+    let headsUpAtMs = time?.headsUpAtMs ?? 0;
     let lastOutput = started;
     let quietGraceUntil = 0;
     let toolsInFlight = 0;
@@ -469,6 +516,43 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
       if (event.type === "retry") quietGraceUntil = Date.now() + event.delayMs;
       options.onEvent?.(event);
     };
+    // A turn that ended after the time ran out waits on the decision; any other ends the run.
+    let turnDone = false;
+    const turnOver = () => {
+      if (turnDone) return;
+      turnDone = true;
+      clearTimeout(settleTimer);
+      settleTimer = undefined;
+      if (state.timeUp && time?.onTimeUp && !done && !state.killed) decide(time.onTimeUp);
+      else input.close();
+    };
+    const decide = (onTimeUp: NonNullable<TimeLimit["onTimeUp"]>) => {
+      state.deciding = true;
+      clearTimeout(deadline);
+      const report = parsePiStream(collector.peek()).text;
+      onTimeUp(report).then(({ extraMs, message }) => {
+        if (done || state.killed) return;
+        state.deciding = false;
+        if (extraMs <= 0) return input.close();
+        // Granted: the same agent carries on where it stopped, its context intact.
+        state.timeUp = false;
+        state.headsUp = false;
+        state.settled = false;
+        state.extendedMs += extraMs;
+        turnDone = false;
+        clockStart = Date.now();
+        lastOutput = clockStart;
+        upAtMs = extraMs;
+        // The user just named the time it has: no heads-up quoting the old allotment.
+        headsUpAtMs = 0;
+        deadline = setTimeout(onDeadline, extraMs + (time?.graceMs ?? 0));
+        input.send({ type: "prompt", message: message ?? "You have more time: carry on from where you left off and finish." });
+        options.onEvent?.({ type: "extended", ms: extraMs });
+      }, () => {
+        state.deciding = false;
+        input.close();
+      });
+    };
     const onControl = (event: ControlEvent) => {
       if (event.type === "response" && event.command === "prompt" && event.success === false) {
         state.protocolError = event.error ?? "the prompt was rejected";
@@ -478,9 +562,9 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
         input.send({ type: "extension_ui_response", id: event.id, cancelled: true });
       } else if (event.type === "agent_settled") {
         state.settled = true;
-        input.close();
-      } else if (event.type === "agent_end" && event.willRetry !== true && !settleTimer) {
-        settleTimer = setTimeout(() => input.close(), SETTLE_FALLBACK_MS);
+        turnOver();
+      } else if (event.type === "agent_end" && event.willRetry !== true && !settleTimer && !turnDone) {
+        settleTimer = setTimeout(turnOver, SETTLE_FALLBACK_MS);
       }
     };
     const collector = createStreamCollector(onEvent, onControl);
@@ -506,7 +590,8 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
       // Reap anything the agent left running in its group.
       if (POSIX) signalGroup(proc, "SIGTERM");
       const { killed, timedOut, stalled, wrappedUp, protocolError } = state;
-      resolve({ exitCode: code, stdout: collector.finish(), stderr, killed, timedOut, stalled, wrappedUp, protocolError });
+      const timeUp = state.timeUp && !killed;
+      resolve({ exitCode: code, stdout: collector.finish(), stderr, killed, timedOut, stalled, wrappedUp, protocolError, ...(timeUp ? { timeUp } : {}), ...(state.extendedMs > 0 ? { extendedMs: state.extendedMs } : {}) });
     };
     const onAbort = () => {
       state.killed = true;
@@ -514,20 +599,30 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
       input.close();
       terminate(proc, 3000);
     };
-    const deadline = setTimeout(() => {
+    const onDeadline = () => {
       state.killed = true;
       state.timedOut = true;
       input.send({ type: "abort" });
       input.close();
       setTimeout(() => terminate(proc), options.graceMs ?? DEADLINE_GRACE_MS).unref();
-    }, options.timeoutMs);
+    };
+    let deadline = setTimeout(onDeadline, options.timeoutMs);
     const watch = setInterval(() => {
-      if (state.killed || done) return;
+      if (state.killed || done || state.deciding) return;
       const now = Date.now();
       if (!state.wrappedUp && !state.settled && options.wrapUpAtMs && options.wrapUpAtMs > 0 && now - started >= options.wrapUpAtMs) {
         state.wrappedUp = true;
         input.send({ type: "steer", message: options.wrapUpMessage ?? WRAP_UP_MESSAGE });
         options.onEvent?.({ type: "wrap_up" });
+      }
+      if (time && !state.headsUp && !state.timeUp && !turnDone && headsUpAtMs > 0 && now - clockStart >= headsUpAtMs) {
+        state.headsUp = true;
+        if (time.headsUpMessage) input.send({ type: "steer", message: time.headsUpMessage });
+      }
+      if (time && !state.timeUp && !turnDone && upAtMs > 0 && now - clockStart >= upAtMs) {
+        state.timeUp = true;
+        input.send({ type: "steer", message: time.upMessage });
+        options.onEvent?.({ type: "time_up" });
       }
       const limit = toolsInFlight > 0 ? options.toolStallTimeoutMs : options.stallTimeoutMs;
       if (limit && limit > 0 && now - Math.max(lastOutput, quietGraceUntil) >= limit) {
@@ -536,7 +631,7 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
         input.close();
         terminate(proc, 3000);
       }
-    }, watchInterval(options.stallTimeoutMs, options.toolStallTimeoutMs, options.wrapUpAtMs));
+    }, watchInterval(options.stallTimeoutMs, options.toolStallTimeoutMs, options.wrapUpAtMs, time?.upAtMs, time?.headsUpAtMs));
     watch.unref();
 
     proc.on("exit", (code, signal) => {
@@ -557,7 +652,7 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
 }
 
 function toResult(parsed: ParsedStream, outcome: ProcessOutcome, aborted: boolean, options: PiRunOptions): PiRunResult {
-  const base = { output: parsed.text, usage: parsed.usage, model: parsed.model, wrappedUp: outcome.wrappedUp === true };
+  const base = { output: parsed.text, usage: parsed.usage, model: parsed.model, wrappedUp: outcome.wrappedUp === true, ...(outcome.timeUp ? { timeUp: true } : {}), ...(outcome.extendedMs ? { extendedMs: outcome.extendedMs } : {}) };
   if (outcome.stalled) {
     const quiet = shortDuration(options.stallTimeoutMs ?? 0);
     return { ...base, status: "timeout", stalled: true, error: `stalled: no output for ${quiet}` };
@@ -602,6 +697,7 @@ export async function runPiAgent(options: PiRunOptions, run: ProcessRunner = spa
       stallTimeoutMs: options.stallTimeoutMs,
       toolStallTimeoutMs: options.toolStallTimeoutMs,
       wrapUpAtMs: options.wrapUpAtMs,
+      ...(options.time ? { time: options.time } : {}),
       onStart: options.onStart,
       onEvent: (event) => {
         if (event.type === "tool_execution_start") options.onActivity?.(activityWord(event.toolName));

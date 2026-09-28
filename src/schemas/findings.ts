@@ -42,6 +42,10 @@ export interface WorkerResult {
   domain: Domain;
   role: "worker";
   completed: string;
+  /** Stopped for time: what it was doing and what is still to do. */
+  leftOff?: string;
+  /** Stopped for time: the minutes it asks for, and why. */
+  moreTime?: { minutes?: number; reason: string };
   filesChanged: FileChange[];
   verification: string;
   notes: string;
@@ -69,6 +73,8 @@ export interface ReviewResult {
   pushback?: Pushback;
   /** Set when the engine downgraded an unsupported PASS. */
   downgraded?: string;
+  /** Set when the engine passed a CHANGES_REQUIRED that named only minor or info findings. */
+  relaxed?: string;
   raw: string;
 }
 
@@ -137,4 +143,12 @@ export interface AgentRun {
   routedFrom?: string;
   /** Why and where it was routed (`trivial 0.88: p/big · medium → p/cheap · low`). */
   route?: string;
+  /** Files the run changed with `edit`/`write`, absolute, across its attempts. */
+  edited?: string[];
+  /** Under a task time budget: the time it was given, when that runs out (epoch ms), and any granted since. */
+  allotMs?: number;
+  endsAt?: number;
+  extendedMs?: number;
+  /** Stopped at its allotted time and not given more: its report says where it left off. */
+  timeUp?: boolean;
 }
