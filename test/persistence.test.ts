@@ -126,21 +126,23 @@ test("taskSlug turns a request into a bounded dash slug", () => {
   assert.equal(taskSlug("x".repeat(39) + "-yyy"), "x".repeat(39));
 });
 
-test("nextTaskId names a task from its request and falls back to a timestamp", () => {
-  assert.equal(nextTaskId("Add pagination to the task list"), "TASK-add-pagination-to-the-task-list");
-  assert.equal(nextTaskId("!!!", new Date("2026-01-01T00:10:00.000Z")), "TASK-task-20260101001000");
-  assert.equal(nextTaskId("   ", new Date("2026-01-01T00:10:00.000Z")), "TASK-task-20260101001000");
+test("nextTaskId names a task from its request and the day, in a friendly form", () => {
+  const day = new Date(2026, 8, 27, 10, 30);
+  assert.equal(nextTaskId("Change the table font", day), "Task-Change-Table-Font-27-09-2026");
+  assert.equal(nextTaskId("Add pagination to the task list", day), "Task-Add-Pagination-Task-List-27-09-2026");
+  assert.equal(nextTaskId("!!!", day), "Task-Untitled-27-09-2026");
+  assert.equal(nextTaskId("   ", new Date(2026, 0, 5)), "Task-Untitled-05-01-2026");
 });
 
-test("a slug-named task round-trips and a timestamped directory still loads", () => {
+test("a friendly-named task round-trips and an older timestamped directory still loads", () => {
   const root = project();
-  const slugId = nextTaskId("Add pagination to the task list");
+  const slugId = nextTaskId("Add pagination to the task list", new Date(2026, 8, 27));
   const slugTask = createTask(slugId, "Add pagination to the task list");
   createTaskDir(root, ".pi", slugTask);
   slugTask.state = "implementing";
   saveTask(root, ".pi", slugTask);
   const loadedSlug = loadTask(root, ".pi", slugId);
-  assert.equal(loadedSlug?.id, "TASK-add-pagination-to-the-task-list");
+  assert.equal(loadedSlug?.id, "Task-Add-Pagination-Task-List-27-09-2026");
   assert.equal(loadedSlug?.state, "implementing");
 
   const legacyId = "TASK-20260101001000";

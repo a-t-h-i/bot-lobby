@@ -131,6 +131,15 @@ export function resolvePanelProfile(config: BotLobbyConfig, member: PanelMember,
   return resolveRunProfile(panelMemberProfile(config, member), kindLabel(member), options);
 }
 
+/**
+ * The model, thinking and time limit a pull request review runs on: QA's, the
+ * agent whose job is judging work, with its custom instructions.
+ */
+export function resolveReviewProfile(config: BotLobbyConfig, options: ResolverOptions): RunProfile {
+  const profile = agentProfile(config, "qa", "reviewer");
+  return resolveRunProfile({ model: profile.model, thinking: profile.thinking, timeoutMs: profile.timeoutMs, ...(profile.instructions ? { instructions: profile.instructions } : {}), ...(profile.fallback ? { fallback: profile.fallback } : {}) }, kindLabel("qa"), options);
+}
+
 /** Every configured subagent whose thinking level its model does not support, for `/bot-lobby config`. */
 export function thinkingMismatches(config: BotLobbyConfig, lookup: ModelLookup, sessionModel?: string): string[] {
   const entries: Array<[SubagentKind | "master", string, string]> = [

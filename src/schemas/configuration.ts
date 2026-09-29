@@ -55,6 +55,18 @@ export type LobbyAgentKind = "quickfix" | "planner";
 /** Settings kinds a workflow run (domain + role) can draw from. */
 export type WorkflowProfileKind = Domain | "scout" | "researcher";
 
+/**
+ * Whether a new task gets a git branch of its own (`branch`: created and
+ * checked out in the working folder) or a worktree of its own (`worktree`: a
+ * second checkout every agent of the task runs in), named after the task.
+ */
+export const GIT_ISOLATIONS = ["off", "branch", "worktree"] as const;
+export type GitIsolation = (typeof GIT_ISOLATIONS)[number];
+
+export function isGitIsolation(value: unknown): value is GitIsolation {
+  return typeof value === "string" && (GIT_ISOLATIONS as readonly string[]).includes(value);
+}
+
 export interface WorkflowConfig {
   maxReviewIterations: number;
   maxParallelScouts: number;
@@ -82,6 +94,8 @@ export interface WorkflowConfig {
   briefCheck: boolean;
   /** A new request that one agent can do alone goes to the quick-fix agent once the oracle confirms; false makes every request a task. */
   routeQuickFixes: boolean;
+  /** A new task gets a git branch or worktree of its own, named after it; `--branch` and `--worktree` decide for one task. */
+  gitIsolation: GitIsolation;
 }
 
 export interface KnowledgeConfig {
@@ -129,10 +143,15 @@ export interface LobbyConfig {
    * round skips the seats and asks nothing; later replies only revise. 0 = unlimited.
    */
   maxPlanningRounds: number;
+  /**
+   * A plan with more steps than this is offered to be split into up to five
+   * tasks when it is saved (the oracle proposes, the user decides); 0 = never.
+   */
+  splitPlanAbove: number;
 }
 
 /** Decisions the classifier can make, each switched on or off on its own. */
-export const CLASSIFIER_FEATURES = ["seats", "answers", "files", "triage", "effort"] as const;
+export const CLASSIFIER_FEATURES = ["seats", "answers", "files", "triage", "effort", "review", "knowledge"] as const;
 export type ClassifierFeature = (typeof CLASSIFIER_FEATURES)[number];
 
 /** Hosts that serve Jev behind the same System One API; `auto` takes OpenCode's free Jev when pi holds an OpenCode key, else TypeSafe. */
@@ -151,6 +170,8 @@ export interface ClassifierThresholds {
   autoAnswerMargin: number;
   /** A file is a likely file at this relevance. */
   fileRelevantAt: number;
+  /** A section of a knowledge file that is over the prompt budget stays in at this relevance. */
+  knowledgeRelevantAt: number;
   /** A step scored simple at this confidence runs one thinking level lower. */
   simpleAt: number;
   /** A step scored trivial at this confidence runs on the cheaper model. */
@@ -224,6 +245,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     fastTrack: true,
     briefCheck: true,
     routeQuickFixes: true,
+    gitIsolation: "off",
   },
   knowledge: {
     compactionThreshold: 20000,
@@ -241,6 +263,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     mouse: true,
     miniLine: true,
     maxPlanningRounds: 5,
+    splitPlanAbove: 8,
   },
   classifier: {
     enabled: false,
@@ -248,13 +271,14 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     model: "",
     baseUrl: "",
     timeoutMs: 4000,
-    features: { seats: true, answers: true, files: true, triage: true, effort: true },
+    features: { seats: true, answers: true, files: true, triage: true, effort: true, review: true, knowledge: true },
     thresholds: {
       seatAt: 0.35,
       reseatReadyAt: 0.6,
       autoAnswerAt: 0.9,
       autoAnswerMargin: 0.5,
       fileRelevantAt: 0.5,
+      knowledgeRelevantAt: 0.4,
       simpleAt: 0.7,
       trivialAt: 0.8,
       quickFixAt: 0.7,
@@ -268,6 +292,9 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
 
 /** Choices the settings menu cycles through for the planning round limit; 0 = unlimited. */
 export const PLANNING_ROUND_CHOICES = [2, 3, 5, 8, 0] as const;
+
+/** Choices the settings menu cycles through for the step count past which a saved plan is offered a split; 0 = never. */
+export const SPLIT_PLAN_CHOICES = [6, 8, 10, 12, 0] as const;
 
 function positive(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
@@ -299,7 +326,7 @@ function flag(value: unknown, fallback: boolean): boolean {
 }
 
 function normalizeLobby(value: unknown): LobbyConfig {
-  const source = value as { autoOpen?: unknown; planningPanel?: unknown; autoAsk?: unknown; issues?: unknown; panels?: unknown; keys?: unknown; mouse?: unknown; miniLine?: unknown; maxPlanningRounds?: unknown } | undefined;
+  const source = value as { autoOpen?: unknown; planningPanel?: unknown; autoAsk?: unknown; issues?: unknown; panels?: unknown; keys?: unknown; mouse?: unknown; miniLine?: unknown; maxPlanningRounds?: unknown; splitPlanAbove?: unknown } | undefined;
   const defaults = DEFAULT_CONFIG.lobby;
   const panel = Array.isArray(source?.planningPanel)
     ? [...new Set(source.planningPanel.filter((entry): entry is PanelMember => typeof entry === "string" && isPanelMember(entry)))]
@@ -316,6 +343,7 @@ function normalizeLobby(value: unknown): LobbyConfig {
     mouse: flag(source?.mouse, defaults.mouse),
     miniLine: flag(source?.miniLine, defaults.miniLine),
     maxPlanningRounds: roundLimit(source?.maxPlanningRounds, defaults.maxPlanningRounds),
+    splitPlanAbove: roundLimit(source?.splitPlanAbove, defaults.splitPlanAbove),
   };
 }
 
@@ -370,6 +398,7 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
   workflow.fastTrack = workflow.fastTrack !== false;
   workflow.briefCheck = workflow.briefCheck !== false;
   workflow.routeQuickFixes = workflow.routeQuickFixes !== false;
+  workflow.gitIsolation = isGitIsolation(workflow.gitIsolation) ? workflow.gitIsolation : DEFAULT_CONFIG.workflow.gitIsolation;
   workflow.taskBudgetMinutes = typeof workflow.taskBudgetMinutes === "number" && workflow.taskBudgetMinutes > 0 ? Math.min(24 * 60, Math.round(workflow.taskBudgetMinutes)) : 0;
   const knowledge = { ...DEFAULT_CONFIG.knowledge, ...(src.knowledge as Partial<KnowledgeConfig> | undefined) };
   const srcAgents = (src.agents ?? {}) as Partial<BotLobbyConfig["agents"]>;

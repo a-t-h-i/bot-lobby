@@ -33,7 +33,7 @@ export interface MetricRecord {
   cost?: number;
   taskId?: string;
   stalled?: boolean;
-  /** Classifier calls: what the call decided (seats, answers, files, triage, effort, test). */
+  /** Classifier calls: what the call decided (seats, answers, files, triage, effort, review, knowledge, test). */
   purpose?: string;
   /** A run the classifier routed down: the configured profile it came from. */
   routedFrom?: string;
@@ -49,7 +49,7 @@ export interface ClassifierSummary {
   p90Ms: number;
   /** Tokens Jev read across every call. */
   input: number;
-  /** Calls per decision (seats, answers, files, triage, effort, test). */
+  /** Calls per decision (seats, answers, files, triage, effort, review, knowledge, test). */
   byPurpose: Record<string, number>;
   seatRunsSkipped: number;
   questionsAnswered: number;
