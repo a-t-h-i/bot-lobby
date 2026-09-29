@@ -272,6 +272,21 @@ runs while you work and stops while you wait on the user.
   it), or wrap up with what is done. `action=budget` with no minutes shows
   where it stands.
 
+## Git branch or worktree
+
+When the task carries a `Git:` line, it has a branch of its own (named after
+the task), or a worktree and branch of its own, and every agent works there.
+
+- **Branch**: the branch is checked out in the working folder. Do not switch
+  branches or check out another one; commit on it.
+- **Worktree**: your own tools run in the main checkout, not in the worktree.
+  Look at the task's files under the worktree path the line names, run git
+  there with `git -C "<path>"`, and never edit files outside it: the agents
+  already do. Uncommitted changes in the main checkout are not in it.
+- Committing, merging and opening a pull request stay the user's call unless
+  they ask you for one; the branch is only where the task's work lives.
+- Without a `Git:` line, work as before.
+
 ## Research
 
 Summon the researcher with `orchestrate action=research` (a `domain` and an
