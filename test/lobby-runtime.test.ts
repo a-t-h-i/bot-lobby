@@ -298,6 +298,29 @@ test("the lobby starts a task in a named background session, relays its question
   assert.ok(launched[0]!.proc.signals.length === 1, "resetting the launcher stops the sessions it started");
 });
 
+test("flags typed in the new-session prompt reach its task but stay out of the session's name", async () => {
+  const launched: Array<{ args: string[]; proc: FakeSessionProcess }> = [];
+  setSessionLauncher((args) => {
+    const proc = new FakeSessionProcess();
+    launched.push({ args, proc });
+    return proc;
+  });
+  const { fake, ctx } = await start(false);
+  try {
+    assert.equal(showLobby("lobby"), true);
+    const view = lobbyView()!;
+    view.handleInput("\x1bn");
+    for (const char of "--worktree add a login page") view.handleInput(char);
+    view.handleInput("\r");
+    assert.equal(launched.length, 1);
+    assert.equal(launched[0]!.args[launched[0]!.args.indexOf("--name") + 1], taskName("add a login page"), "named after the request, not the flag");
+    assert.deepEqual(launched[0]!.proc.commands("prompt").map((command) => command.message), ["/bot-lobby --task --worktree add a login page"], "the flag reaches the task the session starts");
+  } finally {
+    await stop(fake, ctx);
+    setSessionLauncher(undefined);
+  }
+});
+
 test("switching to a background session stops its process, then asks pi to run its session file here", async () => {
   const launched: FakeSessionProcess[] = [];
   setSessionLauncher(() => {
