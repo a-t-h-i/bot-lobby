@@ -55,6 +55,7 @@ import { pingApproval } from "../pi/notify.ts";
 import { describeRun, runLogEntry } from "../pi/run-summary.ts";
 import { nextStates } from "./transitions.ts";
 import type { FileHinter } from "../classifier/files.ts";
+import type { KnowledgePicker } from "../classifier/knowledge.ts";
 import type { Classifier } from "../classifier/classifier.ts";
 import type { EffortRouter } from "../classifier/effort.ts";
 import { answerClarify } from "../classifier/triage.ts";
@@ -141,6 +142,8 @@ export interface WorkflowDeps {
   runProcess?: ProcessRunner;
   /** Likely files for scouts and workers, while the classifier's file hints are on. */
   hints?: FileHinter;
+  /** Picks the relevant sections of long knowledge files for scouts, workers and the QA gate, while the classifier's knowledge picks are on. */
+  knowledge?: KnowledgePicker;
   /** Answers a clarify question whose recommended option is clearly right, when it is on. */
   classifier?: Classifier;
   /** Re-reads a request after an amendment (the task's triage), when the classifier is on. */
@@ -339,6 +342,7 @@ async function handleScout(task: Task, params: OrchestrateParams, deps: Workflow
       signal: deps.signal,
       onUpdate: deps.onUpdate,
       ...(deps.hints ? { hints: deps.hints } : {}),
+      ...(deps.knowledge ? { knowledge: deps.knowledge } : {}),
       ...(deps.effort ? { effort: deps.effort } : {}),
     },
     deps.runProcess ?? spawnPiProcess,
@@ -678,6 +682,7 @@ function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instructi
     signal: deps.signal,
     onUpdate: deps.onUpdate,
     ...(deps.hints ? { hints: deps.hints } : {}),
+    ...(deps.knowledge ? { knowledge: deps.knowledge } : {}),
     ...(deps.effort ? { effort: deps.effort } : {}),
   };
 }
@@ -1106,6 +1111,7 @@ function qaRequest(deps: WorkflowDeps, task: Task, diff: string, instruction?: s
     profile: deps.profile,
     signal: deps.signal,
     onUpdate: deps.onUpdate,
+    ...(deps.knowledge ? { knowledge: deps.knowledge } : {}),
   };
 }
 

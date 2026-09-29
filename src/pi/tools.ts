@@ -5,7 +5,7 @@ import { Type } from "typebox";
 import type { AgentRun } from "../schemas/findings.ts";
 import type { ProcessRunner } from "../execution/pi-runner.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
-import { classifier, effortFor, hintsFor, triageFor } from "../classifier/instance.ts";
+import { classifier, effortFor, hintsFor, knowledgeFor, triageFor } from "../classifier/instance.ts";
 import { truncate } from "../text.ts";
 import { applyStatus, reportRuns, summarizeRun } from "./ui.ts";
 import { whileAsking } from "../state/budget.ts";
@@ -119,6 +119,7 @@ export function workflowDeps(
     onUpdate,
     runProcess,
     hints: hintsFor({ cwd: ctx.cwd, root, configDir }),
+    knowledge: knowledgeFor(),
     classifier: classifier(),
     triage: (request, triageSignal) => triageFor({ cwd: ctx.cwd, root, configDir }, request, triageSignal),
     effort: effortFor((model, thinking) => checkThinking(modelLookup(ctx)(model), thinking).level),

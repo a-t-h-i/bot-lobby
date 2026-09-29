@@ -336,6 +336,13 @@ them picked. Files past the compaction threshold are marked.
   back. They live in `.pi/bot-lobby/knowledge-comments.jsonl`, never in the
   files, which agents rewrite when they compact.
 
+**What an agent reads.** Knowledge, standards and decisions go into an agent's
+prompt; a file past about 4,000 characters is cut to the sections that bear on
+the step (by keywords, or by [Jev](#the-classifier-jev) when it is on), and the
+prompt says how many sections it left out and where the whole file is. Nothing
+is looked up on demand: what a step needs has to be in the file and near the
+top of its relevance, so keep entries short, one topic under one heading.
+
 Common keys: `tab` switches tabs, `esc` browses (arrows, single-key
 commands), `ctrl+f` searches, `ctrl+s` saves the plan, `alt+o` browses
 sessions, `alt+n` starts a task in a new session, `alt+s` opens settings.
@@ -495,6 +502,7 @@ else TypeSafe.
 | Planning seats | Each round, only the seats the idea or your latest answers touch sit; `1`–`4` pins a seat |
 | Obvious answers | Answers a question itself when the conversation already makes the recommended option clearly right (≥ 0.9); listed under Assumptions |
 | File hints | Agents start with a short list of the files they most likely need, and get a `find_relevant_files` tool |
+| Relevant knowledge | When an agent's knowledge, standards or decisions file is too long for its prompt (over 4,000 characters), Jev keeps the sections that bear on the step, and the prompt says how many it left out and where the whole file is, so the agent can read the rest. A file that fits goes in whole, untouched; standards are never left empty |
 | Quick fix or task | Whether one engineer can do a new request alone decides whether it goes to the [quick-fix agent](#quick-fix-or-the-team) (the oracle confirms) |
 | Task triage | The task's [track](#fast-track-or-full-workflow) and roster use its read (size, domains, research, ambiguity), and the Master gets it as hints; a quick fix that is really a task (large, and not one engineer's work) is held (`r` run anyway, `t` make it a task) |
 | Effort routing | Simple steps run one thinking level lower; trivial ones on a **cheaper model** you pick. A routed run that falls short re-runs on your normal settings |
@@ -504,8 +512,9 @@ else TypeSafe.
 bot-lobby decides as it would without it; three failures in a row pause it
 for ten minutes. Calls and savings show on the Metrics tab.
 
-**What is sent:** the planning conversation, task text, and file excerpts of
-at most 400 characters (never whole files). Gitignored files, `.env*`, keys,
+**What is sent:** the planning conversation, task text, file excerpts of
+at most 400 characters (never whole files), and, for a knowledge file too long
+for a prompt, the first 700 characters of each of its sections. Gitignored files, `.env*`, keys,
 certificates and anything in `classifier.exclude` are never sent. If
 OpenCode's free model ends, set *Model* to `jev-1.13` (paid); bot-lobby won't
 switch on its own.
@@ -538,8 +547,8 @@ the result.
 - `instructions` adds your own text to an agent's built-in prompt.
 - `fallbackModel` and `fallbackThinking` on any agent (and the master): see
   [Fallback models](#fallback-models).
-- Classifier thresholds and limits (`classifier.thresholds`,
-  `classifier.fileHints`) are edited in the file.
+- Classifier thresholds and limits (`classifier.thresholds`, such as
+  `knowledgeRelevantAt`, 0.4, and `classifier.fileHints`) are edited in the file.
 
 ## Fallback models
 

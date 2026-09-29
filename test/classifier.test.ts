@@ -259,7 +259,7 @@ test("the classifier config is off by default and normalises every field", () =>
   assert.equal(resolved.provider, "auto");
   assert.equal(resolved.timeoutMs, 4000);
   assert.equal(resolved.model, "jev-1.13");
-  assert.deepEqual(resolved.features, { seats: true, answers: true, files: true, triage: true, effort: false, review: true });
+  assert.deepEqual(resolved.features, { seats: true, answers: true, files: true, triage: true, effort: false, review: true, knowledge: true });
   assert.equal(resolved.thresholds.seatAt, 0.2);
   assert.equal(resolved.thresholds.autoAnswerAt, 0.9, "a probability outside 0..1 keeps the default");
   assert.deepEqual(resolved.fileHints, { topK: 3, maxCandidates: 480, budgetMs: 1500 });
