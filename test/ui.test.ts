@@ -1,8 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { IDLE_TICK_MS, LIVE_TICK_MS, MAX_RETAINED_RUNS, expressionTickDelay, mergeRuns, persistedRuns, statusText, summarizeRun } from "../src/pi/ui.ts";
-import { planChecklist } from "../src/pi/zen.ts";
-import { BLINK_MS, FAST_TICK_MS } from "../src/pi/expressions.ts";
+import { MAX_RETAINED_RUNS, mergeRuns, persistedRuns, statusText, summarizeRun } from "../src/pi/ui.ts";
+import { planChecklist } from "../src/pi/plan-checklist.ts";
 import { setQuiet } from "../src/pi/quiet.ts";
 import { createTask, type Task } from "../src/schemas/task.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
@@ -45,18 +44,6 @@ test("summarizeRun marks running, success, and failure", () => {
   assert.equal(summarizeRun(run({ status: "failed" })), "✗ backend/scout (failed)");
   assert.equal(summarizeRun(run({ status: "timeout" })), "✗ backend/scout (timeout)");
   assert.equal(summarizeRun(run({ status: "success", attempts: 2 })), "✓ backend/scout (success) ×2");
-});
-
-test("the zen clock speeds up while an expression plays", () => {
-  const resting = { nextAt: 10_000, until: 0, startedAt: 0, frame: 0, variant: 0 };
-  const blinking = { nextAt: 10_000, until: 1_000, startedAt: 0, frame: 1, variant: 0 };
-  assert.equal(expressionTickDelay([resting], 0, true), LIVE_TICK_MS);
-  assert.equal(expressionTickDelay([resting], 0, false), IDLE_TICK_MS);
-  assert.equal(expressionTickDelay([blinking], 0, false), FAST_TICK_MS);
-  assert.equal(expressionTickDelay([resting, blinking], 0, true), FAST_TICK_MS);
-  assert.ok(FAST_TICK_MS < BLINK_MS, "a blink must survive one fast tick");
-  assert.equal(expressionTickDelay([resting], Number.NaN, true), LIVE_TICK_MS);
-  assert.equal(expressionTickDelay([resting], 0, false, true), FAST_TICK_MS, "the oracle's lip-sync runs on the fast clock");
 });
 
 test("mergeRuns returns a fresh copy of the previous set when nothing arrives", () => {
@@ -110,20 +97,4 @@ test("persisted worker records replay the checklist after a reload, and live cop
   assert.equal(merged.at(-1)!.activity, "editing");
   assert.deepEqual(persistedRuns(task()), []);
   assert.deepEqual(persistedRuns(undefined), []);
-});
-
-import { isReaction, situationKey } from "../src/pi/ui.ts";
-
-test("agents react to starting, finishing, failing, flags and handovers, but not to going idle", () => {
-  const working = situationKey({ status: "working" });
-  assert.equal(isReaction(undefined, { status: "working" }), false, "no reaction on the first sighting");
-  assert.equal(isReaction(situationKey({ status: "idle" }), { status: "working" }), true, "starts work");
-  assert.equal(isReaction(working, { status: "done" }), true, "finishes");
-  assert.equal(isReaction(working, { status: "failed" }), true, "fails");
-  assert.equal(isReaction(working, { status: "working", flag: "quiet" }), true, "goes quiet");
-  assert.equal(isReaction(working, { status: "working", flag: "waiting" }), true, "starts waiting");
-  assert.equal(isReaction(working, { status: "working", handover: true }), true, "receives a file");
-  assert.equal(isReaction(situationKey({ status: "working", flag: "quiet" }), { status: "working" }), false, "a flag clearing is quiet");
-  assert.equal(isReaction(situationKey({ status: "done" }), { status: "idle" }), false, "going idle is quiet");
-  assert.equal(isReaction(working, { status: "working" }), false, "no change, no reaction");
 });

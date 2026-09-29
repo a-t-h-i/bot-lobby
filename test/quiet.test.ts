@@ -84,13 +84,9 @@ function makeCtx(cwd: string, expanded = false, sessionId = "session-1") {
     expanded,
     expandedCalls: [] as boolean[],
     statuses: [] as Array<{ key: string; text: string | undefined }>,
-    widgets: [] as Array<{ key: string; content: unknown }>,
     notifications: [] as Array<{ message: string; type: string | undefined }>,
     setStatus(key: string, text: string | undefined): void {
       ui.statuses.push({ key, text });
-    },
-    setWidget(key: string, content: unknown): void {
-      ui.widgets.push({ key, content });
     },
     setWorkingVisible(_visible: boolean): void {},
     workingIndicators: [] as unknown[],
@@ -281,7 +277,7 @@ test("session_shutdown clears the bot-lobby status", () => {
   assert.deepEqual(ui.statuses.at(-1), { key: STATUS_KEY, text: undefined });
 });
 
-test("ctrl+shift+m minimizes and restores the widget without touching ownership", () => {
+test("ctrl+shift+m minimizes and restores bot-lobby without touching ownership", () => {
   setMinimized(false);
   const fake = makePi(["read"]);
   registerRevealShortcut(asPi(fake), ".pi");
@@ -302,24 +298,21 @@ function ownedProject(sessionId: string, prefix: string): string {
   return root;
 }
 
-test("applyStatus shows the widget and task only for the owning session", () => {
+test("applyStatus shows the task only for the owning session", () => {
   setMinimized(false);
   const root = ownedProject("session-a", "dh-owner-widget-");
   const foreign = makeCtx(root, false, "session-b");
   applyStatus(foreign.ctx, root, ".pi");
-  assert.equal(foreign.ui.widgets.at(-1)!.content, undefined, "a foreign session gets no widget");
   assert.ok(!foreign.ui.statuses.at(-1)!.text?.includes("TASK-owned"), "a foreign session's footer hides the task");
   const owner = makeCtx(root, false, "session-a");
   applyStatus(owner.ctx, root, ".pi");
-  assert.equal(typeof owner.ui.widgets.at(-1)!.content, "function", "the owning session gets the widget");
   assert.ok(owner.ui.statuses.at(-1)!.text?.includes("TASK-owned"));
   setMinimized(true);
   applyStatus(owner.ctx, root, ".pi");
-  assert.equal(owner.ui.widgets.at(-1)!.content, undefined, "minimize hides the widget");
   assert.ok(owner.ui.statuses.at(-1)!.text?.includes("minimized"));
   setMinimized(false);
   applyStatus(owner.ctx, root, ".pi");
-  assert.equal(typeof owner.ui.widgets.at(-1)!.content, "function", "restore brings the widget back");
+  assert.ok(owner.ui.statuses.at(-1)!.text?.includes("TASK-owned"), "restore brings the task back");
 });
 
 test("before_agent_start injects the Master section only for the owning session", () => {
@@ -341,14 +334,14 @@ test("before_agent_start injects the Master section only for the owning session"
   setMinimized(false);
 });
 
-test("a subagent process never gets the widget or the Master section", () => {
+test("a subagent process never gets the task status or the Master section", () => {
   setMinimized(false);
   const restore = setSubagent("1");
   try {
     const root = ownedProject("session-a", "dh-subgate-");
     const { ctx, ui } = makeCtx(root, false, "session-a");
     applyStatus(ctx, root, ".pi");
-    assert.equal(ui.widgets.at(-1)!.content, undefined);
+    assert.ok(!ui.statuses.at(-1)!.text?.includes("TASK-owned"));
     const fake = makePi(["read"]);
     registerLifecycle(asPi(fake), ".pi");
     const event = { systemPromptOptions: { sections: {} as Record<string, string> } };
@@ -420,11 +413,10 @@ test("/bot-lobby minimize and restore toggle the per-session mode without releas
   const { ctx, ui } = makeCtx(root, false, "session-1");
   await fake.commandHandlers["bot-lobby"]!("minimize", ctx);
   assert.equal(isMinimized(), true);
-  assert.equal(ui.widgets.at(-1)!.content, undefined, "minimize hides the widget");
   assert.ok(ui.statuses.at(-1)!.text?.includes("minimized"));
   await fake.commandHandlers["bot-lobby"]!("restore", ctx);
   assert.equal(isMinimized(), false);
-  assert.equal(typeof ui.widgets.at(-1)!.content, "function", "restore brings the widget back");
+  assert.ok(ui.statuses.at(-1)!.text?.includes("TASK-owned"), "restore brings the task back");
   assert.equal(loadTask(root, ".pi", "TASK-owned")!.ownerSessionId, "session-1", "ownership is preserved");
 });
 

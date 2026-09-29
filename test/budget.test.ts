@@ -23,7 +23,6 @@ import {
 } from "../src/state/budget.ts";
 import { parseCommand } from "../src/pi/commands.ts";
 import { parseMoreTime, parseWorkerResult } from "../src/roles/worker.ts";
-import { sceneMetrics } from "../src/pi/zen-metrics.ts";
 import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
 import { createTask, type Task, type TaskState } from "../src/schemas/task.ts";
 import { createTaskDir, ensureProjectStructure, loadTask, saveTask } from "../src/state/persistence.ts";
@@ -120,15 +119,6 @@ test("a worker out of time says where it left off and how much more it needs", (
   const result = parseWorkerResult("backend", "## Completed\nthe API\n\n## Left Off\ntests remain\n\n## More Time\n10 minutes — the tests");
   assert.deepEqual([result.leftOff, result.moreTime], ["tests remain", { minutes: 10, reason: "the tests" }]);
   assert.equal(parseWorkerResult("backend", "## Completed\nall of it").leftOff, undefined);
-});
-
-test("the status box reads against the budget, and each agent against its minutes", () => {
-  const task = createTask("T", "x", new Date(0).toISOString());
-  const run: AgentRun = { runId: "r", taskId: "T", domain: "backend", role: "worker", status: "running", output: "", attempts: 1, startedAt: new Date(0).toISOString(), allotMs: 30 * MINUTE, extendedMs: 10 * MINUTE };
-  const metrics = sceneMetrics(task, [run], 12 * MINUTE, { usedMs: 34 * MINUTE, totalMs: 90 * MINUTE });
-  assert.equal(metrics.elapsedLabel, "34m of 1h 30m");
-  assert.equal(metrics.slots.find((slot) => slot.id === "dev")?.elapsedLabel, "12/40m");
-  assert.equal(sceneMetrics(task, [], 12 * MINUTE).elapsedLabel, "12m 00s", "without a budget, the time since the task started");
 });
 
 /* ------------------------------------------------------------ the workflow */

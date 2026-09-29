@@ -109,8 +109,6 @@ function makeView(options: ViewOptions = {}) {
     theme: () => ({ fg: (_color, text) => text, bold: (text) => text }),
     sessionId: () => "me",
     zen: () => ({ ...(options.task ? { task: options.task } : {}), runs: [] }),
-    // The fake scene keeps 3 lines of status.
-    scene: (_width, height) => Array.from({ length: Math.min(height, 3) }, (_, index) => `still ${index}`),
     feed,
     masterBusy: () => options.busy === true,
     tasks: () => taskList,
@@ -218,7 +216,6 @@ function makeView(options: ViewOptions = {}) {
       calls.historyLoads.push(sessionId ?? "");
       return options.history?.[sessionId ?? ""] ?? [];
     },
-    taskScene: (task, _width, height) => Array.from({ length: Math.min(height, 2) }, (_, index) => `status of ${task.id} ${index}`),
     requestRender: () => {},
     now: () => NOW,
   };
@@ -456,14 +453,13 @@ test("g and s regroup and resort the metrics table", () => {
 
 const ALL_PANELS = { conversation: true, activity: true, thinking: true };
 
-test("the home tab puts the scene first, the thinking pane last, and stacks panes when narrow", () => {
+test("the home tab puts the conversation first, the thinking pane last, and stacks panes when narrow", () => {
   const feed = new LobbyFeed();
   feed.say("you", "build it");
   feed.log("DEV", "reading a.ts", "info", NOW);
   feed.thought("DEV", "the router lives in a.ts");
-  const input = { task: activeTask(), scene: () => ["SCENE"], chat: feed.chat, activity: feed.activity, thoughts: feed.thoughts, busy: false, others: 0, pending: 0, tick: 0, now: NOW, panels: ALL_PANELS };
+  const input = { task: activeTask(), chat: feed.chat, activity: feed.activity, thoughts: feed.thoughts, busy: false, others: 0, pending: 0, tick: 0, now: NOW, panels: ALL_PANELS };
   const wide = renderHome(input, 120, 30);
-  assert.equal(wide[0], fit("SCENE", 120));
   assert.ok(wide.some((line) => line.includes("╭ Conversation ─") && line.includes("╭ Activity")), "the task id lives in the tab bar, not the pane title");
   assert.ok(wide.some((line) => line.includes("╭ Thinking") && line.includes("DEV · just now")));
   assert.ok(wide.some((line) => line.includes("the router lives in a.ts")));
@@ -719,14 +715,12 @@ test("alt+a, alt+k and alt+c show and hide panes, and the choice is remembered",
   const { view, calls } = makeView({ task: activeTask() });
   const has = (text: string) => view.render(120).some((line) => line.includes(text));
   assert.ok(has("╭ Activity") && has("╭ Thinking"));
-  assert.ok(has("still 0"), "the lobby shows the task's status");
   view.handleInput(KEY.alt("a"));
   assert.ok(!has("╭ Activity"));
   assert.match(view.render(120).at(-1)!, /activity log hidden · Alt\+A shows it/);
   assert.deepEqual(calls.savedPanels.at(-1), { conversation: true, activity: false, thinking: true });
   view.handleInput(KEY.alt("k"));
   assert.ok(!has("╭ Thinking"));
-  assert.ok(has("still 0"), "the task's status stays");
   view.handleInput(KEY.alt("c"));
   assert.ok(has("Every pane is hidden"));
   view.handleInput(KEY.alt("a"));
