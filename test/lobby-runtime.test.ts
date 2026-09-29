@@ -99,7 +99,7 @@ function fakeUi() {
       return options[0];
     },
   };
-  return { ui, overlay, widgets, notes, written };
+  return { ui, overlay, widgets, mounted, notes, written };
 }
 
 function project(owned: boolean) {
@@ -317,5 +317,26 @@ test("switching to a background session stops its process, then asks pi to run i
   } finally {
     await stop(fake, ctx);
     setSessionLauncher(undefined);
+  }
+});
+
+test("while the lobby is hidden a one-line status shows under the editor, and it clears when the lobby opens or bot-lobby is minimized", async () => {
+  setMinimized(false);
+  const { fake, ui, ctx } = await start(false);
+  try {
+    hideLobby();
+    const anchor = () => (ui.mounted.get(ANCHOR_KEY) as unknown as { render(width: number): string[] }).render(100);
+    const idle = anchor();
+    assert.equal(idle.length, 1);
+    assert.match(idle[0]!, /bot-lobby.*idle.*Alt\+L opens/);
+    showLobby();
+    assert.deepEqual(anchor(), [], "the lobby is up: no status line");
+    hideLobby();
+    assert.equal(anchor().length, 1, "hidden again: the line is back");
+    setMinimized(true);
+    assert.deepEqual(anchor(), [], "minimized bot-lobby shows nothing");
+    setMinimized(false);
+  } finally {
+    await stop(fake, ctx);
   }
 });
