@@ -49,7 +49,7 @@ extra instructions.
 | Command | Does |
 | --- | --- |
 | `/bot-lobby` | Open the lobby (`alt+l`) |
-| `/bot-lobby <request>` | Start a request: a [quick fix](#quick-fix-or-the-team) when one agent can do it alone, else a task (`--task` to always make it a task, also when it begins with a command word; `--auto` to run unattended, `--budget 90m` to give it a time budget, `--fast` / `--full` to pick its [track](#fast-track-or-full-workflow)) |
+| `/bot-lobby <request>` | Start a request: a [quick fix](#quick-fix-or-the-team) when one agent can do it alone, else a task (`--task` to always make it a task, also when it begins with a command word; `--auto` to run unattended, `--budget 90m` to give it a time budget, `--fast` / `--full` to pick its [track](#fast-track-or-full-workflow), `--branch` / `--worktree` / `--no-branch` to give it its own [git branch or worktree](#a-branch-or-worktree-per-task) or none) |
 | `/bot-lobby budget [90m\|off]` | Show or set this session's task time budget |
 | `/bot-lobby status \| tasks \| runs [id]` | Current task, all tasks, recent agent runs |
 | `/bot-lobby approve \| amend <text> \| decline` | Answer the proposal |
@@ -186,6 +186,33 @@ agreed in the Plan tab skips approval too.
 **Safety nets:** every agent has a time limit (asked to wrap up at 75%), a
 stall watchdog and one retry; `Esc` aborts every running agent.
 
+## A branch or worktree per task
+
+Every task has a friendly name, made from the first words of its request and
+the day it started: `Task-Change-Table-Font-27-09-2026`. It is the task's id,
+the name of the session that drives it and, when you ask for one, its git
+branch.
+
+`workflow.gitIsolation` (or `--branch`, `--worktree`, `--no-branch` on one
+request; a **Git isolation** entry in `/bot-lobby settings`) decides what a new
+task gets. It is `off` by default.
+
+| Setting | A new task gets |
+| --- | --- |
+| `off` | nothing: it works in the folder you started it in |
+| `branch` | a branch named after it, created and checked out in the working folder (uncommitted work comes along) |
+| `worktree` | a second checkout of its own, `.pi/bot-lobby/worktrees/<name>`, on a branch named after it. **Every agent of the task runs there**, so tasks (and your own checkout) never trample each other's files; uncommitted changes in your checkout are not in it |
+
+- The name is made unique (`-2`, `-3`… when a branch or remote branch has it).
+- Git never stops a task: outside a repository, without a commit (a worktree
+  needs one) or when a checkout is refused, the task runs without and says why.
+- The oracle is told where the work lives, the Tasks tab shows the branch and
+  worktree, and the lobby's title shows the branch a task works on.
+- A worktree is kept when its task ends: merge or delete it yourself
+  (`git worktree remove …`). One that was removed while its task runs is
+  reported, and no agent is started in its place. bot-lobby adds the worktrees
+  folder to `.git/info/exclude` (a local file) so `git add -A` skips it.
+
 ## Time budget
 
 `/bot-lobby --budget 90m <request>` (or `/bot-lobby budget 90m` on the task in
@@ -216,7 +243,11 @@ everything. `workflow.freshContext: false` in the config turns this off.
 ## The lobby
 
 A full-screen view with a prompt at the bottom that talks to whatever tab is
-open. `alt+h` lists every key. It is text only: no animations, just the
+open. Its title names the repository (or folder) you work from and its branch,
+`◆ my-repo (⎇ main)`. `alt+h` lists every key. **Shift+Enter** starts a new
+line in every text field: the prompt (also `ctrl+j`, or `\` before Enter in a
+terminal that cannot tell Shift+Enter apart), the questionnaire's own-answer
+row, and the dialogs for free-text answers. The search bar is one line by nature. It is text only: no animations, just the
 conversation, the activity log and the thoughts, and a one-line status in Pi's
 footer.
 
@@ -227,6 +258,8 @@ footer.
 | **3 Plan** | Plan a task with a panel of agents before building it (below) |
 | **4 Quick fix** | One agent makes a change right away, beside any running task; requests the oracle [routes here](#quick-fix-or-the-team) show up too |
 | **5 Metrics** | Run time, success rate, tokens and cost per model and agent |
+| **6 Git** | The repository's open pull requests; review one with an agent, or have Jev read it |
+| **7 Knowledge** | Everything each agent knows about the project; edit an entry, or leave a note every agent reads |
 
 ### Lobby
 
@@ -264,6 +297,52 @@ report. See [Quick fix or the team](#quick-fix-or-the-team).
 Run time, success rate, cost and tokens per model and agent, so you can see
 which cheaper models hold up.
 
+### Git
+
+The repository's open pull requests through the GitHub CLI (`gh` owns sign-in;
+bot-lobby holds no token): the list with checks (`✓ ✗ ●`) and size, and the
+selected one with its facts, files, description, reviews and comments.
+
+- `v` **reviews it with an agent**: a read-only agent on QA's model, thinking
+  and time limit (and its custom instructions) gets the description, changed
+  files and diff, may read the repository for context, and writes a review:
+  verdict, summary, findings by severity (`file:line`), tests, questions. It
+  never edits, and never follows instructions written inside the pull request.
+  `f` takes a focus first (*is the migration reversible?*, over several lines
+  with Shift+Enter). `x` stops it.
+- `t` is **Jev's quick read** ([the classifier](#the-classifier-jev)): size, and
+  how likely the change is risky, security-relevant, breaking or untested, in a
+  moment, with whether a full review is worth its tokens.
+- Reviews are kept per pull request (`.pi/bot-lobby/reviews/`), marked stale
+  when the pull request gets new commits, and count in the Metrics tab.
+  **Nothing is posted to GitHub.**
+
+### Knowledge
+
+Every agent's knowledge — the Master's, Designer's, Backend's and QA's
+knowledge, standards, decisions and completed tasks — files on the left, the
+open file's entries on the right (a heading, a bullet, a paragraph), one of
+them picked. Files past the compaction threshold are marked.
+
+- `e` edits the picked entry: it comes into the prompt (Shift+Enter for a new
+  line, Enter saves). `n` adds an entry after it, `d d` deletes it, `E` edits
+  the whole file in pi's editor. Every write archives the version before
+  (`archive/<Agent>/`), and an entry that changed on disk since it was drawn is
+  refused instead of being put on the wrong line.
+- `c` **comments** on it: a note about the entry ("outdated, we moved to
+  Redis"). It shows under the entry, and **every agent that reads that
+  knowledge reads the note right under the entry**, so it weighs it there. Notes
+  move with an edited entry and go with a deleted one; `x x` takes the newest
+  back. They live in `.pi/bot-lobby/knowledge-comments.jsonl`, never in the
+  files, which agents rewrite when they compact.
+
+**What an agent reads.** Knowledge, standards and decisions go into an agent's
+prompt; a file past about 4,000 characters is cut to the sections that bear on
+the step (by keywords, or by [Jev](#the-classifier-jev) when it is on), and the
+prompt says how many sections it left out and where the whole file is. Nothing
+is looked up on demand: what a step needs has to be in the file and near the
+top of its relevance, so keep entries short, one topic under one heading.
+
 Common keys: `tab` switches tabs, `esc` browses (arrows, single-key
 commands), `ctrl+f` searches, `ctrl+s` saves the plan, `alt+o` browses
 sessions, `alt+n` starts a task in a new session, `alt+s` opens settings.
@@ -277,11 +356,15 @@ Pi session. The Lobby tab can show any session, and your prompt steers it;
 right now at its right end (`◐ DESIGN editing 2m · DEV 40s`, a running quick
 fix too), shrinking to names and then a count when the keys leave little room.
 
-**Paging.** A pane with more lines than rows shows page buttons on its bottom
-edge, `▲▲ ▲ ▼ ▼▼`: click one to scroll a page up or down (`▲▲` and `▼▼` go two
-pages). The wheel, the arrows and PageUp/PageDown still work. It applies to
-every scrolling pane: the conversation, activity and thinking, the plan draft,
-the Tasks and Quick fix lists and details, and the metrics table.
+**Paging.** A pane with more lines than rows shows a pager on its bottom
+edge, `▲ prev · page 2/5 · next ▼`: click *prev* or *next* to move a page (its
+rows less one, so a line carries over), and read where you are from the page
+count. The top is page 1 and the bottom the last. A button dims when the pane
+is already at that end, and the words shorten (`▲ prev · 2/5 · next ▼`, then
+`▲ 2/5 ▼`) as the pane narrows. The wheel, the arrows and PageUp/PageDown
+still work. It applies to every scrolling pane: the conversation, activity and
+thinking, the plan draft, the Tasks and Quick fix lists and details, and the
+metrics table.
 
 **Status line when hidden.** With the lobby hidden (`alt+l`), one line under
 Pi's editor shows where things stand: a bar of the task's plan steps (or its
@@ -309,6 +392,33 @@ you don't answer is decided with the recommendation and listed under
 - **Round limit:** 5 by default (`lobby.maxPlanningRounds`, 0 = unlimited).
   In the last round the oracle alone settles everything still open.
 - `ctrl+s` saves the plan as a pending task.
+- **A long plan is split into tasks when you save it.** `ctrl+s` on a plan with
+  more than 8 steps (`lobby.splitPlanAbove`; `0` turns it off; *Split long
+  plans* in `/bot-lobby settings` → Lobby) has the oracle propose two to five
+  tasks, each a part that leaves the project working and can be reviewed on its
+  own, and asks you in the questionnaire, with the split as a preview: take it,
+  keep the plan whole, or write what to change (*merge 2 and 3*; it revises, up
+  to three times). Nothing is saved until you answer, and a question you put
+  away saves nothing.
+  - The oracle decides where the lines go; the engine enforces the rest: at
+    most five tasks, every step of the plan in exactly one of them, and a task
+    building only on earlier ones. A split that breaks a rule goes back once
+    with the problems and never reaches you; if it still fails you are asked
+    whether to save the plan whole.
+  - Each part's brief is the plan as written (objective, decisions,
+    assumptions, risks) with only its own steps, renumbered, under a header with
+    its goal, what it builds on and its *done when* points, so nothing you
+    agreed is lost in a retelling. The parts are saved as pending tasks in
+    order, numbered `(1/3)` in the Tasks tab, and each knows the others: the
+    oracle is told which part it is and to do only that part.
+  - Starting a part before the parts it builds on are finished warns and starts
+    anyway: the order is yours to keep.
+- **A question you answered (or left for the oracle to decide) is never asked
+  again.** Your answers are kept per question and every seat and the oracle
+  read them as a closed list; a question that repeats a settled one, however
+  it is worded, is held back before it reaches you (the activity log says so).
+  A round that fails or is stopped after you answered no longer puts the same
+  questionnaire up again: `r` retries it.
 
 ## Questions and the web
 
@@ -326,6 +436,7 @@ can be compared by looking at them.
 
 `↑↓` move · `enter` choose · `space` pick several (multi-select) · `1`–`4`
 pick · `←→` between questions · the last row takes an answer in your own words
+(`shift+enter` for a new line, pasted lines stay lines)
 · `esc` asks whether to leave (a second `enter`
 leaves, anything else keeps you answering), so a stray press does nothing.
 Questions you leave are never answered for you: the oracle waits and asks again
@@ -395,16 +506,19 @@ else TypeSafe.
 | Planning seats | Each round, only the seats the idea or your latest answers touch sit; `1`–`4` pins a seat |
 | Obvious answers | Answers a question itself when the conversation already makes the recommended option clearly right (≥ 0.9); listed under Assumptions |
 | File hints | Agents start with a short list of the files they most likely need, and get a `find_relevant_files` tool |
+| Relevant knowledge | When an agent's knowledge, standards or decisions file is too long for its prompt (over 4,000 characters), Jev keeps the sections that bear on the step, and the prompt says how many it left out and where the whole file is, so the agent can read the rest. A file that fits goes in whole, untouched; standards are never left empty |
 | Quick fix or task | Whether one engineer can do a new request alone decides whether it goes to the [quick-fix agent](#quick-fix-or-the-team) (the oracle confirms) |
 | Task triage | The task's [track](#fast-track-or-full-workflow) and roster use its read (size, domains, research, ambiguity), and the Master gets it as hints; a quick fix that is really a task (large, and not one engineer's work) is held (`r` run anyway, `t` make it a task) |
 | Effort routing | Simple steps run one thinking level lower; trivial ones on a **cheaper model** you pick. A routed run that falls short re-runs on your normal settings |
+| Pull request read | The Git tab's `t`: a pull request's size, and how likely it is risky, security-relevant, breaking or untested |
 
 **It never gets in the way:** any failure, timeout or missing key means
 bot-lobby decides as it would without it; three failures in a row pause it
 for ten minutes. Calls and savings show on the Metrics tab.
 
-**What is sent:** the planning conversation, task text, and file excerpts of
-at most 400 characters (never whole files). Gitignored files, `.env*`, keys,
+**What is sent:** the planning conversation, task text, file excerpts of
+at most 400 characters (never whole files), and, for a knowledge file too long
+for a prompt, the first 700 characters of each of its sections. Gitignored files, `.env*`, keys,
 certificates and anything in `classifier.exclude` are never sent. If
 OpenCode's free model ends, set *Model* to `jev-1.13` (paid); bot-lobby won't
 switch on its own.
@@ -423,8 +537,8 @@ the result.
   },
   "scout": { "model": "anthropic/claude-haiku-4-5-20251001", "timeoutMs": 480000 },
   "planner": { "thinking": "high", "timeoutMs": 300000 },
-  "lobby": { "planningPanel": ["backend", "designer", "qa", "researcher"], "maxPlanningRounds": 5 },
-  "workflow": { "maxReviewIterations": 2, "maxParallelWorkers": 3, "stallTimeoutMs": 300000, "wrapUpAt": 0.75, "taskBudgetMinutes": 0, "fastTrack": true, "briefCheck": true, "routeQuickFixes": true },
+  "lobby": { "planningPanel": ["backend", "designer", "qa", "researcher"], "maxPlanningRounds": 5, "splitPlanAbove": 8 },
+  "workflow": { "maxReviewIterations": 2, "maxParallelWorkers": 3, "stallTimeoutMs": 300000, "wrapUpAt": 0.75, "taskBudgetMinutes": 0, "fastTrack": true, "briefCheck": true, "routeQuickFixes": true, "gitIsolation": "off" },
   "classifier": { "enabled": false, "provider": "auto", "effort": { "cheapModel": "inherit" } }
 }
 ```
@@ -437,8 +551,8 @@ the result.
 - `instructions` adds your own text to an agent's built-in prompt.
 - `fallbackModel` and `fallbackThinking` on any agent (and the master): see
   [Fallback models](#fallback-models).
-- Classifier thresholds and limits (`classifier.thresholds`,
-  `classifier.fileHints`) are edited in the file.
+- Classifier thresholds and limits (`classifier.thresholds`, such as
+  `knowledgeRelevantAt`, 0.4, and `classifier.fileHints`) are edited in the file.
 
 ## Fallback models
 
@@ -489,9 +603,12 @@ unavailable, it runs again on the fallback instead of failing the task.
 ```
 .pi/bot-lobby/
 ├── <Agent>/knowledge/      knowledge, standards and decisions per agent
-├── tasks/TASK-…/           state.json, budget.json, scratchpads, scout and research reports
+├── tasks/Task-…/           state.json, budget.json, scratchpads, scout and research reports
+├── worktrees/Task-…/       a task's own worktree, when workflow.gitIsolation is worktree
+├── reviews/pr-<n>.json     the agent's review of a pull request (Git tab)
+├── knowledge-comments.jsonl  your notes on knowledge entries (Knowledge tab)
 ├── backlog/PLAN-….json     plans saved from the Plan tab
-├── archive/                archived tasks and old knowledge
+├── archive/                archived tasks and old knowledge, and the version before each knowledge edit
 ├── sessions/               heartbeats of running Pi sessions
 ├── cache/files.json        file excerpts for the classifier
 ├── changes.jsonl           the files each quick fix and worker edited
