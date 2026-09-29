@@ -30,6 +30,8 @@ import { describeRun, runFromLog } from "./run-summary.ts";
 import { modelLookup } from "./tools.ts";
 import { budgetLine, budgetState, parseMinutes, readBudget, setBudget, startClock } from "../state/budget.ts";
 import { qaStillDue } from "../workflow/track.ts";
+import type { GitIsolation } from "../schemas/configuration.ts";
+import { START_FLAG } from "./start-flags.ts";
 
 const HELP = [
   "/bot-lobby                  Open the lobby: tasks, plan, quick fix, metrics (alt+l)",
@@ -37,6 +39,7 @@ const HELP = [
   "/bot-lobby --task [--auto] <request>   Always a task (also when the request begins with a subcommand word)",
   "/bot-lobby --budget 90m <request>   Start a task with a time budget the oracle divides between its agents",
   "/bot-lobby --fast|--full <request>   Start a task on the fast track (straight to the agents it needs) or the full workflow, whatever it reads as",
+  "/bot-lobby --branch|--worktree|--no-branch <request>   Give the task its own git branch, or its own worktree, named after it (or neither), whatever workflow.gitIsolation says",
   "/bot-lobby budget [90m|off]  Show or set this session's task time budget",
   "/bot-lobby status [taskId]  Show the active task",
   "/bot-lobby tasks            List tasks",
@@ -59,12 +62,10 @@ const HELP = [
 /** Subcommands only win when no free-form text follows (so tasks still start). */
 const SUBCOMMANDS = new Set(["lobby", "help", "status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "accept", "budget", "knowledge", "config", "settings", "minimize", "restore", "claim", "auto", "start-plan", "switch"]);
 
+/** `Task-Change-Table-Font-27-09-2026`, or an older `TASK-add-login` id. */
 function isTaskId(value: string | undefined): boolean {
-  return Boolean(value && /^TASK-/.test(value));
+  return Boolean(value && /^task-/i.test(value));
 }
-
-/** A task start's leading flags: `--task` (always a task), `--auto`, `--fast`, `--full`, `--budget <time>` (or `--budget=<time>`). */
-const START_FLAG = /^--(task|auto|fast|full)(?=\s|$)\s*|^--budget(?:=|\s+)(\S+)\s*/;
 
 export interface ParsedCommand {
   sub: string | undefined;
@@ -79,6 +80,8 @@ export interface ParsedCommand {
   track?: "fast" | "full";
   /** `--task`: a task, never routed to the quick-fix agent. */
   task?: boolean;
+  /** `--branch`, `--worktree` or `--no-branch`: the task's git isolation, whatever the config says. */
+  isolation?: GitIsolation;
 }
 
 export function parseCommand(args: string): ParsedCommand {
@@ -86,12 +89,14 @@ export function parseCommand(args: string): ParsedCommand {
   // Leading flags start a task: what follows is its request, even when it begins with a subcommand word
   // (a background session started from the lobby sends `--task [--auto] <request>`).
   let flagged = false;
-  const extras: Pick<ParsedCommand, "auto" | "budget" | "budgetError" | "track" | "task"> = {};
+  const extras: Pick<ParsedCommand, "auto" | "budget" | "budgetError" | "track" | "task" | "isolation"> = {};
   for (let match = START_FLAG.exec(trimmed); match; match = START_FLAG.exec(trimmed)) {
     flagged = true;
     if (match[1] === "auto") extras.auto = true;
     else if (match[1] === "task") extras.task = true;
     else if (match[1] === "fast" || match[1] === "full") extras.track = match[1];
+    else if (match[1] === "branch" || match[1] === "worktree") extras.isolation = match[1];
+    else if (match[1] === "no-branch") extras.isolation = "off";
     else if (match[2] !== undefined) {
       const minutes = parseMinutes(match[2]);
       if (minutes) extras.budget = minutes;
@@ -324,7 +329,7 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
       return filtered.length > 0 ? filtered : null;
     },
     handler: async (args, ctx) => {
-      const { sub, rest, restText, auto, budget, budgetError, track, task } = parseCommand(args ?? "");
+      const { sub, rest, restText, auto, budget, budgetError, track, task, isolation } = parseCommand(args ?? "");
       if (budgetError) return ctx.ui.notify(`bot-lobby: ${budgetError}`, "warning");
       if (!sub) {
         if (!restText) {
@@ -332,7 +337,7 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
           return;
         }
         // A request one agent can do alone may go to the quick-fix agent once the oracle confirms; the rest start as tasks.
-        const started = await startRequest(pi, ctx, configDir, restText, { ...(auto ? { auto } : {}), ...(budget ? { budget } : {}), ...(track ? { track } : {}), ...(task ? { task } : {}) });
+        const started = await startRequest(pi, ctx, configDir, restText, { ...(auto ? { auto } : {}), ...(budget ? { budget } : {}), ...(track ? { track } : {}), ...(task ? { task } : {}), ...(isolation ? { isolation } : {}) });
         if (started === "task") autoOpenLobby();
         return;
       }
