@@ -6,7 +6,7 @@
  * answers become the user's turn for the next round.
  */
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { PanelQuestion } from "./planner.ts";
+import type { PanelQuestion, SettledQuestion } from "./planner.ts";
 import { MAX_HEADER, MAX_LABEL, MAX_OPTIONS, MAX_QUESTIONS, MIN_OPTIONS, RESERVED, type AskAnswer, type AskOption, type AskQuestion, type AskResult } from "../ask/types.ts";
 import type { Asker } from "../ask/dialog.ts";
 
@@ -64,6 +64,35 @@ function answerText(answer: AskAnswer | undefined): string | undefined {
   return answer.answer?.trim() || undefined;
 }
 
+/** A multi-line answer keeps its lines under the `→` that opens it. */
+function indented(text: string, by: string): string {
+  return text.replace(/\n/g, `\n${by}`);
+}
+
+/** Every question of the round with the answer the user gave it, in the order asked. */
+function answered(questions: readonly PanelQuestion[], results: readonly AskResult[]): Array<{ number: number; question: PanelQuestion; answer: AskAnswer | undefined; text: string | undefined }> {
+  const rows: Array<{ number: number; question: PanelQuestion; answer: AskAnswer | undefined; text: string | undefined }> = [];
+  results.forEach((result, chunk) => {
+    const offset = chunk * MAX_QUESTIONS;
+    for (let i = 0; i < MAX_QUESTIONS; i++) {
+      const question = questions[offset + i];
+      if (!question) break;
+      const answer = result.answers.find((entry) => entry.questionIndex === i);
+      rows.push({ number: offset + i + 1, question, answer, text: answerText(answer) });
+    }
+  });
+  return rows;
+}
+
+/**
+ * What the user's reply settled: each question of the round with its answer,
+ * or without one when they left it. The panel is never allowed to ask a
+ * settled question again.
+ */
+export function settledQuestions(questions: readonly PanelQuestion[], results: readonly AskResult[]): SettledQuestion[] {
+  return answered(questions, results).map(({ question, text }) => ({ from: question.from, question: question.text.replace(/\s+/g, " ").trim(), ...(text ? { answer: text } : {}) }));
+}
+
 /**
  * The user's turn for the next round: every question with who asked it and
  * the answer (`→ …`), their notes, and what they left unanswered. Undefined
@@ -72,27 +101,19 @@ function answerText(answer: AskAnswer | undefined): string | undefined {
 export function answerMessage(questions: readonly PanelQuestion[], results: readonly AskResult[]): string | undefined {
   const lines: string[] = [];
   const skipped: string[] = [];
-  const notes: string[] = [];
-  let answered = 0;
-  results.forEach((result, chunk) => {
-    if (result.globalNote?.trim()) notes.push(result.globalNote.trim());
-    const offset = chunk * MAX_QUESTIONS;
-    for (let i = 0; i < MAX_QUESTIONS; i++) {
-      const question = questions[offset + i];
-      if (!question) break;
-      const answer = result.answers.find((entry) => entry.questionIndex === i);
-      const text = answerText(answer);
-      const label = `${offset + i + 1}. [${question.from}] ${question.text.replace(/\s+/g, " ").trim()}`;
-      if (!text) {
-        skipped.push(label);
-        continue;
-      }
-      answered += 1;
-      lines.push(`${label}\n   → ${text}${answer?.kind === "custom" ? " (in my words)" : ""}`);
-      if (answer?.notes?.trim()) lines.push(`   note: ${answer.notes.trim()}`);
+  const notes = results.map((result) => result.globalNote?.trim()).filter((note): note is string => Boolean(note));
+  let count = 0;
+  for (const { number, question, answer, text } of answered(questions, results)) {
+    const label = `${number}. [${question.from}] ${question.text.replace(/\s+/g, " ").trim()}`;
+    if (!text) {
+      skipped.push(label);
+      continue;
     }
-  });
-  if (answered === 0 && notes.length === 0) return undefined;
+    count += 1;
+    lines.push(`${label}\n   → ${indented(text, "     ")}${answer?.kind === "custom" ? " (in my words)" : ""}`);
+    if (answer?.notes?.trim()) lines.push(`   note: ${indented(answer.notes.trim(), "     ")}`);
+  }
+  if (count === 0 && notes.length === 0) return undefined;
   return [
     "Answers to the panel's questions:",
     ...lines,

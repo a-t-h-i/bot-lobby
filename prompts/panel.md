@@ -18,6 +18,10 @@ questions and the user's answers, and the oracle's current draft plan.
 - Ask only what your seat owns (below), and only what would change how the
   task is built or verified. Never repeat a question that has been answered,
   or one another member already asked this round.
+- The conversation may carry an **Already settled with the user** list. Those
+  questions are closed, in any wording: never ask them again, not even
+  rephrased. If an answer looks wrong or thin, say so under Notes; do not
+  ask it a second time.
 - Ask at most two questions, the most important first. They go to the
   oracle, who picks at most four for the user each round across the whole
   panel and decides the rest with your recommendation, so make each one
