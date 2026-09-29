@@ -20,8 +20,7 @@ import { archiveTask as archiveTaskOnDisk, deleteTask as deleteTaskOnDisk, listA
 import { discardPlannedTask, listPlannedTasks, type PlannedTask } from "../state/backlog.ts";
 import { appendMetrics, readClassifierMetrics, readMetrics, type MetricStatus } from "../state/metrics.ts";
 import { describeToolCall } from "../pi/activity.ts";
-import { applyStatus, currentZenTask, isMinimized, onMinimizeChange, onRunUpdates, persistedRuns, setMinimized, setWidgetSuppressor, ZenScene, zenSnapshot } from "../pi/ui.ts";
-import { panelLines } from "../pi/zen.ts";
+import { applyStatus, currentZenTask, isMinimized, onMinimizeChange, onRunUpdates, setMinimized, taskSnapshot } from "../pi/ui.ts";
 import { shortTitle } from "../text.ts";
 import { isSubagentProcess } from "../pi/quiet.ts";
 import { modelRef, resolveLobbyProfile, resolvePanelProfile } from "../pi/model-support.ts";
@@ -43,7 +42,6 @@ import { LobbyView, type LiveSession, type LobbyHost, type SwitchTarget, type Ta
 import { lobbyTheme } from "./theme.ts";
 import { deliverComments, onOwnerEvent, setAuto } from "../pi/owner.ts";
 import { openEntrySettings, openSettings } from "../pi/settings-ui.ts";
-import { budgetClock } from "../state/budget.ts";
 
 export const ANCHOR_KEY = "bot-lobby-anchor";
 export { deliverComments };
@@ -59,7 +57,6 @@ interface Runtime {
   visible: boolean;
   /** Stepped aside while pi shows a dialog. */
   asideForPrompt: boolean;
-  scene: ZenScene;
   quickfix: QuickFixQueue;
   planner?: PlanningSession;
   issues: IssuesState;
@@ -426,13 +423,6 @@ function deleteTask(state: Runtime, taskId: string, where: "list" | "archive"): 
   return `deleted ${taskId} for good`;
 }
 
-/** A task's status box without animations, for a session other than this window's. */
-function taskScene(state: Runtime, task: Task, width: number, height: number): string[] {
-  const now = Date.now();
-  const time = budgetClock(state.root, state.configDir, task.id, now);
-  return panelLines(task, persistedRuns(task), now, false, { width, rows: Math.floor(height / 0.75), still: true, theme: state.ctx.ui.theme, ...(time ? { time } : {}) });
-}
-
 function seatProfile(state: Runtime, member: PanelMember) {
   return resolvePanelProfile(loadConfig(), member, {
     lookup: modelLookup(state.ctx),
@@ -518,14 +508,8 @@ function host(state: Runtime, tui: TUI): LobbyHost {
     theme: () => lobbyTheme(state.ctx.ui.theme),
     sessionId: () => state.ctx.sessionManager.getSessionId(),
     zen: () => {
-      const snapshot = zenSnapshot();
+      const snapshot = taskSnapshot();
       return { ...(snapshot.task ? { task: snapshot.task } : {}), runs: snapshot.runs };
-    },
-    // The scene's height budget is 3/4 of the rows it is given.
-    scene: (width, height, animated) => state.scene.lines(width, Math.floor(height / 0.75), state.ctx.ui.theme, Date.now(), !animated),
-    advanceScene: (now) => {
-      state.scene.advance(now);
-      return state.scene.delay(now);
     },
     feed: lobbyFeed,
     masterBusy: () => !state.ctx.isIdle(),
@@ -577,7 +561,6 @@ function host(state: Runtime, tui: TUI): LobbyHost {
     sessionChat: (sessionId) => chats.chat(sessionId),
     hasOlderChat: (sessionId) => chats.hasOlder(sessionId),
     chatHistory: (sessionId) => chatHistory(state, sessionId),
-    taskScene: (task, width, height) => taskScene(state, task, width, height),
     requestRender: () => tui.requestRender(),
   };
 }
@@ -716,7 +699,6 @@ function shutdown(): void {
   state.planner?.cancel();
   state.view?.dispose();
   state.handle?.hide();
-  setWidgetSuppressor(() => false);
   onRunUpdates(undefined);
   onMinimizeChange(undefined);
 }
@@ -755,7 +737,6 @@ export function initLobby(pi: ExtensionAPI, ctx: ExtensionContext, configDir: st
     asking: false,
     mouse: false,
     inSettings: false,
-    scene: new ZenScene(),
     quickfix: undefined as unknown as QuickFixQueue,
     issues: new IssuesState(execCommand, ctx.cwd, rerender),
   };
@@ -781,7 +762,6 @@ export function initLobby(pi: ExtensionAPI, ctx: ExtensionContext, configDir: st
   // Only the newest messages are kept; the feed learns whether earlier ones exist, and loads them when scrolled to.
   lobbyFeed.seedChat(chatFromEntries(ctx.sessionManager.getBranch(), Number.POSITIVE_INFINITY));
   state.unsubscribeFeed = lobbyFeed.onChange(rerender);
-  setWidgetSuppressor(() => runtime?.visible === true);
   onRunUpdates((runs) => lobbyFeed.runs(runs));
   onMinimizeChange((value) => {
     if (value) hideLobby();

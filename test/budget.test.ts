@@ -23,7 +23,6 @@ import {
 } from "../src/state/budget.ts";
 import { parseCommand } from "../src/pi/commands.ts";
 import { parseMoreTime, parseWorkerResult } from "../src/roles/worker.ts";
-import { sceneMetrics } from "../src/pi/zen-metrics.ts";
 import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
 import { createTask, type Task, type TaskState } from "../src/schemas/task.ts";
 import { createTaskDir, ensureProjectStructure, loadTask, saveTask } from "../src/state/persistence.ts";
@@ -32,6 +31,8 @@ import { setAutoMode } from "../src/state/auto.ts";
 import { runWorkflowAction, type OrchestrateParams, type WorkflowDeps } from "../src/workflow/workflow.ts";
 import type { ProcessOutcome, ProcessRunner, ProcessRunOptions } from "../src/execution/pi-runner.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
+
+const LENIENT = { ...DEFAULT_CONFIG, workflow: { ...DEFAULT_CONFIG.workflow, briefCheck: false } };
 
 const MINUTE = 60_000;
 
@@ -122,15 +123,6 @@ test("a worker out of time says where it left off and how much more it needs", (
   assert.equal(parseWorkerResult("backend", "## Completed\nall of it").leftOff, undefined);
 });
 
-test("the status box reads against the budget, and each agent against its minutes", () => {
-  const task = createTask("T", "x", new Date(0).toISOString());
-  const run: AgentRun = { runId: "r", taskId: "T", domain: "backend", role: "worker", status: "running", output: "", attempts: 1, startedAt: new Date(0).toISOString(), allotMs: 30 * MINUTE, extendedMs: 10 * MINUTE };
-  const metrics = sceneMetrics(task, [run], 12 * MINUTE, { usedMs: 34 * MINUTE, totalMs: 90 * MINUTE });
-  assert.equal(metrics.elapsedLabel, "34m of 1h 30m");
-  assert.equal(metrics.slots.find((slot) => slot.id === "dev")?.elapsedLabel, "12/40m");
-  assert.equal(sceneMetrics(task, [], 12 * MINUTE).elapsedLabel, "12m 00s", "without a budget, the time since the task started");
-});
-
 /* ------------------------------------------------------------ the workflow */
 
 const FLOW: TaskState[] = ["clarifying", "scouting", "synthesizing", "awaiting_approval", "planning"];
@@ -164,7 +156,7 @@ function budgeted(options: { minutes?: number; used?: number; choose?: WorkflowD
   const seen: Seen = { prompts: [], times: [] };
   const titles: string[] = [];
   const deps: WorkflowDeps = {
-    root, configDir: ".pi", cwd: root, config: DEFAULT_CONFIG,
+    root, configDir: ".pi", cwd: root, config: LENIENT,
     ask: options.ask ?? (async () => undefined),
     choose: async (title, choices) => (titles.push(title), options.choose ? options.choose(title, choices) : undefined),
     notify: () => {},
@@ -271,7 +263,7 @@ test("a task without a budget runs exactly as before", async () => {
   task.domains = ["backend"];
   task.plan = PLAN;
   saveTask(root, ".pi", task);
-  const deps: WorkflowDeps = { root, configDir: ".pi", cwd: root, config: DEFAULT_CONFIG, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess: outOfTime(seen) };
+  const deps: WorkflowDeps = { root, configDir: ".pi", cwd: root, config: LENIENT, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess: outOfTime(seen) };
   const result = await runWorkflowAction({ action: "implement", taskId: "TASK-1", domain: "backend", task: "Add it" } as OrchestrateParams, deps);
   assert.equal(result.ok, true, result.message);
   assert.equal(seen.times[0], undefined);

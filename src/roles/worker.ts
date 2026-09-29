@@ -16,7 +16,7 @@ export const workerSpec: RoleSpec = {
   contract: [
     "### Output contract",
     "Respond with exactly these sections and nothing else: `## Completed`, `## Files Changed`,",
-    "`## Verification`, `## Notes`, `## Blockers`, `## Dependencies Needed`, `## Architecture Changes`,",
+    "`## Verification`, `## Brief Check` (one `- criterion — met|not met — evidence` line per \"Done when\" item of your brief), `## Notes`, `## Blockers`, `## Dependencies Needed`, `## Architecture Changes`,",
     "`## Knowledge Proposals` (`- knowledge: ...`, `- standard: ...`, or `- decision: ...`).",
     "`## Files Changed` entries are `- \\`path\\` — change`.",
     "`## Verification` entries are `- command — result`.",

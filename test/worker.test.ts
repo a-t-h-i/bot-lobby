@@ -14,6 +14,8 @@ import { runWorkflowAction, type OrchestrateParams, type WorkflowDeps } from "..
 import { pendingApprovals } from "../src/workflow/approvals.ts";
 import type { ProcessRunner } from "../src/execution/pi-runner.ts";
 
+const LENIENT = { ...DEFAULT_CONFIG, workflow: { ...DEFAULT_CONFIG.workflow, briefCheck: false } };
+
 const WELL_FORMED = [
   "## Completed",
   "Added pagination to the users endpoint.",
@@ -73,7 +75,7 @@ function makeDeps(overrides: Partial<WorkflowDeps> = {}): WorkflowDeps {
     root: mkdtempSync(join(tmpdir(), "dh-w-")),
     configDir: ".pi",
     cwd: process.cwd(),
-    config: DEFAULT_CONFIG,
+    config: LENIENT,
     ask: async () => undefined,
     choose: async () => undefined,
     notify: () => {},
@@ -241,8 +243,8 @@ test("a failed worker run is reported without changing the workflow state", asyn
 
 test("auto-approval is recorded as a decision when the config disables the gate", async () => {
   const config = {
-    ...DEFAULT_CONFIG,
-    workflow: { ...DEFAULT_CONFIG.workflow, requireApprovalForDependencies: false, requireApprovalForArchitectureChanges: false },
+    ...LENIENT,
+    workflow: { ...LENIENT.workflow, requireApprovalForDependencies: false, requireApprovalForArchitectureChanges: false },
   };
   const deps = makeDeps({ config });
   withTask(deps, "planning");
@@ -282,4 +284,19 @@ test("implement records each worker delegation on the task for the plan checklis
     ["designer", "Step 2: style the pager.", "success"],
   ]);
   assert.ok(records.every((record) => record.runId && record.startedAt && record.finishedAt));
+});
+
+test("a vague delegation is sent back once with nothing started; the same text again goes through", async () => {
+  let runs = 0;
+  const deps = makeDeps({ config: DEFAULT_CONFIG, runProcess: async () => { runs++; return { exitCode: 0, stdout: workerReply(WELL_FORMED), stderr: "", killed: false, timedOut: false }; } });
+  withTask(deps, "planning");
+  const vague = { action: "implement", domain: "backend", task: "Make the users list better." } as const;
+  const sent = await act(deps, vague);
+  assert.equal(sent.ok, false);
+  assert.match(sent.message, /brief was not sent/);
+  assert.equal(runs, 0, "no worker started");
+  assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.state, "planning", "the state did not move");
+  assert.equal((await act(deps, vague)).ok, true, "the oracle sent it again unchanged");
+  const concrete = await act(deps, { action: "implement", domain: "designer", task: "In `src/ui/list.tsx`, add limit and offset query parameters." });
+  assert.equal(concrete.ok, true, "a short concrete task needs no ceremony");
 });

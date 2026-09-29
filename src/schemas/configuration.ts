@@ -72,6 +72,8 @@ export interface WorkflowConfig {
   taskBudgetMinutes: number;
   /** Small, clear, low-risk requests take the fast track (no scouts, proposal or plan; QA only when tests are needed); false puts every task on the full workflow. */
   fastTrack: boolean;
+  /** A delegation that names nothing concrete, or is long without done criteria, is sent back to the oracle once for a fuller brief (sending it again unchanged goes through). */
+  briefCheck: boolean;
   /** A new request that one agent can do alone goes to the quick-fix agent once the oracle confirms; false makes every request a task. */
   routeQuickFixes: boolean;
 }
@@ -92,12 +94,10 @@ export function isPanelMember(value: string): value is PanelMember {
 }
 
 /**
- * Lobby panes that can be shown or hidden: the Lobby tab's animated oracle and
- * agents (off by default: the lobby keeps only the task's status, and the
- * animations show above pi's editor while the lobby is hidden), the
- * conversation, the activity log and thinking.
+ * Lobby panes that can be shown or hidden: the conversation, the activity log
+ * and thinking.
  */
-export const LOBBY_PANELS = ["animations", "conversation", "activity", "thinking"] as const;
+export const LOBBY_PANELS = ["conversation", "activity", "thinking"] as const;
 export type LobbyPanel = (typeof LOBBY_PANELS)[number];
 
 /** The full-screen lobby. */
@@ -214,6 +214,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     freshContext: true,
     taskBudgetMinutes: 0,
     fastTrack: true,
+    briefCheck: true,
     routeQuickFixes: true,
   },
   knowledge: {
@@ -227,7 +228,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     planningPanel: [...PANEL_MEMBERS],
     autoAsk: true,
     issues: false,
-    panels: { animations: false, conversation: true, activity: true, thinking: true },
+    panels: { conversation: true, activity: true, thinking: true },
     keys: {},
     mouse: true,
     maxPlanningRounds: 5,
@@ -353,6 +354,7 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
   const workflow = { ...DEFAULT_CONFIG.workflow, ...(src.workflow as Partial<WorkflowConfig> | undefined) };
   workflow.freshContext = workflow.freshContext !== false;
   workflow.fastTrack = workflow.fastTrack !== false;
+  workflow.briefCheck = workflow.briefCheck !== false;
   workflow.routeQuickFixes = workflow.routeQuickFixes !== false;
   workflow.taskBudgetMinutes = typeof workflow.taskBudgetMinutes === "number" && workflow.taskBudgetMinutes > 0 ? Math.min(24 * 60, Math.round(workflow.taskBudgetMinutes)) : 0;
   const knowledge = { ...DEFAULT_CONFIG.knowledge, ...(src.knowledge as Partial<KnowledgeConfig> | undefined) };

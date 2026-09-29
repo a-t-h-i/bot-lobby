@@ -358,7 +358,7 @@ function entryDescription(kind: SettingsKind, view: EntryView): string {
 /** The lobby's on/off settings as the settings menu lists them; `panel:*` are the Lobby tab's panes. */
 export type LobbySwitch = "autoOpen" | "autoAsk" | "mouse" | "issues" | `panel:${LobbyPanel}`;
 
-const PANEL_SWITCH_LABELS: Record<LobbyPanel, string> = { animations: "Animations in the lobby", conversation: "Conversation pane", activity: "Activity log pane", thinking: "Thinking pane" };
+const PANEL_SWITCH_LABELS: Record<LobbyPanel, string> = { conversation: "Conversation pane", activity: "Activity log pane", thinking: "Thinking pane" };
 
 export const LOBBY_SWITCHES: ReadonlyArray<{ id: LobbySwitch; label: string; help: string }> = [
   { id: "autoOpen", label: "Open with a task", help: "open the lobby when this session starts or resumes a task" },
@@ -368,7 +368,7 @@ export const LOBBY_SWITCHES: ReadonlyArray<{ id: LobbySwitch; label: string; hel
   ...LOBBY_PANELS.map((panel) => ({
     id: `panel:${panel}` as const,
     label: PANEL_SWITCH_LABELS[panel],
-    help: panel === "animations" ? "the animated oracle and agents on the Lobby tab; off keeps only the task's status (they still show above pi's editor while the lobby is hidden); alt+z toggles it too" : "shown on the Lobby tab; its key in the lobby toggles it too",
+    help: "shown on the Lobby tab; its key in the lobby toggles it too",
   })),
 ];
 

@@ -15,6 +15,8 @@ import { createTaskDir, ensureProjectStructure, loadTask, saveTask } from "../sr
 import { transition } from "../src/state/task-state.ts";
 import { runWorkflowAction, type OrchestrateParams, type WorkflowDeps } from "../src/workflow/workflow.ts";
 
+const LENIENT = { ...DEFAULT_CONFIG, workflow: { ...DEFAULT_CONFIG.workflow, briefCheck: false } };
+
 function desk(events: DeskEvent[] = []): FileDesk {
   return new FileDesk("/repo", (event) => events.push(event), () => 1000);
 }
@@ -243,7 +245,7 @@ test("implement with assignments runs domains in parallel and hands shared files
     root,
     configDir: ".pi",
     cwd: root,
-    config: DEFAULT_CONFIG,
+    config: LENIENT,
     ask: async () => undefined,
     choose: async () => undefined,
     notify: () => {},
@@ -287,7 +289,7 @@ test("parallel assignments reject a repeated domain", async () => {
   saveTask(root, ".pi", task);
   const result = await runWorkflowAction(
     { action: "implement", taskId: "TASK-1", assignments: [{ domain: "backend", task: "a" }, { domain: "backend", task: "b" }] } as OrchestrateParams,
-    { root, configDir: ".pi", cwd: root, config: DEFAULT_CONFIG, ask: async () => undefined, choose: async () => undefined, notify: () => {} },
+    { root, configDir: ".pi", cwd: root, config: LENIENT, ask: async () => undefined, choose: async () => undefined, notify: () => {} },
   );
   assert.equal(result.ok, false);
   assert.match(result.message, /distinct domains/);

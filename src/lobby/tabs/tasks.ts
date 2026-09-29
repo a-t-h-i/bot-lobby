@@ -7,7 +7,7 @@
 import { TERMINAL_STATES, taskRequest, type Task } from "../../schemas/task.ts";
 import type { PlannedTask } from "../../state/backlog.ts";
 import type { PlanComment } from "../../state/comments.ts";
-import { planChecklist } from "../../pi/zen.ts";
+import { planChecklist } from "../../pi/plan-checklist.ts";
 import { persistedRuns } from "../../pi/ui.ts";
 import { describeRun, runFromLog } from "../../pi/run-summary.ts";
 import { pendingApprovals } from "../../workflow/approvals.ts";
