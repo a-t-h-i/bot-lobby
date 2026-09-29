@@ -165,3 +165,33 @@ test("the decision record reads each answer, several picks, the user's own words
   );
   assert.equal(askedDecision("DESIGN", [layout, colour], { answers: [], cancelled: true }), "DESIGN asked the user about Layout, Colour; they did not answer, so DESIGN decides.");
 });
+
+test("questions the user leaves are put to them again, and the designer decides only when they say so", async () => {
+  const gone = { answers: [], cancelled: true };
+  const seen: Seen[] = [];
+  let asked = 0;
+  const offered: string[][] = [];
+  const answers = ["Answer the questions now", "Let DESIGN decide with its recommendation"];
+  const first = project({
+    askQuestions: async () => ((asked += 1), gone),
+    choose: async (_title, options) => (offered.push([...options]), answers.shift()),
+  }, seen);
+  await first.act({ action: "implement", domain: "designer", task: "Build the page" });
+  assert.equal(asked, 2, "left once, asked again on their say-so, and decided only after they let it");
+  assert.deepEqual(seen[0]!.answer, gone);
+  assert.match(offered[0]![0]!, /Answer the questions now/);
+
+  // They answer on the second try: the answers are used.
+  const again: Seen[] = [];
+  let tries = 0;
+  const second = project({ askQuestions: async () => (++tries === 1 ? gone : picked), choose: async () => "Answer the questions now" }, again);
+  await second.act({ action: "implement", domain: "designer", task: "Build the page" });
+  assert.deepEqual(again[0]!.answer, picked);
+
+  // Nobody at the prompt (no answer to the nudge) is bounded, not endless.
+  let endless = 0;
+  const bounded: Seen[] = [];
+  const third = project({ askQuestions: async () => ((endless += 1), gone), choose: async () => undefined }, bounded);
+  await third.act({ action: "implement", domain: "designer", task: "Build the page" });
+  assert.ok(endless > 1 && endless <= 7, `asked ${endless} times`);
+});
