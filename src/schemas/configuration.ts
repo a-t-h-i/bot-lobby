@@ -72,6 +72,8 @@ export interface WorkflowConfig {
   taskBudgetMinutes: number;
   /** Small, clear, low-risk requests take the fast track (no scouts, proposal or plan; QA only when tests are needed); false puts every task on the full workflow. */
   fastTrack: boolean;
+  /** A delegation that names nothing concrete, or is long without done criteria, is sent back to the oracle once for a fuller brief (sending it again unchanged goes through). */
+  briefCheck: boolean;
   /** A new request that one agent can do alone goes to the quick-fix agent once the oracle confirms; false makes every request a task. */
   routeQuickFixes: boolean;
 }
@@ -212,6 +214,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     freshContext: true,
     taskBudgetMinutes: 0,
     fastTrack: true,
+    briefCheck: true,
     routeQuickFixes: true,
   },
   knowledge: {
@@ -351,6 +354,7 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
   const workflow = { ...DEFAULT_CONFIG.workflow, ...(src.workflow as Partial<WorkflowConfig> | undefined) };
   workflow.freshContext = workflow.freshContext !== false;
   workflow.fastTrack = workflow.fastTrack !== false;
+  workflow.briefCheck = workflow.briefCheck !== false;
   workflow.routeQuickFixes = workflow.routeQuickFixes !== false;
   workflow.taskBudgetMinutes = typeof workflow.taskBudgetMinutes === "number" && workflow.taskBudgetMinutes > 0 ? Math.min(24 * 60, Math.round(workflow.taskBudgetMinutes)) : 0;
   const knowledge = { ...DEFAULT_CONFIG.knowledge, ...(src.knowledge as Partial<KnowledgeConfig> | undefined) };

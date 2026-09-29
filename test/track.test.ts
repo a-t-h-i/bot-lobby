@@ -14,6 +14,8 @@ import { kickoff } from "../src/pi/start-task.ts";
 import { parseCommand } from "../src/pi/commands.ts";
 import type { ProcessRunner } from "../src/execution/pi-runner.ts";
 
+const LENIENT = { ...DEFAULT_CONFIG, workflow: { ...DEFAULT_CONFIG.workflow, briefCheck: false } };
+
 const ON = { fastTrack: true };
 
 function read(request: string, options: { fastTrack: boolean; forced?: TrackPath; approvedPlan?: boolean } = ON, triage?: TaskTriage): TaskTrack {
@@ -120,7 +122,7 @@ function makeDeps(runs: string[], overrides: Partial<WorkflowDeps> = {}): Workfl
     runs.push(String(args.at(-1)));
     return { exitCode: 0, stdout: message(WORKER), stderr: "", killed: false, timedOut: false };
   };
-  return { root, configDir: ".pi", cwd: root, config: DEFAULT_CONFIG, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess: runner, ...overrides };
+  return { root, configDir: ".pi", cwd: root, config: LENIENT, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess: runner, ...overrides };
 }
 
 function withTask(deps: WorkflowDeps, request: string, options: { fastTrack: boolean; forced?: TrackPath } = ON): Task {
@@ -219,7 +221,7 @@ test("the fast track is never taken against the user's --full, the settings, or 
   withTask(forced, "change the submit button colour to blue", { fastTrack: true, forced: "full" });
   assert.match((await act(forced, { action: "track", track: "fast", reason: "tiny" })).message, /the user asked for the full workflow/);
 
-  const off = makeDeps([], { config: resolveConfig({ workflow: { fastTrack: false } }) });
+  const off = makeDeps([], { config: resolveConfig({ workflow: { fastTrack: false, briefCheck: false } }) });
   withTask(off, "change the submit button colour to blue", { fastTrack: false });
   assert.match((await act(off, { action: "track", track: "fast", reason: "tiny" })).message, /off in settings/);
 
