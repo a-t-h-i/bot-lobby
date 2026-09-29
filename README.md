@@ -413,8 +413,41 @@ the result.
   `off, minimal, low, medium, high, xhigh, max`, limited to what the model
   supports. Scouts always think at `low`.
 - `instructions` adds your own text to an agent's built-in prompt.
+- `fallbackModel` and `fallbackThinking` on any agent (and the master): see
+  [Fallback models](#fallback-models).
 - Classifier thresholds and limits (`classifier.thresholds`,
   `classifier.fileHints`) are edited in the file.
+
+## Fallback models
+
+Running the oracle on a subscription model and the agents on another provider
+means one of them can run out of usage mid-task. Give each agent class a
+**fallback model** and the **thinking level** to run it at (`/bot-lobby
+settings` → the agent → *Fallback model* / *Fallback thinking*). When a run
+fails because its model is out of usage, rate-limited, out of credit or
+unavailable, it runs again on the fallback instead of failing the task.
+
+- Works for the master, DESIGN, DEV, QA, the researcher, scouts (their fallback
+  thinks at `low` too), quick fixes and the planner and its panel seats.
+- The exhausted model is skipped for 20 minutes, so the next agents go straight
+  to their fallback instead of each spending a failed run finding out.
+- **The master** is your own Pi session: on a usage failure the session
+  switches to its fallback model and thinking level, tells you, and the oracle
+  carries on from where it stopped. Switch back with `/model` when your usage
+  returns.
+- Only usage, limit and availability errors switch model; an ordinary failure
+  still retries on the same model. If the fallback fails the same way, the run
+  fails: it does not chain to a third model.
+- The activity log says when an agent switched, and the run's receipts and the
+  Metrics tab show the model that actually ran.
+
+```json
+{
+  "master": { "model": "anthropic/claude-fable-5-1", "thinking": "high", "fallbackModel": "deepseek/deepseek-v3", "fallbackThinking": "medium" },
+  "agents": { "backend": { "model": "zai/glm-4.6", "thinking": "medium", "fallbackModel": "deepseek/deepseek-v3", "fallbackThinking": "low" } },
+  "scout": { "model": "zai/glm-4.6", "fallbackModel": "deepseek/deepseek-v3" }
+}
+```
 
 ## What the engine enforces
 

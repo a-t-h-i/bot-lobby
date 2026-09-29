@@ -20,6 +20,7 @@
  */
 import { loadPrompt } from "../prompts/loader.ts";
 import { compilePrompt } from "../prompts/compiler.ts";
+import { withFallback } from "../execution/fallback.ts";
 import { runPiAgent, spawnPiProcess, type PiStreamEvent, type ProcessRunner } from "../execution/pi-runner.ts";
 import { describeToolCall } from "../pi/activity.ts";
 import { appendMetrics, type MetricRecord } from "../state/metrics.ts";
@@ -593,12 +594,12 @@ export class PlanningSession {
     const startedAt = Date.now();
     let outcome: RunOutcome;
     try {
-      const result = await runPiAgent(
+      const attempt = (model: string | undefined, thinking: string) => runPiAgent(
         {
           cwd: this.deps.cwd,
           ...request,
-          model: profile.model,
-          thinking: profile.thinking,
+          model,
+          thinking,
           timeoutMs: profile.timeoutMs,
           signal,
           stallTimeoutMs: this.deps.stallTimeoutMs,
@@ -607,6 +608,12 @@ export class PlanningSession {
         },
         this.deps.runProcess ?? spawnPiProcess,
       );
+      // A model that is out of usage hands the turn to the fallback the settings name.
+      const { result, switchedFrom } = await withFallback(profile.model, profile.thinking, profile.fallback, attempt);
+      if (switchedFrom && profile.fallback) {
+        this.deps.feed?.log(label, `${switchedFrom} is out of usage or unavailable; ran on ${profile.fallback.model}`, "warning");
+        profile = { ...profile, model: profile.fallback.model, thinking: profile.fallback.thinking };
+      }
       outcome = { status: result.status, output: result.output, ...(result.error ? { error: result.error } : {}), ...(result.model ? { model: result.model } : {}), usage: result.usage };
     } catch (error) {
       outcome = { status: "failed", output: "", error: (error as Error).message, usage: { input: 0, output: 0, cost: 0, turns: 0 } };

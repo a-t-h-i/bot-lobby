@@ -40,11 +40,14 @@ interface EntryView {
   thinking?: string;
   instructions?: string;
   timeoutMs?: number;
+  /** The model this agent switches to when its own runs out of usage; unset = none. */
+  fallbackModel?: string;
+  fallbackThinking?: string;
 }
 
 function entryView(config: BotLobbyConfig, kind: SettingsKind): EntryView {
   if (kind === "master") return config.master;
-  if (kind === "scout") return { model: config.scout.model, timeoutMs: config.scout.timeoutMs };
+  if (kind === "scout") return { model: config.scout.model, timeoutMs: config.scout.timeoutMs, ...(config.scout.fallbackModel ? { fallbackModel: config.scout.fallbackModel } : {}) };
   if (kind === "researcher") return config.researcher;
   if (kind === "quickfix") return config.quickFix;
   if (kind === "planner") return config.planner;
@@ -56,21 +59,33 @@ interface EntryPatch {
   thinking?: string;
   instructions?: string;
   timeoutMs?: number;
+  /** `inherit` clears the fallback (its thinking level with it). */
+  fallbackModel?: string;
+  fallbackThinking?: string;
+}
+
+/** A settings entry with the fallback patch applied: `inherit` removes the fallback model and its thinking. */
+function withFallbackPatch<T extends { fallbackModel?: string; fallbackThinking?: string }>(entry: T): T {
+  if (entry.fallbackModel !== INHERIT_MODEL) return entry;
+  const { fallbackModel: _model, fallbackThinking: _thinking, ...rest } = entry;
+  return rest as T;
 }
 
 /** Apply a patch to one entry in a config copy; scouts ignore thinking and instructions. */
 export function patchEntry(config: BotLobbyConfig, kind: SettingsKind, patch: EntryPatch): BotLobbyConfig {
   const next: BotLobbyConfig = { ...config, agents: { ...config.agents } };
-  if (kind === "master") next.master = { ...config.master, ...patch } as AgentModelConfig;
+  if (kind === "master") next.master = withFallbackPatch({ ...config.master, ...patch } as AgentModelConfig);
   else if (kind === "scout") {
-    next.scout = {
+    const fallbackModel = patch.fallbackModel ?? config.scout.fallbackModel;
+    next.scout = withFallbackPatch({
       model: patch.model ?? config.scout.model,
       timeoutMs: patch.timeoutMs ?? config.scout.timeoutMs,
-    };
-  } else if (kind === "researcher") next.researcher = { ...config.researcher, ...patch } as AgentModelConfig;
-  else if (kind === "quickfix") next.quickFix = { ...config.quickFix, ...patch } as AgentModelConfig;
-  else if (kind === "planner") next.planner = { ...config.planner, ...patch } as AgentModelConfig;
-  else next.agents[kind] = { ...config.agents[kind], ...patch } as AgentModelConfig;
+      ...(fallbackModel ? { fallbackModel } : {}),
+    });
+  } else if (kind === "researcher") next.researcher = withFallbackPatch({ ...config.researcher, ...patch } as AgentModelConfig);
+  else if (kind === "quickfix") next.quickFix = withFallbackPatch({ ...config.quickFix, ...patch } as AgentModelConfig);
+  else if (kind === "planner") next.planner = withFallbackPatch({ ...config.planner, ...patch } as AgentModelConfig);
+  else next.agents[kind] = withFallbackPatch({ ...config.agents[kind], ...patch } as AgentModelConfig);
   return next;
 }
 
@@ -275,6 +290,37 @@ async function editThinking(pi: ExtensionAPI, ctx: ExtensionContext, kind: Setti
   await commit(pi, ctx, kind, { thinking: level }, `thinking → ${level}`);
 }
 
+/** The model an entry falls back to when its own runs out of usage; `none` removes it. */
+async function editFallbackModel(pi: ExtensionAPI, ctx: ExtensionContext, kind: SettingsKind): Promise<void> {
+  const view = entryView(loadConfig(), kind);
+  const current = view.fallbackModel ?? INHERIT_MODEL;
+  const none: SelectItem = { value: INHERIT_MODEL, label: current === INHERIT_MODEL ? "none ✓" : "none", description: "No fallback: when its model runs out of usage the run fails" };
+  const choice = await pick(ctx, `Fallback model — ${kindLabel(kind)}`, [none, ...modelItems(ctx, current, false)], { search: true });
+  if (choice === undefined) return;
+  const typed = choice === CUSTOM_MODEL ? (await ctx.ui.input("Model id", "provider/model"))?.trim() : choice;
+  if (!typed) return;
+  await commit(pi, ctx, kind, { fallbackModel: typed }, typed === INHERIT_MODEL ? "fallback removed" : `fallback model → ${typed}`);
+  if (typed === INHERIT_MODEL || kind === "scout") return;
+  // Keep the fallback's thinking level one its model can run.
+  const level = entryView(loadConfig(), kind).fallbackThinking;
+  const check = level ? checkThinking(modelLookup(ctx)(typed), level) : undefined;
+  if (check?.warning) {
+    updateEntry(kind, { fallbackThinking: check.level });
+    ctx.ui.notify(`bot-lobby: ${kindLabel(kind)} fallback — ${check.warning}.`, "warning");
+  }
+}
+
+/** The thinking level on the fallback model, limited to what that model supports. */
+async function editFallbackThinking(pi: ExtensionAPI, ctx: ExtensionContext, kind: SettingsKind): Promise<void> {
+  const view = entryView(loadConfig(), kind);
+  if (!view.fallbackModel) return;
+  const model = modelLookup(ctx)(view.fallbackModel);
+  const title = `Fallback thinking — ${kindLabel(kind)} (${view.fallbackModel})`;
+  const level = await pick(ctx, title, thinkingItems(supportedThinking(model), view.fallbackThinking ?? view.thinking));
+  if (!level || !isThinkingLevel(level)) return;
+  await commit(pi, ctx, kind, { fallbackThinking: level }, `fallback thinking → ${level}`);
+}
+
 async function editTimeout(pi: ExtensionAPI, ctx: ExtensionContext, kind: SettingsKind): Promise<void> {
   const current = entryView(loadConfig(), kind).timeoutMs ?? loadConfig().workflow.agentTimeoutMs;
   const typed = (await ctx.ui.input(`Time limit (minutes) — ${kindLabel(kind)}`, String(Math.round(current / 60_000))))?.trim();
@@ -303,6 +349,8 @@ export function entryItems(kind: SettingsKind, view: EntryView): SelectItem[] {
   const items: SelectItem[] = [{ value: "model", label: "Model", description: view.model }];
   if (kind === "scout") items.push({ value: "fixed", label: "Thinking", description: `${SCOUT_THINKING} (fixed for scouts)` });
   else items.push({ value: "thinking", label: "Thinking", description: view.thinking ?? "" });
+  items.push({ value: "fallback", label: "Fallback model", description: view.fallbackModel ?? "none · used when this model runs out of usage" });
+  if (kind !== "scout" && view.fallbackModel) items.push({ value: "fallbackThinking", label: "Fallback thinking", description: view.fallbackThinking ?? view.thinking ?? "" });
   if (kind !== "master") items.push({ value: "timeout", label: "Time limit", description: minutes(view.timeoutMs) });
   if (kind !== "scout" && kind !== "researcher") {
     items.push({ value: "instructions", label: "Instructions", description: view.instructions ? `${view.instructions.length} chars` : "(none)" });
@@ -317,6 +365,8 @@ async function editEntry(pi: ExtensionAPI, ctx: ExtensionContext, kind: Settings
     if (!action || action === "back") return;
     if (action === "model") await editModel(pi, ctx, kind);
     else if (action === "thinking") await editThinking(pi, ctx, kind);
+    else if (action === "fallback") await editFallbackModel(pi, ctx, kind);
+    else if (action === "fallbackThinking") await editFallbackThinking(pi, ctx, kind);
     else if (action === "timeout") await editTimeout(pi, ctx, kind);
     else if (action === "instructions") await editInstructions(pi, ctx, kind);
   }
@@ -352,7 +402,8 @@ function entryDescription(kind: SettingsKind, view: EntryView): string {
   const thinking = kind === "scout" ? SCOUT_THINKING : view.thinking;
   const custom = view.instructions ? " · custom" : "";
   const limit = kind === "master" ? "" : ` · ${minutes(view.timeoutMs)}`;
-  return `${view.model} · ${thinking}${limit}${custom}`;
+  const fallback = view.fallbackModel ? ` · fallback ${view.fallbackModel}` : "";
+  return `${view.model} · ${thinking}${limit}${custom}${fallback}`;
 }
 
 /** The lobby's on/off settings as the settings menu lists them; `panel:*` are the Lobby tab's panes. */
