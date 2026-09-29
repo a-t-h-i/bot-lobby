@@ -124,8 +124,8 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   const budgetMinutes = options.budget ?? config.workflow.taskBudgetMinutes;
   if (budgetMinutes > 0) setBudget(root, configDir, task.id, budgetMinutes);
   if (options.auto) setAutoMode(root, configDir, task.id, true, sessionId);
-  // A session that starts a task is named after it, so /resume and the lobby list it by name.
-  if (!pi.getSessionName()) pi.setSessionName(task.title);
+  // A session that starts a task is named after it (its friendly name), so /resume and the lobby list it by name.
+  if (!pi.getSessionName()) pi.setSessionName(task.id);
   applyStatus(ctx, root, configDir);
   await applyMasterModel(pi, ctx, loadConfig());
   ctx.ui.notify(`bot-lobby ${task.id} started`, "info");
