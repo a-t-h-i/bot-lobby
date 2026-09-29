@@ -54,8 +54,8 @@ const PROMPT_FIRST: ReadonlySet<TabId> = new Set(["lobby", "plan", "quickfix"]);
 export type LobbyMode = "type" | "browse";
 
 /** What each pane toggle is called in notices and help. */
-const PANEL_NAMES: Record<LobbyPanel, string> = { animations: "oracle and agent animations", conversation: "conversation", activity: "activity log", thinking: "thinking" };
-const PANEL_ACTIONS: Record<LobbyPanel, LobbyAction> = { animations: "toggleScene", conversation: "toggleConversation", activity: "toggleActivity", thinking: "toggleThinking" };
+const PANEL_NAMES: Record<LobbyPanel, string> = { conversation: "conversation", activity: "activity log", thinking: "thinking" };
+const PANEL_ACTIONS: Record<LobbyPanel, LobbyAction> = { conversation: "toggleConversation", activity: "toggleActivity", thinking: "toggleThinking" };
 
 /**
  * Which session the Lobby tab shows and talks to: this window, one it started
@@ -125,12 +125,8 @@ export interface LobbyHost {
   rows(): number;
   theme(): LobbyTheme;
   sessionId(): string | undefined;
-  /** This session's active task and its runs, as the zen widget sees them. */
+  /** This session's active task and its runs, as the lobby reads them. */
   zen(): { task?: Task; runs: readonly AgentRun[] };
-  /** Draw the zen scene into at most `height` lines: animated, or only the task's status when `animated` is false. */
-  scene(width: number, height: number, animated: boolean): string[];
-  /** Advance the scene's clock; returns the delay it wants until the next step. */
-  advanceScene(now: number): number;
   feed: LobbyFeed;
   masterBusy(): boolean;
   tasks(): Task[];
@@ -199,14 +195,12 @@ export interface LobbyHost {
   hasOlderChat(sessionId: string): boolean;
   /** A session's whole conversation, oldest first: this window's (no id) or another's; loaded only while scrolled back to it. */
   chatHistory(sessionId?: string): readonly ChatEntry[];
-  /** A task's status without animations, for a session other than this window's. */
-  taskScene(task: Task, width: number, height: number): string[];
   profileLabel(kind: LobbyAgentKind): string;
   requestRender(): void;
   now?(): number;
 }
 
-/** Live work speeds the clock up so spinners and the scene move. */
+/** Live work speeds the clock up so spinners move. */
 export const LIVE_MS = 250;
 export const IDLE_MS = 1000;
 /** How often task and metrics data is reread from disk while the lobby is open. */
@@ -424,16 +418,13 @@ export class LobbyView implements Component, Focusable {
       || Boolean(zen.task && !zen.task.paused && !TERMINAL_STATES.includes(zen.task.state));
   }
 
-  /** One clock step: advance the scene, reread data when due, repaint. */
+  /** One clock step: reread data when due, repaint. */
   private step(): void {
     if (!this.running) return;
-    const now = this.now();
     this.tick += 1;
-    let delay = this.isLive() ? LIVE_MS : IDLE_MS;
-    if (this.tab === "lobby" && this.panels.animations && this.host.zen().task) delay = Math.min(delay, this.host.advanceScene(now));
     this.refreshData(false);
     this.host.requestRender();
-    this.schedule(delay);
+    this.schedule(this.isLive() ? LIVE_MS : IDLE_MS);
   }
 
   /** Reread tasks, plans, comments and metrics from disk (throttled unless forced). */
@@ -675,8 +666,6 @@ export class LobbyView implements Component, Focusable {
         return this.cycleTab(1);
       case "prevTab":
         return this.cycleTab(-1);
-      case "toggleScene":
-        return this.togglePanel("animations");
       case "toggleConversation":
         return this.togglePanel("conversation");
       case "toggleActivity":
@@ -2295,7 +2284,7 @@ export class LobbyView implements Component, Focusable {
     if (entry.view.kind !== "here") return this.otherSessionBody(entry, width, height, theme, now);
     const talk = this.conversationFor(entry);
     return renderHome({
-      ...(zen.task ? { task: zen.task, scene: (w: number, h: number, animated: boolean) => this.host.scene(w, h, animated) } : {}),
+      ...(zen.task ? { task: zen.task } : {}),
       chat: talk.chat,
       ...(talk.older ? { olderNote: OLDER_NOTE } : {}),
       ...(feed.reply ? { liveReply: feed.reply } : {}),
@@ -2313,7 +2302,6 @@ export class LobbyView implements Component, Focusable {
       panels: this.panels,
       ...(query ? { query } : {}),
       keys: {
-        animations: keyLabel(this.keys.toggleScene),
         conversation: keyLabel(this.keys.toggleConversation),
         activity: keyLabel(this.keys.toggleActivity),
         thinking: keyLabel(this.keys.toggleThinking),
@@ -2323,8 +2311,7 @@ export class LobbyView implements Component, Focusable {
 
   /**
    * Another session on the Lobby tab: a background session's live feed, or an
-   * other terminal's conversation read from its session file; the task's
-   * status sits on top without animations.
+   * other terminal's conversation read from its session file.
    */
   private otherSessionBody(entry: SessionEntry, width: number, height: number, theme: LobbyTheme, now: number): string[] {
     const session = this.viewedSession();
@@ -2332,7 +2319,7 @@ export class LobbyView implements Component, Focusable {
     const task = entry.task;
     const query = this.query();
     const common = {
-      ...(task ? { task, scene: (w: number, h: number) => this.host.taskScene(task, w, h), stillScene: true } : {}),
+      ...(task ? { task } : {}),
       others: 0,
       pending: 0,
       offsets: this.homeOffsets,
@@ -2345,7 +2332,6 @@ export class LobbyView implements Component, Focusable {
       ...(query ? { query } : {}),
       title: entry.name,
       keys: {
-        animations: keyLabel(this.keys.toggleScene),
         conversation: keyLabel(this.keys.toggleConversation),
         activity: keyLabel(this.keys.toggleActivity),
         thinking: keyLabel(this.keys.toggleThinking),

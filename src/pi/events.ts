@@ -7,8 +7,7 @@ import { selectKnowledge } from "../knowledge/selector.ts";
 import { cancelAllRuns } from "../execution/agent-runner.ts";
 import { describeTask } from "../workflow/workflow.ts";
 import { truncate } from "../text.ts";
-import { applyStatus, clearStatus, isMinimized, setMinimized, setOracleActivity } from "./ui.ts";
-import { ORACLE_THINKING, oracleActivityWord } from "./activity.ts";
+import { applyStatus, clearStatus, isMinimized, setMinimized } from "./ui.ts";
 import { isSubagentProcess, webToolsFor } from "./quiet.ts";
 import { registerQuietTools } from "./tool-renderers.ts";
 import { taskRequest, type Task, type TaskState } from "../schemas/task.ts";
@@ -76,26 +75,16 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
   });
 
 
-  // The oracle's speech bubble mirrors the master's own turn: thinking between
-  // tool calls, the tool's word during one, and silent (your turn) once it ends.
-  // Subagents report into runs instead.
-  // Parallel tool calls: the newest still-running call keeps the word.
-  const inFlight = new Map<string, string>();
-  const showOracle = () => setOracleActivity([...inFlight.values()].at(-1) ?? ORACLE_THINKING);
   // A task's time budget counts while the oracle works on it, not while it waits on the user.
   const asking = new Set<string>();
   pi.on("agent_start", (_event, ctx) => {
     if (isSubagentProcess()) return;
-    inFlight.clear();
-    showOracle();
     const root = detectProjectRoot(ctx.cwd, configDir);
     const task = activeTask(root, configDir, ctx.sessionManager.getSessionId());
     if (task) startClock(root, configDir, task.id);
   });
   pi.on("tool_execution_start", (event) => {
     if (isSubagentProcess()) return;
-    inFlight.set(event.toolCallId, oracleActivityWord(event.toolName, event.args));
-    showOracle();
     if (ASKING_TOOLS.has(event.toolName) && !asking.has(event.toolCallId)) {
       asking.add(event.toolCallId);
       pauseClocks();
@@ -103,14 +92,10 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
   });
   pi.on("tool_execution_end", (event) => {
     if (isSubagentProcess()) return;
-    inFlight.delete(event.toolCallId);
-    showOracle();
     if (asking.delete(event.toolCallId)) resumeClocks();
   });
   pi.on("agent_end", () => {
     if (isSubagentProcess()) return;
-    inFlight.clear();
-    setOracleActivity(undefined);
     for (const _call of asking) resumeClocks();
     asking.clear();
     stopClocks();
