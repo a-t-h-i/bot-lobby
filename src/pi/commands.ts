@@ -59,8 +59,9 @@ const HELP = [
 /** Subcommands only win when no free-form text follows (so tasks still start). */
 const SUBCOMMANDS = new Set(["lobby", "help", "status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "accept", "budget", "knowledge", "config", "settings", "minimize", "restore", "claim", "auto", "start-plan", "switch"]);
 
+/** `Task-Change-Table-Font-27-09-2026`, or an older `TASK-add-login` id. */
 function isTaskId(value: string | undefined): boolean {
-  return Boolean(value && /^TASK-/.test(value));
+  return Boolean(value && /^task-/i.test(value));
 }
 
 /** A task start's leading flags: `--task` (always a task), `--auto`, `--fast`, `--full`, `--budget <time>` (or `--budget=<time>`). */
