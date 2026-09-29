@@ -64,8 +64,15 @@ test("←→ move between questions, unanswered ones are left out, and esc puts 
   assert.equal(moved.tab, 1);
   const done = keys(initialState([auth, features, layout]), "enter", "right", "enter");
   assert.deepEqual(done.result?.answers.map((answer) => answer.questionIndex), [0, 2]);
-  const away = keys(initialState([auth, layout]), "enter", "escape");
+  const asked = keys(initialState([auth, layout]), "enter", "escape");
+  assert.equal(asked.result, undefined, "esc only asks: an accidental press does not leave the questions");
+  assert.equal(asked.leaving, true);
+  const away = keys(initialState([auth, layout]), "enter", "escape", "enter");
   assert.deepEqual([away.result?.cancelled, away.result?.answers.length], [true, 1]);
+  const kept = keys(initialState([auth, layout]), "enter", "escape", "escape");
+  assert.deepEqual([kept.result, kept.leaving], [undefined, false], "esc twice, or any other key, keeps answering");
+  assert.equal(keys(initialState([auth, layout]), "escape", "down").leaving, false);
+  assert.equal(keys(initialState([auth, layout]), "escape", { type: "text", value: "y" }).result?.cancelled, true);
 });
 
 test("keys from the terminal: arrows, enter, esc, digits, space, and typed or pasted text", () => {
@@ -150,7 +157,13 @@ test("ask_user_question: registered outside subagents, refuses malformed questio
   assert.match(invalidQuestions([{ ...auth, options: [{ label: "Yes" }, { label: "yes" }] }])!, /two options labelled/);
   assert.match(invalidQuestions([auth, auth])!, /repeats an earlier question/);
   assert.equal(invalidQuestions([auth, features]), undefined);
-  assert.match(answerSummary([auth], { answers: [], cancelled: true }), /put the questions away without answering/);
+  const left = answerSummary([auth], { answers: [], cancelled: true });
+  assert.match(left, /left the questions without answering/);
+  assert.match(left, /Do not assume answers, do not pick the recommended options/, "the oracle waits instead of guessing");
+  assert.match(left, /end your turn/);
+  const partly = answerSummary([auth, features], { answers: [{ questionIndex: 0, question: auth.question, kind: "option", answer: "Clerk" }], cancelled: true });
+  assert.match(partly, /\(not answered\)/);
+  assert.match(partly, /still open. Do not assume answers/);
   const previous = process.env.BOT_LOBBY_SUBAGENT;
   process.env.BOT_LOBBY_SUBAGENT = "1";
   const sub: unknown[] = [];
