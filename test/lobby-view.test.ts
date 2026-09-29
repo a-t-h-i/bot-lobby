@@ -1428,36 +1428,49 @@ test("a conversation scrolled to its top scrolls down again, one line a press, a
   assert.equal(content() === reading, false, "and it still scrolls");
 });
 
-test("the buttons on a scrolling pane's bottom edge scroll it a page or two, and only where it scrolls", () => {
+test("a scrolling pane's bottom edge reads `▲ prev · page 2/5 · next ▼`: the buttons move a page, and only a pane that scrolls has them", () => {
   const { view, feed } = makeView();
   busyFeed(feed);
   let lines = view.render(120);
   const top = lines.findIndex((line) => line.includes("╭ Activity"));
-  const bottom = lines.findIndex((line, index) => index > top && line.includes("╰") && line.includes("▲▲ ▲ ▼ ▼▼"));
-  assert.ok(bottom > top, "a pane with more lines than rows carries the buttons");
+  const pagerAt = (frame: string[]) => frame.findIndex((line, index) => index > top && line.includes("╰") && line.includes("▲ prev · page"));
+  const bottom = pagerAt(lines);
+  assert.ok(bottom > top, "a pane with more lines than rows carries the pager");
   const conversationEdge = lines[bottom]!.slice(0, lines[bottom]!.indexOf("╰", 2));
   assert.ok(!conversationEdge.includes("▲"), "a pane that fits has none");
-  const rows = bottom - top - 1;
-  const at = lines[bottom]!.indexOf("▲▲ ▲ ▼ ▼▼");
-  const shown = () => view.render(120).filter((line) => line.includes("reading file-")).length;
-  assert.ok(shown() > 0);
+  const pageNow = () => {
+    const match = /page\s+(\d+)\/(\d+)/.exec(view.render(120)[bottom]!)!;
+    return { page: Number(match[1]), pages: Number(match[2]) };
+  };
+  const first = pageNow();
+  assert.ok(first.pages > 1);
+  assert.equal(first.page, first.pages, "the log is at its newest line: the last page");
+  const up = lines[bottom]!.indexOf("▲ prev") + 2;
+  const down = lines[bottom]!.indexOf("next ▼") + 3;
+  const label = lines[bottom]!.indexOf("page") + 2;
   const newest = () => view.render(120).some((line) => line.includes("file-59.ts"));
   assert.equal(newest(), true);
-  view.handleInput(click(at + 3, bottom)); // one page up
+  view.handleInput(click(label, bottom));
+  assert.equal(pageNow().page, first.pages, "the page count is not a button");
+  view.handleInput(click(up, bottom));
   assert.equal(newest(), false, "a page back leaves the newest line");
+  assert.equal(pageNow().page, first.pages - 1, "and the count follows");
   const onePage = view.render(120).find((line) => /file-\d+\.ts/.test(line))!;
-  view.handleInput(click(at + 3, bottom));
+  view.handleInput(click(up, bottom));
   assert.notEqual(view.render(120).find((line) => /file-\d+\.ts/.test(line)), onePage, "another page back");
-  view.handleInput(click(at + 7, bottom)); // one page down
-  view.handleInput(click(at + 7, bottom));
+  assert.equal(pageNow().page, first.pages - 2);
+  view.handleInput(click(down, bottom));
+  view.handleInput(click(down, bottom));
   assert.equal(newest(), true, "back at the newest");
-  view.handleInput(click(at, bottom)); // two pages up
-  const twoPages = view.render(120).find((line) => /file-\d+\.ts/.test(line))!;
-  assert.notEqual(twoPages, onePage, "two pages go further than one");
-  view.handleInput(click(at + 8, bottom)); // two pages down
-  assert.equal(newest(), true);
+  assert.equal(pageNow().page, first.pages);
+  view.handleInput(click(down, bottom));
+  assert.equal(newest(), true, "no further than the end");
   assert.equal(view.homeFocus, "activity", "using a pane's buttons gives it the keys");
-  void rows;
+  const narrow = makeView();
+  busyFeed(narrow.feed);
+  const short = narrow.view.render(48);
+  assert.ok(short.some((line) => line.includes("╰") && /▲.*\d+\/\d+.*▼/.test(line)), "a narrow terminal keeps the arrows and the count");
+  assert.ok(short.every((line) => visibleWidth(line) <= 48));
 });
 
 test("the bottom line shows the subagents at work at its right end, and nothing when none is", () => {

@@ -356,11 +356,15 @@ Pi session. The Lobby tab can show any session, and your prompt steers it;
 right now at its right end (`◐ DESIGN editing 2m · DEV 40s`, a running quick
 fix too), shrinking to names and then a count when the keys leave little room.
 
-**Paging.** A pane with more lines than rows shows page buttons on its bottom
-edge, `▲▲ ▲ ▼ ▼▼`: click one to scroll a page up or down (`▲▲` and `▼▼` go two
-pages). The wheel, the arrows and PageUp/PageDown still work. It applies to
-every scrolling pane: the conversation, activity and thinking, the plan draft,
-the Tasks and Quick fix lists and details, and the metrics table.
+**Paging.** A pane with more lines than rows shows a pager on its bottom
+edge, `▲ prev · page 2/5 · next ▼`: click *prev* or *next* to move a page (its
+rows less one, so a line carries over), and read where you are from the page
+count. The top is page 1 and the bottom the last. A button dims when the pane
+is already at that end, and the words shorten (`▲ prev · 2/5 · next ▼`, then
+`▲ 2/5 ▼`) as the pane narrows. The wheel, the arrows and PageUp/PageDown
+still work. It applies to every scrolling pane: the conversation, activity and
+thinking, the plan draft, the Tasks and Quick fix lists and details, and the
+metrics table.
 
 **Status line when hidden.** With the lobby hidden (`alt+l`), one line under
 Pi's editor shows where things stand: a bar of the task's plan steps (or its

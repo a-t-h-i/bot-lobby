@@ -271,21 +271,84 @@ export function scrollThumb(total: number, rows: number, start: number): { from:
   return { from, to: from + size };
 }
 
-/** Page buttons in the bottom border of a pane that scrolls: two pages up, one up, one down, two down. */
-export const PAGER = "▲▲ ▲ ▼ ▼▼";
-/** Columns the pager takes with a space on each side. */
-export const PAGER_WIDTH = PAGER.length + 2;
-/** Narrowest box that has room for the pager beside its corners. */
-const PAGER_MIN_WIDTH = PAGER_WIDTH + 6;
+/** Lines a page moves a pane: its rows less one, so a line of context carries over. */
+export function pageStep(rows: number): number {
+  return Math.max(1, rows - 1);
+}
 
-/** Which page button a column of a scrollable pane's bottom border is: -2, -1, 1 or 2 pages (negative up), or undefined. */
-export function pagerButton(width: number, column: number): -2 | -1 | 1 | 2 | undefined {
-  if (width < PAGER_MIN_WIDTH) return undefined;
-  const from = column - width;
-  if (from >= -12 && from <= -10) return -2;
-  if (from >= -9 && from <= -7) return -1;
-  if (from >= -6 && from <= -5) return 1;
-  if (from >= -4 && from <= -2) return 2;
+/** How many pages a pane showing `rows` lines at a time holds out of `total`. */
+export function pageCount(total: number, rows: number): number {
+  return total <= rows ? 1 : 1 + Math.ceil((total - rows) / pageStep(rows));
+}
+
+/**
+ * The page a pane showing lines from `start` is on, counted so that the top is
+ * page 1 and the bottom the last, and a page's worth of scrolling from either
+ * end lands exactly on the next number: a log that opens at its newest line
+ * and a detail that opens at its first both step through the same numbers.
+ */
+export function pageOf(total: number, rows: number, start: number): number {
+  const end = Math.max(0, total - rows);
+  const behind = Math.ceil(Math.max(0, end - Math.max(0, start)) / pageStep(rows));
+  return Math.max(1, pageCount(total, rows) - behind);
+}
+
+/** One piece of the pager: a button, where the pane is, or what sits between them. */
+export interface PagerPart {
+  text: string;
+  role: "up" | "down" | "where" | "between";
+}
+
+/** Fewest columns of border kept either side of the pager, beside its two spaces. */
+const PAGER_MARGIN = 3;
+
+/**
+ * The pager in a scrolling pane's bottom border, as words a newcomer can read:
+ * `▲ prev · page 2/5 · next ▼`, shortening to `▲ prev · 2/5 · next ▼` and
+ * `▲ 2/5 ▼` as the pane narrows, and to nothing when even that will not fit
+ * in `room` columns. The page number is padded to the width of the page count,
+ * so the buttons stay where they are as it changes and a click can be traced
+ * from the pane's size alone.
+ */
+export function pager(total: number, rows: number, start: number, room: number): PagerPart[] | undefined {
+  const pages = pageCount(total, rows);
+  const count = String(pages);
+  const of = `${String(pageOf(total, rows, start)).padStart(count.length)}/${pages}`;
+  const between = (text: string): PagerPart => ({ text, role: "between" });
+  const up = (text: string): PagerPart => ({ text, role: "up" });
+  const down = (text: string): PagerPart => ({ text, role: "down" });
+  const where = (text: string): PagerPart => ({ text, role: "where" });
+  const variants: PagerPart[][] = [
+    [up("▲ prev"), between(" · "), where(`page ${of}`), between(" · "), down("next ▼")],
+    [up("▲ prev"), between(" · "), where(of), between(" · "), down("next ▼")],
+    [up("▲"), between(" "), where(of), between(" "), down("▼")],
+  ];
+  return variants.find((parts) => parts.reduce((sum, part) => sum + textWidth(part.text), 0) <= room);
+}
+
+/** Columns a box of `width` leaves for the pager's text: two spaces around it and a margin of border on each side. */
+function pagerRoom(width: number): number {
+  return width - 2 - 2 - PAGER_MARGIN;
+}
+
+/**
+ * Which button a column of a scrollable pane's bottom border is: -1 (a page
+ * up) or 1 (a page down), or undefined. The buttons take their words and the
+ * space beside them, so a click a little off still lands.
+ */
+export function pagerButton(width: number, column: number, total: number, rows: number): -1 | 1 | undefined {
+  const parts = pager(total, rows, 0, pagerRoom(width));
+  if (!parts) return undefined;
+  const size = parts.reduce((sum, part) => sum + textWidth(part.text), 0);
+  // The text ends one space before the corner: `… next ▼ ╯`.
+  const origin = width - 2 - size;
+  let at = origin;
+  for (const part of parts) {
+    const from = part.role === "up" ? origin - 1 : at;
+    const to = part.role === "down" ? width - 1 : at + textWidth(part.text);
+    if (column >= from && column < to) return part.role === "up" ? -1 : part.role === "down" ? 1 : undefined;
+    at += textWidth(part.text);
+  }
   return undefined;
 }
 
@@ -312,9 +375,20 @@ export function box(width: number, height: number, content: readonly string[], o
   const thumb = options.scroll ? scrollThumb(options.scroll.total, height - 2, options.scroll.start) : undefined;
   const rightEdge = (row: number) => (thumb && row >= thumb.from && row < thumb.to ? paint(theme, focused ? "accent" : "muted", "┃") : edge("│"));
   const rows = fill(content, height - 2).map((line, row) => `${edge("│")} ${fit(line, inner)} ${rightEdge(row)}`);
-  // A pane with more lines than rows carries page buttons in its bottom border; `pagerButton` finds them again for clicks.
-  const pager = thumb && width >= PAGER_MIN_WIDTH ? ` ${PAGER} ` : "";
-  const bottom = `${edge("╰")}${edge("─".repeat(width - 2 - textWidth(pager)))}${pager ? paint(theme, focused ? "accent" : "muted", pager) : ""}${edge("╯")}`;
+  // A pane with more lines than rows carries a pager in its bottom border; `pagerButton` finds its buttons again for clicks.
+  const parts = thumb && options.scroll ? pager(options.scroll.total, height - 2, options.scroll.start, pagerRoom(width)) : undefined;
+  const atTop = (options.scroll?.start ?? 0) <= 0;
+  const atEnd = options.scroll ? options.scroll.start >= options.scroll.total - (height - 2) : true;
+  const paintPart = (part: PagerPart): string => {
+    if (part.role === "between") return paint(theme, "dim", part.text);
+    if (part.role === "where") return paint(theme, focused ? "text" : "muted", part.text);
+    // A button that cannot go further is dimmed: the pane is at that end.
+    if (part.role === "up" ? atTop : atEnd) return paint(theme, "dim", part.text);
+    return bold(theme, paint(theme, focused ? "accent" : "text", part.text));
+  };
+  const pagerText = parts ? ` ${parts.map(paintPart).join("")} ` : "";
+  const pagerWidth = parts ? parts.reduce((sum, part) => sum + textWidth(part.text), 0) + 2 : 0;
+  const bottom = `${edge("╰")}${edge("─".repeat(width - 2 - pagerWidth))}${pagerText}${edge("╯")}`;
   return [top, ...rows, bottom];
 }
 
