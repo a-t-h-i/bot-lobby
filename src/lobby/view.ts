@@ -22,6 +22,7 @@ import type { BackgroundSession } from "./sessions.ts";
 import type { QuickFixQueue } from "./quickfix.ts";
 import { MEMBER_LABELS, ORACLE_LABEL, type PlannerSeed, type PlanningSession } from "./planner.ts";
 import { issueText, type IssuesState } from "./issues.ts";
+import { agentsIndicator, workingAgents } from "./mini.ts";
 import { actionFor, keyLabel, keyMap, LOBBY_ACTIONS, type KeyMap, type LobbyAction } from "./keys.ts";
 import { beside, bold, box, fit, highlight, pagerButton, paint, rule, selectRow, spinner, spread, windowStart, wrap, wrapHanging, type LobbyTheme, type PaneBox, type PaneLayout, type PaneMark } from "./layout.ts";
 import { chatTail, HOME_PANES, renderHome, type HomePane } from "./tabs/home.ts";
@@ -1987,7 +1988,11 @@ export class LobbyView implements Component, Focusable {
     if (this.help) return fit(`${badge("KEYS", "accent")} ${this.chips([["any key", "closes"]], theme)}`, width);
     if (this.searching) return fit(`${badge("SEARCH", "warning")} ${this.chips([["enter", "keep"], ["esc", "clear"], ["↑↓", "results"], [k("nextTab"), "next tab"]], theme)}`, width);
     const mode = this.mode === "type" ? badge("TYPE", "accent") : badge("BROWSE", "muted");
-    return fit(`${mode} ${this.chips(this.hintChips(), theme)}`, width);
+    const keys = `${mode} ${this.chips(this.hintChips(), theme)}`;
+    // The subagents at work sit at the right end of the line, when the keys leave room.
+    const working = this.viewing.kind === "here" ? agentsIndicator(workingAgents(this.host.zen().runs, this.host.quickfix.running), this.now(), spinner(this.tick), width - textWidth(keys) - 3, theme) : "";
+    const gap = width - textWidth(keys) - textWidth(working) - 1;
+    return working && gap >= 2 ? `${keys}${" ".repeat(gap)}${working} ` : fit(keys, width);
   }
 
   /**

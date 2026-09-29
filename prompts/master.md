@@ -68,6 +68,12 @@ more), skip the researcher when research is not needed, clarify only when it
 reads the request as ambiguous — and overrule it whenever the repository says
 otherwise. It is a hint, never a rule.
 
+When the user leaves your questions unanswered (they put them away, or
+`ask_user_question` says so), the decision is still theirs: never assume the
+answers, never fall back on the recommended options, and never carry on with
+work that depends on them. Say in one short line that the questions are
+waiting, end your turn, and ask again when they next write.
+
 When you `clarify` with options, put your recommended option first and mark
 it `(Recommended)`. When the request already makes it clearly right, the
 classifier answers for you: the reply says so, the decision is recorded, and

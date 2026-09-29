@@ -296,7 +296,7 @@ async function handleClarify(task: Task, params: OrchestrateParams, deps: Workfl
   }
   const answer = params.options?.length ? await deps.choose(question, params.options) : await deps.ask(question);
   if (answer === undefined) {
-    return `No answer captured. Ask the user this in your reply, then continue.\n\nQuestion: ${question}`;
+    return `The user did not answer. Do not assume an answer or pick the recommended option: ask the user this again in your reply, end your turn, and continue only once they have answered.\n\nQuestion: ${question}`;
   }
   return `User answered: ${answer}`;
 }
@@ -681,6 +681,10 @@ function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instructi
   };
 }
 
+const ANSWER_NOW = "Answer the questions now";
+/** Times an agent's abandoned questions are put to the user again before it decides. */
+const MAX_NUDGES = 5;
+
 /** Agents that may ask the user themselves: the designer, whose choices are the user's to see. */
 const ASKING_DOMAINS: ReadonlySet<Domain> = new Set(["designer"]);
 
@@ -706,7 +710,13 @@ function askRelay(task: Task, deps: WorkflowDeps, domain: Domain): { onAsk: Rela
       if (isAutoMode(deps.root, deps.configDir, task.id)) {
         return { answers: [], cancelled: true, globalNote: "Auto mode is on, so nobody can answer: decide with the options you recommend and say in your report what you chose and why." };
       }
-      const result = await askQuestions(questions, label, signal);
+      let result = await askQuestions(questions, label, signal);
+      // Leaving the questions must not quietly hand the choice to the agent: ask whether it may decide.
+      for (let nudges = 0; result.answers.length === 0 && result.cancelled && !signal.aborted && nudges < MAX_NUDGES; nudges++) {
+        const choice = await deps.choose(`${label} is waiting for your answer${questions.length === 1 ? "" : "s"} (${questions.map((question) => question.header).join(", ")}).`, [ANSWER_NOW, `Let ${label} decide with its recommendation`]);
+        if (choice !== ANSWER_NOW && choice !== undefined) break;
+        result = await askQuestions(questions, label, signal);
+      }
       recordDecision(task, askedDecision(label, questions, result), domain);
       return result;
     });

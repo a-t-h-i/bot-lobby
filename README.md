@@ -273,6 +273,10 @@ Rebind any key under `lobby.keys` in the config.
 Pi session. The Lobby tab can show any session, and your prompt steers it;
 `● waiting` in the tab bar means one has a question for you.
 
+**Agents at work.** The bottom line of the lobby shows the subagents running
+right now at its right end (`◐ DESIGN editing 2m · DEV 40s`, a running quick
+fix too), shrinking to names and then a count when the keys leave little room.
+
 **Paging.** A pane with more lines than rows shows page buttons on its bottom
 edge, `▲▲ ▲ ▼ ▼▼`: click one to scroll a page up or down (`▲▲` and `▼▼` go two
 pages). The wheel, the arrows and PageUp/PageDown still work. It applies to
@@ -322,7 +326,10 @@ can be compared by looking at them.
 
 `↑↓` move · `enter` choose · `space` pick several (multi-select) · `1`–`4`
 pick · `←→` between questions · the last row takes an answer in your own words
-· `esc` puts the questions away (what you answered is kept). Editor hosts that
+· `esc` asks whether to leave (a second `enter`
+leaves, anything else keeps you answering), so a stray press does nothing.
+Questions you leave are never answered for you: the oracle waits and asks again
+when you next write, and the designer asks again before it may decide. Editor hosts that
 run Pi in RPC mode get the same questions through Pi's own dialogs.
 
 **Images.** An option can also carry an `image`: a PNG, JPEG, GIF or WebP

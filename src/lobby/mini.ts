@@ -116,3 +116,44 @@ export function miniLine(input: MiniInput, width: number, theme?: LobbyTheme): s
   const line = ` ${paint(theme, "accent", "◆ bot-lobby")}  ${body}`;
   return truncateToWidth(`${line}${hint}`, width, "…");
 }
+
+/** An agent at work right now, for the lobby's bottom-line indicator. */
+export interface WorkingAgent {
+  name: string;
+  activity?: string;
+  /** Epoch ms it started, for its elapsed time. */
+  since?: number;
+}
+
+/** The subagents running now: task runs still going, and the quick fix in hand. */
+export function workingAgents(runs: readonly AgentRun[], quickFix?: { startedAt?: number }): WorkingAgent[] {
+  const agents: WorkingAgent[] = [];
+  for (const run of runs) {
+    if (run.status !== "running") continue;
+    const since = Date.parse(run.startedAt);
+    agents.push({ name: agentName(run), ...(run.activity ? { activity: run.activity } : {}), ...(Number.isFinite(since) ? { since } : {}) });
+  }
+  if (quickFix) agents.push({ name: "QUICK FIX", ...(quickFix.startedAt ? { since: quickFix.startedAt } : {}) });
+  return agents;
+}
+
+function elapsed(ms: number): string {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m`;
+}
+
+/**
+ * `◐ DESIGN editing 2m · DEV running 40s`, at most `width` columns: it gives up
+ * the activity and time, then the names, then shows only a count, and nothing
+ * when even that does not fit or nothing is working. `spin` is the spinner glyph.
+ */
+export function agentsIndicator(agents: readonly WorkingAgent[], now: number, spin: string, width: number, theme?: LobbyTheme): string {
+  if (agents.length === 0) return "";
+  const full = agents.map((agent) => `${agent.name}${agent.activity ? ` ${agent.activity}` : ""}${agent.since ? ` ${elapsed(now - agent.since)}` : ""}`).join(" · ");
+  const names = [...new Set(agents.map((agent) => agent.name))].join(" · ");
+  const count = `${agents.length} agent${agents.length === 1 ? "" : "s"} working`;
+  for (const text of [full, names, count]) {
+    if (text.length + 2 <= width) return `${paint(theme, "accent", spin)} ${paint(theme, "muted", text)}`;
+  }
+  return "";
+}
