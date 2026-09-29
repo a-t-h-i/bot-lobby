@@ -268,6 +268,24 @@ export function scrollThumb(total: number, rows: number, start: number): { from:
   return { from, to: from + size };
 }
 
+/** Page buttons in the bottom border of a pane that scrolls: two pages up, one up, one down, two down. */
+export const PAGER = "▲▲ ▲ ▼ ▼▼";
+/** Columns the pager takes with a space on each side. */
+export const PAGER_WIDTH = PAGER.length + 2;
+/** Narrowest box that has room for the pager beside its corners. */
+const PAGER_MIN_WIDTH = PAGER_WIDTH + 6;
+
+/** Which page button a column of a scrollable pane's bottom border is: -2, -1, 1 or 2 pages (negative up), or undefined. */
+export function pagerButton(width: number, column: number): -2 | -1 | 1 | 2 | undefined {
+  if (width < PAGER_MIN_WIDTH) return undefined;
+  const from = column - width;
+  if (from >= -12 && from <= -10) return -2;
+  if (from >= -9 && from <= -7) return -1;
+  if (from >= -6 && from <= -5) return 1;
+  if (from >= -4 && from <= -2) return 2;
+  return undefined;
+}
+
 /**
  * A rounded panel exactly `width` × `height`: the title set into the top
  * border, `content` inside with one column of padding, extra lines cut and
@@ -291,7 +309,10 @@ export function box(width: number, height: number, content: readonly string[], o
   const thumb = options.scroll ? scrollThumb(options.scroll.total, height - 2, options.scroll.start) : undefined;
   const rightEdge = (row: number) => (thumb && row >= thumb.from && row < thumb.to ? paint(theme, focused ? "accent" : "muted", "┃") : edge("│"));
   const rows = fill(content, height - 2).map((line, row) => `${edge("│")} ${fit(line, inner)} ${rightEdge(row)}`);
-  return [top, ...rows, `${edge("╰")}${edge("─".repeat(width - 2))}${edge("╯")}`];
+  // A pane with more lines than rows carries page buttons in its bottom border; `pagerButton` finds them again for clicks.
+  const pager = thumb && width >= PAGER_MIN_WIDTH ? ` ${PAGER} ` : "";
+  const bottom = `${edge("╰")}${edge("─".repeat(width - 2 - textWidth(pager)))}${pager ? paint(theme, focused ? "accent" : "muted", pager) : ""}${edge("╯")}`;
+  return [top, ...rows, bottom];
 }
 
 /** Lay boxes out side by side, each already exactly its width and the same height. */
