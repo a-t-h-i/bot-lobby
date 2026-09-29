@@ -36,7 +36,7 @@ export function splitSections(markdown: string): string[] {
     .filter((part) => part.length > 0);
 }
 
-function score(sectionText: string, tokens: string[]): number {
+export function score(sectionText: string, tokens: string[]): number {
   const lower = sectionText.toLowerCase();
   return tokens.reduce((total, token) => total + (lower.includes(token) ? 1 : 0), 0);
 }
