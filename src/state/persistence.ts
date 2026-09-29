@@ -15,6 +15,7 @@ import {
 } from "../knowledge/paths.ts";
 import { DEFAULT_KNOWLEDGE_CONTENT, ensureFile, readFileOr, writeFileEnsured } from "../knowledge/store.ts";
 import { forgetCached, forgetCachedUnder, readJsonCached } from "./file-cache.ts";
+import { taskName } from "../text.ts";
 
 /** Idempotently create the full knowledge + tasks layout with seed files. */
 export function ensureProjectStructure(root: string, configDir: string): void {
@@ -235,13 +236,12 @@ export function taskSlug(request: string, max = 40): string {
 }
 
 /**
- * Task id from the request (`TASK-<slug>`); requests with no usable slug fall
- * back to the timestamped `TASK-task-<timestamp>` form callers already suffix.
+ * Task id from the request: its friendly name, `Task-<Words>-<DD-MM-YYYY>`
+ * (`Task-Change-Table-Font-27-09-2026`); a request with no words is
+ * `Task-Untitled-<date>`. Callers add a `-2`, `-3`… suffix when it is taken.
  */
 export function nextTaskId(request: string, now = new Date()): string {
-  const slug = taskSlug(request);
-  if (slug.length > 0) return `TASK-${slug}`;
-  return `TASK-task-${now.toISOString().replace(/[-:T]/g, "").slice(0, 14)}`;
+  return taskName(request, now);
 }
 
 /** Files that make up a task's temporary working state (§20). */

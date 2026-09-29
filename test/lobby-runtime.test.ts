@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createTask } from "../src/schemas/task.ts";
+import { taskName } from "../src/text.ts";
 import { createTaskDir, ensureProjectStructure, saveTask } from "../src/state/persistence.ts";
 import { transition } from "../src/state/task-state.ts";
 import { addPlanComment, readPlanComments } from "../src/state/comments.ts";
@@ -262,22 +263,24 @@ test("the lobby starts a task in a named background session, relays its question
     for (const char of "add a login page") view.handleInput(char);
     view.handleInput("\r");
     assert.equal(launched.length, 1);
-    assert.deepEqual(launched[0]!.args.slice(0, 6), ["--mode", "rpc", "--name", "add login page", "--model", "p/master-model"]);
+    const name = taskName("add a login page");
+    assert.match(name, /^Task-Add-Login-Page-\d{2}-\d{2}-\d{4}$/, "named with the task's friendly name");
+    assert.deepEqual(launched[0]!.args.slice(0, 6), ["--mode", "rpc", "--name", name, "--model", "p/master-model"]);
     assert.equal(launched[0]!.cwd, root);
     const session = backgroundSessions()[0]!;
-    assert.equal(view.viewedEntry().name, "add login page", "named as its task will be");
+    assert.equal(view.viewedEntry().name, name, "named as its task will be");
 
     // A question while the lobby is up waits in it; enter on an empty prompt puts it to the user with pi's dialog.
     launched[0]!.proc.emit({ type: "extension_ui_request", id: "q1", method: "select", title: "Approve the proposal?", options: ["Approve", "Decline"] });
     view.handleInput("\r");
     await new Promise((resolve) => setImmediate(resolve));
-    assert.deepEqual(ui.ui.asked, ["add login page — Approve the proposal?"]);
+    assert.deepEqual(ui.ui.asked, [`${name} — Approve the proposal?`]);
     assert.deepEqual(launched[0]!.proc.commands("extension_ui_response"), [{ type: "extension_ui_response", id: "q1", value: "Approve" }]);
 
     // With the lobby hidden, a new question is announced.
     hideLobby();
     launched[0]!.proc.emit({ type: "extension_ui_request", id: "q2", method: "confirm", title: "Sure?", message: "" });
-    assert.ok(ui.notes.some((note) => note.includes("add login page is waiting for you")));
+    assert.ok(ui.notes.some((note) => note.includes(`${name} is waiting for you`)));
 
     // Another terminal's task: messages go to its inbox, and auto mode is switched in its folder.
     showLobby("lobby");

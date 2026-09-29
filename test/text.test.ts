@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { shortTitle } from "../src/text.ts";
+import { dateStamp, nameWords, shortTitle, taskName } from "../src/text.ts";
 
 test("shortTitle keeps the first three content words", () => {
   assert.equal(shortTitle("let's create a landing page for our website"), "create landing page");
@@ -37,4 +37,20 @@ test("tail keeps the newest end of a log", async () => {
   const { tail } = await import("../src/text.ts");
   assert.equal(tail("abcdef", 10), "abcdef");
   assert.equal(tail("abcdef", 2), "[...4 earlier characters omitted]\nef");
+});
+
+test("a task's friendly name is its first content words, capitalised, then the day", () => {
+  const day = new Date(2026, 8, 27, 23, 59);
+  assert.equal(dateStamp(day), "27-09-2026");
+  assert.equal(dateStamp(new Date(2027, 0, 3)), "03-01-2027");
+  assert.equal(taskName("Change the table font", day), "Task-Change-Table-Font-27-09-2026");
+  assert.equal(taskName("please can you fix the login redirect bug on mobile", day), "Task-Fix-Login-Redirect-Bug-On-27-09-2026", "at most five words");
+  assert.equal(nameWords("add OAuth support to the API"), "Add-OAuth-Support-API", "capitals inside a word stay");
+  assert.equal(nameWords("rename front-end helpers"), "Rename-Front-End-Helpers", "a hyphenated word keeps its parts");
+  assert.equal(nameWords("### Objective\nFour fixes: solid buttons"), "Four-Fixes-Solid-Buttons", "Markdown labels are skipped");
+  assert.equal(nameWords("añadir página de inicio"), "Añadir-Página-De-Inicio", "letters of any script count");
+  assert.equal(nameWords("x".repeat(80)), `X${"x".repeat(35)}`, "a single long word is cut");
+  assert.equal(nameWords("implementation internationalization infrastructure rearchitecture"), "Implementation-Internationalization", "cut between words, not in one");
+  assert.equal(nameWords("!!! ???"), "");
+  assert.equal(taskName("???", day), "Task-Untitled-27-09-2026");
 });

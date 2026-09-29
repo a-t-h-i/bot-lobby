@@ -21,7 +21,7 @@ import { discardPlannedTask, listPlannedTasks, type PlannedTask } from "../state
 import { appendMetrics, readClassifierMetrics, readMetrics, type MetricStatus } from "../state/metrics.ts";
 import { describeToolCall } from "../pi/activity.ts";
 import { applyStatus, currentZenTask, isMinimized, onMinimizeChange, onRunUpdates, setMinimized, taskSnapshot } from "../pi/ui.ts";
-import { shortTitle } from "../text.ts";
+import { taskName } from "../text.ts";
 import { isSubagentProcess } from "../pi/quiet.ts";
 import { modelRef, resolveLobbyProfile, resolvePanelProfile } from "../pi/model-support.ts";
 import { modelLookup } from "../pi/tools.ts";
@@ -265,7 +265,7 @@ function startSession(state: Runtime, start: { request?: string; plan?: PlannedT
     const starting = backgroundSessions().find((session) => session.alive && session.planId === plan.id);
     if (starting) return `${plan.id} is already starting in ${starting.name}`;
   }
-  const name = plan?.title ?? shortTitle(request!);
+  const name = taskName(plan?.title ?? request!);
   try {
     const session = sessionRegistry().start(state.ctx.cwd, { name, ...(plan ? { planId: plan.id } : { request: request! }), ...(start.auto ? { auto: true } : {}) }, sessionModel(state.ctx));
     lobbyFeed.log("LOBBY", `started "${name}" in a new session`, "success");
