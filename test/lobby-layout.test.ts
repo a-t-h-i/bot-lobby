@@ -191,7 +191,7 @@ test("the lobby config reads panes, keys, the Issues tab, questionnaires and the
 });
 
 test("the settings menu flips each lobby switch", () => {
-  assert.deepEqual(LOBBY_SWITCHES.map((entry) => entry.id), ["autoOpen", "autoAsk", "mouse", "issues", "panel:conversation", "panel:activity", "panel:thinking"]);
+  assert.deepEqual(LOBBY_SWITCHES.map((entry) => entry.id), ["autoOpen", "autoAsk", "mouse", "miniLine", "issues", "panel:conversation", "panel:activity", "panel:thinking"]);
   const off = toggleLobbySwitch(DEFAULT_CONFIG, "panel:activity");
   assert.equal(lobbySwitch(off, "panel:activity"), false);
   assert.equal(off.lobby.panels.thinking, true);
