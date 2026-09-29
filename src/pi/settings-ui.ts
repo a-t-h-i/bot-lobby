@@ -407,7 +407,7 @@ function entryDescription(kind: SettingsKind, view: EntryView): string {
 }
 
 /** The lobby's on/off settings as the settings menu lists them; `panel:*` are the Lobby tab's panes. */
-export type LobbySwitch = "autoOpen" | "autoAsk" | "mouse" | "issues" | `panel:${LobbyPanel}`;
+export type LobbySwitch = "autoOpen" | "autoAsk" | "mouse" | "miniLine" | "issues" | `panel:${LobbyPanel}`;
 
 const PANEL_SWITCH_LABELS: Record<LobbyPanel, string> = { conversation: "Conversation pane", activity: "Activity log pane", thinking: "Thinking pane" };
 
@@ -415,6 +415,7 @@ export const LOBBY_SWITCHES: ReadonlyArray<{ id: LobbySwitch; label: string; hel
   { id: "autoOpen", label: "Open with a task", help: "open the lobby when this session starts or resumes a task" },
   { id: "autoAsk", label: "Ask at once", help: "put the panel's questions to you as soon as a round ends, while the Plan tab is open" },
   { id: "mouse", label: "Mouse", help: "click tabs and draft lines, scroll with the wheel (shift+drag still selects text)" },
+  { id: "miniLine", label: "Status line when hidden", help: "one line under the editor while the lobby is hidden: task steps, the planning round, a quick fix, or idle" },
   { id: "issues", label: "Issues tab", help: "the GitHub Issues tab" },
   ...LOBBY_PANELS.map((panel) => ({
     id: `panel:${panel}` as const,
@@ -470,6 +471,7 @@ function lobbySummary(config: BotLobbyConfig): string {
     config.lobby.autoOpen ? "opens with a task" : "opens on alt+l",
     config.lobby.autoAsk ? "asks at once" : "asks on enter",
     config.lobby.mouse ? "mouse" : "no mouse",
+    ...(config.lobby.miniLine ? [] : ["no status line"]),
     `planning: ${roundLimitLabel(config.lobby.maxPlanningRounds)}`,
     ...(config.lobby.issues ? ["issues tab"] : []),
     ...(hidden.length > 0 ? [`hidden: ${hidden.join(", ")}`] : []),
