@@ -2,7 +2,7 @@
 
 A [Pi](https://pi.dev) extension that turns Pi into a multi-agent software team.
 
-![The bot-lobby status scene: the oracle orchestrating DEV, DESIGN, RESEARCH and QA through a task's plan](https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/gallery.png)
+![The Lobby tab: your conversation with the oracle, the activity log of every agent, and their latest thoughts](https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/gallery.png)
 
 `/bot-lobby <request>` (or a request typed in the lobby) starts a task, unless
 one agent can simply do it: then it goes to the [quick-fix agent](#quick-fix-or-the-team).
@@ -15,6 +15,10 @@ gate before anything is marked done.
 The rule: **LLMs decide, the engine enforces.** Agents propose; the
 extension validates every state change, permission and approval through one
 `orchestrate` tool.
+
+The oracle is meant to be your most capable model; the agents can be smaller
+and cheaper ones. So it never assumes they are as capable as it is: it makes
+every decision itself and [briefs each agent in full](#briefing-the-agents).
 
 ## Install
 
@@ -35,7 +39,7 @@ tool names.
 
 1. `/bot-lobby add a login page` — starts a task; the lobby opens.
 2. Answer the Master's questions, then approve its proposal.
-3. Watch the agents work in the lobby (`alt+l` shows or hides it).
+3. Follow the agents in the lobby (`alt+l` shows or hides it): what they do, and what they think.
 
 `/bot-lobby settings` sets each agent's model, thinking level, time limit and
 extra instructions.
@@ -129,6 +133,30 @@ passwords, payments, migrations, production, personal data), or **unclear**
 - The track shows in the lobby's activity log, the task's details on the
   Tasks tab, and `/bot-lobby status`.
 
+### Briefing the agents
+
+Every agent may run on a smaller, cheaper model than the oracle's, one that
+follows instructions well but does not infer intent. So the oracle writes
+each delegation (`implement`, `scout`, `research`) as a self-contained brief
+and settles every design and architecture decision itself first:
+
+- **Goal**, the exact **Files**, numbered **What to do** with names, shapes
+  and values, the **Contracts** shared with other agents (repeated in full in
+  each brief), **Constraints**, **Done when** (checkable criteria and the
+  commands to run) and **If stuck**.
+- Plan steps are written to the same standard, so a brief is the plan step
+  made explicit, never a new decision.
+- Every agent is told to follow its brief and the approved plan exactly, use
+  the given names letter for letter, and report what does not match instead of
+  guessing. Workers end their report with a **Brief Check**: each "Done when"
+  item, met or not, with evidence.
+- The oracle holds each report to its brief. Drift, a skipped criterion or a
+  guessed choice comes back as a fix step with a more explicit brief.
+- The engine backs it up: a delegation that names nothing concrete (or a long
+  one with no done criteria) is sent back to the oracle once before any agent
+  starts. Sending the same text again goes through, so a short task that is
+  complete as written is never stuck. `workflow.briefCheck: false` turns it off.
+
 ### The full workflow
 
 - **Scouts** (read-only) investigate the domains the request touches.
@@ -188,15 +216,53 @@ everything. `workflow.freshContext: false` in the config turns this off.
 ## The lobby
 
 A full-screen view with a prompt at the bottom that talks to whatever tab is
-open. `alt+h` lists every key.
+open. `alt+h` lists every key. It is text only: no animations, just the
+conversation, the activity log and the thoughts, and a one-line status in Pi's
+footer.
 
 | Tab | What it is |
 | --- | --- |
-| **1 Lobby** | The task's status, your conversation with the oracle, an activity log of every tool call, and each agent's latest thought |
+| **1 Lobby** | Your conversation with the oracle, an activity log of every agent's steps, and each agent's latest thought |
 | **2 Tasks** | Every task and saved plan as a checklist. `s` starts a plan in a new session, `h` here; `c` comments on a plan; `a` archives, `d` deletes |
 | **3 Plan** | Plan a task with a panel of agents before building it (below) |
 | **4 Quick fix** | One agent makes a change right away, beside any running task; requests the oracle [routes here](#quick-fix-or-the-team) show up too |
 | **5 Metrics** | Run time, success rate, tokens and cost per model and agent |
+
+### Lobby
+
+![The Lobby tab](https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/gallery.png)
+
+Your conversation with the oracle on the left, the activity log of every
+agent's steps on the right, and the agents' latest thoughts below. `alt+c`,
+`alt+a` and `alt+k` hide any of the three; the prompt steers the running turn.
+
+### Tasks
+
+![The Tasks tab](https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/lobby-tasks.png)
+
+Every task as a checklist, with its track, plan progress, the approved plan
+and your comments on it.
+
+### Plan
+
+![The Plan tab](https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/lobby-plan.png)
+
+The panel's questions, with recommended options, on the left; the draft plan
+on the right. See [Planning](#planning).
+
+### Quick fix
+
+![The Quick fix tab](https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/lobby-quickfix.png)
+
+One agent's jobs, each with its live steps, the files it edited and its
+report. See [Quick fix or the team](#quick-fix-or-the-team).
+
+### Metrics
+
+![The Metrics tab](https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/lobby-metrics.png)
+
+Run time, success rate, cost and tokens per model and agent, so you can see
+which cheaper models hold up.
 
 Common keys: `tab` switches tabs, `esc` browses (arrows, single-key
 commands), `ctrl+f` searches, `ctrl+s` saves the plan, `alt+o` browses
@@ -336,7 +402,7 @@ the result.
   "scout": { "model": "anthropic/claude-haiku-4-5-20251001", "timeoutMs": 480000 },
   "planner": { "thinking": "high", "timeoutMs": 300000 },
   "lobby": { "planningPanel": ["backend", "designer", "qa", "researcher"], "maxPlanningRounds": 5 },
-  "workflow": { "maxReviewIterations": 2, "maxParallelWorkers": 3, "stallTimeoutMs": 300000, "wrapUpAt": 0.75, "taskBudgetMinutes": 0, "fastTrack": true, "routeQuickFixes": true },
+  "workflow": { "maxReviewIterations": 2, "maxParallelWorkers": 3, "stallTimeoutMs": 300000, "wrapUpAt": 0.75, "taskBudgetMinutes": 0, "fastTrack": true, "briefCheck": true, "routeQuickFixes": true },
   "classifier": { "enabled": false, "provider": "auto", "effort": { "cheapModel": "inherit" } }
 }
 ```
