@@ -21,7 +21,7 @@ export default function (pi: ExtensionAPI): void {
   // Before the lifecycle, so a task that ended while the oracle was idle is closed before it builds the next turn's prompt.
   registerFreshContext(pi, CONFIG_DIR_NAME);
   registerLifecycle(pi, CONFIG_DIR_NAME);
-  // After the lifecycle, so the lobby opens over a task the widget state already knows.
+  // After the lifecycle, so the lobby opens over a task the status already knows.
   registerLobbyEvents(pi, CONFIG_DIR_NAME);
   registerOwner(pi, CONFIG_DIR_NAME);
   onTransition((task) => pingTransition(task));
