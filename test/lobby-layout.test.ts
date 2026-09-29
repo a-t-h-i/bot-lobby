@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { stripTerminalSequences, visibleWidth, type MarkdownTheme } from "@earendil-works/pi-tui";
-import { bar, beside, box, detailWindow, highlight, markdownHanging, markdownLines, meter, notePane, position, scrollThumb, sparkline, stackedBar, type LobbyTheme } from "../src/lobby/layout.ts";
+import { bar, beside, box, detailWindow, highlight, markdownHanging, markdownLines, meter, notePane, pageCount, pageOf, pager, pagerButton, pageStep, position, scrollThumb, sparkline, stackedBar, type LobbyTheme } from "../src/lobby/layout.ts";
 import { chatLines, chatTail, paneWindow, tailWindow } from "../src/lobby/tabs/home.ts";
 import type { ChatEntry } from "../src/lobby/feed.ts";
 import { createMarkdownRenderer, markdownBlocks, tidyHeading } from "../src/lobby/markdown.ts";
@@ -216,6 +216,68 @@ test("scroll windows, thumbs and positions stay inside their panes", () => {
   const panes = new Map();
   notePane(panes, "detail", 1, 20, 30, 12, 99);
   assert.deepEqual(panes.get("detail"), { top: 1, left: 20, width: 30, height: 12, total: 99, rows: 10 });
+});
+
+test("pages: a page is the rows less one, counted from the top as 1 to the bottom as the last, whichever end a pane opens at", () => {
+  assert.equal(pageStep(10), 9);
+  assert.equal(pageStep(1), 1);
+  assert.equal(pageCount(8, 10), 1, "everything fits: one page");
+  assert.equal(pageCount(60, 20), 4);
+  assert.deepEqual([0, 19, 38, 40].map((start) => pageOf(60, 20, start)), [1, 2, 3, 4], "reading down from the top");
+  assert.deepEqual([40, 21, 2, 0].map((start) => pageOf(60, 20, start)), [4, 3, 2, 1], "reading up from the newest line");
+  assert.equal(pageOf(60, 20, 999), 4, "past the end is the end");
+  assert.equal(pageOf(60, 20, -5), 1);
+  assert.equal(pageOf(5, 10, 0), 1);
+});
+
+test("the pager is words a newcomer reads, shortening as the pane narrows, and nothing where it cannot fit", () => {
+  const words = (room: number, start = 40) => pager(120, 4, start, room)?.map((part) => part.text).join("");
+  assert.equal(words(40), "▲ prev · page 14/40 · next ▼");
+  assert.equal(words(28), "▲ prev · page 14/40 · next ▼");
+  assert.equal(words(27), "▲ prev · 14/40 · next ▼");
+  assert.equal(words(23), "▲ prev · 14/40 · next ▼");
+  assert.equal(words(22), "▲ 14/40 ▼");
+  assert.equal(words(9), "▲ 14/40 ▼");
+  assert.equal(words(8), undefined, "no room: no pager");
+  assert.equal(pager(120, 4, 0, 40)!.find((part) => part.role === "where")!.text, "page  1/40", "the page number is padded so the buttons never move");
+  assert.deepEqual(pager(60, 20, 40, 40)!.map((part) => part.role), ["up", "between", "where", "between", "down"]);
+  const edge = (width: number, start: number, total = 120, height = 6) => stripTerminalSequences(box(width, height, ["x"], { scroll: { total, start } }).at(-1)!);
+  assert.equal(edge(40, 40), "╰──────── ▲ prev · page 14/40 · next ▼ ╯");
+  assert.equal(edge(30, 40), "╰─── ▲ prev · 14/40 · next ▼ ╯");
+  assert.equal(edge(16, 40), "╰─── ▲ 14/40 ▼ ╯");
+  assert.equal(edge(14, 40), "╰────────────╯", "too narrow for the pager");
+  assert.equal(edge(44, 0, 4, 6), `╰${"─".repeat(42)}╯`, "a pane that fits has none");
+  for (const width of [14, 16, 22, 30, 44, 80]) assert.equal(visibleWidth(box(width, 6, ["x"], { scroll: { total: 120, start: 40 } }).at(-1)!), width);
+});
+
+test("a button that cannot go further is dimmed, and the words between them are not buttons", () => {
+  const theme: LobbyTheme = { fg: (color, text) => `<${color}>${text}</${color}>`, bold: (text) => `*${text}*` };
+  const edge = (start: number, focused = true) => box(44, 6, ["x"], { scroll: { total: 120, start }, focused, theme }).at(-1)!;
+  assert.match(edge(0), /<dim>▲ prev<\/dim><dim> · <\/dim><text>page  1\/40<\/text><dim> · <\/dim>\*<accent>next ▼<\/accent>\*/, "at the top: prev is dimmed, next is live");
+  assert.match(edge(116), /\*<accent>▲ prev<\/accent>\*.*<dim>next ▼<\/dim>/, "at the end: next is dimmed");
+  assert.match(edge(40), /\*<accent>▲ prev<\/accent>\*.*\*<accent>next ▼<\/accent>\*/, "in the middle both are live");
+  assert.match(edge(40, false), /\*<text>▲ prev<\/text>\*.*<muted>page 14\/40<\/muted>/, "an unfocused pane is quieter");
+});
+
+test("clicks land on the buttons and the space beside them, not on the page count", () => {
+  // `╰──────── ▲ prev · page 14/40 · next ▼ ╯` in 40 columns: ▲ prev at 10–15, page 14/40 at 19–28, next ▼ at 32–37.
+  const width = 40;
+  const at = (column: number) => pagerButton(width, column, 120, 4);
+  assert.equal(at(8), undefined, "the border");
+  assert.equal(at(9), -1, "the space before ▲ prev");
+  assert.equal(at(10), -1);
+  assert.equal(at(15), -1);
+  assert.equal(at(16), undefined, "between the buttons");
+  assert.equal(at(24), undefined, "the page count");
+  assert.equal(at(32), 1);
+  assert.equal(at(37), 1);
+  assert.equal(at(38), 1, "the space after ▼");
+  assert.equal(at(width - 1), undefined, "the corner");
+  assert.equal(pagerButton(14, 10, 120, 4), undefined, "no pager, no buttons");
+  // `╰─── ▲ 14/40 ▼ ╯` in 16 columns: ▲ at 5, ▼ at 13.
+  assert.equal(pagerButton(16, 5, 120, 4), -1);
+  assert.equal(pagerButton(16, 8, 120, 4), undefined);
+  assert.equal(pagerButton(16, 13, 120, 4), 1);
 });
 
 test("line breaks a model wrote out as \\n are made real, but not inside code or where real ones exist", async () => {

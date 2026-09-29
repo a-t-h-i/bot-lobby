@@ -24,7 +24,7 @@ import { MEMBER_LABELS, ORACLE_LABEL, type PlannerSeed, type PlanningSession } f
 import { issueText, type IssuesState } from "./issues.ts";
 import { agentsIndicator, workingAgents } from "./mini.ts";
 import { actionFor, keyLabel, keyMap, LOBBY_ACTIONS, type KeyMap, type LobbyAction } from "./keys.ts";
-import { beside, BRANCH_GLYPH, bold, box, fit, highlight, pagerButton, paint, rule, selectRow, spinner, spread, windowStart, wrap, wrapHanging, type LobbyTheme, type PaneBox, type PaneLayout, type PaneMark } from "./layout.ts";
+import { beside, BRANCH_GLYPH, bold, box, fit, highlight, pageStep, pagerButton, paint, rule, selectRow, spinner, spread, windowStart, wrap, wrapHanging, type LobbyTheme, type PaneBox, type PaneLayout, type PaneMark } from "./layout.ts";
 import { chatTail, HOME_PANES, renderHome, type HomePane } from "./tabs/home.ts";
 import { filterRows, pips, planDetailLines, renderTasks, taskDetailLines, taskProgress, taskRows, tasksWidths, type TaskRow } from "./tabs/tasks.ts";
 import { renderPlan, type PlanLayout, type PlanView, type SeatView } from "./tabs/plan.ts";
@@ -1926,9 +1926,9 @@ export class LobbyView implements Component, Focusable {
     // The page buttons in a scrolling pane's bottom border scroll it a page or two.
     const paneBox = pane ? this.panes.get(pane) : undefined;
     if (pane && paneBox && paneBox.total > paneBox.rows && row === paneBox.top + paneBox.height - 1) {
-      const button = pagerButton(paneBox.width, x - paneBox.left);
+      const button = pagerButton(paneBox.width, x - paneBox.left, paneBox.total, paneBox.rows);
       if (button) {
-        this.scrollPane(pane, button * Math.max(1, paneBox.rows - 1), false, true);
+        this.scrollPane(pane, button * pageStep(paneBox.rows), false, true);
         return;
       }
     }
@@ -2447,7 +2447,7 @@ export class LobbyView implements Component, Focusable {
       ...row("Ctrl+C", "clear the prompt, or hide the lobby", inner),
       ...row("click", "a tab to open it, a pane to give it the keys, a draft plan line to comment on it", inner),
       ...row("wheel", "scroll the pane under the pointer", inner),
-      ...row("▲ ▼", "click the buttons on a pane's bottom edge: a page up or down (▲▲ ▼▼ two pages)", inner),
+      ...row("prev next", "click on a long pane's bottom edge (▲ prev · page 2/5 · next ▼) to move a page; dimmed at either end", inner),
     ];
     const modes = (inner: number) => [
       section("Typing"),
