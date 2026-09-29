@@ -71,6 +71,13 @@ export interface PanelQuestion extends AskedQuestion {
   from: string;
 }
 
+/** One of the panel's questions as the user's reply settled it: answered, or left open (`answer` absent). */
+export interface SettledQuestion {
+  from: string;
+  question: string;
+  answer?: string;
+}
+
 export interface PlannerMessage {
   role: "you" | "planner";
   text: string;
@@ -79,6 +86,8 @@ export interface PlannerMessage {
   questions?: PanelQuestion[];
   /** Questions the classifier answered with their recommended option instead of asking. */
   decided?: AutoAnswer[];
+  /** On the user's reply: which of the questions before it were answered, so they are never asked again. */
+  settled?: SettledQuestion[];
 }
 
 /** The oracle's reply: its verdict, title, own questions and the draft plan. */
@@ -337,6 +346,8 @@ export function plannerTranscript(messages: readonly PlannerMessage[], seed?: Pl
     lines.push(message.role === "you" ? "### User" : "### Panel", "", body, "");
     if (message.decided && message.decided.length > 0) lines.push(decidedBlock(message.decided), "");
   }
+  const settled = messages.flatMap((message) => message.settled ?? []);
+  if (settled.length > 0) lines.push(settledBlock(settled), "");
   if (draft) lines.push("## The oracle's current draft plan", "", truncate(draft, 8000), "");
   lines.push(closing);
   return lines.join("\n");
@@ -353,6 +364,55 @@ export function decidedBlock(decided: readonly AutoAnswer[]): string {
   return [
     "Decided by the classifier (each is the recommended option, which the conversation already makes clearly right; list them under Assumptions, the user can overrule them):",
     ...decided.map((entry) => `- [${entry.from}] ${entry.question} → ${entry.answer} (${entry.probability.toFixed(2)})`),
+  ].join("\n");
+}
+
+/** One line of at most `max` characters, for the activity log. */
+function brief(text: string, max: number): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+}
+
+/** Two questions this alike (by shared words) ask the same thing. */
+const SAME_QUESTION = 0.8;
+
+/** Words that carry no topic: a rewording changes them without changing the question. */
+const FILLER = new Set(["a", "an", "the", "of", "to", "in", "on", "at", "for", "with", "and", "or", "is", "are", "be", "been", "it", "its", "this", "that", "do", "does", "did", "we", "you", "i", "should", "would", "could", "can", "will", "shall", "must", "which", "what", "how", "so", "as", "by", "from", "than", "then", "us", "our", "your"]);
+
+function questionWords(text: string): Set<string> {
+  const words = text.toLowerCase().replace(/[^a-z0-9\s]+/g, " ").split(/\s+/).filter(Boolean);
+  const content = words.filter((word) => !FILLER.has(word));
+  return new Set(content.length > 0 ? content : words);
+}
+
+/** Whether two questions ask the same thing: the same topic words in any order, or nearly all of them. */
+export function sameQuestion(a: string, b: string): boolean {
+  const left = questionWords(a);
+  const right = questionWords(b);
+  if (left.size === 0 || right.size === 0) return false;
+  let shared = 0;
+  for (const word of left) if (right.has(word)) shared += 1;
+  if (shared === left.size && shared === right.size) return true;
+  return Math.min(left.size, right.size) >= 3 && shared / (left.size + right.size - shared) >= SAME_QUESTION;
+}
+
+/**
+ * Split a round's questions into those still to ask and the repeats of ones
+ * the user already settled (answered, or left for the oracle to decide): the
+ * user never gets the same question twice, whatever the models write.
+ */
+export function withoutSettled(questions: readonly PanelQuestion[], settled: readonly SettledQuestion[]): { asked: PanelQuestion[]; repeats: PanelQuestion[] } {
+  const asked: PanelQuestion[] = [];
+  const repeats: PanelQuestion[] = [];
+  for (const question of questions) (settled.some((entry) => sameQuestion(entry.question, question.text)) ? repeats : asked).push(question);
+  return { asked, repeats };
+}
+
+/** What the user settled, as every seat and the oracle read it: closed questions, never to be asked again. */
+export function settledBlock(settled: readonly SettledQuestion[]): string {
+  return [
+    "## Already settled with the user (closed: never ask these again, in any wording)",
+    ...settled.map((entry) => `- [${entry.from}] ${entry.question} → ${entry.answer ? entry.answer.replace(/\s*\n\s*/g, " / ") : "(left unanswered: decide it yourself with its recommended option and list it under Assumptions)"}`),
   ].join("\n");
 }
 
@@ -498,19 +558,28 @@ export class PlanningSession {
     return this.seats.has(member);
   }
 
-  /** Add the user's message (the idea, or answers), with any line comments, and run a round. */
-  async send(text: string): Promise<void> {
+  /**
+   * Add the user's message (the idea, or answers), with any line comments, and
+   * run a round. `settled` says which of the open questions the message
+   * answered (or left), so the panel is never allowed to ask them again.
+   */
+  async send(text: string, settled?: readonly SettledQuestion[]): Promise<void> {
     this.autoContinued = false;
-    await this.post(text);
+    await this.post(text, settled);
   }
 
-  private async post(text: string): Promise<void> {
+  private async post(text: string, settled?: readonly SettledQuestion[]): Promise<void> {
     const body = [text.trim(), commentBlock(this.lineComments)].filter(Boolean).join("\n\n");
     if (!body) return;
     if (this.busy) throw new Error("the panel is still thinking");
     this.lineComments = [];
-    this.messages = [...this.messages, { role: "you", text: body, at: Date.now() }];
+    this.messages = [...this.messages, { role: "you", text: body, at: Date.now(), ...(settled && settled.length > 0 ? { settled: [...settled] } : {}) }];
     await this.turn();
+  }
+
+  /** Every question the user has settled so far, oldest first. */
+  get settled(): SettledQuestion[] {
+    return this.messages.flatMap((message) => message.settled ?? []);
   }
 
   /** The round's questions still wait for answers. */
@@ -686,6 +755,8 @@ export class PlanningSession {
     this.turns += 1;
     this.attempts += 1;
     this.answered = [];
+    // The user's reply answers whatever was open: a round that then fails or is stopped must not put those questions to them again.
+    this.questions = [];
     const limit = this.limit;
     const mode = roundMode(this.turns, limit);
     this.mode = mode;
@@ -824,7 +895,9 @@ export class PlanningSession {
   private finishRound(outcomes: readonly MemberOutcome[], lead: RunOutcome, mode: RoundMode): void {
     const reply = lead.status === "success" ? parsePlannerReply(lead.output) : undefined;
     const seatQuestions = outcomes.flatMap((outcome) => (outcome.reply?.questions ?? []).map((question) => ({ ...question, from: MEMBER_LABELS[outcome.member] })));
-    let questions = roundQuestions(reply, seatQuestions);
+    const { asked, repeats } = withoutSettled(roundQuestions(reply, seatQuestions), this.settled);
+    let questions = asked;
+    if (repeats.length > 0) this.deps.feed?.log(ORACLE_LABEL, `held back ${repeats.length} question${repeats.length === 1 ? "" : "s"} you already settled: ${repeats.map((question) => brief(question.text, 60)).join("; ")}`, "info");
     const seatsReady = outcomes.every((outcome) => outcome.reply?.status === "ready");
     let ready = Boolean(reply && reply.status === "ready" && seatsReady);
     if (reply) {

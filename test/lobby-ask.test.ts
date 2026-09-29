@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { answerMessage, askPanel, dialogAsker, MAX_QUESTIONS, questionnaires, toAskQuestion, type AskQuestion, type AskResult } from "../src/lobby/ask.ts";
+import { answerMessage, askPanel, dialogAsker, MAX_QUESTIONS, questionnaires, settledQuestions, toAskQuestion, type AskQuestion, type AskResult } from "../src/lobby/ask.ts";
 import type { PanelQuestion } from "../src/lobby/planner.ts";
 
 const question = (from: string, text: string, labels: string[] = []): PanelQuestion => ({ from, text, options: labels.map((label) => ({ label, description: `${label} it is` })) });
@@ -53,6 +53,33 @@ test("answers go back to the panel attributed, with notes and what was skipped",
     "5. [RESEARCH] Library?",
   ].join("\n"));
   assert.equal(answerMessage(questions, [{ cancelled: false, answers: [] }]), undefined, "nothing answered sends nothing");
+});
+
+test("what the reply settled is kept per question, answered or left, so none is asked twice", () => {
+  const questions = [question("DEV", "REST or RPC?"), question("QA", "  Which\n browsers? "), question("DESIGN", "Modal or page?")];
+  const results: AskResult[] = [{
+    cancelled: false,
+    answers: [
+      { questionIndex: 0, question: "REST or RPC?", kind: "option", answer: "REST" },
+      { questionIndex: 2, question: "Modal or page?", kind: "multi", answer: null, selected: ["Modal", "Page"] },
+    ],
+  }];
+  assert.deepEqual(settledQuestions(questions, results), [
+    { from: "DEV", question: "REST or RPC?", answer: "REST" },
+    { from: "QA", question: "Which browsers?" },
+    { from: "DESIGN", question: "Modal or page?", answer: "Modal, Page" },
+  ]);
+  assert.deepEqual(settledQuestions(questions, []), [], "nothing was asked of the user yet");
+});
+
+test("an answer written over several lines keeps its lines under the arrow", () => {
+  const questions = [question("DEV", "How should errors look?")];
+  const results: AskResult[] = [{ cancelled: false, answers: [{ questionIndex: 0, question: "How should errors look?", kind: "custom", answer: "one line\nsecond line", notes: "a\nb" }] }];
+  assert.equal(answerMessage(questions, results), [
+    "Answers to the panel's questions:",
+    "1. [DEV] How should errors look?\n   → one line\n     second line (in my words)",
+    "   note: a\n     b",
+  ].join("\n"));
 });
 
 const ctx = {} as ExtensionContext;
