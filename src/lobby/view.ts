@@ -160,6 +160,8 @@ export interface LobbyHost {
   newPlanner(seed?: PlannerSeed, seats?: readonly PanelMember[]): PlanningSession;
   /** The oracle puts the panel's open questions to the user, one questionnaire at a time; returns a notice. */
   answerPanel(): Promise<string>;
+  /** Save the plan as a pending task, offering to split a long one into several first; returns a notice. */
+  savePlan(): Promise<string>;
   /** The seats a new session starts with, from settings. */
   defaultPanel(): readonly PanelMember[];
   /** Planning rounds before the oracle finalizes alone (`lobby.maxPlanningRounds`); 0 = unlimited. */
@@ -1578,17 +1580,25 @@ export class LobbyView implements Component, Focusable {
     this.say(on ? `auto mode on — the oracle drives ${task.id} to completion without asking` : `auto mode off — the oracle asks you again on ${task.id}`);
   }
 
-  /** Save the planning session's draft to the pending tasks, from any tab and in either mode. */
+  /**
+   * Save the planning session's draft to the pending tasks, from any tab and
+   * in either mode. A plan with many steps is first offered a split into
+   * several tasks, which takes the oracle a moment and asks the user.
+   */
   savePlan(): void {
     const session = this.host.planner();
     if (!session?.reply?.plan) return this.say(session?.busy ? "the first draft is still being written" : "no plan to save yet — describe a task in the Plan tab", "warning");
-    try {
-      const saved = session.save();
-      this.say(`saved ${saved.id} to the pending tasks — start it from the Tasks tab${session.reply.status === "ready" ? "" : " (the panel had not agreed yet)"}`);
-    } catch (error) {
-      this.say((error as Error).message, "warning");
-    }
-    this.refreshData(true);
+    void this.host.savePlan().then(
+      (notice) => {
+        this.say(notice);
+        this.refreshData(true);
+        this.host.requestRender();
+      },
+      (error: Error) => {
+        this.say(error.message, "warning");
+        this.host.requestRender();
+      },
+    );
   }
 
   /** The oracle puts the round's questions to the user through the questionnaire. */
@@ -2587,6 +2597,7 @@ export class LobbyView implements Component, Focusable {
       nextMode: session.nextMode,
       ...(session.seed ? { seed: session.seed } : {}),
       ...(session.saved ? { saved: session.saved } : {}),
+      ...(session.savedParts.length > 1 ? { savedParts: session.savedParts.length } : {}),
       ...(session.title ? { title: session.title } : {}),
       awaitingAnswers: session.awaitingAnswers,
       answeredChunks: session.answered.length,

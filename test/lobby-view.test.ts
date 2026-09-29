@@ -17,6 +17,7 @@ import { ensureProjectStructure } from "../src/state/persistence.ts";
 import { dataRoot } from "../src/state/project.ts";
 import { readAgentKnowledge } from "../src/knowledge/store.ts";
 import type { Classifier } from "../src/classifier/classifier.ts";
+import type { AskQuestion, AskResult } from "../src/ask/types.ts";
 import { PlanningSession, type PlannerSeed } from "../src/lobby/planner.ts";
 import { createTask, type Task } from "../src/schemas/task.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
@@ -76,6 +77,8 @@ interface Calls {
   deleted: Array<[string, "list" | "archive"]>;
   historyLoads: string[];
   edited: Array<[string, string]>;
+  /** The questions the split of a long plan put to the user. */
+  splitAsked: AskQuestion[][];
 }
 
 interface ViewOptions {
@@ -109,11 +112,15 @@ interface ViewOptions {
   classifier?: Classifier;
   /** What pi's editor returns when the Knowledge tab edits a whole file (undefined = cancelled). */
   editedText?: string;
+  /** Steps a plan may have before saving it offers a split (the config's default when absent). */
+  splitAbove?: number;
+  /** How the user answers the split question (leaving it open when absent). */
+  splitAnswer?: (questions: AskQuestion[]) => AskResult;
 }
 
 function makeView(options: ViewOptions = {}) {
   const root = mkdtempSync(join(tmpdir(), "bl-view-"));
-  const calls: Calls = { settings: [], answered: 0, savedPanels: [], oracle: [], comments: [], started: [], discarded: [], aborted: 0, hidden: 0, seeds: [], seats: [], sessionStarts: [], auto: [], inbox: [], sessionInbox: [], switches: [], dialogs: [], archived: [], restored: [], deleted: [], historyLoads: [], edited: [] };
+  const calls: Calls = { settings: [], answered: 0, savedPanels: [], oracle: [], comments: [], started: [], discarded: [], aborted: 0, hidden: 0, seeds: [], seats: [], sessionStarts: [], auto: [], inbox: [], sessionInbox: [], switches: [], dialogs: [], archived: [], restored: [], deleted: [], historyLoads: [], edited: [], splitAsked: [] };
   let taskList: Task[] = options.tasks ?? (options.task ? [options.task] : []);
   let archivedList: Task[] = options.archivedTasks ?? [];
   const sessions: BackgroundSession[] = [];
@@ -138,7 +145,7 @@ function makeView(options: ViewOptions = {}) {
     feed,
     masterBusy: () => options.busy === true,
     tasks: () => taskList,
-    plans: () => options.plans ?? [],
+    plans: () => options.plans ?? listPlannedTasks(root, ".pi"),
     comments: (): PlanComment[] => [],
     metrics: (): MetricRecord[] => options.metrics ?? [],
     toOracle: (text) => {
@@ -167,6 +174,13 @@ function makeView(options: ViewOptions = {}) {
     answerPanel: async () => {
       calls.answered += 1;
       return "answers sent — the panel is on the next round";
+    },
+    savePlan: async () => {
+      if (!planner) return "no planning session";
+      return planner.saveWithSplit(async (questions) => {
+        calls.splitAsked.push(questions);
+        return options.splitAnswer?.(questions) ?? { answers: [], cancelled: true };
+      }, { splitAbove: options.splitAbove ?? 8 });
     },
     issuesEnabled: () => options.issues === true,
     panels: () => ({ ...DEFAULT_CONFIG.lobby.panels, ...options.panels }),
@@ -1041,12 +1055,14 @@ test("ctrl+s saves the plan while typing and from any tab; the Plan tab names th
   assert.equal(view.mode, "type");
   type(view, "half a reply");
   view.handleInput(KEY.ctrlS);
+  await settle();
   assert.equal(planner()!.saved?.id, "PLAN-login");
   assert.match(view.render(140).at(-1)!.trimEnd(), /saved PLAN-login to the pending tasks — start it from the Tasks tab$/);
   assert.ok(view.render(140).some((line) => line.includes("half a reply")), "the draft reply is left alone");
   assert.ok(listPlannedTasks(root, ".pi").some((plan) => plan.id === "PLAN-login"));
   view.setTab("tasks");
   view.handleInput(KEY.ctrlS);
+  await settle();
   assert.match(view.render(140).at(-1)!, /saved PLAN-login/, "it works from another tab too");
   const rebound = makeView({ keys: { savePlan: "alt+w" } }).view;
   rebound.setTab("plan");
@@ -1956,4 +1972,67 @@ test("the Knowledge tab says what an empty file needs, and lists its keys", () =
   assert.match(help, /Knowledge tab/);
   assert.match(help, /note every agent/);
   assert.match(help, /whole file/);
+});
+
+/* ------------------------------------------------------ splitting a long plan */
+
+const LONG_PLAN = ["### Objective", "Add dark mode.", "### Assumptions", "- [QA] Evergreen only.", "### Steps", ...Array.from({ length: 10 }, (_, index) => `${index + 1}. Step number ${index + 1}`), "### Risks and open points", "None."].join("\n");
+const SPLIT_REPLY = [
+  "## Tasks",
+  "### 1. Foundation", "Goal: the base.", "Covers: 1-4", "After: none", "Done when:", "- it works", "",
+  "### 2. Screens", "Goal: the screens.", "Covers: 5-10", "After: 1", "Done when:", "- it looks right", "",
+  "## Note", "Do 1 first.",
+].join("\n");
+
+/** A fake pi: the panel's round answers with the long plan, the oracle's split answers with the split. */
+function splittingRunner(): ProcessRunner {
+  const text = (prompt: string) => (prompt.includes("Split this plan into") ? SPLIT_REPLY : `## Status\nREADY\n## Title\nDark mode\n## Plan\n${LONG_PLAN}`);
+  return async (_args, options) => ({ exitCode: 0, stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: text(options.prompt ?? "") }], model: "p/served", stopReason: "stop", usage: { input: 1, output: 1 } } }), stderr: "", killed: false, timedOut: false });
+}
+
+async function planWithLongPlan(options: ViewOptions = {}) {
+  const made = makeView({ panel: [], runProcess: splittingRunner(), ...options });
+  made.view.setTab("plan");
+  type(made.view, "dark mode");
+  made.view.handleInput(KEY.enter);
+  await settle();
+  assert.equal(made.planner()?.reply?.status, "ready");
+  return made;
+}
+
+test("ctrl+s on a long plan asks whether to split it; accepting saves the parts, which the Tasks tab lists in order", async () => {
+  const { view, calls, root } = await planWithLongPlan({ splitAnswer: (questions) => ({ cancelled: false, answers: [{ questionIndex: 0, question: questions[0]!.question, kind: "option", answer: "Split into 2 tasks (Recommended)" }] }) });
+  view.handleInput(KEY.ctrlS);
+  await settle();
+  assert.equal(calls.splitAsked.length, 1);
+  const question = calls.splitAsked[0]![0]!;
+  assert.match(question.question, /This plan has \*\*10 steps\*\*/);
+  assert.match(question.options[0]!.preview!, /\*\*1\. Foundation\*\* · steps 1-4/);
+  assert.match(view.render(140).at(-1)!, /split into 2 tasks — PLAN-foundation, PLAN-screens; start them from the Tasks tab, in order/);
+  assert.match(flat(view.render(140)), /saved as 2 tasks, from PLAN-foundation/, "the Plan tab says what became of the plan");
+  assert.deepEqual(listPlannedTasks(root, ".pi").map((plan) => plan.id), ["PLAN-foundation", "PLAN-screens"]);
+  view.setTab("tasks");
+  const list = flat(view.render(140));
+  assert.match(list, /Foundation \(1\/2\)[\s\S]*Screens \(2\/2\)/, "in part order, each numbered");
+  view.handleInput(KEY.down);
+  view.handleInput(KEY.down);
+  const detail = flat(view.render(140));
+  assert.match(detail, /part 2 of 2 of one plan that was split into tasks, after part 1/);
+  assert.match(detail, /1\. Foundation · 2\. Screens/);
+  assert.match(detail, /Builds on:\*\* part 1 — Foundation|Builds on: part 1 — Foundation/);
+});
+
+test("ctrl+s leaves the plan alone while the split question is open, and a plan under the limit saves without one", async () => {
+  const left = await planWithLongPlan();
+  left.view.handleInput(KEY.ctrlS);
+  await settle();
+  assert.equal(left.calls.splitAsked.length, 1);
+  assert.match(left.view.render(140).at(-1)!, /the split question was left open, so nothing was saved — ctrl\+s asks again/);
+  assert.deepEqual(listPlannedTasks(left.root, ".pi"), []);
+  assert.equal(left.planner()!.busy, false, "the panel is free again");
+  const small = await planWithLongPlan({ splitAbove: 12 });
+  small.view.handleInput(KEY.ctrlS);
+  await settle();
+  assert.equal(small.calls.splitAsked.length, 0, "ten steps are under twelve");
+  assert.match(small.view.render(140).at(-1)!, /saved PLAN-dark-mode to the pending tasks/);
 });
