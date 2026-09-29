@@ -20,6 +20,8 @@ import { loadPlannedTask, markPlannedTaskStarted, plannedTaskRequest } from "../
 import { triageFor } from "../classifier/instance.ts";
 import { freshContextOn, markContext } from "./fresh-context.ts";
 import { setBudget } from "../state/budget.ts";
+import { createWorkspace, gitLine } from "../execution/workspace.ts";
+import type { GitIsolation } from "../schemas/configuration.ts";
 
 function uniqueTaskId(root: string, configDir: string, request: string): string {
   const base = nextTaskId(request);
@@ -62,6 +64,7 @@ export function kickoff(task: Task, budgetMinutes = 0, options: { fastTrack?: bo
     ...(options.routed ? [ROUTED_LINE] : []),
     ...(track ? [trackSummary(track)] : []),
     ...(budgetMinutes > 0 ? [`Time budget: ${budgetMinutes} minutes of work, for you and every agent. Size the plan to fit it and divide it by scope (see Time budget in your prompt).`] : []),
+    ...(task.git ? [gitLine(task.git)] : []),
     "",
   ];
   if (track?.path === "fast") return [...head, ...fastSteps(track)].join("\n");
@@ -75,6 +78,23 @@ export function kickoff(task: Task, budgetMinutes = 0, options: { fastTrack?: bo
     "Do not implement anything before the user approves the proposal.",
     ...(fastAllowed ? ["If it is in fact a small, clear, low-risk change, take the fast track instead: orchestrate action=track track=fast with a reason."] : []),
   ].join("\n");
+}
+
+/**
+ * Give the task its git branch or worktree, named after it. Any failure (no
+ * repository, no commits, a refused checkout) is said once and the task runs
+ * without: git must never stop a task from starting.
+ */
+async function giveWorkspace(ctx: ExtensionContext, root: string, configDir: string, task: Task, isolation: GitIsolation): Promise<void> {
+  if (isolation === "off") return;
+  const made = await createWorkspace({ cwd: ctx.cwd, root, configDir, name: task.id, mode: isolation });
+  if (typeof made === "string") {
+    lobbyFeed.log("LOBBY", `${task.id} runs without its own ${isolation} — ${made}`, "warning");
+    ctx.ui.notify(`bot-lobby: ${task.id} runs without its own ${isolation} — ${made}`, "warning");
+    return;
+  }
+  task.git = made;
+  lobbyFeed.log("LOBBY", made.mode === "worktree" ? `${task.id}: worktree ${made.path} on branch ${made.branch}` : `${task.id}: on branch ${made.branch}${made.from ? ` (from ${made.from})` : ""}`, "success");
 }
 
 /**
@@ -98,6 +118,8 @@ export interface StartOptions {
   triage?: TaskTriage;
   /** The oracle sent this request to the team after the classifier read it as a quick fix. */
   routed?: boolean;
+  /** `--branch`, `--worktree` or `--no-branch`: whether this task gets a git branch or worktree of its own; `workflow.gitIsolation` when absent. */
+  isolation?: GitIsolation;
 }
 
 export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configDir: string, request: string, options: StartOptions = {}): Promise<Task | undefined> {
@@ -120,6 +142,7 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   const config = loadConfig();
   task.track = chooseTrack(request, triage, { fastTrack: config.workflow.fastTrack, ...(options.track ? { forced: options.track } : {}), ...(options.approvedPlan ? { approvedPlan: true } : {}) });
   lobbyFeed.log("LOBBY", trackLine(task.track), "info");
+  await giveWorkspace(ctx, root, configDir, task, options.isolation ?? config.workflow.gitIsolation);
   saveTask(root, configDir, task);
   const budgetMinutes = options.budget ?? config.workflow.taskBudgetMinutes;
   if (budgetMinutes > 0) setBudget(root, configDir, task.id, budgetMinutes);

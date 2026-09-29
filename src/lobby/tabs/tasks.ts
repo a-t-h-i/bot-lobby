@@ -12,7 +12,7 @@ import { persistedRuns } from "../../pi/ui.ts";
 import { describeRun, runFromLog } from "../../pi/run-summary.ts";
 import { pendingApprovals } from "../../workflow/approvals.ts";
 import { textWidth } from "../../width.ts";
-import { ago, beside, bold, box, detailWindow, fill, markdownHanging, markdownLines, notePane, paint, position, rule, selectRow, since, spread, strike, windowStart, wrap, wrapHanging, type LobbyColor, type LobbyTheme, type PaneLayout } from "../layout.ts";
+import { ago, beside, BRANCH_GLYPH, bold, box, detailWindow, fill, markdownHanging, markdownLines, notePane, paint, position, rule, selectRow, since, spread, strike, windowStart, wrap, wrapHanging, type LobbyColor, type LobbyTheme, type PaneLayout } from "../layout.ts";
 
 export type TaskSection = "mine" | "others" | "pending" | "recent" | "archived";
 
@@ -270,6 +270,10 @@ export function taskDetailLines(task: Task, comments: readonly PlanComment[], se
   lines.push(...wrapHanging("  ", facts.join(dot), width));
   const track = task.track ? (task.track.path === "fast" ? `fast track (${task.track.size})` : `full workflow (${task.track.size})`) : "";
   lines.push(...wrapHanging("  ", paint(theme, "dim", [task.id, track, task.domains.length > 0 ? task.domains.join(", ") : ""].filter(Boolean).join(" · ")), width));
+  if (task.git) {
+    const where = task.git.mode === "worktree" && task.git.path ? ` · worktree ${task.git.path}` : "";
+    lines.push(...wrapHanging("  ", paint(theme, "dim", `${BRANCH_GLYPH} ${task.git.branch}${task.git.from ? ` · from ${task.git.from}` : ""}${where}`), width));
+  }
   const steps = task.plan ? planChecklist(task.plan, persistedRuns(task)) : [];
   const done = steps.filter((step) => step.status === "done").length;
   if (steps.length > 0) {

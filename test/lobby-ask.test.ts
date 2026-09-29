@@ -97,7 +97,7 @@ test("askPanel runs the questionnaires in order and stops at the first one the u
   assert.equal(outcome.results.length, 1, "what was answered before stopping is kept");
 });
 
-test("where the questionnaire cannot be drawn, pi's dialogs ask the same questions: pick, type, skip, or esc", async () => {
+test("where the questionnaire cannot be drawn, pi's dialogs ask the same questions: pick, type in the multi-line editor, skip, or esc", async () => {
   const picks = ["Yes", "Type an answer…", "Skip", undefined];
   const typed = ["my own words"];
   const titles: string[] = [];
@@ -107,7 +107,7 @@ test("where the questionnaire cannot be drawn, pi's dialogs ask the same questio
         titles.push(title);
         return picks.shift();
       },
-      input: async () => typed.shift(),
+      editor: async () => typed.shift(),
     },
   } as unknown as ExtensionContext;
   const chunk: AskQuestion[] = ["A?", "B?", "C?", "D?"].map((text) => ({ question: text, header: "DEV", options: [{ label: "Yes", description: "" }, { label: "No", description: "" }] }));
