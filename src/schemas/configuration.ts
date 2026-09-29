@@ -120,6 +120,8 @@ export interface LobbyConfig {
   panels: Record<LobbyPanel, boolean>;
   /** Key overrides by action name, e.g. `{ "toggleThinking": "alt+t" }`. */
   keys: Record<string, string>;
+  /** A one-line status (task steps, planning round, quick fix, or idle) under the editor while the lobby is hidden. */
+  miniLine: boolean;
   /** Clicks and the wheel work in the lobby (click a draft line to comment on it); shift+drag still selects text. */
   mouse: boolean;
   /**
@@ -237,6 +239,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     panels: { conversation: true, activity: true, thinking: true },
     keys: {},
     mouse: true,
+    miniLine: true,
     maxPlanningRounds: 5,
   },
   classifier: {
@@ -296,7 +299,7 @@ function flag(value: unknown, fallback: boolean): boolean {
 }
 
 function normalizeLobby(value: unknown): LobbyConfig {
-  const source = value as { autoOpen?: unknown; planningPanel?: unknown; autoAsk?: unknown; issues?: unknown; panels?: unknown; keys?: unknown; mouse?: unknown; maxPlanningRounds?: unknown } | undefined;
+  const source = value as { autoOpen?: unknown; planningPanel?: unknown; autoAsk?: unknown; issues?: unknown; panels?: unknown; keys?: unknown; mouse?: unknown; miniLine?: unknown; maxPlanningRounds?: unknown } | undefined;
   const defaults = DEFAULT_CONFIG.lobby;
   const panel = Array.isArray(source?.planningPanel)
     ? [...new Set(source.planningPanel.filter((entry): entry is PanelMember => typeof entry === "string" && isPanelMember(entry)))]
@@ -311,6 +314,7 @@ function normalizeLobby(value: unknown): LobbyConfig {
     panels: Object.fromEntries(LOBBY_PANELS.map((name) => [name, flag(panels[name], defaults.panels[name])])) as Record<LobbyPanel, boolean>,
     keys: Object.fromEntries(Object.entries(keys).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0)),
     mouse: flag(source?.mouse, defaults.mouse),
+    miniLine: flag(source?.miniLine, defaults.miniLine),
     maxPlanningRounds: roundLimit(source?.maxPlanningRounds, defaults.maxPlanningRounds),
   };
 }
