@@ -101,3 +101,12 @@ test("read-only roles keep their tool restrictions", () => {
   ]);
   assert.deepEqual(ROLE_SPECS.worker.tools, ["read", "bash", "edit", "write", "grep", "find", "ls"]);
 });
+
+test("the master briefs smaller agents explicitly and every agent follows its brief", () => {
+  const master = loadPrompt("master.md");
+  assert.ok(master.includes("## Briefing the agents") && master.includes("Never assume they are as capable as you"));
+  for (const part of ["**Goal**", "**Files**", "**Contracts**", "**Done when**", "**If stuck**"]) assert.ok(master.includes(part), part);
+  assert.ok(loadPrompt("global.md").includes("## Following your brief"), "every agent gets the rule");
+  const worker = compilePrompt({ domain: "backend", role: "worker", task: "x" });
+  assert.ok(worker.includes("## Brief Check") && worker.includes("Following your brief"));
+});

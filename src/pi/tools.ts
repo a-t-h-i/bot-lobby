@@ -29,17 +29,17 @@ const OrchestrateSchema = Type.Object({
   question: Type.Optional(Type.String({ description: "clarify: question for the user" })),
   options: Type.Optional(Type.Array(Type.String(), { description: "clarify: optional answer choices; put your recommended one first and mark it (Recommended)" })),
   domains: Type.Optional(Type.Array(Type.String(), { description: "scout: any of designer, backend, qa" })),
-  instruction: Type.Optional(Type.String({ description: "scout/research: what to investigate (for scout, also used to target-verify a claim)" })),
+  instruction: Type.Optional(Type.String({ description: "scout/research: a self-contained brief: the specific questions, where to look, the answer format you want (paths, names, versions, evidence) and what you will do with it. The agent may be a small model: assume nothing" })),
   proposal: Type.Optional(Type.String({ description: "propose: the user-facing proposal as a short `- ` bullet list, one line per change" })),
   concerns: Type.Optional(Type.Array(Type.String(), { description: "propose: concerns raised while challenging the request" })),
-  plan: Type.Optional(Type.String({ description: "plan: the detailed internal plan (while implementing or reviewing, the full revised plan that replaces it)" })),
+  plan: Type.Optional(Type.String({ description: "plan: the detailed internal plan (while implementing or reviewing, the full revised plan that replaces it). Every step names its files, its concrete actions and its done criteria, and the contracts between domains are written out; no decision is left to the workers" })),
   domain: Type.Optional(Type.String({ description: "implement/research: designer, backend, or qa" })),
-  task: Type.Optional(Type.String({ description: "implement: the concrete step for that domain's worker" })),
+  task: Type.Optional(Type.String({ description: "implement: a self-contained brief for that domain's worker (which may be a small, literal model): Goal, exact Files, numbered What to do with names/shapes/values, Contracts, Constraints, Done when (checkable criteria and commands), If stuck. Decide everything yourself; leave nothing to be assumed" })),
   assignments: Type.Optional(
     Type.Array(
       Type.Object({
         domain: Type.String({ description: "designer, backend, or qa" }),
-        task: Type.String({ description: "the concrete step(s) for that domain's worker" }),
+        task: Type.String({ description: "a self-contained brief for that domain's worker: Goal, exact Files, numbered What to do, Contracts (in full), Constraints, Done when, If stuck. No assumptions" }),
         minutes: Type.Optional(Type.Number({ description: "under a time budget: minutes for this worker, by its scope" })),
       }),
       { description: "implement: run several domains in parallel (distinct domains); workers share files through the file desk" },
@@ -77,6 +77,7 @@ const DESCRIPTION = [
   "pass), block/resume (escalate or continue), budget (under a time budget: where it stands, or ask the",
   "user for more minutes with a reason), track (the task's path and who takes part: show it, or correct it with",
   "track=fast|full, roster and a reason), status, cancel.",
+  "Every instruction you give an agent is read by a possibly smaller, cheaper model that cannot infer intent: write each one as a complete, explicit brief with the goal, files, actions, contracts, constraints and done criteria, then check the report against it.",
   "The engine validates every step against the task state machine, so a rejected action means the workflow is not at that step yet.",
 ].join(" ");
 

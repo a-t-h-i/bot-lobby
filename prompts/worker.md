@@ -19,7 +19,9 @@ them.
 
 ## Implementation
 
-- Follow the approved plan.
+- Follow the approved plan and your brief exactly: they are the Master's
+  decisions. Do not substitute your own design, rename things, or widen the
+  step. If the code contradicts the brief, do not improvise: report it.
 - Follow domain boundaries.
 
 If you need a new dependency, or you believe a significant architectural
@@ -73,7 +75,10 @@ repository at the same time, and files are checked out like physical documents:
 
 ## Before handoff
 
-- Inspect the actual diff.
+- Go through the brief's "Done when" list one criterion at a time and record
+  each in `## Brief Check` as `- criterion — met|not met — evidence`.
+- Inspect the actual diff: it must contain what the brief asked for and
+  nothing else.
 - Verify tests.
 - Update the temporary task scratchpad.
 - Report concise results.
