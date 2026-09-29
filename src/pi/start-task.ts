@@ -9,17 +9,19 @@ import { createTask, taskRequest, type Task, type TaskTrack, type TaskTriage, ty
 import type { Domain } from "../schemas/agent.ts";
 import { chooseTrack, trackLine, trackSummary } from "../workflow/track.ts";
 import { lobbyFeed } from "../lobby/feed.ts";
-import { createTaskDir, ensureProjectStructure, nextTaskId, ownedTask, saveTask, taskDirFor } from "../state/persistence.ts";
+import { createTaskDir, ensureProjectStructure, loadTask, nextTaskId, ownedTask, saveTask, taskDirFor } from "../state/persistence.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { transition } from "../state/task-state.ts";
 import { shortTitle } from "../text.ts";
 import { applyStatus } from "./ui.ts";
 import { applyMasterModel } from "./settings-ui.ts";
 import { setAutoMode } from "../state/auto.ts";
-import { loadPlannedTask, markPlannedTaskStarted, plannedTaskRequest } from "../state/backlog.ts";
+import { listPlannedTasks, loadPlannedTask, markPlannedTaskStarted, plannedTaskRequest, type PlannedTask } from "../state/backlog.ts";
 import { triageFor } from "../classifier/instance.ts";
 import { freshContextOn, markContext } from "./fresh-context.ts";
 import { setBudget } from "../state/budget.ts";
+import { createWorkspace, gitLine } from "../execution/workspace.ts";
+import type { GitIsolation } from "../schemas/configuration.ts";
 
 function uniqueTaskId(root: string, configDir: string, request: string): string {
   const base = nextTaskId(request);
@@ -62,6 +64,7 @@ export function kickoff(task: Task, budgetMinutes = 0, options: { fastTrack?: bo
     ...(options.routed ? [ROUTED_LINE] : []),
     ...(track ? [trackSummary(track)] : []),
     ...(budgetMinutes > 0 ? [`Time budget: ${budgetMinutes} minutes of work, for you and every agent. Size the plan to fit it and divide it by scope (see Time budget in your prompt).`] : []),
+    ...(task.git ? [gitLine(task.git)] : []),
     "",
   ];
   if (track?.path === "fast") return [...head, ...fastSteps(track)].join("\n");
@@ -75,6 +78,23 @@ export function kickoff(task: Task, budgetMinutes = 0, options: { fastTrack?: bo
     "Do not implement anything before the user approves the proposal.",
     ...(fastAllowed ? ["If it is in fact a small, clear, low-risk change, take the fast track instead: orchestrate action=track track=fast with a reason."] : []),
   ].join("\n");
+}
+
+/**
+ * Give the task its git branch or worktree, named after it. Any failure (no
+ * repository, no commits, a refused checkout) is said once and the task runs
+ * without: git must never stop a task from starting.
+ */
+async function giveWorkspace(ctx: ExtensionContext, root: string, configDir: string, task: Task, isolation: GitIsolation): Promise<void> {
+  if (isolation === "off") return;
+  const made = await createWorkspace({ cwd: ctx.cwd, root, configDir, name: task.id, mode: isolation });
+  if (typeof made === "string") {
+    lobbyFeed.log("LOBBY", `${task.id} runs without its own ${isolation} — ${made}`, "warning");
+    ctx.ui.notify(`bot-lobby: ${task.id} runs without its own ${isolation} — ${made}`, "warning");
+    return;
+  }
+  task.git = made;
+  lobbyFeed.log("LOBBY", made.mode === "worktree" ? `${task.id}: worktree ${made.path} on branch ${made.branch}` : `${task.id}: on branch ${made.branch}${made.from ? ` (from ${made.from})` : ""}`, "success");
 }
 
 /**
@@ -98,6 +118,8 @@ export interface StartOptions {
   triage?: TaskTriage;
   /** The oracle sent this request to the team after the classifier read it as a quick fix. */
   routed?: boolean;
+  /** `--branch`, `--worktree` or `--no-branch`: whether this task gets a git branch or worktree of its own; `workflow.gitIsolation` when absent. */
+  isolation?: GitIsolation;
 }
 
 export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configDir: string, request: string, options: StartOptions = {}): Promise<Task | undefined> {
@@ -120,12 +142,13 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   const config = loadConfig();
   task.track = chooseTrack(request, triage, { fastTrack: config.workflow.fastTrack, ...(options.track ? { forced: options.track } : {}), ...(options.approvedPlan ? { approvedPlan: true } : {}) });
   lobbyFeed.log("LOBBY", trackLine(task.track), "info");
+  await giveWorkspace(ctx, root, configDir, task, options.isolation ?? config.workflow.gitIsolation);
   saveTask(root, configDir, task);
   const budgetMinutes = options.budget ?? config.workflow.taskBudgetMinutes;
   if (budgetMinutes > 0) setBudget(root, configDir, task.id, budgetMinutes);
   if (options.auto) setAutoMode(root, configDir, task.id, true, sessionId);
-  // A session that starts a task is named after it, so /resume and the lobby list it by name.
-  if (!pi.getSessionName()) pi.setSessionName(task.title);
+  // A session that starts a task is named after it (its friendly name), so /resume and the lobby list it by name.
+  if (!pi.getSessionName()) pi.setSessionName(task.id);
   applyStatus(ctx, root, configDir);
   await applyMasterModel(pi, ctx, loadConfig());
   ctx.ui.notify(`bot-lobby ${task.id} started`, "info");
@@ -137,17 +160,45 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
 }
 
 /**
+ * The parts of a split plan that this one builds on and that are not finished:
+ * still pending, dropped, or started but not completed. Empty for a plan that
+ * was not split, or whose earlier parts are done (or gone).
+ */
+export function unfinishedBefore(root: string, configDir: string, plan: PlannedTask): string[] {
+  const split = plan.split;
+  if (!split || split.after.length === 0) return [];
+  const siblings = listPlannedTasks(root, configDir).filter((entry) => entry.split?.group === split.group);
+  return split.after.flatMap((number) => {
+    const sibling = siblings.find((entry) => entry.split?.part === number);
+    if (!sibling) return [];
+    const label = `part ${number} (${split.titles[number - 1] ?? sibling.id})`;
+    if (sibling.status === "pending") return [`${label} has not been started`];
+    const task = sibling.startedTaskId ? loadTask(root, configDir, sibling.startedTaskId) : undefined;
+    if (!task || task.state === "completed") return [];
+    return [`${label} is ${task.state === "abandoned" ? "abandoned" : "not finished"}`];
+  });
+}
+
+/**
  * Start a task saved from the planning panel in this session. The user
  * already agreed its plan, so the task carries it as approved and its
- * proposal goes through without asking. Returns the task, or a reason.
+ * proposal goes through without asking. A part of a split plan that builds on
+ * parts not yet finished starts anyway, with a warning: the order is the
+ * user's to keep. Returns the task, or a reason.
  */
 export async function startPlannedTask(pi: ExtensionAPI, ctx: ExtensionContext, configDir: string, planId: string, options: { auto?: boolean } = {}): Promise<Task | string> {
   const root = detectProjectRoot(ctx.cwd, configDir);
   const plan = loadPlannedTask(root, configDir, planId);
   if (!plan) return `no planned task ${planId}`;
   if (plan.status !== "pending") return `${planId} was already started${plan.startedTaskId ? ` as ${plan.startedTaskId}` : ""}`;
+  const waiting = unfinishedBefore(root, configDir, plan);
   const task = await startTask(pi, ctx, configDir, plannedTaskRequest(plan), { approvedPlan: plan.id, title: plan.title, ...(options.auto ? { auto: true } : {}) });
   if (!task) return `this session already drives a task; finish or cancel it first`;
   markPlannedTaskStarted(root, configDir, plan.id, task.id);
+  if (waiting.length > 0) {
+    const warning = `${plan.id} builds on ${waiting.join("; ")} — started anyway`;
+    lobbyFeed.log("LOBBY", warning, "warning");
+    ctx.ui.notify(`bot-lobby: ${warning}`, "warning");
+  }
   return task;
 }

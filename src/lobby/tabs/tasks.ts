@@ -12,7 +12,7 @@ import { persistedRuns } from "../../pi/ui.ts";
 import { describeRun, runFromLog } from "../../pi/run-summary.ts";
 import { pendingApprovals } from "../../workflow/approvals.ts";
 import { textWidth } from "../../width.ts";
-import { ago, beside, bold, box, detailWindow, fill, markdownHanging, markdownLines, notePane, paint, position, rule, selectRow, since, spread, strike, windowStart, wrap, wrapHanging, type LobbyColor, type LobbyTheme, type PaneLayout } from "../layout.ts";
+import { ago, beside, BRANCH_GLYPH, bold, box, detailWindow, fill, markdownHanging, markdownLines, notePane, paint, position, rule, selectRow, since, spread, strike, windowStart, wrap, wrapHanging, type LobbyColor, type LobbyTheme, type PaneLayout } from "../layout.ts";
 
 export type TaskSection = "mine" | "others" | "pending" | "recent" | "archived";
 
@@ -114,7 +114,7 @@ export function taskRows(tasks: readonly Task[], plans: readonly PlannedTask[], 
     ...plans.filter((plan) => plan.status === "pending").map((plan): TaskRow => ({
       kind: "plan",
       id: plan.id,
-      title: plan.title,
+      title: plan.split ? `${plan.title} (${plan.split.part}/${plan.split.of})` : plan.title,
       section: "pending",
       status: "pending",
       check: "open",
@@ -270,6 +270,10 @@ export function taskDetailLines(task: Task, comments: readonly PlanComment[], se
   lines.push(...wrapHanging("  ", facts.join(dot), width));
   const track = task.track ? (task.track.path === "fast" ? `fast track (${task.track.size})` : `full workflow (${task.track.size})`) : "";
   lines.push(...wrapHanging("  ", paint(theme, "dim", [task.id, track, task.domains.length > 0 ? task.domains.join(", ") : ""].filter(Boolean).join(" · ")), width));
+  if (task.git) {
+    const where = task.git.mode === "worktree" && task.git.path ? ` · worktree ${task.git.path}` : "";
+    lines.push(...wrapHanging("  ", paint(theme, "dim", `${BRANCH_GLYPH} ${task.git.branch}${task.git.from ? ` · from ${task.git.from}` : ""}${where}`), width));
+  }
   const steps = task.plan ? planChecklist(task.plan, persistedRuns(task)) : [];
   const done = steps.filter((step) => step.status === "done").length;
   if (steps.length > 0) {
@@ -331,6 +335,11 @@ export function planDetailLines(plan: PlannedTask, width: number, now: number, t
     ...wrapHanging("  ", paint(theme, "dim", plan.id), width),
   ];
   if (plan.issue) lines.push(...wrapHanging("  ", `from issue #${plan.issue.number} — ${plan.issue.title}${plan.issue.url ? ` ${paint(theme, "dim", plan.issue.url)}` : ""}`, width));
+  if (plan.split) {
+    const { part, of, titles, after } = plan.split;
+    lines.push(...wrapHanging("  ", `${paint(theme, "accent", `part ${part} of ${of}`)} of one plan that was split into tasks${after.length > 0 ? `, ${paint(theme, "warning", `after ${after.map((number) => `part ${number}`).join(" and ")}`)}` : ""}`, width));
+    lines.push(...wrapHanging("    ", titles.map((title, index) => (index + 1 === part ? bold(theme, `${index + 1}. ${title}`) : paint(theme, "muted", `${index + 1}. ${title}`))).join(paint(theme, "dim", " · ")), width));
+  }
   const key = (text: string) => paint(theme, "accent", text);
   lines.push("", ...wrapHanging("  ", [`${key("s")} ${paint(theme, "muted", "start it in a new session")}`, `${key("h")} ${paint(theme, "muted", "start it here")}`, `${key("d d")} ${paint(theme, "muted", "discard it")}`].join(paint(theme, "dim", "   ")), width));
   lines.push(...section("Agreed plan", width, theme), ...markdownLines(plan.brief, width, theme));

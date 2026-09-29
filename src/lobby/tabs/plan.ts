@@ -45,6 +45,8 @@ export interface PlanView {
   nextMode?: RoundMode;
   seed?: PlannerSeed;
   saved?: PlannedTask;
+  /** How many tasks the plan was saved as, when it was split. */
+  savedParts?: number;
   title?: string;
   /** The round's questions wait for answers. */
   awaitingAnswers: boolean;
@@ -120,7 +122,7 @@ function statusLine(view: PlanView, input: PlanTabInput, theme?: LobbyTheme): st
   else if (view.reply?.status === "ready") parts.push(paint(theme, "success", `✓ ready — ${input.saveKey ?? "Ctrl+S"} saves it`));
   else if (view.awaitingAnswers) parts.push(paint(theme, "warning", `● ${count(view.questions.length, "question")} — enter ${view.answeredChunks > 0 ? "resumes" : "answers them"}`));
   if (view.lineComments.length > 0) parts.push(paint(theme, "accent", `◆ ${count(view.lineComments.length, "comment")} to send`));
-  if (view.saved) parts.push(paint(theme, "success", `saved as ${view.saved.id}`));
+  if (view.saved) parts.push(paint(theme, "success", view.savedParts && view.savedParts > 1 ? `saved as ${view.savedParts} tasks, from ${view.saved.id}` : `saved as ${view.saved.id}`));
   if (!view.busy && view.turns > 0) parts.push(paint(theme, "dim", roundLabel(view.turns, view.limit)));
   if (!view.busy && view.nextMode === "final") parts.push(paint(theme, "warning", "the next round is the last: the oracle settles the rest"));
   return parts.join(paint(theme, "dim", " · "));

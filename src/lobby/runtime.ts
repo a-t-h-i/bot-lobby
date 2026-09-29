@@ -21,9 +21,12 @@ import { discardPlannedTask, listPlannedTasks, type PlannedTask } from "../state
 import { appendMetrics, readClassifierMetrics, readMetrics, type MetricStatus } from "../state/metrics.ts";
 import { describeToolCall } from "../pi/activity.ts";
 import { applyStatus, currentZenTask, isMinimized, onMinimizeChange, onRunUpdates, setMinimized, taskSnapshot } from "../pi/ui.ts";
-import { shortTitle } from "../text.ts";
+import { taskName } from "../text.ts";
+import { describeWorkspace, type WorkspaceInfo } from "../execution/workspace.ts";
+import { basename } from "node:path";
+import { stripStartFlags } from "../pi/start-flags.ts";
 import { isSubagentProcess } from "../pi/quiet.ts";
-import { modelRef, resolveLobbyProfile, resolvePanelProfile } from "../pi/model-support.ts";
+import { modelRef, resolveLobbyProfile, resolvePanelProfile, resolveReviewProfile } from "../pi/model-support.ts";
 import { modelLookup } from "../pi/tools.ts";
 import { startPlannedTask } from "../pi/start-task.ts";
 import { pendingRequest, setQuickFixHandoff, startRequest } from "../pi/route.ts";
@@ -34,11 +37,14 @@ import { classifier, effortFor, hintsFor } from "../classifier/instance.ts";
 import { checkThinking } from "../pi/model-support.ts";
 import { launchPi, SessionRegistry, type BackgroundSession, type SessionLauncher } from "./sessions.ts";
 import { SessionChats } from "./session-files.ts";
-import { answerMessage, askUser, questionnaires, type Asker } from "./ask.ts";
+import { answerMessage, askUser, questionnaires, settledQuestions, type Asker } from "./ask.ts";
 import { jobTitle, QuickFixQueue } from "./quickfix.ts";
 import { miniLine, type MiniInput } from "./mini.ts";
 import { PlanningSession, type PlannerSeed } from "./planner.ts";
 import { execCommand, IssuesState } from "./issues.ts";
+import { PullsState } from "./pulls.ts";
+import { PullReviews } from "./pr-review.ts";
+import { KnowledgeBook } from "./knowledge.ts";
 import { LobbyView, type LiveSession, type LobbyHost, type SwitchTarget, type TabId } from "./view.ts";
 import { lobbyTheme } from "./theme.ts";
 import { deliverComments, onOwnerEvent, setAuto } from "../pi/owner.ts";
@@ -61,6 +67,9 @@ interface Runtime {
   quickfix: QuickFixQueue;
   planner?: PlanningSession;
   issues: IssuesState;
+  pulls: PullsState;
+  reviews: PullReviews;
+  knowledge: KnowledgeBook;
   unsubscribeFeed?: () => void;
   /** Puts the panel's questions to the user: the questionnaire unless a test sets another. */
   asker?: Asker;
@@ -70,6 +79,9 @@ interface Runtime {
   mouse: boolean;
   /** Settings opened from the lobby are on screen; the lobby stays aside until they close. */
   inSettings: boolean;
+  /** The repository (or folder) and branch the lobby's title shows, and whether git is being asked now. */
+  workspace: WorkspaceInfo;
+  readingWorkspace: boolean;
 }
 
 let runtime: Runtime | undefined;
@@ -265,7 +277,8 @@ function startSession(state: Runtime, start: { request?: string; plan?: PlannedT
     const starting = backgroundSessions().find((session) => session.alive && session.planId === plan.id);
     if (starting) return `${plan.id} is already starting in ${starting.name}`;
   }
-  const name = plan?.title ?? shortTitle(request!);
+  // A request may lead with flags (`--worktree add login`); the session is named after what follows them.
+  const name = taskName(plan?.title ?? (stripStartFlags(request!) || request!));
   try {
     const session = sessionRegistry().start(state.ctx.cwd, { name, ...(plan ? { planId: plan.id } : { request: request! }), ...(start.auto ? { auto: true } : {}) }, sessionModel(state.ctx));
     lobbyFeed.log("LOBBY", `started "${name}" in a new session`, "success");
@@ -445,6 +458,15 @@ function deleteTask(state: Runtime, taskId: string, where: "list" | "archive"): 
   return `deleted ${taskId} for good`;
 }
 
+/** What a pull request review runs on: QA's model, thinking and time limit. */
+function reviewProfile(state: Runtime) {
+  return resolveReviewProfile(loadConfig(), {
+    lookup: modelLookup(state.ctx),
+    sessionModel: sessionModel(state.ctx),
+    warn: (message) => state.ctx.ui.notify(message, "warning"),
+  });
+}
+
 function seatProfile(state: Runtime, member: PanelMember) {
   return resolvePanelProfile(loadConfig(), member, {
     lookup: modelLookup(state.ctx),
@@ -486,6 +508,26 @@ function panelAsker(state: Runtime): Asker {
 }
 
 /**
+ * Save the plan as a pending task. A plan with many steps is first split by
+ * the oracle into up to five tasks, which the user takes, changes or declines
+ * in a questionnaire; the split's questions open over the lobby like the
+ * panel's. Returns a notice for the lobby.
+ */
+export async function savePlan(state: Runtime | undefined = runtime): Promise<string> {
+  const session = state?.planner;
+  if (!state || !session) return "no planning session";
+  if (state.asking) return "a questionnaire is already open";
+  state.asking = true;
+  try {
+    const asker = panelAsker(state);
+    return await session.saveWithSplit((questions, signal) => asker(questions, state.ctx, signal), { splitAbove: loadConfig().lobby.splitPlanAbove });
+  } finally {
+    state.asking = false;
+    rerender();
+  }
+}
+
+/**
  * The oracle puts the round's questions to the user, one at a time; answered
  * questionnaires are kept if the user stops, so the next call resumes there.
  * Once every questionnaire is done, the answers (and any line comments) start
@@ -514,7 +556,7 @@ export async function answerPanel(state: Runtime | undefined = runtime): Promise
       session.answered = [];
       return "nothing was answered — the questions stay open";
     }
-    void session.send(message);
+    void session.send(message, settledQuestions(session.questions, session.answered));
     return "answers sent — the panel is on the next round";
   } catch (error) {
     return `could not put the questions: ${(error as Error).message}`;
@@ -522,6 +564,22 @@ export async function answerPanel(state: Runtime | undefined = runtime): Promise
     state.asking = false;
     rerender();
   }
+}
+
+/** Read the repository name and branch again, off the render path; the title repaints when they changed. */
+function refreshWorkspace(state: Runtime): void {
+  if (state.readingWorkspace) return;
+  state.readingWorkspace = true;
+  describeWorkspace(state.ctx.cwd)
+    .then((info) => {
+      if (runtime !== state || (info.name === state.workspace.name && info.branch === state.workspace.branch)) return;
+      state.workspace = info;
+      rerender();
+    })
+    .catch(() => {})
+    .finally(() => {
+      state.readingWorkspace = false;
+    });
 }
 
 function host(state: Runtime, tui: TUI): LobbyHost {
@@ -550,6 +608,7 @@ function host(state: Runtime, tui: TUI): LobbyHost {
     planner: () => state.planner,
     newPlanner: (seed, seats) => newPlanner(state, seed, seats),
     answerPanel: () => answerPanel(state),
+    savePlan: () => savePlan(state),
     defaultPanel: () => loadConfig().lobby.planningPanel,
     planningRounds: () => loadConfig().lobby.maxPlanningRounds,
     issuesEnabled: () => loadConfig().lobby.issues,
@@ -562,10 +621,16 @@ function host(state: Runtime, tui: TUI): LobbyHost {
       return `${profile.model ?? "session model"} · ${profile.thinking}`;
     },
     issues: state.issues,
+    pulls: state.pulls,
+    reviews: state.reviews,
+    knowledge: state.knowledge,
+    editText: (title, text) => editText(state, title, text),
     profileLabel: (kind) => {
       const profile = lobbyProfile(state, kind);
       return `${profile.model ?? "session model"} · ${profile.thinking}`;
     },
+    workspace: () => state.workspace,
+    refreshWorkspace: () => refreshWorkspace(state),
     sessionName: () => state.pi.getSessionName(),
     sessions: () => backgroundSessions(),
     startSession: (start) => startSession(state, start),
@@ -588,20 +653,20 @@ function host(state: Runtime, tui: TUI): LobbyHost {
 }
 
 /**
- * bot-lobby's settings (or one agent's entry) from inside the lobby. The
- * lobby stays aside for the whole visit, not only for each menu, so it does
- * not flash between them, and rereads the config when it comes back.
+ * Run something pi draws itself (its settings menus, its multi-line editor)
+ * with the lobby stepped aside for the whole visit, not only for each dialog,
+ * so it does not flash between them; the lobby rereads the config after.
  */
-async function lobbySettings(state: Runtime, entry?: "quickfix" | "planner"): Promise<void> {
-  if (state.inSettings) return;
+async function whileAside<T>(state: Runtime, run: () => Promise<T>, failure: string): Promise<T | undefined> {
+  if (state.inSettings) return undefined;
   state.inSettings = true;
   setMouse(state, false);
   state.handle?.setHidden(true);
   try {
-    if (entry) await openEntrySettings(state.pi, state.ctx, entry);
-    else await openSettings(state.pi, state.ctx);
+    return await run();
   } catch (error) {
-    state.ctx.ui.notify(`bot-lobby: settings failed — ${(error as Error).message}`, "warning");
+    state.ctx.ui.notify(`bot-lobby: ${failure} — ${(error as Error).message}`, "warning");
+    return undefined;
   } finally {
     state.inSettings = false;
     state.asideForPrompt = false;
@@ -613,6 +678,16 @@ async function lobbySettings(state: Runtime, entry?: "quickfix" | "planner"): Pr
     state.view?.reloadConfig();
     rerender();
   }
+}
+
+/** bot-lobby's settings (or one agent's entry) from inside the lobby. */
+async function lobbySettings(state: Runtime, entry?: "quickfix" | "planner"): Promise<void> {
+  await whileAside(state, () => (entry ? openEntrySettings(state.pi, state.ctx, entry) : openSettings(state.pi, state.ctx)), "settings failed");
+}
+
+/** A text edited in pi's multi-line editor (Enter saves, Shift+Enter is a new line); undefined when cancelled. */
+async function editText(state: Runtime, title: string, text: string): Promise<string | undefined> {
+  return whileAside(state, () => state.ctx.ui.editor(title, text), "the editor failed");
 }
 
 /** Remember which panes show, keeping every other setting as the file has it now. */
@@ -718,6 +793,7 @@ function shutdown(): void {
   setMouse(state, false);
   state.unsubscribeFeed?.();
   state.quickfix.cancelAll();
+  state.reviews.cancelAll();
   state.planner?.cancel();
   state.view?.dispose();
   state.handle?.hide();
@@ -759,9 +835,35 @@ export function initLobby(pi: ExtensionAPI, ctx: ExtensionContext, configDir: st
     asking: false,
     mouse: false,
     inSettings: false,
+    workspace: { name: basename(ctx.cwd) || ctx.cwd },
+    readingWorkspace: false,
     quickfix: undefined as unknown as QuickFixQueue,
     issues: new IssuesState(execCommand, ctx.cwd, rerender),
+    pulls: new PullsState(execCommand, ctx.cwd, rerender),
+    reviews: undefined as unknown as PullReviews,
+    knowledge: new KnowledgeBook({
+      root,
+      configDir,
+      threshold: () => loadConfig().knowledge.compactionThreshold,
+      backups: () => loadConfig().knowledge.backupCount,
+      sessionId: () => ctx.sessionManager.getSessionId(),
+    }),
   };
+  state.reviews = new PullReviews({
+    cwd: ctx.cwd,
+    root,
+    configDir,
+    exec: execCommand,
+    profile: () => reviewProfile(state),
+    stallTimeoutMs: workflow.stallTimeoutMs,
+    toolStallTimeoutMs: workflow.toolStallTimeoutMs,
+    feed: lobbyFeed,
+    onChange: rerender,
+    notify: (message, level) => {
+      if (!state.visible) ctx.ui.notify(message, level);
+    },
+    classifier: classifier(),
+  });
   state.quickfix = new QuickFixQueue({
     cwd: ctx.cwd,
     root,

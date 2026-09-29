@@ -158,6 +158,19 @@ export interface QaWaiver {
   open: string[];
 }
 
+/** The branch (or worktree and branch) a task works on, when git isolation was on as it started. */
+export interface TaskGit {
+  mode: "branch" | "worktree";
+  /** Named after the task. */
+  branch: string;
+  /** What the working folder stood on when the task started: a branch name, or `detached at 1a2b3c4`. */
+  from?: string;
+  /** The commit it branched from. */
+  base?: string;
+  /** worktree: the folder every agent of the task runs in. */
+  path?: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -197,6 +210,8 @@ export interface Task {
   extraReviewRounds?: number;
   /** Set only by the user: the work is accepted without a QA pass, so the task may complete. */
   qaWaiver?: QaWaiver;
+  /** The git branch (or worktree) made for this task, when isolation was on as it started. */
+  git?: TaskGit;
 }
 
 export function createTask(

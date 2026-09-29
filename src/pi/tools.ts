@@ -5,7 +5,7 @@ import { Type } from "typebox";
 import type { AgentRun } from "../schemas/findings.ts";
 import type { ProcessRunner } from "../execution/pi-runner.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
-import { classifier, effortFor, hintsFor, triageFor } from "../classifier/instance.ts";
+import { classifier, effortFor, hintsFor, knowledgeFor, triageFor } from "../classifier/instance.ts";
 import { truncate } from "../text.ts";
 import { applyStatus, reportRuns, summarizeRun } from "./ui.ts";
 import { whileAsking } from "../state/budget.ts";
@@ -119,11 +119,13 @@ export function workflowDeps(
     onUpdate,
     runProcess,
     hints: hintsFor({ cwd: ctx.cwd, root, configDir }),
+    knowledge: knowledgeFor(),
     classifier: classifier(),
     triage: (request, triageSignal) => triageFor({ cwd: ctx.cwd, root, configDir }, request, triageSignal),
     effort: effortFor((model, thinking) => checkThinking(modelLookup(ctx)(model), thinking).level),
     // Time spent waiting on the user is not the task's: its budget clock waits too.
-    ask: async (question) => (hasUI ? whileAsking(() => ctx.ui.input(question)) : undefined),
+    // A free-text answer may run to several lines (Shift+Enter), so it is asked in the multi-line editor.
+    ask: async (question) => (hasUI ? whileAsking(() => ctx.ui.editor(question)) : undefined),
     choose: async (title, options) => (hasUI ? whileAsking(() => ctx.ui.select(title, options)) : undefined),
     // An agent's own questions (the designer's), relayed as the questionnaire.
     ...(hasUI ? { askQuestions: (questions: AskQuestion[], from: string, askSignal?: AbortSignal) => whileAsking(() => askUser(questions, ctx, askSignal, from)) } : {}),

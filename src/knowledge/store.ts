@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { knowledgeDir, STANDARDS_FILE, type KnowledgeAgent } from "./paths.ts";
+import { annotate, readNotes } from "./notes.ts";
 
 export function readFileOr(path: string, fallback = ""): string {
   try {
@@ -105,7 +106,20 @@ export function readKnowledgeSlices(
   };
 }
 
-/** Read an agent's knowledge by agent key; bot-lobby dirs win per file over the pre-rename ones. */
+/**
+ * Read an agent's knowledge by agent key; bot-lobby dirs win per file over the
+ * pre-rename ones. The user's notes on entries (Knowledge tab) sit right under
+ * the entries they are about, so every agent reads them with the knowledge.
+ */
 export function readAgentKnowledge(roots: readonly string[], agent: KnowledgeAgent) {
-  return readKnowledgeSlices(roots.map((root) => knowledgeDir(root, agent)), STANDARDS_FILE[agent]);
+  const slices = readKnowledgeSlices(roots.map((root) => knowledgeDir(root, agent)), STANDARDS_FILE[agent]);
+  const notes = readNotes(roots[0]).filter((note) => note.agent === agent);
+  if (notes.length === 0) return slices;
+  const about = (file: string) => notes.filter((note) => note.file === file);
+  return {
+    knowledge: annotate(slices.knowledge, about("knowledge.md")),
+    standards: annotate(slices.standards, about(STANDARDS_FILE[agent])),
+    decisions: annotate(slices.decisions, about("decisions.md")),
+    completed: annotate(slices.completed, about("completed-tasks.md")),
+  };
 }

@@ -81,7 +81,9 @@ export function answerSummary(questions: readonly AskQuestion[], result: AskResu
     const head = `${index + 1}. [${question.header}] ${question.question.replace(/\s+/g, " ").trim()}`;
     if (!answer) return `${head}\n   → (not answered)`;
     const text = answer.kind === "multi" ? (answer.selected ?? []).join(", ") : answer.answer ?? "";
-    return `${head}\n   → ${text}${answer.kind === "custom" ? " (in the user's own words)" : ""}${answer.notes ? `\n   note: ${answer.notes}` : ""}`;
+    // A several-line answer keeps its lines under the arrow.
+    const lines = (value: string) => value.replace(/\n/g, "\n     ");
+    return `${head}\n   → ${lines(text)}${answer.kind === "custom" ? " (in the user's own words)" : ""}${answer.notes ? `\n   note: ${lines(answer.notes)}` : ""}`;
   });
   return [
     result.cancelled ? "The user answered some questions, then put the rest away:" : "The user answered:",

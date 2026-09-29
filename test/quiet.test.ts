@@ -397,7 +397,7 @@ test("/bot-lobby <request> stamps the starting session as owner", async () => {
     const { ctx } = makeCtx(root, false, "session-stamp");
     await fake.commandHandlers["bot-lobby"]!("ship the redesign", ctx);
     assert.equal(listTasks(root, ".pi")[0]!.ownerSessionId, "session-stamp");
-    assert.equal(fake.sessionName, listTasks(root, ".pi")[0]!.title, "the session is named after its task");
+    assert.equal(fake.sessionName, listTasks(root, ".pi")[0]!.id, "the session is named after its task (its friendly name)");
     assert.deepEqual(fake.entries.map((entry) => [entry.customType, (entry.data as { kind: string; taskId: string }).kind, (entry.data as { taskId: string }).taskId]), [["bot-lobby-context", "start", listTasks(root, ".pi")[0]!.id]], "the oracle takes the task on with a clean context");
   } finally {
     if (previous === undefined) delete process.env.BOT_LOBBY_CONFIG_DIR;

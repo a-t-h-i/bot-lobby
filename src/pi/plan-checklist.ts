@@ -119,6 +119,48 @@ export function planSteps(plan: string): string[] {
   return collectSteps(lines, topBulletItem).slice(0, MAX_PLAN_STEPS);
 }
 
+/** Where a plan's steps section sits, and each of its top-level steps whole (its nested lines included). */
+export interface StepBlocks {
+  /** The section's body: from this line up to (not including) `to`. */
+  from: number;
+  to: number;
+  /** One entry per step, the step's lines as written. */
+  blocks: string[];
+}
+
+/**
+ * The steps of a plan written as a list under a `Steps` heading, each with the
+ * lines that hang under it, so a step can be moved to another plan whole.
+ * Undefined when the plan has no such section (its steps are headings, or
+ * scattered); the list found here counts steps the way `planSteps` does.
+ */
+export function planStepBlocks(plan: string): StepBlocks | undefined {
+  const lines = plan.split("\n");
+  const heading = lines.findIndex((line) => HEADER_LINE.test(line) && STEP_SECTION.test(line));
+  if (heading < 0) return undefined;
+  let to = lines.length;
+  for (let index = heading + 1; index < lines.length; index += 1) {
+    if (HEADER_LINE.test(lines[index]!)) {
+      to = index;
+      break;
+    }
+  }
+  const blocks: string[][] = [];
+  let parent: number | undefined;
+  for (let index = heading + 1; index < to; index += 1) {
+    const line = lines[index]!;
+    const item = sectionItem(line);
+    if (item && !(parent !== undefined && item.indent >= parent)) {
+      blocks.push([line]);
+      parent = item.content;
+      continue;
+    }
+    if (!item && parent !== undefined && line.trim() && indentOf(line) < parent) parent = undefined;
+    if (parent !== undefined && blocks.length > 0) blocks[blocks.length - 1]!.push(line);
+  }
+  return { from: heading + 1, to, blocks: blocks.map((block) => block.join("\n").replace(/\s+$/, "")) };
+}
+
 /* -------------------------------------------------------------------------
  * Step matching. A worker instruction names its step explicitly ("Step 3: ...")
  * or is scored against every step by shared paths, a shared opening phrase and

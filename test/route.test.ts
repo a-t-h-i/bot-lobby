@@ -142,7 +142,7 @@ test("the oracle may send it to the team instead: the task starts, and the lobby
   assert.equal(await startRequest(pi, ctx, ".pi", "change the submit button colour to blue"), "routing");
   const routed = await routeRequest(pi, ctx, ".pi", { to: "task", reason: "the user wants it reviewed" });
   assert.equal(routed.ok, true, routed.text);
-  assert.match(routed.text, /^Started TASK-.* as a task/);
+  assert.match(routed.text, /^Started Task-.* as a task/);
   const tasks = peekTasks(root, ".pi");
   assert.equal(tasks.length, 1);
   assert.equal(tasks[0]!.track!.path, "fast");

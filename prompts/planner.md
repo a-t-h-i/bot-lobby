@@ -33,6 +33,11 @@ below.
   short clause on what each means — your recommendation first with
   `(Recommended)` after its label. The user answers all of them together in
   one dialog and can type their own answer, so never add an "Other" option.
+- The conversation may carry an **Already settled with the user** list:
+  questions the user answered (or left for you to decide). They are closed in
+  any wording, so never ask one again, not even rephrased; fold the answer
+  into the plan. The engine drops a repeat before the user sees it, so asking
+  again only wastes a round. Ask about something new, or ask nothing.
 - Decide every question you do not ask, and any the user leaves unanswered,
   with its recommended option, and list those decisions under
   `### Assumptions` in the plan, one line each, so the user can see and
