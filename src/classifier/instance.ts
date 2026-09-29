@@ -11,6 +11,7 @@ import { isSubagentProcess } from "../pi/quiet.ts";
 import { Classifier } from "./classifier.ts";
 import { registerJevProvider, type KeySource, type KeyStatus } from "./hosts.ts";
 import { fileHinter, type FileHinter, type FileScope } from "./files.ts";
+import { knowledgePicker, type KnowledgePicker } from "./knowledge.ts";
 import { lobbyFeed } from "../lobby/feed.ts";
 import { triageLine, triageWithContext } from "./triage.ts";
 import type { TaskTriage } from "../schemas/task.ts";
@@ -43,6 +44,11 @@ export function classifier(): Classifier {
 /** Likely files for agents working in a tree, with what was found logged to the lobby's activity feed. */
 export function hintsFor(scope: FileScope): FileHinter {
   return fileHinter(classifier(), scope, (text) => lobbyFeed.log("CLASSIFIER", text, "info"));
+}
+
+/** Relevant knowledge for agents, with what Jev kept of each long file logged to the lobby's activity feed. */
+export function knowledgeFor(): KnowledgePicker {
+  return knowledgePicker(classifier(), (text) => lobbyFeed.log("CLASSIFIER", text, "info"));
 }
 
 /** Triage a request for a task in a tree, logged to the lobby's activity feed; undefined when triage is off or fails. */

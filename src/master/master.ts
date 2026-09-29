@@ -6,7 +6,7 @@ import type { AgentRun, ReviewResult, ScoutResult, WorkerResult } from "../schem
 import { domainSpec } from "../agents/registry.ts";
 import { runAgent, runParallel, watchdogOptions, type AgentRequest, type AgentTime } from "../execution/agent-runner.ts";
 import { spawnPiProcess, type ProcessRunner, type RelayAsk } from "../execution/pi-runner.ts";
-import { readAgentKnowledge, writeFileEnsured } from "../knowledge/store.ts";
+import { knowledgeFilePath, readAgentKnowledge, writeFileEnsured } from "../knowledge/store.ts";
 import { selectKnowledge, type KnowledgeSelection } from "../knowledge/selector.ts";
 import { summarizeOutcomes } from "./synthesis.ts";
 import { parseWorkerResult, validateWorkerResult } from "../roles/worker.ts";
@@ -14,6 +14,7 @@ import { parseReviewResult, validateReviewResult } from "../roles/reviewer.ts";
 import { truncate } from "../text.ts";
 import { isScoutResultUsable, parseScoutResult, validateScoutResult } from "../roles/scout.ts";
 import type { FileHinter } from "../classifier/files.ts";
+import type { KnowledgePaths, KnowledgePicker } from "../classifier/knowledge.ts";
 import { fellShort, profileLabel, routeLabel, type EffortRoute, type EffortRouter } from "../classifier/effort.ts";
 
 export interface ScoutOutcome {
@@ -42,6 +43,8 @@ export interface ScoutRequest {
   onUpdate?: (run: AgentRun) => void;
   /** Likely files for each scout's context, and the lookup tool, while the classifier's file hints are on. */
   hints?: FileHinter;
+  /** Picks the relevant sections of long knowledge files, while the classifier's knowledge picks are on. */
+  knowledge?: KnowledgePicker;
   /** Moves a trivial scout to the cheaper model, while the classifier's effort routing is on. */
   effort?: EffortRouter;
 }
@@ -61,11 +64,31 @@ function scoutInstruction(request: ScoutRequest, domain: Domain): string {
   ].join("\n");
 }
 
-function scoutContext(request: ScoutRequest, domain: Domain, likely = ""): AgentRequest["context"] {
-  const slices = readAgentKnowledge(request.dataRoots, domain);
+/** Where an agent's knowledge files are, for the note that says what a prompt left out. */
+function knowledgePaths(dataRoots: readonly string[], agent: Domain): KnowledgePaths {
+  const root = dataRoots[0];
+  return root ? { knowledge: knowledgeFilePath(root, agent, "knowledge"), standards: knowledgeFilePath(root, agent, "standard"), decisions: knowledgeFilePath(root, agent, "decision") } : {};
+}
+
+/**
+ * What an agent's prompt carries of its knowledge for a step: Jev's picks from
+ * the files that are too long when a picker is given, the keyword selection
+ * otherwise and whenever the picker fails.
+ */
+async function pickKnowledge(request: { knowledge?: KnowledgePicker; dataRoots: readonly string[]; signal?: AbortSignal }, agent: Domain, query: string): Promise<KnowledgeSelection> {
+  const slices = readAgentKnowledge(request.dataRoots, agent);
+  if (!request.knowledge) return selectKnowledge(query, slices);
+  try {
+    return await request.knowledge.select(query, slices, { paths: knowledgePaths(request.dataRoots, agent), ...(request.signal ? { signal: request.signal } : {}) });
+  } catch {
+    return selectKnowledge(query, slices);
+  }
+}
+
+function scoutContext(request: ScoutRequest, domain: Domain, selected: KnowledgeSelection, likely = ""): AgentRequest["context"] {
   return {
     task: request.taskText,
-    ...selectKnowledge(`${request.taskText} ${domainSpec(domain).scoutFocus}`, slices),
+    ...selected,
     instructions: request.config.agents[domain].instructions,
     workflowContext: [`Task state: scouting. Domain: ${domain}. Read-only reconnaissance; no implementation.`, likely, request.time?.note ?? ""].filter(Boolean).join("\n\n"),
   };
@@ -112,14 +135,17 @@ function toOutcome(run: AgentRun, domain: Domain): ScoutOutcome {
 /** Run the selected domain scouts concurrently and persist their findings. */
 export async function runScouts(request: ScoutRequest, run: ProcessRunner = spawnPiProcess): Promise<ScoutOutcome[]> {
   // Each scout gets the files most likely to answer its own instruction and focus.
-  const likely = await Promise.all(request.domains.map((domain) => likelyFor(request.hints, `${request.instruction}\n${domainSpec(domain).scoutFocus}`, request.signal, request.taskText)));
+  const [likely, selected] = await Promise.all([
+    Promise.all(request.domains.map((domain) => likelyFor(request.hints, `${request.instruction}\n${domainSpec(domain).scoutFocus}`, request.signal, request.taskText))),
+    Promise.all(request.domains.map((domain) => pickKnowledge(request, domain, `${request.instruction}\n${domainSpec(domain).scoutFocus}\n\n${request.taskText}`))),
+  ]);
   const extraTools = request.hints?.tools() ?? [];
   const requests: AgentRequest[] = request.domains.map((domain, index) => ({
     taskId: request.taskId,
     domain,
     role: "scout",
     instruction: scoutInstruction(request, domain),
-    context: scoutContext(request, domain, likely[index]),
+    context: scoutContext(request, domain, selected[index]!, likely[index]),
     ...(extraTools.length > 0 ? { extraTools } : {}),
     ...profileFields(request.config, request.profile, domain, "scout"),
     ...(request.time ? { time: { ...request.time } } : {}),
@@ -204,6 +230,8 @@ export interface WorkerRequest {
   onUpdate?: (run: AgentRun) => void;
   /** Likely files for the worker's step, and the lookup tool, while the classifier's file hints are on. */
   hints?: FileHinter;
+  /** Picks the relevant sections of long knowledge files, while the classifier's knowledge picks are on. */
+  knowledge?: KnowledgePicker;
   /** Lowers thinking (or the model) for a step the classifier judges simple or trivial. */
   effort?: EffortRouter;
   /** Under a task time budget: the step's time, and who decides on more when it runs out. */
@@ -246,10 +274,9 @@ export async function runWorker(
   request: WorkerRequest,
   run: ProcessRunner = spawnPiProcess,
 ): Promise<WorkerOutcome> {
-  const slices = readAgentKnowledge(request.dataRoots, request.domain);
-  const selected = selectKnowledge(`${request.taskText} ${request.instruction}`, slices);
   const configured = profileFields(request.config, request.profile, request.domain, "worker");
-  const [likely, route] = await Promise.all([
+  const [selected, likely, route] = await Promise.all([
+    pickKnowledge(request, request.domain, `${request.instruction}\n\n${request.taskText}`),
     likelyFor(request.hints, request.instruction, request.signal, request.taskText),
     routeFor(request.effort, request.instruction, { ...(configured.model ? { model: configured.model } : {}), thinking: configured.thinking }, { context: request.taskText, ...(request.signal ? { signal: request.signal } : {}) }),
   ]);
@@ -325,6 +352,8 @@ export interface ReviewerRequest {
   profile?: ProfileResolver;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
+  /** Picks the relevant sections of long knowledge files, while the classifier's knowledge picks are on. */
+  knowledge?: KnowledgePicker;
 }
 
 function reviewerContext(request: ReviewerRequest): string {
@@ -390,10 +419,7 @@ export async function runReviewer(
   request: ReviewerRequest,
   run: ProcessRunner = spawnPiProcess,
 ): Promise<ReviewerOutcome> {
-  const selected = selectKnowledge(
-    `${request.taskText} ${request.workerSummary}`,
-    readAgentKnowledge(request.dataRoots, request.domain),
-  );
+  const selected = await pickKnowledge(request, request.domain, `${request.taskText} ${request.workerSummary}`);
   const agentRequest = reviewerAgentRequest(request, selected);
   const attempts = Math.max(1, request.config.workflow.maxAgentRetries + 1);
   let agentRun = await runAgent(agentRequest, run);

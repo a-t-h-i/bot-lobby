@@ -1,14 +1,23 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { visibleWidth, type TUI } from "@earendil-works/pi-tui";
-import { LobbyView, parseMouse, TAB_IDS, visibleTabs, type LiveSession, type LobbyHost, type SwitchTarget } from "../src/lobby/view.ts";
+import { BRANCH_GLYPH, LobbyView, parseMouse, TAB_IDS, visibleTabs, type LiveSession, type LobbyHost, type SwitchTarget } from "../src/lobby/view.ts";
+import type { WorkspaceInfo } from "../src/execution/workspace.ts";
 import { DEFAULT_CONFIG, type LobbyPanel, type PanelMember } from "../src/schemas/configuration.ts";
 import { LobbyFeed } from "../src/lobby/feed.ts";
 import { QuickFixQueue } from "../src/lobby/quickfix.ts";
 import { IssuesState, type Exec } from "../src/lobby/issues.ts";
+import { PullsState } from "../src/lobby/pulls.ts";
+import { PullReviews } from "../src/lobby/pr-review.ts";
+import { KnowledgeBook } from "../src/lobby/knowledge.ts";
+import { ensureProjectStructure } from "../src/state/persistence.ts";
+import { dataRoot } from "../src/state/project.ts";
+import { readAgentKnowledge } from "../src/knowledge/store.ts";
+import type { Classifier } from "../src/classifier/classifier.ts";
+import type { AskQuestion, AskResult } from "../src/ask/types.ts";
 import { PlanningSession, type PlannerSeed } from "../src/lobby/planner.ts";
 import { createTask, type Task } from "../src/schemas/task.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
@@ -67,6 +76,9 @@ interface Calls {
   restored: string[];
   deleted: Array<[string, "list" | "archive"]>;
   historyLoads: string[];
+  edited: Array<[string, string]>;
+  /** The questions the split of a long plan put to the user. */
+  splitAsked: AskQuestion[][];
 }
 
 interface ViewOptions {
@@ -91,11 +103,24 @@ interface ViewOptions {
   archivedTasks?: Task[];
   /** The task's runs, as streamed. */
   runs?: AgentRun[];
+  /** The repository (or folder) and branch the title shows. */
+  workspace?: WorkspaceInfo;
+  /** What `gh` answers for the Git tab (the Issues tab's `exec` when absent). */
+  pullsExec?: Exec;
+  /** The fake pi a pull request review runs on. */
+  reviewProcess?: ProcessRunner;
+  classifier?: Classifier;
+  /** What pi's editor returns when the Knowledge tab edits a whole file (undefined = cancelled). */
+  editedText?: string;
+  /** Steps a plan may have before saving it offers a split (the config's default when absent). */
+  splitAbove?: number;
+  /** How the user answers the split question (leaving it open when absent). */
+  splitAnswer?: (questions: AskQuestion[]) => AskResult;
 }
 
 function makeView(options: ViewOptions = {}) {
   const root = mkdtempSync(join(tmpdir(), "bl-view-"));
-  const calls: Calls = { settings: [], answered: 0, savedPanels: [], oracle: [], comments: [], started: [], discarded: [], aborted: 0, hidden: 0, seeds: [], seats: [], sessionStarts: [], auto: [], inbox: [], sessionInbox: [], switches: [], dialogs: [], archived: [], restored: [], deleted: [], historyLoads: [] };
+  const calls: Calls = { settings: [], answered: 0, savedPanels: [], oracle: [], comments: [], started: [], discarded: [], aborted: 0, hidden: 0, seeds: [], seats: [], sessionStarts: [], auto: [], inbox: [], sessionInbox: [], switches: [], dialogs: [], archived: [], restored: [], deleted: [], historyLoads: [], edited: [], splitAsked: [] };
   let taskList: Task[] = options.tasks ?? (options.task ? [options.task] : []);
   let archivedList: Task[] = options.archivedTasks ?? [];
   const sessions: BackgroundSession[] = [];
@@ -105,7 +130,12 @@ function makeView(options: ViewOptions = {}) {
   const tui = { terminal: { rows, columns: 120 }, requestRender() {} } as unknown as TUI;
   const feed = new LobbyFeed();
   const quickfix = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low", timeoutMs: 1000 }), runProcess: hangingRunner });
-  const issues = new IssuesState(options.exec ?? (async () => ({ stdout: "[]", stderr: "", code: 0 })), root);
+  const exec: Exec = options.exec ?? (async () => ({ stdout: "[]", stderr: "", code: 0 }));
+  const issues = new IssuesState(exec, root);
+  const pulls = new PullsState(options.pullsExec ?? exec, root);
+  ensureProjectStructure(root, ".pi");
+  const knowledge = new KnowledgeBook({ root, configDir: ".pi", threshold: () => 20_000, backups: () => 1, sessionId: () => "me" });
+  const reviews = new PullReviews({ cwd: root, root, configDir: ".pi", exec: options.pullsExec ?? exec, profile: () => ({ thinking: "medium", timeoutMs: 1000 }), runProcess: options.reviewProcess ?? hangingRunner, ...(options.classifier ? { classifier: options.classifier } : {}) });
   let planner: PlanningSession | undefined;
   const host: LobbyHost = {
     rows: () => rows,
@@ -115,7 +145,7 @@ function makeView(options: ViewOptions = {}) {
     feed,
     masterBusy: () => options.busy === true,
     tasks: () => taskList,
-    plans: () => options.plans ?? [],
+    plans: () => options.plans ?? listPlannedTasks(root, ".pi"),
     comments: (): PlanComment[] => [],
     metrics: (): MetricRecord[] => options.metrics ?? [],
     toOracle: (text) => {
@@ -145,6 +175,13 @@ function makeView(options: ViewOptions = {}) {
       calls.answered += 1;
       return "answers sent — the panel is on the next round";
     },
+    savePlan: async () => {
+      if (!planner) return "no planning session";
+      return planner.saveWithSplit(async (questions) => {
+        calls.splitAsked.push(questions);
+        return options.splitAnswer?.(questions) ?? { answers: [], cancelled: true };
+      }, { splitAbove: options.splitAbove ?? 8 });
+    },
     issuesEnabled: () => options.issues === true,
     panels: () => ({ ...DEFAULT_CONFIG.lobby.panels, ...options.panels }),
     savePanels: (panels) => void calls.savedPanels.push({ ...panels }),
@@ -153,6 +190,13 @@ function makeView(options: ViewOptions = {}) {
     defaultPanel: () => options.panel ?? ["backend", "designer", "qa", "researcher"],
     seatLabel: (member) => `p/${member} · medium`,
     issues,
+    pulls,
+    reviews,
+    knowledge,
+    editText: async (title, text) => {
+      calls.edited.push([title, text]);
+      return options.editedText;
+    },
     profileLabel: () => "p/model · high",
     sessionName: () => "my window",
     sessions: () => sessions,
@@ -219,6 +263,7 @@ function makeView(options: ViewOptions = {}) {
       calls.historyLoads.push(sessionId ?? "");
       return options.history?.[sessionId ?? ""] ?? [];
     },
+    ...(options.workspace ? { workspace: () => options.workspace! } : {}),
     requestRender: () => {},
     now: () => NOW,
   };
@@ -226,7 +271,7 @@ function makeView(options: ViewOptions = {}) {
   const view = new LobbyView(tui, host, { borderColor: noop, selectList: { selectedPrefix: noop, selectedText: noop, description: noop, scrollInfo: noop, noMatch: noop } });
   view.focused = true;
   view.refreshData(true);
-  return { view, calls, feed, quickfix, issues, root, planner: () => planner, sessions, procs };
+  return { view, calls, feed, quickfix, issues, pulls, reviews, knowledge, root, planner: () => planner, sessions, procs };
 }
 
 /** A fake pi whose every run answers `text` as the assistant. */
@@ -306,7 +351,7 @@ test("tab and alt+digit switch tabs; prompt tabs open in typing mode, list tabs 
 });
 
 test("the Issues tab is off unless lobby.issues turns it on", () => {
-  assert.deepEqual(visibleTabs(false), ["lobby", "tasks", "plan", "quickfix", "metrics"]);
+  assert.deepEqual(visibleTabs(false), ["lobby", "tasks", "plan", "quickfix", "metrics", "git", "knowledge"]);
   assert.deepEqual(visibleTabs(true), [...TAB_IDS]);
   const { view } = makeView();
   assert.ok(!view.render(140)[0]!.includes("Issues"));
@@ -1010,12 +1055,14 @@ test("ctrl+s saves the plan while typing and from any tab; the Plan tab names th
   assert.equal(view.mode, "type");
   type(view, "half a reply");
   view.handleInput(KEY.ctrlS);
+  await settle();
   assert.equal(planner()!.saved?.id, "PLAN-login");
   assert.match(view.render(140).at(-1)!.trimEnd(), /saved PLAN-login to the pending tasks — start it from the Tasks tab$/);
   assert.ok(view.render(140).some((line) => line.includes("half a reply")), "the draft reply is left alone");
   assert.ok(listPlannedTasks(root, ".pi").some((plan) => plan.id === "PLAN-login"));
   view.setTab("tasks");
   view.handleInput(KEY.ctrlS);
+  await settle();
   assert.match(view.render(140).at(-1)!, /saved PLAN-login/, "it works from another tab too");
   const rebound = makeView({ keys: { savePlan: "alt+w" } }).view;
   rebound.setTab("plan");
@@ -1381,36 +1428,49 @@ test("a conversation scrolled to its top scrolls down again, one line a press, a
   assert.equal(content() === reading, false, "and it still scrolls");
 });
 
-test("the buttons on a scrolling pane's bottom edge scroll it a page or two, and only where it scrolls", () => {
+test("a scrolling pane's bottom edge reads `▲ prev · page 2/5 · next ▼`: the buttons move a page, and only a pane that scrolls has them", () => {
   const { view, feed } = makeView();
   busyFeed(feed);
   let lines = view.render(120);
   const top = lines.findIndex((line) => line.includes("╭ Activity"));
-  const bottom = lines.findIndex((line, index) => index > top && line.includes("╰") && line.includes("▲▲ ▲ ▼ ▼▼"));
-  assert.ok(bottom > top, "a pane with more lines than rows carries the buttons");
+  const pagerAt = (frame: string[]) => frame.findIndex((line, index) => index > top && line.includes("╰") && line.includes("▲ prev · page"));
+  const bottom = pagerAt(lines);
+  assert.ok(bottom > top, "a pane with more lines than rows carries the pager");
   const conversationEdge = lines[bottom]!.slice(0, lines[bottom]!.indexOf("╰", 2));
   assert.ok(!conversationEdge.includes("▲"), "a pane that fits has none");
-  const rows = bottom - top - 1;
-  const at = lines[bottom]!.indexOf("▲▲ ▲ ▼ ▼▼");
-  const shown = () => view.render(120).filter((line) => line.includes("reading file-")).length;
-  assert.ok(shown() > 0);
+  const pageNow = () => {
+    const match = /page\s+(\d+)\/(\d+)/.exec(view.render(120)[bottom]!)!;
+    return { page: Number(match[1]), pages: Number(match[2]) };
+  };
+  const first = pageNow();
+  assert.ok(first.pages > 1);
+  assert.equal(first.page, first.pages, "the log is at its newest line: the last page");
+  const up = lines[bottom]!.indexOf("▲ prev") + 2;
+  const down = lines[bottom]!.indexOf("next ▼") + 3;
+  const label = lines[bottom]!.indexOf("page") + 2;
   const newest = () => view.render(120).some((line) => line.includes("file-59.ts"));
   assert.equal(newest(), true);
-  view.handleInput(click(at + 3, bottom)); // one page up
+  view.handleInput(click(label, bottom));
+  assert.equal(pageNow().page, first.pages, "the page count is not a button");
+  view.handleInput(click(up, bottom));
   assert.equal(newest(), false, "a page back leaves the newest line");
+  assert.equal(pageNow().page, first.pages - 1, "and the count follows");
   const onePage = view.render(120).find((line) => /file-\d+\.ts/.test(line))!;
-  view.handleInput(click(at + 3, bottom));
+  view.handleInput(click(up, bottom));
   assert.notEqual(view.render(120).find((line) => /file-\d+\.ts/.test(line)), onePage, "another page back");
-  view.handleInput(click(at + 7, bottom)); // one page down
-  view.handleInput(click(at + 7, bottom));
+  assert.equal(pageNow().page, first.pages - 2);
+  view.handleInput(click(down, bottom));
+  view.handleInput(click(down, bottom));
   assert.equal(newest(), true, "back at the newest");
-  view.handleInput(click(at, bottom)); // two pages up
-  const twoPages = view.render(120).find((line) => /file-\d+\.ts/.test(line))!;
-  assert.notEqual(twoPages, onePage, "two pages go further than one");
-  view.handleInput(click(at + 8, bottom)); // two pages down
-  assert.equal(newest(), true);
+  assert.equal(pageNow().page, first.pages);
+  view.handleInput(click(down, bottom));
+  assert.equal(newest(), true, "no further than the end");
   assert.equal(view.homeFocus, "activity", "using a pane's buttons gives it the keys");
-  void rows;
+  const narrow = makeView();
+  busyFeed(narrow.feed);
+  const short = narrow.view.render(48);
+  assert.ok(short.some((line) => line.includes("╰") && /▲.*\d+\/\d+.*▼/.test(line)), "a narrow terminal keeps the arrows and the count");
+  assert.ok(short.every((line) => visibleWidth(line) <= 48));
 });
 
 test("the bottom line shows the subagents at work at its right end, and nothing when none is", () => {
@@ -1423,4 +1483,569 @@ test("the bottom line shows the subagents at work at its right end, and nothing 
   assert.ok(visibleWidth(narrow) <= 60);
   const idle = makeView({ task: activeTask(), runs: [run("c", "backend", "success")] });
   assert.ok(!/DEV|agents? working/.test(idle.view.render(140).at(-1)!), "nothing shows when no agent is working");
+});
+
+test("the title names the repository and its branch instead of bot-lobby", () => {
+  const { view } = makeView({ workspace: { name: "my-repo", branch: "main" } });
+  const bar = view.render(120)[0]!;
+  assert.match(bar, new RegExp(`◆ my-repo \\(${BRANCH_GLYPH} main\\) `));
+  assert.doesNotMatch(bar, /bot-lobby/);
+  assert.equal(view.render(120)[0]!.length > 0 && visibleWidth(view.render(120)[0]!), 120, "the bar fills its width");
+  // A folder outside git has just its name.
+  assert.match(makeView({ workspace: { name: "notes" } }).view.render(120)[0]!, /◆ notes │/);
+  // Nothing known yet: the plain product name, never an empty title.
+  assert.match(makeView().view.render(120)[0]!, /◆ bot-lobby │/);
+});
+
+test("a long title gives up the branch, then the name, before it crowds out the tabs", () => {
+  const { view } = makeView({ workspace: { name: "a-repository-with-quite-a-long-name-indeed", branch: "feature/some-very-long-branch-name-that-goes-on" } });
+  const wide = view.render(200)[0]!;
+  assert.match(wide, /◆ a-repository-with-quite-a-l… \(⎇ feature\/some-very-long-branch-name-…\) /, "clipped, with the branch");
+  const medium = view.render(112)[0]!;
+  assert.match(medium, /◆ a-repository-with-quite-a-l… │/, "the branch goes first");
+  assert.match(medium, /Metrics/);
+  const narrow = view.render(60)[0]!;
+  assert.match(narrow, / ◆ /);
+  assert.equal(visibleWidth(narrow), 60);
+  // Every tab stays clickable where the tab bar says it is.
+  const at = view.render(120)[0]!;
+  assert.match(at, /1 Lobby/);
+});
+
+test("a task working in its own worktree shows that branch in the title; a branch task shows the checkout's", () => {
+  const worktree: Task = { ...activeTask(), git: { mode: "worktree", branch: "Task-Change-Table-Font-27-09-2026", path: "/repo/.pi/bot-lobby/worktrees/Task-Change-Table-Font-27-09-2026" } };
+  assert.match(makeView({ task: worktree, workspace: { name: "my-repo", branch: "main" } }).view.render(140)[0]!, new RegExp(`◆ my-repo \\(${BRANCH_GLYPH} Task-Change-Table-Font-27-09-2026\\) `));
+  const branch: Task = { ...activeTask(), git: { mode: "branch", branch: "Task-Change-Table-Font-27-09-2026" } };
+  assert.match(makeView({ task: branch, workspace: { name: "my-repo", branch: "Task-Change-Table-Font-27-09-2026" } }).view.render(140)[0]!, new RegExp(`\\(${BRANCH_GLYPH} Task-Change-Table-Font-27-09-2026\\)`), "the checkout is on it");
+  assert.match(makeView({ task: branch, workspace: { name: "my-repo", branch: "main" } }).view.render(140)[0]!, new RegExp(`\\(${BRANCH_GLYPH} main\\)`), "switched away by hand: the title tells the truth");
+});
+
+test("shift+enter puts a new line in every prompt of the lobby instead of sending it", () => {
+  const SHIFT_ENTER = ["\x1b[13;2u", "\x1b[27;2;13~"];
+  const ctrlJ = "\n";
+  const sent = (made: ReturnType<typeof makeView>) => [made.calls.oracle.length, made.calls.comments.length, made.calls.sessionStarts.length, made.quickfix.jobs.length];
+  for (const newline of [...SHIFT_ENTER, ctrlJ]) {
+    // The Lobby prompt talks to the oracle.
+    const lobby = makeView();
+    type(lobby.view, "first line");
+    lobby.view.handleInput(newline);
+    type(lobby.view, "second line");
+    assert.deepEqual(sent(lobby), [0, 0, 0, 0], `${JSON.stringify(newline)} does not send`);
+    const drawn = lobby.view.render(100).join("\n");
+    assert.match(drawn, /first line[\s\S]*second line/, "both lines are in the prompt");
+    lobby.view.handleInput(KEY.enter);
+    assert.deepEqual(lobby.calls.oracle, ["first line\nsecond line"], "enter sends the whole message");
+
+    // A comment on a task's plan.
+    const tasks = makeView({ task: activeTask() });
+    tasks.view.setTab("tasks");
+    tasks.view.handleInput("c");
+    type(tasks.view, "cap the page size");
+    tasks.view.handleInput(newline);
+    type(tasks.view, "and the rate");
+    tasks.view.handleInput(KEY.enter);
+    assert.deepEqual(tasks.calls.comments, [["TASK-login", "cap the page size\nand the rate"]]);
+
+    // The planning panel, a quick fix and a new issue.
+    const plan = makeView({ panel: [] });
+    plan.view.setTab("plan");
+    type(plan.view, "login page");
+    plan.view.handleInput(newline);
+    type(plan.view, "with a remember-me box");
+    plan.view.handleInput(KEY.enter);
+    assert.equal(plan.planner()?.messages[0]?.text, "login page\nwith a remember-me box");
+    const fix = makeView();
+    fix.view.setTab("quickfix");
+    type(fix.view, "rename Save");
+    fix.view.handleInput(newline);
+    type(fix.view, "to Apply");
+    assert.equal(fix.quickfix.jobs.length, 0);
+    fix.view.handleInput(KEY.enter);
+    assert.equal(fix.quickfix.jobs[0]?.prompt, "rename Save\nto Apply");
+  }
+});
+
+test("a backslash before enter is a new line too, for terminals that cannot tell shift+enter apart", () => {
+  const { view, calls } = makeView();
+  type(view, "one\\");
+  view.handleInput(KEY.enter);
+  type(view, "two");
+  view.handleInput(KEY.enter);
+  assert.deepEqual(calls.oracle, ["one\ntwo"]);
+});
+
+test("the search bar is one line: shift+enter neither sends nor writes anything into it", () => {
+  const { view } = makeView({ task: activeTask() });
+  view.setTab("tasks");
+  view.handleInput("\x06");
+  type(view, "log");
+  view.handleInput("\x1b[13;2u");
+  type(view, "in");
+  assert.equal(view.query(), "login", "the query carries on as one line");
+  assert.equal(view.searching, true, "shift+enter does not close it");
+});
+
+test("a task's details name its branch, where it came from and its worktree", () => {
+  const detail = (git: Task["git"]) => taskDetailLines({ ...activeTask(), ...(git ? { git } : {}) }, [], "me", 100, NOW).join("\n");
+  assert.doesNotMatch(detail(undefined), new RegExp(BRANCH_GLYPH), "a task without git shows nothing about it");
+  assert.match(detail({ mode: "branch", branch: "Task-Change-Table-Font-27-09-2026", from: "main" }), new RegExp(`${BRANCH_GLYPH} Task-Change-Table-Font-27-09-2026 · from main`));
+  const worktree = detail({ mode: "worktree", branch: "Task-A-27-09-2026", from: "main", path: "/repo/.pi/bot-lobby/worktrees/Task-A-27-09-2026" });
+  assert.match(worktree, /⎇ Task-A-27-09-2026 · from main · worktree \/repo\/\.pi\/bot-lobby\/worktrees\/Task-A-27-09-2026/);
+});
+
+/* ------------------------------------------------------------------ Git tab */
+
+const PULL_LIST = JSON.stringify([
+  { number: 12, title: "Fix the table font", author: { login: "ana" }, headRefName: "fix/table-font", baseRefName: "main", isDraft: false, updatedAt: "2026-09-26T10:00:00Z", additions: 12, deletions: 3, changedFiles: 2, reviewDecision: "APPROVED", statusCheckRollup: [{ conclusion: "SUCCESS" }], labels: [{ name: "ui" }], headRefOid: "abc123" },
+  { number: 13, title: "Rework auth", author: { login: "bo" }, headRefName: "auth", baseRefName: "main", isDraft: true, additions: 400, deletions: 90, changedFiles: 14, statusCheckRollup: [{ conclusion: "FAILURE" }], labels: [] },
+]);
+const pullView = (number: number) => JSON.stringify({
+  number, title: number === 12 ? "Fix the table font" : "Rework auth", body: number === 12 ? "Uses Inter." : "Big rewrite.", state: "OPEN", mergeable: "MERGEABLE", reviewDecision: "APPROVED", author: { login: "ana" }, headRefName: "fix/table-font", baseRefName: "main", isDraft: false, additions: 12, deletions: 3, changedFiles: 2, headRefOid: "abc123",
+  statusCheckRollup: [{ conclusion: "SUCCESS" }], labels: [{ name: "ui" }], files: [{ path: "src/table.css", additions: 10, deletions: 2 }], reviews: [], comments: [{ author: { login: "bo" }, body: "Looks good.", createdAt: "2026-09-26T11:00:00Z" }],
+});
+const PULL_DIFF = "diff --git a/src/table.css b/src/table.css\n-serif\n+Inter\n";
+const PULL_REVIEW = "## Verdict\nREQUEST CHANGES\n\n## Summary\nSwaps the font.\n\n## Findings\n- **major** `src/table.css:1` — no fallback stack.";
+
+/** `gh` for the Git tab: the list, each pull request, its diff. */
+function pullsGh(calls: string[][] = []): Exec {
+  return async (_command, args) => {
+    calls.push(args);
+    const key = args.slice(0, 2).join(" ");
+    if (key === "pr list") return { stdout: PULL_LIST, stderr: "", code: 0 };
+    if (key === "pr view") return { stdout: pullView(Number(args[2])), stderr: "", code: 0 };
+    if (key === "pr diff") return { stdout: PULL_DIFF, stderr: "", code: 0 };
+    return { stdout: "", stderr: "unexpected", code: 1 };
+  };
+}
+
+/** A fake pi that reviews as `text`, recording what it was asked. */
+function reviewer(text: string, prompts: string[] = []): ProcessRunner {
+  const stdout = JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], model: "p/served", stopReason: "stop", usage: { input: 1, output: 1 } } });
+  return async (_args, options) => {
+    prompts.push(options.prompt ?? "");
+    return { exitCode: 0, stdout, stderr: "", killed: false, timedOut: false };
+  };
+}
+
+async function gitTab(options: ViewOptions = {}) {
+  const calls: string[][] = [];
+  const prompts: string[] = [];
+  const made = makeView({ pullsExec: pullsGh(calls), reviewProcess: reviewer(PULL_REVIEW, prompts), ...options });
+  made.view.setTab("git");
+  await settle();
+  made.view.render(140);
+  return { ...made, ghCalls: calls, prompts };
+}
+
+const flat = (lines: string[]) => lines.join("\n");
+
+test("the Git tab lists the open pull requests with their checks and size, and opens the selected one", async () => {
+  const { view, ghCalls } = await gitTab();
+  assert.deepEqual(ghCalls.map((args) => args.slice(0, 2).join(" ")), ["pr list", "pr view"], "opening the tab loads the list, then the selected pull request");
+  const screen = flat(view.render(140));
+  assert.match(screen, /Pull requests [─ ]+2 open/);
+  assert.match(screen, /#12 ✓ Fix the table font/);
+  assert.match(screen, /#13 ✗ draft Rework auth/);
+  assert.match(screen, /\+12 −3/);
+  assert.match(screen, /#12 Fix the table font/);
+  assert.match(screen, /by ana/);
+  assert.match(screen, /fix\/table-font → main/);
+  assert.match(screen, /checks passing \(1\) · approved · mergeable · ui/);
+  assert.match(screen, /src\/table\.css +\+10 −2/);
+  assert.match(screen, /Uses Inter\./);
+  assert.match(screen, /── bo/);
+  assert.match(view.render(140)[0]!, /6 Git 2/, "the tab says how many are open");
+  // The arrows move through the list and load each pull request.
+  view.handleInput(KEY.down);
+  await settle();
+  assert.match(flat(view.render(140)), /#13 Rework auth[\s\S]*Big rewrite\./);
+});
+
+test("v reviews the selected pull request with a read-only agent; the review shows under its facts and in the list", async () => {
+  const { view, prompts, reviews } = await gitTab();
+  view.handleInput("v");
+  assert.match(view.render(140).at(-1)!, /reviewing #12 — it streams into the activity log; x stops it/);
+  await settle();
+  const screen = flat(view.render(140));
+  assert.equal(prompts.length, 1);
+  assert.match(prompts[0]!, /Review pull request #12 — Fix the table font/);
+  assert.doesNotMatch(prompts[0]!, /Focus \(look at this first\)/);
+  assert.match(screen, /Review [─ ]+request changes · \d+s/);
+  assert.match(screen, /p\/served · medium/, "the model that ran, on its own line");
+  assert.match(screen, /Swaps the font\./);
+  assert.match(screen, /no fallback stack/);
+  assert.match(screen, /✗ reviewed/, "the list carries the verdict");
+  assert.equal(reviews.review(12)?.verdict, "changes");
+  // Asking again while nothing runs starts a fresh review.
+  view.handleInput("v");
+  await settle();
+  assert.equal(prompts.length, 2);
+});
+
+test("f takes what the review should look at first, over several lines, and reviews with it", async () => {
+  const { view, prompts } = await gitTab();
+  view.handleInput("f");
+  assert.equal(view.mode, "type");
+  assert.match(flat(view.render(140)), /what should the review of #12 look at first\? · enter reviews/);
+  assert.match(view.render(140).at(-1)!, /enter review with this focus.*shift\+enter new line.*esc cancel/);
+  type(view, "is the font licensed?");
+  view.handleInput("\x1b[13;2u");
+  type(view, "and does it fall back?");
+  view.handleInput(KEY.enter);
+  await settle();
+  assert.equal(prompts.length, 1);
+  assert.match(prompts[0]!, /Focus \(look at this first\): is the font licensed\?\nand does it fall back\?/);
+  assert.equal(view.mode, "browse");
+  assert.match(flat(view.render(140)), /focus: is the font licensed\?/);
+  // esc leaves the focus prompt without reviewing anything.
+  view.handleInput("f");
+  type(view, "never mind");
+  view.handleInput(KEY.escape);
+  view.handleInput("v");
+  await settle();
+  assert.match(prompts.at(-1)!, /Review pull request #12/);
+  assert.doesNotMatch(prompts.at(-1)!, /never mind/);
+});
+
+test("text typed without f is kept, not sent as a review focus", async () => {
+  const { view, prompts } = await gitTab();
+  view.handleInput("f");
+  view.handleInput(KEY.escape);
+  view.setTab("git");
+  view.handleInput("\x1b[13;2u");
+  assert.equal(view.mode, "browse");
+  view.handleInput("f");
+  view.handleInput(KEY.escape);
+  assert.deepEqual(prompts, []);
+});
+
+test("x stops a running review", async () => {
+  let abort: (() => void) | undefined;
+  const hanging: ProcessRunner = (_args, options) => new Promise((resolve) => {
+    abort = () => resolve({ exitCode: 1, stdout: "", stderr: "", killed: true, timedOut: false });
+    options.signal?.addEventListener("abort", abort, { once: true });
+  });
+  const { view, reviews } = await gitTab({ reviewProcess: hanging });
+  view.handleInput("x");
+  assert.match(view.render(140).at(-1)!, /no review of #12 is running/);
+  view.handleInput("v");
+  await settle();
+  assert.equal(reviews.running(12), true);
+  assert.match(flat(view.render(140)), /Review [─ ]+[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] \d+s/, "a running review shows its spinner and clock");
+  assert.match(view.render(140)[0]!, /6 Git [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/, "the tab spins while a review runs");
+  view.handleInput("v");
+  assert.match(view.render(140).at(-1)!, /already reviewing #12 — x stops it/);
+  view.handleInput("x");
+  await settle();
+  assert.equal(reviews.review(12)?.status, "cancelled");
+  assert.match(flat(view.render(140)), /stopped/);
+});
+
+test("t asks Jev for a quick read, and says how to turn Jev on when it is off", async () => {
+  const off = await gitTab();
+  off.view.handleInput("t");
+  await settle();
+  const offScreen = flat(off.view.render(140));
+  assert.match(offScreen, /Jev's read/);
+  assert.match(offScreen, /Jev is off/);
+  assert.match(offScreen, /Pull request read on in/);
+  const answers = { size: { type: "score", score: 1.2, confidence: 0.8 }, risky: { type: "noul", noul: 0.8 }, breaking: { type: "noul", noul: 0.1 }, security: { type: "noul", noul: 0.05 }, tests_missing: { type: "noul", noul: 0.3 }, kind: { type: "choice", choice: "bugfix", probabilities: { bugfix: 0.9 }, confidence: 0.9 } };
+  const classifier = new (await import("../src/classifier/classifier.ts")).Classifier({
+    config: () => ({ ...DEFAULT_CONFIG.classifier, enabled: true }), keys: async () => "k", sleep: async () => {},
+    fetch: async () => new Response(JSON.stringify({ model: "jev-test", answers }), { status: 200 }),
+  });
+  const on = await gitTab({ classifier });
+  on.view.handleInput("t");
+  await settle();
+  const onScreen = flat(on.view.render(140));
+  assert.match(onScreen, /Jev's read [─ ]+jev-test · \d+ ms/);
+  assert.match(onScreen, /small · bugfix · risky 0\.80/);
+  assert.match(onScreen, /worth a full review/);
+});
+
+test("the Git tab says why it is empty: no gh, no pull requests, or loading", async () => {
+  const missing = await gitTab({ pullsExec: async () => ({ stdout: "", stderr: "", code: 127 }) });
+  assert.match(flat(missing.view.render(140)), /✗ GitHub CLI \(gh\) is not installed/);
+  const none = await gitTab({ pullsExec: async (_command, args) => ({ stdout: args[1] === "list" ? "[]" : "{}", stderr: "", code: 0 }) });
+  assert.match(flat(none.view.render(140)), /No open pull requests\./);
+  none.view.handleInput("v");
+  assert.match(none.view.render(140).at(-1)!, /no pull request selected — r loads the open ones/, "nothing to review");
+  const { view, ghCalls } = await gitTab();
+  view.handleInput("r");
+  await settle();
+  assert.equal(ghCalls.filter((args) => args[1] === "list").length, 2, "r asks gh again");
+});
+
+test("enter moves between the list and a pull request's detail, which scrolls with the arrows", async () => {
+  const { view } = await gitTab({ rows: 16 });
+  const head = flat(view.render(140));
+  assert.match(head, /Pull request\n|Pull request /);
+  view.handleInput(KEY.enter);
+  assert.match(flat(view.render(140)), /Pull request ◂/);
+  for (let i = 0; i < 6; i++) view.handleInput(KEY.down);
+  assert.notEqual(flat(view.render(140)), head, "the detail scrolled");
+  view.handleInput(KEY.escape);
+  assert.doesNotMatch(flat(view.render(140)), /Pull request ◂/);
+  // Narrow terminals show one pane at a time.
+  const narrow = view.render(80);
+  assert.ok(narrow.some((line) => line.includes("Pull requests")));
+  assert.ok(!narrow.some((line) => line.includes("Pull request ◂")));
+});
+
+test("the Git tab's keys are in the help and the hint line", async () => {
+  const { view } = await gitTab();
+  const hint = view.render(140).at(-1)!;
+  assert.match(hint, /v review.*f review with a focus.*t Jev's read.*r reload/);
+  view.handleInput("?");
+  const help = flat(view.render(140));
+  assert.match(help, /Git tab/);
+  assert.match(help, /read-only agent on QA's model/);
+  assert.match(help, /nothing is posted to\s+GitHub|nothing is posted to GitHub/);
+  assert.match(help, /Jev's quick read/);
+});
+
+/* ------------------------------------------------------------ Knowledge tab */
+
+const BACKEND_DECISIONS = "# Decisions\n\n## 2026-09-01\n- REST over GraphQL.\n- Postgres for sessions.\n";
+
+/** A lobby on the Knowledge tab with Backend's decisions written, and that file picked. */
+function knowledgeTab(options: ViewOptions = {}) {
+  const made = makeView(options);
+  const file = join(dataRoot(made.root, ".pi"), "Backend", "knowledge", "decisions.md");
+  writeFileSync(file, BACKEND_DECISIONS);
+  made.view.setTab("knowledge");
+  // Files are listed master, designer, backend, qa; Backend's decisions is the eleventh row.
+  for (let i = 0; i < 10; i++) made.view.handleInput(KEY.down);
+  made.view.handleInput(KEY.enter);
+  made.view.render(140);
+  return { ...made, file };
+}
+
+const onDisk = (file: string) => readFileSync(file, "utf8");
+
+test("the Knowledge tab lists every agent's files with their size, and shows the picked file's entries", () => {
+  const { view } = knowledgeTab();
+  const screen = flat(view.render(140));
+  for (const agent of ["Master (oracle)", "Designer", "Backend", "QA"]) assert.match(screen, new RegExp(`── ${agent.replace(/[()]/g, "\\$&")} `));
+  assert.match(screen, /Design language/);
+  assert.match(screen, /Engineering standards/);
+  assert.match(screen, /Testing standards/);
+  assert.match(screen, /Backend · decisions\.md ◂[─ ]+4 entries · 73 chars/);
+  assert.match(screen, /▸ # Decisions|▸ Decisions/, "the first entry is picked");
+  assert.match(screen, /REST over GraphQL\./);
+  assert.match(view.render(140)[0]!, /7 Knowledge/);
+  // The arrows pick entries while the entries have the keys, files while the list has.
+  view.handleInput(KEY.down);
+  assert.match(flat(view.render(140)), /▸ ## 2026-09-01|▸ 2026-09-01/);
+  view.handleInput(KEY.enter);
+  view.handleInput(KEY.up);
+  assert.match(flat(view.render(140)), /Backend · engineering-standards\.md(?! ◂)/, "back on the list, where up picks the file above");
+  assert.match(flat(view.render(140)), /Designer/);
+});
+
+test("e brings the picked entry into the prompt; shift+enter adds a line, enter saves it and only that entry changes", () => {
+  const { view, file, root } = knowledgeTab();
+  view.handleInput(KEY.down);
+  view.handleInput(KEY.down);
+  view.handleInput("e");
+  assert.equal(view.mode, "type");
+  const prompt = flat(view.render(140));
+  assert.match(prompt, /edit “- REST over GraphQL\.” · enter saves it · esc cancels/);
+  assert.match(prompt, /- REST over GraphQL\./);
+  assert.match(view.render(140).at(-1)!, /enter save.*shift\+enter new line.*esc cancel/);
+  // The whole entry is in the prompt: clear it and write the new one over two lines.
+  for (let i = 0; i < 40; i++) view.handleInput("\x7f");
+  type(view, "- REST, with cursors.");
+  view.handleInput("\x1b[13;2u");
+  type(view, "  Page size 50.");
+  view.handleInput(KEY.enter);
+  assert.equal(onDisk(file), "# Decisions\n\n## 2026-09-01\n- REST, with cursors.\n  Page size 50.\n- Postgres for sessions.\n");
+  assert.match(view.render(140).at(-1)!, /saved backend\/decisions\.md — the version before is in archive\/Backend/);
+  assert.equal(view.mode, "browse");
+  assert.match(flat(view.render(140)), /REST, with cursors\.[\s\S]*Page size 50\./);
+  assert.ok(readdirSync(join(dataRoot(root, ".pi"), "archive", "Backend")).length === 1, "the version before was archived");
+});
+
+test("esc while editing leaves the file alone and does not leave the entry's text behind in the prompt", () => {
+  const { view, file } = knowledgeTab();
+  view.handleInput(KEY.down);
+  view.handleInput("e");
+  view.handleInput(KEY.escape);
+  assert.equal(view.mode, "browse");
+  assert.equal(onDisk(file), BACKEND_DECISIONS);
+  view.handleInput("c");
+  view.handleInput(KEY.escape);
+  view.handleInput("e");
+  view.setTab("lobby");
+  view.setTab("knowledge");
+  view.handleInput("i");
+  assert.equal(view.mode, "browse", "i does not open the prompt on this tab");
+  view.setTab("lobby");
+  assert.doesNotMatch(flat(view.render(140)), /Decisions/, "nothing lent to the prompt followed it to another tab");
+  // Text typed with nothing being edited is kept, not saved anywhere.
+  view.setTab("knowledge");
+  view.handleInput("\x1b[13;2u");
+  assert.equal(onDisk(file), BACKEND_DECISIONS);
+});
+
+test("c leaves a note under the entry, agents read it there, and x x takes it back", () => {
+  const { view, file, root } = knowledgeTab();
+  for (let i = 0; i < 3; i++) view.handleInput(KEY.down);
+  view.handleInput("c");
+  assert.match(flat(view.render(140)), /a note on “- Postgres for sessions\.” — every agent reads it under the entry · enter saves/);
+  type(view, "Outdated: it is Redis now.");
+  view.handleInput("\x1b[13;2u");
+  type(view, "Ask ana.");
+  view.handleInput(KEY.enter);
+  assert.match(view.render(140).at(-1)!, /note saved — every agent reads it under this entry/);
+  assert.equal(onDisk(file), BACKEND_DECISIONS, "a note never touches the file");
+  const screen = flat(view.render(140));
+  assert.match(screen, /- Postgres for sessions\.[\s\S]*✎ Outdated: it is Redis now\.[\s\S]*Ask ana\./);
+  assert.match(screen, /✎ 1/, "the list counts notes");
+  assert.match(readAgentKnowledge([dataRoot(root, ".pi")], "backend").decisions, /- Postgres for sessions\.\n> Note from the user: Outdated: it is Redis now\.\n> Ask ana\./);
+  view.handleInput("x");
+  assert.match(view.render(140).at(-1)!, /press x again to remove the note “Outdated: it is Redis now\. Ask ana\.”/);
+  view.handleInput("x");
+  assert.match(view.render(140).at(-1)!, /note removed/);
+  assert.doesNotMatch(flat(view.render(140)), /✎ Outdated/);
+  view.handleInput("x");
+  assert.match(view.render(140).at(-1)!, /this entry has no notes/);
+});
+
+test("n adds an entry after the picked one, and d d deletes the picked entry together with its notes", () => {
+  const { view, file } = knowledgeTab();
+  view.handleInput(KEY.down);
+  view.handleInput(KEY.down);
+  view.handleInput("n");
+  assert.match(flat(view.render(140)), /a new entry after “- REST over GraphQL\.” · enter adds it/);
+  type(view, "Use ULIDs for ids.");
+  view.handleInput(KEY.enter);
+  assert.equal(onDisk(file), "# Decisions\n\n## 2026-09-01\n- REST over GraphQL.\n- Use ULIDs for ids.\n- Postgres for sessions.\n");
+  assert.match(flat(view.render(140)), /▸ - Use ULIDs for ids\.|▸ • Use ULIDs for ids\./, "the new entry is the picked one");
+  view.handleInput("c");
+  type(view, "check the library");
+  view.handleInput(KEY.enter);
+  view.handleInput("d");
+  assert.match(view.render(140).at(-1)!, /press d again to delete this entry \(the file is archived first, and its notes go with it\)/);
+  assert.equal(onDisk(file).includes("ULIDs"), true, "one press deletes nothing");
+  view.handleInput("d");
+  assert.equal(onDisk(file), BACKEND_DECISIONS, "back to how it was");
+  assert.match(view.render(140).at(-1)!, /its 1 note went with it/);
+});
+
+test("E edits the whole file in pi's editor: saved when it returns text, untouched when cancelled", async () => {
+  const saved = knowledgeTab({ editedText: "# Decisions\n- Only this.\n" });
+  saved.view.handleInput("E");
+  await settle();
+  assert.deepEqual(saved.calls.edited, [["Decisions — backend/decisions.md", BACKEND_DECISIONS]]);
+  assert.equal(onDisk(saved.file), "# Decisions\n- Only this.\n");
+  assert.match(saved.view.render(140).at(-1)!, /saved backend\/decisions\.md/);
+  const cancelled = knowledgeTab();
+  cancelled.view.handleInput("E");
+  await settle();
+  assert.equal(onDisk(cancelled.file), BACKEND_DECISIONS, "cancelling changes nothing");
+});
+
+test("an edit for an entry that changed on disk since it was drawn is refused, not put on the wrong line", () => {
+  const { view, file } = knowledgeTab();
+  view.handleInput(KEY.down);
+  view.handleInput(KEY.down);
+  view.handleInput(KEY.down);
+  view.handleInput("e");
+  writeFileSync(file, "# Decisions\n\n## 2026-09-01\n- Something else entirely.\n");
+  for (let i = 0; i < 40; i++) view.handleInput("\x7f");
+  type(view, "- changed");
+  view.handleInput(KEY.enter);
+  assert.match(view.render(140).at(-1)!, /that entry changed on disk since it was drawn — r reloads the file/);
+  assert.equal(onDisk(file), "# Decisions\n\n## 2026-09-01\n- Something else entirely.\n");
+  view.handleInput("r");
+  assert.match(flat(view.render(140)), /Something else entirely\./);
+});
+
+test("the Knowledge tab says what an empty file needs, and lists its keys", () => {
+  const made = makeView();
+  writeFileSync(join(dataRoot(made.root, ".pi"), "Master", "knowledge", "knowledge.md"), "");
+  made.view.setTab("knowledge");
+  made.view.handleInput(KEY.enter);
+  assert.match(flat(made.view.render(140)), /Nothing here yet\. n adds the first entry\./);
+  made.view.handleInput("d");
+  assert.match(made.view.render(140).at(-1)!, /nothing is picked — n adds an entry/);
+  made.view.handleInput("e");
+  assert.match(made.view.render(140).at(-1)!, /nothing is picked — n adds an entry/);
+  made.view.handleInput("n");
+  type(made.view, "First fact.");
+  made.view.handleInput(KEY.enter);
+  assert.equal(readFileSync(join(dataRoot(made.root, ".pi"), "Master", "knowledge", "knowledge.md"), "utf8"), "- First fact.\n");
+  assert.match(flat(made.view.render(140)), /▸ (- |• )First fact\./);
+  const { view } = knowledgeTab();
+  const hint = view.render(140).at(-1)!;
+  assert.match(hint, /pick.*e edit.*c comment.*n new.*d d delete.*E edit file/);
+  view.handleInput("?");
+  const help = flat(view.render(140));
+  assert.match(help, /Knowledge tab/);
+  assert.match(help, /note every agent/);
+  assert.match(help, /whole file/);
+});
+
+/* ------------------------------------------------------ splitting a long plan */
+
+const LONG_PLAN = ["### Objective", "Add dark mode.", "### Assumptions", "- [QA] Evergreen only.", "### Steps", ...Array.from({ length: 10 }, (_, index) => `${index + 1}. Step number ${index + 1}`), "### Risks and open points", "None."].join("\n");
+const SPLIT_REPLY = [
+  "## Tasks",
+  "### 1. Foundation", "Goal: the base.", "Covers: 1-4", "After: none", "Done when:", "- it works", "",
+  "### 2. Screens", "Goal: the screens.", "Covers: 5-10", "After: 1", "Done when:", "- it looks right", "",
+  "## Note", "Do 1 first.",
+].join("\n");
+
+/** A fake pi: the panel's round answers with the long plan, the oracle's split answers with the split. */
+function splittingRunner(): ProcessRunner {
+  const text = (prompt: string) => (prompt.includes("Split this plan into") ? SPLIT_REPLY : `## Status\nREADY\n## Title\nDark mode\n## Plan\n${LONG_PLAN}`);
+  return async (_args, options) => ({ exitCode: 0, stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: text(options.prompt ?? "") }], model: "p/served", stopReason: "stop", usage: { input: 1, output: 1 } } }), stderr: "", killed: false, timedOut: false });
+}
+
+async function planWithLongPlan(options: ViewOptions = {}) {
+  const made = makeView({ panel: [], runProcess: splittingRunner(), ...options });
+  made.view.setTab("plan");
+  type(made.view, "dark mode");
+  made.view.handleInput(KEY.enter);
+  await settle();
+  assert.equal(made.planner()?.reply?.status, "ready");
+  return made;
+}
+
+test("ctrl+s on a long plan asks whether to split it; accepting saves the parts, which the Tasks tab lists in order", async () => {
+  const { view, calls, root } = await planWithLongPlan({ splitAnswer: (questions) => ({ cancelled: false, answers: [{ questionIndex: 0, question: questions[0]!.question, kind: "option", answer: "Split into 2 tasks (Recommended)" }] }) });
+  view.handleInput(KEY.ctrlS);
+  await settle();
+  assert.equal(calls.splitAsked.length, 1);
+  const question = calls.splitAsked[0]![0]!;
+  assert.match(question.question, /This plan has \*\*10 steps\*\*/);
+  assert.match(question.options[0]!.preview!, /\*\*1\. Foundation\*\* · steps 1-4/);
+  assert.match(view.render(140).at(-1)!, /split into 2 tasks — PLAN-foundation, PLAN-screens; start them from the Tasks tab, in order/);
+  assert.match(flat(view.render(140)), /saved as 2 tasks, from PLAN-foundation/, "the Plan tab says what became of the plan");
+  assert.deepEqual(listPlannedTasks(root, ".pi").map((plan) => plan.id), ["PLAN-foundation", "PLAN-screens"]);
+  view.setTab("tasks");
+  const list = flat(view.render(140));
+  assert.match(list, /Foundation \(1\/2\)[\s\S]*Screens \(2\/2\)/, "in part order, each numbered");
+  view.handleInput(KEY.down);
+  view.handleInput(KEY.down);
+  const detail = flat(view.render(140));
+  assert.match(detail, /part 2 of 2 of one plan that was split into tasks, after part 1/);
+  assert.match(detail, /1\. Foundation · 2\. Screens/);
+  assert.match(detail, /Builds on:\*\* part 1 — Foundation|Builds on: part 1 — Foundation/);
+});
+
+test("ctrl+s leaves the plan alone while the split question is open, and a plan under the limit saves without one", async () => {
+  const left = await planWithLongPlan();
+  left.view.handleInput(KEY.ctrlS);
+  await settle();
+  assert.equal(left.calls.splitAsked.length, 1);
+  assert.match(left.view.render(140).at(-1)!, /the split question was left open, so nothing was saved — ctrl\+s asks again/);
+  assert.deepEqual(listPlannedTasks(left.root, ".pi"), []);
+  assert.equal(left.planner()!.busy, false, "the panel is free again");
+  const small = await planWithLongPlan({ splitAbove: 12 });
+  small.view.handleInput(KEY.ctrlS);
+  await settle();
+  assert.equal(small.calls.splitAsked.length, 0, "ten steps are under twelve");
+  assert.match(small.view.render(140).at(-1)!, /saved PLAN-dark-mode to the pending tasks/);
 });

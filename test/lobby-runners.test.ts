@@ -7,7 +7,7 @@ import { describeToolCall } from "../src/pi/activity.ts";
 import { createStreamCollector, finishedThought, MAX_THOUGHT_CHARS, type PiStreamEvent, type ProcessOutcome, type ProcessRunner, type ProcessRunOptions } from "../src/execution/pi-runner.ts";
 import { chatFromEntries, chatText, LobbyFeed, MAX_CHAT, textOf } from "../src/lobby/feed.ts";
 import { QUICK_FIX_TOOLS, QuickFixQueue, jobTitle, quickFixPrompt } from "../src/lobby/quickfix.ts";
-import { PLANNER_TOOLS, RESEARCH_PANEL_TOOLS, PlanningSession, appendAssumptions, commentBlock, memberPrompt, oracleClosing, optionLabel, panelSection, parseMemberReply, parseOption, parsePlannerReply, plannerSays, plannerTranscript, recommendedOption, roundMode, roundQuestions } from "../src/lobby/planner.ts";
+import { PLANNER_TOOLS, RESEARCH_PANEL_TOOLS, PlanningSession, appendAssumptions, commentBlock, memberPrompt, oracleClosing, optionLabel, panelSection, parseMemberReply, parseOption, parsePlannerReply, plannerSays, plannerTranscript, recommendedOption, roundMode, roundQuestions, sameQuestion, settledBlock, withoutSettled } from "../src/lobby/planner.ts";
 import { roundLabel } from "../src/lobby/tabs/plan.ts";
 import { MAX_QUESTIONS } from "../src/lobby/ask.ts";
 import { createIssue, ghError, IssuesState, issueText, listIssues, splitIssueText, viewIssue, type Exec } from "../src/lobby/issues.ts";
@@ -384,6 +384,82 @@ test("line comments wait for the answers when questions are open, and start a ro
   assert.equal(session.turns, 3);
   assert.match(seen.at(-1)!.prompt, /### User\n\nComments on the draft plan:\n- On "1\. Add the modal": name it LoginDialog/);
   assert.equal(session.commentOnLine("  ", "x"), false);
+});
+
+test("a round that fails after you answered never puts the answered questions back", async () => {
+  const root = tempRoot();
+  const seen: Array<{ who: string; args: string[]; prompt: string }> = [];
+  const answers: Record<string, string | undefined> = {
+    ORACLE: "## Status\nGRILLING\n## Questions\n1. [DEV] REST or RPC?\n   - REST (Recommended) — follows the API\n   - RPC — one endpoint\n## Plan\n### Steps\n1. Build it",
+  };
+  const rounds: boolean[] = [];
+  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: [], profile: () => ({ thinking: "high", timeoutMs: 60_000 }), runProcess: panelRunner(answers, seen), onRound: (current) => rounds.push(current.awaitingAnswers) });
+  await session.send("an API");
+  assert.equal(session.awaitingAnswers, true);
+
+  // The user answers, and the next round crashes: the questions they answered stay answered.
+  answers.ORACLE = undefined;
+  await session.send("1. [DEV] REST or RPC?\n   → REST", [{ from: "DEV", question: "REST or RPC?", answer: "REST" }]);
+  assert.match(session.error!, /the oracle's part of the round failed/);
+  assert.deepEqual(session.questions, [], "nothing is left open");
+  assert.equal(session.awaitingAnswers, false, "the lobby has nothing to ask, so the questionnaire does not open again");
+  assert.deepEqual(rounds, [true, false], "the lobby hears that the failed round left no questions");
+  assert.equal(session.retryable, true, "the answers are kept: the round can be retried");
+
+  // A stopped round is the same: answering, then stopping it, leaves nothing to ask again.
+  answers.ORACLE = "## Status\nGRILLING\n## Questions\n1. [QA] Which browsers?\n## Plan\n1. x";
+  await session.retry();
+  // (assert.deepEqual above narrowed `session.questions` to never[]; the callback names its own type.)
+  assert.deepEqual(session.questions.map((question: { text: string }) => question.text), ["Which browsers?"]);
+  const stopped = session.send("1. evergreen", [{ from: "QA", question: "Which browsers?", answer: "evergreen" }]);
+  session.cancel();
+  await stopped;
+  assert.equal(session.awaitingAnswers, false, "a stopped round does not re-open the questions it was answering");
+});
+
+test("the panel is never allowed to ask a question the user already settled, whatever its wording", async () => {
+  const root = tempRoot();
+  const seen: Array<{ who: string; args: string[]; prompt: string }> = [];
+  const feed = new LobbyFeed();
+  const answers: Record<string, string | undefined> = {
+    DEV: "## Status\nOPEN\n## Questions\n1. REST or RPC?",
+    ORACLE: "## Status\nGRILLING\n## Questions\n1. [DEV] REST or RPC?\n2. [QA] Which browsers?\n## Plan\n1. x",
+  };
+  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: ["backend"], feed, profile: () => ({ thinking: "high", timeoutMs: 60_000 }), runProcess: panelRunner(answers, seen) });
+  await session.send("an API");
+  assert.deepEqual(session.questions.map((question) => question.text), ["REST or RPC?", "Which browsers?"]);
+
+  // REST or RPC? is answered, the browsers are left for the oracle to decide; the models ask both again, reworded, plus something new.
+  answers.ORACLE = "## Status\nGRILLING\n## Questions\n1. [DEV] Should it be rpc or REST?\n2. [QA] Which browsers must we support?\n3. [DESIGN] Which pages get the form?\n## Plan\n1. x";
+  await session.send("Answers to the panel's questions:\n1. [DEV] REST or RPC?\n   → REST", [
+    { from: "DEV", question: "REST or RPC?", answer: "REST" },
+    { from: "QA", question: "Which browsers?" },
+  ]);
+  assert.match(seen.at(-1)!.prompt, /## Already settled with the user \(closed: never ask these again, in any wording\)\n- \[DEV\] REST or RPC\? → REST\n- \[QA\] Which browsers\? → \(left unanswered: decide it yourself/, "the oracle reads what is closed");
+  assert.deepEqual(session.questions.map((question) => question.text), ["Which browsers must we support?", "Which pages get the form?"], "the reworded answered question is held back; the reworded unanswered one is not caught (different words), the new one gets through");
+  assert.ok(feed.activity.some((entry) => /held back 1 question you already settled/.test(entry.text)));
+
+  // Everything asked was already settled: nothing reaches the user, and the panel says so instead of looping.
+  answers.ORACLE = "## Status\nGRILLING\n## Questions\n1. [DEV] REST or RPC?\n## Plan\n1. x";
+  await session.send("carry on", []);
+  assert.deepEqual(session.questions, []);
+  assert.equal(session.awaitingAnswers, false);
+  assert.match(session.messages.at(-1)!.text, /No open questions this round/);
+});
+
+test("two questions ask the same thing when they share (nearly) all their words", () => {
+  assert.equal(sameQuestion("REST or RPC?", "should it be rpc or REST"), true, "filler words do not make a different question");
+  assert.equal(sameQuestion("REST or RPC?", "rpc, or REST?"), true, "case, punctuation and order do not matter");
+  assert.equal(sameQuestion("REST or RPC?", "REST or GraphQL?"), false, "a different option is a different question");
+  assert.equal(sameQuestion("Which browsers do we support?", "Which browsers do we need to support?"), false);
+  assert.equal(sameQuestion("Which browsers do we support in the first release?", "Which browsers do we support in the first release"), true);
+  assert.equal(sameQuestion("Which database should the sessions use?", "Which database should the sessions use for login?"), false, "a wider question is not the same one");
+  assert.equal(sameQuestion("", "anything"), false);
+  const settled = [{ from: "DEV", question: "REST or RPC?", answer: "REST" }];
+  const asked = (text: string) => ({ from: "DEV", text, options: [] });
+  const { asked: fresh, repeats } = withoutSettled([asked("rpc or rest"), asked("Which pages?")], settled);
+  assert.deepEqual([fresh.map((question) => question.text), repeats.map((question) => question.text)], [["Which pages?"], ["rpc or rest"]]);
+  assert.equal(settledBlock([{ from: "QA", question: "Where?", answer: "line one\nline two" }]), "## Already settled with the user (closed: never ask these again, in any wording)\n- [QA] Where? → line one / line two");
 });
 
 test("the round limit: normal rounds, then the final round, then revisions; 0 means unlimited", () => {
