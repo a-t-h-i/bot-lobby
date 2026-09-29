@@ -143,6 +143,11 @@ export interface LobbyConfig {
    * round skips the seats and asks nothing; later replies only revise. 0 = unlimited.
    */
   maxPlanningRounds: number;
+  /**
+   * A plan with more steps than this is offered to be split into up to five
+   * tasks when it is saved (the oracle proposes, the user decides); 0 = never.
+   */
+  splitPlanAbove: number;
 }
 
 /** Decisions the classifier can make, each switched on or off on its own. */
@@ -256,6 +261,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     mouse: true,
     miniLine: true,
     maxPlanningRounds: 5,
+    splitPlanAbove: 8,
   },
   classifier: {
     enabled: false,
@@ -283,6 +289,9 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
 
 /** Choices the settings menu cycles through for the planning round limit; 0 = unlimited. */
 export const PLANNING_ROUND_CHOICES = [2, 3, 5, 8, 0] as const;
+
+/** Choices the settings menu cycles through for the step count past which a saved plan is offered a split; 0 = never. */
+export const SPLIT_PLAN_CHOICES = [6, 8, 10, 12, 0] as const;
 
 function positive(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
@@ -314,7 +323,7 @@ function flag(value: unknown, fallback: boolean): boolean {
 }
 
 function normalizeLobby(value: unknown): LobbyConfig {
-  const source = value as { autoOpen?: unknown; planningPanel?: unknown; autoAsk?: unknown; issues?: unknown; panels?: unknown; keys?: unknown; mouse?: unknown; miniLine?: unknown; maxPlanningRounds?: unknown } | undefined;
+  const source = value as { autoOpen?: unknown; planningPanel?: unknown; autoAsk?: unknown; issues?: unknown; panels?: unknown; keys?: unknown; mouse?: unknown; miniLine?: unknown; maxPlanningRounds?: unknown; splitPlanAbove?: unknown } | undefined;
   const defaults = DEFAULT_CONFIG.lobby;
   const panel = Array.isArray(source?.planningPanel)
     ? [...new Set(source.planningPanel.filter((entry): entry is PanelMember => typeof entry === "string" && isPanelMember(entry)))]
@@ -331,6 +340,7 @@ function normalizeLobby(value: unknown): LobbyConfig {
     mouse: flag(source?.mouse, defaults.mouse),
     miniLine: flag(source?.miniLine, defaults.miniLine),
     maxPlanningRounds: roundLimit(source?.maxPlanningRounds, defaults.maxPlanningRounds),
+    splitPlanAbove: roundLimit(source?.splitPlanAbove, defaults.splitPlanAbove),
   };
 }
 

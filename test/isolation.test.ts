@@ -10,6 +10,7 @@ import { setMinimized } from "../src/pi/ui.ts";
 import { DEFAULT_CONFIG, resolveConfig } from "../src/schemas/configuration.ts";
 import { createTask } from "../src/schemas/task.ts";
 import { createTaskDir, ensureProjectStructure, listTasks, loadTask, saveTask } from "../src/state/persistence.ts";
+import { savePlannedTask } from "../src/state/backlog.ts";
 import { transition } from "../src/state/task-state.ts";
 import { runWorkflowAction, type OrchestrateParams, type WorkflowDeps } from "../src/workflow/workflow.ts";
 import { chooseTrack } from "../src/workflow/track.ts";
@@ -206,4 +207,23 @@ test("the kickoff carries the git line only for a task that has one", () => {
   const isolated = { ...plain, git: { mode: "branch" as const, branch: "Task-A-27-09-2026", from: "main" } };
   assert.match(kickoff(isolated), /State: created\nGit: this task works on its own branch Task-A-27-09-2026 \(from main\)/);
   assert.equal(loadTask(repo(), ".pi", "nothing"), undefined);
+});
+
+test("starting a part of a split plan tells the oracle which part it is, and warns when an earlier part is not done", async () => {
+  const root = repo();
+  process.env.BOT_LOBBY_CONFIG_DIR = mkdtempSync(join(tmpdir(), "bl-iso-cfg-"));
+  setMinimized(false);
+  ensureProjectStructure(root, ".pi");
+  const split = (part: number, after: number[]) => ({ group: "G", part, of: 2, titles: ["Foundation", "Screens"], after });
+  savePlannedTask(root, ".pi", { title: "Foundation", brief: "### Part 1 of 2 — Foundation\n### Steps\n1. a", split: split(1, []) });
+  const second = savePlannedTask(root, ".pi", { title: "Screens", brief: "### Part 2 of 2 — Screens\n### Steps\n1. b", split: split(2, [1]) });
+  const pi = makePi();
+  registerCommands(pi as unknown as ExtensionAPI, ".pi");
+  const { ctx, notes } = makeCtx(root);
+  await pi.handlers["bot-lobby"]!(`start-plan ${second.id}`, ctx);
+  const task = listTasks(root, ".pi")[0]!;
+  assert.ok(task, "it started anyway");
+  assert.match(task.request, /This is part 2 of 2 of one plan that was split into separate tasks: 1\. Foundation; 2\. Screens \(this task\)\. It builds on part 1, which should be done first\. Do only this part/);
+  assert.match(pi.sent.at(-1)!, /Do only this part; the others are their own tasks\./, "the kickoff carries it");
+  assert.ok(notes.some((note) => note.includes(`${second.id} builds on part 1 (Foundation) has not been started — started anyway`)), notes.join("\n"));
 });

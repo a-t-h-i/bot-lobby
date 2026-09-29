@@ -14,6 +14,7 @@ import {
   LOBBY_PANELS,
   PLANNING_ROUND_CHOICES,
   SCOUT_THINKING,
+  SPLIT_PLAN_CHOICES,
   SUBAGENT_KINDS,
   type AgentModelConfig,
   type BotLobbyConfig,
@@ -453,16 +454,30 @@ export function nextRoundLimit(current: number): number {
   return PLANNING_ROUND_CHOICES.find((choice) => choice > current) ?? 0;
 }
 
+/** `over 8 steps`, or `never` for 0. */
+export function splitLimitLabel(limit: number): string {
+  return limit > 0 ? `over ${limit} steps` : "never";
+}
+
+/** The next step count in the menu's cycle (6, 8, 10, 12, never); a hand-edited value rejoins it. */
+export function nextSplitLimit(current: number): number {
+  const index = SPLIT_PLAN_CHOICES.indexOf(current as (typeof SPLIT_PLAN_CHOICES)[number]);
+  if (index >= 0) return SPLIT_PLAN_CHOICES[(index + 1) % SPLIT_PLAN_CHOICES.length]!;
+  return SPLIT_PLAN_CHOICES.find((choice) => choice > current) ?? 0;
+}
+
 /** On/off settings for the lobby, and the planning round limit; enter flips or cycles one and saves it. Key rebinding stays in the file (lobby.keys). */
 async function editLobby(ctx: ExtensionContext): Promise<void> {
   for (;;) {
     const config = loadConfig();
     const items: SelectItem[] = LOBBY_SWITCHES.map((entry) => ({ value: entry.id, label: entry.label, description: `${lobbySwitch(config, entry.id) ? "on" : "off"} · ${entry.help}` }));
     items.push({ value: "rounds", label: "Planning rounds", description: `${roundLimitLabel(config.lobby.maxPlanningRounds)} · enter cycles 2, 3, 5, 8, unlimited; the last round the oracle settles alone` });
+    items.push({ value: "split", label: "Split long plans", description: `${splitLimitLabel(config.lobby.splitPlanAbove)} · saving a plan with more steps offers to split it into up to 5 tasks · enter cycles 6, 8, 10, 12, never` });
     items.push({ value: "back", label: "Back", description: `keys: lobby.keys in ${globalConfigPath()}` });
     const choice = await pick(ctx, "bot-lobby settings · Lobby", items);
     if (!choice || choice === "back") return;
     if (choice === "rounds") saveConfig({ ...config, lobby: { ...config.lobby, maxPlanningRounds: nextRoundLimit(config.lobby.maxPlanningRounds) } });
+    else if (choice === "split") saveConfig({ ...config, lobby: { ...config.lobby, splitPlanAbove: nextSplitLimit(config.lobby.splitPlanAbove) } });
     else saveConfig(toggleLobbySwitch(config, choice as LobbySwitch));
   }
 }
@@ -475,6 +490,7 @@ function lobbySummary(config: BotLobbyConfig): string {
     config.lobby.mouse ? "mouse" : "no mouse",
     ...(config.lobby.miniLine ? [] : ["no status line"]),
     `planning: ${roundLimitLabel(config.lobby.maxPlanningRounds)}`,
+    `split plans ${splitLimitLabel(config.lobby.splitPlanAbove)}`,
     ...(config.lobby.issues ? ["issues tab"] : []),
     ...(hidden.length > 0 ? [`hidden: ${hidden.join(", ")}`] : []),
   ].join(" · ");

@@ -114,7 +114,7 @@ export function taskRows(tasks: readonly Task[], plans: readonly PlannedTask[], 
     ...plans.filter((plan) => plan.status === "pending").map((plan): TaskRow => ({
       kind: "plan",
       id: plan.id,
-      title: plan.title,
+      title: plan.split ? `${plan.title} (${plan.split.part}/${plan.split.of})` : plan.title,
       section: "pending",
       status: "pending",
       check: "open",
@@ -335,6 +335,11 @@ export function planDetailLines(plan: PlannedTask, width: number, now: number, t
     ...wrapHanging("  ", paint(theme, "dim", plan.id), width),
   ];
   if (plan.issue) lines.push(...wrapHanging("  ", `from issue #${plan.issue.number} — ${plan.issue.title}${plan.issue.url ? ` ${paint(theme, "dim", plan.issue.url)}` : ""}`, width));
+  if (plan.split) {
+    const { part, of, titles, after } = plan.split;
+    lines.push(...wrapHanging("  ", `${paint(theme, "accent", `part ${part} of ${of}`)} of one plan that was split into tasks${after.length > 0 ? `, ${paint(theme, "warning", `after ${after.map((number) => `part ${number}`).join(" and ")}`)}` : ""}`, width));
+    lines.push(...wrapHanging("    ", titles.map((title, index) => (index + 1 === part ? bold(theme, `${index + 1}. ${title}`) : paint(theme, "muted", `${index + 1}. ${title}`))).join(paint(theme, "dim", " · ")), width));
+  }
   const key = (text: string) => paint(theme, "accent", text);
   lines.push("", ...wrapHanging("  ", [`${key("s")} ${paint(theme, "muted", "start it in a new session")}`, `${key("h")} ${paint(theme, "muted", "start it here")}`, `${key("d d")} ${paint(theme, "muted", "discard it")}`].join(paint(theme, "dim", "   ")), width));
   lines.push(...section("Agreed plan", width, theme), ...markdownLines(plan.brief, width, theme));

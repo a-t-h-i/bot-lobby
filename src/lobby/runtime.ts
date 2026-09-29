@@ -508,6 +508,26 @@ function panelAsker(state: Runtime): Asker {
 }
 
 /**
+ * Save the plan as a pending task. A plan with many steps is first split by
+ * the oracle into up to five tasks, which the user takes, changes or declines
+ * in a questionnaire; the split's questions open over the lobby like the
+ * panel's. Returns a notice for the lobby.
+ */
+export async function savePlan(state: Runtime | undefined = runtime): Promise<string> {
+  const session = state?.planner;
+  if (!state || !session) return "no planning session";
+  if (state.asking) return "a questionnaire is already open";
+  state.asking = true;
+  try {
+    const asker = panelAsker(state);
+    return await session.saveWithSplit((questions, signal) => asker(questions, state.ctx, signal), { splitAbove: loadConfig().lobby.splitPlanAbove });
+  } finally {
+    state.asking = false;
+    rerender();
+  }
+}
+
+/**
  * The oracle puts the round's questions to the user, one at a time; answered
  * questionnaires are kept if the user stops, so the next call resumes there.
  * Once every questionnaire is done, the answers (and any line comments) start
@@ -588,6 +608,7 @@ function host(state: Runtime, tui: TUI): LobbyHost {
     planner: () => state.planner,
     newPlanner: (seed, seats) => newPlanner(state, seed, seats),
     answerPanel: () => answerPanel(state),
+    savePlan: () => savePlan(state),
     defaultPanel: () => loadConfig().lobby.planningPanel,
     planningRounds: () => loadConfig().lobby.maxPlanningRounds,
     issuesEnabled: () => loadConfig().lobby.issues,

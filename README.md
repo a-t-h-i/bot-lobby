@@ -381,6 +381,27 @@ you don't answer is decided with the recommendation and listed under
 - **Round limit:** 5 by default (`lobby.maxPlanningRounds`, 0 = unlimited).
   In the last round the oracle alone settles everything still open.
 - `ctrl+s` saves the plan as a pending task.
+- **A long plan is split into tasks when you save it.** `ctrl+s` on a plan with
+  more than 8 steps (`lobby.splitPlanAbove`; `0` turns it off; *Split long
+  plans* in `/bot-lobby settings` → Lobby) has the oracle propose two to five
+  tasks, each a part that leaves the project working and can be reviewed on its
+  own, and asks you in the questionnaire, with the split as a preview: take it,
+  keep the plan whole, or write what to change (*merge 2 and 3*; it revises, up
+  to three times). Nothing is saved until you answer, and a question you put
+  away saves nothing.
+  - The oracle decides where the lines go; the engine enforces the rest: at
+    most five tasks, every step of the plan in exactly one of them, and a task
+    building only on earlier ones. A split that breaks a rule goes back once
+    with the problems and never reaches you; if it still fails you are asked
+    whether to save the plan whole.
+  - Each part's brief is the plan as written (objective, decisions,
+    assumptions, risks) with only its own steps, renumbered, under a header with
+    its goal, what it builds on and its *done when* points, so nothing you
+    agreed is lost in a retelling. The parts are saved as pending tasks in
+    order, numbered `(1/3)` in the Tasks tab, and each knows the others: the
+    oracle is told which part it is and to do only that part.
+  - Starting a part before the parts it builds on are finished warns and starts
+    anyway: the order is yours to keep.
 - **A question you answered (or left for the oracle to decide) is never asked
   again.** Your answers are kept per question and every seat and the oracle
   read them as a closed list; a question that repeats a settled one, however
@@ -503,7 +524,7 @@ the result.
   },
   "scout": { "model": "anthropic/claude-haiku-4-5-20251001", "timeoutMs": 480000 },
   "planner": { "thinking": "high", "timeoutMs": 300000 },
-  "lobby": { "planningPanel": ["backend", "designer", "qa", "researcher"], "maxPlanningRounds": 5 },
+  "lobby": { "planningPanel": ["backend", "designer", "qa", "researcher"], "maxPlanningRounds": 5, "splitPlanAbove": 8 },
   "workflow": { "maxReviewIterations": 2, "maxParallelWorkers": 3, "stallTimeoutMs": 300000, "wrapUpAt": 0.75, "taskBudgetMinutes": 0, "fastTrack": true, "briefCheck": true, "routeQuickFixes": true, "gitIsolation": "off" },
   "classifier": { "enabled": false, "provider": "auto", "effort": { "cheapModel": "inherit" } }
 }

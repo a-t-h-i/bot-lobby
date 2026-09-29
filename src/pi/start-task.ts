@@ -9,14 +9,14 @@ import { createTask, taskRequest, type Task, type TaskTrack, type TaskTriage, ty
 import type { Domain } from "../schemas/agent.ts";
 import { chooseTrack, trackLine, trackSummary } from "../workflow/track.ts";
 import { lobbyFeed } from "../lobby/feed.ts";
-import { createTaskDir, ensureProjectStructure, nextTaskId, ownedTask, saveTask, taskDirFor } from "../state/persistence.ts";
+import { createTaskDir, ensureProjectStructure, loadTask, nextTaskId, ownedTask, saveTask, taskDirFor } from "../state/persistence.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { transition } from "../state/task-state.ts";
 import { shortTitle } from "../text.ts";
 import { applyStatus } from "./ui.ts";
 import { applyMasterModel } from "./settings-ui.ts";
 import { setAutoMode } from "../state/auto.ts";
-import { loadPlannedTask, markPlannedTaskStarted, plannedTaskRequest } from "../state/backlog.ts";
+import { listPlannedTasks, loadPlannedTask, markPlannedTaskStarted, plannedTaskRequest, type PlannedTask } from "../state/backlog.ts";
 import { triageFor } from "../classifier/instance.ts";
 import { freshContextOn, markContext } from "./fresh-context.ts";
 import { setBudget } from "../state/budget.ts";
@@ -160,17 +160,45 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
 }
 
 /**
+ * The parts of a split plan that this one builds on and that are not finished:
+ * still pending, dropped, or started but not completed. Empty for a plan that
+ * was not split, or whose earlier parts are done (or gone).
+ */
+export function unfinishedBefore(root: string, configDir: string, plan: PlannedTask): string[] {
+  const split = plan.split;
+  if (!split || split.after.length === 0) return [];
+  const siblings = listPlannedTasks(root, configDir).filter((entry) => entry.split?.group === split.group);
+  return split.after.flatMap((number) => {
+    const sibling = siblings.find((entry) => entry.split?.part === number);
+    if (!sibling) return [];
+    const label = `part ${number} (${split.titles[number - 1] ?? sibling.id})`;
+    if (sibling.status === "pending") return [`${label} has not been started`];
+    const task = sibling.startedTaskId ? loadTask(root, configDir, sibling.startedTaskId) : undefined;
+    if (!task || task.state === "completed") return [];
+    return [`${label} is ${task.state === "abandoned" ? "abandoned" : "not finished"}`];
+  });
+}
+
+/**
  * Start a task saved from the planning panel in this session. The user
  * already agreed its plan, so the task carries it as approved and its
- * proposal goes through without asking. Returns the task, or a reason.
+ * proposal goes through without asking. A part of a split plan that builds on
+ * parts not yet finished starts anyway, with a warning: the order is the
+ * user's to keep. Returns the task, or a reason.
  */
 export async function startPlannedTask(pi: ExtensionAPI, ctx: ExtensionContext, configDir: string, planId: string, options: { auto?: boolean } = {}): Promise<Task | string> {
   const root = detectProjectRoot(ctx.cwd, configDir);
   const plan = loadPlannedTask(root, configDir, planId);
   if (!plan) return `no planned task ${planId}`;
   if (plan.status !== "pending") return `${planId} was already started${plan.startedTaskId ? ` as ${plan.startedTaskId}` : ""}`;
+  const waiting = unfinishedBefore(root, configDir, plan);
   const task = await startTask(pi, ctx, configDir, plannedTaskRequest(plan), { approvedPlan: plan.id, title: plan.title, ...(options.auto ? { auto: true } : {}) });
   if (!task) return `this session already drives a task; finish or cancel it first`;
   markPlannedTaskStarted(root, configDir, plan.id, task.id);
+  if (waiting.length > 0) {
+    const warning = `${plan.id} builds on ${waiting.join("; ")} — started anyway`;
+    lobbyFeed.log("LOBBY", warning, "warning");
+    ctx.ui.notify(`bot-lobby: ${warning}`, "warning");
+  }
   return task;
 }
