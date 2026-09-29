@@ -4,7 +4,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { visibleWidth, type TUI } from "@earendil-works/pi-tui";
-import { LobbyView, parseMouse, TAB_IDS, visibleTabs, type LiveSession, type LobbyHost, type SwitchTarget } from "../src/lobby/view.ts";
+import { BRANCH_GLYPH, LobbyView, parseMouse, TAB_IDS, visibleTabs, type LiveSession, type LobbyHost, type SwitchTarget } from "../src/lobby/view.ts";
+import type { WorkspaceInfo } from "../src/execution/workspace.ts";
 import { DEFAULT_CONFIG, type LobbyPanel, type PanelMember } from "../src/schemas/configuration.ts";
 import { LobbyFeed } from "../src/lobby/feed.ts";
 import { QuickFixQueue } from "../src/lobby/quickfix.ts";
@@ -91,6 +92,8 @@ interface ViewOptions {
   archivedTasks?: Task[];
   /** The task's runs, as streamed. */
   runs?: AgentRun[];
+  /** The repository (or folder) and branch the title shows. */
+  workspace?: WorkspaceInfo;
 }
 
 function makeView(options: ViewOptions = {}) {
@@ -219,6 +222,7 @@ function makeView(options: ViewOptions = {}) {
       calls.historyLoads.push(sessionId ?? "");
       return options.history?.[sessionId ?? ""] ?? [];
     },
+    ...(options.workspace ? { workspace: () => options.workspace! } : {}),
     requestRender: () => {},
     now: () => NOW,
   };
@@ -1423,4 +1427,112 @@ test("the bottom line shows the subagents at work at its right end, and nothing 
   assert.ok(visibleWidth(narrow) <= 60);
   const idle = makeView({ task: activeTask(), runs: [run("c", "backend", "success")] });
   assert.ok(!/DEV|agents? working/.test(idle.view.render(140).at(-1)!), "nothing shows when no agent is working");
+});
+
+test("the title names the repository and its branch instead of bot-lobby", () => {
+  const { view } = makeView({ workspace: { name: "my-repo", branch: "main" } });
+  const bar = view.render(120)[0]!;
+  assert.match(bar, new RegExp(`◆ my-repo \\(${BRANCH_GLYPH} main\\) `));
+  assert.doesNotMatch(bar, /bot-lobby/);
+  assert.equal(view.render(120)[0]!.length > 0 && visibleWidth(view.render(120)[0]!), 120, "the bar fills its width");
+  // A folder outside git has just its name.
+  assert.match(makeView({ workspace: { name: "notes" } }).view.render(120)[0]!, /◆ notes │/);
+  // Nothing known yet: the plain product name, never an empty title.
+  assert.match(makeView().view.render(120)[0]!, /◆ bot-lobby │/);
+});
+
+test("a long title gives up the branch, then the name, before it crowds out the tabs", () => {
+  const { view } = makeView({ workspace: { name: "a-repository-with-quite-a-long-name-indeed", branch: "feature/some-very-long-branch-name-that-goes-on" } });
+  const wide = view.render(200)[0]!;
+  assert.match(wide, /◆ a-repository-with-quite-a-l… \(⎇ feature\/some-very-long-branch-name-…\) /, "clipped, with the branch");
+  const medium = view.render(96)[0]!;
+  assert.match(medium, /◆ a-repository-with-quite-a-l… │/, "the branch goes first");
+  assert.match(medium, /Metrics/);
+  const narrow = view.render(60)[0]!;
+  assert.match(narrow, / ◆ /);
+  assert.equal(visibleWidth(narrow), 60);
+  // Every tab stays clickable where the tab bar says it is.
+  const at = view.render(120)[0]!;
+  assert.match(at, /1 Lobby/);
+});
+
+test("a task working in its own worktree shows that branch in the title; a branch task shows the checkout's", () => {
+  const worktree: Task = { ...activeTask(), git: { mode: "worktree", branch: "Task-Change-Table-Font-27-09-2026", path: "/repo/.pi/bot-lobby/worktrees/Task-Change-Table-Font-27-09-2026" } };
+  assert.match(makeView({ task: worktree, workspace: { name: "my-repo", branch: "main" } }).view.render(140)[0]!, new RegExp(`◆ my-repo \\(${BRANCH_GLYPH} Task-Change-Table-Font-27-09-2026\\) `));
+  const branch: Task = { ...activeTask(), git: { mode: "branch", branch: "Task-Change-Table-Font-27-09-2026" } };
+  assert.match(makeView({ task: branch, workspace: { name: "my-repo", branch: "Task-Change-Table-Font-27-09-2026" } }).view.render(140)[0]!, new RegExp(`\\(${BRANCH_GLYPH} Task-Change-Table-Font-27-09-2026\\)`), "the checkout is on it");
+  assert.match(makeView({ task: branch, workspace: { name: "my-repo", branch: "main" } }).view.render(140)[0]!, new RegExp(`\\(${BRANCH_GLYPH} main\\)`), "switched away by hand: the title tells the truth");
+});
+
+test("shift+enter puts a new line in every prompt of the lobby instead of sending it", () => {
+  const SHIFT_ENTER = ["\x1b[13;2u", "\x1b[27;2;13~"];
+  const ctrlJ = "\n";
+  const sent = (made: ReturnType<typeof makeView>) => [made.calls.oracle.length, made.calls.comments.length, made.calls.sessionStarts.length, made.quickfix.jobs.length];
+  for (const newline of [...SHIFT_ENTER, ctrlJ]) {
+    // The Lobby prompt talks to the oracle.
+    const lobby = makeView();
+    type(lobby.view, "first line");
+    lobby.view.handleInput(newline);
+    type(lobby.view, "second line");
+    assert.deepEqual(sent(lobby), [0, 0, 0, 0], `${JSON.stringify(newline)} does not send`);
+    const drawn = lobby.view.render(100).join("\n");
+    assert.match(drawn, /first line[\s\S]*second line/, "both lines are in the prompt");
+    lobby.view.handleInput(KEY.enter);
+    assert.deepEqual(lobby.calls.oracle, ["first line\nsecond line"], "enter sends the whole message");
+
+    // A comment on a task's plan.
+    const tasks = makeView({ task: activeTask() });
+    tasks.view.setTab("tasks");
+    tasks.view.handleInput("c");
+    type(tasks.view, "cap the page size");
+    tasks.view.handleInput(newline);
+    type(tasks.view, "and the rate");
+    tasks.view.handleInput(KEY.enter);
+    assert.deepEqual(tasks.calls.comments, [["TASK-login", "cap the page size\nand the rate"]]);
+
+    // The planning panel, a quick fix and a new issue.
+    const plan = makeView({ panel: [] });
+    plan.view.setTab("plan");
+    type(plan.view, "login page");
+    plan.view.handleInput(newline);
+    type(plan.view, "with a remember-me box");
+    plan.view.handleInput(KEY.enter);
+    assert.equal(plan.planner()?.messages[0]?.text, "login page\nwith a remember-me box");
+    const fix = makeView();
+    fix.view.setTab("quickfix");
+    type(fix.view, "rename Save");
+    fix.view.handleInput(newline);
+    type(fix.view, "to Apply");
+    assert.equal(fix.quickfix.jobs.length, 0);
+    fix.view.handleInput(KEY.enter);
+    assert.equal(fix.quickfix.jobs[0]?.prompt, "rename Save\nto Apply");
+  }
+});
+
+test("a backslash before enter is a new line too, for terminals that cannot tell shift+enter apart", () => {
+  const { view, calls } = makeView();
+  type(view, "one\\");
+  view.handleInput(KEY.enter);
+  type(view, "two");
+  view.handleInput(KEY.enter);
+  assert.deepEqual(calls.oracle, ["one\ntwo"]);
+});
+
+test("the search bar is one line: shift+enter neither sends nor writes anything into it", () => {
+  const { view } = makeView({ task: activeTask() });
+  view.setTab("tasks");
+  view.handleInput("\x06");
+  type(view, "log");
+  view.handleInput("\x1b[13;2u");
+  type(view, "in");
+  assert.equal(view.query(), "login", "the query carries on as one line");
+  assert.equal(view.searching, true, "shift+enter does not close it");
+});
+
+test("a task's details name its branch, where it came from and its worktree", () => {
+  const detail = (git: Task["git"]) => taskDetailLines({ ...activeTask(), ...(git ? { git } : {}) }, [], "me", 100, NOW).join("\n");
+  assert.doesNotMatch(detail(undefined), new RegExp(BRANCH_GLYPH), "a task without git shows nothing about it");
+  assert.match(detail({ mode: "branch", branch: "Task-Change-Table-Font-27-09-2026", from: "main" }), new RegExp(`${BRANCH_GLYPH} Task-Change-Table-Font-27-09-2026 · from main`));
+  const worktree = detail({ mode: "worktree", branch: "Task-A-27-09-2026", from: "main", path: "/repo/.pi/bot-lobby/worktrees/Task-A-27-09-2026" });
+  assert.match(worktree, /⎇ Task-A-27-09-2026 · from main · worktree \/repo\/\.pi\/bot-lobby\/worktrees\/Task-A-27-09-2026/);
 });

@@ -90,7 +90,8 @@ export async function startRequest(pi: ExtensionAPI, ctx: ExtensionContext, conf
   const { task: asTask, ...start } = options;
   const config = loadConfig();
   const root = detectProjectRoot(ctx.cwd, configDir);
-  const placed = asTask || start.track || start.approvedPlan || !config.workflow.routeQuickFixes || !handoff;
+  // `--branch` and `--worktree` are for tasks, so they place the request; `--no-branch` only says what a task would not get.
+  const placed = asTask || start.track || start.approvedPlan || (start.isolation && start.isolation !== "off") || !config.workflow.routeQuickFixes || !handoff;
   // A session that already drives a task gets startTask's own warning.
   if (placed || ownedTask(root, configDir, ctx.sessionManager.getSessionId())) {
     return (await startTask(pi, ctx, configDir, request, start)) ? "task" : undefined;

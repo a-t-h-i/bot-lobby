@@ -6,7 +6,8 @@
  * Every question lists its options, then a row for the user's own answer.
  * Enter on an option answers a single-choice question and moves on; space
  * toggles options of a multi-choice one and enter moves on. Answering the
- * last question submits; ←/→ move between questions first. Esc stops typing,
+ * last question submits; ←/→ move between questions first. Writing your own
+ * answer, Enter keeps it and Shift+Enter starts a new line. Esc stops typing,
  * or puts the questions away.
  */
 import type { AskAnswer, AskQuestion, AskResult } from "./types.ts";
@@ -20,6 +21,8 @@ export type AskKey =
   | { type: "space" }
   | { type: "escape" }
   | { type: "backspace" }
+  /** Shift+Enter (or Ctrl+J): a new line in the answer being written. */
+  | { type: "newline" }
   /** 1-9: pick (or toggle) that option. */
   | { type: "digit"; value: number }
   /** Typed or pasted text, only used while writing an answer. */
@@ -108,7 +111,10 @@ function choose(state: AskState, option: number): AskState {
 function typing(state: AskState, key: AskKey): AskState {
   switch (key.type) {
     case "text":
-      return { ...state, draft: state.draft + key.value.replace(/[\r\n\t]+/g, " ") };
+      // Pasted lines stay lines; tabs become spaces.
+      return { ...state, draft: state.draft + key.value.replace(/\r\n?/g, "\n").replace(/\t/g, "  ") };
+    case "newline":
+      return { ...state, draft: `${state.draft}\n` };
     case "space":
       return { ...state, draft: `${state.draft} ` };
     case "digit":
