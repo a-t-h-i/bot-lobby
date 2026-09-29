@@ -18,6 +18,19 @@ export interface IssueRef {
   url?: string;
 }
 
+/** What a task saved from a split plan knows of the others: it is one part of a plan that became several tasks. */
+export interface SplitInfo {
+  /** Shared by every part of one plan. */
+  group: string;
+  /** This part's number (from 1) and how many parts there are. */
+  part: number;
+  of: number;
+  /** The title of every part, in order. */
+  titles: string[];
+  /** Parts (by number) that come before this one and should be finished first. */
+  after: number[];
+}
+
 export interface PlannedTask {
   id: string;
   title: string;
@@ -29,6 +42,8 @@ export interface PlannedTask {
   issue?: IssueRef;
   /** The bot-lobby task started from this entry. */
   startedTaskId?: string;
+  /** Set when the plan was split into several tasks and this is one of them. */
+  split?: SplitInfo;
 }
 
 export function backlogDir(root: string, configDir: string): string {
@@ -48,7 +63,7 @@ function isPlannedTask(value: unknown): value is PlannedTask {
 export function savePlannedTask(
   root: string,
   configDir: string,
-  input: { title: string; brief: string; issue?: IssueRef },
+  input: { title: string; brief: string; issue?: IssueRef; split?: SplitInfo },
   now = new Date(),
 ): PlannedTask {
   const title = input.title.trim() || "planned task";
@@ -58,7 +73,7 @@ export function savePlannedTask(
   let id = base;
   for (let n = 2; existsSync(entryPath(root, configDir, id)); n++) id = `${base}-${n}`;
   const at = now.toISOString();
-  const entry: PlannedTask = { id, title, brief, createdAt: at, updatedAt: at, status: "pending", ...(input.issue ? { issue: input.issue } : {}) };
+  const entry: PlannedTask = { id, title, brief, createdAt: at, updatedAt: at, status: "pending", ...(input.issue ? { issue: input.issue } : {}), ...(input.split ? { split: input.split } : {}) };
   writeFileEnsured(entryPath(root, configDir, id), JSON.stringify(entry, null, 2));
   return entry;
 }
@@ -109,8 +124,16 @@ export function discardPlannedTask(root: string, configDir: string, id: string):
   rmSync(entryPath(root, configDir, id), { force: true });
 }
 
-/** The request a started task carries: the agreed plan, plus the issue it came from. */
+/** `Part 2 of 3 of one plan…` and the other parts' titles, for a task that is one part of a split plan. */
+export function splitLine(split: SplitInfo): string {
+  const others = split.titles.map((title, index) => `${index + 1}. ${title}${index + 1 === split.part ? " (this task)" : ""}`).join("; ");
+  const before = split.after.length > 0 ? ` It builds on ${split.after.map((part) => `part ${part}`).join(" and ")}, which should be done first.` : "";
+  return `This is part ${split.part} of ${split.of} of one plan that was split into separate tasks: ${others}.${before} Do only this part; the others are their own tasks.`;
+}
+
+/** The request a started task carries: the agreed plan, plus the issue it came from, plus where it sits in a split plan. */
 export function plannedTaskRequest(entry: PlannedTask): string {
   const source = entry.issue ? `\n\nFrom GitHub issue #${entry.issue.number}: ${entry.issue.title}${entry.issue.url ? ` (${entry.issue.url})` : ""}` : "";
-  return `${entry.title}\n\nAgreed plan (from the planning session):\n${entry.brief}${source}`;
+  const part = entry.split ? `\n\n${splitLine(entry.split)}` : "";
+  return `${entry.title}${part}\n\nAgreed plan (from the planning session):\n${entry.brief}${source}`;
 }
