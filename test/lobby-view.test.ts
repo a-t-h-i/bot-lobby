@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { visibleWidth, type TUI } from "@earendil-works/pi-tui";
@@ -12,6 +12,10 @@ import { QuickFixQueue } from "../src/lobby/quickfix.ts";
 import { IssuesState, type Exec } from "../src/lobby/issues.ts";
 import { PullsState } from "../src/lobby/pulls.ts";
 import { PullReviews } from "../src/lobby/pr-review.ts";
+import { KnowledgeBook } from "../src/lobby/knowledge.ts";
+import { ensureProjectStructure } from "../src/state/persistence.ts";
+import { dataRoot } from "../src/state/project.ts";
+import { readAgentKnowledge } from "../src/knowledge/store.ts";
 import type { Classifier } from "../src/classifier/classifier.ts";
 import { PlanningSession, type PlannerSeed } from "../src/lobby/planner.ts";
 import { createTask, type Task } from "../src/schemas/task.ts";
@@ -71,6 +75,7 @@ interface Calls {
   restored: string[];
   deleted: Array<[string, "list" | "archive"]>;
   historyLoads: string[];
+  edited: Array<[string, string]>;
 }
 
 interface ViewOptions {
@@ -102,11 +107,13 @@ interface ViewOptions {
   /** The fake pi a pull request review runs on. */
   reviewProcess?: ProcessRunner;
   classifier?: Classifier;
+  /** What pi's editor returns when the Knowledge tab edits a whole file (undefined = cancelled). */
+  editedText?: string;
 }
 
 function makeView(options: ViewOptions = {}) {
   const root = mkdtempSync(join(tmpdir(), "bl-view-"));
-  const calls: Calls = { settings: [], answered: 0, savedPanels: [], oracle: [], comments: [], started: [], discarded: [], aborted: 0, hidden: 0, seeds: [], seats: [], sessionStarts: [], auto: [], inbox: [], sessionInbox: [], switches: [], dialogs: [], archived: [], restored: [], deleted: [], historyLoads: [] };
+  const calls: Calls = { settings: [], answered: 0, savedPanels: [], oracle: [], comments: [], started: [], discarded: [], aborted: 0, hidden: 0, seeds: [], seats: [], sessionStarts: [], auto: [], inbox: [], sessionInbox: [], switches: [], dialogs: [], archived: [], restored: [], deleted: [], historyLoads: [], edited: [] };
   let taskList: Task[] = options.tasks ?? (options.task ? [options.task] : []);
   let archivedList: Task[] = options.archivedTasks ?? [];
   const sessions: BackgroundSession[] = [];
@@ -119,6 +126,8 @@ function makeView(options: ViewOptions = {}) {
   const exec: Exec = options.exec ?? (async () => ({ stdout: "[]", stderr: "", code: 0 }));
   const issues = new IssuesState(exec, root);
   const pulls = new PullsState(options.pullsExec ?? exec, root);
+  ensureProjectStructure(root, ".pi");
+  const knowledge = new KnowledgeBook({ root, configDir: ".pi", threshold: () => 20_000, backups: () => 1, sessionId: () => "me" });
   const reviews = new PullReviews({ cwd: root, root, configDir: ".pi", exec: options.pullsExec ?? exec, profile: () => ({ thinking: "medium", timeoutMs: 1000 }), runProcess: options.reviewProcess ?? hangingRunner, ...(options.classifier ? { classifier: options.classifier } : {}) });
   let planner: PlanningSession | undefined;
   const host: LobbyHost = {
@@ -169,6 +178,11 @@ function makeView(options: ViewOptions = {}) {
     issues,
     pulls,
     reviews,
+    knowledge,
+    editText: async (title, text) => {
+      calls.edited.push([title, text]);
+      return options.editedText;
+    },
     profileLabel: () => "p/model · high",
     sessionName: () => "my window",
     sessions: () => sessions,
@@ -243,7 +257,7 @@ function makeView(options: ViewOptions = {}) {
   const view = new LobbyView(tui, host, { borderColor: noop, selectList: { selectedPrefix: noop, selectedText: noop, description: noop, scrollInfo: noop, noMatch: noop } });
   view.focused = true;
   view.refreshData(true);
-  return { view, calls, feed, quickfix, issues, pulls, reviews, root, planner: () => planner, sessions, procs };
+  return { view, calls, feed, quickfix, issues, pulls, reviews, knowledge, root, planner: () => planner, sessions, procs };
 }
 
 /** A fake pi whose every run answers `text` as the assistant. */
@@ -323,7 +337,7 @@ test("tab and alt+digit switch tabs; prompt tabs open in typing mode, list tabs 
 });
 
 test("the Issues tab is off unless lobby.issues turns it on", () => {
-  assert.deepEqual(visibleTabs(false), ["lobby", "tasks", "plan", "quickfix", "metrics", "git"]);
+  assert.deepEqual(visibleTabs(false), ["lobby", "tasks", "plan", "quickfix", "metrics", "git", "knowledge"]);
   assert.deepEqual(visibleTabs(true), [...TAB_IDS]);
   const { view } = makeView();
   assert.ok(!view.render(140)[0]!.includes("Issues"));
@@ -1458,7 +1472,7 @@ test("a long title gives up the branch, then the name, before it crowds out the 
   const { view } = makeView({ workspace: { name: "a-repository-with-quite-a-long-name-indeed", branch: "feature/some-very-long-branch-name-that-goes-on" } });
   const wide = view.render(200)[0]!;
   assert.match(wide, /◆ a-repository-with-quite-a-l… \(⎇ feature\/some-very-long-branch-name-…\) /, "clipped, with the branch");
-  const medium = view.render(96)[0]!;
+  const medium = view.render(112)[0]!;
   assert.match(medium, /◆ a-repository-with-quite-a-l… │/, "the branch goes first");
   assert.match(medium, /Metrics/);
   const narrow = view.render(60)[0]!;
@@ -1627,7 +1641,8 @@ test("v reviews the selected pull request with a read-only agent; the review sho
   assert.equal(prompts.length, 1);
   assert.match(prompts[0]!, /Review pull request #12 — Fix the table font/);
   assert.doesNotMatch(prompts[0]!, /Focus \(look at this first\)/);
-  assert.match(screen, /Review [─ ]+request changes · p\/served/);
+  assert.match(screen, /Review [─ ]+request changes · \d+s/);
+  assert.match(screen, /p\/served · medium/, "the model that ran, on its own line");
   assert.match(screen, /Swaps the font\./);
   assert.match(screen, /no fallback stack/);
   assert.match(screen, /✗ reviewed/, "the list carries the verdict");
@@ -1758,4 +1773,187 @@ test("the Git tab's keys are in the help and the hint line", async () => {
   assert.match(help, /read-only agent on QA's model/);
   assert.match(help, /nothing is posted to\s+GitHub|nothing is posted to GitHub/);
   assert.match(help, /Jev's quick read/);
+});
+
+/* ------------------------------------------------------------ Knowledge tab */
+
+const BACKEND_DECISIONS = "# Decisions\n\n## 2026-09-01\n- REST over GraphQL.\n- Postgres for sessions.\n";
+
+/** A lobby on the Knowledge tab with Backend's decisions written, and that file picked. */
+function knowledgeTab(options: ViewOptions = {}) {
+  const made = makeView(options);
+  const file = join(dataRoot(made.root, ".pi"), "Backend", "knowledge", "decisions.md");
+  writeFileSync(file, BACKEND_DECISIONS);
+  made.view.setTab("knowledge");
+  // Files are listed master, designer, backend, qa; Backend's decisions is the eleventh row.
+  for (let i = 0; i < 10; i++) made.view.handleInput(KEY.down);
+  made.view.handleInput(KEY.enter);
+  made.view.render(140);
+  return { ...made, file };
+}
+
+const onDisk = (file: string) => readFileSync(file, "utf8");
+
+test("the Knowledge tab lists every agent's files with their size, and shows the picked file's entries", () => {
+  const { view } = knowledgeTab();
+  const screen = flat(view.render(140));
+  for (const agent of ["Master (oracle)", "Designer", "Backend", "QA"]) assert.match(screen, new RegExp(`── ${agent.replace(/[()]/g, "\\$&")} `));
+  assert.match(screen, /Design language/);
+  assert.match(screen, /Engineering standards/);
+  assert.match(screen, /Testing standards/);
+  assert.match(screen, /Backend · decisions\.md ◂[─ ]+4 entries · 73 chars/);
+  assert.match(screen, /▸ # Decisions|▸ Decisions/, "the first entry is picked");
+  assert.match(screen, /REST over GraphQL\./);
+  assert.match(view.render(140)[0]!, /7 Knowledge/);
+  // The arrows pick entries while the entries have the keys, files while the list has.
+  view.handleInput(KEY.down);
+  assert.match(flat(view.render(140)), /▸ ## 2026-09-01|▸ 2026-09-01/);
+  view.handleInput(KEY.enter);
+  view.handleInput(KEY.up);
+  assert.match(flat(view.render(140)), /Backend · engineering-standards\.md(?! ◂)/, "back on the list, where up picks the file above");
+  assert.match(flat(view.render(140)), /Designer/);
+});
+
+test("e brings the picked entry into the prompt; shift+enter adds a line, enter saves it and only that entry changes", () => {
+  const { view, file, root } = knowledgeTab();
+  view.handleInput(KEY.down);
+  view.handleInput(KEY.down);
+  view.handleInput("e");
+  assert.equal(view.mode, "type");
+  const prompt = flat(view.render(140));
+  assert.match(prompt, /edit “- REST over GraphQL\.” · enter saves it · esc cancels/);
+  assert.match(prompt, /- REST over GraphQL\./);
+  assert.match(view.render(140).at(-1)!, /enter save.*shift\+enter new line.*esc cancel/);
+  // The whole entry is in the prompt: clear it and write the new one over two lines.
+  for (let i = 0; i < 40; i++) view.handleInput("\x7f");
+  type(view, "- REST, with cursors.");
+  view.handleInput("\x1b[13;2u");
+  type(view, "  Page size 50.");
+  view.handleInput(KEY.enter);
+  assert.equal(onDisk(file), "# Decisions\n\n## 2026-09-01\n- REST, with cursors.\n  Page size 50.\n- Postgres for sessions.\n");
+  assert.match(view.render(140).at(-1)!, /saved backend\/decisions\.md — the version before is in archive\/Backend/);
+  assert.equal(view.mode, "browse");
+  assert.match(flat(view.render(140)), /REST, with cursors\.[\s\S]*Page size 50\./);
+  assert.ok(readdirSync(join(dataRoot(root, ".pi"), "archive", "Backend")).length === 1, "the version before was archived");
+});
+
+test("esc while editing leaves the file alone and does not leave the entry's text behind in the prompt", () => {
+  const { view, file } = knowledgeTab();
+  view.handleInput(KEY.down);
+  view.handleInput("e");
+  view.handleInput(KEY.escape);
+  assert.equal(view.mode, "browse");
+  assert.equal(onDisk(file), BACKEND_DECISIONS);
+  view.handleInput("c");
+  view.handleInput(KEY.escape);
+  view.handleInput("e");
+  view.setTab("lobby");
+  view.setTab("knowledge");
+  view.handleInput("i");
+  assert.equal(view.mode, "browse", "i does not open the prompt on this tab");
+  view.setTab("lobby");
+  assert.doesNotMatch(flat(view.render(140)), /Decisions/, "nothing lent to the prompt followed it to another tab");
+  // Text typed with nothing being edited is kept, not saved anywhere.
+  view.setTab("knowledge");
+  view.handleInput("\x1b[13;2u");
+  assert.equal(onDisk(file), BACKEND_DECISIONS);
+});
+
+test("c leaves a note under the entry, agents read it there, and x x takes it back", () => {
+  const { view, file, root } = knowledgeTab();
+  for (let i = 0; i < 3; i++) view.handleInput(KEY.down);
+  view.handleInput("c");
+  assert.match(flat(view.render(140)), /a note on “- Postgres for sessions\.” — every agent reads it under the entry · enter saves/);
+  type(view, "Outdated: it is Redis now.");
+  view.handleInput("\x1b[13;2u");
+  type(view, "Ask ana.");
+  view.handleInput(KEY.enter);
+  assert.match(view.render(140).at(-1)!, /note saved — every agent reads it under this entry/);
+  assert.equal(onDisk(file), BACKEND_DECISIONS, "a note never touches the file");
+  const screen = flat(view.render(140));
+  assert.match(screen, /- Postgres for sessions\.[\s\S]*✎ Outdated: it is Redis now\.[\s\S]*Ask ana\./);
+  assert.match(screen, /✎ 1/, "the list counts notes");
+  assert.match(readAgentKnowledge([dataRoot(root, ".pi")], "backend").decisions, /- Postgres for sessions\.\n> Note from the user: Outdated: it is Redis now\.\n> Ask ana\./);
+  view.handleInput("x");
+  assert.match(view.render(140).at(-1)!, /press x again to remove the note “Outdated: it is Redis now\. Ask ana\.”/);
+  view.handleInput("x");
+  assert.match(view.render(140).at(-1)!, /note removed/);
+  assert.doesNotMatch(flat(view.render(140)), /✎ Outdated/);
+  view.handleInput("x");
+  assert.match(view.render(140).at(-1)!, /this entry has no notes/);
+});
+
+test("n adds an entry after the picked one, and d d deletes the picked entry together with its notes", () => {
+  const { view, file } = knowledgeTab();
+  view.handleInput(KEY.down);
+  view.handleInput(KEY.down);
+  view.handleInput("n");
+  assert.match(flat(view.render(140)), /a new entry after “- REST over GraphQL\.” · enter adds it/);
+  type(view, "Use ULIDs for ids.");
+  view.handleInput(KEY.enter);
+  assert.equal(onDisk(file), "# Decisions\n\n## 2026-09-01\n- REST over GraphQL.\n- Use ULIDs for ids.\n- Postgres for sessions.\n");
+  assert.match(flat(view.render(140)), /▸ - Use ULIDs for ids\.|▸ • Use ULIDs for ids\./, "the new entry is the picked one");
+  view.handleInput("c");
+  type(view, "check the library");
+  view.handleInput(KEY.enter);
+  view.handleInput("d");
+  assert.match(view.render(140).at(-1)!, /press d again to delete this entry \(the file is archived first, and its notes go with it\)/);
+  assert.equal(onDisk(file).includes("ULIDs"), true, "one press deletes nothing");
+  view.handleInput("d");
+  assert.equal(onDisk(file), BACKEND_DECISIONS, "back to how it was");
+  assert.match(view.render(140).at(-1)!, /its 1 note went with it/);
+});
+
+test("E edits the whole file in pi's editor: saved when it returns text, untouched when cancelled", async () => {
+  const saved = knowledgeTab({ editedText: "# Decisions\n- Only this.\n" });
+  saved.view.handleInput("E");
+  await settle();
+  assert.deepEqual(saved.calls.edited, [["Decisions — backend/decisions.md", BACKEND_DECISIONS]]);
+  assert.equal(onDisk(saved.file), "# Decisions\n- Only this.\n");
+  assert.match(saved.view.render(140).at(-1)!, /saved backend\/decisions\.md/);
+  const cancelled = knowledgeTab();
+  cancelled.view.handleInput("E");
+  await settle();
+  assert.equal(onDisk(cancelled.file), BACKEND_DECISIONS, "cancelling changes nothing");
+});
+
+test("an edit for an entry that changed on disk since it was drawn is refused, not put on the wrong line", () => {
+  const { view, file } = knowledgeTab();
+  view.handleInput(KEY.down);
+  view.handleInput(KEY.down);
+  view.handleInput(KEY.down);
+  view.handleInput("e");
+  writeFileSync(file, "# Decisions\n\n## 2026-09-01\n- Something else entirely.\n");
+  for (let i = 0; i < 40; i++) view.handleInput("\x7f");
+  type(view, "- changed");
+  view.handleInput(KEY.enter);
+  assert.match(view.render(140).at(-1)!, /that entry changed on disk since it was drawn — r reloads the file/);
+  assert.equal(onDisk(file), "# Decisions\n\n## 2026-09-01\n- Something else entirely.\n");
+  view.handleInput("r");
+  assert.match(flat(view.render(140)), /Something else entirely\./);
+});
+
+test("the Knowledge tab says what an empty file needs, and lists its keys", () => {
+  const made = makeView();
+  writeFileSync(join(dataRoot(made.root, ".pi"), "Master", "knowledge", "knowledge.md"), "");
+  made.view.setTab("knowledge");
+  made.view.handleInput(KEY.enter);
+  assert.match(flat(made.view.render(140)), /Nothing here yet\. n adds the first entry\./);
+  made.view.handleInput("d");
+  assert.match(made.view.render(140).at(-1)!, /nothing is picked — n adds an entry/);
+  made.view.handleInput("e");
+  assert.match(made.view.render(140).at(-1)!, /nothing is picked — n adds an entry/);
+  made.view.handleInput("n");
+  type(made.view, "First fact.");
+  made.view.handleInput(KEY.enter);
+  assert.equal(readFileSync(join(dataRoot(made.root, ".pi"), "Master", "knowledge", "knowledge.md"), "utf8"), "- First fact.\n");
+  assert.match(flat(made.view.render(140)), /▸ (- |• )First fact\./);
+  const { view } = knowledgeTab();
+  const hint = view.render(140).at(-1)!;
+  assert.match(hint, /pick.*e edit.*c comment.*n new.*d d delete.*E edit file/);
+  view.handleInput("?");
+  const help = flat(view.render(140));
+  assert.match(help, /Knowledge tab/);
+  assert.match(help, /note every agent/);
+  assert.match(help, /whole file/);
 });

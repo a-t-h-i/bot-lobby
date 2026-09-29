@@ -64,10 +64,12 @@ function took(review: PullReview, now: number): string {
 export function reviewLines(review: PullReview, detail: PullDetail | undefined, width: number, tick: number, now: number, theme?: LobbyTheme): string[] {
   const lines: string[] = [];
   const verdict = review.verdict ? VERDICTS[review.verdict] : undefined;
+  // Short enough to fit beside the title in a narrow pane; the model goes on a line of its own.
   const right = review.status === "running"
     ? `${spinner(tick)} ${took(review, now)}`
-    : [verdict ? paint(theme, verdict.color, verdict.words) : "", review.model ?? "", review.status === "done" ? took(review, now) : review.status].filter(Boolean).join(paint(theme, "dim", " · "));
+    : [verdict ? paint(theme, verdict.color, verdict.words) : "", review.status === "done" ? took(review, now) : review.status].filter(Boolean).join(paint(theme, "dim", " · "));
   lines.push(rule(width, "Review", theme, right));
+  if (review.model) lines.push(paint(theme, "dim", [review.model, review.thinking].filter(Boolean).join(" · ")));
   if (review.focus) lines.push(...wrapHanging(paint(theme, "dim", "focus: "), review.focus, width));
   if (review.saved) lines.push(paint(theme, "dim", `kept from ${since(now - review.startedAt)}`));
   if (isStale(review, detail)) lines.push(paint(theme, "warning", "the pull request has new commits since this review — v reviews it again"));

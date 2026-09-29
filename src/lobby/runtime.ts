@@ -44,6 +44,7 @@ import { PlanningSession, type PlannerSeed } from "./planner.ts";
 import { execCommand, IssuesState } from "./issues.ts";
 import { PullsState } from "./pulls.ts";
 import { PullReviews } from "./pr-review.ts";
+import { KnowledgeBook } from "./knowledge.ts";
 import { LobbyView, type LiveSession, type LobbyHost, type SwitchTarget, type TabId } from "./view.ts";
 import { lobbyTheme } from "./theme.ts";
 import { deliverComments, onOwnerEvent, setAuto } from "../pi/owner.ts";
@@ -68,6 +69,7 @@ interface Runtime {
   issues: IssuesState;
   pulls: PullsState;
   reviews: PullReviews;
+  knowledge: KnowledgeBook;
   unsubscribeFeed?: () => void;
   /** Puts the panel's questions to the user: the questionnaire unless a test sets another. */
   asker?: Asker;
@@ -600,6 +602,8 @@ function host(state: Runtime, tui: TUI): LobbyHost {
     issues: state.issues,
     pulls: state.pulls,
     reviews: state.reviews,
+    knowledge: state.knowledge,
+    editText: (title, text) => editText(state, title, text),
     profileLabel: (kind) => {
       const profile = lobbyProfile(state, kind);
       return `${profile.model ?? "session model"} · ${profile.thinking}`;
@@ -628,20 +632,20 @@ function host(state: Runtime, tui: TUI): LobbyHost {
 }
 
 /**
- * bot-lobby's settings (or one agent's entry) from inside the lobby. The
- * lobby stays aside for the whole visit, not only for each menu, so it does
- * not flash between them, and rereads the config when it comes back.
+ * Run something pi draws itself (its settings menus, its multi-line editor)
+ * with the lobby stepped aside for the whole visit, not only for each dialog,
+ * so it does not flash between them; the lobby rereads the config after.
  */
-async function lobbySettings(state: Runtime, entry?: "quickfix" | "planner"): Promise<void> {
-  if (state.inSettings) return;
+async function whileAside<T>(state: Runtime, run: () => Promise<T>, failure: string): Promise<T | undefined> {
+  if (state.inSettings) return undefined;
   state.inSettings = true;
   setMouse(state, false);
   state.handle?.setHidden(true);
   try {
-    if (entry) await openEntrySettings(state.pi, state.ctx, entry);
-    else await openSettings(state.pi, state.ctx);
+    return await run();
   } catch (error) {
-    state.ctx.ui.notify(`bot-lobby: settings failed — ${(error as Error).message}`, "warning");
+    state.ctx.ui.notify(`bot-lobby: ${failure} — ${(error as Error).message}`, "warning");
+    return undefined;
   } finally {
     state.inSettings = false;
     state.asideForPrompt = false;
@@ -653,6 +657,16 @@ async function lobbySettings(state: Runtime, entry?: "quickfix" | "planner"): Pr
     state.view?.reloadConfig();
     rerender();
   }
+}
+
+/** bot-lobby's settings (or one agent's entry) from inside the lobby. */
+async function lobbySettings(state: Runtime, entry?: "quickfix" | "planner"): Promise<void> {
+  await whileAside(state, () => (entry ? openEntrySettings(state.pi, state.ctx, entry) : openSettings(state.pi, state.ctx)), "settings failed");
+}
+
+/** A text edited in pi's multi-line editor (Enter saves, Shift+Enter is a new line); undefined when cancelled. */
+async function editText(state: Runtime, title: string, text: string): Promise<string | undefined> {
+  return whileAside(state, () => state.ctx.ui.editor(title, text), "the editor failed");
 }
 
 /** Remember which panes show, keeping every other setting as the file has it now. */
@@ -806,6 +820,13 @@ export function initLobby(pi: ExtensionAPI, ctx: ExtensionContext, configDir: st
     issues: new IssuesState(execCommand, ctx.cwd, rerender),
     pulls: new PullsState(execCommand, ctx.cwd, rerender),
     reviews: undefined as unknown as PullReviews,
+    knowledge: new KnowledgeBook({
+      root,
+      configDir,
+      threshold: () => loadConfig().knowledge.compactionThreshold,
+      backups: () => loadConfig().knowledge.backupCount,
+      sessionId: () => ctx.sessionManager.getSessionId(),
+    }),
   };
   state.reviews = new PullReviews({
     cwd: ctx.cwd,

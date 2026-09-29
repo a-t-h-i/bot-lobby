@@ -31,12 +31,17 @@ import { renderPlan, type PlanLayout, type PlanView, type SeatView } from "./tab
 import { filterJobs, newestFirst, renderQuickFix } from "./tabs/quickfix.ts";
 import { renderIssues } from "./tabs/issues.ts";
 import { renderGit } from "./tabs/git.ts";
+import { renderKnowledge, type KnowledgeLayout } from "./tabs/knowledge.ts";
+import type { EntryRef, KnowledgeBook, KnowledgeFileInfo, KnowledgeView } from "./knowledge.ts";
 import type { PullsState } from "./pulls.ts";
 import type { PullReviews } from "./pr-review.ts";
 import type { WorkspaceInfo } from "../execution/workspace.ts";
 import { filterRecords, renderMetrics } from "./tabs/metrics.ts";
 
-export const TAB_IDS = ["lobby", "tasks", "plan", "quickfix", "issues", "metrics", "git"] as const;
+/** The mark before a branch name in the title (shared with the task details). */
+export { BRANCH_GLYPH };
+
+export const TAB_IDS = ["lobby", "tasks", "plan", "quickfix", "issues", "metrics", "git", "knowledge"] as const;
 export type TabId = (typeof TAB_IDS)[number];
 
 export const TAB_LABELS: Record<TabId, string> = {
@@ -47,6 +52,7 @@ export const TAB_LABELS: Record<TabId, string> = {
   issues: "Issues",
   metrics: "Metrics",
   git: "Git",
+  knowledge: "Knowledge",
 };
 
 /** The tabs on show: Issues only while `lobby.issues` switches it on. */
@@ -165,6 +171,10 @@ export interface LobbyHost {
   pulls: PullsState;
   /** Reviews of pull requests by an agent, and Jev's reads of them. */
   reviews: PullReviews;
+  /** Every agent's knowledge files: read, edited, commented on. */
+  knowledge: KnowledgeBook;
+  /** Edit a text in pi's multi-line editor (the lobby steps aside meanwhile); the new text, or undefined when cancelled. */
+  editText(title: string, text: string): Promise<string | undefined>;
   /** The Issues tab is switched on (`lobby.issues`). */
   issuesEnabled(): boolean;
   /** Which panes show (`lobby.panels`), and remembering a change. */
@@ -223,7 +233,6 @@ const NOTICE_MS = 6000;
 /** Lines one wheel notch scrolls. */
 const WHEEL_LINES = 3;
 /** The longest repository and branch names the title shows whole. */
-export { BRANCH_GLYPH };
 const TITLE_NAME_MAX = 28;
 const TITLE_BRANCH_MAX = 36;
 
@@ -361,19 +370,28 @@ export class LobbyView implements Component, Focusable {
   private gitDetailOffset = 0;
   /** The prompt is taking what the review of the selected pull request should look at first. */
   private gitFocusDraft = false;
+  private kSelected = 0;
+  private kFocus: "list" | "detail" = "list";
+  /** The picked entry of the open knowledge file (an index into its entries), and how far its pane is scrolled. */
+  private kCursor = 0;
+  private kOffset = 0;
+  private readonly kLayout: KnowledgeLayout = { offset: 0, total: 0, rows: 0 };
+  /** The prompt is writing an edit of the picked entry, a note on it, or a new entry after it. */
+  private kDraft: { kind: "edit" | "comment" | "add"; entry?: EntryRef } | undefined;
   private metricsSelected = 0;
   private metricsBy: GroupBy = "model";
   private metricsSort: SortKey = "runs";
 
   /** The Tasks tab lists archived tasks too (v). */
   showArchived = false;
-  private data: { tasks: Task[]; plans: PlannedTask[]; archived: Task[]; comments: Map<string, PlanComment[]>; metrics: MetricRecord[]; classifierMetrics: MetricRecord[]; at: number } = {
+  private data: { tasks: Task[]; plans: PlannedTask[]; archived: Task[]; comments: Map<string, PlanComment[]>; metrics: MetricRecord[]; classifierMetrics: MetricRecord[]; knowledge: { files: KnowledgeFileInfo[]; view?: KnowledgeView }; at: number } = {
     tasks: [],
     plans: [],
     archived: [],
     comments: new Map(),
     metrics: [],
     classifierMetrics: [],
+    knowledge: { files: [] },
     at: 0,
   };
 
@@ -465,12 +483,26 @@ export class LobbyView implements Component, Focusable {
       comments: new Map(),
       metrics: this.tab === "metrics" ? this.host.metrics() : this.data.metrics,
       classifierMetrics: this.tab === "metrics" ? this.host.classifierMetrics?.() ?? [] : this.data.classifierMetrics,
+      knowledge: this.tab === "knowledge" ? this.readKnowledge() : this.data.knowledge,
       at: now,
     };
     if (this.tab === "tasks") {
       const row = this.taskRowList()[this.tasksSelected];
       if (row?.kind === "task") this.data.comments.set(row.id, this.host.comments(row.id));
     }
+  }
+
+  /** Every knowledge file, and the selected one read as entries. */
+  private readKnowledge(): { files: KnowledgeFileInfo[]; view?: KnowledgeView } {
+    const files = this.host.knowledge.files();
+    this.kSelected = Math.max(0, Math.min(this.kSelected, files.length - 1));
+    const info = files[this.kSelected];
+    return { files, ...(info ? { view: this.host.knowledge.open(info.agent, info.file) } : {}) };
+  }
+
+  /** Read the open knowledge file again (after an edit, or another file was picked). */
+  private reloadKnowledge(): void {
+    this.data.knowledge = this.readKnowledge();
   }
 
   private say(text: string, kind: Notice["kind"] = "info"): void {
@@ -500,6 +532,11 @@ export class LobbyView implements Component, Focusable {
   setTab(tab: TabId): void {
     if (tab === this.tab) return;
     if (!this.tabs().includes(tab)) return this.say(`the ${TAB_LABELS[tab]} tab is off — set lobby.${tab} to true in the config to bring it back`, "warning");
+    // An entry being edited is not a draft to come back to: its text was only lent to the prompt.
+    if (this.kDraft) {
+      this.kDraft = undefined;
+      this.editor.setText("");
+    }
     this.drafts[this.tab] = this.editor.getText();
     this.tab = tab;
     this.editor.setText(this.drafts[tab] ?? "");
@@ -717,6 +754,10 @@ export class LobbyView implements Component, Focusable {
       this.commentTarget = undefined;
       this.issueDraft = false;
       this.gitFocusDraft = false;
+      if (this.kDraft) {
+        this.kDraft = undefined;
+        this.editor.setText("");
+      }
       this.newSession = false;
       if (this.lineTarget) {
         this.lineTarget = undefined;
@@ -743,7 +784,7 @@ export class LobbyView implements Component, Focusable {
     if (matchesKey(data, Key.home) || matchesKey(data, Key.end)) return this.scrollToEdge(matchesKey(data, Key.home));
     const tabs = this.tabs();
     if (!PROMPT_FIRST.has(this.tab) && /^[1-9]$/.test(data) && Number(data) <= tabs.length) return this.setTab(tabs[Number(data) - 1]!);
-    if (data === "i" && this.tab !== "metrics" && this.tab !== "tasks" && this.tab !== "issues" && this.tab !== "git") return this.setMode("type");
+    if (data === "i" && this.tab !== "metrics" && this.tab !== "tasks" && this.tab !== "issues" && this.tab !== "git" && this.tab !== "knowledge") return this.setMode("type");
     if (this.tabCommand(data)) return;
     const printable = isPrintable(data);
     if (printable && PROMPT_FIRST.has(this.tab)) {
@@ -767,6 +808,8 @@ export class LobbyView implements Component, Focusable {
         return this.issueFocus;
       case "git":
         return this.gitFocus;
+      case "knowledge":
+        return this.kFocus;
       case "metrics":
         return "table";
     }
@@ -816,6 +859,9 @@ export class LobbyView implements Component, Focusable {
       case "git":
         this.gitFocus = direction < 0 ? "list" : "detail";
         return;
+      case "knowledge":
+        this.kFocus = direction < 0 ? "list" : "detail";
+        return;
       case "metrics":
         return;
     }
@@ -849,9 +895,28 @@ export class LobbyView implements Component, Focusable {
           void this.loadPullDetail();
         }
         return;
+      case "knowledge":
+        return this.moveKnowledge(delta);
       case "metrics":
         return this.scrollPane("table", delta);
     }
+  }
+
+  /** Arrows and pages on the Knowledge tab: pick a file, or pick an entry of the open one (a page moves several). */
+  private moveKnowledge(delta: number): void {
+    const knowledge = this.data.knowledge;
+    if (this.kFocus === "list") {
+      const next = Math.max(0, Math.min(knowledge.files.length - 1, this.kSelected + delta));
+      if (next === this.kSelected) return;
+      this.kSelected = next;
+      this.kCursor = 0;
+      this.kOffset = 0;
+      this.reloadKnowledge();
+      return;
+    }
+    const count = knowledge.view?.entries.length ?? 0;
+    const step = Math.abs(delta) > 1 ? Math.sign(delta) * Math.max(2, Math.round(Math.abs(delta) / 3)) : delta;
+    this.kCursor = Math.max(0, Math.min(count - 1, this.kCursor + step));
   }
 
   /**
@@ -1100,6 +1165,8 @@ export class LobbyView implements Component, Focusable {
         return this.issuesCommand(data, enter, escape);
       case "git":
         return this.gitCommand(data, enter, escape);
+      case "knowledge":
+        return this.knowledgeCommand(data, enter, escape);
       case "metrics":
         if (data === "g") return (this.metricsBy = this.metricsBy === "model" ? "model-kind" : "model", this.metricsSelected = 0), true;
         if (data === "s") return (this.metricsSort = SORT_KEYS[(SORT_KEYS.indexOf(this.metricsSort) + 1) % SORT_KEYS.length]!), true;
@@ -1693,6 +1760,107 @@ export class LobbyView implements Component, Focusable {
     return false;
   }
 
+  /** The picked entry of the open knowledge file, as the edit functions find it again. */
+  private pickedEntry(): { entry: EntryRef; text: string } | undefined {
+    const entry = this.data.knowledge.view?.entries[this.kCursor];
+    return entry ? { entry: { text: entry.text, occurrence: entry.occurrence }, text: entry.text } : undefined;
+  }
+
+  private knowledgeCommand(data: string, enter: boolean, escape: boolean): boolean {
+    const info = this.data.knowledge.files[this.kSelected];
+    if (enter) return (this.kFocus = this.kFocus === "list" ? "detail" : "list"), true;
+    if (escape) return (this.kFocus = "list"), true;
+    if (data === "r") {
+      this.reloadKnowledge();
+      this.say("knowledge reread from disk");
+      return true;
+    }
+    if (!info) return false;
+    if (data === "E") {
+      const view = this.data.knowledge.view;
+      if (!view) return true;
+      void this.host.editText(`${info.label} — ${info.agent}/${info.file}`, view.content).then((text) => {
+        if (text !== undefined) this.say(this.host.knowledge.replaceFile(info.agent, info.file, text));
+        this.reloadKnowledge();
+        this.host.requestRender();
+      });
+      return true;
+    }
+    if (!"ecndx".includes(data) || data.length !== 1) return false;
+    const picked = this.pickedEntry();
+    // Adding needs no entry to start from: it goes at the end of an empty or entry-less file.
+    if (!picked && data !== "n") {
+      this.say("nothing is picked — n adds an entry", "warning");
+      return true;
+    }
+    this.kFocus = "detail";
+    if (data === "e" && picked) {
+      this.kDraft = { kind: "edit", entry: picked.entry };
+      this.editor.setText(picked.text);
+      this.setMode("type");
+      return true;
+    }
+    if (data === "c" && picked) {
+      this.kDraft = { kind: "comment", entry: picked.entry };
+      this.setMode("type");
+      return true;
+    }
+    if (data === "n") {
+      this.kDraft = { kind: "add", ...(picked ? { entry: picked.entry } : {}) };
+      this.setMode("type");
+      return true;
+    }
+    if (data === "d" && picked) {
+      const key = `kdelete:${info.agent}/${info.file}:${picked.entry.occurrence}:${picked.text}`;
+      if (this.armed !== key) {
+        this.armed = key;
+        this.say("press d again to delete this entry (the file is archived first, and its notes go with it)", "warning");
+        return true;
+      }
+      this.armed = undefined;
+      this.say(this.host.knowledge.remove(info.agent, info.file, picked.entry));
+      this.reloadKnowledge();
+      return true;
+    }
+    if (data === "x" && picked) {
+      const notes = this.data.knowledge.view?.attached.filter((note) => note.entry === picked.text) ?? [];
+      const newest = notes.at(-1);
+      if (!newest) {
+        this.say("this entry has no notes", "warning");
+        return true;
+      }
+      const key = `kunnote:${newest.id}`;
+      if (this.armed !== key) {
+        this.armed = key;
+        this.say(`press x again to remove the note “${clip(newest.text, 40)}”`, "warning");
+        return true;
+      }
+      this.armed = undefined;
+      this.say(this.host.knowledge.unnote(newest.id));
+      this.reloadKnowledge();
+      return true;
+    }
+    return true;
+  }
+
+  /** The prompt's text on the Knowledge tab: an edit of the picked entry, a note on it, or a new entry after it. */
+  private submitKnowledge(body: string): void {
+    const draft = this.kDraft;
+    const info = this.data.knowledge.files[this.kSelected];
+    if (!draft || !info) {
+      this.editor.setText(body);
+      return this.say("press e to edit the picked entry, c to comment on it, n to add one", "warning");
+    }
+    this.kDraft = undefined;
+    this.setMode("browse");
+    const book = this.host.knowledge;
+    const notice = draft.kind === "edit" ? book.edit(info.agent, info.file, draft.entry!, body) : draft.kind === "comment" ? book.comment(info.agent, info.file, draft.entry!, body) : book.add(info.agent, info.file, draft.entry, body);
+    this.say(notice, /^(saved|note saved)/.test(notice) ? "info" : "warning");
+    this.reloadKnowledge();
+    // A new entry goes right after the picked one, which the cursor then moves onto.
+    if (draft.kind === "add" && notice.startsWith("saved")) this.kCursor = Math.min(this.kCursor + (draft.entry ? 1 : 0), Math.max(0, (this.data.knowledge.view?.entries.length ?? 1) - 1));
+  }
+
   /* --------------------------------------------------------------- mouse */
 
   /** Mouse events when pi runs full screen (pi-tui dispatches them to the overlay). */
@@ -1722,7 +1890,7 @@ export class LobbyView implements Component, Focusable {
   /** The wheel scrolls the pane under the pointer (the focused one when it is over none). */
   private wheel(direction: number, x = -1, y = -1): void {
     if (this.help) return;
-    if (this.tab === "issues" || this.tab === "git") return this.scroll(direction * WHEEL_LINES);
+    if (this.tab === "issues" || this.tab === "git" || this.tab === "knowledge") return this.scroll(direction * WHEEL_LINES);
     this.scrollPane(this.paneAt(x, y) ?? this.focusedPane(), direction * WHEEL_LINES, true);
   }
 
@@ -1778,6 +1946,7 @@ export class LobbyView implements Component, Focusable {
   private submit(text: string): void {
     const body = text.trim();
     if (!body) {
+      if (this.tab === "knowledge" && this.kDraft) return this.say(this.kDraft.kind === "edit" ? "nothing to save — d d deletes an entry, esc cancels" : "write something first, or esc to cancel", "warning");
       // An empty enter on the Plan tab opens the panel's questions; on the Lobby, a background session's question.
       if (this.tab === "plan" && !this.lineTarget && this.host.planner()?.awaitingAnswers) this.answerQuestions();
       if (this.tab === "lobby" && !this.newSession) this.answerSessionDialog();
@@ -1817,6 +1986,8 @@ export class LobbyView implements Component, Focusable {
         this.say("filing the issue…");
         void this.host.issues.create(body);
         return;
+      case "knowledge":
+        return this.submitKnowledge(body);
       case "git":
         if (!this.gitFocusDraft) {
           this.editor.setText(body);
@@ -1928,20 +2099,22 @@ export class LobbyView implements Component, Focusable {
     const auto = entry.auto ? ` ${bold(theme, paint(theme, "success", "⟳ AUTO"))}` : "";
     const waiting = this.host.sessions().reduce((count, session) => count + session.dialogs.length, 0);
     const asking = waiting > 0 ? ` ${paint(theme, "warning", `● ${waiting} waiting · ${keyLabel(this.keys.sessions)}`)}` : "";
+    // Short of room, the key to open the sessions goes before the waiting count does.
+    const asked = waiting > 0 ? ` ${paint(theme, "warning", `● ${waiting} waiting`)}` : "";
     let choices: string[];
     if (entry.view.kind !== "here") {
       // Another session in view: its name and what it is doing lead, so it is never mistaken for this window.
       const working = entry.status === "working";
       const dot = paint(theme, working ? "accent" : "dim", working ? spinner(this.tick) : "◆");
       const where = paint(theme, "muted", `${entry.name} · ${entry.status}`);
-      choices = [`${dot} ${where}${auto}${asking}  ${help}`, `${dot} ${where}${auto}${asking} `, `${dot} ${where}${auto} `, `${dot}${auto} `];
+      choices = [`${dot} ${where}${auto}${asking}  ${help}`, `${dot} ${where}${auto}${asking} `, `${dot} ${where}${auto}${asked} `, `${dot}${auto}${asked} `, `${dot} ${where}${auto} `, `${dot}${auto} `];
     } else {
       const dot = paint(theme, this.host.masterBusy() ? "accent" : "dim", this.host.masterBusy() ? spinner(this.tick) : "●");
       const state = zen.task ? paint(theme, "muted", zen.task.paused ? `${zen.task.state} (paused)` : zen.task.state) : "";
       // Long task ids give way to the state, then to the dot alone.
       choices = zen.task
-        ? [`${dot} ${zen.task.id} ${state}${auto}${asking}  ${help}`, `${dot} ${zen.task.id} ${state}${auto}${asking} `, `${dot} ${state}${auto} `, `${dot}${auto} `]
-        : [`${paint(theme, "dim", "no task in this session")}${asking}  ${help}`, `${paint(theme, "dim", "no task in this session")}${asking} `, help, ""];
+        ? [`${dot} ${zen.task.id} ${state}${auto}${asking}  ${help}`, `${dot} ${zen.task.id} ${state}${auto}${asking} `, `${dot} ${zen.task.id} ${state}${auto}${asked} `, `${dot} ${state}${auto}${asked} `, `${dot}${auto}${asked} `, `${dot} ${state}${auto} `, `${dot}${auto} `]
+        : [`${paint(theme, "dim", "no task in this session")}${asking}  ${help}`, `${paint(theme, "dim", "no task in this session")}${asking} `, `${paint(theme, "dim", "no task in this session")}${asked} `, `${asked.trimStart()} `, help, ""];
     }
     // The longest title that leaves room for the tabs and, when a session waits on you, for saying so.
     const tabsWidth = cells.reduce((sum, cell) => sum + textWidth(cell.text), 0);
@@ -2023,6 +2196,13 @@ export class LobbyView implements Component, Focusable {
         return this.host.quickfix.running ? "describe a quick change; it runs after the current one" : "describe a quick change";
       case "issues":
         return this.issueDraft ? "new issue · first line is the title" : "n files a new issue";
+      case "knowledge": {
+        const picked = this.pickedEntry();
+        if (this.kDraft?.kind === "edit") return `edit “${clip(picked?.text ?? "", 40)}” · enter saves it · esc cancels`;
+        if (this.kDraft?.kind === "comment") return `a note on “${clip(picked?.text ?? "", 40)}” — every agent reads it under the entry · enter saves`;
+        if (this.kDraft?.kind === "add") return picked ? `a new entry after “${clip(picked.text, 40)}” · enter adds it` : "a new entry · enter adds it";
+        return "e edits the picked entry, c comments on it, n adds one";
+      }
       case "git": {
         const pull = this.selectedPull();
         if (this.gitFocusDraft) return `what should the review of #${pull?.number ?? "?"} look at first? · enter reviews`;
@@ -2115,6 +2295,18 @@ export class LobbyView implements Component, Focusable {
           { key: "n", text: "file a new issue" },
           { key: "r", text: "reload issues" },
         ];
+      case "knowledge":
+        return [
+          { key: "↑ ↓", text: "pick a file, or (in the entries) pick an entry; PageUp/PageDown several" },
+          { key: "enter / ← →", text: "move between the files and their entries" },
+          { key: "e", text: "edit the picked entry: it comes into the prompt (Shift+Enter for a new line, enter saves)" },
+          { key: "c", text: "comment on it: a note every agent reads under that entry" },
+          { key: "n", text: "add an entry after the picked one" },
+          { key: "d d", text: "delete the picked entry, and its notes" },
+          { key: "x x", text: "take back the newest note on the picked entry" },
+          { key: "E", text: "edit the whole file in pi's editor" },
+          { key: "r", text: "reread the files from disk" },
+        ];
       case "git":
         return [
           { key: "↑ ↓", text: "select a pull request, or scroll its detail (PageUp/PageDown)" },
@@ -2175,6 +2367,7 @@ export class LobbyView implements Component, Focusable {
       }
       if (this.tab === "lobby" && this.host.masterBusy()) return [["enter", "steer"], ["esc", "stop the oracle"], [k("hide"), "hide"]];
       if (this.tab === "plan" && this.lineTarget) return [["enter", "add the comment"], ["esc", "cancel"]];
+      if (this.tab === "knowledge" && this.kDraft) return [["enter", this.kDraft.kind === "edit" ? "save" : this.kDraft.kind === "comment" ? "save the note" : "add it"], ["shift+enter", "new line"], ["esc", "cancel"]];
       if (this.tab === "git" && this.gitFocusDraft) return [["enter", "review with this focus"], ["shift+enter", "new line"], ["esc", "cancel"]];
       const enter = this.tab === "plan" && session?.awaitingAnswers && !this.editor.getText().trim() ? "answer questions" : this.tab === "quickfix" ? "run it" : "send";
       return [["enter", enter], ["esc", "browse"], [k("hide"), "hide"]];
@@ -2210,6 +2403,11 @@ export class LobbyView implements Component, Focusable {
         break;
       case "issues":
         keys.push(["↑↓", "select"], ["p", "plan it"], ["n", "new"]);
+        break;
+      case "knowledge":
+        keys.push(["↑↓", "pick"], ["enter", this.kFocus === "list" ? "entries" : "files"]);
+        if (this.kFocus === "detail" || this.pickedEntry()) keys.push(["e", "edit"], ["c", "comment"], ["n", "new"], ["d d", "delete"]);
+        keys.push(["E", "edit file"]);
         break;
       case "git": {
         const pull = this.selectedPull();
@@ -2312,6 +2510,14 @@ export class LobbyView implements Component, Focusable {
           issues: issues.issues, selected: this.issueSelected, ...(detail ? { detail } : {}), focus: this.issueFocus, detailOffset: this.issueDetailOffset,
           loading: issues.loading, loaded: issues.loaded, ...(issues.error ? { error: issues.error } : {}), ...(issues.notice ? { notice: issues.notice } : {}), tick: this.tick, now,
         }, width, height, theme);
+      }
+      case "knowledge": {
+        const knowledge = this.data.knowledge;
+        this.kSelected = Math.min(this.kSelected, Math.max(0, knowledge.files.length - 1));
+        this.kCursor = Math.min(this.kCursor, Math.max(0, (knowledge.view?.entries.length ?? 1) - 1));
+        const lines = renderKnowledge({ files: knowledge.files, selected: this.kSelected, ...(knowledge.view ? { view: knowledge.view } : {}), cursor: this.kCursor, focus: this.kFocus, offset: this.kOffset, layout: this.kLayout }, width, height, theme);
+        this.kOffset = this.kLayout.offset;
+        return lines;
       }
       case "git": {
         const pulls = this.host.pulls;
