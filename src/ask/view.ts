@@ -112,6 +112,7 @@ function previewBox(preview: Preview, width: number, rows: number, theme: LobbyT
 }
 
 function hints(state: AskState, question: AskQuestion, width: number, theme?: LobbyTheme): string[] {
+  if (state.leaving) return wrap(paint(theme, "warning", "Leave without answering? The oracle will not guess for you. enter leaves · any other key keeps answering"), width);
   const parts = state.editing
     ? ["enter keep it", "esc back to the options"]
     : [
@@ -119,7 +120,7 @@ function hints(state: AskState, question: AskQuestion, width: number, theme?: Lo
         question.multiSelect ? "space pick · enter next" : "enter choose",
         `1-${question.options.length} pick`,
         ...(state.questions.length > 1 ? ["←→ questions"] : []),
-        "esc put away",
+        "esc leave",
       ];
   return wrap(paint(theme, "dim", parts.join(" · ")), width);
 }
