@@ -23,7 +23,7 @@ import type { QuickFixQueue } from "./quickfix.ts";
 import { MEMBER_LABELS, ORACLE_LABEL, type PlannerSeed, type PlanningSession } from "./planner.ts";
 import { issueText, type IssuesState } from "./issues.ts";
 import { actionFor, keyLabel, keyMap, LOBBY_ACTIONS, type KeyMap, type LobbyAction } from "./keys.ts";
-import { beside, bold, box, fit, highlight, paint, rule, selectRow, spinner, spread, windowStart, wrap, wrapHanging, type LobbyTheme, type PaneBox, type PaneLayout, type PaneMark } from "./layout.ts";
+import { beside, bold, box, fit, highlight, pagerButton, paint, rule, selectRow, spinner, spread, windowStart, wrap, wrapHanging, type LobbyTheme, type PaneBox, type PaneLayout, type PaneMark } from "./layout.ts";
 import { chatTail, HOME_PANES, renderHome, type HomePane } from "./tabs/home.ts";
 import { filterRows, pips, planDetailLines, renderTasks, taskDetailLines, taskProgress, taskRows, tasksWidths, type TaskRow } from "./tabs/tasks.ts";
 import { renderPlan, type PlanLayout, type PlanView, type SeatView } from "./tabs/plan.ts";
@@ -816,7 +816,7 @@ export class LobbyView implements Component, Focusable {
    * end. Lists move their selection instead; the draft moves its cursor (the
    * wheel scrolls it and the cursor follows only when it would leave the screen).
    */
-  private scrollPane(pane: string, delta: number, wheel = false): void {
+  private scrollPane(pane: string, delta: number, wheel = false, page = false): void {
     if (delta === 0) return;
     switch (pane) {
       case "conversation":
@@ -828,13 +828,13 @@ export class LobbyView implements Component, Focusable {
         this.planOffset = Math.max(0, this.planOffset - delta);
         break;
       case "draft":
-        if (wheel) this.wheelDraft(delta);
+        if (wheel || page) this.wheelDraft(delta);
         else this.moveCursor(delta);
         break;
       case "list":
-        if (this.tab === "tasks") this.selectTask(this.tasksSelected + Math.sign(delta));
+        if (this.tab === "tasks") this.selectTask(this.tasksSelected + (page ? delta : Math.sign(delta)));
         else if (this.tab === "quickfix") {
-          this.fixSelected = Math.max(0, Math.min(this.fixJobs().length - 1, this.fixSelected + Math.sign(delta)));
+          this.fixSelected = Math.max(0, Math.min(this.fixJobs().length - 1, this.fixSelected + (page ? delta : Math.sign(delta))));
           this.fixDetailOffset = 0;
         }
         break;
@@ -843,7 +843,7 @@ export class LobbyView implements Component, Focusable {
         else if (this.tab === "quickfix") this.fixDetailOffset = Math.max(0, this.fixDetailOffset + delta);
         break;
       case "table":
-        this.metricsSelected = Math.max(0, this.metricsSelected + (wheel ? Math.sign(delta) : delta));
+        this.metricsSelected = Math.max(0, this.metricsSelected + (wheel && !page ? Math.sign(delta) : delta));
         break;
     }
     this.clampScroll();
@@ -1640,6 +1640,15 @@ export class LobbyView implements Component, Focusable {
     if (this.tab === "lobby" && pane) this.homeFocus = pane as HomePane;
     if (this.tab === "tasks" && (pane === "list" || pane === "detail")) this.tasksFocus = pane;
     if (this.tab === "quickfix" && (pane === "list" || pane === "detail")) this.fixFocus = pane;
+    // The page buttons in a scrolling pane's bottom border scroll it a page or two.
+    const paneBox = pane ? this.panes.get(pane) : undefined;
+    if (pane && paneBox && paneBox.total > paneBox.rows && row === paneBox.top + paneBox.height - 1) {
+      const button = pagerButton(paneBox.width, x - paneBox.left);
+      if (button) {
+        this.scrollPane(pane, button * Math.max(1, paneBox.rows - 1), false, true);
+        return;
+      }
+    }
     if (this.tab !== "plan" || row < 0 || !this.host.planner()) return;
     const layout = this.planLayout;
     // The draft pane: its border sits one row above its first line and two columns left of its text.
@@ -2054,6 +2063,7 @@ export class LobbyView implements Component, Focusable {
       ...row("Ctrl+C", "clear the prompt, or hide the lobby", inner),
       ...row("click", "a tab to open it, a pane to give it the keys, a draft plan line to comment on it", inner),
       ...row("wheel", "scroll the pane under the pointer", inner),
+      ...row("▲ ▼", "click the buttons on a pane's bottom edge: a page up or down (▲▲ ▼▼ two pages)", inner),
     ];
     const modes = (inner: number) => [
       section("Typing"),
