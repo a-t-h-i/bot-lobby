@@ -44,7 +44,9 @@ test("a task's friendly name is its first content words, capitalised, then the d
   assert.equal(dateStamp(day), "27-09-2026");
   assert.equal(dateStamp(new Date(2027, 0, 3)), "03-01-2027");
   assert.equal(taskName("Change the table font", day), "Task-Change-Table-Font-27-09-2026");
-  assert.equal(taskName("please can you fix the login redirect bug on mobile", day), "Task-Fix-Login-Redirect-Bug-On-27-09-2026", "at most five words");
+  assert.equal(taskName("please can you fix the login redirect bug on mobile", day), "Task-Fix-Login-Redirect-Bug-Mobile-27-09-2026", "at most five words, connectors left out");
+  assert.equal(taskName("Change the table font to Inter and make it 14px", day), "Task-Change-Table-Font-Inter-Make-27-09-2026", "no `and` filling a slot");
+  assert.equal(taskName("update the docs and", day), "Task-Update-Docs-27-09-2026", "and never ends a name");
   assert.equal(nameWords("add OAuth support to the API"), "Add-OAuth-Support-API", "capitals inside a word stay");
   assert.equal(nameWords("rename front-end helpers"), "Rename-Front-End-Helpers", "a hyphenated word keeps its parts");
   assert.equal(nameWords("### Objective\nFour fixes: solid buttons"), "Four-Fixes-Solid-Buttons", "Markdown labels are skipped");
