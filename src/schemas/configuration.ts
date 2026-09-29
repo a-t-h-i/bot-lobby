@@ -146,7 +146,7 @@ export interface LobbyConfig {
 }
 
 /** Decisions the classifier can make, each switched on or off on its own. */
-export const CLASSIFIER_FEATURES = ["seats", "answers", "files", "triage", "effort"] as const;
+export const CLASSIFIER_FEATURES = ["seats", "answers", "files", "triage", "effort", "review"] as const;
 export type ClassifierFeature = (typeof CLASSIFIER_FEATURES)[number];
 
 /** Hosts that serve Jev behind the same System One API; `auto` takes OpenCode's free Jev when pi holds an OpenCode key, else TypeSafe. */
@@ -263,7 +263,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     model: "",
     baseUrl: "",
     timeoutMs: 4000,
-    features: { seats: true, answers: true, files: true, triage: true, effort: true },
+    features: { seats: true, answers: true, files: true, triage: true, effort: true, review: true },
     thresholds: {
       seatAt: 0.35,
       reseatReadyAt: 0.6,
