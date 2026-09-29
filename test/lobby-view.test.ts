@@ -1377,3 +1377,35 @@ test("a conversation scrolled to its top scrolls down again, one line a press, a
   press(KEY.down);
   assert.equal(content() === reading, false, "and it still scrolls");
 });
+
+test("the buttons on a scrolling pane's bottom edge scroll it a page or two, and only where it scrolls", () => {
+  const { view, feed } = makeView();
+  busyFeed(feed);
+  let lines = view.render(120);
+  const top = lines.findIndex((line) => line.includes("╭ Activity"));
+  const bottom = lines.findIndex((line, index) => index > top && line.includes("╰") && line.includes("▲▲ ▲ ▼ ▼▼"));
+  assert.ok(bottom > top, "a pane with more lines than rows carries the buttons");
+  const conversationEdge = lines[bottom]!.slice(0, lines[bottom]!.indexOf("╰", 2));
+  assert.ok(!conversationEdge.includes("▲"), "a pane that fits has none");
+  const rows = bottom - top - 1;
+  const at = lines[bottom]!.indexOf("▲▲ ▲ ▼ ▼▼");
+  const shown = () => view.render(120).filter((line) => line.includes("reading file-")).length;
+  assert.ok(shown() > 0);
+  const newest = () => view.render(120).some((line) => line.includes("file-59.ts"));
+  assert.equal(newest(), true);
+  view.handleInput(click(at + 3, bottom)); // one page up
+  assert.equal(newest(), false, "a page back leaves the newest line");
+  const onePage = view.render(120).find((line) => /file-\d+\.ts/.test(line))!;
+  view.handleInput(click(at + 3, bottom));
+  assert.notEqual(view.render(120).find((line) => /file-\d+\.ts/.test(line)), onePage, "another page back");
+  view.handleInput(click(at + 7, bottom)); // one page down
+  view.handleInput(click(at + 7, bottom));
+  assert.equal(newest(), true, "back at the newest");
+  view.handleInput(click(at, bottom)); // two pages up
+  const twoPages = view.render(120).find((line) => /file-\d+\.ts/.test(line))!;
+  assert.notEqual(twoPages, onePage, "two pages go further than one");
+  view.handleInput(click(at + 8, bottom)); // two pages down
+  assert.equal(newest(), true);
+  assert.equal(view.homeFocus, "activity", "using a pane's buttons gives it the keys");
+  void rows;
+});

@@ -273,6 +273,21 @@ Rebind any key under `lobby.keys` in the config.
 Pi session. The Lobby tab can show any session, and your prompt steers it;
 `● waiting` in the tab bar means one has a question for you.
 
+**Paging.** A pane with more lines than rows shows page buttons on its bottom
+edge, `▲▲ ▲ ▼ ▼▼`: click one to scroll a page up or down (`▲▲` and `▼▼` go two
+pages). The wheel, the arrows and PageUp/PageDown still work. It applies to
+every scrolling pane: the conversation, activity and thinking, the plan draft,
+the Tasks and Quick fix lists and details, and the metrics table.
+
+**Status line when hidden.** With the lobby hidden (`alt+l`), one line under
+Pi's editor shows where things stand: a bar of the task's plan steps (or its
+stage before there is a plan) with who is working, the planning round and the
+questions waiting for you, the quick fix in hand, or `idle`. It costs nothing
+while nothing changes. Turn it off with `lobby.miniLine: false` (or in
+`/bot-lobby settings` → Lobby).
+
+![The status line under the editor while the lobby is hidden: a task, planning, idle](https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/lobby-status-line.png)
+
 The conversation keeps its newest 100 messages in memory; scroll to the top
 to load the rest.
 
