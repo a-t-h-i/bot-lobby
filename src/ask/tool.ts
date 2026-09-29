@@ -65,12 +65,16 @@ export function invalidQuestions(questions: readonly AskQuestion[]): string | un
   return undefined;
 }
 
+/** What the model does with questions the user left unanswered: wait, never fill them in. */
+const STILL_OPEN = "Do not assume answers, do not pick the recommended options, and do not go on with work that depends on them. Say in one short line that the questions are waiting, end your turn, and put them to the user again when they next write.";
+const NOT_ANSWERED = `The user left the questions without answering. ${STILL_OPEN}`;
+
 /** What the model reads back: each question with its answer, or that it was skipped. */
 export function answerSummary(questions: readonly AskQuestion[], result: AskResult): string {
   if (result.cancelled && result.answers.length === 0) {
     // A relay that could not ask anyone (auto mode) says why.
     if (result.globalNote) return result.globalNote;
-    return "The user put the questions away without answering. Do not ask the same again right away: go on with your best judgement and say what you assumed, or ask something narrower.";
+    return NOT_ANSWERED;
   }
   const lines = questions.map((question, index) => {
     const answer = result.answers.find((entry) => entry.questionIndex === index);
@@ -82,6 +86,7 @@ export function answerSummary(questions: readonly AskQuestion[], result: AskResu
   return [
     result.cancelled ? "The user answered some questions, then put the rest away:" : "The user answered:",
     ...lines,
+    ...(result.cancelled ? ["", `The questions marked "(not answered)" are still open. ${STILL_OPEN}`] : []),
     ...(result.globalNote ? ["", `Note: ${result.globalNote}`] : []),
   ].join("\n");
 }
