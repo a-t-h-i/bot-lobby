@@ -63,7 +63,7 @@ export function ghError(result: Partial<ExecResult> & { error?: string }): strin
   return first.length > 160 ? `${first.slice(0, 159)}…` : first;
 }
 
-async function gh(exec: Exec, cwd: string, args: string[]): Promise<string> {
+export async function gh(exec: Exec, cwd: string, args: string[]): Promise<string> {
   let result: ExecResult;
   try {
     result = await exec("gh", args, { cwd, timeout: TIMEOUT_MS });
