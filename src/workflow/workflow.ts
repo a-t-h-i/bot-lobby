@@ -49,6 +49,7 @@ import { assessReconnaissance, completionBlockers, decideReviewLoop, recordDecis
 import { detectSharedFiles, summarizeOutcomes } from "../master/synthesis.ts";
 import { tail, truncate } from "../text.ts";
 import { isAutoMode } from "../state/auto.ts";
+import { briefRejection } from "./brief.ts";
 import { assertNoPendingApprovals, pendingApprovals, requestApproval, resolveApproval } from "./approvals.ts";
 import { pingApproval } from "../pi/notify.ts";
 import { describeRun, runLogEntry } from "../pi/run-summary.ts";
@@ -877,6 +878,8 @@ async function handleImplement(task: Task, params: OrchestrateParams, deps: Work
   }
   if (!starting) requireState(task, ["planning", "implementing", "reviewing"]);
   const assignments = parseAssignments(params);
+  const short = !deps.config.workflow.briefCheck ? [] : assignments.map((entry) => briefRejection(task.id, entry.domain, entry.instruction)).filter(Boolean);
+  if (short.length > 0) throw new Error(short.join("\n"));
   for (const { domain } of assignments) assertNoPendingApprovals(task, domain);
   for (const { domain } of assignments) if (!task.domains.includes(domain)) task.domains.push(domain);
   // Under a time budget every step is given its share before any starts; a spent budget starts none.
