@@ -76,7 +76,7 @@ test("clarify without UI tells the Master to ask directly", async () => {
   const deps = makeDeps();
   withTask(deps);
   const result = await act(deps, { action: "clarify", question: "Which env?" });
-  assert.match(result.message, /No answer captured/);
+  assert.match(result.message, /did not answer.*Do not assume an answer or pick the recommended option/s);
   assert.match(result.message, /Which env\?/);
 });
 
