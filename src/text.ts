@@ -57,6 +57,9 @@ export function shortTitle(request: string, maxWords = 3): string {
   return (content.length > 0 ? content : words).slice(0, maxWords).join(" ").replace(/[:;,]+$/, "");
 }
 
+/** Words a task's name leaves out: they join the words that matter without being any of them. */
+const NAME_CONNECTORS = new Set(["and", "or", "but", "with", "without", "on", "in", "at", "of", "by", "from", "into", "so", "as", "is", "are", "be", "it", "its", "that", "this", "then", "also", "just", "some"]);
+
 /** `27-09-2026`: the local date as day-month-year, as task names carry it. */
 export function dateStamp(now: Date): string {
   return `${String(now.getDate()).padStart(2, "0")}-${String(now.getMonth() + 1).padStart(2, "0")}-${now.getFullYear()}`;
@@ -69,9 +72,10 @@ export function dateStamp(now: Date): string {
  * letters or digits.
  */
 export function nameWords(request: string, maxWords = 5, maxChars = 36): string {
-  const words = shortTitle(request, maxWords)
+  // Connectors (`and`, `on`, `with`…) say little in a name and must not fill its few slots or end it.
+  const words = shortTitle(request, maxWords * 3)
     .split(/[^\p{L}\p{N}]+/u)
-    .filter(Boolean)
+    .filter((word) => word.length > 0 && !NAME_CONNECTORS.has(word.toLowerCase()))
     .map((word) => word.charAt(0).toLocaleUpperCase() + word.slice(1))
     .slice(0, maxWords);
   const kept: string[] = [];
