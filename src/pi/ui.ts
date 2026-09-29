@@ -1,32 +1,10 @@
-import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { Key, type Component, type TUI } from "@earendil-works/pi-tui";
-import { clip } from "../width.ts";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Key } from "@earendil-works/pi-tui";
 import type { AgentRun } from "../schemas/findings.ts";
-import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
+import type { Task } from "../schemas/task.ts";
 import { activeTask } from "../state/persistence.ts";
 import { detectProjectRoot } from "../state/project.ts";
-import {
-  advanceExpression,
-  anyPlaying,
-  createExpression,
-  expressionPhase,
-  FAST_TICK_MS,
-  ORACLE_GAP,
-  SLOT_GAP,
-  talkFrame,
-  triggerEmote,
-  WORKING_BLINK_CHANCE,
-  WORKING_GAP,
-  type ExpressionGap,
-  type ExpressionState,
-} from "./expressions.ts";
-import { ORACLE_THINKING } from "./activity.ts";
-import { SLOT_IDS, type SlotId } from "./mascot-art.ts";
-import { slotSituations } from "./zen-metrics.ts";
-import type { Situation } from "./kaomoji.ts";
-import { isQuiet, isSubagentProcess, toggleQuiet } from "./quiet.ts";
-import { panelLines, type ExpressionFrames, type OracleMotion } from "./zen.ts";
-import { budgetClock } from "../state/budget.ts";
+import { isSubagentProcess, isQuiet, toggleQuiet } from "./quiet.ts";
 
 export const STATUS_KEY = "bot-lobby";
 
@@ -44,44 +22,14 @@ export function statusText(task: Task | undefined, minimized = false): string {
   return `bot-lobby ${task.id} · ${task.paused ? `${task.state} (paused)` : task.state} · ${mode}`;
 }
 
-let zenOn = false;
-
 /**
- * Widget state. `live` holds the runs reported in this session; `runs` is what the
- * panel draws: the task's persisted worker records overlaid by the live copies,
- * so the checklist replays after a reload. `version` bumps on every change and
- * keys the widget's render cache.
+ * The session's task state. `live` holds the runs reported in this session;
+ * `runs` is the task's persisted worker records overlaid by the live copies,
+ * so the checklist replays after a reload.
  */
 let zenState: { task: Task | undefined; live: AgentRun[]; runs: AgentRun[] } = { task: undefined, live: [], runs: [] };
-/** Where the widget's task lives, so its time budget can be read. */
-let zenPaths: { root: string; configDir: string } | undefined;
-let zenVersion = 0;
 
-/** Latest master tool activity; the oracle's speech bubble shows it. */
-let oracleActivity: string | undefined;
-
-/** The mounted widget, so run and activity updates can repaint without waiting a tick. */
-let mountedWidget: { refresh(): void } | undefined;
-
-function touch(): void {
-  zenVersion += 1;
-  mountedWidget?.refresh();
-}
-
-/** Record the master's current activity word (see events.ts); undefined means it waits on the user. */
-export function setOracleActivity(activity: string | undefined, now = Date.now()): void {
-  if (activity === oracleActivity) return;
-  oracleActivity = activity;
-  // The oracle speaks when it names something new, including handing you the turn;
-  // quietly going back to "thinking" between tool calls is not worth a word.
-  if (activity !== ORACLE_THINKING) oracleSpokeAt = now;
-  touch();
-}
-
-/** When the oracle last said something new; its mouth lip-syncs for `TALK_MS` after. */
-let oracleSpokeAt: number | undefined;
-
-/** Upper bound on retained runs so a long task cannot grow the widget state without limit. */
+/** Upper bound on retained runs so a long task cannot grow the task state without limit. */
 export const MAX_RETAINED_RUNS = 128;
 
 /**
@@ -123,10 +71,9 @@ function slim(runs: readonly AgentRun[]): AgentRun[] {
 
 function setZenState(task: Task | undefined, live: AgentRun[]): void {
   zenState = { task, live, runs: mergeRuns(persistedRuns(task), live) };
-  touch();
 }
 
-/** Per-session standard-pi mode: the widget and Master prompt are hidden but ownership stays. */
+/** Per-session standard-pi mode: the Master prompt is hidden but ownership stays. */
 let minimized = false;
 
 export function isMinimized(): boolean {
@@ -153,191 +100,8 @@ export function toggleMinimized(ctx: ExtensionContext, configDir: string): void 
   ctx.ui.notify(minimized ? "bot-lobby minimized — ctrl+shift+m or /bot-lobby restore to return" : "bot-lobby restored", "info");
 }
 
-export const LIVE_TICK_MS = 250;
-export const IDLE_TICK_MS = 1000;
-
-/** Fast frames while an agent works or the task is live; slow frames when it is quiet. */
-function isLive(): boolean {
-  if (zenState.runs.some((run) => run.status === "running")) return true;
-  const task = zenState.task;
-  return Boolean(task && !TERMINAL_STATES.includes(task.state) && !task.paused);
-}
-
-/** Tick delay for the zen clock: fastest while an expression plays or the oracle talks, so no step is skipped. */
-export function expressionTickDelay(states: readonly ExpressionState[], now: number, live: boolean, talking = false): number {
-  if (talking || anyPlaying(states, now)) return FAST_TICK_MS;
-  return live ? LIVE_TICK_MS : IDLE_TICK_MS;
-}
-
-/** Every sprite with its own expression schedule. */
-type ExpressionKey = keyof ExpressionFrames;
-const EXPRESSION_KEYS: readonly ExpressionKey[] = [...SLOT_IDS, "oracle"];
-
-/** The oracle keeps its own schedule; working agents are livelier than idle ones. */
-function gapFor(key: ExpressionKey, situations?: Record<SlotId, Situation>): ExpressionGap {
-  if (key === "oracle") return ORACLE_GAP;
-  return situations?.[key].status === "working" ? WORKING_GAP : SLOT_GAP;
-}
-
-function blinkChanceFor(key: ExpressionKey, situations?: Record<SlotId, Situation>): number | undefined {
-  return key !== "oracle" && situations?.[key].status === "working" ? WORKING_BLINK_CHANCE : undefined;
-}
-
-/** A compact fingerprint of what a slot is going through; a change may earn a reaction. */
-export function situationKey(situation: Situation): string {
-  return [situation.status, situation.flag ?? "", situation.handover ? "handover" : "", situation.wrappedUp ? "wrapped" : ""].join("|");
-}
-
 /**
- * Whether a slot's change of situation deserves an immediate emote: it started
- * work, finished, failed, got flagged (waiting, quiet, retrying) or received a
- * file. Going idle, or a flag clearing, passes quietly.
- */
-export function isReaction(previous: string | undefined, next: Situation): boolean {
-  if (previous === undefined || previous === situationKey(next)) return false;
-  if (next.status === "idle") return false;
-  if (next.status !== "working") return true;
-  return !previous.startsWith("working|") || next.flag !== undefined || next.handover === true;
-}
-
-/**
- * The animated zen scene: the tick, each sprite's expression schedule and the
- * reactions to what the agents go through. The widget and the lobby's home tab
- * each own one and advance it from their own clock.
- */
-export class ZenScene {
-  tick = 0;
-  private readonly expressions: Record<ExpressionKey, ExpressionState>;
-  private readonly situations: Partial<Record<SlotId, string>> = {};
-  private readonly rng: () => number;
-  private cache: { key: string; theme: Theme | undefined; lines: string[] } | undefined;
-
-  constructor(rng: () => number = Math.random, now = Date.now()) {
-    this.rng = rng;
-    const entries = EXPRESSION_KEYS.map((key) => [key, createExpression(now, rng, gapFor(key))] as const);
-    this.expressions = Object.fromEntries(entries) as Record<ExpressionKey, ExpressionState>;
-  }
-
-  /** One clock step: expressions advance and agents react to their new situations. */
-  advance(now = Date.now()): void {
-    this.tick += 1;
-    const situations = slotSituations(zenState.runs, now);
-    for (const key of EXPRESSION_KEYS) {
-      this.expressions[key] = advanceExpression(this.expressions[key], now, this.rng, gapFor(key, situations), blinkChanceFor(key, situations));
-    }
-    for (const id of SLOT_IDS) {
-      const situation = situations[id];
-      if (isReaction(this.situations[id], situation)) this.expressions[id] = triggerEmote(now, this.rng, gapFor(id, situations));
-      this.situations[id] = situationKey(situation);
-    }
-  }
-
-  /** The delay until the next step: fast while an expression plays or the oracle talks. */
-  delay(now = Date.now()): number {
-    return expressionTickDelay(Object.values(this.expressions), now, isLive(), talkFrame(oracleSpokeAt, now) !== undefined);
-  }
-
-  private motion(now: number): OracleMotion {
-    return { phase: expressionPhase(this.expressions.oracle, now), talk: talkFrame(oracleSpokeAt, now) };
-  }
-
-  /**
-   * The scene lines for the current zen state. They only change with the tick,
-   * an expression frame, the widget state or the elapsed second, so any other
-   * repaint (typing, streaming output) reuses the last lines.
-   */
-  lines(width: number, rows: number, theme: Theme | undefined, now = Date.now(), still = false): string[] {
-    const expressions = Object.fromEntries(EXPRESSION_KEYS.map((key) => [key, this.expressions[key].frame])) as Partial<Record<ExpressionKey, number>>;
-    const variants = Object.fromEntries(SLOT_IDS.map((id) => [id, this.expressions[id].variant])) as Partial<Record<SlotId, number>>;
-    const quiet = isQuiet();
-    const frameKey = [...EXPRESSION_KEYS.map((key) => expressions[key] ?? 0), ...SLOT_IDS.map((id) => variants[id] ?? 0)].join(",");
-    const motion = this.motion(now);
-    const key = `${width}|${rows}|${this.tick}|${frameKey}|${motion.phase}|${motion.talk}|${zenVersion}|${Math.floor(now / 1000)}|${quiet}|${still}`;
-    if (this.cache && this.cache.key === key && this.cache.theme === theme) return this.cache.lines;
-    const time = zenState.task && zenPaths ? budgetClock(zenPaths.root, zenPaths.configDir, zenState.task.id, now) : undefined;
-    const opts = { width, rows, tick: this.tick, theme, expressions, variants, oracleActivity, oracleMotion: motion, still, ...(time ? { time } : {}) };
-    const lines = panelLines(zenState.task, zenState.runs, now, quiet, opts).map((line) => clip(line, width));
-    this.cache = { key, theme, lines };
-    return lines;
-  }
-
-  invalidate(): void {
-    this.cache = undefined;
-  }
-}
-
-/** The zen state as the lobby reads it: the session's active task and its runs. */
-export function zenSnapshot(): { task: Task | undefined; runs: readonly AgentRun[]; version: number; oracleActivity: string | undefined } {
-  return { task: zenState.task, runs: zenState.runs, version: zenVersion, oracleActivity };
-}
-
-/** Zen scene + plan checklist shown above the editor while a task is active and the lobby is closed. */
-class ZenWidget implements Component {
-  private readonly scene: ZenScene;
-  private readonly timer: ReturnType<typeof setInterval>;
-  private disposed = false;
-  private readonly tui: TUI;
-  private readonly theme: () => Theme;
-
-  constructor(tui: TUI, theme: () => Theme, rng: () => number = Math.random) {
-    this.tui = tui;
-    this.theme = theme;
-    this.scene = new ZenScene(rng);
-    // Nothing animates: a repaint each second keeps the elapsed time and spinner current.
-    this.timer = setInterval(() => this.advance(), 1000);
-    mountedWidget = this;
-  }
-
-  /** Repaint now: state changed between ticks. */
-  refresh(): void {
-    if (!this.disposed) this.tui.requestRender();
-  }
-
-  private advance(): void {
-    if (this.disposed) return;
-    this.scene.tick += 1;
-    this.tui.requestRender();
-  }
-
-  render(width: number): string[] {
-    return this.scene.lines(width, this.tui.terminal.rows, this.theme(), Date.now(), true);
-  }
-
-  invalidate(): void {
-    this.scene.invalidate();
-  }
-
-  dispose(): void {
-    this.disposed = true;
-    clearInterval(this.timer);
-    if (mountedWidget === this) mountedWidget = undefined;
-  }
-}
-
-/** True while the full-screen lobby is showing; the small widget then stays unmounted. */
-let widgetSuppressed: () => boolean = () => false;
-let widgetMounted = false;
-
-/** The lobby registers how to tell whether it covers the screen. */
-export function setWidgetSuppressor(check: () => boolean): void {
-  widgetSuppressed = check;
-}
-
-function unmountWidget(ctx: ExtensionContext): void {
-  if (!widgetMounted) return;
-  widgetMounted = false;
-  ctx.ui.setWidget(STATUS_KEY, undefined);
-}
-
-function leaveZen(ctx: ExtensionContext): void {
-  if (!zenOn) return;
-  zenOn = false;
-  ctx.ui.setWorkingVisible(true);
-  ctx.ui.setWorkingIndicator();
-}
-
-/**
- * Refresh the footer + widget to match the task on disk. Runs are merged into the
+ * Refresh the footer to match the task on disk. Runs are merged into the
  * retained set for the same task because each `orchestrate` call reports only its
  * own agents: without retention the qa/reviewer call that follows the workers would
  * evict their successes and the checklist would reset. A new task starts clean.
@@ -345,28 +109,12 @@ function leaveZen(ctx: ExtensionContext): void {
 export function applyStatus(ctx: ExtensionContext, root: string, configDir: string, runs: AgentRun[] = []): void {
   const sessionId = ctx.sessionManager.getSessionId();
   const task = isSubagentProcess() || minimized ? undefined : activeTask(root, configDir, sessionId);
-  zenPaths = { root, configDir };
   const sameTask = zenState.task?.id === task?.id;
   setZenState(task, mergeRuns(sameTask ? zenState.live : [], slim(runs)));
   ctx.ui.setStatus(STATUS_KEY, statusText(task, minimized));
-  const active = Boolean(task && !TERMINAL_STATES.includes(task.state));
-  if (!active) {
-    leaveZen(ctx);
-    widgetMounted = false;
-    ctx.ui.setWidget(STATUS_KEY, undefined);
-    return;
-  }
-  zenOn = true;
-  ctx.ui.setWorkingVisible(false);
-  ctx.ui.setWorkingIndicator({ frames: [] });
-  if (widgetSuppressed()) return unmountWidget(ctx);
-  if (!widgetMounted) {
-    widgetMounted = true;
-    ctx.ui.setWidget(STATUS_KEY, (tui) => new ZenWidget(tui, () => ctx.ui.theme));
-  }
 }
 
-/** The session's active task as the widget last loaded it (undefined when none or minimized). */
+/** The session's active task as last loaded (undefined when none or minimized). */
 export function currentZenTask(): Task | undefined {
   return zenState.task;
 }
@@ -382,7 +130,7 @@ export function onRunUpdates(listener: ((runs: readonly AgentRun[]) => void) | u
  * Streamed run updates (start, every activity change, finish) from an in-flight
  * `orchestrate` call. The task on disk does not change mid-call, so this only
  * merges the runs and repaints; `applyStatus` rereads the task once the call ends.
- * Before any task is loaded it falls back to `applyStatus` so the widget appears.
+ * Before any task is loaded it falls back to `applyStatus` so the status appears.
  */
 export function reportRuns(ctx: ExtensionContext, root: string, configDir: string, runs: AgentRun[]): void {
   runListener?.(runs);
@@ -394,12 +142,8 @@ export function reportRuns(ctx: ExtensionContext, root: string, configDir: strin
 }
 
 export function clearStatus(ctx: ExtensionContext): void {
-  leaveZen(ctx);
-  widgetMounted = false;
-  oracleActivity = undefined;
   zenState = { task: undefined, live: [], runs: [] };
   ctx.ui.setStatus(STATUS_KEY, undefined);
-  ctx.ui.setWidget(STATUS_KEY, undefined);
 }
 
 /** Register `alt+t`, the reveal-on-demand toggle for built-in tool rows. */
@@ -410,7 +154,7 @@ export function registerRevealShortcut(pi: ExtensionAPI, configDir: string): voi
     handler: (ctx) => revealTools(ctx, configDir),
   });
   pi.registerShortcut(Key.ctrlShift("m"), {
-    description: "bot-lobby: minimize or restore the widget for this session",
+    description: "bot-lobby: minimize or restore bot-lobby for this session",
     handler: (ctx) => toggleMinimized(ctx, configDir),
   });
 }
@@ -427,4 +171,9 @@ function revealTools(ctx: ExtensionContext, configDir: string): void {
       : "bot-lobby: tool rows shown from now on — ctrl+o expands, alt+t hides",
     "info",
   );
+}
+
+/** The session's active task and its runs, as the lobby reads them. */
+export function taskSnapshot(): { task: Task | undefined; runs: readonly AgentRun[] } {
+  return { task: zenState.task, runs: zenState.runs };
 }
