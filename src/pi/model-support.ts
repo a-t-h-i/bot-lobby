@@ -8,6 +8,7 @@ import {
   type PanelMember,
   THINKING_LEVELS,
   type BotLobbyConfig,
+  type FallbackProfile,
   type ProfileResolver,
   type SubagentKind,
   type ThinkingLevelName,
@@ -86,11 +87,25 @@ export function createProfileResolver(config: BotLobbyConfig, options: ResolverO
         options.warn?.(message);
       }
     }
-    return { ...profile, model, thinking: check.level };
+    return { ...profile, model, thinking: check.level, ...clampedFallback(profile.fallback, kindLabel(profile.kind as SubagentKind), options) };
   };
 }
 
-type RunProfile = { model?: string; thinking: string; timeoutMs: number; instructions?: string };
+/** The fallback with its thinking level clamped to what the fallback model supports. */
+function clampedFallback(fallback: FallbackProfile | undefined, label: string, options: ResolverOptions): { fallback?: FallbackProfile } {
+  if (!fallback) return {};
+  const check = checkThinking(options.lookup(fallback.model), fallback.thinking);
+  if (check.warning) {
+    const message = `bot-lobby: ${label} fallback — ${check.warning}. Change it in /bot-lobby settings.`;
+    if (!warned.has(message)) {
+      warned.add(message);
+      options.warn?.(message);
+    }
+  }
+  return { fallback: { model: fallback.model, thinking: check.level } };
+}
+
+type RunProfile = { model?: string; thinking: string; timeoutMs: number; instructions?: string; fallback?: FallbackProfile };
 
 /** Unset models run on the session's; thinking is clamped to the model, with a one-time warning. */
 function resolveRunProfile(profile: RunProfile, label: string, options: ResolverOptions): RunProfile {
@@ -103,7 +118,7 @@ function resolveRunProfile(profile: RunProfile, label: string, options: Resolver
       options.warn?.(message);
     }
   }
-  return { ...profile, model, thinking: check.level };
+  return { ...profile, model, thinking: check.level, ...clampedFallback(profile.fallback, label, options) };
 }
 
 /** A lobby agent's model, thinking and time limit. */
