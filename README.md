@@ -273,6 +273,10 @@ Rebind any key under `lobby.keys` in the config.
 Pi session. The Lobby tab can show any session, and your prompt steers it;
 `● waiting` in the tab bar means one has a question for you.
 
+**Agents at work.** The bottom line of the lobby shows the subagents running
+right now at its right end (`◐ DESIGN editing 2m · DEV 40s`, a running quick
+fix too), shrinking to names and then a count when the keys leave little room.
+
 **Paging.** A pane with more lines than rows shows page buttons on its bottom
 edge, `▲▲ ▲ ▼ ▼▼`: click one to scroll a page up or down (`▲▲` and `▼▼` go two
 pages). The wheel, the arrows and PageUp/PageDown still work. It applies to
