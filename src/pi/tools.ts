@@ -123,7 +123,8 @@ export function workflowDeps(
     triage: (request, triageSignal) => triageFor({ cwd: ctx.cwd, root, configDir }, request, triageSignal),
     effort: effortFor((model, thinking) => checkThinking(modelLookup(ctx)(model), thinking).level),
     // Time spent waiting on the user is not the task's: its budget clock waits too.
-    ask: async (question) => (hasUI ? whileAsking(() => ctx.ui.input(question)) : undefined),
+    // A free-text answer may run to several lines (Shift+Enter), so it is asked in the multi-line editor.
+    ask: async (question) => (hasUI ? whileAsking(() => ctx.ui.editor(question)) : undefined),
     choose: async (title, options) => (hasUI ? whileAsking(() => ctx.ui.select(title, options)) : undefined),
     // An agent's own questions (the designer's), relayed as the questionnaire.
     ...(hasUI ? { askQuestions: (questions: AskQuestion[], from: string, askSignal?: AbortSignal) => whileAsking(() => askUser(questions, ctx, askSignal, from)) } : {}),

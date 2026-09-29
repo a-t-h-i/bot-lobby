@@ -55,6 +55,18 @@ export type LobbyAgentKind = "quickfix" | "planner";
 /** Settings kinds a workflow run (domain + role) can draw from. */
 export type WorkflowProfileKind = Domain | "scout" | "researcher";
 
+/**
+ * Whether a new task gets a git branch of its own (`branch`: created and
+ * checked out in the working folder) or a worktree of its own (`worktree`: a
+ * second checkout every agent of the task runs in), named after the task.
+ */
+export const GIT_ISOLATIONS = ["off", "branch", "worktree"] as const;
+export type GitIsolation = (typeof GIT_ISOLATIONS)[number];
+
+export function isGitIsolation(value: unknown): value is GitIsolation {
+  return typeof value === "string" && (GIT_ISOLATIONS as readonly string[]).includes(value);
+}
+
 export interface WorkflowConfig {
   maxReviewIterations: number;
   maxParallelScouts: number;
@@ -82,6 +94,8 @@ export interface WorkflowConfig {
   briefCheck: boolean;
   /** A new request that one agent can do alone goes to the quick-fix agent once the oracle confirms; false makes every request a task. */
   routeQuickFixes: boolean;
+  /** A new task gets a git branch or worktree of its own, named after it; `--branch` and `--worktree` decide for one task. */
+  gitIsolation: GitIsolation;
 }
 
 export interface KnowledgeConfig {
@@ -224,6 +238,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     fastTrack: true,
     briefCheck: true,
     routeQuickFixes: true,
+    gitIsolation: "off",
   },
   knowledge: {
     compactionThreshold: 20000,
@@ -370,6 +385,7 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
   workflow.fastTrack = workflow.fastTrack !== false;
   workflow.briefCheck = workflow.briefCheck !== false;
   workflow.routeQuickFixes = workflow.routeQuickFixes !== false;
+  workflow.gitIsolation = isGitIsolation(workflow.gitIsolation) ? workflow.gitIsolation : DEFAULT_CONFIG.workflow.gitIsolation;
   workflow.taskBudgetMinutes = typeof workflow.taskBudgetMinutes === "number" && workflow.taskBudgetMinutes > 0 ? Math.min(24 * 60, Math.round(workflow.taskBudgetMinutes)) : 0;
   const knowledge = { ...DEFAULT_CONFIG.knowledge, ...(src.knowledge as Partial<KnowledgeConfig> | undefined) };
   const srcAgents = (src.agents ?? {}) as Partial<BotLobbyConfig["agents"]>;

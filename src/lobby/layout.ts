@@ -91,6 +91,9 @@ export function wrapHanging(lead: string, text: string, width: number): string[]
   return body.map((line, index) => `${index === 0 ? lead : " ".repeat(indent)}${line}`);
 }
 
+/** The mark before a git branch name, in the lobby's title and a task's details. */
+export const BRANCH_GLYPH = "⎇";
+
 /** `── Title ───────` spanning `width`; `right` sits at the far end when it fits. */
 export function rule(width: number, title = "", theme?: LobbyTheme, right = "", color: LobbyColor = "borderMuted"): string {
   if (width <= 0) return "";
