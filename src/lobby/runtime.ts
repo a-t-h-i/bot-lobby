@@ -34,7 +34,7 @@ import { classifier, effortFor, hintsFor } from "../classifier/instance.ts";
 import { checkThinking } from "../pi/model-support.ts";
 import { launchPi, SessionRegistry, type BackgroundSession, type SessionLauncher } from "./sessions.ts";
 import { SessionChats } from "./session-files.ts";
-import { answerMessage, askUser, questionnaires, type Asker } from "./ask.ts";
+import { answerMessage, askUser, questionnaires, settledQuestions, type Asker } from "./ask.ts";
 import { jobTitle, QuickFixQueue } from "./quickfix.ts";
 import { miniLine, type MiniInput } from "./mini.ts";
 import { PlanningSession, type PlannerSeed } from "./planner.ts";
@@ -514,7 +514,7 @@ export async function answerPanel(state: Runtime | undefined = runtime): Promise
       session.answered = [];
       return "nothing was answered — the questions stay open";
     }
-    void session.send(message);
+    void session.send(message, settledQuestions(session.questions, session.answered));
     return "answers sent — the panel is on the next round";
   } catch (error) {
     return `could not put the questions: ${(error as Error).message}`;
