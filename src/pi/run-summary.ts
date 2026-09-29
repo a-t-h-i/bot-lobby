@@ -6,16 +6,25 @@
 import type { AgentRun } from "../schemas/findings.ts";
 import type { RunLogEntry } from "../schemas/task.ts";
 import { shortDuration } from "../text.ts";
-import { SLOT_LABELS, type SlotId } from "./mascot-art.ts";
 
-/** The zen column a run belongs to; a researcher reports under RESEARCH from any domain. */
+export type SlotId = "dev" | "design" | "research" | "qa";
+
+/** Uppercase agent names. */
+const SLOT_LABELS: Record<SlotId, string> = {
+  dev: "DEV",
+  design: "DESIGN",
+  research: "RESEARCH",
+  qa: "QA",
+};
+
+/** The agent slot a run belongs to; a researcher reports under RESEARCH from any domain. */
 export function slotOf(run: Pick<AgentRun, "domain" | "role">): SlotId {
   if (run.role === "researcher") return "research";
   if (run.domain === "backend") return "dev";
   return run.domain === "designer" ? "design" : "qa";
 }
 
-/** Upper-case agent name as the scene shows it (DEV, DESIGN, RESEARCH, QA). */
+/** Upper-case agent name (DEV, DESIGN, RESEARCH, QA). */
 export function agentName(run: Pick<AgentRun, "domain" | "role">): string {
   return SLOT_LABELS[slotOf(run)];
 }
