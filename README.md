@@ -322,7 +322,10 @@ can be compared by looking at them.
 
 `↑↓` move · `enter` choose · `space` pick several (multi-select) · `1`–`4`
 pick · `←→` between questions · the last row takes an answer in your own words
-· `esc` puts the questions away (what you answered is kept). Editor hosts that
+· `esc` asks whether to leave (a second `enter`
+leaves, anything else keeps you answering), so a stray press does nothing.
+Questions you leave are never answered for you: the oracle waits and asks again
+when you next write, and the designer asks again before it may decide. Editor hosts that
 run Pi in RPC mode get the same questions through Pi's own dialogs.
 
 **Images.** An option can also carry an `image`: a PNG, JPEG, GIF or WebP
