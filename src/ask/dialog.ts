@@ -9,7 +9,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, type Component, type TUI } from "@earendil-works/pi-tui";
 import type { LobbyTheme } from "../lobby/layout.ts";
 import { lobbyTheme } from "../lobby/theme.ts";
-import { initialState, step, type AskKey, type AskState } from "./state.ts";
+import { initialState, putAway, step, type AskKey, type AskState } from "./state.ts";
 import { renderAsk, type AskFrame } from "./view.ts";
 import { loadImages } from "./image.ts";
 import { isAbsolute, resolve } from "node:path";
@@ -68,7 +68,9 @@ export class AskDialog implements Component {
 
   /** Put the questions away from outside (the turn was aborted). */
   cancel(): void {
-    if (!this.state.result) this.handleInput("\x1b");
+    if (this.state.result) return;
+    this.state = putAway(this.state);
+    this.done(this.state.result!);
   }
 
   render(width: number): string[] {
