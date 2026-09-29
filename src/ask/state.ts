@@ -38,8 +38,15 @@ export interface AskState {
   /** Writing the own answer of the question in view. */
   editing: boolean;
   draft: string;
+  /** Esc was pressed: asked whether to leave without answering; enter leaves, any other key keeps answering. */
+  leaving?: boolean;
   /** Set once the user submits or puts the questions away. */
   result?: AskResult;
+}
+
+/** The questions put away, with what was answered so far (also when something outside ends them). */
+export function putAway(state: AskState): AskState {
+  return { ...state, editing: false, draft: "", leaving: false, result: { answers: answersOf(state), cancelled: true } };
 }
 
 export function initialState(questions: readonly AskQuestion[]): AskState {
@@ -127,6 +134,8 @@ function typing(state: AskState, key: AskKey): AskState {
 /** One key press. */
 export function step(state: AskState, key: AskKey): AskState {
   if (state.result) return state;
+  // Esc asks first: leaving the questions unanswered lets the oracle carry on without you, so it takes a second key.
+  if (state.leaving) return key.type === "enter" || (key.type === "text" && key.value.toLowerCase() === "y") ? putAway(state) : { ...state, leaving: false };
   if (state.editing) return typing(state, key);
   const question = state.questions[state.tab];
   if (!question) return { ...state, result: { answers: [], cancelled: false } };
@@ -153,7 +162,7 @@ export function step(state: AskState, key: AskKey): AskState {
       return advance(state);
     }
     case "escape":
-      return { ...state, result: { answers: answersOf(state), cancelled: true } };
+      return { ...state, leaving: true };
     default:
       return state;
   }
