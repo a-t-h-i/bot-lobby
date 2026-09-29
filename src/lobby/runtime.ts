@@ -35,7 +35,8 @@ import { checkThinking } from "../pi/model-support.ts";
 import { launchPi, SessionRegistry, type BackgroundSession, type SessionLauncher } from "./sessions.ts";
 import { SessionChats } from "./session-files.ts";
 import { answerMessage, askUser, questionnaires, type Asker } from "./ask.ts";
-import { QuickFixQueue } from "./quickfix.ts";
+import { jobTitle, QuickFixQueue } from "./quickfix.ts";
+import { miniLine, type MiniInput } from "./mini.ts";
 import { PlanningSession, type PlannerSeed } from "./planner.ts";
 import { execCommand, IssuesState } from "./issues.ts";
 import { LobbyView, type LiveSession, type LobbyHost, type SwitchTarget, type TabId } from "./view.ts";
@@ -94,16 +95,37 @@ let frameTimer: ReturnType<typeof setTimeout> | undefined;
  * through pi.
  */
 function rerender(): void {
-  if (!runtime?.visible || frameTimer) return;
+  // Hidden, only the one-line status under the editor changes.
+  if (!runtime || (!runtime.visible && !miniShown(runtime)) || frameTimer) return;
   const wait = lastFrame + FRAME_MS - Date.now();
   const paint = () => {
     frameTimer = undefined;
     lastFrame = Date.now();
-    if (runtime?.visible) runtime.tui?.requestRender();
+    if (runtime?.visible || (runtime && miniShown(runtime))) runtime.tui?.requestRender();
   };
   if (wait <= 0) return paint();
   frameTimer = setTimeout(paint, wait);
   frameTimer.unref?.();
+}
+
+/** The status line shows under the editor while the lobby is hidden (not while bot-lobby is minimized), unless settings turn it off. */
+function miniShown(state: Runtime): boolean {
+  return !state.visible && !isMinimized() && loadConfig().lobby.miniLine;
+}
+
+/** What the status line shows: the task, the planning round, the quick fix in hand. */
+function miniInput(state: Runtime): MiniInput {
+  const snapshot = taskSnapshot();
+  const planner = state.planner;
+  const job = state.quickfix.running ?? state.quickfix.jobs.find((entry) => entry.status === "queued");
+  const queued = state.quickfix.jobs.filter((entry) => entry.status === "queued" && entry !== job).length;
+  return {
+    ...(snapshot.task ? { task: snapshot.task } : {}),
+    runs: snapshot.runs,
+    ...(planner ? { planning: { busy: planner.busy, round: planner.turns, limit: loadConfig().lobby.maxPlanningRounds, questions: planner.awaitingAnswers ? planner.questions.length : 0, ready: planner.reply?.status === "ready", saved: Boolean(planner.saved) } } : {}),
+    ...(job ? { quickfix: { title: jobTitle(job), running: job.status === "running", queued } } : {}),
+    key: "Alt+L",
+  };
 }
 
 function sessionModel(ctx: ExtensionContext): string | undefined {
@@ -769,7 +791,8 @@ export function initLobby(pi: ExtensionAPI, ctx: ExtensionContext, configDir: st
   // Capture pi's TUI through a zero-line widget below the editor.
   ctx.ui.setWidget(ANCHOR_KEY, (tui) => {
     state.tui = tui;
-    return { render: () => [], invalidate: () => {} };
+    // Zero lines while the lobby is up (or bot-lobby is minimized); one status line when it is hidden.
+    return { render: (width: number) => (miniShown(state) ? [miniLine(miniInput(state), width, lobbyTheme(state.ctx.ui.theme))] : []), invalidate: () => {} };
   }, { placement: "belowEditor" });
   // The owner's clock (pi/owner.ts) delivers comments and messages and drives auto mode; the lobby logs what it did.
   onOwnerEvent((event) => {
