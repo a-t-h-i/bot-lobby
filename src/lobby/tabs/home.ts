@@ -1,9 +1,8 @@
 /**
- * The Lobby tab: the zen scene of this session's task on top (the oracle
- * and agent animations, or just their status when animations are off), then the
+ * The Lobby tab: the status of this session's task on top, then the
  * conversation with the oracle (text only, no tool rows, no thinking), the
  * activity log of plain-words steps from every agent, and the one place where
- * thoughts show up. Pure: the scene arrives as a callback, the clock as `now`.
+ * thoughts show up. Pure: the clock arrives as `now`.
  */
 import { textWidth } from "../../width.ts";
 import type { Task } from "../../schemas/task.ts";
@@ -18,8 +17,6 @@ export type HomePane = (typeof HOME_PANES)[number];
 
 export interface HomeInput {
   task?: Task;
-  /** Draws the zen scene into at most `height` lines, animated or still; absent when no task is active. */
-  scene?: (width: number, height: number, animated: boolean) => string[];
   chat: readonly ChatEntry[];
   /** The oracle's reply while it streams. */
   liveReply?: string;
@@ -48,8 +45,6 @@ export interface HomeInput {
   keys?: Record<LobbyPanel, string>;
   /** Another session is shown: its name titles the conversation. */
   title?: string;
-  /** The scene is another session's still status (no animations to toggle). */
-  stillScene?: boolean;
   /** What the empty conversation says instead of the default (a session starting, say). */
   emptyNote?: string;
   /** What the empty activity log says instead of "No activity yet.". */
@@ -60,11 +55,6 @@ export interface HomeInput {
 
 /** Wide terminals put the conversation and the activity log side by side. */
 export const HOME_COLUMNS_MIN = 100;
-/** Most lines the scene may take, and its share of the body; the still status needs far fewer. */
-const SCENE_SHARE = 0.45;
-const MAX_SCENE = 36;
-const MAX_STILL = 10;
-
 const SOURCE_COLORS: Record<string, LobbyColor> = {
   MASTER: "accent",
   DEV: "success",
@@ -490,31 +480,6 @@ function thinkingContent(input: HomeInput, thoughts: readonly ThoughtEntry[], wi
   return whole([paint(theme, "dim", input.query ? `No thought matches "${input.query}".` : "Thoughts from the oracle and every agent appear here, and only here.")]);
 }
 
-/**
- * The scene: with animations off (the `animations` panel, off by default)
- * only the task's status box, what the agents are doing and the checklist;
- * with them on, the animated oracle and agents too. Its first line names the
- * key that toggles the animations.
- */
-function sceneLines(input: HomeInput, width: number, height: number, theme?: LobbyTheme): string[] {
-  if (!input.task || !input.scene) return [];
-  const animated = input.panels.animations && !input.stillScene;
-  const budget = Math.min(animated ? MAX_SCENE : MAX_STILL, Math.floor(height * SCENE_SHARE));
-  if (budget < (animated ? 6 : 4)) return [];
-  const lines = input.scene(width, budget, animated).slice(0, budget);
-  const note = input.keys && !input.stillScene ? `${input.keys.animations} ${animated ? "hides" : "shows"} animations` : undefined;
-  return keyNote(lines, width, note, theme);
-}
-
-/** `note` at the right end of the first line, dimmed, when it fits beside what is there. */
-function keyNote(lines: readonly string[], width: number, note: string | undefined, theme?: LobbyTheme): string[] {
-  const first = lines[0];
-  if (!note || first === undefined) return [...lines];
-  const gap = width - textWidth(first) - textWidth(note) - 1;
-  if (gap < 2) return [...lines];
-  return [`${first}${" ".repeat(gap)}${paint(theme, "dim", note)}`, ...lines.slice(1)];
-}
-
 function hiddenHint(input: HomeInput, width: number, height: number, theme?: LobbyTheme): string[] {
   const keys = input.keys;
   const text = keys
@@ -536,12 +501,11 @@ export function renderHome(input: HomeInput, width: number, height: number, them
   if (height <= 0) return [];
   const { panels } = input;
   const feed = filterFeed(input);
-  const scene = sceneLines(input, width, height, theme);
-  const rest = height - scene.length;
+  const rest = height;
   const showMain = panels.conversation || panels.activity;
   const thinkHeight = !panels.thinking ? 0 : !showMain ? rest : rest >= 18 ? Math.max(5, Math.floor(rest * 0.25)) : rest >= 10 ? 4 : 0;
   const main = rest - thinkHeight;
-  if (!showMain && !panels.thinking) return fill([...scene, ...hiddenHint(input, width, rest, theme)], height, width);
+  if (!showMain && !panels.thinking) return fill(hiddenHint(input, width, rest, theme), height, width);
   const matches = (count: number) => `${count} match${count === 1 ? "" : "es"}`;
   /**
    * One scrollable pane: only the lines it shows are drawn — its newest, or
@@ -563,7 +527,7 @@ export function renderHome(input: HomeInput, width: number, height: number, them
   const thought = currentThought(feed.thoughts);
   const thinkingNote = thought ? `${thought.source} · ${thought.live ? "thinking" : since(input.now - thought.at)}` : input.keys?.thinking;
   const thinkingBox = pane("thinking", "Thinking", thinkingNote, (inner, need, anchor) => thinkingContent(input, feed.thoughts, inner, need, anchor, theme));
-  const top = scene.length;
+  const top = 0;
   let body: string[] = [];
   if (main > 0 && panels.conversation && panels.activity) {
     if (width >= HOME_COLUMNS_MIN) {
@@ -576,5 +540,5 @@ export function renderHome(input: HomeInput, width: number, height: number, them
   } else if (main > 0 && panels.conversation) body = chatBox(top, 0, width, main);
   else if (main > 0 && panels.activity) body = activityBox(top, 0, width, main);
   const think = thinkHeight >= 3 ? thinkingBox(top + main, 0, width, thinkHeight) : [];
-  return fill([...scene, ...fill(body, main), ...think], height, width);
+  return fill([...fill(body, main), ...think], height, width);
 }

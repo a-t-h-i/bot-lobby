@@ -83,7 +83,17 @@ export class AskDialog implements Component {
  * cannot draw the questionnaire. Without any UI nobody can answer: the
  * result says the questions were put away.
  */
-export const askUser: Asker = async (questions, ctx, signal, from) => {
+export const askUser: Asker = (questions, ctx, signal, from) => {
+  // A model may call the tool several times in one turn; pi runs them in parallel, and overlays opened together hide each other. One at a time.
+  const next = asking.then(() => (signal?.aborted ? { answers: [], cancelled: true } : askNow(questions, ctx, signal, from)));
+  asking = next.then(() => undefined, () => undefined);
+  return next;
+};
+
+/** Tail of the questions waiting their turn. */
+let asking: Promise<void> = Promise.resolve();
+
+const askNow: Asker = async (questions, ctx, signal, from) => {
   if (!ctx.hasUI || questions.length === 0) return { answers: [], cancelled: true };
   if ((ctx as { mode?: string }).mode === "rpc") return dialogAsker(questions, ctx, signal, from);
   // Option images are read before the questionnaire opens, so drawing it never waits on the disk.

@@ -2,7 +2,7 @@
  * What the lobby narrates: an activity log of plain-words tool steps from the
  * Master and every subagent, a single place for thoughts, and the conversation
  * with the Master stripped of tool rows and thinking. Bounded ring buffers in
- * one module-level store (like the zen widget state), so every event source can
+ * one module-level store (like the task state in ui.ts), so every event source can
  * write without a reference to the lobby, and the lobby repaints on `version`.
  */
 import type { AgentRun } from "../schemas/findings.ts";

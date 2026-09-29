@@ -180,21 +180,18 @@ test("the key map has a default for every action, takes overrides and matches ke
 });
 
 test("the lobby config reads panes, keys, the Issues tab, questionnaires and the mouse", () => {
-  assert.deepEqual(DEFAULT_CONFIG.lobby.panels, { animations: false, conversation: true, activity: true, thinking: true }, "the lobby starts without the animations");
+  assert.deepEqual(DEFAULT_CONFIG.lobby.panels, { conversation: true, activity: true, thinking: true });
   assert.equal(DEFAULT_CONFIG.lobby.issues, false, "Issues is off by default");
   assert.equal(DEFAULT_CONFIG.lobby.autoAsk, true);
   assert.equal(DEFAULT_CONFIG.lobby.mouse, true);
   const config = resolveConfig({ lobby: { panels: { thinking: false, activity: "no", bogus: false }, keys: { toggleThinking: "alt+t", help: 3, search: " " }, issues: true, autoAsk: false, mouse: false } });
-  assert.deepEqual(config.lobby.panels, { animations: false, conversation: true, activity: true, thinking: false });
-  const legacy = resolveConfig({ lobby: { panels: { scene: true, conversation: true } } });
-  assert.equal(legacy.lobby.panels.animations, false, "the old scene switch, saved on by default, no longer turns the animations on");
-  assert.equal(resolveConfig({ lobby: { panels: { animations: true } } }).lobby.panels.animations, true, "turning them on is remembered");
+  assert.deepEqual(config.lobby.panels, { conversation: true, activity: true, thinking: false });
   assert.deepEqual(config.lobby.keys, { toggleThinking: "alt+t" });
   assert.deepEqual([config.lobby.issues, config.lobby.autoAsk, config.lobby.mouse], [true, false, false]);
 });
 
 test("the settings menu flips each lobby switch", () => {
-  assert.deepEqual(LOBBY_SWITCHES.map((entry) => entry.id), ["autoOpen", "autoAsk", "mouse", "issues", "panel:animations", "panel:conversation", "panel:activity", "panel:thinking"]);
+  assert.deepEqual(LOBBY_SWITCHES.map((entry) => entry.id), ["autoOpen", "autoAsk", "mouse", "issues", "panel:conversation", "panel:activity", "panel:thinking"]);
   const off = toggleLobbySwitch(DEFAULT_CONFIG, "panel:activity");
   assert.equal(lobbySwitch(off, "panel:activity"), false);
   assert.equal(off.lobby.panels.thinking, true);
