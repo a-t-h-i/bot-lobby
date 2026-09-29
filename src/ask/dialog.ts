@@ -6,7 +6,7 @@
  * select and input dialogs, which those hosts do forward.
  */
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Key, matchesKey, type Component, type TUI } from "@earendil-works/pi-tui";
+import { getKeybindings, Key, matchesKey, type Component, type TUI } from "@earendil-works/pi-tui";
 import type { LobbyTheme } from "../lobby/layout.ts";
 import { lobbyTheme } from "../lobby/theme.ts";
 import { initialState, putAway, step, type AskKey, type AskState } from "./state.ts";
@@ -25,8 +25,22 @@ export type Asker = (questions: readonly AskQuestion[], ctx: ExtensionContext, s
 /** Share of the terminal the overlay may take. */
 const OVERLAY_HEIGHT = 0.9;
 
+/** Shift+Enter, Ctrl+J and the sequences terminals send for them: a new line, as in the lobby's prompt. */
+function isNewline(data: string): boolean {
+  return getKeybindings().matches(data, "tui.input.newLine") || data === "\n" || data === "\x1b\r" || data === "\x1b[13;2~";
+}
+
+/** Text the terminal pasted arrives wrapped in bracketed-paste markers. */
+const PASTE = /^\x1b\[200~([\s\S]*)\x1b\[201~$/;
+
 /** A key press as the questionnaire reads it; undefined for keys it ignores. */
 export function readKey(data: string): AskKey | undefined {
+  const paste = PASTE.exec(data);
+  if (paste) {
+    const text = [...paste[1]!].filter((char) => (char >= " " && char !== "\x7f") || char === "\n" || char === "\r" || char === "\t").join("");
+    return text ? { type: "text", value: text } : undefined;
+  }
+  if (isNewline(data)) return { type: "newline" };
   if (matchesKey(data, Key.up)) return { type: "up" };
   if (matchesKey(data, Key.down)) return { type: "down" };
   if (matchesKey(data, Key.left) || matchesKey(data, Key.shift("tab"))) return { type: "left" };
@@ -36,7 +50,7 @@ export function readKey(data: string): AskKey | undefined {
   if (matchesKey(data, Key.backspace)) return { type: "backspace" };
   if (data === " ") return { type: "space" };
   if (/^[1-9]$/.test(data)) return { type: "digit", value: Number(data) };
-  // Typed or pasted text: anything printable (control sequences are dropped).
+  // Typed text: anything printable (control sequences are dropped).
   const text = [...data].filter((char) => char >= " " && char !== "\x7f").join("");
   if (text && !data.startsWith("\x1b")) return { type: "text", value: text };
   return undefined;
@@ -140,7 +154,7 @@ function dialogTitle(question: AskQuestion, index: number, total: number, from?:
   return [`${from ? `${from} asks · ` : ""}${question.header} · ${index + 1}/${total}`, question.question, ...details].join("\n\n");
 }
 
-/** The same questions through pi's select and input dialogs: pick, type an answer, or skip; esc stops. */
+/** The same questions through pi's select and editor dialogs: pick, type an answer (Shift+Enter for a new line), or skip; esc stops. */
 export const dialogAsker: Asker = async (questions, ctx, _signal, from) => {
   const answers: AskAnswer[] = [];
   for (const [index, question] of questions.entries()) {
@@ -153,7 +167,7 @@ export const dialogAsker: Asker = async (questions, ctx, _signal, from) => {
         if (choice === undefined) return { answers, cancelled: true };
         if (choice === DONE || choice === SKIP) break;
         if (choice === TYPE_ANSWER) {
-          const typed = await ctx.ui.input(question.question, "your answer");
+          const typed = await ctx.ui.editor(question.question, "");
           if (typed === undefined) return { answers, cancelled: true };
           if (typed.trim()) selected.push(typed.trim());
           break;
@@ -168,7 +182,7 @@ export const dialogAsker: Asker = async (questions, ctx, _signal, from) => {
     if (choice === undefined) return { answers, cancelled: true };
     if (choice === SKIP) continue;
     if (choice === TYPE_ANSWER) {
-      const typed = await ctx.ui.input(question.question, "your answer");
+      const typed = await ctx.ui.editor(question.question, "");
       if (typed === undefined) return { answers, cancelled: true };
       if (typed.trim()) answers.push({ questionIndex: index, question: question.question, kind: "custom", answer: typed.trim() });
       continue;

@@ -61,6 +61,7 @@ import { answerClarify } from "../classifier/triage.ts";
 import { appendMetrics, metricFromRun } from "../state/metrics.ts";
 import { markCommentsAddressed, pendingComments, readPlanComments } from "../state/comments.ts";
 import { fastNext, onFastTrack, parseRoster, qaRequired, qaStillDue, qaTookPart, rosterWords, trackSummary } from "./track.ts";
+import { missingWorktree, taskCwd } from "../execution/workspace.ts";
 
 export const ORCHESTRATE_ACTIONS = [
   "clarify",
@@ -1680,9 +1681,13 @@ export async function runWorkflowAction(params: OrchestrateParams, deps: Workflo
   if (!handler) {
     return { ok: false, taskId: task.id, state: task.state, message: `Unknown action "${params.action}".` };
   }
+  const gone = missingWorktree(task);
+  if (gone && params.action !== "status") return { ok: false, taskId: task.id, state: task.state, message: `Rejected: ${gone}` };
   const finished = new Map<string, AgentRun>();
   const tracked: WorkflowDeps = {
     ...deps,
+    // Every agent, diff and desk of a task with its own worktree works there.
+    cwd: taskCwd(task, deps.cwd),
     onUpdate: (run) => {
       if (run.status !== "running") finished.set(run.runId, run);
       deps.onUpdate?.(run);

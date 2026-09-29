@@ -7,6 +7,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Container, type Component, type Focusable, fuzzyFilter, getKeybindings, Input, type SelectItem, SelectList, Text } from "@earendil-works/pi-tui";
 import {
+  GIT_ISOLATIONS,
   JEV_HOSTS,
   INHERIT_MODEL,
   isThinkingLevel,
@@ -17,6 +18,7 @@ import {
   type AgentModelConfig,
   type BotLobbyConfig,
   type ClassifierFeature,
+  type GitIsolation,
   type JevHostName,
   type LobbyPanel,
   type SubagentKind,
@@ -490,6 +492,24 @@ export const CLASSIFIER_FEATURE_ITEMS: ReadonlyArray<{ id: ClassifierFeature; la
   { id: "files", label: "File hints", help: "scouts, workers, quick fixes and the planning panel start with the files most likely needed, and can look more up with find_relevant_files" },
 ];
 
+/** What each git isolation means, for the settings menu. */
+const GIT_ISOLATION_HELP: Record<GitIsolation, string> = {
+  off: "tasks work in the folder you started them in",
+  branch: "each new task gets a git branch named after it, checked out in the working folder",
+  worktree: "each new task gets its own worktree and branch, named after it: every agent runs there, apart from your checkout",
+};
+
+/** The next git isolation in the menu's cycle (off, branch, worktree). */
+export function nextGitIsolation(current: GitIsolation): GitIsolation {
+  return GIT_ISOLATIONS[(GIT_ISOLATIONS.indexOf(current) + 1) % GIT_ISOLATIONS.length]!;
+}
+
+/** `branch · each new task gets…`, for the settings menu; `--branch`, `--worktree` and `--no-branch` decide for one task. */
+export function gitSummary(config: BotLobbyConfig): string {
+  const isolation = config.workflow.gitIsolation;
+  return `${isolation} · ${GIT_ISOLATION_HELP[isolation]} · enter cycles ${GIT_ISOLATIONS.join(", ")}`;
+}
+
 /** The next Jev host in the menu's cycle. */
 export function nextJevHost(current: JevHostName): JevHostName {
   return JEV_HOSTS[(JEV_HOSTS.indexOf(current) + 1) % JEV_HOSTS.length]!;
@@ -605,12 +625,14 @@ export async function openSettings(pi: ExtensionAPI, ctx: ExtensionContext): Pro
   for (;;) {
     const config = loadConfig();
     const items: SelectItem[] = SETTINGS_KINDS.map((kind) => ({ value: kind, label: kindLabel(kind), description: entryDescription(kind, entryView(config, kind)) }));
+    items.push({ value: "git", label: "Git isolation", description: gitSummary(config) });
     items.push({ value: "lobby", label: "Lobby", description: lobbySummary(config) });
     items.push({ value: "classifier", label: "Classifier (Jev)", description: classifierSummary(config, authStatus(ctx)) });
     items.push({ value: "close", label: "Close" });
     const choice = await pick(ctx, "bot-lobby settings", items);
     if (!choice || choice === "close") return;
-    if (choice === "lobby") await editLobby(ctx);
+    if (choice === "git") saveConfig({ ...config, workflow: { ...config.workflow, gitIsolation: nextGitIsolation(config.workflow.gitIsolation) } });
+    else if (choice === "lobby") await editLobby(ctx);
     else if (choice === "classifier") await editClassifier(ctx);
     else await editEntry(pi, ctx, choice as SettingsKind);
   }

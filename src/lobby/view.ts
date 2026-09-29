@@ -24,12 +24,13 @@ import { MEMBER_LABELS, ORACLE_LABEL, type PlannerSeed, type PlanningSession } f
 import { issueText, type IssuesState } from "./issues.ts";
 import { agentsIndicator, workingAgents } from "./mini.ts";
 import { actionFor, keyLabel, keyMap, LOBBY_ACTIONS, type KeyMap, type LobbyAction } from "./keys.ts";
-import { beside, bold, box, fit, highlight, pagerButton, paint, rule, selectRow, spinner, spread, windowStart, wrap, wrapHanging, type LobbyTheme, type PaneBox, type PaneLayout, type PaneMark } from "./layout.ts";
+import { beside, BRANCH_GLYPH, bold, box, fit, highlight, pagerButton, paint, rule, selectRow, spinner, spread, windowStart, wrap, wrapHanging, type LobbyTheme, type PaneBox, type PaneLayout, type PaneMark } from "./layout.ts";
 import { chatTail, HOME_PANES, renderHome, type HomePane } from "./tabs/home.ts";
 import { filterRows, pips, planDetailLines, renderTasks, taskDetailLines, taskProgress, taskRows, tasksWidths, type TaskRow } from "./tabs/tasks.ts";
 import { renderPlan, type PlanLayout, type PlanView, type SeatView } from "./tabs/plan.ts";
 import { filterJobs, newestFirst, renderQuickFix } from "./tabs/quickfix.ts";
 import { renderIssues } from "./tabs/issues.ts";
+import type { WorkspaceInfo } from "../execution/workspace.ts";
 import { filterRecords, renderMetrics } from "./tabs/metrics.ts";
 
 export const TAB_IDS = ["lobby", "tasks", "plan", "quickfix", "issues", "metrics"] as const;
@@ -197,6 +198,10 @@ export interface LobbyHost {
   /** A session's whole conversation, oldest first: this window's (no id) or another's; loaded only while scrolled back to it. */
   chatHistory(sessionId?: string): readonly ChatEntry[];
   profileLabel(kind: LobbyAgentKind): string;
+  /** The repository (or folder) and branch the title shows; the folder's name alone until git has answered. */
+  workspace?(): WorkspaceInfo;
+  /** Ask for the workspace to be read again (the branch may have changed); it arrives through `workspace()`. */
+  refreshWorkspace?(): void;
   requestRender(): void;
   now?(): number;
 }
@@ -209,6 +214,10 @@ export const DATA_REFRESH_MS = 2000;
 const NOTICE_MS = 6000;
 /** Lines one wheel notch scrolls. */
 const WHEEL_LINES = 3;
+/** The longest repository and branch names the title shows whole. */
+export { BRANCH_GLYPH };
+const TITLE_NAME_MAX = 28;
+const TITLE_BRANCH_MAX = 36;
 
 /** The prompt editor, with its target written into the top border. */
 class LobbyEditor extends Editor {
@@ -433,6 +442,7 @@ export class LobbyView implements Component, Focusable {
     const now = this.now();
     if (!force && now - this.data.at < DATA_REFRESH_MS) return;
     this.dataVersion += 1;
+    this.host.refreshWorkspace?.();
     this.data = {
       tasks: this.host.tasks(),
       plans: this.host.plans(),
@@ -1802,22 +1812,24 @@ export class LobbyView implements Component, Focusable {
     else if (session?.awaitingAnswers) badges.plan = `${session.questions.length}?`;
     if (this.host.quickfix.running) badges.quickfix = spinner(this.tick);
     if (this.issuesOn && this.host.issues.issues.length > 0) badges.issues = String(this.host.issues.issues.length);
-    const brand = bold(theme, paint(theme, "accent", " ◆ bot-lobby "));
-    let left = `${brand}${paint(theme, "borderMuted", "│")}`;
-    const spans: Array<{ tab: TabId; from: number; to: number }> = [];
-    for (const [index, tab] of this.tabs().entries()) {
+    const cells = this.tabs().map((tab, index) => {
       const number = paint(theme, tab === this.tab ? "accent" : "dim", String(index + 1));
       const name = tab === this.tab ? bold(theme, paint(theme, "text", TAB_LABELS[tab])) : paint(theme, "muted", TAB_LABELS[tab]);
       const badge = badges[tab] ? ` ${paint(theme, tab === "plan" && session?.awaitingAnswers ? "warning" : "accent", badges[tab]!)}` : "";
-      let cell = ` ${number} ${name}${badge} `;
-      if (tab === this.tab) cell = theme.bg ? theme.bg("selectedBg", cell) : `[${cell}]`;
+      const cell = ` ${number} ${name}${badge} `;
+      return { tab, text: tab === this.tab ? (theme.bg ? theme.bg("selectedBg", cell) : `[${cell}]`) : cell };
+    });
+    const entry = this.viewedEntry();
+    const brand = this.brand(entry.task, width - cells.reduce((sum, cell) => sum + textWidth(cell.text), 0) - 1, theme);
+    let left = `${brand}${paint(theme, "borderMuted", "│")}`;
+    const spans: Array<{ tab: TabId; from: number; to: number }> = [];
+    for (const cell of cells) {
       const from = textWidth(left);
-      left += cell;
-      spans.push({ tab, from, to: textWidth(left) });
+      left += cell.text;
+      spans.push({ tab: cell.tab, from, to: textWidth(left) });
     }
     this.tabSpans = spans;
     const room = width - textWidth(left) - 1;
-    const entry = this.viewedEntry();
     const help = paint(theme, "dim", `${keyLabel(this.keys.help)} keys `);
     const auto = entry.auto ? ` ${bold(theme, paint(theme, "success", "⟳ AUTO"))}` : "";
     const waiting = this.host.sessions().reduce((count, session) => count + session.dialogs.length, 0);
@@ -1840,6 +1852,27 @@ export class LobbyView implements Component, Focusable {
     const status = choices.find((choice) => textWidth(choice) <= room) ?? "";
     const gap = width - textWidth(left) - textWidth(status);
     return gap >= 1 ? `${left}${" ".repeat(gap)}${status}` : fit(left, width);
+  }
+
+  /**
+   * The lobby's title: the repository (or folder) it works from and the
+   * branch, `◆ my-repo (⎇ main)`. A task with a worktree of its own shows that
+   * branch, since that is where its work happens. The name and branch give way
+   * (branch first) when the tabs leave little room.
+   */
+  private brand(task: Task | undefined, room: number, theme: LobbyTheme): string {
+    const workspace = this.host.workspace?.();
+    const name = clip(workspace?.name || "bot-lobby", TITLE_NAME_MAX);
+    const own = task?.git?.mode === "worktree" ? task.git.branch : undefined;
+    const branch = own ?? workspace?.branch;
+    const glyph = paint(theme, "accent", " ◆ ");
+    const label = (text: string) => bold(theme, paint(theme, "accent", text));
+    const variants = [
+      ...(branch ? [`${glyph}${label(name)} ${paint(theme, "muted", `(${BRANCH_GLYPH} ${clip(branch, TITLE_BRANCH_MAX)})`)} `] : []),
+      `${glyph}${label(name)} `,
+      glyph,
+    ];
+    return variants.find((variant) => textWidth(variant) <= room) ?? variants.at(-1)!;
   }
 
   private promptLabel(): string {

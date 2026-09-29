@@ -65,10 +65,13 @@ function optionLines(state: AskState, question: AskQuestion, width: number, them
   const lead = `${pointer} ${paint(theme, own ? "accent" : "dim", "✎")}    `;
   const room = Math.max(1, width - textWidth(lead));
   if (state.editing) {
-    const draft = wrap(`${state.draft}▏`, room);
+    // Each line of the answer wraps on its own, so Shift+Enter shows as a new row.
+    const draft = `${state.draft}▏`.split("\n").flatMap((line) => (line ? wrap(line, room) : [""]));
     lines.push(`${lead}${paint(theme, "accent", draft[0] ?? "")}`, ...draft.slice(1).map((line) => `${" ".repeat(textWidth(lead))}${paint(theme, "accent", line)}`));
   } else {
-    lines.push(`${lead}${own ? paint(theme, "accent", `“${own}”`) : paint(theme, ownFocused ? "text" : "dim", OWN_ANSWER)}`);
+    // A several-line answer shows on one row, its line breaks marked.
+    const shown = own?.replace(/\s*\n\s*/g, " ⏎ ");
+    lines.push(`${lead}${shown ? paint(theme, "accent", `“${shown}”`) : paint(theme, ownFocused ? "text" : "dim", OWN_ANSWER)}`);
   }
   return lines;
 }
@@ -114,7 +117,7 @@ function previewBox(preview: Preview, width: number, rows: number, theme: LobbyT
 function hints(state: AskState, question: AskQuestion, width: number, theme?: LobbyTheme): string[] {
   if (state.leaving) return wrap(paint(theme, "warning", "Leave without answering? The oracle will not guess for you. enter leaves · any other key keeps answering"), width);
   const parts = state.editing
-    ? ["enter keep it", "esc back to the options"]
+    ? ["enter keep it", "shift+enter new line", "esc back to the options"]
     : [
         "↑↓ move",
         question.multiSelect ? "space pick · enter next" : "enter choose",

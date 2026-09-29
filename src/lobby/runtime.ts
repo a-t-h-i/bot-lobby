@@ -22,6 +22,9 @@ import { appendMetrics, readClassifierMetrics, readMetrics, type MetricStatus } 
 import { describeToolCall } from "../pi/activity.ts";
 import { applyStatus, currentZenTask, isMinimized, onMinimizeChange, onRunUpdates, setMinimized, taskSnapshot } from "../pi/ui.ts";
 import { taskName } from "../text.ts";
+import { describeWorkspace, type WorkspaceInfo } from "../execution/workspace.ts";
+import { basename } from "node:path";
+import { stripStartFlags } from "../pi/start-flags.ts";
 import { isSubagentProcess } from "../pi/quiet.ts";
 import { modelRef, resolveLobbyProfile, resolvePanelProfile } from "../pi/model-support.ts";
 import { modelLookup } from "../pi/tools.ts";
@@ -70,6 +73,9 @@ interface Runtime {
   mouse: boolean;
   /** Settings opened from the lobby are on screen; the lobby stays aside until they close. */
   inSettings: boolean;
+  /** The repository (or folder) and branch the lobby's title shows, and whether git is being asked now. */
+  workspace: WorkspaceInfo;
+  readingWorkspace: boolean;
 }
 
 let runtime: Runtime | undefined;
@@ -265,7 +271,8 @@ function startSession(state: Runtime, start: { request?: string; plan?: PlannedT
     const starting = backgroundSessions().find((session) => session.alive && session.planId === plan.id);
     if (starting) return `${plan.id} is already starting in ${starting.name}`;
   }
-  const name = taskName(plan?.title ?? request!);
+  // A request may lead with flags (`--worktree add login`); the session is named after what follows them.
+  const name = taskName(plan?.title ?? (stripStartFlags(request!) || request!));
   try {
     const session = sessionRegistry().start(state.ctx.cwd, { name, ...(plan ? { planId: plan.id } : { request: request! }), ...(start.auto ? { auto: true } : {}) }, sessionModel(state.ctx));
     lobbyFeed.log("LOBBY", `started "${name}" in a new session`, "success");
@@ -524,6 +531,22 @@ export async function answerPanel(state: Runtime | undefined = runtime): Promise
   }
 }
 
+/** Read the repository name and branch again, off the render path; the title repaints when they changed. */
+function refreshWorkspace(state: Runtime): void {
+  if (state.readingWorkspace) return;
+  state.readingWorkspace = true;
+  describeWorkspace(state.ctx.cwd)
+    .then((info) => {
+      if (runtime !== state || (info.name === state.workspace.name && info.branch === state.workspace.branch)) return;
+      state.workspace = info;
+      rerender();
+    })
+    .catch(() => {})
+    .finally(() => {
+      state.readingWorkspace = false;
+    });
+}
+
 function host(state: Runtime, tui: TUI): LobbyHost {
   return {
     rows: () => tui.terminal.rows,
@@ -566,6 +589,8 @@ function host(state: Runtime, tui: TUI): LobbyHost {
       const profile = lobbyProfile(state, kind);
       return `${profile.model ?? "session model"} · ${profile.thinking}`;
     },
+    workspace: () => state.workspace,
+    refreshWorkspace: () => refreshWorkspace(state),
     sessionName: () => state.pi.getSessionName(),
     sessions: () => backgroundSessions(),
     startSession: (start) => startSession(state, start),
@@ -759,6 +784,8 @@ export function initLobby(pi: ExtensionAPI, ctx: ExtensionContext, configDir: st
     asking: false,
     mouse: false,
     inSettings: false,
+    workspace: { name: basename(ctx.cwd) || ctx.cwd },
+    readingWorkspace: false,
     quickfix: undefined as unknown as QuickFixQueue,
     issues: new IssuesState(execCommand, ctx.cwd, rerender),
   };

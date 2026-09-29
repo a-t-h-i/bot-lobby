@@ -85,6 +85,39 @@ test("keys from the terminal: arrows, enter, esc, digits, space, and typed or pa
   assert.equal(readKey("\x1b[15~"), undefined, "other control sequences are ignored");
 });
 
+test("shift+enter starts a new line in your own answer; enter keeps the whole answer", () => {
+  for (const data of ["\x1b[13;2u", "\x1b[27;2;13~", "\n", "\x1b\r", "\x1b[13;2~"]) {
+    assert.deepEqual(readKey(data), { type: "newline" }, `${JSON.stringify(data)} is a new line, not an enter`);
+  }
+  assert.deepEqual(readKey("\r"), { type: "enter" }, "plain enter still keeps the answer");
+  const typing = keys(initialState([auth]), "up", "enter");
+  const written = keys(typing, { type: "text", value: "first" }, "newline", { type: "text", value: "second" }, "newline", { type: "text", value: "third" });
+  assert.equal(written.draft, "first\nsecond\nthird");
+  assert.equal(written.editing, true, "a new line does not keep the answer");
+  assert.deepEqual(keys(written, "enter").result?.answers, [{ questionIndex: 0, question: auth.question, kind: "custom", answer: "first\nsecond\nthird" }]);
+  assert.equal(keys(initialState([auth]), "newline").draft, "", "outside the own-answer row a new line does nothing");
+});
+
+test("pasted text keeps its lines in your own answer; other terminal sequences stay ignored", () => {
+  assert.deepEqual(readKey("\x1b[200~line one\r\nline two\ttabbed\x1b[201~"), { type: "text", value: "line one\r\nline two\ttabbed" });
+  assert.equal(readKey("\x1b[200~\x1b[201~"), undefined, "an empty paste is nothing");
+  assert.deepEqual(readKey("\x1b[200~a\x1b[31mb\x1b[201~"), { type: "text", value: "a[31mb" }, "escape bytes inside a paste are dropped");
+  const typing = keys(initialState([auth]), "up", "enter");
+  assert.equal(keys(typing, { type: "text", value: "a\r\nb\rc\td" }).draft, "a\nb\nc  d");
+});
+
+test("a several-line own answer draws as several rows while typing and on one row once kept", () => {
+  const typing = keys(initialState([auth]), "up", "enter", { type: "text", value: "first line" }, "newline", { type: "text", value: "second" });
+  const drawn = text(renderAsk(typing, 100, 30, theme));
+  assert.match(drawn, /✎ +first line +│\n│ +second▏ +│/, "each line of the answer is a row of its own");
+  assert.match(drawn, /shift\+enter new line/);
+  const kept = text(renderAsk(keys(typing, "enter"), 100, 30, theme));
+  assert.match(kept, /“first line ⏎ second”/);
+  // The model reads every line under the arrow.
+  const summary = answerSummary([auth], { cancelled: false, answers: [{ questionIndex: 0, question: auth.question, kind: "custom", answer: "first line\nsecond" }] });
+  assert.match(summary, /→ first line\n {5}second \(in the user's own words\)/);
+});
+
 const tag = (name: string) => (text: string) => `<${name}>${text}</${name}>`;
 const plain: MarkdownTheme = { heading: tag("h"), link: (t) => t, linkUrl: (t) => t, code: tag("code"), codeBlock: (t) => t, codeBlockBorder: (t) => t, quote: (t) => t, quoteBorder: (t) => t, hr: (t) => t, listBullet: (t) => t, bold: tag("b"), italic: tag("i"), strikethrough: (t) => t, underline: (t) => t };
 const theme: LobbyTheme = { fg: (_color, text) => text, bold: (text) => text, markdown: createMarkdownRenderer(plain) };
