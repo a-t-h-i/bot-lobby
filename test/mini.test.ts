@@ -48,3 +48,15 @@ test("the line never exceeds its width", () => {
   for (const width of [12, 30, 60, 100, 200]) assert.ok(visibleWidth(miniLine(input, width)) <= width, `width ${width}`);
   assert.equal(miniLine(input, 5), "");
 });
+
+test("the working agents indicator lists who is busy and gives up detail as the room shrinks", async () => {
+  const { agentsIndicator, workingAgents } = await import("../src/lobby/mini.ts");
+  const now = Date.parse("2026-09-29T10:03:00.000Z");
+  const agents = workingAgents([worker("a", "x", "running", { activity: "editing" }), worker("b", "y", "success"), { ...worker("c", "z", "running"), domain: "backend" }], { startedAt: now - 30_000 });
+  assert.deepEqual(agents.map((agent) => agent.name), ["DESIGN", "DEV", "QUICK FIX"]);
+  assert.equal(plain(agentsIndicator(agents, now, "◐", 80)), "◐ DESIGN editing 2m · DEV 2m · QUICK FIX 30s");
+  assert.equal(plain(agentsIndicator(agents, now, "◐", 30)), "◐ DESIGN · DEV · QUICK FIX");
+  assert.equal(plain(agentsIndicator(agents, now, "◐", 20)), "◐ 3 agents working");
+  assert.equal(agentsIndicator(agents, now, "◐", 8), "");
+  assert.equal(agentsIndicator([], now, "◐", 80), "");
+});

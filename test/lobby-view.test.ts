@@ -11,6 +11,7 @@ import { QuickFixQueue } from "../src/lobby/quickfix.ts";
 import { IssuesState, type Exec } from "../src/lobby/issues.ts";
 import { PlanningSession, type PlannerSeed } from "../src/lobby/planner.ts";
 import { createTask, type Task } from "../src/schemas/task.ts";
+import type { AgentRun } from "../src/schemas/findings.ts";
 import { listPlannedTasks, type PlannedTask } from "../src/state/backlog.ts";
 import type { PlanComment } from "../src/state/comments.ts";
 import type { MetricRecord } from "../src/state/metrics.ts";
@@ -88,6 +89,8 @@ interface ViewOptions {
   /** Whole conversations served when scrolled back: this window's under "", others' by session id. */
   history?: Record<string, ChatEntry[]>;
   archivedTasks?: Task[];
+  /** The task's runs, as streamed. */
+  runs?: AgentRun[];
 }
 
 function makeView(options: ViewOptions = {}) {
@@ -108,7 +111,7 @@ function makeView(options: ViewOptions = {}) {
     rows: () => rows,
     theme: () => ({ fg: (_color, text) => text, bold: (text) => text }),
     sessionId: () => "me",
-    zen: () => ({ ...(options.task ? { task: options.task } : {}), runs: [] }),
+    zen: () => ({ ...(options.task ? { task: options.task } : {}), runs: options.runs ?? [] }),
     feed,
     masterBusy: () => options.busy === true,
     tasks: () => taskList,
@@ -1408,4 +1411,16 @@ test("the buttons on a scrolling pane's bottom edge scroll it a page or two, and
   assert.equal(newest(), true);
   assert.equal(view.homeFocus, "activity", "using a pane's buttons gives it the keys");
   void rows;
+});
+
+test("the bottom line shows the subagents at work at its right end, and nothing when none is", () => {
+  const run = (id: string, domain: "designer" | "backend", status: AgentRun["status"], activity?: string): AgentRun => ({ runId: id, taskId: "TASK-login", domain, role: "worker", status, instruction: "x", output: "", attempts: 1, startedAt: new Date(NOW - 130_000).toISOString(), ...(activity ? { activity } : {}) });
+  const busy = makeView({ task: activeTask(), runs: [run("a", "designer", "running", "editing"), run("b", "backend", "running"), run("c", "backend", "success")] });
+  const last = busy.view.render(140).at(-1)!;
+  assert.match(last, /TYPE.*enter/, "the keys stay on the left");
+  assert.match(last.trimEnd(), /DESIGN editing 2m · DEV 2m$/, "each running agent, its activity and time; finished ones are left out");
+  const narrow = busy.view.render(60).at(-1)!;
+  assert.ok(visibleWidth(narrow) <= 60);
+  const idle = makeView({ task: activeTask(), runs: [run("c", "backend", "success")] });
+  assert.ok(!/DEV|agents? working/.test(idle.view.render(140).at(-1)!), "nothing shows when no agent is working");
 });
