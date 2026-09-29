@@ -18,6 +18,8 @@ import { setAutoMode } from "../src/state/auto.ts";
 import { askedDecision, runWorkflowAction, type OrchestrateParams, type WorkflowDeps } from "../src/workflow/workflow.ts";
 import type { ProcessOutcome, ProcessRunner, ProcessRunOptions } from "../src/execution/pi-runner.ts";
 
+const LENIENT = { ...DEFAULT_CONFIG, workflow: { ...DEFAULT_CONFIG.workflow, briefCheck: false } };
+
 const layout: AskQuestion = { question: "Which layout?", header: "Layout", options: [{ label: "Sidebar (Recommended)", preview: "┌──┬────┐\n│  │    │\n└──┴────┘", image: "shots/sidebar.png" }, { label: "Top bar" }] };
 const picked: AskResult = { cancelled: false, answers: [{ questionIndex: 0, question: layout.question, kind: "option", answer: "Sidebar (Recommended)" }] };
 
@@ -104,7 +106,7 @@ function asking(seen: Seen[], before?: () => void): ProcessRunner {
 
 function project(overrides: Partial<WorkflowDeps> = {}, seen: Seen[] = [], before?: () => void) {
   const root = mkdtempSync(join(tmpdir(), "dh-relay-"));
-  const deps: WorkflowDeps = { root, configDir: ".pi", cwd: root, config: DEFAULT_CONFIG, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess: asking(seen, before), ...overrides };
+  const deps: WorkflowDeps = { root, configDir: ".pi", cwd: root, config: LENIENT, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess: asking(seen, before), ...overrides };
   ensureProjectStructure(root, ".pi");
   const task: Task = createTask("TASK-1", "A page");
   createTaskDir(root, ".pi", task);

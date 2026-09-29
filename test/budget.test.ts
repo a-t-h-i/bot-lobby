@@ -32,6 +32,8 @@ import { runWorkflowAction, type OrchestrateParams, type WorkflowDeps } from "..
 import type { ProcessOutcome, ProcessRunner, ProcessRunOptions } from "../src/execution/pi-runner.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
 
+const LENIENT = { ...DEFAULT_CONFIG, workflow: { ...DEFAULT_CONFIG.workflow, briefCheck: false } };
+
 const MINUTE = 60_000;
 
 test("time budgets read the way people write them", () => {
@@ -154,7 +156,7 @@ function budgeted(options: { minutes?: number; used?: number; choose?: WorkflowD
   const seen: Seen = { prompts: [], times: [] };
   const titles: string[] = [];
   const deps: WorkflowDeps = {
-    root, configDir: ".pi", cwd: root, config: DEFAULT_CONFIG,
+    root, configDir: ".pi", cwd: root, config: LENIENT,
     ask: options.ask ?? (async () => undefined),
     choose: async (title, choices) => (titles.push(title), options.choose ? options.choose(title, choices) : undefined),
     notify: () => {},
@@ -261,7 +263,7 @@ test("a task without a budget runs exactly as before", async () => {
   task.domains = ["backend"];
   task.plan = PLAN;
   saveTask(root, ".pi", task);
-  const deps: WorkflowDeps = { root, configDir: ".pi", cwd: root, config: DEFAULT_CONFIG, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess: outOfTime(seen) };
+  const deps: WorkflowDeps = { root, configDir: ".pi", cwd: root, config: LENIENT, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess: outOfTime(seen) };
   const result = await runWorkflowAction({ action: "implement", taskId: "TASK-1", domain: "backend", task: "Add it" } as OrchestrateParams, deps);
   assert.equal(result.ok, true, result.message);
   assert.equal(seen.times[0], undefined);
