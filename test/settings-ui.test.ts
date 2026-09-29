@@ -150,7 +150,7 @@ test("render shows the no-match text for a zero-match query", () => {
 
 // --- profiles: scouts have fixed thinking, subagents never inherit a model ---
 
-import { entryItems, nextRoundLimit, patchEntry, prefillModels, roundLimitLabel, thinkingItems } from "../src/pi/settings-ui.ts";
+import { entryItems, gitSummary, nextGitIsolation, nextRoundLimit, patchEntry, prefillModels, roundLimitLabel, thinkingItems } from "../src/pi/settings-ui.ts";
 import { DEFAULT_CONFIG, resolveConfig } from "../src/schemas/configuration.ts";
 
 test("the scout entry offers model and time limit but no thinking choice", () => {
@@ -225,4 +225,11 @@ test("the planning round limit defaults to 5, keeps whole numbers (0 = unlimited
   assert.equal(nextRoundLimit(4), 5, "a hand-edited value rejoins the cycle");
   assert.equal(nextRoundLimit(12), 0);
   assert.deepEqual([1, 5, 0].map(roundLimitLabel), ["1 round", "5 rounds", "unlimited"]);
+});
+
+test("git isolation cycles off, branch, worktree in the menu and says what each does", () => {
+  assert.deepEqual(["off", "branch", "worktree"].map((value) => nextGitIsolation(value as "off")), ["branch", "worktree", "off"]);
+  assert.match(gitSummary(DEFAULT_CONFIG), /^off · tasks work in the folder you started them in · enter cycles off, branch, worktree$/);
+  const worktree = resolveConfig({ workflow: { gitIsolation: "worktree" } });
+  assert.match(gitSummary(worktree), /^worktree · each new task gets its own worktree and branch, named after it/);
 });

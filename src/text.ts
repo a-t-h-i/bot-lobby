@@ -57,6 +57,44 @@ export function shortTitle(request: string, maxWords = 3): string {
   return (content.length > 0 ? content : words).slice(0, maxWords).join(" ").replace(/[:;,]+$/, "");
 }
 
+/** Words a task's name leaves out: they join the words that matter without being any of them. */
+const NAME_CONNECTORS = new Set(["and", "or", "but", "with", "without", "on", "in", "at", "of", "by", "from", "into", "so", "as", "is", "are", "be", "it", "its", "that", "this", "then", "also", "just", "some"]);
+
+/** `27-09-2026`: the local date as day-month-year, as task names carry it. */
+export function dateStamp(now: Date): string {
+  return `${String(now.getDate()).padStart(2, "0")}-${String(now.getMonth() + 1).padStart(2, "0")}-${now.getFullYear()}`;
+}
+
+/**
+ * The first content words of a request as one name part, each capitalised and
+ * joined by dashes (`Change-Table-Font`): at most `maxWords` words and
+ * `maxChars` characters, cut between words. Empty when the request has no
+ * letters or digits.
+ */
+export function nameWords(request: string, maxWords = 5, maxChars = 36): string {
+  // Connectors (`and`, `on`, `with`…) say little in a name and must not fill its few slots or end it.
+  const words = shortTitle(request, maxWords * 3)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((word) => word.length > 0 && !NAME_CONNECTORS.has(word.toLowerCase()))
+    .map((word) => word.charAt(0).toLocaleUpperCase() + word.slice(1))
+    .slice(0, maxWords);
+  const kept: string[] = [];
+  for (const word of words) {
+    if ([...kept, word].join("-").length > maxChars && kept.length > 0) break;
+    kept.push(word);
+  }
+  return kept.join("-").slice(0, maxChars).replace(/-+$/, "");
+}
+
+/**
+ * A task's friendly name: `Task-Change-Table-Font-27-09-2026`, from its
+ * request (or title) and the day it started. It is the task's id, the name of
+ * the git branch it works on and of the session that drives it.
+ */
+export function taskName(request: string, now = new Date()): string {
+  return `Task-${nameWords(request) || "Untitled"}-${dateStamp(now)}`;
+}
+
 /** Headings that only label a section (`### Objective`), not name the work. */
 const LABEL_HEADING = /^#{1,6}\s*(objective|goal|goals|summary|overview|task|request|context|background|description|plan)\s*:?\s*$/i;
 
