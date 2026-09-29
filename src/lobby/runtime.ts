@@ -26,7 +26,7 @@ import { describeWorkspace, type WorkspaceInfo } from "../execution/workspace.ts
 import { basename } from "node:path";
 import { stripStartFlags } from "../pi/start-flags.ts";
 import { isSubagentProcess } from "../pi/quiet.ts";
-import { modelRef, resolveLobbyProfile, resolvePanelProfile } from "../pi/model-support.ts";
+import { modelRef, resolveLobbyProfile, resolvePanelProfile, resolveReviewProfile } from "../pi/model-support.ts";
 import { modelLookup } from "../pi/tools.ts";
 import { startPlannedTask } from "../pi/start-task.ts";
 import { pendingRequest, setQuickFixHandoff, startRequest } from "../pi/route.ts";
@@ -42,6 +42,8 @@ import { jobTitle, QuickFixQueue } from "./quickfix.ts";
 import { miniLine, type MiniInput } from "./mini.ts";
 import { PlanningSession, type PlannerSeed } from "./planner.ts";
 import { execCommand, IssuesState } from "./issues.ts";
+import { PullsState } from "./pulls.ts";
+import { PullReviews } from "./pr-review.ts";
 import { LobbyView, type LiveSession, type LobbyHost, type SwitchTarget, type TabId } from "./view.ts";
 import { lobbyTheme } from "./theme.ts";
 import { deliverComments, onOwnerEvent, setAuto } from "../pi/owner.ts";
@@ -64,6 +66,8 @@ interface Runtime {
   quickfix: QuickFixQueue;
   planner?: PlanningSession;
   issues: IssuesState;
+  pulls: PullsState;
+  reviews: PullReviews;
   unsubscribeFeed?: () => void;
   /** Puts the panel's questions to the user: the questionnaire unless a test sets another. */
   asker?: Asker;
@@ -452,6 +456,15 @@ function deleteTask(state: Runtime, taskId: string, where: "list" | "archive"): 
   return `deleted ${taskId} for good`;
 }
 
+/** What a pull request review runs on: QA's model, thinking and time limit. */
+function reviewProfile(state: Runtime) {
+  return resolveReviewProfile(loadConfig(), {
+    lookup: modelLookup(state.ctx),
+    sessionModel: sessionModel(state.ctx),
+    warn: (message) => state.ctx.ui.notify(message, "warning"),
+  });
+}
+
 function seatProfile(state: Runtime, member: PanelMember) {
   return resolvePanelProfile(loadConfig(), member, {
     lookup: modelLookup(state.ctx),
@@ -585,6 +598,8 @@ function host(state: Runtime, tui: TUI): LobbyHost {
       return `${profile.model ?? "session model"} · ${profile.thinking}`;
     },
     issues: state.issues,
+    pulls: state.pulls,
+    reviews: state.reviews,
     profileLabel: (kind) => {
       const profile = lobbyProfile(state, kind);
       return `${profile.model ?? "session model"} · ${profile.thinking}`;
@@ -743,6 +758,7 @@ function shutdown(): void {
   setMouse(state, false);
   state.unsubscribeFeed?.();
   state.quickfix.cancelAll();
+  state.reviews.cancelAll();
   state.planner?.cancel();
   state.view?.dispose();
   state.handle?.hide();
@@ -788,7 +804,24 @@ export function initLobby(pi: ExtensionAPI, ctx: ExtensionContext, configDir: st
     readingWorkspace: false,
     quickfix: undefined as unknown as QuickFixQueue,
     issues: new IssuesState(execCommand, ctx.cwd, rerender),
+    pulls: new PullsState(execCommand, ctx.cwd, rerender),
+    reviews: undefined as unknown as PullReviews,
   };
+  state.reviews = new PullReviews({
+    cwd: ctx.cwd,
+    root,
+    configDir,
+    exec: execCommand,
+    profile: () => reviewProfile(state),
+    stallTimeoutMs: workflow.stallTimeoutMs,
+    toolStallTimeoutMs: workflow.toolStallTimeoutMs,
+    feed: lobbyFeed,
+    onChange: rerender,
+    notify: (message, level) => {
+      if (!state.visible) ctx.ui.notify(message, level);
+    },
+    classifier: classifier(),
+  });
   state.quickfix = new QuickFixQueue({
     cwd: ctx.cwd,
     root,

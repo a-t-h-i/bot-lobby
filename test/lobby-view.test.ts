@@ -10,6 +10,9 @@ import { DEFAULT_CONFIG, type LobbyPanel, type PanelMember } from "../src/schema
 import { LobbyFeed } from "../src/lobby/feed.ts";
 import { QuickFixQueue } from "../src/lobby/quickfix.ts";
 import { IssuesState, type Exec } from "../src/lobby/issues.ts";
+import { PullsState } from "../src/lobby/pulls.ts";
+import { PullReviews } from "../src/lobby/pr-review.ts";
+import type { Classifier } from "../src/classifier/classifier.ts";
 import { PlanningSession, type PlannerSeed } from "../src/lobby/planner.ts";
 import { createTask, type Task } from "../src/schemas/task.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
@@ -94,6 +97,11 @@ interface ViewOptions {
   runs?: AgentRun[];
   /** The repository (or folder) and branch the title shows. */
   workspace?: WorkspaceInfo;
+  /** What `gh` answers for the Git tab (the Issues tab's `exec` when absent). */
+  pullsExec?: Exec;
+  /** The fake pi a pull request review runs on. */
+  reviewProcess?: ProcessRunner;
+  classifier?: Classifier;
 }
 
 function makeView(options: ViewOptions = {}) {
@@ -108,7 +116,10 @@ function makeView(options: ViewOptions = {}) {
   const tui = { terminal: { rows, columns: 120 }, requestRender() {} } as unknown as TUI;
   const feed = new LobbyFeed();
   const quickfix = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low", timeoutMs: 1000 }), runProcess: hangingRunner });
-  const issues = new IssuesState(options.exec ?? (async () => ({ stdout: "[]", stderr: "", code: 0 })), root);
+  const exec: Exec = options.exec ?? (async () => ({ stdout: "[]", stderr: "", code: 0 }));
+  const issues = new IssuesState(exec, root);
+  const pulls = new PullsState(options.pullsExec ?? exec, root);
+  const reviews = new PullReviews({ cwd: root, root, configDir: ".pi", exec: options.pullsExec ?? exec, profile: () => ({ thinking: "medium", timeoutMs: 1000 }), runProcess: options.reviewProcess ?? hangingRunner, ...(options.classifier ? { classifier: options.classifier } : {}) });
   let planner: PlanningSession | undefined;
   const host: LobbyHost = {
     rows: () => rows,
@@ -156,6 +167,8 @@ function makeView(options: ViewOptions = {}) {
     defaultPanel: () => options.panel ?? ["backend", "designer", "qa", "researcher"],
     seatLabel: (member) => `p/${member} · medium`,
     issues,
+    pulls,
+    reviews,
     profileLabel: () => "p/model · high",
     sessionName: () => "my window",
     sessions: () => sessions,
@@ -230,7 +243,7 @@ function makeView(options: ViewOptions = {}) {
   const view = new LobbyView(tui, host, { borderColor: noop, selectList: { selectedPrefix: noop, selectedText: noop, description: noop, scrollInfo: noop, noMatch: noop } });
   view.focused = true;
   view.refreshData(true);
-  return { view, calls, feed, quickfix, issues, root, planner: () => planner, sessions, procs };
+  return { view, calls, feed, quickfix, issues, pulls, reviews, root, planner: () => planner, sessions, procs };
 }
 
 /** A fake pi whose every run answers `text` as the assistant. */
@@ -310,7 +323,7 @@ test("tab and alt+digit switch tabs; prompt tabs open in typing mode, list tabs 
 });
 
 test("the Issues tab is off unless lobby.issues turns it on", () => {
-  assert.deepEqual(visibleTabs(false), ["lobby", "tasks", "plan", "quickfix", "metrics"]);
+  assert.deepEqual(visibleTabs(false), ["lobby", "tasks", "plan", "quickfix", "metrics", "git"]);
   assert.deepEqual(visibleTabs(true), [...TAB_IDS]);
   const { view } = makeView();
   assert.ok(!view.render(140)[0]!.includes("Issues"));
@@ -1535,4 +1548,214 @@ test("a task's details name its branch, where it came from and its worktree", ()
   assert.match(detail({ mode: "branch", branch: "Task-Change-Table-Font-27-09-2026", from: "main" }), new RegExp(`${BRANCH_GLYPH} Task-Change-Table-Font-27-09-2026 · from main`));
   const worktree = detail({ mode: "worktree", branch: "Task-A-27-09-2026", from: "main", path: "/repo/.pi/bot-lobby/worktrees/Task-A-27-09-2026" });
   assert.match(worktree, /⎇ Task-A-27-09-2026 · from main · worktree \/repo\/\.pi\/bot-lobby\/worktrees\/Task-A-27-09-2026/);
+});
+
+/* ------------------------------------------------------------------ Git tab */
+
+const PULL_LIST = JSON.stringify([
+  { number: 12, title: "Fix the table font", author: { login: "ana" }, headRefName: "fix/table-font", baseRefName: "main", isDraft: false, updatedAt: "2026-09-26T10:00:00Z", additions: 12, deletions: 3, changedFiles: 2, reviewDecision: "APPROVED", statusCheckRollup: [{ conclusion: "SUCCESS" }], labels: [{ name: "ui" }], headRefOid: "abc123" },
+  { number: 13, title: "Rework auth", author: { login: "bo" }, headRefName: "auth", baseRefName: "main", isDraft: true, additions: 400, deletions: 90, changedFiles: 14, statusCheckRollup: [{ conclusion: "FAILURE" }], labels: [] },
+]);
+const pullView = (number: number) => JSON.stringify({
+  number, title: number === 12 ? "Fix the table font" : "Rework auth", body: number === 12 ? "Uses Inter." : "Big rewrite.", state: "OPEN", mergeable: "MERGEABLE", reviewDecision: "APPROVED", author: { login: "ana" }, headRefName: "fix/table-font", baseRefName: "main", isDraft: false, additions: 12, deletions: 3, changedFiles: 2, headRefOid: "abc123",
+  statusCheckRollup: [{ conclusion: "SUCCESS" }], labels: [{ name: "ui" }], files: [{ path: "src/table.css", additions: 10, deletions: 2 }], reviews: [], comments: [{ author: { login: "bo" }, body: "Looks good.", createdAt: "2026-09-26T11:00:00Z" }],
+});
+const PULL_DIFF = "diff --git a/src/table.css b/src/table.css\n-serif\n+Inter\n";
+const PULL_REVIEW = "## Verdict\nREQUEST CHANGES\n\n## Summary\nSwaps the font.\n\n## Findings\n- **major** `src/table.css:1` — no fallback stack.";
+
+/** `gh` for the Git tab: the list, each pull request, its diff. */
+function pullsGh(calls: string[][] = []): Exec {
+  return async (_command, args) => {
+    calls.push(args);
+    const key = args.slice(0, 2).join(" ");
+    if (key === "pr list") return { stdout: PULL_LIST, stderr: "", code: 0 };
+    if (key === "pr view") return { stdout: pullView(Number(args[2])), stderr: "", code: 0 };
+    if (key === "pr diff") return { stdout: PULL_DIFF, stderr: "", code: 0 };
+    return { stdout: "", stderr: "unexpected", code: 1 };
+  };
+}
+
+/** A fake pi that reviews as `text`, recording what it was asked. */
+function reviewer(text: string, prompts: string[] = []): ProcessRunner {
+  const stdout = JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], model: "p/served", stopReason: "stop", usage: { input: 1, output: 1 } } });
+  return async (_args, options) => {
+    prompts.push(options.prompt ?? "");
+    return { exitCode: 0, stdout, stderr: "", killed: false, timedOut: false };
+  };
+}
+
+async function gitTab(options: ViewOptions = {}) {
+  const calls: string[][] = [];
+  const prompts: string[] = [];
+  const made = makeView({ pullsExec: pullsGh(calls), reviewProcess: reviewer(PULL_REVIEW, prompts), ...options });
+  made.view.setTab("git");
+  await settle();
+  made.view.render(140);
+  return { ...made, ghCalls: calls, prompts };
+}
+
+const flat = (lines: string[]) => lines.join("\n");
+
+test("the Git tab lists the open pull requests with their checks and size, and opens the selected one", async () => {
+  const { view, ghCalls } = await gitTab();
+  assert.deepEqual(ghCalls.map((args) => args.slice(0, 2).join(" ")), ["pr list", "pr view"], "opening the tab loads the list, then the selected pull request");
+  const screen = flat(view.render(140));
+  assert.match(screen, /Pull requests [─ ]+2 open/);
+  assert.match(screen, /#12 ✓ Fix the table font/);
+  assert.match(screen, /#13 ✗ draft Rework auth/);
+  assert.match(screen, /\+12 −3/);
+  assert.match(screen, /#12 Fix the table font/);
+  assert.match(screen, /by ana/);
+  assert.match(screen, /fix\/table-font → main/);
+  assert.match(screen, /checks passing \(1\) · approved · mergeable · ui/);
+  assert.match(screen, /src\/table\.css +\+10 −2/);
+  assert.match(screen, /Uses Inter\./);
+  assert.match(screen, /── bo/);
+  assert.match(view.render(140)[0]!, /6 Git 2/, "the tab says how many are open");
+  // The arrows move through the list and load each pull request.
+  view.handleInput(KEY.down);
+  await settle();
+  assert.match(flat(view.render(140)), /#13 Rework auth[\s\S]*Big rewrite\./);
+});
+
+test("v reviews the selected pull request with a read-only agent; the review shows under its facts and in the list", async () => {
+  const { view, prompts, reviews } = await gitTab();
+  view.handleInput("v");
+  assert.match(view.render(140).at(-1)!, /reviewing #12 — it streams into the activity log; x stops it/);
+  await settle();
+  const screen = flat(view.render(140));
+  assert.equal(prompts.length, 1);
+  assert.match(prompts[0]!, /Review pull request #12 — Fix the table font/);
+  assert.doesNotMatch(prompts[0]!, /Focus \(look at this first\)/);
+  assert.match(screen, /Review [─ ]+request changes · p\/served/);
+  assert.match(screen, /Swaps the font\./);
+  assert.match(screen, /no fallback stack/);
+  assert.match(screen, /✗ reviewed/, "the list carries the verdict");
+  assert.equal(reviews.review(12)?.verdict, "changes");
+  // Asking again while nothing runs starts a fresh review.
+  view.handleInput("v");
+  await settle();
+  assert.equal(prompts.length, 2);
+});
+
+test("f takes what the review should look at first, over several lines, and reviews with it", async () => {
+  const { view, prompts } = await gitTab();
+  view.handleInput("f");
+  assert.equal(view.mode, "type");
+  assert.match(flat(view.render(140)), /what should the review of #12 look at first\? · enter reviews/);
+  assert.match(view.render(140).at(-1)!, /enter review with this focus.*shift\+enter new line.*esc cancel/);
+  type(view, "is the font licensed?");
+  view.handleInput("\x1b[13;2u");
+  type(view, "and does it fall back?");
+  view.handleInput(KEY.enter);
+  await settle();
+  assert.equal(prompts.length, 1);
+  assert.match(prompts[0]!, /Focus \(look at this first\): is the font licensed\?\nand does it fall back\?/);
+  assert.equal(view.mode, "browse");
+  assert.match(flat(view.render(140)), /focus: is the font licensed\?/);
+  // esc leaves the focus prompt without reviewing anything.
+  view.handleInput("f");
+  type(view, "never mind");
+  view.handleInput(KEY.escape);
+  view.handleInput("v");
+  await settle();
+  assert.match(prompts.at(-1)!, /Review pull request #12/);
+  assert.doesNotMatch(prompts.at(-1)!, /never mind/);
+});
+
+test("text typed without f is kept, not sent as a review focus", async () => {
+  const { view, prompts } = await gitTab();
+  view.handleInput("f");
+  view.handleInput(KEY.escape);
+  view.setTab("git");
+  view.handleInput("\x1b[13;2u");
+  assert.equal(view.mode, "browse");
+  view.handleInput("f");
+  view.handleInput(KEY.escape);
+  assert.deepEqual(prompts, []);
+});
+
+test("x stops a running review", async () => {
+  let abort: (() => void) | undefined;
+  const hanging: ProcessRunner = (_args, options) => new Promise((resolve) => {
+    abort = () => resolve({ exitCode: 1, stdout: "", stderr: "", killed: true, timedOut: false });
+    options.signal?.addEventListener("abort", abort, { once: true });
+  });
+  const { view, reviews } = await gitTab({ reviewProcess: hanging });
+  view.handleInput("x");
+  assert.match(view.render(140).at(-1)!, /no review of #12 is running/);
+  view.handleInput("v");
+  await settle();
+  assert.equal(reviews.running(12), true);
+  assert.match(flat(view.render(140)), /Review [─ ]+[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] \d+s/, "a running review shows its spinner and clock");
+  assert.match(view.render(140)[0]!, /6 Git [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/, "the tab spins while a review runs");
+  view.handleInput("v");
+  assert.match(view.render(140).at(-1)!, /already reviewing #12 — x stops it/);
+  view.handleInput("x");
+  await settle();
+  assert.equal(reviews.review(12)?.status, "cancelled");
+  assert.match(flat(view.render(140)), /stopped/);
+});
+
+test("t asks Jev for a quick read, and says how to turn Jev on when it is off", async () => {
+  const off = await gitTab();
+  off.view.handleInput("t");
+  await settle();
+  const offScreen = flat(off.view.render(140));
+  assert.match(offScreen, /Jev's read/);
+  assert.match(offScreen, /Jev is off/);
+  assert.match(offScreen, /Pull request read on in/);
+  const answers = { size: { type: "score", score: 1.2, confidence: 0.8 }, risky: { type: "noul", noul: 0.8 }, breaking: { type: "noul", noul: 0.1 }, security: { type: "noul", noul: 0.05 }, tests_missing: { type: "noul", noul: 0.3 }, kind: { type: "choice", choice: "bugfix", probabilities: { bugfix: 0.9 }, confidence: 0.9 } };
+  const classifier = new (await import("../src/classifier/classifier.ts")).Classifier({
+    config: () => ({ ...DEFAULT_CONFIG.classifier, enabled: true }), keys: async () => "k", sleep: async () => {},
+    fetch: async () => new Response(JSON.stringify({ model: "jev-test", answers }), { status: 200 }),
+  });
+  const on = await gitTab({ classifier });
+  on.view.handleInput("t");
+  await settle();
+  const onScreen = flat(on.view.render(140));
+  assert.match(onScreen, /Jev's read [─ ]+jev-test · \d+ ms/);
+  assert.match(onScreen, /small · bugfix · risky 0\.80/);
+  assert.match(onScreen, /worth a full review/);
+});
+
+test("the Git tab says why it is empty: no gh, no pull requests, or loading", async () => {
+  const missing = await gitTab({ pullsExec: async () => ({ stdout: "", stderr: "", code: 127 }) });
+  assert.match(flat(missing.view.render(140)), /✗ GitHub CLI \(gh\) is not installed/);
+  const none = await gitTab({ pullsExec: async (_command, args) => ({ stdout: args[1] === "list" ? "[]" : "{}", stderr: "", code: 0 }) });
+  assert.match(flat(none.view.render(140)), /No open pull requests\./);
+  none.view.handleInput("v");
+  assert.match(none.view.render(140).at(-1)!, /no pull request selected — r loads the open ones/, "nothing to review");
+  const { view, ghCalls } = await gitTab();
+  view.handleInput("r");
+  await settle();
+  assert.equal(ghCalls.filter((args) => args[1] === "list").length, 2, "r asks gh again");
+});
+
+test("enter moves between the list and a pull request's detail, which scrolls with the arrows", async () => {
+  const { view } = await gitTab({ rows: 16 });
+  const head = flat(view.render(140));
+  assert.match(head, /Pull request\n|Pull request /);
+  view.handleInput(KEY.enter);
+  assert.match(flat(view.render(140)), /Pull request ◂/);
+  for (let i = 0; i < 6; i++) view.handleInput(KEY.down);
+  assert.notEqual(flat(view.render(140)), head, "the detail scrolled");
+  view.handleInput(KEY.escape);
+  assert.doesNotMatch(flat(view.render(140)), /Pull request ◂/);
+  // Narrow terminals show one pane at a time.
+  const narrow = view.render(80);
+  assert.ok(narrow.some((line) => line.includes("Pull requests")));
+  assert.ok(!narrow.some((line) => line.includes("Pull request ◂")));
+});
+
+test("the Git tab's keys are in the help and the hint line", async () => {
+  const { view } = await gitTab();
+  const hint = view.render(140).at(-1)!;
+  assert.match(hint, /v review.*f review with a focus.*t Jev's read.*r reload/);
+  view.handleInput("?");
+  const help = flat(view.render(140));
+  assert.match(help, /Git tab/);
+  assert.match(help, /read-only agent on QA's model/);
+  assert.match(help, /nothing is posted to\s+GitHub|nothing is posted to GitHub/);
+  assert.match(help, /Jev's quick read/);
 });

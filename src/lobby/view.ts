@@ -30,10 +30,13 @@ import { filterRows, pips, planDetailLines, renderTasks, taskDetailLines, taskPr
 import { renderPlan, type PlanLayout, type PlanView, type SeatView } from "./tabs/plan.ts";
 import { filterJobs, newestFirst, renderQuickFix } from "./tabs/quickfix.ts";
 import { renderIssues } from "./tabs/issues.ts";
+import { renderGit } from "./tabs/git.ts";
+import type { PullsState } from "./pulls.ts";
+import type { PullReviews } from "./pr-review.ts";
 import type { WorkspaceInfo } from "../execution/workspace.ts";
 import { filterRecords, renderMetrics } from "./tabs/metrics.ts";
 
-export const TAB_IDS = ["lobby", "tasks", "plan", "quickfix", "issues", "metrics"] as const;
+export const TAB_IDS = ["lobby", "tasks", "plan", "quickfix", "issues", "metrics", "git"] as const;
 export type TabId = (typeof TAB_IDS)[number];
 
 export const TAB_LABELS: Record<TabId, string> = {
@@ -43,6 +46,7 @@ export const TAB_LABELS: Record<TabId, string> = {
   quickfix: "Quick fix",
   issues: "Issues",
   metrics: "Metrics",
+  git: "Git",
 };
 
 /** The tabs on show: Issues only while `lobby.issues` switches it on. */
@@ -157,6 +161,10 @@ export interface LobbyHost {
   /** `model · thinking` a panel seat runs on. */
   seatLabel(member: PanelMember): string;
   issues: IssuesState;
+  /** The Git tab's pull requests, read through `gh`. */
+  pulls: PullsState;
+  /** Reviews of pull requests by an agent, and Jev's reads of them. */
+  reviews: PullReviews;
   /** The Issues tab is switched on (`lobby.issues`). */
   issuesEnabled(): boolean;
   /** Which panes show (`lobby.panels`), and remembering a change. */
@@ -348,6 +356,11 @@ export class LobbyView implements Component, Focusable {
   private issueFocus: "list" | "detail" = "list";
   private issueDetailOffset = 0;
   private issueDraft = false;
+  private gitSelected = 0;
+  private gitFocus: "list" | "detail" = "list";
+  private gitDetailOffset = 0;
+  /** The prompt is taking what the review of the selected pull request should look at first. */
+  private gitFocusDraft = false;
   private metricsSelected = 0;
   private metricsBy: GroupBy = "model";
   private metricsSort: SortKey = "runs";
@@ -424,6 +437,8 @@ export class LobbyView implements Component, Focusable {
       || Boolean(this.host.planner()?.busy)
       || this.host.sessions().some((session) => session.busy)
       || (this.issuesOn && this.host.issues.loading)
+      || (this.tab === "git" && this.host.pulls.loading)
+      || this.host.reviews.busy
       || zen.runs.some((run) => run.status === "running")
       || Boolean(zen.task && !zen.task.paused && !TERMINAL_STATES.includes(zen.task.state));
   }
@@ -491,6 +506,7 @@ export class LobbyView implements Component, Focusable {
     this.commentTarget = undefined;
     this.lineTarget = undefined;
     this.issueDraft = false;
+    this.gitFocusDraft = false;
     this.armed = undefined;
     this.help = false;
     this.picking = false;
@@ -499,6 +515,8 @@ export class LobbyView implements Component, Focusable {
     this.setMode(PROMPT_FIRST.has(tab) ? "type" : "browse");
     this.refreshData(true);
     if (tab === "issues" && !this.host.issues.loaded && !this.host.issues.loading) void this.host.issues.refresh().then(() => this.loadIssueDetail());
+    if (tab === "git" && !this.host.pulls.loaded && !this.host.pulls.loading) void this.host.pulls.refresh().then(() => this.loadPullDetail());
+    else if (tab === "git") void this.loadPullDetail();
     this.host.requestRender();
   }
 
@@ -698,6 +716,7 @@ export class LobbyView implements Component, Focusable {
       }
       this.commentTarget = undefined;
       this.issueDraft = false;
+      this.gitFocusDraft = false;
       this.newSession = false;
       if (this.lineTarget) {
         this.lineTarget = undefined;
@@ -724,7 +743,7 @@ export class LobbyView implements Component, Focusable {
     if (matchesKey(data, Key.home) || matchesKey(data, Key.end)) return this.scrollToEdge(matchesKey(data, Key.home));
     const tabs = this.tabs();
     if (!PROMPT_FIRST.has(this.tab) && /^[1-9]$/.test(data) && Number(data) <= tabs.length) return this.setTab(tabs[Number(data) - 1]!);
-    if (data === "i" && this.tab !== "metrics" && this.tab !== "tasks" && this.tab !== "issues") return this.setMode("type");
+    if (data === "i" && this.tab !== "metrics" && this.tab !== "tasks" && this.tab !== "issues" && this.tab !== "git") return this.setMode("type");
     if (this.tabCommand(data)) return;
     const printable = isPrintable(data);
     if (printable && PROMPT_FIRST.has(this.tab)) {
@@ -746,6 +765,8 @@ export class LobbyView implements Component, Focusable {
         return this.fixFocus;
       case "issues":
         return this.issueFocus;
+      case "git":
+        return this.gitFocus;
       case "metrics":
         return "table";
     }
@@ -792,6 +813,9 @@ export class LobbyView implements Component, Focusable {
       case "issues":
         this.issueFocus = direction < 0 ? "list" : "detail";
         return;
+      case "git":
+        this.gitFocus = direction < 0 ? "list" : "detail";
+        return;
       case "metrics":
         return;
     }
@@ -815,6 +839,14 @@ export class LobbyView implements Component, Focusable {
           this.issueSelected = Math.max(0, Math.min(this.host.issues.issues.length - 1, this.issueSelected + delta));
           this.issueDetailOffset = 0;
           void this.loadIssueDetail();
+        }
+        return;
+      case "git":
+        if (this.gitFocus === "detail" || Math.abs(delta) > 1) this.gitDetailOffset = Math.max(0, this.gitDetailOffset + delta);
+        else {
+          this.gitSelected = Math.max(0, Math.min(this.host.pulls.pulls.length - 1, this.gitSelected + delta));
+          this.gitDetailOffset = 0;
+          void this.loadPullDetail();
         }
         return;
       case "metrics":
@@ -1000,6 +1032,11 @@ export class LobbyView implements Component, Focusable {
     if (row?.kind === "task" && !this.data.comments.has(row.id)) this.data.comments.set(row.id, this.host.comments(row.id));
   }
 
+  private async loadPullDetail(): Promise<void> {
+    const pull = this.host.pulls.pulls[this.gitSelected];
+    if (pull) await this.host.pulls.detail(pull.number);
+  }
+
   private async loadIssueDetail(): Promise<void> {
     const issue = this.host.issues.issues[this.issueSelected];
     if (issue) await this.host.issues.detail(issue.number);
@@ -1061,6 +1098,8 @@ export class LobbyView implements Component, Focusable {
         return false;
       case "issues":
         return this.issuesCommand(data, enter, escape);
+      case "git":
+        return this.gitCommand(data, enter, escape);
       case "metrics":
         if (data === "g") return (this.metricsBy = this.metricsBy === "model" ? "model-kind" : "model", this.metricsSelected = 0), true;
         if (data === "s") return (this.metricsSort = SORT_KEYS[(SORT_KEYS.indexOf(this.metricsSort) + 1) % SORT_KEYS.length]!), true;
@@ -1599,6 +1638,61 @@ export class LobbyView implements Component, Focusable {
     return false;
   }
 
+  /** The selected pull request on the Git tab. */
+  private selectedPull() {
+    return this.host.pulls.pulls[this.gitSelected];
+  }
+
+  /** Review the selected pull request with a read-only agent, optionally looking at `focus` first. */
+  private startReview(focus?: string): void {
+    const pull = this.selectedPull();
+    if (!pull) return this.say("no pull request selected — r loads the open ones", "warning");
+    if (this.host.reviews.running(pull.number)) return this.say(`already reviewing #${pull.number} — x stops it`, "warning");
+    this.gitFocus = "detail";
+    this.gitDetailOffset = 0;
+    this.say(`reviewing #${pull.number}${focus ? ` — looking at: ${clip(focus, 40)}` : ""} — it streams into the activity log; x stops it`);
+    void this.host.reviews.start(pull.number, { ...(focus ? { focus } : {}), ...(this.host.pulls.details.has(pull.number) ? { detail: this.host.pulls.details.get(pull.number)! } : {}) }).then(() => this.host.requestRender());
+  }
+
+  private gitCommand(data: string, enter: boolean, escape: boolean): boolean {
+    const pull = this.selectedPull();
+    if (enter) {
+      this.gitFocus = this.gitFocus === "list" ? "detail" : "list";
+      void this.loadPullDetail();
+      return true;
+    }
+    if (escape) return (this.gitFocus = "list"), true;
+    if (data === "r") {
+      this.host.pulls.forget();
+      void this.host.pulls.refresh().then(() => this.loadPullDetail());
+      return true;
+    }
+    if (!pull) {
+      // Nothing listed: the review keys say so instead of doing nothing.
+      if (!"vftx".includes(data) || data.length !== 1) return false;
+      this.say("no pull request selected — r loads the open ones", "warning");
+      return true;
+    }
+    if (data === "v") return this.startReview(), true;
+    if (data === "f") {
+      this.gitFocusDraft = true;
+      this.setMode("type");
+      return true;
+    }
+    if (data === "t") {
+      this.gitFocus = "detail";
+      this.gitDetailOffset = 0;
+      this.say(`asking Jev to read #${pull.number}…`);
+      void this.host.reviews.readWithJev(pull.number, this.host.pulls.details.get(pull.number)).then(() => this.host.requestRender());
+      return true;
+    }
+    if (data === "x") {
+      this.say(this.host.reviews.cancel(pull.number) ? `stopping the review of #${pull.number}` : `no review of #${pull.number} is running`, "warning");
+      return true;
+    }
+    return false;
+  }
+
   /* --------------------------------------------------------------- mouse */
 
   /** Mouse events when pi runs full screen (pi-tui dispatches them to the overlay). */
@@ -1628,7 +1722,7 @@ export class LobbyView implements Component, Focusable {
   /** The wheel scrolls the pane under the pointer (the focused one when it is over none). */
   private wheel(direction: number, x = -1, y = -1): void {
     if (this.help) return;
-    if (this.tab === "issues") return this.scroll(direction * WHEEL_LINES);
+    if (this.tab === "issues" || this.tab === "git") return this.scroll(direction * WHEEL_LINES);
     this.scrollPane(this.paneAt(x, y) ?? this.focusedPane(), direction * WHEEL_LINES, true);
   }
 
@@ -1723,6 +1817,14 @@ export class LobbyView implements Component, Focusable {
         this.say("filing the issue…");
         void this.host.issues.create(body);
         return;
+      case "git":
+        if (!this.gitFocusDraft) {
+          this.editor.setText(body);
+          return this.say("press f to review the selected pull request with a focus", "warning");
+        }
+        this.gitFocusDraft = false;
+        this.setMode("browse");
+        return this.startReview(body);
       case "metrics":
         return;
     }
@@ -1812,6 +1914,8 @@ export class LobbyView implements Component, Focusable {
     else if (session?.awaitingAnswers) badges.plan = `${session.questions.length}?`;
     if (this.host.quickfix.running) badges.quickfix = spinner(this.tick);
     if (this.issuesOn && this.host.issues.issues.length > 0) badges.issues = String(this.host.issues.issues.length);
+    if (this.host.reviews.busy) badges.git = spinner(this.tick);
+    else if (this.host.pulls.pulls.length > 0) badges.git = String(this.host.pulls.pulls.length);
     const cells = this.tabs().map((tab, index) => {
       const number = paint(theme, tab === this.tab ? "accent" : "dim", String(index + 1));
       const name = tab === this.tab ? bold(theme, paint(theme, "text", TAB_LABELS[tab])) : paint(theme, "muted", TAB_LABELS[tab]);
@@ -1820,16 +1924,6 @@ export class LobbyView implements Component, Focusable {
       return { tab, text: tab === this.tab ? (theme.bg ? theme.bg("selectedBg", cell) : `[${cell}]`) : cell };
     });
     const entry = this.viewedEntry();
-    const brand = this.brand(entry.task, width - cells.reduce((sum, cell) => sum + textWidth(cell.text), 0) - 1, theme);
-    let left = `${brand}${paint(theme, "borderMuted", "│")}`;
-    const spans: Array<{ tab: TabId; from: number; to: number }> = [];
-    for (const cell of cells) {
-      const from = textWidth(left);
-      left += cell.text;
-      spans.push({ tab: cell.tab, from, to: textWidth(left) });
-    }
-    this.tabSpans = spans;
-    const room = width - textWidth(left) - 1;
     const help = paint(theme, "dim", `${keyLabel(this.keys.help)} keys `);
     const auto = entry.auto ? ` ${bold(theme, paint(theme, "success", "⟳ AUTO"))}` : "";
     const waiting = this.host.sessions().reduce((count, session) => count + session.dialogs.length, 0);
@@ -1849,30 +1943,50 @@ export class LobbyView implements Component, Focusable {
         ? [`${dot} ${zen.task.id} ${state}${auto}${asking}  ${help}`, `${dot} ${zen.task.id} ${state}${auto}${asking} `, `${dot} ${state}${auto} `, `${dot}${auto} `]
         : [`${paint(theme, "dim", "no task in this session")}${asking}  ${help}`, `${paint(theme, "dim", "no task in this session")}${asking} `, help, ""];
     }
-    const status = choices.find((choice) => textWidth(choice) <= room) ?? "";
+    // The longest title that leaves room for the tabs and, when a session waits on you, for saying so.
+    const tabsWidth = cells.reduce((sum, cell) => sum + textWidth(cell.text), 0);
+    const titles = this.titles(entry.task, theme);
+    let brand = titles.at(-1)!;
+    let status = "";
+    for (const [index, title] of titles.entries()) {
+      const room = width - textWidth(title) - 1 - tabsWidth - 1;
+      const shown = choices.find((choice) => textWidth(choice) <= room) ?? "";
+      if (index === titles.length - 1 || (room >= 0 && (waiting === 0 || shown.includes("waiting")))) {
+        brand = title;
+        status = shown;
+        break;
+      }
+    }
+    let left = `${brand}${paint(theme, "borderMuted", "│")}`;
+    const spans: Array<{ tab: TabId; from: number; to: number }> = [];
+    for (const cell of cells) {
+      const from = textWidth(left);
+      left += cell.text;
+      spans.push({ tab: cell.tab, from, to: textWidth(left) });
+    }
+    this.tabSpans = spans;
     const gap = width - textWidth(left) - textWidth(status);
     return gap >= 1 ? `${left}${" ".repeat(gap)}${status}` : fit(left, width);
   }
 
   /**
-   * The lobby's title: the repository (or folder) it works from and the
-   * branch, `◆ my-repo (⎇ main)`. A task with a worktree of its own shows that
-   * branch, since that is where its work happens. The name and branch give way
-   * (branch first) when the tabs leave little room.
+   * The lobby's title, longest first: the repository (or folder) it works
+   * from and the branch, `◆ my-repo (⎇ main)`, then the name alone, then just
+   * the mark. A task with a worktree of its own shows that branch, since that
+   * is where its work happens.
    */
-  private brand(task: Task | undefined, room: number, theme: LobbyTheme): string {
+  private titles(task: Task | undefined, theme: LobbyTheme): string[] {
     const workspace = this.host.workspace?.();
     const name = clip(workspace?.name || "bot-lobby", TITLE_NAME_MAX);
     const own = task?.git?.mode === "worktree" ? task.git.branch : undefined;
     const branch = own ?? workspace?.branch;
     const glyph = paint(theme, "accent", " ◆ ");
     const label = (text: string) => bold(theme, paint(theme, "accent", text));
-    const variants = [
+    return [
       ...(branch ? [`${glyph}${label(name)} ${paint(theme, "muted", `(${BRANCH_GLYPH} ${clip(branch, TITLE_BRANCH_MAX)})`)} `] : []),
       `${glyph}${label(name)} `,
       glyph,
     ];
-    return variants.find((variant) => textWidth(variant) <= room) ?? variants.at(-1)!;
   }
 
   private promptLabel(): string {
@@ -1909,6 +2023,11 @@ export class LobbyView implements Component, Focusable {
         return this.host.quickfix.running ? "describe a quick change; it runs after the current one" : "describe a quick change";
       case "issues":
         return this.issueDraft ? "new issue · first line is the title" : "n files a new issue";
+      case "git": {
+        const pull = this.selectedPull();
+        if (this.gitFocusDraft) return `what should the review of #${pull?.number ?? "?"} look at first? · enter reviews`;
+        return pull ? `f reviews #${pull.number} with a focus you type, v without one` : "r loads the open pull requests";
+      }
       case "metrics":
         return "";
     }
@@ -1996,6 +2115,16 @@ export class LobbyView implements Component, Focusable {
           { key: "n", text: "file a new issue" },
           { key: "r", text: "reload issues" },
         ];
+      case "git":
+        return [
+          { key: "↑ ↓", text: "select a pull request, or scroll its detail (PageUp/PageDown)" },
+          { key: "enter / ← →", text: "move between the list and the detail" },
+          { key: "v", text: "review it with a read-only agent on QA's model (nothing is posted to GitHub)" },
+          { key: "f", text: "review it with a focus you type first (Shift+Enter for a new line, enter reviews)" },
+          { key: "t", text: "Jev's quick read: size, risk, security, breaking changes, missing tests" },
+          { key: "x", text: "stop the review that is running" },
+          { key: "r", text: "reload the pull requests" },
+        ];
       case "metrics":
         return [
           { key: "↑ ↓", text: "select a row of the table" },
@@ -2046,6 +2175,7 @@ export class LobbyView implements Component, Focusable {
       }
       if (this.tab === "lobby" && this.host.masterBusy()) return [["enter", "steer"], ["esc", "stop the oracle"], [k("hide"), "hide"]];
       if (this.tab === "plan" && this.lineTarget) return [["enter", "add the comment"], ["esc", "cancel"]];
+      if (this.tab === "git" && this.gitFocusDraft) return [["enter", "review with this focus"], ["shift+enter", "new line"], ["esc", "cancel"]];
       const enter = this.tab === "plan" && session?.awaitingAnswers && !this.editor.getText().trim() ? "answer questions" : this.tab === "quickfix" ? "run it" : "send";
       return [["enter", enter], ["esc", "browse"], [k("hide"), "hide"]];
     }
@@ -2081,6 +2211,14 @@ export class LobbyView implements Component, Focusable {
       case "issues":
         keys.push(["↑↓", "select"], ["p", "plan it"], ["n", "new"]);
         break;
+      case "git": {
+        const pull = this.selectedPull();
+        keys.push(["↑↓", "select"]);
+        if (pull) keys.push(["v", "review"], ["f", "review with a focus"], ["t", "Jev's read"]);
+        if (pull && this.host.reviews.running(pull.number)) keys.push(["x", "stop"]);
+        keys.push(["r", "reload"]);
+        break;
+      }
       case "metrics":
         keys.push(["↑↓", "select"], ["g", "group"], ["s", "sort"]);
         break;
@@ -2173,6 +2311,18 @@ export class LobbyView implements Component, Focusable {
         return renderIssues({
           issues: issues.issues, selected: this.issueSelected, ...(detail ? { detail } : {}), focus: this.issueFocus, detailOffset: this.issueDetailOffset,
           loading: issues.loading, loaded: issues.loaded, ...(issues.error ? { error: issues.error } : {}), ...(issues.notice ? { notice: issues.notice } : {}), tick: this.tick, now,
+        }, width, height, theme);
+      }
+      case "git": {
+        const pulls = this.host.pulls;
+        this.gitSelected = Math.min(this.gitSelected, Math.max(0, pulls.pulls.length - 1));
+        const selected = pulls.pulls[this.gitSelected];
+        const detail = selected ? pulls.details.get(selected.number) : undefined;
+        const review = selected ? this.host.reviews.review(selected.number) : undefined;
+        const read = selected ? this.host.reviews.reads.get(selected.number) : undefined;
+        return renderGit({
+          pulls: pulls.pulls, selected: this.gitSelected, ...(detail ? { detail } : {}), ...(review ? { review } : {}), ...(read ? { read } : {}),
+          focus: this.gitFocus, detailOffset: this.gitDetailOffset, loading: pulls.loading, loaded: pulls.loaded, ...(pulls.error ? { error: pulls.error } : {}), tick: this.tick, now,
         }, width, height, theme);
       }
       case "metrics": {
