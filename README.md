@@ -260,6 +260,7 @@ footer.
 | **5 Metrics** | Run time, success rate, tokens and cost per model and agent |
 | **6 Git** | The repository's open pull requests; review one with an agent, or have Jev read it |
 | **7 Knowledge** | Everything each agent knows about the project; edit an entry, or leave a note every agent reads |
+| **8 Excalidraw** | Up to five shared Excalidraw sessions, each assigned to one agent or several, who read the board and draw on it with you |
 
 ### Lobby
 
@@ -342,6 +343,51 @@ the step (by keywords, or by [Jev](#the-classifier-jev) when it is on), and the
 prompt says how many sections it left out and where the whole file is. Nothing
 is looked up on demand: what a step needs has to be in the file and near the
 top of its relevance, so keep entries short, one topic under one heading.
+
+### Excalidraw
+
+A live [Excalidraw](https://excalidraw.com) room that you and your agents draw
+in together. Add up to **five sessions**, assign each to **one agent or several**
+(the oracle, Designer, Backend, QA, scouts, the researcher, quick fix, the
+planner), and those agents can look at what you drew and add to it.
+
+- `a` **adds a session**: in Excalidraw, *Share → Live collaboration → Start
+  session*, copy the link, paste it into the prompt (a name may follow it).
+  `n` **makes a new room** instead and shows its link, for you to open in
+  Excalidraw. Neither works past five sessions: `d d` removes one.
+- `enter` moves into the checklist of agents; `enter` or `space` assigns the
+  picked agent (or takes the session back), `*` assigns every agent.
+- `w` lets agents **draw** in the session or **only look** at it. An agent whose
+  sessions are all look-only gets no drawing tool.
+- `t` **checks** the session: joins the room for a moment and says whether the
+  server can be reached, who is in it, and how much is on the board. `r` renames it.
+
+**What an assigned agent can do.** It gets two tools and the room link:
+`excalidraw_read` describes the board in words (shapes with their labels, arrows
+as *from → to*, free text, each with its id and place), and `excalidraw_draw`
+adds labelled rectangles, ellipses and diamonds, arrows between them (with
+labels), free text and lines, or changes and deletes what is there by id. It
+joins the room as its own collaborator (`Backend · bot-lobby`) with a cursor
+where it drew, so you watch it work. The board stays yours: agents may move,
+recolour and relabel what you drew, but delete only what agents drew (elements
+they draw are marked, and Excalidraw cannot undo another collaborator's
+deletion), and one call draws at most 100 shapes and removes at most 50.
+
+- **You must have the session open in Excalidraw.** A room's board lives in the
+  browsers that are in it; an agent that joins an empty room can read nothing,
+  and is not allowed to draw, since nothing would keep it. It says so and asks
+  you to open the link.
+- **Boards are other people's writing.** What an agent reads from a board comes
+  fenced as untrusted data, like a web page, and it is told never to follow
+  instructions written on it.
+- **The link is a key.** Anyone with a room link can read and draw in the room, so
+  bot-lobby keeps your sessions with your own settings
+  (`~/.pi/bot-lobby/excalidraw/`, one file for each project) and never in the
+  project, where a commit could publish them. An agent's process is handed only the
+  links of the sessions assigned to it.
+- Rooms are Excalidraw's own collaboration protocol, end-to-end encrypted with the
+  key in the link, over `oss-collab.excalidraw.com`. A self-hosted collaboration
+  server is used when `BOT_LOBBY_EXCALIDRAW_SERVER` names it.
 
 Common keys: `tab` switches tabs, `esc` browses (arrows, single-key
 commands), `ctrl+f` searches, `ctrl+s` saves the plan, `alt+o` browses
@@ -629,12 +675,15 @@ Live checks (spend tokens or need a key and network):
 BOT_LOBBY_E2E=1 node --test test/e2e.test.ts
 BOT_LOBBY_LIVE_WEB=1 node --test test/web.test.ts
 BOT_LOBBY_JEV_E2E=1 OPENCODE_API_KEY=… node --test test/jev-e2e.test.ts
+BOT_LOBBY_LIVE_EXCALIDRAW=1 node --test test/excalidraw-live.test.ts
 ```
 
 Source layout: `src/workflow` (engine), `src/master` (delegation),
 `src/execution` (subagent processes), `src/lobby` (the UI),
 `src/classifier` (Jev), `src/state` (persistence), `src/ask` (the
-questionnaire), `src/web` (the web tools), `prompts/` (agent prompts).
+questionnaire), `src/web` (the web tools), `src/excalidraw` (shared
+Excalidraw sessions: the room protocol, the sessions, the agents' tools),
+`prompts/` (agent prompts).
 
 ## Publishing
 
