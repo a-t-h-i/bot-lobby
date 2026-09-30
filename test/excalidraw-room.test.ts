@@ -256,6 +256,18 @@ test("where a websocket is refused, the seat joins over long-polling instead", a
   }
 });
 
+test("a server that only lets a browser's Origin in is joined by saying the site a browser would come from", async () => {
+  const server = await startCollabServer({ requireOrigin: true });
+  const link = newRoomLink();
+  const room = seat(server.url, link);
+  try {
+    assert.equal((await room.ready()).connected, true);
+  } finally {
+    room.close();
+    await server.close();
+  }
+});
+
 test("a seat reaches the server through the proxy the environment names", async () => {
   const server = await startCollabServer();
   // A minimal forward proxy: it only tunnels (CONNECT), and counts what it tunnelled.
