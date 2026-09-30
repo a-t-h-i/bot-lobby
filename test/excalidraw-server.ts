@@ -24,9 +24,10 @@ export interface CollabServer {
 /**
  * excalidraw-room's handlers, unchanged in behaviour. `refuseWebsocket` answers
  * every websocket upgrade with 403, as a firewall or proxy in front of the
- * server might, so only long-polling gets through.
+ * server might, so only long-polling gets through. `requireOrigin` only lets
+ * in handshakes whose Origin is the server's own URL origin, as Excalidraw's server does.
  */
-export async function startCollabServer(options: { refuseWebsocket?: boolean } = {}): Promise<CollabServer> {
+export async function startCollabServer(options: { refuseWebsocket?: boolean; requireOrigin?: boolean } = {}): Promise<CollabServer> {
   const http: HttpServer = createServer();
   if (options.refuseWebsocket) {
     http.prependListener("upgrade", (_request, socket) => {
@@ -34,7 +35,13 @@ export async function startCollabServer(options: { refuseWebsocket?: boolean } =
       socket.destroy();
     });
   }
-  const server = new Server(http, { transports: ["websocket", "polling"], cors: { origin: "*" }, allowEIO3: true });
+  let selfOrigin = "";
+  const server = new Server(http, {
+    transports: ["websocket", "polling"],
+    cors: { origin: "*" },
+    allowEIO3: true,
+    ...(options.requireOrigin ? { allowRequest: (req: { headers: { origin?: string } }, fn: (err: string | null | undefined, success: boolean) => void) => fn(null, Boolean(selfOrigin) && req.headers.origin === selfOrigin) } : {}),
+  });
   const relayed: string[] = [];
   server.on("connection", (socket) => {
     server.to(`${socket.id}`).emit("init-room");
@@ -62,6 +69,7 @@ export async function startCollabServer(options: { refuseWebsocket?: boolean } =
   });
   await new Promise<void>((done) => http.listen(0, "127.0.0.1", done));
   const { port } = http.address() as AddressInfo;
+  selfOrigin = `http://127.0.0.1:${port}`;
   return {
     url: `http://127.0.0.1:${port}`,
     relayed,
