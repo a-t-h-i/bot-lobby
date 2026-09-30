@@ -21,9 +21,19 @@ export interface CollabServer {
   close(): Promise<void>;
 }
 
-/** excalidraw-room's handlers, unchanged in behaviour. */
-export async function startCollabServer(): Promise<CollabServer> {
+/**
+ * excalidraw-room's handlers, unchanged in behaviour. `refuseWebsocket` answers
+ * every websocket upgrade with 403, as a firewall or proxy in front of the
+ * server might, so only long-polling gets through.
+ */
+export async function startCollabServer(options: { refuseWebsocket?: boolean } = {}): Promise<CollabServer> {
   const http: HttpServer = createServer();
+  if (options.refuseWebsocket) {
+    http.prependListener("upgrade", (_request, socket) => {
+      socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
+      socket.destroy();
+    });
+  }
   const server = new Server(http, { transports: ["websocket", "polling"], cors: { origin: "*" }, allowEIO3: true });
   const relayed: string[] = [];
   server.on("connection", (socket) => {
