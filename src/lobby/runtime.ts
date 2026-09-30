@@ -45,6 +45,8 @@ import { execCommand, IssuesState } from "./issues.ts";
 import { PullsState } from "./pulls.ts";
 import { PullReviews } from "./pr-review.ts";
 import { KnowledgeBook } from "./knowledge.ts";
+import { ExcalidrawBook } from "../excalidraw/sessions.ts";
+import { checkSession } from "../excalidraw/check.ts";
 import { LobbyView, type LiveSession, type LobbyHost, type SwitchTarget, type TabId } from "./view.ts";
 import { lobbyTheme } from "./theme.ts";
 import { deliverComments, onOwnerEvent, setAuto } from "../pi/owner.ts";
@@ -70,6 +72,7 @@ interface Runtime {
   pulls: PullsState;
   reviews: PullReviews;
   knowledge: KnowledgeBook;
+  excalidraw: ExcalidrawBook;
   unsubscribeFeed?: () => void;
   /** Puts the panel's questions to the user: the questionnaire unless a test sets another. */
   asker?: Asker;
@@ -624,6 +627,8 @@ function host(state: Runtime, tui: TUI): LobbyHost {
     pulls: state.pulls,
     reviews: state.reviews,
     knowledge: state.knowledge,
+    excalidraw: state.excalidraw,
+    checkExcalidraw: (session) => checkSession(session.link, session.name),
     editText: (title, text) => editText(state, title, text),
     profileLabel: (kind) => {
       const profile = lobbyProfile(state, kind);
@@ -848,6 +853,7 @@ export function initLobby(pi: ExtensionAPI, ctx: ExtensionContext, configDir: st
       backups: () => loadConfig().knowledge.backupCount,
       sessionId: () => ctx.sessionManager.getSessionId(),
     }),
+    excalidraw: new ExcalidrawBook({ root }),
   };
   state.reviews = new PullReviews({
     cwd: ctx.cwd,

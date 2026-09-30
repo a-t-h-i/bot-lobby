@@ -13,6 +13,7 @@ import { IssuesState, type Exec } from "../src/lobby/issues.ts";
 import { PullsState } from "../src/lobby/pulls.ts";
 import { PullReviews } from "../src/lobby/pr-review.ts";
 import { KnowledgeBook } from "../src/lobby/knowledge.ts";
+import { ExcalidrawBook } from "../src/excalidraw/sessions.ts";
 import { ensureProjectStructure } from "../src/state/persistence.ts";
 import { dataRoot } from "../src/state/project.ts";
 import { readAgentKnowledge } from "../src/knowledge/store.ts";
@@ -79,6 +80,8 @@ interface Calls {
   edited: Array<[string, string]>;
   /** The questions the split of a long plan put to the user. */
   splitAsked: AskQuestion[][];
+  /** The Excalidraw sessions the tab checked. */
+  checked: string[];
 }
 
 interface ViewOptions {
@@ -112,6 +115,8 @@ interface ViewOptions {
   classifier?: Classifier;
   /** What pi's editor returns when the Knowledge tab edits a whole file (undefined = cancelled). */
   editedText?: string;
+  /** What checking an Excalidraw session finds (a room with someone in it when absent). */
+  excalidrawCheck?: { ok: boolean; text: string };
   /** Steps a plan may have before saving it offers a split (the config's default when absent). */
   splitAbove?: number;
   /** How the user answers the split question (leaving it open when absent). */
@@ -120,7 +125,7 @@ interface ViewOptions {
 
 function makeView(options: ViewOptions = {}) {
   const root = mkdtempSync(join(tmpdir(), "bl-view-"));
-  const calls: Calls = { settings: [], answered: 0, savedPanels: [], oracle: [], comments: [], started: [], discarded: [], aborted: 0, hidden: 0, seeds: [], seats: [], sessionStarts: [], auto: [], inbox: [], sessionInbox: [], switches: [], dialogs: [], archived: [], restored: [], deleted: [], historyLoads: [], edited: [], splitAsked: [] };
+  const calls: Calls = { settings: [], answered: 0, savedPanels: [], oracle: [], comments: [], started: [], discarded: [], aborted: 0, hidden: 0, seeds: [], seats: [], sessionStarts: [], auto: [], inbox: [], sessionInbox: [], switches: [], dialogs: [], archived: [], restored: [], deleted: [], historyLoads: [], edited: [], splitAsked: [], checked: [] };
   let taskList: Task[] = options.tasks ?? (options.task ? [options.task] : []);
   let archivedList: Task[] = options.archivedTasks ?? [];
   const sessions: BackgroundSession[] = [];
@@ -135,6 +140,7 @@ function makeView(options: ViewOptions = {}) {
   const pulls = new PullsState(options.pullsExec ?? exec, root);
   ensureProjectStructure(root, ".pi");
   const knowledge = new KnowledgeBook({ root, configDir: ".pi", threshold: () => 20_000, backups: () => 1, sessionId: () => "me" });
+  const excalidraw = new ExcalidrawBook({ root, dir: join(root, "excalidraw-lists") });
   const reviews = new PullReviews({ cwd: root, root, configDir: ".pi", exec: options.pullsExec ?? exec, profile: () => ({ thinking: "medium", timeoutMs: 1000 }), runProcess: options.reviewProcess ?? hangingRunner, ...(options.classifier ? { classifier: options.classifier } : {}) });
   let planner: PlanningSession | undefined;
   const host: LobbyHost = {
@@ -193,6 +199,11 @@ function makeView(options: ViewOptions = {}) {
     pulls,
     reviews,
     knowledge,
+    excalidraw,
+    checkExcalidraw: async (session) => {
+      calls.checked.push(session.id);
+      return options.excalidrawCheck ?? { ok: true, text: "reached the room with 1 other; 3 elements on the board" };
+    },
     editText: async (title, text) => {
       calls.edited.push([title, text]);
       return options.editedText;
@@ -271,7 +282,7 @@ function makeView(options: ViewOptions = {}) {
   const view = new LobbyView(tui, host, { borderColor: noop, selectList: { selectedPrefix: noop, selectedText: noop, description: noop, scrollInfo: noop, noMatch: noop } });
   view.focused = true;
   view.refreshData(true);
-  return { view, calls, feed, quickfix, issues, pulls, reviews, knowledge, root, planner: () => planner, sessions, procs };
+  return { view, calls, feed, quickfix, issues, pulls, reviews, knowledge, excalidraw, root, planner: () => planner, sessions, procs };
 }
 
 /** A fake pi whose every run answers `text` as the assistant. */
@@ -351,7 +362,7 @@ test("tab and alt+digit switch tabs; prompt tabs open in typing mode, list tabs 
 });
 
 test("the Issues tab is off unless lobby.issues turns it on", () => {
-  assert.deepEqual(visibleTabs(false), ["lobby", "tasks", "plan", "quickfix", "metrics", "git", "knowledge"]);
+  assert.deepEqual(visibleTabs(false), ["lobby", "tasks", "plan", "quickfix", "metrics", "git", "knowledge", "excalidraw"]);
   assert.deepEqual(visibleTabs(true), [...TAB_IDS]);
   const { view } = makeView();
   assert.ok(!view.render(140)[0]!.includes("Issues"));
@@ -787,7 +798,7 @@ test("panes start as the config left them, and lobby.keys rebinds the shortcuts"
   assert.ok(!has("╭ Thinking"), "the default key no longer toggles");
   view.handleInput(KEY.alt("t"));
   assert.ok(has("╭ Thinking"));
-  assert.ok(view.render(120)[0]!.includes("F1 keys"), "the tab bar names the help key");
+  assert.ok(view.render(140)[0]!.includes("F1 keys"), "the tab bar names the help key");
   view.handleInput("\x1bOP");
   assert.equal(view.help, true);
   assert.ok(has("Alt+T") && has("show or hide thinking"));
@@ -1130,7 +1141,7 @@ test("alt+n starts a task in its own session named after it; the Lobby then show
   assert.deepEqual(calls.oracle, [], "nothing went to this window's oracle");
   assert.deepEqual(procs[0]!.commands("prompt").map((command) => command.message), ["/bot-lobby --task add a login page"]);
   assert.equal(view.viewedEntry().where, "background");
-  assert.ok(view.render(120)[0]!.includes("add a login page · starting"), "the tab bar names the session in view");
+  assert.ok(view.render(140)[0]!.includes("add a login page · starting"), "the tab bar names the session in view");
 
   procs[0]!.emit(
     { type: "response", command: "get_state", success: true, data: { sessionId: "child-1" } },
@@ -1501,7 +1512,8 @@ test("a long title gives up the branch, then the name, before it crowds out the 
   const { view } = makeView({ workspace: { name: "a-repository-with-quite-a-long-name-indeed", branch: "feature/some-very-long-branch-name-that-goes-on" } });
   const wide = view.render(200)[0]!;
   assert.match(wide, /◆ a-repository-with-quite-a-l… \(⎇ feature\/some-very-long-branch-name-…\) /, "clipped, with the branch");
-  const medium = view.render(112)[0]!;
+  // Wide enough for the tabs (the Excalidraw tab took 14 columns) and the name, but not the branch.
+  const medium = view.render(126)[0]!;
   assert.match(medium, /◆ a-repository-with-quite-a-l… │/, "the branch goes first");
   assert.match(medium, /Metrics/);
   const narrow = view.render(60)[0]!;
@@ -2048,4 +2060,225 @@ test("ctrl+s leaves the plan alone while the split question is open, and a plan 
   await settle();
   assert.equal(small.calls.splitAsked.length, 0, "ten steps are under twelve");
   assert.match(small.view.render(140).at(-1)!, /saved PLAN-dark-mode to the pending tasks/);
+});
+
+/* ------------------------------------------------------- the Excalidraw tab */
+
+const XD_LINK = "https://excalidraw.com/#room=0123456789abcdef0123,AbCdEfGhIjKlMnOpQrStUv";
+
+function excalidrawTab(options: ViewOptions = {}) {
+  const made = makeView(options);
+  made.view.setTab("excalidraw");
+  return made;
+}
+
+/** Add a session through the prompt, as a user does: a, then the link and a name, then enter. */
+function addSession(view: LobbyView, text: string): void {
+  view.handleInput("a");
+  type(view, text);
+  view.handleInput(KEY.enter);
+}
+
+test("the Excalidraw tab starts empty, says how to add a session, and opens in browsing mode", () => {
+  const { view } = excalidrawTab();
+  assert.deepEqual([view.tab, view.mode], ["excalidraw", "browse"]);
+  const text = flat(view.render(140));
+  assert.match(text, /Excalidraw ─+ 0\/5/);
+  assert.match(text, /No sessions yet/);
+  assert.match(text, /a {2}add one: in Excalidraw, Share → Live collaboration → Start session, then paste the link/);
+  assert.match(text, /n {2}or make a new room here/);
+  assert.match(text, /Up to 5 sessions; each can be assigned to one agent or several/);
+});
+
+test("a is a link with an optional name; the session appears, picked, ready to be assigned; a bad link is kept for fixing", () => {
+  const { view, excalidraw } = excalidrawTab();
+  view.handleInput("a");
+  assert.equal(view.mode, "type");
+  assert.match(flat(view.render(140)), /paste the session's link \(a name may follow it\) · enter adds it · esc cancels/);
+  view.handleInput(KEY.enter);
+  assert.match(view.render(140).at(-1)!, /paste the session's link first, or esc to cancel/);
+  type(view, "Architecture https://excalidraw.com/#room=abc");
+  view.handleInput(KEY.enter);
+  assert.match(view.render(140).at(-1)!, /that is not an Excalidraw room link/);
+  assert.equal(view.mode, "type", "still adding: what was typed is there to fix");
+  view.handleInput("\x15");
+  type(view, `Architecture ${XD_LINK}`);
+  view.handleInput(KEY.enter);
+  assert.equal(view.mode, "browse");
+  assert.match(view.render(140).at(-1)!, /added “Architecture” \(1 of 5\)/);
+  assert.deepEqual(excalidraw.list().map((session) => [session.name, session.link]), [["Architecture", XD_LINK]]);
+  const text = flat(view.render(140));
+  assert.match(text, /Sessions ─+ 1\/5/);
+  assert.match(text, /Architecture {2,}no agents/);
+  assert.ok(text.includes(XD_LINK.replace("#room=", "#room=")), "the link is shown, to copy");
+  assert.match(text, /agents may draw here \(w: look only\)/);
+  assert.match(text, /\[ \] Master \(oracle\)/);
+  assert.ok(view.render(140)[0]!.includes("9 Excalidraw") || view.render(140)[0]!.includes("8 Excalidraw"));
+  assert.match(view.render(140)[0]!, /Excalidraw 1/, "the tab bar counts the sessions");
+});
+
+test("n makes a new room named by the prompt, and its link is a real room link", () => {
+  const { view, excalidraw } = excalidrawTab();
+  view.handleInput("n");
+  assert.match(flat(view.render(140)), /a name for the new room \(optional\)/);
+  type(view, "Sprint board");
+  view.handleInput(KEY.enter);
+  const [session] = excalidraw.list();
+  assert.equal(session!.name, "Sprint board");
+  assert.match(session!.link, /^https:\/\/excalidraw\.com\/#room=[0-9a-f]{20},[\w-]{22}$/);
+  assert.match(view.render(140).at(-1)!, /added “Sprint board” \(1 of 5\)/);
+  view.handleInput("n");
+  view.handleInput(KEY.enter);
+  assert.equal(excalidraw.list()[1]!.name, "Session 2", "unnamed: numbered");
+});
+
+test("five sessions at most: a and n refuse the sixth and say to remove one", () => {
+  const { view, excalidraw } = excalidrawTab();
+  for (let index = 0; index < 5; index += 1) {
+    view.handleInput("n");
+    type(view, `Board ${index + 1}`);
+    view.handleInput(KEY.enter);
+  }
+  assert.equal(excalidraw.list().length, 5);
+  assert.match(flat(view.render(140)), /Sessions ─+ 5\/5/);
+  for (const key of ["a", "n"]) {
+    view.handleInput(key);
+    assert.equal(view.mode, "browse", "the prompt does not open");
+    assert.match(view.render(140).at(-1)!, /all 5 sessions are in use — remove one first \(d d\)/);
+  }
+  assert.equal(excalidraw.list().length, 5);
+  // Removing one makes room again.
+  view.handleInput("d");
+  view.handleInput("d");
+  assert.equal(excalidraw.list().length, 4);
+  view.handleInput("n");
+  assert.equal(view.mode, "type");
+});
+
+test("a session is assigned to one agent or several with enter or space, and taken back", () => {
+  const { view, excalidraw } = excalidrawTab();
+  addSession(view, `Architecture ${XD_LINK}`);
+  // After adding, the checklist has the keys: the first agent is the oracle.
+  view.handleInput(KEY.enter);
+  assert.equal(excalidraw.list()[0]!.agents.join(), "master");
+  view.handleInput(KEY.down);
+  view.handleInput(KEY.down);
+  view.handleInput(" ");
+  assert.equal(excalidraw.list()[0]!.agents.join(), "master,backend", "the third is Backend");
+  assert.match(view.render(140).at(-1)!, /Backend has this session now/);
+  let text = flat(view.render(140));
+  assert.match(text, /Assigned to ─+ 2 agents/);
+  assert.match(text, /\[x\] Master \(oracle\)/);
+  assert.match(text, /\[ \] Designer/);
+  assert.match(text, /▸ \[x\] Backend/, "the cursor is on the agent that was toggled");
+  view.handleInput(KEY.enter);
+  assert.equal(excalidraw.list()[0]!.agents.join(), "master", "again takes it back");
+  view.handleInput("*");
+  assert.equal(excalidraw.list()[0]!.agents.length, 8);
+  assert.match(view.render(140).at(-1)!, /assigned to every agent/);
+  view.handleInput("*");
+  assert.deepEqual(excalidraw.list()[0]!.agents, []);
+  // The cursor stops at the ends of the checklist.
+  for (let index = 0; index < 20; index += 1) view.handleInput(KEY.down);
+  view.handleInput(KEY.enter);
+  assert.equal(excalidraw.list()[0]!.agents.join(), "planner");
+  text = flat(view.render(140));
+  assert.match(text, /▸ \[x\] Planner/);
+});
+
+test("w lets agents draw or only look; t checks the room; r renames; d d removes", async () => {
+  const { view, excalidraw, calls } = excalidrawTab({ excalidrawCheck: { ok: false, text: "could not reach the Excalidraw collaboration server" } });
+  addSession(view, `Architecture ${XD_LINK}`);
+  view.handleInput(KEY.escape);
+  view.handleInput("w");
+  assert.equal(excalidraw.list()[0]!.contribute, false);
+  assert.match(flat(view.render(140)), /agents may only look \(w: let them draw\)/);
+  view.handleInput("w");
+  assert.equal(excalidraw.list()[0]!.contribute, true);
+  assert.match(flat(view.render(140)), /t checks that the room can be reached/);
+  view.handleInput("t");
+  assert.match(flat(view.render(140)), /checking the room…/);
+  await settle();
+  assert.deepEqual(calls.checked, [excalidraw.list()[0]!.id]);
+  assert.match(flat(view.render(140)), /! could not reach the Excalidraw collaboration server/);
+  assert.match(flat(view.render(140)), /! {2}Architecture|!\s+Architecture/, "the list marks the session that failed its check");
+  view.handleInput("r");
+  assert.equal(view.mode, "type");
+  assert.match(flat(view.render(140)), /a new name for the session/);
+  view.handleInput("\x15");
+  type(view, "Roadmap");
+  view.handleInput(KEY.enter);
+  assert.equal(excalidraw.list()[0]!.name, "Roadmap");
+  view.handleInput("d");
+  assert.match(view.render(140).at(-1)!, /press d again to remove “Roadmap”/);
+  assert.equal(excalidraw.list().length, 1);
+  view.handleInput("d");
+  assert.deepEqual(excalidraw.list(), []);
+  assert.match(view.render(140).at(-1)!, /removed “Roadmap”/);
+  assert.match(flat(view.render(140)), /No sessions yet/);
+});
+
+test("a draft is dropped by esc or by leaving the tab, and never becomes another tab's prompt", () => {
+  const { view, excalidraw } = excalidrawTab();
+  view.handleInput("a");
+  type(view, "half a link");
+  view.handleInput(KEY.escape);
+  assert.equal(view.mode, "browse");
+  view.handleInput("a");
+  type(view, "https://excalidraw.com/#room=abc");
+  view.handleInput(KEY.alt("1"));
+  assert.equal(view.tab, "lobby");
+  type(view, "hello");
+  assert.equal(view.render(140).some((line) => line.includes("half a link") || line.includes("#room=abc")), false, "the Lobby's prompt is its own");
+  view.setTab("excalidraw");
+  view.handleInput("i");
+  assert.equal(view.mode, "browse", "i does not resume typing here; a and n start a draft");
+  assert.deepEqual(excalidraw.list(), []);
+});
+
+test("the help lists the tab's keys, and the hint line names the ones that apply", () => {
+  const { view } = excalidrawTab();
+  assert.match(flat(view.render(140)), /a add a link.*n new room/, "the hint line, before any session");
+  addSession(view, `Architecture ${XD_LINK}`);
+  view.handleInput(KEY.escape);
+  view.handleInput("?");
+  const help = flat(view.render(140));
+  assert.match(help, /Excalidraw tab/);
+  // The help wraps its text in columns, so each fragment is one that stays on a line.
+  assert.match(help, /paste the link from Excalidraw/);
+  assert.match(help, /let agents draw in the session, or only look at it/);
+  assert.match(help, /remove the session \(agents lose it at once\)/);
+  assert.match(help, /make a new room, whose link you open in Excalidraw/);
+});
+
+test("the tab fits its space with sessions in it, wide, narrow and short; a narrow one shows one pane at a time", () => {
+  const { view } = excalidrawTab();
+  for (let index = 0; index < 3; index += 1) {
+    view.handleInput("n");
+    type(view, `A session with quite a long name number ${index + 1} that goes on`);
+    view.handleInput(KEY.enter);
+    view.handleInput(KEY.escape);
+  }
+  view.handleInput(KEY.up);
+  for (const [width, rows] of [[140, 40], [100, 24], [80, 24], [60, 16], [40, 12]] as const) {
+    const made = makeView({ rows });
+    made.excalidraw.create("A session with quite a long name that goes on and on");
+    made.excalidraw.create("Second");
+    made.excalidraw.toggleAll(made.excalidraw.list()[0]!.id);
+    made.view.setTab("excalidraw");
+    for (const focus of ["list", "detail"] as const) {
+      if (focus === "detail") made.view.handleInput(KEY.enter);
+      const lines = made.view.render(width);
+      assert.equal(lines.length, rows, `${width}x${rows} ${focus}`);
+      for (const line of lines) assert.ok(visibleWidth(line) <= width, `${width}x${rows} ${focus}: "${line}"`);
+    }
+  }
+  const narrow = makeView({ rows: 24 });
+  narrow.excalidraw.create("Only one");
+  narrow.view.setTab("excalidraw");
+  assert.match(flat(narrow.view.render(80)), /Sessions/);
+  assert.doesNotMatch(flat(narrow.view.render(80)), /Assigned to/, "the list alone");
+  narrow.view.handleInput(KEY.enter);
+  assert.match(flat(narrow.view.render(80)), /Assigned to/);
+  assert.doesNotMatch(flat(narrow.view.render(80)), /Sessions ─/, "the detail alone");
 });
