@@ -11,6 +11,7 @@
  * itself. And it does not draw while nobody else is in the room, because
  * nothing keeps a scene for a room but the browsers in it.
  */
+import { HttpsProxyAgent } from "https-proxy-agent";
 import { io, type Socket } from "socket.io-client";
 import { DEFAULT_SERVER, seal, unseal, type RoomLink } from "./room.ts";
 import { describeScene, mergeElements, plainText, planDraw, sceneBounds, visible, type DrawOutcome, type DrawRequest, type Scene, type SceneElement } from "./scene.ts";
@@ -51,7 +52,63 @@ const SCENE_WAIT_MS = 5000;
 const MAX_MESSAGE_CHARS = 900_000;
 
 function defaultConnect(server: string): SocketLike {
-  return io(server, { transports: ["websocket", "polling"], autoUnref: true, timeout: 8000 });
+  const proxy = proxyFor(server);
+  // Where a network lets plain HTTPS through but not a websocket, the seat falls back to long-polling, as a browser does.
+  // socket.io types `agent` for browsers (string | boolean); in Node it is passed on to the http and ws requests as an http.Agent.
+  const agent = proxy ? { agent: new HttpsProxyAgent(proxy) as unknown as string } : {};
+  return io(server, { transports: ["websocket", "polling"], tryAllTransports: true, autoUnref: true, timeout: 8000, ...agent });
+}
+
+/**
+ * The proxy the environment names for this server (`HTTPS_PROXY`, `HTTP_PROXY`,
+ * `ALL_PROXY`, in either case), unless `NO_PROXY` exempts its host. Node's own
+ * sockets ignore these variables, so without this a seat on a network that only
+ * lets traffic out through a proxy never reaches the server.
+ */
+export function proxyFor(server: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
+  let url: URL;
+  try {
+    url = new URL(server);
+  } catch {
+    return undefined;
+  }
+  const pick = (...names: string[]) => names.map((name) => env[name]?.trim()).find((value) => value);
+  const proxy = url.protocol === "http:" ? pick("http_proxy", "HTTP_PROXY", "all_proxy", "ALL_PROXY") : pick("https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY");
+  if (!proxy) return undefined;
+  const host = url.hostname.toLowerCase();
+  const exempt = (pick("no_proxy", "NO_PROXY") ?? "").split(/[\s,]+/).filter(Boolean);
+  for (const entry of exempt) {
+    if (entry === "*") return undefined;
+    const name = entry.toLowerCase().replace(/:\d+$/, "").replace(/^\*?\./, "");
+    if (host === name || host.endsWith(`.${name}`)) return undefined;
+  }
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(proxy) ? proxy : `http://${proxy}`;
+}
+
+/**
+ * Why a connection failed, in words a person can act on. socket.io reports
+ * every transport failure as "websocket error" or "xhr poll error" and keeps
+ * the cause (a refused upgrade, an unknown host, a certificate) underneath.
+ */
+export function connectFailure(error: unknown): string {
+  const outer = error as { message?: string; description?: unknown; context?: { responseText?: unknown } } | undefined;
+  const description = outer?.description as { message?: unknown } | number | string | undefined;
+  // A websocket keeps its cause in `description`; long-polling keeps the HTTP status there (0 when no response came) and the cause in the request's text.
+  const polled = typeof outer?.context?.responseText === "string" ? outer.context.responseText.split("\n")[0]!.replace(/^Error: /, "") : "";
+  const text =
+    typeof description === "object" && typeof description?.message === "string" && description.message
+      ? description.message
+      : typeof description === "number" && description > 0
+        ? `Unexpected server response: ${description}`
+        : typeof description === "string" && description
+          ? description
+          : polled || outer?.message || "";
+  const status = /Unexpected server response: (\d{3})/.exec(text)?.[1];
+  if (status) return `the connection was refused with HTTP ${status}`;
+  if (/ENOTFOUND|EAI_AGAIN/.test(text)) return `${text}: the server's name did not resolve, so check the network or DNS`;
+  if (/ECONNREFUSED|ECONNRESET|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH/.test(text)) return `${text}: check the network, or set HTTPS_PROXY if it only lets traffic out through a proxy`;
+  if (/certificate|CERT_|SSL|TLS/i.test(text)) return `${text}: a proxy or firewall may be intercepting HTTPS; NODE_EXTRA_CA_CERTS can point at its certificate`;
+  return text;
 }
 
 export function collaborationServer(env: NodeJS.ProcessEnv = process.env): string {
@@ -122,11 +179,13 @@ export class ExcalidrawRoom {
           done = true;
           this.opening = undefined;
           this.close();
-          reject(new Error(`could not reach the Excalidraw collaboration server ${server}${lastError ? ` (${lastError})` : ""}`));
+          // Only the proxy's host is named: its URL may carry a password.
+          const via = this.options.connect ? undefined : proxyFor(server);
+          reject(new Error(`could not reach the Excalidraw collaboration server ${server}${via ? ` through the proxy ${new URL(via).host}` : ""}${lastError ? ` (${lastError})` : ""}`));
         }, this.options.connectTimeoutMs ?? CONNECT_TIMEOUT_MS),
       );
       socket.on("connect_error", (error: Error) => {
-        lastError = error.message;
+        lastError = connectFailure(error) || lastError;
       });
       // Every (re)connection is greeted with init-room; the seat answers by joining.
       socket.on("init-room", () => {
