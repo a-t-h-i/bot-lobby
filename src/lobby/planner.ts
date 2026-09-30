@@ -22,6 +22,7 @@ import { loadPrompt } from "../prompts/loader.ts";
 import { compilePrompt } from "../prompts/compiler.ts";
 import { withFallback } from "../execution/fallback.ts";
 import { runPiAgent, spawnPiProcess, type PiStreamEvent, type ProcessRunner } from "../execution/pi-runner.ts";
+import { grantOption, type Grant } from "../excalidraw/sessions.ts";
 import { describeToolCall } from "../pi/activity.ts";
 import { appendMetrics, type MetricRecord } from "../state/metrics.ts";
 import { savePlannedTask, type IssueRef, type PlannedTask } from "../state/backlog.ts";
@@ -686,6 +687,7 @@ export class PlanningSession {
         task: splitRequest({ title, plan, steps, ...(feedback ? { revision: feedback } : {}), ...(rejected.length > 0 ? { rejected } : {}) }),
         systemPrompt: splitPrompt(profile.instructions),
         tools: this.tools(PLANNER_TOOLS),
+        ...grantOption("planner"),
       }, signal, (step) => (this.step = step));
       if (signal.aborted) throw new Error("stopped");
       if (lead.status !== "success") return lead.error ?? lead.status;
@@ -778,7 +780,7 @@ export class PlanningSession {
     this.deps.onChange?.();
   }
 
-  private async run(label: string, kind: "planner" | "panel", profile: QuickFixProfile, request: { task: string; systemPrompt: string; tools: readonly string[] }, signal: AbortSignal, setStep: (step: string) => void, routedFrom?: string): Promise<RunOutcome> {
+  private async run(label: string, kind: "planner" | "panel", profile: QuickFixProfile, request: { task: string; systemPrompt: string; tools: readonly string[]; excalidraw?: Grant }, signal: AbortSignal, setStep: (step: string) => void, routedFrom?: string): Promise<RunOutcome> {
     const startedAt = Date.now();
     let outcome: RunOutcome;
     try {
@@ -846,6 +848,8 @@ export class PlanningSession {
       task: `${transcript}\n\nYou are ${label} on the planning panel${roundNote(this.turns, this.limit)}: ask your seat's open questions, or declare READY.`,
       systemPrompt: memberPrompt(member, profile.instructions),
       tools: this.tools(member === "researcher" ? RESEARCH_PANEL_TOOLS : PLANNER_TOOLS),
+      // A panel seat is the agent of its own kind: DEV is Backend, DESIGN the Designer.
+      ...grantOption(member),
     };
     const route = effort ? this.deps.effort?.plan(effort, { ...(profile.model ? { model: profile.model } : {}), thinking: profile.thinking }) : undefined;
     let outcome = await this.run(label, "panel", route ? { ...profile, model: route.model, thinking: route.thinking } : profile, request, signal, (step) => (state.step = step), route ? profileLabel(route.from) : undefined);
@@ -902,6 +906,7 @@ export class PlanningSession {
         task: `${transcript}\n\n${panelSection(outcomes)}\n\n${oracleClosing(mode, this.turns, limit)}`,
         systemPrompt: plannerPrompt(profile.instructions),
         tools: this.tools(PLANNER_TOOLS),
+        ...grantOption("planner"),
       }, controller.signal, (step) => (this.step = step));
       if (controller.signal.aborted) throw new Error("stopped");
       this.finishRound(outcomes, lead, mode);
