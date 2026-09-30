@@ -13,7 +13,7 @@
  */
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { io, type Socket } from "socket.io-client";
-import { DEFAULT_SERVER, seal, unseal, type RoomLink } from "./room.ts";
+import { DEFAULT_ORIGIN, DEFAULT_SERVER, seal, unseal, type RoomLink } from "./room.ts";
 import { describeScene, mergeElements, plainText, planDraw, sceneBounds, visible, type DrawOutcome, type DrawRequest, type Scene, type SceneElement } from "./scene.ts";
 
 /** The part of a socket.io client a seat uses; tests and other transports can stand in for it. */
@@ -56,7 +56,16 @@ function defaultConnect(server: string): SocketLike {
   // Where a network lets plain HTTPS through but not a websocket, the seat falls back to long-polling, as a browser does.
   // socket.io types `agent` for browsers (string | boolean); in Node it is passed on to the http and ws requests as an http.Agent.
   const agent = proxy ? { agent: new HttpsProxyAgent(proxy) as unknown as string } : {};
-  return io(server, { transports: ["websocket", "polling"], tryAllTransports: true, autoUnref: true, timeout: 8000, ...agent });
+  // Excalidraw's collaboration server refuses handshakes whose Origin is not on its allowlist, so a seat presents the site a browser would come from.
+  let site = DEFAULT_ORIGIN;
+  if (server !== DEFAULT_SERVER) {
+    try {
+      site = new URL(server).origin;
+    } catch {
+      /* fall back to DEFAULT_ORIGIN */
+    }
+  }
+  return io(server, { transports: ["websocket", "polling"], tryAllTransports: true, autoUnref: true, timeout: 8000, extraHeaders: { Origin: site }, ...agent });
 }
 
 /**
