@@ -6,6 +6,7 @@ import { activityWord } from "../pi/activity.ts";
 import { shortDuration } from "../text.ts";
 import { readRelayRequest } from "../ask/relay.ts";
 import type { AskQuestion, AskResult } from "../ask/types.ts";
+import { grantEnv, grantNote, toolsOf, type Grant } from "../excalidraw/sessions.ts";
 
 /** Live control over one running subagent: queue a steering message for its next turn. */
 export interface RunHandle {
@@ -45,6 +46,8 @@ export interface PiRunOptions {
   time?: TimeLimit;
   /** Answers the agent's relayed questions; without it they are cancelled like any other dialog. */
   onAsk?: RelayAsk;
+  /** The Excalidraw sessions assigned to this agent: its tools, the room links in its environment, and a note on them in its task. */
+  excalidraw?: Grant;
 }
 
 /**
@@ -742,14 +745,17 @@ function writePromptFile(prompt: string): { file: string; cleanup: () => void } 
 /** Run one isolated subagent and normalise its outcome. */
 export async function runPiAgent(options: PiRunOptions, run: ProcessRunner = spawnPiProcess): Promise<PiRunResult> {
   const prompt = options.systemPrompt ? writePromptFile(options.systemPrompt) : undefined;
+  const grant = options.excalidraw;
+  // An agent with an allowlist gets the Excalidraw tools added to it; one without is not restricted, so already has them.
+  const tools = grant && options.tools ? [...new Set([...options.tools, ...toolsOf(grant)])] : options.tools;
   try {
-    const args = buildPiArgs({ ...options, systemPromptFile: prompt?.file });
+    const args = buildPiArgs({ ...options, ...(tools ? { tools } : {}), systemPromptFile: prompt?.file });
     const outcome = await run(args, {
       cwd: options.cwd,
       signal: options.signal,
       timeoutMs: options.timeoutMs,
-      prompt: `Task: ${options.task}`,
-      env: options.env,
+      prompt: `Task: ${options.task}${grant ? `\n\n${grantNote(grant)}` : ""}`,
+      env: grant ? { ...options.env, ...grantEnv(grant) } : options.env,
       stallTimeoutMs: options.stallTimeoutMs,
       toolStallTimeoutMs: options.toolStallTimeoutMs,
       wrapUpAtMs: options.wrapUpAtMs,

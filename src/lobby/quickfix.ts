@@ -8,6 +8,7 @@
 import { loadPrompt } from "../prompts/loader.ts";
 import { withFallback } from "../execution/fallback.ts";
 import { runPiAgent, spawnPiProcess, type PiStreamEvent, type ProcessRunner } from "../execution/pi-runner.ts";
+import { grantOption } from "../excalidraw/sessions.ts";
 import { describeToolCall } from "../pi/activity.ts";
 import { appendMetrics, type MetricRecord } from "../state/metrics.ts";
 import { appendChange, EditLog } from "../state/changes.ts";
@@ -253,6 +254,7 @@ export class QuickFixQueue {
           task: likely ? `${job.prompt}\n\n${likely}` : job.prompt,
           systemPrompt: quickFixPrompt(profile.instructions),
           tools: [...QUICK_FIX_TOOLS, ...(this.deps.hints?.tools() ?? [])],
+          ...grantOption("quickfix"),
           model,
           thinking,
           timeoutMs: profile.timeoutMs,

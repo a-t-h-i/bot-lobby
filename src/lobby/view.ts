@@ -32,6 +32,8 @@ import { filterJobs, newestFirst, renderQuickFix } from "./tabs/quickfix.ts";
 import { renderIssues } from "./tabs/issues.ts";
 import { renderGit } from "./tabs/git.ts";
 import { renderKnowledge, type KnowledgeLayout } from "./tabs/knowledge.ts";
+import { renderExcalidraw, type SessionCheck } from "./tabs/excalidraw.ts";
+import { EXCALIDRAW_AGENTS, MAX_SESSIONS, type ExcalidrawBook, type ExcalidrawSession } from "../excalidraw/sessions.ts";
 import type { EntryRef, KnowledgeBook, KnowledgeFileInfo, KnowledgeView } from "./knowledge.ts";
 import type { PullsState } from "./pulls.ts";
 import type { PullReviews } from "./pr-review.ts";
@@ -41,7 +43,7 @@ import { filterRecords, renderMetrics } from "./tabs/metrics.ts";
 /** The mark before a branch name in the title (shared with the task details). */
 export { BRANCH_GLYPH };
 
-export const TAB_IDS = ["lobby", "tasks", "plan", "quickfix", "issues", "metrics", "git", "knowledge"] as const;
+export const TAB_IDS = ["lobby", "tasks", "plan", "quickfix", "issues", "metrics", "git", "knowledge", "excalidraw"] as const;
 export type TabId = (typeof TAB_IDS)[number];
 
 export const TAB_LABELS: Record<TabId, string> = {
@@ -53,6 +55,7 @@ export const TAB_LABELS: Record<TabId, string> = {
   metrics: "Metrics",
   git: "Git",
   knowledge: "Knowledge",
+  excalidraw: "Excalidraw",
 };
 
 /** The tabs on show: Issues only while `lobby.issues` switches it on. */
@@ -175,6 +178,10 @@ export interface LobbyHost {
   reviews: PullReviews;
   /** Every agent's knowledge files: read, edited, commented on. */
   knowledge: KnowledgeBook;
+  /** The shared Excalidraw sessions (five at most) and which agents each is assigned to. */
+  excalidraw: ExcalidrawBook;
+  /** Join a session's room for a moment and report what is there. */
+  checkExcalidraw(session: ExcalidrawSession): Promise<SessionCheck>;
   /** Edit a text in pi's multi-line editor (the lobby steps aside meanwhile); the new text, or undefined when cancelled. */
   editText(title: string, text: string): Promise<string | undefined>;
   /** The Issues tab is switched on (`lobby.issues`). */
@@ -380,13 +387,21 @@ export class LobbyView implements Component, Focusable {
   private readonly kLayout: KnowledgeLayout = { offset: 0, total: 0, rows: 0 };
   /** The prompt is writing an edit of the picked entry, a note on it, or a new entry after it. */
   private kDraft: { kind: "edit" | "comment" | "add"; entry?: EntryRef } | undefined;
+  private xSelected = 0;
+  private xFocus: "list" | "detail" = "list";
+  /** The agent under the cursor in the picked session's checklist. */
+  private xAgent = 0;
+  /** The prompt is taking a link to add (with an optional name), the name of a new room, or a new name for the picked session. */
+  private xDraft: "add" | "new" | "rename" | undefined;
+  private readonly xChecks = new Map<string, SessionCheck>();
+  private readonly xChecking = new Set<string>();
   private metricsSelected = 0;
   private metricsBy: GroupBy = "model";
   private metricsSort: SortKey = "runs";
 
   /** The Tasks tab lists archived tasks too (v). */
   showArchived = false;
-  private data: { tasks: Task[]; plans: PlannedTask[]; archived: Task[]; comments: Map<string, PlanComment[]>; metrics: MetricRecord[]; classifierMetrics: MetricRecord[]; knowledge: { files: KnowledgeFileInfo[]; view?: KnowledgeView }; at: number } = {
+  private data: { tasks: Task[]; plans: PlannedTask[]; archived: Task[]; comments: Map<string, PlanComment[]>; metrics: MetricRecord[]; classifierMetrics: MetricRecord[]; knowledge: { files: KnowledgeFileInfo[]; view?: KnowledgeView }; excalidraw: ExcalidrawSession[]; at: number } = {
     tasks: [],
     plans: [],
     archived: [],
@@ -394,6 +409,7 @@ export class LobbyView implements Component, Focusable {
     metrics: [],
     classifierMetrics: [],
     knowledge: { files: [] },
+    excalidraw: [],
     at: 0,
   };
 
@@ -486,6 +502,7 @@ export class LobbyView implements Component, Focusable {
       metrics: this.tab === "metrics" ? this.host.metrics() : this.data.metrics,
       classifierMetrics: this.tab === "metrics" ? this.host.classifierMetrics?.() ?? [] : this.data.classifierMetrics,
       knowledge: this.tab === "knowledge" ? this.readKnowledge() : this.data.knowledge,
+      excalidraw: this.host.excalidraw.list(),
       at: now,
     };
     if (this.tab === "tasks") {
@@ -535,8 +552,9 @@ export class LobbyView implements Component, Focusable {
     if (tab === this.tab) return;
     if (!this.tabs().includes(tab)) return this.say(`the ${TAB_LABELS[tab]} tab is off — set lobby.${tab} to true in the config to bring it back`, "warning");
     // An entry being edited is not a draft to come back to: its text was only lent to the prompt.
-    if (this.kDraft) {
+    if (this.kDraft || this.xDraft) {
       this.kDraft = undefined;
+      this.xDraft = undefined;
       this.editor.setText("");
     }
     this.drafts[this.tab] = this.editor.getText();
@@ -756,8 +774,9 @@ export class LobbyView implements Component, Focusable {
       this.commentTarget = undefined;
       this.issueDraft = false;
       this.gitFocusDraft = false;
-      if (this.kDraft) {
+      if (this.kDraft || this.xDraft) {
         this.kDraft = undefined;
+        this.xDraft = undefined;
         this.editor.setText("");
       }
       this.newSession = false;
@@ -786,7 +805,7 @@ export class LobbyView implements Component, Focusable {
     if (matchesKey(data, Key.home) || matchesKey(data, Key.end)) return this.scrollToEdge(matchesKey(data, Key.home));
     const tabs = this.tabs();
     if (!PROMPT_FIRST.has(this.tab) && /^[1-9]$/.test(data) && Number(data) <= tabs.length) return this.setTab(tabs[Number(data) - 1]!);
-    if (data === "i" && this.tab !== "metrics" && this.tab !== "tasks" && this.tab !== "issues" && this.tab !== "git" && this.tab !== "knowledge") return this.setMode("type");
+    if (data === "i" && this.tab !== "metrics" && this.tab !== "tasks" && this.tab !== "issues" && this.tab !== "git" && this.tab !== "knowledge" && this.tab !== "excalidraw") return this.setMode("type");
     if (this.tabCommand(data)) return;
     const printable = isPrintable(data);
     if (printable && PROMPT_FIRST.has(this.tab)) {
@@ -812,6 +831,8 @@ export class LobbyView implements Component, Focusable {
         return this.gitFocus;
       case "knowledge":
         return this.kFocus;
+      case "excalidraw":
+        return this.xFocus;
       case "metrics":
         return "table";
     }
@@ -864,6 +885,9 @@ export class LobbyView implements Component, Focusable {
       case "knowledge":
         this.kFocus = direction < 0 ? "list" : "detail";
         return;
+      case "excalidraw":
+        this.xFocus = direction < 0 ? "list" : "detail";
+        return;
       case "metrics":
         return;
     }
@@ -899,9 +923,23 @@ export class LobbyView implements Component, Focusable {
         return;
       case "knowledge":
         return this.moveKnowledge(delta);
+      case "excalidraw":
+        return this.moveExcalidraw(delta);
       case "metrics":
         return this.scrollPane("table", delta);
     }
+  }
+
+  /** Arrows on the Excalidraw tab: pick a session, or (in the checklist) an agent. */
+  private moveExcalidraw(delta: number): void {
+    const step = Math.sign(delta);
+    if (this.xFocus === "list") {
+      const next = Math.max(0, Math.min(this.data.excalidraw.length - 1, this.xSelected + step));
+      if (next !== this.xSelected) this.xAgent = 0;
+      this.xSelected = next;
+      return;
+    }
+    this.xAgent = Math.max(0, Math.min(EXCALIDRAW_AGENTS.length - 1, this.xAgent + step));
   }
 
   /** Arrows and pages on the Knowledge tab: pick a file, or pick an entry of the open one (a page moves several). */
@@ -1169,6 +1207,8 @@ export class LobbyView implements Component, Focusable {
         return this.gitCommand(data, enter, escape);
       case "knowledge":
         return this.knowledgeCommand(data, enter, escape);
+      case "excalidraw":
+        return this.excalidrawCommand(data, enter, escape);
       case "metrics":
         if (data === "g") return (this.metricsBy = this.metricsBy === "model" ? "model-kind" : "model", this.metricsSelected = 0), true;
         if (data === "s") return (this.metricsSort = SORT_KEYS[(SORT_KEYS.indexOf(this.metricsSort) + 1) % SORT_KEYS.length]!), true;
@@ -1853,6 +1893,110 @@ export class LobbyView implements Component, Focusable {
     return true;
   }
 
+  /** Assign the picked session to the agent under the cursor, or take it back. */
+  private toggleExcalidrawAgent(session: ExcalidrawSession): void {
+    this.say(this.host.excalidraw.toggleAgent(session.id, EXCALIDRAW_AGENTS[this.xAgent]!));
+    this.data.excalidraw = this.host.excalidraw.list();
+  }
+
+  private excalidrawCommand(data: string, enter: boolean, escape: boolean): boolean {
+    const sessions = this.data.excalidraw;
+    const session = sessions[this.xSelected];
+    if (data === "a" || data === "n") {
+      if (sessions.length >= MAX_SESSIONS) {
+        this.say(`all ${MAX_SESSIONS} sessions are in use — remove one first (d d)`, "warning");
+        return true;
+      }
+      this.xDraft = data === "a" ? "add" : "new";
+      this.xFocus = "list";
+      this.setMode("type");
+      return true;
+    }
+    if (escape) return (this.xFocus = "list"), true;
+    if (!session) return false;
+    if (enter || (data === " " && this.xFocus === "detail")) {
+      if (this.xFocus === "list") this.xFocus = "detail";
+      else this.toggleExcalidrawAgent(session);
+      return true;
+    }
+    if (data === "*") {
+      this.say(this.host.excalidraw.toggleAll(session.id));
+      this.data.excalidraw = this.host.excalidraw.list();
+      return true;
+    }
+    if (data === "w") {
+      this.say(this.host.excalidraw.toggleContribute(session.id));
+      this.data.excalidraw = this.host.excalidraw.list();
+      return true;
+    }
+    if (data === "r") {
+      this.xDraft = "rename";
+      this.editor.setText(session.name);
+      this.setMode("type");
+      return true;
+    }
+    if (data === "t") {
+      if (this.xChecking.has(session.id)) return true;
+      this.xChecking.add(session.id);
+      this.xChecks.delete(session.id);
+      void this.host.checkExcalidraw(session).then((result) => {
+        this.xChecking.delete(session.id);
+        this.xChecks.set(session.id, result);
+        this.host.requestRender();
+      });
+      return true;
+    }
+    if (data === "d") {
+      const key = `xdelete:${session.id}`;
+      if (this.armed !== key) {
+        this.armed = key;
+        this.say(`press d again to remove “${session.name}” (agents lose it at once; the room itself is untouched)`, "warning");
+        return true;
+      }
+      this.armed = undefined;
+      this.say(this.host.excalidraw.remove(session.id));
+      this.xChecks.delete(session.id);
+      this.data.excalidraw = this.host.excalidraw.list();
+      this.xSelected = Math.max(0, Math.min(this.xSelected, this.data.excalidraw.length - 1));
+      return true;
+    }
+    return false;
+  }
+
+  /** The prompt's text on the Excalidraw tab: a link to add (a name may follow it), the name of a new room, or a new name. */
+  private submitExcalidraw(body: string): void {
+    const draft = this.xDraft;
+    if (!draft) {
+      this.editor.setText(body);
+      return this.say("press a to add a session from a link, n for a new room", "warning");
+    }
+    const book = this.host.excalidraw;
+    if (draft === "rename") {
+      const session = this.data.excalidraw[this.xSelected];
+      this.xDraft = undefined;
+      this.setMode("browse");
+      if (session) this.say(book.rename(session.id, body));
+      this.data.excalidraw = book.list();
+      return;
+    }
+    // A link, then optionally a name for it; or the link's name first.
+    const parts = body.split(/\s+/);
+    const linkAt = parts.findIndex((part) => part.includes("#room=") || /^[\w-]+,[\w-]{22}$/.test(part));
+    const added = draft === "add" ? (linkAt < 0 ? { notice: "that is not an Excalidraw room link — it looks like https://excalidraw.com/#room=<id>,<key>" } : book.add(parts[linkAt]!, parts.filter((_, index) => index !== linkAt).join(" "))) : book.create(body);
+    if (!added.session) {
+      // Keep what was typed, so a slip in the link can be fixed.
+      this.editor.setText(body);
+      return this.say(added.notice, "warning");
+    }
+    this.xDraft = undefined;
+    this.setMode("browse");
+    this.data.excalidraw = book.list();
+    this.xSelected = Math.max(0, this.data.excalidraw.findIndex((session) => session.id === added.session!.id));
+    this.xFocus = "detail";
+    this.xAgent = 0;
+    this.say(added.notice);
+  }
+
   /** The prompt's text on the Knowledge tab: an edit of the picked entry, a note on it, or a new entry after it. */
   private submitKnowledge(body: string): void {
     const draft = this.kDraft;
@@ -1900,7 +2044,7 @@ export class LobbyView implements Component, Focusable {
   /** The wheel scrolls the pane under the pointer (the focused one when it is over none). */
   private wheel(direction: number, x = -1, y = -1): void {
     if (this.help) return;
-    if (this.tab === "issues" || this.tab === "git" || this.tab === "knowledge") return this.scroll(direction * WHEEL_LINES);
+    if (this.tab === "issues" || this.tab === "git" || this.tab === "knowledge" || this.tab === "excalidraw") return this.scroll(direction * WHEEL_LINES);
     this.scrollPane(this.paneAt(x, y) ?? this.focusedPane(), direction * WHEEL_LINES, true);
   }
 
@@ -1957,6 +2101,9 @@ export class LobbyView implements Component, Focusable {
     const body = text.trim();
     if (!body) {
       if (this.tab === "knowledge" && this.kDraft) return this.say(this.kDraft.kind === "edit" ? "nothing to save — d d deletes an entry, esc cancels" : "write something first, or esc to cancel", "warning");
+      // A new room's name is optional: an empty enter makes it with a numbered one.
+      if (this.tab === "excalidraw" && this.xDraft === "new") return this.submitExcalidraw("");
+      if (this.tab === "excalidraw" && this.xDraft) return this.say(this.xDraft === "add" ? "paste the session's link first, or esc to cancel" : "write a name first, or esc to cancel", "warning");
       // An empty enter on the Plan tab opens the panel's questions; on the Lobby, a background session's question.
       if (this.tab === "plan" && !this.lineTarget && this.host.planner()?.awaitingAnswers) this.answerQuestions();
       if (this.tab === "lobby" && !this.newSession) this.answerSessionDialog();
@@ -1998,6 +2145,8 @@ export class LobbyView implements Component, Focusable {
         return;
       case "knowledge":
         return this.submitKnowledge(body);
+      case "excalidraw":
+        return this.submitExcalidraw(body);
       case "git":
         if (!this.gitFocusDraft) {
           this.editor.setText(body);
@@ -2097,6 +2246,7 @@ export class LobbyView implements Component, Focusable {
     if (this.issuesOn && this.host.issues.issues.length > 0) badges.issues = String(this.host.issues.issues.length);
     if (this.host.reviews.busy) badges.git = spinner(this.tick);
     else if (this.host.pulls.pulls.length > 0) badges.git = String(this.host.pulls.pulls.length);
+    if (this.data.excalidraw.length > 0) badges.excalidraw = String(this.data.excalidraw.length);
     const cells = this.tabs().map((tab, index) => {
       const number = paint(theme, tab === this.tab ? "accent" : "dim", String(index + 1));
       const name = tab === this.tab ? bold(theme, paint(theme, "text", TAB_LABELS[tab])) : paint(theme, "muted", TAB_LABELS[tab]);
@@ -2213,6 +2363,12 @@ export class LobbyView implements Component, Focusable {
         if (this.kDraft?.kind === "add") return picked ? `a new entry after “${clip(picked.text, 40)}” · enter adds it` : "a new entry · enter adds it";
         return "e edits the picked entry, c comments on it, n adds one";
       }
+      case "excalidraw": {
+        if (this.xDraft === "add") return "paste the session's link (a name may follow it) · enter adds it · esc cancels";
+        if (this.xDraft === "new") return "a name for the new room (optional) · enter makes it · esc cancels";
+        if (this.xDraft === "rename") return "a new name for the session · enter saves it · esc cancels";
+        return "a adds a session from a link, n makes a new room";
+      }
       case "git": {
         const pull = this.selectedPull();
         if (this.gitFocusDraft) return `what should the review of #${pull?.number ?? "?"} look at first? · enter reviews`;
@@ -2317,6 +2473,18 @@ export class LobbyView implements Component, Focusable {
           { key: "E", text: "edit the whole file in pi's editor" },
           { key: "r", text: "reread the files from disk" },
         ];
+      case "excalidraw":
+        return [
+          { key: "↑ ↓", text: "pick a session, or (in the checklist) an agent" },
+          { key: "enter / ← →", text: "move between the sessions and the agents; in the checklist, enter or space assigns the picked agent" },
+          { key: "a", text: "add a session: paste the link from Excalidraw (Share → Live collaboration → Start session)" },
+          { key: "n", text: "make a new room, whose link you open in Excalidraw" },
+          { key: "*", text: "assign the session to every agent, or (when they all have it) to none" },
+          { key: "w", text: "let agents draw in the session, or only look at it" },
+          { key: "t", text: "check the session: join the room for a moment and report who is there and what is on the board" },
+          { key: "r", text: "rename the session" },
+          { key: "d d", text: "remove the session (agents lose it at once)" },
+        ];
       case "git":
         return [
           { key: "↑ ↓", text: "select a pull request, or scroll its detail (PageUp/PageDown)" },
@@ -2378,6 +2546,7 @@ export class LobbyView implements Component, Focusable {
       if (this.tab === "lobby" && this.host.masterBusy()) return [["enter", "steer"], ["esc", "stop the oracle"], [k("hide"), "hide"]];
       if (this.tab === "plan" && this.lineTarget) return [["enter", "add the comment"], ["esc", "cancel"]];
       if (this.tab === "knowledge" && this.kDraft) return [["enter", this.kDraft.kind === "edit" ? "save" : this.kDraft.kind === "comment" ? "save the note" : "add it"], ["shift+enter", "new line"], ["esc", "cancel"]];
+      if (this.tab === "excalidraw" && this.xDraft) return [["enter", this.xDraft === "add" ? "add it" : this.xDraft === "new" ? "make it" : "save"], ["esc", "cancel"]];
       if (this.tab === "git" && this.gitFocusDraft) return [["enter", "review with this focus"], ["shift+enter", "new line"], ["esc", "cancel"]];
       const enter = this.tab === "plan" && session?.awaitingAnswers && !this.editor.getText().trim() ? "answer questions" : this.tab === "quickfix" ? "run it" : "send";
       return [["enter", enter], ["esc", "browse"], [k("hide"), "hide"]];
@@ -2419,6 +2588,12 @@ export class LobbyView implements Component, Focusable {
         if (this.kFocus === "detail" || this.pickedEntry()) keys.push(["e", "edit"], ["c", "comment"], ["n", "new"], ["d d", "delete"]);
         keys.push(["E", "edit file"]);
         break;
+      case "excalidraw": {
+        const session = this.data.excalidraw[this.xSelected];
+        keys.push(["a", "add a link"], ["n", "new room"]);
+        if (session) keys.push(["↑↓", this.xFocus === "detail" ? "agent" : "session"], ["enter", this.xFocus === "detail" ? "assign" : "agents"], ["t", "check"], ["w", session.contribute ? "look only" : "let agents draw"], ["d d", "remove"]);
+        break;
+      }
       case "git": {
         const pull = this.selectedPull();
         keys.push(["↑↓", "select"]);
@@ -2528,6 +2703,10 @@ export class LobbyView implements Component, Focusable {
         const lines = renderKnowledge({ files: knowledge.files, selected: this.kSelected, ...(knowledge.view ? { view: knowledge.view } : {}), cursor: this.kCursor, focus: this.kFocus, offset: this.kOffset, layout: this.kLayout }, width, height, theme);
         this.kOffset = this.kLayout.offset;
         return lines;
+      }
+      case "excalidraw": {
+        this.xSelected = Math.min(this.xSelected, Math.max(0, this.data.excalidraw.length - 1));
+        return renderExcalidraw({ sessions: this.data.excalidraw, selected: this.xSelected, focus: this.xFocus, agent: this.xAgent, checks: this.xChecks, checking: this.xChecking, tick: this.tick }, width, height, theme);
       }
       case "git": {
         const pulls = this.host.pulls;

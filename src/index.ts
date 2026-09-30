@@ -14,6 +14,7 @@ import { registerClassifierTools } from "./classifier/tools.ts";
 import { registerFreshContext } from "./pi/fresh-context.ts";
 import { registerAskTool } from "./ask/tool.ts";
 import { registerWebTools } from "./web/tools.ts";
+import { registerExcalidrawTools } from "./excalidraw/tools.ts";
 
 export default function (pi: ExtensionAPI): void {
   // First, so every session_start handler below finds the classifier bound to this session's keys.
@@ -33,6 +34,8 @@ export default function (pi: ExtensionAPI): void {
   registerAskTool(pi);
   // The web tools, for the researcher and for pi without a task (the oracle leaves them to the researcher).
   registerWebTools(pi);
+  // The shared Excalidraw sessions the user assigned to agents: the oracle here, every other agent through its own grant.
+  registerExcalidrawTools(pi, CONFIG_DIR_NAME);
   // Parallel workers share files through the master's file desk.
   if (isSubagentProcess()) registerDeskClient(pi);
   // Subagents look files up with the classifier (the engine allows the tool only while file hints are on).

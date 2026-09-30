@@ -1,0 +1,253 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { createDecipheriv } from "node:crypto";
+import { ExcalidrawRoom } from "../src/excalidraw/client.ts";
+import { newRoomLink, parseRoomLink, seal, unseal } from "../src/excalidraw/room.ts";
+import { planDraw, type SceneElement } from "../src/excalidraw/scene.ts";
+import { openTab, startCollabServer, until } from "./excalidraw-server.ts";
+
+const KEY = "AbCdEfGhIjKlMnOpQrStUv";
+
+test("room links: the full URL, the fragment and the bare pair all read; anything else does not", () => {
+  const full = parseRoomLink(`https://excalidraw.com/#room=0123456789abcdef0123,${KEY}`);
+  assert.deepEqual([full?.roomId, full?.roomKey], ["0123456789abcdef0123", KEY]);
+  assert.equal(full?.url, `https://excalidraw.com/#room=0123456789abcdef0123,${KEY}`);
+  assert.equal(parseRoomLink(`#room=abc,${KEY}`)?.roomId, "abc");
+  assert.equal(parseRoomLink(`abc,${KEY}`)?.url, `https://excalidraw.com/#room=abc,${KEY}`);
+  assert.equal(parseRoomLink(`  https://draw.example.org/#room=abc,${KEY}  `)?.url, `https://draw.example.org/#room=abc,${KEY}`, "a self-hosted Excalidraw keeps its host");
+  for (const bad of ["", "https://excalidraw.com/", "https://excalidraw.com/#room=abc", `https://excalidraw.com/#room=abc,short`, `https://excalidraw.com/#room=a b,${KEY}`, `ftp://x.org/#room=abc,${KEY}`, "not a link"]) {
+    assert.equal(parseRoomLink(bad), undefined, `"${bad}" is not a room link`);
+  }
+});
+
+test("a new room's link reads back, and no two are alike", () => {
+  const first = newRoomLink();
+  assert.deepEqual(parseRoomLink(first.url), first);
+  assert.equal(first.roomKey.length, 22);
+  assert.notEqual(newRoomLink().roomId, first.roomId);
+});
+
+test("the envelope is Excalidraw's: AES-128-GCM over the JSON, the tag after the ciphertext, a 12-byte IV", async () => {
+  const sealed = await seal(KEY, { type: "SCENE_UPDATE", payload: { elements: [] } });
+  assert.equal(sealed.iv.length, 12);
+  // Decrypted by a second implementation, from the bare key bytes.
+  const key = Buffer.from(KEY, "base64url");
+  assert.equal(key.length, 16);
+  const tag = sealed.data.subarray(sealed.data.length - 16);
+  const decipher = createDecipheriv("aes-128-gcm", key, sealed.iv);
+  decipher.setAuthTag(tag);
+  const plain = Buffer.concat([decipher.update(sealed.data.subarray(0, sealed.data.length - 16)), decipher.final()]).toString("utf8");
+  assert.deepEqual(JSON.parse(plain), { type: "SCENE_UPDATE", payload: { elements: [] } });
+  assert.deepEqual(await unseal(KEY, sealed.data, sealed.iv), { type: "SCENE_UPDATE", payload: { elements: [] } });
+  assert.equal(await unseal("ZyXwVuTsRqPoNmLkJiHgFe", sealed.data, sealed.iv), undefined, "another key cannot open it");
+  assert.equal(await unseal(KEY, sealed.data.subarray(1), sealed.iv), undefined, "a damaged message does not open");
+});
+
+function seat(url: string, link: { roomId: string; roomKey: string }, username = "Backend · bot-lobby", extra: { sceneWaitMs?: number; connectTimeoutMs?: number } = {}): ExcalidrawRoom {
+  return new ExcalidrawRoom({ link, username, name: "Board", server: url, sceneWaitMs: 400, ...extra });
+}
+
+function box(id: string, text: string, x: number, y: number): SceneElement[] {
+  return planDraw(new Map(), { shapes: [{ id, type: "rectangle", text, x, y }] }).changed;
+}
+
+test("a seat joining a room with a browser in it learns the board the browser has", async () => {
+  const server = await startCollabServer();
+  const link = newRoomLink();
+  const tab = openTab(server.url, link, box("api", "API gateway", 100, 80));
+  await tab.joined;
+  const room = seat(server.url, link);
+  try {
+    const status = await room.ready();
+    assert.equal(status.synced, true);
+    assert.equal(status.peers, 1);
+    assert.match(room.read(), /rectangle "API gateway" id=api at 100,80/);
+    assert.match(room.read(), /In the room with you: 1 other\./);
+  } finally {
+    room.close();
+    tab.close();
+    await server.close();
+  }
+});
+
+test("what a seat draws reaches the browser's board, labelled and joined by an arrow", async () => {
+  const server = await startCollabServer();
+  const link = newRoomLink();
+  const tab = openTab(server.url, link, box("api", "API gateway", 100, 80));
+  await tab.joined;
+  const room = seat(server.url, link);
+  try {
+    await room.ready();
+    const outcome = await room.draw({
+      shapes: [
+        { id: "db", type: "ellipse", text: "Database", x: 400, y: 80, fill: "blue" },
+        { id: "link", type: "arrow", from: "api", to: "db", text: "SQL" },
+      ],
+    });
+    assert.deepEqual(outcome.problems, []);
+    await until(() => [...tab.scene.values()].some((element) => element.id === "link"), "the arrow to reach the tab");
+    const board = [...tab.scene.values()].filter((element) => !element.isDeleted);
+    // The tab's own shape and its label, the database and its label, the arrow and its label.
+    assert.equal(board.length, 6);
+    assert.equal(board.find((element) => element.id === "db")?.backgroundColor, "#a5d8ff");
+    assert.ok(tab.scene.get("api")!.boundElements?.some((entry) => entry.id === "link" && entry.type === "arrow"));
+    assert.ok(tab.scene.get("api")!.version > 1, "the shape the arrow joined was updated, so the tab takes it");
+    const arrow = tab.scene.get("link")!;
+    assert.deepEqual([(arrow.startBinding as { elementId: string }).elementId, (arrow.endBinding as { elementId: string }).elementId], ["api", "db"]);
+    // The room sees who drew: a named collaborator.
+    await until(() => tab.others.some((message) => message.type === "IDLE_STATUS"), "the seat to announce itself");
+    assert.equal(tab.others.find((message) => message.type === "IDLE_STATUS")!.payload.username, "Backend · bot-lobby");
+    await until(() => tab.others.some((message) => message.type === "MOUSE_LOCATION"), "a cursor where it drew");
+    const cursor = tab.others.find((message) => message.type === "MOUSE_LOCATION")!.payload;
+    assert.deepEqual([cursor.username, (cursor.pointer as { x: number }).x], ["Backend · bot-lobby", 100], "at the top left of what it drew");
+  } finally {
+    room.close();
+    tab.close();
+    await server.close();
+  }
+});
+
+test("an update the browser makes after the seat joined is merged, and the seat's next edit wins over the old version", async () => {
+  const server = await startCollabServer();
+  const link = newRoomLink();
+  const tab = openTab(server.url, link, box("api", "API gateway", 100, 80));
+  await tab.joined;
+  const room = seat(server.url, link);
+  try {
+    await room.ready();
+    const moved = { ...tab.scene.get("api")!, x: 500, version: 2, versionNonce: 7 };
+    const sealed = await seal(link.roomKey, { type: "SCENE_UPDATE", payload: { elements: [moved] } });
+    tab.socket.emit("server-broadcast", link.roomId, sealed.data, sealed.iv);
+    await until(() => room.scene.get("api")?.x === 500, "the browser's move to reach the seat");
+    await room.draw({ shapes: [{ id: "api", x: 700 }] });
+    await until(() => tab.scene.get("api")?.x === 700, "the seat's move to reach the browser");
+    assert.equal(tab.scene.get("api")!.version, 3, "one version past the browser's own");
+  } finally {
+    room.close();
+    tab.close();
+    await server.close();
+  }
+});
+
+test("a browser that joins after the seat drew gets the board from the seat", async () => {
+  const server = await startCollabServer();
+  const link = newRoomLink();
+  const first = openTab(server.url, link);
+  await first.joined;
+  const room = seat(server.url, link);
+  let late: ReturnType<typeof openTab> | undefined;
+  try {
+    await room.ready();
+    await room.draw({ shapes: [{ id: "note", type: "text", text: "hello", x: 0, y: 0 }] });
+    first.close();
+    await until(() => room.status().peers === 0, "the first tab to leave");
+    // A second tab joins while the seat, which has the board, is the only one there: it takes the seat's scene.
+    late = openTab(server.url, link);
+    await until(() => late!.scene.has("note"), "the late tab to take the seat's scene");
+  } finally {
+    late?.close();
+    room.close();
+    await server.close();
+  }
+});
+
+test("a seat that alone knows nothing does not hand a joining browser an empty board", async () => {
+  const server = await startCollabServer();
+  const link = newRoomLink();
+  const room = seat(server.url, link, "Backend · bot-lobby", { sceneWaitMs: 200 });
+  let tab: ReturnType<typeof openTab> | undefined;
+  try {
+    const status = await room.ready();
+    assert.equal(status.peers, 0);
+    assert.equal(status.synced, false);
+    assert.match(room.read(), /Nobody else is in the room/);
+    // The browser comes second, with the board it saved earlier.
+    tab = openTab(server.url, link, box("saved", "Saved earlier", 0, 0));
+    await tab.joined;
+    await until(() => room.status().peers === 1, "the tab to be seen");
+    // The tab was not sent an (empty) scene by the seat, so it keeps the board it came with.
+    await new Promise((done) => setTimeout(done, 150));
+    assert.ok(tab.scene.has("saved"));
+    assert.equal(tab.scene.size, 2, "its shape and label, and nothing from the seat");
+    assert.equal(tab.sceneMessages, 0, "the seat sent it no scene at all");
+  } finally {
+    room.close();
+    tab?.close();
+    await server.close();
+  }
+});
+
+test("nothing is drawn while nobody else is in the room, and the reason says what to do", async () => {
+  const server = await startCollabServer();
+  const link = newRoomLink();
+  const room = seat(server.url, link, "Backend · bot-lobby", { sceneWaitMs: 200 });
+  try {
+    await room.ready();
+    const outcome = await room.draw({ shapes: [{ id: "a", type: "rectangle" }] });
+    assert.equal(outcome.changed.length, 0);
+    assert.match(outcome.problems.join(" "), /ask the user to open the session's link in Excalidraw/);
+    assert.equal(room.elements().length, 0, "the scene keeps nothing that never went out");
+    assert.equal(server.relayed.length, 0);
+  } finally {
+    room.close();
+    await server.close();
+  }
+});
+
+test("a link with the wrong key is told apart from an empty room", async () => {
+  const server = await startCollabServer();
+  const link = newRoomLink();
+  const tab = openTab(server.url, link, box("api", "API gateway", 100, 80));
+  await tab.joined;
+  const room = seat(server.url, { roomId: link.roomId, roomKey: "ZyXwVuTsRqPoNmLkJiHgFe" });
+  try {
+    await room.ready();
+    await until(() => room.status().undecryptable > 0, "the seat to see messages it cannot open");
+    assert.match(room.read(), /key does not match/);
+  } finally {
+    room.close();
+    tab.close();
+    await server.close();
+  }
+});
+
+test("a server that cannot be reached is reported with what was tried", async () => {
+  const room = new ExcalidrawRoom({ link: newRoomLink(), username: "x", name: "Board", server: "http://127.0.0.1:1", connectTimeoutMs: 600 });
+  await assert.rejects(room.ready(), /could not reach the Excalidraw collaboration server http:\/\/127\.0\.0\.1:1/);
+  room.close();
+});
+
+test("a collaborator's name is cleaned of control characters before it is shown anywhere", async () => {
+  const server = await startCollabServer();
+  const link = newRoomLink();
+  const tab = openTab(server.url, link, box("api", "API", 0, 0));
+  await tab.joined;
+  const room = seat(server.url, link);
+  try {
+    await room.ready();
+    const sealed = await seal(link.roomKey, { type: "IDLE_STATUS", payload: { socketId: tab.socket.id, userState: "active", username: "Ana\u001b[2J\u0007 the tester" } });
+    tab.socket.emit("server-broadcast", link.roomId, sealed.data, sealed.iv);
+    await until(() => room.status().people.length > 0, "the name to arrive");
+    assert.deepEqual(room.status().people, ["Ana[2J the tester"]);
+    assert.match(room.read(), /In the room with you: Ana\[2J the tester\./);
+  } finally {
+    room.close();
+    tab.close();
+    await server.close();
+  }
+});
+
+test("a seat whose first attempt failed can join once the server is there", async () => {
+  const server = await startCollabServer();
+  const link = newRoomLink();
+  const room = new ExcalidrawRoom({ link, username: "x", name: "Board", server: "http://127.0.0.1:1", connectTimeoutMs: 300, sceneWaitMs: 200 });
+  await assert.rejects(room.ready(), /could not reach/);
+  const again = new ExcalidrawRoom({ link, username: "x", name: "Board", server: server.url, sceneWaitMs: 200 });
+  try {
+    assert.equal((await again.ready()).connected, true);
+  } finally {
+    again.close();
+    room.close();
+    await server.close();
+  }
+});

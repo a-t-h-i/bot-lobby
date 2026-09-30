@@ -10,6 +10,7 @@ import { runPiAgent, spawnPiProcess, type PiStreamEvent, type ProcessRunner, typ
 import { isUnavailable, looksUnavailable, markUnavailable, usableFallback } from "./fallback.ts";
 import { ASK_ENV } from "../ask/relay.ts";
 import { ASK_TOOL } from "../ask/types.ts";
+import { agentOfRun, grantOption } from "../excalidraw/sessions.ts";
 
 export interface AgentContext {
   task: string;
@@ -251,6 +252,7 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
       } : {}),
       signal,
       ...(request.onAsk ? { onAsk: request.onAsk } : {}),
+      ...grantOption(agentOfRun(request.domain, request.role)),
       env: request.onAsk ? { ...request.env, [ASK_ENV]: "1" } : request.env,
       stallTimeoutMs: request.stallTimeoutMs,
       toolStallTimeoutMs: request.toolStallTimeoutMs,
