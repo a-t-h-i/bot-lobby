@@ -1,7 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createDecipheriv } from "node:crypto";
-import { ExcalidrawRoom } from "../src/excalidraw/client.ts";
+import { createServer, type Server as HttpServer } from "node:http";
+import { connect, type AddressInfo } from "node:net";
+import { ExcalidrawRoom, connectFailure, proxyFor } from "../src/excalidraw/client.ts";
 import { newRoomLink, parseRoomLink, seal, unseal } from "../src/excalidraw/room.ts";
 import { planDraw, type SceneElement } from "../src/excalidraw/scene.ts";
 import { openTab, startCollabServer, until } from "./excalidraw-server.ts";
@@ -211,10 +213,85 @@ test("a link with the wrong key is told apart from an empty room", async () => {
   }
 });
 
-test("a server that cannot be reached is reported with what was tried", async () => {
-  const room = new ExcalidrawRoom({ link: newRoomLink(), username: "x", name: "Board", server: "http://127.0.0.1:1", connectTimeoutMs: 600 });
-  await assert.rejects(room.ready(), /could not reach the Excalidraw collaboration server http:\/\/127\.0\.0\.1:1/);
+test("a server that cannot be reached is reported with what was tried, and why", async () => {
+  const room = new ExcalidrawRoom({ link: newRoomLink(), username: "x", name: "Board", server: "http://127.0.0.1:1", connectTimeoutMs: 1500 });
+  await assert.rejects(room.ready(), /could not reach the Excalidraw collaboration server http:\/\/127\.0\.0\.1:1 \(connect ECONNREFUSED 127\.0\.0\.1:1: check the network/);
   room.close();
+});
+
+test("socket.io's bare 'websocket error' and 'xhr poll error' are turned into their causes", () => {
+  const websocket = (message: string, code?: string) => Object.assign(new Error("websocket error"), { type: "TransportError", description: { message, error: { code } } });
+  assert.equal(connectFailure(websocket("Unexpected server response: 403")), "the connection was refused with HTTP 403");
+  assert.match(connectFailure(websocket("getaddrinfo ENOTFOUND oss-collab.excalidraw.com", "ENOTFOUND")), /^getaddrinfo ENOTFOUND oss-collab\.excalidraw\.com: the server's name did not resolve/);
+  assert.match(connectFailure(websocket("unable to get local issuer certificate")), /intercepting HTTPS; NODE_EXTRA_CA_CERTS/);
+  const polled = (status: number, responseText: string) => Object.assign(new Error("xhr poll error"), { type: "TransportError", description: status, context: { status, responseText } });
+  assert.equal(connectFailure(polled(502, "Bad gateway")), "the connection was refused with HTTP 502");
+  assert.match(connectFailure(polled(0, "Error: connect ETIMEDOUT 1.2.3.4:443\n    at TCPConnectWrap")), /^connect ETIMEDOUT 1\.2\.3\.4:443: check the network, or set HTTPS_PROXY/);
+  assert.equal(connectFailure(new Error("timeout")), "timeout");
+});
+
+test("a proxy is used as the environment says, and NO_PROXY is honoured", () => {
+  const server = "https://oss-collab.excalidraw.com";
+  assert.equal(proxyFor(server, {}), undefined);
+  assert.equal(proxyFor(server, { HTTPS_PROXY: "http://proxy.lan:3128" }), "http://proxy.lan:3128");
+  assert.equal(proxyFor(server, { https_proxy: "proxy.lan:3128" }), "http://proxy.lan:3128", "a bare host:port is an HTTP proxy");
+  assert.equal(proxyFor(server, { ALL_PROXY: "http://all.lan:8080" }), "http://all.lan:8080");
+  assert.equal(proxyFor(server, { HTTP_PROXY: "http://plain.lan:80" }), undefined, "HTTP_PROXY is only for http:// servers");
+  assert.equal(proxyFor("http://collab.lan", { HTTP_PROXY: "http://plain.lan:80" }), "http://plain.lan:80");
+  for (const NO_PROXY of ["*", "excalidraw.com", ".excalidraw.com", "localhost, oss-collab.excalidraw.com:443"]) {
+    assert.equal(proxyFor(server, { HTTPS_PROXY: "http://proxy.lan:3128", NO_PROXY }), undefined, `NO_PROXY=${NO_PROXY}`);
+  }
+  assert.equal(proxyFor(server, { HTTPS_PROXY: "http://proxy.lan:3128", NO_PROXY: "notexcalidraw.com" }), "http://proxy.lan:3128");
+});
+
+test("where a websocket is refused, the seat joins over long-polling instead", async () => {
+  const server = await startCollabServer({ refuseWebsocket: true });
+  const link = newRoomLink();
+  const room = seat(server.url, link);
+  try {
+    assert.equal((await room.ready()).connected, true);
+  } finally {
+    room.close();
+    await server.close();
+  }
+});
+
+test("a seat reaches the server through the proxy the environment names", async () => {
+  const server = await startCollabServer();
+  // A minimal forward proxy: it only tunnels (CONNECT), and counts what it tunnelled.
+  const tunnels: string[] = [];
+  const proxy: HttpServer = createServer((_request, response) => response.writeHead(405).end());
+  proxy.on("connect", (request, client, head) => {
+    tunnels.push(request.url ?? "");
+    const [host, port] = (request.url ?? "").split(":");
+    const upstream = connect(Number(port), host, () => {
+      client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+      upstream.write(head);
+      upstream.pipe(client).pipe(upstream);
+    });
+    upstream.on("error", () => client.destroy());
+    client.on("error", () => upstream.destroy());
+  });
+  await new Promise<void>((done) => proxy.listen(0, "127.0.0.1", done));
+  const saved = { HTTP_PROXY: process.env.HTTP_PROXY, NO_PROXY: process.env.NO_PROXY, no_proxy: process.env.no_proxy, http_proxy: process.env.http_proxy };
+  process.env.HTTP_PROXY = `http://127.0.0.1:${(proxy.address() as AddressInfo).port}`;
+  delete process.env.http_proxy;
+  delete process.env.NO_PROXY;
+  delete process.env.no_proxy;
+  const room = seat(server.url, newRoomLink());
+  try {
+    assert.equal((await room.ready()).connected, true);
+    assert.deepEqual([...new Set(tunnels)], [new URL(server.url).host]);
+  } finally {
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    room.close();
+    await server.close();
+    proxy.closeAllConnections();
+    await new Promise((done) => proxy.close(done));
+  }
 });
 
 test("a collaborator's name is cleaned of control characters before it is shown anywhere", async () => {

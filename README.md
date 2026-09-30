@@ -388,6 +388,13 @@ deletion), and one call draws at most 100 shapes and removes at most 50.
 - Rooms are Excalidraw's own collaboration protocol, end-to-end encrypted with the
   key in the link, over `oss-collab.excalidraw.com`. A self-hosted collaboration
   server is used when `BOT_LOBBY_EXCALIDRAW_SERVER` names it.
+- **When `t` says it could not reach the server**, the reason in brackets says
+  why: a name that did not resolve (the network or DNS), a refused or timed-out
+  connection, a certificate a firewall replaced (point `NODE_EXTRA_CA_CERTS` at
+  its certificate), or a refusal with an HTTP status. Where only a proxy lets
+  traffic out, set `HTTPS_PROXY` (`NO_PROXY` exempts hosts); agents then join
+  through it, and the message names it. A network that blocks websockets but not
+  HTTPS still works: the seat falls back to long-polling, as a browser does.
 
 Common keys: `tab` switches tabs, `esc` browses (arrows, single-key
 commands), `ctrl+f` searches, `ctrl+s` saves the plan, `alt+o` browses
