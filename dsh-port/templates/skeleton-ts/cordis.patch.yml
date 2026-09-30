@@ -1,0 +1,4 @@
+# Inserts the plugin's row into the profile it is installed in.
+- insert:
+    - id: dsh-bot-lobby
+      name: 'dsh-bot-lobby'

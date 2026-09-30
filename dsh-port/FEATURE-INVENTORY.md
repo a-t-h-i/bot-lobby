@@ -1,0 +1,472 @@
+# Feature inventory
+
+Every bot-lobby feature at v0.6.8 (commit `f07bc1e`), with where it lives, what tests it and where it goes in the port. This is the **parity checklist**: the port is done when every row is `ported`, `replaced` (by the DSH mechanism named) or `dropped` (with the reason given).
+
+**Fields in each entry:**
+- **README:** the anchor in the [bot-lobby README](../README.md).
+- **Source** and **tests:** paths under `src/` and `test/` in this repo.
+- **Port:** the target, as a task from [PLAN.md](PLAN.md) plus the decision that governs it.
+
+**Status at handover:** every row is `todo`. The swarm keeps its own copy in the new repo's `docs/parity.md` and updates it in each PR.
+
+---
+
+## Tasks and the workflow
+
+- **F-01 · Start a request** (`/bot-lobby <request>`)
+  - **What it does:** starts work from a typed request. Flags:
+    - `--task`: always make it a task;
+    - `--auto`: run unattended;
+    - `--budget 90m`: give it a time budget;
+    - `--fast` / `--full`: pick its track;
+    - `--branch` / `--worktree` / `--no-branch`: its git isolation.
+  - **README:** [Commands](../README.md#commands)
+  - **Source:** `pi/commands.ts`, `pi/start-flags.ts`, `pi/start-task.ts`, `pi/route.ts`
+  - **Tests:** `kickoff`, `isolation`, `route`, `track`
+  - **Port:** P2-07 (commands), P2-05 (routing). Also a "New task" box in the page (P3-03).
+- **F-02 · Quick fix or the team**
+  - **What it does:** decides whether one agent can do the request alone. Jev decides at ≥ 0.7, plain rules otherwise. The oracle confirms with `route_request`, and the lobby then switches to the Quick fix tab.
+  - **README:** [Quick fix or the team](../README.md#quick-fix-or-the-team)
+  - **Source:** `pi/route.ts`, `workflow/track.ts` (`chooseRoute`), `classifier/triage.ts` (`quickFixSize`)
+  - **Tests:** `route`, `track`, `classifier-triage`
+  - **Port:** P2-05. `route_request` is registered on the oracle's `agent.ctx` (D-07).
+- **F-03 · Fast track or full workflow**
+  - **What it does:**
+    - Reads the request's size, the people it needs (DESIGN, DEV, QA, RESEARCH) and its risk.
+    - The oracle can correct the read with `orchestrate action=track`.
+    - A track only gets stricter once work starts.
+    - Supports `--fast` / `--full` and `workflow.fastTrack`.
+  - **README:** [Fast track or full workflow](../README.md#fast-track-or-full-workflow)
+  - **Source:** `workflow/track.ts`, `workflow/workflow.ts`
+  - **Tests:** `track`, `workflow`
+  - **Port:** P1-03 (core, unchanged)
+- **F-04 · The task state machine**
+  - **What it does:** runs clarify → scout → synthesize → approve → plan → implement → review → complete, plus blocked and abandoned. Every move is validated.
+  - **README:** [How a task runs](../README.md#how-a-task-runs), [What the engine enforces](../README.md#what-the-engine-enforces)
+  - **Source:** `workflow/transitions.ts`, `schemas/task.ts`, `state/task-state.ts`, `workflow/workflow.ts`
+  - **Tests:** `transitions`, `task`, `task-state`, `workflow`
+  - **Port:** P1-03 (core, unchanged)
+- **F-05 · Briefing standard and brief check**
+  - **What it does:**
+    - Each brief carries Goal, Files, What to do, Contracts, Constraints, Done when and If stuck.
+    - Workers end with a Brief Check.
+    - A vague delegation is sent back once (`workflow.briefCheck`).
+  - **README:** [Briefing the agents](../README.md#briefing-the-agents)
+  - **Source:** `workflow/brief.ts`, `prompts/master.md`, `prompts/worker.md`
+  - **Tests:** `brief`
+  - **Port:** P1-03. The brief memory in `brief.ts` (`resetBriefs`) becomes per-task, not per-process (P2-01).
+- **F-06 · Scouts**
+  - **What it does:** read-only investigation, per domain, in parallel. Results are synthesized into gaps and shared files, then assessed.
+  - **README:** [The full workflow](../README.md#the-full-workflow)
+  - **Source:** `master/master.ts` (`runScouts`), `master/synthesis.ts`, `master/decisions.ts`, `roles/scout.ts`, `prompts/scout.md`
+  - **Tests:** `scout`, `master`
+  - **Port:** P1-06 (core) + P2-02 (backend: read-only `toolFilter`)
+- **F-07 · Proposal and approval**
+  - **What it does:**
+    - The proposal is a short bullet list, at most 1,200 characters.
+    - The user approves, amends or declines.
+    - Auto mode, or a plan agreed in the Plan tab, skips the approval.
+  - **README:** [The full workflow](../README.md#the-full-workflow)
+  - **Source:** `workflow/workflow.ts` (`validateProposal`, `applyApprovalChoice`, `unattendedReason`)
+  - **Tests:** `workflow`, `auto-mode`
+  - **Port:** P1-03 + P2-03. `choose` becomes `ctx.userQuestions.ask` (D-09).
+- **F-08 · Plan and checklist**
+  - **What it does:** parses the plan's steps, finds the current step and tracks progress. The plan is required before implementing on the full workflow, and the engine keeps a short plan on the fast track.
+  - **Source:** `pi/plan-checklist.ts`, `workflow/workflow.ts` (`validatePlan`, `planWithin`)
+  - **Tests:** `plan-checklist`, `ui`
+  - **Port:** P1-03 (move `plan-checklist.ts` into `core/workflow/`)
+- **F-09 · Workers**
+  - **What it does:**
+    - One domain per run, several in parallel (`workflow.maxParallelWorkers`).
+    - Reports are parsed for knowledge proposals, blockers, "more time" and dependency or architecture asks.
+    - Those asks need approval.
+  - **README:** [The full workflow](../README.md#the-full-workflow)
+  - **Source:** `master/master.ts` (`runWorker`), `roles/worker.ts`, `workflow/approvals.ts`, `prompts/worker.md`, `prompts/designer.md`, `prompts/backend.md`, `prompts/qa.md`
+  - **Tests:** `worker`, `workflow`
+  - **Port:** P1-06 + P2-02
+- **F-10 · File desk**
+  - **What it does:** parallel workers claim files, queue for a busy one and hand it over with a note. Edits need a claim.
+  - **README:** [The full workflow](../README.md#the-full-workflow)
+  - **Source:** `desk/desk.ts`, `desk/session.ts`; `desk/ipc.ts` and `desk/client-extension.ts` are dropped
+  - **Tests:** `desk`
+  - **Port:** P2-06. The in-process `FileDesk`, desk tools and `ctx.tools.guard` (D-13).
+- **F-11 · QA gate**
+  - **What it does:**
+    - Runs once at the end.
+    - Only critical or major findings fail it.
+    - Rounds are bounded (`workflow.maxReviewIterations`), and a re-review checks what the last round asked for.
+    - The gate needs executed checks: a PASS without them is downgraded.
+    - At the round limit the user decides.
+    - `/bot-lobby accept` accepts the work at any time.
+  - **README:** [The full workflow](../README.md#the-full-workflow)
+  - **Source:** `master/master.ts` (`runReviewer`), `roles/reviewer.ts`, `master/decisions.ts`, `workflow/workflow.ts` (`waiveQa`, `lastQaAsks`), `prompts/reviewer.md`
+  - **Tests:** `reviewer`, `qa`
+  - **Port:** P1-06 + P2-02. The QA gate's tools are read-only plus bash (D-13, guard).
+- **F-12 · Change provenance**
+  - **What it does:** tells who changed each file since the task's baseline commit: planned, quick fix, pre-existing, another task or unattributed. Quick fixes are never reverted.
+  - **Source:** `state/changes.ts`, `execution/git.ts`
+  - **Tests:** `changes`, `git`
+  - **Port:** P1-04. The edit log is fed from child tool results (P2-02 `activity.ts`).
+- **F-13 · Researcher**
+  - **What it does:** gathers cited web evidence, summoned with `orchestrate action=research`.
+  - **README:** [The full workflow](../README.md#the-full-workflow)
+  - **Source:** `master/research.ts`, `roles/researcher.ts`, `prompts/researcher.md`
+  - **Tests:** `researcher`
+  - **Port:** P1-06 + P2-02. Tools: DSH `web_search` / `web_fetch` (D-13).
+- **F-14 · Auto mode**
+  - **What it does:** the oracle approves and answers for the user, and pauses after three nudges without progress. Toggled with `alt+g`.
+  - **README:** [The full workflow](../README.md#the-full-workflow)
+  - **Source:** `state/auto.ts`, `pi/owner.ts` (`autoStep`, `autoNudge`, `driveAuto`)
+  - **Tests:** `auto-mode`
+  - **Port:** P2-04. The nudge uses `agent.followup()` (D-07), and the toggle is on the Tasks tab and in the dock.
+- **F-15 · Safety nets**
+  - **What it does:** every agent has a time limit, is asked to wrap up at 75%, has a stall watchdog and gets one retry. `Esc` aborts every running agent.
+  - **README:** [The full workflow](../README.md#the-full-workflow)
+  - **Source:** `execution/agent-runner.ts`, `execution/pi-runner.ts` (timers)
+  - **Tests:** `agent-runner`, `reliability`
+  - **Port:** P2-02. Timers wrap `ctx.subagents`; wrap-up is `localAgent.steer`; abort is `dispose()`. "Stop all" goes in the page and the dock.
+- **F-16 · Task names**
+  - **What it does:** gives each task a name like `Task-Change-Table-Font-27-09-2026`. The name is the task's id, its session name and its branch.
+  - **README:** [A branch or worktree per task](../README.md#a-branch-or-worktree-per-task)
+  - **Source:** `text.ts` (`taskName`)
+  - **Tests:** `text`
+  - **Port:** P1-02
+- **F-17 · Git isolation**
+  - **What it does:**
+    - `off`, `branch` or `worktree`, with unique names.
+    - Git never blocks a task.
+    - Worktrees are excluded in `.git/info/exclude`.
+    - A worktree removed mid-task is reported.
+  - **README:** [A branch or worktree per task](../README.md#a-branch-or-worktree-per-task)
+  - **Source:** `execution/workspace.ts`
+  - **Tests:** `workspace`, `isolation`
+  - **Port:**
+    - P1-04: the core, with the path `.bot-lobby/worktrees`.
+    - P4-02: the session `cwd` becomes the worktree (D-08).
+- **F-18 · Time budget**
+  - **What it does:**
+    - Gives the task N minutes, with allotments per step and a QA reserve.
+    - Agents get a heads-up at 75%.
+    - At time-up the worker reports and the user is asked for more time.
+    - Auto-mode rules apply; `34m of 1h 30m` is shown.
+  - **README:** [Time budget](../README.md#time-budget)
+  - **Source:** `state/budget.ts`, `execution/agent-runner.ts` (`AgentTime`), `pi/events.ts` (`budgetContext`)
+  - **Tests:** `budget`
+  - **Port:** P1-04 + P2-02. "Same agent carries on" needs continuable children (P4-03); until then, a re-brief (D-06).
+- **F-19 · Fresh context per task**
+  - **What it does:** the oracle sees only the current task's conversation.
+  - **README:** [Time budget](../README.md#time-budget) (last paragraph)
+  - **Source:** `pi/fresh-context.ts`
+  - **Tests:** `fresh-context`
+  - **Port:** **Replaced** by one DSH session per task (D-08, P4-01).
+- **F-20 · Command set**
+  - **What it does:** `status`, `tasks`, `runs`, `approve`, `amend`, `decline`, `accept`, `pause`, `resume`, `cancel`, `auto`, `claim`, `start-plan`, `settings`, `config`, `knowledge`, `budget`, `minimize`, `restore`.
+  - **README:** [Commands](../README.md#commands)
+  - **Source:** `pi/commands.ts` (`parseCommand`, `runsReport`)
+  - **Tests:** `kickoff`, `run-summary`, `budget`, `quiet`
+  - **Port:** P2-07 via `ctx.commands.register({ name: 'bot-lobby' })`. `minimize` and `restore` are dropped (F-57).
+- **F-21 · Task ownership, claim, comments and inbox**
+  - **What it does:**
+    - One session owns a task; `/bot-lobby claim` takes it over.
+    - Plan comments are delivered to the oracle.
+    - Messages can be left for a task.
+  - **Source:** `pi/owner.ts`, `state/comments.ts`, `state/inbox.ts`, `state/presence.ts`
+  - **Tests:** `presence`, `lobby-runtime`, `archive`
+  - **Port:** P2-04. Ownership = the DSH session id. Comments and messages reach the oracle with `agent.followup()`. Heartbeats are dropped (ARCHITECTURE §7).
+- **F-22 · Notifications**
+  - **What it does:** pings on state transitions and on approvals that need the user.
+  - **Source:** `pi/notify.ts`
+  - **Tests:** `notify`
+  - **Port:** P3-12 (page notices and dock). DSH notification API if one exists.
+- **F-23 · Fallback models**
+  - **What it does:**
+    - Each agent class has its own fallback model and thinking level.
+    - A model that ran out is skipped for 20 minutes.
+    - The master switches its own model and tells the user.
+    - Only usage, limit and availability errors switch; there is no third model.
+  - **README:** [Fallback models](../README.md#fallback-models)
+  - **Source:** `execution/fallback.ts`, `pi/master-fallback.ts`
+  - **Tests:** `fallback`
+  - **Port:** P2-02 (agents) and P2-04 (master: switching the session's route; see P0-05). Error recognition is updated for DSH diagnostics.
+- **F-24 · Per-agent model and thinking**
+  - **What it does:** thinking is clamped to what the model supports, mismatches produce warnings, and "inherit" uses the session's model.
+  - **README:** [Configuration](../README.md#configuration)
+  - **Source:** `pi/model-support.ts`, `schemas/configuration.ts`
+  - **Tests:** `model-support`, `project`
+  - **Port:** P2-08. DSH routes, models and reasoning efforts (D-03).
+- **F-25 · Settings UI**
+  - **What it does:**
+    - For each agent: model, thinking, time limit, instructions and fallback.
+    - Lobby switches, git isolation and the classifier.
+    - "Test connection" for Jev.
+  - **README:** [Configuration](../README.md#configuration)
+  - **Source:** `pi/settings-ui.ts`
+  - **Tests:** `settings-ui`
+  - **Port:** P3-10, a Settings tab (P0-08 decides storage).
+- **F-26 · Config file and effective config**
+  - **What it does:** `config.json` defaults, `resolveConfig`, and `/bot-lobby config` to show the effective settings.
+  - **README:** [Configuration](../README.md#configuration)
+  - **Source:** `schemas/configuration.ts`, `state/project.ts`
+  - **Tests:** `project`, `persistence`
+  - **Port:** P1-02 (schema) + P2-08 (DSH store)
+
+## Knowledge
+
+- **F-27 · Per-agent knowledge**
+  - **What it does:**
+    - Each agent (Master, Designer, Backend, QA) has knowledge, standards, decisions and completed-task files.
+    - Only the Master writes them; workers propose entries.
+  - **README:** [What the engine enforces](../README.md#what-the-engine-enforces)
+  - **Source:** `knowledge/store.ts`, `knowledge/paths.ts`, `roles/worker.ts` (proposals)
+  - **Tests:** `knowledge`, `persistence`
+  - **Port:** P1-05
+- **F-28 · What an agent reads**
+  - **What it does:** a knowledge file longer than about 4,000 characters is cut to the relevant sections, by keywords or by Jev, with a "left out" note.
+  - **README:** [Knowledge](../README.md#knowledge)
+  - **Source:** `knowledge/selector.ts`, `classifier/knowledge.ts`
+  - **Tests:** `selector`, `knowledge`, `classifier-knowledge`
+  - **Port:** P1-05
+- **F-29 · Compaction**
+  - **What it does:** files past a threshold are flagged, and the Master rewrites them with `orchestrate action=compact`.
+  - **Source:** `knowledge/compactor.ts`
+  - **Tests:** `compactor`
+  - **Port:** P1-05
+- **F-30 · Knowledge tab**
+  - **What it does:**
+    - Browse files and entries.
+    - Edit, insert or delete an entry, or edit the whole file.
+    - The previous version is archived.
+    - An entry that changed on disk is refused.
+  - **README:** [Knowledge](../README.md#knowledge)
+  - **Source:** `lobby/knowledge.ts` (`KnowledgeBook`), `knowledge/edit.ts`, `lobby/tabs/knowledge.ts`
+  - **Tests:** `knowledge-book`, `knowledge-edit`
+  - **Port:** P1-05 (book) + P3-08 (tab)
+- **F-31 · Knowledge notes**
+  - **What it does:** the user comments on an entry, and every agent reads the note under the entry. Notes move with edited entries and are undone with `x x`.
+  - **README:** [Knowledge](../README.md#knowledge)
+  - **Source:** `knowledge/notes.ts`
+  - **Tests:** `knowledge-book`, `knowledge-edit`
+  - **Port:** P1-05 + P3-08
+
+## The lobby (TUI → GUI)
+
+- **F-32 · Lobby tab**
+  - **What it does:** shows the conversation with the oracle, an activity log of every agent's steps and each agent's latest thought, with pane toggles.
+  - **README:** [Lobby](../README.md#lobby)
+  - **Source:** `lobby/feed.ts`, `lobby/tabs/home.ts`, `lobby/markdown.ts`
+  - **Tests:** `lobby-view`, `lobby-layout`, `chat-markdown`
+  - **Port:**
+    - The conversation is **replaced** by the DSH chat.
+    - The activity log and thoughts go to the **Agents** view (P3-11, D-11).
+    - `LobbyFeed` logic ports (P1-07).
+- **F-33 · Tasks tab**
+  - **What it does:**
+    - Lists every task and saved plan as a checklist, with track, progress, the approved plan and comments.
+    - Starts a plan here or in a new session.
+    - Comments, archives and deletes.
+  - **README:** [Tasks](../README.md#tasks)
+  - **Source:** `lobby/tabs/tasks.ts`, `state/archive.ts`, `state/backlog.ts`
+  - **Tests:** `lobby-view`, `archive`
+  - **Port:** P3-03
+- **F-34 · Plan tab (planning panel)**
+  - **What it does:**
+    - Seats (DEV, DESIGN, QA, RESEARCH) question the idea in parallel.
+    - The oracle drafts a plan with at most 4 questions for the user.
+    - The round limit is `lobby.maxPlanningRounds`.
+    - The user can comment on any line, seat or unseat members, retry a round or start over.
+    - Settled questions are never asked again.
+  - **README:** [Planning](../README.md#planning)
+  - **Source:** `lobby/planner.ts`, `lobby/ask.ts`, `lobby/tabs/plan.ts`, `prompts/planner.md`, `prompts/panel.md`
+  - **Tests:** `lobby-ask`, `lobby-runners`, `classifier-planning`, `lobby-view`
+  - **Port:** P1-07 (planner model) + P2-10 (planner runs) + P3-04 (tab). Panel questions go through DSH questions or the tab's own form (P0-09).
+- **F-35 · Save and split long plans**
+  - **What it does:**
+    - Saving a plan with more than 8 steps asks the oracle to split it into 2–5 tasks.
+    - The split rules are enforced.
+    - The user can revise the split up to 3 times.
+    - Parts are saved in order and know about each other.
+  - **README:** [Planning](../README.md#planning)
+  - **Source:** `lobby/split.ts`, `prompts/splitter.md`, `state/backlog.ts`
+  - **Tests:** `split`
+  - **Port:** P1-07 + P3-04
+- **F-36 · Quick fix tab**
+  - **What it does:**
+    - Jobs run beside any running task, each with live steps, edited files and its report.
+    - A job that is really a task is held (`r` runs it anyway, `t` makes it a task).
+    - A quick feature uses its builder's profile.
+  - **README:** [Quick fix](../README.md#quick-fix)
+  - **Source:** `lobby/quickfix.ts`, `lobby/tabs/quickfix.ts`, `prompts/quickfix.md`
+  - **Tests:** `lobby-runners`, `route`, `classifier-triage`
+  - **Port:** P1-07 (queue) + P2-05 (runs) + P3-05 (tab)
+- **F-37 · Metrics tab**
+  - **What it does:** shows run time, success rate, tokens and cost per model and per agent, the time share, classifier savings and filters.
+  - **README:** [Metrics](../README.md#metrics)
+  - **Source:** `state/metrics.ts`, `lobby/tabs/metrics.ts`
+  - **Tests:** `classifier-metrics`, `lobby-view`
+  - **Port:** P1-04 (records) + P3-06 (tab, charts)
+- **F-38 · Git tab**
+  - **What it does:**
+    - Lists open pull requests through `gh`, with checks and size.
+    - Shows the selected PR's details.
+    - **Agent review:** a read-only agent reviews it, with an optional focus, and can be stopped.
+    - **Jev's read:** a quick risk read of the PR.
+    - Reviews are stored and marked stale on new commits.
+    - Nothing is posted to GitHub.
+  - **README:** [Git](../README.md#git)
+  - **Source:** `lobby/pulls.ts`, `lobby/pr-review.ts`, `lobby/tabs/git.ts`, `classifier/review.ts`, `prompts/pr-review.md`
+  - **Tests:** `pulls`
+  - **Port:** P1-07 + P2-10 + P3-07 (D-16)
+- **F-39 · Issues tab (optional)**
+  - **What it does:** list, view and create GitHub issues, behind `lobby.issues`.
+  - **Source:** `lobby/issues.ts`, `lobby/tabs/issues.ts`
+  - **Tests:** `lobby-view`, `lobby-runners`
+  - **Port:** P3-09b (Q-02)
+- **F-50 · Excalidraw**
+  - **What it does:**
+    - **Sessions:** up to 5 rooms, each assigned to one agent or several. The user adds, creates, removes, renames, assigns, sets draw or look-only, and checks a session.
+    - **Agent tools:** `excalidraw_read` and `excalidraw_draw`. Board content is fenced as untrusted, and agents may delete only what agents drew.
+    - **Limits:** at most 100 shapes drawn and 50 removed per call.
+    - **Links:** kept outside the project.
+  - **README:** [Excalidraw](../README.md#excalidraw)
+  - **Source:** `excalidraw/*`, `lobby/tabs/excalidraw.ts`
+  - **Tests:** `excalidraw-scene`, `excalidraw-room`, `excalidraw-sessions`, `excalidraw-tools`, `excalidraw-live` (live), with `excalidraw-server.ts` as the test server
+  - **Port:** P1-08 (core) + P2-09 (tools, grants, storage) + P3-09 (tab) (D-15)
+- **F-53 · Several sessions from one window**
+  - **What it does:** starts a task in a background session (`alt+n`), browses sessions (`alt+o`), and marks a session that is waiting on the user.
+  - **README:** [The lobby](../README.md#the-lobby)
+  - **Source:** `lobby/sessions.ts`, `lobby/session-files.ts`, `state/presence.ts`
+  - **Tests:** `lobby-sessions`, `presence`
+  - **Port:** **Replaced** by DSH's session list. "Start in a new session" = P4-01.
+- **F-54 · Agents at work**
+  - **What it does:** the lobby's bottom line shows the agents working right now, such as `◐ DESIGN editing 2m`.
+  - **README:** [The lobby](../README.md#the-lobby)
+  - **Source:** `lobby/mini.ts` (`workingAgents`, `agentsIndicator`)
+  - **Tests:** `mini`
+  - **Port:** P3-12 (dock) + P3-11 (Agents view)
+- **F-55 · Status line while hidden**
+  - **What it does:** shows the plan bar, who is working, the planning round and the quick fix in hand.
+  - **README:** [The lobby](../README.md#the-lobby)
+  - **Source:** `lobby/mini.ts` (`miniLine`, `stageBar`, `stepBar`)
+  - **Tests:** `mini`
+  - **Port:** P3-12 (`conversation.composer.dock`)
+- **F-56 · TUI mechanics**
+  - **What it does:** keys and rebinding, paging, mouse, search, width handling and themes.
+  - **README:** [The lobby](../README.md#the-lobby)
+  - **Source:** `lobby/view.ts`, `lobby/layout.ts`, `lobby/keys.ts`, `width.ts`, `lobby/theme.ts`
+  - **Tests:** `lobby-view`, `lobby-layout`, `width`
+  - **Port:** **Dropped.** A GUI has native scrolling, focus and search. A search box and keyboard shortcuts in the page are nice-to-have (P5).
+- **F-57 · Minimize / restore**
+  - **What it does:** hides bot-lobby in a session.
+  - **Source:** `pi/ui.ts`
+  - **Tests:** `quiet`, `ui`
+  - **Port:** **Dropped.** The panel is opened on demand; the dock hides when there is no task.
+- **F-58 · Run receipts and the metrics log**
+  - **What it does:** records every run in `metrics.jsonl` and backs `/bot-lobby runs`.
+  - **Source:** `state/metrics.ts`, `pi/run-summary.ts`, `pi/ui.ts` (`mergeRuns`, `persistedRuns`)
+  - **Tests:** `run-summary`, `ui`
+  - **Port:** P1-04 + P2-02
+- **F-59 · Tool renderers in the chat**
+  - **What it does:** shows compact `orchestrate` and `route_request` cards and quiets noisy tools.
+  - **Source:** `pi/tool-renderers.ts`, `pi/quiet.ts`
+  - **Tests:** `quiet`, `chat-markdown`
+  - **Port:** P3-13 (`tool.call.toolview`)
+- **F-60 · Oracle context**
+  - **What it does:** `masterWorkflowContext`, `masterTaskContext` and `budgetContext` are added to the oracle each turn.
+  - **Source:** `pi/events.ts`
+  - **Tests:** `auto-mode`, `lobby-state`, `classifier-triage`
+  - **Port:** P2-04, injected when it changes (D-07)
+
+## Questions and the web
+
+- **F-51 · Questionnaire** (`ask_user_question`)
+  - **What it does:**
+    - Up to 4 questions with 2–4 options each, the recommended one first.
+    - Supports multi-select, Markdown previews, images, and the user's own answer.
+    - Esc asks before leaving.
+    - The designer can ask the user directly, relayed through the oracle.
+  - **README:** [The questionnaire](../README.md#the-questionnaire)
+  - **Source:** `ask/*`, `lobby/ask.ts`, `ask/relay.ts`
+  - **Tests:** `ask`, `ask-image`, `relay`, `lobby-ask`
+  - **Port:** **Replaced** by DSH's `ask_user_question` and `ctx.userQuestions` (D-09, P0-09, P2-03). Designer questions go through the oracle (D-09).
+- **F-52 · Web tools**
+  - **What it does:**
+    - `web_search` over Brave, Tavily, Exa, SearXNG or DuckDuckGo.
+    - `get_search_content`, `fetch_content` and `source_check`.
+    - SSRF protection, and pages are marked untrusted.
+    - The oracle hides the web tools during a task.
+  - **README:** [The web](../README.md#the-web)
+  - **Source:** `web/*`, `pi/quiet.ts` (`webToolsFor`)
+  - **Tests:** `web`, `quiet`
+  - **Port:** **Replaced** by DSH `web_search` / `web_fetch` (D-13). Hiding them from the oracle = P2-04. `source_check` is optional (P4-06).
+
+## Jev (the classifier)
+
+Every decision below can be switched off, and every one falls back to bot-lobby's plain rules on any failure.
+
+- **F-40 · Planning seats**
+  - **What it does:** only the seats a round touches sit, and the user can pin a seat.
+  - **Source:** `classifier/seats.ts`
+  - **Tests:** `classifier-planning`
+  - **Port:** P1-09 + P2-11
+- **F-41 · Obvious answers**
+  - **What it does:** answers a question itself when the recommended option is clearly right (≥ 0.9), and lists it under Assumptions.
+  - **Source:** `classifier/answers.ts`
+  - **Tests:** `classifier-planning`, `classifier-triage`
+  - **Port:** P1-09 + P2-11
+- **F-42 · File hints**
+  - **What it does:** agents start with a list of likely files and get the `find_relevant_files` tool.
+  - **Source:** `classifier/files.ts`, `classifier/tools.ts`
+  - **Tests:** `classifier-files`
+  - **Port:** P1-09 + P2-11. The tool is registered globally and allowed per child with `toolFilter`.
+- **F-43 · Relevant knowledge**
+  - **What it does:** Jev picks the knowledge sections that fit the step.
+  - **Source:** `classifier/knowledge.ts`
+  - **Tests:** `classifier-knowledge`
+  - **Port:** P1-09
+- **F-44 · Quick fix or task**
+  - **Source:** `classifier/triage.ts` (`quickFixSize`)
+  - **Tests:** `classifier-triage`
+  - **Port:** P1-09 + P2-05
+- **F-45 · Task triage**
+  - **What it does:** reads the task's size, domains, need for research and ambiguity, and holds a quick fix that is really a task.
+  - **Source:** `classifier/triage.ts`
+  - **Tests:** `classifier-triage`
+  - **Port:** P1-09 + P2-05
+- **F-46 · Effort routing**
+  - **What it does:** simple steps run one thinking level lower and trivial ones on a cheaper model. A routed run that falls short re-runs on the normal settings.
+  - **Source:** `classifier/effort.ts`
+  - **Tests:** `classifier-effort`
+  - **Port:** P1-09 + P2-11. "One level lower" becomes the previous effort in the model's list (D-03).
+- **F-47 · Pull request read**
+  - **What it does:** reads a PR's size and the likelihood it is risky, security-relevant, breaking or untested.
+  - **Source:** `classifier/review.ts`
+  - **Tests:** `pulls`
+  - **Port:** P1-09 + P3-07
+- **F-48 · Circuit breaker**
+  - **What it does:** three failures in a row pause Jev for 10 minutes, and failures fall back to the plain rules.
+  - **Source:** `classifier/classifier.ts`
+  - **Tests:** `classifier`
+  - **Port:** P1-09
+- **F-49 · Privacy and hosts**
+  - **What it does:**
+    - Never sends secrets, gitignored files or `.env*` files.
+    - Excerpts are at most 400 characters.
+    - Chooses between OpenCode and TypeSafe.
+  - **Source:** `classifier/files.ts`, `classifier/hosts.ts`, `classifier/limits.ts`
+  - **Tests:** `classifier`, `classifier-files`
+  - **Port:** P1-09 + P2-11. Keys come from DSH credentials (D-14).
+
+## Engine rules that must still hold
+
+These rules come from "What the engine enforces" in the README. Each must have a test in the new repo.
+
+| Rule | Enforced by | Test to port |
+| --- | --- | --- |
+| Steps happen in order | `workflow/transitions.ts` | `transitions`, `workflow` |
+| Nothing is built before approval (full workflow) | `workflow.ts` implement guard | `workflow`, `track` |
+| Scouts and the QA gate cannot edit code | role allow lists → `toolFilter` + guard | new: `test/host/guard.test.ts` |
+| New dependencies and architecture changes need approval | `roles/worker.ts` + `workflow/approvals.ts` | `worker` |
+| Only the Master writes knowledge | `workflow.ts` knowledge action | `knowledge` |
+| "Done" is earned | `master/decisions.ts completionBlockers`, `workflow/track.ts qaRequired` | `qa`, `track` |
+| Parallel workers don't clobber files | `FileDesk` + guard | `desk` + new host guard test |
+| A crash doesn't corrupt a task | temp file + rename in `state/*` | `persistence`, `reliability` |
