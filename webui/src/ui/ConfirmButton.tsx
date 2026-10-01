@@ -33,7 +33,7 @@ export function ConfirmButton({ label, title, description, confirmLabel, onConfi
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant={variant} className="h-10" disabled={disabled}>
+        <Button variant="outline" className={variant === "destructive" ? "h-10 border-destructive/40 text-destructive" : "h-10"} disabled={disabled}>
           {icon}
           {label}
         </Button>
