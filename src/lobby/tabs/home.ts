@@ -73,7 +73,7 @@ export function sourceColor(source: string): LobbyColor {
 const SOURCE_WIDTH = 9;
 
 /** One activity line: time, who, what; a running step spins, a finished one is marked. */
-export function activityLine(entry: ActivityEntry, width: number, tick: number, theme?: LobbyTheme): string {
+export function activityLine(entry: ActivityEntry, _width: number, tick: number, theme?: LobbyTheme): string {
   const who = paint(theme, sourceColor(entry.source), entry.source.padEnd(SOURCE_WIDTH).slice(0, SOURCE_WIDTH));
   const mark = entry.pending
     ? paint(theme, "accent", spinner(tick))

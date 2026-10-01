@@ -15,6 +15,68 @@ interface StreamState {
   followUp?: ReturnType<typeof setTimeout>;
 }
 
+/** A planning session as canned fixture data: the same fields the planner calls read. */
+function fakePlanner(entry: NonNullable<ScenarioFixture["mockPlanner"]>): Record<string, unknown> & { seats: Set<string> } {
+  const seats = new Set<string>(entry.seats);
+  const session = {
+    seats,
+    members: entry.members.map((member) => ({ ...member })),
+    messages: entry.messages.map((message) => ({ ...message })),
+    reply: entry.draft ? { status: "grilling", questions: [], plan: entry.draft } : undefined,
+    questions: entry.questions.map((question) => ({ ...question })),
+    notes: entry.notes.map((note) => ({ ...note })),
+    turns: entry.round,
+    busy: false,
+    awaitingAnswers: entry.questions.length > 0,
+    retryable: entry.retryable,
+    lineComments: [] as Array<{ line: string; text: string }>,
+    toggle(member: string): boolean {
+      if (seats.has(member)) seats.delete(member);
+      else seats.add(member);
+      return seats.has(member);
+    },
+    async send(text: string): Promise<void> {
+      (session.messages as Array<Record<string, unknown>>).push({ role: "you", text, at: Date.now() });
+    },
+    async retry(): Promise<void> {},
+    commentOnLine(line: string, text: string): boolean {
+      session.lineComments.push({ line, text });
+      return false;
+    },
+  };
+  return session;
+}
+
+function defaultPlanner(): NonNullable<ScenarioFixture["mockPlanner"]> {
+  return { seats: ["backend", "designer", "qa", "researcher"], members: [], messages: [], questions: [], notes: [], round: 0, retryable: false };
+}
+
+interface FakeQuickFixJob {
+  id: string;
+  prompt: string;
+  status: string;
+  createdAt: number;
+  steps: Array<{ at: number; text: string; pending: boolean }>;
+  tools: number;
+  turns: number;
+  note?: string;
+  report?: string;
+}
+
+function fakeQuickFixJobs(entries: Array<Record<string, unknown>>): FakeQuickFixJob[] {
+  return entries.map((job, index) => ({
+    id: typeof job.id === "string" ? job.id : `QF-${index + 1}`,
+    prompt: typeof job.prompt === "string" ? job.prompt : "",
+    status: typeof job.status === "string" ? job.status : "success",
+    createdAt: typeof job.createdAt === "number" ? job.createdAt : Date.now(),
+    steps: [],
+    tools: 0,
+    turns: 0,
+    ...(typeof job.note === "string" ? { note: job.note } : {}),
+    ...(typeof job.report === "string" ? { report: job.report } : {}),
+  }));
+}
+
 const streams = new WeakMap<object, StreamState>();
 const opened = new WeakMap<object, string[]>();
 
@@ -136,6 +198,40 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
   const auto = new Set(fixture.autoTasks ?? []);
   const comments = new Map<string, Array<Record<string, unknown>>>(Object.entries(fixture.taskComments ?? {}));
   const backgrounds = (fixture.backgroundSessions ?? []).map(fakeBackground);
+  let planning = fakePlanner(fixture.mockPlanner ?? defaultPlanner());
+  const qfJobs = fakeQuickFixJobs(fixture.mockQuickfix ?? []);
+  let qfCounter = qfJobs.length;
+  const quickfix = {
+    jobs: qfJobs,
+    get running() {
+      return qfJobs.find((job) => job.status === "running");
+    },
+    submit(prompt: string) {
+      const job: FakeQuickFixJob = { id: `QF-${(qfCounter += 1)}`, prompt: prompt.trim(), status: "queued", createdAt: Date.now(), steps: [], tools: 0, turns: 0 };
+      qfJobs.push(job);
+      return job;
+    },
+    cancel(id: string): boolean {
+      const job = qfJobs.find((entry) => entry.id === id);
+      if (!job || (job.status !== "queued" && job.status !== "running")) return false;
+      job.status = "cancelled";
+      return true;
+    },
+    runAnyway(id: string): boolean {
+      const job = qfJobs.find((entry) => entry.id === id);
+      if (!job || job.status !== "held") return false;
+      job.status = "queued";
+      delete job.note;
+      return true;
+    },
+    movedToTask(id: string): boolean {
+      const job = qfJobs.find((entry) => entry.id === id);
+      if (!job || job.status !== "held") return false;
+      job.status = "cancelled";
+      job.note = "started as a task in a new session";
+      return true;
+    },
+  };
   let commentSeq = 0;
   const service = {
     sessionId: () => fixture.status.sessionId,
@@ -204,6 +300,24 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
       return session;
     },
     liveSessions: () => [...(fixture.liveSessions ?? [])],
+    planner: () => planning,
+    newPlanner: (seed?: { issue: { number: number; title: string; url?: string }; body: string }, seats?: string[]) => {
+      planning = fakePlanner({ ...defaultPlanner(), ...(seed ? { messages: [{ role: "you", text: seed.body, at: Date.now() }] } : {}), ...(seats ? { seats } : {}) });
+      return planning;
+    },
+    answerPanel: async () => {
+      planning.questions = [];
+      planning.awaitingAnswers = false;
+      return "answers sent — the panel is on the next round";
+    },
+    savePlan: async () => {
+      const plan = (planning.reply as { plan?: string } | undefined)?.plan;
+      if (!plan) throw new Error("there is no draft plan to save yet");
+      return "saved PLAN-mock-1 to the pending tasks — start it from the Tasks tab";
+    },
+    defaultPanel: () => ["backend", "designer", "qa", "researcher"],
+    planningRounds: () => 5,
+    quickfix,
     sessionChat: () => [],
     hasOlderChat: () => false,
     switchTo: async (target: { name: string }) => `switching this window to ${target.name}…`,

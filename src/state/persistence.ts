@@ -145,7 +145,7 @@ function taskEntries(root: string, configDir: string): { entry: string; dir: str
 /** All tasks on disk, newest first. Unreadable task dirs are skipped. */
 export function listTasks(root: string, configDir: string): Task[] {
   const tasks: Task[] = [];
-  for (const { entry, dir } of taskEntries(root, configDir)) {
+  for (const { dir } of taskEntries(root, configDir)) {
     const task = readTaskAt(dir);
     if (task) tasks.push(task);
   }
