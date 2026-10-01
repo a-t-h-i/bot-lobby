@@ -13,7 +13,8 @@ How the web UI fits into bot-lobby. Read [DECISIONS.md](DECISIONS.md) first: thi
 │  src/lobby/runtime.ts      per Pi session: builds the stores and the service              │
 │  src/lobby/service.ts      LobbyService: every read and action, no terminal  (D-05)       │
 │  src/lobby/topics.ts       which topic changed: the feed, runs, stores, files (§4)        │
-│  src/lobby/prompts.ts      questions offered to every surface, first answer wins (D-13)   │
+│  src/lobby/prompts.ts      shared user-visible strings, pure, no I/O      (D-14)          │
+│  src/lobby/prompt-hub.ts   questions offered to every surface, first answer wins (D-13)   │
 │  src/lobby/models/         pure view models shared by both UIs                (D-06)      │
 │        │                                │                                                 │
 │        ▼                                ▼                                                 │
@@ -44,7 +45,9 @@ How the web UI fits into bot-lobby. Read [DECISIONS.md](DECISIONS.md) first: thi
 bot-lobby/
 ├── src/lobby/service.ts        LobbyService interface + createLobbyService(state)   (P1-01)
 ├── src/lobby/topics.ts         Topic, LobbyTopics (an emitter with versions)        (P1-02)
-├── src/lobby/prompts.ts        PromptHub: surfaces, pending prompts, first answer   (P1-04)
+├── src/lobby/prompts.ts        shared user-visible strings, pure, no I/O          (D-14)
+├── src/lobby/prompt-hub.ts     PromptHub: surfaces, pending prompts, first answer (P1-04)
+├── src/lobby/keys.ts           existing key table + tabJumpKey, webKeyMap         (P3-02)
 ├── src/lobby/models/           view models split out of tabs/*.ts                   (P1-03)
 ├── src/webui/
 │   ├── protocol.ts             every call's request/result, stream events, topics    (P2-03)
@@ -60,7 +63,7 @@ bot-lobby/
 ├── webui/
 │   ├── src/                    the page (§6)
 │   ├── dist/                   built page, committed (D-08)
-│   ├── build.mjs               esbuild → dist/, content-hashed, writes dist/build.json
+│   ├── vite.config.ts          Vite → dist/, content-hashed, writes dist/build.json
 │   └── tsconfig.json           DOM + JSX settings for the page
 ├── test/webui-*.test.ts        server, auth, events, api, models
 └── test/web/                   Playwright checks against the mock server (TESTING §4)
@@ -145,7 +148,7 @@ Today every store calls `rerender()` and the terminal repaints everything. The w
 | `issues` | `list` · `get {number}` · `create {text}` (only when `lobby.issues`) | `IssuesState` |
 | `knowledge` | `files` · `open {agent, file}` → entries with refs and notes · `edit`, `add`, `remove {agent, file, ref, text?}` · `replaceFile {agent, file, text}` · `comment {agent, file, ref, text}` · `unnote {id}` | `KnowledgeBook` (its stale-entry refusal becomes `conflict`) |
 | `excalidraw` | `list` → sessions with **masked** links · `add {link, name?}` · `create {name?}` · `remove`, `rename`, `toggleAgent`, `toggleAll`, `toggleContribute` · `check {id}` · `reveal {id}` → the full link (separate call, D-12) | `ExcalidrawBook`, `checkSession` |
-| `prompts` | `list` → open questions with their kind and payload · `answer {id, answer}` · `dismiss {id}` | `src/lobby/prompts.ts` |
+| `prompts` | `list` → open questions with their kind and payload · `answer {id, answer}` · `dismiss {id}` | `src/lobby/prompt-hub.ts` |
 | `settings` | `get` → config + the models Pi offers · `set {patch}` (validated by `resolveConfig`, `src/schemas/configuration.ts`) | P5-01 |
 
 **Not under `/api`:**
@@ -178,7 +181,7 @@ Today every store calls `rerender()` and the terminal repaints everything. The w
 ## 7. Questions (the prompt hub)
 
 ```
-engine / tool / planner           PromptHub (src/lobby/prompts.ts)          surfaces
+engine / tool / planner           PromptHub (src/lobby/prompt-hub.ts)      surfaces
  ask_user_question ─┐            ┌─ open(kind, payload, signal) ─────────┬─▶ terminal: our custom() questionnaire,
  choose (approval) ─┼──────────▶ │  id, created, from                    │            select/confirm/input with a signal
  panel / split     ─┤            │  first answer resolves, the rest are  └─▶ web: topic `prompts` → page shows a sheet;
@@ -228,4 +231,4 @@ Each of these has a test before its phase ends:
   - older chat is paged with `lobby.history`.
 - **The streaming reply** goes out in frames of 40 ms or more. Each frame carries the reply's text so far, at most `MAX_REPLY_TEXT` (8,000 characters), not a diff. That is simple and survives a dropped frame.
 - **Rendering cost on phones:** the page re-renders only the reply's Markdown while it streams. The other messages are memoised by id.
-- **First load:** under 150 KB gzipped (D-07). Syntax highlighting and Mermaid load on first use.
+- **First load:** under 250 KB gzipped (D-07). Syntax highlighting and Mermaid load on first use.

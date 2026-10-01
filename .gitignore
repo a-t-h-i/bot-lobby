@@ -10,6 +10,9 @@ build/
 out/
 *.tsbuildinfo
 
+# Committed web UI build
+!webui/dist/
+
 # Test and coverage output
 coverage/
 .nyc_output/
