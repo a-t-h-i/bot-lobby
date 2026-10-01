@@ -1,6 +1,6 @@
 {
-  "hash": "e294e64fe8f0893a6a25e58b373980e756dd1b80305e792d0b1d5432599f8b59",
-  "builtAt": "2026-10-01T18:12:54.308Z",
+  "hash": "b9c3b5e828a95353dae20027f0678855f0ba9e6717bdaa1daf219445dcd656e7",
+  "builtAt": "2026-10-01T18:22:45.153Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -20,7 +20,59 @@
     },
     {
       "path": "webui/src/App.tsx",
-      "sha256": "b7c77769d950b3fda179f58f9f5d965e65f04d37808611ce120eece7a695f30d"
+      "sha256": "6519ddbe1b5023774435c18e6eb6d4f2343847996ddf733a96f0cc0f628f24ad"
+    },
+    {
+      "path": "webui/src/app/AltH.tsx",
+      "sha256": "6caf0dc12f4e0484fad78079fc6c6bbbf61de6beed10512c788b823e3dd88c18"
+    },
+    {
+      "path": "webui/src/app/Composer.tsx",
+      "sha256": "3a90289fb0befd5c42f0516ac1d88e16d61c2895383609990fe175374117f1cc"
+    },
+    {
+      "path": "webui/src/app/Header.tsx",
+      "sha256": "b0730fdf481a5478785e978f8a070d52692aee54c7b0cca9fe2787ed2f2beb60"
+    },
+    {
+      "path": "webui/src/app/Shell.tsx",
+      "sha256": "6dae77b33e99244a63dc216718aed4f1473722541761c90378bca299a79e1f17"
+    },
+    {
+      "path": "webui/src/app/SignIn.tsx",
+      "sha256": "0e7445d481ec221382e34388561b41c4bbd647a93887f176dc937f6866676d26"
+    },
+    {
+      "path": "webui/src/app/States.tsx",
+      "sha256": "3dd760eff4672e42c7cd39e20761243d25c7a5b179510aa6f8209640a7556794"
+    },
+    {
+      "path": "webui/src/app/TabStrip.tsx",
+      "sha256": "5da9dddd244d4d2ddb710c895f94e0935b55b5227e28f2d669dbe6a2e1ff1974"
+    },
+    {
+      "path": "webui/src/app/bootstrap.ts",
+      "sha256": "e6157d69331f5b6a030916a8dee252dc843fa970eeb1b23442b624f6b23338f0"
+    },
+    {
+      "path": "webui/src/app/hooks.ts",
+      "sha256": "fe3815a45f517bfe0f519f5660763478b47086c2481776c7478f0368cc18e43a"
+    },
+    {
+      "path": "webui/src/app/readTopic.ts",
+      "sha256": "9ad1c6b1761878e595498195909118334f11b518a41308265f189d411b34e3fd"
+    },
+    {
+      "path": "webui/src/app/router.ts",
+      "sha256": "a2dc69d7074f3ad6d8820b2c9ebdc8939dac382edf24bf5826d934d7f68505f0"
+    },
+    {
+      "path": "webui/src/app/useEvents.ts",
+      "sha256": "2343054129b6332237fb0a8642bddd33f33db447509f074ab102efb1a3a29aec"
+    },
+    {
+      "path": "webui/src/app/useLobbyKeys.ts",
+      "sha256": "592a6a20500cf246f9db26d569ff7c7c2c1bef585b0c33f68d5840b5a206ecb1"
     },
     {
       "path": "webui/src/components/theme-provider.tsx",
@@ -108,11 +160,23 @@
     },
     {
       "path": "webui/src/main.tsx",
-      "sha256": "f4697bd996d65112c8cc61575b4f148d9f604aaacb37f3c6d2ac7895f10e4d38"
+      "sha256": "a3017c22c493435eba223af9ec17b76af94f8bbcd4ed01f5a75ece02e677d9dc"
     },
     {
       "path": "webui/src/nonce.ts",
       "sha256": "87fd65873d4ed3639461efabc6e6ec20ff50ada92dedbc87044b7da0b5bc4e9f"
+    },
+    {
+      "path": "webui/src/tabs/lobby/LobbyTab.tsx",
+      "sha256": "faf19ab225f520fb408b2d50a4e837d9daa4d5fa9ac2a4ed3e1538d4bb45c124"
+    },
+    {
+      "path": "webui/src/tabs/placeholders.tsx",
+      "sha256": "32c74387c801186e9ec5b18dceb70e79ca79e5e5781002344727dcdb2eec0d80"
+    },
+    {
+      "path": "webui/src/tabs/registry.tsx",
+      "sha256": "058b7912647898930f02286b9c80f59b0a4009e236674e7c1572eaf9a7477325"
     },
     {
       "path": "webui/tsconfig.json",
