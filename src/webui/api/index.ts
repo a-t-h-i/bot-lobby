@@ -13,6 +13,8 @@ import type { LobbyService } from "../../lobby/service.ts";
 import { statusGet } from "./status.ts";
 import { lobbyAbort, lobbyHistory, lobbySend, lobbySnapshot } from "./lobby.ts";
 import { promptsAnswer, promptsDismiss, promptsList } from "./prompts.ts";
+import { plannerAnswer, plannerCommentLine, plannerGet, plannerNew, plannerRetry, plannerSend, plannerToggleSeat, plannerSave } from "./planner.ts";
+import { quickfixCancel, quickfixList, quickfixMovedToTask, quickfixRunAnyway, quickfixSubmit } from "./quickfix.ts";
 import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksList, tasksMessage, tasksRestore } from "./tasks.ts";
 import { plansDiscard, plansStart } from "./plans.ts";
 import { sessionsAnswer, sessionsChat, sessionsList, sessionsMessage, sessionsStart, sessionsStop, sessionsSwitch } from "./sessions.ts";
@@ -74,6 +76,12 @@ const DialogAnswer = Type.Union([
   Type.Object({ confirmed: Type.Boolean() }, { additionalProperties: false }),
   Type.Object({ cancelled: Type.Literal(true) }, { additionalProperties: false }),
 ]);
+
+const Member = Type.Union([Type.Literal("backend"), Type.Literal("designer"), Type.Literal("qa"), Type.Literal("researcher")]);
+const PlannerSeed = Type.Object({
+  issue: Type.Object({ number: Type.Integer({ minimum: 1 }), title: Type.String({ minLength: 1, maxLength: 500 }), url: Type.Optional(Type.String({ maxLength: 2000 })) }, { additionalProperties: false }),
+  body: Type.String({ maxLength: 20_000 }),
+}, { additionalProperties: false });
 
 function firstError(schema: TObject, body: unknown): string {
   const check = Compile(schema);
@@ -166,6 +174,43 @@ function buildRoutes(): Record<string, Route> {
   routes["prompts.dismiss"] = {
     schema: Type.Object({ id: Type.String() }, { additionalProperties: false }),
     run: (body, ctx) => promptsDismiss(body as { id: string }, ctx),
+  };
+  routes["planner.get"] = { schema: Empty, run: (_body, ctx) => plannerGet(ctx) };
+  routes["planner.new"] = {
+    schema: Type.Object({ seed: Type.Optional(PlannerSeed), seats: Type.Optional(Type.Array(Member, { maxItems: 4 })) }, { additionalProperties: false }),
+    run: (body, ctx) => plannerNew(body as { seed?: { issue: { number: number; title: string; url?: string }; body: string }; seats?: ("backend" | "designer" | "qa" | "researcher")[] }, ctx),
+  };
+  routes["planner.send"] = {
+    schema: Type.Object({ text: NoticeText }, { additionalProperties: false }),
+    run: (body, ctx) => plannerSend(body as { text: string }, ctx),
+  };
+  routes["planner.toggleSeat"] = {
+    schema: Type.Object({ member: Member }, { additionalProperties: false }),
+    run: (body, ctx) => plannerToggleSeat(body as { member: "backend" | "designer" | "qa" | "researcher" }, ctx),
+  };
+  routes["planner.retry"] = { schema: Empty, run: (_body, ctx) => plannerRetry(ctx) };
+  routes["planner.commentLine"] = {
+    schema: Type.Object({ line: Type.String({ minLength: 1, maxLength: 5000 }), text: CommentText }, { additionalProperties: false }),
+    run: (body, ctx) => plannerCommentLine(body as { line: string; text: string }, ctx),
+  };
+  routes["planner.answer"] = { schema: Empty, run: (_body, ctx) => plannerAnswer(ctx) };
+  routes["planner.save"] = { schema: Empty, run: (_body, ctx) => plannerSave(ctx) };
+  routes["quickfix.list"] = { schema: Empty, run: (_body, ctx) => quickfixList(ctx) };
+  routes["quickfix.submit"] = {
+    schema: Type.Object({ text: NoticeText }, { additionalProperties: false }),
+    run: (body, ctx) => quickfixSubmit(body as { text: string }, ctx),
+  };
+  routes["quickfix.cancel"] = {
+    schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
+    run: (body, ctx) => quickfixCancel(body as { id: string }, ctx),
+  };
+  routes["quickfix.runAnyway"] = {
+    schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
+    run: (body, ctx) => quickfixRunAnyway(body as { id: string }, ctx),
+  };
+  routes["quickfix.movedToTask"] = {
+    schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
+    run: (body, ctx) => quickfixMovedToTask(body as { id: string }, ctx),
   };
   return routes;
 }
