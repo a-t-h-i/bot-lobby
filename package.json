@@ -39,6 +39,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit && tsc -p webui --noEmit",
+    "web:dev": "node src/webui/dev/serve.ts",
     "web:build": "vite build --config webui/vite.config.ts && node webui/scripts/build-info.mjs",
     "web:typecheck": "tsc -p webui --noEmit",
     "test": "node --test --test-reporter=dot test/*.test.ts"
