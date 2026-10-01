@@ -1,4 +1,5 @@
 import "./nonce"
+import "@/app/install"
 
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
@@ -19,3 +20,11 @@ createRoot(document.getElementById("root")!).render(
     </ThemeProvider>
   </StrictMode>
 )
+
+// Cache the shell so the installed app opens when Pi is not running. The
+// update check bypasses the immutable HTTP cache the static server sets.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    void navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(() => undefined)
+  })
+}
