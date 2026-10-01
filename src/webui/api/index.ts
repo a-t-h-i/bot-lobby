@@ -13,6 +13,9 @@ import type { LobbyService } from "../../lobby/service.ts";
 import { statusGet } from "./status.ts";
 import { lobbyAbort, lobbyHistory, lobbySend, lobbySnapshot } from "./lobby.ts";
 import { promptsAnswer, promptsDismiss, promptsList } from "./prompts.ts";
+import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksList, tasksMessage, tasksRestore } from "./tasks.ts";
+import { plansDiscard, plansStart } from "./plans.ts";
+import { sessionsAnswer, sessionsChat, sessionsList, sessionsMessage, sessionsStart, sessionsStop, sessionsSwitch } from "./sessions.ts";
 
 /** What a handler reads besides the request body. */
 export interface ApiContext {
@@ -63,6 +66,14 @@ interface Route {
 }
 
 const Empty = Type.Object({}, { additionalProperties: false });
+const TaskId = Type.String({ minLength: 1, maxLength: 200 });
+const NoticeText = Type.String({ maxLength: 20_000 });
+const CommentText = Type.String({ maxLength: 10_000 });
+const DialogAnswer = Type.Union([
+  Type.Object({ value: Type.String() }, { additionalProperties: false }),
+  Type.Object({ confirmed: Type.Boolean() }, { additionalProperties: false }),
+  Type.Object({ cancelled: Type.Literal(true) }, { additionalProperties: false }),
+]);
 
 function firstError(schema: TObject, body: unknown): string {
   const check = Compile(schema);
@@ -84,6 +95,69 @@ function buildRoutes(): Record<string, Route> {
     run: (body, ctx) => lobbySend(body as { text: string }, ctx),
   };
   routes["lobby.abort"] = { schema: Empty, run: (_body, ctx) => lobbyAbort(ctx) };
+  routes["tasks.list"] = { schema: Empty, run: (_body, ctx) => tasksList(ctx) };
+  routes["tasks.archived"] = { schema: Empty, run: (_body, ctx) => tasksArchived(ctx) };
+  routes["tasks.comments"] = {
+    schema: Type.Object({ taskId: TaskId }, { additionalProperties: false }),
+    run: (body, ctx) => tasksComments(body as { taskId: string }, ctx),
+  };
+  routes["tasks.comment"] = {
+    schema: Type.Object({ taskId: TaskId, text: CommentText }, { additionalProperties: false }),
+    run: (body, ctx) => tasksComment(body as { taskId: string; text: string }, ctx),
+  };
+  routes["tasks.archive"] = {
+    schema: Type.Object({ taskId: TaskId }, { additionalProperties: false }),
+    run: (body, ctx) => tasksArchive(body as { taskId: string }, ctx),
+  };
+  routes["tasks.restore"] = {
+    schema: Type.Object({ taskId: TaskId }, { additionalProperties: false }),
+    run: (body, ctx) => tasksRestore(body as { taskId: string }, ctx),
+  };
+  routes["tasks.delete"] = {
+    schema: Type.Object({ taskId: TaskId, where: Type.Union([Type.Literal("list"), Type.Literal("archive")]) }, { additionalProperties: false }),
+    run: (body, ctx) => tasksDelete(body as { taskId: string; where: "list" | "archive" }, ctx),
+  };
+  routes["tasks.auto"] = {
+    schema: Type.Object({ taskId: TaskId, on: Type.Boolean() }, { additionalProperties: false }),
+    run: (body, ctx) => tasksAuto(body as { taskId: string; on: boolean }, ctx),
+  };
+  routes["tasks.message"] = {
+    schema: Type.Object({ taskId: TaskId, text: NoticeText }, { additionalProperties: false }),
+    run: (body, ctx) => tasksMessage(body as { taskId: string; text: string }, ctx),
+  };
+  routes["plans.start"] = {
+    schema: Type.Object({ planId: TaskId, where: Type.Union([Type.Literal("here"), Type.Literal("session")]), auto: Type.Optional(Type.Boolean()) }, { additionalProperties: false }),
+    run: (body, ctx) => plansStart(body as { planId: string; where: "here" | "session"; auto?: boolean }, ctx),
+  };
+  routes["plans.discard"] = {
+    schema: Type.Object({ planId: TaskId }, { additionalProperties: false }),
+    run: (body, ctx) => plansDiscard(body as { planId: string }, ctx),
+  };
+  routes["sessions.list"] = { schema: Empty, run: (_body, ctx) => sessionsList(ctx) };
+  routes["sessions.chat"] = {
+    schema: Type.Object({ key: Type.Optional(TaskId), sessionId: Type.Optional(TaskId), before: Type.Optional(Type.Number()) }, { additionalProperties: false }),
+    run: (body, ctx) => sessionsChat(body as { key?: string; sessionId?: string; before?: number }, ctx),
+  };
+  routes["sessions.start"] = {
+    schema: Type.Object({ request: Type.Optional(NoticeText), planId: Type.Optional(TaskId), auto: Type.Optional(Type.Boolean()) }, { additionalProperties: false }),
+    run: (body, ctx) => sessionsStart(body as { request?: string; planId?: string; auto?: boolean }, ctx),
+  };
+  routes["sessions.stop"] = {
+    schema: Type.Object({ key: TaskId }, { additionalProperties: false }),
+    run: (body, ctx) => sessionsStop(body as { key: string }, ctx),
+  };
+  routes["sessions.message"] = {
+    schema: Type.Object({ key: Type.Optional(TaskId), sessionId: Type.Optional(TaskId), text: NoticeText }, { additionalProperties: false }),
+    run: (body, ctx) => sessionsMessage(body as { key?: string; sessionId?: string; text: string }, ctx),
+  };
+  routes["sessions.switch"] = {
+    schema: Type.Object({ key: Type.Optional(TaskId), sessionId: Type.Optional(TaskId), claimTaskId: Type.Optional(TaskId) }, { additionalProperties: false }),
+    run: (body, ctx) => sessionsSwitch(body as { key?: string; sessionId?: string; claimTaskId?: string }, ctx),
+  };
+  routes["sessions.answer"] = {
+    schema: Type.Object({ key: TaskId, dialogId: TaskId, answer: DialogAnswer }, { additionalProperties: false }),
+    run: (body, ctx) => sessionsAnswer(body as { key: string; dialogId: string; answer: { value: string } | { confirmed: boolean } | { cancelled: true } }, ctx),
+  };
   routes["prompts.list"] = { schema: Empty, run: (_body, ctx) => promptsList(ctx) };
   routes["prompts.answer"] = {
     schema: Type.Object({ id: Type.String(), answer: Type.Any() }, { additionalProperties: false }),
