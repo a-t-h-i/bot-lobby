@@ -17,7 +17,8 @@ import type { TabInfo } from "@protocol"
 interface TabStripProps {
   tabs: TabInfo[]
   activeId?: string
-  question?: boolean
+  /** How many questions wait; a count badge shows on every tab but Lobby. */
+  questionCount?: number
   onSelect: (id: string) => void
 }
 
@@ -28,8 +29,8 @@ const pillClass = cn(
 
 const TabPill = forwardRef<
   HTMLAnchorElement,
-  { tab: TabInfo; active: boolean; badge: boolean }
->(function TabPill({ tab, active, badge }, ref) {
+  { tab: TabInfo; active: boolean }
+>(function TabPill({ tab, active }, ref) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -49,11 +50,6 @@ const TabPill = forwardRef<
           )}
         >
           {tab.label}
-          {badge ? (
-            <Badge variant="destructive" className="h-4 px-1 text-[10px]" aria-label="Question waiting">
-              ?
-            </Badge>
-          ) : null}
         </a>
       </TooltipTrigger>
       <TooltipContent>
@@ -84,7 +80,7 @@ function Chevron({ side, onClick }: { side: "left" | "right"; onClick: () => voi
   )
 }
 
-export function TabStrip({ tabs, activeId, question, onSelect }: TabStripProps) {
+export function TabStrip({ tabs, activeId, questionCount = 0, onSelect }: TabStripProps) {
   const scroller = useRef<HTMLDivElement>(null)
   const pills = useRef<Record<string, HTMLAnchorElement | null>>({})
   const [edges, setEdges] = useState({ left: false, right: false })
@@ -140,17 +136,32 @@ export function TabStrip({ tabs, activeId, question, onSelect }: TabStripProps) 
         onKeyDown={onKeyDown}
         className="flex h-12 items-center gap-1.5 overflow-x-auto px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {tabs.map((tab) => (
-          <TabPill
-            key={tab.id}
-            ref={(el) => {
-              pills.current[tab.id] = el
-            }}
-            tab={tab}
-            active={tab.id === activeId}
-            badge={Boolean(question) && tab.id !== "lobby"}
-          />
-        ))}
+        {tabs.map((tab) => {
+          const badge = tab.id === "lobby" ? 0 : questionCount
+          return (
+            <div key={tab.id} className="relative shrink-0">
+              <TabPill
+                ref={(el) => {
+                  pills.current[tab.id] = el
+                }}
+                tab={tab}
+                active={tab.id === activeId}
+              />
+              {badge > 0 ? (
+                <Badge asChild variant="destructive" className="absolute -top-1 -right-1 z-10 h-6 min-w-6 justify-center px-1 text-[10px] tabular-nums">
+                  <button
+                    type="button"
+                    aria-label={`${badge} question${badge === 1 ? "" : "s"} waiting — go to Lobby`}
+                    onClick={() => onSelect("lobby")}
+                    className="before:absolute before:-inset-2 before:content-['']"
+                  >
+                    {badge}
+                  </button>
+                </Badge>
+              ) : null}
+            </div>
+          )
+        })}
       </div>
       {edges.right ? <Chevron side="right" onClick={() => nudge(1)} /> : null}
     </div>
