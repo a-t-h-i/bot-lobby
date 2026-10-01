@@ -65,6 +65,10 @@ extra instructions.
 | `/bot-lobby settings \| config` | Edit settings / show the effective config |
 | `/bot-lobby knowledge` | Knowledge file sizes |
 | `/bot-lobby minimize \| restore` | Hide bot-lobby in this session (`ctrl+shift+m`) |
+| `/bot-lobby web` | Start the browser UI on this machine (loopback only) and open its link |
+| `/bot-lobby web link` | Print the browser UI's link |
+| `/bot-lobby web stop` | Stop the browser UI |
+| `/bot-lobby web reset` | Reset the browser UI's link (its old cookies stop working) |
 
 ## Quick fix or the team
 
