@@ -86,6 +86,11 @@ export interface SnapshotTask {
   id: string;
   title: string;
   state: string;
+  track?: { path: "fast" | "full"; size: string };
+  domains: string[];
+  git?: { branch: string; from?: string };
+  progress?: { done: number; total: number };
+  currentStep?: string;
 }
 
 /** What the Lobby tab shows, read in one call. */

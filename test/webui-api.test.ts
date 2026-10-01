@@ -11,6 +11,7 @@ import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LobbyFeed } from "../src/lobby/feed.ts";
+import { createTask } from "../src/schemas/task.ts";
 import { fakeWebService } from "./webui-fake.ts";
 import { promptHub } from "../src/lobby/prompt-hub.ts";
 import { startWebServer } from "../src/webui/server.ts";
@@ -106,6 +107,64 @@ test("lobby.snapshot carries chat, reply, activity, thoughts and the older flag"
     assert.deepEqual(result.runs, []);
   } finally {
     await close();
+  }
+});
+
+test("lobby.snapshot carries the task header facts the terminal shows", async () => {
+  const task = createTask("task-1", "Build the thing");
+  task.state = "implementing";
+  task.track = { path: "full", size: "medium", roster: ["backend"], reasons: ["sized"], source: "rules", at: new Date().toISOString() };
+  task.domains = ["backend", "qa"];
+  task.git = { mode: "branch", branch: "task/task-1", from: "main" };
+  task.plan = "1. Wire the API\n2. Add the header\n3. Write the tests";
+  task.workerRuns = [
+    { runId: "run-1", domain: "backend", instruction: "Implement step 1: Wire the API", status: "success", startedAt: new Date().toISOString(), finishedAt: new Date().toISOString() },
+  ];
+  const service = fakeService();
+  (service as unknown as { zen: () => unknown }).zen = () => ({ task, runs: [] });
+  const server = await startWebServer({ service, port: 0, secret: randomBytes(32), dist: DIST });
+  try {
+    const token = new URL(server.link).hash.replace("#token=", "");
+    const login = await send(server.port, { method: "POST", path: "/api/auth.login", headers: json, body: JSON.stringify({ token }) });
+    const cookie = String(login.headers["set-cookie"]).split(";")[0]!;
+    const answer = await send(server.port, { method: "POST", path: "/api/lobby.snapshot", headers: { ...json, cookie }, body: "{}" });
+    assert.equal(answer.status, 200, answer.body);
+    const snapshot = (JSON.parse(answer.body) as { ok: boolean; result: Record<string, unknown> }).result;
+    assert.deepEqual(snapshot.task, {
+      id: "task-1",
+      title: "Build the thing",
+      state: "implementing",
+      track: { path: "full", size: "medium" },
+      domains: ["backend", "qa"],
+      git: { branch: "task/task-1", from: "main" },
+      progress: { done: 1, total: 3 },
+      currentStep: "Add the header",
+    });
+  } finally {
+    await server.close();
+  }
+});
+
+test("lobby.snapshot omits progress and the current step before a plan exists", async () => {
+  const task = createTask("task-2", "Just an idea");
+  const service = fakeService();
+  (service as unknown as { zen: () => unknown }).zen = () => ({ task, runs: [] });
+  const server = await startWebServer({ service, port: 0, secret: randomBytes(32), dist: DIST });
+  try {
+    const token = new URL(server.link).hash.replace("#token=", "");
+    const login = await send(server.port, { method: "POST", path: "/api/auth.login", headers: json, body: JSON.stringify({ token }) });
+    const cookie = String(login.headers["set-cookie"]).split(";")[0]!;
+    const answer = await send(server.port, { method: "POST", path: "/api/lobby.snapshot", headers: { ...json, cookie }, body: "{}" });
+    assert.equal(answer.status, 200, answer.body);
+    const snapshot = (JSON.parse(answer.body) as { ok: boolean; result: Record<string, unknown> }).result;
+    const header = snapshot.task as Record<string, unknown>;
+    assert.deepEqual(header, { id: "task-2", title: "Just an idea", state: "created", domains: [] });
+    assert.equal("track" in header, false);
+    assert.equal("git" in header, false);
+    assert.equal("progress" in header, false);
+    assert.equal("currentStep" in header, false);
+  } finally {
+    await server.close();
   }
 });
 
