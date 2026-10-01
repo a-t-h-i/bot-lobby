@@ -1,6 +1,7 @@
 # Bot-Lobby
 
-A [Pi](https://pi.dev) extension that turns Pi into a multi-agent software team.
+A [Pi](https://pi.dev) plugin that forces you to vibe code intentionally.
+It turns Pi into a multi-agent software team.
 
 ![The Lobby tab: your conversation with the oracle, the activity log of every agent, and their latest thoughts](https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/gallery.png)
 
