@@ -10,6 +10,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { lobbyTopics, type LobbyTopic } from "../lobby/topics.ts";
 import type { LobbyService } from "../lobby/service.ts";
 import type { StreamEvent } from "./protocol.ts";
+import { onNotice, watchFeed, type Notice } from "./notices.ts";
 
 /** Concurrent streams; the oldest closes when one more opens. */
 export const MAX_STREAMS = 8;
@@ -42,10 +43,13 @@ export class EventHub {
   private service: LobbyService | undefined;
   private unsubTopics: (() => void) | undefined;
   private unsubFeed: (() => void) | undefined;
+  private unsubFeedWatch: (() => void) | undefined;
+  private readonly unsubNotices: () => void;
   private lastReply = "";
   private readonly heartbeatMs: number;
   constructor(heartbeatMs: number = HEARTBEAT_MS) {
     this.heartbeatMs = heartbeatMs;
+    this.unsubNotices = onNotice((notice) => this.notice(notice));
   }
 
   /** Open streams (one per browser tab watching). */
@@ -61,14 +65,17 @@ export class EventHub {
     const feed = service.feed;
     this.lastReply = feed.reply;
     this.unsubFeed = feed.onChange(() => this.scheduleFlush());
+    this.unsubFeedWatch = watchFeed(feed);
   }
 
   /** Stop following the service (streams stay open across a rebind). */
   detach(): void {
     this.unsubTopics?.();
     this.unsubFeed?.();
+    this.unsubFeedWatch?.();
     this.unsubTopics = undefined;
     this.unsubFeed = undefined;
+    this.unsubFeedWatch = undefined;
     this.service = undefined;
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
@@ -105,9 +112,17 @@ export class EventHub {
     for (const stream of [...this.streams]) this.send(stream, frame({ type: "hello", versions: lobbyTopics.versions() }));
   }
 
+  /** A lobby notice: every open stream hears it, and `notices` moves on. */
+  private notice(notice: Notice): void {
+    const text = frame({ type: "notice", text: notice.text, level: notice.level });
+    for (const stream of [...this.streams]) this.send(stream, text);
+    lobbyTopics.bump("notices");
+  }
+
   /** Close every stream and stop following the service. */
   close(): void {
     this.detach();
+    this.unsubNotices();
     for (const stream of this.streams) {
       clearInterval(stream.beat);
       try {

@@ -9,7 +9,7 @@ import type { DialogAnswer, SessionDialog } from "../lobby/sessions.ts";
 import type { LiveSession } from "../lobby/view.ts";
 import type { TaskRow } from "../lobby/tabs/tasks.ts";
 import type { PlanComment } from "../state/comments.ts";
-import type { PanelMember } from "../schemas/configuration.ts";
+import type { BotLobbyConfig, PanelMember } from "../schemas/configuration.ts";
 import type { MemberState, PanelNote, PanelQuestion, PlannerMessage } from "../lobby/planner.ts";
 import type { QuickFixJob } from "../lobby/quickfix.ts";
 
@@ -17,7 +17,7 @@ export type { WebPrompt };
 export type { LobbyTopic };
 export type { DialogAnswer, SessionDialog, TaskRow, PlanComment };
 export type { LiveSession };
-export type { PanelMember, MemberState, PanelNote, PanelQuestion, PlannerMessage, QuickFixJob };
+export type { PanelMember, MemberState, PanelNote, PanelQuestion, PlannerMessage, QuickFixJob, BotLobbyConfig };
 
 /** Every API answer: the result, or why not. */
 export type ApiReply<T> = { ok: true; result: T } | { ok: false; error: string; code: ErrorCode };
@@ -133,12 +133,30 @@ export interface BackgroundSessionInfo {
   dialogs: SessionDialog[];
 }
 
+/** How loud a lobby notice is (sonner's levels). */
+export type NoticeLevel = "info" | "success" | "warning" | "error";
+
+/** One model Pi offers, for the settings page's picker. */
+export interface SettingsModelInfo {
+  /** `provider/id`, the form settings store. */
+  id: string;
+  label: string;
+  thinkingLevels: string[];
+}
+
+/** `settings.get`: the effective config (never a secret) and the models Pi offers. */
+export interface SettingsInfo {
+  config: BotLobbyConfig;
+  models: SettingsModelInfo[];
+}
+
 /** One message on the event stream (`GET /api/events`, server-sent events). */
 export type StreamEvent =
   | { type: "hello"; versions: Partial<Record<LobbyTopic, number>> }
   | { type: "changed"; topic: LobbyTopic; version: number }
   | { type: "feed"; activity: unknown[]; thoughts: unknown[]; chat: unknown[] }
-  | { type: "reply"; text: string };
+  | { type: "reply"; text: string }
+  | { type: "notice"; text: string; level: NoticeLevel };
 
 /** The planning session as `planner.get` describes it. */
 export interface PlannerSnapshot {
@@ -540,6 +558,8 @@ export interface Api {
   "issues.list": { request: { refresh?: boolean }; result: IssuesList };
   "issues.get": { request: { number: number }; result: { issue: IssueDetailInfo } };
   "issues.create": { request: { text: string }; result: { notice: string } };
+  "settings.get": { request: Record<string, never>; result: SettingsInfo };
+  "settings.set": { request: { patch: Record<string, unknown> }; result: { config: BotLobbyConfig } };
 }
 
 export type ApiName = keyof Api;
