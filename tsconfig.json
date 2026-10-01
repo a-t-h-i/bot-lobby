@@ -14,7 +14,11 @@
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
     "allowImportingTsExtensions": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@protocol": ["./src/webui/protocol.ts"],
+      "@shared": ["./src/lobby/prompts.ts"]
+    }
   },
   "include": ["src/**/*.ts", "test/**/*.ts"],
   "exclude": ["webui"]
