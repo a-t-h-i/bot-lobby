@@ -1,6 +1,6 @@
 {
-  "hash": "c2a09727763857c0d273a11a3f5f1e099887203aa8914c5182075ec71f76ba18",
-  "builtAt": "2026-10-01T22:22:48.608Z",
+  "hash": "eb13820901fb62e498ec7eba6e63fb3dd97baa92383764bb819120ba5b1c904a",
+  "builtAt": "2026-10-01T22:44:11.375Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -199,6 +199,38 @@
       "sha256": "afb5f2e4d1bd799ed10bad123568cadbda039e0694282de6c06f258cc2293bde"
     },
     {
+      "path": "webui/src/tabs/git/GitTab.tsx",
+      "sha256": "65907a6f8371d069778e314a43e2e987f1ce7edb38ed847f0651c8022128474f"
+    },
+    {
+      "path": "webui/src/tabs/git/PullDetail.tsx",
+      "sha256": "2f11b6249ba198ab0dbcf50cc9adae8eb49500a3e351b05867699b79b3d3a757"
+    },
+    {
+      "path": "webui/src/tabs/git/PullList.tsx",
+      "sha256": "bcdc109143c457376a4ff13de2c984e0ac3ef04885ec715ad53ed8f4237e1b16"
+    },
+    {
+      "path": "webui/src/tabs/git/words.ts",
+      "sha256": "406cd3e17e458e7f81b9945870f1e6110370979dafcf622499c89af7021300af"
+    },
+    {
+      "path": "webui/src/tabs/issues/IssueDetail.tsx",
+      "sha256": "382b951ad58d3ec128f2f0f626530ad071e773b87bc0f284cbdc727edd58eb0b"
+    },
+    {
+      "path": "webui/src/tabs/issues/IssueList.tsx",
+      "sha256": "c9302e1c98b3ae2749687833172c9805c4e6af334acfcf1bc7d0220f3d66c061"
+    },
+    {
+      "path": "webui/src/tabs/issues/IssuesTab.tsx",
+      "sha256": "96d1ffe70840aea1544a44b64b0510179217f69668a4ce39f10a224c4036ce94"
+    },
+    {
+      "path": "webui/src/tabs/issues/words.ts",
+      "sha256": "0873bd29c15933dab47532be481dc42bd04a4b19feac7cd34e074aa6ea612e4a"
+    },
+    {
       "path": "webui/src/tabs/knowledge/Editors.tsx",
       "sha256": "77ee8a939ab54c3e4f765ec82e7be13f285a23f033c7efaadb1f0ad8ab4ad218"
     },
@@ -276,7 +308,7 @@
     },
     {
       "path": "webui/src/tabs/placeholders.tsx",
-      "sha256": "3cf5c9f67006a8b2c8a2644e7ac844687defd0ac3687762468fb14439799c113"
+      "sha256": "0d5db046c77a2a9832372bd5fd405cef3c18e91027022b0002d675563e8a4606"
     },
     {
       "path": "webui/src/tabs/plan/Conversation.tsx",
@@ -328,7 +360,7 @@
     },
     {
       "path": "webui/src/tabs/registry.tsx",
-      "sha256": "3ccb3e9b82a6e9685c38154f971a2baf316e5c4be399acaf5d1a9bcf9ed19dcf"
+      "sha256": "4521eae9707c4056c942ac2250434c8e72cafe005988f4177a115ede6dd53a01"
     },
     {
       "path": "webui/src/tabs/sessions/ChatView.tsx",
