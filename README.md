@@ -1,7 +1,9 @@
 # Bot-Lobby
 
-A [Pi](https://pi.dev) plugin that forces you to vibe code intentionally.
-It turns Pi into a multi-agent software team.
+A [Pi](https://pi.dev) extension that forces you to vibe code intentionally.
+You still describe what you want in plain words, but you don't just hand it
+over: you and the model work out together what's needed until the picture is
+clear, and then a multi-agent software team builds what you agreed on.
 
 ![The Lobby tab: your conversation with the oracle, the activity log of every agent, and their latest thoughts](https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/gallery.png)
 
@@ -13,8 +15,9 @@ work to three domain agents â€” **Designer+Frontend**, **Backend** and **QA** â€
 each running in its own isolated `pi` process. QA's reviewer is the quality
 gate before anything is marked done.
 
-The rule: **LLMs decide, the engine enforces.** Agents propose; the
-extension validates every state change, permission and approval through one
+The rule: **you decide with the LLMs, and the engine enforces.** Agents
+propose; you shape and approve the plan with the oracle; the extension
+validates every state change, permission and approval through one
 `orchestrate` tool.
 
 The oracle is meant to be your most capable model; the agents can be smaller
