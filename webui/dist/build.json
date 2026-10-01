@@ -1,6 +1,6 @@
 {
-  "hash": "6771ca60f13abe38d28d29c6f7122a1b9b12a23a73be0e763027ac77a8f60a1e",
-  "builtAt": "2026-10-01T23:16:32.517Z",
+  "hash": "a93a93e1a2ab1187a5d05535164e8a6ddc67cb18cdbd4e5fa1c5b1179c4727dc",
+  "builtAt": "2026-10-01T23:30:02.212Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -420,7 +420,7 @@
     },
     {
       "path": "webui/src/tabs/settings/SettingsForm.tsx",
-      "sha256": "c0fa59ee973e90c60c885ee671ca6bd9807742907e91018498f145a26776624e"
+      "sha256": "37343a139a409fb9db157cfa4f4cceb31518bdf208cdec5fac6bf7d2f3ee1d7c"
     },
     {
       "path": "webui/src/tabs/settings/SettingsTab.tsx",
