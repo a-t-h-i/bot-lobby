@@ -30,6 +30,14 @@ function parseVerdict(text: string | undefined): Verdict {
   return "blocked";
 }
 
+/** The verdict token may sit in the heading itself (`## Verdict PASS`), leaving an empty body. */
+function verdictHeading(sections: Map<string, string>): string | undefined {
+  for (const heading of sections.keys()) {
+    if (heading.includes("verdict")) return heading;
+  }
+  return undefined;
+}
+
 /** The severity a finding was tagged with, or undefined when it carries none. */
 function taggedSeverity(text: string): Severity | undefined {
   const match = /^\[([^\]]+)\]/.exec(text);
@@ -58,7 +66,7 @@ export function parseReviewResult(domain: Domain, raw: string): ReviewResult {
   const verification = findSection(sections, "verification") ?? "";
   const requiredChanges = bullets(findSection(sections, "required changes"));
   const entries = bullets(findSection(sections, "findings"));
-  let verdict = parseVerdict(findSection(sections, "verdict"));
+  let verdict = parseVerdict(`${verdictHeading(sections) ?? ""}\n${findSection(sections, "verdict") ?? ""}`);
   let downgraded: string | undefined;
   let relaxed: string | undefined;
   const checked = executedChecks(verification).length > 0;
