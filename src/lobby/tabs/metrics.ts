@@ -11,6 +11,9 @@ import { tokens } from "../../pi/run-summary.ts";
 import type { ClassifierSummary, GroupBy, MetricGroup, MetricRecord, SortKey, TaskStats, TaskTimeGroup } from "../../state/metrics.ts";
 import { bar, beside, bold, box, fill, fit, meter, notePane, paint, selectRow, sparkline, stackedBar, windowStart, wrap, type LobbyTheme, type PaneLayout } from "../layout.ts";
 import { sourceColor } from "./home.ts";
+import { filterRecords } from "../models/metrics.ts";
+
+export { filterRecords };
 
 export interface MetricsTabInput {
   groups: readonly MetricGroup[];
@@ -294,9 +297,4 @@ export function renderMetrics(input: MetricsTabInput, width: number, height: num
   return fill(sections, height, width);
 }
 
-/** Runs whose agent, model, thinking level, kind, status or task mention `query`. */
-export function filterRecords(records: readonly MetricRecord[], query: string | undefined): MetricRecord[] {
-  const needle = query?.trim().toLowerCase();
-  if (!needle) return [...records];
-  return records.filter((record) => [record.agent, record.model ?? "", record.thinking ?? "", record.kind, record.status, record.taskId ?? ""].join(" ").toLowerCase().includes(needle));
-}
+

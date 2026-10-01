@@ -16,6 +16,9 @@ import { promptsAnswer, promptsDismiss, promptsList } from "./prompts.ts";
 import { plannerAnswer, plannerCommentLine, plannerGet, plannerNew, plannerRetry, plannerSend, plannerToggleSeat, plannerSave } from "./planner.ts";
 import { quickfixCancel, quickfixList, quickfixMovedToTask, quickfixRunAnyway, quickfixSubmit } from "./quickfix.ts";
 import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksList, tasksMessage, tasksRestore } from "./tasks.ts";
+import { metricsGet } from "./metrics.ts";
+import { knowledgeAdd, knowledgeComment, knowledgeEdit, knowledgeFiles, knowledgeOpen, knowledgeRemove, knowledgeReplaceFile, knowledgeUnnote } from "./knowledge.ts";
+import { excalidrawAdd, excalidrawCheck, excalidrawCreate, excalidrawList, excalidrawRemove, excalidrawRename, excalidrawReveal, excalidrawToggleAgent, excalidrawToggleAll, excalidrawToggleContribute } from "./excalidraw.ts";
 import { plansDiscard, plansStart } from "./plans.ts";
 import { sessionsAnswer, sessionsChat, sessionsList, sessionsMessage, sessionsStart, sessionsStop, sessionsSwitch } from "./sessions.ts";
 
@@ -78,6 +81,11 @@ const DialogAnswer = Type.Union([
 ]);
 
 const Member = Type.Union([Type.Literal("backend"), Type.Literal("designer"), Type.Literal("qa"), Type.Literal("researcher")]);
+const KnowledgeAgent = Type.Union([Type.Literal("master"), Type.Literal("designer"), Type.Literal("backend"), Type.Literal("qa")]);
+const KnowledgeFile = Type.String({ minLength: 1, maxLength: 200 });
+const KnowledgeText = Type.String({ minLength: 1, maxLength: 100_000 });
+const EntryRef = Type.Object({ text: Type.String({ minLength: 1, maxLength: 100_000 }), occurrence: Type.Integer({ minimum: 0, maximum: 100000 }) }, { additionalProperties: false });
+const ExcalidrawAgent = Type.Union([Type.Literal("master"), Type.Literal("designer"), Type.Literal("backend"), Type.Literal("qa"), Type.Literal("scout"), Type.Literal("researcher"), Type.Literal("quickfix"), Type.Literal("planner")]);
 const PlannerSeed = Type.Object({
   issue: Type.Object({ number: Type.Integer({ minimum: 1 }), title: Type.String({ minLength: 1, maxLength: 500 }), url: Type.Optional(Type.String({ maxLength: 2000 })) }, { additionalProperties: false }),
   body: Type.String({ maxLength: 20_000 }),
@@ -211,6 +219,76 @@ function buildRoutes(): Record<string, Route> {
   routes["quickfix.movedToTask"] = {
     schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
     run: (body, ctx) => quickfixMovedToTask(body as { id: string }, ctx),
+  };
+  routes["metrics.get"] = {
+    schema: Type.Object({ groupBy: Type.Union([Type.Literal("model"), Type.Literal("model-kind")]), query: Type.Optional(Type.String({ maxLength: 500 })) }, { additionalProperties: false }),
+    run: (body, ctx) => metricsGet(body as { groupBy: "model" | "model-kind"; query?: string }, ctx),
+  };
+  routes["knowledge.files"] = { schema: Empty, run: (_body, ctx) => knowledgeFiles(ctx) };
+  routes["knowledge.open"] = {
+    schema: Type.Object({ agent: KnowledgeAgent, file: KnowledgeFile }, { additionalProperties: false }),
+    run: (body, ctx) => knowledgeOpen(body as { agent: "master" | "designer" | "backend" | "qa"; file: string }, ctx),
+  };
+  routes["knowledge.edit"] = {
+    schema: Type.Object({ agent: KnowledgeAgent, file: KnowledgeFile, ref: EntryRef, text: KnowledgeText }, { additionalProperties: false }),
+    run: (body, ctx) => knowledgeEdit(body as { agent: "master" | "designer" | "backend" | "qa"; file: string; ref: { text: string; occurrence: number }; text: string }, ctx),
+  };
+  routes["knowledge.add"] = {
+    schema: Type.Object({ agent: KnowledgeAgent, file: KnowledgeFile, ref: Type.Optional(EntryRef), text: KnowledgeText }, { additionalProperties: false }),
+    run: (body, ctx) => knowledgeAdd(body as { agent: "master" | "designer" | "backend" | "qa"; file: string; ref?: { text: string; occurrence: number }; text: string }, ctx),
+  };
+  routes["knowledge.remove"] = {
+    schema: Type.Object({ agent: KnowledgeAgent, file: KnowledgeFile, ref: EntryRef }, { additionalProperties: false }),
+    run: (body, ctx) => knowledgeRemove(body as { agent: "master" | "designer" | "backend" | "qa"; file: string; ref: { text: string; occurrence: number } }, ctx),
+  };
+  routes["knowledge.replaceFile"] = {
+    schema: Type.Object({ agent: KnowledgeAgent, file: KnowledgeFile, text: Type.String({ maxLength: 100_000 }) }, { additionalProperties: false }),
+    run: (body, ctx) => knowledgeReplaceFile(body as { agent: "master" | "designer" | "backend" | "qa"; file: string; text: string }, ctx),
+  };
+  routes["knowledge.comment"] = {
+    schema: Type.Object({ agent: KnowledgeAgent, file: KnowledgeFile, ref: EntryRef, text: Type.String({ minLength: 1, maxLength: 2000 }) }, { additionalProperties: false }),
+    run: (body, ctx) => knowledgeComment(body as { agent: "master" | "designer" | "backend" | "qa"; file: string; ref: { text: string; occurrence: number }; text: string }, ctx),
+  };
+  routes["knowledge.unnote"] = {
+    schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
+    run: (body, ctx) => knowledgeUnnote(body as { id: string }, ctx),
+  };
+  routes["excalidraw.list"] = { schema: Empty, run: (_body, ctx) => excalidrawList(ctx) };
+  routes["excalidraw.add"] = {
+    schema: Type.Object({ link: Type.String({ minLength: 1, maxLength: 2000 }), name: Type.Optional(Type.String({ maxLength: 40 })) }, { additionalProperties: false }),
+    run: (body, ctx) => excalidrawAdd(body as { link: string; name?: string }, ctx),
+  };
+  routes["excalidraw.create"] = {
+    schema: Type.Object({ name: Type.Optional(Type.String({ maxLength: 40 })) }, { additionalProperties: false }),
+    run: (body, ctx) => excalidrawCreate(body as { name?: string }, ctx),
+  };
+  routes["excalidraw.remove"] = {
+    schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
+    run: (body, ctx) => excalidrawRemove(body as { id: string }, ctx),
+  };
+  routes["excalidraw.rename"] = {
+    schema: Type.Object({ id: TaskId, name: Type.String({ maxLength: 40 }) }, { additionalProperties: false }),
+    run: (body, ctx) => excalidrawRename(body as { id: string; name: string }, ctx),
+  };
+  routes["excalidraw.toggleAgent"] = {
+    schema: Type.Object({ id: TaskId, agent: ExcalidrawAgent }, { additionalProperties: false }),
+    run: (body, ctx) => excalidrawToggleAgent(body as { id: string; agent: "master" | "designer" | "backend" | "qa" | "scout" | "researcher" | "quickfix" | "planner" }, ctx),
+  };
+  routes["excalidraw.toggleAll"] = {
+    schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
+    run: (body, ctx) => excalidrawToggleAll(body as { id: string }, ctx),
+  };
+  routes["excalidraw.toggleContribute"] = {
+    schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
+    run: (body, ctx) => excalidrawToggleContribute(body as { id: string }, ctx),
+  };
+  routes["excalidraw.check"] = {
+    schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
+    run: (body, ctx) => excalidrawCheck(body as { id: string }, ctx),
+  };
+  routes["excalidraw.reveal"] = {
+    schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
+    run: (body, ctx) => excalidrawReveal(body as { id: string }, ctx),
   };
   return routes;
 }
