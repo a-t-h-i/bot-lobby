@@ -23,7 +23,7 @@ import type { QuickFixQueue } from "./quickfix.ts";
 import { MEMBER_LABELS, ORACLE_LABEL, type PlannerSeed, type PlanningSession } from "./planner.ts";
 import { issueText, type IssuesState } from "./issues.ts";
 import { agentsIndicator, workingAgents } from "./mini.ts";
-import { actionFor, keyLabel, keyMap, LOBBY_ACTIONS, type KeyMap, type LobbyAction } from "./keys.ts";
+import { actionFor, keyLabel, keyMap, LOBBY_ACTIONS, tabJumpKey, type KeyMap, type LobbyAction } from "./keys.ts";
 import { beside, BRANCH_GLYPH, bold, box, fit, highlight, pageStep, pagerButton, paint, rule, selectRow, spinner, spread, windowStart, wrap, wrapHanging, type LobbyTheme, type PaneBox, type PaneLayout, type PaneMark } from "./layout.ts";
 import { chatTail, HOME_PANES, renderHome, type HomePane } from "./tabs/home.ts";
 import { filterRows, pips, planDetailLines, renderTasks, taskDetailLines, taskProgress, taskRows, tasksWidths, type TaskRow } from "./tabs/tasks.ts";
@@ -43,25 +43,10 @@ import { filterRecords, renderMetrics } from "./tabs/metrics.ts";
 /** The mark before a branch name in the title (shared with the task details). */
 export { BRANCH_GLYPH };
 
-export const TAB_IDS = ["lobby", "tasks", "plan", "quickfix", "issues", "metrics", "git", "knowledge", "excalidraw"] as const;
-export type TabId = (typeof TAB_IDS)[number];
-
-export const TAB_LABELS: Record<TabId, string> = {
-  lobby: "Lobby",
-  tasks: "Tasks",
-  plan: "Plan",
-  quickfix: "Quick fix",
-  issues: "Issues",
-  metrics: "Metrics",
-  git: "Git",
-  knowledge: "Knowledge",
-  excalidraw: "Excalidraw",
-};
-
-/** The tabs on show: Issues only while `lobby.issues` switches it on. */
-export function visibleTabs(issues: boolean): TabId[] {
-  return TAB_IDS.filter((tab) => issues || tab !== "issues");
-}
+export { TAB_IDS, TAB_LABELS, visibleTabs } from "./prompts.ts";
+export type { TabId } from "./prompts.ts";
+// Local bindings for the uses below; the definitions live in prompts.ts.
+import { TAB_LABELS, visibleTabs, type TabId } from "./prompts.ts";
 
 /** Tabs where the prompt is the point: they open in typing mode and typing in browsing mode resumes it. */
 const PROMPT_FIRST: ReadonlySet<TabId> = new Set(["lobby", "plan", "quickfix"]);
@@ -719,7 +704,7 @@ export class LobbyView implements Component, Focusable {
     if (action) return this.runAction(action);
     const tabs = this.tabs();
     for (const [index, tab] of tabs.entries()) {
-      if (matchesKey(data, Key.alt(String(index + 1) as "1"))) return this.setTab(tab);
+      if (matchesKey(data, tabJumpKey(index))) return this.setTab(tab);
     }
     if (matchesKey(data, Key.ctrl("c"))) {
       if (this.editor.getText()) return this.editor.setText("");
@@ -804,7 +789,12 @@ export class LobbyView implements Component, Focusable {
     if (matchesKey(data, Key.left) || matchesKey(data, Key.right)) return this.movePaneFocus(matchesKey(data, Key.left) ? -1 : 1);
     if (matchesKey(data, Key.home) || matchesKey(data, Key.end)) return this.scrollToEdge(matchesKey(data, Key.home));
     const tabs = this.tabs();
-    if (!PROMPT_FIRST.has(this.tab) && /^[1-9]$/.test(data) && Number(data) <= tabs.length) return this.setTab(tabs[Number(data) - 1]!);
+    const digit = /^[1-9]$/.test(data) ? Number(data) - 1 : -1;
+    if (!PROMPT_FIRST.has(this.tab) && digit >= 0 && digit < tabs.length) {
+      // Plain digits jump without Alt; the Alt key stays the shared definition.
+      void tabJumpKey(digit);
+      return this.setTab(tabs[digit]!);
+    }
     if (data === "i" && this.tab !== "metrics" && this.tab !== "tasks" && this.tab !== "issues" && this.tab !== "git" && this.tab !== "knowledge" && this.tab !== "excalidraw") return this.setMode("type");
     if (this.tabCommand(data)) return;
     const printable = isPrintable(data);

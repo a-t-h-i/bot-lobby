@@ -4,7 +4,7 @@
  * (`{ "toggleThinking": "alt+t" }`). They work in typing and browsing mode
  * alike, so each default is a key that never types a character.
  */
-import { matchesKey, type KeyId } from "@earendil-works/pi-tui";
+import { Key, matchesKey, type KeyId } from "@earendil-works/pi-tui";
 
 export const LOBBY_ACTIONS = {
   hide: { key: "alt+l", help: "hide the lobby (back to pi)" },
@@ -34,6 +34,19 @@ export function keyMap(overrides: Readonly<Record<string, string>> = {}): KeyMap
   for (const [action, key] of Object.entries(overrides)) {
     if (action in map && key.trim()) map[action as LobbyAction] = key.trim().toLowerCase();
   }
+  return map;
+}
+
+/** Alt+digit jumps to the tab at `index`; the same key the TUI matches. */
+export function tabJumpKey(index: number): KeyId {
+  return Key.alt(String(index + 1) as "1");
+}
+
+/** `keyMap` with the web-only tab cycling defaults; user overrides win. */
+export function webKeyMap(overrides: Readonly<Record<string, string>> = {}): KeyMap {
+  const map = keyMap(overrides);
+  if (!overrides.nextTab?.trim()) map.nextTab = "alt+]";
+  if (!overrides.prevTab?.trim()) map.prevTab = "alt+[";
   return map;
 }
 
