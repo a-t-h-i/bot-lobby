@@ -1,19 +1,21 @@
 /**
  * A task's detail (batch-2 §f): title with its box, state facts, id, track and
- * branch (from the Lobby snapshot when it is the session's own task), plan
- * progress, comments and the actions the row allows. A saved plan has its own
- * body (`PlanDetail`). The plan text and the per-step checklist are not on the
- * wire yet, so the progress shows the count and the step under way only.
+ * branch (from the Lobby snapshot when it is the session's own task), the
+ * Request, the plan checklist and text (`tasks.get`), comments, amendments,
+ * what the task waits on, recent runs and the actions the row allows. A saved
+ * plan has its own body (`PlanDetail`).
  */
 import { RotateCcw } from "lucide-react"
 import type { LobbySnapshot, SnapshotTask, TaskRow } from "@protocol"
 import { useTopic } from "@/app/hooks"
+import { useApiRead } from "@/app/useApiRead"
 import { Button } from "@/components/ui/button"
 import { act } from "@/lib/act"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { NoteForm } from "@/ui/NoteForm"
 import { Pips, trackText } from "@/ui/task-facts"
 import { Comments } from "./Comments"
+import { DetailTrailer, PlanSections } from "./DetailSections"
 import { PlanDetail } from "./PlanDetail"
 import { CHECK_MARKS, CHECK_WORDS, agoWords, stateWords } from "./words"
 
@@ -139,13 +141,16 @@ function Actions(props: DetailProps) {
 
 export function TaskDetail(props: DetailProps) {
   const { row } = props
+  const isPlan = row.kind === "plan"
+  const detail = useApiRead("tasks.get", { taskId: row.id }, ["tasks"], !isPlan)
   const snapshot = useTopic<LobbySnapshot>("lobby").data?.task
   const task = snapshot?.id === row.id ? snapshot : undefined
-  if (row.kind === "plan") return <PlanDetail row={row} onGone={props.onGone} />
+  if (isPlan) return <PlanDetail row={row} onGone={props.onGone} />
   const open = row.check === "open" && row.kind === "task"
   return (
     <article className="flex flex-col gap-5" aria-label={row.title}>
       <Header row={row} task={task} />
+      {detail.data ? <PlanSections detail={detail.data} finished={!open} /> : null}
       <Comments taskId={row.id} finished={!open} canComment={open} />
       {open ? (
         <NoteForm
@@ -154,6 +159,8 @@ export function TaskDetail(props: DetailProps) {
           onSend={async (text) => (await act("tasks.message", { taskId: row.id, text })) !== undefined}
         />
       ) : null}
+      {detail.data ? <DetailTrailer detail={detail.data} /> : null}
+      {detail.error && !detail.data ? <p className="text-sm text-muted-foreground">Could not load the plan detail. {detail.error}</p> : null}
       <Actions {...props} />
     </article>
   )

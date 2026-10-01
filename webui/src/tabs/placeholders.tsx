@@ -23,16 +23,8 @@ export function IssuesTab({ detail }: { detail?: string }) {
   return <Placeholder label="Issues" detail={detail} />
 }
 
-export function MetricsTab({ detail }: { detail?: string }) {
-  return <Placeholder label="Metrics" detail={detail} />
-}
-
 export function GitTab({ detail }: { detail?: string }) {
   return <Placeholder label="Git" detail={detail} />
-}
-
-export function KnowledgeTab({ detail }: { detail?: string }) {
-  return <Placeholder label="Knowledge" detail={detail} />
 }
 
 export function ExcalidrawTab({ detail }: { detail?: string }) {

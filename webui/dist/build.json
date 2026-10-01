@@ -1,6 +1,6 @@
 {
-  "hash": "7bf3405708a0938e18960b40ae70cc4ee43bbfa30fc69f1e63ea7bfbb74ea97b",
-  "builtAt": "2026-10-01T21:54:38.795Z",
+  "hash": "c2a09727763857c0d273a11a3f5f1e099887203aa8914c5182075ec71f76ba18",
+  "builtAt": "2026-10-01T22:22:48.608Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -8,7 +8,7 @@
     },
     {
       "path": "src/webui/protocol.ts",
-      "sha256": "e749e3e053dacf7c35e69e4ed0fc6c00ff89470c865c0b4d3706cf4bbe4097a4"
+      "sha256": "35cca2f8e1ccb0547c50cccf16828154ed496517a98ebb551efba8dc5b9170ec"
     },
     {
       "path": "webui/components.json",
@@ -199,6 +199,26 @@
       "sha256": "afb5f2e4d1bd799ed10bad123568cadbda039e0694282de6c06f258cc2293bde"
     },
     {
+      "path": "webui/src/tabs/knowledge/Editors.tsx",
+      "sha256": "77ee8a939ab54c3e4f765ec82e7be13f285a23f033c7efaadb1f0ad8ab4ad218"
+    },
+    {
+      "path": "webui/src/tabs/knowledge/FileDetail.tsx",
+      "sha256": "e4e9c77ac7f9a0bc568f513a9ed323061b9351c2f98d5e580218ada56ac586e1"
+    },
+    {
+      "path": "webui/src/tabs/knowledge/KnowledgeList.tsx",
+      "sha256": "d3c415c029c9df8bfc501b38518ab3ac1d5383e439d31057527ec93252af67d7"
+    },
+    {
+      "path": "webui/src/tabs/knowledge/KnowledgeTab.tsx",
+      "sha256": "6525eac5040057f89fc3b5ba983ce6c233b5844bb6107aed10a792df11293004"
+    },
+    {
+      "path": "webui/src/tabs/knowledge/words.ts",
+      "sha256": "34bb54a943a6e7f3852abb04ecef3c6b64bffc0f9e7cab0fde129b1545491b18"
+    },
+    {
       "path": "webui/src/tabs/lobby/ActivityLog.tsx",
       "sha256": "6c1cce6e573c7b38a22e763bbdc5e3801922445f2c062d3b5e393033ced3a811"
     },
@@ -231,8 +251,32 @@
       "sha256": "4dc5b1f6012f55b998bcaf2a2d060e02eb276c3185483bdb48545d5eb540b6d5"
     },
     {
+      "path": "webui/src/tabs/metrics/Charts.tsx",
+      "sha256": "daf9611be87b32d01f8fe1fc22f71b052d5576da68575441ca6d847ac3d49519"
+    },
+    {
+      "path": "webui/src/tabs/metrics/Classifier.tsx",
+      "sha256": "13a10b12d92cb2efab7ea7be7a1ff525f13c86fbd4c2255548c2c0e4b8d3ce41"
+    },
+    {
+      "path": "webui/src/tabs/metrics/MetricsTab.tsx",
+      "sha256": "da71a46b0f55f5864324b18fcf34f8a361586507018044adcaedf357dd6f8808"
+    },
+    {
+      "path": "webui/src/tabs/metrics/MetricsTable.tsx",
+      "sha256": "167048df39266ff29080c429ec8cd96c407fcfb03b5910235f9c6a612374806d"
+    },
+    {
+      "path": "webui/src/tabs/metrics/Tiles.tsx",
+      "sha256": "5c0c381c8af94a37b83514a7df39f112be0bbe35c1ff493ff38815f8b88d9a7a"
+    },
+    {
+      "path": "webui/src/tabs/metrics/words.ts",
+      "sha256": "9027ef2da5280d9e816424b81ca28eb61d4506a5959b0fcaba0beebac178aec3"
+    },
+    {
       "path": "webui/src/tabs/placeholders.tsx",
-      "sha256": "0331e06a330571cbc89eef68ecdda69a4e302650d769ceeb8e18b5d07a260202"
+      "sha256": "3cf5c9f67006a8b2c8a2644e7ac844687defd0ac3687762468fb14439799c113"
     },
     {
       "path": "webui/src/tabs/plan/Conversation.tsx",
@@ -284,7 +328,7 @@
     },
     {
       "path": "webui/src/tabs/registry.tsx",
-      "sha256": "b35ec8b536cd16c6a95cc8962a13b5a4fbe49d18e7dd7d3fe3b6266e2fc2df29"
+      "sha256": "3ccb3e9b82a6e9685c38154f971a2baf316e5c4be399acaf5d1a9bcf9ed19dcf"
     },
     {
       "path": "webui/src/tabs/sessions/ChatView.tsx",
@@ -315,12 +359,16 @@
       "sha256": "f6447b9fdae34740f33dfc1dc5042bdde6bfae265d1f1edf0d00b5e0aa3a38c7"
     },
     {
+      "path": "webui/src/tabs/tasks/DetailSections.tsx",
+      "sha256": "e87ac3bcab58701b856eba9a0bf54623718a2da0dde564c4fc10a3347a0a43cf"
+    },
+    {
       "path": "webui/src/tabs/tasks/PlanDetail.tsx",
-      "sha256": "b993af6d2286d92033421ac52e6efcc6e5e273456ffca6247d3268624decbe7c"
+      "sha256": "9d1d4246c731e70243bde1f11c03f5a597ebbf8934881105e52158eef98d7db2"
     },
     {
       "path": "webui/src/tabs/tasks/TaskDetail.tsx",
-      "sha256": "88f1d748ff78d2904ceb261c69e7bdc4b3e22d4f493e20cc73c52588a80b185f"
+      "sha256": "9d2d2c0f30c590a11d8b842ef3849bff0f6ef9c83aee93e742c706844ee41b0f"
     },
     {
       "path": "webui/src/tabs/tasks/TaskList.tsx",
