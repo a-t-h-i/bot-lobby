@@ -26,7 +26,7 @@ Every card also has to meet [AGENT-GUIDE.md](AGENT-GUIDE.md) §6, the definition
 | **0 · Groundwork** | Toolchain, the design, and spikes that settle what could change the plan | Spike notes; approved wireframes |
 | **1 · The service seam** | The terminal lobby runs on `LobbyService`, topics and the prompt hub, with no visible change | All existing tests green; P1-X review |
 | **2 · The server** | `/bot-lobby web` serves an authenticated API and stream over the real service | P2-X: curl walkthrough and security tests |
-| **3 · Shell, Lobby tab, questions** | A usable web lobby on phone, tablet and desktop | **P3-X: first usable release** (opt-in) |
+| **3 · Shell, Lobby tab, questions** | A usable web lobby on tablet and desktop | **P3-X: first usable release** (opt-in) |
 | **4 · Every other tab** | Parity with the terminal | P4-X parity walkthrough |
 | **5 · Settings, notifications, app** | Settings, browser notifications, installable PWA, accessibility, release | P5-07 release |
 | **6 · Standalone (later)** | A headless host and an Electron app | not scheduled |
@@ -41,20 +41,21 @@ Every card also has to meet [AGENT-GUIDE.md](AGENT-GUIDE.md) §6, the definition
 
 ## Phase 0 · Groundwork
 
-### P0-01 · Workspace and toolchain
+### P0-01 · Workspace and toolchain (Vite + shadcn)
 - **Lane:** D · **Depends on:** none · **Owns:** `webui/` (new), `package.json`, `tsconfig.json`, `.gitignore`, `docs/web-ui/` (new)
-- **Starts from:** `web-ui-mode/starter/` (`build.mjs`, `tsconfig.json`, `package.json`).
+- **Starts from:** `web-ui-mode/starter/` (`tsconfig.json`, `package.json`).
 - **Do:**
-  1. Create `webui/` with `src/`, `build.mjs` and its own `tsconfig.json` (DOM, JSX for Preact, `noEmit`).
-  2. Add the devDependencies at the starter's versions: `preact`, `marked`, `dompurify`, `esbuild`, `playwright-core`.
-  3. `build.mjs` writes `dist/build.json`: the sources' hash, the build time and the file names.
-  4. Add the scripts:
+  1. Create `webui/` with `src/`, `index.html`, `vite.config.ts` and its own `tsconfig.json` (DOM, JSX for React, `noEmit`).
+  2. Set it up with `shadcn init -t vite -b radix`, and pin the devDependencies exactly: `vite` 8, `react` 19.3, `radix-ui`, `tailwindcss` 4, `marked`, `dompurify`, `playwright-core`. Check every package against npm and the shadcn registry, including `Questionnaire`; if one does not exist, say so, and build the slideout from RadioGroup, Checkbox and Card instead.
+  3. Prove the CSP nonce reaches Radix's injected `<style>` before Phase 3: the nonce is passed in a `<meta>` tag and set on `window.__webpack_nonce__` before any Radix portal mounts.
+  4. The Vite build writes `dist/build.json`: a hash of the sources **and** `index.html`, the build time and the file names.
+  5. Add the scripts:
      - `web:build`;
      - `web:dev` (a placeholder until P2-09);
      - `web:check` (the Playwright checks, P3-X);
      - `check` = `typecheck` + `web:typecheck` + `test`.
-  5. Add `webui/dist` to `files`. Add a test (`test/webui-dist.test.ts`) that fails when the `dist/` hash does not match the sources (D-08).
-  6. Copy `STATUS-TEMPLATE.md` → `docs/web-ui/status.md`, and FEATURE-INVENTORY → `docs/web-ui/parity.md`.
+  6. Add `webui/dist` to `files`. Add a test (`test/webui-dist.test.ts`) that fails when the `dist/` hash does not match the sources (D-08).
+  7. Copy `STATUS-TEMPLATE.md` → `docs/web-ui/status.md`, and FEATURE-INVENTORY → `docs/web-ui/parity.md`.
 - **Done when:**
   - a placeholder page builds to `webui/dist/`;
   - the staleness test fails after editing a source without rebuilding, and passes after;
@@ -74,18 +75,6 @@ Every card also has to meet [AGENT-GUIDE.md](AGENT-GUIDE.md) §6, the definition
   3. Note how `ctx.ui.notify` shows a long link, and whether the terminal makes it clickable.
 - **Done when:** the spike note answers each point, with commands and output.
 
-### P0-03 · Spike: Android, Termux and Chrome
-- **Lane:** D · **Depends on:** none · **Owns:** `docs/web-ui/spikes/p0-03-android.md`
-- **Needs:** a phone or tablet with Termux, and the user, who can run it.
-- **Do:** with the starter (`npm run serve` in Termux), check:
-  1. Chrome on the device opens `http://127.0.0.1:<port>/#token=…`;
-  2. `termux-open-url` opens it;
-  3. the stream survives switching apps for 1, 5 and 15 minutes, with and without `termux-wake-lock`;
-  4. split screen (Samsung multi-window) keeps both running;
-  5. "Add to home screen" works (only a shortcut until P5-03);
-  6. the on-screen keyboard never covers the composer.
-- **Done when:** the note lists what works, what Android kills and when, and the settings the README must recommend (RISKS R-03).
-
 ### P0-04 · Spike: answering questions in two places
 - **Lane:** A · **Depends on:** none · **Owns:** `docs/web-ui/spikes/p0-04-prompts.md`, a throwaway branch
 - **Do:** prove each withdrawal path in D-13 against Pi 0.87:
@@ -96,10 +85,10 @@ Every card also has to meet [AGENT-GUIDE.md](AGENT-GUIDE.md) §6, the definition
   5. that `ui_prompt_start` / `ui_prompt_end` fire for each kind.
 - **Done when:** the note confirms or replaces D-13, with the code that worked.
 
-### P0-05 · Spike: the event stream on phones
+### P0-05 · Spike: the event stream under desktop and tablet emulation
 - **Lane:** C · **Depends on:** none · **Owns:** `docs/web-ui/spikes/p0-05-stream.md`
-- **Do:** with the starter, measure on a phone (or Chrome's mobile emulation if P0-03 has no device):
-  1. reconnect time after the screen sleeps and after Pi restarts;
+- **Do:** with the starter, measure under Chromium's desktop and tablet emulation:
+  1. reconnect time after the page is backgrounded and after Pi restarts;
   2. that `hello` after a reconnect is enough to resync;
   3. CPU use during a long streamed reply at 40 ms frames, compared with 80 ms;
   4. the six-connections-per-origin limit with several tabs open (one stream per tab).
@@ -110,22 +99,17 @@ Every card also has to meet [AGENT-GUIDE.md](AGENT-GUIDE.md) §6, the definition
 - **Do:** list everything in `src/lobby/runtime.ts` and the stores it builds that needs a `TUI`, `ctx.ui` or `ctx.mode === "tui"`. For each, say whether the service can do without it (P1-05) and what a headless host would need (Phase 6). Run Pi with `--mode rpc` and confirm `ctx.mode` and `ctx.hasUI` (PI-NOTES §1).
 - **Done when:** the note has the list and a recommendation for P1-05.
 
-### P0-07 · Design: wireframes for every screen
+### P0-07 · Design: wireframes, in batches
 - **Lane:** D · **Depends on:** none · **Owns:** `docs/web-ui/design/`
 - **Do:**
-  1. Draw every tab, the questionnaire, the sessions view and settings:
-     - at phone (360×780), tablet portrait (800×1280) and desktop (1440×900);
-     - in light and dark.
-  2. Use static HTML built with the starter's tokens and components, so the wireframes are real pages, plus screenshots.
-  3. Cover these states for each screen:
-     - empty;
-     - loading;
-     - error;
-     - busy;
-     - a long list;
-     - a long Markdown reply.
-  4. Use the terminal's screenshots in `docs/*.png` and the README's tab descriptions as the content.
-- **Done when:** **the user approves the wireframes.** Phase 3's UI tasks build to them.
+  1. Use static HTML built with the shadcn tokens and components, so the wireframes are real pages, plus screenshots.
+  2. **Batch 1 (gates Phase 3):** the shell, the tab strip in all its overflow states, the Lobby tab and every state of the questionnaire slideout.
+  3. **Batch 2 (gates Phase 4):** every remaining tab, the sessions view and settings.
+  4. Draw each wireframe at **768 and 1440 px**, in light and dark.
+  5. Cover these states for each screen: empty, loading, error, busy, a long list and a long Markdown reply.
+  6. Note on each wireframe where it differs from the TUI, and why.
+  7. Use the terminal's screenshots in `docs/*.png` and the README's tab descriptions as the content.
+- **Done when:** **the user approves the wireframes, batch by batch.** Phase 3's UI tasks build to batch 1; Phase 4's to batch 2.
 
 ---
 
@@ -164,7 +148,7 @@ Every card also has to meet [AGENT-GUIDE.md](AGENT-GUIDE.md) §6, the definition
   - no model imports `@earendil-works/pi-tui`.
 
 ### P1-04 · The prompt hub
-- **Lane:** A · **Depends on:** P1-01, P0-04 · **Owns:** `src/lobby/prompts.ts` (new), `src/ask/dialog.ts`, `src/ask/tool.ts`, `src/pi/tools.ts` (the `ask`/`choose` deps), `src/lobby/runtime.ts` (`answerPanel`, `savePlan`, `answerDialog`)
+- **Lane:** A · **Depends on:** P1-01, P0-04 · **Owns:** `src/lobby/prompts.ts` (new, shared strings), `src/lobby/prompt-hub.ts` (new, PromptHub), `src/ask/dialog.ts`, `src/ask/tool.ts`, `src/pi/tools.ts` (the `ask`/`choose` deps), `src/lobby/runtime.ts` (`answerPanel`, `savePlan`, `answerDialog`)
 - **Do:**
   1. Write `PromptHub` (ARCHITECTURE §7) with a terminal surface that wraps today's code. Use the withdrawal mechanisms P0-04 settled.
   2. Route the questionnaire, `choose`, `ask`, the panel and the split through it.
@@ -284,7 +268,7 @@ Every card also has to meet [AGENT-GUIDE.md](AGENT-GUIDE.md) §6, the definition
   2. The fixtures cover each state P0-07 drew (empty, busy, long lists, long Markdown, errors).
   3. `?scenario=<name>` switches between fixture sets.
   4. A scripted oracle streams replies, and a scripted questionnaire arrives after a send.
-  5. The page rebuilds on change (esbuild watch) and reloads.
+  5. The page rebuilds on change through Vite and reloads.
 - **Done when:**
   - Lane C can build every tab with no Pi and no model;
   - a test checks that every protocol call has a fixture.
@@ -298,34 +282,34 @@ Every card also has to meet [AGENT-GUIDE.md](AGENT-GUIDE.md) §6, the definition
 
 ## Phase 3 · Shell, Lobby tab and questions (first usable release)
 
-### P3-01 · Tokens and base components
+### P3-01 · shadcn tokens and base components
 - **Lane:** C · **Depends on:** P0-07, P0-01 · **Owns:** `webui/src/styles/`, `webui/src/ui/`
-- **Starts from:** `starter/client/styles.css`.
+- **Starts from:** `shadcn init -t vite -b radix`.
 - **Do:** build these from the wireframes:
-  - the tokens (light and dark);
-  - type and spacing scales;
-  - the components: Button, IconButton, Tabs, Segmented, List/Row, Badge, Sheet (full-screen on phones, side panel on tablets), Dialog, Toast, Empty/Loading/Error, Markdown (wrapping P3-04), Field and TextArea;
+  - the shadcn tokens (light and dark), plus type and spacing scales;
+  - the components: Button, IconButton, Tabs, Segmented, List/Row, Badge, Sheet (a side panel), Dialog, Toast, Empty/Loading/Error, Markdown (wrapping P3-04), Field and TextArea;
   - a component gallery page in the mock server (`#/gallery`).
 - **Done when:**
   - the gallery passes TESTING §4 at every size, in both themes;
-  - every touch target is ≥ 44 px on touch;
+  - every touch target is ≥ 40 px;
   - contrast is ≥ 4.5:1 (checked by the UI check).
 
-### P3-02 · App shell and layouts
+### P3-02 · App shell and the tab strip
 - **Lane:** C · **Depends on:** P3-01 · **Owns:** `webui/src/app/`
-- **Starts from:** `starter/client/app.tsx` (the header, tabs and layout).
+- **Starts from:** the shadcn shell and tabs.
 - **Do:**
   1. The header: workspace, branch, task state, connection.
-  2. The tabs per D-09: a bottom bar with More on phones, the top on tablets, the side or top on desktop.
+  2. The **tab strip** per D-09 and P0-07: compact pills at the top at every width; the WAI-ARIA tabs pattern; the active tab always scrolls into view; a chevron at each edge that has hidden tabs, 40 px, not reachable with Tab; a fade that shows there is more; no visible scrollbar. Alt+1…8 jumps to a tab, from `tabJumpKey` in `src/lobby/keys.ts`; next and previous tab have shortcuts. A waiting question shows a badge on any tab other than Lobby.
   3. Hash routing.
   4. The sign-in gate.
   5. The banner for a terminal dialog that is open.
   6. Toasts from `notices`.
-  7. Safe areas, and the on-screen keyboard (P0-03).
+  7. The empty, loading, error and reconnecting states.
 - **Done when:**
   - every route renders a placeholder at every size;
   - back and forward work;
   - a reload keeps the route;
+  - all eight pills fit on one line at 1024 px and up, and the strip scrolls with chevrons below that;
   - nothing scrolls sideways.
 
 ### P3-03 · Data layer
@@ -348,7 +332,7 @@ Every card also has to meet [AGENT-GUIDE.md](AGENT-GUIDE.md) §6, the definition
   3. Syntax highlighting loads lazily (highlight.js, a common-languages build), only when a block has a language.
   4. A streaming reply re-renders only itself.
   5. Add a source-scan test: only `Markdown.tsx` sets HTML.
-- **Done when:** the starter's checks (bold, code, table, a script that does not run, links with `noopener`) pass in the gallery, plus a 2,000-line reply that renders without freezing a mid-range phone (P0-05's CPU numbers).
+- **Done when:** the starter's checks (bold, code, table, a script that does not run, links with `noopener`) pass in the gallery, plus a 2,000-line reply that renders without freezing a mid-range tablet (P0-05's CPU numbers).
 
 ### P3-05 · The Lobby tab
 - **Lane:** C · **Depends on:** P3-02, P3-03, P3-04 · **Owns:** `webui/src/tabs/lobby/`, `webui/src/ui/Composer.tsx`
@@ -360,7 +344,7 @@ Every card also has to meet [AGENT-GUIDE.md](AGENT-GUIDE.md) §6, the definition
   4. **The composer:** send, steer while busy, and stop.
   5. **The activity log:** colour per source and pending marks.
   6. **Thoughts:** each agent's latest, with the live one marked.
-  7. **Pane toggles** (the terminal's `alt+c`, `alt+a` and `alt+k`), and a segmented control on phones.
+  7. **Pane toggles** (the terminal's `alt+c`, `alt+a` and `alt+k`) for wide screens.
   8. **Search** within the tab (the terminal's `ctrl+f`), using `filterFeed`.
 - **Done when:**
   - every behaviour in FEATURE-INVENTORY's Lobby rows is checked in the mock;
@@ -369,7 +353,7 @@ Every card also has to meet [AGENT-GUIDE.md](AGENT-GUIDE.md) §6, the definition
 ### P3-06 · Questions in the page
 - **Lane:** C · **Depends on:** P3-05, P2-06 · **Owns:** `webui/src/prompts/`
 - **Do:**
-  1. **The questionnaire:** a step per question (tabs on wide screens), options with descriptions, Markdown previews beside the list or under it on phones, and images from `/files/preview`. Multi-select, an answer in your own words, and a leave confirmation, all as in the README's questionnaire section.
+  1. **The questionnaire:** a step per question (tabs on wide screens), options with descriptions, Markdown previews beside the list or under it at narrow widths, and images from `/files/preview`. Multi-select, an answer in your own words, and a leave confirmation, all as in the README's questionnaire section.
   2. **`choose`, `confirm` and `text`.**
   3. **Background-session dialogs.**
   4. **Showing them:** an open prompt shows as a sheet over any tab, plus a badge on the Lobby tab. When the terminal answers first, the sheet closes with "answered in the terminal".
@@ -390,7 +374,7 @@ Every card also has to meet [AGENT-GUIDE.md](AGENT-GUIDE.md) §6, the definition
 ### P3-X · First usable release
 - **Lane:** coordinator · **Depends on:** P3-01…P3-07, P2-X
 - **Do:**
-  1. Run a real task from the phone (Termux + Chrome) and from a desktop browser, following `docs/web-ui/verification/phase3.md`: start it, approve the proposal, answer a question, watch it finish.
+  1. Run a real task in Chromium at emulated tablet and desktop sizes, following `docs/web-ui/verification/phase3.md`: start it, approve the proposal, answer a question, watch it finish.
   2. Run `npm run web:check` (TESTING §4).
   3. Write the README's "Web UI (preview)" section.
   4. Bump the minor version.
@@ -410,7 +394,7 @@ Each card builds one tab to its wireframe, over the mock, and then checks it onc
 | **P4-01** | Tasks | C · `webui/src/tabs/tasks/` | Checklists from `taskRows`; plans and their comments; start here or in a new session; archive, restore and delete with confirmation; the auto toggle; messaging a task's oracle; the archived view |
 | **P4-02** | Plan | C · `webui/src/tabs/plan/` | Seats (tap to toggle), round and limit, members thinking; the panel's conversation; the draft plan with **tap a line to comment**; questions through the prompt hub; retry, new and save (with the split question) |
 | **P4-03** | Quick fix | C · `webui/src/tabs/quickfix/` | Submit; jobs newest first; live steps; edited files; the report as Markdown; cancel; run anyway; moved to a task; the "routed here by the oracle" note |
-| **P4-04** | Metrics | C · `webui/src/tabs/metrics/` | Tiles; bars of run time and success per model and per agent (SVG); the time share; the cost and token table (scrolls on phones); the classifier summary; group-by and search |
+| **P4-04** | Metrics | C · `webui/src/tabs/metrics/` | Tiles; bars of run time and success per model and per agent (SVG); the time share; the cost and token table (scrolls in its box); the classifier summary; group-by and search |
 | **P4-05** | Git | C · `webui/src/tabs/git/` | Pull requests with checks and size; detail with files, description, reviews and comments; review with an agent (with a focus), cancel; Jev's read; stale marks; "nothing is posted to GitHub" |
 | **P4-06** | Knowledge | C · `webui/src/tabs/knowledge/` | Files by agent, with compaction marks; entries; edit, add and delete with the conflict refusal; whole-file edit; notes (add, take back); archive notice |
 | **P4-07** | Excalidraw | C · `webui/src/tabs/excalidraw/` | Up to five sessions; add a link or make a room; the agent checklist; look-only; check with its reason; rename and remove. **Links masked; reveal and copy on tap; "Open board" opens it in a new tab** (Q-03) |
@@ -419,7 +403,7 @@ Each card builds one tab to its wireframe, over the mock, and then checks it onc
 
 ### P4-X · Parity walkthrough
 - **Lane:** coordinator · **Depends on:** P4-01…P4-09
-- **Do:** go through every FEATURE-INVENTORY row on a phone and a desktop with real Pi.
+- **Do:** go through every FEATURE-INVENTORY row on a tablet and a desktop with real Pi.
 - **Done when:** every row is `done` or has an agreed exception in `docs/web-ui/parity.md`.
 
 ---
@@ -430,10 +414,10 @@ Each card builds one tab to its wireframe, over the mock, and then checks it onc
 | --- | --- | --- | --- |
 | **P5-01** | **Settings page:** every entry of `/bot-lobby settings`. Models come from Pi's registry (`ctx.modelRegistry.getAvailable()`, or the scoped models, as `src/pi/settings-ui.ts:237` does). Thinking levels per model; time limits; instructions; the lobby; `lobby.web`; Jev. Saved through `resolveConfig`. A theme switch | A+B+C · `src/webui/api/settings.ts`, `webui/src/tabs/settings/` | Every setting round-trips; invalid input is refused with the terminal's message; the terminal sees the change |
 | **P5-02** | **Notifications:** toasts for notices. Opt-in browser notifications (the Notification API works on `127.0.0.1`) while the page is hidden: a task waits for you, finished or failed; a background session asks something; a quick fix is done | C · `webui/src/app/notify.ts` | Shown once per event; never while the page is visible; off by default |
-| **P5-03** | **Installable app (PWA):** manifest, icons and a service worker that caches the shell by build hash and never API answers; a "Pi is not running" offline page | C+D · `webui/src/sw.ts`, `webui/public/` | Installs on Android Chrome (P0-03 device); an update is picked up on the next load; API answers are never served from the cache (test) |
+| **P5-03** | **Installable app (PWA):** manifest, icons and a service worker that caches the shell by build hash and never API answers; a "Pi is not running" offline page | C+D · `webui/src/sw.ts`, `webui/public/` | Installs in desktop and tablet Chrome; an update is picked up on the next load; API answers are never served from the cache (test) |
 | **P5-04** | **Accessibility and keys:** keyboard paths for every action; the terminal's shortcuts where the browser allows (tab switching, search, send, stop, auto); a help sheet; screen-reader labels; focus management for sheets | C · `webui/src/app/keys.ts`, components | axe-core finds no serious issues on any screen; a keyboard-only walkthrough is recorded |
-| **P5-05** | **Performance and extras:** a long-session stress test (400 activity entries, 100 messages, a reply of 8,000 characters); lazy Mermaid (Q-05); bundle budget check in CI | C · `webui/src/lib/` | Under the 150 KB budget; no long tasks over 200 ms on the P0-03 device during a stream |
-| **P5-06** | **Docs:** the README's Web UI section with phone and desktop screenshots, Termux setup (from P0-03), troubleshooting, security notes; `/bot-lobby help` | D · `README.md`, `docs/*.png` | A new user on Termux gets from install to a working page with only the README |
+| **P5-05** | **Performance and extras:** a long-session stress test (400 activity entries, 100 messages, a reply of 8,000 characters); lazy Mermaid (Q-05); bundle budget check in CI | C · `webui/src/lib/` | Under the 250 KB budget; no long tasks over 200 ms in the tablet emulation during a stream |
+| **P5-06** | **Docs:** the README's Web UI section with tablet and desktop screenshots, setup, troubleshooting, security notes; `/bot-lobby help` | D · `README.md`, `docs/*.png` | A new user gets from install to a working page with only the README |
 | **P5-07** | **Release:** settle Q-04 (start the server with each session?); changelog; version bump; publish | coordinator | Released; the parity file is complete |
 
 ---
