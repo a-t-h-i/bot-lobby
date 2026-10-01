@@ -11,6 +11,7 @@ import { Container, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { isSubagentProcess } from "../pi/quiet.ts";
 import { askUser, type Asker } from "./dialog.ts";
+import { promptHub } from "../lobby/prompt-hub.ts";
 import { isImagePath } from "./image.ts";
 import { relayAsker, relayEnabled } from "./relay.ts";
 import { ASK_TOOL, MAX_HEADER, MAX_LABEL, MAX_OPTIONS, MAX_QUESTIONS, MIN_OPTIONS, RESERVED, type AskQuestion, type AskResult } from "./types.ts";
@@ -114,7 +115,7 @@ export function registerAskTool(pi: ExtensionAPI, ask?: Asker): void {
       const questions = (params as { questions: AskQuestion[] }).questions;
       const invalid = invalidQuestions(questions);
       if (invalid) throw new Error(`${invalid}.`);
-      const result = await asker(questions, ctx, signal);
+      const result = await promptHub.run("questionnaire", "oracle", { questions }, () => asker(questions, ctx, signal), { signal });
       return { content: [{ type: "text", text: answerSummary(questions, result) }], details: result };
     },
     renderCall(args, theme) {
