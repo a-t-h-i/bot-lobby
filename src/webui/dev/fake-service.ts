@@ -6,6 +6,7 @@
  */
 import { LobbyFeed } from "../../lobby/feed.ts";
 import { promptHub } from "../../lobby/prompt-hub.ts";
+import type { BackgroundSession, DialogAnswer, SessionDialog } from "../../lobby/sessions.ts";
 import type { LobbyService } from "../../lobby/service.ts";
 import { loadScenario, type ScenarioFixture } from "./fixtures.ts";
 
@@ -51,6 +52,45 @@ function seedPrompts(service: object, fixture: ScenarioFixture): void {
   for (const settled of fixture.settled) promptHub.answer(promptHub.open(settled.kind, settled.from, settled.payload).id, settled.answer);
 }
 
+/** A background session as live fixture data: its own feed, dialogs, and canned answers. */
+function fakeBackground(entry: NonNullable<ScenarioFixture["backgroundSessions"]>[number]): BackgroundSession {
+  const feed = new LobbyFeed();
+  let status = entry.status;
+  const dialogs = ((entry.dialogs ?? []) as unknown as SessionDialog[]).map((dialog) => ({ ...dialog }));
+  const session = {
+    key: entry.key,
+    name: entry.name,
+    get status() {
+      return status;
+    },
+    set status(next: string) {
+      status = next;
+    },
+    ...(entry.sessionId ? { sessionId: entry.sessionId } : {}),
+    ...(entry.planId ? { planId: entry.planId } : {}),
+    feed,
+    dialogs,
+    get alive() {
+      return status !== "exited";
+    },
+    get busy() {
+      return status === "working";
+    },
+    send(text: string) {
+      feed.say("you", text);
+    },
+    stop() {
+      status = "exited";
+      dialogs.length = 0;
+    },
+    answer(id: string, _answer: DialogAnswer) {
+      const index = dialogs.findIndex((dialog) => dialog.id === id);
+      if (index >= 0) dialogs.splice(index, 1);
+    },
+  };
+  return session as unknown as BackgroundSession;
+}
+
 function sliceReply(text: string): string[] {
   const parts: string[] = [];
   for (let index = 0; index < text.length; index += 120) parts.push(text.slice(index, index + 120));
@@ -90,6 +130,13 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
   const fixture = loadScenario(name);
   seedFeed(feed, fixture);
   const history = fixture.history.map((entry, index) => ({ id: index + 1, at: Date.now() - (fixture.history.length - index) * 1000, role: entry.role, text: entry.text }));
+  const tasks = (fixture.mockTasks ?? []).map((task) => ({ ...task }));
+  const archived = (fixture.mockArchived ?? []).map((task) => ({ ...task }));
+  const plans = (fixture.mockPlans ?? []).map((plan) => ({ ...plan, status: "pending" as const, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }));
+  const auto = new Set(fixture.autoTasks ?? []);
+  const comments = new Map<string, Array<Record<string, unknown>>>(Object.entries(fixture.taskComments ?? {}));
+  const backgrounds = (fixture.backgroundSessions ?? []).map(fakeBackground);
+  let commentSeq = 0;
   const service = {
     sessionId: () => fixture.status.sessionId,
     sessionName: () => fixture.status.sessionName,
@@ -109,6 +156,57 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
       feed.replyEnd();
     },
     chatHistory: () => [...history],
+    tasks: () => [...tasks],
+    plans: () => [...plans],
+    comments: (taskId: string) => [...(comments.get(taskId) ?? [])],
+    comment: (taskId: string, text: string) => {
+      const entry = { id: `C-mock-${(commentSeq += 1)}`, taskId, text, createdAt: new Date().toISOString(), status: "open" };
+      comments.set(taskId, [...(comments.get(taskId) ?? []), entry]);
+      return "comment sent to the oracle — it will amend the plan";
+    },
+    startPlanned: (plan: { id: string }) => `starting ${plan.id} here — its agreed plan needs no approval…`,
+    discardPlan: (id: string) => {
+      const index = plans.findIndex((plan) => plan.id === id);
+      if (index >= 0) plans.splice(index, 1);
+    },
+    archivedTasks: () => [...archived],
+    archiveTask: (taskId: string) => {
+      const index = tasks.findIndex((task) => (task as { id: string }).id === taskId);
+      if (index < 0) return `no task ${taskId}`;
+      archived.unshift(tasks.splice(index, 1)[0]!);
+      return `archived ${taskId} — v shows archived tasks, a restores one`;
+    },
+    restoreTask: (taskId: string) => {
+      const index = archived.findIndex((task) => (task as { id: string }).id === taskId);
+      if (index < 0) return `no archived task ${taskId}`;
+      tasks.unshift(archived.splice(index, 1)[0]!);
+      return `restored ${taskId} to the task list`;
+    },
+    deleteTask: (taskId: string, where: "list" | "archive") => {
+      const list = where === "list" ? tasks : archived;
+      const index = list.findIndex((task) => (task as { id: string }).id === taskId);
+      if (index < 0) return `no task ${taskId}`;
+      list.splice(index, 1);
+      return `deleted ${taskId} for good`;
+    },
+    isAuto: (taskId: string) => auto.has(taskId),
+    setAuto: (taskId: string, on: boolean) => {
+      if (on) auto.add(taskId);
+      else auto.delete(taskId);
+    },
+    sendToTask: (taskId: string, _text: string) => (tasks.some((task) => (task as { id: string }).id === taskId) ? `sent — the session driving ${taskId} passes it to its oracle` : `no task ${taskId}`),
+    sendToSession: (_sessionId: string, _text: string) => "sent — that session passes it to its oracle within a few seconds",
+    sessions: () => [...backgrounds],
+    startSession: (start: { request?: string; plan?: { id: string; title: string }; auto?: boolean }) => {
+      const key = `S${backgrounds.length + 1}`;
+      const session = fakeBackground({ key, name: start.plan?.title ?? start.request?.trim().slice(0, 40) ?? "mock session", status: "starting", ...(start.plan ? { planId: start.plan.id } : {}) });
+      backgrounds.push(session);
+      return session;
+    },
+    liveSessions: () => [...(fixture.liveSessions ?? [])],
+    sessionChat: () => [],
+    hasOlderChat: () => false,
+    switchTo: async (target: { name: string }) => `switching this window to ${target.name}…`,
   } as unknown as LobbyService;
   seedPrompts(service, fixture);
   return service;
