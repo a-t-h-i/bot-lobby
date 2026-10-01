@@ -10,6 +10,7 @@ import { truncate } from "../text.ts";
 import { applyStatus, reportRuns, summarizeRun } from "./ui.ts";
 import { whileAsking } from "../state/budget.ts";
 import { askUser } from "../ask/dialog.ts";
+import { promptHub } from "../lobby/prompt-hub.ts";
 import type { AskQuestion } from "../ask/types.ts";
 import { unescapeBreaks } from "../lobby/markdown.ts";
 import { isQuiet } from "./quiet.ts";
@@ -126,10 +127,10 @@ export function workflowDeps(
     effort: effortFor((model, thinking) => checkThinking(modelLookup(ctx)(model), thinking).level),
     // Time spent waiting on the user is not the task's: its budget clock waits too.
     // A free-text answer may run to several lines (Shift+Enter), so it is asked in the multi-line editor.
-    ask: async (question) => (hasUI ? whileAsking(() => ctx.ui.editor(question)) : undefined),
-    choose: async (title, options) => (hasUI ? whileAsking(() => ctx.ui.select(title, options)) : undefined),
+    ask: async (question) => (hasUI ? whileAsking(() => promptHub.run("text", "orchestrate", { question }, () => ctx.ui.editor(question))) : undefined),
+    choose: async (title, options) => (hasUI ? whileAsking(() => promptHub.run("choose", "orchestrate", { title, options }, () => ctx.ui.select(title, options))) : undefined),
     // An agent's own questions (the designer's), relayed as the questionnaire.
-    ...(hasUI ? { askQuestions: (questions: AskQuestion[], from: string, askSignal?: AbortSignal) => whileAsking(() => askUser(questions, ctx, askSignal, from)) } : {}),
+    ...(hasUI ? { askQuestions: (questions: AskQuestion[], from: string, askSignal?: AbortSignal) => whileAsking(() => promptHub.run("questionnaire", from, { questions }, () => askUser(questions, ctx, askSignal, from), askSignal ? { signal: askSignal } : undefined)) } : {}),
     notify: (message, level = "info") => {
       if (hasUI) ctx.ui.notify(message, level);
     },
