@@ -20,6 +20,7 @@ import { TabStrip } from "./TabStrip.tsx"
 import { PromptSlideout } from "@/prompts/PromptSlideout"
 import { useEvents } from "./useEvents.ts"
 import { useLobbyKeys } from "./useLobbyKeys.ts"
+import { useDesktopNotifications } from "./notify.ts"
 import { usePrompts } from "./usePrompts.ts"
 import { useStoreVersion, useStatus, useTopic } from "./hooks.ts"
 import { go, tabHash, useRoute, type Route } from "./router.ts"
@@ -87,6 +88,7 @@ export function Shell() {
   const rootRef = useRef<HTMLDivElement>(null)
   const retry = useEvents()
   useNotices()
+  useDesktopNotifications()
 
   const status = statusRecord.data
   const tabs = status?.tabs ?? []
