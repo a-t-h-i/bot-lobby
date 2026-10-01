@@ -27,7 +27,7 @@ import { describeToolCall } from "../pi/activity.ts";
 import { appendMetrics, type MetricRecord } from "../state/metrics.ts";
 import { savePlannedTask, type IssueRef, type PlannedTask } from "../state/backlog.ts";
 import { planSteps } from "../pi/plan-checklist.ts";
-import { KEEP_WHOLE, MAX_SPLIT_REVISIONS, partBrief, partInfo, parseSplit, splitFailedQuestion, splitLabel, splitProblems, splitPrompt, splitQuestion, splitRequest, type SplitProposal } from "./split.ts";
+import { KEEP_WHOLE, MAX_SPLIT_REVISIONS, partBrief, partInfo, parseSplit, splitFailedQuestion, splitProblems, splitPrompt, splitQuestion, splitRequest, type SplitProposal } from "./split.ts";
 import type { AskQuestion, AskResult } from "../ask/types.ts";
 import { PANEL_MEMBERS, type PanelMember } from "../schemas/configuration.ts";
 import { truncate } from "../text.ts";
