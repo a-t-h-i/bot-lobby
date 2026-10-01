@@ -1,10 +1,14 @@
 {
-  "hash": "8d4f4fe6527b7367778f21e85f4312375cd42cbe63ebeea5cecab30019cb9273",
-  "builtAt": "2026-10-01T15:44:30.182Z",
+  "hash": "e294e64fe8f0893a6a25e58b373980e756dd1b80305e792d0b1d5432599f8b59",
+  "builtAt": "2026-10-01T18:12:54.308Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
       "sha256": "fcd39a117914cbfa8794b321c32063be542f0aaa51970acf980f48c6632952fc"
+    },
+    {
+      "path": "src/webui/protocol.ts",
+      "sha256": "5718402e02399ca5ba01d7cb698ae2b4bfea855dbb1fbebee775445c4ff8c30a"
     },
     {
       "path": "webui/components.json",
@@ -16,7 +20,7 @@
     },
     {
       "path": "webui/src/App.tsx",
-      "sha256": "e44d346904a8e604f0b56b55bf6db3c416f49c4c7e21d5c72db5208a47968587"
+      "sha256": "b7c77769d950b3fda179f58f9f5d965e65f04d37808611ce120eece7a695f30d"
     },
     {
       "path": "webui/src/components/theme-provider.tsx",
@@ -59,8 +63,16 @@
       "sha256": "9dad5d33e99d4f35955a0134233eac292c6a2e163f5fb3e9bab317a8c388ddb4"
     },
     {
+      "path": "webui/src/components/ui/sonner.tsx",
+      "sha256": "878bff4a4614872fd4afbfd330dac608ee40994d2567fd03f2e1ebe8b5a005dc"
+    },
+    {
       "path": "webui/src/components/ui/spinner.tsx",
       "sha256": "900f722c961fa6e1c28104809d56831c9056dc69599e49d364cc13a6f33966a3"
+    },
+    {
+      "path": "webui/src/components/ui/tabs.tsx",
+      "sha256": "46069535413cb62f09985be5f8ac19c446e1d9c680e3dfe1103bda977bf637ef"
     },
     {
       "path": "webui/src/components/ui/textarea.tsx",
@@ -73,6 +85,22 @@
     {
       "path": "webui/src/index.css",
       "sha256": "a30c5f5ed2aeb28feba6ba57ad635650e4b475e9ae109423cd1e8806f5041408"
+    },
+    {
+      "path": "webui/src/lib/api.ts",
+      "sha256": "471fd80ebca456636fd824974af8d1bee560bdd3141eafd5580bb27f0b1a1cdd"
+    },
+    {
+      "path": "webui/src/lib/events.ts",
+      "sha256": "f64f2033b328dcb77d8a4a430b84f7a5ca7dbfd124602d162f6df0ee3738d525"
+    },
+    {
+      "path": "webui/src/lib/format.ts",
+      "sha256": "7fb130b43b8ce46f396209440b36330dbf93e97924c125903044227b4baffd38"
+    },
+    {
+      "path": "webui/src/lib/store.ts",
+      "sha256": "a05fffe3d82e33c1ba7c7401d3ebc851cca52d87518aeba4f472cc5fde1b2e28"
     },
     {
       "path": "webui/src/lib/utils.ts",
@@ -88,11 +116,11 @@
     },
     {
       "path": "webui/tsconfig.json",
-      "sha256": "3c3a97265e8755e2ae993a7cc96b732ae28dbb76b60a58f821eb7bc8aa30b187"
+      "sha256": "2acd31a2ec81c342f1513b3bd1803fb944acf9bee926f27839daa8b4035c0251"
     },
     {
       "path": "webui/vite.config.ts",
-      "sha256": "f9f1b4257c31c12fffff57fee7472afdae7cf311bae00240299968b9f690aa04"
+      "sha256": "3378acfeb57b5ecd5de7cb8639759595f47d2fb0f9b46c18b4eef854ff7f8f9b"
     }
   ]
 }
