@@ -1,0 +1,98 @@
+{
+  "hash": "8d4f4fe6527b7367778f21e85f4312375cd42cbe63ebeea5cecab30019cb9273",
+  "builtAt": "2026-10-01T15:44:30.182Z",
+  "files": [
+    {
+      "path": "src/lobby/prompts.ts",
+      "sha256": "fcd39a117914cbfa8794b321c32063be542f0aaa51970acf980f48c6632952fc"
+    },
+    {
+      "path": "webui/components.json",
+      "sha256": "d0ada54e59710099b766eae59a1a35d31b717a6ec43d73a8814de1815ddc1749"
+    },
+    {
+      "path": "webui/index.html",
+      "sha256": "5e8756004fb7270b372c13ad5a0db3aafc0f551792a4fb1e731244ff4a46c6a7"
+    },
+    {
+      "path": "webui/src/App.tsx",
+      "sha256": "e44d346904a8e604f0b56b55bf6db3c416f49c4c7e21d5c72db5208a47968587"
+    },
+    {
+      "path": "webui/src/components/theme-provider.tsx",
+      "sha256": "88c52942808e8f1c5a0e64e3bf86a5d8d700ca5101646c800eca6db6cafc0e3e"
+    },
+    {
+      "path": "webui/src/components/ui/badge.tsx",
+      "sha256": "ac24435d9954a37fd7e72815e565fc9b68ffc2170cf221a7042cb529ba041e9d"
+    },
+    {
+      "path": "webui/src/components/ui/button.tsx",
+      "sha256": "eff75f2b1fdf9b57e57f472f63679a411826224ab361ed221dd5ccf8152cd027"
+    },
+    {
+      "path": "webui/src/components/ui/card.tsx",
+      "sha256": "931718ce4a38bd879c39823b5c18606754c68982566d6450a3da3d91bab077c0"
+    },
+    {
+      "path": "webui/src/components/ui/empty.tsx",
+      "sha256": "40da189e8b626f6480c77b78be86b781070b270e724c611d31e099ad7f652fae"
+    },
+    {
+      "path": "webui/src/components/ui/kbd.tsx",
+      "sha256": "1e477363fca474e23b9a1f0e5d2920cd7319e076eaa5156ba29ea4722b96bba5"
+    },
+    {
+      "path": "webui/src/components/ui/questionnaire.tsx",
+      "sha256": "17e7306c3aa468799ba0f3412eca3273a6273e63e8419c366b8e821e89f731ce"
+    },
+    {
+      "path": "webui/src/components/ui/scroll-area.tsx",
+      "sha256": "976f98295cb2e308f49d26efee73c7e514452992f4c57d943cb75e388a12e170"
+    },
+    {
+      "path": "webui/src/components/ui/separator.tsx",
+      "sha256": "c924a82e99fda03684c17238d04eec857edc83977da2ee601795e94e52b4828f"
+    },
+    {
+      "path": "webui/src/components/ui/sheet.tsx",
+      "sha256": "9dad5d33e99d4f35955a0134233eac292c6a2e163f5fb3e9bab317a8c388ddb4"
+    },
+    {
+      "path": "webui/src/components/ui/spinner.tsx",
+      "sha256": "900f722c961fa6e1c28104809d56831c9056dc69599e49d364cc13a6f33966a3"
+    },
+    {
+      "path": "webui/src/components/ui/textarea.tsx",
+      "sha256": "fa0ce5e86f2d8315e120edcddf036f9c7d1c764fb3252576e42450786932c662"
+    },
+    {
+      "path": "webui/src/components/ui/tooltip.tsx",
+      "sha256": "e5993a46ce5fa29a4d158b469856553a85ea09c813df7ce2884e06001ec3454e"
+    },
+    {
+      "path": "webui/src/index.css",
+      "sha256": "a30c5f5ed2aeb28feba6ba57ad635650e4b475e9ae109423cd1e8806f5041408"
+    },
+    {
+      "path": "webui/src/lib/utils.ts",
+      "sha256": "7c8c3dfc0cdd370d44932828eb067ef771c8fe7996693221d5d4b90af6d54f2d"
+    },
+    {
+      "path": "webui/src/main.tsx",
+      "sha256": "f4697bd996d65112c8cc61575b4f148d9f604aaacb37f3c6d2ac7895f10e4d38"
+    },
+    {
+      "path": "webui/src/nonce.ts",
+      "sha256": "87fd65873d4ed3639461efabc6e6ec20ff50ada92dedbc87044b7da0b5bc4e9f"
+    },
+    {
+      "path": "webui/tsconfig.json",
+      "sha256": "3c3a97265e8755e2ae993a7cc96b732ae28dbb76b60a58f821eb7bc8aa30b187"
+    },
+    {
+      "path": "webui/vite.config.ts",
+      "sha256": "f9f1b4257c31c12fffff57fee7472afdae7cf311bae00240299968b9f690aa04"
+    }
+  ]
+}
