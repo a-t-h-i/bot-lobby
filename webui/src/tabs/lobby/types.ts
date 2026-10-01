@@ -42,14 +42,18 @@ export interface LobbyRun {
   finishedAt?: string
 }
 
-/** A token colour per source, mirroring `tabs/home.ts`; meaning is also carried by a mark. */
+/**
+ * A token colour per source, mirroring `tabs/home.ts`; meaning is also carried
+ * by a mark. Chart tokens are tuned for fills and fail 4.5:1 as text, so the
+ * hues come from the accessible `--source-*` palette (D-19).
+ */
 const SOURCE_COLORS: Record<string, string> = {
   MASTER: "text-primary",
-  DEV: "text-chart-2",
-  DESIGN: "text-chart-4",
-  QA: "text-chart-1",
-  RESEARCH: "text-chart-3",
-  "QUICK FIX": "text-chart-5",
+  DEV: "text-source-dev",
+  DESIGN: "text-source-design",
+  QA: "text-source-qa",
+  RESEARCH: "text-source-research",
+  "QUICK FIX": "text-source-quickfix",
   ORACLE: "text-primary",
   LOBBY: "text-muted-foreground",
 }
