@@ -8,7 +8,7 @@
 import { SessionManager, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { loadTask, peekTasks } from "../state/persistence.ts";
-import { loadConfig } from "../state/project.ts";
+import { loadConfig, saveConfig as writeConfig } from "../state/project.ts";
 import { addPlanComment, readPlanComments } from "../state/comments.ts";
 import { isAutoMode } from "../state/auto.ts";
 import { sendToInbox, sendToSession as leaveForSession } from "../state/inbox.ts";
@@ -20,7 +20,7 @@ import { currentZenTask, isMinimized, taskSnapshot } from "../pi/ui.ts";
 import { taskName } from "../text.ts";
 import { describeWorkspace } from "../execution/workspace.ts";
 import { stripStartFlags } from "../pi/start-flags.ts";
-import { checkThinking, modelRef, resolveLobbyProfile, resolvePanelProfile, resolveReviewProfile } from "../pi/model-support.ts";
+import { checkThinking, modelRef, resolveLobbyProfile, resolvePanelProfile, resolveReviewProfile, supportedThinking } from "../pi/model-support.ts";
 import { modelLookup } from "../pi/tools.ts";
 import { startPlannedTask } from "../pi/start-task.ts";
 import { pendingRequest, startRequest } from "../pi/route.ts";
@@ -598,6 +598,22 @@ export function createLobbyService(state: Runtime): LobbyService {
     savePlan: () => savePlan(state),
     defaultPanel: () => loadConfig().lobby.planningPanel,
     planningRounds: () => loadConfig().lobby.maxPlanningRounds,
+    config: () => loadConfig(),
+    saveConfig: (next) => writeConfig(next),
+    configChanged: () => state.view?.reloadConfig(),
+    models: () => {
+      try {
+        const scoped = state.ctx.scopedModels;
+        const usable = scoped.length > 0 ? scoped.map((entry) => entry.model) : state.ctx.modelRegistry.getAvailable();
+        return usable.map((model) => {
+          const id = modelRef(model);
+          return { id, label: model.name && model.name !== id ? model.name : id, thinkingLevels: supportedThinking(model) };
+        });
+      } catch {
+        // No model registry in this process (tests): the page falls back to custom ids.
+        return [];
+      }
+    },
     issuesEnabled: () => loadConfig().lobby.issues,
     seatLabel: (member) => {
       const profile = seatProfile(state, member);
