@@ -170,6 +170,141 @@ export interface PlannerSeedInfo {
   body: string;
 }
 
+/** The Metrics tab's KPI row as data: runs, success, average run, cost, tasks. */
+export interface MetricsTiles {
+  runs: number;
+  successes: number;
+  stalls: number;
+  avgMs: number;
+  p90Ms: number;
+  cost: number;
+  completed: number;
+  active: number;
+  avgCompleteMs: number;
+}
+
+/** One per-model group as `metrics.get` carries it. */
+export interface MetricGroupInfo {
+  model: string;
+  thinking: string;
+  kinds: string[];
+  runs: number;
+  successes: number;
+  timeouts: number;
+  avgMs: number;
+  p50Ms: number;
+  p90Ms: number;
+  avgTurns: number;
+  avgTools: number;
+  avgTokens: number;
+  avgCost: number;
+  totalCost: number;
+  tokensPerSecond: number;
+}
+
+/** One agent's share of all run time. */
+export interface MetricsAgentShare {
+  agent: string;
+  runs: number;
+  ms: number;
+  share: number;
+}
+
+/** Completed tasks' request-to-done time by the oracle's model and thinking. */
+export interface MetricsTaskTime {
+  model: string;
+  thinking: string;
+  tasks: number;
+  avgMs: number;
+}
+
+/** What the classifier did and spared, when it has run. */
+export interface MetricsClassifier {
+  calls: number;
+  ok: number;
+  p50Ms: number;
+  p90Ms: number;
+  input: number;
+  byPurpose: Record<string, number>;
+  seatRunsSkipped: number;
+  questionsAnswered: number;
+  quickFixesHeld: number;
+  routed: number;
+  routedOk: number;
+}
+
+/** `metrics.get`: the dashboard figures for one grouping and search. */
+export interface MetricsData {
+  tiles: MetricsTiles;
+  groups: MetricGroupInfo[];
+  timeShare: { byAgent: MetricsAgentShare[]; taskTimes: MetricsTaskTime[] };
+  classifier?: MetricsClassifier;
+}
+
+/** Who a knowledge file belongs to. */
+export type KnowledgeAgentName = "master" | "designer" | "backend" | "qa";
+
+/** One knowledge file with its size and note count, in tab order. */
+export interface KnowledgeFileInfo {
+  agent: KnowledgeAgentName;
+  file: string;
+  label: string;
+  chars: number;
+  over: boolean;
+  notes: number;
+}
+
+/** One entry of a knowledge file, as the tab picks it. */
+export interface KnowledgeEntryInfo {
+  text: string;
+  kind: "heading" | "bullet" | "text";
+  occurrence: number;
+}
+
+/** One note on a knowledge entry. */
+export interface KnowledgeNoteInfo {
+  id: string;
+  agent: KnowledgeAgentName;
+  file: string;
+  entry: string;
+  text: string;
+  createdAt: string;
+  by?: string;
+}
+
+/** One file read as entries with their notes. */
+export interface KnowledgeViewData extends KnowledgeFileInfo {
+  content: string;
+  entries: KnowledgeEntryInfo[];
+  attached: KnowledgeNoteInfo[];
+  detached: KnowledgeNoteInfo[];
+}
+
+/** An entry picked in the tab: its text, and which of several identical ones it is. */
+export interface EntryRefInfo {
+  text: string;
+  occurrence: number;
+}
+
+/** Who an Excalidraw session can be assigned to. */
+export type ExcalidrawAgentName = "master" | "designer" | "backend" | "qa" | "scout" | "researcher" | "quickfix" | "planner";
+
+/** One shared session with its key hidden (`room <id>`). */
+export interface ExcalidrawSessionInfo {
+  id: string;
+  name: string;
+  masked: string;
+  agents: ExcalidrawAgentName[];
+  contribute: boolean;
+  addedAt: string;
+}
+
+/** What the last check of a session found. */
+export interface ExcalidrawCheck {
+  ok: boolean;
+  text: string;
+}
+
 /** The calls the server answers: `POST /api/<name>` with the request as the JSON body. */
 export interface Api {
   "status.get": { request: Record<string, never>; result: StatusInfo };
@@ -211,6 +346,25 @@ export interface Api {
   "quickfix.cancel": { request: { id: string }; result: { notice: string } };
   "quickfix.runAnyway": { request: { id: string }; result: { notice: string } };
   "quickfix.movedToTask": { request: { id: string }; result: { notice: string; key?: string } };
+  "metrics.get": { request: { groupBy: "model" | "model-kind"; query?: string }; result: MetricsData };
+  "knowledge.files": { request: Record<string, never>; result: { files: KnowledgeFileInfo[] } };
+  "knowledge.open": { request: { agent: KnowledgeAgentName; file: string }; result: { view: KnowledgeViewData } };
+  "knowledge.edit": { request: { agent: KnowledgeAgentName; file: string; ref: EntryRefInfo; text: string }; result: { notice: string } };
+  "knowledge.add": { request: { agent: KnowledgeAgentName; file: string; ref?: EntryRefInfo; text: string }; result: { notice: string } };
+  "knowledge.remove": { request: { agent: KnowledgeAgentName; file: string; ref: EntryRefInfo }; result: { notice: string } };
+  "knowledge.replaceFile": { request: { agent: KnowledgeAgentName; file: string; text: string }; result: { notice: string } };
+  "knowledge.comment": { request: { agent: KnowledgeAgentName; file: string; ref: EntryRefInfo; text: string }; result: { notice: string } };
+  "knowledge.unnote": { request: { id: string }; result: { notice: string } };
+  "excalidraw.list": { request: Record<string, never>; result: { sessions: ExcalidrawSessionInfo[] } };
+  "excalidraw.add": { request: { link: string; name?: string }; result: { notice: string; id?: string } };
+  "excalidraw.create": { request: { name?: string }; result: { notice: string; id?: string } };
+  "excalidraw.remove": { request: { id: string }; result: { notice: string } };
+  "excalidraw.rename": { request: { id: string; name: string }; result: { notice: string } };
+  "excalidraw.toggleAgent": { request: { id: string; agent: ExcalidrawAgentName }; result: { notice: string } };
+  "excalidraw.toggleAll": { request: { id: string }; result: { notice: string } };
+  "excalidraw.toggleContribute": { request: { id: string }; result: { notice: string } };
+  "excalidraw.check": { request: { id: string }; result: ExcalidrawCheck };
+  "excalidraw.reveal": { request: { id: string }; result: { link: string } };
 }
 
 export type ApiName = keyof Api;
