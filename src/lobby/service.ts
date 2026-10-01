@@ -27,10 +27,12 @@ import { pendingRequest, startRequest } from "../pi/route.ts";
 import { deliverComments, setAuto } from "../pi/owner.ts";
 import { chatFromEntries, lobbyFeed, type ChatEntry } from "./feed.ts";
 import { classifier, effortFor, hintsFor } from "../classifier/instance.ts";
-import { launchPi, SessionRegistry, type BackgroundSession, type SessionLauncher } from "./sessions.ts";
+import { launchPi, SessionRegistry, type BackgroundSession, type DialogAnswer, type SessionLauncher } from "./sessions.ts";
 import { SessionChats } from "./session-files.ts";
 import { answerMessage, askUser, questionnaires, settledQuestions, type Asker } from "./ask.ts";
 import { PlanningSession, type PlannerSeed } from "./planner.ts";
+import { lobbyTopics } from "./topics.ts";
+import { promptHub } from "./prompt-hub.ts";
 import { checkSession } from "../excalidraw/check.ts";
 import type { LobbyAgentKind, PanelMember } from "../schemas/configuration.ts";
 import type { LiveSession, LobbyHost, SwitchTarget } from "./view.ts";
@@ -105,6 +107,7 @@ function addComment(state: Runtime, taskId: string, text: string): string {
     return (error as Error).message;
   }
   lobbyFeed.log("LOBBY", `comment on ${taskId}'s plan saved`, "info");
+  lobbyTopics.bump("plans");
   if (task.ownerSessionId === sessionId) {
     if (deliverComments() === 0) return `comment saved — it reaches the oracle once ${taskId} is resumed or restored`;
     return `comment sent to the oracle — it will ${task.plan ? "amend the plan" : "revise the proposal"}`;
@@ -115,6 +118,7 @@ function addComment(state: Runtime, taskId: string, text: string): string {
 
 function failed(state: Runtime, what: string, error: Error): void {
   lobbyFeed.log("LOBBY", `${what} — ${error.message}`, "error");
+  lobbyTopics.bump("notices");
   state.ctx.ui.notify(`bot-lobby: ${what} — ${error.message}`, "error");
 }
 
@@ -140,6 +144,7 @@ function startPlanned(state: Runtime, plan: PlannedTask): string {
     .then((task) => {
       if (typeof task === "string") return failed(state, `could not start ${plan.id}`, new Error(task));
       state.view?.setTab("lobby");
+      lobbyTopics.bump("tasks");
       repaintLobby();
     })
     .catch((error: Error) => failed(state, `could not start ${plan.id}`, error));
@@ -162,7 +167,10 @@ const chats = new SessionChats(async () => {
   if (!dirs.has(state.root)) dirs.set(state.root, undefined);
   const lists = await Promise.all([...dirs].map(([cwd, dir]) => SessionManager.list(cwd, dir).catch(() => [])));
   return lists.flat();
-}, () => repaintLobby());
+}, () => {
+  lobbyTopics.bump("sessions");
+  repaintLobby();
+});
 
 /** Launch background sessions with something else (tests); resets the registry. */
 export function setSessionLauncher(next: SessionLauncher | undefined): void {
@@ -193,16 +201,23 @@ export function backgroundSessions(): readonly BackgroundSession[] {
 
 /** A background session changed: redraw, and say so when one asks something or fails while the lobby is hidden. */
 function sessionsChanged(): void {
+  lobbyTopics.bump("sessions");
   const state = serviceState;
   for (const session of registry?.sessions ?? []) {
     if (session.sessionId && session.sessionFile) chats.remember(session.sessionId, session.sessionFile);
     const seen = announced.get(session.key) ?? 0;
     announced.set(session.key, session.dialogs.length);
     if (!state || state.visible) continue;
-    if (session.dialogs.length > seen) state.ctx.ui.notify(`bot-lobby: ${session.name} is waiting for you — alt+l opens the lobby`, "info");
+    if (session.dialogs.length > seen) {
+      lobbyTopics.bump("notices");
+      state.ctx.ui.notify(`bot-lobby: ${session.name} is waiting for you — alt+l opens the lobby`, "info");
+    }
     if (!session.alive && !exitsSaid.has(session.key)) {
       exitsSaid.add(session.key);
-      if (session.exitCode) state.ctx.ui.notify(`bot-lobby: ${session.name} exited (${session.exitCode})${session.lastError() ? `: ${session.lastError()}` : ""}`, "warning");
+      if (session.exitCode) {
+        lobbyTopics.bump("notices");
+        state.ctx.ui.notify(`bot-lobby: ${session.name} exited (${session.exitCode})${session.lastError() ? `: ${session.lastError()}` : ""}`, "warning");
+      }
     }
   }
   repaintLobby();
@@ -230,22 +245,34 @@ function startSession(state: Runtime, start: { request?: string; plan?: PlannedT
   }
 }
 
+/** The oldest question a background session waits on, if any (data only; the terminal draws it). */
+export function peekSessionDialog(session: BackgroundSession) {
+  return session.dialogs[0];
+}
+
+/** Answer a background session's dialog (data only; the terminal draws it). */
+export function answerSessionDialog(session: BackgroundSession, id: string, answer: DialogAnswer): void {
+  session.answer(id, answer);
+}
+
 /** Put the oldest question a background session waits on to the user, with pi's own dialogs; escape cancels it as it would there. */
 async function answerDialog(state: Runtime, session: BackgroundSession): Promise<void> {
-  const dialog = session.dialogs[0];
+  const dialog = peekSessionDialog(session);
   if (!dialog) return;
   const title = `${session.name} — ${dialog.title}`;
   const ui = state.ctx.ui;
   try {
-    if (dialog.method === "select") {
-      const value = await ui.select(title, dialog.options ?? []);
-      session.answer(dialog.id, value === undefined ? { cancelled: true } : { value });
-    } else if (dialog.method === "confirm") {
-      session.answer(dialog.id, { confirmed: await ui.confirm(title, dialog.message ?? "") });
-    } else {
-      const value = dialog.method === "input" ? await ui.input(title, dialog.placeholder) : await ui.editor(title, dialog.prefill);
-      session.answer(dialog.id, value === undefined ? { cancelled: true } : { value });
-    }
+    await promptHub.run("sessionDialog", session.name, { dialog }, async () => {
+      if (dialog.method === "select") {
+        const value = await ui.select(title, dialog.options ?? []);
+        answerSessionDialog(session, dialog.id, value === undefined ? { cancelled: true } : { value });
+      } else if (dialog.method === "confirm") {
+        answerSessionDialog(session, dialog.id, { confirmed: await ui.confirm(title, dialog.message ?? "") });
+      } else {
+        const value = dialog.method === "input" ? await ui.input(title, dialog.placeholder) : await ui.editor(title, dialog.prefill);
+        answerSessionDialog(session, dialog.id, value === undefined ? { cancelled: true } : { value });
+      }
+    });
   } catch (error) {
     failed(state, `could not answer ${session.name}`, error as Error);
   }
@@ -280,6 +307,7 @@ function autoFor(state: Runtime, taskId: string): boolean {
 
 function switchAuto(state: Runtime, taskId: string, on: boolean): void {
   setAuto(state.root, state.configDir, taskId, on, state.ctx.sessionManager.getSessionId());
+  lobbyTopics.bump("tasks");
   autoSeen.set(taskId, { at: Date.now(), on });
 }
 
@@ -378,6 +406,7 @@ function archiveTask(state: Runtime, taskId: string): string {
     return (error as Error).message;
   }
   lobbyFeed.log("LOBBY", `archived ${taskId}`, "info");
+  lobbyTopics.bump("tasks");
   return `archived ${taskId}${TERMINAL_STATES.includes(task.state) ? "" : " (abandoned first)"} — v shows archived tasks, a restores one`;
 }
 
@@ -388,6 +417,7 @@ function restoreTask(state: Runtime, taskId: string): string {
     return (error as Error).message;
   }
   lobbyFeed.log("LOBBY", `restored ${taskId}`, "info");
+  lobbyTopics.bump("tasks");
   return `restored ${taskId} to the task list`;
 }
 
@@ -404,6 +434,7 @@ function deleteTask(state: Runtime, taskId: string, where: "list" | "archive"): 
     return (error as Error).message;
   }
   lobbyFeed.log("LOBBY", `deleted ${taskId}`, "warning");
+  lobbyTopics.bump("tasks");
   return `deleted ${taskId} for good`;
 }
 
@@ -442,8 +473,12 @@ function newPlanner(state: Runtime, seed?: PlannerSeed, seats?: readonly PanelMe
     stallTimeoutMs: workflow.stallTimeoutMs,
     toolStallTimeoutMs: workflow.toolStallTimeoutMs,
     feed: lobbyFeed,
-    onChange: () => repaintLobby(),
+    onChange: () => {
+      lobbyTopics.bump("planner");
+      repaintLobby();
+    },
     onRound: (session) => {
+      lobbyTopics.bump("planner");
       // Put the questions to the user at once when they are looking at the Plan tab.
       if (loadConfig().lobby.autoAsk && state.visible && state.view?.tab === "plan" && session.awaitingAnswers) void answerPanel(state);
     },
@@ -469,7 +504,7 @@ export async function savePlan(state: Runtime | undefined): Promise<string> {
   state.asking = true;
   try {
     const asker = panelAsker(state);
-    return await session.saveWithSplit((questions, signal) => asker(questions, state.ctx, signal), { splitAbove: loadConfig().lobby.splitPlanAbove });
+    return await session.saveWithSplit((questions, signal) => promptHub.run("questionnaire", "planner", { questions }, () => asker(questions, state.ctx, signal), { signal }), { splitAbove: loadConfig().lobby.splitPlanAbove });
   } finally {
     state.asking = false;
     repaintLobby();
@@ -493,7 +528,8 @@ export async function answerPanel(state: Runtime | undefined): Promise<string> {
     const asker = panelAsker(state);
     const chunks = questionnaires(session.questions);
     for (let index = session.answered.length; index < chunks.length; index++) {
-      const result = await asker(chunks[index]!, state.ctx);
+      const questions = chunks[index]!;
+      const result = await promptHub.run("questionnaire", "planner", { questions }, () => asker(questions, state.ctx));
       if (result.cancelled) {
         repaintLobby();
         return session.answered.length > 0 ? `answers kept — ${chunks.length - session.answered.length} questionnaire${chunks.length - session.answered.length === 1 ? "" : "s"} left; enter resumes` : "questions put away — enter brings them back";
@@ -523,6 +559,7 @@ function refreshWorkspace(state: Runtime): void {
     .then((info) => {
       if (serviceState !== state || (info.name === state.workspace.name && info.branch === state.workspace.branch)) return;
       state.workspace = info;
+      lobbyTopics.bump("status");
       repaintLobby();
     })
     .catch(() => {})
@@ -549,7 +586,10 @@ export function createLobbyService(state: Runtime): LobbyService {
     toOracle: (text) => toOracle(state, text),
     comment: (taskId, text) => addComment(state, taskId, text),
     startPlanned: (plan) => startPlanned(state, plan),
-    discardPlan: (id) => discardPlannedTask(state.root, state.configDir, id),
+    discardPlan: (id) => {
+      discardPlannedTask(state.root, state.configDir, id);
+      lobbyTopics.bump("plans");
+    },
     abortMaster: () => state.ctx.abort(),
     quickfix: state.quickfix,
     planner: () => state.planner,
@@ -568,7 +608,10 @@ export function createLobbyService(state: Runtime): LobbyService {
     reviews: state.reviews,
     knowledge: state.knowledge,
     excalidraw: state.excalidraw,
-    checkExcalidraw: (session) => checkSession(session.link, session.name),
+    checkExcalidraw: (session) => {
+      lobbyTopics.bump("excalidraw");
+      return checkSession(session.link, session.name);
+    },
     profileLabel: (kind) => {
       const profile = lobbyProfile(state, kind);
       return `${profile.model ?? "session model"} · ${profile.thinking}`;

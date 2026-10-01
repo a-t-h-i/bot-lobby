@@ -35,6 +35,8 @@ import { KnowledgeBook } from "./knowledge.ts";
 import { ExcalidrawBook } from "../excalidraw/sessions.ts";
 import { LobbyView, type LobbyHost, type TabId } from "./view.ts";
 import { createLobbyService, lobbyProfile, miniShown, repaintLobby, reviewProfile, seatProfile, setServiceState, takeReopenAfterSwitch, savePlan as serviceSavePlan, answerPanel as serviceAnswerPanel, type LobbyService } from "./service.ts";
+import { lobbyTopics } from "./topics.ts";
+import { promptHub } from "./prompt-hub.ts";
 export { backgroundSessions, FRAME_MS, setSessionLauncher } from "./service.ts";
 import { lobbyTheme } from "./theme.ts";
 import { deliverComments, onOwnerEvent } from "../pi/owner.ts";
@@ -62,6 +64,10 @@ export interface Runtime {
   knowledge: KnowledgeBook;
   excalidraw: ExcalidrawBook;
   unsubscribeFeed?: () => void;
+  /** The terminal's subscription to every topic (repaints, as before). */
+  unsubscribeTopics?: () => void;
+  /** The terminal's registration as the hub's only prompt surface. */
+  unregisterTerminalSurface?: () => void;
   /** Puts the panel's questions to the user: the questionnaire unless a test sets another. */
   asker?: Asker;
   /** A questionnaire is on screen. */
@@ -254,6 +260,7 @@ export function autoOpenLobby(): void {
 
 /** Step aside while pi shows a dialog (an approval, a question), and come back after. */
 function promptStarted(): void {
+  lobbyTopics.bump("status");
   const state = runtime;
   if (!state?.visible || !state.handle || state.inSettings) return;
   state.asideForPrompt = true;
@@ -262,6 +269,7 @@ function promptStarted(): void {
 }
 
 function promptEnded(): void {
+  lobbyTopics.bump("status");
   const state = runtime;
   if (!state?.asideForPrompt || !state.handle || state.inSettings) return;
   state.asideForPrompt = false;
@@ -279,6 +287,8 @@ function shutdown(): void {
   setQuickFixHandoff(undefined);
   setMouse(state, false);
   state.unsubscribeFeed?.();
+  state.unsubscribeTopics?.();
+  state.unregisterTerminalSurface?.();
   state.quickfix.cancelAll();
   state.reviews.cancelAll();
   state.planner?.cancel();
@@ -302,6 +312,7 @@ function handToQuickFix(state: Runtime, request: string, builder: Domain | undef
     note: `The oracle sent your request here: ${reason.replace(/[.\s]+$/, "")}.${builder ? ` A quick feature: it runs on ${builder === "designer" ? "DESIGN" : "DEV"}'s model, thinking and time limit.` : ""}`,
   });
   showLobby("quickfix");
+  lobbyTopics.bump("quickfix");
   state.view?.showQuickFix(job.id);
   return job.id;
 }
@@ -333,8 +344,14 @@ export function startLobbyService(pi: ExtensionAPI, ctx: ExtensionContext, confi
     workspace: { name: basename(ctx.cwd) || ctx.cwd },
     readingWorkspace: false,
     quickfix: undefined as unknown as QuickFixQueue,
-    issues: new IssuesState(execCommand, ctx.cwd, rerender),
-    pulls: new PullsState(execCommand, ctx.cwd, rerender),
+    issues: new IssuesState(execCommand, ctx.cwd, () => {
+      lobbyTopics.bump("issues");
+      rerender();
+    }),
+    pulls: new PullsState(execCommand, ctx.cwd, () => {
+      lobbyTopics.bump("git");
+      rerender();
+    }),
     reviews: undefined as unknown as PullReviews,
     knowledge: new KnowledgeBook({
       root,
@@ -354,8 +371,12 @@ export function startLobbyService(pi: ExtensionAPI, ctx: ExtensionContext, confi
     stallTimeoutMs: workflow.stallTimeoutMs,
     toolStallTimeoutMs: workflow.toolStallTimeoutMs,
     feed: lobbyFeed,
-    onChange: rerender,
+    onChange: () => {
+      lobbyTopics.bump("git");
+      rerender();
+    },
     notify: (message, level) => {
+      lobbyTopics.bump("notices");
       if (!state.visible) ctx.ui.notify(message, level);
     },
     classifier: classifier(),
@@ -368,8 +389,12 @@ export function startLobbyService(pi: ExtensionAPI, ctx: ExtensionContext, confi
     stallTimeoutMs: workflow.stallTimeoutMs,
     toolStallTimeoutMs: workflow.toolStallTimeoutMs,
     feed: lobbyFeed,
-    onChange: rerender,
+    onChange: () => {
+      lobbyTopics.bump("quickfix");
+      rerender();
+    },
     notify: (message, level) => {
+      lobbyTopics.bump("notices");
       if (!state.visible) ctx.ui.notify(message, level);
     },
     hints: hintsFor({ cwd: ctx.cwd, root, configDir }),
@@ -379,17 +404,33 @@ export function startLobbyService(pi: ExtensionAPI, ctx: ExtensionContext, confi
   runtime = state;
   lobbyService = createLobbyService(state);
   setServiceState(state);
+  // Topic routing (src/lobby/topics.ts): the terminal hears every topic and
+  // repaints, as before. Sources bump on their way to rerender — lobbyFeed
+  // (lobby), run updates (tasks), quick fix (quickfix), planner (planner),
+  // background sessions (sessions), metrics (metrics), pulls/reviews (git),
+  // issues (issues), the prompt hub (prompts), owner/notify events (notices),
+  // dialogs/busy/workspace (status), link checks (excalidraw). File polling
+  // for tasks/plans/knowledge starts once a non-terminal listener attaches.
+  state.unsubscribeTopics = lobbyTopics.onChange(rerender);
+  state.unregisterTerminalSurface = promptHub.registerSurface({ name: "terminal", show() {}, withdraw() {} });
   setQuickFixHandoff((request, builder, reason) => (runtime === state ? handToQuickFix(state, request, builder, reason) : undefined));
   lobbyFeed.clear();
   // Only the newest messages are kept; the feed learns whether earlier ones exist, and loads them when scrolled to.
   lobbyFeed.seedChat(chatFromEntries(ctx.sessionManager.getBranch(), Number.POSITIVE_INFINITY));
-  state.unsubscribeFeed = lobbyFeed.onChange(rerender);
-  onRunUpdates((runs) => lobbyFeed.runs(runs));
+  state.unsubscribeFeed = lobbyFeed.onChange(() => {
+    lobbyTopics.bump("lobby");
+    rerender();
+  });
+  onRunUpdates((runs) => {
+    lobbyFeed.runs(runs);
+    lobbyTopics.bump("tasks");
+  });
   onMinimizeChange((value) => {
     if (value) hideLobby();
   });
   // The owner's clock (pi/owner.ts) delivers comments and messages and drives auto mode; the lobby logs what it did.
   onOwnerEvent((event) => {
+    lobbyTopics.bump("notices");
     if (event.kind === "comments") lobbyFeed.log("LOBBY", `passed ${event.count} plan comment${event.count === 1 ? "" : "s"} on ${event.taskId} to the oracle`, "info");
     else if (event.kind === "inbox" || event.kind === "messages") lobbyFeed.log("LOBBY", `passed ${event.count} message${event.count === 1 ? "" : "s"} from another session to the oracle`, "info");
     else if (event.kind === "auto") lobbyFeed.log("LOBBY", `auto mode ${event.on ? "on" : "off"} for ${event.taskId}`, event.on ? "success" : "info");
@@ -461,6 +502,7 @@ export function registerLobbyEvents(pi: ExtensionAPI, configDir: string): void {
   pi.on("ui_prompt_end", () => promptEnded());
   pi.on("agent_start", (_event, ctx) => {
     track(ctx);
+    lobbyTopics.bump("status");
     const taskId = currentZenTask()?.id;
     turn = { startedAt: Date.now(), ...(taskId ? { taskId } : {}), ...(ctx.model ? { model: modelRef(ctx.model) } : {}), thinking: pi.getThinkingLevel(), tools: 0, turns: 0, input: 0, output: 0, cost: 0 };
   });
@@ -504,5 +546,7 @@ export function registerLobbyEvents(pi: ExtensionAPI, configDir: string): void {
       cost: finished.cost,
       taskId,
     }]);
+    lobbyTopics.bump("metrics");
+    lobbyTopics.bump("status");
   });
 }
