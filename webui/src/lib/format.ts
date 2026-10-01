@@ -38,3 +38,20 @@ export function formatBytes(bytes: number): string {
   }
   return `${unit === 0 ? Math.round(value) : value.toFixed(1)} ${BYTE_UNITS[unit]}`
 }
+
+/** How long ago, as `now`, `40s`, `12m`, `3h` or `4d` (mirrors the terminal's `ago`). */
+export function formatAgo(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 5_000) return "now"
+  const seconds = Math.floor(ms / 1000)
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  return hours < 48 ? `${hours}h` : `${Math.floor(hours / 24)}d`
+}
+
+/** `just now` or `12m ago` for a span in milliseconds. */
+export function formatSince(ms: number): string {
+  const age = formatAgo(ms)
+  return age === "now" ? "just now" : `${age} ago`
+}

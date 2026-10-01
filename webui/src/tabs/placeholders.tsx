@@ -1,7 +1,8 @@
 /**
  * Placeholder bodies for every tab route. Step 10b proves routing and layout;
- * each tab's real content lands in a later step (the Lobby in Step 11). Every
- * body uses the same empty-state card so the shell looks consistent.
+ * each tab's real content lands in a later step (the Lobby in Step 11, Tasks
+ * and Quick fix in Step 18a). Every body uses the same empty-state card so
+ * the shell looks consistent.
  */
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 
@@ -18,16 +19,8 @@ function Placeholder({ label, detail }: { label: string; detail?: string }) {
   )
 }
 
-export function TasksTab({ detail }: { detail?: string }) {
-  return <Placeholder label="Tasks" detail={detail} />
-}
-
 export function PlanTab({ detail }: { detail?: string }) {
   return <Placeholder label="Plan" detail={detail} />
-}
-
-export function QuickFixTab({ detail }: { detail?: string }) {
-  return <Placeholder label="Quick fix" detail={detail} />
 }
 
 export function IssuesTab({ detail }: { detail?: string }) {

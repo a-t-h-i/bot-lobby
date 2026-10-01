@@ -12,11 +12,22 @@ import {
   KnowledgeTab,
   MetricsTab,
   PlanTab,
-  QuickFixTab,
   SessionsTab,
   SettingsTab,
-  TasksTab,
 } from "./placeholders"
+import { QuickfixTab } from "./quickfix/QuickfixTab"
+import { TasksTab } from "./tasks/TasksTab"
+
+/** The first path segment after the tab, decoded (`#/tasks/T-1` → `T-1`). */
+function detailId(rest: string[]): string | undefined {
+  const raw = rest[0]
+  if (!raw) return undefined
+  try {
+    return decodeURIComponent(raw)
+  } catch {
+    return raw
+  }
+}
 
 export function routeBody(route: Route): ReactNode {
   if (route.kind === "settings") return <SettingsTab />
@@ -26,11 +37,11 @@ export function routeBody(route: Route): ReactNode {
     case "lobby":
       return <LobbyTab />
     case "tasks":
-      return <TasksTab detail={detail} />
+      return <TasksTab id={detailId(route.rest)} />
     case "plan":
       return <PlanTab detail={detail} />
     case "quickfix":
-      return <QuickFixTab detail={detail} />
+      return <QuickfixTab id={detailId(route.rest)} />
     case "issues":
       return <IssuesTab detail={detail} />
     case "metrics":
