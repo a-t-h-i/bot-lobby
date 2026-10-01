@@ -9,11 +9,15 @@ import type { DialogAnswer, SessionDialog } from "../lobby/sessions.ts";
 import type { LiveSession } from "../lobby/view.ts";
 import type { TaskRow } from "../lobby/tabs/tasks.ts";
 import type { PlanComment } from "../state/comments.ts";
+import type { PanelMember } from "../schemas/configuration.ts";
+import type { MemberState, PanelNote, PanelQuestion, PlannerMessage } from "../lobby/planner.ts";
+import type { QuickFixJob } from "../lobby/quickfix.ts";
 
 export type { WebPrompt };
 export type { LobbyTopic };
 export type { DialogAnswer, SessionDialog, TaskRow, PlanComment };
 export type { LiveSession };
+export type { PanelMember, MemberState, PanelNote, PanelQuestion, PlannerMessage, QuickFixJob };
 
 /** Every API answer: the result, or why not. */
 export type ApiReply<T> = { ok: true; result: T } | { ok: false; error: string; code: ErrorCode };
@@ -136,6 +140,36 @@ export type StreamEvent =
   | { type: "feed"; activity: unknown[]; thoughts: unknown[]; chat: unknown[] }
   | { type: "reply"; text: string };
 
+/** The planning session as `planner.get` describes it. */
+export interface PlannerSnapshot {
+  /** Seats on the panel next round. */
+  seats: PanelMember[];
+  /** What each seat of the latest round did. */
+  members: MemberState[];
+  /** The whole conversation, oldest first. */
+  messages: PlannerMessage[];
+  /** The oracle's current draft plan, when it wrote one. */
+  draft?: string;
+  /** The latest round's questions, attributed. */
+  questions: PanelQuestion[];
+  /** What each seat said the plan must respect. */
+  notes: PanelNote[];
+  /** Rounds run so far. */
+  round: number;
+  /** Rounds before the oracle finalizes alone; 0 = unlimited. */
+  limit: number;
+  /** Whether `planner.retry` has something to redo. */
+  retryable: boolean;
+  /** Whether the panel is thinking now. */
+  busy: boolean;
+}
+
+/** One issue a planning session can start from. */
+export interface PlannerSeedInfo {
+  issue: { number: number; title: string; url?: string };
+  body: string;
+}
+
 /** The calls the server answers: `POST /api/<name>` with the request as the JSON body. */
 export interface Api {
   "status.get": { request: Record<string, never>; result: StatusInfo };
@@ -164,6 +198,19 @@ export interface Api {
   "prompts.list": { request: Record<string, never>; result: { prompts: WebPrompt[] } };
   "prompts.answer": { request: { id: string; answer: unknown }; result: { notice?: string } };
   "prompts.dismiss": { request: { id: string }; result: Record<string, never> };
+  "planner.get": { request: Record<string, never>; result: PlannerSnapshot };
+  "planner.new": { request: { seed?: PlannerSeedInfo; seats?: PanelMember[] }; result: { notice: string } };
+  "planner.send": { request: { text: string }; result: { notice: string } };
+  "planner.toggleSeat": { request: { member: PanelMember }; result: { notice: string; seated: boolean } };
+  "planner.retry": { request: Record<string, never>; result: { notice: string } };
+  "planner.commentLine": { request: { line: string; text: string }; result: { notice: string } };
+  "planner.answer": { request: Record<string, never>; result: { notice: string } };
+  "planner.save": { request: Record<string, never>; result: { notice: string } };
+  "quickfix.list": { request: Record<string, never>; result: { jobs: QuickFixJob[] } };
+  "quickfix.submit": { request: { text: string }; result: { notice: string; id: string } };
+  "quickfix.cancel": { request: { id: string }; result: { notice: string } };
+  "quickfix.runAnyway": { request: { id: string }; result: { notice: string } };
+  "quickfix.movedToTask": { request: { id: string }; result: { notice: string; key?: string } };
 }
 
 export type ApiName = keyof Api;
