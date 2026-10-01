@@ -10,15 +10,17 @@ import { PI_ASKING_IN_TERMINAL, type TabId } from "@shared"
 import { Kbd } from "@/components/ui/kbd"
 import { lobbyStore } from "@/lib/store"
 import type { ConnectionState } from "@/lib/events"
-import type { LobbySnapshot, StatusInfo, WebPrompt } from "@protocol"
+import type { LobbySnapshot, StatusInfo } from "@protocol"
 import { AltH } from "./AltH.tsx"
 import { Composer } from "./Composer.tsx"
 import { Header } from "./Header.tsx"
 import { SignIn } from "./SignIn.tsx"
 import { ErrorState, LoadingState, ReconnectingState, sentence } from "./States.tsx"
 import { TabStrip } from "./TabStrip.tsx"
+import { PromptSlideout } from "@/prompts/PromptSlideout"
 import { useEvents } from "./useEvents.ts"
 import { useLobbyKeys } from "./useLobbyKeys.ts"
+import { usePrompts } from "./usePrompts.ts"
 import { useStoreVersion, useStatus, useTopic } from "./hooks.ts"
 import { go, tabHash, useRoute, type Route } from "./router.ts"
 import { routeBody } from "@/tabs/registry.tsx"
@@ -79,7 +81,7 @@ export function Shell() {
   const route: Route = useRoute()
   const statusRecord = useTopic<StatusInfo>("status")
   const lobbyRecord = useTopic<LobbySnapshot>("lobby")
-  const promptsRecord = useTopic<{ prompts: WebPrompt[] }>("prompts")
+  const { prompts, answer, dismiss } = usePrompts()
   const { connection, signedOut } = useStatus()
   const [help, setHelp] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -90,7 +92,6 @@ export function Shell() {
   const tabs = status?.tabs ?? []
   const keys = status?.keys ?? []
   const activeId = route.kind === "tab" ? route.tab : undefined
-  const question = (promptsRecord.data?.prompts.length ?? 0) > 0
 
   const select = useCallback((id: string) => go(tabHash(id as TabId)), [])
   const cycle = useCallback(
@@ -122,7 +123,7 @@ export function Shell() {
       className="flex h-svh flex-col overflow-hidden bg-background pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
     >
       <Header status={status} task={lobbyRecord.data?.task} connection={connection} />
-      <TabStrip tabs={tabs} activeId={activeId} question={question} onSelect={select} />
+      <TabStrip tabs={tabs} activeId={activeId} questionCount={prompts.length} onSelect={select} />
       <Banner status={status} connection={connection} onRetry={retry} />
       <main
         id="main"
@@ -132,6 +133,7 @@ export function Shell() {
       >
         {routeBody(route)}
       </main>
+      <PromptSlideout prompts={prompts} answer={answer} dismiss={dismiss} />
       <Composer />
       <HintLine />
       <AltH open={help} onOpenChange={setHelp} keys={keys} tabs={tabs} />
