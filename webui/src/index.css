@@ -118,3 +118,65 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Rendered model Markdown (see `ui/Markdown.tsx`): calm, token-only styling. */
+@layer components {
+  .md-body {
+    @apply text-sm leading-relaxed break-words;
+  }
+  .md-body > :first-child {
+    @apply mt-0;
+  }
+  .md-body > :last-child {
+    @apply mb-0;
+  }
+  .md-body p {
+    @apply my-2;
+  }
+  .md-body h1,
+  .md-body h2,
+  .md-body h3 {
+    @apply mt-4 mb-2 font-semibold tracking-tight;
+  }
+  .md-body h1 {
+    @apply text-base;
+  }
+  .md-body h2,
+  .md-body h3 {
+    @apply text-sm;
+  }
+  .md-body ul {
+    @apply my-2 list-disc space-y-1 pl-5;
+  }
+  .md-body ol {
+    @apply my-2 list-decimal space-y-1 pl-5;
+  }
+  .md-body li > p {
+    @apply my-0;
+  }
+  .md-body blockquote {
+    @apply my-2 border-l-2 pl-3 text-muted-foreground;
+  }
+  .md-body hr {
+    @apply my-3 border-border;
+  }
+  .md-body a {
+    @apply font-medium text-primary underline underline-offset-4;
+  }
+  .md-body :not(pre) > code {
+    @apply rounded bg-muted px-1 py-0.5 font-mono text-[0.85em];
+  }
+  .md-body img {
+    @apply max-w-full rounded-md;
+  }
+  .md-body input[type="checkbox"] {
+    @apply mr-1.5;
+  }
+  .md-body table th,
+  .md-body table td {
+    @apply border border-border px-2 py-1 text-left align-top;
+  }
+  .md-body table th {
+    @apply bg-muted font-medium;
+  }
+}
