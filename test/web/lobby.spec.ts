@@ -171,9 +171,12 @@ test("contrast meets 4.5:1", async ({ page, server }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const results = await new AxeBuilder({ page: page as any }).withRules(["color-contrast"]).analyze();
-  const detail = results.violations.flatMap((v: { id: string; nodes: { target: string[]; failureSummary?: string }[] }) =>
-    v.nodes.map((n) => ({ id: v.id, target: n.target, summary: n.failureSummary }),
-    ),
+  const detail = results.violations.flatMap((v) =>
+    v.nodes.map((n) => ({
+      id: v.id,
+      target: n.target.map((t) => (Array.isArray(t) ? t.join(" ") : t)).join(" "),
+      summary: n.failureSummary,
+    })),
   );
   expect(detail, "no color-contrast violations").toEqual([]);
 });
