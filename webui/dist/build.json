@@ -1,6 +1,6 @@
 {
-  "hash": "eb13820901fb62e498ec7eba6e63fb3dd97baa92383764bb819120ba5b1c904a",
-  "builtAt": "2026-10-01T22:44:11.375Z",
+  "hash": "808c9be901e2f7cb86f03a0a78f25308f826c98af56ddfa4fc6f80fecf5e4cee",
+  "builtAt": "2026-10-01T22:54:09.715Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -199,6 +199,22 @@
       "sha256": "afb5f2e4d1bd799ed10bad123568cadbda039e0694282de6c06f258cc2293bde"
     },
     {
+      "path": "webui/src/tabs/excalidraw/ExcalidrawTab.tsx",
+      "sha256": "8c124b104483e7603b8bff50ba7bfcd703b0523a2733601ca569675e2367e205"
+    },
+    {
+      "path": "webui/src/tabs/excalidraw/SessionDetail.tsx",
+      "sha256": "6fa8a141501911c363a2a1d0ae33511c8fba307f418d1340b2e79ae2ff022318"
+    },
+    {
+      "path": "webui/src/tabs/excalidraw/SessionList.tsx",
+      "sha256": "8d05d5aad64ca5913db9cad7966f51f4ed15d754c790ba0625b3edaf3dc8f301"
+    },
+    {
+      "path": "webui/src/tabs/excalidraw/words.ts",
+      "sha256": "42d4add43d6bc46bb2cf960f87b9c0e84c705e5d133192b2ae8eff7c31557c61"
+    },
+    {
       "path": "webui/src/tabs/git/GitTab.tsx",
       "sha256": "65907a6f8371d069778e314a43e2e987f1ce7edb38ed847f0651c8022128474f"
     },
@@ -308,7 +324,7 @@
     },
     {
       "path": "webui/src/tabs/placeholders.tsx",
-      "sha256": "0d5db046c77a2a9832372bd5fd405cef3c18e91027022b0002d675563e8a4606"
+      "sha256": "993228950df1db2fb882e409390b440d2a4c2e143b27a6d9208751dab07ea572"
     },
     {
       "path": "webui/src/tabs/plan/Conversation.tsx",
@@ -360,7 +376,7 @@
     },
     {
       "path": "webui/src/tabs/registry.tsx",
-      "sha256": "4521eae9707c4056c942ac2250434c8e72cafe005988f4177a115ede6dd53a01"
+      "sha256": "da333846316697cff9168e72e720491853023433690a4f0860a7962110a1fff2"
     },
     {
       "path": "webui/src/tabs/sessions/ChatView.tsx",
