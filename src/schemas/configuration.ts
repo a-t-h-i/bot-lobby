@@ -120,6 +120,21 @@ export function isPanelMember(value: string): value is PanelMember {
 export const LOBBY_PANELS = ["conversation", "activity", "thinking"] as const;
 export type LobbyPanel = (typeof LOBBY_PANELS)[number];
 
+/** Where the web UI's questions are answered: in the browser, or only in the terminal. */
+export const LOBBY_WEB_QUESTIONS = ["both", "terminal"] as const;
+export type LobbyWebQuestions = (typeof LOBBY_WEB_QUESTIONS)[number];
+
+/** The loopback web UI: off until started with `/bot-lobby web`. */
+export interface LobbyWebConfig {
+  /** Start the server with the session. */
+  enabled: boolean;
+  /** Base port (tried, then the next free up to +20); 0 means any free port. */
+  port: number;
+  /** Open the link in the browser on `/bot-lobby web`. */
+  openBrowser: boolean;
+  questions: LobbyWebQuestions;
+}
+
 /** The full-screen lobby. */
 export interface LobbyConfig {
   /** Open by itself when this session starts or resumes a task. */
@@ -148,6 +163,8 @@ export interface LobbyConfig {
    * tasks when it is saved (the oracle proposes, the user decides); 0 = never.
    */
   splitPlanAbove: number;
+  /** The loopback web UI (port, browser, where its questions are answered). */
+  web: LobbyWebConfig;
 }
 
 /** Decisions the classifier can make, each switched on or off on its own. */
@@ -264,6 +281,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     miniLine: true,
     maxPlanningRounds: 5,
     splitPlanAbove: 8,
+    web: { enabled: false, port: 7347, openBrowser: true, questions: "both" },
   },
   classifier: {
     enabled: false,
@@ -326,7 +344,7 @@ function flag(value: unknown, fallback: boolean): boolean {
 }
 
 function normalizeLobby(value: unknown): LobbyConfig {
-  const source = value as { autoOpen?: unknown; planningPanel?: unknown; autoAsk?: unknown; issues?: unknown; panels?: unknown; keys?: unknown; mouse?: unknown; miniLine?: unknown; maxPlanningRounds?: unknown; splitPlanAbove?: unknown } | undefined;
+  const source = value as { autoOpen?: unknown; planningPanel?: unknown; autoAsk?: unknown; issues?: unknown; panels?: unknown; keys?: unknown; mouse?: unknown; miniLine?: unknown; maxPlanningRounds?: unknown; splitPlanAbove?: unknown; web?: unknown } | undefined;
   const defaults = DEFAULT_CONFIG.lobby;
   const panel = Array.isArray(source?.planningPanel)
     ? [...new Set(source.planningPanel.filter((entry): entry is PanelMember => typeof entry === "string" && isPanelMember(entry)))]
@@ -344,7 +362,21 @@ function normalizeLobby(value: unknown): LobbyConfig {
     miniLine: flag(source?.miniLine, defaults.miniLine),
     maxPlanningRounds: roundLimit(source?.maxPlanningRounds, defaults.maxPlanningRounds),
     splitPlanAbove: roundLimit(source?.splitPlanAbove, defaults.splitPlanAbove),
+    web: normalizeLobbyWeb(source?.web, defaults.web),
   };
+}
+
+/** The loopback web UI's config: 0 or a real port, `both` or `terminal`; anything else keeps the default. */
+function normalizeLobbyWeb(value: unknown, fallback: LobbyWebConfig): LobbyWebConfig {
+  const source = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
+  const port = source.port === 0 ? 0 : webPort(source.port, fallback.port);
+  const questions = source.questions === "both" || source.questions === "terminal" ? source.questions : fallback.questions;
+  return { enabled: flag(source.enabled, fallback.enabled), port, openBrowser: flag(source.openBrowser, fallback.openBrowser), questions };
+}
+
+/** A TCP port (0 means any free port); anything else keeps the default. */
+function webPort(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 && value <= 65535 ? value : fallback;
 }
 
 /** A whole number of rounds, 0 for unlimited; anything else keeps the default. */

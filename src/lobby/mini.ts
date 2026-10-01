@@ -36,6 +36,8 @@ export interface MiniInput {
   runs: readonly AgentRun[];
   planning?: MiniPlanning;
   quickfix?: MiniQuickFix;
+  /** The loopback web UI's link, while its server runs. */
+  webLink?: string;
   /** The key that opens the lobby, as shown. */
   key: string;
 }
@@ -107,10 +109,16 @@ function quickFixSegment(quickfix: MiniQuickFix | undefined, theme?: LobbyTheme)
   return `${paint(theme, "accent", "quick fix")} ${paint(theme, "success", quickfix.running ? "◐" : "○")} ${paint(theme, "muted", quickfix.title)}${paint(theme, "dim", queued)}`;
 }
 
+/** The web link, while the server runs; pure: the link arrives as input. */
+function webSegment(link: string | undefined, theme?: LobbyTheme): string | undefined {
+  if (!link) return undefined;
+  return paint(theme, "dim", link);
+}
+
 /** The status line, at most `width` columns. */
 export function miniLine(input: MiniInput, width: number, theme?: LobbyTheme): string {
   if (width < 12) return "";
-  const segments = [taskSegment(input, theme), planningSegment(input.planning, theme), quickFixSegment(input.quickfix, theme)].filter((segment): segment is string => Boolean(segment));
+  const segments = [taskSegment(input, theme), planningSegment(input.planning, theme), quickFixSegment(input.quickfix, theme), webSegment(input.webLink, theme)].filter((segment): segment is string => Boolean(segment));
   const body = segments.length > 0 ? segments.join(paint(theme, "dim", "  │  ")) : paint(theme, "dim", "idle");
   const hint = paint(theme, "dim", `  ${input.key} opens`);
   const line = ` ${paint(theme, "accent", "◆ bot-lobby")}  ${body}`;

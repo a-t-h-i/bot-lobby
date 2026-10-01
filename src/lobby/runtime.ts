@@ -19,6 +19,7 @@ import { isSubagentProcess } from "../pi/quiet.ts";
 import { modelRef } from "../pi/model-support.ts";
 import { modelLookup } from "../pi/tools.ts";
 import { setQuickFixHandoff } from "../pi/route.ts";
+import { currentWebServer } from "../webui/server.ts";
 import type { Domain } from "../schemas/agent.ts";
 import type { LobbyPanel } from "../schemas/configuration.ts";
 import { chatFromEntries, lobbyFeed, narrateEvent, type AgentEventLike } from "./feed.ts";
@@ -109,11 +110,13 @@ function miniInput(state: Runtime): MiniInput {
   const planner = state.planner;
   const job = state.quickfix.running ?? state.quickfix.jobs.find((entry) => entry.status === "queued");
   const queued = state.quickfix.jobs.filter((entry) => entry.status === "queued" && entry !== job).length;
+  const webLink = currentWebServer()?.link;
   return {
     ...(snapshot.task ? { task: snapshot.task } : {}),
     runs: snapshot.runs,
     ...(planner ? { planning: { busy: planner.busy, round: planner.turns, limit: loadConfig().lobby.maxPlanningRounds, questions: planner.awaitingAnswers ? planner.questions.length : 0, ready: planner.reply?.status === "ready", saved: Boolean(planner.saved) } } : {}),
     ...(job ? { quickfix: { title: jobTitle(job), running: job.status === "running", queued } } : {}),
+    ...(webLink ? { webLink } : {}),
     key: "Alt+L",
   };
 }
