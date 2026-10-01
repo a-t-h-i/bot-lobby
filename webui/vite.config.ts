@@ -18,6 +18,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve(root, "src"),
+      "@protocol": resolve(root, "../src/webui/protocol.ts"),
+      "@shared": resolve(root, "../src/lobby/prompts.ts"),
     },
   },
 })
