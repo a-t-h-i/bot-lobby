@@ -82,6 +82,40 @@ test("every scenario loads and backs every router call", async () => {
   for (const name of SCENARIOS) await checkScenario(name);
 });
 
+test("every scenario's snapshot, status and prompts answer 200 with domains always an array", async () => {
+  for (const name of SCENARIOS) {
+    clearPrompts();
+    const service = createFixtureService(name);
+    const server = await startWebServer({ service, port: 0, secret: randomBytes(32), dist: DIST });
+    try {
+      const token = new URL(server.link).hash.replace("#token=", "");
+      const login = await send(server.port, "/api/auth.login", jsonHeaders, JSON.stringify({ token }));
+      assert.equal(login.status, 200, `${name}: login`);
+      const cookie = login.cookie ?? "";
+      const call: Call = (api, body = {}) => send(server.port, `/api/${api}`, { ...jsonHeaders, cookie }, JSON.stringify(body));
+      for (const api of ["status.get", "lobby.snapshot", "prompts.list"] as const) {
+        const answer = await call(api);
+        assert.equal(answer.status, 200, `${name}: ${api}`);
+        assert.equal(answer.payload.ok, true, `${name}: ${api} ok`);
+      }
+      const task = (await call("lobby.snapshot")).payload.result?.task as Record<string, unknown> | undefined;
+      if (task) assert.ok(Array.isArray(task.domains), `${name}: task.domains is an array`);
+      if (name === "full") {
+        assert.deepEqual(task?.domains, ["dev", "qa"], "full: domains");
+        assert.deepEqual(task?.track, { path: "full", size: "large" }, "full: track");
+        assert.deepEqual(task?.git, { branch: "mock/offline-fixtures", from: "main" }, "full: git");
+        const progress = task?.progress as { done: number; total: number } | undefined;
+        assert.ok(progress && typeof progress.done === "number" && typeof progress.total === "number", "full: progress");
+        assert.equal(typeof task?.currentStep, "string", "full: currentStep");
+      }
+    } finally {
+      disposeFixtureService(service);
+      clearPrompts();
+      await server.close();
+    }
+  }
+});
+
 async function checkScenario(name: ScenarioName): Promise<void> {
   const fixture = loadScenario(name);
   assert.ok(fixture.status.workspace.name, `${name}: status.workspace`);

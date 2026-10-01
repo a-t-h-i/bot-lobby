@@ -8,6 +8,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ChatRole } from "../../lobby/feed.ts";
 import type { PromptKind } from "../../lobby/prompt-hub.ts";
+import type { SnapshotTask } from "../protocol.ts";
 
 /** Every scenario the mock serves; `?scenario=` picks one. */
 export const SCENARIOS = [
@@ -45,7 +46,7 @@ export interface ScenarioFixture {
     terminalDialog: boolean;
     issuesEnabled: boolean;
   };
-  zen: { task?: { id: string; title: string; state: string }; runs: unknown[] };
+  zen: { task?: Partial<SnapshotTask> & { id: string; title: string; state: string; plan?: string }; runs: unknown[] };
   feed: {
     chat: Array<{ role: ChatRole; text: string }>;
     activity: Array<{ source: string; text: string; kind: "info" | "success" | "warning" | "error"; pending: boolean }>;
