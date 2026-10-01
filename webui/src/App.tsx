@@ -1,56 +1,19 @@
-import { Button } from "@/components/ui/button"
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import { Toaster } from "@/components/ui/sonner"
+import { Shell } from "@/app/Shell"
+import { SignIn } from "@/app/SignIn"
+import { LoadingState, NarrowWindow } from "@/app/States"
+import { useBootstrap } from "@/app/bootstrap"
+import { useMediaQuery, useStatus } from "@/app/hooks"
 
+/** The gate in front of the shell: narrow notice, first paint, sign-in, shell. */
 export function App() {
-  return (
-    <TooltipProvider>
-      <main className="mx-auto flex min-h-svh w-full max-w-2xl flex-col gap-6 p-8">
-        <header className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold tracking-tight">bot-lobby</h1>
-          <p className="text-sm text-muted-foreground">
-            Web UI scaffold. Portals, theme tokens and the CSP nonce are wired
-            up.
-          </p>
-        </header>
-        <div className="flex flex-wrap items-center gap-3">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button>Hover for a tooltip</Button>
-            </TooltipTrigger>
-            <TooltipContent>A Radix portal with the CSP nonce</TooltipContent>
-          </Tooltip>
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="outline">Open sheet</Button>
-            </SheetTrigger>
-            <SheetContent>
-              <SheetHeader>
-                <SheetTitle>Portal proof</SheetTitle>
-                <SheetDescription>
-                  This sheet renders in a portal outside the React root.
-                </SheetDescription>
-              </SheetHeader>
-            </SheetContent>
-          </Sheet>
-        </div>
-      </main>
-      <Toaster />
-    </TooltipProvider>
-  )
+  const wide = useMediaQuery("(min-width: 768px)")
+  const ready = useBootstrap()
+  const { signedOut } = useStatus()
+
+  if (!wide) return <NarrowWindow />
+  if (!ready) return <LoadingState />
+  if (signedOut) return <SignIn />
+  return <Shell />
 }
 
 export default App
