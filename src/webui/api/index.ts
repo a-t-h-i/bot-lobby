@@ -15,11 +15,13 @@ import { lobbyAbort, lobbyHistory, lobbySend, lobbySnapshot } from "./lobby.ts";
 import { promptsAnswer, promptsDismiss, promptsList } from "./prompts.ts";
 import { plannerAnswer, plannerCommentLine, plannerGet, plannerNew, plannerRetry, plannerSend, plannerToggleSeat, plannerSave } from "./planner.ts";
 import { quickfixCancel, quickfixList, quickfixMovedToTask, quickfixRunAnyway, quickfixSubmit } from "./quickfix.ts";
-import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksList, tasksMessage, tasksRestore } from "./tasks.ts";
+import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksGet, tasksList, tasksMessage, tasksRestore } from "./tasks.ts";
 import { metricsGet } from "./metrics.ts";
 import { knowledgeAdd, knowledgeComment, knowledgeEdit, knowledgeFiles, knowledgeOpen, knowledgeRemove, knowledgeReplaceFile, knowledgeUnnote } from "./knowledge.ts";
 import { excalidrawAdd, excalidrawCheck, excalidrawCreate, excalidrawList, excalidrawRemove, excalidrawRename, excalidrawReveal, excalidrawToggleAgent, excalidrawToggleAll, excalidrawToggleContribute } from "./excalidraw.ts";
-import { plansDiscard, plansStart } from "./plans.ts";
+import { plansDiscard, plansGet, plansStart } from "./plans.ts";
+import { gitCancelReview, gitJev, gitPull, gitPulls, gitReview } from "./git.ts";
+import { issuesCreate, issuesGet, issuesList } from "./issues.ts";
 import { sessionsAnswer, sessionsChat, sessionsList, sessionsMessage, sessionsStart, sessionsStop, sessionsSwitch } from "./sessions.ts";
 
 /** What a handler reads besides the request body. */
@@ -72,6 +74,7 @@ interface Route {
 
 const Empty = Type.Object({}, { additionalProperties: false });
 const TaskId = Type.String({ minLength: 1, maxLength: 200 });
+const GhNumber = Type.Integer({ minimum: 1, maximum: 1_000_000_000 });
 const NoticeText = Type.String({ maxLength: 20_000 });
 const CommentText = Type.String({ maxLength: 10_000 });
 const DialogAnswer = Type.Union([
@@ -113,6 +116,10 @@ function buildRoutes(): Record<string, Route> {
   routes["lobby.abort"] = { schema: Empty, run: (_body, ctx) => lobbyAbort(ctx) };
   routes["tasks.list"] = { schema: Empty, run: (_body, ctx) => tasksList(ctx) };
   routes["tasks.archived"] = { schema: Empty, run: (_body, ctx) => tasksArchived(ctx) };
+  routes["tasks.get"] = {
+    schema: Type.Object({ taskId: TaskId }, { additionalProperties: false }),
+    run: (body, ctx) => tasksGet(body as { taskId: string }, ctx),
+  };
   routes["tasks.comments"] = {
     schema: Type.Object({ taskId: TaskId }, { additionalProperties: false }),
     run: (body, ctx) => tasksComments(body as { taskId: string }, ctx),
@@ -140,6 +147,10 @@ function buildRoutes(): Record<string, Route> {
   routes["tasks.message"] = {
     schema: Type.Object({ taskId: TaskId, text: NoticeText }, { additionalProperties: false }),
     run: (body, ctx) => tasksMessage(body as { taskId: string; text: string }, ctx),
+  };
+  routes["plans.get"] = {
+    schema: Type.Object({ planId: TaskId }, { additionalProperties: false }),
+    run: (body, ctx) => plansGet(body as { planId: string }, ctx),
   };
   routes["plans.start"] = {
     schema: Type.Object({ planId: TaskId, where: Type.Union([Type.Literal("here"), Type.Literal("session")]), auto: Type.Optional(Type.Boolean()) }, { additionalProperties: false }),
@@ -289,6 +300,38 @@ function buildRoutes(): Record<string, Route> {
   routes["excalidraw.reveal"] = {
     schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
     run: (body, ctx) => excalidrawReveal(body as { id: string }, ctx),
+  };
+  routes["git.pulls"] = {
+    schema: Type.Object({ refresh: Type.Optional(Type.Boolean()) }, { additionalProperties: false }),
+    run: (body, ctx) => gitPulls(body as { refresh?: boolean }, ctx),
+  };
+  routes["git.pull"] = {
+    schema: Type.Object({ number: GhNumber }, { additionalProperties: false }),
+    run: (body, ctx) => gitPull(body as { number: number }, ctx),
+  };
+  routes["git.review"] = {
+    schema: Type.Object({ number: GhNumber, focus: Type.Optional(Type.String({ maxLength: 2000 })) }, { additionalProperties: false }),
+    run: (body, ctx) => gitReview(body as { number: number; focus?: string }, ctx),
+  };
+  routes["git.cancelReview"] = {
+    schema: Type.Object({ number: GhNumber }, { additionalProperties: false }),
+    run: (body, ctx) => gitCancelReview(body as { number: number }, ctx),
+  };
+  routes["git.jev"] = {
+    schema: Type.Object({ number: GhNumber }, { additionalProperties: false }),
+    run: (body, ctx) => gitJev(body as { number: number }, ctx),
+  };
+  routes["issues.list"] = {
+    schema: Type.Object({ refresh: Type.Optional(Type.Boolean()) }, { additionalProperties: false }),
+    run: (body, ctx) => issuesList(body as { refresh?: boolean }, ctx),
+  };
+  routes["issues.get"] = {
+    schema: Type.Object({ number: GhNumber }, { additionalProperties: false }),
+    run: (body, ctx) => issuesGet(body as { number: number }, ctx),
+  };
+  routes["issues.create"] = {
+    schema: Type.Object({ text: Type.String({ maxLength: 20_000 }) }, { additionalProperties: false }),
+    run: (body, ctx) => issuesCreate(body as { text: string }, ctx),
   };
   return routes;
 }

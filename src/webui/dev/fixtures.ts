@@ -100,6 +100,14 @@ export interface ScenarioFixture {
   mockExcalidraw?: Array<{ id: string; name: string; masked: string; agents: string[]; contribute: boolean; addedAt: string }>;
   /** The full link `excalidraw.reveal` returns (absent means none). */
   mockExcalidrawLink?: string;
+  /** Open pull requests for the `git.*` calls, each with its detail fields (absent means none). */
+  mockPulls?: Array<Record<string, unknown>>;
+  /** Saved reviews of those pull requests, by number. */
+  mockReviews?: Array<Record<string, unknown>>;
+  /** Jev's reads of those pull requests, by number. */
+  mockReads?: Array<Record<string, unknown>>;
+  /** Open issues for the `issues.*` calls, each with its detail fields (absent means none). */
+  mockIssues?: Array<Record<string, unknown>>;
 }
 
 /** Whether `value` names a scenario. */
@@ -161,5 +169,9 @@ export function loadScenario(name: string | undefined): ScenarioFixture {
     mockKnowledgeView: isRecord(parsed.mockKnowledgeView) ? (parsed.mockKnowledgeView as unknown as ScenarioFixture["mockKnowledgeView"]) : undefined,
     mockExcalidraw: Array.isArray(parsed.mockExcalidraw) ? (parsed.mockExcalidraw as ScenarioFixture["mockExcalidraw"]) : [],
     mockExcalidrawLink: typeof parsed.mockExcalidrawLink === "string" ? (parsed.mockExcalidrawLink as string) : undefined,
+    mockPulls: Array.isArray(parsed.mockPulls) ? (parsed.mockPulls as ScenarioFixture["mockPulls"]) : [],
+    mockReviews: Array.isArray(parsed.mockReviews) ? (parsed.mockReviews as ScenarioFixture["mockReviews"]) : [],
+    mockReads: Array.isArray(parsed.mockReads) ? (parsed.mockReads as ScenarioFixture["mockReads"]) : [],
+    mockIssues: Array.isArray(parsed.mockIssues) ? (parsed.mockIssues as ScenarioFixture["mockIssues"]) : [],
   };
 }
