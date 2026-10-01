@@ -8,32 +8,7 @@
 import type { SnapshotTask, StatusInfo } from "@protocol"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { cn } from "@/lib/utils"
-
-/** A pip per step, at most eight, as the terminal's `pips` does. */
-const PIPS_MAX = 8
-
-function trackText(track: SnapshotTask["track"]): string {
-  if (!track) return ""
-  return track.path === "fast" ? `fast track (${track.size})` : `full workflow (${track.size})`
-}
-
-function pipStates(done: number, total: number): boolean[] {
-  const cells = Math.min(total, PIPS_MAX)
-  if (cells <= 0) return []
-  const filled = Math.min(cells, Math.round((Math.max(0, done) / total) * cells))
-  return Array.from({ length: cells }, (_, index) => index < filled)
-}
-
-function Pips({ done, total }: { done: number; total: number }) {
-  return (
-    <span className="inline-flex items-center gap-0.5 align-middle" aria-hidden="true">
-      {pipStates(done, total).map((on, index) => (
-        <span key={index} className={cn("h-1.5 w-3 rounded-full", on ? "bg-primary" : "bg-border")} />
-      ))}
-    </span>
-  )
-}
+import { Pips, trackText } from "@/ui/task-facts"
 
 function Facts({ task, branch }: { task: SnapshotTask; branch?: string }) {
   const track = trackText(task.track)
