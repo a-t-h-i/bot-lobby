@@ -23,6 +23,8 @@ import { plansDiscard, plansGet, plansStart } from "./plans.ts";
 import { gitCancelReview, gitJev, gitPull, gitPulls, gitReview } from "./git.ts";
 import { issuesCreate, issuesGet, issuesList } from "./issues.ts";
 import { sessionsAnswer, sessionsChat, sessionsList, sessionsMessage, sessionsStart, sessionsStop, sessionsSwitch } from "./sessions.ts";
+import { settingsGet, settingsSet } from "./settings.ts";
+import { noticeText, pushNotice } from "../notices.ts";
 
 /** What a handler reads besides the request body. */
 export interface ApiContext {
@@ -333,6 +335,12 @@ function buildRoutes(): Record<string, Route> {
     schema: Type.Object({ text: Type.String({ maxLength: 20_000 }) }, { additionalProperties: false }),
     run: (body, ctx) => issuesCreate(body as { text: string }, ctx),
   };
+  routes["settings.get"] = { schema: Empty, run: (_body, ctx) => settingsGet(ctx) };
+  routes["settings.set"] = {
+    // The patch's shape is the normaliser's job (`resolveConfig`); only a plain object is required here.
+    schema: Type.Object({ patch: Type.Object({}, { additionalProperties: true }) }, { additionalProperties: false }),
+    run: (body, ctx) => settingsSet(body as { patch: Record<string, unknown> }, ctx),
+  };
   return routes;
 }
 
@@ -354,7 +362,10 @@ export async function routeApiCall(name: string, body: unknown, ctx: ApiContext)
   if (!body || typeof body !== "object" || Array.isArray(body)) fail(400, "bad_request", "the body must be a JSON object");
   const checked = route as Route;
   if (!Compile(checked.schema).Check(body)) fail(400, "bad_request", firstError(checked.schema, body));
-  return checked.run(body as Record<string, unknown>, ctx);
+  const result = await checked.run(body as Record<string, unknown>, ctx);
+  const notice = noticeText(result);
+  if (notice) pushNotice(notice);
+  return result;
 }
 
 /** Read the call name from `POST /api/<group>.<action>` (undefined for anything else). */

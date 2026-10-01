@@ -4,6 +4,7 @@
  * builds with no Pi. Dev-only; never imported by production code or tests
  * (tests use `test/webui-fake.ts`).
  */
+import { resolveConfig, type BotLobbyConfig } from "../../schemas/configuration.ts";
 import { LobbyFeed } from "../../lobby/feed.ts";
 import { promptHub } from "../../lobby/prompt-hub.ts";
 import { lobbyTopics } from "../../lobby/topics.ts";
@@ -193,6 +194,12 @@ function fakeIssues(entries: Array<Record<string, unknown>>) {
   return state;
 }
 
+/** The models the mock offers, unless a scenario's settings name its own. */
+const DEFAULT_MODELS: Array<{ id: string; label: string; thinkingLevels: string[] }> = [
+  { id: "mock/gpt-5", label: "Mock GPT-5", thinkingLevels: ["low", "medium", "high"] },
+  { id: "mock/gpt-5-mini", label: "Mock GPT-5 mini", thinkingLevels: ["minimal", "low", "medium"] },
+];
+
 const streams = new WeakMap<object, StreamState>();
 const opened = new WeakMap<object, string[]>();
 
@@ -316,6 +323,8 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
   const comments = new Map<string, Array<Record<string, unknown>>>(Object.entries(fixture.taskComments ?? {}));
   const backgrounds = (fixture.backgroundSessions ?? []).map(fakeBackground);
   let planning = fakePlanner(fixture.mockPlanner ?? defaultPlanner());
+  let config: BotLobbyConfig = resolveConfig(fixture.settings?.config ?? {});
+  const models = fixture.settings?.models ?? DEFAULT_MODELS;
   const metrics = (fixture.mockMetrics ?? []).map((record) => ({ ...record }));
   const classifierMetrics = (fixture.mockClassifierMetrics ?? []).map((record) => ({ ...record }));
   const knowledgeFiles = (fixture.mockKnowledge ?? []).map((file) => ({ ...file }));
@@ -426,6 +435,12 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     sessionId: () => fixture.status.sessionId,
     sessionName: () => fixture.status.sessionName,
     masterBusy: () => fixture.status.busy,
+    config: () => config,
+    saveConfig: (next: BotLobbyConfig) => {
+      config = next;
+    },
+    configChanged: () => {},
+    models: () => models.map((model) => ({ id: model.id, label: model.label, thinkingLevels: [...model.thinkingLevels] })),
     issuesEnabled: () => fixture.status.issuesEnabled,
     terminalDialog: () => fixture.status.terminalDialog,
     workspace: () => ({ ...fixture.status.workspace }),

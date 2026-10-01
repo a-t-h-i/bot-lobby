@@ -59,6 +59,8 @@ export interface ScenarioFixture {
   settled: FixtureSettled[];
   /** Streamed back (in deltas) after `lobby.send`. */
   oracleReply: string;
+  /** The Settings page's mock: a partial config merged over the defaults, and the models Pi offers. */
+  settings?: { config?: Record<string, unknown>; models?: Array<{ id: string; label: string; thinkingLevels: string[] }> };
   /** Opened through `promptHub` shortly after a send, if any. */
   questionAfterSend: FixturePrompt | null;
   /** Tasks backing `tasks.list` (absent means none). */
@@ -173,5 +175,6 @@ export function loadScenario(name: string | undefined): ScenarioFixture {
     mockReviews: Array.isArray(parsed.mockReviews) ? (parsed.mockReviews as ScenarioFixture["mockReviews"]) : [],
     mockReads: Array.isArray(parsed.mockReads) ? (parsed.mockReads as ScenarioFixture["mockReads"]) : [],
     mockIssues: Array.isArray(parsed.mockIssues) ? (parsed.mockIssues as ScenarioFixture["mockIssues"]) : [],
+    settings: isRecord(parsed.settings) ? (parsed.settings as ScenarioFixture["settings"]) : undefined,
   };
 }

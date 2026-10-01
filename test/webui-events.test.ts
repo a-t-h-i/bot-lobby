@@ -91,6 +91,22 @@ function tap(port: number, cookie: string, path = "/api/events"): Promise<Tap> {
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function post(port: number, cookie: string, path: string, body: unknown): Promise<{ status: number; payload: { ok: boolean; result?: Record<string, unknown> } }> {
+  return new Promise((resolve, reject) => {
+    const req = httpRequest({ host: "127.0.0.1", port, method: "POST", path, headers: { host: `127.0.0.1:${port}`, cookie, ...json } }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (chunk: Buffer) => chunks.push(chunk));
+      res.on("end", () => {
+        const text = Buffer.concat(chunks).toString("utf8");
+        resolve({ status: res.statusCode ?? 0, payload: JSON.parse(text) as { ok: boolean; result?: Record<string, unknown> } });
+      });
+    });
+    req.on("error", reject);
+    req.write(JSON.stringify(body));
+    req.end();
+  });
+}
+
 test("the stream says hello with every topic's versions", async () => {
   const { server, cookie } = await start();
   try {
@@ -173,6 +189,57 @@ test("the stream refuses anyone without the cookie", async () => {
   const { server } = await start();
   try {
     await assert.rejects(tap(server.port, "bl_session=guess"), /refused with 401/);
+  } finally {
+    await server.close();
+  }
+});
+
+test("a LOBBY warning arrives as a notice delta and bumps the notices topic", async () => {
+  const feed = new LobbyFeed();
+  const { server, cookie } = await start(feed);
+  try {
+    const stream = await tap(server.port, cookie);
+    try {
+      await wait(50);
+      stream.events.length = 0;
+      const before = lobbyTopics.version("notices");
+      feed.log("LOBBY", "the web link was reset", "warning");
+      await wait(150);
+      const notice = stream.events.find((event) => event.type === "notice");
+      assert.ok(notice, `a notice arrives, got ${stream.events.map((event) => event.type).join(",")}`);
+      assert.equal(notice?.text, "the web link was reset");
+      assert.equal(notice?.level, "warning");
+      assert.ok(lobbyTopics.version("notices") > before, "the notices topic moved on");
+      // Ordinary activity (info/success) is not a toast.
+      stream.events.length = 0;
+      feed.log("LOBBY", "comment saved", "info");
+      await wait(120);
+      assert.equal(stream.events.some((event) => event.type === "notice"), false, "info stays an activity line");
+    } finally {
+      stream.destroy();
+    }
+  } finally {
+    await server.close();
+  }
+});
+
+test("an action's notice reaches the stream", async () => {
+  const { server, cookie } = await start();
+  try {
+    const stream = await tap(server.port, cookie);
+    try {
+      await wait(50);
+      stream.events.length = 0;
+      const answer = await post(server.port, cookie, "/api/lobby.send", { text: "   " });
+      assert.equal(answer.status, 200, JSON.stringify(answer.payload));
+      assert.equal(answer.payload.result?.notice, "type something first");
+      await wait(150);
+      const notice = stream.events.find((event) => event.type === "notice");
+      assert.ok(notice, `an action notice arrives, got ${stream.events.map((event) => event.type).join(",")}`);
+      assert.equal(notice?.text, "type something first");
+    } finally {
+      stream.destroy();
+    }
   } finally {
     await server.close();
   }
