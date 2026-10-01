@@ -454,9 +454,11 @@ export function SettingsForm({ config, models, onConfig }: { config: Config; mod
         <h1 className="text-lg font-medium">{PAGE.title}</h1>
         <p className="text-sm text-muted-foreground">{PAGE.intro}</p>
       </header>
-      <div className="flex flex-col gap-3">
-        {AGENT_ORDER.map((kind) => <AgentCard key={kind} kind={kind} config={config} models={models} save={save} />)}
-      </div>
+      <Section title={GROUP_TITLES.agents}>
+        <div className="flex flex-col gap-3">
+          {AGENT_ORDER.map((kind) => <AgentCard key={kind} kind={kind} config={config} models={models} save={save} />)}
+        </div>
+      </Section>
       <WorkflowGroup config={config} save={save} />
       <LobbyGroup config={config} save={save} />
       <ClassifierGroup config={config} models={models} save={save} />
