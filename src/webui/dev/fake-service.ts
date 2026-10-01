@@ -6,6 +6,7 @@
  */
 import { LobbyFeed } from "../../lobby/feed.ts";
 import { promptHub } from "../../lobby/prompt-hub.ts";
+import { lobbyTopics } from "../../lobby/topics.ts";
 import type { BackgroundSession, DialogAnswer, SessionDialog } from "../../lobby/sessions.ts";
 import type { LobbyService } from "../../lobby/service.ts";
 import { loadScenario, type ScenarioFixture } from "./fixtures.ts";
@@ -75,6 +76,121 @@ function fakeQuickFixJobs(entries: Array<Record<string, unknown>>): FakeQuickFix
     ...(typeof job.note === "string" ? { note: job.note } : {}),
     ...(typeof job.report === "string" ? { report: job.report } : {}),
   }));
+}
+
+const DETAIL_ONLY = ["body", "state", "mergeable", "files", "notes", "comments"] as const;
+
+/** A list row: the detail fixture without the fields only a detail carries. */
+function summaryOf(entry: Record<string, unknown>): Record<string, unknown> {
+  const row: Record<string, unknown> = { ...entry };
+  for (const key of DETAIL_ONLY) delete row[key];
+  return row;
+}
+
+/** The Git tab's `PullsState` as canned fixture data (`gh` is never run). */
+function fakePulls(entries: Array<Record<string, unknown>>) {
+  const details = new Map<number, Record<string, unknown>>();
+  const state = {
+    pulls: [] as Array<Record<string, unknown>>,
+    details,
+    loading: false,
+    loaded: false,
+    error: undefined as string | undefined,
+    async refresh() {
+      state.pulls = entries.map(summaryOf);
+      state.loaded = true;
+      lobbyTopics.bump("git");
+    },
+    async detail(number: number) {
+      const found = entries.find((entry) => entry.number === number);
+      if (!found) {
+        state.error = "GraphQL: Could not resolve to a PullRequest with the number of " + number + ".";
+        return undefined;
+      }
+      state.error = undefined;
+      details.set(number, found);
+      return { ...found };
+    },
+    forget() {
+      details.clear();
+    },
+  };
+  return state;
+}
+
+/** Reviews and Jev's reads as canned data; a started review finishes after a moment. */
+function fakeReviews(saved: Array<Record<string, unknown>>, savedReads: Array<Record<string, unknown>>) {
+  const reviews = new Map<number, Record<string, unknown>>(saved.map((review) => [review.number as number, { ...review }]));
+  const reads = new Map<number, Record<string, unknown>>(savedReads.map((read) => [read.number as number, { ...read }]));
+  const finish = (after: () => void): void => {
+    const timer = setTimeout(() => {
+      after();
+      lobbyTopics.bump("git");
+    }, 400);
+    timer.unref?.();
+  };
+  return {
+    reviews,
+    reads,
+    review: (number: number) => reviews.get(number),
+    running: (number: number) => reviews.get(number)?.status === "running",
+    async start(number: number, options: { focus?: string } = {}) {
+      const review: Record<string, unknown> = { number, status: "running", startedAt: Date.now(), steps: ["reading the pull request from GitHub"], ...(options.focus ? { focus: options.focus } : {}) };
+      reviews.set(number, review);
+      lobbyTopics.bump("git");
+      finish(() => Object.assign(review, { status: "done", verdict: "comment", finishedAt: Date.now(), model: "mock/qa", thinking: "medium", text: "## Verdict\nCOMMENT\n\n## Summary\nA canned review from the mock.\n\n## Findings\nNone." }));
+      return review;
+    },
+    cancel(number: number): boolean {
+      const review = reviews.get(number);
+      if (review?.status !== "running") return false;
+      review.status = "cancelled";
+      review.finishedAt = Date.now();
+      lobbyTopics.bump("git");
+      return true;
+    },
+    async readWithJev(number: number) {
+      const read: Record<string, unknown> = { number, status: "running" };
+      reads.set(number, read);
+      lobbyTopics.bump("git");
+      finish(() => Object.assign(read, { status: "done", line: "small · low risk", read: { size: "small", sizeConfidence: 0.9, risky: 0.1, breaking: 0.05, security: 0.02, testsMissing: 0.2, model: "mock/jev", ms: 200 } }));
+      return read;
+    },
+  };
+}
+
+/** The Issues tab's `IssuesState` as canned fixture data. */
+function fakeIssues(entries: Array<Record<string, unknown>>) {
+  const details = new Map<number, Record<string, unknown>>();
+  const state = {
+    issues: [] as Array<Record<string, unknown>>,
+    details,
+    loading: false,
+    loaded: false,
+    error: undefined as string | undefined,
+    notice: undefined as string | undefined,
+    async refresh() {
+      state.issues = entries.map(summaryOf);
+      state.loaded = true;
+      lobbyTopics.bump("issues");
+    },
+    async detail(number: number) {
+      const found = entries.find((entry) => entry.number === number);
+      if (!found) {
+        state.error = "GraphQL: Could not resolve to an Issue with the number of " + number + ".";
+        return undefined;
+      }
+      return { ...found };
+    },
+    async create(text: string) {
+      const title = text.trim().split("\n")[0]!.replace(/^#+\s*/, "");
+      const number = Math.max(0, ...entries.map((entry) => entry.number as number)) + 1;
+      entries.unshift({ number, title, labels: [], body: text.trim().split("\n").slice(1).join("\n").trim(), state: "OPEN", comments: [] });
+      state.notice = `created #${number} — https://github.com/example/bot-lobby/issues/${number}`;
+      await state.refresh();
+    },
+  };
+  return state;
 }
 
 const streams = new WeakMap<object, StreamState>();
@@ -192,8 +308,9 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
   const fixture = loadScenario(name);
   seedFeed(feed, fixture);
   const history = fixture.history.map((entry, index) => ({ id: index + 1, at: Date.now() - (fixture.history.length - index) * 1000, role: entry.role, text: entry.text }));
-  const tasks = (fixture.mockTasks ?? []).map((task) => ({ ...task }));
-  const archived = (fixture.mockArchived ?? []).map((task) => ({ ...task }));
+  const whole = (task: Record<string, unknown>): Record<string, unknown> => ({ amendments: [], blockers: [], approvals: [], ...task });
+  const tasks = (fixture.mockTasks ?? []).map(whole);
+  const archived = (fixture.mockArchived ?? []).map(whole);
   const plans = (fixture.mockPlans ?? []).map((plan) => ({ ...plan, status: "pending" as const, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }));
   const auto = new Set(fixture.autoTasks ?? []);
   const comments = new Map<string, Array<Record<string, unknown>>>(Object.entries(fixture.taskComments ?? {}));
@@ -395,6 +512,9 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     defaultPanel: () => ["backend", "designer", "qa", "researcher"],
     planningRounds: () => 5,
     quickfix,
+    pulls: fakePulls(fixture.mockPulls ?? []),
+    reviews: fakeReviews(fixture.mockReviews ?? [], fixture.mockReads ?? []),
+    issues: fakeIssues((fixture.mockIssues ?? []).map((issue) => ({ ...issue }))),
     sessionChat: () => [],
     hasOlderChat: () => false,
     switchTo: async (target: { name: string }) => `switching this window to ${target.name}…`,

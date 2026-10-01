@@ -1,9 +1,10 @@
 /**
- * Saved plans over HTTP: starting one here or in a new background session,
- * and discarding one. Actions answer with the same notice text the terminal
+ * Saved plans over HTTP: reading one, starting it here or in a new background
+ * session, and discarding it. Actions answer with the same notice text the terminal
  * shows (the terminal asks twice before discarding; the web call is already
  * an explicit confirmation).
  */
+import type { PlanDetail } from "../protocol.ts";
 import type { ApiContext } from "./index.ts";
 import { fail } from "./index.ts";
 
@@ -23,4 +24,21 @@ export function plansDiscard(body: { planId: string }, ctx: ApiContext): { notic
   if (!plan) fail(404, "not_found", `no plan ${body.planId}`);
   ctx.service.discardPlan(body.planId);
   return { notice: `discarded ${body.planId}` };
+}
+
+/** One saved plan: its agreed text, the issue it came from and the parts it was split into. */
+export function plansGet(body: { planId: string }, ctx: ApiContext): PlanDetail {
+  const found = ctx.service.plans().find((entry) => entry.id === body.planId);
+  if (!found) fail(404, "not_found", `no plan ${body.planId}`);
+  const plan = found!;
+  return {
+    id: plan.id,
+    title: plan.title,
+    status: plan.status,
+    createdAt: plan.createdAt,
+    brief: plan.brief,
+    ...(plan.issue ? { issue: { number: plan.issue.number, title: plan.issue.title, ...(plan.issue.url ? { url: plan.issue.url } : {}) } } : {}),
+    ...(plan.split ? { split: { part: plan.split.part, of: plan.split.of, titles: [...plan.split.titles], after: [...plan.split.after] } } : {}),
+    ...(plan.startedTaskId ? { startedTaskId: plan.startedTaskId } : {}),
+  };
 }

@@ -172,6 +172,40 @@ test("plans.start in a session starts a background session and keys it", async (
   }
 });
 
+test("plans.get reads a saved plan; unknown ids are 404 and the body is strict", async () => {
+  const { call, plan, close } = await setup();
+  try {
+    const got = await call("plans.get", { planId: plan.id });
+    assert.equal(got.status, 200, got.body);
+    assert.deepEqual(got.payload.result, { id: plan.id, title: "A saved plan", status: "pending", createdAt: plan.createdAt, brief: "## Agreed plan\n\nDo it well." });
+    const unknown = await call("plans.get", { planId: "PLAN-nope" });
+    assert.equal(unknown.status, 404);
+    assert.equal(unknown.payload.code, "not_found");
+    assert.equal((await call("plans.get", { planId: plan.id, extra: true })).status, 400);
+    assert.equal((await call("plans.get", {})).status, 400);
+  } finally {
+    await close();
+  }
+});
+
+test("plans.get carries issue and split info", async () => {
+  const state = fakeState();
+  const split = { group: "g1", part: 2, of: 3, titles: ["Server", "Page", "Docs"], after: [1] };
+  const saved = savePlannedTask(state.root, ".pi", { title: "Page", brief: "Build the page.", issue: { number: 7, title: "Web UI", url: "https://github.com/x/y/issues/7" }, split });
+  const service = createLobbyService({ ...state, configDir: ".pi" } as unknown as Runtime);
+  const server = await startWebServer({ service, port: 0, secret: randomBytes(32), dist: DIST });
+  try {
+    const cookie = await login(server.port, new URL(server.link).hash.replace("#token=", ""));
+    const got = await send(server.port, "/api/plans.get", { ...json, cookie }, JSON.stringify({ planId: saved.id }));
+    assert.equal(got.status, 200, got.body);
+    const result = got.payload.result as Record<string, unknown>;
+    assert.deepEqual(result.issue, { number: 7, title: "Web UI", url: "https://github.com/x/y/issues/7" });
+    assert.deepEqual(result.split, { part: 2, of: 3, titles: ["Server", "Page", "Docs"], after: [1] }, "the shared group id stays server-side");
+  } finally {
+    await server.close();
+  }
+});
+
 test("every scenario's mock answers the plans calls without throwing", async () => {
   for (const name of SCENARIOS) {
     const service = createFixtureService(name);
@@ -179,6 +213,9 @@ test("every scenario's mock answers the plans calls without throwing", async () 
     try {
       const cookie = await login(server.port, new URL(server.link).hash.replace("#token=", ""));
       const call = async (api: string, body: unknown = {}) => send(server.port, `/api/${api}`, { ...json, cookie }, JSON.stringify(body));
+      const detail = await call("plans.get", { planId: "PLAN-mock-dark" });
+      assert.equal(detail.status, name === "full" ? 200 : 404, `${name}: plans.get`);
+      if (name === "full") assert.match(String(detail.payload.result!.brief), /Agreed plan/);
       const start = await call("plans.start", { planId: "PLAN-mock-dark", where: "here" });
       assert.equal(start.status, name === "full" ? 200 : 404, `${name}: plans.start`);
       if (name === "full") assert.match(String(start.payload.result!.notice), /starting PLAN-mock-dark here/);

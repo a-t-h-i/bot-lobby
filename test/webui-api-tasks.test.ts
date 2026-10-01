@@ -15,6 +15,7 @@ import { ensureProjectStructure, saveTask } from "../src/state/persistence.ts";
 import { savePlannedTask } from "../src/state/backlog.ts";
 import { createTask } from "../src/schemas/task.ts";
 import { createLobbyService } from "../src/lobby/service.ts";
+import type { RunLogEntry } from "../src/schemas/task.ts";
 import type { Runtime } from "../src/lobby/runtime.ts";
 import { createFixtureService, disposeFixtureService } from "../src/webui/dev/fake-service.ts";
 import { SCENARIOS } from "../src/webui/dev/fixtures.ts";
@@ -107,7 +108,7 @@ async function setup() {
   const token = new URL(server.link).hash.replace("#token=", "");
   const cookie = await login(server.port, token);
   const call = async (name: string, body: unknown = {}) => send(server.port, `/api/${name}`, { ...json, cookie }, JSON.stringify(body));
-  return { server, call, close: () => server.close() };
+  return { server, call, root: state.root, close: () => server.close() };
 }
 
 test("tasks.list rows mirror the terminal: mine, others, pending, recent", async () => {
@@ -215,6 +216,77 @@ test("tasks.message leaves a message for the task's oracle", async () => {
   }
 });
 
+function logEntry(index: number): RunLogEntry {
+  const startedAt = new Date(Date.UTC(2026, 9, 1, 0, index)).toISOString();
+  return { runId: `run-${index}`, domain: "backend", role: "worker", status: index === 7 ? "failed" : "success", startedAt, finishedAt: new Date(Date.parse(startedAt) + 192_000).toISOString(), attempts: 1, ...(index === 7 ? { error: "the build broke\nsecond line" } : {}) };
+}
+
+test("tasks.get reads a plan's checklist: steps, no request when it equals the title, no proposal beside a plan", async () => {
+  const { call, close } = await setup();
+  try {
+    const got = await call("tasks.get", { taskId: "TASK-mine" });
+    assert.equal(got.status, 200, got.body);
+    assert.deepEqual(got.payload.result, {
+      plan: "1. Write the API\n2. Add the header\n3. Write the tests",
+      steps: [{ text: "Write the API", status: "done" }, { text: "Add the header", status: "current" }, { text: "Write the tests", status: "open" }],
+      amendments: [],
+      waiting: [],
+      blockers: [],
+      runs: [],
+    });
+  } finally {
+    await close();
+  }
+});
+
+test("tasks.get carries the request, proposal, amendments, waits, blockers and the last six runs in the terminal's wording", async () => {
+  const { call, root, close } = await setup();
+  try {
+    const task = createTask("TASK-detail", "Short title", new Date().toISOString(), "The long request\n\n- with a list");
+    task.state = "awaiting_approval";
+    task.proposal = "Do it in two moves.";
+    task.amendments = ["Keep the old endpoint."];
+    task.blockers = [{ domain: "backend", reason: "No database in CI", tried: ["sqlite"], need: "a test database", createdAt: new Date().toISOString() }];
+    task.approvals = [
+      { id: "APR-1", kind: "dependency", domain: "backend", detail: "add zod", status: "pending", createdAt: new Date().toISOString() },
+      { id: "APR-2", kind: "architecture", domain: "designer", detail: "already answered", status: "approved", createdAt: new Date().toISOString() },
+    ];
+    task.runLog = Array.from({ length: 8 }, (_, index) => logEntry(index));
+    saveTask(root, ".pi", task);
+    const got = await call("tasks.get", { taskId: "TASK-detail" });
+    assert.equal(got.status, 200, got.body);
+    const result = got.payload.result as unknown as { request: string; proposal: string; plan?: string; steps: unknown[]; amendments: string[]; waiting: unknown[]; blockers: unknown[]; runs: string[] };
+    assert.equal(result.request, "The long request\n\n- with a list");
+    assert.equal(result.proposal, "Do it in two moves.");
+    assert.equal(result.plan, undefined);
+    assert.deepEqual(result.steps, []);
+    assert.deepEqual(result.amendments, ["Keep the old endpoint."]);
+    assert.deepEqual(result.waiting, [{ kind: "dependency", detail: "for backend: add zod" }]);
+    assert.deepEqual(result.blockers, [{ reason: "No database in CI", need: "a test database" }]);
+    assert.equal(result.runs.length, 6, "the last six");
+    assert.match(result.runs[0]!, /^✓ DEV worker · 3m 12s/);
+    assert.match(result.runs[5]!, /^✗ DEV worker · 3m 12s · failed — the build broke$/);
+  } finally {
+    await close();
+  }
+});
+
+test("tasks.get finds archived tasks; unknown ids are 404; extra fields are 400", async () => {
+  const { call, close } = await setup();
+  try {
+    await call("tasks.archive", { taskId: "TASK-done" });
+    assert.equal((await call("tasks.get", { taskId: "TASK-done" })).status, 200, "archived tasks read too");
+    const unknown = await call("tasks.get", { taskId: "TASK-nope" });
+    assert.equal(unknown.status, 404);
+    assert.equal(unknown.payload.code, "not_found");
+    const extra = await call("tasks.get", { taskId: "TASK-mine", more: 1 });
+    assert.equal(extra.status, 400);
+    assert.equal((await call("tasks.get", {})).status, 400);
+  } finally {
+    await close();
+  }
+});
+
 test("every scenario's mock answers the tasks calls without throwing", async () => {
   for (const name of SCENARIOS) {
     const service = createFixtureService(name);
@@ -226,7 +298,14 @@ test("every scenario's mock answers the tasks calls without throwing", async () 
       assert.equal((await call("tasks.list")).status, 200, `${name}: tasks.list`);
       assert.equal((await call("tasks.archived")).status, 200, `${name}: tasks.archived`);
       assert.equal((await call("tasks.comments", { taskId: "T-mock-1" })).status, 200, `${name}: tasks.comments`);
+      assert.equal((await call("tasks.get", { taskId: "T-mock-1" })).status, name === "full" ? 200 : 404, `${name}: tasks.get`);
+      assert.equal((await call("tasks.get", { taskId: "T-nope" })).status, 404, `${name}: unknown tasks.get is 404`);
       if (name === "full") {
+        const detail = (await call("tasks.get", { taskId: "T-mock-1" })).payload.result as unknown as { request: string; steps: Array<{ status: string }>; waiting: unknown[]; blockers: unknown[]; runs: string[]; amendments: string[] };
+        assert.deepEqual(detail.steps.map((step) => step.status), ["done", "current", "open"], "full: checklist from the fixture");
+        assert.ok(detail.request && detail.waiting.length === 1 && detail.blockers.length === 1 && detail.runs.length === 0 && detail.amendments.length === 1, "full: request, waits, blockers, amendments (no run log: the metrics tiles count it)");
+        const proposal = (await call("tasks.get", { taskId: "T-mock-2" })).payload.result as unknown as { proposal: string };
+        assert.match(proposal.proposal, /pending migrations/, "full: a task with a proposal and no plan");
         const rows = (await call("tasks.list")).payload.result!.rows as Array<{ id: string; section: string }>;
         assert.ok(rows.some((row) => row.id === "T-mock-1" && row.section === "mine"), "full: the owned task is mine");
         assert.ok(rows.some((row) => row.id === "PLAN-mock-dark" && row.section === "pending"), "full: the saved plan is pending");

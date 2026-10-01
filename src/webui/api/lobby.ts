@@ -5,36 +5,15 @@
  * feed module, so the page sees exactly what the terminal keeps.
  */
 import { MAX_ACTIVITY, MAX_CHAT, MAX_THOUGHTS } from "../../lobby/feed.ts";
-import { planChecklist } from "../../pi/plan-checklist.ts";
-import type { AgentRun } from "../../schemas/findings.ts";
 import type { Task } from "../../schemas/task.ts";
 import type { ApiContext } from "./index.ts";
 import { fail } from "./index.ts";
+import { taskSteps } from "./plan-facts.ts";
 import type { LobbySnapshot, SnapshotTask } from "../protocol.ts";
-
-/**
- * Worker records as runs, the same projection the terminal checklist reads.
- * It lives here (not via `persistedRuns`) so the server never loads the TUI.
- */
-function persistedTaskRuns(task: Task): AgentRun[] {
-  return (task.workerRuns ?? []).map((record) => ({
-    runId: record.runId,
-    taskId: task.id,
-    domain: record.domain,
-    role: "worker" as const,
-    status: record.status,
-    instruction: record.instruction,
-    output: "",
-    attempts: 1,
-    startedAt: record.startedAt,
-    ...(record.finishedAt ? { finishedAt: record.finishedAt } : {}),
-  }));
-}
 
 /** Plan facts the header shows: step progress plus the step under way, if any. */
 function planFacts(task: Task): Pick<SnapshotTask, "progress" | "currentStep"> {
-  if (!task.plan) return {};
-  const steps = planChecklist(task.plan, persistedTaskRuns(task));
+  const steps = taskSteps(task);
   if (steps.length === 0) return {};
   const current = steps.find((step) => step.status === "current");
   return {
