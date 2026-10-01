@@ -19,11 +19,11 @@ bot-lobby stays a Pi extension: the same package (`@a-t-h-i/bot-lobby`) and the 
 
 The earlier DeepSeek Harness plan is superseded. It is in git history at commit `463d241` (`dsh-port/`).
 
-## D-02 · A localhost web UI, mobile responsive · Fixed
+## D-02 · A loopback web UI for desktop and tablet · Fixed
 
 - **Where it is served:** from the user's own machine, on `127.0.0.1`.
-- **Where it is opened:** in any browser on that machine, including Chrome on an Android phone or tablet running Pi in Termux.
-- **Which screens it works on:** phone, tablet and desktop widths, in portrait and landscape, as first-class layouts (D-09).
+- **Where it is opened:** in any browser on that machine.
+- **Which screens it works on:** desktop and tablet widths, from **768 px up**, in portrait and landscape, as first-class layouts (D-09). Phones are out of scope: below 768 px the page shows a "use a larger window" notice.
 
 ## D-03 · Built in this repository · Adopted
 
@@ -31,9 +31,9 @@ The web UI lives in `a-t-h-i/bot-lobby`, beside the code it shows. There is no n
 
 | Path | What |
 | --- | --- |
-| `src/lobby/service.ts`, `src/lobby/prompts.ts`, `src/lobby/topics.ts` | The seam both UIs use (D-05, D-11) |
+| `src/lobby/service.ts`, `src/lobby/topics.ts`, `src/lobby/prompts.ts` (shared strings), `src/lobby/prompt-hub.ts` (PromptHub) | The seam both UIs use (D-05, D-11) |
 | `src/webui/` | The server, in Pi's process (`src/web/` is already taken by the web-search tools) |
-| `webui/src/` | The page: TypeScript + Preact (D-07) |
+| `webui/src/` | The page: React 19 + shadcn/ui on Radix (D-07) |
 | `webui/dist/` | The built page, **committed** and shipped (D-08) |
 | `web-ui-mode/` | This handbook |
 
@@ -74,40 +74,44 @@ Where the terminal computes what to show with a pure function, the server calls 
 
 The page only lays these out, so the two UIs cannot drift apart. A function that today returns terminal strings is split: the data part moves next to it (or into `src/lobby/models/`), and the string part stays in the tab file. SURFACE-MAP §3 lists each one.
 
-## D-07 · The page: TypeScript + Preact, bundled with esbuild · Adopted
+## D-07 · The page: React 19 + shadcn/ui on Radix, bundled with Vite · Adopted
 
-- **Why Preact:** about 4 KB, JSX, hooks, and no runtime compiler.
+- **Why React 19:** JSX, hooks and no runtime compiler; shadcn/ui's components are written for it.
+- **Why shadcn/ui on Radix:** accessible primitives (tabs, dialog, sheet, tooltip) with the source in this repository, so we own and can audit it.
+- **Why Vite:** it replaces the starter's `build.mjs`, and the build writes `dist/build.json` (D-08).
 - **Markdown:** `marked`, sanitized with `DOMPurify` (D-10).
-- **Styles:** plain CSS with tokens. There is no CSS framework.
+- **Styles:** Tailwind 4 with shadcn's tokens (D-19). There is no hand-written CSS framework.
 - **Icons:** inline SVG paths. There is no icon font.
-- **Charts:** hand-written SVG components for the Metrics tab. There is no chart library unless P4-04 shows one is needed.
-- **Budget:** the first load stays under **150 KB gzipped**. Heavy extras load lazily on first use: syntax highlighting, and Mermaid if Q-05 says yes.
-
-**Verified:** the starter's page (Preact 11, marked 18, DOMPurify 3) is 94.7 KB minified and about 33 KB gzipped (VERIFIED-FACTS 1).
+- **Charts:** Recharts, loaded lazily in the Metrics tab. There is no chart library in the first load.
+- **Budget:** the first load stays under **250 KB gzipped**, re-measured in P0-01. Heavy extras load lazily on first use: syntax highlighting, charts and Mermaid if Q-05 says yes.
+- **CSP:** the per-response nonce must reach Radix's injected `<style>`, proved in P0-01 (D-12).
 
 ## D-08 · The built page is committed and shipped · Adopted
 
 - **Why committed:** Pi installs a package from npm or from git by running `npm install` (**documented**, PI-NOTES §6). It does not run a build, and a git install does not install devDependencies for us to build with. So `webui/dist/` is committed and listed in `package.json` → `files`.
-- **Staleness check:** a test fails when `webui/dist/` is older than `webui/src/`. It compares a hash of the sources with the one `webui/build.mjs` writes into `dist/build.json`.
-- **Dependencies:** client libraries (Preact, marked, DOMPurify) are **devDependencies**, because they are bundled into `dist/`. The server needs no new runtime dependency, since it uses `node:http`.
+- **Build:** Vite replaces the starter's `build.mjs`; `webui/index.html` is the template, and a post-build step writes `dist/build.json`.
+- **Staleness check:** a test fails when `webui/dist/` is older than the sources. It compares a hash of `webui/src/` **and** `webui/index.html` with the one the build writes into `dist/build.json`.
+- **Dependencies:** client libraries (React, shadcn/ui on Radix, Tailwind) are **devDependencies**, because they are bundled into `dist/`. The server needs no new runtime dependency, since it uses `node:http`.
 
-## D-09 · Mobile first, three layouts · Adopted
+## D-09 · Desktop and tablet layouts: top tabs, one pane, a Sheet · Adopted
+
+Tabs sit at the top at every supported width, and one main pane is shown at a time. Details open in a **Sheet** that slides in from the side instead of replacing the view (D-14).
 
 | Width | Layout |
 | --- | --- |
-| **< 768 px** (phones) | One pane at a time. Tabs in a bottom bar: Lobby, Tasks, Plan, Quick fix, More (Metrics, Git, Knowledge, Excalidraw, Issues, Sessions, Settings). The Lobby tab switches between Conversation, Activity and Thoughts with a segmented control. The composer is pinned above the tab bar. |
-| **768–1023 px** (tablets in portrait, small laptops) | Tabs at the top. One main pane plus a panel that slides over from the side. |
-| **≥ 1024 px** (tablets in landscape, desktops) | Panes side by side, like the terminal: the conversation beside the activity log, and lists beside their detail. |
+| **768–1023 px** (tablet portrait, small laptops) | Tabs at the top. One main pane plus a Sheet that slides in from the side. |
+| **≥ 1024 px** (tablet landscape, desktops) | Tabs at the top; the same single pane, wider, with a Sheet for details. |
+| **< 768 px** (phones) | Not supported. The page shows a "use a larger window" notice. |
 
 **Rules for every screen:**
-- **Touch targets:** at least 44×44 px on touch screens. Hover is never the only way to an action.
+- **Touch targets:** at least 40×40 px (D-19). Hover is never the only way to an action.
 - **No sideways page scroll at any width.** Code blocks and tables scroll inside their own box.
 - **Safe areas:** handle `env(safe-area-inset-*)`. The viewport meta has `viewport-fit=cover, interactive-widget=resizes-content`, so the on-screen keyboard resizes the page and never covers the composer.
-- **Text fields:** 16 px font, so phones do not zoom in on focus.
+- **Text fields:** 16 px font, so touch keyboards do not zoom in on focus.
 - **Preferences:** follow `prefers-color-scheme` and `prefers-reduced-motion`. A manual light/dark switch goes in Settings.
-- **Keyboard:** every action reachable from a keyboard. Desktop shortcuts mirror the terminal's where the browser allows (P5-04).
+- **Keyboard:** every action reachable from a keyboard. Shortcuts mirror the terminal's where the browser allows (D-19, P5-04).
 
-**Verified at 360, 412, 800, 1280 and 1440 px wide**, light and dark, in the starter: no sideways scroll and no control under 36 px (VERIFIED-FACTS 3). The 44 px rule is enforced from P3-01.
+**Verified in the starter at 360, 412, 800, 1280 and 1440 px wide**, light and dark: no sideways scroll and no control under 36 px (VERIFIED-FACTS 3). The 40 px rule is enforced from P3-01.
 
 ## D-10 · Everything shown is untrusted · Adopted
 
@@ -179,18 +183,21 @@ bot-lobby's own questions are offered in the terminal **and** in the page. The f
 
 **Setting:** `lobby.web.questions`: `"both"` (default) or `"terminal"`.
 
-## D-14 · Feature scope and order · Adopted
+## D-14 · Mirror the terminal almost exactly, plus agreed GUI improvements · Adopted
 
 - **Full parity:** the web UI ends at parity with the terminal lobby, covering all eight tabs, Issues, sessions, questions and settings. FEATURE-INVENTORY is the checklist.
 - **Order:** it ships in stages behind `lobby.web.enabled`:
-  - the Lobby tab and questions first (Phase 3: the most used, and what a phone needs most);
+  - the Lobby tab and questions first (Phase 3: the most used);
   - then the other tabs (Phase 4);
   - then settings, notifications and install-as-app (Phase 5).
-- **Two things are better in the web, on purpose:**
-  - real Markdown, images and diagrams;
-  - charts in Metrics.
-
-  Everything else keeps the terminal's behaviour, messages and limits.
+- **Almost exactly:** the same tabs in the same order, the same content and wording, the same flows and the same keyboard shortcuts. Anything else is a parity bug unless it is logged in `docs/web-ui/parity.md` with a reason.
+- **The only permitted GUI improvements:**
+  - the mouse and touch work everywhere: click tabs, rows and buttons, scroll, and select text;
+  - details open in a side **Sheet** instead of replacing the view;
+  - the questionnaire is a slideout above the chat input, with a badge on the other tabs;
+  - the tab strip uses compact pills, scrolls with chevrons, and shows shortcut hints in tooltips;
+  - Markdown, code and charts are drawn properly, and file previews open inline;
+  - separate empty, loading, error and reconnecting states, plus an Alt+H help overlay.
 
 ## D-15 · Opening the link · Adopted
 
@@ -208,7 +215,7 @@ The link also shows in the lobby's status line and in the Lobby tab's header. Fa
 
 ## D-16 · Installable as an app (PWA) · Adopted
 
-`http://127.0.0.1` is a secure context, so a web app manifest and a service worker work there. On Android, "Add to home screen" then opens the lobby in its own window with no browser bar.
+`http://127.0.0.1` is a secure context, so a web app manifest and a service worker work there. On desktop and tablet Chrome, "Install app" then opens the lobby in its own window with no browser bar.
 - **What is cached:** the service worker caches the page's shell only (versioned by the build hash). It never caches API answers.
 - **When Pi is not running:** the installed app shows "Pi is not running; start it and run /bot-lobby web".
 
@@ -239,8 +246,8 @@ This is Phase 5 (P5-03) and is the cheap first step towards the standalone app (
 ## D-18 · Tests · Adopted
 
 - **Server, service and models:** `node:test`, like the rest of bot-lobby.
-- **The page:** Playwright (`playwright-core`, with the Chromium in `CHROMIUM_PATH`) against the mock server (P2-09):
-  - at 360, 412, 800, 1280 and 1440 px;
+- **The page:** Playwright (`playwright-core`, with the Chromium in `CHROMIUM_PATH`) against the mock server (P2-09), run by `npm run web:check`:
+  - at 768×1024, 800×1280, 1280×800 and 1440×900;
   - in light and dark;
   - with screenshots kept as CI artifacts, not in the repo.
 - **Live:** a walkthrough with real Pi and a real model before each phase ends (P2-X, P3-X, P4-X, and P5-07).
@@ -250,12 +257,15 @@ See [TESTING.md](TESTING.md).
 ## D-19 · Accessibility and language · Adopted
 
 - **Accessibility:**
-  - semantic HTML first (buttons are `<button>`, lists are lists, tabs use `role="tab"`);
+  - semantic HTML first (buttons are `<button>`, lists are lists, tabs use `role="tab"` and the WAI-ARIA tabs pattern);
   - visible focus;
   - labels for every control;
   - `aria-live="polite"` on the streaming reply and on notices;
-  - contrast of at least 4.5:1 for text in both themes.
-- **Language:** English, with the terminal's wording for the same things. Strings are written plainly in components; there is no translation layer until someone asks for one.
+  - contrast of at least 4.5:1 for text in both themes;
+  - touch targets are at least 40×40 px;
+  - an **Alt+H** help overlay lists the web key map, built from `keyLabel` in `src/lobby/keys.ts`;
+  - tab pills show their Alt+digit hint in a tooltip and an `aria-keyshortcuts` attribute, so the hint is never available only on hover.
+- **Language:** English, with the terminal's wording for the same things. User-visible strings come from shared modules such as `src/lobby/prompts.ts`, so the TUI and the page cannot drift; there is no translation layer until someone asks for one.
 
 ## D-20 · A standalone app is a later phase · Adopted
 
