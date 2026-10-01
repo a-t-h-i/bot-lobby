@@ -88,6 +88,20 @@ test("an unknown or missing verdict is never treated as a pass", () => {
   assert.ok(validateReviewResult(missing).includes("missing Verdict section"));
 });
 
+test("a PASS token in the verdict heading parses as a pass", () => {
+  const result = parseReviewResult("backend", "## Verdict PASS\n\n## Verification\n- `npm run typecheck` — clean");
+  assert.equal(result.verdict, "pass");
+  assert.equal(result.downgraded, undefined);
+});
+
+test("a CHANGES_REQUIRED token in the verdict heading parses as changes_required", () => {
+  const result = parseReviewResult(
+    "backend",
+    "## Verdict CHANGES_REQUIRED\n\n## Findings\n- [major] No validation on the query param — `src/api/users.ts:42`\n\n## Verification\n- `npm test` — passing\n\n## Required Changes\n- Validate limit and offset",
+  );
+  assert.equal(result.verdict, "changes_required");
+});
+
 test("a pass with critical findings is flagged", () => {
   const result = parseReviewResult("backend", "## Verdict\nPASS\n\n## Findings\n- [critical] data loss — `x.ts:1`\n\n## Verification\n- `npm test` — 12 passing");
   assert.equal(result.verdict, "pass");
