@@ -329,6 +329,14 @@ knowledge, standards, decisions and completed tasks — files on the left, the
 open file's entries on the right (a heading, a bullet, a paragraph), one of
 them picked. Files past the compaction threshold are marked.
 
+Completion is gated on compaction: the engine refuses `complete` while any
+knowledge file is over the threshold (default 20,000 chars,
+`knowledge.compactionThreshold`). The Master first disperses domain-relevant
+facts where they belong with `action=knowledge (domain=designer|backend|qa)`
+— per-agent files fill up through that dispersal — then rewrites each
+oversized file with `action=compact` (which archives the previous version)
+before the task closes.
+
 - `e` edits the picked entry: it comes into the prompt (Shift+Enter for a new
   line, Enter saves). `n` adds an entry after it, `d d` deletes it, `E` edits
   the whole file in pi's editor. Every write archives the version before
@@ -365,6 +373,12 @@ planner), and those agents can look at what you drew and add to it.
   sessions are all look-only gets no drawing tool.
 - `t` **checks** the session: joins the room for a moment and says whether the
   server can be reached, who is in it, and how much is on the board. `r` renames it.
+- `orchestrate action=whiteboard [name=...]` lets the Master create its own
+  session: a room on the configured collaboration server, assigned to itself,
+  with the join link returned. Its seat (opened by `excalidraw_read` /
+  `excalidraw_draw`) holds the room alive for the pi session's lifetime, so it
+  needs no one else in the room. The room is not guaranteed to persist after
+  the last connection leaves.
 
 **What an assigned agent can do.** It gets two tools and the room link:
 `excalidraw_read` describes the board in words (shapes with their labels, arrows
@@ -651,6 +665,7 @@ unavailable, it runs again on the fallback instead of failing the task.
 | Scouts and the QA gate can't edit code | Scouts get read-only tools; the QA gate adds only `bash` for tests |
 | New dependencies and architecture changes need approval | Parsed from worker reports; the domain is blocked until resolved |
 | Only the Master writes knowledge | Agents can only propose it |
+| Knowledge is compacted before done | `complete` is refused while any knowledge file is over the threshold; disperse with `action=knowledge (domain=designer\|backend\|qa)`, then `action=compact` |
 | "Done" is earned | Needs a plan, a passing QA gate that ran checks (or your explicit acceptance), and no open blockers; on the fast track, a finished worker step, and QA's part only when the change needs tests |
 | Parallel workers don't clobber files | Edits need a file-desk claim |
 | A crash doesn't corrupt a task | State is on disk; tasks resume from their state |
