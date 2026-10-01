@@ -15,6 +15,7 @@ import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { commentMessage, markCommentsDelivered, readPlanComments, undeliveredComments } from "../state/comments.ts";
 import { inboxMessage, markInboxDelivered, markSessionInboxDelivered, readInbox, readSessionInbox } from "../state/inbox.ts";
 import { removePresence, writePresence } from "../state/presence.ts";
+import { currentWebServer } from "../webui/server.ts";
 import { isAutoMode, setAutoMode } from "../state/auto.ts";
 import { isSubagentProcess } from "./quiet.ts";
 import { isMinimized } from "./ui.ts";
@@ -119,6 +120,7 @@ export function heartbeat(): void {
       ...(name ? { name } : {}),
       ...(sessionFile ? { sessionFile } : {}),
       ...(live(task) ? { taskId: task.id } : {}),
+      ...(currentWebServer() ? { webPort: currentWebServer()!.port } : {}),
     });
   } catch {
     // A read-only project only means other windows do not see this one.
