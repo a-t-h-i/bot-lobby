@@ -20,6 +20,7 @@ import { ownerlessTask, readTaskArtifact, removeTaskScratchpads, saveTask, selec
 import { dataRoot, readDataRoots } from "../state/project.ts";
 import { appendCompletedTask, appendDecision, applyKnowledge, readFileOr, writeFileEnsured, type KnowledgeKind } from "../knowledge/store.ts";
 import { compactKnowledgeFile, overThreshold } from "../knowledge/compactor.ts";
+import { ExcalidrawBook } from "../excalidraw/sessions.ts";
 import { knowledgeDir, type KnowledgeAgent } from "../knowledge/paths.ts";
 import { writeScratchpad } from "../state/persistence.ts";
 import { spawnPiProcess, type ProcessRunner, type RelayAsk } from "../execution/pi-runner.ts";
@@ -75,6 +76,7 @@ export const ORCHESTRATE_ACTIONS = [
   "qa",
   "knowledge",
   "compact",
+  "whiteboard",
   "complete",
   "block",
   "resume",
@@ -112,6 +114,8 @@ export interface OrchestrateParams {
   kind?: KnowledgeKind;
   /** compact: the knowledge file being rewritten. */
   file?: string;
+  /** whiteboard: name for the new Excalidraw session. */
+  name?: string;
   approvalId?: string;
   decision?: "approved" | "rejected";
   note?: string;
@@ -1270,6 +1274,19 @@ function handleCompact(task: Task, params: OrchestrateParams, deps: WorkflowDeps
   return `Compacted ${agent}/${file}: ${outcome.before} -> ${outcome.after} chars. Previous version archived at ${outcome.archive}.`;
 }
 
+/**
+ * The Master creates its own whiteboard: a room on the configured server,
+ * assigned to itself so its seat keeps the room alive for this pi session.
+ */
+function handleWhiteboard(task: Task, params: OrchestrateParams, deps: WorkflowDeps): string {
+  const book = new ExcalidrawBook({ root: deps.root });
+  const made = book.create(params.name?.trim() || undefined);
+  if (!made.session) throw new Error(made.notice);
+  book.toggleAgent(made.session.id, "master");
+  recordDecision(task, `Created Excalidraw session "${made.session.name}" and assigned it to Master.`);
+  return `Created Excalidraw session "${made.session.name}" and assigned it to you. Join link: ${made.session.link}. Call excalidraw_read to open your seat; the connection stays open for this pi session and keeps the room alive without anyone else in it. It ends when the pi session ends.`;
+}
+
 /** §63: record history, drop scratchpads, then mark the task completed. */
 async function handleComplete(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
   // The fast track completes straight from its work; the full workflow from review.
@@ -1279,6 +1296,9 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
   if (task.state === "blocked") throw new Error("cannot complete: the task is blocked, and the user did not accept its work as it is");
   const blockers = completionBlockers(task, pendingApprovals(task).length);
   if (blockers.length > 0) throw new Error(`cannot complete: ${blockers.join("; ")}`);
+  // The gate refuses before any side effect, so a refusal leaves the task untouched.
+  const oversized = overThreshold(readDataRoots(deps.root, deps.configDir), deps.config.knowledge.compactionThreshold);
+  if (oversized.length > 0) throw new Error(`cannot complete: knowledge files over the compaction threshold: ${oversized.map((entry) => `${entry.agent}/${entry.file} (${entry.chars})`).join(", ")}. First record domain-relevant facts where they belong with action=knowledge (domain=designer|backend|qa), then rewrite each oversized file with action=compact, then call complete again.`);
   const summary = params.text?.trim() || task.proposal || task.title;
   flushDecisions(deps, task);
   recordCompletion(deps, task, summary);
@@ -1286,12 +1306,7 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
   task.blockers = [];
   if (task.state === "implementing") transition(task, "reviewing");
   transition(task, "completed");
-  const oversized = overThreshold(readDataRoots(deps.root, deps.configDir), deps.config.knowledge.compactionThreshold);
-  const advice =
-    oversized.length > 0
-      ? `\nKnowledge files over the compaction threshold: ${oversized.map((entry) => `${entry.agent}/${entry.file} (${entry.chars})`).join(", ")}. Compact them with action=compact when convenient.`
-      : "";
-  return `Task ${task.id} completed. History recorded and temporary scratchpads removed.${advice}`;
+  return `Task ${task.id} completed. History recorded and temporary scratchpads removed.`;
 }
 
 /** Asked when the oracle completes a task QA has not passed (the user told it to finish, say). */
@@ -1653,6 +1668,7 @@ const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams
   qa: handleQa,
   knowledge: handleKnowledge,
   compact: handleCompact,
+  whiteboard: handleWhiteboard,
   complete: handleComplete,
   block: handleBlock,
   resume: handleResume,
