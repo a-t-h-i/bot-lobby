@@ -11,11 +11,11 @@ import {
   IssuesTab,
   KnowledgeTab,
   MetricsTab,
-  PlanTab,
-  SessionsTab,
   SettingsTab,
 } from "./placeholders"
+import { PlanTab } from "./plan/PlanTab"
 import { QuickfixTab } from "./quickfix/QuickfixTab"
+import { SessionsTab } from "./sessions/SessionsTab"
 import { TasksTab } from "./tasks/TasksTab"
 
 /** The first path segment after the tab, decoded (`#/tasks/T-1` → `T-1`). */
@@ -31,7 +31,7 @@ function detailId(rest: string[]): string | undefined {
 
 export function routeBody(route: Route): ReactNode {
   if (route.kind === "settings") return <SettingsTab />
-  if (route.kind === "sessions") return <SessionsTab detail={route.key} />
+  if (route.kind === "sessions") return <SessionsTab id={detailId(route.key ? [route.key] : [])} />
   const detail = route.rest.length > 0 ? route.rest.join(" / ") : undefined
   switch (route.tab) {
     case "lobby":
@@ -39,7 +39,7 @@ export function routeBody(route: Route): ReactNode {
     case "tasks":
       return <TasksTab id={detailId(route.rest)} />
     case "plan":
-      return <PlanTab detail={detail} />
+      return <PlanTab />
     case "quickfix":
       return <QuickfixTab id={detailId(route.rest)} />
     case "issues":
