@@ -305,6 +305,171 @@ export interface ExcalidrawCheck {
   text: string;
 }
 
+/** `tasks.get`: one task read whole, in the terminal's wording. */
+export interface TaskDetail {
+  /** The full request, when it says more than the title. */
+  request?: string;
+  /** The oracle's proposal, while the task has no approved plan yet. */
+  proposal?: string;
+  /** The approved plan in Markdown. */
+  plan?: string;
+  /** The plan as a checklist, in order; `current` is the step under way. */
+  steps: Array<{ text: string; status: "done" | "current" | "open" }>;
+  amendments: string[];
+  /** Approvals waiting on you: `kind` plus `for <domain>: <detail>`. */
+  waiting: Array<{ kind: string; detail: string }>;
+  blockers: Array<{ reason: string; need: string }>;
+  /** The last six runs, one line each (`✓ DEV worker · 3m 12s · …`). */
+  runs: string[];
+}
+
+/** `plans.get`: one saved plan. */
+export interface PlanDetail {
+  id: string;
+  title: string;
+  status: "pending" | "started";
+  createdAt: string;
+  /** The agreed plan in Markdown. */
+  brief: string;
+  issue?: { number: number; title: string; url?: string };
+  /** Set when the plan was split: this is `part` of `of`, with every part's title. */
+  split?: { part: number; of: number; titles: string[]; after: number[] };
+  startedTaskId?: string;
+}
+
+/** The checks of a pull request as one state. */
+export type PullChecks = "passing" | "failing" | "pending";
+
+/** How a pull request's review stands, for the list's marks. */
+export interface PullReviewMark {
+  status: "running" | "done" | "failed" | "cancelled" | "timeout";
+  verdict?: "approve" | "changes" | "comment";
+  /** The pull request has commits the review did not see. */
+  stale: boolean;
+}
+
+/** One open pull request in the Git list. */
+export interface PullInfo {
+  number: number;
+  title: string;
+  author?: string;
+  headRef: string;
+  baseRef: string;
+  draft: boolean;
+  updatedAt?: string;
+  url?: string;
+  additions: number;
+  deletions: number;
+  changedFiles: number;
+  decision?: string;
+  checks?: PullChecks;
+  checkCount: number;
+  labels: string[];
+  review?: PullReviewMark;
+}
+
+/** One changed file. */
+export interface PullFileInfo {
+  path: string;
+  additions: number;
+  deletions: number;
+}
+
+/** A review or a comment on a pull request. */
+export interface PullNoteInfo {
+  author?: string;
+  body: string;
+  at?: string;
+  state?: string;
+}
+
+/** A pull request with its description, files and discussion. */
+export interface PullDetailInfo extends PullInfo {
+  body: string;
+  state?: string;
+  mergeable?: string;
+  files: PullFileInfo[];
+  notes: PullNoteInfo[];
+}
+
+/** The agent's review of a pull request (never posted to GitHub). */
+export interface PullReviewInfo {
+  number: number;
+  status: "running" | "done" | "failed" | "cancelled" | "timeout";
+  focus?: string;
+  startedAt: number;
+  finishedAt?: number;
+  steps: string[];
+  text?: string;
+  verdict?: "approve" | "changes" | "comment";
+  error?: string;
+  model?: string;
+  thinking?: string;
+  stale: boolean;
+  /** Kept from an earlier session rather than run now. */
+  saved?: boolean;
+}
+
+/** Jev's quick read of a pull request. */
+export interface PullReadInfo {
+  number: number;
+  status: "running" | "done" | "failed";
+  line?: string;
+  error?: string;
+  read?: {
+    size: string;
+    sizeConfidence: number;
+    risky: number;
+    breaking: number;
+    security: number;
+    testsMissing: number;
+    kind?: string;
+    kindProbability?: number;
+    model: string;
+    ms: number;
+  };
+}
+
+/** `git.pulls`: the open pull requests, or why they could not be read. */
+export interface GitPulls {
+  pulls: PullInfo[];
+  loading: boolean;
+  loaded: boolean;
+  error?: string;
+}
+
+/** `git.pull`: one pull request with our review and Jev's read of it. */
+export interface GitPull {
+  pull: PullDetailInfo;
+  review?: PullReviewInfo;
+  read?: PullReadInfo;
+}
+
+/** One open issue in the Issues list. */
+export interface IssueInfo {
+  number: number;
+  title: string;
+  labels: string[];
+  author?: string;
+  updatedAt?: string;
+  url?: string;
+}
+
+/** An issue with its description and comments. */
+export interface IssueDetailInfo extends IssueInfo {
+  body: string;
+  state?: string;
+  comments: Array<{ author?: string; body: string; createdAt?: string }>;
+}
+
+/** `issues.list`: the open issues, or why they could not be read. */
+export interface IssuesList {
+  issues: IssueInfo[];
+  loading: boolean;
+  loaded: boolean;
+  error?: string;
+}
+
 /** The calls the server answers: `POST /api/<name>` with the request as the JSON body. */
 export interface Api {
   "status.get": { request: Record<string, never>; result: StatusInfo };
@@ -321,6 +486,8 @@ export interface Api {
   "tasks.delete": { request: { taskId: string; where: "list" | "archive" }; result: { notice: string } };
   "tasks.auto": { request: { taskId: string; on: boolean }; result: { notice: string; on: boolean } };
   "tasks.message": { request: { taskId: string; text: string }; result: { notice: string } };
+  "tasks.get": { request: { taskId: string }; result: TaskDetail };
+  "plans.get": { request: { planId: string }; result: PlanDetail };
   "plans.start": { request: { planId: string; where: "here" | "session"; auto?: boolean }; result: { notice: string; key?: string } };
   "plans.discard": { request: { planId: string }; result: { notice: string } };
   "sessions.list": { request: Record<string, never>; result: { background: BackgroundSessionInfo[]; live: LiveSession[] } };
@@ -365,6 +532,14 @@ export interface Api {
   "excalidraw.toggleContribute": { request: { id: string }; result: { notice: string } };
   "excalidraw.check": { request: { id: string }; result: ExcalidrawCheck };
   "excalidraw.reveal": { request: { id: string }; result: { link: string } };
+  "git.pulls": { request: { refresh?: boolean }; result: GitPulls };
+  "git.pull": { request: { number: number }; result: GitPull };
+  "git.review": { request: { number: number; focus?: string }; result: { notice: string } };
+  "git.cancelReview": { request: { number: number }; result: { notice: string } };
+  "git.jev": { request: { number: number }; result: { notice: string } };
+  "issues.list": { request: { refresh?: boolean }; result: IssuesList };
+  "issues.get": { request: { number: number }; result: { issue: IssueDetailInfo } };
+  "issues.create": { request: { text: string }; result: { notice: string } };
 }
 
 export type ApiName = keyof Api;
