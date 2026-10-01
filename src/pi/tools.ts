@@ -58,6 +58,7 @@ const OrchestrateSchema = Type.Object({
   roster: Type.Optional(Type.Array(Type.String(), { description: "track: who takes part — any of designer, backend, qa, researcher" })),
   text: Type.Optional(Type.String({ description: "decide/complete/knowledge: the decision, completion summary, or knowledge text" })),
   file: Type.Optional(Type.String({ description: "compact: the knowledge file to rewrite, e.g. knowledge.md" })),
+  name: Type.Optional(Type.String({ description: "whiteboard: name for the new Excalidraw session" })),
   kind: Type.Optional(
     StringEnum(["knowledge", "standard", "decision", "completed"] as const, {
       description: "knowledge: which persistent file the text belongs to",
@@ -72,7 +73,7 @@ const DESCRIPTION = [
   "dependency), propose (record the proposal and request approval), plan (record the internal",
   "plan, or amend it later with the full revised plan), implement (delegate a step to a domain worker, or several domains in parallel with assignments), qa (final quality gate and the only",
   "review), knowledge (record approved knowledge or a decision),",
-  "compact (replace a knowledge file with a rewritten version, archiving the old one),",
+  "compact (replace a knowledge file with a rewritten version, archiving the old one, dispersing domain-relevant facts to action=knowledge (domain=designer|backend|qa) first), whiteboard (create your own Excalidraw session and assign it to yourself),",
   "resolve_approval (approve or reject a request), complete (declare the task done after the gates",
   "pass), block/resume (escalate or continue), budget (under a time budget: where it stands, or ask the",
   "user for more minutes with a reason), track (the task's path and who takes part: show it, or correct it with",

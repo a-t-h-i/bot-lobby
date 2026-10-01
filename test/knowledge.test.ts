@@ -1,8 +1,11 @@
-import { test } from "node:test";
+import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ExcalidrawBook } from "../src/excalidraw/sessions.ts";
+import { overThreshold } from "../src/knowledge/compactor.ts";
+import { readDataRoots } from "../src/state/project.ts";
 import {
   appendCompletedTask,
   appendDecision,
@@ -20,6 +23,26 @@ import { transition } from "../src/state/task-state.ts";
 import { knowledgeDir } from "../src/knowledge/paths.ts";
 import { selectKnowledge } from "../src/knowledge/selector.ts";
 import { runWorkflowAction, type OrchestrateParams, type WorkflowDeps } from "../src/workflow/workflow.ts";
+
+// Hermetic whiteboard sessions: the book lives under the user-global config dir,
+// so park the ambient gates and point it at a temp dir for this file.
+let ambientConfig: string | undefined;
+let ambientSubagent: string | undefined;
+let ambientDevSubagent: string | undefined;
+before(() => {
+  ambientConfig = process.env.BOT_LOBBY_CONFIG_DIR;
+  ambientSubagent = process.env.BOT_LOBBY_SUBAGENT;
+  ambientDevSubagent = process.env.DEV_LOBBY_SUBAGENT;
+  process.env.BOT_LOBBY_CONFIG_DIR = mkdtempSync(join(tmpdir(), "bl-kb-cfg-"));
+  delete process.env.BOT_LOBBY_SUBAGENT;
+  delete process.env.DEV_LOBBY_SUBAGENT;
+});
+after(() => {
+  if (ambientConfig === undefined) delete process.env.BOT_LOBBY_CONFIG_DIR;
+  else process.env.BOT_LOBBY_CONFIG_DIR = ambientConfig;
+  if (ambientSubagent !== undefined) process.env.BOT_LOBBY_SUBAGENT = ambientSubagent;
+  if (ambientDevSubagent !== undefined) process.env.DEV_LOBBY_SUBAGENT = ambientDevSubagent;
+});
 
 function dataRootFor(): string {
   const root = mkdtempSync(join(tmpdir(), "dh-k-"));
@@ -176,4 +199,69 @@ test("context selection keeps only task-relevant knowledge", () => {
   const selected = selectKnowledge("auth sessions", { knowledge: readFileOr(path) }, 70);
   assert.match(selected.knowledge, /Auth/);
   assert.doesNotMatch(selected.knowledge, /Billing/);
+});
+
+test("complete is refused while knowledge is over the threshold, then succeeds after compact", async () => {
+  const deps = makeDeps();
+  deps.config = { ...DEFAULT_CONFIG, knowledge: { ...DEFAULT_CONFIG.knowledge, compactionThreshold: 20 } };
+  const task = withTask(deps, "reviewing");
+  task.domains = ["backend"];
+  task.plan = "plan mentions files, sequence, dependencies, testing, acceptance, rollback, review";
+  task.qaVerdict = "pass";
+  task.decisions.push({ domain: "backend", text: "Use the existing query builder.", createdAt: "2026-01-01T00:00:00.000Z" });
+  saveTask(deps.root, deps.configDir, task);
+  const dataRoot = join(deps.root, ".pi", "bot-lobby");
+  const decisionsPath = join(knowledgeDir(dataRoot, "backend"), "decisions.md");
+  const before = readFileOr(decisionsPath);
+
+  const refused = await act(deps, { action: "complete" });
+  assert.equal(refused.ok, false, refused.message);
+  assert.match(refused.message, /compaction threshold/);
+  assert.match(refused.message, /action=knowledge \(domain=designer\|backend\|qa\)/);
+  assert.match(refused.message, /action=compact/);
+  assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.state, "reviewing", "a refusal leaves the task untouched");
+  assert.equal(readFileOr(decisionsPath), before, "a refusal flushes no decisions");
+
+  const oversized = overThreshold(readDataRoots(deps.root, deps.configDir), 20);
+  assert.ok(oversized.length > 0, "a seeded file is over the low threshold");
+  for (const entry of oversized) {
+    const rewritten = await act(deps, { action: "compact", domain: entry.agent, file: entry.file, text: "tidy" });
+    assert.equal(rewritten.ok, true, rewritten.message);
+  }
+  const done = await act(deps, { action: "complete" });
+  assert.equal(done.ok, true, done.message);
+  assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.state, "completed");
+});
+
+test("whiteboard creates a session for Master and returns its join link", async () => {
+  const deps = makeDeps();
+  withTask(deps, "implementing");
+  const result = await act(deps, { action: "whiteboard" });
+  assert.equal(result.ok, true, result.message);
+  assert.match(result.message, /Join link:/);
+  assert.match(result.message, /excalidraw_read/);
+  const sessions = new ExcalidrawBook({ root: deps.root }).list();
+  assert.equal(sessions.length, 1);
+  assert.deepEqual(sessions[0]!.agents, ["master"]);
+  assert.ok(result.message.includes(sessions[0]!.link), "the join link is the session's link");
+});
+
+test("whiteboard honours a name and refuses when the book is full", async () => {
+  const deps = makeDeps();
+  withTask(deps, "implementing");
+  const named = await act(deps, { action: "whiteboard", name: "Plan" });
+  assert.equal(named.ok, true, named.message);
+  assert.match(named.message, /"Plan"/);
+  assert.match(named.message, /Join link:/);
+  const sessions = new ExcalidrawBook({ root: deps.root }).list();
+  assert.equal(sessions[0]!.name, "Plan");
+  assert.deepEqual(sessions[0]!.agents, ["master"]);
+
+  const fullDeps = makeDeps();
+  withTask(fullDeps, "implementing");
+  const book = new ExcalidrawBook({ root: fullDeps.root });
+  for (let index = 0; index < 5; index += 1) assert.ok(book.create(`Board ${index + 1}`).session);
+  const full = await act(fullDeps, { action: "whiteboard" });
+  assert.equal(full.ok, false);
+  assert.match(full.message, /all 5 sessions are in use/);
 });
