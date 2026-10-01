@@ -8,13 +8,15 @@
  * `layout.ts` and would load the TUI (`@earendil-works/pi-tui`) into the
  * server. The one type import above is erased at compile time.
  */
-import { TERMINAL_STATES, type Task } from "../../schemas/task.ts";
+import { TERMINAL_STATES, taskRequest, type Task } from "../../schemas/task.ts";
 import type { PlannedTask } from "../../state/backlog.ts";
-import type { AgentRun } from "../../schemas/findings.ts";
-import { planChecklist } from "../../pi/plan-checklist.ts";
+import { describeRun, runFromLog } from "../../pi/run-summary.ts";
+import { pendingApprovals } from "../../workflow/approvals.ts";
 import type { TaskRow } from "../../lobby/tabs/tasks.ts";
+import type { TaskDetail } from "../protocol.ts";
 import type { ApiContext } from "./index.ts";
 import { fail } from "./index.ts";
+import { taskSteps } from "./plan-facts.ts";
 import type { TaskSection } from "../../lobby/tabs/tasks.ts";
 
 interface RowContext {
@@ -29,25 +31,8 @@ function checkOf(task: Task): TaskRow["check"] {
   return "open";
 }
 
-/** Worker runs as the checklist reads them (mirrors the lobby snapshot's projection). */
-function runsOf(task: Task): AgentRun[] {
-  return (task.workerRuns ?? []).map((record) => ({
-    runId: record.runId,
-    taskId: task.id,
-    domain: record.domain,
-    role: "worker" as const,
-    status: record.status,
-    instruction: record.instruction,
-    output: "",
-    attempts: 1,
-    startedAt: record.startedAt,
-    ...(record.finishedAt ? { finishedAt: record.finishedAt } : {}),
-  }));
-}
-
 function progressOf(task: Task): TaskRow["progress"] {
-  if (!task.plan) return undefined;
-  const steps = planChecklist(task.plan, runsOf(task));
+  const steps = taskSteps(task);
   if (steps.length === 0) return undefined;
   return { done: steps.filter((step) => step.status === "done").length, total: steps.length };
 }
@@ -189,4 +174,31 @@ export function tasksAuto(body: { taskId: string; on: boolean }, ctx: ApiContext
 export function tasksMessage(body: { taskId: string; text: string }, ctx: ApiContext): { notice: string } {
   if (!body.text.trim()) return { notice: "type something first" };
   return { notice: ctx.service.sendToTask(body.taskId, body.text) };
+}
+
+/** How many recent runs the detail lists (the terminal's count). */
+const DETAIL_RUNS = 6;
+
+/** The terminal's "Waiting on" approvals: `kind` plus `for <domain>: <detail>`. */
+function waitingOf(task: Task): TaskDetail["waiting"] {
+  return pendingApprovals(task).map((approval) => ({ kind: approval.kind, detail: `for ${approval.domain}: ${approval.detail}` }));
+}
+
+/** One task read whole: request, plan or proposal, step checklist, waits and recent runs. */
+export function tasksGet(body: { taskId: string }, ctx: ApiContext): TaskDetail {
+  const task = [...ctx.service.tasks(), ...ctx.service.archivedTasks()].find((entry) => entry.id === body.taskId);
+  if (!task) fail(404, "not_found", `no task ${body.taskId}`);
+  const found = task as Task;
+  const request = taskRequest(found);
+  const now = Date.now();
+  return {
+    ...(request !== found.title ? { request } : {}),
+    ...(!found.plan && found.proposal ? { proposal: found.proposal } : {}),
+    ...(found.plan ? { plan: found.plan } : {}),
+    steps: taskSteps(found).map((step) => ({ text: step.text, status: step.status === "pending" ? "open" : step.status })),
+    amendments: [...found.amendments],
+    waiting: waitingOf(found),
+    blockers: found.blockers.map((blocker) => ({ reason: blocker.reason, need: blocker.need })),
+    runs: (found.runLog ?? []).slice(-DETAIL_RUNS).map((entry) => describeRun(runFromLog(entry, found.id), now)),
+  };
 }
