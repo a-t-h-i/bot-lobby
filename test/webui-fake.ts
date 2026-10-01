@@ -12,6 +12,7 @@ export function fakeWebService(feed = new LobbyFeed()): LobbyService {
     sessionId: () => "session-1",
     sessionName: () => "test session",
     masterBusy: () => false,
+    models: () => [{ id: "mock/model", label: "Mock Model", thinkingLevels: ["low", "medium", "high"] }],
     issuesEnabled: () => false,
     workspace: () => ({ name: "bot-lobby", branch: "main" }),
     zen: () => ({ runs: [] }),
