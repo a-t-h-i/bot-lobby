@@ -13,6 +13,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { Toaster } from "@/components/ui/sonner"
 
 export function App() {
   return (
@@ -47,6 +48,7 @@ export function App() {
           </Sheet>
         </div>
       </main>
+      <Toaster />
     </TooltipProvider>
   )
 }

@@ -17,7 +17,9 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@protocol": ["../src/webui/protocol.ts"],
+      "@shared": ["../src/lobby/prompts.ts"]
     }
   },
   "include": ["src"]
