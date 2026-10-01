@@ -4,15 +4,10 @@
  */
 import type { ReactNode } from "react"
 import type { Route } from "@/app/router"
+import { KnowledgeTab } from "./knowledge/KnowledgeTab"
 import { LobbyTab } from "./lobby/LobbyTab"
-import {
-  ExcalidrawTab,
-  GitTab,
-  IssuesTab,
-  KnowledgeTab,
-  MetricsTab,
-  SettingsTab,
-} from "./placeholders"
+import { MetricsTab } from "./metrics/MetricsTab"
+import { ExcalidrawTab, GitTab, IssuesTab, SettingsTab } from "./placeholders"
 import { PlanTab } from "./plan/PlanTab"
 import { QuickfixTab } from "./quickfix/QuickfixTab"
 import { SessionsTab } from "./sessions/SessionsTab"
@@ -45,11 +40,11 @@ export function routeBody(route: Route): ReactNode {
     case "issues":
       return <IssuesTab detail={detail} />
     case "metrics":
-      return <MetricsTab detail={detail} />
+      return <MetricsTab />
     case "git":
       return <GitTab detail={detail} />
     case "knowledge":
-      return <KnowledgeTab detail={detail} />
+      return <KnowledgeTab agent={route.rest[0]} file={route.rest[1]} />
     case "excalidraw":
       return <ExcalidrawTab detail={detail} />
   }
