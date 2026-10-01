@@ -51,7 +51,7 @@ function taskOf(ctx: ApiContext): LobbySnapshot["task"] {
     title: task.title,
     state: task.state,
     ...(task.track ? { track: { path: task.track.path, size: task.track.size } } : {}),
-    domains: [...task.domains],
+    domains: [...(task.domains ?? [])],
     ...(task.git ? { git: { branch: task.git.branch, ...(task.git.from ? { from: task.git.from } : {}) } } : {}),
     ...planFacts(task),
   };
