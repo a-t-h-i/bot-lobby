@@ -10,7 +10,7 @@
 import { appendFileSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { Domain } from "../schemas/agent.ts";
-import type { ChangeBaseline, Task } from "../schemas/task.ts";
+import type { Task } from "../schemas/task.ts";
 import { dataRoot } from "./project.ts";
 
 export type ChangeSource = "quickfix" | "worker";

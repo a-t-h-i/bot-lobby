@@ -24,7 +24,7 @@ import { MEMBER_LABELS, ORACLE_LABEL, type PlannerSeed, type PlanningSession } f
 import { issueText, type IssuesState } from "./issues.ts";
 import { agentsIndicator, workingAgents } from "./mini.ts";
 import { actionFor, keyLabel, keyMap, LOBBY_ACTIONS, tabJumpKey, type KeyMap, type LobbyAction } from "./keys.ts";
-import { beside, BRANCH_GLYPH, bold, box, fit, highlight, pageStep, pagerButton, paint, rule, selectRow, spinner, spread, windowStart, wrap, wrapHanging, type LobbyTheme, type PaneBox, type PaneLayout, type PaneMark } from "./layout.ts";
+import { beside, BRANCH_GLYPH, bold, box, fit, highlight, pageStep, pagerButton, paint, rule, selectRow, spinner, spread, windowStart, wrapHanging, type LobbyTheme, type PaneBox, type PaneLayout, type PaneMark } from "./layout.ts";
 import { chatTail, HOME_PANES, renderHome, type HomePane } from "./tabs/home.ts";
 import { filterRows, pips, planDetailLines, renderTasks, taskDetailLines, taskProgress, taskRows, tasksWidths, type TaskRow } from "./tabs/tasks.ts";
 import { renderPlan, type PlanLayout, type PlanView, type SeatView } from "./tabs/plan.ts";
