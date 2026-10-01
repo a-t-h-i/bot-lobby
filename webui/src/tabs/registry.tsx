@@ -7,9 +7,10 @@ import type { Route } from "@/app/router"
 import { GitTab } from "./git/GitTab"
 import { IssuesTab } from "./issues/IssuesTab"
 import { KnowledgeTab } from "./knowledge/KnowledgeTab"
+import { ExcalidrawTab } from "./excalidraw/ExcalidrawTab"
 import { LobbyTab } from "./lobby/LobbyTab"
 import { MetricsTab } from "./metrics/MetricsTab"
-import { ExcalidrawTab, SettingsTab } from "./placeholders"
+import { SettingsTab } from "./placeholders"
 import { PlanTab } from "./plan/PlanTab"
 import { QuickfixTab } from "./quickfix/QuickfixTab"
 import { SessionsTab } from "./sessions/SessionsTab"
@@ -29,7 +30,6 @@ function detailId(rest: string[]): string | undefined {
 export function routeBody(route: Route): ReactNode {
   if (route.kind === "settings") return <SettingsTab />
   if (route.kind === "sessions") return <SessionsTab id={detailId(route.key ? [route.key] : [])} />
-  const detail = route.rest.length > 0 ? route.rest.join(" / ") : undefined
   switch (route.tab) {
     case "lobby":
       return <LobbyTab />
@@ -48,6 +48,6 @@ export function routeBody(route: Route): ReactNode {
     case "knowledge":
       return <KnowledgeTab agent={route.rest[0]} file={route.rest[1]} />
     case "excalidraw":
-      return <ExcalidrawTab detail={detail} />
+      return <ExcalidrawTab id={detailId(route.rest)} />
   }
 }
