@@ -88,6 +88,18 @@ export interface ScenarioFixture {
   };
   /** Quick-fix jobs for the `quickfix.*` calls, oldest first (absent means none). */
   mockQuickfix?: Array<Record<string, unknown>>;
+  /** Metric records for `metrics.get` (absent means none). */
+  mockMetrics?: Array<Record<string, unknown>>;
+  /** Classifier records for `metrics.get` (absent means none). */
+  mockClassifierMetrics?: Array<Record<string, unknown>>;
+  /** Knowledge files for `knowledge.files` (absent means none). */
+  mockKnowledge?: Array<{ agent: string; file: string; label: string; chars: number; over: boolean; notes: number }>;
+  /** One open knowledge file for `knowledge.open` (absent means an empty file). */
+  mockKnowledgeView?: { agent: string; file: string; label: string; chars: number; over: boolean; notes: number; content: string; entries: Array<Record<string, unknown>>; attached: Array<Record<string, unknown>>; detached: Array<Record<string, unknown>> };
+  /** Excalidraw sessions for `excalidraw.list` (masked links only; absent means none). */
+  mockExcalidraw?: Array<{ id: string; name: string; masked: string; agents: string[]; contribute: boolean; addedAt: string }>;
+  /** The full link `excalidraw.reveal` returns (absent means none). */
+  mockExcalidrawLink?: string;
 }
 
 /** Whether `value` names a scenario. */
@@ -143,5 +155,11 @@ export function loadScenario(name: string | undefined): ScenarioFixture {
     liveSessions: Array.isArray(parsed.liveSessions) ? (parsed.liveSessions as ScenarioFixture["liveSessions"]) : [],
     mockPlanner: isRecord(parsed.mockPlanner) ? (parsed.mockPlanner as unknown as ScenarioFixture["mockPlanner"]) : undefined,
     mockQuickfix: Array.isArray(parsed.mockQuickfix) ? (parsed.mockQuickfix as ScenarioFixture["mockQuickfix"]) : [],
+    mockMetrics: Array.isArray(parsed.mockMetrics) ? (parsed.mockMetrics as ScenarioFixture["mockMetrics"]) : [],
+    mockClassifierMetrics: Array.isArray(parsed.mockClassifierMetrics) ? (parsed.mockClassifierMetrics as ScenarioFixture["mockClassifierMetrics"]) : [],
+    mockKnowledge: Array.isArray(parsed.mockKnowledge) ? (parsed.mockKnowledge as ScenarioFixture["mockKnowledge"]) : [],
+    mockKnowledgeView: isRecord(parsed.mockKnowledgeView) ? (parsed.mockKnowledgeView as unknown as ScenarioFixture["mockKnowledgeView"]) : undefined,
+    mockExcalidraw: Array.isArray(parsed.mockExcalidraw) ? (parsed.mockExcalidraw as ScenarioFixture["mockExcalidraw"]) : [],
+    mockExcalidrawLink: typeof parsed.mockExcalidrawLink === "string" ? (parsed.mockExcalidrawLink as string) : undefined,
   };
 }
