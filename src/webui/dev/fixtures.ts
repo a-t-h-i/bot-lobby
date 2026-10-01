@@ -61,6 +61,20 @@ export interface ScenarioFixture {
   oracleReply: string;
   /** Opened through `promptHub` shortly after a send, if any. */
   questionAfterSend: FixturePrompt | null;
+  /** Tasks backing `tasks.list` (absent means none). */
+  mockTasks?: Array<Record<string, unknown>>;
+  /** Saved plans backing `plans.start`/`plans.discard` and the pending rows. */
+  mockPlans?: Array<{ id: string; title: string; brief: string }>;
+  /** Archived tasks backing `tasks.archived`. */
+  mockArchived?: Array<Record<string, unknown>>;
+  /** Task ids with auto mode on. */
+  autoTasks?: string[];
+  /** Comments by task id for `tasks.comments`. */
+  taskComments?: Record<string, Array<Record<string, unknown>>>;
+  /** Background sessions for `sessions.list` (plain data, made live below). */
+  backgroundSessions?: Array<{ key: string; name: string; status: string; sessionId?: string; planId?: string; dialogs?: Array<Record<string, unknown>> }>;
+  /** Live sessions in other terminals for `sessions.list`. */
+  liveSessions?: Array<{ sessionId: string; pid: number; name?: string; taskId?: string; mode: string }>;
 }
 
 /** Whether `value` names a scenario. */
@@ -107,5 +121,12 @@ export function loadScenario(name: string | undefined): ScenarioFixture {
     ...(parsed as unknown as ScenarioFixture),
     settled: Array.isArray(parsed.settled) ? (parsed.settled as ScenarioFixture["settled"]) : [],
     questionAfterSend: isRecord(parsed.questionAfterSend) ? (parsed.questionAfterSend as unknown as FixturePrompt) : null,
+    taskComments: isRecord(parsed.taskComments) ? (parsed.taskComments as ScenarioFixture["taskComments"]) : {},
+    mockTasks: Array.isArray(parsed.mockTasks) ? (parsed.mockTasks as ScenarioFixture["mockTasks"]) : [],
+    mockPlans: Array.isArray(parsed.mockPlans) ? (parsed.mockPlans as ScenarioFixture["mockPlans"]) : [],
+    mockArchived: Array.isArray(parsed.mockArchived) ? (parsed.mockArchived as ScenarioFixture["mockArchived"]) : [],
+    autoTasks: Array.isArray(parsed.autoTasks) ? (parsed.autoTasks as string[]) : [],
+    backgroundSessions: Array.isArray(parsed.backgroundSessions) ? (parsed.backgroundSessions as ScenarioFixture["backgroundSessions"]) : [],
+    liveSessions: Array.isArray(parsed.liveSessions) ? (parsed.liveSessions as ScenarioFixture["liveSessions"]) : [],
   };
 }

@@ -5,9 +5,15 @@
  */
 import type { LobbyTopic } from "../lobby/topics.ts";
 import type { WebPrompt } from "../lobby/prompt-hub.ts";
+import type { DialogAnswer, SessionDialog } from "../lobby/sessions.ts";
+import type { LiveSession } from "../lobby/view.ts";
+import type { TaskRow } from "../lobby/tabs/tasks.ts";
+import type { PlanComment } from "../state/comments.ts";
 
 export type { WebPrompt };
 export type { LobbyTopic };
+export type { DialogAnswer, SessionDialog, TaskRow, PlanComment };
+export type { LiveSession };
 
 /** Every API answer: the result, or why not. */
 export type ApiReply<T> = { ok: true; result: T } | { ok: false; error: string; code: ErrorCode };
@@ -109,6 +115,20 @@ export interface LobbySnapshot {
   hasOlderChat: boolean;
 }
 
+/** One background session as `sessions.list` describes it. */
+export interface BackgroundSessionInfo {
+  key: string;
+  name: string;
+  status: string;
+  busy: boolean;
+  alive: boolean;
+  sessionId?: string;
+  planId?: string;
+  /** Questions it waits on you for. */
+  waiting: number;
+  dialogs: SessionDialog[];
+}
+
 /** One message on the event stream (`GET /api/events`, server-sent events). */
 export type StreamEvent =
   | { type: "hello"; versions: Partial<Record<LobbyTopic, number>> }
@@ -123,6 +143,24 @@ export interface Api {
   "lobby.history": { request: { before?: number }; result: { entries: unknown[]; hasOlder: boolean } };
   "lobby.send": { request: { text: string }; result: { notice?: string } };
   "lobby.abort": { request: Record<string, never>; result: Record<string, never> };
+  "tasks.list": { request: Record<string, never>; result: { rows: TaskRow[] } };
+  "tasks.archived": { request: Record<string, never>; result: { rows: TaskRow[] } };
+  "tasks.comments": { request: { taskId: string }; result: { comments: PlanComment[] } };
+  "tasks.comment": { request: { taskId: string; text: string }; result: { notice?: string } };
+  "tasks.archive": { request: { taskId: string }; result: { notice: string } };
+  "tasks.restore": { request: { taskId: string }; result: { notice: string } };
+  "tasks.delete": { request: { taskId: string; where: "list" | "archive" }; result: { notice: string } };
+  "tasks.auto": { request: { taskId: string; on: boolean }; result: { notice: string; on: boolean } };
+  "tasks.message": { request: { taskId: string; text: string }; result: { notice: string } };
+  "plans.start": { request: { planId: string; where: "here" | "session"; auto?: boolean }; result: { notice: string; key?: string } };
+  "plans.discard": { request: { planId: string }; result: { notice: string } };
+  "sessions.list": { request: Record<string, never>; result: { background: BackgroundSessionInfo[]; live: LiveSession[] } };
+  "sessions.chat": { request: { key?: string; sessionId?: string; before?: number }; result: { entries: unknown[]; hasOlder: boolean } };
+  "sessions.start": { request: { request?: string; planId?: string; auto?: boolean }; result: { notice: string; key?: string } };
+  "sessions.stop": { request: { key: string }; result: { notice: string } };
+  "sessions.message": { request: { key?: string; sessionId?: string; text: string }; result: { notice?: string } };
+  "sessions.switch": { request: { key?: string; sessionId?: string; claimTaskId?: string }; result: { notice: string } };
+  "sessions.answer": { request: { key: string; dialogId: string; answer: DialogAnswer }; result: { notice: string } };
   "prompts.list": { request: Record<string, never>; result: { prompts: WebPrompt[] } };
   "prompts.answer": { request: { id: string; answer: unknown }; result: { notice?: string } };
   "prompts.dismiss": { request: { id: string }; result: Record<string, never> };
