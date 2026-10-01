@@ -96,7 +96,7 @@ export function PromptSlideout({ prompts, answer, dismiss }: PromptSlideoutProps
         <div className="flex max-h-[50svh] flex-col gap-3 overflow-y-auto px-4 py-3">
           <div className="flex items-center gap-2">
             <QueueTitle prompt={identified} index={at} total={count} />
-            <Button type="button" variant="ghost" size="sm" className="h-9" onClick={() => setMinimized(true)}>
+            <Button type="button" variant="ghost" size="sm" className="h-10" onClick={() => setMinimized(true)}>
               Minimise
             </Button>
           </div>
@@ -134,7 +134,7 @@ export function PromptSlideout({ prompts, answer, dismiss }: PromptSlideoutProps
             {count > 1 ? ` · ${at + 1} of ${count}` : ""}
             {view ? ` · ${promptSummary(view)}` : ""}
           </span>
-          <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => setMinimized(false)}>
+          <Button type="button" variant="outline" size="sm" className="h-10" onClick={() => setMinimized(false)}>
             Reopen
           </Button>
         </div>
