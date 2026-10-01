@@ -63,7 +63,10 @@ test("index.html replaces every nonce placeholder and the CSP carries the same n
     const occurrences = first.body.split(nonce).length - 1;
     assert.ok(occurrences >= 3, `the nonce occurs in the body, got ${occurrences}`);
     const csp = String(first.headers["content-security-policy"]);
-    assert.ok(csp.includes(`'nonce-${nonce}'`), "the CSP header carries the same nonce");
+    assert.ok(csp.includes(`script-src 'self' 'nonce-${nonce}'`), "script-src stays nonce-locked");
+    assert.ok(csp.includes("style-src 'self' 'unsafe-inline'"), "style-src allows Radix inline style attributes");
+    const styleSrc = /style-src ([^;]*)/.exec(csp)?.[1] ?? "";
+    assert.ok(!styleSrc.includes("'nonce-"), "no nonce in the style-src directive");
     assert.match(csp, /default-src 'self'.*frame-ancestors 'none'/);
     assert.equal(first.headers["cache-control"], "no-store");
     assert.equal(first.headers["x-content-type-options"], "nosniff");

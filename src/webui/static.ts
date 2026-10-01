@@ -47,7 +47,7 @@ export function cspHeader(nonce: string): string {
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}'`,
-    `style-src 'self' 'nonce-${nonce}'`,
+    "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "connect-src 'self'",
     "font-src 'self'",
