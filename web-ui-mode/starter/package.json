@@ -1,0 +1,22 @@
+{
+  "name": "bot-lobby-web-starter",
+  "private": true,
+  "type": "module",
+  "description": "The verified starting point for bot-lobby's web UI: a token-gated localhost server, an event stream and a mobile-first page.",
+  "scripts": {
+    "build": "node build.mjs",
+    "serve": "node server/dev.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts",
+    "ui-check": "node test/ui-check.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "dompurify": "3.4.16",
+    "esbuild": "0.28.2",
+    "marked": "18.0.14",
+    "playwright-core": "1.56.1",
+    "preact": "11.0.0",
+    "typescript": "5.7.3"
+  }
+}
