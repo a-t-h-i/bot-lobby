@@ -25,6 +25,7 @@ import { kickoff, startPlannedTask } from "./start-task.ts";
 import { startRequest } from "./route.ts";
 import { setAuto, toggleOwnAuto } from "./owner.ts";
 import { autoOpenLobby, showLobby } from "../lobby/runtime.ts";
+import { registerWebServer, webCommand } from "../webui/command.ts";
 import { modelRef, thinkingMismatches } from "./model-support.ts";
 import { describeRun, runFromLog } from "./run-summary.ts";
 import { modelLookup } from "./tools.ts";
@@ -56,11 +57,12 @@ const HELP = [
   "/bot-lobby auto [on|off]    Auto mode: the oracle drives this session's task without asking (alt+g)",
   "/bot-lobby start-plan PLAN-… [auto]   Start a planned task here; its agreed plan needs no approval",
   "/bot-lobby switch <session.jsonl>   Run a saved session in this window (the lobby's session browser uses it: alt+o, s)",
+  "/bot-lobby web [stop|link|reset]   Start the browser UI on this machine (loopback only), or stop it, print its link, reset its link",
   "/bot-lobby help             This help",
 ].join("\n");
 
 /** Subcommands only win when no free-form text follows (so tasks still start). */
-const SUBCOMMANDS = new Set(["lobby", "help", "status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "accept", "budget", "knowledge", "config", "settings", "minimize", "restore", "claim", "auto", "start-plan", "switch"]);
+const SUBCOMMANDS = new Set(["lobby", "help", "status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "accept", "budget", "knowledge", "config", "settings", "minimize", "restore", "claim", "auto", "start-plan", "switch", "web"]);
 
 /** `Task-Change-Table-Font-27-09-2026`, or an older `TASK-add-login` id. */
 function isTaskId(value: string | undefined): boolean {
@@ -111,7 +113,8 @@ export function parseCommand(args: string): ParsedCommand {
     || (sub === "auto" && rest.length === 1 && /^(on|off)$/i.test(rest[0]!))
     || (sub === "budget" && rest.length >= 1 && rest.length <= 2 && (/^off$/i.test(rest[0]!) || parseMinutes(rest.join("")) !== undefined))
     || (sub === "start-plan" && rest.length >= 1 && rest.length <= 2 && /^PLAN-/.test(rest[0]!) && (rest.length === 1 || rest[1] === "auto"))
-    || (sub === "switch" && rest.length >= 1 && /\.jsonl$/.test(rest.join(" ")));
+    || (sub === "switch" && rest.length >= 1 && /\.jsonl$/.test(rest.join(" ")))
+    || (sub === "web" && rest.length === 1 && ["stop", "link", "reset"].includes(rest[0]!));
   if (!takesArgs && rest.length > 0 && !(rest.length === 1 && isTaskId(rest[0]))) {
     return { sub: undefined, rest: [], restText: trimmed };
   }
@@ -321,6 +324,7 @@ function autoCommand(ctx: ExtensionCommandContext, configDir: string, value: str
 
 export function registerCommands(pi: ExtensionAPI, configDir: string): void {
   registerRevealShortcut(pi, configDir);
+  registerWebServer(pi);
   pi.registerCommand("bot-lobby", {
     description: "Structured multi-agent engineering orchestrator",
     getArgumentCompletions: (prefix) => {
@@ -385,6 +389,8 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
           return autoCommand(ctx, configDir, rest[0]);
         case "switch":
           return switchCommand(ctx, restText);
+        case "web":
+          return webCommand(ctx, rest[0]);
         case "start-plan": {
           const started = await startPlannedTask(pi, ctx, configDir, rest[0]!, { auto: rest[1] === "auto" });
           if (typeof started === "string") return ctx.ui.notify(`bot-lobby: ${started}`, "warning");

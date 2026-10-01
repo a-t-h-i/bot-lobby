@@ -19,6 +19,8 @@ export interface Presence {
   sessionFile?: string;
   /** The task it drives, if any. */
   taskId?: string;
+  /** The loopback web UI's port, while this session's server runs. */
+  webPort?: number;
   /** `tui` for a terminal, `rpc` for a session another window started in the background. */
   mode: string;
   updatedAt: string;

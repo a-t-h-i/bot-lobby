@@ -466,6 +466,55 @@ export function nextSplitLimit(current: number): number {
   return SPLIT_PLAN_CHOICES.find((choice) => choice > current) ?? 0;
 }
 
+/** `on · port 7347 · opens the browser · questions both`, for the settings menu. */
+export function webSummary(config: BotLobbyConfig): string {
+  const web = config.lobby.web;
+  return `${web.enabled ? "on" : "off"} · port ${web.port === 0 ? "any" : web.port} · ${web.openBrowser ? "opens the browser" : "link only"} · questions ${web.questions}`;
+}
+
+/** The next place the web UI's questions are answered (`both`, in the browser or the terminal). */
+export function nextWebQuestions(current: string): "both" | "terminal" {
+  return current === "both" ? "terminal" : "both";
+}
+
+/** A port typed in the settings menu: 0 (any free port) or a real port; undefined when it is not a port. */
+export function parseWebPort(typed: string): number | undefined {
+  if (!/^\d+$/.test(typed.trim())) return undefined;
+  const port = Number(typed.trim());
+  return port === 0 || (port > 0 && port <= 65535) ? port : undefined;
+}
+
+/** The loopback web UI's own settings: on/off, its port, the browser and where its questions are answered. */
+async function editWeb(ctx: ExtensionContext): Promise<void> {
+  const typed = await pick(ctx, "bot-lobby settings · Web UI", [
+    { value: "enabled", label: "Web UI", description: `${loadConfig().lobby.web.enabled ? "on" : "off"} · start the loopback browser UI with /bot-lobby web` },
+    { value: "port", label: "Port", description: `${loadConfig().lobby.web.port === 0 ? "any free port" : loadConfig().lobby.web.port} · the base port (then the next free up to +20); 0 means any free port` },
+    { value: "browser", label: "Open browser", description: `${loadConfig().lobby.web.openBrowser ? "on" : "off"} · open the link in the browser on /bot-lobby web` },
+    { value: "questions", label: "Questions", description: `${loadConfig().lobby.web.questions} · where the web UI's questions are answered: both, or the terminal only` },
+    { value: "back", label: "Back" },
+  ]);
+  if (!typed || typed === "back") return;
+  const config = loadConfig();
+  if (typed === "enabled") saveConfig({ ...config, lobby: { ...config.lobby, web: { ...config.lobby.web, enabled: !config.lobby.web.enabled } } });
+  else if (typed === "browser") saveConfig({ ...config, lobby: { ...config.lobby, web: { ...config.lobby.web, openBrowser: !config.lobby.web.openBrowser } } });
+  else if (typed === "questions") saveConfig({ ...config, lobby: { ...config.lobby, web: { ...config.lobby.web, questions: nextWebQuestions(config.lobby.web.questions) } } });
+  else await editWebPort(ctx);
+  await editWeb(ctx);
+}
+
+/** Type the web UI's port; 0 means any free port. */
+async function editWebPort(ctx: ExtensionContext): Promise<void> {
+  const typed = (await ctx.ui.input("Web UI port (0: any free port)", String(loadConfig().lobby.web.port)))?.trim();
+  if (!typed) return;
+  const port = parseWebPort(typed);
+  if (port === undefined) {
+    ctx.ui.notify(`bot-lobby: "${typed}" is not a port (0, or 1-65535).`, "warning");
+    return;
+  }
+  const config = loadConfig();
+  saveConfig({ ...config, lobby: { ...config.lobby, web: { ...config.lobby.web, port } } });
+}
+
 /** On/off settings for the lobby, and the planning round limit; enter flips or cycles one and saves it. Key rebinding stays in the file (lobby.keys). */
 async function editLobby(ctx: ExtensionContext): Promise<void> {
   for (;;) {
@@ -473,10 +522,12 @@ async function editLobby(ctx: ExtensionContext): Promise<void> {
     const items: SelectItem[] = LOBBY_SWITCHES.map((entry) => ({ value: entry.id, label: entry.label, description: `${lobbySwitch(config, entry.id) ? "on" : "off"} · ${entry.help}` }));
     items.push({ value: "rounds", label: "Planning rounds", description: `${roundLimitLabel(config.lobby.maxPlanningRounds)} · enter cycles 2, 3, 5, 8, unlimited; the last round the oracle settles alone` });
     items.push({ value: "split", label: "Split long plans", description: `${splitLimitLabel(config.lobby.splitPlanAbove)} · saving a plan with more steps offers to split it into up to 5 tasks · enter cycles 6, 8, 10, 12, never` });
+    items.push({ value: "web", label: "Web UI", description: webSummary(config) });
     items.push({ value: "back", label: "Back", description: `keys: lobby.keys in ${globalConfigPath()}` });
     const choice = await pick(ctx, "bot-lobby settings · Lobby", items);
     if (!choice || choice === "back") return;
-    if (choice === "rounds") saveConfig({ ...config, lobby: { ...config.lobby, maxPlanningRounds: nextRoundLimit(config.lobby.maxPlanningRounds) } });
+    if (choice === "web") await editWeb(ctx);
+    else if (choice === "rounds") saveConfig({ ...config, lobby: { ...config.lobby, maxPlanningRounds: nextRoundLimit(config.lobby.maxPlanningRounds) } });
     else if (choice === "split") saveConfig({ ...config, lobby: { ...config.lobby, splitPlanAbove: nextSplitLimit(config.lobby.splitPlanAbove) } });
     else saveConfig(toggleLobbySwitch(config, choice as LobbySwitch));
   }
