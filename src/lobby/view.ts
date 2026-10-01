@@ -16,7 +16,7 @@ import type { AgentRun } from "../schemas/findings.ts";
 import type { PlannedTask } from "../state/backlog.ts";
 import type { PlanComment } from "../state/comments.ts";
 import { aggregateMetrics, collectMetrics, SORT_KEYS, sortGroups, summarizeClassifier, taskStats, taskTimesByModel, type GroupBy, type MetricRecord, type SortKey } from "../state/metrics.ts";
-import { PANEL_MEMBERS, type LobbyAgentKind, type LobbyPanel, type PanelMember } from "../schemas/configuration.ts";
+import { PANEL_MEMBERS, type BotLobbyConfig, type LobbyAgentKind, type LobbyPanel, type PanelMember } from "../schemas/configuration.ts";
 import type { ChatEntry, LobbyFeed } from "./feed.ts";
 import type { BackgroundSession } from "./sessions.ts";
 import type { QuickFixQueue } from "./quickfix.ts";
@@ -120,6 +120,13 @@ export const OLDER_NOTE = "↑ earlier messages load as you scroll up";
 const SECTION_OF: Record<SessionWhere, string> = { "this window": "THIS WINDOW", background: "BACKGROUND", "other terminal": "OTHER TERMINALS", "not running": "NOT RUNNING" };
 const WHERE_MARKS: Record<SessionWhere, string> = { "this window": "●", background: "◆", "other terminal": "◇", "not running": "○" };
 
+/** One model Pi offers, for the settings page's picker: `provider/id`, its label and thinking levels. */
+export interface ModelChoice {
+  id: string;
+  label: string;
+  thinkingLevels: string[];
+}
+
 /** Everything the view needs from pi and bot-lobby. */
 export interface LobbyHost {
   rows(): number;
@@ -169,6 +176,14 @@ export interface LobbyHost {
   checkExcalidraw(session: ExcalidrawSession): Promise<SessionCheck>;
   /** Edit a text in pi's multi-line editor (the lobby steps aside meanwhile); the new text, or undefined when cancelled. */
   editText(title: string, text: string): Promise<string | undefined>;
+  /** The effective config, never a secret; the web settings page reads it. */
+  config?(): BotLobbyConfig;
+  /** Save a whole config, the way the settings menu does; the web settings page writes it. */
+  saveConfig?(config: BotLobbyConfig): void;
+  /** Reload cached config (keys, panes) after a settings change. */
+  configChanged?(): void;
+  /** The models Pi offers, for the settings page's picker. */
+  models?(): ModelChoice[];
   /** The Issues tab is switched on (`lobby.issues`). */
   issuesEnabled(): boolean;
   /** Which panes show (`lobby.panels`), and remembering a change. */
