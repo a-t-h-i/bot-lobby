@@ -27,7 +27,7 @@ function Row({ session, check, checking, selected, onSelect }: { session: Excali
         type="button"
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(session.id)}
-        className="flex min-h-11 w-full flex-col gap-0.5 rounded-sm px-[1ch] py-2 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current=true]:bg-accent"
+        className="flex min-h-11 w-full flex-col gap-0.5 rounded-md px-[1ch] py-2 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current=true]:bg-accent"
       >
         <span className="flex items-center gap-2 text-sm">
           <Mark check={check} checking={checking} />

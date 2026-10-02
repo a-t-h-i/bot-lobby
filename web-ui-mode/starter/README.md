@@ -48,4 +48,4 @@ These checks were last run on 2026-10-02 with Node 22.22.2 and Chromium build 11
 - `npm run typecheck`: clean.
 - `npm test`: 11 of 11 pass.
 - `npm run ui-check`: 146 of 146 checks pass at 360×780, 412×915, 800×1280, 1280×800 and 1440×900, in light and dark.
-- **Bundle size:** the script is 98.4 KB minified (about 34 KB gzipped), and the stylesheet is 10.0 KB (about 3 KB gzipped).
+- **Bundle size:** the script is 98.4 KB minified (about 34 KB gzipped), and the stylesheet is 10.1 KB (about 3 KB gzipped).
