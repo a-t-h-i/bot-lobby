@@ -25,7 +25,7 @@ interface TabStripProps {
 }
 
 const cellClass = cn(
-  "inline-flex h-10 shrink-0 items-center gap-[1ch] px-[1ch] text-sm whitespace-nowrap outline-none",
+  "inline-flex h-10 shrink-0 items-center gap-[1ch] rounded-md px-[1ch] text-sm whitespace-nowrap outline-none",
   "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
 )
 
@@ -163,7 +163,7 @@ export function TabStrip({ tabs, activeId, questionCount = 0, onSelect }: TabStr
                   type="button"
                   aria-label={`${badge} question${badge === 1 ? "" : "s"} waiting — go to Lobby`}
                   onClick={() => onSelect("lobby")}
-                  className="-ml-[1ch] h-10 px-[0.5ch] text-sm font-bold text-warning tabular-nums outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                  className="-ml-[1ch] h-10 rounded-md px-[0.5ch] text-sm font-bold text-warning tabular-nums outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 >
                   {badge}?
                 </button>

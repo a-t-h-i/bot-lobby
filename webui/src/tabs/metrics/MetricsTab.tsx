@@ -42,7 +42,7 @@ function SearchBox({ query, onQuery }: { query: string; onQuery: (value: string)
         maxLength={500}
         placeholder="model, agent, tool…"
         onChange={(event) => onQuery(event.target.value)}
-        className="h-10 w-full min-w-48 rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="h-10 w-full min-w-48 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       />
     </div>
   )
@@ -63,7 +63,7 @@ function Body({ data, groupBy, query }: { data: MetricsData; groupBy: GroupBy; q
     return (
       <div className="flex flex-col gap-4">
         <Tiles tiles={data.tiles} />
-        <p className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">{query ? `No run matches "${query}".` : EMPTY}</p>
+        <p className="rounded-md border border-border bg-card p-4 text-sm text-muted-foreground">{query ? `No run matches "${query}".` : EMPTY}</p>
       </div>
     )
   }
@@ -85,7 +85,7 @@ function Skeleton() {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" role="status" aria-label="Loading metrics">
       {[0, 1, 2, 3, 4].map((tile) => (
-        <div key={tile} className="h-24 rounded-xl bg-muted motion-safe:animate-pulse" />
+        <div key={tile} className="h-24 rounded-md bg-muted motion-safe:animate-pulse" />
       ))}
     </div>
   )

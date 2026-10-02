@@ -27,7 +27,7 @@ function Row({ pull, selected, onSelect }: { pull: PullInfo; selected: boolean; 
         type="button"
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(pull.number)}
-        className="flex min-h-11 w-full flex-col gap-0.5 rounded-sm px-[1ch] py-2 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current=true]:bg-accent"
+        className="flex min-h-11 w-full flex-col gap-0.5 rounded-md px-[1ch] py-2 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current=true]:bg-accent"
       >
         <span className="flex items-start gap-2 text-sm">
           <span className="shrink-0 text-muted-foreground tabular-nums">#{pull.number}</span>
