@@ -34,6 +34,17 @@ const REPLY = [
   "<img src=x onerror=alert(1)> A link: [the spec](https://example.com/spec).",
 ].join("\n");
 
+/** Earlier work, so the activity log shows each agent's colour and each kind of mark from the start. */
+const HISTORY: Array<[source: string, text: string, kind: ActivityEntry["kind"]]> = [
+  ["LOBBY", "track: full · small · DESIGN, DEV", "info"],
+  ["MASTER", "scouting designer", "info"],
+  ["DESIGN", "started as scout", "info"],
+  ["DESIGN", "reading client/styles.css", "info"],
+  ["DESIGN", "scout finished", "success"],
+  ["DEV", "running npm test", "info"],
+  ["QA", "one label is below 4.5:1 contrast", "warning"],
+];
+
 export class FakeService implements LobbyService {
   private readonly chat: ChatEntry[] = [];
   private readonly activity: ActivityEntry[] = [];
@@ -46,6 +57,8 @@ export class FakeService implements LobbyService {
   constructor(options: { stepMs?: number } = {}) {
     // A plain field, not a parameter property: Node runs this file by stripping types, which cannot rewrite those.
     this.options = options;
+    const start = Date.now() - (HISTORY.length + 1) * 60_000;
+    for (const [index, [source, text, kind]] of HISTORY.entries()) this.activity.push({ id: this.nextId++, at: start + index * 60_000, source, text, kind, pending: false });
     this.chat.push({ id: this.nextId++, at: Date.now(), role: "note", text: "Fake oracle: anything you send gets a streamed Markdown reply." });
   }
 
