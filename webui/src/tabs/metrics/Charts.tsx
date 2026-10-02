@@ -122,7 +122,7 @@ function ShareLegend({ share }: { share: MetricsData["timeShare"]["byAgent"] }) 
     <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
       {share.map((entry) => (
         <li key={entry.agent} className="flex items-center gap-1.5 text-muted-foreground">
-          <span className={`inline-block size-2.5 rounded-sm ${agentFill(entry.agent)}`} aria-hidden="true" />
+          <span className={`inline-block size-2.5 rounded-[2px] ${agentFill(entry.agent)}`} aria-hidden="true" />
           <span className="text-foreground">{entry.agent}</span>
           <span className="tabular-nums">{Math.round(entry.share * 100)}%</span>
           <span className="tabular-nums">avg {shortDuration(entry.ms / Math.max(1, entry.runs))} ×{entry.runs}</span>

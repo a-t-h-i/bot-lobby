@@ -77,8 +77,8 @@ function Hint({ keys, children, typing }: { keys: string; children: string; typi
 function KeyLine({ tabCount }: { tabCount: number }) {
   return (
     <div className="flex shrink-0 items-center gap-x-[2ch] overflow-hidden px-[1ch] py-1 text-xs whitespace-nowrap text-muted-foreground">
-      <span className="bg-accent px-[1ch] font-bold text-foreground group-has-[textarea:focus]/shell:hidden">BROWSE</span>
-      <span className="hidden bg-accent px-[1ch] font-bold text-primary group-has-[textarea:focus]/shell:inline">TYPE</span>
+      <span className="rounded-md bg-accent px-[1ch] font-bold text-foreground group-has-[textarea:focus]/shell:hidden">BROWSE</span>
+      <span className="hidden rounded-md bg-accent px-[1ch] font-bold text-primary group-has-[textarea:focus]/shell:inline">TYPE</span>
       <Hint keys="Enter" typing>
         send
       </Hint>

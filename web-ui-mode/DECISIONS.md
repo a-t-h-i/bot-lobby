@@ -294,7 +294,8 @@ The user asked for the web UI to look close to bot-lobby in the terminal, with t
   - From 1400 px everything sits on one line. Below it, the tabs take a line of their own under the title.
   - A waiting question shows as `N?` in the warning colour after a tab's name.
 - **Panes** (`ui/Frame.tsx`): rounded frames with the title set into the top border. The pane you are in (clicked, or reached with Tab) is drawn in the focus colour, as the terminal draws its focused pane. Sections and lists are headed by a rule with the title set into it, `── Progress ──── 2/5 steps ──` (`Rule`).
-- **Keys and badges:** square cells lit with the selection colour, the word in the accent colour; lists mark the chosen row with the selection colour, not a ring.
+- **Keys and badges:** cells lit with the selection colour, the word in the accent colour; lists mark the chosen row with the selection colour, not a ring.
+- **One radius:** every border, button and input uses `rounded-md` (6 px): frames, cards, dialogs, notices, keys, badges, fields, selects, tab cells and chosen rows (2026-10-02). Only shapes that mean something keep their own: the switch, radio dots and progress bars stay round, and checkbox marks and legend swatches stay square.
 - **The Lobby tab:**
   - the task as `□ title  state`, its facts dimmed under it, progress as `▰▱` pips;
   - the oracle under `◆ Oracle ··· 12:04`, its reply indented; you on the right under `12:04  You ●`, your words in the accent colour on the user-message background; messages from one speaker within five minutes share a header; events as a centred rule;
