@@ -147,7 +147,7 @@ function ReviewBox({ number, review, now, onChanged }: { number: number; review?
 function Files({ files }: { files: PullFileInfo[] }) {
   return (
     <Section title="Files" right={String(files.length)}>
-      <div className="overflow-x-auto rounded-lg border">
+      <div className="overflow-x-auto rounded-md border">
         <table className="w-full border-collapse text-sm tabular-nums">
           <tbody>
             {files.map((file) => (

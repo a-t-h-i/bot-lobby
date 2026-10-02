@@ -13,7 +13,8 @@
  * darker in light; the comment gives Pi's value.
  */
 :root {
-  --radius: 0.25rem;
+  /* rounded-md (radius - 2px) is 6px, the one radius every border, button and input uses. */
+  --radius: 0.5rem;
   --background: #f8f8f8;
   --foreground: #1f2328;
   --card: #f8f8f8;
@@ -247,6 +248,6 @@
 
   /* The terminal's notices: a cell on the page, its text in the accent colour (sonner, `components/ui/sonner.tsx`). */
   .cn-toast {
-    @apply rounded-sm font-sans;
+    @apply rounded-md font-sans;
   }
 }
