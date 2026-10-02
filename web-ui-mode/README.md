@@ -16,6 +16,7 @@ The work happens **in this repository**, by a swarm of agents (D-03).
 
 - **A view of the lobby in the browser.** bot-lobby stays a Pi extension (D-01). In Pi, `/bot-lobby web` prints a link such as `http://127.0.0.1:7347/#token=…` and opens it.
 - **The terminal lobby keeps working.** Both views show the same state, live.
+- **It looks like the terminal lobby** (D-21): Pi's colours, one monospace face, framed panes, and the tabs as cells of the title line.
 - **Phone first** (D-09):
   - on Android, run Pi in Termux and open the link in Chrome on the same device;
   - on a tablet in landscape or on a desktop, the panes sit side by side as in the terminal.
@@ -29,7 +30,7 @@ The work happens **in this repository**, by a swarm of agents (D-03).
 
 ![The starter on a phone](reference/screenshots/phone-light.png) ![The starter on a tablet in landscape, dark](reference/screenshots/tablet-landscape-dark.png)
 
-*The starter, with a fake oracle, at 360 px and at 1280 px in dark mode.*
+*The starter, with a fake oracle, at 360 px in light mode and at 1280 px in dark mode.*
 
 ## Reading order
 
@@ -54,8 +55,8 @@ The work happens **in this repository**, by a swarm of agents (D-03).
 
 | Status | Item |
 | --- | --- |
-| ✅ Verified | **The starter's server:** loopback, link token → cookie, Host/Origin/JSON checks, CSP, an event stream with coalesced reply frames. 10 of 10 tests pass |
-| ✅ Verified | **The starter's page** at 360, 412, 800, 1280 and 1440 px, light and dark: streamed Markdown, no HTML runs, no sideways scroll, reload stays signed in. 92 of 92 browser checks pass; about 33 KB gzipped |
+| ✅ Verified | **The starter's server:** loopback, link token → cookie, Host/Origin/JSON checks, CSP, an event stream with coalesced reply frames that never overtake a change. 11 of 11 tests pass |
+| ✅ Verified | **The starter's page,** drawn like the terminal lobby, at 360, 412, 800, 1280 and 1440 px, light and dark: streamed Markdown, no HTML runs, no sideways scroll, text at 4.5:1 or better, reload stays signed in. 146 of 146 browser checks pass; about 37 KB gzipped |
 | ⬜ First swarm tasks | P0-01 (toolchain) and the spikes P0-02…P0-06, in parallel; P0-07 (wireframes, for the user to approve) |
 | ⬜ Everything else | Phases 1–5 in [PLAN.md](PLAN.md) |
 

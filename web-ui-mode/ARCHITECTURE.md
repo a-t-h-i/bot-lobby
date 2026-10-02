@@ -29,10 +29,10 @@ How the web UI fits into bot-lobby. Read [DECISIONS.md](DECISIONS.md) first: thi
 ┌────────────────────────────────────────────┴──────────────────────────────────────────────┐
 │ the page (any browser on this machine: desktop, or Chrome on the phone running Termux)    │
 │ webui/src/                                                                                │
-│   lib/       api.ts (calls, sign-in), events.ts (EventSource), store.ts (topics → state),  │
+│   lib/       api.ts (calls, sign-in), events.ts (EventSource), store.ts (topics → state), │
 │              markdown.ts (marked + DOMPurify), format.ts (times, sizes, money)            │
-│   app/       shell: header, tabs (bottom bar / top / side), routing, layouts, toasts      │
-│   ui/        components: Button, Sheet, Tabs, List, Badge, Empty, Markdown, Chart …        │
+│   app/       shell: the title line with the tabs, routing, layouts, the key line (D-21)   │
+│   ui/        components: Frame, Key, Sheet, Tabs, List, Empty, Markdown, Chart …          │
 │   tabs/      lobby · tasks · plan · quickfix · metrics · git · knowledge · excalidraw ·   │
 │              issues · sessions · settings                                                 │
 │   prompts/   the questionnaire and dialogs (D-13)                                         │
@@ -131,7 +131,7 @@ Today every store calls `rerender()` and the terminal repaints everything. The w
 - Every call is `POST /api/<group>.<action>` with a JSON object body.
 - Answers are `{ ok: true, result }` or `{ ok: false, error, code }`, where `code` is one of `bad_request`, `unauthorized`, `forbidden`, `not_found`, `unsupported`, `too_large`, `conflict` or `failed`.
 - Requests are validated with TypeBox schemas (bot-lobby already depends on `typebox`) before the handler runs.
-- Actions answer with the same notice text the terminal shows (`"comment sent to the oracle — it will amend the plan"`), and the page shows it as a toast.
+- Actions answer with the same notice text the terminal shows (`"comment sent to the oracle — it will amend the plan"`), and the page shows it in its key line, as the terminal does (D-21).
 
 | Group | Calls (request → result) | Backed by |
 | --- | --- | --- |
