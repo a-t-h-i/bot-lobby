@@ -17,6 +17,8 @@ import { safeHref } from "@/lib/markdown"
 interface HastNode {
   type?: string
   value?: string
+  tagName?: string
+  properties?: { className?: unknown }
   children?: HastNode[]
 }
 
@@ -26,10 +28,19 @@ function hastText(node: HastNode | undefined): string {
   return (node.children ?? []).map((child) => hastText(child)).join("")
 }
 
-/** A fenced block with a Copy button reading the block's own text. */
+/** The fence's language (`language-ts` → `ts`), a plain word only. */
+function langOf(node: HastNode | undefined): string {
+  const names = node?.children?.find((child) => child.tagName === "code")?.properties?.className
+  const name = (Array.isArray(names) ? names : []).map(String).find((value) => value.startsWith("language-"))
+  const lang = name?.slice("language-".length) ?? ""
+  return /^[\w+#.-]{1,20}$/.test(lang) ? lang : ""
+}
+
+/** A fenced block as Pi draws it (D-21): between its fences, the code indented and in the code-block colour; a Copy button reads the block's own text. */
 function CodeBlock({ node, children }: { node?: unknown; children?: ReactNode }) {
   const [copied, setCopied] = useState(false)
   const text = hastText(node as HastNode | undefined)
+  const lang = langOf(node as HastNode | undefined)
   const copy = useCallback(() => {
     void navigator.clipboard
       ?.writeText(text)
@@ -41,19 +52,28 @@ function CodeBlock({ node, children }: { node?: unknown; children?: ReactNode })
   }, [text])
 
   return (
-    <div className="relative my-2">
+    <div className="relative my-3">
       <Button
         type="button"
-        variant="secondary"
+        variant="ghost"
         size="sm"
         onClick={copy}
         disabled={!text}
-        className="absolute top-2 right-2 z-10 h-10"
+        className="absolute top-0 right-0 z-10 h-10 text-muted-foreground"
       >
         {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
         {copied ? "Copied" : "Copy"}
       </Button>
-      <pre className="overflow-x-auto rounded-lg border bg-muted/50 p-3 pr-24 text-sm leading-relaxed">{children}</pre>
+      <pre className="overflow-x-auto pr-[12ch] text-sm leading-relaxed [&>code]:block [&>code]:pl-[2ch]">
+        <span aria-hidden="true" className="block text-muted-foreground">
+          {"```"}
+          {lang}
+        </span>
+        {children}
+        <span aria-hidden="true" className="block text-muted-foreground">
+          {"```"}
+        </span>
+      </pre>
     </div>
   )
 }
@@ -70,7 +90,7 @@ const components: Components = {
   pre: CodeBlock,
   a: Link,
   table: ({ children }) => (
-    <div className="my-2 w-full overflow-x-auto">
+    <div className="my-3 w-full overflow-x-auto">
       <table className="w-full border-collapse text-sm">{children}</table>
     </div>
   ),

@@ -62,7 +62,7 @@ function Header({ row, task }: { row: TaskRow; task?: SnapshotTask }) {
   const branch = task?.git ? `⎇ ${task.git.branch}${task.git.from ? ` · from ${task.git.from}` : ""}` : ""
   return (
     <header className="flex flex-col gap-1">
-      <h2 className="flex gap-2 text-base font-medium">
+      <h2 className="flex gap-2 text-sm font-bold">
         <span aria-hidden="true">{CHECK_MARKS[row.check]}</span>
         <span className="sr-only">{CHECK_WORDS[row.check]}:</span>
         <span className={row.check === "dropped" ? "min-w-0 break-words line-through" : "min-w-0 break-words"}>{row.title}</span>

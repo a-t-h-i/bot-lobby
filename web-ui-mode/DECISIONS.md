@@ -80,7 +80,7 @@ The page only lays these out, so the two UIs cannot drift apart. A function that
 - **Why shadcn/ui on Radix:** accessible primitives (tabs, dialog, sheet, tooltip) with the source in this repository, so we own and can audit it.
 - **Why Vite:** it replaces the starter's `build.mjs`, and the build writes `dist/build.json` (D-08).
 - **Markdown:** `marked`, sanitized with `DOMPurify` (D-10).
-- **Styles:** Tailwind 4 with shadcn's tokens (D-19). There is no hand-written CSS framework.
+- **Styles:** Tailwind 4 with shadcn's tokens, set to Pi's theme colours (D-19, D-21). There is no hand-written CSS framework.
 - **Icons:** inline SVG paths. There is no icon font.
 - **Charts:** Recharts, loaded lazily in the Metrics tab. There is no chart library in the first load.
 - **Budget:** the first load stays under **250 KB gzipped**, re-measured in P0-01. Heavy extras load lazily on first use: syntax highlighting, charts and Mermaid if Q-05 says yes.
@@ -95,12 +95,12 @@ The page only lays these out, so the two UIs cannot drift apart. A function that
 
 ## D-09 · Desktop and tablet layouts: top tabs, one pane, a Sheet · Adopted
 
-Tabs sit at the top at every supported width, and one main pane is shown at a time. Details open in a **Sheet** that slides in from the side instead of replacing the view (D-14).
+Tabs sit at the top at every supported width, as cells of the title line (D-21), and one main pane is shown at a time. Details open in a **Sheet** that slides in from the side instead of replacing the view (D-14).
 
 | Width | Layout |
 | --- | --- |
-| **768–1023 px** (tablet portrait, small laptops) | Tabs at the top. One main pane plus a Sheet that slides in from the side. |
-| **≥ 1024 px** (tablet landscape, desktops) | Tabs at the top; the same single pane, wider, with a Sheet for details. |
+| **768–1023 px** (tablet portrait, small laptops) | Tabs at the top, on a line of their own under the title. One main pane plus a Sheet that slides in from the side. |
+| **≥ 1024 px** (tablet landscape, desktops) | Tabs at the top; from 1400 px they join the title line, as in the terminal. The same single pane, wider, with a Sheet for details. |
 | **< 768 px** (phones) | Not supported. The page shows a "use a larger window" notice. |
 
 **Rules for every screen:**
@@ -195,7 +195,7 @@ bot-lobby's own questions are offered in the terminal **and** in the page. The f
   - the mouse and touch work everywhere: click tabs, rows and buttons, scroll, and select text;
   - details open in a side **Sheet** instead of replacing the view;
   - the questionnaire is a slideout above the chat input, with a badge on the other tabs;
-  - the tab strip uses compact pills, scrolls with chevrons, and shows shortcut hints in tooltips;
+  - the tab strip scrolls with chevrons when it overflows, and each tab's shortcut is also in a tooltip; the tabs themselves are drawn as the terminal draws them (D-21);
   - Markdown, code and charts are drawn properly, and file previews open inline;
   - separate empty, loading, error and reconnecting states, plus an Alt+H help overlay.
 
@@ -264,7 +264,7 @@ See [TESTING.md](TESTING.md).
   - contrast of at least 4.5:1 for text in both themes;
   - touch targets are at least 40×40 px;
   - an **Alt+H** help overlay lists the web key map, built from `keyLabel` in `src/lobby/keys.ts`;
-  - tab pills show their Alt+digit hint in a tooltip and an `aria-keyshortcuts` attribute, so the hint is never available only on hover.
+  - each tab prints its Alt+digit number, as the terminal does, and also carries it in a tooltip and an `aria-keyshortcuts` attribute.
 - **Language:** English, with the terminal's wording for the same things. User-visible strings come from shared modules such as `src/lobby/prompts.ts`, so the TUI and the page cannot drift; there is no translation layer until someone asks for one.
 
 ## D-20 · A standalone app is a later phase · Adopted
@@ -280,30 +280,34 @@ The user wants this possible later, not now. **Phase 6 (not scheduled):**
 
 ## D-21 · The page looks like the terminal lobby · Fixed
 
-The user asked for the web UI to look close to bot-lobby in the terminal, with tabs that look like part of the page rather than separate pill-shaped selectors (2026-10-02). The starter is built this way, and every screen follows it:
-- **Colours:** Pi's own themes (`dark.json` and `light.json` in `@earendil-works/pi-coding-agent`) as CSS tokens. These cover the background, text, accent and selection colours, your message's background, the Markdown colours, and each agent's colour (`SOURCE_COLORS` in `src/lobby/tabs/home.ts`). Where one of Pi's colours is under 4.5:1 on the page (D-19), its token is a step lighter in dark or darker in light; `styles.css` notes Pi's value beside it.
-- **Type:** one monospace face for everything, from the system, with no web font (the CSP and D-07's budget). 13 px on phones and 14 px from 768 px. Vertical space comes in whole lines.
-- **The title line,** as the terminal's top line: `◆ name (⎇ branch) │ 1 Lobby 2 Tasks … 8 Excalidraw … status`.
-  - The tabs are cells of that line: the chosen one lit with the selection colour, the rest plain text on the page. The numbers are the `alt+1…9` keys.
-  - Below 1024 px, the tabs take a line of their own under the title, which scrolls sideways.
-  - There are no pills, no segmented controls and no tab bar with a background of its own.
-- **Panes:** rounded frames with the title set into the top border. The pane you are in is drawn in the focus colour, as the terminal draws its focused pane. On phones, the Lobby's frame carries both pane titles, and tapping one switches the pane.
-- **The conversation:**
-  - the oracle as `◆ Oracle ··· 12:04`, with its reply indented under it;
-  - you on the right as `12:04  You ●`, your words in the accent colour on the user-message background;
-  - events as a centred rule;
-  - messages from one speaker within five minutes share a header.
-- **Activity:** `time WHO mark text`, with each agent in its colour and the terminal's marks (`·` `✓` `!` `✗` and the spinner).
-- **Markdown,** as Pi renders it: headings in the heading colour, with `###` kept from level 3; fenced code with its fences and language; `- ` bullets; inline code in the code colour. Tables, images and links are real HTML, which is what the web UI is for.
-- **The composer** is the terminal's prompt: a label set into a rule (`message the oracle · enter sends`), with the rules in the typing colour while you type.
-- **The key line** under it shows the mode (`TYPE` or `BROWSE`) and the keys, and a notice takes its place for a few seconds, as in the terminal. Touch screens hide the keys and show only notices.
-- **Kept from D-09:** 44 px targets on touch, no sideways scroll, 16 px fields on phones, `prefers-color-scheme`, and `prefers-reduced-motion` (the spinner stands still).
+The user asked for the web UI to look close to bot-lobby in the terminal, with the tabs at the top looking like part of the page rather than separate pill-shaped selectors (2026-10-02). This replaces batch 1's "shadcn defaults, no custom theming" and its compact pills. The web UI (`webui/src`) and the starter (`web-ui-mode/starter`) both follow it.
 
-**Custom Pi themes:** the page uses Pi's built-in dark and light themes. P3-01 checks whether Pi gives an extension the active theme's colours; if it does, the server sends them as tokens (nudged for contrast the same way), so a custom Pi theme carries over.
+- **Colours:** Pi's own themes (`dark.json` and `light.json` in `@earendil-works/pi-coding-agent`) mapped onto shadcn's tokens in `webui/src/index.css`.
+  - `--accent` is Pi's selection colour (the chosen tab, the chosen row, keys); `--primary` is Pi's accent; `--ring` is the focused pane's border (`borderAccent`); `--border` is `borderMuted`.
+  - Panes are frames on the page, not cards, so `--card` is the page.
+  - Each agent keeps its terminal colour (`SOURCE_COLORS` in `src/lobby/tabs/home.ts`), in text and in the Metrics bars.
+  - Where one of Pi's colours is under 4.5:1 on what it sits on (D-19), its token is a step lighter in dark or darker in light; the stylesheet notes Pi's value beside it.
+- **Type:** one monospace face for everything, from the system, with no web font (the CSP allows none). Headings are the body size, in bold, as in the terminal.
+- **The title line** (`app/Header.tsx`, `app/TabStrip.tsx`): `◆ name (⎇ branch) │ 1 Lobby 2 Tasks … 8 Excalidraw … status`, as the terminal's top line.
+  - The tabs are cells of that line: the number printed (in the accent colour on the chosen tab), the chosen cell lit with the selection colour, the rest plain text on the page. There are no pills, no tray behind them and no rule under them.
+  - From 1400 px everything sits on one line. Below it, the tabs take a line of their own under the title.
+  - A waiting question shows as `N?` in the warning colour after a tab's name.
+- **Panes** (`ui/Frame.tsx`): rounded frames with the title set into the top border. The pane you are in (clicked, or reached with Tab) is drawn in the focus colour, as the terminal draws its focused pane. Sections and lists are headed by a rule with the title set into it, `── Progress ──── 2/5 steps ──` (`Rule`).
+- **Keys and badges:** square cells lit with the selection colour, the word in the accent colour; lists mark the chosen row with the selection colour, not a ring.
+- **The Lobby tab:**
+  - the task as `□ title  state`, its facts dimmed under it, progress as `▰▱` pips;
+  - the oracle under `◆ Oracle ··· 12:04`, its reply indented; you on the right under `12:04  You ●`, your words in the accent colour on the user-message background; messages from one speaker within five minutes share a header; events as a centred rule;
+  - activity as `time WHO mark text`, in columns, with the terminal's marks (`·` `✓` `!` `✗`) and its braille spinner, which every spinner on the page now uses.
+- **Markdown,** as Pi renders it: headings in the heading colour (`###` kept from level 3), `- ` bullets, inline code in the code colour, fenced code between its fences with the language after the opening one. Tables, images and links stay real HTML.
+- **The composer** is the terminal's prompt: a label set into a rule (`message the oracle · enter sends`), the rules in the typing colour while you type, `send` and `stop` as keys. **The key line** under it shows the mode (`TYPE` while a field has focus, else `BROWSE`) and the keys.
+- **Notices** keep sonner, because a notice can carry an Undo button. They are drawn as cells with the terminal's marks and sit at the top right, under the title line, so they never cover the composer's keys. At the bottom right, a notice had covered Send and failed a browser check on `main`.
 
-**Verified in the starter** at all five sizes, light and dark (VERIFIED-FACTS 3):
-- every visible piece of text is at least 4.5:1 against what is behind it;
-- from 1024 px, the tabs sit in the title line.
+**Custom Pi themes:** the page uses Pi's built-in dark and light themes. A later task can read the active theme's colours from Pi, if Pi exposes them to an extension, and send them as tokens, nudged for contrast the same way, so a custom Pi theme carries over.
+
+**Verified** on 2026-10-02 against the mock lobby (TESTING; VERIFIED-FACTS 3 for the starter):
+- `web:check`: 68 of 68 pass, light and dark, including the axe colour-contrast check and the 40 px targets;
+- `npm test` and both typechecks pass;
+- `webui/dist` is rebuilt, so the staleness test passes.
 
 ---
 
@@ -316,4 +320,4 @@ The user asked for the web UI to look close to bot-lobby in the terminal, with t
 | **Q-03** | Should the Excalidraw tab embed the live board (Excalidraw's React component joined to the room), or link out to excalidraw.com? | Link out in Phase 4; consider embedding after Phase 5 |
 | **Q-04** | Should the web server start with every session (`lobby.web.enabled: true`) once the UI reaches parity? | Off until P5-07, then on |
 | **Q-05** | Should Mermaid diagrams in Markdown be rendered (about 600 KB, lazily loaded)? | Yes, lazily, in P5-05 |
-| **Q-06** | Is it fine to have a light theme and a dark theme of our own, rather than following Pi's terminal theme colours? | Our own, with the terminal's accent colour if Pi exposes it |
+| **Q-06** | Is it fine to have a light theme and a dark theme of our own, rather than following Pi's terminal theme colours? | **Answered (2026-10-02):** follow the terminal. The page uses Pi's theme colours (D-21) |

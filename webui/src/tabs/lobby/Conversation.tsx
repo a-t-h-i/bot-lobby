@@ -1,19 +1,26 @@
 /**
- * The conversation pane: chat newest-last, your messages as bubbles on the
- * right and the oracle's as Markdown on the left, notes as centred rules, the
- * streaming reply marked, older history loaded from `lobby.history` at the
- * top, and a "Jump to latest" button while scrolled up. Settled messages are
- * memoised by id, so only the streaming reply redraws on each delta.
+ * The conversation pane, as the terminal draws it (D-21): chat newest-last,
+ * the oracle's replies as Markdown under `◆ Oracle ··· 12:04` on the left,
+ * yours in the accent colour on the user-message background under
+ * `12:04  You ●` on the right, messages from one speaker within five minutes
+ * under one header, notes as centred rules, the streaming reply marked, older
+ * history loaded from `lobby.history` at the top, and a "Jump to latest"
+ * button while scrolled up. Settled messages are memoised by id, so only the
+ * streaming reply redraws on each delta.
  */
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react"
 import { ArrowDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { Spinner } from "@/components/ui/spinner"
 import { call } from "@/lib/api"
 import { formatClock } from "@/lib/format"
+import { Frame } from "@/ui/Frame"
 import { Markdown } from "@/ui/Markdown"
 import type { ChatEntry } from "./types"
+
+/** Messages from one speaker this close together share a header, as in the terminal (`GROUP_MS`). */
+const GROUP_MS = 5 * 60_000
 
 const OLDER_NOTE = "↑ earlier messages load as you scroll up"
 const NO_TASK = "No task is running in this session."
@@ -24,7 +31,7 @@ const NOTHING_SAID = "Nothing said yet. Type below to talk to the oracle about t
 function NoteEntry({ entry }: { entry: ChatEntry }) {
   const failed = entry.text.startsWith("✗")
   return (
-    <div className={failed ? "flex items-center gap-2 text-xs text-destructive" : "flex items-center gap-2 text-xs text-muted-foreground"}>
+    <div className={failed ? "flex items-center gap-[1ch] text-sm text-destructive" : "flex items-center gap-[1ch] text-sm text-muted-foreground"}>
       <span className="h-px flex-1 bg-border" aria-hidden="true" />
       <span>
         {entry.text}
@@ -35,34 +42,54 @@ function NoteEntry({ entry }: { entry: ChatEntry }) {
   )
 }
 
-function MessageBody({ entry }: { entry: ChatEntry }) {
+/** `◆ Oracle ········ 12:04`: the mark and name on the left, the time (or what it is doing) at the right. */
+function OracleHead({ name, children }: { name: string; children?: ReactNode }) {
+  return (
+    <span className="flex items-baseline gap-[1ch] text-sm">
+      <span aria-hidden="true">◆</span>
+      <span className="font-bold">{name}</span>
+      <span className="ml-auto flex items-center gap-[1ch] text-xs text-muted-foreground">{children}</span>
+    </span>
+  )
+}
+
+function MessageBody({ entry, head }: { entry: ChatEntry; head: boolean }) {
   if (entry.role === "you") {
     return (
-      <div className="flex flex-col items-end gap-1">
-        <span className="text-xs text-muted-foreground">
-          {formatClock(entry.at)} You ●
-        </span>
-        <div className="max-w-[85%] rounded-lg bg-primary/10 px-3 py-2">
+      <div className="flex flex-col items-end gap-0.5">
+        {head ? (
+          <span className="flex items-baseline gap-[1ch] text-sm text-primary">
+            <span className="mr-[1ch] text-xs text-muted-foreground">{formatClock(entry.at)}</span>
+            <span className="font-bold">You</span>
+            <span aria-hidden="true">●</span>
+          </span>
+        ) : null}
+        <div className="max-w-[72%] bg-you px-[1ch] text-primary">
           <Markdown text={entry.text} />
         </div>
       </div>
     )
   }
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs text-muted-foreground">
-        ◆ {entry.role === "panel" ? "Panel" : "Oracle"} {formatClock(entry.at)}
-      </span>
-      <Markdown text={entry.text} />
+    <div className="flex flex-col gap-0.5">
+      {head ? (
+        <OracleHead name={entry.role === "panel" ? "Panel" : "Oracle"}>
+          <time>{formatClock(entry.at)}</time>
+        </OracleHead>
+      ) : null}
+      <div className="max-w-[86%] pl-[2ch]">
+        <Markdown text={entry.text} />
+      </div>
     </div>
   )
 }
 
 const Message = memo(
-  function Message({ entry }: { entry: ChatEntry }) {
-    return entry.role === "note" ? <NoteEntry entry={entry} /> : <MessageBody entry={entry} />
+  function Message({ entry, head }: { entry: ChatEntry; head: boolean }) {
+    return entry.role === "note" ? <NoteEntry entry={entry} /> : <MessageBody entry={entry} head={head} />
   },
   (before, after) =>
+    before.head === after.head &&
     before.entry.id === after.entry.id &&
     before.entry.text === after.entry.text &&
     before.entry.at === after.entry.at
@@ -72,17 +99,20 @@ function LiveReply({ text, busy }: { text?: string; busy: boolean }) {
   const writing = Boolean(text?.trim())
   if (!writing && !busy) return null
   return (
-    <div className="flex flex-col gap-1">
-      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        ◆ Oracle
+    <div className="flex flex-col gap-0.5">
+      <OracleHead name="Oracle">
         {busy ? (
           <>
-            <Spinner className="size-3" aria-hidden="true" role="presentation" />
+            <Spinner aria-hidden="true" role="presentation" />
             {writing ? "writing" : "working…"}
           </>
         ) : null}
-      </span>
-      {writing ? <Markdown text={text ?? ""} /> : null}
+      </OracleHead>
+      {writing ? (
+        <div className="max-w-[86%] pl-[2ch]">
+          <Markdown text={text ?? ""} />
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -182,29 +212,27 @@ export function Conversation({
   }, [onScroll, ref, more, loading, load])
   const empty = merged.length === 0 && !reply?.trim() && !busy
   return (
-    <section className="relative flex min-h-0 flex-col overflow-hidden rounded-xl border bg-card" aria-label="Conversation">
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">
-        <h2 className="text-sm font-medium">Conversation</h2>
-        {more ? <span className="text-xs text-muted-foreground">{OLDER_NOTE}</span> : null}
-      </header>
-      <div ref={ref} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto px-4 py-3" role="log" aria-label="Conversation">
+    <Frame aria-label="Conversation" title="Conversation" note={more ? OLDER_NOTE : undefined}>
+      <div ref={ref} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto px-[1ch] pb-2" role="log" aria-label="Conversation" tabIndex={0}>
         {empty ? (
           <ConversationEmpty hasTask={hasTask} />
         ) : (
           <div className="flex flex-col gap-4">
-            {merged.map((entry) => (
-              <Message key={entry.id} entry={entry} />
-            ))}
+            {merged.map((entry, index) => {
+              const previous = merged[index - 1]
+              const head = !previous || previous.role !== entry.role || entry.at - previous.at > GROUP_MS
+              return <Message key={entry.id} entry={entry} head={head} />
+            })}
             <LiveReply text={reply} busy={busy} />
           </div>
         )}
       </div>
       {!atBottom ? (
-        <Button type="button" size="lg" className="absolute right-4 bottom-4 h-10" onClick={stick}>
+        <Button type="button" size="lg" className="absolute right-[2ch] bottom-3 h-10" onClick={stick}>
           <ArrowDown aria-hidden="true" />
           Jump to latest
         </Button>
       ) : null}
-    </section>
+    </Frame>
   )
 }

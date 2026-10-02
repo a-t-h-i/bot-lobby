@@ -9,7 +9,8 @@ import type { ReactNode } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Spinner } from "@/components/ui/spinner"
 import { formatElapsed } from "@/lib/format"
-import { agentName, type LobbyRun } from "./types"
+import { cn } from "@/lib/utils"
+import { agentName, sourceColor, type LobbyRun } from "./types"
 
 function useNow(active: boolean): number {
   const [now, setNow] = useState(() => Date.now())
@@ -22,9 +23,9 @@ function useNow(active: boolean): number {
 }
 
 function statusMark(status: string | undefined): ReactNode {
-  if (status === "running") return <Spinner className="size-3" aria-hidden="true" role="presentation" />
-  if (status === "success") return "✓"
-  if (status === "failed" || status === "timeout" || status === "error") return "✗"
+  if (status === "running") return <Spinner aria-hidden="true" role="presentation" />
+  if (status === "success") return <span className="text-success">✓</span>
+  if (status === "failed" || status === "timeout" || status === "error") return <span className="text-destructive">✗</span>
   return "·"
 }
 
@@ -38,15 +39,15 @@ export function RunsStrip({ runs }: { runs: LobbyRun[] }) {
   const now = useNow(runs.some((run) => run.status === "running"))
   if (runs.length === 0) return null
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-2" aria-label="Runs">
-      <span className="text-xs font-medium text-muted-foreground">Runs</span>
+    <div className="flex shrink-0 flex-wrap items-center gap-x-[2ch] gap-y-1 text-sm" aria-label="Runs">
+      <span className="font-bold text-primary">Runs</span>
       {runs.map((run, index) => (
-        <Badge key={run.runId ?? index} variant="outline" className="h-7 gap-1.5 font-normal">
+        <Badge key={run.runId ?? index} variant="ghost" className="h-6 gap-[1ch] px-0 text-sm font-normal">
           <span aria-hidden="true" className="text-muted-foreground">
             {statusMark(run.status)}
           </span>
           <span className="sr-only">{run.status ?? "unknown"}</span>
-          <span className="font-medium">{agentName(run)}</span>
+          <span className={cn(sourceColor(agentName(run)))}>{agentName(run)}</span>
           {run.activity ?? run.step ? (
             <span className="text-muted-foreground">{run.activity ?? run.step}</span>
           ) : null}
