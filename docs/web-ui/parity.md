@@ -17,7 +17,7 @@ The engine (tracks, the state machine, briefs, workers, the QA gate, budgets, kn
 | Id | Terminal | Source | Tests | Web |
 | --- | --- | --- | --- | --- |
 | W-01 | Title: `◆ repo (⎇ branch)`, read off the render path | `lobby/view.ts`, `execution/workspace.ts` | `workspace`, `lobby-view` | P3-02 header |
-| W-02 | Eight tabs by default, nine when `lobby.issues` is on (Issues); `tab`/`shift+tab`, `alt+1…N`, click | `lobby/view.ts` (`visibleTabs`, `tabs()`) | `lobby-view`, `lobby-layout` | P3-02: compact pill tab strip at the top (D-09); `alt+1…N` from `tabJumpKey` (P5-04) |
+| W-02 | Eight tabs by default, nine when `lobby.issues` is on (Issues); `tab`/`shift+tab`, `alt+1…N`, click | `lobby/view.ts` (`visibleTabs`, `tabs()`) | `lobby-view`, `lobby-layout` | P3-02: the tabs as cells of the title line (D-09, D-21); `alt+1…N` from `tabJumpKey` (P5-04) |
 | W-03 | Status line under Pi's editor while the lobby is hidden: task steps, planning round, quick fix; `lobby.miniLine` | `lobby/mini.ts` | `mini` | P3-02: the header's task state. The status line also gets the web link (P2-08) |
 | W-04 | Help: every key (`alt+h`, `?`) | `lobby/view.ts` (`helpBody`), `lobby/keys.ts` | `lobby-view` | P5-04 help sheet |
 | W-05 | Search the current tab (`ctrl+f`, `/`) | `tabs/home.ts` `filterFeed`, `tabs/quickfix.ts` `filterJobs`, `tabs/metrics.ts` `filterRecords` | `lobby-view` | P3-05 and each tab's card |
@@ -188,7 +188,7 @@ Phases 4–5. Evidence: `npm run web:check` (`test/web/lobby.spec.ts`) and the
 | Id | Verdict | Notes |
 | --- | --- | --- |
 | W-01 | matches | Header reads `◆ repo (⎇ branch)` off the same render path |
-| W-02 | GUI improvement (D-09, D-14) | Compact pill tab strip; `Alt+1…N` from `tabJumpKey`, same order and labels |
+| W-02 | GUI improvement (D-09, D-14) | The tabs drawn as the terminal draws them, cells of the title line with the number printed (D-21); chevrons when they overflow; `Alt+1…N` from `tabJumpKey`, same order and labels |
 | W-03 | matches | Header carries the task state; the status line gained the web link in P2-08 |
 | W-04 | matches | `Alt+H` key sheet reads the server's key table (built early in P3-02) |
 | W-05 | deferred | Search arrives with the Lobby tab and each later tab's card |
