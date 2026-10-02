@@ -20,12 +20,14 @@ function pipStates(done: number, total: number): boolean[] {
   return Array.from({ length: cells }, (_, index) => index < filled)
 }
 
-/** Filled and hollow pips; decorative, the numbers beside it carry the meaning. */
+/** Filled and hollow pips, the terminal's `▰▱`; decorative, the numbers beside it carry the meaning. */
 export function Pips({ done, total }: { done: number; total: number }) {
   return (
-    <span className="inline-flex items-center gap-0.5 align-middle" aria-hidden="true">
+    <span className="inline-flex items-center" aria-hidden="true">
       {pipStates(done, total).map((on, index) => (
-        <span key={index} className={cn("h-1.5 w-3 rounded-full", on ? "bg-primary" : "bg-border")} />
+        <span key={index} className={cn(on ? "text-primary" : "text-muted-foreground")}>
+          {on ? "▰" : "▱"}
+        </span>
       ))}
     </span>
   )

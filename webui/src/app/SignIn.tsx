@@ -43,7 +43,7 @@ export function SignIn() {
       <form onSubmit={submit} className="flex w-full max-w-md flex-col gap-4 rounded-xl border bg-card p-6">
         <div className="flex items-center gap-2">
           <KeyRound className="size-5" aria-hidden="true" />
-          <h1 className="text-lg font-semibold tracking-tight">Sign in to bot-lobby</h1>
+          <h1 className="text-sm font-bold text-primary">Sign in to bot-lobby</h1>
         </div>
         <p className="text-sm text-muted-foreground">
           Run <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">/bot-lobby web</code> in Pi for the

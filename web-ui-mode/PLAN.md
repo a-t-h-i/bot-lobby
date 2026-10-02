@@ -288,6 +288,7 @@ Every card also has to meet [AGENT-GUIDE.md](AGENT-GUIDE.md) §6, the definition
 - **Do:** build these from the wireframes:
   - the shadcn tokens (light and dark), plus type and spacing scales;
   - the components: Button, IconButton, Tabs, Segmented, List/Row, Badge, Sheet (a side panel), Dialog, Toast, Empty/Loading/Error, Markdown (wrapping P3-04), Field and TextArea;
+  - **since D-21:** the tokens are Pi's theme colours, the face is monospace, buttons and badges are key cells, panes are `Frame`s with the title in the border, and section heads are `Rule`s;
   - a component gallery page in the mock server (`#/gallery`).
 - **Done when:**
   - the gallery passes TESTING §4 at every size, in both themes;
@@ -299,7 +300,7 @@ Every card also has to meet [AGENT-GUIDE.md](AGENT-GUIDE.md) §6, the definition
 - **Starts from:** the shadcn shell and tabs.
 - **Do:**
   1. The header: workspace, branch, task state, connection.
-  2. The **tab strip** per D-09 and P0-07: compact pills at the top at every width; the WAI-ARIA tabs pattern; the active tab always scrolls into view; a chevron at each edge that has hidden tabs, 40 px, not reachable with Tab; a fade that shows there is more; no visible scrollbar. Alt+1…8 jumps to a tab, from `tabJumpKey` in `src/lobby/keys.ts`; next and previous tab have shortcuts. A waiting question shows a badge on any tab other than Lobby.
+  2. The **tab strip** per D-09, P0-07 and D-21: the tabs as cells of the title line at every width (compact pills until D-21); the WAI-ARIA tabs pattern; the active tab always scrolls into view; a chevron at each edge that has hidden tabs, 40 px, not reachable with Tab; a fade that shows there is more; no visible scrollbar. Alt+1…8 jumps to a tab, from `tabJumpKey` in `src/lobby/keys.ts`; next and previous tab have shortcuts. A waiting question shows a badge on any tab other than Lobby.
   3. Hash routing.
   4. The sign-in gate.
   5. The banner for a terminal dialog that is open.
@@ -309,7 +310,7 @@ Every card also has to meet [AGENT-GUIDE.md](AGENT-GUIDE.md) §6, the definition
   - every route renders a placeholder at every size;
   - back and forward work;
   - a reload keeps the route;
-  - all eight pills fit on one line at 1024 px and up, and the strip scrolls with chevrons below that;
+  - all eight tabs fit on one line at 1024 px and up, and the strip scrolls with chevrons below that;
   - nothing scrolls sideways.
 
 ### P3-03 · Data layer

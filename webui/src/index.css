@@ -3,88 +3,107 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * The terminal lobby's look (D-21): Pi's own themes (`dark.json` and
+ * `light.json` in @earendil-works/pi-coding-agent) mapped onto shadcn's
+ * tokens. Panes are frames on the page, not cards, so `--card` is the page;
+ * `--accent` is Pi's selection colour (the lit tab, the chosen row); `--ring`
+ * is the focused pane's border (`borderAccent`). Where one of Pi's colours is
+ * under 4.5:1 on what it sits on (D-19), it is a step lighter in dark and
+ * darker in light; the comment gives Pi's value.
+ */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.53 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  /* Accessible agent-source text palette: the chart hues darkened for 4.5:1 on --card. */
-  --source-dev: oklch(0.5 0.1 185);
-  --source-design: oklch(0.45 0.12 84);
-  --source-qa: oklch(0.55 0.18 41);
-  --source-research: oklch(0.45 0.13 250);
-  --source-quickfix: oklch(0.5 0.2 16);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --radius: 0.25rem;
+  --background: #f8f8f8;
+  --foreground: #1f2328;
+  --card: #f8f8f8;
+  --card-foreground: #1f2328;
+  --popover: #ffffff;
+  --popover-foreground: #1f2328;
+  --primary: #416a6a; /* accent, Pi #5a8080 */
+  --primary-foreground: #f8f8f8;
+  --secondary: #ececf2;
+  --secondary-foreground: #1f2328;
+  --muted: #efeff4;
+  --muted-foreground: #5c5c5c; /* muted, Pi #6c6c6c */
+  --accent: #e2e2ee; /* selectedBg, Pi #d0d0e0 */
+  --accent-foreground: #1f2328;
+  --destructive: #a34f4f; /* error, Pi #aa5555 */
+  --border: #b0b0b0; /* borderMuted */
+  --input: #b0b0b0;
+  --ring: #5a8080; /* borderAccent */
+  --typing: #547da7; /* border: the prompt's rules while you type */
+  --you: #ebebef; /* userMessageBg, Pi #e8e8e8 */
+  --success: #4b754b; /* Pi #588458 */
+  --warning: #7d5c1a; /* Pi #9a7326 */
+  --heading: #7d5c1a; /* mdHeading, Pi #9a7326 */
+  --link: #46698f; /* mdLink, Pi #547da7 */
+  --code: var(--primary); /* mdCode */
+  --codeblock: var(--success); /* mdCodeBlock */
+  --bullet: var(--success); /* mdListBullet */
+  --chart-1: var(--primary);
+  --chart-2: var(--success);
+  --chart-3: var(--link);
+  --chart-4: #875f87; /* thinkingHigh */
+  --chart-5: var(--heading);
+  /* Each agent's colour, as the terminal paints it (SOURCE_COLORS in src/lobby/tabs/home.ts). */
+  --source-dev: var(--success);
+  --source-design: var(--heading);
+  --source-qa: var(--warning);
+  --source-research: var(--foreground);
+  --source-quickfix: var(--code);
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  /* Accessible agent-source text palette: the chart hues lightened for 4.5:1 on --card. */
-  --source-dev: oklch(0.78 0.13 185);
-  --source-design: oklch(0.82 0.16 84);
-  --source-qa: oklch(0.78 0.16 41);
-  --source-research: oklch(0.72 0.13 250);
-  --source-quickfix: oklch(0.72 0.17 16);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #18181e;
+  --foreground: #d4d4d4;
+  --card: #18181e;
+  --card-foreground: #d4d4d4;
+  --popover: #1e1e24; /* Pi's cardBg */
+  --popover-foreground: #d4d4d4;
+  --primary: #8abeb7;
+  --primary-foreground: #18181e;
+  --secondary: #2a2a35;
+  --secondary-foreground: #d4d4d4;
+  --muted: #24242c;
+  --muted-foreground: #a3a3a3; /* muted, Pi #808080 */
+  --accent: #33333f; /* selectedBg, Pi #3a3a4a */
+  --accent-foreground: #d4d4d4;
+  --destructive: #d47777; /* error, Pi #cc6666 */
+  --border: #505050;
+  --input: #505050;
+  --ring: #00d7ff;
+  --typing: #5f87ff;
+  --you: #2e2f3a; /* userMessageBg, Pi #343541 */
+  --success: #b5bd68;
+  --warning: #ffff00;
+  --heading: #f0c674;
+  --link: #81a2be;
+  --bullet: var(--primary);
+  --chart-4: #b294bb;
 }
 
 @theme inline {
+  /* One monospace face for everything, from the system: the CSP allows no web font. */
+  --font-sans: ui-monospace, "JetBrains Mono", "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
+  --font-mono: ui-monospace, "JetBrains Mono", "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
+  --color-typing: var(--typing);
+  --color-you: var(--you);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-heading: var(--heading);
+  --color-link: var(--link);
+  --color-code: var(--code);
+  --color-codeblock: var(--codeblock);
+  --color-bullet: var(--bullet);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -133,10 +152,20 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-variant-ligatures: none;
+  }
+  ::selection {
+    background: var(--accent);
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
   }
 }
 
-/* Rendered model Markdown (see `ui/Markdown.tsx`): calm, token-only styling. */
+/* Rendered model Markdown (see `ui/Markdown.tsx`), as Pi draws it in the terminal: headings in the
+   heading colour (### kept from level 3), `- ` bullets, inline code in the code colour, fenced code
+   between its fences, a blank line between blocks. Tables, images and links stay real HTML. */
 @layer components {
   .md-body {
     @apply text-sm leading-relaxed break-words;
@@ -147,53 +176,71 @@
   .md-body > :last-child {
     @apply mb-0;
   }
-  .md-body p {
-    @apply my-2;
+  .md-body :is(p, ul, ol, blockquote, table, hr, h1, h2, h3, h4, h5, h6) {
+    @apply my-3;
   }
-  .md-body h1,
-  .md-body h2,
-  .md-body h3 {
-    @apply mt-4 mb-2 font-semibold tracking-tight;
+  .md-body :is(h1, h2, h3, h4, h5, h6) {
+    @apply text-sm font-bold text-heading;
   }
   .md-body h1 {
-    @apply text-base;
+    @apply underline underline-offset-4;
   }
-  .md-body h2,
-  .md-body h3 {
-    @apply text-sm;
+  .md-body h3::before {
+    content: "### ";
+  }
+  .md-body h4::before {
+    content: "#### ";
+  }
+  .md-body h5::before {
+    content: "##### ";
+  }
+  .md-body h6::before {
+    content: "###### ";
   }
   .md-body ul {
-    @apply my-2 list-disc space-y-1 pl-5;
+    @apply pl-[2ch];
+    list-style-type: "- ";
   }
   .md-body ol {
-    @apply my-2 list-decimal space-y-1 pl-5;
+    @apply list-decimal pl-[3ch];
   }
-  .md-body li > p {
+  .md-body li::marker {
+    color: var(--bullet);
+  }
+  .md-body li > :is(p, ul, ol) {
     @apply my-0;
   }
   .md-body blockquote {
-    @apply my-2 border-l-2 pl-3 text-muted-foreground;
+    @apply border-l pl-[1ch] text-muted-foreground italic;
   }
   .md-body hr {
-    @apply my-3 border-border;
+    @apply border-muted-foreground;
   }
   .md-body a {
-    @apply font-medium text-primary underline underline-offset-4;
+    @apply text-link underline underline-offset-4;
   }
   .md-body :not(pre) > code {
-    @apply rounded bg-muted px-1 py-0.5 font-mono text-[0.85em];
+    @apply text-code;
+  }
+  .md-body pre {
+    @apply text-codeblock;
   }
   .md-body img {
-    @apply max-w-full rounded-md;
+    @apply max-w-full;
   }
   .md-body input[type="checkbox"] {
     @apply mr-1.5;
   }
   .md-body table th,
   .md-body table td {
-    @apply border border-border px-2 py-1 text-left align-top;
+    @apply border border-border px-[1ch] text-left align-top;
   }
   .md-body table th {
-    @apply bg-muted font-medium;
+    @apply font-bold;
+  }
+
+  /* The terminal's notices: a cell on the page, its text in the accent colour (sonner, `components/ui/sonner.tsx`). */
+  .cn-toast {
+    @apply rounded-sm font-sans;
   }
 }
