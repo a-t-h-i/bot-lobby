@@ -41,8 +41,8 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #18181e;
-    --text: #d4d4d4;
+    --bg: #1d1f21; /* the terminal's background in docs/*.png, softer than Pi's export #18181e */
+    --text: #c5c8c6; /* the terminal's text */
     --muted: #999999; /* Pi #808080 */
     --dim: #878787; /* Pi #666666 */
     --accent: #8abeb7;
@@ -62,8 +62,8 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #18181e;
-  --text: #d4d4d4;
+  --bg: #1d1f21;
+  --text: #c5c8c6;
   --muted: #999999;
   --dim: #878787;
   --accent: #8abeb7;
