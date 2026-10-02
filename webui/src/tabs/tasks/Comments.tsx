@@ -9,6 +9,7 @@ import { act } from "@/lib/act"
 import { formatSince } from "@/lib/format"
 import { NoteForm } from "@/ui/NoteForm"
 import { Markdown } from "@/ui/Markdown"
+import { Rule } from "@/ui/Frame"
 
 const COMMENT_MARKS: Record<PlanComment["status"], string> = { open: "○", delivered: "◐", addressed: "✓" }
 const COMMENT_WORDS: Record<PlanComment["status"], string> = {
@@ -45,9 +46,8 @@ export function Comments({ taskId, finished, canComment }: { taskId: string; fin
   }
   return (
     <section aria-labelledby={`comments-${taskId}`} className="flex flex-col gap-3">
-      <h3 id={`comments-${taskId}`} className="flex items-center justify-between border-b pb-1 text-sm font-medium">
-        <span>Comments</span>
-        {open > 0 ? <span className="text-xs font-normal text-muted-foreground">{open} open</span> : null}
+      <h3 id={`comments-${taskId}`} className="text-sm">
+        <Rule title="Comments" right={open > 0 ? `${open} open` : undefined} />
       </h3>
       {comments.length === 0 ? (
         <p className="text-sm text-muted-foreground">

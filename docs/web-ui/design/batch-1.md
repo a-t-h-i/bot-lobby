@@ -2,6 +2,8 @@
 
 **Status:** for the user's approval before Phase 3 (plan P0-07, batch 1). Phase 3 builds to this document.
 
+**Changed by D-21 (2026-10-02):** the user asked for the page to look like the terminal lobby, with the tabs part of the page rather than pills. Pi's theme colours replace the shadcn defaults, the face is monospace, the tab strip is drawn as cells of the title line (number printed, the chosen cell lit, no pills), panes are frames with the title in the border, and notices sit at the top right. Where this document says pills, a filled pill or the shadcn defaults, read `web-ui-mode/DECISIONS.md` D-21; layouts, content, wording and behaviour stand as drawn.
+
 **Scope:** desktop/tablet only, ≥ 768 px (D-02, D-09). Below 768 px the page is replaced by the `NARROW_WINDOW` notice. Phones are dropped. Light and dark are the shadcn defaults; no custom theming.
 
 **Sources read for this document:** `src/lobby/view.ts` (tab bar, titles, prompt labels, hints, help), `src/lobby/tabs/home.ts` (Lobby tab), `src/lobby/keys.ts` (key map), `src/lobby/prompts.ts` (shared strings), `src/lobby/tabs/tasks.ts` + `src/state/budget.ts` + `src/lobby/mini.ts` (task header, runs), `src/ask/dialog.ts` + `src/ask/view.ts` + `src/ask/state.ts` + `src/ask/types.ts` (questionnaire), `web-ui-mode/DECISIONS.md` (D-09, D-10, D-13, D-14), `web-ui-mode/FEATURE-INVENTORY.md` (Lobby rows), `web-ui-mode/PLAN.md` (P0-07, P3-01…P3-07), `webui/src/components/ui/*` and `webui/src/index.css` (the shadcn components and tokens we already have).
@@ -15,7 +17,7 @@
 Five choices to approve or change before Phase 3 starts.
 
 1. **Shell frame.** A fixed header (56 px: workspace, branch, task state, connection) and a tab strip (48 px) on top; one scrolling main pane; the composer + hint line docked at the bottom. The page itself never scrolls; only the main pane does. *Recommendation: adopt.*
-2. **Tab strip.** Compact labelled pills (`Alt+1…8` moves into the tooltip, not the pill) with edge chevrons, edge fades, no visible scrollbar, the active pill filled with `--primary`. *Recommendation: adopt.* The terminal prints the number inside the cell; the web pill omits it — approve this one visible wording/layout change.
+2. **Tab strip.** *(Superseded by D-21: cells of the title line, as the terminal draws its tab bar.)* Compact labelled pills (`Alt+1…8` moves into the tooltip, not the pill) with edge chevrons, edge fades, no visible scrollbar, the active pill filled with `--primary`. *Recommendation: adopt.* The terminal prints the number inside the cell; the web pill omits it — approve this one visible wording/layout change.
 3. **Lobby tab columns.** At ≥ 1024 px the conversation and the activity log sit side by side (as the TUI does at ≥ 100 columns), each with its own scroll; below 1024 px they stack (conversation first), thinking full width under both. *Recommendation: adopt.*
 4. **Questionnaire slideout.** A bottom sheet docked directly above the composer, never covering it; the option preview sits beside the options at ≥ 1024 px and below them at 768 px; `Esc` minimises it to a chip above the composer (state kept) rather than discarding. *Recommendation: adopt.*
 5. **Alt+H overlay.** A modal sheet with the whole web key map: one column at 768 px, two columns at 1440 px (Everywhere | Typing/Browsing/this tab). Closes on any key or Esc. *Recommendation: adopt.*

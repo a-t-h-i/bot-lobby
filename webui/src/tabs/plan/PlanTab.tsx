@@ -20,6 +20,7 @@ import { PlanHeader } from "./Header"
 import { LineComment } from "./LineComment"
 import { Roster } from "./Roster"
 import { DRAFT_WAITS, NO_DRAFT, introText, isFresh, seatCells } from "./words"
+import { Rule } from "@/ui/Frame"
 
 type Comments = ReadonlyMap<string, string[]>
 
@@ -36,7 +37,7 @@ function useFollowEnd(revision: number) {
 function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) {
   return (
     <Pane className="flex flex-col gap-4 p-4">
-      <h2 className="text-base font-medium">Plan</h2>
+      <h2 className="text-sm font-bold">Plan</h2>
       <p className="text-sm font-medium text-foreground">{introText(snap.limit)}</p>
       <Roster cells={seatCells(snap)} intro onToggled={onDone} />
     </Pane>
@@ -47,7 +48,9 @@ function ConversationPane({ snap, wide }: { snap: PlannerSnapshot; wide: boolean
   const ref = useFollowEnd(snap.messages.length)
   return (
     <Pane className="flex flex-col">
-      <h2 className="border-b px-3 py-2 text-base font-medium">Conversation</h2>
+      <h2 className="px-[1ch] pt-2 text-sm">
+        <Rule title="Conversation" />
+      </h2>
       <div ref={ref} className={cn("min-h-0 overflow-y-auto p-4", wide ? "flex-1" : "max-h-[45svh]")}>
         <PanelConversation messages={snap.messages} />
       </div>
@@ -58,7 +61,9 @@ function ConversationPane({ snap, wide }: { snap: PlannerSnapshot; wide: boolean
 function DraftPane({ snap, comments, onComment }: { snap: PlannerSnapshot; comments: Comments; onComment: (line: string) => void }) {
   return (
     <Pane className="flex flex-col">
-      <h2 className="border-b px-3 py-2 text-base font-medium">Draft plan</h2>
+      <h2 className="px-[1ch] pt-2 text-sm">
+        <Rule title="Draft plan" />
+      </h2>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
         {snap.draft ? <DraftBody draft={snap.draft} comments={comments} onComment={onComment} /> : <p className="text-sm text-muted-foreground">{snap.busy ? DRAFT_WAITS : NO_DRAFT}</p>}
         <SeatNeeds notes={snap.notes} />

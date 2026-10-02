@@ -32,7 +32,7 @@ How the web UI fits into bot-lobby. Read [DECISIONS.md](DECISIONS.md) first: thi
 │   lib/       api.ts (calls, sign-in), events.ts (EventSource), store.ts (topics → state), │
 │              markdown.ts (marked + DOMPurify), format.ts (times, sizes, money)            │
 │   app/       shell: the title line with the tabs, routing, layouts, the key line (D-21)   │
-│   ui/        components: Frame, Key, Sheet, Tabs, List, Empty, Markdown, Chart …          │
+│   ui/        components: Frame, Rule, Button, Sheet, List, Empty, Markdown, Chart …       │
 │   tabs/      lobby · tasks · plan · quickfix · metrics · git · knowledge · excalidraw ·   │
 │              issues · sessions · settings                                                 │
 │   prompts/   the questionnaire and dialogs (D-13)                                         │

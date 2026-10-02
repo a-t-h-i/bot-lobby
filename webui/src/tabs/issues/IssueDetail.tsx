@@ -15,7 +15,7 @@ type Comment = IssueDetailInfo["comments"][number]
 function Header({ issue, now }: { issue: IssueDetailInfo; now: number }) {
   return (
     <header className="flex flex-col gap-1">
-      <h2 className="text-base font-medium break-words">
+      <h2 className="text-sm font-bold break-words">
         #{issue.number} {issue.title}
       </h2>
       <p className="text-xs text-muted-foreground">{factsLine(issue, now)}</p>

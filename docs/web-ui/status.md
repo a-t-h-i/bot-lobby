@@ -34,8 +34,8 @@ P0-01 copies this file to `docs/web-ui/status.md`. Agents claim and update tasks
 | P2-08 | Command, config and opening the browser | done: Step 6 | `web`, `web stop`, `web link`, `web reset`, `lobby.web` |
 | P2-09 | Mock server and fixtures | done: Step 7 | Ten scenario sets under `webui/fixtures/` |
 | P2-X | Server checkpoint | done: Step 7 | Server/security tests green |
-| P3-01 | Tokens and base components | done: Step 8 | shadcn tokens, tabs/sonner additions |
-| P3-02 | App shell and layouts | done: Step 9 | Header, pill tab strip, routing, keys, help sheet |
+| P3-01 | Tokens and base components | done: Step 8 | shadcn tokens, tabs/sonner additions; since D-21, Pi's theme colours, monospace, key cells, `Frame` and `Rule` |
+| P3-02 | App shell and layouts | done: Step 9 | Header, tab strip, routing, keys, help sheet; since D-21, the tabs are cells of the title line, not pills |
 | P3-03 | Data layer | done: Step 8 | Store, topics, event hook, API client |
 | P3-04 | Markdown | done: Step 10 | Real Markdown, no raw HTML, XSS-covered |
 | P3-05 | The Lobby tab | done: Step 10 | Task header, runs, conversation, activity, thoughts, composer |
