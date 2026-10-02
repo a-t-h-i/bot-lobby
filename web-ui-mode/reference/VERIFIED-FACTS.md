@@ -14,7 +14,7 @@ What was actually run for this plan, and what it showed.
 ```
 cd web-ui-mode/starter && npm install && npm run build
 app-DCDCSCUN.js   98.4 KB      (gzip: about 34 KB)
-app-SSWXTZGT.css  10.0 KB      (gzip: about 3 KB)
+app-ZY3EJDE4.css  10.0 KB      (gzip: about 3 KB)
 ```
 
 - **Libraries:** Preact 11.0.0, marked 18.0.14 and DOMPurify 3.4.16, bundled by esbuild 0.28.2 with content-hashed names.

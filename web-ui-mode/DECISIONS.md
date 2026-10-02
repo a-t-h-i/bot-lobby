@@ -284,6 +284,7 @@ The user asked for the web UI to look close to bot-lobby in the terminal, with t
 
 - **Colours:** Pi's own themes (`dark.json` and `light.json` in `@earendil-works/pi-coding-agent`) mapped onto shadcn's tokens in `webui/src/index.css`.
   - `--accent` is Pi's selection colour (the chosen tab, the chosen row, keys); `--primary` is Pi's accent; `--ring` is the focused pane's border (`borderAccent`); `--border` is `borderMuted`.
+  - **Dark is the terminal's soft charcoal,** as in the screenshots in `docs/*.png`: background `#1d1f21` and text `#c5c8c6` (the terminal's own, Tomorrow Night), with the greys between them for surfaces. It is not the near-black `#18181e` of Pi's HTML export, which the page first used (2026-10-02).
   - Panes are frames on the page, not cards, so `--card` is the page.
   - Each agent keeps its terminal colour (`SOURCE_COLORS` in `src/lobby/tabs/home.ts`), in text and in the Metrics bars.
   - Where one of Pi's colours is under 4.5:1 on what it sits on (D-19), its token is a step lighter in dark or darker in light; the stylesheet notes Pi's value beside it.
