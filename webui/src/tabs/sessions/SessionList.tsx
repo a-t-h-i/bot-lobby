@@ -1,10 +1,11 @@
 /**
  * The session list (batch-2 §i): sections THIS WINDOW, BACKGROUND and OTHER
- * TERMINALS, each with its count; a 44 px row per session with the
+ * TERMINALS, each headed by a rule with its count, as the terminal heads them (D-21); a 44 px row per session with the
  * where-mark, name, status and the ● n questions badge.
  */
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
+import { Rule } from "@/ui/Frame"
 import { SECTION_OF, SECTION_ORDER, WHERE_MARKS, type Entry, type Where } from "./words"
 
 function Row({ entry, selected, onSelect }: { entry: Entry; selected: boolean; onSelect: (id: string) => void }) {
@@ -33,9 +34,8 @@ function Row({ entry, selected, onSelect }: { entry: Entry; selected: boolean; o
 function Group({ where, entries, selectedId, onSelect }: { where: Where; entries: Entry[]; selectedId?: string; onSelect: (id: string) => void }) {
   return (
     <section aria-label={SECTION_OF[where]} className="flex flex-col gap-1">
-      <h3 className="flex items-center justify-between px-3 pt-2 text-xs font-medium tracking-wide text-muted-foreground">
-        <span>{SECTION_OF[where]}</span>
-        <span className="tabular-nums">{entries.length}</span>
+      <h3 className="px-[1ch] pt-2 text-sm">
+        <Rule title={SECTION_OF[where]} right={String(entries.length)} />
       </h3>
       <ul className="flex flex-col gap-0.5">
         {entries.map((entry) => (
