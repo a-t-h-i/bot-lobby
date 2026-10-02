@@ -20,6 +20,11 @@ DOMPurify.addHook("afterSanitizeAttributes", (node) => {
   }
   // Wide tables scroll inside their own box instead of the page.
   if (node.tagName === "TABLE") node.setAttribute("data-wide", "");
+  // A code block's language, shown after its opening fence as the terminal does (```css); a plain word only.
+  if (node.tagName === "PRE") {
+    const lang = /(?:^|\s)language-([\w+#.-]{1,20})(?:\s|$)/.exec(node.firstElementChild?.getAttribute("class") ?? "")?.[1];
+    if (lang) node.setAttribute("data-lang", lang);
+  }
 });
 
 export function renderMarkdown(text: string): string {

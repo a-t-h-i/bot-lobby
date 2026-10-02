@@ -33,7 +33,7 @@
 
 ## 4. UI checks
 
-**Start from `web-ui-mode/starter/test/ui-check.mjs`**, which ran 92 checks green (VERIFIED-FACTS 3).
+**Start from `web-ui-mode/starter/test/ui-check.mjs`**, which ran 146 checks green (VERIFIED-FACTS 3).
 
 **Sizes:** every page task runs its checks at these sizes, in **light and dark**:
 
@@ -47,13 +47,13 @@
 
 **Check on every screen:**
 1. it renders (a `data-testid`) in its loading, empty, error and full states, using mock scenarios;
-2. its main action round-trips, and the notice shows as a toast;
-3. **no sideways page scroll:** `document.documentElement.scrollWidth − innerWidth ≤ 0`;
+2. its main action round-trips, and the notice shows in the key line;
+3. **no sideways page scroll:** `max(scrollWidth, innerWidth) − the device's width ≤ 0`, at rest and while something is running (mobile Chrome widens `innerWidth` to fit overflow, AGENT-GUIDE §4);
 4. **touch targets** are at least 44 px tall and wide on touch sizes (the starter checks 36; P3-01 raises it);
 5. **no console errors** and no page errors;
 6. **untrusted text stays inert:** Markdown with `<img onerror>`, `<script>`, `javascript:` links and remote images renders inert, with no dialog, no request off-origin, and remote images stripped;
 7. **keyboard:** the main action is reachable with Tab and works with Enter or Space;
-8. **contrast:** text meets 4.5:1 in both themes. Use axe-core from P5-04, or a computed-style check until then;
+8. **contrast:** text meets 4.5:1 in both themes. The starter's UI check has a computed-style check (`lowContrastText`); axe-core joins it from P5-04;
 9. **screenshots:** one per size and theme, kept as CI artifacts, not committed. The four in `reference/screenshots/` are the exception: they are the starter's reference.
 
 **Rules for writing the checks:**

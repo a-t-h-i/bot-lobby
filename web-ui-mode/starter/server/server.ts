@@ -145,16 +145,20 @@ export async function startLobbyServer(options: ServerOptions): Promise<LobbySer
   // A streaming reply changes dozens of times a second; clients get its newest text at most once a frame.
   let pendingReply: string | undefined;
   let replyTimer: ReturnType<typeof setTimeout> | undefined;
+  const flushReply = () => {
+    clearTimeout(replyTimer);
+    replyTimer = undefined;
+    if (pendingReply !== undefined) broadcast({ type: "reply", text: pendingReply });
+    pendingReply = undefined;
+  };
   const unsubscribe = options.service.onChange((change) => {
     if ("reply" in change) {
       pendingReply = change.reply;
-      replyTimer ??= setTimeout(() => {
-        replyTimer = undefined;
-        if (pendingReply !== undefined) broadcast({ type: "reply", text: pendingReply });
-        pendingReply = undefined;
-      }, options.frameMs ?? 40);
+      replyTimer ??= setTimeout(flushReply, options.frameMs ?? 40);
       return;
     }
+    // A held reply step goes out before the change that may end the reply; sent after it, the page would show the finished reply as still streaming.
+    flushReply();
     const version = (versions[change.topic] ?? 0) + 1;
     versions[change.topic] = version;
     broadcast({ type: "changed", topic: change.topic, version });

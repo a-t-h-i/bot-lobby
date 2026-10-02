@@ -79,6 +79,9 @@ Then read the extra documents for your lane:
 - **A shared fake service keeps state between test runs.** In UI checks, wait for *this* run's change (count before and after), not for "the last message".
 - **`EventSource` cannot send headers.** The stream is authenticated by the cookie alone, which is why the cookie is `SameSite=Strict` and the stream checks Host and Origin like any call.
 - **Phones zoom into fields with a font under 16 px.** Keep the composer and every field at 16 px.
+- **A grid with an `auto` column grows to its widest child's natural width.** A textarea's natural width plus the stop and send keys pushed send off a 360 px screen while the oracle worked. Give every layout grid `minmax(0, 1fr)` columns, as the starter does.
+- **Mobile Chrome widens `innerWidth` to fit content that overflows.** So `scrollWidth − innerWidth` reads 0 even when the page scrolls sideways. Compare against the device's width, as the starter's UI check does, and check while the oracle is busy too.
+- **A held stream frame must not overtake a change.** The server holds reply steps for one frame; a `changed` sent meanwhile reached the page first, and the late frame brought a finished reply back as streaming. The server now flushes a held reply frame before any change (`server.ts`, with a test).
 
 ## 5. Conventions
 
@@ -89,7 +92,7 @@ Then read the extra documents for your lane:
 | Tests | `node:test` + `node:assert/strict`, `test/webui-*.test.ts`; Playwright checks in `test/web/` |
 | Test ids | `data-testid="<tab>-<thing>"` (`tasks-row`, `composer-send`) |
 | API | `POST /api/<group>.<action>`, answering `{ ok, result }` or `{ ok: false, error, code }` (ARCHITECTURE §5) |
-| Notices | the terminal's exact text, returned by the action and shown as a toast |
+| Notices | the terminal's exact text, returned by the action and shown in the key line (D-21) |
 | Config | under `lobby.web` (D-17); read with `loadConfig()`, as everything else in bot-lobby |
 | Data | nothing new on disk except `~/.pi/bot-lobby/web.json` (the secret) and `webPort` in presence files |
 | CSS | tokens on `:root`, redefined for dark (`prefers-color-scheme` and `[data-theme]`); no colour values outside the token block |
