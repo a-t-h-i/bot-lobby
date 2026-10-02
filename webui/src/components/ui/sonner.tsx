@@ -1,16 +1,16 @@
 "use client"
 
 import type { CSSProperties } from "react"
-import {
-  CircleCheckIcon,
-  InfoIcon,
-  Loader2Icon,
-  OctagonXIcon,
-  TriangleAlertIcon,
-} from "lucide-react"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 
 import { useTheme } from "@/components/theme-provider"
+import { Spinner } from "@/components/ui/spinner"
+
+/*
+ * Notices as the terminal shows them (D-21): the terminal's marks for the kind,
+ * a square cell, the page's monospace face. They sit at the top right, under
+ * the title line, so they never cover the composer's keys.
+ */
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()
@@ -19,12 +19,14 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
+      position="top-right"
+      offset={{ top: 88, right: 16 }}
       icons={{
-        success: <CircleCheckIcon className="size-4" />,
-        info: <InfoIcon className="size-4" />,
-        warning: <TriangleAlertIcon className="size-4" />,
-        error: <OctagonXIcon className="size-4" />,
-        loading: <Loader2Icon className="size-4 animate-spin" />,
+        success: <span className="text-success">✓</span>,
+        info: <span className="text-primary">·</span>,
+        warning: <span className="text-warning">!</span>,
+        error: <span className="text-destructive">✗</span>,
+        loading: <Spinner aria-hidden="true" role="presentation" />,
       }}
       style={
         {

@@ -1,12 +1,13 @@
 /**
- * The composer docked at the bottom of every route. Enter sends with a
- * physical keyboard and Shift+Enter is a newline; on touch the Send button
- * sends. While the oracle is busy the placeholder says so and a Stop button
- * appears (`lobby.send` steers, `lobby.abort` stops). Any notice the server
- * returns becomes a toast.
+ * The composer docked at the bottom of every route, drawn as the terminal's
+ * prompt (D-21): a label set into a rule, the text, a rule under it, both
+ * rules in the typing colour while you type. Enter sends with a physical
+ * keyboard and Shift+Enter is a newline; on touch the send key sends. While
+ * the oracle is busy the label says so and a stop key appears (`lobby.send`
+ * steers, `lobby.abort` stops). Any notice the server returns becomes a
+ * toast.
  */
 import { useCallback, useState, type KeyboardEvent } from "react"
-import { SendHorizontal, Square } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -14,7 +15,7 @@ import { useTopic } from "@/app/hooks"
 import { call } from "@/lib/api"
 import type { LobbySnapshot, StatusInfo } from "@protocol"
 
-const PROMPT = "Type a request, or / for commands…"
+const PROMPT = "message the oracle · enter sends · / for commands"
 const STEER = "message the oracle · enter steers the running turn"
 
 export function Composer() {
@@ -56,26 +57,29 @@ export function Composer() {
   )
 
   return (
-    <div className="shrink-0 border-t bg-background px-4 py-3">
-      <div className="flex items-end gap-2">
+    <div className="group/prompt shrink-0 bg-background px-[1ch] pt-1">
+      <label htmlFor="composer-text" className="flex items-center gap-[1ch] text-xs text-muted-foreground group-focus-within/prompt:text-primary">
+        <span aria-hidden="true" className="w-[2ch] shrink-0 border-t border-border group-focus-within/prompt:border-typing" />
+        <span className="truncate">{busy ? STEER : PROMPT}</span>
+        <span aria-hidden="true" className="min-w-[2ch] flex-1 border-t border-border group-focus-within/prompt:border-typing" />
+      </label>
+      <div className="flex items-end gap-[1ch] border-b border-border py-1 group-focus-within/prompt:border-typing">
         <Textarea
+          id="composer-text"
           aria-label="Message the oracle"
-          placeholder={busy ? STEER : PROMPT}
           value={text}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={onKeyDown}
           rows={1}
-          className="min-h-11 flex-1 resize-none text-base md:text-base"
+          className="min-h-10 flex-1 resize-none rounded-none border-0 bg-transparent px-[1ch] text-base caret-primary shadow-none focus-visible:ring-0 md:text-base dark:bg-transparent"
         />
         {busy ? (
-          <Button type="button" size="lg" variant="outline" className="h-11" onClick={() => void stop()}>
-            <Square aria-hidden="true" />
-            Stop
+          <Button type="button" size="lg" variant="secondary" className="h-10 px-[2ch] text-foreground" onClick={() => void stop()}>
+            stop
           </Button>
         ) : null}
-        <Button type="button" size="lg" className="h-11" onClick={() => void send()} disabled={sending}>
-          <SendHorizontal aria-hidden="true" />
-          Send
+        <Button type="button" size="lg" className="h-10 px-[2ch]" onClick={() => void send()} disabled={sending}>
+          send
         </Button>
       </div>
     </div>

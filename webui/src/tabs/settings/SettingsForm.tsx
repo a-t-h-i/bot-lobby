@@ -152,14 +152,14 @@ function Choice({ value, items, label, onChange }: { value: string; items: Choic
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger aria-label={label}>
-        <SelectValue />
+        <SelectValue className="min-w-0 overflow-hidden" />
       </SelectTrigger>
       <SelectContent>
         {items.map((item) => (
           <SelectItem key={item.value} value={item.value}>
-            <span className="flex min-w-0 flex-col">
-              <span className="truncate">{item.label}</span>
-              {item.help ? <span className="text-xs text-muted-foreground">{item.help}</span> : null}
+            <span className="flex min-w-0 flex-col items-start text-left">
+              <span className="max-w-full truncate">{item.label}</span>
+              {item.help ? <span className="max-w-full truncate text-xs text-muted-foreground">{item.help}</span> : null}
             </span>
           </SelectItem>
         ))}
@@ -451,7 +451,7 @@ export function SettingsForm({ config, models, onConfig }: { config: Config; mod
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4">
       <header className="flex flex-col gap-1">
-        <h1 className="text-lg font-medium">{PAGE.title}</h1>
+        <h1 className="text-sm font-bold">{PAGE.title}</h1>
         <p className="text-sm text-muted-foreground">{PAGE.intro}</p>
       </header>
       <Section title={GROUP_TITLES.agents}>

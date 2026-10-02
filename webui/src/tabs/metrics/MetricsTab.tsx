@@ -19,9 +19,9 @@ const EMPTY = "No runs recorded yet. Every Master turn, subagent run, quick fix 
 
 function GroupToggle({ groupBy, onGroup }: { groupBy: GroupBy; onGroup: (value: GroupBy) => void }) {
   return (
-    <div role="group" aria-label="Group by" className="flex gap-1 rounded-lg bg-muted p-1">
+    <div role="group" aria-label="Group by" className="flex">
       {(["model", "model-kind"] as const).map((value) => (
-        <Button key={value} variant={groupBy === value ? "secondary" : "ghost"} aria-pressed={groupBy === value} className="h-10" onClick={() => onGroup(value)}>
+        <Button key={value} variant={groupBy === value ? "default" : "ghost"} aria-pressed={groupBy === value} className="h-10" onClick={() => onGroup(value)}>
           {byLabel(value)}
         </Button>
       ))}
@@ -99,7 +99,7 @@ export function MetricsTab() {
   return (
     <div className="flex flex-col gap-4 p-4">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-lg font-medium">Metrics</h1>
+        <h1 className="text-sm font-bold">Metrics</h1>
         {read.loading && read.data ? <span className="text-xs text-muted-foreground">⠋ refreshing</span> : null}
       </header>
       <Controls groupBy={groupBy} query={query} onGroup={setGroupBy} onQuery={setQuery} />

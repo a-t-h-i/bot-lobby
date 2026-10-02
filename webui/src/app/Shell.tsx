@@ -1,8 +1,9 @@
 /**
- * The shell that wraps every route (batch-1 §a): header, pill tab strip, an
- * optional banner, one scrolling main pane, the docked composer and the hint
- * line. Clicking a pill or pressing a shortcut moves the hash route; the
- * Alt+H overlay lists the key map.
+ * The shell that wraps every route (batch-1 §a), drawn like the terminal
+ * lobby (D-21): the title line with the tabs as its cells, an optional
+ * banner, one scrolling main pane, the docked composer and the key line.
+ * Clicking a tab or pressing a shortcut moves the hash route; the Alt+H
+ * overlay lists the key map.
  */
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -50,30 +51,52 @@ function handleAction(action: string, toggleHelp: () => void, cycle: (delta: num
 function Banner({ status, connection, onRetry }: { status?: StatusInfo; connection: ConnectionState; onRetry: () => void }) {
   if (status?.terminalDialog) {
     return (
-      <div role="status" className="shrink-0 border-b bg-muted px-4 py-2 text-sm">
+      <div role="status" className="shrink-0 px-[1ch] py-1 text-sm font-bold text-warning">
         {sentence(PI_ASKING_IN_TERMINAL)} — answer it there; this page waits.
       </div>
     )
   }
   if (connection === "offline") return <ReconnectingState onRetry={onRetry} />
   if (connection === "connecting") {
-    return <div className="shrink-0 border-b bg-muted px-4 py-2 text-sm text-muted-foreground">Reconnecting…</div>
+    return <div className="shrink-0 px-[1ch] py-1 text-sm text-muted-foreground">Reconnecting…</div>
   }
   return null
 }
 
-function HintLine() {
+function Hint({ keys, children, typing }: { keys: string; children: string; typing?: boolean }) {
+  // Shown while you type in a field (TYPE) or while you do not (BROWSE), as the terminal swaps its key line.
+  const when = typing === undefined ? "flex" : typing ? "hidden group-has-[textarea:focus]/shell:flex" : "flex group-has-[textarea:focus]/shell:hidden"
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t px-4 py-1.5 text-xs text-muted-foreground">
-      <span className="flex items-center gap-1">
-        <Kbd>Alt+]</Kbd> next tab
-      </span>
-      <span className="flex items-center gap-1">
-        <Kbd>Alt+[</Kbd> previous tab
-      </span>
-      <span className="flex items-center gap-1">
-        <Kbd>Alt+H</Kbd> keys
-      </span>
+    <span className={`${when} items-center gap-[1ch]`}>
+      <Kbd>{keys}</Kbd> {children}
+    </span>
+  )
+}
+
+/** The terminal's key line: the mode in a lit cell, then each key in the accent colour and what it does. */
+function KeyLine({ tabCount }: { tabCount: number }) {
+  return (
+    <div className="flex shrink-0 items-center gap-x-[2ch] overflow-hidden px-[1ch] py-1 text-xs whitespace-nowrap text-muted-foreground">
+      <span className="bg-accent px-[1ch] font-bold text-foreground group-has-[textarea:focus]/shell:hidden">BROWSE</span>
+      <span className="hidden bg-accent px-[1ch] font-bold text-primary group-has-[textarea:focus]/shell:inline">TYPE</span>
+      <Hint keys="Enter" typing>
+        send
+      </Hint>
+      <Hint keys="Shift+Enter" typing>
+        new line
+      </Hint>
+      {tabCount > 0 ? (
+        <Hint keys={`Alt+1…${tabCount}`} typing={false}>
+          tabs
+        </Hint>
+      ) : null}
+      <Hint keys="Alt+]" typing={false}>
+        next tab
+      </Hint>
+      <Hint keys="Alt+[" typing={false}>
+        previous tab
+      </Hint>
+      <Hint keys="Alt+H">keys</Hint>
     </div>
   )
 }
@@ -122,10 +145,14 @@ export function Shell() {
   return (
     <div
       ref={rootRef}
-      className="flex h-svh flex-col overflow-hidden bg-background pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
+      className="group/shell flex h-svh flex-col overflow-hidden bg-background pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
     >
-      <Header status={status} task={lobbyRecord.data?.task} connection={connection} />
-      <TabStrip tabs={tabs} activeId={activeId} questionCount={prompts.length} onSelect={select} />
+      <Header
+        status={status}
+        task={lobbyRecord.data?.task}
+        connection={connection}
+        tabs={<TabStrip tabs={tabs} activeId={activeId} questionCount={prompts.length} onSelect={select} />}
+      />
       <Banner status={status} connection={connection} onRetry={retry} />
       <main
         id="main"
@@ -137,7 +164,7 @@ export function Shell() {
       </main>
       <PromptSlideout prompts={prompts} answer={answer} dismiss={dismiss} />
       <Composer />
-      <HintLine />
+      <KeyLine tabCount={tabs.length} />
       <AltH open={help} onOpenChange={setHelp} keys={keys} tabs={tabs} />
     </div>
   )

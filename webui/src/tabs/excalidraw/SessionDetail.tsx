@@ -223,7 +223,7 @@ interface SessionDetailProps {
 export function SessionDetail({ session, check, checking, onCheck, onChanged, onRemove }: SessionDetailProps) {
   return (
     <article aria-label="Session detail" className="flex flex-col gap-4">
-      <h2 className="text-base font-medium break-words">{session.name}</h2>
+      <h2 className="text-sm font-bold break-words">{session.name}</h2>
       <LinkBox session={session} />
       <ContributeLine session={session} onChanged={onChanged} />
       <CheckBox check={check} checking={checking} onCheck={onCheck} />

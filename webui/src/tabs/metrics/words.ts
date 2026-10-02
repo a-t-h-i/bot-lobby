@@ -87,8 +87,21 @@ export function groupLabel(group: MetricGroupInfo, groupBy: GroupBy): string {
 
 const AGENT_FILLS: readonly string[] = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5"]
 
-/** A stable fill class per agent name (chart hues are fills, never text). */
+/** Each agent's own colour, as the terminal's stacked bar paints it (`sourceColor`, D-21). */
+const SOURCE_FILLS: Record<string, string> = {
+  MASTER: "bg-primary",
+  ORACLE: "bg-primary",
+  DEV: "bg-source-dev",
+  DESIGN: "bg-source-design",
+  QA: "bg-source-qa",
+  RESEARCH: "bg-source-research",
+  "QUICK FIX": "bg-source-quickfix",
+}
+
+/** A stable fill class per agent name: its own colour, else a chart hue (chart hues are fills, never text). */
 export function agentFill(agent: string): string {
+  const own = SOURCE_FILLS[agent.toUpperCase()]
+  if (own) return own
   let hash = 0
   for (const char of agent) hash = (hash * 31 + char.charCodeAt(0)) % AGENT_FILLS.length
   return AGENT_FILLS[hash] ?? AGENT_FILLS[0]!

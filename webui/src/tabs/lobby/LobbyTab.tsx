@@ -33,10 +33,10 @@ export function LobbyTab() {
   if (!data && lobby.loading) return <LobbyLoading />
   if (!data && lobby.error) return <ErrorState message={lobby.error} onRetry={() => lobbyStore.onHello({})} />
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-1 px-[1ch] pb-1">
       <TaskHeader task={data?.task} status={status.data} />
       <RunsStrip runs={runsOf(data)} />
-      <div className="grid min-h-0 flex-1 grid-rows-2 gap-3 lg:grid-rows-1 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 grid-rows-2 gap-x-[1ch] lg:grid-rows-1 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <Conversation
           chat={data?.chat ?? []}
           reply={data?.reply}

@@ -78,7 +78,7 @@ export function SessionDetail({ entry, lobby, onChanged }: { entry: Entry; lobby
   return (
     <article aria-label="Session detail" className="flex flex-col gap-4">
       <header className="flex flex-col gap-1">
-        <h3 className="text-base font-medium text-foreground">
+        <h3 className="text-sm font-bold text-foreground">
           <span aria-hidden="true">{WHERE_MARKS[entry.where]} </span>
           {entry.name}
         </h3>

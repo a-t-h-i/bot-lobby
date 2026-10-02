@@ -6,6 +6,7 @@
 import type { KnowledgeFileInfo } from "@protocol"
 import { cn } from "@/lib/utils"
 import { AGENT_LABELS, groupFiles, sizeWords } from "./words"
+import { Rule } from "@/ui/Frame"
 
 export function fileKey(info: Pick<KnowledgeFileInfo, "agent" | "file">): string {
   return `${info.agent}/${info.file}`
@@ -29,8 +30,8 @@ function FileRow({ info, selected, onSelect }: { info: KnowledgeFileInfo; select
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(fileKey(info))}
         className={cn(
-          "flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50",
-          selected && "bg-muted ring-2 ring-ring ring-inset",
+          "flex min-h-11 w-full items-center justify-between gap-3 rounded-sm px-[1ch] py-2 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50",
+          selected && "bg-accent",
         )}
       >
         <span className={cn("min-w-0 truncate text-sm text-foreground", selected && "font-medium")}>{info.label}</span>
@@ -45,9 +46,8 @@ export function KnowledgeList({ files, selectedKey, onSelect }: { files: Knowled
     <div className="flex flex-col pb-2">
       {groupFiles(files).map((group) => (
         <div key={group.agent}>
-          <h3 className="flex items-center justify-between border-b px-3 pt-4 pb-1 text-xs font-medium tracking-wide text-muted-foreground">
-            <span>{AGENT_LABELS[group.agent]}</span>
-            {group.notes > 0 ? <span className="text-primary">✎ {group.notes}</span> : null}
+          <h3 className="px-[1ch] pt-3 pb-1 text-sm">
+            <Rule title={AGENT_LABELS[group.agent]} right={group.notes > 0 ? `✎ ${group.notes}` : undefined} />
           </h3>
           <ul className="flex flex-col gap-0.5 px-1 pt-1">
             {group.files.map((info) => (

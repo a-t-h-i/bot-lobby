@@ -7,6 +7,7 @@ import type { TaskRow } from "@protocol"
 import { cn } from "@/lib/utils"
 import { Pips } from "@/ui/task-facts"
 import { CHECK_MARKS, CHECK_WORDS, SECTION_TITLES, detailsLine, groupRows } from "./words"
+import { Rule } from "@/ui/Frame"
 
 function Trailing({ row }: { row: TaskRow }) {
   if (row.check === "open" && row.progress) {
@@ -35,7 +36,7 @@ function Row({ row, selected, onSelect }: { row: TaskRow; selected: boolean; onS
         type="button"
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(row.id)}
-        className="flex min-h-11 w-full flex-col gap-0.5 rounded-lg px-3 py-2 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current=true]:bg-muted aria-[current=true]:ring-2 aria-[current=true]:ring-inset aria-[current=true]:ring-ring"
+        className="flex min-h-11 w-full flex-col gap-0.5 rounded-sm px-[1ch] py-2 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current=true]:bg-accent"
       >
         <span className="flex items-start gap-2 text-sm">
           <span className="w-3 shrink-0 text-foreground" aria-hidden="true">
@@ -59,9 +60,8 @@ export function TaskList({ rows, selectedId, onSelect }: { rows: readonly TaskRo
     <div className="flex flex-col pb-2">
       {groupRows(rows).map(({ section, rows: group }) => (
         <div key={section}>
-          <h3 className="flex items-center justify-between border-b px-3 pt-4 pb-1 text-xs font-medium tracking-wide text-muted-foreground">
-            <span>{SECTION_TITLES[section]}</span>
-            <span className="tabular-nums">{group.length}</span>
+          <h3 className="px-[1ch] pt-3 pb-1 text-sm">
+            <Rule title={SECTION_TITLES[section]} right={String(group.length)} />
           </h3>
           <ul className="flex flex-col gap-0.5 px-1 pt-1">
             {group.map((row) => (

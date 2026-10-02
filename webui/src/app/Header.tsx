@@ -1,63 +1,73 @@
 /**
- * The fixed header: workspace and branch, the task in view, the AUTO mode
- * marker and the stream state. At 768 px the parts wrap onto a second line; at
- * 1024 px and up they sit on one.
+ * The title line, as the terminal's top line (D-21): `◆ workspace (⎇ branch)`,
+ * the tabs as cells of the line, then what this session is doing, the AUTO
+ * mode marker and the stream state, all as text on the page. Below 1400 px the
+ * tabs take a line of their own under the title; from 1400 px everything sits
+ * on one line, as in the terminal.
  */
-import { Circle, CircleDot, RotateCw, WifiOff } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import type { ReactNode } from "react"
+import { Spinner } from "@/components/ui/spinner"
 import type { ConnectionState } from "@/lib/events"
 import type { SnapshotTask, StatusInfo } from "@protocol"
 
-function ConnectionBadge({ state }: { state: ConnectionState }) {
+function Connection({ state }: { state: ConnectionState }) {
   if (state === "live") {
     return (
-      <Badge variant="outline" className="gap-1 font-normal text-muted-foreground">
-        <Circle className="size-2 fill-current" aria-hidden="true" />
-        Connected
-      </Badge>
+      <span className="text-muted-foreground">
+        <span aria-hidden="true">● </span>connected
+      </span>
     )
   }
   if (state === "connecting") {
     return (
-      <Badge variant="secondary" className="gap-1 font-normal">
-        <CircleDot className="size-3 animate-pulse" aria-hidden="true" />
-        Reconnecting…
-      </Badge>
+      <span className="flex items-center gap-[1ch] text-muted-foreground">
+        <Spinner aria-hidden="true" role="presentation" />
+        reconnecting…
+      </span>
     )
   }
-  return (
-    <Badge variant="destructive" className="gap-1 font-normal">
-      <WifiOff className="size-3" aria-hidden="true" />
-      Connection lost
-    </Badge>
-  )
+  return <span className="font-bold text-destructive">✗ connection lost</span>
 }
 
 export function Header({
   status,
   task,
   connection,
+  tabs,
 }: {
   status?: StatusInfo
   task?: SnapshotTask
   connection: ConnectionState
+  tabs: ReactNode
 }) {
   const name = status?.workspace.name ?? "bot-lobby"
   const branch = status?.branch ?? status?.workspace.branch
-  const state = task ? `${task.id} ${task.state}` : (status?.sessionName ?? "no task in this session")
+  const busy = status?.busy ?? false
 
   return (
-    <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-2">
-      <span className="text-sm font-semibold tracking-tight">
-        ◆ {name}
-        {branch ? <span className="font-normal text-muted-foreground"> (⎇ {branch})</span> : null}
+    <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-[2ch] px-[1ch] text-sm [grid-template-areas:'title_status'_'tabs_tabs'] min-[1400px]:grid-cols-[auto_auto_minmax(0,1fr)_auto] min-[1400px]:gap-x-[1ch] min-[1400px]:[grid-template-areas:'title_sep_tabs_status']">
+      <span className="truncate leading-10 [grid-area:title]">
+        <span className="font-bold text-primary">◆ {name}</span>
+        {branch ? <span className="text-muted-foreground"> (⎇ {branch})</span> : null}
       </span>
-      <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{state}</span>
-      <Badge variant="outline" className="gap-1 font-normal">
-        <RotateCw className="size-3" aria-hidden="true" />
-        AUTO
-      </Badge>
-      <ConnectionBadge state={connection} />
+      <span aria-hidden="true" className="hidden text-border [grid-area:sep] min-[1400px]:block">
+        │
+      </span>
+      <div className="min-w-0 [grid-area:tabs]">{tabs}</div>
+      <div className="flex min-w-0 items-center gap-[2ch] whitespace-nowrap [grid-area:status]">
+        <span className="flex min-w-0 items-center gap-[1ch]">
+          {busy ? <Spinner aria-hidden="true" role="presentation" /> : <span aria-hidden="true" className="text-muted-foreground">●</span>}
+          {task ? (
+            <span className="truncate">
+              {task.id} <span className="text-muted-foreground">{task.state}</span>
+            </span>
+          ) : (
+            <span className="truncate text-muted-foreground">{status?.sessionName ?? "no task in this session"}</span>
+          )}
+        </span>
+        <span className="text-muted-foreground">⟳ AUTO</span>
+        <Connection state={connection} />
+      </div>
     </header>
   )
 }
