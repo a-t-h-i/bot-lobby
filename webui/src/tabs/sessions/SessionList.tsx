@@ -15,7 +15,7 @@ function Row({ entry, selected, onSelect }: { entry: Entry; selected: boolean; o
         type="button"
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(entry.id)}
-        className="flex min-h-11 w-full items-start gap-2 rounded-sm px-[1ch] py-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current=true]:bg-accent"
+        className="flex min-h-11 w-full items-start gap-2 rounded-md px-[1ch] py-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current=true]:bg-accent"
       >
         <span className="w-4 shrink-0 text-center text-foreground" aria-hidden="true">
           {WHERE_MARKS[entry.where]}

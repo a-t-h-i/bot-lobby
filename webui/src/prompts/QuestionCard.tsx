@@ -72,7 +72,7 @@ function OptionRow({
   return (
     <label
       className={cn(
-        "flex min-h-11 cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 text-start text-sm transition-colors",
+        "flex min-h-11 cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2.5 text-start text-sm transition-colors",
         selected ? "border-primary/40 bg-muted" : "border-input hover:bg-muted/50",
         "has-[:focus-visible]:border-ring has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50"
       )}
@@ -93,7 +93,7 @@ function OptionRow({
 function Preview({ option }: { option?: AskOption }) {
   if (!option || (!option.preview && !option.image)) return null
   return (
-    <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3">
+    <div className="flex flex-col gap-2 rounded-md border bg-muted/30 p-3">
       <p className="text-xs font-medium text-muted-foreground">Preview · {splitRecommended(option.label).text}</p>
       {option.image ? (
         <img src={option.image} alt="" loading="lazy" className="max-h-64 w-full rounded-md border object-contain" />
@@ -156,7 +156,7 @@ function Chips({ questions, picks, own, index, onGo }: { questions: AskQuestion[
             onClick={() => onGo(position)}
             aria-current={position === index}
             className={cn(
-              "inline-flex min-h-9 items-center gap-1 rounded-full border px-3 text-xs font-medium",
+              "inline-flex min-h-9 items-center gap-1 rounded-md border px-3 text-xs font-medium",
               position === index ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"
             )}
           >
@@ -224,7 +224,7 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel }: { ques
           {question.options.map((option, position) => (
             <OptionRow key={position} option={option} index={position} multi={multi} name={`question-${index}`} selected={picked.includes(position)} onToggle={() => toggle(position)} />
           ))}
-          <label className="flex min-h-11 flex-col gap-1 rounded-lg border border-input px-3 py-2 text-sm focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
+          <label className="flex min-h-11 flex-col gap-1 rounded-md border border-input px-3 py-2 text-sm focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
             <span className="text-muted-foreground">
               <span aria-hidden="true">✎ </span>
               {OWN_ANSWER}
