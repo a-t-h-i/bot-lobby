@@ -15,7 +15,7 @@ function Row({ issue, selected, now, onSelect }: { issue: IssueInfo; selected: b
         type="button"
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(issue.number)}
-        className="flex min-h-11 w-full flex-col gap-0.5 rounded-lg px-3 py-2 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current=true]:bg-muted aria-[current=true]:ring-2 aria-[current=true]:ring-inset aria-[current=true]:ring-ring"
+        className="flex min-h-11 w-full flex-col gap-0.5 rounded-sm px-[1ch] py-2 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current=true]:bg-accent"
       >
         <span className="flex items-start gap-2 text-sm">
           <span className="shrink-0 text-muted-foreground tabular-nums">#{issue.number}</span>

@@ -6,6 +6,7 @@
  */
 import type { MetricGroupInfo } from "@protocol"
 import { duration, groupLabel, kindWord, money, percent, tokens, type GroupBy } from "./words"
+import { Rule } from "@/ui/Frame"
 
 const HEADERS = ["Runs", "OK", "Avg", "p50", "p90", "Turns", "Tools", "Tokens", "tok/s", "$/run", "$ total", "Stalls"] as const
 
@@ -37,11 +38,10 @@ function agents(group: MetricGroupInfo, groupBy: GroupBy): string {
 export function MetricsTable({ groups, groupBy }: { groups: MetricGroupInfo[]; groupBy: GroupBy }) {
   return (
     <section className="flex min-h-0 flex-col gap-2" aria-label="All models">
-      <h2 className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-1 text-sm font-medium">
-        <span>All models</span>
-        <span className="text-xs font-normal text-muted-foreground">{groupBy === "model" ? "by model · thinking" : "by model · thinking · agent"} · sorted by runs</span>
+      <h2 className="text-sm">
+        <Rule title="All models" right={`${groupBy === "model" ? "by model · thinking" : "by model · thinking · agent"} · sorted by runs`} />
       </h2>
-      <div className="max-h-96 overflow-auto rounded-lg border">
+      <div className="max-h-96 overflow-auto rounded-md border">
         <table className="w-full border-collapse text-sm">
           <thead className="sticky top-0 bg-card text-xs text-muted-foreground">
             <tr>

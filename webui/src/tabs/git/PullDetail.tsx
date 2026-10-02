@@ -32,7 +32,7 @@ function useNow(active: boolean): number {
 function Header({ pull, now }: { pull: PullDetailInfo; now: number }) {
   return (
     <header className="flex flex-col gap-1">
-      <h2 className="text-base font-medium break-words">
+      <h2 className="text-sm font-bold break-words">
         #{pull.number} {pull.title}
       </h2>
       <p className="text-xs text-muted-foreground">{factsLine(pull, now)}</p>
