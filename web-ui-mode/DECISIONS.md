@@ -278,6 +278,33 @@ The user wants this possible later, not now. **Phase 6 (not scheduled):**
 - the server takes its service as a parameter (the starter already does);
 - nothing in the page assumes a terminal exists.
 
+## D-21 · The page looks like the terminal lobby · Fixed
+
+The user asked for the web UI to look close to bot-lobby in the terminal, with tabs that look like part of the page rather than separate pill-shaped selectors (2026-10-02). The starter is built this way, and every screen follows it:
+- **Colours:** Pi's own themes (`dark.json` and `light.json` in `@earendil-works/pi-coding-agent`) as CSS tokens. These cover the background, text, accent and selection colours, your message's background, the Markdown colours, and each agent's colour (`SOURCE_COLORS` in `src/lobby/tabs/home.ts`). Where one of Pi's colours is under 4.5:1 on the page (D-19), its token is a step lighter in dark or darker in light; `styles.css` notes Pi's value beside it.
+- **Type:** one monospace face for everything, from the system, with no web font (the CSP and D-07's budget). 13 px on phones and 14 px from 768 px. Vertical space comes in whole lines.
+- **The title line,** as the terminal's top line: `◆ name (⎇ branch) │ 1 Lobby 2 Tasks … 8 Excalidraw … status`.
+  - The tabs are cells of that line: the chosen one lit with the selection colour, the rest plain text on the page. The numbers are the `alt+1…9` keys.
+  - Below 1024 px, the tabs take a line of their own under the title, which scrolls sideways.
+  - There are no pills, no segmented controls and no tab bar with a background of its own.
+- **Panes:** rounded frames with the title set into the top border. The pane you are in is drawn in the focus colour, as the terminal draws its focused pane. On phones, the Lobby's frame carries both pane titles, and tapping one switches the pane.
+- **The conversation:**
+  - the oracle as `◆ Oracle ··· 12:04`, with its reply indented under it;
+  - you on the right as `12:04  You ●`, your words in the accent colour on the user-message background;
+  - events as a centred rule;
+  - messages from one speaker within five minutes share a header.
+- **Activity:** `time WHO mark text`, with each agent in its colour and the terminal's marks (`·` `✓` `!` `✗` and the spinner).
+- **Markdown,** as Pi renders it: headings in the heading colour, with `###` kept from level 3; fenced code with its fences and language; `- ` bullets; inline code in the code colour. Tables, images and links are real HTML, which is what the web UI is for.
+- **The composer** is the terminal's prompt: a label set into a rule (`message the oracle · enter sends`), with the rules in the typing colour while you type.
+- **The key line** under it shows the mode (`TYPE` or `BROWSE`) and the keys, and a notice takes its place for a few seconds, as in the terminal. Touch screens hide the keys and show only notices.
+- **Kept from D-09:** 44 px targets on touch, no sideways scroll, 16 px fields on phones, `prefers-color-scheme`, and `prefers-reduced-motion` (the spinner stands still).
+
+**Custom Pi themes:** the page uses Pi's built-in dark and light themes. P3-01 checks whether Pi gives an extension the active theme's colours; if it does, the server sends them as tokens (nudged for contrast the same way), so a custom Pi theme carries over.
+
+**Verified in the starter** at all five sizes, light and dark (VERIFIED-FACTS 3):
+- every visible piece of text is at least 4.5:1 against what is behind it;
+- from 1024 px, the tabs sit in the title line.
+
 ---
 
 ## Open questions (each has a default the swarm uses until the user answers)

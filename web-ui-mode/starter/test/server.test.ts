@@ -169,3 +169,32 @@ test("the stream says hello, reports changes, and sends a streaming reply in fra
     assert.ok(replies > 0 && replies < 120, `${replies} reply frames for about 120 words: they are coalesced`);
   });
 });
+
+test("a reply's last frame reaches the page before the change that ends the reply", async () => {
+  await withServer(async (server, cookie, service) => {
+    const value = await cookie();
+    const events: string[] = [];
+    await new Promise<void>((resolve, reject) => {
+      const req = httpRequest({ host: "127.0.0.1", port: server.port, path: "/api/events", headers: { host: `127.0.0.1:${server.port}`, cookie: value } }, (res) => {
+        res.on("data", (chunk: Buffer) => {
+          for (const line of chunk.toString("utf8").split("\n")) if (line.startsWith("data: ")) events.push(line.slice(6));
+          // The second change ends the reply; anything still coming would arrive within a few frames.
+          if (events.filter((event) => event.includes('"changed"')).length >= 2)
+            setTimeout(() => {
+              req.destroy();
+              resolve();
+            }, 100);
+        });
+      });
+      req.on("error", (error) => (events.length ? resolve() : reject(error)));
+      req.end();
+      setTimeout(() => service.send("dark mode please"), 50);
+      setTimeout(() => reject(new Error(`timed out; got ${events.join(" | ")}`)), 5000);
+    });
+    const types = events.map((event) => (JSON.parse(event) as { type: string }).type);
+    const lastReply = types.lastIndexOf("reply");
+    const lastChange = types.lastIndexOf("changed");
+    assert.ok(lastReply >= 0 && lastReply < lastChange, `the last reply frame (#${lastReply}) comes before the last change (#${lastChange}), so the page never shows a finished reply as streaming`);
+    assert.match(events[lastReply]!, /the spec/, "the last frame carries the whole reply");
+  });
+});
