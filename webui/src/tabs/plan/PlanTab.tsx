@@ -1,7 +1,7 @@
 /**
- * The Plan tab (batch-2 §g): the seating intro before a session, then the
- * panel's conversation beside the draft plan (stacked below 1024 px), with a
- * box that sends to the panel underneath. The session is read again on every
+ * The Plan tab: the seating intro before a session, then the panel's
+ * conversation beside the draft plan (stacked below 1024 px); the floating box
+ * sends to the panel (its Panel target). The session is read again on every
  * `planner` topic change; the panel's questions arrive through the prompt
  * slideout, started by Answer questions. Line comments are remembered here
  * only (the snapshot does not carry them) and go with the session.
@@ -9,10 +9,8 @@
 import { useEffect, useRef, useState } from "react"
 import { ErrorState } from "@/app/States"
 import { useApiRead } from "@/app/useApiRead"
-import { act } from "@/lib/act"
 import { cn } from "@/lib/utils"
 import type { PlannerSnapshot } from "@protocol"
-import { NoteForm } from "@/ui/NoteForm"
 import { Pane, useWide } from "@/ui/SplitPane"
 import { PanelConversation } from "./Conversation"
 import { DraftBody, SeatNeeds } from "./Draft"
@@ -36,8 +34,8 @@ function useFollowEnd(revision: number) {
 
 function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) {
   return (
-    <Pane className="flex flex-col gap-4 p-4">
-      <h2 className="text-sm font-bold">Plan</h2>
+    <Pane className="flex flex-col gap-4 p-5">
+      <h2 className="text-base font-medium">Plan</h2>
       <p className="text-sm font-medium text-foreground">{introText(snap.limit)}</p>
       <Roster cells={seatCells(snap)} intro onToggled={onDone} />
     </Pane>
@@ -48,7 +46,7 @@ function ConversationPane({ snap, wide }: { snap: PlannerSnapshot; wide: boolean
   const ref = useFollowEnd(snap.messages.length)
   return (
     <Pane className="flex flex-col">
-      <h2 className="px-[1ch] pt-2 text-sm">
+      <h2 className="px-5 pt-4 text-sm">
         <Rule title="Conversation" />
       </h2>
       <div ref={ref} className={cn("min-h-0 overflow-y-auto p-4", wide ? "flex-1" : "max-h-[45svh]")}>
@@ -61,7 +59,7 @@ function ConversationPane({ snap, wide }: { snap: PlannerSnapshot; wide: boolean
 function DraftPane({ snap, comments, onComment }: { snap: PlannerSnapshot; comments: Comments; onComment: (line: string) => void }) {
   return (
     <Pane className="flex flex-col">
-      <h2 className="px-[1ch] pt-2 text-sm">
+      <h2 className="px-5 pt-4 text-sm">
         <Rule title="Draft plan" />
       </h2>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
@@ -72,25 +70,12 @@ function DraftPane({ snap, comments, onComment }: { snap: PlannerSnapshot; comme
   )
 }
 
-function PanelBox({ fresh, onSent }: { fresh: boolean; onSent: () => void }) {
-  const send = async (text: string) => {
-    const result = await act("planner.send", { text })
-    if (result) onSent()
-    return result !== undefined
-  }
-  return (
-    <Pane className="shrink-0 p-3">
-      <NoteForm label={fresh ? "Describe a task" : "Message the panel"} hint="Enter sends · Shift+Enter adds a line" buttonLabel="Send to the panel" onSend={send} />
-    </Pane>
-  )
-}
-
 function Session({ snap, reload }: { snap: PlannerSnapshot; reload: () => void }) {
   const wide = useWide()
   const [line, setLine] = useState<string>()
   const [comments, setComments] = useState<Comments>(new Map())
   const remember = (at: string, text: string) => setComments((now) => new Map(now).set(at, [...(now.get(at) ?? []), text]))
-  const grid = wide ? "grid min-h-0 flex-1 grid-cols-[minmax(0,46fr)_minmax(0,54fr)] grid-rows-[minmax(0,1fr)] gap-3" : "flex flex-col gap-3"
+  const grid = wide ? "grid min-h-0 flex-1 grid-cols-[minmax(0,46fr)_minmax(0,54fr)] grid-rows-[minmax(0,1fr)] gap-4" : "flex flex-col gap-4"
   return (
     <>
       <PlanHeader snap={snap} onDone={reload} />
@@ -110,9 +95,8 @@ export function PlanTab() {
   if (!snap) return <p role="status" className="p-4 text-sm text-muted-foreground">Loading the plan…</p>
   const fresh = isFresh(snap)
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 px-4 pb-2">
       {fresh ? <Intro snap={snap} onDone={read.reload} /> : <Session snap={snap} reload={read.reload} />}
-      <PanelBox fresh={fresh} onSent={read.reload} />
     </div>
   )
 }

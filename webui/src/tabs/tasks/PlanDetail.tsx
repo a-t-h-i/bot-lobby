@@ -1,7 +1,7 @@
 /**
  * A saved plan's detail: when it was saved, where it came from, the parts it
- * was split into, the terminal's start/discard choices as buttons (`s`, `h`,
- * `d d`), and the agreed plan itself (`plans.get`).
+ * was split into, the start/discard choices as buttons, and the agreed plan
+ * itself (`plans.get`).
  */
 import type { PlanDetail as PlanDetailData, TaskRow } from "@protocol"
 import { useApiRead } from "@/app/useApiRead"
@@ -10,7 +10,8 @@ import { act } from "@/lib/act"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { Markdown } from "@/ui/Markdown"
 import { Section } from "@/ui/Section"
-import { CHECK_MARKS, agoWords } from "./words"
+import { agoWords } from "./words"
+import { CheckMark } from "@/ui/task-facts"
 
 /** `part 2 of 3 of one plan that was split into tasks`, with its parts listed. */
 function Split({ split }: { split: NonNullable<PlanDetailData["split"]> }) {
@@ -18,7 +19,7 @@ function Split({ split }: { split: NonNullable<PlanDetailData["split"]> }) {
   return (
     <>
       <p className="text-sm text-muted-foreground">
-        <span className="text-primary">part {split.part} of {split.of}</span> of one plan that was split into tasks
+        <span className="font-medium text-primary">part {split.part} of {split.of}</span> of one plan that was split into tasks
         {after ? <span className="text-foreground">{after}</span> : null}
       </p>
       <p className="text-sm text-muted-foreground">
@@ -67,8 +68,8 @@ export function PlanDetail({ row, onGone }: { row: TaskRow; onGone: () => void }
   return (
     <article className="flex flex-col gap-4" aria-label={row.title}>
       <header className="flex flex-col gap-1">
-        <h2 className="flex gap-2 text-sm font-bold">
-          <span aria-hidden="true">{CHECK_MARKS.open}</span>
+        <h2 className="flex items-start gap-2.5 text-lg font-medium">
+          <CheckMark check="open" className="mt-1.5" />
           <span className="min-w-0 break-words">{row.title}</span>
         </h2>
         <p className="text-sm text-muted-foreground">pending{row.age ? ` · saved ${agoWords(row.age)}` : ""}</p>
@@ -76,10 +77,10 @@ export function PlanDetail({ row, onGone }: { row: TaskRow; onGone: () => void }
       </header>
       <PlanSections planId={row.id} />
       <div className="flex flex-wrap gap-2">
-        <Button className="h-10" onClick={() => void start("here")}>
+        <Button onClick={() => void start("here")}>
           Start here
         </Button>
-        <Button variant="outline" className="h-10" onClick={() => void start("session")}>
+        <Button variant="outline" onClick={() => void start("session")}>
           Start in a new session
         </Button>
         <ConfirmButton

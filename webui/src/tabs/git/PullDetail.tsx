@@ -1,5 +1,5 @@
 /**
- * One pull request's detail (batch-2 §k): its facts, the actions line, Jev's
+ * One pull request's detail: its facts, the actions line, Jev's
  * read, our review (status, steps, verdict and findings) with the focus input
  * and its buttons, the changed files in a scrolling box, the description and
  * the discussion. The `git` topic rereads all of it, so a running review's
@@ -32,7 +32,7 @@ function useNow(active: boolean): number {
 function Header({ pull, now }: { pull: PullDetailInfo; now: number }) {
   return (
     <header className="flex flex-col gap-1">
-      <h2 className="text-sm font-bold break-words">
+      <h2 className="text-sm font-semibold break-words">
         #{pull.number} {pull.title}
       </h2>
       <p className="text-xs text-muted-foreground">{factsLine(pull, now)}</p>
@@ -113,10 +113,10 @@ function ReviewActions({ number, running, onChanged }: { number: number; running
       <Textarea id={`focus-${number}`} value={focus} rows={2} maxLength={2000} onChange={(event) => setFocus(event.target.value)} />
       <p className="text-xs text-muted-foreground">{FOCUS_HINT}</p>
       <div className="flex flex-wrap gap-2">
-        <Button className="h-10" disabled={running} onClick={() => void start()}>
+        <Button disabled={running} onClick={() => void start()}>
           Review
         </Button>
-        <Button variant="outline" className="h-10" disabled={running} onClick={() => void read()}>
+        <Button variant="outline" disabled={running} onClick={() => void read()}>
           Jev's read
         </Button>
         {running ? (
@@ -147,7 +147,7 @@ function ReviewBox({ number, review, now, onChanged }: { number: number; review?
 function Files({ files }: { files: PullFileInfo[] }) {
   return (
     <Section title="Files" right={String(files.length)}>
-      <div className="overflow-x-auto rounded-md border">
+      <div className="overflow-x-auto rounded-lg border">
         <table className="w-full border-collapse text-sm tabular-nums">
           <tbody>
             {files.map((file) => (

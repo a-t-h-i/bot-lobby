@@ -1,5 +1,5 @@
 /**
- * Phase 4 browser checks (P4-X): every remaining tab route against the
+ * Browser checks: every remaining tab route against the
  * fixture-backed mock server (`?scenario=full` at 1280x800, light plus dark
  * via the two config projects), plus each tab's empty state against
  * `?scenario=empty`. Every route must render its real content (never a
@@ -46,11 +46,11 @@ const ROUTES: RouteCheck[] = [
   {
     route: "#/quickfix",
     full: ["Fix the typo in the header"],
-    empty: "Describe a small change below",
+    empty: "Describe a small change",
   },
   {
     route: "#/sessions",
-    full: ["Mock background task", "BACKGROUND"],
+    full: ["Mock background task", "Background"],
     empty: "No other sessions. Start one below.",
   },
   {
@@ -170,18 +170,18 @@ test("issues tab is off without lobby.issues (empty)", async ({ page, server }) 
 test("settings change saves with a notice and round-trips", async ({ page, server }) => {
   const trap = await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 800 });
-  await gotoRoute(page, "#/settings", "Web UI");
-  const mouse = page.getByRole("switch", { name: "Mouse" });
-  await expect(mouse, "Mouse toggle").toBeVisible();
+  await gotoRoute(page, "#/settings", "Each agent's model and effort");
+  const mouse = page.getByRole("switch", { name: "Issues tab" });
+  await expect(mouse, "Issues toggle").toBeVisible();
   const before = await mouse.getAttribute("aria-checked");
   await mouse.click();
   await expect(page.getByText("Settings saved"), "saved notice").toBeVisible();
   const after = await mouse.getAttribute("aria-checked");
   expect(after, "toggle flips").not.toBe(before);
   await page.reload();
-  await page.getByRole("tablist", { name: "Lobby tabs" }).waitFor();
-  await gotoRoute(page, "#/settings", "Web UI");
-  expect(await page.getByRole("switch", { name: "Mouse" }).getAttribute("aria-checked"), "value round-trips").toBe(after);
+  await page.locator('[role="tablist"]').waitFor();
+  await gotoRoute(page, "#/settings", "Each agent's model and effort");
+  expect(await page.getByRole("switch", { name: "Issues tab" }).getAttribute("aria-checked"), "value round-trips").toBe(after);
   await expectNoSidewaysScroll(page);
   expect(cspErrors(trap.errors), "no CSP violations").toEqual([]);
   expect(trap.errors, "no console errors").toEqual([]);

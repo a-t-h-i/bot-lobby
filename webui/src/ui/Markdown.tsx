@@ -1,5 +1,5 @@
 /**
- * Model text as real Markdown (D-10): `react-markdown` + `remark-gfm`, with
+ * Model text as real Markdown : `react-markdown` + `remark-gfm`, with
  * raw HTML never enabled (the raw-HTML rehype plugin is never imported).
  * Links are forced into a new tab with `rel="noopener noreferrer nofollow"`,
  * code blocks get a Copy button, and wide tables scroll inside their own box.
@@ -13,6 +13,7 @@ import { Check, Copy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { safeHref } from "@/lib/markdown"
+import { AttachmentList, splitAttachments } from "./Attachments"
 
 interface HastNode {
   type?: string
@@ -36,7 +37,7 @@ function langOf(node: HastNode | undefined): string {
   return /^[\w+#.-]{1,20}$/.test(lang) ? lang : ""
 }
 
-/** A fenced block as Pi draws it (D-21): between its fences, the code indented and in the code-block colour; a Copy button reads the block's own text. */
+/** A fenced block: a soft card with its language and a Copy button that reads the block's own text. */
 function CodeBlock({ node, children }: { node?: unknown; children?: ReactNode }) {
   const [copied, setCopied] = useState(false)
   const text = hastText(node as HastNode | undefined)
@@ -52,28 +53,15 @@ function CodeBlock({ node, children }: { node?: unknown; children?: ReactNode })
   }, [text])
 
   return (
-    <div className="relative my-3">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={copy}
-        disabled={!text}
-        className="absolute top-0 right-0 z-10 h-10 text-muted-foreground"
-      >
-        {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-        {copied ? "Copied" : "Copy"}
-      </Button>
-      <pre className="overflow-x-auto pr-[12ch] text-sm leading-relaxed [&>code]:block [&>code]:pl-[2ch]">
-        <span aria-hidden="true" className="block text-muted-foreground">
-          {"```"}
-          {lang}
-        </span>
-        {children}
-        <span aria-hidden="true" className="block text-muted-foreground">
-          {"```"}
-        </span>
-      </pre>
+    <div className="relative my-3 rounded-lg bg-muted">
+      <div className="flex items-center justify-between pl-3">
+        <span className="text-xs text-muted-foreground">{lang || "code"}</span>
+        <Button type="button" variant="ghost" size="sm" onClick={copy} disabled={!text} className="text-muted-foreground">
+          {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+          {copied ? "Copied" : "Copy"}
+        </Button>
+      </div>
+      <pre className="!my-0 overflow-x-auto !rounded-t-none !bg-transparent px-3 pb-3 text-sm leading-relaxed [&>code]:block">{children}</pre>
     </div>
   )
 }
@@ -98,11 +86,15 @@ const components: Components = {
 
 /** Safe Markdown for untrusted model text; callers pass only `text` and `className`. */
 export const Markdown = memo(function Markdown({ text, className }: { text: string; className?: string }) {
+  const { body, files } = splitAttachments(text)
   return (
     <div className={cn("md-body", className)}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={safeHref} components={components}>
-        {text}
-      </ReactMarkdown>
+      {body ? (
+        <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={safeHref} components={components}>
+          {body}
+        </ReactMarkdown>
+      ) : null}
+      <AttachmentList files={files} />
     </div>
   )
 })

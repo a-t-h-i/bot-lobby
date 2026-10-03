@@ -1,13 +1,14 @@
 /**
- * The settings form (Phase 5): every group the terminal's `/bot-lobby settings`
- * menu writes, read from `settings.get` and saved back with a minimal
- * `settings.set` patch. A refused patch (`bad_request`) shows the terminal's
- * own message and leaves the field reading its saved value, because every
- * control is driven by the config the server last returned. The appearance,
+ * The settings form: each agent's model and effort (a slider with a stop per
+ * level, skipping what the model cannot do), the workflow, the lobby and the
+ * classifier, read from `settings.get` and saved back with a minimal
+ * `settings.set` patch. A refused patch (`bad_request`) shows the server's own
+ * message and leaves the field reading its saved value, because every control
+ * is driven by the config the server last returned. The appearance,
  * notification and install rows are page-only and never sent to the server.
  */
 import { useEffect, useState, type ReactNode } from "react"
-import { toast } from "sonner"
+import { toast } from "@/lib/toast"
 import { useInstallPrompt } from "@/app/install"
 import { disableNotifications, enableNotifications, useNotificationsEnabled } from "@/app/notify"
 import { useTheme } from "@/components/theme-provider"
@@ -17,6 +18,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import { EffortSlider, nearestSupported } from "@/ui/EffortSlider"
 import { call } from "@/lib/api"
 import { Section } from "@/ui/Section"
 import type { BotLobbyConfig, SettingsModelInfo } from "@protocol"
@@ -52,13 +54,8 @@ import {
   THINKING_LEVELS,
   WEB_BROWSER_HELP,
   WEB_BROWSER_LABEL,
-  WEB_ENABLED_HELP,
-  WEB_LABEL,
   WEB_PORT_HELP,
   WEB_PORT_LABEL,
-  WEB_QUESTIONS,
-  WEB_QUESTIONS_HELP,
-  WEB_QUESTIONS_LABEL,
   type AgentKind,
 } from "./words"
 
@@ -114,17 +111,19 @@ function entryOf(config: Config, kind: AgentKind): AgentView {
   }
 }
 
-function patchOf(kind: AgentKind, field: string, value: unknown): Record<string, unknown> {
-  return AGENT_PATH[kind].reduceRight<Record<string, unknown>>((acc, key) => ({ [key]: acc }), { [field]: value })
+function patchOf(kind: AgentKind, fields: Record<string, unknown>): Record<string, unknown> {
+  return AGENT_PATH[kind].reduceRight<Record<string, unknown>>((acc, key) => ({ [key]: acc }), fields)
 }
 
+/** The effort levels a model supports; a model Pi does not list (a typed id, `inherit`) is allowed them all. */
 function levelsFor(models: SettingsModelInfo[], model: string): readonly string[] {
   return models.find((entry) => entry.id === model)?.thinkingLevels ?? THINKING_LEVELS
 }
 
-function levelItems(current: string, levels: readonly string[]): ChoiceItem[] {
-  const all = levels.includes(current) ? levels : [current, ...levels]
-  return all.map((level) => ({ value: level, label: level }))
+/** The level a model runs a requested one at: itself when supported, else the nearest it supports. */
+function levelOn(supported: readonly string[], level: string): string {
+  const index = nearestSupported(THINKING_LEVELS, supported, Math.max(0, THINKING_LEVELS.indexOf(level as (typeof THINKING_LEVELS)[number])))
+  return THINKING_LEVELS[index] ?? level
 }
 
 const roundLabel = (value: number): string => (value > 0 ? `${value} round${value === 1 ? "" : "s"}` : "unlimited")
@@ -136,9 +135,9 @@ interface ChoiceItem {
   help?: string
 }
 
-function Field({ label, help, children }: { label: string; help?: string; children: ReactNode }) {
+function Field({ label, help, children, stacked }: { label: string; help?: string; children: ReactNode; stacked?: boolean }) {
   return (
-    <div className="grid gap-1.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] sm:items-start sm:gap-4">
+    <div className={stacked ? "grid gap-1.5" : "grid gap-1.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,18rem)] sm:items-start sm:gap-4"}>
       <div className="min-w-0 py-1">
         <div className="text-sm font-medium">{label}</div>
         {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
@@ -196,7 +195,7 @@ function ModelChoice(props: { value: string; models: SettingsModelInfo[]; label:
       {typing ? (
         <div className="flex gap-2">
           <Input autoFocus value={text} placeholder="provider/model" aria-label="Model id" onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); use() } }} />
-          <Button type="button" variant="outline" className="h-10" onClick={use}>Use</Button>
+          <Button type="button" variant="outline" onClick={use}>Use</Button>
         </div>
       ) : null}
     </div>
@@ -205,7 +204,7 @@ function ModelChoice(props: { value: string; models: SettingsModelInfo[]; label:
 
 function ToggleField({ label, help, checked, onChange }: { label: string; help?: string; checked: boolean; onChange: (next: boolean) => void }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-md border border-border px-3 py-2.5">
+    <div className="flex items-start justify-between gap-4 rounded-lg border border-border bg-card/40 px-4 py-3">
       <div className="min-w-0">
         <div className="text-sm font-medium">{label}</div>
         {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
@@ -281,36 +280,73 @@ function InstructionsField({ value, label, onSave }: { value: string; label: str
 
 function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Config; models: SettingsModelInfo[]; save: Save }) {
   const entry = entryOf(config, kind)
-  const set = (field: string, value: unknown) => void save(patchOf(kind, field, value))
+  const set = (fields: Record<string, unknown>) => void save(patchOf(kind, fields))
   const name = AGENT_LABELS[kind]
+  const supported = levelsFor(models, entry.model)
+  const fallbackSupported = entry.fallbackModel ? levelsFor(models, entry.fallbackModel) : supported
+  // Changing the model carries the effort along to what the new model supports.
+  const chooseModel = (model: string) => {
+    const fields: Record<string, unknown> = { model }
+    if (kind !== "scout" && !levelsFor(models, model).includes(entry.thinking)) fields.thinking = levelOn(levelsFor(models, model), entry.thinking)
+    set(fields)
+  }
+  const chooseFallback = (fallbackModel: string) => {
+    const fields: Record<string, unknown> = { fallbackModel }
+    const current = entry.fallbackThinking ?? entry.thinking
+    if (kind !== "scout" && fallbackModel !== INHERIT_MODEL && !levelsFor(models, fallbackModel).includes(current)) fields.fallbackThinking = levelOn(levelsFor(models, fallbackModel), current)
+    set(fields)
+  }
   return (
     <Card size="sm">
       <CardHeader>
-        <CardTitle>{name}</CardTitle>
+        <CardTitle className="flex items-center justify-between gap-3 text-base">
+          {name}
+          <span className="truncate text-xs font-normal text-muted-foreground">
+            {entry.model === INHERIT_MODEL ? "session model" : entry.model} · {kind === "scout" ? FIXED_SCOUT_THINKING : entry.thinking}
+          </span>
+        </CardTitle>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex flex-col gap-5">
         <Field label={FIELD_LABELS.model}>
-          <ModelChoice value={entry.model} models={models} label={`${name} model`} inherit={kind === "master"} onChange={(value) => set("model", value)} />
+          <ModelChoice value={entry.model} models={models} label={`${name} model`} inherit={kind === "master"} onChange={chooseModel} />
         </Field>
-        <Field label={FIELD_LABELS.thinking} help={kind === "scout" ? "fixed for scouts" : undefined}>
-          {kind === "scout" ? <p className="py-2 text-sm text-muted-foreground">{FIXED_SCOUT_THINKING}</p> : <Choice value={entry.thinking} items={levelItems(entry.thinking, levelsFor(models, entry.model))} label={`${name} thinking`} onChange={(value) => set("thinking", value)} />}
+        <Field label={FIELD_LABELS.thinking} help={kind === "scout" ? "fixed for scouts" : undefined} stacked>
+          {kind === "scout" ? (
+            <p className="py-1 text-sm text-muted-foreground">{FIXED_SCOUT_THINKING}</p>
+          ) : (
+            <EffortSlider
+              value={entry.thinking}
+              levels={THINKING_LEVELS}
+              supported={supported}
+              model={entry.model === INHERIT_MODEL ? "the session model" : entry.model}
+              label={`${name} effort`}
+              onChange={(level) => set({ thinking: level })}
+            />
+          )}
         </Field>
         <Field label={FIELD_LABELS.fallback} help={NO_FALLBACK_HELP}>
-          <ModelChoice value={entry.fallbackModel ?? INHERIT_MODEL} models={models} label={`${name} fallback model`} none onChange={(value) => set("fallbackModel", value)} />
+          <ModelChoice value={entry.fallbackModel ?? INHERIT_MODEL} models={models} label={`${name} fallback model`} none onChange={chooseFallback} />
         </Field>
         {kind !== "scout" && entry.fallbackModel ? (
-          <Field label={FIELD_LABELS.fallbackThinking}>
-            <Choice value={entry.fallbackThinking ?? entry.thinking} items={levelItems(entry.fallbackThinking ?? entry.thinking, levelsFor(models, entry.fallbackModel))} label={`${name} fallback thinking`} onChange={(value) => set("fallbackThinking", value)} />
+          <Field label={FIELD_LABELS.fallbackThinking} stacked>
+            <EffortSlider
+              value={entry.fallbackThinking ?? entry.thinking}
+              levels={THINKING_LEVELS}
+              supported={fallbackSupported}
+              model={entry.fallbackModel}
+              label={`${name} fallback effort`}
+              onChange={(level) => set({ fallbackThinking: level })}
+            />
           </Field>
         ) : null}
         {kind !== "master" ? (
           <Field label={FIELD_LABELS.timeout} help={`in minutes; default ${Math.round(config.workflow.agentTimeoutMs / 60_000)}`}>
-            <MinutesField value={entry.timeoutMs ?? config.workflow.agentTimeoutMs} label={`${name} time limit`} onSave={(ms) => set("timeoutMs", ms)} />
+            <MinutesField value={entry.timeoutMs ?? config.workflow.agentTimeoutMs} label={`${name} time limit`} onSave={(ms) => set({ timeoutMs: ms })} />
           </Field>
         ) : null}
         {kind !== "scout" && kind !== "researcher" ? (
-          <Field label={FIELD_LABELS.instructions}>
-            <InstructionsField value={entry.instructions ?? ""} label={`${name} instructions`} onSave={(text) => set("instructions", text)} />
+          <Field label={FIELD_LABELS.instructions} stacked>
+            <InstructionsField value={entry.instructions ?? ""} label={`${name} instructions`} onSave={(text) => set({ instructions: text })} />
           </Field>
         ) : null}
       </CardContent>
@@ -357,14 +393,10 @@ function LobbyGroup({ config, save }: { config: Config; save: Save }) {
         <Field label={SPLIT_LABEL} help={SPLIT_HELP}>
           <Choice value={String(config.lobby.splitPlanAbove)} items={SPLIT_CHOICES.map((value) => ({ value: String(value), label: splitLabel(value) }))} label={SPLIT_LABEL} onChange={(value) => void save({ lobby: { splitPlanAbove: Number(value) } })} />
         </Field>
-        <ToggleField label={WEB_LABEL} help={WEB_ENABLED_HELP} checked={web.enabled} onChange={(next) => void save({ lobby: { web: { enabled: next } } })} />
         <Field label={WEB_PORT_LABEL} help={WEB_PORT_HELP}>
           <PortField value={web.port} onSave={(port) => void save({ lobby: { web: { port } } })} />
         </Field>
         <ToggleField label={WEB_BROWSER_LABEL} help={WEB_BROWSER_HELP} checked={web.openBrowser} onChange={(next) => void save({ lobby: { web: { openBrowser: next } } })} />
-        <Field label={WEB_QUESTIONS_LABEL} help={WEB_QUESTIONS_HELP}>
-          <Choice value={web.questions} items={WEB_QUESTIONS.map((value) => ({ value, label: value }))} label={WEB_QUESTIONS_LABEL} onChange={(value) => void save({ lobby: { web: { questions: value } } })} />
-        </Field>
       </div>
     </Section>
   )
@@ -430,7 +462,7 @@ function InstallGroup() {
   return (
     <Section title={GROUP_TITLES.install}>
       <Field label={PAGE.installLabel} help={PAGE.installHelp}>
-        {available ? <Button type="button" className="h-10" onClick={() => void install().then(() => toast.success(PAGE.installDone))}>{PAGE.installButton}</Button> : <p className="py-2 text-xs text-muted-foreground">{PAGE.installUnavailable}</p>}
+        {available ? <Button type="button" onClick={() => void install().then(() => toast.success(PAGE.installDone))}>{PAGE.installButton}</Button> : <p className="py-2 text-xs text-muted-foreground">{PAGE.installUnavailable}</p>}
       </Field>
     </Section>
   )
@@ -449,13 +481,13 @@ export function SettingsForm({ config, models, onConfig }: { config: Config; mod
     }
   }
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-4 sm:p-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-sm font-bold">{PAGE.title}</h1>
+        <h1 className="text-xl font-medium">{PAGE.title}</h1>
         <p className="text-sm text-muted-foreground">{PAGE.intro}</p>
       </header>
       <Section title={GROUP_TITLES.agents}>
-        <div className="flex flex-col gap-3">
+        <div className="grid gap-4 lg:grid-cols-2">
           {AGENT_ORDER.map((kind) => <AgentCard key={kind} kind={kind} config={config} models={models} save={save} />)}
         </div>
       </Section>

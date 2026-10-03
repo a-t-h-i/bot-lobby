@@ -1,29 +1,24 @@
 /**
- * The sections of a task's detail (batch-2 §f, `taskDetailLines` order):
- * Request, Progress, Approved plan (or Proposal / the empty Plan note),
- * Amendments, Waiting on and Recent runs. Wording and marks are copied from
- * `src/lobby/tabs/tasks.ts`; the plan text and steps arrive with `tasks.get`.
+ * The sections of a task's detail: Request, Progress, Approved plan (or
+ * Proposal / the empty Plan note), Amendments, Waiting on and Recent runs. The
+ * plan text and steps arrive with `tasks.get`.
  */
+import { AlertCircle, CheckCircle2, Circle, XCircle } from "lucide-react"
 import type { TaskDetail as TaskDetailData } from "@protocol"
 import { Markdown } from "@/ui/Markdown"
 import { Section } from "@/ui/Section"
 
-const DONE = "☑"
-const OPEN = "☐"
-
 function Step({ step, index }: { step: TaskDetailData["steps"][number]; index: number }) {
-  const mark = step.status === "done" ? DONE : OPEN
-  const markClass = step.status === "done" ? "text-primary" : step.status === "current" ? "text-foreground" : "text-muted-foreground"
+  const Icon = step.status === "done" ? CheckCircle2 : Circle
+  const markClass = step.status === "done" ? "text-success" : step.status === "current" ? "text-primary" : "text-muted-foreground"
   return (
-    <li className="flex items-start gap-2 text-sm">
-      <span className={`shrink-0 ${markClass}`} aria-hidden="true">
-        {mark}
-      </span>
+    <li className="flex items-start gap-2.5 text-sm">
+      <Icon aria-hidden="true" className={`mt-0.5 size-4 shrink-0 ${markClass}`} />
       <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{index + 1}.</span>
       <span className={step.status === "current" ? "min-w-0 break-words text-foreground" : "min-w-0 break-words text-muted-foreground"}>{step.text}</span>
       {step.status === "current" ? (
-        <span className="shrink-0 font-medium text-primary">
-          ◂ now<span className="sr-only"> (current step)</span>
+        <span className="shrink-0 rounded-lg bg-accent px-2 py-0.5 text-xs font-medium">
+          now<span className="sr-only"> (current step)</span>
         </span>
       ) : null}
     </li>
@@ -34,7 +29,7 @@ function ProgressSection({ steps }: { steps: TaskDetailData["steps"] }) {
   const done = steps.filter((step) => step.status === "done").length
   return (
     <Section title="Progress" right={`${done}/${steps.length} steps`}>
-      <ol className="flex flex-col gap-1">
+      <ol className="flex flex-col gap-1.5">
         {steps.map((step, index) => (
           <Step key={`${index}-${step.text}`} step={step} index={index} />
         ))}
@@ -89,9 +84,7 @@ function Waiting({ detail }: { detail: TaskDetailData }) {
       <ul className="flex flex-col gap-1 text-sm">
         {detail.waiting.map((item, index) => (
           <li key={`${index}-${item.kind}`} className="flex gap-2">
-            <span className="shrink-0 text-primary" aria-hidden="true">
-              !
-            </span>
+            <AlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning" />
             <span className="min-w-0 break-words text-muted-foreground">
               {item.kind} {item.detail}
             </span>
@@ -99,9 +92,7 @@ function Waiting({ detail }: { detail: TaskDetailData }) {
         ))}
         {detail.blockers.map((blocker, index) => (
           <li key={`${index}-${blocker.reason}`} className="flex gap-2">
-            <span className="shrink-0 text-destructive" aria-hidden="true">
-              ✗
-            </span>
+            <XCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-destructive" />
             <span className="min-w-0 break-words text-muted-foreground">
               {blocker.reason} (needs: {blocker.need})
             </span>

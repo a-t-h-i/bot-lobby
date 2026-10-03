@@ -1,5 +1,5 @@
 /**
- * The Git page (batch-2 §k): the open pull requests on the left with their
+ * The Git page: the open pull requests on the left with their
  * checks, draft mark, review outcome and size, and the selected pull's facts,
  * review, Jev's read, files, description and comments on the right (a Sheet
  * below 1024 px). `#/git/<number>` selects a pull request; the list is read
@@ -31,12 +31,12 @@ export function pullNumber(rest: readonly string[]): number | undefined {
 function NoPulls({ loading, loaded, error, onRetry }: { loading: boolean; loaded: boolean; error?: string; onRetry: () => void }) {
   const text = error ? `✗ ${error}` : loaded ? EMPTY_LIST : loading ? LOADING_LIST : NOT_LOADED
   return (
-    <Empty className="m-4 flex-1 border border-border bg-card">
+    <Empty className="glass m-4 flex-1 border">
       <EmptyHeader>
         <EmptyDescription className={error ? "text-destructive" : undefined}>{text}</EmptyDescription>
       </EmptyHeader>
       {error ? (
-        <Button variant="outline" className="h-10" onClick={onRetry}>
+        <Button variant="outline" onClick={onRetry}>
           Retry
         </Button>
       ) : null}
@@ -58,7 +58,7 @@ export function GitTab({ rest }: { rest: readonly string[] }) {
   const list = (
     <>
       <PaneHeader title={LIST_TITLE} count={read.data ? `${pulls.length} open` : undefined}>
-        <Button variant="outline" className="h-10" disabled={busy} onClick={refresh}>
+        <Button variant="outline" disabled={busy} onClick={refresh}>
           {busy ? <Spinner className="size-3.5" /> : null}
           Refresh
         </Button>
