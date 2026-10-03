@@ -338,6 +338,10 @@ The user asked for a keyboard-first, tighter page that makes them think through 
 - Inputs match the choice: checkboxes for several (panel seats, agents, show archived), a switch for on/off (Auto), a radio group for one of a few (group by). A checkbox's corners are the one place the 8px radius is not used (on a box that small it would be a circle).
 - The page's rem is 15px (a compact scale); controls are 24-30px; dark is near-black (`#0a0b0f`); every radius step is 8px.
 
+## D-25 · Action buttons are icons in a pinned bar · Adopted
+
+Every action (archive, delete, start, review, refresh, copy, …) is an icon button whose tooltip and accessible name say what it does (`ui/Actions.tsx`). In a detail pane the buttons sit in a bar stuck to the top of the pane, so they never scroll out of reach; Left and Right move between them. Choices inside a dialog (Yes/No, Answer, Cancel, an option) keep their words. The Lobby's task header is one slim line, and dark is darker still (`#050608`).
+
 ---
 
 ## Open questions (each has a default the swarm uses until the user answers)
