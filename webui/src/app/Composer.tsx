@@ -10,7 +10,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react"
 import { animate, AnimatePresence, motion } from "motion/react"
-import { ArrowUp, FileText, Maximize2, Minimize2, Paperclip, Square, X } from "lucide-react"
+import { ArrowUp, Eye, FileText, Maximize2, Minimize2, Paperclip, Square, X } from "lucide-react"
 import { Keys, KeyHint } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -18,8 +18,11 @@ import { call } from "@/lib/api"
 import { act } from "@/lib/act"
 import { useComposerContext, type ComposerSession } from "@/lib/composerContext"
 import { useAnyOverlay } from "@/lib/overlay"
+import { focusTab } from "@/prompts/nav"
 import { toast } from "@/lib/toast"
 import { MAX_ATTACHMENTS, sizeLabel, uploadFile } from "@/lib/uploads"
+import { Markdown } from "@/ui/Markdown"
+import { continueList, link, wrap, type Edit } from "./markdownEdit"
 import { cn } from "@/lib/utils"
 import type { LobbySnapshot, StatusInfo, UploadInfo } from "@protocol"
 import { useTopic } from "./hooks"
@@ -84,13 +87,47 @@ let keySeq = 0
 
 /** The flat icon buttons under the box. */
 const TOOL =
-  "inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+  "inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
 
 function isSend(event: KeyboardEvent): boolean {
   return event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing
 }
 
 function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
+  const remove = (
+    <button
+      type="button"
+      aria-label={`Remove ${file.name}`}
+      onClick={onRemove}
+      className={cn(
+        "flex shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40",
+        file.image ? "absolute top-1 right-1 size-5 bg-background/80 text-foreground backdrop-blur-sm" : "size-7"
+      )}
+    >
+      <X aria-hidden="true" className="size-3.5" />
+    </button>
+  )
+  if (file.image) {
+    return (
+      <motion.li
+        layout
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.8 }}
+        transition={{ type: "spring", stiffness: 520, damping: 32 }}
+        title={`${file.name} · ${sizeLabel(file.size)}`}
+        className="relative size-16 shrink-0 overflow-hidden rounded-lg border border-border bg-muted"
+      >
+        <img src={file.image} alt={file.name} className="size-full object-cover" />
+        {file.state === "uploading" ? (
+          <span className="absolute inset-0 flex items-center justify-center bg-background/60">
+            <Spinner className="size-4" aria-hidden="true" role="presentation" />
+          </span>
+        ) : null}
+        {remove}
+      </motion.li>
+    )
+  }
   return (
     <motion.li
       layout
@@ -98,28 +135,17 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.8 }}
       transition={{ type: "spring", stiffness: 520, damping: 32 }}
-      className="flex min-w-0 items-center gap-2 rounded-lg bg-muted py-1 pr-1 pl-1"
+      className="flex h-9 min-w-0 items-center gap-2 rounded-lg bg-muted pr-1 pl-2.5"
     >
-      <span className="relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-card text-muted-foreground">
-        {file.image ? <img src={file.image} alt="" className="size-full object-cover" /> : <FileText aria-hidden="true" className="size-4" />}
-        {file.state === "uploading" ? (
-          <span className="absolute inset-0 flex items-center justify-center bg-background/60">
-            <Spinner className="size-4" aria-hidden="true" role="presentation" />
-          </span>
-        ) : null}
+      <span className="relative flex shrink-0 items-center justify-center text-muted-foreground">
+        <FileText aria-hidden="true" className="size-4" />
+        {file.state === "uploading" ? <Spinner className="absolute -right-1 -bottom-1 size-2.5" aria-hidden="true" role="presentation" /> : null}
       </span>
       <span className="min-w-0 max-w-40">
         <span className="block truncate text-xs font-medium">{file.name}</span>
-        <span className="block text-[0.7rem] text-muted-foreground">{file.state === "uploading" ? "uploading…" : sizeLabel(file.size)}</span>
+        <span className="block text-[0.65rem] leading-tight text-muted-foreground">{file.state === "uploading" ? "uploading…" : sizeLabel(file.size)}</span>
       </span>
-      <button
-        type="button"
-        aria-label={`Remove ${file.name}`}
-        onClick={onRemove}
-        className="flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
-      >
-        <X aria-hidden="true" className="size-4" />
-      </button>
+      {remove}
     </motion.li>
   )
 }
@@ -128,6 +154,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
   const [text, setText] = useState("")
   const [files, setFiles] = useState<Pending[]>([])
   const [expanded, setExpanded] = useState(false)
+  const [preview, setPreview] = useState(false)
   const [sending, setSending] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [chosen, setChosen] = useState<TargetId>()
@@ -148,6 +175,21 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
   const picker = useRef<HTMLInputElement>(null)
   const filesRef = useRef(files)
   filesRef.current = files
+  const selection = useRef<{ start: number; end: number } | undefined>(undefined)
+
+  // After a Markdown edit the selection goes where the edit says (the text is controlled, so it must be set after the render).
+  useLayoutEffect(() => {
+    const pending = selection.current
+    const el = field.current
+    if (!pending || !el) return
+    selection.current = undefined
+    el.setSelectionRange(pending.start, pending.end)
+  }, [text])
+
+  const edit = useCallback((change: Edit) => {
+    selection.current = { start: change.start, end: change.end }
+    setText(change.value)
+  }, [])
 
   // The toasts and the page's own bottom padding follow the composer's height.
   useEffect(() => {
@@ -253,6 +295,41 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
   }, [])
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Escape" && !event.nativeEvent.isComposing) {
+      // Esc leaves the box (what you typed stays) for the tab bar.
+      event.preventDefault()
+      focusTab()
+      return
+    }
+    const box = event.currentTarget
+    const key = event.key.toLowerCase()
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && ["b", "i", "e", "k"].includes(key)) {
+      // Ctrl+B bold, Ctrl+I italic, Ctrl+E code, Ctrl+K link.
+      event.preventDefault()
+      const { selectionStart: from, selectionEnd: to, value } = box
+      edit(key === "k" ? link(value, from, to) : wrap(value, from, to, key === "b" ? "**" : key === "i" ? "_" : "`"))
+      return
+    }
+    if (event.altKey && !event.ctrlKey && !event.metaKey && key === "p") {
+      event.preventDefault()
+      setPreview((value) => !value)
+      return
+    }
+    if (event.key === "Enter" && event.shiftKey && !event.nativeEvent.isComposing && box.selectionStart === box.selectionEnd) {
+      // Shift+Enter on a list line carries the list on.
+      const next = continueList(box.value, box.selectionStart)
+      if (next) {
+        event.preventDefault()
+        edit(next)
+      }
+      return
+    }
+    if (event.key === "Backspace" && box.value === "" && filesRef.current.length > 0) {
+      // Backspace in an empty box takes the last attachment off.
+      event.preventDefault()
+      forget(filesRef.current.at(-1)!.key)
+      return
+    }
     if (!isSend(event) && !(event.key === "Enter" && (event.metaKey || event.ctrlKey))) return
     event.preventDefault()
     void send()
@@ -300,7 +377,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
                 exit={{ height: 0, opacity: 0 }}
                 transition={{ type: "spring", stiffness: 420, damping: 36 }}
                 aria-label="Attachments"
-                className="flex flex-wrap gap-2 overflow-hidden px-2 pt-2"
+                className="flex flex-wrap items-end gap-2 overflow-hidden px-3 pt-3"
               >
                 {files.map((file) => (
                   <Chip key={file.key} file={file} onRemove={() => forget(file.key)} />
@@ -309,7 +386,13 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
             ) : null}
           </AnimatePresence>
 
-          <div ref={area} className="flex items-start gap-2 px-3 py-2.5">
+          {preview ? (
+            <div aria-label="Markdown preview" role="region" className="max-h-48 overflow-y-auto border-b border-border px-3 py-2">
+              {text.trim() ? <Markdown text={text} /> : <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>}
+            </div>
+          ) : null}
+
+          <div ref={area} className="flex items-start gap-2 px-3 py-2">
             <span aria-hidden="true" className="pt-px font-mono text-base leading-relaxed text-primary select-none md:text-sm md:leading-relaxed">
               &gt;
             </span>
@@ -326,7 +409,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
               className={cn(
                 "w-full min-w-0 flex-1 resize-none bg-transparent font-mono text-base leading-relaxed caret-primary outline-none placeholder:text-muted-foreground md:text-sm md:leading-relaxed",
                 "field-sizing-content",
-                expanded ? "max-h-[60svh] min-h-[min(46svh,24rem)]" : "max-h-40 min-h-6"
+                expanded ? "max-h-[60svh] min-h-[min(46svh,24rem)]" : "max-h-[34svh] min-h-6"
               )}
             />
           </div>
@@ -367,6 +450,16 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
             </TooltipTrigger>
             <TooltipContent>{expanded ? "Smaller" : "Bigger"}</TooltipContent>
           </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button type="button" aria-label="Preview the Markdown" aria-pressed={preview} aria-keyshortcuts="Alt+P" onClick={() => setPreview((value) => !value)} className={cn(TOOL, preview && "bg-tab text-foreground")}>
+                <Eye aria-hidden="true" className="size-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              Preview <Keys chord="Alt+P" />
+            </TooltipContent>
+          </Tooltip>
 
           {targets.length > 1 ? (
             <div role="radiogroup" aria-label="Send to" className="ml-1 flex items-center gap-0.5">
@@ -378,7 +471,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
                   aria-checked={entry.id === target.id}
                   onClick={() => setChosen(entry.id)}
                   className={cn(
-                    "h-10 rounded-lg px-3 text-xs font-medium transition-[background-color,color] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
+                    "h-8 rounded-lg px-3 text-xs font-medium transition-[background-color,color] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
                     entry.id === target.id ? "bg-tab text-foreground" : "text-muted-foreground hover:text-foreground"
                   )}
                 >
@@ -408,7 +501,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
                 aria-label="Keyboard shortcuts"
                 aria-haspopup="dialog"
                 onClick={onHelp}
-                className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg px-1.5 text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-1.5 text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
               >
                 <Keys chord={keys.help ?? "Alt+H"} />
                 <span className="hidden @[8rem]:inline">shortcuts</span>
@@ -423,7 +516,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
                   type="button"
                   aria-label="Stop"
                   onClick={() => void stop()}
-                  className="inline-flex size-10 items-center justify-center rounded-lg bg-secondary text-foreground transition-[background-color,transform] duration-150 ease-snap outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+                  className="inline-flex size-8 items-center justify-center rounded-lg bg-secondary text-foreground transition-[background-color,transform] duration-150 ease-snap outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
                 >
                   <Square aria-hidden="true" className="size-3.5 fill-current" />
                 </button>
@@ -439,7 +532,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
                 aria-keyshortcuts="Enter"
                 onClick={() => void send()}
                 disabled={!canSend}
-                className="inline-flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-[opacity,transform,filter] duration-150 ease-snap outline-none hover:brightness-110 focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95 disabled:opacity-40 disabled:hover:brightness-100"
+                className="inline-flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-[opacity,transform,filter] duration-150 ease-snap outline-none hover:brightness-110 focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95 disabled:opacity-40 disabled:hover:brightness-100"
               >
                 {sending ? <Spinner aria-hidden="true" role="presentation" className="size-4 text-primary-foreground" /> : <ArrowUp aria-hidden="true" className="size-[1.15rem]" />}
               </button>

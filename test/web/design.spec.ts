@@ -141,12 +141,34 @@ test("the composer takes an image, shows it, and clears it once sent", async ({ 
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.locator('input[type="file"]').setInputFiles({ name: "mockup.png", mimeType: "image/png", buffer: PNG });
   const chips = page.getByRole("list", { name: "Attachments" });
-  await expect(chips).toContainText("mockup.png");
-  await expect(chips.getByText("uploading…"), "the upload finishes").toBeHidden({ timeout: 10_000 });
+  const preview = chips.getByRole("img", { name: "mockup.png" });
+  await expect(preview, "the image shows as a preview in the box").toBeVisible();
+  await expect.poll(async () => (await preview.boundingBox())!.width, { message: "a real thumbnail, not an icon (it springs in first)" }).toBeGreaterThanOrEqual(60);
   await page.getByLabel("Message the oracle").fill("see this");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(chips).toHaveCount(0);
   await expect(page.getByLabel("Message the oracle")).toHaveValue("");
+});
+
+test("the box grows with what is typed, carries lists on, formats with Ctrl+B and previews the Markdown", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const box = page.getByLabel("Message the oracle");
+  const before = (await box.boundingBox())!.height;
+  await box.fill("- one");
+  await box.press("Shift+Enter");
+  await expect(box, "Shift+Enter on a list line carries the list on").toHaveValue("- one\n- ");
+  await box.pressSequentially("two");
+  await box.press("Shift+Enter");
+  await box.press("Shift+Enter");
+  await expect(box, "an empty marker ends the list").toHaveValue("- one\n- two\n");
+  expect((await box.boundingBox())!.height, "it grew with the lines").toBeGreaterThan(before + 20);
+  await box.fill("make this bold");
+  await box.press("Control+a");
+  await box.press("Control+b");
+  await expect(box).toHaveValue("**make this bold**");
+  await page.getByRole("button", { name: "Preview the Markdown" }).click();
+  await expect(page.getByRole("region", { name: "Markdown preview" }).locator("strong"), "the preview renders it").toHaveText("make this bold");
 });
 
 test("the composer's tall editor opens and closes", async ({ page, server }) => {
@@ -229,9 +251,88 @@ test("keyboard hints: the box prints its keys, the header button opens the key l
   await page.getByRole("button", { name: "Keyboard shortcuts" }).first().click();
   const keys = page.getByRole("dialog", { name: "Keys" });
   await expect(keys).toBeVisible();
-  await expect(keys.getByText("Message box"), "the list covers the message box too").toBeVisible();
+  await expect(keys.getByText("Message box", { exact: true }), "the list covers the message box too").toBeVisible();
   await page.keyboard.press("Escape");
   await expect(keys).toBeHidden();
+});
+
+test("the page itself never scrolls: no empty page below the composer, whatever the tab", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1024, height: 700 });
+  for (const hash of ["#/lobby", "#/tasks", "#/metrics", "#/settings", "#/knowledge", "#/git"]) {
+    await page.evaluate((h) => {
+      window.location.hash = h;
+    }, hash);
+    await page.waitForTimeout(250);
+    const run = await page.evaluate(() => {
+      const root = document.scrollingElement as any;
+      window.scrollTo(0, 400);
+      document.body.scrollTop = 400;
+      (document.getElementById("composer-text") as any)?.focus();
+      const composer = (document.getElementById("composer-text") as any).getBoundingClientRect();
+      return { y: window.scrollY + root.scrollTop + document.body.scrollTop, bottom: composer.bottom, inner: window.innerHeight };
+    });
+    expect(run.y, `${hash}: the page does not scroll`).toBe(0);
+    expect(run.bottom, `${hash}: the composer stays on the screen`).toBeLessThanOrEqual(run.inner);
+  }
+});
+
+test("questions are answered from the keyboard alone: y/n, arrows, Space, Enter", async ({ page, server }) => {
+  await openScenario(page, server, "question");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const popup = page.locator('section[aria-label="Question from the lobby"]');
+  await expect(popup).toContainText("Start the mock server on 7347?");
+  await page.keyboard.press("y");
+  await expect(popup, "y answers yes").toBeHidden();
+  await page.getByLabel("Message the oracle").fill("go");
+  await page.keyboard.press("Enter");
+  await expect(popup).toContainText("Which set should stream next?");
+  await expect(popup.locator('[data-option="0"]'), "the first option has focus").toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(popup.locator('[data-option="1"]'), "Down moves to the next option").toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(popup.locator('[data-option="1"]'), "Space picks it").toBeChecked();
+  await page.keyboard.press("Enter");
+  await expect(popup, "Enter answers").toBeHidden();
+});
+
+test("lists are walked with the keyboard: Down from the tab bar, arrows between rows, right into the detail, Esc back up", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.getByRole("tab", { name: /Tasks/ }).click();
+  await page.getByRole("tab", { name: /Tasks/ }).focus();
+  await page.keyboard.press("ArrowDown");
+  const list = page.locator('[data-pane="list"]');
+  await expect(list.locator(":focus"), "Down from the tab bar lands on a row of the list").toHaveCount(1);
+  const first = await list.locator(":focus").textContent();
+  await page.keyboard.press("ArrowDown");
+  expect(await list.locator(":focus").textContent(), "Down moves to the next row").not.toBe(first);
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator('[data-pane="detail"]'), "Right goes into the detail").toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(list.locator(":focus"), "Left comes back").toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tab", { name: /Tasks/ }), "Esc goes back up to the tab bar").toBeFocused();
+  await page.keyboard.press("/");
+  await expect(page.locator("#composer-text"), "/ jumps to the message box").toBeFocused();
+});
+
+test("Knowledge agents fold and unfold, with the keyboard too", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.evaluate(() => {
+    window.location.hash = "#/knowledge";
+  });
+  const master = page.getByRole("button", { name: /Master \(oracle\)/ });
+  await expect(master).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("button", { name: /^Knowledge/ }).first(), "its file is listed").toBeVisible();
+  await master.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(master, "Left folds it").toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("ArrowRight");
+  await expect(master, "Right opens it").toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Enter");
+  await expect(master, "Enter toggles it").toHaveAttribute("aria-expanded", "false");
 });
 
 test("Activity and Thinking fold down to their title bar and open again", async ({ page, server }) => {

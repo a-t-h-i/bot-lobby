@@ -60,7 +60,7 @@ export function ReconnectingState({ onRetry }: { onRetry?: () => void }) {
       <WifiOff className="size-4" aria-hidden="true" />
       <span>Connection lost — retrying every 2 s.</span>
       {onRetry ? (
-        <Button variant="link" className="h-10 px-1 text-destructive" onClick={onRetry}>
+        <Button variant="link" className="h-8 px-1 text-destructive" onClick={onRetry}>
           Retry now
         </Button>
       ) : null}

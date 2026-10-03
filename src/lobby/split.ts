@@ -171,7 +171,7 @@ export function splitQuestion(input: { stepCount: number; proposal: SplitProposa
       last ? "This is the last revision: take it, or keep the plan whole." : "Type what to change (for example *merge 2 and 3*) to revise it.",
     ].join("\n\n"),
     options: [
-      { label: `${splitLabel(count)} (Recommended)`, description: "Each part is saved as its own pending task, in order, knowing the others.", preview: splitPreview(input.proposal, input.steps) },
+      { label: splitLabel(count), description: "Each part is saved as its own pending task, in order, knowing the others.", preview: splitPreview(input.proposal, input.steps) },
       { label: "Keep it as one task", description: `One task with all ${input.stepCount} steps.` },
     ],
   };

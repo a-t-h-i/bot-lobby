@@ -5,6 +5,7 @@
  * reread `metrics.get`, and the `metrics` topic rereads them too.
  */
 import { useState } from "react"
+import { Search } from "lucide-react"
 import { ErrorState } from "@/app/States"
 import { useApiRead } from "@/app/useApiRead"
 import { Button } from "@/components/ui/button"
@@ -20,9 +21,16 @@ const EMPTY = "No runs recorded yet. Every Master turn, subagent run, quick fix 
 
 function GroupToggle({ groupBy, onGroup }: { groupBy: GroupBy; onGroup: (value: GroupBy) => void }) {
   return (
-    <div role="group" aria-label="Group by" className="flex gap-1 rounded-lg bg-muted p-1">
+    <div role="group" aria-label="Group by" className="flex gap-0.5 rounded-lg bg-muted p-0.5">
       {(["model", "model-kind"] as const).map((value) => (
-        <Button key={value} variant="ghost" className={groupBy === value ? "rounded-lg bg-tab text-foreground hover:bg-tab" : "rounded-lg text-muted-foreground"} aria-pressed={groupBy === value} onClick={() => onGroup(value)}>
+        <Button
+          key={value}
+          variant="ghost"
+          size="sm"
+          className={groupBy === value ? "bg-tab text-foreground hover:bg-tab" : "text-muted-foreground"}
+          aria-pressed={groupBy === value}
+          onClick={() => onGroup(value)}
+        >
           {byLabel(value)}
         </Button>
       ))}
@@ -32,29 +40,19 @@ function GroupToggle({ groupBy, onGroup }: { groupBy: GroupBy; onGroup: (value: 
 
 function SearchBox({ query, onQuery }: { query: string; onQuery: (value: string) => void }) {
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor="metrics-search" className="text-xs font-medium text-muted-foreground">
-        Search runs
-      </label>
+    <label className="relative flex items-center">
+      <span className="sr-only">Search runs</span>
+      <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 size-3.5 text-muted-foreground" />
       <input
         id="metrics-search"
         type="search"
         value={query}
         maxLength={500}
-        placeholder="model, agent, tool…"
+        placeholder="Search runs: model, agent, tool…"
         onChange={(event) => onQuery(event.target.value)}
-        className="h-10 w-full min-w-48 rounded-lg border border-input bg-card/40 px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+        className="h-7 w-64 max-w-full rounded-lg border border-input bg-card/40 pr-3 pl-8 text-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
       />
-    </div>
-  )
-}
-
-function Controls(props: { groupBy: GroupBy; query: string; onGroup: (value: GroupBy) => void; onQuery: (value: string) => void }) {
-  return (
-    <div className="flex flex-wrap items-end justify-between gap-3">
-      <GroupToggle groupBy={props.groupBy} onGroup={props.onGroup} />
-      <SearchBox query={props.query} onQuery={props.onQuery} />
-    </div>
+    </label>
   )
 }
 
@@ -62,17 +60,17 @@ function Body({ data, groupBy, query }: { data: MetricsData; groupBy: GroupBy; q
   const label = (group: MetricsData["groups"][number]) => groupLabel(group, groupBy)
   if (data.tiles.runs === 0) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
         <Tiles tiles={data.tiles} />
         <p className="glass rounded-lg p-4 text-sm text-muted-foreground">{query ? `No run matches "${query}".` : EMPTY}</p>
       </div>
     )
   }
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <Tiles tiles={data.tiles} />
       {data.classifier ? <Classifier summary={data.classifier} /> : null}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-2">
         <AvgTime groups={data.groups} label={label} />
         <SuccessRate groups={data.groups} label={label} />
       </div>
@@ -86,7 +84,7 @@ function Skeleton() {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" role="status" aria-label="Loading metrics">
       {[0, 1, 2, 3, 4].map((tile) => (
-        <div key={tile} className="h-24 rounded-lg bg-muted motion-safe:animate-pulse" />
+        <div key={tile} className="h-20 rounded-lg bg-muted motion-safe:animate-pulse" />
       ))}
     </div>
   )
@@ -98,12 +96,14 @@ export function MetricsTab() {
   const read = useApiRead("metrics.get", { groupBy, query }, ["metrics"])
   if (!read.data && read.error) return <ErrorState message={`Could not load metrics. ${read.error}`} onRetry={read.reload} />
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <header className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-xl font-medium">Metrics</h1>
+    <div className="flex flex-col gap-3 px-4 py-2">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h1 className="text-base font-medium">Metrics</h1>
         {read.loading && read.data ? <span className="flex items-center gap-2 text-xs text-muted-foreground"><Spinner className="size-3" aria-hidden="true" role="presentation" /> refreshing</span> : null}
+        <span aria-hidden="true" className="min-w-4 flex-1" />
+        <GroupToggle groupBy={groupBy} onGroup={setGroupBy} />
+        <SearchBox query={query} onQuery={setQuery} />
       </header>
-      <Controls groupBy={groupBy} query={query} onGroup={setGroupBy} onQuery={setQuery} />
       {read.data ? <Body data={read.data} groupBy={groupBy} query={query} /> : <Skeleton />}
     </div>
   )
