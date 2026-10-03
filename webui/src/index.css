@@ -133,13 +133,13 @@
   --color-bullet: var(--bullet);
   --color-glass-border: var(--glass-border);
   --color-scrim: var(--scrim);
-  /* One radius for everything: rounded-md. */
+  /* One radius for everything: rounded-lg (8px). */
   --radius-sm: 4px;
   --radius-md: 6px;
-  --radius-lg: 6px;
-  --radius-xl: 6px;
-  --radius-2xl: 6px;
-  --radius-3xl: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 8px;
+  --radius-2xl: 8px;
+  --radius-3xl: 8px;
   --color-tab: var(--tab-active);
   --shadow-glass: var(--glass-shadow);
   --color-background: var(--background);
@@ -244,7 +244,7 @@
     @apply my-3;
   }
   .md-body :is(h1, h2, h3, h4, h5, h6) {
-    @apply font-semibold text-heading;
+    @apply font-medium text-heading;
   }
   .md-body h1 {
     @apply text-lg;
@@ -277,10 +277,10 @@
     @apply rounded-sm bg-muted px-1 py-0.5 font-mono text-[0.85em] text-code;
   }
   .md-body pre {
-    @apply overflow-x-auto rounded-md bg-muted p-3 font-mono text-[0.85em] text-codeblock;
+    @apply overflow-x-auto rounded-lg bg-muted p-3 font-mono text-[0.85em] text-codeblock;
   }
   .md-body img {
-    @apply max-w-full rounded-md;
+    @apply max-w-full rounded-lg;
   }
   .md-body input[type="checkbox"] {
     @apply mr-1.5;
@@ -290,7 +290,7 @@
     @apply border border-border px-2.5 py-1 text-left align-top;
   }
   .md-body table th {
-    @apply font-semibold;
+    @apply font-medium;
   }
 }
 

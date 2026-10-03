@@ -27,7 +27,7 @@ function Line({ entry }: { entry: ChatEntry }) {
     <li className="flex flex-col gap-1">
       <span className="flex items-center gap-2 text-xs text-muted-foreground">
         {you ? null : <span aria-hidden="true" className="size-2 rounded-full bg-primary" />}
-        <span className="font-semibold text-foreground">{you ? "You" : "Oracle"}</span> {time}
+        <span className="font-medium text-foreground">{you ? "You" : "Oracle"}</span> {time}
       </span>
       <Markdown text={entry.text} />
     </li>
