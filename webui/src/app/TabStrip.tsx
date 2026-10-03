@@ -1,6 +1,6 @@
 /**
  * The tabs as plain numbered words joined by dotted lines, `1-Lobby ··· 2-Tasks
- * ··· 3-Plan`. One pill (10px corners, a shade off the page) sits behind the
+ * ··· 3-Plan`. One pill (8px corners, a shade off the page) sits behind the
  * chosen tab and slides to the next like a drop of water: the edge it moves toward runs ahead on a stiff
  * spring, the other trails on a soft one, so the drop stretches across the
  * gap and then draws back into the new tab (and settles with a small
@@ -12,7 +12,7 @@ import { forwardRef, Fragment, useCallback, useEffect, useLayoutEffect, useRef, 
 import { animate, type AnimationPlaybackControls } from "motion"
 import { BarChart3, BookOpen, CircleDot, GitPullRequest, ListChecks, MessageSquare, PenTool, Route, Zap, type LucideIcon } from "lucide-react"
 import { Keys } from "@/components/ui/kbd"
-import { focusPage } from "@/prompts/nav"
+import { focusPage, tabWalk } from "@/prompts/nav"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import type { TabInfo } from "@protocol"
@@ -56,7 +56,7 @@ const TabCell = forwardRef<HTMLAnchorElement, { tab: TabInfo; active: boolean }>
           aria-keyshortcuts={tab.key}
           tabIndex={active ? 0 : -1}
           className={cn(
-            "relative z-10 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[10px] px-3.5 text-sm font-medium whitespace-nowrap outline-none",
+            "relative z-10 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[0.8125rem] font-medium whitespace-nowrap outline-none",
             "transition-colors duration-200 ease-snap focus-visible:ring-3 focus-visible:ring-ring/40",
             active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
           )}
@@ -205,6 +205,10 @@ export function TabStrip({ tabs, activeId, onSelect }: TabStripProps) {
     event.preventDefault()
     const index = Math.max(0, tabs.findIndex((tab) => tab.id === activeId))
     const next = tabs[(index + delta + tabs.length) % tabs.length]!
+    tabWalk.active = true
+    window.setTimeout(() => {
+      tabWalk.active = false
+    }, 400)
     onSelect(next.id)
     cells.current[next.id]?.focus({ preventScroll: true })
   }
@@ -215,7 +219,7 @@ export function TabStrip({ tabs, activeId, onSelect }: TabStripProps) {
         <span
           ref={drop}
           aria-hidden="true"
-          className="pointer-events-none absolute top-1 left-0 z-0 h-8 origin-center rounded-[10px] bg-tab opacity-0 will-change-transform"
+          className="pointer-events-none absolute top-1 left-0 z-0 h-8 origin-center rounded-lg bg-tab opacity-0 will-change-transform"
         />
         {tabs.map((tab, position) => (
           <Fragment key={tab.id}>
