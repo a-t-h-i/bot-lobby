@@ -6,6 +6,7 @@
 import { SessionManager, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { loadTask, peekTasks } from "../state/persistence.ts";
+import { releaseAttachments } from "../state/attachments.ts";
 import { loadConfig, saveConfig as writeConfig } from "../state/project.ts";
 import { addPlanComment, readPlanComments } from "../state/comments.ts";
 import { isAutoMode } from "../state/auto.ts";
@@ -317,6 +318,7 @@ function archiveTask(state: Runtime, taskId: string): string {
   if (busy) return busy;
   try {
     archiveTaskOnDisk(state.root, state.configDir, taskId);
+    releaseAttachments(taskId);
   } catch (error) {
     return (error as Error).message;
   }
@@ -345,6 +347,7 @@ function deleteTask(state: Runtime, taskId: string, where: "list" | "archive"): 
   }
   try {
     deleteTaskOnDisk(state.root, state.configDir, taskId, where);
+    releaseAttachments(taskId);
   } catch (error) {
     return (error as Error).message;
   }
