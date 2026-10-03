@@ -8,13 +8,14 @@
  * notification and install rows are page-only and never sent to the server.
  */
 import { useEffect, useState, type ReactNode } from "react"
+import { ChevronRight } from "lucide-react"
 import { toast } from "@/lib/toast"
 import { useInstallPrompt } from "@/app/install"
 import { disableNotifications, enableNotifications, useNotificationsEnabled } from "@/app/notify"
 import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
@@ -135,11 +136,12 @@ interface ChoiceItem {
   help?: string
 }
 
+/** A setting as a row: its name and help on the left, the control on the right (or below, `stacked`). */
 function Field({ label, help, children, stacked }: { label: string; help?: string; children: ReactNode; stacked?: boolean }) {
   return (
-    <div className={stacked ? "grid gap-1.5" : "grid gap-1.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,18rem)] sm:items-start sm:gap-4"}>
-      <div className="min-w-0 py-1">
-        <div className="text-sm font-medium">{label}</div>
+    <div className={stacked ? "grid gap-1.5" : "grid gap-1.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,16rem)] sm:items-center sm:gap-4"}>
+      <div className="min-w-0">
+        <div className="text-[0.8125rem] font-medium">{label}</div>
         {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
       </div>
       <div className="min-w-0">{children}</div>
@@ -147,19 +149,31 @@ function Field({ label, help, children, stacked }: { label: string; help?: strin
   )
 }
 
+/** A small label above a control, for the dense grids inside an agent's card. */
+function Mini({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid min-w-0 gap-1">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      {children}
+    </div>
+  )
+}
+
+/** Several settings in one card, hairlines between them. */
+function Rows({ children }: { children: ReactNode }) {
+  return <div className="glass flex flex-col divide-y divide-border rounded-lg px-4 [&>*]:py-2.5">{children}</div>
+}
+
 function Choice({ value, items, label, onChange }: { value: string; items: ChoiceItem[]; label: string; onChange: (value: string) => void }) {
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger aria-label={label}>
-        <SelectValue className="min-w-0 overflow-hidden" />
+        <SelectValue className="min-w-0 truncate" />
       </SelectTrigger>
       <SelectContent>
         {items.map((item) => (
-          <SelectItem key={item.value} value={item.value}>
-            <span className="flex min-w-0 flex-col items-start text-left">
-              <span className="max-w-full truncate">{item.label}</span>
-              {item.help ? <span className="max-w-full truncate text-xs text-muted-foreground">{item.help}</span> : null}
-            </span>
+          <SelectItem key={item.value} value={item.value} {...(item.help ? { hint: item.help } : {})}>
+            {item.label}
           </SelectItem>
         ))}
       </SelectContent>
@@ -204,12 +218,12 @@ function ModelChoice(props: { value: string; models: SettingsModelInfo[]; label:
 
 function ToggleField({ label, help, checked, onChange }: { label: string; help?: string; checked: boolean; onChange: (next: boolean) => void }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-lg border border-border bg-card/40 px-4 py-3">
+    <div className="flex items-center justify-between gap-4">
       <div className="min-w-0">
-        <div className="text-sm font-medium">{label}</div>
+        <div className="text-[0.8125rem] font-medium">{label}</div>
         {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
       </div>
-      <Switch checked={checked} onCheckedChange={onChange} aria-label={label} className="mt-0.5" />
+      <Switch checked={checked} onCheckedChange={onChange} aria-label={label} />
     </div>
   )
 }
@@ -272,8 +286,8 @@ function InstructionsField({ value, label, onSave }: { value: string; label: str
   useEffect(() => setText(value), [value])
   return (
     <div className="flex flex-col gap-1.5">
-      <Textarea rows={3} value={text} aria-label={label} onChange={(event) => setText(event.target.value)} onBlur={() => { if (text.trim() !== value) onSave(text.trim()) }} />
-      <p className="text-xs text-muted-foreground">Saved when the field loses focus.</p>
+      <Textarea rows={2} value={text} aria-label={label} onChange={(event) => setText(event.target.value)} onBlur={() => { if (text.trim() !== value) onSave(text.trim()) }} />
+      <p className="text-xs text-muted-foreground">Saved when you leave the field.</p>
     </div>
   )
 }
@@ -296,61 +310,71 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
     if (kind !== "scout" && fallbackModel !== INHERIT_MODEL && !levelsFor(models, fallbackModel).includes(current)) fields.fallbackThinking = levelOn(levelsFor(models, fallbackModel), current)
     set(fields)
   }
+  const hasInstructions = kind !== "scout" && kind !== "researcher"
+  const [showNotes, setShowNotes] = useState(Boolean(entry.instructions))
   return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between gap-3 text-base">
-          {name}
-          <span className="truncate text-xs font-normal text-muted-foreground">
-            {entry.model === INHERIT_MODEL ? "session model" : entry.model} · {kind === "scout" ? FIXED_SCOUT_THINKING : entry.thinking}
-          </span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-5">
-        <Field label={FIELD_LABELS.model}>
+    <section className="glass flex flex-col gap-3 rounded-lg p-4">
+      <header className="flex items-baseline justify-between gap-3">
+        <h3 className="text-sm font-medium">{name}</h3>
+        <span className="truncate text-xs text-muted-foreground">
+          {entry.model === INHERIT_MODEL ? "session model" : entry.model} · {kind === "scout" ? FIXED_SCOUT_THINKING : entry.thinking}
+        </span>
+      </header>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Mini label={FIELD_LABELS.model}>
           <ModelChoice value={entry.model} models={models} label={`${name} model`} inherit={kind === "master"} onChange={chooseModel} />
-        </Field>
-        <Field label={FIELD_LABELS.thinking} help={kind === "scout" ? "fixed for scouts" : undefined} stacked>
-          {kind === "scout" ? (
-            <p className="py-1 text-sm text-muted-foreground">{FIXED_SCOUT_THINKING}</p>
-          ) : (
-            <EffortSlider
-              value={entry.thinking}
-              levels={THINKING_LEVELS}
-              supported={supported}
-              model={entry.model === INHERIT_MODEL ? "the session model" : entry.model}
-              label={`${name} effort`}
-              onChange={(level) => set({ thinking: level })}
-            />
-          )}
-        </Field>
-        <Field label={FIELD_LABELS.fallback} help={NO_FALLBACK_HELP}>
+        </Mini>
+        <Mini label={FIELD_LABELS.fallback}>
           <ModelChoice value={entry.fallbackModel ?? INHERIT_MODEL} models={models} label={`${name} fallback model`} none onChange={chooseFallback} />
-        </Field>
-        {kind !== "scout" && entry.fallbackModel ? (
-          <Field label={FIELD_LABELS.fallbackThinking} stacked>
-            <EffortSlider
-              value={entry.fallbackThinking ?? entry.thinking}
-              levels={THINKING_LEVELS}
-              supported={fallbackSupported}
-              model={entry.fallbackModel}
-              label={`${name} fallback effort`}
-              onChange={(level) => set({ fallbackThinking: level })}
-            />
-          </Field>
-        ) : null}
-        {kind !== "master" ? (
-          <Field label={FIELD_LABELS.timeout} help={`in minutes; default ${Math.round(config.workflow.agentTimeoutMs / 60_000)}`}>
+        </Mini>
+      </div>
+      <Mini label={FIELD_LABELS.thinking}>
+        {kind === "scout" ? (
+          <p className="text-sm text-muted-foreground">{FIXED_SCOUT_THINKING} (fixed for scouts)</p>
+        ) : (
+          <EffortSlider
+            value={entry.thinking}
+            levels={THINKING_LEVELS}
+            supported={supported}
+            model={entry.model === INHERIT_MODEL ? "the session model" : entry.model}
+            label={`${name} effort`}
+            onChange={(level) => set({ thinking: level })}
+          />
+        )}
+      </Mini>
+      {kind !== "scout" && entry.fallbackModel ? (
+        <Mini label={FIELD_LABELS.fallbackThinking}>
+          <EffortSlider
+            value={entry.fallbackThinking ?? entry.thinking}
+            levels={THINKING_LEVELS}
+            supported={fallbackSupported}
+            model={entry.fallbackModel}
+            label={`${name} fallback effort`}
+            onChange={(level) => set({ fallbackThinking: level })}
+          />
+        </Mini>
+      ) : null}
+      {kind !== "master" ? (
+        <div className="max-w-44">
+          <Mini label={`${FIELD_LABELS.timeout} (default ${Math.round(config.workflow.agentTimeoutMs / 60_000)})`}>
             <MinutesField value={entry.timeoutMs ?? config.workflow.agentTimeoutMs} label={`${name} time limit`} onSave={(ms) => set({ timeoutMs: ms })} />
-          </Field>
-        ) : null}
-        {kind !== "scout" && kind !== "researcher" ? (
-          <Field label={FIELD_LABELS.instructions} stacked>
-            <InstructionsField value={entry.instructions ?? ""} label={`${name} instructions`} onSave={(text) => set({ instructions: text })} />
-          </Field>
-        ) : null}
-      </CardContent>
-    </Card>
+          </Mini>
+        </div>
+      ) : null}
+      {hasInstructions ? (
+        <button
+          type="button"
+          aria-expanded={showNotes}
+          onClick={() => setShowNotes((now) => !now)}
+          className="flex h-5 items-center gap-1 self-start text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30"
+        >
+          <ChevronRight aria-hidden="true" className={cn("size-3.5 transition-transform duration-200 ease-snap", showNotes && "rotate-90")} />
+          {FIELD_LABELS.instructions}
+          {!showNotes && entry.instructions ? <span className="text-primary">· set</span> : null}
+        </button>
+      ) : null}
+      {hasInstructions && showNotes ? <InstructionsField value={entry.instructions ?? ""} label={`${name} instructions`} onSave={(text) => set({ instructions: text })} /> : null}
+    </section>
   )
 }
 
@@ -372,9 +396,11 @@ function WorkflowGroup({ config, save }: { config: Config; save: Save }) {
   const current = config.workflow.gitIsolation
   return (
     <Section title={GROUP_TITLES.workflow}>
-      <Field label={GIT_LABEL} help={GIT_ISOLATION_ITEMS.find((item) => item.id === current)?.help ?? "enter cycles off, branch, worktree"}>
-        <Choice value={current} items={GIT_ISOLATION_ITEMS.map((item) => ({ value: item.id, label: item.label }))} label={GIT_LABEL} onChange={(value) => void save({ workflow: { gitIsolation: value } })} />
-      </Field>
+      <Rows>
+        <Field label={GIT_LABEL} help={GIT_ISOLATION_ITEMS.find((item) => item.id === current)?.help ?? "enter cycles off, branch, worktree"}>
+          <Choice value={current} items={GIT_ISOLATION_ITEMS.map((item) => ({ value: item.id, label: item.label }))} label={GIT_LABEL} onChange={(value) => void save({ workflow: { gitIsolation: value } })} />
+        </Field>
+      </Rows>
     </Section>
   )
 }
@@ -383,10 +409,8 @@ function LobbyGroup({ config, save }: { config: Config; save: Save }) {
   const web = config.lobby.web
   return (
     <Section title={GROUP_TITLES.lobby}>
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-2">
-          {LOBBY_TOGGLES.map((item) => <LobbyToggle key={item.id} config={config} item={item} save={save} />)}
-        </div>
+      <Rows>
+        {LOBBY_TOGGLES.map((item) => <LobbyToggle key={item.id} config={config} item={item} save={save} />)}
         <Field label={ROUNDS_LABEL} help={ROUNDS_HELP}>
           <Choice value={String(config.lobby.maxPlanningRounds)} items={ROUND_CHOICES.map((value) => ({ value: String(value), label: roundLabel(value) }))} label={ROUNDS_LABEL} onChange={(value) => void save({ lobby: { maxPlanningRounds: Number(value) } })} />
         </Field>
@@ -397,7 +421,7 @@ function LobbyGroup({ config, save }: { config: Config; save: Save }) {
           <PortField value={web.port} onSave={(port) => void save({ lobby: { web: { port } } })} />
         </Field>
         <ToggleField label={WEB_BROWSER_LABEL} help={WEB_BROWSER_HELP} checked={web.openBrowser} onChange={(next) => void save({ lobby: { web: { openBrowser: next } } })} />
-      </div>
+      </Rows>
     </Section>
   )
 }
@@ -407,7 +431,7 @@ function ClassifierGroup({ config, models, save }: { config: Config; models: Set
   const host = JEV_HOST_ITEMS.find((item) => item.id === classifier.provider)?.label
   return (
     <Section title={GROUP_TITLES.classifier}>
-      <div className="flex flex-col gap-3">
+      <Rows>
         <ToggleField label={CLASSIFIER_LABELS.enabled} help={CLASSIFIER_LABELS.enabledHelp} checked={classifier.enabled} onChange={(next) => void save({ classifier: { enabled: next } })} />
         <Field label={CLASSIFIER_LABELS.host}>
           <Choice value={classifier.provider} items={JEV_HOST_ITEMS.map((item) => ({ value: item.id, label: item.label }))} label={CLASSIFIER_LABELS.host} onChange={(value) => void save({ classifier: { provider: value } })} />
@@ -416,17 +440,15 @@ function ClassifierGroup({ config, models, save }: { config: Config; models: Set
           <TextValue value={classifier.model} label={CLASSIFIER_LABELS.model} placeholder="the host's default" onSave={(value) => void save({ classifier: { model: value } })} />
         </Field>
         <Field label={CLASSIFIER_LABELS.key} help={CLASSIFIER_LABELS.keyNote}>
-          <p className="py-2 text-sm text-muted-foreground">{host ?? classifier.provider}</p>
+          <p className="text-sm text-muted-foreground">{host ?? classifier.provider}</p>
         </Field>
-        <div className="flex flex-col gap-2">
-          {CLASSIFIER_FEATURE_ITEMS.map((feature) => (
-            <ToggleField key={feature.id} label={feature.label} help={feature.help} checked={classifier.features[feature.id]} onChange={(next) => void save({ classifier: { features: { [feature.id]: next } } })} />
-          ))}
-        </div>
+        {CLASSIFIER_FEATURE_ITEMS.map((feature) => (
+          <ToggleField key={feature.id} label={feature.label} help={feature.help} checked={classifier.features[feature.id]} onChange={(next) => void save({ classifier: { features: { [feature.id]: next } } })} />
+        ))}
         <Field label={CLASSIFIER_LABELS.cheap} help={CLASSIFIER_LABELS.cheapHelp}>
           <ModelChoice value={classifier.effort.cheapModel} models={models} label={CLASSIFIER_LABELS.cheap} none onChange={(value) => void save({ classifier: { effort: { cheapModel: value } } })} />
         </Field>
-      </div>
+      </Rows>
     </Section>
   )
 }
@@ -435,9 +457,11 @@ function AppearanceGroup() {
   const { theme, setTheme } = useTheme()
   return (
     <Section title={GROUP_TITLES.appearance}>
-      <Field label={PAGE.themeLabel} help={PAGE.appearanceHelp}>
-        <Choice value={theme} items={PAGE.themeItems.map((item) => ({ value: item.id, label: item.label }))} label={PAGE.themeLabel} onChange={(value) => setTheme(value as "light" | "dark" | "system")} />
-      </Field>
+      <Rows>
+        <Field label={PAGE.themeLabel} help={PAGE.appearanceHelp}>
+          <Choice value={theme} items={PAGE.themeItems.map((item) => ({ value: item.id, label: item.label }))} label={PAGE.themeLabel} onChange={(value) => setTheme(value as "light" | "dark" | "system")} />
+        </Field>
+      </Rows>
     </Section>
   )
 }
@@ -452,7 +476,9 @@ function NotificationsGroup() {
   }
   return (
     <Section title={GROUP_TITLES.notifications}>
-      <ToggleField label={PAGE.notificationsLabel} help={PAGE.notificationsHelp} checked={enabled} onChange={(next) => void change(next)} />
+      <Rows>
+        <ToggleField label={PAGE.notificationsLabel} help={PAGE.notificationsHelp} checked={enabled} onChange={(next) => void change(next)} />
+      </Rows>
     </Section>
   )
 }
@@ -461,9 +487,11 @@ function InstallGroup() {
   const { available, install } = useInstallPrompt()
   return (
     <Section title={GROUP_TITLES.install}>
+      <Rows>
       <Field label={PAGE.installLabel} help={PAGE.installHelp}>
-        {available ? <Button type="button" onClick={() => void install().then(() => toast.success(PAGE.installDone))}>{PAGE.installButton}</Button> : <p className="py-2 text-xs text-muted-foreground">{PAGE.installUnavailable}</p>}
+        {available ? <Button type="button" onClick={() => void install().then(() => toast.success(PAGE.installDone))}>{PAGE.installButton}</Button> : <p className="text-xs text-muted-foreground">{PAGE.installUnavailable}</p>}
       </Field>
+      </Rows>
     </Section>
   )
 }
@@ -481,13 +509,13 @@ export function SettingsForm({ config, models, onConfig }: { config: Config; mod
     }
   }
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-4 sm:p-6">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-3">
       <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-medium">{PAGE.title}</h1>
+        <h1 className="text-base font-medium">{PAGE.title}</h1>
         <p className="text-sm text-muted-foreground">{PAGE.intro}</p>
       </header>
       <Section title={GROUP_TITLES.agents}>
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-3 lg:grid-cols-2">
           {AGENT_ORDER.map((kind) => <AgentCard key={kind} kind={kind} config={config} models={models} save={save} />)}
         </div>
       </Section>

@@ -51,7 +51,7 @@ export function NoteForm({ label, hint, buttonLabel = "Send", onSend }: NoteForm
           {hint}
         </p>
       ) : null}
-      <Button className="h-10 self-end" onClick={() => void send()} disabled={!text.trim() || busy}>
+      <Button className="h-8 self-end" onClick={() => void send()} disabled={!text.trim() || busy}>
         {busy ? <Spinner /> : null}
         {buttonLabel}
       </Button>
