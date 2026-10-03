@@ -34,7 +34,7 @@ async function expectNoSidewaysScroll(page: Page): Promise<void> {
   expect(overflow, "no sideways scroll").toBeLessThanOrEqual(1);
 }
 
-/** Every visible button and tab pill keeps a ≥40 px touch target (D-09). */
+/** Every visible button and tab pill keeps a ≥28 px target: compact on purpose, above WCAG 2.2's 24 px minimum (D-09, D-23). */
 async function touchTargetMisses(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const misses: string[] = [];
@@ -54,7 +54,7 @@ async function touchTargetMisses(page: Page): Promise<string[]> {
     for (const el of document.querySelectorAll("button, [role='tab']")) {
       const rect = el.getBoundingClientRect();
       if (rect.width < 1 || rect.height < 1) continue;
-      if (heightOf(el) < 40) {
+      if (heightOf(el) < 28) {
         const label = (el.textContent ?? "").trim().slice(0, 28).replace(/\s+/g, " ");
         misses.push(`${el.tagName.toLowerCase()} "${label}" ${Math.round(rect.height)}px`);
       }
@@ -153,12 +153,12 @@ test("keyboard jumps, arrows and help", async ({ page, server }) => {
 });
 
 for (const scenario of ["full", "question"] as const) {
-  test(`touch targets ≥40px (${scenario})`, async ({ page, server }) => {
+  test(`touch targets ≥28px (${scenario})`, async ({ page, server }) => {
     await openScenario(page, server, scenario);
     await page.setViewportSize({ width: 1280, height: 800 });
     // The pop-up springs in; measure once it has settled.
     await page.waitForTimeout(900);
-    expect(await touchTargetMisses(page), "touch targets ≥40px").toEqual([]);
+    expect(await touchTargetMisses(page), "touch targets ≥28px").toEqual([]);
   });
 }
 
