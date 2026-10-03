@@ -141,12 +141,34 @@ test("the composer takes an image, shows it, and clears it once sent", async ({ 
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.locator('input[type="file"]').setInputFiles({ name: "mockup.png", mimeType: "image/png", buffer: PNG });
   const chips = page.getByRole("list", { name: "Attachments" });
-  await expect(chips).toContainText("mockup.png");
-  await expect(chips.getByText("uploading…"), "the upload finishes").toBeHidden({ timeout: 10_000 });
+  const preview = chips.getByRole("img", { name: "mockup.png" });
+  await expect(preview, "the image shows as a preview in the box").toBeVisible();
+  await expect.poll(async () => (await preview.boundingBox())!.width, { message: "a real thumbnail, not an icon (it springs in first)" }).toBeGreaterThanOrEqual(56);
   await page.getByLabel("Message the oracle").fill("see this");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(chips).toHaveCount(0);
   await expect(page.getByLabel("Message the oracle")).toHaveValue("");
+});
+
+test("the box grows with what is typed, carries lists on, formats with Ctrl+B and previews the Markdown", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const box = page.getByLabel("Message the oracle");
+  const before = (await box.boundingBox())!.height;
+  await box.fill("- one");
+  await box.press("Shift+Enter");
+  await expect(box, "Shift+Enter on a list line carries the list on").toHaveValue("- one\n- ");
+  await box.pressSequentially("two");
+  await box.press("Shift+Enter");
+  await box.press("Shift+Enter");
+  await expect(box, "an empty marker ends the list").toHaveValue("- one\n- two\n");
+  expect((await box.boundingBox())!.height, "it grew with the lines").toBeGreaterThan(before + 20);
+  await box.fill("make this bold");
+  await box.press("Control+a");
+  await box.press("Control+b");
+  await expect(box).toHaveValue("**make this bold**");
+  await page.getByRole("button", { name: "Preview the Markdown" }).click();
+  await expect(page.getByRole("region", { name: "Markdown preview" }).locator("strong"), "the preview renders it").toHaveText("make this bold");
 });
 
 test("the composer's tall editor opens and closes", async ({ page, server }) => {
@@ -178,7 +200,7 @@ test("Plan, Quick fix and an open task each give the composer its own target", a
   }
 });
 
-test("zen palettes: cool mist in light, graphite in dark, an indigo accent, one 8px radius, composer clear of the page", async ({ page, server }) => {
+test("zen palettes: cool mist in light, near-black in dark, an indigo accent, one 8px radius, composer clear of the page", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const look = await page.evaluate(() => {
@@ -203,7 +225,7 @@ test("zen palettes: cool mist in light, graphite in dark, an indigo accent, one 
     };
   });
   const [r, g, b] = look.page as [number, number, number];
-  if (look.dark) expect(Math.max(r, g, b), "graphite is dark").toBeLessThan(60);
+  if (look.dark) expect(Math.max(r, g, b), "near-black is dark").toBeLessThan(32);
   else expect(Math.min(r, g, b), "mist is light").toBeGreaterThan(230);
   const accent = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(look.primary);
   expect(accent, `the accent is a hex colour (${look.primary})`).not.toBeNull();
@@ -213,7 +235,7 @@ test("zen palettes: cool mist in light, graphite in dark, an indigo accent, one 
   expect(look.cardRadius).toBe("8px");
   expect(look.inputRadius).toBe("8px");
   expect(look.inactiveBorder, "inactive tabs are plain text").toBe("0px");
-  expect(look.pillRadius, "the active pill has 10px corners").toBe("10px");
+  expect(look.pillRadius, "the active pill has the same 8px corners").toBe("8px");
   expect(look.gap, "the composer never touches the page above it").toBeGreaterThanOrEqual(2);
 });
 
@@ -229,9 +251,189 @@ test("keyboard hints: the box prints its keys, the header button opens the key l
   await page.getByRole("button", { name: "Keyboard shortcuts" }).first().click();
   const keys = page.getByRole("dialog", { name: "Keys" });
   await expect(keys).toBeVisible();
-  await expect(keys.getByText("Message box"), "the list covers the message box too").toBeVisible();
+  await expect(keys.getByText("Message box", { exact: true }), "the list covers the message box too").toBeVisible();
   await page.keyboard.press("Escape");
   await expect(keys).toBeHidden();
+});
+
+test("the page itself never scrolls: no empty page below the composer, whatever the tab", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1024, height: 700 });
+  for (const hash of ["#/lobby", "#/tasks", "#/metrics", "#/settings", "#/knowledge", "#/git"]) {
+    await page.evaluate((h) => {
+      window.location.hash = h;
+    }, hash);
+    await page.waitForTimeout(250);
+    const run = await page.evaluate(() => {
+      const root = document.scrollingElement as any;
+      window.scrollTo(0, 400);
+      document.body.scrollTop = 400;
+      (document.getElementById("composer-text") as any)?.focus();
+      const composer = (document.getElementById("composer-text") as any).getBoundingClientRect();
+      return { y: window.scrollY + root.scrollTop + document.body.scrollTop, bottom: composer.bottom, inner: window.innerHeight };
+    });
+    expect(run.y, `${hash}: the page does not scroll`).toBe(0);
+    expect(run.bottom, `${hash}: the composer stays on the screen`).toBeLessThanOrEqual(run.inner);
+  }
+});
+
+test("questions are answered from the keyboard alone: y/n, arrows, Space, Enter", async ({ page, server }) => {
+  await openScenario(page, server, "question");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const popup = page.locator('section[aria-label="Question from the lobby"]');
+  await expect(popup).toContainText("Start the mock server on 7347?");
+  await page.keyboard.press("y");
+  await expect(popup, "y answers yes").toBeHidden();
+  await page.getByLabel("Message the oracle").fill("go");
+  await page.keyboard.press("Enter");
+  await expect(popup).toContainText("Which set should stream next?");
+  await expect(popup.locator('[data-option="0"]'), "the first option has focus").toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(popup.locator('[data-option="1"]'), "Down moves to the next option").toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(popup.locator('[data-option="1"]'), "Space picks it").toBeChecked();
+  await page.keyboard.press("Enter");
+  await expect(popup, "Enter answers").toBeHidden();
+});
+
+test("lists are walked with the keyboard: Down from the tab bar, arrows between rows, right into the detail, Esc back up", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.getByRole("tab", { name: /Tasks/ }).click();
+  await page.getByRole("tab", { name: /Tasks/ }).focus();
+  await page.keyboard.press("ArrowDown");
+  const list = page.locator('[data-pane="list"]');
+  await expect(list.locator(":focus"), "Down from the tab bar lands on a row of the list").toHaveCount(1);
+  const first = await list.locator(":focus").textContent();
+  await page.keyboard.press("ArrowDown");
+  expect(await list.locator(":focus").textContent(), "Down moves to the next row").not.toBe(first);
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator('[data-pane="detail"]'), "Right goes into the detail").toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(list.locator(":focus"), "Left comes back").toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tab", { name: /Tasks/ }), "Esc goes back up to the tab bar").toBeFocused();
+  await page.keyboard.press("/");
+  await expect(page.locator("#composer-text"), "/ jumps to the message box").toBeFocused();
+});
+
+test("Knowledge agents fold and unfold, with the keyboard too", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.evaluate(() => {
+    window.location.hash = "#/knowledge";
+  });
+  const master = page.getByRole("button", { name: /Master \(oracle\)/ });
+  await expect(master).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("button", { name: /^Knowledge/ }).first(), "its file is listed").toBeVisible();
+  await master.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(master, "Left folds it").toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("ArrowRight");
+  await expect(master, "Right opens it").toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Enter");
+  await expect(master, "Enter toggles it").toHaveAttribute("aria-expanded", "false");
+});
+
+test("every drop-down has a search box, and the keyboard picks from it", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => {
+    window.location.hash = "#/settings";
+  });
+  const trigger = page.getByRole("combobox", { name: "Master model" });
+  await trigger.click();
+  const search = page.getByRole("searchbox", { name: /Search Master model/ });
+  await expect(search, "the search box takes focus").toBeFocused();
+  await search.fill("zzz-no-such-model");
+  await expect(page.getByText("Nothing matches")).toBeVisible();
+  await search.fill("");
+  await expect(page.getByRole("option").first()).toBeVisible();
+  const before = await page.getByRole("option").count();
+  await search.fill("mock");
+  expect(await page.getByRole("option").count(), "typing narrows the list").toBeLessThanOrEqual(before);
+  await page.keyboard.press("Escape");
+  await expect(search, "Esc closes it").toBeHidden();
+  await expect(trigger, "and gives focus back").toBeFocused();
+});
+
+test("switching tabs puts the cursor in the message box; arrowing along the tab bar keeps it on the bar", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByRole("tab", { name: /Git/ }).click();
+  await expect(page.locator("#composer-text"), "a click on a tab").toBeFocused();
+  await page.keyboard.press("Alt+2");
+  await expect(page.locator("#composer-text"), "an Alt+N jump").toBeFocused();
+  await page.getByRole("tab", { name: /Tasks/ }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("tab", { name: /Plan/ }), "arrows stay on the bar").toBeFocused();
+});
+
+test("the Settings page offers the fullscreen install and a fullscreen toggle", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => {
+    window.location.hash = "#/settings";
+  });
+  const install = page.getByRole("button", { name: "Install as fullscreen app" });
+  await expect(install).toBeVisible();
+  await install.click();
+  await expect(page.locator('[role="status"]').filter({ hasText: "Install app" }).first(), "without a browser prompt it says where to find the install action").toBeVisible();
+  const manifest = (await page.evaluate(async () => (await fetch("/manifest.webmanifest")).json())) as { display: string };
+  expect(manifest.display, "the manifest asks for fullscreen").toBe("fullscreen");
+});
+
+test("choices use the right inputs: real checkboxes for several, a switch for on/off, a radio group for one of two", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => {
+    window.location.hash = "#/excalidraw/room-1";
+  });
+  await page.evaluate(() => {
+    window.location.hash = "#/plan";
+  });
+  await expect(page.getByRole("checkbox").first(), "plan seats are checkboxes").toBeVisible();
+  await page.evaluate(() => {
+    window.location.hash = "#/metrics";
+  });
+  await expect(page.getByRole("radiogroup", { name: "Group by" }).getByRole("radio")).toHaveCount(2);
+  await page.evaluate(() => {
+    window.location.hash = "#/tasks/T-mock-1";
+  });
+  await expect(page.getByRole("switch", { name: "Auto mode" }), "auto is a switch").toBeVisible();
+  expect(await page.getByText("[x]").count() + (await page.getByText("[ ]").count()), "no text-drawn boxes").toBe(0);
+});
+
+test("action buttons are icons with tooltips, and stay pinned in view while the detail scrolls", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 500 });
+  await page.evaluate(() => {
+    window.location.hash = "#/tasks/T-mock-1";
+  });
+  const bar = page.getByRole("toolbar", { name: "Actions" });
+  await expect(bar).toBeVisible();
+  const archive = bar.getByRole("button", { name: "Archive" });
+  await expect(archive, "an icon button named for what it does").toBeVisible();
+  expect((await archive.textContent())?.trim(), "no text label on it").toBe("");
+  await archive.hover();
+  await expect(page.locator('[data-slot="tooltip-content"]').first(), "the tooltip says what it does").toContainText("Archive");
+  const detail = page.locator('[data-pane="detail"]');
+  await detail.evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  await page.waitForTimeout(150);
+  const box = await bar.boundingBox();
+  const pane = (await detail.boundingBox())!;
+  expect(box!.y, "after scrolling to the bottom the bar is still at the top of the pane").toBeLessThanOrEqual(pane.y + 4);
+  await expect(bar.getByRole("button", { name: "Delete" })).toBeVisible();
+});
+
+test("the Lobby's task header is one slim line", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const header = page.getByRole("group", { name: "Task" });
+  await expect(header).toContainText("Add offline mock fixtures");
+  expect((await header.boundingBox())!.height, "a single line, not a card").toBeLessThanOrEqual(48);
 });
 
 test("Activity and Thinking fold down to their title bar and open again", async ({ page, server }) => {

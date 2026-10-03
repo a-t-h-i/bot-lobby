@@ -7,11 +7,11 @@
  * file comes back fresh.
  */
 import { useState } from "react"
-import { PencilLine } from "lucide-react"
+import { FilePen, MessageSquarePlus, Pencil, PencilLine, Plus, Trash2, Undo2 } from "lucide-react"
 import type { KnowledgeEntryInfo, KnowledgeNoteInfo, KnowledgeViewData } from "@protocol"
 import { useApiRead } from "@/app/useApiRead"
-import { Button } from "@/components/ui/button"
 import { act } from "@/lib/act"
+import { ActionBar, ActionButton } from "@/ui/Actions"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { Markdown } from "@/ui/Markdown"
 import { NoteForm } from "@/ui/NoteForm"
@@ -32,9 +32,7 @@ function NoteLine({ note, about, onTakeBack, busy }: { note: KnowledgeNoteInfo; 
     <li className="flex items-start gap-2 text-sm text-muted-foreground">
       <PencilLine aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-primary" />
       <span className="min-w-0 flex-1 break-words">{text}</span>
-      <Button variant="ghost" className="h-10 shrink-0 text-xs" disabled={busy} onClick={() => onTakeBack(note.id)}>
-        Take back
-      </Button>
+      <ActionButton label="Take the note back" icon={Undo2} className="-my-1 size-7" disabled={busy} onClick={() => onTakeBack(note.id)} />
     </li>
   )
 }
@@ -68,7 +66,7 @@ function EntryRow({
         event.preventDefault()
         pick()
       }}
-      className={selected ? "flex min-h-11 cursor-pointer flex-col gap-1 rounded-lg bg-accent p-2.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/30" : "flex min-h-11 cursor-pointer flex-col gap-1 rounded-lg p-2.5 outline-none transition-colors hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/30"}
+      className={selected ? "flex min-h-9 cursor-pointer flex-col gap-1 rounded-lg bg-accent p-2.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/30" : "flex min-h-9 cursor-pointer flex-col gap-1 rounded-lg p-2.5 outline-none transition-colors hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/30"}
     >
       <div className="flex gap-2">
         <div className="min-w-0 flex-1">
@@ -117,18 +115,13 @@ function Header({ view }: { view: KnowledgeViewData }) {
 function Actions({ draft, picked, setDraft, onEditFile, onDelete }: { draft?: Draft; picked?: KnowledgeEntryInfo; setDraft: (draft?: Draft) => void; onEditFile: () => void; onDelete: () => void }) {
   const off = Boolean(draft)
   return (
-    <div className="flex flex-wrap gap-2">
-      <Button variant="outline" disabled={off || !picked} onClick={() => setDraft({ kind: "edit", entry: picked })}>
-        Edit
-      </Button>
-      <Button variant="outline" disabled={off} onClick={() => setDraft({ kind: "add", entry: picked })}>
-        {picked ? "Add after" : "Add entry"}
-      </Button>
-      <Button variant="outline" disabled={off || !picked} onClick={() => setDraft({ kind: "comment", entry: picked })}>
-        Comment
-      </Button>
+    <ActionBar>
+      <ActionButton label="Edit the entry" icon={Pencil} disabled={off || !picked} onClick={() => setDraft({ kind: "edit", entry: picked })} />
+      <ActionButton label={picked ? "Add an entry after it" : "Add an entry"} icon={Plus} disabled={off} onClick={() => setDraft({ kind: "add", entry: picked })} />
+      <ActionButton label="Comment on the entry" icon={MessageSquarePlus} disabled={off || !picked} onClick={() => setDraft({ kind: "comment", entry: picked })} />
       <ConfirmButton
-        label="Delete"
+        icon={Trash2}
+        label="Delete the entry"
         title="Delete this entry?"
         description="The entry and its notes are removed. The version before is archived."
         confirmLabel="Delete entry"
@@ -136,10 +129,8 @@ function Actions({ draft, picked, setDraft, onEditFile, onDelete }: { draft?: Dr
         disabled={off || !picked}
         onConfirm={onDelete}
       />
-      <Button variant="outline" disabled={off} onClick={onEditFile}>
-        Edit file
-      </Button>
-    </div>
+      <ActionButton label="Edit the whole file" icon={FilePen} disabled={off} onClick={onEditFile} />
+    </ActionBar>
   )
 }
 
@@ -181,6 +172,7 @@ export function FileDetail({ agent, file, onChanged }: { agent: KnowledgeAgentNa
   }
   return (
     <article className="flex flex-col gap-4" aria-label={`${AGENT_DIR_NAMES[agent]} ${file}`}>
+      <Actions draft={draft} picked={picked} setDraft={setDraft} onEditFile={() => setFileOpen(true)} onDelete={remove} />
       <Header view={view} />
       {entries.length === 0 ? <p className="text-sm text-muted-foreground">Nothing here yet. Add the first entry below.</p> : null}
       <ul className="flex flex-col gap-1">
@@ -202,7 +194,6 @@ export function FileDetail({ agent, file, onChanged }: { agent: KnowledgeAgentNa
       {draft?.kind === "add" ? <NoteForm label="Add an entry" hint={ARCHIVE_HINT} buttonLabel="Add entry" onSend={async (text) => (saveDraft(text), true)} /> : null}
       {busy && !draft ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> saving…</p> : null}
       <Detached notes={view.detached} onTakeBack={takeBack} busy={busy} />
-      <Actions draft={draft} picked={picked} setDraft={setDraft} onEditFile={() => setFileOpen(true)} onDelete={remove} />
       <FileEditor open={fileOpen} file={file} initial={view.content} busy={busy} onClose={() => setFileOpen(false)} onSave={saveFile} />
     </article>
   )

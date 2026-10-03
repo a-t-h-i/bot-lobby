@@ -1,100 +1,116 @@
 /**
- * The Metrics tab's charts: horizontal bars for average
- * run time, meters for success, and the stacked agent share with the
- * request-to-done bars. Plain divs and SVG-free flex bars; colour is only
- * ever a fill, each bar carries an accessible label, and chart hues come
- * from the theme's `--chart-*` / `--source-*` tokens.
+ * The Metrics tab's charts: run time per model with its p90 marked, success as
+ * a two-tone bar (what worked, what failed), and the stacked agent share with
+ * the request-to-done bars. Plain divs; each bar carries an accessible label,
+ * and hues come from the theme's tokens. Long lists show the first few rows
+ * and a button for the rest.
  */
+import { useState } from "react"
 import type { MetricGroupInfo, MetricsData } from "@protocol"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { sourceLabel } from "../lobby/types"
-import { agentFill, duration, shortDuration, status, toneClass, type RateStatus } from "./words"
+import { agentFill, duration, shortDuration, status } from "./words"
 
-function ChartCard({ title, right, children }: { title: string; right: string; children: React.ReactNode }) {
+const SHOWN = 6
+
+function ChartCard({ title, right, children }: { title: string; right?: string; children: React.ReactNode }) {
   return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-          <span>{title}</span>
-          <span className="text-xs font-normal text-muted-foreground">{right}</span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
+    <section className="glass flex min-w-0 flex-col gap-3 rounded-lg px-4 py-3" aria-label={title}>
+      <h2 className="flex items-baseline justify-between gap-3 text-sm font-medium">
+        <span>{title}</span>
+        {right ? <span className="truncate text-xs font-normal text-muted-foreground">{right}</span> : null}
+      </h2>
+      {children}
+    </section>
   )
 }
 
-function barWidth(value: number, max: number): string {
-  return `${max > 0 ? Math.max(2, Math.round((value / max) * 100)) : 0}%`
+/** The first rows of a list, and "Show all n" for the rest. */
+function Rows<T>({ rows, render }: { rows: T[]; render: (row: T) => React.ReactNode }) {
+  const [all, setAll] = useState(false)
+  const shown = all ? rows : rows.slice(0, SHOWN)
+  return (
+    <>
+      <ul className="flex flex-col gap-2.5">{shown.map(render)}</ul>
+      {rows.length > SHOWN ? (
+        <button
+          type="button"
+          aria-expanded={all}
+          onClick={() => setAll((now) => !now)}
+          className="h-6 self-start rounded-lg text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30"
+        >
+          {all ? "Show fewer" : `Show all ${rows.length}`}
+        </button>
+      ) : null}
+    </>
+  )
 }
 
-function BarRow({ label, value, max, valueText, sub }: { label: string; value: number; max: number; valueText: string; sub: string }) {
+function pct(value: number, max: number): number {
+  return max > 0 ? Math.max(1.5, (value / max) * 100) : 0
+}
+
+function BarRow({ label, value, marker, max, valueText, sub }: { label: string; value: number; marker?: number; max: number; valueText: string; sub: string }) {
   return (
-    <li className="flex flex-col gap-1.5">
-      <div className="flex items-baseline justify-between gap-3 text-sm">
-        <span className="min-w-0 truncate text-muted-foreground" title={label}>
+    <li className="flex flex-col gap-1">
+      <div className="flex items-baseline justify-between gap-3 text-[0.8125rem]">
+        <span className="min-w-0 truncate" title={label}>
           {label}
         </span>
-        <span className="shrink-0 text-foreground tabular-nums">
+        <span className="shrink-0 tabular-nums">
           {valueText}
           {sub ? <span className="ml-2 text-xs text-muted-foreground">{sub}</span> : null}
         </span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${label}: ${valueText}`}>
-        <div className="h-full rounded-full bg-primary/60" style={{ width: barWidth(value, max) }} />
+      <div className="relative h-1.5 rounded-full bg-muted" role="img" aria-label={`${label}: ${valueText}`}>
+        <div className="h-full rounded-full bg-primary/70" style={{ width: `${pct(value, max)}%` }} />
+        {marker ? <span aria-hidden="true" className="absolute top-1/2 h-3 w-0.5 -translate-y-1/2 rounded-full bg-foreground/40" style={{ left: `${Math.min(99.5, pct(marker, max))}%` }} /> : null}
       </div>
     </li>
   )
 }
 
-/** Average run time per model and thinking level, longest first. */
+/** Average run time per model and thinking level, longest first, with the p90 as a tick. */
 export function AvgTime({ groups, label }: { groups: MetricGroupInfo[]; label: (group: MetricGroupInfo) => string }) {
   const rows = groups.filter((group) => group.avgMs > 0).sort((a, b) => b.avgMs - a.avgMs)
-  const max = Math.max(...rows.map((group) => group.avgMs), 1)
+  const max = Math.max(...rows.map((group) => Math.max(group.avgMs, group.p90Ms)), 1)
   return (
-    <ChartCard title="Average run time" right="per model · thinking">
+    <ChartCard title="Average run time" right="per model · thinking · tick is p90">
       {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">No timed runs yet.</p>
       ) : (
-        <ul className="flex flex-col gap-3">
-          {rows.map((group) => (
-            <BarRow
-              key={label(group)}
-              label={label(group)}
-              value={group.avgMs}
-              max={max}
-              valueText={duration(group.avgMs)}
-              sub={`p90 ${duration(group.p90Ms)}`}
-            />
-          ))}
-        </ul>
+        <Rows
+          rows={rows}
+          render={(group) => <BarRow key={label(group)} label={label(group)} value={group.avgMs} marker={group.p90Ms} max={max} valueText={duration(group.avgMs)} sub={`p90 ${duration(group.p90Ms)}`} />}
+        />
       )}
     </ChartCard>
   )
 }
 
-const METER_FILL: Record<RateStatus["tone"], string> = { healthy: "bg-primary/60", shaky: "bg-foreground/60", failing: "bg-destructive/70" }
+const DOT = { healthy: "bg-success", shaky: "bg-warning", failing: "bg-destructive" } as const
+const TEXT = { healthy: "text-success", shaky: "text-warning", failing: "text-destructive" } as const
 
 function MeterRow({ label, rate, runs }: { label: string; rate: number; runs: number }) {
   const state = status(rate)
-  const pct = `${Math.round(rate * 100)}%`
+  const text = `${Math.round(rate * 100)}%`
   return (
-    <li className="flex flex-col gap-1.5">
-      <div className="flex items-baseline justify-between gap-3 text-sm">
-        <span className="min-w-0 truncate text-muted-foreground" title={label}>
+    <li className="flex flex-col gap-1">
+      <div className="flex items-baseline justify-between gap-3 text-[0.8125rem]">
+        <span className="min-w-0 truncate" title={label}>
           {label}
         </span>
         <span className="flex shrink-0 items-center gap-2 tabular-nums">
-          <span className={`flex items-center gap-1 ${toneClass(state.tone)}`}>
-            <span aria-hidden="true">{state.icon}</span>
+          <span className={`flex items-center gap-1.5 ${TEXT[state.tone]}`}>
+            <span aria-hidden="true" className={`size-1.5 rounded-full ${DOT[state.tone]}`} />
             <span className="sr-only">{state.word}</span>
-            <span>{pct}</span>
+            {text}
           </span>
-          <span className="text-xs text-muted-foreground">{runs}</span>
+          <span className="text-xs text-muted-foreground">{runs} run{runs === 1 ? "" : "s"}</span>
         </span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${label}: ${state.word}, ${pct} of ${runs} runs`}>
-        <div className={`h-full rounded-full ${METER_FILL[state.tone]}`} style={{ width: barWidth(rate, 1) }} />
+      <div className="flex h-1.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${label}: ${state.word}, ${text} of ${runs} runs`}>
+        <div className="h-full bg-success/70" style={{ width: `${rate * 100}%` }} />
+        <div className="h-full bg-destructive/45" style={{ width: `${(1 - rate) * 100}%` }} />
       </div>
     </li>
   )
@@ -102,17 +118,13 @@ function MeterRow({ label, rate, runs }: { label: string; rate: number; runs: nu
 
 /** Success rate per model and thinking level, weakest first. */
 export function SuccessRate({ groups, label }: { groups: MetricGroupInfo[]; label: (group: MetricGroupInfo) => string }) {
-  const rows = [...groups].sort((a, b) => a.successes / a.runs - b.successes / b.runs)
+  const rows = groups.filter((group) => group.runs > 0).sort((a, b) => a.successes / a.runs - b.successes / b.runs)
   return (
-    <ChartCard title="Success rate" right="✓ ≥90% · ! ≥70% · ✗ below">
+    <ChartCard title="Success rate" right="green worked · red failed">
       {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">No runs yet.</p>
       ) : (
-        <ul className="flex flex-col gap-3">
-          {rows.map((group) => (
-            <MeterRow key={label(group)} label={label(group)} rate={group.runs > 0 ? group.successes / group.runs : 0} runs={group.runs} />
-          ))}
-        </ul>
+        <Rows rows={rows} render={(group) => <MeterRow key={label(group)} label={label(group)} rate={group.successes / group.runs} runs={group.runs} />} />
       )}
     </ChartCard>
   )
@@ -120,13 +132,15 @@ export function SuccessRate({ groups, label }: { groups: MetricGroupInfo[]; labe
 
 function ShareLegend({ share }: { share: MetricsData["timeShare"]["byAgent"] }) {
   return (
-    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+    <ul className="flex flex-wrap gap-x-6 gap-y-1.5 text-xs">
       {share.map((entry) => (
-        <li key={entry.agent} className="flex items-center gap-1.5 text-muted-foreground">
-          <span className={`inline-block size-2.5 rounded-[2px] ${agentFill(entry.agent)}`} aria-hidden="true" />
-          <span className="text-foreground">{sourceLabel(entry.agent)}</span>
+        <li key={entry.agent} className="flex items-center gap-2">
+          <span className={`size-2 shrink-0 rounded-full ${agentFill(entry.agent)}`} aria-hidden="true" />
+          <span className="text-[0.8125rem]">{sourceLabel(entry.agent)}</span>
           <span className="tabular-nums">{Math.round(entry.share * 100)}%</span>
-          <span className="tabular-nums">avg {shortDuration(entry.ms / Math.max(1, entry.runs))} ×{entry.runs}</span>
+          <span className="text-muted-foreground tabular-nums">
+            avg {shortDuration(entry.ms / Math.max(1, entry.runs))} ×{entry.runs}
+          </span>
         </li>
       ))}
     </ul>
@@ -135,9 +149,9 @@ function ShareLegend({ share }: { share: MetricsData["timeShare"]["byAgent"] }) 
 
 function Stacked({ share }: { share: MetricsData["timeShare"]["byAgent"] }) {
   return (
-    <div className="flex h-2 overflow-hidden rounded-full bg-muted" role="img" aria-label="Share of run time by agent">
+    <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-full" role="img" aria-label="Share of run time by agent">
       {share.map((entry) => (
-        <span key={entry.agent} className={`${agentFill(entry.agent)} opacity-70`} style={{ width: `${entry.share * 100}%` }} title={`${entry.agent} ${Math.round(entry.share * 100)}%`} />
+        <span key={entry.agent} className={`${agentFill(entry.agent)} opacity-75 first:rounded-l-full last:rounded-r-full`} style={{ width: `${entry.share * 100}%` }} title={`${entry.agent} ${Math.round(entry.share * 100)}%`} />
       ))}
     </div>
   )
@@ -147,10 +161,11 @@ function TaskTimes({ times }: { times: MetricsData["timeShare"]["taskTimes"] }) 
   if (times.length === 0) return null
   const max = Math.max(...times.map((group) => group.avgMs), 1)
   return (
-    <div className="flex flex-col gap-3">
-      <h3 className="text-sm font-medium">Request to done, by the oracle's model</h3>
-      <ul className="flex flex-col gap-3">
-        {times.map((group) => (
+    <div className="flex flex-col gap-2.5 pt-1">
+      <h3 className="text-xs text-muted-foreground">Request to done, by the oracle's model</h3>
+      <Rows
+        rows={times}
+        render={(group) => (
           <BarRow
             key={`${group.model}-${group.thinking}`}
             label={[group.model, group.thinking].filter(Boolean).join(" · ")}
@@ -159,8 +174,8 @@ function TaskTimes({ times }: { times: MetricsData["timeShare"]["taskTimes"] }) 
             valueText={shortDuration(group.avgMs)}
             sub={`×${group.tasks}`}
           />
-        ))}
-      </ul>
+        )}
+      />
     </div>
   )
 }

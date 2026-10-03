@@ -5,7 +5,9 @@
  */
 import { useId, useState } from "react"
 import type { DialogAnswer, SessionDialog } from "@protocol"
+import { ArrowUp, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { ActionButton } from "@/ui/Actions"
 import { Textarea } from "@/components/ui/textarea"
 import { act } from "@/lib/act"
 import { waitingText } from "./words"
@@ -33,9 +35,9 @@ function Typed({ dialog, send }: { dialog: SessionDialog; send: Send }) {
         {dialog.title}
       </label>
       <Textarea id={id} rows={dialog.method === "editor" ? 4 : 2} value={text} placeholder={dialog.placeholder} onChange={(event) => setText(event.target.value)} />
-      <Button className="h-10 self-end" disabled={!text.trim()} onClick={() => void send({ value: text.trim() })}>
-        Send answer
-      </Button>
+      <div className="flex self-end">
+        <ActionButton label="Send the answer" icon={ArrowUp} tone="primary" disabled={!text.trim()} onClick={() => void send({ value: text.trim() })} />
+      </div>
     </div>
   )
 }
@@ -64,9 +66,9 @@ function Card({ sessionKey, dialog, onAnswered }: { sessionKey: string; dialog: 
         {dialog.message ? <p className="text-sm text-muted-foreground">{dialog.message}</p> : null}
       </div>
       <Answer dialog={dialog} send={send} />
-      <Button variant="ghost" className="h-10 self-start text-muted-foreground" onClick={() => void send({ cancelled: true })}>
-        Put it away
-      </Button>
+      <div className="flex self-start">
+        <ActionButton label="Put it away" icon={X} onClick={() => void send({ cancelled: true })} />
+      </div>
     </div>
   )
 }

@@ -5,8 +5,9 @@
  */
 import type { LobbySnapshot } from "@protocol"
 import { go } from "@/app/router"
-import { Button } from "@/components/ui/button"
+import { ArrowLeft, ArrowRightToLine, CircleStop } from "lucide-react"
 import { act } from "@/lib/act"
+import { ActionBar, ActionButton } from "@/ui/Actions"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { Section } from "@/ui/Section"
 import { Pips } from "@/ui/task-facts"
@@ -34,15 +35,20 @@ function TaskLine({ task }: { task: NonNullable<LobbySnapshot["task"]> }) {
 
 function Actions({ entry }: { entry: Entry }) {
   const { key } = entry
-  if (entry.where === "this window") return <Button className="h-10 self-start" onClick={() => go("#/lobby")}>Back to this window</Button>
+  if (entry.where === "this window") {
+    return (
+      <ActionBar>
+        <ActionButton label="Back to this window" icon={ArrowLeft} tone="primary" onClick={() => go("#/lobby")} />
+      </ActionBar>
+    )
+  }
   if (!key) return null
   return (
-    <div className="flex flex-wrap gap-2">
-      <Button onClick={() => void act("sessions.switch", { key })}>
-        Move here
-      </Button>
+    <ActionBar>
+      <ActionButton label="Move here" icon={ArrowRightToLine} tone="primary" onClick={() => void act("sessions.switch", { key })} />
       <ConfirmButton
-        label="Stop"
+        icon={CircleStop}
+        label="Stop the session"
         title={`Stop ${entry.name}?`}
         description="Its process ends. The task keeps its state and can be resumed in this window."
         confirmLabel="Stop session"
@@ -50,7 +56,7 @@ function Actions({ entry }: { entry: Entry }) {
         disabled={!entry.alive}
         onConfirm={() => void act("sessions.stop", { key })}
       />
-    </div>
+    </ActionBar>
   )
 }
 
@@ -66,6 +72,7 @@ function Conversation({ entry, lobby }: { entry: Entry; lobby?: LobbySnapshot })
 export function SessionDetail({ entry, lobby, onChanged }: { entry: Entry; lobby?: LobbySnapshot; onChanged: () => void }) {
   return (
     <article aria-label="Session detail" className="flex flex-col gap-4">
+      <Actions entry={entry} />
       <header className="flex flex-col gap-1">
         <h3 className="flex items-center gap-2 text-sm font-medium text-foreground">
           <WhereIcon where={entry.where} />
@@ -75,7 +82,6 @@ export function SessionDetail({ entry, lobby, onChanged }: { entry: Entry; lobby
         {entry.task ? <TaskLine task={entry.task} /> : null}
         {entry.where !== "background" && entry.waiting > 0 ? <p className="text-sm text-foreground">{waitingText(entry.waiting)}</p> : null}
       </header>
-      <Actions entry={entry} />
       {entry.where === "other terminal" ? <p className="text-sm text-muted-foreground">{OTHER_TERMINAL_NOTE}</p> : null}
       {entry.key ? <Dialogs sessionKey={entry.key} dialogs={entry.dialogs} onAnswered={onChanged} /> : null}
       <Section title="Conversation">

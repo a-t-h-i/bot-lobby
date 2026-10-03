@@ -4,7 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * A zen page: cool mist in light, deep graphite in dark, one calm indigo accent.
+ * A zen page: cool mist in light, near-black in dark, one calm indigo accent.
  * Every colour lives in this one block: change a token here and the whole page
  * follows. Only pop-ups, toasts and the composer's edges are translucent.
  */
@@ -88,39 +88,39 @@
 }
 
 .dark {
-  /* Graphite */
-  --background: #14161c;
-  --foreground: #e7e9f0;
-  --muted-foreground: #9aa1b2;
+  /* Near-black */
+  --background: #050608;
+  --foreground: #e6e8ee;
+  --muted-foreground: #8b93a4;
 
-  --card: #1b1e26;
-  --card-foreground: #e7e9f0;
-  --popover: rgb(28 31 40 / 0.9);
-  --popover-foreground: #e7e9f0;
-  --glass-border: #2a2f3a;
-  --glass-shadow: 0 14px 36px -12px rgb(0 0 0 / 0.65);
-  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
-  --scrim: rgb(5 7 12 / 0.6);
+  --card: #0b0d11;
+  --card-foreground: #e6e8ee;
+  --popover: rgb(11 13 17 / 0.94);
+  --popover-foreground: #e6e8ee;
+  --glass-border: #181b22;
+  --glass-shadow: 0 14px 36px -12px rgb(0 0 0 / 0.8);
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  --scrim: rgb(0 0 0 / 0.75);
 
   --primary: #8f9bff;
-  --primary-foreground: #12142e;
-  --accent: rgb(143 155 255 / 0.14);
-  --accent-foreground: #e7e9f0;
+  --primary-foreground: #0d0f26;
+  --accent: rgb(143 155 255 / 0.13);
+  --accent-foreground: #e6e8ee;
   --ring: #8f9bff;
   --typing: #8f9bff;
-  --tab-active: #232845;
+  --tab-active: #141830;
 
-  --secondary: rgb(255 255 255 / 0.06);
-  --secondary-foreground: #e7e9f0;
-  --muted: rgb(255 255 255 / 0.05);
-  --border: #2a2f3a;
-  --input: #383e4c;
-  --you: #242836;
+  --secondary: rgb(255 255 255 / 0.045);
+  --secondary-foreground: #e6e8ee;
+  --muted: rgb(255 255 255 / 0.04);
+  --border: #181b22;
+  --input: #262a35;
+  --you: #11141b;
 
   --destructive: #f2918a;
   --success: #7fcf9f;
   --warning: #e5b45a;
-  --heading: #e7e9f0;
+  --heading: #e6e8ee;
   --code: #e6a6d6;
 
   --chart-3: #5fd0c4;
@@ -144,9 +144,9 @@
   --color-bullet: var(--bullet);
   --color-glass-border: var(--glass-border);
   --color-scrim: var(--scrim);
-  /* One radius for everything: rounded-lg (8px). */
-  --radius-sm: 4px;
-  --radius-md: 6px;
+  /* One radius for everything: rounded-lg (8px), whichever step a class names. Only dots, bars and switches stay fully round. */
+  --radius-sm: 8px;
+  --radius-md: 8px;
   --radius-lg: 8px;
   --radius-xl: 8px;
   --radius-2xl: 8px;
@@ -196,6 +196,18 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* The page never scrolls: the shell is fixed to the screen and only its panes scroll. */
+  html {
+    /* A compact scale: every rem-based size (type, spacing, controls) follows this. */
+    font-size: 93.75%;
+  }
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+    overflow: clip;
+    overscroll-behavior: none;
+  }
   html {
     color-scheme: light;
   }
@@ -206,6 +218,14 @@
     @apply bg-background font-sans text-foreground antialiased;
     letter-spacing: -0.006em;
     text-rendering: optimizeLegibility;
+  }
+  /* Touch browsers zoom into fields under 16px: keep them at 16px there. */
+  @media (pointer: coarse) {
+    input,
+    textarea,
+    [role="combobox"] {
+      font-size: 16px !important;
+    }
   }
   ::selection {
     background: var(--accent);

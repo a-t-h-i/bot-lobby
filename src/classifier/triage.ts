@@ -208,13 +208,14 @@ export function triageLine(triage: TaskTriage): string {
 
 /**
  * A clarify question the classifier can answer: its pick must be the
- * recommended option (marked `(Recommended)`, else the first), confident and
- * clearly ahead; otherwise the question goes to the user as before.
+ * recommended option (marked `(Recommended)`; an unmarked question always goes
+ * to the user), confident and clearly ahead.
  */
 export async function answerClarify(classifier: Classifier, question: string, options: readonly string[], context: { request: string; notes: string; proposal?: string }, signal?: AbortSignal): Promise<AutoAnswer | undefined> {
   if (options.length < 2 || !classifier.enabled("answers")) return undefined;
   const labels = options.map((option) => option.replace(/\s*\(recommended\)\s*/i, " ").trim());
   const marked = options.findIndex((option) => /\(recommended\)/i.test(option));
-  const decided = await autoAnswer(classifier, [{ index: 0, from: "MASTER", text: question, options: labels.map((label) => ({ label, description: "" })), recommended: labels[marked >= 0 ? marked : 0]! }], { request: context.request, conversation: context.notes, ...(context.proposal ? { draft: context.proposal } : {}) }, signal);
+  if (marked < 0) return undefined;
+  const decided = await autoAnswer(classifier, [{ index: 0, from: "MASTER", text: question, options: labels.map((label) => ({ label, description: "" })), recommended: labels[marked]! }], { request: context.request, conversation: context.notes, ...(context.proposal ? { draft: context.proposal } : {}) }, signal);
   return decided?.[0];
 }
