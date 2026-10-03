@@ -136,7 +136,7 @@ export function EffortSlider({ value, levels, supported, model, label, disabled,
         <span aria-hidden="true" className="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-muted" />
         <motion.span
           aria-hidden="true"
-          className="absolute top-1/2 left-0 h-2 -translate-y-1/2 rounded-full bg-gradient-to-r from-primary/50 to-primary"
+          className="absolute top-1/2 left-0 h-2 -translate-y-1/2 rounded-full bg-primary"
           animate={{ width: `${percent}%` }}
           transition={{ type: "spring", stiffness: 520, damping: 34 }}
         />
@@ -157,7 +157,7 @@ export function EffortSlider({ value, levels, supported, model, label, disabled,
         })}
         <motion.span
           aria-hidden="true"
-          className={cn("absolute top-1/2 size-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-white shadow-[0_2px_10px_-2px_var(--primary)]", dragging !== undefined && "scale-110")}
+          className={cn("absolute top-1/2 size-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-white shadow-sm", dragging !== undefined && "scale-110")}
           animate={{ left: `${percent}%` }}
           transition={{ type: "spring", stiffness: 520, damping: 28 }}
         />

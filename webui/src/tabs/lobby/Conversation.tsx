@@ -63,7 +63,7 @@ function MessageBody({ entry, head }: { entry: ChatEntry; head: boolean }) {
             <span className="font-semibold">You</span>
           </span>
         ) : null}
-        <div className="max-w-[78%] rounded-2xl rounded-tr-md border border-primary/15 bg-you px-4 py-2">
+        <div className="max-w-[78%] rounded-md rounded-tr-md border border-primary/15 bg-you px-4 py-2">
           <Markdown text={entry.text} />
         </div>
       </div>
@@ -234,7 +234,7 @@ export function Conversation({
         )}
       </div>
       {!atBottom ? (
-        <Button type="button" className="absolute right-5 bottom-3 shadow-glass" onClick={stick}>
+        <Button type="button" className="absolute right-5 bottom-3 shadow-sm" onClick={stick}>
           <ArrowDown aria-hidden="true" />
           Jump to latest
         </Button>

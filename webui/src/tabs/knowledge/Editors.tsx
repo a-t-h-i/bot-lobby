@@ -31,7 +31,7 @@ export function EntryEditor({ initial, busy, onSave, onCancel }: EntryEditorProp
     if (!busy && text.trim()) onSave(text)
   }
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-input p-3">
+    <div className="flex flex-col gap-2 rounded-md border border-input p-3">
       <label htmlFor="knowledge-entry" className="text-sm font-medium text-foreground">
         Edit entry
       </label>

@@ -10,7 +10,7 @@ import type { SnapshotTask, StatusInfo } from "@protocol"
 import { trackText } from "@/ui/task-facts"
 
 function Chip({ children }: { children: React.ReactNode }) {
-  return <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">{children}</span>
+  return <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2.5 py-1 text-xs text-muted-foreground">{children}</span>
 }
 
 function Progress({ done, total, current }: { done: number; total: number; current?: string }) {
@@ -28,7 +28,7 @@ function Progress({ done, total, current }: { done: number; total: number; curre
         ) : null}
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done} aria-label="Plan progress">
-        <motion.div className="h-full rounded-full bg-gradient-to-r from-primary/60 to-primary" initial={false} animate={{ width: `${percent}%` }} transition={{ type: "spring", stiffness: 260, damping: 30 }} />
+        <motion.div className="h-full rounded-full bg-primary" initial={false} animate={{ width: `${percent}%` }} transition={{ type: "spring", stiffness: 260, damping: 30 }} />
       </div>
     </div>
   )
@@ -38,10 +38,10 @@ export function TaskHeader({ task, status }: { task?: SnapshotTask; status?: Sta
   const branch = status?.branch ?? status?.workspace.branch
   const where = task?.git?.branch ?? branch
   return (
-    <section className="glass flex shrink-0 flex-col gap-3 rounded-2xl px-5 py-4" aria-label="Task" role="group">
+    <section className="glass flex shrink-0 flex-col gap-3 rounded-md px-5 py-4" aria-label="Task" role="group">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <h2 className="min-w-0 truncate text-base font-semibold">{task?.title ?? "No task is running in this session."}</h2>
-        {task ? <span className="rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium">{task.state.replace(/_/g, " ")}</span> : null}
+        {task ? <span className="rounded-md bg-accent px-2.5 py-0.5 text-xs font-medium">{task.state.replace(/_/g, " ")}</span> : null}
       </div>
       {task ? (
         <>
