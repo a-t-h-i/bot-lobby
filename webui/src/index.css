@@ -4,51 +4,51 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * A calm, glassy page. Every colour lives in this one block, light and dark:
- * change a token here and the whole page follows. Surfaces are translucent
- * (`--card`, `--popover`) over a soft, slow-moving wash of colour (`--wash-*`),
- * so the blur behind them has something to blur.
+ * A zen page: flat paper in light, flat charcoal in dark, one warm clay accent.
+ * Every colour lives in this one block: change a token here and the whole page
+ * follows. Only pop-ups, toasts and the composer's edges are translucent.
  */
 :root {
-  --radius: 1rem;
+  --radius: 0.5rem;
 
-  /* Page and ink */
-  --background: #eef2f5;
-  --foreground: #1b2530;
-  --muted-foreground: #556272;
+  /* Page and ink: paper */
+  --background: #f5f2eb;
+  --foreground: #25231f;
+  --muted-foreground: #66625a;
 
-  /* Glass surfaces */
-  --card: rgb(255 255 255 / 0.62);
-  --card-foreground: #1b2530;
-  --popover: rgb(255 255 255 / 0.86);
-  --popover-foreground: #1b2530;
-  --glass-border: rgb(255 255 255 / 0.7);
-  --glass-shadow: 0 1px 2px rgb(27 37 48 / 0.04), 0 12px 32px -12px rgb(27 37 48 / 0.18);
-  --scrim: rgb(27 37 48 / 0.22);
+  /* Surfaces */
+  --card: #fbf9f4;
+  --card-foreground: #25231f;
+  --popover: rgb(255 253 248 / 0.92);
+  --popover-foreground: #25231f;
+  --glass-border: #e2ddd0;
+  --glass-shadow: 0 8px 28px -10px rgb(60 45 20 / 0.22);
+  --scrim: rgb(50 40 25 / 0.26);
 
-  /* Accent */
-  --primary: #2b6f86;
-  --primary-foreground: #ffffff;
-  --accent: rgb(43 111 134 / 0.12);
-  --accent-foreground: #1b2530;
-  --ring: #3d8aa5;
-  --typing: #3d8aa5;
+  /* Accent: clay */
+  --primary: #a8471f;
+  --primary-foreground: #fffaf5;
+  --accent: rgb(178 80 43 / 0.1);
+  --accent-foreground: #25231f;
+  --ring: #c8704a;
+  --typing: #c8704a;
+  --tab-active: #e8e2d4;
 
   /* Quiet fills and lines */
-  --secondary: rgb(27 37 48 / 0.06);
-  --secondary-foreground: #1b2530;
-  --muted: rgb(27 37 48 / 0.05);
-  --border: rgb(27 37 48 / 0.12);
-  --input: rgb(27 37 48 / 0.18);
-  --you: rgb(43 111 134 / 0.1);
+  --secondary: rgb(60 45 20 / 0.06);
+  --secondary-foreground: #25231f;
+  --muted: rgb(60 45 20 / 0.05);
+  --border: #e2ddd0;
+  --input: #d3cdbd;
+  --you: #efe9dc;
 
   /* Meaning */
-  --destructive: #b4443f;
-  --success: #2c7a58;
-  --warning: #96600a;
-  --heading: #1b2530;
-  --link: #22669d;
-  --code: #7a4a8a;
+  --destructive: #b03a34;
+  --success: #2f6a45;
+  --warning: #8a5a0a;
+  --heading: #25231f;
+  --link: #2f5f8f;
+  --code: #8a4b6a;
   --codeblock: var(--foreground);
   --bullet: var(--primary);
 
@@ -60,15 +60,10 @@
 
   /* Each agent's colour in the activity log and the metrics bars. */
   --source-dev: var(--success);
-  --source-design: #8a4f8f;
+  --source-design: #8a4b6a;
   --source-qa: var(--warning);
   --source-research: var(--link);
   --source-quickfix: var(--primary);
-
-  /* The wash behind the glass */
-  --wash-a: rgb(146 200 218 / 0.5);
-  --wash-b: rgb(196 186 232 / 0.38);
-  --wash-c: rgb(176 222 200 / 0.32);
 
   --sidebar: var(--background);
   --sidebar-foreground: var(--foreground);
@@ -84,46 +79,44 @@
 }
 
 .dark {
-  --background: #0f1419;
-  --foreground: #e6ebf0;
-  --muted-foreground: #9aa8b6;
+  /* Charcoal */
+  --background: #262624;
+  --foreground: #ece9e1;
+  --muted-foreground: #a7a399;
 
-  --card: rgb(32 41 51 / 0.58);
-  --card-foreground: #e6ebf0;
-  --popover: rgb(24 31 39 / 0.88);
-  --popover-foreground: #e6ebf0;
-  --glass-border: rgb(255 255 255 / 0.09);
-  --glass-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 16px 40px -14px rgb(0 0 0 / 0.55);
-  --scrim: rgb(5 8 12 / 0.5);
+  --card: #2e2e2b;
+  --card-foreground: #ece9e1;
+  --popover: rgb(52 52 49 / 0.92);
+  --popover-foreground: #ece9e1;
+  --glass-border: #3f3e3a;
+  --glass-shadow: 0 10px 32px -10px rgb(0 0 0 / 0.6);
+  --scrim: rgb(10 10 9 / 0.55);
 
-  --primary: #7cc3d6;
-  --primary-foreground: #0b1c22;
-  --accent: rgb(124 195 214 / 0.14);
-  --accent-foreground: #e6ebf0;
-  --ring: #7cc3d6;
-  --typing: #7cc3d6;
+  --primary: #e08a62;
+  --primary-foreground: #2a1a12;
+  --accent: rgb(224 138 98 / 0.14);
+  --accent-foreground: #ece9e1;
+  --ring: #e08a62;
+  --typing: #e08a62;
+  --tab-active: #3d3c38;
 
-  --secondary: rgb(255 255 255 / 0.07);
-  --secondary-foreground: #e6ebf0;
+  --secondary: rgb(255 255 255 / 0.06);
+  --secondary-foreground: #ece9e1;
   --muted: rgb(255 255 255 / 0.05);
-  --border: rgb(255 255 255 / 0.1);
-  --input: rgb(255 255 255 / 0.14);
-  --you: rgb(124 195 214 / 0.12);
+  --border: #3f3e3a;
+  --input: #4a4944;
+  --you: #363633;
 
-  --destructive: #f08a82;
-  --success: #7fd1a6;
-  --warning: #e8b45a;
-  --heading: #e6ebf0;
-  --link: #8cbcec;
-  --code: #d3a8e0;
+  --destructive: #ee8b83;
+  --success: #8bc6a0;
+  --warning: #e2b25c;
+  --heading: #ece9e1;
+  --link: #8fb8e8;
+  --code: #d9a7c0;
 
   --chart-4: #b8a0dc;
 
-  --source-design: #d3a8e0;
-
-  --wash-a: rgb(40 96 120 / 0.42);
-  --wash-b: rgb(78 62 130 / 0.3);
-  --wash-c: rgb(32 96 80 / 0.24);
+  --source-design: #d9a7c0;
 }
 
 @theme inline {
@@ -140,12 +133,14 @@
   --color-bullet: var(--bullet);
   --color-glass-border: var(--glass-border);
   --color-scrim: var(--scrim);
-  --radius-sm: calc(var(--radius) - 6px);
-  --radius-md: calc(var(--radius) - 4px);
-  --radius-lg: calc(var(--radius) - 2px);
-  --radius-xl: var(--radius);
-  --radius-2xl: calc(var(--radius) + 6px);
-  --radius-3xl: calc(var(--radius) + 12px);
+  /* One radius for everything: rounded-md. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 6px;
+  --radius-xl: 6px;
+  --radius-2xl: 6px;
+  --radius-3xl: 6px;
+  --color-tab: var(--tab-active);
   --shadow-glass: var(--glass-shadow);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -197,11 +192,6 @@
   }
   body {
     @apply bg-background font-sans text-foreground antialiased;
-    background-image:
-      radial-gradient(52rem 36rem at 8% -8%, var(--wash-a), transparent 70%),
-      radial-gradient(46rem 34rem at 100% 4%, var(--wash-b), transparent 70%),
-      radial-gradient(54rem 38rem at 40% 112%, var(--wash-c), transparent 70%);
-    background-attachment: fixed;
   }
   ::selection {
     background: var(--accent);
@@ -215,13 +205,27 @@
   }
 }
 
-/* The one glass look: a translucent card with a soft edge and a blur behind it. */
+/* Cards are flat paper (or charcoal) with a thin edge; pop-ups are translucent with a blur behind them. */
 @layer components {
   .glass {
-    @apply border border-glass-border bg-card text-card-foreground shadow-glass backdrop-blur-md;
+    @apply border border-glass-border bg-card text-card-foreground;
   }
   .glass-pop {
     @apply border border-glass-border bg-popover text-popover-foreground shadow-glass backdrop-blur-md;
+  }
+}
+
+/* The activity indicator: three dots that hop in turn. */
+@keyframes hop {
+  0%,
+  70%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  35% {
+    transform: translateY(-80%);
+    opacity: 1;
   }
 }
 
@@ -270,13 +274,13 @@
     @apply text-link underline underline-offset-4;
   }
   .md-body :not(pre) > code {
-    @apply rounded-md bg-muted px-1 py-0.5 font-mono text-[0.85em] text-code;
+    @apply rounded-sm bg-muted px-1 py-0.5 font-mono text-[0.85em] text-code;
   }
   .md-body pre {
-    @apply overflow-x-auto rounded-xl bg-muted p-3 font-mono text-[0.85em] text-codeblock;
+    @apply overflow-x-auto rounded-md bg-muted p-3 font-mono text-[0.85em] text-codeblock;
   }
   .md-body img {
-    @apply max-w-full rounded-xl;
+    @apply max-w-full rounded-md;
   }
   .md-body input[type="checkbox"] {
     @apply mr-1.5;
