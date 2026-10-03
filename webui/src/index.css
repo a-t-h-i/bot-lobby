@@ -30,8 +30,8 @@
   --accent: #e2e2ee; /* selectedBg, Pi #d0d0e0 */
   --accent-foreground: #1f2328;
   --destructive: #a34f4f; /* error, Pi #aa5555 */
-  --border: #b0b0b0; /* borderMuted */
-  --input: #b0b0b0;
+  --border: #d4d4d4; /* hairline */
+  --input: #d4d4d4;
   --ring: #5a8080; /* borderAccent */
   --typing: #547da7; /* border: the prompt's rules while you type */
   --you: #ebebef; /* userMessageBg, Pi #e8e8e8 */
@@ -47,12 +47,12 @@
   --chart-3: var(--link);
   --chart-4: #875f87; /* thinkingHigh */
   --chart-5: var(--heading);
-  /* Each agent's colour, as the terminal paints it (SOURCE_COLORS in src/lobby/tabs/home.ts). */
-  --source-dev: var(--success);
-  --source-design: var(--heading);
-  --source-qa: var(--warning);
-  --source-research: var(--foreground);
-  --source-quickfix: var(--code);
+  /* Per-role accents: one identity cue per agent, distinct in both themes and AA-checked (>=4.5:1 on page, popover and --you surfaces). */
+  --source-dev: #446944;
+  --source-design: #7d5c1a;
+  --source-qa: #6d4f9e;
+  --source-research: #3a5a80;
+  --source-quickfix: #416a6a;
   --sidebar: var(--background);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
@@ -85,8 +85,8 @@
   --accent: #363741; /* selectedBg, Pi #3a3a4a */
   --accent-foreground: #c5c8c6;
   --destructive: #d47777; /* error, Pi #cc6666 */
-  --border: #505050;
-  --input: #505050;
+  --border: #3a3a3a;
+  --input: #3a3a3a;
   --ring: #00d7ff;
   --typing: #5f87ff;
   --you: #343541; /* userMessageBg */
@@ -95,13 +95,26 @@
   --heading: #f0c674;
   --link: #81a2be;
   --bullet: var(--primary);
+  /* Per-role accents, AA-checked on dark surfaces */
+  --source-dev: #b5bd68;
+  --source-design: #f0c674;
+  --source-qa: #c397d4;
+  --source-research: #93b5d5;
+  --source-quickfix: #8abeb7;
   --chart-4: #b294bb;
 }
 
 @theme inline {
-  /* One monospace face for everything, from the system: the CSP allows no web font. */
-  --font-sans: ui-monospace, "JetBrains Mono", "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
+  /* The UI face is the system's sans; mono stays for code, paths, ids and logs; no remote fonts (CSP font-src 'self' holds). */
+  --font-sans: system-ui, -apple-system, "Segoe UI", "Ubuntu", "Noto Sans", "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "JetBrains Mono", "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
+  /* Airy content vs compact chrome; applied by later parts, landed now. */
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.55;
+  --text-chrome: 0.8125rem;
+  --text-chrome--line-height: 1.4;
+  --spacing-content: 0.75rem;
+  --spacing-chrome: 0.375rem;
   --color-typing: var(--typing);
   --color-you: var(--you);
   --color-success: var(--success);
