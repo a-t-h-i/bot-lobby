@@ -45,7 +45,7 @@ function CheckMark({ multi, on }: { multi: boolean; on: boolean }) {
       aria-hidden="true"
       className={cn(
         "relative mt-0.5 flex size-4 shrink-0 items-center justify-center border",
-        multi ? "rounded-[4px]" : "rounded-full",
+        multi ? "rounded-lg" : "rounded-full",
         on ? "border-primary bg-primary text-primary-foreground" : "border-input"
       )}
     >
