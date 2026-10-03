@@ -311,6 +311,15 @@ The user asked for the web UI to look close to bot-lobby in the terminal, with t
 - `npm test` and both typechecks pass;
 - `webui/dist` is rebuilt, so the staleness test passes.
 
+## D-22 · The page has its own calm look · Adopted
+
+The user asked for a modern, calm page of cards and no longer wants the terminal look or the Claude Code colours (2026-10-03). This replaces D-21's colours, type and layout; the structure (title row, numbered tabs, list and detail cards, one composer) stays.
+
+- **Colours** (`webui/src/index.css`, one block of tokens): cool mist `#f6f7fa` with white cards in light; graphite `#14161c` with `#1b1e26` cards in dark; one indigo accent (`#4650d1` light, `#8f9bff` dark). Agents keep their own hues (green, plum, amber, teal). A design test checks that the accent leans blue.
+- **Type:** Inter (variable, Latin subset, served from `webui/dist/assets`; the CSP's `font-src 'self'` allows it) for text, the system monospace for the message box.
+- **Shape:** one radius, `rounded-lg` (8px), for cards, inputs, buttons and chips; the tab pill has 10px corners.
+- **Key hints:** every shortcut is shown where it applies. Caps (`Alt` `H`, `⌥` `H` on a Mac) in tooltips, under the message box (they thin out as it narrows), in the pop-up headers, and in the key list (`Alt+H`, or the keyboard button in the title row).
+
 ---
 
 ## Open questions (each has a default the swarm uses until the user answers)

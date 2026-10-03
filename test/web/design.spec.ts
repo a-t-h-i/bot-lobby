@@ -178,7 +178,7 @@ test("Plan, Quick fix and an open task each give the composer its own target", a
   }
 });
 
-test("zen palettes: paper in light, charcoal in dark, one 8px radius, composer clear of the page", async ({ page, server }) => {
+test("zen palettes: cool mist in light, graphite in dark, an indigo accent, one 8px radius, composer clear of the page", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const look = await page.evaluate(() => {
@@ -199,17 +199,39 @@ test("zen palettes: paper in light, charcoal in dark, one 8px radius, composer c
       inactiveBorder: getComputedStyle(inactive).borderTopWidth,
       pillRadius: getComputedStyle(active).borderTopLeftRadius,
       body: getComputedStyle(document.body).backgroundImage,
+      primary: getComputedStyle(document.documentElement).getPropertyValue("--primary").trim(),
     };
   });
   const [r, g, b] = look.page as [number, number, number];
-  if (look.dark) expect(Math.max(r, g, b), "charcoal is dark").toBeLessThan(60);
-  else expect(Math.min(r, g, b), "paper is light").toBeGreaterThan(230);
+  if (look.dark) expect(Math.max(r, g, b), "graphite is dark").toBeLessThan(60);
+  else expect(Math.min(r, g, b), "mist is light").toBeGreaterThan(230);
+  const accent = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(look.primary);
+  expect(accent, `the accent is a hex colour (${look.primary})`).not.toBeNull();
+  const [ar, , ab] = accent!.slice(1).map((part) => parseInt(part, 16)) as [number, number, number];
+  expect(ab - ar, "the accent leans blue, not warm").toBeGreaterThan(60);
   expect(look.body, "flat page, no wash").toBe("none");
   expect(look.cardRadius).toBe("8px");
   expect(look.inputRadius).toBe("8px");
   expect(look.inactiveBorder, "inactive tabs are plain text").toBe("0px");
   expect(look.pillRadius, "the active pill has 10px corners").toBe("10px");
   expect(look.gap, "the composer never touches the page above it").toBeGreaterThanOrEqual(2);
+});
+
+test("keyboard hints: the box prints its keys, the header button opens the key list, a tab's tooltip names its key", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const hints = page.locator("#composer-text").locator("xpath=ancestor::div[contains(@class,'shrink-0')][1]");
+  await expect(hints.getByText("new line"), "Shift+Enter is hinted").toBeVisible();
+  await expect(hints.getByText("shortcuts"), "and the way to the full list").toBeVisible();
+  await page.getByRole("tab", { name: /Tasks/ }).hover();
+  await expect(page.locator('[data-slot="tooltip-content"]').first(), "a tab's tooltip shows its Alt+N").toContainText(/Alt\s*(plus)?\s*2/);
+  await page.mouse.move(0, 400);
+  await page.getByRole("button", { name: "Keyboard shortcuts" }).first().click();
+  const keys = page.getByRole("dialog", { name: "Keys" });
+  await expect(keys).toBeVisible();
+  await expect(keys.getByText("Message box"), "the list covers the message box too").toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(keys).toBeHidden();
 });
 
 test("Activity and Thinking fold down to their title bar and open again", async ({ page, server }) => {
