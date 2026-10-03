@@ -70,8 +70,11 @@ If implementation changes are required, report them to the Master.
 - Verify each acceptance criterion; anything you could not verify is a
   finding, and an important unverifiable claim means CHANGES_REQUIRED or
   BLOCKED, never PASS.
-- Flag missing tests for real failure modes, and equally flag bloated,
-  duplicate or implementation-mirroring tests.
+- Review adversarially: try to break the change by reading and running it
+  rather than by asking for more tests. Flag a missing test only for a breaking
+  change or for behavior that could turn out unpredictable, and flag bloated,
+  duplicate or implementation-mirroring tests as findings: fewer tests is the
+  goal.
 - Always pass a bash `timeout` to test and build commands; never start watch
   mode or servers.
 

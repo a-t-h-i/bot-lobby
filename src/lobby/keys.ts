@@ -1,27 +1,17 @@
 /**
- * The lobby's shortcuts in one table: every action has a default key, a line
- * for the help overlay, and can be rebound under `lobby.keys` in the config
- * (`{ "toggleThinking": "alt+t" }`). They work in typing and browsing mode
- * alike, so each default is a key that never types a character.
+ * The web lobby's shortcuts in one table: every action has a default key, a
+ * line for the help overlay, and can be rebound under `lobby.keys` in the
+ * config (`{ "search": "alt+f" }`). Chords are written `alt+k`,
+ * `ctrl+f`, `shift+tab`; the page matches them on the physical key.
  */
-import { Key, matchesKey, type KeyId } from "@earendil-works/pi-tui";
 
 export const LOBBY_ACTIONS = {
-  hide: { key: "alt+l", help: "hide the lobby (back to pi)" },
   help: { key: "alt+h", help: "show or hide these keys" },
-  settings: { key: "alt+s", help: "bot-lobby settings: each agent's model and thinking, the lobby" },
-  search: { key: "ctrl+f", help: "search the current tab" },
+  settings: { key: "alt+s", help: "bot-lobby settings: each agent's model and effort, the lobby" },
   savePlan: { key: "ctrl+s", help: "save the plan being made in the Plan tab to the pending tasks" },
   sessions: { key: "alt+o", help: "browse sessions: view one, message it, or switch this window to it" },
-  newSession: { key: "alt+n", help: "start a task in a new session, named after it" },
-  toggleAuto: { key: "alt+g", help: "auto mode: the oracle drives the task to completion without asking" },
-  nextTab: { key: "tab", help: "next tab" },
-  prevTab: { key: "shift+tab", help: "previous tab" },
-  toggleConversation: { key: "alt+c", help: "show or hide the conversation" },
-  toggleActivity: { key: "alt+a", help: "show or hide the activity log" },
-  toggleThinking: { key: "alt+k", help: "show or hide thinking" },
-  scrollUp: { key: "pageUp", help: "scroll up a page" },
-  scrollDown: { key: "pageDown", help: "scroll down a page" },
+  nextTab: { key: "alt+]", help: "next tab" },
+  prevTab: { key: "alt+[", help: "previous tab" },
 } as const;
 
 export type LobbyAction = keyof typeof LOBBY_ACTIONS;
@@ -35,27 +25,6 @@ export function keyMap(overrides: Readonly<Record<string, string>> = {}): KeyMap
     if (action in map && key.trim()) map[action as LobbyAction] = key.trim().toLowerCase();
   }
   return map;
-}
-
-/** Alt+digit jumps to the tab at `index`; the same key the TUI matches. */
-export function tabJumpKey(index: number): KeyId {
-  return Key.alt(String(index + 1) as "1");
-}
-
-/** `keyMap` with the web-only tab cycling defaults; user overrides win. */
-export function webKeyMap(overrides: Readonly<Record<string, string>> = {}): KeyMap {
-  const map = keyMap(overrides);
-  if (!overrides.nextTab?.trim()) map.nextTab = "alt+]";
-  if (!overrides.prevTab?.trim()) map.prevTab = "alt+[";
-  return map;
-}
-
-/** The action `data` triggers under `map`, if any. */
-export function actionFor(data: string, map: KeyMap): LobbyAction | undefined {
-  for (const action of Object.keys(map) as LobbyAction[]) {
-    if (matchesKey(data, map[action] as KeyId)) return action;
-  }
-  return undefined;
 }
 
 /** `alt+k` reads `Alt+K` in hints and help. */

@@ -1,8 +1,9 @@
 /**
  * The panel's conversation: your words on the right, the panel's questions
  * attributed and numbered with their options, questions the classifier
- * settled marked with ✓, and everything else as Markdown.
+ * settled marked with a tick, and everything else as Markdown.
  */
+import { Check } from "lucide-react"
 import type { PlannerMessage, PanelQuestion } from "@protocol"
 import { formatClock } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -20,9 +21,12 @@ function Asked({ questions }: { questions: PanelQuestion[] }) {
           </p>
           <ul className="flex flex-col gap-0.5 pl-6 text-muted-foreground">
             {question.options.map((option) => (
-              <li key={option.label}>
-                ○ {option.label}
-                {option.description ? ` — ${option.description}` : ""}
+              <li key={option.label} className="flex gap-2">
+                <span aria-hidden="true" className="mt-2 size-1.5 shrink-0 rounded-full border border-muted-foreground/60" />
+                <span>
+                  {option.label}
+                  {option.description ? ` — ${option.description}` : ""}
+                </span>
               </li>
             ))}
           </ul>
@@ -37,7 +41,7 @@ function Decided({ message }: { message: PlannerMessage }) {
     <>
       {(message.decided ?? []).map((entry, index) => (
         <p key={index} className="text-sm">
-          <span aria-hidden="true">✓ </span>
+          <Check aria-hidden="true" className="mr-1 inline size-3.5 text-success" />
           <span className={cn("font-medium", sourceColor(entry.from))}>[{entry.from}]</span> {entry.question} → <strong>{entry.answer}</strong>{" "}
           <span className="text-muted-foreground">· decided by the classifier ({entry.probability.toFixed(2)}); comment on the plan to overrule</span>
         </p>
@@ -52,9 +56,9 @@ function Turn({ message }: { message: PlannerMessage }) {
     return (
       <div className="flex flex-col items-end gap-1">
         <span className="text-xs text-muted-foreground">
-          {time} You ●
+          {time} You
         </span>
-        <div className="max-w-[85%] rounded-md bg-primary/10 px-3 py-2">
+        <div className="max-w-[85%] rounded-2xl rounded-tr-md border border-primary/15 bg-you px-4 py-2">
           <Markdown text={message.text} />
         </div>
       </div>
@@ -63,7 +67,10 @@ function Turn({ message }: { message: PlannerMessage }) {
   const asked = message.questions ?? []
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-xs text-muted-foreground">◆ Panel {time}</span>
+      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span aria-hidden="true" className="size-2 rounded-full bg-primary" />
+        <span className="font-semibold text-foreground">Panel</span> {time}
+      </span>
       {asked.length > 0 ? <Asked questions={asked} /> : <Markdown text={message.text} />}
       <Decided message={message} />
     </div>

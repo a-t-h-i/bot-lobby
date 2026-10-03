@@ -1,7 +1,7 @@
 /**
- * The Quick fix tab (batch-2 §h): jobs newest first beside the selected job's
- * steps and report (a Sheet below 1024 px), with the box that submits a new
- * one underneath. `#/quickfix/<id>` selects a job; the list is read again on
+ * The Quick fix tab: jobs newest first beside the selected job's steps and
+ * report (a sheet below 1024 px); the floating box submits a new one (its Quick
+ * fix target). `#/quickfix/<id>` selects a job; the list is read again on
  * every `quickfix` topic change, which is also how running steps arrive.
  */
 import { useEffect, useState } from "react"
@@ -12,7 +12,6 @@ import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty"
 import { ListSkeleton, PaneHeader, SplitPane, useWide } from "@/ui/SplitPane"
 import { JobDetail } from "./JobDetail"
 import { JobList } from "./JobList"
-import { SubmitBox } from "./SubmitBox"
 import { INTRO, newestFirst } from "./words"
 
 const close = () => go(tabHash("quickfix"))
@@ -31,7 +30,7 @@ function useNow(active: boolean): number {
 
 function Intro() {
   return (
-    <Empty className="m-4 flex-1 border border-border bg-card">
+    <Empty className="glass m-4 flex-1 border">
       <EmptyHeader>
         <EmptyDescription className="font-medium text-foreground">{INTRO}</EmptyDescription>
       </EmptyHeader>
@@ -46,12 +45,7 @@ export function QuickfixTab({ id }: { id?: string }) {
   const now = useNow(jobs.some((job) => job.status === "running"))
   if (!read.data && read.error) return <ErrorState message={`Could not load quick fixes. ${read.error}`} onRetry={read.reload} />
   const body = read.data && jobs.length === 0 ? <Intro /> : <Split id={id} wide={wide} loaded={Boolean(read.data)} jobs={jobs} now={now} />
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      {body}
-      <SubmitBox onSent={read.reload} />
-    </div>
-  )
+  return <div className="flex min-h-0 flex-1 flex-col">{body}</div>
 }
 
 function Split({ id, wide, loaded, jobs, now }: { id?: string; wide: boolean; loaded: boolean; jobs: ReturnType<typeof newestFirst>; now: number }) {

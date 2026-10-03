@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { answerMessage, askPanel, dialogAsker, MAX_QUESTIONS, questionnaires, settledQuestions, toAskQuestion, type AskQuestion, type AskResult } from "../src/lobby/ask.ts";
+import { answerMessage, askPanel, MAX_QUESTIONS, questionnaires, settledQuestions, toAskQuestion, type AskQuestion, type AskResult } from "../src/lobby/ask.ts";
 import type { PanelQuestion } from "../src/lobby/planner.ts";
 
 const question = (from: string, text: string, labels: string[] = []): PanelQuestion => ({ from, text, options: labels.map((label) => ({ label, description: `${label} it is` })) });
@@ -95,29 +95,4 @@ test("askPanel runs the questionnaires in order and stops at the first one the u
   assert.equal(asked.length, 2);
   assert.equal(outcome.stopped, true);
   assert.equal(outcome.results.length, 1, "what was answered before stopping is kept");
-});
-
-test("where the questionnaire cannot be drawn, pi's dialogs ask the same questions: pick, type in the multi-line editor, skip, or esc", async () => {
-  const picks = ["Yes", "Type an answer…", "Skip", undefined];
-  const typed = ["my own words"];
-  const titles: string[] = [];
-  const dialogCtx = {
-    ui: {
-      select: async (title: string) => {
-        titles.push(title);
-        return picks.shift();
-      },
-      editor: async () => typed.shift(),
-    },
-  } as unknown as ExtensionContext;
-  const chunk: AskQuestion[] = ["A?", "B?", "C?", "D?"].map((text) => ({ question: text, header: "DEV", options: [{ label: "Yes", description: "" }, { label: "No", description: "" }] }));
-  const result = await dialogAsker(chunk, dialogCtx);
-  assert.equal(titles[0], "DEV · 1/4\n\nA?");
-  assert.deepEqual(result, {
-    cancelled: true,
-    answers: [
-      { questionIndex: 0, question: "A?", kind: "option", answer: "Yes" },
-      { questionIndex: 1, question: "B?", kind: "custom", answer: "my own words" },
-    ],
-  });
 });
