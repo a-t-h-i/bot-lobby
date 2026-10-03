@@ -27,7 +27,7 @@ import { usePrompts } from "./usePrompts.ts"
 import { useStatus, useTopic } from "./hooks.ts"
 import { go, tabHash, useRoute, type Route } from "./router.ts"
 import { routeBody } from "@/tabs/registry.tsx"
-import { focusTab, isTyping } from "@/prompts/nav"
+import { focusTab, isTyping, tabWalk } from "@/prompts/nav"
 
 function handleAction(action: string, route: Route, toggleHelp: () => void, cycle: (delta: number) => void): void {
   if (action === "help") toggleHelp()
@@ -83,6 +83,22 @@ export function Shell() {
   }, [])
   useLobbyKeys({ enabled: Boolean(status), keys, tabs, insideApp, onAction, onTab: select })
   const reload = useCallback(() => lobbyStore.onHello({}), [])
+
+  // Switching tabs puts the cursor in the message box, so you can just type (unless the arrows are walking the tab bar).
+  const tab = route.kind === "tab" ? route.tab : route.kind
+  const ready = Boolean(status)
+  useEffect(() => {
+    if (!ready) return
+    if (tabWalk.active) {
+      tabWalk.active = false
+      return
+    }
+    const frame = requestAnimationFrame(() => {
+      const box = document.getElementById("composer-text")
+      if (box && !box.closest("[inert]") && !document.querySelector("[role='dialog']")) box.focus({ preventScroll: true })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [tab, ready])
 
   // `/` jumps to the message box from anywhere that is not a text field.
   useEffect(() => {

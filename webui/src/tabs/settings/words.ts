@@ -152,10 +152,15 @@ export const PAGE = {
   notificationsOn: "Browser notifications are on.",
   notificationsOff: "Browser notifications are off.",
   installLabel: "Install bot-lobby",
-  installHelp: "Keep it in its own window, with the shell cached so it opens when Pi is not running.",
-  installButton: "Install app",
-  installUnavailable: "Use your browser's “Install app” or “Add to Home Screen” action.",
+  installHelp: "Opens in its own fullscreen window, with the shell cached so it starts when Pi is not running.",
+  installButton: "Install as fullscreen app",
+  installUnavailable: "Your browser has not offered to install it. Use its menu: “Install app” (Chrome, Edge) or Share, then “Add to Home Screen” (Safari).",
   installDone: "bot-lobby is installed.",
+  installedNow: "Running as an installed app.",
+  fullscreenLabel: "Fullscreen",
+  fullscreenHelp: "Hide the browser's own bars for this tab (F11 does the same).",
+  fullscreenOn: "Exit fullscreen",
+  fullscreenOff: "Go fullscreen",
 } as const
 
 /** The toast after a save. */

@@ -1,12 +1,12 @@
 {
   "name": "bot-lobby",
   "short_name": "bot-lobby",
-  "description": "The bot-lobby web UI: the terminal lobby in the browser.",
+  "description": "The bot-lobby web UI, fullscreen.",
   "start_url": "/",
   "scope": "/",
-  "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#333333",
+  "display": "fullscreen",
+  "background_color": "#0a0b0f",
+  "theme_color": "#0a0b0f",
   "icons": [
     {
       "src": "/icon-192.png",
@@ -32,5 +32,10 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "display_override": [
+    "fullscreen",
+    "standalone",
+    "minimal-ui"
   ]
 }
