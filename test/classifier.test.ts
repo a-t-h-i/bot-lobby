@@ -9,7 +9,7 @@ import { clip, clipTail, fitsBudget, LIMITS } from "../src/classifier/limits.ts"
 import { chooseHost, describeKey, JEV_HOST_TABLE, jevEndpoint, keyHint, maskKey, registerJevProvider, resolveKey, resolveTarget, type StatusSource } from "../src/classifier/hosts.ts";
 import { DEFAULT_CONFIG, resolveConfig, type ClassifierConfig } from "../src/schemas/configuration.ts";
 import { appendMetrics, readClassifierMetrics, readMetrics, type MetricRecord } from "../src/state/metrics.ts";
-import { classifierSummary, nextJevHost, toggleClassifierFeature } from "../src/pi/settings-ui.ts";
+import { classifierSummary } from "../src/pi/model-settings.ts";
 
 interface Sent {
   url: string;
@@ -266,8 +266,6 @@ test("the classifier config is off by default and normalises every field", () =>
   assert.equal(resolved.effort.cheapModel, "p/cheap");
   assert.deepEqual(resolved.exclude, ["secrets/**"]);
   assert.deepEqual(resolveConfig({}).classifier, DEFAULT_CONFIG.classifier);
-  assert.deepEqual(["auto", "opencode", "typesafe", "openrouter", "vercel"].map((name) => nextJevHost(name as never)), ["opencode", "typesafe", "openrouter", "vercel", "auto"]);
-  assert.equal(toggleClassifierFeature(DEFAULT_CONFIG, "files").classifier.features.files, false);
   assert.equal(classifierSummary(DEFAULT_CONFIG, statusOf({ opencode: { source: "stored" } })), "off · OpenCode Zen (auto) · jev-1.13-free · key stored in pi (/login opencode)");
   assert.equal(classifierSummary({ ...DEFAULT_CONFIG, classifier: { ...DEFAULT_CONFIG.classifier, provider: "typesafe" } }, statusOf({ typesafe: { source: "stored" } })), "off · TypeSafe · jev-latest · key stored in pi (/login typesafe)");
 });

@@ -1,9 +1,12 @@
 /**
- * The activity log: every agent's plain-words steps, oldest first, one line
+ * The activity log: every agent's plain-words steps, oldest first, one row
  * each with a time, a colour per source and a mark per kind (a running step
- * spins, `✓` done, `!` warning, `✗` error, `·` plain). The feed caps it at
- * 400, so the pane slices the same way. Colour is never the only signal.
+ * spins, a tick for done, an alert for a warning, a cross for an error). The
+ * feed caps it at 400, so the pane slices the same way. Colour is never the
+ * only signal.
  */
+import { useEffect, useRef } from "react"
+import { AlertTriangle, Check, X } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 import { formatClock } from "@/lib/format"
@@ -13,46 +16,49 @@ import { sourceColor, type ActivityEntry } from "./types"
 const CAP = 400
 
 function KindMark({ entry }: { entry: ActivityEntry }) {
-  if (entry.pending) return <Spinner aria-hidden="true" role="presentation" />
-  if (entry.kind === "error") return <span className="text-destructive">✗</span>
-  if (entry.kind === "warning") return <span className="text-warning">!</span>
-  if (entry.kind === "success") return <span className="text-success">✓</span>
-  return <span className="text-muted-foreground">·</span>
+  if (entry.pending) return <Spinner aria-hidden="true" role="presentation" className="size-3" />
+  if (entry.kind === "error") return <X aria-hidden="true" className="size-3.5 text-destructive" />
+  if (entry.kind === "warning") return <AlertTriangle aria-hidden="true" className="size-3.5 text-warning" />
+  if (entry.kind === "success") return <Check aria-hidden="true" className="size-3.5 text-success" />
+  return <span className="size-1.5 rounded-full bg-muted-foreground/40" />
 }
 
 function ActivityRow({ entry }: { entry: ActivityEntry }) {
   return (
-    <li className="grid grid-cols-[5ch_9ch_1ch_minmax(0,1fr)] gap-x-[1ch] text-sm">
-      <span className="tabular-nums text-muted-foreground">{formatClock(entry.at)}</span>
-      <span className={cn("overflow-hidden whitespace-nowrap", sourceColor(entry.source))}>{entry.source}</span>
-      <span aria-hidden="true">
+    <li className="grid grid-cols-[2.75rem_5.5rem_1rem_minmax(0,1fr)] items-baseline gap-x-2 rounded-lg px-2 py-1 text-sm transition-colors hover:bg-accent/50">
+      <span className="text-xs tabular-nums text-muted-foreground">{formatClock(entry.at)}</span>
+      <span className={cn("overflow-hidden text-xs font-semibold whitespace-nowrap", sourceColor(entry.source))}>{entry.source}</span>
+      <span aria-hidden="true" className="flex items-center justify-center self-center">
         <KindMark entry={entry} />
       </span>
       <span className="sr-only">{entry.pending ? "pending" : entry.kind}</span>
-      <span
-        className={cn(
-          "min-w-0 break-words",
-          entry.kind === "error" ? "text-destructive" : entry.pending ? "" : "text-muted-foreground"
-        )}
-      >
+      <span className={cn("min-w-0 break-words", entry.kind === "error" ? "text-destructive" : entry.pending ? "" : "text-muted-foreground")}>
         {entry.pending ? `${entry.text}…` : entry.text}
       </span>
     </li>
   )
 }
 
-export function ActivityLog({ entries }: { entries: ActivityEntry[] }) {
+export function ActivityLog({ entries, collapsed, onToggle }: { entries: ActivityEntry[]; collapsed: boolean; onToggle: () => void }) {
   const shown = entries.slice(-CAP)
   const running = shown.filter((entry) => entry.pending).length
+  const scroller = useRef<HTMLDivElement>(null)
+  const last = shown.at(-1)?.id
+  useEffect(() => {
+    const el = scroller.current
+    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 96) el.scrollTop = el.scrollHeight
+  }, [last])
   return (
     <Frame
       aria-label="Activity"
       title="Activity"
-      note={running ? <><Spinner aria-hidden="true" role="presentation" /> {running} running</> : undefined}
+      collapsed={collapsed}
+      onToggle={onToggle}
+      note={running ? <><Spinner aria-hidden="true" role="presentation" className="size-3" /> {running} running</> : undefined}
     >
-      <div className="min-h-0 flex-1 overflow-y-auto px-[1ch] pb-1" role="log" aria-label="Activity" tabIndex={0}>
+      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-2 pb-3" role="log" aria-label="Activity" tabIndex={0}>
         {shown.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No activity yet.</p>
+          <p className="px-2 text-sm text-muted-foreground">No activity yet.</p>
         ) : (
           <ul>
             {shown.map((entry) => (

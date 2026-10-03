@@ -8,7 +8,6 @@ import { autoAnswer } from "../src/classifier/answers.ts";
 import { quickFixSize } from "../src/classifier/triage.ts";
 import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
 import { summarizeClassifier, type MetricRecord } from "../src/state/metrics.ts";
-import { classifierLines, renderMetrics } from "../src/lobby/tabs/metrics.ts";
 
 function answering(make: (questions: Record<string, Question>) => Record<string, Answer>): FetchLike {
   return async (_url, init) => {
@@ -51,10 +50,4 @@ test("the summary counts calls, their speed and what they spared, and routed run
     byPurpose: { seats: 2, answers: 1, files: 1, triage: 1, effort: 1 },
     seatRunsSkipped: 3, questionsAnswered: 3, quickFixesHeld: 1, routed: 2, routedOk: 1,
   });
-  const lines = classifierLines(summary, 160).map((line) => stripTerminalSequences(line));
-  assert.match(lines[0]!, /Classifier \(Jev\)/);
-  assert.match(lines[1]!, /6 calls · 83% ok · p50 400 ms · p90 900 ms · 600 tokens read · seats 2 · answers 1/);
-  assert.match(lines[2]!, /spared 3 seat runs skipped · 3 questions answered · 1 quick fix held · 2 runs routed down, 50% ok/);
-  const screen = renderMetrics({ groups: [], records: runs, stats: { completed: 0, abandoned: 0, active: 0, avgCompleteMs: 0 }, by: "model", sort: "runs", selected: 0, classifier: summary }, 160, 40).map((line) => stripTerminalSequences(line)).join("\n");
-  assert.match(screen, /Classifier \(Jev\)[\s\S]*spared 3 seat runs skipped/);
 });

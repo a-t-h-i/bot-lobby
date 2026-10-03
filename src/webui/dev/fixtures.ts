@@ -19,8 +19,6 @@ export const SCENARIOS = [
   "reconnecting",
   "question",
   "questions3",
-  "answered-in-terminal",
-  "terminal-dialog",
   "issues",
 ] as const;
 
@@ -43,7 +41,6 @@ export interface ScenarioFixture {
     sessionId: string;
     sessionName: string;
     busy: boolean;
-    terminalDialog: boolean;
     issuesEnabled: boolean;
   };
   zen: { task?: Partial<SnapshotTask> & { id: string; title: string; state: string; plan?: string }; runs: unknown[] };
@@ -143,8 +140,8 @@ export function loadScenario(name: string | undefined): ScenarioFixture {
   if (!hasKeys(parsed, ["status", "zen", "feed", "history", "prompts", "oracleReply"])) {
     throw new Error(`fixtures/${scenario}.json must cover status, zen, feed, history, prompts and oracleReply`);
   }
-  if (!hasKeys(parsed.status, ["workspace", "sessionId", "sessionName", "busy", "terminalDialog", "issuesEnabled"])) {
-    throw new Error(`fixtures/${scenario}.json status must carry workspace, session, busy, terminalDialog and issuesEnabled`);
+  if (!hasKeys(parsed.status, ["workspace", "sessionId", "sessionName", "busy", "issuesEnabled"])) {
+    throw new Error(`fixtures/${scenario}.json status must carry workspace, session, busy and issuesEnabled`);
   }
   if (!hasKeys(parsed.zen, ["runs"]) || !hasKeys(parsed.feed, ["chat", "activity", "thoughts", "reply", "chatOlder"])) {
     throw new Error(`fixtures/${scenario}.json zen/feed are missing their fields`);

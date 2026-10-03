@@ -1,17 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PromptHub, type PromptSurface, type WebPrompt } from "../src/lobby/prompt-hub.ts";
-
-function fakeSurface(name: string) {
-  const shown: WebPrompt[] = [];
-  const withdrawn: string[] = [];
-  const surface: PromptSurface = {
-    name,
-    show: (prompt) => void shown.push(prompt),
-    withdraw: (id) => void withdrawn.push(id),
-  };
-  return { surface, shown, withdrawn };
-}
+import { PromptHub } from "../src/lobby/prompt-hub.ts";
 
 test("a prompt carries its web shape: id, kind, timestamp, asker and payload", () => {
   const hub = new PromptHub();
@@ -25,71 +14,46 @@ test("a prompt carries its web shape: id, kind, timestamp, asker and payload", (
   assert.equal(hub.dismiss(prompt.id), true);
 });
 
-test("two surfaces: the first answer wins and the other surface is withdrawn", () => {
+test("the first answer wins and a late one is refused without changing the outcome", () => {
   const hub = new PromptHub();
-  const first = fakeSurface("terminal");
-  const second = fakeSurface("web");
-  hub.registerSurface(first.surface);
-  hub.registerSurface(second.surface);
   const prompt = hub.open("choose", "orchestrate", { title: "Ship it?", options: ["Yes", "No"] });
-  assert.deepEqual(first.shown.map((entry) => entry.id), [prompt.id]);
-  assert.deepEqual(second.shown.map((entry) => entry.id), [prompt.id]);
   assert.equal(hub.answer(prompt.id, "Yes"), true);
   assert.equal(hub.answer(prompt.id, "No"), false);
-  assert.deepEqual(first.withdrawn, [prompt.id]);
-  assert.deepEqual(second.withdrawn, [prompt.id]);
   assert.deepEqual(hub.pending(), []);
   assert.deepEqual(hub.outcome(prompt.id), { id: prompt.id, value: "Yes", how: "answered" });
-  // A late answer is not recorded: exactly one resolution stands.
-  assert.equal(hub.answer(prompt.id, "No"), false);
-  assert.deepEqual(hub.outcome(prompt.id)?.value, "Yes");
 });
 
-test("a cancelled caller withdraws every surface and records one outcome", async () => {
+test("ask waits for the answer and resolves with it", async () => {
   const hub = new PromptHub();
-  const first = fakeSurface("terminal");
-  const second = fakeSurface("web");
-  hub.registerSurface(first.surface);
-  hub.registerSurface(second.surface);
+  const asked = hub.ask("text", "orchestrate", { question: "Name?" });
+  const [prompt] = hub.pending();
+  assert.ok(prompt);
+  assert.equal(hub.answer(prompt!.id, "typed"), true);
+  assert.deepEqual(await asked, { how: "answered", value: "typed" });
+});
+
+test("a dismissed prompt resolves its ask as dismissed, and a second dismiss reports false", async () => {
+  const hub = new PromptHub();
+  const asked = hub.ask("sessionDialog", "Task-1", { dialog: { id: "q1" } });
+  const id = hub.pending()[0]!.id;
+  assert.equal(hub.dismiss(id), true);
+  assert.equal(hub.dismiss(id), false);
+  assert.deepEqual(await asked, { how: "dismissed", value: undefined });
+  assert.deepEqual(hub.outcome(id)?.how, "dismissed");
+});
+
+test("an aborted caller takes its prompt out of the queue; one already aborted never enters it", async () => {
+  const hub = new PromptHub();
   const controller = new AbortController();
+  const asked = hub.ask("confirm", "oracle", { title: "Sure?" }, { signal: controller.signal });
+  assert.equal(hub.pending().length, 1);
   controller.abort();
-  const seen: string[] = [];
-  const value = await hub.run("text", "orchestrate", { question: "Name?" }, async (prompt) => {
-    seen.push(prompt.id);
-    return "typed";
-  }, { signal: controller.signal });
-  assert.equal(value, "typed");
-  assert.deepEqual(seen, first.shown.map((entry) => entry.id));
-  assert.deepEqual(first.withdrawn, seen);
-  assert.deepEqual(second.withdrawn, seen);
+  assert.deepEqual(await asked, { how: "cancelled", value: undefined });
   assert.deepEqual(hub.pending(), []);
-  assert.equal(hub.outcome(seen[0]!)?.how, "cancelled");
-});
-
-test("run answers through the terminal when nobody else is registered", async () => {
-  const hub = new PromptHub();
-  const terminal = fakeSurface("terminal");
-  hub.registerSurface(terminal.surface);
-  const value = await hub.run("confirm", "oracle", { title: "Sure?" }, async () => true);
-  assert.equal(value, true);
-  assert.equal(terminal.shown.length, 1);
-  assert.deepEqual(terminal.withdrawn, terminal.shown.map((entry) => entry.id));
-  assert.deepEqual(hub.pending(), []);
-});
-
-test("dismiss withdraws and a second dismiss reports false", () => {
-  const hub = new PromptHub();
-  const terminal = fakeSurface("terminal");
-  hub.registerSurface(terminal.surface);
-  const prompt = hub.open("sessionDialog", "Task-1", { dialog: { id: "q1" } });
-  assert.equal(hub.dismiss(prompt.id), true);
-  assert.equal(hub.dismiss(prompt.id), false);
-  assert.deepEqual(terminal.withdrawn, [prompt.id]);
-  assert.deepEqual(hub.outcome(prompt.id)?.how, "dismissed");
+  assert.deepEqual(await hub.ask("confirm", "oracle", {}, { signal: controller.signal }), { how: "cancelled", value: undefined });
+  assert.deepEqual(hub.pending(), [], "nothing was queued");
 });
 
 test("an answer to an unknown prompt reports false", () => {
-  const hub = new PromptHub();
-  hub.registerSurface(fakeSurface("terminal").surface);
-  assert.equal(hub.answer("p0-nope", "x"), false);
+  assert.equal(new PromptHub().answer("p0-nope", "x"), false);
 });

@@ -1,11 +1,12 @@
 /**
- * The Tasks tab (batch-2 §f): the checklist of every task and saved plan on
- * the left, the selected row's detail on the right (a Sheet below 1024 px).
+ * The Tasks tab: the checklist of every task and saved plan on the left, the
+ * selected row's detail on the right (a sheet below 1024 px).
  * `#/tasks/<id>` selects a row; the lists are read again whenever the `tasks`
  * or `plans` topic changes.
  */
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { go, tabHash } from "@/app/router"
+import { setComposerTask } from "@/lib/composerContext"
 import { ErrorState } from "@/app/States"
 import { useApiRead } from "@/app/useApiRead"
 import { Badge } from "@/components/ui/badge"
@@ -22,11 +23,11 @@ const select = (id: string) => go(tabHash("tasks", id))
 
 function NoTasks() {
   return (
-    <Empty className="m-4 flex-1 border border-border bg-card">
+    <Empty className="glass m-4 flex-1 border">
       <EmptyHeader>
         <EmptyDescription>{EMPTY_LIST}</EmptyDescription>
       </EmptyHeader>
-      <Button className="h-10" onClick={() => go(tabHash("plan"))}>
+      <Button onClick={() => go(tabHash("plan"))}>
         Plan a task
       </Button>
     </Empty>
@@ -35,7 +36,7 @@ function NoTasks() {
 
 function ArchivedToggle({ shown, count, onToggle }: { shown: boolean; count: number; onToggle: () => void }) {
   return (
-    <Button variant="outline" className="h-10" aria-pressed={shown} onClick={onToggle}>
+    <Button variant="outline" aria-pressed={shown} onClick={onToggle} className="aria-pressed:border-primary aria-pressed:bg-accent">
       Archived
       <Badge variant="secondary">{count}</Badge>
     </Button>
@@ -50,9 +51,15 @@ export function TasksTab({ id }: { id?: string }) {
   const current = tasks.data?.rows ?? []
   const old = archived.data?.rows ?? []
   const rows = showArchived ? [...current, ...old] : current
+  const chosen = id ?? (wide ? rows[0]?.id : undefined)
+  const commentable = [...rows, ...old].find((row) => row.id === chosen && row.kind === "task")?.id
+  // The floating box can comment on the task that is open.
+  useEffect(() => {
+    setComposerTask(commentable)
+    return () => setComposerTask(undefined)
+  }, [commentable])
   if (!tasks.data && tasks.error) return <ErrorState message={`Could not load tasks. ${tasks.error}`} onRetry={tasks.reload} />
   if (tasks.data && current.length === 0 && old.length === 0) return <NoTasks />
-  const chosen = id ?? (wide ? rows[0]?.id : undefined)
   const selected: TaskRow | undefined = [...rows, ...old].find((row) => row.id === chosen)
   const list = (
     <>

@@ -1,36 +1,32 @@
-/**
- * The Git page's wording and small helpers, copied from `src/lobby/tabs/git.ts`
- * (which draws through the terminal layout, so the page cannot import it).
- * Pure and free of the DOM.
- */
+/** The Git page's wording and small helpers. Pure and free of the DOM. */
 import type { PullChecks, PullDetailInfo, PullInfo, PullReadInfo, PullReviewInfo } from "@protocol"
 import { formatSince } from "@/lib/format"
 
 export const LIST_TITLE = "Pull requests"
 export const DETAIL_TITLE = "Pull request"
-export const ACTIONS_LINE = "v reviews it with an agent · f with a focus you type · t is Jev's quick read"
+export const ACTIONS_LINE = "An agent reviews it, optionally with a focus you type; Jev's quick read sizes it up first."
 export const NOT_POSTED = "nothing is posted to GitHub"
-export const NOT_LOADED = "Press r to load open pull requests with the GitHub CLI (gh)."
+export const NOT_LOADED = "Refresh to load open pull requests with the GitHub CLI (gh)."
 export const EMPTY_LIST = "No open pull requests."
 export const LOADING_LIST = "loading pull requests from GitHub…"
 export const READING = "reading the diff…"
 export const JEV_FAILED = "Jev could not read it"
-export const STALE = "the pull request has new commits since this review — v reviews it again"
+export const STALE = "the pull request has new commits since this review — review it again"
 export const NO_DESCRIPTION = "(no description)"
 export const FOCUS_LABEL = "Review with a focus (optional)"
 export const FOCUS_HINT = "Leave it empty for a full review."
 
-/** `✓` passing, `✗` failing, `●` still running, blank without checks. */
+/** A tick for passing checks, a cross for failing, an ellipsis while they run, blank without checks. */
 export function checkMark(checks: PullChecks | undefined): string {
   if (checks === "passing") return "✓"
   if (checks === "failing") return "✗"
-  return checks === "pending" ? "●" : ""
+  return checks === "pending" ? "…" : ""
 }
 
 /** The tone a checks mark wears (never colour alone: the glyph stays). */
 export function checkTone(checks: PullChecks | undefined): string {
-  if (checks === "passing") return "text-primary"
-  return checks === "failing" ? "text-destructive" : "text-foreground"
+  if (checks === "passing") return "text-success"
+  return checks === "failing" ? "text-destructive" : "text-muted-foreground"
 }
 
 /** The size of a change, `+12 −3`. */
@@ -45,13 +41,13 @@ export function decisionWords(decision: string | undefined): string {
   return decision === "REVIEW_REQUIRED" ? "review required" : ""
 }
 
-/** What the list says about our review: `✓ reviewed`, `✗ reviewed`, `◆ reviewed`, `reviewing`. */
+/** What the list says about our review: `reviewed`, `changes found`, `reviewed with comments`, `reviewing`. */
 export function reviewMark(review: PullInfo["review"]): string {
   if (!review) return ""
   if (review.status === "running") return "reviewing"
   if (review.status !== "done" || !review.verdict) return ""
-  if (review.verdict === "approve") return "✓ reviewed"
-  return review.verdict === "changes" ? "✗ reviewed" : "◆ reviewed"
+  if (review.verdict === "approve") return "approved"
+  return review.verdict === "changes" ? "changes found" : "commented"
 }
 
 /** `approve`, `request changes` or `comment`. */
@@ -87,10 +83,10 @@ export function factsLine(pull: PullDetailInfo, now: number): string {
     .join(" · ")
 }
 
-/** The branch and size line: `⎇ feature-search → main · +48 −12 · 6 files`. */
+/** The branch and size line: `feature-search → main · +48 −12 · 6 files`. */
 export function branchLine(pull: PullInfo): string {
   const files = `${pull.changedFiles} file${pull.changedFiles === 1 ? "" : "s"}`
-  return `⎇ ${pull.headRef || "?"} → ${pull.baseRef || "?"} · ${changeSize(pull.additions, pull.deletions)} · ${files}`
+  return `${pull.headRef || "?"} → ${pull.baseRef || "?"} · ${changeSize(pull.additions, pull.deletions)} · ${files}`
 }
 
 /** The checks, decision and merge line. */

@@ -1,23 +1,23 @@
 /**
- * A task's detail (batch-2 §f): title with its box, state facts, id, track and
- * branch (from the Lobby snapshot when it is the session's own task), the
- * Request, the plan checklist and text (`tasks.get`), comments, amendments,
- * what the task waits on, recent runs and the actions the row allows. A saved
+ * A task's detail: title with its mark, state facts, id, track and branch
+ * (from the Lobby snapshot when it is the session's own task), the request,
+ * the plan checklist and text (`tasks.get`), comments, amendments, what the
+ * task waits on, recent runs and the actions the row allows. Comments and
+ * messages to the task's oracle are written in the floating box below. A saved
  * plan has its own body (`PlanDetail`).
  */
-import { RotateCcw } from "lucide-react"
+import { RefreshCw, RotateCcw } from "lucide-react"
 import type { LobbySnapshot, SnapshotTask, TaskRow } from "@protocol"
 import { useTopic } from "@/app/hooks"
 import { useApiRead } from "@/app/useApiRead"
 import { Button } from "@/components/ui/button"
 import { act } from "@/lib/act"
 import { ConfirmButton } from "@/ui/ConfirmButton"
-import { NoteForm } from "@/ui/NoteForm"
-import { Pips, trackText } from "@/ui/task-facts"
+import { CheckMark, Pips, trackText } from "@/ui/task-facts"
 import { Comments } from "./Comments"
 import { DetailTrailer, PlanSections } from "./DetailSections"
 import { PlanDetail } from "./PlanDetail"
-import { CHECK_MARKS, CHECK_WORDS, agoWords, stateWords } from "./words"
+import { CHECK_WORDS, agoWords, stateWords } from "./words"
 
 interface DetailProps {
   row: TaskRow
@@ -50,7 +50,7 @@ function Progress({ row, task }: { row: TaskRow; task?: SnapshotTask }) {
       </span>
       {task?.currentStep ? (
         <span className="text-foreground">
-          {task.currentStep} <span aria-hidden="true">◂ now</span>
+          {task.currentStep} <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-medium">now</span>
           <span className="sr-only">(current step)</span>
         </span>
       ) : null}
@@ -59,11 +59,11 @@ function Progress({ row, task }: { row: TaskRow; task?: SnapshotTask }) {
 }
 
 function Header({ row, task }: { row: TaskRow; task?: SnapshotTask }) {
-  const branch = task?.git ? `⎇ ${task.git.branch}${task.git.from ? ` · from ${task.git.from}` : ""}` : ""
+  const branch = task?.git ? `branch ${task.git.branch}${task.git.from ? ` · from ${task.git.from}` : ""}` : ""
   return (
-    <header className="flex flex-col gap-1">
-      <h2 className="flex gap-2 text-sm font-bold">
-        <span aria-hidden="true">{CHECK_MARKS[row.check]}</span>
+    <header className="flex flex-col gap-1.5">
+      <h2 className="flex items-start gap-2.5 text-lg font-semibold">
+        <CheckMark check={row.check} className="mt-1.5" />
         <span className="sr-only">{CHECK_WORDS[row.check]}:</span>
         <span className={row.check === "dropped" ? "min-w-0 break-words line-through" : "min-w-0 break-words"}>{row.title}</span>
       </h2>
@@ -93,7 +93,7 @@ function useActions({ row, onGone, onChanged }: DetailProps) {
 function ArchiveButton({ row, archive }: { row: TaskRow; archive: () => Promise<void> }) {
   if (row.check !== "open") {
     return (
-      <Button variant="outline" className="h-10" onClick={() => void archive()}>
+      <Button variant="outline" onClick={() => void archive()}>
         Archive
       </Button>
     )
@@ -116,14 +116,14 @@ function Actions(props: DetailProps) {
   return (
     <div className="flex flex-wrap gap-2">
       {archived ? (
-        <Button variant="outline" className="h-10" onClick={() => void restore()}>
+        <Button variant="outline" onClick={() => void restore()}>
           <RotateCcw aria-hidden="true" />
           Restore
         </Button>
       ) : null}
       {row.check === "open" && !archived ? (
-        <Button variant="outline" className="h-10" aria-pressed={Boolean(row.auto)} onClick={toggleAuto}>
-          <span aria-hidden="true">⟳</span> Auto
+        <Button variant="outline" aria-pressed={Boolean(row.auto)} onClick={toggleAuto} className="aria-pressed:border-primary aria-pressed:bg-accent">
+          <RefreshCw aria-hidden="true" /> Auto
         </Button>
       ) : null}
       {archived ? null : <ArchiveButton row={row} archive={archive} />}
@@ -152,13 +152,6 @@ export function TaskDetail(props: DetailProps) {
       <Header row={row} task={task} />
       {detail.data ? <PlanSections detail={detail.data} finished={!open} /> : null}
       <Comments taskId={row.id} finished={!open} canComment={open} />
-      {open ? (
-        <NoteForm
-          label="Message the oracle"
-          hint="Left for the oracle that owns this task."
-          onSend={async (text) => (await act("tasks.message", { taskId: row.id, text })) !== undefined}
-        />
-      ) : null}
       {detail.data ? <DetailTrailer detail={detail.data} /> : null}
       {detail.error && !detail.data ? <p className="text-sm text-muted-foreground">Could not load the plan detail. {detail.error}</p> : null}
       <Actions {...props} />
