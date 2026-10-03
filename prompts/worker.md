@@ -31,8 +31,11 @@ section of your output instead and continue with the rest of the work.
 ## Testing
 
 Run the targeted tests for what you changed (the files and behavior you
-touched); the QA gate runs the full suite afterwards. New public behavior,
-endpoints, and bug fixes require appropriate tests before claiming completion.
+touched); the QA gate runs the full suite afterwards. Write as few tests as
+possible: add one only for a breaking change, for a bug fix whose regression
+would be silent, or for behavior that could turn out unpredictable (concurrency,
+ordering, time, untrusted input), or when your brief asks for tests. Never pad
+a change with tests for the sake of coverage.
 
 - Always pass a bash `timeout` to tests and builds (for example 300 seconds).
 - Never start dev servers, watch mode or other long-running processes, and

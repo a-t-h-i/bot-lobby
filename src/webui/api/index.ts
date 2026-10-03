@@ -9,7 +9,7 @@ import type { ServerResponse } from "node:http";
 import { Type, type TObject } from "typebox";
 import { Compile } from "typebox/compile";
 import { statusFor, type ApiName, type ErrorCode } from "../protocol.ts";
-import type { LobbyService } from "../../lobby/service.ts";
+import type { LobbyService } from "../../lobby/host.ts";
 import { statusGet } from "./status.ts";
 import { lobbyAbort, lobbyHistory, lobbySend, lobbySnapshot } from "./lobby.ts";
 import { promptsAnswer, promptsDismiss, promptsList } from "./prompts.ts";
@@ -78,6 +78,8 @@ const Empty = Type.Object({}, { additionalProperties: false });
 const TaskId = Type.String({ minLength: 1, maxLength: 200 });
 const GhNumber = Type.Integer({ minimum: 1, maximum: 1_000_000_000 });
 const NoticeText = Type.String({ maxLength: 20_000 });
+/** Ids of files uploaded through `files.upload`; the message names them by path. */
+const Attachments = Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { maxItems: 8 }));
 const CommentText = Type.String({ maxLength: 10_000 });
 const DialogAnswer = Type.Union([
   Type.Object({ value: Type.String() }, { additionalProperties: false }),
@@ -112,8 +114,8 @@ function buildRoutes(): Record<string, Route> {
     run: (body, ctx) => lobbyHistory(body as { before?: number }, ctx),
   };
   routes["lobby.send"] = {
-    schema: Type.Object({ text: Type.String({ maxLength: 20_000 }) }, { additionalProperties: false }),
-    run: (body, ctx) => lobbySend(body as { text: string }, ctx),
+    schema: Type.Object({ text: Type.String({ maxLength: 20_000 }), attachments: Attachments }, { additionalProperties: false }),
+    run: (body, ctx) => lobbySend(body as { text: string; attachments?: string[] }, ctx),
   };
   routes["lobby.abort"] = { schema: Empty, run: (_body, ctx) => lobbyAbort(ctx) };
   routes["tasks.list"] = { schema: Empty, run: (_body, ctx) => tasksList(ctx) };
@@ -127,8 +129,8 @@ function buildRoutes(): Record<string, Route> {
     run: (body, ctx) => tasksComments(body as { taskId: string }, ctx),
   };
   routes["tasks.comment"] = {
-    schema: Type.Object({ taskId: TaskId, text: CommentText }, { additionalProperties: false }),
-    run: (body, ctx) => tasksComment(body as { taskId: string; text: string }, ctx),
+    schema: Type.Object({ taskId: TaskId, text: CommentText, attachments: Attachments }, { additionalProperties: false }),
+    run: (body, ctx) => tasksComment(body as { taskId: string; text: string; attachments?: string[] }, ctx),
   };
   routes["tasks.archive"] = {
     schema: Type.Object({ taskId: TaskId }, { additionalProperties: false }),
@@ -147,8 +149,8 @@ function buildRoutes(): Record<string, Route> {
     run: (body, ctx) => tasksAuto(body as { taskId: string; on: boolean }, ctx),
   };
   routes["tasks.message"] = {
-    schema: Type.Object({ taskId: TaskId, text: NoticeText }, { additionalProperties: false }),
-    run: (body, ctx) => tasksMessage(body as { taskId: string; text: string }, ctx),
+    schema: Type.Object({ taskId: TaskId, text: NoticeText, attachments: Attachments }, { additionalProperties: false }),
+    run: (body, ctx) => tasksMessage(body as { taskId: string; text: string; attachments?: string[] }, ctx),
   };
   routes["plans.get"] = {
     schema: Type.Object({ planId: TaskId }, { additionalProperties: false }),
@@ -168,16 +170,16 @@ function buildRoutes(): Record<string, Route> {
     run: (body, ctx) => sessionsChat(body as { key?: string; sessionId?: string; before?: number }, ctx),
   };
   routes["sessions.start"] = {
-    schema: Type.Object({ request: Type.Optional(NoticeText), planId: Type.Optional(TaskId), auto: Type.Optional(Type.Boolean()) }, { additionalProperties: false }),
-    run: (body, ctx) => sessionsStart(body as { request?: string; planId?: string; auto?: boolean }, ctx),
+    schema: Type.Object({ request: Type.Optional(NoticeText), planId: Type.Optional(TaskId), auto: Type.Optional(Type.Boolean()), attachments: Attachments }, { additionalProperties: false }),
+    run: (body, ctx) => sessionsStart(body as { request?: string; planId?: string; auto?: boolean; attachments?: string[] }, ctx),
   };
   routes["sessions.stop"] = {
     schema: Type.Object({ key: TaskId }, { additionalProperties: false }),
     run: (body, ctx) => sessionsStop(body as { key: string }, ctx),
   };
   routes["sessions.message"] = {
-    schema: Type.Object({ key: Type.Optional(TaskId), sessionId: Type.Optional(TaskId), text: NoticeText }, { additionalProperties: false }),
-    run: (body, ctx) => sessionsMessage(body as { key?: string; sessionId?: string; text: string }, ctx),
+    schema: Type.Object({ key: Type.Optional(TaskId), sessionId: Type.Optional(TaskId), text: NoticeText, attachments: Attachments }, { additionalProperties: false }),
+    run: (body, ctx) => sessionsMessage(body as { key?: string; sessionId?: string; text: string; attachments?: string[] }, ctx),
   };
   routes["sessions.switch"] = {
     schema: Type.Object({ key: Type.Optional(TaskId), sessionId: Type.Optional(TaskId), claimTaskId: Type.Optional(TaskId) }, { additionalProperties: false }),
@@ -202,8 +204,8 @@ function buildRoutes(): Record<string, Route> {
     run: (body, ctx) => plannerNew(body as { seed?: { issue: { number: number; title: string; url?: string }; body: string }; seats?: ("backend" | "designer" | "qa" | "researcher")[] }, ctx),
   };
   routes["planner.send"] = {
-    schema: Type.Object({ text: NoticeText }, { additionalProperties: false }),
-    run: (body, ctx) => plannerSend(body as { text: string }, ctx),
+    schema: Type.Object({ text: NoticeText, attachments: Attachments }, { additionalProperties: false }),
+    run: (body, ctx) => plannerSend(body as { text: string; attachments?: string[] }, ctx),
   };
   routes["planner.toggleSeat"] = {
     schema: Type.Object({ member: Member }, { additionalProperties: false }),
@@ -218,8 +220,8 @@ function buildRoutes(): Record<string, Route> {
   routes["planner.save"] = { schema: Empty, run: (_body, ctx) => plannerSave(ctx) };
   routes["quickfix.list"] = { schema: Empty, run: (_body, ctx) => quickfixList(ctx) };
   routes["quickfix.submit"] = {
-    schema: Type.Object({ text: NoticeText }, { additionalProperties: false }),
-    run: (body, ctx) => quickfixSubmit(body as { text: string }, ctx),
+    schema: Type.Object({ text: NoticeText, attachments: Attachments }, { additionalProperties: false }),
+    run: (body, ctx) => quickfixSubmit(body as { text: string; attachments?: string[] }, ctx),
   };
   routes["quickfix.cancel"] = {
     schema: Type.Object({ id: TaskId }, { additionalProperties: false }),

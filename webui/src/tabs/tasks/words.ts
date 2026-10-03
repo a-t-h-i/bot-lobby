@@ -1,23 +1,16 @@
-/**
- * The Tasks tab's wording and grouping, copied letter for letter from
- * `src/lobby/tabs/tasks.ts` (that module draws through the terminal layout, so
- * the page cannot import it). Pure and free of the DOM.
- */
+/** The Tasks tab's wording and grouping. Pure and free of the DOM. */
 import type { TaskRow } from "@protocol"
 
 export type TaskSection = TaskRow["section"]
 export type CheckState = TaskRow["check"]
 
 export const SECTION_TITLES: Record<TaskSection, string> = {
-  mine: "THIS SESSION",
-  others: "OTHER SESSIONS",
-  pending: "PENDING",
-  recent: "FINISHED",
-  archived: "ARCHIVED",
+  mine: "This session",
+  others: "Other sessions",
+  pending: "Pending",
+  recent: "Finished",
+  archived: "Archived",
 }
-
-/** The box each row wears: empty while there is work to do, ticked when completed, crossed when abandoned. */
-export const CHECK_MARKS: Record<CheckState, string> = { open: "☐", done: "☑", dropped: "☒" }
 
 /** What a screen reader hears where the box is drawn. */
 export const CHECK_WORDS: Record<CheckState, string> = { open: "open", done: "done", dropped: "abandoned" }
@@ -40,7 +33,7 @@ export function detailsLine(row: TaskRow): string {
     return ["planned", row.age ? (row.age === "now" ? "saved just now" : `saved ${row.age} ago`) : "", row.issue ? `#${row.issue}` : ""].filter(Boolean).join(" · ")
   }
   const owner = row.owner ?? (row.section === "mine" ? "this session" : "")
-  return [stateWords(row.status, row.paused), row.auto ? "⟳ auto" : "", owner].filter(Boolean).join(" · ")
+  return [stateWords(row.status, row.paused), row.auto ? "auto" : "", owner].filter(Boolean).join(" · ")
 }
 
 /** Rows grouped under their section, in the order the API sent them. */

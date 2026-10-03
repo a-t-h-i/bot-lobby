@@ -1,56 +1,59 @@
 /**
- * A pane as the terminal draws it (D-21): a rounded frame with its title set
- * into the top border and an optional note at the other end of it. The pane
- * you are in (clicked, or reached with Tab) is drawn in the focus colour, as
- * the terminal draws its focused pane. Content sits below the title row, so
- * nothing scrolls under it.
+ * A titled card: a pane of glass with its title in a row at the top and an
+ * optional note at the other end. Content sits below the title row, so
+ * nothing scrolls under it. The card's edge lights up while you are inside it.
  */
 import type { ReactNode } from "react"
+import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-export function Frame({
-  title,
-  note,
-  className,
-  children,
-  ...props
-}: { title?: ReactNode; note?: ReactNode } & Omit<React.ComponentProps<"section">, "title">) {
+interface FrameProps extends Omit<React.ComponentProps<"section">, "title"> {
+  title?: ReactNode
+  note?: ReactNode
+  /** With `onToggle`, the card can be folded down to its title row. */
+  collapsed?: boolean
+  onToggle?: () => void
+}
+
+export function Frame({ title, note, className, children, collapsed, onToggle, ...props }: FrameProps) {
+  const name = typeof title === "string" ? title : "pane"
   return (
     <section
-      className={cn(
-        "group/frame relative mt-2.5 flex min-h-0 min-w-0 flex-col rounded-md border border-border pt-2.5 focus-within:border-ring",
-        className
-      )}
+      className={cn("glass group/frame relative flex min-h-0 min-w-0 flex-col rounded-2xl transition-[border-color] duration-200 focus-within:border-ring/50", collapsed && "flex-none", className)}
       {...props}
     >
-      {title ? (
-        <h2 className="absolute -top-2.5 left-[1ch] max-w-[60%] truncate bg-background px-[1ch] text-sm leading-5 font-bold group-focus-within/frame:text-primary">
-          {title}
-        </h2>
+      {title || note || onToggle ? (
+        <div className={cn("flex shrink-0 items-center justify-between gap-3 px-4", onToggle ? "py-1" : "pt-3 pb-1")}>
+          {title ? <h2 className="min-w-0 truncate text-sm font-semibold">{title}</h2> : <span />}
+          <span className="flex shrink-0 items-center gap-1">
+            {note ? <span className="flex items-center gap-2 truncate text-xs text-muted-foreground">{note}</span> : null}
+            {onToggle ? (
+              <button
+                type="button"
+                aria-expanded={!collapsed}
+                aria-label={collapsed ? `Expand ${name}` : `Minimize ${name}`}
+                title={collapsed ? "Expand" : "Minimize"}
+                onClick={onToggle}
+                className="-mr-2 inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+              >
+                <ChevronDown aria-hidden="true" className={cn("size-4 transition-transform duration-200 ease-snap", collapsed && "-rotate-90")} />
+              </button>
+            ) : null}
+          </span>
+        </div>
       ) : null}
-      {note ? (
-        <span className="absolute -top-2.5 right-[1ch] flex max-w-[40%] items-center gap-[1ch] truncate bg-background px-[1ch] text-xs leading-5 text-muted-foreground">
-          {note}
-        </span>
-      ) : null}
-      {children}
+      {collapsed ? null : children}
     </section>
   )
 }
 
-/** A rule with a title set into it, as the terminal heads a section: `── Progress ──────── 2/5 steps ──`. */
+/** A heading with a hairline after it and, at the far end, an optional note: `Progress ────── 2/5 steps`. */
 export function Rule({ title, right, className }: { title: ReactNode; right?: ReactNode; className?: string }) {
   return (
-    <span className={cn("flex min-w-0 items-center gap-[1ch]", className)}>
-      <span aria-hidden="true" className="w-[2ch] shrink-0 border-t border-border" />
-      <span className="truncate font-bold text-primary">{title}</span>
-      <span aria-hidden="true" className="min-w-[2ch] flex-1 border-t border-border" />
-      {right ? (
-        <>
-          <span className="shrink-0 text-xs font-normal text-muted-foreground">{right}</span>
-          <span aria-hidden="true" className="w-[2ch] shrink-0 border-t border-border" />
-        </>
-      ) : null}
+    <span className={cn("flex min-w-0 items-center gap-3", className)}>
+      <span className="truncate font-semibold">{title}</span>
+      <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-border" />
+      {right ? <span className="shrink-0 text-xs font-normal text-muted-foreground">{right}</span> : null}
     </span>
   )
 }

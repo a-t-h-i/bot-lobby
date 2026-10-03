@@ -1,5 +1,5 @@
 /**
- * The Metrics tab's charts (batch-2 §j, W-152): horizontal bars for average
+ * The Metrics tab's charts: horizontal bars for average
  * run time, meters for success, and the stacked agent share with the
  * request-to-done bars. Plain divs and SVG-free flex bars; colour is only
  * ever a fill, each bar carries an accessible label, and chart hues come

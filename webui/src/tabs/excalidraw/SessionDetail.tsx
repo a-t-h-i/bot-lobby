@@ -1,5 +1,5 @@
 /**
- * One Excalidraw session's detail (batch-2 §m): the room link (masked until
+ * One Excalidraw session's detail: the room link (masked until
  * `Reveal`, then the full link with `Copy` and `Open board` in a new tab), the
  * draw state, the last check, the agent checklist, the add/create/rename boxes
  * and `Remove`. A revealed link lives in component state only — it is never
@@ -7,7 +7,7 @@
  */
 import { useState } from "react"
 import { Copy } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/toast"
 import type { ExcalidrawAgentName, ExcalidrawCheck, ExcalidrawSessionInfo } from "@protocol"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
@@ -61,7 +61,7 @@ function NameForm({ id, label, hint, buttonLabel, initial = "", required, onSubm
         value={name}
         maxLength={80}
         onChange={(event) => setName(event.target.value)}
-        className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="h-10 w-full rounded-xl border border-input bg-card/40 px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
       />
       {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       <Button type="submit" className="h-10 self-end" disabled={required && !name.trim()}>
@@ -108,18 +108,18 @@ function LinkBox({ session }: { session: ExcalidrawSessionInfo }) {
       <div className="flex flex-wrap gap-2">
         {revealed ? (
           <>
-            <Button variant="outline" className="h-10" onClick={copy}>
+            <Button variant="outline" onClick={copy}>
               <Copy aria-hidden="true" />
               Copy
             </Button>
-            <Button variant="outline" className="h-10" asChild>
+            <Button variant="outline" asChild>
               <a href={revealed} target="_blank" rel="noopener noreferrer">
                 Open board
               </a>
             </Button>
           </>
         ) : (
-          <Button variant="outline" className="h-10" onClick={() => void reveal()}>
+          <Button variant="outline" onClick={() => void reveal()}>
             Reveal
           </Button>
         )}
@@ -135,7 +135,7 @@ function ContributeLine({ session, onChanged }: { session: ExcalidrawSessionInfo
   return (
     <div className="flex flex-wrap items-center gap-2">
       <p className={session.contribute ? "text-sm text-primary" : "text-sm text-muted-foreground"}>{session.contribute ? DRAW_LINE : LOOK_LINE}</p>
-      <Button variant="outline" className="h-10" onClick={() => void toggle()}>
+      <Button variant="outline" onClick={() => void toggle()}>
         {session.contribute ? "Look only" : "Let agents draw"}
       </Button>
     </div>
@@ -145,7 +145,7 @@ function ContributeLine({ session, onChanged }: { session: ExcalidrawSessionInfo
 function CheckBox({ check, checking, onCheck }: { check?: ExcalidrawCheck; checking: boolean; onCheck: () => void }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Button variant="outline" className="h-10" disabled={checking} onClick={onCheck}>
+      <Button variant="outline" disabled={checking} onClick={onCheck}>
         {checking ? <Spinner className="size-3.5" /> : null}
         Check
       </Button>
@@ -170,7 +170,7 @@ function AgentRow({ agent, on, onToggle }: { agent: ExcalidrawAgentName; on: boo
         role="checkbox"
         aria-checked={on}
         onClick={() => onToggle(agent)}
-        className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="flex min-h-11 w-full items-center gap-2 rounded-xl px-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/30"
       >
         <span aria-hidden="true" className={on ? "text-primary" : "text-muted-foreground"}>{on ? "[x]" : "[ ]"}</span>
         <span className={on ? "text-foreground" : "text-muted-foreground"}>{AGENT_LABELS[agent]}</span>

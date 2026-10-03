@@ -8,7 +8,7 @@ import { runAgent, type AgentRequest } from "../src/execution/agent-runner.ts";
 import { isUnavailable, looksUnavailable, markUnavailable, resetUnavailable, withFallback } from "../src/execution/fallback.ts";
 import type { ProcessOutcome, ProcessRunner } from "../src/execution/pi-runner.ts";
 import { agentProfile, DEFAULT_CONFIG, fallbackOf, resolveConfig } from "../src/schemas/configuration.ts";
-import { patchEntry } from "../src/pi/settings-ui.ts";
+import { patchEntry } from "../src/pi/model-settings.ts";
 import { registerMasterFallback, usageFailure } from "../src/pi/master-fallback.ts";
 
 beforeEach(() => resetUnavailable());

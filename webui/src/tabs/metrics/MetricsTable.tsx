@@ -1,5 +1,5 @@
 /**
- * The Metrics tab's full table (batch-2 §j): Model, Think, Agent(s) and the
+ * The Metrics tab's full table: Model, Think, Agent(s) and the
  * terminal's metric columns, in the same priority order. It is a real
  * `<table>` that scrolls horizontally inside its own box, so a narrow pane
  * never scrolls the page sideways.
@@ -41,9 +41,9 @@ export function MetricsTable({ groups, groupBy }: { groups: MetricGroupInfo[]; g
       <h2 className="text-sm">
         <Rule title="All models" right={`${groupBy === "model" ? "by model · thinking" : "by model · thinking · agent"} · sorted by runs`} />
       </h2>
-      <div className="max-h-96 overflow-auto rounded-md border">
+      <div className="max-h-96 overflow-auto rounded-xl border">
         <table className="w-full border-collapse text-sm">
-          <thead className="sticky top-0 bg-card text-xs text-muted-foreground">
+          <thead className="sticky top-0 bg-popover text-xs text-muted-foreground">
             <tr>
               <th scope="col" className="px-3 py-2 text-left font-medium">Model</th>
               <th scope="col" className="px-3 py-2 text-left font-medium">Think</th>

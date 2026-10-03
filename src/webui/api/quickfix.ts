@@ -5,6 +5,7 @@
  * terminal shows.
  */
 import type { ApiContext } from "./index.ts";
+import { withAttachments } from "../uploads.ts";
 import { fail } from "./index.ts";
 import type { QuickFixJob } from "../../lobby/quickfix.ts";
 
@@ -14,9 +15,9 @@ export function quickfixList(ctx: ApiContext): { jobs: QuickFixJob[] } {
 }
 
 /** Queue a quick fix; it starts at once when nothing else is running. */
-export function quickfixSubmit(body: { text: string }, ctx: ApiContext): { notice: string; id: string } {
-  if (!body.text.trim()) fail(400, "bad_request", "describe a quick change first");
-  const job = ctx.service.quickfix.submit(body.text);
+export function quickfixSubmit(body: { text: string; attachments?: string[] }, ctx: ApiContext): { notice: string; id: string } {
+  if (!body.text.trim() && !body.attachments?.length) fail(400, "bad_request", "describe a quick change first");
+  const job = ctx.service.quickfix.submit(withAttachments(body.text, body.attachments));
   return { notice: ctx.service.quickfix.running?.id === job.id ? `${job.id} started` : `${job.id} queued behind the running quick fix`, id: job.id };
 }
 
