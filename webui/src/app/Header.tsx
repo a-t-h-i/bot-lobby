@@ -1,14 +1,14 @@
 /**
  * The top of the page: where you are (workspace and branch), the numbered
  * tabs in the middle, and what this session is doing on the right with
- * the way to Sessions, Settings and the light/dark switch. On narrow windows
+ * the way to Sessions, Settings, the key help and the light/dark switch. On narrow windows
  * the tabs take a row of their own.
  */
 import type { ReactNode } from "react"
-import { GitBranch, Layers, Moon, Settings, Sun } from "lucide-react"
+import { GitBranch, Keyboard, Layers, Moon, Settings, Sun } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { Kbd } from "@/components/ui/kbd"
+import { Keys } from "@/components/ui/kbd"
 import { useTheme } from "@/components/theme-provider"
 import type { ConnectionState } from "@/lib/events"
 import { cn } from "@/lib/utils"
@@ -28,6 +28,10 @@ function Connection({ state }: { state: ConnectionState }) {
   return <span className="text-xs font-medium text-destructive">Connection lost</span>
 }
 
+/** The flat icon buttons on the right. */
+const ICON =
+  "inline-flex size-10 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+
 function IconLink({ label, hint, href, active, children }: { label: string; hint: string; href: string; active: boolean; children: ReactNode }) {
   return (
     <Tooltip>
@@ -36,16 +40,29 @@ function IconLink({ label, hint, href, active, children }: { label: string; hint
           href={href}
           aria-label={label}
           aria-current={active ? "page" : undefined}
-          className={cn(
-            "inline-flex size-10 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95",
-            active && "bg-accent text-foreground"
-          )}
+          aria-keyshortcuts={hint}
+          className={cn(ICON, active && "bg-accent text-foreground")}
         >
           {children}
         </a>
       </TooltipTrigger>
       <TooltipContent>
-        {label} · <Kbd>{hint}</Kbd>
+        {label} <Keys chord={hint} />
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+function HelpButton({ hint, onHelp }: { hint: string; onHelp: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button type="button" aria-label="Keyboard shortcuts" aria-haspopup="dialog" aria-keyshortcuts={hint} onClick={onHelp} className={ICON}>
+          <Keyboard aria-hidden="true" className="size-[1.1rem]" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>
+        Keyboard shortcuts <Keys chord={hint} />
       </TooltipContent>
     </Tooltip>
   )
@@ -61,7 +78,7 @@ function ThemeToggle() {
           type="button"
           aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
           onClick={() => setTheme(dark ? "light" : "dark")}
-          className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+          className={ICON}
         >
           {dark ? <Sun aria-hidden="true" className="size-[1.1rem]" /> : <Moon aria-hidden="true" className="size-[1.1rem]" />}
         </button>
@@ -79,6 +96,7 @@ export function Header({
   tabs,
   extra,
   keys,
+  onHelp,
 }: {
   status?: StatusInfo
   task?: SnapshotTask
@@ -88,6 +106,7 @@ export function Header({
   /** Shown before the status (the way back to a question put away). */
   extra?: ReactNode
   keys: Record<string, string>
+  onHelp: () => void
 }) {
   const name = status?.workspace.name ?? "bot-lobby"
   const branch = status?.branch ?? status?.workspace.branch
@@ -111,7 +130,7 @@ export function Header({
         <div className="mr-2 flex min-w-0 items-center gap-2 text-sm">
           {busy ? <Spinner aria-hidden="true" role="presentation" className="size-3.5" /> : null}
           {task ? (
-            <span className="max-w-[16rem] truncate">
+            <span className="hidden max-w-[16rem] truncate sm:inline">
               <span className="font-medium">{task.id}</span> <span className="text-muted-foreground">{task.state.replace(/_/g, " ")}</span>
             </span>
           ) : (
@@ -125,6 +144,7 @@ export function Header({
         <IconLink label="Settings" hint={keys.settings ?? "Alt+S"} href="#/settings" active={route.kind === "settings"}>
           <Settings aria-hidden="true" className="size-[1.1rem]" />
         </IconLink>
+        <HelpButton hint={keys.help ?? "Alt+H"} onHelp={onHelp} />
         <ThemeToggle />
       </div>
     </header>

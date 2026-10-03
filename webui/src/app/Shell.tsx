@@ -97,6 +97,7 @@ export function Shell() {
         connection={connection}
         route={route}
         keys={keyLabels}
+        onHelp={toggleHelp}
         tabs={<TabStrip tabs={tabs} activeId={activeId} onSelect={select} />}
         extra={putAway && prompts.length > 0 ? <QuestionsPill count={prompts.length} onOpen={() => setPutAway(false)} /> : null}
       />
@@ -117,7 +118,7 @@ export function Shell() {
           {routeBody(route)}
         </motion.div>
       </main>
-      <Composer route={route} />
+      <Composer route={route} keys={keyLabels} onHelp={toggleHelp} />
       <QuestionPopup prompts={prompts} answer={answer} dismiss={dismiss} minimized={putAway} onMinimize={setPutAway} />
       <AltH open={help} onOpenChange={setHelp} keys={keys} tabs={tabs} />
     </div>

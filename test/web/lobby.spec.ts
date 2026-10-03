@@ -74,9 +74,11 @@ for (const scenario of SCENARIOS) {
   test(`shell renders (${scenario})`, async ({ page, server }) => {
     const trap = await openScenario(page, server, scenario);
     if (scenario === "question") {
-      // The question pop-up is modal; put it away to look at the shell behind it.
+      // The question pop-up is modal; put it away to look at the shell behind it (once it has opened).
+      const popup = page.getByRole("dialog", { name: "Question from the lobby" });
+      await popup.waitFor();
       await page.keyboard.press("Escape");
-      await page.waitForTimeout(400);
+      await popup.waitFor({ state: "hidden" });
     }
     for (const size of SIZES) {
       await page.setViewportSize(size);

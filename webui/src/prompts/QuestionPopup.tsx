@@ -102,7 +102,7 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
               {who}
               {count > 1 ? ` · 1 of ${count}` : ""}
             </p>
-            <Button type="button" variant="ghost" size="icon" aria-label="Later: put the question away" title="Later" onClick={() => onMinimize(true)}>
+            <Button type="button" variant="ghost" size="icon" aria-label="Later: put the question away" title="Later · Esc" onClick={() => onMinimize(true)}>
               <X aria-hidden="true" />
             </Button>
           </header>
