@@ -1,14 +1,14 @@
 /**
- * The controls for one lobby question, on the slideout's surface. The
- * questionnaire mirrors `src/ask/view.ts`: per-question chips, numbered
- * options with Markdown descriptions and `(Recommended)` markers, the own
- * answer row and the focused option's preview (beside the options at ≥1024 px,
- * below them at 768 px). `choose`, `confirm`, `text` and `sessionDialog` reuse
+ * The controls for one lobby question, inside the question pop-up: per-question
+ * chips, numbered options with Markdown descriptions and `(Recommended)`
+ * markers, the own answer field and the focused option's preview (beside the
+ * options on wide windows, below them on narrow ones). `choose`, `confirm`, `text` and `sessionDialog` reuse
  * the same surface with their own controls and answer shapes.
  */
 import { useState, type FormEvent, type KeyboardEvent } from "react"
 import { Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Kbd, KeyHint } from "@/components/ui/kbd"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { Markdown } from "@/ui/Markdown"
@@ -72,9 +72,9 @@ function OptionRow({
   return (
     <label
       className={cn(
-        "flex min-h-11 cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2.5 text-start text-sm transition-colors",
-        selected ? "border-primary/40 bg-muted" : "border-input hover:bg-muted/50",
-        "has-[:focus-visible]:border-ring has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50"
+        "flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 text-start text-sm transition-[background-color,border-color,transform] duration-150 ease-snap active:scale-[0.99]",
+        selected ? "border-primary/50 bg-accent" : "border-input bg-card/40 hover:bg-accent/60",
+        "has-[:focus-visible]:border-ring has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/30"
       )}
     >
       <input type={multi ? "checkbox" : "radio"} name={name} className="sr-only" checked={selected} onChange={onToggle} />
@@ -93,10 +93,10 @@ function OptionRow({
 function Preview({ option }: { option?: AskOption }) {
   if (!option || (!option.preview && !option.image)) return null
   return (
-    <div className="flex flex-col gap-2 rounded-md border bg-muted/30 p-3">
+    <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3">
       <p className="text-xs font-medium text-muted-foreground">Preview · {splitRecommended(option.label).text}</p>
       {option.image ? (
-        <img src={option.image} alt="" loading="lazy" className="max-h-64 w-full rounded-md border object-contain" />
+        <img src={option.image} alt="" loading="lazy" className="max-h-64 w-full rounded-lg border object-contain" />
       ) : null}
       {option.preview ? (
         <Markdown text={option.preview} className="text-xs" />
@@ -122,10 +122,10 @@ function CardFooter({
 }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <Button type="button" variant="ghost" size="lg" className="h-11" onClick={onCancel}>
+      <Button type="button" variant="ghost" onClick={onCancel}>
         Cancel
       </Button>
-      <Button type={primary} size="lg" className="h-11" disabled={disabled || submitting}>
+      <Button type={primary} disabled={disabled || submitting}>
         {submitting ? "Sending…" : primaryLabel}
       </Button>
     </div>
@@ -156,7 +156,7 @@ function Chips({ questions, picks, own, index, onGo }: { questions: AskQuestion[
             onClick={() => onGo(position)}
             aria-current={position === index}
             className={cn(
-              "inline-flex min-h-9 items-center gap-1 rounded-md border px-3 text-xs font-medium",
+              "inline-flex min-h-10 items-center gap-1 rounded-lg border px-3.5 text-xs font-medium transition-colors",
               position === index ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"
             )}
           >
@@ -224,9 +224,9 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel }: { ques
           {question.options.map((option, position) => (
             <OptionRow key={position} option={option} index={position} multi={multi} name={`question-${index}`} selected={picked.includes(position)} onToggle={() => toggle(position)} />
           ))}
-          <label className="flex min-h-11 flex-col gap-1 rounded-md border border-input px-3 py-2 text-sm focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
+          <label className="flex min-h-11 flex-col gap-1 rounded-lg border border-input px-3 py-2 text-sm focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30">
             <span className="text-muted-foreground">
-              <span aria-hidden="true">✎ </span>
+              
               {OWN_ANSWER}
             </span>
             <Textarea
@@ -244,9 +244,13 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel }: { ques
         </div>
         <Preview option={previewOption} />
       </div>
-      <p className="text-xs text-muted-foreground">
-        {multi ? "space pick · enter next" : "↑↓ move · enter choose"} · 1-{question.options.length} pick
-        {questions.length > 1 ? " · ←→ questions" : ""} · esc leave
+      <p className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+        <span>{multi ? "Pick several, then continue" : "Pick one"}</span>
+        <span className="inline-flex items-center gap-1.5">
+          <Kbd>{question.options.length > 1 ? `1–${question.options.length}` : "1"}</Kbd>
+          choose
+        </span>
+        <KeyHint chord="Esc">put it away</KeyHint>
       </p>
       <CardFooter
         primary="submit"
@@ -288,10 +292,10 @@ function ConfirmCard({ view, submitting, onAnswer }: CardProps & { view: Extract
         {view.detail ? <Markdown text={view.detail} className="mt-1 text-muted-foreground" /> : null}
       </div>
       <div className="flex items-center justify-end gap-2">
-        <Button type="button" variant="outline" size="lg" className="h-11" disabled={submitting} onClick={() => onAnswer(false)}>
+        <Button type="button" variant="outline" disabled={submitting} onClick={() => onAnswer(false)}>
           No
         </Button>
-        <Button type="button" size="lg" className="h-11" disabled={submitting} onClick={() => onAnswer(true)}>
+        <Button type="button" disabled={submitting} onClick={() => onAnswer(true)}>
           {submitting ? "Sending…" : "Yes"}
         </Button>
       </div>
@@ -360,20 +364,20 @@ function SessionDialogCard({ dialog, submitting, onAnswer }: CardProps & { dialo
         />
       ) : null}
       <div className="flex items-center justify-end gap-2">
-        <Button type="button" variant="outline" size="lg" className="h-11" disabled={submitting} onClick={() => onAnswer({ cancelled: true })}>
+        <Button type="button" variant="outline" disabled={submitting} onClick={() => onAnswer({ cancelled: true })}>
           Cancel
         </Button>
         {dialog.method === "confirm" ? (
           <>
-            <Button type="button" variant="outline" size="lg" className="h-11" disabled={submitting} onClick={() => onAnswer({ confirmed: false })}>
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => onAnswer({ confirmed: false })}>
               No
             </Button>
-            <Button type="button" size="lg" className="h-11" disabled={submitting} onClick={() => onAnswer({ confirmed: true })}>
+            <Button type="button" disabled={submitting} onClick={() => onAnswer({ confirmed: true })}>
               {submitting ? "Sending…" : "Yes"}
             </Button>
           </>
         ) : (
-          <Button type="submit" size="lg" className="h-11" disabled={!ready || submitting}>
+          <Button type="submit" disabled={!ready || submitting}>
             {submitting ? "Sending…" : "Answer"}
           </Button>
         )}

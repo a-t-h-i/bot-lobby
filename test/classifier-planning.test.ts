@@ -194,17 +194,3 @@ test("with the classifier off or failing, every seat sits and every question is 
   }
 });
 
-test("the Plan tab shows seats that sat out with their probability, and answers the classifier decided", async () => {
-  const { conversationLines, rosterLines } = await import("../src/lobby/tabs/plan.ts");
-  const base = { messages: [], questions: [], notes: [], busy: false, turns: 1, awaitingAnswers: false, answeredChunks: 0, lineComments: [] };
-  const seats = [
-    { label: "ORACLE", seated: true, status: "done" as const, questions: 0, ready: false },
-    { label: "DESIGN", seated: true, status: "idle" as const, questions: 0, ready: false, satOut: 0.07 },
-    { label: "DEV", seated: true, status: "done" as const, questions: 1, ready: false, pinned: true },
-  ];
-  const roster = rosterLines({ ...base, seats }, 200, 0).join(" ");
-  assert.match(roster, /DESIGN sat out · 0\.07/);
-  assert.match(roster, /DEV 1 question/);
-  const lines = conversationLines({ ...base, seats, messages: [{ role: "planner", text: "The classifier settled this round's questions.", at: 0, decided: [{ index: 0, from: "QA", question: "Which browsers?", answer: "Evergreen", probability: 0.94 }] }] }, 200).join("\n");
-  assert.match(lines, /✓ \[QA\] Which browsers\? → Evergreen · decided by the classifier \(0\.94\); comment on the plan to overrule/);
-});

@@ -6,6 +6,8 @@
  */
 import type { LobbyTopic, StreamEvent } from "@protocol"
 
+export type NoticeLevel = "info" | "success" | "warning" | "error"
+
 export type ConnectionState = "live" | "connecting" | "offline"
 
 export interface FeedDelta {
@@ -19,6 +21,7 @@ export interface EventHandlers {
   onChanged?: (topic: LobbyTopic, version: number) => void
   onFeed?: (delta: FeedDelta) => void
   onReply?: (text: string) => void
+  onNotice?: (text: string, level: NoticeLevel) => void
   onConnection?: (state: ConnectionState) => void
 }
 
@@ -62,6 +65,9 @@ function dispatch(event: StreamEvent, handlers: EventHandlers): void {
       return
     case "reply":
       handlers.onReply?.(event.text)
+      return
+    case "notice":
+      handlers.onNotice?.(event.text, event.level)
   }
 }
 

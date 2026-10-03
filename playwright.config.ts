@@ -1,8 +1,8 @@
 import { defineConfig } from "@playwright/test";
 
 /**
- * Phase 3 browser checks (P3-04/P3-05/P0-01): the shell, the Lobby tab and
- * the questionnaire slideout against the fixture-backed mock server. No
+ * Browser checks: the shell, every tab and the question pop-up against the
+ * fixture-backed mock server. No
  * `webServer` entry — the fixture in `test/web/fixture.ts` starts the real
  * `startWebServer` with `createFixtureService` in-process, one per worker.
  * Chromium only, at the cached `chromium-1234` revision (`@playwright/test`
@@ -13,7 +13,13 @@ export default defineConfig({
   fullyParallel: true,
   timeout: 90_000,
   expect: { timeout: 10_000 },
-  use: { trace: "off", screenshot: "off", video: "off" },
+  use: {
+    trace: "off",
+    screenshot: "off",
+    video: "off",
+    // CHROMIUM_PATH points at a browser installed elsewhere (a container with its own Chromium).
+    ...(process.env.CHROMIUM_PATH ? { launchOptions: { executablePath: process.env.CHROMIUM_PATH, args: ["--no-sandbox"] } } : {}),
+  },
   projects: [
     { name: "light", use: { browserName: "chromium", colorScheme: "light" } },
     { name: "dark", use: { browserName: "chromium", colorScheme: "dark" } },

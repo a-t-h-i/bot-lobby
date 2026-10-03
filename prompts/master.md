@@ -27,8 +27,9 @@ process it gets. Fewer steps win whenever the result is the same.
   no plan document: delegate straight away with `orchestrate action=implement`,
   opening each task with `Step N:` (the engine keeps the plan and the
   checklist). Only the roster takes part: DESIGN for frontend work, DEV for
-  backend work, QA when the change needs tests (its worker writing and
-  running them as the last step, or the QA gate), and the researcher when a
+  backend work, QA when the change needs tests or an adversarial review
+  (its worker writing the few tests that are needed and running them as the
+  last step, or the QA gate), and the researcher when a
   decision needs outside facts (summon it first). Several domains: one
   `implement` with `assignments`, each task stating the contract between
   them. When the work is in, check `git diff --stat` and the report, then

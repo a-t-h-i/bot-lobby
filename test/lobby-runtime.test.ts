@@ -11,7 +11,8 @@ import { transition } from "../src/state/task-state.ts";
 import { addPlanComment, readPlanComments } from "../src/state/comments.ts";
 import { readMetrics } from "../src/state/metrics.ts";
 import { applyStatus, clearStatus, setMinimized } from "../src/pi/ui.ts";
-import { ANCHOR_KEY, backgroundSessions, deliverComments, hideLobby, isLobbyVisible, lobbyView, registerLobbyEvents, setSessionLauncher, showLobby } from "../src/lobby/runtime.ts";
+import { backgroundSessions, currentLobbyService, deliverComments, registerLobbyEvents, setSessionLauncher } from "../src/lobby/runtime.ts";
+import { onNotice, type Notice } from "../src/webui/notices.ts";
 import { isAutoMode } from "../src/state/auto.ts";
 import { readInbox } from "../src/state/inbox.ts";
 import { FakeSessionProcess } from "./fake-session.ts";
@@ -38,15 +39,12 @@ type Handler = (event: any, ctx: ExtensionContext) => unknown;
 function fakePi() {
   const handlers = new Map<string, Handler[]>();
   const sent: Array<{ text: string; options?: unknown }> = [];
-  const shortcuts: string[] = [];
   const pi = {
     on(event: string, handler: Handler) {
       handlers.set(event, [...(handlers.get(event) ?? []), handler]);
       return () => {};
     },
-    registerShortcut(key: string) {
-      shortcuts.push(key);
-    },
+    registerShortcut() {},
     sendUserMessage(text: string, options?: unknown) {
       sent.push({ text, options });
     },
@@ -56,51 +54,20 @@ function fakePi() {
   const emit = async (event: string, payload: unknown, ctx: ExtensionContext) => {
     for (const handler of handlers.get(event) ?? []) await handler(payload, ctx);
   };
-  return { pi: pi as unknown as ExtensionAPI, emit, sent, shortcuts };
+  return { pi: pi as unknown as ExtensionAPI, emit, sent };
 }
 
 function fakeUi() {
-  const overlay = { shown: 0, hidden: [] as boolean[], focused: 0, removed: 0 };
-  const written: string[] = [];
-  const tui = {
-    mode: "regular",
-    terminal: { rows: 30, columns: 100, write: (data: string) => void written.push(data) },
-    requestRender() {},
-    showOverlay() {
-      overlay.shown += 1;
-      return {
-        setHidden: (value: boolean) => void overlay.hidden.push(value),
-        focus: () => void (overlay.focused += 1),
-        hide: () => void (overlay.removed += 1),
-      };
-    },
-  };
-  const widgets = new Map<string, unknown>();
-  const mounted = new Map<string, { dispose?(): void }>();
   const notes: string[] = [];
-  const theme = { fg: (_c: string, text: string) => text, bg: (_c: string, text: string) => text, bold: (text: string) => text, italic: (text: string) => text };
   const ui = {
-    theme,
-    // Like pi: replacing or clearing a widget disposes the old component.
-    setWidget(key: string, content: unknown) {
-      mounted.get(key)?.dispose?.();
-      mounted.delete(key);
-      widgets.set(key, content);
-      if (typeof content === "function") mounted.set(key, (content as (tui: unknown, theme: unknown) => { dispose?(): void })(tui, theme));
-    },
     setStatus() {},
     setWorkingVisible() {},
     setWorkingIndicator() {},
     notify(message: string) {
       notes.push(message);
     },
-    asked: [] as string[],
-    async select(title: string, options: string[]) {
-      ui.asked.push(title);
-      return options[0];
-    },
   };
-  return { ui, overlay, widgets, mounted, notes, written };
+  return { ui, notes };
 }
 
 function project(owned: boolean) {
@@ -149,44 +116,27 @@ async function stop(fake: ReturnType<typeof fakePi>, ctx: ExtensionContext): Pro
   clearStatus(ctx);
 }
 
-test("session start anchors the lobby, seeds the conversation and auto-opens over an owned task", async () => {
-  const { fake, ui, ctx } = await start(true);
+test("session start brings the lobby service up and seeds the conversation", async () => {
+  const { fake, ctx } = await start(true);
   try {
-    assert.ok(ui.widgets.has(ANCHOR_KEY), "a zero-line anchor widget captures the TUI");
-    assert.ok(fake.shortcuts.includes("alt+l"));
-    assert.equal(ui.overlay.shown, 1, "the lobby opens over the session's task");
-    assert.equal(isLobbyVisible(), true);
+    assert.ok(currentLobbyService(), "the web page's backend runs with the session");
     assert.deepEqual(lobbyFeed.chat.map((entry) => [entry.role, entry.text]), [["you", "hello"]]);
+    assert.equal(currentLobbyService()!.zen().task?.id, "TASK-live");
   } finally {
     await stop(fake, ctx);
   }
-  assert.equal(ui.overlay.removed, 1, "shutdown removes the overlay");
-  assert.equal(isLobbyVisible(), false);
+  assert.equal(currentLobbyService(), undefined, "shutdown takes it down");
 });
 
-test("the lobby stays closed without a task, opens on demand and steps aside for dialogs", async () => {
-  const { fake, ui, ctx } = await start(false);
-  try {
-    assert.equal(ui.overlay.shown, 0);
-    assert.equal(showLobby(), true);
-    assert.equal(ui.overlay.shown, 1);
-    await fake.emit("ui_prompt_start", { type: "ui_prompt_start", reason: "ui_prompt", kind: "select" }, ctx);
-    await fake.emit("ui_prompt_end", { type: "ui_prompt_end", reason: "ui_prompt", kind: "select" }, ctx);
-    assert.deepEqual(ui.overlay.hidden, [true, false], "hidden during the dialog, back after it");
-    // Mouse reporting is on only while the lobby shows: off for the dialog, back after it.
-    assert.deepEqual(ui.written, ["\x1b[?1000h\x1b[?1006h", "\x1b[?1006l\x1b[?1000l", "\x1b[?1000h\x1b[?1006h"]);
-    hideLobby();
-    assert.equal(ui.written.at(-1), "\x1b[?1006l\x1b[?1000l");
-    assert.equal(isLobbyVisible(), false);
-    await fake.emit("ui_prompt_start", { type: "ui_prompt_start", reason: "ui_prompt", kind: "select" }, ctx);
-    await fake.emit("ui_prompt_end", { type: "ui_prompt_end", reason: "ui_prompt", kind: "select" }, ctx);
-    assert.deepEqual(ui.overlay.hidden, [true, false, true], "a hidden lobby ignores dialogs");
-    showLobby();
-    assert.equal(ui.overlay.shown, 1, "showing again reuses the overlay");
-    assert.equal(ui.overlay.focused, 1);
-  } finally {
-    await stop(fake, ctx);
-  }
+test("a session that is not an interactive terminal runs no lobby service", async () => {
+  setMinimized(false);
+  const root = project(false);
+  const fake = fakePi();
+  const { ui } = fakeUi();
+  const { ctx } = context(root, ui);
+  registerLobbyEvents(fake.pi, ".pi");
+  await fake.emit("session_start", { type: "session_start" }, { ...ctx, mode: "print" } as unknown as ExtensionContext);
+  assert.equal(currentLobbyService(), undefined);
 });
 
 test("new plan comments reach the owning Master once, as a steer while it works", async () => {
@@ -244,61 +194,57 @@ test("a failed Master turn shows up in the lobby, not only in pi's chat", async 
   }
 });
 
-test("the lobby starts a task in a named background session, relays its questions and messages other sessions' tasks", async () => {
+function notices(): { seen: Notice[]; stop: () => void } {
+  const seen: Notice[] = [];
+  return { seen, stop: onNotice((notice) => seen.push(notice)) };
+}
+
+test("the service starts a task in a named background session, announces its questions and messages other sessions' tasks", async () => {
   const launched: Array<{ args: string[]; cwd: string; proc: FakeSessionProcess }> = [];
   setSessionLauncher((args, cwd) => {
     const proc = new FakeSessionProcess();
     launched.push({ args, cwd, proc });
     return proc;
   });
-  const { root, fake, ui, ctx } = await start(false);
+  const { root, fake, ctx } = await start(false);
+  const heard = notices();
   try {
+    const service = currentLobbyService()!;
     const elsewhere = createTask("TASK-api", "rate limits", new Date().toISOString(), "add rate limits", "other-terminal");
     createTaskDir(root, ".pi", elsewhere);
     transition(elsewhere, "clarifying");
     saveTask(root, ".pi", elsewhere);
-    assert.equal(showLobby("lobby"), true);
-    const view = lobbyView()!;
-    view.handleInput("\x1bn");
-    for (const char of "add a login page") view.handleInput(char);
-    view.handleInput("\r");
+    const started = service.startSession({ request: "add a login page" });
+    assert.equal(typeof started, "object");
     assert.equal(launched.length, 1);
     const name = taskName("add a login page");
     assert.match(name, /^Task-Add-Login-Page-\d{2}-\d{2}-\d{4}$/, "named with the task's friendly name");
     assert.deepEqual(launched[0]!.args.slice(0, 6), ["--mode", "rpc", "--name", name, "--model", "p/master-model"]);
     assert.equal(launched[0]!.cwd, root);
     const session = backgroundSessions()[0]!;
-    assert.equal(view.viewedEntry().name, name, "named as its task will be");
+    assert.equal(session.name, name);
 
-    // A question while the lobby is up waits in it; enter on an empty prompt puts it to the user with pi's dialog.
+    // A question the session asks is announced to the page, and answered there.
     launched[0]!.proc.emit({ type: "extension_ui_request", id: "q1", method: "select", title: "Approve the proposal?", options: ["Approve", "Decline"] });
-    view.handleInput("\r");
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.deepEqual(ui.ui.asked, [`${name} — Approve the proposal?`]);
+    assert.ok(heard.seen.some((notice) => notice.text.includes(`${name} is waiting for you`)));
+    session.answer("q1", { value: "Approve" });
     assert.deepEqual(launched[0]!.proc.commands("extension_ui_response"), [{ type: "extension_ui_response", id: "q1", value: "Approve" }]);
 
-    // With the lobby hidden, a new question is announced.
-    hideLobby();
-    launched[0]!.proc.emit({ type: "extension_ui_request", id: "q2", method: "confirm", title: "Sure?", message: "" });
-    assert.ok(ui.notes.some((note) => note.includes(`${name} is waiting for you`)));
-
     // Another terminal's task: messages go to its inbox, and auto mode is switched in its folder.
-    showLobby("lobby");
-    view.view({ kind: "idle", taskId: "TASK-api" });
-    for (const char of "cap bursts") view.handleInput(char);
-    view.handleInput("\r");
+    service.sendToTask("TASK-api", "cap bursts");
     assert.deepEqual(readInbox(root, ".pi", "TASK-api").map((message) => [message.text, message.by]), [["cap bursts", "session-1"]]);
-    view.handleInput("\x1bg");
+    service.setAuto("TASK-api", true);
     assert.equal(isAutoMode(root, ".pi", "TASK-api"), true);
     assert.equal(session.alive, true);
   } finally {
+    heard.stop();
     await stop(fake, ctx);
     setSessionLauncher(undefined);
   }
   assert.ok(launched[0]!.proc.signals.length === 1, "resetting the launcher stops the sessions it started");
 });
 
-test("flags typed in the new-session prompt reach its task but stay out of the session's name", async () => {
+test("flags typed in the new-session box reach its task but stay out of the session's name", async () => {
   const launched: Array<{ args: string[]; proc: FakeSessionProcess }> = [];
   setSessionLauncher((args) => {
     const proc = new FakeSessionProcess();
@@ -307,11 +253,7 @@ test("flags typed in the new-session prompt reach its task but stay out of the s
   });
   const { fake, ctx } = await start(false);
   try {
-    assert.equal(showLobby("lobby"), true);
-    const view = lobbyView()!;
-    view.handleInput("\x1bn");
-    for (const char of "--worktree add a login page") view.handleInput(char);
-    view.handleInput("\r");
+    currentLobbyService()!.startSession({ request: "--worktree add a login page" });
     assert.equal(launched.length, 1);
     assert.equal(launched[0]!.args[launched[0]!.args.indexOf("--name") + 1], taskName("add a login page"), "named after the request, not the flag");
     assert.deepEqual(launched[0]!.proc.commands("prompt").map((command) => command.message), ["/bot-lobby --task --worktree add a login page"], "the flag reaches the task the session starts");
@@ -330,39 +272,17 @@ test("switching to a background session stops its process, then asks pi to run i
   });
   const { fake, ctx } = await start(false);
   try {
-    assert.equal(showLobby("lobby"), true);
-    const view = lobbyView()!;
-    view.handleInput("\x1bn");
-    for (const char of "add a footer") view.handleInput(char);
-    view.handleInput("\r");
+    const service = currentLobbyService()!;
+    service.startSession({ request: "add a footer" });
     launched[0]!.emit({ type: "response", command: "get_state", success: true, data: { sessionId: "child-1", sessionFile: "/sessions/child-1.jsonl" } });
-    view.switchTo(view.viewedEntry());
+    const background = backgroundSessions()[0]!;
+    const switching = service.switchTo({ name: background.name, sessionId: "child-1", background });
     for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setImmediate(resolve));
+    await switching;
     assert.deepEqual(launched[0]!.signals, ["SIGTERM"], "the background process ends first");
     assert.deepEqual(fake.sent.at(-1), { text: "/bot-lobby switch /sessions/child-1.jsonl", options: { expandPromptTemplates: true } });
   } finally {
     await stop(fake, ctx);
     setSessionLauncher(undefined);
-  }
-});
-
-test("while the lobby is hidden a one-line status shows under the editor, and it clears when the lobby opens or bot-lobby is minimized", async () => {
-  setMinimized(false);
-  const { fake, ui, ctx } = await start(false);
-  try {
-    hideLobby();
-    const anchor = () => (ui.mounted.get(ANCHOR_KEY) as unknown as { render(width: number): string[] }).render(100);
-    const idle = anchor();
-    assert.equal(idle.length, 1);
-    assert.match(idle[0]!, /bot-lobby.*idle.*Alt\+L opens/);
-    showLobby();
-    assert.deepEqual(anchor(), [], "the lobby is up: no status line");
-    hideLobby();
-    assert.equal(anchor().length, 1, "hidden again: the line is back");
-    setMinimized(true);
-    assert.deepEqual(anchor(), [], "minimized bot-lobby shows nothing");
-    setMinimized(false);
-  } finally {
-    await stop(fake, ctx);
   }
 });

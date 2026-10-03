@@ -1,5 +1,5 @@
 /**
- * The Issues page (batch-2 §n): the open issues on the left, the selected
+ * The Issues page: the open issues on the left, the selected
  * one's body and comments on the right (a Sheet below 1024 px), and the box
  * that files a new one underneath. `#/issues/<number>` selects an issue; the
  * list is read again on every `issues` topic change. With `lobby.issues` off
@@ -32,7 +32,7 @@ export function issueNumber(rest: readonly string[]): number | undefined {
 
 function IssuesOff() {
   return (
-    <Empty className="m-4 flex-1 border border-border bg-card">
+    <Empty className="glass m-4 flex-1 border">
       <EmptyHeader>
         <EmptyTitle>Issues are off</EmptyTitle>
         <EmptyDescription className="font-mono">{OFF}</EmptyDescription>
@@ -44,12 +44,12 @@ function IssuesOff() {
 function NoIssues({ loading, loaded, error, onRetry }: { loading: boolean; loaded: boolean; error?: string; onRetry: () => void }) {
   const text = error ? `✗ ${error}` : loaded ? EMPTY_LIST : loading ? LOADING_LIST : NOT_LOADED
   return (
-    <Empty className="m-4 flex-1 border border-border bg-card">
+    <Empty className="glass m-4 flex-1 border">
       <EmptyHeader>
         <EmptyDescription className={error ? "text-destructive" : undefined}>{text}</EmptyDescription>
       </EmptyHeader>
       {error ? (
-        <Button variant="outline" className="h-10" onClick={onRetry}>
+        <Button variant="outline" onClick={onRetry}>
           Retry
         </Button>
       ) : null}
@@ -94,7 +94,7 @@ export function IssuesTab({ rest }: { rest: readonly string[] }) {
   const list = (
     <>
       <PaneHeader title={LIST_TITLE} count={read.data ? `${issues.length} open` : undefined}>
-        <Button variant="outline" className="h-10" disabled={busy} onClick={refresh}>
+        <Button variant="outline" disabled={busy} onClick={refresh}>
           {busy ? <Spinner className="size-3.5" /> : null}
           Refresh
         </Button>

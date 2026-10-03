@@ -1,5 +1,5 @@
 /**
- * One issue's detail (batch-2 §n): its facts, the planning hint, the body as
+ * One issue's detail: its facts, the planning hint, the body as
  * GitHub Markdown and its comments. The `issues` topic rereads it.
  */
 import type { IssueDetailInfo } from "@protocol"
@@ -15,7 +15,7 @@ type Comment = IssueDetailInfo["comments"][number]
 function Header({ issue, now }: { issue: IssueDetailInfo; now: number }) {
   return (
     <header className="flex flex-col gap-1">
-      <h2 className="text-sm font-bold break-words">
+      <h2 className="text-sm font-semibold break-words">
         #{issue.number} {issue.title}
       </h2>
       <p className="text-xs text-muted-foreground">{factsLine(issue, now)}</p>

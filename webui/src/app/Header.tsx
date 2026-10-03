@@ -1,72 +1,151 @@
 /**
- * The title line, as the terminal's top line (D-21): `◆ workspace (⎇ branch)`,
- * the tabs as cells of the line, then what this session is doing, the AUTO
- * mode marker and the stream state, all as text on the page. Below 1400 px the
- * tabs take a line of their own under the title; from 1400 px everything sits
- * on one line, as in the terminal.
+ * The top of the page: where you are (workspace and branch), the numbered
+ * tabs in the middle, and what this session is doing on the right with
+ * the way to Sessions, Settings, the key help and the light/dark switch. On narrow windows
+ * the tabs take a row of their own.
  */
 import type { ReactNode } from "react"
+import { GitBranch, Keyboard, Layers, Moon, Settings, Sun } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Keys } from "@/components/ui/kbd"
+import { useTheme } from "@/components/theme-provider"
 import type { ConnectionState } from "@/lib/events"
+import { cn } from "@/lib/utils"
 import type { SnapshotTask, StatusInfo } from "@protocol"
+import type { Route } from "./router.ts"
 
 function Connection({ state }: { state: ConnectionState }) {
-  if (state === "live") {
-    return (
-      <span className="text-muted-foreground">
-        <span aria-hidden="true">● </span>connected
-      </span>
-    )
-  }
+  if (state === "live") return <span title="Connected" aria-label="Connected" className="size-2 rounded-full bg-success" />
   if (state === "connecting") {
     return (
-      <span className="flex items-center gap-[1ch] text-muted-foreground">
-        <Spinner aria-hidden="true" role="presentation" />
+      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Spinner aria-hidden="true" role="presentation" className="size-3" />
         reconnecting…
       </span>
     )
   }
-  return <span className="font-bold text-destructive">✗ connection lost</span>
+  return <span className="text-xs font-medium text-destructive">Connection lost</span>
+}
+
+/** The flat icon buttons on the right. */
+const ICON =
+  "inline-flex size-10 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+
+function IconLink({ label, hint, href, active, children }: { label: string; hint: string; href: string; active: boolean; children: ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <a
+          href={href}
+          aria-label={label}
+          aria-current={active ? "page" : undefined}
+          aria-keyshortcuts={hint}
+          className={cn(ICON, active && "bg-accent text-foreground")}
+        >
+          {children}
+        </a>
+      </TooltipTrigger>
+      <TooltipContent>
+        {label} <Keys chord={hint} />
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+function HelpButton({ hint, onHelp }: { hint: string; onHelp: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button type="button" aria-label="Keyboard shortcuts" aria-haspopup="dialog" aria-keyshortcuts={hint} onClick={onHelp} className={ICON}>
+          <Keyboard aria-hidden="true" className="size-[1.1rem]" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>
+        Keyboard shortcuts <Keys chord={hint} />
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme()
+  const dark = theme === "dark" || (theme === "system" && typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches)
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+          onClick={() => setTheme(dark ? "light" : "dark")}
+          className={ICON}
+        >
+          {dark ? <Sun aria-hidden="true" className="size-[1.1rem]" /> : <Moon aria-hidden="true" className="size-[1.1rem]" />}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>{dark ? "Light mode" : "Dark mode"}</TooltipContent>
+    </Tooltip>
+  )
 }
 
 export function Header({
   status,
   task,
   connection,
+  route,
   tabs,
+  extra,
+  keys,
+  onHelp,
 }: {
   status?: StatusInfo
   task?: SnapshotTask
   connection: ConnectionState
+  route: Route
   tabs: ReactNode
+  /** Shown before the status (the way back to a question put away). */
+  extra?: ReactNode
+  keys: Record<string, string>
+  onHelp: () => void
 }) {
   const name = status?.workspace.name ?? "bot-lobby"
   const branch = status?.branch ?? status?.workspace.branch
   const busy = status?.busy ?? false
 
   return (
-    <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-[2ch] px-[1ch] text-sm [grid-template-areas:'title_status'_'tabs_tabs'] min-[1400px]:grid-cols-[auto_auto_minmax(0,1fr)_auto] min-[1400px]:gap-x-[1ch] min-[1400px]:[grid-template-areas:'title_sep_tabs_status']">
-      <span className="truncate leading-10 [grid-area:title]">
-        <span className="font-bold text-primary">◆ {name}</span>
-        {branch ? <span className="text-muted-foreground"> (⎇ {branch})</span> : null}
-      </span>
-      <span aria-hidden="true" className="hidden text-border [grid-area:sep] min-[1400px]:block">
-        │
-      </span>
+    <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 pt-3 pb-2 [grid-template-areas:'title_status'_'tabs_tabs'] min-[1560px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] min-[1560px]:[grid-template-areas:'title_tabs_status']">
+      <div className="flex min-w-0 items-center gap-2.5 [grid-area:title]">
+        <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full bg-primary" />
+        <span className="truncate text-sm font-medium">{name}</span>
+        {branch ? (
+          <span className="inline-flex min-w-0 items-center gap-1 truncate rounded-lg bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+            <GitBranch aria-hidden="true" className="size-3 shrink-0" />
+            <span className="truncate">{branch}</span>
+          </span>
+        ) : null}
+      </div>
       <div className="min-w-0 [grid-area:tabs]">{tabs}</div>
-      <div className="flex min-w-0 items-center gap-[2ch] whitespace-nowrap [grid-area:status]">
-        <span className="flex min-w-0 items-center gap-[1ch]">
-          {busy ? <Spinner aria-hidden="true" role="presentation" /> : <span aria-hidden="true" className="text-muted-foreground">●</span>}
+      <div className="flex min-w-0 items-center justify-end gap-1 [grid-area:status]">
+        {extra}
+        <div className="mr-2 flex min-w-0 items-center gap-2 text-sm">
+          {busy ? <Spinner aria-hidden="true" role="presentation" className="size-3.5" /> : null}
           {task ? (
-            <span className="truncate">
-              {task.id} <span className="text-muted-foreground">{task.state}</span>
+            <span className="hidden max-w-[16rem] truncate sm:inline">
+              <span className="font-medium">{task.id}</span> <span className="text-muted-foreground">{task.state.replace(/_/g, " ")}</span>
             </span>
           ) : (
-            <span className="truncate text-muted-foreground">{status?.sessionName ?? "no task in this session"}</span>
+            <span className="hidden max-w-[12rem] truncate text-muted-foreground md:inline">{status?.sessionName ?? "no task in this session"}</span>
           )}
-        </span>
-        <span className="text-muted-foreground">⟳ AUTO</span>
-        <Connection state={connection} />
+          <Connection state={connection} />
+        </div>
+        <IconLink label="Sessions" hint={keys.sessions ?? "Alt+O"} href="#/sessions" active={route.kind === "sessions"}>
+          <Layers aria-hidden="true" className="size-[1.1rem]" />
+        </IconLink>
+        <IconLink label="Settings" hint={keys.settings ?? "Alt+S"} href="#/settings" active={route.kind === "settings"}>
+          <Settings aria-hidden="true" className="size-[1.1rem]" />
+        </IconLink>
+        <HelpButton hint={keys.help ?? "Alt+H"} onHelp={onHelp} />
+        <ThemeToggle />
       </div>
     </header>
   )

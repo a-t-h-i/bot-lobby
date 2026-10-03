@@ -16,7 +16,7 @@ function Options({ options, send }: { options: string[]; send: Send }) {
   return (
     <div className="flex flex-wrap gap-2">
       {options.map((option) => (
-        <Button key={option} variant="outline" className="h-10" onClick={() => void send({ value: option })}>
+        <Button key={option} variant="outline" onClick={() => void send({ value: option })}>
           {option}
         </Button>
       ))}
@@ -45,8 +45,8 @@ function Answer({ dialog, send }: { dialog: SessionDialog; send: Send }) {
   if (dialog.method === "confirm") {
     return (
       <div className="flex flex-wrap gap-2">
-        <Button className="h-10" onClick={() => void send({ confirmed: true })}>Yes</Button>
-        <Button variant="outline" className="h-10" onClick={() => void send({ confirmed: false })}>No</Button>
+        <Button onClick={() => void send({ confirmed: true })}>Yes</Button>
+        <Button variant="outline" onClick={() => void send({ confirmed: false })}>No</Button>
       </div>
     )
   }
@@ -58,7 +58,7 @@ function Card({ sessionKey, dialog, onAnswered }: { sessionKey: string; dialog: 
     if (await act("sessions.answer", { key: sessionKey, dialogId: dialog.id, answer })) onAnswered()
   }
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-border p-3">
+    <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-foreground">{dialog.title}</p>
         {dialog.message ? <p className="text-sm text-muted-foreground">{dialog.message}</p> : null}

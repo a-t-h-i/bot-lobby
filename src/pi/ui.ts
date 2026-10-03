@@ -80,17 +80,8 @@ export function isMinimized(): boolean {
   return minimized;
 }
 
-/** Told when minimize changes, so the lobby can step aside too. */
-let minimizeListener: ((value: boolean) => void) | undefined;
-
-export function onMinimizeChange(listener: ((value: boolean) => void) | undefined): void {
-  minimizeListener = listener;
-}
-
 export function setMinimized(value: boolean): void {
-  if (minimized === value) return;
   minimized = value;
-  minimizeListener?.(value);
 }
 
 /** Flip minimize/restore and refresh the footer; the session is unchanged. */

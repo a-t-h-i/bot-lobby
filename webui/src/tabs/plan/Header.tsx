@@ -9,11 +9,11 @@ import { act } from "@/lib/act"
 import type { PlannerSnapshot } from "@protocol"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { Roster } from "./Roster"
-import { seatCells, statusParts } from "./words"
+import { failure, seatCells, statusParts } from "./words"
 
 function Status({ snap }: { snap: PlannerSnapshot }) {
   const parts = statusParts(snap)
-  const failed = !snap.busy && parts[0]?.startsWith("✗")
+  const failed = !snap.busy && failure(snap) !== undefined
   return (
     <p role="status" className={failed ? "flex items-center gap-2 text-sm text-destructive" : "flex items-center gap-2 text-sm text-muted-foreground"}>
       {snap.busy ? <Spinner className="size-3.5" aria-hidden="true" /> : null}
@@ -28,9 +28,9 @@ function Actions({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }
   }
   return (
     <div className="flex flex-wrap gap-2">
-      {snap.questions.length > 0 && !snap.busy ? <Button className="h-10" onClick={() => void run("planner.answer")()}>Answer questions</Button> : null}
-      {snap.retryable ? <Button variant="outline" className="h-10" onClick={() => void run("planner.retry")()}>Retry</Button> : null}
-      <Button variant="outline" className="h-10" disabled={!snap.draft || snap.busy} onClick={() => void run("planner.save")()}>
+      {snap.questions.length > 0 && !snap.busy ? <Button onClick={() => void run("planner.answer")()}>Answer questions</Button> : null}
+      {snap.retryable ? <Button variant="outline" onClick={() => void run("planner.retry")()}>Retry</Button> : null}
+      <Button variant="outline" disabled={!snap.draft || snap.busy} onClick={() => void run("planner.save")()}>
         Save
       </Button>
       <ConfirmButton
@@ -49,7 +49,7 @@ export function PlanHeader({ snap, onDone }: { snap: PlannerSnapshot; onDone: ()
     <header className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="flex min-w-0 flex-col gap-1">
-          <h2 className="text-sm font-bold">Planning</h2>
+          <h2 className="text-lg font-medium">Planning</h2>
           <Status snap={snap} />
         </div>
         <Actions snap={snap} onDone={onDone} />

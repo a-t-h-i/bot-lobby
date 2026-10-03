@@ -7,7 +7,7 @@
  */
 import type { AgentRun } from "../schemas/findings.ts";
 import { agentName } from "../pi/run-summary.ts";
-import { markdownBlocks } from "./markdown.ts";
+import { markdownBlocks } from "./blocks.ts";
 
 export type ActivityKind = "info" | "success" | "warning" | "error";
 

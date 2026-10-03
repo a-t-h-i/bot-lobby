@@ -1,5 +1,5 @@
 /**
- * The classifier's box (batch-2 §j): `Classifier (Jev)`, its calls and speed,
+ * The classifier's box: `Classifier (Jev)`, its calls and speed,
  * then what its decisions spared — the terminal's `classifierLines` wording.
  */
 import type { MetricsData } from "@protocol"

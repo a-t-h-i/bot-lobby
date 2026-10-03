@@ -9,11 +9,11 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { LobbyFeed } from "../src/lobby/feed.ts";
 import { loadConfig, saveConfig } from "../src/state/project.ts";
 import { currentWebServer } from "../src/webui/server.ts";
-import { webAction, webCommand, webLink } from "../src/webui/command.ts";
+import { webAction, webCommand, webLink, webSessionStarted } from "../src/webui/command.ts";
 import { fakeWebService } from "./webui-fake.ts";
 
 process.env.BOT_LOBBY_CONFIG_DIR ??= mkdtempSync(join(tmpdir(), "bl-webcmd-"));
@@ -25,13 +25,14 @@ const service = fakeWebService(new LobbyFeed());
 const opened: string[] = [];
 const deps = { service, open: (url: string) => { opened.push(url); return true; } };
 
-function fakeCtx(): { ctx: ExtensionCommandContext; notices: Array<{ message: string; level?: string }> } {
+function fakeCtx(): { ctx: ExtensionCommandContext; notices: Array<{ message: string; level?: string }>; statuses: Array<string | undefined> } {
   const notices: Array<{ message: string; level?: string }> = [];
-  const ctx = { ui: { notify: (message: string, level?: string) => void notices.push({ message, level }) } } as unknown as ExtensionCommandContext;
-  return { ctx, notices };
+  const statuses: Array<string | undefined> = [];
+  const ctx = { ui: { notify: (message: string, level?: string) => void notices.push({ message, level }), setStatus: (_key: string, text?: string) => void statuses.push(text) } } as unknown as ExtensionCommandContext;
+  return { ctx, notices, statuses };
 }
 
-function useConfig(web: { enabled: boolean; port: number; openBrowser: boolean; questions: "both" | "terminal" }): void {
+function useConfig(web: { port: number; openBrowser: boolean }): void {
   const config = loadConfig();
   saveConfig({ ...config, lobby: { ...config.lobby, web } });
 }
@@ -79,19 +80,21 @@ test("webAction names the subcommands", () => {
 test("web without the lobby service is a notice, not a throw", async () => {
   const { ctx, notices } = fakeCtx();
   await webCommand(ctx, undefined, { open: () => true });
-  assert.match(notices.at(-1)!.message, /needs the lobby service/);
+  assert.match(notices.at(-1)!.message, /needs an interactive pi session/);
 });
 
-test("web starts once: a second start is a notice, and link prints the link", async () => {
-  useConfig({ enabled: false, port: 0, openBrowser: true, questions: "both" });
-  const { ctx, notices } = fakeCtx();
+test("web starts once and shows its address; a second `web` opens the page again, and link prints the link", async () => {
+  useConfig({ port: 0, openBrowser: true });
+  const { ctx, notices, statuses } = fakeCtx();
+  opened.length = 0;
   await webCommand(ctx, undefined, deps);
   const started = notices.at(-1)!.message;
   assert.match(started, /http:\/\/127\.0\.0\.1:\d+\/#token=/);
   assert.deepEqual(opened, [currentWebServer()!.link]);
+  assert.match(statuses.at(-1) ?? "", /^bot-lobby web ui: http:\/\/127\.0\.0\.1:\d+$/, "pi's status line names the address, never the secret");
   await webCommand(ctx, undefined, deps);
-  assert.match(notices.at(-1)!.message, /already running/);
-  assert.equal(opened.length, 1, "the browser opens once");
+  assert.equal(opened.length, 2, "asking again opens the page again");
+  assert.match(notices.at(-1)!.message, /http:\/\/127\.0\.0\.1:\d+\/#token=/);
   await webCommand(ctx, "link", deps);
   assert.match(notices.at(-1)!.message, new RegExp(currentWebServer()!.link.replace(/[./:#]/g, (c) => `\\${c}`)));
   await currentWebServer()!.close();
@@ -99,7 +102,7 @@ test("web starts once: a second start is a notice, and link prints the link", as
 });
 
 test("web reset changes the link and signs out the old cookie", async () => {
-  useConfig({ enabled: false, port: 0, openBrowser: false, questions: "both" });
+  useConfig({ port: 0, openBrowser: false });
   const { ctx, notices } = fakeCtx();
   await webCommand(ctx, undefined, deps);
   const before = webLink()!;
@@ -129,4 +132,26 @@ test("web stop and reset with nothing running are notices", async () => {
   assert.match(notices.at(-1)!.message, /not running/);
   await webCommand(ctx, "link", deps);
   assert.match(notices.at(-1)!.message, /not running/);
+});
+
+test("a session starting brings the page up on its own, opens the browser once and follows later sessions", async () => {
+  useConfig({ port: 0, openBrowser: true });
+  const notices: string[] = [];
+  const statuses: Array<string | undefined> = [];
+  const interactive = { mode: "tui", ui: { notify: (message: string) => void notices.push(message), setStatus: (_key: string, text?: string) => void statuses.push(text) } } as unknown as ExtensionContext;
+  const printed = { mode: "print", ui: interactive.ui } as unknown as ExtensionContext;
+  opened.length = 0;
+  webSessionStarted(printed, deps);
+  assert.equal(currentWebServer(), undefined, "a one-shot run serves nothing");
+  webSessionStarted(interactive, deps);
+  for (let i = 0; i < 50 && !currentWebServer(); i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+  const server = currentWebServer();
+  assert.ok(server, "the server is up without any command");
+  assert.deepEqual(opened, [server!.link], "the browser opens on it");
+  assert.match(notices.at(-1)!, /http:\/\/127\.0\.0\.1:\d+\/#token=/);
+  assert.match(statuses.at(-1) ?? "", /^bot-lobby web ui: http:\/\/127\.0\.0\.1:\d+$/);
+  webSessionStarted(interactive, deps);
+  assert.equal(currentWebServer(), server, "a later session reuses the server");
+  assert.equal(opened.length, 1, "and does not open another window");
+  await server!.close();
 });

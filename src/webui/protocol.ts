@@ -6,8 +6,8 @@
 import type { LobbyTopic } from "../lobby/topics.ts";
 import type { WebPrompt } from "../lobby/prompt-hub.ts";
 import type { DialogAnswer, SessionDialog } from "../lobby/sessions.ts";
-import type { LiveSession } from "../lobby/view.ts";
-import type { TaskRow } from "../lobby/tabs/tasks.ts";
+import type { LiveSession } from "../lobby/host.ts";
+import type { TaskRow } from "../lobby/task-rows.ts";
 import type { PlanComment } from "../state/comments.ts";
 import type { BotLobbyConfig, PanelMember } from "../schemas/configuration.ts";
 import type { MemberState, PanelNote, PanelQuestion, PlannerMessage } from "../lobby/planner.ts";
@@ -82,10 +82,10 @@ export interface StatusInfo {
   sessionId?: string;
   sessionName?: string;
   busy: boolean;
-  /** Pi itself is asking in the terminal; the page waits. */
-  terminalDialog: boolean;
   port: number;
   issuesEnabled: boolean;
+  /** Which panes the Lobby tab shows (`lobby.panels`). */
+  panels: Record<"conversation" | "activity" | "thinking", boolean>;
   tabs: TabInfo[];
   keys: KeyInfo[];
   windows: Array<{ name: string; url: string }>;
@@ -101,6 +101,17 @@ export interface SnapshotTask {
   git?: { branch: string; from?: string };
   progress?: { done: number; total: number };
   currentStep?: string;
+}
+
+/** A file attached in the composer, as `files.upload` answers (the message names it by its path). */
+export interface UploadInfo {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  kind: "image" | "pdf" | "file";
+  /** Where the page shows an image from. */
+  url?: string;
 }
 
 /** What the Lobby tab shows, read in one call. */
@@ -493,26 +504,26 @@ export interface Api {
   "status.get": { request: Record<string, never>; result: StatusInfo };
   "lobby.snapshot": { request: Record<string, never>; result: LobbySnapshot };
   "lobby.history": { request: { before?: number }; result: { entries: unknown[]; hasOlder: boolean } };
-  "lobby.send": { request: { text: string }; result: { notice?: string } };
+  "lobby.send": { request: { text: string; attachments?: string[] }; result: { notice?: string } };
   "lobby.abort": { request: Record<string, never>; result: Record<string, never> };
   "tasks.list": { request: Record<string, never>; result: { rows: TaskRow[] } };
   "tasks.archived": { request: Record<string, never>; result: { rows: TaskRow[] } };
   "tasks.comments": { request: { taskId: string }; result: { comments: PlanComment[] } };
-  "tasks.comment": { request: { taskId: string; text: string }; result: { notice?: string } };
+  "tasks.comment": { request: { taskId: string; text: string; attachments?: string[] }; result: { notice?: string } };
   "tasks.archive": { request: { taskId: string }; result: { notice: string } };
   "tasks.restore": { request: { taskId: string }; result: { notice: string } };
   "tasks.delete": { request: { taskId: string; where: "list" | "archive" }; result: { notice: string } };
   "tasks.auto": { request: { taskId: string; on: boolean }; result: { notice: string; on: boolean } };
-  "tasks.message": { request: { taskId: string; text: string }; result: { notice: string } };
+  "tasks.message": { request: { taskId: string; text: string; attachments?: string[] }; result: { notice: string } };
   "tasks.get": { request: { taskId: string }; result: TaskDetail };
   "plans.get": { request: { planId: string }; result: PlanDetail };
   "plans.start": { request: { planId: string; where: "here" | "session"; auto?: boolean }; result: { notice: string; key?: string } };
   "plans.discard": { request: { planId: string }; result: { notice: string } };
   "sessions.list": { request: Record<string, never>; result: { background: BackgroundSessionInfo[]; live: LiveSession[] } };
   "sessions.chat": { request: { key?: string; sessionId?: string; before?: number }; result: { entries: unknown[]; hasOlder: boolean } };
-  "sessions.start": { request: { request?: string; planId?: string; auto?: boolean }; result: { notice: string; key?: string } };
+  "sessions.start": { request: { request?: string; planId?: string; auto?: boolean; attachments?: string[] }; result: { notice: string; key?: string } };
   "sessions.stop": { request: { key: string }; result: { notice: string } };
-  "sessions.message": { request: { key?: string; sessionId?: string; text: string }; result: { notice?: string } };
+  "sessions.message": { request: { key?: string; sessionId?: string; text: string; attachments?: string[] }; result: { notice?: string } };
   "sessions.switch": { request: { key?: string; sessionId?: string; claimTaskId?: string }; result: { notice: string } };
   "sessions.answer": { request: { key: string; dialogId: string; answer: DialogAnswer }; result: { notice: string } };
   "prompts.list": { request: Record<string, never>; result: { prompts: WebPrompt[] } };
@@ -520,14 +531,14 @@ export interface Api {
   "prompts.dismiss": { request: { id: string }; result: Record<string, never> };
   "planner.get": { request: Record<string, never>; result: PlannerSnapshot };
   "planner.new": { request: { seed?: PlannerSeedInfo; seats?: PanelMember[] }; result: { notice: string } };
-  "planner.send": { request: { text: string }; result: { notice: string } };
+  "planner.send": { request: { text: string; attachments?: string[] }; result: { notice: string } };
   "planner.toggleSeat": { request: { member: PanelMember }; result: { notice: string; seated: boolean } };
   "planner.retry": { request: Record<string, never>; result: { notice: string } };
   "planner.commentLine": { request: { line: string; text: string }; result: { notice: string } };
   "planner.answer": { request: Record<string, never>; result: { notice: string } };
   "planner.save": { request: Record<string, never>; result: { notice: string } };
   "quickfix.list": { request: Record<string, never>; result: { jobs: QuickFixJob[] } };
-  "quickfix.submit": { request: { text: string }; result: { notice: string; id: string } };
+  "quickfix.submit": { request: { text: string; attachments?: string[] }; result: { notice: string; id: string } };
   "quickfix.cancel": { request: { id: string }; result: { notice: string } };
   "quickfix.runAnyway": { request: { id: string }; result: { notice: string } };
   "quickfix.movedToTask": { request: { id: string }; result: { notice: string; key?: string } };

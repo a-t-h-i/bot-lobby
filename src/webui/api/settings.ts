@@ -1,14 +1,15 @@
 /**
  * `settings.get` / `settings.set`: the effective bot-lobby config (never a
  * secret) and the models Pi offers. A set merges the patch over the current
- * config, normalises it through the same `resolveConfig` the terminal uses and
- * saves it the way the settings menu does, so the terminal sees the change.
- * The one terminal wording reused here is the port's; everything else the
+ * config, normalises it through `resolveConfig` and saves it; everything the
  * normaliser clamps or drops, so no unknown field is ever written.
  */
 import { resolveConfig, type BotLobbyConfig } from "../../schemas/configuration.ts";
 import { loadConfig, saveConfig } from "../../state/project.ts";
 import { lobbyTopics } from "../../lobby/topics.ts";
+import { prefillModels } from "../../pi/model-settings.ts";
+import { kindLabel } from "../../pi/model-support.ts";
+import { pushNotice } from "../notices.ts";
 import type { SettingsInfo } from "../protocol.ts";
 import type { ApiContext } from "./index.ts";
 import { fail } from "./index.ts";
@@ -49,7 +50,7 @@ function writeConfig(ctx: ApiContext, config: BotLobbyConfig): void {
   else saveConfig(config);
 }
 
-/** Reject a port that is not 0 or 1-65535, with the terminal's wording. */
+/** Reject a port that is not 0 or 1-65535, . */
 function checkPort(patch: Record<string, unknown>): void {
   const lobby = isPlain(patch.lobby) ? patch.lobby : undefined;
   const web = lobby && isPlain(lobby.web) ? lobby.web : undefined;
@@ -65,7 +66,7 @@ function agentEntries(patch: Record<string, unknown>): unknown[] {
   return [patch.master, ...agents, patch.researcher, patch.quickFix, patch.planner, patch.scout];
 }
 
-/** Reject a time limit that is not a positive number, with the terminal's wording. */
+/** Reject a time limit that is not a positive number, . */
 function checkTimeouts(patch: Record<string, unknown>): void {
   for (const entry of agentEntries(patch)) {
     const timeout = isPlain(entry) ? entry.timeoutMs : undefined;
@@ -76,12 +77,23 @@ function checkTimeouts(patch: Record<string, unknown>): void {
   }
 }
 
-/** The page's first settings call. */
+/**
+ * The page's first settings call. Subagents never inherit a model silently:
+ * any whose model is still unset is pinned to the session's model and saved,
+ * so the page always shows what each agent runs on.
+ */
 export function settingsGet(ctx: ApiContext): SettingsInfo {
-  return { config: stripSecrets(readConfig(ctx)), models: ctx.service.models?.() ?? [] };
+  let config = readConfig(ctx);
+  const prefilled = prefillModels(config, ctx.service.sessionModel?.());
+  if (prefilled.filled.length > 0) {
+    writeConfig(ctx, prefilled.config);
+    config = prefilled.config;
+    pushNotice(`${prefilled.filled.map(kindLabel).join(", ")} now run on the session model; change them here any time.`);
+  }
+  return { config: stripSecrets(config), models: ctx.service.models?.() ?? [] };
 }
 
-/** Merge, normalise and save the patch; the terminal rerenders and rereads the config. */
+/** Merge, normalise and save the patch; the lobby rereads the config. */
 export function settingsSet(body: { patch: Record<string, unknown> }, ctx: ApiContext): { config: BotLobbyConfig } {
   checkPort(body.patch);
   checkTimeouts(body.patch);

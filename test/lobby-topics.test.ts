@@ -10,7 +10,7 @@ import { createTask } from "../src/schemas/task.ts";
 import { createTaskDir, saveTask } from "../src/state/persistence.ts";
 import { transition } from "../src/state/task-state.ts";
 import { applyStatus, clearStatus, reportRuns, setMinimized } from "../src/pi/ui.ts";
-import { ANCHOR_KEY, currentLobbyService, hideLobby, isLobbyVisible, registerLobbyEvents, setSessionLauncher, showLobby } from "../src/lobby/runtime.ts";
+import { currentLobbyService, registerLobbyEvents, setSessionLauncher } from "../src/lobby/runtime.ts";
 import { LOBBY_TOPICS, LobbyTopics, lobbyTopics } from "../src/lobby/topics.ts";
 import { promptHub } from "../src/lobby/prompt-hub.ts";
 import { lobbyFeed } from "../src/lobby/feed.ts";
@@ -141,29 +141,6 @@ async function stop(fake: ReturnType<typeof fakePi>, ctx: ExtensionContext): Pro
   setSessionLauncher(undefined);
 }
 
-test("the terminal still anchors, opens and hides exactly as before", async () => {
-  const { fake, ui, ctx } = await start(false);
-  try {
-    assert.ok(ui.widgets.has(ANCHOR_KEY));
-    assert.equal(isLobbyVisible(), false);
-    const tui = {
-      mode: "regular",
-      terminal: { rows: 30, columns: 100, write() {} },
-      requestRender() {},
-      showOverlay() {
-        return { setHidden() {}, focus() {}, hide() {} };
-      },
-    };
-    (ui.widgets.get(ANCHOR_KEY) as (tui: unknown, theme: unknown) => unknown)(tui, ui.ui.theme);
-    assert.equal(showLobby(), true, "with a TUI captured the lobby still opens");
-    assert.equal(isLobbyVisible(), true);
-    hideLobby();
-    assert.equal(isLobbyVisible(), false);
-  } finally {
-    await stop(fake, ctx);
-  }
-});
-
 test("feed writes bump lobby; run updates bump tasks", async () => {
   const { root, fake, ctx } = await start(false);
   try {
@@ -197,14 +174,14 @@ test("pi dialogs and turns bump status; a finished turn bumps metrics", async ()
   }
 });
 
-test("background sessions bump sessions; a hidden question bumps notices", async () => {
+test("background sessions bump sessions; a question bumps notices", async () => {
   const procs: FakeSessionProcess[] = [];
   setSessionLauncher(() => {
     const proc = new FakeSessionProcess();
     procs.push(proc);
     return proc;
   });
-  const { fake, ui, ctx } = await start(false);
+  const { fake, ctx } = await start(false);
   try {
     const service = currentLobbyService()!;
     const sessions = lobbyTopics.version("sessions");
@@ -212,11 +189,9 @@ test("background sessions bump sessions; a hidden question bumps notices", async
     const started = service.startSession({ request: "hello test" });
     assert.ok(typeof started === "object", "a background session starts");
     assert.equal(lobbyTopics.version("sessions"), sessions + 1);
-    hideLobby();
     procs[0]!.emit({ type: "extension_ui_request", id: "q1", method: "select", title: "Approve?", options: ["Yes", "No"] });
     assert.ok(lobbyTopics.version("sessions") >= sessions + 2);
     assert.ok(lobbyTopics.version("notices") >= notices + 1);
-    assert.ok(ui.notes.some((note) => note.includes("is waiting for you")));
     (started as BackgroundSession).stop();
     await (started as BackgroundSession).whenExited();
   } finally {
