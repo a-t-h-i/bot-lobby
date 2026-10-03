@@ -138,7 +138,7 @@ export function tasksComments(body: { taskId: string }, ctx: ApiContext): { comm
 /** Comment on a task's plan; blank text is a no-op notice like the lobby's. */
 export function tasksComment(body: { taskId: string; text: string; attachments?: string[] }, ctx: ApiContext): { notice?: string } {
   if (!body.text.trim() && !body.attachments?.length) return { notice: "type something first" };
-  return { notice: ctx.service.comment(body.taskId, withAttachments(body.text, body.attachments)) };
+  return { notice: ctx.service.comment(body.taskId, withAttachments(body.text, body.attachments, body.taskId)) };
 }
 
 /** Archive, restore or delete a task; each answers the terminal's notice. */
@@ -169,7 +169,7 @@ export function tasksAuto(body: { taskId: string; on: boolean }, ctx: ApiContext
 /** Leave a message for a task's oracle; blank text is a no-op notice. */
 export function tasksMessage(body: { taskId: string; text: string; attachments?: string[] }, ctx: ApiContext): { notice: string } {
   if (!body.text.trim() && !body.attachments?.length) return { notice: "type something first" };
-  return { notice: ctx.service.sendToTask(body.taskId, withAttachments(body.text, body.attachments)) };
+  return { notice: ctx.service.sendToTask(body.taskId, withAttachments(body.text, body.attachments, body.taskId)) };
 }
 
 /** How many recent runs the detail lists (the terminal's count). */
