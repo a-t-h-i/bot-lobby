@@ -11,7 +11,6 @@ import { unfinishedBefore } from "../src/pi/start-task.ts";
 import { createTask } from "../src/schemas/task.ts";
 import { createTaskDir, ensureProjectStructure, saveTask } from "../src/state/persistence.ts";
 import { DEFAULT_CONFIG, resolveConfig } from "../src/schemas/configuration.ts";
-import { nextSplitLimit, splitLimitLabel } from "../src/pi/settings-ui.ts";
 import { readMetrics } from "../src/state/metrics.ts";
 import { LobbyFeed } from "../src/lobby/feed.ts";
 import type { AskQuestion, AskResult } from "../src/ask/types.ts";
@@ -372,13 +371,9 @@ test("starting a part before the parts it builds on names what is unfinished, an
   assert.deepEqual(unfinishedBefore(root, ".pi", three), ["part 1 (Foundation) is abandoned", "part 2 (Toggle) has not been started"]);
 });
 
-test("plans over eight steps are offered a split by default; the setting cycles and rejects nonsense", () => {
+test("plans over eight steps are offered a split by default; the setting rejects nonsense", () => {
   assert.equal(DEFAULT_CONFIG.lobby.splitPlanAbove, 8);
   assert.equal(resolveConfig({ lobby: { splitPlanAbove: 12 } }).lobby.splitPlanAbove, 12);
   assert.equal(resolveConfig({ lobby: { splitPlanAbove: 0 } }).lobby.splitPlanAbove, 0);
   for (const bad of [-1, 2.5, "8", null]) assert.equal(resolveConfig({ lobby: { splitPlanAbove: bad } }).lobby.splitPlanAbove, 8);
-  assert.deepEqual([6, 8, 10, 12, 0].map(nextSplitLimit), [8, 10, 12, 0, 6]);
-  assert.equal(nextSplitLimit(9), 10, "a hand-edited value rejoins the cycle");
-  assert.equal(nextSplitLimit(40), 0);
-  assert.deepEqual([8, 0].map(splitLimitLabel), ["over 8 steps", "never"]);
 });

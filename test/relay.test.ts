@@ -6,9 +6,6 @@ import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { ASK_ENV, previewDir, readRelayAnswer, readRelayRequest, relayAsker, RELAY_TITLE } from "../src/ask/relay.ts";
 import { answerSummary, registerAskTool } from "../src/ask/tool.ts";
-import { renderAsk } from "../src/ask/view.ts";
-import { initialState } from "../src/ask/state.ts";
-import { dialogAsker } from "../src/ask/dialog.ts";
 import { ASK_TOOL, type AskQuestion, type AskResult } from "../src/ask/types.ts";
 import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
 import { createTask, type Task, type TaskState } from "../src/schemas/task.ts";
@@ -66,15 +63,6 @@ test("in a subagent the tool exists only when the master relays it, and says so"
   assert.deepEqual(relayed.map((tool) => tool.name), [ASK_TOOL]);
   assert.match(relayed[0]!.description, /reach the user through the oracle/);
   assert.match(answerSummary([layout], { answers: [], cancelled: true, globalNote: "Auto mode is on." }), /^Auto mode is on\.$/, "a relay that could not ask says why");
-});
-
-test("the questionnaire and its plain-dialog fallback say who is asking", async () => {
-  const drawn = renderAsk(initialState([layout]), 60, 30, undefined, { from: "DESIGN" }).join("\n");
-  assert.match(drawn, /╭ DESIGN asks · Question /);
-  const titles: string[] = [];
-  const ctx = { hasUI: true, ui: { select: async (title: string, options: string[]) => (titles.push(title), options[0]) } } as unknown as ExtensionContext;
-  await dialogAsker([layout], ctx, undefined, "DESIGN");
-  assert.match(titles[0]!, /^DESIGN asks · Layout · 1\/1/);
 });
 
 /* ------------------------------------------------------------ the workflow */

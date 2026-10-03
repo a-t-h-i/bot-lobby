@@ -4,34 +4,31 @@ import { cn } from "@/lib/utils"
 import { Slot } from "radix-ui"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-[transform,background-color,box-shadow,color,border-color] duration-150 ease-snap outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/40 active:not-aria-[haspopup]:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        // A key, as the terminal draws its badges: a cell lit with the selection colour, the word in the accent colour.
-        default: "bg-accent font-bold text-primary hover:bg-primary hover:text-primary-foreground",
+        default: "bg-primary text-primary-foreground shadow-sm hover:brightness-110",
+        soft: "bg-accent text-foreground hover:bg-primary/20",
         outline:
-          "border-border bg-transparent hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground",
+          "border-border bg-card/40 text-foreground hover:bg-accent aria-expanded:bg-accent",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-accent aria-expanded:bg-accent aria-expanded:text-secondary-foreground",
+          "bg-secondary text-secondary-foreground hover:bg-accent aria-expanded:bg-accent",
         ghost:
-          "hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground",
+          "text-foreground hover:bg-accent aria-expanded:bg-accent",
         destructive:
-          "border-destructive/70 bg-transparent text-destructive hover:bg-destructive hover:text-background focus-visible:border-destructive focus-visible:ring-destructive/30",
+          "border-destructive/40 bg-transparent text-destructive hover:bg-destructive hover:text-background focus-visible:ring-destructive/30",
         link: "text-link underline-offset-4 hover:underline",
       },
       size: {
-        default:
-          "h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        xs: "h-6 gap-1 rounded-md px-2 text-xs has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-7 gap-1 rounded-md px-2.5 text-[0.8rem] has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
-        lg: "h-9 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        icon: "size-8",
-        "icon-xs":
-          "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm":
-          "size-7 rounded-md",
-        "icon-lg": "size-9",
+        default: "h-10 gap-2 px-4",
+        xs: "h-10 gap-1 px-3 text-xs [&_svg:not([class*='size-'])]:size-3",
+        sm: "h-10 gap-1.5 px-3 text-[0.8rem] [&_svg:not([class*='size-'])]:size-3.5",
+        lg: "h-10 gap-2 px-4",
+        icon: "size-10",
+        "icon-xs": "size-10 [&_svg:not([class*='size-'])]:size-3.5",
+        "icon-sm": "size-10",
+        "icon-lg": "size-11",
       },
     },
     defaultVariants: {

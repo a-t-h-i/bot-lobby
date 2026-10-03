@@ -4,55 +4,72 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * The terminal lobby's look (D-21): Pi's own themes (`dark.json` and
- * `light.json` in @earendil-works/pi-coding-agent) mapped onto shadcn's
- * tokens. Panes are frames on the page, not cards, so `--card` is the page;
- * `--accent` is Pi's selection colour (the lit tab, the chosen row); `--ring`
- * is the focused pane's border (`borderAccent`). Where one of Pi's colours is
- * under 4.5:1 on what it sits on (D-19), it is a step lighter in dark and
- * darker in light; the comment gives Pi's value.
+ * A calm, glassy page. Every colour lives in this one block, light and dark:
+ * change a token here and the whole page follows. Surfaces are translucent
+ * (`--card`, `--popover`) over a soft, slow-moving wash of colour (`--wash-*`),
+ * so the blur behind them has something to blur.
  */
 :root {
-  /* rounded-md (radius - 2px) is 6px, the one radius every border, button and input uses. */
-  --radius: 0.5rem;
-  --background: #f8f8f8;
-  --foreground: #1f2328;
-  --card: #f8f8f8;
-  --card-foreground: #1f2328;
-  --popover: #ffffff;
-  --popover-foreground: #1f2328;
-  --primary: #416a6a; /* accent, Pi #5a8080 */
-  --primary-foreground: #f8f8f8;
-  --secondary: #ececf2;
-  --secondary-foreground: #1f2328;
-  --muted: #efeff4;
-  --muted-foreground: #5c5c5c; /* muted, Pi #6c6c6c */
-  --accent: #e2e2ee; /* selectedBg, Pi #d0d0e0 */
-  --accent-foreground: #1f2328;
-  --destructive: #a34f4f; /* error, Pi #aa5555 */
-  --border: #b0b0b0; /* borderMuted */
-  --input: #b0b0b0;
-  --ring: #5a8080; /* borderAccent */
-  --typing: #547da7; /* border: the prompt's rules while you type */
-  --you: #ebebef; /* userMessageBg, Pi #e8e8e8 */
-  --success: #4b754b; /* Pi #588458 */
-  --warning: #7d5c1a; /* Pi #9a7326 */
-  --heading: #7d5c1a; /* mdHeading, Pi #9a7326 */
-  --link: #46698f; /* mdLink, Pi #547da7 */
-  --code: var(--primary); /* mdCode */
-  --codeblock: var(--success); /* mdCodeBlock */
-  --bullet: var(--success); /* mdListBullet */
+  --radius: 1rem;
+
+  /* Page and ink */
+  --background: #eef2f5;
+  --foreground: #1b2530;
+  --muted-foreground: #556272;
+
+  /* Glass surfaces */
+  --card: rgb(255 255 255 / 0.62);
+  --card-foreground: #1b2530;
+  --popover: rgb(255 255 255 / 0.86);
+  --popover-foreground: #1b2530;
+  --glass-border: rgb(255 255 255 / 0.7);
+  --glass-shadow: 0 1px 2px rgb(27 37 48 / 0.04), 0 12px 32px -12px rgb(27 37 48 / 0.18);
+  --scrim: rgb(27 37 48 / 0.22);
+
+  /* Accent */
+  --primary: #2b6f86;
+  --primary-foreground: #ffffff;
+  --accent: rgb(43 111 134 / 0.12);
+  --accent-foreground: #1b2530;
+  --ring: #3d8aa5;
+  --typing: #3d8aa5;
+
+  /* Quiet fills and lines */
+  --secondary: rgb(27 37 48 / 0.06);
+  --secondary-foreground: #1b2530;
+  --muted: rgb(27 37 48 / 0.05);
+  --border: rgb(27 37 48 / 0.12);
+  --input: rgb(27 37 48 / 0.18);
+  --you: rgb(43 111 134 / 0.1);
+
+  /* Meaning */
+  --destructive: #b4443f;
+  --success: #2c7a58;
+  --warning: #96600a;
+  --heading: #1b2530;
+  --link: #22669d;
+  --code: #7a4a8a;
+  --codeblock: var(--foreground);
+  --bullet: var(--primary);
+
   --chart-1: var(--primary);
   --chart-2: var(--success);
   --chart-3: var(--link);
-  --chart-4: #875f87; /* thinkingHigh */
-  --chart-5: var(--heading);
-  /* Each agent's colour, as the terminal paints it (SOURCE_COLORS in src/lobby/tabs/home.ts). */
+  --chart-4: #7a5aa0;
+  --chart-5: var(--warning);
+
+  /* Each agent's colour in the activity log and the metrics bars. */
   --source-dev: var(--success);
-  --source-design: var(--heading);
+  --source-design: #8a4f8f;
   --source-qa: var(--warning);
-  --source-research: var(--foreground);
-  --source-quickfix: var(--code);
+  --source-research: var(--link);
+  --source-quickfix: var(--primary);
+
+  /* The wash behind the glass */
+  --wash-a: rgb(146 200 218 / 0.5);
+  --wash-b: rgb(196 186 232 / 0.38);
+  --wash-c: rgb(176 222 200 / 0.32);
+
   --sidebar: var(--background);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
@@ -61,47 +78,57 @@
   --sidebar-accent-foreground: var(--accent-foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
+
+  /* Snappy: quick in, a soft landing. */
+  --ease-snap: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/*
- * Dark: the soft charcoal of the terminal in the screenshots (docs/*.png),
- * not the near-black of Pi's HTML export (#18181e): the terminal's own
- * background and text, Tomorrow Night's #1d1f21 and #c5c8c6, with the
- * greys between them for surfaces, and Pi's colours on top.
- */
 .dark {
-  --background: #1d1f21; /* the terminal's background */
-  --foreground: #c5c8c6; /* the terminal's text */
-  --card: #1d1f21;
-  --card-foreground: #c5c8c6;
-  --popover: #25272a;
-  --popover-foreground: #c5c8c6;
-  --primary: #8abeb7;
-  --primary-foreground: #1d1f21;
-  --secondary: #2d2f33;
-  --secondary-foreground: #c5c8c6;
-  --muted: #282a2e;
-  --muted-foreground: #a3a3a3; /* muted, Pi #808080 */
-  --accent: #363741; /* selectedBg, Pi #3a3a4a */
-  --accent-foreground: #c5c8c6;
-  --destructive: #d47777; /* error, Pi #cc6666 */
-  --border: #505050;
-  --input: #505050;
-  --ring: #00d7ff;
-  --typing: #5f87ff;
-  --you: #343541; /* userMessageBg */
-  --success: #b5bd68;
-  --warning: #ffff00;
-  --heading: #f0c674;
-  --link: #81a2be;
-  --bullet: var(--primary);
-  --chart-4: #b294bb;
+  --background: #0f1419;
+  --foreground: #e6ebf0;
+  --muted-foreground: #9aa8b6;
+
+  --card: rgb(32 41 51 / 0.58);
+  --card-foreground: #e6ebf0;
+  --popover: rgb(24 31 39 / 0.88);
+  --popover-foreground: #e6ebf0;
+  --glass-border: rgb(255 255 255 / 0.09);
+  --glass-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 16px 40px -14px rgb(0 0 0 / 0.55);
+  --scrim: rgb(5 8 12 / 0.5);
+
+  --primary: #7cc3d6;
+  --primary-foreground: #0b1c22;
+  --accent: rgb(124 195 214 / 0.14);
+  --accent-foreground: #e6ebf0;
+  --ring: #7cc3d6;
+  --typing: #7cc3d6;
+
+  --secondary: rgb(255 255 255 / 0.07);
+  --secondary-foreground: #e6ebf0;
+  --muted: rgb(255 255 255 / 0.05);
+  --border: rgb(255 255 255 / 0.1);
+  --input: rgb(255 255 255 / 0.14);
+  --you: rgb(124 195 214 / 0.12);
+
+  --destructive: #f08a82;
+  --success: #7fd1a6;
+  --warning: #e8b45a;
+  --heading: #e6ebf0;
+  --link: #8cbcec;
+  --code: #d3a8e0;
+
+  --chart-4: #b8a0dc;
+
+  --source-design: #d3a8e0;
+
+  --wash-a: rgb(40 96 120 / 0.42);
+  --wash-b: rgb(78 62 130 / 0.3);
+  --wash-c: rgb(32 96 80 / 0.24);
 }
 
 @theme inline {
-  /* One monospace face for everything, from the system: the CSP allows no web font. */
-  --font-sans: ui-monospace, "JetBrains Mono", "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
-  --font-mono: ui-monospace, "JetBrains Mono", "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
   --color-typing: var(--typing);
   --color-you: var(--you);
   --color-success: var(--success);
@@ -111,10 +138,15 @@
   --color-code: var(--code);
   --color-codeblock: var(--codeblock);
   --color-bullet: var(--bullet);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --color-glass-border: var(--glass-border);
+  --color-scrim: var(--scrim);
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-lg: calc(var(--radius) - 2px);
+  --radius-xl: var(--radius);
+  --radius-2xl: calc(var(--radius) + 6px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --shadow-glass: var(--glass-shadow);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -157,9 +189,19 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
   body {
-    @apply bg-background text-foreground;
-    font-variant-ligatures: none;
+    @apply bg-background font-sans text-foreground antialiased;
+    background-image:
+      radial-gradient(52rem 36rem at 8% -8%, var(--wash-a), transparent 70%),
+      radial-gradient(46rem 34rem at 100% 4%, var(--wash-b), transparent 70%),
+      radial-gradient(54rem 38rem at 40% 112%, var(--wash-c), transparent 70%);
+    background-attachment: fixed;
   }
   ::selection {
     background: var(--accent);
@@ -168,11 +210,22 @@
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
   }
+  :focus-visible {
+    outline-offset: 2px;
+  }
 }
 
-/* Rendered model Markdown (see `ui/Markdown.tsx`), as Pi draws it in the terminal: headings in the
-   heading colour (### kept from level 3), `- ` bullets, inline code in the code colour, fenced code
-   between its fences, a blank line between blocks. Tables, images and links stay real HTML. */
+/* The one glass look: a translucent card with a soft edge and a blur behind it. */
+@layer components {
+  .glass {
+    @apply border border-glass-border bg-card text-card-foreground shadow-glass backdrop-blur-md;
+  }
+  .glass-pop {
+    @apply border border-glass-border bg-popover text-popover-foreground shadow-glass backdrop-blur-md;
+  }
+}
+
+/* Rendered model Markdown (see `ui/Markdown.tsx`): calm prose, real HTML for tables, images and links. */
 @layer components {
   .md-body {
     @apply text-sm leading-relaxed break-words;
@@ -183,33 +236,23 @@
   .md-body > :last-child {
     @apply mb-0;
   }
-  .md-body :is(p, ul, ol, blockquote, table, hr, h1, h2, h3, h4, h5, h6) {
+  .md-body :is(p, ul, ol, blockquote, table, hr, pre, h1, h2, h3, h4, h5, h6) {
     @apply my-3;
   }
   .md-body :is(h1, h2, h3, h4, h5, h6) {
-    @apply text-sm font-bold text-heading;
+    @apply font-semibold text-heading;
   }
   .md-body h1 {
-    @apply underline underline-offset-4;
+    @apply text-lg;
   }
-  .md-body h3::before {
-    content: "### ";
-  }
-  .md-body h4::before {
-    content: "#### ";
-  }
-  .md-body h5::before {
-    content: "##### ";
-  }
-  .md-body h6::before {
-    content: "###### ";
+  .md-body h2 {
+    @apply text-base;
   }
   .md-body ul {
-    @apply pl-[2ch];
-    list-style-type: "- ";
+    @apply list-disc pl-5;
   }
   .md-body ol {
-    @apply list-decimal pl-[3ch];
+    @apply list-decimal pl-5;
   }
   .md-body li::marker {
     color: var(--bullet);
@@ -218,36 +261,42 @@
     @apply my-0;
   }
   .md-body blockquote {
-    @apply border-l pl-[1ch] text-muted-foreground italic;
+    @apply border-l-2 pl-3 text-muted-foreground italic;
   }
   .md-body hr {
-    @apply border-muted-foreground;
+    @apply border-border;
   }
   .md-body a {
     @apply text-link underline underline-offset-4;
   }
   .md-body :not(pre) > code {
-    @apply text-code;
+    @apply rounded-md bg-muted px-1 py-0.5 font-mono text-[0.85em] text-code;
   }
   .md-body pre {
-    @apply text-codeblock;
+    @apply overflow-x-auto rounded-xl bg-muted p-3 font-mono text-[0.85em] text-codeblock;
   }
   .md-body img {
-    @apply max-w-full;
+    @apply max-w-full rounded-xl;
   }
   .md-body input[type="checkbox"] {
     @apply mr-1.5;
   }
   .md-body table th,
   .md-body table td {
-    @apply border border-border px-[1ch] text-left align-top;
+    @apply border border-border px-2.5 py-1 text-left align-top;
   }
   .md-body table th {
-    @apply font-bold;
+    @apply font-semibold;
   }
+}
 
-  /* The terminal's notices: a cell on the page, its text in the accent colour (sonner, `components/ui/sonner.tsx`). */
-  .cn-toast {
-    @apply rounded-md font-sans;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

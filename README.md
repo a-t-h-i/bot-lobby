@@ -13,7 +13,9 @@ For a task, your Pi session becomes the **Master**
 (the "oracle"): it scouts the codebase, proposes a plan, and delegates the
 work to three domain agents — **Designer+Frontend**, **Backend** and **QA** —
 each running in its own isolated `pi` process. QA's reviewer is the quality
-gate before anything is marked done.
+gate before anything is marked done. QA reviews adversarially (it tries to
+break the change) and writes as few tests as it can: only for a breaking
+change, for behavior that could turn out unpredictable, or when asked.
 
 The rule: **you decide with the LLMs, and the engine enforces.** Agents
 propose; you shape and approve the plan with the oracle; the extension
@@ -43,31 +45,31 @@ tool names.
 
 1. `/bot-lobby add a login page` — starts a task; the lobby opens.
 2. Answer the Master's questions, then approve its proposal.
-3. Follow the agents in the lobby (`alt+l` shows or hides it): what they do, and what they think.
+3. Follow the agents in the lobby, a web page that opens in your browser when Pi starts: what they do, and what they think.
 
-`/bot-lobby settings` sets each agent's model, thinking level, time limit and
-extra instructions.
+The lobby's Settings page sets each agent's model, effort (a slider that skips
+what the model cannot do), time limit and extra instructions.
 
 ## Commands
 
 | Command | Does |
 | --- | --- |
-| `/bot-lobby` | Open the lobby (`alt+l`) |
+| `/bot-lobby` | Open the lobby in your browser (it already runs: the page starts with Pi) |
 | `/bot-lobby <request>` | Start a request: a [quick fix](#quick-fix-or-the-team) when one agent can do it alone, else a task (`--task` to always make it a task, also when it begins with a command word; `--auto` to run unattended, `--budget 90m` to give it a time budget, `--fast` / `--full` to pick its [track](#fast-track-or-full-workflow), `--branch` / `--worktree` / `--no-branch` to give it its own [git branch or worktree](#a-branch-or-worktree-per-task) or none) |
 | `/bot-lobby budget [90m\|off]` | Show or set this session's task time budget |
 | `/bot-lobby status \| tasks \| runs [id]` | Current task, all tasks, recent agent runs |
 | `/bot-lobby approve \| amend <text> \| decline` | Answer the proposal |
 | `/bot-lobby accept [id]` | Accept a task's work as it is, without a QA pass; the oracle then completes it |
 | `/bot-lobby pause \| resume \| cancel [id]` | Control a task |
-| `/bot-lobby auto [on\|off]` | Auto mode: the oracle finishes the task without asking (`alt+g`) |
+| `/bot-lobby auto [on\|off]` | Auto mode: the oracle finishes the task without asking (`alt+g` in Pi) |
 | `/bot-lobby claim <id>` | Take over a task another session owned |
 | `/bot-lobby start-plan PLAN-… [auto]` | Start a plan saved from the Plan tab |
 | `/bot-lobby settings \| config` | Edit settings / show the effective config |
 | `/bot-lobby knowledge` | Knowledge file sizes |
 | `/bot-lobby minimize \| restore` | Hide bot-lobby in this session (`ctrl+shift+m`) |
-| `/bot-lobby web` | Start the browser UI on this machine (loopback only) and open its link |
+| `/bot-lobby web` | Open the lobby page again (it starts with every interactive Pi session, on this machine only) and print its link |
 | `/bot-lobby web link` | Print the browser UI's link |
-| `/bot-lobby web stop` | Stop the browser UI |
+| `/bot-lobby web stop` | Stop the page until the next session |
 | `/bot-lobby web reset` | Reset the browser UI's link (its old cookies stop working) |
 
 ## Quick fix or the team
@@ -250,19 +252,29 @@ everything. `workflow.freshContext: false` in the config turns this off.
 
 ## The lobby
 
-A full-screen view with a prompt at the bottom that talks to whatever tab is
-open. Its title names the repository (or folder) you work from and its branch,
-`◆ my-repo (⎇ main)`. `alt+h` lists every key. **Shift+Enter** starts a new
-line in every text field: the prompt (also `ctrl+j`, or `\` before Enter in a
-terminal that cannot tell Shift+Enter apart), the questionnaire's own-answer
-row, and the dialogs for free-text answers. The search bar is one line by nature. It is text only: no animations, just the
-conversation, the activity log and the thoughts, and a one-line status in Pi's
-footer.
+bot-lobby is a web-only plugin. When Pi starts an interactive session it also
+starts the lobby, a page served on `127.0.0.1` (this machine only, behind a
+secret link), opens it in your browser and shows its address in Pi's status
+line. Nothing is drawn in the terminal but Pi itself.
+
+The page is a calm, glassy window in a light or a dark theme (the sun/moon
+button in its top row). The tabs are numbered pills joined by dotted lines; the
+lit pill glides to the tab you pick like a drop of water. Under the tabs, each
+tab is a pair of cards, a list on the left and the chosen item on the right.
+At the bottom floats **one text box for everything**: it grows as you type (or
+opens up to a tall editor), takes Markdown, and takes images, PDFs and other
+files (pick, paste or drop them, up to 20 MB each, eight per message). Who it
+talks to follows the tab: the oracle everywhere, the planning panel on Plan, a
+quick fix on Quick fix, a comment on the open task (or a message to its
+oracle) on Tasks, the picked session on Sessions. The oracle's questions pop
+up in the middle of the window over a blurred backdrop; there is only ever one
+pop-up, and one toast, on screen at a time. Activity and Thinking can be
+minimized to their title bar. `alt+h` lists every key.
 
 | Tab | What it is |
 | --- | --- |
 | **1 Lobby** | Your conversation with the oracle, an activity log of every agent's steps, and each agent's latest thought |
-| **2 Tasks** | Every task and saved plan as a checklist. `s` starts a plan in a new session, `h` here; `c` comments on a plan; `a` archives, `d` deletes |
+| **2 Tasks** | Every task and saved plan as a checklist. Start a plan here or in a new session; comment on a plan (images welcome); archive or delete |
 | **3 Plan** | Plan a task with a panel of agents before building it (below) |
 | **4 Quick fix** | One agent makes a change right away, beside any running task; requests the oracle [routes here](#quick-fix-or-the-team) show up too |
 | **5 Metrics** | Run time, success rate, tokens and cost per model and agent |
@@ -275,8 +287,9 @@ footer.
 ![The Lobby tab](https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/gallery.png)
 
 Your conversation with the oracle on the left, the activity log of every
-agent's steps on the right, and the agents' latest thoughts below. `alt+c`,
-`alt+a` and `alt+k` hide any of the three; the prompt steers the running turn.
+agent's steps on the right, and the agents' latest thoughts below. Activity and
+Thinking fold down to their title bar; the box at the bottom steers the
+running turn.
 
 ### Tasks
 
@@ -309,17 +322,17 @@ which cheaper models hold up.
 ### Git
 
 The repository's open pull requests through the GitHub CLI (`gh` owns sign-in;
-bot-lobby holds no token): the list with checks (`✓ ✗ ●`) and size, and the
+bot-lobby holds no token): the list with checks and size, and the
 selected one with its facts, files, description, reviews and comments.
 
-- `v` **reviews it with an agent**: a read-only agent on QA's model, thinking
+- **Review it with an agent**: a read-only agent on QA's model, thinking
   and time limit (and its custom instructions) gets the description, changed
   files and diff, may read the repository for context, and writes a review:
   verdict, summary, findings by severity (`file:line`), tests, questions. It
   never edits, and never follows instructions written inside the pull request.
-  `f` takes a focus first (*is the migration reversible?*, over several lines
-  with Shift+Enter). `x` stops it.
-- `t` is **Jev's quick read** ([the classifier](#the-classifier-jev)): size, and
+  A focus can be typed first (*is the migration reversible?*), and a review
+  can be stopped.
+- **Jev's quick read** ([the classifier](#the-classifier-jev)): size, and
   how likely the change is risky, security-relevant, breaking or untested, in a
   moment, with whether a full review is worth its tokens.
 - Reviews are kept per pull request (`.pi/bot-lobby/reviews/`), marked stale
@@ -418,37 +431,18 @@ deletion), and one call draws at most 100 shapes and removes at most 50.
   through it, and the message names it. A network that blocks websockets but not
   HTTPS still works: the seat falls back to long-polling, as a browser does.
 
-Common keys: `tab` switches tabs, `esc` browses (arrows, single-key
-commands), `ctrl+f` searches, `ctrl+s` saves the plan, `alt+o` browses
-sessions, `alt+n` starts a task in a new session, `alt+s` opens settings.
-Rebind any key under `lobby.keys` in the config.
+Common keys: `alt+1`…`alt+9` jump to a tab, `alt+[` and `alt+]` cycle them,
+`ctrl+s` saves the plan on Plan, `alt+o` browses sessions, `alt+s` opens
+settings, `alt+h` shows them all. Rebind any key under `lobby.keys` in the
+config.
 
-**Several sessions from one window.** `alt+n` starts a task in a background
-Pi session. The Lobby tab can show any session, and your prompt steers it;
-`● waiting` in the tab bar means one has a question for you.
+**Several sessions from one window.** The Sessions page starts a task in a
+background Pi session (the box's New session target). The page can show any
+session, and your messages steer it; a badge on its row means it has a
+question for you.
 
-**Agents at work.** The bottom line of the lobby shows the subagents running
-right now at its right end (`◐ DESIGN editing 2m · DEV 40s`, a running quick
-fix too), shrinking to names and then a count when the keys leave little room.
-
-**Paging.** A pane with more lines than rows shows a pager on its bottom
-edge, `▲ prev · page 2/5 · next ▼`: click *prev* or *next* to move a page (its
-rows less one, so a line carries over), and read where you are from the page
-count. The top is page 1 and the bottom the last. A button dims when the pane
-is already at that end, and the words shorten (`▲ prev · 2/5 · next ▼`, then
-`▲ 2/5 ▼`) as the pane narrows. The wheel, the arrows and PageUp/PageDown
-still work. It applies to every scrolling pane: the conversation, activity and
-thinking, the plan draft, the Tasks and Quick fix lists and details, and the
-metrics table.
-
-**Status line when hidden.** With the lobby hidden (`alt+l`), one line under
-Pi's editor shows where things stand: a bar of the task's plan steps (or its
-stage before there is a plan) with who is working, the planning round and the
-questions waiting for you, the quick fix in hand, or `idle`. It costs nothing
-while nothing changes. Turn it off with `lobby.miniLine: false` (or in
-`/bot-lobby settings` → Lobby).
-
-![The status line under the editor while the lobby is hidden: a task, planning, idle](https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/lobby-status-line.png)
+**A question put away.** Esc (or the cross) puts a question pop-up away
+without losing a word; the *waiting* button in the top row brings it back.
 
 The conversation keeps its newest 100 messages in memory; scroll to the top
 to load the rest.
@@ -502,28 +496,23 @@ has them as well.
 
 ### The questionnaire
 
-`ask_user_question` puts up to four questions to you in one overlay, each with
-two to four options (the recommended one first). Questions, option
-descriptions and **previews** are Markdown: an option's preview (a layout
-sketch, a component mockup, a code snippet, a config) shows beside the list
-while that option is focused, under it in a narrow terminal, so design choices
-can be compared by looking at them.
+`ask_user_question` puts up to four questions to you in one pop-up in the
+lobby page, each with two to four options (the recommended one first).
+Questions, option descriptions and **previews** are Markdown: an option's
+preview (a layout sketch, a component mockup, a code snippet, a config) shows
+beside the list while that option is focused, under it in a narrow window, so
+design choices can be compared by looking at them.
 
-`↑↓` move · `enter` choose · `space` pick several (multi-select) · `1`–`4`
-pick · `←→` between questions · the last row takes an answer in your own words
-(`shift+enter` for a new line, pasted lines stay lines)
-· `esc` asks whether to leave (a second `enter`
-leaves, anything else keeps you answering), so a stray press does nothing.
-Questions you leave are never answered for you: the oracle waits and asks again
-when you next write, and the designer asks again before it may decide. Editor hosts that
-run Pi in RPC mode get the same questions through Pi's own dialogs.
+Click an option, or press `1`–`4`; several can be picked in a multi-select;
+the last field takes an answer in your own words. *Later* (Esc) puts the
+pop-up away without losing anything, *Cancel* asks whether to leave, so a
+stray click does nothing. Questions you leave are never answered for you: the
+oracle waits and asks again when you next write, and the designer asks again
+before it may decide. A question with nobody to answer it (a one-shot
+`pi -p` run) is put away at once.
 
 **Images.** An option can also carry an `image`: a PNG, JPEG, GIF or WebP
 file (a screenshot, a rendered mockup), shown above its preview text.
-Terminals with the Kitty graphics protocol (Kitty, Ghostty, WezTerm) show the
-image itself; other terminals draw PNGs as coloured half-blocks, and name the
-file for other formats. `BOT_LOBBY_IMAGES=blocks` always uses blocks, `off`
-never draws images.
 
 **The designer asks you directly.** During a task (not in auto mode) the
 designer worker can put its visual choices to you: its questions reach you
@@ -601,8 +590,8 @@ switch on its own.
 ## Configuration
 
 Settings live in `~/.pi/bot-lobby/config.json` (`BOT_LOBBY_CONFIG_DIR`
-overrides). Edit them with `/bot-lobby settings`; `/bot-lobby config` shows
-the result.
+overrides). Edit them on the lobby's Settings page (the cog in its top row;
+it saves as you go); `/bot-lobby config` shows the result.
 
 ```json
 {
@@ -612,7 +601,7 @@ the result.
   },
   "scout": { "model": "anthropic/claude-haiku-4-5-20251001", "timeoutMs": 480000 },
   "planner": { "thinking": "high", "timeoutMs": 300000 },
-  "lobby": { "planningPanel": ["backend", "designer", "qa", "researcher"], "maxPlanningRounds": 5, "splitPlanAbove": 8 },
+  "lobby": { "planningPanel": ["backend", "designer", "qa", "researcher"], "maxPlanningRounds": 5, "splitPlanAbove": 8, "web": { "port": 7347, "openBrowser": true } },
   "workflow": { "maxReviewIterations": 2, "maxParallelWorkers": 3, "stallTimeoutMs": 300000, "wrapUpAt": 0.75, "taskBudgetMinutes": 0, "fastTrack": true, "briefCheck": true, "routeQuickFixes": true, "gitIsolation": "off" },
   "classifier": { "enabled": false, "provider": "auto", "effort": { "cheapModel": "inherit" } }
 }
@@ -622,7 +611,8 @@ the result.
   `quickFix`, `planner`, `lobby`, `workflow`, `knowledge`, `classifier`.
 - An agent without a model runs on the session's model. Thinking is one of
   `off, minimal, low, medium, high, xhigh, max`, limited to what the model
-  supports. Scouts always think at `low`.
+  supports: on the Settings page it is a slider whose unsupported stops are
+  struck through and cannot be chosen. Scouts always think at `low`.
 - `instructions` adds your own text to an agent's built-in prompt.
 - `fallbackModel` and `fallbackThinking` on any agent (and the master): see
   [Fallback models](#fallback-models).
@@ -709,7 +699,8 @@ BOT_LOBBY_LIVE_EXCALIDRAW=1 node --test test/excalidraw-live.test.ts
 ```
 
 Source layout: `src/workflow` (engine), `src/master` (delegation),
-`src/execution` (subagent processes), `src/lobby` (the UI),
+`src/execution` (subagent processes), `src/lobby` (the lobby's state and service), `src/webui` and `webui/` (the
+server and the page; rebuild with `npm run web:build`),
 `src/classifier` (Jev), `src/state` (persistence), `src/ask` (the
 questionnaire), `src/web` (the web tools), `src/excalidraw` (shared
 Excalidraw sessions: the room protocol, the sessions, the agents' tools),

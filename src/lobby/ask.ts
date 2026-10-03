@@ -1,17 +1,16 @@
 /**
  * The oracle puts the planning panel's questions to the user through the
- * questionnaire (`../ask`): a tab per question with each seat's options, the
- * recommended one first, and a row for an answer in the user's own words.
+ * questionnaire (`../ask`): a card per question with each seat's options, the
+ * recommended one first, and a field for an answer in the user's own words.
  * The panel's questions become questionnaires of at most four, and the
  * answers become the user's turn for the next round.
  */
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { PanelQuestion, SettledQuestion } from "./planner.ts";
-import { MAX_HEADER, MAX_LABEL, MAX_OPTIONS, MAX_QUESTIONS, MIN_OPTIONS, RESERVED, type AskAnswer, type AskOption, type AskQuestion, type AskResult } from "../ask/types.ts";
-import type { Asker } from "../ask/dialog.ts";
+import { MAX_HEADER, MAX_LABEL, MAX_OPTIONS, MAX_QUESTIONS, MIN_OPTIONS, RESERVED, type AskAnswer, type AskOption, type AskQuestion, type AskResult, type Asker } from "../ask/types.ts";
 
 export { MAX_QUESTIONS, MIN_OPTIONS, MAX_OPTIONS, type AskAnswer, type AskOption, type AskQuestion, type AskResult, type Asker };
-export { askUser, dialogAsker } from "../ask/dialog.ts";
+export { askUser } from "../ask/web.ts";
 
 function clip(text: string, max: number): string {
   const flat = text.replace(/\s+/g, " ").trim();

@@ -1,5 +1,5 @@
 /**
- * One issue's detail (batch-2 §n): its facts, the planning hint, the body as
+ * One issue's detail: its facts, the planning hint, the body as
  * GitHub Markdown and its comments. The `issues` topic rereads it.
  */
 import type { IssueDetailInfo } from "@protocol"

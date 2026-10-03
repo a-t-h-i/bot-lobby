@@ -13,16 +13,16 @@ import { PAGE } from "./words"
 
 function Skeleton() {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4" role="status" aria-label={PAGE.loading}>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4" role="status" aria-label={PAGE.loading}>
       {[0, 1, 2, 3].map((card) => (
-        <div key={card} className="h-48 rounded-md bg-muted motion-safe:animate-pulse" />
+        <div key={card} className="h-48 rounded-2xl bg-muted motion-safe:animate-pulse" />
       ))}
     </div>
   )
 }
 
 export function SettingsTab() {
-  const read = useApiRead("settings.get", {}, [])
+  const read = useApiRead("settings.get", {}, ["status"])
   const [config, setConfig] = useState<BotLobbyConfig>()
   useEffect(() => {
     if (read.data) setConfig(read.data.config)

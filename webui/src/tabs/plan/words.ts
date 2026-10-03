@@ -43,13 +43,13 @@ export function failure(snap: PlannerSnapshot): string | undefined {
   return (failed.error ?? `${MEMBER_LABELS[failed.member]} failed`).split("\n")[0]
 }
 
-/** The status line's parts, in the terminal's order and words. */
+/** The status line's parts. */
 export function statusParts(snap: PlannerSnapshot): string[] {
   const parts: string[] = []
   const error = failure(snap)
   if (snap.busy) parts.push(roundLabel(snap.round, snap.limit))
-  else if (error) parts.push(`✗ ${error} — Retry runs the round again`)
-  else if (snap.questions.length > 0) parts.push(`● ${count(snap.questions.length, "question")} waiting`)
+  else if (error) parts.push(`${error} — Retry runs the round again`)
+  else if (snap.questions.length > 0) parts.push(`${count(snap.questions.length, "question")} waiting`)
   if (!snap.busy && snap.round > 0) parts.push(roundLabel(snap.round, snap.limit))
   if (!snap.busy && snap.limit > 0 && snap.round + 1 === snap.limit) parts.push("the next round is the last: the oracle settles the rest")
   return parts
@@ -71,14 +71,14 @@ function memberCell(member: PanelMember, snap: PlannerSnapshot): SeatCell {
   const base = { member, label, seated, working: false }
   if (!seated) return { ...base, text: "off" }
   if (state?.status === "thinking") return { ...base, working: true, text: state.step ?? "thinking" }
-  if (state?.status === "failed") return { ...base, text: "✗ failed — Retry" }
+  if (state?.status === "failed") return { ...base, text: "failed — Retry" }
   if (!state) return { ...base, text: "·" }
-  if (state.reply?.status === "ready") return { ...base, text: "✓ ready" }
+  if (state.reply?.status === "ready") return { ...base, text: "ready" }
   const asked = snap.questions.filter((question) => question.from === label).length
   return { ...base, text: asked === 0 ? "done" : count(asked, "question") }
 }
 
-/** The oracle first, then the four seats in the terminal's order. */
+/** The oracle first, then the four seats. */
 export function seatCells(snap: PlannerSnapshot): SeatCell[] {
   const asked = snap.questions.filter((question) => question.from === ORACLE).length
   const oracle: SeatCell = { label: ORACLE, seated: true, working: snap.busy, text: snap.busy ? "chairing" : asked ? count(asked, "question") : "·" }

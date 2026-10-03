@@ -1,5 +1,5 @@
 /**
- * The Knowledge tab (batch-2 §l): every agent's knowledge files on the left
+ * The Knowledge tab: every agent's knowledge files on the left
  * (grouped, with their compaction marks and note counts) and the open file's
  * entries on the right (a Sheet below 1024 px). `#/knowledge/<agent>/<file>`
  * opens a file; the `knowledge` topic rereads the list.
@@ -21,7 +21,7 @@ const open = (key: string) => {
 
 function NoFiles() {
   return (
-    <Empty className="m-4 flex-1 border border-border bg-card">
+    <Empty className="glass m-4 flex-1 border">
       <EmptyHeader>
         <EmptyDescription>No knowledge files yet.</EmptyDescription>
       </EmptyHeader>
@@ -45,7 +45,7 @@ export function KnowledgeTab({ agent, file }: { agent?: string; file?: string })
   const chosen = files.find((info) => info.agent === agent && info.file === file)
   const list = (
     <>
-      <PaneHeader title="Knowledge" count={notes > 0 ? `✎ ${notes}` : undefined} />
+      <PaneHeader title="Knowledge" count={notes > 0 ? `${notes} note${notes === 1 ? "" : "s"}` : undefined} />
       {read.data ? <KnowledgeList files={files} selectedKey={chosen ? fileKey(chosen) : undefined} onSelect={open} /> : <ListSkeleton />}
     </>
   )

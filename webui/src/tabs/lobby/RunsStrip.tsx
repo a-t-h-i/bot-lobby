@@ -6,7 +6,7 @@
  */
 import { useEffect, useState } from "react"
 import type { ReactNode } from "react"
-import { Badge } from "@/components/ui/badge"
+import { Check, X } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { formatElapsed } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -23,10 +23,10 @@ function useNow(active: boolean): number {
 }
 
 function statusMark(status: string | undefined): ReactNode {
-  if (status === "running") return <Spinner aria-hidden="true" role="presentation" />
-  if (status === "success") return <span className="text-success">✓</span>
-  if (status === "failed" || status === "timeout" || status === "error") return <span className="text-destructive">✗</span>
-  return "·"
+  if (status === "running") return <Spinner aria-hidden="true" role="presentation" className="size-3.5" />
+  if (status === "success") return <Check aria-hidden="true" className="size-3.5 text-success" />
+  if (status === "failed" || status === "timeout" || status === "error") return <X aria-hidden="true" className="size-3.5 text-destructive" />
+  return <span className="size-1.5 rounded-full bg-muted-foreground/50" />
 }
 
 function elapsedOf(run: LobbyRun, now: number): string {
@@ -39,21 +39,16 @@ export function RunsStrip({ runs }: { runs: LobbyRun[] }) {
   const now = useNow(runs.some((run) => run.status === "running"))
   if (runs.length === 0) return null
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-x-[2ch] gap-y-1 text-sm" aria-label="Runs">
-      <span className="font-bold text-primary">Runs</span>
+    <ul className="flex shrink-0 flex-wrap items-center gap-2" aria-label="Runs">
       {runs.map((run, index) => (
-        <Badge key={run.runId ?? index} variant="ghost" className="h-6 gap-[1ch] px-0 text-sm font-normal">
-          <span aria-hidden="true" className="text-muted-foreground">
-            {statusMark(run.status)}
-          </span>
+        <li key={run.runId ?? index} className="glass flex items-center gap-2 rounded-full py-1.5 pr-3.5 pl-3 text-xs">
+          <span className="flex size-4 items-center justify-center">{statusMark(run.status)}</span>
           <span className="sr-only">{run.status ?? "unknown"}</span>
-          <span className={cn(sourceColor(agentName(run)))}>{agentName(run)}</span>
-          {run.activity ?? run.step ? (
-            <span className="text-muted-foreground">{run.activity ?? run.step}</span>
-          ) : null}
+          <span className={cn("font-semibold", sourceColor(agentName(run)))}>{agentName(run)}</span>
+          {run.activity ?? run.step ? <span className="max-w-[18rem] truncate text-muted-foreground">{run.activity ?? run.step}</span> : null}
           <span className="tabular-nums text-muted-foreground">{elapsedOf(run, now)}</span>
-        </Badge>
+        </li>
       ))}
-    </div>
+    </ul>
   )
 }
