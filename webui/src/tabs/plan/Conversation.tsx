@@ -8,7 +8,7 @@ import type { PlannerMessage, PanelQuestion } from "@protocol"
 import { formatClock } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Markdown } from "@/ui/Markdown"
-import { sourceColor } from "../lobby/types"
+import { sourceColor, sourceLabel } from "../lobby/types"
 
 function Asked({ questions }: { questions: PanelQuestion[] }) {
   return (
@@ -17,7 +17,7 @@ function Asked({ questions }: { questions: PanelQuestion[] }) {
         <li key={index} className="flex flex-col gap-1 text-sm">
           <p>
             <span className="tabular-nums text-muted-foreground">{String(index + 1).padStart(2, "0")}. </span>
-            <span className={cn("font-medium", sourceColor(question.from))}>{question.from}</span> {question.text}
+            <span className={cn("font-medium", sourceColor(question.from))}>{sourceLabel(question.from)}</span> {question.text}
           </p>
           <ul className="flex flex-col gap-0.5 pl-6 text-muted-foreground">
             {question.options.map((option) => (
@@ -42,7 +42,7 @@ function Decided({ message }: { message: PlannerMessage }) {
       {(message.decided ?? []).map((entry, index) => (
         <p key={index} className="text-sm">
           <Check aria-hidden="true" className="mr-1 inline size-3.5 text-success" />
-          <span className={cn("font-medium", sourceColor(entry.from))}>[{entry.from}]</span> {entry.question} → <strong>{entry.answer}</strong>{" "}
+          <span className={cn("font-medium", sourceColor(entry.from))}>{sourceLabel(entry.from)}</span> {entry.question} → <strong>{entry.answer}</strong>{" "}
           <span className="text-muted-foreground">· decided by the classifier ({entry.probability.toFixed(2)}); comment on the plan to overrule</span>
         </p>
       ))}
@@ -58,7 +58,7 @@ function Turn({ message }: { message: PlannerMessage }) {
         <span className="text-xs text-muted-foreground">
           {time} You
         </span>
-        <div className="max-w-[85%] rounded-md rounded-tr-md border border-primary/15 bg-you px-4 py-2">
+        <div className="max-w-[85%] rounded-lg rounded-tr-lg border border-primary/15 bg-you px-4 py-2">
           <Markdown text={message.text} />
         </div>
       </div>
@@ -69,7 +69,7 @@ function Turn({ message }: { message: PlannerMessage }) {
     <div className="flex flex-col gap-2">
       <span className="flex items-center gap-2 text-xs text-muted-foreground">
         <span aria-hidden="true" className="size-2 rounded-full bg-primary" />
-        <span className="font-semibold text-foreground">Panel</span> {time}
+        <span className="font-medium text-foreground">Panel</span> {time}
       </span>
       {asked.length > 0 ? <Asked questions={asked} /> : <Markdown text={message.text} />}
       <Decided message={message} />

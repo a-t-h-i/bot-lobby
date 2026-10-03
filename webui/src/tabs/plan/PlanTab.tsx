@@ -35,7 +35,7 @@ function useFollowEnd(revision: number) {
 function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) {
   return (
     <Pane className="flex flex-col gap-4 p-5">
-      <h2 className="text-base font-semibold">Plan</h2>
+      <h2 className="text-base font-medium">Plan</h2>
       <p className="text-sm font-medium text-foreground">{introText(snap.limit)}</p>
       <Roster cells={seatCells(snap)} intro onToggled={onDone} />
     </Pane>

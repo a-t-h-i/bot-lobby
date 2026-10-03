@@ -37,7 +37,7 @@ function IconLink({ label, hint, href, active, children }: { label: string; hint
           aria-label={label}
           aria-current={active ? "page" : undefined}
           className={cn(
-            "inline-flex size-10 items-center justify-center rounded-md border border-transparent text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95",
+            "inline-flex size-10 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95",
             active && "bg-accent text-foreground"
           )}
         >
@@ -61,7 +61,7 @@ function ThemeToggle() {
           type="button"
           aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
           onClick={() => setTheme(dark ? "light" : "dark")}
-          className="inline-flex size-10 items-center justify-center rounded-md text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+          className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
         >
           {dark ? <Sun aria-hidden="true" className="size-[1.1rem]" /> : <Moon aria-hidden="true" className="size-[1.1rem]" />}
         </button>
@@ -97,9 +97,9 @@ export function Header({
     <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 pt-3 pb-2 [grid-template-areas:'title_status'_'tabs_tabs'] min-[1560px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] min-[1560px]:[grid-template-areas:'title_tabs_status']">
       <div className="flex min-w-0 items-center gap-2.5 [grid-area:title]">
         <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full bg-primary" />
-        <span className="truncate text-sm font-semibold">{name}</span>
+        <span className="truncate text-sm font-medium">{name}</span>
         {branch ? (
-          <span className="inline-flex min-w-0 items-center gap-1 truncate rounded-md bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+          <span className="inline-flex min-w-0 items-center gap-1 truncate rounded-lg bg-muted px-2.5 py-1 text-xs text-muted-foreground">
             <GitBranch aria-hidden="true" className="size-3 shrink-0" />
             <span className="truncate">{branch}</span>
           </span>

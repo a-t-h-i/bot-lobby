@@ -204,7 +204,7 @@ function ModelChoice(props: { value: string; models: SettingsModelInfo[]; label:
 
 function ToggleField({ label, help, checked, onChange }: { label: string; help?: string; checked: boolean; onChange: (next: boolean) => void }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-md border border-border bg-card/40 px-4 py-3">
+    <div className="flex items-start justify-between gap-4 rounded-lg border border-border bg-card/40 px-4 py-3">
       <div className="min-w-0">
         <div className="text-sm font-medium">{label}</div>
         {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
@@ -483,7 +483,7 @@ export function SettingsForm({ config, models, onConfig }: { config: Config; mod
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-4 sm:p-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold">{PAGE.title}</h1>
+        <h1 className="text-xl font-medium">{PAGE.title}</h1>
         <p className="text-sm text-muted-foreground">{PAGE.intro}</p>
       </header>
       <Section title={GROUP_TITLES.agents}>

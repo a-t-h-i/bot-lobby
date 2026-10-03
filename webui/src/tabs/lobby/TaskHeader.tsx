@@ -10,7 +10,7 @@ import type { SnapshotTask, StatusInfo } from "@protocol"
 import { trackText } from "@/ui/task-facts"
 
 function Chip({ children }: { children: React.ReactNode }) {
-  return <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2.5 py-1 text-xs text-muted-foreground">{children}</span>
+  return <span className="inline-flex items-center gap-1 rounded-lg bg-muted px-2.5 py-1 text-xs text-muted-foreground">{children}</span>
 }
 
 function Progress({ done, total, current }: { done: number; total: number; current?: string }) {
@@ -38,10 +38,10 @@ export function TaskHeader({ task, status }: { task?: SnapshotTask; status?: Sta
   const branch = status?.branch ?? status?.workspace.branch
   const where = task?.git?.branch ?? branch
   return (
-    <section className="glass flex shrink-0 flex-col gap-3 rounded-md px-5 py-4" aria-label="Task" role="group">
+    <section className="glass flex shrink-0 flex-col gap-3 rounded-lg px-5 py-4" aria-label="Task" role="group">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <h2 className="min-w-0 truncate text-base font-semibold">{task?.title ?? "No task is running in this session."}</h2>
-        {task ? <span className="rounded-md bg-accent px-2.5 py-0.5 text-xs font-medium">{task.state.replace(/_/g, " ")}</span> : null}
+        <h2 className="min-w-0 truncate text-base font-medium">{task?.title ?? "No task is running in this session."}</h2>
+        {task ? <span className="rounded-lg bg-accent px-2.5 py-0.5 text-xs font-medium">{task.state.replace(/_/g, " ")}</span> : null}
       </div>
       {task ? (
         <>

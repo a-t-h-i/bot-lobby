@@ -50,7 +50,7 @@ function Progress({ row, task }: { row: TaskRow; task?: SnapshotTask }) {
       </span>
       {task?.currentStep ? (
         <span className="text-foreground">
-          {task.currentStep} <span className="rounded-md bg-accent px-2 py-0.5 text-xs font-medium">now</span>
+          {task.currentStep} <span className="rounded-lg bg-accent px-2 py-0.5 text-xs font-medium">now</span>
           <span className="sr-only">(current step)</span>
         </span>
       ) : null}
@@ -62,7 +62,7 @@ function Header({ row, task }: { row: TaskRow; task?: SnapshotTask }) {
   const branch = task?.git ? `branch ${task.git.branch}${task.git.from ? ` · from ${task.git.from}` : ""}` : ""
   return (
     <header className="flex flex-col gap-1.5">
-      <h2 className="flex items-start gap-2.5 text-lg font-semibold">
+      <h2 className="flex items-start gap-2.5 text-lg font-medium">
         <CheckMark check={row.check} className="mt-1.5" />
         <span className="sr-only">{CHECK_WORDS[row.check]}:</span>
         <span className={row.check === "dropped" ? "min-w-0 break-words line-through" : "min-w-0 break-words"}>{row.title}</span>

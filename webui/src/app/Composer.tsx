@@ -83,7 +83,7 @@ let keySeq = 0
 
 /** The flat icon buttons under the box. */
 const TOOL =
-  "inline-flex size-10 items-center justify-center rounded-md text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+  "inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
 
 function isSend(event: KeyboardEvent): boolean {
   return event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing
@@ -97,9 +97,9 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.8 }}
       transition={{ type: "spring", stiffness: 520, damping: 32 }}
-      className="flex min-w-0 items-center gap-2 rounded-md bg-muted py-1 pr-1 pl-1"
+      className="flex min-w-0 items-center gap-2 rounded-lg bg-muted py-1 pr-1 pl-1"
     >
-      <span className="relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-card text-muted-foreground">
+      <span className="relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-card text-muted-foreground">
         {file.image ? <img src={file.image} alt="" className="size-full object-cover" /> : <FileText aria-hidden="true" className="size-4" />}
         {file.state === "uploading" ? (
           <span className="absolute inset-0 flex items-center justify-center bg-background/60">
@@ -115,7 +115,7 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
         type="button"
         aria-label={`Remove ${file.name}`}
         onClick={onRemove}
-        className="flex size-10 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+        className="flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
       >
         <X aria-hidden="true" className="size-4" />
       </button>
@@ -279,7 +279,7 @@ export function Composer({ route }: { route: Route }) {
       <div className={cn("mx-auto w-full transition-[max-width] duration-300 ease-snap", expanded ? "max-w-4xl" : "max-w-3xl")}>
         <div
           className={cn(
-            "group/composer rounded-md border border-input bg-card transition-[border-color,box-shadow] duration-200 ease-snap focus-within:border-ring/60",
+            "group/composer rounded-lg border border-input bg-card transition-[border-color,box-shadow] duration-200 ease-snap focus-within:border-ring/60",
             dragging && "border-primary ring-3 ring-ring/30"
           )}
           onDragOver={(event) => {
@@ -377,7 +377,7 @@ export function Composer({ route }: { route: Route }) {
                   aria-checked={entry.id === target.id}
                   onClick={() => setChosen(entry.id)}
                   className={cn(
-                    "h-10 rounded-md px-3 text-xs font-medium transition-[background-color,color] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
+                    "h-10 rounded-lg px-3 text-xs font-medium transition-[background-color,color] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
                     entry.id === target.id ? "bg-tab text-foreground" : "text-muted-foreground hover:text-foreground"
                   )}
                 >
@@ -397,7 +397,7 @@ export function Composer({ route }: { route: Route }) {
               type="button"
               aria-label="Stop"
               onClick={() => void stop()}
-              className="inline-flex size-10 items-center justify-center rounded-md bg-secondary text-foreground transition-[background-color,transform] duration-150 ease-snap outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+              className="inline-flex size-10 items-center justify-center rounded-lg bg-secondary text-foreground transition-[background-color,transform] duration-150 ease-snap outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
             >
               <Square aria-hidden="true" className="size-3.5 fill-current" />
             </button>
@@ -407,7 +407,7 @@ export function Composer({ route }: { route: Route }) {
             aria-label="Send"
             onClick={() => void send()}
             disabled={!canSend}
-            className="inline-flex size-10 items-center justify-center rounded-md bg-primary text-primary-foreground transition-[opacity,transform,filter] duration-150 ease-snap outline-none hover:brightness-110 focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95 disabled:opacity-40 disabled:hover:brightness-100"
+            className="inline-flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-[opacity,transform,filter] duration-150 ease-snap outline-none hover:brightness-110 focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95 disabled:opacity-40 disabled:hover:brightness-100"
           >
             {sending ? <Spinner aria-hidden="true" role="presentation" className="size-4 text-primary-foreground" /> : <ArrowUp aria-hidden="true" className="size-[1.15rem]" />}
           </button>

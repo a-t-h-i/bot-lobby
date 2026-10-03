@@ -32,7 +32,7 @@ function useNow(active: boolean): number {
 function Header({ pull, now }: { pull: PullDetailInfo; now: number }) {
   return (
     <header className="flex flex-col gap-1">
-      <h2 className="text-sm font-bold break-words">
+      <h2 className="text-sm font-semibold break-words">
         #{pull.number} {pull.title}
       </h2>
       <p className="text-xs text-muted-foreground">{factsLine(pull, now)}</p>
@@ -147,7 +147,7 @@ function ReviewBox({ number, review, now, onChanged }: { number: number; review?
 function Files({ files }: { files: PullFileInfo[] }) {
   return (
     <Section title="Files" right={String(files.length)}>
-      <div className="overflow-x-auto rounded-md border">
+      <div className="overflow-x-auto rounded-lg border">
         <table className="w-full border-collapse text-sm tabular-nums">
           <tbody>
             {files.map((file) => (

@@ -7,6 +7,7 @@
  */
 import type { MetricGroupInfo, MetricsData } from "@protocol"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { sourceLabel } from "../lobby/types"
 import { agentFill, duration, shortDuration, status, toneClass, type RateStatus } from "./words"
 
 function ChartCard({ title, right, children }: { title: string; right: string; children: React.ReactNode }) {
@@ -39,8 +40,8 @@ function BarRow({ label, value, max, valueText, sub }: { label: string; value: n
           {sub ? <span className="ml-2 text-xs text-muted-foreground">{sub}</span> : null}
         </span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${label}: ${valueText}`}>
-        <div className="h-full rounded-full bg-chart-1" style={{ width: barWidth(value, max) }} />
+      <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${label}: ${valueText}`}>
+        <div className="h-full rounded-full bg-primary/60" style={{ width: barWidth(value, max) }} />
       </div>
     </li>
   )
@@ -72,7 +73,7 @@ export function AvgTime({ groups, label }: { groups: MetricGroupInfo[]; label: (
   )
 }
 
-const METER_FILL: Record<RateStatus["tone"], string> = { healthy: "bg-primary", shaky: "bg-foreground", failing: "bg-destructive" }
+const METER_FILL: Record<RateStatus["tone"], string> = { healthy: "bg-primary/60", shaky: "bg-foreground/60", failing: "bg-destructive/70" }
 
 function MeterRow({ label, rate, runs }: { label: string; rate: number; runs: number }) {
   const state = status(rate)
@@ -92,7 +93,7 @@ function MeterRow({ label, rate, runs }: { label: string; rate: number; runs: nu
           <span className="text-xs text-muted-foreground">{runs}</span>
         </span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${label}: ${state.word}, ${pct} of ${runs} runs`}>
+      <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${label}: ${state.word}, ${pct} of ${runs} runs`}>
         <div className={`h-full rounded-full ${METER_FILL[state.tone]}`} style={{ width: barWidth(rate, 1) }} />
       </div>
     </li>
@@ -123,7 +124,7 @@ function ShareLegend({ share }: { share: MetricsData["timeShare"]["byAgent"] }) 
       {share.map((entry) => (
         <li key={entry.agent} className="flex items-center gap-1.5 text-muted-foreground">
           <span className={`inline-block size-2.5 rounded-[2px] ${agentFill(entry.agent)}`} aria-hidden="true" />
-          <span className="text-foreground">{entry.agent}</span>
+          <span className="text-foreground">{sourceLabel(entry.agent)}</span>
           <span className="tabular-nums">{Math.round(entry.share * 100)}%</span>
           <span className="tabular-nums">avg {shortDuration(entry.ms / Math.max(1, entry.runs))} ×{entry.runs}</span>
         </li>
@@ -134,9 +135,9 @@ function ShareLegend({ share }: { share: MetricsData["timeShare"]["byAgent"] }) 
 
 function Stacked({ share }: { share: MetricsData["timeShare"]["byAgent"] }) {
   return (
-    <div className="flex h-3 overflow-hidden rounded-full bg-muted" role="img" aria-label="Share of run time by agent">
+    <div className="flex h-2 overflow-hidden rounded-full bg-muted" role="img" aria-label="Share of run time by agent">
       {share.map((entry) => (
-        <span key={entry.agent} className={agentFill(entry.agent)} style={{ width: `${entry.share * 100}%` }} title={`${entry.agent} ${Math.round(entry.share * 100)}%`} />
+        <span key={entry.agent} className={`${agentFill(entry.agent)} opacity-70`} style={{ width: `${entry.share * 100}%` }} title={`${entry.agent} ${Math.round(entry.share * 100)}%`} />
       ))}
     </div>
   )

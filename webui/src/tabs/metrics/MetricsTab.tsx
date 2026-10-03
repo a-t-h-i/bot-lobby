@@ -20,9 +20,9 @@ const EMPTY = "No runs recorded yet. Every Master turn, subagent run, quick fix 
 
 function GroupToggle({ groupBy, onGroup }: { groupBy: GroupBy; onGroup: (value: GroupBy) => void }) {
   return (
-    <div role="group" aria-label="Group by" className="flex gap-1 rounded-md bg-muted p-1">
+    <div role="group" aria-label="Group by" className="flex gap-1 rounded-lg bg-muted p-1">
       {(["model", "model-kind"] as const).map((value) => (
-        <Button key={value} variant={groupBy === value ? "default" : "ghost"} className="rounded-md" aria-pressed={groupBy === value} onClick={() => onGroup(value)}>
+        <Button key={value} variant="ghost" className={groupBy === value ? "rounded-lg bg-tab text-foreground hover:bg-tab" : "rounded-lg text-muted-foreground"} aria-pressed={groupBy === value} onClick={() => onGroup(value)}>
           {byLabel(value)}
         </Button>
       ))}
@@ -43,7 +43,7 @@ function SearchBox({ query, onQuery }: { query: string; onQuery: (value: string)
         maxLength={500}
         placeholder="model, agent, tool…"
         onChange={(event) => onQuery(event.target.value)}
-        className="h-10 w-full min-w-48 rounded-md border border-input bg-card/40 px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+        className="h-10 w-full min-w-48 rounded-lg border border-input bg-card/40 px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
       />
     </div>
   )
@@ -64,7 +64,7 @@ function Body({ data, groupBy, query }: { data: MetricsData; groupBy: GroupBy; q
     return (
       <div className="flex flex-col gap-4">
         <Tiles tiles={data.tiles} />
-        <p className="glass rounded-md p-4 text-sm text-muted-foreground">{query ? `No run matches "${query}".` : EMPTY}</p>
+        <p className="glass rounded-lg p-4 text-sm text-muted-foreground">{query ? `No run matches "${query}".` : EMPTY}</p>
       </div>
     )
   }
@@ -86,7 +86,7 @@ function Skeleton() {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" role="status" aria-label="Loading metrics">
       {[0, 1, 2, 3, 4].map((tile) => (
-        <div key={tile} className="h-24 rounded-md bg-muted motion-safe:animate-pulse" />
+        <div key={tile} className="h-24 rounded-lg bg-muted motion-safe:animate-pulse" />
       ))}
     </div>
   )
@@ -100,7 +100,7 @@ export function MetricsTab() {
   return (
     <div className="flex flex-col gap-4 p-4">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-xl font-semibold">Metrics</h1>
+        <h1 className="text-xl font-medium">Metrics</h1>
         {read.loading && read.data ? <span className="flex items-center gap-2 text-xs text-muted-foreground"><Spinner className="size-3" aria-hidden="true" role="presentation" /> refreshing</span> : null}
       </header>
       <Controls groupBy={groupBy} query={query} onGroup={setGroupBy} onQuery={setQuery} />

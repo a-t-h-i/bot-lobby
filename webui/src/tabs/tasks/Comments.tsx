@@ -21,7 +21,7 @@ function CommentItem({ comment }: { comment: PlanComment }) {
   const age = formatSince(Date.now() - Date.parse(comment.createdAt))
   const Icon = COMMENT_ICONS[comment.status]
   return (
-    <li className="rounded-md border border-border bg-card/50 px-4 py-3">
+    <li className="rounded-lg border border-border bg-card/50 px-4 py-3">
       <Markdown text={comment.text} />
       <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
         <Icon aria-hidden="true" className={comment.status === "addressed" ? "size-3.5 text-success" : "size-3.5"} />
