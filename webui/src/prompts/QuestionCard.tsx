@@ -8,6 +8,7 @@
 import { useState, type FormEvent, type KeyboardEvent } from "react"
 import { Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Kbd, KeyHint } from "@/components/ui/kbd"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { Markdown } from "@/ui/Markdown"
@@ -243,8 +244,13 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel }: { ques
         </div>
         <Preview option={previewOption} />
       </div>
-      <p className="text-xs text-muted-foreground">
-        {multi ? "Pick several, then continue" : "Pick one"} · keys 1-{question.options.length} choose · Esc puts it away
+      <p className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+        <span>{multi ? "Pick several, then continue" : "Pick one"}</span>
+        <span className="inline-flex items-center gap-1.5">
+          <Kbd>{question.options.length > 1 ? `1–${question.options.length}` : "1"}</Kbd>
+          choose
+        </span>
+        <KeyHint chord="Esc">put it away</KeyHint>
       </p>
       <CardFooter
         primary="submit"
