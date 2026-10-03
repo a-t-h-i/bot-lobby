@@ -320,6 +320,16 @@ The user asked for a modern, calm page of cards and no longer wants the terminal
 - **Shape:** one radius, `rounded-lg` (8px), for cards, inputs, buttons and chips; the tab pill has 10px corners.
 - **Key hints:** every shortcut is shown where it applies. Caps (`Alt` `H`, `⌥` `H` on a Mac) in tooltips, under the message box (they thin out as it narrows), in the pop-up headers, and in the key list (`Alt+H`, or the keyboard button in the title row).
 
+## D-23 · Keyboard first, compact, no recommendations · Adopted
+
+The user asked for a keyboard-first, tighter page that makes them think through decisions (2026-10-04).
+
+- **Keyboard:** every list, card and question can be driven without the mouse. `↓` from the tab bar enters the page; `↑↓` (or `j`/`k`) walk a list, `→`/`←` (`l`/`h`) cross between a list and its detail, `Esc` goes back up; `/` jumps to the message box. In a question: `↑↓` move, `Space` picks, `Enter` chooses and goes on, `←→` change question, digits pick, `y`/`n` answer a yes/no. `Alt+H` lists all of it (`app/AltH.tsx`, `prompts/nav.ts`).
+- **Compact:** controls are 28-32px (D-09's 40px target is relaxed to 28px, above WCAG 2.2's 24px); the Settings page is dense cards and hairline rows, instructions folded away until opened.
+- **The page never scrolls:** the shell is fixed to the screen and only its panes scroll, so there is no empty page below the composer.
+- **No recommended answers:** agents no longer mark a `(Recommended)` option unless the answer is quite obvious (prompts, the `ask_user_question` tool text). Order implies nothing: an unmarked question has no recommendation, so the classifier never answers it and a question left at the round limit is "the oracle's call". The split question no longer marks its first option.
+- **Message box:** grows with the text, Markdown shortcuts (`Ctrl+B/I/E/K`, `Shift+Enter` carries lists on), `Alt+P` previews, images show as thumbnails.
+
 ---
 
 ## Open questions (each has a default the swarm uses until the user answers)

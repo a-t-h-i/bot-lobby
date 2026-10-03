@@ -45,6 +45,14 @@ export function Popup({ open, onOpenChange, label, description, dismissOnBackdro
                 onInteractOutside={(event) => {
                   if (!dismissOnBackdrop) event.preventDefault()
                 }}
+                onOpenAutoFocus={(event) => {
+                  // A pop-up that holds options or a text field puts focus there, not on its close button.
+                  const first = (event.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>("[data-nav], [data-autofocus], textarea")
+                  if (first) {
+                    event.preventDefault()
+                    first.focus()
+                  }
+                }}
                 {...(description ? {} : { "aria-describedby": undefined })}
               >
                 <motion.div

@@ -33,7 +33,7 @@ function Typed({ dialog, send }: { dialog: SessionDialog; send: Send }) {
         {dialog.title}
       </label>
       <Textarea id={id} rows={dialog.method === "editor" ? 4 : 2} value={text} placeholder={dialog.placeholder} onChange={(event) => setText(event.target.value)} />
-      <Button className="h-10 self-end" disabled={!text.trim()} onClick={() => void send({ value: text.trim() })}>
+      <Button className="h-8 self-end" disabled={!text.trim()} onClick={() => void send({ value: text.trim() })}>
         Send answer
       </Button>
     </div>
@@ -64,7 +64,7 @@ function Card({ sessionKey, dialog, onAnswered }: { sessionKey: string; dialog: 
         {dialog.message ? <p className="text-sm text-muted-foreground">{dialog.message}</p> : null}
       </div>
       <Answer dialog={dialog} send={send} />
-      <Button variant="ghost" className="h-10 self-start text-muted-foreground" onClick={() => void send({ cancelled: true })}>
+      <Button variant="ghost" className="h-8 self-start text-muted-foreground" onClick={() => void send({ cancelled: true })}>
         Put it away
       </Button>
     </div>

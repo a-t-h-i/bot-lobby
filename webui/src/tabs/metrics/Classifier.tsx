@@ -1,52 +1,43 @@
 /**
- * The classifier's box: `Classifier (Jev)`, its calls and speed,
- * then what its decisions spared — the terminal's `classifierLines` wording.
+ * The classifier's box: `Classifier (Jev)`, its calls and speed in four small
+ * stats, the calls by purpose, then what its decisions spared.
  */
 import type { MetricsData } from "@protocol"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { millis, percent, tokens } from "./words"
 
 type Summary = NonNullable<MetricsData["classifier"]>
 
-function callsLine(summary: Summary): string {
-  if (summary.calls === 0) return "no calls recorded"
-  const purposes = Object.entries(summary.byPurpose)
-    .sort((a, b) => b[1] - a[1])
-    .map(([purpose, count]) => `${purpose} ${count}`)
-    .join(" · ")
-  return [
-    `${summary.calls} call${summary.calls === 1 ? "" : "s"}`,
-    `${percent(summary.ok, summary.calls)} ok`,
-    `p50 ${millis(summary.p50Ms)}`,
-    `p90 ${millis(summary.p90Ms)}`,
-    summary.input > 0 ? `${tokens(summary.input)} tokens read` : "",
-    purposes,
-  ]
-    .filter(Boolean)
-    .join(" · ")
+function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-sm font-medium tabular-nums">{value}</span>
+      {sub ? <span className="truncate text-xs text-muted-foreground">{sub}</span> : null}
+    </div>
+  )
 }
 
-function sparedLine(summary: Summary): string {
-  return [
-    `${summary.seatRunsSkipped} seat run${summary.seatRunsSkipped === 1 ? "" : "s"} skipped`,
-    `${summary.questionsAnswered} question${summary.questionsAnswered === 1 ? "" : "s"} answered`,
-    `${summary.quickFixesHeld} quick fix${summary.quickFixesHeld === 1 ? "" : "es"} held`,
-    summary.routed > 0 ? `${summary.routed} run${summary.routed === 1 ? "" : "s"} routed down, ${percent(summary.routedOk, summary.routed)} ok` : "no runs routed",
-  ].join(" · ")
-}
+const plural = (count: number, word: string, many = `${word}s`): string => `${count} ${count === 1 ? word : many}`
 
 export function Classifier({ summary }: { summary: Summary }) {
+  const purposes = Object.entries(summary.byPurpose).sort((a, b) => b[1] - a[1])
   return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle className="text-sm">Classifier (Jev)</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-1 text-sm text-muted-foreground">
-        <p className="break-words">{callsLine(summary)}</p>
-        <p className="break-words">
-          <span className="text-primary">spared</span> {sparedLine(summary)}
-        </p>
-      </CardContent>
-    </Card>
+    <section className="glass flex flex-col gap-3 rounded-lg px-4 py-3" aria-label="Classifier (Jev)">
+      <h2 className="text-sm font-medium">Classifier (Jev)</h2>
+      {summary.calls === 0 ? (
+        <p className="text-sm text-muted-foreground">no calls recorded</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+          <Stat label="Calls" value={plural(summary.calls, "call")} sub={`${percent(summary.ok, summary.calls)} ok`} />
+          <Stat label="Speed" value={`p50 ${millis(summary.p50Ms)}`} sub={`p90 ${millis(summary.p90Ms)}`} />
+          <Stat label="Read" value={summary.input > 0 ? `${tokens(summary.input)} tokens` : "—"} />
+          <Stat label="Routed down" value={summary.routed > 0 ? plural(summary.routed, "run") : "none"} sub={summary.routed > 0 ? `${percent(summary.routedOk, summary.routed)} ok` : "no runs routed"} />
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground">
+        <span className="text-primary">spared</span> {plural(summary.seatRunsSkipped, "seat run")} skipped · {plural(summary.questionsAnswered, "question")} answered · {plural(summary.quickFixesHeld, "quick fix", "quick fixes")} held
+        {purposes.length > 0 ? <span className="ml-3 border-l border-border pl-3">{purposes.map(([purpose, count]) => `${purpose} ${count}`).join(" · ")}</span> : null}
+      </p>
+    </section>
   )
 }

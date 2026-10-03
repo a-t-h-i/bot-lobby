@@ -5,13 +5,14 @@
  * options on wide windows, below them on narrow ones). `choose`, `confirm`, `text` and `sessionDialog` reuse
  * the same surface with their own controls and answer shapes.
  */
-import { useState, type FormEvent, type KeyboardEvent } from "react"
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
 import { Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Kbd, KeyHint } from "@/components/ui/kbd"
+import { KeyHint } from "@/components/ui/kbd"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { Markdown } from "@/ui/Markdown"
+import { horizontalStep, isTyping, moveNav, verticalStep } from "./nav"
 import type { AskAnswer, AskQuestion, AskResult, AskOption, PromptView, SessionDialog } from "./payload"
 
 interface CardProps {
@@ -61,6 +62,7 @@ function OptionRow({
   name,
   selected,
   onToggle,
+  onFocusOption,
 }: {
   option: AskOption
   index: number
@@ -68,16 +70,17 @@ function OptionRow({
   name?: string
   selected: boolean
   onToggle: () => void
+  onFocusOption?: () => void
 }) {
   return (
     <label
       className={cn(
-        "flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 text-start text-sm transition-[background-color,border-color,transform] duration-150 ease-snap active:scale-[0.99]",
+        "flex min-h-9 cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 text-start text-sm transition-[background-color,border-color,transform] duration-150 ease-snap active:scale-[0.99]",
         selected ? "border-primary/50 bg-accent" : "border-input bg-card/40 hover:bg-accent/60",
         "has-[:focus-visible]:border-ring has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/30"
       )}
     >
-      <input type={multi ? "checkbox" : "radio"} name={name} className="sr-only" checked={selected} onChange={onToggle} />
+      <input type={multi ? "checkbox" : "radio"} name={name} data-nav="" data-option={index} className="sr-only" checked={selected} onChange={onToggle} onFocus={onFocusOption} />
       <CheckMark multi={multi} on={selected} />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex gap-1.5">
@@ -156,7 +159,7 @@ function Chips({ questions, picks, own, index, onGo }: { questions: AskQuestion[
             onClick={() => onGo(position)}
             aria-current={position === index}
             className={cn(
-              "inline-flex min-h-10 items-center gap-1 rounded-lg border px-3.5 text-xs font-medium transition-colors",
+              "inline-flex min-h-8 items-center gap-1 rounded-lg border px-3 text-xs font-medium transition-colors",
               position === index ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"
             )}
           >
@@ -174,12 +177,22 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel }: { ques
   const [picks, setPicks] = useState<Record<number, number[]>>({})
   const [own, setOwn] = useState<Record<number, string>>({})
   const [focused, setFocused] = useState<Record<number, number>>({})
+  const form = useRef<HTMLFormElement>(null)
   const question = questions[index]
   const picked = picks[index] ?? []
   const ownText = own[index] ?? ""
   const previewOption = question?.options[focused[index] ?? picked[0] ?? 0]
   const current = answerFor(questions, picks, own, index)
   const multi = question?.multiSelect === true
+
+  // Each question opens with focus on its first option (or the one already picked).
+  useEffect(() => {
+    const root = form.current
+    if (!root) return
+    const first = root.querySelector<HTMLElement>(`[data-option="${picks[index]?.[0] ?? 0}"]`) ?? root.querySelector<HTMLElement>("[data-nav]")
+    first?.focus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index])
 
   if (!question) return null
 
@@ -190,28 +203,94 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel }: { ques
     setFocused({ ...focused, [index]: option })
   }
 
-  function submit(event: FormEvent) {
-    event.preventDefault()
-    if (!current) return
+  /** Go on with these answers: the next question, or send them all. */
+  function proceed(nextPicks: Record<number, number[]>, nextOwn: Record<number, string>) {
+    if (!answerFor(questions, nextPicks, nextOwn, index)) return
     if (index < questions.length - 1) {
       setIndex(index + 1)
       return
     }
-    const answers = questions.map((_, position) => answerFor(questions, picks, own, position)).filter((answer): answer is AskAnswer => Boolean(answer))
+    const answers = questions.map((_, position) => answerFor(questions, nextPicks, nextOwn, position)).filter((answer): answer is AskAnswer => Boolean(answer))
     onAnswer({ answers, cancelled: false } satisfies AskResult)
   }
 
+  function submit(event: FormEvent) {
+    event.preventDefault()
+    if (!submitting) proceed(picks, own)
+  }
+
+  function go(to: number) {
+    if (to >= 0 && to < questions.length) setIndex(to)
+  }
+
   function onKeyDown(event: KeyboardEvent<HTMLFormElement>) {
-    if (event.target instanceof HTMLTextAreaElement) return
+    const target = event.target as HTMLElement
+    const root = form.current
+    if (!root || event.altKey) return
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault()
+      if (!submitting) proceed(picks, own)
+      return
+    }
+    if (target instanceof HTMLTextAreaElement) {
+      // In the own-answer box: Enter answers, Shift+Enter is a new line, Up at the top goes back to the options.
+      if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+        event.preventDefault()
+        if (!submitting) proceed(picks, own)
+      } else if (event.key === "ArrowUp" && target.selectionStart === 0 && target.selectionEnd === 0) {
+        event.preventDefault()
+        moveNav(root, target, -1)
+      }
+      return
+    }
+    const step = verticalStep(event.key)
+    if (step) {
+      event.preventDefault()
+      moveNav(root, target, step)
+      return
+    }
+    if (event.key === "Home" || event.key === "End") {
+      event.preventDefault()
+      moveNav(root, target, event.key === "Home" ? "first" : "last")
+      return
+    }
+    const across = horizontalStep(event.key)
+    if (across && !(target instanceof HTMLButtonElement)) {
+      event.preventDefault()
+      go(index + across)
+      return
+    }
+    const option = target instanceof HTMLInputElement && target.dataset.option !== undefined ? Number(target.dataset.option) : -1
+    if (event.key === "Enter" && option >= 0) {
+      event.preventDefault()
+      if (multi) {
+        // Several answers: Enter on a picked option goes on, otherwise it picks.
+        if (picked.length > 0 && picked.includes(option)) proceed(picks, own)
+        else toggle(option)
+      } else {
+        const nextPicks = { ...picks, [index]: [option] }
+        const nextOwn = { ...own, [index]: "" }
+        setPicks(nextPicks)
+        setOwn(nextOwn)
+        proceed(nextPicks, nextOwn)
+      }
+      return
+    }
+    if (event.key === " " && option >= 0) {
+      event.preventDefault()
+      toggle(option)
+      return
+    }
     const digit = Number(event.key)
     if (Number.isInteger(digit) && digit >= 1 && digit <= question.options.length) {
       event.preventDefault()
       toggle(digit - 1)
+      root.querySelector<HTMLElement>(`[data-option="${digit - 1}"]`)?.focus()
     }
   }
 
   return (
-    <form className="flex flex-col gap-3" onSubmit={submit} onKeyDown={onKeyDown}>
+    <form ref={form} className="flex flex-col gap-3" onSubmit={submit} onKeyDown={onKeyDown}>
       <Chips questions={questions} picks={picks} own={own} index={index} onGo={setIndex} />
       <div>
         <p className="text-xs text-muted-foreground">
@@ -222,14 +301,21 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel }: { ques
       <div className={cn("grid min-w-0 gap-4", previewOption?.preview || previewOption?.image ? "lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]" : "")}>
         <div className="flex min-w-0 flex-col gap-2">
           {question.options.map((option, position) => (
-            <OptionRow key={position} option={option} index={position} multi={multi} name={`question-${index}`} selected={picked.includes(position)} onToggle={() => toggle(position)} />
+            <OptionRow
+              key={position}
+              option={option}
+              index={position}
+              multi={multi}
+              name={`question-${index}`}
+              selected={picked.includes(position)}
+              onToggle={() => toggle(position)}
+              onFocusOption={() => setFocused({ ...focused, [index]: position })}
+            />
           ))}
-          <label className="flex min-h-11 flex-col gap-1 rounded-lg border border-input px-3 py-2 text-sm focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30">
-            <span className="text-muted-foreground">
-              
-              {OWN_ANSWER}
-            </span>
+          <label className="flex min-h-9 flex-col gap-1 rounded-lg border border-input px-3 py-1.5 text-sm focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30">
+            <span className="text-muted-foreground">{OWN_ANSWER}</span>
             <Textarea
+              data-nav=""
               value={ownText}
               onChange={(event) => {
                 setOwn({ ...own, [index]: event.target.value })
@@ -238,19 +324,19 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel }: { ques
               placeholder={OWN_ANSWER}
               aria-label="Your own answer"
               rows={2}
-              className="min-h-11 resize-none border-0 bg-transparent p-0 text-base shadow-none focus-visible:ring-0 md:text-base"
+              className="min-h-9 resize-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0 md:text-sm"
             />
           </label>
         </div>
         <Preview option={previewOption} />
       </div>
       <p className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
-        <span>{multi ? "Pick several, then continue" : "Pick one"}</span>
-        <span className="inline-flex items-center gap-1.5">
-          <Kbd>{question.options.length > 1 ? `1–${question.options.length}` : "1"}</Kbd>
-          choose
-        </span>
-        <KeyHint chord="Esc">put it away</KeyHint>
+        <span>{multi ? "Pick several" : "Pick one"}</span>
+        <KeyHint chord="↑↓">move</KeyHint>
+        <KeyHint chord={multi ? "Space" : "Enter"}>{multi ? "pick" : "choose"}</KeyHint>
+        {multi ? <KeyHint chord="Enter">next</KeyHint> : null}
+        {questions.length > 1 ? <KeyHint chord="←→">question</KeyHint> : null}
+        <KeyHint chord="Esc">later</KeyHint>
       </p>
       <CardFooter
         primary="submit"
@@ -263,41 +349,99 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel }: { ques
   )
 }
 
+/** Up/Down (or j/k) move between the options, Space or a digit picks, Enter picks and answers. */
+function optionKeys(event: KeyboardEvent<HTMLElement>, count: number, pick: (option: number, answer: boolean) => void) {
+  const root = event.currentTarget
+  const target = event.target as HTMLElement
+  if (event.altKey || isTyping(target)) return
+  const step = verticalStep(event.key)
+  if (step) {
+    event.preventDefault()
+    moveNav(root, target, step)
+    return
+  }
+  const option = target instanceof HTMLInputElement && target.dataset.option !== undefined ? Number(target.dataset.option) : -1
+  if ((event.key === "Enter" || event.key === " ") && option >= 0) {
+    event.preventDefault()
+    pick(option, event.key === "Enter")
+    return
+  }
+  const digit = Number(event.key)
+  if (Number.isInteger(digit) && digit >= 1 && digit <= count) {
+    event.preventDefault()
+    pick(digit - 1, false)
+    root.querySelector<HTMLElement>(`[data-option="${digit - 1}"]`)?.focus()
+  }
+}
+
 function ChoiceCard({ view, submitting, onAnswer, onCancel }: CardProps & { view: Extract<PromptView, { kind: "choose" }> }) {
   const [value, setValue] = useState("")
+  const form = useRef<HTMLFormElement>(null)
+  useEffect(() => {
+    form.current?.querySelector<HTMLElement>("[data-nav]")?.focus()
+  }, [])
   return (
     <form
+      ref={form}
       className="flex flex-col gap-3"
       onSubmit={(event) => {
         event.preventDefault()
         if (value) onAnswer(value)
       }}
+      onKeyDown={(event) =>
+        optionKeys(event, view.options.length, (option, answer) => {
+          const label = view.options[option]
+          if (label === undefined) return
+          setValue(label)
+          if (answer && !submitting) onAnswer(label)
+        })
+      }
     >
       <Markdown text={view.title} className="text-base" />
       <div className="flex flex-col gap-2">
-        {view.options.map((option) => (
-          <OptionRow key={option} option={{ label: option }} index={view.options.indexOf(option)} multi={false} selected={value === option} onToggle={() => setValue(option)} />
+        {view.options.map((option, position) => (
+          <OptionRow key={option} option={{ label: option }} index={position} multi={false} name="choice" selected={value === option} onToggle={() => setValue(option)} />
         ))}
       </div>
+      <p className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+        <KeyHint chord="↑↓">move</KeyHint>
+        <KeyHint chord="Enter">choose</KeyHint>
+        <KeyHint chord="Esc">later</KeyHint>
+      </p>
       <CardFooter primary="submit" primaryLabel="Choose" disabled={!value} submitting={submitting} onCancel={onCancel} />
     </form>
   )
 }
 
 function ConfirmCard({ view, submitting, onAnswer }: CardProps & { view: Extract<PromptView, { kind: "confirm" }> }) {
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => box.current?.focus(), [])
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.altKey || event.ctrlKey || event.metaKey || submitting) return
+    const key = event.key.toLowerCase()
+    if (key === "y") onAnswer(true)
+    else if (key === "n") onAnswer(false)
+  }
   return (
-    <div className="flex flex-col gap-3">
+    <div ref={box} tabIndex={-1} data-autofocus="" onKeyDown={onKeyDown} className="flex flex-col gap-3 outline-none">
       <div>
         <Markdown text={view.question} className="text-base" />
         {view.detail ? <Markdown text={view.detail} className="mt-1 text-muted-foreground" /> : null}
       </div>
-      <div className="flex items-center justify-end gap-2">
-        <Button type="button" variant="outline" disabled={submitting} onClick={() => onAnswer(false)}>
-          No
-        </Button>
-        <Button type="button" disabled={submitting} onClick={() => onAnswer(true)}>
-          {submitting ? "Sending…" : "Yes"}
-        </Button>
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-x-4 text-xs text-muted-foreground">
+          <KeyHint chord="Y">yes</KeyHint>
+          <KeyHint chord="N">no</KeyHint>
+          <KeyHint chord="Esc">later</KeyHint>
+        </p>
+        <span className="flex items-center gap-2">
+          <Button type="button" variant="outline" disabled={submitting} onClick={() => onAnswer(false)}>
+            No
+          </Button>
+          <Button type="button" disabled={submitting} onClick={() => onAnswer(true)}>
+            {submitting ? "Sending…" : "Yes"}
+          </Button>
+        </span>
       </div>
     </div>
   )
@@ -315,13 +459,25 @@ function TextCard({ view, submitting, onAnswer, onCancel }: CardProps & { view: 
     >
       <Markdown text={view.question} className="text-base" />
       <Textarea
+        autoFocus
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+            event.preventDefault()
+            event.currentTarget.form?.requestSubmit()
+          }
+        }}
         value={text}
         onChange={(event) => setText(event.target.value)}
         placeholder={view.placeholder ?? OWN_ANSWER}
         aria-label={view.question}
         rows={3}
-        className="min-h-11 resize-none text-base md:text-base"
+        className="min-h-9 resize-none text-sm md:text-sm"
       />
+      <p className="flex items-center gap-x-4 text-xs text-muted-foreground">
+        <KeyHint chord="Enter">answer</KeyHint>
+        <KeyHint chord="Shift+Enter">new line</KeyHint>
+        <KeyHint chord="Esc">later</KeyHint>
+      </p>
       <CardFooter primary="submit" primaryLabel="Answer" disabled={!text.trim()} submitting={submitting} onCancel={onCancel} />
     </form>
   )
@@ -332,6 +488,10 @@ function SessionDialogCard({ dialog, submitting, onAnswer }: CardProps & { dialo
   const [selected, setSelected] = useState("")
   const options = dialog.options ?? []
   const ready = dialog.method === "select" ? selected !== "" : value.trim() !== ""
+  const form = useRef<HTMLFormElement>(null)
+  useEffect(() => {
+    form.current?.querySelector<HTMLElement>("[data-nav], textarea")?.focus()
+  }, [])
 
   function submit(event: FormEvent) {
     event.preventDefault()
@@ -341,7 +501,20 @@ function SessionDialogCard({ dialog, submitting, onAnswer }: CardProps & { dialo
   }
 
   return (
-    <form className="flex flex-col gap-3" onSubmit={submit}>
+    <form
+      ref={form}
+      className="flex flex-col gap-3"
+      onSubmit={submit}
+      onKeyDown={(event) => {
+        if (dialog.method !== "select") return
+        optionKeys(event, options.length, (option, answer) => {
+          const label = options[option]
+          if (label === undefined) return
+          setSelected(label)
+          if (answer && !submitting) onAnswer({ value: label })
+        })
+      }}
+    >
       <div>
         <p className="text-xs text-muted-foreground">{dialog.title}</p>
         {dialog.message ? <Markdown text={dialog.message} className="mt-1 text-base" /> : null}
@@ -349,7 +522,7 @@ function SessionDialogCard({ dialog, submitting, onAnswer }: CardProps & { dialo
       {dialog.method === "select" ? (
         <div className="flex flex-col gap-2">
           {options.map((option, index) => (
-            <OptionRow key={option} option={{ label: option }} index={index} multi={false} selected={selected === option} onToggle={() => setSelected(option)} />
+            <OptionRow key={option} option={{ label: option }} index={index} multi={false} name="dialog" selected={selected === option} onToggle={() => setSelected(option)} />
           ))}
         </div>
       ) : null}
@@ -360,7 +533,7 @@ function SessionDialogCard({ dialog, submitting, onAnswer }: CardProps & { dialo
           placeholder={dialog.placeholder ?? OWN_ANSWER}
           aria-label={dialog.title}
           rows={dialog.method === "editor" ? 4 : 2}
-          className="min-h-11 resize-none text-base md:text-base"
+          className="min-h-9 resize-none text-sm md:text-sm"
         />
       ) : null}
       <div className="flex items-center justify-end gap-2">

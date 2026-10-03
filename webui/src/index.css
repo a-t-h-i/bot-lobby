@@ -196,6 +196,14 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* The page never scrolls: the shell is fixed to the screen and only its panes scroll. */
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+    overflow: clip;
+    overscroll-behavior: none;
+  }
   html {
     color-scheme: light;
   }

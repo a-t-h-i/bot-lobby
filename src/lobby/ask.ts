@@ -1,7 +1,7 @@
 /**
  * The oracle puts the planning panel's questions to the user through the
- * questionnaire (`../ask`): a card per question with each seat's options, the
- * recommended one first, and a field for an answer in the user's own words.
+ * questionnaire (`../ask`): a card per question with each seat's options (the
+ * recommended one first when the answer is obvious), and a field for an answer in the user's own words.
  * The panel's questions become questionnaires of at most four, and the
  * answers become the user's turn for the next round.
  */
