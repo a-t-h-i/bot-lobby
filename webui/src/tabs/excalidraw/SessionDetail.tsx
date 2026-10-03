@@ -10,6 +10,7 @@ import { Copy } from "lucide-react"
 import { toast } from "@/lib/toast"
 import type { ExcalidrawAgentName, ExcalidrawCheck, ExcalidrawSessionInfo } from "@protocol"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Spinner } from "@/components/ui/spinner"
 import { act } from "@/lib/act"
 import { call } from "@/lib/api"
@@ -165,16 +166,10 @@ function CheckBox({ check, checking, onCheck }: { check?: ExcalidrawCheck; check
 function AgentRow({ agent, on, onToggle }: { agent: ExcalidrawAgentName; on: boolean; onToggle: (agent: ExcalidrawAgentName) => void }) {
   return (
     <li>
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={on}
-        onClick={() => onToggle(agent)}
-        className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/30"
-      >
-        <span aria-hidden="true" className={on ? "text-primary" : "text-muted-foreground"}>{on ? "[x]" : "[ ]"}</span>
+      <label className="flex min-h-8 w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 text-sm transition-colors hover:bg-muted">
+        <Checkbox checked={on} onCheckedChange={() => onToggle(agent)} />
         <span className={on ? "text-foreground" : "text-muted-foreground"}>{AGENT_LABELS[agent]}</span>
-      </button>
+      </label>
     </li>
   )
 }

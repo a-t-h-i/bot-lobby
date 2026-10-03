@@ -11,6 +11,7 @@ import type { LobbySnapshot, SnapshotTask, TaskRow } from "@protocol"
 import { useTopic } from "@/app/hooks"
 import { useApiRead } from "@/app/useApiRead"
 import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
 import { act } from "@/lib/act"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { CheckMark, Pips, trackText } from "@/ui/task-facts"
@@ -122,9 +123,11 @@ function Actions(props: DetailProps) {
         </Button>
       ) : null}
       {row.check === "open" && !archived ? (
-        <Button variant="outline" aria-pressed={Boolean(row.auto)} onClick={toggleAuto} className="aria-pressed:border-primary aria-pressed:bg-accent">
-          <RefreshCw aria-hidden="true" /> Auto
-        </Button>
+        <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border px-3 text-[0.8125rem] font-medium transition-colors hover:bg-accent">
+          <RefreshCw aria-hidden="true" className="size-3.5" />
+          Auto
+          <Switch checked={Boolean(row.auto)} onCheckedChange={toggleAuto} aria-label="Auto mode" />
+        </label>
       ) : null}
       {archived ? null : <ArchiveButton row={row} archive={archive} />}
       <ConfirmButton
