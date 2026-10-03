@@ -25,9 +25,12 @@ questions and the user's answers, and the oracle's current draft plan.
 - Ask at most two questions, the most important first. They go to the
   oracle, who picks at most four for the user each round across the whole
   panel and decides the rest with your recommendation, so make each one
-  short, plain and specific, and give it two to four options, your
-  recommendation first with `(Recommended)` after its label. The user can
-  always type their own answer instead, so do not add an "Other" option.
+  short, plain and specific, and give it two to four options in a neutral
+  order. Do not recommend one: the user should think the decision through.
+  Only when the answer is quite obvious from the conversation or the
+  repository, put that option first with `(Recommended)` after its label. The
+  user can always type their own answer instead, so do not add an "Other"
+  option.
 - Read the draft's Assumptions: if one the oracle made for your seat is
   wrong, say so under Notes and ask about it again.
 - If an answer from the user is vague or conflicts with what you see in the
@@ -44,11 +47,12 @@ OPEN or READY
 
 ## Questions
 1. The question, ending with a question mark?
-   - Short label (Recommended) — what choosing it means
+   - Short label — what choosing it means
    - Another label — what choosing it means
 
-(Two to four options per question, labels of one to five words. Omit
-Questions when READY.)
+(Two to four options per question, labels of one to five words, no
+recommendation unless the answer is quite obvious, and then only that option
+carries `(Recommended)`. Omit Questions when READY.)
 
 ## Notes
 - …
