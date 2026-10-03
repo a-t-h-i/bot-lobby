@@ -178,7 +178,7 @@ test("Plan, Quick fix and an open task each give the composer its own target", a
   }
 });
 
-test("zen palettes: paper in light, charcoal in dark, one 6px radius, composer clear of the page", async ({ page, server }) => {
+test("zen palettes: paper in light, charcoal in dark, one 8px radius, composer clear of the page", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const look = await page.evaluate(() => {
@@ -205,8 +205,8 @@ test("zen palettes: paper in light, charcoal in dark, one 6px radius, composer c
   if (look.dark) expect(Math.max(r, g, b), "charcoal is dark").toBeLessThan(60);
   else expect(Math.min(r, g, b), "paper is light").toBeGreaterThan(230);
   expect(look.body, "flat page, no wash").toBe("none");
-  expect(look.cardRadius).toBe("6px");
-  expect(look.inputRadius).toBe("6px");
+  expect(look.cardRadius).toBe("8px");
+  expect(look.inputRadius).toBe("8px");
   expect(look.inactiveBorder, "inactive tabs are plain text").toBe("0px");
   expect(look.pillRadius, "the active pill has 10px corners").toBe("10px");
   expect(look.gap, "the composer never touches the page above it").toBeGreaterThanOrEqual(2);

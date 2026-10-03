@@ -27,14 +27,14 @@ function Row({ session, check, checking, selected, onSelect }: { session: Excali
         type="button"
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(session.id)}
-        className="flex min-h-11 w-full flex-col gap-0.5 rounded-md px-3 py-2.5 text-left outline-none transition-colors duration-150 hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:bg-accent"
+        className="flex min-h-11 w-full flex-col gap-0.5 rounded-lg px-3 py-2.5 text-left outline-none transition-colors duration-150 hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:bg-accent"
       >
         <span className="flex items-center gap-2 text-sm">
           <Mark check={check} checking={checking} />
           <span className={cn("min-w-0 flex-1 break-words text-foreground", selected && "font-medium")}>{session.name}</span>
           <span className="shrink-0 text-xs text-muted-foreground">{agentCount(session.agents.length)}</span>
         </span>
-        <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span className="flex flex-wrap items-center gap-2 pl-[1.375rem] text-xs text-muted-foreground">
           <span className="font-mono break-all">{session.masked}</span>
           <Badge variant="secondary">{session.contribute ? DRAW_BADGE : LOOK_BADGE}</Badge>
         </span>

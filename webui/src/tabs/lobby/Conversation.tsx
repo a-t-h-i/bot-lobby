@@ -31,13 +31,11 @@ const NOTHING_SAID = "Nothing said yet. Type below to talk to the oracle about t
 function NoteEntry({ entry }: { entry: ChatEntry }) {
   const failed = entry.text.startsWith("✗")
   return (
-    <div className={failed ? "flex items-center gap-2 text-sm text-destructive" : "flex items-center gap-2 text-sm text-muted-foreground"}>
-      <span className="h-px flex-1 bg-border" aria-hidden="true" />
+    <div className={failed ? "flex justify-center text-sm text-destructive" : "flex justify-center text-sm text-muted-foreground"}>
       <span className="max-w-[80%] text-center">
         {entry.text}
         {entry.at ? ` · ${formatClock(entry.at)}` : ""}
       </span>
-      <span className="h-px flex-1 bg-border" aria-hidden="true" />
     </div>
   )
 }
@@ -47,7 +45,7 @@ function OracleHead({ name, children }: { name: string; children?: ReactNode }) 
   return (
     <span className="flex items-center gap-2 text-sm">
       <span aria-hidden="true" className="size-2 rounded-full bg-primary" />
-      <span className="font-semibold">{name}</span>
+      <span className="font-medium">{name}</span>
       <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">{children}</span>
     </span>
   )
@@ -60,10 +58,10 @@ function MessageBody({ entry, head }: { entry: ChatEntry; head: boolean }) {
         {head ? (
           <span className="flex items-baseline gap-2 text-sm">
             <span className="text-xs text-muted-foreground">{formatClock(entry.at)}</span>
-            <span className="font-semibold">You</span>
+            <span className="font-medium">You</span>
           </span>
         ) : null}
-        <div className="max-w-[78%] rounded-md rounded-tr-md border border-primary/15 bg-you px-4 py-2">
+        <div className="max-w-[78%] rounded-lg rounded-tr-lg border border-primary/15 bg-you px-4 py-2">
           <Markdown text={entry.text} />
         </div>
       </div>

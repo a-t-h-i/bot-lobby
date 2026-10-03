@@ -17,7 +17,7 @@ function Step({ step, index }: { step: TaskDetailData["steps"][number]; index: n
       <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{index + 1}.</span>
       <span className={step.status === "current" ? "min-w-0 break-words text-foreground" : "min-w-0 break-words text-muted-foreground"}>{step.text}</span>
       {step.status === "current" ? (
-        <span className="shrink-0 rounded-md bg-accent px-2 py-0.5 text-xs font-medium">
+        <span className="shrink-0 rounded-lg bg-accent px-2 py-0.5 text-xs font-medium">
           now<span className="sr-only"> (current step)</span>
         </span>
       ) : null}

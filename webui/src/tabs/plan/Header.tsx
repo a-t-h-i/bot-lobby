@@ -49,7 +49,7 @@ export function PlanHeader({ snap, onDone }: { snap: PlannerSnapshot; onDone: ()
     <header className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="flex min-w-0 flex-col gap-1">
-          <h2 className="text-lg font-semibold">Planning</h2>
+          <h2 className="text-lg font-medium">Planning</h2>
           <Status snap={snap} />
         </div>
         <Actions snap={snap} onDone={onDone} />

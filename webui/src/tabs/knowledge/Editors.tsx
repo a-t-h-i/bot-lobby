@@ -31,7 +31,7 @@ export function EntryEditor({ initial, busy, onSave, onCancel }: EntryEditorProp
     if (!busy && text.trim()) onSave(text)
   }
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-input p-3">
+    <div className="flex flex-col gap-2 rounded-lg border border-input p-3">
       <label htmlFor="knowledge-entry" className="text-sm font-medium text-foreground">
         Edit entry
       </label>
@@ -80,7 +80,7 @@ export function FileEditor({ open, file, initial, busy, onClose, onSave }: FileE
     <Popup open={open && shown} onOpenChange={(next) => !next && onClose()} label={`Edit ${file}`} description={ARCHIVE_HINT} dismissOnBackdrop={false} className="max-w-3xl">
       <div className="flex min-h-0 flex-1 flex-col gap-3 p-6">
         <div>
-          <h2 className="text-base font-semibold">Edit {file}</h2>
+          <h2 className="text-base font-medium">Edit {file}</h2>
           <p className="text-sm text-muted-foreground">{ARCHIVE_HINT}</p>
         </div>
         <Textarea value={text} rows={14} className="min-h-0 flex-1 font-mono text-sm" onChange={(event) => setText(event.target.value)} />
