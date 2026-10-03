@@ -33,7 +33,7 @@ function Windows({ windows }: { windows: StatusInfo["windows"] }) {
                 href={window.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex min-h-10 items-center rounded-xl px-2 text-sm text-foreground underline underline-offset-4 hover:bg-muted"
+                className="flex min-h-10 items-center rounded-md px-2 text-sm text-foreground underline underline-offset-4 hover:bg-muted"
               >
                 {window.name}
               </a>

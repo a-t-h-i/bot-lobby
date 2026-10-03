@@ -18,7 +18,7 @@ interface PopupProps {
 }
 
 /**
- * Every pop-up in the page: a pane of glass that springs up in the middle of
+ * Every pop-up in the page: a pane that springs up in the middle of
  * the window over a backdrop blurred a little (`backdrop-blur-sm`). Callers
  * show it only while they hold the page's one overlay slot (see
  * `lib/overlay.ts`), so two never stack.
@@ -48,7 +48,7 @@ export function Popup({ open, onOpenChange, label, description, dismissOnBackdro
                 {...(description ? {} : { "aria-describedby": undefined })}
               >
                 <motion.div
-                  className={cn("glass-pop pointer-events-auto flex max-h-[min(86svh,48rem)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl outline-none", className)}
+                  className={cn("glass-pop pointer-events-auto flex max-h-[min(86svh,48rem)] w-full max-w-2xl flex-col overflow-hidden rounded-md outline-none", className)}
                   initial={{ opacity: 0, scale: 0.92, y: 18 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.96, y: 8, transition: { duration: 0.12, ease: "easeIn" } }}

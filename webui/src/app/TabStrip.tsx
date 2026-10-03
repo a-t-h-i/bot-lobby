@@ -1,7 +1,7 @@
 /**
- * The tabs as small numbered pills joined by dotted lines, `1-Lobby ··· 2-Tasks
- * ··· 3-Plan`. One lit pill sits behind the chosen tab and slides to the next
- * like a drop of water: the edge it moves toward runs ahead on a stiff
+ * The tabs as plain numbered words joined by dotted lines, `1-Lobby ··· 2-Tasks
+ * ··· 3-Plan`. One pill (10px corners, a shade off the page) sits behind the
+ * chosen tab and slides to the next like a drop of water: the edge it moves toward runs ahead on a stiff
  * spring, the other trails on a soft one, so the drop stretches across the
  * gap and then draws back into the new tab (and settles with a small
  * overshoot). Under `prefers-reduced-motion` it simply jumps. Arrow keys
@@ -55,12 +55,12 @@ const TabCell = forwardRef<HTMLAnchorElement, { tab: TabInfo; active: boolean }>
           aria-keyshortcuts={tab.key}
           tabIndex={active ? 0 : -1}
           className={cn(
-            "relative z-10 inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium whitespace-nowrap outline-none",
-            "transition-[color,border-color,background-color] duration-200 ease-snap focus-visible:ring-3 focus-visible:ring-ring/40",
-            active ? "border-transparent text-primary-foreground" : "border-border bg-card/40 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+            "relative z-10 inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[10px] px-3.5 text-sm font-medium whitespace-nowrap outline-none",
+            "transition-colors duration-200 ease-snap focus-visible:ring-3 focus-visible:ring-ring/40",
+            active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
           )}
         >
-          {Icon ? <Icon aria-hidden="true" className="size-4 shrink-0" /> : null}
+          {Icon ? <Icon aria-hidden="true" className={cn("size-4 shrink-0 transition-colors duration-200", active && "text-primary")} /> : null}
           <span>
             {number ? (
               <span aria-hidden="true" className="tabular-nums">
@@ -204,7 +204,7 @@ export function TabStrip({ tabs, activeId, onSelect }: TabStripProps) {
         <span
           ref={drop}
           aria-hidden="true"
-          className="pointer-events-none absolute top-1 left-0 z-0 h-10 origin-center rounded-full bg-primary opacity-0 shadow-[0_6px_18px_-6px_var(--primary)] will-change-transform"
+          className="pointer-events-none absolute top-1 left-0 z-0 h-10 origin-center rounded-[10px] bg-tab opacity-0 will-change-transform"
         />
         {tabs.map((tab, position) => (
           <Fragment key={tab.id}>

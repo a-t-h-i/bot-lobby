@@ -25,7 +25,7 @@ function KindMark({ entry }: { entry: ActivityEntry }) {
 
 function ActivityRow({ entry }: { entry: ActivityEntry }) {
   return (
-    <li className="grid grid-cols-[2.75rem_5.5rem_1rem_minmax(0,1fr)] items-baseline gap-x-2 rounded-lg px-2 py-1 text-sm transition-colors hover:bg-accent/50">
+    <li className="grid grid-cols-[2.75rem_5.5rem_1rem_minmax(0,1fr)] items-baseline gap-x-2 rounded-md px-2 py-1 text-sm transition-colors hover:bg-accent/50">
       <span className="text-xs tabular-nums text-muted-foreground">{formatClock(entry.at)}</span>
       <span className={cn("overflow-hidden text-xs font-semibold whitespace-nowrap", sourceColor(entry.source))}>{entry.source}</span>
       <span aria-hidden="true" className="flex items-center justify-center self-center">

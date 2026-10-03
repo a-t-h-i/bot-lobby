@@ -1,11 +1,12 @@
 /**
- * The one text box for everything, floating at the bottom of the window: a
- * pane of glass that grows with what you type (and opens up to a tall editor
- * with the expand key), takes images, PDFs and other files (pick, paste or
- * drop them) and sends Markdown to whoever the tab talks to: the oracle
- * everywhere, the planning panel on Plan, a quick fix on Quick fix, a comment
- * on the open task on Tasks. While a pop-up is open it steps aside, so only
- * one thing asks for you at a time.
+ * The one text box for everything, in the Claude Code style: a bordered box
+ * with a `>` prompt and monospace text, and a quiet line of tools and hints
+ * under it. It sits in the page's flow at the bottom (never over the content),
+ * grows with what you type (and opens up to a tall editor), takes images, PDFs
+ * and other files (pick, paste or drop them) and sends Markdown to whoever the
+ * tab talks to: the oracle everywhere, the planning panel on Plan, a quick fix
+ * on Quick fix, a comment on the open task on Tasks. While a pop-up is open it
+ * steps aside, so only one thing asks for you at a time.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react"
 import { animate, AnimatePresence, motion } from "motion/react"
@@ -80,6 +81,10 @@ interface Pending {
 
 let keySeq = 0
 
+/** The flat icon buttons under the box. */
+const TOOL =
+  "inline-flex size-10 items-center justify-center rounded-md text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+
 function isSend(event: KeyboardEvent): boolean {
   return event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing
 }
@@ -92,9 +97,9 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.8 }}
       transition={{ type: "spring", stiffness: 520, damping: 32 }}
-      className="flex min-w-0 items-center gap-2 rounded-xl border border-border bg-card/60 py-1 pr-1 pl-1"
+      className="flex min-w-0 items-center gap-2 rounded-md bg-muted py-1 pr-1 pl-1"
     >
-      <span className="relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground">
+      <span className="relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-card text-muted-foreground">
         {file.image ? <img src={file.image} alt="" className="size-full object-cover" /> : <FileText aria-hidden="true" className="size-4" />}
         {file.state === "uploading" ? (
           <span className="absolute inset-0 flex items-center justify-center bg-background/60">
@@ -110,7 +115,7 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
         type="button"
         aria-label={`Remove ${file.name}`}
         onClick={onRemove}
-        className="flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+        className="flex size-10 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
       >
         <X aria-hidden="true" className="size-4" />
       </button>
@@ -267,65 +272,66 @@ export function Composer({ route }: { route: Route }) {
 
   return (
     <div
-      className={cn(
-        "pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-4 pb-4 transition-[opacity,transform] duration-200 ease-snap",
-        blocked && "translate-y-3 opacity-0"
-      )}
+      ref={card}
+      className={cn("shrink-0 px-4 pt-0.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-opacity duration-200 ease-snap", blocked && "opacity-0")}
       inert={blocked}
     >
-      <div
-        ref={card}
-        className={cn(
-          "glass group/composer pointer-events-auto w-full rounded-3xl p-2 transition-[max-width,box-shadow,border-color] duration-300 ease-snap focus-within:border-ring/50",
-          expanded ? "max-w-4xl" : "max-w-3xl",
-          dragging && "border-primary ring-3 ring-ring/30"
-        )}
-        onDragOver={(event) => {
-          if (!event.dataTransfer.types.includes("Files")) return
-          event.preventDefault()
-          setDragging(true)
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-      >
-        <AnimatePresence initial={false}>
-          {files.length > 0 ? (
-            <motion.ul
-              key="files"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 420, damping: 36 }}
-              aria-label="Attachments"
-              className="flex flex-wrap gap-2 overflow-hidden px-1"
-            >
-              {files.map((file) => (
-                <Chip key={file.key} file={file} onRemove={() => forget(file.key)} />
-              ))}
-            </motion.ul>
-          ) : null}
-        </AnimatePresence>
+      <div className={cn("mx-auto w-full transition-[max-width] duration-300 ease-snap", expanded ? "max-w-4xl" : "max-w-3xl")}>
+        <div
+          className={cn(
+            "group/composer rounded-md border border-input bg-card transition-[border-color,box-shadow] duration-200 ease-snap focus-within:border-ring/60",
+            dragging && "border-primary ring-3 ring-ring/30"
+          )}
+          onDragOver={(event) => {
+            if (!event.dataTransfer.types.includes("Files")) return
+            event.preventDefault()
+            setDragging(true)
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+        >
+          <AnimatePresence initial={false}>
+            {files.length > 0 ? (
+              <motion.ul
+                key="files"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ type: "spring", stiffness: 420, damping: 36 }}
+                aria-label="Attachments"
+                className="flex flex-wrap gap-2 overflow-hidden px-2 pt-2"
+              >
+                {files.map((file) => (
+                  <Chip key={file.key} file={file} onRemove={() => forget(file.key)} />
+                ))}
+              </motion.ul>
+            ) : null}
+          </AnimatePresence>
 
-        <div ref={area} className="flex flex-col">
-          <textarea
-            ref={field}
-            id="composer-text"
-            aria-label={target.label}
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            onKeyDown={onKeyDown}
-            onPaste={onPaste}
-            placeholder={busy && target.id === "oracle" ? "The oracle is working — Enter steers it…" : target.placeholder}
-            rows={1}
-            className={cn(
-              "w-full resize-none bg-transparent px-3 pt-2.5 pb-1 text-base leading-relaxed caret-primary outline-none placeholder:text-muted-foreground md:text-[0.95rem]",
-              "field-sizing-content",
-              expanded ? "min-h-[min(46svh,24rem)] max-h-[60svh]" : "max-h-40 min-h-11"
-            )}
-          />
+          <div ref={area} className="flex items-start gap-2 px-3 py-2.5">
+            <span aria-hidden="true" className="pt-px font-mono text-base leading-relaxed text-primary select-none md:text-sm md:leading-relaxed">
+              &gt;
+            </span>
+            <textarea
+              ref={field}
+              id="composer-text"
+              aria-label={target.label}
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              onKeyDown={onKeyDown}
+              onPaste={onPaste}
+              placeholder={busy && target.id === "oracle" ? "The oracle is working — Enter steers it…" : target.placeholder}
+              rows={1}
+              className={cn(
+                "w-full min-w-0 flex-1 resize-none bg-transparent font-mono text-base leading-relaxed caret-primary outline-none placeholder:text-muted-foreground md:text-sm md:leading-relaxed",
+                "field-sizing-content",
+                expanded ? "max-h-[60svh] min-h-[min(46svh,24rem)]" : "max-h-40 min-h-6"
+              )}
+            />
+          </div>
         </div>
 
-        <div className="flex items-center gap-1 pt-1">
+        <div className="flex items-center gap-1 pt-1.5">
           <input
             ref={picker}
             type="file"
@@ -340,12 +346,7 @@ export function Composer({ route }: { route: Route }) {
           />
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label="Attach images, PDFs or files"
-                onClick={() => picker.current?.click()}
-                className="inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
-              >
+              <button type="button" aria-label="Attach images, PDFs or files" onClick={() => picker.current?.click()} className={TOOL}>
                 <Paperclip aria-hidden="true" className="size-[1.1rem]" />
               </button>
             </TooltipTrigger>
@@ -358,7 +359,7 @@ export function Composer({ route }: { route: Route }) {
                 aria-label={expanded ? "Make the box smaller" : "Open the box wider and taller"}
                 aria-pressed={expanded}
                 onClick={() => setExpanded((value) => !value)}
-                className="inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+                className={TOOL}
               >
                 {expanded ? <Minimize2 aria-hidden="true" className="size-4" /> : <Maximize2 aria-hidden="true" className="size-4" />}
               </button>
@@ -367,7 +368,7 @@ export function Composer({ route }: { route: Route }) {
           </Tooltip>
 
           {targets.length > 1 ? (
-            <div role="radiogroup" aria-label="Send to" className="ml-1 flex items-center gap-1 rounded-full bg-muted p-0.5">
+            <div role="radiogroup" aria-label="Send to" className="ml-1 flex items-center gap-0.5">
               {targets.map((entry) => (
                 <button
                   key={entry.id}
@@ -376,8 +377,8 @@ export function Composer({ route }: { route: Route }) {
                   aria-checked={entry.id === target.id}
                   onClick={() => setChosen(entry.id)}
                   className={cn(
-                    "h-10 rounded-full px-3.5 text-xs font-medium transition-[background-color,color] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
-                    entry.id === target.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                    "h-10 rounded-md px-3 text-xs font-medium transition-[background-color,color] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
+                    entry.id === target.id ? "bg-tab text-foreground" : "text-muted-foreground hover:text-foreground"
                   )}
                 >
                   {entry.pill}
@@ -388,9 +389,7 @@ export function Composer({ route }: { route: Route }) {
             <span className="ml-1 px-2 text-xs text-muted-foreground">To the {target.pill.toLowerCase()}</span>
           )}
 
-          <span className="mx-2 hidden min-w-0 flex-1 truncate text-right text-[0.7rem] text-muted-foreground group-focus-within/composer:inline sm:inline-block sm:opacity-0 sm:transition-opacity group-focus-within/composer:sm:opacity-100">
-            Enter sends · Shift+Enter new line · Markdown works
-          </span>
+          <span className="mx-2 hidden min-w-0 flex-1 truncate text-right font-mono text-[0.7rem] text-muted-foreground sm:inline">Enter sends · Shift+Enter new line · Markdown works</span>
           <span className="flex-1 sm:hidden" />
 
           {busy && target.id === "oracle" ? (
@@ -398,7 +397,7 @@ export function Composer({ route }: { route: Route }) {
               type="button"
               aria-label="Stop"
               onClick={() => void stop()}
-              className="inline-flex size-10 items-center justify-center rounded-full bg-secondary text-foreground transition-[background-color,transform] duration-150 ease-snap outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+              className="inline-flex size-10 items-center justify-center rounded-md bg-secondary text-foreground transition-[background-color,transform] duration-150 ease-snap outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
             >
               <Square aria-hidden="true" className="size-3.5 fill-current" />
             </button>
@@ -408,7 +407,7 @@ export function Composer({ route }: { route: Route }) {
             aria-label="Send"
             onClick={() => void send()}
             disabled={!canSend}
-            className="inline-flex size-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-[opacity,transform,filter] duration-150 ease-snap outline-none hover:brightness-110 focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-90 disabled:opacity-40 disabled:hover:brightness-100"
+            className="inline-flex size-10 items-center justify-center rounded-md bg-primary text-primary-foreground transition-[opacity,transform,filter] duration-150 ease-snap outline-none hover:brightness-110 focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95 disabled:opacity-40 disabled:hover:brightness-100"
           >
             {sending ? <Spinner aria-hidden="true" role="presentation" className="size-4 text-primary-foreground" /> : <ArrowUp aria-hidden="true" className="size-[1.15rem]" />}
           </button>

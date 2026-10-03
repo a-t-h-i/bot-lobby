@@ -28,7 +28,7 @@ function Row({ job, selected, now, onSelect }: { job: QuickFixJob; selected: boo
         type="button"
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(job.id)}
-        className="flex min-h-11 w-full items-start gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm outline-none transition-colors duration-150 hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:bg-accent"
+        className="flex min-h-11 w-full items-start gap-2.5 rounded-md px-3 py-2.5 text-left text-sm outline-none transition-colors duration-150 hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:bg-accent"
       >
         <span className="flex h-5 w-4 shrink-0 items-center justify-center">
           <StatusMark status={job.status} />

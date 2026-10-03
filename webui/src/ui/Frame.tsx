@@ -1,5 +1,5 @@
 /**
- * A titled card: a pane of glass with its title in a row at the top and an
+ * A titled card with its title in a row at the top and an
  * optional note at the other end. Content sits below the title row, so
  * nothing scrolls under it. The card's edge lights up while you are inside it.
  */
@@ -19,7 +19,7 @@ export function Frame({ title, note, className, children, collapsed, onToggle, .
   const name = typeof title === "string" ? title : "pane"
   return (
     <section
-      className={cn("glass group/frame relative flex min-h-0 min-w-0 flex-col rounded-2xl transition-[border-color] duration-200 focus-within:border-ring/50", collapsed && "flex-none", className)}
+      className={cn("glass group/frame relative flex min-h-0 min-w-0 flex-col rounded-md transition-[border-color] duration-200 focus-within:border-ring/50", collapsed && "flex-none", className)}
       {...props}
     >
       {title || note || onToggle ? (
@@ -34,7 +34,7 @@ export function Frame({ title, note, className, children, collapsed, onToggle, .
                 aria-label={collapsed ? `Expand ${name}` : `Minimize ${name}`}
                 title={collapsed ? "Expand" : "Minimize"}
                 onClick={onToggle}
-                className="-mr-2 inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+                className="-mr-2 inline-flex size-10 items-center justify-center rounded-md text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
               >
                 <ChevronDown aria-hidden="true" className={cn("size-4 transition-transform duration-200 ease-snap", collapsed && "-rotate-90")} />
               </button>

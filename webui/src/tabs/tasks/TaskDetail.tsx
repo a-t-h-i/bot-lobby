@@ -50,7 +50,7 @@ function Progress({ row, task }: { row: TaskRow; task?: SnapshotTask }) {
       </span>
       {task?.currentStep ? (
         <span className="text-foreground">
-          {task.currentStep} <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-medium">now</span>
+          {task.currentStep} <span className="rounded-md bg-accent px-2 py-0.5 text-xs font-medium">now</span>
           <span className="sr-only">(current step)</span>
         </span>
       ) : null}

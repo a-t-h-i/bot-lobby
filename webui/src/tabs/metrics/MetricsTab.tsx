@@ -20,9 +20,9 @@ const EMPTY = "No runs recorded yet. Every Master turn, subagent run, quick fix 
 
 function GroupToggle({ groupBy, onGroup }: { groupBy: GroupBy; onGroup: (value: GroupBy) => void }) {
   return (
-    <div role="group" aria-label="Group by" className="flex gap-1 rounded-full bg-muted p-1">
+    <div role="group" aria-label="Group by" className="flex gap-1 rounded-md bg-muted p-1">
       {(["model", "model-kind"] as const).map((value) => (
-        <Button key={value} variant={groupBy === value ? "default" : "ghost"} className="rounded-full" aria-pressed={groupBy === value} onClick={() => onGroup(value)}>
+        <Button key={value} variant={groupBy === value ? "default" : "ghost"} className="rounded-md" aria-pressed={groupBy === value} onClick={() => onGroup(value)}>
           {byLabel(value)}
         </Button>
       ))}
@@ -43,7 +43,7 @@ function SearchBox({ query, onQuery }: { query: string; onQuery: (value: string)
         maxLength={500}
         placeholder="model, agent, tool…"
         onChange={(event) => onQuery(event.target.value)}
-        className="h-10 w-full min-w-48 rounded-xl border border-input bg-card/40 px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+        className="h-10 w-full min-w-48 rounded-md border border-input bg-card/40 px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
       />
     </div>
   )
@@ -64,7 +64,7 @@ function Body({ data, groupBy, query }: { data: MetricsData; groupBy: GroupBy; q
     return (
       <div className="flex flex-col gap-4">
         <Tiles tiles={data.tiles} />
-        <p className="glass rounded-2xl p-4 text-sm text-muted-foreground">{query ? `No run matches "${query}".` : EMPTY}</p>
+        <p className="glass rounded-md p-4 text-sm text-muted-foreground">{query ? `No run matches "${query}".` : EMPTY}</p>
       </div>
     )
   }
@@ -86,7 +86,7 @@ function Skeleton() {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" role="status" aria-label="Loading metrics">
       {[0, 1, 2, 3, 4].map((tile) => (
-        <div key={tile} className="h-24 rounded-xl bg-muted motion-safe:animate-pulse" />
+        <div key={tile} className="h-24 rounded-md bg-muted motion-safe:animate-pulse" />
       ))}
     </div>
   )

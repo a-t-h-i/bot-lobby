@@ -55,7 +55,7 @@ export function ReconnectingState({ onRetry }: { onRetry?: () => void }) {
   return (
     <div
       role="status"
-      className="mx-4 mt-1 flex items-center gap-2 rounded-2xl bg-destructive/10 px-4 py-2 text-sm text-destructive"
+      className="mx-4 mt-1 flex items-center gap-2 rounded-md bg-destructive/10 px-4 py-2 text-sm text-destructive"
     >
       <WifiOff className="size-4" aria-hidden="true" />
       <span>Connection lost — retrying every 2 s.</span>
