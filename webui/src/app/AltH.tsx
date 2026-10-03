@@ -22,7 +22,7 @@ function KeyRow({ info }: { info: KeyInfo }) {
 function Section({ title, keys }: { title: string; keys: KeyInfo[] }) {
   return (
     <section className="flex flex-col gap-1">
-      <h3 className="mb-1 text-sm font-semibold">{title}</h3>
+      <h3 className="mb-1 text-sm font-medium">{title}</h3>
       {keys.map((info) => (
         <KeyRow key={info.action} info={info} />
       ))}
@@ -62,7 +62,7 @@ export function AltH({
   return (
     <Popup open={open && shown} onOpenChange={onOpenChange} label="Keys" className="max-w-3xl">
       <header className="flex items-center justify-between px-6 pt-5 pb-2">
-        <h2 className="text-base font-semibold">Keys</h2>
+        <h2 className="text-base font-medium">Keys</h2>
         <Button type="button" variant="ghost" size="icon" aria-label="Close" onClick={() => onOpenChange(false)}>
           <X aria-hidden="true" />
         </Button>

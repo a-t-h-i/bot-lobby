@@ -125,7 +125,7 @@ Same parts as 768 px; only the reflow changes (one header line, one strip line, 
 
 ## (b) Tab strip in all overflow states
 
-Pills in `visibleTabs` order (`src/lobby/prompts.ts`): **Lobby, Tasks, Plan, Quick fix, [Issues], Metrics, Git, Knowledge, Excalidraw**. Labels verbatim from `TAB_LABELS`. The pill body shows the label; the `Alt+N` hint lives in the tooltip and in `aria-keyshortcuts`. Issues is the fifth pill and only exists when `lobby.issues` is on (then `Alt+9` reaches Excalidraw).
+Pills in `visibleTabs` order (`src/lobby/prompts.ts`): **Lobby, Tasks, Plan, Quick fix, [Issues], Excalidraw, Git, Knowledge, Metrics**. Labels verbatim from `TAB_LABELS`. The pill body shows the label; the `Alt+N` hint lives in the tooltip and in `aria-keyshortcuts`. Issues is the fifth pill and only exists when `lobby.issues` is on (then `Alt+6` reaches Excalidraw).
 
 **shadcn:** `tabs` (Phase 3, WAI-ARIA tabs pattern), `badge` (counts, spinner, question badge), `button` (chevrons), `tooltip` (label + `Alt+N`), `kbd` (the shortcut inside the tooltip), `separator` (strip rule).
 
@@ -194,7 +194,7 @@ All eight pills fit at 768 px with compact pills (border `--border`, radius `--r
     tooltip = label + Alt+N; a badge pill shows its count next to the label
 ```
 
-`aria-keyshortcuts`: `Alt+1` Lobby, `Alt+2` Tasks, `Alt+3` Plan, `Alt+4` Quick fix, `Alt+5` Issues *(when on)*, `Alt+6` Metrics, `Alt+7` Git, `Alt+8` Knowledge, `Alt+9` Excalidraw *(when Issues on)*. `nextTab`/`prevTab` use `webKeyMap` defaults `Alt+]` / `Alt+[` (overridable by `lobby.keys`). A waiting question shows a `badge` on any pill other than the one whose prompt it is (`view.ts` tab badges + D-09/P3-02).
+`aria-keyshortcuts`: `Alt+1` Lobby, `Alt+2` Tasks, `Alt+3` Plan, `Alt+4` Quick fix, `Alt+5` Issues *(when on)*, then Excalidraw, Git, Knowledge and Metrics (`Alt+5`…`Alt+8` with Issues off, `Alt+6`…`Alt+9` with it on). `nextTab`/`prevTab` use `webKeyMap` defaults `Alt+]` / `Alt+[` (overridable by `lobby.keys`). A waiting question shows a `badge` on any pill other than the one whose prompt it is (`view.ts` tab badges + D-09/P3-02).
 
 ### (b7) 1440 × 900 — all eight fit on one line
 

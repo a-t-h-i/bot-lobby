@@ -68,7 +68,7 @@ function EntryRow({
         event.preventDefault()
         pick()
       }}
-      className={selected ? "flex min-h-11 cursor-pointer flex-col gap-1 rounded-md bg-accent p-2.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/30" : "flex min-h-11 cursor-pointer flex-col gap-1 rounded-md p-2.5 outline-none transition-colors hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/30"}
+      className={selected ? "flex min-h-11 cursor-pointer flex-col gap-1 rounded-lg bg-accent p-2.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/30" : "flex min-h-11 cursor-pointer flex-col gap-1 rounded-lg p-2.5 outline-none transition-colors hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/30"}
     >
       <div className="flex gap-2">
         <div className="min-w-0 flex-1">
@@ -103,7 +103,7 @@ function Header({ view }: { view: KnowledgeViewData }) {
   const entries = view.entries.length
   return (
     <header className="flex flex-col gap-1">
-      <h2 className="text-sm font-bold">
+      <h2 className="text-sm font-semibold">
         {AGENT_DIR_NAMES[view.agent]} · {view.file}
       </h2>
       <p className="text-xs text-muted-foreground">

@@ -68,7 +68,7 @@ export function PlanDetail({ row, onGone }: { row: TaskRow; onGone: () => void }
   return (
     <article className="flex flex-col gap-4" aria-label={row.title}>
       <header className="flex flex-col gap-1">
-        <h2 className="flex items-start gap-2.5 text-lg font-semibold">
+        <h2 className="flex items-start gap-2.5 text-lg font-medium">
           <CheckMark check="open" className="mt-1.5" />
           <span className="min-w-0 break-words">{row.title}</span>
         </h2>
