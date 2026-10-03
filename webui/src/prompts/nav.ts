@@ -77,3 +77,6 @@ export function focusTab(): boolean {
   tab?.focus({ preventScroll: true })
   return Boolean(tab)
 }
+
+/** Set while the arrow keys walk the tab bar, so the page keeps focus on the bar instead of the message box. */
+export const tabWalk = { active: false }

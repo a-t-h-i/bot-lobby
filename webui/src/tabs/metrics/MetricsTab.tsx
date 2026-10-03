@@ -21,14 +21,30 @@ const EMPTY = "No runs recorded yet. Every Master turn, subagent run, quick fix 
 
 function GroupToggle({ groupBy, onGroup }: { groupBy: GroupBy; onGroup: (value: GroupBy) => void }) {
   return (
-    <div role="group" aria-label="Group by" className="flex gap-0.5 rounded-lg bg-muted p-0.5">
+    <div
+      role="radiogroup"
+      aria-label="Group by"
+      className="flex gap-0.5 rounded-lg bg-muted p-0.5"
+      onKeyDown={(event) => {
+        // Arrows move between the choices and pick, as a radio group does.
+        const step = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0
+        if (!step) return
+        event.preventDefault()
+        const order = ["model", "model-kind"] as const
+        const next = order[(order.indexOf(groupBy) + step + order.length) % order.length]!
+        onGroup(next)
+        requestAnimationFrame(() => event.currentTarget.querySelector<HTMLElement>("[aria-checked='true']")?.focus())
+      }}
+    >
       {(["model", "model-kind"] as const).map((value) => (
         <Button
           key={value}
           variant="ghost"
           size="sm"
+          role="radio"
+          tabIndex={groupBy === value ? 0 : -1}
           className={groupBy === value ? "bg-tab text-foreground hover:bg-tab" : "text-muted-foreground"}
-          aria-pressed={groupBy === value}
+          aria-checked={groupBy === value}
           onClick={() => onGroup(value)}
         >
           {byLabel(value)}

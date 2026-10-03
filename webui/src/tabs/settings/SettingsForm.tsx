@@ -8,15 +8,15 @@
  * notification and install rows are page-only and never sent to the server.
  */
 import { useEffect, useState, type ReactNode } from "react"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, Download, Maximize, Minimize } from "lucide-react"
 import { toast } from "@/lib/toast"
-import { useInstallPrompt } from "@/app/install"
+import { useFullscreen, useInstallPrompt, useInstalled } from "@/app/install"
 import { disableNotifications, enableNotifications, useNotificationsEnabled } from "@/app/notify"
 import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Combobox } from "@/components/ui/combobox"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { EffortSlider, nearestSupported } from "@/ui/EffortSlider"
@@ -164,21 +164,9 @@ function Rows({ children }: { children: ReactNode }) {
   return <div className="glass flex flex-col divide-y divide-border rounded-lg px-4 [&>*]:py-2.5">{children}</div>
 }
 
+/** Every drop-down on the page is a searchable one. */
 function Choice({ value, items, label, onChange }: { value: string; items: ChoiceItem[]; label: string; onChange: (value: string) => void }) {
-  return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger aria-label={label}>
-        <SelectValue className="min-w-0 truncate" />
-      </SelectTrigger>
-      <SelectContent>
-        {items.map((item) => (
-          <SelectItem key={item.value} value={item.value} {...(item.help ? { hint: item.help } : {})}>
-            {item.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  )
+  return <Combobox value={value} options={items.map((item) => ({ value: item.value, label: item.label, ...(item.help ? { hint: item.help } : {}) }))} label={label} onChange={onChange} />
 }
 
 function ModelChoice(props: { value: string; models: SettingsModelInfo[]; label: string; none?: boolean; inherit?: boolean; onChange: (value: string) => void }) {
@@ -320,13 +308,18 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
           {entry.model === INHERIT_MODEL ? "session model" : entry.model} · {kind === "scout" ? FIXED_SCOUT_THINKING : entry.thinking}
         </span>
       </header>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className={cn("grid gap-3 sm:grid-cols-2", kind !== "master" && "sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_7rem]")}>
         <Mini label={FIELD_LABELS.model}>
           <ModelChoice value={entry.model} models={models} label={`${name} model`} inherit={kind === "master"} onChange={chooseModel} />
         </Mini>
         <Mini label={FIELD_LABELS.fallback}>
           <ModelChoice value={entry.fallbackModel ?? INHERIT_MODEL} models={models} label={`${name} fallback model`} none onChange={chooseFallback} />
         </Mini>
+        {kind !== "master" ? (
+          <Mini label="Time limit">
+            <MinutesField value={entry.timeoutMs ?? config.workflow.agentTimeoutMs} label={`${name} time limit`} onSave={(ms) => set({ timeoutMs: ms })} />
+          </Mini>
+        ) : null}
       </div>
       <Mini label={FIELD_LABELS.thinking}>
         {kind === "scout" ? (
@@ -353,13 +346,6 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
             onChange={(level) => set({ fallbackThinking: level })}
           />
         </Mini>
-      ) : null}
-      {kind !== "master" ? (
-        <div className="max-w-44">
-          <Mini label={`${FIELD_LABELS.timeout} (default ${Math.round(config.workflow.agentTimeoutMs / 60_000)})`}>
-            <MinutesField value={entry.timeoutMs ?? config.workflow.agentTimeoutMs} label={`${name} time limit`} onSave={(ms) => set({ timeoutMs: ms })} />
-          </Mini>
-        </div>
       ) : null}
       {hasInstructions ? (
         <button
@@ -485,12 +471,31 @@ function NotificationsGroup() {
 
 function InstallGroup() {
   const { available, install } = useInstallPrompt()
+  const installed = useInstalled()
+  const fullscreen = useFullscreen()
   return (
     <Section title={GROUP_TITLES.install}>
       <Rows>
-      <Field label={PAGE.installLabel} help={PAGE.installHelp}>
-        {available ? <Button type="button" onClick={() => void install().then(() => toast.success(PAGE.installDone))}>{PAGE.installButton}</Button> : <p className="text-xs text-muted-foreground">{PAGE.installUnavailable}</p>}
-      </Field>
+        <Field label={PAGE.installLabel} help={installed ? PAGE.installedNow : PAGE.installHelp}>
+          {installed ? null : (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => (available ? void install().then(() => toast.success(PAGE.installDone)) : toast.warning(PAGE.installUnavailable))}
+            >
+              <Download aria-hidden="true" />
+              {PAGE.installButton}
+            </Button>
+          )}
+        </Field>
+        {fullscreen.supported ? (
+          <Field label={PAGE.fullscreenLabel} help={PAGE.fullscreenHelp}>
+            <Button type="button" variant="outline" aria-pressed={fullscreen.on} onClick={() => void fullscreen.toggle()}>
+              {fullscreen.on ? <Minimize aria-hidden="true" /> : <Maximize aria-hidden="true" />}
+              {fullscreen.on ? PAGE.fullscreenOn : PAGE.fullscreenOff}
+            </Button>
+          </Field>
+        ) : null}
       </Rows>
     </Section>
   )
