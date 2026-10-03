@@ -6,12 +6,14 @@
  * messages to the task's oracle are written in the floating box below. A saved
  * plan has its own body (`PlanDetail`).
  */
-import { RefreshCw, RotateCcw } from "lucide-react"
+import { Archive, RefreshCw, RotateCcw, Trash2 } from "lucide-react"
 import type { LobbySnapshot, SnapshotTask, TaskRow } from "@protocol"
 import { useTopic } from "@/app/hooks"
 import { useApiRead } from "@/app/useApiRead"
-import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { act } from "@/lib/act"
+import { ActionBar, ActionButton } from "@/ui/Actions"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { CheckMark, Pips, trackText } from "@/ui/task-facts"
 import { Comments } from "./Comments"
@@ -91,16 +93,11 @@ function useActions({ row, onGone, onChanged }: DetailProps) {
 }
 
 function ArchiveButton({ row, archive }: { row: TaskRow; archive: () => Promise<void> }) {
-  if (row.check !== "open") {
-    return (
-      <Button variant="outline" onClick={() => void archive()}>
-        Archive
-      </Button>
-    )
-  }
+  if (row.check !== "open") return <ActionButton label="Archive" icon={Archive} onClick={() => void archive()} />
   return (
     <ConfirmButton
       label="Archive"
+      icon={Archive}
       title={`Archive "${row.title}"?`}
       description="A task still under way is abandoned first, then moved to the archive. Restore brings it back."
       confirmLabel="Archive"
@@ -114,20 +111,22 @@ function Actions(props: DetailProps) {
   const { restore, archive, remove, toggleAuto } = useActions(props)
   const archived = row.kind === "archived"
   return (
-    <div className="flex flex-wrap gap-2">
-      {archived ? (
-        <Button variant="outline" onClick={() => void restore()}>
-          <RotateCcw aria-hidden="true" />
-          Restore
-        </Button>
-      ) : null}
+    <ActionBar>
+      {archived ? <ActionButton label="Restore" icon={RotateCcw} onClick={() => void restore()} /> : null}
       {row.check === "open" && !archived ? (
-        <Button variant="outline" aria-pressed={Boolean(row.auto)} onClick={toggleAuto} className="aria-pressed:border-primary aria-pressed:bg-accent">
-          <RefreshCw aria-hidden="true" /> Auto
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <label className="flex h-8 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+              <RefreshCw aria-hidden="true" className="size-4" />
+              <Switch checked={Boolean(row.auto)} onCheckedChange={toggleAuto} aria-label="Auto mode" />
+            </label>
+          </TooltipTrigger>
+          <TooltipContent>Auto mode: the oracle decides without asking</TooltipContent>
+        </Tooltip>
       ) : null}
       {archived ? null : <ArchiveButton row={row} archive={archive} />}
       <ConfirmButton
+        icon={Trash2}
         label={archived ? "Delete for good" : "Delete"}
         title={`Delete "${row.title}" for good?`}
         description="This cannot be undone."
@@ -135,7 +134,7 @@ function Actions(props: DetailProps) {
         variant="destructive"
         onConfirm={() => void remove()}
       />
-    </div>
+    </ActionBar>
   )
 }
 
@@ -149,12 +148,12 @@ export function TaskDetail(props: DetailProps) {
   const open = row.check === "open" && row.kind === "task"
   return (
     <article className="flex flex-col gap-5" aria-label={row.title}>
+      <Actions {...props} />
       <Header row={row} task={task} />
       {detail.data ? <PlanSections detail={detail.data} finished={!open} /> : null}
       <Comments taskId={row.id} finished={!open} canComment={open} />
       {detail.data ? <DetailTrailer detail={detail.data} /> : null}
       {detail.error && !detail.data ? <p className="text-sm text-muted-foreground">Could not load the plan detail. {detail.error}</p> : null}
-      <Actions {...props} />
     </article>
   )
 }

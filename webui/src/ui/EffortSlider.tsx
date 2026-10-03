@@ -109,9 +109,9 @@ export function EffortSlider({ value, levels, supported, model, label, disabled,
   }
 
   return (
-    <div className={cn("flex flex-col gap-2", disabled && "opacity-60")}>
+    <div className={cn("flex flex-col gap-1", disabled && "opacity-60")}>
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-sm font-medium capitalize" aria-hidden="true">
+        <span className="text-[0.8125rem] font-medium capitalize" aria-hidden="true">
           {level}
         </span>
         <span className="min-w-0 truncate text-xs text-muted-foreground">{HINTS[level] ?? ""}</span>
@@ -131,12 +131,12 @@ export function EffortSlider({ value, levels, supported, model, label, disabled,
         onPointerUp={onPointerUp}
         onPointerCancel={() => setDragging(undefined)}
         onKeyDown={onKeyDown}
-        className="relative mx-3 h-10 touch-none cursor-pointer rounded-full outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/40"
+        className="relative mx-2.5 h-6 touch-none cursor-pointer rounded-full outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/40"
       >
-        <span aria-hidden="true" className="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-muted" />
+        <span aria-hidden="true" className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-muted" />
         <motion.span
           aria-hidden="true"
-          className="absolute top-1/2 left-0 h-2 -translate-y-1/2 rounded-full bg-primary"
+          className="absolute top-1/2 left-0 h-1.5 -translate-y-1/2 rounded-full bg-primary"
           animate={{ width: `${percent}%` }}
           transition={{ type: "spring", stiffness: 520, damping: 34 }}
         />
@@ -148,7 +148,7 @@ export function EffortSlider({ value, levels, supported, model, label, disabled,
               aria-hidden="true"
               title={ok ? name : `${model ?? "This model"} does not support ${name}`}
               className={cn(
-                "absolute top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full",
+                "absolute top-1/2 size-1 -translate-x-1/2 -translate-y-1/2 rounded-full",
                 ok ? (index <= shown ? "bg-primary-foreground/80" : "bg-muted-foreground/40") : "bg-transparent ring-1 ring-muted-foreground/30"
               )}
               style={{ left: `${(index / last) * 100}%` }}
@@ -157,12 +157,12 @@ export function EffortSlider({ value, levels, supported, model, label, disabled,
         })}
         <motion.span
           aria-hidden="true"
-          className={cn("absolute top-1/2 size-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-white shadow-sm", dragging !== undefined && "scale-110")}
+          className={cn("absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-white shadow-sm", dragging !== undefined && "scale-110")}
           animate={{ left: `${percent}%` }}
           transition={{ type: "spring", stiffness: 520, damping: 28 }}
         />
       </div>
-      <div className="relative mx-3 h-4 text-[0.68rem] text-muted-foreground" aria-hidden="true">
+      <div className="relative mx-2.5 h-3.5 text-[0.68rem] text-muted-foreground" aria-hidden="true">
         {levels.map((name, index) => {
           const ok = supported.includes(name)
           return (

@@ -466,20 +466,20 @@ test("the round limit: normal rounds, then the final round, then revisions; 0 me
   assert.deepEqual([1, 9, 50].map((round) => roundMode(round, 0)), ["normal", "normal", "normal"]);
   assert.match(oracleClosing("normal", 2, 5), /^Round 2 of 5; in round 5 you settle whatever is still open alone/);
   assert.doesNotMatch(oracleClosing("normal", 2, 0), /Round/);
-  assert.match(oracleClosing("final", 5, 5), /Final round \(5 of 5\)[\s\S]*decide every point still open with its recommended option[\s\S]*Status READY/);
+  assert.match(oracleClosing("final", 5, 5), /Final round \(5 of 5\)[\s\S]*decide every point still open[\s\S]*marked option[\s\S]*Status READY/);
   assert.match(oracleClosing("revise", 6, 5), /round limit \(5\) is reached[\s\S]*Ask nothing/);
 });
 
-test("questions left at the limit become assumptions decided with the recommended option", () => {
+test("questions left at the limit become assumptions decided with the marked option, else the oracle's call", () => {
   const question = (from: string, text: string, labels: string[]) => ({ from, text, options: labels.map((label) => ({ label, description: "" })) });
   const flag = question("DEV", "Behind a flag?", ["No", "Yes (Recommended)"]);
   const browsers = question("QA", "Which browsers?", ["Evergreen", "All"]);
   assert.equal(optionLabel(recommendedOption(flag)!), "Yes", "the marked option wins over the first");
-  assert.equal(recommendedOption(browsers)!.label, "Evergreen", "otherwise the first");
+  assert.equal(recommendedOption(browsers), undefined, "nothing is implied by order: an unmarked question has no recommendation");
   const plan = "### Objective\nx\n### Assumptions\n- [QA] Evergreen\n\n### Steps\n1. y";
   assert.equal(appendAssumptions(plan, [flag, question("ORACLE", "Anything else?", [])], "decided at the round limit"),
     "### Objective\nx\n### Assumptions\n- [QA] Evergreen\n- [DEV] Behind a flag? → Yes (decided at the round limit)\n- [ORACLE] Anything else? → the oracle's call (decided at the round limit)\n\n### Steps\n1. y");
-  assert.equal(appendAssumptions("### Steps\n1. y\n", [browsers], "why"), "### Steps\n1. y\n\n### Assumptions\n- [QA] Which browsers? → Evergreen (why)");
+  assert.equal(appendAssumptions("### Steps\n1. y\n", [browsers], "why"), "### Steps\n1. y\n\n### Assumptions\n- [QA] Which browsers? → the oracle's call (why)");
   assert.equal(appendAssumptions(plan, [], "why"), plan);
 });
 
