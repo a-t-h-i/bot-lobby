@@ -320,6 +320,28 @@ The user asked for a modern, calm page of cards and no longer wants the terminal
 - **Shape:** one radius, `rounded-lg` (8px), for cards, inputs, buttons and chips; the tab pill has 10px corners.
 - **Key hints:** every shortcut is shown where it applies. Caps (`Alt` `H`, `⌥` `H` on a Mac) in tooltips, under the message box (they thin out as it narrows), in the pop-up headers, and in the key list (`Alt+H`, or the keyboard button in the title row).
 
+## D-23 · Keyboard first, compact, no recommendations · Adopted
+
+The user asked for a keyboard-first, tighter page that makes them think through decisions (2026-10-04).
+
+- **Keyboard:** every list, card and question can be driven without the mouse. `↓` from the tab bar enters the page; `↑↓` (or `j`/`k`) walk a list, `→`/`←` (`l`/`h`) cross between a list and its detail, `Esc` goes back up; `/` jumps to the message box. In a question: `↑↓` move, `Space` picks, `Enter` chooses and goes on, `←→` change question, digits pick, `y`/`n` answer a yes/no. `Alt+H` lists all of it (`app/AltH.tsx`, `prompts/nav.ts`).
+- **Compact:** controls are 28-32px (D-09's 40px target is relaxed to 28px, above WCAG 2.2's 24px); the Settings page is dense cards and hairline rows, instructions folded away until opened.
+- **The page never scrolls:** the shell is fixed to the screen and only its panes scroll, so there is no empty page below the composer.
+- **No recommended answers:** agents no longer mark a `(Recommended)` option unless the answer is quite obvious (prompts, the `ask_user_question` tool text). Order implies nothing: an unmarked question has no recommendation, so the classifier never answers it and a question left at the round limit is "the oracle's call". The split question no longer marks its first option.
+- **Message box:** grows with the text, Markdown shortcuts (`Ctrl+B/I/E/K`, `Shift+Enter` carries lists on), `Alt+P` previews, images show as thumbnails.
+
+## D-24 · Searchable drop-downs, installable fullscreen, near-black · Adopted
+
+- Every drop-down is a `Combobox` (`components/ui/combobox.tsx`): a search field filters the list; keys pick; Esc returns focus to the trigger.
+- Switching tabs puts the cursor in the message box (not while the arrows walk the tab bar, and not while a pop-up is open).
+- The manifest asks for `display: fullscreen`; Settings has an install button (or says where the browser's own action is) and a fullscreen toggle.
+- Inputs match the choice: checkboxes for several (panel seats, agents, show archived), a switch for on/off (Auto), a radio group for one of a few (group by). A checkbox's corners are the one place the 8px radius is not used (on a box that small it would be a circle).
+- The page's rem is 15px (a compact scale); controls are 24-30px; dark is near-black (`#0a0b0f`); every radius step is 8px.
+
+## D-25 · Action buttons are icons in a pinned bar · Adopted
+
+Every action (archive, delete, start, review, refresh, copy, …) is an icon button whose tooltip and accessible name say what it does (`ui/Actions.tsx`). In a detail pane the buttons sit in a bar stuck to the top of the pane, so they never scroll out of reach; Left and Right move between them. Choices inside a dialog (Yes/No, Answer, Cancel, an option) keep their words. The Lobby's task header is one slim line, and dark is darker still (`#050608`).
+
 ---
 
 ## Open questions (each has a default the swarm uses until the user answers)

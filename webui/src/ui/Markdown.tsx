@@ -10,7 +10,7 @@ import { memo, useCallback, useState, type ReactNode } from "react"
 import ReactMarkdown, { type Components } from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Check, Copy } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { ActionButton } from "./Actions"
 import { cn } from "@/lib/utils"
 import { safeHref } from "@/lib/markdown"
 import { AttachmentList, splitAttachments } from "./Attachments"
@@ -56,10 +56,7 @@ function CodeBlock({ node, children }: { node?: unknown; children?: ReactNode })
     <div className="relative my-3 rounded-lg bg-muted">
       <div className="flex items-center justify-between pl-3">
         <span className="text-xs text-muted-foreground">{lang || "code"}</span>
-        <Button type="button" variant="ghost" size="sm" onClick={copy} disabled={!text} className="text-muted-foreground">
-          {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-          {copied ? "Copied" : "Copy"}
-        </Button>
+        <ActionButton label={copied ? "Copied" : "Copy the code"} icon={copied ? Check : Copy} className="size-7" onClick={copy} disabled={!text} />
       </div>
       <pre className="!my-0 overflow-x-auto !rounded-t-none !bg-transparent px-3 pb-3 text-sm leading-relaxed [&>code]:block">{children}</pre>
     </div>

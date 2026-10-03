@@ -3,8 +3,8 @@
  * line; the text stays put when the call fails so nothing typed is lost.
  */
 import { useId, useState, type KeyboardEvent } from "react"
-import { Button } from "@/components/ui/button"
-import { Spinner } from "@/components/ui/spinner"
+import { ArrowUp, Loader } from "lucide-react"
+import { ActionButton } from "./Actions"
 import { Textarea } from "@/components/ui/textarea"
 
 interface NoteFormProps {
@@ -51,10 +51,9 @@ export function NoteForm({ label, hint, buttonLabel = "Send", onSend }: NoteForm
           {hint}
         </p>
       ) : null}
-      <Button className="h-10 self-end" onClick={() => void send()} disabled={!text.trim() || busy}>
-        {busy ? <Spinner /> : null}
-        {buttonLabel}
-      </Button>
+      <div className="flex self-end">
+        <ActionButton label={buttonLabel} icon={busy ? Loader : ArrowUp} tone="primary" shortcut="Enter" className={busy ? "[&_svg]:animate-spin" : undefined} onClick={() => void send()} disabled={!text.trim() || busy} />
+      </div>
     </div>
   )
 }

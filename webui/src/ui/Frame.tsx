@@ -34,7 +34,7 @@ export function Frame({ title, note, className, children, collapsed, onToggle, .
                 aria-label={collapsed ? `Expand ${name}` : `Minimize ${name}`}
                 title={collapsed ? "Expand" : "Minimize"}
                 onClick={onToggle}
-                className="-mr-2 inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+                className="-mr-2 inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
               >
                 <ChevronDown aria-hidden="true" className={cn("size-4 transition-transform duration-200 ease-snap", collapsed && "-rotate-90")} />
               </button>

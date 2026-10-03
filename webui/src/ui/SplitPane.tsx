@@ -4,12 +4,13 @@
  * right-hand sheet. The route decides what is open; `onClose` takes the
  * detail off the route again.
  */
-import type { ReactNode } from "react"
+import { useRef, type KeyboardEvent, type ReactNode } from "react"
 import { X } from "lucide-react"
 import { useMediaQuery } from "@/app/hooks"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { PRIORITY, useOverlaySlot } from "@/lib/overlay"
+import { currentRow, horizontalStep, isTyping, stepRows, verticalStep } from "@/prompts/nav"
 import { cn } from "@/lib/utils"
 
 /** Two cards side by side from this width, in pixels. */
@@ -60,10 +61,41 @@ function DetailSheet({ open, onClose, describe, children }: Pick<SplitPaneProps,
 }
 
 export function SplitPane({ wide, list, detail, open, onClose, hint, describe }: SplitPaneProps) {
+  const listPane = useRef<HTMLElement>(null)
+  const detailPane = useRef<HTMLElement>(null)
+
+  // List: up/down (or k/j) step through the rows, Home/End jump, right (or l) goes into the detail.
+  function onListKey(event: KeyboardEvent<HTMLElement>) {
+    const root = listPane.current
+    if (!root || event.altKey || event.ctrlKey || event.metaKey || isTyping(event.target)) return
+    const step = verticalStep(event.key)
+    if (step) {
+      event.preventDefault()
+      stepRows(root, event.target as Element, step)
+    } else if (event.key === "Home" || event.key === "End") {
+      event.preventDefault()
+      stepRows(root, event.target as Element, event.key === "Home" ? "first" : "last")
+    } else if (wide && horizontalStep(event.key) === 1 && detailPane.current) {
+      event.preventDefault()
+      detailPane.current.focus()
+    }
+  }
+
+  // Detail: left (or h) goes back to the open row in the list.
+  function onDetailKey(event: KeyboardEvent<HTMLElement>) {
+    if (event.altKey || event.ctrlKey || event.metaKey || isTyping(event.target)) return
+    if (horizontalStep(event.key) === -1 && listPane.current) {
+      event.preventDefault()
+      currentRow(listPane.current)?.focus()
+    }
+  }
+
   if (!wide) {
     return (
       <div className="flex flex-col p-3">
-        <Pane>{list}</Pane>
+        <Pane data-pane="list" ref={listPane} onKeyDown={onListKey}>
+          {list}
+        </Pane>
         <DetailSheet open={open && detail !== null} onClose={onClose} describe={describe}>
           {detail}
         </DetailSheet>
@@ -72,8 +104,10 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe }:
   }
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,30fr)_minmax(0,70fr)] gap-4 px-4 pb-2">
-      <Pane className="overflow-y-auto">{list}</Pane>
-      <Pane className="overflow-y-auto p-5">
+      <Pane data-pane="list" ref={listPane} onKeyDown={onListKey} className="overflow-y-auto">
+        {list}
+      </Pane>
+      <Pane data-pane="detail" ref={detailPane} tabIndex={0} aria-label="Detail" onKeyDown={onDetailKey} className="overflow-y-auto p-4 outline-none">
         {detail ?? <p className="text-sm text-muted-foreground">{hint}</p>}
       </Pane>
     </div>
@@ -97,7 +131,7 @@ export function ListSkeleton() {
   return (
     <div className="flex flex-col gap-2 p-3" role="status" aria-label="Loading">
       {[0, 1, 2, 3].map((row) => (
-        <div key={row} className="h-11 rounded-lg bg-muted motion-safe:animate-pulse" />
+        <div key={row} className="h-9 rounded-lg bg-muted motion-safe:animate-pulse" />
       ))}
     </div>
   )

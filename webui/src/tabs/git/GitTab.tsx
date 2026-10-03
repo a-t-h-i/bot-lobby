@@ -10,9 +10,10 @@ import { useCallback } from "react"
 import { go, tabHash } from "@/app/router"
 import { ErrorState } from "@/app/States"
 import { useApiRead } from "@/app/useApiRead"
+import { RefreshCw } from "lucide-react"
+import { ActionButton } from "@/ui/Actions"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty"
-import { Spinner } from "@/components/ui/spinner"
 import { act } from "@/lib/act"
 import { ListSkeleton, PaneHeader, SplitPane, useWide } from "@/ui/SplitPane"
 import { PullDetail } from "./PullDetail"
@@ -58,10 +59,7 @@ export function GitTab({ rest }: { rest: readonly string[] }) {
   const list = (
     <>
       <PaneHeader title={LIST_TITLE} count={read.data ? `${pulls.length} open` : undefined}>
-        <Button variant="outline" disabled={busy} onClick={refresh}>
-          {busy ? <Spinner className="size-3.5" /> : null}
-          Refresh
-        </Button>
+        <ActionButton label="Refresh" icon={RefreshCw} disabled={busy} className={busy ? "[&_svg]:animate-spin" : undefined} onClick={refresh} />
       </PaneHeader>
       {read.data?.error ? <p className="px-3 pt-2 text-sm text-destructive">✗ {read.data.error}</p> : null}
       {read.data ? <PullList pulls={pulls} selectedId={id} onSelect={select} /> : <ListSkeleton />}

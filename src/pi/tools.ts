@@ -27,7 +27,7 @@ const OrchestrateSchema = Type.Object({
   action: StringEnum(ORCHESTRATE_ACTIONS, { description: "Workflow step to run" }),
   taskId: Type.Optional(Type.String({ description: "Task id; defaults to the active task" })),
   question: Type.Optional(Type.String({ description: "clarify: question for the user" })),
-  options: Type.Optional(Type.Array(Type.String(), { description: "clarify: optional answer choices; put your recommended one first and mark it (Recommended)" })),
+  options: Type.Optional(Type.Array(Type.String(), { description: "clarify: optional answer choices, neutral and unranked; mark one (Recommended) only when the answer is quite obvious" })),
   domains: Type.Optional(Type.Array(Type.String(), { description: "scout: any of designer, backend, qa" })),
   instruction: Type.Optional(Type.String({ description: "scout/research: a self-contained brief: the specific questions, where to look, the answer format you want (paths, names, versions, evidence) and what you will do with it. The agent may be a small model: assume nothing" })),
   proposal: Type.Optional(Type.String({ description: "propose: the user-facing proposal as a short `- ` bullet list, one line per change" })),

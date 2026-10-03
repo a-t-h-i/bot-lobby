@@ -5,7 +5,8 @@
  * window's own conversation comes from the Lobby snapshot.
  */
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
+import { ChevronsUp } from "lucide-react"
+import { ActionButton } from "@/ui/Actions"
 import { useApiRead } from "@/app/useApiRead"
 import { act } from "@/lib/act"
 import { formatClock } from "@/lib/format"
@@ -46,9 +47,9 @@ export function ChatView({ entries, more, loading, onMore, empty }: ChatViewProp
   return (
     <div className="flex flex-col gap-3">
       {more ? (
-        <Button variant="outline" className="h-10 self-center" disabled={loading} onClick={onMore}>
-          Load earlier messages
-        </Button>
+        <div className="flex self-center">
+          <ActionButton label="Load earlier messages" icon={ChevronsUp} disabled={loading} onClick={onMore ?? (() => undefined)} />
+        </div>
       ) : null}
       {entries.length === 0 ? (
         <p className="text-sm text-muted-foreground">{empty}</p>

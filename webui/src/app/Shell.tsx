@@ -6,7 +6,7 @@
  * the key help) and toasts sit above it, one at a time. Clicking a tab or
  * pressing a shortcut moves the hash route.
  */
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { motion } from "motion/react"
 import { lobbyStore } from "@/lib/store"
 import { act } from "@/lib/act"
@@ -27,6 +27,7 @@ import { usePrompts } from "./usePrompts.ts"
 import { useStatus, useTopic } from "./hooks.ts"
 import { go, tabHash, useRoute, type Route } from "./router.ts"
 import { routeBody } from "@/tabs/registry.tsx"
+import { focusTab, isTyping, tabWalk } from "@/prompts/nav"
 
 function handleAction(action: string, route: Route, toggleHelp: () => void, cycle: (delta: number) => void): void {
   if (action === "help") toggleHelp()
@@ -83,6 +84,35 @@ export function Shell() {
   useLobbyKeys({ enabled: Boolean(status), keys, tabs, insideApp, onAction, onTab: select })
   const reload = useCallback(() => lobbyStore.onHello({}), [])
 
+  // Switching tabs puts the cursor in the message box, so you can just type (unless the arrows are walking the tab bar).
+  const tab = route.kind === "tab" ? route.tab : route.kind
+  const ready = Boolean(status)
+  useEffect(() => {
+    if (!ready) return
+    if (tabWalk.active) {
+      tabWalk.active = false
+      return
+    }
+    const frame = requestAnimationFrame(() => {
+      const box = document.getElementById("composer-text")
+      if (box && !box.closest("[inert]") && !document.querySelector("[role='dialog']")) box.focus({ preventScroll: true })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [tab, ready])
+
+  // `/` jumps to the message box from anywhere that is not a text field.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "/" || event.altKey || event.ctrlKey || event.metaKey || isTyping(event.target)) return
+      const box = document.getElementById("composer-text")
+      if (!box || box.closest("[inert]")) return
+      event.preventDefault()
+      box.focus()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [])
+
   if (signedOut) return <SignIn />
   if (!status && statusRecord.loading) return <LoadingState />
   if (!status && statusRecord.error) return <ErrorState message={statusRecord.error} onRetry={reload} />
@@ -90,7 +120,7 @@ export function Shell() {
 
   const keyLabels = Object.fromEntries(keys.map((key) => [key.action, key.label]))
   return (
-    <div ref={rootRef} className="flex h-svh flex-col gap-0.5">
+    <div ref={rootRef} className="fixed inset-0 flex flex-col gap-0.5">
       <Header
         status={status}
         task={lobbyRecord.data?.task}
@@ -104,9 +134,16 @@ export function Shell() {
       <Banner connection={connection} onRetry={retry} />
       <main
         id="main"
+        tabIndex={-1}
+        onKeyDown={(event) => {
+          // Esc from the page goes back up to the tab bar.
+          if (event.key !== "Escape" || event.defaultPrevented || isTyping(event.target)) return
+          if ((event.target as HTMLElement).closest("[role='dialog'], [role='menu'], [role='listbox']")) return
+          if (focusTab()) event.preventDefault()
+        }}
         role={activeId ? "tabpanel" : undefined}
         aria-labelledby={activeId ? `tab-${activeId}` : undefined}
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2 outline-none"
       >
         <motion.div
           key={routeKey(route)}
