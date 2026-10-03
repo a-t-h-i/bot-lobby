@@ -330,6 +330,14 @@ The user asked for a keyboard-first, tighter page that makes them think through 
 - **No recommended answers:** agents no longer mark a `(Recommended)` option unless the answer is quite obvious (prompts, the `ask_user_question` tool text). Order implies nothing: an unmarked question has no recommendation, so the classifier never answers it and a question left at the round limit is "the oracle's call". The split question no longer marks its first option.
 - **Message box:** grows with the text, Markdown shortcuts (`Ctrl+B/I/E/K`, `Shift+Enter` carries lists on), `Alt+P` previews, images show as thumbnails.
 
+## D-24 · Searchable drop-downs, installable fullscreen, near-black · Adopted
+
+- Every drop-down is a `Combobox` (`components/ui/combobox.tsx`): a search field filters the list; keys pick; Esc returns focus to the trigger.
+- Switching tabs puts the cursor in the message box (not while the arrows walk the tab bar, and not while a pop-up is open).
+- The manifest asks for `display: fullscreen`; Settings has an install button (or says where the browser's own action is) and a fullscreen toggle.
+- Inputs match the choice: checkboxes for several (panel seats, agents, show archived), a switch for on/off (Auto), a radio group for one of a few (group by). A checkbox's corners are the one place the 8px radius is not used (on a box that small it would be a circle).
+- The page's rem is 15px (a compact scale); controls are 24-30px; dark is near-black (`#0a0b0f`); every radius step is 8px.
+
 ---
 
 ## Open questions (each has a default the swarm uses until the user answers)
