@@ -1,22 +1,9 @@
 /**
- * The Quick fix tab's wording and small helpers, copied from
- * `src/lobby/tabs/quickfix.ts` and `src/lobby/quickfix.ts` (which the page
- * cannot import: they pull in the terminal layout and the agent runner).
+ * The Quick fix tab's wording and small helpers.
  */
 import type { QuickFixJob } from "@protocol"
 
-export const INTRO = "Describe a small change below and one agent makes it now, beside any running task."
-
-/** The glyph each finished or waiting status wears; running shows a spinner instead. */
-export const STATUS_MARKS: Record<QuickFixJob["status"], string> = {
-  queued: "…",
-  running: "",
-  success: "✓",
-  failed: "✗",
-  timeout: "✗",
-  cancelled: "·",
-  held: "‖",
-}
+export const INTRO = "Describe a small change in the box below and one agent makes it now, beside any running task."
 
 /** The first non-blank line of the prompt. */
 export function jobTitle(job: Pick<QuickFixJob, "prompt">): string {

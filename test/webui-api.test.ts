@@ -72,15 +72,14 @@ test("status.get has the C5 shape: workspace, tabs, keys, windows", async () => 
     assert.equal(result.sessionId, "session-1");
     assert.equal(result.sessionName, "test session");
     assert.equal(result.busy, false);
-    assert.equal(result.terminalDialog, false);
     assert.equal(result.issuesEnabled, false);
     assert.ok(typeof result.port === "number");
     const tabs = result.tabs as Array<{ id: string; label: string; key: string }>;
-    assert.deepEqual(tabs.map((tab) => tab.id), ["lobby", "tasks", "plan", "quickfix", "metrics", "git", "knowledge", "excalidraw"]);
+    assert.deepEqual(tabs.map((tab) => tab.id), ["lobby", "tasks", "plan", "quickfix", "excalidraw", "git", "knowledge", "metrics"]);
     assert.equal(tabs[0]?.label, "Lobby");
     assert.equal(tabs[0]?.key, "Alt+1");
     const keys = result.keys as Array<{ action: string; key: string; label: string; help: string }>;
-    assert.ok(keys.some((entry) => entry.action === "hide" && entry.key === "alt+l"));
+    assert.ok(keys.some((entry) => entry.action === "help" && entry.key === "alt+h"));
     assert.ok(keys.some((entry) => entry.action === "nextTab" && entry.key === "alt+]"), "web tab cycling defaults apply");
     assert.deepEqual(result.windows, []);
   } finally {

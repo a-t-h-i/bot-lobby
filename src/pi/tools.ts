@@ -9,10 +9,9 @@ import { classifier, effortFor, hintsFor, knowledgeFor, triageFor } from "../cla
 import { truncate } from "../text.ts";
 import { applyStatus, reportRuns, summarizeRun } from "./ui.ts";
 import { whileAsking } from "../state/budget.ts";
-import { askUser } from "../ask/dialog.ts";
-import { promptHub } from "../lobby/prompt-hub.ts";
+import { askChoice, askText, askUser, canAsk } from "../ask/web.ts";
 import type { AskQuestion } from "../ask/types.ts";
-import { unescapeBreaks } from "../lobby/markdown.ts";
+import { unescapeBreaks } from "../lobby/blocks.ts";
 import { isQuiet } from "./quiet.ts";
 import { checkThinking, createProfileResolver, modelRef, type ModelLookup } from "./model-support.ts";
 import { agentName, describeRun } from "./run-summary.ts";
@@ -126,11 +125,11 @@ export function workflowDeps(
     triage: (request, triageSignal) => triageFor({ cwd: ctx.cwd, root, configDir }, request, triageSignal),
     effort: effortFor((model, thinking) => checkThinking(modelLookup(ctx)(model), thinking).level),
     // Time spent waiting on the user is not the task's: its budget clock waits too.
-    // A free-text answer may run to several lines (Shift+Enter), so it is asked in the multi-line editor.
-    ask: async (question) => (hasUI ? whileAsking(() => promptHub.run("text", "orchestrate", { question }, () => ctx.ui.editor(question))) : undefined),
-    choose: async (title, options) => (hasUI ? whileAsking(() => promptHub.run("choose", "orchestrate", { title, options }, () => ctx.ui.select(title, options))) : undefined),
+    // The questions go to the web page, where a free-text answer may run to several lines.
+    ask: async (question) => (canAsk() ? whileAsking(() => askText(question)) : undefined),
+    choose: async (title, options) => (canAsk() ? whileAsking(() => askChoice(title, options)) : undefined),
     // An agent's own questions (the designer's), relayed as the questionnaire.
-    ...(hasUI ? { askQuestions: (questions: AskQuestion[], from: string, askSignal?: AbortSignal) => whileAsking(() => promptHub.run("questionnaire", from, { questions }, () => askUser(questions, ctx, askSignal, from), askSignal ? { signal: askSignal } : undefined)) } : {}),
+    ...(canAsk() ? { askQuestions: (questions: AskQuestion[], from: string, askSignal?: AbortSignal) => whileAsking(() => askUser(questions, ctx, askSignal, from)) } : {}),
     notify: (message, level = "info") => {
       if (hasUI) ctx.ui.notify(message, level);
     },

@@ -1,5 +1,5 @@
 /**
- * The Metrics tab's KPI row (batch-2 §j): `Runs`, `Success`, `Avg run`,
+ * The Metrics tab's KPI row: `Runs`, `Success`, `Avg run`,
  * `Cost`, `Tasks`, each a card with the terminal's value and context line
  * (`tileRow`). The Runs sparkline is not on the wire, so its context reads
  * `no runs yet` when there is nothing to draw.

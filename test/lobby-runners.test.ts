@@ -8,7 +8,6 @@ import { createStreamCollector, finishedThought, MAX_THOUGHT_CHARS, type PiStrea
 import { chatFromEntries, chatText, LobbyFeed, MAX_CHAT, textOf } from "../src/lobby/feed.ts";
 import { QUICK_FIX_TOOLS, QuickFixQueue, jobTitle, quickFixPrompt } from "../src/lobby/quickfix.ts";
 import { PLANNER_TOOLS, RESEARCH_PANEL_TOOLS, PlanningSession, appendAssumptions, commentBlock, memberPrompt, oracleClosing, optionLabel, panelSection, parseMemberReply, parseOption, parsePlannerReply, plannerSays, plannerTranscript, recommendedOption, roundMode, roundQuestions, sameQuestion, settledBlock, withoutSettled } from "../src/lobby/planner.ts";
-import { roundLabel } from "../src/lobby/tabs/plan.ts";
 import { MAX_QUESTIONS } from "../src/lobby/ask.ts";
 import { createIssue, ghError, IssuesState, issueText, listIssues, splitIssueText, viewIssue, type Exec } from "../src/lobby/issues.ts";
 import { listPlannedTasks } from "../src/state/backlog.ts";
@@ -469,7 +468,6 @@ test("the round limit: normal rounds, then the final round, then revisions; 0 me
   assert.doesNotMatch(oracleClosing("normal", 2, 0), /Round/);
   assert.match(oracleClosing("final", 5, 5), /Final round \(5 of 5\)[\s\S]*decide every point still open with its recommended option[\s\S]*Status READY/);
   assert.match(oracleClosing("revise", 6, 5), /round limit \(5\) is reached[\s\S]*Ask nothing/);
-  assert.deepEqual([[3, 5], [5, 5], [6, 5], [4, 0]].map(([turns, limit]) => roundLabel(turns!, limit)), ["round 3/5", "final round 5/5", "round 6 · past the limit, revising", "round 4"]);
 });
 
 test("questions left at the limit become assumptions decided with the recommended option", () => {

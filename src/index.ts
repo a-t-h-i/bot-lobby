@@ -4,6 +4,8 @@ import { registerLifecycle } from "./pi/events.ts";
 import { registerOrchestrateTool } from "./pi/tools.ts";
 import { registerRouteTool } from "./pi/route.ts";
 import { onTransition } from "./state/task-state.ts";
+import { releaseAttachments } from "./state/attachments.ts";
+import { TERMINAL_STATES } from "./schemas/task.ts";
 import { pingTransition } from "./pi/notify.ts";
 import { isSubagentProcess } from "./pi/quiet.ts";
 import { registerDeskClient } from "./desk/client-extension.ts";
@@ -25,7 +27,11 @@ export default function (pi: ExtensionAPI): void {
   // After the lifecycle, so the lobby opens over a task the status already knows.
   registerLobbyEvents(pi, CONFIG_DIR_NAME);
   registerOwner(pi, CONFIG_DIR_NAME);
-  onTransition((task) => pingTransition(task));
+  // A finished task takes the files attached during it along.
+  onTransition((task) => {
+    pingTransition(task);
+    if (TERMINAL_STATES.includes(task.state)) releaseAttachments(task.id);
+  });
   registerCommands(pi, CONFIG_DIR_NAME);
   registerOrchestrateTool(pi, CONFIG_DIR_NAME);
   // A new request one agent can do alone: the oracle confirms, and the lobby hands it to the quick-fix agent.
