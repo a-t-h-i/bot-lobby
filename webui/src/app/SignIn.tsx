@@ -57,7 +57,7 @@ export function SignIn() {
             autoComplete="off"
             spellCheck={false}
             placeholder="http://127.0.0.1:7347/#token=…"
-            className="h-10 rounded-lg border border-input bg-card/40 px-3.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+            className="h-8 rounded-lg border border-input bg-card/40 px-3.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
           />
         </label>
         {error ? (

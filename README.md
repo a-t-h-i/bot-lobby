@@ -302,7 +302,7 @@ and your comments on it.
 
 ![The Plan tab](https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/lobby-plan.png)
 
-The panel's questions, with recommended options, on the left; the draft plan
+The panel's questions, with their options, on the left; the draft plan
 on the right. See [Planning](#planning).
 
 ### Quick fix
@@ -497,7 +497,7 @@ has them as well.
 ### The questionnaire
 
 `ask_user_question` puts up to four questions to you in one pop-up in the
-lobby page, each with two to four options (the recommended one first).
+lobby page, each with two to four options. Agents do not recommend an answer, so you think it through; only a quite obvious one is marked `(Recommended)`.
 Questions, option descriptions and **previews** are Markdown: an option's
 preview (a layout sketch, a component mockup, a code snippet, a config) shows
 beside the list while that option is focused, under it in a narrow window, so
@@ -568,7 +568,7 @@ else TypeSafe.
 | Decision | Effect |
 | --- | --- |
 | Planning seats | Each round, only the seats the idea or your latest answers touch sit; `1`–`4` pins a seat |
-| Obvious answers | Answers a question itself when the conversation already makes the recommended option clearly right (≥ 0.9); listed under Assumptions |
+| Obvious answers | Answers a question itself when the conversation already makes an option marked `(Recommended)` clearly right (≥ 0.9); listed under Assumptions |
 | File hints | Agents start with a short list of the files they most likely need, and get a `find_relevant_files` tool |
 | Relevant knowledge | When an agent's knowledge, standards or decisions file is too long for its prompt (over 4,000 characters), Jev keeps the sections that bear on the step, and the prompt says how many it left out and where the whole file is, so the agent can read the rest. A file that fits goes in whole, untouched; standards are never left empty |
 | Quick fix or task | Whether one engineer can do a new request alone decides whether it goes to the [quick-fix agent](#quick-fix-or-the-team) (the oracle confirms) |

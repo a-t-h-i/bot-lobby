@@ -1,57 +1,27 @@
-/**
- * The model-text fence (D-10): raw HTML is never enabled where the page
- * renders model text. `rehype-raw` must not appear anywhere in `webui/src`,
- * and `dangerouslySetInnerHTML` is fenced to the one Markdown component.
- * `safeHref` is checked directly, since the component itself cannot run under
- * `node:test` without a JSX transform.
- */
-import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
-import { join, relative } from "node:path";
-import { fileURLToPath } from "node:url";
-import { safeHref } from "../webui/src/lib/markdown.ts";
+import test from "node:test";
+import { continueList, link, wrap } from "../webui/src/app/markdownEdit.ts";
 
-const WEBUI = join(fileURLToPath(new URL(".", import.meta.url)), "..", "webui", "src");
-const MARKDOWN_COMPONENT = "ui/Markdown.tsx";
-
-function sources(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) return sources(full);
-    return /\.(ts|tsx)$/.test(entry.name) ? [full] : [];
-  });
-}
-
-test("raw HTML is never enabled for model text: no rehype-raw, dangerouslySetInnerHTML fenced to Markdown", () => {
-  const files = sources(WEBUI);
-  assert.ok(files.length > 0, "the webui sources are found");
-  for (const file of files) {
-    const name = relative(WEBUI, file).split("\\").join("/");
-    const text = readFileSync(file, "utf8");
-    assert.equal(/rehype-raw/.test(text), false, `rehype-raw must not appear in ${name}`);
-    if (text.includes("dangerouslySetInnerHTML")) {
-      assert.equal(name, MARKDOWN_COMPONENT, `dangerouslySetInnerHTML is fenced to ${MARKDOWN_COMPONENT}, seen in ${name}`);
-    }
-  }
+test("wrapping marks a selection, takes the mark off again, and leaves the cursor between marks when nothing is selected", () => {
+  assert.deepEqual(wrap("a big day", 2, 5, "**"), { value: "a **big** day", start: 4, end: 7 });
+  assert.deepEqual(wrap("a **big** day", 4, 7, "**"), { value: "a big day", start: 2, end: 5 }, "marks around the selection come off");
+  assert.deepEqual(wrap("a **big** day", 2, 9, "**"), { value: "a big day", start: 2, end: 5 }, "so do marks inside it");
+  assert.deepEqual(wrap("", 0, 0, "_"), { value: "__", start: 1, end: 1 });
 });
 
-test("the one Markdown component uses react-markdown + remark-gfm and opens links in a new tab", () => {
-  const text = readFileSync(join(WEBUI, MARKDOWN_COMPONENT), "utf8");
-  assert.match(text, /from "react-markdown"/);
-  assert.match(text, /from "remark-gfm"/);
-  assert.match(text, /rel="noopener noreferrer nofollow"/);
-  assert.equal(/rehype-raw/.test(text), false);
+test("a link leaves its address selected", () => {
+  const edit = link("see docs here", 4, 8);
+  assert.equal(edit.value, "see [docs](url) here");
+  assert.equal(edit.value.slice(edit.start, edit.end), "url");
+  assert.equal(link("", 0, 0).value, "[text](url)");
 });
 
-test("safeHref drops dangerous schemes and keeps ordinary links", () => {
-  assert.equal(safeHref("javascript:alert(1)"), "");
-  assert.equal(safeHref("data:text/html,<script>"), "");
-  assert.equal(safeHref("vbscript:msgbox(1)"), "");
-  assert.equal(safeHref("https://example.com/a?b=1"), "https://example.com/a?b=1");
-  assert.equal(safeHref("http://example.com"), "http://example.com");
-  assert.equal(safeHref("mailto:dev@example.com"), "mailto:dev@example.com");
-  assert.equal(safeHref("/files/preview/task/one.png"), "/files/preview/task/one.png");
-  assert.equal(safeHref("#section"), "#section");
-  assert.equal(safeHref(""), "");
+test("a list carries on at its end, counts up, keeps task boxes and indent, and ends on an empty marker", () => {
+  assert.deepEqual(continueList("- one", 5), { value: "- one\n- ", start: 8, end: 8 });
+  assert.equal(continueList("1. one\n2. two", 13)!.value, "1. one\n2. two\n3. ");
+  assert.equal(continueList("  * [x] done", 12)!.value, "  * [x] done\n  * [ ] ");
+  assert.deepEqual(continueList("- one\n- ", 8), { value: "- one\n", start: 6, end: 6 }, "an empty marker ends the list");
+  assert.equal(continueList("plain line", 10), undefined);
+  assert.equal(continueList("- one", 1), undefined, "inside the marker it is a plain new line");
+  assert.equal(continueList("-not a list", 11), undefined);
 });

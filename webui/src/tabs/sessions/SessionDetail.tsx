@@ -34,7 +34,7 @@ function TaskLine({ task }: { task: NonNullable<LobbySnapshot["task"]> }) {
 
 function Actions({ entry }: { entry: Entry }) {
   const { key } = entry
-  if (entry.where === "this window") return <Button className="h-10 self-start" onClick={() => go("#/lobby")}>Back to this window</Button>
+  if (entry.where === "this window") return <Button className="h-8 self-start" onClick={() => go("#/lobby")}>Back to this window</Button>
   if (!key) return null
   return (
     <div className="flex flex-wrap gap-2">

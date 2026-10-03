@@ -61,10 +61,10 @@ function NameForm({ id, label, hint, buttonLabel, initial = "", required, onSubm
         value={name}
         maxLength={80}
         onChange={(event) => setName(event.target.value)}
-        className="h-10 w-full rounded-lg border border-input bg-card/40 px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+        className="h-8 w-full rounded-lg border border-input bg-card/40 px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
       />
       {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
-      <Button type="submit" className="h-10 self-end" disabled={required && !name.trim()}>
+      <Button type="submit" className="h-8 self-end" disabled={required && !name.trim()}>
         {buttonLabel}
       </Button>
     </form>
@@ -170,7 +170,7 @@ function AgentRow({ agent, on, onToggle }: { agent: ExcalidrawAgentName; on: boo
         role="checkbox"
         aria-checked={on}
         onClick={() => onToggle(agent)}
-        className="flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/30"
+        className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/30"
       >
         <span aria-hidden="true" className={on ? "text-primary" : "text-muted-foreground"}>{on ? "[x]" : "[ ]"}</span>
         <span className={on ? "text-foreground" : "text-muted-foreground"}>{AGENT_LABELS[agent]}</span>
@@ -194,7 +194,7 @@ function AgentBox({ session, onChanged }: { session: ExcalidrawSessionInfo; onCh
           <AgentRow key={agent} agent={agent} on={session.agents.includes(agent)} onToggle={toggle} />
         ))}
       </ul>
-      <Button variant="ghost" className="h-10 self-start" onClick={() => void toggleAll()}>
+      <Button variant="ghost" className="h-8 self-start" onClick={() => void toggleAll()}>
         {all ? "No agents" : "Every agent"}
       </Button>
       <p className="text-xs text-muted-foreground">{AGENT_NOTE}</p>

@@ -23,15 +23,29 @@ interface Line {
 
 /** Keys the page handles itself, beside the server's table. */
 const MESSAGE_BOX: Line[] = [
+  { id: "focus", caps: ["/"], help: "jump to the message box" },
   { id: "send", label: "Enter", help: "send the message" },
-  { id: "newline", label: "Shift+Enter", help: "a new line" },
-  { id: "sendAlt", label: "Ctrl+Enter", help: "send from anywhere in the box" },
+  { id: "newline", label: "Shift+Enter", help: "a new line (lists carry on)" },
+  { id: "format", label: "Ctrl+B", help: "bold; Ctrl+I italic, Ctrl+E code, Ctrl+K link" },
+  { id: "leave", label: "Esc", help: "leave the box for the tab bar" },
 ]
 
-const POPUPS: Line[] = [
-  { id: "esc", label: "Esc", help: "close this, or put a question away for later" },
-  { id: "digits", caps: ["1", "2", "…"], help: "choose that option in a question" },
-  { id: "arrows", caps: ["←", "→"], help: "move between tabs while the tab bar has focus" },
+const LISTS: Line[] = [
+  { id: "enter", caps: ["↓"], help: "from the tab bar, into the page" },
+  { id: "rows", caps: ["↑", "↓"], help: "move through a list (j and k work too)" },
+  { id: "pane", caps: ["←", "→"], help: "between a list and its detail (h and l)" },
+  { id: "ends", caps: ["Home", "End"], help: "first and last row" },
+  { id: "open", label: "Enter", help: "open the row, press a button" },
+  { id: "back", label: "Esc", help: "back up to the tab bar" },
+]
+
+const QUESTIONS: Line[] = [
+  { id: "qmove", caps: ["↑", "↓"], help: "move between the options" },
+  { id: "qpick", label: "Space", help: "pick an option (several when allowed)" },
+  { id: "qchoose", label: "Enter", help: "choose and go on; in your own answer, send it" },
+  { id: "qacross", caps: ["←", "→"], help: "previous and next question" },
+  { id: "qdigit", caps: ["1", "2", "…"], help: "pick that option" },
+  { id: "qesc", label: "Esc", help: "put the question away for later" },
 ]
 
 function KeyRow({ line }: { line: Line }) {
@@ -87,7 +101,11 @@ export function AltH({
 
   useEffect(() => {
     if (!open) return
-    const close = () => onOpenChange(false)
+    // Any key closes it, except the ones that scroll it or are only a modifier.
+    const keeps = new Set(["Alt", "Control", "Shift", "Meta", "ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", "Tab", " "])
+    const close = (event: KeyboardEvent) => {
+      if (!keeps.has(event.key)) onOpenChange(false)
+    }
     window.addEventListener("keydown", close, true)
     return () => window.removeEventListener("keydown", close, true)
   }, [open, onOpenChange])
@@ -108,11 +126,12 @@ export function AltH({
       <div className="grid min-h-0 flex-1 gap-x-10 gap-y-6 overflow-y-auto px-6 pt-2 pb-6 md:grid-cols-2">
         <div className="flex flex-col gap-6">
           <Section title="Everywhere" lines={fromKeys(keys)} />
+          <Section title="Jump to a tab" lines={tabKeys(tabs)} />
           <Section title="Message box" lines={MESSAGE_BOX} />
         </div>
         <div className="flex flex-col gap-6">
-          <Section title="Jump to a tab" lines={tabKeys(tabs)} />
-          <Section title="Pop-ups and tabs" lines={POPUPS} />
+          <Section title="Lists and cards" lines={LISTS} />
+          <Section title="Questions" lines={QUESTIONS} />
         </div>
       </div>
     </Popup>
