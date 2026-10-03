@@ -3,9 +3,10 @@
  * back (delete, discard, cancel, archive of a task under way). The dialog's
  * focus starts on Cancel, so Enter never confirms by accident.
  */
-import { useState, type ReactNode } from "react"
+import { useState } from "react"
+import type { LucideIcon } from "lucide-react"
 import { PRIORITY, useOverlaySlot } from "@/lib/overlay"
-import { Button } from "@/components/ui/button"
+import { ActionButton } from "./Actions"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,14 +19,15 @@ import {
 } from "@/components/ui/alert-dialog"
 
 interface ConfirmButtonProps {
+  /** What the icon button does: its tooltip and accessible name. */
   label: string
   title: string
   description: string
   confirmLabel: string
   onConfirm: () => void
-  icon?: ReactNode
+  icon: LucideIcon
   disabled?: boolean
-  /** The trigger's look; the confirm button turns destructive for `destructive`. */
+  /** The trigger's tone; the confirm button turns destructive for `destructive`. */
   variant?: "outline" | "destructive"
 }
 
@@ -34,10 +36,7 @@ export function ConfirmButton({ label, title, description, confirmLabel, onConfi
   const shown = useOverlaySlot(asking, PRIORITY.confirm)
   return (
     <AlertDialog open={asking && shown} onOpenChange={setAsking}>
-      <Button variant="outline" className={variant === "destructive" ? "border-destructive/40 text-destructive" : undefined} disabled={disabled} onClick={() => setAsking(true)}>
-        {icon}
-        {label}
-      </Button>
+      <ActionButton label={label} icon={icon} tone={variant === "destructive" ? "danger" : "neutral"} disabled={disabled} onClick={() => setAsking(true)} />
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>

@@ -6,7 +6,7 @@
  * logged or persisted.
  */
 import { useState } from "react"
-import { Copy } from "lucide-react"
+import { Copy, ExternalLink, Eye, ListChecks, Loader, Pencil, PencilOff, ShieldCheck, Trash2 } from "lucide-react"
 import { toast } from "@/lib/toast"
 import type { ExcalidrawAgentName, ExcalidrawCheck, ExcalidrawSessionInfo } from "@protocol"
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Spinner } from "@/components/ui/spinner"
 import { act } from "@/lib/act"
 import { call } from "@/lib/api"
+import { ActionBar, ActionButton } from "@/ui/Actions"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { NoteForm } from "@/ui/NoteForm"
 import { Section } from "@/ui/Section"
@@ -93,74 +94,31 @@ export function AddForms({ onChanged }: { onChanged: () => void }) {
   )
 }
 
-function LinkBox({ session }: { session: ExcalidrawSessionInfo }) {
-  const [revealed, setRevealed] = useState<string>()
-  const reveal = async () => {
-    try {
-      setRevealed((await call("excalidraw.reveal", { id: session.id })).link)
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : REVEAL_FAILED)
-    }
-  }
-  const copy = () => void navigator.clipboard?.writeText(revealed ?? "").then(() => toast(COPIED)).catch(() => undefined)
-  return (
-    <div className="flex flex-col gap-2">
-      <p className="font-mono text-sm break-all text-foreground">{revealed ?? session.masked}</p>
-      <div className="flex flex-wrap gap-2">
-        {revealed ? (
-          <>
-            <Button variant="outline" onClick={copy}>
-              <Copy aria-hidden="true" />
-              Copy
-            </Button>
-            <Button variant="outline" asChild>
-              <a href={revealed} target="_blank" rel="noopener noreferrer">
-                Open board
-              </a>
-            </Button>
-          </>
-        ) : (
-          <Button variant="outline" onClick={() => void reveal()}>
-            Reveal
-          </Button>
-        )}
-      </div>
-    </div>
-  )
+function LinkLine({ session, revealed }: { session: ExcalidrawSessionInfo; revealed?: string }) {
+  return <p className="font-mono text-sm break-all text-foreground">{revealed ?? session.masked}</p>
 }
 
-function ContributeLine({ session, onChanged }: { session: ExcalidrawSessionInfo; onChanged: () => void }) {
-  const toggle = async () => {
-    if (await act("excalidraw.toggleContribute", { id: session.id })) onChanged()
-  }
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <p className={session.contribute ? "text-sm text-primary" : "text-sm text-muted-foreground"}>{session.contribute ? DRAW_LINE : LOOK_LINE}</p>
-      <Button variant="outline" onClick={() => void toggle()}>
-        {session.contribute ? "Look only" : "Let agents draw"}
-      </Button>
-    </div>
-  )
+function ContributeLine({ session }: { session: ExcalidrawSessionInfo }) {
+  return <p className={session.contribute ? "text-sm text-primary" : "text-sm text-muted-foreground"}>{session.contribute ? DRAW_LINE : LOOK_LINE}</p>
 }
 
-function CheckBox({ check, checking, onCheck }: { check?: ExcalidrawCheck; checking: boolean; onCheck: () => void }) {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Button variant="outline" disabled={checking} onClick={onCheck}>
-        {checking ? <Spinner className="size-3.5" /> : null}
-        Check
-      </Button>
-      {checking ? (
-        <p className="text-sm text-muted-foreground">{CHECKING_ROOM}</p>
-      ) : check ? (
-        <p className={check.ok ? "text-sm text-primary" : "text-sm text-foreground"}>
-          {check.ok ? "✓" : "!"} {check.text}
-        </p>
-      ) : (
-        <p className="text-xs text-muted-foreground">{CHECK_HINT}</p>
-      )}
-    </div>
-  )
+function CheckLine({ check, checking }: { check?: ExcalidrawCheck; checking: boolean }) {
+  if (checking) {
+    return (
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Spinner className="size-3.5" aria-hidden="true" />
+        {CHECKING_ROOM}
+      </p>
+    )
+  }
+  if (check) {
+    return (
+      <p className={check.ok ? "text-sm text-primary" : "text-sm text-foreground"}>
+        {check.ok ? "✓" : "!"} {check.text}
+      </p>
+    )
+  }
+  return <p className="text-xs text-muted-foreground">{CHECK_HINT}</p>
 }
 
 function AgentRow({ agent, on, onToggle }: { agent: ExcalidrawAgentName; on: boolean; onToggle: (agent: ExcalidrawAgentName) => void }) {
@@ -189,9 +147,9 @@ function AgentBox({ session, onChanged }: { session: ExcalidrawSessionInfo; onCh
           <AgentRow key={agent} agent={agent} on={session.agents.includes(agent)} onToggle={toggle} />
         ))}
       </ul>
-      <Button variant="ghost" className="h-8 self-start" onClick={() => void toggleAll()}>
-        {all ? "No agents" : "Every agent"}
-      </Button>
+      <div className="flex">
+        <ActionButton label={all ? "Take every agent off" : "Assign every agent"} icon={ListChecks} onClick={() => void toggleAll()} />
+      </div>
       <p className="text-xs text-muted-foreground">{AGENT_NOTE}</p>
     </Section>
   )
@@ -216,27 +174,50 @@ interface SessionDetailProps {
 }
 
 export function SessionDetail({ session, check, checking, onCheck, onChanged, onRemove }: SessionDetailProps) {
+  const [revealed, setRevealed] = useState<string>()
+  const reveal = async () => {
+    try {
+      setRevealed((await call("excalidraw.reveal", { id: session.id })).link)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : REVEAL_FAILED)
+    }
+  }
+  const copy = () => void navigator.clipboard?.writeText(revealed ?? "").then(() => toast(COPIED)).catch(() => undefined)
+  const toggleContribute = async () => {
+    if (await act("excalidraw.toggleContribute", { id: session.id })) onChanged()
+  }
   return (
     <article aria-label="Session detail" className="flex flex-col gap-4">
-      <h2 className="text-sm font-semibold break-words">{session.name}</h2>
-      <LinkBox session={session} />
-      <ContributeLine session={session} onChanged={onChanged} />
-      <CheckBox check={check} checking={checking} onCheck={onCheck} />
-      <AgentBox session={session} onChanged={onChanged} />
-      <Section title={MANAGE_TITLE}>
-        <AddForms onChanged={onChanged} />
-        <RenameForm session={session} onChanged={onChanged} />
-      </Section>
-      <div>
+      <ActionBar>
+        {revealed ? (
+          <>
+            <ActionButton label="Copy the link" icon={Copy} onClick={copy} />
+            <ActionButton label="Open board" icon={ExternalLink} tone="primary" href={revealed} />
+          </>
+        ) : (
+          <ActionButton label="Reveal the link" icon={Eye} onClick={() => void reveal()} />
+        )}
+        <ActionButton label={session.contribute ? "Look only: agents stop drawing" : "Let agents draw"} icon={session.contribute ? PencilOff : Pencil} pressed={session.contribute} onClick={() => void toggleContribute()} />
+        <ActionButton label="Check the room" icon={checking ? Loader : ShieldCheck} disabled={checking} onClick={onCheck} />
         <ConfirmButton
-          label="Remove"
+          icon={Trash2}
+          label="Remove the session"
           title={`Remove "${session.name}"?`}
           description="Agents lose this session at once; the Excalidraw room itself is not touched."
           confirmLabel="Remove session"
           variant="destructive"
           onConfirm={onRemove}
         />
-      </div>
+      </ActionBar>
+      <h2 className="text-sm font-medium break-words">{session.name}</h2>
+      <LinkLine session={session} revealed={revealed} />
+      <ContributeLine session={session} />
+      <CheckLine check={check} checking={checking} />
+      <AgentBox session={session} onChanged={onChanged} />
+      <Section title={MANAGE_TITLE}>
+        <AddForms onChanged={onChanged} />
+        <RenameForm session={session} onChanged={onChanged} />
+      </Section>
     </article>
   )
 }

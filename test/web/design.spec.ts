@@ -404,6 +404,38 @@ test("choices use the right inputs: real checkboxes for several, a switch for on
   expect(await page.getByText("[x]").count() + (await page.getByText("[ ]").count()), "no text-drawn boxes").toBe(0);
 });
 
+test("action buttons are icons with tooltips, and stay pinned in view while the detail scrolls", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 500 });
+  await page.evaluate(() => {
+    window.location.hash = "#/tasks/T-mock-1";
+  });
+  const bar = page.getByRole("toolbar", { name: "Actions" });
+  await expect(bar).toBeVisible();
+  const archive = bar.getByRole("button", { name: "Archive" });
+  await expect(archive, "an icon button named for what it does").toBeVisible();
+  expect((await archive.textContent())?.trim(), "no text label on it").toBe("");
+  await archive.hover();
+  await expect(page.locator('[data-slot="tooltip-content"]').first(), "the tooltip says what it does").toContainText("Archive");
+  const detail = page.locator('[data-pane="detail"]');
+  await detail.evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  await page.waitForTimeout(150);
+  const box = await bar.boundingBox();
+  const pane = (await detail.boundingBox())!;
+  expect(box!.y, "after scrolling to the bottom the bar is still at the top of the pane").toBeLessThanOrEqual(pane.y + 4);
+  await expect(bar.getByRole("button", { name: "Delete" })).toBeVisible();
+});
+
+test("the Lobby's task header is one slim line", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const header = page.getByRole("group", { name: "Task" });
+  await expect(header).toContainText("Add offline mock fixtures");
+  expect((await header.boundingBox())!.height, "a single line, not a card").toBeLessThanOrEqual(48);
+});
+
 test("Activity and Thinking fold down to their title bar and open again", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });

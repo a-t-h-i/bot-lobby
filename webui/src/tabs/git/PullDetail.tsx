@@ -8,11 +8,12 @@
 import { useEffect, useState } from "react"
 import type { PullDetailInfo, PullFileInfo, PullNoteInfo, PullReadInfo, PullReviewInfo } from "@protocol"
 import { useApiRead } from "@/app/useApiRead"
-import { Button } from "@/components/ui/button"
+import { BookOpen, CircleStop, Play } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { act } from "@/lib/act"
 import { formatSince } from "@/lib/format"
+import { ActionBar, ActionButton } from "@/ui/Actions"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { Markdown } from "@/ui/Markdown"
 import { Section } from "@/ui/Section"
@@ -89,56 +90,24 @@ function ReviewSteps({ steps }: { steps: string[] }) {
   )
 }
 
-function ReviewActions({ number, running, onChanged }: { number: number; running: boolean; onChanged: () => void }) {
-  const [focus, setFocus] = useState("")
-  const start = async () => {
-    const text = focus.trim()
-    setFocus("")
-    await act("git.review", { number, ...(text ? { focus: text } : {}) })
-    onChanged()
-  }
-  const read = async () => {
-    await act("git.jev", { number })
-    onChanged()
-  }
-  const stop = async () => {
-    await act("git.cancelReview", { number })
-    onChanged()
-  }
+/** The optional focus for the next review: what it should look at most. */
+function FocusInput({ number, focus, onChange }: { number: number; focus: string; onChange: (value: string) => void }) {
   return (
-    <div className="flex flex-col gap-2">
-      <label htmlFor={`focus-${number}`} className="text-sm font-medium text-foreground">
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={`focus-${number}`} className="text-[0.8125rem] font-medium text-foreground">
         {FOCUS_LABEL}
       </label>
-      <Textarea id={`focus-${number}`} value={focus} rows={2} maxLength={2000} onChange={(event) => setFocus(event.target.value)} />
+      <Textarea id={`focus-${number}`} value={focus} rows={2} maxLength={2000} onChange={(event) => onChange(event.target.value)} />
       <p className="text-xs text-muted-foreground">{FOCUS_HINT}</p>
-      <div className="flex flex-wrap gap-2">
-        <Button disabled={running} onClick={() => void start()}>
-          Review
-        </Button>
-        <Button variant="outline" disabled={running} onClick={() => void read()}>
-          Jev's read
-        </Button>
-        {running ? (
-          <ConfirmButton
-            label="Stop"
-            title="Stop this review?"
-            description="The agent stops reading the pull request. Nothing is posted to GitHub."
-            confirmLabel="Stop review"
-            variant="destructive"
-            onConfirm={() => void stop()}
-          />
-        ) : null}
-      </div>
     </div>
   )
 }
 
-function ReviewBox({ number, review, now, onChanged }: { number: number; review?: PullReviewInfo; now: number; onChanged: () => void }) {
+function ReviewBox({ number, review, now, focus, onFocus }: { number: number; review?: PullReviewInfo; now: number; focus: string; onFocus: (value: string) => void }) {
   return (
     <Section title="Review" right={review ? reviewNote(review, now) : undefined}>
       {review ? <ReviewBody review={review} now={now} /> : null}
-      <ReviewActions number={number} running={review?.status === "running"} onChanged={onChanged} />
+      <FocusInput number={number} focus={focus} onChange={onFocus} />
       <p className="text-xs text-muted-foreground">A read-only agent reviews it — {NOT_POSTED}.</p>
     </Section>
   )
@@ -202,6 +171,7 @@ function Loading({ number, error }: { number: number; error?: string }) {
 
 export function PullDetail({ number, onChanged }: { number: number; onChanged?: () => void }) {
   const read = useApiRead("git.pull", { number }, ["git"])
+  const [focus, setFocus] = useState("")
   const running = read.data?.review?.status === "running"
   const now = useNow(running)
   if (!read.data) return <Loading number={number} error={read.error} />
@@ -210,12 +180,41 @@ export function PullDetail({ number, onChanged }: { number: number; onChanged?: 
     read.reload()
     onChanged?.()
   }
+  const start = async () => {
+    const text = focus.trim()
+    setFocus("")
+    await act("git.review", { number, ...(text ? { focus: text } : {}) })
+    refresh()
+  }
+  const readIt = async () => {
+    await act("git.jev", { number })
+    refresh()
+  }
+  const stop = async () => {
+    await act("git.cancelReview", { number })
+    refresh()
+  }
   return (
     <article className="flex flex-col gap-4" aria-label={`Pull request #${number}`}>
+      <ActionBar>
+        <ActionButton label="Review" icon={Play} tone="primary" disabled={running} onClick={() => void start()} />
+        <ActionButton label="Jev's read" icon={BookOpen} disabled={running} onClick={() => void readIt()} />
+        {running ? (
+          <ConfirmButton
+            icon={CircleStop}
+            label="Stop the review"
+            title="Stop this review?"
+            description="The agent stops reading the pull request. Nothing is posted to GitHub."
+            confirmLabel="Stop review"
+            variant="destructive"
+            onConfirm={() => void stop()}
+          />
+        ) : null}
+      </ActionBar>
       <Header pull={pull} now={now} />
       <p className="text-xs text-muted-foreground">{ACTIONS_LINE}</p>
       {jev ? <JevReadLine read={jev} /> : null}
-      <ReviewBox number={number} review={review} now={now} onChanged={refresh} />
+      <ReviewBox number={number} review={review} now={now} focus={focus} onFocus={setFocus} />
       {pull.files.length > 0 ? <Files files={pull.files} /> : null}
       <Section title="Description">
         {pull.body.trim() ? <Markdown text={pull.body.trim()} /> : <p className="text-sm text-muted-foreground">{NO_DESCRIPTION}</p>}

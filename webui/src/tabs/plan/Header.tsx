@@ -3,10 +3,11 @@
  * buttons the session allows — Answer questions while some wait, Retry when a
  * round can be run again, New plan, Save.
  */
-import { Button } from "@/components/ui/button"
+import { FilePlus, MessageCircleQuestion, RotateCw, Save } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { act } from "@/lib/act"
 import type { PlannerSnapshot } from "@protocol"
+import { ActionButton } from "@/ui/Actions"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { Roster } from "./Roster"
 import { failure, seatCells, statusParts } from "./words"
@@ -27,13 +28,12 @@ function Actions({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }
     if (await act(name, {})) onDone()
   }
   return (
-    <div className="flex flex-wrap gap-2">
-      {snap.questions.length > 0 && !snap.busy ? <Button onClick={() => void run("planner.answer")()}>Answer questions</Button> : null}
-      {snap.retryable ? <Button variant="outline" onClick={() => void run("planner.retry")()}>Retry</Button> : null}
-      <Button variant="outline" disabled={!snap.draft || snap.busy} onClick={() => void run("planner.save")()}>
-        Save
-      </Button>
+    <div className="flex items-center gap-0.5">
+      {snap.questions.length > 0 && !snap.busy ? <ActionButton label="Answer questions" icon={MessageCircleQuestion} tone="primary" onClick={() => void run("planner.answer")()} /> : null}
+      {snap.retryable ? <ActionButton label="Retry" icon={RotateCw} onClick={() => void run("planner.retry")()} /> : null}
+      <ActionButton label="Save the plan" icon={Save} shortcut="Ctrl+S" disabled={!snap.draft || snap.busy} onClick={() => void run("planner.save")()} />
       <ConfirmButton
+        icon={FilePlus}
         label="New plan"
         title="Start a new plan?"
         description="The conversation and the draft are left behind. Saved plans are not touched."

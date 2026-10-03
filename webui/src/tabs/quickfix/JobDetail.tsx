@@ -5,10 +5,11 @@
  * run anyway or start as a task while it is held).
  */
 import type { QuickFixJob } from "@protocol"
-import { Button } from "@/components/ui/button"
+import { CircleStop, ListPlus, Play } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { act } from "@/lib/act"
 import { formatClock } from "@/lib/format"
+import { ActionBar, ActionButton } from "@/ui/Actions"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { Markdown } from "@/ui/Markdown"
 import { Section } from "@/ui/Section"
@@ -54,39 +55,36 @@ function Steps({ job }: { job: QuickFixJob }) {
 function Actions({ job }: { job: QuickFixJob }) {
   if (job.status === "held") {
     return (
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={() => void act("quickfix.runAnyway", { id: job.id })}>
-          Run anyway
-        </Button>
-        <Button variant="outline" onClick={() => void act("quickfix.movedToTask", { id: job.id })}>
-          As a task
-        </Button>
-      </div>
+      <ActionBar>
+        <ActionButton label="Run anyway" icon={Play} tone="primary" onClick={() => void act("quickfix.runAnyway", { id: job.id })} />
+        <ActionButton label="Turn it into a task" icon={ListPlus} onClick={() => void act("quickfix.movedToTask", { id: job.id })} />
+      </ActionBar>
     )
   }
   if (job.status !== "queued" && job.status !== "running") return null
   return (
-    <div className="flex flex-wrap gap-2">
+    <ActionBar>
       <ConfirmButton
-        label="Cancel"
+        icon={CircleStop}
+        label="Cancel the quick fix"
         title="Cancel this quick fix?"
         description="The agent stops. Files it already edited stay as they are."
         confirmLabel="Cancel quick fix"
         variant="destructive"
         onConfirm={() => void act("quickfix.cancel", { id: job.id })}
       />
-    </div>
+    </ActionBar>
   )
 }
 
 export function JobDetail({ job, now }: { job: QuickFixJob; now: number }) {
   return (
     <article className="flex flex-col gap-4" aria-label="Quick fix detail">
+      <Actions job={job} />
       <header className="flex flex-col gap-1">
         <p className="text-xs text-muted-foreground break-all">{job.id}</p>
         <p className="text-sm text-foreground">{factsLine(job, now)}</p>
       </header>
-      <Actions job={job} />
       <Markdown text={job.prompt} />
       <Notes job={job} />
       <Section title="Steps">

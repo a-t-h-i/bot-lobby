@@ -8,15 +8,15 @@
  * notification and install rows are page-only and never sent to the server.
  */
 import { useEffect, useState, type ReactNode } from "react"
-import { ChevronRight, Download, Maximize, Minimize } from "lucide-react"
+import { Check, ChevronRight, Download, Maximize, Minimize } from "lucide-react"
 import { toast } from "@/lib/toast"
 import { useFullscreen, useInstallPrompt, useInstalled } from "@/app/install"
 import { disableNotifications, enableNotifications, useNotificationsEnabled } from "@/app/notify"
 import { useTheme } from "@/components/theme-provider"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { Combobox } from "@/components/ui/combobox"
+import { ActionButton } from "@/ui/Actions"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { EffortSlider, nearestSupported } from "@/ui/EffortSlider"
@@ -197,7 +197,7 @@ function ModelChoice(props: { value: string; models: SettingsModelInfo[]; label:
       {typing ? (
         <div className="flex gap-2">
           <Input autoFocus value={text} placeholder="provider/model" aria-label="Model id" onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); use() } }} />
-          <Button type="button" variant="outline" onClick={use}>Use</Button>
+          <ActionButton label="Use this model" icon={Check} tone="primary" onClick={use} />
         </div>
       ) : null}
     </div>
@@ -478,22 +478,17 @@ function InstallGroup() {
       <Rows>
         <Field label={PAGE.installLabel} help={installed ? PAGE.installedNow : PAGE.installHelp}>
           {installed ? null : (
-            <Button
-              type="button"
-              variant="outline"
+            <ActionButton
+              label={PAGE.installButton}
+              icon={Download}
+              tone="primary"
               onClick={() => (available ? void install().then(() => toast.success(PAGE.installDone)) : toast.warning(PAGE.installUnavailable))}
-            >
-              <Download aria-hidden="true" />
-              {PAGE.installButton}
-            </Button>
+            />
           )}
         </Field>
         {fullscreen.supported ? (
           <Field label={PAGE.fullscreenLabel} help={PAGE.fullscreenHelp}>
-            <Button type="button" variant="outline" aria-pressed={fullscreen.on} onClick={() => void fullscreen.toggle()}>
-              {fullscreen.on ? <Minimize aria-hidden="true" /> : <Maximize aria-hidden="true" />}
-              {fullscreen.on ? PAGE.fullscreenOn : PAGE.fullscreenOff}
-            </Button>
+            <ActionButton label={fullscreen.on ? PAGE.fullscreenOn : PAGE.fullscreenOff} icon={fullscreen.on ? Minimize : Maximize} pressed={fullscreen.on} onClick={() => void fullscreen.toggle()} />
           </Field>
         ) : null}
       </Rows>
