@@ -4,65 +4,74 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * A zen page: flat paper in light, flat charcoal in dark, one warm clay accent.
+ * A zen page: cool mist in light, deep graphite in dark, one calm indigo accent.
  * Every colour lives in this one block: change a token here and the whole page
  * follows. Only pop-ups, toasts and the composer's edges are translucent.
  */
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("../../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2") format("woff2-variations");
+}
+
 :root {
   --radius: 0.5rem;
 
-  /* Page and ink: paper */
-  --background: #f5f2eb;
-  --foreground: #25231f;
-  --muted-foreground: #66625a;
+  /* Page and ink: mist */
+  --background: #f6f7fa;
+  --foreground: #1a1d26;
+  --muted-foreground: #5a6272;
 
   /* Surfaces */
-  --card: #fbf9f4;
-  --card-foreground: #25231f;
-  --popover: rgb(255 253 248 / 0.92);
-  --popover-foreground: #25231f;
-  --glass-border: #e2ddd0;
-  --glass-shadow: 0 8px 28px -10px rgb(60 45 20 / 0.22);
-  --scrim: rgb(50 40 25 / 0.26);
+  --card: #ffffff;
+  --card-foreground: #1a1d26;
+  --popover: rgb(255 255 255 / 0.9);
+  --popover-foreground: #1a1d26;
+  --glass-border: #e3e6ee;
+  --glass-shadow: 0 12px 32px -12px rgb(24 32 64 / 0.25);
+  --card-shadow: 0 1px 2px rgb(24 32 64 / 0.05);
+  --scrim: rgb(18 24 44 / 0.32);
 
-  /* Accent: clay */
-  --primary: #a8471f;
-  --primary-foreground: #fffaf5;
-  --accent: rgb(178 80 43 / 0.1);
-  --accent-foreground: #25231f;
-  --ring: #c8704a;
-  --typing: #c8704a;
-  --tab-active: #e8e2d4;
+  /* Accent: indigo */
+  --primary: #4650d1;
+  --primary-foreground: #ffffff;
+  --accent: rgb(70 80 209 / 0.09);
+  --accent-foreground: #1a1d26;
+  --ring: #6a73e0;
+  --typing: #6a73e0;
+  --tab-active: #e4e7fa;
 
   /* Quiet fills and lines */
-  --secondary: rgb(60 45 20 / 0.06);
-  --secondary-foreground: #25231f;
-  --muted: rgb(60 45 20 / 0.05);
-  --border: #e2ddd0;
-  --input: #d3cdbd;
-  --you: #efe9dc;
+  --secondary: rgb(26 40 90 / 0.06);
+  --secondary-foreground: #1a1d26;
+  --muted: rgb(26 40 90 / 0.05);
+  --border: #e3e6ee;
+  --input: #d3d8e3;
+  --you: #eaedf7;
 
   /* Meaning */
-  --destructive: #b03a34;
-  --success: #2f6a45;
-  --warning: #8a5a0a;
-  --heading: #25231f;
-  --link: #2f5f8f;
-  --code: #8a4b6a;
+  --destructive: #b8322c;
+  --success: #1f6f48;
+  --warning: #8a5a00;
+  --heading: #1a1d26;
+  --link: var(--primary);
+  --code: #9b3a86;
   --codeblock: var(--foreground);
   --bullet: var(--primary);
 
   --chart-1: var(--primary);
   --chart-2: var(--success);
-  --chart-3: var(--link);
-  --chart-4: #7a5aa0;
+  --chart-3: #0f766e;
+  --chart-4: #a23c82;
   --chart-5: var(--warning);
 
   /* Each agent's colour in the activity log and the metrics bars. */
   --source-dev: var(--success);
-  --source-design: #8a4b6a;
+  --source-design: #a23c82;
   --source-qa: var(--warning);
-  --source-research: var(--link);
+  --source-research: #0f766e;
   --source-quickfix: var(--primary);
 
   --sidebar: var(--background);
@@ -79,48 +88,50 @@
 }
 
 .dark {
-  /* Charcoal */
-  --background: #262624;
-  --foreground: #ece9e1;
-  --muted-foreground: #a7a399;
+  /* Graphite */
+  --background: #14161c;
+  --foreground: #e7e9f0;
+  --muted-foreground: #9aa1b2;
 
-  --card: #2e2e2b;
-  --card-foreground: #ece9e1;
-  --popover: rgb(52 52 49 / 0.92);
-  --popover-foreground: #ece9e1;
-  --glass-border: #3f3e3a;
-  --glass-shadow: 0 10px 32px -10px rgb(0 0 0 / 0.6);
-  --scrim: rgb(10 10 9 / 0.55);
+  --card: #1b1e26;
+  --card-foreground: #e7e9f0;
+  --popover: rgb(28 31 40 / 0.9);
+  --popover-foreground: #e7e9f0;
+  --glass-border: #2a2f3a;
+  --glass-shadow: 0 14px 36px -12px rgb(0 0 0 / 0.65);
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  --scrim: rgb(5 7 12 / 0.6);
 
-  --primary: #e08a62;
-  --primary-foreground: #2a1a12;
-  --accent: rgb(224 138 98 / 0.14);
-  --accent-foreground: #ece9e1;
-  --ring: #e08a62;
-  --typing: #e08a62;
-  --tab-active: #3d3c38;
+  --primary: #8f9bff;
+  --primary-foreground: #12142e;
+  --accent: rgb(143 155 255 / 0.14);
+  --accent-foreground: #e7e9f0;
+  --ring: #8f9bff;
+  --typing: #8f9bff;
+  --tab-active: #232845;
 
   --secondary: rgb(255 255 255 / 0.06);
-  --secondary-foreground: #ece9e1;
+  --secondary-foreground: #e7e9f0;
   --muted: rgb(255 255 255 / 0.05);
-  --border: #3f3e3a;
-  --input: #4a4944;
-  --you: #363633;
+  --border: #2a2f3a;
+  --input: #383e4c;
+  --you: #242836;
 
-  --destructive: #ee8b83;
-  --success: #8bc6a0;
-  --warning: #e2b25c;
-  --heading: #ece9e1;
-  --link: #8fb8e8;
-  --code: #d9a7c0;
+  --destructive: #f2918a;
+  --success: #7fcf9f;
+  --warning: #e5b45a;
+  --heading: #e7e9f0;
+  --code: #e6a6d6;
 
-  --chart-4: #b8a0dc;
+  --chart-3: #5fd0c4;
+  --chart-4: #d99ac9;
 
-  --source-design: #d9a7c0;
+  --source-design: #d99ac9;
+  --source-research: #5fd0c4;
 }
 
 @theme inline {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "JetBrains Mono", "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
   --color-typing: var(--typing);
   --color-you: var(--you);
@@ -142,6 +153,7 @@
   --radius-3xl: 8px;
   --color-tab: var(--tab-active);
   --shadow-glass: var(--glass-shadow);
+  --shadow-card: var(--card-shadow);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -192,6 +204,8 @@
   }
   body {
     @apply bg-background font-sans text-foreground antialiased;
+    letter-spacing: -0.006em;
+    text-rendering: optimizeLegibility;
   }
   ::selection {
     background: var(--accent);
@@ -205,10 +219,10 @@
   }
 }
 
-/* Cards are flat paper (or charcoal) with a thin edge; pop-ups are translucent with a blur behind them. */
+/* Cards are flat mist (or graphite) with a thin edge and a whisper of shadow; pop-ups are translucent with a blur behind them. */
 @layer components {
   .glass {
-    @apply border border-glass-border bg-card text-card-foreground;
+    @apply border border-glass-border bg-card text-card-foreground shadow-card;
   }
   .glass-pop {
     @apply border border-glass-border bg-popover text-popover-foreground shadow-glass backdrop-blur-md;

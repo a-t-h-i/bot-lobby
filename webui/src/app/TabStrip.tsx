@@ -11,7 +11,7 @@
 import { forwardRef, Fragment, useCallback, useEffect, useLayoutEffect, useRef, type KeyboardEvent } from "react"
 import { animate, type AnimationPlaybackControls } from "motion"
 import { BarChart3, BookOpen, CircleDot, GitPullRequest, ListChecks, MessageSquare, PenTool, Route, Zap, type LucideIcon } from "lucide-react"
-import { Kbd } from "@/components/ui/kbd"
+import { Keys } from "@/components/ui/kbd"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import type { TabInfo } from "@protocol"
@@ -63,7 +63,7 @@ const TabCell = forwardRef<HTMLAnchorElement, { tab: TabInfo; active: boolean }>
           {Icon ? <Icon aria-hidden="true" className={cn("size-4 shrink-0 transition-colors duration-200", active && "text-primary")} /> : null}
           <span>
             {number ? (
-              <span aria-hidden="true" className="tabular-nums">
+              <span aria-hidden="true">
                 {number}-
               </span>
             ) : null}
@@ -72,7 +72,7 @@ const TabCell = forwardRef<HTMLAnchorElement, { tab: TabInfo; active: boolean }>
         </a>
       </TooltipTrigger>
       <TooltipContent>
-        {tab.label} · <Kbd>{tab.key}</Kbd>
+        {tab.label} <Keys chord={tab.key} />
       </TooltipContent>
     </Tooltip>
   )

@@ -46,8 +46,12 @@ export function KnowledgeList({ files, selectedKey, onSelect }: { files: Knowled
     <div className="flex flex-col pb-2">
       {groupFiles(files).map((group) => (
         <div key={group.agent}>
-          <h3 className="px-3 pt-3 pb-1 text-sm">
-            <Rule title={AGENT_LABELS[group.agent]} right={group.notes > 0 ? `${group.notes} note${group.notes === 1 ? "" : "s"}` : undefined} />
+          <h3 className="px-4 pt-3 pb-1 text-xs">
+            <Rule
+              title={AGENT_LABELS[group.agent]}
+              right={group.notes > 0 ? `${group.notes} note${group.notes === 1 ? "" : "s"}` : undefined}
+              className="[&>span:first-child]:font-medium [&>span:first-child]:text-muted-foreground"
+            />
           </h3>
           <ul className="flex flex-col gap-0.5 px-1 pt-1">
             {group.files.map((info) => (

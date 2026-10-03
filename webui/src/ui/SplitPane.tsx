@@ -48,7 +48,7 @@ function DetailSheet({ open, onClose, describe, children }: Pick<SplitPaneProps,
           <SheetTitle>Detail</SheetTitle>
           <SheetDescription className="sr-only">{describe}</SheetDescription>
           <SheetClose asChild>
-            <Button variant="ghost" size="icon" aria-label="Close detail">
+            <Button variant="ghost" size="icon" aria-label="Close detail" title="Close · Esc">
               <X aria-hidden="true" />
             </Button>
           </SheetClose>
