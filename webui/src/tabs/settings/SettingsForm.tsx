@@ -204,7 +204,7 @@ function ModelChoice(props: { value: string; models: SettingsModelInfo[]; label:
 
 function ToggleField({ label, help, checked, onChange }: { label: string; help?: string; checked: boolean; onChange: (next: boolean) => void }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-2xl border border-border bg-card/40 px-4 py-3">
+    <div className="flex items-start justify-between gap-4 rounded-md border border-border bg-card/40 px-4 py-3">
       <div className="min-w-0">
         <div className="text-sm font-medium">{label}</div>
         {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}

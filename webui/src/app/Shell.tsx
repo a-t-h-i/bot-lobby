@@ -1,9 +1,10 @@
 /**
- * The shell that wraps every route: one big window of glass holding the title
- * row with the numbered tab pills, the page for the route (it eases in when
- * the tab changes) and the floating composer at the bottom. Pop-ups (the
- * question, the key help) and toasts sit above it, one at a time. Clicking a
- * tab or pressing a shortcut moves the hash route.
+ * The shell that wraps every route, laid out top to bottom with a gap between
+ * each part: the title row with the tabs, the page for the route (it eases in
+ * when the tab changes) and the composer. Nothing overlaps: the page scrolls
+ * in the space between the title row and the composer. Pop-ups (the question,
+ * the key help) and toasts sit above it, one at a time. Clicking a tab or
+ * pressing a shortcut moves the hash route.
  */
 import { useCallback, useRef, useState } from "react"
 import { motion } from "motion/react"
@@ -89,37 +90,34 @@ export function Shell() {
 
   const keyLabels = Object.fromEntries(keys.map((key) => [key.action, key.label]))
   return (
-    <div ref={rootRef} className="flex h-svh flex-col p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
-      <div className="glass relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[2rem]">
-        <Header
-          status={status}
-          task={lobbyRecord.data?.task}
-          connection={connection}
-          route={route}
-          keys={keyLabels}
-          tabs={<TabStrip tabs={tabs} activeId={activeId} onSelect={select} />}
-          extra={putAway && prompts.length > 0 ? <QuestionsPill count={prompts.length} onOpen={() => setPutAway(false)} /> : null}
-        />
-        <Banner connection={connection} onRetry={retry} />
-        <main
-          id="main"
-          role={activeId ? "tabpanel" : undefined}
-          aria-labelledby={activeId ? `tab-${activeId}` : undefined}
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto pt-2"
-          style={{ paddingBottom: "calc(var(--composer-h, 6rem) + 0.5rem)" }}
+    <div ref={rootRef} className="flex h-svh flex-col gap-0.5">
+      <Header
+        status={status}
+        task={lobbyRecord.data?.task}
+        connection={connection}
+        route={route}
+        keys={keyLabels}
+        tabs={<TabStrip tabs={tabs} activeId={activeId} onSelect={select} />}
+        extra={putAway && prompts.length > 0 ? <QuestionsPill count={prompts.length} onOpen={() => setPutAway(false)} /> : null}
+      />
+      <Banner connection={connection} onRetry={retry} />
+      <main
+        id="main"
+        role={activeId ? "tabpanel" : undefined}
+        aria-labelledby={activeId ? `tab-${activeId}` : undefined}
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2"
+      >
+        <motion.div
+          key={routeKey(route)}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+          className="flex min-h-0 flex-1 flex-col"
         >
-          <motion.div
-            key={routeKey(route)}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
-            className="flex min-h-0 flex-1 flex-col"
-          >
-            {routeBody(route)}
-          </motion.div>
-        </main>
-        <Composer route={route} />
-      </div>
+          {routeBody(route)}
+        </motion.div>
+      </main>
+      <Composer route={route} />
       <QuestionPopup prompts={prompts} answer={answer} dismiss={dismiss} minimized={putAway} onMinimize={setPutAway} />
       <AltH open={help} onOpenChange={setHelp} keys={keys} tabs={tabs} />
     </div>
