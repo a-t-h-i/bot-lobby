@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react"
 import { animate, AnimatePresence, motion } from "motion/react"
 import { ArrowUp, FileText, Maximize2, Minimize2, Paperclip, Square, X } from "lucide-react"
+import { Keys, KeyHint } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { call } from "@/lib/api"
@@ -123,7 +124,7 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
   )
 }
 
-export function Composer({ route }: { route: Route }) {
+export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<string, string>; onHelp: () => void }) {
   const [text, setText] = useState("")
   const [files, setFiles] = useState<Pending[]>([])
   const [expanded, setExpanded] = useState(false)
@@ -389,28 +390,64 @@ export function Composer({ route }: { route: Route }) {
             <span className="ml-1 px-2 text-xs text-muted-foreground">To the {target.pill.toLowerCase()}</span>
           )}
 
-          <span className="mx-2 hidden min-w-0 flex-1 truncate text-right font-mono text-[0.7rem] text-muted-foreground sm:inline">Enter sends · Shift+Enter new line · Markdown works</span>
-          <span className="flex-1 sm:hidden" />
+          <div className="@container ml-auto flex min-w-0 flex-1 items-center justify-end overflow-hidden px-2">
+            <div className="flex items-center justify-end gap-3.5">
+              {route.kind === "tab" && route.tab === "plan" ? (
+                <KeyHint chord={keys.savePlan ?? "Ctrl+S"} className="hidden @[30rem]:inline-flex">
+                  save plan
+                </KeyHint>
+              ) : null}
+              <KeyHint chord="Shift+Enter" className="hidden @[22rem]:inline-flex">
+                new line
+              </KeyHint>
+              <KeyHint chord="Enter" className="hidden @[11rem]:inline-flex">
+                send
+              </KeyHint>
+              <button
+                type="button"
+                aria-label="Keyboard shortcuts"
+                aria-haspopup="dialog"
+                onClick={onHelp}
+                className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg px-1.5 text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+              >
+                <Keys chord={keys.help ?? "Alt+H"} />
+                <span className="hidden @[8rem]:inline">shortcuts</span>
+              </button>
+            </div>
+          </div>
 
           {busy && target.id === "oracle" ? (
-            <button
-              type="button"
-              aria-label="Stop"
-              onClick={() => void stop()}
-              className="inline-flex size-10 items-center justify-center rounded-lg bg-secondary text-foreground transition-[background-color,transform] duration-150 ease-snap outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
-            >
-              <Square aria-hidden="true" className="size-3.5 fill-current" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Stop"
+                  onClick={() => void stop()}
+                  className="inline-flex size-10 items-center justify-center rounded-lg bg-secondary text-foreground transition-[background-color,transform] duration-150 ease-snap outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+                >
+                  <Square aria-hidden="true" className="size-3.5 fill-current" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Stop the oracle</TooltipContent>
+            </Tooltip>
           ) : null}
-          <button
-            type="button"
-            aria-label="Send"
-            onClick={() => void send()}
-            disabled={!canSend}
-            className="inline-flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-[opacity,transform,filter] duration-150 ease-snap outline-none hover:brightness-110 focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95 disabled:opacity-40 disabled:hover:brightness-100"
-          >
-            {sending ? <Spinner aria-hidden="true" role="presentation" className="size-4 text-primary-foreground" /> : <ArrowUp aria-hidden="true" className="size-[1.15rem]" />}
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="Send"
+                aria-keyshortcuts="Enter"
+                onClick={() => void send()}
+                disabled={!canSend}
+                className="inline-flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-[opacity,transform,filter] duration-150 ease-snap outline-none hover:brightness-110 focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95 disabled:opacity-40 disabled:hover:brightness-100"
+              >
+                {sending ? <Spinner aria-hidden="true" role="presentation" className="size-4 text-primary-foreground" /> : <ArrowUp aria-hidden="true" className="size-[1.15rem]" />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              Send <Keys chord="Enter" />
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
     </div>
