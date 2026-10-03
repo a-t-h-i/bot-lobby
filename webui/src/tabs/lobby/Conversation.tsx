@@ -10,7 +10,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react"
 import { ArrowDown } from "lucide-react"
 import { motion } from "motion/react"
-import { Button } from "@/components/ui/button"
+import { ActionButton } from "@/ui/Actions"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { Spinner } from "@/components/ui/spinner"
 import { call } from "@/lib/api"
@@ -232,10 +232,9 @@ export function Conversation({
         )}
       </div>
       {!atBottom ? (
-        <Button type="button" className="absolute right-5 bottom-3 shadow-sm" onClick={stick}>
-          <ArrowDown aria-hidden="true" />
-          Jump to latest
-        </Button>
+        <div className="absolute right-4 bottom-3">
+          <ActionButton label="Jump to latest" icon={ArrowDown} tone="primary" className="shadow-sm" onClick={stick} />
+        </div>
       ) : null}
     </Frame>
   )
