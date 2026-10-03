@@ -120,39 +120,24 @@ export function isPanelMember(value: string): value is PanelMember {
 export const LOBBY_PANELS = ["conversation", "activity", "thinking"] as const;
 export type LobbyPanel = (typeof LOBBY_PANELS)[number];
 
-/** Where the web UI's questions are answered: in the browser, or only in the terminal. */
-export const LOBBY_WEB_QUESTIONS = ["both", "terminal"] as const;
-export type LobbyWebQuestions = (typeof LOBBY_WEB_QUESTIONS)[number];
-
-/** The loopback web UI: off until started with `/bot-lobby web`. */
+/** The loopback web UI: it starts with every interactive session. */
 export interface LobbyWebConfig {
-  /** Start the server with the session. */
-  enabled: boolean;
   /** Base port (tried, then the next free up to +20); 0 means any free port. */
   port: number;
-  /** Open the link in the browser on `/bot-lobby web`. */
+  /** Open the link in the browser when the session starts. */
   openBrowser: boolean;
-  questions: LobbyWebQuestions;
 }
 
-/** The full-screen lobby. */
+/** The web lobby. */
 export interface LobbyConfig {
-  /** Open by itself when this session starts or resumes a task. */
-  autoOpen: boolean;
   /** Who sits on the planning panel next to the oracle, until toggled in the Plan tab. */
   planningPanel: PanelMember[];
-  /** Put the panel's questions to the user as soon as a round ends, while the Plan tab is open. */
-  autoAsk: boolean;
   /** Show the GitHub Issues tab (off for now). */
   issues: boolean;
-  /** Which panes show; toggled with keys in the lobby and remembered here. */
+  /** Which panes the Lobby tab shows. */
   panels: Record<LobbyPanel, boolean>;
-  /** Key overrides by action name, e.g. `{ "toggleThinking": "alt+t" }`. */
+  /** Key overrides by action name, e.g. `{ "search": "alt+f" }`. */
   keys: Record<string, string>;
-  /** A one-line status (task steps, planning round, quick fix, or idle) under the editor while the lobby is hidden. */
-  miniLine: boolean;
-  /** Clicks and the wheel work in the lobby (click a draft line to comment on it); shift+drag still selects text. */
-  mouse: boolean;
   /**
    * Planning rounds before the oracle finalizes the plan on its own: the last
    * round skips the seats and asks nothing; later replies only revise. 0 = unlimited.
@@ -271,17 +256,13 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     scratchpadMaxChars: 2000,
   },
   lobby: {
-    autoOpen: true,
     planningPanel: [...PANEL_MEMBERS],
-    autoAsk: true,
     issues: false,
     panels: { conversation: true, activity: true, thinking: true },
     keys: {},
-    mouse: true,
-    miniLine: true,
     maxPlanningRounds: 5,
     splitPlanAbove: 8,
-    web: { enabled: false, port: 7347, openBrowser: true, questions: "both" },
+    web: { port: 7347, openBrowser: true },
   },
   classifier: {
     enabled: false,
@@ -344,7 +325,7 @@ function flag(value: unknown, fallback: boolean): boolean {
 }
 
 function normalizeLobby(value: unknown): LobbyConfig {
-  const source = value as { autoOpen?: unknown; planningPanel?: unknown; autoAsk?: unknown; issues?: unknown; panels?: unknown; keys?: unknown; mouse?: unknown; miniLine?: unknown; maxPlanningRounds?: unknown; splitPlanAbove?: unknown; web?: unknown } | undefined;
+  const source = value as { planningPanel?: unknown; issues?: unknown; panels?: unknown; keys?: unknown; maxPlanningRounds?: unknown; splitPlanAbove?: unknown; web?: unknown } | undefined;
   const defaults = DEFAULT_CONFIG.lobby;
   const panel = Array.isArray(source?.planningPanel)
     ? [...new Set(source.planningPanel.filter((entry): entry is PanelMember => typeof entry === "string" && isPanelMember(entry)))]
@@ -352,26 +333,21 @@ function normalizeLobby(value: unknown): LobbyConfig {
   const panels = (source?.panels ?? {}) as Partial<Record<LobbyPanel, unknown>>;
   const keys = source?.keys && typeof source.keys === "object" ? source.keys as Record<string, unknown> : {};
   return {
-    autoOpen: flag(source?.autoOpen, defaults.autoOpen),
     planningPanel: PANEL_MEMBERS.filter((member) => panel.includes(member)),
-    autoAsk: flag(source?.autoAsk, defaults.autoAsk),
     issues: flag(source?.issues, defaults.issues),
     panels: Object.fromEntries(LOBBY_PANELS.map((name) => [name, flag(panels[name], defaults.panels[name])])) as Record<LobbyPanel, boolean>,
     keys: Object.fromEntries(Object.entries(keys).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0)),
-    mouse: flag(source?.mouse, defaults.mouse),
-    miniLine: flag(source?.miniLine, defaults.miniLine),
     maxPlanningRounds: roundLimit(source?.maxPlanningRounds, defaults.maxPlanningRounds),
     splitPlanAbove: roundLimit(source?.splitPlanAbove, defaults.splitPlanAbove),
     web: normalizeLobbyWeb(source?.web, defaults.web),
   };
 }
 
-/** The loopback web UI's config: 0 or a real port, `both` or `terminal`; anything else keeps the default. */
+/** The loopback web UI's config: 0 or a real port; anything else keeps the default. */
 function normalizeLobbyWeb(value: unknown, fallback: LobbyWebConfig): LobbyWebConfig {
   const source = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
   const port = source.port === 0 ? 0 : webPort(source.port, fallback.port);
-  const questions = source.questions === "both" || source.questions === "terminal" ? source.questions : fallback.questions;
-  return { enabled: flag(source.enabled, fallback.enabled), port, openBrowser: flag(source.openBrowser, fallback.openBrowser), questions };
+  return { port, openBrowser: flag(source.openBrowser, fallback.openBrowser) };
 }
 
 /** A TCP port (0 means any free port); anything else keeps the default. */

@@ -2,21 +2,24 @@ import "./nonce"
 import "@/app/install"
 
 import { StrictMode } from "react"
+import { MotionConfig } from "motion/react"
 import { createRoot } from "react-dom/client"
 
 import "./index.css"
 import App from "./App.tsx"
 import { ThemeProvider } from "@/components/theme-provider.tsx"
-import { Toaster } from "@/components/ui/sonner"
+import { Toaster } from "@/components/ui/toaster"
 import { TooltipProvider } from "@/components/ui/tooltip"
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider>
-      <TooltipProvider>
-        <App />
-        <Toaster />
-      </TooltipProvider>
+      <MotionConfig reducedMotion="user">
+        <TooltipProvider>
+          <App />
+          <Toaster />
+        </TooltipProvider>
+      </MotionConfig>
     </ThemeProvider>
   </StrictMode>
 )

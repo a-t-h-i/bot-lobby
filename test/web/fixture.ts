@@ -6,7 +6,7 @@
  */
 import { randomBytes } from "node:crypto";
 import { test as base, type ConsoleMessage, type Page } from "@playwright/test";
-import type { LobbyService } from "../../src/lobby/service.ts";
+import type { LobbyService } from "../../src/lobby/host.ts";
 import { createFixtureService, disposeFixtureService } from "../../src/webui/dev/fake-service.ts";
 import { startWebServer } from "../../src/webui/server.ts";
 
@@ -45,7 +45,8 @@ export async function openScenario(page: Page, server: MockServer, scenario: str
   server.use(scenario);
   const trap = trapErrors(page);
   await page.goto(server.link);
-  await page.getByRole("tablist", { name: "Lobby tabs" }).waitFor();
+  // A question pop-up is modal, so the page behind it is hidden from the accessibility tree: wait on the DOM.
+  await page.locator('[role="tablist"]').waitFor();
   return trap;
 }
 

@@ -8,7 +8,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { lobbyTopics, type LobbyTopic } from "../lobby/topics.ts";
-import type { LobbyService } from "../lobby/service.ts";
+import type { LobbyService } from "../lobby/host.ts";
 import type { StreamEvent } from "./protocol.ts";
 import { onNotice, watchFeed, type Notice } from "./notices.ts";
 

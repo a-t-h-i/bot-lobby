@@ -9,7 +9,7 @@ import { LobbyFeed } from "../../lobby/feed.ts";
 import { promptHub } from "../../lobby/prompt-hub.ts";
 import { lobbyTopics } from "../../lobby/topics.ts";
 import type { BackgroundSession, DialogAnswer, SessionDialog } from "../../lobby/sessions.ts";
-import type { LobbyService } from "../../lobby/service.ts";
+import type { LobbyService } from "../../lobby/host.ts";
 import { loadScenario, type ScenarioFixture } from "./fixtures.ts";
 
 interface StreamState {
@@ -442,7 +442,6 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     configChanged: () => {},
     models: () => models.map((model) => ({ id: model.id, label: model.label, thinkingLevels: [...model.thinkingLevels] })),
     issuesEnabled: () => fixture.status.issuesEnabled,
-    terminalDialog: () => fixture.status.terminalDialog,
     workspace: () => ({ ...fixture.status.workspace }),
     zen: () => ({ ...(fixture.zen.task ? { task: { ...fixture.zen.task } } : {}), runs: [...fixture.zen.runs] }),
     feed,

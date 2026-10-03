@@ -1,5 +1,5 @@
 /**
- * The Excalidraw page (batch-2 §m): the shared sessions on the left with their
+ * The Excalidraw page: the shared sessions on the left with their
  * check mark, name, masked link and agent count, and the selected session's
  * link (masked until revealed), its draw state, the last check and the agent
  * checklist on the right (a Sheet below 1024 px). `#/excalidraw/<id>` selects a
@@ -23,7 +23,7 @@ const select = (id: string) => go(tabHash("excalidraw", id))
 
 function ExcalidrawEmpty({ onChanged }: { onChanged: () => void }) {
   return (
-    <Empty className="m-4 flex-1 border border-border bg-card">
+    <Empty className="glass m-4 flex-1 border">
       <EmptyHeader>
         <EmptyTitle>{EMPTY_HEADLINE}</EmptyTitle>
         <EmptyDescription className="font-mono">{EMPTY_ADD}</EmptyDescription>

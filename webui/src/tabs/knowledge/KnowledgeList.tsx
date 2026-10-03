@@ -1,7 +1,7 @@
 /**
- * The Knowledge file list (batch-2 §l): files grouped by agent under
+ * The Knowledge file list: files grouped by agent under
  * `Master (oracle)`, `Designer`, `Backend`, `QA`, each row a 44 px button with
- * its size, `· over` compaction mark and `✎ n` notes.
+ * its size, `· over` compaction mark and `n notes`.
  */
 import type { KnowledgeFileInfo } from "@protocol"
 import { cn } from "@/lib/utils"
@@ -17,7 +17,7 @@ function Facts({ info }: { info: KnowledgeFileInfo }) {
     <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground tabular-nums">
       <span>{sizeWords(info.chars)}</span>
       {info.over ? <span className="text-foreground">· over</span> : null}
-      {info.notes > 0 ? <span className="text-primary">✎ {info.notes}</span> : null}
+      {info.notes > 0 ? <span className="text-primary">{info.notes} note{info.notes === 1 ? "" : "s"}</span> : null}
     </span>
   )
 }
@@ -30,7 +30,7 @@ function FileRow({ info, selected, onSelect }: { info: KnowledgeFileInfo; select
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(fileKey(info))}
         className={cn(
-          "flex min-h-11 w-full items-center justify-between gap-3 rounded-md px-[1ch] py-2 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50",
+          "flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/30",
           selected && "bg-accent",
         )}
       >
@@ -46,8 +46,12 @@ export function KnowledgeList({ files, selectedKey, onSelect }: { files: Knowled
     <div className="flex flex-col pb-2">
       {groupFiles(files).map((group) => (
         <div key={group.agent}>
-          <h3 className="px-[1ch] pt-3 pb-1 text-sm">
-            <Rule title={AGENT_LABELS[group.agent]} right={group.notes > 0 ? `✎ ${group.notes}` : undefined} />
+          <h3 className="px-4 pt-3 pb-1 text-xs">
+            <Rule
+              title={AGENT_LABELS[group.agent]}
+              right={group.notes > 0 ? `${group.notes} note${group.notes === 1 ? "" : "s"}` : undefined}
+              className="[&>span:first-child]:font-medium [&>span:first-child]:text-muted-foreground"
+            />
           </h3>
           <ul className="flex flex-col gap-0.5 px-1 pt-1">
             {group.files.map((info) => (

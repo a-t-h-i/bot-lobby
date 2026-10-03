@@ -58,6 +58,12 @@ const SOURCE_COLORS: Record<string, string> = {
   LOBBY: "text-muted-foreground",
 }
 
+/** A source as it reads on the page: `MASTER` → `Master`, `QUICK FIX` → `Quick fix`, `QA` stays. */
+export function sourceLabel(source: string): string {
+  if (source.length <= 2) return source
+  return source.charAt(0) + source.slice(1).toLowerCase()
+}
+
 export function sourceColor(source: string): string {
   return SOURCE_COLORS[source] ?? "text-muted-foreground"
 }

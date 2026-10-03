@@ -839,7 +839,7 @@ The empty tab (both sizes) keeps the terminal's three paragraphs:
 
 ## (n) Issues — when `lobby.issues` is on
 
-The whole tab: the open GitHub issues (number, title, first two labels), the selected issue's detail (`#12 title`, state, author, `updated 3h ago`, labels, URL, `p plans it with the planning panel, then save it as a task`, body, comments), and a success/warning banner above. List left, detail right at ≥ 1024 px; at 768 px the list fills the pane and the detail opens in a `Sheet`. The pill only appears when `lobby.issues` is on; Issues is `Alt+5` and Excalidraw stays `Alt+9` (`visibleTabs`).
+The whole tab: the open GitHub issues (number, title, first two labels), the selected issue's detail (`#12 title`, state, author, `updated 3h ago`, labels, URL, `p plans it with the planning panel, then save it as a task`, body, comments), and a success/warning banner above. List left, detail right at ≥ 1024 px; at 768 px the list fills the pane and the detail opens in a `Sheet`. The pill only appears when `lobby.issues` is on; Issues is `Alt+5` and Excalidraw follows it as `Alt+6` (`visibleTabs`).
 
 **shadcn:** `card` (list, detail), `scroll-area` (both), `separator` (comment rules), `badge` (state, labels), `button` (`Plan it`, `New issue`, `Reload`), `sheet` (detail at 768 px; the new-issue form), `textarea` (issue body), `input` (title), `empty`, `spinner`, `tooltip`, `kbd`, `sonner`.
 

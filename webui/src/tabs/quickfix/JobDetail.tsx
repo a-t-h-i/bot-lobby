@@ -1,5 +1,5 @@
 /**
- * A quick fix's detail (batch-2 §h): facts, the request, the oracle's route
+ * A quick fix's detail: facts, the request, the oracle's route
  * or hold note, the live steps, the files it edited, an error and the report —
  * with the buttons the job's status allows (cancel while it waits or runs;
  * run anyway or start as a task while it is held).
@@ -18,8 +18,8 @@ function Notes({ job }: { job: QuickFixJob }) {
   const held = job.status === "held"
   return (
     <>
-      {job.route ? <p className="text-sm text-muted-foreground">↓ routed {job.route}</p> : null}
-      {job.note && held ? <p className="text-sm text-foreground">‖ Held: {job.note}.</p> : null}
+      {job.route ? <p className="text-sm text-muted-foreground">Routed {job.route}</p> : null}
+      {job.note && held ? <p className="rounded-lg bg-warning/10 px-3 py-2 text-sm text-foreground">Held: {job.note}.</p> : null}
       {job.note && !held ? <p className="text-sm text-muted-foreground">{job.routed ? `Routed here by the oracle — ${job.note}` : job.note}</p> : null}
       {job.routed && !job.note ? <p className="text-sm text-muted-foreground">Routed here by the oracle.</p> : null}
     </>
@@ -42,7 +42,7 @@ function Steps({ job }: { job: QuickFixJob }) {
         <li key={index} className="flex items-start gap-2">
           <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{formatClock(step.at)}</span>
           <span className="flex h-5 w-3.5 shrink-0 items-center justify-center" aria-hidden="true">
-            {step.pending && running ? <Spinner className="size-3.5" /> : "·"}
+            {step.pending && running ? <Spinner className="size-3.5" /> : <span className="size-1.5 rounded-full bg-muted-foreground/40" />}
           </span>
           <span className="min-w-0 break-words text-muted-foreground">{step.pending && running ? `${step.text}…` : step.text}</span>
         </li>
@@ -55,10 +55,10 @@ function Actions({ job }: { job: QuickFixJob }) {
   if (job.status === "held") {
     return (
       <div className="flex flex-wrap gap-2">
-        <Button className="h-10" onClick={() => void act("quickfix.runAnyway", { id: job.id })}>
+        <Button onClick={() => void act("quickfix.runAnyway", { id: job.id })}>
           Run anyway
         </Button>
-        <Button variant="outline" className="h-10" onClick={() => void act("quickfix.movedToTask", { id: job.id })}>
+        <Button variant="outline" onClick={() => void act("quickfix.movedToTask", { id: job.id })}>
           As a task
         </Button>
       </div>
@@ -103,7 +103,7 @@ export function JobDetail({ job, now }: { job: QuickFixJob; now: number }) {
           </ul>
         </Section>
       ) : null}
-      {job.error ? <p className="text-sm text-destructive">✗ {job.error}</p> : null}
+      {job.error ? <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{job.error}</p> : null}
       {job.report ? (
         <Section title="Report">
           <Markdown text={job.report} />

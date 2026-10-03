@@ -1,10 +1,11 @@
 /**
- * Small task facts the Lobby header and the Tasks tab both draw: the track in
- * words and the progress pips. Wording mirrors `src/lobby/tabs/tasks.ts`.
+ * Small task facts the Tasks tab and the sessions page draw: the track in
+ * words and the progress segments.
  */
+import { CheckCircle2, Circle, XCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-/** A pip per step, at most eight, as the terminal's `pips` does. */
+/** A segment per step, at most eight. */
 const PIPS_MAX = 8
 
 /** `fast track (2)` or `full workflow (3)`; empty without a track. */
@@ -20,15 +21,19 @@ function pipStates(done: number, total: number): boolean[] {
   return Array.from({ length: cells }, (_, index) => index < filled)
 }
 
-/** Filled and hollow pips, the terminal's `▰▱`; decorative, the numbers beside it carry the meaning. */
+/** Filled and hollow segments; decorative, the numbers beside it carry the meaning. */
 export function Pips({ done, total }: { done: number; total: number }) {
   return (
-    <span className="inline-flex items-center" aria-hidden="true">
+    <span className="inline-flex items-center gap-0.5" aria-hidden="true">
       {pipStates(done, total).map((on, index) => (
-        <span key={index} className={cn(on ? "text-primary" : "text-muted-foreground")}>
-          {on ? "▰" : "▱"}
-        </span>
+        <span key={index} className={cn("h-1.5 w-3 rounded-full", on ? "bg-primary" : "bg-muted-foreground/25")} />
       ))}
     </span>
   )
+}
+
+/** The mark a task wears: open while there is work to do, ticked when completed, crossed when abandoned. */
+export function CheckMark({ check, className }: { check: "open" | "done" | "dropped"; className?: string }) {
+  const Icon = check === "done" ? CheckCircle2 : check === "dropped" ? XCircle : Circle
+  return <Icon aria-hidden="true" className={cn("size-4 shrink-0", check === "done" ? "text-success" : "text-muted-foreground", className)} />
 }
