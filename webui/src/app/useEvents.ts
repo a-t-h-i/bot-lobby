@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef } from "react"
 import { openEvents } from "@/lib/events"
 import { lobbyStore } from "@/lib/store"
+import { toast } from "@/lib/toast"
 
 export function useEvents(): () => void {
   const closeRef = useRef<(() => void) | undefined>(undefined)
@@ -16,6 +17,7 @@ export function useEvents(): () => void {
       onChanged: (topic, version) => lobbyStore.onChanged(topic, version),
       onFeed: (delta) => lobbyStore.onFeedDelta(delta),
       onReply: (text) => lobbyStore.onReplyDelta(text),
+      onNotice: (text, level) => toast[level](text),
       onConnection: (connection) => lobbyStore.onStatus({ connection }),
     })
   }, [])

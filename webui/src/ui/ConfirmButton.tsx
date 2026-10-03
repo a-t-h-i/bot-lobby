@@ -3,7 +3,8 @@
  * back (delete, discard, cancel, archive of a task under way). The dialog's
  * focus starts on Cancel, so Enter never confirms by accident.
  */
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
+import { PRIORITY, useOverlaySlot } from "@/lib/overlay"
 import { Button } from "@/components/ui/button"
 import {
   AlertDialog,
@@ -14,7 +15,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 
 interface ConfirmButtonProps {
@@ -30,14 +30,14 @@ interface ConfirmButtonProps {
 }
 
 export function ConfirmButton({ label, title, description, confirmLabel, onConfirm, icon, disabled, variant = "outline" }: ConfirmButtonProps) {
+  const [asking, setAsking] = useState(false)
+  const shown = useOverlaySlot(asking, PRIORITY.confirm)
   return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button variant="outline" className={variant === "destructive" ? "h-10 border-destructive/40 text-destructive" : "h-10"} disabled={disabled}>
-          {icon}
-          {label}
-        </Button>
-      </AlertDialogTrigger>
+    <AlertDialog open={asking && shown} onOpenChange={setAsking}>
+      <Button variant="outline" className={variant === "destructive" ? "border-destructive/40 text-destructive" : undefined} disabled={disabled} onClick={() => setAsking(true)}>
+        {icon}
+        {label}
+      </Button>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
