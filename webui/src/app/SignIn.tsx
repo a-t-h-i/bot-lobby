@@ -40,13 +40,13 @@ export function SignIn() {
 
   return (
     <div className="flex min-h-svh items-center justify-center p-6">
-      <form onSubmit={submit} className="glass flex w-full max-w-md flex-col gap-4 rounded-3xl p-7">
+      <form onSubmit={submit} className="glass flex w-full max-w-md flex-col gap-4 rounded-md p-7">
         <div className="flex items-center gap-2">
           <KeyRound className="size-5" aria-hidden="true" />
           <h1 className="text-base font-semibold">Sign in to bot-lobby</h1>
         </div>
         <p className="text-sm text-muted-foreground">
-          Pi printed a link when it started (or run <code className="rounded-xl bg-muted px-1.5 py-0.5 font-mono text-xs">/bot-lobby web</code>
+          Pi printed a link when it started (or run <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs">/bot-lobby web</code>
           to see it again). Paste it here.
         </p>
         <label className="flex flex-col gap-1.5 text-sm">
@@ -57,7 +57,7 @@ export function SignIn() {
             autoComplete="off"
             spellCheck={false}
             placeholder="http://127.0.0.1:7347/#token=…"
-            className="h-10 rounded-xl border border-input bg-card/40 px-3.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+            className="h-10 rounded-md border border-input bg-card/40 px-3.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
           />
         </label>
         {error ? (

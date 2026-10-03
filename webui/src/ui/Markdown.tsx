@@ -53,7 +53,7 @@ function CodeBlock({ node, children }: { node?: unknown; children?: ReactNode })
   }, [text])
 
   return (
-    <div className="relative my-3 rounded-xl bg-muted">
+    <div className="relative my-3 rounded-md bg-muted">
       <div className="flex items-center justify-between pl-3">
         <span className="text-xs text-muted-foreground">{lang || "code"}</span>
         <Button type="button" variant="ghost" size="sm" onClick={copy} disabled={!text} className="text-muted-foreground">
