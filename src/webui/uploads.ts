@@ -9,6 +9,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { extname, join } from "node:path";
 import { previewDir } from "../ask/relay.ts";
+import { claimAttachments, sweepAttachments } from "../state/attachments.ts";
 import { ATTACHMENTS_MARK } from "../lobby/prompts.ts";
 import { fail } from "./api/index.ts";
 import type { UploadInfo } from "./protocol.ts";
@@ -16,6 +17,8 @@ import type { UploadInfo } from "./protocol.ts";
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 /** The preview folder the attachments live in: `/files/preview/attachments/<id>`. */
 export const ATTACHMENT_BUCKET = "attachments";
+/** Unsent or task-less files are deleted after this long. */
+const STALE_MS = 3 * 24 * 60 * 60 * 1000;
 /** How many files one message may carry. */
 export const MAX_ATTACHMENTS = 8;
 
@@ -42,6 +45,7 @@ function kindOf(mime: string): UploadKind {
 
 /** Save one file; the id is its name in the attachments folder. */
 export function saveUpload(name: string, claimedType: string, bytes: Buffer): Upload {
+  sweepAttachments(STALE_MS);
   const dir = previewDir(ATTACHMENT_BUCKET);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const id = `${Date.now().toString(36)}${randomBytes(3).toString("hex")}-${safeName(name)}`;
@@ -51,13 +55,14 @@ export function saveUpload(name: string, claimedType: string, bytes: Buffer): Up
   return { id, name: safeName(name), mime, size: bytes.length, kind, ...(kind === "image" ? { url: `/files/preview/${ATTACHMENT_BUCKET}/${id}` } : {}) };
 }
 
-/** `text`, then the files it carries by path, the way the agents read them. */
-export function withAttachments(text: string, ids: readonly string[] | undefined): string {
+/** `text`, then the files it carries by path, the way the agents read them; they belong to `taskId` and go with it. */
+export function withAttachments(text: string, ids: readonly string[] | undefined, taskId?: string): string {
   if (!ids || ids.length === 0) return text;
   const dir = previewDir(ATTACHMENT_BUCKET);
   const lines = ids.slice(0, MAX_ATTACHMENTS).map((id) => {
     if (!/^[\w.-]+$/.test(id) || !existsSync(join(dir, id)) || !statSync(join(dir, id)).isFile()) fail(400, "bad_request", `the attachment ${id} is not there; attach it again`);
     return `- ${join(dir, id)} (${mimeOf(id, "")})`;
   });
+  if (taskId) claimAttachments(ids.slice(0, MAX_ATTACHMENTS), taskId);
   return `${text.trim()}${text.trim() ? "\n\n" : ""}${ATTACHMENTS_MARK}\n${lines.join("\n")}`;
 }
