@@ -46,7 +46,7 @@ export function ChatView({ entries, more, loading, onMore, empty }: ChatViewProp
   return (
     <div className="flex flex-col gap-3">
       {more ? (
-        <Button variant="outline" className="h-10 self-center" disabled={loading} onClick={onMore}>
+        <Button variant="outline" className="h-8 self-center" disabled={loading} onClick={onMore}>
           Load earlier messages
         </Button>
       ) : null}

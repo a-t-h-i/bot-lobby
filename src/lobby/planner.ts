@@ -173,10 +173,10 @@ export function roundMode(round: number, limit: number): RoundMode {
 /** What the oracle is told to do at the end of its task, by round mode. */
 export function oracleClosing(mode: RoundMode, round: number, limit: number): string {
   if (mode === "final") {
-    return `Final round (${round} of ${limit}): no seat runs this round and nothing more is asked. Fold the user's answers into the plan, decide every point still open with its recommended option and list each under ### Assumptions, and set Status READY. Omit the Questions section. Reply in the required output format.`;
+    return `Final round (${round} of ${limit}): no seat runs this round and nothing more is asked. Fold the user's answers into the plan, decide every point still open (with its marked option where there is one, otherwise your best call) and list each under ### Assumptions, and set Status READY. Omit the Questions section. Reply in the required output format.`;
   }
   if (mode === "revise") {
-    return `The planning round limit (${limit}) is reached: revise the plan for the user's latest message and comments. Ask nothing; decide anything open with its recommended option under ### Assumptions, and keep Status READY. Omit the Questions section. Reply in the required output format.`;
+    return `The planning round limit (${limit}) is reached: revise the plan for the user's latest message and comments. Ask nothing; decide anything open (with its marked option where there is one, otherwise your best call) under ### Assumptions, and keep Status READY. Omit the Questions section. Reply in the required output format.`;
   }
   const bound = limit > 0 ? `Round ${round} of ${limit}; in round ${limit} you settle whatever is still open alone, so ask the decisive questions now. ` : "";
   return `${bound}Continue: fold the panel's notes and the user's answers into the plan, ask what no seat owns, or declare the plan READY. Reply in the required output format.`;
@@ -225,9 +225,9 @@ export function parseOption(text: string): PanelOption {
   return split ? { label: split[1]!.trim(), description: split[2]!.trim() } : { label: flat, description: "" };
 }
 
-/** The option the asker recommends: the one marked `(Recommended)`, else the first. */
+/** The option the asker recommends: only the one marked `(Recommended)`; nothing is implied by order. */
 export function recommendedOption(question: AskedQuestion): PanelOption | undefined {
-  return question.options.find((option) => /\(recommended\)/i.test(option.label)) ?? question.options[0];
+  return question.options.find((option) => /\(recommended\)/i.test(option.label));
 }
 
 /** An option's label without its `(Recommended)` marker. */

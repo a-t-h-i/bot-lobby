@@ -47,7 +47,7 @@ export function Toaster() {
             {item.action ? (
               <button
                 type="button"
-                className="-my-2 -mr-2 h-10 shrink-0 rounded-lg px-3 font-medium text-primary transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none"
+                className="-my-2 -mr-2 h-8 shrink-0 rounded-lg px-3 font-medium text-primary transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none"
                 onClick={() => {
                   item.action?.onClick()
                   dismissToast(item.id)

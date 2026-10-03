@@ -6,7 +6,6 @@
  */
 import type { MetricGroupInfo } from "@protocol"
 import { duration, groupLabel, kindWord, money, percent, tokens, type GroupBy } from "./words"
-import { Rule } from "@/ui/Frame"
 
 const HEADERS = ["Runs", "OK", "Avg", "p50", "p90", "Turns", "Tools", "Tokens", "tok/s", "$/run", "$ total", "Stalls"] as const
 
@@ -37,19 +36,20 @@ function agents(group: MetricGroupInfo, groupBy: GroupBy): string {
 
 export function MetricsTable({ groups, groupBy }: { groups: MetricGroupInfo[]; groupBy: GroupBy }) {
   return (
-    <section className="flex min-h-0 flex-col gap-2" aria-label="All models">
-      <h2 className="text-sm">
-        <Rule title="All models" right={`${groupBy === "model" ? "by model · thinking" : "by model · thinking · agent"} · sorted by runs`} />
+    <section className="glass flex min-h-0 flex-col gap-2 rounded-lg pt-3" aria-label="All models">
+      <h2 className="flex items-baseline justify-between gap-3 px-4 text-sm font-medium">
+        <span>All models</span>
+        <span className="text-xs font-normal text-muted-foreground">{groupBy === "model" ? "by model · thinking" : "by model · thinking · agent"} · sorted by runs</span>
       </h2>
-      <div className="max-h-96 overflow-auto rounded-lg border">
-        <table className="w-full border-collapse text-sm">
-          <thead className="sticky top-0 bg-popover text-xs text-muted-foreground">
+      <div className="max-h-80 overflow-auto">
+        <table className="w-full border-collapse text-xs">
+          <thead className="sticky top-0 bg-card text-muted-foreground">
             <tr>
-              <th scope="col" className="px-3 py-2 text-left font-medium">Model</th>
-              <th scope="col" className="px-3 py-2 text-left font-medium">Think</th>
-              <th scope="col" className="px-3 py-2 text-left font-medium">{groupBy === "model-kind" ? "Agent" : "Agents"}</th>
+              <th scope="col" className="px-3 py-1.5 text-left font-medium">Model</th>
+              <th scope="col" className="px-3 py-1.5 text-left font-medium">Think</th>
+              <th scope="col" className="px-3 py-1.5 text-left font-medium">{groupBy === "model-kind" ? "Agent" : "Agents"}</th>
               {HEADERS.map((header) => (
-                <th key={header} scope="col" className="px-3 py-2 text-right font-medium whitespace-nowrap">
+                <th key={header} scope="col" className="px-3 py-1.5 text-right font-medium whitespace-nowrap">
                   {header}
                 </th>
               ))}
@@ -57,14 +57,14 @@ export function MetricsTable({ groups, groupBy }: { groups: MetricGroupInfo[]; g
           </thead>
           <tbody>
             {groups.map((group) => (
-              <tr key={groupLabel(group, groupBy)} className="border-t">
-                <th scope="row" className="px-3 py-2 text-left font-normal text-foreground">
+              <tr key={groupLabel(group, groupBy)} className="border-t border-border/70 transition-colors hover:bg-muted">
+                <th scope="row" className="px-3 py-1.5 text-left font-normal text-foreground">
                   {group.model}
                 </th>
-                <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{group.thinking || "—"}</td>
-                <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{agents(group, groupBy) || "—"}</td>
+                <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground">{group.thinking || "—"}</td>
+                <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground">{agents(group, groupBy) || "—"}</td>
                 {cells(group).map((value, index) => (
-                  <td key={HEADERS[index]} className="px-3 py-2 text-right tabular-nums whitespace-nowrap text-foreground">
+                  <td key={HEADERS[index]} className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap text-foreground">
                     {value}
                   </td>
                 ))}

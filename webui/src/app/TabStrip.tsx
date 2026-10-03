@@ -12,6 +12,7 @@ import { forwardRef, Fragment, useCallback, useEffect, useLayoutEffect, useRef, 
 import { animate, type AnimationPlaybackControls } from "motion"
 import { BarChart3, BookOpen, CircleDot, GitPullRequest, ListChecks, MessageSquare, PenTool, Route, Zap, type LucideIcon } from "lucide-react"
 import { Keys } from "@/components/ui/kbd"
+import { focusPage } from "@/prompts/nav"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import type { TabInfo } from "@protocol"
@@ -55,7 +56,7 @@ const TabCell = forwardRef<HTMLAnchorElement, { tab: TabInfo; active: boolean }>
           aria-keyshortcuts={tab.key}
           tabIndex={active ? 0 : -1}
           className={cn(
-            "relative z-10 inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[10px] px-3.5 text-sm font-medium whitespace-nowrap outline-none",
+            "relative z-10 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[10px] px-3.5 text-sm font-medium whitespace-nowrap outline-none",
             "transition-colors duration-200 ease-snap focus-visible:ring-3 focus-visible:ring-ring/40",
             active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
           )}
@@ -185,17 +186,27 @@ export function TabStrip({ tabs, activeId, onSelect }: TabStripProps) {
   const scroller = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (activeId) cells.current[activeId]?.scrollIntoView({ block: "nearest", inline: "nearest" })
+    // Only the strip scrolls sideways; scrollIntoView would also move the page.
+    const strip = scroller.current
+    const cell = activeId ? cells.current[activeId] : undefined
+    if (!strip || !cell) return
+    if (cell.offsetLeft < strip.scrollLeft) strip.scrollLeft = cell.offsetLeft - 8
+    else if (cell.offsetLeft + cell.offsetWidth > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = cell.offsetLeft + cell.offsetWidth - strip.clientWidth + 8
   }, [activeId, cells])
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    // Down goes from the tab bar into the page.
+    if (event.key === "ArrowDown" && !event.altKey) {
+      if (focusPage()) event.preventDefault()
+      return
+    }
     const delta = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0
     if (!delta || tabs.length === 0) return
     event.preventDefault()
     const index = Math.max(0, tabs.findIndex((tab) => tab.id === activeId))
     const next = tabs[(index + delta + tabs.length) % tabs.length]!
     onSelect(next.id)
-    cells.current[next.id]?.focus()
+    cells.current[next.id]?.focus({ preventScroll: true })
   }
 
   return (
@@ -204,7 +215,7 @@ export function TabStrip({ tabs, activeId, onSelect }: TabStripProps) {
         <span
           ref={drop}
           aria-hidden="true"
-          className="pointer-events-none absolute top-1 left-0 z-0 h-10 origin-center rounded-[10px] bg-tab opacity-0 will-change-transform"
+          className="pointer-events-none absolute top-1 left-0 z-0 h-8 origin-center rounded-[10px] bg-tab opacity-0 will-change-transform"
         />
         {tabs.map((tab, position) => (
           <Fragment key={tab.id}>
