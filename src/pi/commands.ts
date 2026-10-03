@@ -19,12 +19,11 @@ import { readFirstExisting } from "../knowledge/store.ts";
 import { overThreshold } from "../knowledge/compactor.ts";
 import { applyApprovalChoice, describeTask, describeOversizedKnowledge, lastQaAsks, waiveQa, type ApprovalChoice } from "../workflow/workflow.ts";
 import { applyStatus, registerRevealShortcut, setMinimized } from "./ui.ts";
-import { classifierSummary, openSettings } from "./settings-ui.ts";
+import { classifierSummary } from "./model-settings.ts";
 import { keyStatus } from "../classifier/instance.ts";
 import { kickoff, startPlannedTask } from "./start-task.ts";
 import { startRequest } from "./route.ts";
 import { setAuto, toggleOwnAuto } from "./owner.ts";
-import { autoOpenLobby, showLobby } from "../lobby/runtime.ts";
 import { registerWebServer, webCommand } from "../webui/command.ts";
 import { modelRef, thinkingMismatches } from "./model-support.ts";
 import { describeRun, runFromLog } from "./run-summary.ts";
@@ -35,7 +34,7 @@ import type { GitIsolation } from "../schemas/configuration.ts";
 import { START_FLAG } from "./start-flags.ts";
 
 const HELP = [
-  "/bot-lobby                  Open the lobby: tasks, plan, quick fix, metrics (alt+l)",
+  "/bot-lobby                  Open the web lobby in your browser: tasks, plan, quick fix, metrics",
   "/bot-lobby <request>        Start a request: a quick fix when one agent can do it alone (the oracle confirms), else a task",
   "/bot-lobby --task [--auto] <request>   Always a task (also when the request begins with a subcommand word)",
   "/bot-lobby --budget 90m <request>   Start a task with a time budget the oracle divides between its agents",
@@ -50,14 +49,14 @@ const HELP = [
   "/bot-lobby accept [taskId]  Accept a task's work as it is, without a QA pass; the oracle then completes it",
   "/bot-lobby knowledge        Show persistent knowledge files",
   "/bot-lobby runs [taskId]    Recent subagent runs: time, turns, tokens, cost, model",
-  "/bot-lobby settings         Edit per-agent model/thinking/instructions",
+  "/bot-lobby settings         Open the web lobby's Settings: per-agent model, effort and instructions",
   "/bot-lobby config           Show effective configuration",
   "/bot-lobby minimize|restore   Hide or restore bot-lobby for this session (ctrl+shift+m)",
   "/bot-lobby claim <taskId>    Take ownership of an orphaned task",
   "/bot-lobby auto [on|off]    Auto mode: the oracle drives this session's task without asking (alt+g)",
   "/bot-lobby start-plan PLAN-… [auto]   Start a planned task here; its agreed plan needs no approval",
-  "/bot-lobby switch <session.jsonl>   Run a saved session in this window (the lobby's session browser uses it: alt+o, s)",
-  "/bot-lobby web [stop|link|reset]   Start the browser UI on this machine (loopback only), or stop it, print its link, reset its link",
+  "/bot-lobby switch <session.jsonl>   Run a saved session in this window (the web lobby's session browser uses it)",
+  "/bot-lobby web [stop|link|reset]   Open the browser UI (it starts with pi, on this machine only), or stop it, print its link, reset its link",
   "/bot-lobby help             This help",
 ].join("\n");
 
@@ -306,7 +305,7 @@ function showConfig(ctx: ExtensionCommandContext): void {
 async function switchCommand(ctx: ExtensionCommandContext, path: string): Promise<void> {
   if (!existsSync(path)) return ctx.ui.notify(`bot-lobby: no session file at ${path}`, "warning");
   if (ctx.sessionManager.getSessionFile() === path) return ctx.ui.notify("bot-lobby: this window already runs that session", "info");
-  if (!ctx.isIdle()) return ctx.ui.notify("bot-lobby: the oracle is working — esc stops it, then switch", "warning");
+  if (!ctx.isIdle()) return ctx.ui.notify("bot-lobby: the oracle is working — stop it, then switch", "warning");
   const result = await ctx.switchSession(path);
   if (result.cancelled) ctx.ui.notify("bot-lobby: the switch was cancelled", "warning");
 }
@@ -336,19 +335,14 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
       const { sub, rest, restText, auto, budget, budgetError, track, task, isolation } = parseCommand(args ?? "");
       if (budgetError) return ctx.ui.notify(`bot-lobby: ${budgetError}`, "warning");
       if (!sub) {
-        if (!restText) {
-          if (!showLobby()) ctx.ui.notify(HELP, "info");
-          return;
-        }
+        if (!restText) return webCommand(ctx, undefined);
         // A request one agent can do alone may go to the quick-fix agent once the oracle confirms; the rest start as tasks.
-        const started = await startRequest(pi, ctx, configDir, restText, { ...(auto ? { auto } : {}), ...(budget ? { budget } : {}), ...(track ? { track } : {}), ...(task ? { task } : {}), ...(isolation ? { isolation } : {}) });
-        if (started === "task") autoOpenLobby();
+        await startRequest(pi, ctx, configDir, restText, { ...(auto ? { auto } : {}), ...(budget ? { budget } : {}), ...(track ? { track } : {}), ...(task ? { task } : {}), ...(isolation ? { isolation } : {}) });
         return;
       }
       switch (sub) {
         case "lobby":
-          if (!showLobby()) ctx.ui.notify("The lobby needs pi's interactive terminal UI.", "warning");
-          return;
+          return webCommand(ctx, undefined);
         case "help":
           return ctx.ui.notify(HELP, "info");
         case "status":
@@ -376,7 +370,7 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
         case "knowledge":
           return showKnowledge(ctx, configDir);
         case "settings":
-          return openSettings(pi, ctx);
+          return webCommand(ctx, undefined);
         case "minimize":
           setMinimized(true);
           return applyStatus(ctx, detectProjectRoot(ctx.cwd, configDir), configDir);
@@ -393,8 +387,8 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
           return webCommand(ctx, rest[0]);
         case "start-plan": {
           const started = await startPlannedTask(pi, ctx, configDir, rest[0]!, { auto: rest[1] === "auto" });
-          if (typeof started === "string") return ctx.ui.notify(`bot-lobby: ${started}`, "warning");
-          return autoOpenLobby();
+          if (typeof started === "string") ctx.ui.notify(`bot-lobby: ${started}`, "warning");
+          return;
         }
         default:
           return showConfig(ctx);
@@ -403,7 +397,7 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
   });
 
   pi.registerCommand("bot-lobby-settings", {
-    description: "Edit per-agent model, thinking, and instructions",
-    handler: async (_args, ctx) => openSettings(pi, ctx),
+    description: "Open the web lobby's settings: per-agent model, effort, and instructions",
+    handler: async (_args, ctx) => webCommand(ctx, undefined),
   });
 }

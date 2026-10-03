@@ -1,17 +1,20 @@
 /**
- * The Quick fix list (batch-2 §h): jobs newest first, one 44 px row each with
- * its status mark, the first line of the request and the time it has run.
+ * The Quick fix list: jobs newest first, one row each with its status mark,
+ * the first line of the request and the time it has run.
  */
+import { Check, Clock, Minus, Pause, X } from "lucide-react"
 import type { QuickFixJob } from "@protocol"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
-import { STATUS_MARKS, elapsed, jobTitle } from "./words"
+import { elapsed, jobTitle } from "./words"
 
 export function StatusMark({ status }: { status: QuickFixJob["status"] }) {
   if (status === "running") return <Spinner className="size-3.5" aria-label="running" />
+  const Icon = { queued: Clock, success: Check, failed: X, timeout: X, cancelled: Minus, held: Pause, running: Clock }[status]
+  const tone = status === "success" ? "text-success" : status === "failed" || status === "timeout" ? "text-destructive" : status === "held" ? "text-warning" : "text-muted-foreground"
   return (
     <>
-      <span aria-hidden="true">{STATUS_MARKS[status]}</span>
+      <Icon aria-hidden="true" className={`size-4 ${tone}`} />
       <span className="sr-only">{status}</span>
     </>
   )
@@ -25,9 +28,9 @@ function Row({ job, selected, now, onSelect }: { job: QuickFixJob; selected: boo
         type="button"
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(job.id)}
-        className="flex min-h-11 w-full items-start gap-2 rounded-md px-[1ch] py-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current=true]:bg-accent"
+        className="flex min-h-11 w-full items-start gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm outline-none transition-colors duration-150 hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:bg-accent"
       >
-        <span className="flex h-5 w-4 shrink-0 items-center justify-center text-foreground">
+        <span className="flex h-5 w-4 shrink-0 items-center justify-center">
           <StatusMark status={job.status} />
         </span>
         <span className={cn("min-w-0 flex-1 break-words", selected ? "font-medium text-foreground" : "text-foreground")}>{jobTitle(job)}</span>
@@ -39,7 +42,7 @@ function Row({ job, selected, now, onSelect }: { job: QuickFixJob; selected: boo
 
 export function JobList({ jobs, selectedId, now, onSelect }: { jobs: readonly QuickFixJob[]; selectedId?: string; now: number; onSelect: (id: string) => void }) {
   return (
-    <ul className="flex flex-col gap-0.5 p-1">
+    <ul className="flex flex-col gap-0.5 px-2 pb-2">
       {jobs.map((job) => (
         <Row key={job.id} job={job} selected={job.id === selectedId} now={now} onSelect={onSelect} />
       ))}

@@ -1,6 +1,6 @@
 /** Shared feed-backed fake for the webui server tests. */
 import { LobbyFeed } from "../src/lobby/feed.ts";
-import type { LobbyService } from "../src/lobby/service.ts";
+import type { LobbyService } from "../src/lobby/host.ts";
 
 /** A deterministic fake with every method the web routes read. */
 export function fakeWebService(feed = new LobbyFeed()): LobbyService {
@@ -56,7 +56,7 @@ export function fakeWebService(feed = new LobbyFeed()): LobbyService {
       if (index >= 0) plans.splice(index, 1);
     },
     archivedTasks: () => [...archived],
-    archiveTask: (taskId: string) => `archived ${taskId} — v shows archived tasks, a restores one`,
+    archiveTask: (taskId: string) => `archived ${taskId} — show archived tasks to restore it`,
     restoreTask: (taskId: string) => `restored ${taskId} to the task list`,
     deleteTask: (taskId: string) => `deleted ${taskId} for good`,
     isAuto: (taskId: string) => auto.has(taskId),

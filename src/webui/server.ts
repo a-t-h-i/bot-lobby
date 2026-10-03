@@ -8,7 +8,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from "node:net";
 import { loadConfig } from "../state/project.ts";
 import { lobbyFeed } from "../lobby/feed.ts";
-import type { LobbyService } from "../lobby/service.ts";
+import type { LobbyService } from "../lobby/host.ts";
 import {
   MAX_BODY_BYTES,
   LoginGuard,
@@ -26,6 +26,7 @@ import { callName, HttpError, routeApiCall, sendError, sendJson } from "./api/in
 import { distDir, serveStatic } from "./static.ts";
 import { EventHub } from "./events.ts";
 import { servePreview } from "./files.ts";
+import { MAX_UPLOAD_BYTES, saveUpload } from "./uploads.ts";
 
 /** The default port; the server tries it, then the next free port up to +20. */
 export const DEFAULT_PORT = 7347;
@@ -97,6 +98,42 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
   } catch {
     throw new HttpError(400, "bad_request", "the body is not JSON");
   }
+}
+
+/** Read a raw body, capped at `limit` bytes (413 past it, after the rest is read and dropped so the browser sees the answer). */
+async function readBytes(req: IncomingMessage, limit: number): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req) {
+    const buffer = chunk as Buffer;
+    size += buffer.length;
+    if (size <= limit) chunks.push(buffer);
+  }
+  if (size > limit) throw new HttpError(413, "too_large", `the file is larger than ${Math.round(limit / 1024 / 1024)} MB`);
+  return Buffer.concat(chunks);
+}
+
+/** `POST /api/files.upload?name=…&type=…`: one attached file as the raw body. */
+async function upload(req: IncomingMessage, res: ServerResponse, url: URL, state: RouteState): Promise<void> {
+  if (req.method !== "POST") {
+    sendError(res, "unsupported", "only POST", 405);
+    return;
+  }
+  if (!isSignedIn(req.headers.cookie, state.session)) {
+    sendError(res, "unauthorized", "open the link Pi printed", 401);
+    return;
+  }
+  const name = url.searchParams.get("name")?.trim();
+  if (!name || name.length > 255) {
+    sendError(res, "bad_request", "the file needs a name");
+    return;
+  }
+  const bytes = await readBytes(req, MAX_UPLOAD_BYTES);
+  if (bytes.length === 0) {
+    sendError(res, "bad_request", "the file is empty");
+    return;
+  }
+  sendJson(res, 200, { ok: true, result: saveUpload(name, url.searchParams.get("type") ?? "", bytes) });
 }
 
 function numParam(url: URL, name: string): number | undefined {
@@ -193,6 +230,10 @@ async function route(req: IncomingMessage, res: ServerResponse, state: RouteStat
   }
   if (isCrossSite(req.headers.origin, req.headers["sec-fetch-site"] as string | undefined, state.port)) {
     sendError(res, "forbidden", "cross-site request", 403);
+    return;
+  }
+  if (url.pathname === "/api/files.upload") {
+    await upload(req, res, url, state);
     return;
   }
   if (url.pathname === "/api/events") {

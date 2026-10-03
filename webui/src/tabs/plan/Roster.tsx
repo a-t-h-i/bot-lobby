@@ -23,7 +23,7 @@ function Inside({ cell, intro }: { cell: SeatCell; intro: boolean }) {
 
 function Chip({ cell, intro, onToggled }: { cell: SeatCell; intro: boolean; onToggled: () => void }) {
   const { member } = cell
-  const look = "inline-flex min-h-10 items-center gap-2 rounded-md border px-3 text-sm"
+  const look = "inline-flex min-h-10 items-center gap-2 rounded-full border px-4 text-sm"
   if (!member) return <li className={cn(look, "border-border")}><Inside cell={cell} intro={intro} /></li>
   const toggle = async () => {
     if (await act("planner.toggleSeat", { member })) onToggled()
@@ -35,7 +35,7 @@ function Chip({ cell, intro, onToggled }: { cell: SeatCell; intro: boolean; onTo
         variant="ghost"
         aria-pressed={cell.seated}
         onClick={() => void toggle()}
-        className={cn(look, "h-auto font-normal", cell.seated ? "border-border bg-muted/50" : "border-dashed")}
+        className={cn(look, "h-auto font-normal", cell.seated ? "border-border bg-card/50" : "border-dashed")}
       >
         <Inside cell={cell} intro={intro} />
       </Button>

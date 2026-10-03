@@ -10,11 +10,9 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Container, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { isSubagentProcess } from "../pi/quiet.ts";
-import { askUser, type Asker } from "./dialog.ts";
-import { promptHub } from "../lobby/prompt-hub.ts";
-import { isImagePath } from "./image.ts";
+import { askUser } from "./web.ts";
 import { relayAsker, relayEnabled } from "./relay.ts";
-import { ASK_TOOL, MAX_HEADER, MAX_LABEL, MAX_OPTIONS, MAX_QUESTIONS, MIN_OPTIONS, RESERVED, type AskQuestion, type AskResult } from "./types.ts";
+import { ASK_TOOL, isImagePath, MAX_HEADER, MAX_LABEL, MAX_OPTIONS, MAX_QUESTIONS, MIN_OPTIONS, RESERVED, type AskQuestion, type AskResult, type Asker } from "./types.ts";
 
 export { ASK_TOOL };
 
@@ -22,7 +20,7 @@ const OptionSchema = Type.Object({
   label: Type.String({ maxLength: MAX_LABEL, description: `The option as the user sees and picks it: 1-5 words, at most ${MAX_LABEL} characters.` }),
   description: Type.Optional(Type.String({ description: "What choosing it means: its trade-offs or consequences. Markdown." })),
   preview: Type.Optional(Type.String({ description: "Markdown shown beside the options while this one is focused: a mockup, a code snippet, a diagram, a config. Only when seeing it helps the user compare." })),
-  image: Type.Optional(Type.String({ description: "Path to a PNG (or JPEG, GIF, WebP) shown with the preview: a screenshot or a rendered mockup of this option. Drawn as the image in terminals that can, as coloured blocks (PNG) elsewhere." })),
+  image: Type.Optional(Type.String({ description: "Path to a PNG (or JPEG, GIF, WebP) shown with the preview: a screenshot or a rendered mockup of this option." })),
 });
 
 const QuestionSchema = Type.Object({
@@ -115,7 +113,7 @@ export function registerAskTool(pi: ExtensionAPI, ask?: Asker): void {
       const questions = (params as { questions: AskQuestion[] }).questions;
       const invalid = invalidQuestions(questions);
       if (invalid) throw new Error(`${invalid}.`);
-      const result = await promptHub.run("questionnaire", "oracle", { questions }, () => asker(questions, ctx, signal), { signal });
+      const result = await asker(questions, ctx, signal, "oracle");
       return { content: [{ type: "text", text: answerSummary(questions, result) }], details: result };
     },
     renderCall(args, theme) {

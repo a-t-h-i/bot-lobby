@@ -1,6 +1,6 @@
 /**
- * A session's conversation (batch-2 §i): oldest first, your messages marked
- * "You ●", the oracle's as Markdown, notes as rules. Background and other
+ * A session's conversation: oldest first, the oracle's and your messages as
+ * Markdown under their name and time, notes as rules. Background and other
  * terminal sessions page back with `before` through `sessions.chat`; this
  * window's own conversation comes from the Lobby snapshot.
  */
@@ -25,8 +25,9 @@ function Line({ entry }: { entry: ChatEntry }) {
   const you = entry.role === "you"
   return (
     <li className="flex flex-col gap-1">
-      <span className="text-xs text-muted-foreground">
-        {time} {you ? "You ●" : "◆ Oracle"}
+      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+        {you ? null : <span aria-hidden="true" className="size-2 rounded-full bg-primary" />}
+        <span className="font-semibold text-foreground">{you ? "You" : "Oracle"}</span> {time}
       </span>
       <Markdown text={entry.text} />
     </li>

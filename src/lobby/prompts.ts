@@ -1,8 +1,7 @@
 /**
- * Strings the terminal lobby and the web lobby share: tab metadata and the
- * short status lines shown while a question is answered elsewhere. Pure on
- * purpose (no `node:*`, no `@earendil-works/pi-tui`): the web page imports
- * this file directly.
+ * Strings the server and the page share: tab metadata and the short line
+ * shown when a question was answered elsewhere. Pure on purpose (no
+ * `node:*`): the web page imports this file directly.
  */
 
 export const TAB_IDS = ["lobby", "tasks", "plan", "quickfix", "issues", "metrics", "git", "knowledge", "excalidraw"] as const;
@@ -25,11 +24,8 @@ export function visibleTabs(issues: boolean): TabId[] {
   return TAB_IDS.filter((tab) => issues || tab !== "issues");
 }
 
-/** A question answered in the terminal while the web lobby watched it. */
-export const ANSWERED_IN_TERMINAL = "already answered in the terminal";
+/** A question answered in another window of the page (or put away) before this one's answer arrived. */
+export const ANSWERED_ELSEWHERE = "already answered in another window";
 
-/** Pi itself is asking in the terminal; the web lobby waits. */
-export const PI_ASKING_IN_TERMINAL = "pi is asking in the terminal";
-
-/** The window is too narrow to show the lobby. */
-export const NARROW_WINDOW = "the window is too narrow to show the lobby";
+/** Opens the list of files a message carries (see src/webui/uploads.ts); the page shows them as thumbnails and chips. */
+export const ATTACHMENTS_MARK = "Attached files:";

@@ -1,12 +1,12 @@
 /**
- * The Tasks list (batch-2 §f): a rule over each section, then one 44 px row
- * per task or saved plan — check mark, title, plan pips or age, and a line of
- * facts under it. The selected row carries `▸` and an inset ring.
+ * The Tasks list: a heading over each section, then one row per task or saved
+ * plan: its mark, title, plan progress or age, and a line of facts under it.
+ * The chosen row is lit.
  */
 import type { TaskRow } from "@protocol"
 import { cn } from "@/lib/utils"
-import { Pips } from "@/ui/task-facts"
-import { CHECK_MARKS, CHECK_WORDS, SECTION_TITLES, detailsLine, groupRows } from "./words"
+import { CheckMark, Pips } from "@/ui/task-facts"
+import { CHECK_WORDS, SECTION_TITLES, detailsLine, groupRows } from "./words"
 import { Rule } from "@/ui/Frame"
 
 function Trailing({ row }: { row: TaskRow }) {
@@ -36,20 +36,15 @@ function Row({ row, selected, onSelect }: { row: TaskRow; selected: boolean; onS
         type="button"
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(row.id)}
-        className="flex min-h-11 w-full flex-col gap-0.5 rounded-md px-[1ch] py-2 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current=true]:bg-accent"
+        className="flex min-h-11 w-full flex-col gap-0.5 rounded-xl px-3 py-2.5 text-left outline-none transition-colors duration-150 hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:bg-accent"
       >
         <span className="flex items-start gap-2 text-sm">
-          <span className="w-3 shrink-0 text-foreground" aria-hidden="true">
-            {selected ? "▸" : ""}
-          </span>
-          <span className="shrink-0 text-foreground" aria-hidden="true">
-            {CHECK_MARKS[row.check]}
-          </span>
+          <CheckMark check={row.check} className="mt-0.5" />
           <span className="sr-only">{CHECK_WORDS[row.check]}:</span>
           <span className={cn("min-w-0 flex-1 break-words", titleClass(row), selected && "font-medium text-foreground")}>{row.title}</span>
           <Trailing row={row} />
         </span>
-        {row.check === "open" ? <span className="pl-[2.125rem] text-xs text-muted-foreground">{detailsLine(row)}</span> : null}
+        {row.check === "open" ? <span className="pl-6 text-xs text-muted-foreground">{detailsLine(row)}</span> : null}
       </button>
     </li>
   )
@@ -60,10 +55,10 @@ export function TaskList({ rows, selectedId, onSelect }: { rows: readonly TaskRo
     <div className="flex flex-col pb-2">
       {groupRows(rows).map(({ section, rows: group }) => (
         <div key={section}>
-          <h3 className="px-[1ch] pt-3 pb-1 text-sm">
-            <Rule title={SECTION_TITLES[section]} right={String(group.length)} />
+          <h3 className="px-4 pt-3 pb-1 text-xs">
+            <Rule title={SECTION_TITLES[section]} right={String(group.length)} className="[&>span:first-child]:font-medium [&>span:first-child]:text-muted-foreground" />
           </h3>
-          <ul className="flex flex-col gap-0.5 px-1 pt-1">
+          <ul className="flex flex-col gap-0.5 px-2 pt-1">
             {group.map((row) => (
               <Row key={`${row.kind}-${row.id}`} row={row} selected={row.id === selectedId} onSelect={onSelect} />
             ))}

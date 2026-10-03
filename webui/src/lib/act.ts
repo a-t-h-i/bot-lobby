@@ -3,7 +3,7 @@
  * (with an Undo when the caller can reverse it), the error text on failure.
  * Resolves to the result, or `undefined` when the call failed.
  */
-import { toast } from "sonner"
+import { toast } from "@/lib/toast"
 import type { Api, ApiName } from "@protocol"
 import { call } from "./api.ts"
 

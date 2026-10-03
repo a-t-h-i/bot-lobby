@@ -1,10 +1,8 @@
 /**
- * The page's non-content states: loading, empty, error, reconnecting and the
- * below-768 px notice. Each is a real state rather than a spinner over
- * whatever was on screen before (D-14 "states").
+ * The page's non-content states: loading, empty, error and reconnecting. Each
+ * is a real state rather than a spinner over whatever was on screen before.
  */
 import { RotateCw, TriangleAlert, WifiOff } from "lucide-react"
-import { NARROW_WINDOW } from "@shared"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { Spinner } from "@/components/ui/spinner"
@@ -22,7 +20,7 @@ export function LoadingState({ label = "Connecting…" }: { label?: string }) {
 /** A screen with nothing to show yet. */
 export function EmptyState({ title, description }: { title: string; description?: string }) {
   return (
-    <Empty className="m-4 flex-1 border border-border bg-card">
+    <Empty className="glass m-4 flex-1 border">
       <EmptyHeader>
         <EmptyTitle>{title}</EmptyTitle>
         {description ? <EmptyDescription>{description}</EmptyDescription> : null}
@@ -34,7 +32,7 @@ export function EmptyState({ title, description }: { title: string; description?
 /** A topic that failed to load, with a retry that rereads it. */
 export function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => void }) {
   return (
-    <Empty className="m-4 flex-1 border border-destructive/40 bg-card">
+    <Empty className="glass m-4 flex-1 border-destructive/40">
       <EmptyHeader>
         <EmptyTitle className="flex items-center gap-2">
           <TriangleAlert className="size-4 text-destructive" aria-hidden="true" />
@@ -43,7 +41,7 @@ export function ErrorState({ message, onRetry }: { message?: string; onRetry?: (
         <EmptyDescription>{message ?? "The request failed. Try again."}</EmptyDescription>
       </EmptyHeader>
       {onRetry ? (
-        <Button variant="outline" size="lg" className="h-10" onClick={onRetry}>
+        <Button variant="outline" onClick={onRetry}>
           <RotateCw aria-hidden="true" />
           Try again
         </Button>
@@ -57,34 +55,15 @@ export function ReconnectingState({ onRetry }: { onRetry?: () => void }) {
   return (
     <div
       role="status"
-      className="flex items-center gap-2 border-b bg-muted px-4 py-2 text-sm text-muted-foreground"
+      className="mx-4 mt-1 flex items-center gap-2 rounded-2xl bg-destructive/10 px-4 py-2 text-sm text-destructive"
     >
       <WifiOff className="size-4" aria-hidden="true" />
       <span>Connection lost — retrying every 2 s.</span>
       {onRetry ? (
-        <Button variant="link" className="h-auto px-0" onClick={onRetry}>
+        <Button variant="link" className="h-10 px-1 text-destructive" onClick={onRetry}>
           Retry now
         </Button>
       ) : null}
-    </div>
-  )
-}
-
-/** Capitalise the first letter of a shared lower-case string. */
-export function sentence(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1)
-}
-
-/** Below 768 px the whole app is replaced by this notice. */
-export function NarrowWindow() {
-  return (
-    <div className="flex min-h-svh items-center justify-center p-8">
-      <Empty className="max-w-md border border-border bg-card">
-        <EmptyHeader>
-          <EmptyTitle>{sentence(NARROW_WINDOW)}</EmptyTitle>
-          <EmptyDescription>Open the lobby on a window at least 768 px wide.</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
     </div>
   )
 }

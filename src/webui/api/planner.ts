@@ -8,6 +8,7 @@ import { MEMBER_LABELS } from "../../lobby/planner.ts";
 import type { PanelMember } from "../../schemas/configuration.ts";
 import type { PlannerSnapshot } from "../protocol.ts";
 import type { ApiContext } from "./index.ts";
+import { withAttachments } from "../uploads.ts";
 import { fail } from "./index.ts";
 
 /** The planning session as the page reads it; absent means no session yet. */
@@ -47,11 +48,12 @@ export function plannerNew(body: { seed?: { issue: { number: number; title: stri
 }
 
 /** Send a message to the panel; the round runs in the background. */
-export function plannerSend(body: { text: string }, ctx: ApiContext): { notice: string } {
-  if (!body.text.trim()) fail(400, "bad_request", "describe the task to plan");
+export function plannerSend(body: { text: string; attachments?: string[] }, ctx: ApiContext): { notice: string } {
+  if (!body.text.trim() && !body.attachments?.length) fail(400, "bad_request", "describe the task to plan");
+  const text = withAttachments(body.text, body.attachments);
   const session = ctx.service.planner() ?? ctx.service.newPlanner(undefined, [...ctx.service.defaultPanel()]);
-  if (session!.busy) fail(409, "conflict", "the panel is still thinking — x stops it");
-  session!.send(body.text).catch(() => {});
+  if (session!.busy) fail(409, "conflict", "the panel is still thinking — wait for the round to finish");
+  session!.send(text).catch(() => {});
   return { notice: "sent — the panel is on the next round" };
 }
 
