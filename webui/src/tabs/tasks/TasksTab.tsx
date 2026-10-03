@@ -9,6 +9,7 @@ import { go, tabHash } from "@/app/router"
 import { setComposerTask } from "@/lib/composerContext"
 import { ErrorState } from "@/app/States"
 import { useApiRead } from "@/app/useApiRead"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty"
@@ -36,10 +37,11 @@ function NoTasks() {
 
 function ArchivedToggle({ shown, count, onToggle }: { shown: boolean; count: number; onToggle: () => void }) {
   return (
-    <Button variant="outline" aria-pressed={shown} onClick={onToggle} className="aria-pressed:border-primary aria-pressed:bg-accent">
+    <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border px-2.5 text-[0.8125rem] font-medium transition-colors hover:bg-accent">
+      <Checkbox checked={shown} onCheckedChange={onToggle} aria-label="Show archived tasks" />
       Archived
       <Badge variant="secondary">{count}</Badge>
-    </Button>
+    </label>
   )
 }
 

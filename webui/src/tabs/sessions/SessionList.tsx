@@ -16,7 +16,7 @@ function Row({ entry, selected, onSelect }: { entry: Entry; selected: boolean; o
         type="button"
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(entry.id)}
-        className="flex min-h-11 w-full items-start gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm outline-none transition-colors duration-150 hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:bg-accent"
+        className="flex min-h-9 w-full items-start gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm outline-none transition-colors duration-150 hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:bg-accent"
       >
         <WhereIcon where={entry.where} className="mt-0.5" />
         <span className={cn("min-w-0 flex-1 break-words text-foreground", selected && "font-medium")}>{entry.name}</span>
