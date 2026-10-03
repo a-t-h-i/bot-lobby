@@ -5,8 +5,9 @@
  */
 import type { PlanDetail as PlanDetailData, TaskRow } from "@protocol"
 import { useApiRead } from "@/app/useApiRead"
-import { Button } from "@/components/ui/button"
+import { Play, SquareArrowOutUpRight, Trash2 } from "lucide-react"
 import { act } from "@/lib/act"
+import { ActionBar, ActionButton } from "@/ui/Actions"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { Markdown } from "@/ui/Markdown"
 import { Section } from "@/ui/Section"
@@ -67,6 +68,19 @@ export function PlanDetail({ row, onGone }: { row: TaskRow; onGone: () => void }
   }
   return (
     <article className="flex flex-col gap-4" aria-label={row.title}>
+      <ActionBar>
+        <ActionButton label="Start here" icon={Play} tone="primary" onClick={() => void start("here")} />
+        <ActionButton label="Start in a new session" icon={SquareArrowOutUpRight} onClick={() => void start("session")} />
+        <ConfirmButton
+          icon={Trash2}
+          label="Discard"
+          title={`Discard "${row.title}"?`}
+          description="The saved plan is removed from the list. This cannot be undone."
+          confirmLabel="Discard"
+          variant="destructive"
+          onConfirm={() => void discard()}
+        />
+      </ActionBar>
       <header className="flex flex-col gap-1">
         <h2 className="flex items-start gap-2.5 text-lg font-medium">
           <CheckMark check="open" className="mt-1.5" />
@@ -76,22 +90,6 @@ export function PlanDetail({ row, onGone }: { row: TaskRow; onGone: () => void }
         <p className="text-xs text-muted-foreground break-all">{row.id}</p>
       </header>
       <PlanSections planId={row.id} />
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={() => void start("here")}>
-          Start here
-        </Button>
-        <Button variant="outline" onClick={() => void start("session")}>
-          Start in a new session
-        </Button>
-        <ConfirmButton
-          label="Discard"
-          title={`Discard "${row.title}"?`}
-          description="The saved plan is removed from the list. This cannot be undone."
-          confirmLabel="Discard"
-          variant="destructive"
-          onConfirm={() => void discard()}
-        />
-      </div>
     </article>
   )
 }
