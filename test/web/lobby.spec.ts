@@ -1,6 +1,5 @@
 /**
- * Phase 3 browser checks (P3-04/P3-05/P0-01): the shell, the Lobby tab and
- * the questionnaire slideout, each at 768×1024, 800×1280, 1280×800 and
+ * Browser checks: the shell, the Lobby tab and the question pop-up, each at 768×1024, 800×1280, 1280×800 and
  * 1440×900 in light and dark (the two config projects), against the
  * `full`, `empty` and `question` fixture sets.
  */
@@ -65,7 +64,7 @@ async function touchTargetMisses(page: Page): Promise<string[]> {
 }
 
 async function expectShell(page: Page, tabs: number): Promise<void> {
-  await expect(page.getByText("◆ bot-lobby").first(), "header").toBeVisible();
+  await expect(page.locator("header").getByText("bot-lobby", { exact: true }), "header").toBeVisible();
   await expect(page.getByRole("tab"), `eight pills`).toHaveCount(tabs);
   await expect(page.locator("#main"), "main pane").toBeVisible();
   await expect(page.getByLabel("Message the oracle"), "composer").toBeVisible();
@@ -74,6 +73,13 @@ async function expectShell(page: Page, tabs: number): Promise<void> {
 for (const scenario of SCENARIOS) {
   test(`shell renders (${scenario})`, async ({ page, server }) => {
     const trap = await openScenario(page, server, scenario);
+    if (scenario === "question") {
+      // The question pop-up is modal; put it away to look at the shell behind it (once it has opened).
+      const popup = page.getByRole("dialog", { name: "Question from the lobby" });
+      await popup.waitFor();
+      await page.keyboard.press("Escape");
+      await popup.waitFor({ state: "hidden" });
+    }
     for (const size of SIZES) {
       await page.setViewportSize(size);
       await expectShell(page, 8);
@@ -150,6 +156,8 @@ for (const scenario of ["full", "question"] as const) {
   test(`touch targets ≥40px (${scenario})`, async ({ page, server }) => {
     await openScenario(page, server, scenario);
     await page.setViewportSize({ width: 1280, height: 800 });
+    // The pop-up springs in; measure once it has settled.
+    await page.waitForTimeout(900);
     expect(await touchTargetMisses(page), "touch targets ≥40px").toEqual([]);
   });
 }

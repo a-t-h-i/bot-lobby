@@ -1,12 +1,9 @@
 /**
- * The settings page's copy. The group names, toggle labels, help lines and
- * value descriptions are the terminal settings menu's own words, quoted from
- * `src/pi/settings-ui.ts` and `src/pi/model-support.ts`; only the page's
- * headings, the appearance/notification/install rows and a handful of hints
- * are added here. Nothing secret is ever stored or shown.
+ * The settings page's copy: group names, labels, help lines and value
+ * descriptions. Nothing secret is ever stored or shown.
  */
 
-/** The menu's agent order (`SETTINGS_KINDS`): the master first, then every subagent. */
+/** The agents in the order the page lists them: the master first, then every subagent. */
 export const AGENT_ORDER = [
   "master",
   "designer",
@@ -20,7 +17,7 @@ export const AGENT_ORDER = [
 
 export type AgentKind = (typeof AGENT_ORDER)[number]
 
-/** `kindLabel` from `src/pi/model-support.ts`, verbatim. */
+/** What each agent is called. */
 export const AGENT_LABELS: Record<AgentKind, string> = {
   master: "Master",
   designer: "Designer",
@@ -32,12 +29,11 @@ export const AGENT_LABELS: Record<AgentKind, string> = {
   planner: "Planner",
 }
 
-/** Ideas for what each agent's free-form instructions do, shown as the field hint. */
 export const FIELD_LABELS = {
   model: "Model",
-  thinking: "Thinking",
+  thinking: "Effort",
   fallback: "Fallback model",
-  fallbackThinking: "Fallback thinking",
+  fallbackThinking: "Fallback effort",
   timeout: "Time limit",
   instructions: "Instructions",
 } as const
@@ -52,10 +48,10 @@ export const CUSTOM_HELP = "Type a provider/model id"
 export const NO_FALLBACK = "none"
 export const NO_FALLBACK_HELP = "No fallback: when its model runs out of usage the run fails"
 export const FIXED_SCOUT_THINKING = "low"
-/** The levels the terminal accepts (`THINKING_LEVELS`); a model narrows them. */
+/** Every effort level, lowest to highest; a model supports only some of them. */
 export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const
 
-/** The settings menu order for agents on the page: master, subagents, then the shared groups. */
+/** The page's groups. */
 export const GROUP_TITLES = {
   agents: "Agents",
   workflow: "Workflow",
@@ -66,43 +62,34 @@ export const GROUP_TITLES = {
   install: "Install as app",
 } as const
 
-/** `LOBBY_SWITCHES` from `src/pi/settings-ui.ts`, verbatim. `panel:*` are the Lobby tab's panes. */
+/** The lobby's on/off switches. `panel:*` are the Lobby tab's panes. */
 export const LOBBY_SWITCH_ITEMS = [
-  { id: "autoOpen", label: "Open with a task", help: "open the lobby when this session starts or resumes a task" },
-  { id: "autoAsk", label: "Ask at once", help: "put the panel's questions to you as soon as a round ends, while the Plan tab is open" },
-  { id: "mouse", label: "Mouse", help: "click tabs and draft lines, scroll with the wheel (shift+drag still selects text)" },
-  { id: "miniLine", label: "Status line when hidden", help: "one line under the editor while the lobby is hidden: task steps, the planning round, a quick fix, or idle" },
   { id: "issues", label: "Issues tab", help: "the GitHub Issues tab" },
 ] as const
 
-/** `PANEL_SWITCH_LABELS` and their shared help, verbatim. */
+/** The panes the Lobby tab can show. */
 export const PANEL_ITEMS = [
   { id: "conversation", label: "Conversation pane" },
   { id: "activity", label: "Activity log pane" },
   { id: "thinking", label: "Thinking pane" },
 ] as const
-export const PANEL_HELP = "shown on the Lobby tab; its key in the lobby toggles it too"
+export const PANEL_HELP = "shown on the Lobby tab"
 
 export const ROUNDS_LABEL = "Planning rounds"
-export const ROUNDS_HELP = "enter cycles 2, 3, 5, 8, unlimited; the last round the oracle settles alone"
+export const ROUNDS_HELP = "how many rounds the panel gets before the oracle settles the rest alone"
 /** `PLANNING_ROUND_CHOICES`: 0 = unlimited. */
 export const ROUND_CHOICES = [2, 3, 5, 8, 0] as const
 export const SPLIT_LABEL = "Split long plans"
-export const SPLIT_HELP = "saving a plan with more steps offers to split it into up to 5 tasks · enter cycles 6, 8, 10, 12, never"
+export const SPLIT_HELP = "saving a plan with more steps offers to split it into up to 5 tasks"
 /** `SPLIT_PLAN_CHOICES`: 0 = never. */
 export const SPLIT_CHOICES = [6, 8, 10, 12, 0] as const
 
-export const WEB_LABEL = "Web UI"
-export const WEB_ENABLED_HELP = "start the loopback browser UI with /bot-lobby web"
 export const WEB_PORT_LABEL = "Port"
-export const WEB_PORT_HELP = "the base port (then the next free up to +20); 0 means any free port"
+export const WEB_PORT_HELP = "the base port (then the next free up to +20); 0 means any free port; applies the next time pi starts"
 export const WEB_BROWSER_LABEL = "Open browser"
-export const WEB_BROWSER_HELP = "open the link in the browser on /bot-lobby web"
-export const WEB_QUESTIONS_LABEL = "Questions"
-export const WEB_QUESTIONS_HELP = "where the web UI's questions are answered: both, or the terminal only"
-export const WEB_QUESTIONS = ["both", "terminal"] as const
+export const WEB_BROWSER_HELP = "open this page in the browser when pi starts"
 
-/** `GIT_ISOLATION_HELP` from `src/pi/settings-ui.ts`, verbatim. */
+/** What each git isolation mode does. */
 export const GIT_ISOLATION_ITEMS = [
   { id: "off", label: "off", help: "tasks work in the folder you started them in" },
   { id: "branch", label: "branch", help: "each new task gets a git branch named after it, checked out in the working folder" },
@@ -110,7 +97,7 @@ export const GIT_ISOLATION_ITEMS = [
 ] as const
 export const GIT_LABEL = "Git isolation"
 
-/** `hostLabel` from `src/classifier/hosts.ts`, verbatim. */
+/** The classifier hosts. */
 export const JEV_HOST_ITEMS = [
   { id: "auto", label: "Auto (OpenCode's free Jev, else TypeSafe)" },
   { id: "opencode", label: "OpenCode Zen" },
@@ -119,7 +106,7 @@ export const JEV_HOST_ITEMS = [
   { id: "vercel", label: "Vercel AI Gateway" },
 ] as const
 
-/** `CLASSIFIER_FEATURE_ITEMS` from `src/pi/settings-ui.ts`, verbatim. */
+/** The classifier's decisions, each its own switch. */
 export const CLASSIFIER_FEATURE_ITEMS = [
   { id: "seats", label: "Planning seats", help: "each round, only the seats your idea or latest answers touch sit; 1-4 in the Plan tab pins one" },
   { id: "answers", label: "Obvious answers", help: "a panel question whose recommended option the conversation already makes clearly right is answered for you (listed under Assumptions)" },
@@ -146,7 +133,7 @@ export const CLASSIFIER_LABELS = {
 /** Page-only copy: the headings, hints and confirmations. */
 export const PAGE = {
   title: "Settings",
-  intro: "Every setting the terminal's /bot-lobby settings menu writes, saved to the same config file.",
+  intro: "Each agent's model and effort, the lobby and the classifier. Changes save as you make them.",
   loading: "Loading settings…",
   loadFailed: "Could not load settings.",
   saved: "Settings saved",
@@ -171,5 +158,5 @@ export const PAGE = {
   installDone: "bot-lobby is installed.",
 } as const
 
-/** The terminal's success wording, for the toast after a save. */
+/** The toast after a save. */
 export const SAVED_TO_CONFIG = "saved to the bot-lobby config"

@@ -1,23 +1,19 @@
 /**
  * The Tasks tab over HTTP: rows, archived tasks, plan comments, and the row
- * actions (comment, archive, restore, delete, auto mode, message). Actions
- * answer with the same notice text the terminal shows.
- *
- * The row shape mirrors `taskRows` in `src/lobby/tabs/tasks.ts`, whose pure
- * data part is rebuilt here instead of imported: that module draws through
- * `layout.ts` and would load the TUI (`@earendil-works/pi-tui`) into the
- * server. The one type import above is erased at compile time.
+ * actions (comment, archive, restore, delete, auto mode, message). The row
+ * shape is `TaskRow` in `src/lobby/task-rows.ts`.
  */
 import { TERMINAL_STATES, taskRequest, type Task } from "../../schemas/task.ts";
 import type { PlannedTask } from "../../state/backlog.ts";
 import { describeRun, runFromLog } from "../../pi/run-summary.ts";
 import { pendingApprovals } from "../../workflow/approvals.ts";
-import type { TaskRow } from "../../lobby/tabs/tasks.ts";
+import type { TaskRow } from "../../lobby/task-rows.ts";
 import type { TaskDetail } from "../protocol.ts";
 import type { ApiContext } from "./index.ts";
+import { withAttachments } from "../uploads.ts";
 import { fail } from "./index.ts";
 import { taskSteps } from "./plan-facts.ts";
-import type { TaskSection } from "../../lobby/tabs/tasks.ts";
+import type { TaskSection } from "../../lobby/task-rows.ts";
 
 interface RowContext {
   names: ReadonlyMap<string, string>;
@@ -140,9 +136,9 @@ export function tasksComments(body: { taskId: string }, ctx: ApiContext): { comm
 }
 
 /** Comment on a task's plan; blank text is a no-op notice like the lobby's. */
-export function tasksComment(body: { taskId: string; text: string }, ctx: ApiContext): { notice?: string } {
-  if (!body.text.trim()) return { notice: "type something first" };
-  return { notice: ctx.service.comment(body.taskId, body.text) };
+export function tasksComment(body: { taskId: string; text: string; attachments?: string[] }, ctx: ApiContext): { notice?: string } {
+  if (!body.text.trim() && !body.attachments?.length) return { notice: "type something first" };
+  return { notice: ctx.service.comment(body.taskId, withAttachments(body.text, body.attachments, body.taskId)) };
 }
 
 /** Archive, restore or delete a task; each answers the terminal's notice. */
@@ -171,9 +167,9 @@ export function tasksAuto(body: { taskId: string; on: boolean }, ctx: ApiContext
 }
 
 /** Leave a message for a task's oracle; blank text is a no-op notice. */
-export function tasksMessage(body: { taskId: string; text: string }, ctx: ApiContext): { notice: string } {
-  if (!body.text.trim()) return { notice: "type something first" };
-  return { notice: ctx.service.sendToTask(body.taskId, body.text) };
+export function tasksMessage(body: { taskId: string; text: string; attachments?: string[] }, ctx: ApiContext): { notice: string } {
+  if (!body.text.trim() && !body.attachments?.length) return { notice: "type something first" };
+  return { notice: ctx.service.sendToTask(body.taskId, withAttachments(body.text, body.attachments, body.taskId)) };
 }
 
 /** How many recent runs the detail lists (the terminal's count). */

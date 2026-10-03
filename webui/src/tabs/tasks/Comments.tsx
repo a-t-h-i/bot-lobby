@@ -1,17 +1,16 @@
 /**
- * A task's plan comments (the terminal's `Comments` section): each with its
- * mark, its text as Markdown and where it stands, plus a box to add one.
- * Wording is `tasks.ts`'s `COMMENT_WORDS`.
+ * A task's plan comments: each as a soft card with its text as Markdown (and
+ * any files it carries) and where it stands. New ones are written in the
+ * floating box below, with its Comment target picked.
  */
+import { CheckCircle2, Circle, CircleDot } from "lucide-react"
 import type { PlanComment } from "@protocol"
 import { useApiRead } from "@/app/useApiRead"
-import { act } from "@/lib/act"
 import { formatSince } from "@/lib/format"
-import { NoteForm } from "@/ui/NoteForm"
 import { Markdown } from "@/ui/Markdown"
 import { Rule } from "@/ui/Frame"
 
-const COMMENT_MARKS: Record<PlanComment["status"], string> = { open: "○", delivered: "◐", addressed: "✓" }
+const COMMENT_ICONS: Record<PlanComment["status"], typeof Circle> = { open: Circle, delivered: CircleDot, addressed: CheckCircle2 }
 const COMMENT_WORDS: Record<PlanComment["status"], string> = {
   open: "waiting for the owning session",
   delivered: "sent to the oracle",
@@ -20,17 +19,14 @@ const COMMENT_WORDS: Record<PlanComment["status"], string> = {
 
 function CommentItem({ comment }: { comment: PlanComment }) {
   const age = formatSince(Date.now() - Date.parse(comment.createdAt))
+  const Icon = COMMENT_ICONS[comment.status]
   return (
-    <li className="flex gap-2">
-      <span className="shrink-0 text-foreground" aria-hidden="true">
-        {COMMENT_MARKS[comment.status]}
-      </span>
-      <div className="min-w-0 flex-1">
-        <Markdown text={comment.text} />
-        <p className="text-xs text-muted-foreground">
-          — {COMMENT_WORDS[comment.status]}, {age}
-        </p>
-      </div>
+    <li className="rounded-lg border border-border bg-card/50 px-4 py-3">
+      <Markdown text={comment.text} />
+      <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Icon aria-hidden="true" className={comment.status === "addressed" ? "size-3.5 text-success" : "size-3.5"} />
+        {COMMENT_WORDS[comment.status]}, {age}
+      </p>
     </li>
   )
 }
@@ -39,11 +35,6 @@ export function Comments({ taskId, finished, canComment }: { taskId: string; fin
   const read = useApiRead("tasks.comments", { taskId }, ["tasks"])
   const comments = read.data?.comments ?? []
   const open = comments.filter((comment) => comment.status !== "addressed").length
-  const send = async (text: string) => {
-    const result = await act("tasks.comment", { taskId, text })
-    read.reload()
-    return result !== undefined
-  }
   return (
     <section aria-labelledby={`comments-${taskId}`} className="flex flex-col gap-3">
       <h3 id={`comments-${taskId}`} className="text-sm">
@@ -51,16 +42,15 @@ export function Comments({ taskId, finished, canComment }: { taskId: string; fin
       </h3>
       {comments.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          {finished ? "No comments." : "No comments yet — comment on the plan below; the oracle amends it."}
+          {finished ? "No comments." : canComment ? "No comments yet. Comment on the plan in the box below (Markdown and images work); the oracle amends it." : "No comments yet."}
         </p>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="flex flex-col gap-2.5">
           {comments.map((comment) => (
             <CommentItem key={comment.id} comment={comment} />
           ))}
         </ul>
       )}
-      {canComment ? <NoteForm label="Comment on the plan" buttonLabel="Add comment" onSend={send} /> : null}
     </section>
   )
 }

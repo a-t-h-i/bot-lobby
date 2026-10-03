@@ -93,7 +93,7 @@ test("settings.set merges, normalises and saves the patch; the terminal rereads 
     assert.equal(((saved.agents as Record<string, unknown>).backend as Record<string, unknown>).timeoutMs, 300_000);
     // Other entries are untouched by the patch.
     assert.equal((saved.master as Record<string, unknown>).model, "inherit");
-    assert.deepEqual((saved.lobby as Record<string, unknown>).web, { enabled: false, port: 7347, openBrowser: true, questions: "both" });
+    assert.deepEqual((saved.lobby as Record<string, unknown>).web, { port: 7347, openBrowser: true });
     // The file the terminal reads holds it.
     assert.equal(loadConfig().master.thinking, "low");
     assert.equal(loadConfig().agents.backend.timeoutMs, 300_000);

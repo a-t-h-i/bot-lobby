@@ -6,6 +6,8 @@
  * diagram) shown beside the options.
  */
 
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+
 /** The questionnaire tool's name, in this session and in the agents that may ask. */
 export const ASK_TOOL = "ask_user_question";
 
@@ -52,4 +54,18 @@ export interface AskResult {
   answers: AskAnswer[];
   cancelled: boolean;
   globalNote?: string;
+}
+
+/**
+ * Puts up to `MAX_QUESTIONS` questions to the user and returns what they
+ * chose. `from` names who asks when it is not this session's model (an agent
+ * whose questions the oracle relays).
+ */
+export type Asker = (questions: readonly AskQuestion[], ctx: ExtensionContext, signal?: AbortSignal, from?: string) => Promise<AskResult>;
+
+const IMAGE_EXTENSIONS = /\.(png|jpe?g|gif|webp)$/i;
+
+/** Whether a path names an image the page can show. */
+export function isImagePath(path: string): boolean {
+  return IMAGE_EXTENSIONS.test(path.trim());
 }

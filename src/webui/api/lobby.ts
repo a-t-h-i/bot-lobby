@@ -7,6 +7,7 @@
 import { MAX_ACTIVITY, MAX_CHAT, MAX_THOUGHTS } from "../../lobby/feed.ts";
 import type { Task } from "../../schemas/task.ts";
 import type { ApiContext } from "./index.ts";
+import { withAttachments } from "../uploads.ts";
 import { fail } from "./index.ts";
 import { taskSteps } from "./plan-facts.ts";
 import type { LobbySnapshot, SnapshotTask } from "../protocol.ts";
@@ -74,9 +75,9 @@ export function lobbyHistory(body: { before?: number }, ctx: ApiContext): { entr
 }
 
 /** Text for the oracle; a notice when it was not simply sent. */
-export function lobbySend(body: { text: string }, ctx: ApiContext): { notice?: string } {
-  if (!body.text.trim()) return { notice: "type something first" };
-  const notice = ctx.service.toOracle(body.text);
+export function lobbySend(body: { text: string; attachments?: string[] }, ctx: ApiContext): { notice?: string } {
+  if (!body.text.trim() && !body.attachments?.length) return { notice: "type something first" };
+  const notice = ctx.service.toOracle(withAttachments(body.text, body.attachments, ctx.service.zen().task?.id));
   return notice ? { notice } : {};
 }
 
