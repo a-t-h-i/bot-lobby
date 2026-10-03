@@ -7,14 +7,14 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { act } from "@/lib/act"
 import { cn } from "@/lib/utils"
-import { sourceColor } from "../lobby/types"
+import { sourceColor, sourceLabel } from "../lobby/types"
 import type { SeatCell } from "./words"
 
 function Inside({ cell, intro }: { cell: SeatCell; intro: boolean }) {
   const state = intro ? (cell.member ? (cell.seated ? "seated" : "not seated") : "chairs") : cell.text
   return (
     <>
-      <span className={cn("font-medium", cell.seated ? sourceColor(cell.label) : "text-muted-foreground")}>{cell.label}</span>
+      <span className={cn("font-medium", cell.seated ? sourceColor(cell.label) : "text-muted-foreground")}>{sourceLabel(cell.label)}</span>
       {cell.working && !intro ? <Spinner className="size-3.5" aria-hidden="true" /> : null}
       <span className="text-muted-foreground">{state}</span>
     </>
@@ -23,8 +23,8 @@ function Inside({ cell, intro }: { cell: SeatCell; intro: boolean }) {
 
 function Chip({ cell, intro, onToggled }: { cell: SeatCell; intro: boolean; onToggled: () => void }) {
   const { member } = cell
-  const look = "inline-flex min-h-10 items-center gap-2 rounded-md border px-4 text-sm"
-  if (!member) return <li className={cn(look, "border-border")}><Inside cell={cell} intro={intro} /></li>
+  const look = "inline-flex min-h-10 items-center gap-2 rounded-lg px-3.5 text-sm"
+  if (!member) return <li className={cn(look, "bg-muted")}><Inside cell={cell} intro={intro} /></li>
   const toggle = async () => {
     if (await act("planner.toggleSeat", { member })) onToggled()
   }
@@ -35,7 +35,7 @@ function Chip({ cell, intro, onToggled }: { cell: SeatCell; intro: boolean; onTo
         variant="ghost"
         aria-pressed={cell.seated}
         onClick={() => void toggle()}
-        className={cn(look, "h-auto font-normal", cell.seated ? "border-border bg-card/50" : "border-dashed")}
+        className={cn(look, "h-auto font-normal", cell.seated ? "bg-muted hover:bg-accent" : "text-muted-foreground opacity-70 hover:bg-muted hover:opacity-100")}
       >
         <Inside cell={cell} intro={intro} />
       </Button>

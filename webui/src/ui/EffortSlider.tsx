@@ -111,7 +111,7 @@ export function EffortSlider({ value, levels, supported, model, label, disabled,
   return (
     <div className={cn("flex flex-col gap-2", disabled && "opacity-60")}>
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-sm font-semibold capitalize" aria-hidden="true">
+        <span className="text-sm font-medium capitalize" aria-hidden="true">
           {level}
         </span>
         <span className="min-w-0 truncate text-xs text-muted-foreground">{HINTS[level] ?? ""}</span>
@@ -169,7 +169,7 @@ export function EffortSlider({ value, levels, supported, model, label, disabled,
             <span
               key={name}
               title={ok ? undefined : `${model ?? "This model"} does not support ${name}`}
-              className={cn("absolute -translate-x-1/2 whitespace-nowrap", index === shown && "font-semibold text-foreground", !ok && "line-through opacity-40")}
+              className={cn("absolute -translate-x-1/2 whitespace-nowrap", index === shown && "font-medium text-foreground", !ok && "opacity-40")}
               style={{ left: `${(index / last) * 100}%` }}
             >
               {SHORT[name] ?? name}

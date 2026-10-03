@@ -71,7 +71,7 @@ function OptionRow({
   return (
     <label
       className={cn(
-        "flex min-h-11 cursor-pointer items-start gap-3 rounded-md border px-4 py-3 text-start text-sm transition-[background-color,border-color,transform] duration-150 ease-snap active:scale-[0.99]",
+        "flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 text-start text-sm transition-[background-color,border-color,transform] duration-150 ease-snap active:scale-[0.99]",
         selected ? "border-primary/50 bg-accent" : "border-input bg-card/40 hover:bg-accent/60",
         "has-[:focus-visible]:border-ring has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/30"
       )}
@@ -92,10 +92,10 @@ function OptionRow({
 function Preview({ option }: { option?: AskOption }) {
   if (!option || (!option.preview && !option.image)) return null
   return (
-    <div className="flex flex-col gap-2 rounded-md border bg-muted/30 p-3">
+    <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3">
       <p className="text-xs font-medium text-muted-foreground">Preview · {splitRecommended(option.label).text}</p>
       {option.image ? (
-        <img src={option.image} alt="" loading="lazy" className="max-h-64 w-full rounded-md border object-contain" />
+        <img src={option.image} alt="" loading="lazy" className="max-h-64 w-full rounded-lg border object-contain" />
       ) : null}
       {option.preview ? (
         <Markdown text={option.preview} className="text-xs" />
@@ -155,7 +155,7 @@ function Chips({ questions, picks, own, index, onGo }: { questions: AskQuestion[
             onClick={() => onGo(position)}
             aria-current={position === index}
             className={cn(
-              "inline-flex min-h-10 items-center gap-1 rounded-md border px-3.5 text-xs font-medium transition-colors",
+              "inline-flex min-h-10 items-center gap-1 rounded-lg border px-3.5 text-xs font-medium transition-colors",
               position === index ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"
             )}
           >
@@ -223,7 +223,7 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel }: { ques
           {question.options.map((option, position) => (
             <OptionRow key={position} option={option} index={position} multi={multi} name={`question-${index}`} selected={picked.includes(position)} onToggle={() => toggle(position)} />
           ))}
-          <label className="flex min-h-11 flex-col gap-1 rounded-md border border-input px-3 py-2 text-sm focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30">
+          <label className="flex min-h-11 flex-col gap-1 rounded-lg border border-input px-3 py-2 text-sm focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30">
             <span className="text-muted-foreground">
               
               {OWN_ANSWER}

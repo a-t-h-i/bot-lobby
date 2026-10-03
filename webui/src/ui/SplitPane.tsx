@@ -19,7 +19,7 @@ export function useWide(): boolean {
 
 /** A flat card; its edge lights up while you are inside it. */
 export function Pane({ className, ...props }: React.ComponentProps<"section">) {
-  return <section className={cn("glass min-h-0 min-w-0 rounded-md transition-[border-color] duration-200 focus-within:border-ring/50", className)} {...props} />
+  return <section className={cn("glass min-h-0 min-w-0 rounded-lg transition-[border-color] duration-200 focus-within:border-ring/50", className)} {...props} />
 }
 
 interface SplitPaneProps {
@@ -80,12 +80,12 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe }:
   )
 }
 
-/** The list card's title row: `Tasks ────── 2 open · 2 finished`, then any controls. */
+/** The list card's title row: `Tasks            2 open · 2 finished`, then any controls. */
 export function PaneHeader({ title, count, children }: { title: string; count?: string; children?: ReactNode }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-      <h2 className="text-sm font-semibold">{title}</h2>
-      <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-border" />
+      <h2 className="text-sm font-medium">{title}</h2>
+      <span aria-hidden="true" className="min-w-4 flex-1" />
       {count ? <span className="text-xs text-muted-foreground tabular-nums">{count}</span> : null}
       {children ? <div className="flex items-center gap-2">{children}</div> : null}
     </div>
@@ -97,7 +97,7 @@ export function ListSkeleton() {
   return (
     <div className="flex flex-col gap-2 p-3" role="status" aria-label="Loading">
       {[0, 1, 2, 3].map((row) => (
-        <div key={row} className="h-11 rounded-md bg-muted motion-safe:animate-pulse" />
+        <div key={row} className="h-11 rounded-lg bg-muted motion-safe:animate-pulse" />
       ))}
     </div>
   )

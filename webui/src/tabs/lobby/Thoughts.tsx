@@ -5,12 +5,12 @@
 import { cn } from "@/lib/utils"
 import { Frame } from "@/ui/Frame"
 import { Markdown } from "@/ui/Markdown"
-import { latestThoughts, sourceColor, type ThoughtEntry } from "./types"
+import { latestThoughts, sourceColor, sourceLabel, type ThoughtEntry } from "./types"
 
 function ThoughtRow({ thought }: { thought: ThoughtEntry }) {
   return (
     <li className="flex items-start gap-3 text-sm">
-      <span className={cn("w-24 shrink-0 overflow-hidden pt-0.5 text-xs font-semibold whitespace-nowrap", sourceColor(thought.source))}>{thought.source}</span>
+      <span className={cn("w-24 shrink-0 overflow-hidden pt-0.5 text-xs font-medium whitespace-nowrap", sourceColor(thought.source))}>{sourceLabel(thought.source)}</span>
       <span className="min-w-0 flex-1 text-muted-foreground italic">
         <Markdown text={thought.text} />
       </span>
