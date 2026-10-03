@@ -67,7 +67,7 @@ export function SessionDetail({ entry, lobby, onChanged }: { entry: Entry; lobby
   return (
     <article aria-label="Session detail" className="flex flex-col gap-4">
       <header className="flex flex-col gap-1">
-        <h3 className="text-sm font-bold text-foreground">
+        <h3 className="text-sm font-semibold text-foreground">
           <WhereIcon where={entry.where} className="inline size-4 align-text-bottom" />
           {entry.name}
         </h3>

@@ -40,14 +40,14 @@ export function Toaster() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.92, y: 6, transition: { duration: 0.14, ease: "easeIn" } }}
             transition={{ type: "spring", stiffness: 560, damping: 15, mass: 0.8 }}
-            className="pointer-events-auto flex max-w-[min(32rem,100%)] items-center gap-3 rounded-md border border-glass-border bg-popover/75 px-4 py-3 text-sm text-popover-foreground shadow-glass backdrop-blur-xs"
+            className="pointer-events-auto flex max-w-[min(32rem,100%)] items-center gap-3 rounded-lg border border-glass-border bg-popover/75 px-4 py-3 text-sm text-popover-foreground shadow-glass backdrop-blur-xs"
           >
             <ToastIcon kind={item.kind} />
             <span className="min-w-0 break-words">{item.message}</span>
             {item.action ? (
               <button
                 type="button"
-                className="-my-2 -mr-2 h-10 shrink-0 rounded-md px-3 font-medium text-primary transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none"
+                className="-my-2 -mr-2 h-10 shrink-0 rounded-lg px-3 font-medium text-primary transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none"
                 onClick={() => {
                   item.action?.onClick()
                   dismissToast(item.id)

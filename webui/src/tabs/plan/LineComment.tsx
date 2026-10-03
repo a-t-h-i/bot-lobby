@@ -30,7 +30,7 @@ export function LineComment({ line, onClose, onSent }: LineCommentProps) {
     <Popup open={line !== undefined && shown} onOpenChange={(next) => !next && onClose()} label="Comment on this line" className="max-w-xl">
       <div className="flex min-h-0 flex-1 flex-col gap-3 p-6">
         <div>
-          <h2 className="text-base font-semibold">Comment on this line</h2>
+          <h2 className="text-base font-medium">Comment on this line</h2>
           <p className="mt-1 line-clamp-3 text-sm break-words text-muted-foreground">{line}</p>
         </div>
         <NoteForm label="Your comment" hint="Enter adds the comment · Esc cancels" buttonLabel="Add comment" onSend={send} />

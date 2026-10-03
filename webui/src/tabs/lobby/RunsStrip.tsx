@@ -10,7 +10,7 @@ import { Check, X } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { formatElapsed } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { agentName, sourceColor, type LobbyRun } from "./types"
+import { agentName, sourceColor, sourceLabel, type LobbyRun } from "./types"
 
 function useNow(active: boolean): number {
   const [now, setNow] = useState(() => Date.now())
@@ -41,10 +41,10 @@ export function RunsStrip({ runs }: { runs: LobbyRun[] }) {
   return (
     <ul className="flex shrink-0 flex-wrap items-center gap-2" aria-label="Runs">
       {runs.map((run, index) => (
-        <li key={run.runId ?? index} className="flex items-center gap-2 rounded-md bg-muted py-1.5 pr-3 pl-2.5 text-xs">
+        <li key={run.runId ?? index} className="flex items-center gap-2 rounded-lg bg-muted py-1.5 pr-3 pl-2.5 text-xs">
           <span className="flex size-4 items-center justify-center">{statusMark(run.status)}</span>
           <span className="sr-only">{run.status ?? "unknown"}</span>
-          <span className={cn("font-semibold", sourceColor(agentName(run)))}>{agentName(run)}</span>
+          <span className={cn("font-medium", sourceColor(agentName(run)))}>{sourceLabel(agentName(run))}</span>
           {run.activity ?? run.step ? <span className="max-w-[18rem] truncate text-muted-foreground">{run.activity ?? run.step}</span> : null}
           <span className="tabular-nums text-muted-foreground">{elapsedOf(run, now)}</span>
         </li>
