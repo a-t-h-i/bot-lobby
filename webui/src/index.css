@@ -89,18 +89,18 @@
 
 .dark {
   /* Near-black */
-  --background: #0a0b0f;
+  --background: #050608;
   --foreground: #e6e8ee;
-  --muted-foreground: #8e96a7;
+  --muted-foreground: #8b93a4;
 
-  --card: #111318;
+  --card: #0b0d11;
   --card-foreground: #e6e8ee;
-  --popover: rgb(17 19 25 / 0.92);
+  --popover: rgb(11 13 17 / 0.94);
   --popover-foreground: #e6e8ee;
-  --glass-border: #1e222b;
+  --glass-border: #181b22;
   --glass-shadow: 0 14px 36px -12px rgb(0 0 0 / 0.8);
   --card-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
-  --scrim: rgb(0 0 0 / 0.68);
+  --scrim: rgb(0 0 0 / 0.75);
 
   --primary: #8f9bff;
   --primary-foreground: #0d0f26;
@@ -108,14 +108,14 @@
   --accent-foreground: #e6e8ee;
   --ring: #8f9bff;
   --typing: #8f9bff;
-  --tab-active: #1a1e36;
+  --tab-active: #141830;
 
-  --secondary: rgb(255 255 255 / 0.05);
+  --secondary: rgb(255 255 255 / 0.045);
   --secondary-foreground: #e6e8ee;
-  --muted: rgb(255 255 255 / 0.045);
-  --border: #1e222b;
-  --input: #2b303c;
-  --you: #181b25;
+  --muted: rgb(255 255 255 / 0.04);
+  --border: #181b22;
+  --input: #262a35;
+  --you: #11141b;
 
   --destructive: #f2918a;
   --success: #7fcf9f;
