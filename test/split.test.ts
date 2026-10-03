@@ -167,7 +167,7 @@ test("the user is asked with the split as a preview, and can take it, keep the p
   assert.match(question.question, /This plan has \*\*10 steps\*\*\. The oracle suggests splitting it into \*\*3 tasks\*\*/);
   assert.match(question.question, /Part 1 must go first/);
   assert.match(question.question, /Type what to change \(for example \*merge 2 and 3\*\)/);
-  assert.deepEqual(question.options.map((option) => option.label), ["Split into 3 tasks (Recommended)", "Keep it as one task"]);
+  assert.deepEqual(question.options.map((option) => option.label), ["Split into 3 tasks", "Keep it as one task"]);
   assert.match(question.options[0]!.preview!, /\*\*1\. Theme foundation\*\* · steps 1-3\n_tokens, a store and persistence\._\n- 1\. Define colour tokens/);
   assert.match(question.options[0]!.preview!, /\*\*3\. Style and verify\*\* · steps 6-10 · after 1-2/);
   assert.match(splitQuestion({ stepCount: 10, proposal, steps: STEPS, revisions: MAX_SPLIT_REVISIONS }).question, /This is the last revision: take it, or keep the plan whole\./);
@@ -206,7 +206,7 @@ function saving(options: { plan?: string; answers?: string[]; choices?: Array<(q
 
 const pick = (label: string) => (question: AskQuestion): AskResult => ({ cancelled: false, answers: [{ questionIndex: 0, question: question.question, kind: "option", answer: label }] });
 const write = (words: string) => (question: AskQuestion): AskResult => ({ cancelled: false, answers: [{ questionIndex: 0, question: question.question, kind: "custom", answer: words }] });
-const SPLIT_3 = "Split into 3 tasks (Recommended)";
+const SPLIT_3 = "Split into 3 tasks";
 
 test("a plan with few steps is saved as one task at once: no oracle run, no question", async () => {
   const { session, prompts, asked, ask } = saving({ plan: "### Steps\n1. a\n2. b\n3. c" });
@@ -255,7 +255,7 @@ test("the user can keep the plan whole", async () => {
 test("what the user writes in their own words revises the split before anything is saved", async () => {
   const merged = SPLIT.replace(/### 2\.[\s\S]*?### 3\. Style and verify\nGoal: every screen follows the theme\.\nCovers: 6-10\nAfter: 1, 2/, "### 2. Toggle and screens\nGoal: users switch themes.\nCovers: 4-10\nAfter: 1");
   assert.equal(parseSplit(merged).tasks.length, 2);
-  const { session, root, prompts, asked, ask } = saving({ answers: [SPLIT, merged], choices: [write("merge 2 and 3"), pick("Split into 2 tasks (Recommended)")] });
+  const { session, root, prompts, asked, ask } = saving({ answers: [SPLIT, merged], choices: [write("merge 2 and 3"), pick("Split into 2 tasks")] });
   const notice = await session.saveWithSplit(ask, { splitAbove: 8 });
   assert.match(notice, /^split into 2 tasks — PLAN-theme-foundation, PLAN-toggle-and-screens/);
   assert.equal(prompts.length, 2);

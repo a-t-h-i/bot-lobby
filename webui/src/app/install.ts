@@ -3,7 +3,7 @@
  * not be mounted yet when it fires). The manifest and service worker make the
  * app installable; this only offers the shortcut. Nothing is stored.
  */
-import { useSyncExternalStore } from "react"
+import { useEffect, useState, useSyncExternalStore } from "react"
 
 interface InstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -53,4 +53,39 @@ export function useInstallPrompt(): InstallPrompt {
     emit()
   }
   return { available, install }
+}
+
+/** Whether the page already runs as an installed app (fullscreen or standalone). */
+export function useInstalled(): boolean {
+  const query = "(display-mode: fullscreen), (display-mode: standalone), (display-mode: minimal-ui)"
+  const [installed, setInstalled] = useState(() => typeof window !== "undefined" && window.matchMedia(query).matches)
+  useEffect(() => {
+    const media = window.matchMedia(query)
+    const change = () => setInstalled(media.matches)
+    media.addEventListener("change", change)
+    return () => media.removeEventListener("change", change)
+  }, [])
+  return installed
+}
+
+export interface FullscreenControl {
+  supported: boolean
+  on: boolean
+  toggle: () => Promise<void>
+}
+
+/** The browser's fullscreen for this page (what `F11` does), where the browser offers it. */
+export function useFullscreen(): FullscreenControl {
+  const supported = typeof document !== "undefined" && typeof document.documentElement.requestFullscreen === "function"
+  const [on, setOn] = useState(() => typeof document !== "undefined" && document.fullscreenElement !== null)
+  useEffect(() => {
+    const change = () => setOn(document.fullscreenElement !== null)
+    document.addEventListener("fullscreenchange", change)
+    return () => document.removeEventListener("fullscreenchange", change)
+  }, [])
+  const toggle = async (): Promise<void> => {
+    if (document.fullscreenElement) await document.exitFullscreen().catch(() => undefined)
+    else await document.documentElement.requestFullscreen().catch(() => undefined)
+  }
+  return { supported, on, toggle }
 }

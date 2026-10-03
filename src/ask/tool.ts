@@ -26,7 +26,7 @@ const OptionSchema = Type.Object({
 const QuestionSchema = Type.Object({
   question: Type.String({ description: "The whole question, clear and specific, ending with a question mark. Markdown." }),
   header: Type.String({ maxLength: MAX_HEADER, description: `A short chip naming the question (at most ${MAX_HEADER} characters), e.g. "Auth" or "Layout".` }),
-  options: Type.Array(OptionSchema, { minItems: MIN_OPTIONS, maxItems: MAX_OPTIONS, description: `${MIN_OPTIONS}-${MAX_OPTIONS} distinct options. Put the one you recommend first and end its label with "(Recommended)". The user can always answer in their own words instead.` }),
+  options: Type.Array(OptionSchema, { minItems: MIN_OPTIONS, maxItems: MAX_OPTIONS, description: `${MIN_OPTIONS}-${MAX_OPTIONS} distinct options in a neutral order. Do not recommend one: the user should think the decision through. Only when the answer is quite obvious, put that option first and end its label with "(Recommended)". The user can always answer in their own words instead.` }),
   multiSelect: Type.Optional(Type.Boolean({ description: "True when several answers can apply together." })),
 });
 
@@ -36,7 +36,7 @@ export const AskParams = Type.Object({
 
 const DESCRIPTION = [
   "Ask the user one to four questions with options to pick from, when the answer would change what you do and you would otherwise guess.",
-  "Each question has 2-4 options (the one you recommend first, its label ending in \"(Recommended)\"); the user can pick one (or several with multiSelect), or answer in their own words.",
+  "Each question has 2-4 options in a neutral order, with no recommendation (mark one \"(Recommended)\", first, only when the answer is quite obvious); the user can pick one (or several with multiSelect), or answer in their own words.",
   "Questions, descriptions and previews are Markdown. Give options a `preview` when the user needs to see them to choose: a UI mockup, a layout sketch, a code snippet, a config; the focused option's preview shows beside the list. An option can also carry an `image` file (a screenshot, a rendered mockup).",
   "Do not use it for yes/no confirmations of what you were already told to do, or for questions the conversation already answers.",
 ].join(" ");
