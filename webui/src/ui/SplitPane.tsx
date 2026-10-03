@@ -17,9 +17,9 @@ export function useWide(): boolean {
   return useMediaQuery("(min-width: 1024px)")
 }
 
-/** A card of glass; its edge lights up while you are inside it. */
+/** A flat card; its edge lights up while you are inside it. */
 export function Pane({ className, ...props }: React.ComponentProps<"section">) {
-  return <section className={cn("glass min-h-0 min-w-0 rounded-2xl transition-[border-color] duration-200 focus-within:border-ring/50", className)} {...props} />
+  return <section className={cn("glass min-h-0 min-w-0 rounded-md transition-[border-color] duration-200 focus-within:border-ring/50", className)} {...props} />
 }
 
 interface SplitPaneProps {
@@ -97,7 +97,7 @@ export function ListSkeleton() {
   return (
     <div className="flex flex-col gap-2 p-3" role="status" aria-label="Loading">
       {[0, 1, 2, 3].map((row) => (
-        <div key={row} className="h-11 rounded-xl bg-muted motion-safe:animate-pulse" />
+        <div key={row} className="h-11 rounded-md bg-muted motion-safe:animate-pulse" />
       ))}
     </div>
   )

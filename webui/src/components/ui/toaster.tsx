@@ -10,7 +10,7 @@ const TONES: Record<ToastKind, string> = { info: "text-primary", success: "text-
 
 /**
  * The one toast on screen: it scales up with a bounce just above the composer,
- * on a pane of glass with a light blur behind it. It waits while a pop-up is
+ * on a pane with a light blur behind it. It waits while a pop-up is
  * open and leaves sooner when more are queued.
  */
 export function Toaster() {
@@ -30,7 +30,7 @@ export function Toaster() {
       aria-live="polite"
       aria-atomic="true"
       className="pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4"
-      style={{ bottom: "calc(var(--composer-h, 0px) + 1.75rem)" }}
+      style={{ bottom: "calc(var(--composer-h, 0px) + 0.5rem)" }}
     >
       <AnimatePresence mode="wait">
         {showing ? (
@@ -40,14 +40,14 @@ export function Toaster() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.92, y: 6, transition: { duration: 0.14, ease: "easeIn" } }}
             transition={{ type: "spring", stiffness: 560, damping: 15, mass: 0.8 }}
-            className="pointer-events-auto flex max-w-[min(32rem,100%)] items-center gap-3 rounded-2xl border border-glass-border bg-popover/75 px-4 py-3 text-sm text-popover-foreground shadow-glass backdrop-blur-xs"
+            className="pointer-events-auto flex max-w-[min(32rem,100%)] items-center gap-3 rounded-md border border-glass-border bg-popover/75 px-4 py-3 text-sm text-popover-foreground shadow-glass backdrop-blur-xs"
           >
             <ToastIcon kind={item.kind} />
             <span className="min-w-0 break-words">{item.message}</span>
             {item.action ? (
               <button
                 type="button"
-                className="-my-2 -mr-2 h-10 shrink-0 rounded-xl px-3 font-medium text-primary transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none"
+                className="-my-2 -mr-2 h-10 shrink-0 rounded-md px-3 font-medium text-primary transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none"
                 onClick={() => {
                   item.action?.onClick()
                   dismissToast(item.id)

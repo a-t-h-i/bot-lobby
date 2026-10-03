@@ -58,7 +58,7 @@ function Turn({ message }: { message: PlannerMessage }) {
         <span className="text-xs text-muted-foreground">
           {time} You
         </span>
-        <div className="max-w-[85%] rounded-2xl rounded-tr-md border border-primary/15 bg-you px-4 py-2">
+        <div className="max-w-[85%] rounded-md rounded-tr-md border border-primary/15 bg-you px-4 py-2">
           <Markdown text={message.text} />
         </div>
       </div>

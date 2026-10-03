@@ -41,7 +41,7 @@ export function MetricsTable({ groups, groupBy }: { groups: MetricGroupInfo[]; g
       <h2 className="text-sm">
         <Rule title="All models" right={`${groupBy === "model" ? "by model · thinking" : "by model · thinking · agent"} · sorted by runs`} />
       </h2>
-      <div className="max-h-96 overflow-auto rounded-xl border">
+      <div className="max-h-96 overflow-auto rounded-md border">
         <table className="w-full border-collapse text-sm">
           <thead className="sticky top-0 bg-popover text-xs text-muted-foreground">
             <tr>

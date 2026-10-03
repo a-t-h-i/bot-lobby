@@ -1,7 +1,7 @@
 /**
  * The redesign's own behaviour: the droplet that slides between tab pills, the
  * effort slider that skips what a model cannot do, one pop-up and one toast at
- * a time, and the floating composer taking files.
+ * a time, the zen palettes and shapes, and the composer taking files.
  */
 import { expect, openScenario, test } from "./fixture.ts";
 
@@ -178,15 +178,38 @@ test("Plan, Quick fix and an open task each give the composer its own target", a
   }
 });
 
-test("calm light and dark palettes both draw glass over a wash", async ({ page, server }) => {
+test("zen palettes: paper in light, charcoal in dark, one 6px radius, composer clear of the page", async ({ page, server }) => {
   await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
   const look = await page.evaluate(() => {
-    const body = getComputedStyle(document.body);
-    const glass = getComputedStyle(document.querySelector(".glass"));
-    return { image: body.backgroundImage, blur: glass.backdropFilter };
+    const rgb = (el: any) => getComputedStyle(el).backgroundColor.match(/\d+/g)!.map(Number);
+    const dark = document.documentElement.classList.contains("dark");
+    const card = document.querySelector("#main section");
+    const box = (el: any) => el.getBoundingClientRect();
+    const composer = box(document.querySelector("#composer-text").closest(".group\\/composer"));
+    const main = box(document.querySelector("#main"));
+    const inactive = [...document.querySelectorAll('[role="tab"][aria-selected="false"]')][0] as any;
+    const active = document.querySelector('[role="tablist"] > span') as any;
+    return {
+      dark,
+      page: rgb(document.body),
+      cardRadius: getComputedStyle(card).borderTopLeftRadius,
+      inputRadius: getComputedStyle(document.querySelector("#composer-text").closest(".group\\/composer")).borderTopLeftRadius,
+      gap: composer.top - main.bottom,
+      inactiveBorder: getComputedStyle(inactive).borderTopWidth,
+      pillRadius: getComputedStyle(active).borderTopLeftRadius,
+      body: getComputedStyle(document.body).backgroundImage,
+    };
   });
-  expect(look.image).toContain("radial-gradient");
-  expect(look.blur).toContain("blur");
+  const [r, g, b] = look.page as [number, number, number];
+  if (look.dark) expect(Math.max(r, g, b), "charcoal is dark").toBeLessThan(60);
+  else expect(Math.min(r, g, b), "paper is light").toBeGreaterThan(230);
+  expect(look.body, "flat page, no wash").toBe("none");
+  expect(look.cardRadius).toBe("6px");
+  expect(look.inputRadius).toBe("6px");
+  expect(look.inactiveBorder, "inactive tabs are plain text").toBe("0px");
+  expect(look.pillRadius, "the active pill has 10px corners").toBe("10px");
+  expect(look.gap, "the composer never touches the page above it").toBeGreaterThanOrEqual(2);
 });
 
 test("Activity and Thinking fold down to their title bar and open again", async ({ page, server }) => {

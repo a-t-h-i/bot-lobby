@@ -19,7 +19,7 @@ function Notes({ job }: { job: QuickFixJob }) {
   return (
     <>
       {job.route ? <p className="text-sm text-muted-foreground">Routed {job.route}</p> : null}
-      {job.note && held ? <p className="rounded-xl bg-warning/10 px-3 py-2 text-sm text-foreground">Held: {job.note}.</p> : null}
+      {job.note && held ? <p className="rounded-md bg-warning/10 px-3 py-2 text-sm text-foreground">Held: {job.note}.</p> : null}
       {job.note && !held ? <p className="text-sm text-muted-foreground">{job.routed ? `Routed here by the oracle — ${job.note}` : job.note}</p> : null}
       {job.routed && !job.note ? <p className="text-sm text-muted-foreground">Routed here by the oracle.</p> : null}
     </>
@@ -103,7 +103,7 @@ export function JobDetail({ job, now }: { job: QuickFixJob; now: number }) {
           </ul>
         </Section>
       ) : null}
-      {job.error ? <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{job.error}</p> : null}
+      {job.error ? <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{job.error}</p> : null}
       {job.report ? (
         <Section title="Report">
           <Markdown text={job.report} />

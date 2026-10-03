@@ -33,7 +33,7 @@ function Notes({ notes }: { notes: string[] }) {
   return (
     <>
       {notes.map((note, index) => (
-        <p key={index} className="ml-6 rounded-xl bg-accent px-3 py-1.5 text-sm text-foreground italic">
+        <p key={index} className="ml-6 rounded-md bg-accent px-3 py-1.5 text-sm text-foreground italic">
           {note}
         </p>
       ))}
@@ -57,7 +57,7 @@ function Line({ row, notes, onComment }: LineProps) {
           {notes.length > 0 ? <span className="size-2 rounded-full bg-primary" /> : null}
         </span>
         <div
-          className={cn("min-w-0 flex-1 cursor-pointer rounded-xl px-2 py-1.5 transition-colors hover:bg-accent/50", row.fenced && "font-mono text-sm whitespace-pre-wrap break-words")}
+          className={cn("min-w-0 flex-1 cursor-pointer rounded-md px-2 py-1.5 transition-colors hover:bg-accent/50", row.fenced && "font-mono text-sm whitespace-pre-wrap break-words")}
           onClick={(event) => !(event.target as HTMLElement).closest("a") && open()}
         >
           {row.fenced ? row.text : <Markdown text={row.text} />}
