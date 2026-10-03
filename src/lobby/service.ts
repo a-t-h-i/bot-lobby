@@ -1,13 +1,12 @@
 /**
- * The lobby's backend, without the terminal: every host member the view
- * needs that does not draw anything. `createLobbyService(state)` builds it
- * from the same state the terminal lobby runs on, so a later web server can
- * drive the lobby through this module without a TUI. Putting a question on
- * screen stays with the terminal; the dialog data and its answer live here.
+ * The lobby's backend: `createLobbyService(state)` builds the service the web
+ * server drives from the runtime's state. Questions go to the page through
+ * the prompt hub (see ../ask/web.ts).
  */
 import { SessionManager, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { loadTask, peekTasks } from "../state/persistence.ts";
+import { releaseAttachments } from "../state/attachments.ts";
 import { loadConfig, saveConfig as writeConfig } from "../state/project.ts";
 import { addPlanComment, readPlanComments } from "../state/comments.ts";
 import { isAutoMode } from "../state/auto.ts";
@@ -16,7 +15,7 @@ import { livePresence } from "../state/presence.ts";
 import { archiveTask as archiveTaskOnDisk, deleteTask as deleteTaskOnDisk, listArchivedTasks, restoreTask as restoreTaskOnDisk } from "../state/archive.ts";
 import { discardPlannedTask, listPlannedTasks, type PlannedTask } from "../state/backlog.ts";
 import { readClassifierMetrics, readMetrics } from "../state/metrics.ts";
-import { currentZenTask, isMinimized, taskSnapshot } from "../pi/ui.ts";
+import { currentZenTask, taskSnapshot } from "../pi/ui.ts";
 import { taskName } from "../text.ts";
 import { describeWorkspace } from "../execution/workspace.ts";
 import { stripStartFlags } from "../pi/start-flags.ts";
@@ -29,20 +28,17 @@ import { chatFromEntries, lobbyFeed, type ChatEntry } from "./feed.ts";
 import { classifier, effortFor, hintsFor } from "../classifier/instance.ts";
 import { launchPi, SessionRegistry, type BackgroundSession, type DialogAnswer, type SessionLauncher } from "./sessions.ts";
 import { SessionChats } from "./session-files.ts";
-import { answerMessage, askUser, questionnaires, settledQuestions, type Asker } from "./ask.ts";
+import { answerMessage, questionnaires, settledQuestions } from "./ask.ts";
+import { askUser } from "../ask/web.ts";
+import type { Asker } from "../ask/types.ts";
 import { PlanningSession, type PlannerSeed } from "./planner.ts";
+import { applyMasterModel } from "../pi/model-settings.ts";
 import { lobbyTopics } from "./topics.ts";
-import { promptHub } from "./prompt-hub.ts";
 import { checkSession } from "../excalidraw/check.ts";
 import type { LobbyAgentKind, PanelMember } from "../schemas/configuration.ts";
-import type { LiveSession, LobbyHost, SwitchTarget } from "./view.ts";
+import type { LiveSession, LobbyService, SwitchTarget } from "./host.ts";
+import { pushNotice, type NoticeLevel } from "../webui/notices.ts";
 import type { Runtime } from "./runtime.ts";
-
-/**
- * The lobby without its terminal-only members (rows, theme, hide,
- * requestRender, now, keys, panels, savePanels, editText, openSettings).
- */
-export type LobbyService = Omit<LobbyHost, "rows" | "theme" | "hide" | "requestRender" | "now" | "keys" | "panels" | "savePanels" | "editText" | "openSettings">;
 
 /** The state background callbacks report to; set while the lobby service runs. */
 let serviceState: Runtime | undefined;
@@ -52,36 +48,14 @@ export function setServiceState(state: Runtime | undefined): void {
   serviceState = state;
 }
 
-/** Repaints asked for by what happens in the background come at most this often. */
-export const FRAME_MS = 40;
-let lastFrame = 0;
-let frameTimer: ReturnType<typeof setTimeout> | undefined;
-
 /**
- * Repaint the lobby for something that happened in the background. A reply
- * streams dozens of events a second; they share frames, at most one per
- * `FRAME_MS`, instead of each asking for its own. Keys repaint at once
- * through pi.
+ * Tell the user: a toast in the page, and in pi's own terminal too when it is
+ * a warning or an error (the page may not be open).
  */
-export function repaintLobby(): void {
-  const state = serviceState;
-  // Hidden, only the one-line status under the editor changes.
-  if (!state || (!state.visible && !miniShown(state)) || frameTimer) return;
-  const wait = lastFrame + FRAME_MS - Date.now();
-  const paint = () => {
-    frameTimer = undefined;
-    lastFrame = Date.now();
-    const current = serviceState;
-    if (current?.visible || (current && miniShown(current))) current.tui?.requestRender();
-  };
-  if (wait <= 0) return paint();
-  frameTimer = setTimeout(paint, wait);
-  frameTimer.unref?.();
-}
-
-/** The status line shows under the editor while the lobby is hidden (not while bot-lobby is minimized), unless settings turn it off. */
-export function miniShown(state: Runtime): boolean {
-  return !state.visible && !isMinimized() && loadConfig().lobby.miniLine;
+export function lobbyNotify(state: Runtime, message: string, level: "info" | "warning" | "error" = "info"): void {
+  lobbyTopics.bump("notices");
+  pushNotice(message, level as NoticeLevel);
+  if (level !== "info") state.ctx.ui.notify(message, level);
 }
 
 function sessionModel(ctx: ExtensionContext): string | undefined {
@@ -92,7 +66,7 @@ export function lobbyProfile(state: Runtime, kind: LobbyAgentKind) {
   return resolveLobbyProfile(loadConfig(), kind, {
     lookup: modelLookup(state.ctx),
     sessionModel: sessionModel(state.ctx),
-    warn: (message) => state.ctx.ui.notify(message, "warning"),
+    warn: (message) => lobbyNotify(state, message, "warning"),
   });
 }
 
@@ -118,15 +92,14 @@ function addComment(state: Runtime, taskId: string, text: string): string {
 
 function failed(state: Runtime, what: string, error: Error): void {
   lobbyFeed.log("LOBBY", `${what} — ${error.message}`, "error");
-  lobbyTopics.bump("notices");
-  state.ctx.ui.notify(`bot-lobby: ${what} — ${error.message}`, "error");
+  lobbyNotify(state, `bot-lobby: ${what} — ${error.message}`, "error");
 }
 
 function toOracle(state: Runtime, text: string): string | undefined {
   const busy = !state.ctx.isIdle();
   if (text.startsWith("/")) {
     state.pi.sendUserMessage(text, { expandPromptTemplates: true, ...(busy ? { deliverAs: "followUp" as const } : {}) });
-    return `sent ${text.split(/\s+/)[0]} to pi (built-in commands need the lobby hidden: alt+l)`;
+    return `sent ${text.split(/\s+/)[0]} to pi`;
   }
   // While the oracle decides where a request goes, what the user types joins that conversation.
   if (!currentZenTask() && !pendingRequest()) {
@@ -143,9 +116,7 @@ function startPlanned(state: Runtime, plan: PlannedTask): string {
   startPlannedTask(state.pi, state.ctx, state.configDir, plan.id)
     .then((task) => {
       if (typeof task === "string") return failed(state, `could not start ${plan.id}`, new Error(task));
-      state.view?.setTab("lobby");
       lobbyTopics.bump("tasks");
-      repaintLobby();
     })
     .catch((error: Error) => failed(state, `could not start ${plan.id}`, error));
   return `starting ${plan.id} here — its agreed plan needs no approval…`;
@@ -167,10 +138,7 @@ const chats = new SessionChats(async () => {
   if (!dirs.has(state.root)) dirs.set(state.root, undefined);
   const lists = await Promise.all([...dirs].map(([cwd, dir]) => SessionManager.list(cwd, dir).catch(() => [])));
   return lists.flat();
-}, () => {
-  lobbyTopics.bump("sessions");
-  repaintLobby();
-});
+}, () => lobbyTopics.bump("sessions"));
 
 /** Launch background sessions with something else (tests); resets the registry. */
 export function setSessionLauncher(next: SessionLauncher | undefined): void {
@@ -199,7 +167,7 @@ export function backgroundSessions(): readonly BackgroundSession[] {
   return registry?.sessions ?? [];
 }
 
-/** A background session changed: redraw, and say so when one asks something or fails while the lobby is hidden. */
+/** A background session changed: say so when one asks something or fails. */
 function sessionsChanged(): void {
   lobbyTopics.bump("sessions");
   const state = serviceState;
@@ -207,20 +175,13 @@ function sessionsChanged(): void {
     if (session.sessionId && session.sessionFile) chats.remember(session.sessionId, session.sessionFile);
     const seen = announced.get(session.key) ?? 0;
     announced.set(session.key, session.dialogs.length);
-    if (!state || state.visible) continue;
-    if (session.dialogs.length > seen) {
-      lobbyTopics.bump("notices");
-      state.ctx.ui.notify(`bot-lobby: ${session.name} is waiting for you — alt+l opens the lobby`, "info");
-    }
+    if (!state) continue;
+    if (session.dialogs.length > seen) lobbyNotify(state, `bot-lobby: ${session.name} is waiting for you — see the Sessions page`, "info");
     if (!session.alive && !exitsSaid.has(session.key)) {
       exitsSaid.add(session.key);
-      if (session.exitCode) {
-        lobbyTopics.bump("notices");
-        state.ctx.ui.notify(`bot-lobby: ${session.name} exited (${session.exitCode})${session.lastError() ? `: ${session.lastError()}` : ""}`, "warning");
-      }
+      if (session.exitCode) lobbyNotify(state, `bot-lobby: ${session.name} exited (${session.exitCode})${session.lastError() ? `: ${session.lastError()}` : ""}`, "warning");
     }
   }
-  repaintLobby();
 }
 
 /** Start a task in its own new pi session, named after the task; the session, or why not. */
@@ -242,39 +203,6 @@ function startSession(state: Runtime, start: { request?: string; plan?: PlannedT
     return session;
   } catch (error) {
     return `could not start a new session — ${(error as Error).message}`;
-  }
-}
-
-/** The oldest question a background session waits on, if any (data only; the terminal draws it). */
-export function peekSessionDialog(session: BackgroundSession) {
-  return session.dialogs[0];
-}
-
-/** Answer a background session's dialog (data only; the terminal draws it). */
-export function answerSessionDialog(session: BackgroundSession, id: string, answer: DialogAnswer): void {
-  session.answer(id, answer);
-}
-
-/** Put the oldest question a background session waits on to the user, with pi's own dialogs; escape cancels it as it would there. */
-async function answerDialog(state: Runtime, session: BackgroundSession): Promise<void> {
-  const dialog = peekSessionDialog(session);
-  if (!dialog) return;
-  const title = `${session.name} — ${dialog.title}`;
-  const ui = state.ctx.ui;
-  try {
-    await promptHub.run("sessionDialog", session.name, { dialog }, async () => {
-      if (dialog.method === "select") {
-        const value = await ui.select(title, dialog.options ?? []);
-        answerSessionDialog(session, dialog.id, value === undefined ? { cancelled: true } : { value });
-      } else if (dialog.method === "confirm") {
-        answerSessionDialog(session, dialog.id, { confirmed: await ui.confirm(title, dialog.message ?? "") });
-      } else {
-        const value = dialog.method === "input" ? await ui.input(title, dialog.placeholder) : await ui.editor(title, dialog.prefill);
-        answerSessionDialog(session, dialog.id, value === undefined ? { cancelled: true } : { value });
-      }
-    });
-  } catch (error) {
-    failed(state, `could not answer ${session.name}`, error as Error);
   }
 }
 
@@ -350,16 +278,6 @@ function sendToSession(state: Runtime, sessionId: string, text: string): string 
   return "sent — that session passes it to its oracle within a few seconds";
 }
 
-/** The lobby reopens on the session this window switches to (set just before asking pi to switch). */
-let reopenAfterSwitch = false;
-
-/** Whether a switch asked for from the lobby is still owed its reopen; clears the flag. */
-export function takeReopenAfterSwitch(): boolean {
-  const value = reopenAfterSwitch;
-  reopenAfterSwitch = false;
-  return value;
-}
-
 /**
  * Run another session in this window through `/bot-lobby switch`, which pi
  * runs with a command context (the only one that may replace the session).
@@ -367,9 +285,8 @@ export function takeReopenAfterSwitch(): boolean {
  * task no session owns is claimed instead.
  */
 async function switchTo(state: Runtime, target: SwitchTarget): Promise<string> {
-  if (!state.ctx.isIdle()) return "this window's oracle is working — esc stops it, then switch";
+  if (!state.ctx.isIdle()) return "this window's oracle is working — stop it, then switch";
   if (target.claimTaskId) {
-    reopenAfterSwitch = false;
     state.pi.sendUserMessage(`/bot-lobby claim ${target.claimTaskId}`, { expandPromptTemplates: true });
     return `taking ${target.claimTaskId} over in this window`;
   }
@@ -380,7 +297,6 @@ async function switchTo(state: Runtime, target: SwitchTarget): Promise<string> {
   }
   file ??= target.sessionId ? await chats.locate(target.sessionId) : undefined;
   if (!file) return `could not find ${target.name}'s session file — /resume lists every saved session`;
-  reopenAfterSwitch = true;
   state.pi.sendUserMessage(`/bot-lobby switch ${file}`, { expandPromptTemplates: true });
   return `switching this window to ${target.name}…`;
 }
@@ -390,7 +306,7 @@ function drivenElsewhere(state: Runtime, task: Task): string | undefined {
   if (TERMINAL_STATES.includes(task.state) || !task.ownerSessionId) return undefined;
   if (task.ownerSessionId === state.ctx.sessionManager.getSessionId()) return `this window drives ${task.id} — cancel it first (/bot-lobby cancel ${task.id})`;
   const background = backgroundSessions().find((session) => session.alive && session.sessionId === task.ownerSessionId);
-  if (background) return `${background.name} is driving ${task.id} in the background — stop it first (x x)`;
+  if (background) return `${background.name} is driving ${task.id} in the background — stop it first`;
   if (liveSessions(state).some((session) => session.sessionId === task.ownerSessionId)) return `a session in another terminal is driving ${task.id} — finish or cancel it there first`;
   return undefined;
 }
@@ -402,12 +318,13 @@ function archiveTask(state: Runtime, taskId: string): string {
   if (busy) return busy;
   try {
     archiveTaskOnDisk(state.root, state.configDir, taskId);
+    releaseAttachments(taskId);
   } catch (error) {
     return (error as Error).message;
   }
   lobbyFeed.log("LOBBY", `archived ${taskId}`, "info");
   lobbyTopics.bump("tasks");
-  return `archived ${taskId}${TERMINAL_STATES.includes(task.state) ? "" : " (abandoned first)"} — v shows archived tasks, a restores one`;
+  return `archived ${taskId}${TERMINAL_STATES.includes(task.state) ? "" : " (abandoned first)"} — show archived tasks to restore it`;
 }
 
 function restoreTask(state: Runtime, taskId: string): string {
@@ -430,6 +347,7 @@ function deleteTask(state: Runtime, taskId: string, where: "list" | "archive"): 
   }
   try {
     deleteTaskOnDisk(state.root, state.configDir, taskId, where);
+    releaseAttachments(taskId);
   } catch (error) {
     return (error as Error).message;
   }
@@ -443,7 +361,7 @@ export function reviewProfile(state: Runtime) {
   return resolveReviewProfile(loadConfig(), {
     lookup: modelLookup(state.ctx),
     sessionModel: sessionModel(state.ctx),
-    warn: (message) => state.ctx.ui.notify(message, "warning"),
+    warn: (message) => lobbyNotify(state, message, "warning"),
   });
 }
 
@@ -451,7 +369,7 @@ export function seatProfile(state: Runtime, member: PanelMember) {
   return resolvePanelProfile(loadConfig(), member, {
     lookup: modelLookup(state.ctx),
     sessionModel: sessionModel(state.ctx),
-    warn: (message) => state.ctx.ui.notify(message, "warning"),
+    warn: (message) => lobbyNotify(state, message, "warning"),
   });
 }
 
@@ -473,20 +391,13 @@ function newPlanner(state: Runtime, seed?: PlannerSeed, seats?: readonly PanelMe
     stallTimeoutMs: workflow.stallTimeoutMs,
     toolStallTimeoutMs: workflow.toolStallTimeoutMs,
     feed: lobbyFeed,
-    onChange: () => {
-      lobbyTopics.bump("planner");
-      repaintLobby();
-    },
-    onRound: (session) => {
-      lobbyTopics.bump("planner");
-      // Put the questions to the user at once when they are looking at the Plan tab.
-      if (loadConfig().lobby.autoAsk && state.visible && state.view?.tab === "plan" && session.awaitingAnswers) void answerPanel(state);
-    },
+    onChange: () => lobbyTopics.bump("planner"),
+    onRound: () => lobbyTopics.bump("planner"),
   }, seed);
   return state.planner;
 }
 
-/** The questionnaire (pi's own dialogs where it cannot be drawn); tests swap it. */
+/** The questionnaire in the page; tests swap it. */
 function panelAsker(state: Runtime): Asker {
   return state.asker ?? askUser;
 }
@@ -504,10 +415,10 @@ export async function savePlan(state: Runtime | undefined): Promise<string> {
   state.asking = true;
   try {
     const asker = panelAsker(state);
-    return await session.saveWithSplit((questions, signal) => promptHub.run("questionnaire", "planner", { questions }, () => asker(questions, state.ctx, signal), { signal }), { splitAbove: loadConfig().lobby.splitPlanAbove });
+    return await session.saveWithSplit((questions, signal) => asker(questions, state.ctx, signal, "planner"), { splitAbove: loadConfig().lobby.splitPlanAbove });
   } finally {
     state.asking = false;
-    repaintLobby();
+    lobbyTopics.bump("planner");
   }
 }
 
@@ -529,10 +440,9 @@ export async function answerPanel(state: Runtime | undefined): Promise<string> {
     const chunks = questionnaires(session.questions);
     for (let index = session.answered.length; index < chunks.length; index++) {
       const questions = chunks[index]!;
-      const result = await promptHub.run("questionnaire", "planner", { questions }, () => asker(questions, state.ctx));
+      const result = await asker(questions, state.ctx, undefined, "planner");
       if (result.cancelled) {
-        repaintLobby();
-        return session.answered.length > 0 ? `answers kept — ${chunks.length - session.answered.length} questionnaire${chunks.length - session.answered.length === 1 ? "" : "s"} left; enter resumes` : "questions put away — enter brings them back";
+        return session.answered.length > 0 ? `answers kept — ${chunks.length - session.answered.length} questionnaire${chunks.length - session.answered.length === 1 ? "" : "s"} left; answer again to resume` : "questions put away — answer again to bring them back";
       }
       session.answered = [...session.answered, result];
     }
@@ -547,7 +457,7 @@ export async function answerPanel(state: Runtime | undefined): Promise<string> {
     return `could not put the questions: ${(error as Error).message}`;
   } finally {
     state.asking = false;
-    repaintLobby();
+    lobbyTopics.bump("planner");
   }
 }
 
@@ -560,7 +470,6 @@ function refreshWorkspace(state: Runtime): void {
       if (serviceState !== state || (info.name === state.workspace.name && info.branch === state.workspace.branch)) return;
       state.workspace = info;
       lobbyTopics.bump("status");
-      repaintLobby();
     })
     .catch(() => {})
     .finally(() => {
@@ -570,6 +479,11 @@ function refreshWorkspace(state: Runtime): void {
 
 /** The lobby's backend for `state`: every host member that draws nothing. */
 export function createLobbyService(state: Runtime): LobbyService {
+  const masterKey = () => {
+    const { master } = loadConfig();
+    return `${master.model}|${master.thinking}`;
+  };
+  let appliedMaster = masterKey();
   return {
     sessionId: () => state.ctx.sessionManager.getSessionId(),
     zen: () => {
@@ -600,8 +514,15 @@ export function createLobbyService(state: Runtime): LobbyService {
     planningRounds: () => loadConfig().lobby.maxPlanningRounds,
     config: () => loadConfig(),
     saveConfig: (next) => writeConfig(next),
-    configChanged: () => state.view?.reloadConfig(),
-    models: () => {
+    configChanged: () => {
+      lobbyTopics.bump("status");
+      // A new master model or effort takes hold in this session at once.
+      const next = masterKey();
+      if (next === appliedMaster) return;
+      appliedMaster = next;
+      void applyMasterModel(state.pi, state.ctx, loadConfig()).catch((error: Error) => lobbyNotify(state, `bot-lobby: could not apply the master model — ${error.message}`, "warning"));
+    },
+    sessionModel: () => sessionModel(state.ctx),    models: () => {
       try {
         const scoped = state.ctx.scopedModels;
         const usable = scoped.length > 0 ? scoped.map((entry) => entry.model) : state.ctx.modelRegistry.getAvailable();
@@ -637,7 +558,6 @@ export function createLobbyService(state: Runtime): LobbyService {
     sessionName: () => state.pi.getSessionName(),
     sessions: () => backgroundSessions(),
     startSession: (start) => startSession(state, start),
-    answerDialog: (session) => answerDialog(state, session),
     isAuto: (taskId) => autoFor(state, taskId),
     setAuto: (taskId, on) => switchAuto(state, taskId, on),
     sendToTask: (taskId, text) => sendToTask(state, taskId, text),

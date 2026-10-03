@@ -1,5 +1,5 @@
 /**
- * One knowledge file's detail (batch-2 §l): its entries with `▸` on the
+ * One knowledge file's detail: its entries with `▸` on the
  * picked one, the notes under the entries they are about, and `Notes on
  * entries that changed` at the end. The picked entry can be edited, commented
  * on, deleted or added after; the whole file can be replaced. Every write
@@ -7,6 +7,7 @@
  * file comes back fresh.
  */
 import { useState } from "react"
+import { PencilLine } from "lucide-react"
 import type { KnowledgeEntryInfo, KnowledgeNoteInfo, KnowledgeViewData } from "@protocol"
 import { useApiRead } from "@/app/useApiRead"
 import { Button } from "@/components/ui/button"
@@ -29,9 +30,7 @@ function NoteLine({ note, about, onTakeBack, busy }: { note: KnowledgeNoteInfo; 
   const text = about ? `about "${about.replace(/\s+/g, " ").trim().slice(0, 50)}": ${note.text}` : note.text
   return (
     <li className="flex items-start gap-2 text-sm text-muted-foreground">
-      <span className="shrink-0 text-primary" aria-hidden="true">
-        ✎
-      </span>
+      <PencilLine aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-primary" />
       <span className="min-w-0 flex-1 break-words">{text}</span>
       <Button variant="ghost" className="h-10 shrink-0 text-xs" disabled={busy} onClick={() => onTakeBack(note.id)}>
         Take back
@@ -69,18 +68,15 @@ function EntryRow({
         event.preventDefault()
         pick()
       }}
-      className={selected ? "flex min-h-11 cursor-pointer flex-col gap-1 rounded-md bg-accent p-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50" : "flex min-h-11 cursor-pointer flex-col gap-1 rounded-md p-2 outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50"}
+      className={selected ? "flex min-h-11 cursor-pointer flex-col gap-1 rounded-lg bg-accent p-2.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/30" : "flex min-h-11 cursor-pointer flex-col gap-1 rounded-lg p-2.5 outline-none transition-colors hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/30"}
     >
       <div className="flex gap-2">
-        <span className={selected ? "shrink-0 text-primary" : "shrink-0 text-muted-foreground"} aria-hidden="true">
-          {selected ? "▸" : " "}
-        </span>
         <div className="min-w-0 flex-1">
           <Markdown text={entry.text} />
         </div>
       </div>
       {notes.length > 0 ? (
-        <ul className="flex flex-col gap-1 pl-4">
+        <ul className="flex flex-col gap-1 pl-1">
           {notes.map((note) => (
             <NoteLine key={note.id} note={note} onTakeBack={onTakeBack} busy={busy} />
           ))}
@@ -107,7 +103,7 @@ function Header({ view }: { view: KnowledgeViewData }) {
   const entries = view.entries.length
   return (
     <header className="flex flex-col gap-1">
-      <h2 className="text-sm font-bold">
+      <h2 className="text-sm font-semibold">
         {AGENT_DIR_NAMES[view.agent]} · {view.file}
       </h2>
       <p className="text-xs text-muted-foreground">
@@ -122,13 +118,13 @@ function Actions({ draft, picked, setDraft, onEditFile, onDelete }: { draft?: Dr
   const off = Boolean(draft)
   return (
     <div className="flex flex-wrap gap-2">
-      <Button variant="outline" className="h-10" disabled={off || !picked} onClick={() => setDraft({ kind: "edit", entry: picked })}>
+      <Button variant="outline" disabled={off || !picked} onClick={() => setDraft({ kind: "edit", entry: picked })}>
         Edit
       </Button>
-      <Button variant="outline" className="h-10" disabled={off} onClick={() => setDraft({ kind: "add", entry: picked })}>
+      <Button variant="outline" disabled={off} onClick={() => setDraft({ kind: "add", entry: picked })}>
         {picked ? "Add after" : "Add entry"}
       </Button>
-      <Button variant="outline" className="h-10" disabled={off || !picked} onClick={() => setDraft({ kind: "comment", entry: picked })}>
+      <Button variant="outline" disabled={off || !picked} onClick={() => setDraft({ kind: "comment", entry: picked })}>
         Comment
       </Button>
       <ConfirmButton
@@ -140,7 +136,7 @@ function Actions({ draft, picked, setDraft, onEditFile, onDelete }: { draft?: Dr
         disabled={off || !picked}
         onConfirm={onDelete}
       />
-      <Button variant="outline" className="h-10" disabled={off} onClick={onEditFile}>
+      <Button variant="outline" disabled={off} onClick={onEditFile}>
         Edit file
       </Button>
     </div>

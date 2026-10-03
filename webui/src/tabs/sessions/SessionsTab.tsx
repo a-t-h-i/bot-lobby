@@ -1,22 +1,22 @@
 /**
- * The Sessions page (`alt+o`, batch-2 §i): this window, the background
- * sessions it started and live sessions in other terminals, beside the picked
- * one's conversation (a Sheet below 1024 px), with a box that starts a task in
- * a new session and links to other windows' web UIs. `#/sessions/<key>` picks
+ * The Sessions page (`alt+o`): this window, the background sessions it
+ * started and live sessions in other terminals, beside the picked one's
+ * conversation (a sheet below 1024 px). The floating box messages the picked
+ * session or starts a task in a new one; other windows' web UIs are linked. `#/sessions/<key>` picks
  * one; the list is read again on every `sessions` topic change.
  */
+import { useEffect } from "react"
 import { go } from "@/app/router"
 import { ErrorState } from "@/app/States"
 import { useTopic } from "@/app/hooks"
 import { useApiRead } from "@/app/useApiRead"
-import { act } from "@/lib/act"
+import { setComposerSession } from "@/lib/composerContext"
 import type { LobbySnapshot, StatusInfo } from "@protocol"
-import { NoteForm } from "@/ui/NoteForm"
-import { ListSkeleton, PaneHeader, SplitPane, useWide, Pane } from "@/ui/SplitPane"
+import { ListSkeleton, PaneHeader, SplitPane, useWide } from "@/ui/SplitPane"
 import { Section } from "@/ui/Section"
 import { SessionDetail } from "./SessionDetail"
 import { SessionList } from "./SessionList"
-import { NO_OTHERS, STARTER_LABEL, buildEntries, type Entry } from "./words"
+import { NO_OTHERS, addressOf, buildEntries, type Entry } from "./words"
 
 const close = () => go("#/sessions")
 const select = (id: string) => go(`#/sessions/${encodeURIComponent(id)}`)
@@ -33,7 +33,7 @@ function Windows({ windows }: { windows: StatusInfo["windows"] }) {
                 href={window.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex min-h-10 items-center rounded-md px-2 text-sm text-foreground underline underline-offset-4 hover:bg-muted"
+                className="flex min-h-10 items-center rounded-lg px-2 text-sm text-foreground underline underline-offset-4 hover:bg-muted"
               >
                 {window.name}
               </a>
@@ -42,21 +42,6 @@ function Windows({ windows }: { windows: StatusInfo["windows"] }) {
         </ul>
       </Section>
     </div>
-  )
-}
-
-function StartBox({ onStarted }: { onStarted: () => void }) {
-  const start = async (request: string) => {
-    const result = await act("sessions.start", { request })
-    if (!result) return false
-    onStarted()
-    if (result.key) select(result.key)
-    return true
-  }
-  return (
-    <Pane className="mx-4 mb-4 shrink-0 p-3">
-      <NoteForm label={STARTER_LABEL} hint="Enter starts it · Shift+Enter adds a line" buttonLabel="Start session" onSend={start} />
-    </Pane>
   )
 }
 
@@ -74,6 +59,15 @@ export function SessionsTab({ id }: { id?: string }) {
   const entries = buildEntries(status, lobby, asked, read.data?.background ?? [], read.data?.live ?? [])
   const chosen = id ?? (wide ? entries[0]?.id : undefined)
   const picked: Entry | undefined = entries.find((entry) => entry.id === chosen)
+  // The floating box can message the picked session (this window's own goes to its oracle).
+  const address = picked && picked.where !== "this window" && picked.alive ? addressOf(picked) : undefined
+  const addressKey = address ? JSON.stringify(address) : ""
+  const pickedName = picked?.name
+  useEffect(() => {
+    setComposerSession(address && pickedName ? { name: pickedName, address } : undefined)
+    return () => setComposerSession(undefined)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addressKey, pickedName])
   const list = (
     <>
       <PaneHeader title="Sessions" count={String(entries.length)} />
@@ -83,10 +77,5 @@ export function SessionsTab({ id }: { id?: string }) {
     </>
   )
   const detail = picked ? <SessionDetail key={picked.id} entry={picked} lobby={lobby} onChanged={read.reload} /> : id ? <Missing /> : null
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <SplitPane wide={wide} list={list} detail={detail} open={Boolean(id)} onClose={close} hint="Select a session to see its conversation." describe="Session detail" />
-      <StartBox onStarted={read.reload} />
-    </div>
-  )
+  return <SplitPane wide={wide} list={list} detail={detail} open={Boolean(id)} onClose={close} hint="Select a session to see its conversation." describe="Session detail" />
 }

@@ -14,7 +14,7 @@ import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { transition } from "../state/task-state.ts";
 import { shortTitle } from "../text.ts";
 import { applyStatus } from "./ui.ts";
-import { applyMasterModel } from "./settings-ui.ts";
+import { applyMasterModel } from "./model-settings.ts";
 import { setAutoMode } from "../state/auto.ts";
 import { listPlannedTasks, loadPlannedTask, markPlannedTaskStarted, plannedTaskRequest, type PlannedTask } from "../state/backlog.ts";
 import { triageFor } from "../classifier/instance.ts";

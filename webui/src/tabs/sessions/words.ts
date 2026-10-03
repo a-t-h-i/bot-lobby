@@ -1,15 +1,13 @@
 /**
- * The Sessions page's wording and entry model, copied from the session
- * browser in `src/lobby/view.ts` (`SECTION_OF`, `WHERE_MARKS`,
- * `sessionEntries`, `sessionPreview`, `otherSessionBody`), which the page
- * cannot import. "Not running" tasks are the Tasks tab's business here.
+ * The Sessions page's wording and entry model: this window, the background
+ * sessions it started and the sessions running in other terminals. "Not
+ * running" tasks are the Tasks tab's business here.
  */
 import type { BackgroundSessionInfo, LiveSession, LobbySnapshot, SessionDialog, StatusInfo } from "@protocol"
 
 export type Where = "this window" | "background" | "other terminal"
 
-export const SECTION_OF: Record<Where, string> = { "this window": "THIS WINDOW", background: "BACKGROUND", "other terminal": "OTHER TERMINALS" }
-export const WHERE_MARKS: Record<Where, string> = { "this window": "●", background: "◆", "other terminal": "◇" }
+export const SECTION_OF: Record<Where, string> = { "this window": "This window", background: "Background", "other terminal": "Other terminals" }
 export const SECTION_ORDER: readonly Where[] = ["this window", "background", "other terminal"]
 
 export const NOTHING_SAID = "Nothing said yet."
@@ -79,9 +77,9 @@ export function buildEntries(
   return [hereEntry(status, lobby, waiting), ...background.map(backgroundEntry), ...others.map(liveEntry)]
 }
 
-/** `● 2 questions waiting for you`. */
+/** `2 questions waiting for you`. */
 export function waitingText(n: number): string {
-  return `● ${n} question${n === 1 ? "" : "s"} waiting for you`
+  return `${n} question${n === 1 ? "" : "s"} waiting for you`
 }
 
 /** What a background session says when it has no conversation yet. */

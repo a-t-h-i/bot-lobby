@@ -9,8 +9,7 @@
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { Asker } from "./dialog.ts";
-import { MAX_OPTIONS, MAX_QUESTIONS, type AskQuestion, type AskResult } from "./types.ts";
+import { MAX_OPTIONS, MAX_QUESTIONS, type AskQuestion, type AskResult, type Asker } from "./types.ts";
 
 /** Env flag the master sets for a subagent that may ask the user. */
 export const ASK_ENV = "BOT_LOBBY_ASK";
