@@ -56,7 +56,7 @@ export function ActivityLog({ entries, collapsed, onToggle }: { entries: Activit
       onToggle={onToggle}
       note={running ? <><Spinner aria-hidden="true" role="presentation" className="size-3" /> {running} running</> : undefined}
     >
-      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-2 pb-3" role="log" aria-label="Activity" tabIndex={0}>
+      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-2 pt-2 pb-3" role="log" aria-label="Activity" tabIndex={0}>
         {shown.length === 0 ? (
           <p className="px-2 text-sm text-muted-foreground">No activity yet.</p>
         ) : (
