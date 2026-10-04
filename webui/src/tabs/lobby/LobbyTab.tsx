@@ -47,7 +47,7 @@ export function LobbyTab() {
   if (!data && lobby.loading) return <LobbyLoading />
   if (!data && lobby.error) return <ErrorState message={lobby.error} onRetry={() => lobbyStore.onHello({})} />
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-2">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-3 px-4 pb-2">
       <TaskHeader task={data?.task} status={status.data} />
       <RunsStrip runs={runsOf(data)} />
       {showMain ? (
@@ -70,7 +70,8 @@ export function LobbyTab() {
         </motion.div>
       ) : null}
       {panes.thinking ? (
-        <motion.div layout="position" transition={GLIDE} className="shrink-0">
+        // Capped as a share of the column, so the card can never push the panes above it out of the window.
+        <motion.div layout="position" transition={GLIDE} className="flex min-h-0 max-h-[35%] shrink-0 flex-col">
           <Thoughts thoughts={data?.thoughts ?? []} collapsed={thinkingFolded} onToggle={toggleThinking} shortcut={keyOf("thinking")} />
         </motion.div>
       ) : null}

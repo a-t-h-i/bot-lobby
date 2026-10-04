@@ -5,7 +5,7 @@
  * feed caps it at 400, so the pane slices the same way. Colour is never the
  * only signal.
  */
-import { useEffect, useRef } from "react"
+import { useCallback, useEffect, useRef } from "react"
 import { AlertTriangle, Check, X } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
@@ -42,12 +42,32 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
 export function ActivityLog({ entries, collapsed, onToggle, shortcut }: { entries: ActivityEntry[]; collapsed: boolean; onToggle: () => void; shortcut?: string }) {
   const shown = entries.slice(-CAP)
   const running = shown.filter((entry) => entry.pending).length
-  const scroller = useRef<HTMLDivElement>(null)
+  const scroller = useRef<HTMLDivElement | null>(null)
+  const seenHeight = useRef(0)
   const last = shown.at(-1)?.id
   useEffect(() => {
+    // The log always follows its newest entry, so a run's progress is never off screen.
     const el = scroller.current
-    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 96) el.scrollTop = el.scrollHeight
+    if (el) el.scrollTop = el.scrollHeight
   }, [last])
+  // Late layout, a streaming note or a resized window can grow the pane without
+  // a new entry, so re-pin whenever its content height actually changed.
+  const observe = useCallback((el: HTMLDivElement | null) => {
+    scroller.current = el
+    if (!el) return
+    seenHeight.current = el.scrollHeight
+    const observer = new ResizeObserver(() => {
+      const height = el.scrollHeight
+      if (height === seenHeight.current) return
+      seenHeight.current = height
+      el.scrollTop = height
+    })
+    observer.observe(el)
+    return () => {
+      observer.disconnect()
+      scroller.current = null
+    }
+  }, [])
   return (
     <Frame
       aria-label="Activity"
@@ -56,7 +76,7 @@ export function ActivityLog({ entries, collapsed, onToggle, shortcut }: { entrie
       onToggle={onToggle} shortcut={shortcut}
       note={running ? <><Spinner aria-hidden="true" role="presentation" className="size-3" /> {running} running</> : undefined}
     >
-      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-2 pt-2 pb-3" role="log" aria-label="Activity" tabIndex={0}>
+      <div ref={observe} className="min-h-0 flex-1 overflow-y-auto px-2 pt-2 pb-3" role="log" aria-label="Activity" tabIndex={0}>
         {shown.length === 0 ? (
           <p className="px-2 text-sm text-muted-foreground">No activity yet.</p>
         ) : (
