@@ -357,6 +357,45 @@ test("every drop-down has a search box, and the keyboard picks from it", async (
   await expect(trigger, "and gives focus back").toBeFocused();
 });
 
+test("a drop-down opens with the arrow key and its list is wide enough to read", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => {
+    window.location.hash = "#/settings";
+  });
+  const trigger = page.getByRole("combobox", { name: "Backend model" });
+  await trigger.focus();
+  await page.keyboard.press("ArrowDown");
+  const list = page.getByRole("listbox", { name: "Backend model" });
+  await expect(list, "Down opens it").toBeVisible();
+  const box = await list.boundingBox();
+  expect(box?.width ?? 0, "wider than a narrow trigger").toBeGreaterThanOrEqual(240);
+  await page.keyboard.press("Tab");
+  await expect(list, "Tab leaves it").toBeHidden();
+});
+
+test("the mascot on each agent acts out its effort level, and the page never scrolls sideways", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => {
+    window.location.hash = "#/settings";
+  });
+  const card = page.locator("section.glass", { hasText: "Backend" }).first();
+  const mascot = card.locator('[data-slot="effort-mascot"]');
+  await expect(mascot).toBeVisible();
+  await expect(mascot, "medium by default").toHaveAttribute("data-level", "medium");
+  const slider = card.getByRole("slider", { name: "Backend effort" });
+  await slider.focus();
+  await slider.press("Home");
+  await expect(mascot, "Home is the lowest: asleep").toHaveAttribute("data-level", "off");
+  await slider.press("End");
+  await expect(mascot, "End is the highest: blazing").toHaveAttribute("data-level", "max");
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow, "no sideways scroll").toBeLessThanOrEqual(0);
+  await slider.press("Home");
+  await expect(mascot).toHaveAttribute("data-level", "off");
+});
+
 test("switching tabs puts the cursor in the message box; arrowing along the tab bar keeps it on the bar", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
