@@ -11,13 +11,13 @@ import { fail } from "./index.ts";
 import { rewritePreviewImages } from "../files.ts";
 import type { WebPrompt } from "../protocol.ts";
 
-function withPreviewUrls(prompt: WebPrompt): WebPrompt {
-  return { ...prompt, payload: rewritePreviewImages(prompt.payload) };
+function withPreviewUrls(prompt: WebPrompt, root?: string): WebPrompt {
+  return { ...prompt, payload: rewritePreviewImages(prompt.payload, root) };
 }
 
 /** The questions still waiting for an answer, oldest first. */
-export function promptsList(_ctx: ApiContext): { prompts: WebPrompt[] } {
-  return { prompts: promptHub.pending().map(withPreviewUrls) };
+export function promptsList(ctx: ApiContext): { prompts: WebPrompt[] } {
+  return { prompts: promptHub.pending().map((prompt) => withPreviewUrls(prompt, ctx.service.projectRoot?.())) };
 }
 
 /** Answer a question; 409 when it is already settled or unknown. */

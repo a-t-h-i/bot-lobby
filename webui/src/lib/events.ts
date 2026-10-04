@@ -5,6 +5,7 @@
  * rereads. No DOM globals at module load, so `node:test` can inject a source.
  */
 import type { LobbyTopic, StreamEvent } from "@protocol"
+import { projectUrl } from "./project.ts"
 
 export type NoticeLevel = "info" | "success" | "warning" | "error"
 
@@ -73,7 +74,7 @@ function dispatch(event: StreamEvent, handlers: EventHandlers): void {
 
 /** Follow the stream; returns the close function. */
 export function openEvents(handlers: EventHandlers, create: EventSourceFactory = browserEventSource): () => void {
-  const source = create("/api/events")
+  const source = create(projectUrl("/api/events"))
   handlers.onConnection?.("connecting")
   source.onopen = () => handlers.onConnection?.("live")
   source.onerror = () => handlers.onConnection?.(source.readyState === CLOSED ? "offline" : "connecting")

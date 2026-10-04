@@ -7,7 +7,7 @@
 import type { ServerResponse } from "node:http";
 import { readFile, realpath } from "node:fs/promises";
 import { extname, join, relative, resolve, sep } from "node:path";
-import { tmpdir } from "node:os";
+import { previewRoot } from "../state/previews.ts";
 import { previewDir } from "../ask/relay.ts";
 import { applyBaseHeaders, HttpError, sendError } from "./api/index.ts";
 
@@ -19,20 +19,16 @@ const PREVIEW_TYPES: Record<string, string> = {
   ".webp": "image/webp",
 };
 
-function previewsRoot(): string {
-  return join(tmpdir(), "bot-lobby-previews");
-}
-
 /** Whether `task`/`name` name a file without reaching outside their folder. */
 export function isPreviewName(task: string, name: string): boolean {
-  if (!/^[\w.-]+$/.test(task) || !/^[\w.-]+$/.test(name)) return false;
+  if (!/^[\w.-]+$/.test(task) || task === "." || task === ".." || !/^[\w.-]+$/.test(name)) return false;
   const ext = extname(name).toLowerCase();
   return PREVIEW_TYPES[ext] !== undefined;
 }
 
 /** An absolute image path under the previews root as its preview URL, if it is one. */
-export function previewUrlFor(absPath: string): string | undefined {
-  const root = previewsRoot();
+export function previewUrlFor(absPath: string, projectRoot?: string): string | undefined {
+  const root = previewRoot(projectRoot);
   const resolved = resolve(absPath);
   if (resolved !== root && !resolved.startsWith(root + sep)) return undefined;
   const rel = relative(root, resolved);
@@ -42,27 +38,29 @@ export function previewUrlFor(absPath: string): string | undefined {
 }
 
 /** Every absolute preview path in a prompt payload as its preview URL. */
-export function rewritePreviewImages(payload: unknown): unknown {
-  if (typeof payload === "string") return previewUrlFor(payload) ?? payload;
-  if (Array.isArray(payload)) return payload.map(rewritePreviewImages);
+export function rewritePreviewImages(payload: unknown, root?: string): unknown {
+  if (typeof payload === "string") return previewUrlFor(payload, root) ?? payload;
+  if (Array.isArray(payload)) return payload.map((value) => rewritePreviewImages(value, root));
   if (payload && typeof payload === "object") {
-    return Object.fromEntries(Object.entries(payload as Record<string, unknown>).map(([key, value]) => [key, rewritePreviewImages(value)]));
+    return Object.fromEntries(Object.entries(payload as Record<string, unknown>).map(([key, value]) => [key, rewritePreviewImages(value, root)]));
   }
   return payload;
 }
 
 /** The preview file's bytes, jailed to its task's preview dir, or undefined when refused. */
-export async function readPreview(task: string, name: string): Promise<{ body: Buffer; type: string } | undefined> {
+export async function readPreview(task: string, name: string, root?: string): Promise<{ body: Buffer; type: string } | undefined> {
   if (!isPreviewName(task, name)) return undefined;
   let real: string;
   try {
-    real = await realpath(join(previewDir(task), name));
+    real = await realpath(join(previewDir(task, root), name));
   } catch {
     return undefined;
   }
   let base: string;
   try {
-    base = await realpath(previewDir(task));
+    base = await realpath(previewDir(task, root));
+    const jail = await realpath(previewRoot(root));
+    if (!base.startsWith(jail + sep)) return undefined;
   } catch {
     return undefined;
   }
@@ -75,12 +73,12 @@ export async function readPreview(task: string, name: string): Promise<{ body: B
 }
 
 /** Serve one preview; 401 without the cookie, 404 for anything jailed away. */
-export async function servePreview(res: ServerResponse, task: string, name: string, signedIn: boolean): Promise<void> {
+export async function servePreview(res: ServerResponse, task: string, name: string, signedIn: boolean, root?: string): Promise<void> {
   if (!signedIn) {
     sendError(res, "unauthorized", "open the link Pi printed", 401);
     return;
   }
-  const found = await readPreview(task, name);
+  const found = await readPreview(task, name, root);
   if (!found) throw new HttpError(404, "not_found", "no such preview");
   applyBaseHeaders(res);
   res.writeHead(200, { "Content-Type": found.type, "Cache-Control": "no-store" });
