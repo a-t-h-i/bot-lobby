@@ -24,7 +24,7 @@ const select = (id: string) => go(tabHash("tasks", id))
 
 function NoTasks() {
   return (
-    <Empty className="glass m-4 flex-1 border">
+    <Empty className="flat-pane m-4 flex-1">
       <EmptyHeader>
         <EmptyDescription>{EMPTY_LIST}</EmptyDescription>
       </EmptyHeader>

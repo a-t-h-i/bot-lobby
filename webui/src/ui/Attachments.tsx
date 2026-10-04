@@ -7,6 +7,7 @@
  */
 import { FileText, Paperclip } from "lucide-react"
 import { ATTACHMENTS_MARK } from "@shared"
+import { projectUrl } from "@/lib/project"
 
 export interface AttachmentRef {
   id: string
@@ -41,8 +42,8 @@ export function AttachmentList({ files }: { files: AttachmentRef[] }) {
       {files.map((file) => (
         <li key={file.id}>
           {IMAGES.has(file.mime) ? (
-            <a href={`/files/preview/attachments/${file.id}`} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-lg border border-border bg-muted/40 transition-transform duration-150 ease-snap hover:scale-[1.02]">
-              <img src={`/files/preview/attachments/${file.id}`} alt={file.name} loading="lazy" className="max-h-40 max-w-56 object-cover" />
+            <a href={projectUrl(`/files/preview/attachments/${file.id}`)} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-lg border border-border bg-muted/40 transition-transform duration-150 ease-snap hover:scale-[1.02]">
+              <img src={projectUrl(`/files/preview/attachments/${file.id}`)} alt={file.name} loading="lazy" className="max-h-40 max-w-56 object-cover" />
             </a>
           ) : (
             <span className="inline-flex max-w-64 items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">

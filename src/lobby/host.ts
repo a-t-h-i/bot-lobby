@@ -86,6 +86,7 @@ export interface ModelChoice {
 
 /** Everything the web server needs from pi and bot-lobby. */
 export interface LobbyService {
+  projectRoot?(): string;
   sessionId(): string | undefined;
   /** This session's active task and its runs, as the lobby reads them. */
   zen(): { task?: Task; runs: readonly AgentRun[] };
@@ -100,6 +101,8 @@ export interface LobbyService {
   /** Send text to the oracle, or start a task when none is active; returns a notice. */
   toOracle(text: string): string | undefined;
   comment(taskId: string, text: string): string;
+  /** Correct a comment this session sent; returns the edited comment. */
+  editComment(taskId: string, commentId: string, text: string): PlanComment;
   startPlanned(plan: PlannedTask): string;
   discardPlan(id: string): void;
   abortMaster(): void;

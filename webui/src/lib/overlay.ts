@@ -55,6 +55,9 @@ export function useOverlaySlot(wantsOpen: boolean, priority: number): boolean {
   return wantsOpen && current === id
 }
 
+/** Synchronous guard for keyboard listeners, including queued overlays. */
+export function hasOverlay(): boolean { return entries.length > 0 }
+
 /** Whether any overlay holds the slot (the composer and the toasts give way). */
 export function useAnyOverlay(): boolean {
   return useSyncExternalStore(subscribe, () => entries.length > 0, () => false)

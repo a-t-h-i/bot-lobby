@@ -86,6 +86,7 @@ export interface PlannerMessage {
   role: "you" | "planner";
   text: string;
   at: number;
+  editedAt?: number;
   /** The round's questions, attributed, when the panel asked any. */
   questions?: PanelQuestion[];
   /** Questions the classifier answered with their recommended option instead of asking. */
@@ -572,6 +573,30 @@ export class PlanningSession {
   async send(text: string, settled?: readonly SettledQuestion[]): Promise<void> {
     this.autoContinued = false;
     await this.post(text, settled);
+  }
+
+  /** Correct an ordinary user turn, keeping the conversation and rerunning the panel. */
+  async editMessage(messageIndex: number, at: number, text: string): Promise<void> {
+    this.validateEdit(messageIndex, at, text);
+    this.messages = this.messages.map((message, index) => index === messageIndex ? { ...message, text: text.trim(), editedAt: Date.now() } : message);
+    this.reply = undefined;
+    this.questions = [];
+    this.answered = [];
+    this.lineComments = [];
+    this.notes = [];
+    this.memberNotes.clear();
+    this.lastStatus.clear();
+    this.autoContinued = false;
+    await this.turn();
+  }
+
+  /** Shared boundary checks, also used by HTTP before starting the background round. */
+  validateEdit(messageIndex: number, at: number, text: string): void {
+    if (this.busy) throw new Error("the panel is still thinking");
+    const message = this.messages[messageIndex];
+    if (!Number.isInteger(messageIndex) || messageIndex < 0 || !message || message.at !== at) throw new Error("the message has changed — refresh the conversation");
+    if (message.role !== "you" || message.settled?.length) throw new Error("only ordinary user messages can be edited");
+    if (!text.trim()) throw new Error("an edited message needs some text");
   }
 
   private async post(text: string, settled?: readonly SettledQuestion[]): Promise<void> {

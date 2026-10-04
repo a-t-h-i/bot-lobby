@@ -14,7 +14,7 @@ const SHOWN = 6
 
 function ChartCard({ title, right, children }: { title: string; right?: string; children: React.ReactNode }) {
   return (
-    <section className="glass flex min-w-0 flex-col gap-3 rounded-lg px-4 py-3" aria-label={title}>
+    <section className="flat-pane flex min-w-0 flex-col gap-3 px-4 py-3" aria-label={title}>
       <h2 className="flex items-baseline justify-between gap-3 text-sm font-medium">
         <span>{title}</span>
         {right ? <span className="truncate text-xs font-normal text-muted-foreground">{right}</span> : null}

@@ -7,7 +7,8 @@
  * up. New messages ease in; settled ones are memoised by id, so only the
  * streaming reply redraws on each delta.
  */
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react"
+import { memo, useCallback, useEffect, useMemo, useState, type ReactNode, type RefObject } from "react"
+import { useStickToBottom } from "@/lib/useStickToBottom"
 import { ArrowDown } from "lucide-react"
 import { motion } from "motion/react"
 import { ActionButton } from "@/ui/Actions"
@@ -174,22 +175,6 @@ function useOlderChat(chat: ChatEntry[], hasOlder: boolean, scrollRef: RefObject
   return { merged, more, loading, load }
 }
 
-function useStickToBottom(revision: number) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [atBottom, setAtBottom] = useState(true)
-  const stick = useCallback(() => {
-    const el = ref.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [])
-  useEffect(() => {
-    if (atBottom) stick()
-  }, [atBottom, stick, revision])
-  const onScroll = useCallback(() => {
-    const el = ref.current
-    if (el) setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 48)
-  }, [])
-  return { ref, atBottom, stick, onScroll }
-}
 
 export function Conversation({
   chat,
@@ -217,7 +202,7 @@ export function Conversation({
   useEffect(() => setSettled(true), [])
   return (
     <Frame aria-label="Conversation" title="Conversation" note={more ? OLDER_NOTE : undefined}>
-      <div ref={ref} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto px-4 pt-3 pb-3" role="log" aria-label="Conversation" tabIndex={0}>
+      <div ref={ref} onScroll={handleScroll} className="composer-inset min-h-0 flex-1 overflow-y-auto px-4 pt-3 pb-3" role="log" aria-label="Conversation" tabIndex={0}>
         {empty ? (
           <ConversationEmpty hasTask={hasTask} />
         ) : (

@@ -4,7 +4,7 @@
  * Like issues, `gh` owns authentication and repository detection; every
  * failure becomes one readable line.
  */
-import { gh, type Exec } from "./issues.ts";
+import { execCommand, gh, type Exec } from "./issues.ts";
 
 export type ChecksState = "passing" | "failing" | "pending";
 
@@ -191,6 +191,49 @@ export async function viewPull(exec: Exec, cwd: string, number: number): Promise
 export async function pullDiff(exec: Exec, cwd: string, number: number, limit = DIFF_CHARS): Promise<string> {
   const stdout = await gh(exec, cwd, ["pr", "diff", String(number), "--color", "never"]);
   return stdout.length > limit ? `${stdout.slice(0, limit)}\n[…the diff continues: ${stdout.length - limit} more characters]` : stdout;
+}
+
+/** A pull request opened for a completed task's branch. */
+export interface CreatedPull {
+  number: number;
+  url: string;
+}
+
+const PUSH_TIMEOUT_MS = 60_000;
+
+async function run(exec: Exec, cwd: string, command: string, args: string[]): Promise<string> {
+  let result: Awaited<ReturnType<Exec>>;
+  try {
+    result = await exec(command, args, { cwd, timeout: PUSH_TIMEOUT_MS });
+  } catch (error) {
+    throw new Error(`${command} could not run — ${(error as Error).message}`);
+  }
+  if (result.code !== 0) throw new Error(result.stderr.trim() || `${command} exited with code ${result.code}`);
+  return result.stdout;
+}
+
+/** `gh pr create` ends with the URL on its own last line; the number is its tail. */
+function parseCreated(stdout: string): CreatedPull {
+  const url = stdout.trim().split("\n").map((line) => line.trim()).filter((line) => /^https?:\/\/\S+$/.test(line)).pop();
+  if (!url) throw new Error("gh pr create printed no pull request URL");
+  const match = /\/pull\/([1-9]\d*)$/.exec(url);
+  const number = Number(match?.[1]);
+  if (!Number.isSafeInteger(number) || number <= 0) throw new Error(`gh pr create printed an unreadable URL: ${url}`);
+  return { number, url };
+}
+
+/**
+ * Push a finished task's branch and open its pull request, so the work lands
+ * in review without the oracle having to remember a second step.
+ */
+export async function createPullRequest(options: { exec?: Exec; cwd: string; branch: string; base: string; title: string; body: string }): Promise<CreatedPull> {
+  for (const ref of [options.branch, options.base]) {
+    if (!ref || ref.startsWith("-") || /[\s~^:?*\[\\]|\.\.|@\{|\/\//.test(ref) || /[/.]$/.test(ref)) throw new Error("invalid pull request branch");
+  }
+  const exec = options.exec ?? execCommand;
+  await run(exec, options.cwd, "git", ["push", "-u", "origin", options.branch]);
+  const stdout = await gh(exec, options.cwd, ["pr", "create", "--base", options.base, "--head", options.branch, "--title", options.title, "--body", options.body.slice(0, 60_000)]);
+  return parseCreated(stdout);
 }
 
 /** Lobby state for the Git tab: the list, the open pull request, and what is loading. */

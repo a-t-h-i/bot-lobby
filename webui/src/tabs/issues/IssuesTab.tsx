@@ -33,7 +33,7 @@ export function issueNumber(rest: readonly string[]): number | undefined {
 
 function IssuesOff() {
   return (
-    <Empty className="glass m-4 flex-1 border">
+    <Empty className="flat-pane m-4 flex-1">
       <EmptyHeader>
         <EmptyTitle>Issues are off</EmptyTitle>
         <EmptyDescription className="font-mono">{OFF}</EmptyDescription>
@@ -45,7 +45,7 @@ function IssuesOff() {
 function NoIssues({ loading, loaded, error, onRetry }: { loading: boolean; loaded: boolean; error?: string; onRetry: () => void }) {
   const text = error ? `✗ ${error}` : loaded ? EMPTY_LIST : loading ? LOADING_LIST : NOT_LOADED
   return (
-    <Empty className="glass m-4 flex-1 border">
+    <Empty className="flat-pane m-4 flex-1">
       <EmptyHeader>
         <EmptyDescription className={error ? "text-destructive" : undefined}>{text}</EmptyDescription>
       </EmptyHeader>
@@ -99,16 +99,16 @@ export function IssuesTab({ rest }: { rest: readonly string[] }) {
       </PaneHeader>
       {read.data?.error ? <p className="px-3 pt-2 text-sm text-destructive">✗ {read.data.error}</p> : null}
       {read.data ? <IssueList issues={issues} selectedId={id} now={now} onSelect={select} /> : <ListSkeleton />}
+      <CreateBox onCreate={create} />
     </>
   )
   const detail = id !== undefined ? <IssueDetail key={id} number={id} /> : null
   const body = read.data && issues.length === 0
-    ? <NoIssues loading={read.data.loading} loaded={read.data.loaded} error={read.data.error} onRetry={read.reload} />
+    ? <><NoIssues loading={read.data.loading} loaded={read.data.loaded} error={read.data.error} onRetry={read.reload} /><CreateBox onCreate={create} /></>
     : <SplitPane wide={wide} list={list} detail={detail} open={id !== undefined} onClose={close} hint="Select an issue to read it." describe="Issue detail" />
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {body}
-      <CreateBox onCreate={create} />
     </div>
   )
 }

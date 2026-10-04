@@ -6,7 +6,7 @@
  * slideout, started by Answer questions. Line comments are remembered here
  * only (the snapshot does not carry them) and go with the session.
  */
-import { useEffect, useRef, useState } from "react"
+import { useState } from "react"
 import { ErrorState } from "@/app/States"
 import { useApiRead } from "@/app/useApiRead"
 import { cn } from "@/lib/utils"
@@ -20,17 +20,9 @@ import { Roster } from "./Roster"
 import { DRAFT_WAITS, NO_DRAFT, introText, isFresh, seatCells } from "./words"
 import { Rule } from "@/ui/Frame"
 
-type Comments = ReadonlyMap<string, string[]>
+import { useStickToBottom } from "@/lib/useStickToBottom"
 
-/** Keep a scrolling pane at its newest end as `revision` grows. */
-function useFollowEnd(revision: number) {
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const el = ref.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [revision])
-  return ref
-}
+type Comments = ReadonlyMap<string, string[]>
 
 function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) {
   return (
@@ -43,26 +35,26 @@ function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) 
 }
 
 function ConversationPane({ snap, wide }: { snap: PlannerSnapshot; wide: boolean }) {
-  const ref = useFollowEnd(snap.messages.length)
+  const { ref, onScroll } = useStickToBottom(JSON.stringify(snap.messages))
   return (
     <Pane className="flex flex-col">
       <h2 className="px-5 pt-4 text-sm">
         <Rule title="Conversation" />
       </h2>
-      <div ref={ref} className={cn("min-h-0 overflow-y-auto p-4", wide ? "flex-1" : "max-h-[45svh]")}>
-        <PanelConversation messages={snap.messages} />
+      <div ref={ref} onScroll={onScroll} className={cn("min-h-0 overflow-y-auto p-4", wide ? "composer-inset flex-1" : "max-h-[45svh]")}>
+        <PanelConversation messages={snap.messages} busy={snap.busy} />
       </div>
     </Pane>
   )
 }
 
-function DraftPane({ snap, comments, onComment }: { snap: PlannerSnapshot; comments: Comments; onComment: (line: string) => void }) {
+function DraftPane({ snap, comments, onComment, wide }: { snap: PlannerSnapshot; comments: Comments; onComment: (line: string) => void; wide: boolean }) {
   return (
     <Pane className="flex flex-col">
       <h2 className="px-5 pt-4 text-sm">
         <Rule title="Draft plan" />
       </h2>
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+      <div className={cn("flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4", wide && "composer-inset")}>
         {snap.draft ? <DraftBody draft={snap.draft} comments={comments} onComment={onComment} /> : <p className="text-sm text-muted-foreground">{snap.busy ? DRAFT_WAITS : NO_DRAFT}</p>}
         <SeatNeeds notes={snap.notes} />
       </div>
@@ -81,7 +73,7 @@ function Session({ snap, reload }: { snap: PlannerSnapshot; reload: () => void }
       <PlanHeader snap={snap} onDone={reload} />
       <div className={grid}>
         <ConversationPane snap={snap} wide={wide} />
-        <DraftPane snap={snap} comments={comments} onComment={setLine} />
+        <DraftPane snap={snap} comments={comments} onComment={setLine} wide={wide} />
       </div>
       <LineComment line={line} onClose={() => setLine(undefined)} onSent={remember} />
     </>

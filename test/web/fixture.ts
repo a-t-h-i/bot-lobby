@@ -5,6 +5,9 @@
  * The server never touches `web.json` (tests pass an explicit secret).
  */
 import { randomBytes } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test as base, type ConsoleMessage, type Page } from "@playwright/test";
 import type { LobbyService } from "../../src/lobby/host.ts";
 import { createFixtureService, disposeFixtureService } from "../../src/webui/dev/fake-service.ts";
@@ -13,6 +16,8 @@ import { startWebServer } from "../../src/webui/server.ts";
 export interface MockServer {
   link: string;
   use: (scenario: string) => void;
+  /** Append one activity entry to the live feed, so a test can watch the log react. */
+  log: (source: string, text: string) => void;
 }
 
 export interface ErrorTrap {
@@ -53,6 +58,10 @@ export async function openScenario(page: Page, server: MockServer, scenario: str
 export const test = base.extend<object, { server: MockServer }>({
   server: [
     async ({}, use) => {
+      // An empty config directory of our own: the checks must never inherit the
+      // developer's real `~/.pi/bot-lobby` (its folded panes would hide panes).
+      const configDir = mkdtempSync(join(tmpdir(), "bot-lobby-web-"));
+      process.env.BOT_LOBBY_CONFIG_DIR = configDir;
       let current: LobbyService = createFixtureService("full");
       const web = await startWebServer({ service: current, port: 0, secret: randomBytes(32) });
       const mock: MockServer = {
@@ -62,10 +71,14 @@ export const test = base.extend<object, { server: MockServer }>({
           current = createFixtureService(scenario);
           web.rebind(current);
         },
+        log: (source, text) => {
+          (current.feed as { log: (source: string, text: string) => void }).log(source, text);
+        },
       };
       await use(mock);
       disposeFixtureService(current);
       await web.close();
+      rmSync(configDir, { recursive: true, force: true });
     },
     { scope: "worker" },
   ],

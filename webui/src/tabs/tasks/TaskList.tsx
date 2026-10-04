@@ -1,7 +1,7 @@
 /**
  * The Tasks list: a heading over each section, then one row per task or saved
  * plan: its mark, title, plan progress or age, and a line of facts under it.
- * The chosen row is lit.
+ * The chosen row is lit. Rows are flat, split by hairlines.
  */
 import type { TaskRow } from "@protocol"
 import { cn } from "@/lib/utils"
@@ -34,9 +34,10 @@ function Row({ row, selected, onSelect }: { row: TaskRow; selected: boolean; onS
     <li>
       <button
         type="button"
+        data-row
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(row.id)}
-        className="flex min-h-9 w-full flex-col gap-0.5 rounded-lg px-3 py-2.5 text-left outline-none transition-colors duration-150 hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:bg-accent"
+        className="flex min-h-9 w-full flex-col gap-0.5 px-3 py-2.5 text-left outline-none transition-colors duration-150 hover:bg-accent/40 focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:bg-accent"
       >
         <span className="flex items-start gap-2 text-sm">
           <CheckMark check={row.check} className="mt-0.5" />
@@ -58,7 +59,7 @@ export function TaskList({ rows, selectedId, onSelect }: { rows: readonly TaskRo
           <h3 className="px-4 pt-3 pb-1 text-xs">
             <Rule title={SECTION_TITLES[section]} right={String(group.length)} className="[&>span:first-child]:font-medium [&>span:first-child]:text-muted-foreground" />
           </h3>
-          <ul className="flex flex-col gap-0.5 px-2 pt-1">
+          <ul className="flex flex-col divide-y divide-border px-2 pt-1">
             {group.map((row) => (
               <Row key={`${row.kind}-${row.id}`} row={row} selected={row.id === selectedId} onSelect={onSelect} />
             ))}

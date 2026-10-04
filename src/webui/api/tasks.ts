@@ -4,6 +4,7 @@
  * shape is `TaskRow` in `src/lobby/task-rows.ts`.
  */
 import { TERMINAL_STATES, taskRequest, type Task } from "../../schemas/task.ts";
+import type { PlanComment } from "../../state/comments.ts";
 import type { PlannedTask } from "../../state/backlog.ts";
 import { describeRun, runFromLog } from "../../pi/run-summary.ts";
 import { pendingApprovals } from "../../workflow/approvals.ts";
@@ -138,7 +139,24 @@ export function tasksComments(body: { taskId: string }, ctx: ApiContext): { comm
 /** Comment on a task's plan; blank text is a no-op notice like the lobby's. */
 export function tasksComment(body: { taskId: string; text: string; attachments?: string[] }, ctx: ApiContext): { notice?: string } {
   if (!body.text.trim() && !body.attachments?.length) return { notice: "type something first" };
-  return { notice: ctx.service.comment(body.taskId, withAttachments(body.text, body.attachments, body.taskId)) };
+  return { notice: ctx.service.comment(body.taskId, withAttachments(body.text, body.attachments, body.taskId, ctx.service.projectRoot?.())) };
+}
+
+/**
+ * Correct a comment this session sent. Only the session that wrote it may edit:
+ * an agent's comment, or one from a session that has since gone, is refused.
+ */
+export function tasksEditComment(body: { taskId: string; commentId: string; text: string }, ctx: ApiContext): { comment: PlanComment } {
+  const comment = ctx.service.comments(body.taskId).find((entry) => entry.id === body.commentId);
+  if (!comment) fail(404, "not_found", `no comment ${body.commentId} on ${body.taskId}`);
+  const sessionId = ctx.service.sessionId();
+  if (!comment.by || comment.by !== sessionId) fail(403, "forbidden", `only the session that wrote ${body.commentId} can edit it`);
+  if (!body.text.trim()) fail(400, "bad_request", "an edited comment needs some text");
+  try {
+    return { comment: ctx.service.editComment(body.taskId, body.commentId, body.text) };
+  } catch (error) {
+    return fail(400, "bad_request", (error as Error).message);
+  }
 }
 
 /** Archive, restore or delete a task; each answers the terminal's notice. */
@@ -169,7 +187,7 @@ export function tasksAuto(body: { taskId: string; on: boolean }, ctx: ApiContext
 /** Leave a message for a task's oracle; blank text is a no-op notice. */
 export function tasksMessage(body: { taskId: string; text: string; attachments?: string[] }, ctx: ApiContext): { notice: string } {
   if (!body.text.trim() && !body.attachments?.length) return { notice: "type something first" };
-  return { notice: ctx.service.sendToTask(body.taskId, withAttachments(body.text, body.attachments, body.taskId)) };
+  return { notice: ctx.service.sendToTask(body.taskId, withAttachments(body.text, body.attachments, body.taskId, ctx.service.projectRoot?.())) };
 }
 
 /** How many recent runs the detail lists (the terminal's count). */

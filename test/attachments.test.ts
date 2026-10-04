@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, utimesSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -9,6 +9,21 @@ const { attachmentDir, releaseAttachments, sweepAttachments } = await import("..
 const { saveUpload, withAttachments } = await import("../src/webui/uploads.ts");
 
 const file = (id: string) => existsSync(join(attachmentDir(), id));
+
+test("same attachment/task IDs in separate roots cannot be read or released across projects", () => {
+  const roots = [mkdtempSync(join(tmpdir(), "bl-a-")), mkdtempSync(join(tmpdir(), "bl-b-"))];
+  const id = "same.png";
+  for (const root of roots) {
+    mkdirSync(attachmentDir(root), { recursive: true });
+    writeFileSync(join(attachmentDir(root), id), root);
+    withAttachments("hi", [id], "same-task", root);
+  }
+  assert.equal(releaseAttachments("same-task", roots[0]), 1);
+  assert.equal(existsSync(join(attachmentDir(roots[1]), id)), true);
+  assert.throws(() => withAttachments("hi", [id], "same-task", roots[0]), /attach it again/);
+  assert.ok(withAttachments("hi", [id], "same-task", roots[1]).includes(attachmentDir(roots[1])));
+  assert.equal(releaseAttachments("same-task", roots[1]), 1);
+});
 
 test("files sent during a task go when that task finishes, and only that task's", () => {
   const mine = saveUpload("a.png", "image/png", Buffer.from("a"));

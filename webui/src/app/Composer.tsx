@@ -1,12 +1,13 @@
 /**
  * The one text box for everything: a single card with roomy text at the top
  * and, inside it at the bottom, the tools, who it goes to, the key hints and
- * the send button. It sits in the page's flow at the bottom (never over the content),
- * grows with what you type (and opens up to a tall editor), takes images, PDFs
- * and other files (pick, paste or drop them) and sends Markdown to whoever the
- * tab talks to: the oracle everywhere, the planning panel on Plan, a quick fix
- * on Quick fix, a comment on the open task on Tasks. While a pop-up is open it
- * steps aside, so only one thing asks for you at a time.
+ * the send button. It floats pinned at the bottom of the window (the shell
+ * gives it its overlay container), grows with what you type up to a cap
+ * (and opens up to a tall editor), takes images, PDFs and other files (pick,
+ * paste or drop them) and sends Markdown to whoever the tab talks to: the
+ * oracle everywhere, the planning panel on Plan, a quick fix on Quick fix, a
+ * comment on the open task on Tasks. While a pop-up is open it steps aside, so
+ * only one thing asks for you at a time.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react"
 import { animate, AnimatePresence, motion } from "motion/react"
@@ -24,6 +25,7 @@ import { MAX_ATTACHMENTS, sizeLabel, uploadFile } from "@/lib/uploads"
 import { Markdown } from "@/ui/Markdown"
 import { continueList, link, wrap, type Edit } from "./markdownEdit"
 import { cn } from "@/lib/utils"
+import { projectUrl } from "@/lib/project"
 import type { LobbySnapshot, StatusInfo, UploadInfo } from "@protocol"
 import { useTopic } from "./hooks"
 import { go, type Route } from "./router"
@@ -118,7 +120,7 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
         title={`${file.name} · ${sizeLabel(file.size)}`}
         className="relative size-16 shrink-0 overflow-hidden rounded-lg border border-border bg-muted"
       >
-        <img src={file.image} alt={file.name} className="size-full object-cover" />
+        <img src={projectUrl(file.image)} alt={file.name} className="size-full object-cover" />
         {file.state === "uploading" ? (
           <span className="absolute inset-0 flex items-center justify-center bg-background/60">
             <Spinner className="size-4" aria-hidden="true" role="presentation" />
@@ -196,15 +198,15 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
     const el = card.current
     if (!el) return
     const root = document.documentElement
-    const set = () => root.style.setProperty("--composer-h", `${Math.ceil(el.getBoundingClientRect().height)}px`)
+    const set = () => root.style.setProperty("--composer-h", blocked ? "0px" : `${Math.ceil(el.getBoundingClientRect().height)}px`)
     set()
     const observer = new ResizeObserver(set)
     observer.observe(el)
     return () => {
       observer.disconnect()
-      root.style.removeProperty("--composer-h")
+      root.style.setProperty("--composer-h", "0px")
     }
-  }, [])
+  }, [blocked])
 
   // Opening or closing the tall editor eases the box between its two heights.
   const lastHeight = useRef(0)
@@ -351,7 +353,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
   return (
     <div
       ref={card}
-      className={cn("shrink-0 px-4 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-opacity duration-200 ease-snap", blocked && "opacity-0")}
+      className={cn("pointer-events-auto px-4 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-opacity duration-200 ease-snap", blocked && "opacity-0")}
       inert={blocked}
     >
       <div className={cn("mx-auto w-full transition-[max-width] duration-300 ease-snap", expanded ? "max-w-4xl" : "max-w-3xl")}>
@@ -406,7 +408,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
               className={cn(
                 "w-full min-w-0 flex-1 resize-none bg-transparent text-base leading-relaxed caret-primary outline-none placeholder:text-muted-foreground/80 md:text-[0.9375rem] md:leading-relaxed",
                 "field-sizing-content",
-                expanded ? "max-h-[60svh] min-h-[min(46svh,24rem)]" : "max-h-[34svh] min-h-[1.75rem]"
+                expanded ? "max-h-[40vh] min-h-[min(30vh,24rem)]" : "max-h-[40vh] min-h-[1.75rem]"
               )}
             />
           </div>
