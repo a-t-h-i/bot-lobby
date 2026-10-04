@@ -174,6 +174,43 @@ test("markdown never runs page scripts", async ({ page, server }: { page: Page; 
   expect(await page.evaluate(() => (window as unknown as { __xss?: number }).__xss), "no script ran").toBeUndefined();
 });
 
+test("the Lobby fills the window: the page never scrolls, each pane does, and Thinking shows by default", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  for (const size of SIZES.filter((entry) => entry.width === 1280 || entry.width === 768)) {
+    await page.setViewportSize(size);
+    const main = page.locator("#main");
+    await expect(main.getByText("Thinking", { exact: true }).first()).toBeVisible();
+    const run = await page.evaluate(() => {
+      const el = document.getElementById("main") as any;
+      el.scrollTop = 400;
+      const conversation = document.querySelector('[role="log"][aria-label="Conversation"]') as any;
+      return { main: { scrollHeight: el.scrollHeight, clientHeight: el.clientHeight, scrollTop: el.scrollTop }, chat: { scrollHeight: conversation.scrollHeight, clientHeight: conversation.clientHeight } };
+    });
+    expect(run.main.scrollHeight, `${size.width}: #main has nothing to scroll`).toBe(run.main.clientHeight);
+    expect(run.main.scrollTop, `${size.width}: forcing a scroll leaves it at the top`).toBe(0);
+    expect(run.chat.scrollHeight, `${size.width}: the conversation pane scrolls on its own`).toBeGreaterThan(run.chat.clientHeight);
+  }
+  await page.getByRole("button", { name: "Minimize Thinking" }).click();
+  await expect(page.getByRole("button", { name: "Expand Thinking" }), "the card folds").toBeVisible();
+});
+
+test("the activity log always follows its newest entry, even from a scroll up", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  // A short window so the seeded log overflows its pane and following is visible.
+  await page.setViewportSize({ width: 1280, height: 560 });
+  const log = page.locator('[role="log"][aria-label="Activity"]');
+  await expect(log).toBeVisible();
+  expect(await log.evaluate((el: any) => el.scrollHeight > el.clientHeight), "the log overflows, so following is visible").toBe(true);
+  expect(Math.abs(await log.evaluate((el: any) => el.scrollTop + el.clientHeight - el.scrollHeight)), "it opens at its newest entry").toBeLessThanOrEqual(2);
+  await log.evaluate((el: any) => {
+    el.scrollTop = 0;
+  });
+  expect(await log.evaluate((el: any) => el.scrollTop), "the reader scrolls up").toBe(0);
+  server.log("MASTER", "a new step the log must not leave off screen");
+  await expect.poll(async () => log.evaluate((el: any) => Math.abs(el.scrollTop + el.clientHeight - el.scrollHeight)), { message: "a new entry pulls the log back to the bottom" }).toBeLessThanOrEqual(2);
+  await expect(log, "and it is the new entry that is showing").toContainText("a new step the log must not leave off screen");
+});
+
 test("contrast meets 4.5:1", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 800 });
