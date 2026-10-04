@@ -16,6 +16,8 @@ export const MIN_OPTIONS = 2;
 export const MAX_OPTIONS = 4;
 export const MAX_HEADER = 16;
 export const MAX_LABEL = 60;
+export const MAX_PREVIEW_HTML = 100_000;
+export const MAX_PREVIEW_CSS = 50_000;
 
 /** The row under every question's options where the user writes their own answer. */
 export const OWN_ANSWER = "Type something.";
@@ -25,11 +27,21 @@ export const RESERVED = new Set(["other", OWN_ANSWER.toLowerCase(), "next"]);
 
 export interface AskOption {
   label: string;
+  /** Explicit static HTML/CSS; never inferred from Markdown. */
+  htmlPreview?: { html: string; css?: string };
   description?: string;
   /** Markdown shown beside the options while this one is focused. */
   preview?: string;
   /** An image file (PNG, JPEG, GIF or WebP) shown with the preview: a screenshot, a rendered mockup. */
   image?: string;
+}
+
+export function validHtmlPreview(value: unknown): value is NonNullable<AskOption["htmlPreview"]> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const preview = value as Record<string, unknown>;
+  return Object.keys(preview).every((key) => key === "html" || key === "css")
+    && typeof preview.html === "string" && preview.html.length <= MAX_PREVIEW_HTML
+    && (preview.css === undefined || (typeof preview.css === "string" && preview.css.length <= MAX_PREVIEW_CSS));
 }
 
 export interface AskQuestion {

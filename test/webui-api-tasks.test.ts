@@ -15,6 +15,7 @@ import { ensureProjectStructure, saveTask } from "../src/state/persistence.ts";
 import { addPlanComment, readPlanComments } from "../src/state/comments.ts";
 import { savePlannedTask } from "../src/state/backlog.ts";
 import { createTask } from "../src/schemas/task.ts";
+import { newDelivery } from "../src/delivery/review.ts";
 import { createLobbyService } from "../src/lobby/service.ts";
 import type { RunLogEntry } from "../src/schemas/task.ts";
 import type { Runtime } from "../src/lobby/runtime.ts";
@@ -109,8 +110,60 @@ async function setup() {
   const token = new URL(server.link).hash.replace("#token=", "");
   const cookie = await login(server.port, token);
   const call = async (name: string, body: unknown = {}) => send(server.port, `/api/${name}`, { ...json, cookie }, JSON.stringify(body));
-  return { server, call, root: state.root, close: () => server.close() };
+  return { server, service, call, root: state.root, close: () => server.close() };
 }
+
+test("tasks.open selects actual owner metadata without claiming or replacing sessions", async () => {
+  const { call, service, close } = await setup();
+  try {
+    assert.deepEqual((await call("tasks.open", { taskId: "TASK-mine" })).payload.result, { sessionId: "session-1" });
+    const ended = await call("tasks.open", { taskId: "TASK-other" });
+    assert.match(String(ended.payload.result!.notice), /ended or is unavailable/);
+    assert.equal(ended.payload.result!.sessionId, undefined);
+    const ownerless = await call("tasks.open", { taskId: "TASK-done" });
+    assert.match(String(ownerless.payload.result!.notice), /no owning session/);
+    service.liveSessions = () => [{ sessionId: "session-2", pid: process.pid, mode: "interactive" }];
+    assert.deepEqual((await call("tasks.open", { taskId: "TASK-other" })).payload.result, { sessionId: "session-2" });
+    assert.equal(service.tasks().find((task) => task.id === "TASK-other")!.ownerSessionId, "session-2");
+  } finally { await close(); }
+});
+
+test("tasks.open refuses unauthenticated, foreign-project and caller-selected session payloads", async () => {
+  const { server, call, close } = await setup();
+  try {
+    const unauthorized = await send(server.port, "/api/tasks.open", json, JSON.stringify({ taskId: "TASK-mine" }));
+    assert.equal(unauthorized.status, 401);
+    assert.equal((await call("tasks.open", { taskId: "foreign-project-task" })).status, 404);
+    assert.equal((await call("tasks.open", { taskId: "TASK-mine", sessionId: "foreign-session" })).status, 400);
+  } finally { await close(); }
+});
+
+test("delivery review routes authorize project scope, persist deferral and reject stale identities", async () => {
+  const { server, call, root, service, close } = await setup();
+  try {
+    const task = createTask("TASK-review", "Review"); task.state = "completed";
+    task.delivery = newDelivery(task, root); saveTask(root, ".pi", task);
+    assert.equal((await send(server.port, "/api/tasks.deliveryReview", json, JSON.stringify({ taskId: task.id }))).status, 401);
+    assert.equal((await call("tasks.deliveryReview", { taskId: "foreign" })).status, 404);
+    assert.equal((await call("tasks.deliveryReview", { taskId: "../escape" })).status, 400);
+    assert.equal((await call("tasks.deliveryReview", { taskId: "TASK-done" })).status, 400);
+    const review = await call("tasks.deliveryReview", { taskId: task.id });
+    assert.equal(review.status, 200);
+    const delivery = review.payload.result!.delivery as { reviewId: string };
+    assert.equal((await call("tasks.deliveryDefer", { taskId: task.id, reviewId: "stale" })).status, 409);
+    assert.equal((await call("tasks.deliveryDefer", { taskId: task.id, reviewId: delivery.reviewId })).status, 200);
+    assert.equal(service.tasks().find((entry) => entry.id === task.id)!.delivery!.status, "deferred");
+    assert.equal((await call("tasks.deliver", { taskId: task.id, reviewId: delivery.reviewId, action: "merge_main" })).status, 400);
+    assert.equal((await call("tasks.deliver", { taskId: "foreign", reviewId: delivery.reviewId, action: "create_pr" })).status, 404);
+    assert.equal((await call("tasks.deliver", { taskId: task.id, reviewId: "stale", action: "create_pr" })).status, 409);
+    assert.equal((await call("tasks.deliver", { taskId: task.id, reviewId: delivery.reviewId, action: "create_pr", path: "/client/path" })).status, 400);
+    assert.equal((await send(server.port, "/api/tasks.deliver", json, JSON.stringify({ taskId: task.id, reviewId: delivery.reviewId, action: "create_pr" }))).status, 401);
+    service.deliveryDeliver = async (_id, request) => ({ ...task.delivery!, status: "successful", result: { action: request.action, pullNumber: 42 } });
+    const published = await call("tasks.deliver", { taskId: task.id, reviewId: delivery.reviewId, action: "create_pr" });
+    assert.equal(published.status, 200);
+    assert.equal((published.payload.result!.delivery as { result: { pullNumber: number } }).result.pullNumber, 42);
+  } finally { await close(); }
+});
 
 test("tasks.list rows mirror the terminal: mine, others, pending, recent", async () => {
   const { call, close } = await setup();
@@ -249,7 +302,11 @@ test("tasks.get reads a plan's checklist: steps, no request when it equals the t
   try {
     const got = await call("tasks.get", { taskId: "TASK-mine" });
     assert.equal(got.status, 200, got.body);
-    assert.deepEqual(got.payload.result, {
+    const { timing, ...detail } = got.payload.result!;
+    assert.equal((timing as { waiting: boolean }).waiting, false);
+    assert.equal((timing as { elapsedMs: number }).elapsedMs, 0);
+    assert.ok(Number.isFinite(Date.parse((timing as { serverNow: string }).serverNow)));
+    assert.deepEqual(detail, {
       plan: "1. Write the API\n2. Add the header\n3. Write the tests",
       steps: [{ text: "Write the API", status: "done" }, { text: "Add the header", status: "current" }, { text: "Write the tests", status: "open" }],
       amendments: [],

@@ -248,13 +248,27 @@
   .glass-pop {
     @apply border border-glass-border bg-popover text-popover-foreground shadow-glass backdrop-blur-md;
   }
-  /* A pane with no card: a hairline above it, nothing else. */
+  /* One quiet surface per meaningful pane, never per chat message. */
   .flat-pane {
-    @apply border-t border-border bg-transparent;
+    @apply min-w-0 rounded-lg border border-border bg-card shadow-card;
   }
 }
 
-:root { --composer-h: 5.5rem; }
+:root { --composer-h: 5.5rem; --touch-target: 44px; --control-target: 40px; --thinking-lift: -2px; --thinking-scale: 1.04; }
+
+/* Native focused activation stays local to its control; no global Enter handler. */
+button:not([role="switch"]):not([role="checkbox"]), [role="tab"], header a[aria-keyshortcuts] { min-height: var(--control-target); min-width: var(--control-target); }
+[hidden] { display: none !important; }
+.thinking-bubble {
+  width: var(--touch-target);
+  height: var(--touch-target);
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: calc(var(--composer-h) + 1rem + env(safe-area-inset-bottom));
+  transition: transform 150ms ease-out;
+}
+.thinking-bubble:hover { transform: translateY(var(--thinking-lift)) scale(var(--thinking-scale)); }
+@media (pointer: coarse) { button:not([role="switch"]):not([role="checkbox"]), [role="combobox"], [role="tab"], header a[aria-keyshortcuts] { min-height: var(--touch-target); min-width: var(--touch-target); } }
+@media (prefers-reduced-motion: reduce) { .thinking-bubble, .thinking-bubble:hover { transform: none !important; transition: none !important; } }
 
 /* Own the scroll inset even when a tab also uses a padding utility. */
 .composer-inset {
@@ -334,6 +348,11 @@
   }
   .md-body input[type="checkbox"] {
     @apply mr-1.5;
+  }
+  .md-body table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
   }
   .md-body table th,
   .md-body table td {

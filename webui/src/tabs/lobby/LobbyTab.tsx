@@ -1,5 +1,5 @@
-/* Expanded panes share the content grid; folded panes live only in the side rail. */
-import { Activity, Brain, type LucideIcon } from "lucide-react"
+/* Conversation and activity share the grid; Thinking opens from a floating bubble. */
+import { Activity, type LucideIcon } from "lucide-react"
 import { ErrorState } from "@/app/States"
 import { useTopic } from "@/app/hooks"
 import { Button } from "@/components/ui/button"
@@ -28,16 +28,15 @@ const panesOf = (status?: StatusInfo) => status?.panels ?? { conversation: true,
 
 function RailButton({ name, icon: Icon, shortcut, onClick }: { name: string; icon: LucideIcon; shortcut?: string; onClick: () => void }) {
   return <Tooltip>
-    <TooltipTrigger asChild><Button variant="ghost" className="size-10 shrink-0" aria-label={`Expand ${name}`} onClick={onClick}><Icon aria-hidden="true" className="size-4" /></Button></TooltipTrigger>
+    <TooltipTrigger asChild><Button variant="ghost" className="size-11 shrink-0" aria-keyshortcuts={shortcut ? `${shortcut} Enter Space` : "Enter Space"} aria-label={`Expand ${name}`} onClick={onClick}><Icon aria-hidden="true" className="size-4" /></Button></TooltipTrigger>
     <TooltipContent side="left">Expand {name}{shortcut ? ` (${shortcut})` : ""}</TooltipContent>
   </Tooltip>
 }
 
 function SideRail(props: LobbyViewProps) {
   const panes = panesOf(props.status)
-  return <aside aria-label="Minimized panes" className="flex w-10 shrink-0 flex-col border-l border-border">
+  return <aside aria-label="Minimized panes" className="flex w-[var(--touch-target)] shrink-0 flex-col border-l border-border">
     {panes.activity && props.activityFolded ? <RailButton name="Activity" icon={Activity} shortcut={keyOf(props.status, "activity")} onClick={props.toggleActivity} /> : null}
-    {panes.thinking && props.thinkingFolded ? <RailButton name="Thinking" icon={Brain} shortcut={keyOf(props.status, "thinking")} onClick={props.toggleThinking} /> : null}
   </aside>
 }
 
@@ -55,17 +54,17 @@ function MainPanes(props: LobbyViewProps) {
 function LobbyView(props: LobbyViewProps) {
   const { data, status } = props
   const panes = panesOf(status)
-  const rail = (panes.activity && props.activityFolded) || (panes.thinking && props.thinkingFolded)
+  const rail = panes.activity && props.activityFolded
   return <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-2">
     <TaskHeader task={data?.task} status={status} />
     <RunsStrip runs={runsOf(data)} />
     <div className="flex min-h-0 flex-1 gap-2">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
         <MainPanes {...props} />
-        {panes.thinking && !props.thinkingFolded ? <Thoughts thoughts={data?.thoughts ?? []} collapsed={false} onToggle={props.toggleThinking} shortcut={keyOf(status, "thinking")} /> : null}
       </div>
       {rail ? <SideRail {...props} /> : null}
     </div>
+    {panes.thinking ? <Thoughts thoughts={data?.thoughts ?? []} collapsed={props.thinkingFolded} onToggle={props.toggleThinking} shortcut={keyOf(status, "thinking")} /> : null}
   </div>
 }
 
