@@ -1,5 +1,7 @@
 # Dependencies
 node_modules/
+node_modules
+node_modules.old/
 
 # bot-lobby local task state, knowledge and config
 .pi/
