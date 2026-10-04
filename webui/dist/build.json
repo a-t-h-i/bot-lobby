@@ -1,6 +1,6 @@
 {
-  "hash": "11e12d3105c21fec032848cd09e6b23682b26ed310381f71260ac244418c8334",
-  "builtAt": "2026-10-04T06:09:44.221Z",
+  "hash": "f6d7386bf97aadd9ade8f1ad3e0395d87db91876a696b483db48d374e35a35c5",
+  "builtAt": "2026-10-04T09:37:27.504Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -28,7 +28,7 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "3ddc63942207d30a7bf0a04495103793306ca94a4b2d4df8f2c1aa023994f7ec"
+      "sha256": "9a2e203282dbe09d0fecf2654c77aa045b87822e95ee1d229fbb4e5dc507fd53"
     },
     {
       "path": "webui/src/app/Header.tsx",
@@ -36,7 +36,7 @@
     },
     {
       "path": "webui/src/app/Shell.tsx",
-      "sha256": "de39ab57b92ccb68742556175530ab7ac4a86da13ab6d0710d4142091fbfac90"
+      "sha256": "e9e520b391f3c447790a57c4d70bb8e40f64d2ec72f2748830c54fb746407531"
     },
     {
       "path": "webui/src/app/SignIn.tsx",
@@ -332,7 +332,7 @@
     },
     {
       "path": "webui/src/tabs/lobby/ActivityLog.tsx",
-      "sha256": "4e3fbcba4b7c6e0ed2cc6a4f513b78ac2b5468fd7e8db41fc99005f013067f85"
+      "sha256": "63d82311140a9f112580f24bad4b54bd03164afb90ca85fed83981f81f982e9d"
     },
     {
       "path": "webui/src/tabs/lobby/Conversation.tsx",
@@ -340,7 +340,7 @@
     },
     {
       "path": "webui/src/tabs/lobby/LobbyTab.tsx",
-      "sha256": "3a4bcc382e1bb167171bae73d1513918b17834703dc6e53311fcf868b91b7f3e"
+      "sha256": "6f84c5805e449894a554451f3141d61d7c6aa3c66737dcbfeb2a7724fdca1e45"
     },
     {
       "path": "webui/src/tabs/lobby/RunsStrip.tsx",
@@ -352,7 +352,7 @@
     },
     {
       "path": "webui/src/tabs/lobby/Thoughts.tsx",
-      "sha256": "9e69a5de970769a14ae5f13bf41243babd4145bed63254477a1e853577bb4675"
+      "sha256": "cbea62ebbfd81fdb6698fdade6289afb08bd4fcbaf61cc06715fa57c01d56abb"
     },
     {
       "path": "webui/src/tabs/lobby/types.ts",
@@ -460,7 +460,7 @@
     },
     {
       "path": "webui/src/tabs/settings/SettingsForm.tsx",
-      "sha256": "0a4b6cd8e9a5a61f31ed105d439c806c255e00ebb6458fa33bc26856dc96d61f"
+      "sha256": "e7d15e61dc978f22e6b0ed3b2776b8786286ad1355920781a435341fe9bd6c97"
     },
     {
       "path": "webui/src/tabs/settings/SettingsTab.tsx",
@@ -472,7 +472,7 @@
     },
     {
       "path": "webui/src/tabs/settings/parts.tsx",
-      "sha256": "7753f863a4afff2a4f38cdf08cfce53c20f1b14461a0ec702d4662924a1a5dff"
+      "sha256": "5cfb7d2e7ed7ea84abe90dc68c3401cede9e45f99eed5920705bd9d5ce5dab36"
     },
     {
       "path": "webui/src/tabs/settings/words.ts",
