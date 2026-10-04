@@ -13,6 +13,7 @@ import { Check, Copy } from "lucide-react"
 import { ActionButton } from "./Actions"
 import { cn } from "@/lib/utils"
 import { safeHref } from "@/lib/markdown"
+import { projectUrl } from "@/lib/project"
 import { AttachmentList, splitAttachments } from "./Attachments"
 
 interface HastNode {
@@ -65,7 +66,7 @@ function CodeBlock({ node, children }: { node?: unknown; children?: ReactNode })
 
 function Link({ href, children }: { href?: string; children?: ReactNode }) {
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer nofollow">
+    <a href={href ? projectUrl(href) : undefined} target="_blank" rel="noopener noreferrer nofollow">
       {children}
     </a>
   )
@@ -74,6 +75,7 @@ function Link({ href, children }: { href?: string; children?: ReactNode }) {
 const components: Components = {
   pre: CodeBlock,
   a: Link,
+  img: ({ src, alt }) => <img src={src ? projectUrl(src) : undefined} alt={alt ?? ""} loading="lazy" />,
   table: ({ children }) => (
     <div className="my-3 w-full overflow-x-auto">
       <table className="w-full border-collapse text-sm">{children}</table>

@@ -5,6 +5,7 @@
  */
 import type { Api, ApiName, ApiReply, ErrorCode } from "@protocol"
 import { lobbyStore } from "./store.ts"
+import { projectUrl } from "./project.ts"
 
 export class ApiError extends Error {
   readonly code: ErrorCode
@@ -24,7 +25,7 @@ const JSON_HEADERS = { "Content-Type": "application/json" }
 export async function call<Name extends ApiName>(name: Name, body?: Api[Name]["request"]): Promise<Api[Name]["result"]>
 export async function call<T = unknown>(name: string, body?: Record<string, unknown>): Promise<T>
 export async function call(name: string, body: Record<string, unknown> = {}): Promise<unknown> {
-  const response = await fetch(`/api/${name}`, {
+  const response = await fetch(name === "auth.login" || name === "projects.list" ? `/api/${name}` : projectUrl(`/api/${name}`), {
     method: "POST",
     headers: JSON_HEADERS,
     body: JSON.stringify(body),
