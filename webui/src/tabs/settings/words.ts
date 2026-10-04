@@ -138,8 +138,8 @@ export const PAGE = {
   loadFailed: "Could not load settings.",
   saved: "Settings saved",
   saving: "Saving…",
-  appearanceHelp: "The page's own light/dark theme; it is not sent to the server.",
-  themeLabel: "Theme",
+  appearanceHelp: "Light, dark, or follow your system. Kept in this browser only.",
+  themeLabel: "Mode",
   themeItems: [
     { id: "light", label: "Light" },
     { id: "dark", label: "Dark" },

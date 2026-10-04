@@ -28,12 +28,17 @@ import { useStatus, useTopic } from "./hooks.ts"
 import { go, tabHash, useRoute, type Route } from "./router.ts"
 import { routeBody } from "@/tabs/registry.tsx"
 import { focusTab, isTyping, tabWalk } from "@/prompts/nav"
+import { toggleCollapsed } from "@/lib/collapsed"
 
 function handleAction(action: string, route: Route, toggleHelp: () => void, cycle: (delta: number) => void): void {
   if (action === "help") toggleHelp()
   else if (action === "settings") go("#/settings")
   else if (action === "sessions") go("#/sessions")
-  else if (action === "nextTab") cycle(1)
+  else if (action === "activity" || action === "thinking") {
+    // The cards live on the Lobby: there the key folds or opens one, elsewhere it takes you there first.
+    if (route.kind === "tab" && route.tab === "lobby") toggleCollapsed(`lobby.${action}`)
+    else go(tabHash("lobby"))
+  } else if (action === "nextTab") cycle(1)
   else if (action === "prevTab") cycle(-1)
   else if (action === "savePlan" && route.kind === "tab" && route.tab === "plan") void act("planner.save", {})
 }

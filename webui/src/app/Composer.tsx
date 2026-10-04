@@ -1,7 +1,7 @@
 /**
- * The one text box for everything, in the Claude Code style: a bordered box
- * with a `>` prompt and monospace text, and a quiet line of tools and hints
- * under it. It sits in the page's flow at the bottom (never over the content),
+ * The one text box for everything: a single card with roomy text at the top
+ * and, inside it at the bottom, the tools, who it goes to, the key hints and
+ * the send button. It sits in the page's flow at the bottom (never over the content),
  * grows with what you type (and opens up to a tall editor), takes images, PDFs
  * and other files (pick, paste or drop them) and sends Markdown to whoever the
  * tab talks to: the oracle everywhere, the planning panel on Plan, a quick fix
@@ -87,7 +87,7 @@ let keySeq = 0
 
 /** The flat icon buttons under the box. */
 const TOOL =
-  "inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+  "inline-flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
 
 function isSend(event: KeyboardEvent): boolean {
   return event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing
@@ -351,14 +351,14 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
   return (
     <div
       ref={card}
-      className={cn("shrink-0 px-4 pt-0.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-opacity duration-200 ease-snap", blocked && "opacity-0")}
+      className={cn("shrink-0 px-4 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-opacity duration-200 ease-snap", blocked && "opacity-0")}
       inert={blocked}
     >
       <div className={cn("mx-auto w-full transition-[max-width] duration-300 ease-snap", expanded ? "max-w-4xl" : "max-w-3xl")}>
         <div
           className={cn(
-            "group/composer rounded-lg border border-input bg-card transition-[border-color,box-shadow] duration-200 ease-snap focus-within:border-ring/60",
-            dragging && "border-primary ring-3 ring-ring/30"
+            "group/composer relative rounded-lg border border-input bg-card shadow-card transition-[border-color,box-shadow] duration-200 ease-snap focus-within:border-ring/60 focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_16%,transparent)]",
+            dragging && "border-primary shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_30%,transparent)]"
           )}
           onDragOver={(event) => {
             if (!event.dataTransfer.types.includes("Files")) return
@@ -387,15 +387,12 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
           </AnimatePresence>
 
           {preview ? (
-            <div aria-label="Markdown preview" role="region" className="max-h-48 overflow-y-auto border-b border-border px-3 py-2">
+            <div aria-label="Markdown preview" role="region" className="max-h-48 overflow-y-auto border-b border-border px-4 py-3">
               {text.trim() ? <Markdown text={text} /> : <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>}
             </div>
           ) : null}
 
-          <div ref={area} className="flex items-start gap-2 px-3 py-2">
-            <span aria-hidden="true" className="pt-px font-mono text-base leading-relaxed text-primary select-none md:text-sm md:leading-relaxed">
-              &gt;
-            </span>
+          <div ref={area} className="flex px-4 pt-3 pb-1">
             <textarea
               ref={field}
               id="composer-text"
@@ -404,143 +401,150 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
               onChange={(event) => setText(event.target.value)}
               onKeyDown={onKeyDown}
               onPaste={onPaste}
-              placeholder={busy && target.id === "oracle" ? "The oracle is working — Enter steers it…" : target.placeholder}
+              placeholder={busy && target.id === "oracle" ? "The oracle is working. Enter steers it…" : target.placeholder}
               rows={1}
               className={cn(
-                "w-full min-w-0 flex-1 resize-none bg-transparent font-mono text-base leading-relaxed caret-primary outline-none placeholder:text-muted-foreground md:text-sm md:leading-relaxed",
+                "w-full min-w-0 flex-1 resize-none bg-transparent text-base leading-relaxed caret-primary outline-none placeholder:text-muted-foreground/80 md:text-[0.9375rem] md:leading-relaxed",
                 "field-sizing-content",
-                expanded ? "max-h-[60svh] min-h-[min(46svh,24rem)]" : "max-h-[34svh] min-h-6"
+                expanded ? "max-h-[60svh] min-h-[min(46svh,24rem)]" : "max-h-[34svh] min-h-[1.75rem]"
               )}
             />
           </div>
-        </div>
 
-        <div className="flex items-center gap-1 pt-1.5">
-          <input
-            ref={picker}
-            type="file"
-            multiple
-            hidden
-            tabIndex={-1}
-            aria-label="Attach files"
-            onChange={(event) => {
-              attach(event.target.files ?? [])
-              event.target.value = ""
-            }}
-          />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button type="button" aria-label="Attach images, PDFs or files" onClick={() => picker.current?.click()} className={TOOL}>
-                <Paperclip aria-hidden="true" className="size-[1.1rem]" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Attach images, PDFs or files</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label={expanded ? "Make the box smaller" : "Open the box wider and taller"}
-                aria-pressed={expanded}
-                onClick={() => setExpanded((value) => !value)}
-                className={TOOL}
-              >
-                {expanded ? <Minimize2 aria-hidden="true" className="size-4" /> : <Maximize2 aria-hidden="true" className="size-4" />}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>{expanded ? "Smaller" : "Bigger"}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button type="button" aria-label="Preview the Markdown" aria-pressed={preview} aria-keyshortcuts="Alt+P" onClick={() => setPreview((value) => !value)} className={cn(TOOL, preview && "bg-tab text-foreground")}>
-                <Eye aria-hidden="true" className="size-4" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              Preview <Keys chord="Alt+P" />
-            </TooltipContent>
-          </Tooltip>
-
-          {targets.length > 1 ? (
-            <div role="radiogroup" aria-label="Send to" className="ml-1 flex items-center gap-0.5">
-              {targets.map((entry) => (
-                <button
-                  key={entry.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={entry.id === target.id}
-                  onClick={() => setChosen(entry.id)}
-                  className={cn(
-                    "h-8 rounded-lg px-3 text-xs font-medium transition-[background-color,color] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
-                    entry.id === target.id ? "bg-tab text-foreground" : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {entry.pill}
+          <div className="flex flex-wrap items-center gap-x-1 gap-y-1 px-2 pt-1 pb-2">
+            <input
+              ref={picker}
+              type="file"
+              multiple
+              hidden
+              tabIndex={-1}
+              aria-label="Attach files"
+              onChange={(event) => {
+                attach(event.target.files ?? [])
+                event.target.value = ""
+              }}
+            />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button type="button" aria-label="Attach images, PDFs or files" onClick={() => picker.current?.click()} className={TOOL}>
+                  <Paperclip aria-hidden="true" className="size-4" />
                 </button>
-              ))}
-            </div>
-          ) : (
-            <span className="ml-1 px-2 text-xs text-muted-foreground">To the {target.pill.toLowerCase()}</span>
-          )}
-
-          <div className="@container ml-auto flex min-w-0 flex-1 items-center justify-end overflow-hidden px-2">
-            <div className="flex items-center justify-end gap-3.5">
-              {route.kind === "tab" && route.tab === "plan" ? (
-                <KeyHint chord={keys.savePlan ?? "Ctrl+S"} className="hidden @[30rem]:inline-flex">
-                  save plan
-                </KeyHint>
-              ) : null}
-              <KeyHint chord="Shift+Enter" className="hidden @[22rem]:inline-flex">
-                new line
-              </KeyHint>
-              <KeyHint chord="Enter" className="hidden @[11rem]:inline-flex">
-                send
-              </KeyHint>
-              <button
-                type="button"
-                aria-label="Keyboard shortcuts"
-                aria-haspopup="dialog"
-                onClick={onHelp}
-                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-1.5 text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
-              >
-                <Keys chord={keys.help ?? "Alt+H"} />
-                <span className="hidden @[8rem]:inline">shortcuts</span>
-              </button>
-            </div>
-          </div>
-
-          {busy && target.id === "oracle" ? (
+              </TooltipTrigger>
+              <TooltipContent>Attach images, PDFs or files</TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  aria-label="Stop"
-                  onClick={() => void stop()}
-                  className="inline-flex size-8 items-center justify-center rounded-lg bg-secondary text-foreground transition-[background-color,transform] duration-150 ease-snap outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+                  aria-label={expanded ? "Make the box smaller" : "Open the box wider and taller"}
+                  aria-pressed={expanded}
+                  onClick={() => setExpanded((value) => !value)}
+                  className={cn(TOOL, expanded && "bg-tab text-foreground")}
                 >
-                  <Square aria-hidden="true" className="size-3.5 fill-current" />
+                  {expanded ? <Minimize2 aria-hidden="true" className="size-4" /> : <Maximize2 aria-hidden="true" className="size-4" />}
                 </button>
               </TooltipTrigger>
-              <TooltipContent>Stop the oracle</TooltipContent>
+              <TooltipContent>{expanded ? "Smaller" : "Bigger"}</TooltipContent>
             </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button type="button" aria-label="Preview the Markdown" aria-pressed={preview} aria-keyshortcuts="Alt+P" onClick={() => setPreview((value) => !value)} className={cn(TOOL, preview && "bg-tab text-foreground")}>
+                  <Eye aria-hidden="true" className="size-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                Preview <Keys chord="Alt+P" />
+              </TooltipContent>
+            </Tooltip>
+
+            <span aria-hidden="true" className="mx-1.5 h-4 w-px bg-border" />
+            {targets.length > 1 ? (
+              <div role="radiogroup" aria-label="Send to" className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
+                {targets.map((entry) => (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={entry.id === target.id}
+                    onClick={() => setChosen(entry.id)}
+                    className={cn(
+                      "h-6 rounded-[6px] px-2.5 text-xs font-medium transition-[background-color,color,box-shadow] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
+                      entry.id === target.id ? "bg-card text-foreground shadow-card" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {entry.pill}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <span className="px-1 text-xs text-muted-foreground">To the {target.pill.toLowerCase()}</span>
+            )}
+
+            <div className="@container ml-auto flex min-w-0 flex-1 items-center justify-end overflow-hidden px-2">
+              <div className="flex items-center justify-end gap-3.5">
+                {route.kind === "tab" && route.tab === "plan" ? (
+                  <KeyHint chord={keys.savePlan ?? "Ctrl+S"} className="hidden @[30rem]:inline-flex">
+                    save plan
+                  </KeyHint>
+                ) : null}
+                <KeyHint chord="Shift+Enter" className="hidden @[22rem]:inline-flex">
+                  new line
+                </KeyHint>
+                <KeyHint chord="Enter" className="hidden @[11rem]:inline-flex">
+                  send
+                </KeyHint>
+                <button
+                  type="button"
+                  aria-label="Keyboard shortcuts"
+                  aria-haspopup="dialog"
+                  onClick={onHelp}
+                  className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-1.5 text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+                >
+                  <Keys chord={keys.help ?? "Alt+H"} />
+                  <span className="hidden @[8rem]:inline">shortcuts</span>
+                </button>
+              </div>
+            </div>
+
+            {busy && target.id === "oracle" ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Stop"
+                    onClick={() => void stop()}
+                    className="inline-flex size-7 items-center justify-center rounded-lg bg-secondary text-foreground transition-[background-color,transform] duration-150 ease-snap outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+                  >
+                    <Square aria-hidden="true" className="size-3 fill-current" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Stop the oracle</TooltipContent>
+              </Tooltip>
+            ) : null}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Send"
+                  aria-keyshortcuts="Enter"
+                  onClick={() => void send()}
+                  disabled={!canSend}
+                  className="inline-flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-[background-color,color,transform,filter] duration-150 ease-snap outline-none hover:brightness-110 focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95 disabled:bg-muted disabled:text-muted-foreground disabled:hover:brightness-100"
+                >
+                  {sending ? <Spinner aria-hidden="true" role="presentation" className="size-4 text-primary-foreground" /> : <ArrowUp aria-hidden="true" className="size-4" />}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                Send <Keys chord="Enter" />
+              </TooltipContent>
+            </Tooltip>
+          </div>
+
+          {dragging ? (
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-card/90 text-sm font-medium text-primary backdrop-blur-[2px]">
+              Drop to attach
+            </div>
           ) : null}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label="Send"
-                aria-keyshortcuts="Enter"
-                onClick={() => void send()}
-                disabled={!canSend}
-                className="inline-flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-[opacity,transform,filter] duration-150 ease-snap outline-none hover:brightness-110 focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95 disabled:opacity-40 disabled:hover:brightness-100"
-              >
-                {sending ? <Spinner aria-hidden="true" role="presentation" className="size-4 text-primary-foreground" /> : <ArrowUp aria-hidden="true" className="size-[1.15rem]" />}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              Send <Keys chord="Enter" />
-            </TooltipContent>
-          </Tooltip>
         </div>
       </div>
     </div>
