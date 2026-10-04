@@ -433,7 +433,8 @@ deletion), and one call draws at most 100 shapes and removes at most 50.
 
 Common keys: `alt+1`…`alt+9` jump to a tab, `alt+[` and `alt+]` cycle them,
 `ctrl+s` saves the plan on Plan, `alt+o` browses sessions, `alt+s` opens
-settings, `alt+h` shows them all. Rebind any key under `lobby.keys` in the
+settings, `alt+a` and `alt+t` fold Activity and Thinking on the Lobby, `alt+h`
+shows them all. Rebind any key under `lobby.keys` in the
 config.
 
 **Several sessions from one window.** The Sessions page starts a task in a

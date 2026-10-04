@@ -1,6 +1,6 @@
 {
-  "hash": "806e94c39ea4250edee2f5bdd1e6f20e8fbdc13d161ea684cb5307619865b750",
-  "builtAt": "2026-10-04T05:29:12.322Z",
+  "hash": "238a800e2b23189c458e50561ef6a9f33d78c41bf256879ebf6967a73567c0bc",
+  "builtAt": "2026-10-04T06:04:37.408Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -36,7 +36,7 @@
     },
     {
       "path": "webui/src/app/Shell.tsx",
-      "sha256": "b591e8497fd4d3cf22678a29a1c6f685a5e151a1811b7a439911ae09602c8a23"
+      "sha256": "de39ab57b92ccb68742556175530ab7ac4a86da13ab6d0710d4142091fbfac90"
     },
     {
       "path": "webui/src/app/SignIn.tsx",
@@ -192,7 +192,7 @@
     },
     {
       "path": "webui/src/lib/collapsed.ts",
-      "sha256": "48e9f56f7a9a6501042d176367e12062f106bb7f45868df15a867218ba4e5d69"
+      "sha256": "d2a316db30ce718c0c40b01f414cf17515d4ea064d9d16b24f7ff13fc122d0c5"
     },
     {
       "path": "webui/src/lib/composerContext.ts",
@@ -324,7 +324,7 @@
     },
     {
       "path": "webui/src/tabs/lobby/ActivityLog.tsx",
-      "sha256": "95b80f9b82c4f41e427c49550c16f822f1f54d44b1b68835af8ba857a05f34db"
+      "sha256": "4e3fbcba4b7c6e0ed2cc6a4f513b78ac2b5468fd7e8db41fc99005f013067f85"
     },
     {
       "path": "webui/src/tabs/lobby/Conversation.tsx",
@@ -332,7 +332,7 @@
     },
     {
       "path": "webui/src/tabs/lobby/LobbyTab.tsx",
-      "sha256": "c9cb59601f104e6aa3d65b2b0466760d2419b99d5f80db03975834394c218a53"
+      "sha256": "3a4bcc382e1bb167171bae73d1513918b17834703dc6e53311fcf868b91b7f3e"
     },
     {
       "path": "webui/src/tabs/lobby/RunsStrip.tsx",
@@ -344,7 +344,7 @@
     },
     {
       "path": "webui/src/tabs/lobby/Thoughts.tsx",
-      "sha256": "c9e5ab0727d791baaffad52bc75cf80a8eaea2f9c6b096f06b6b3bb84bdce9a6"
+      "sha256": "9e69a5de970769a14ae5f13bf41243babd4145bed63254477a1e853577bb4675"
     },
     {
       "path": "webui/src/tabs/lobby/types.ts",
@@ -512,7 +512,7 @@
     },
     {
       "path": "webui/src/ui/Frame.tsx",
-      "sha256": "9120f2a09d4893a3c9867737462ed9fd8df513be474375f32f01526c3238bb60"
+      "sha256": "37d78a24cb97ec6c203278a5193f8ebbf878c46cf737c0145b0e063e1ab31ade"
     },
     {
       "path": "webui/src/ui/Markdown.tsx",
