@@ -3,6 +3,7 @@ import type { ProjectInfo } from "@protocol"
 import { call } from "@/lib/api"
 import { selectedProject, switchProject } from "@/lib/project"
 import { Button } from "@/components/ui/button"
+import { Combobox } from "@/components/ui/combobox"
 
 interface ProjectList { projects: ProjectInfo[]; currentId: string }
 
@@ -21,14 +22,12 @@ function projectError(data: ProjectList | undefined, id: string | undefined): st
 function ProjectSelect({ data, id, busy, tab }: { data?: ProjectList; id?: string; busy: boolean; tab: string }) {
   const active = id ?? data?.currentId ?? ""
   const known = data?.projects.some((project) => project.id === active)
-  return <label className="flex min-w-0 flex-1 items-center gap-2 text-xs text-muted-foreground">
+  const options = data?.projects.map((project) => ({ value: project.id, label: project.name, hint: `${project.cwd} :${project.port}` })) ?? []
+  if (!known) options.unshift({ value: active, label: busy ? "Loading projects…" : active ? "Selected project unavailable" : "Choose a project", hint: "Refresh or choose a running project" })
+  return <div className="flex min-w-0 flex-1 items-center gap-2 text-xs text-muted-foreground">
     <span>Project</span>
-    <select value={active} disabled={!data?.projects.length} onChange={(event) => switchProject(event.target.value, tab)}
-      className="h-10 min-w-0 max-w-64 flex-1 rounded-lg border border-input bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-50">
-      {!known ? <option value={active}>{busy ? "Loading projects…" : active ? "Selected project unavailable" : "Choose a project"}</option> : null}
-      {data?.projects.map((project) => <option key={project.id} value={project.id}>{project.name} — {project.cwd} :{project.port}</option>)}
-    </select>
-  </label>
+    <Combobox value={active} options={options} label="Project" disabled={!data?.projects.length} className="min-h-11 flex-1" onChange={(value) => { if (data?.projects.some((project) => project.id === value)) switchProject(value, tab) }} />
+  </div>
 }
 
 function useProjects() {
@@ -54,7 +53,7 @@ export function ProjectSwitcher({ tab }: { tab: string }) {
   return <div aria-busy={busy} className="flex min-w-0 max-w-lg flex-col gap-1 [grid-area:project]">
     <div className="flex min-w-0 items-center gap-1">
       <ProjectSelect data={data} id={selected.error ? "invalid" : selected.id} busy={busy} tab={tab} />
-      <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void refresh()} className="min-h-10" aria-label="Refresh projects">{busy ? "Loading…" : "Refresh"}</Button>
+      <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void refresh()} className="min-h-11" aria-label="Refresh projects">{busy ? "Loading…" : "Refresh"}</Button>
     </div>
     {message ? <p role="alert" className="break-words text-xs text-destructive">{message}</p> : null}
   </div>

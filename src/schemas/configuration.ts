@@ -31,18 +31,12 @@ export interface AgentModelConfig {
   instructions?: string;
   /** Time limit per run; falls back to `workflow.agentTimeoutMs`. */
   timeoutMs?: number;
-  /** Model this agent switches to when its own model runs out of usage or is unavailable; unset or `inherit` = none. */
-  fallbackModel?: ModelRef;
-  /** Thinking level on the fallback model; unset uses this agent's own `thinking`. */
-  fallbackThinking?: string;
 }
 
 /** Scouts pick a model and a time limit only; their thinking is fixed at `SCOUT_THINKING`. */
 export interface ScoutConfig {
   model: ModelRef;
   timeoutMs: number;
-  /** Model scouts switch to when theirs runs out of usage or is unavailable (they think at `SCOUT_THINKING` on it too). */
-  fallbackModel?: ModelRef;
 }
 
 /** Subagent kinds with their own settings entry. */
@@ -301,22 +295,18 @@ function positive(value: unknown): number | undefined {
 
 /** Merge one agent's override over its default; legacy `inherit` or unknown thinking falls back to the default level. */
 function normalizeAgent(base: AgentModelConfig, override: Partial<AgentModelConfig> | undefined): AgentModelConfig {
-  const { fallbackModel: rawModel, fallbackThinking: rawThinking, ...merged } = { ...base, ...(override ?? {}) };
+  const merged = { ...base, ...(override ?? {}) };
   const thinking = isThinkingLevel(merged.thinking) ? merged.thinking : base.thinking;
   const timeoutMs = positive(merged.timeoutMs) ?? base.timeoutMs;
-  const fallbackModel = typeof rawModel === "string" && rawModel.trim() && rawModel !== INHERIT_MODEL ? rawModel.trim() : undefined;
-  const fallbackThinking = typeof rawThinking === "string" && isThinkingLevel(rawThinking) ? rawThinking : undefined;
-  return { ...merged, thinking, ...(timeoutMs ? { timeoutMs } : {}), ...(fallbackModel ? { fallbackModel, ...(fallbackThinking ? { fallbackThinking } : {}) } : {}) };
+  return { model: merged.model, thinking, ...(typeof merged.instructions === "string" ? { instructions: merged.instructions } : {}), ...(timeoutMs ? { timeoutMs } : {}) };
 }
 
 /** Scouts keep a model and a time limit; any thinking value in the file is dropped. */
 function normalizeScout(override: Partial<ScoutConfig> | undefined): ScoutConfig {
   const base = DEFAULT_CONFIG.scout;
-  const fallback = override?.fallbackModel;
   return {
     model: typeof override?.model === "string" && override.model.trim() ? override.model : base.model,
     timeoutMs: positive(override?.timeoutMs) ?? base.timeoutMs,
-    ...(typeof fallback === "string" && fallback.trim() && fallback !== INHERIT_MODEL ? { fallbackModel: fallback.trim() } : {}),
   };
 }
 
@@ -441,22 +431,6 @@ export interface AgentProfile {
   thinking: string;
   timeoutMs: number;
   instructions?: string;
-  /** Where the run goes when its model runs out of usage or is unavailable; absent = it just fails. */
-  fallback?: FallbackProfile;
-}
-
-/** The fallback model and the thinking level to run it at. */
-export interface FallbackProfile {
-  model: string;
-  thinking: string;
-}
-
-/** The fallback of a settings entry: its model and thinking (the entry's own level when none is set). */
-export function fallbackOf(entry: { fallbackModel?: string; fallbackThinking?: string; thinking?: string }): FallbackProfile | undefined {
-  const model = modelOf(entry.fallbackModel ?? INHERIT_MODEL);
-  if (!model) return undefined;
-  const own = entry.thinking && isThinkingLevel(entry.thinking) ? entry.thinking : DEFAULT_THINKING;
-  return { model, thinking: entry.fallbackThinking && isThinkingLevel(entry.fallbackThinking) ? entry.fallbackThinking : own };
 }
 
 /** The settings entry a domain/role run draws from. */
@@ -481,12 +455,10 @@ export function agentProfile(config: BotLobbyConfig, domain: Domain, role: Role)
   const instructions = config.agents[domain].instructions;
   const fallback = config.workflow.agentTimeoutMs;
   if (kind === "scout") {
-    const scoutFallback = fallbackOf({ fallbackModel: config.scout.fallbackModel, thinking: SCOUT_THINKING });
-    return { kind, model: modelOf(config.scout.model), thinking: SCOUT_THINKING, timeoutMs: config.scout.timeoutMs || fallback, instructions, ...(scoutFallback ? { fallback: scoutFallback } : {}) };
+    return { kind, model: modelOf(config.scout.model), thinking: SCOUT_THINKING, timeoutMs: config.scout.timeoutMs || fallback, instructions };
   }
   const entry = kind === "researcher" ? config.researcher : config.agents[kind];
-  const entryFallback = fallbackOf(entry);
-  return { kind, model: modelOf(entry.model), thinking: entry.thinking, timeoutMs: entry.timeoutMs ?? fallback, instructions, ...(entryFallback ? { fallback: entryFallback } : {}) };
+  return { kind, model: modelOf(entry.model), thinking: entry.thinking, timeoutMs: entry.timeoutMs ?? fallback, instructions };
 }
 
 /** The settings entry of a lobby agent (quick fix or planner). */
@@ -495,21 +467,19 @@ export function lobbyAgentConfig(config: BotLobbyConfig, kind: LobbyAgentKind): 
 }
 
 /** Profile for a lobby agent run, from settings alone; `model` is undefined while unset. */
-export function lobbyAgentProfile(config: BotLobbyConfig, kind: LobbyAgentKind): { model?: string; thinking: string; timeoutMs: number; instructions?: string; fallback?: FallbackProfile } {
+export function lobbyAgentProfile(config: BotLobbyConfig, kind: LobbyAgentKind): { model?: string; thinking: string; timeoutMs: number; instructions?: string } {
   const entry = lobbyAgentConfig(config, kind);
-  const fallback = fallbackOf(entry);
-  return { model: modelOf(entry.model), thinking: entry.thinking, timeoutMs: entry.timeoutMs ?? config.workflow.agentTimeoutMs, instructions: entry.instructions, ...(fallback ? { fallback } : {}) };
+  return { model: modelOf(entry.model), thinking: entry.thinking, timeoutMs: entry.timeoutMs ?? config.workflow.agentTimeoutMs, instructions: entry.instructions };
 }
 
 /**
  * A planning panel seat's profile: the domain's (or the researcher's) model,
  * thinking and custom instructions, bounded by the planner's per-turn limit.
  */
-export function panelMemberProfile(config: BotLobbyConfig, member: PanelMember): { model?: string; thinking: string; timeoutMs: number; instructions?: string; fallback?: FallbackProfile } {
+export function panelMemberProfile(config: BotLobbyConfig, member: PanelMember): { model?: string; thinking: string; timeoutMs: number; instructions?: string } {
   const entry = member === "researcher" ? config.researcher : config.agents[member];
   const timeoutMs = config.planner.timeoutMs ?? config.workflow.agentTimeoutMs;
-  const fallback = fallbackOf(entry);
-  return { model: modelOf(entry.model), thinking: entry.thinking, timeoutMs, instructions: entry.instructions, ...(fallback ? { fallback } : {}) };
+  return { model: modelOf(entry.model), thinking: entry.thinking, timeoutMs, instructions: entry.instructions };
 }
 
 /** Resolves the model, thinking and time limit one subagent run uses. */

@@ -11,6 +11,7 @@ import { Popup } from "@/components/ui/popup"
 import { PRIORITY, useOverlaySlot } from "@/lib/overlay"
 import type { KeyInfo, TabInfo } from "@protocol"
 import { goKey } from "@/tabs/registry"
+import { matchKey } from "./useLobbyKeys"
 
 /** One line of the table: the caps, then what they do. */
 interface Line {
@@ -43,7 +44,7 @@ const LISTS: Line[] = [
   { id: "rows", caps: ["↑", "↓"], help: "move through a list (j and k work too)" },
   { id: "pane", caps: ["←", "→"], help: "between a list and its detail (h and l)" },
   { id: "ends", caps: ["Home", "End"], help: "first and last row" },
-  { id: "open", label: "Enter", help: "open the row, press a button" },
+  { id: "open", caps: ["Enter", "Space"], help: "activate the focused button or row (links: Enter; checkboxes: Space)" },
   { id: "back", label: "Esc", help: "back up to the tab bar" },
 ]
 
@@ -108,15 +109,15 @@ export function AltH({
   const shown = useOverlaySlot(open, PRIORITY.help)
 
   useEffect(() => {
-    if (!open) return
-    // Any key closes it, except the ones that scroll it or are only a modifier.
-    const keeps = new Set(["Alt", "Control", "Shift", "Meta", "ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", "Tab", " "])
+    if (!open || !shown) return
+    // Do not consume activation, typing or focus movement inside the dialog.
     const close = (event: KeyboardEvent) => {
-      if (!keeps.has(event.key)) onOpenChange(false)
+      const helpKey = keys.find((key) => key.action === "help")?.key
+      if (event.key === "Escape" || (helpKey && matchKey(event, helpKey))) { event.preventDefault(); onOpenChange(false) }
     }
     window.addEventListener("keydown", close, true)
     return () => window.removeEventListener("keydown", close, true)
-  }, [open, onOpenChange])
+  }, [open, shown, onOpenChange, keys])
 
   return (
     <Popup open={open && shown} onOpenChange={onOpenChange} label="Keys" className="max-w-4xl">
