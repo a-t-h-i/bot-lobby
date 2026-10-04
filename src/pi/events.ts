@@ -7,7 +7,6 @@ import { selectKnowledge } from "../knowledge/selector.ts";
 import { cancelAllRuns } from "../execution/agent-runner.ts";
 import { describeTask } from "../workflow/workflow.ts";
 import { truncate } from "../text.ts";
-import { registerMasterFallback } from "./master-fallback.ts";
 import { applyStatus, clearStatus, isMinimized, setMinimized } from "./ui.ts";
 import { isSubagentProcess, webToolsFor } from "./quiet.ts";
 import { registerQuietTools } from "./tool-renderers.ts";
@@ -65,7 +64,6 @@ export function masterTaskContext(task: Task, comments: readonly PlanComment[] =
  * section rather than replacing the whole prompt.
  */
 export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
-  registerMasterFallback(pi);
   // Web tools the oracle put away for the task in hand, given back when it ends.
   let hiddenWeb: string[] = [];
   pi.on("session_start", (_event, ctx) => {
