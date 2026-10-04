@@ -257,16 +257,17 @@ starts the lobby, a page served on `127.0.0.1` (this machine only, behind a
 secret link), opens it in your browser and shows its address in Pi's status
 line. Nothing is drawn in the terminal but Pi itself.
 
-The page is a calm, glassy window in a light or a dark theme (the sun/moon
-button in its top row). The tabs are numbered pills joined by dotted lines; the
-lit pill glides to the tab you pick like a drop of water. Under the tabs, each
-tab is a pair of cards, a list on the left and the chosen item on the right.
-At the bottom floats **one text box for everything**: it grows as you type (or
-opens up to a tall editor), takes Markdown, and takes images, PDFs and other
+The page is a calm window in a light or a dark theme (the sun/moon button in
+its top row). The tabs are numbered pills; the lit pill glides to the tab you
+pick like a drop of water. Under the tabs, each tab is a pair of cards, a list
+on the left and the chosen item on the right.
+At the bottom floats **one text box for everything**: it grows as you type (up
+to a third of the window, then scrolls inside), takes Markdown, and takes
+images, PDFs and other
 files (pick, paste or drop them, up to 20 MB each, eight per message). Who it
 talks to follows the tab: the oracle everywhere, the planning panel on Plan, a
-quick fix on Quick fix, a comment on the open task (or a message to its
-oracle) on Tasks, the picked session on Sessions. The oracle's questions pop
+quick fix on Quick fix, and a comment on the open task (or a message to its
+oracle) on Tasks. The oracle's questions pop
 up in the middle of the window over a blurred backdrop; there is only ever one
 pop-up, and one toast, on screen at a time. Activity and Thinking can be
 minimized to their title bar. `alt+h` lists every key.

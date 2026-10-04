@@ -1,10 +1,11 @@
 /**
  * The shell that wraps every route, laid out top to bottom with a gap between
  * each part: the title row with the tabs, the page for the route (it eases in
- * when the tab changes) and the composer. Nothing overlaps: the page scrolls
- * in the space between the title row and the composer. Pop-ups (the question,
- * the key help) and toasts sit above it, one at a time. Clicking a tab or
- * pressing a shortcut moves the hash route.
+ * when the tab changes) and the composer, which floats over the page at the
+ * bottom while the page keeps its empty height clear. The Lobby fills the
+ * window with each pane scrolling inside itself, so no empty page shows below
+ * it. Pop-ups (the question, the key help) and toasts sit above it, one at a
+ * time. Clicking a tab or pressing a shortcut moves the hash route.
  */
 import { useCallback, useEffect, useRef, useState } from "react"
 import { motion } from "motion/react"
@@ -29,6 +30,7 @@ import { go, tabHash, useRoute, type Route } from "./router.ts"
 import { routeBody } from "@/tabs/registry.tsx"
 import { focusTab, isTyping, tabWalk } from "@/prompts/nav"
 import { toggleCollapsed } from "@/lib/collapsed"
+import { cn } from "@/lib/utils"
 
 function handleAction(action: string, route: Route, toggleHelp: () => void, cycle: (delta: number) => void): void {
   if (action === "help") toggleHelp()
@@ -124,6 +126,7 @@ export function Shell() {
   if (!status) return <LoadingState />
 
   const keyLabels = Object.fromEntries(keys.map((key) => [key.action, key.label]))
+  const lobbyRoute = route.kind === "tab" && route.tab === "lobby"
   return (
     <div ref={rootRef} className="fixed inset-0 flex flex-col gap-0.5">
       <Header
@@ -148,7 +151,7 @@ export function Shell() {
         }}
         role={activeId ? "tabpanel" : undefined}
         aria-labelledby={activeId ? `tab-${activeId}` : undefined}
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2 outline-none"
+        className={cn("flex min-h-0 flex-1 flex-col overflow-y-auto py-2 pb-[var(--composer-min-h,0px)] outline-none", lobbyRoute && "overflow-hidden")}
       >
         <motion.div
           key={routeKey(route)}
