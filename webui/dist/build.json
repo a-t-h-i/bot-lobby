@@ -1,6 +1,6 @@
 {
-  "hash": "238a800e2b23189c458e50561ef6a9f33d78c41bf256879ebf6967a73567c0bc",
-  "builtAt": "2026-10-04T06:04:37.408Z",
+  "hash": "11e12d3105c21fec032848cd09e6b23682b26ed310381f71260ac244418c8334",
+  "builtAt": "2026-10-04T06:09:44.221Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -69,6 +69,14 @@
     {
       "path": "webui/src/app/notify.ts",
       "sha256": "168e08bda492dc495c1cd56c7f9b62d331fcbbf6a4a5b436d4a99afe0bfefdea"
+    },
+    {
+      "path": "webui/src/app/palette-core.ts",
+      "sha256": "8dd3072aec9955794c335d02a0bf58f4e1b1bc95f5f924e9ee1c3cd76fdba146"
+    },
+    {
+      "path": "webui/src/app/palette.ts",
+      "sha256": "5e8f1def00bbb512750a707b7811cce93973382d707a85366b8327553ae13b75"
     },
     {
       "path": "webui/src/app/readTopic.ts",
@@ -180,7 +188,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "8cda5aab23b3c7f9580ec2e0d75e57ec5f9e85cde9fdec33a37872ba9c3061bc"
+      "sha256": "dd36ebd1cda03c004e569f2044d7d85a5ff5cf637f6164d8c36bec2f9f8d7144"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -232,7 +240,7 @@
     },
     {
       "path": "webui/src/main.tsx",
-      "sha256": "808690980e968ea7f3a3c5d9f30c15c76770727be7afd58992e640e1d951303e"
+      "sha256": "1fa99d835006cb5b812d6c74832a506cf15f580972a1d2ac940a352f31cee8ab"
     },
     {
       "path": "webui/src/nonce.ts",
@@ -452,15 +460,23 @@
     },
     {
       "path": "webui/src/tabs/settings/SettingsForm.tsx",
-      "sha256": "130bbc7022529b8a82986ce8ef28a51599898d5df922646e4168f9731c670ab5"
+      "sha256": "0a4b6cd8e9a5a61f31ed105d439c806c255e00ebb6458fa33bc26856dc96d61f"
     },
     {
       "path": "webui/src/tabs/settings/SettingsTab.tsx",
       "sha256": "6b4507831179b2457aa71e85790291cd624f821e18e4c66c3735af21d7239189"
     },
     {
+      "path": "webui/src/tabs/settings/ThemeGroup.tsx",
+      "sha256": "e6f7cfc9bebd48cfdb36a128a8d55c9eeaa7d0dc2123070033997215393c47e9"
+    },
+    {
+      "path": "webui/src/tabs/settings/parts.tsx",
+      "sha256": "7753f863a4afff2a4f38cdf08cfce53c20f1b14461a0ec702d4662924a1a5dff"
+    },
+    {
       "path": "webui/src/tabs/settings/words.ts",
-      "sha256": "cc32066ca006db9ce9db1bd953b2a4448dccb4862c73f41539d7301137ca74f2"
+      "sha256": "fc296ec793cec0dce0194a383004d01cda2a9de053b165a79ac1fd8fb3cb8466"
     },
     {
       "path": "webui/src/tabs/tasks/Comments.tsx",
