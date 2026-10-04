@@ -396,6 +396,37 @@ test("the mascot on each agent acts out its effort level, and the page never scr
   await expect(mascot).toHaveAttribute("data-level", "off");
 });
 
+test("Alt+A and Alt+T fold Activity and Thinking, from the message box too, and the buttons say so", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => {
+    window.location.hash = "#/lobby";
+  });
+  const activity = page.getByRole("button", { name: /Minimize Activity|Expand Activity/ });
+  const thinking = page.getByRole("button", { name: /Minimize Thinking|Expand Thinking/ });
+  await expect(activity).toHaveAttribute("aria-expanded", "true");
+  await expect(activity, "the tooltip names the key").toHaveAttribute("title", /Alt\+A/);
+  await expect(thinking).toHaveAttribute("aria-expanded", "true");
+  await page.locator("#composer-text").focus();
+  await page.keyboard.press("Alt+a");
+  await expect(activity, "Alt+A folds Activity while typing").toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("Alt+t");
+  await expect(thinking, "Alt+T folds Thinking").toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("Alt+a");
+  await expect(activity, "Alt+A again opens it").toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Alt+t");
+  await expect(thinking).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Alt+h");
+  const keys = page.getByRole("dialog", { name: "Keys" });
+  await expect(keys.getByText("show or hide Activity on the Lobby"), "the key list has it").toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => {
+    window.location.hash = "#/tasks";
+  });
+  await page.keyboard.press("Alt+a");
+  await expect(page, "off the Lobby it takes you there").toHaveURL(/#\/lobby/);
+});
+
 test("switching tabs puts the cursor in the message box; arrowing along the tab bar keeps it on the bar", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });

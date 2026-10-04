@@ -39,7 +39,7 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
   )
 }
 
-export function ActivityLog({ entries, collapsed, onToggle }: { entries: ActivityEntry[]; collapsed: boolean; onToggle: () => void }) {
+export function ActivityLog({ entries, collapsed, onToggle, shortcut }: { entries: ActivityEntry[]; collapsed: boolean; onToggle: () => void; shortcut?: string }) {
   const shown = entries.slice(-CAP)
   const running = shown.filter((entry) => entry.pending).length
   const scroller = useRef<HTMLDivElement>(null)
@@ -53,7 +53,7 @@ export function ActivityLog({ entries, collapsed, onToggle }: { entries: Activit
       aria-label="Activity"
       title="Activity"
       collapsed={collapsed}
-      onToggle={onToggle}
+      onToggle={onToggle} shortcut={shortcut}
       note={running ? <><Spinner aria-hidden="true" role="presentation" className="size-3" /> {running} running</> : undefined}
     >
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-2 pt-2 pb-3" role="log" aria-label="Activity" tabIndex={0}>
