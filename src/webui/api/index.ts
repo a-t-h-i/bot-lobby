@@ -13,9 +13,9 @@ import type { LobbyService } from "../../lobby/host.ts";
 import { statusGet } from "./status.ts";
 import { lobbyAbort, lobbyHistory, lobbySend, lobbySnapshot } from "./lobby.ts";
 import { promptsAnswer, promptsDismiss, promptsList } from "./prompts.ts";
-import { plannerAnswer, plannerCommentLine, plannerGet, plannerNew, plannerRetry, plannerSend, plannerToggleSeat, plannerSave } from "./planner.ts";
+import { plannerAnswer, plannerCommentLine, plannerGet, plannerNew, plannerRetry, plannerSend, plannerEditMessage, plannerToggleSeat, plannerSave } from "./planner.ts";
 import { quickfixCancel, quickfixList, quickfixMovedToTask, quickfixRunAnyway, quickfixSubmit } from "./quickfix.ts";
-import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksGet, tasksList, tasksMessage, tasksRestore } from "./tasks.ts";
+import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksEditComment, tasksGet, tasksList, tasksMessage, tasksRestore } from "./tasks.ts";
 import { metricsGet } from "./metrics.ts";
 import { knowledgeAdd, knowledgeComment, knowledgeEdit, knowledgeFiles, knowledgeOpen, knowledgeRemove, knowledgeReplaceFile, knowledgeUnnote } from "./knowledge.ts";
 import { excalidrawAdd, excalidrawCheck, excalidrawCreate, excalidrawList, excalidrawRemove, excalidrawRename, excalidrawReveal, excalidrawToggleAgent, excalidrawToggleAll, excalidrawToggleContribute } from "./excalidraw.ts";
@@ -132,6 +132,10 @@ function buildRoutes(): Record<string, Route> {
     schema: Type.Object({ taskId: TaskId, text: CommentText, attachments: Attachments }, { additionalProperties: false }),
     run: (body, ctx) => tasksComment(body as { taskId: string; text: string; attachments?: string[] }, ctx),
   };
+  routes["tasks.editComment"] = {
+    schema: Type.Object({ taskId: TaskId, commentId: Type.String({ minLength: 1, maxLength: 200 }), text: CommentText }, { additionalProperties: false }),
+    run: (body, ctx) => tasksEditComment(body as { taskId: string; commentId: string; text: string }, ctx),
+  };
   routes["tasks.archive"] = {
     schema: Type.Object({ taskId: TaskId }, { additionalProperties: false }),
     run: (body, ctx) => tasksArchive(body as { taskId: string }, ctx),
@@ -206,6 +210,10 @@ function buildRoutes(): Record<string, Route> {
   routes["planner.send"] = {
     schema: Type.Object({ text: NoticeText, attachments: Attachments }, { additionalProperties: false }),
     run: (body, ctx) => plannerSend(body as { text: string; attachments?: string[] }, ctx),
+  };
+  routes["planner.editMessage"] = {
+    schema: Type.Object({ messageIndex: Type.Integer({ minimum: 0 }), at: Type.Number(), text: NoticeText }, { additionalProperties: false }),
+    run: (body, ctx) => plannerEditMessage(body as { messageIndex: number; at: number; text: string }, ctx),
   };
   routes["planner.toggleSeat"] = {
     schema: Type.Object({ member: Member }, { additionalProperties: false }),

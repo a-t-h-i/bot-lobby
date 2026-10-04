@@ -19,6 +19,10 @@ import { createLobbyService } from "../src/lobby/service.ts";
 import type { Runtime } from "../src/lobby/runtime.ts";
 import { createFixtureService, disposeFixtureService } from "../src/webui/dev/fake-service.ts";
 import { SCENARIOS } from "../src/webui/dev/fixtures.ts";
+import { PlanningSession } from "../src/lobby/planner.ts";
+import type { ProcessRunner } from "../src/execution/pi-runner.ts";
+import { plannerEditMessage, plannerGet } from "../src/webui/api/planner.ts";
+import type { ApiContext } from "../src/webui/api/index.ts";
 import { startWebServer } from "../src/webui/server.ts";
 
 process.env.BOT_LOBBY_CONFIG_DIR ??= mkdtempSync(join(tmpdir(), "bl-planner-"));
@@ -91,6 +95,73 @@ async function setup() {
   const call = async (name: string, body: unknown = {}) => send(server.port, `/api/${name}`, { ...json, cookie }, JSON.stringify(body));
   return { server, call, service, state, close: () => server.close() };
 }
+
+test("planner edits rerun corrected history without duplicating a user turn", async () => {
+  const root = mkdtempSync(join(tmpdir(), "bl-edit-plan-"));
+  const prompts: string[] = [];
+  const runProcess: ProcessRunner = async (_args, options) => {
+    prompts.push(options.prompt ?? "");
+    const text = "## Status\nREADY\n## Title\nCorrected\n## Plan\n1. Corrected plan";
+    return { exitCode: 0, stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], stopReason: "stop" } }), stderr: "", killed: false, timedOut: false };
+  };
+  let rounds = 0;
+  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: [], profile: () => ({ model: "p/model", thinking: "low", timeoutMs: 1000, instructions: "" }), runProcess, onRound: () => { rounds++; } });
+  session.messages = [{ role: "you", text: "old idea", at: 1 }, { role: "planner", text: "prior reply", at: 2 }, { role: "you", text: "later answer", at: 3, settled: [{ from: "QA", question: "which?", answer: "yes" }] }];
+  session.reply = { status: "ready", questions: [], plan: "stale draft" };
+  const pending = session.editMessage(0, 1, " corrected idea ");
+  assert.equal(session.messages[0]!.text, "corrected idea");
+  assert.equal(session.messages[0]!.at, 1);
+  assert.ok(session.messages[0]!.editedAt);
+  assert.equal(session.reply, undefined);
+  assert.equal(session.messages.length, 3);
+  await pending;
+  assert.equal(rounds, 1);
+  assert.equal(session.messages.filter((message) => message.role === "you").length, 2);
+  assert.equal(session.settled[0]!.answer, "yes");
+  assert.match(prompts[0]!, /corrected idea/);
+  assert.doesNotMatch(prompts[0]!, /old idea|stale draft/);
+  await assert.rejects(session.editMessage(0, 999, "stale"), /has changed/);
+  await assert.rejects(session.editMessage(1, 2, "panel"), /ordinary user/);
+  await assert.rejects(session.editMessage(2, 3, "answered"), /ordinary user/);
+  await assert.rejects(session.editMessage(0, 1, "  "), /needs some text/);
+  session.status = "thinking";
+  await assert.rejects(session.editMessage(0, 1, "busy"), /still thinking/);
+});
+
+test("planner.editMessage HTTP validates missing, stale, busy, panel, answered and blank inputs", async () => {
+  const { call, service, close } = await setup();
+  try {
+    assert.equal((await call("planner.editMessage", { messageIndex: 0, at: 1, text: "ok" })).status, 404);
+    await call("planner.new", {});
+    const session = service.planner()!;
+    session.messages = [{ role: "you", text: "idea", at: 1 }, { role: "planner", text: "reply", at: 2 }, { role: "you", text: "answer", at: 3, settled: [{ from: "QA", question: "q" }] }];
+    const edit = (messageIndex: number, at: number, text = "ok") => call("planner.editMessage", { messageIndex, at, text });
+    assert.equal((await edit(9, 1)).status, 409);
+    assert.equal((await edit(0, 2)).status, 409);
+    assert.equal((await edit(1, 2)).status, 403);
+    assert.equal((await edit(2, 3)).status, 403);
+    assert.equal((await edit(0, 1, "  ")).status, 400);
+    assert.equal((await edit(-1, 1)).status, 400);
+    assert.equal((await call("planner.editMessage", { messageIndex: 0, at: 1, text: "ok", extra: true })).status, 400);
+    session.status = "thinking";
+    assert.equal((await edit(0, 1)).status, 409);
+  } finally { await close(); }
+});
+
+test("planner.editMessage returns a cloned updated message before its background round finishes", async () => {
+  const root = mkdtempSync(join(tmpdir(), "bl-edit-response-"));
+  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: [], profile: () => ({ model: "p/model", thinking: "low", timeoutMs: 1000, instructions: "" }), runProcess: async () => ({ exitCode: 1, stdout: "", stderr: "fake failure", killed: false, timedOut: false }) });
+  session.messages = [{ role: "you", text: "old", at: 1 }];
+  const ctx = { service: { planner: () => session } } as unknown as ApiContext;
+  const result = plannerEditMessage({ messageIndex: 0, at: 1, text: "new" }, ctx);
+  assert.equal(result.message.text, "new");
+  assert.equal(result.message.at, 1);
+  assert.ok(result.message.editedAt);
+  assert.notEqual(result.message, session.messages[0]);
+  assert.equal(plannerGet(ctx).messages[0]!.editedAt, result.message.editedAt);
+  assert.equal(result.notice, "message edited — the panel revises the plan");
+  while (session.busy) await new Promise((resolve) => setTimeout(resolve, 5));
+});
 
 test("planner.get starts empty; planner.new seats the panel from a seed or nothing", async () => {
   const { call, close } = await setup();

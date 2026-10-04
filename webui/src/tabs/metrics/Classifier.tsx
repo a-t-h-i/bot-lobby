@@ -22,7 +22,7 @@ const plural = (count: number, word: string, many = `${word}s`): string => `${co
 export function Classifier({ summary }: { summary: Summary }) {
   const purposes = Object.entries(summary.byPurpose).sort((a, b) => b[1] - a[1])
   return (
-    <section className="glass flex flex-col gap-3 rounded-lg px-4 py-3" aria-label="Classifier (Jev)">
+    <section className="flat-pane flex flex-col gap-3 px-4 py-3" aria-label="Classifier (Jev)">
       <h2 className="text-sm font-medium">Classifier (Jev)</h2>
       {summary.calls === 0 ? (
         <p className="text-sm text-muted-foreground">no calls recorded</p>

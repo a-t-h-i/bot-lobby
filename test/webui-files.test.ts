@@ -16,6 +16,8 @@ import { fakeWebService } from "./webui-fake.ts";
 import { promptHub } from "../src/lobby/prompt-hub.ts";
 import { previewDir } from "../src/ask/relay.ts";
 import { startWebServer } from "../src/webui/server.ts";
+import { readPreview, previewUrlFor } from "../src/webui/files.ts";
+import { previewRoot } from "../src/state/previews.ts";
 
 process.env.BOT_LOBBY_CONFIG_DIR ??= mkdtempSync(join(tmpdir(), "bl-files-"));
 
@@ -24,6 +26,22 @@ writeFileSync(join(DIST, "index.html"), "<!doctype html><title>t</title>");
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const TASK = "t123";
+
+test("same preview IDs stay isolated and neither file nor bucket symlinks can escape", async () => {
+  const a = mkdtempSync(join(tmpdir(), "bl-preview-a-"));
+  const b = mkdtempSync(join(tmpdir(), "bl-preview-b-"));
+  for (const root of [a, b]) mkdirSync(previewDir(TASK, root), { recursive: true });
+  writeFileSync(join(previewDir(TASK, a), "same.png"), "a");
+  writeFileSync(join(previewDir(TASK, b), "same.png"), "b");
+  assert.equal((await readPreview(TASK, "same.png", a))?.body.toString(), "a");
+  assert.equal((await readPreview(TASK, "same.png", b))?.body.toString(), "b");
+  assert.equal(previewUrlFor(join(previewDir(TASK, a), "same.png"), b), undefined);
+  symlinkSync(join(previewDir(TASK, b), "same.png"), join(previewDir(TASK, a), "foreign.png"));
+  symlinkSync(previewDir(TASK, b), join(previewRoot(a), "foreign"));
+  assert.equal(await readPreview(TASK, "foreign.png", a), undefined);
+  assert.equal(await readPreview("foreign", "same.png", a), undefined);
+  assert.equal(await readPreview("..", "same.png", a), undefined);
+});
 
 function seedPreviews(): void {
   mkdirSync(previewDir(TASK), { recursive: true });

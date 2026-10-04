@@ -26,9 +26,10 @@ function Row({ job, selected, now, onSelect }: { job: QuickFixJob; selected: boo
     <li>
       <button
         type="button"
+        data-row
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(job.id)}
-        className="flex min-h-9 w-full items-start gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm outline-none transition-colors duration-150 hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:bg-accent"
+        className="flex min-h-9 w-full items-start gap-2.5 px-3 py-2.5 text-left text-sm outline-none transition-colors duration-150 hover:bg-accent/40 focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:bg-accent"
       >
         <span className="flex h-5 w-4 shrink-0 items-center justify-center">
           <StatusMark status={job.status} />
@@ -42,7 +43,7 @@ function Row({ job, selected, now, onSelect }: { job: QuickFixJob; selected: boo
 
 export function JobList({ jobs, selectedId, now, onSelect }: { jobs: readonly QuickFixJob[]; selectedId?: string; now: number; onSelect: (id: string) => void }) {
   return (
-    <ul className="flex flex-col gap-0.5 px-2 pb-2">
+    <ul className="flex flex-col divide-y divide-border px-2 pb-2">
       {jobs.map((job) => (
         <Row key={job.id} job={job} selected={job.id === selectedId} now={now} onSelect={onSelect} />
       ))}

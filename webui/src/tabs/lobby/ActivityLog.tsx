@@ -5,7 +5,8 @@
  * feed caps it at 400, so the pane slices the same way. Colour is never the
  * only signal.
  */
-import { useEffect, useRef } from "react"
+import { useStickToBottom } from "@/lib/useStickToBottom"
+import { Button } from "@/components/ui/button"
 import { AlertTriangle, Check, X } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
@@ -25,7 +26,7 @@ function KindMark({ entry }: { entry: ActivityEntry }) {
 
 function ActivityRow({ entry }: { entry: ActivityEntry }) {
   return (
-    <li className="grid grid-cols-[2.75rem_5.5rem_1rem_minmax(0,1fr)] items-baseline gap-x-2 rounded-lg px-2 py-1 text-sm transition-colors hover:bg-accent/50">
+    <li className="grid grid-cols-[2.75rem_5.5rem_1rem_minmax(0,1fr)] items-baseline gap-x-2 border-b border-border px-2 py-1 text-sm transition-colors hover:bg-accent/50">
       <span className="text-xs tabular-nums text-muted-foreground">{formatClock(entry.at)}</span>
       <span className={cn("overflow-hidden text-xs font-medium whitespace-nowrap", sourceColor(entry.source))}>{sourceLabel(entry.source)}</span>
       <span aria-hidden="true" className="flex items-center justify-center self-center">
@@ -42,31 +43,14 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
 export function ActivityLog({ entries, collapsed, onToggle, shortcut }: { entries: ActivityEntry[]; collapsed: boolean; onToggle: () => void; shortcut?: string }) {
   const shown = entries.slice(-CAP)
   const running = shown.filter((entry) => entry.pending).length
-  const scroller = useRef<HTMLDivElement>(null)
-  const last = shown.at(-1)?.id
-  useEffect(() => {
-    const el = scroller.current
-    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 96) el.scrollTop = el.scrollHeight
-  }, [last])
+  const { ref, atBottom, stick, onScroll } = useStickToBottom(JSON.stringify(shown))
   return (
-    <Frame
-      aria-label="Activity"
-      title="Activity"
-      collapsed={collapsed}
-      onToggle={onToggle} shortcut={shortcut}
-      note={running ? <><Spinner aria-hidden="true" role="presentation" className="size-3" /> {running} running</> : undefined}
-    >
-      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-2 pt-2 pb-3" role="log" aria-label="Activity" tabIndex={0}>
-        {shown.length === 0 ? (
-          <p className="px-2 text-sm text-muted-foreground">No activity yet.</p>
-        ) : (
-          <ul>
-            {shown.map((entry) => (
-              <ActivityRow key={entry.id} entry={entry} />
-            ))}
-          </ul>
-        )}
+    <Frame aria-label="Activity" title="Activity" collapsed={collapsed} onToggle={onToggle} shortcut={shortcut}
+      note={running ? <><Spinner aria-hidden="true" role="presentation" className="size-3" /> {running} running</> : undefined}>
+      <div ref={ref} onScroll={onScroll} className="composer-inset min-h-0 flex-1 overflow-y-auto px-2 pt-2 pb-3" role="log" aria-label="Activity" tabIndex={0}>
+        {shown.length === 0 ? <p className="px-2 text-sm text-muted-foreground">No activity yet.</p> : <ul>{shown.map((entry) => <ActivityRow key={entry.id} entry={entry} />)}</ul>}
       </div>
+      {!atBottom ? <Button variant="ghost" size="sm" className="shrink-0" onClick={stick}>Jump to latest</Button> : null}
     </Frame>
   )
 }
