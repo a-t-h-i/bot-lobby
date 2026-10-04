@@ -3,6 +3,10 @@
  * attributed and numbered with their options, questions the classifier
  * settled marked with a tick, and everything else as Markdown.
  */
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { InlineEditor } from "@/ui/InlineEditor"
+import { call } from "@/lib/api"
 import { Check } from "lucide-react"
 import type { PlannerMessage, PanelQuestion } from "@protocol"
 import { formatClock } from "@/lib/format"
@@ -50,20 +54,27 @@ function Decided({ message }: { message: PlannerMessage }) {
   )
 }
 
-function Turn({ message }: { message: PlannerMessage }) {
-  const time = message.at > 0 ? formatClock(message.at) : ""
-  if (message.role === "you") {
-    return (
-      <div className="flex flex-col items-end gap-1">
-        <span className="text-xs text-muted-foreground">
-          {time} You
-        </span>
-        <div className="max-w-[85%] rounded-lg rounded-tr-lg border border-primary/15 bg-you px-4 py-2">
-          <Markdown text={message.text} />
-        </div>
-      </div>
-    )
+function UserTurn({ message, index, busy }: { message: PlannerMessage; index: number; busy: boolean }) {
+  const [editing, setEditing] = useState(false)
+  const [saved, setSaved] = useState<PlannerMessage>()
+  const current = saved && (saved.editedAt ?? 0) > (message.editedAt ?? 0) ? saved : message
+  const waiting = busy || current !== message
+  const save = async (text: string) => {
+    const result = await call("planner.editMessage", { messageIndex: index, at: message.at, text })
+    setSaved(result.message)
   }
+  return <div className="flex flex-col items-end gap-1">
+    <span className="text-xs text-muted-foreground">{message.at > 0 ? formatClock(message.at) : ""} You{current.editedAt ? " (edited)" : ""}</span>
+    <div className="max-w-[85%] rounded-lg rounded-tr-lg border border-primary/15 bg-you px-4 py-2">
+      {editing ? <InlineEditor text={current.text} disabled={busy} onSave={save} onCancel={() => setEditing(false)} /> : <Markdown text={current.text} />}
+    </div>
+    {!message.settled?.length && !editing ? <Button size="sm" variant="ghost" disabled={waiting} onClick={() => setEditing(true)}>Edit</Button> : null}
+  </div>
+}
+
+function Turn({ message, index, busy }: { message: PlannerMessage; index: number; busy: boolean }) {
+  const time = message.at > 0 ? formatClock(message.at) : ""
+  if (message.role === "you") return <UserTurn message={message} index={index} busy={busy} />
   const asked = message.questions ?? []
   return (
     <div className="flex flex-col gap-2">
@@ -77,12 +88,12 @@ function Turn({ message }: { message: PlannerMessage }) {
   )
 }
 
-export function PanelConversation({ messages, seed }: { messages: PlannerMessage[]; seed?: string }) {
+export function PanelConversation({ messages, seed, busy = false }: { messages: PlannerMessage[]; seed?: string; busy?: boolean }) {
   return (
     <div className="flex flex-col gap-4" role="log" aria-label="Panel conversation">
       {seed ? <p className="text-sm text-muted-foreground">{seed}</p> : null}
       {messages.map((message, index) => (
-        <Turn key={`${message.at}-${index}`} message={message} />
+        <Turn key={`${message.at}-${index}`} message={message} index={index} busy={busy} />
       ))}
     </div>
   )

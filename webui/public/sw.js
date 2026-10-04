@@ -16,7 +16,6 @@ const SHELL = [
   "/manifest.webmanifest",
   "/icon-192.png",
   "/icon-512.png",
-  "/vite.svg",
 ]
 const PREFIX = "bot-lobby-shell-"
 const NEVER = /^\/(?:api|files)(?:\/|$)/

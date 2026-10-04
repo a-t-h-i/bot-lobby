@@ -41,7 +41,7 @@ export function RunsStrip({ runs }: { runs: LobbyRun[] }) {
   return (
     <ul className="flex shrink-0 flex-wrap items-center gap-2" aria-label="Runs">
       {runs.map((run, index) => (
-        <li key={run.runId ?? index} className="flex items-center gap-2 rounded-lg bg-muted py-1.5 pr-3 pl-2.5 text-xs">
+        <li key={run.runId ?? index} className="flex items-center gap-2 border-r border-border py-1.5 pr-3 pl-2.5 text-xs">
           <span className="flex size-4 items-center justify-center">{statusMark(run.status)}</span>
           <span className="sr-only">{run.status ?? "unknown"}</span>
           <span className={cn("font-medium", sourceColor(agentName(run)))}>{sourceLabel(agentName(run))}</span>

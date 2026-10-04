@@ -6,8 +6,9 @@
  * them. Images are also served back to the page through the preview route.
  */
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
-import { extname, join } from "node:path";
+import { existsSync, mkdirSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import { extname, join, sep } from "node:path";
+import { previewRoot } from "../state/previews.ts";
 import { previewDir } from "../ask/relay.ts";
 import { claimAttachments, sweepAttachments } from "../state/attachments.ts";
 import { ATTACHMENTS_MARK } from "../lobby/prompts.ts";
@@ -44,9 +45,9 @@ function kindOf(mime: string): UploadKind {
 }
 
 /** Save one file; the id is its name in the attachments folder. */
-export function saveUpload(name: string, claimedType: string, bytes: Buffer): Upload {
-  sweepAttachments(STALE_MS);
-  const dir = previewDir(ATTACHMENT_BUCKET);
+export function saveUpload(name: string, claimedType: string, bytes: Buffer, root?: string): Upload {
+  sweepAttachments(STALE_MS, Date.now(), root);
+  const dir = previewDir(ATTACHMENT_BUCKET, root);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const id = `${Date.now().toString(36)}${randomBytes(3).toString("hex")}-${safeName(name)}`;
   writeFileSync(join(dir, id), bytes, { mode: 0o600 });
@@ -55,14 +56,23 @@ export function saveUpload(name: string, claimedType: string, bytes: Buffer): Up
   return { id, name: safeName(name), mime, size: bytes.length, kind, ...(kind === "image" ? { url: `/files/preview/${ATTACHMENT_BUCKET}/${id}` } : {}) };
 }
 
+function attachmentExists(dir: string, id: string, root?: string): boolean {
+  if (!/^[\w.-]+$/.test(id) || !existsSync(join(dir, id))) return false;
+  try {
+    const base = realpathSync(dir);
+    return base.startsWith(realpathSync(previewRoot(root)) + sep)
+      && realpathSync(join(dir, id)).startsWith(base + sep) && statSync(join(dir, id)).isFile();
+  } catch { return false; }
+}
+
 /** `text`, then the files it carries by path, the way the agents read them; they belong to `taskId` and go with it. */
-export function withAttachments(text: string, ids: readonly string[] | undefined, taskId?: string): string {
+export function withAttachments(text: string, ids: readonly string[] | undefined, taskId?: string, root?: string): string {
   if (!ids || ids.length === 0) return text;
-  const dir = previewDir(ATTACHMENT_BUCKET);
+  const dir = previewDir(ATTACHMENT_BUCKET, root);
   const lines = ids.slice(0, MAX_ATTACHMENTS).map((id) => {
-    if (!/^[\w.-]+$/.test(id) || !existsSync(join(dir, id)) || !statSync(join(dir, id)).isFile()) fail(400, "bad_request", `the attachment ${id} is not there; attach it again`);
+    if (!attachmentExists(dir, id, root)) fail(400, "bad_request", `the attachment ${id} is not there; attach it again`);
     return `- ${join(dir, id)} (${mimeOf(id, "")})`;
   });
-  if (taskId) claimAttachments(ids.slice(0, MAX_ATTACHMENTS), taskId);
+  if (taskId) claimAttachments(ids.slice(0, MAX_ATTACHMENTS), taskId, root);
   return `${text.trim()}${text.trim() ? "\n\n" : ""}${ATTACHMENTS_MARK}\n${lines.join("\n")}`;
 }

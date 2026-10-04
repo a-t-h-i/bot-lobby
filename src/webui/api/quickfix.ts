@@ -17,7 +17,7 @@ export function quickfixList(ctx: ApiContext): { jobs: QuickFixJob[] } {
 /** Queue a quick fix; it starts at once when nothing else is running. */
 export function quickfixSubmit(body: { text: string; attachments?: string[] }, ctx: ApiContext): { notice: string; id: string } {
   if (!body.text.trim() && !body.attachments?.length) fail(400, "bad_request", "describe a quick change first");
-  const job = ctx.service.quickfix.submit(withAttachments(body.text, body.attachments));
+  const job = ctx.service.quickfix.submit(withAttachments(body.text, body.attachments, undefined, ctx.service.projectRoot?.()));
   return { notice: ctx.service.quickfix.running?.id === job.id ? `${job.id} started` : `${job.id} queued behind the running quick fix`, id: job.id };
 }
 

@@ -248,6 +248,21 @@
   .glass-pop {
     @apply border border-glass-border bg-popover text-popover-foreground shadow-glass backdrop-blur-md;
   }
+  /* A pane with no card: a hairline above it, nothing else. */
+  .flat-pane {
+    @apply border-t border-border bg-transparent;
+  }
+}
+
+:root { --composer-h: 5.5rem; }
+
+/* Own the scroll inset even when a tab also uses a padding utility. */
+.composer-inset {
+  padding-bottom: var(--composer-h);
+}
+/* Nested tab scrollers own their inset, never the ancestor as well. */
+.composer-inset:has(.composer-inset) {
+  padding-bottom: 0;
 }
 
 /* The activity indicator: three dots that hop in turn. */

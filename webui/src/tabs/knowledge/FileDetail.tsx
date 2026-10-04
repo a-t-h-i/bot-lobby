@@ -66,7 +66,7 @@ function EntryRow({
         event.preventDefault()
         pick()
       }}
-      className={selected ? "flex min-h-9 cursor-pointer flex-col gap-1 rounded-lg bg-accent p-2.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/30" : "flex min-h-9 cursor-pointer flex-col gap-1 rounded-lg p-2.5 outline-none transition-colors hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/30"}
+      className={selected ? "flex min-h-9 cursor-pointer flex-col gap-1 border-b border-border bg-accent p-2.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/30" : "flex min-h-9 cursor-pointer flex-col gap-1 border-b border-border p-2.5 outline-none transition-colors hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/30"}
     >
       <div className="flex gap-2">
         <div className="min-w-0 flex-1">

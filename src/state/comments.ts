@@ -5,8 +5,9 @@
  * session rewrites state.json at the end of every workflow step and would
  * silently drop a comment written by another session in the meantime.
  *
- * Each line is one event: a comment, its delivery to the owning Master, or the
- * Master addressing it with an amended plan. Reading folds the events.
+ * Each line is one event: a comment, its delivery to the owning Master, the
+ * Master addressing it with an amended plan, or the user editing their own
+ * comment after sending it. Reading folds the events.
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -23,6 +24,7 @@ export interface PlanComment {
   /** The pi session that wrote the comment, when known. */
   by?: string;
   status: CommentStatus;
+  editedAt?: string;
   deliveredAt?: string;
   addressedAt?: string;
 }
@@ -30,7 +32,8 @@ export interface PlanComment {
 type CommentEvent =
   | { kind: "comment"; id: string; text: string; at: string; by?: string }
   | { kind: "delivered"; id: string; at: string }
-  | { kind: "addressed"; id: string; at: string };
+  | { kind: "addressed"; id: string; at: string }
+  | { kind: "edited"; id: string; text: string; at: string };
 
 /** Longest comment kept; the Master gets it verbatim. */
 export const MAX_COMMENT_CHARS = 2000;
@@ -82,6 +85,13 @@ export function foldComments(taskId: string, events: readonly CommentEvent[]): P
     } else if (event.kind === "addressed" && comment.status !== "addressed") {
       comment.status = "addressed";
       comment.addressedAt = event.at;
+    } else if (event.kind === "edited") {
+      // An edit reopens the comment: the correction has not reached the Master yet.
+      comment.text = event.text;
+      comment.editedAt = event.at;
+      comment.status = "open";
+      delete comment.deliveredAt;
+      delete comment.addressedAt;
     }
   }
   return [...byId.values()];
@@ -99,6 +109,18 @@ export function addPlanComment(root: string, configDir: string, taskId: string, 
   const id = `C-${now.getTime().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   append(commentsPath(root, configDir, taskId), { kind: "comment", id, text: body, at, ...(by ? { by } : {}) });
   return { id, taskId, text: body, createdAt: at, ...(by ? { by } : {}), status: "open" };
+}
+
+/** Correct a comment already sent; the edit is one more event, never a rewrite. */
+export function editComment(root: string, configDir: string, taskId: string, commentId: string, text: string, now = new Date()): PlanComment {
+  const body = text.trim().slice(0, MAX_COMMENT_CHARS);
+  if (!body) throw new Error("an edited comment needs some text");
+  if (!readPlanComments(root, configDir, taskId).some((comment) => comment.id === commentId)) throw new Error(`no comment ${commentId} on ${taskId}`);
+  const path = commentsPath(root, configDir, taskId);
+  append(path, { kind: "edited", id: commentId, text: body, at: now.toISOString() });
+  const edited = readPlanComments(root, configDir, taskId).find((comment) => comment.id === commentId);
+  if (!edited) throw new Error(`no comment ${commentId} on ${taskId}`);
+  return edited;
 }
 
 export function markCommentsDelivered(root: string, configDir: string, taskId: string, ids: readonly string[], now = new Date()): void {

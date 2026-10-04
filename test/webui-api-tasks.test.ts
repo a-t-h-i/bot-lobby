@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { ensureProjectStructure, saveTask } from "../src/state/persistence.ts";
+import { addPlanComment, readPlanComments } from "../src/state/comments.ts";
 import { savePlannedTask } from "../src/state/backlog.ts";
 import { createTask } from "../src/schemas/task.ts";
 import { createLobbyService } from "../src/lobby/service.ts";
@@ -131,6 +132,28 @@ test("tasks.list rows mirror the terminal: mine, others, pending, recent", async
   } finally {
     await close();
   }
+});
+
+test("tasks.editComment rejects missing, foreign, unknown authors and blank edits", async () => {
+  const { call, root, close } = await setup();
+  try {
+    const own = addPlanComment(root, ".pi", "TASK-mine", "original", "session-1");
+    const foreign = addPlanComment(root, ".pi", "TASK-mine", "foreign", "session-2");
+    const unknown = addPlanComment(root, ".pi", "TASK-mine", "unknown");
+    const edit = (commentId: string, text = "corrected") => call("tasks.editComment", { taskId: "TASK-mine", commentId, text });
+    assert.equal((await edit("missing")).status, 404);
+    assert.equal((await edit(foreign.id)).status, 403);
+    assert.equal((await edit(unknown.id)).status, 403);
+    assert.equal((await edit(own.id, "   ")).status, 400);
+    assert.equal((await call("tasks.editComment", { taskId: "TASK-mine", commentId: own.id, text: "ok", by: "session-2" })).status, 400);
+    const result = await edit(own.id);
+    assert.equal(result.status, 200, result.body);
+    const comment = result.payload.result!.comment as typeof own;
+    assert.equal(comment.text, "corrected");
+    assert.equal(comment.createdAt, own.createdAt);
+    assert.ok(comment.editedAt);
+    assert.equal(readPlanComments(root, ".pi", "TASK-mine")[0]!.editedAt, comment.editedAt);
+  } finally { await close(); }
 });
 
 test("tasks.comments starts empty; tasks.comment adds one and answers its notice", async () => {
