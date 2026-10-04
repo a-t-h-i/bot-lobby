@@ -73,7 +73,7 @@ test("an uploaded image is saved, named by path in the message to the oracle and
 
     const reply = await call("lobby.send", { text: "look at this", attachments: [file.id] });
     assert.equal(reply.json.ok, true);
-    assert.match(sent[0]!, new RegExp(`^look at this\\n\\n${ATTACHMENTS_MARK}\\n- .*bot-lobby-previews.attachments.*${file.id.replace(/[.]/g, "\\.")} \\(image/png\\)$`));
+    assert.match(sent[0]!, new RegExp(`^look at this\\n\\n${ATTACHMENTS_MARK}\\n- .*bot-lobby-previews.[a-f0-9]{64}.attachments.*${file.id.replace(/[.]/g, "\\.")} \\(image/png\\)$`));
 
     const served = await send(server.port, { path: file.url!, headers: { cookie } });
     assert.equal(served.status, 200);

@@ -7,6 +7,9 @@
  */
 import { useEffect } from "react"
 import type { KeyInfo, TabInfo } from "@protocol"
+import { goKey } from "@/tabs/registry"
+import { hasOverlay } from "@/lib/overlay"
+import { isTyping, selectRow } from "@/prompts/nav"
 
 export interface LobbyKeyOptions {
   enabled: boolean
@@ -93,25 +96,59 @@ function tabFor(event: KeyboardEvent, tabs: TabInfo[]): string | undefined {
   return undefined
 }
 
-export function useLobbyKeys({ enabled, keys, tabs, insideApp, onAction, onTab }: LobbyKeyOptions): void {
+function bareBlocked(event: KeyboardEvent): boolean {
+  return isTyping(event.target) || event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || hasOverlay() || Boolean(document.querySelector("[role='dialog'], [role='menu'], [role='listbox']"))
+}
+
+function bareAction(event: KeyboardEvent, tabs: TabInfo[], onAction: LobbyKeyOptions["onAction"], onTab: LobbyKeyOptions["onTab"]): boolean {
+  const digit = !event.shiftKey && /^[1-9]$/.test(event.key) ? tabs[Number(event.key) - 1] : undefined
+  if (digit) onTab(digit.id)
+  else if (event.key === "/") onAction("search")
+  else if (event.key === "?") onAction("help")
+  else if (event.key === "j" || event.key === "k") selectRow(event.key === "j" ? 1 : -1)
+  else return false
+  return true
+}
+
+function configured(event: KeyboardEvent, options: LobbyKeyOptions): boolean {
+  const jump = tabFor(event, options.tabs)
+  const action = actionFor(event, options.keys)
+  if (!jump && !action) return false
+  if ((action === "search" || action === "savePlan") && !options.insideApp()) return true
+  event.preventDefault()
+  if (jump) options.onTab(jump)
+  else if (action) options.onAction(action)
+  return true
+}
+
+function navigateBare(event: KeyboardEvent, options: LobbyKeyOptions, prefixUntil: number): number {
+  if (event.key === "Escape") {
+    if (Date.now() < prefixUntil) event.preventDefault()
+    return 0
+  }
+  if (Date.now() < prefixUntil) {
+    const tab = goKey[event.key as keyof typeof goKey]
+    if (tab) { event.preventDefault(); options.onTab(tab) }
+    return 0
+  }
+  if (event.key === "g") return Date.now() + 1500
+  if (bareAction(event, options.tabs, options.onAction, options.onTab)) event.preventDefault()
+  return 0
+}
+
+export function useLobbyKeys(options: LobbyKeyOptions): void {
   useEffect(() => {
-    if (!enabled) return
+    if (!options.enabled) return
+    let prefixUntil = 0
     const onKeyDown = (event: KeyboardEvent) => {
-      const jump = tabFor(event, tabs)
-      if (jump) {
-        event.preventDefault()
-        onTab(jump)
-        return
-      }
-      const action = actionFor(event, keys)
-      if (!action) return
-      if (action === "search" || action === "savePlan") {
-        if (!insideApp()) return
-        event.preventDefault()
-      }
-      onAction(action)
+      if (event.defaultPrevented || event.isComposing || !options.insideApp()) return
+      const bare = !event.altKey && !event.ctrlKey && !event.metaKey
+      if (bare && bareBlocked(event)) { prefixUntil = 0; return }
+      if (configured(event, options)) { prefixUntil = 0; return }
+      prefixUntil = bare ? navigateBare(event, options, prefixUntil) : 0
     }
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [enabled, keys, tabs, insideApp, onAction, onTab])
+    // Run before pane-local keys so configured chords and g sequences win.
+    window.addEventListener("keydown", onKeyDown, true)
+    return () => window.removeEventListener("keydown", onKeyDown, true)
+  }, [options.enabled, options.keys, options.tabs, options.insideApp, options.onAction, options.onTab])
 }

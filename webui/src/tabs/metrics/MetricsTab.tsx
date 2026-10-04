@@ -78,7 +78,7 @@ function Body({ data, groupBy, query }: { data: MetricsData; groupBy: GroupBy; q
     return (
       <div className="flex flex-col gap-3">
         <Tiles tiles={data.tiles} />
-        <p className="glass rounded-lg p-4 text-sm text-muted-foreground">{query ? `No run matches "${query}".` : EMPTY}</p>
+        <p className="flat-pane p-4 text-sm text-muted-foreground">{query ? `No run matches "${query}".` : EMPTY}</p>
       </div>
     )
   }
