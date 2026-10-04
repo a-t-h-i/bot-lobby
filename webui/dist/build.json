@@ -1,6 +1,6 @@
 {
-  "hash": "f1f1d0f7d21d829e560b9d5fb7e72d9e6dd9c9e46f51c9b3e25d92227d23b56a",
-  "builtAt": "2026-10-03T23:34:19.822Z",
+  "hash": "1c116dc7caf92cac67ab90f3700bcc864bd16202d55d91b5d6a816ce92d9efe1",
+  "builtAt": "2026-10-04T00:17:47.517Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -120,7 +120,7 @@
     },
     {
       "path": "webui/src/components/ui/combobox.tsx",
-      "sha256": "1f830b67ea4d88593bda6cb9c42dd816dd9897d6fa377964d42b21377ba36d3a"
+      "sha256": "969ca6d7f29de8193c28d3f646740282f502822a35361defb238fd4a18862250"
     },
     {
       "path": "webui/src/components/ui/empty.tsx",
@@ -452,7 +452,7 @@
     },
     {
       "path": "webui/src/tabs/settings/SettingsForm.tsx",
-      "sha256": "6989d8ca50205c9e38ae3c840e0957067abadc465ec39b848d0e1a595aecfd46"
+      "sha256": "130bbc7022529b8a82986ce8ef28a51599898d5df922646e4168f9731c670ab5"
     },
     {
       "path": "webui/src/tabs/settings/SettingsTab.tsx",
@@ -501,6 +501,10 @@
     {
       "path": "webui/src/ui/ConfirmButton.tsx",
       "sha256": "1ea4765ed5886e9bb3aec6d7c6330565eedd3cc05227f933e1301e2e6cf57162"
+    },
+    {
+      "path": "webui/src/ui/EffortMascot.tsx",
+      "sha256": "4fd7c79d34c17b13face673851aa349a982421f368d9cff8c23c1638d85a1155"
     },
     {
       "path": "webui/src/ui/EffortSlider.tsx",
