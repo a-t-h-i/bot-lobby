@@ -350,6 +350,12 @@ Every agent card has the same rows: Model and Fallback side by side, then the ef
 
 ---
 
+## D-27 · One-card composer, one-row header · Adopted
+
+The message box is a single card: roomy sans-serif text on top (no `>` prompt, no monospace), and inside the card's bottom edge the tools (attach, bigger, preview), who the message goes to (a small segmented control), the key hints and the send button. Send is quiet grey until there is something to send. Dropping a file over it says "Drop to attach". On screens 1180px and wider the header is one row (workspace, tabs, status and buttons); the tabs lose their dotted joins and show the `Alt+N` digit in small quiet type after the name. Every card's title row has a hairline under it, and an empty detail pane shows an icon with the keys that move around, not a bare sentence.
+
+---
+
 ## Open questions (each has a default the swarm uses until the user answers)
 
 | Id | Question | Default |

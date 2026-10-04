@@ -23,7 +23,7 @@ export function Frame({ title, note, className, children, collapsed, onToggle, .
       {...props}
     >
       {title || note || onToggle ? (
-        <div className={cn("flex shrink-0 items-center justify-between gap-3 px-4", onToggle ? "py-1" : "pt-3 pb-1")}>
+        <div className={cn("flex h-10 shrink-0 items-center justify-between gap-3 px-4", !collapsed && "border-b border-border/70")}>
           {title ? <h2 className="min-w-0 truncate text-sm font-medium">{title}</h2> : <span />}
           <span className="flex shrink-0 items-center gap-1">
             {note ? <span className="flex items-center gap-2 truncate text-xs text-muted-foreground">{note}</span> : null}
