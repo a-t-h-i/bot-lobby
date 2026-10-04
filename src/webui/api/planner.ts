@@ -4,7 +4,7 @@
  * answering the round's questions and saving the draft. Actions answer with
  * the same notice text the terminal shows.
  */
-import { MEMBER_LABELS } from "../../lobby/planner.ts";
+import { MEMBER_LABELS, type PlannerMessage } from "../../lobby/planner.ts";
 import type { PanelMember } from "../../schemas/configuration.ts";
 import type { PlannerSnapshot } from "../protocol.ts";
 import type { ApiContext } from "./index.ts";
@@ -50,11 +50,24 @@ export function plannerNew(body: { seed?: { issue: { number: number; title: stri
 /** Send a message to the panel; the round runs in the background. */
 export function plannerSend(body: { text: string; attachments?: string[] }, ctx: ApiContext): { notice: string } {
   if (!body.text.trim() && !body.attachments?.length) fail(400, "bad_request", "describe the task to plan");
-  const text = withAttachments(body.text, body.attachments);
+  const text = withAttachments(body.text, body.attachments, undefined, ctx.service.projectRoot?.());
   const session = ctx.service.planner() ?? ctx.service.newPlanner(undefined, [...ctx.service.defaultPanel()]);
   if (session!.busy) fail(409, "conflict", "the panel is still thinking — wait for the round to finish");
   session!.send(text).catch(() => {});
   return { notice: "sent — the panel is on the next round" };
+}
+
+/** Correct a user turn synchronously, then revise the plan in the background. */
+export function plannerEditMessage(body: { messageIndex: number; at: number; text: string }, ctx: ApiContext): { message: PlannerMessage; notice: string } {
+  const session = ctx.service.planner();
+  if (!session) fail(404, "not_found", "no planning session");
+  const message = session.messages[body.messageIndex];
+  if (session.busy) fail(409, "conflict", "the panel is still thinking — wait for the round to finish");
+  if (!message || message.at !== body.at) fail(409, "conflict", "the message has changed — refresh the conversation");
+  if (message.role !== "you" || message.settled?.length) fail(403, "forbidden", "only ordinary user messages can be edited");
+  if (!body.text.trim()) fail(400, "bad_request", "an edited message needs some text");
+  session.editMessage(body.messageIndex, body.at, body.text).catch(() => {});
+  return { message: structuredClone(session.messages[body.messageIndex]!), notice: "message edited — the panel revises the plan" };
 }
 
 /** Seat or unseat a member for the next round. */

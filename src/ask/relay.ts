@@ -6,7 +6,7 @@
  * sends the answers back the same way. Only runs the master lets ask (the
  * designer's) get the tool: it sets `ASK_ENV` for them.
  */
-import { tmpdir } from "node:os";
+import { previewRoot } from "../state/previews.ts";
 import { isAbsolute, join, resolve } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { MAX_OPTIONS, MAX_QUESTIONS, type AskQuestion, type AskResult, type Asker } from "./types.ts";
@@ -21,8 +21,8 @@ export function relayEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
 }
 
 /** Where an agent saves the images it shows the user for a task: outside the repository, so they are never part of its change. */
-export function previewDir(taskId: string): string {
-  return join(tmpdir(), "bot-lobby-previews", taskId.replace(/[^\w.-]/g, "_"));
+export function previewDir(taskId: string, root?: string): string {
+  return join(previewRoot(root), taskId.replace(/[^\w.-]/g, "_"));
 }
 
 /** Image paths made absolute, so the master finds them whatever its cwd. */

@@ -1,6 +1,6 @@
 /**
- * The list + detail layout the tabs share: at ≥ 1024 px a narrow list card
- * beside a large detail card, below it the list alone with the detail in a
+ * The list + detail layout the tabs share: at ≥ 1024 px a narrow list pane
+ * beside a large detail pane, below it the list alone with the detail in a
  * right-hand sheet. The route decides what is open; `onClose` takes the
  * detail off the route again.
  */
@@ -10,7 +10,7 @@ import { Keys, KeyHint } from "@/components/ui/kbd"
 import { useMediaQuery } from "@/app/hooks"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { PRIORITY, useOverlaySlot } from "@/lib/overlay"
+import { PRIORITY, hasOverlay, useOverlaySlot } from "@/lib/overlay"
 import { currentRow, horizontalStep, isTyping, stepRows, verticalStep } from "@/prompts/nav"
 import { cn } from "@/lib/utils"
 
@@ -19,9 +19,9 @@ export function useWide(): boolean {
   return useMediaQuery("(min-width: 1024px)")
 }
 
-/** A flat card; its edge lights up while you are inside it. */
+/** A flat pane: a hairline above it, no card around it. */
 export function Pane({ className, ...props }: React.ComponentProps<"section">) {
-  return <section className={cn("glass min-h-0 min-w-0 rounded-lg transition-[border-color] duration-200 focus-within:border-ring/50", className)} {...props} />
+  return <section className={cn("flat-pane min-h-0 min-w-0", className)} {...props} />
 }
 
 interface SplitPaneProps {
@@ -68,8 +68,8 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe }:
   // List: up/down (or k/j) step through the rows, Home/End jump, right (or l) goes into the detail.
   function onListKey(event: KeyboardEvent<HTMLElement>) {
     const root = listPane.current
-    if (!root || event.altKey || event.ctrlKey || event.metaKey || isTyping(event.target)) return
-    const step = verticalStep(event.key)
+    if (!root || event.defaultPrevented || event.nativeEvent.isComposing || hasOverlay() || event.altKey || event.ctrlKey || event.metaKey || isTyping(event.target) || event.target instanceof HTMLInputElement) return
+    const step = verticalStep(event.key, false)
     if (step) {
       event.preventDefault()
       stepRows(root, event.target as Element, step)
@@ -84,7 +84,7 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe }:
 
   // Detail: left (or h) goes back to the open row in the list.
   function onDetailKey(event: KeyboardEvent<HTMLElement>) {
-    if (event.altKey || event.ctrlKey || event.metaKey || isTyping(event.target)) return
+    if (event.defaultPrevented || event.nativeEvent.isComposing || hasOverlay() || event.altKey || event.ctrlKey || event.metaKey || isTyping(event.target)) return
     if (horizontalStep(event.key) === -1 && listPane.current) {
       event.preventDefault()
       currentRow(listPane.current)?.focus()
@@ -105,10 +105,10 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe }:
   }
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,30fr)_minmax(0,70fr)] gap-4 px-4 pb-2">
-      <Pane data-pane="list" ref={listPane} onKeyDown={onListKey} className="overflow-y-auto">
+      <Pane data-pane="list" ref={listPane} onKeyDown={onListKey} className="composer-inset overflow-y-auto">
         {list}
       </Pane>
-      <Pane data-pane="detail" ref={detailPane} tabIndex={0} aria-label="Detail" onKeyDown={onDetailKey} className="overflow-y-auto p-4 outline-none">
+      <Pane data-pane="detail" ref={detailPane} tabIndex={0} aria-label="Detail" onKeyDown={onDetailKey} className="composer-inset overflow-y-auto p-4 outline-none">
         {detail ?? (
           <div className="grid h-full min-h-48 place-items-center">
             <div className="flex max-w-xs flex-col items-center gap-2 text-center">
@@ -130,7 +130,7 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe }:
   )
 }
 
-/** The list card's title row: `Tasks            2 open · 2 finished`, then any controls. */
+/** The list pane's title row: `Tasks            2 open · 2 finished`, then any controls. */
 export function PaneHeader({ title, count, children }: { title: string; count?: string; children?: ReactNode }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">

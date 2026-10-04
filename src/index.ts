@@ -5,6 +5,7 @@ import { registerOrchestrateTool } from "./pi/tools.ts";
 import { registerRouteTool } from "./pi/route.ts";
 import { onTransition } from "./state/task-state.ts";
 import { releaseAttachments } from "./state/attachments.ts";
+import { detectProjectRoot } from "./state/project.ts";
 import { TERMINAL_STATES } from "./schemas/task.ts";
 import { pingTransition } from "./pi/notify.ts";
 import { isSubagentProcess } from "./pi/quiet.ts";
@@ -19,6 +20,8 @@ import { registerWebTools } from "./web/tools.ts";
 import { registerExcalidrawTools } from "./excalidraw/tools.ts";
 
 export default function (pi: ExtensionAPI): void {
+  let root = detectProjectRoot(process.cwd(), CONFIG_DIR_NAME);
+  pi.on("session_start", (_event, ctx) => { root = detectProjectRoot(ctx.cwd, CONFIG_DIR_NAME); });
   // First, so every session_start handler below finds the classifier bound to this session's keys.
   registerClassifier(pi, CONFIG_DIR_NAME);
   // Before the lifecycle, so a task that ended while the oracle was idle is closed before it builds the next turn's prompt.
@@ -30,7 +33,7 @@ export default function (pi: ExtensionAPI): void {
   // A finished task takes the files attached during it along.
   onTransition((task) => {
     pingTransition(task);
-    if (TERMINAL_STATES.includes(task.state)) releaseAttachments(task.id);
+    if (TERMINAL_STATES.includes(task.state)) releaseAttachments(task.id, root);
   });
   registerCommands(pi, CONFIG_DIR_NAME);
   registerOrchestrateTool(pi, CONFIG_DIR_NAME);

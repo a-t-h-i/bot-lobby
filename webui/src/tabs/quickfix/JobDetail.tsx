@@ -21,7 +21,7 @@ function Notes({ job }: { job: QuickFixJob }) {
   return (
     <>
       {job.route ? <p className="text-sm text-muted-foreground">Routed {job.route}</p> : null}
-      {job.note && held ? <p className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-foreground">
+      {job.note && held ? <p className="flex items-start gap-2 border-b border-warning/30 px-3 pb-2 text-sm text-foreground">
           <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning" />
           <span>Held: {job.note}.</span>
         </p> : null}
@@ -105,7 +105,7 @@ export function JobDetail({ job, now }: { job: QuickFixJob; now: number }) {
           </ul>
         </Section>
       ) : null}
-      {job.error ? <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{job.error}</p> : null}
+      {job.error ? <p className="border-b border-destructive/30 px-3 pb-2 text-sm text-destructive">{job.error}</p> : null}
       {job.report ? (
         <Section title="Report">
           <Markdown text={job.report} />

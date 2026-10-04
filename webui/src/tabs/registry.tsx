@@ -16,6 +16,8 @@ import { QuickfixTab } from "./quickfix/QuickfixTab"
 import { SessionsTab } from "./sessions/SessionsTab"
 import { TasksTab } from "./tasks/TasksTab"
 
+export const goKey = { l: "lobby", p: "plan", t: "tasks", i: "issues", u: "git", s: "sessions", n: "knowledge", q: "quickfix", m: "metrics", e: "settings", x: "excalidraw" } as const
+
 /** The first path segment after the tab, decoded (`#/tasks/T-1` → `T-1`). */
 function detailId(rest: string[]): string | undefined {
   const raw = rest[0]

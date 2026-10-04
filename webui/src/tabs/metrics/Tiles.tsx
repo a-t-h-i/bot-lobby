@@ -1,7 +1,7 @@
 /**
  * The Metrics tab's stat strip: `Runs`, `Success`, `Avg run`, `Cost`, `Tasks`
- * in one card, a big number under each name with its context line below.
- * The success state is a dot (and a hidden word), never colour alone.
+ * in one flat row split by dividers, a big number under each name with its
+ * context line below. The success state is a dot (and a hidden word), never colour alone.
  */
 import type { MetricsData } from "@protocol"
 import { duration, money, percent, shortDuration, status } from "./words"
@@ -33,7 +33,7 @@ export function Tiles({ tiles }: { tiles: Tiles }) {
   const state = status(rate)
   const failures = tiles.runs - tiles.successes
   return (
-    <div className="glass grid grid-cols-2 rounded-lg sm:grid-cols-3 lg:grid-cols-5 lg:divide-x lg:divide-border">
+    <div className="flat-pane grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 lg:divide-x lg:divide-border">
       <Stat label="Runs" value={String(tiles.runs)} sub={tiles.runs === 0 ? "no runs yet" : ""} />
       <Stat
         label="Success"

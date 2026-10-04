@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
@@ -12,6 +12,8 @@ import {
   addPlanComment,
   commentMessage,
   commentsPath,
+  editComment,
+  markCommentsAddressed,
   markCommentsDelivered,
   pendingComments,
   readPlanComments,
@@ -74,6 +76,39 @@ test("plan comments fold from an append-only log: open, delivered, addressed", (
   assert.deepEqual(undeliveredComments(comments).map((c) => c.id), [second.id]);
   assert.equal(pendingComments(comments).length, 2);
   assert.throws(() => addPlanComment(root, ".pi", "TASK-1", "   "), /needs some text/);
+});
+
+test("an edit replaces the text, reopens the comment and keeps it where it was", () => {
+  const root = tempRoot();
+  const original = addPlanComment(root, ".pi", "TASK-1", "Use cursor pagination", "session-a");
+  markCommentsDelivered(root, ".pi", "TASK-1", [original.id]);
+  const edited = editComment(root, ".pi", "TASK-1", original.id, "  Use keyset pagination  ", new Date(1_000));
+  assert.equal(edited.text, "Use keyset pagination");
+  assert.equal(edited.status, "open");
+  assert.equal(edited.createdAt, original.createdAt, "an edit does not rewrite history");
+  assert.equal(edited.by, "session-a");
+  assert.equal(edited.editedAt, new Date(1_000).toISOString());
+  assert.equal(edited.deliveredAt, undefined);
+  assert.equal(readPlanComments(root, ".pi", "TASK-1")[0]?.editedAt, edited.editedAt);
+  assert.equal(readPlanComments(root, ".pi", "TASK-1").length, 1);
+});
+
+test("an edit after the Master addressed a comment reopens it", () => {
+  const root = tempRoot();
+  const original = addPlanComment(root, ".pi", "TASK-1", "Cap the page size", "session-a");
+  markCommentsAddressed(root, ".pi", "TASK-1", [original.id]);
+  const edited = editComment(root, ".pi", "TASK-1", original.id, "Cap the page size at 100");
+  assert.equal(edited.status, "open");
+  assert.equal(edited.addressedAt, undefined);
+  assert.deepEqual(undeliveredComments(readPlanComments(root, ".pi", "TASK-1")).map((c) => c.id), [original.id]);
+});
+
+test("an edit for an unknown id never appends, and an empty one is refused", () => {
+  const root = tempRoot();
+  assert.throws(() => editComment(root, ".pi", "TASK-1", "C-nope", "anything"), /no comment C-nope/);
+  assert.deepEqual(readPlanComments(root, ".pi", "TASK-1"), []);
+  assert.equal(existsSync(commentsPath(root, ".pi", "TASK-1")), false);
+  assert.throws(() => editComment(root, ".pi", "TASK-1", "C-nope", "   "), /needs some text/);
 });
 
 test("a torn comment line is skipped instead of breaking the log", () => {

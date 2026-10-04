@@ -23,7 +23,7 @@ const select = (id: string) => go(tabHash("excalidraw", id))
 
 function ExcalidrawEmpty({ onChanged }: { onChanged: () => void }) {
   return (
-    <Empty className="glass m-4 flex-1 border">
+    <Empty className="flat-pane m-4 flex-1">
       <EmptyHeader>
         <EmptyTitle>{EMPTY_HEADLINE}</EmptyTitle>
         <EmptyDescription className="font-mono">{EMPTY_ADD}</EmptyDescription>

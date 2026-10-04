@@ -10,6 +10,7 @@ import { Kbd, Keys } from "@/components/ui/kbd"
 import { Popup } from "@/components/ui/popup"
 import { PRIORITY, useOverlaySlot } from "@/lib/overlay"
 import type { KeyInfo, TabInfo } from "@protocol"
+import { goKey } from "@/tabs/registry"
 
 /** One line of the table: the caps, then what they do. */
 interface Line {
@@ -23,11 +24,18 @@ interface Line {
 
 /** Keys the page handles itself, beside the server's table. */
 const MESSAGE_BOX: Line[] = [
-  { id: "focus", caps: ["/"], help: "jump to the message box" },
+  { id: "focus", caps: ["/"], help: "focus search, or the message box" },
   { id: "send", label: "Enter", help: "send the message" },
   { id: "newline", label: "Shift+Enter", help: "a new line (lists carry on)" },
   { id: "format", label: "Ctrl+B", help: "bold; Ctrl+I italic, Ctrl+E code, Ctrl+K link" },
   { id: "leave", label: "Esc", help: "leave the box for the tab bar" },
+]
+
+const NAVIGATION: Line[] = [
+  { id: "digits", caps: ["1", "…", "9"], help: "jump to a tab in current order" },
+  { id: "help", caps: ["?"], help: "keyboard shortcuts" },
+  ...Object.entries(goKey).map(([key, tab]) => ({ id: `go.${tab}`, caps: ["g", key], help: `jump to ${tab}` })),
+  { id: "edit", label: "Ctrl+Enter", help: "save an edited message; Esc cancels" },
 ]
 
 const LISTS: Line[] = [
@@ -127,10 +135,11 @@ export function AltH({
         <div className="flex flex-col gap-6">
           <Section title="Everywhere" lines={fromKeys(keys)} />
           <Section title="Jump to a tab" lines={tabKeys(tabs)} />
+          <Section title="Navigation and editing" lines={NAVIGATION} />
           <Section title="Message box" lines={MESSAGE_BOX} />
         </div>
         <div className="flex flex-col gap-6">
-          <Section title="Lists and cards" lines={LISTS} />
+          <Section title="Lists and panes" lines={LISTS} />
           <Section title="Questions" lines={QUESTIONS} />
         </div>
       </div>
