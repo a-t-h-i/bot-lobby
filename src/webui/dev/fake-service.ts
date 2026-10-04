@@ -9,6 +9,7 @@ import { LobbyFeed } from "../../lobby/feed.ts";
 import { promptHub } from "../../lobby/prompt-hub.ts";
 import { lobbyTopics } from "../../lobby/topics.ts";
 import type { BackgroundSession, DialogAnswer, SessionDialog } from "../../lobby/sessions.ts";
+import type { PlanComment } from "../../state/comments.ts";
 import type { LobbyService } from "../../lobby/host.ts";
 import { loadScenario, type ScenarioFixture } from "./fixtures.ts";
 
@@ -39,6 +40,13 @@ function fakePlanner(entry: NonNullable<ScenarioFixture["mockPlanner"]>): Record
     },
     async send(text: string): Promise<void> {
       (session.messages as Array<Record<string, unknown>>).push({ role: "you", text, at: Date.now() });
+    },
+    async editMessage(messageIndex: number, at: number, text: string): Promise<void> {
+      const message = session.messages[messageIndex];
+      if (session.busy || !message || message.at !== at) throw new Error("the message has changed");
+      if (message.role !== "you" || (Array.isArray(message.settled) && message.settled.length > 0)) throw new Error("only ordinary user messages can be edited");
+      if (!text.trim()) throw new Error("an edited message needs some text");
+      session.messages[messageIndex] = { ...message, text: text.trim(), editedAt: Date.now() };
     },
     async retry(): Promise<void> {},
     commentOnLine(line: string, text: string): boolean {
@@ -464,9 +472,19 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     checkExcalidraw: async () => ({ ok: true, text: "reached the server; nobody has this session open yet — open the link in Excalidraw, and agents can read and draw" }),
     comments: (taskId: string) => [...(comments.get(taskId) ?? [])],
     comment: (taskId: string, text: string) => {
-      const entry = { id: `C-mock-${(commentSeq += 1)}`, taskId, text, createdAt: new Date().toISOString(), status: "open" };
+      const entry = { id: `C-mock-${(commentSeq += 1)}`, taskId, text, by: fixture.status.sessionId, createdAt: new Date().toISOString(), status: "open" };
       comments.set(taskId, [...(comments.get(taskId) ?? []), entry]);
       return "comment sent to the oracle — it will amend the plan";
+    },
+    editComment: (taskId: string, commentId: string, text: string) => {
+      const existing = (comments.get(taskId) ?? []).find((entry) => entry.id === commentId);
+      if (!existing) throw new Error(`no comment ${commentId}`);
+      if (!existing.by || existing.by !== fixture.status.sessionId) throw new Error("only your own comments can be edited");
+      const entry: Record<string, unknown> = { ...existing, text: text.trim(), editedAt: new Date().toISOString(), status: "open" };
+      delete entry.deliveredAt;
+      delete entry.addressedAt;
+      comments.set(taskId, [...(comments.get(taskId) ?? []).map((other) => (other.id === commentId ? entry : other))]);
+      return entry as unknown as PlanComment;
     },
     startPlanned: (plan: { id: string }) => `starting ${plan.id} here — its agreed plan needs no approval…`,
     discardPlan: (id: string) => {

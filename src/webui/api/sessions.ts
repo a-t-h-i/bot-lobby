@@ -61,7 +61,7 @@ export function sessionsStart(body: { request?: string; planId?: string; auto?: 
     return { notice: `started ${session.name} in a new session`, key: session.key };
   }
   if (!body.request?.trim() && !body.attachments?.length) fail(400, "bad_request", "describe the task first");
-  const session = ctx.service.startSession({ request: withAttachments((body.request ?? "").trim(), body.attachments), ...(body.auto ? { auto: true } : {}) });
+  const session = ctx.service.startSession({ request: withAttachments((body.request ?? "").trim(), body.attachments, undefined, ctx.service.projectRoot?.()), ...(body.auto ? { auto: true } : {}) });
   if (typeof session === "string") return { notice: session };
   return { notice: `started ${session.name} in a new session`, key: session.key };
 }
@@ -78,7 +78,7 @@ export function sessionsStop(body: { key: string }, ctx: ApiContext): { notice: 
 export function sessionsMessage(body: { key?: string; sessionId?: string; text: string; attachments?: string[] }, ctx: ApiContext): { notice?: string } {
   if (!body.key && !body.sessionId) fail(400, "bad_request", "a session key or id is required");
   if (!body.text.trim() && !body.attachments?.length) return { notice: "type something first" };
-  const text = withAttachments(body.text, body.attachments);
+  const text = withAttachments(body.text, body.attachments, undefined, ctx.service.projectRoot?.());
   const background = backgroundOf(ctx, body.key, body.sessionId);
   if (background) {
     if (!background.alive) fail(409, "conflict", `${background.name} has ended`);

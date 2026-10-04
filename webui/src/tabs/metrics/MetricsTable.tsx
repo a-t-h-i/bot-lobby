@@ -36,14 +36,14 @@ function agents(group: MetricGroupInfo, groupBy: GroupBy): string {
 
 export function MetricsTable({ groups, groupBy }: { groups: MetricGroupInfo[]; groupBy: GroupBy }) {
   return (
-    <section className="glass flex min-h-0 flex-col gap-2 rounded-lg pt-3" aria-label="All models">
+    <section className="flat-pane flex min-h-0 flex-col gap-2 pt-3" aria-label="All models">
       <h2 className="flex items-baseline justify-between gap-3 px-4 text-sm font-medium">
         <span>All models</span>
         <span className="text-xs font-normal text-muted-foreground">{groupBy === "model" ? "by model · thinking" : "by model · thinking · agent"} · sorted by runs</span>
       </h2>
       <div className="max-h-80 overflow-auto">
         <table className="w-full border-collapse text-xs">
-          <thead className="sticky top-0 bg-card text-muted-foreground">
+          <thead className="sticky top-0 bg-background text-muted-foreground">
             <tr>
               <th scope="col" className="px-3 py-1.5 text-left font-medium">Model</th>
               <th scope="col" className="px-3 py-1.5 text-left font-medium">Think</th>

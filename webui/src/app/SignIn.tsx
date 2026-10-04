@@ -40,7 +40,7 @@ export function SignIn() {
 
   return (
     <div className="flex min-h-svh items-center justify-center p-6">
-      <form onSubmit={submit} className="glass flex w-full max-w-md flex-col gap-4 rounded-lg p-7">
+      <form onSubmit={submit} className="flat-pane flex w-full max-w-md flex-col gap-4 p-7">
         <div className="flex items-center gap-2">
           <KeyRound className="size-5" aria-hidden="true" />
           <h1 className="text-base font-medium">Sign in to bot-lobby</h1>
