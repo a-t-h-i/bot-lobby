@@ -15,6 +15,8 @@ import {
   type WorkflowDeps,
   type OrchestrateParams,
 } from "../src/workflow/workflow.ts";
+import { dataRoot } from "../src/state/project.ts";
+import { knowledgeDir } from "../src/knowledge/paths.ts";
 import { pendingApprovals, requestApproval } from "../src/workflow/approvals.ts";
 import type { ProcessRunner } from "../src/execution/pi-runner.ts";
 
@@ -62,6 +64,38 @@ function withTask(deps: WorkflowDeps, state: TaskState = "created"): Task {
 function act(deps: WorkflowDeps, params: Partial<OrchestrateParams> = {}) {
   return runWorkflowAction({ action: "status", taskId: "TASK-1", ...params } as OrchestrateParams, deps);
 }
+
+test("completion records nonblocking PR skips and command failures, and persists success links", async () => {
+  const cases = ["none", "base", "failure", "success"] as const;
+  for (const kind of cases) {
+    const calls: string[][] = [];
+    const notices: string[] = [];
+    const deps = makeDeps({ notify: (message) => { notices.push(message); }, exec: async (command, args) => {
+      assert.match(readFileSync(join(knowledgeDir(dataRoot(deps.root, deps.configDir), "master"), "completed-tasks.md"), "utf8"), /TASK-1/);
+      calls.push([command, ...args]);
+      if (kind === "failure") return { code: 1, stdout: "", stderr: "no remote" };
+      return { code: 0, stdout: command === "gh" ? "https://github.com/acme/repo/pull/42" : "", stderr: "" };
+    } });
+    const task = withTask(deps, "reviewing");
+    task.plan = "1. Implement";
+    task.qaVerdict = "pass";
+    if (kind !== "none") task.git = { mode: "branch", branch: "task-x", base: "a".repeat(40), ...(kind !== "base" ? { from: "main" } : {}) };
+    saveTask(deps.root, deps.configDir, task);
+    const result = await act(deps, { action: "complete" });
+    assert.equal(result.ok, true, result.message);
+    assert.equal(result.state, "completed");
+    const saved = loadTask(deps.root, deps.configDir, task.id)!;
+    const reason = kind === "none" ? /no git isolation/ : kind === "base" ? /no valid base branch/ : kind === "failure" ? /no remote/ : /pull request #42.*https/i;
+    assert.match(saved.decisions.at(-1)!.text, reason);
+    assert.match(readFileSync(join(knowledgeDir(dataRoot(deps.root, deps.configDir), "master"), "decisions.md"), "utf8"), reason);
+    assert.match(result.message, reason);
+    assert.equal(calls.length, kind === "none" || kind === "base" ? 0 : kind === "failure" ? 1 : 2);
+    if (kind === "success") {
+      assert.match(notices[0]!, /#42.*https/);
+      assert.deepEqual(calls[1]!.slice(0, 7), ["gh", "pr", "create", "--base", "main", "--head", "task-x"]);
+    }
+  }
+});
 
 test("clarify moves created to clarifying and returns the user's answer", async () => {
   const deps = makeDeps({ ask: async () => "Only admins" });

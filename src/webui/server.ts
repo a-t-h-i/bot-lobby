@@ -6,7 +6,10 @@
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { loadConfig } from "../state/project.ts";
+import { detectProjectRoot, loadConfig } from "../state/project.ts";
+import { canonicalRoot } from "../state/previews.ts";
+import { ProjectRegistry, registryDirectory, projectInfo, listProjects, browserSession } from "./projects.ts";
+import { gateway } from "./gateway.ts";
 import { lobbyFeed } from "../lobby/feed.ts";
 import type { LobbyService } from "../lobby/host.ts";
 import {
@@ -35,6 +38,8 @@ export const PORT_RANGE = 20;
 
 export interface WebServerOptions {
   service: LobbyService;
+  projectRoot?: string;
+  registryDir?: string;
   /** Base port (config `lobby.web.port` once a later step adds it). */
   port?: number;
   /** The built page; defaults to `webui/dist`. */
@@ -82,7 +87,7 @@ function hookExit(): void {
 }
 
 /** Read a JSON body, capped at a megabyte (413 past it, 400 when it is no JSON). */
-async function readJson(req: IncomingMessage): Promise<unknown> {
+async function readJson(req: IncomingMessage, allowEmpty = true): Promise<unknown> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
@@ -92,7 +97,7 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
     chunks.push(buffer);
   }
   const text = Buffer.concat(chunks).toString("utf8");
-  if (!text.trim()) return {};
+  if (!text.trim() && allowEmpty) return {};
   try {
     return JSON.parse(text);
   } catch {
@@ -133,7 +138,7 @@ async function upload(req: IncomingMessage, res: ServerResponse, url: URL, state
     sendError(res, "bad_request", "the file is empty");
     return;
   }
-  sendJson(res, 200, { ok: true, result: saveUpload(name, url.searchParams.get("type") ?? "", bytes) });
+  sendJson(res, 200, { ok: true, result: saveUpload(name, url.searchParams.get("type") ?? "", bytes, state.projectRoot) });
 }
 
 function numParam(url: URL, name: string): number | undefined {
@@ -151,6 +156,8 @@ interface RouteState {
   guard: LoginGuard;
   hub: EventHub;
   root: string;
+  projectRoot: string;
+  registry?: ProjectRegistry;
 }
 
 async function login(req: IncomingMessage, res: ServerResponse, state: RouteState): Promise<void> {
@@ -190,6 +197,15 @@ async function routeApi(req: IncomingMessage, res: ServerResponse, url: URL, sta
     sendError(res, "unauthorized", "open the link Pi printed", 401);
     return;
   }
+  if (url.pathname === "/api/projects.self" || url.pathname === "/api/projects.list") {
+    const body = await readJson(req, false);
+    if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).length) throw new HttpError(400, "bad_request", "send exactly {}");
+    const registry = state.registry!;
+    const result = url.pathname.endsWith(".self") ? { project: projectInfo(registry.record) }
+      : { projects: await listProjects(registry, browserSession(req.headers.cookie)), currentId: registry.record.id };
+    sendJson(res, 200, { ok: true, result });
+    return;
+  }
   const name = callName(url);
   if (name === undefined) {
     sendError(res, "not_found", `no call ${url.pathname.slice("/api/".length)}`, 404);
@@ -210,7 +226,14 @@ async function route(req: IncomingMessage, res: ServerResponse, state: RouteStat
     sendError(res, "forbidden", "unknown host", 403);
     return;
   }
-  const url = new URL(req.url ?? "/", "http://127.0.0.1");
+  let url = new URL(req.url ?? "/", "http://127.0.0.1");
+  if (url.pathname.startsWith("/projects/")) {
+    if (isCrossSite(req.headers.origin, req.headers["sec-fetch-site"] as string | undefined, state.port)) throw new HttpError(403, "forbidden", "cross-site request");
+    if (!isSignedIn(req.headers.cookie, state.session)) throw new HttpError(401, "unauthorized", "open the link Pi printed");
+    const local = await gateway(req, res, url, state.registry!);
+    if (!local) return;
+    url = local;
+  }
   if (url.pathname.startsWith("/files/preview/")) {
     if (req.method !== "GET") {
       sendError(res, "unsupported", "only GET", 405);
@@ -221,7 +244,7 @@ async function route(req: IncomingMessage, res: ServerResponse, state: RouteStat
       sendError(res, "not_found", "no such preview", 404);
       return;
     }
-    await servePreview(res, names.task, names.name, isSignedIn(req.headers.cookie, state.session));
+    await servePreview(res, names.task, names.name, isSignedIn(req.headers.cookie, state.session), state.projectRoot);
     return;
   }
   if (!url.pathname.startsWith("/api/")) {
@@ -288,6 +311,7 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
     guard: new LoginGuard(),
     hub,
     root: distDir(options.dist),
+    projectRoot: canonicalRoot(options.service.projectRoot?.() ?? options.projectRoot ?? detectProjectRoot(process.cwd())),
   };
   const server: Server = createServer((req, res) => {
     route(req, res, state).catch((error: Error) => {
@@ -318,6 +342,8 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
     throw new Error(`no free port from ${base} to ${base + PORT_RANGE}`);
   }
   state.port = bound;
+  try { state.registry = new ProjectRegistry(options.registryDir ?? registryDirectory(), state.projectRoot, bound); }
+  catch (error) { hub.close(); server.close(); throw error; }
   hookExit();
   const api: WebServer = {
     link: `http://127.0.0.1:${bound}/#token=${link}`,
@@ -325,6 +351,8 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
     clients: () => hub.clients(),
     rebind: (service) => {
       state.service = service;
+      state.projectRoot = canonicalRoot(service.projectRoot?.() ?? options.projectRoot ?? detectProjectRoot(process.cwd()));
+      state.registry!.rebind(state.projectRoot);
       hub.attach(service);
       hub.hello();
     },
@@ -336,6 +364,7 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
       return `http://127.0.0.1:${state.port}/#token=${state.link}`;
     },
     close: async () => {
+      state.registry!.close();
       hub.close();
       await new Promise<void>((resolve) => {
         server.close(() => resolve());

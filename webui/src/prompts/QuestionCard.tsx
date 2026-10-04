@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { KeyHint } from "@/components/ui/kbd"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import { projectUrl } from "@/lib/project"
 import { Markdown } from "@/ui/Markdown"
 import { horizontalStep, isTyping, moveNav, verticalStep } from "./nav"
 import type { AskAnswer, AskQuestion, AskResult, AskOption, PromptView, SessionDialog } from "./payload"
@@ -99,7 +100,7 @@ function Preview({ option }: { option?: AskOption }) {
     <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3">
       <p className="text-xs font-medium text-muted-foreground">Preview · {splitRecommended(option.label).text}</p>
       {option.image ? (
-        <img src={option.image} alt="" loading="lazy" className="max-h-64 w-full rounded-lg border object-contain" />
+        <img src={projectUrl(option.image)} alt="" loading="lazy" className="max-h-64 w-full rounded-lg border object-contain" />
       ) : null}
       {option.preview ? (
         <Markdown text={option.preview} className="text-xs" />

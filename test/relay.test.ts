@@ -116,7 +116,7 @@ test("the designer may ask the user: its questions reach the questionnaire as DE
   assert.ok(seen[0]!.tools.split(",").includes(ASK_TOOL), "the tool is on its allowlist");
   assert.equal(seen[0]!.env?.[ASK_ENV], "1");
   assert.match(seen[0]!.prompt, /You can ask the user with ask_user_question/);
-  assert.ok(seen[0]!.prompt.includes(previewDir("TASK-1")), "it is told where to save images");
+  assert.ok(seen[0]!.prompt.includes(previewDir("TASK-1", root)), "it is told where to save images");
   assert.deepEqual(asked.map((entry) => entry.from), ["DESIGN"]);
   assert.deepEqual(seen[0]!.answer, picked);
   const decisions = loadTask(root, ".pi", "TASK-1")!.decisions.map((decision) => decision.text);
