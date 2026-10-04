@@ -5,7 +5,8 @@
  * detail off the route again.
  */
 import { useRef, type KeyboardEvent, type ReactNode } from "react"
-import { X } from "lucide-react"
+import { PanelRight, X } from "lucide-react"
+import { Keys, KeyHint } from "@/components/ui/kbd"
 import { useMediaQuery } from "@/app/hooks"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
@@ -108,7 +109,22 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe }:
         {list}
       </Pane>
       <Pane data-pane="detail" ref={detailPane} tabIndex={0} aria-label="Detail" onKeyDown={onDetailKey} className="overflow-y-auto p-4 outline-none">
-        {detail ?? <p className="text-sm text-muted-foreground">{hint}</p>}
+        {detail ?? (
+          <div className="grid h-full min-h-48 place-items-center">
+            <div className="flex max-w-xs flex-col items-center gap-2 text-center">
+              <span aria-hidden="true" className="flex size-10 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                <PanelRight className="size-5" />
+              </span>
+              <p className="text-sm text-muted-foreground">{hint}</p>
+              <p className="text-xs text-muted-foreground/70">
+                <KeyHint chord="ArrowUp" className="gap-1">
+                  <Keys chord="ArrowDown" />
+                  move, <Keys chord="ArrowRight" /> opens
+                </KeyHint>
+              </p>
+            </div>
+          </div>
+        )}
       </Pane>
     </div>
   )

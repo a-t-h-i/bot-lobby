@@ -10,6 +10,8 @@ export const LOBBY_ACTIONS = {
   settings: { key: "alt+s", help: "settings: each agent's model and effort" },
   savePlan: { key: "ctrl+s", help: "save the plan from the Plan tab" },
   sessions: { key: "alt+o", help: "browse and message your sessions" },
+  activity: { key: "alt+a", help: "show or hide Activity on the Lobby" },
+  thinking: { key: "alt+t", help: "show or hide Thinking on the Lobby" },
   nextTab: { key: "alt+]", help: "next tab" },
   prevTab: { key: "alt+[", help: "previous tab" },
 } as const;
