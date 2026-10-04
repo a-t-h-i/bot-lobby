@@ -4,6 +4,7 @@
  * with the buttons the job's status allows (cancel while it waits or runs;
  * run anyway or start as a task while it is held).
  */
+import { TriangleAlert } from "lucide-react"
 import type { QuickFixJob } from "@protocol"
 import { CircleStop, ListPlus, Play } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
@@ -20,7 +21,10 @@ function Notes({ job }: { job: QuickFixJob }) {
   return (
     <>
       {job.route ? <p className="text-sm text-muted-foreground">Routed {job.route}</p> : null}
-      {job.note && held ? <p className="rounded-lg bg-warning/10 px-3 py-2 text-sm text-foreground">Held: {job.note}.</p> : null}
+      {job.note && held ? <p className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-foreground">
+          <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning" />
+          <span>Held: {job.note}.</span>
+        </p> : null}
       {job.note && !held ? <p className="text-sm text-muted-foreground">{job.routed ? `Routed here by the oracle — ${job.note}` : job.note}</p> : null}
       {job.routed && !job.note ? <p className="text-sm text-muted-foreground">Routed here by the oracle.</p> : null}
     </>
