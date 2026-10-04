@@ -113,7 +113,7 @@ export function Header({
   const busy = status?.busy ?? false
 
   return (
-    <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 pt-3 pb-2 [grid-template-areas:'title_status'_'tabs_tabs'] min-[1560px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] min-[1560px]:[grid-template-areas:'title_tabs_status']">
+    <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 pt-2.5 pb-1.5 [grid-template-areas:'title_status'_'tabs_tabs'] min-[1180px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] min-[1180px]:[grid-template-areas:'title_tabs_status']">
       <div className="flex min-w-0 items-center gap-2.5 [grid-area:title]">
         <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full bg-primary" />
         <span className="truncate text-sm font-medium">{name}</span>

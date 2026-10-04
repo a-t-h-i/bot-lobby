@@ -1,6 +1,6 @@
 {
-  "hash": "1c116dc7caf92cac67ab90f3700bcc864bd16202d55d91b5d6a816ce92d9efe1",
-  "builtAt": "2026-10-04T00:17:47.517Z",
+  "hash": "806e94c39ea4250edee2f5bdd1e6f20e8fbdc13d161ea684cb5307619865b750",
+  "builtAt": "2026-10-04T05:29:12.322Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -28,11 +28,11 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "825aa6b1ce64fe22b6d59c968ad6d021bc5509011e5fe442a62cab732f0f0142"
+      "sha256": "3ddc63942207d30a7bf0a04495103793306ca94a4b2d4df8f2c1aa023994f7ec"
     },
     {
       "path": "webui/src/app/Header.tsx",
-      "sha256": "ba62b54a48860f9336a836da7775b96a93515ea5bcad8a53d64dc6db1742d2fa"
+      "sha256": "858531fc31b4fa615e9c5ff1461d422d1d130564d8033042266e195800ecfe6c"
     },
     {
       "path": "webui/src/app/Shell.tsx",
@@ -48,7 +48,7 @@
     },
     {
       "path": "webui/src/app/TabStrip.tsx",
-      "sha256": "12e1031db8e2fc77bc2b8ad276fdaeb4728c29adeac764bee37e8968970d2c1b"
+      "sha256": "1c395ed76fb7f75e170446ebbdaa4425e504d29297edda7294ca2ec9f1e182d0"
     },
     {
       "path": "webui/src/app/bootstrap.ts",
@@ -324,11 +324,11 @@
     },
     {
       "path": "webui/src/tabs/lobby/ActivityLog.tsx",
-      "sha256": "ac435f31eb822aa7b0276eb6878740b2eb143bd6e97fba498dbb3cbf304e4f2a"
+      "sha256": "95b80f9b82c4f41e427c49550c16f822f1f54d44b1b68835af8ba857a05f34db"
     },
     {
       "path": "webui/src/tabs/lobby/Conversation.tsx",
-      "sha256": "27dc3677c4e0989e103fd76f20f585f0564fa3a6902916a88fb0a004709ee6e8"
+      "sha256": "a6dc4dba91441dabd166c80812d4d86d271fd63500ba07b3f7b5977a49faf75f"
     },
     {
       "path": "webui/src/tabs/lobby/LobbyTab.tsx",
@@ -344,7 +344,7 @@
     },
     {
       "path": "webui/src/tabs/lobby/Thoughts.tsx",
-      "sha256": "68d94e559c89187294e1d6b665700d2a0d74156d42242c92a52de22cfc3d2026"
+      "sha256": "c9e5ab0727d791baaffad52bc75cf80a8eaea2f9c6b096f06b6b3bb84bdce9a6"
     },
     {
       "path": "webui/src/tabs/lobby/types.ts",
@@ -404,7 +404,7 @@
     },
     {
       "path": "webui/src/tabs/quickfix/JobDetail.tsx",
-      "sha256": "9a0dbee4b8b41585c751dde708de08789600d4341d4814ba13218fccea093844"
+      "sha256": "b5c098c78f40197851eabd2ddda5121c0f1dee6b2b56199644069b48df93420c"
     },
     {
       "path": "webui/src/tabs/quickfix/JobList.tsx",
@@ -512,7 +512,7 @@
     },
     {
       "path": "webui/src/ui/Frame.tsx",
-      "sha256": "f9d4d022fd6e62f0316d76294c4c23c6b6f8d99401152ff2dc579d0ff66b4716"
+      "sha256": "9120f2a09d4893a3c9867737462ed9fd8df513be474375f32f01526c3238bb60"
     },
     {
       "path": "webui/src/ui/Markdown.tsx",
@@ -528,7 +528,7 @@
     },
     {
       "path": "webui/src/ui/SplitPane.tsx",
-      "sha256": "acee95a6e271c39b4d34f1377ed4d071d92f94253d42e9078cebe4e2f33a4ded"
+      "sha256": "e3216dced9f788dc322b86d785d490c24c744c216f42ce0a023bf566b69ad6c9"
     },
     {
       "path": "webui/src/ui/task-facts.tsx",
