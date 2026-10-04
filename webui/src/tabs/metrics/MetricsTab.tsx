@@ -112,7 +112,7 @@ export function MetricsTab() {
   const read = useApiRead("metrics.get", { groupBy, query }, ["metrics"])
   if (!read.data && read.error) return <ErrorState message={`Could not load metrics. ${read.error}`} onRetry={read.reload} />
   return (
-    <div className="flex flex-col gap-3 px-4 py-2">
+    <div className="flex min-w-0 flex-col gap-4 px-4 py-2">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h1 className="text-base font-medium">Metrics</h1>
         {read.loading && read.data ? <span className="flex items-center gap-2 text-xs text-muted-foreground"><Spinner className="size-3" aria-hidden="true" role="presentation" /> refreshing</span> : null}

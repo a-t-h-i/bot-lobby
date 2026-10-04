@@ -71,7 +71,6 @@ export class LobbyFeed {
   private readonly runThoughts = new Map<string, string>();
   private readonly runStatus = new Map<string, AgentRun["status"]>();
   /** Runs already reported as switched to their fallback model. */
-  private readonly fellBack = new Set<string>();
 
   onChange(listener: () => void): () => void {
     this.listeners.add(listener);
@@ -202,10 +201,6 @@ export class LobbyFeed {
       const before = this.runStatus.get(key);
       this.runStatus.set(key, run.status);
       if (before === undefined) this.log(source, `started as ${run.role}`, "info", at);
-      if (run.fellBackFrom && !this.fellBack.has(key)) {
-        this.fellBack.add(key);
-        this.log(source, `${run.fellBackFrom} is out of usage or unavailable: running on the fallback model`, "warning", at);
-      }
       if (run.step && this.runSteps.get(key) !== run.step) {
         this.runSteps.set(key, run.step);
         this.step(source, run.step, key, at);
@@ -231,7 +226,6 @@ export class LobbyFeed {
     this.runSteps.clear();
     this.runThoughts.clear();
     this.runStatus.clear();
-    this.fellBack.clear();
     this.touch();
   }
 }
