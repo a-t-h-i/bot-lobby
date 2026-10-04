@@ -93,6 +93,9 @@ export interface LobbyService {
   feed: LobbyFeed;
   masterBusy(): boolean;
   tasks(): Task[];
+  deliveryDeliver?(taskId: string, request: import("../delivery/operations.ts").DeliveryRequest): Promise<import("../delivery/types.ts").Delivery>;
+  deliveryReview?(taskId: string): Promise<import("../delivery/types.ts").Delivery>;
+  deliveryDefer?(taskId: string, reviewId: string): import("../delivery/types.ts").Delivery;
   plans(): PlannedTask[];
   comments(taskId: string): PlanComment[];
   metrics(): MetricRecord[];

@@ -32,8 +32,6 @@ export const AGENT_LABELS: Record<AgentKind, string> = {
 export const FIELD_LABELS = {
   model: "Model",
   thinking: "Effort",
-  fallback: "Fallback model",
-  fallbackThinking: "Fallback effort",
   timeout: "Time limit",
   instructions: "Instructions",
 } as const
@@ -45,8 +43,6 @@ export const INHERIT_HELP = "Use the session's current model"
 export const CUSTOM_MODEL = "__custom__"
 export const CUSTOM_LABEL = "custom…"
 export const CUSTOM_HELP = "Type a provider/model id"
-export const NO_FALLBACK = "none"
-export const NO_FALLBACK_HELP = "No fallback: when its model runs out of usage the run fails"
 export const FIXED_SCOUT_THINKING = "low"
 /** Every effort level, lowest to highest; a model supports only some of them. */
 export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const
@@ -56,7 +52,7 @@ export const GROUP_TITLES = {
   agents: "Agents",
   workflow: "Workflow",
   lobby: "Lobby",
-  classifier: "Classifier (Jev)",
+  classifier: "Classifier",
   appearance: "Appearance",
   notifications: "Notifications",
   install: "Install as app",
@@ -71,7 +67,7 @@ export const LOBBY_SWITCH_ITEMS = [
 export const PANEL_ITEMS = [
   { id: "conversation", label: "Conversation pane" },
   { id: "activity", label: "Activity log pane" },
-  { id: "thinking", label: "Thinking pane" },
+  { id: "thinking", label: "Thinking bubble" },
 ] as const
 export const PANEL_HELP = "shown on the Lobby tab"
 

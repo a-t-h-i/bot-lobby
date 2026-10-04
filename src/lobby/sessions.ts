@@ -39,6 +39,9 @@ export interface SessionProcess {
 export type SessionStatus = "starting" | "idle" | "working" | "exited";
 
 export interface SessionStart {
+  /** Server-owned task association; never supplied by a browser payload. */
+  onDialog?: (id: string, pending: boolean, sessionId?: string) => void;
+  projectRoot?: string;
   /** The display name: the task's title. */
   name: string;
   /** What to send once it is up: the request, or a planned task to start. */
@@ -54,6 +57,7 @@ export const STOP_GRACE_MS = 5000;
 
 export class BackgroundSession {
   readonly key: string;
+  readonly projectRoot?: string;
   readonly name: string;
   /** The planned task it was started from. */
   readonly planId?: string;
@@ -67,6 +71,7 @@ export class BackgroundSession {
   exitCode?: number | null;
   /** Dialogs the session waits on, oldest first. */
   readonly dialogs: SessionDialog[] = [];
+  private readonly onDialog: NonNullable<SessionStart["onDialog"]>;
   private readonly proc: SessionProcess;
   private buffer = "";
   private stderr = "";
@@ -79,7 +84,9 @@ export class BackgroundSession {
     counter += 1;
     this.key = `S${counter}`;
     this.name = start.name;
+    this.projectRoot = start.projectRoot;
     if (start.planId) this.planId = start.planId;
+    this.onDialog = start.onDialog ?? (() => {});
     this.proc = proc;
     this.onChange = onChange;
     proc.stdout?.on("data", (chunk) => this.receive(String(chunk)));
@@ -102,6 +109,7 @@ export class BackgroundSession {
     if (this.status === "exited") return;
     this.status = "exited";
     this.exitCode = code;
+    for (const dialog of this.dialogs) this.onDialog(dialog.id, false, this.sessionId);
     this.dialogs.length = 0;
     if (this.killTimer) clearTimeout(this.killTimer);
     this.feed.say("note", reason);
@@ -148,6 +156,7 @@ export class BackgroundSession {
 
   /** Stop the oracle's running turn (the session stays up). */
   abort(): void {
+    for (const dialog of [...this.dialogs]) this.answer(dialog.id, { cancelled: true });
     if (this.busy) this.write({ type: "abort" });
   }
 
@@ -156,6 +165,7 @@ export class BackgroundSession {
     const index = this.dialogs.findIndex((dialog) => dialog.id === id);
     if (index < 0) return;
     this.dialogs.splice(index, 1);
+    this.onDialog(id, false, this.sessionId);
     if (this.alive && this.proc.stdin) this.proc.stdin.write(`${JSON.stringify({ type: "extension_ui_response", id, ...answer })}\n`);
     this.onChange();
   }
@@ -213,6 +223,7 @@ export class BackgroundSession {
       if (event.command === "get_state" && data) {
         this.sessionId = data.sessionId;
         this.sessionFile = data.sessionFile;
+        for (const dialog of this.dialogs) this.onDialog(dialog.id, true, this.sessionId);
         if (this.status === "starting") this.status = "idle";
       } else if (event.success === false && typeof event.error === "string") {
         this.feed.log("LOBBY", `the session refused a request: ${event.error}`, "warning");
@@ -240,6 +251,7 @@ export class BackgroundSession {
         ...(typeof event.placeholder === "string" ? { placeholder: event.placeholder } : {}),
         ...(typeof event.prefill === "string" ? { prefill: event.prefill } : {}),
       });
+      this.onDialog(id, true, this.sessionId);
       this.feed.log("LOBBY", `waiting for you: ${String(event.title ?? "a question").split("\n")[0]}`, "warning");
     } else if (method === "notify") {
       const level = event.notifyType === "error" ? "error" : event.notifyType === "warning" ? "warning" : "info";

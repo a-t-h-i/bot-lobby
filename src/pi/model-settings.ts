@@ -26,14 +26,11 @@ export interface EntryView {
   thinking?: string;
   instructions?: string;
   timeoutMs?: number;
-  /** The model this agent switches to when its own runs out of usage; unset = none. */
-  fallbackModel?: string;
-  fallbackThinking?: string;
 }
 
 export function entryView(config: BotLobbyConfig, kind: SettingsKind): EntryView {
   if (kind === "master") return config.master;
-  if (kind === "scout") return { model: config.scout.model, timeoutMs: config.scout.timeoutMs, ...(config.scout.fallbackModel ? { fallbackModel: config.scout.fallbackModel } : {}) };
+  if (kind === "scout") return { model: config.scout.model, timeoutMs: config.scout.timeoutMs };
   if (kind === "researcher") return config.researcher;
   if (kind === "quickfix") return config.quickFix;
   if (kind === "planner") return config.planner;
@@ -45,33 +42,17 @@ interface EntryPatch {
   thinking?: string;
   instructions?: string;
   timeoutMs?: number;
-  /** `inherit` clears the fallback (its thinking level with it). */
-  fallbackModel?: string;
-  fallbackThinking?: string;
-}
-
-/** A settings entry with the fallback patch applied: `inherit` removes the fallback model and its thinking. */
-function withFallbackPatch<T extends { fallbackModel?: string; fallbackThinking?: string }>(entry: T): T {
-  if (entry.fallbackModel !== INHERIT_MODEL) return entry;
-  const { fallbackModel: _model, fallbackThinking: _thinking, ...rest } = entry;
-  return rest as T;
 }
 
 /** Apply a patch to one entry in a config copy; scouts ignore thinking and instructions. */
 export function patchEntry(config: BotLobbyConfig, kind: SettingsKind, patch: EntryPatch): BotLobbyConfig {
   const next: BotLobbyConfig = { ...config, agents: { ...config.agents } };
-  if (kind === "master") next.master = withFallbackPatch({ ...config.master, ...patch } as AgentModelConfig);
-  else if (kind === "scout") {
-    const fallbackModel = patch.fallbackModel ?? config.scout.fallbackModel;
-    next.scout = withFallbackPatch({
-      model: patch.model ?? config.scout.model,
-      timeoutMs: patch.timeoutMs ?? config.scout.timeoutMs,
-      ...(fallbackModel ? { fallbackModel } : {}),
-    });
-  } else if (kind === "researcher") next.researcher = withFallbackPatch({ ...config.researcher, ...patch } as AgentModelConfig);
-  else if (kind === "quickfix") next.quickFix = withFallbackPatch({ ...config.quickFix, ...patch } as AgentModelConfig);
-  else if (kind === "planner") next.planner = withFallbackPatch({ ...config.planner, ...patch } as AgentModelConfig);
-  else next.agents[kind] = withFallbackPatch({ ...config.agents[kind], ...patch } as AgentModelConfig);
+  if (kind === "master") next.master = { ...config.master, ...patch } as AgentModelConfig;
+  else if (kind === "scout") next.scout = { model: patch.model ?? config.scout.model, timeoutMs: patch.timeoutMs ?? config.scout.timeoutMs };
+  else if (kind === "researcher") next.researcher = { ...config.researcher, ...patch } as AgentModelConfig;
+  else if (kind === "quickfix") next.quickFix = { ...config.quickFix, ...patch } as AgentModelConfig;
+  else if (kind === "planner") next.planner = { ...config.planner, ...patch } as AgentModelConfig;
+  else next.agents[kind] = { ...config.agents[kind], ...patch } as AgentModelConfig;
   return next;
 }
 

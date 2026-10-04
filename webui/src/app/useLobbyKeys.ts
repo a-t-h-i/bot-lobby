@@ -10,6 +10,7 @@ import type { KeyInfo, TabInfo } from "@protocol"
 import { goKey } from "@/tabs/registry"
 import { hasOverlay } from "@/lib/overlay"
 import { isTyping, selectRow } from "@/prompts/nav"
+import { blocksConfiguredAction } from "./keyGuards"
 
 export interface LobbyKeyOptions {
   enabled: boolean
@@ -79,7 +80,7 @@ function matches(event: KeyboardEvent, chord: Chord): boolean {
   )
 }
 
-function matchKey(event: KeyboardEvent, key: string): boolean {
+export function matchKey(event: KeyboardEvent, key: string): boolean {
   const chord = parseChord(key)
   return chord ? matches(event, chord) : false
 }
@@ -114,6 +115,8 @@ function configured(event: KeyboardEvent, options: LobbyKeyOptions): boolean {
   const jump = tabFor(event, options.tabs)
   const action = actionFor(event, options.keys)
   if (!jump && !action) return false
+  const dialog = document.querySelector("[role='dialog'], [role='menu'], [role='listbox']")
+  if (blocksConfiguredAction(action, { overlay: Boolean(dialog) || hasOverlay(), typing: isTyping(event.target) || event.target instanceof HTMLInputElement, saveAvailable: Boolean(document.querySelector("[data-plan-save]:not([disabled])")) })) return true
   if ((action === "search" || action === "savePlan") && !options.insideApp()) return true
   event.preventDefault()
   if (jump) options.onTab(jump)
