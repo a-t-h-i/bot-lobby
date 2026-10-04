@@ -8,7 +8,6 @@ import {
   type PanelMember,
   THINKING_LEVELS,
   type BotLobbyConfig,
-  type FallbackProfile,
   type ProfileResolver,
   type SubagentKind,
   type ThinkingLevelName,
@@ -87,25 +86,11 @@ export function createProfileResolver(config: BotLobbyConfig, options: ResolverO
         options.warn?.(message);
       }
     }
-    return { ...profile, model, thinking: check.level, ...clampedFallback(profile.fallback, kindLabel(profile.kind as SubagentKind), options) };
+    return { ...profile, model, thinking: check.level };
   };
 }
 
-/** The fallback with its thinking level clamped to what the fallback model supports. */
-function clampedFallback(fallback: FallbackProfile | undefined, label: string, options: ResolverOptions): { fallback?: FallbackProfile } {
-  if (!fallback) return {};
-  const check = checkThinking(options.lookup(fallback.model), fallback.thinking);
-  if (check.warning) {
-    const message = `bot-lobby: ${label} fallback — ${check.warning}. Change it in /bot-lobby settings.`;
-    if (!warned.has(message)) {
-      warned.add(message);
-      options.warn?.(message);
-    }
-  }
-  return { fallback: { model: fallback.model, thinking: check.level } };
-}
-
-type RunProfile = { model?: string; thinking: string; timeoutMs: number; instructions?: string; fallback?: FallbackProfile };
+type RunProfile = { model?: string; thinking: string; timeoutMs: number; instructions?: string };
 
 /** Unset models run on the session's; thinking is clamped to the model, with a one-time warning. */
 function resolveRunProfile(profile: RunProfile, label: string, options: ResolverOptions): RunProfile {
@@ -118,7 +103,7 @@ function resolveRunProfile(profile: RunProfile, label: string, options: Resolver
       options.warn?.(message);
     }
   }
-  return { ...profile, model, thinking: check.level, ...clampedFallback(profile.fallback, label, options) };
+  return { ...profile, model, thinking: check.level };
 }
 
 /** A lobby agent's model, thinking and time limit. */
@@ -137,7 +122,7 @@ export function resolvePanelProfile(config: BotLobbyConfig, member: PanelMember,
  */
 export function resolveReviewProfile(config: BotLobbyConfig, options: ResolverOptions): RunProfile {
   const profile = agentProfile(config, "qa", "reviewer");
-  return resolveRunProfile({ model: profile.model, thinking: profile.thinking, timeoutMs: profile.timeoutMs, ...(profile.instructions ? { instructions: profile.instructions } : {}), ...(profile.fallback ? { fallback: profile.fallback } : {}) }, kindLabel("qa"), options);
+  return resolveRunProfile({ model: profile.model, thinking: profile.thinking, timeoutMs: profile.timeoutMs, ...(profile.instructions ? { instructions: profile.instructions } : {}) }, kindLabel("qa"), options);
 }
 
 /** Every configured subagent whose thinking level its model does not support, for `/bot-lobby config`. */

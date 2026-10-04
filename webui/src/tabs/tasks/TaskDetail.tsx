@@ -6,7 +6,14 @@
  * messages to the task's oracle are written in the floating box below. A saved
  * plan has its own body (`PlanDetail`).
  */
-import { Archive, RefreshCw, RotateCcw, Trash2 } from "lucide-react"
+import { useEffect, useRef } from "react"
+import { go } from "@/app/router"
+import { call } from "@/lib/api"
+import { selectedProject } from "@/lib/project"
+import { toast } from "@/lib/toast"
+import { PhaseTiming } from "./PhaseTiming"
+import { DeliveryReview } from "./DeliveryReview"
+import { Archive, MessageSquare, RefreshCw, RotateCcw, Trash2 } from "lucide-react"
 import type { LobbySnapshot, SnapshotTask, TaskRow } from "@protocol"
 import { useTopic } from "@/app/hooks"
 import { useApiRead } from "@/app/useApiRead"
@@ -112,6 +119,7 @@ function Actions(props: DetailProps) {
   const archived = row.kind === "archived"
   return (
     <ActionBar>
+      {row.kind === "task" ? <OpenTask taskId={row.id} /> : null}
       {archived ? <ActionButton label="Restore" icon={RotateCcw} onClick={() => void restore()} /> : null}
       {row.check === "open" && !archived ? (
         <Tooltip>
@@ -138,6 +146,25 @@ function Actions(props: DetailProps) {
   )
 }
 
+function OpenTask({ taskId }: { taskId: string }) {
+  const alive = useRef(true)
+  useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
+  async function open() {
+    const project = selectedProject()
+    try {
+      const result = await call("tasks.open", { taskId })
+      if (!alive.current || selectedProject() !== project) return
+      if (result.notice) toast.info(result.notice)
+      const status = await call("status.get", {})
+      if (!alive.current || selectedProject() !== project) return
+      const id = result.key ?? (result.sessionId === status.sessionId ? "here" : result.sessionId)
+      if (id) go(`#/sessions/${encodeURIComponent(id)}`)
+      else if (!result.notice) toast.info("This task has no active session. No replacement session was created.")
+    } catch (e) { if (alive.current && selectedProject() === project) toast.error(e instanceof Error ? e.message : String(e)) }
+  }
+  return <ActionButton label="Open task conversation" icon={MessageSquare} onClick={() => void open()} />
+}
+
 export function TaskDetail(props: DetailProps) {
   const { row } = props
   const isPlan = row.kind === "plan"
@@ -150,6 +177,8 @@ export function TaskDetail(props: DetailProps) {
     <article className="flex flex-col gap-5" aria-label={row.title}>
       <Actions {...props} />
       <Header row={row} task={task} />
+      <p className="text-sm text-muted-foreground"><PhaseTiming timing={detail.data?.timing ?? row.timing} stopped={row.check !== "open"} /></p>
+      {detail.data?.delivery ? <DeliveryReview key={row.id} taskId={row.id} title={row.title} delivery={detail.data.delivery} onChanged={detail.reload} /> : null}
       {detail.data ? <PlanSections detail={detail.data} finished={!open} /> : null}
       <Comments taskId={row.id} finished={!open} canComment={open} />
       {detail.data ? <DetailTrailer detail={detail.data} /> : null}

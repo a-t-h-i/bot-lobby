@@ -282,20 +282,9 @@ Settings live in `~/.pi/bot-lobby/config.json` (`BOT_LOBBY_CONFIG_DIR` overrides
 - `instructions` adds text to built-in prompts. Shortcut overrides live under `lobby.keys`; defaults are in `src/lobby/keys.ts`.
 - Classifier thresholds/limits (e.g. `knowledgeRelevantAt`, 0.4, and `classifier.fileHints`) can be edited in the file.
 
-A **fallback model** and **fallback thinking** can be set per agent and Master. Usage exhaustion, rate limits, credit or model unavailability reruns on fallback instead of failing. This works for oracle, DESIGN, DEV, QA, RESEARCH, scouts (still low), quick fixes and planner/seats.
+Model errors are reported on the configured primary model, without automatic model switching. Legacy fallback keys are ignored when loading configuration and omitted from saved configuration. Bounded transient crash/stall retries still use the same model. Classifier cheaper-model effort routing remains independent of error handling.
 
-- An exhausted model is skipped twenty minutes so subsequent agents go directly to fallback.
-- The Master is your Pi session; failure switches model/thinking and carries on. `/model` switches back when usage returns.
-- Ordinary failures retry on the same model. A failing fallback does not chain to a third model.
-- Activity, receipts and Metrics name the model actually used.
-
-```json
-{
-  "master": { "model": "anthropic/claude-fable-5-1", "thinking": "high", "fallbackModel": "deepseek/deepseek-v3", "fallbackThinking": "medium" },
-  "agents": { "backend": { "model": "zai/glm-4.6", "thinking": "medium", "fallbackModel": "deepseek/deepseek-v3", "fallbackThinking": "low" } },
-  "scout": { "model": "zai/glm-4.6", "fallbackModel": "deepseek/deepseek-v3" }
-}
-```
+Activity, receipts and Metrics name the model actually used.
 
 ## Engine guarantees
 

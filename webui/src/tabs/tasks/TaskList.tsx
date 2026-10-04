@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { CheckMark, Pips } from "@/ui/task-facts"
 import { CHECK_WORDS, SECTION_TITLES, detailsLine, groupRows } from "./words"
 import { Rule } from "@/ui/Frame"
+import { PhaseTiming } from "./PhaseTiming"
 
 function Trailing({ row }: { row: TaskRow }) {
   if (row.check === "open" && row.progress) {
@@ -32,7 +33,7 @@ function titleClass(row: TaskRow): string {
 function Row({ row, selected, onSelect }: { row: TaskRow; selected: boolean; onSelect: (id: string) => void }) {
   return (
     <li>
-      <button
+      <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
         type="button"
         data-row
         aria-current={selected ? "true" : undefined}
@@ -46,6 +47,8 @@ function Row({ row, selected, onSelect }: { row: TaskRow; selected: boolean; onS
           <Trailing row={row} />
         </span>
         {row.check === "open" ? <span className="pl-6 text-xs text-muted-foreground">{detailsLine(row)}</span> : null}
+        {row.kind !== "plan" ? <span className="pl-6 text-xs text-muted-foreground"><PhaseTiming timing={row.timing} stopped={row.check !== "open"} /></span> : null}
+        {row.delivery ? <span className="pl-6 text-xs text-foreground">Delivery: {row.delivery.status.replaceAll("_", " ")} · open task to review</span> : null}
       </button>
     </li>
   )

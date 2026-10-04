@@ -6,7 +6,8 @@
 import { FilePlus, MessageCircleQuestion, RotateCw, Save } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { act } from "@/lib/act"
-import type { PlannerSnapshot } from "@protocol"
+import type { PlannerSnapshot, StatusInfo } from "@protocol"
+import { useTopic } from "@/app/hooks"
 import { ActionButton } from "@/ui/Actions"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { Roster } from "./Roster"
@@ -24,6 +25,7 @@ function Status({ snap }: { snap: PlannerSnapshot }) {
 }
 
 function Actions({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) {
+  const shortcut = useTopic<StatusInfo>("status").data?.keys.find((key) => key.action === "savePlan")?.label
   const run = (name: "planner.answer" | "planner.retry" | "planner.save") => async () => {
     if (await act(name, {})) onDone()
   }
@@ -31,7 +33,7 @@ function Actions({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }
     <div className="flex items-center gap-0.5">
       {snap.questions.length > 0 && !snap.busy ? <ActionButton label="Answer questions" icon={MessageCircleQuestion} tone="primary" onClick={() => void run("planner.answer")()} /> : null}
       {snap.retryable ? <ActionButton label="Retry" icon={RotateCw} onClick={() => void run("planner.retry")()} /> : null}
-      <ActionButton label="Save the plan" icon={Save} shortcut="Ctrl+S" disabled={!snap.draft || snap.busy} onClick={() => void run("planner.save")()} />
+      <ActionButton data-plan-save label="Save the plan" icon={Save} shortcut={shortcut} disabled={!snap.draft || snap.busy} onClick={() => void run("planner.save")()} />
       <ConfirmButton
         icon={FilePlus}
         label="New plan"

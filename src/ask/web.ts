@@ -8,7 +8,7 @@
 import { isAbsolute, resolve } from "node:path";
 import { currentWebServer } from "../webui/server.ts";
 import { promptHub } from "../lobby/prompt-hub.ts";
-import type { AskAnswer, AskQuestion, AskResult, Asker } from "./types.ts";
+import { validHtmlPreview, type AskAnswer, type AskQuestion, type AskResult, type Asker } from "./types.ts";
 
 let availability: (() => boolean) | undefined;
 
@@ -43,6 +43,7 @@ function readResult(value: unknown): AskResult | undefined {
 
 /** The questionnaire in the page. */
 export const askUser: Asker = async (questions, ctx, signal, from) => {
+  if (questions.some((question) => question.options.some((option) => option.htmlPreview !== undefined && !validHtmlPreview(option.htmlPreview)))) throw new Error("Invalid static HTML/CSS preview");
   if (questions.length === 0 || !canAsk()) return { answers: [], cancelled: true };
   const outcome = await promptHub.ask("questionnaire", from ?? "oracle", { questions: withAbsoluteImages(questions, ctx.cwd) }, signal ? { signal } : undefined);
   return (outcome.how === "answered" ? readResult(outcome.value) : undefined) ?? { answers: [], cancelled: true };
