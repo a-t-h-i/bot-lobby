@@ -28,6 +28,7 @@ import { previewDir } from "../ask/relay.ts";
 import type { AskQuestion, AskResult } from "../ask/types.ts";
 import { mapConcurrent } from "../execution/agent-runner.ts";
 import { parseWorkerResult } from "../roles/worker.ts";
+import { openPullRequest, type PullRequestResult } from "../execution/pull-request.ts";
 import { autoNote, DESK_TOOLS, DeskSession } from "../desk/session.ts";
 import type { Handover } from "../desk/desk.ts";
 import { changedFiles, commitBefore, headCommit, readRepositoryDiff } from "../execution/git.ts";
@@ -1306,7 +1307,10 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
   task.blockers = [];
   if (task.state === "implementing") transition(task, "reviewing");
   transition(task, "completed");
-  return `Task ${task.id} completed. History recorded and temporary scratchpads removed.`;
+  // Every agent commits its own work on the task's branch, so a completed task usually has commits nobody pushed; open the review for it here. Never fatal.
+  const pull: PullRequestResult = await openPullRequest(task, { cwd: deps.cwd, summary }).catch(() => ({ skipped: "the pull request could not be opened" }));
+  const prLine = pull.url ? `Pull request: ${pull.url}` : `No pull request: ${pull.skipped}`;
+  return `Task ${task.id} completed. History recorded and temporary scratchpads removed. ${prLine}`;
 }
 
 /** Asked when the oracle completes a task QA has not passed (the user told it to finish, say). */

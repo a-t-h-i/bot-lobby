@@ -164,11 +164,13 @@ function ModelChoice(props: { value: string; models: SettingsModelInfo[]; label:
     if (next && next !== props.value) props.onChange(next)
   }
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-w-0 flex-col gap-2">
       <Choice value={props.value} items={items} label={props.label} onChange={choose} />
       {typing ? (
-        <div className="flex gap-2">
-          <Input autoFocus value={text} placeholder="provider/model" aria-label="Model id" onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); use() } }} />
+        <div className="flex min-w-0 gap-2">
+          <div className="min-w-0 flex-1">
+            <Input autoFocus value={text} placeholder="provider/model" aria-label="Model id" onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); use() } }} />
+          </div>
           <ActionButton label="Use this model" icon={Check} tone="primary" onClick={use} />
         </div>
       ) : null}
@@ -282,7 +284,7 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
           {entry.model === INHERIT_MODEL ? "session model" : entry.model} · {kind === "scout" ? FIXED_SCOUT_THINKING : entry.thinking}
         </span>
       </header>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3">
         <Mini label={FIELD_LABELS.model}>
           <ModelChoice value={entry.model} models={models} label={`${name} model`} inherit={kind === "master"} onChange={chooseModel} />
         </Mini>
@@ -493,7 +495,7 @@ export function SettingsForm({ config, models, onConfig }: { config: Config; mod
         <p className="text-sm text-muted-foreground">{PAGE.intro}</p>
       </header>
       <Section title={GROUP_TITLES.agents}>
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           {AGENT_ORDER.map((kind) => <AgentCard key={kind} kind={kind} config={config} models={models} save={save} />)}
         </div>
       </Section>
