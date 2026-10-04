@@ -32,7 +32,7 @@ function Rows<T>({ rows, render }: { rows: T[]; render: (row: T) => React.ReactN
     <>
       <ul className="flex flex-col gap-2.5">{shown.map(render)}</ul>
       {rows.length > SHOWN ? (
-        <button
+        <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
           type="button"
           aria-expanded={all}
           onClick={() => setAll((now) => !now)}

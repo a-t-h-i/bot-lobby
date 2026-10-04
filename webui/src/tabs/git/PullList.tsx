@@ -22,7 +22,7 @@ function Row({ pull, selected, onSelect }: { pull: PullInfo; selected: boolean; 
   const review = reviewMark(pull.review)
   return (
     <li>
-      <button
+      <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
         type="button"
         data-row
         aria-current={selected ? "true" : undefined}

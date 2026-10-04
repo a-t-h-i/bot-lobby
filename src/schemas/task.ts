@@ -1,4 +1,5 @@
 import type { Domain, Role } from "./agent.ts";
+import type { Delivery } from "../delivery/types.ts";
 
 export const TASK_STATES = [
   "created",
@@ -171,7 +172,18 @@ export interface TaskGit {
   path?: string;
 }
 
+export interface PhaseTiming {
+  phase: TaskState;
+  elapsedMs: number;
+  runningSince?: string;
+  blockingRequestIds: string[];
+}
+
 export interface Task {
+  /** Canonical waits, including legacy tasks without a reliable clock. */
+  blockingRequestIds?: string[];
+  phaseTiming?: PhaseTiming;
+  delivery?: Delivery;
   id: string;
   title: string;
   /** The user's original request, kept in full while `title` stays a short label. */
@@ -226,6 +238,8 @@ export function createTask(
     title,
     request,
     state: "created",
+    blockingRequestIds: [],
+    phaseTiming: { phase: "created", elapsedMs: 0, runningSince: now, blockingRequestIds: [] },
     domains: [],
     amendments: [],
     paused: false,

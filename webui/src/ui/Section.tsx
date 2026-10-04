@@ -4,8 +4,8 @@ import { Rule } from "./Frame"
 
 export function Section({ title, right, children }: { title: string; right?: string; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-2">
-      <h3 className="text-xs text-muted-foreground">
+    <section className="flex min-w-0 flex-col gap-3">
+      <h3 className="border-b border-border pb-2 text-sm text-foreground">
         <Rule title={title} right={right} />
       </h3>
       {children}

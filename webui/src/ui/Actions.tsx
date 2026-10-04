@@ -38,19 +38,19 @@ export function ActionButton({ label, icon: Icon, tone = "neutral", shortcut, hr
       <TooltipTrigger asChild>
         {href ? (
           <Button asChild variant={tone === "primary" ? "default" : "ghost"} size="icon" className={look}>
-            <a href={href} target="_blank" rel="noreferrer noopener" aria-label={label}>
+            <a href={href} target="_blank" rel="noreferrer noopener" aria-label={label} aria-keyshortcuts="Enter" aria-describedby="focused-action-help" title={`${label} · Enter when focused`}>
               {icon}
             </a>
           </Button>
         ) : (
-          <Button type="button" variant={tone === "primary" ? "default" : "ghost"} size="icon" aria-label={label} aria-pressed={pressed} className={look} {...props}>
+          <Button type="button" variant={tone === "primary" ? "default" : "ghost"} size="icon" aria-label={label} aria-keyshortcuts={shortcut ? `${shortcut} Enter Space` : "Enter Space"} title={`${label} · ${shortcut ? `${shortcut} or ` : ""}Enter / Space when focused`} aria-pressed={pressed} className={look} {...props}>
             {icon}
           </Button>
         )}
       </TooltipTrigger>
       <TooltipContent>
         {label}
-        {shortcut ? <Keys chord={shortcut} /> : null}
+        <Keys chord={shortcut ?? (href ? "Enter" : "Enter / Space")} />
       </TooltipContent>
     </Tooltip>
   )

@@ -1,7 +1,7 @@
 /**
  * A titled pane with its title in a row at the top and an
  * optional note at the other end. Content sits below the title row, so
- * nothing scrolls under it. Flat: a hairline above the pane and under the title row.
+ * nothing scrolls under it. One quiet surface groups the pane's content.
  */
 import type { ReactNode } from "react"
 import { ChevronDown } from "lucide-react"
@@ -25,7 +25,7 @@ export function Frame({ title, note, className, children, collapsed, onToggle, s
       {...props}
     >
       {title || note || onToggle ? (
-        <div className={cn("flex h-10 shrink-0 items-center justify-between gap-3 px-4", !collapsed && "border-b border-border/70")}>
+        <div className={cn("flex min-h-[var(--touch-target)] shrink-0 items-center justify-between gap-3 px-4", !collapsed && "border-b border-border/70")}>
           {title ? <h2 className="min-w-0 truncate text-sm font-medium">{title}</h2> : <span />}
           <span className="flex shrink-0 items-center gap-1">
             {note ? <span className="flex items-center gap-2 truncate text-xs text-muted-foreground">{note}</span> : null}
@@ -35,9 +35,10 @@ export function Frame({ title, note, className, children, collapsed, onToggle, s
                 aria-expanded={!collapsed}
                 aria-label={collapsed ? `Expand ${name}` : `Minimize ${name}`}
                 title={`${collapsed ? "Expand" : "Minimize"}${shortcut ? ` · ${shortcut}` : ""}`}
-                aria-keyshortcuts={shortcut}
+                aria-keyshortcuts={shortcut ? `${shortcut} Enter Space` : "Enter Space"}
+                aria-describedby="focused-action-help"
                 onClick={onToggle}
-                className="-mr-2 inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+                className="-mr-2 inline-flex size-11 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
               >
                 <ChevronDown aria-hidden="true" className={cn("size-4 transition-transform duration-200 ease-snap", collapsed && "-rotate-90")} />
               </button>
