@@ -275,7 +275,7 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
   const hasInstructions = kind !== "scout" && kind !== "researcher"
   const [showNotes, setShowNotes] = useState(Boolean(entry.instructions))
   return (
-    <section className="glass flex min-w-0 flex-col gap-3 rounded-lg p-4">
+    <section className="flat-pane flex min-w-0 flex-col gap-3 p-4">
       <header className="flex items-baseline justify-between gap-3">
         <h3 className="text-sm font-medium">{name}</h3>
         <span className="truncate text-xs text-muted-foreground">
@@ -290,7 +290,7 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
           <ModelChoice value={entry.fallbackModel ?? INHERIT_MODEL} models={models} label={`${name} fallback model`} none onChange={chooseFallback} />
         </Mini>
       </div>
-      <div className="flex items-center gap-3 rounded-lg bg-muted/40 p-3">
+      <div className="flex items-center gap-3 border-t border-border p-3">
         <EffortMascot level={effective} className="size-16" />
         <div className="min-w-0 flex-1">
           {kind === "scout" ? (

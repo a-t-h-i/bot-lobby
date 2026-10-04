@@ -4,6 +4,7 @@
  */
 import type { ApiReply, UploadInfo } from "@protocol"
 import { ApiError } from "./api.ts"
+import { projectUrl } from "./project.ts"
 
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 export const MAX_ATTACHMENTS = 8
@@ -19,7 +20,7 @@ export async function uploadFile(file: File): Promise<UploadInfo> {
   if (file.size === 0) throw new Error(`${file.name || "That file"} is empty.`)
   if (file.size > MAX_UPLOAD_BYTES) throw new Error(`${file.name || "That file"} is larger than 20 MB.`)
   const query = new URLSearchParams({ name: file.name || "pasted-file", type: file.type })
-  const response = await fetch(`/api/files.upload?${query}`, {
+  const response = await fetch(projectUrl(`/api/files.upload?${query}`), {
     method: "POST",
     headers: { "Content-Type": "application/octet-stream" },
     body: file,

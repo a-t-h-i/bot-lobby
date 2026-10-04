@@ -8,7 +8,7 @@ import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { loadTask, peekTasks } from "../state/persistence.ts";
 import { releaseAttachments } from "../state/attachments.ts";
 import { loadConfig, saveConfig as writeConfig } from "../state/project.ts";
-import { addPlanComment, readPlanComments } from "../state/comments.ts";
+import { addPlanComment, editComment, readPlanComments, type PlanComment } from "../state/comments.ts";
 import { isAutoMode } from "../state/auto.ts";
 import { sendToInbox, sendToSession as leaveForSession } from "../state/inbox.ts";
 import { livePresence } from "../state/presence.ts";
@@ -82,12 +82,38 @@ function addComment(state: Runtime, taskId: string, text: string): string {
   }
   lobbyFeed.log("LOBBY", `comment on ${taskId}'s plan saved`, "info");
   lobbyTopics.bump("plans");
+  lobbyTopics.bump("tasks");
+  return deliverComment(task, sessionId);
+}
+
+function deliverComment(task: Task, sessionId: string): string {
+  const taskId = task.id;
   if (task.ownerSessionId === sessionId) {
     if (deliverComments() === 0) return `comment saved — it reaches the oracle once ${taskId} is resumed or restored`;
     return `comment sent to the oracle — it will ${task.plan ? "amend the plan" : "revise the proposal"}`;
   }
   if (!task.ownerSessionId) return `comment saved — ${taskId} has no owning session; it is delivered once a session claims it`;
   return `comment saved — the session driving ${taskId} passes it to its oracle`;
+}
+
+/**
+ * Correct a comment this session sent. Ownership is checked again here, not
+ * only at the API boundary: the session that wrote the comment is the only one
+ * that may change its words.
+ */
+function editOwnComment(state: Runtime, taskId: string, commentId: string, text: string): PlanComment {
+  const task = loadTask(state.root, state.configDir, taskId);
+  if (!task) throw new Error(`no task ${taskId}`);
+  const sessionId = state.ctx.sessionManager.getSessionId();
+  const comment = readPlanComments(state.root, state.configDir, taskId).find((entry) => entry.id === commentId);
+  if (!comment) throw new Error(`no comment ${commentId} on ${taskId}`);
+  if (!comment.by || comment.by !== sessionId) throw new Error(`only the session that wrote ${commentId} can edit it`);
+  const edited = editComment(state.root, state.configDir, taskId, commentId, text);
+  lobbyFeed.log("LOBBY", `comment ${commentId} on ${taskId}'s plan edited`, "info");
+  lobbyTopics.bump("plans");
+  lobbyTopics.bump("tasks");
+  deliverComment(task, sessionId);
+  return edited;
 }
 
 function failed(state: Runtime, what: string, error: Error): void {
@@ -318,7 +344,7 @@ function archiveTask(state: Runtime, taskId: string): string {
   if (busy) return busy;
   try {
     archiveTaskOnDisk(state.root, state.configDir, taskId);
-    releaseAttachments(taskId);
+    releaseAttachments(taskId, state.root);
   } catch (error) {
     return (error as Error).message;
   }
@@ -347,7 +373,7 @@ function deleteTask(state: Runtime, taskId: string, where: "list" | "archive"): 
   }
   try {
     deleteTaskOnDisk(state.root, state.configDir, taskId, where);
-    releaseAttachments(taskId);
+    releaseAttachments(taskId, state.root);
   } catch (error) {
     return (error as Error).message;
   }
@@ -485,6 +511,7 @@ export function createLobbyService(state: Runtime): LobbyService {
   };
   let appliedMaster = masterKey();
   return {
+    projectRoot: () => state.root,
     sessionId: () => state.ctx.sessionManager.getSessionId(),
     zen: () => {
       const snapshot = taskSnapshot();
@@ -499,6 +526,7 @@ export function createLobbyService(state: Runtime): LobbyService {
     classifierMetrics: () => readClassifierMetrics(state.root, state.configDir),
     toOracle: (text) => toOracle(state, text),
     comment: (taskId, text) => addComment(state, taskId, text),
+    editComment: (taskId, commentId, text) => editOwnComment(state, taskId, commentId, text),
     startPlanned: (plan) => startPlanned(state, plan),
     discardPlan: (id) => {
       discardPlannedTask(state.root, state.configDir, id);

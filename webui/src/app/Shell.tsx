@@ -1,10 +1,11 @@
 /**
  * The shell that wraps every route, laid out top to bottom with a gap between
- * each part: the title row with the tabs, the page for the route (it eases in
- * when the tab changes) and the composer. Nothing overlaps: the page scrolls
- * in the space between the title row and the composer. Pop-ups (the question,
- * the key help) and toasts sit above it, one at a time. Clicking a tab or
- * pressing a shortcut moves the hash route.
+ * each part: the title row with the tabs and the page for the route (it eases
+ * in when the tab changes). The composer floats pinned at the bottom, above
+ * every other layer but the pop-ups, so the page scrolls under it and typing
+ * in it moves nothing. Pop-ups (the question, the key help) and toasts sit
+ * above that, one at a time. Clicking a tab or pressing a shortcut moves the
+ * hash route.
  */
 import { useCallback, useEffect, useRef, useState } from "react"
 import { motion } from "motion/react"
@@ -31,7 +32,8 @@ import { focusTab, isTyping, tabWalk } from "@/prompts/nav"
 import { toggleCollapsed } from "@/lib/collapsed"
 
 function handleAction(action: string, route: Route, toggleHelp: () => void, cycle: (delta: number) => void): void {
-  if (action === "help") toggleHelp()
+  if (action === "search") (document.querySelector<HTMLElement>("#main input[type='search']") ?? document.getElementById("composer-text"))?.focus()
+  else if (action === "help") toggleHelp()
   else if (action === "settings") go("#/settings")
   else if (action === "sessions") go("#/sessions")
   else if (action === "activity" || action === "thinking") {
@@ -105,28 +107,8 @@ export function Shell() {
     return () => cancelAnimationFrame(frame)
   }, [tab, ready])
 
-  // `/` jumps to the message box from anywhere that is not a text field.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "/" || event.altKey || event.ctrlKey || event.metaKey || isTyping(event.target)) return
-      const box = document.getElementById("composer-text")
-      if (!box || box.closest("[inert]")) return
-      event.preventDefault()
-      box.focus()
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [])
-
-  if (signedOut) return <SignIn />
-  if (!status && statusRecord.loading) return <LoadingState />
-  if (!status && statusRecord.error) return <ErrorState message={statusRecord.error} onRetry={reload} />
-  if (!status) return <LoadingState />
-
   const keyLabels = Object.fromEntries(keys.map((key) => [key.action, key.label]))
-  return (
-    <div ref={rootRef} className="fixed inset-0 flex flex-col gap-0.5">
-      <Header
+  const header = <Header
         status={status}
         task={lobbyRecord.data?.task}
         connection={connection}
@@ -136,6 +118,17 @@ export function Shell() {
         tabs={<TabStrip tabs={tabs} activeId={activeId} onSelect={select} />}
         extra={putAway && prompts.length > 0 ? <QuestionsPill count={prompts.length} onOpen={() => setPutAway(false)} /> : null}
       />
+  if (signedOut || !status) return (
+    <div ref={rootRef} className="fixed inset-0 flex flex-col">
+      {header}
+      <main className="min-h-0 flex-1 overflow-y-auto">
+        {signedOut ? <SignIn /> : statusRecord.error ? <ErrorState message={statusRecord.error} onRetry={reload} /> : <LoadingState />}
+      </main>
+    </div>
+  )
+  return (
+    <div ref={rootRef} className="fixed inset-0 flex flex-col gap-0.5">
+      {header}
       <Banner connection={connection} onRetry={retry} />
       <main
         id="main"
@@ -148,7 +141,7 @@ export function Shell() {
         }}
         role={activeId ? "tabpanel" : undefined}
         aria-labelledby={activeId ? `tab-${activeId}` : undefined}
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2 outline-none"
+        className="composer-inset flex min-h-0 flex-1 flex-col overflow-y-auto py-2 outline-none"
       >
         <motion.div
           key={routeKey(route)}
@@ -160,7 +153,10 @@ export function Shell() {
           {routeBody(route)}
         </motion.div>
       </main>
-      <Composer route={route} keys={keyLabels} onHelp={toggleHelp} />
+      {/* Pinned, not in the flow: typing in the box must not move anything else. */}
+      <div className="fixed inset-x-0 bottom-0 z-30 pointer-events-none">
+        <Composer route={route} keys={keyLabels} onHelp={toggleHelp} />
+      </div>
       <QuestionPopup prompts={prompts} answer={answer} dismiss={dismiss} minimized={putAway} onMinimize={setPutAway} />
       <AltH open={help} onOpenChange={setHelp} keys={keys} tabs={tabs} />
     </div>

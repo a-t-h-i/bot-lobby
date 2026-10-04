@@ -30,7 +30,7 @@ function useNow(active: boolean): number {
 
 function Intro() {
   return (
-    <Empty className="glass m-4 flex-1 border">
+    <Empty className="flat-pane m-4 flex-1">
       <EmptyHeader>
         <EmptyDescription className="font-medium text-foreground">{INTRO}</EmptyDescription>
       </EmptyHeader>

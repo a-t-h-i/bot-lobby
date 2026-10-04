@@ -9,7 +9,7 @@ import { concerns, pullRequest, readLine, readPull, worthReview, type PullRead }
 import { DEFAULT_CONFIG, type ClassifierConfig } from "../src/schemas/configuration.ts";
 import type { ProcessRunner } from "../src/execution/pi-runner.ts";
 import type { Exec, ExecResult } from "../src/lobby/issues.ts";
-import { checksOf, listPulls, PullsState, pullDiff, viewPull } from "../src/lobby/pulls.ts";
+import { checksOf, createPullRequest, listPulls, PullsState, pullDiff, viewPull } from "../src/lobby/pulls.ts";
 import { isStale, loadReview, parseVerdict, PullReviews, REVIEW_DIFF_CHARS, REVIEW_TOOLS, reviewPrompt, reviewTask, saveReview, type PullReview } from "../src/lobby/pr-review.ts";
 import { LobbyFeed } from "../src/lobby/feed.ts";
 import { readMetrics } from "../src/state/metrics.ts";
@@ -47,6 +47,52 @@ test("checks fold into one state: any failure fails, an unfinished check is pend
   assert.equal(checksOf([{ conclusion: "SUCCESS" }, { conclusion: "FAILURE" }, { state: "PENDING" }]).state, "failing", "a failure outranks pending");
   assert.equal(checksOf([{ state: "ERROR" }]).state, "failing");
   assert.equal(checksOf([{ conclusion: "TIMED_OUT" }]).state, "failing");
+});
+
+test("opening a pull request pushes the branch first, then asks gh for one", async () => {
+  const calls: string[][] = [];
+  const pull = await createPullRequest({
+    exec: fakeExec({ "push -u": { stdout: "" }, "pr create": { stdout: "Creating pull request for main into task-x\nhttps://github.com/acme/repo/pull/42\n" } }, calls),
+    cwd: "/repo",
+    branch: "task-x",
+    base: "main",
+    title: "Get rid of the cards",
+    body: "A flat layout.",
+  });
+  assert.deepEqual(calls[0], ["push", "-u", "origin", "task-x"]);
+  assert.deepEqual(calls[1]!.slice(0, 8), ["pr", "create", "--base", "main", "--head", "task-x", "--title", "Get rid of the cards"]);
+  assert.equal(calls[1]![7], "Get rid of the cards");
+  assert.equal(calls[1]![9], "A flat layout.");
+  assert.deepEqual(pull, { number: 42, url: "https://github.com/acme/repo/pull/42" });
+});
+
+test("a refused push or a failing gh reaches the caller as an error, never a pull request", async () => {
+  await assert.rejects(
+    createPullRequest({ exec: fakeExec({ "push -u": { code: 1, stderr: "rejected (non-fast-forward)" } }), cwd: "/repo", branch: "task-x", base: "main", title: "T", body: "B" }),
+    /non-fast-forward/,
+  );
+  await assert.rejects(
+    createPullRequest({ exec: fakeExec({ "push -u": {}, "pr create": { code: 1, stderr: "gh is not signed in" } }), cwd: "/repo", branch: "task-x", base: "main", title: "T", body: "B" }),
+    /gh is not signed in/,
+  );
+});
+
+test("pull creation rejects malformed URLs and bounds the body using safe argv and timeouts", async () => {
+  for (const url of ["https://github.com/a/b/issues/42", "https://github.com/a/b/pull/0", "https://github.com/a/b/pull/42oops", "https://github.com/a/b/pull/-1"]) {
+    await assert.rejects(createPullRequest({ exec: fakeExec({ "push -u": {}, "pr create": { stdout: url } }), cwd: "/repo", branch: "task", base: "main", title: "T", body: "B" }), /unreadable URL/);
+  }
+  const seen: Array<{ command: string; args: string[]; cwd?: string; timeout?: number }> = [];
+  const exec: Exec = async (command, args, options) => {
+    seen.push({ command, args, ...options });
+    return { code: 0, stdout: command === "gh" ? "https://github.com/a/b/pull/1" : "", stderr: "" };
+  };
+  await createPullRequest({ exec, cwd: "/task", branch: "task", base: "main", title: "$(unsafe)", body: "x".repeat(70_000) });
+  assert.equal(seen[0]!.command, "git");
+  assert.equal(seen[0]!.cwd, "/task");
+  assert.equal(seen[0]!.timeout, 60_000);
+  assert.equal(seen[1]!.args[7], "$(unsafe)");
+  assert.equal(seen[1]!.args[9]!.length, 60_000);
+  assert.ok((seen[1]!.timeout ?? 0) > 0);
 });
 
 test("open pull requests list through gh, with their checks, review decision and size", async () => {

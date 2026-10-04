@@ -25,9 +25,10 @@ function Row({ session, check, checking, selected, onSelect }: { session: Excali
     <li>
       <button
         type="button"
+        data-row
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(session.id)}
-        className="flex min-h-9 w-full flex-col gap-0.5 rounded-lg px-3 py-2.5 text-left outline-none transition-colors duration-150 hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:bg-accent"
+        className="flex min-h-9 w-full flex-col gap-0.5 px-3 py-2.5 text-left outline-none transition-colors duration-150 hover:bg-accent/40 focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:bg-accent"
       >
         <span className="flex items-center gap-2 text-sm">
           <Mark check={check} checking={checking} />
@@ -45,7 +46,7 @@ function Row({ session, check, checking, selected, onSelect }: { session: Excali
 
 export function SessionList({ sessions, checks, checking, selectedId, onSelect }: { sessions: readonly ExcalidrawSessionInfo[]; checks: Record<string, ExcalidrawCheck>; checking: readonly string[]; selectedId?: string; onSelect: (id: string) => void }) {
   return (
-    <ul className="flex flex-col gap-0.5 px-2 pb-2">
+    <ul className="flex flex-col divide-y divide-border px-2 pb-2">
       {sessions.map((session) => (
         <Row
           key={session.id}

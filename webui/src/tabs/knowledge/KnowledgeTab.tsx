@@ -21,7 +21,7 @@ const open = (key: string) => {
 
 function NoFiles() {
   return (
-    <Empty className="glass m-4 flex-1 border">
+    <Empty className="flat-pane m-4 flex-1">
       <EmptyHeader>
         <EmptyDescription>No knowledge files yet.</EmptyDescription>
       </EmptyHeader>

@@ -13,6 +13,8 @@ import type { BotLobbyConfig, PanelMember } from "../schemas/configuration.ts";
 import type { MemberState, PanelNote, PanelQuestion, PlannerMessage } from "../lobby/planner.ts";
 import type { QuickFixJob } from "../lobby/quickfix.ts";
 
+export interface ProjectInfo { id: string; name: string; cwd: string; port: number }
+
 export type { WebPrompt };
 export type { LobbyTopic };
 export type { DialogAnswer, SessionDialog, TaskRow, PlanComment };
@@ -510,6 +512,7 @@ export interface Api {
   "tasks.archived": { request: Record<string, never>; result: { rows: TaskRow[] } };
   "tasks.comments": { request: { taskId: string }; result: { comments: PlanComment[] } };
   "tasks.comment": { request: { taskId: string; text: string; attachments?: string[] }; result: { notice?: string } };
+  "tasks.editComment": { request: { taskId: string; commentId: string; text: string }; result: { comment: PlanComment } };
   "tasks.archive": { request: { taskId: string }; result: { notice: string } };
   "tasks.restore": { request: { taskId: string }; result: { notice: string } };
   "tasks.delete": { request: { taskId: string; where: "list" | "archive" }; result: { notice: string } };
@@ -532,6 +535,7 @@ export interface Api {
   "planner.get": { request: Record<string, never>; result: PlannerSnapshot };
   "planner.new": { request: { seed?: PlannerSeedInfo; seats?: PanelMember[] }; result: { notice: string } };
   "planner.send": { request: { text: string; attachments?: string[] }; result: { notice: string } };
+  "planner.editMessage": { request: { messageIndex: number; at: number; text: string }; result: { message: PlannerMessage; notice: string } };
   "planner.toggleSeat": { request: { member: PanelMember }; result: { notice: string; seated: boolean } };
   "planner.retry": { request: Record<string, never>; result: { notice: string } };
   "planner.commentLine": { request: { line: string; text: string }; result: { notice: string } };
