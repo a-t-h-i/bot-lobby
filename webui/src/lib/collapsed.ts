@@ -35,6 +35,11 @@ function subscribe(listener: () => void): () => void {
   }
 }
 
+/** Flip `key`'s pane from outside a component (a keyboard shortcut). */
+export function toggleCollapsed(key: string): void {
+  write(key, !read(key))
+}
+
 /** Whether `key`'s pane is folded away, and a way to flip it. */
 export function useCollapsed(key: string): [boolean, () => void] {
   const collapsed = useSyncExternalStore(subscribe, () => read(key), () => false)
