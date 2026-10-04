@@ -40,7 +40,7 @@ export default function (pi: ExtensionAPI): void {
   // A new request one agent can do alone: the oracle confirms, and the lobby hands it to the quick-fix agent.
   registerRouteTool(pi, CONFIG_DIR_NAME);
   // The questionnaire the oracle (and pi without a task) asks the user with; no other extension is needed for it.
-  registerAskTool(pi);
+  registerAskTool(pi, undefined, CONFIG_DIR_NAME);
   // The web tools, for the researcher and for pi without a task (the oracle leaves them to the researcher).
   registerWebTools(pi);
   // The shared Excalidraw sessions the user assigned to agents: the oracle here, every other agent through its own grant.

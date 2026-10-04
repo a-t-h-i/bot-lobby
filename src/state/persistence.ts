@@ -16,6 +16,13 @@ import {
 import { DEFAULT_KNOWLEDGE_CONTENT, ensureFile, readFileOr, writeFileEnsured } from "../knowledge/store.ts";
 import { forgetCached, forgetCachedUnder, readJsonCached } from "./file-cache.ts";
 import { taskName } from "../text.ts";
+import { mergePhaseTiming, timingBaseline, type TimingBaseline } from "./timing-merge.ts";
+
+const timingBaselines = new WeakMap<Task, TimingBaseline>();
+function rememberTiming(task: Task): Task {
+  timingBaselines.set(task, timingBaseline(task));
+  return task;
+}
 
 /** Idempotently create the full knowledge + tasks layout with seed files. */
 export function ensureProjectStructure(root: string, configDir: string): void {
@@ -40,6 +47,7 @@ export function createTaskDir(root: string, configDir: string, task: Task): void
   mkdirSync(dir, { recursive: true });
   forgetCached(join(dir, "state.json"));
   writeFileEnsured(join(dir, "state.json"), JSON.stringify(task, null, 2));
+  rememberTiming(task);
   ensureFile(join(dir, "proposal.md"), "");
   ensureFile(join(dir, "plan.md"), "");
   for (const domain of ["designer", "backend", "qa"] as const) {
@@ -80,9 +88,12 @@ export function readTaskArtifact(
 }
 
 export function saveTask(root: string, configDir: string, task: Task): void {
+  const latest = loadTask(root, configDir, task.id);
+  if (latest) mergePhaseTiming(task, timingBaselines.get(task), latest);
   const path = join(taskDir(dataRoot(root, configDir), task.id), "state.json");
   forgetCached(path);
   writeFileEnsured(path, JSON.stringify(task, null, 2));
+  rememberTiming(task);
 }
 
 /** Read a task state: the bot-lobby copy wins, else the newest pre-rename copy. */
@@ -91,7 +102,7 @@ export function loadTask(root: string, configDir: string, taskId: string): Task 
     const path = join(taskDir(dr, taskId), "state.json");
     if (!existsSync(path)) continue;
     try {
-      return JSON.parse(readFileSync(path, "utf8")) as Task;
+      return rememberTiming(JSON.parse(readFileSync(path, "utf8")) as Task);
     } catch {
       // A bot-lobby state.json that exists but cannot be parsed is surfaced, not shadowed.
       return undefined;

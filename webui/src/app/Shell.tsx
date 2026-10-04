@@ -83,10 +83,13 @@ export function Shell() {
     [tabs, activeId]
   )
   const toggleHelp = useCallback(() => setHelp((open) => !open), [])
-  const onAction = useCallback((action: string) => handleAction(action, route, toggleHelp, cycle), [route, toggleHelp, cycle])
+  const onAction = useCallback((action: string) => {
+    if ((action === "thinking" || action === "activity") && status?.panels?.[action] === false) return
+    handleAction(action, route, toggleHelp, cycle)
+  }, [route, toggleHelp, cycle, status?.panels])
   const insideApp = useCallback(() => {
     const el = document.activeElement
-    return !el || el === document.body || rootRef.current?.contains(el) === true
+    return !el || el === document.body || rootRef.current?.contains(el) === true || Boolean(el.closest(".thinking-bubble"))
   }, [])
   useLobbyKeys({ enabled: Boolean(status), keys, tabs, insideApp, onAction, onTab: select })
   const reload = useCallback(() => lobbyStore.onHello({}), [])

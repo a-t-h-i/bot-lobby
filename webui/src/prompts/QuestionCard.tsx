@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { projectUrl } from "@/lib/project"
 import { Markdown } from "@/ui/Markdown"
+import { StaticPreview } from "./StaticPreview"
 import { horizontalStep, isTyping, moveNav, verticalStep } from "./nav"
 import type { AskAnswer, AskQuestion, AskResult, AskOption, PromptView, SessionDialog } from "./payload"
 
@@ -74,6 +75,7 @@ function OptionRow({
   onFocusOption?: () => void
 }) {
   return (
+    <div className="grid gap-1">
     <label
       className={cn(
         "flex min-h-9 cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 text-start text-sm transition-[background-color,border-color,transform] duration-150 ease-snap active:scale-[0.99]",
@@ -88,25 +90,23 @@ function OptionRow({
           <span aria-hidden="true" className="text-muted-foreground tabular-nums">{index + 1}.</span>
           <OptionLabel label={option.label} />
         </span>
-        {option.description ? <Markdown text={option.description} className="text-muted-foreground" /> : null}
       </span>
     </label>
+    {option.description ? <Markdown text={option.description} className="px-3 text-muted-foreground" /> : null}
+    </div>
   )
 }
 
 function Preview({ option }: { option?: AskOption }) {
-  if (!option || (!option.preview && !option.image)) return null
+  if (!option || (!option.preview && !option.image && !option.htmlPreview)) return null
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3">
       <p className="text-xs font-medium text-muted-foreground">Preview · {splitRecommended(option.label).text}</p>
       {option.image ? (
         <img src={projectUrl(option.image)} alt="" loading="lazy" className="max-h-64 w-full rounded-lg border object-contain" />
       ) : null}
-      {option.preview ? (
-        <Markdown text={option.preview} className="text-xs" />
-      ) : (
-        <p className="text-xs text-muted-foreground">No preview for this one.</p>
-      )}
+      {option.htmlPreview ? <StaticPreview preview={option.htmlPreview} label={splitRecommended(option.label).text} /> : null}
+      {option.preview ? <Markdown text={option.preview} className="text-xs" /> : null}
     </div>
   )
 }
@@ -154,7 +154,7 @@ function Chips({ questions, picks, own, index, onGo }: { questions: AskQuestion[
       {questions.map((question, position) => {
         const answered = Boolean(own[position]?.trim()) || (picks[position]?.length ?? 0) > 0
         return (
-          <button
+          <button aria-keyshortcuts="Enter Space" aria-description="When focused, press Enter or Space to open this question."
             key={position}
             type="button"
             onClick={() => onGo(position)}
@@ -299,7 +299,7 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel }: { ques
         </p>
         <Markdown text={question.question} className="mt-1 text-base" />
       </div>
-      <div className={cn("grid min-w-0 gap-4", previewOption?.preview || previewOption?.image ? "lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]" : "")}>
+      <div className={cn("grid min-w-0 gap-4", previewOption?.preview || previewOption?.image || previewOption?.htmlPreview ? "lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]" : "")}>
         <div className="flex min-w-0 flex-col gap-2">
           {question.options.map((option, position) => (
             <OptionRow

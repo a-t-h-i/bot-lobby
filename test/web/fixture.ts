@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test as base, type ConsoleMessage, type Page } from "@playwright/test";
 import type { LobbyService } from "../../src/lobby/host.ts";
+import { lobbyTopics, type LobbyTopic } from "../../src/lobby/topics.ts";
 import { createFixtureService, disposeFixtureService } from "../../src/webui/dev/fake-service.ts";
 import { startWebServer } from "../../src/webui/server.ts";
 
@@ -18,6 +19,7 @@ export interface MockServer {
   use: (scenario: string) => void;
   /** Append one activity entry to the live feed, so a test can watch the log react. */
   log: (source: string, text: string) => void;
+  bump: (topic: LobbyTopic) => void;
 }
 
 export interface ErrorTrap {
@@ -56,6 +58,11 @@ export async function openScenario(page: Page, server: MockServer, scenario: str
 }
 
 export const test = base.extend<object, { server: MockServer }>({
+  page: async ({ page }, use) => {
+    await use(page);
+    // Finish in-flight response transformations while the request context is alive.
+    await page.unrouteAll({ behavior: "wait" });
+  },
   server: [
     async ({}, use) => {
       // An empty config directory of our own: the checks must never inherit the
@@ -71,6 +78,7 @@ export const test = base.extend<object, { server: MockServer }>({
           current = createFixtureService(scenario);
           web.rebind(current);
         },
+        bump: (topic) => { lobbyTopics.bump(topic); },
         log: (source, text) => {
           (current.feed as { log: (source: string, text: string) => void }).log(source, text);
         },
