@@ -88,7 +88,6 @@ export async function runResearch(request: ResearchRequest, run: ProcessRunner =
       model: profile.model,
       thinking: profile.thinking,
       timeoutMs: profile.timeoutMs,
-      ...(profile.fallback ? { fallback: profile.fallback } : {}),
       ...(request.time ? { time: request.time } : {}),
       cwd: request.cwd,
       signal: request.signal,

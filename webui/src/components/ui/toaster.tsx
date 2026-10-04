@@ -45,7 +45,7 @@ export function Toaster() {
             <ToastIcon kind={item.kind} />
             <span className="min-w-0 break-words">{item.message}</span>
             {item.action ? (
-              <button
+              <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
                 type="button"
                 className="-my-2 -mr-2 h-8 shrink-0 rounded-lg px-3 font-medium text-primary transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none"
                 onClick={() => {
