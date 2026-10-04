@@ -1,7 +1,7 @@
 /**
- * A titled card with its title in a row at the top and an
+ * A titled pane with its title in a row at the top and an
  * optional note at the other end. Content sits below the title row, so
- * nothing scrolls under it. The card's edge lights up while you are inside it.
+ * nothing scrolls under it. Flat: a hairline above the pane and under the title row.
  */
 import type { ReactNode } from "react"
 import { ChevronDown } from "lucide-react"
@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils"
 interface FrameProps extends Omit<React.ComponentProps<"section">, "title"> {
   title?: ReactNode
   note?: ReactNode
-  /** With `onToggle`, the card can be folded down to its title row. */
+  /** With `onToggle`, the pane can be folded down to its title row. */
   collapsed?: boolean
   onToggle?: () => void
   /** The key that folds it, printed in the button's tooltip (`Alt+A`). */
@@ -21,7 +21,7 @@ export function Frame({ title, note, className, children, collapsed, onToggle, s
   const name = typeof title === "string" ? title : "pane"
   return (
     <section
-      className={cn("glass group/frame relative flex min-h-0 min-w-0 flex-col rounded-lg transition-[border-color] duration-200 focus-within:border-ring/50", collapsed && "flex-none", className)}
+      className={cn("flat-pane group/frame relative flex min-h-0 min-w-0 flex-col", collapsed && "flex-none", className)}
       {...props}
     >
       {title || note || onToggle ? (

@@ -14,9 +14,10 @@ function Row({ entry, selected, onSelect }: { entry: Entry; selected: boolean; o
     <li>
       <button
         type="button"
+        data-row
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(entry.id)}
-        className="flex min-h-9 w-full items-start gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm outline-none transition-colors duration-150 hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:bg-accent"
+        className="flex min-h-9 w-full items-start gap-2.5 px-3 py-2.5 text-left text-sm outline-none transition-colors duration-150 hover:bg-accent/40 focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:bg-accent"
       >
         <WhereIcon where={entry.where} className="mt-0.5" />
         <span className={cn("min-w-0 flex-1 break-words text-foreground", selected && "font-medium")}>{entry.name}</span>
@@ -36,7 +37,7 @@ function Group({ where, entries, selectedId, onSelect }: { where: Where; entries
       <h3 className="px-4 pt-2 text-xs">
         <Rule title={SECTION_OF[where]} right={String(entries.length)} className="[&>span:first-child]:font-medium [&>span:first-child]:text-muted-foreground" />
       </h3>
-      <ul className="flex flex-col gap-0.5 px-2">
+      <ul className="flex flex-col divide-y divide-border px-2">
         {entries.map((entry) => (
           <Row key={entry.id} entry={entry} selected={entry.id === selectedId} onSelect={onSelect} />
         ))}

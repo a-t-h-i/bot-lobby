@@ -22,7 +22,7 @@ export function moveNav(root: ParentNode, from: Element | null, to: number | "fi
 
 /** Whether the key press is going into a text field (so letters and arrows belong to it). */
 export function isTyping(target: EventTarget | null): boolean {
-  return target instanceof HTMLTextAreaElement || (target instanceof HTMLInputElement && !["checkbox", "radio", "button"].includes(target.type)) || (target instanceof HTMLElement && target.isContentEditable)
+  return target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement || (target instanceof HTMLInputElement && !["checkbox", "radio", "button"].includes(target.type)) || (target instanceof HTMLElement && target.isContentEditable)
 }
 
 /** `ArrowDown`/`j` → 1, `ArrowUp`/`k` → -1, otherwise 0. */
@@ -54,6 +54,17 @@ export function stepRows(root: HTMLElement, from: Element | null, to: number | "
   const at = from ? items.findIndex((el) => el === from || el.contains(from)) : -1
   const next = to === "first" ? 0 : to === "last" ? items.length - 1 : Math.max(0, Math.min(items.length - 1, (at < 0 ? (to > 0 ? -1 : items.length) : at) + to))
   items[next]?.focus()
+}
+
+/** Use the row's existing onClick rather than keeping a second selection store. */
+export function selectRow(delta: number, root = document.querySelector("[data-pane='list']")): void {
+  if (!root) return
+  const rows = [...root.querySelectorAll<HTMLButtonElement>("button[data-row]")].filter((row) => row.offsetParent !== null)
+  const current = rows.findIndex((row) => row.getAttribute("aria-current") === "true")
+  const index = Math.max(0, Math.min(rows.length - 1, current < 0 ? (delta > 0 ? 0 : rows.length - 1) : current + delta))
+  rows[index]?.click()
+  rows[index]?.focus({ preventScroll: true })
+  rows[index]?.scrollIntoView({ block: "nearest" })
 }
 
 /** The open row of a list: the one marked current, else the first. */

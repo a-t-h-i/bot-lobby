@@ -77,7 +77,7 @@ export function lobbyHistory(body: { before?: number }, ctx: ApiContext): { entr
 /** Text for the oracle; a notice when it was not simply sent. */
 export function lobbySend(body: { text: string; attachments?: string[] }, ctx: ApiContext): { notice?: string } {
   if (!body.text.trim() && !body.attachments?.length) return { notice: "type something first" };
-  const notice = ctx.service.toOracle(withAttachments(body.text, body.attachments, ctx.service.zen().task?.id));
+  const notice = ctx.service.toOracle(withAttachments(body.text, body.attachments, ctx.service.zen().task?.id, ctx.service.projectRoot?.()));
   return notice ? { notice } : {};
 }
 
