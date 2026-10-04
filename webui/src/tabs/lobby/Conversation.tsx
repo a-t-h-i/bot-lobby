@@ -217,7 +217,7 @@ export function Conversation({
   useEffect(() => setSettled(true), [])
   return (
     <Frame aria-label="Conversation" title="Conversation" note={more ? OLDER_NOTE : undefined}>
-      <div ref={ref} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto px-4 pb-3" role="log" aria-label="Conversation" tabIndex={0}>
+      <div ref={ref} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto px-4 pt-3 pb-3" role="log" aria-label="Conversation" tabIndex={0}>
         {empty ? (
           <ConversationEmpty hasTask={hasTask} />
         ) : (
