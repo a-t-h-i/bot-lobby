@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import { Dialog } from "radix-ui"
-import { AnimatePresence, motion } from "motion/react"
+import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { cn } from "@/lib/utils"
 
 interface PopupProps {
@@ -14,6 +14,7 @@ interface PopupProps {
   /** When false, clicking the backdrop never closes it (a question keeps its answers). */
   dismissOnBackdrop?: boolean
   className?: string
+  onCloseAutoFocus?: (event: Event) => void
   children: ReactNode
 }
 
@@ -23,7 +24,8 @@ interface PopupProps {
  * show it only while they hold the page's one overlay slot (see
  * `lib/overlay.ts`), so two never stack.
  */
-export function Popup({ open, onOpenChange, label, description, dismissOnBackdrop = true, className, children }: PopupProps) {
+export function Popup({ open, onOpenChange, label, description, dismissOnBackdrop = true, className, onCloseAutoFocus, children }: PopupProps) {
+  const reduceMotion = useReducedMotion()
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <AnimatePresence>
@@ -42,6 +44,7 @@ export function Popup({ open, onOpenChange, label, description, dismissOnBackdro
               <Dialog.Content
                 asChild
                 forceMount
+                onCloseAutoFocus={onCloseAutoFocus}
                 onInteractOutside={(event) => {
                   if (!dismissOnBackdrop) event.preventDefault()
                 }}
@@ -57,9 +60,9 @@ export function Popup({ open, onOpenChange, label, description, dismissOnBackdro
               >
                 <motion.div
                   className={cn("glass-pop pointer-events-auto flex max-h-[min(86svh,48rem)] w-full max-w-2xl flex-col overflow-hidden rounded-lg outline-none", className)}
-                  initial={{ opacity: 0, scale: 0.92, y: 18 }}
+                  initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.92, y: reduceMotion ? 0 : 18 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.96, y: 8, transition: { duration: 0.12, ease: "easeIn" } }}
+                  exit={{ opacity: 0, scale: reduceMotion ? 1 : 0.96, y: reduceMotion ? 0 : 8, transition: { duration: 0.12, ease: "easeIn" } }}
                   transition={{ type: "spring", stiffness: 460, damping: 32, mass: 0.9 }}
                 >
                   <Dialog.Title className="sr-only">{label}</Dialog.Title>

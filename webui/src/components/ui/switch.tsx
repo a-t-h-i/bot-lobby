@@ -9,9 +9,12 @@ function Switch({
 }: React.ComponentProps<typeof SwitchPrimitive.Root> & { thumbClassName?: string }) {
   return (
     <SwitchPrimitive.Root
+      aria-keyshortcuts="Enter Space"
+      aria-description="When focused, press Enter or Space to toggle."
+      title="Toggle: Enter / Space when focused"
       data-slot="switch"
       className={cn(
-        "peer relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors duration-150 outline-none before:absolute before:-inset-x-2 before:-inset-y-2.5 before:content-[''] focus-visible:ring-3 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input",
+        "peer relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors duration-150 outline-none before:absolute before:-inset-x-2 before:-inset-y-3 before:content-[''] focus-visible:ring-3 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input",
         className
       )}
       {...props}

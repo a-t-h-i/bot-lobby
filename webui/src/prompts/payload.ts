@@ -6,11 +6,13 @@
  * `src/lobby/sessions.ts` (`SessionDialog`).
  */
 import type { WebPrompt } from "@protocol"
+import { previewPayload, type HtmlPreview } from "../lib/staticPreview.ts"
 
 export interface AskOption {
   label: string
   description?: string
   preview?: string
+  htmlPreview?: HtmlPreview
   image?: string
 }
 
@@ -70,11 +72,13 @@ function optionOf(value: unknown): AskOption | undefined {
   const description = str(option.description)
   const preview = str(option.preview)
   const image = str(option.image)
+  const htmlPreview = previewPayload(option.htmlPreview)
   return {
     label,
     ...(description ? { description } : {}),
     ...(preview ? { preview } : {}),
     ...(image ? { image } : {}),
+    ...(htmlPreview ? { htmlPreview } : {}),
   }
 }
 

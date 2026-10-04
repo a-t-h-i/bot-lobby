@@ -19,7 +19,7 @@ export function useWide(): boolean {
   return useMediaQuery("(min-width: 1024px)")
 }
 
-/** A flat pane: a hairline above it, no card around it. */
+/** A quiet shared surface for a meaningful list or detail group. */
 export function Pane({ className, ...props }: React.ComponentProps<"section">) {
   return <section className={cn("flat-pane min-h-0 min-w-0", className)} {...props} />
 }
@@ -40,11 +40,16 @@ interface SplitPaneProps {
 
 function DetailSheet({ open, onClose, describe, children }: Pick<SplitPaneProps, "open" | "onClose" | "describe"> & { children: ReactNode }) {
   const shown = useOverlaySlot(open, PRIORITY.sheet)
+  const mounted = useRef(false)
+  if (shown) mounted.current = true
+  if (!open) mounted.current = false
   return (
     <Sheet open={open && shown} onOpenChange={(next) => !next && onClose()}>
       <SheetContent
+        forceMount={open && mounted.current ? true : undefined}
+        hidden={!shown}
         showCloseButton={false}
-        className="gap-0 data-[side=right]:w-[90%] data-[side=right]:sm:max-w-3xl"
+        className={cn("gap-0 data-[side=right]:w-[90%] data-[side=right]:sm:max-w-3xl", !shown && "!hidden")}
       >
         <SheetHeader className="flex-row items-center justify-between border-b py-2">
           <SheetTitle>Detail</SheetTitle>
