@@ -344,6 +344,12 @@ Every action (archive, delete, start, review, refresh, copy, …) is an icon but
 
 ---
 
+## D-26 · Settings: aligned agent cards and an effort mascot · Adopted
+
+Every agent card has the same rows: Model and Fallback side by side, then the effort slider with a small robot that acts out the level (asleep at `off`, thoughtful at `medium`, straining at `xhigh`, blazing at `max`; `ui/EffortMascot.tsx`), then a footer with Instructions and the time limit. The mascot is decoration (hidden from screen readers) and holds still under reduced motion. It shows the level the model really runs at, so an unsupported level is drawn as the nearest supported one. Drop-down lists are at least 17rem wide, wrap their hints instead of cutting them, open with Down or Up on the trigger and close with Tab.
+
+---
+
 ## Open questions (each has a default the swarm uses until the user answers)
 
 | Id | Question | Default |
