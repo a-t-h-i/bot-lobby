@@ -6,7 +6,6 @@
  * and the lobby feed, and every finished job lands in the metrics log.
  */
 import { loadPrompt } from "../prompts/loader.ts";
-import { withFallback } from "../execution/fallback.ts";
 import { runPiAgent, spawnPiProcess, type PiStreamEvent, type ProcessRunner } from "../execution/pi-runner.ts";
 import { grantOption } from "../excalidraw/sessions.ts";
 import { describeToolCall } from "../pi/activity.ts";
@@ -77,7 +76,6 @@ export interface QuickFixProfile {
   timeoutMs: number;
   instructions?: string;
   /** Where the job goes when its model runs out of usage or is unavailable. */
-  fallback?: { model: string; thinking: string };
 }
 
 export interface QuickFixDeps {
@@ -265,17 +263,6 @@ export class QuickFixQueue {
         },
         this.deps.runProcess ?? spawnPiProcess,
       );
-      // A model that is out of usage hands the job to the fallback the settings name.
-      const attemptOrFallback = async (model: string | undefined, thinking: string) => {
-        const { result: outcome, switchedFrom } = await withFallback(model, thinking, profile.fallback, attempt);
-        if (switchedFrom && profile.fallback) {
-          job.model = profile.fallback.model;
-          job.thinking = profile.fallback.thinking;
-          this.addStep(job, `${switchedFrom} is out of usage or unavailable; ran on ${profile.fallback.model} (${profile.fallback.thinking})`, Date.now());
-          this.changed();
-        }
-        return outcome;
-      };
       let result;
       if (route) {
         job.route = routeLabel(route);
@@ -283,7 +270,7 @@ export class QuickFixQueue {
         job.thinking = route.thinking;
         if (route.model) job.model = route.model;
         this.changed();
-        result = await attemptOrFallback(route.model, route.thinking);
+        result = await attempt(route.model, route.thinking);
         if (fellShort(result) && !controller.signal.aborted) {
           // The routed attempt counts in the metrics on its own; the job re-runs on the configured profile.
           appendMetrics(this.deps.root, this.deps.configDir, [{ ...quickFixMetric({ ...job, status: result.status, finishedAt: Date.now(), usage: result.usage, ...(result.model ? { model: result.model } : {}) }), id: `${job.id}-routed-${job.startedAt}` }]);
@@ -292,10 +279,10 @@ export class QuickFixQueue {
           delete job.routedFrom;
           job.thinking = profile.thinking;
           if (profile.model) job.model = profile.model;
-          result = await attemptOrFallback(profile.model, profile.thinking);
+          result = await attempt(profile.model, profile.thinking);
         }
       } else {
-        result = await attemptOrFallback(profile.model, profile.thinking);
+        result = await attempt(profile.model, profile.thinking);
       }
       job.status = result.status;
       job.report = result.output.trim() || undefined;

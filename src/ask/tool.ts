@@ -12,11 +12,19 @@ import { Type } from "typebox";
 import { isSubagentProcess } from "../pi/quiet.ts";
 import { askUser } from "./web.ts";
 import { relayAsker, relayEnabled } from "./relay.ts";
-import { ASK_TOOL, isImagePath, MAX_HEADER, MAX_LABEL, MAX_OPTIONS, MAX_QUESTIONS, MIN_OPTIONS, RESERVED, type AskQuestion, type AskResult, type Asker } from "./types.ts";
+import { ASK_TOOL, isImagePath, validHtmlPreview, MAX_PREVIEW_HTML, MAX_PREVIEW_CSS, MAX_HEADER, MAX_LABEL, MAX_OPTIONS, MAX_QUESTIONS, MIN_OPTIONS, RESERVED, type AskQuestion, type AskResult, type Asker } from "./types.ts";
+
+import { detectProjectRoot } from "../state/project.ts";
+import { ownedTask } from "../state/persistence.ts";
+import { withBlockingRequest } from "../state/blocking-requests.ts";
 
 export { ASK_TOOL };
 
 const OptionSchema = Type.Object({
+  htmlPreview: Type.Optional(Type.Object({
+    html: Type.String({ maxLength: MAX_PREVIEW_HTML }),
+    css: Type.Optional(Type.String({ maxLength: MAX_PREVIEW_CSS })),
+  }, { additionalProperties: false })),
   label: Type.String({ maxLength: MAX_LABEL, description: `The option as the user sees and picks it: 1-5 words, at most ${MAX_LABEL} characters.` }),
   description: Type.Optional(Type.String({ description: "What choosing it means: its trade-offs or consequences. Markdown." })),
   preview: Type.Optional(Type.String({ description: "Markdown shown beside the options while this one is focused: a mockup, a code snippet, a diagram, a config. Only when seeing it helps the user compare." })),
@@ -58,6 +66,7 @@ export function invalidQuestions(questions: readonly AskQuestion[]): string | un
       if (RESERVED.has(label)) return `${at}: "${option.label}" is kept for the user's own answer; leave it out`;
       if (labels.has(label)) return `${at} has two options labelled "${option.label}"`;
       if (option.image?.trim() && !isImagePath(option.image)) return `${at}: the image for "${option.label}" must be a .png, .jpg, .gif or .webp file`;
+      if (option.htmlPreview !== undefined && !validHtmlPreview(option.htmlPreview)) return `${at}: invalid static HTML/CSS preview`;
       labels.add(label);
     }
   }
@@ -96,7 +105,7 @@ export function answerSummary(questions: readonly AskQuestion[], result: AskResu
  * Register `ask_user_question` in this pi session; in a subagent only when
  * the master relays its questions. `ask` is swappable for tests.
  */
-export function registerAskTool(pi: ExtensionAPI, ask?: Asker): void {
+export function registerAskTool(pi: ExtensionAPI, ask?: Asker, configDir = ".pi"): void {
   const subagent = isSubagentProcess();
   if (subagent && !relayEnabled()) return;
   const asker = ask ?? (subagent ? relayAsker : askUser);
@@ -113,7 +122,13 @@ export function registerAskTool(pi: ExtensionAPI, ask?: Asker): void {
       const questions = (params as { questions: AskQuestion[] }).questions;
       const invalid = invalidQuestions(questions);
       if (invalid) throw new Error(`${invalid}.`);
-      const result = await asker(questions, ctx, signal, "oracle");
+      // A context without a cwd or session cannot be attributed to a task, so the ask runs untracked.
+      const root = ctx.cwd ? detectProjectRoot(ctx.cwd, configDir) : undefined;
+      const sessionId = ctx.sessionManager?.getSessionId();
+      const task = subagent || !root || !sessionId ? undefined : ownedTask(root, configDir, sessionId);
+      const tracked = task && root && sessionId ? { root, configDir, taskId: task.id, sessionId } : undefined;
+      const run = () => asker(questions, ctx, signal, "oracle");
+      const result = tracked ? await withBlockingRequest(tracked, run) : await run();
       return { content: [{ type: "text", text: answerSummary(questions, result) }], details: result };
     },
     renderCall(args, theme) {

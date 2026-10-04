@@ -23,5 +23,7 @@ export default defineConfig({
   projects: [
     { name: "light", use: { browserName: "chromium", colorScheme: "light" } },
     { name: "dark", use: { browserName: "chromium", colorScheme: "dark" } },
+    { name: "light-320", testMatch: /(?:refresh|feedback)\.spec\.ts/, use: { browserName: "chromium", colorScheme: "light", viewport: { width: 320, height: 740 }, hasTouch: true } },
+    { name: "dark-320", testMatch: /(?:refresh|feedback)\.spec\.ts/, use: { browserName: "chromium", colorScheme: "dark", viewport: { width: 320, height: 740 }, hasTouch: true } },
   ],
 });

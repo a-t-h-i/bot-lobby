@@ -15,7 +15,7 @@ import { lobbyAbort, lobbyHistory, lobbySend, lobbySnapshot } from "./lobby.ts";
 import { promptsAnswer, promptsDismiss, promptsList } from "./prompts.ts";
 import { plannerAnswer, plannerCommentLine, plannerGet, plannerNew, plannerRetry, plannerSend, plannerEditMessage, plannerToggleSeat, plannerSave } from "./planner.ts";
 import { quickfixCancel, quickfixList, quickfixMovedToTask, quickfixRunAnyway, quickfixSubmit } from "./quickfix.ts";
-import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksEditComment, tasksGet, tasksList, tasksMessage, tasksRestore } from "./tasks.ts";
+import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksEditComment, tasksGet, tasksList, tasksMessage, tasksRestore, tasksOpen, tasksDeliveryReview, tasksDeliveryDefer, tasksDeliver } from "./tasks.ts";
 import { metricsGet } from "./metrics.ts";
 import { knowledgeAdd, knowledgeComment, knowledgeEdit, knowledgeFiles, knowledgeOpen, knowledgeRemove, knowledgeReplaceFile, knowledgeUnnote } from "./knowledge.ts";
 import { excalidrawAdd, excalidrawCheck, excalidrawCreate, excalidrawList, excalidrawRemove, excalidrawRename, excalidrawReveal, excalidrawToggleAgent, excalidrawToggleAll, excalidrawToggleContribute } from "./excalidraw.ts";
@@ -123,6 +123,22 @@ function buildRoutes(): Record<string, Route> {
   routes["tasks.get"] = {
     schema: Type.Object({ taskId: TaskId }, { additionalProperties: false }),
     run: (body, ctx) => tasksGet(body as { taskId: string }, ctx),
+  };
+  routes["tasks.open"] = {
+    schema: Type.Object({ taskId: TaskId }, { additionalProperties: false }),
+    run: (body, ctx) => tasksOpen(body as { taskId: string }, ctx),
+  };
+  routes["tasks.deliveryReview"] = {
+    schema: Type.Object({ taskId: TaskId }, { additionalProperties: false }),
+    run: (body, ctx) => tasksDeliveryReview(body as { taskId: string }, ctx),
+  };
+  routes["tasks.deliver"] = {
+    schema: Type.Object({ taskId: TaskId, reviewId: Type.String({ minLength: 1, maxLength: 200 }), action: Type.Union([Type.Literal("create_pr"), Type.Literal("merge_main")]), confirmMain: Type.Optional(Type.Boolean()) }, { additionalProperties: false }),
+    run: (body, ctx) => tasksDeliver(body as unknown as Parameters<typeof tasksDeliver>[0], ctx),
+  };
+  routes["tasks.deliveryDefer"] = {
+    schema: Type.Object({ taskId: TaskId, reviewId: Type.String({ minLength: 1, maxLength: 200 }) }, { additionalProperties: false }),
+    run: (body, ctx) => tasksDeliveryDefer(body as { taskId: string; reviewId: string }, ctx),
   };
   routes["tasks.comments"] = {
     schema: Type.Object({ taskId: TaskId }, { additionalProperties: false }),

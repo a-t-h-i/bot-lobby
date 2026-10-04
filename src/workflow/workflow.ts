@@ -52,6 +52,7 @@ import { tail, truncate } from "../text.ts";
 import { isAutoMode } from "../state/auto.ts";
 import { briefRejection } from "./brief.ts";
 import { assertNoPendingApprovals, pendingApprovals, requestApproval, resolveApproval } from "./approvals.ts";
+import { withBlockingRequest } from "../state/blocking-requests.ts";
 import { pingApproval } from "../pi/notify.ts";
 import { describeRun, runLogEntry } from "../pi/run-summary.ts";
 import { nextStates } from "./transitions.ts";
@@ -64,8 +65,8 @@ import { appendMetrics, metricFromRun } from "../state/metrics.ts";
 import { markCommentsAddressed, pendingComments, readPlanComments } from "../state/comments.ts";
 import { fastNext, onFastTrack, parseRoster, qaRequired, qaStillDue, qaTookPart, rosterWords, trackSummary } from "./track.ts";
 import { missingWorktree, taskCwd } from "../execution/workspace.ts";
-import { createPullRequest } from "../lobby/pulls.ts";
-import type { Exec } from "../lobby/issues.ts";
+import { completionReview } from "../delivery/review.ts";
+import { execCommand, type Exec } from "../lobby/issues.ts";
 
 export const ORCHESTRATE_ACTIONS = [
   "clarify",
@@ -1309,38 +1310,10 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
   task.blockers = [];
   if (task.state === "implementing") transition(task, "reviewing");
   transition(task, "completed");
-  const opened = await openPullRequest(task, deps);
+  task.delivery = await completionReview(task, deps.root, { cwd: deps.root, exec: deps.exec ?? execCommand });
+  deps.notify(`Task ${task.id} is completed. Delivery review is available; publishing requires your approval.`, "info");
   flushDecisions(deps, task);
-  return `Task ${task.id} completed. History recorded and temporary scratchpads removed.${opened}`;
-}
-
-/** Longest pull request body `gh` takes without complaint. */
-const PR_BODY_CHARS = 60_000;
-
-/**
- * Open the task's pull request once it completes, so its branch lands in
- * review by itself. Every reason it cannot (no isolation, no remote, `gh` not
- * signed in) is recorded as a note and the completion stands either way.
- */
-async function openPullRequest(task: Task, deps: WorkflowDeps): Promise<string> {
-  const git = task.git;
-  if (!git || (git.mode !== "branch" && git.mode !== "worktree")) return pullNote(task, "No pull request opened — task has no git isolation");
-  const base = git.from?.trim();
-  if (!base || /^detached at /i.test(base) || /^[a-f0-9]{40,64}$/i.test(base)) return pullNote(task, "No pull request opened — task has no valid base branch");
-  const body = [task.proposal?.trim() || task.plan?.trim() || task.title, task.qaVerdict ? `QA verdict: ${task.qaVerdict}` : ""].filter(Boolean).join("\n\n").slice(0, PR_BODY_CHARS);
-  try {
-    const pull = await createPullRequest({ exec: deps.exec, cwd: taskCwd(task, deps.cwd), branch: git.branch, base, title: task.title, body });
-    recordDecision(task, `Opened pull request #${pull.number} for ${git.branch}: ${pull.url}`);
-    deps.notify(`Pull request #${pull.number} is open: ${pull.url}`, "info");
-    return ` Pull request #${pull.number} is open: ${pull.url}.`;
-  } catch (error) {
-    return pullNote(task, `No pull request opened for ${git.branch} — ${(error as Error).message}`);
-  }
-}
-
-function pullNote(task: Task, note: string): string {
-  recordDecision(task, note);
-  return ` ${note}.`;
+  return `Task ${task.id} completed. History recorded and temporary scratchpads removed. Delivery review is available; nothing was published.`;
 }
 
 /** Asked when the oracle completes a task QA has not passed (the user told it to finish, say). */
@@ -1740,8 +1713,16 @@ export async function runWorkflowAction(params: OrchestrateParams, deps: Workflo
   const gone = missingWorktree(task);
   if (gone && params.action !== "status") return { ok: false, taskId: task.id, state: task.state, message: `Rejected: ${gone}` };
   const finished = new Map<string, AgentRun>();
+  const identity = { root: deps.root, configDir: deps.configDir, taskId: task.id, sessionId: task.ownerSessionId };
+  const wait = <T>(run: () => Promise<T>) => {
+    saveTask(deps.root, deps.configDir, task);
+    return withBlockingRequest(identity, run);
+  };
   const tracked: WorkflowDeps = {
     ...deps,
+    choose: (...args) => wait(() => deps.choose(...args)),
+    ask: (...args) => wait(() => deps.ask(...args)),
+    ...(deps.askQuestions ? { askQuestions: (...args: Parameters<NonNullable<WorkflowDeps["askQuestions"]>>) => wait(() => deps.askQuestions!(...args)) } : {}),
     // Every agent, diff and desk of a task with its own worktree works there.
     cwd: taskCwd(task, deps.cwd),
     onUpdate: (run) => {
