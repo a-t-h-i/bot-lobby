@@ -27,7 +27,7 @@ function ThoughtRow({ thought }: { thought: ThoughtEntry }) {
 export function Thoughts({ thoughts, collapsed, onToggle, shortcut }: { thoughts: ThoughtEntry[]; collapsed: boolean; onToggle: () => void; shortcut?: string }) {
   const shown = latestThoughts(thoughts)
   return (
-    <Frame className="max-h-44 shrink-0" aria-label="Thinking" title="Thinking" collapsed={collapsed} onToggle={onToggle} shortcut={shortcut}>
+    <Frame className="min-h-0 flex-1" aria-label="Thinking" title="Thinking" collapsed={collapsed} onToggle={onToggle} shortcut={shortcut}>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-2.5" role="log" aria-label="Thinking" tabIndex={0}>
         {shown.length === 0 ? (
           <p className="text-sm text-muted-foreground">Thoughts from the oracle and every agent appear here, and only here.</p>

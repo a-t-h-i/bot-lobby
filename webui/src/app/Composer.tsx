@@ -1,16 +1,19 @@
 /**
  * The one text box for everything: a single card with roomy text at the top
  * and, inside it at the bottom, the tools, who it goes to, the key hints and
- * the send button. It sits in the page's flow at the bottom (never over the content),
- * grows with what you type (and opens up to a tall editor), takes images, PDFs
- * and other files (pick, paste or drop them) and sends Markdown to whoever the
- * tab talks to: the oracle everywhere, the planning panel on Plan, a quick fix
- * on Quick fix, a comment on the open task on Tasks. While a pop-up is open it
- * steps aside, so only one thing asks for you at a time.
+ * the send button. It takes images, PDFs and other files (pick, paste or drop
+ * them) and sends Markdown to whoever the tab talks to: the oracle everywhere,
+ * the planning panel on Plan, a quick fix
+ * on Quick fix, a comment on the open task on Tasks. It floats over the window
+ * at the bottom (the page keeps its empty height clear), grows and shrinks with
+ * what you type up to about a third of the window and scrolls after that, and
+ * has no expand or collapse toggle. Only the card itself takes clicks; the
+ * empty band around and above it belongs to the page. While a pop-up is open it steps aside, so
+ * only one thing asks for you at a time.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react"
-import { animate, AnimatePresence, motion } from "motion/react"
-import { ArrowUp, Eye, FileText, Maximize2, Minimize2, Paperclip, Square, X } from "lucide-react"
+import { AnimatePresence, motion } from "motion/react"
+import { ArrowUp, Eye, FileText, Paperclip, Square, X } from "lucide-react"
 import { Keys, KeyHint } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -153,7 +156,6 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
 export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<string, string>; onHelp: () => void }) {
   const [text, setText] = useState("")
   const [files, setFiles] = useState<Pending[]>([])
-  const [expanded, setExpanded] = useState(false)
   const [preview, setPreview] = useState(false)
   const [sending, setSending] = useState(false)
   const [dragging, setDragging] = useState(false)
@@ -170,7 +172,6 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
   useEffect(() => setChosen(undefined), [targetKey])
 
   const card = useRef<HTMLDivElement>(null)
-  const area = useRef<HTMLDivElement>(null)
   const field = useRef<HTMLTextAreaElement>(null)
   const picker = useRef<HTMLInputElement>(null)
   const filesRef = useRef(files)
@@ -206,25 +207,26 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
     }
   }, [])
 
-  // Opening or closing the tall editor eases the box between its two heights.
-  const lastHeight = useRef(0)
+  // The page pads itself by the empty box's height, so nothing hides behind it at rest.
+  // Measured once per mount and again on resize while the box is empty: typing must never
+  // clear the reserve, or the page shifts up under the box as it grows.
+  const filled = useRef(false)
+  filled.current = text !== "" || files.length > 0
   useLayoutEffect(() => {
-    const el = area.current
+    const el = card.current
     if (!el) return
-    const to = el.offsetHeight
-    const from = lastHeight.current
-    lastHeight.current = to
-    if (!from || from === to || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
-    el.style.height = `${from}px`
-    el.style.overflow = "hidden"
-    const control = animate(el, { height: `${to}px` }, { type: "spring", stiffness: 380, damping: 34 })
-    void control.finished.then(() => {
-      el.style.height = ""
-      el.style.overflow = ""
-      lastHeight.current = el.offsetHeight
-    })
-    return () => control.stop()
-  }, [expanded])
+    const root = document.documentElement
+    const set = () => {
+      if (filled.current) return
+      root.style.setProperty("--composer-min-h", `${Math.ceil(el.getBoundingClientRect().height)}px`)
+    }
+    set()
+    window.addEventListener("resize", set)
+    return () => {
+      window.removeEventListener("resize", set)
+      root.style.removeProperty("--composer-min-h")
+    }
+  }, [])
 
   const attach = useCallback((list: Iterable<File>) => {
     const incoming = [...list]
@@ -351,13 +353,17 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
   return (
     <div
       ref={card}
-      className={cn("shrink-0 px-4 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-opacity duration-200 ease-snap", blocked && "opacity-0")}
+      className={cn(
+        "absolute inset-x-0 bottom-0 z-30 shrink-0 px-4 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-opacity duration-200 ease-snap pointer-events-none",
+        blocked && "opacity-0"
+      )}
       inert={blocked}
     >
-      <div className={cn("mx-auto w-full transition-[max-width] duration-300 ease-snap", expanded ? "max-w-4xl" : "max-w-3xl")}>
+      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-full bg-background" />
+      <div className="mx-auto w-full max-w-3xl">
         <div
           className={cn(
-            "group/composer relative rounded-lg border border-input bg-card shadow-card transition-[border-color,box-shadow] duration-200 ease-snap focus-within:border-ring/60 focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_16%,transparent)]",
+            "group/composer pointer-events-auto relative rounded-lg border border-input bg-card shadow-card transition-[border-color,box-shadow] duration-200 ease-snap focus-within:border-ring/60 focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_16%,transparent)]",
             dragging && "border-primary shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_30%,transparent)]"
           )}
           onDragOver={(event) => {
@@ -392,7 +398,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
             </div>
           ) : null}
 
-          <div ref={area} className="flex px-4 pt-3 pb-1">
+          <div className="flex px-4 pt-3 pb-1">
             <textarea
               ref={field}
               id="composer-text"
@@ -406,7 +412,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
               className={cn(
                 "w-full min-w-0 flex-1 resize-none bg-transparent text-base leading-relaxed caret-primary outline-none placeholder:text-muted-foreground/80 md:text-[0.9375rem] md:leading-relaxed",
                 "field-sizing-content",
-                expanded ? "max-h-[60svh] min-h-[min(46svh,24rem)]" : "max-h-[34svh] min-h-[1.75rem]"
+                "max-h-[34svh] min-h-[1.75rem] overflow-y-auto"
               )}
             />
           </div>
@@ -431,20 +437,6 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
                 </button>
               </TooltipTrigger>
               <TooltipContent>Attach images, PDFs or files</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={expanded ? "Make the box smaller" : "Open the box wider and taller"}
-                  aria-pressed={expanded}
-                  onClick={() => setExpanded((value) => !value)}
-                  className={cn(TOOL, expanded && "bg-tab text-foreground")}
-                >
-                  {expanded ? <Minimize2 aria-hidden="true" className="size-4" /> : <Maximize2 aria-hidden="true" className="size-4" />}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>{expanded ? "Smaller" : "Bigger"}</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>

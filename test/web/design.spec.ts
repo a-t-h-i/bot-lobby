@@ -171,17 +171,49 @@ test("the box grows with what is typed, carries lists on, formats with Ctrl+B an
   await expect(page.getByRole("region", { name: "Markdown preview" }).locator("strong"), "the preview renders it").toHaveText("make this bold");
 });
 
-test("the composer's tall editor opens and closes", async ({ page, server }) => {
+test("the box grows and shrinks with the text on its own, over the page instead of pushing it", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
-  const box = page.getByLabel("Message the oracle");
+  const box = page.locator("#composer-text");
   const before = (await box.boundingBox())!.height;
-  await page.getByRole("button", { name: "Open the box wider and taller" }).click();
-  await page.waitForTimeout(700);
-  expect((await box.boundingBox())!.height, "it grows").toBeGreaterThan(before + 100);
-  await page.getByRole("button", { name: "Make the box smaller" }).click();
-  await page.waitForTimeout(700);
-  expect((await box.boundingBox())!.height, "and shrinks back").toBeLessThan(before + 20);
+  const mainBefore = (await page.locator("#main").boundingBox())!;
+  await box.fill("one\ntwo\nthree\nfour\nfive\nsix");
+  await expect.poll(async () => (await box.boundingBox())!.height, { message: "six lines make the box taller" }).toBeGreaterThan(before + 100);
+  const mainAfter = (await page.locator("#main").boundingBox())!;
+  expect(Math.abs(mainAfter.y - mainBefore.y), "the composer floats: the page does not move down").toBeLessThanOrEqual(2);
+  expect(Math.abs(mainAfter.height - mainBefore.height), "nor grow").toBeLessThanOrEqual(2);
+  const reserve = await page.evaluate(() => document.documentElement.style.getPropertyValue("--composer-min-h"));
+  expect(reserve, "the page keeps the empty box's height clear while it holds text").not.toBe("");
+  await box.fill("");
+  await expect.poll(async () => (await box.boundingBox())!.height, { message: "and shrinks back when emptied" }).toBeLessThan(before + 20);
+  await expect(page.getByRole("button", { name: /Open the box wider and taller|Make the box smaller/ }), "there is no expand or collapse toggle").toHaveCount(0);
+});
+
+test("on Settings the model selectors stack inside the agent card, one card per row on a tablet", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.evaluate(() => {
+    window.location.hash = "#/settings";
+  });
+  const masterCard = page.locator("section.glass").filter({ has: page.getByRole("heading", { name: "Master", exact: true }) });
+  await expect(masterCard, "the Master's card").toBeVisible();
+  const model = masterCard.getByRole("combobox", { name: "Master model" });
+  const fallback = masterCard.getByRole("combobox", { name: "Master fallback model" });
+  await expect(model).toBeVisible();
+  await expect(fallback, "a long model id cannot squeeze the pair side by side").toBeVisible();
+  const modelBox = (await model.boundingBox())!;
+  const fallbackBox = (await fallback.boundingBox())!;
+  const cardBox = (await masterCard.boundingBox())!;
+  expect(Math.abs(modelBox.x - fallbackBox.x), "stacked, not side by side").toBeLessThanOrEqual(2);
+  expect(fallbackBox.y, "the fallback sits under the model").toBeGreaterThan(modelBox.y + 20);
+  expect(Math.max(modelBox.x + modelBox.width, fallbackBox.x + fallbackBox.width), "neither selector crosses the card's right edge").toBeLessThanOrEqual(cardBox.x + cardBox.width);
+  await page.setViewportSize({ width: 1024, height: 768 });
+  const designerCard = page.locator("section.glass").filter({ has: page.getByRole("heading", { name: "Designer", exact: true }) });
+  await expect(designerCard, "the Designer's card").toBeVisible();
+  const designerBox = (await designerCard.boundingBox())!;
+  const masterAtTablet = (await masterCard.boundingBox())!;
+  expect(Math.abs(designerBox.x - masterAtTablet.x), "one card per row at tablet width").toBeLessThanOrEqual(2);
+  expect(designerBox.y, "the next card is below, not beside").toBeGreaterThan(masterAtTablet.y + 20);
 });
 
 test("Plan, Quick fix and an open task each give the composer its own target", async ({ page, server }) => {
@@ -217,7 +249,10 @@ test("zen palettes: cool mist in light, near-black in dark, an indigo accent, on
       page: rgb(document.body),
       cardRadius: getComputedStyle(card).borderTopLeftRadius,
       inputRadius: getComputedStyle(document.querySelector("#composer-text").closest(".group\\/composer")).borderTopLeftRadius,
-      gap: composer.top - main.bottom,
+      cardBottom: composer.bottom,
+      composerTop: composer.top,
+      mainBottom: main.bottom,
+      inner: window.innerHeight,
       inactiveBorder: getComputedStyle(inactive).borderTopWidth,
       pillRadius: getComputedStyle(active).borderTopLeftRadius,
       body: getComputedStyle(document.body).backgroundImage,
@@ -236,7 +271,8 @@ test("zen palettes: cool mist in light, near-black in dark, an indigo accent, on
   expect(look.inputRadius).toBe("8px");
   expect(look.inactiveBorder, "inactive tabs are plain text").toBe("0px");
   expect(look.pillRadius, "the active pill has the same 8px corners").toBe("8px");
-  expect(look.gap, "the composer never touches the page above it").toBeGreaterThanOrEqual(2);
+  expect(look.cardBottom, "the composer stays on the screen").toBeLessThanOrEqual(look.inner);
+  expect(look.mainBottom, "and the page keeps its empty height clear of the floating box").toBeGreaterThanOrEqual(look.composerTop);
 });
 
 test("keyboard hints: the box prints its keys, the header button opens the key list, a tab's tooltip names its key", async ({ page, server }) => {
