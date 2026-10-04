@@ -131,8 +131,9 @@
 }
 
 @theme inline {
-  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, "JetBrains Mono", "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  /* A theme from tweakcn may name its own fonts (--app-font-*); with none, these. */
+  --font-sans: var(--app-font-sans, "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+  --font-mono: var(--app-font-mono, ui-monospace, "JetBrains Mono", "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace);
   --color-typing: var(--typing);
   --color-you: var(--you);
   --color-success: var(--success);

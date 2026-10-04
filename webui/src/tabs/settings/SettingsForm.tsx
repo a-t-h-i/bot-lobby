@@ -12,10 +12,8 @@ import { Check, ChevronRight, Download, Maximize, Minimize } from "lucide-react"
 import { toast } from "@/lib/toast"
 import { useFullscreen, useInstallPrompt, useInstalled } from "@/app/install"
 import { disableNotifications, enableNotifications, useNotificationsEnabled } from "@/app/notify"
-import { useTheme } from "@/components/theme-provider"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
-import { Combobox } from "@/components/ui/combobox"
 import { ActionButton } from "@/ui/Actions"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
@@ -23,6 +21,8 @@ import { EffortMascot } from "@/ui/EffortMascot"
 import { EffortSlider, nearestSupported } from "@/ui/EffortSlider"
 import { call } from "@/lib/api"
 import { Section } from "@/ui/Section"
+import { Choice, Field, Rows, type ChoiceItem } from "./parts"
+import { ThemeGroup } from "./ThemeGroup"
 import type { BotLobbyConfig, SettingsModelInfo } from "@protocol"
 import {
   AGENT_LABELS,
@@ -131,25 +131,6 @@ function levelOn(supported: readonly string[], level: string): string {
 const roundLabel = (value: number): string => (value > 0 ? `${value} round${value === 1 ? "" : "s"}` : "unlimited")
 const splitLabel = (value: number): string => (value > 0 ? `over ${value} steps` : "never")
 
-interface ChoiceItem {
-  value: string
-  label: string
-  help?: string
-}
-
-/** A setting as a row: its name and help on the left, the control on the right (or below, `stacked`). */
-function Field({ label, help, children, stacked }: { label: string; help?: string; children: ReactNode; stacked?: boolean }) {
-  return (
-    <div className={stacked ? "grid gap-1.5" : "grid gap-1.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,18rem)] sm:items-center sm:gap-6"}>
-      <div className="min-w-0">
-        <div className="text-[0.8125rem] font-medium">{label}</div>
-        {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
-      </div>
-      <div className="min-w-0">{children}</div>
-    </div>
-  )
-}
-
 /** A small label above a control, for the dense grids inside an agent's card. */
 function Mini({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -158,16 +139,6 @@ function Mini({ label, children }: { label: string; children: ReactNode }) {
       {children}
     </div>
   )
-}
-
-/** Several settings in one card, hairlines between them. */
-function Rows({ children }: { children: ReactNode }) {
-  return <div className="glass flex flex-col divide-y divide-border rounded-lg px-4 [&>*]:py-2.5">{children}</div>
-}
-
-/** Every drop-down on the page is a searchable one. */
-function Choice({ value, items, label, onChange }: { value: string; items: ChoiceItem[]; label: string; onChange: (value: string) => void }) {
-  return <Combobox value={value} options={items.map((item) => ({ value: item.value, label: item.label, ...(item.help ? { hint: item.help } : {}) }))} label={label} onChange={onChange} />
 }
 
 function ModelChoice(props: { value: string; models: SettingsModelInfo[]; label: string; none?: boolean; inherit?: boolean; onChange: (value: string) => void }) {
@@ -455,19 +426,6 @@ function ClassifierGroup({ config, models, save }: { config: Config; models: Set
   )
 }
 
-function AppearanceGroup() {
-  const { theme, setTheme } = useTheme()
-  return (
-    <Section title={GROUP_TITLES.appearance}>
-      <Rows>
-        <Field label={PAGE.themeLabel} help={PAGE.appearanceHelp}>
-          <Choice value={theme} items={PAGE.themeItems.map((item) => ({ value: item.id, label: item.label }))} label={PAGE.themeLabel} onChange={(value) => setTheme(value as "light" | "dark" | "system")} />
-        </Field>
-      </Rows>
-    </Section>
-  )
-}
-
 function NotificationsGroup() {
   const enabled = useNotificationsEnabled()
   const change = async (next: boolean) => {
@@ -542,7 +500,7 @@ export function SettingsForm({ config, models, onConfig }: { config: Config; mod
       <WorkflowGroup config={config} save={save} />
       <LobbyGroup config={config} save={save} />
       <ClassifierGroup config={config} models={models} save={save} />
-      <AppearanceGroup />
+      <ThemeGroup />
       <NotificationsGroup />
       <InstallGroup />
     </div>

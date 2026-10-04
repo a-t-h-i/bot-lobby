@@ -356,6 +356,14 @@ The message box is a single card: roomy sans-serif text on top (no `>` prompt, n
 
 ---
 
+## D-28 · Colour themes, with import from tweakcn · Adopted
+
+Settings > Appearance has the mode (light, dark or system) and a colour theme: Mist (the page's own), Forest, Ocean, Violet, Rose, Amber and Mono. A theme from tweakcn can be pasted (its `:root` and `.dark` CSS) or uploaded (a `.css` file, or the registry `.json`) and is kept as the "imported" theme. It lives in this browser only (`localStorage`) and is painted as one `<style>` before the first render.
+
+An import is never injected as it is: only the shadcn colour variables and the two font variables are kept, and only values made of colour, length and font-name characters (no `url()`, `;`, braces or backslashes), so a theme can recolour the page but cannot load anything. Radius and shadows are ignored on purpose: corners stay one calm 8px (D-22). Colours the page has and tweakcn does not (tab pill, your own bubbles, typing dot) are worked out from the theme's primary, background and card. A theme with only a light or only a dark block leaves the other mode on the default colours.
+
+---
+
 ## Open questions (each has a default the swarm uses until the user answers)
 
 | Id | Question | Default |
