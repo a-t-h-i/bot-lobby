@@ -23,6 +23,7 @@ import { focusTab } from "@/prompts/nav"
 import { toast } from "@/lib/toast"
 import { MAX_ATTACHMENTS, sizeLabel, uploadFile } from "@/lib/uploads"
 import { Markdown } from "@/ui/Markdown"
+import { ConfirmButton } from "@/ui/ConfirmButton"
 import { continueList, link, wrap, type Edit } from "./markdownEdit"
 import { cn } from "@/lib/utils"
 import { projectUrl } from "@/lib/project"
@@ -89,7 +90,7 @@ let keySeq = 0
 
 /** The flat icon buttons under the box. */
 const TOOL =
-  "inline-flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+  "inline-flex size-11 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
 
 function isSend(event: KeyboardEvent): boolean {
   return event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing
@@ -100,6 +101,7 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
     <button
       type="button"
       aria-label={`Remove ${file.name}`}
+      aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
       onClick={onRemove}
       className={cn(
         "flex shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40",
@@ -428,7 +430,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
             />
             <Tooltip>
               <TooltipTrigger asChild>
-                <button type="button" aria-label="Attach images, PDFs or files" onClick={() => picker.current?.click()} className={TOOL}>
+                <button type="button" aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help" aria-label="Attach images, PDFs or files" onClick={() => picker.current?.click()} className={TOOL}>
                   <Paperclip aria-hidden="true" className="size-4" />
                 </button>
               </TooltipTrigger>
@@ -438,6 +440,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
               <TooltipTrigger asChild>
                 <button
                   type="button"
+                  aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
                   aria-label={expanded ? "Make the box smaller" : "Open the box wider and taller"}
                   aria-pressed={expanded}
                   onClick={() => setExpanded((value) => !value)}
@@ -450,7 +453,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button type="button" aria-label="Preview the Markdown" aria-pressed={preview} aria-keyshortcuts="Alt+P" onClick={() => setPreview((value) => !value)} className={cn(TOOL, preview && "bg-tab text-foreground")}>
+                <button type="button" aria-label="Preview the Markdown" aria-pressed={preview} aria-keyshortcuts="Alt+P Enter Space" aria-describedby="focused-action-help" onClick={() => setPreview((value) => !value)} className={cn(TOOL, preview && "bg-tab text-foreground")}>
                   <Eye aria-hidden="true" className="size-4" />
                 </button>
               </TooltipTrigger>
@@ -465,6 +468,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
                 {targets.map((entry) => (
                   <button
                     key={entry.id}
+                    aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
                     type="button"
                     role="radio"
                     aria-checked={entry.id === target.id}
@@ -497,6 +501,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
                 </KeyHint>
                 <button
                   type="button"
+                  aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
                   aria-label="Keyboard shortcuts"
                   aria-haspopup="dialog"
                   onClick={onHelp}
@@ -509,29 +514,17 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
             </div>
 
             {busy && target.id === "oracle" ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="Stop"
-                    onClick={() => void stop()}
-                    className="inline-flex size-7 items-center justify-center rounded-lg bg-secondary text-foreground transition-[background-color,transform] duration-150 ease-snap outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
-                  >
-                    <Square aria-hidden="true" className="size-3 fill-current" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>Stop the oracle</TooltipContent>
-              </Tooltip>
+              <ConfirmButton label="Stop" icon={Square} title="Stop the oracle?" description="The current response stops. Work already recorded is kept." confirmLabel="Stop" variant="destructive" onConfirm={() => void stop()} />
             ) : null}
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
                   aria-label="Send"
-                  aria-keyshortcuts="Enter"
+                  aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
                   onClick={() => void send()}
                   disabled={!canSend}
-                  className="inline-flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-[background-color,color,transform,filter] duration-150 ease-snap outline-none hover:brightness-110 focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95 disabled:bg-muted disabled:text-muted-foreground disabled:hover:brightness-100"
+                  className="inline-flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-[background-color,color,transform,filter] duration-150 ease-snap outline-none hover:brightness-110 focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95 disabled:bg-muted disabled:text-muted-foreground disabled:hover:brightness-100"
                 >
                   {sending ? <Spinner aria-hidden="true" role="presentation" className="size-4 text-primary-foreground" /> : <ArrowUp aria-hidden="true" className="size-4" />}
                 </button>

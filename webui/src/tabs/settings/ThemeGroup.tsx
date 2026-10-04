@@ -7,12 +7,15 @@
 import { useRef, useState, type KeyboardEvent } from "react"
 import { Check, ExternalLink, Trash2, Upload } from "lucide-react"
 import { useTheme } from "@/components/theme-provider"
+import { Switch } from "@/components/ui/switch"
+import { setSoundMuted, useSoundMuted } from "@/app/sound"
 import { Textarea } from "@/components/ui/textarea"
 import { usePalette } from "@/app/palette"
 import { MAX_THEME_BYTES, parseTheme, swatch, type Palette } from "@/app/palette-core"
 import { toast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 import { ActionButton } from "@/ui/Actions"
+import { ConfirmButton } from "@/ui/ConfirmButton"
 import { Section } from "@/ui/Section"
 import { Choice, Field, Rows } from "./parts"
 import { GROUP_TITLES, PAGE } from "./words"
@@ -57,7 +60,7 @@ function ThemePicker() {
       {palette.all.map((entry) => {
         const on = entry.id === palette.active.id
         return (
-          <button
+          <button aria-keyshortcuts="Enter Space ArrowLeft ArrowRight" aria-describedby="focused-action-help"
             key={entry.id}
             type="button"
             role="radio"
@@ -142,7 +145,7 @@ function ImportTheme() {
         }} />
         <ActionButton label="Apply the pasted theme" icon={Check} tone="primary" disabled={!text.trim()} onClick={() => apply(text, "Custom theme")} />
         <ActionButton label="Upload a .css or .json theme file" icon={Upload} onClick={() => picker.current?.click()} />
-        {palette.custom ? <ActionButton label={`Remove ${palette.custom.name}`} icon={Trash2} tone="danger" onClick={() => palette.removeCustom()} /> : null}
+        {palette.custom ? <ConfirmButton label={`Remove ${palette.custom.name}`} title="Remove the imported theme?" description="The imported theme is stored in this browser. Keep a copy if you want to use it again." confirmLabel="Remove theme" icon={Trash2} variant="destructive" onConfirm={() => palette.removeCustom()} /> : null}
         {error ? (
           <p role="alert" className="ml-2 min-w-0 text-xs text-destructive">
             {error}
@@ -155,9 +158,13 @@ function ImportTheme() {
 
 export function ThemeGroup() {
   const { theme, setTheme } = useTheme()
+  const muted = useSoundMuted()
   return (
     <Section title={GROUP_TITLES.appearance}>
       <Rows>
+        <Field label="Prompt sounds" help="A droplet for each new actionable prompt or delivery review. Kept in this browser; sound starts after interaction. Desktop notifications remain separate.">
+          <Switch checked={!muted} onCheckedChange={(on) => setSoundMuted(!on)} aria-label="Prompt sounds" />
+        </Field>
         <Field label={PAGE.themeLabel} help={PAGE.appearanceHelp}>
           <Choice value={theme} items={PAGE.themeItems.map((item) => ({ value: item.id, label: item.label }))} label={PAGE.themeLabel} onChange={(value) => setTheme(value as "light" | "dark" | "system")} />
         </Field>

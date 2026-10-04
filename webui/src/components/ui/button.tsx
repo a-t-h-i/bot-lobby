@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils"
 import { Slot } from "radix-ui"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-[0.8125rem] font-medium whitespace-nowrap transition-[transform,background-color,box-shadow,color,border-color] duration-150 ease-snap outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/40 active:not-aria-[haspopup]:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button min-h-10 min-w-10 motion-reduce:transition-none motion-reduce:active:transform-none inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-[0.8125rem] font-medium whitespace-nowrap transition-[transform,background-color,box-shadow,color,border-color] duration-150 ease-snap outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/40 active:not-aria-[haspopup]:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -52,6 +52,10 @@ function Button({
 
   return (
     <Comp
+      aria-keyshortcuts={asChild ? undefined : "Enter Space"}
+      aria-description={asChild ? "When focused, press Enter to activate." : "When focused, press Enter or Space to activate."}
+      aria-describedby="focused-action-help"
+      title={asChild ? "Activate: Enter when focused" : "Activate: Enter or Space when focused"}
       data-slot="button"
       data-variant={variant}
       data-size={size}
