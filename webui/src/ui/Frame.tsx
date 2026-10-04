@@ -13,9 +13,11 @@ interface FrameProps extends Omit<React.ComponentProps<"section">, "title"> {
   /** With `onToggle`, the card can be folded down to its title row. */
   collapsed?: boolean
   onToggle?: () => void
+  /** The key that folds it, printed in the button's tooltip (`Alt+A`). */
+  shortcut?: string
 }
 
-export function Frame({ title, note, className, children, collapsed, onToggle, ...props }: FrameProps) {
+export function Frame({ title, note, className, children, collapsed, onToggle, shortcut, ...props }: FrameProps) {
   const name = typeof title === "string" ? title : "pane"
   return (
     <section
@@ -32,7 +34,8 @@ export function Frame({ title, note, className, children, collapsed, onToggle, .
                 type="button"
                 aria-expanded={!collapsed}
                 aria-label={collapsed ? `Expand ${name}` : `Minimize ${name}`}
-                title={collapsed ? "Expand" : "Minimize"}
+                title={`${collapsed ? "Expand" : "Minimize"}${shortcut ? ` · ${shortcut}` : ""}`}
+                aria-keyshortcuts={shortcut}
                 onClick={onToggle}
                 className="-mr-2 inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
               >
