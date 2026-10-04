@@ -396,6 +396,89 @@ test("the mascot on each agent acts out its effort level, and the page never scr
   await expect(mascot).toHaveAttribute("data-level", "off");
 });
 
+test("Alt+A and Alt+T fold Activity and Thinking, from the message box too, and the buttons say so", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => {
+    window.location.hash = "#/lobby";
+  });
+  const activity = page.getByRole("button", { name: /Minimize Activity|Expand Activity/ });
+  const thinking = page.getByRole("button", { name: /Minimize Thinking|Expand Thinking/ });
+  await expect(activity).toHaveAttribute("aria-expanded", "true");
+  await expect(activity, "the tooltip names the key").toHaveAttribute("title", /Alt\+A/);
+  await expect(thinking).toHaveAttribute("aria-expanded", "true");
+  await page.locator("#composer-text").focus();
+  await page.keyboard.press("Alt+a");
+  await expect(activity, "Alt+A folds Activity while typing").toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("Alt+t");
+  await expect(thinking, "Alt+T folds Thinking").toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("Alt+a");
+  await expect(activity, "Alt+A again opens it").toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Alt+t");
+  await expect(thinking).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Alt+h");
+  const keys = page.getByRole("dialog", { name: "Keys" });
+  await expect(keys.getByText("show or hide Activity on the Lobby"), "the key list has it").toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => {
+    window.location.hash = "#/tasks";
+  });
+  await page.keyboard.press("Alt+a");
+  await expect(page, "off the Lobby it takes you there").toHaveURL(/#\/lobby/);
+});
+
+test("colour themes: a built-in one repaints the page and survives a reload; a tweakcn export can be pasted; bad values are refused", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => {
+    window.location.hash = "#/settings";
+  });
+  const primary = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--primary").trim());
+  const before = await primary();
+  const group = page.getByRole("radiogroup", { name: "Colour theme" });
+  await expect(group.getByRole("radio", { name: /Mist/ }), "the page's own colours are the default").toHaveAttribute("aria-checked", "true");
+  await group.getByRole("radio", { name: /Forest/ }).click();
+  await expect(group.getByRole("radio", { name: /Forest/ })).toHaveAttribute("aria-checked", "true");
+  expect(await primary(), "Forest changes the accent").not.toBe(before);
+  await group.getByRole("radio", { name: /Forest/ }).press("ArrowRight");
+  await expect(group.getByRole("radio", { name: /Ocean/ }), "arrows walk the themes").toHaveAttribute("aria-checked", "true");
+  await page.reload();
+  await expect(page.getByRole("radiogroup", { name: "Colour theme" }).getByRole("radio", { name: /Ocean/ }), "the choice is remembered").toHaveAttribute("aria-checked", "true");
+
+  const box = page.getByLabel("Theme CSS from tweakcn");
+  const apply = page.getByRole("button", { name: "Apply the pasted theme" });
+  await box.fill("hello");
+  await apply.click();
+  await expect(page.getByRole("alert"), "text that is not a theme says so").toContainText("No theme colours");
+  const pasted = (value: string) => `:root{--background:#fafafa;--foreground:#111;--card:#fff;--card-foreground:#111;--primary:${value};--primary-foreground:#fff;--muted:#eee;--border:#ddd}.dark{--background:#000;--foreground:#eee;--card:#111;--card-foreground:#eee;--primary:#f80;--primary-foreground:#000}`;
+  await box.fill(pasted("url(https://evil.example/x.png)"));
+  await apply.click();
+  expect(await primary(), "an unsafe value is dropped, not applied").not.toContain("evil");
+  await box.fill(pasted("#e11d48"));
+  await apply.click();
+  await expect(group.getByRole("radio", { name: /Custom theme/ }), "the pasted theme is kept and selected").toHaveAttribute("aria-checked", "true");
+  const light = await page.evaluate(() => document.documentElement.classList.contains("light"));
+  expect(await primary(), light ? "light uses the :root block" : "dark uses the .dark block").toBe(light ? "#e11d48" : "#f80");
+  await page.getByRole("button", { name: /Remove Custom theme/ }).click();
+  await expect(group.getByRole("radio", { name: /Custom theme/ }), "removing it").toHaveCount(0);
+  await expect(group.getByRole("radio", { name: /Mist/ })).toHaveAttribute("aria-checked", "true");
+  expect(await primary()).toBe(before);
+});
+
+test("a theme file (.css or the registry .json) uploads and is named after the file", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => {
+    window.location.hash = "#/settings";
+  });
+  const css = ":root{--background:#fafafa;--foreground:#111;--card:#fff;--primary:#0a7;--primary-foreground:#fff}\n.dark{--background:#000;--foreground:#eee;--card:#111;--primary:#4fd;--primary-foreground:#000}";
+  await page.getByLabel("Upload a theme file").setInputFiles({ name: "Mint Fresh.css", mimeType: "text/css", buffer: Buffer.from(css) });
+  await expect(page.getByRole("radiogroup", { name: "Colour theme" }).getByRole("radio", { name: /Mint Fresh/ })).toHaveAttribute("aria-checked", "true");
+  const json = JSON.stringify({ title: "Sunrise", cssVars: { light: { background: "#fff", foreground: "#111", card: "#fff", primary: "#f60", "primary-foreground": "#fff" }, dark: { background: "#000", foreground: "#eee", card: "#111", primary: "#fa6", "primary-foreground": "#000" } } });
+  await page.getByLabel("Upload a theme file").setInputFiles({ name: "sunrise.json", mimeType: "application/json", buffer: Buffer.from(json) });
+  await expect(page.getByRole("radiogroup", { name: "Colour theme" }).getByRole("radio", { name: /Sunrise/ }), "the JSON's own title wins").toHaveAttribute("aria-checked", "true");
+});
+
 test("switching tabs puts the cursor in the message box; arrowing along the tab bar keeps it on the bar", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
