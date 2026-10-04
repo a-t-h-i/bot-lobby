@@ -437,6 +437,12 @@ settings, `alt+a` and `alt+t` fold Activity and Thinking on the Lobby, `alt+h`
 shows them all. Rebind any key under `lobby.keys` in the
 config.
 
+**Themes.** Settings > Appearance picks light, dark or system and one of a few
+colour themes. A theme from [tweakcn](https://tweakcn.com/editor/theme) can be
+pasted (its Code panel: the `:root` and `.dark` blocks) or uploaded as a `.css`
+or `.json` file. It stays in your browser, and only its colours and fonts are
+used.
+
 **Several sessions from one window.** The Sessions page starts a task in a
 background Pi session (the box's New session target). The page can show any
 session, and your messages steer it; a badge on its row means it has a
