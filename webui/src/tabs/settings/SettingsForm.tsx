@@ -19,6 +19,7 @@ import { Combobox } from "@/components/ui/combobox"
 import { ActionButton } from "@/ui/Actions"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import { EffortMascot } from "@/ui/EffortMascot"
 import { EffortSlider, nearestSupported } from "@/ui/EffortSlider"
 import { call } from "@/lib/api"
 import { Section } from "@/ui/Section"
@@ -139,7 +140,7 @@ interface ChoiceItem {
 /** A setting as a row: its name and help on the left, the control on the right (or below, `stacked`). */
 function Field({ label, help, children, stacked }: { label: string; help?: string; children: ReactNode; stacked?: boolean }) {
   return (
-    <div className={stacked ? "grid gap-1.5" : "grid gap-1.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,16rem)] sm:items-center sm:gap-4"}>
+    <div className={stacked ? "grid gap-1.5" : "grid gap-1.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,18rem)] sm:items-center sm:gap-6"}>
       <div className="min-w-0">
         <div className="text-[0.8125rem] font-medium">{label}</div>
         {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
@@ -262,9 +263,9 @@ function NumberField({ label, value, min, max, suffix, onSave }: { label: string
     if (!onSave(text.trim())) setText(value)
   }
   return (
-    <div className="flex items-center gap-2">
-      <Input type="number" inputMode="numeric" min={min} max={max} value={text} aria-label={label} onChange={(event) => setText(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit() } }} />
-      {suffix ? <span className="shrink-0 text-sm text-muted-foreground">{suffix}</span> : null}
+    <div className="relative">
+      <Input type="number" inputMode="numeric" min={min} max={max} value={text} aria-label={label} className={suffix ? "pr-10" : undefined} onChange={(event) => setText(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit() } }} />
+      {suffix ? <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">{suffix}</span> : null}
     </div>
   )
 }
@@ -298,43 +299,46 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
     if (kind !== "scout" && fallbackModel !== INHERIT_MODEL && !levelsFor(models, fallbackModel).includes(current)) fields.fallbackThinking = levelOn(levelsFor(models, fallbackModel), current)
     set(fields)
   }
+  // The mascot acts out what the model really runs at (an unsupported level is clamped).
+  const effective = kind === "scout" ? FIXED_SCOUT_THINKING : levelOn(supported, entry.thinking)
   const hasInstructions = kind !== "scout" && kind !== "researcher"
   const [showNotes, setShowNotes] = useState(Boolean(entry.instructions))
   return (
-    <section className="glass flex flex-col gap-3 rounded-lg p-4">
+    <section className="glass flex min-w-0 flex-col gap-3 rounded-lg p-4">
       <header className="flex items-baseline justify-between gap-3">
         <h3 className="text-sm font-medium">{name}</h3>
         <span className="truncate text-xs text-muted-foreground">
           {entry.model === INHERIT_MODEL ? "session model" : entry.model} · {kind === "scout" ? FIXED_SCOUT_THINKING : entry.thinking}
         </span>
       </header>
-      <div className={cn("grid gap-3 sm:grid-cols-2", kind !== "master" && "sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_7rem]")}>
+      <div className="grid gap-3 sm:grid-cols-2">
         <Mini label={FIELD_LABELS.model}>
           <ModelChoice value={entry.model} models={models} label={`${name} model`} inherit={kind === "master"} onChange={chooseModel} />
         </Mini>
         <Mini label={FIELD_LABELS.fallback}>
           <ModelChoice value={entry.fallbackModel ?? INHERIT_MODEL} models={models} label={`${name} fallback model`} none onChange={chooseFallback} />
         </Mini>
-        {kind !== "master" ? (
-          <Mini label="Time limit">
-            <MinutesField value={entry.timeoutMs ?? config.workflow.agentTimeoutMs} label={`${name} time limit`} onSave={(ms) => set({ timeoutMs: ms })} />
-          </Mini>
-        ) : null}
       </div>
-      <Mini label={FIELD_LABELS.thinking}>
-        {kind === "scout" ? (
-          <p className="text-sm text-muted-foreground">{FIXED_SCOUT_THINKING} (fixed for scouts)</p>
-        ) : (
-          <EffortSlider
-            value={entry.thinking}
-            levels={THINKING_LEVELS}
-            supported={supported}
-            model={entry.model === INHERIT_MODEL ? "the session model" : entry.model}
-            label={`${name} effort`}
-            onChange={(level) => set({ thinking: level })}
-          />
-        )}
-      </Mini>
+      <div className="flex items-center gap-3 rounded-lg bg-muted/40 p-3">
+        <EffortMascot level={effective} className="size-16" />
+        <div className="min-w-0 flex-1">
+          {kind === "scout" ? (
+            <div className="grid gap-1">
+              <span className="text-xs text-muted-foreground">{FIELD_LABELS.thinking}</span>
+              <p className="text-sm text-muted-foreground">{FIXED_SCOUT_THINKING} (fixed for scouts)</p>
+            </div>
+          ) : (
+            <EffortSlider
+              value={entry.thinking}
+              levels={THINKING_LEVELS}
+              supported={supported}
+              model={entry.model === INHERIT_MODEL ? "the session model" : entry.model}
+              label={`${name} effort`}
+              onChange={(level) => set({ thinking: level })}
+            />
+          )}
+        </div>
+      </div>
       {kind !== "scout" && entry.fallbackModel ? (
         <Mini label={FIELD_LABELS.fallbackThinking}>
           <EffortSlider
@@ -347,18 +351,30 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
           />
         </Mini>
       ) : null}
-      {hasInstructions ? (
-        <button
-          type="button"
-          aria-expanded={showNotes}
-          onClick={() => setShowNotes((now) => !now)}
-          className="flex h-5 items-center gap-1 self-start text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30"
-        >
-          <ChevronRight aria-hidden="true" className={cn("size-3.5 transition-transform duration-200 ease-snap", showNotes && "rotate-90")} />
-          {FIELD_LABELS.instructions}
-          {!showNotes && entry.instructions ? <span className="text-primary">· set</span> : null}
-        </button>
-      ) : null}
+      <div className="flex min-h-7 items-center justify-between gap-3">
+        {hasInstructions ? (
+          <button
+            type="button"
+            aria-expanded={showNotes}
+            onClick={() => setShowNotes((now) => !now)}
+            className="flex h-5 items-center gap-1 text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30"
+          >
+            <ChevronRight aria-hidden="true" className={cn("size-3.5 transition-transform duration-200 ease-snap", showNotes && "rotate-90")} />
+            {FIELD_LABELS.instructions}
+            {!showNotes && entry.instructions ? <span className="text-primary">· set</span> : null}
+          </button>
+        ) : (
+          <span />
+        )}
+        {kind !== "master" ? (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Time limit</span>
+            <div className="w-24">
+              <MinutesField value={entry.timeoutMs ?? config.workflow.agentTimeoutMs} label={`${name} time limit`} onSave={(ms) => set({ timeoutMs: ms })} />
+            </div>
+          </div>
+        ) : null}
+      </div>
       {hasInstructions && showNotes ? <InstructionsField value={entry.instructions ?? ""} label={`${name} instructions`} onSave={(text) => set({ instructions: text })} /> : null}
     </section>
   )
@@ -426,7 +442,7 @@ function ClassifierGroup({ config, models, save }: { config: Config; models: Set
           <TextValue value={classifier.model} label={CLASSIFIER_LABELS.model} placeholder="the host's default" onSave={(value) => void save({ classifier: { model: value } })} />
         </Field>
         <Field label={CLASSIFIER_LABELS.key} help={CLASSIFIER_LABELS.keyNote}>
-          <p className="text-sm text-muted-foreground">{host ?? classifier.provider}</p>
+          <p className="text-sm text-muted-foreground sm:text-right">{host ?? classifier.provider}</p>
         </Field>
         {CLASSIFIER_FEATURE_ITEMS.map((feature) => (
           <ToggleField key={feature.id} label={feature.label} help={feature.help} checked={classifier.features[feature.id]} onChange={(next) => void save({ classifier: { features: { [feature.id]: next } } })} />
@@ -478,17 +494,21 @@ function InstallGroup() {
       <Rows>
         <Field label={PAGE.installLabel} help={installed ? PAGE.installedNow : PAGE.installHelp}>
           {installed ? null : (
+            <div className="flex sm:justify-end">
             <ActionButton
               label={PAGE.installButton}
               icon={Download}
               tone="primary"
               onClick={() => (available ? void install().then(() => toast.success(PAGE.installDone)) : toast.warning(PAGE.installUnavailable))}
             />
+            </div>
           )}
         </Field>
         {fullscreen.supported ? (
           <Field label={PAGE.fullscreenLabel} help={PAGE.fullscreenHelp}>
-            <ActionButton label={fullscreen.on ? PAGE.fullscreenOn : PAGE.fullscreenOff} icon={fullscreen.on ? Minimize : Maximize} pressed={fullscreen.on} onClick={() => void fullscreen.toggle()} />
+            <div className="flex sm:justify-end">
+              <ActionButton label={fullscreen.on ? PAGE.fullscreenOn : PAGE.fullscreenOff} icon={fullscreen.on ? Minimize : Maximize} pressed={fullscreen.on} onClick={() => void fullscreen.toggle()} />
+            </div>
           </Field>
         ) : null}
       </Rows>
@@ -515,7 +535,7 @@ export function SettingsForm({ config, models, onConfig }: { config: Config; mod
         <p className="text-sm text-muted-foreground">{PAGE.intro}</p>
       </header>
       <Section title={GROUP_TITLES.agents}>
-        <div className="grid gap-3 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {AGENT_ORDER.map((kind) => <AgentCard key={kind} kind={kind} config={config} models={models} save={save} />)}
         </div>
       </Section>
