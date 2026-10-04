@@ -80,6 +80,9 @@ export function Combobox({ value, options, onChange, label, className, disabled 
     } else if (event.key === "End" && !query) {
       event.preventDefault()
       setActive(Math.max(0, shown.length - 1))
+    } else if (event.key === "Tab") {
+      // Leaving the field closes the list; focus goes back to the trigger.
+      setOpen(false)
     } else if (event.key === "Enter" && !event.nativeEvent.isComposing) {
       event.preventDefault()
       pick(shown[active])
@@ -96,6 +99,13 @@ export function Combobox({ value, options, onChange, label, className, disabled 
         aria-haspopup="listbox"
         aria-controls={open ? id : undefined}
         disabled={disabled}
+        onKeyDown={(event) => {
+          // Down or Up opens the list, like a native select.
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault()
+            setOpen(true)
+          }
+        }}
         data-slot="select-trigger"
         className={cn(
           "flex h-8 w-full min-w-0 items-center justify-between gap-2 overflow-hidden rounded-lg border border-input bg-card/40 px-2.5 text-[0.8125rem] whitespace-nowrap outline-none transition-[border-color,box-shadow] duration-150 hover:bg-accent/40 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50",
@@ -114,7 +124,7 @@ export function Combobox({ value, options, onChange, label, className, disabled 
             event.preventDefault()
             ;(event.currentTarget as HTMLElement).querySelector<HTMLElement>("input")?.focus()
           }}
-          className="glass-pop z-50 flex max-h-[min(20rem,var(--radix-popover-content-available-height))] w-(--radix-popover-trigger-width) min-w-56 flex-col overflow-hidden rounded-lg outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0"
+          className="glass-pop z-50 flex max-h-[min(20rem,var(--radix-popover-content-available-height))] w-[max(var(--radix-popover-trigger-width),17rem)] max-w-(--radix-popover-content-available-width) flex-col overflow-hidden rounded-lg outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0"
         >
           <div className="flex items-center gap-2 border-b border-border px-2.5">
             <Search aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
@@ -147,7 +157,7 @@ export function Combobox({ value, options, onChange, label, className, disabled 
               >
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate">{option.label}</span>
-                  {option.hint ? <span className="truncate text-xs text-muted-foreground">{option.hint}</span> : null}
+                  {option.hint ? <span className="line-clamp-2 text-xs text-muted-foreground">{option.hint}</span> : null}
                 </span>
                 {option.value === value ? <Check aria-hidden="true" className="size-3.5 shrink-0 text-primary" /> : null}
               </div>
