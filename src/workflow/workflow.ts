@@ -64,6 +64,8 @@ import { appendMetrics, metricFromRun } from "../state/metrics.ts";
 import { markCommentsAddressed, pendingComments, readPlanComments } from "../state/comments.ts";
 import { fastNext, onFastTrack, parseRoster, qaRequired, qaStillDue, qaTookPart, rosterWords, trackSummary } from "./track.ts";
 import { missingWorktree, taskCwd } from "../execution/workspace.ts";
+import { createPullRequest } from "../lobby/pulls.ts";
+import type { Exec } from "../lobby/issues.ts";
 
 export const ORCHESTRATE_ACTIONS = [
   "clarify",
@@ -144,6 +146,8 @@ export interface WorkflowDeps {
   askQuestions?: (questions: AskQuestion[], from: string, signal?: AbortSignal) => Promise<AskResult>;
   notify: (message: string, level?: "info" | "warning" | "error") => void;
   runProcess?: ProcessRunner;
+  /** Command seam for completion's bounded git/gh calls. */
+  exec?: Exec;
   /** Likely files for scouts and workers, while the classifier's file hints are on. */
   hints?: FileHinter;
   /** Picks the relevant sections of long knowledge files for scouts, workers and the QA gate, while the classifier's knowledge picks are on. */
@@ -708,7 +712,7 @@ function askRelay(task: Task, deps: WorkflowDeps, domain: Domain): { onAsk: Rela
   if (!ASKING_DOMAINS.has(domain) || !deps.askQuestions || isAutoMode(deps.root, deps.configDir, task.id)) return undefined;
   const askQuestions = deps.askQuestions;
   const label = AGENT_LABELS[domain];
-  const previews = previewDir(task.id);
+  const previews = previewDir(task.id, deps.root);
   try {
     mkdirSync(previews, { recursive: true });
   } catch {
@@ -1300,13 +1304,43 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
   const oversized = overThreshold(readDataRoots(deps.root, deps.configDir), deps.config.knowledge.compactionThreshold);
   if (oversized.length > 0) throw new Error(`cannot complete: knowledge files over the compaction threshold: ${oversized.map((entry) => `${entry.agent}/${entry.file} (${entry.chars})`).join(", ")}. First record domain-relevant facts where they belong with action=knowledge (domain=designer|backend|qa), then rewrite each oversized file with action=compact, then call complete again.`);
   const summary = params.text?.trim() || task.proposal || task.title;
-  flushDecisions(deps, task);
   recordCompletion(deps, task, summary);
   removeTaskScratchpads(deps.root, deps.configDir, task.id);
   task.blockers = [];
   if (task.state === "implementing") transition(task, "reviewing");
   transition(task, "completed");
-  return `Task ${task.id} completed. History recorded and temporary scratchpads removed.`;
+  const opened = await openPullRequest(task, deps);
+  flushDecisions(deps, task);
+  return `Task ${task.id} completed. History recorded and temporary scratchpads removed.${opened}`;
+}
+
+/** Longest pull request body `gh` takes without complaint. */
+const PR_BODY_CHARS = 60_000;
+
+/**
+ * Open the task's pull request once it completes, so its branch lands in
+ * review by itself. Every reason it cannot (no isolation, no remote, `gh` not
+ * signed in) is recorded as a note and the completion stands either way.
+ */
+async function openPullRequest(task: Task, deps: WorkflowDeps): Promise<string> {
+  const git = task.git;
+  if (!git || (git.mode !== "branch" && git.mode !== "worktree")) return pullNote(task, "No pull request opened — task has no git isolation");
+  const base = git.from?.trim();
+  if (!base || /^detached at /i.test(base) || /^[a-f0-9]{40,64}$/i.test(base)) return pullNote(task, "No pull request opened — task has no valid base branch");
+  const body = [task.proposal?.trim() || task.plan?.trim() || task.title, task.qaVerdict ? `QA verdict: ${task.qaVerdict}` : ""].filter(Boolean).join("\n\n").slice(0, PR_BODY_CHARS);
+  try {
+    const pull = await createPullRequest({ exec: deps.exec, cwd: taskCwd(task, deps.cwd), branch: git.branch, base, title: task.title, body });
+    recordDecision(task, `Opened pull request #${pull.number} for ${git.branch}: ${pull.url}`);
+    deps.notify(`Pull request #${pull.number} is open: ${pull.url}`, "info");
+    return ` Pull request #${pull.number} is open: ${pull.url}.`;
+  } catch (error) {
+    return pullNote(task, `No pull request opened for ${git.branch} — ${(error as Error).message}`);
+  }
+}
+
+function pullNote(task: Task, note: string): string {
+  recordDecision(task, note);
+  return ` ${note}.`;
 }
 
 /** Asked when the oracle completes a task QA has not passed (the user told it to finish, say). */

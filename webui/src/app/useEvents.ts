@@ -7,11 +7,14 @@ import { useCallback, useEffect, useRef } from "react"
 import { openEvents } from "@/lib/events"
 import { lobbyStore } from "@/lib/store"
 import { toast } from "@/lib/toast"
+import { selectedProject } from "@/lib/project"
 
 export function useEvents(): () => void {
   const closeRef = useRef<(() => void) | undefined>(undefined)
   const connect = useCallback(() => {
     closeRef.current?.()
+    try { selectedProject() }
+    catch { lobbyStore.onStatus({ connection: "offline" }); return }
     closeRef.current = openEvents({
       onHello: (versions) => lobbyStore.onHello(versions),
       onChanged: (topic, version) => lobbyStore.onChanged(topic, version),
