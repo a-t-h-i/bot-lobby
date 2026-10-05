@@ -15,6 +15,37 @@ import { withAttachments } from "../uploads.ts";
 import { fail } from "./index.ts";
 import { taskSteps } from "./plan-facts.ts";
 import type { TaskSection } from "../../lobby/task-rows.ts";
+import { projectPhaseTiming } from "../../state/phase-timing.ts";
+import type { DeliveryRequest } from "../../delivery/operations.ts";
+
+function deliveryTask(body: { taskId: string }, ctx: ApiContext): Task {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/.test(body.taskId)) fail(400, "bad_request", "invalid task ID");
+  const task = ctx.service.tasks().find((entry) => entry.id === body.taskId);
+  if (!task) fail(404, "not_found", "task not found in this project");
+  if (task.state !== "completed" || !task.delivery) fail(400, "bad_request", "this task has no completed-work delivery review");
+  return task;
+}
+export async function tasksDeliveryReview(body: { taskId: string }, ctx: ApiContext) {
+  deliveryTask(body, ctx);
+  if (!ctx.service.deliveryReview) fail(400, "bad_request", "delivery review is unavailable");
+  try { return { delivery: await ctx.service.deliveryReview(body.taskId) }; }
+  catch (error) { return fail(400, "bad_request", (error as Error).message); }
+}
+export async function tasksDeliver(body: { taskId: string } & DeliveryRequest, ctx: ApiContext) {
+  const task = deliveryTask(body, ctx);
+  if (task.delivery!.reviewId !== body.reviewId) fail(409, "conflict", "review changed; refresh before delivery");
+  if (body.action === "merge_main" && body.confirmMain !== true) fail(400, "bad_request", "confirm that direct merge updates and pushes main");
+  if (!ctx.service.deliveryDeliver) fail(400, "bad_request", "delivery is unavailable");
+  try { return { delivery: await ctx.service.deliveryDeliver(body.taskId, body) }; }
+  catch (error) { return fail(409, "conflict", (error as Error).message); }
+}
+export function tasksDeliveryDefer(body: { taskId: string; reviewId: string }, ctx: ApiContext) {
+  const task = deliveryTask(body, ctx);
+  if (task.delivery!.reviewId !== body.reviewId) fail(409, "conflict", "review changed; refresh before deferring");
+  if (!ctx.service.deliveryDefer) fail(400, "bad_request", "delivery review is unavailable");
+  try { return { delivery: ctx.service.deliveryDefer(body.taskId, body.reviewId) }; }
+  catch (error) { return fail(400, "bad_request", (error as Error).message); }
+}
 
 interface RowContext {
   names: ReadonlyMap<string, string>;
@@ -62,6 +93,8 @@ function rowOf(task: Task, section: TaskSection, ctx: RowContext, sessionId: str
     title: task.title,
     section,
     status: task.state,
+    timing: projectPhaseTiming(task, new Date(now).toISOString()),
+    ...(task.delivery ? { delivery: { status: task.delivery.status, reviewId: task.delivery.reviewId } } : {}),
     ...(task.paused && section !== "recent" ? { paused: true } : {}),
     check: checkOf(task),
     ...(progress ? { progress } : {}),
@@ -94,6 +127,8 @@ function buildRows(tasks: readonly Task[], plans: readonly PlannedTask[], sessio
       title: task.title,
       section: "archived",
       status: task.state,
+      timing: projectPhaseTiming(task, new Date(now).toISOString()),
+      ...(task.delivery ? { delivery: { status: task.delivery.status, reviewId: task.delivery.reviewId } } : {}),
       check: checkOf(task),
       age: ago(now - Date.parse(task.archivedAt ?? task.updatedAt)),
     })),
@@ -125,6 +160,8 @@ export function tasksArchived(ctx: ApiContext): { rows: TaskRow[] } {
     title: task.title,
     section: "archived",
     status: task.state,
+    timing: projectPhaseTiming(task),
+    ...(task.delivery ? { delivery: { status: task.delivery.status, reviewId: task.delivery.reviewId } } : {}),
     check: checkOf(task),
     age: ago(Date.now() - Date.parse(task.archivedAt ?? task.updatedAt)),
   }));
@@ -190,6 +227,19 @@ export function tasksMessage(body: { taskId: string; text: string; attachments?:
   return { notice: ctx.service.sendToTask(body.taskId, withAttachments(body.text, body.attachments, body.taskId, ctx.service.projectRoot?.())) };
 }
 
+/** Select existing owner chat metadata only; never start, claim or switch a process. */
+export function tasksOpen(body: { taskId: string }, ctx: ApiContext): { sessionId?: string; key?: string; notice?: string } {
+  const task = ctx.service.tasks().find((entry) => entry.id === body.taskId);
+  if (!task) fail(404, "not_found", `no task ${body.taskId} in this project`);
+  const sessionId = task.ownerSessionId;
+  if (!sessionId) return { notice: "This task has no owning session. No replacement session was created." };
+  if (sessionId === ctx.service.sessionId()) return { sessionId };
+  const background = ctx.service.sessions().find((entry) => entry.sessionId === sessionId && entry.alive);
+  if (background) return { sessionId, key: background.key };
+  if (ctx.service.liveSessions().some((entry) => entry.sessionId === sessionId)) return { sessionId };
+  return { notice: "The task's owning session has ended or is unavailable. No replacement session was created." };
+}
+
 /** How many recent runs the detail lists (the terminal's count). */
 const DETAIL_RUNS = 6;
 
@@ -206,6 +256,8 @@ export function tasksGet(body: { taskId: string }, ctx: ApiContext): TaskDetail 
   const request = taskRequest(found);
   const now = Date.now();
   return {
+    timing: projectPhaseTiming(found, new Date(now).toISOString()),
+    ...(found.delivery ? { delivery: found.delivery } : {}),
     ...(request !== found.title ? { request } : {}),
     ...(!found.plan && found.proposal ? { proposal: found.proposal } : {}),
     ...(found.plan ? { plan: found.plan } : {}),

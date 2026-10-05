@@ -65,7 +65,7 @@ function act(deps: WorkflowDeps, params: Partial<OrchestrateParams> = {}) {
   return runWorkflowAction({ action: "status", taskId: "TASK-1", ...params } as OrchestrateParams, deps);
 }
 
-test("completion records nonblocking PR skips and command failures, and persists success links", async () => {
+test("completion persists approval without publication even when identity lookup fails", async () => {
   const cases = ["none", "base", "failure", "success"] as const;
   for (const kind of cases) {
     const calls: string[][] = [];
@@ -85,15 +85,13 @@ test("completion records nonblocking PR skips and command failures, and persists
     assert.equal(result.ok, true, result.message);
     assert.equal(result.state, "completed");
     const saved = loadTask(deps.root, deps.configDir, task.id)!;
-    const reason = kind === "none" ? /no git isolation/ : kind === "base" ? /no valid base branch/ : kind === "failure" ? /no remote/ : /pull request #42.*https/i;
-    assert.match(saved.decisions.at(-1)!.text, reason);
-    assert.match(readFileSync(join(knowledgeDir(dataRoot(deps.root, deps.configDir), "master"), "decisions.md"), "utf8"), reason);
-    assert.match(result.message, reason);
-    assert.equal(calls.length, kind === "none" || kind === "base" ? 0 : kind === "failure" ? 1 : 2);
-    if (kind === "success") {
-      assert.match(notices[0]!, /#42.*https/);
-      assert.deepEqual(calls[1]!.slice(0, 7), ["gh", "pr", "create", "--base", "main", "--head", "task-x"]);
-    }
+    assert.equal(saved.delivery!.status, "pending_approval");
+    assert.equal(saved.delivery!.target, "main");
+    assert.ok(saved.delivery!.blocked.merge_main);
+    assert.match(result.message, /nothing was published/);
+    assert.match(notices[0]!, /requires your approval/);
+    assert.equal(calls.some((call) => call.includes("push") || call[0] === "gh"), false);
+    assert.equal(saved.state, "completed");
   }
 });
 

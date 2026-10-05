@@ -5,7 +5,7 @@
  * tabs take a row of their own (the grid lives in `index.css`).
  */
 import type { ReactNode } from "react"
-import { Keyboard, Layers, Moon, Settings, Sun } from "lucide-react"
+import { Keyboard, Layers, Moon, Settings, Sun, Volume2, VolumeX } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Keys } from "@/components/ui/kbd"
@@ -14,7 +14,8 @@ import type { ConnectionState } from "@/lib/events"
 import { cn } from "@/lib/utils"
 import type { SnapshotTask, StatusInfo } from "@protocol"
 import type { Route } from "./router.ts"
-import { ProjectSwitcher } from "./ProjectSwitcher.tsx"
+import { ProjectNotice, ProjectSwitcher, useProjects } from "./ProjectSwitcher.tsx"
+import { setSoundMuted, useSoundMuted } from "./sound"
 
 /** What the link to the server is doing: a green dot when live, words when it is not. */
 function Connection({ state }: { state: ConnectionState }) {
@@ -43,7 +44,7 @@ function Connection({ state }: { state: ConnectionState }) {
 
 /** The flat icon buttons on the right. */
 const ICON =
-  "inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+  "inline-flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
 
 function IconLink({ label, hint, href, active, children }: { label: string; hint: string; href: string; active: boolean; children: ReactNode }) {
   return (
@@ -54,6 +55,7 @@ function IconLink({ label, hint, href, active, children }: { label: string; hint
           aria-label={label}
           aria-current={active ? "page" : undefined}
           aria-keyshortcuts={hint}
+          aria-describedby="focused-action-help"
           className={cn(ICON, active && "bg-accent text-foreground")}
         >
           {children}
@@ -70,13 +72,28 @@ function HelpButton({ hint, onHelp }: { hint: string; onHelp: () => void }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button type="button" aria-label="Keyboard shortcuts" aria-haspopup="dialog" aria-keyshortcuts={hint} onClick={onHelp} className={ICON}>
+        <button type="button" aria-label="Keyboard shortcuts" aria-haspopup="dialog" aria-keyshortcuts={hint} aria-describedby="focused-action-help" onClick={onHelp} className={ICON}>
           <Keyboard aria-hidden="true" className="size-[1.05rem]" />
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom">
         Keyboard shortcuts <Keys chord={hint} />
       </TooltipContent>
+    </Tooltip>
+  )
+}
+
+function SoundToggle() {
+  const muted = useSoundMuted()
+  const label = muted ? "Unmute prompt sounds" : "Mute prompt sounds"
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button type="button" aria-label={label} aria-pressed={muted} aria-describedby="focused-action-help" className={ICON} onClick={() => setSoundMuted(!muted)}>
+          {muted ? <VolumeX aria-hidden="true" className="size-[1.05rem]" /> : <Volume2 aria-hidden="true" className="size-[1.05rem]" />}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{label}</TooltipContent>
     </Tooltip>
   )
 }
@@ -91,6 +108,7 @@ function ThemeToggle() {
           type="button"
           aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
           aria-keyshortcuts="D"
+          aria-describedby="focused-action-help"
           onClick={() => setTheme(dark ? "light" : "dark")}
           className={ICON}
         >
@@ -144,11 +162,12 @@ export function Header({
   const name = status?.workspace.name ?? "bot-lobby"
   const branch = status?.branch ?? status?.workspace.branch
   const busy = status?.busy ?? false
+  const projects = useProjects()
 
   return (
     <header className="app-header shrink-0">
       <div className="where flex min-w-0 items-center">
-        <ProjectSwitcher tab={route.kind === "tab" ? route.tab : route.kind} name={name} branch={branch} />
+        <ProjectSwitcher projects={projects} tab={route.kind === "tab" ? route.tab : route.kind} name={name} branch={branch} />
       </div>
       <div className="tabs min-w-0">{tabs}</div>
       <div className="tools flex min-w-0 items-center justify-end gap-0.5">
@@ -163,7 +182,12 @@ export function Header({
         </IconLink>
         <HelpButton hint={keys.help ?? "Alt+H"} onHelp={onHelp} />
         <ThemeToggle />
+        <SoundToggle />
+        <span id="focused-action-help" className="sr-only">
+          Focused buttons: Enter or Space. Links: Enter. Checkboxes: Space.
+        </span>
       </div>
+      <ProjectNotice projects={projects} />
     </header>
   )
 }
