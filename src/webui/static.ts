@@ -6,7 +6,8 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
-import { extname, join, normalize, sep } from "node:path";
+import { dirname, extname, join, normalize, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { applyBaseHeaders, HttpError } from "./api/index.ts";
 
@@ -32,9 +33,12 @@ const TYPES: Record<string, string> = {
   ".map": "application/json; charset=utf-8",
 };
 
+/** The package's own `webui/dist`, wherever pi was started: the server runs inside the user's project, not ours. */
+const PACKAGE_DIST = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "webui", "dist");
+
 /** Where the built page lives; tests point `BOT_LOBBY_WEBUI_DIST` at a fixture. */
 export function distDir(override?: string): string {
-  return override ?? process.env.BOT_LOBBY_WEBUI_DIST ?? join(process.cwd(), "webui", "dist");
+  return override ?? process.env.BOT_LOBBY_WEBUI_DIST ?? PACKAGE_DIST;
 }
 
 /** A fresh base64 nonce (16 random bytes) for one `index.html` response. */
