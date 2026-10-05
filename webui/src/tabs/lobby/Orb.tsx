@@ -1,6 +1,8 @@
 /**
- * The Thinking orb: a glowing sphere in the colour of the agent thinking,
- * with that agent's name on a tag beside it. Pointed at (or focused), it
+ * The Thinking orb, on every page: a glowing sphere in the colour of the
+ * agent thinking, with that agent's name on a tag beside it. While agents are
+ * at work with no thought to show (a run, the oracle answering, a session in
+ * the background) it breathes with the brain on it and names who is busy. Pointed at (or focused), it
  * swells with a ripple and shows the agent's icon. It can be dragged anywhere
  * on the Lobby's card, or nudged with the arrow keys while focused (Shift for
  * bigger steps), and stays where it was put. A press that does not move opens
@@ -12,6 +14,7 @@ import { Keys } from "@/components/ui/kbd"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { AgentIcon } from "@/ui/AgentIcon"
+import { busyLabel } from "./busy"
 import { sourceLabel } from "./types"
 import { clampPoint, loadPlace, savePlace, toPlace, toPoint, type Area, type Place } from "./orbPlace"
 
@@ -47,6 +50,8 @@ interface OrbProps {
   spotlight?: string | undefined
   /** Everyone thinking, for screen readers. */
   thinking: string[]
+  /** Who is at work (the oracle, a run, a session in the background), thinking or not. */
+  busy?: string[]
   tone: string
   expanded: boolean
   hidden: boolean
@@ -54,7 +59,7 @@ interface OrbProps {
   onOpen: () => void
 }
 
-export const ThinkingOrb = forwardRef<HTMLButtonElement, OrbProps>(function ThinkingOrb({ spotlight, thinking, tone, expanded, hidden, shortcut, onOpen }, ref) {
+export const ThinkingOrb = forwardRef<HTMLButtonElement, OrbProps>(function ThinkingOrb({ spotlight, thinking, busy = [], tone, expanded, hidden, shortcut, onOpen }, ref) {
   const area = useCardArea()
   const [place, setPlace] = useState<Place | undefined>(loadPlace)
   const [live, setLive] = useState<{ x: number; y: number }>()
@@ -107,6 +112,10 @@ export const ThinkingOrb = forwardRef<HTMLButtonElement, OrbProps>(function Thin
     keep(box.left + delta[0]!, box.top + delta[1]!)
   }
 
+  // Busy with nothing to show of its thoughts: the brain and the breathing say work is going on.
+  const working = !spotlight && busy.length > 0
+  const tag = spotlight ? sourceLabel(spotlight) : working ? busyLabel(busy) : undefined
+  const told = spotlight ? `${thinking.map(sourceLabel).join(", ")} thinking. ` : working ? `${busy.join(", ")} at work. ` : ""
   // Near the card's left edge the name goes on the orb's right.
   const flip = point && area ? point.x - area.left < 140 : false
   const style = { "--orb": tone, ...(point ? { left: point.x, top: point.y, right: "auto", bottom: "auto" } : {}) } as CSSProperties
@@ -117,7 +126,7 @@ export const ThinkingOrb = forwardRef<HTMLButtonElement, OrbProps>(function Thin
           ref={ref}
           type="button"
           aria-label="Open Thinking"
-          aria-description={`${spotlight ? `${thinking.map(sourceLabel).join(", ")} thinking. ` : ""}Drag, or use the arrow keys, to move it.`}
+          aria-description={`${told}Drag, or use the arrow keys, to move it.`}
           aria-haspopup="dialog"
           aria-expanded={expanded}
           aria-keyshortcuts={shortcut ? `${shortcut} Enter Space` : "Enter Space"}
@@ -139,13 +148,14 @@ export const ThinkingOrb = forwardRef<HTMLButtonElement, OrbProps>(function Thin
           onKeyDown={onKeyDown}
           style={style}
           data-thinking={spotlight ? "" : undefined}
+          data-busy={working ? "" : undefined}
           data-dragging={live ? "" : undefined}
           data-placed={point ? "" : undefined}
           data-flip={flip || undefined}
           className={cn("thinking-bubble fixed z-20 touch-none rounded-full outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/40", hidden && "invisible")}
         >
           <AnimatePresence initial={false}>
-            {spotlight ? (
+            {tag ? (
               <motion.span
                 key="label"
                 className="orb-label"
@@ -156,14 +166,14 @@ export const ThinkingOrb = forwardRef<HTMLButtonElement, OrbProps>(function Thin
               >
                 <AnimatePresence mode="popLayout" initial={false}>
                   <motion.span
-                    key={spotlight}
+                    key={tag}
                     className="inline-flex items-center gap-1"
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
                     transition={{ type: "spring", visualDuration: 0.28, bounce: 0.3 }}
                   >
-                    {sourceLabel(spotlight)}
+                    {tag}
                   </motion.span>
                 </AnimatePresence>
               </motion.span>

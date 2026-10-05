@@ -20,6 +20,7 @@ import { Header } from "./Header.tsx"
 import { SignIn } from "./SignIn.tsx"
 import { ErrorState, LoadingState, ReconnectingState } from "./States.tsx"
 import { TabStrip } from "./TabStrip.tsx"
+import { Thinking } from "./Thinking.tsx"
 import { QuestionPopup, QuestionsPill } from "@/prompts/QuestionPopup"
 import { useEvents } from "./useEvents.ts"
 import { useLobbyKeys } from "./useLobbyKeys.ts"
@@ -36,9 +37,10 @@ function handleAction(action: string, route: Route, toggleHelp: () => void, cycl
   else if (action === "help") toggleHelp()
   else if (action === "settings") go("#/settings")
   else if (action === "sessions") go("#/sessions")
-  else if (action === "activity" || action === "thinking") {
-    // The cards live on the Lobby: there the key folds or opens one, elsewhere it takes you there first.
-    if (route.kind === "tab" && route.tab === "lobby") toggleCollapsed(`lobby.${action}`)
+  else if (action === "thinking") toggleCollapsed("lobby.thinking")
+  else if (action === "activity") {
+    // Activity lives on the Lobby: there the key folds or opens it, elsewhere it takes you there first.
+    if (route.kind === "tab" && route.tab === "lobby") toggleCollapsed("lobby.activity")
     else go(tabHash("lobby"))
   } else if (action === "nextTab") cycle(1)
   else if (action === "prevTab") cycle(-1)
@@ -162,6 +164,7 @@ export function Shell() {
         </motion.div>
       </main>
       <Composer route={route} keys={keyLabels} onHelp={toggleHelp} />
+      <Thinking status={status} lobby={lobbyRecord.data} />
       <QuestionPopup prompts={prompts} answer={answer} dismiss={dismiss} minimized={putAway} onMinimize={setPutAway} />
       <AltH open={help} onOpenChange={setHelp} keys={keys} tabs={tabs} />
     </div>

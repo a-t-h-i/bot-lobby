@@ -856,7 +856,7 @@ test("the Thinking pane has no title bar; every agent has its own labelled bubbl
   await expect(pane.getByText(/Minimize|Esc/), "nor any hint text").toHaveCount(0);
   const bubbles = pane.getByRole("log", { name: "Latest thoughts" }).locator("> ul > li");
   const labels = await bubbles.locator(".thought-label").allTextContents();
-  expect(labels.map((label) => label.trim()), "one bubble per agent, the ones thinking first").toEqual(["Dev", "QA", "Research", "Master"]);
+  expect(labels.map((label) => label.trim()), "one bubble per agent, the ones thinking first, newest first").toEqual(["QA", "Dev", "Master", "Research"]);
   await expect(bubbles.first()).toHaveAttribute("data-live", "true");
   await expect(bubbles.first()).toContainText("thinking");
   // Research thought in two headed sections; Master's wall of text is broken into steps.
@@ -1106,4 +1106,35 @@ test("the oracle is a crystal ball and speaks in a bubble of its own, the mirror
   expect(look.background, "tinted apart from the page").not.toBe(look.card);
   const [mine, theirs] = await Promise.all([chat.locator(".chat-bubble").first().boundingBox(), said.boundingBox()]);
   expect(theirs!.x, "on the left, yours on the right").toBeLessThan(mine!.x);
+});
+
+test("the orb is on every page, and opens Thinking from any of them", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  for (const hash of ["#/tasks", "#/plan", "#/settings", "#/sessions"]) {
+    await page.evaluate((to) => {
+      window.location.hash = to;
+    }, hash);
+    await expect(page.getByRole("button", { name: "Open Thinking" }), `${hash}: the orb is there`).toBeVisible();
+  }
+  await page.getByRole("button", { name: "Open Thinking" }).click();
+  await expect(page.getByRole("dialog", { name: "Thinking", exact: true }), "it opens Thinking without leaving the page").toBeVisible();
+  await expect(page).toHaveURL(/#\/sessions$/);
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Alt+T");
+  await expect(page.getByRole("dialog", { name: "Thinking", exact: true }), "and so does its key").toBeVisible();
+});
+
+test("with agents at work and no thought to show, the orb breathes with the brain on it and names who is busy", async ({ page, server }) => {
+  await openScenario(page, server, "loading");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() => {
+    window.location.hash = "#/tasks";
+  });
+  const orb = page.getByRole("button", { name: "Open Thinking" });
+  await expect(orb).toHaveAttribute("data-busy", "");
+  await expect(orb.locator('[data-agent-icon="thinking"]'), "the brain").toBeAttached();
+  await expect.poll(() => orb.locator(".orb-icon").evaluate((el: any) => Number(getComputedStyle(el).opacity)), { message: "shown without pointing at it" }).toBeGreaterThan(0.9);
+  expect(await orb.locator(".orb-float").evaluate((el: any) => getComputedStyle(el).animationName), "breathing").toContain("orb-breathe");
+  await expect(orb.locator(".orb-label"), "naming who is at work").toContainText("Oracle");
 });

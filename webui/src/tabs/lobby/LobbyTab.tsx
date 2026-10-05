@@ -1,7 +1,7 @@
 /*
  * The Lobby. From 1024 px the Conversation and the Activity log sit side by
  * side; Activity folds away into a button in the side rail (Alt+A). Thinking is
- * not a pane: it opens from a floating bubble in a dialog (Alt+T). Below 1024
+ * not a pane: its orb floats over every page (see `app/Thinking.tsx`). Below 1024
  * px there is room for one pane at a time, so a switcher picks between them.
  */
 import { useState } from "react"
@@ -20,16 +20,13 @@ import { ActivityLog } from "./ActivityLog"
 import { Conversation } from "./Conversation"
 import { RunsStrip } from "./RunsStrip"
 import { TaskHeader } from "./TaskHeader"
-import { Thoughts } from "./Thoughts"
 import { runsOf } from "./types"
 
 interface LobbyViewProps {
   data?: LobbySnapshot
   status?: StatusInfo
   activityFolded: boolean
-  thinkingFolded: boolean
   toggleActivity: () => void
-  toggleThinking: () => void
 }
 const keyOf = (status: StatusInfo | undefined, action: string) => status?.keys.find((key) => key.action === action)?.label
 const panesOf = (status?: StatusInfo) => status?.panels ?? { conversation: true, activity: true, thinking: true }
@@ -143,7 +140,6 @@ function NarrowView({ data, status }: LobbyViewProps) {
 function LobbyView(props: LobbyViewProps) {
   const { data, status } = props
   const wide = useWide()
-  const panes = panesOf(status)
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 border-b border-border">
@@ -151,7 +147,6 @@ function LobbyView(props: LobbyViewProps) {
         <RunsStrip runs={runsOf(data)} />
       </div>
       {wide ? <WideView {...props} /> : <NarrowView {...props} />}
-      {panes.thinking ? <Thoughts thoughts={data?.thoughts ?? []} collapsed={props.thinkingFolded} onToggle={props.toggleThinking} shortcut={keyOf(status, "thinking")} /> : null}
     </div>
   )
 }
@@ -160,8 +155,7 @@ export function LobbyTab() {
   const lobby = useTopic<LobbySnapshot>("lobby")
   const status = useTopic<StatusInfo>("status")
   const [activityFolded, toggleActivity] = useCollapsed("lobby.activity")
-  const [thinkingFolded, toggleThinking] = useCollapsed("lobby.thinking")
   if (!lobby.data && lobby.loading) return <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner /><span>Connecting…</span></div>
   if (!lobby.data && lobby.error) return <ErrorState message={lobby.error} onRetry={() => lobbyStore.onHello({})} />
-  return <LobbyView data={lobby.data} status={status.data} activityFolded={activityFolded} thinkingFolded={thinkingFolded} toggleActivity={toggleActivity} toggleThinking={toggleThinking} />
+  return <LobbyView data={lobby.data} status={status.data} activityFolded={activityFolded} toggleActivity={toggleActivity} />
 }
