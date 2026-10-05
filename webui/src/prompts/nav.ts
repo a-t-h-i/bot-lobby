@@ -95,4 +95,4 @@ export function focusTab(): boolean {
 }
 
 /** Set while the arrow keys walk the tab bar, so the page keeps focus on the bar instead of the message box. */
-export const tabWalk = { active: false }
+export const tabWalk: { active: boolean; to?: string } = { active: false }

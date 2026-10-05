@@ -99,20 +99,24 @@ export function Shell() {
   useLobbyKeys({ enabled: Boolean(status), keys, tabs, insideApp, onAction, onTab: select })
   const reload = useCallback(() => lobbyStore.onHello({}), [])
 
-  // Switching tabs hands the keys to the new page, so its buttons' keys and j/k work at once; `/` goes to the
-  // message box. Someone typing in the box stays there, and arrows walking the tab bar stay on the bar.
+  // Switching tabs puts the cursor in the message box, ready to write; Esc leaves it for the tab bar, and Down
+  // from there walks into the page. Arrows walking the tab bar stay on the bar. On a touch screen the page takes
+  // the keys instead, so the on-screen keyboard does not spring up at every tap of a tab.
   const tab = route.kind === "tab" ? route.tab : route.kind
   const ready = Boolean(status)
   useEffect(() => {
     if (!ready) return
-    if (tabWalk.active) {
-      tabWalk.active = false
-      return
-    }
+    // Only the tab the arrows walked to keeps focus on the bar; any other route (a jump in the same moment) gets the box.
+    const walked = tabWalk.active && tabWalk.to === tab
+    tabWalk.active = false
+    tabWalk.to = undefined
+    if (walked) return
     const frame = requestAnimationFrame(() => {
-      const now = document.activeElement
-      if (now?.id === "composer-text" || document.querySelector("[role='dialog']")) return
-      document.getElementById("main")?.focus({ preventScroll: true })
+      if (document.querySelector("[role='dialog']:not([data-state='closed'])")) return
+      const box = document.getElementById("composer-text") as HTMLTextAreaElement | null
+      const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches
+      if (box && !box.disabled && !touch) box.focus({ preventScroll: true })
+      else if (document.activeElement?.id !== "composer-text") document.getElementById("main")?.focus({ preventScroll: true })
     })
     return () => cancelAnimationFrame(frame)
   }, [tab, ready])
