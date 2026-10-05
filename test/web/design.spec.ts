@@ -76,13 +76,13 @@ test("switching tabs pours the colour along the connectors like a straw, runs it
   expect(run.frames.at(-1)!.liquid.every((width: number) => width < 1), "and the straw is empty again").toBe(true);
   expect(run.frames.at(-1)!.ring.amount, "the ring closes into Git's border").toBeGreaterThanOrEqual(1);
   // The tint splashing against Git's far wall knocks the pill a little along the way it flowed, and it bounces back.
-  const knocked = run.frames.find((frame: any) => Math.abs(frame.budge) > 0.5);
+  const knocked = run.frames.find((frame: any) => Math.abs(frame.budge) > 0.3);
   expect(knocked, "the pill budges").toBeDefined();
   expect(knocked.fill, "when the tint reaches the far wall").toBeGreaterThan(run.tab.width * 0.85);
   const furthest = Math.max(...run.frames.map((frame: any) => frame.budge));
-  expect(furthest, "to the right, the way the colour flowed").toBeGreaterThan(1.5);
-  expect(furthest, "only slightly").toBeLessThan(6);
-  expect(Math.min(...run.frames.map((frame: any) => frame.budge)), "swings back past its place").toBeLessThan(-0.2);
+  expect(furthest, "to the right, the way the colour flowed").toBeGreaterThan(0.6);
+  expect(furthest, "only slightly: about a pixel").toBeLessThan(1.6);
+  expect(Math.min(...run.frames.map((frame: any) => frame.budge)), "swings back past its place").toBeLessThan(-0.1);
   expect(run.rest, "and settles where it was").toBe("");
   // Springs: quick.
   const settled = run.frames.find((frame: any) => frame.t > 50 && frame.liquid.every((width: number) => width < 1) && Math.abs(frame.fill - run.tab.width) < 1.5 && frame.drain < 1 && frame.ring.amount >= 1 && frame.unring.amount === 0);
@@ -98,7 +98,7 @@ test("switching tabs pours the colour along the connectors like a straw, runs it
   expect(back.frames.find((frame: any) => frame.ring.amount > 0 && frame.ring.amount < 1)?.ring.port, "coming back, the ring starts on the right").toBe("right");
   expect(back.frames.some((frame: any) => frame.unring.amount > 0.05 && frame.unring.amount < 0.95 && frame.unring.port === "left"), "and Git's ring drains out to the left").toBe(true);
   expect(back.frames.at(-1)!.ring.amount, "and closes round Tasks").toBeGreaterThanOrEqual(1);
-  expect(Math.min(...back.frames.map((frame: any) => frame.budge)), "which is knocked to the left").toBeLessThan(-1.5);
+  expect(Math.min(...back.frames.map((frame: any) => frame.budge)), "which is knocked to the left").toBeLessThan(-0.6);
   expect(back.rest, "and settles too").toBe("");
 });
 
