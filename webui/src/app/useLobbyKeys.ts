@@ -115,7 +115,8 @@ function configured(event: KeyboardEvent, options: LobbyKeyOptions): boolean {
   const jump = tabFor(event, options.tabs)
   const action = actionFor(event, options.keys)
   if (!jump && !action) return false
-  const dialog = document.querySelector("[role='dialog'], [role='menu'], [role='listbox']")
+  // A dialog still fading out after Esc (Radix marks it closed) no longer blocks the keys.
+  const dialog = document.querySelector("[role='dialog']:not([data-state='closed']), [role='menu']:not([data-state='closed']), [role='listbox']")
   if (blocksConfiguredAction(action, { overlay: Boolean(dialog) || hasOverlay(), typing: isTyping(event.target) || event.target instanceof HTMLInputElement, saveAvailable: Boolean(document.querySelector("[data-plan-save]:not([disabled])")) })) return true
   if ((action === "search" || action === "savePlan") && !options.insideApp()) return true
   event.preventDefault()
