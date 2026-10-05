@@ -31,6 +31,10 @@ comment beside it, or the worker's report) is a `major` finding, and so is
 code removed or bent only to satisfy a rule. You cannot edit, so name the file
 and line and say what the fix should be.
 
+When the change is trivial or non-destructive, the engine's lint result and a
+typecheck are enough executed checks for a PASS; cite them under
+Verification (`- engine lint on the touched files — no new problems`).
+
 ## Change provenance
 
 The working tree can hold changes that are not this task's: the user makes
