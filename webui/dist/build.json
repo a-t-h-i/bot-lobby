@@ -1,6 +1,6 @@
 {
-  "hash": "50f32f33b20908ea48fcc71e7ab077fbecab585964282248ab7bac84e723c42e",
-  "builtAt": "2026-10-05T11:12:31.445Z",
+  "hash": "f5e92e25afb96d885663b79412d2111cc19a371f766562d7a2dffaa43aea513e",
+  "builtAt": "2026-10-05T11:58:28.466Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -115,6 +115,10 @@
       "sha256": "7f578b7eba14200ee46bd3a711b09ef782492cd2269f607247d697a80dbc832b"
     },
     {
+      "path": "webui/src/assets/oracle.png",
+      "sha256": "475f7b45a46692b843a2f89e9812377a5da07cd8f91c3aed4f780624a2202a40"
+    },
+    {
       "path": "webui/src/components/theme-provider.tsx",
       "sha256": "88c52942808e8f1c5a0e64e3bf86a5d8d700ca5101646c800eca6db6cafc0e3e"
     },
@@ -196,7 +200,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "918a52bb7aa5a1418f041b7e7a9e7be92b40b60e129aaeea8cccb026a1aa176c"
+      "sha256": "7a90aa65869e7840e6287f2f28903bebdd98091595bbe831e1182c3690577bde"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -380,7 +384,7 @@
     },
     {
       "path": "webui/src/tabs/lobby/ChatParts.tsx",
-      "sha256": "48e6d420830b94a1d9f2b5d3674f6c621833d1097f0d239af4c0f762d295eb2b"
+      "sha256": "9cb6738ee4c6fec1cfef2c023e16aa280c0f25088495d91bb82d77df69bb54ed"
     },
     {
       "path": "webui/src/tabs/lobby/Conversation.tsx",
@@ -444,7 +448,7 @@
     },
     {
       "path": "webui/src/tabs/plan/Conversation.tsx",
-      "sha256": "33ad1840dfbfb51ebe536896e0cee2f7e7167629affd9d9750c35869371b768b"
+      "sha256": "2ee1e4f1cada0a4a3f0f246d253b90469d98c9c0b4c4d66cbf206e8c970b3076"
     },
     {
       "path": "webui/src/tabs/plan/Draft.tsx",
@@ -584,7 +588,7 @@
     },
     {
       "path": "webui/src/ui/AgentIcon.tsx",
-      "sha256": "3de4e0ec27c69cdeeb1d99ddcffc81fa54eb4a1bf3eaf9d7e46530ae93ee2670"
+      "sha256": "0c242843567e616a28ed2db751e3495f07c904cd1c20e2f540762910fe5079ea"
     },
     {
       "path": "webui/src/ui/Attachments.tsx",
