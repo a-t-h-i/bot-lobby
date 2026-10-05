@@ -429,7 +429,9 @@ export function TabStrip({ tabs, activeId, onSelect }: TabStripProps) {
     const delta = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0
     if (!delta || tabs.length === 0) return
     event.preventDefault()
-    const index = Math.max(0, tabs.findIndex((tab) => tab.id === activeId))
+    // From the tab with focus (the chosen one, unless the page has not caught up with a jump made a moment ago).
+    const from = (event.target as HTMLElement).closest<HTMLElement>("[role='tab']")?.id.replace(/^tab-/, "") ?? activeId
+    const index = Math.max(0, tabs.findIndex((tab) => tab.id === from))
     const next = tabs[(index + delta + tabs.length) % tabs.length]!
     tabWalk.active = true
     tabWalk.to = next.id
