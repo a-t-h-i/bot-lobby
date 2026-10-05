@@ -60,7 +60,7 @@ const TabCell = forwardRef<HTMLAnchorElement, { tab: TabInfo; active: boolean }>
           aria-keyshortcuts={tab.key}
           tabIndex={active ? 0 : -1}
           className={cn(
-            "relative z-10 inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[0.8125rem] leading-none font-medium whitespace-nowrap outline-none",
+            "relative z-10 inline-flex h-7.5 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[0.8125rem] leading-none font-medium whitespace-nowrap outline-none",
             "transition-colors duration-200 ease-snap focus-visible:ring-3 focus-visible:ring-ring/40",
             active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
           )}
@@ -75,7 +75,7 @@ const TabCell = forwardRef<HTMLAnchorElement, { tab: TabInfo; active: boolean }>
               animate={{ scale: 1, y: 0 }}
               transition={{ type: "spring", visualDuration: 0.32, bounce: 0.55, delay: 0.12 }}
             >
-              <Icon className={cn("size-4 shrink-0 transition-colors duration-200", active && "text-primary")} />
+              <Icon className={cn("size-3.5 shrink-0 transition-colors duration-200", active && "text-primary")} />
             </motion.span>
           ) : null}
           {number ? (
@@ -334,13 +334,13 @@ export function TabStrip({ tabs, activeId, onSelect }: TabStripProps) {
       style={{ maskImage: fadeFor(more), WebkitMaskImage: fadeFor(more) }}
       className="min-w-0 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
-      <div ref={track} role="tablist" aria-label="Lobby tabs" onKeyDown={onKeyDown} className="relative mx-auto flex w-max items-center gap-1 py-0.5">
+      <div ref={track} role="tablist" aria-label="Lobby tabs" onKeyDown={onKeyDown} className="relative mx-auto flex w-max items-center gap-0.5 py-0.5">
         <span ref={drain} aria-hidden="true" data-tab-drain className="pointer-events-none absolute left-0 z-0 rounded-lg bg-tab-fill opacity-0 will-change-transform" />
         <span ref={fill} aria-hidden="true" data-tab-fill className="pointer-events-none absolute left-0 z-0 rounded-lg bg-tab-fill opacity-0 will-change-transform" />
         {tabs.map((tab, position) => (
           <Fragment key={tab.id}>
             {position > 0 ? (
-              <span aria-hidden="true" data-tab-link className="relative h-[2px] w-3 shrink-0 sm:w-4">
+              <span aria-hidden="true" data-tab-link className="relative h-[2px] w-2.5 shrink-0 sm:w-3">
                 <span className="absolute inset-0 border-t-2 border-dotted border-input" />
                 <span
                   ref={(el) => {
