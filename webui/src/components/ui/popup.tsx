@@ -56,7 +56,7 @@ export function Popup({ open, onOpenChange, label, description, dismissOnBackdro
                 {...(description ? {} : { "aria-describedby": undefined })}
               >
                 <motion.div
-                  className={cn("glass-pop pointer-events-auto flex max-h-[min(86svh,48rem)] w-full max-w-2xl flex-col overflow-hidden rounded-lg outline-none", className)}
+                  className={cn("glass-pop pointer-events-auto flex max-h-[min(86svh,48rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl outline-none", className)}
                   initial={{ opacity: 0, scale: 0.92, y: 18 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.96, y: 8, transition: { duration: 0.12, ease: "easeIn" } }}

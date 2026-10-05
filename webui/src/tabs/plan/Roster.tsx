@@ -23,14 +23,14 @@ function Inside({ cell, intro }: { cell: SeatCell; intro: boolean }) {
 
 function Chip({ cell, intro, onToggled }: { cell: SeatCell; intro: boolean; onToggled: () => void }) {
   const { member } = cell
-  const look = "inline-flex min-h-8 items-center gap-2 rounded-lg px-3 text-[0.8125rem]"
+  const look = "inline-flex min-h-8 items-center gap-2 rounded-lg border border-border px-3 text-[0.8125rem]"
   if (!member) return <li className={cn(look, "bg-muted")}><Inside cell={cell} intro={intro} /></li>
   const toggle = async () => {
     if (await act("planner.toggleSeat", { member })) onToggled()
   }
   return (
     <li>
-      <label className={cn(look, "cursor-pointer transition-colors", cell.seated ? "bg-muted hover:bg-accent" : "text-muted-foreground opacity-70 hover:bg-muted hover:opacity-100")}>
+      <label className={cn(look, "cursor-pointer transition-colors", cell.seated ? "bg-background hover:bg-accent" : "border-dashed text-muted-foreground hover:bg-muted")}>
         <Checkbox checked={cell.seated} onCheckedChange={() => void toggle()} aria-label={`${sourceLabel(cell.label)} sits on the panel`} />
         <Inside cell={cell} intro={intro} />
       </label>

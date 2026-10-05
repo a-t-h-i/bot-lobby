@@ -65,7 +65,7 @@ function UserTurn({ message, index, busy }: { message: PlannerMessage; index: nu
   }
   return <div className="flex flex-col items-end gap-1">
     <span className="text-xs text-muted-foreground">{message.at > 0 ? formatClock(message.at) : ""} You{current.editedAt ? " (edited)" : ""}</span>
-    <div className="max-w-[85%] rounded-lg rounded-tr-lg border border-primary/15 bg-you px-4 py-2">
+    <div className="max-w-[85%] rounded-xl rounded-tr-sm border border-primary/10 bg-you px-3.5 py-2">
       {editing ? <InlineEditor text={current.text} disabled={busy} onSave={save} onCancel={() => setEditing(false)} /> : <Markdown text={current.text} />}
     </div>
     {!message.settled?.length && !editing ? <Button size="sm" variant="ghost" disabled={waiting} onClick={() => setEditing(true)}>Edit</Button> : null}
@@ -90,7 +90,7 @@ function Turn({ message, index, busy }: { message: PlannerMessage; index: number
 
 export function PanelConversation({ messages, seed, busy = false }: { messages: PlannerMessage[]; seed?: string; busy?: boolean }) {
   return (
-    <div className="flex flex-col gap-4" role="log" aria-label="Panel conversation">
+    <div className="flex flex-col gap-5" role="log" aria-label="Panel conversation">
       {seed ? <p className="text-sm text-muted-foreground">{seed}</p> : null}
       {messages.map((message, index) => (
         <Turn key={`${message.at}-${index}`} message={message} index={index} busy={busy} />

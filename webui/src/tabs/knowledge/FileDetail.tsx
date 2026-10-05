@@ -32,7 +32,7 @@ function NoteLine({ note, about, onTakeBack, busy }: { note: KnowledgeNoteInfo; 
     <li className="flex items-start gap-2 text-sm text-muted-foreground">
       <PencilLine aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-primary" />
       <span className="min-w-0 flex-1 break-words">{text}</span>
-      <ActionButton label="Take the note back" icon={Undo2} className="-my-1 size-7" disabled={busy} onClick={() => onTakeBack(note.id)} />
+      <ActionButton label="Take the note back" icon={Undo2} iconOnly className="-my-1 size-7" disabled={busy} onClick={() => onTakeBack(note.id)} />
     </li>
   )
 }
@@ -66,7 +66,7 @@ function EntryRow({
         event.preventDefault()
         pick()
       }}
-      className={selected ? "flex min-h-9 cursor-pointer flex-col gap-1 border-b border-border bg-accent p-2.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/30" : "flex min-h-9 cursor-pointer flex-col gap-1 border-b border-border p-2.5 outline-none transition-colors hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/30"}
+      className={selected ? "flex min-h-9 cursor-pointer flex-col gap-1 rounded-lg border border-primary/30 bg-accent px-3 py-2.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/40" : "flex min-h-9 cursor-pointer flex-col gap-1 rounded-lg border border-border px-3 py-2.5 outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/40"}
     >
       <div className="flex gap-2">
         <div className="min-w-0 flex-1">
@@ -100,9 +100,9 @@ function Detached({ notes, onTakeBack, busy }: { notes: KnowledgeNoteInfo[]; onT
 function Header({ view }: { view: KnowledgeViewData }) {
   const entries = view.entries.length
   return (
-    <header className="flex flex-col gap-1">
-      <h2 className="text-sm font-semibold">
-        {AGENT_DIR_NAMES[view.agent]} · {view.file}
+    <header className="flex flex-col gap-1.5">
+      <h2 className="text-lg font-semibold tracking-tight">
+        {AGENT_DIR_NAMES[view.agent]} <span className="font-normal text-muted-foreground">· {view.file}</span>
       </h2>
       <p className="text-xs text-muted-foreground">
         {entries} {entries === 1 ? "entry" : "entries"} · {sizeWords(view.chars)} chars
@@ -116,12 +116,15 @@ function Actions({ draft, picked, setDraft, onEditFile, onDelete }: { draft?: Dr
   const off = Boolean(draft)
   return (
     <ActionBar>
-      <ActionButton label="Edit the entry" icon={Pencil} disabled={off || !picked} onClick={() => setDraft({ kind: "edit", entry: picked })} />
-      <ActionButton label={picked ? "Add an entry after it" : "Add an entry"} icon={Plus} disabled={off} onClick={() => setDraft({ kind: "add", entry: picked })} />
-      <ActionButton label="Comment on the entry" icon={MessageSquarePlus} disabled={off || !picked} onClick={() => setDraft({ kind: "comment", entry: picked })} />
+      <ActionButton label="Edit the entry" text="Edit" icon={Pencil} shortcut="E" disabled={off || !picked} onClick={() => setDraft({ kind: "edit", entry: picked })} />
+      <ActionButton label={picked ? "Add an entry after it" : "Add an entry"} text="Add" icon={Plus} shortcut="A" disabled={off} onClick={() => setDraft({ kind: "add", entry: picked })} />
+      <ActionButton label="Comment on the entry" text="Comment" icon={MessageSquarePlus} shortcut="C" disabled={off || !picked} onClick={() => setDraft({ kind: "comment", entry: picked })} />
+      <ActionButton label="Edit the whole file" text="Edit file" icon={FilePen} shortcut="F" disabled={off} onClick={onEditFile} />
       <ConfirmButton
         icon={Trash2}
         label="Delete the entry"
+        text="Delete"
+        shortcut="Delete"
         title="Delete this entry?"
         description="The entry and its notes are removed. The version before is archived."
         confirmLabel="Delete entry"
@@ -129,7 +132,6 @@ function Actions({ draft, picked, setDraft, onEditFile, onDelete }: { draft?: Dr
         disabled={off || !picked}
         onConfirm={onDelete}
       />
-      <ActionButton label="Edit the whole file" icon={FilePen} disabled={off} onClick={onEditFile} />
     </ActionBar>
   )
 }
@@ -175,7 +177,7 @@ export function FileDetail({ agent, file, onChanged }: { agent: KnowledgeAgentNa
       <Actions draft={draft} picked={picked} setDraft={setDraft} onEditFile={() => setFileOpen(true)} onDelete={remove} />
       <Header view={view} />
       {entries.length === 0 ? <p className="text-sm text-muted-foreground">Nothing here yet. Add the first entry below.</p> : null}
-      <ul className="flex flex-col gap-1">
+      <ul className="flex flex-col gap-2">
         {entries.map((entry, index) => (
           <EntryRow
             key={`${index}-${entry.text}`}
