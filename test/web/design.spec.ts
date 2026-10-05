@@ -1089,9 +1089,21 @@ test("the bar is one row when the project, the tabs and the tools fit, and puts 
   expect(await rows(), "and come back up when there is room again").toBe(1);
 });
 
-test("the oracle speaks with an eye in both chats", async ({ page, server }) => {
+test("the oracle is a crystal ball and speaks in a bubble of its own, the mirror of yours", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
-  const avatar = page.locator('[role="log"][aria-label="Conversation"] .chat-avatar').first();
-  await expect(avatar.locator("svg.lucide-eye"), "the oracle's own icon").toBeAttached();
+  const chat = page.locator('[role="log"][aria-label="Conversation"]');
+  const ball = chat.locator(".chat-avatar .agent-oracle").first();
+  await expect(ball, "the oracle's own picture").toBeVisible();
+  expect(await ball.evaluate((el: any) => getComputedStyle(el).backgroundImage), "a drawn crystal ball").toMatch(/oracle.*\.png/);
+  const said = chat.locator(".chat-bubble-agent").filter({ hasText: "Done: ten sets" });
+  await expect(said, "the oracle's words sit in a bubble").toBeVisible();
+  const look = await said.evaluate((el: any) => {
+    const style = getComputedStyle(el);
+    return { border: style.borderTopWidth, background: style.backgroundColor, card: getComputedStyle(el.closest("#main")).backgroundColor };
+  });
+  expect(look.border, "with an edge").not.toBe("0px");
+  expect(look.background, "tinted apart from the page").not.toBe(look.card);
+  const [mine, theirs] = await Promise.all([chat.locator(".chat-bubble").first().boundingBox(), said.boundingBox()]);
+  expect(theirs!.x, "on the left, yours on the right").toBeLessThan(mine!.x);
 });

@@ -94,7 +94,7 @@ function Turn({ message, index, busy }: { message: PlannerMessage; index: number
   if (message.role === "you") return <UserTurn message={message} index={index} busy={busy} />
   const asked = message.questions ?? []
   return (
-    <AgentMessage source="PLANNER" name="Panel" time={message.at > 0 ? formatClock(message.at) : undefined} head aside={asked.length ? `${asked.length} question${asked.length === 1 ? "" : "s"}` : undefined}>
+    <AgentMessage source="PLANNER" name="Panel" time={message.at > 0 ? formatClock(message.at) : undefined} head bubble={asked.length === 0} aside={asked.length ? `${asked.length} question${asked.length === 1 ? "" : "s"}` : undefined}>
       {asked.length > 0 ? <Asked questions={asked} /> : <Markdown text={message.text} />}
       <Decided message={message} />
     </AgentMessage>
