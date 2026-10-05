@@ -8,10 +8,32 @@ import type { ExcalidrawAgentName, ExcalidrawCheck } from "@protocol"
 
 export const LIST_TITLE = "Sessions"
 export const MAX_SESSIONS = 5
-export const EMPTY_HEADLINE = "No sessions yet. A session is a live Excalidraw room that you and your agents draw in together."
-export const EMPTY_ADD = "a  add one: in Excalidraw, Share → Live collaboration → Start session, then paste the link"
-export const EMPTY_NEW = "n  or make a new room here and open its link in Excalidraw"
+export const EMPTY_HEADLINE = "No sessions yet."
 export const EMPTY_LIMIT = "Up to 5 sessions; each can be assigned to one agent or several."
+export const EMPTY_LEAD = "A session is a live Excalidraw room that you and your agents draw in together."
+
+/** The three steps from nothing to agents drawing, for the empty page and the overview. */
+export const STEPS: ReadonlyArray<{ title: string; text: string }> = [
+  { title: "Start a live room", text: "In Excalidraw: Share → Live collaboration → Start session." },
+  { title: "Add it here", text: "Paste the room link, or make a new room and open it in Excalidraw." },
+  { title: "Assign agents", text: "They read the board and draw on it, under their own name." },
+]
+export const OVERVIEW_TITLE = "Sessions"
+export const OVERVIEW_PICK = "Pick a session on the left to see its link, its room and its agents."
+export const LINK_TITLE = "Room link"
+export const LINK_NOTE = "Masked until revealed. A revealed link stays in this tab and is never saved."
+export const ROOM_TITLE = "Room"
+export const DRAWING = "Drawing"
+export const LAST_CHECK = "Last check"
+export const NOT_CHECKED = "not checked yet"
+export const ADD_TITLE = "Add a session"
+export const LINK_PLACEHOLDER = "https://excalidraw.com/#room=…"
+export const NAME_PLACEHOLDER = "Optional name"
+
+/** `1 of 5 in use`. */
+export function capacity(count: number): string {
+  return `${count} of ${MAX_SESSIONS} in use`
+}
 export const DRAW_LINE = "Agents may draw here."
 export const LOOK_LINE = "Agents may only look."
 export const CHECKING_ROOM = "checking the room…"

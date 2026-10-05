@@ -931,3 +931,26 @@ test("a task opens in its own session from the Tasks screen, with S: this window
   expect(switched, "by moving that session into this window").toEqual([{ key: "S1" }]);
   await expect(page.getByText(/switching this window to Mock background task/)).toBeVisible();
 });
+
+test("Excalidraw is laid out in cards: an overview when nothing is chosen, then the link, the room and the agents", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() => {
+    window.location.hash = "#/excalidraw";
+  });
+  const detail = page.locator('[data-pane="detail"]');
+  await expect(detail.getByRole("heading", { name: "Sessions" }), "with nothing chosen, an overview").toBeVisible();
+  await expect(detail, "how many of the five are in use").toContainText("1 of 5 in use");
+  await expect(detail.getByRole("listitem").filter({ hasText: "Start a live room" }), "the steps").toBeVisible();
+  await expect(detail.getByLabel("Add by link"), "and the add boxes").toBeVisible();
+  await page.evaluate(() => {
+    window.location.hash = "#/excalidraw/x1";
+  });
+  const card = (title: string) => detail.locator("section").filter({ has: page.getByRole("heading", { name: title, exact: true }) });
+  await expect(card("Room link")).toContainText("room abc123");
+  await expect(card("Room")).toContainText("Agents may draw here.");
+  await expect(card("Assigned to").getByRole("checkbox"), "every agent as a checkbox").toHaveCount(8);
+  await expect(card("Add or rename").getByRole("textbox", { name: "Rename" })).toHaveValue("Mock board");
+  const [link, agents] = await Promise.all([card("Room link").boundingBox(), card("Assigned to").boundingBox()]);
+  expect(Math.abs(link!.y - agents!.y), "the link and the agents side by side").toBeLessThan(4);
+});
