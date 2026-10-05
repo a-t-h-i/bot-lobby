@@ -144,7 +144,10 @@ test("delivery actions use authoritative blocks, explicit APIs and confirmed dir
   assert.match(panel, /project === selectedProject\(\)/);
   const detail = source("tabs/tasks/TaskDetail.tsx");
   assert.match(detail, /call\("tasks.open", \{ taskId \}\)/);
-  assert.doesNotMatch(detail, /sessions\.(switch|start|stop)/);
+  assert.doesNotMatch(detail, /sessions\.(switch|start|stop)/, "opening the conversation never moves a session");
+  const move = source("tabs/tasks/OpenInSession.tsx");
+  assert.doesNotMatch(move, /sessions\.(start|stop)/, "opening a task in its session never starts or stops one");
+  assert.match(move, /label=\{here \? "Open in its session: this window" : "Open in its session"\}/, "moving one is its own, named action");
   assert.match(detail, /detail\.data\?\.delivery/);
   assert.match(source("ui/SplitPane.tsx"), /forceMount=\{open && mounted\.current/);
   assert.match(source("components/ui/sheet.tsx"), /hidden \? null : <SheetOverlay/);

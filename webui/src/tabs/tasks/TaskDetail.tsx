@@ -27,6 +27,7 @@ import { ConfirmButton } from "@/ui/ConfirmButton"
 import { CheckMark, Pips, trackText } from "@/ui/task-facts"
 import { Comments } from "./Comments"
 import { DetailTrailer, PlanSections } from "./DetailSections"
+import { OpenInSession } from "./OpenInSession"
 import { PlanDetail } from "./PlanDetail"
 import { CHECK_WORDS, agoWords, stateWords } from "./words"
 
@@ -144,6 +145,7 @@ function Actions(props: DetailProps) {
   const archived = row.kind === "archived"
   return (
     <ActionBar>
+      {row.kind === "task" && row.check === "open" ? <OpenInSession row={row} /> : null}
       {row.kind === "task" ? <OpenTask taskId={row.id} /> : null}
       {archived ? <ActionButton label="Restore" icon={RotateCcw} shortcut="R" onClick={() => void restore()} /> : null}
       {row.check === "open" && !archived ? <AutoMode on={Boolean(row.auto)} toggle={toggleAuto} /> : null}
@@ -179,7 +181,7 @@ function OpenTask({ taskId }: { taskId: string }) {
       else if (!result.notice) toast.info("This task has no active session. No replacement session was created.")
     } catch (e) { if (alive.current && selectedProject() === project) toast.error(e instanceof Error ? e.message : String(e)) }
   }
-  return <ActionButton label="Open task conversation" text="Open" icon={MessageSquare} shortcut="O" onClick={() => void open()} />
+  return <ActionButton label="Open task conversation" text="Conversation" icon={MessageSquare} shortcut="O" onClick={() => void open()} />
 }
 
 export function TaskDetail(props: DetailProps) {
