@@ -1,6 +1,6 @@
 {
-  "hash": "61301a4b634d83c0769a369ceaa55e176baf731067166c37cf01dac93b5eb98b",
-  "builtAt": "2026-10-05T10:18:00.068Z",
+  "hash": "50f32f33b20908ea48fcc71e7ab077fbecab585964282248ab7bac84e723c42e",
+  "builtAt": "2026-10-05T11:12:31.445Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -32,7 +32,7 @@
     },
     {
       "path": "webui/src/app/Header.tsx",
-      "sha256": "f81407fad76f22f68979644fca77735ae6fed0cc37fbb8518b1d1172e1a7bd77"
+      "sha256": "61e05d4e800367370f6aff35e6da7ef89a0d2c98787ccd634fcc23a9b7696c68"
     },
     {
       "path": "webui/src/app/ProjectSwitcher.tsx",
@@ -196,7 +196,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "e4e7992d078f2f7922b1ab08381801b0fae70b58a263425b12360322030f64a2"
+      "sha256": "918a52bb7aa5a1418f041b7e7a9e7be92b40b60e129aaeea8cccb026a1aa176c"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -584,7 +584,7 @@
     },
     {
       "path": "webui/src/ui/AgentIcon.tsx",
-      "sha256": "dcb7c77eb61d0e3f5cc520c18c88028ffa86c42a564d60df75c275789cafe2d8"
+      "sha256": "3de4e0ec27c69cdeeb1d99ddcffc81fa54eb4a1bf3eaf9d7e46530ae93ee2670"
     },
     {
       "path": "webui/src/ui/Attachments.tsx",
