@@ -98,7 +98,7 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
       {active ? (
         <section aria-label="Question from the lobby" className="flex min-h-0 flex-1 flex-col">
           <header className="flex items-center gap-3 px-6 pt-5 pb-3">
-            <p className="min-w-0 flex-1 truncate text-sm font-medium text-muted-foreground">
+            <p className="min-w-0 flex-1 truncate text-sm font-medium text-muted-foreground first-letter:uppercase">
               {who}
               {count > 1 ? ` · 1 of ${count}` : ""}
             </p>

@@ -24,7 +24,7 @@ const select = (id: string) => go(`#/sessions/${encodeURIComponent(id)}`)
 function Windows({ windows }: { windows: StatusInfo["windows"] }) {
   if (windows.length === 0) return null
   return (
-    <div className="px-3 pb-3">
+    <div className="px-4 pb-4 pt-2">
       <Section title="Other windows">
         <ul className="flex flex-col">
           {windows.map((window) => (
@@ -33,7 +33,7 @@ function Windows({ windows }: { windows: StatusInfo["windows"] }) {
                 href={window.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex min-h-8 items-center rounded-lg px-2 text-sm text-foreground underline underline-offset-4 hover:bg-muted"
+                className="flex min-h-8 items-center rounded-lg px-2.5 text-sm text-foreground underline-offset-4 transition-colors hover:bg-muted hover:underline"
               >
                 {window.name}
               </a>

@@ -7,7 +7,7 @@
  * is driven by the config the server last returned. The appearance,
  * notification and install rows are page-only and never sent to the server.
  */
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Check, ChevronRight, Download, Maximize, Minimize } from "lucide-react"
 import { toast } from "@/lib/toast"
 import { useFullscreen, useInstallPrompt, useInstalled } from "@/app/install"
@@ -254,7 +254,7 @@ function InstructionsField({ value, label, onSave }: { value: string; label: str
 
 function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Config; models: SettingsModelInfo[]; save: Save }) {
   const entry = entryOf(config, kind)
-  const set = (fields: Record<string, unknown>) => void save(patchOf(kind, fields))
+  const set = (fields: Record<string, unknown>) => save(patchOf(kind, fields))
   const name = AGENT_LABELS[kind]
   const supported = levelsFor(models, entry.model)
   const fallbackSupported = entry.fallbackModel ? levelsFor(models, entry.fallbackModel) : supported
@@ -275,14 +275,14 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
   const hasInstructions = kind !== "scout" && kind !== "researcher"
   const [showNotes, setShowNotes] = useState(Boolean(entry.instructions))
   return (
-    <section className="flat-pane flex min-w-0 flex-col gap-3 p-4">
+    <section className="glass flex min-w-0 flex-col gap-3 rounded-xl p-4">
       <header className="flex items-baseline justify-between gap-3">
-        <h3 className="text-sm font-medium">{name}</h3>
+        <h3 className="text-sm font-semibold">{name}</h3>
         <span className="truncate text-xs text-muted-foreground">
           {entry.model === INHERIT_MODEL ? "session model" : entry.model} · {kind === "scout" ? FIXED_SCOUT_THINKING : entry.thinking}
         </span>
       </header>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
         <Mini label={FIELD_LABELS.model}>
           <ModelChoice value={entry.model} models={models} label={`${name} model`} inherit={kind === "master"} onChange={chooseModel} />
         </Mini>
@@ -290,7 +290,7 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
           <ModelChoice value={entry.fallbackModel ?? INHERIT_MODEL} models={models} label={`${name} fallback model`} none onChange={chooseFallback} />
         </Mini>
       </div>
-      <div className="flex items-center gap-3 border-t border-border p-3">
+      <div className="flex items-center gap-3 rounded-lg bg-muted p-3">
         <EffortMascot level={effective} className="size-16" />
         <div className="min-w-0 flex-1">
           {kind === "scout" ? (
@@ -368,7 +368,7 @@ function LobbyToggle({ config, item, save }: { config: Config; item: { id: strin
 function WorkflowGroup({ config, save }: { config: Config; save: Save }) {
   const current = config.workflow.gitIsolation
   return (
-    <Section title={GROUP_TITLES.workflow}>
+    <Section prominent title={GROUP_TITLES.workflow}>
       <Rows>
         <Field label={GIT_LABEL} help={GIT_ISOLATION_ITEMS.find((item) => item.id === current)?.help ?? "enter cycles off, branch, worktree"}>
           <Choice value={current} items={GIT_ISOLATION_ITEMS.map((item) => ({ value: item.id, label: item.label }))} label={GIT_LABEL} onChange={(value) => void save({ workflow: { gitIsolation: value } })} />
@@ -381,7 +381,7 @@ function WorkflowGroup({ config, save }: { config: Config; save: Save }) {
 function LobbyGroup({ config, save }: { config: Config; save: Save }) {
   const web = config.lobby.web
   return (
-    <Section title={GROUP_TITLES.lobby}>
+    <Section prominent title={GROUP_TITLES.lobby}>
       <Rows>
         {LOBBY_TOGGLES.map((item) => <LobbyToggle key={item.id} config={config} item={item} save={save} />)}
         <Field label={ROUNDS_LABEL} help={ROUNDS_HELP}>
@@ -403,7 +403,7 @@ function ClassifierGroup({ config, models, save }: { config: Config; models: Set
   const classifier = config.classifier
   const host = JEV_HOST_ITEMS.find((item) => item.id === classifier.provider)?.label
   return (
-    <Section title={GROUP_TITLES.classifier}>
+    <Section prominent title={GROUP_TITLES.classifier}>
       <Rows>
         <ToggleField label={CLASSIFIER_LABELS.enabled} help={CLASSIFIER_LABELS.enabledHelp} checked={classifier.enabled} onChange={(next) => void save({ classifier: { enabled: next } })} />
         <Field label={CLASSIFIER_LABELS.host}>
@@ -435,7 +435,7 @@ function NotificationsGroup() {
     else toast.error(result === "unsupported" ? PAGE.notificationsUnsupported : PAGE.notificationsBlocked)
   }
   return (
-    <Section title={GROUP_TITLES.notifications}>
+    <Section prominent title={GROUP_TITLES.notifications}>
       <Rows>
         <ToggleField label={PAGE.notificationsLabel} help={PAGE.notificationsHelp} checked={enabled} onChange={(next) => void change(next)} />
       </Rows>
@@ -448,7 +448,7 @@ function InstallGroup() {
   const installed = useInstalled()
   const fullscreen = useFullscreen()
   return (
-    <Section title={GROUP_TITLES.install}>
+    <Section prominent title={GROUP_TITLES.install}>
       <Rows>
         <Field label={PAGE.installLabel} help={installed ? PAGE.installedNow : PAGE.installHelp}>
           {installed ? null : (
@@ -475,25 +475,32 @@ function InstallGroup() {
 }
 
 export function SettingsForm({ config, models, onConfig }: { config: Config; models: SettingsModelInfo[]; onConfig: (config: Config) => void }) {
-  const save: Save = async (patch) => {
-    try {
-      const result = await call("settings.set", { patch })
-      onConfig(result.config)
-      toast.success(PAGE.saved)
-      return true
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "That did not work. Try again.")
-      return false
+  // One save at a time, in the order they were made: the form shows the config of the last reply, so replies must come back in order.
+  const queue = useRef<Promise<unknown>>(Promise.resolve())
+  const save: Save = (patch) => {
+    const run = async () => {
+      try {
+        const result = await call("settings.set", { patch })
+        onConfig(result.config)
+        toast.success(PAGE.saved)
+        return true
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "That did not work. Try again.")
+        return false
+      }
     }
+    const next = queue.current.then(run, run)
+    queue.current = next
+    return next
   }
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-3">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-5 sm:p-8">
       <header className="flex flex-col gap-1">
-        <h1 className="text-base font-medium">{PAGE.title}</h1>
+        <h1 className="text-xl font-semibold tracking-tight">{PAGE.title}</h1>
         <p className="text-sm text-muted-foreground">{PAGE.intro}</p>
       </header>
-      <Section title={GROUP_TITLES.agents}>
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <Section prominent title={GROUP_TITLES.agents}>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           {AGENT_ORDER.map((kind) => <AgentCard key={kind} kind={kind} config={config} models={models} save={save} />)}
         </div>
       </Section>

@@ -38,17 +38,19 @@ function Actions({ entry }: { entry: Entry }) {
   if (entry.where === "this window") {
     return (
       <ActionBar>
-        <ActionButton label="Back to this window" icon={ArrowLeft} tone="primary" onClick={() => go("#/lobby")} />
+        <ActionButton label="Back to this window" text="Back to the Lobby" icon={ArrowLeft} tone="primary" shortcut="B" onClick={() => go("#/lobby")} />
       </ActionBar>
     )
   }
   if (!key) return null
   return (
     <ActionBar>
-      <ActionButton label="Move here" icon={ArrowRightToLine} tone="primary" onClick={() => void act("sessions.switch", { key })} />
+      <ActionButton label="Move here" icon={ArrowRightToLine} tone="primary" shortcut="M" onClick={() => void act("sessions.switch", { key })} />
       <ConfirmButton
         icon={CircleStop}
         label="Stop the session"
+        text="Stop"
+        shortcut="S"
         title={`Stop ${entry.name}?`}
         description="Its process ends. The task keeps its state and can be resumed in this window."
         confirmLabel="Stop session"
@@ -73,9 +75,9 @@ export function SessionDetail({ entry, lobby, onChanged }: { entry: Entry; lobby
   return (
     <article aria-label="Session detail" className="flex flex-col gap-4">
       <Actions entry={entry} />
-      <header className="flex flex-col gap-1">
-        <h3 className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <WhereIcon where={entry.where} />
+      <header className="flex flex-col gap-1.5">
+        <h3 className="flex items-center gap-2.5 text-lg font-semibold tracking-tight text-foreground">
+          <WhereIcon where={entry.where} className="size-[1.1rem]" />
           {entry.name}
         </h3>
         <p className="text-sm text-muted-foreground">{factsLine(entry)}</p>

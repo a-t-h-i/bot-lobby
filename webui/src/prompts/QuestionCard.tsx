@@ -77,7 +77,7 @@ function OptionRow({
     <label
       className={cn(
         "flex min-h-9 cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 text-start text-sm transition-[background-color,border-color,transform] duration-150 ease-snap active:scale-[0.99]",
-        selected ? "border-primary/50 bg-accent" : "border-input bg-card/40 hover:bg-accent/60",
+        selected ? "border-primary/50 bg-accent" : "border-input bg-background hover:bg-accent/60",
         "has-[:focus-visible]:border-ring has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/30"
       )}
     >

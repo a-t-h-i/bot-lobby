@@ -24,13 +24,27 @@ function Line({ entry }: { entry: ChatEntry }) {
     )
   }
   const you = entry.role === "you"
+  if (you) {
+    return (
+      <li className="flex flex-col items-end gap-1">
+        <span className="flex items-baseline gap-2 text-xs text-muted-foreground">
+          {time} <span className="font-medium text-foreground">You</span>
+        </span>
+        <div className="max-w-[85%] rounded-xl rounded-tr-sm border border-primary/10 bg-you px-3.5 py-2">
+          <Markdown text={entry.text} />
+        </div>
+      </li>
+    )
+  }
   return (
     <li className="flex flex-col gap-1">
       <span className="flex items-center gap-2 text-xs text-muted-foreground">
-        {you ? null : <span aria-hidden="true" className="size-2 rounded-full bg-primary" />}
-        <span className="font-medium text-foreground">{you ? "You" : "Oracle"}</span> {time}
+        <span aria-hidden="true" className="size-2 rounded-full bg-primary" />
+        <span className="font-medium text-foreground">Oracle</span> {time}
       </span>
-      <Markdown text={entry.text} />
+      <div className="max-w-[90%] pl-4">
+        <Markdown text={entry.text} />
+      </div>
     </li>
   )
 }
@@ -54,7 +68,7 @@ export function ChatView({ entries, more, loading, onMore, empty }: ChatViewProp
       {entries.length === 0 ? (
         <p className="text-sm text-muted-foreground">{empty}</p>
       ) : (
-        <ol aria-label="Conversation" className="flex flex-col gap-3">
+        <ol aria-label="Conversation" className="flex flex-col gap-4">
           {entries.map((entry) => (
             <Line key={entry.id} entry={entry} />
           ))}

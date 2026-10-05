@@ -82,11 +82,16 @@ export function focusPage(): boolean {
   return true
 }
 
-/** Back from the page to the active tab. */
+/** Back from the page to the active tab; on Sessions and Settings, which are no tab, to the page itself. */
 export function focusTab(): boolean {
   const tab = document.querySelector<HTMLElement>("[role='tab'][aria-selected='true']")
-  tab?.focus({ preventScroll: true })
-  return Boolean(tab)
+  if (tab) {
+    tab.focus({ preventScroll: true })
+    return true
+  }
+  const main = document.getElementById("main")
+  main?.focus({ preventScroll: true })
+  return Boolean(main)
 }
 
 /** Set while the arrow keys walk the tab bar, so the page keeps focus on the bar instead of the message box. */

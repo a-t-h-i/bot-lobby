@@ -1,11 +1,11 @@
 /**
- * The top of the page: where you are (workspace and branch), the numbered
- * tabs in the middle, and what this session is doing on the right with
- * the way to Sessions, Settings, the key help and the light/dark switch. On narrow windows
- * the tabs take a row of their own.
+ * The top bar: the project you are in on the left, the numbered tabs in the
+ * middle, and what this session is doing on the right with the way to
+ * Sessions, Settings, the key help and the light/dark switch. Below 1360px the
+ * tabs take a row of their own (the grid lives in `index.css`).
  */
 import type { ReactNode } from "react"
-import { GitBranch, Keyboard, Layers, Moon, Settings, Sun } from "lucide-react"
+import { Keyboard, Layers, Moon, Settings, Sun } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Keys } from "@/components/ui/kbd"
@@ -16,11 +16,23 @@ import type { SnapshotTask, StatusInfo } from "@protocol"
 import type { Route } from "./router.ts"
 import { ProjectSwitcher } from "./ProjectSwitcher.tsx"
 
+/** What the link to the server is doing: a green dot when live, words when it is not. */
 function Connection({ state }: { state: ConnectionState }) {
-  if (state === "live") return <span title="Connected" aria-label="Connected" className="size-2 rounded-full bg-success" />
+  if (state === "live") {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span role="img" aria-label="Connected" className="grid size-6 place-items-center">
+            <span className="size-2 rounded-full bg-success" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>Connected</TooltipContent>
+      </Tooltip>
+    )
+  }
   if (state === "connecting") {
     return (
-      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Spinner aria-hidden="true" role="presentation" className="size-3" />
         reconnecting…
       </span>
@@ -31,7 +43,7 @@ function Connection({ state }: { state: ConnectionState }) {
 
 /** The flat icon buttons on the right. */
 const ICON =
-  "inline-flex size-8 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+  "inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
 
 function IconLink({ label, hint, href, active, children }: { label: string; hint: string; href: string; active: boolean; children: ReactNode }) {
   return (
@@ -47,7 +59,7 @@ function IconLink({ label, hint, href, active, children }: { label: string; hint
           {children}
         </a>
       </TooltipTrigger>
-      <TooltipContent>
+      <TooltipContent side="bottom">
         {label} <Keys chord={hint} />
       </TooltipContent>
     </Tooltip>
@@ -59,10 +71,10 @@ function HelpButton({ hint, onHelp }: { hint: string; onHelp: () => void }) {
     <Tooltip>
       <TooltipTrigger asChild>
         <button type="button" aria-label="Keyboard shortcuts" aria-haspopup="dialog" aria-keyshortcuts={hint} onClick={onHelp} className={ICON}>
-          <Keyboard aria-hidden="true" className="size-[1.1rem]" />
+          <Keyboard aria-hidden="true" className="size-[1.05rem]" />
         </button>
       </TooltipTrigger>
-      <TooltipContent>
+      <TooltipContent side="bottom">
         Keyboard shortcuts <Keys chord={hint} />
       </TooltipContent>
     </Tooltip>
@@ -78,14 +90,34 @@ function ThemeToggle() {
         <button
           type="button"
           aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+          aria-keyshortcuts="D"
           onClick={() => setTheme(dark ? "light" : "dark")}
           className={ICON}
         >
-          {dark ? <Sun aria-hidden="true" className="size-[1.1rem]" /> : <Moon aria-hidden="true" className="size-[1.1rem]" />}
+          {dark ? <Sun aria-hidden="true" className="size-[1.05rem]" /> : <Moon aria-hidden="true" className="size-[1.05rem]" />}
         </button>
       </TooltipTrigger>
-      <TooltipContent>{dark ? "Light mode" : "Dark mode"}</TooltipContent>
+      <TooltipContent side="bottom">
+        {dark ? "Light mode" : "Dark mode"} <Keys chord="D" />
+      </TooltipContent>
     </Tooltip>
+  )
+}
+
+/** The session's task and whether the oracle is busy, as one quiet chip. */
+function SessionChip({ busy, task, sessionName }: { busy: boolean; task?: SnapshotTask; sessionName?: string }) {
+  return (
+    <div className="mr-1 flex min-w-0 items-center gap-2 text-[0.8125rem]">
+      {busy ? <Spinner aria-hidden="true" role="presentation" className="size-3.5" /> : null}
+      {task ? (
+        <span className="hidden max-w-[16rem] truncate md:inline">
+          <span className="font-medium">{task.id}</span>
+          <span className="hidden text-muted-foreground min-[1500px]:inline"> · {task.state.replace(/_/g, " ")}</span>
+        </span>
+      ) : (
+        <span className="hidden max-w-[10rem] truncate text-muted-foreground min-[1500px]:inline">{sessionName ?? "no task in this session"}</span>
+      )}
+    </div>
   )
 }
 
@@ -114,37 +146,20 @@ export function Header({
   const busy = status?.busy ?? false
 
   return (
-    <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 pt-2.5 pb-1.5 [grid-template-areas:'title_title'_'project_project'_'status_status'_'tabs_tabs'] sm:[grid-template-areas:'title_status'_'project_project'_'tabs_tabs'] min-[1180px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] min-[1180px]:[grid-template-areas:'title_tabs_status'_'project_project_project']">
-      <div className="flex min-w-0 items-center gap-2.5 [grid-area:title]">
-        <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full bg-primary" />
-        <span className="truncate text-sm font-medium">{name}</span>
-        {branch ? (
-          <span className="inline-flex min-w-0 items-center gap-1 truncate rounded-lg bg-muted px-2.5 py-1 text-xs text-muted-foreground">
-            <GitBranch aria-hidden="true" className="size-3 shrink-0" />
-            <span className="truncate">{branch}</span>
-          </span>
-        ) : null}
+    <header className="app-header shrink-0">
+      <div className="where flex min-w-0 items-center">
+        <ProjectSwitcher tab={route.kind === "tab" ? route.tab : route.kind} name={name} branch={branch} />
       </div>
-      <ProjectSwitcher tab={route.kind === "tab" ? route.tab : route.kind} />
-      <div className="min-w-0 [grid-area:tabs]">{tabs}</div>
-      <div className="flex min-w-0 items-center justify-end gap-1 [grid-area:status]">
+      <div className="tabs min-w-0">{tabs}</div>
+      <div className="tools flex min-w-0 items-center justify-end gap-0.5">
         {extra}
-        <div className="mr-2 flex min-w-0 items-center gap-2 text-sm">
-          {busy ? <Spinner aria-hidden="true" role="presentation" className="size-3.5" /> : null}
-          {task ? (
-            <span className="hidden max-w-[16rem] truncate sm:inline">
-              <span className="font-medium">{task.id}</span> <span className="text-muted-foreground">{task.state.replace(/_/g, " ")}</span>
-            </span>
-          ) : (
-            <span className="hidden max-w-[12rem] truncate text-muted-foreground md:inline">{status?.sessionName ?? "no task in this session"}</span>
-          )}
-          <Connection state={connection} />
-        </div>
+        <SessionChip busy={busy} {...(task ? { task } : {})} {...(status?.sessionName ? { sessionName: status.sessionName } : {})} />
+        <Connection state={connection} />
         <IconLink label="Sessions" hint={keys.sessions ?? "Alt+O"} href="#/sessions" active={route.kind === "sessions"}>
-          <Layers aria-hidden="true" className="size-[1.1rem]" />
+          <Layers aria-hidden="true" className="size-[1.05rem]" />
         </IconLink>
         <IconLink label="Settings" hint={keys.settings ?? "Alt+S"} href="#/settings" active={route.kind === "settings"}>
-          <Settings aria-hidden="true" className="size-[1.1rem]" />
+          <Settings aria-hidden="true" className="size-[1.05rem]" />
         </IconLink>
         <HelpButton hint={keys.help ?? "Alt+H"} onHelp={onHelp} />
         <ThemeToggle />

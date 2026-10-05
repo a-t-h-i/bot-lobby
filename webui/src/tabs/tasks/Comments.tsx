@@ -26,7 +26,7 @@ function CommentMeta({ comment }: { comment: PlanComment }) {
   const age = formatSince(Date.now() - Date.parse(comment.createdAt))
   const Icon = COMMENT_ICONS[comment.status]
   return (
-      <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+      <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
         <Icon aria-hidden="true" className={comment.status === "addressed" ? "size-3.5 text-success" : "size-3.5"} />
         {COMMENT_WORDS[comment.status]}, {age}{comment.editedAt ? " (edited)" : ""}
       </p>
@@ -41,7 +41,7 @@ function CommentItem({ comment, taskId, own }: { comment: PlanComment; taskId: s
     const result = await call("tasks.editComment", { taskId, commentId: comment.id, text })
     setSaved(result.comment)
   }
-  return <li className="border-b border-border px-4 py-3">
+  return <li className="rounded-lg border border-border bg-background/60 px-3.5 py-2.5">
     {editing ? <InlineEditor text={current.text} onSave={save} onCancel={() => setEditing(false)} /> : <Markdown text={current.text} />}
     <div className="flex items-center justify-between gap-2"><CommentMeta comment={current} />
       {own && !editing ? <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>Edit</Button> : null}

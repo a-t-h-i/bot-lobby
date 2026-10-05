@@ -32,11 +32,11 @@ function useNow(active: boolean): number {
 
 function Header({ pull, now }: { pull: PullDetailInfo; now: number }) {
   return (
-    <header className="flex flex-col gap-1">
-      <h2 className="text-sm font-semibold break-words">
-        #{pull.number} {pull.title}
+    <header className="flex flex-col gap-2">
+      <h2 className="text-lg font-semibold tracking-tight break-words">
+        <span className="font-normal text-muted-foreground tabular-nums">#{pull.number}</span> {pull.title}
       </h2>
-      <p className="text-xs text-muted-foreground">{factsLine(pull, now)}</p>
+      <p className="text-sm text-muted-foreground">{factsLine(pull, now)}</p>
       <p className="text-sm tabular-nums">{branchLine(pull)}</p>
       {stateLine(pull) ? <p className="text-sm text-muted-foreground">{stateLine(pull)}</p> : null}
       {pull.url ? (
@@ -116,7 +116,7 @@ function ReviewBox({ number, review, now, focus, onFocus }: { number: number; re
 function Files({ files }: { files: PullFileInfo[] }) {
   return (
     <Section title="Files" right={String(files.length)}>
-      <div className="overflow-x-auto border-t border-border">
+      <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full border-collapse text-sm tabular-nums">
           <tbody>
             {files.map((file) => (
@@ -136,7 +136,7 @@ function Note({ note, now }: { note: PullNoteInfo; now: number }) {
   const state = note.state && note.state !== "COMMENTED" ? note.state.toLowerCase().replace(/_/g, " ") : ""
   const right = [state, note.at ? formatSince(now - Date.parse(note.at)) : ""].filter(Boolean).join(" · ")
   return (
-    <article className="flex flex-col gap-1 border-b pb-2 last:border-0 last:pb-0">
+    <article className="flex flex-col gap-1.5 rounded-lg border border-border bg-background/60 px-3.5 py-2.5">
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span className="font-medium text-foreground">{note.author ?? "comment"}</span>
         {right ? <span>{right}</span> : null}
@@ -197,12 +197,14 @@ export function PullDetail({ number, onChanged }: { number: number; onChanged?: 
   return (
     <article className="flex flex-col gap-4" aria-label={`Pull request #${number}`}>
       <ActionBar>
-        <ActionButton label="Review" icon={Play} tone="primary" disabled={running} onClick={() => void start()} />
-        <ActionButton label="Jev's read" icon={BookOpen} disabled={running} onClick={() => void readIt()} />
+        <ActionButton label="Review" icon={Play} tone="primary" shortcut="V" disabled={running} onClick={() => void start()} />
+        <ActionButton label="Jev's read" icon={BookOpen} shortcut="Q" disabled={running} onClick={() => void readIt()} />
         {running ? (
           <ConfirmButton
             icon={CircleStop}
             label="Stop the review"
+            text="Stop"
+            shortcut="X"
             title="Stop this review?"
             description="The agent stops reading the pull request. Nothing is posted to GitHub."
             confirmLabel="Stop review"

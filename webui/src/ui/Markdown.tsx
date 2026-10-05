@@ -57,7 +57,7 @@ function CodeBlock({ node, children }: { node?: unknown; children?: ReactNode })
     <div className="relative my-3 rounded-lg bg-muted">
       <div className="flex items-center justify-between pl-3">
         <span className="text-xs text-muted-foreground">{lang || "code"}</span>
-        <ActionButton label={copied ? "Copied" : "Copy the code"} icon={copied ? Check : Copy} className="size-7" onClick={copy} disabled={!text} />
+        <ActionButton label={copied ? "Copied" : "Copy the code"} icon={copied ? Check : Copy} iconOnly className="size-7" onClick={copy} disabled={!text} />
       </div>
       <pre className="!my-0 overflow-x-auto !rounded-t-none !bg-transparent px-3 pb-3 text-sm leading-relaxed [&>code]:block">{children}</pre>
     </div>

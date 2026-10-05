@@ -10,7 +10,7 @@ import { Spinner } from "@/components/ui/spinner"
 /** First paint, before the first answer lands. */
 export function LoadingState({ label = "Connecting…" }: { label?: string }) {
   return (
-    <div className="flex min-h-svh items-center justify-center gap-2 text-sm text-muted-foreground">
+    <div className="flex min-h-48 flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
       <Spinner />
       <span>{label}</span>
     </div>
@@ -20,7 +20,7 @@ export function LoadingState({ label = "Connecting…" }: { label?: string }) {
 /** A screen with nothing to show yet. */
 export function EmptyState({ title, description }: { title: string; description?: string }) {
   return (
-    <Empty className="flat-pane m-4 flex-1">
+    <Empty className="m-4 flex-1">
       <EmptyHeader>
         <EmptyTitle>{title}</EmptyTitle>
         {description ? <EmptyDescription>{description}</EmptyDescription> : null}
@@ -32,7 +32,7 @@ export function EmptyState({ title, description }: { title: string; description?
 /** A topic that failed to load, with a retry that rereads it. */
 export function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => void }) {
   return (
-    <Empty className="flat-pane m-4 flex-1">
+    <Empty className="m-4 flex-1">
       <EmptyHeader>
         <EmptyTitle className="flex items-center gap-2">
           <TriangleAlert className="size-4 text-destructive" aria-hidden="true" />
@@ -55,7 +55,7 @@ export function ReconnectingState({ onRetry }: { onRetry?: () => void }) {
   return (
     <div
       role="status"
-      className="mx-4 mt-1 flex items-center gap-2 border-b border-border px-4 py-2 text-sm text-destructive"
+      className="mx-3 mb-1 flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive max-sm:mx-2"
     >
       <WifiOff className="size-4" aria-hidden="true" />
       <span>Connection lost — retrying every 2 s.</span>
