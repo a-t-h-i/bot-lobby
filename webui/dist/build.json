@@ -1,6 +1,6 @@
 {
-  "hash": "46bf7cfb87b334a7b17a6f8ee06a872acd94337492a336e1004ab76e56978270",
-  "builtAt": "2026-10-05T06:15:01.496Z",
+  "hash": "291bb89c7a264f3483fb9ea68f3f128a585b09bd8c48f0a533da161a7c8f7249",
+  "builtAt": "2026-10-05T07:16:19.513Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -28,15 +28,15 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "4fdc015d00639ee16fd5a31706bdac491a3c3ea57e8150fd600c62956723717c"
+      "sha256": "ebb613b3acae70e04cbab7cd16bbe89f38e101818aeeee61c1b4fc47f3515203"
     },
     {
       "path": "webui/src/app/Header.tsx",
-      "sha256": "f014e3c7746f20b6e79ae20d127598617d27d44b6fd211d4bc5b82a870a94480"
+      "sha256": "f81407fad76f22f68979644fca77735ae6fed0cc37fbb8518b1d1172e1a7bd77"
     },
     {
       "path": "webui/src/app/ProjectSwitcher.tsx",
-      "sha256": "6dbe0943ddb2b5651622e2bd57f05f7d8bd6a4bf7af01f878670566fe1fef003"
+      "sha256": "50ad09f96dabed345623ba70587fa224fc10089a191a7dd2df9b04f0de898c7d"
     },
     {
       "path": "webui/src/app/Shell.tsx",
@@ -52,7 +52,7 @@
     },
     {
       "path": "webui/src/app/TabStrip.tsx",
-      "sha256": "03436e252f503eab27b9be51b084eda8f06c5463352b97a16678733400621293"
+      "sha256": "891cb3d410052ac2d9776cac3cbe9aa5f50b84b0261398f31c5b770f545a776b"
     },
     {
       "path": "webui/src/app/bootstrap.ts",
@@ -128,7 +128,7 @@
     },
     {
       "path": "webui/src/components/ui/button.tsx",
-      "sha256": "8c2aa8d0a62a9d6e1de6dc6ee2fba650132743f5579cbab9ac31ec9d5415df8b"
+      "sha256": "4dbdb369c0512afa20795b1c1c8845ec6fd42d75a598b00b4b6cc2b51d04bc97"
     },
     {
       "path": "webui/src/components/ui/checkbox.tsx",
@@ -136,7 +136,7 @@
     },
     {
       "path": "webui/src/components/ui/combobox.tsx",
-      "sha256": "664477a458e5cbe602ecc6fee7ca611fdf9a9e88cf3592fda2c9069f69d84fbe"
+      "sha256": "ba56ce0a6f5fdcee930d595c1d0d522f093ce2baf6ff8a04168fae3d6799ddcf"
     },
     {
       "path": "webui/src/components/ui/empty.tsx",
@@ -148,11 +148,11 @@
     },
     {
       "path": "webui/src/components/ui/kbd.tsx",
-      "sha256": "278cfe10d594e226d80d905d915bf7af6bca3fbacde3f6e1bf7a03a3fb043281"
+      "sha256": "ecde46ccb35afd4321f8bf1c73c6aaf416adfb640434d42f706cf5f43a0e9e9e"
     },
     {
       "path": "webui/src/components/ui/popup.tsx",
-      "sha256": "2405362848313619afe075503b6969b2ee954ae6427ffa6b5e7e08f6b921d4b4"
+      "sha256": "3d89a835019b8cc6393eadc18b417f2180e508770ede89dc4c39a86cf300232d"
     },
     {
       "path": "webui/src/components/ui/questionnaire.tsx",
@@ -188,7 +188,7 @@
     },
     {
       "path": "webui/src/components/ui/toaster.tsx",
-      "sha256": "9c8beb4bc4d6eaf0511fc4407f073b4823554ef71073842cec7cd716ab12d14c"
+      "sha256": "c592f41daf86d8777d8db390afd2bd19fb3485ecb6a9be923759862c9b4ad619"
     },
     {
       "path": "webui/src/components/ui/tooltip.tsx",
@@ -196,7 +196,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "bdaadc0d8d3a367ab25ce954f66ec9012a2adbde31e4b5b7492d9389a6b6a166"
+      "sha256": "c942b18ed3714c20df4ff4075c4877d3b70f9b7affa175eeac9a8fd8941779af"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -384,7 +384,7 @@
     },
     {
       "path": "webui/src/tabs/lobby/LobbyTab.tsx",
-      "sha256": "6c68ee578a3ee17c622a8a82cf0d699c3357df4f44d65b12e2c1f1000c8097eb"
+      "sha256": "8254b2bb39e4ecf2f92f3c8158eb748138a82689e6616e13e0acad1f784fa229"
     },
     {
       "path": "webui/src/tabs/lobby/RunsStrip.tsx",
@@ -396,11 +396,15 @@
     },
     {
       "path": "webui/src/tabs/lobby/Thoughts.tsx",
-      "sha256": "f9498a9f93ac268fe657d143ac2db0fed581c1e086357dc8caa905cf7bed28a6"
+      "sha256": "c8b1a3da3de6fafbb2bbaa7ce8aea0c56fb3aad46731ec54f8796aeb08762058"
+    },
+    {
+      "path": "webui/src/tabs/lobby/thoughtSteps.ts",
+      "sha256": "27e9cc97ca6bd19b4cfaf34efd944d1bcdd93cbf6bee595723feecd0fa9c2935"
     },
     {
       "path": "webui/src/tabs/lobby/types.ts",
-      "sha256": "bdf7b36e9c33f327179629e0479bc0339d8209c9bdf8f18468d24e2579d56f8e"
+      "sha256": "98c381b737703c0275c32411b129c71f080014c0ae6691fe121c7664cd2d53d2"
     },
     {
       "path": "webui/src/tabs/metrics/Charts.tsx",
@@ -448,7 +452,7 @@
     },
     {
       "path": "webui/src/tabs/plan/Roster.tsx",
-      "sha256": "b5b57e1c40ee3764b20950e59e97a35ac768f6a77f13116786a997a6e1a71ec0"
+      "sha256": "655d31c68355cb647b9940cfb5bed9ff43c654f2569885684e7786b0941aee84"
     },
     {
       "path": "webui/src/tabs/plan/words.ts",
@@ -504,7 +508,7 @@
     },
     {
       "path": "webui/src/tabs/settings/SettingsForm.tsx",
-      "sha256": "d85d96dd4f50ef5d3b7dd90f8037becd850eeb3cbd02066a0094393ebab4bf78"
+      "sha256": "793dab4001ca9da317a79e01a325571532721ef8b228c4a3abfdb7e7ff46abc2"
     },
     {
       "path": "webui/src/tabs/settings/SettingsTab.tsx",
@@ -552,7 +556,7 @@
     },
     {
       "path": "webui/src/tabs/tasks/TasksTab.tsx",
-      "sha256": "b3f2686d532d54ee1bcadeeac986b8e46429084edbb2109f2a20e402d1cfd877"
+      "sha256": "22d0a80319e651a814b288e656e72eaa8821b82bac9da341d5468dc38b98838a"
     },
     {
       "path": "webui/src/tabs/tasks/words.ts",
@@ -560,7 +564,7 @@
     },
     {
       "path": "webui/src/ui/Actions.tsx",
-      "sha256": "7b4c6df97503dfed82ba9bd6058dbfaed6b53ce5daa5cf702e9042f349571653"
+      "sha256": "9942d2f4a26570255d9aa97a8989767ab43e3a22b17df629a1fab19c2f46391a"
     },
     {
       "path": "webui/src/ui/Attachments.tsx",
@@ -580,7 +584,7 @@
     },
     {
       "path": "webui/src/ui/Frame.tsx",
-      "sha256": "956641993e92c1733674f2a8660c28d3e33eb7b012a92671d1775fba35546381"
+      "sha256": "9ebc62df5c3dd465fc039dcef5d4c856af4382c7a56b2b1f861c821ff563a4ae"
     },
     {
       "path": "webui/src/ui/InlineEditor.tsx",
