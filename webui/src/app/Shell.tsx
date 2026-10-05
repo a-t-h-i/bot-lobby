@@ -83,11 +83,14 @@ export function Shell() {
     [tabs, activeId]
   )
   const toggleHelp = useCallback(() => setHelp((open) => !open), [])
-  // The route as the address bar has it right now: a key pressed in the frame after a jump must not act on the page just left.
-  const onAction = useCallback((action: string) => handleAction(action, parseHash(window.location.hash) ?? route, toggleHelp, cycle), [route, toggleHelp, cycle])
+  const onAction = useCallback((action: string) => {
+    if ((action === "thinking" || action === "activity") && status?.panels?.[action] === false) return
+    // The route as the address bar has it right now: a key pressed in the frame after a jump must not act on the page just left.
+    handleAction(action, parseHash(window.location.hash) ?? route, toggleHelp, cycle)
+  }, [route, toggleHelp, cycle, status?.panels])
   const insideApp = useCallback(() => {
     const el = document.activeElement
-    if (!el || el === document.body || rootRef.current?.contains(el) === true) return true
+    if (!el || el === document.body || rootRef.current?.contains(el) === true || el.closest(".thinking-bubble")) return true
     // A pop-up on its way out still holds focus for a moment; it is no longer in the way.
     return el.closest("[data-state='closed']") !== null
   }, [])

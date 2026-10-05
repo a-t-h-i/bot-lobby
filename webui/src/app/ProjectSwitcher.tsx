@@ -13,6 +13,7 @@ import { useHotkey } from "@/lib/hotkeys"
 import { selectedProject, switchProject } from "@/lib/project"
 import { Keys } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
 interface ProjectList {
@@ -35,7 +36,7 @@ function projectError(data: ProjectList | undefined, id: string | undefined): st
   return undefined
 }
 
-function useProjects() {
+export function useProjects() {
   const [data, setData] = useState<ProjectList>()
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState(false)
@@ -59,7 +60,34 @@ function useProjects() {
       request.current++
     }
   }, [])
-  return { data, error, busy, refresh }
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    // A lookup that is quick never flashes a spinner in the bar.
+    if (!busy) return setSlow(false)
+    const timer = setTimeout(() => setSlow(true), 300)
+    return () => clearTimeout(timer)
+  }, [busy])
+  return { data, error, busy, slow, refresh }
+}
+
+export type Projects = ReturnType<typeof useProjects>
+
+/** What is wrong with the project this page is looking at, in words; nothing when all is well. */
+function problem({ data, error }: Projects): string | undefined {
+  const selected = selection()
+  return selected.error ?? error ?? projectError(data, selected.id)
+}
+
+/** The one line under the bar that says why no project can be chosen, with the way to try again. */
+export function ProjectNotice({ projects }: { projects: Projects }) {
+  const message = problem(projects)
+  if (!message) return null
+  return (
+    <p role="alert" className="notice flex min-w-0 items-start gap-2 pt-1 pb-0.5 text-xs break-words text-destructive">
+      <TriangleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+      <span>{message}</span>
+    </p>
+  )
 }
 
 /** Up and Down walk the options, Home and End jump, like a native list box. */
@@ -75,13 +103,14 @@ function walk(event: KeyboardEvent<HTMLElement>) {
   options[next]?.focus()
 }
 
-export function ProjectSwitcher({ tab, name, branch }: { tab: string; name: string; branch?: string | undefined }) {
-  const { data, error, busy, refresh } = useProjects()
+export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Projects; tab: string; name: string; branch?: string | undefined }) {
+  const { data, busy, slow, refresh } = projects
   const [open, setOpen] = useState(false)
   const selected = selection()
-  const message = selected.error ?? error ?? projectError(data, selected.id)
+  const message = problem(projects)
   const active = selected.error ? "invalid" : selected.id ?? data?.currentId ?? ""
-  useHotkey("p", () => setOpen(true))
+  const canOpen = Boolean(data?.projects.length)
+  useHotkey("p", () => setOpen(true), { enabled: canOpen })
   useHotkey("r", () => void refresh(), { enabled: open, inDialog: true })
 
   function choose(id: string) {
@@ -91,16 +120,26 @@ export function ProjectSwitcher({ tab, name, branch }: { tab: string; name: stri
 
   return (
     <div aria-busy={busy} className="flex min-w-0 items-center gap-1.5">
-      <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Root open={open && canOpen} onOpenChange={setOpen}>
         <Popover.Trigger
           type="button"
-          aria-label={`Project: ${name}`}
-          aria-keyshortcuts="P"
-          className="group flex h-8 min-w-0 items-center gap-2 rounded-lg px-2 text-sm font-medium outline-none transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 aria-expanded:bg-accent"
+          role="combobox"
+          aria-label="Project"
+          aria-description={`${name}${branch ? `, branch ${branch}` : ""}`}
+          aria-haspopup="listbox"
+          aria-expanded={open && canOpen}
+          aria-keyshortcuts="P ArrowDown"
+          disabled={!canOpen}
+          onKeyDown={(event) => {
+            if (event.key !== "ArrowDown" || event.altKey || event.metaKey || event.ctrlKey) return
+            event.preventDefault()
+            setOpen(true)
+          }}
+          className="group flex h-10 min-w-0 items-center gap-2 rounded-lg px-2.5 text-sm font-medium outline-none transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none aria-expanded:bg-accent"
         >
-          <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full bg-primary" />
+          <span aria-hidden="true" className={cn("size-2.5 shrink-0 rounded-full", message ? "bg-destructive" : "bg-primary")} />
           <span className="truncate">{name}</span>
-          <ChevronsUpDown aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+          <ChevronsUpDown aria-hidden="true" className={cn("size-3.5 shrink-0 text-muted-foreground", !canOpen && "opacity-40")} />
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Content
@@ -123,7 +162,7 @@ export function ProjectSwitcher({ tab, name, branch }: { tab: string; name: stri
                 type="button"
                 onClick={() => void refresh()}
                 disabled={busy}
-                aria-label="Refresh projects"
+                aria-label="Refresh list"
                 aria-keyshortcuts="R"
                 className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-60"
               >
@@ -133,41 +172,31 @@ export function ProjectSwitcher({ tab, name, branch }: { tab: string; name: stri
               </button>
             </div>
             <div role="listbox" aria-label="Projects" className="flex max-h-72 flex-col overflow-y-auto p-1">
-              {data?.projects.length ? (
-                data.projects.map((project) => {
-                  const on = project.id === active
-                  return (
-                    <button
-                      key={project.id}
-                      type="button"
-                      role="option"
-                      aria-selected={on}
-                      onClick={() => choose(project.id)}
-                      className={cn(
-                        "flex min-h-9 w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:ring-3 focus-visible:ring-ring/30",
-                        on && "bg-accent"
-                      )}
-                    >
-                      <span className="flex h-5 w-4 shrink-0 items-center justify-center">{on ? <Check aria-hidden="true" className="size-3.5 text-primary" /> : null}</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">{project.name}</span>
-                        <span className="block truncate text-xs text-muted-foreground">
-                          {project.cwd} · :{project.port}
-                        </span>
+              {data?.projects.map((project) => {
+                const on = project.id === active
+                return (
+                  <button
+                    key={project.id}
+                    type="button"
+                    role="option"
+                    aria-selected={on}
+                    onClick={() => choose(project.id)}
+                    className={cn(
+                      "flex min-h-10 w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:ring-3 focus-visible:ring-ring/30",
+                      on && "bg-accent"
+                    )}
+                  >
+                    <span className="flex h-5 w-4 shrink-0 items-center justify-center">{on ? <Check aria-hidden="true" className="size-3.5 text-primary" /> : null}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{project.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {project.cwd} · :{project.port}
                       </span>
-                    </button>
-                  )
-                })
-              ) : (
-                <p className="px-3 py-3 text-sm text-muted-foreground">{busy ? "Loading projects…" : "No running projects found."}</p>
-              )}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
-            {message ? (
-              <p role="alert" className="flex items-start gap-2 border-t border-border px-3 py-2 text-xs break-words text-destructive">
-                <TriangleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-                {message}
-              </p>
-            ) : null}
           </Popover.Content>
         </Popover.Portal>
       </Popover.Root>
@@ -177,17 +206,21 @@ export function ProjectSwitcher({ tab, name, branch }: { tab: string; name: stri
           <span className="truncate">{branch}</span>
         </span>
       ) : null}
-      {message && !open ? (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          title={message}
-          className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-destructive/10 px-2 text-xs font-medium text-destructive outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
-        >
-          <TriangleAlert aria-hidden="true" className="size-3" />
-          Project
-          <span className="sr-only">: {message}</span>
-        </button>
+      {slow || message ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label="Refresh projects"
+              disabled={busy}
+              onClick={() => void refresh()}
+              className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-60"
+            >
+              {busy ? <Spinner aria-hidden="true" role="presentation" className="size-4" /> : <RefreshCw aria-hidden="true" className="size-4" />}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Refresh projects</TooltipContent>
+        </Tooltip>
       ) : null}
     </div>
   )

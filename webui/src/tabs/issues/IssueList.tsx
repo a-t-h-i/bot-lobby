@@ -12,17 +12,17 @@ function Row({ issue, selected, now, onSelect }: { issue: IssueInfo; selected: b
   const labels = labelText(issue.labels)
   return (
     <li>
-      <button
+      <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
         type="button"
         data-row
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(issue.number)}
         className={ROW}
       >
-        <span className="flex items-start gap-2 text-sm">
+        <span className="flex flex-wrap items-start gap-2 text-sm">
           <span className="shrink-0 text-muted-foreground tabular-nums">#{issue.number}</span>
           <span className={cn("min-w-0 flex-1 break-words text-foreground", selected && "font-medium")}>{issue.title}</span>
-          {labels ? <span className="shrink-0 text-xs text-muted-foreground">{labels}</span> : null}
+          {labels ? <span className="max-w-full break-words text-xs text-muted-foreground">{labels}</span> : null}
         </span>
         <span className="pl-9 text-xs text-muted-foreground">{rowFacts(issue, now)}</span>
       </button>

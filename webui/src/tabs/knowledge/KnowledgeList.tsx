@@ -28,7 +28,7 @@ function Facts({ info }: { info: KnowledgeFileInfo }) {
 function FileRow({ info, selected, onSelect }: { info: KnowledgeFileInfo; selected: boolean; onSelect: (key: string) => void }) {
   return (
     <li>
-      <button
+      <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
         type="button"
         data-row
         aria-current={selected ? "true" : undefined}
@@ -85,7 +85,7 @@ export function KnowledgeList({ files, selectedKey, onSelect }: { files: Knowled
         return (
           <section key={group.agent}>
             <h3>
-              <button
+              <button aria-keyshortcuts="Enter Space ArrowLeft ArrowRight" aria-describedby="focused-action-help"
                 type="button"
                 aria-expanded={open}
                 aria-controls={panel}

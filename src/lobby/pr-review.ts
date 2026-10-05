@@ -11,7 +11,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadPrompt } from "../prompts/loader.ts";
-import { withFallback } from "../execution/fallback.ts";
 import { runPiAgent, spawnPiProcess, type PiStreamEvent, type ProcessRunner } from "../execution/pi-runner.ts";
 import { describeToolCall } from "../pi/activity.ts";
 import { appendMetrics } from "../state/metrics.ts";
@@ -284,12 +283,7 @@ export class PullReviews {
       },
       this.deps.runProcess ?? spawnPiProcess,
     );
-    const { result, switchedFrom } = await withFallback(profile.model, profile.thinking, profile.fallback, attempt);
-    if (switchedFrom && profile.fallback) {
-      review.model = profile.fallback.model;
-      review.thinking = profile.fallback.thinking;
-      this.step(review, `${switchedFrom} is out of usage or unavailable; ran on ${profile.fallback.model}`);
-    }
+    const result = await attempt(profile.model, profile.thinking);
     if (result.model) review.model = result.model;
     review.status = result.status === "success" ? "done" : result.status;
     const text = result.output.trim();
