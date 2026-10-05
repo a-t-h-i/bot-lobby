@@ -24,12 +24,13 @@ test("switching tabs pours the colour along the connectors like a straw, then fi
     const drain = document.querySelector("[data-tab-drain]") as any;
     const target = [...document.querySelectorAll('[role="tab"]')].find((el: any) => /Git/.test(el.textContent)) as any;
     const source = document.querySelector('[role="tab"][aria-selected="true"]') as any;
-    const frames: Array<{ liquid: number[]; drain: number; fill: number }> = [];
+    const frames: Array<{ t: number; liquid: number[]; drain: number; fill: number }> = [];
     const start = performance.now();
     target.click();
     await new Promise<void>((resolve) => {
       const tick = () => {
         frames.push({
+          t: performance.now() - start,
           liquid: [...document.querySelectorAll("[data-tab-liquid]")].map((el: any) => el.getBoundingClientRect().width),
           drain: Number(getComputedStyle(drain).opacity) * drain.getBoundingClientRect().width,
           fill: Number(getComputedStyle(fill).opacity) * fill.getBoundingClientRect().width,
@@ -50,6 +51,10 @@ test("switching tabs pours the colour along the connectors like a straw, then fi
   expect(run.frames.some((frame) => frame.drain > 2 && frame.drain < run.from - 2), "Lobby drains into the straw").toBe(true);
   expect(run.frames.some((frame) => frame.fill > 2 && frame.fill < run.tab.width - 2), "Git fills up").toBe(true);
   expect(run.frames.at(-1)!.liquid.every((width) => width < 1), "and the straw is empty again").toBe(true);
+  // Springs: quick, and the new tab overfills a little before it settles.
+  expect(run.frames.some((frame) => frame.fill > run.tab.width + 1), "the fill bounces past full").toBe(true);
+  const settled = run.frames.find((frame) => frame.t > 50 && frame.liquid.every((width) => width < 1) && Math.abs(frame.fill - run.tab.width) < 1.5 && frame.drain < 1);
+  expect(settled?.t ?? Infinity, "the whole switch is over in well under a second").toBeLessThan(700);
   expect(Math.abs(run.end.left - run.tab.left), "the fill lands on the tab").toBeLessThan(2);
   expect(Math.abs(run.end.width - run.tab.width), "at the tab's width").toBeLessThan(2);
   expect(Math.abs(run.end.top - run.tab.top) + Math.abs(run.end.height - run.tab.height), "and its height, so the label sits in the middle").toBeLessThan(2);

@@ -5,13 +5,16 @@
  * tab into the connector beside it, flows along the dotted line (under any
  * tabs in between) and fills the chosen tab from the side it arrives on. The
  * fill is measured from the tab itself, so it always sits on it exactly, label
- * centred, at any size. Under `prefers-reduced-motion` the fill simply moves.
+ * centred, at any size. It all runs on motion's springs, so it is quick and
+ * lands with a little bounce. Under `prefers-reduced-motion` the fill simply
+ * moves.
  * Arrow keys follow the WAI-ARIA tabs pattern with a roving tabindex; `Alt+N`
  * is printed in the tooltip and `aria-keyshortcuts`, and the number on the tab
  * is the N.
  */
 import { Fragment, forwardRef, useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react"
 import { BarChart3, BookOpen, CircleDot, GitPullRequest, ListChecks, MessageSquare, PenTool, Route, Zap, type LucideIcon } from "lucide-react"
+import { animate, motion, type AnimationPlaybackControls, type ValueAnimationTransition } from "motion/react"
 import { Keys } from "@/components/ui/kbd"
 import { focusPage, tabWalk } from "@/prompts/nav"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -58,13 +61,25 @@ const TabCell = forwardRef<HTMLAnchorElement, { tab: TabInfo; active: boolean }>
           tabIndex={active ? 0 : -1}
           className={cn(
             "relative z-10 inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[0.8125rem] leading-none font-medium whitespace-nowrap outline-none",
-            "transition-colors duration-300 ease-snap focus-visible:ring-3 focus-visible:ring-ring/40",
+            "transition-colors duration-200 ease-snap focus-visible:ring-3 focus-visible:ring-ring/40",
             active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
           )}
         >
-          {Icon ? <Icon aria-hidden="true" className={cn("size-4 shrink-0 transition-colors duration-300", active && "text-primary")} /> : null}
+          {Icon ? (
+            // The icon hops as the colour lands on its tab (MotionConfig keeps it still under reduced motion).
+            <motion.span
+              key={active ? "on" : "off"}
+              aria-hidden="true"
+              className="inline-flex"
+              initial={active ? { scale: 0.7, y: 2 } : false}
+              animate={{ scale: 1, y: 0 }}
+              transition={{ type: "spring", visualDuration: 0.32, bounce: 0.55, delay: 0.12 }}
+            >
+              <Icon className={cn("size-4 shrink-0 transition-colors duration-200", active && "text-primary")} />
+            </motion.span>
+          ) : null}
           {number ? (
-            <span aria-hidden="true" className={cn("text-[0.72rem] font-semibold tabular-nums transition-colors duration-300", active ? "text-primary" : "text-muted-foreground/75")}>
+            <span aria-hidden="true" className={cn("text-[0.72rem] font-semibold tabular-nums transition-colors duration-200", active ? "text-primary" : "text-muted-foreground/75")}>
               {number}
             </span>
           ) : null}
@@ -85,29 +100,36 @@ interface Box {
   height: number
 }
 
-const clamp01 = (value: number) => Math.min(1, Math.max(0, value))
-const easeIn = (t: number) => t * t * t
-const easeOut = (t: number) => 1 - (1 - t) ** 3
-const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
-
-function paint(el: HTMLElement | null, box: Box | undefined, left = box?.left ?? 0, right = box?.right ?? 0) {
+function paint(el: HTMLElement | null, box: Box | undefined, left = box?.left ?? 0, right = box?.right ?? 0, squash = 1) {
   if (!el) return
   if (!box || right - left < 0.5) {
     el.style.opacity = "0"
     return
   }
-  el.style.opacity = "1"
+  // A sliver fades rather than standing there as a thin bar.
+  el.style.opacity = String(Math.min(1, (right - left) / 14))
   el.style.top = `${box.top}px`
   el.style.height = `${box.height}px`
   el.style.width = `${right - left}px`
   el.style.transform = `translateX(${left}px)`
+  el.style.scale = squash === 1 ? "" : `1 ${squash}`
 }
 
 /**
+ * The springs of one switch (motion's physics, so a quick run of switches
+ * picks up where the last left off). The old tab is sucked dry, the colour's
+ * head races along the straw with its tail a beat behind, and the new tab
+ * fills with a bounce as it lands, its height wobbling like a drop.
+ */
+const DRAIN: ValueAnimationTransition<number> = { type: "spring", visualDuration: 0.12, bounce: 0 }
+const HEAD: ValueAnimationTransition<number> = { type: "spring", visualDuration: 0.17, bounce: 0.15, delay: 0.015 }
+const TAIL: ValueAnimationTransition<number> = { type: "spring", visualDuration: 0.17, bounce: 0.05, delay: 0.07 }
+const FILL: ValueAnimationTransition<number> = { type: "spring", visualDuration: 0.22, bounce: 0.4 }
+const WOBBLE: ValueAnimationTransition<number> = { type: "spring", visualDuration: 0.28, bounce: 0.6 }
+
+/**
  * The fill on the chosen tab, the one draining out of the last, and the liquid
- * in each connector. A switch runs one timeline: drain (ease in, as if sucked
- * out), flow (the head runs ahead, the tail follows once the old tab is empty),
- * fill (ease out, as the colour settles in).
+ * in each connector.
  */
 function useStraw(activeId: string | undefined, tabCount: number) {
   const track = useRef<HTMLDivElement>(null)
@@ -116,22 +138,30 @@ function useStraw(activeId: string | undefined, tabCount: number) {
   const cells = useRef<Record<string, HTMLAnchorElement | null>>({})
   const liquids = useRef<Array<HTMLSpanElement | null>>([])
   const at = useRef<string | undefined>(undefined)
-  const frame = useRef(0)
+  const runs = useRef<AnimationPlaybackControls[]>([])
+  // How full the chosen tab is (it can briefly overflow while it bounces), so a switch mid-fill drains only what is there.
+  const level = useRef(1)
 
   const boxOf = useCallback((id: string | undefined): Box | undefined => {
     const cell = id ? cells.current[id] : undefined
     return cell ? { left: cell.offsetLeft, right: cell.offsetLeft + cell.offsetWidth, top: cell.offsetTop, height: cell.offsetHeight } : undefined
   }, [])
 
+  const stop = useCallback(() => {
+    for (const run of runs.current) run.stop()
+    runs.current = []
+  }, [])
+
   const rest = useCallback(
     (id: string | undefined) => {
-      cancelAnimationFrame(frame.current)
+      stop()
       at.current = id
+      level.current = 1
       paint(fill.current, boxOf(id))
       paint(drain.current, undefined)
       for (const liquid of liquids.current) if (liquid) liquid.style.width = "0px"
     },
-    [boxOf]
+    [boxOf, stop]
   )
 
   const flow = useCallback(
@@ -139,33 +169,28 @@ function useStraw(activeId: string | undefined, tabCount: number) {
       const a = boxOf(from)
       const b = boxOf(to)
       if (!a || !b) return rest(to)
-      cancelAnimationFrame(frame.current)
+      stop()
       at.current = to
       const dir = b.left > a.left ? 1 : -1
       const start = dir > 0 ? a.right : a.left
       const end = dir > 0 ? b.left : b.right
       const length = Math.abs(end - start)
-      const drainFor = 210
-      const flowFor = Math.min(560, Math.max(220, 160 + length * 0.45))
-      const fillFor = 280
-      const headAt = drainFor * 0.45
-      const tailAt = drainFor
-      const fillAt = headAt + flowFor
-      const total = Math.max(fillAt + fillFor, tailAt + flowFor)
       const links = liquids.current.map((liquid) => {
         const link = liquid?.parentElement
         return link ? { liquid, from: link.offsetLeft, to: link.offsetLeft + link.offsetWidth } : undefined
       })
-      const began = performance.now()
-      const step = (now: number) => {
-        const t = now - began
+      // The new tab starts to fill as the head reaches the middle of the last connector, so the colour is seen to arrive.
+      const last = links.filter(Boolean).sort((x, y) => Math.abs(end - (x!.from + x!.to) / 2) - Math.abs(end - (y!.from + y!.to) / 2))[0]
+      const lands = last && length > 0 ? Math.min(0.97, Math.abs((last.from + last.to) / 2 - start) / length) : 0.7
+      const now = { drained: 1 - Math.min(1, level.current), head: 0, tail: 0, filled: 0, squash: 1 }
+      level.current = 0
+      const draw = () => {
         // The old tab empties toward the connector it drains into.
-        const drained = easeIn(clamp01(t / drainFor))
-        const gone = (a.right - a.left) * drained
+        const gone = (a.right - a.left) * Math.min(1, now.drained)
         paint(drain.current, a, dir > 0 ? a.left + gone : a.left, dir > 0 ? a.right : a.right - gone)
         // The liquid: everything between its tail and its head, seen only where a connector is.
-        const head = start + dir * length * easeInOut(clamp01((t - headAt) / flowFor))
-        const tail = start + dir * length * easeInOut(clamp01((t - tailAt) / flowFor))
+        const head = start + dir * length * now.head
+        const tail = start + dir * length * now.tail
         const low = Math.min(head, tail)
         const high = Math.max(head, tail)
         for (const link of links) {
@@ -175,15 +200,42 @@ function useStraw(activeId: string | undefined, tabCount: number) {
           link.liquid.style.width = `${Math.max(0, to - from)}px`
           link.liquid.style.transform = `translateX(${Math.max(0, from - link.from)}px)`
         }
-        // The new tab fills from the side the colour arrives on.
-        const filled = (b.right - b.left) * easeOut(clamp01((t - fillAt) / fillFor))
-        paint(fill.current, b, dir > 0 ? b.left : b.right - filled, dir > 0 ? b.left + filled : b.right)
-        if (t < total) frame.current = requestAnimationFrame(step)
-        else rest(to)
+        // The new tab fills from the side the colour arrives on, a little past full on the bounce.
+        const filled = (b.right - b.left) * Math.max(0, now.filled)
+        paint(fill.current, b, dir > 0 ? b.left : b.right - filled, dir > 0 ? b.left + filled : b.right, now.squash)
       }
-      frame.current = requestAnimationFrame(step)
+      const spring = (key: "drained" | "head" | "tail" | "filled" | "squash", from: number, transition: ValueAnimationTransition<number>, onUpdate?: (value: number) => void) => {
+        const run = animate(from, 1, {
+          ...transition,
+          onUpdate: (value) => {
+            now[key] = value
+            onUpdate?.(value)
+            draw()
+          },
+        })
+        runs.current.push(run)
+        return run
+      }
+      let landed = false
+      const land = () => {
+        if (landed) return
+        landed = true
+        const done = spring("filled", 0, FILL, (value) => {
+          level.current = value
+        })
+        spring("squash", 0.8, WOBBLE)
+        void Promise.all([done, ...runs.current]).then(() => {
+          if (at.current === to && runs.current.includes(done)) rest(to)
+        })
+      }
+      spring("drained", now.drained, DRAIN)
+      spring("head", 0, HEAD, (value) => {
+        if (value >= lands) land()
+      })
+      spring("tail", 0, TAIL)
+      draw()
     },
-    [boxOf, rest]
+    [boxOf, rest, stop]
   )
 
   useLayoutEffect(() => {
@@ -211,9 +263,9 @@ function useStraw(activeId: string | undefined, tabCount: number) {
     observer.observe(el)
     return () => {
       observer.disconnect()
-      cancelAnimationFrame(frame.current)
+      stop()
     }
-  }, [rest])
+  }, [rest, stop])
 
   return { track, fill, drain, cells, liquids }
 }
