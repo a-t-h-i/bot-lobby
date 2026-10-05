@@ -24,7 +24,7 @@ export function Field({ label, help, children, stacked }: { label: string; help?
 
 /** Several settings in one card, hairlines between them. */
 export function Rows({ children }: { children: ReactNode }) {
-  return <div className="flat-pane flex flex-col divide-y divide-border px-4 [&>*]:py-2.5">{children}</div>
+  return <div className="flex flex-col divide-y divide-border rounded-xl border border-border px-4 [&>*]:py-3">{children}</div>
 }
 
 /** Every drop-down on the page is a searchable one. */

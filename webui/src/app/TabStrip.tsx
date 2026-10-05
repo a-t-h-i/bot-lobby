@@ -1,6 +1,6 @@
 /**
  * The tabs as plain words, each with its icon and its `Alt+N` digit in small
- * quiet type, `1 Lobby  2 Tasks  3 Plan`. One pill (8px corners, a shade off the page) sits behind the
+ * quiet type, `Lobby 1  Tasks 2  Plan 3`. One pill (8px corners, a shade off the page) sits behind the
  * chosen tab and slides to the next like a drop of water: the edge it moves toward runs ahead on a stiff
  * spring, the other trails on a soft one, so the drop stretches across the
  * gap and then draws back into the new tab (and settles with a small
@@ -8,7 +8,7 @@
  * follow the WAI-ARIA tabs pattern with a roving tabindex; `Alt+N` is printed
  * in the tooltip and `aria-keyshortcuts`.
  */
-import { forwardRef, useCallback, useEffect, useLayoutEffect, useRef, type KeyboardEvent } from "react"
+import { forwardRef, useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react"
 import { animate, type AnimationPlaybackControls } from "motion"
 import { BarChart3, BookOpen, CircleDot, GitPullRequest, ListChecks, MessageSquare, PenTool, Route, Zap, type LucideIcon } from "lucide-react"
 import { Keys } from "@/components/ui/kbd"
@@ -64,7 +64,7 @@ const TabCell = forwardRef<HTMLAnchorElement, { tab: TabInfo; active: boolean }>
           {Icon ? <Icon aria-hidden="true" className={cn("size-4 shrink-0 transition-colors duration-200", active && "text-primary")} /> : null}
           <span>{tab.label}</span>
           {number ? (
-            <span aria-hidden="true" className={cn("text-[0.65rem] font-normal tabular-nums transition-colors duration-200", active ? "text-muted-foreground" : "text-muted-foreground/60")}>
+            <span aria-hidden="true" className={cn("kbd-hint text-[0.65rem] font-normal tabular-nums transition-colors duration-200", active ? "text-muted-foreground" : "text-muted-foreground/70")}>
               {number}
             </span>
           ) : null}
@@ -179,9 +179,34 @@ function useDroplet(activeId: string | undefined, tabCount: number) {
   return { track, drop, cells }
 }
 
+/** The strip fades out at an edge it can still be scrolled past, so a clipped tab looks meant. */
+function fadeFor(more: { left: boolean; right: boolean }): string | undefined {
+  if (!more.left && !more.right) return undefined
+  return `linear-gradient(to right, ${more.left ? "transparent 0, black 28px" : "black 0"}, ${more.right ? "black calc(100% - 28px), transparent 100%" : "black 100%"})`
+}
+
 export function TabStrip({ tabs, activeId, onSelect }: TabStripProps) {
   const { track, drop, cells } = useDroplet(activeId, tabs.length)
   const scroller = useRef<HTMLDivElement>(null)
+  const [more, setMore] = useState({ left: false, right: false })
+
+  const measureEdges = useCallback(() => {
+    const strip = scroller.current
+    if (!strip) return
+    const left = strip.scrollLeft > 2
+    const right = strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 2
+    setMore((now) => (now.left === left && now.right === right ? now : { left, right }))
+  }, [])
+
+  useEffect(() => {
+    const strip = scroller.current
+    if (!strip || typeof ResizeObserver === "undefined") return
+    measureEdges()
+    const observer = new ResizeObserver(measureEdges)
+    observer.observe(strip)
+    if (strip.firstElementChild) observer.observe(strip.firstElementChild)
+    return () => observer.disconnect()
+  }, [measureEdges, tabs.length])
 
   useEffect(() => {
     // Only the strip scrolls sideways; scrollIntoView would also move the page.
@@ -206,13 +231,18 @@ export function TabStrip({ tabs, activeId, onSelect }: TabStripProps) {
     tabWalk.active = true
     window.setTimeout(() => {
       tabWalk.active = false
-    }, 400)
+    }, 3000)
     onSelect(next.id)
     cells.current[next.id]?.focus({ preventScroll: true })
   }
 
   return (
-    <div ref={scroller} className="min-w-0 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div
+      ref={scroller}
+      onScroll={measureEdges}
+      style={{ maskImage: fadeFor(more), WebkitMaskImage: fadeFor(more) }}
+      className="min-w-0 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
       <div ref={track} role="tablist" aria-label="Lobby tabs" onKeyDown={onKeyDown} className="relative mx-auto flex w-max items-center gap-0.5 py-1">
         <span
           ref={drop}
