@@ -8,12 +8,12 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "btn-tint text-primary-foreground [--tint:var(--primary)]",
+        default: "btn-tint text-primary-foreground [--tint:var(--primary)] disabled:text-muted-foreground",
         soft: "btn-raised btn-soft text-foreground",
         outline: "btn-raised bg-card text-foreground",
         secondary: "btn-raised bg-card text-secondary-foreground",
         ghost: "btn-ghost text-foreground",
-        destructive: "btn-tint text-background [--tint:var(--destructive)] focus-visible:ring-destructive/30",
+        destructive: "btn-tint text-background [--tint:var(--destructive)] focus-visible:ring-destructive/30 disabled:text-muted-foreground",
         link: "text-link underline-offset-4 hover:underline",
       },
       size: {
