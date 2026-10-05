@@ -63,7 +63,7 @@ async function waitFor(check: () => boolean | Promise<boolean>, ms = 3000): Prom
 type Call = (api: string, body?: unknown) => Promise<Answer>;
 
 test("all ten scenario files exist and unknown names default to full", () => {
-  assert.deepEqual([...SCENARIOS], ["full", "empty", "loading", "error", "reconnecting", "question", "questions3", "issues"]);
+  assert.deepEqual([...SCENARIOS], ["full", "empty", "loading", "error", "reconnecting", "question", "questions3", "issues", "mockups"]);
   for (const name of SCENARIOS) assert.equal(existsSync(fixturePath(name)), true, name);
   assert.equal(resolveScenario("nope"), "full");
   assert.equal(resolveScenario(undefined), "full");

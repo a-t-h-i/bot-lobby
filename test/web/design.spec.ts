@@ -1068,7 +1068,7 @@ test("the chats read alike: avatars beside agents, your words in bubbles, notes 
   await expect(cards, "each question its own card").toHaveCount(2);
   await expect(cards.first(), "naming who asks").toContainText("Design");
   await expect(cards.first().locator('[data-agent-icon="DESIGN"]')).toBeAttached();
-  await expect(cards.first().getByRole("listitem"), "with its options").toHaveCount(2);
+  await expect(cards.first().getByRole("list", { name: "Options" }).getByRole("listitem"), "with its options").toHaveCount(2);
   await expect(panel, "and what the classifier settled").toContainText("decided by the classifier");
 });
 
@@ -1192,4 +1192,68 @@ test("Linting in Settings: the gate's mode, a command of your own with its file 
   await expect(page.getByRole("textbox", { name: "Command" })).toHaveValue("ruff check {files}");
   expect(trap.errors, "no console errors").toEqual([]);
   trap.stop();
+});
+
+test("a question's mockups expand into a viewer the user scrolls through, chooses from, and leaves with Esc", async ({ page, server }) => {
+  await openScenario(page, server, "mockups");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const dialog = page.getByRole("dialog", { name: "Question from the lobby" });
+  await expect(dialog).toBeVisible();
+  const thumb = dialog.getByRole("button", { name: "Expand the mockup: Sidebar nav" });
+  await expect(thumb, "the preview is a thumbnail that opens the viewer").toBeVisible();
+  const frame = dialog.locator('iframe[title="Static mockup: Sidebar nav"]');
+  expect(await frame.evaluate((el: any) => parseFloat(el.style.width)), "laid out as a desktop page, then scaled").toBe(1200);
+  const before = (await dialog.boundingBox())!.width;
+  await page.keyboard.press("e");
+  const viewer = dialog.getByRole("region", { name: "Mockups: Layout" });
+  await expect(viewer, "E expands it").toBeVisible();
+  expect((await dialog.boundingBox())!.width, "the pop-up widens for it").toBeGreaterThan(before + 200);
+  const pills = viewer.getByRole("tablist", { name: "Options" }).getByRole("tab");
+  await expect(pills).toHaveCount(3);
+  await expect(pills.first()).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowRight");
+  await expect(pills.nth(1), "arrows step through the options").toHaveAttribute("aria-selected", "true");
+  await expect(viewer.getByText("2 of 3")).toBeVisible();
+  // Scrolling the track sideways (a swipe, a trackpad) moves to the option in view.
+  await viewer.locator(".mockup-track").evaluate((el: any) => el.scrollTo({ left: el.clientWidth * 2, behavior: "auto" }));
+  await expect(pills.nth(2)).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("1");
+  await expect(pills.first(), "a digit jumps").toHaveAttribute("aria-selected", "true");
+  await pills.nth(1).click();
+  await expect(viewer.getByRole("tabpanel", { name: "2 of 3: Top bar" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(viewer, "Esc goes back to the question").toBeHidden();
+  await expect(dialog, "and keeps it open").toBeVisible();
+  await dialog.getByRole("button", { name: "Expand", exact: true }).click();
+  await expect(viewer).toBeVisible();
+  await viewer.getByRole("button", { name: /^Choose\s*Top bar$/ }).click();
+  await expect(viewer).toBeHidden();
+  await expect(dialog.locator('input[data-option="1"]'), "chosen from the viewer").toBeChecked();
+  await expect(dialog.locator('input[data-option="1"]'), "with focus on it").toBeFocused();
+  // The Markdown sketches of the next question expand too.
+  await dialog.getByRole("button", { name: /Density/ }).click();
+  await dialog.getByRole("button", { name: "Expand", exact: true }).click();
+  await expect(dialog.getByRole("region", { name: "Mockups: Density" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(dialog, "a second Esc puts the question away").toBeHidden();
+});
+
+test("the panel's mockups show as thumbnails on its questions in the Plan tab and open the same viewer", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() => {
+    window.location.hash = "#/plan";
+  });
+  const thumbs = page.getByRole("list", { name: "Mockups" });
+  await expect(thumbs.getByRole("listitem")).toHaveCount(2);
+  await thumbs.getByRole("button", { name: "Expand the mockup: Settings" }).click();
+  const viewer = page.getByRole("region", { name: /^Mockups: Should the toggle live/ });
+  await expect(viewer).toBeVisible();
+  await expect(viewer.getByRole("tab", { name: /Settings/ }), "opened on the one clicked").toHaveAttribute("aria-selected", "true");
+  await expect(viewer.getByRole("button", { name: /^Choose/ }), "answered in the questionnaire, not here").toHaveCount(0);
+  await page.keyboard.press("ArrowLeft");
+  await expect(viewer.getByRole("tab", { name: /Header/ })).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Escape");
+  await expect(viewer).toBeHidden();
 });
