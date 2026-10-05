@@ -25,6 +25,10 @@ the change now, the way they would ask pi directly.
   servers, watchers or background processes.
 - Change files with `edit`/`write`, never through shell redirection or
   `sed -i`.
+- The engine lints the files you touched when you finish and shows the user
+  what it finds on the lines you changed. Run the project's linter on them
+  first and fix what it finds; never silence a rule with a disable comment or
+  a config change.
 
 ## Anything people look at
 

@@ -1,4 +1,4 @@
-import { mkdirSync, realpathSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
 import type { BotLobbyConfig, ProfileResolver } from "../schemas/configuration.ts";
 import type { AgentRun, Pushback, ResearchResult, ReviewResult, WorkerResult } from "../schemas/findings.ts";
@@ -67,6 +67,9 @@ import { fastNext, onFastTrack, parseRoster, qaRequired, qaStillDue, qaTookPart,
 import { missingWorktree, taskCwd } from "../execution/workspace.ts";
 import { completionReview } from "../delivery/review.ts";
 import { execCommand, type Exec } from "../lobby/issues.ts";
+import type { LintExec } from "../execution/lint.ts";
+import type { LintReport } from "../schemas/lint.ts";
+import { lintBrief, lintContext, lintHolds, lintNote, lintRefusal, lintSummary, runLintGate } from "./lint.ts";
 
 export const ORCHESTRATE_ACTIONS = [
   "clarify",
@@ -159,6 +162,10 @@ export interface WorkflowDeps {
   triage?: (request: string, signal?: AbortSignal) => Promise<Task["triage"]>;
   /** Lowers thinking or the model for scouts and workers on steps the classifier judges simple or trivial. */
   effort?: EffortRouter;
+  /** Runs a linter for the lint gate (tests); the real one otherwise. */
+  lintExec?: LintExec;
+  /** Told each new lint report on a task's touched files (the lobby's activity log). */
+  onLint?: (taskId: string, report: LintReport) => void;
 }
 
 export interface WorkflowResult {
@@ -830,12 +837,43 @@ async function treeChanges(deps: WorkflowDeps, base?: string): Promise<{ top: st
   return { top: tree.top, files: tree.files.filter((file) => !file.startsWith(prefix)) };
 }
 
-/** Every changed file of the working tree, explained for this task; undefined without a baseline or git. */
-async function changeProvenance(deps: WorkflowDeps, task: Task, base?: string): Promise<FileProvenance[] | undefined> {
+/** Every changed file of the working tree, explained for this task, with the repository's top; undefined without a baseline or git. */
+async function changeState(deps: WorkflowDeps, task: Task, base?: string): Promise<{ top: string; files: FileProvenance[] } | undefined> {
   if (!task.baseline) return undefined;
   const tree = await treeChanges(deps, base);
   if (!tree) return undefined;
-  return explainChanges(task, tree.files, tree.top, readChanges(deps.root, deps.configDir, task.createdAt));
+  return { top: tree.top, files: explainChanges(task, tree.files, tree.top, readChanges(deps.root, deps.configDir, task.createdAt)) };
+}
+
+/** Who touched each file, as the oracle names them (`DEV`, `DESIGN/DEV`). */
+function ownersOf(files: readonly FileProvenance[] | undefined): Map<string, string> {
+  return new Map((files ?? []).filter((file) => file.domains?.length).map((file) => [file.path, file.domains!.map((domain) => AGENT_LABELS[domain]).join("/")]));
+}
+
+/**
+ * The lint gate (see lint.ts): lint the files this task's agents touched, as
+ * they stand, record the report on the task and tell the lobby when it is
+ * new. `tree` is the change state measured from the task's baseline, when the
+ * caller already has it. Nothing runs with lint off or before any worker.
+ */
+async function lintTask(task: Task, deps: WorkflowDeps, tree?: { top: string; files: FileProvenance[] }): Promise<LintReport | undefined> {
+  if (deps.config.lint.mode === "off" || !task.baseline) return undefined;
+  const state = tree ?? (await changeState(deps, task, task.baseline.head));
+  if (!state) return undefined;
+  const files = state.files.filter((file) => file.kinds.includes("planned") && existsSync(join(state.top, file.path))).map((file) => file.path);
+  const before = task.lint;
+  const report = await runLintGate({
+    top: state.top,
+    files,
+    ...(task.baseline.head ? { base: task.baseline.head } : {}),
+    config: deps.config.lint,
+    ...(before ? { previous: before } : {}),
+    ...(deps.lintExec ? { exec: deps.lintExec } : {}),
+    ...(deps.signal ? { signal: deps.signal } : {}),
+  });
+  task.lint = report;
+  if (report !== before && report.state !== "skipped") deps.onLint?.(task.id, report);
+  return report;
 }
 
 /** Who changed the tree, for the Master: counts, and what the changes that are not this task's mean for it. */
@@ -925,8 +963,9 @@ async function handleImplement(task: Task, params: OrchestrateParams, deps: Work
     // A step that never reported (the call failed) does not stay "running" in the budget.
     for (const time of times.values()) settleAllotment(task, deps, time.id, "stopped");
   }
-  const note = provenanceNote(await changeProvenance(deps, task, task.baseline?.head));
-  return note ? `${report}\n\n${note}` : report;
+  const tree = await changeState(deps, task, task.baseline?.head);
+  const lint = lintNote(await lintTask(task, deps, tree), deps.config.lint.mode, ownersOf(tree?.files));
+  return [report, provenanceNote(tree?.files), lint].filter(Boolean).join("\n\n");
 }
 
 /**
@@ -1102,7 +1141,7 @@ const QA_INSTRUCTION = [
 ].join(" ");
 
 /** The QA gate looks at every domain's work, not just one worker's diff, knowing who changed each file. */
-function qaRequest(deps: WorkflowDeps, task: Task, diff: string, instruction?: string, provenance?: readonly FileProvenance[]): ReviewerRequest {
+function qaRequest(deps: WorkflowDeps, task: Task, diff: string, instruction?: string, provenance?: readonly FileProvenance[], lint?: LintReport): ReviewerRequest {
   const rounds = previousRound(task);
   return {
     taskId: task.id,
@@ -1113,6 +1152,7 @@ function qaRequest(deps: WorkflowDeps, task: Task, diff: string, instruction?: s
     scoutOutcomes: loadScoutResults(taskReadDirs(deps.root, deps.configDir, task.id), [...new Set<Domain>(["qa", ...task.domains])]),
     diff,
     ...(provenance && provenance.length > 0 ? { provenance: provenanceLines(provenance) } : {}),
+    ...(lint ? { lint: lintContext(lint, deps.config.lint.mode) } : {}),
     instruction: instruction?.trim() || QA_INSTRUCTION,
     cwd: deps.cwd,
     dataRoots: readDataRoots(deps.root, deps.configDir),
@@ -1127,7 +1167,7 @@ function qaRequest(deps: WorkflowDeps, task: Task, diff: string, instruction?: s
 /** What the loop does after a QA round: finish, fix and review again, stop, or (the user's call) accept the work as it is. */
 type LoopDecision = "accept" | "iterate" | "blocked" | "waived";
 
-function qaReport(outcome: ReviewerOutcome, decision: LoopDecision, provenance?: readonly FileProvenance[]): string {
+function qaReport(outcome: ReviewerOutcome, decision: LoopDecision, provenance?: readonly FileProvenance[], lint = ""): string {
   const { result, run, issues } = outcome;
   const passed = result.verdict === "pass";
   return [
@@ -1148,6 +1188,7 @@ function qaReport(outcome: ReviewerOutcome, decision: LoopDecision, provenance?:
     result.pushback ? pushbackLine(result.pushback, "qa") : "",
     issues.length > 0 ? `Issues: ${issues.join("; ")}` : "",
     provenanceNote(provenance),
+    lint,
   ]
     .filter((line) => line.length > 0)
     .join("\n");
@@ -1160,11 +1201,14 @@ async function handleQa(task: Task, params: OrchestrateParams, deps: WorkflowDep
   task.reviewIterations = { qa: iterations };
   const time = qaTime(task, deps);
   const base = await reviewBase(task, deps);
-  const [diff, provenance] = await Promise.all([
+  const [diff, tree] = await Promise.all([
     readRepositoryDiff(deps.cwd, { ...(base ? { base } : {}), exclude: ownRecords(deps) }),
-    changeProvenance(deps, task, base),
+    changeState(deps, task, base),
   ]);
-  const outcome = await runReviewer({ ...qaRequest(deps, task, diff, params.task, provenance), ...(time ? { time } : {}) }, deps.runProcess ?? spawnPiProcess);
+  const provenance = tree?.files;
+  // The gate's base is the task's own; a legacy task measured from an older commit lints from a fresh look.
+  const lint = await lintTask(task, deps, base === task.baseline?.head ? tree : undefined);
+  const outcome = await runReviewer({ ...qaRequest(deps, task, diff, params.task, provenance, lint), ...(time ? { time } : {}) }, deps.runProcess ?? spawnPiProcess);
   if (time) settleAllotment(task, deps, time.id, "finished");
   task.qaVerdict = outcome.result.verdict;
   recordReview(task, "qa", outcome.result);
@@ -1173,7 +1217,7 @@ async function handleQa(task: Task, params: OrchestrateParams, deps: WorkflowDep
   let decision: LoopDecision = decideReviewLoop(outcome.result.verdict, iterations, reviewLimit(task, deps));
   if (decision === "blocked") decision = await askAtReviewLimit(task, outcome.result, iterations, deps);
   if (decision === "accept") task.blockers = task.blockers.filter((blocker) => blocker.domain !== "qa");
-  return qaReport(outcome, decision, provenance);
+  return qaReport(outcome, decision, provenance, lintBrief(lint, deps.config.lint.mode, Boolean(task.lintWaiver)));
 }
 
 /** Review rounds allowed: the configured limit plus any the user granted. */
@@ -1228,11 +1272,20 @@ async function askAtReviewLimit(task: Task, result: ReviewResult, iterations: nu
  */
 export function waiveQa(task: Task, open: readonly string[], why: string): void {
   task.qaWaiver = { at: new Date().toISOString(), open: open.map((ask) => truncate(ask, 300)) };
+  // Accepting the work as it stands accepts its lint errors too.
+  if (task.lint?.state === "failing") waiveLint(task, why);
   const cleared = task.blockers.map((blocker) => blocker.reason);
   task.blockers = [];
   if (task.state === "blocked") transition(task, "implementing");
   if (task.state === "implementing") transition(task, "reviewing");
   recordDecision(task, `The user accepted the work without a QA pass (${why}).${open.length > 0 ? ` QA still asked for: ${open.map((ask) => truncate(ask, 160)).join("; ")}.` : ""}${cleared.length > 0 ? ` Cleared blockers: ${cleared.join("; ")}.` : ""}`);
+}
+
+/** The user accepts the work with the lint errors it has: the lint gate no longer holds completion. */
+export function waiveLint(task: Task, why: string): void {
+  if (task.lintWaiver) return;
+  task.lintWaiver = { at: new Date().toISOString() };
+  recordDecision(task, `The user accepted the work with its lint errors (${why})${task.lint ? `: ${lintSummary(task.lint)}` : "."}`);
 }
 
 /** The last QA round's open asks, for a waiver made outside the loop. */
@@ -1301,6 +1354,9 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
   if (task.state === "blocked") throw new Error("cannot complete: the task is blocked, and the user did not accept its work as it is");
   const blockers = completionBlockers(task, pendingApprovals(task).length);
   if (blockers.length > 0) throw new Error(`cannot complete: ${blockers.join("; ")}`);
+  // New lint errors in what the task touched hold it in block mode, unless the user accepted the work as it is.
+  const lint = await lintTask(task, deps);
+  if (lint && lintHolds(lint, deps.config.lint.mode, Boolean(task.lintWaiver))) throw new Error(`cannot complete: ${lintRefusal(lint)}`);
   // The gate refuses before any side effect, so a refusal leaves the task untouched.
   const oversized = overThreshold(readDataRoots(deps.root, deps.configDir), deps.config.knowledge.compactionThreshold);
   if (oversized.length > 0) throw new Error(`cannot complete: knowledge files over the compaction threshold: ${oversized.map((entry) => `${entry.agent}/${entry.file} (${entry.chars})`).join(", ")}. First record domain-relevant facts where they belong with action=knowledge (domain=designer|backend|qa), then rewrite each oversized file with action=compact, then call complete again.`);
@@ -1313,7 +1369,8 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
   task.delivery = await completionReview(task, deps.root, { cwd: deps.root, exec: deps.exec ?? execCommand });
   deps.notify(`Task ${task.id} is completed. Delivery review is available; publishing requires your approval.`, "info");
   flushDecisions(deps, task);
-  return `Task ${task.id} completed. History recorded and temporary scratchpads removed. Delivery review is available; nothing was published.`;
+  const left = lint?.state === "failing" ? ` ${task.lintWaiver ? "Accepted by the user with lint errors" : "Lint (advisory)"}: ${lintSummary(lint)} Tell the user.` : "";
+  return `Task ${task.id} completed. History recorded and temporary scratchpads removed. Delivery review is available; nothing was published.${left}`;
 }
 
 /** Asked when the oracle completes a task QA has not passed (the user told it to finish, say). */

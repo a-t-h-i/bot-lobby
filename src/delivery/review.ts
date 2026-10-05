@@ -10,7 +10,7 @@ import { readRules, type Rules } from "./rules.ts";
 import type { DeliveryContext } from "./transport.ts";
 
 export function localVerified(task: Task): boolean {
-  return task.state === "completed" && !task.qaWaiver && completionBlockers(task, pendingApprovals(task).length).length === 0
+  return task.state === "completed" && !task.qaWaiver && !task.lintWaiver && completionBlockers(task, pendingApprovals(task).length).length === 0
     && (!qaRequired(task) || task.qaVerdict === "pass");
 }
 export function newDelivery(task: Task, project: string): Delivery {
