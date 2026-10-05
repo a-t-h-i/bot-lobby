@@ -88,6 +88,28 @@ test("the feed logs each new subagent step once and settles the previous one", (
   assert.deepEqual(feed.thoughts.map((entry) => [entry.source, entry.text]), [["DEV", "add a limit param"]]);
 });
 
+test("a running agent's thought stays live until its next one or until the run ends, so the orb shows who is thinking", () => {
+  const feed = new LobbyFeed();
+  feed.runs([run({ thought: "read the handler first" })], 1);
+  assert.deepEqual(feed.thoughts.map((entry) => [entry.source, entry.text, entry.live]), [["DEV", "read the handler first", true]]);
+  // The oracle thinks meanwhile: its stream is its own entry, and a later delta still lands in it.
+  feed.thinkDelta("MASTER", "wait for DEV");
+  feed.runs([run({ thought: "add the limit param" })], 2);
+  feed.thinkDelta("MASTER", ", then QA");
+  assert.deepEqual(feed.thoughts.map((entry) => [entry.source, entry.text, entry.live]), [
+    ["DEV", "read the handler first", false],
+    ["MASTER", "wait for DEV, then QA", true],
+    ["DEV", "add the limit param", true],
+  ]);
+  feed.thinkEnd("MASTER");
+  feed.runs([run({ thought: "add the limit param", status: "success" })], 3);
+  assert.deepEqual(feed.thoughts.map((entry) => entry.live), [false, false, false], "a finished run thinks no more");
+  feed.liveThought("QUICK FIX", "rename it", "QF-1");
+  assert.equal(feed.thoughts.at(-1)!.live, true);
+  feed.settleThought("QF-1");
+  assert.equal(feed.thoughts.at(-1)!.live, false);
+});
+
 test("the feed streams the Master's thought into one entry and closes it", () => {
   const feed = new LobbyFeed();
   feed.thinkDelta("MASTER", "Let me ");

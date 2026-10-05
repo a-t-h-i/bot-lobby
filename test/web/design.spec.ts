@@ -1138,3 +1138,20 @@ test("with agents at work and no thought to show, the orb breathes with the brai
   expect(await orb.locator(".orb-float").evaluate((el: any) => getComputedStyle(el).animationName), "breathing").toContain("orb-breathe");
   await expect(orb.locator(".orb-label"), "naming who is at work").toContainText("Oracle");
 });
+
+test("the Thinking pane's edge pulses in the working agent's colour while anyone thinks or works, and rests when nobody does", async ({ page, server }) => {
+  for (const [scenario, working] of [["loading", "busy"], ["full", "thinking"]] as const) {
+    await openScenario(page, server, scenario);
+    await page.setViewportSize({ width: 1280, height: 860 });
+    await page.getByRole("button", { name: "Open Thinking" }).click();
+    const pane = page.locator(".thought-pane");
+    await expect(pane, `${scenario}: lit`).toHaveClass(/thought-pane-live/);
+    expect(await pane.evaluate((el: any) => getComputedStyle(el).animationName), `${scenario}: the glow breathes`).toBe("pane-glow");
+    expect(await pane.evaluate((el: any) => getComputedStyle(el, "::after").animationName), `${scenario}: the ring pulses`).toBe("pane-ring");
+    await expect(pane.locator(".thought-aura")).toHaveAttribute("data-working", working);
+    await page.keyboard.press("Escape");
+  }
+  await openScenario(page, server, "empty");
+  await page.getByRole("button", { name: "Open Thinking" }).click();
+  await expect(page.locator(".thought-pane"), "nobody at work: still").not.toHaveClass(/thought-pane-live/);
+});

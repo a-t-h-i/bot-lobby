@@ -798,7 +798,7 @@ export class PlanningSession {
       const step = describeToolCall(event.toolName, event.args);
       setStep(step);
       this.deps.feed?.step(label, step, this.stepKey(label));
-    } else if (event.type === "thought") this.deps.feed?.thought(label, event.text);
+    } else if (event.type === "thought") this.deps.feed?.liveThought(label, event.text, this.stepKey(label));
     else if (event.type === "thinking" || event.type === "writing") setStep(event.type);
     else return;
     this.deps.onChange?.();
@@ -828,6 +828,7 @@ export class PlanningSession {
       outcome = { status: "failed", output: "", error: (error as Error).message, usage: { input: 0, output: 0, cost: 0, turns: 0 } };
     }
     this.deps.feed?.end(this.stepKey(label), outcome.status !== "success");
+    this.deps.feed?.settleThought(this.stepKey(label));
     const metric = planningMetric(kind, label, this.turns, startedAt, outcome.status, profile, outcome.model, outcome.usage);
     appendMetrics(this.deps.root, this.deps.configDir, [routedFrom ? { ...metric, routedFrom } : metric]);
     return outcome;

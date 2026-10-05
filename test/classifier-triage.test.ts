@@ -188,7 +188,7 @@ test("a quick fix the classifier judges a task is held, not run; r runs it anywa
   const sizes: Array<[number, number]> = [[3, 0.9], [0.2, 0.9], [3, 0.6], [3, 0.95]];
   const fetch: FetchLike = async (url, init) => scriptedJev({ size: sizes.shift() })(url, init);
   const logged: string[] = [];
-  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low", timeoutMs: 60_000 }), runProcess: runner, classifier: jev(fetch), feed: { log: (_source: string, text: string) => logged.push(text), step: () => {}, end: () => {}, thought: () => {} } as never });
+  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low", timeoutMs: 60_000 }), runProcess: runner, classifier: jev(fetch), feed: { log: (_source: string, text: string) => logged.push(text), step: () => {}, end: () => {}, thought: () => {}, liveThought: () => {}, settleThought: () => {} } as never });
   const big = queue.submit("rewrite the auth system to use OAuth");
   await drain(queue);
   assert.equal(big.status, "held");

@@ -258,7 +258,7 @@ export class PullReviews {
 
   private onEvent(review: PullReview, event: PiStreamEvent): void {
     if (event.type === "tool_execution_start") this.step(review, describeToolCall(event.toolName, event.args));
-    else if (event.type === "thought") this.deps.feed?.thought(REVIEW_SOURCE, event.text);
+    else if (event.type === "thought") this.deps.feed?.liveThought(REVIEW_SOURCE, event.text, `pr-${review.number}-${review.startedAt}`);
     else if (event.type === "retry") this.step(review, `provider retry ${event.attempt}/${event.maxAttempts}`);
   }
 
@@ -299,6 +299,7 @@ export class PullReviews {
     const ok = review.status === "done";
     const outcome = ok ? `reviewed #${review.number}${review.verdict ? `: ${review.verdict === "changes" ? "request changes" : review.verdict}` : ""}` : `review of #${review.number} ${review.status}${review.error ? ` — ${review.error.split("\n")[0]}` : ""}`;
     this.deps.feed?.end(`pr-${review.number}-${review.startedAt}`, !ok);
+    this.deps.feed?.settleThought(`pr-${review.number}-${review.startedAt}`);
     this.deps.feed?.log(REVIEW_SOURCE, outcome, ok ? "success" : review.status === "cancelled" ? "warning" : "error", review.finishedAt);
     appendMetrics(this.deps.root, this.deps.configDir, [{
       id: `review-${review.number}-${review.startedAt}`,

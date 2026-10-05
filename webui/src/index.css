@@ -600,8 +600,30 @@
   filter: blur(16px);
   opacity: 0.85;
 }
-.thought-aura[data-thinking] { animation: aura-breathe 3.2s ease-in-out infinite; }
+.thought-aura[data-working] { animation: aura-breathe 3.2s ease-in-out infinite; }
 @keyframes aura-breathe { 50% { opacity: 1; scale: 1.08; } }
+/* While anyone thinks or works, the pane's edge pulses in their colour: a ring inside, a glow outside. */
+.thought-pane::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  border: 1.5px solid color-mix(in oklab, var(--orb) 60%, transparent);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+.thought-pane-live { animation: pane-glow 2.4s ease-in-out infinite; }
+.thought-pane-live::after { animation: pane-ring 2.4s ease-in-out infinite; }
+@keyframes pane-ring {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+@keyframes pane-glow {
+  0%, 100% { box-shadow: var(--glass-shadow), 0 0 0 1px color-mix(in oklab, var(--orb) 18%, transparent), 0 24px 70px -28px color-mix(in oklab, var(--orb) 50%, transparent); }
+  50% { box-shadow: var(--glass-shadow), 0 0 0 1px color-mix(in oklab, var(--orb) 40%, transparent), 0 0 34px 2px color-mix(in oklab, var(--orb) 38%, transparent), 0 24px 80px -24px color-mix(in oklab, var(--orb) 70%, transparent); }
+}
 
 /* One agent's bubble, edged and tinted in its colour, its name on a tag. */
 .thought {
@@ -672,10 +694,12 @@
 
 @media (prefers-reduced-motion: reduce) {
   .thinking-bubble, .thinking-bubble:hover { transform: none !important; transition: none !important; }
-  [data-thinking] > .orb-float, [data-thinking] > .orb-float::after, [data-busy] > .orb-float, [data-busy] > .orb-float::after, .thinking-bubble[data-busy] .orb-icon, .thought-aura[data-thinking], .thought-ellipsis::after, .thought-steps > li[data-current]::before { animation: none !important; }
+  [data-thinking] > .orb-float, [data-thinking] > .orb-float::after, [data-busy] > .orb-float, [data-busy] > .orb-float::after, .thinking-bubble[data-busy] .orb-icon, .thought-aura[data-working], .thought-pane-live, .thought-pane-live::after, .thought-ellipsis::after, .thought-steps > li[data-current]::before { animation: none !important; }
   .orb, .orb-label, .thought-pane, .orb-icon { transition: none; }
   .thinking-bubble:is(:hover, :focus-visible, [data-dragging]) > .orb-float { scale: 1; }
   .thinking-bubble > .orb-float::before { animation: none !important; }
+  /* Still, the edge stays lit in the working agent's colour. */
+  .thought-pane-live::after { opacity: 0.85; }
 }
 
 /*

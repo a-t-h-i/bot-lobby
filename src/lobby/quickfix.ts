@@ -222,7 +222,7 @@ export class QuickFixQueue {
       if (edits?.note(event.toolName, event.args)) job.files = edits.shown();
       this.addStep(job, describeToolCall(event.toolName, event.args), now);
     } else if (event.type === "turn_start") job.turns += 1;
-    else if (event.type === "thought") this.deps.feed?.thought(QUICK_FIX_SOURCE, event.text, now);
+    else if (event.type === "thought") this.deps.feed?.liveThought(QUICK_FIX_SOURCE, event.text, job.id, now);
     else if (event.type === "retry") this.addStep(job, `provider retry ${event.attempt}/${event.maxAttempts}`, now);
     else return;
     this.changed();
@@ -360,6 +360,7 @@ export class QuickFixQueue {
       });
     }
     this.deps.feed?.end(job.id, job.status !== "success");
+    this.deps.feed?.settleThought(job.id);
     const ok = job.status === "success";
     const outcome = ok ? "done" : `${job.status}${job.error ? ` — ${job.error.split("\n")[0]}` : ""}`;
     this.deps.feed?.log(QUICK_FIX_SOURCE, `${outcome}: ${jobTitle(job)}`, ok ? "success" : job.status === "cancelled" ? "warning" : "error", job.finishedAt);
