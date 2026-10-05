@@ -984,14 +984,15 @@ function startFast(task: Task): void {
   for (const state of walk[task.state] ?? []) transition(task, state);
   const track = task.track!;
   if (!task.plan) {
+    // The steps come first, a line each, so the plan reads at a glance; the rest is for whoever wants more.
     task.plan = [
+      "## Steps",
+      "",
       "## Objective",
       oneLine(taskRequest(task), 600),
       "",
       "## Track",
       `Fast track (${track.size}): ${rosterWords(track.roster)}. No scouts, proposal round or plan review; ${qaRequired(task) ? "QA takes part before completion (its tests as the last step, or the QA gate)" : "no QA gate, as nothing here needs tests"}.`,
-      "",
-      "## Steps",
     ].join("\n");
     track.autoPlan = true;
   }
@@ -1007,20 +1008,35 @@ const STEP_PREFIX = /^\s*(?:\*\*)?steps?\s*#?\s*(\d+)(?:\s*(?:-|\u2013|\u2014|to
  * follows the work without a plan document.
  */
 function addFastSteps(task: Task, deps: WorkflowDeps, assignments: readonly Assignment[]): void {
-  const plan = task.plan ?? "";
-  const lines = plan.split("\n");
-  const heading = lines.findIndex((line) => /^##\s+steps\s*$/i.test(line));
-  let count = heading < 0 ? 0 : lines.slice(heading + 1).filter((line) => /^\d+\.\s/.test(line)).length;
+  const lines = (task.plan ?? "").split("\n");
+  let heading = lines.findIndex((line) => /^##\s+steps\s*$/i.test(line));
+  if (heading < 0) {
+    lines.unshift("## Steps", "");
+    heading = 0;
+  }
+  // The section runs to the next heading; new steps go after its last numbered line.
+  const end = lines.findIndex((line, index) => index > heading && /^#{1,6}\s/.test(line));
+  const section = lines.slice(heading + 1, end < 0 ? lines.length : end);
+  let count = section.filter((line) => /^\d+\.\s/.test(line)).length;
+  const last = section.reduce((at, line, index) => (/^\d+\.\s/.test(line) ? index : at), -1);
   const added: string[] = [];
   for (const { domain, instruction } of assignments) {
     const named = STEP_PREFIX.exec(instruction);
     if (named && Number(named[2] ?? named[1]) <= count) continue;
     count += 1;
-    added.push(`${count}. ${AGENT_LABELS[domain]}: ${oneLine(instruction.replace(STEP_PREFIX, ""), 160) || "its part of the request"}`);
+    added.push(`${count}. ${AGENT_LABELS[domain]}: ${stepLine(instruction)}`);
   }
   if (added.length === 0) return;
-  task.plan = `${plan.trimEnd()}\n${added.join("\n")}`;
+  lines.splice(heading + 1 + last + 1, 0, ...added);
+  task.plan = lines.join("\n");
   writeFileEnsured(join(taskDirFor(deps.root, deps.configDir, task.id), "plan.md"), task.plan);
+}
+
+/** A delegation as a line of the steps list: its first line or sentence, short enough to skim. */
+function stepLine(instruction: string): string {
+  const first = instruction.replace(STEP_PREFIX, "").split("\n").find((line) => line.trim()) ?? "";
+  const sentence = first.replace(/^[#*\s-]+/, "").split(/(?<=[.!?])\s/)[0] ?? "";
+  return oneLine(sentence.replace(/[.!?]$/, ""), 80) || "its part of the request";
 }
 
 /**

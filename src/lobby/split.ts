@@ -202,7 +202,39 @@ function planWithSteps(plan: string, covers: readonly number[], stepCount: numbe
   const lines = plan.split("\n");
   const kept = covers.map((step, index) => found.blocks[step - 1]!.replace(/^(\s*)\d+([.)])/, (_all, indent: string, mark: string) => `${indent}${index + 1}${mark}`));
   const spacer = found.to > found.from && !(lines[found.to - 1] ?? "").trim() ? [""] : [];
-  return [...lines.slice(0, found.from), ...kept.flatMap((block) => block.split("\n")), ...spacer, ...lines.slice(found.to)].join("\n");
+  return [...lines.slice(0, found.from), ...kept.flatMap((block) => block.split("\n")), ...spacer, ...stepDetails(lines.slice(found.to), covers)].join("\n");
+}
+
+/** `### Step 3: …` (or `**Step 3 — …**`): the heading of one step's detail. */
+const DETAIL_HEADING = /^(\s*(?:#{1,6}\s+)?(?:\*\*)?\s*step\s+#?)(\d+)(?!\d)/i;
+const ANY_HEADING = /^\s*(?:(#{1,6})\s+\S.*|\*\*[^*]+\*\*.*)$/;
+
+/** A heading's depth: `#` is 1, a bold line deeper than any `#`. */
+const depth = (line: string): number => ANY_HEADING.exec(line)?.[1]?.length ?? 7;
+
+/**
+ * The lines after a plan's steps list with only the detail of the steps in `covers`, renumbered as
+ * the list was: a step's detail runs from its `Step N` heading to the next heading as deep or deeper.
+ */
+function stepDetails(lines: readonly string[], covers: readonly number[]): string[] {
+  const out: string[] = [];
+  let skipping: number | undefined;
+  for (const line of lines) {
+    const heading = ANY_HEADING.test(line) ? depth(line) : undefined;
+    if (skipping !== undefined && heading !== undefined && heading <= skipping) skipping = undefined;
+    const detail = heading !== undefined ? DETAIL_HEADING.exec(line) : null;
+    if (detail) {
+      const at = covers.indexOf(Number(detail[2]));
+      if (at < 0) {
+        skipping = heading;
+        continue;
+      }
+      out.push(line.replace(DETAIL_HEADING, (_all, lead: string) => `${lead}${at + 1}`));
+      continue;
+    }
+    if (skipping === undefined) out.push(line);
+  }
+  return out;
 }
 
 /** One part's brief: where it sits, what it delivers, then the plan as written with only its own steps. */

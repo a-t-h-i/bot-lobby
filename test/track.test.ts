@@ -151,7 +151,7 @@ test("a fast task goes straight to its worker and completes without scouts, a pr
   assert.equal(built.state, "implementing");
   assert.match(built.message, /Next \(fast track\).*action=complete\. No QA gate/);
   const task = loadTask(deps.root, deps.configDir, "TASK-1")!;
-  assert.match(task.plan!, /## Steps\n1\. DESIGN: make the submit button blue$/, "the engine keeps the plan: its steps are the delegations");
+  assert.match(task.plan!, /^## Steps\n1\. DESIGN: make the submit button blue\n\n## Objective\n/, "the engine keeps the plan: its steps, the delegations, come first");
   assert.equal(task.track!.autoPlan, true);
   assert.ok(existsSync(join(taskDirFor(deps.root, deps.configDir, "TASK-1"), "plan.md")));
   assert.match(task.decisions.map((decision) => decision.text).join("\n"), /Fast track: started without a proposal round/);
@@ -175,7 +175,7 @@ test("QA takes part in a fast task that needs tests: as the last step, or throug
   const tests = await act(deps, { action: "implement", domain: "qa", task: "add a regression test for the empty name" });
   assert.match(tests.message, /QA has taken part \(its step came last\)/);
   const task = loadTask(deps.root, deps.configDir, "TASK-1")!;
-  assert.match(task.plan!, /1\. DESIGN: guard the empty name\n2\. QA: add a regression test for the empty name$/);
+  assert.match(task.plan!, /^## Steps\n1\. DESIGN: guard the empty name\n2\. QA: add a regression test for the empty name\n\n## Objective\n/);
   const done = await act(deps, { action: "complete" });
   assert.equal(done.ok, true, done.message);
   assert.equal(runs.length, 2, "no QA gate on top of QA's own step");
