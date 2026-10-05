@@ -902,3 +902,32 @@ test("buttons are slim and stand a little raised: a lit face, a rim and a soft s
   expect((await send.boundingBox())!.height, "the send button stays compact").toBeLessThan(34);
   expect(await send.evaluate((el: any) => getComputedStyle(el).backgroundImage)).toContain("linear-gradient");
 });
+
+test("a task opens in its own session from the Tasks screen, with S: this window's goes to the Lobby, a background one moves here", async ({ page, server }) => {
+  const switched: unknown[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/api/sessions.switch")) switched.push(request.postDataJSON());
+  });
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => {
+    window.location.hash = "#/tasks/T-mock-1";
+  });
+  const open = page.getByRole("toolbar", { name: "Actions" }).getByRole("button", { name: /Open in its session/ });
+  await expect(open, "the action names what it does").toContainText("Open in session");
+  await expect(open.locator('[data-slot="kbd"]'), "and prints its key").toHaveText("S");
+  await expect(open).toHaveAttribute("aria-keyshortcuts", "S");
+  await page.locator("#main").focus();
+  await page.keyboard.press("s");
+  await expect(page, "this window's own task is the Lobby").toHaveURL(/#\/lobby$/);
+  expect(switched, "nothing is switched for it").toEqual([]);
+  await page.evaluate(() => {
+    window.location.hash = "#/tasks/T-mock-2";
+  });
+  await expect(page.getByRole("toolbar", { name: "Actions" }).getByRole("button", { name: /Open in its session/ })).toBeVisible();
+  await page.locator("#main").focus();
+  await page.keyboard.press("s");
+  await expect(page, "a background session's task moves it here and shows it").toHaveURL(/#\/lobby$/);
+  expect(switched, "by moving that session into this window").toEqual([{ key: "S1" }]);
+  await expect(page.getByText(/switching this window to Mock background task/)).toBeVisible();
+});
