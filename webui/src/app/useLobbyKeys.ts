@@ -141,7 +141,15 @@ export function useLobbyKeys(options: LobbyKeyOptions): void {
     if (!options.enabled) return
     let prefixUntil = 0
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing || !options.insideApp()) return
+      if (event.defaultPrevented || event.isComposing) return
+      if (!options.insideApp()) {
+        // A pop-up holds focus outside the page. Only the key help still gets through: it waits for its turn.
+        if (actionFor(event, options.keys) === "help") {
+          event.preventDefault()
+          options.onAction("help")
+        }
+        return
+      }
       const bare = !event.altKey && !event.ctrlKey && !event.metaKey
       if (bare && bareBlocked(event)) { prefixUntil = 0; return }
       if (configured(event, options)) { prefixUntil = 0; return }

@@ -30,11 +30,10 @@ export function elapsed(job: QuickFixJob, now: number): string {
   return shortDuration((job.finishedAt ?? now) - job.startedAt)
 }
 
-/** The facts line: `running · 40s · openai/gpt-5 · medium · 2 tools · $0.02`. */
-export function factsLine(job: QuickFixJob, now: number): string {
+/** The facts after the status: `40s · openai/gpt-5 · medium · 2 tools · $0.02`. */
+export function factsRest(job: QuickFixJob, now: number): string {
   const model = job.model ? `${job.model}${job.thinking ? ` · ${job.thinking}` : ""}` : (job.thinking ?? "")
   return [
-    job.status,
     elapsed(job, now),
     model,
     job.tools ? `${job.tools} tool${job.tools === 1 ? "" : "s"}` : "",

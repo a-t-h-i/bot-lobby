@@ -140,9 +140,9 @@ function ImportTheme() {
           void onFile(event.target.files?.[0])
           event.target.value = ""
         }} />
-        <ActionButton label="Apply the pasted theme" icon={Check} tone="primary" disabled={!text.trim()} onClick={() => apply(text, "Custom theme")} />
-        <ActionButton label="Upload a .css or .json theme file" icon={Upload} onClick={() => picker.current?.click()} />
-        {palette.custom ? <ActionButton label={`Remove ${palette.custom.name}`} icon={Trash2} tone="danger" onClick={() => palette.removeCustom()} /> : null}
+        <ActionButton label="Apply the pasted theme" text="Apply" icon={Check} tone="primary" disabled={!text.trim()} onClick={() => apply(text, "Custom theme")} />
+        <ActionButton label="Upload a .css or .json theme file" text="Upload file" icon={Upload} onClick={() => picker.current?.click()} />
+        {palette.custom ? <ActionButton label={`Remove ${palette.custom.name}`} text="Remove" icon={Trash2} tone="danger" onClick={() => palette.removeCustom()} /> : null}
         {error ? (
           <p role="alert" className="ml-2 min-w-0 text-xs text-destructive">
             {error}
@@ -156,7 +156,7 @@ function ImportTheme() {
 export function ThemeGroup() {
   const { theme, setTheme } = useTheme()
   return (
-    <Section title={GROUP_TITLES.appearance}>
+    <Section prominent title={GROUP_TITLES.appearance}>
       <Rows>
         <Field label={PAGE.themeLabel} help={PAGE.appearanceHelp}>
           <Choice value={theme} items={PAGE.themeItems.map((item) => ({ value: item.id, label: item.label }))} label={PAGE.themeLabel} onChange={(value) => setTheme(value as "light" | "dark" | "system")} />

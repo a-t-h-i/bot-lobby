@@ -6,12 +6,13 @@
  * session; the list is read again on every `excalidraw` topic change. The board
  * is never embedded: `Open board` leaves for Excalidraw in a new tab.
  */
+import { PenTool } from "lucide-react"
 import { useState } from "react"
 import type { ExcalidrawCheck } from "@protocol"
 import { go, tabHash } from "@/app/router"
 import { ErrorState } from "@/app/States"
 import { useApiRead } from "@/app/useApiRead"
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
+import { Empty, EmptyMedia, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { act } from "@/lib/act"
 import { ListSkeleton, PaneHeader, SplitPane, useWide } from "@/ui/SplitPane"
 import { AddForms, SessionDetail } from "./SessionDetail"
@@ -23,8 +24,11 @@ const select = (id: string) => go(tabHash("excalidraw", id))
 
 function ExcalidrawEmpty({ onChanged }: { onChanged: () => void }) {
   return (
-    <Empty className="flat-pane m-4 flex-1">
+    <Empty className="m-4 flex-1">
       <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <PenTool aria-hidden="true" />
+        </EmptyMedia>
         <EmptyTitle>{EMPTY_HEADLINE}</EmptyTitle>
         <EmptyDescription className="font-mono">{EMPTY_ADD}</EmptyDescription>
         <EmptyDescription className="font-mono">{EMPTY_NEW}</EmptyDescription>
