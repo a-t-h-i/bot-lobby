@@ -954,3 +954,26 @@ test("Excalidraw is laid out in cards: an overview when nothing is chosen, then 
   const [link, agents] = await Promise.all([card("Room link").boundingBox(), card("Assigned to").boundingBox()]);
   expect(Math.abs(link!.y - agents!.y), "the link and the agents side by side").toBeLessThan(4);
 });
+
+test("the empty Excalidraw and Plan pages are laid out: steps beside the boxes, the panel as seats", async ({ page, server }) => {
+  await openScenario(page, server, "empty");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() => {
+    window.location.hash = "#/excalidraw";
+  });
+  const main = page.locator("#main");
+  await expect(main.getByRole("heading", { name: "No sessions yet." })).toBeVisible();
+  await expect(main.getByRole("list").first().getByRole("listitem"), "three steps").toHaveCount(3);
+  const [steps, add] = await Promise.all([main.getByText("Start a live room").boundingBox(), main.getByLabel("Add by link").boundingBox()]);
+  expect(add!.x, "the add boxes sit beside the steps").toBeGreaterThan(steps!.x + 300);
+  await page.evaluate(() => {
+    window.location.hash = "#/plan";
+  });
+  await expect(main.getByRole("heading", { name: "Plan with the panel" })).toBeVisible();
+  const panel = main.getByRole("list", { name: "Panel" });
+  await expect(panel.getByRole("listitem"), "the oracle and four seats").toHaveCount(5);
+  await expect(panel.getByRole("checkbox"), "each seat a checkbox").toHaveCount(4);
+  await expect(panel, "each seat says what it brings").toContainText("Tests, edge cases and what could break.");
+  await expect(main, "and how a plan comes together").toContainText("How a plan comes together");
+  await expect(main.getByRole("heading", { name: "Plan", exact: true }), "not a bare generic title").toHaveCount(0);
+});

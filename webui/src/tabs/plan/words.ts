@@ -14,6 +14,32 @@ export const SEATS_NEED = "What each seat needs"
 export const MEMBER_ORDER: readonly PanelMember[] = ["backend", "designer", "qa", "researcher"]
 export const MEMBER_LABELS: Record<PanelMember, string> = { backend: "DEV", designer: "DESIGN", qa: "QA", researcher: "RESEARCH" }
 
+/** The start page's lead; the round bound is drawn beside it. */
+export const INTRO_LEAD = "Describe a task in the box below. The panel asks what it needs to know, round by round, until the plan is clear."
+
+/** What each seat brings to the panel, under its name on the start page. */
+export const SEAT_ROLES: Record<string, string> = {
+  ORACLE: "Chairs the panel, and settles the last round alone.",
+  DEV: "Code, data and the APIs it touches.",
+  DESIGN: "Screens, flows and the words on them.",
+  QA: "Tests, edge cases and what could break.",
+  RESEARCH: "Prior art, docs and sources.",
+}
+
+/** How a plan comes together, on the start page. */
+export const PLAN_STEPS: ReadonlyArray<{ title: string; text: string }> = [
+  { title: "Describe it", text: "Say what you want in the box below." },
+  { title: "The panel asks", text: "Each seat asks what it needs to know." },
+  { title: "A draft forms", text: "Answer, comment on lines, go another round." },
+  { title: "Save the plan", text: "Keep it, or start it as a task." },
+]
+
+/** `4 of 4 seated`. */
+export function seatedCount(cells: readonly SeatCell[]): string {
+  const seats = cells.filter((cell) => cell.member)
+  return `${seats.filter((cell) => cell.seated).length} of ${seats.length} seated`
+}
+
 /** The seating intro before a session: one sentence, with the round bound when there is one. */
 export function introText(limit: number): string {
   const bound = limit > 0 ? ` (at most ${limit} rounds; the last one the oracle settles alone)` : ""

@@ -7,6 +7,8 @@
  * only (the snapshot does not carry them) and go with the session.
  */
 import { useState } from "react"
+import { ArrowDown, Route } from "lucide-react"
+import { KeyHint } from "@/components/ui/kbd"
 import { ErrorState } from "@/app/States"
 import { useApiRead } from "@/app/useApiRead"
 import { cn } from "@/lib/utils"
@@ -16,20 +18,86 @@ import { PanelConversation } from "./Conversation"
 import { DraftBody, SeatNeeds } from "./Draft"
 import { PlanHeader } from "./Header"
 import { LineComment } from "./LineComment"
-import { Roster } from "./Roster"
-import { DRAFT_WAITS, NO_DRAFT, introText, isFresh, seatCells } from "./words"
+import { Seats } from "./Roster"
+import { DRAFT_WAITS, INTRO_LEAD, NO_DRAFT, PLAN_STEPS, isFresh, seatCells, seatedCount } from "./words"
 import { Rule } from "@/ui/Frame"
 
 import { useStickToBottom } from "@/lib/useStickToBottom"
 
 type Comments = ReadonlyMap<string, string[]>
 
-function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) {
+/** The rounds the panel has, the last one the oracle's. */
+function Rounds({ limit }: { limit: number }) {
+  if (limit <= 0) return null
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 p-6 sm:p-10">
-      <h2 className="text-xl font-semibold tracking-tight">Plan</h2>
-      <p className="text-sm text-muted-foreground">{introText(snap.limit)}</p>
-      <Roster cells={seatCells(snap)} intro onToggled={onDone} />
+    <span className="flex items-center gap-2 text-xs text-muted-foreground">
+      <span aria-hidden="true" className="flex gap-1">
+        {Array.from({ length: limit }, (_, round) => (
+          <span key={round} className={cn("h-1.5 w-4 rounded-full", round === limit - 1 ? "bg-primary" : "bg-border")} />
+        ))}
+      </span>
+      <span>
+        up to {limit} rounds, the last the oracle's
+      </span>
+    </span>
+  )
+}
+
+/**
+ * Before anyone speaks: what planning is, the panel as seats you can fill or
+ * leave empty, how a plan comes together, and where to start.
+ */
+function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) {
+  const cells = seatCells(snap)
+  return (
+    <div className="@container flex-1 overflow-y-auto px-5 pt-8 pb-dock sm:px-8 sm:pt-10">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
+        <header className="flex flex-col gap-4 @3xl:flex-row @3xl:items-end @3xl:justify-between">
+          <div className="flex items-start gap-4">
+            <span aria-hidden="true" className="grid size-11 shrink-0 place-items-center rounded-xl border border-border bg-card text-primary shadow-card">
+              <Route className="size-5" />
+            </span>
+            <div className="flex flex-col gap-1">
+              <h2 className="text-xl font-semibold tracking-tight">Plan with the panel</h2>
+              <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">{INTRO_LEAD}</p>
+            </div>
+          </div>
+          <Rounds limit={snap.limit} />
+        </header>
+
+        <section aria-labelledby="plan-panel" className="flex flex-col gap-3">
+          <h3 id="plan-panel" className="text-xs text-muted-foreground">
+            <Rule title="The panel" right={seatedCount(cells)} />
+          </h3>
+          <Seats cells={cells} onToggled={onDone} />
+        </section>
+
+        <section aria-labelledby="plan-steps" className="flex flex-col gap-3">
+          <h3 id="plan-steps" className="text-xs text-muted-foreground">
+            <Rule title="How a plan comes together" />
+          </h3>
+          <ol className="grid gap-3 @2xl:grid-cols-2 @4xl:grid-cols-4">
+            {PLAN_STEPS.map((step, index) => (
+              <li key={step.title} className="relative flex gap-3 rounded-xl border border-border bg-card p-3.5">
+                <span aria-hidden="true" className="grid size-6 shrink-0 place-items-center rounded-full bg-accent text-xs font-semibold text-primary tabular-nums">
+                  {index + 1}
+                </span>
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-sm font-medium">{step.title}</span>
+                  <span className="text-xs leading-relaxed text-muted-foreground">{step.text}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+          <ArrowDown aria-hidden="true" className="size-4 text-primary motion-safe:animate-bounce" />
+          Start in the box below.
+          <KeyHint chord="/">write</KeyHint>
+          <KeyHint chord="Enter">send to the panel</KeyHint>
+        </p>
+      </div>
     </div>
   )
 }
