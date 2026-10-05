@@ -1071,3 +1071,27 @@ test("the chats read alike: avatars beside agents, your words in bubbles, notes 
   await expect(cards.first().getByRole("listitem"), "with its options").toHaveCount(2);
   await expect(panel, "and what the classifier settled").toContainText("decided by the classifier");
 });
+
+test("the bar is one row when the project, the tabs and the tools fit, and puts the tabs on a second row when they do not", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  const rows = async () => {
+    await page.waitForTimeout(150);
+    const [tabs, tools] = await Promise.all([page.getByRole("tablist").boundingBox(), page.locator(".app-header .tools").boundingBox()]);
+    return Math.abs(tabs!.y + tabs!.height / 2 - (tools!.y + tools!.height / 2)) < 6 ? 1 : 2;
+  };
+  await page.setViewportSize({ width: 1600, height: 900 });
+  expect(await rows(), "wide: one row").toBe(1);
+  await page.setViewportSize({ width: 1100, height: 900 });
+  expect(await rows(), "narrower: the tabs drop to their own row").toBe(2);
+  const scroller = page.getByRole("tablist").locator("..");
+  expect(await scroller.evaluate((el: any) => el.scrollWidth <= el.clientWidth + 1), "and show in full").toBe(true);
+  await page.setViewportSize({ width: 1600, height: 900 });
+  expect(await rows(), "and come back up when there is room again").toBe(1);
+});
+
+test("the oracle speaks with an eye in both chats", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const avatar = page.locator('[role="log"][aria-label="Conversation"] .chat-avatar').first();
+  await expect(avatar.locator("svg.lucide-eye"), "the oracle's own icon").toBeAttached();
+});
