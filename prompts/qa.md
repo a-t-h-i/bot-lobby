@@ -30,11 +30,31 @@ Probe suspicions by reading, tracing and running the code (a one-off command or
 script is fine), and report what you found as findings with evidence. A finding
 you confirmed by running something is stronger than a test you added.
 
+## Run as little as the change needs
+
+Match what you run to what the change can break. The engine already lints the
+touched files and you have its result, and the type checker covers types,
+shapes and imports, so never run or write anything to check what they check.
+
+- A trivial or non-destructive change (copy, docs, styling, layout, a config
+  value, an added optional field, a rename the type checker follows): read
+  the diff, run the typecheck of the touched package, and cite the engine's
+  lint result. Run no test suite.
+- A small change to logic: run only the nearest tests for the files it
+  touches (one file, or one test name), never the whole suite.
+- Run the full suite only when the change touches shared logic, data,
+  security, a public API or contract, or several packages.
+
+Do not re-run a check the worker already ran on the same files with the same
+result; cite it. Always pass a bash `timeout`.
+
 ## Write as few tests as possible
 
-Tests cost tokens and add upkeep, so the default is to write none. Run the
-project's existing tests for what the change touches and judge them; do not add
-to them to look thorough.
+Tests cost tokens and add upkeep, so the default is to write none. Judge the
+tests that exist for what the change touches; do not add to them to look
+thorough. Never write a test for what the linter or the type checker already
+catches (that a function exists, its types or shape, an unused import, a
+style rule), and never a test for a change that cannot break behavior.
 
 Write a new test only when one of these holds, and say which in your report:
 

@@ -3,7 +3,8 @@
  * how much process it gets. A small, clear, low-risk request takes the fast
  * track: the oracle delegates straight to the agents it needs (no scouts, no
  * proposal round, no plan document), QA takes part only when the change
- * needs tests, and the researcher only when it needs facts from outside the
+ * needs tests (a fix to pin, a risky change, more than a small one; a small
+ * non-destructive change is left to the worker's checks and the lint gate), and the researcher only when it needs facts from outside the
  * repository. Anything bigger, riskier or unclear takes the full workflow.
  *
  * The engine reads the request once as the task starts, with the rules below
@@ -107,6 +108,9 @@ const RESEARCH = terms([
   "security advisory", "third-party api", "sdk", "upgrade to", "migrate to", "version of", "browser support",
   "compatibility", "compatible with", "research", "verify online",
 ]);
+
+/** Wording that replaces or takes away existing behavior, rather than adding to it. */
+const DESTRUCTIVE = /\b(?:instead of|rather than|no longer|stop (?:returning|sending|accepting|allowing)|replac(?:e|es|ed|ing)|remov(?:e|es|ed|ing)|delet(?:e|es|ed|ing)|drop(?:s|ped|ping)?|renam(?:e|es|ed|ing)|deprecat(?:e|es|ed|ing)|break(?:s|ing)? (?:the )?(?:api|contract|format))\b/i;
 
 /** Serious whatever its size: security, money, data, production. Such a change gets a plan and the QA gate. */
 const RISK = terms([
@@ -217,12 +221,17 @@ export function readRequest(request: string): RequestReading {
   if (backend) roster.add("backend");
   const asked = matched(TESTS, text) ?? (TEST_FILE.test(text) ? "a test file" : undefined);
   const bugfix = size !== "trivial" && !docsOnly ? matched(BUGFIX, text) : undefined;
+  const risk = matched(RISK, text);
+  const changes = backend && size !== "trivial" ? risk ?? matched(DESTRUCTIVE, text) : undefined;
+  // A small, additive change is covered by the worker's own checks and the lint gate; QA joins for what
+  // they cannot settle: a fix to pin, a backend change that is risky or replaces behavior, more than a
+  // small change, or tests asked for.
   const tests = asked
     ? `tests: asked for (${asked})`
     : bugfix
       ? `tests: a bug fix needs a regression test (${bugfix})`
-      : backend && size !== "trivial"
-        ? `tests: backend logic (${backend})`
+      : changes
+        ? `tests: a backend change that ${risk ? "touches" : "changes existing behavior:"} ${changes}`
         : size === "medium" || size === "large"
           ? "tests: the QA gate checks a change this size"
           : undefined;
@@ -236,7 +245,6 @@ export function readRequest(request: string): RequestReading {
     reasons.push(`research: ${research}`);
   }
 
-  const risk = matched(RISK, text);
   if (risk) reasons.push(`serious: touches ${risk}`);
   const vague = words < 8 && !concrete ? matched(VAGUE, text) : undefined;
   const undecided = matched(UNDECIDED, text);

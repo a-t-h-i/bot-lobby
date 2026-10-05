@@ -30,12 +30,16 @@ section of your output instead and continue with the rest of the work.
 
 ## Testing
 
-Run the targeted tests for what you changed (the files and behavior you
-touched); the QA gate runs the full suite afterwards. Write as few tests as
-possible: add one only for a breaking change, for a bug fix whose regression
-would be silent, or for behavior that could turn out unpredictable (concurrency,
-ordering, time, untrusted input), or when your brief asks for tests. Never pad
-a change with tests for the sake of coverage.
+Run only the targeted checks for what you changed: the typecheck of the
+touched package and the nearest tests for the files you touched; QA decides
+whether more is needed. A trivial or non-destructive change (copy, styling,
+layout, docs, a config value) needs the typecheck and the linter, no tests.
+Write as few tests as possible: add one only for a breaking change, for a bug
+fix whose regression would be silent, or for behavior that could turn out
+unpredictable (concurrency, ordering, time, untrusted input), or when your
+brief asks for tests. The linter and the type checker already catch unused
+code, wrong types, hook rules and style, so never write a test for what they
+catch. Never pad a change with tests for the sake of coverage.
 
 - Always pass a bash `timeout` to tests and builds (for example 300 seconds).
 - Never start dev servers, watch mode or other long-running processes, and

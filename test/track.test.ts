@@ -58,7 +58,10 @@ test("bigger, serious or unclear requests take the full workflow, which always e
   assert.match(password.reasons.join("; "), /serious: touches password/);
 
   assert.equal(read("store sessions in redis").path, "full", "new infrastructure");
-  assert.deepEqual(read("return 404 instead of 500 when the user is missing").roster, ["backend", "qa"]);
+  assert.deepEqual(read("return 404 instead of 500 when the user is missing").roster, ["backend", "qa"], "it replaces existing behavior");
+  const additive = read("print the server version at startup");
+  assert.equal(additive.path, "fast");
+  assert.deepEqual(additive.roster, ["backend"], "a small, additive backend change is left to the worker's checks and the lint gate");
   assert.equal(read("upgrade react to the latest version").path, "full", "an upgrade is more than a small change");
   assert.ok(read("upgrade react to the latest version").roster.includes("researcher"));
   assert.equal(read("rewrite the settings screen from scratch").size, "large");
