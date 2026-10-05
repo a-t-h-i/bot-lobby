@@ -215,11 +215,13 @@ test("the activity log follows its newest entry, lets a reader who scrolled up s
   await log.evaluate((el: any) => {
     el.scrollTop = 0;
   });
-  await expect(page.getByRole("button", { name: "Jump to latest" }), "scrolling up offers the way back").toBeVisible();
+  // The conversation has its own way back; this is the log's.
+  const jump = page.getByRole("region", { name: "Activity" }).getByRole("button", { name: "Jump to latest" });
+  await expect(jump, "scrolling up offers the way back").toBeVisible();
   server.log("MASTER", "a step the reader has not caught up with");
   await expect(log).toContainText("a step the reader has not caught up with");
   expect(await log.evaluate((el: any) => el.scrollTop), "the reader is not pulled away from what they were reading").toBeLessThanOrEqual(2);
-  await page.getByRole("button", { name: "Jump to latest" }).click();
+  await jump.click();
   await expect.poll(gap, { message: "Jump to latest lands on the newest entry" }).toBeLessThanOrEqual(2);
 });
 
