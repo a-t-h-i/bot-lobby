@@ -977,3 +977,97 @@ test("the empty Excalidraw and Plan pages are laid out: steps beside the boxes, 
   await expect(main, "and how a plan comes together").toContainText("How a plan comes together");
   await expect(main.getByRole("heading", { name: "Plan", exact: true }), "not a bare generic title").toHaveCount(0);
 });
+
+test("pointed at, the orb swells and shows the thinking agent's icon", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const orb = page.getByRole("button", { name: "Open Thinking" });
+  const icon = orb.locator(".orb-icon");
+  await expect.poll(() => icon.evaluate((el: any) => Number(getComputedStyle(el).opacity)), { message: "at rest the icon is hidden" }).toBeLessThan(0.1);
+  await orb.hover();
+  await expect.poll(() => icon.evaluate((el: any) => Number(getComputedStyle(el).opacity)), { message: "pointed at, it shows" }).toBeGreaterThan(0.9);
+  await expect.poll(() => orb.locator(".orb-float").evaluate((el: any) => getComputedStyle(el).scale), { message: "and the orb swells" }).not.toBe("none");
+  const shown = await orb.evaluate((el: any) => ({ agent: el.querySelector("[data-agent-icon]")?.getAttribute("data-agent-icon"), name: el.querySelector(".orb-label")?.textContent?.trim() }));
+  expect(["DEV", "QA"], "the icon is a thinking agent's").toContain(shown.agent);
+});
+
+test("the orb can be dragged anywhere on the Lobby, stays there, and moves with the arrow keys", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const orb = page.getByRole("button", { name: "Open Thinking" });
+  const start = (await orb.boundingBox())!;
+  await page.mouse.move(start.x + 22, start.y + 22);
+  await page.mouse.down();
+  await page.mouse.move(500, 400, { steps: 8 });
+  await page.mouse.move(300, 250, { steps: 8 });
+  await page.mouse.up();
+  const dropped = (await orb.boundingBox())!;
+  expect(Math.abs(dropped.x + 22 - 300) + Math.abs(dropped.y + 22 - 250), "it lands where it was let go").toBeLessThan(4);
+  await expect(page.getByRole("dialog", { name: "Thinking", exact: true }), "a drag does not open Thinking").toHaveCount(0);
+  await page.reload();
+  await page.locator('[role="tablist"]').waitFor();
+  const kept = (await orb.boundingBox())!;
+  expect(Math.abs(kept.x - dropped.x) + Math.abs(kept.y - dropped.y), "it stays put across a reload").toBeLessThan(3);
+  await orb.focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Shift+ArrowDown");
+  const nudged = (await orb.boundingBox())!;
+  // Its place is kept as a share of the card, so a card that settles a few pixels moves it a little too.
+  expect(Math.abs(nudged.x - kept.x - 16), "Right nudges it").toBeLessThan(6);
+  expect(Math.abs(nudged.y - kept.y - 64), "Shift+Down takes a bigger step").toBeLessThan(8);
+  // It never leaves the card, however far it is pushed.
+  for (let i = 0; i < 40; i += 1) await page.keyboard.press("Shift+ArrowLeft");
+  const card = (await page.locator("#main").boundingBox())!;
+  expect((await orb.boundingBox())!.x, "the card's left edge holds it").toBeGreaterThanOrEqual(card.x);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog", { name: "Thinking", exact: true }), "Enter still opens it").toBeVisible();
+});
+
+test("tabs are slim and a confirmation's buttons are small, with a crisp focus line and no glow", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  expect((await page.getByRole("tab").first().boundingBox())!.height, "a slim tab").toBeLessThanOrEqual(30);
+  await page.evaluate(() => {
+    window.location.hash = "#/tasks/T-mock-1";
+  });
+  await expect(page.getByRole("toolbar", { name: "Actions" })).toBeVisible();
+  await page.locator("#main").focus();
+  await page.keyboard.press("Delete");
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toBeVisible();
+  for (const name of [/Keep it/, /^Delete/]) {
+    const button = dialog.getByRole("button", { name });
+    expect((await button.boundingBox())!.height, "a small button").toBeLessThanOrEqual(28);
+  }
+  const focus = await page.evaluate(() => {
+    const el = document.activeElement as any;
+    const style = getComputedStyle(el);
+    return { outline: style.outlineStyle, shadow: style.boxShadow };
+  });
+  expect(focus.outline, "focus shows as a line").toBe("solid");
+  expect(focus.shadow, "with no ring of glow").not.toMatch(/0px 0px 0px 3px/);
+  await page.keyboard.press("Escape");
+});
+
+test("the chats read alike: avatars beside agents, your words in bubbles, notes as rules, the panel's questions as cards", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const chat = page.locator('[role="log"][aria-label="Conversation"]');
+  await expect(chat.locator(".chat-avatar").first(), "the oracle has an avatar").toBeVisible();
+  await expect(chat.locator('[data-agent-icon="ORACLE"]').first(), "with the oracle's icon").toBeAttached();
+  await expect(chat.locator(".chat-bubble").first(), "your words in a bubble").toBeVisible();
+  await expect(chat.getByRole("note").filter({ hasText: "task started" }), "a note across the column").toBeVisible();
+  const column = (await chat.locator(".chat-column").boundingBox())!;
+  expect(column.width, "a readable line, not the whole pane").toBeLessThanOrEqual(46 * 15 + 1);
+  await page.evaluate(() => {
+    window.location.hash = "#/plan";
+  });
+  const panel = page.getByRole("log", { name: "Panel conversation" });
+  await expect(panel.locator(".chat-bubble"), "your request in a bubble").toContainText("Plan dark mode for the lobby");
+  const cards = panel.locator("ol > li");
+  await expect(cards, "each question its own card").toHaveCount(2);
+  await expect(cards.first(), "naming who asks").toContainText("Design");
+  await expect(cards.first().locator('[data-agent-icon="DESIGN"]')).toBeAttached();
+  await expect(cards.first().getByRole("listitem"), "with its options").toHaveCount(2);
+  await expect(panel, "and what the classifier settled").toContainText("decided by the classifier");
+});

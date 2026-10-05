@@ -1,39 +1,49 @@
 /**
- * The panel's conversation: your words on the right, the panel's questions
- * attributed and numbered with their options, questions the classifier
- * settled marked with a tick, and everything else as Markdown.
+ * The panel's conversation, in the same shape as the Lobby's: your words in a
+ * bubble on the right, the panel beside its avatar, its questions as cards
+ * (who asks, the question, the options), questions the classifier settled
+ * marked with a tick, three dots while a round runs, and everything else as
+ * Markdown.
  */
-import { useState } from "react"
+import { useState, type CSSProperties } from "react"
 import { Button } from "@/components/ui/button"
 import { InlineEditor } from "@/ui/InlineEditor"
 import { call } from "@/lib/api"
-import { Check } from "lucide-react"
+import { Check, Pencil } from "lucide-react"
 import type { PlannerMessage, PanelQuestion } from "@protocol"
 import { formatClock } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Markdown } from "@/ui/Markdown"
-import { sourceColor, sourceLabel } from "../lobby/types"
+import { AgentIcon } from "@/ui/AgentIcon"
+import { AgentMessage, ChatNote, TypingDots, YourMessage } from "../lobby/ChatParts"
+import { sourceColor, sourceLabel, sourceTone } from "../lobby/types"
 
+/** The panel's questions as cards: who asks (icon, name, colour), the question, and the options to pick from. */
 function Asked({ questions }: { questions: PanelQuestion[] }) {
   return (
-    <ol className="flex flex-col gap-3">
+    <ol className="mt-1 flex flex-col gap-2">
       {questions.map((question, index) => (
-        <li key={index} className="flex flex-col gap-1 text-sm">
-          <p>
-            <span className="tabular-nums text-muted-foreground">{String(index + 1).padStart(2, "0")}. </span>
-            <span className={cn("font-medium", sourceColor(question.from))}>{sourceLabel(question.from)}</span> {question.text}
+        <li key={index} className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3 text-sm" style={{ "--orb": sourceTone(question.from) } as CSSProperties}>
+          <p className="flex items-start gap-2">
+            <span className="mt-px inline-flex shrink-0 items-center gap-1 rounded-full bg-[color-mix(in_oklab,var(--orb)_12%,transparent)] px-2 py-0.5 text-xs font-medium text-[color-mix(in_oklab,var(--orb)_85%,var(--foreground))]">
+              <AgentIcon source={question.from} className="size-3" />
+              {sourceLabel(question.from)}
+            </span>
+            <span className="min-w-0">
+              <span className="sr-only">Question {index + 1}: </span>
+              {question.text}
+            </span>
           </p>
-          <ul className="flex flex-col gap-0.5 pl-6 text-muted-foreground">
-            {question.options.map((option) => (
-              <li key={option.label} className="flex gap-2">
-                <span aria-hidden="true" className="mt-2 size-1.5 shrink-0 rounded-full border border-muted-foreground/60" />
-                <span>
-                  {option.label}
+          {question.options.length ? (
+            <ul className="flex flex-wrap gap-1.5">
+              {question.options.map((option) => (
+                <li key={option.label} className="rounded-lg border border-border bg-muted/60 px-2 py-1 text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">{option.label}</span>
                   {option.description ? ` — ${option.description}` : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </li>
       ))}
     </ol>
@@ -41,16 +51,20 @@ function Asked({ questions }: { questions: PanelQuestion[] }) {
 }
 
 function Decided({ message }: { message: PlannerMessage }) {
+  const decided = message.decided ?? []
+  if (!decided.length) return null
   return (
-    <>
-      {(message.decided ?? []).map((entry, index) => (
-        <p key={index} className="text-sm">
-          <Check aria-hidden="true" className="mr-1 inline size-3.5 text-success" />
-          <span className={cn("font-medium", sourceColor(entry.from))}>{sourceLabel(entry.from)}</span> {entry.question} → <strong>{entry.answer}</strong>{" "}
-          <span className="text-muted-foreground">· decided by the classifier ({entry.probability.toFixed(2)}); comment on the plan to overrule</span>
-        </p>
+    <ul className="mt-1 flex flex-col gap-1.5">
+      {decided.map((entry, index) => (
+        <li key={index} className="flex items-start gap-2 rounded-lg bg-muted/60 px-2.5 py-1.5 text-sm">
+          <Check aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-success" />
+          <span className="min-w-0">
+            <span className={cn("font-medium", sourceColor(entry.from))}>{sourceLabel(entry.from)}</span> {entry.question} → <strong>{entry.answer}</strong>
+            <span className="block text-xs text-muted-foreground">decided by the classifier ({entry.probability.toFixed(2)}); comment on the plan to overrule</span>
+          </span>
+        </li>
       ))}
-    </>
+    </ul>
   )
 }
 
@@ -63,38 +77,42 @@ function UserTurn({ message, index, busy }: { message: PlannerMessage; index: nu
     const result = await call("planner.editMessage", { messageIndex: index, at: message.at, text })
     setSaved(result.message)
   }
-  return <div className="flex flex-col items-end gap-1">
-    <span className="text-xs text-muted-foreground">{message.at > 0 ? formatClock(message.at) : ""} You{current.editedAt ? " (edited)" : ""}</span>
-    <div className="max-w-[85%] rounded-xl rounded-tr-sm border border-primary/10 bg-you px-3.5 py-2">
+  const edit = !message.settled?.length && !editing ? (
+    <Button size="xs" variant="ghost" disabled={waiting} onClick={() => setEditing(true)} className="text-muted-foreground">
+      <Pencil aria-hidden="true" />
+      Edit
+    </Button>
+  ) : null
+  return (
+    <YourMessage time={message.at > 0 ? formatClock(message.at) : undefined} head note={current.editedAt ? "(edited)" : undefined} below={edit}>
       {editing ? <InlineEditor text={current.text} disabled={busy} onSave={save} onCancel={() => setEditing(false)} /> : <Markdown text={current.text} />}
-    </div>
-    {!message.settled?.length && !editing ? <Button size="sm" variant="ghost" disabled={waiting} onClick={() => setEditing(true)}>Edit</Button> : null}
-  </div>
+    </YourMessage>
+  )
 }
 
 function Turn({ message, index, busy }: { message: PlannerMessage; index: number; busy: boolean }) {
-  const time = message.at > 0 ? formatClock(message.at) : ""
   if (message.role === "you") return <UserTurn message={message} index={index} busy={busy} />
   const asked = message.questions ?? []
   return (
-    <div className="flex flex-col gap-2">
-      <span className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span aria-hidden="true" className="size-2 rounded-full bg-primary" />
-        <span className="font-medium text-foreground">Panel</span> {time}
-      </span>
+    <AgentMessage source="PLANNER" name="Panel" time={message.at > 0 ? formatClock(message.at) : undefined} head aside={asked.length ? `${asked.length} question${asked.length === 1 ? "" : "s"}` : undefined}>
       {asked.length > 0 ? <Asked questions={asked} /> : <Markdown text={message.text} />}
       <Decided message={message} />
-    </div>
+    </AgentMessage>
   )
 }
 
 export function PanelConversation({ messages, seed, busy = false }: { messages: PlannerMessage[]; seed?: string; busy?: boolean }) {
   return (
-    <div className="flex flex-col gap-5" role="log" aria-label="Panel conversation">
-      {seed ? <p className="text-sm text-muted-foreground">{seed}</p> : null}
+    <div className="chat-column" role="log" aria-label="Panel conversation">
+      {seed ? <ChatNote>{seed}</ChatNote> : null}
       {messages.map((message, index) => (
         <Turn key={`${message.at}-${index}`} message={message} index={index} busy={busy} />
       ))}
+      {busy ? (
+        <AgentMessage source="PLANNER" name="Panel" head live aside="the panel is thinking">
+          <TypingDots className="mt-1" />
+        </AgentMessage>
+      ) : null}
     </div>
   )
 }
