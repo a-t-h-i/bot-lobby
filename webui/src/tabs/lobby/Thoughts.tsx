@@ -82,12 +82,16 @@ function ThoughtBubble({ thought }: { thought: ThoughtEntry }) {
   )
 }
 
-/** The Thinking key closes the open pane again (typing in a field is never interrupted). */
+/**
+ * The Thinking key closes the open pane again (typing in a field is never interrupted). A key the lobby's own
+ * keys already took is left alone: that press is the one that just opened the pane, which draws (and adds this
+ * listener) before the press is done.
+ */
 function useThinkingKey(open: boolean, shortcut: string | undefined, onToggle: () => void) {
   useEffect(() => {
     if (!open || !shortcut) return
     const listener = (event: KeyboardEvent) => {
-      if (event.isComposing || !matchKey(event, shortcut)) return
+      if (event.defaultPrevented || event.isComposing || !matchKey(event, shortcut)) return
       if ((event.target as HTMLElement)?.closest("input, textarea, [contenteditable='true']")) return
       event.preventDefault()
       onToggle()
