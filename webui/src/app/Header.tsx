@@ -1,10 +1,11 @@
 /**
  * The top bar: the project you are in on the left, the numbered tabs in the
  * middle, and what this session is doing on the right with the way to
- * Sessions, Settings, the key help and the light/dark switch. Below 1500px the
- * tabs take a row of their own (the grid lives in `index.css`).
+ * Sessions, Settings, the key help and the light/dark switch, all on one row
+ * whenever they fit side by side; when they do not, the tabs take a row of
+ * their own under the other two (the grid lives in `index.css`).
  */
-import type { ReactNode } from "react"
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { Keyboard, Layers, Moon, Settings, Sun, Volume2, VolumeX } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -139,6 +140,56 @@ function SessionChip({ busy, task, sessionName }: { busy: boolean; task?: Snapsh
   )
 }
 
+/** How wide a part of the bar would be with nothing cut short: its children's extent, plus whatever truncation hides. */
+function naturalWidth(part: Element | null): number {
+  if (!part) return 0
+  const shown = [...part.children].filter((child): child is HTMLElement => child instanceof HTMLElement && child.offsetParent !== null && getComputedStyle(child).position !== "absolute")
+  if (!shown.length) return 0
+  const left = Math.min(...shown.map((child) => child.getBoundingClientRect().left))
+  const right = Math.max(...shown.map((child) => child.getBoundingClientRect().right))
+  let hidden = 0
+  for (const el of part.querySelectorAll<HTMLElement>("*")) {
+    // Text cut short with an ellipsis; a screen-reader-only label (1px, clipped) is not on the bar at all.
+    if (el.clientWidth <= 1 || el.offsetParent === null || el.scrollWidth <= el.clientWidth + 1) continue
+    if (getComputedStyle(el).textOverflow === "ellipsis") hidden += el.scrollWidth - el.clientWidth
+  }
+  return right - left + hidden
+}
+
+/** Room to spare before the bar goes to one row, so it does not flip back and forth at the edge. */
+const SPARE = 24
+
+/**
+ * Whether the project, the tabs and the tools fit on one row: measured from
+ * the parts themselves (the tab track is always its full width), again when
+ * the window, the tabs or anything in the bar changes size.
+ */
+function useOneRow() {
+  const header = useRef<HTMLElement>(null)
+  const [one, setOne] = useState(false)
+  const measure = useRef(() => {})
+  measure.current = () => {
+    const el = header.current
+    if (!el) return
+    const track = el.querySelector<HTMLElement>('[role="tablist"]')
+    const style = getComputedStyle(el)
+    const gap = parseFloat(style.columnGap) || 0
+    const room = el.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0)
+    const needed = naturalWidth(el.querySelector(".where")) + (track?.offsetWidth ?? 0) + naturalWidth(el.querySelector(".tools")) + gap * 2
+    setOne(needed + SPARE <= room)
+  }
+  useLayoutEffect(() => measure.current())
+  useLayoutEffect(() => {
+    const el = header.current
+    if (!el || typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver(() => measure.current())
+    observer.observe(el)
+    for (const part of el.querySelectorAll('[role="tablist"], .where, .tools')) observer.observe(part)
+    return () => observer.disconnect()
+  }, [])
+  return { header, one }
+}
+
 export function Header({
   status,
   task,
@@ -163,9 +214,10 @@ export function Header({
   const branch = status?.branch ?? status?.workspace.branch
   const busy = status?.busy ?? false
   const projects = useProjects()
+  const { header, one } = useOneRow()
 
   return (
-    <header className="app-header shrink-0">
+    <header ref={header} className="app-header shrink-0" data-one-row={one || undefined}>
       <div className="where flex min-w-0 items-center">
         <ProjectSwitcher projects={projects} tab={route.kind === "tab" ? route.tab : route.kind} name={name} branch={branch} />
       </div>
