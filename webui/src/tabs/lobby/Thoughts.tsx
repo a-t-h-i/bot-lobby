@@ -97,14 +97,15 @@ function useThinkingKey(open: boolean, shortcut: string | undefined, onToggle: (
 
 /** Thinking agents first, newest first, then the rest, newest first. */
 function byNow(thoughts: ThoughtEntry[]): ThoughtEntry[] {
-  return [...thoughts].sort((a, b) => Number(b.live) - Number(a.live) || b.at - a.at)
+  // Ids grow with time, so two thoughts in the same millisecond still have an order.
+  return [...thoughts].sort((a, b) => Number(b.live) - Number(a.live) || b.at - a.at || b.id - a.id)
 }
 
-export function Thoughts({ thoughts, collapsed, onToggle, shortcut }: { thoughts: ThoughtEntry[]; collapsed: boolean; onToggle: () => void; shortcut?: string | undefined }) {
+export function Thoughts({ thoughts, collapsed, onToggle, shortcut, busy = [] }: { thoughts: ThoughtEntry[]; collapsed: boolean; onToggle: () => void; shortcut?: string | undefined; busy?: string[] }) {
   const shown = byNow(latestThoughts(thoughts))
   const thinking = shown.filter((thought) => thought.live).map((thought) => thought.source)
   const spotlight = useSpotlight(thinking)
-  const tone = spotlight ? sourceTone(spotlight) : "var(--orb-idle)"
+  const tone = spotlight ? sourceTone(spotlight) : busy.length ? "var(--primary)" : "var(--orb-idle)"
   const bubble = useRef<HTMLButtonElement>(null)
   const minimized = useRef(collapsed)
   minimized.current = collapsed
@@ -119,6 +120,7 @@ export function Thoughts({ thoughts, collapsed, onToggle, shortcut }: { thoughts
           ref={bubble}
           spotlight={spotlight}
           thinking={thinking}
+          busy={busy}
           tone={tone}
           expanded={!collapsed}
           hidden={overlay}
