@@ -454,7 +454,7 @@
     inset 0 -2px 5px color-mix(in oklab, var(--orb) 55%, black),
     0 0 0 1px color-mix(in oklab, var(--orb) 22%, transparent),
     0 0 12px 1px color-mix(in oklab, var(--orb) 38%, transparent);
-  transition: --orb 700ms ease;
+  transition: --orb 700ms ease, scale 420ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 300ms ease;
 }
 /* A sheen that swirls round the orb while it thinks. */
 .orb::after {
@@ -467,7 +467,37 @@
   opacity: 0;
   transition: opacity 400ms ease;
 }
-.orb-float { width: 1.75rem; height: 1.75rem; margin: calc((var(--touch-target) - 1.75rem) / 2); }
+.orb-float { display: block; width: 1.75rem; height: 1.75rem; margin: calc((var(--touch-target) - 1.75rem) / 2); }
+/* Pointed at, focused or held: the orb swells with a ripple and shows the agent's icon. */
+.orb-icon {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  opacity: 0;
+  scale: 0.4;
+  rotate: -30deg;
+  filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.45));
+  transition: opacity 160ms ease, scale 460ms cubic-bezier(0.34, 1.56, 0.64, 1), rotate 460ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.orb-float::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 1.5px solid color-mix(in oklab, var(--orb) 65%, transparent);
+  opacity: 0;
+  pointer-events: none;
+}
+.thinking-bubble:is(:hover, :focus-visible, [data-dragging]) > .orb-float { scale: 1.3; }
+.thinking-bubble:is(:hover, :focus-visible, [data-dragging]) .orb-icon { opacity: 1; scale: 1; rotate: 0deg; }
+.thinking-bubble:is(:hover, :focus-visible) > .orb-float::before { animation: orb-ripple 900ms ease-out; }
+@keyframes orb-ripple {
+  0% { opacity: 0.9; scale: 1; }
+  100% { opacity: 0; scale: 2; }
+}
 .orb-dot { width: 0.5rem; height: 0.5rem; box-shadow: 0 0 6px color-mix(in oklab, var(--orb) 55%, transparent); }
 .orb-dot::after { display: none; }
 [data-thinking] > .orb-float {
@@ -485,22 +515,32 @@
 }
 @keyframes orb-swirl { to { transform: rotate(1turn); } }
 
-/* The orb floats above the message box; it leans toward the pointer unless motion is reduced. */
+/*
+ * The orb starts above the message box at the right; once dragged it sits
+ * where it was put (inline left/top). It leans toward the pointer unless
+ * motion is reduced.
+ */
 .thinking-bubble {
-  min-width: var(--touch-target);
+  width: var(--touch-target);
   height: var(--touch-target);
   right: max(1rem, env(safe-area-inset-right));
   bottom: calc(var(--composer-h) + 1rem + env(safe-area-inset-bottom));
+  cursor: pointer;
   transition: transform 150ms ease-out;
 }
-.thinking-bubble:hover { transform: translateY(var(--thinking-lift)) scale(var(--thinking-scale)); }
-/* The name of the agent thinking, on a small glass tag beside the orb. */
+.thinking-bubble:hover { transform: translateY(var(--thinking-lift)); }
+.thinking-bubble[data-dragging] { cursor: grabbing; transition: none; }
+/* The name of the agent thinking, on a small glass tag beside the orb (on its right near the left edge). */
 .orb-label {
+  position: absolute;
+  top: 50%;
+  right: calc(100% - 0.125rem);
+  translate: 0 -50%;
+  pointer-events: none;
   display: inline-flex;
   align-items: center;
   height: 1.5rem;
   padding: 0 0.625rem;
-  margin-right: -0.25rem;
   border-radius: 9999px;
   border: 1px solid color-mix(in oklab, var(--orb) 22%, var(--dock-border));
   background: color-mix(in oklab, var(--card) 88%, transparent);
@@ -513,6 +553,7 @@
   overflow: hidden;
   transition: color 700ms ease, border-color 700ms ease;
 }
+.thinking-bubble[data-flip] .orb-label { right: auto; left: calc(100% - 0.125rem); }
 
 /* The pane: no title bar, lit from the top in the spotlit agent's colour. */
 .thought-pane {
@@ -606,7 +647,56 @@
 @media (prefers-reduced-motion: reduce) {
   .thinking-bubble, .thinking-bubble:hover { transform: none !important; transition: none !important; }
   [data-thinking] > .orb-float, [data-thinking] > .orb-float::after, .thought-aura[data-thinking], .thought-ellipsis::after, .thought-steps > li[data-current]::before { animation: none !important; }
-  .orb, .orb-label, .thought-pane { transition: none; }
+  .orb, .orb-label, .thought-pane, .orb-icon { transition: none; }
+  .thinking-bubble:is(:hover, :focus-visible, [data-dragging]) > .orb-float { scale: 1; }
+  .thinking-bubble > .orb-float::before { animation: none !important; }
+}
+
+/*
+ * The chats (Lobby and Plan): a centred column a comfortable line wide; an
+ * agent's avatar in a gutter on the left with its text beside it, your words
+ * in a bubble on the right, notes as a rule across the column.
+ */
+.chat-column { display: flex; flex-direction: column; gap: 1.125rem; width: 100%; max-width: 46rem; margin-inline: auto; }
+.chat-row { position: relative; display: grid; grid-template-columns: 1.75rem minmax(0, 1fr); column-gap: 0.75rem; }
+.chat-row + .chat-row:not(:has(.chat-avatar)) { margin-top: -0.5rem; }
+.chat-gutter { display: flex; justify-content: center; padding-top: 0.0625rem; }
+.chat-speaker { display: flex; align-items: baseline; gap: 0.5rem; min-height: 1.75rem; padding-top: 0.25rem; font-size: 0.8125rem; line-height: 1.25rem; }
+.chat-hover-time { padding-top: 0.25rem; font-size: 0.625rem; color: var(--muted-foreground); font-variant-numeric: tabular-nums; opacity: 0; transition: opacity 150ms ease; }
+.group\/msg:hover .chat-hover-time { opacity: 1; }
+.chat-avatar {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  color: color-mix(in oklab, var(--orb) 85%, var(--foreground));
+  background: color-mix(in oklab, var(--orb) 13%, var(--card));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--orb) 22%, transparent), 0 1px 2px rgb(0 0 0 / 0.05);
+}
+.chat-avatar[data-live] { animation: avatar-live 1.8s ease-in-out infinite; }
+@keyframes avatar-live {
+  0%, 100% { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--orb) 22%, transparent), 0 0 0 0 color-mix(in oklab, var(--orb) 28%, transparent); }
+  50% { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--orb) 30%, transparent), 0 0 0 5px color-mix(in oklab, var(--orb) 0%, transparent); }
+}
+.chat-bubble {
+  max-width: min(80%, 36rem);
+  padding: 0.5rem 0.875rem;
+  border-radius: 1rem 1rem 0.375rem 1rem;
+  border: 1px solid color-mix(in oklab, var(--primary) 12%, var(--border));
+  background: var(--you);
+  box-shadow: 0 1px 1px rgb(0 0 0 / 0.03);
+}
+.chat-note { display: flex; align-items: center; gap: 0.75rem; font-size: 0.75rem; color: var(--muted-foreground); }
+.chat-note::before, .chat-note::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.chat-note > span { max-width: 80%; text-align: center; }
+.typing-dots { display: inline-flex; align-items: center; gap: 3px; height: 1.25rem; }
+.typing-dots > span { width: 5px; height: 5px; border-radius: 9999px; background: var(--muted-foreground); opacity: 0.35; animation: typing 1.2s ease-in-out infinite; }
+.typing-dots > span:nth-child(2) { animation-delay: 150ms; }
+.typing-dots > span:nth-child(3) { animation-delay: 300ms; }
+@keyframes typing { 0%, 60%, 100% { opacity: 0.35; translate: 0 0; } 30% { opacity: 1; translate: 0 -3px; } }
+@media (prefers-reduced-motion: reduce) {
+  .chat-avatar[data-live], .typing-dots > span { animation: none; }
 }
 
 /*
