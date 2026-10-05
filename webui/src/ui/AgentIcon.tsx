@@ -1,15 +1,15 @@
 /**
  * One icon per kind of agent, so an agent reads the same everywhere it shows
- * (the Thinking orb, its bubbles, the planning panel): the oracle's sparkle,
+ * (the Thinking orb, its bubbles, the planning panel, the chats): the oracle's eye,
  * code for DEV, a palette for DESIGN, a shield for QA, a telescope for
  * RESEARCH, a bolt for Quick fix. Anything else is a robot.
  */
-import { Bot, Brain, CodeXml, Compass, MessagesSquare, Palette, Route, ShieldCheck, Sparkles, Tags, Telescope, Zap, type LucideIcon } from "lucide-react"
+import { Bot, Brain, CodeXml, Compass, Eye, MessagesSquare, Palette, Route, ShieldCheck, Tags, Telescope, Zap, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const ICONS: Record<string, LucideIcon> = {
-  MASTER: Sparkles,
-  ORACLE: Sparkles,
+  MASTER: Eye,
+  ORACLE: Eye,
   DEV: CodeXml,
   DESIGN: Palette,
   QA: ShieldCheck,
