@@ -332,7 +332,7 @@ export function TabStrip({ tabs, activeId, onSelect }: TabStripProps) {
       ref={scroller}
       onScroll={measureEdges}
       style={{ maskImage: fadeFor(more), WebkitMaskImage: fadeFor(more) }}
-      className="min-w-0 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="min-w-0 max-w-full overflow-x-auto [scrollbar-width:none] pointer-coarse:-my-1.5 pointer-coarse:py-1.5 [&::-webkit-scrollbar]:hidden"
     >
       <div ref={track} role="tablist" aria-label="Lobby tabs" onKeyDown={onKeyDown} className="relative mx-auto flex w-max items-center gap-0.5 py-0.5">
         <span ref={drain} aria-hidden="true" data-tab-drain className="pointer-events-none absolute left-0 z-0 rounded-lg bg-tab-fill opacity-0 will-change-transform" />
