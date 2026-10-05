@@ -15,58 +15,71 @@ declare const getComputedStyle: any;
 // A real 1x1 PNG.
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
 
-test("the tab pill slides to the chosen tab like a drop: it stretches across the gap, then settles on the tab", async ({ page, server }) => {
+test("switching tabs pours the colour along the connectors like a straw, then fills the chosen tab exactly", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.waitForTimeout(500);
   const run = await page.evaluate(async () => {
-    const drop = document.querySelector('[role="tablist"] > span');
+    const fill = document.querySelector("[data-tab-fill]") as any;
+    const drain = document.querySelector("[data-tab-drain]") as any;
     const target = [...document.querySelectorAll('[role="tab"]')].find((el: any) => /Git/.test(el.textContent)) as any;
-    const widths: number[] = [];
+    const source = document.querySelector('[role="tab"][aria-selected="true"]') as any;
+    const frames: Array<{ liquid: number[]; drain: number; fill: number }> = [];
     const start = performance.now();
     target.click();
     await new Promise<void>((resolve) => {
       const tick = () => {
-        widths.push(drop.getBoundingClientRect().width);
-        if (performance.now() - start < 1200) requestAnimationFrame(tick);
+        frames.push({
+          liquid: [...document.querySelectorAll("[data-tab-liquid]")].map((el: any) => el.getBoundingClientRect().width),
+          drain: Number(getComputedStyle(drain).opacity) * drain.getBoundingClientRect().width,
+          fill: Number(getComputedStyle(fill).opacity) * fill.getBoundingClientRect().width,
+        });
+        if (performance.now() - start < 1300) requestAnimationFrame(tick);
         else resolve();
       };
       tick();
     });
     const box = target.getBoundingClientRect();
-    const end = drop.getBoundingClientRect();
-    return { widths, tab: { left: box.left, width: box.width }, end: { left: end.left, width: end.width } };
+    const end = fill.getBoundingClientRect();
+    return { frames, from: source.getBoundingClientRect().width, tab: { left: box.left, top: box.top, width: box.width, height: box.height }, end: { left: end.left, top: end.top, width: end.width, height: end.height } };
   });
-  expect(Math.max(...run.widths), "the drop stretches while it travels").toBeGreaterThan(run.tab.width * 1.6);
-  expect(Math.abs(run.end.left - run.tab.left), "and lands on the tab").toBeLessThan(3);
-  expect(Math.abs(run.end.width - run.tab.width), "at the tab's width").toBeLessThan(3);
+  const links = run.frames[0]!.liquid.length;
+  const wet = new Set(run.frames.flatMap((frame) => frame.liquid.map((width, n) => (width > 1 ? n : -1)).filter((n) => n >= 0)));
+  expect(links, "dotted connectors join the tabs").toBeGreaterThan(3);
+  expect(wet.size, "the colour flows through every connector between Lobby and Git").toBeGreaterThanOrEqual(4);
+  expect(run.frames.some((frame) => frame.drain > 2 && frame.drain < run.from - 2), "Lobby drains into the straw").toBe(true);
+  expect(run.frames.some((frame) => frame.fill > 2 && frame.fill < run.tab.width - 2), "Git fills up").toBe(true);
+  expect(run.frames.at(-1)!.liquid.every((width) => width < 1), "and the straw is empty again").toBe(true);
+  expect(Math.abs(run.end.left - run.tab.left), "the fill lands on the tab").toBeLessThan(2);
+  expect(Math.abs(run.end.width - run.tab.width), "at the tab's width").toBeLessThan(2);
+  expect(Math.abs(run.end.top - run.tab.top) + Math.abs(run.end.height - run.tab.height), "and its height, so the label sits in the middle").toBeLessThan(2);
   await expect(page.getByRole("tab", { name: /Git/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: /Git/ }), "the tab shows its number").toContainText("6");
 });
 
-test("under reduced motion the pill simply jumps", async ({ page, server }) => {
+test("under reduced motion the fill simply moves, with no flow", async ({ page, server }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.waitForTimeout(400);
-  const widths = await page.evaluate(async () => {
-    const drop = document.querySelector('[role="tablist"] > span');
+  const run = await page.evaluate(async () => {
     const target = [...document.querySelectorAll('[role="tab"]')].find((el: any) => /Git/.test(el.textContent)) as any;
-    const seen: number[] = [drop.getBoundingClientRect().width];
+    let wet = 0;
     const start = performance.now();
     target.click();
     await new Promise<void>((resolve) => {
       const tick = () => {
-        seen.push(drop.getBoundingClientRect().width);
+        wet = Math.max(wet, ...[...document.querySelectorAll("[data-tab-liquid]")].map((el: any) => el.getBoundingClientRect().width));
         if (performance.now() - start < 500) requestAnimationFrame(tick);
         else resolve();
       };
       tick();
     });
-    return seen;
+    const fill = (document.querySelector("[data-tab-fill]") as any).getBoundingClientRect();
+    return { wet, fill: fill.left, tab: target.getBoundingClientRect().left };
   });
-  const first = widths[0]!;
-  const last = widths.at(-1)!;
-  for (const width of widths) expect(Math.min(Math.abs(width - first), Math.abs(width - last)), "only ever the old or the new width: no stretch").toBeLessThan(2);
+  expect(run.wet, "nothing flows").toBeLessThan(1);
+  expect(Math.abs(run.fill - run.tab), "the fill is simply on the new tab").toBeLessThan(2);
 });
 
 test("the effort slider skips the levels a model does not support", async ({ page, server }) => {
@@ -246,7 +259,7 @@ test("zen palettes: warm paper in light, deep ink in dark, a quiet indigo accent
     const composer = box(document.querySelector("#composer-text").closest(".group\\/composer"));
     const main = box(document.querySelector("#main"));
     const inactive = [...document.querySelectorAll('[role="tab"][aria-selected="false"]')][0] as any;
-    const active = document.querySelector('[role="tablist"] > span') as any;
+    const active = document.querySelector("[data-tab-fill]") as any;
     return {
       dark,
       page: rgb(document.body),
@@ -435,7 +448,7 @@ test("the mascot on each agent acts out its effort level, and the page never scr
   await expect(mascot).toHaveAttribute("data-level", "off");
 });
 
-test("Alt+A and Alt+T respect text entry and open Thinking from the bubble", async ({ page, server }) => {
+test("Alt+A and Alt+T work from the message box, and Thinking opens from its bubble", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => {
@@ -448,12 +461,12 @@ test("Alt+A and Alt+T respect text entry and open Thinking from the bubble", asy
   await expect(thinking).toHaveAttribute("aria-expanded", "false");
   await page.locator("#composer-text").focus();
   await page.keyboard.press("Alt+a");
-  await expect(activity, "shortcuts do not steal text-entry focus").toHaveAttribute("aria-expanded", "true");
+  await expect(activity, "Alt+A folds Activity from the message box too").toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("Alt+a");
+  await expect(activity, "and opens it again").toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("#composer-text"), "the cursor stays in the box").toBeFocused();
   await page.keyboard.press("Alt+t");
-  await expect(thinking, "Thinking remains minimized while typing").toHaveAttribute("aria-expanded", "false");
-  await thinking.focus();
-  await page.keyboard.press("Alt+t");
-  await expect(page.getByRole("dialog", { name: "Thinking", exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Thinking", exact: true }), "Alt+T opens Thinking from the box").toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "Thinking", exact: true })).toBeHidden();
   await page.keyboard.press("Alt+h");
@@ -464,9 +477,7 @@ test("Alt+A and Alt+T respect text entry and open Thinking from the bubble", asy
   await page.evaluate(() => {
     window.location.hash = "#/tasks";
   });
-  // Alt+A is typing while the cursor is in the message box; Esc steps out to the tab bar first.
   await page.locator("#composer-text").focus();
-  await page.keyboard.press("Escape");
   await page.keyboard.press("Alt+a");
   await expect(page, "off the Lobby it takes you there").toHaveURL(/#\/lobby/);
 });
@@ -527,18 +538,23 @@ test("a theme file (.css or the registry .json) uploads and is named after the f
   await expect(page.getByRole("radiogroup", { name: "Colour theme" }).getByRole("radio", { name: /Sunrise/ }), "the JSON's own title wins").toHaveAttribute("aria-checked", "true");
 });
 
-test("switching tabs puts the cursor in the message box; arrowing along the tab bar keeps it on the bar", async ({ page, server }) => {
+test("switching tabs hands the keys to the page; Alt+N works from the box; arrowing along the tab bar keeps it on the bar", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole("tab", { name: /Git/ }).click();
-  await expect(page.locator("#composer-text"), "a click on a tab").toBeFocused();
-  await page.keyboard.press("Escape");
-  await page.keyboard.press("Alt+2");
-  await expect(page, "an Alt+N jump from the tab bar").toHaveURL(/#\/tasks/);
-  await expect(page.locator("#composer-text"), "an Alt+N jump").toBeFocused();
-  await page.getByRole("tab", { name: /Tasks/ }).focus();
+  await expect(page.locator("#main"), "a click on a tab puts the keys on the page").toBeFocused();
+  await page.keyboard.press("2");
+  await expect(page, "so a bare digit jumps").toHaveURL(/#\/tasks/);
+  await page.keyboard.press("/");
+  const box = page.locator("#composer-text");
+  await expect(box, "/ goes to the message box").toBeFocused();
+  await box.fill("half a thought");
+  await page.keyboard.press("Alt+3");
+  await expect(page, "Alt+N jumps from the message box").toHaveURL(/#\/plan/);
+  await expect(box, "and leaves the cursor where it was").toBeFocused();
+  await page.getByRole("tab", { name: /Plan/ }).focus();
   await page.keyboard.press("ArrowRight");
-  await expect(page.getByRole("tab", { name: /Plan/ }), "arrows stay on the bar").toBeFocused();
+  await expect(page.getByRole("tab", { name: /Quick/ }), "arrows stay on the bar").toBeFocused();
 });
 
 test("the Settings page offers the fullscreen install and a fullscreen toggle", async ({ page, server }) => {
@@ -611,9 +627,9 @@ test("the keys printed on the buttons work from the page, ask before anything is
     window.location.hash = "#/tasks/T-mock-1";
   });
   const composer = page.locator("#composer-text");
-  await expect(composer, "a tab switch leaves the cursor in the message box").toBeFocused();
+  await composer.focus();
   await page.keyboard.press("e");
-  await expect(composer, "the letter is typed, not taken as a shortcut").toHaveValue("e");
+  await expect(composer, "in the message box the letter is typed, not taken as a shortcut").toHaveValue("e");
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
   await composer.fill("");
   await page.keyboard.press("Escape");
@@ -735,9 +751,7 @@ test("Esc leaves the message box on Sessions and Settings too, so the keys on th
   });
   const composer = page.locator("#composer-text");
   await expect(page.getByRole("button", { name: "Back to this window" }), "the page has switched").toBeVisible();
-  // The switch hands the cursor to the message box on the next frame; wait it out so Esc is the last thing to move it.
-  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(undefined)))));
-  await expect(composer, "a page switch leaves the cursor in the message box").toBeFocused();
+  await composer.focus();
   await page.keyboard.press("Escape");
   await expect(composer, "Esc leaves it though no tab is selected").not.toBeFocused();
   await expect(page.getByRole("button", { name: "Back to this window" }).locator('[data-slot="kbd"]'), "the button prints its key").toHaveText("B");
@@ -753,8 +767,6 @@ test("on Excalidraw R reveals the link and O opens the board in a new tab", asyn
     window.location.hash = "#/excalidraw/x1";
   });
   await expect(page.getByRole("button", { name: "Reveal the link" })).toBeVisible();
-  await expect(page.locator("#composer-text")).toBeFocused();
-  await page.keyboard.press("Escape");
   await page.keyboard.press("r");
   await expect(page.locator("#main"), "R reveals the full room link").toContainText("whiteboard.example");
   const open = page.getByRole("link", { name: "Open board" });
