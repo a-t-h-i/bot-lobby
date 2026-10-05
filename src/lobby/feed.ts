@@ -69,6 +69,8 @@ export class LobbyFeed {
   /** Last step reported per run, so repeated run updates log each step once. */
   private readonly runSteps = new Map<string, string>();
   private readonly runThoughts = new Map<string, string>();
+  /** The live whole thought of each piece of work still under way (a run, a quick fix, a review), by its key. */
+  private readonly liveThoughts = new Map<string, number>();
   private readonly runStatus = new Map<string, AgentRun["status"]>();
   /** Runs already reported as switched to their fallback model. */
 
@@ -126,8 +128,10 @@ export class LobbyFeed {
 
   /** Stream the Master's (or any source's) live thought. */
   thinkDelta(source: string, delta: string, at = Date.now()): void {
-    const last = this.thoughts.at(-1);
-    if (last && last.live && last.source === source) {
+    // The source's own streaming entry, even when another agent's thought landed after it.
+    const keyed = new Set(this.liveThoughts.values());
+    const last = [...this.thoughts].reverse().find((entry) => entry.live && entry.source === source && !keyed.has(entry.id));
+    if (last) {
       const text = last.text + delta;
       last.text = text.length > MAX_THOUGHT_TEXT ? trimThought(text) : text;
     } else {
@@ -138,7 +142,8 @@ export class LobbyFeed {
 
   /** Close the live thought of `source`, replacing it with the final text when given. */
   thinkEnd(source: string, text?: string): void {
-    const last = [...this.thoughts].reverse().find((entry) => entry.source === source && entry.live);
+    const keyed = new Set(this.liveThoughts.values());
+    const last = [...this.thoughts].reverse().find((entry) => entry.source === source && entry.live && !keyed.has(entry.id));
     if (!last) {
       if (text?.trim()) this.thought(source, text);
       return;
@@ -155,6 +160,32 @@ export class LobbyFeed {
     if (!body) return;
     this.thoughts = bounded([...this.thoughts, { id: this.nextId++, at, source, text: body.slice(-MAX_THOUGHT_TEXT), live: false }], MAX_THOUGHTS);
     this.touch();
+  }
+
+  /**
+   * A whole thought from work still under way (`key`: its run, quick fix or
+   * review): live, so the Thinking orb takes its agent's colour, until the
+   * same work's next thought or `settleThought(key)` when it ends.
+   */
+  liveThought(source: string, text: string, key: string, at = Date.now()): void {
+    const body = text.trim();
+    if (!body) return;
+    this.settleThought(key, false);
+    const entry: ThoughtEntry = { id: this.nextId++, at, source, text: body.slice(-MAX_THOUGHT_TEXT), live: true };
+    this.thoughts = bounded([...this.thoughts, entry], MAX_THOUGHTS);
+    this.liveThoughts.set(key, entry.id);
+    this.touch();
+  }
+
+  /** The work behind `key` has ended: its last thought is no longer live. */
+  settleThought(key: string, touch = true): void {
+    const id = this.liveThoughts.get(key);
+    if (id === undefined) return;
+    this.liveThoughts.delete(key);
+    const entry = this.thoughts.find((thought) => thought.id === id);
+    if (!entry?.live) return;
+    entry.live = false;
+    if (touch) this.touch();
   }
 
   /** Stream the oracle's reply text as it arrives. */
@@ -207,8 +238,11 @@ export class LobbyFeed {
       }
       if (run.thought && this.runThoughts.get(key) !== run.thought) {
         this.runThoughts.set(key, run.thought);
-        this.thought(source, run.thought, at);
+        // Live while the run goes on: the orb shows who is thinking, not only the oracle.
+        if (run.status === "running") this.liveThought(source, run.thought, key, at);
+        else this.thought(source, run.thought, at);
       }
+      if (run.status !== "running") this.settleThought(key);
       if (run.status !== "running" && before !== run.status) {
         this.settle(undefined, key);
         const kind: ActivityKind = run.status === "success" ? (run.wrappedUp ? "warning" : "success") : run.status === "cancelled" ? "warning" : "error";
@@ -225,6 +259,7 @@ export class LobbyFeed {
     this.reply = "";
     this.runSteps.clear();
     this.runThoughts.clear();
+    this.liveThoughts.clear();
     this.runStatus.clear();
     this.touch();
   }

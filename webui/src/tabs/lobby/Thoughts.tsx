@@ -1,14 +1,15 @@
 /**
  * The agents' latest thoughts. A glowing orb (see `Orb.tsx`) floats on the
  * Lobby in the colour of the agent thinking (taking turns when several are),
- * with that agent's name beside it; it opens a pane lit in the same colour, with no
- * title bar, where every agent has its own labelled bubble and each thought
+ * with that agent's name beside it; it opens a pane lit in the same colour, its
+ * edge pulsing while anyone thinks or works, with no title bar, where every agent has its own labelled bubble and each thought
  * reads as steps rather than one block of text. Esc, the backdrop or the
  * Thinking key closes it.
  */
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { createPortal } from "react-dom"
 import { formatSince } from "@/lib/format"
+import { cn } from "@/lib/utils"
 import { Popup } from "@/components/ui/popup"
 import { PRIORITY, useAnyOverlay, useOverlaySlot } from "@/lib/overlay"
 import { matchKey } from "@/app/useLobbyKeys"
@@ -106,6 +107,8 @@ export function Thoughts({ thoughts, collapsed, onToggle, shortcut, busy = [] }:
   const thinking = shown.filter((thought) => thought.live).map((thought) => thought.source)
   const spotlight = useSpotlight(thinking)
   const tone = spotlight ? sourceTone(spotlight) : busy.length ? "var(--primary)" : "var(--orb-idle)"
+  // Someone thinking, or at work with nothing to show yet: the pane's edge pulses in their colour.
+  const working = spotlight ? "thinking" : busy.length ? "busy" : undefined
   const bubble = useRef<HTMLButtonElement>(null)
   const minimized = useRef(collapsed)
   minimized.current = collapsed
@@ -133,14 +136,14 @@ export function Thoughts({ thoughts, collapsed, onToggle, shortcut, busy = [] }:
         open={visible}
         onOpenChange={(open) => { if (!open && !collapsed) onToggle() }}
         label="Thinking"
-        className="thought-pane max-w-xl"
+        className={cn("thought-pane max-w-xl", working && "thought-pane-live")}
         style={toneStyle(tone)}
         onCloseAutoFocus={(event) => {
           event.preventDefault()
           requestAnimationFrame(() => { if (!document.querySelector("[role='dialog']")) bubble.current?.focus() })
         }}
       >
-        <div aria-hidden="true" className="thought-aura" data-thinking={spotlight ? "" : undefined} />
+        <div aria-hidden="true" className="thought-aura" data-working={working} />
         <div className="relative min-h-0 overflow-y-auto p-3 outline-none sm:p-4" role="log" aria-label="Latest thoughts" tabIndex={0}>
           {shown.length ? (
             <ul className="flex flex-col gap-2.5">
