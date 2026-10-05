@@ -1,6 +1,6 @@
 {
-  "hash": "b47559fd67fdfc590859340461040e4e98cca50a5500e4db60d9da1425764b5d",
-  "builtAt": "2026-10-05T22:54:36.278Z",
+  "hash": "f3f99540f4b52a83c750af21af613927936237ab6215a2ab3691d145534166bc",
+  "builtAt": "2026-10-05T23:08:06.206Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -56,7 +56,7 @@
     },
     {
       "path": "webui/src/app/TabStrip.tsx",
-      "sha256": "e5d89251d5db5322ec285a0acab3c4f33f4e6fd35f7a6ef7d0228c0ed379c1f0"
+      "sha256": "081b32d6e93c5615027e6c85fb6ce9f1e2f23f531c5c601a23b47b42ec321cc2"
     },
     {
       "path": "webui/src/app/Thinking.tsx",
