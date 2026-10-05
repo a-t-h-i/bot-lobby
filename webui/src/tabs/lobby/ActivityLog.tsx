@@ -47,7 +47,7 @@ export function ActivityLog({ entries, collapsed, onToggle, shortcut, bare }: { 
   return (
     <Frame aria-label="Activity" {...(bare ? {} : { title: "Activity" })} collapsed={collapsed} {...(onToggle ? { onToggle } : {})} shortcut={shortcut} className="flex-1"
       note={running ? <><Spinner aria-hidden="true" role="presentation" className="size-3" /> {running} running</> : undefined}>
-      <div ref={ref} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-2 pt-2 pb-dock outline-none focus-visible:bg-muted/30" role="log" aria-label="Activity" tabIndex={0}>
+      <div ref={ref} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-2 pt-2 pb-dock outline-none focus-visible:bg-muted/30" role="log" aria-label="Activity" tabIndex={0}>
         {shown.length === 0 ? <p className="px-2 py-1 text-sm text-muted-foreground">No activity yet.</p> : <ul>{shown.map((entry) => <ActivityRow key={entry.id} entry={entry} />)}</ul>}
       </div>
       {!atBottom ? (
