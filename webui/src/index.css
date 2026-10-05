@@ -304,9 +304,25 @@
   /* Touch browsers zoom into fields under 16px: keep them at 16px there. */
   @media (pointer: coarse) {
     input,
-    textarea,
-    [role="combobox"] {
+    textarea {
       font-size: 16px !important;
+    }
+  }
+  /*
+   * Under a finger a control keeps the size it is drawn at; an invisible
+   * margin round it (taller, a little wider) makes it as easy to hit as a
+   * 40px one. The control holds the margin, so it is positioned; a utility
+   * that places it (absolute, fixed) still wins.
+   */
+  @media (pointer: coarse) {
+    :where(button, [role="tab"], [role="combobox"], header a[aria-keyshortcuts]):not([role="switch"], [role="checkbox"], [data-compact]) {
+      position: relative;
+    }
+    :where(button, [role="tab"], [role="combobox"], header a[aria-keyshortcuts]):not([role="switch"], [role="checkbox"], [data-compact])::after {
+      content: "";
+      position: absolute;
+      inset-block: min(0px, calc((100% - var(--control-target)) / 2));
+      inset-inline: min(-2px, calc((100% - var(--control-target)) / 2));
     }
   }
   ::selection {
@@ -420,13 +436,12 @@
 
 
 /*
- * With a mouse a control keeps its drawn size (30px for most, never under the
- * 24px of WCAG 2.5.8), so buttons stay slim. Under a finger it is never
- * smaller than 44px; switches, checkboxes and the message box's compact
- * buttons carry their own hit area.
+ * Controls keep their drawn size everywhere (30px for most, never under the
+ * 24px of WCAG 2.5.8), on a tablet too: under a finger each gets an invisible
+ * margin to 40px instead (see the base layer). Switches, checkboxes and the
+ * message box's compact buttons carry their own hit area.
  */
 :root { --touch-target: 44px; --control-target: 40px; --thinking-lift: -2px; --thinking-scale: 1.04; }
-@media (pointer: coarse) { button:not([role="switch"]):not([role="checkbox"]):not([data-compact]), [role="combobox"], [role="tab"], header a[aria-keyshortcuts] { min-height: var(--touch-target); min-width: var(--touch-target); } }
 [hidden] { display: none !important; }
 
 /*
@@ -726,6 +741,9 @@
  * nothing is squeezed.
  */
 .app-header {
+  /* Above the page's card, so the tabs' tap margins reach a little over its top edge. */
+  position: relative;
+  z-index: 2;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas:
