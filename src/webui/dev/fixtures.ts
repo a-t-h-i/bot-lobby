@@ -47,7 +47,8 @@ export interface ScenarioFixture {
   feed: {
     chat: Array<{ role: ChatRole; text: string }>;
     activity: Array<{ source: string; text: string; kind: "info" | "success" | "warning" | "error"; pending: boolean }>;
-    thoughts: Array<{ source: string; text: string }>;
+    /** `live` thoughts are still streaming, as an agent thinking now. */
+    thoughts: Array<{ source: string; text: string; live?: boolean }>;
     reply: string;
     chatOlder: boolean;
   };

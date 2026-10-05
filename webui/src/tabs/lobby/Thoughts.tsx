@@ -1,35 +1,88 @@
-/** The latest agent thoughts, opened from the Lobby's floating bubble. */
-import { useEffect, useRef } from "react"
+/**
+ * The agents' latest thoughts. A glowing orb floats above the message box in
+ * the colour of the agent thinking (taking turns when several are), with that
+ * agent's name beside it; it opens a pane lit in the same colour, with no
+ * title bar, where every agent has its own labelled bubble and each thought
+ * reads as steps rather than one block of text. Esc, the backdrop or the
+ * Thinking key closes it.
+ */
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { createPortal } from "react-dom"
-import { Brain, Minimize } from "lucide-react"
+import { AnimatePresence, motion } from "motion/react"
 import { cn } from "@/lib/utils"
+import { formatSince } from "@/lib/format"
 import { Popup } from "@/components/ui/popup"
-import { Button } from "@/components/ui/button"
-import { KBD_CLASS, Keys } from "@/components/ui/kbd"
+import { Keys } from "@/components/ui/kbd"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { PRIORITY, useAnyOverlay, useOverlaySlot } from "@/lib/overlay"
 import { matchKey } from "@/app/useLobbyKeys"
 import { Markdown } from "@/ui/Markdown"
-import { latestThoughts, sourceColor, sourceLabel, type ThoughtEntry } from "./types"
+import { latestThoughts, sourceLabel, sourceTone, type ThoughtEntry } from "./types"
+import { thoughtSteps } from "./thoughtSteps"
 
-function ThoughtRow({ thought }: { thought: ThoughtEntry }) {
+/** Steps a bubble shows before the earlier ones fold away. */
+const SHOWN_STEPS = 4
+/** How long each thinking agent holds the orb when several are. */
+const TURN_MS = 1800
+
+const toneStyle = (tone: string) => ({ "--orb": tone }) as CSSProperties
+
+/** The agent in the spotlight: the one thinking, or each in turn when several are. */
+function useSpotlight(sources: string[]): string | undefined {
+  const [turn, setTurn] = useState(0)
+  const key = sources.join("|")
+  useEffect(() => {
+    setTurn(0)
+    if (sources.length < 2) return
+    const timer = window.setInterval(() => setTurn((now) => now + 1), TURN_MS)
+    return () => window.clearInterval(timer)
+    // Keyed on the names, not the array: a new snapshot with the same agents keeps the turn going.
+  }, [key, sources.length])
+  return sources.length ? sources[turn % sources.length] : undefined
+}
+
+function ThoughtBubble({ thought }: { thought: ThoughtEntry }) {
+  const steps = useMemo(() => thoughtSteps(thought.text), [thought.text])
+  const [all, setAll] = useState(false)
+  const folded = all ? 0 : Math.max(0, steps.length - SHOWN_STEPS)
+  const shown = steps.slice(folded)
+  const label = sourceLabel(thought.source)
   return (
-    <li className="flex flex-wrap items-start gap-x-3 gap-y-1 border-b border-border py-3 text-sm last:border-0">
-      <span className={cn("shrink-0 pt-0.5 text-xs font-medium", sourceColor(thought.source))}>{sourceLabel(thought.source)}</span>
-      {thought.live ? (
-        <span className="flex shrink-0 items-center gap-2 pt-0.5 text-xs text-primary">
-          <span aria-hidden="true" className="size-1.5 rounded-full bg-primary motion-safe:animate-pulse" />
-          thinking
+    <li className="thought" style={toneStyle(sourceTone(thought.source))} data-live={thought.live || undefined} aria-label={`${label}${thought.live ? ", thinking" : ""}`}>
+      <div className="flex items-center gap-2">
+        <span className="thought-label">
+          <span aria-hidden="true" className="orb orb-dot" />
+          {label}
         </span>
-      ) : null}
-      <div className="w-full min-w-0 text-muted-foreground italic">
-        <Markdown text={thought.text} />
+        <span className="text-xs text-muted-foreground">
+          {thought.live ? (
+            <span className="thought-live">
+              thinking<span aria-hidden="true" className="thought-ellipsis" />
+            </span>
+          ) : (
+            formatSince(Date.now() - thought.at)
+          )}
+        </span>
+        {steps.length > 1 ? <span className="ml-auto text-xs text-muted-foreground tabular-nums">{steps.length} steps</span> : null}
       </div>
+      {folded ? (
+        <button type="button" data-compact className="thought-more" onClick={() => setAll(true)}>
+          {folded} earlier {folded === 1 ? "step" : "steps"}
+        </button>
+      ) : null}
+      <ol className="thought-steps" data-single={shown.length === 1 || undefined}>
+        {shown.map((step, index) => (
+          <li key={folded + index} data-current={(thought.live && index === shown.length - 1) || undefined}>
+            {step.title ? <p className="text-sm font-medium text-foreground">{step.title}</p> : null}
+            {step.text ? <Markdown text={step.text} className="thought-text" /> : null}
+          </li>
+        ))}
+      </ol>
     </li>
   )
 }
 
-/** The Thinking key closes the open dialog again (typing in a field is never interrupted). */
+/** The Thinking key closes the open pane again (typing in a field is never interrupted). */
 function useThinkingKey(open: boolean, shortcut: string | undefined, onToggle: () => void) {
   useEffect(() => {
     if (!open || !shortcut) return
@@ -44,8 +97,16 @@ function useThinkingKey(open: boolean, shortcut: string | undefined, onToggle: (
   }, [open, shortcut, onToggle])
 }
 
+/** Thinking agents first, newest first, then the rest, newest first. */
+function byNow(thoughts: ThoughtEntry[]): ThoughtEntry[] {
+  return [...thoughts].sort((a, b) => Number(b.live) - Number(a.live) || b.at - a.at)
+}
+
 export function Thoughts({ thoughts, collapsed, onToggle, shortcut }: { thoughts: ThoughtEntry[]; collapsed: boolean; onToggle: () => void; shortcut?: string | undefined }) {
-  const shown = latestThoughts(thoughts)
+  const shown = byNow(latestThoughts(thoughts))
+  const thinking = shown.filter((thought) => thought.live).map((thought) => thought.source)
+  const spotlight = useSpotlight(thinking)
+  const tone = spotlight ? sourceTone(spotlight) : "var(--orb-idle)"
   const bubble = useRef<HTMLButtonElement>(null)
   const minimized = useRef(collapsed)
   minimized.current = collapsed
@@ -58,19 +119,46 @@ export function Thoughts({ thoughts, collapsed, onToggle, shortcut }: { thoughts
       {createPortal(
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
+            <button
               ref={bubble}
               type="button"
-              variant="outline"
               aria-label="Open Thinking"
+              aria-description={spotlight ? `${thinking.map(sourceLabel).join(", ")} thinking` : undefined}
               aria-haspopup="dialog"
               aria-expanded={!collapsed}
               aria-keyshortcuts={shortcut ? `${shortcut} Enter Space` : "Enter Space"}
               onClick={onToggle}
-              className={cn("thinking-bubble fixed z-20 size-11 rounded-full shadow-card", overlay && "invisible")}
+              style={toneStyle(tone)}
+              data-thinking={spotlight ? "" : undefined}
+              className={cn("thinking-bubble fixed z-20 flex items-center justify-end gap-2 rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/40", overlay && "invisible")}
             >
-              <Brain aria-hidden="true" />
-            </Button>
+              <AnimatePresence initial={false}>
+                {spotlight ? (
+                  <motion.span
+                    key="label"
+                    className="orb-label"
+                    initial={{ opacity: 0, x: 8, scale: 0.9 }}
+                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                    exit={{ opacity: 0, x: 8, scale: 0.9 }}
+                    transition={{ type: "spring", visualDuration: 0.3, bounce: 0.35 }}
+                  >
+                    <AnimatePresence mode="popLayout" initial={false}>
+                      <motion.span
+                        key={spotlight}
+                        className="inline-block"
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ type: "spring", visualDuration: 0.28, bounce: 0.3 }}
+                      >
+                        {sourceLabel(spotlight)}
+                      </motion.span>
+                    </AnimatePresence>
+                  </motion.span>
+                ) : null}
+              </AnimatePresence>
+              <span aria-hidden="true" className="orb orb-float" />
+            </button>
           </TooltipTrigger>
           <TooltipContent side="left">
             Thinking {shortcut ? <Keys chord={shortcut} /> : null}
@@ -82,25 +170,21 @@ export function Thoughts({ thoughts, collapsed, onToggle, shortcut }: { thoughts
         open={visible}
         onOpenChange={(open) => { if (!open && !collapsed) onToggle() }}
         label="Thinking"
+        className="thought-pane max-w-xl"
+        style={toneStyle(tone)}
         onCloseAutoFocus={(event) => {
           event.preventDefault()
           requestAnimationFrame(() => { if (!document.querySelector("[role='dialog']")) bubble.current?.focus() })
         }}
       >
-        <header className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
-          <h2 className="text-[0.9375rem] font-medium">Thinking</h2>
-          <Button variant="ghost" aria-keyshortcuts="Escape Enter Space" onClick={onToggle}>
-            <Minimize aria-hidden="true" />
-            Minimize <kbd data-slot="kbd" className={cn(KBD_CLASS, "ml-0.5")}>Esc</kbd>
-          </Button>
-        </header>
-        <div className="min-h-0 overflow-y-auto px-4 py-2 outline-none focus-visible:bg-muted/30" role="log" aria-label="Latest thoughts" tabIndex={0}>
+        <div aria-hidden="true" className="thought-aura" data-thinking={spotlight ? "" : undefined} />
+        <div className="relative min-h-0 overflow-y-auto p-3 outline-none sm:p-4" role="log" aria-label="Latest thoughts" tabIndex={0}>
           {shown.length ? (
-            <ul>
-              {shown.map((thought) => <ThoughtRow key={thought.id} thought={thought} />)}
+            <ul className="flex flex-col gap-2.5">
+              {shown.map((thought) => <ThoughtBubble key={thought.id} thought={thought} />)}
             </ul>
           ) : (
-            <p className="py-4 text-sm text-muted-foreground">Thoughts from the oracle and every agent appear here, and only here.</p>
+            <p className="px-2 py-6 text-center text-sm text-muted-foreground">Thoughts from the oracle and every agent appear here, and only here.</p>
           )}
         </div>
       </Popup>

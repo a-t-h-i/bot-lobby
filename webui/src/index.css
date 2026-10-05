@@ -337,16 +337,185 @@ button:not([role="switch"]):not([role="checkbox"]):not([data-compact]), [role="t
 @media (pointer: coarse) { button:not([role="switch"]):not([role="checkbox"]):not([data-compact]), [role="combobox"], [role="tab"], header a[aria-keyshortcuts] { min-height: var(--touch-target); min-width: var(--touch-target); } }
 [hidden] { display: none !important; }
 
-/* The Thinking bubble floats above the message box; it leans toward the pointer unless motion is reduced. */
+/*
+ * Thinking: a glowing orb in the colour of the agent thinking (`--orb`, set
+ * per agent). The colour is a registered property, so a change of agent fades
+ * from one colour to the next instead of jumping. It breathes while an agent
+ * thinks and rests, pearl grey, when none does.
+ */
+@property --orb {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #9a9aa3;
+}
+:root { --orb-idle: #a3a1ad; }
+.dark { --orb-idle: #6e6d78; }
+
+.orb {
+  position: relative;
+  flex: none;
+  border-radius: 9999px;
+  background:
+    radial-gradient(circle at 32% 26%, rgb(255 255 255 / 0.9) 0, rgb(255 255 255 / 0) 32%),
+    radial-gradient(circle at 50% 60%, color-mix(in oklab, var(--orb) 55%, white) 0%, color-mix(in oklab, var(--orb) 86%, white) 45%, var(--orb) 78%, color-mix(in oklab, var(--orb) 72%, black) 100%);
+  box-shadow:
+    inset 0 -2px 5px color-mix(in oklab, var(--orb) 55%, black),
+    0 0 0 1px color-mix(in oklab, var(--orb) 22%, transparent),
+    0 0 12px 1px color-mix(in oklab, var(--orb) 38%, transparent);
+  transition: --orb 700ms ease;
+}
+/* A sheen that swirls round the orb while it thinks. */
+.orb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: conic-gradient(from 0deg, transparent 0 55%, rgb(255 255 255 / 0.4) 72%, transparent 88%);
+  mix-blend-mode: overlay;
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+.orb-float { width: 1.75rem; height: 1.75rem; margin: calc((var(--touch-target) - 1.75rem) / 2); }
+.orb-dot { width: 0.5rem; height: 0.5rem; box-shadow: 0 0 6px color-mix(in oklab, var(--orb) 55%, transparent); }
+.orb-dot::after { display: none; }
+[data-thinking] > .orb-float {
+  box-shadow:
+    inset 0 -2px 5px color-mix(in oklab, var(--orb) 55%, black),
+    0 0 0 1px color-mix(in oklab, var(--orb) 28%, transparent),
+    0 0 14px 2px color-mix(in oklab, var(--orb) 55%, transparent),
+    0 0 34px 8px color-mix(in oklab, var(--orb) 24%, transparent);
+  animation: orb-breathe 2.4s ease-in-out infinite;
+}
+[data-thinking] > .orb-float::after { opacity: 1; animation: orb-swirl 2.6s linear infinite; }
+@keyframes orb-breathe {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.08); filter: brightness(1.12); }
+}
+@keyframes orb-swirl { to { transform: rotate(1turn); } }
+
+/* The orb floats above the message box; it leans toward the pointer unless motion is reduced. */
 .thinking-bubble {
-  width: var(--touch-target);
+  min-width: var(--touch-target);
   height: var(--touch-target);
   right: max(1rem, env(safe-area-inset-right));
   bottom: calc(var(--composer-h) + 1rem + env(safe-area-inset-bottom));
   transition: transform 150ms ease-out;
 }
 .thinking-bubble:hover { transform: translateY(var(--thinking-lift)) scale(var(--thinking-scale)); }
-@media (prefers-reduced-motion: reduce) { .thinking-bubble, .thinking-bubble:hover { transform: none !important; transition: none !important; } }
+/* The name of the agent thinking, on a small glass tag beside the orb. */
+.orb-label {
+  display: inline-flex;
+  align-items: center;
+  height: 1.5rem;
+  padding: 0 0.625rem;
+  margin-right: -0.25rem;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in oklab, var(--orb) 22%, var(--dock-border));
+  background: color-mix(in oklab, var(--card) 88%, transparent);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 4px 14px -6px color-mix(in oklab, var(--orb) 45%, transparent);
+  backdrop-filter: blur(12px);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: color-mix(in oklab, var(--orb) 78%, var(--foreground));
+  white-space: nowrap;
+  overflow: hidden;
+  transition: color 700ms ease, border-color 700ms ease;
+}
+
+/* The pane: no title bar, lit from the top in the spotlit agent's colour. */
+.thought-pane {
+  position: relative;
+  box-shadow: var(--glass-shadow), 0 0 0 1px color-mix(in oklab, var(--orb) 16%, transparent), 0 24px 70px -28px color-mix(in oklab, var(--orb) 55%, transparent);
+  transition: box-shadow 700ms ease;
+}
+.thought-aura {
+  pointer-events: none;
+  position: absolute;
+  left: 50%;
+  top: -8rem;
+  width: 30rem;
+  height: 13rem;
+  translate: -50% 0;
+  border-radius: 9999px;
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--orb) 42%, transparent), transparent);
+  filter: blur(16px);
+  opacity: 0.85;
+}
+.thought-aura[data-thinking] { animation: aura-breathe 3.2s ease-in-out infinite; }
+@keyframes aura-breathe { 50% { opacity: 1; scale: 1.08; } }
+
+/* One agent's bubble, edged and tinted in its colour, its name on a tag. */
+.thought {
+  display: grid;
+  gap: 0.625rem;
+  padding: 0.75rem 0.875rem 0.875rem;
+  border-radius: var(--radius-xl);
+  border: 1px solid color-mix(in oklab, var(--orb) 16%, var(--border));
+  background: color-mix(in oklab, var(--orb) 4%, var(--card));
+}
+.thought[data-live] { border-color: color-mix(in oklab, var(--orb) 32%, var(--border)); box-shadow: 0 0 0 3px color-mix(in oklab, var(--orb) 7%, transparent); }
+.thought-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 1.375rem;
+  padding: 0 0.5rem;
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--orb) 12%, transparent);
+  color: color-mix(in oklab, var(--orb) 82%, var(--foreground));
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.thought-live { color: color-mix(in oklab, var(--orb) 70%, var(--muted-foreground)); }
+.thought-ellipsis::after { content: "…"; display: inline-block; animation: thought-blink 1.2s steps(2, jump-none) infinite; }
+@keyframes thought-blink { 50% { opacity: 0.25; } }
+.thought-more {
+  justify-self: start;
+  margin-left: 1.125rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+.thought-more:hover { color: var(--foreground); }
+.thought-more:focus-visible { box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 40%, transparent); }
+
+/* The steps of a thought on a thin rail, the one being thought now lit. */
+.thought-steps { position: relative; display: grid; gap: 0.5rem; padding-left: 1.125rem; }
+.thought-steps::before {
+  content: "";
+  position: absolute;
+  left: 0.21875rem;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  width: 1px;
+  background: color-mix(in oklab, var(--orb) 22%, var(--border));
+}
+.thought-steps > li { position: relative; min-width: 0; }
+.thought-steps > li::before {
+  content: "";
+  position: absolute;
+  left: -1.125rem;
+  top: 0.4rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: var(--card);
+  border: 1.5px solid color-mix(in oklab, var(--orb) 55%, var(--border));
+}
+.thought-steps > li[data-current]::before { background: var(--orb); box-shadow: 0 0 0 3px color-mix(in oklab, var(--orb) 20%, transparent); animation: thought-blink 1.4s ease-in-out infinite; }
+.thought-steps[data-single] { padding-left: 0; }
+.thought-steps[data-single]::before, .thought-steps[data-single] > li::before { display: none; }
+.thought-text { font-size: 0.8125rem; line-height: 1.55; color: var(--muted-foreground); }
+.thought-steps > li[data-current] .thought-text { color: var(--foreground); }
+.thought-text > * + * { margin-top: 0.375rem; }
+.thought-steps > li > p + .thought-text { margin-top: 0.125rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-bubble, .thinking-bubble:hover { transform: none !important; transition: none !important; }
+  [data-thinking] > .orb-float, [data-thinking] > .orb-float::after, .thought-aura[data-thinking], .thought-ellipsis::after, .thought-steps > li[data-current]::before { animation: none !important; }
+  .orb, .orb-label, .thought-pane { transition: none; }
+}
 
 /*
  * The top bar: where you are on the left, the tabs in the middle, the session
