@@ -4,10 +4,11 @@
  * entries on the right (a Sheet below 1024 px). `#/knowledge/<agent>/<file>`
  * opens a file; the `knowledge` topic rereads the list.
  */
+import { BookOpen } from "lucide-react"
 import { go, tabHash } from "@/app/router"
 import { ErrorState } from "@/app/States"
 import { useApiRead } from "@/app/useApiRead"
-import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty"
+import { Empty, EmptyMedia, EmptyDescription, EmptyHeader } from "@/components/ui/empty"
 import { ListSkeleton, PaneHeader, SplitPane, useWide } from "@/ui/SplitPane"
 import { FileDetail } from "./FileDetail"
 import { fileKey, KnowledgeList } from "./KnowledgeList"
@@ -21,8 +22,11 @@ const open = (key: string) => {
 
 function NoFiles() {
   return (
-    <Empty className="flat-pane m-4 flex-1">
+    <Empty className="m-4 flex-1">
       <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <BookOpen aria-hidden="true" />
+        </EmptyMedia>
         <EmptyDescription>No knowledge files yet.</EmptyDescription>
       </EmptyHeader>
     </Empty>

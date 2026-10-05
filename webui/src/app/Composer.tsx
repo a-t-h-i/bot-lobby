@@ -1,17 +1,16 @@
 /**
  * The one text box for everything: a single card with roomy text at the top
  * and, inside it at the bottom, the tools, who it goes to, the key hints and
- * the send button. It floats pinned at the bottom of the window (the shell
- * gives it its overlay container), grows with what you type up to a cap
- * (and opens up to a tall editor), takes images, PDFs and other files (pick,
+ * the send button. It sits under the page (the shell gives it its row), grows
+ * with what you type up to a cap, takes images, PDFs and other files (pick,
  * paste or drop them) and sends Markdown to whoever the tab talks to: the
  * oracle everywhere, the planning panel on Plan, a quick fix on Quick fix, a
  * comment on the open task on Tasks. While a pop-up is open it steps aside, so
  * only one thing asks for you at a time.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react"
-import { animate, AnimatePresence, motion } from "motion/react"
-import { ArrowUp, Eye, FileText, Maximize2, Minimize2, Paperclip, Square, X } from "lucide-react"
+import { AnimatePresence, motion } from "motion/react"
+import { ArrowUp, Eye, FileText, Paperclip, Square, X } from "lucide-react"
 import { Keys, KeyHint } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -90,7 +89,7 @@ let keySeq = 0
 
 /** The flat icon buttons under the box. */
 const TOOL =
-  "inline-flex size-11 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+  "inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95 aria-pressed:bg-accent aria-pressed:text-foreground"
 
 function isSend(event: KeyboardEvent): boolean {
   return event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing
@@ -139,7 +138,7 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.8 }}
       transition={{ type: "spring", stiffness: 520, damping: 32 }}
-      className="flex h-9 min-w-0 items-center gap-2 rounded-lg bg-muted pr-1 pl-2.5"
+      className="flex h-9 min-w-0 items-center gap-2 rounded-lg border border-border bg-muted pr-1 pl-2.5"
     >
       <span className="relative flex shrink-0 items-center justify-center text-muted-foreground">
         <FileText aria-hidden="true" className="size-4" />
@@ -157,7 +156,6 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
 export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<string, string>; onHelp: () => void }) {
   const [text, setText] = useState("")
   const [files, setFiles] = useState<Pending[]>([])
-  const [expanded, setExpanded] = useState(false)
   const [preview, setPreview] = useState(false)
   const [sending, setSending] = useState(false)
   const [dragging, setDragging] = useState(false)
@@ -174,7 +172,6 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
   useEffect(() => setChosen(undefined), [targetKey])
 
   const card = useRef<HTMLDivElement>(null)
-  const area = useRef<HTMLDivElement>(null)
   const field = useRef<HTMLTextAreaElement>(null)
   const picker = useRef<HTMLInputElement>(null)
   const filesRef = useRef(files)
@@ -195,7 +192,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
     setText(change.value)
   }, [])
 
-  // The toasts and the page's own bottom padding follow the composer's height.
+  // The toasts sit just above the composer, wherever its height has got to.
   useEffect(() => {
     const el = card.current
     if (!el) return
@@ -209,26 +206,6 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
       root.style.setProperty("--composer-h", "0px")
     }
   }, [blocked])
-
-  // Opening or closing the tall editor eases the box between its two heights.
-  const lastHeight = useRef(0)
-  useLayoutEffect(() => {
-    const el = area.current
-    if (!el) return
-    const to = el.offsetHeight
-    const from = lastHeight.current
-    lastHeight.current = to
-    if (!from || from === to || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
-    el.style.height = `${from}px`
-    el.style.overflow = "hidden"
-    const control = animate(el, { height: `${to}px` }, { type: "spring", stiffness: 380, damping: 34 })
-    void control.finished.then(() => {
-      el.style.height = ""
-      el.style.overflow = ""
-      lastHeight.current = el.offsetHeight
-    })
-    return () => control.stop()
-  }, [expanded])
 
   const attach = useCallback((list: Iterable<File>) => {
     const incoming = [...list]
@@ -355,13 +332,13 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
   return (
     <div
       ref={card}
-      className={cn("pointer-events-auto px-4 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-opacity duration-200 ease-snap", blocked && "opacity-0")}
+      className={cn("shrink-0 px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-opacity duration-200 ease-snap max-sm:px-2", blocked && "opacity-0")}
       inert={blocked}
     >
-      <div className={cn("mx-auto w-full transition-[max-width] duration-300 ease-snap", expanded ? "max-w-4xl" : "max-w-3xl")}>
+      <div className="mx-auto w-full max-w-3xl">
         <div
           className={cn(
-            "group/composer relative rounded-lg border border-input bg-card shadow-card transition-[border-color,box-shadow] duration-200 ease-snap focus-within:border-ring/60 focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_16%,transparent)]",
+            "group/composer relative rounded-xl border border-input bg-card shadow-surface transition-[border-color,box-shadow] duration-200 ease-snap focus-within:border-ring/60 focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_16%,transparent)]",
             dragging && "border-primary shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_30%,transparent)]"
           )}
           onDragOver={(event) => {
@@ -396,7 +373,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
             </div>
           ) : null}
 
-          <div ref={area} className="flex px-4 pt-3 pb-1">
+          <div className="flex px-4 pt-3 pb-1">
             <textarea
               ref={field}
               id="composer-text"
@@ -407,11 +384,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
               onPaste={onPaste}
               placeholder={busy && target.id === "oracle" ? "The oracle is working. Enter steers it…" : target.placeholder}
               rows={1}
-              className={cn(
-                "w-full min-w-0 flex-1 resize-none bg-transparent text-base leading-relaxed caret-primary outline-none placeholder:text-muted-foreground/80 md:text-[0.9375rem] md:leading-relaxed",
-                "field-sizing-content",
-                expanded ? "max-h-[40vh] min-h-[min(30vh,24rem)]" : "max-h-[40vh] min-h-[1.75rem]"
-              )}
+              className="field-sizing-content max-h-[min(45vh,20rem)] min-h-[1.75rem] w-full min-w-0 flex-1 resize-none bg-transparent text-base leading-relaxed caret-primary outline-none placeholder:text-muted-foreground md:text-[0.9375rem] md:leading-relaxed"
             />
           </div>
 
@@ -438,22 +411,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
-                  aria-label={expanded ? "Make the box smaller" : "Open the box wider and taller"}
-                  aria-pressed={expanded}
-                  onClick={() => setExpanded((value) => !value)}
-                  className={cn(TOOL, expanded && "bg-tab text-foreground")}
-                >
-                  {expanded ? <Minimize2 aria-hidden="true" className="size-4" /> : <Maximize2 aria-hidden="true" className="size-4" />}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>{expanded ? "Smaller" : "Bigger"}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button type="button" aria-label="Preview the Markdown" aria-pressed={preview} aria-keyshortcuts="Alt+P Enter Space" aria-describedby="focused-action-help" onClick={() => setPreview((value) => !value)} className={cn(TOOL, preview && "bg-tab text-foreground")}>
+                <button type="button" aria-label="Preview the Markdown" aria-pressed={preview} aria-keyshortcuts="Alt+P" aria-describedby="focused-action-help" onClick={() => setPreview((value) => !value)} className={TOOL}>
                   <Eye aria-hidden="true" className="size-4" />
                 </button>
               </TooltipTrigger>
@@ -474,7 +432,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
                     aria-checked={entry.id === target.id}
                     onClick={() => setChosen(entry.id)}
                     className={cn(
-                      "h-6 rounded-[6px] px-2.5 text-xs font-medium transition-[background-color,color,box-shadow] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
+                      "h-6 rounded-md px-2.5 text-xs font-medium transition-[background-color,color,box-shadow] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
                       entry.id === target.id ? "bg-card text-foreground shadow-card" : "text-muted-foreground hover:text-foreground"
                     )}
                   >
@@ -489,10 +447,13 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
             <div className="@container ml-auto flex min-w-0 flex-1 items-center justify-end overflow-hidden px-2">
               <div className="flex items-center justify-end gap-3.5">
                 {route.kind === "tab" && route.tab === "plan" ? (
-                  <KeyHint chord={keys.savePlan ?? "Ctrl+S"} className="hidden @[30rem]:inline-flex">
+                  <KeyHint chord={keys.savePlan ?? "Ctrl+S"} className="hidden @[34rem]:inline-flex">
                     save plan
                   </KeyHint>
                 ) : null}
+                <KeyHint chord="Esc" className="hidden @[28rem]:inline-flex">
+                  tabs
+                </KeyHint>
                 <KeyHint chord="Shift+Enter" className="hidden @[22rem]:inline-flex">
                   new line
                 </KeyHint>
@@ -505,16 +466,16 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
                   aria-label="Keyboard shortcuts"
                   aria-haspopup="dialog"
                   onClick={onHelp}
-                  className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-1.5 text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+                  className="kbd-hint inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-1.5 text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
                 >
-                  <Keys chord={keys.help ?? "Alt+H"} />
+                  <Keys chord={keys.help ?? "Alt+H"} className="kbd-hint" />
                   <span className="hidden @[8rem]:inline">shortcuts</span>
                 </button>
               </div>
             </div>
 
             {busy && target.id === "oracle" ? (
-              <ConfirmButton label="Stop" icon={Square} title="Stop the oracle?" description="The current response stops. Work already recorded is kept." confirmLabel="Stop" variant="destructive" onConfirm={() => void stop()} />
+              <ConfirmButton label="Stop" icon={Square} iconOnly title="Stop the oracle?" description="The current response stops. Work already recorded is kept." confirmLabel="Stop" variant="destructive" onConfirm={() => void stop()} />
             ) : null}
             <Tooltip>
               <TooltipTrigger asChild>
@@ -524,7 +485,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
                   aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
                   onClick={() => void send()}
                   disabled={!canSend}
-                  className="inline-flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-[background-color,color,transform,filter] duration-150 ease-snap outline-none hover:brightness-110 focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95 disabled:bg-muted disabled:text-muted-foreground disabled:hover:brightness-100"
+                  className="inline-flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-[background-color,color,transform,filter] duration-150 ease-snap outline-none hover:brightness-110 focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95 disabled:bg-muted disabled:text-muted-foreground disabled:hover:brightness-100"
                 >
                   {sending ? <Spinner aria-hidden="true" role="presentation" className="size-4 text-primary-foreground" /> : <ArrowUp aria-hidden="true" className="size-4" />}
                 </button>
@@ -536,7 +497,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
           </div>
 
           {dragging ? (
-            <div aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-card/90 text-sm font-medium text-primary backdrop-blur-[2px]">
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-card/90 text-sm font-medium text-primary backdrop-blur-[2px]">
               Drop to attach
             </div>
           ) : null}

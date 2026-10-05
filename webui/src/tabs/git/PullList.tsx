@@ -6,6 +6,7 @@
 import type { PullInfo } from "@protocol"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { ROW, ROWS } from "@/ui/rows"
 import { changeSize, checkMark, checkTone, metaLine, reviewMark } from "./words"
 
 function Checks({ checks }: { checks: PullInfo["checks"] }) {
@@ -27,7 +28,7 @@ function Row({ pull, selected, onSelect }: { pull: PullInfo; selected: boolean; 
         data-row
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(pull.number)}
-        className="flex min-h-9 w-full flex-col gap-0.5 px-3 py-2.5 text-left outline-none transition-colors duration-150 hover:bg-accent/40 focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:bg-accent"
+        className={ROW}
       >
         <span className="flex items-start gap-2 text-sm">
           <span className="shrink-0 text-muted-foreground tabular-nums">#{pull.number}</span>
@@ -49,7 +50,7 @@ function Row({ pull, selected, onSelect }: { pull: PullInfo; selected: boolean; 
 
 export function PullList({ pulls, selectedId, onSelect }: { pulls: readonly PullInfo[]; selectedId?: number; onSelect: (number: number) => void }) {
   return (
-    <ul className="flex flex-col divide-y divide-border px-2 pb-2">
+    <ul className={ROWS}>
       {pulls.map((pull) => (
         <Row key={pull.number} pull={pull} selected={pull.number === selectedId} onSelect={onSelect} />
       ))}

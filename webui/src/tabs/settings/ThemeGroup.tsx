@@ -143,9 +143,9 @@ function ImportTheme() {
           void onFile(event.target.files?.[0])
           event.target.value = ""
         }} />
-        <ActionButton label="Apply the pasted theme" icon={Check} tone="primary" disabled={!text.trim()} onClick={() => apply(text, "Custom theme")} />
-        <ActionButton label="Upload a .css or .json theme file" icon={Upload} onClick={() => picker.current?.click()} />
-        {palette.custom ? <ConfirmButton label={`Remove ${palette.custom.name}`} title="Remove the imported theme?" description="The imported theme is stored in this browser. Keep a copy if you want to use it again." confirmLabel="Remove theme" icon={Trash2} variant="destructive" onConfirm={() => palette.removeCustom()} /> : null}
+        <ActionButton label="Apply the pasted theme" text="Apply" icon={Check} tone="primary" disabled={!text.trim()} onClick={() => apply(text, "Custom theme")} />
+        <ActionButton label="Upload a .css or .json theme file" text="Upload file" icon={Upload} onClick={() => picker.current?.click()} />
+        {palette.custom ? <ConfirmButton label={`Remove ${palette.custom.name}`} text="Remove" title="Remove the imported theme?" description="The imported theme is stored in this browser. Keep a copy if you want to use it again." confirmLabel="Remove theme" icon={Trash2} variant="destructive" onConfirm={() => palette.removeCustom()} /> : null}
         {error ? (
           <p role="alert" className="ml-2 min-w-0 text-xs text-destructive">
             {error}
@@ -160,7 +160,7 @@ export function ThemeGroup() {
   const { theme, setTheme } = useTheme()
   const muted = useSoundMuted()
   return (
-    <Section title={GROUP_TITLES.appearance}>
+    <Section prominent title={GROUP_TITLES.appearance}>
       <Rows>
         <Field label="Prompt sounds" help="A droplet for each new actionable prompt or delivery review. Kept in this browser; sound starts after interaction. Desktop notifications remain separate.">
           <Switch checked={!muted} onCheckedChange={(on) => setSoundMuted(!on)} aria-label="Prompt sounds" />

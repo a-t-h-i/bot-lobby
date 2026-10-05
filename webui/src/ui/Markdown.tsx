@@ -54,7 +54,7 @@ function CodeBlock({ node, children, source }: { node?: unknown; children?: Reac
   const names = n?.children?.find((child) => child.tagName === "code")?.properties?.className
   const language = (Array.isArray(names) ? names : []).map(String).find((name) => name.startsWith("language-"))?.slice(9)
   return <div className="relative my-3 rounded-lg bg-muted">
-    <div className="flex items-center justify-between pl-3"><span className="text-xs text-muted-foreground">{language && /^[\w+#.-]{1,20}$/.test(language) ? language : "code"} · tap to copy</span><ActionButton label={copied ? "Copied" : "Copy the code"} icon={copied ? Check : Copy} onClick={() => void copy()} /></div>
+    <div className="flex items-center justify-between pl-3"><span className="text-xs text-muted-foreground">{language && /^[\w+#.-]{1,20}$/.test(language) ? language : "code"} · tap to copy</span><ActionButton label={copied ? "Copied" : "Copy the code"} icon={copied ? Check : Copy} iconOnly onClick={() => void copy()} /></div>
     <pre className="!my-0 overflow-x-auto !rounded-t-none !bg-transparent px-3 pb-3 text-sm leading-relaxed [&>code]:block">{children}</pre>
   </div>
 }

@@ -52,7 +52,8 @@ test("toolbar touch targets, context, keyboard hint activation and modal guard",
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog", { name: "Keys", exact: true })).toBeVisible();
   await page.keyboard.press("Alt+2");
-  await expect(page.getByRole("tab", { name: /Lobby/ })).toHaveAttribute("aria-selected", "true");
+  // The open dialog hides the page from assistive technology, so the tab is looked up with `includeHidden`.
+  await expect(page.getByRole("tab", { name: /Lobby/, includeHidden: true })).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("Escape");
   await page.locator("#composer-text").focus();
   await page.keyboard.press("Alt+2");

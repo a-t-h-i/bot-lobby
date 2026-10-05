@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from "motion/react"
 import { Brain, ChevronRight, Palette, Server, ShieldCheck, type LucideIcon } from "lucide-react"
 import type { KnowledgeFileInfo } from "@protocol"
 import { cn } from "@/lib/utils"
+import { ROW } from "@/ui/rows"
 import { AGENT_LABELS, groupFiles, sizeWords, type KnowledgeAgentName } from "./words"
 
 export function fileKey(info: Pick<KnowledgeFileInfo, "agent" | "file">): string {
@@ -32,10 +33,7 @@ function FileRow({ info, selected, onSelect }: { info: KnowledgeFileInfo; select
         data-row
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(fileKey(info))}
-        className={cn(
-          "flex min-h-8 w-full items-center justify-between gap-3 px-3 py-1.5 text-left outline-none transition-colors hover:bg-accent/40 focus-visible:ring-3 focus-visible:ring-ring/30",
-          selected && "bg-accent",
-        )}
+        className={cn(ROW, "min-h-9 flex-row items-center justify-between gap-3 py-1.5")}
       >
         <span className={cn("min-w-0 truncate text-sm text-foreground", selected && "font-medium")}>{info.label}</span>
         <Facts info={info} />
@@ -79,7 +77,7 @@ export function KnowledgeList({ files, selectedKey, onSelect }: { files: Knowled
   }
 
   return (
-    <div className="flex flex-col gap-0.5 px-1 pb-2">
+    <div className="flex flex-col gap-0.5 px-2 pb-2">
       {groupFiles(files).map((group) => {
         const open = !folded.includes(group.agent)
         const Icon = AGENT_ICONS[group.agent]
@@ -103,7 +101,7 @@ export function KnowledgeList({ files, selectedKey, onSelect }: { files: Knowled
                     if (!open) setOpen(group.agent, true)
                   }
                 }}
-                className="flex h-8 w-full items-center gap-2 px-3 text-left text-xs font-medium text-muted-foreground transition-colors outline-none hover:bg-muted/60 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30"
+                className="mt-1 flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-xs font-medium text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
               >
                 <ChevronRight aria-hidden="true" className={cn("size-3.5 shrink-0 transition-transform duration-200 ease-snap", open && "rotate-90")} />
                 <Icon aria-hidden="true" className="size-3.5 shrink-0" />
@@ -124,7 +122,7 @@ export function KnowledgeList({ files, selectedKey, onSelect }: { files: Knowled
                   animate={{ height: "auto", opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
                   transition={{ type: "spring", stiffness: 520, damping: 42 }}
-                  className="flex flex-col overflow-hidden pl-3 divide-y divide-border"
+                  className="flex flex-col gap-0.5 overflow-hidden pl-3"
                 >
                   {group.files.map((info) => (
                     <FileRow key={fileKey(info)} info={info} selected={fileKey(info) === selectedKey} onSelect={onSelect} />
