@@ -105,6 +105,7 @@ test("only one toast shows at a time, with a light blur behind it", async ({ pag
   await page.evaluate(() => {
     window.location.hash = "#/settings";
   });
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Lobby", exact: true }).click();
   const port = page.getByRole("spinbutton", { name: "Port" });
   await expect(port).toBeVisible();
   let most = 0;
@@ -200,15 +201,11 @@ test("on Settings the model selectors stack inside the agent card, one card per 
   const masterCard = page.locator("section.glass").filter({ has: page.getByRole("heading", { name: "Master", exact: true }) });
   await expect(masterCard, "the Master's card").toBeVisible();
   const model = masterCard.getByRole("combobox", { name: "Master model" });
-  const fallback = masterCard.getByRole("combobox", { name: "Master fallback model" });
   await expect(model).toBeVisible();
-  await expect(fallback, "a long model id cannot squeeze the pair side by side").toBeVisible();
+  await expect(page.getByRole("combobox", { name: /fallback/i }), "fallback configuration is removed").toHaveCount(0);
   const modelBox = (await model.boundingBox())!;
-  const fallbackBox = (await fallback.boundingBox())!;
   const cardBox = (await masterCard.boundingBox())!;
-  expect(Math.abs(modelBox.x - fallbackBox.x), "stacked, not side by side").toBeLessThanOrEqual(2);
-  expect(fallbackBox.y, "the fallback sits under the model").toBeGreaterThan(modelBox.y + 20);
-  expect(Math.max(modelBox.x + modelBox.width, fallbackBox.x + fallbackBox.width), "neither selector crosses the card's right edge").toBeLessThanOrEqual(cardBox.x + cardBox.width);
+  expect(modelBox.x + modelBox.width, "the selector stays within the card").toBeLessThanOrEqual(cardBox.x + cardBox.width);
   await page.setViewportSize({ width: 1024, height: 768 });
   const designerCard = page.locator("section.glass").filter({ has: page.getByRole("heading", { name: "Designer", exact: true }) });
   await expect(designerCard, "the Designer's card").toBeVisible();
@@ -434,33 +431,38 @@ test("the mascot on each agent acts out its effort level, and the page never scr
   await expect(mascot).toHaveAttribute("data-level", "off");
 });
 
-test("Alt+A and Alt+T fold Activity and Thinking, from the message box too, and the buttons say so", async ({ page, server }) => {
+test("Alt+A and Alt+T respect text entry and open Thinking from the bubble", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => {
     window.location.hash = "#/lobby";
   });
   const activity = page.getByRole("button", { name: /Minimize Activity|Expand Activity/ });
-  const thinking = page.getByRole("button", { name: /Minimize Thinking|Expand Thinking/ });
+  const thinking = page.getByRole("button", { name: "Open Thinking" });
   await expect(activity).toHaveAttribute("aria-expanded", "true");
   await expect(activity, "the tooltip names the key").toHaveAttribute("title", /Alt\+A/);
-  await expect(thinking).toHaveAttribute("aria-expanded", "true");
+  await expect(thinking).toHaveAttribute("aria-expanded", "false");
   await page.locator("#composer-text").focus();
   await page.keyboard.press("Alt+a");
-  await expect(activity, "Alt+A folds Activity while typing").toHaveAttribute("aria-expanded", "false");
+  await expect(activity, "shortcuts do not steal text-entry focus").toHaveAttribute("aria-expanded", "true");
   await page.keyboard.press("Alt+t");
-  await expect(thinking, "Alt+T folds Thinking").toHaveAttribute("aria-expanded", "false");
-  await page.keyboard.press("Alt+a");
-  await expect(activity, "Alt+A again opens it").toHaveAttribute("aria-expanded", "true");
+  await expect(thinking, "Thinking remains minimized while typing").toHaveAttribute("aria-expanded", "false");
+  await thinking.focus();
   await page.keyboard.press("Alt+t");
-  await expect(thinking).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("dialog", { name: "Thinking", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Thinking", exact: true })).toBeHidden();
   await page.keyboard.press("Alt+h");
   const keys = page.getByRole("dialog", { name: "Keys" });
   await expect(keys.getByText("show or hide Activity on the Lobby"), "the key list has it").toBeVisible();
   await page.keyboard.press("Escape");
+  await expect(keys, "a dialog on its way out still blocks the keys").toBeHidden();
   await page.evaluate(() => {
     window.location.hash = "#/tasks";
   });
+  // Alt+A is typing while the cursor is in the message box; Esc steps out to the tab bar first.
+  await page.locator("#composer-text").focus();
+  await page.keyboard.press("Escape");
   await page.keyboard.press("Alt+a");
   await expect(page, "off the Lobby it takes you there").toHaveURL(/#\/lobby/);
 });
@@ -473,6 +475,7 @@ test("colour themes: a built-in one repaints the page and survives a reload; a t
   });
   const primary = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--primary").trim());
   const before = await primary();
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Appearance & notifications", exact: true }).click();
   const group = page.getByRole("radiogroup", { name: "Colour theme" });
   await expect(group.getByRole("radio", { name: /Mist/ }), "the page's own colours are the default").toHaveAttribute("aria-checked", "true");
   await group.getByRole("radio", { name: /Forest/ }).click();
@@ -481,6 +484,7 @@ test("colour themes: a built-in one repaints the page and survives a reload; a t
   await group.getByRole("radio", { name: /Forest/ }).press("ArrowRight");
   await expect(group.getByRole("radio", { name: /Ocean/ }), "arrows walk the themes").toHaveAttribute("aria-checked", "true");
   await page.reload();
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Appearance & notifications", exact: true }).click();
   await expect(page.getByRole("radiogroup", { name: "Colour theme" }).getByRole("radio", { name: /Ocean/ }), "the choice is remembered").toHaveAttribute("aria-checked", "true");
 
   const box = page.getByLabel("Theme CSS from tweakcn");
@@ -498,6 +502,7 @@ test("colour themes: a built-in one repaints the page and survives a reload; a t
   const light = await page.evaluate(() => document.documentElement.classList.contains("light"));
   expect(await primary(), light ? "light uses the :root block" : "dark uses the .dark block").toBe(light ? "#e11d48" : "#f80");
   await page.getByRole("button", { name: /Remove Custom theme/ }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: /Remove theme/ }).click();
   await expect(group.getByRole("radio", { name: /Custom theme/ }), "removing it").toHaveCount(0);
   await expect(group.getByRole("radio", { name: /Mist/ })).toHaveAttribute("aria-checked", "true");
   expect(await primary()).toBe(before);
@@ -509,6 +514,7 @@ test("a theme file (.css or the registry .json) uploads and is named after the f
   await page.evaluate(() => {
     window.location.hash = "#/settings";
   });
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Appearance & notifications", exact: true }).click();
   const css = ":root{--background:#fafafa;--foreground:#111;--card:#fff;--primary:#0a7;--primary-foreground:#fff}\n.dark{--background:#000;--foreground:#eee;--card:#111;--primary:#4fd;--primary-foreground:#000}";
   await page.getByLabel("Upload a theme file").setInputFiles({ name: "Mint Fresh.css", mimeType: "text/css", buffer: Buffer.from(css) });
   await expect(page.getByRole("radiogroup", { name: "Colour theme" }).getByRole("radio", { name: /Mint Fresh/ })).toHaveAttribute("aria-checked", "true");
@@ -522,7 +528,9 @@ test("switching tabs puts the cursor in the message box; arrowing along the tab 
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole("tab", { name: /Git/ }).click();
   await expect(page.locator("#composer-text"), "a click on a tab").toBeFocused();
+  await page.keyboard.press("Escape");
   await page.keyboard.press("Alt+2");
+  await expect(page, "an Alt+N jump from the tab bar").toHaveURL(/#\/tasks/);
   await expect(page.locator("#composer-text"), "an Alt+N jump").toBeFocused();
   await page.getByRole("tab", { name: /Tasks/ }).focus();
   await page.keyboard.press("ArrowRight");
@@ -535,6 +543,7 @@ test("the Settings page offers the fullscreen install and a fullscreen toggle", 
   await page.evaluate(() => {
     window.location.hash = "#/settings";
   });
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Appearance & notifications", exact: true }).click();
   const install = page.getByRole("button", { name: "Install as fullscreen app" });
   await expect(install).toBeVisible();
   await install.click();
@@ -581,7 +590,7 @@ test("action buttons say what they do and which key does it, and stay pinned in 
   await expect(remove).toContainText("Delete");
   await expect(remove.locator("kbd").first(), "Delete is the Delete key").toHaveText("Del");
   const detail = page.locator('[data-pane="detail"]');
-  await detail.evaluate((el) => {
+  await detail.evaluate((el: any) => {
     el.scrollTop = el.scrollHeight;
   });
   await page.waitForTimeout(150);
@@ -627,7 +636,7 @@ test("the Lobby's task header is one slim line", async ({ page, server }) => {
   expect((await header.boundingBox())!.height, "a single line, not a card").toBeLessThanOrEqual(48);
 });
 
-test("Activity and Thinking fold down to their title bar and open again", async ({ page, server }) => {
+test("Activity folds to its title bar and Thinking opens only in a modal", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const main = page.locator("#main");
@@ -635,15 +644,15 @@ test("Activity and Thinking fold down to their title bar and open again", async 
   await page.getByRole("button", { name: "Minimize Activity" }).click();
   await expect(main.getByRole("log", { name: "Activity" }), "the log is gone").toBeHidden();
   await expect(page.getByRole("button", { name: "Expand Activity" }), "its bar stays").toBeVisible();
-  await page.getByRole("button", { name: "Minimize Thinking" }).click();
-  await expect(main.getByRole("log", { name: "Thinking" })).toBeHidden();
+  await page.getByRole("button", { name: "Open Thinking" }).click();
+  await expect(page.getByRole("dialog", { name: "Thinking", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /Minimize/ }).click();
   await page.reload();
   await page.locator('[role="tablist"]').waitFor();
-  await expect(page.getByRole("button", { name: "Expand Thinking" }), "the choice is remembered").toBeVisible();
+  await expect(page.getByRole("button", { name: "Open Thinking" })).toHaveAttribute("aria-expanded", "false");
   await page.getByRole("button", { name: "Expand Activity" }).click();
-  await page.getByRole("button", { name: "Expand Thinking" }).click();
   await expect(main.getByRole("log", { name: "Activity" })).toBeVisible();
-  await expect(main.getByRole("log", { name: "Thinking" })).toBeVisible();
+  await expect(main.getByRole("log", { name: "Thinking" }), "there is no third fixed pane").toHaveCount(0);
 });
 
 test("every tab carries an icon", async ({ page, server }) => {
@@ -666,7 +675,7 @@ test("the project switcher is a list you open with P, not a native select", asyn
   await expect(list.getByRole("option").first()).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(list, "Esc closes it").toBeHidden();
-  await expect(page.getByRole("button", { name: /^Project: bot-lobby/ }), "and gives focus back").toBeFocused();
+  await expect(page.getByRole("combobox", { name: "Project", exact: true }), "and gives focus back").toBeFocused();
 });
 
 test("below 1024px the Lobby shows one pane at a time behind a switcher, and the chat keeps the room", async ({ page, server }) => {
@@ -680,8 +689,8 @@ test("below 1024px the Lobby shows one pane at a time behind a switcher, and the
   await panes.getByRole("radio", { name: /Activity/ }).click();
   await expect(page.getByRole("log", { name: "Activity" })).toBeVisible();
   await expect(chat, "the others step aside").toBeHidden();
-  await panes.getByRole("radio", { name: /Thinking/ }).click();
-  await expect(page.getByRole("log", { name: "Thinking" })).toBeVisible();
+  await expect(panes.getByRole("radio", { name: /Thinking/ }), "Thinking is a bubble, not a pane").toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Open Thinking" })).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow, "no sideways scroll").toBeLessThanOrEqual(0);
 });
@@ -710,6 +719,9 @@ test("Esc leaves the message box on Sessions and Settings too, so the keys on th
     window.location.hash = "#/sessions";
   });
   const composer = page.locator("#composer-text");
+  await expect(page.getByRole("button", { name: "Back to this window" }), "the page has switched").toBeVisible();
+  // The switch hands the cursor to the message box on the next frame; wait it out so Esc is the last thing to move it.
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(undefined)))));
   await expect(composer, "a page switch leaves the cursor in the message box").toBeFocused();
   await page.keyboard.press("Escape");
   await expect(composer, "Esc leaves it though no tab is selected").not.toBeFocused();
