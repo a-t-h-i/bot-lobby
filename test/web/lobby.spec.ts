@@ -237,3 +237,26 @@ test("contrast meets 4.5:1", async ({ page, server }) => {
   );
   expect(detail, "no color-contrast violations").toEqual([]);
 });
+
+test("scrolling past the end of a chat full of code never drags the Lobby page up", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const box = page.getByLabel("Message the oracle");
+  // The scripted reply carries inline code; each code chip has a hidden screen-reader label.
+  for (const text of ["one", "two", "three"]) {
+    await box.fill(text);
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("button", { name: "Stop" })).toBeHidden({ timeout: 15_000 });
+  }
+  const main = page.locator("#main");
+  const sizes = await main.evaluate((el: any) => [el.scrollHeight, el.clientHeight]);
+  expect(sizes[0], "the page is no taller than the window").toBeLessThanOrEqual(sizes[1]);
+  for (const name of ["Conversation", "Activity"]) {
+    const log = (await page.locator(`[role="log"][aria-label="${name}"]`).boundingBox())!;
+    await page.mouse.move(log.x + log.width / 2, log.y + log.height / 2);
+    for (let i = 0; i < 25; i += 1) await page.mouse.wheel(0, 500);
+    await page.waitForTimeout(300);
+    expect(await main.evaluate((el: any) => el.scrollTop), `${name}: the page stays where it is`).toBe(0);
+  }
+  await expect(page.getByText("Add offline mock fixtures", { exact: true }), "the task header is still in view").toBeInViewport();
+});
