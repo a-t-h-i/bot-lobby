@@ -17,9 +17,11 @@ import { Archive, MessageSquare, RefreshCw, RotateCcw, Trash2 } from "lucide-rea
 import type { LobbySnapshot, SnapshotTask, TaskRow } from "@protocol"
 import { useTopic } from "@/app/hooks"
 import { useApiRead } from "@/app/useApiRead"
+import { Keys } from "@/components/ui/kbd"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { act } from "@/lib/act"
+import { useHotkey } from "@/lib/hotkeys"
 import { ActionBar, ActionButton } from "@/ui/Actions"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { CheckMark, Pips, trackText } from "@/ui/task-facts"
@@ -36,12 +38,13 @@ interface DetailProps {
   onChanged: () => void
 }
 
-function factsLine(row: TaskRow): string {
-  if (row.kind === "archived") return `archived ${agoWords(row.age ?? "now")}`
+/** The state as one word or two, and the rest of the facts (who owns it, when it ended) as quiet text. */
+function factParts(row: TaskRow): { state: string; rest: string } {
+  if (row.kind === "archived") return { state: "archived", rest: agoWords(row.age ?? "now") }
   const finished = row.check !== "open"
   const owner = row.owner ?? (row.section === "mine" ? "this session" : "")
   const when = finished && row.age ? `${row.check === "dropped" ? "dropped" : "done"} ${agoWords(row.age)}` : ""
-  return [stateWords(row.status, row.paused), finished ? "" : owner, when].filter(Boolean).join(" · ")
+  return { state: stateWords(row.status, row.paused), rest: [finished ? "" : owner, when].filter(Boolean).join(" · ") }
 }
 
 function snapshotLine(task: SnapshotTask | undefined): string {
@@ -59,7 +62,7 @@ function Progress({ row, task }: { row: TaskRow; task?: SnapshotTask }) {
       </span>
       {task?.currentStep ? (
         <span className="text-foreground">
-          {task.currentStep} <span className="rounded-lg bg-accent px-2 py-0.5 text-xs font-medium">now</span>
+          {task.currentStep} <span className="rounded-md bg-accent px-2 py-0.5 text-xs font-medium">now</span>
           <span className="sr-only">(current step)</span>
         </span>
       ) : null}
@@ -69,16 +72,19 @@ function Progress({ row, task }: { row: TaskRow; task?: SnapshotTask }) {
 
 function Header({ row, task }: { row: TaskRow; task?: SnapshotTask }) {
   const branch = task?.git ? `branch ${task.git.branch}${task.git.from ? ` · from ${task.git.from}` : ""}` : ""
+  const { state, rest } = factParts(row)
   return (
-    <header className="flex flex-col gap-1.5">
-      <h2 className="flex items-start gap-2.5 text-lg font-medium">
+    <header className="flex flex-col gap-2">
+      <h2 className="flex items-start gap-2.5 text-lg font-semibold tracking-tight">
         <CheckMark check={row.check} className="mt-1.5" />
         <span className="sr-only">{CHECK_WORDS[row.check]}:</span>
         <span className={row.check === "dropped" ? "min-w-0 break-words line-through" : "min-w-0 break-words"}>{row.title}</span>
       </h2>
-      <p className="text-sm text-foreground">{factsLine(row)}</p>
-      <p className="text-xs text-muted-foreground break-all">{[row.id, snapshotLine(task)].filter(Boolean).join(" · ")}</p>
-      {branch ? <p className="text-xs text-muted-foreground">{branch}</p> : null}
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+        <span className="rounded-md bg-accent px-2 py-0.5 text-xs font-medium text-foreground">{state}</span>
+        {rest ? <span>{rest}</span> : null}
+      </p>
+      <p className="text-xs text-muted-foreground break-all">{[row.id, snapshotLine(task), branch].filter(Boolean).join(" · ")}</p>
       <Progress row={row} task={task} />
     </header>
   )
@@ -100,16 +106,35 @@ function useActions({ row, onGone, onChanged }: DetailProps) {
 }
 
 function ArchiveButton({ row, archive }: { row: TaskRow; archive: () => Promise<void> }) {
-  if (row.check !== "open") return <ActionButton label="Archive" icon={Archive} onClick={() => void archive()} />
+  if (row.check !== "open") return <ActionButton label="Archive" icon={Archive} shortcut="E" onClick={() => void archive()} />
   return (
     <ConfirmButton
       label="Archive"
       icon={Archive}
+      shortcut="E"
       title={`Archive "${row.title}"?`}
       description="A task still under way is abandoned first, then moved to the archive. Restore brings it back."
       confirmLabel="Archive"
       onConfirm={() => void archive()}
     />
+  )
+}
+
+/** Auto mode: the oracle decides without asking. A switch, with its key beside it. */
+function AutoMode({ on, toggle }: { on: boolean; toggle: () => void }) {
+  useHotkey("a", toggle)
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-[0.8125rem] font-medium transition-colors hover:bg-accent">
+          <RefreshCw aria-hidden="true" className="size-4 text-muted-foreground" />
+          <span>Auto</span>
+          <Switch checked={on} onCheckedChange={toggle} aria-label="Auto mode" aria-keyshortcuts="A" />
+          <Keys chord="A" className="kbd-hint" />
+        </label>
+      </TooltipTrigger>
+      <TooltipContent>Auto mode: the oracle decides without asking</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -120,22 +145,14 @@ function Actions(props: DetailProps) {
   return (
     <ActionBar>
       {row.kind === "task" ? <OpenTask taskId={row.id} /> : null}
-      {archived ? <ActionButton label="Restore" icon={RotateCcw} onClick={() => void restore()} /> : null}
-      {row.check === "open" && !archived ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <label className="flex h-8 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
-              <RefreshCw aria-hidden="true" className="size-4" />
-              <Switch checked={Boolean(row.auto)} onCheckedChange={toggleAuto} aria-label="Auto mode" />
-            </label>
-          </TooltipTrigger>
-          <TooltipContent>Auto mode: the oracle decides without asking</TooltipContent>
-        </Tooltip>
-      ) : null}
+      {archived ? <ActionButton label="Restore" icon={RotateCcw} shortcut="R" onClick={() => void restore()} /> : null}
+      {row.check === "open" && !archived ? <AutoMode on={Boolean(row.auto)} toggle={toggleAuto} /> : null}
       {archived ? null : <ArchiveButton row={row} archive={archive} />}
       <ConfirmButton
         icon={Trash2}
         label={archived ? "Delete for good" : "Delete"}
+        text="Delete"
+        shortcut="Delete"
         title={`Delete "${row.title}" for good?`}
         description="This cannot be undone."
         confirmLabel="Delete"
@@ -162,7 +179,7 @@ function OpenTask({ taskId }: { taskId: string }) {
       else if (!result.notice) toast.info("This task has no active session. No replacement session was created.")
     } catch (e) { if (alive.current && selectedProject() === project) toast.error(e instanceof Error ? e.message : String(e)) }
   }
-  return <ActionButton label="Open task conversation" icon={MessageSquare} onClick={() => void open()} />
+  return <ActionButton label="Open task conversation" text="Open" icon={MessageSquare} shortcut="O" onClick={() => void open()} />
 }
 
 export function TaskDetail(props: DetailProps) {

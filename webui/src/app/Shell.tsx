@@ -1,11 +1,11 @@
 /**
- * The shell that wraps every route, laid out top to bottom with a gap between
- * each part: the title row with the tabs and the page for the route (it eases
- * in when the tab changes). The composer floats pinned at the bottom, above
- * every other layer but the pop-ups, so the page scrolls under it and typing
- * in it moves nothing. Pop-ups (the question, the key help) and toasts sit
- * above that, one at a time. Clicking a tab or pressing a shortcut moves the
- * hash route.
+ * The shell that wraps every route, laid out top to bottom: the top bar with
+ * the project and the tabs, one bordered surface for the page of the route
+ * (it eases in when the tab changes) and the composer under it. The composer
+ * sits in the flow, so a tall message gives the page less room instead of
+ * covering it; the page behind it never scrolls, only its panes do. Pop-ups
+ * (the question, the key help) and toasts sit above everything, one at a
+ * time. Clicking a tab or pressing a shortcut moves the hash route.
  */
 import { useCallback, useEffect, useRef, useState } from "react"
 import { motion } from "motion/react"
@@ -26,7 +26,7 @@ import { useLobbyKeys } from "./useLobbyKeys.ts"
 import { useDesktopNotifications } from "./notify.ts"
 import { usePrompts } from "./usePrompts.ts"
 import { useStatus, useTopic } from "./hooks.ts"
-import { go, tabHash, useRoute, type Route } from "./router.ts"
+import { go, parseHash, tabHash, useRoute, type Route } from "./router.ts"
 import { routeBody } from "@/tabs/registry.tsx"
 import { focusTab, isTyping, tabWalk } from "@/prompts/nav"
 import { toggleCollapsed } from "@/lib/collapsed"
@@ -85,11 +85,14 @@ export function Shell() {
   const toggleHelp = useCallback(() => setHelp((open) => !open), [])
   const onAction = useCallback((action: string) => {
     if ((action === "thinking" || action === "activity") && status?.panels?.[action] === false) return
-    handleAction(action, route, toggleHelp, cycle)
+    // The route as the address bar has it right now: a key pressed in the frame after a jump must not act on the page just left.
+    handleAction(action, parseHash(window.location.hash) ?? route, toggleHelp, cycle)
   }, [route, toggleHelp, cycle, status?.panels])
   const insideApp = useCallback(() => {
     const el = document.activeElement
-    return !el || el === document.body || rootRef.current?.contains(el) === true || Boolean(el.closest(".thinking-bubble"))
+    if (!el || el === document.body || rootRef.current?.contains(el) === true || el.closest(".thinking-bubble")) return true
+    // A pop-up on its way out still holds focus for a moment; it is no longer in the way.
+    return el.closest("[data-state='closed']") !== null
   }, [])
   useLobbyKeys({ enabled: Boolean(status), keys, tabs, insideApp, onAction, onTab: select })
   const reload = useCallback(() => lobbyStore.onHello({}), [])
@@ -124,13 +127,13 @@ export function Shell() {
   if (signedOut || !status) return (
     <div ref={rootRef} className="fixed inset-0 flex flex-col">
       {header}
-      <main className="min-h-0 flex-1 overflow-y-auto">
+      <main className="surface mx-3 mb-3 flex min-h-0 flex-1 flex-col overflow-y-auto max-sm:mx-0 max-sm:mb-0">
         {signedOut ? <SignIn /> : statusRecord.error ? <ErrorState message={statusRecord.error} onRetry={reload} /> : <LoadingState />}
       </main>
     </div>
   )
   return (
-    <div ref={rootRef} className="fixed inset-0 flex flex-col gap-0.5">
+    <div ref={rootRef} className="fixed inset-0 flex flex-col">
       {header}
       <Banner connection={connection} onRetry={retry} />
       <main
@@ -144,22 +147,19 @@ export function Shell() {
         }}
         role={activeId ? "tabpanel" : undefined}
         aria-labelledby={activeId ? `tab-${activeId}` : undefined}
-        className="composer-inset flex min-h-0 flex-1 flex-col overflow-y-auto py-2 outline-none"
+        className="surface mx-3 flex min-h-0 flex-1 flex-col overflow-y-auto outline-none max-sm:mx-0"
       >
         <motion.div
           key={routeKey(route)}
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+          transition={{ duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}
           className="flex min-h-0 flex-1 flex-col"
         >
           {routeBody(route)}
         </motion.div>
       </main>
-      {/* Pinned, not in the flow: typing in the box must not move anything else. */}
-      <div className="fixed inset-x-0 bottom-0 z-30 pointer-events-none">
-        <Composer route={route} keys={keyLabels} onHelp={toggleHelp} />
-      </div>
+      <Composer route={route} keys={keyLabels} onHelp={toggleHelp} />
       <QuestionPopup prompts={prompts} answer={answer} dismiss={dismiss} minimized={putAway} onMinimize={setPutAway} />
       <AltH open={help} onOpenChange={setHelp} keys={keys} tabs={tabs} />
     </div>

@@ -4,6 +4,7 @@
  * `#/tasks/<id>` selects a row; the lists are read again whenever the `tasks`
  * or `plans` topic changes.
  */
+import { ListChecks } from "lucide-react"
 import { useEffect, useState } from "react"
 import { go, tabHash } from "@/app/router"
 import { setComposerTask } from "@/lib/composerContext"
@@ -12,7 +13,7 @@ import { useApiRead } from "@/app/useApiRead"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty"
+import { Empty, EmptyMedia, EmptyDescription, EmptyHeader } from "@/components/ui/empty"
 import { ListSkeleton, PaneHeader, SplitPane, useWide } from "@/ui/SplitPane"
 import { TaskDetail } from "./TaskDetail"
 import { TaskList } from "./TaskList"
@@ -24,8 +25,11 @@ const select = (id: string) => go(tabHash("tasks", id))
 
 function NoTasks() {
   return (
-    <Empty className="flat-pane m-4 flex-1">
+    <Empty className="m-4 flex-1">
       <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <ListChecks aria-hidden="true" />
+        </EmptyMedia>
         <EmptyDescription>{EMPTY_LIST}</EmptyDescription>
       </EmptyHeader>
       <Button onClick={() => go(tabHash("plan"))}>
@@ -37,10 +41,10 @@ function NoTasks() {
 
 function ArchivedToggle({ shown, count, onToggle }: { shown: boolean; count: number; onToggle: () => void }) {
   return (
-    <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border px-2.5 text-[0.8125rem] font-medium transition-colors hover:bg-accent">
-      <Checkbox checked={shown} onCheckedChange={onToggle} aria-label="Show archived tasks" />
+    <label className="flex h-7 cursor-pointer items-center gap-2 rounded-lg border border-border px-2 text-xs font-medium transition-colors hover:bg-muted">
+      <Checkbox checked={shown} onCheckedChange={onToggle} aria-label="Show archived tasks" className="size-4" />
       Archived
-      <Badge variant="secondary">{count}</Badge>
+      <Badge variant="secondary" className="h-5 px-1.5">{count}</Badge>
     </label>
   )
 }

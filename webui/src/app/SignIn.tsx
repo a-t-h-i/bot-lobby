@@ -39,8 +39,8 @@ export function SignIn() {
   }
 
   return (
-    <div className="flex min-h-svh items-center justify-center p-6">
-      <form onSubmit={submit} className="flat-pane flex w-full max-w-md flex-col gap-4 p-7">
+    <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+      <form onSubmit={submit} className="glass flex w-full max-w-md flex-col gap-4 rounded-xl p-6">
         <div className="flex items-center gap-2">
           <KeyRound className="size-5" aria-hidden="true" />
           <h1 className="text-base font-medium">Sign in to bot-lobby</h1>
@@ -57,7 +57,7 @@ export function SignIn() {
             autoComplete="off"
             spellCheck={false}
             placeholder="http://127.0.0.1:7347/#token=…"
-            className="h-8 rounded-lg border border-input bg-card/40 px-3.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+            className="h-8 rounded-lg border border-input bg-background px-3.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
           />
         </label>
         {error ? (
