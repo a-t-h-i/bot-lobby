@@ -194,21 +194,31 @@ test("the Lobby fills the window: the page never scrolls, each pane does, and Th
   await expect(page.getByRole("button", { name: "Expand Thinking" }), "the card folds").toBeVisible();
 });
 
-test("the activity log always follows its newest entry, even from a scroll up", async ({ page, server }) => {
+test("the activity log follows its newest entry, lets a reader who scrolled up stay put, and jumps back on request", async ({ page, server }) => {
   await openScenario(page, server, "full");
   // A short window so the seeded log overflows its pane and following is visible.
   await page.setViewportSize({ width: 1280, height: 560 });
   const log = page.locator('[role="log"][aria-label="Activity"]');
   await expect(log).toBeVisible();
   expect(await log.evaluate((el: any) => el.scrollHeight > el.clientHeight), "the log overflows, so following is visible").toBe(true);
-  expect(Math.abs(await log.evaluate((el: any) => el.scrollTop + el.clientHeight - el.scrollHeight)), "it opens at its newest entry").toBeLessThanOrEqual(2);
+  const gap = () => log.evaluate((el: any) => Math.abs(el.scrollTop + el.clientHeight - el.scrollHeight));
+  expect(await gap(), "it opens at its newest entry").toBeLessThanOrEqual(2);
+  // A window that changes size keeps a following reader on the newest line.
+  await page.setViewportSize({ width: 1280, height: 640 });
+  await expect.poll(gap, { message: "a resize keeps it at the bottom" }).toBeLessThanOrEqual(2);
+  server.log("MASTER", "a step that arrives while following");
+  await expect(log).toContainText("a step that arrives while following");
+  await expect.poll(gap, { message: "a new entry keeps following" }).toBeLessThanOrEqual(2);
+  // A reader who scrolled up is left where they are, with a way back.
   await log.evaluate((el: any) => {
     el.scrollTop = 0;
   });
-  expect(await log.evaluate((el: any) => el.scrollTop), "the reader scrolls up").toBe(0);
-  server.log("MASTER", "a new step the log must not leave off screen");
-  await expect.poll(async () => log.evaluate((el: any) => Math.abs(el.scrollTop + el.clientHeight - el.scrollHeight)), { message: "a new entry pulls the log back to the bottom" }).toBeLessThanOrEqual(2);
-  await expect(log, "and it is the new entry that is showing").toContainText("a new step the log must not leave off screen");
+  await expect(page.getByRole("button", { name: "Jump to latest" }), "scrolling up offers the way back").toBeVisible();
+  server.log("MASTER", "a step the reader has not caught up with");
+  await expect(log).toContainText("a step the reader has not caught up with");
+  expect(await log.evaluate((el: any) => el.scrollTop), "the reader is not pulled away from what they were reading").toBeLessThanOrEqual(2);
+  await page.getByRole("button", { name: "Jump to latest" }).click();
+  await expect.poll(gap, { message: "Jump to latest lands on the newest entry" }).toBeLessThanOrEqual(2);
 });
 
 test("contrast meets 4.5:1", async ({ page, server }) => {
