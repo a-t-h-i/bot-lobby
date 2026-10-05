@@ -8,6 +8,7 @@ import { cancelAllRuns } from "../execution/agent-runner.ts";
 import { describeTask } from "../workflow/workflow.ts";
 import { truncate } from "../text.ts";
 import { applyStatus, clearStatus, isMinimized, setMinimized } from "./ui.ts";
+import { startsOn } from "./switch.ts";
 import { isSubagentProcess, webToolsFor } from "./quiet.ts";
 import { registerQuietTools } from "./tool-renderers.ts";
 import { taskRequest, type Task, type TaskState } from "../schemas/task.ts";
@@ -70,7 +71,8 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
     // Master-only: subagents keep their own --tools allowlist (see quiet.ts).
     if (!isSubagentProcess()) registerQuietTools(pi);
     const root = detectProjectRoot(ctx.cwd, configDir);
-    setMinimized(false);
+    // A new session starts with bot-lobby off unless settings or its own task say otherwise (switch.ts).
+    setMinimized(!isSubagentProcess() && !startsOn(ctx, configDir));
     applyStatus(ctx, root, configDir);
   });
 

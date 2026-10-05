@@ -151,6 +151,8 @@ export interface LobbyConfig {
   planningPanel: PanelMember[];
   /** Show the GitHub Issues tab (off for now). */
   issues: boolean;
+  /** Bot-lobby is on when pi starts; off (the default), pi starts as plain pi until ctrl+shift+m or /bot-lobby on. */
+  startOn: boolean;
   /** Which panes the Lobby tab shows. */
   panels: Record<LobbyPanel, boolean>;
   /** Key overrides by action name, e.g. `{ "search": "alt+f" }`. */
@@ -278,6 +280,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
   lobby: {
     planningPanel: [...PANEL_MEMBERS],
     issues: false,
+    startOn: false,
     panels: { conversation: true, activity: true, thinking: true },
     keys: {},
     maxPlanningRounds: 5,
@@ -341,7 +344,7 @@ function flag(value: unknown, fallback: boolean): boolean {
 }
 
 function normalizeLobby(value: unknown): LobbyConfig {
-  const source = value as { planningPanel?: unknown; issues?: unknown; panels?: unknown; keys?: unknown; maxPlanningRounds?: unknown; splitPlanAbove?: unknown; web?: unknown } | undefined;
+  const source = value as { planningPanel?: unknown; issues?: unknown; startOn?: unknown; panels?: unknown; keys?: unknown; maxPlanningRounds?: unknown; splitPlanAbove?: unknown; web?: unknown } | undefined;
   const defaults = DEFAULT_CONFIG.lobby;
   const panel = Array.isArray(source?.planningPanel)
     ? [...new Set(source.planningPanel.filter((entry): entry is PanelMember => typeof entry === "string" && isPanelMember(entry)))]
@@ -351,6 +354,7 @@ function normalizeLobby(value: unknown): LobbyConfig {
   return {
     planningPanel: PANEL_MEMBERS.filter((member) => panel.includes(member)),
     issues: flag(source?.issues, defaults.issues),
+    startOn: flag(source?.startOn, defaults.startOn),
     panels: Object.fromEntries(LOBBY_PANELS.map((name) => [name, flag(panels[name], defaults.panels[name])])) as Record<LobbyPanel, boolean>,
     keys: Object.fromEntries(Object.entries(keys).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0)),
     maxPlanningRounds: roundLimit(source?.maxPlanningRounds, defaults.maxPlanningRounds),
