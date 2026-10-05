@@ -1,7 +1,8 @@
 /**
  * The oracle puts the planning panel's questions to the user through the
  * questionnaire (`../ask`): a card per question with each seat's options (the
- * recommended one first when the answer is obvious), and a field for an answer in the user's own words.
+ * recommended one first when the answer is obvious, with the mockup a seat drew
+ * for it), and a field for an answer in the user's own words.
  * The panel's questions become questionnaires of at most four, and the
  * answers become the user's turn for the next round.
  */
@@ -32,7 +33,8 @@ export function toAskQuestion(question: PanelQuestion): AskQuestion {
     if (!label || RESERVED.has(label.toLowerCase())) continue;
     for (let n = 2; seen.has(label.toLowerCase()); n++) label = clip(`${option.label} (${n})`, MAX_LABEL);
     seen.add(label.toLowerCase());
-    options.push({ label, description: option.description.trim() || label });
+    // A seat's mockup goes with its option, so the user sees it (and expands it) in the questionnaire.
+    options.push({ label, description: option.description.trim() || label, ...(option.mockup ? { htmlPreview: option.mockup } : {}) });
     if (options.length === MAX_OPTIONS) break;
   }
   for (const filler of DEFAULT_OPTIONS) {

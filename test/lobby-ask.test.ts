@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { answerMessage, askPanel, MAX_QUESTIONS, questionnaires, settledQuestions, toAskQuestion, type AskQuestion, type AskResult } from "../src/lobby/ask.ts";
-import type { PanelQuestion } from "../src/lobby/planner.ts";
+import { carryMockups, MAX_MOCKUP_CHARS, parseMemberReply, type PanelQuestion } from "../src/lobby/planner.ts";
 
 const question = (from: string, text: string, labels: string[] = []): PanelQuestion => ({ from, text, options: labels.map((label) => ({ label, description: `${label} it is` })) });
 
@@ -95,4 +95,41 @@ test("askPanel runs the questionnaires in order and stops at the first one the u
   assert.equal(asked.length, 2);
   assert.equal(outcome.stopped, true);
   assert.equal(outcome.results.length, 1, "what was answered before stopping is kept");
+});
+
+test("a seat's mockups ride under its options, survive the oracle's relay by label, and reach the questionnaire", () => {
+  const seat = parseMemberReply([
+    "## Status",
+    "OPEN",
+    "",
+    "## Questions",
+    "1. Which layout for the dashboard?",
+    "   - Sidebar — nav down the left",
+    "     ```mockup",
+    "     <style>.side{width:200px}</style>",
+    "     <div class=\"side\">Overview</div>",
+    "     ```",
+    "   - Top bar — nav across the top",
+    "     ~~~html",
+    "     <div class=\"top\">Overview</div>",
+    "     ~~~",
+    "   - Tabs — no nav at all",
+  ].join("\n"));
+  const options = seat.questions[0]!.options;
+  assert.deepEqual(options.map((option) => [option.label, option.description, option.mockup?.html]), [
+    ["Sidebar", "nav down the left", "<style>.side{width:200px}</style>\n<div class=\"side\">Overview</div>"],
+    ["Top bar", "nav across the top", "<div class=\"top\">Overview</div>"],
+    ["Tabs", "no nav at all", undefined],
+  ], "the fences are mockups, not question text");
+  assert.equal(seat.questions[0]!.text, "Which layout for the dashboard?");
+  const fromSeat: PanelQuestion[] = seat.questions.map((question) => ({ ...question, from: "DESIGN" }));
+  // The oracle relays it in its own words, keeping two of the labels.
+  const relayed = carryMockups([{ from: "DESIGN", text: "Dashboard layout?", options: [{ label: "Sidebar (Recommended)", description: "most room" }, { label: "Top bar", description: "full width" }] }], fromSeat);
+  assert.deepEqual(relayed[0]!.options.map((option) => Boolean(option.mockup)), [true, true]);
+  const asked = toAskQuestion(relayed[0]!);
+  assert.equal(asked.options[0]!.htmlPreview?.html, options[0]!.mockup!.html, "the user sees it in the questionnaire, where it expands");
+  assert.equal(asked.options[1]!.htmlPreview?.html, "<div class=\"top\">Overview</div>");
+  const plain = parseMemberReply("## Status\nOPEN\n\n## Questions\n1. Too big?\n   - Yes\n     ```mockup\n" + "x".repeat(MAX_MOCKUP_CHARS + 1) + "\n     ```\n   - No");
+  assert.equal(plain.questions[0]!.options[0]!.mockup, undefined, "a mockup past the limit is dropped, not cut mid-tag");
+  assert.equal(plain.questions[0]!.options.length, 2);
 });

@@ -2,11 +2,14 @@
  * The controls for one lobby question, inside the question pop-up: per-question
  * chips, numbered options with Markdown descriptions and `(Recommended)`
  * markers, the own answer field and the focused option's preview (beside the
- * options on wide windows, below them on narrow ones). `choose`, `confirm`, `text` and `sessionDialog` reuse
- * the same surface with their own controls and answer shapes.
+ * options on wide windows, below them on narrow ones). Every mockup expands
+ * (its button, or E) into the mockup viewer, where the user scrolls through
+ * every option's mockup and can choose from there. `choose`, `confirm`, `text`
+ * and `sessionDialog` reuse the same surface with their own controls and
+ * answer shapes.
  */
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
-import { Check } from "lucide-react"
+import { Check, Maximize2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { KeyHint } from "@/components/ui/kbd"
 import { Textarea } from "@/components/ui/textarea"
@@ -14,6 +17,7 @@ import { cn } from "@/lib/utils"
 import { projectUrl } from "@/lib/project"
 import { Markdown } from "@/ui/Markdown"
 import { StaticPreview } from "./StaticPreview"
+import { hasMockup, MockupViewer } from "./MockupViewer"
 import { horizontalStep, isTyping, moveNav, verticalStep } from "./nav"
 import type { AskAnswer, AskQuestion, AskResult, AskOption, PromptView, SessionDialog } from "./payload"
 
@@ -22,9 +26,14 @@ interface CardProps {
   submitting: boolean
   onAnswer: (value: unknown) => void
   onCancel: () => void
+  /** The mockup viewer is open (the pop-up widens for it and Esc closes it first). */
+  expanded?: boolean
+  onExpand?: (expanded: boolean) => void
 }
 
 const RECOMMENDED = /\s*\(recommended\)\s*$/i
+/** The page width a mockup is laid out at before it is scaled into the preview. */
+const MOCKUP_WIDTH = 1200
 const OWN_ANSWER = "Type something."
 
 function splitRecommended(label: string): { text: string; recommended: boolean } {
@@ -97,15 +106,21 @@ function OptionRow({
   )
 }
 
-function Preview({ option }: { option?: AskOption }) {
-  if (!option || (!option.preview && !option.image && !option.htmlPreview)) return null
+function Preview({ option, onExpand }: { option?: AskOption; onExpand: () => void }) {
+  if (!option || !hasMockup(option)) return null
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3">
-      <p className="text-xs font-medium text-muted-foreground">Preview · {splitRecommended(option.label).text}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="min-w-0 truncate text-xs font-medium text-muted-foreground">Preview · {splitRecommended(option.label).text}</p>
+        <Button type="button" variant="ghost" size="xs" onClick={onExpand} aria-keyshortcuts="E" title="Expand · E" className="-my-1 shrink-0">
+          <Maximize2 aria-hidden="true" />
+          Expand
+        </Button>
+      </div>
       {option.image ? (
         <img src={projectUrl(option.image)} alt="" loading="lazy" className="max-h-64 w-full rounded-lg border object-contain" />
       ) : null}
-      {option.htmlPreview ? <StaticPreview preview={option.htmlPreview} label={splitRecommended(option.label).text} /> : null}
+      {option.htmlPreview ? <StaticPreview preview={option.htmlPreview} label={splitRecommended(option.label).text} frameWidth={MOCKUP_WIDTH} onOpen={onExpand} className="h-auto aspect-[3/2]" /> : null}
       {option.preview ? <Markdown text={option.preview} className="text-xs" /> : null}
     </div>
   )
@@ -173,8 +188,16 @@ function Chips({ questions, picks, own, index, onGo }: { questions: AskQuestion[
   )
 }
 
-function QuestionnaireCard({ questions, submitting, onAnswer, onCancel }: { questions: AskQuestion[] } & Omit<CardProps, "view">) {
+function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded: shown, onExpand }: { questions: AskQuestion[] } & Omit<CardProps, "view">) {
   const [index, setIndex] = useState(0)
+  // Open or closed from the pop-up when it holds the state (Esc closes the viewer first), here otherwise.
+  const [ownExpanded, setOwnExpanded] = useState(false)
+  const expanded = shown ?? ownExpanded
+  const expand = (on: boolean) => (onExpand ? onExpand(on) : setOwnExpanded(on))
+  const [viewing, setViewing] = useState(0)
+  // The option in view in the viewer, and whether it was open, so closing it (Esc included) lands on that option.
+  const inView = useRef(0)
+  const wasExpanded = useRef(false)
   const [picks, setPicks] = useState<Record<number, number[]>>({})
   const [own, setOwn] = useState<Record<number, string>>({})
   const [focused, setFocused] = useState<Record<number, number>>({})
@@ -195,7 +218,48 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel }: { ques
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index])
 
+  // Back from the viewer, focus is on the option last in view.
+  useEffect(() => {
+    const closed = wasExpanded.current && !expanded
+    wasExpanded.current = expanded
+    if (!closed) return
+    setFocused((now) => ({ ...now, [index]: inView.current }))
+    form.current?.querySelector<HTMLElement>(`[data-option="${inView.current}"]`)?.focus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded])
+
   if (!question) return null
+  const mockups = question.options.some(hasMockup)
+
+  function openViewer(option: number) {
+    setViewing(Math.max(0, option))
+    inView.current = Math.max(0, option)
+    expand(true)
+  }
+
+  function closeViewer(option: number) {
+    inView.current = option
+    expand(false)
+  }
+
+  if (expanded && mockups) {
+    return (
+      <MockupViewer
+        key={index}
+        options={question.options}
+        start={viewing}
+        title={question.header || question.question}
+        picked={picked}
+        multi={multi}
+        onChoose={(option) => {
+          toggle(option)
+          if (!multi) closeViewer(option)
+        }}
+        onClose={closeViewer}
+        onIndex={(option) => { inView.current = option }}
+      />
+    )
+  }
 
   function toggle(option: number) {
     const next = multi ? (picked.includes(option) ? picked.filter((i) => i !== option) : [...picked, option]) : [option]
@@ -287,6 +351,11 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel }: { ques
       event.preventDefault()
       toggle(digit - 1)
       root.querySelector<HTMLElement>(`[data-option="${digit - 1}"]`)?.focus()
+      return
+    }
+    if (event.key.toLowerCase() === "e" && mockups && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault()
+      openViewer(option >= 0 ? option : focused[index] ?? picked[0] ?? 0)
     }
   }
 
@@ -329,7 +398,7 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel }: { ques
             />
           </label>
         </div>
-        <Preview option={previewOption} />
+        <Preview option={previewOption} onExpand={() => openViewer(question.options.indexOf(previewOption!))} />
       </div>
       <p className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
         <span>{multi ? "Pick several" : "Pick one"}</span>
@@ -337,6 +406,7 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel }: { ques
         <KeyHint chord={multi ? "Space" : "Enter"}>{multi ? "pick" : "choose"}</KeyHint>
         {multi ? <KeyHint chord="Enter">next</KeyHint> : null}
         {questions.length > 1 ? <KeyHint chord="←→">question</KeyHint> : null}
+        {mockups ? <KeyHint chord="E">expand mockups</KeyHint> : null}
         <KeyHint chord="Esc">later</KeyHint>
       </p>
       <CardFooter
@@ -562,7 +632,7 @@ function SessionDialogCard({ dialog, submitting, onAnswer }: CardProps & { dialo
 
 export function QuestionCard(props: CardProps) {
   const { view } = props
-  if (view.kind === "questionnaire") return <QuestionnaireCard questions={view.questions} submitting={props.submitting} onAnswer={props.onAnswer} onCancel={props.onCancel} />
+  if (view.kind === "questionnaire") return <QuestionnaireCard questions={view.questions} submitting={props.submitting} onAnswer={props.onAnswer} onCancel={props.onCancel} {...(props.onExpand ? { expanded: props.expanded ?? false, onExpand: props.onExpand } : {})} />
   if (view.kind === "choose") return <ChoiceCard {...props} view={view} />
   if (view.kind === "confirm") return <ConfirmCard {...props} view={view} />
   if (view.kind === "text") return <TextCard {...props} view={view} />

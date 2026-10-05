@@ -22,9 +22,9 @@ export { ASK_TOOL };
 
 const OptionSchema = Type.Object({
   htmlPreview: Type.Optional(Type.Object({
-    html: Type.String({ maxLength: MAX_PREVIEW_HTML }),
+    html: Type.String({ maxLength: MAX_PREVIEW_HTML, description: "Static HTML of a mockup of this option; scripts, images, fonts and links are stripped." }),
     css: Type.Optional(Type.String({ maxLength: MAX_PREVIEW_CSS })),
-  }, { additionalProperties: false })),
+  }, { additionalProperties: false, description: "A static HTML/CSS mockup of this option, laid out for a page about 1200px wide: shown as a thumbnail beside the question, which the user expands to scroll through every option's mockup. Give one to every option of a visual question (a layout, a screen, a component's look)." })),
   label: Type.String({ maxLength: MAX_LABEL, description: `The option as the user sees and picks it: 1-5 words, at most ${MAX_LABEL} characters.` }),
   description: Type.Optional(Type.String({ description: "What choosing it means: its trade-offs or consequences. Markdown." })),
   preview: Type.Optional(Type.String({ description: "Markdown shown beside the options while this one is focused: a mockup, a code snippet, a diagram, a config. Only when seeing it helps the user compare." })),
@@ -45,7 +45,7 @@ export const AskParams = Type.Object({
 const DESCRIPTION = [
   "Ask the user one to four questions with options to pick from, when the answer would change what you do and you would otherwise guess.",
   "Each question has 2-4 options in a neutral order, with no recommendation (mark one \"(Recommended)\", first, only when the answer is quite obvious); the user can pick one (or several with multiSelect), or answer in their own words.",
-  "Questions, descriptions and previews are Markdown. Give options a `preview` when the user needs to see them to choose: a UI mockup, a layout sketch, a code snippet, a config; the focused option's preview shows beside the list. An option can also carry an `image` file (a screenshot, a rendered mockup).",
+  "Questions, descriptions and previews are Markdown. For anything the user will see (a layout, a screen, a component's look), give every option an `htmlPreview`: a static HTML/CSS mockup the user can expand and scroll through side by side with the others. Give options a Markdown `preview` for a code snippet, a config or a text sketch; the focused option's preview shows beside the list. An option can also carry an `image` file (a screenshot, a rendered mockup).",
   "Do not use it for yes/no confirmations of what you were already told to do, or for questions the conversation already answers.",
 ].join(" ");
 
