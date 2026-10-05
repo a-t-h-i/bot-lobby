@@ -111,7 +111,7 @@ export function IssuesTab({ rest }: { rest: readonly string[] }) {
   )
   const detail = id !== undefined ? <IssueDetail key={id} number={id} /> : null
   const body = read.data && issues.length === 0
-    ? <><NoIssues loading={read.data.loading} loaded={read.data.loaded} error={read.data.error} onRetry={read.reload} /><CreateBox onCreate={create} /></>
+    ? <><NoIssues loading={read.data.loading} loaded={read.data.loaded} error={read.data.error} onRetry={read.reload} /><div className="shrink-0 pb-dock"><CreateBox onCreate={create} /></div></>
     : <SplitPane wide={wide} list={list} detail={detail} open={id !== undefined} onClose={close} hint="Select an issue to read it." describe="Issue detail" />
   return (
     <div className="flex min-h-0 flex-1 flex-col">

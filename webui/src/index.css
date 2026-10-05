@@ -4,10 +4,10 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * A calm page: cool mist in light, near-black in dark, one indigo accent.
- * The page is a tinted ground; everything you work in sits on one bordered
- * surface above it. Every colour lives in this one block: change a token here
- * and the whole page follows. Only pop-ups and toasts are translucent.
+ * A calm page: warm paper in light, deep ink in dark, one quiet indigo
+ * accent. Everything you work in sits on one bordered surface above the
+ * ground, and the message box floats over it as a dock. Every colour lives in
+ * this one block: change a token here and the whole page follows.
  */
 @font-face {
   font-family: "Inter Variable";
@@ -20,46 +20,46 @@
 :root {
   --radius: 0.5rem;
 
-  /* Page and ink: mist */
-  --background: #f4f5f9;
-  --foreground: #14161d;
-  --muted-foreground: #586070;
+  /* Page and ink: warm paper, soft graphite */
+  --background: #f6f5f2;
+  --foreground: #1b1c21;
+  --muted-foreground: #5f626b;
 
   /* Surfaces */
   --card: #ffffff;
-  --card-foreground: #14161d;
-  --popover: rgb(255 255 255 / 0.92);
-  --popover-foreground: #14161d;
-  --glass-border: #e3e6ee;
-  --glass-shadow: 0 16px 40px -14px rgb(20 28 60 / 0.3);
-  --card-shadow: 0 1px 2px rgb(20 28 60 / 0.05);
-  --surface-shadow: 0 1px 2px rgb(20 28 60 / 0.04), 0 12px 32px -20px rgb(20 28 60 / 0.16);
-  --scrim: rgb(16 22 42 / 0.34);
+  --card-foreground: #1b1c21;
+  --popover: rgb(255 255 255 / 0.9);
+  --popover-foreground: #1b1c21;
+  --glass-border: #e9e7e1;
+  --glass-shadow: 0 1px 2px rgb(32 28 20 / 0.04), 0 18px 44px -18px rgb(32 28 20 / 0.24);
+  --card-shadow: 0 1px 2px rgb(32 28 20 / 0.04);
+  --surface-shadow: 0 1px 2px rgb(32 28 20 / 0.03), 0 10px 30px -22px rgb(32 28 20 / 0.14);
+  --scrim: rgb(28 26 22 / 0.28);
 
-  /* Accent: indigo */
-  --primary: #4650d1;
+  /* Accent: a quiet indigo */
+  --primary: #4b54b5;
   --primary-foreground: #ffffff;
-  --accent: rgb(70 80 209 / 0.08);
-  --accent-foreground: #14161d;
-  --ring: #6a73e0;
-  --typing: #6a73e0;
-  --tab-active: #e6e9fb;
+  --accent: rgb(75 84 181 / 0.07);
+  --accent-foreground: #1b1c21;
+  --ring: #7078cc;
+  --typing: #7078cc;
+  --tab-active: #efeee9;
 
   /* Quiet fills and lines */
-  --secondary: rgb(26 40 90 / 0.06);
-  --secondary-foreground: #14161d;
-  --muted: rgb(26 40 90 / 0.05);
-  --border: #e3e6ee;
-  --input: #cfd4df;
-  --you: #eef0fa;
+  --secondary: rgb(40 36 28 / 0.05);
+  --secondary-foreground: #1b1c21;
+  --muted: rgb(40 36 28 / 0.04);
+  --border: #ebe9e4;
+  --input: #dad8d1;
+  --you: #f3f2ee;
 
   /* Meaning */
-  --destructive: #b8322c;
-  --success: #1f6f48;
-  --warning: #8a5a00;
-  --heading: #14161d;
+  --destructive: #b2362f;
+  --success: #2a6b4a;
+  --warning: #855900;
+  --heading: #1b1c21;
   --link: var(--primary);
-  --code: #9b3a86;
+  --code: #8f3d7d;
   --codeblock: var(--foreground);
   --bullet: var(--primary);
 
@@ -85,55 +85,85 @@
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
 
-  /* Snappy: quick in, a soft landing. */
-  --ease-snap: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* The floating message box: the card, a little see-through, lifted on a soft shadow. Themes get it for free. */
+  --dock: color-mix(in oklab, var(--card) 86%, transparent);
+  --dock-border: color-mix(in oklab, var(--foreground) 8%, transparent);
+  --dock-shadow: 0 1px 1px rgb(32 28 20 / 0.03), 0 2px 8px -4px rgb(32 28 20 / 0.06), 0 16px 40px -14px rgb(32 28 20 / 0.2);
+  --dock-focus-shadow: var(--dock-shadow), 0 0 0 4px color-mix(in oklab, var(--ring) 12%, transparent);
 
-  /* The composer's height, so toasts can sit just above it. */
-  --composer-h: 5.5rem;
+  /* The rainbow for max effort: deep enough to read on paper. */
+  --rainbow-1: #e0475b;
+  --rainbow-2: #e2792c;
+  --rainbow-3: #c99a06;
+  --rainbow-4: #2f9a5d;
+  --rainbow-5: #2a82d4;
+  --rainbow-6: #6a57d8;
+  --rainbow-7: #c34fae;
+
+  /* The dock's height from the bottom of the window, so toasts and the page can clear it. */
+  --composer-h: 6.5rem;
 }
 
 .dark {
-  /* Near-black */
-  --background: #08090c;
-  --foreground: #e8eaf0;
-  --muted-foreground: #9099ab;
+  /* Deep ink */
+  --background: #0b0b0d;
+  --foreground: #e8e7e4;
+  --muted-foreground: #9b9ba3;
 
-  --card: #0e1015;
-  --card-foreground: #e8eaf0;
-  --popover: rgb(14 16 21 / 0.94);
-  --popover-foreground: #e8eaf0;
-  --glass-border: #1a1e26;
-  --glass-shadow: 0 18px 44px -14px rgb(0 0 0 / 0.85);
-  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
-  --surface-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -20px rgb(0 0 0 / 0.7);
-  --scrim: rgb(0 0 0 / 0.72);
+  --card: #121215;
+  --card-foreground: #e8e7e4;
+  --popover: rgb(20 20 24 / 0.9);
+  --popover-foreground: #e8e7e4;
+  --glass-border: #212126;
+  --glass-shadow: 0 20px 48px -16px rgb(0 0 0 / 0.8);
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+  --surface-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px -22px rgb(0 0 0 / 0.6);
+  --scrim: rgb(0 0 0 / 0.64);
 
-  --primary: #8f9bff;
-  --primary-foreground: #0d0f26;
-  --accent: rgb(143 155 255 / 0.13);
-  --accent-foreground: #e8eaf0;
-  --ring: #8f9bff;
-  --typing: #8f9bff;
-  --tab-active: #151a33;
+  --primary: #9aa2f0;
+  --primary-foreground: #10122e;
+  --accent: rgb(154 162 240 / 0.11);
+  --accent-foreground: #e8e7e4;
+  --ring: #9aa2f0;
+  --typing: #9aa2f0;
+  --tab-active: #1d1d22;
 
   --secondary: rgb(255 255 255 / 0.045);
-  --secondary-foreground: #e8eaf0;
-  --muted: rgb(255 255 255 / 0.04);
-  --border: #1a1e26;
-  --input: #272c37;
-  --you: #12151d;
+  --secondary-foreground: #e8e7e4;
+  --muted: rgb(255 255 255 / 0.035);
+  --border: #1e1e23;
+  --input: #2c2c33;
+  --you: #19191d;
 
-  --destructive: #f2918a;
-  --success: #7fcf9f;
-  --warning: #e5b45a;
-  --heading: #e8eaf0;
-  --code: #e6a6d6;
+  --destructive: #f0958e;
+  --success: #82cfa2;
+  --warning: #e3b45e;
+  --heading: #e8e7e4;
+  --code: #e2a8d4;
 
   --chart-3: #5fd0c4;
   --chart-4: #d99ac9;
 
   --source-design: #d99ac9;
   --source-research: #5fd0c4;
+
+  --rainbow-1: #ff7a8a;
+  --rainbow-2: #ffa25c;
+  --rainbow-3: #ffd65c;
+  --rainbow-4: #6ee39a;
+  --rainbow-5: #62b6ff;
+  --rainbow-6: #a492ff;
+  --rainbow-7: #f08ad8;
+
+  --dock: color-mix(in oklab, var(--card) 80%, transparent);
+  --dock-border: color-mix(in oklab, var(--foreground) 9%, transparent);
+  --dock-shadow: 0 1px 1px rgb(0 0 0 / 0.3), 0 18px 44px -14px rgb(0 0 0 / 0.75);
+}
+
+/* Snappy: quick in, a soft landing. Calm: slower, for things that drift. */
+@theme {
+  --ease-snap: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-calm: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 @theme inline {
@@ -151,12 +181,16 @@
   --color-bullet: var(--bullet);
   --color-glass-border: var(--glass-border);
   --color-scrim: var(--scrim);
-  /* Two corners: 8px for controls and rows, 12px for the surfaces they sit on. Only dots, bars and switches stay fully round. */
+  --color-dock: var(--dock);
+  --color-dock-border: var(--dock-border);
+  --shadow-dock: var(--dock-shadow);
+  --shadow-dock-focus: var(--dock-focus-shadow);
+  /* Corners: 8px for controls and rows, 12px for the surfaces they sit on, 16px for the floating dock. Only dots, bars and switches stay fully round. */
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 8px;
   --radius-xl: 12px;
-  --radius-2xl: 12px;
+  --radius-2xl: 16px;
   --radius-3xl: 12px;
   --color-tab: var(--tab-active);
   --shadow-glass: var(--glass-shadow);
@@ -245,6 +279,19 @@
   :focus-visible {
     outline-offset: 2px;
   }
+}
+
+/*
+ * The message box floats over the page as a dock. Whatever scrolls under it
+ * leaves room at its end to scroll clear of it, and keyboard scrolling stops
+ * short of it too.
+ */
+@utility pb-dock {
+  padding-bottom: calc(var(--composer-h, 0px) + 1rem);
+  scroll-padding-bottom: calc(var(--composer-h, 0px) + 1rem);
+}
+@utility bottom-dock {
+  bottom: calc(var(--composer-h, 0px) + 0.5rem);
 }
 
 /* One bordered surface carries the page; pop-ups are translucent with a blur behind them. */
@@ -438,4 +485,31 @@ button:not([role="switch"]):not([role="checkbox"]), [role="tab"], header a[aria-
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/*
+ * The effort word above the slider: xhigh glints as a light passes over it,
+ * max shimmers through the rainbow (the way a terminal lights up ultrathink).
+ */
+.effort-word[data-level="xhigh"],
+.effort-word[data-level="max"] {
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: effort-shimmer 2.4s linear infinite;
+}
+.effort-word[data-level="xhigh"] {
+  background-image: linear-gradient(100deg, var(--foreground) 35%, var(--primary) 50%, var(--foreground) 65%);
+}
+.effort-word[data-level="max"] {
+  background-image: linear-gradient(90deg, var(--rainbow-1), var(--rainbow-2), var(--rainbow-3), var(--rainbow-4), var(--rainbow-5), var(--rainbow-6), var(--rainbow-7), var(--rainbow-1));
+  font-weight: 650;
+}
+@keyframes effort-shimmer {
+  from { background-position: 125% 0; }
+  to { background-position: -125% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .effort-word { animation: none !important; background-position: 50% 0; }
 }

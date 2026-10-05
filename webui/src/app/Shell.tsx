@@ -147,7 +147,7 @@ export function Shell() {
         }}
         role={activeId ? "tabpanel" : undefined}
         aria-labelledby={activeId ? `tab-${activeId}` : undefined}
-        className="surface mx-3 flex min-h-0 flex-1 flex-col overflow-y-auto outline-none max-sm:mx-0"
+        className="surface mx-3 mb-3 flex min-h-0 flex-1 flex-col overflow-y-auto outline-none max-sm:mx-0 max-sm:mb-0"
       >
         <motion.div
           key={routeKey(route)}

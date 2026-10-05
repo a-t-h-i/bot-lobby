@@ -143,7 +143,7 @@ export function EffortSlider({ value, levels, supported, model, label, disabled,
   return (
     <div className={cn("flex flex-col gap-1", disabled && "opacity-60")}>
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-[0.8125rem] font-medium capitalize" aria-hidden="true">
+        <span data-level={level} className="effort-word text-[0.8125rem] font-medium capitalize" aria-hidden="true">
           {level}
         </span>
         <span className="min-w-0 truncate text-xs text-muted-foreground">{HINTS[level] ?? ""}</span>

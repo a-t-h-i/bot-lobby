@@ -37,7 +37,7 @@ export function TaskHeader({ task, status }: { task?: SnapshotTask; status?: Sta
   const branch = status?.branch ?? status?.workspace.branch
   const where = task?.git?.branch ?? branch
   return (
-    <section className="flex h-11 shrink-0 items-center gap-3 border-b border-border px-4" aria-label="Task" role="group">
+    <section className="flex h-12 shrink-0 items-center gap-3 px-5" aria-label="Task" role="group">
       <h2 className="min-w-0 flex-1 truncate text-[0.8125rem] font-medium" title={task?.title}>
         {task?.title ?? "No task yet"}
         {!task ? <span className="ml-2 font-normal text-muted-foreground">{status?.sessionName ?? "Type a request below to start one."}</span> : null}

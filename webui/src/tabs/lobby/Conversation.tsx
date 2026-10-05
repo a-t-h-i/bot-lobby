@@ -210,7 +210,7 @@ export function Conversation({
   useEffect(() => setSettled(true), [])
   return (
     <Frame aria-label="Conversation" {...(bare ? {} : { title: "Conversation" })} note={more ? OLDER_NOTE : undefined} className="flex-1">
-      <div ref={ref} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto px-5 py-4 outline-none focus-visible:bg-muted/30" role="log" aria-label="Conversation" tabIndex={0}>
+      <div ref={ref} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto px-5 pt-4 pb-dock outline-none focus-visible:bg-muted/30" role="log" aria-label="Conversation" tabIndex={0}>
         {empty ? (
           <ConversationEmpty hasTask={hasTask} />
         ) : (
@@ -225,7 +225,7 @@ export function Conversation({
         )}
       </div>
       {!atBottom ? (
-        <div className="absolute right-4 bottom-3">
+        <div className="absolute right-4 bottom-dock z-10">
           <ActionButton label="Jump to latest" text="Latest" icon={ArrowDown} tone="primary" className="rounded-full shadow-sm" onClick={stick} />
         </div>
       ) : null}
