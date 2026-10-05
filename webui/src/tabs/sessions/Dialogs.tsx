@@ -60,7 +60,7 @@ function Card({ sessionKey, dialog, onAnswered }: { sessionKey: string; dialog: 
     if (await act("sessions.answer", { key: sessionKey, dialogId: dialog.id, answer })) onAnswered()
   }
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border bg-background/60 p-3">
+    <div className="card-raised flex flex-col gap-3 rounded-lg border p-3">
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-foreground">{dialog.title}</p>
         {dialog.message ? <p className="text-sm text-muted-foreground">{dialog.message}</p> : null}

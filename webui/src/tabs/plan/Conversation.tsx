@@ -62,7 +62,7 @@ function Asked({ questions }: { questions: PanelQuestion[] }) {
   return (
     <ol className="mt-1 flex flex-col gap-2">
       {questions.map((question, index) => (
-        <li key={index} className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3 text-sm" style={{ "--orb": sourceTone(question.from) } as CSSProperties}>
+        <li key={index} className="card-raised flex flex-col gap-2 rounded-xl border p-3 text-sm" style={{ "--orb": sourceTone(question.from) } as CSSProperties}>
           <p className="flex items-start gap-2">
             <span className="mt-px inline-flex shrink-0 items-center gap-1 rounded-full bg-[color-mix(in_oklab,var(--orb)_12%,transparent)] px-2 py-0.5 text-xs font-medium text-[color-mix(in_oklab,var(--orb)_85%,var(--foreground))]">
               <AgentIcon source={question.from} className="size-3" />
