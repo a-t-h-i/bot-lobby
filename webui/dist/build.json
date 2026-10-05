@@ -1,6 +1,6 @@
 {
-  "hash": "f5e92e25afb96d885663b79412d2111cc19a371f766562d7a2dffaa43aea513e",
-  "builtAt": "2026-10-05T11:58:28.466Z",
+  "hash": "c2b2be289497866fbc542041362faab200cc50f901ffa4a37097cfdd3920a5c7",
+  "builtAt": "2026-10-05T14:08:21.970Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -52,7 +52,7 @@
     },
     {
       "path": "webui/src/app/TabStrip.tsx",
-      "sha256": "b51c4dc026ce0f6cebbc9d76a5e1c04867686314b29b4e907aeaada6d61b0aad"
+      "sha256": "b9102bcd212dde455a8c90bee96d11729df394907afa7644b08ce6ba20612e47"
     },
     {
       "path": "webui/src/app/bootstrap.ts",
@@ -132,7 +132,7 @@
     },
     {
       "path": "webui/src/components/ui/button.tsx",
-      "sha256": "96e004d293c41d645971d2d6af3a30c3e3b84879540e1c229e416441c2d3b721"
+      "sha256": "69f5e12177fb2b6bc0770c6365c9b2331d0a1e00cb182ea5a86b7d2d82215588"
     },
     {
       "path": "webui/src/components/ui/checkbox.tsx",
@@ -200,7 +200,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "7a90aa65869e7840e6287f2f28903bebdd98091595bbe831e1182c3690577bde"
+      "sha256": "3959e53bb9fffd165705601bd9d5015e2ed417985bb3f74cbe76aa5eca62464d"
     },
     {
       "path": "webui/src/lib/act.ts",
