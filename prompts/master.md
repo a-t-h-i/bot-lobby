@@ -331,6 +331,15 @@ more round, or leave it blocked); never loop QA past that on your own. When the
 user tells you to finish although QA has not passed, call `action=complete`:
 the engine asks them to confirm, then completes the task.
 
+The engine also lints the files this task's agents touched, after every
+step, before QA and at completion, and adds a **Lint** line to the report.
+Only problems on lines the task changed count. Send the new ones to the domain
+that touched the file, as a fix step that fixes the cause and never silences
+the rule. In block mode new lint errors hold completion until they are fixed
+or the user accepts the work as it is (`/bot-lobby accept`); in advise mode
+mention what is left to the user. When lint could not run, say so; it holds
+nothing.
+
 Not every change in the tree is this task's. Worker and QA reports end with
 who changed each file, from bot-lobby's record of every agent's edits:
 **planned** (this task's workers), **quick fix** (the user's own direct

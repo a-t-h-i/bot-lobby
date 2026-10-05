@@ -31,6 +31,15 @@ export async function headCommit(cwd: string): Promise<string | undefined> {
   }
 }
 
+/** The repository's top folder, or undefined (no git, not a repository). */
+export async function repositoryTop(cwd: string): Promise<string | undefined> {
+  try {
+    return (await git(cwd, ["rev-parse", "--show-toplevel"])) || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** The newest commit on HEAD made before `iso` (where a task started), or undefined. */
 export async function commitBefore(cwd: string, iso: string): Promise<string | undefined> {
   try {
@@ -133,6 +142,74 @@ export async function changedFiles(cwd: string, base?: string): Promise<{ top: s
     }
     for (const file of committed.split("\0")) if (file && files.size < MAX_CHANGED_FILES) files.add(file);
     return { top, files: [...files] };
+  } catch {
+    return undefined;
+  }
+}
+
+/** What a set of files gained since a commit: which files are new, which lines changed, and the text added. */
+export interface AddedLines {
+  /** Files new since `base` (untracked, or added): every line of them is new. */
+  whole: Set<string>;
+  /** Line numbers, in each file as it stands now, added or changed since `base`. */
+  lines: Map<string, Set<number>>;
+  /** The added text, line by line, bounded. */
+  text: Array<{ file: string; line: number; text: string }>;
+}
+
+/** Most added lines kept as text; line numbers stay whole. */
+const MAX_ADDED_TEXT = 20_000;
+
+/**
+ * The lines `files` (repository-relative, under `top`) gained since `base`
+ * (HEAD when absent): from `git diff -U0`, plus every line of an untracked
+ * file. Undefined when git cannot say, so callers treat every line as new.
+ */
+export async function addedLines(top: string, base: string | undefined, files: readonly string[]): Promise<AddedLines | undefined> {
+  if (files.length === 0) return { whole: new Set(), lines: new Map(), text: [] };
+  try {
+    const [diff, untracked] = await Promise.all([
+      run("git", ["-c", "core.quotePath=false", "diff", "-U0", "--no-color", "--no-ext-diff", base ?? "HEAD", "--", ...files], { cwd: top, maxBuffer: MAX_BUFFER }).then((result) => result.stdout),
+      run("git", ["ls-files", "--others", "--exclude-standard", "-z", "--", ...files], { cwd: top, maxBuffer: MAX_BUFFER }).then((result) => result.stdout),
+    ]);
+    const out: AddedLines = { whole: new Set(), lines: new Map(), text: [] };
+    let file: string | undefined;
+    let at = 0;
+    for (const line of diff.split("\n")) {
+      if (line.startsWith("+++ ")) {
+        const path = line.slice(4).replace(/^"|"$/g, "");
+        file = path === "/dev/null" ? undefined : path.replace(/^b\//, "");
+        continue;
+      }
+      const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
+      if (hunk) {
+        at = Number(hunk[1]);
+        const count = hunk[2] === undefined ? 1 : Number(hunk[2]);
+        if (file && count > 0) {
+          const set = out.lines.get(file) ?? new Set<number>();
+          for (let number = at; number < at + count; number += 1) set.add(number);
+          out.lines.set(file, set);
+        }
+        continue;
+      }
+      if (file && line.startsWith("+") && !line.startsWith("+++")) {
+        if (out.text.length < MAX_ADDED_TEXT) out.text.push({ file, line: at, text: line.slice(1) });
+        at += 1;
+      }
+    }
+    for (const path of untracked.split("\0").filter(Boolean)) {
+      out.whole.add(path);
+      try {
+        const full = join(top, path);
+        if (statSync(full).size > MAX_NEW_FILE_BYTES) continue;
+        const content = readFileSync(full, "utf8");
+        if (content.includes("\0")) continue;
+        content.split("\n").forEach((text, index) => { if (out.text.length < MAX_ADDED_TEXT) out.text.push({ file: path, line: index + 1, text }); });
+      } catch {
+        // Unreadable: its lines still count as new.
+      }
+    }
+    return out;
   } catch {
     return undefined;
   }

@@ -18,6 +18,19 @@ Review requirements, the approved plan, the actual diff, affected files, tests,
 security, accessibility where relevant, error handling, reliability,
 performance where relevant, maintainability, and scope discipline.
 
+## Lint
+
+When your context has a Lint section, the engine ran the project's linter on
+the files this task touched. Problems on lines the task changed are the
+task's; what was already there is not. A lint pass is evidence, not
+acceptance, and a lint failure in block mode already holds completion, so
+report it only when it shows a real defect. The section also lists every lint
+suppression and lint-config change the task added. Judge each one: a disable
+comment, ignore entry or loosened rule without a reason that holds (in a
+comment beside it, or the worker's report) is a `major` finding, and so is
+code removed or bent only to satisfy a rule. You cannot edit, so name the file
+and line and say what the fix should be.
+
 ## Change provenance
 
 The working tree can hold changes that are not this task's: the user makes

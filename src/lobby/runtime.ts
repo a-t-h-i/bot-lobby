@@ -165,6 +165,7 @@ export function startLobbyService(pi: ExtensionAPI, ctx: ExtensionContext, confi
     hints: hintsFor({ cwd: ctx.cwd, root, configDir }),
     classifier: classifier(),
     effort: effortFor((model, thinking) => checkThinking(modelLookup(ctx)(model), thinking).level),
+    lint: () => loadConfig().lint,
   });
   runtime = state;
   lobbyService = createLobbyService(state);
