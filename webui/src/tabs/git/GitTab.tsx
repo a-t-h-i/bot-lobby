@@ -10,11 +10,12 @@ import { useCallback } from "react"
 import { go, tabHash } from "@/app/router"
 import { ErrorState } from "@/app/States"
 import { useApiRead } from "@/app/useApiRead"
-import { RefreshCw } from "lucide-react"
+import { RefreshCw, GitPullRequest } from "lucide-react"
 import { ActionButton } from "@/ui/Actions"
 import { Button } from "@/components/ui/button"
-import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty"
+import { Empty, EmptyMedia, EmptyDescription, EmptyHeader } from "@/components/ui/empty"
 import { act } from "@/lib/act"
+import { cn } from "@/lib/utils"
 import { ListSkeleton, PaneHeader, SplitPane, useWide } from "@/ui/SplitPane"
 import { PullDetail } from "./PullDetail"
 import { PullList } from "./PullList"
@@ -32,8 +33,11 @@ export function pullNumber(rest: readonly string[]): number | undefined {
 function NoPulls({ loading, loaded, error, onRetry }: { loading: boolean; loaded: boolean; error?: string; onRetry: () => void }) {
   const text = error ? `✗ ${error}` : loaded ? EMPTY_LIST : loading ? LOADING_LIST : NOT_LOADED
   return (
-    <Empty className="flat-pane m-4 flex-1">
+    <Empty className="m-4 flex-1">
       <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <GitPullRequest aria-hidden="true" />
+        </EmptyMedia>
         <EmptyDescription className={error ? "text-destructive" : undefined}>{text}</EmptyDescription>
       </EmptyHeader>
       {error ? (
@@ -59,7 +63,7 @@ export function GitTab({ rest }: { rest: readonly string[] }) {
   const list = (
     <>
       <PaneHeader title={LIST_TITLE} count={read.data ? `${pulls.length} open` : undefined}>
-        <ActionButton label="Refresh" icon={RefreshCw} disabled={busy} className={busy ? "[&_svg]:animate-spin" : undefined} onClick={refresh} />
+        <ActionButton label="Refresh" icon={RefreshCw} shortcut="R" disabled={busy} className={cn("h-7", busy && "[&_svg]:animate-spin")} onClick={refresh} />
       </PaneHeader>
       {read.data?.error ? <p className="px-3 pt-2 text-sm text-destructive">✗ {read.data.error}</p> : null}
       {read.data ? <PullList pulls={pulls} selectedId={id} onSelect={select} /> : <ListSkeleton />}

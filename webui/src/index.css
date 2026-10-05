@@ -4,9 +4,10 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * A zen page: cool mist in light, near-black in dark, one calm indigo accent.
- * Every colour lives in this one block: change a token here and the whole page
- * follows. Only pop-ups, toasts and the composer's edges are translucent.
+ * A calm page: cool mist in light, near-black in dark, one indigo accent.
+ * The page is a tinted ground; everything you work in sits on one bordered
+ * surface above it. Every colour lives in this one block: change a token here
+ * and the whole page follows. Only pop-ups and toasts are translucent.
  */
 @font-face {
   font-family: "Inter Variable";
@@ -20,42 +21,43 @@
   --radius: 0.5rem;
 
   /* Page and ink: mist */
-  --background: #f6f7fa;
-  --foreground: #1a1d26;
-  --muted-foreground: #5a6272;
+  --background: #f4f5f9;
+  --foreground: #14161d;
+  --muted-foreground: #586070;
 
   /* Surfaces */
   --card: #ffffff;
-  --card-foreground: #1a1d26;
-  --popover: rgb(255 255 255 / 0.9);
-  --popover-foreground: #1a1d26;
+  --card-foreground: #14161d;
+  --popover: rgb(255 255 255 / 0.92);
+  --popover-foreground: #14161d;
   --glass-border: #e3e6ee;
-  --glass-shadow: 0 12px 32px -12px rgb(24 32 64 / 0.25);
-  --card-shadow: 0 1px 2px rgb(24 32 64 / 0.05);
-  --scrim: rgb(18 24 44 / 0.32);
+  --glass-shadow: 0 16px 40px -14px rgb(20 28 60 / 0.3);
+  --card-shadow: 0 1px 2px rgb(20 28 60 / 0.05);
+  --surface-shadow: 0 1px 2px rgb(20 28 60 / 0.04), 0 12px 32px -20px rgb(20 28 60 / 0.16);
+  --scrim: rgb(16 22 42 / 0.34);
 
   /* Accent: indigo */
   --primary: #4650d1;
   --primary-foreground: #ffffff;
-  --accent: rgb(70 80 209 / 0.09);
-  --accent-foreground: #1a1d26;
+  --accent: rgb(70 80 209 / 0.08);
+  --accent-foreground: #14161d;
   --ring: #6a73e0;
   --typing: #6a73e0;
-  --tab-active: #e4e7fa;
+  --tab-active: #e6e9fb;
 
   /* Quiet fills and lines */
   --secondary: rgb(26 40 90 / 0.06);
-  --secondary-foreground: #1a1d26;
+  --secondary-foreground: #14161d;
   --muted: rgb(26 40 90 / 0.05);
   --border: #e3e6ee;
-  --input: #d3d8e3;
-  --you: #eaedf7;
+  --input: #cfd4df;
+  --you: #eef0fa;
 
   /* Meaning */
   --destructive: #b8322c;
   --success: #1f6f48;
   --warning: #8a5a00;
-  --heading: #1a1d26;
+  --heading: #14161d;
   --link: var(--primary);
   --code: #9b3a86;
   --codeblock: var(--foreground);
@@ -85,42 +87,46 @@
 
   /* Snappy: quick in, a soft landing. */
   --ease-snap: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* The composer's height, so toasts can sit just above it. */
+  --composer-h: 5.5rem;
 }
 
 .dark {
   /* Near-black */
-  --background: #050608;
-  --foreground: #e6e8ee;
-  --muted-foreground: #8b93a4;
+  --background: #08090c;
+  --foreground: #e8eaf0;
+  --muted-foreground: #9099ab;
 
-  --card: #0b0d11;
-  --card-foreground: #e6e8ee;
-  --popover: rgb(11 13 17 / 0.94);
-  --popover-foreground: #e6e8ee;
-  --glass-border: #181b22;
-  --glass-shadow: 0 14px 36px -12px rgb(0 0 0 / 0.8);
+  --card: #0e1015;
+  --card-foreground: #e8eaf0;
+  --popover: rgb(14 16 21 / 0.94);
+  --popover-foreground: #e8eaf0;
+  --glass-border: #1a1e26;
+  --glass-shadow: 0 18px 44px -14px rgb(0 0 0 / 0.85);
   --card-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
-  --scrim: rgb(0 0 0 / 0.75);
+  --surface-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -20px rgb(0 0 0 / 0.7);
+  --scrim: rgb(0 0 0 / 0.72);
 
   --primary: #8f9bff;
   --primary-foreground: #0d0f26;
   --accent: rgb(143 155 255 / 0.13);
-  --accent-foreground: #e6e8ee;
+  --accent-foreground: #e8eaf0;
   --ring: #8f9bff;
   --typing: #8f9bff;
-  --tab-active: #141830;
+  --tab-active: #151a33;
 
   --secondary: rgb(255 255 255 / 0.045);
-  --secondary-foreground: #e6e8ee;
+  --secondary-foreground: #e8eaf0;
   --muted: rgb(255 255 255 / 0.04);
-  --border: #181b22;
-  --input: #262a35;
-  --you: #11141b;
+  --border: #1a1e26;
+  --input: #272c37;
+  --you: #12151d;
 
   --destructive: #f2918a;
   --success: #7fcf9f;
   --warning: #e5b45a;
-  --heading: #e6e8ee;
+  --heading: #e8eaf0;
   --code: #e6a6d6;
 
   --chart-3: #5fd0c4;
@@ -145,16 +151,17 @@
   --color-bullet: var(--bullet);
   --color-glass-border: var(--glass-border);
   --color-scrim: var(--scrim);
-  /* One radius for everything: rounded-lg (8px), whichever step a class names. Only dots, bars and switches stay fully round. */
-  --radius-sm: 8px;
+  /* Two corners: 8px for controls and rows, 12px for the surfaces they sit on. Only dots, bars and switches stay fully round. */
+  --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 8px;
-  --radius-xl: 8px;
-  --radius-2xl: 8px;
-  --radius-3xl: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 12px;
+  --radius-3xl: 12px;
   --color-tab: var(--tab-active);
   --shadow-glass: var(--glass-shadow);
   --shadow-card: var(--card-shadow);
+  --shadow-surface: var(--surface-shadow);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -229,40 +236,77 @@
     }
   }
   ::selection {
-    background: var(--accent);
+    background: color-mix(in oklab, var(--primary) 22%, transparent);
   }
   * {
     scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
+    scrollbar-color: color-mix(in oklab, var(--foreground) 16%, transparent) transparent;
   }
   :focus-visible {
     outline-offset: 2px;
   }
 }
 
-/* Cards are flat mist (or graphite) with a thin edge and a whisper of shadow; pop-ups are translucent with a blur behind them. */
+/* One bordered surface carries the page; pop-ups are translucent with a blur behind them. */
 @layer components {
+  /* The big pane every tab lives in, set into the page with a margin. Edge to edge on a phone. */
+  .surface {
+    @apply min-h-0 min-w-0 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-surface;
+  }
+  @media (max-width: 639px) {
+    .surface {
+      border-radius: 0;
+      border-inline-width: 0;
+      box-shadow: none;
+    }
+  }
+  /* A bordered block inside a surface (a settings card, a metric). */
   .glass {
     @apply border border-glass-border bg-card text-card-foreground shadow-card;
   }
   .glass-pop {
     @apply border border-glass-border bg-popover text-popover-foreground shadow-glass backdrop-blur-md;
   }
-  /* A pane with no card: a hairline above it, nothing else. */
-  .flat-pane {
-    @apply border-t border-border bg-transparent;
+
+  /* The key cap hints are for keyboards: a touch screen has none to press. */
+  @media (hover: none) and (pointer: coarse) {
+    .kbd-hint {
+      display: none;
+    }
   }
 }
 
-:root { --composer-h: 5.5rem; }
-
-/* Own the scroll inset even when a tab also uses a padding utility. */
-.composer-inset {
-  padding-bottom: var(--composer-h);
+/*
+ * The top bar: where you are on the left, the tabs in the middle, the session
+ * and its tools on the right. Below 1360px the tabs take a row of their own so
+ * nothing is squeezed.
+ */
+.app-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "where tools"
+    "tabs tabs";
+  align-items: center;
+  column-gap: 0.75rem;
+  row-gap: 0.125rem;
+  padding: 0.5rem 0.75rem 0.25rem;
 }
-/* Nested tab scrollers own their inset, never the ancestor as well. */
-.composer-inset:has(.composer-inset) {
-  padding-bottom: 0;
+@media (min-width: 1360px) {
+  .app-header {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-areas: "where tabs tools";
+    padding: 0.5rem 0.75rem;
+  }
+}
+.app-header > .where {
+  grid-area: where;
+}
+.app-header > .tabs {
+  grid-area: tabs;
+}
+.app-header > .tools {
+  grid-area: tools;
 }
 
 /* The activity indicator: three dots that hop in turn. */

@@ -17,7 +17,7 @@ function Step({ step, index }: { step: TaskDetailData["steps"][number]; index: n
       <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{index + 1}.</span>
       <span className={step.status === "current" ? "min-w-0 break-words text-foreground" : "min-w-0 break-words text-muted-foreground"}>{step.text}</span>
       {step.status === "current" ? (
-        <span className="shrink-0 rounded-lg bg-accent px-2 py-0.5 text-xs font-medium">
+        <span className="shrink-0 rounded-md bg-accent px-2 py-0.5 text-xs font-medium">
           now<span className="sr-only"> (current step)</span>
         </span>
       ) : null}
@@ -29,7 +29,7 @@ function ProgressSection({ steps }: { steps: TaskDetailData["steps"] }) {
   const done = steps.filter((step) => step.status === "done").length
   return (
     <Section title="Progress" right={`${done}/${steps.length} steps`}>
-      <ol className="flex flex-col gap-1.5">
+      <ol className="flex flex-col gap-2">
         {steps.map((step, index) => (
           <Step key={`${index}-${step.text}`} step={step} index={index} />
         ))}

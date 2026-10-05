@@ -20,7 +20,7 @@ function Progress({ done, total, current }: { done: number; total: number; curre
       <span className="tabular-nums">
         {done} of {total} steps
       </span>
-      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done} aria-label="Plan progress">
+      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-border" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done} aria-label="Plan progress">
         <motion.div className="h-full rounded-full bg-primary" initial={false} animate={{ width: `${percent}%` }} transition={{ type: "spring", stiffness: 260, damping: 30 }} />
       </div>
       {current ? (
@@ -37,14 +37,14 @@ export function TaskHeader({ task, status }: { task?: SnapshotTask; status?: Sta
   const branch = status?.branch ?? status?.workspace.branch
   const where = task?.git?.branch ?? branch
   return (
-    <section className="flat-pane flex h-10 shrink-0 items-center gap-3 px-3" aria-label="Task" role="group">
+    <section className="flex h-11 shrink-0 items-center gap-3 border-b border-border px-4" aria-label="Task" role="group">
       <h2 className="min-w-0 flex-1 truncate text-[0.8125rem] font-medium" title={task?.title}>
-        {task?.title ?? "No task is running in this session."}
+        {task?.title ?? "No task yet"}
         {!task ? <span className="ml-2 font-normal text-muted-foreground">{status?.sessionName ?? "Type a request below to start one."}</span> : null}
       </h2>
       {task ? (
         <>
-          <span className="shrink-0 rounded-lg bg-accent px-2 py-0.5 text-xs font-medium">{task.state.replace(/_/g, " ")}</span>
+          <span className="shrink-0 rounded-md bg-accent px-2 py-0.5 text-xs font-medium">{task.state.replace(/_/g, " ")}</span>
           <Dot>{task.id}</Dot>
           {task.track ? <Dot>{trackText(task.track)}</Dot> : null}
           {(task.domains ?? []).length > 0 ? <Dot>{task.domains.join(", ")}</Dot> : null}

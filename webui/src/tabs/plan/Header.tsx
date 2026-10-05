@@ -28,13 +28,14 @@ function Actions({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }
     if (await act(name, {})) onDone()
   }
   return (
-    <div className="flex items-center gap-0.5">
-      {snap.questions.length > 0 && !snap.busy ? <ActionButton label="Answer questions" icon={MessageCircleQuestion} tone="primary" onClick={() => void run("planner.answer")()} /> : null}
-      {snap.retryable ? <ActionButton label="Retry" icon={RotateCw} onClick={() => void run("planner.retry")()} /> : null}
-      <ActionButton label="Save the plan" icon={Save} shortcut="Ctrl+S" disabled={!snap.draft || snap.busy} onClick={() => void run("planner.save")()} />
+    <div className="flex flex-wrap items-center gap-1">
+      {snap.questions.length > 0 && !snap.busy ? <ActionButton label="Answer questions" icon={MessageCircleQuestion} tone="primary" shortcut="A" onClick={() => void run("planner.answer")()} /> : null}
+      {snap.retryable ? <ActionButton label="Retry" icon={RotateCw} shortcut="R" onClick={() => void run("planner.retry")()} /> : null}
+      <ActionButton label="Save the plan" text="Save" icon={Save} shortcut="Ctrl+S" disabled={!snap.draft || snap.busy} onClick={() => void run("planner.save")()} />
       <ConfirmButton
         icon={FilePlus}
         label="New plan"
+        shortcut="N"
         title="Start a new plan?"
         description="The conversation and the draft are left behind. Saved plans are not touched."
         confirmLabel="New plan"
@@ -46,10 +47,10 @@ function Actions({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }
 
 export function PlanHeader({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) {
   return (
-    <header className="flex flex-col gap-3">
+    <header className="flex shrink-0 flex-col gap-3 border-b border-border px-5 py-3">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <div className="flex min-w-0 flex-col gap-1">
-          <h2 className="text-lg font-medium">Planning</h2>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <h2 className="text-lg font-semibold tracking-tight">Planning</h2>
           <Status snap={snap} />
         </div>
         <Actions snap={snap} onDone={onDone} />

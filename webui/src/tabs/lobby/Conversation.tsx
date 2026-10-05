@@ -9,10 +9,11 @@
  */
 import { memo, useCallback, useEffect, useMemo, useState, type ReactNode, type RefObject } from "react"
 import { useStickToBottom } from "@/lib/useStickToBottom"
-import { ArrowDown } from "lucide-react"
+import { ArrowDown, MessageSquare } from "lucide-react"
 import { motion } from "motion/react"
 import { ActionButton } from "@/ui/Actions"
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { Keys } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { call } from "@/lib/api"
 import { formatClock } from "@/lib/format"
@@ -26,7 +27,6 @@ const GROUP_MS = 5 * 60_000
 const OLDER_NOTE = "earlier messages load as you scroll up"
 const NO_TASK = "No task is running in this session."
 const NO_TASK_HINT = "Type a request below and press enter to start one: the oracle scouts, proposes, plans and delegates."
-const NO_TASK_ALT = "Or plan it first with the whole planning panel in 3 Plan, or make a direct change in 4 Quick fix."
 const NOTHING_SAID = "Nothing said yet. Type below to talk to the oracle about this task."
 
 function NoteEntry({ entry }: { entry: ChatEntry }) {
@@ -62,7 +62,7 @@ function MessageBody({ entry, head }: { entry: ChatEntry; head: boolean }) {
             <span className="font-medium">You</span>
           </span>
         ) : null}
-        <div className="max-w-[78%] rounded-lg rounded-tr-lg border border-primary/15 bg-you px-4 py-2">
+        <div className="max-w-[78%] rounded-xl rounded-tr-sm border border-primary/10 bg-you px-3.5 py-2">
           <Markdown text={entry.text} />
         </div>
       </div>
@@ -123,17 +123,22 @@ function ConversationEmpty({ hasTask }: { hasTask: boolean }) {
   return (
     <Empty className="h-full border-0">
       <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <MessageSquare aria-hidden="true" />
+        </EmptyMedia>
         {hasTask ? null : <EmptyTitle>{NO_TASK}</EmptyTitle>}
-        <EmptyDescription>
-          {hasTask ? NOTHING_SAID : NO_TASK_HINT}
-          {hasTask ? null : (
-            <>
-              {" "}
-              {NO_TASK_ALT}
-            </>
-          )}
-        </EmptyDescription>
+        <EmptyDescription>{hasTask ? NOTHING_SAID : NO_TASK_HINT}</EmptyDescription>
       </EmptyHeader>
+      {hasTask ? null : (
+        <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
+          <li className="flex items-center justify-center gap-2">
+            Or plan it first with the whole panel in <Keys chord="3" /> Plan
+          </li>
+          <li className="flex items-center justify-center gap-2">
+            or make a direct change in <Keys chord="4" /> Quick fix
+          </li>
+        </ul>
+      )}
     </Empty>
   )
 }
@@ -182,12 +187,15 @@ export function Conversation({
   busy,
   hasOlder,
   hasTask,
+  bare,
 }: {
   chat: ChatEntry[]
   reply?: string
   busy: boolean
   hasOlder: boolean
   hasTask: boolean
+  /** Without its own title row (the switcher above already names it). */
+  bare?: boolean
 }) {
   const { ref, atBottom, stick, onScroll } = useStickToBottom(chat.length + (reply?.length ?? 0))
   const { merged, more, loading, load } = useOlderChat(chat, hasOlder, ref)
@@ -201,12 +209,12 @@ export function Conversation({
   const [settled, setSettled] = useState(false)
   useEffect(() => setSettled(true), [])
   return (
-    <Frame aria-label="Conversation" title="Conversation" note={more ? OLDER_NOTE : undefined}>
-      <div ref={ref} onScroll={handleScroll} className="composer-inset min-h-0 flex-1 overflow-y-auto px-4 pt-3 pb-3" role="log" aria-label="Conversation" tabIndex={0}>
+    <Frame aria-label="Conversation" {...(bare ? {} : { title: "Conversation" })} note={more ? OLDER_NOTE : undefined} className="flex-1">
+      <div ref={ref} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto px-5 py-4 outline-none focus-visible:bg-muted/30" role="log" aria-label="Conversation" tabIndex={0}>
         {empty ? (
           <ConversationEmpty hasTask={hasTask} />
         ) : (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-5">
             {merged.map((entry, index) => {
               const previous = merged[index - 1]
               const head = !previous || previous.role !== entry.role || entry.at - previous.at > GROUP_MS
@@ -218,7 +226,7 @@ export function Conversation({
       </div>
       {!atBottom ? (
         <div className="absolute right-4 bottom-3">
-          <ActionButton label="Jump to latest" icon={ArrowDown} tone="primary" className="shadow-sm" onClick={stick} />
+          <ActionButton label="Jump to latest" text="Latest" icon={ArrowDown} tone="primary" className="rounded-full shadow-sm" onClick={stick} />
         </div>
       ) : null}
     </Frame>

@@ -26,7 +26,7 @@ function KindMark({ entry }: { entry: ActivityEntry }) {
 
 function ActivityRow({ entry }: { entry: ActivityEntry }) {
   return (
-    <li className="grid grid-cols-[2.75rem_5.5rem_1rem_minmax(0,1fr)] items-baseline gap-x-2 border-b border-border px-2 py-1 text-sm transition-colors hover:bg-accent/50">
+    <li className="grid grid-cols-[2.75rem_5rem_1rem_minmax(0,1fr)] items-baseline gap-x-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-muted">
       <span className="text-xs tabular-nums text-muted-foreground">{formatClock(entry.at)}</span>
       <span className={cn("overflow-hidden text-xs font-medium whitespace-nowrap", sourceColor(entry.source))}>{sourceLabel(entry.source)}</span>
       <span aria-hidden="true" className="flex items-center justify-center self-center">
@@ -40,17 +40,17 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
   )
 }
 
-export function ActivityLog({ entries, collapsed, onToggle, shortcut }: { entries: ActivityEntry[]; collapsed: boolean; onToggle: () => void; shortcut?: string }) {
+export function ActivityLog({ entries, collapsed, onToggle, shortcut, bare }: { entries: ActivityEntry[]; collapsed: boolean; onToggle?: () => void; shortcut?: string | undefined; bare?: boolean }) {
   const shown = entries.slice(-CAP)
   const running = shown.filter((entry) => entry.pending).length
   const { ref, atBottom, stick, onScroll } = useStickToBottom(JSON.stringify(shown))
   return (
-    <Frame aria-label="Activity" title="Activity" collapsed={collapsed} onToggle={onToggle} shortcut={shortcut}
+    <Frame aria-label="Activity" {...(bare ? {} : { title: "Activity" })} collapsed={collapsed} {...(onToggle ? { onToggle } : {})} shortcut={shortcut} className="flex-1"
       note={running ? <><Spinner aria-hidden="true" role="presentation" className="size-3" /> {running} running</> : undefined}>
-      <div ref={ref} onScroll={onScroll} className="composer-inset min-h-0 flex-1 overflow-y-auto px-2 pt-2 pb-3" role="log" aria-label="Activity" tabIndex={0}>
-        {shown.length === 0 ? <p className="px-2 text-sm text-muted-foreground">No activity yet.</p> : <ul>{shown.map((entry) => <ActivityRow key={entry.id} entry={entry} />)}</ul>}
+      <div ref={ref} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-2 py-2 outline-none focus-visible:bg-muted/30" role="log" aria-label="Activity" tabIndex={0}>
+        {shown.length === 0 ? <p className="px-2 py-1 text-sm text-muted-foreground">No activity yet.</p> : <ul>{shown.map((entry) => <ActivityRow key={entry.id} entry={entry} />)}</ul>}
       </div>
-      {!atBottom ? <Button variant="ghost" size="sm" className="shrink-0" onClick={stick}>Jump to latest</Button> : null}
+      {!atBottom ? <div className="flex shrink-0 justify-center border-t border-border py-1.5"><Button variant="ghost" size="sm" onClick={stick}>Jump to latest</Button></div> : null}
     </Frame>
   )
 }
