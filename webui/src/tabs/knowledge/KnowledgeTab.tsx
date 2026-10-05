@@ -1,6 +1,7 @@
 /**
- * The Knowledge tab: every agent's knowledge files on the left
- * (grouped, with their compaction marks and note counts) and the open file's
+ * The Knowledge tab: every agent's knowledge files on the left, as a tree
+ * from the project to each agent (and the model it runs on) to its files,
+ * with their compaction marks and note counts, and the open file's
  * entries on the right (a Sheet below 1024 px). `#/knowledge/<agent>/<file>`
  * opens a file; the `knowledge` topic rereads the list.
  */
@@ -50,7 +51,7 @@ export function KnowledgeTab({ agent, file }: { agent?: string; file?: string })
   const list = (
     <>
       <PaneHeader title="Knowledge" count={notes > 0 ? `${notes} note${notes === 1 ? "" : "s"}` : undefined} />
-      {read.data ? <KnowledgeList files={files} selectedKey={chosen ? fileKey(chosen) : undefined} onSelect={open} /> : <ListSkeleton />}
+      {read.data ? <KnowledgeList files={files} models={read.data.models ?? {}} selectedKey={chosen ? fileKey(chosen) : undefined} onSelect={open} /> : <ListSkeleton />}
     </>
   )
   return (

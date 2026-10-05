@@ -563,7 +563,7 @@ export interface Api {
   "quickfix.runAnyway": { request: { id: string }; result: { notice: string } };
   "quickfix.movedToTask": { request: { id: string }; result: { notice: string; key?: string } };
   "metrics.get": { request: { groupBy: "model" | "model-kind"; query?: string }; result: MetricsData };
-  "knowledge.files": { request: Record<string, never>; result: { files: KnowledgeFileInfo[] } };
+  "knowledge.files": { request: Record<string, never>; result: { files: KnowledgeFileInfo[]; models?: Partial<Record<KnowledgeAgentName, string>> } };
   "knowledge.open": { request: { agent: KnowledgeAgentName; file: string }; result: { view: KnowledgeViewData } };
   "knowledge.edit": { request: { agent: KnowledgeAgentName; file: string; ref: EntryRefInfo; text: string }; result: { notice: string } };
   "knowledge.add": { request: { agent: KnowledgeAgentName; file: string; ref?: EntryRefInfo; text: string }; result: { notice: string } };
