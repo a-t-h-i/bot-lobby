@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { CheckMark, Pips } from "@/ui/task-facts"
 import { CHECK_WORDS, SECTION_TITLES, detailsLine, groupRows } from "./words"
 import { Rule } from "@/ui/Frame"
+import { GROUP, ROW, ROWS } from "@/ui/rows"
 
 function Trailing({ row }: { row: TaskRow }) {
   if (row.check === "open" && row.progress) {
@@ -37,7 +38,7 @@ function Row({ row, selected, onSelect }: { row: TaskRow; selected: boolean; onS
         data-row
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(row.id)}
-        className="flex min-h-9 w-full flex-col gap-0.5 px-3 py-2.5 text-left outline-none transition-colors duration-150 hover:bg-accent/40 focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:bg-accent"
+        className={ROW}
       >
         <span className="flex items-start gap-2 text-sm">
           <CheckMark check={row.check} className="mt-0.5" />
@@ -56,10 +57,10 @@ export function TaskList({ rows, selectedId, onSelect }: { rows: readonly TaskRo
     <div className="flex flex-col pb-2">
       {groupRows(rows).map(({ section, rows: group }) => (
         <div key={section}>
-          <h3 className="px-4 pt-3 pb-1 text-xs">
+          <h3 className={GROUP}>
             <Rule title={SECTION_TITLES[section]} right={String(group.length)} className="[&>span:first-child]:font-medium [&>span:first-child]:text-muted-foreground" />
           </h3>
-          <ul className="flex flex-col divide-y divide-border px-2 pt-1">
+          <ul className={ROWS}>
             {group.map((row) => (
               <Row key={`${row.kind}-${row.id}`} row={row} selected={row.id === selectedId} onSelect={onSelect} />
             ))}

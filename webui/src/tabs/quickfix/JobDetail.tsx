@@ -14,14 +14,14 @@ import { ActionBar, ActionButton } from "@/ui/Actions"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { Markdown } from "@/ui/Markdown"
 import { Section } from "@/ui/Section"
-import { factsLine, noStepsText } from "./words"
+import { factsRest, jobTitle, noStepsText } from "./words"
 
 function Notes({ job }: { job: QuickFixJob }) {
   const held = job.status === "held"
   return (
     <>
       {job.route ? <p className="text-sm text-muted-foreground">Routed {job.route}</p> : null}
-      {job.note && held ? <p className="flex items-start gap-2 border-b border-warning/30 px-3 pb-2 text-sm text-foreground">
+      {job.note && held ? <p className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-foreground">
           <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning" />
           <span>Held: {job.note}.</span>
         </p> : null}
@@ -60,8 +60,8 @@ function Actions({ job }: { job: QuickFixJob }) {
   if (job.status === "held") {
     return (
       <ActionBar>
-        <ActionButton label="Run anyway" icon={Play} tone="primary" onClick={() => void act("quickfix.runAnyway", { id: job.id })} />
-        <ActionButton label="Turn it into a task" icon={ListPlus} onClick={() => void act("quickfix.movedToTask", { id: job.id })} />
+        <ActionButton label="Run anyway" icon={Play} tone="primary" shortcut="R" onClick={() => void act("quickfix.runAnyway", { id: job.id })} />
+        <ActionButton label="Turn it into a task" text="Make it a task" icon={ListPlus} shortcut="T" onClick={() => void act("quickfix.movedToTask", { id: job.id })} />
       </ActionBar>
     )
   }
@@ -71,6 +71,8 @@ function Actions({ job }: { job: QuickFixJob }) {
       <ConfirmButton
         icon={CircleStop}
         label="Cancel the quick fix"
+        text="Cancel"
+        shortcut="C"
         title="Cancel this quick fix?"
         description="The agent stops. Files it already edited stay as they are."
         confirmLabel="Cancel quick fix"
@@ -85,11 +87,15 @@ export function JobDetail({ job, now }: { job: QuickFixJob; now: number }) {
   return (
     <article className="flex flex-col gap-4" aria-label="Quick fix detail">
       <Actions job={job} />
-      <header className="flex flex-col gap-1">
+      <header className="flex flex-col gap-2">
+        <h2 className="text-lg font-semibold tracking-tight break-words">{jobTitle(job)}</h2>
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+          <span className="rounded-md bg-accent px-2 py-0.5 text-xs font-medium text-foreground">{job.status}</span>
+          {factsRest(job, now) ? <span>{factsRest(job, now)}</span> : null}
+        </p>
         <p className="text-xs text-muted-foreground break-all">{job.id}</p>
-        <p className="text-sm text-foreground">{factsLine(job, now)}</p>
       </header>
-      <Markdown text={job.prompt} />
+      {job.prompt.trim().includes("\n") ? <Markdown text={job.prompt} /> : null}
       <Notes job={job} />
       <Section title="Steps">
         <Steps job={job} />
@@ -105,7 +111,7 @@ export function JobDetail({ job, now }: { job: QuickFixJob; now: number }) {
           </ul>
         </Section>
       ) : null}
-      {job.error ? <p className="border-b border-destructive/30 px-3 pb-2 text-sm text-destructive">{job.error}</p> : null}
+      {job.error ? <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{job.error}</p> : null}
       {job.report ? (
         <Section title="Report">
           <Markdown text={job.report} />
