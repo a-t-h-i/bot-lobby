@@ -38,7 +38,7 @@ function ConversationPane({ snap, wide }: { snap: PlannerSnapshot; wide: boolean
   const { ref, onScroll } = useStickToBottom(JSON.stringify(snap.messages))
   return (
     <Pane className="flex flex-col">
-      <h2 className="flex h-11 shrink-0 items-center px-5 pt-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+      <h2 className="flex min-h-12 shrink-0 items-center border-b border-border px-4 text-sm font-medium">
         <Rule title="Conversation" className="w-full" />
       </h2>
       <div ref={ref} onScroll={onScroll} className={cn("min-h-0 overflow-y-auto", wide ? "flex-1 px-5 pt-5 pb-dock" : "max-h-[45svh] p-5")}>
@@ -51,7 +51,7 @@ function ConversationPane({ snap, wide }: { snap: PlannerSnapshot; wide: boolean
 function DraftPane({ snap, comments, onComment, wide }: { snap: PlannerSnapshot; comments: Comments; onComment: (line: string) => void; wide: boolean }) {
   return (
     <Pane className="flex flex-col">
-      <h2 className="flex h-11 shrink-0 items-center px-5 pt-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+      <h2 className="flex min-h-12 shrink-0 items-center border-b border-border px-4 text-sm font-medium">
         <Rule title="Draft plan" className="w-full" />
       </h2>
       <div className={cn("flex min-h-0 flex-col gap-5 overflow-y-auto px-5 pt-5 pb-dock", wide && "flex-1")}>

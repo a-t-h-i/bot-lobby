@@ -44,6 +44,9 @@
   --ring: #7078cc;
   --typing: #7078cc;
   --tab-active: #efeee9;
+  /* The chosen tab's fill and the colour that flows between tabs, both from the accent so themes follow. */
+  --tab-fill: color-mix(in oklab, var(--primary) 11%, transparent);
+  --tab-liquid: color-mix(in oklab, var(--primary) 72%, transparent);
 
   /* Quiet fills and lines */
   --secondary: rgb(40 36 28 / 0.05);
@@ -127,6 +130,8 @@
   --ring: #9aa2f0;
   --typing: #9aa2f0;
   --tab-active: #1d1d22;
+  --tab-fill: color-mix(in oklab, var(--primary) 17%, transparent);
+  --tab-liquid: color-mix(in oklab, var(--primary) 80%, transparent);
 
   --secondary: rgb(255 255 255 / 0.045);
   --secondary-foreground: #e8e7e4;
@@ -193,6 +198,8 @@
   --radius-2xl: 16px;
   --radius-3xl: 12px;
   --color-tab: var(--tab-active);
+  --color-tab-fill: var(--tab-fill);
+  --color-tab-liquid: var(--tab-liquid);
   --shadow-glass: var(--glass-shadow);
   --shadow-card: var(--card-shadow);
   --shadow-surface: var(--surface-shadow);
@@ -324,10 +331,10 @@
 }
 
 
-/* Controls are never smaller than 40px, 44px under a finger; switches and checkboxes carry their own hit area. */
+/* Controls are never smaller than 40px, 44px under a finger; switches, checkboxes and the message box's compact buttons carry their own hit area. */
 :root { --touch-target: 44px; --control-target: 40px; --thinking-lift: -2px; --thinking-scale: 1.04; }
-button:not([role="switch"]):not([role="checkbox"]), [role="tab"], header a[aria-keyshortcuts] { min-height: var(--control-target); min-width: var(--control-target); }
-@media (pointer: coarse) { button:not([role="switch"]):not([role="checkbox"]), [role="combobox"], [role="tab"], header a[aria-keyshortcuts] { min-height: var(--touch-target); min-width: var(--touch-target); } }
+button:not([role="switch"]):not([role="checkbox"]):not([data-compact]), [role="tab"], header a[aria-keyshortcuts] { min-height: var(--control-target); min-width: var(--control-target); }
+@media (pointer: coarse) { button:not([role="switch"]):not([role="checkbox"]):not([data-compact]), [role="combobox"], [role="tab"], header a[aria-keyshortcuts] { min-height: var(--touch-target); min-width: var(--touch-target); } }
 [hidden] { display: none !important; }
 
 /* The Thinking bubble floats above the message box; it leans toward the pointer unless motion is reduced. */
@@ -343,8 +350,8 @@ button:not([role="switch"]):not([role="checkbox"]), [role="tab"], header a[aria-
 
 /*
  * The top bar: where you are on the left, the tabs in the middle, the session
- * and its tools on the right. Below 1360px the tabs take a row of their own so
- * nothing is squeezed.
+ * and its tools on the right. Below 1500px the tabs (numbers, words and their
+ * connectors) take a row of their own so nothing is squeezed.
  */
 .app-header {
   display: grid;
@@ -371,7 +378,7 @@ button:not([role="switch"]):not([role="checkbox"]), [role="tab"], header a[aria-
     flex-wrap: wrap;
   }
 }
-@media (min-width: 1360px) {
+@media (min-width: 1500px) {
   .app-header {
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     grid-template-areas: "where tabs tools";
