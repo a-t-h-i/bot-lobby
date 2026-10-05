@@ -30,7 +30,7 @@ function Chip({ cell, intro, onToggled }: { cell: SeatCell; intro: boolean; onTo
   }
   return (
     <li>
-      <label className={cn(look, "cursor-pointer transition-colors", cell.seated ? "bg-background hover:bg-accent" : "border-dashed text-muted-foreground hover:bg-muted")}>
+      <label className={cn(look, "cursor-pointer transition-colors", cell.seated ? "btn-raised bg-card" : "border-dashed text-muted-foreground hover:bg-muted")}>
         <Checkbox checked={cell.seated} onCheckedChange={() => void toggle()} aria-label={`${sourceLabel(cell.label)} sits on the panel`} />
         <Inside cell={cell} intro={intro} />
       </label>

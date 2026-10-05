@@ -41,7 +41,7 @@ function NoTasks() {
 
 function ArchivedToggle({ shown, count, onToggle }: { shown: boolean; count: number; onToggle: () => void }) {
   return (
-    <label className="flex h-7 cursor-pointer items-center gap-2 rounded-lg border border-border px-2 text-xs font-medium transition-colors hover:bg-muted">
+    <label className="btn-raised flex h-7 cursor-pointer items-center gap-2 rounded-lg border bg-card px-2 text-xs font-medium transition-[box-shadow]">
       <Checkbox checked={shown} onCheckedChange={onToggle} aria-label="Show archived tasks" className="size-4" />
       Archived
       <Badge variant="secondary" className="h-5 px-1.5">{count}</Badge>

@@ -301,7 +301,7 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
             type="button"
             aria-expanded={showNotes}
             onClick={() => setShowNotes((now) => !now)}
-            className="flex min-h-10 items-center gap-1 text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30"
+            className="flex min-h-8 items-center gap-1 rounded-md text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30"
           >
             <ChevronRight aria-hidden="true" className={cn("size-3.5 transition-transform duration-200 ease-snap", showNotes && "rotate-90")} />
             {FIELD_LABELS.instructions}
@@ -486,8 +486,8 @@ export function SettingsForm({ config, models, onConfig }: { config: Config; mod
             aria-controls={`settings-${name.split(" ")[0]}`}
             onClick={() => setSection(name)}
             className={cn(
-              "h-10 rounded-lg px-3 text-sm font-medium outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/40",
-              section === name ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              "h-8 rounded-lg border border-transparent px-3 text-sm font-medium outline-none transition-[box-shadow,color] focus-visible:ring-3 focus-visible:ring-ring/40",
+              section === name ? "btn-raised bg-card text-foreground" : "text-muted-foreground hover:text-foreground"
             )}
           >
             {name}
