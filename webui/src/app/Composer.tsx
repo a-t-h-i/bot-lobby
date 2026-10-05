@@ -332,13 +332,16 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
   return (
     <div
       ref={card}
-      className={cn("shrink-0 px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-opacity duration-200 ease-snap max-sm:px-2", blocked && "opacity-0")}
+      className={cn(
+        "dock pointer-events-none absolute inset-x-0 bottom-0 z-30 px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] transition-opacity duration-200 ease-snap max-sm:px-2 max-sm:pb-[max(0.5rem,env(safe-area-inset-bottom))]",
+        blocked && "opacity-0"
+      )}
       inert={blocked}
     >
-      <div className="mx-auto w-full max-w-3xl">
+      <div className="pointer-events-auto mx-auto w-full max-w-3xl">
         <div
           className={cn(
-            "group/composer relative rounded-xl border border-input bg-card shadow-surface transition-[border-color,box-shadow] duration-200 ease-snap focus-within:border-ring/60 focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_16%,transparent)]",
+            "group/composer relative rounded-2xl border border-dock-border bg-dock shadow-dock backdrop-blur-xl backdrop-saturate-150 transition-[border-color,box-shadow] duration-300 ease-snap focus-within:border-ring/45 focus-within:shadow-dock-focus",
             dragging && "border-primary shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_30%,transparent)]"
           )}
           onDragOver={(event) => {

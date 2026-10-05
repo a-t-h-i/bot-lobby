@@ -38,10 +38,10 @@ function ConversationPane({ snap, wide }: { snap: PlannerSnapshot; wide: boolean
   const { ref, onScroll } = useStickToBottom(JSON.stringify(snap.messages))
   return (
     <Pane className="flex flex-col">
-      <h2 className="flex h-11 shrink-0 items-center border-b border-border px-5 text-[0.8125rem]">
+      <h2 className="flex h-11 shrink-0 items-center px-5 pt-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
         <Rule title="Conversation" className="w-full" />
       </h2>
-      <div ref={ref} onScroll={onScroll} className={cn("min-h-0 overflow-y-auto p-5", wide ? "flex-1" : "max-h-[45svh]")}>
+      <div ref={ref} onScroll={onScroll} className={cn("min-h-0 overflow-y-auto", wide ? "flex-1 px-5 pt-5 pb-dock" : "max-h-[45svh] p-5")}>
         <PanelConversation messages={snap.messages} busy={snap.busy} />
       </div>
     </Pane>
@@ -51,10 +51,10 @@ function ConversationPane({ snap, wide }: { snap: PlannerSnapshot; wide: boolean
 function DraftPane({ snap, comments, onComment, wide }: { snap: PlannerSnapshot; comments: Comments; onComment: (line: string) => void; wide: boolean }) {
   return (
     <Pane className="flex flex-col">
-      <h2 className="flex h-11 shrink-0 items-center border-b border-border px-5 text-[0.8125rem]">
+      <h2 className="flex h-11 shrink-0 items-center px-5 pt-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
         <Rule title="Draft plan" className="w-full" />
       </h2>
-      <div className={cn("flex min-h-0 flex-col gap-5 overflow-y-auto p-5", wide && "flex-1")}>
+      <div className={cn("flex min-h-0 flex-col gap-5 overflow-y-auto px-5 pt-5 pb-dock", wide && "flex-1")}>
         {snap.draft ? <DraftBody draft={snap.draft} comments={comments} onComment={onComment} /> : <p className="text-sm text-muted-foreground">{snap.busy ? DRAFT_WAITS : NO_DRAFT}</p>}
         <SeatNeeds notes={snap.notes} />
       </div>

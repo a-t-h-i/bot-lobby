@@ -6,11 +6,11 @@
  * only signal.
  */
 import { useStickToBottom } from "@/lib/useStickToBottom"
-import { Button } from "@/components/ui/button"
-import { AlertTriangle, Check, X } from "lucide-react"
+import { AlertTriangle, ArrowDown, Check, X } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 import { formatClock } from "@/lib/format"
+import { ActionButton } from "@/ui/Actions"
 import { Frame } from "@/ui/Frame"
 import { sourceColor, sourceLabel, type ActivityEntry } from "./types"
 
@@ -47,10 +47,14 @@ export function ActivityLog({ entries, collapsed, onToggle, shortcut, bare }: { 
   return (
     <Frame aria-label="Activity" {...(bare ? {} : { title: "Activity" })} collapsed={collapsed} {...(onToggle ? { onToggle } : {})} shortcut={shortcut} className="flex-1"
       note={running ? <><Spinner aria-hidden="true" role="presentation" className="size-3" /> {running} running</> : undefined}>
-      <div ref={ref} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-2 py-2 outline-none focus-visible:bg-muted/30" role="log" aria-label="Activity" tabIndex={0}>
+      <div ref={ref} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-2 pt-2 pb-dock outline-none focus-visible:bg-muted/30" role="log" aria-label="Activity" tabIndex={0}>
         {shown.length === 0 ? <p className="px-2 py-1 text-sm text-muted-foreground">No activity yet.</p> : <ul>{shown.map((entry) => <ActivityRow key={entry.id} entry={entry} />)}</ul>}
       </div>
-      {!atBottom ? <div className="flex shrink-0 justify-center border-t border-border py-1.5"><Button variant="ghost" size="sm" onClick={stick}>Jump to latest</Button></div> : null}
+      {!atBottom ? (
+        <div className="absolute inset-x-0 bottom-dock z-10 flex justify-center">
+          <ActionButton label="Jump to latest" text="Latest" icon={ArrowDown} className="rounded-full bg-card shadow-card" onClick={stick} />
+        </div>
+      ) : null}
     </Frame>
   )
 }

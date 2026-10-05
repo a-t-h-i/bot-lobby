@@ -470,7 +470,7 @@ export function SettingsForm({ config, models, onConfig }: { config: Config; mod
     return next
   }
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-5 sm:p-8">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-5 pt-5 pb-dock sm:px-8 sm:pt-8">
       <header className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold tracking-tight">{PAGE.title}</h1>
         <p className="text-sm text-muted-foreground">{PAGE.intro}</p>
