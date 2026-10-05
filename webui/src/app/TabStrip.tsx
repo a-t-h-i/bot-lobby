@@ -320,8 +320,10 @@ export function TabStrip({ tabs, activeId, onSelect }: TabStripProps) {
     const index = Math.max(0, tabs.findIndex((tab) => tab.id === activeId))
     const next = tabs[(index + delta + tabs.length) % tabs.length]!
     tabWalk.active = true
+    tabWalk.to = next.id
     window.setTimeout(() => {
       tabWalk.active = false
+      tabWalk.to = undefined
     }, 3000)
     onSelect(next.id)
     cells.current[next.id]?.focus({ preventScroll: true })

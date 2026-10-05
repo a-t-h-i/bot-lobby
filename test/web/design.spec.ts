@@ -543,23 +543,30 @@ test("a theme file (.css or the registry .json) uploads and is named after the f
   await expect(page.getByRole("radiogroup", { name: "Colour theme" }).getByRole("radio", { name: /Sunrise/ }), "the JSON's own title wins").toHaveAttribute("aria-checked", "true");
 });
 
-test("switching tabs hands the keys to the page; Alt+N works from the box; arrowing along the tab bar keeps it on the bar", async ({ page, server }) => {
+test("switching tabs puts the cursor in the message box; Esc leaves it for the bar; Alt+N works from the box; arrowing along the tab bar keeps it on the bar", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.getByRole("tab", { name: /Git/ }).click();
-  await expect(page.locator("#main"), "a click on a tab puts the keys on the page").toBeFocused();
-  await page.keyboard.press("2");
-  await expect(page, "so a bare digit jumps").toHaveURL(/#\/tasks/);
-  await page.keyboard.press("/");
   const box = page.locator("#composer-text");
-  await expect(box, "/ goes to the message box").toBeFocused();
+  await page.getByRole("tab", { name: /Git/ }).click();
+  await expect(box, "a tab switch puts the cursor in the message box").toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tab", { name: /Git/ }), "Esc leaves it for the tab bar").toBeFocused();
+  await page.keyboard.press("2");
+  await expect(page, "where a bare digit jumps").toHaveURL(/#\/tasks/);
+  await expect(box, "and the new page's switch puts the cursor back in the box").toBeFocused();
   await box.fill("half a thought");
   await page.keyboard.press("Alt+3");
   await expect(page, "Alt+N jumps from the message box").toHaveURL(/#\/plan/);
   await expect(box, "and leaves the cursor where it was").toBeFocused();
+  await expect(box).toHaveValue("half a thought");
   await page.getByRole("tab", { name: /Plan/ }).focus();
   await page.keyboard.press("ArrowRight");
   await expect(page.getByRole("tab", { name: /Quick/ }), "arrows stay on the bar").toBeFocused();
+  await expect(page).toHaveURL(/#\/quick/);
+  await page.evaluate(() => {
+    window.location.hash = "#/settings";
+  });
+  await expect(box, "any route change, not only a tab").toBeFocused();
 });
 
 test("the Settings page offers the fullscreen install and a fullscreen toggle", async ({ page, server }) => {
@@ -773,6 +780,8 @@ test("on Excalidraw R reveals the link and O opens the board in a new tab", asyn
     window.location.hash = "#/excalidraw/x1";
   });
   await expect(page.getByRole("button", { name: "Reveal the link" })).toBeVisible();
+  // A route change puts the cursor in the message box; the page's keys work once the page has focus.
+  await page.locator("#main").focus();
   await page.keyboard.press("r");
   await expect(page.locator("#main"), "R reveals the full room link").toContainText("whiteboard.example");
   const open = page.getByRole("link", { name: "Open board" });
