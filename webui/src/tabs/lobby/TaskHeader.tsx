@@ -1,19 +1,59 @@
 /**
  * The Lobby tab's task header as one slim line: the task's title and state,
- * its facts as quiet text (id, track, domains, git branch) and a progress bar
- * with the step under way. `lobby.snapshot.task` carries the facts; without a
- * task the line says how to start one.
+ * its facts as quiet text (id, track, domains, git branch), how long the
+ * agents have worked on it, and a progress bar with the step a worker is on
+ * (`active · 1m 12s`, ticking) or else the next one. `lobby.snapshot.task`
+ * carries the facts; without a task the line says how to start one.
  */
-import { GitBranch } from "lucide-react"
+import { GitBranch, Timer } from "lucide-react"
 import { motion } from "motion/react"
 import type { SnapshotTask, StatusInfo } from "@protocol"
+import { executionWords } from "@/lib/phaseTiming"
+import { useElapsed } from "@/lib/useElapsed"
 import { trackText } from "@/ui/task-facts"
 
 function Dot({ children }: { children: React.ReactNode }) {
   return <span className="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground md:inline-flex">{children}</span>
 }
 
-function Progress({ done, total, current }: { done: number; total: number; current?: string }) {
+/** Time that ticks on from the snapshot's figure while `running`. */
+function Ticking({ ms, running, sample }: { ms: number; running: boolean; sample: unknown }) {
+  const elapsed = useElapsed(running, sample)
+  return <span className="tabular-nums">{executionWords(ms + elapsed)}</span>
+}
+
+/** How long the agents have worked on the task, idle time left out. */
+function Worked({ work }: { work: NonNullable<SnapshotTask["work"]> }) {
+  return (
+    <span className="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground md:inline-flex" title="How long the agents have worked on this task (idle time left out)">
+      <Timer aria-hidden="true" className="size-3 shrink-0" />
+      worked <Ticking ms={work.workedMs} running={work.running} sample={work} />
+    </span>
+  )
+}
+
+/** The step a worker is on, with its time, or else the step up next. */
+function Under({ active, current }: { active?: SnapshotTask["activeSteps"]; current?: string }) {
+  const first = active?.[0]
+  if (first) {
+    return (
+      <span className="hidden max-w-[20rem] min-w-0 items-center gap-1.5 xl:inline-flex">
+        <span className="truncate text-foreground">{first.text}</span>
+        <span className="shrink-0 rounded-md bg-primary/10 px-1.5 py-px font-medium text-primary">
+          active · <Ticking ms={first.workedMs} running sample={first} />
+        </span>
+        {active!.length > 1 ? <span className="shrink-0">+{active!.length - 1}</span> : null}
+      </span>
+    )
+  }
+  return current ? (
+    <span className="hidden max-w-[16rem] truncate xl:inline">
+      next: <span className="text-foreground">{current}</span>
+    </span>
+  ) : null
+}
+
+function Progress({ done, total, current, active }: { done: number; total: number; current?: string; active?: SnapshotTask["activeSteps"] }) {
   const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0
   return (
     <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
@@ -23,11 +63,7 @@ function Progress({ done, total, current }: { done: number; total: number; curre
       <div className="h-1.5 w-16 overflow-hidden rounded-full bg-border" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done} aria-label="Plan progress">
         <motion.div className="h-full rounded-full bg-primary" initial={false} animate={{ width: `${percent}%` }} transition={{ type: "spring", stiffness: 260, damping: 30 }} />
       </div>
-      {current ? (
-        <span className="hidden max-w-[16rem] truncate xl:inline">
-          now: <span className="text-foreground">{current}</span>
-        </span>
-      ) : null}
+      <Under {...(active ? { active } : {})} {...(current ? { current } : {})} />
     </div>
   )
 }
@@ -57,7 +93,8 @@ export function TaskHeader({ task, status }: { task?: SnapshotTask; status?: Sta
               </span>
             </span>
           ) : null}
-          {task.progress ? <Progress done={task.progress.done} total={task.progress.total} current={task.currentStep} /> : null}
+          {task.work ? <Worked work={task.work} /> : null}
+          {task.progress ? <Progress done={task.progress.done} total={task.progress.total} {...(task.currentStep ? { current: task.currentStep } : {})} {...(task.activeSteps ? { active: task.activeSteps } : {})} /> : null}
         </>
       ) : null}
     </section>

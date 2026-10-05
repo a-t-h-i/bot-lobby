@@ -53,7 +53,7 @@ function snapshotLine(task: SnapshotTask | undefined): string {
   return [trackText(task.track), task.domains.join(", ")].filter(Boolean).join(" · ")
 }
 
-function Progress({ row, task }: { row: TaskRow; task?: SnapshotTask }) {
+function Progress({ row }: { row: TaskRow }) {
   if (!row.progress) return null
   return (
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
@@ -61,12 +61,7 @@ function Progress({ row, task }: { row: TaskRow; task?: SnapshotTask }) {
       <span>
         {row.progress.done} of {row.progress.total} steps
       </span>
-      {task?.currentStep ? (
-        <span className="text-foreground">
-          {task.currentStep} <span className="rounded-md bg-accent px-2 py-0.5 text-xs font-medium">now</span>
-          <span className="sr-only">(current step)</span>
-        </span>
-      ) : null}
+
     </p>
   )
 }
@@ -86,7 +81,7 @@ function Header({ row, task }: { row: TaskRow; task?: SnapshotTask }) {
         {rest ? <span>{rest}</span> : null}
       </p>
       <p className="text-xs text-muted-foreground break-all">{[row.id, snapshotLine(task), branch].filter(Boolean).join(" · ")}</p>
-      <Progress row={row} task={task} />
+      <Progress row={row} />
     </header>
   )
 }
@@ -192,11 +187,13 @@ export function TaskDetail(props: DetailProps) {
   const task = snapshot?.id === row.id ? snapshot : undefined
   if (isPlan) return <PlanDetail row={row} onGone={props.onGone} />
   const open = row.check === "open" && row.kind === "task"
+  // The detail, once read, says whether the task keeps work time; the row stands in until then.
+  const work = detail.data ? detail.data.work : row.work
   return (
     <article className="flex flex-col gap-5" aria-label={row.title}>
       <Actions {...props} />
       <Header row={row} task={task} />
-      <p className="text-sm text-muted-foreground"><PhaseTiming timing={detail.data?.timing ?? row.timing} stopped={row.check !== "open"} /></p>
+      <p className="text-sm text-muted-foreground"><PhaseTiming timing={detail.data?.timing ?? row.timing} {...(work ? { work } : {})} stopped={row.check !== "open"} /></p>
       {detail.data?.delivery ? <DeliveryReview key={row.id} taskId={row.id} title={row.title} delivery={detail.data.delivery} onChanged={detail.reload} /> : null}
       {detail.data ? <PlanSections detail={detail.data} finished={!open} /> : null}
       <Comments taskId={row.id} finished={!open} canComment={open} />

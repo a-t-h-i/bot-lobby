@@ -276,15 +276,23 @@ function stepScore(step: string, instruction: InstructionIndex): number {
  * named, so "building on step 1, now do step 3" does not jump back to step 1.
  */
 export function explicitStepIndex(instruction: string, count: number): number {
+  return explicitStepRange(instruction, count)?.[1] ?? -1;
+}
+
+/** The 0-based steps an instruction labels itself with, first and last ("Steps 2-4: ..." is 1 to 3); undefined when none. */
+export function explicitStepRange(instruction: string, count: number): [number, number] | undefined {
   const refs = [...instruction.matchAll(STEP_REFERENCE)];
-  if (refs.length === 0) return -1;
+  if (refs.length === 0) return undefined;
   const first = refs[0]!;
   const leading = LEADING_LABEL.test(instruction.slice(0, first.index ?? 0)) ? first : undefined;
   const distinct = new Set(refs.map((ref) => ref[0].toLowerCase().replace(/\s+/g, "")));
   const chosen = leading ?? (distinct.size === 1 ? refs[0] : undefined);
-  if (!chosen) return -1;
-  const last = Math.max(Number(chosen[1]), Number(chosen[2] ?? chosen[1]));
-  return last >= 1 && last <= count ? last - 1 : -1;
+  if (!chosen) return undefined;
+  const a = Number(chosen[1]);
+  const b = Number(chosen[2] ?? chosen[1]);
+  const last = Math.max(a, b);
+  if (last < 1 || last > count) return undefined;
+  return [Math.max(1, Math.min(a, b)) - 1, last - 1];
 }
 
 /**
@@ -381,4 +389,49 @@ export function planChecklist(plan: string, runs: readonly AgentRun[]): PlanStep
   const steps = texts.map((text, index) => ({ text, status: stepStatus(index, current) }));
   checklistMemo = { plan, runs, steps };
   return steps;
+}
+
+/* -------------------------------------------------------------------------
+ * Step work: how long the workers have worked on each step, and which steps
+ * they are on right now, for the checklist's `active · 1m 12s` marks.
+ * ---------------------------------------------------------------------- */
+
+export interface StepWork {
+  /** Worker time on the step so far, in ms (the running runs up to `now`). */
+  ms: number;
+  /** A worker is on it right now. */
+  active: boolean;
+}
+
+/** The steps a run works on: every step of a range it names, else the step it targets, else the next one still open. */
+function runSteps(steps: readonly string[], instruction: string | undefined, completed: ReadonlySet<number>): number[] {
+  const range = instruction ? explicitStepRange(instruction, steps.length) : undefined;
+  if (range) return Array.from({ length: range[1] - range[0] + 1 }, (_value, offset) => range[0] + offset);
+  const target = targetStep(steps, instruction, completed);
+  const step = target >= 0 ? target : nextOpenStep(steps, completed);
+  return step >= 0 ? [step] : [];
+}
+
+/**
+ * Each step's worker time and whether a worker is on it now, replaying the
+ * runs in start order as the checklist does. A run counts in full toward each
+ * step it works on (a `Steps 2-4` run toward all three), and its success
+ * completes them, so a later run that names no step goes to the next one.
+ */
+export function stepWork(steps: readonly string[], runs: readonly AgentRun[], now = Date.now()): StepWork[] {
+  const work = steps.map(() => ({ ms: 0, active: false }));
+  const completed = new Set<number>();
+  for (const run of byStart(runs)) {
+    if (run.role !== "worker") continue;
+    const covered = runSteps(steps, run.instruction, completed);
+    const start = Date.parse(run.startedAt);
+    const end = run.finishedAt ? Date.parse(run.finishedAt) : now;
+    const ms = Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, end - start) : 0;
+    for (const index of covered) {
+      work[index]!.ms += ms;
+      if (run.status === "running") work[index]!.active = true;
+    }
+    if (run.status === "success" && covered.length > 0) markThrough(completed, covered[covered.length - 1]!);
+  }
+  return work;
 }

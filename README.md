@@ -20,7 +20,9 @@ The questionnaire and web tools are built in, so don't also install extensions w
 1. In Pi, run `/bot-lobby add a login page`. Bot-lobby turns on and the lobby opens in your browser.
    A new pi session starts with bot-lobby off, as plain pi: `Ctrl+Shift+M` or `/bot-lobby on|off` switches it.
 2. Answer the oracle's questions and approve its plan, or agree one with the panel in **Plan** first.
-3. Follow the agents in **Lobby**. Models, effort and time limits are in **Settings**.
+   A plan opens with a short list of steps; the detail of each follows for whoever wants it.
+3. Follow the agents in **Lobby**: the step being worked on reads `active · 1m 12s`, and each task shows
+   how long its agents have worked on it (idle time left out). Models, effort and time limits are in **Settings**.
 
 Small changes go to **Quick fix**. `--task` forces a full task, `--fast` / `--full` picks the workflow,
 and `--branch` / `--worktree` isolates it in git. A finished isolated task pushes its branch and tries

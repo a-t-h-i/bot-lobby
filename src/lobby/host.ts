@@ -95,6 +95,8 @@ export interface LobbyService {
   feed: LobbyFeed;
   masterBusy(): boolean;
   tasks(): Task[];
+  /** How long a task's agents have worked on it, and the worker runs under way (`work.json`); undefined without one. */
+  work?(taskId: string): import("../state/work-time.ts").WorkProjection | undefined;
   deliveryDeliver?(taskId: string, request: import("../delivery/operations.ts").DeliveryRequest): Promise<import("../delivery/types.ts").Delivery>;
   deliveryReview?(taskId: string): Promise<import("../delivery/types.ts").Delivery>;
   deliveryDefer?(taskId: string, reviewId: string): import("../delivery/types.ts").Delivery;

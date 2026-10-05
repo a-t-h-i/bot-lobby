@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { loadTask, ownedTask, peekTasks, saveTask } from "../state/persistence.ts";
+import { taskWork } from "../state/work-time.ts";
 import { refreshReview, deferReview } from "../delivery/review.ts";
 import { deliver, type DeliveryRequest, type DeliveryStore } from "../delivery/operations.ts";
 import type { LockIdentity } from "../delivery/lock.ts";
@@ -572,6 +573,7 @@ export function createLobbyService(state: Runtime): LobbyService {
     feed: lobbyFeed,
     masterBusy: () => !state.ctx.isIdle(),
     tasks: () => peekTasks(state.root, state.configDir),
+    work: (taskId) => taskWork(state.root, state.configDir, taskId),
     deliveryDeliver: (taskId, request: DeliveryRequest) => deliver(request, { cwd: state.root, exec: execCommand }, deliveryStore(state, taskId)),
     deliveryReview: async (taskId) => {
       const task = deliveryTask(state, taskId);

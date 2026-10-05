@@ -48,7 +48,7 @@ function Row({ row, selected, onSelect }: { row: TaskRow; selected: boolean; onS
           <Trailing row={row} />
         </span>
         {row.check === "open" ? <span className="pl-6 text-xs text-muted-foreground">{detailsLine(row)}</span> : null}
-        {row.kind !== "plan" ? <span className="pl-6 text-xs text-muted-foreground"><PhaseTiming timing={row.timing} stopped={row.check !== "open"} /></span> : null}
+        {row.kind !== "plan" ? <span className="pl-6 text-xs text-muted-foreground"><PhaseTiming timing={row.timing} {...(row.work ? { work: row.work } : {})} stopped={row.check !== "open"} /></span> : null}
         {row.delivery ? <span className="pl-6 text-xs text-foreground">Delivery: {row.delivery.status.replaceAll("_", " ")} · open task to review</span> : null}
       </button>
     </li>

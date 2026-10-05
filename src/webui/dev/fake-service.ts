@@ -468,6 +468,12 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     },
     chatHistory: () => [...history],
     tasks: () => [...tasks],
+    work: (taskId: string) => {
+      const work = fixture.mockWork?.[taskId];
+      if (!work) return undefined;
+      const now = Date.now();
+      return { workedMs: work.workedMs, running: work.running, active: (work.active ?? []).map((run) => ({ runId: run.runId, instruction: run.instruction, startedAt: new Date(now - run.startedAgoMs).toISOString() })) };
+    },
     plans: () => [...plans],
     metrics: () => metrics.map((record) => ({ ...record })),
     classifierMetrics: () => classifierMetrics.map((record) => ({ ...record })),

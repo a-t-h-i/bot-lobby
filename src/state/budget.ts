@@ -11,6 +11,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { taskDirFor } from "./persistence.ts";
 import { readJsonCached } from "./file-cache.ts";
+import { clearStaleRuns, updateWork } from "./work-time.ts";
 
 /** What one delegation was given. */
 export interface Allotment {
@@ -127,6 +128,11 @@ export function formatMinutes(ms: number): string {
 }
 
 /* ------------------------------------------------------------ work clock */
+/*
+ * Every task the session drives has a work clock, budget or not: it keeps the
+ * task's work time (work.json, what the lobby shows as "worked") and, when the
+ * task has a budget, the time spent of it.
+ */
 
 interface Clock {
   root: string;
@@ -141,41 +147,74 @@ interface Clock {
 
 /** Work clocks of the tasks this process drives. */
 const clocks = new Map<string, Clock>();
-/** How often a counting clock is saved, so other windows see time pass. */
+/** How often a running clock is saved, so other windows see time pass (and see it is still kept). */
 export const CLOCK_FLUSH_MS = 30_000;
 let flusher: ReturnType<typeof setInterval> | undefined;
+/** The oracle's turn is running in this process. */
+let turn = false;
 
-/** Fold the stretch that counted into the saved total, and start a new one if it still counts. */
+/** Fold the stretch that counted into the saved totals, and start a new one if it still counts. */
 function settle(taskId: string, clock: Clock, now = Date.now()): void {
+  let spent = 0;
   if (clock.since !== undefined) {
-    const spent = Math.max(0, now - clock.since);
+    spent = Math.max(0, now - clock.since);
     clock.since = undefined;
     if (spent > 0) updateBudget(clock.root, clock.configDir, taskId, (budget) => { budget.usedMs += spent; });
   }
   if (clock.running && clock.waits === 0) clock.since = now;
+  const since = clock.since;
+  updateWork(clock.root, clock.configDir, taskId, (work) => {
+    work.workedMs += spent;
+    if (since !== undefined) work.runningSince = new Date(since).toISOString();
+    else delete work.runningSince;
+  }, new Date(now));
 }
 
 function ensureFlusher(): void {
   if (flusher) return;
   flusher = setInterval(() => {
-    for (const [taskId, clock] of clocks) if (clock.since !== undefined) settle(taskId, clock);
+    for (const [taskId, clock] of clocks) if (clock.running) settle(taskId, clock);
   }, CLOCK_FLUSH_MS);
   flusher.unref();
 }
 
-/** The oracle started a turn on a task: its clock runs, if the task has a budget. */
+/** The oracle's turn started: a task it drives, or starts within the turn, is being worked on. */
+export function turnStarted(): void {
+  turn = true;
+}
+
+/** The oracle started a turn on a task (or took one up within it): its clock runs. */
 export function startClock(root: string, configDir: string, taskId: string): void {
-  if (!readBudget(root, configDir, taskId)) return;
-  const clock = clocks.get(taskId) ?? { root, configDir, running: false, waits: 0 };
-  clocks.set(taskId, clock);
+  let clock = clocks.get(taskId);
+  if (!clock) {
+    clock = { root, configDir, running: false, waits: 0 };
+    clocks.set(taskId, clock);
+    clearStaleRuns(root, configDir, taskId);
+  }
+  if (clock.running) return;
   clock.running = true;
   settle(taskId, clock);
   ensureFlusher();
 }
 
-/** The oracle's turn ended: the clock stops until the next one. */
+/**
+ * The task the session drives now, after a step that may have started, ended or taken over one: while
+ * a turn runs, its clock runs and any other task's stops.
+ */
+export function clockTask(root: string, configDir: string, taskId: string | undefined): void {
+  for (const [id, clock] of clocks) {
+    if (id === taskId || !clock.running) continue;
+    clock.running = false;
+    settle(id, clock);
+  }
+  if (taskId && turn) startClock(root, configDir, taskId);
+}
+
+/** The oracle's turn ended: the clocks stop until the next one. */
 export function stopClocks(): void {
+  turn = false;
   for (const [taskId, clock] of clocks) {
+    if (!clock.running && clock.since === undefined) continue;
     clock.running = false;
     settle(taskId, clock);
   }
@@ -215,6 +254,7 @@ export function usedMs(taskId: string, budget: TaskBudget, now = Date.now()): nu
 /** Forget the clocks (tests; a session that ends). */
 export function resetClocks(): void {
   clocks.clear();
+  turn = false;
   if (flusher) clearInterval(flusher);
   flusher = undefined;
 }
