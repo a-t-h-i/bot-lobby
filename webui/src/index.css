@@ -375,16 +375,16 @@
     background-image: var(--btn-face-press);
     --tw-shadow: var(--btn-press);
   }
-  /* A tinted button: the colour (--tint) under a gloss, with a darker rim and a shadow in its own colour. */
+  /* A tinted button: the colour (--tint) under a gloss, with a darker rim and the same neutral shadow as the rest (no coloured glow). */
   .btn-tint {
     background-color: var(--tint);
     background-image: var(--btn-gloss);
     border-color: color-mix(in oklab, var(--tint) 76%, black);
-    --tw-shadow: inset 0 1px 0 rgb(255 255 255 / 0.26), inset 0 -1px 0 rgb(0 0 0 / 0.12), 0 1px 2px color-mix(in oklab, var(--tint) 34%, transparent), 0 4px 10px -4px color-mix(in oklab, var(--tint) 58%, transparent);
+    --tw-shadow: inset 0 1px 0 rgb(255 255 255 / 0.22), inset 0 -1px 0 rgb(0 0 0 / 0.12), 0 1px 1.5px rgb(0 0 0 / 0.14);
   }
   .btn-tint:hover {
     filter: brightness(1.07);
-    --tw-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3), inset 0 -1px 0 rgb(0 0 0 / 0.12), 0 1px 2px color-mix(in oklab, var(--tint) 38%, transparent), 0 7px 16px -6px color-mix(in oklab, var(--tint) 68%, transparent);
+    --tw-shadow: inset 0 1px 0 rgb(255 255 255 / 0.26), inset 0 -1px 0 rgb(0 0 0 / 0.12), 0 1px 2px rgb(0 0 0 / 0.16), 0 3px 6px -3px rgb(0 0 0 / 0.18);
   }
   .btn-tint:active {
     filter: brightness(0.97);
