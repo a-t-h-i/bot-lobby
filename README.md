@@ -25,6 +25,11 @@ Small changes go to **Quick fix**. `--task` forces a full task, `--fast` / `--fu
 and `--branch` / `--worktree` isolates it in git. A finished isolated task pushes its branch and tries
 to open a PR through `gh`; nothing merges on its own.
 
+After every worker step, before QA and at completion, the engine runs the project's own linter
+(ESLint, Biome, Oxlint, Ruff, or a command you set) on the files the task touched. Only problems on
+changed lines count, and QA judges any lint suppression a worker adds. **Settings → Linting** sets it
+to off, advise or block. Visual questions come with mockups that expand and scroll side by side.
+
 | Agent | Does |
 | --- | --- |
 | Oracle | Your Pi session: questions, plan, delegation and approvals |
