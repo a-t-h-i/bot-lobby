@@ -52,6 +52,19 @@ function Banner({ connection, onRetry }: { connection: ConnectionState; onRetry:
   return null
 }
 
+/**
+ * Whether focus has moved since the address last changed: a click, Esc or a page's own key put it somewhere
+ * the user chose, and the cursor going to the message box a frame after a route change must not undo that.
+ */
+const moments = { tick: 0, route: 0, focus: 0 }
+window.addEventListener("hashchange", () => {
+  moments.route = ++moments.tick
+})
+document.addEventListener("focusin", () => {
+  moments.focus = ++moments.tick
+})
+const focusMovedSinceRoute = () => moments.focus > moments.route
+
 /** The page changes with the tab (not with a detail inside it), easing in quickly. */
 function routeKey(route: Route): string {
   return route.kind === "tab" ? route.tab : route.kind
@@ -112,7 +125,7 @@ export function Shell() {
     tabWalk.to = undefined
     if (walked) return
     const frame = requestAnimationFrame(() => {
-      if (document.querySelector("[role='dialog']:not([data-state='closed'])")) return
+      if (focusMovedSinceRoute() || document.querySelector("[role='dialog']:not([data-state='closed'])")) return
       const box = document.getElementById("composer-text") as HTMLTextAreaElement | null
       const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches
       if (box && !box.disabled && !touch) box.focus({ preventScroll: true })
