@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_PLAN_STEPS, explicitStepIndex, planChecklist, planSteps } from "../src/pi/plan-checklist.ts";
+import { MAX_PLAN_STEPS, explicitStepIndex, planChecklist, planDetails, planSteps } from "../src/pi/plan-checklist.ts";
 import { createTask, type Task } from "../src/schemas/task.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
 
@@ -248,4 +248,28 @@ test("planChecklist returns the same array for the same plan and runs", () => {
   const runs = [worker("w1", "implement `src/a.ts`", 1)];
   assert.equal(planChecklist(steps, runs), planChecklist(steps, runs));
   assert.notEqual(planChecklist(steps, runs), planChecklist(steps, [...runs]));
+});
+
+test("a plan that opens with a short steps list keeps it as the checklist, and its Step N detail below stays detail", () => {
+  const plan = [
+    "## Steps",
+    "1. Add the work timer",
+    "2. Show it on the task",
+    "",
+    "## Details",
+    "### Step 1: Add the work timer",
+    "Files: `src/state/budget.ts`. Done when the clock saves.",
+    "### Step 2: Show it on the task",
+    "Files: `webui/src/tabs/tasks/TaskDetail.tsx`.",
+    "",
+    "## Risks",
+    "None.",
+  ].join("\n");
+  assert.deepEqual(planSteps(plan), ["Add the work timer", "Show it on the task"]);
+  assert.equal(planDetails(plan), ["## Details", "### Step 1: Add the work timer", "Files: `src/state/budget.ts`. Done when the clock saves.", "### Step 2: Show it on the task", "Files: `webui/src/tabs/tasks/TaskDetail.tsx`.", "", "## Risks", "None."].join("\n"));
+  // Step headings that come first still win, and such a plan is read whole.
+  const headed = ["### Step 1: Model", "the model", "### Step 2: API", "the api", "## Steps", "1. a summary line"].join("\n");
+  assert.deepEqual(planSteps(headed), ["Model", "API"]);
+  assert.equal(planDetails(headed), undefined);
+  assert.equal(planDetails("## Steps\n1. Only steps"), undefined, "nothing beyond the list");
 });

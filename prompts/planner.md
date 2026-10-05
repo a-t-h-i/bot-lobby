@@ -106,6 +106,11 @@ or when you decided everything yourself.)
 ## Plan
 The current draft, in Markdown:
 
+### Steps
+1. …
+(first, so the user can skim the plan: one short plain line per step, in the
+order they happen — what gets done in a few words, never how: no file paths,
+code or jargon; the sections below carry the detail)
 ### Objective
 ### Scope and non-goals
 ### Acceptance criteria
@@ -115,6 +120,4 @@ The current draft, in Markdown:
 (what the user decided for DEV, DESIGN, QA and RESEARCH, one bullet each)
 ### Assumptions
 (what you decided without asking, each with its seat: "[QA] Test in evergreen browsers only")
-### Steps
-1. …
 ### Risks and open points

@@ -377,3 +377,30 @@ test("plans over eight steps are offered a split by default; the setting rejects
   assert.equal(resolveConfig({ lobby: { splitPlanAbove: 0 } }).lobby.splitPlanAbove, 0);
   for (const bad of [-1, 2.5, "8", null]) assert.equal(resolveConfig({ lobby: { splitPlanAbove: bad } }).lobby.splitPlanAbove, 8);
 });
+
+test("a part keeps only its own steps' detail, renumbered like its steps list", () => {
+  const plan = [
+    "## Steps",
+    "1. Model",
+    "2. API",
+    "3. Screen",
+    "",
+    "## Details",
+    "### Step 1: Model",
+    "The model.",
+    "**Done when:** it saves.",
+    "### Step 2: API",
+    "The API.",
+    "### Step 3: Screen",
+    "The screen.",
+    "## Risks",
+    "Few.",
+  ].join("\n");
+  const steps = planSteps(plan);
+  const proposal: SplitProposal = { tasks: [{ title: "Backend", goal: "", covers: [1, 2], after: [], done: [] }, { title: "Screen", goal: "", covers: [3], after: [1], done: [] }] };
+  const second = partBrief({ plan, steps, proposal, index: 1 });
+  assert.match(second, /## Steps\n1\. Screen\n\n## Details\n### Step 1: Screen\nThe screen\.\n## Risks\nFew\./);
+  assert.doesNotMatch(second, /The model|The API|it saves/, "the other part's detail is not in it");
+  const first = partBrief({ plan, steps, proposal, index: 0 });
+  assert.match(first, /### Step 1: Model\nThe model\.\n\*\*Done when:\*\* it saves\.\n### Step 2: API\nThe API\.\n## Risks/);
+});
