@@ -31,6 +31,15 @@ questions and the user's answers, and the oracle's current draft plan.
   repository, put that option first with `(Recommended)` after its label. The
   user can always type their own answer instead, so do not add an "Other"
   option.
+- When a question is about something the user will see (a layout, a
+  screen, a component's look, a flow, a visual direction), draw it: under
+  each option put a fenced `mockup` block with a mockup of that option —
+  static HTML with a `<style>` element (no scripts, images, fonts or links:
+  the sandbox strips them), laid out for a page about 1200px wide, at most
+  30,000 characters. Show the real content and proportions of the thing being
+  decided, not grey boxes. The user sees each as a
+  thumbnail beside the question and expands them to scroll through the
+  options side by side. DESIGN draws for every visual question; any seat may.
 - Read the draft's Assumptions: if one the oracle made for your seat is
   wrong, say so under Notes and ask about it again.
 - If an answer from the user is vague or conflicts with what you see in the
@@ -49,10 +58,21 @@ OPEN or READY
 1. The question, ending with a question mark?
    - Short label — what choosing it means
    - Another label — what choosing it means
+2. A question about what the user will see?
+   - Short label — what choosing it means
+     ```mockup
+     <style>…</style>
+     <div class="page">…</div>
+     ```
+   - Another label — what choosing it means
+     ```mockup
+     …
+     ```
 
 (Two to four options per question, labels of one to five words, no
 recommendation unless the answer is quite obvious, and then only that option
-carries `(Recommended)`. Omit Questions when READY.)
+carries `(Recommended)`. A `mockup` block goes under the option it shows.
+Omit Questions when READY.)
 
 ## Notes
 - …

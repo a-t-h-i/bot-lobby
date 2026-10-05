@@ -106,6 +106,20 @@ over-animated.
 - Always honor `prefers-reduced-motion`: keep the state change, drop the
   movement.
 
+## Show the options
+
+When a visual decision is the user's to make (a layout, a screen, how a
+component looks, a direction for the whole UI), show it rather than describe
+it: ask with `ask_user_question` and give every option an `htmlPreview`, a
+static mockup of that option — HTML and CSS only (no scripts, images, fonts or
+links: the sandbox strips them), laid out for a page about 1200px wide, with
+the real content, palette and proportions of what you would build, never grey
+placeholder boxes. The user sees the focused option's mockup beside the
+question, expands it and scrolls through all the options side by side, so
+draw each option at the same fidelity. Ask before you build, and only about
+what is theirs to choose; decide the rest yourself. In the planning panel,
+draw the same mockups as fenced `mockup` blocks under your options.
+
 ## Accessibility
 
 Accessibility is a core requirement: semantic HTML first (landmarks, headings in

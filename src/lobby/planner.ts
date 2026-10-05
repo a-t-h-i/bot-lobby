@@ -61,7 +61,12 @@ const MEMBER_SEATS: Record<PanelMember, string> = {
 export interface PanelOption {
   label: string;
   description: string;
+  /** A static HTML/CSS mockup of the option (a fenced `mockup` block under it), shown as a thumbnail the user expands. */
+  mockup?: { html: string; css?: string };
 }
+
+/** Longest mockup kept per option; a longer one is dropped rather than cut mid-tag. */
+export const MAX_MOCKUP_CHARS = 30_000;
 
 /** A question as a seat or the oracle wrote it, with the options it offers (recommended first). */
 export interface AskedQuestion {
@@ -273,7 +278,22 @@ export function questionItems(body: string | undefined): AskedQuestion[] {
   if (!body) return [];
   const items: AskedQuestion[] = [];
   let current: AskedQuestion | undefined;
+  // A fenced `mockup` (or `html`) block under an option is that option's mockup, never more question text.
+  let fence: { option?: PanelOption | undefined; lines: string[]; marker: string } | undefined;
   for (const line of body.split("\n")) {
+    if (fence) {
+      if (line.trim() === fence.marker) {
+        const html = dedent(fence.lines).trim();
+        if (fence.option && html && html.length <= MAX_MOCKUP_CHARS) fence.option.mockup = { html };
+        fence = undefined;
+      } else fence.lines.push(line);
+      continue;
+    }
+    const opening = /^\s*(`{3,}|~{3,})\s*(?:mockup|html)\s*$/i.exec(line);
+    if (opening) {
+      fence = { lines: [], marker: opening[1]!, ...(current?.options.length ? { option: current.options.at(-1) } : {}) };
+      continue;
+    }
     const match = /^(\s*)(?:\d+[.)]|[-*])\s+(.*\S)\s*$/.exec(line);
     if (match && (match[1]!.length === 0 || !current)) {
       current = { text: match[2]!.replace(/\*\*/g, ""), options: [] };
@@ -289,6 +309,34 @@ export function questionItems(body: string | undefined): AskedQuestion[] {
   return items.map(inlineOptions);
 }
 
+/** Lines with their shared indentation removed. */
+function dedent(lines: readonly string[]): string {
+  const indents = lines.filter((line) => line.trim()).map((line) => /^\s*/.exec(line)![0].length);
+  const cut = indents.length ? Math.min(...indents) : 0;
+  return lines.map((line) => line.slice(cut)).join("\n");
+}
+
+const plainOption = (label: string): string => optionLabel({ label, description: "" }).toLowerCase();
+
+/**
+ * The oracle relays a seat's question in its own words, without repeating the
+ * seat's mockups: an option it keeps by label keeps the seat's mockup (from
+ * the seat it tags first, then any seat).
+ */
+export function carryMockups(questions: readonly PanelQuestion[], seatQuestions: readonly PanelQuestion[]): PanelQuestion[] {
+  const drawn = seatQuestions.flatMap((question) => question.options.filter((option) => option.mockup).map((option) => ({ from: question.from, label: plainOption(option.label), mockup: option.mockup! })));
+  if (drawn.length === 0) return [...questions];
+  return questions.map((question) => ({
+    ...question,
+    options: question.options.map((option) => {
+      if (option.mockup) return option;
+      const label = plainOption(option.label);
+      const match = drawn.find((entry) => entry.label === label && entry.from === question.from) ?? drawn.find((entry) => entry.label === label);
+      return match ? { ...option, mockup: match.mockup } : option;
+    }),
+  }));
+}
+
 /**
  * The round's questions for the user. The oracle chooses them from its own
  * and the seats' (tagged with the seat each serves) and decides the rest; only
@@ -296,7 +344,7 @@ export function questionItems(body: string | undefined): AskedQuestion[] {
  * `MAX_QUESTIONS`, so a round is answered in one questionnaire.
  */
 export function roundQuestions(reply: PlannerReply | undefined, seatQuestions: readonly PanelQuestion[]): PanelQuestion[] {
-  const chosen = reply ? reply.questions.map((question) => tagged(question, ORACLE_LABEL)) : [...seatQuestions];
+  const chosen = reply ? carryMockups(reply.questions.map((question) => tagged(question, ORACLE_LABEL)), seatQuestions) : [...seatQuestions];
   return chosen.slice(0, MAX_QUESTIONS);
 }
 
@@ -330,8 +378,8 @@ export function parseMemberReply(text: string): MemberReply {
   return { status: ready ? "ready" : "open", questions, notes: listItems(parts.get("notes")) };
 }
 
-function optionLines(options: readonly PanelOption[]): string[] {
-  return options.map((option) => `   - ${option.label}${option.description ? ` — ${option.description}` : ""}`);
+function optionLines(options: readonly PanelOption[], marks = false): string[] {
+  return options.map((option) => `   - ${option.label}${option.description ? ` — ${option.description}` : ""}${marks && option.mockup ? " [mockup]" : ""}`);
 }
 
 function questionLine(question: PanelQuestion, index: number): string {
@@ -429,7 +477,7 @@ export function panelSection(outcomes: readonly MemberOutcome[]): string {
     const { status, questions, notes } = outcome.reply;
     return [
       `### ${label} — ${status === "ready" ? "READY" : "OPEN"}`,
-      questions.length > 0 ? `Questions for the user:\n${questions.map((question) => [`- ${question.text}`, ...optionLines(question.options)].join("\n")).join("\n")}` : "",
+      questions.length > 0 ? `Questions for the user:\n${questions.map((question) => [`- ${question.text}`, ...optionLines(question.options, true)].join("\n")).join("\n")}` : "",
       notes.length > 0 ? `Notes:\n${notes.map((note) => `- ${note}`).join("\n")}` : "",
     ].filter(Boolean).join("\n");
   });

@@ -3,7 +3,9 @@
  * backdrop. One question at a time, `1 of N` across the queue. `Later` (or
  * Esc) puts it away without losing a word: a small button in the header
  * brings it back. `Cancel` asks before leaving. A late answer (another window
- * answered first) surfaces the shared "already answered" notice.
+ * answered first) surfaces the shared "already answered" notice. A question's
+ * mockups expand in place: the pop-up grows to nearly the whole window for the
+ * mockup viewer, and Esc goes back to the question before it puts it away.
  */
 import { useEffect, useState } from "react"
 import { HelpCircle, X } from "lucide-react"
@@ -13,6 +15,7 @@ import { Popup } from "@/components/ui/popup"
 import { ApiError } from "@/lib/api"
 import { PRIORITY, useOverlaySlot } from "@/lib/overlay"
 import { toast } from "@/lib/toast"
+import { cn } from "@/lib/utils"
 import type { WebPrompt } from "@protocol"
 import { QuestionCard } from "./QuestionCard"
 import { parsePrompt } from "./payload"
@@ -56,6 +59,7 @@ export function QuestionsPill({ count, onOpen }: { count: number; onOpen: () => 
 export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize }: QuestionPopupProps) {
   const [leaving, setLeaving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const count = prompts.length
   const active = prompts[0]
   const view = active ? parsePrompt(active) : undefined
@@ -68,6 +72,10 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
       onMinimize(false)
     }
   }, [count, onMinimize])
+
+  // Each question starts with its mockups folded.
+  const activeId = active?.id
+  useEffect(() => setExpanded(false), [activeId])
 
   async function settle(action: Promise<void>, failure: string): Promise<void> {
     setSubmitting(true)
@@ -90,14 +98,15 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
       dismissOnBackdrop={false}
       onOpenChange={(open) => {
         if (open) return
-        if (leaving) setLeaving(false)
+        if (expanded) setExpanded(false)
+        else if (leaving) setLeaving(false)
         else onMinimize(true)
       }}
-      className="max-w-3xl"
+      className={cn("max-w-3xl", expanded && "h-[min(92svh,60rem)] max-h-[min(92svh,60rem)] max-w-6xl")}
     >
       {active ? (
         <section aria-label="Question from the lobby" className="flex min-h-0 flex-1 flex-col">
-          <header className="flex items-center gap-3 px-6 pt-5 pb-3">
+          <header className={cn("flex items-center gap-3 px-6 pt-5 pb-3", expanded && "hidden")}>
             <p className="min-w-0 flex-1 truncate text-sm font-medium text-muted-foreground first-letter:uppercase">
               {who}
               {count > 1 ? ` · 1 of ${count}` : ""}
@@ -106,7 +115,7 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
               <X aria-hidden="true" />
             </Button>
           </header>
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+          <div className={expanded ? "flex min-h-0 flex-1 flex-col" : "min-h-0 flex-1 overflow-y-auto px-6 pb-6"}>
             {view ? (
               leaving ? (
                 <LeavePrompt submitting={submitting} onKeep={() => setLeaving(false)} onLeave={() => void settle(dismiss(active.id), "Could not leave the question")} />
@@ -117,6 +126,8 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
                   submitting={submitting}
                   onAnswer={(value) => void settle(answer(active.id, value), "Could not send the answer")}
                   onCancel={() => setLeaving(true)}
+                  expanded={expanded}
+                  onExpand={setExpanded}
                 />
               )
             ) : (

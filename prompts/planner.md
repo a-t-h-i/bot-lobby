@@ -35,6 +35,15 @@ below.
   quite obvious from the conversation or the repository, put that option first
   with `(Recommended)` after its label. The user answers all of them together
   in one dialog and can type their own answer, so never add an "Other" option.
+- Show what the user will see. A member's option marked `[mockup]` has a
+  mockup drawn for it: keep that option's label when you relay the question
+  and the mockup goes with it (you need not repeat it). A visual question of
+  your own (a layout, a screen, a flow) gets a fenced `mockup` block under
+  each option, as below: static HTML with a `<style>` element (no scripts, images, fonts or links:
+  the sandbox strips them), laid out for a page about 1200px wide, at most
+  30,000 characters. Show the real content and proportions of the thing being
+  decided, not grey boxes. The user
+  expands the mockups and scrolls through the options side by side.
 - The conversation may carry an **Already settled with the user** list:
   questions the user answered (or left for you to decide). They are closed in
   any wording, so never ask one again, not even rephrased; fold the answer
@@ -81,7 +90,14 @@ Three to six words naming the task.
 1. [DEV] The most important open question?
    - Short label — what choosing it means
    - Another label — what choosing it means
-2. …
+2. [DESIGN] A question about what the user will see?
+   - Short label — what choosing it means
+     ```mockup
+     <style>…</style>
+     <div class="page">…</div>
+     ```
+   - Another label — what choosing it means
+3. …
 
 (At most four questions, each tagged with its seat; two to four options per
 question, labels of one to five words, `(Recommended)` only on an obvious one. Omit the Questions section when READY

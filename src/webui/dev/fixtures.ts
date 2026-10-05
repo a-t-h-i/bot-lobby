@@ -20,6 +20,7 @@ export const SCENARIOS = [
   "question",
   "questions3",
   "issues",
+  "mockups",
 ] as const;
 
 export type ScenarioName = (typeof SCENARIOS)[number];

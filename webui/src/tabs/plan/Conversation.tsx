@@ -1,11 +1,16 @@
 /**
  * The panel's conversation, in the same shape as the Lobby's: your words in a
  * bubble on the right, the panel beside its avatar, its questions as cards
- * (who asks, the question, the options), questions the classifier settled
+ * (who asks, the question, the options, and the mockups a seat drew for them,
+ * which expand into the mockup viewer), questions the classifier settled
  * marked with a tick, three dots while a round runs, and everything else as
  * Markdown.
  */
 import { useState, type CSSProperties } from "react"
+import { Popup } from "@/components/ui/popup"
+import { PRIORITY, useOverlaySlot } from "@/lib/overlay"
+import { MockupViewer, plainLabel } from "@/prompts/MockupViewer"
+import { StaticPreview } from "@/prompts/StaticPreview"
 import { Button } from "@/components/ui/button"
 import { InlineEditor } from "@/ui/InlineEditor"
 import { call } from "@/lib/api"
@@ -17,6 +22,40 @@ import { Markdown } from "@/ui/Markdown"
 import { AgentIcon } from "@/ui/AgentIcon"
 import { AgentMessage, ChatNote, TypingDots, YourMessage } from "../lobby/ChatParts"
 import { sourceColor, sourceLabel, sourceTone } from "../lobby/types"
+
+/** The page width a mockup is laid out at before it is scaled into its thumbnail. */
+const MOCKUP_WIDTH = 1200
+
+/** The mockups a question's options carry, as thumbnails; each opens the viewer, where the user scrolls through them all. */
+function OptionMockups({ question }: { question: PanelQuestion }) {
+  const [open, setOpen] = useState<number>()
+  const shown = useOverlaySlot(open !== undefined, PRIORITY.sheet)
+  const drawn = question.options.flatMap((option, index) => (option.mockup ? [{ option, index, mockup: option.mockup }] : []))
+  if (drawn.length === 0) return null
+  const options = question.options.map((option) => ({ label: option.label, description: option.description, ...(option.mockup ? { htmlPreview: option.mockup } : {}) }))
+  return (
+    <>
+      <ul aria-label="Mockups" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {drawn.map(({ option, index, mockup }) => (
+          <li key={index} className="flex min-w-0 flex-col gap-1">
+            <StaticPreview preview={mockup} label={plainLabel(option.label)} frameWidth={MOCKUP_WIDTH} onOpen={() => setOpen(index)} className="aspect-[3/2] h-auto" />
+            <span className="truncate text-xs text-muted-foreground">
+              <span className="tabular-nums">{index + 1}.</span> {plainLabel(option.label)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <Popup
+        open={open !== undefined && shown}
+        onOpenChange={(next) => { if (!next) setOpen(undefined) }}
+        label={`Mockups: ${question.text}`}
+        className="h-[min(92svh,60rem)] max-h-[min(92svh,60rem)] max-w-6xl"
+      >
+        {open !== undefined ? <MockupViewer options={options} start={open} title={question.text} onClose={() => setOpen(undefined)} /> : null}
+      </Popup>
+    </>
+  )
+}
 
 /** The panel's questions as cards: who asks (icon, name, colour), the question, and the options to pick from. */
 function Asked({ questions }: { questions: PanelQuestion[] }) {
@@ -35,7 +74,7 @@ function Asked({ questions }: { questions: PanelQuestion[] }) {
             </span>
           </p>
           {question.options.length ? (
-            <ul className="flex flex-wrap gap-1.5">
+            <ul aria-label="Options" className="flex flex-wrap gap-1.5">
               {question.options.map((option) => (
                 <li key={option.label} className="rounded-lg border border-border bg-muted/60 px-2 py-1 text-xs text-muted-foreground">
                   <span className="font-medium text-foreground">{option.label}</span>
@@ -44,6 +83,7 @@ function Asked({ questions }: { questions: PanelQuestion[] }) {
               ))}
             </ul>
           ) : null}
+          <OptionMockups question={question} />
         </li>
       ))}
     </ol>

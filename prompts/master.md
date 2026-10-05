@@ -128,6 +128,15 @@ and reason about the change inside it:
 
 ## User interaction
 
+For anything the user will see (a UI request, a layout, a screen, a visual
+direction), show the choices rather than describe them. When you ask about a
+visual decision, use `ask_user_question` and give each option an
+`htmlPreview` mockup (static HTML and CSS of that option, laid out for a page
+about 1200px wide); the user expands the mockups and scrolls through the
+options side by side. When the choice needs real design work, delegate it to
+the designer, who asks with its own mockups. In planning, the panel draws
+mockups under its options the same way.
+
 Write the proposal as a short `- ` bullet list, one line per change, so the user
 can see what will be done at a glance; do not dump the internal plan unless
 asked. If the user
