@@ -236,7 +236,10 @@ function seedFeed(feed: LobbyFeed, fixture: ScenarioFixture): void {
     if (entry.pending) feed.begin(entry.source, entry.text);
     else feed.log(entry.source, entry.text, entry.kind);
   }
-  for (const entry of fixture.feed.thoughts) feed.thought(entry.source, entry.text);
+  for (const entry of fixture.feed.thoughts) {
+    if (entry.live) feed.thinkDelta(entry.source, entry.text);
+    else feed.thought(entry.source, entry.text);
+  }
   if (fixture.feed.reply) feed.replyDelta(fixture.feed.reply);
 }
 

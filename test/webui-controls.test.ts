@@ -26,8 +26,9 @@ test("Thinking starts minimized regardless of legacy preference; Activity still 
   assert.match(thoughts, /latestThoughts\(thoughts\)/);
   assert.match(thoughts, /label="Thinking"/);
   assert.match(thoughts, /onCloseAutoFocus/);
-  assert.match(thoughts, /Minimize <kbd/);
-  assert.match(source("index.css"), /prefers-reduced-motion: reduce\) \{ \.thinking-bubble/);
+  assert.doesNotMatch(thoughts, /Minimize|<header|<h2/, "the pane has no title bar and no minimize hint");
+  assert.match(thoughts, /thoughtSteps\(thought\.text\)/);
+  assert.match(source("index.css"), /prefers-reduced-motion: reduce\) \{\s*\.thinking-bubble/);
 });
 
 test("all five Settings sections remain mounted behind hidden wrappers", () => {
