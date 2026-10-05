@@ -53,7 +53,7 @@ import {
 /** A titled card on the page's surface. */
 export function Card({ title, right, className, children }: { title: string; right?: ReactNode; className?: string; children: ReactNode }) {
   return (
-    <section className={cn("flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-card p-4", className)}>
+    <section className={cn("card-raised flex min-w-0 flex-col gap-3 rounded-xl border p-4", className)}>
       <header className="flex items-baseline justify-between gap-3">
         <h3 className="text-sm font-medium text-foreground">{title}</h3>
         {right ? <span className="text-xs text-muted-foreground tabular-nums">{right}</span> : null}
@@ -68,7 +68,7 @@ export function Steps({ row = false }: { row?: boolean }) {
   return (
     <ol className={cn("grid gap-3", row && "@2xl:grid-cols-3")}>
       {STEPS.map((step, index) => (
-        <li key={step.title} className="flex gap-3 rounded-xl border border-border bg-card p-3.5">
+        <li key={step.title} className="card-raised flex gap-3 rounded-xl border p-3.5">
           <span aria-hidden="true" className="grid size-6 shrink-0 place-items-center rounded-full bg-accent text-xs font-semibold text-primary tabular-nums">
             {index + 1}
           </span>

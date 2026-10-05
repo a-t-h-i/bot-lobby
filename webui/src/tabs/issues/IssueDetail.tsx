@@ -30,7 +30,7 @@ function Header({ issue, now }: { issue: IssueDetailInfo; now: number }) {
 
 function Comment({ comment, now }: { comment: Comment; now: number }) {
   return (
-    <article className="flex flex-col gap-1.5 rounded-lg border border-border bg-background/60 px-3.5 py-2.5">
+    <article className="card-raised flex flex-col gap-1.5 rounded-lg border px-3.5 py-2.5">
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span className="font-medium text-foreground">{comment.author ?? "comment"}</span>
         {comment.createdAt ? <span>{formatSince(now - Date.parse(comment.createdAt))}</span> : null}

@@ -32,7 +32,7 @@
   --popover-foreground: #1b1c21;
   --glass-border: #e9e7e1;
   --glass-shadow: 0 1px 2px rgb(32 28 20 / 0.04), 0 18px 44px -18px rgb(32 28 20 / 0.24);
-  --card-shadow: 0 1px 2px rgb(32 28 20 / 0.04);
+  --card-shadow: var(--card-raise);
   --surface-shadow: 0 1px 2px rgb(32 28 20 / 0.03), 0 10px 30px -22px rgb(32 28 20 / 0.14);
   --scrim: rgb(28 26 22 / 0.28);
 
@@ -119,6 +119,15 @@
   --btn-raise-hover: inset 0 1px 0 rgb(255 255 255 / 1), inset 0 -1px 0 rgb(32 28 20 / 0.05), 0 1px 2px rgb(32 28 20 / 0.09), 0 6px 14px -5px rgb(32 28 20 / 0.17);
   --btn-press: inset 0 1px 2.5px rgb(32 28 20 / 0.13), inset 0 0 0 0.5px rgb(32 28 20 / 0.04);
   --btn-gloss: linear-gradient(180deg, rgb(255 255 255 / 0.2) 0%, rgb(255 255 255 / 0.04) 52%, rgb(0 0 0 / 0.06) 100%);
+
+  /*
+   * Cards sit a little proud of the page too, more softly than buttons: the
+   * card colour lit from above, a bright top edge, a hairline rim and a wide,
+   * faint contact shadow. Built from --card, so a colour theme keeps it.
+   */
+  --card-face: linear-gradient(180deg, color-mix(in oklab, var(--card) 97%, white) 0%, color-mix(in oklab, var(--card) 98.5%, black) 100%);
+  --card-rim: rgb(32 28 20 / 0.11);
+  --card-raise: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 1px 1.5px rgb(32 28 20 / 0.06), 0 3px 10px -4px rgb(32 28 20 / 0.12);
 }
 
 .dark {
@@ -130,6 +139,9 @@
   --btn-raise-hover: inset 0 1px 0 rgb(255 255 255 / 0.09), 0 1px 2px rgb(0 0 0 / 0.55), 0 7px 16px -6px rgb(0 0 0 / 0.7);
   --btn-press: inset 0 1px 3px rgb(0 0 0 / 0.55);
   --btn-gloss: linear-gradient(180deg, rgb(255 255 255 / 0.16) 0%, rgb(255 255 255 / 0.03) 52%, rgb(0 0 0 / 0.08) 100%);
+  --card-face: linear-gradient(180deg, color-mix(in oklab, var(--card) 95%, white) 0%, var(--card) 100%);
+  --card-rim: rgb(255 255 255 / 0.075);
+  --card-raise: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 1px 2px rgb(0 0 0 / 0.45), 0 4px 12px -5px rgb(0 0 0 / 0.55);
 
   /* Deep ink */
   --background: #0b0b0d;
@@ -142,7 +154,7 @@
   --popover-foreground: #e8e7e4;
   --glass-border: #212126;
   --glass-shadow: 0 20px 48px -16px rgb(0 0 0 / 0.8);
-  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+  --card-shadow: var(--card-raise);
   --surface-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px -22px rgb(0 0 0 / 0.6);
   --scrim: rgb(0 0 0 / 0.64);
 
@@ -363,9 +375,18 @@
       box-shadow: none;
     }
   }
-  /* A bordered block inside a surface (a settings card, a metric). */
+  /* A bordered block inside a surface (a settings card, a metric): raised like the buttons. */
   .glass {
-    @apply border border-glass-border bg-card text-card-foreground shadow-card;
+    @apply border bg-card text-card-foreground;
+  }
+  /* Every card: the card colour lit from above on a hairline rim, a little proud of the page (see --card-*). */
+  .glass,
+  .card-raised {
+    background-color: var(--card);
+    background-image: var(--card-face);
+    border-color: var(--card-rim);
+    --tw-shadow: var(--card-raise);
+    box-shadow: var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
   }
   /*
    * The raised button looks (see --btn-* above). The shadow goes through
@@ -633,6 +654,8 @@
   border-radius: var(--radius-xl);
   border: 1px solid color-mix(in oklab, var(--orb) 16%, var(--border));
   background: color-mix(in oklab, var(--orb) 4%, var(--card));
+  /* Raised like every card, its tint kept. */
+  box-shadow: var(--card-raise);
 }
 .thought[data-live] { border-color: color-mix(in oklab, var(--orb) 32%, var(--border)); box-shadow: 0 0 0 3px color-mix(in oklab, var(--orb) 7%, transparent); }
 .thought-label {

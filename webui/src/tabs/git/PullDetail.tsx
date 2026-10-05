@@ -136,7 +136,7 @@ function Note({ note, now }: { note: PullNoteInfo; now: number }) {
   const state = note.state && note.state !== "COMMENTED" ? note.state.toLowerCase().replace(/_/g, " ") : ""
   const right = [state, note.at ? formatSince(now - Date.parse(note.at)) : ""].filter(Boolean).join(" · ")
   return (
-    <article className="flex flex-col gap-1.5 rounded-lg border border-border bg-background/60 px-3.5 py-2.5">
+    <article className="card-raised flex flex-col gap-1.5 rounded-lg border px-3.5 py-2.5">
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span className="font-medium text-foreground">{note.author ?? "comment"}</span>
         {right ? <span>{right}</span> : null}

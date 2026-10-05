@@ -109,7 +109,7 @@ function OptionRow({
 function Preview({ option, onExpand }: { option?: AskOption; onExpand: () => void }) {
   if (!option || !hasMockup(option)) return null
   return (
-    <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3">
+    <div className="card-raised flex flex-col gap-2 rounded-lg border p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="min-w-0 truncate text-xs font-medium text-muted-foreground">Preview · {splitRecommended(option.label).text}</p>
         <Button type="button" variant="ghost" size="xs" onClick={onExpand} aria-keyshortcuts="E" title="Expand · E" className="-my-1 shrink-0">

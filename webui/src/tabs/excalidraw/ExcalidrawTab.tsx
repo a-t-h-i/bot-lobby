@@ -71,7 +71,7 @@ function ExcalidrawEmpty({ onChanged }: { onChanged: () => void }) {
     <div className="@container flex-1 overflow-y-auto px-5 pt-10 pb-dock sm:px-8">
       <div className="mx-auto grid max-w-5xl gap-8 @4xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
         <div className="flex flex-col gap-5">
-          <span aria-hidden="true" className="grid size-11 place-items-center rounded-xl border border-border bg-card text-primary shadow-card">
+          <span aria-hidden="true" className="card-raised grid size-11 place-items-center rounded-xl border text-primary">
             <PenTool className="size-5" />
           </span>
           <div className="flex flex-col gap-1.5">

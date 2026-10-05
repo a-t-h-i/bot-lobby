@@ -54,7 +54,7 @@ function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
         <header className="flex flex-col gap-4 @3xl:flex-row @3xl:items-end @3xl:justify-between">
           <div className="flex items-start gap-4">
-            <span aria-hidden="true" className="grid size-11 shrink-0 place-items-center rounded-xl border border-border bg-card text-primary shadow-card">
+            <span aria-hidden="true" className="card-raised grid size-11 shrink-0 place-items-center rounded-xl border text-primary">
               <Route className="size-5" />
             </span>
             <div className="flex flex-col gap-1">
@@ -78,7 +78,7 @@ function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) 
           </h3>
           <ol className="grid gap-3 @2xl:grid-cols-2 @4xl:grid-cols-4">
             {PLAN_STEPS.map((step, index) => (
-              <li key={step.title} className="relative flex gap-3 rounded-xl border border-border bg-card p-3.5">
+              <li key={step.title} className="card-raised relative flex gap-3 rounded-xl border p-3.5">
                 <span aria-hidden="true" className="grid size-6 shrink-0 place-items-center rounded-full bg-accent text-xs font-semibold text-primary tabular-nums">
                   {index + 1}
                 </span>
