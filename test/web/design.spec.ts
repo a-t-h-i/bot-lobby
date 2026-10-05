@@ -172,20 +172,24 @@ test("the box grows with what is typed, carries lists on, formats with Ctrl+B an
   await expect(page.getByRole("region", { name: "Markdown preview" }).locator("strong"), "the preview renders it").toHaveText("make this bold");
 });
 
-test("the box grows and shrinks with the text on its own, and the page above gives way instead of running under it", async ({ page, server }) => {
+test("the dock grows and shrinks with the text on its own, over the page, and the page makes room to scroll clear of it", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   const box = page.locator("#composer-text");
   const card = box.locator("xpath=ancestor::div[contains(@class,'group/composer')]");
+  const chat = page.getByRole("log", { name: "Conversation" });
+  const pad = () => chat.evaluate((el: any) => parseFloat(getComputedStyle(el).paddingBottom));
   const before = (await box.boundingBox())!.height;
   const mainBefore = (await page.locator("#main").boundingBox())!;
+  const padBefore = await pad();
   await box.fill("one\ntwo\nthree\nfour\nfive\nsix");
   await expect.poll(async () => (await box.boundingBox())!.height, { message: "six lines make the box taller" }).toBeGreaterThan(before + 100);
   const mainAfter = (await page.locator("#main").boundingBox())!;
   const cardBox = (await card.boundingBox())!;
-  expect(Math.abs(mainAfter.y - mainBefore.y), "the page does not move down").toBeLessThanOrEqual(2);
-  expect(mainAfter.height, "it gives up room to the taller box").toBeLessThan(mainBefore.height - 80);
-  expect(mainAfter.y + mainAfter.height, "and never runs under it").toBeLessThanOrEqual(cardBox.y + 1);
+  expect(Math.abs(mainAfter.y - mainBefore.y), "the page does not move").toBeLessThanOrEqual(2);
+  expect(Math.abs(mainAfter.height - mainBefore.height), "nor shrink: the box floats over it").toBeLessThanOrEqual(2);
+  expect(mainAfter.y + mainAfter.height, "the page runs on under the dock").toBeGreaterThan(cardBox.y + 40);
+  await expect.poll(pad, { message: "the conversation leaves room to scroll clear of the taller dock" }).toBeGreaterThan(padBefore + 80);
   expect(cardBox.y + cardBox.height, "the box stays on the screen").toBeLessThanOrEqual(900);
   await box.fill("");
   await expect.poll(async () => (await box.boundingBox())!.height, { message: "and shrinks back when emptied" }).toBeLessThan(before + 20);
@@ -231,7 +235,7 @@ test("Plan, Quick fix and an open task each give the composer its own target", a
   }
 });
 
-test("zen palettes: cool mist in light, near-black in dark, an indigo accent, a 12px surface under 8px controls, composer clear of the page", async ({ page, server }) => {
+test("zen palettes: warm paper in light, deep ink in dark, a quiet indigo accent, a 12px surface under 8px controls, a 16px dock floating over it", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const look = await page.evaluate(() => {
@@ -260,24 +264,24 @@ test("zen palettes: cool mist in light, near-black in dark, an indigo accent, a 
   });
   const [r, g, b] = look.page as [number, number, number];
   if (look.dark) expect(Math.max(r, g, b), "near-black is dark").toBeLessThan(32);
-  else expect(Math.min(r, g, b), "mist is light").toBeGreaterThan(230);
+  else expect(Math.min(r, g, b), "paper is light").toBeGreaterThan(230);
   const accent = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(look.primary);
   expect(accent, `the accent is a hex colour (${look.primary})`).not.toBeNull();
   const [ar, , ab] = accent!.slice(1).map((part) => parseInt(part, 16)) as [number, number, number];
   expect(ab - ar, "the accent leans blue, not warm").toBeGreaterThan(60);
   expect(look.body, "flat page, no wash").toBe("none");
   expect(look.cardRadius, "the page's surface").toBe("12px");
-  expect(look.inputRadius, "the message box sits on it with the same corners").toBe("12px");
+  expect(look.inputRadius, "the floating dock has softer corners").toBe("16px");
   expect(look.inactiveBorder, "inactive tabs are plain text").toBe("0px");
   expect(look.pillRadius, "the active pill has the same 8px corners").toBe("8px");
   expect(look.cardBottom, "the composer stays on the screen").toBeLessThanOrEqual(look.inner);
-  expect(look.mainBottom, "and the page ends above the box instead of running under it").toBeLessThanOrEqual(look.composerTop);
+  expect(look.mainBottom, "and the page runs on under the dock").toBeGreaterThan(look.composerTop);
 });
 
 test("keyboard hints: the box prints its keys, the header button opens the key list, a tab's tooltip names its key", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
-  const hints = page.locator("#composer-text").locator("xpath=ancestor::div[contains(@class,'shrink-0')][1]");
+  const hints = page.locator("#composer-text").locator("xpath=ancestor::div[contains(@class,'group/composer')][1]");
   await expect(hints.getByText("new line"), "Shift+Enter is hinted").toBeVisible();
   await expect(hints.getByText("shortcuts"), "and the way to the full list").toBeVisible();
   await page.getByRole("tab", { name: /Tasks/ }).hover();
@@ -695,20 +699,31 @@ test("below 1024px the Lobby shows one pane at a time behind a switcher, and the
   expect(overflow, "no sideways scroll").toBeLessThanOrEqual(0);
 });
 
-test("the message box sits under the page and never covers a button", async ({ page, server }) => {
+test("the message box floats over the page, and every page scrolls clear of it", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 640 });
-  for (const hash of ["#/lobby", "#/tasks/T-mock-1", "#/plan", "#/settings", "#/metrics"]) {
+  for (const hash of ["#/lobby", "#/tasks/T-mock-1", "#/plan", "#/settings", "#/metrics", "#/sessions"]) {
     await page.evaluate((to) => {
       window.location.hash = to;
     }, hash);
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(300);
     const run = await page.evaluate(() => {
-      const main = (document.getElementById("main") as any).getBoundingClientRect();
-      const box = (document.getElementById("composer-text") as any).closest(".group\\/composer").getBoundingClientRect();
-      return { mainBottom: main.bottom, boxTop: box.top };
+      const main = document.getElementById("main") as any;
+      const dock = (document.getElementById("composer-text") as any).closest(".group\\/composer").getBoundingClientRect();
+      // Scroll everything that scrolls to its end, the way a reader would.
+      for (const el of [main, ...main.querySelectorAll("*")] as any[]) {
+        const style = getComputedStyle(el);
+        if (/(auto|scroll)/.test(style.overflowY) && el.scrollHeight > el.clientHeight) el.scrollTop = el.scrollHeight;
+      }
+      const covered = [...main.querySelectorAll("button, a[href], input, textarea, [role='switch'], [role='slider']")]
+        .map((el: any) => ({ el, box: el.getBoundingClientRect() }))
+        .filter(({ el, box }) => box.width > 0 && box.height > 0 && getComputedStyle(el).visibility !== "hidden")
+        .filter(({ box }) => box.bottom > dock.top + 1 && box.top < dock.bottom && box.right > dock.left && box.left < dock.right)
+        .map(({ el }) => el.getAttribute("aria-label") || el.textContent?.trim().slice(0, 40) || el.tagName);
+      return { mainBottom: main.getBoundingClientRect().bottom, dockTop: dock.top, covered };
     });
-    expect(run.mainBottom, `${hash}: the page ends above the box`).toBeLessThanOrEqual(run.boxTop);
+    expect(run.mainBottom, `${hash}: the page runs under the dock`).toBeGreaterThan(run.dockTop);
+    expect(run.covered, `${hash}: scrolled to the end, nothing is left under the dock`).toEqual([]);
   }
 });
 
