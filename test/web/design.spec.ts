@@ -1160,9 +1160,25 @@ test("the Thinking pane's edge pulses in the working agent's colour while anyone
     await expect(pane.locator(".thought-aura")).toHaveAttribute("data-working", working);
     await page.keyboard.press("Escape");
   }
-  await openScenario(page, server, "empty");
+  await openScenario(page, server, "issues");
   await page.getByRole("button", { name: "Open Thinking" }).click();
-  await expect(page.locator(".thought-pane"), "nobody at work: still").not.toHaveClass(/thought-pane-live/);
+  await expect(page.locator(".thought-pane"), "a thought trail, nobody at work: still").not.toHaveClass(/thought-pane-live/);
+});
+
+test("with no thoughts and nobody at work there is no orb; the Thinking key still opens the pane", async ({ page, server }) => {
+  await openScenario(page, server, "empty");
+  await page.setViewportSize({ width: 1280, height: 860 });
+  await expect(page.locator("#main")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open Thinking" }), "nothing to show: no orb").toHaveCount(0);
+  await page.locator("#main").focus();
+  await page.keyboard.press("Alt+T");
+  await expect(page.getByRole("dialog", { name: "Thinking", exact: true })).toBeVisible();
+  await expect(page.getByText("Thoughts from the oracle and every agent appear here")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await openScenario(page, server, "issues");
+  await expect(page.getByRole("button", { name: "Open Thinking" }), "a thought trail: the orb is there").toBeVisible();
+  await openScenario(page, server, "loading");
+  await expect(page.getByRole("button", { name: "Open Thinking" }), "agents at work: the orb is there").toBeVisible();
 });
 
 test("Linting in Settings: the gate's mode, a command of your own with its file types, and the linters the project configures", async ({ page, server }) => {
