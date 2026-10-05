@@ -36,7 +36,23 @@ const NAVIGATION: Line[] = [
   { id: "digits", caps: ["1", "…", "9"], help: "jump to a tab in current order" },
   { id: "help", caps: ["?"], help: "keyboard shortcuts" },
   ...Object.entries(goKey).map(([key, tab]) => ({ id: `go.${tab}`, caps: ["g", key], help: `jump to ${tab}` })),
+  { id: "project", caps: ["P"], help: "open the project switcher" },
+  { id: "theme", caps: ["D"], help: "switch between light and dark" },
   { id: "edit", label: "Ctrl+Enter", help: "save an edited message; Esc cancels" },
+]
+
+/** The keys on each page's buttons: press one with the list or the detail focused, not the message box. */
+const PAGES: Array<{ id: string; page: string; keys: Array<[string, string]> }> = [
+  { id: "tasks", page: "Tasks", keys: [["E", "archive"], ["R", "restore"], ["A", "auto mode"], ["Delete", "delete"]] },
+  { id: "saved", page: "Saved plan", keys: [["S", "start here"], ["N", "new session"], ["Delete", "discard"]] },
+  { id: "plan", page: "Plan", keys: [["A", "answer"], ["R", "retry"], ["Ctrl+S", "save"], ["N", "new plan"]] },
+  { id: "quickfix", page: "Quick fix", keys: [["R", "run anyway"], ["T", "make a task"], ["C", "cancel"]] },
+  { id: "git", page: "Git", keys: [["R", "refresh"], ["V", "review"], ["Q", "Jev's read"], ["X", "stop"]] },
+  { id: "issues", page: "Issues", keys: [["R", "refresh"]] },
+  { id: "knowledge", page: "Knowledge", keys: [["E", "edit"], ["A", "add"], ["C", "comment"], ["F", "edit file"], ["Delete", "delete"]] },
+  { id: "excalidraw", page: "Excalidraw", keys: [["R", "reveal"], ["C", "copy"], ["O", "open"], ["W", "draw"], ["T", "check"], ["Delete", "remove"]] },
+  { id: "sessions", page: "Sessions", keys: [["M", "move here"], ["S", "stop"], ["B", "back"]] },
+  { id: "confirm", page: "Asked to confirm", keys: [["Y", "yes, do it"], ["Esc", "keep it"]] },
 ]
 
 const LISTS: Line[] = [
@@ -73,6 +89,27 @@ function KeyRow({ line }: { line: Line }) {
       </span>
       <span className="text-sm text-muted-foreground">{line.help}</span>
     </div>
+  )
+}
+
+function PageKeys() {
+  return (
+    <section className="flex flex-col gap-1">
+      <h3 className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">Buttons on a page</h3>
+      {PAGES.map((entry) => (
+        <div key={entry.id} className="flex items-start gap-3 py-1">
+          <span className="w-28 shrink-0 pt-0.5 text-sm font-medium">{entry.page}</span>
+          <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
+            {entry.keys.map(([chord, help]) => (
+              <span key={chord} className="inline-flex items-center gap-1.5">
+                <Keys chord={chord} />
+                {help}
+              </span>
+            ))}
+          </span>
+        </div>
+      ))}
+    </section>
   )
 }
 
@@ -121,8 +158,8 @@ export function AltH({
 
   return (
     <Popup open={open && shown} onOpenChange={onOpenChange} label="Keys" className="max-w-4xl">
-      <header className="flex items-center justify-between gap-3 px-6 pt-5 pb-2">
-        <h2 aria-hidden="true" className="text-base font-medium">
+      <header className="flex items-center justify-between gap-3 border-b border-border px-6 py-4">
+        <h2 aria-hidden="true" className="text-base font-semibold tracking-tight">
           Keyboard shortcuts
         </h2>
         <span className="flex items-center gap-2">
@@ -132,7 +169,7 @@ export function AltH({
           </Button>
         </span>
       </header>
-      <div className="grid min-h-0 flex-1 gap-x-10 gap-y-6 overflow-y-auto px-6 pt-2 pb-6 md:grid-cols-2">
+      <div className="grid min-h-0 flex-1 gap-x-10 gap-y-6 overflow-y-auto px-6 py-5 md:grid-cols-2">
         <div className="flex flex-col gap-6">
           <Section title="Everywhere" lines={fromKeys(keys)} />
           <Section title="Jump to a tab" lines={tabKeys(tabs)} />
@@ -141,6 +178,7 @@ export function AltH({
         </div>
         <div className="flex flex-col gap-6">
           <Section title="Lists and panes" lines={LISTS} />
+          <PageKeys />
           <Section title="Questions" lines={QUESTIONS} />
         </div>
       </div>

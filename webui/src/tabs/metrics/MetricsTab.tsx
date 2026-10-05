@@ -9,6 +9,7 @@ import { Search } from "lucide-react"
 import { ErrorState } from "@/app/States"
 import { useApiRead } from "@/app/useApiRead"
 import { Button } from "@/components/ui/button"
+import { Keys } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { AvgTime, SuccessRate, TimeShare } from "./Charts"
 import { Classifier } from "./Classifier"
@@ -43,7 +44,7 @@ function GroupToggle({ groupBy, onGroup }: { groupBy: GroupBy; onGroup: (value: 
           size="sm"
           role="radio"
           tabIndex={groupBy === value ? 0 : -1}
-          className={groupBy === value ? "bg-tab text-foreground hover:bg-tab" : "text-muted-foreground"}
+          className={groupBy === value ? "bg-card text-foreground shadow-card hover:bg-card" : "text-muted-foreground"}
           aria-checked={groupBy === value}
           onClick={() => onGroup(value)}
         >
@@ -66,8 +67,9 @@ function SearchBox({ query, onQuery }: { query: string; onQuery: (value: string)
         maxLength={500}
         placeholder="Search runs: model, agent, tool…"
         onChange={(event) => onQuery(event.target.value)}
-        className="h-7 w-64 max-w-full rounded-lg border border-input bg-card/40 pr-3 pl-8 text-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+        className="h-8 w-64 max-w-full rounded-lg border border-input bg-background pr-9 pl-8 text-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
       />
+      <Keys chord="/" className="kbd-hint pointer-events-none absolute right-2" />
     </label>
   )
 }
@@ -76,17 +78,17 @@ function Body({ data, groupBy, query }: { data: MetricsData; groupBy: GroupBy; q
   const label = (group: MetricsData["groups"][number]) => groupLabel(group, groupBy)
   if (data.tiles.runs === 0) {
     return (
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-4">
         <Tiles tiles={data.tiles} />
-        <p className="flat-pane p-4 text-sm text-muted-foreground">{query ? `No run matches "${query}".` : EMPTY}</p>
+        <p className="rounded-xl border border-border p-4 text-sm text-muted-foreground">{query ? `No run matches "${query}".` : EMPTY}</p>
       </div>
     )
   }
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       <Tiles tiles={data.tiles} />
       {data.classifier ? <Classifier summary={data.classifier} /> : null}
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <AvgTime groups={data.groups} label={label} />
         <SuccessRate groups={data.groups} label={label} />
       </div>
@@ -112,9 +114,9 @@ export function MetricsTab() {
   const read = useApiRead("metrics.get", { groupBy, query }, ["metrics"])
   if (!read.data && read.error) return <ErrorState message={`Could not load metrics. ${read.error}`} onRetry={read.reload} />
   return (
-    <div className="flex min-w-0 flex-col gap-4 px-4 py-2">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-5">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <h1 className="text-base font-medium">Metrics</h1>
+        <h1 className="text-lg font-semibold tracking-tight">Metrics</h1>
         {read.loading && read.data ? <span className="flex items-center gap-2 text-xs text-muted-foreground"><Spinner className="size-3" aria-hidden="true" role="presentation" /> refreshing</span> : null}
         <span aria-hidden="true" className="min-w-4 flex-1" />
         <GroupToggle groupBy={groupBy} onGroup={setGroupBy} />

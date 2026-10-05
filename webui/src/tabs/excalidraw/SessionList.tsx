@@ -7,6 +7,7 @@ import type { ExcalidrawCheck, ExcalidrawSessionInfo } from "@protocol"
 import { Badge } from "@/components/ui/badge"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
+import { ROW, ROWS } from "@/ui/rows"
 import { DRAW_BADGE, LOOK_BADGE, agentCount, checkMark } from "./words"
 
 function Mark({ check, checking }: { check?: ExcalidrawCheck; checking: boolean }) {
@@ -28,7 +29,7 @@ function Row({ session, check, checking, selected, onSelect }: { session: Excali
         data-row
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(session.id)}
-        className="flex min-h-9 w-full flex-col gap-0.5 px-3 py-2.5 text-left outline-none transition-colors duration-150 hover:bg-accent/40 focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:bg-accent"
+        className={ROW}
       >
         <span className="flex items-center gap-2 text-sm">
           <Mark check={check} checking={checking} />
@@ -46,7 +47,7 @@ function Row({ session, check, checking, selected, onSelect }: { session: Excali
 
 export function SessionList({ sessions, checks, checking, selectedId, onSelect }: { sessions: readonly ExcalidrawSessionInfo[]; checks: Record<string, ExcalidrawCheck>; checking: readonly string[]; selectedId?: string; onSelect: (id: string) => void }) {
   return (
-    <ul className="flex flex-col divide-y divide-border px-2 pb-2">
+    <ul className={ROWS}>
       {sessions.map((session) => (
         <Row
           key={session.id}

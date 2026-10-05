@@ -69,11 +69,12 @@ export function PlanDetail({ row, onGone }: { row: TaskRow; onGone: () => void }
   return (
     <article className="flex flex-col gap-4" aria-label={row.title}>
       <ActionBar>
-        <ActionButton label="Start here" icon={Play} tone="primary" onClick={() => void start("here")} />
-        <ActionButton label="Start in a new session" icon={SquareArrowOutUpRight} onClick={() => void start("session")} />
+        <ActionButton label="Start here" icon={Play} tone="primary" shortcut="S" onClick={() => void start("here")} />
+        <ActionButton label="Start in a new session" text="New session" icon={SquareArrowOutUpRight} shortcut="N" onClick={() => void start("session")} />
         <ConfirmButton
           icon={Trash2}
           label="Discard"
+          shortcut="Delete"
           title={`Discard "${row.title}"?`}
           description="The saved plan is removed from the list. This cannot be undone."
           confirmLabel="Discard"
