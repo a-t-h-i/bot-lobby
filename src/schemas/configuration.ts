@@ -92,6 +92,29 @@ export interface WorkflowConfig {
   gitIsolation: GitIsolation;
 }
 
+/**
+ * The lint gate: off; advise (the oracle and QA see what the project's own
+ * linter finds in the files the task's agents touched); or block (errors on
+ * the lines the task changed also hold completion until they are fixed or
+ * the user accepts the work as it is).
+ */
+export const LINT_MODES = ["off", "advise", "block"] as const;
+export type LintMode = (typeof LINT_MODES)[number];
+
+export function isLintMode(value: unknown): value is LintMode {
+  return typeof value === "string" && (LINT_MODES as readonly string[]).includes(value);
+}
+
+export interface LintConfig {
+  mode: LintMode;
+  /** A command of your own, run without a shell from the repository's top; `{files}` stands for the touched files (they are appended when it is absent). Empty: the project's own linters are found (ESLint, Biome, Oxlint, Ruff). */
+  command: string;
+  /** Which touched files the command is given, by extension (`.ts`, `.py`); empty gives it every one. */
+  extensions: string[];
+  /** Time limit for one linter run. */
+  timeoutMs: number;
+}
+
 export interface KnowledgeConfig {
   compactionThreshold: number;
   backupCount: number;
@@ -208,6 +231,8 @@ export interface BotLobbyConfig {
   /** The task planner that grills the user until a plan is clear; `timeoutMs` bounds one turn. */
   planner: AgentModelConfig;
   workflow: WorkflowConfig;
+  /** The engine lints the files a task's agents touched, after each step, before QA and at completion. */
+  lint: LintConfig;
   knowledge: KnowledgeConfig;
   lobby: LobbyConfig;
   classifier: ClassifierConfig;
@@ -243,6 +268,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     routeQuickFixes: true,
     gitIsolation: "off",
   },
+  lint: { mode: "advise", command: "", extensions: [], timeoutMs: 2 * 60 * 1000 },
   knowledge: {
     compactionThreshold: 20000,
     backupCount: 1,
@@ -362,6 +388,25 @@ function text(value: unknown, fallback: string): string {
   return typeof value === "string" ? value.trim() : fallback;
 }
 
+/** `.ts`, `TSX` and `*.py` all read as `.ts`, `.tsx`, `.py`. */
+function extension(value: string): string {
+  const bare = value.trim().replace(/^\*/, "").replace(/^\./, "").toLowerCase();
+  return bare ? `.${bare}` : "";
+}
+
+function normalizeLint(value: unknown): LintConfig {
+  const source = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
+  const defaults = DEFAULT_CONFIG.lint;
+  const extensions = Array.isArray(source.extensions) ? source.extensions.filter((entry): entry is string => typeof entry === "string").map(extension).filter(Boolean) : [...defaults.extensions];
+  const timeout = positive(source.timeoutMs);
+  return {
+    mode: isLintMode(source.mode) ? source.mode : defaults.mode,
+    command: text(source.command, defaults.command),
+    extensions: [...new Set(extensions)],
+    timeoutMs: timeout ? Math.min(30 * 60 * 1000, Math.round(timeout)) : defaults.timeoutMs,
+  };
+}
+
 function normalizeClassifier(value: unknown): ClassifierConfig {
   const source = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
   const defaults = DEFAULT_CONFIG.classifier;
@@ -412,6 +457,7 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
     quickFix: normalizeAgent(DEFAULT_CONFIG.quickFix, src.quickFix as Partial<AgentModelConfig> | undefined),
     planner: normalizeAgent(DEFAULT_CONFIG.planner, src.planner as Partial<AgentModelConfig> | undefined),
     workflow,
+    lint: normalizeLint(src.lint),
     knowledge,
     lobby: normalizeLobby(src.lobby),
     classifier: normalizeClassifier(src.classifier),

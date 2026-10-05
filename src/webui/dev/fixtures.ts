@@ -58,7 +58,7 @@ export interface ScenarioFixture {
   /** Streamed back (in deltas) after `lobby.send`. */
   oracleReply: string;
   /** The Settings page's mock: a partial config merged over the defaults, and the models Pi offers. */
-  settings?: { config?: Record<string, unknown>; models?: Array<{ id: string; label: string; thinkingLevels: string[] }> };
+  settings?: { config?: Record<string, unknown>; models?: Array<{ id: string; label: string; thinkingLevels: string[] }>; linters?: Array<{ tool: string; folder: string; installed: boolean }> };
   /** Opened through `promptHub` shortly after a send, if any. */
   questionAfterSend: FixturePrompt | null;
   /** Tasks backing `tasks.list` (absent means none). */

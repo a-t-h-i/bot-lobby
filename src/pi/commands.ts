@@ -17,7 +17,7 @@ import { transition } from "../state/task-state.ts";
 import { AGENT_DIR_NAMES, KNOWLEDGE_FILES, knowledgeDir, type KnowledgeAgent } from "../knowledge/paths.ts";
 import { readFirstExisting } from "../knowledge/store.ts";
 import { overThreshold } from "../knowledge/compactor.ts";
-import { applyApprovalChoice, describeTask, describeOversizedKnowledge, lastQaAsks, waiveQa, type ApprovalChoice } from "../workflow/workflow.ts";
+import { applyApprovalChoice, describeTask, describeOversizedKnowledge, lastQaAsks, waiveLint, waiveQa, type ApprovalChoice } from "../workflow/workflow.ts";
 import { applyStatus, registerRevealShortcut, setMinimized } from "./ui.ts";
 import { classifierSummary } from "./model-settings.ts";
 import { keyStatus } from "../classifier/instance.ts";
@@ -241,10 +241,12 @@ function acceptWork(pi: ExtensionAPI, ctx: ExtensionCommandContext, configDir: s
     return ctx.ui.notify(`bot-lobby: ${task.id} is still ${task.state}; there is no work to accept yet.`, "warning");
   }
   if (task.qaVerdict !== "pass" && !task.qaWaiver) waiveQa(task, lastQaAsks(task), "with /bot-lobby accept");
+  if (task.lint?.state === "failing") waiveLint(task, "with /bot-lobby accept");
   saveTask(root, configDir, task);
   applyStatus(ctx, root, configDir);
   ctx.ui.notify(`bot-lobby: ${task.id} accepted as it is; the oracle will complete it.`, "info");
-  const message = `The user accepted ${task.id}'s work as it is (the QA gate is waived). Call orchestrate action=complete now with a short summary that names anything QA still asked for.`;
+  const waived = [task.qaWaiver ? "the QA gate" : "", task.lintWaiver ? "the lint gate" : ""].filter(Boolean);
+  const message = `The user accepted ${task.id}'s work as it is${waived.length ? ` (${waived.join(" and ")} ${waived.length === 1 ? "is" : "are"} waived)` : ""}. Call orchestrate action=complete now with a short summary that names anything QA or lint still asked for.`;
   pi.sendUserMessage(message, ctx.isIdle() ? undefined : { deliverAs: "followUp" });
 }
 

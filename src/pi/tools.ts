@@ -15,6 +15,8 @@ import { unescapeBreaks } from "../lobby/blocks.ts";
 import { isQuiet } from "./quiet.ts";
 import { checkThinking, createProfileResolver, modelRef, type ModelLookup } from "./model-support.ts";
 import { agentName, describeRun } from "./run-summary.ts";
+import { lintFeed } from "../workflow/lint.ts";
+import { lobbyFeed } from "../lobby/feed.ts";
 import {
   ORCHESTRATE_ACTIONS,
   runWorkflowAction,
@@ -132,6 +134,11 @@ export function workflowDeps(
     ...(canAsk() ? { askQuestions: (questions: AskQuestion[], from: string, askSignal?: AbortSignal) => whileAsking(() => askUser(questions, ctx, askSignal, from)) } : {}),
     notify: (message, level = "info") => {
       if (hasUI) ctx.ui.notify(message, level);
+    },
+    // Each new lint result on a task's touched files is a line in the lobby's activity log.
+    onLint: (taskId, report) => {
+      const line = lintFeed(taskId, report);
+      lobbyFeed.log("LINT", line.text, line.kind);
     },
   };
 }

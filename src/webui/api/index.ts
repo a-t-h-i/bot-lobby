@@ -23,7 +23,7 @@ import { plansDiscard, plansGet, plansStart } from "./plans.ts";
 import { gitCancelReview, gitJev, gitPull, gitPulls, gitReview } from "./git.ts";
 import { issuesCreate, issuesGet, issuesList } from "./issues.ts";
 import { sessionsAnswer, sessionsChat, sessionsList, sessionsMessage, sessionsStart, sessionsStop, sessionsSwitch } from "./sessions.ts";
-import { settingsGet, settingsSet } from "./settings.ts";
+import { settingsGet, settingsLinters, settingsSet } from "./settings.ts";
 import { noticeText, pushNotice } from "../notices.ts";
 
 /** What a handler reads besides the request body. */
@@ -367,6 +367,7 @@ function buildRoutes(): Record<string, Route> {
     schema: Type.Object({ patch: Type.Object({}, { additionalProperties: true }) }, { additionalProperties: false }),
     run: (body, ctx) => settingsSet(body as { patch: Record<string, unknown> }, ctx),
   };
+  routes["settings.linters"] = { schema: Empty, run: (_body, ctx) => settingsLinters(ctx) };
   return routes;
 }
 

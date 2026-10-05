@@ -10,7 +10,7 @@ import { lobbyTopics } from "../../lobby/topics.ts";
 import { prefillModels } from "../../pi/model-settings.ts";
 import { kindLabel } from "../../pi/model-support.ts";
 import { pushNotice } from "../notices.ts";
-import type { SettingsInfo } from "../protocol.ts";
+import type { SettingsInfo, SettingsLinter } from "../protocol.ts";
 import type { ApiContext } from "./index.ts";
 import { fail } from "./index.ts";
 
@@ -91,6 +91,11 @@ export function settingsGet(ctx: ApiContext): SettingsInfo {
     pushNotice(`${prefilled.filled.map(kindLabel).join(", ")} now run on the session model; change them here any time.`);
   }
   return { config: stripSecrets(config), models: ctx.service.models?.() ?? [] };
+}
+
+/** The linters the project configures (its top and a few folders below), and whether each is installed. */
+export function settingsLinters(ctx: ApiContext): { linters: SettingsLinter[] } {
+  return { linters: ctx.service.linters?.() ?? [] };
 }
 
 /** Merge, normalise and save the patch; the lobby rereads the config. */

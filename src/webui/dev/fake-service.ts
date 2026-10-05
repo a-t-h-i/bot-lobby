@@ -447,6 +447,7 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     sessionName: () => fixture.status.sessionName,
     masterBusy: () => fixture.status.busy,
     config: () => config,
+    linters: () => fixture.settings?.linters ?? [{ tool: "ESLint", folder: "", installed: true }, { tool: "Ruff", folder: "services/api", installed: false }],
     saveConfig: (next: BotLobbyConfig) => {
       config = next;
     },

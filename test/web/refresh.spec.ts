@@ -7,7 +7,7 @@ declare const getComputedStyle: any;
 let releasePending: (() => void) | undefined;
 test.afterEach(() => { releasePending?.(); releasePending = undefined; });
 
-const SECTIONS = ["Agents", "Workflow", "Lobby", "Classifier", "Appearance & notifications"];
+const SECTIONS = ["Agents", "Workflow", "Linting", "Lobby", "Classifier", "Appearance & notifications"];
 const PAGES = ["lobby", "tasks", "plan", "quickfix", "issues", "metrics", "git", "knowledge", "excalidraw", "sessions", "settings"];
 
 async function route(page: Page, name: string): Promise<void> {
@@ -114,7 +114,7 @@ test("Thinking hover motion respects reduced motion and disabled panel hides bub
   await expect(bubble).toHaveCount(0);
 });
 
-test("five Settings sections preserve custom model draft without fallback controls", async ({ page, server }) => {
+test("six Settings sections preserve custom model draft without fallback controls", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await route(page, "settings");
   await expect(page.getByRole("navigation", { name: "Settings sections" }).getByRole("button")).toHaveText(SECTIONS);

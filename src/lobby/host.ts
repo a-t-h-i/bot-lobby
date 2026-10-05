@@ -87,6 +87,8 @@ export interface ModelChoice {
 /** Everything the web server needs from pi and bot-lobby. */
 export interface LobbyService {
   projectRoot?(): string;
+  /** The linters the project configures, for the Settings page's Linting section. */
+  linters?(): Array<{ tool: string; folder: string; installed: boolean }>;
   sessionId(): string | undefined;
   /** This session's active task and its runs, as the lobby reads them. */
   zen(): { task?: Task; runs: readonly AgentRun[] };

@@ -1,3 +1,4 @@
+import type { LintReport } from "./lint.ts";
 import type { Domain, Role } from "./agent.ts";
 import type { Delivery } from "../delivery/types.ts";
 
@@ -224,6 +225,10 @@ export interface Task {
   qaWaiver?: QaWaiver;
   /** The git branch (or worktree) made for this task, when isolation was on as it started. */
   git?: TaskGit;
+  /** The lint gate's last report on the files this task's agents touched. */
+  lint?: LintReport;
+  /** Set only by the user: the work is accepted with the lint errors it has, so the task may complete. */
+  lintWaiver?: { at: string };
 }
 
 export function createTask(

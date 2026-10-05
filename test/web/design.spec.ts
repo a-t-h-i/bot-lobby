@@ -1155,3 +1155,41 @@ test("the Thinking pane's edge pulses in the working agent's colour while anyone
   await page.getByRole("button", { name: "Open Thinking" }).click();
   await expect(page.locator(".thought-pane"), "nobody at work: still").not.toHaveClass(/thought-pane-live/);
 });
+
+test("Linting in Settings: the gate's mode, a command of your own with its file types, and the linters the project configures", async ({ page, server }) => {
+  const trap = await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 860 });
+  await page.evaluate(() => {
+    window.location.hash = "#/settings";
+  });
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Linting", exact: true }).click();
+  const found = page.getByRole("list", { name: "Found in this project" });
+  await expect(found.getByRole("listitem")).toHaveCount(2);
+  await expect(found.getByRole("listitem").first()).toContainText("ESLint");
+  await expect(found.getByRole("listitem").first()).toContainText("installed");
+  await expect(found.getByRole("listitem").nth(1), "a linter it cannot run says so").toContainText("Ruffservices/api/not installed");
+  const mode = page.getByRole("combobox", { name: "Lint gate" });
+  await expect(mode).toContainText("advise");
+  await mode.click();
+  await page.getByRole("option", { name: /^block/ }).click();
+  await expect(page.getByText("Settings saved")).toBeVisible();
+  await expect(mode).toContainText("block");
+  await expect(page.getByText(/new lint errors also hold a task's completion/), "the mode says what it does").toBeVisible();
+  await expect(page.getByRole("textbox", { name: "File types" }), "file types only matter for a command").toHaveCount(0);
+  const command = page.getByRole("textbox", { name: "Command" });
+  await command.fill("ruff check {files}");
+  await command.press("Enter");
+  const types = page.getByRole("textbox", { name: "File types" });
+  await expect(types).toBeVisible();
+  await types.fill(".py, pyi");
+  await types.press("Enter");
+  await expect(types, "kept as extensions").toHaveValue(".py .pyi");
+  await expect(page.getByText("The command replaces these.")).toBeVisible();
+  await page.reload();
+  await page.locator('[role="tablist"]').waitFor();
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Linting", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "Lint gate" }), "round-trips").toContainText("block");
+  await expect(page.getByRole("textbox", { name: "Command" })).toHaveValue("ruff check {files}");
+  expect(trap.errors, "no console errors").toEqual([]);
+  trap.stop();
+});

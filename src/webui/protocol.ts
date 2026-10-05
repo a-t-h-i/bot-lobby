@@ -159,6 +159,14 @@ export interface SettingsModelInfo {
   thinkingLevels: string[];
 }
 
+/** A linter the project configures (`settings.linters`): which, in which folder, and whether it is installed to run. */
+export interface SettingsLinter {
+  tool: string;
+  /** Repository-relative; "" is the top. */
+  folder: string;
+  installed: boolean;
+}
+
 /** `settings.get`: the effective config (never a secret) and the models Pi offers. */
 export interface SettingsInfo {
   config: BotLobbyConfig;
@@ -583,6 +591,7 @@ export interface Api {
   "issues.create": { request: { text: string }; result: { notice: string } };
   "settings.get": { request: Record<string, never>; result: SettingsInfo };
   "settings.set": { request: { patch: Record<string, unknown> }; result: { config: BotLobbyConfig } };
+  "settings.linters": { request: Record<string, never>; result: { linters: SettingsLinter[] } };
 }
 
 export type ApiName = keyof Api;

@@ -47,6 +47,7 @@ import type { LobbyAgentKind, PanelMember } from "../schemas/configuration.ts";
 import type { LiveSession, LobbyService, SwitchTarget } from "./host.ts";
 import { pushNotice, type NoticeLevel } from "../webui/notices.ts";
 import type { Runtime } from "./runtime.ts";
+import { findLinters } from "../execution/lint.ts";
 
 function deliveryTask(state: Runtime, taskId: string): Task {
   if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/.test(taskId) || taskId === "." || taskId === "..") throw new Error("Invalid task ID.");
@@ -562,6 +563,7 @@ export function createLobbyService(state: Runtime): LobbyService {
   let appliedMaster = masterKey();
   return {
     projectRoot: () => state.root,
+    linters: () => findLinters(state.root),
     sessionId: () => state.ctx.sessionManager.getSessionId(),
     zen: () => {
       const snapshot = taskSnapshot();

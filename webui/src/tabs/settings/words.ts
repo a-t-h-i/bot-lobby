@@ -51,6 +51,7 @@ export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhig
 export const GROUP_TITLES = {
   agents: "Agents",
   workflow: "Workflow",
+  lint: "Linting",
   lobby: "Lobby",
   classifier: "Classifier",
   appearance: "Appearance",
@@ -93,6 +94,34 @@ export const GIT_ISOLATION_ITEMS = [
 ] as const
 export const GIT_LABEL = "Git isolation"
 
+/** The lint gate's modes (`LINT_MODES`). */
+export const LINT_MODE_ITEMS = [
+  { id: "off", label: "off", help: "agents' work is never linted" },
+  { id: "advise", label: "advise", help: "the oracle and QA are told what the project's linter finds on the lines a task changed; nothing is held" },
+  { id: "block", label: "block", help: "new lint errors also hold a task's completion until they are fixed, or you accept the work as it is" },
+] as const
+
+export const LINT = {
+  intro: "After every worker step, before QA and at completion, bot-lobby lints only the files the task's agents touched. Problems on the lines the task changed are the task's; anything already there is shown but never holds it. Suppressions and lint-config changes the task adds go to QA to judge.",
+  mode: "Lint gate",
+  command: "Command",
+  commandHelp: "empty runs the linters the project configures (ESLint, Biome, Oxlint, Ruff), each from its own folder; a command runs without a shell from the repository's top, with {files} standing for the touched files",
+  commandPlaceholder: "found from the project",
+  extensions: "File types",
+  extensionsHelp: "which touched files the command is given, such as .ts .tsx .py",
+  extensionsPlaceholder: "every touched file",
+  timeout: "Time limit",
+  timeoutHelp: "for one linter run; one that runs over reads as could not run, and holds nothing",
+  found: "Found in this project",
+  foundHelp: "config files in the project and the folders a few levels below it",
+  foundNone: "No linter config found. Add one to the project, or set a command above.",
+  foundReplaced: "The command replaces these.",
+  installed: "installed",
+  missing: "not installed",
+  missingHelp: "install the project's dependencies there, or lint cannot run",
+  top: "project root",
+} as const
+
 /** The classifier hosts. */
 export const JEV_HOST_ITEMS = [
   { id: "auto", label: "Auto (OpenCode's free Jev, else TypeSafe)" },
@@ -129,7 +158,7 @@ export const CLASSIFIER_LABELS = {
 /** Page-only copy: the headings, hints and confirmations. */
 export const PAGE = {
   title: "Settings",
-  intro: "Each agent's model and effort, the lobby and the classifier. Changes save as you make them.",
+  intro: "Each agent's model and effort, the workflow and its lint gate, the lobby and the classifier. Changes save as you make them.",
   loading: "Loading settings…",
   loadFailed: "Could not load settings.",
   saved: "Settings saved",

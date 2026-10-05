@@ -342,6 +342,8 @@ export interface ReviewerRequest {
   provenance?: string;
   /** What the previous QA round asked for, when there was one: this round verifies it. */
   previousRound?: string;
+  /** The engine's lint result on the touched files and the suppressions the task added. */
+  lint?: string;
   /** Under a task time budget: the gate's time. */
   time?: AgentTime;
   instruction?: string;
@@ -367,6 +369,7 @@ function reviewerContext(request: ReviewerRequest): string {
     request.workerSummary ? `Worker summary (each domain's newest entries):\n${truncate(request.workerSummary, 4800)}` : "No worker summary available.",
     owns.length > 0 ? `Scout findings:\n${summarizeOutcomes(owns, 1200)}` : "",
     request.provenance ? `Who changed each file (bot-lobby's record of every agent's edit and write calls; judge each as your role's Change provenance says):\n${request.provenance}` : "",
+    request.lint ?? "",
     request.time?.note ?? "",
     `Repository changes:\n${request.diff}`,
   ]

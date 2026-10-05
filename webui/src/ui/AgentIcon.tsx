@@ -3,9 +3,10 @@
  * (the Thinking orb, its bubbles, the planning panel, the chats): the oracle's
  * crystal ball (a picture, `assets/oracle.png`, drawn as the class
  * `agent-oracle`), code for DEV, a palette for DESIGN, a shield for QA, a
- * telescope for RESEARCH, a bolt for Quick fix. Anything else is a robot.
+ * telescope for RESEARCH, a bolt for Quick fix, a checklist for the lint gate.
+ * Anything else is a robot.
  */
-import { Bot, Brain, CodeXml, Compass, MessagesSquare, Palette, Route, ShieldCheck, Tags, Telescope, Zap, type LucideIcon } from "lucide-react"
+import { Bot, Brain, CodeXml, Compass, ListChecks, MessagesSquare, Palette, Route, ShieldCheck, Tags, Telescope, Zap, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const ICONS: Record<string, LucideIcon> = {
@@ -18,6 +19,7 @@ const ICONS: Record<string, LucideIcon> = {
   PLANNER: Route,
   CLASSIFIER: Tags,
   LOBBY: MessagesSquare,
+  LINT: ListChecks,
 }
 
 /** The icon of an agent by its source name (`DEV`, `QA`, …); with none, the thinking brain. */

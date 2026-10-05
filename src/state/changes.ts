@@ -142,6 +142,8 @@ export interface FileProvenance {
   notes: string[];
   /** The quick fixes that edited it. */
   quickFixes: string[];
+  /** This task's domains whose workers edited it. */
+  domains?: Domain[];
 }
 
 const DOMAIN_LABELS: Record<string, string> = { backend: "DEV", designer: "DESIGN", qa: "QA" };
@@ -180,6 +182,7 @@ export function explainChanges(task: Pick<Task, "id" | "baseline">, changed: rea
     const kinds: Provenance[] = [];
     const notes: string[] = [];
     const quickFixes: string[] = [];
+    const domains: Domain[] = [];
     const add = (kind: Provenance, note: string) => {
       if (!kinds.includes(kind)) kinds.push(kind);
       if (!notes.includes(note)) notes.push(note);
@@ -188,12 +191,15 @@ export function explainChanges(task: Pick<Task, "id" | "baseline">, changed: rea
       if (record.source === "quickfix") {
         add("quickfix", `quick fix ${record.id}${clock(record.finishedAt)}, asked by the user: "${clip(record.what)}"`);
         if (!quickFixes.includes(record.id)) quickFixes.push(record.id);
-      } else if (record.taskId === task.id) add("planned", `planned: ${DOMAIN_LABELS[record.domain ?? ""] ?? record.domain ?? "worker"} — ${clip(record.what)}`);
+      } else if (record.taskId === task.id) {
+        add("planned", `planned: ${DOMAIN_LABELS[record.domain ?? ""] ?? record.domain ?? "worker"} — ${clip(record.what)}`);
+        if (record.domain && !domains.includes(record.domain)) domains.push(record.domain);
+      }
       else add("other-task", `another task's worker (${record.taskId ?? "unknown task"}): ${clip(record.what)}`);
     }
     if (before.has(path)) add("pre-existing", "pre-existing: it already had uncommitted changes before this task's agents started");
     if (kinds.length === 0) add("unattributed", "unattributed: no bot-lobby agent recorded editing it");
-    return { path, kinds, notes, quickFixes };
+    return { path, kinds, notes, quickFixes, ...(domains.length ? { domains } : {}) };
   });
 }
 

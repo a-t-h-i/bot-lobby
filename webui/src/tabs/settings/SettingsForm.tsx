@@ -8,7 +8,7 @@
  * notification and install rows are page-only and never sent to the server.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { Check, ChevronRight, Download, Maximize, Minimize } from "lucide-react"
+import { Check, ChevronRight, CircleAlert, CircleCheck, Download, Maximize, Minimize } from "lucide-react"
 import { toast } from "@/lib/toast"
 import { useFullscreen, useInstallPrompt, useInstalled } from "@/app/install"
 import { disableNotifications, enableNotifications, useNotificationsEnabled } from "@/app/notify"
@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { EffortMascot } from "@/ui/EffortMascot"
 import { EffortSlider, nearestSupported } from "@/ui/EffortSlider"
 import { call } from "@/lib/api"
+import { useApiRead } from "@/app/useApiRead"
 import { Section } from "@/ui/Section"
 import { Choice, Field, Rows, type ChoiceItem } from "./parts"
 import { ThemeGroup } from "./ThemeGroup"
@@ -41,6 +42,8 @@ import {
   INHERIT_LABEL,
   INHERIT_MODEL,
   JEV_HOST_ITEMS,
+  LINT,
+  LINT_MODE_ITEMS,
   LOBBY_SWITCH_ITEMS,
   PAGE,
   PANEL_HELP,
@@ -351,6 +354,74 @@ function WorkflowGroup({ config, save }: { config: Config; save: Save }) {
   )
 }
 
+/** Where a found linter's config sits, as the page says it. */
+const folderLabel = (folder: string): string => (folder ? `${folder}/` : LINT.top)
+
+/** Extensions as typed (`.ts tsx, *.py`) into the list the config keeps. */
+function extensionList(text: string): string[] {
+  return text.split(/[\s,]+/).map((entry) => entry.trim()).filter(Boolean)
+}
+
+function FoundLinters({ replaced }: { replaced: boolean }) {
+  const read = useApiRead("settings.linters", {}, [])
+  const linters = read.data?.linters
+  return (
+    <Field label={LINT.found} help={replaced ? LINT.foundReplaced : LINT.foundHelp}>
+      {!linters ? (
+        <p className="text-sm text-muted-foreground sm:text-right">{read.error ? read.error : "Looking…"}</p>
+      ) : linters.length === 0 ? (
+        <p className="text-sm text-muted-foreground sm:text-right">{LINT.foundNone}</p>
+      ) : (
+        <ul aria-label={LINT.found} className={cn("flex flex-col gap-1.5 sm:items-end", replaced && "opacity-60")}>
+          {linters.map((linter) => (
+            <li key={`${linter.tool}:${linter.folder}`} className="flex min-w-0 items-center gap-2 text-sm">
+              <span className="font-medium">{linter.tool}</span>
+              <span className="truncate text-xs text-muted-foreground">{folderLabel(linter.folder)}</span>
+              <span
+                title={linter.installed ? undefined : LINT.missingHelp}
+                className={cn("inline-flex shrink-0 items-center gap-1 text-xs", linter.installed ? "text-success" : "text-warning")}
+              >
+                {linter.installed ? <CircleCheck aria-hidden="true" className="size-3.5" /> : <CircleAlert aria-hidden="true" className="size-3.5" />}
+                {linter.installed ? LINT.installed : LINT.missing}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Field>
+  )
+}
+
+function LintGroup({ config, save }: { config: Config; save: Save }) {
+  const lint = config.lint
+  const off = lint.mode === "off"
+  const custom = lint.command.trim().length > 0
+  return (
+    <Section prominent title={GROUP_TITLES.lint}>
+      <p className="max-w-3xl text-sm text-muted-foreground">{LINT.intro}</p>
+      <Rows>
+        <Field label={LINT.mode} help={LINT_MODE_ITEMS.find((item) => item.id === lint.mode)?.help}>
+          <Choice value={lint.mode} items={LINT_MODE_ITEMS.map((item) => ({ value: item.id, label: item.label }))} label={LINT.mode} onChange={(value) => void save({ lint: { mode: value } })} />
+        </Field>
+        <div className={cn("flex flex-col divide-y divide-border [&>*]:py-3 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0", off && "opacity-60")} aria-disabled={off || undefined}>
+          <Field label={LINT.command} help={LINT.commandHelp}>
+            <TextValue value={lint.command} label={LINT.command} placeholder={LINT.commandPlaceholder} onSave={(value) => void save({ lint: { command: value } })} />
+          </Field>
+          {custom ? (
+            <Field label={LINT.extensions} help={LINT.extensionsHelp}>
+              <TextValue value={lint.extensions.join(" ")} label={LINT.extensions} placeholder={LINT.extensionsPlaceholder} onSave={(value) => void save({ lint: { extensions: extensionList(value) } })} />
+            </Field>
+          ) : null}
+          <Field label={LINT.timeout} help={LINT.timeoutHelp}>
+            <MinutesField value={lint.timeoutMs} label={`Lint ${LINT.timeout.toLowerCase()}`} onSave={(ms) => void save({ lint: { timeoutMs: ms } })} />
+          </Field>
+          <FoundLinters replaced={custom} />
+        </div>
+      </Rows>
+    </Section>
+  )
+}
+
 function LobbyGroup({ config, save }: { config: Config; save: Save }) {
   const web = config.lobby.web
   return (
@@ -447,7 +518,7 @@ function InstallGroup() {
   )
 }
 
-const SECTIONS = ["Agents", "Workflow", "Lobby", "Classifier", "Appearance & notifications"]
+const SECTIONS = ["Agents", "Workflow", "Linting", "Lobby", "Classifier", "Appearance & notifications"]
 
 export function SettingsForm({ config, models, onConfig }: { config: Config; models: SettingsModelInfo[]; onConfig: (config: Config) => void }) {
   const [section, setSection] = useState("Agents")
@@ -502,6 +573,7 @@ export function SettingsForm({ config, models, onConfig }: { config: Config; mod
         </Section>
       </div>
       <div id="settings-Workflow" hidden={section !== "Workflow"} aria-hidden={section !== "Workflow"}><WorkflowGroup config={config} save={save} /></div>
+      <div id="settings-Linting" hidden={section !== "Linting"} aria-hidden={section !== "Linting"}><LintGroup config={config} save={save} /></div>
       <div id="settings-Lobby" hidden={section !== "Lobby"} aria-hidden={section !== "Lobby"}><LobbyGroup config={config} save={save} /></div>
       <div id="settings-Classifier" hidden={section !== "Classifier"} aria-hidden={section !== "Classifier"}><ClassifierGroup config={config} models={models} save={save} /></div>
       <div id="settings-Appearance" hidden={section !== "Appearance & notifications"} aria-hidden={section !== "Appearance & notifications"}>

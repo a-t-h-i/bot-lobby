@@ -42,6 +42,17 @@ a change with tests for the sake of coverage.
   never leave background processes behind.
 - Change files with `edit`/`write`, not through shell redirection or `sed -i`.
 
+## Lint
+
+After every step the engine lints the files you touched with the project's
+own linter and reports what it finds on the lines you changed. Run that linter
+on your files before you report, and fix what it finds at the cause. Never
+silence it: no new disable comments (`eslint-disable`, `@ts-ignore`, `noqa`,
+`biome-ignore` and the like), no loosened rules, ignore lists or lint config,
+no code deleted or bent just to make a rule pass. Every one of them is listed
+for QA, who reads it as a finding unless it carries a reason that holds. When
+a rule is wrong for your change, leave it failing and say why under Notes.
+
 ## Time budget
 
 Work efficiently: read what you need, make the change, verify, report. If the

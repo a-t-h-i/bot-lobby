@@ -16,6 +16,12 @@ import type { FileHinter } from "../classifier/files.ts";
 import type { Classifier } from "../classifier/classifier.ts";
 import { quickFixSize } from "../classifier/triage.ts";
 import { fellShort, profileLabel, routeLabel, type EffortRoute, type EffortRouter } from "../classifier/effort.ts";
+import { existsSync } from "node:fs";
+import { isAbsolute, join, relative } from "node:path";
+import type { LintConfig } from "../schemas/configuration.ts";
+import { repositoryTop } from "../execution/git.ts";
+import type { LintExec } from "../execution/lint.ts";
+import { lintFeed, runLintGate } from "../workflow/lint.ts";
 
 /** A quick fix edits code, so it gets the full coding tool set. */
 export const QUICK_FIX_TOOLS: readonly string[] = ["read", "bash", "edit", "write", "grep", "find", "ls"];
@@ -97,6 +103,10 @@ export interface QuickFixDeps {
   classifier?: Classifier;
   /** Lowers thinking or the model for a request the classifier judges simple or trivial. */
   effort?: EffortRouter;
+  /** The lint settings, read as each job finishes: a finished job's touched files are linted, for the activity log only. */
+  lint?: () => LintConfig;
+  /** Runs a linter (tests); the real one otherwise. */
+  lintExec?: LintExec;
 }
 
 export const MAX_JOBS = 30;
@@ -366,8 +376,30 @@ export class QuickFixQueue {
     this.deps.feed?.log(QUICK_FIX_SOURCE, `${outcome}: ${jobTitle(job)}`, ok ? "success" : job.status === "cancelled" ? "warning" : "error", job.finishedAt);
     appendMetrics(this.deps.root, this.deps.configDir, [quickFixMetric(job)]);
     this.deps.notify?.(`bot-lobby quick fix ${outcome}: ${jobTitle(job)}`, ok ? "info" : "warning");
+    if (ok && edited.length > 0) void this.lintAfter(job, edited);
     this.changed();
     this.pump();
+  }
+
+  /**
+   * The lint gate's pass over what a quick fix touched (only problems on the
+   * lines it changed are its own): a line in the activity log, never a hold,
+   * as a quick fix has no gate. Lint failing to run says nothing.
+   */
+  private async lintAfter(job: QuickFixJob, edited: readonly string[]): Promise<void> {
+    const config = this.deps.lint?.();
+    if (!config || config.mode === "off") return;
+    try {
+      const top = await repositoryTop(this.deps.cwd);
+      if (!top) return;
+      const files = edited.map((file) => relative(top, file).split("\\").join("/")).filter((file) => file && !file.startsWith("..") && !isAbsolute(file) && existsSync(join(top, file)));
+      const report = await runLintGate({ top, files, config, ...(this.deps.lintExec ? { exec: this.deps.lintExec } : {}) });
+      if (report.state === "skipped") return;
+      const line = lintFeed(job.id, report);
+      this.deps.feed?.log("LINT", line.text, line.kind);
+    } catch {
+      // Advisory: a quick fix is never held or failed for lint.
+    }
   }
 }
 
