@@ -59,7 +59,7 @@ function SeatCard({ cell, onToggled }: { cell: SeatCell; onToggled: () => void }
   const name = sourceLabel(cell.label)
   const look = cn(
     "flex h-full flex-col gap-2 rounded-xl border p-3.5 transition-[background-color,border-color,box-shadow]",
-    cell.seated ? "border-[color-mix(in_oklab,var(--orb)_26%,var(--border))] bg-[color-mix(in_oklab,var(--orb)_5%,var(--card))]" : "border-dashed border-input bg-transparent"
+    cell.seated ? "border-[color-mix(in_oklab,var(--orb)_26%,var(--border))] bg-[color-mix(in_oklab,var(--orb)_5%,var(--card))] shadow-card" : "border-dashed border-input bg-transparent"
   )
   const body = (
     <>
