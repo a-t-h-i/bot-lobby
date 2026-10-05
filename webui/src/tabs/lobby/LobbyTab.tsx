@@ -44,7 +44,7 @@ function RailButton({ name, icon: Icon, shortcut, onClick }: { name: string; ico
           aria-expanded={false}
           aria-keyshortcuts={shortcut}
           onClick={onClick}
-          className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+          className="btn-ghost inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-[box-shadow,color,translate] duration-150 ease-snap outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:active:translate-none"
         >
           <Icon aria-hidden="true" className="size-4" />
         </button>
@@ -122,8 +122,8 @@ function NarrowView({ data, status }: LobbyViewProps) {
                 aria-checked={on}
                 onClick={() => setPicked(entry.id)}
                 className={cn(
-                  "inline-flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-[0.8125rem] font-medium outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/40",
-                  on ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  "inline-flex h-8 items-center gap-1.5 rounded-lg border border-transparent px-2.5 text-[0.8125rem] font-medium outline-none transition-[box-shadow,color] focus-visible:ring-3 focus-visible:ring-ring/40",
+                  on ? "btn-raised bg-card text-foreground" : "btn-ghost text-muted-foreground hover:text-foreground"
                 )}
               >
                 <Icon aria-hidden="true" className="size-4" />

@@ -89,7 +89,7 @@ let keySeq = 0
 
 /** The flat icon buttons under the box. */
 const TOOL =
-  "relative inline-flex size-8 items-center justify-center rounded-lg before:absolute before:-inset-1 before:content-[''] text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95 aria-pressed:bg-accent aria-pressed:text-foreground"
+  "btn-ghost relative inline-flex size-8 items-center justify-center rounded-lg border border-transparent before:absolute before:-inset-1 before:content-[''] text-muted-foreground transition-[box-shadow,color,translate] duration-150 ease-snap outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:active:translate-none aria-pressed:text-foreground"
 
 function isSend(event: KeyboardEvent): boolean {
   return event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing
@@ -425,7 +425,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
 
             <span aria-hidden="true" className="mx-1.5 h-4 w-px bg-border" />
             {targets.length > 1 ? (
-              <div role="radiogroup" aria-label="Send to" className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
+              <div role="radiogroup" aria-label="Send to" className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5 shadow-[inset_0_1px_2px_rgb(0_0_0/0.07)]">
                 {targets.map((entry) => (
                   <button
                     key={entry.id}
@@ -436,8 +436,8 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
                     aria-checked={entry.id === target.id}
                     onClick={() => setChosen(entry.id)}
                     className={cn(
-                      "h-7 rounded-md px-2.5 text-xs font-medium transition-[background-color,color,box-shadow] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
-                      entry.id === target.id ? "bg-card text-foreground shadow-card" : "text-muted-foreground hover:text-foreground"
+                      "h-6 rounded-md border border-transparent px-2.5 text-xs font-medium transition-[background-color,color,box-shadow] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
+                      entry.id === target.id ? "btn-raised bg-card text-foreground" : "text-muted-foreground hover:text-foreground"
                     )}
                   >
                     {entry.pill}
@@ -494,7 +494,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
                   data-compact
                   onClick={() => void send()}
                   disabled={!canSend}
-                  className="relative inline-flex size-8 items-center justify-center rounded-lg bg-primary before:absolute before:-inset-1 before:content-[''] text-primary-foreground transition-[background-color,color,transform,filter] duration-150 ease-snap outline-none hover:brightness-110 focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95 disabled:bg-muted disabled:text-muted-foreground disabled:hover:brightness-100"
+                  className="btn-tint relative inline-flex size-8 items-center justify-center rounded-lg border [--tint:var(--primary)] before:absolute before:-inset-1 before:content-[''] text-primary-foreground transition-[background-color,color,box-shadow,translate,filter] duration-150 ease-snap outline-none focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:active:translate-none disabled:text-muted-foreground"
                 >
                   {sending ? <Spinner aria-hidden="true" role="presentation" className="size-3.5 text-primary-foreground" /> : <ArrowUp aria-hidden="true" className="size-4" strokeWidth={2.25} />}
                 </button>

@@ -18,9 +18,9 @@ import { cn } from "@/lib/utils"
 type Tone = "neutral" | "primary" | "danger"
 
 const TONES: Record<Tone, string> = {
-  neutral: "text-foreground hover:bg-accent",
+  neutral: "text-foreground",
   primary: "",
-  danger: "text-destructive hover:bg-destructive/10 hover:text-destructive",
+  danger: "text-destructive hover:text-destructive",
 }
 
 export interface ActionButtonProps extends Omit<ComponentProps<typeof Button>, "children" | "size" | "variant" | "asChild"> {
@@ -45,7 +45,8 @@ export function ActionButton({ label, icon: Icon, tone = "neutral", shortcut, hr
   useHotkey(bound ? shortcut : undefined, () => node.current?.click(), { enabled: bound && !disabled })
 
   const icon = <Icon aria-hidden="true" />
-  const variant = tone === "primary" ? "default" : "ghost"
+  // A worded action stands raised on the page; an icon-only tool rises when pointed at.
+  const variant = tone === "primary" ? "default" : iconOnly ? "ghost" : "outline"
   const look = cn(!iconOnly && "px-2.5", TONES[tone], className)
   const size = iconOnly ? "icon" : "default"
   const body = iconOnly ? (
