@@ -41,7 +41,7 @@ const ROUTES: RouteCheck[] = [
   {
     route: "#/plan",
     full: ["Agreed plan"],
-    empty: "Describe a task below",
+    empty: "Plan with the panel",
   },
   {
     route: "#/quickfix",
