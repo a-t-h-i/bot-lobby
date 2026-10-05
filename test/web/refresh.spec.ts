@@ -72,10 +72,13 @@ test("Thinking defaults to a 44px minimized bubble and modal returns focus", asy
   const modal = page.getByRole("dialog", { name: "Thinking", exact: true });
   await expect(modal.getByRole("log", { name: "Latest thoughts" })).not.toBeEmpty();
   await page.screenshot({ path: info.outputPath("thinking-modal.png"), fullPage: true });
-  await modal.getByRole("button", { name: /Minimize/ }).click();
+  await expect(modal.getByRole("button", { name: /Minimize/ }), "no minimize control, Esc or the backdrop closes it").toHaveCount(0);
+  await page.keyboard.press("Escape");
   await expect(bubble).toBeFocused();
   await bubble.click();
-  await page.keyboard.press("Escape");
+  await expect(modal).toBeVisible();
+  await page.mouse.click(4, 4);
+  await expect(modal, "the backdrop closes it").toBeHidden();
   await expect(bubble).toBeFocused();
 });
 

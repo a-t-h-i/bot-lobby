@@ -68,6 +68,22 @@ export function sourceColor(source: string): string {
   return SOURCE_COLORS[source] ?? "text-muted-foreground"
 }
 
+/** The same colours as CSS values, for what glows in an agent's colour (the Thinking orb and its bubbles). */
+const SOURCE_TONES: Record<string, string> = {
+  MASTER: "var(--primary)",
+  DEV: "var(--source-dev)",
+  DESIGN: "var(--source-design)",
+  QA: "var(--source-qa)",
+  RESEARCH: "var(--source-research)",
+  "QUICK FIX": "var(--source-quickfix)",
+  ORACLE: "var(--primary)",
+  LOBBY: "var(--muted-foreground)",
+}
+
+export function sourceTone(source: string): string {
+  return SOURCE_TONES[source] ?? "var(--muted-foreground)"
+}
+
 /** The agent slot a run belongs to (mirrors `agentName` in `src/pi/run-summary.ts`, and accepts the mock's `role`). */
 export function agentName(run: LobbyRun): string {
   if (run.role === "researcher") return "RESEARCH"

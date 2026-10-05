@@ -671,7 +671,8 @@ test("Activity folds to its title bar and Thinking opens only in a modal", async
   await expect(page.getByRole("button", { name: "Expand Activity" }), "its bar stays").toBeVisible();
   await page.getByRole("button", { name: "Open Thinking" }).click();
   await expect(page.getByRole("dialog", { name: "Thinking", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: /Minimize/ }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Thinking", exact: true })).toBeHidden();
   await page.reload();
   await page.locator('[role="tablist"]').waitFor();
   await expect(page.getByRole("button", { name: "Open Thinking" })).toHaveAttribute("aria-expanded", "false");
@@ -815,4 +816,58 @@ test("quick key presses on the effort slider add up instead of each starting fro
   await expect(slider, "left then right ends where it began").toHaveAttribute("aria-valuetext", "high");
   await page.waitForTimeout(600);
   await expect(slider, "and it stays there once the server has answered").toHaveAttribute("aria-valuetext", "high");
+});
+
+test("Thinking is a glowing orb in the colour of the agent thinking, with that agent's name beside it", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const orb = page.getByRole("button", { name: "Open Thinking" });
+  await expect(orb).toHaveAttribute("data-thinking", "");
+  const tones = { DEV: "--source-dev", QA: "--source-qa" } as const;
+  // Dev and QA are both thinking, so they take turns: the name and the colour change together.
+  const seen = new Map<string, string>();
+  for (let tries = 0; tries < 30 && seen.size < 2; tries += 1) {
+    const now = await orb.evaluate((el: any) => ({
+      name: el.querySelector(".orb-label")?.textContent?.trim() ?? "",
+      tone: el.style.getPropertyValue("--orb").trim(),
+      glow: getComputedStyle(el.querySelector(".orb")).boxShadow,
+    }));
+    // Mid-swap both names are briefly in the tag; only a settled one counts.
+    if (now.name === "Dev" || now.name === "QA") {
+      seen.set(now.name, now.tone);
+      expect(now.glow, "the orb glows").not.toBe("none");
+    }
+    await page.waitForTimeout(200);
+  }
+  expect([...seen.keys()].sort(), "each thinking agent has its turn on the orb").toEqual(["Dev", "QA"]);
+  expect(seen.get("Dev")).toBe(`var(${tones.DEV})`);
+  expect(seen.get("QA")).toBe(`var(${tones.QA})`);
+});
+
+test("the Thinking pane has no title bar; every agent has its own labelled bubble, and a thought reads as steps", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole("button", { name: "Open Thinking" }).click();
+  const pane = page.getByRole("dialog", { name: "Thinking", exact: true });
+  await expect(pane).toBeVisible();
+  // Only the screen-reader name is left of a title.
+  await expect(pane.locator(":is(header, h1, h2, h3):not(.sr-only)"), "no title bar or heading").toHaveCount(0);
+  await expect(pane.getByRole("button", { name: /Minimize|Close/ }), "no minimize or close button").toHaveCount(0);
+  await expect(pane.getByText(/Minimize|Esc/), "nor any hint text").toHaveCount(0);
+  const bubbles = pane.getByRole("log", { name: "Latest thoughts" }).locator("> ul > li");
+  const labels = await bubbles.locator(".thought-label").allTextContents();
+  expect(labels.map((label) => label.trim()), "one bubble per agent, the ones thinking first").toEqual(["Dev", "QA", "Research", "Master"]);
+  await expect(bubbles.first()).toHaveAttribute("data-live", "true");
+  await expect(bubbles.first()).toContainText("thinking");
+  // Research thought in two headed sections; Master's wall of text is broken into steps.
+  const research = pane.getByRole("listitem", { name: "Research" });
+  await expect(research.locator(".thought-steps > li")).toHaveCount(2);
+  await expect(research.locator(".thought-steps > li").first()).toContainText("Surveying the fixture formats");
+  await expect(research).toContainText("2 steps");
+  const master = pane.getByRole("listitem", { name: "Master" });
+  expect(await master.locator(".thought-steps > li").count(), "the long thought is split into steps").toBeGreaterThan(1);
+  const tones = await bubbles.evaluateAll((els: any[]) => els.map((el) => el.style.getPropertyValue("--orb").trim()));
+  expect(new Set(tones).size, "each agent's bubble is in its own colour").toBe(4);
+  await page.keyboard.press("Escape");
+  await expect(pane).toBeHidden();
 });
