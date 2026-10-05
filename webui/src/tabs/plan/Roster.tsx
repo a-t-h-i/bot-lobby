@@ -9,13 +9,17 @@ import { act } from "@/lib/act"
 import { cn } from "@/lib/utils"
 import type { CSSProperties } from "react"
 import { sourceColor, sourceLabel, sourceTone } from "../lobby/types"
+import { AgentIcon } from "@/ui/AgentIcon"
 import { SEAT_ROLES, type SeatCell } from "./words"
 
 function Inside({ cell, intro }: { cell: SeatCell; intro: boolean }) {
   const state = intro ? (cell.member ? (cell.seated ? "seated" : "not seated") : "chairs") : cell.text
   return (
     <>
-      <span className={cn("font-medium", cell.seated ? sourceColor(cell.label) : "text-muted-foreground")}>{sourceLabel(cell.label)}</span>
+      <span className={cn("inline-flex items-center gap-1.5 font-medium", cell.seated ? sourceColor(cell.label) : "text-muted-foreground")}>
+        <AgentIcon source={cell.label} className="size-3.5" />
+        {sourceLabel(cell.label)}
+      </span>
       {cell.working && !intro ? <Spinner className="size-3.5" aria-hidden="true" /> : null}
       <span className="text-muted-foreground">{state}</span>
     </>
@@ -61,7 +65,9 @@ function SeatCard({ cell, onToggled }: { cell: SeatCell; onToggled: () => void }
     <>
       <span className="flex items-center justify-between gap-2">
         <span className="flex min-w-0 items-center gap-2">
-          <span aria-hidden="true" className={cn("orb orb-dot", !cell.seated && "opacity-40 grayscale")} />
+          <span aria-hidden="true" className={cn("grid size-6 place-items-center rounded-lg bg-[color-mix(in_oklab,var(--orb)_14%,transparent)] text-[color-mix(in_oklab,var(--orb)_85%,var(--foreground))]", !cell.seated && "opacity-50 grayscale")}>
+            <AgentIcon source={cell.label} className="size-3.5" />
+          </span>
           <span className={cn("truncate text-sm font-semibold", cell.seated ? sourceColor(cell.label) : "text-muted-foreground")}>{name}</span>
         </span>
         {member ? <Checkbox checked={cell.seated} onCheckedChange={() => void toggle(member, onToggled)} aria-label={`${name} sits on the panel`} /> : null}

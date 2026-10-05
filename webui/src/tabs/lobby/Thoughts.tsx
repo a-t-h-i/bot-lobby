@@ -1,22 +1,20 @@
 /**
- * The agents' latest thoughts. A glowing orb floats above the message box in
- * the colour of the agent thinking (taking turns when several are), with that
- * agent's name beside it; it opens a pane lit in the same colour, with no
+ * The agents' latest thoughts. A glowing orb (see `Orb.tsx`) floats on the
+ * Lobby in the colour of the agent thinking (taking turns when several are),
+ * with that agent's name beside it; it opens a pane lit in the same colour, with no
  * title bar, where every agent has its own labelled bubble and each thought
  * reads as steps rather than one block of text. Esc, the backdrop or the
  * Thinking key closes it.
  */
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { createPortal } from "react-dom"
-import { AnimatePresence, motion } from "motion/react"
-import { cn } from "@/lib/utils"
 import { formatSince } from "@/lib/format"
 import { Popup } from "@/components/ui/popup"
-import { Keys } from "@/components/ui/kbd"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { PRIORITY, useAnyOverlay, useOverlaySlot } from "@/lib/overlay"
 import { matchKey } from "@/app/useLobbyKeys"
+import { AgentIcon } from "@/ui/AgentIcon"
 import { Markdown } from "@/ui/Markdown"
+import { ThinkingOrb } from "./Orb"
 import { latestThoughts, sourceLabel, sourceTone, type ThoughtEntry } from "./types"
 import { thoughtSteps } from "./thoughtSteps"
 
@@ -51,7 +49,7 @@ function ThoughtBubble({ thought }: { thought: ThoughtEntry }) {
     <li className="thought" style={toneStyle(sourceTone(thought.source))} data-live={thought.live || undefined} aria-label={`${label}${thought.live ? ", thinking" : ""}`}>
       <div className="flex items-center gap-2">
         <span className="thought-label">
-          <span aria-hidden="true" className="orb orb-dot" />
+          <AgentIcon source={thought.source} strokeWidth={2.25} className="size-3.5" />
           {label}
         </span>
         <span className="text-xs text-muted-foreground">
@@ -117,53 +115,16 @@ export function Thoughts({ thoughts, collapsed, onToggle, shortcut }: { thoughts
   return (
     <>
       {createPortal(
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              ref={bubble}
-              type="button"
-              aria-label="Open Thinking"
-              aria-description={spotlight ? `${thinking.map(sourceLabel).join(", ")} thinking` : undefined}
-              aria-haspopup="dialog"
-              aria-expanded={!collapsed}
-              aria-keyshortcuts={shortcut ? `${shortcut} Enter Space` : "Enter Space"}
-              onClick={onToggle}
-              style={toneStyle(tone)}
-              data-thinking={spotlight ? "" : undefined}
-              className={cn("thinking-bubble fixed z-20 flex items-center justify-end gap-2 rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/40", overlay && "invisible")}
-            >
-              <AnimatePresence initial={false}>
-                {spotlight ? (
-                  <motion.span
-                    key="label"
-                    className="orb-label"
-                    initial={{ opacity: 0, x: 8, scale: 0.9 }}
-                    animate={{ opacity: 1, x: 0, scale: 1 }}
-                    exit={{ opacity: 0, x: 8, scale: 0.9 }}
-                    transition={{ type: "spring", visualDuration: 0.3, bounce: 0.35 }}
-                  >
-                    <AnimatePresence mode="popLayout" initial={false}>
-                      <motion.span
-                        key={spotlight}
-                        className="inline-block"
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -6 }}
-                        transition={{ type: "spring", visualDuration: 0.28, bounce: 0.3 }}
-                      >
-                        {sourceLabel(spotlight)}
-                      </motion.span>
-                    </AnimatePresence>
-                  </motion.span>
-                ) : null}
-              </AnimatePresence>
-              <span aria-hidden="true" className="orb orb-float" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="left">
-            Thinking {shortcut ? <Keys chord={shortcut} /> : null}
-          </TooltipContent>
-        </Tooltip>,
+        <ThinkingOrb
+          ref={bubble}
+          spotlight={spotlight}
+          thinking={thinking}
+          tone={tone}
+          expanded={!collapsed}
+          hidden={overlay}
+          shortcut={shortcut}
+          onOpen={onToggle}
+        />,
         document.body
       )}
       <Popup
