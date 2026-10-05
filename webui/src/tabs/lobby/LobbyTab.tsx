@@ -146,8 +146,10 @@ function LobbyView(props: LobbyViewProps) {
   const panes = panesOf(status)
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <TaskHeader task={data?.task} status={status} />
-      <RunsStrip runs={runsOf(data)} />
+      <div className="shrink-0 border-b border-border">
+        <TaskHeader task={data?.task} status={status} />
+        <RunsStrip runs={runsOf(data)} />
+      </div>
       {wide ? <WideView {...props} /> : <NarrowView {...props} />}
       {panes.thinking ? <Thoughts thoughts={data?.thoughts ?? []} collapsed={props.thinkingFolded} onToggle={props.toggleThinking} shortcut={keyOf(status, "thinking")} /> : null}
     </div>
