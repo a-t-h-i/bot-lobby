@@ -89,6 +89,19 @@ function stepSection(lines: readonly string[]): string[] | undefined {
   return body;
 }
 
+/**
+ * The concise list a plan opens its steps with: a `Steps` section that comes
+ * before any `Step N` heading. The plan's detail then follows, often one
+ * `### Step N: …` section per step, and the list stays the checklist.
+ */
+function leadingStepList(lines: readonly string[]): string[] {
+  const section = lines.findIndex((line) => HEADER_LINE.test(line) && STEP_SECTION.test(line));
+  if (section < 0) return [];
+  const heading = lines.findIndex((line) => STEP_HEADING.test(line));
+  if (heading >= 0 && heading < section) return [];
+  return collectSteps(stepSection(lines) ?? [], sectionItem);
+}
+
 /** `Step N` headings, when the plan is structured as one heading per step. */
 function headingSteps(lines: readonly string[]): string[] {
   const found: string[] = [];
@@ -100,13 +113,17 @@ function headingSteps(lines: readonly string[]): string[] {
 }
 
 /**
- * Step texts from a free-form plan, capped. `Step N` headings win; then a
- * `sequence|steps|order` section; then numbered lines; when none exists,
- * top-level bullets are the last resort, so unrelated bullet lists under other
- * headers never leak into the checklist. Only the shallowest items count.
+ * Step texts from a free-form plan, capped. A steps list the plan opens with
+ * wins (its detail may follow under `Step N` headings); then `Step N`
+ * headings; then a `sequence|steps|order` section; then numbered lines; when
+ * none exists, top-level bullets are the last resort, so unrelated bullet
+ * lists under other headers never leak into the checklist. Only the
+ * shallowest items count.
  */
 export function planSteps(plan: string): string[] {
   const lines = plan.split("\n");
+  const leading = leadingStepList(lines);
+  if (leading.length > 0) return leading.slice(0, MAX_PLAN_STEPS);
   const headings = headingSteps(lines);
   if (headings.length > 0) return headings.slice(0, MAX_PLAN_STEPS);
   const section = stepSection(lines);
@@ -117,6 +134,26 @@ export function planSteps(plan: string): string[] {
   const numbered = collectSteps(lines, numberedItem);
   if (numbered.length > 0) return numbered.slice(0, MAX_PLAN_STEPS);
   return collectSteps(lines, topBulletItem).slice(0, MAX_PLAN_STEPS);
+}
+
+/**
+ * The plan without the steps list it opens with, for reading after the
+ * checklist (which already shows those steps); undefined when the checklist
+ * does not come from such a list, so the plan is read whole.
+ */
+export function planDetails(plan: string): string | undefined {
+  const lines = plan.split("\n");
+  if (leadingStepList(lines).length === 0) return undefined;
+  const heading = lines.findIndex((line) => HEADER_LINE.test(line) && STEP_SECTION.test(line));
+  let to = lines.length;
+  for (let index = heading + 1; index < lines.length; index += 1) {
+    if (HEADER_LINE.test(lines[index]!)) {
+      to = index;
+      break;
+    }
+  }
+  const rest = [...lines.slice(0, heading), ...lines.slice(to)].join("\n").trim();
+  return rest || undefined;
 }
 
 /** Where a plan's steps section sits, and each of its top-level steps whole (its nested lines included). */

@@ -169,10 +169,15 @@ integrations. One file has one owner: never split a file between domains, and
 never give DESIGN only the styling of something another domain built —
 whoever builds a visual thing owns how it looks.
 
-Write the plan's steps as a numbered list under a `## Steps` heading, and open
-each `implement` task with its step number (`Step 3: ...`, or `Steps 3-4: ...`
-when one delegation covers several) so the user's checklist tracks progress
-exactly.
+Write the plan for the user to skim first and read in full only if they want
+to. It opens with `## Steps`: a numbered list, one short plain line per step,
+in the order they happen — what gets done, in a few words (`Add the work timer
+to the task`), never how: no file paths, code, flags or jargon. That list is
+the user's checklist, so keep it to the steps themselves. The detail follows
+under `## Details`, one `### Step N: <the same words>` section per step, and
+then the rest of the plan (contracts, risks, notes). Open each `implement` task
+with its step number (`Step 3: ...`, or `Steps 3-4: ...` when one delegation
+covers several) so the checklist tracks progress exactly.
 
 ## Briefing the agents
 
@@ -228,9 +233,9 @@ Rules for the brief:
   a few actions. Split anything larger into consecutive steps in the same
   `implement` call rather than leaving the agent to sequence it. Prefer more
   explicit detail to fewer, larger chunks.
-- The plan's steps are written to the same standard: each step names its
-  files, its actions and its done criteria, so the brief is the step made
-  explicit, never a new decision.
+- Each step's detail section is written to the same standard: it names the
+  step's files, its actions and its done criteria, so the brief is the step
+  made explicit, never a new decision.
 - Scout and research instructions ask specific questions with the answer
   format you want (paths, names, versions, yes/no plus evidence), and say what
   you will do with the answer.
