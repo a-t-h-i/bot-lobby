@@ -109,7 +109,7 @@ function ConversationPane({ snap, wide }: { snap: PlannerSnapshot; wide: boolean
       <h2 className="flex min-h-12 shrink-0 items-center border-b border-border px-4 text-sm font-medium">
         <Rule title="Conversation" className="w-full" />
       </h2>
-      <div ref={ref} onScroll={onScroll} className={cn("min-h-0 overflow-y-auto", wide ? "flex-1 px-5 pt-5 pb-dock" : "max-h-[45svh] p-5")}>
+      <div ref={ref} onScroll={onScroll} className={cn("min-h-0 overflow-y-auto overscroll-y-contain", wide ? "flex-1 px-5 pt-5 pb-dock" : "max-h-[45svh] p-5")}>
         <PanelConversation messages={snap.messages} busy={snap.busy} />
       </div>
     </Pane>
@@ -122,7 +122,7 @@ function DraftPane({ snap, comments, onComment, wide }: { snap: PlannerSnapshot;
       <h2 className="flex min-h-12 shrink-0 items-center border-b border-border px-4 text-sm font-medium">
         <Rule title="Draft plan" className="w-full" />
       </h2>
-      <div className={cn("flex min-h-0 flex-col gap-5 overflow-y-auto px-5 pt-5 pb-dock", wide && "flex-1")}>
+      <div className={cn("flex min-h-0 flex-col gap-5 overflow-y-auto overscroll-y-contain px-5 pt-5 pb-dock", wide && "flex-1")}>
         {snap.draft ? <DraftBody draft={snap.draft} comments={comments} onComment={onComment} /> : <p className="text-sm text-muted-foreground">{snap.busy ? DRAFT_WAITS : NO_DRAFT}</p>}
         <SeatNeeds notes={snap.notes} />
       </div>

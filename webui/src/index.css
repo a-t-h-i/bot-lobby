@@ -268,6 +268,16 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /*
+   * Every scroller holds what is positioned inside it. Without this a
+   * screen-reader label (sr-only is absolute) deep in a long chat escapes to
+   * the page's own scroller and makes it taller than the window, so scrolling
+   * past the end of the chat dragged the whole page up. A utility (absolute,
+   * fixed) still wins over this.
+   */
+  :where(.overflow-y-auto, .overflow-auto, .overflow-x-auto, .overflow-hidden) {
+    position: relative;
+  }
   /* The page never scrolls: the shell is fixed to the screen and only its panes scroll. */
   html {
     /* A compact scale: every rem-based size (type, spacing, controls) follows this. */
