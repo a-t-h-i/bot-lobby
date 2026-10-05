@@ -14,11 +14,11 @@ type Comment = IssueDetailInfo["comments"][number]
 
 function Header({ issue, now }: { issue: IssueDetailInfo; now: number }) {
   return (
-    <header className="flex flex-col gap-1">
-      <h2 className="text-sm font-semibold break-words">
-        #{issue.number} {issue.title}
+    <header className="flex flex-col gap-2">
+      <h2 className="text-lg font-semibold tracking-tight break-words">
+        <span className="font-normal text-muted-foreground tabular-nums">#{issue.number}</span> {issue.title}
       </h2>
-      <p className="text-xs text-muted-foreground">{factsLine(issue, now)}</p>
+      <p className="text-sm text-muted-foreground">{factsLine(issue, now)}</p>
       {issue.url ? (
         <a href={issue.url} target="_blank" rel="noopener noreferrer nofollow" className="text-xs break-all text-primary underline underline-offset-4">
           {issue.url}
@@ -30,7 +30,7 @@ function Header({ issue, now }: { issue: IssueDetailInfo; now: number }) {
 
 function Comment({ comment, now }: { comment: Comment; now: number }) {
   return (
-    <article className="flex flex-col gap-1 border-b pb-2 last:border-0 last:pb-0">
+    <article className="flex flex-col gap-1.5 rounded-lg border border-border bg-background/60 px-3.5 py-2.5">
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span className="font-medium text-foreground">{comment.author ?? "comment"}</span>
         {comment.createdAt ? <span>{formatSince(now - Date.parse(comment.createdAt))}</span> : null}

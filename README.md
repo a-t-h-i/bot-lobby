@@ -20,7 +20,7 @@ Questionnaire and web tools are included; don't also install extensions register
 2. Answer the oracle's questions and approve its proposal, or use Plan to agree on a task first.
 3. Follow the agents in Lobby; configure models, effort and time limits in Settings.
 
-The Project selector switches among already-running, authorized project lobbies on one localhost origin.
+The project switcher (top left, `P`) switches among already-running, authorized project lobbies on one localhost origin.
 Upgrading? Reattach older temporary files; previews and attachments are now isolated per project.
 
 Small self-contained changes can route to Quick fix. `--task` forces a task;
@@ -52,12 +52,30 @@ Browser navigation is ignored while typing, composing with an IME or using an ov
 | `j` / `k` | Next / previous selectable list row |
 | `g` then a letter | Jump to a named tab (mapping below) |
 | `/` | Focus the current tab's search, when available |
+| `p` | Open the project switcher |
+| `d` | Switch between light and dark |
 | `?`, `Alt+H` | Shortcut help |
 | `Esc` | Close the top overlay or cancel a pending navigation prefix |
 | `Alt+S` | Settings |
 | `Alt+O` | Sessions |
 | `Alt+A` / `Alt+T` | Fold / expand Activity / Thinking |
 | `Ctrl+S` | Save the plan on Plan |
+
+Every action button prints its key (`Archive E`, `Delete Del`) and the key works while the list or
+the detail has focus (press `Esc` first to leave the message box). Keys that cannot be undone ask first;
+in that question `Y` confirms and `Esc` keeps.
+
+| Page | Keys |
+| --- | --- |
+| Tasks | `e` archive, `r` restore, `a` auto mode, `Delete` delete |
+| Saved plan | `s` start here, `n` new session, `Delete` discard |
+| Plan | `a` answer questions, `r` retry, `Ctrl+S` save, `n` new plan |
+| Quick fix | `r` run anyway, `t` make it a task, `c` cancel |
+| Git | `r` refresh, `v` review, `q` Jev's read, `x` stop the review |
+| Issues | `r` refresh |
+| Knowledge | `e` edit, `a` add, `c` comment, `f` edit the file, `Delete` delete |
+| Excalidraw | `r` reveal, `c` copy, `o` open, `w` let agents draw, `t` check, `Delete` remove |
+| Sessions | `m` move here, `s` stop, `b` back to the Lobby |
 
 `g` mapping: `l` Lobby, `p` Plan, `t` Tasks, `i` Issues, `u` Git,
 `s` Sessions, `n` Knowledge, `q` Quick fix, `m` Metrics, `e` Settings, `x` Excalidraw.

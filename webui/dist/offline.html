@@ -7,17 +7,19 @@
     <style>
       :root {
         color-scheme: light dark;
-        --background: #ffffff;
-        --foreground: #262626;
-        --muted: #737373;
-        --border: #e5e5e5;
+        --background: #f4f5f9;
+        --card: #ffffff;
+        --foreground: #14161d;
+        --muted: #586070;
+        --border: #e3e6ee;
       }
       @media (prefers-color-scheme: dark) {
         :root {
-          --background: #262626;
-          --foreground: #fafafa;
-          --muted: #a3a3a3;
-          --border: #3f3f3f;
+          --background: #08090c;
+          --card: #0e1015;
+          --foreground: #e8eaf0;
+          --muted: #9099ab;
+          --border: #1a1e26;
         }
       }
       body {
@@ -27,13 +29,14 @@
         place-items: center;
         background: var(--background);
         color: var(--foreground);
-        font: 16px/1.5 ui-sans-serif, system-ui, sans-serif;
+        font: 16px/1.5 "Inter Variable", ui-sans-serif, system-ui, sans-serif;
         padding: 24px;
       }
       main {
         max-width: 28rem;
         border: 1px solid var(--border);
         border-radius: 12px;
+        background: var(--card);
         padding: 24px;
         text-align: center;
       }

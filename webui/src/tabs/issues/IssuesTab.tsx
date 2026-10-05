@@ -10,11 +10,12 @@ import { go, tabHash } from "@/app/router"
 import { ErrorState } from "@/app/States"
 import { useTopic } from "@/app/hooks"
 import { useApiRead } from "@/app/useApiRead"
-import { RefreshCw } from "lucide-react"
+import { RefreshCw, CircleDot } from "lucide-react"
 import { ActionButton } from "@/ui/Actions"
 import { Button } from "@/components/ui/button"
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
+import { Empty, EmptyMedia, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { act } from "@/lib/act"
+import { cn } from "@/lib/utils"
 import { NoteForm } from "@/ui/NoteForm"
 import { ListSkeleton, Pane, PaneHeader, SplitPane, useWide } from "@/ui/SplitPane"
 import type { StatusInfo } from "@protocol"
@@ -33,8 +34,11 @@ export function issueNumber(rest: readonly string[]): number | undefined {
 
 function IssuesOff() {
   return (
-    <Empty className="flat-pane m-4 flex-1">
+    <Empty className="m-4 flex-1">
       <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <CircleDot aria-hidden="true" />
+        </EmptyMedia>
         <EmptyTitle>Issues are off</EmptyTitle>
         <EmptyDescription className="font-mono">{OFF}</EmptyDescription>
       </EmptyHeader>
@@ -45,8 +49,11 @@ function IssuesOff() {
 function NoIssues({ loading, loaded, error, onRetry }: { loading: boolean; loaded: boolean; error?: string; onRetry: () => void }) {
   const text = error ? `✗ ${error}` : loaded ? EMPTY_LIST : loading ? LOADING_LIST : NOT_LOADED
   return (
-    <Empty className="flat-pane m-4 flex-1">
+    <Empty className="m-4 flex-1">
       <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <CircleDot aria-hidden="true" />
+        </EmptyMedia>
         <EmptyDescription className={error ? "text-destructive" : undefined}>{text}</EmptyDescription>
       </EmptyHeader>
       {error ? (
@@ -60,7 +67,7 @@ function NoIssues({ loading, loaded, error, onRetry }: { loading: boolean; loade
 
 function CreateBox({ onCreate }: { onCreate: (text: string) => Promise<boolean> }) {
   return (
-    <Pane className="mx-4 mb-4 shrink-0 p-3">
+    <Pane className="shrink-0 border-t border-border p-4">
       <NoteForm
         label="New issue"
         hint="The first line becomes the title; the rest is the body. Enter files it."
@@ -95,7 +102,7 @@ export function IssuesTab({ rest }: { rest: readonly string[] }) {
   const list = (
     <>
       <PaneHeader title={LIST_TITLE} count={read.data ? `${issues.length} open` : undefined}>
-        <ActionButton label="Refresh" icon={RefreshCw} disabled={busy} className={busy ? "[&_svg]:animate-spin" : undefined} onClick={refresh} />
+        <ActionButton label="Refresh" icon={RefreshCw} shortcut="R" disabled={busy} className={cn("h-7", busy && "[&_svg]:animate-spin")} onClick={refresh} />
       </PaneHeader>
       {read.data?.error ? <p className="px-3 pt-2 text-sm text-destructive">✗ {read.data.error}</p> : null}
       {read.data ? <IssueList issues={issues} selectedId={id} now={now} onSelect={select} /> : <ListSkeleton />}
