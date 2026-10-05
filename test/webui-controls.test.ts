@@ -6,11 +6,12 @@ import { initiallyCollapsed } from "../webui/src/lib/panePreference.ts";
 
 const source = (path: string) => readFileSync(new URL(`../webui/src/${path}`, import.meta.url), "utf8");
 
-test("configured actions respect text entry, overlays and disabled plan save", () => {
+test("configured actions work while typing, never behind an overlay, and plan save needs a plan", () => {
   const ready = { overlay: false, typing: false, saveAvailable: true };
   assert.equal(blocksConfiguredAction("thinking", ready), false);
-  assert.equal(blocksConfiguredAction("thinking", { ...ready, typing: true }), true);
-  assert.equal(blocksConfiguredAction(undefined, { ...ready, typing: true }), true, "tab accelerators do not steal typing");
+  assert.equal(blocksConfiguredAction("thinking", { ...ready, typing: true }), false, "a chord types nothing, so it works from the message box");
+  assert.equal(blocksConfiguredAction(undefined, { ...ready, typing: true }), false, "tab accelerators work from the message box");
+  assert.equal(blocksConfiguredAction(undefined, { ...ready, overlay: true }), true, "but never behind a dialog");
   assert.equal(blocksConfiguredAction("savePlan", { ...ready, typing: true }), false, "editor save remains deliberate");
   assert.equal(blocksConfiguredAction("savePlan", { ...ready, saveAvailable: false }), true);
   assert.equal(blocksConfiguredAction("savePlan", { ...ready, overlay: true }), true);

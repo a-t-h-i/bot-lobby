@@ -97,7 +97,8 @@ export function Shell() {
   useLobbyKeys({ enabled: Boolean(status), keys, tabs, insideApp, onAction, onTab: select })
   const reload = useCallback(() => lobbyStore.onHello({}), [])
 
-  // Switching tabs puts the cursor in the message box, so you can just type (unless the arrows are walking the tab bar).
+  // Switching tabs hands the keys to the new page, so its buttons' keys and j/k work at once; `/` goes to the
+  // message box. Someone typing in the box stays there, and arrows walking the tab bar stay on the bar.
   const tab = route.kind === "tab" ? route.tab : route.kind
   const ready = Boolean(status)
   useEffect(() => {
@@ -107,8 +108,9 @@ export function Shell() {
       return
     }
     const frame = requestAnimationFrame(() => {
-      const box = document.getElementById("composer-text")
-      if (box && !box.closest("[inert]") && !document.querySelector("[role='dialog']")) box.focus({ preventScroll: true })
+      const now = document.activeElement
+      if (now?.id === "composer-text" || document.querySelector("[role='dialog']")) return
+      document.getElementById("main")?.focus({ preventScroll: true })
     })
     return () => cancelAnimationFrame(frame)
   }, [tab, ready])

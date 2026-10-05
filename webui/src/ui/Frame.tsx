@@ -24,8 +24,8 @@ export function Frame({ title, note, className, children, collapsed, onToggle, s
   return (
     <section className={cn("group/frame relative flex min-h-0 min-w-0 flex-col", collapsed && "flex-none", className)} {...props}>
       {title || note || onToggle ? (
-        <div className="flex min-h-11 shrink-0 items-center justify-between gap-3 px-5 pt-1">
-          {title ? <h2 className="min-w-0 truncate text-xs font-medium tracking-wide text-muted-foreground uppercase">{title}</h2> : <span />}
+        <div className={cn("flex min-h-12 shrink-0 items-center justify-between gap-3 px-4", !collapsed && "border-b border-border")}>
+          {title ? <h2 className="min-w-0 truncate text-sm font-medium">{title}</h2> : <span />}
           <span className="flex shrink-0 items-center gap-2">
             {note ? <span className="flex items-center gap-2 truncate text-xs text-muted-foreground">{note}</span> : null}
             {onToggle ? (

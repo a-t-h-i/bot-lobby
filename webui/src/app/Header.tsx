@@ -1,7 +1,7 @@
 /**
  * The top bar: the project you are in on the left, the numbered tabs in the
  * middle, and what this session is doing on the right with the way to
- * Sessions, Settings, the key help and the light/dark switch. Below 1360px the
+ * Sessions, Settings, the key help and the light/dark switch. Below 1500px the
  * tabs take a row of their own (the grid lives in `index.css`).
  */
 import type { ReactNode } from "react"
