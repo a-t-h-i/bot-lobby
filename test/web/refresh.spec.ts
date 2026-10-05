@@ -46,10 +46,26 @@ test("toolbar touch targets, context, keyboard hint activation and modal guard",
   await expect(header.getByRole("combobox", { name: "Project", exact: true })).toBeVisible();
   await expect(header.getByLabel("Connected", { exact: true })).toBeVisible();
   const controls = header.locator("button:visible, a:visible");
-  const heights = await controls.evaluateAll((els) => els.map((el: any) => ({ name: el.textContent || el.getAttribute("aria-label"), height: el.getBoundingClientRect().height })));
-  // Slim under a mouse (never under WCAG 2.5.8's 24px), 44px under a finger.
-  const finger = await page.evaluate(() => window.matchMedia("(pointer: coarse)").matches);
-  for (const control of heights) expect(control.height, `toolbar ${control.name} target`).toBeGreaterThanOrEqual(finger ? 44 : 24);
+  // Drawn slim everywhere (never under WCAG 2.5.8's 24px); under a finger an invisible margin makes each 40px to hit.
+  const targets = await controls.evaluateAll((els) => {
+    const finger = window.matchMedia("(pointer: coarse)").matches;
+    return els.map((el: any) => {
+      const box = el.getBoundingClientRect();
+      // A tap 19px from its middle lands on it, or on a neighbour just as close: never in dead space.
+      const reach = (dy: number) => {
+        const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2 + dy);
+        return Boolean(hit?.closest("button, a, [role='tab'], [role='combobox']"));
+      };
+      // A tab scrolled out of the strip is not there to tap.
+      const shown = box.left + box.width / 2 > 0 && box.left + box.width / 2 < window.innerWidth;
+      return { name: el.textContent || el.getAttribute("aria-label"), height: box.height, finger: finger && shown, above: reach(-19), below: reach(19) };
+    });
+  });
+  for (const control of targets) {
+    expect(control.height, `toolbar ${control.name} is drawn slim`).toBeLessThanOrEqual(36);
+    expect(control.height, `toolbar ${control.name} is never tiny`).toBeGreaterThanOrEqual(24);
+    if (control.finger) expect(control.above && control.below, `toolbar ${control.name} takes a tap 19px from its middle`).toBe(true);
+  }
   await header.getByRole("button", { name: "Keyboard shortcuts", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog", { name: "Keys", exact: true })).toBeVisible();
