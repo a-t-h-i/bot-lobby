@@ -1,6 +1,6 @@
 {
-  "hash": "4828db7e5f72c634502a391cec0fce05755695cc0599bdb3fe9f4a40f6c54e37",
-  "builtAt": "2026-10-05T07:45:44.641Z",
+  "hash": "61301a4b634d83c0769a369ceaa55e176baf731067166c37cf01dac93b5eb98b",
+  "builtAt": "2026-10-05T10:18:00.068Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -52,7 +52,7 @@
     },
     {
       "path": "webui/src/app/TabStrip.tsx",
-      "sha256": "891cb3d410052ac2d9776cac3cbe9aa5f50b84b0261398f31c5b770f545a776b"
+      "sha256": "b51c4dc026ce0f6cebbc9d76a5e1c04867686314b29b4e907aeaada6d61b0aad"
     },
     {
       "path": "webui/src/app/bootstrap.ts",
@@ -120,7 +120,7 @@
     },
     {
       "path": "webui/src/components/ui/alert-dialog.tsx",
-      "sha256": "f0d700cb811f1bf755ab910f1fddbd4be5bd2d8b635ca120165492c1222db3ec"
+      "sha256": "32c53c07b9042b5284f5e51de0e71a7376e7fb8a0e704c75c9e710ca02c02d50"
     },
     {
       "path": "webui/src/components/ui/badge.tsx",
@@ -128,7 +128,7 @@
     },
     {
       "path": "webui/src/components/ui/button.tsx",
-      "sha256": "3dc3b655e099013076d33439ed447117e0b722ff88e7a511792a79e6fc0739be"
+      "sha256": "96e004d293c41d645971d2d6af3a30c3e3b84879540e1c229e416441c2d3b721"
     },
     {
       "path": "webui/src/components/ui/checkbox.tsx",
@@ -196,7 +196,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "c942b18ed3714c20df4ff4075c4877d3b70f9b7affa175eeac9a8fd8941779af"
+      "sha256": "e4e7992d078f2f7922b1ab08381801b0fae70b58a263425b12360322030f64a2"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -376,15 +376,23 @@
     },
     {
       "path": "webui/src/tabs/lobby/ActivityLog.tsx",
-      "sha256": "efc5a24637220d839f6fb6c8a1b7b8048ca9fdad1e6231b3d9a72c9dda0f3223"
+      "sha256": "8a6c1a39694b11fb08f9da1fcede83d0217cc9f8c4e8a6fa8dbe6eb08765ec8c"
+    },
+    {
+      "path": "webui/src/tabs/lobby/ChatParts.tsx",
+      "sha256": "48e6d420830b94a1d9f2b5d3674f6c621833d1097f0d239af4c0f762d295eb2b"
     },
     {
       "path": "webui/src/tabs/lobby/Conversation.tsx",
-      "sha256": "3e4229e55dc78ed18974832feabbe13df8c66b7f63cc246924bc808217d9e8b1"
+      "sha256": "61e234cd5247bc8a1174e5f0ec42df37203d499e45f7d0e3a21599b9e312731c"
     },
     {
       "path": "webui/src/tabs/lobby/LobbyTab.tsx",
       "sha256": "8254b2bb39e4ecf2f92f3c8158eb748138a82689e6616e13e0acad1f784fa229"
+    },
+    {
+      "path": "webui/src/tabs/lobby/Orb.tsx",
+      "sha256": "95c35dc6c05e890e65f0b2cab29ed0d359852be30325b55eaffb09e3c14e05dc"
     },
     {
       "path": "webui/src/tabs/lobby/RunsStrip.tsx",
@@ -396,7 +404,11 @@
     },
     {
       "path": "webui/src/tabs/lobby/Thoughts.tsx",
-      "sha256": "c8b1a3da3de6fafbb2bbaa7ce8aea0c56fb3aad46731ec54f8796aeb08762058"
+      "sha256": "529199a310914ba36a1d61ed517d62292a854bba30080b933e71c20570375821"
+    },
+    {
+      "path": "webui/src/tabs/lobby/orbPlace.ts",
+      "sha256": "b0c47f742ddf35c92d6e1bc516c977c95e2996de1a33ea15f0f3f8926fb215ee"
     },
     {
       "path": "webui/src/tabs/lobby/thoughtSteps.ts",
@@ -432,7 +444,7 @@
     },
     {
       "path": "webui/src/tabs/plan/Conversation.tsx",
-      "sha256": "42b6a88f62111313c3cde97726d83229f408a9eef1aa04a37fccb162fc11b53c"
+      "sha256": "33ad1840dfbfb51ebe536896e0cee2f7e7167629affd9d9750c35869371b768b"
     },
     {
       "path": "webui/src/tabs/plan/Draft.tsx",
@@ -448,11 +460,11 @@
     },
     {
       "path": "webui/src/tabs/plan/PlanTab.tsx",
-      "sha256": "24cd7dba0b6131c82f1d90133a48103d4f35cd977008de607f2627feaf2039ce"
+      "sha256": "d4d969e0d34422208304216c589683510f6c81f8558bcaad914dead9d81d738d"
     },
     {
       "path": "webui/src/tabs/plan/Roster.tsx",
-      "sha256": "4746b765c3745fa0e2706bf21153c0a64270aeed021fc7167bcaafc708c5ca00"
+      "sha256": "cf0ac0308680fb773d36451ee6fefc7b5ce841e9079c374cfdf1f5d72074725f"
     },
     {
       "path": "webui/src/tabs/plan/words.ts",
@@ -569,6 +581,10 @@
     {
       "path": "webui/src/ui/Actions.tsx",
       "sha256": "9942d2f4a26570255d9aa97a8989767ab43e3a22b17df629a1fab19c2f46391a"
+    },
+    {
+      "path": "webui/src/ui/AgentIcon.tsx",
+      "sha256": "dcb7c77eb61d0e3f5cc520c18c88028ffa86c42a564d60df75c275789cafe2d8"
     },
     {
       "path": "webui/src/ui/Attachments.tsx",
