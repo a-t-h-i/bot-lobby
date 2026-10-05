@@ -102,6 +102,68 @@ test("switching tabs pours the colour along the connectors like a straw, runs it
   expect(back.rest, "and settles too").toBe("");
 });
 
+/** How far each drawn stroke of a tab's icon is, frame by frame, until `ms` have passed. */
+async function iconFrames(page: any, id: string, ms: number) {
+  return page.evaluate(
+    async ({ id, ms }: { id: string; ms: number }) => {
+      const seen: Array<{ play: number; drawn: number[] }> = [];
+      const start = performance.now();
+      await new Promise<void>((resolve) => {
+        const tick = () => {
+          const icon = document.querySelector(`svg[data-tab-icon="${id}"]`) as any;
+          seen.push({ play: Number(icon.dataset.play), drawn: [...icon.querySelectorAll("[pathLength]")].map((el: any) => parseFloat(el.getAttribute("stroke-dasharray")) || 0) });
+          if (performance.now() - start < ms) requestAnimationFrame(tick);
+          else resolve();
+        };
+        tick();
+      });
+      return seen;
+    },
+    { id, ms }
+  );
+}
+
+test("each tab's icon plays an animation of its own when the pointer comes onto the tab and when the tab is chosen", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const ids = await page.locator('[role="tab"] svg[data-tab-icon]').evaluateAll((icons: any[]) => icons.map((icon) => icon.dataset.tabIcon));
+  expect(ids, "every tab has its own icon").toEqual(["lobby", "tasks", "plan", "quickfix", "excalidraw", "git", "knowledge", "metrics"]);
+  await expect(page.locator('svg[data-tab-icon][data-play="0"]'), "resting until something happens").toHaveCount(8);
+  // Hovering Tasks ticks its boxes: the strokes are drawn again from nothing, then the icon rests as Lucide draws it.
+  await page.getByRole("tab", { name: /Tasks/ }).hover();
+  const ticks = await iconFrames(page, "tasks", 900);
+  expect(ticks.at(-1)!.play, "a hover plays it").toBe(1);
+  expect(ticks.some((frame: any) => frame.drawn.some((part: number) => part > 0.1 && part < 0.9)), "its strokes draw in").toBe(true);
+  expect(ticks.at(-1)!.drawn.every((part: number) => part === 1), "and end whole").toBe(true);
+  // Choosing Plan from the keyboard draws its route as the colour reaches the tab.
+  await page.mouse.move(700, 600);
+  await page.keyboard.press("Alt+3");
+  const route = await iconFrames(page, "plan", 900);
+  const first = route.findIndex((frame: any) => frame.play === 1);
+  expect(first, "choosing the tab plays its icon").toBeGreaterThan(0);
+  expect(route.slice(first).some((frame: any) => frame.drawn.some((part: number) => part > 0.1 && part < 0.9)), "the route draws itself").toBe(true);
+  expect(route.at(-1)!.drawn.every((part: number) => part === 1), "and is whole again").toBe(true);
+  // Hovering a tab and then clicking it plays once, not twice.
+  await page.getByRole("tab", { name: /Git/ }).hover();
+  await page.getByRole("tab", { name: /Git/ }).click();
+  await page.waitForTimeout(400);
+  await expect(page.locator('svg[data-tab-icon="git"]'), "hover then click plays once").toHaveAttribute("data-play", "1");
+  await page.waitForTimeout(700);
+  await page.mouse.move(700, 600);
+  await page.getByRole("tab", { name: /Git/ }).hover();
+  await expect(page.locator('svg[data-tab-icon="git"]'), "and again on the next visit").toHaveAttribute("data-play", "2");
+});
+
+test("under reduced motion the tab icons stay still", async ({ page, server }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole("tab", { name: /Tasks/ }).hover();
+  await page.getByRole("tab", { name: /Git/ }).click();
+  await page.waitForTimeout(500);
+  await expect(page.locator('svg[data-tab-icon][data-play="0"]'), "no icon plays").toHaveCount(8);
+});
+
 test("under reduced motion the fill and the ring simply move, with no flow and no knock", async ({ page, server }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await openScenario(page, server, "full");

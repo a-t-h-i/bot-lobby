@@ -11,18 +11,21 @@
  * so they always sit on it exactly, label centred, at any size. It all runs on
  * motion's springs, so it is quick and lands with a little bounce. Under
  * `prefers-reduced-motion` the fill and the ring simply move.
+ * Each tab's icon plays a little animation of its own (`TabIcons`) when the
+ * pointer comes onto the tab and when the tab is chosen, as the colour reaches
+ * it; under reduced motion the icons stay still.
  * Arrow keys follow the WAI-ARIA tabs pattern with a roving tabindex; `Alt+N`
  * is printed in the tooltip and `aria-keyshortcuts`, and the number on the tab
  * is the N.
  */
-import { Fragment, forwardRef, useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react"
-import { BarChart3, BookOpen, CircleDot, GitPullRequest, ListChecks, MessageSquare, PenTool, Route, Zap, type LucideIcon } from "lucide-react"
-import { animate, motion, spring as springCurve, type AnimationPlaybackControls, type ValueAnimationTransition } from "motion/react"
+import { Fragment, forwardRef, useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react"
+import { animate, spring as springCurve, useReducedMotion, type AnimationPlaybackControls, type ValueAnimationTransition } from "motion/react"
 import { Keys } from "@/components/ui/kbd"
 import { focusPage, tabWalk } from "@/prompts/nav"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import type { TabInfo } from "@protocol"
+import { PLAY_SECONDS, TabIcon } from "./TabIcons"
 
 interface TabStripProps {
   tabs: TabInfo[]
@@ -30,27 +33,45 @@ interface TabStripProps {
   onSelect: (id: string) => void
 }
 
-/** One icon per tab. */
-const TAB_ICONS: Record<string, LucideIcon> = {
-  lobby: MessageSquare,
-  tasks: ListChecks,
-  plan: Route,
-  quickfix: Zap,
-  issues: CircleDot,
-  metrics: BarChart3,
-  git: GitPullRequest,
-  knowledge: BookOpen,
-  excalidraw: PenTool,
-}
-
 /** The digit of a tab's `Alt+N` key, printed before its name. */
 function tabNumber(key: string): string | undefined {
   return /(\d)$/.exec(key)?.[1]
 }
 
+/** When a chosen tab's icon plays: as the colour from the straw reaches the tab, in ms. */
+const ARRIVES = 160
+
+/**
+ * The plays of a tab's icon: one when the pointer comes onto the tab, one when the tab is chosen. A play
+ * already running is left to finish (hovering a tab and then clicking it plays once), and under reduced
+ * motion nothing plays.
+ */
+function useIconPlay(active: boolean) {
+  const still = useReducedMotion()
+  const [play, setPlay] = useState(0)
+  const busyUntil = useRef(0)
+  const start = useCallback(() => {
+    if (still || performance.now() < busyUntil.current) return
+    busyUntil.current = performance.now() + PLAY_SECONDS * 1000
+    setPlay((now) => now + 1)
+  }, [still])
+  const was = useRef(active)
+  useEffect(() => {
+    const chosen = active && !was.current
+    was.current = active
+    if (!chosen) return
+    const timer = window.setTimeout(start, ARRIVES)
+    return () => window.clearTimeout(timer)
+  }, [active, start])
+  const onPointerEnter = useCallback((event: PointerEvent) => {
+    if (event.pointerType !== "touch") start()
+  }, [start])
+  return { play, onPointerEnter }
+}
+
 const TabCell = forwardRef<HTMLAnchorElement, { tab: TabInfo; active: boolean }>(function TabCell({ tab, active }, ref) {
   const number = tabNumber(tab.key)
-  const Icon = TAB_ICONS[tab.id]
+  const { play, onPointerEnter } = useIconPlay(active)
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -62,25 +83,14 @@ const TabCell = forwardRef<HTMLAnchorElement, { tab: TabInfo; active: boolean }>
           aria-selected={active}
           aria-keyshortcuts={tab.key}
           tabIndex={active ? 0 : -1}
+          onPointerEnter={onPointerEnter}
           className={cn(
             "relative z-10 inline-flex h-7.5 shrink-0 items-center gap-1.5 rounded-lg border border-input px-2.5 text-[0.8125rem] leading-none font-medium whitespace-nowrap outline-none",
             "transition-colors duration-200 ease-snap focus-visible:ring-3 focus-visible:ring-ring/40",
             active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
           )}
         >
-          {Icon ? (
-            // The icon hops as the colour lands on its tab (MotionConfig keeps it still under reduced motion).
-            <motion.span
-              key={active ? "on" : "off"}
-              aria-hidden="true"
-              className="inline-flex"
-              initial={active ? { scale: 0.7, y: 2 } : false}
-              animate={{ scale: 1, y: 0 }}
-              transition={{ type: "spring", visualDuration: 0.32, bounce: 0.55, delay: 0.12 }}
-            >
-              <Icon className={cn("size-3.5 shrink-0 transition-colors duration-200", active && "text-primary")} />
-            </motion.span>
-          ) : null}
+          <TabIcon id={tab.id} play={play} className={cn("size-3.5 shrink-0 transition-colors duration-200", active && "text-primary")} />
           {number ? (
             <span aria-hidden="true" className={cn("text-[0.72rem] font-semibold tabular-nums transition-colors duration-200", active ? "text-primary" : "text-muted-foreground/75")}>
               {number}
