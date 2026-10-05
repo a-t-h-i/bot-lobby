@@ -1,6 +1,6 @@
 {
-  "hash": "c2b2be289497866fbc542041362faab200cc50f901ffa4a37097cfdd3920a5c7",
-  "builtAt": "2026-10-05T14:08:21.970Z",
+  "hash": "278529db6ea0b94d4e35ac0dc944161cd1ecc1389b3e56520e54365e2e184919",
+  "builtAt": "2026-10-05T14:28:25.597Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -40,7 +40,7 @@
     },
     {
       "path": "webui/src/app/Shell.tsx",
-      "sha256": "9fc6dc7eeeb667bb7153ac126d7987df7c76a6749cd7a10c3e0cce382e520afe"
+      "sha256": "8585352ab22a068a9d814d8f2a0e3ca3985cb00d37cd7da86f79e21992d343d3"
     },
     {
       "path": "webui/src/app/SignIn.tsx",
@@ -53,6 +53,10 @@
     {
       "path": "webui/src/app/TabStrip.tsx",
       "sha256": "b9102bcd212dde455a8c90bee96d11729df394907afa7644b08ce6ba20612e47"
+    },
+    {
+      "path": "webui/src/app/Thinking.tsx",
+      "sha256": "f8f2da8da2c79f20a76b35d5ac14e277b005331c3eb7e03b10c36a9642eb948f"
     },
     {
       "path": "webui/src/app/bootstrap.ts",
@@ -200,7 +204,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "3959e53bb9fffd165705601bd9d5015e2ed417985bb3f74cbe76aa5eca62464d"
+      "sha256": "85c9c6dfbdd66c96e0db97f6816c723e0fc39e15942853e7b9592439450ec3a1"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -392,11 +396,11 @@
     },
     {
       "path": "webui/src/tabs/lobby/LobbyTab.tsx",
-      "sha256": "8254b2bb39e4ecf2f92f3c8158eb748138a82689e6616e13e0acad1f784fa229"
+      "sha256": "96e87fe959ab7587756c59ac8e7b23633029eb73bbf166968999ce9564af59af"
     },
     {
       "path": "webui/src/tabs/lobby/Orb.tsx",
-      "sha256": "95c35dc6c05e890e65f0b2cab29ed0d359852be30325b55eaffb09e3c14e05dc"
+      "sha256": "ba2064151a42318cbdecd4bba1ea9e16d7e271c869f0fbc9994359538c4d3993"
     },
     {
       "path": "webui/src/tabs/lobby/RunsStrip.tsx",
@@ -408,7 +412,11 @@
     },
     {
       "path": "webui/src/tabs/lobby/Thoughts.tsx",
-      "sha256": "529199a310914ba36a1d61ed517d62292a854bba30080b933e71c20570375821"
+      "sha256": "c189b0ef54db7509a37ad8f7ccb3dfbb494a4ada2000013923786bc096c453d6"
+    },
+    {
+      "path": "webui/src/tabs/lobby/busy.ts",
+      "sha256": "938719a58451b548777f66936f486fcd2a354edca1777053f71c77c80b1d5bae"
     },
     {
       "path": "webui/src/tabs/lobby/orbPlace.ts",
