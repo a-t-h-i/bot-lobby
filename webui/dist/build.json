@@ -1,6 +1,6 @@
 {
-  "hash": "278529db6ea0b94d4e35ac0dc944161cd1ecc1389b3e56520e54365e2e184919",
-  "builtAt": "2026-10-05T14:28:25.597Z",
+  "hash": "c9e6387616f018d756ff71dd0e0243debc411990ce2721212c998db827c5335c",
+  "builtAt": "2026-10-05T16:04:49.644Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -8,7 +8,7 @@
     },
     {
       "path": "src/webui/protocol.ts",
-      "sha256": "6f50a6bd30baa463466b37eed8733f4c1978d33adb4fe47a2fef58672d3f1fc4"
+      "sha256": "63a7f4b0cbd6f9a098cd7c1dd88e36b0daae1c6afe55f4e67b08ddf9565ccdc7"
     },
     {
       "path": "webui/components.json",
@@ -204,7 +204,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "85c9c6dfbdd66c96e0db97f6816c723e0fc39e15942853e7b9592439450ec3a1"
+      "sha256": "a85f3d960e05d4b8cafcb4942b7ddedbd8069d1ad6dbf7053ae5c9f168c23ec6"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -412,7 +412,7 @@
     },
     {
       "path": "webui/src/tabs/lobby/Thoughts.tsx",
-      "sha256": "c189b0ef54db7509a37ad8f7ccb3dfbb494a4ada2000013923786bc096c453d6"
+      "sha256": "6e98fef9bf75ccdc7128e7ffd63dd13a0a425475d04b3e62af5d240602138d67"
     },
     {
       "path": "webui/src/tabs/lobby/busy.ts",
@@ -532,7 +532,7 @@
     },
     {
       "path": "webui/src/tabs/settings/SettingsForm.tsx",
-      "sha256": "793dab4001ca9da317a79e01a325571532721ef8b228c4a3abfdb7e7ff46abc2"
+      "sha256": "8fd908a626ad13a8193c19fd4d4abc5b2802cda69afda81a9ebf69819c67b50b"
     },
     {
       "path": "webui/src/tabs/settings/SettingsTab.tsx",
@@ -548,7 +548,7 @@
     },
     {
       "path": "webui/src/tabs/settings/words.ts",
-      "sha256": "ab99984396fa66cc5a084ae27fc5745f32ca3d1f0986a45b70812d2d7bc1b22e"
+      "sha256": "a38a82e40cef42fe3144229ea5da10ce6b4ce971e25772789d386577efeb3e0a"
     },
     {
       "path": "webui/src/tabs/tasks/Comments.tsx",
@@ -596,7 +596,7 @@
     },
     {
       "path": "webui/src/ui/AgentIcon.tsx",
-      "sha256": "0c242843567e616a28ed2db751e3495f07c904cd1c20e2f540762910fe5079ea"
+      "sha256": "8416ac911623488ddff357c2bd17e68c1a3fd6eeebf0eaf14d055af46df7c600"
     },
     {
       "path": "webui/src/ui/Attachments.tsx",
