@@ -5,6 +5,7 @@
  * the answer, or with how it was put away. A cancelled caller's `signal`
  * withdraws the prompt.
  */
+import { blockingRequestContext } from "../state/blocking-requests.ts";
 import { lobbyTopics } from "./topics.ts";
 
 export type PromptKind = "questionnaire" | "choose" | "confirm" | "text" | "sessionDialog";
@@ -16,6 +17,9 @@ export interface WebPrompt {
   createdAt: number;
   from: string;
   payload: unknown;
+  taskId?: string;
+  sessionId?: string;
+  blockingRequestId?: string;
 }
 
 interface Pending {
@@ -50,7 +54,9 @@ export class PromptHub {
   /** Show a prompt on every surface; the answer settles it later. */
   open(kind: PromptKind, from: string, payload: unknown): WebPrompt {
     this.seq += 1;
-    const prompt: WebPrompt = { id: nextId(this.seq), kind, createdAt: Date.now(), from, payload };
+    const identity = blockingRequestContext.getStore();
+    const prompt: WebPrompt = { id: nextId(this.seq), kind, createdAt: Date.now(), from, payload,
+      ...(identity ? { taskId: identity.taskId, sessionId: identity.sessionId, blockingRequestId: identity.requestId } : {}) };
     this.pendingMap.set(prompt.id, { prompt });
     lobbyTopics.bump("prompts");
     return prompt;

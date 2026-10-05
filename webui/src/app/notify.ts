@@ -10,6 +10,13 @@
 import { useEffect, useRef, useSyncExternalStore } from "react"
 import { lobbyStore } from "@/lib/store"
 import { useStoreVersion } from "./hooks"
+import { useApiRead } from "./useApiRead"
+import { selectedProject } from "@/lib/project"
+import { PromptSeen, promptIdentity, dialogIdentity, deliveryIdentity } from "@/lib/promptSeen"
+import { droplet, useSoundUnlock } from "./sound"
+import type { WebPrompt } from "@protocol"
+import { toast } from "@/lib/toast"
+import { go } from "./router"
 
 const KEY = "bot-lobby.notifications"
 const ICON = "/icon-192.png"
@@ -84,34 +91,69 @@ function show(body: string): void {
   }
 }
 
-interface PromptLike {
-  kind?: string
-}
-interface LobbyLike {
-  task?: { state?: string; title?: string }
+interface LobbyLike { task?: { state?: string; title?: string } }
+function browserSeen(): PromptSeen { try { return new PromptSeen(sessionStorage) } catch { return new PromptSeen() } }
+function promptId(project: string, prompt: WebPrompt): string {
+  const payload = prompt.payload as { dialog?: { id?: string }; key?: string } | undefined
+  return prompt.kind === "sessionDialog" && payload?.dialog?.id ? dialogIdentity(project, prompt.sessionId ?? payload.key ?? prompt.from, payload.dialog.id) : promptIdentity(project, prompt.id)
 }
 
-/** Watch the store and notify only on a transition, only while hidden. */
-export function useDesktopNotifications(): void {
+function useNotificationContext() {
   const enabled = useNotificationsEnabled()
+  useSoundUnlock()
   useStoreVersion()
-  const prompts = lobbyStore.get("prompts").data as { prompts?: PromptLike[] } | undefined
+  const tasks = useApiRead("tasks.list", {}, ["tasks"])
+  const sessions = useApiRead("sessions.list", {}, ["sessions"])
+  const prompts = lobbyStore.get("prompts")
   const lobby = lobbyStore.get("lobby").data as LobbyLike | undefined
-  const count = prompts?.prompts?.length ?? 0
-  const state = lobby?.task?.state ?? ""
-  const title = lobby?.task?.title
-  const seen = useRef<{ count: number; state: string } | undefined>(undefined)
+  const seen = useRef<PromptSeen>(browserSeen())
+  const quiet = useRef(new Set(["prompts", "sessions", "delivery"]))
+  const previousState = useRef<string | undefined>(undefined)
+  const project = selectedProject() ?? "current"
+  const connection = lobbyStore.status().connection
+  const lastConnection = useRef(connection)
+  return { enabled, tasks, sessions, prompts, lobby, seen, quiet, previousState, project, connection, lastConnection }
+}
 
-  useEffect(() => {
-    const previous = seen.current
-    seen.current = { count, state }
-    if (!previous || !enabled || !canNotify()) return
-    if (previous.count === 0 && count > 0) {
-      const dialog = prompts?.prompts?.some((prompt) => prompt.kind === "sessionDialog")
-      show(dialog ? "A background session is asking something." : "A question is waiting in the lobby.")
-      return
-    }
-    const done = outcome(state)
-    if (done && state !== previous.state) show(`${title ? `${title} ` : "The task "}${done}.`)
-  }, [enabled, count, state, title, prompts])
+type NotificationContext = ReturnType<typeof useNotificationContext>
+function announce(context: NotificationContext, channel: string, ids: string[], body: string, ready: boolean) {
+  if (!ready) return
+  const { seen, project, quiet, enabled } = context
+  const fresh = seen.current.observe(`${project}:${channel}`, ids, quiet.current.has(channel))
+  quiet.current.delete(channel)
+  if (!fresh.length) return
+  fresh.forEach(() => droplet())
+  if (enabled && canNotify()) show(body)
+  if (channel === "delivery") toast.info(body, { action: { label: "Review tasks", onClick: () => go("#/tasks") } })
+}
+
+function announcePrompts(context: NotificationContext) {
+  const { prompts, sessions, tasks, project } = context
+  const pending = (prompts.data as { prompts?: WebPrompt[] } | undefined)?.prompts
+  announce(context, "prompts", (pending ?? []).map((p) => promptId(project, p)), "A question is waiting for you.", Boolean(pending) && !prompts.loading)
+  const dialogs = sessions.data?.background.flatMap((s) => s.dialogs.map((d) => dialogIdentity(project, s.sessionId ?? s.key, d.id))) ?? []
+  announce(context, "sessions", dialogs, "A background session is asking something.", Boolean(sessions.data) && !sessions.loading)
+  const reviews = tasks.data?.rows.filter((r) => r.delivery && (r.delivery.status === "pending_approval" || r.delivery.status === "deferred" || r.delivery.status === "recoverable_failure")).map((r) => deliveryIdentity(project, r.id, r.delivery!.reviewId)) ?? []
+  announce(context, "delivery", reviews, "Completed work is ready for delivery review in Tasks.", Boolean(tasks.data) && !tasks.loading)
+}
+
+function updateNotifications(context: NotificationContext) {
+  const { lastConnection, connection, quiet, previousState, lobby, enabled } = context
+  if (lastConnection.current !== connection || connection !== "live") {
+    lastConnection.current = connection
+    quiet.current = new Set(["prompts", "sessions", "delivery"])
+    previousState.current = undefined
+    return
+  }
+  announcePrompts(context)
+  const state = lobby?.task?.state ?? "", done = outcome(state)
+  if (previousState.current && done && state !== previousState.current && enabled && canNotify()) show(`${lobby?.task?.title ?? "The task"} ${done}.`)
+  previousState.current = state
+}
+
+/** Quiet snapshots, identity-based transitions, independent sound and desktop preferences. */
+export function useDesktopNotifications(): void {
+  const context = useNotificationContext()
+  const { connection, enabled, project, prompts, sessions, tasks, lobby } = context
+  useEffect(() => updateNotifications(context), [connection, enabled, project, prompts.data, prompts.loading, sessions.data, sessions.loading, tasks.data, tasks.loading, lobby])
 }

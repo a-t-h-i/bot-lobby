@@ -42,8 +42,6 @@ import {
   INHERIT_MODEL,
   JEV_HOST_ITEMS,
   LOBBY_SWITCH_ITEMS,
-  NO_FALLBACK,
-  NO_FALLBACK_HELP,
   PAGE,
   PANEL_HELP,
   PANEL_ITEMS,
@@ -67,8 +65,6 @@ type Save = (patch: Record<string, unknown>) => Promise<boolean>
 interface AgentView {
   model: string
   thinking: string
-  fallbackModel?: string
-  fallbackThinking?: string
   timeoutMs?: number
   instructions?: string
 }
@@ -100,7 +96,6 @@ function entryOf(config: Config, kind: AgentKind): AgentView {
         model: config.scout.model,
         thinking: FIXED_SCOUT_THINKING,
         timeoutMs: config.scout.timeoutMs,
-        ...(config.scout.fallbackModel ? { fallbackModel: config.scout.fallbackModel } : {}),
       }
     case "researcher":
       return config.researcher
@@ -147,7 +142,7 @@ function ModelChoice(props: { value: string; models: SettingsModelInfo[]; label:
   const known = props.models.some((model) => model.id === props.value)
   const items: ChoiceItem[] = [
     ...(props.inherit ? [{ value: INHERIT_MODEL, label: INHERIT_LABEL, help: INHERIT_HELP }] : []),
-    ...(props.none ? [{ value: INHERIT_MODEL, label: NO_FALLBACK, help: NO_FALLBACK_HELP }] : []),
+    ...(props.none ? [{ value: INHERIT_MODEL, label: "none", help: "Use the primary model" }] : []),
     ...(!props.inherit && !props.none && props.value === INHERIT_MODEL ? [{ value: INHERIT_MODEL, label: INHERIT_LABEL, help: INHERIT_HELP }] : []),
     ...props.models.map((model) => ({ value: model.id, label: model.id, ...(model.label && model.label !== model.id ? { help: model.label } : {}) })),
     ...(!known && props.value !== INHERIT_MODEL ? [{ value: props.value, label: props.value, help: CUSTOM_HELP }] : []),
@@ -257,17 +252,10 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
   const set = (fields: Record<string, unknown>) => save(patchOf(kind, fields))
   const name = AGENT_LABELS[kind]
   const supported = levelsFor(models, entry.model)
-  const fallbackSupported = entry.fallbackModel ? levelsFor(models, entry.fallbackModel) : supported
   // Changing the model carries the effort along to what the new model supports.
   const chooseModel = (model: string) => {
     const fields: Record<string, unknown> = { model }
     if (kind !== "scout" && !levelsFor(models, model).includes(entry.thinking)) fields.thinking = levelOn(levelsFor(models, model), entry.thinking)
-    set(fields)
-  }
-  const chooseFallback = (fallbackModel: string) => {
-    const fields: Record<string, unknown> = { fallbackModel }
-    const current = entry.fallbackThinking ?? entry.thinking
-    if (kind !== "scout" && fallbackModel !== INHERIT_MODEL && !levelsFor(models, fallbackModel).includes(current)) fields.fallbackThinking = levelOn(levelsFor(models, fallbackModel), current)
     set(fields)
   }
   // The mascot acts out what the model really runs at (an unsupported level is clamped).
@@ -285,9 +273,6 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
         <Mini label={FIELD_LABELS.model}>
           <ModelChoice value={entry.model} models={models} label={`${name} model`} inherit={kind === "master"} onChange={chooseModel} />
-        </Mini>
-        <Mini label={FIELD_LABELS.fallback}>
-          <ModelChoice value={entry.fallbackModel ?? INHERIT_MODEL} models={models} label={`${name} fallback model`} none onChange={chooseFallback} />
         </Mini>
       </div>
       <div className="flex items-center gap-3 rounded-lg bg-muted p-3">
@@ -310,25 +295,13 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
           )}
         </div>
       </div>
-      {kind !== "scout" && entry.fallbackModel ? (
-        <Mini label={FIELD_LABELS.fallbackThinking}>
-          <EffortSlider
-            value={entry.fallbackThinking ?? entry.thinking}
-            levels={THINKING_LEVELS}
-            supported={fallbackSupported}
-            model={entry.fallbackModel}
-            label={`${name} fallback effort`}
-            onChange={(level) => set({ fallbackThinking: level })}
-          />
-        </Mini>
-      ) : null}
       <div className="flex min-h-7 items-center justify-between gap-3">
         {hasInstructions ? (
-          <button
+          <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
             type="button"
             aria-expanded={showNotes}
             onClick={() => setShowNotes((now) => !now)}
-            className="flex h-5 items-center gap-1 text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30"
+            className="flex min-h-10 items-center gap-1 text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30"
           >
             <ChevronRight aria-hidden="true" className={cn("size-3.5 transition-transform duration-200 ease-snap", showNotes && "rotate-90")} />
             {FIELD_LABELS.instructions}
@@ -474,7 +447,10 @@ function InstallGroup() {
   )
 }
 
+const SECTIONS = ["Agents", "Workflow", "Lobby", "Classifier", "Appearance & notifications"]
+
 export function SettingsForm({ config, models, onConfig }: { config: Config; models: SettingsModelInfo[]; onConfig: (config: Config) => void }) {
+  const [section, setSection] = useState("Agents")
   // One save at a time, in the order they were made: the form shows the config of the last reply, so replies must come back in order.
   const queue = useRef<Promise<unknown>>(Promise.resolve())
   const save: Save = (patch) => {
@@ -494,22 +470,43 @@ export function SettingsForm({ config, models, onConfig }: { config: Config; mod
     return next
   }
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-5 sm:p-8">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-5 sm:p-8">
       <header className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold tracking-tight">{PAGE.title}</h1>
         <p className="text-sm text-muted-foreground">{PAGE.intro}</p>
       </header>
-      <Section prominent title={GROUP_TITLES.agents}>
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {AGENT_ORDER.map((kind) => <AgentCard key={kind} kind={kind} config={config} models={models} save={save} />)}
-        </div>
-      </Section>
-      <WorkflowGroup config={config} save={save} />
-      <LobbyGroup config={config} save={save} />
-      <ClassifierGroup config={config} models={models} save={save} />
-      <ThemeGroup />
-      <NotificationsGroup />
-      <InstallGroup />
+      <nav aria-label="Settings sections" className="-mx-1 flex flex-wrap gap-1 border-b border-border pb-3">
+        {SECTIONS.map((name) => (
+          <button
+            key={name}
+            type="button"
+            aria-keyshortcuts="Enter Space"
+            aria-describedby="focused-action-help"
+            aria-current={section === name ? "page" : undefined}
+            aria-controls={`settings-${name.split(" ")[0]}`}
+            onClick={() => setSection(name)}
+            className={cn(
+              "h-10 rounded-lg px-3 text-sm font-medium outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/40",
+              section === name ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            {name}
+          </button>
+        ))}
+      </nav>
+      <div id="settings-Agents" hidden={section !== "Agents"} aria-hidden={section !== "Agents"}>
+        <Section prominent title={GROUP_TITLES.agents}>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {AGENT_ORDER.map((kind) => <AgentCard key={kind} kind={kind} config={config} models={models} save={save} />)}
+          </div>
+        </Section>
+      </div>
+      <div id="settings-Workflow" hidden={section !== "Workflow"} aria-hidden={section !== "Workflow"}><WorkflowGroup config={config} save={save} /></div>
+      <div id="settings-Lobby" hidden={section !== "Lobby"} aria-hidden={section !== "Lobby"}><LobbyGroup config={config} save={save} /></div>
+      <div id="settings-Classifier" hidden={section !== "Classifier"} aria-hidden={section !== "Classifier"}><ClassifierGroup config={config} models={models} save={save} /></div>
+      <div id="settings-Appearance" hidden={section !== "Appearance & notifications"} aria-hidden={section !== "Appearance & notifications"}>
+        <div className="flex flex-col gap-8"><ThemeGroup /><NotificationsGroup /><InstallGroup /></div>
+      </div>
     </div>
   )
 }

@@ -1,11 +1,16 @@
 /** The shapes of the Tasks tab's rows, shared by the web API and the page's words. */
 
+import type { TimingProjection } from "../state/phase-timing.ts";
+import type { Delivery } from "../delivery/types.ts";
+
 export type TaskSection = "mine" | "others" | "pending" | "recent" | "archived";
 
 /** How a row is ticked off: still to do (a plan, or a task under way), completed, or abandoned. */
 export type CheckState = "open" | "done" | "dropped";
 
 export interface TaskRow {
+  timing?: TimingProjection;
+  delivery?: Pick<Delivery, "status" | "reviewId">;
   /** A task on the list, a saved plan, or a task in the archive. */
   kind: "task" | "plan" | "archived";
   id: string;

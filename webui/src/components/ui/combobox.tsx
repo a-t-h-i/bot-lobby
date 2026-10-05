@@ -95,6 +95,8 @@ export function Combobox({ value, options, onChange, label, className, disabled 
         type="button"
         role="combobox"
         aria-label={label}
+        aria-keyshortcuts="Enter Space ArrowDown ArrowUp"
+        aria-description="When focused, press Enter, Space or an arrow key to choose. Type to search."
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-controls={open ? id : undefined}

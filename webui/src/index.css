@@ -276,6 +276,24 @@
   }
 }
 
+
+/* Controls are never smaller than 40px, 44px under a finger; switches and checkboxes carry their own hit area. */
+:root { --touch-target: 44px; --control-target: 40px; --thinking-lift: -2px; --thinking-scale: 1.04; }
+button:not([role="switch"]):not([role="checkbox"]), [role="tab"], header a[aria-keyshortcuts] { min-height: var(--control-target); min-width: var(--control-target); }
+@media (pointer: coarse) { button:not([role="switch"]):not([role="checkbox"]), [role="combobox"], [role="tab"], header a[aria-keyshortcuts] { min-height: var(--touch-target); min-width: var(--touch-target); } }
+[hidden] { display: none !important; }
+
+/* The Thinking bubble floats above the message box; it leans toward the pointer unless motion is reduced. */
+.thinking-bubble {
+  width: var(--touch-target);
+  height: var(--touch-target);
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: calc(var(--composer-h) + 1rem + env(safe-area-inset-bottom));
+  transition: transform 150ms ease-out;
+}
+.thinking-bubble:hover { transform: translateY(var(--thinking-lift)) scale(var(--thinking-scale)); }
+@media (prefers-reduced-motion: reduce) { .thinking-bubble, .thinking-bubble:hover { transform: none !important; transition: none !important; } }
+
 /*
  * The top bar: where you are on the left, the tabs in the middle, the session
  * and its tools on the right. Below 1360px the tabs take a row of their own so
@@ -292,6 +310,20 @@
   row-gap: 0.125rem;
   padding: 0.5rem 0.75rem 0.25rem;
 }
+/* A phone has no room for the project and the tools side by side: the tools take a row of their own. */
+@media (max-width: 639px) {
+  .app-header {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "where"
+      "tools"
+      "tabs";
+  }
+  .app-header > .tools {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
 @media (min-width: 1360px) {
   .app-header {
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -307,6 +339,10 @@
 }
 .app-header > .tools {
   grid-area: tools;
+}
+/* Why no project can be chosen, on a row of its own under the bar. */
+.app-header > .notice {
+  grid-column: 1 / -1;
 }
 
 /* The activity indicator: three dots that hop in turn. */
@@ -378,6 +414,11 @@
   }
   .md-body input[type="checkbox"] {
     @apply mr-1.5;
+  }
+  .md-body table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
   }
   .md-body table th,
   .md-body table td {

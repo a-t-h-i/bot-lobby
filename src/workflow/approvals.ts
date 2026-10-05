@@ -1,5 +1,6 @@
 import type { Approval, ApprovalKind, Task } from "../schemas/task.ts";
 import type { Domain } from "../schemas/agent.ts";
+import { blockPhaseTiming, resolvePhaseTiming } from "../state/phase-timing.ts";
 
 /** Record a Worker-requested exception so it blocks further work until resolved. */
 export function requestApproval(
@@ -11,6 +12,7 @@ export function requestApproval(
 ): Approval {
   const approval: Approval = { id: `APR-${task.approvals.length + 1}`, kind, domain, detail, status: "pending", createdAt: now };
   task.approvals.push(approval);
+  blockPhaseTiming(task, `approval:${approval.id}`, now);
   return approval;
 }
 
@@ -30,6 +32,7 @@ export function resolveApproval(
   if (!approval) return undefined;
   approval.status = status;
   approval.note = note;
+  resolvePhaseTiming(task, `approval:${approval.id}`);
   return approval;
 }
 

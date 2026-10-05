@@ -1,11 +1,11 @@
 /*
  * The Lobby. From 1024 px the Conversation and the Activity log sit side by
- * side with Thinking underneath; a pane folded away leaves a button in the
- * side rail (Alt+A and Alt+T fold and open them). Below that there is room for
- * one pane at a time, so a switcher picks between them.
+ * side; Activity folds away into a button in the side rail (Alt+A). Thinking is
+ * not a pane: it opens from a floating bubble in a dialog (Alt+T). Below 1024
+ * px there is room for one pane at a time, so a switcher picks between them.
  */
 import { useState } from "react"
-import { Activity, Brain, MessageSquare, type LucideIcon } from "lucide-react"
+import { Activity, MessageSquare, type LucideIcon } from "lucide-react"
 import { ErrorState } from "@/app/States"
 import { useTopic } from "@/app/hooks"
 import { Keys } from "@/components/ui/kbd"
@@ -44,7 +44,7 @@ function RailButton({ name, icon: Icon, shortcut, onClick }: { name: string; ico
           aria-expanded={false}
           aria-keyshortcuts={shortcut}
           onClick={onClick}
-          className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+          className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
         >
           <Icon aria-hidden="true" className="size-4" />
         </button>
@@ -62,7 +62,6 @@ function SideRail(props: LobbyViewProps) {
   return (
     <aside aria-label="Minimized panes" className="flex w-12 shrink-0 flex-col items-center gap-1 border-l border-border py-2">
       {panes.activity && props.activityFolded ? <RailButton name="Activity" icon={Activity} shortcut={keyOf(props.status, "activity")} onClick={props.toggleActivity} /> : null}
-      {panes.thinking && props.thinkingFolded ? <RailButton name="Thinking" icon={Brain} shortcut={keyOf(props.status, "thinking")} onClick={props.toggleThinking} /> : null}
     </aside>
   )
 }
@@ -82,23 +81,20 @@ function MainPanes(props: LobbyViewProps) {
 }
 
 function WideView(props: LobbyViewProps) {
-  const { data, status } = props
+  const { status } = props
   const panes = panesOf(status)
-  const rail = (panes.activity && props.activityFolded) || (panes.thinking && props.thinkingFolded)
+  const rail = panes.activity && props.activityFolded
   return (
     <div className="flex min-h-0 flex-1">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <MainPanes {...props} />
-        {panes.thinking && !props.thinkingFolded ? (
-          <Thoughts className="border-t border-border" thoughts={data?.thoughts ?? []} collapsed={false} onToggle={props.toggleThinking} shortcut={keyOf(status, "thinking")} />
-        ) : null}
       </div>
       {rail ? <SideRail {...props} /> : null}
     </div>
   )
 }
 
-type Pane = "conversation" | "activity" | "thinking"
+type Pane = "conversation" | "activity"
 
 /** One pane at a time on a small screen: a switcher with a hint of what is going on in the others. */
 function NarrowView({ data, status }: LobbyViewProps) {
@@ -106,7 +102,6 @@ function NarrowView({ data, status }: LobbyViewProps) {
   const available: Array<{ id: Pane; label: string; icon: LucideIcon }> = [
     ...(panes.conversation ? [{ id: "conversation" as const, label: "Conversation", icon: MessageSquare }] : []),
     ...(panes.activity ? [{ id: "activity" as const, label: "Activity", icon: Activity }] : []),
-    ...(panes.thinking ? [{ id: "thinking" as const, label: "Thinking", icon: Brain }] : []),
   ]
   const [picked, setPicked] = useState<Pane>("conversation")
   const view = available.find((entry) => entry.id === picked) ?? available[0]
@@ -127,7 +122,7 @@ function NarrowView({ data, status }: LobbyViewProps) {
                 aria-checked={on}
                 onClick={() => setPicked(entry.id)}
                 className={cn(
-                  "inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[0.8125rem] font-medium outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/40",
+                  "inline-flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-[0.8125rem] font-medium outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/40",
                   on ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
@@ -141,7 +136,6 @@ function NarrowView({ data, status }: LobbyViewProps) {
       ) : null}
       {view.id === "conversation" ? <Conversation chat={data?.chat ?? []} reply={data?.reply} busy={status?.busy ?? false} hasOlder={data?.hasOlderChat ?? false} hasTask={Boolean(data?.task)} bare /> : null}
       {view.id === "activity" ? <ActivityLog entries={data?.activity ?? []} collapsed={false} bare /> : null}
-      {view.id === "thinking" ? <Thoughts thoughts={data?.thoughts ?? []} collapsed={false} bare className="max-h-none flex-1" /> : null}
     </div>
   )
 }
@@ -149,11 +143,13 @@ function NarrowView({ data, status }: LobbyViewProps) {
 function LobbyView(props: LobbyViewProps) {
   const { data, status } = props
   const wide = useWide()
+  const panes = panesOf(status)
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <TaskHeader task={data?.task} status={status} />
       <RunsStrip runs={runsOf(data)} />
       {wide ? <WideView {...props} /> : <NarrowView {...props} />}
+      {panes.thinking ? <Thoughts thoughts={data?.thoughts ?? []} collapsed={props.thinkingFolded} onToggle={props.toggleThinking} shortcut={keyOf(status, "thinking")} /> : null}
     </div>
   )
 }

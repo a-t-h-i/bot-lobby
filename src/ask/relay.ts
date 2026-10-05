@@ -9,7 +9,7 @@
 import { previewRoot } from "../state/previews.ts";
 import { isAbsolute, join, resolve } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { MAX_OPTIONS, MAX_QUESTIONS, type AskQuestion, type AskResult, type Asker } from "./types.ts";
+import { validHtmlPreview, MAX_OPTIONS, MAX_QUESTIONS, type AskQuestion, type AskResult, type Asker } from "./types.ts";
 
 /** Env flag the master sets for a subagent that may ask the user. */
 export const ASK_ENV = "BOT_LOBBY_ASK";
@@ -51,6 +51,7 @@ const text = (value: unknown): value is string => typeof value === "string";
 function asQuestion(value: unknown): AskQuestion | undefined {
   const raw = value as Partial<AskQuestion> | null;
   if (!raw || !text(raw.question) || !text(raw.header) || !Array.isArray(raw.options)) return undefined;
+  if (raw.options.some((option) => option?.htmlPreview !== undefined && !validHtmlPreview(option.htmlPreview))) return undefined;
   const options = raw.options
     .filter((option) => option && text(option.label))
     .slice(0, MAX_OPTIONS)
@@ -59,6 +60,7 @@ function asQuestion(value: unknown): AskQuestion | undefined {
       ...(text(option.description) ? { description: option.description } : {}),
       ...(text(option.preview) ? { preview: option.preview } : {}),
       ...(text(option.image) ? { image: option.image } : {}),
+      ...(validHtmlPreview(option.htmlPreview) ? { htmlPreview: option.htmlPreview } : {}),
     }));
   if (options.length === 0) return undefined;
   return { question: raw.question, header: raw.header, options, ...(raw.multiSelect === true ? { multiSelect: true } : {}) };
