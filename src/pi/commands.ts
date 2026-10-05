@@ -18,7 +18,8 @@ import { AGENT_DIR_NAMES, KNOWLEDGE_FILES, knowledgeDir, type KnowledgeAgent } f
 import { readFirstExisting } from "../knowledge/store.ts";
 import { overThreshold } from "../knowledge/compactor.ts";
 import { applyApprovalChoice, describeTask, describeOversizedKnowledge, lastQaAsks, waiveLint, waiveQa, type ApprovalChoice } from "../workflow/workflow.ts";
-import { applyStatus, registerRevealShortcut, setMinimized } from "./ui.ts";
+import { applyStatus, registerRevealShortcut } from "./ui.ts";
+import { isOn, registerSwitch, turnOff, turnOn } from "./switch.ts";
 import { classifierSummary } from "./model-settings.ts";
 import { keyStatus } from "../classifier/instance.ts";
 import { kickoff, startPlannedTask } from "./start-task.ts";
@@ -51,7 +52,7 @@ const HELP = [
   "/bot-lobby runs [taskId]    Recent subagent runs: time, turns, tokens, cost, model",
   "/bot-lobby settings         Open the web lobby's Settings: per-agent model, effort and instructions",
   "/bot-lobby config           Show effective configuration",
-  "/bot-lobby minimize|restore   Hide or restore bot-lobby for this session (ctrl+shift+m)",
+  "/bot-lobby on|off           Turn bot-lobby on or off for this session (ctrl+shift+m); a new session starts off",
   "/bot-lobby claim <taskId>    Take ownership of an orphaned task",
   "/bot-lobby auto [on|off]    Auto mode: the oracle drives this session's task without asking (alt+g)",
   "/bot-lobby start-plan PLAN-… [auto]   Start a planned task here; its agreed plan needs no approval",
@@ -61,7 +62,10 @@ const HELP = [
 ].join("\n");
 
 /** Subcommands only win when no free-form text follows (so tasks still start). */
-const SUBCOMMANDS = new Set(["lobby", "help", "status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "accept", "budget", "knowledge", "config", "settings", "minimize", "restore", "claim", "auto", "start-plan", "switch", "web"]);
+const SUBCOMMANDS = new Set(["lobby", "help", "status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "accept", "budget", "knowledge", "config", "settings", "on", "off", "minimize", "restore", "claim", "auto", "start-plan", "switch", "web"]);
+
+/** Subcommands that act on a task or open the lobby turn bot-lobby on first; the rest work while it is off. */
+const TURNS_ON = new Set(["lobby", "settings", "resume", "approve", "amend", "decline", "accept", "claim", "auto", "start-plan", "switch", "web"]);
 
 /** `Task-Change-Table-Font-27-09-2026`, or an older `TASK-add-login` id. */
 function isTaskId(value: string | undefined): boolean {
@@ -325,6 +329,7 @@ function autoCommand(ctx: ExtensionCommandContext, configDir: string, value: str
 
 export function registerCommands(pi: ExtensionAPI, configDir: string): void {
   registerRevealShortcut(pi, configDir);
+  registerSwitch(pi, configDir);
   registerWebServer(pi);
   pi.registerCommand("bot-lobby", {
     description: "Structured multi-agent engineering orchestrator",
@@ -336,6 +341,8 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
     handler: async (args, ctx) => {
       const { sub, rest, restText, auto, budget, budgetError, track, task, isolation } = parseCommand(args ?? "");
       if (budgetError) return ctx.ui.notify(`bot-lobby: ${budgetError}`, "warning");
+      // A request, the bare command or anything that drives a task needs bot-lobby on (`web stop` does not).
+      if (!sub || (TURNS_ON.has(sub) && !(sub === "web" && rest[0] === "stop"))) turnOn(pi, ctx, configDir);
       if (!sub) {
         if (!restText) return webCommand(ctx, undefined);
         // A request one agent can do alone may go to the quick-fix agent once the oracle confirms; the rest start as tasks.
@@ -373,12 +380,15 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
           return showKnowledge(ctx, configDir);
         case "settings":
           return webCommand(ctx, undefined);
+        case "off":
         case "minimize":
-          setMinimized(true);
-          return applyStatus(ctx, detectProjectRoot(ctx.cwd, configDir), configDir);
+          if (!isOn()) return ctx.ui.notify("bot-lobby is already off.", "info");
+          await turnOff(ctx, configDir);
+          return;
+        case "on":
         case "restore":
-          setMinimized(false);
-          return applyStatus(ctx, detectProjectRoot(ctx.cwd, configDir), configDir);
+          if (isOn()) return ctx.ui.notify("bot-lobby is already on.", "info");
+          return turnOn(pi, ctx, configDir);
         case "claim":
           return claimTaskCommand(ctx, configDir, rest[0]);
         case "auto":
@@ -400,6 +410,9 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
 
   pi.registerCommand("bot-lobby-settings", {
     description: "Open the web lobby's settings: per-agent model, effort, and instructions",
-    handler: async (_args, ctx) => webCommand(ctx, undefined),
+    handler: async (_args, ctx) => {
+      turnOn(pi, ctx, configDir);
+      return webCommand(ctx, undefined);
+    },
   });
 }

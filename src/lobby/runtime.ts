@@ -9,7 +9,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { appendMetrics, type MetricStatus } from "../state/metrics.ts";
 import { describeToolCall } from "../pi/activity.ts";
-import { currentZenTask, onRunUpdates } from "../pi/ui.ts";
+import { currentZenTask, isMinimized, onRunUpdates } from "../pi/ui.ts";
 import type { WorkspaceInfo } from "../execution/workspace.ts";
 import { basename } from "node:path";
 import { isSubagentProcess } from "../pi/quiet.ts";
@@ -75,6 +75,21 @@ export async function savePlan(state: Runtime | undefined = runtime): Promise<st
 /** Put the panel's open questions to the user; the service holds the implementation. */
 export async function answerPanel(state: Runtime | undefined = runtime): Promise<string> {
   return serviceAnswerPanel(state);
+}
+
+/** What the lobby is running now (a quick fix, a review, a planning round), in words, or undefined. */
+export function lobbyWorkRunning(): string | undefined {
+  const state = runtime;
+  if (!state) return undefined;
+  if (state.quickfix.running) return "A quick fix";
+  if (state.planner?.busy) return "A planning round";
+  if (state.reviews.busy) return "A pull request review";
+  return undefined;
+}
+
+/** Stop the lobby's backend (bot-lobby turned off, or the session ended). */
+export function stopLobbyService(): void {
+  shutdown();
 }
 
 function shutdown(): void {
@@ -234,7 +249,8 @@ export function registerLobbyEvents(pi: ExtensionAPI, configDir: string): void {
     if (runtime) runtime.ctx = ctx;
   };
   pi.on("session_start", (_event, ctx) => {
-    startLobbyService(pi, ctx, configDir);
+    // Off (the default for a new session) runs no lobby until bot-lobby is turned on (see pi/switch.ts).
+    if (!isMinimized()) startLobbyService(pi, ctx, configDir);
   });
   pi.on("session_shutdown", () => shutdown());
   pi.on("ui_prompt_start", () => {
