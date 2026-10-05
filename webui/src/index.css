@@ -701,8 +701,9 @@
 
 /*
  * The top bar: where you are on the left, the tabs in the middle, the session
- * and its tools on the right. Below 1500px the tabs (numbers, words and their
- * connectors) take a row of their own so nothing is squeezed.
+ * and its tools on the right, on one row when they fit. When they do not, the
+ * tabs (numbers, words and their connectors) take a row of their own so
+ * nothing is squeezed.
  */
 .app-header {
   display: grid;
@@ -729,11 +730,12 @@
     flex-wrap: wrap;
   }
 }
-@media (min-width: 1500px) {
-  .app-header {
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+/* Everything on one row when it fits (Header measures it); the tabs sit centred in the room between. */
+@media (min-width: 640px) {
+  .app-header[data-one-row] {
+    grid-template-columns: auto minmax(0, 1fr) auto;
     grid-template-areas: "where tabs tools";
-    padding: 0.5rem 0.75rem;
+    padding: 0.375rem 0.75rem;
   }
 }
 .app-header > .where {
