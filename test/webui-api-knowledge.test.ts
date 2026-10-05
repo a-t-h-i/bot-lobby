@@ -100,6 +100,9 @@ test("knowledge.files lists every agent's files; knowledge.open reads entries wi
     assert.equal(files.status, 200, files.body);
     const listed = files.payload.result!.files as Array<{ agent: string; file: string }>;
     assert.ok(listed.some((file) => file.agent === "master" && file.file === "knowledge.md"));
+    const models = files.payload.result!.models as Record<string, string>;
+    assert.deepEqual(Object.keys(models).sort(), ["backend", "designer", "master", "qa"], "the tree names the model each agent runs on");
+    assert.ok(Object.values(models).every((model) => typeof model === "string" && model.length > 0), "a pinned model, or the session model");
     // Sample open: { view: { agent: "master", entries: [{ text, kind: "bullet", occurrence: 0 }], attached: [], detached: [] } }
     const opened = await call("knowledge.open", { agent: "master", file: "knowledge.md" });
     assert.equal(opened.status, 200, opened.body);
@@ -178,4 +181,11 @@ test("every scenario's mock answers the knowledge calls without throwing", async
       await server.close();
     }
   }
+});
+
+test("each agent's model in the knowledge tree comes from settings, the session model when none is pinned", async () => {
+  const { agentModels } = await import("../src/webui/api/knowledge.ts");
+  const { resolveConfig } = await import("../src/schemas/configuration.ts");
+  const config = resolveConfig({ master: { model: "anthropic/opus" }, agents: { designer: { model: "openai/gpt" } } });
+  assert.deepEqual(agentModels(config), { master: "anthropic/opus", designer: "openai/gpt", backend: "session model", qa: "session model" });
 });
