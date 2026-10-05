@@ -24,7 +24,7 @@ export function Frame({ title, note, className, children, collapsed, onToggle, s
   return (
     <section className={cn("group/frame relative flex min-h-0 min-w-0 flex-col", collapsed && "flex-none", className)} {...props}>
       {title || note || onToggle ? (
-        <div className={cn("flex h-11 shrink-0 items-center justify-between gap-3 px-4", !collapsed && "border-b border-border")}>
+        <div className={cn("flex min-h-11 shrink-0 items-center justify-between gap-3 px-4", !collapsed && "border-b border-border")}>
           {title ? <h2 className="min-w-0 truncate text-[0.8125rem] font-medium">{title}</h2> : <span />}
           <span className="flex shrink-0 items-center gap-2">
             {note ? <span className="flex items-center gap-2 truncate text-xs text-muted-foreground">{note}</span> : null}
@@ -34,9 +34,10 @@ export function Frame({ title, note, className, children, collapsed, onToggle, s
                 aria-expanded={!collapsed}
                 aria-label={collapsed ? `Expand ${name}` : `Minimize ${name}`}
                 title={`${collapsed ? "Expand" : "Minimize"}${shortcut ? ` · ${shortcut}` : ""}`}
-                aria-keyshortcuts={shortcut}
+                aria-keyshortcuts={shortcut ? `${shortcut} Enter Space` : "Enter Space"}
+                aria-describedby="focused-action-help"
                 onClick={onToggle}
-                className="-mr-1.5 inline-flex h-7 items-center gap-1.5 rounded-lg px-1.5 text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+                className="-mr-1.5 inline-flex h-10 items-center gap-1.5 rounded-lg px-2 text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
               >
                 {shortcut ? <Keys chord={shortcut} className="kbd-hint" /> : null}
                 <ChevronDown aria-hidden="true" className={cn("size-4 transition-transform duration-200 ease-snap", collapsed && "-rotate-90")} />

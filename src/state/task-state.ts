@@ -1,5 +1,6 @@
 import type { Task, TaskState } from "../schemas/task.ts";
 import { assertTransition } from "../workflow/transitions.ts";
+import { resetPhaseTiming } from "./phase-timing.ts";
 
 /**
  * Single mutation point for task state. Every state change flows through here
@@ -16,6 +17,7 @@ export function onTransition(fn: TransitionListener): void {
 
 export function transition(task: Task, to: TaskState, now = new Date().toISOString()): void {
   assertTransition(task.state, to);
+  resetPhaseTiming(task, to, now);
   task.state = to;
   task.updatedAt = now;
   listener?.(task, to);

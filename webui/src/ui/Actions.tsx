@@ -86,7 +86,7 @@ export function ActionButton({ label, icon: Icon, tone = "neutral", shortcut, hr
       <TooltipTrigger asChild>{button}</TooltipTrigger>
       <TooltipContent>
         {label}
-        {shortcut ? <Keys chord={shortcut} /> : null}
+        <Keys chord={shortcut ?? (href ? "Enter" : "Enter / Space")} />
       </TooltipContent>
     </Tooltip>
   )

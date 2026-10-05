@@ -13,7 +13,7 @@ import { SECTION_OF, SECTION_ORDER, type Entry, type Where } from "./words"
 function Row({ entry, selected, onSelect }: { entry: Entry; selected: boolean; onSelect: (id: string) => void }) {
   return (
     <li>
-      <button
+      <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
         type="button"
         data-row
         aria-current={selected ? "true" : undefined}

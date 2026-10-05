@@ -1,22 +1,18 @@
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
 
-/** A single key cap: flat, hairline-edged, quiet. It reads on a button, in a tooltip and on the page. */
+/** The look of one key cap: flat, hairline-edged, quiet. It reads on a button, in a tooltip and on the page. */
+export const KBD_CLASS = cn(
+  "pointer-events-none inline-flex h-[1.125rem] min-w-[1.125rem] w-fit items-center justify-center gap-1 rounded-[5px] border border-border bg-background px-1 font-sans text-[0.7rem] leading-none font-medium text-muted-foreground select-none",
+  "in-data-[slot=tooltip-content]:border-background/25 in-data-[slot=tooltip-content]:bg-transparent in-data-[slot=tooltip-content]:text-background",
+  "in-data-[variant=default]:border-primary-foreground/35 in-data-[variant=default]:bg-primary-foreground/10 in-data-[variant=default]:text-primary-foreground",
+  "in-data-[variant=destructive]:border-background/40 in-data-[variant=destructive]:bg-background/10 in-data-[variant=destructive]:text-background",
+  "[&_svg:not([class*='size-'])]:size-3"
+)
+
+/** A single key cap. */
 function Kbd({ className, ...props }: React.ComponentProps<"kbd">) {
-  return (
-    <kbd
-      data-slot="kbd"
-      className={cn(
-        "pointer-events-none inline-flex h-[1.125rem] min-w-[1.125rem] w-fit items-center justify-center gap-1 rounded-[5px] border border-border bg-background px-1 font-sans text-[0.7rem] leading-none font-medium text-muted-foreground select-none",
-        "in-data-[slot=tooltip-content]:border-background/25 in-data-[slot=tooltip-content]:bg-transparent in-data-[slot=tooltip-content]:text-background",
-        "in-data-[variant=default]:border-primary-foreground/35 in-data-[variant=default]:bg-primary-foreground/10 in-data-[variant=default]:text-primary-foreground",
-        "in-data-[variant=destructive]:border-background/40 in-data-[variant=destructive]:bg-background/10 in-data-[variant=destructive]:text-background",
-        "[&_svg:not([class*='size-'])]:size-3",
-        className
-      )}
-      {...props}
-    />
-  )
+  return <kbd data-slot="kbd" className={cn(KBD_CLASS, className)} {...props} />
 }
 
 function KbdGroup({ className, ...props }: React.ComponentProps<"div">) {

@@ -24,7 +24,7 @@ function Mark({ check, checking }: { check?: ExcalidrawCheck; checking: boolean 
 function Row({ session, check, checking, selected, onSelect }: { session: ExcalidrawSessionInfo; check?: ExcalidrawCheck; checking: boolean; selected: boolean; onSelect: (id: string) => void }) {
   return (
     <li>
-      <button
+      <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
         type="button"
         data-row
         aria-current={selected ? "true" : undefined}

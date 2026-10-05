@@ -7,7 +7,6 @@ import { shortDuration, truncate } from "../text.ts";
 import { EditLog } from "../state/changes.ts";
 import { formatMinutes, REPORT_GRACE_MS } from "../state/budget.ts";
 import { runPiAgent, spawnPiProcess, type PiStreamEvent, type ProcessRunner, type RelayAsk } from "./pi-runner.ts";
-import { isUnavailable, looksUnavailable, markUnavailable, usableFallback } from "./fallback.ts";
 import { ASK_ENV } from "../ask/relay.ts";
 import { ASK_TOOL } from "../ask/types.ts";
 import { agentOfRun, grantOption } from "../excalidraw/sessions.ts";
@@ -42,10 +41,6 @@ export interface AgentRequest {
   context: AgentContext;
   model?: string;
   thinking?: string;
-  /** Where the run goes when its model runs out of usage or is unavailable. */
-  fallback?: { model: string; thinking: string };
-  /** Set by the runner once it has switched: the model that ran out. */
-  fellBackFrom?: string;
   timeoutMs: number;
   cwd: string;
   signal?: AbortSignal;
@@ -141,35 +136,19 @@ function retryable(run: AgentRun): boolean {
  */
 export async function runAgent(request: AgentRequest, run: ProcessRunner = spawnPiProcess): Promise<AgentRun> {
   const startedAt = new Date().toISOString();
-  let attempts = Math.max(1, (request.retries ?? 0) + 1);
+  const attempts = Math.max(1, (request.retries ?? 0) + 1);
   // A failed attempt may have edited files before the retry: the run owns every edit.
   const edits = new EditLog(request.cwd);
   let last: AgentRun | undefined;
-  // A model already known to be out of usage goes straight to the fallback.
-  const other = usableFallback(request.fallback, request.model);
-  if (other && isUnavailable(request.model)) request = switchToFallback(request, other, request.model ?? "the session model");
   for (let attempt = 1; attempt <= attempts; attempt++) {
     last = await runAgentOnce(request, run, attempt, startedAt, edits);
     request.onAttemptEnd?.(last);
-    // Out of usage (or the model unavailable): the same model would fail again, so the fallback takes the retry.
-    const fallback = usableFallback(request.fallback, request.model);
-    if (fallback && !request.fellBackFrom && last.status === "failed" && looksUnavailable(last.error)) {
-      if (request.model) markUnavailable(request.model);
-      request = switchToFallback(request, fallback, request.model ?? "the session model");
-      attempts += 1;
-      continue;
-    }
     if (!retryable(last)) break;
     // Under a budget a retry only uses what is left of the allotment.
     if (request.time && request.time.endsAt - Date.now() < MIN_ATTEMPT_MS) break;
   }
   const edited = edits.list();
   return edited.length > 0 ? { ...last!, edited } : last!;
-}
-
-/** The request moved to its fallback model and thinking level. */
-function switchToFallback(request: AgentRequest, fallback: { model: string; thinking?: string }, from: string): AgentRequest {
-  return { ...request, model: fallback.model, thinking: fallback.thinking ?? request.thinking, fellBackFrom: from };
 }
 
 /** Abort every in-flight subagent (session shutdown, user cancel). */
@@ -190,7 +169,6 @@ function baseRun(request: AgentRequest, runId: string, startedAt: string, attemp
     attempts,
     startedAt,
     ...(request.thinking ? { thinking: request.thinking } : {}),
-    ...(request.fellBackFrom ? { fellBackFrom: request.fellBackFrom } : {}),
     ...(request.routedFrom ? { routedFrom: request.routedFrom } : {}),
     ...(request.route ? { route: request.route } : {}),
     ...(request.time ? { allotMs: request.time.allotMs, endsAt: request.time.endsAt } : {}),

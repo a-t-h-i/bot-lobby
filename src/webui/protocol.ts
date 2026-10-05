@@ -3,6 +3,8 @@
  * The page imports this file with `import type` only, so nothing from the
  * server is ever bundled into it.
  */
+import type { Delivery, DeliveryAction } from "../delivery/types.ts";
+import type { TimingProjection } from "../state/phase-timing.ts";
 import type { LobbyTopic } from "../lobby/topics.ts";
 import type { WebPrompt } from "../lobby/prompt-hub.ts";
 import type { DialogAnswer, SessionDialog } from "../lobby/sessions.ts";
@@ -338,6 +340,8 @@ export interface ExcalidrawCheck {
 
 /** `tasks.get`: one task read whole, in the terminal's wording. */
 export interface TaskDetail {
+  timing?: TimingProjection;
+  delivery?: Delivery;
   /** The full request, when it says more than the title. */
   request?: string;
   /** The oracle's proposal, while the task has no approved plan yet. */
@@ -519,6 +523,10 @@ export interface Api {
   "tasks.auto": { request: { taskId: string; on: boolean }; result: { notice: string; on: boolean } };
   "tasks.message": { request: { taskId: string; text: string; attachments?: string[] }; result: { notice: string } };
   "tasks.get": { request: { taskId: string }; result: TaskDetail };
+  "tasks.open": { request: { taskId: string }; result: { sessionId?: string; key?: string; notice?: string } };
+  "tasks.deliveryReview": { request: { taskId: string }; result: { delivery: Delivery } };
+  "tasks.deliveryDefer": { request: { taskId: string; reviewId: string }; result: { delivery: Delivery } };
+  "tasks.deliver": { request: { taskId: string; reviewId: string; action: DeliveryAction; confirmMain?: boolean }; result: { delivery: Delivery } };
   "plans.get": { request: { planId: string }; result: PlanDetail };
   "plans.start": { request: { planId: string; where: "here" | "session"; auto?: boolean }; result: { notice: string; key?: string } };
   "plans.discard": { request: { planId: string }; result: { notice: string } };
