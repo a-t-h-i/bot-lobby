@@ -97,7 +97,6 @@ export function Combobox({ value, options, onChange, label, className, disabled 
         aria-label={label}
         aria-keyshortcuts="Enter Space ArrowDown ArrowUp"
         aria-description="When focused, press Enter, Space or an arrow key to choose. Type to search."
-        title="Choose: Enter / Space / arrows when focused"
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-controls={open ? id : undefined}
@@ -111,7 +110,7 @@ export function Combobox({ value, options, onChange, label, className, disabled 
         }}
         data-slot="select-trigger"
         className={cn(
-          "flex h-8 w-full min-w-0 items-center justify-between gap-2 overflow-hidden rounded-lg border border-input bg-card/40 px-2.5 text-[0.8125rem] whitespace-nowrap outline-none transition-[border-color,box-shadow] duration-150 hover:bg-accent/40 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50",
+          "flex h-8 w-full min-w-0 items-center justify-between gap-2 overflow-hidden rounded-lg border border-input bg-background px-2.5 text-[0.8125rem] whitespace-nowrap outline-none transition-[border-color,box-shadow] duration-150 hover:bg-accent/40 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50",
           className
         )}
       >

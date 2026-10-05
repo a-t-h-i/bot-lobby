@@ -4,9 +4,12 @@
  * support stay on the track, dimmed and struck through, but the thumb never
  * rests on one. Dragging snaps to the nearest supported stop, the arrow keys
  * jump over unsupported ones, and the drop-in is only committed on release.
- * The thumb and the fill glide between stops on a spring.
+ * A key press shows its stop at once and the next press starts from it, so
+ * quick presses add up instead of each starting from a level the server has not
+ * yet answered with; the saved level takes over again when every save a press
+ * started has come back. The thumb and the fill glide between stops on a spring.
  */
-import { useCallback, useRef, useState, type KeyboardEvent, type PointerEvent } from "react"
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react"
 import { motion } from "motion/react"
 import { cn } from "@/lib/utils"
 
@@ -21,7 +24,8 @@ export interface EffortSliderProps {
   model?: string
   label: string
   disabled?: boolean
-  onChange: (level: string) => void
+  /** Save the level. Return the save (a promise) and the slider keeps showing quick key presses until it comes back. */
+  onChange: (level: string) => void | Promise<unknown>
 }
 
 const SHORT: Record<string, string> = { minimal: "min", medium: "med" }
@@ -55,12 +59,29 @@ export function stepSupported(levels: readonly string[], supported: readonly str
 export function EffortSlider({ value, levels, supported, model, label, disabled, onChange }: EffortSliderProps) {
   const track = useRef<HTMLDivElement>(null)
   const [dragging, setDragging] = useState<number | undefined>()
+  // The stop the last key press chose, until every save it started has come back. The ref holds the same stop for
+  // the next key press, which can arrive before React has drawn the first one; `saving` counts the saves under way.
+  const [chosenByKey, setChosenByKey] = useState<number | undefined>()
+  const intended = useRef<number | undefined>(undefined)
+  const saving = useRef(0)
+  const settle = useCallback(() => {
+    intended.current = undefined
+    saving.current = 0
+    setChosenByKey(undefined)
+  }, [])
   const last = Math.max(levels.length - 1, 1)
   const saved = nearestSupported(levels, supported, Math.max(0, levels.indexOf(value)))
-  const shown = dragging ?? saved
+  const shown = dragging ?? chosenByKey ?? saved
   const percent = shown < 0 ? 0 : (shown / last) * 100
   const level = levels[shown] ?? value
   const clamped = shown >= 0 && level !== value
+
+  useEffect(() => {
+    // A safety net for a save that never answers: the saved level takes over again.
+    if (chosenByKey === undefined) return
+    const timer = window.setTimeout(settle, 10_000)
+    return () => window.clearTimeout(timer)
+  }, [chosenByKey, settle])
 
   const indexAt = useCallback(
     (clientX: number): number => {
@@ -93,11 +114,12 @@ export function EffortSlider({ value, levels, supported, model, label, disabled,
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (disabled || shown < 0) return
+    const at = intended.current ?? shown
     const keys: Record<string, number> = {
-      ArrowRight: stepSupported(levels, supported, shown, 1),
-      ArrowUp: stepSupported(levels, supported, shown, 1),
-      ArrowLeft: stepSupported(levels, supported, shown, -1),
-      ArrowDown: stepSupported(levels, supported, shown, -1),
+      ArrowRight: stepSupported(levels, supported, at, 1),
+      ArrowUp: stepSupported(levels, supported, at, 1),
+      ArrowLeft: stepSupported(levels, supported, at, -1),
+      ArrowDown: stepSupported(levels, supported, at, -1),
       Home: nearestSupported(levels, supported, 0),
       End: nearestSupported(levels, supported, last),
     }
@@ -105,7 +127,17 @@ export function EffortSlider({ value, levels, supported, model, label, disabled,
     if (next === undefined) return
     event.preventDefault()
     const chosen = levels[next]
-    if (chosen && chosen !== value) onChange(chosen)
+    // Compared with the last stop chosen, not with what is saved or drawn: right then left in quick succession must end where it began.
+    if (!chosen || next === at) return
+    intended.current = next
+    setChosenByKey(next)
+    saving.current += 1
+    void Promise.resolve(onChange(chosen))
+      .catch(() => undefined)
+      .then(() => {
+        saving.current -= 1
+        if (saving.current <= 0) settle()
+      })
   }
 
   return (

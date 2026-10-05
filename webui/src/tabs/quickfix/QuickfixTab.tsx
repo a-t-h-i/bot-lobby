@@ -4,11 +4,12 @@
  * fix target). `#/quickfix/<id>` selects a job; the list is read again on
  * every `quickfix` topic change, which is also how running steps arrive.
  */
+import { Zap } from "lucide-react"
 import { useEffect, useState } from "react"
 import { go, tabHash } from "@/app/router"
 import { ErrorState } from "@/app/States"
 import { useApiRead } from "@/app/useApiRead"
-import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty"
+import { Empty, EmptyMedia, EmptyDescription, EmptyHeader } from "@/components/ui/empty"
 import { ListSkeleton, PaneHeader, SplitPane, useWide } from "@/ui/SplitPane"
 import { JobDetail } from "./JobDetail"
 import { JobList } from "./JobList"
@@ -30,8 +31,11 @@ function useNow(active: boolean): number {
 
 function Intro() {
   return (
-    <Empty className="flat-pane m-4 flex-1">
+    <Empty className="m-4 flex-1">
       <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <Zap aria-hidden="true" />
+        </EmptyMedia>
         <EmptyDescription className="font-medium text-foreground">{INTRO}</EmptyDescription>
       </EmptyHeader>
     </Empty>

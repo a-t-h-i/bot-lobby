@@ -33,7 +33,7 @@ function Notes({ notes }: { notes: string[] }) {
   return (
     <>
       {notes.map((note, index) => (
-        <p key={index} className="ml-6 rounded-lg bg-accent px-3 py-1.5 text-sm text-foreground italic">
+        <p key={index} className="ml-6 rounded-lg border border-primary/15 bg-accent px-3 py-1.5 text-sm text-foreground italic">
           {note}
         </p>
       ))}
@@ -51,18 +51,18 @@ function Line({ row, notes, onComment }: LineProps) {
   const line = row.text.trim()
   const open = () => onComment(line)
   return (
-    <li>
+    <li className="group/line">
       <div className="flex items-start gap-1">
         <span className="flex w-4 shrink-0 justify-center pt-3.5" aria-hidden="true">
           {notes.length > 0 ? <span className="size-2 rounded-full bg-primary" /> : null}
         </span>
         <div
-          className={cn("min-w-0 flex-1 cursor-pointer rounded-lg px-2 py-1.5 transition-colors hover:bg-accent/50", row.fenced && "font-mono text-sm whitespace-pre-wrap break-words")}
+          className={cn("min-w-0 flex-1 cursor-pointer rounded-lg px-2 py-1.5 transition-colors hover:bg-muted", row.fenced && "font-mono text-sm whitespace-pre-wrap break-words")}
           onClick={(event) => !(event.target as HTMLElement).closest("a") && open()}
         >
           {row.fenced ? row.text : <Markdown text={row.text} />}
         </div>
-        <Button type="button" variant="ghost" size="icon" className="shrink-0" aria-label={`Comment on this line: ${line}`} onClick={open}>
+        <Button type="button" variant="ghost" size="icon" className="shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/line:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100" aria-label={`Comment on this line: ${line}`} onClick={open}>
           <MessageSquarePlus aria-hidden="true" />
         </Button>
       </div>

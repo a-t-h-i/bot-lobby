@@ -63,7 +63,7 @@ function NameForm({ id, label, hint, buttonLabel, initial = "", required, onSubm
         value={name}
         maxLength={80}
         onChange={(event) => setName(event.target.value)}
-        className="h-8 w-full rounded-lg border border-input bg-card/40 px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+        className="h-8 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none transition-[border-color,box-shadow] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
       />
       {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       <Button type="submit" className="h-8 self-end" disabled={required && !name.trim()}>
@@ -95,7 +95,7 @@ export function AddForms({ onChanged }: { onChanged: () => void }) {
 }
 
 function LinkLine({ session, revealed }: { session: ExcalidrawSessionInfo; revealed?: string }) {
-  return <p className="font-mono text-sm break-all text-foreground">{revealed ?? session.masked}</p>
+  return <p className="rounded-lg border border-border bg-muted px-3 py-2 font-mono text-sm break-all text-foreground">{revealed ?? session.masked}</p>
 }
 
 function ContributeLine({ session }: { session: ExcalidrawSessionInfo }) {
@@ -191,17 +191,19 @@ export function SessionDetail({ session, check, checking, onCheck, onChanged, on
       <ActionBar>
         {revealed ? (
           <>
-            <ActionButton label="Copy the link" icon={Copy} onClick={copy} />
-            <ActionButton label="Open board" icon={ExternalLink} tone="primary" href={revealed} />
+            <ActionButton label="Copy the link" text="Copy" icon={Copy} shortcut="C" onClick={copy} />
+            <ActionButton label="Open board" icon={ExternalLink} tone="primary" shortcut="O" href={revealed} />
           </>
         ) : (
-          <ActionButton label="Reveal the link" icon={Eye} onClick={() => void reveal()} />
+          <ActionButton label="Reveal the link" text="Reveal" icon={Eye} shortcut="R" onClick={() => void reveal()} />
         )}
-        <ActionButton label={session.contribute ? "Look only: agents stop drawing" : "Let agents draw"} icon={session.contribute ? PencilOff : Pencil} pressed={session.contribute} onClick={() => void toggleContribute()} />
-        <ActionButton label="Check the room" icon={checking ? Loader : ShieldCheck} disabled={checking} onClick={onCheck} />
+        <ActionButton label={session.contribute ? "Look only: agents stop drawing" : "Let agents draw"} text={session.contribute ? "Look only" : "Let agents draw"} icon={session.contribute ? PencilOff : Pencil} shortcut="W" pressed={session.contribute} onClick={() => void toggleContribute()} />
+        <ActionButton label="Check the room" text="Check" icon={checking ? Loader : ShieldCheck} shortcut="T" disabled={checking} onClick={onCheck} />
         <ConfirmButton
           icon={Trash2}
           label="Remove the session"
+          text="Remove"
+          shortcut="Delete"
           title={`Remove "${session.name}"?`}
           description="Agents lose this session at once; the Excalidraw room itself is not touched."
           confirmLabel="Remove session"
@@ -209,7 +211,7 @@ export function SessionDetail({ session, check, checking, onCheck, onChanged, on
           onConfirm={onRemove}
         />
       </ActionBar>
-      <h2 className="text-sm font-medium break-words">{session.name}</h2>
+      <h2 className="text-lg font-semibold tracking-tight break-words">{session.name}</h2>
       <LinkLine session={session} revealed={revealed} />
       <ContributeLine session={session} />
       <CheckLine check={check} checking={checking} />
