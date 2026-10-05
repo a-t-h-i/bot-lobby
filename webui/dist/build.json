@@ -1,6 +1,6 @@
 {
-  "hash": "291bb89c7a264f3483fb9ea68f3f128a585b09bd8c48f0a533da161a7c8f7249",
-  "builtAt": "2026-10-05T07:16:19.513Z",
+  "hash": "4828db7e5f72c634502a391cec0fce05755695cc0599bdb3fe9f4a40f6c54e37",
+  "builtAt": "2026-10-05T07:45:44.641Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -128,7 +128,7 @@
     },
     {
       "path": "webui/src/components/ui/button.tsx",
-      "sha256": "4dbdb369c0512afa20795b1c1c8845ec6fd42d75a598b00b4b6cc2b51d04bc97"
+      "sha256": "3dc3b655e099013076d33439ed447117e0b722ff88e7a511792a79e6fc0739be"
     },
     {
       "path": "webui/src/components/ui/checkbox.tsx",
@@ -308,11 +308,11 @@
     },
     {
       "path": "webui/src/tabs/excalidraw/ExcalidrawTab.tsx",
-      "sha256": "3d39eb899a6f10a6a492bfb3c5b247c8747d1871414359a3e312f4bd01440401"
+      "sha256": "4f4c8db80db4c5ad42fe4cea2e2d68dd065f106e5bdcd5f49e604756e474446e"
     },
     {
       "path": "webui/src/tabs/excalidraw/SessionDetail.tsx",
-      "sha256": "4685a23250b0ae53c9c070e9302f1c5b484e275eee831fdd6f3c678163dce73e"
+      "sha256": "7f75e90037bdaec0aef0d8f69750d48f1a8496544782d14e179b123f48c7f224"
     },
     {
       "path": "webui/src/tabs/excalidraw/SessionList.tsx",
@@ -320,7 +320,7 @@
     },
     {
       "path": "webui/src/tabs/excalidraw/words.ts",
-      "sha256": "4c5cd5bee8fbce8d8d33d142a5be64a6d8314080cffd6b7fb51f93eb6559950a"
+      "sha256": "134b86797a1911abb7d5c396d0603de8a35ed66a8419b98e2d1fef0e154ee5ae"
     },
     {
       "path": "webui/src/tabs/git/GitTab.tsx",
@@ -448,15 +448,15 @@
     },
     {
       "path": "webui/src/tabs/plan/PlanTab.tsx",
-      "sha256": "ac74d9cd0c70cfa25af879dcb1581b843f3a53e84bf637f098bb4ae4397fbe15"
+      "sha256": "24cd7dba0b6131c82f1d90133a48103d4f35cd977008de607f2627feaf2039ce"
     },
     {
       "path": "webui/src/tabs/plan/Roster.tsx",
-      "sha256": "655d31c68355cb647b9940cfb5bed9ff43c654f2569885684e7786b0941aee84"
+      "sha256": "4746b765c3745fa0e2706bf21153c0a64270aeed021fc7167bcaafc708c5ca00"
     },
     {
       "path": "webui/src/tabs/plan/words.ts",
-      "sha256": "8bb6ca106b77b65faf8575a0e982f521ab091f3d4b1339bb987fc21aa8ef6518"
+      "sha256": "0daa3acdca73602faa396aeef6de4ba2c579e9ab39c859c128eb0c4839ff2692"
     },
     {
       "path": "webui/src/tabs/quickfix/JobDetail.tsx",
@@ -539,6 +539,10 @@
       "sha256": "444061f41d8e87288fc79c6609df4de06bb084e96d4481c88f46fb816ef23732"
     },
     {
+      "path": "webui/src/tabs/tasks/OpenInSession.tsx",
+      "sha256": "cafe41c0617202421394b12e9e4d061421ed06bce1e9e7476d1d65f1ceba95b8"
+    },
+    {
       "path": "webui/src/tabs/tasks/PhaseTiming.tsx",
       "sha256": "721065806a423aee2a16992945cf35075f346fe4512f37001d03ace54f0f9d28"
     },
@@ -548,7 +552,7 @@
     },
     {
       "path": "webui/src/tabs/tasks/TaskDetail.tsx",
-      "sha256": "7b6e5eb84a1deac6dd0bb24f8af205a9efe1d0693750d4245881edeca2e4df47"
+      "sha256": "f8f64315f2ce7c6b58be0e52257a3d2caae05c3071abfbc4118020519e07db62"
     },
     {
       "path": "webui/src/tabs/tasks/TaskList.tsx",
