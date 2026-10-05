@@ -1,44 +1,100 @@
 /**
- * The sections of a task's detail: Request, Progress, Approved plan (or
- * Proposal / the empty Plan note), Amendments, Waiting on and Recent runs. The
- * plan text and steps arrive with `tasks.get`.
+ * The sections of a task's detail: Request, Steps (the plan's short list, the
+ * steps a worker is on marked `active · 1m 12s` and ticking), the full plan
+ * folded away under them (or Proposal / the empty Plan note), Amendments,
+ * Waiting on and Recent runs. The plan text and steps arrive with `tasks.get`.
  */
-import { AlertCircle, CheckCircle2, Circle, XCircle } from "lucide-react"
+import { useId, useState } from "react"
+import { AlertCircle, CheckCircle2, ChevronRight, Circle, XCircle } from "lucide-react"
 import type { TaskDetail as TaskDetailData } from "@protocol"
+import { executionWords } from "@/lib/phaseTiming"
+import { useElapsed } from "@/lib/useElapsed"
+import { cn } from "@/lib/utils"
 import { Markdown } from "@/ui/Markdown"
 import { Section } from "@/ui/Section"
 
-function Step({ step, index }: { step: TaskDetailData["steps"][number]; index: number }) {
-  const Icon = step.status === "done" ? CheckCircle2 : Circle
-  const markClass = step.status === "done" ? "text-success" : step.status === "current" ? "text-primary" : "text-muted-foreground"
+type StepData = TaskDetailData["steps"][number]
+
+/** A worker's time on the step, ticking while it works (`stopped` once the task has ended). */
+function StepTime({ step, stopped }: { step: StepData; stopped: boolean }) {
+  const elapsed = useElapsed(!stopped, step)
+  return <span className="tabular-nums">{executionWords((step.workedMs ?? 0) + elapsed)}</span>
+}
+
+/** The mark of a step under way: a dot that breathes while a worker is on it. */
+function ActiveMark() {
   return (
-    <li className="flex items-start gap-2.5 text-sm">
-      <Icon aria-hidden="true" className={`mt-0.5 size-4 shrink-0 ${markClass}`} />
-      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{index + 1}.</span>
-      <span className={step.status === "current" ? "min-w-0 break-words text-foreground" : "min-w-0 break-words text-muted-foreground"}>{step.text}</span>
-      {step.status === "current" ? (
+    <span aria-hidden="true" className="relative mt-[0.3125rem] grid size-4 shrink-0 place-items-center">
+      <span className="absolute size-2.5 rounded-full bg-primary/30 motion-safe:animate-ping" />
+      <span className="size-2 rounded-full bg-primary" />
+    </span>
+  )
+}
+
+function Step({ step, index, stopped }: { step: StepData; index: number; stopped: boolean }) {
+  const active = Boolean(step.active) && !stopped
+  const done = step.status === "done"
+  const markClass = done ? "text-success" : step.status === "current" ? "text-primary" : "text-muted-foreground"
+  const Icon = done ? CheckCircle2 : Circle
+  return (
+    <li className="flex items-start gap-2.5 text-sm" data-step={active ? "active" : step.status}>
+      {active ? <ActiveMark /> : <Icon aria-hidden="true" className={`mt-0.5 size-4 shrink-0 ${markClass}`} />}
+      <span className="shrink-0 text-xs leading-5 text-muted-foreground tabular-nums">{index + 1}.</span>
+      <span className={cn("min-w-0 break-words", active || step.status === "current" ? "text-foreground" : "text-muted-foreground")}>{step.text}</span>
+      {active ? (
+        <span className="shrink-0 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+          active · <StepTime step={step} stopped={stopped} />
+          <span className="sr-only"> (being worked on now)</span>
+        </span>
+      ) : step.status === "current" && !stopped ? (
         <span className="shrink-0 rounded-md bg-accent px-2 py-0.5 text-xs font-medium">
-          now<span className="sr-only"> (current step)</span>
+          next<span className="sr-only"> (the step up next)</span>
         </span>
       ) : null}
     </li>
   )
 }
 
-function ProgressSection({ steps }: { steps: TaskDetailData["steps"] }) {
+function StepsSection({ steps, stopped }: { steps: TaskDetailData["steps"]; stopped: boolean }) {
   const done = steps.filter((step) => step.status === "done").length
   return (
-    <Section title="Progress" right={`${done}/${steps.length} steps`}>
-      <ol className="flex flex-col gap-2">
+    <Section title="Steps" right={`${done}/${steps.length} done`}>
+      <ol className="flex flex-col gap-2" aria-label="Steps">
         {steps.map((step, index) => (
-          <Step key={`${index}-${step.text}`} step={step} index={index} />
+          <Step key={`${index}-${step.text}`} step={step} index={index} stopped={stopped} />
         ))}
       </ol>
     </Section>
   )
 }
 
+/** The rest of the plan (its detail) under the steps, folded away until asked for. */
+function FullPlan({ text }: { text: string }) {
+  const [open, setOpen] = useState(false)
+  const body = useId()
+  return (
+    <Section title="Full plan">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={body}
+        onClick={() => setOpen((now) => !now)}
+        className="inline-flex w-fit items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+      >
+        <ChevronRight aria-hidden="true" className={cn("size-4 transition-transform duration-200 ease-snap", open && "rotate-90")} />
+        {open ? "Hide the details" : "Read the details of each step"}
+      </button>
+      {open ? (
+        <div id={body}>
+          <Markdown text={text} />
+        </div>
+      ) : null}
+    </Section>
+  )
+}
+
 function PlanSection({ detail, finished }: { detail: TaskDetailData; finished: boolean }) {
+  if (detail.plan && detail.planDetails) return <FullPlan text={detail.planDetails} />
   if (detail.plan) {
     return (
       <Section title="Approved plan">
@@ -118,16 +174,16 @@ function Runs({ runs }: { runs: string[] }) {
   )
 }
 
-/** Request, Progress and the plan — the sections above Comments. */
+/** Steps first, to skim; then the request and the plan in full — the sections above Comments. */
 export function PlanSections({ detail, finished }: { detail: TaskDetailData; finished: boolean }) {
   return (
     <>
+      {detail.steps.length > 0 ? <StepsSection steps={detail.steps} stopped={finished} /> : null}
       {detail.request ? (
         <Section title="Request">
           <Markdown text={detail.request} />
         </Section>
       ) : null}
-      {detail.steps.length > 0 ? <ProgressSection steps={detail.steps} /> : null}
       <PlanSection detail={detail} finished={finished} />
     </>
   )

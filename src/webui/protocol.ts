@@ -95,6 +95,12 @@ export interface StatusInfo {
   windows: Array<{ name: string; url: string }>;
 }
 
+/** Agent work time as of the reply: the page adds the time that passes while `running`. */
+export interface WorkClock {
+  workedMs: number;
+  running: boolean;
+}
+
 /** One task header as the lobby snapshot carries it. */
 export interface SnapshotTask {
   id: string;
@@ -105,6 +111,10 @@ export interface SnapshotTask {
   git?: { branch: string; from?: string };
   progress?: { done: number; total: number };
   currentStep?: string;
+  /** The steps a worker is on right now, with the worker time on each (ms, as of the snapshot). */
+  activeSteps?: Array<{ text: string; workedMs: number }>;
+  /** How long the task's agents have worked on it, idle time left out. */
+  work?: WorkClock;
 }
 
 /** A file attached in the composer, as `files.upload` answers (the message names it by its path). */
@@ -356,8 +366,15 @@ export interface TaskDetail {
   proposal?: string;
   /** The approved plan in Markdown. */
   plan?: string;
-  /** The plan as a checklist, in order; `current` is the step under way. */
-  steps: Array<{ text: string; status: "done" | "current" | "open" }>;
+  /** The plan after the steps list it opens with (the steps show as the checklist); absent when the plan is read whole. */
+  planDetails?: string;
+  /**
+   * The plan as a checklist, in order; `current` is the step under way, `active` the steps a worker is on right now,
+   * each with its worker time (ms, as of the reply).
+   */
+  steps: Array<{ text: string; status: "done" | "current" | "open"; active?: boolean; workedMs?: number }>;
+  /** How long the task's agents have worked on it, idle time left out (ms, as of the reply); `running` while they work. */
+  work?: WorkClock;
   amendments: string[];
   /** Approvals waiting on you: `kind` plus `for <domain>: <detail>`. */
   waiting: Array<{ kind: string; detail: string }>;

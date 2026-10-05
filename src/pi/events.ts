@@ -17,7 +17,7 @@ import { isAutoMode } from "../state/auto.ts";
 import { triageContext } from "../classifier/triage.ts";
 import { qaStillDue } from "../workflow/track.ts";
 import { previousTaskNote } from "./fresh-context.ts";
-import { budgetLine, budgetState, pauseClocks, readBudget, resumeClocks, startClock, stopClocks } from "../state/budget.ts";
+import { budgetLine, budgetState, clockTask, pauseClocks, readBudget, resumeClocks, startClock, stopClocks, turnStarted } from "../state/budget.ts";
 
 /** Tools that wait on the user: the task's clock waits with them. */
 const ASKING_TOOLS: ReadonlySet<string> = new Set(["ask_user_question"]);
@@ -77,10 +77,11 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
   });
 
 
-  // A task's time budget counts while the oracle works on it, not while it waits on the user.
+  // A task's work time (and its time budget) counts while the oracle works on it, not while it waits on the user.
   const asking = new Set<string>();
   pi.on("agent_start", (_event, ctx) => {
     if (isSubagentProcess()) return;
+    turnStarted();
     const root = detectProjectRoot(ctx.cwd, configDir);
     const task = activeTask(root, configDir, ctx.sessionManager.getSessionId());
     if (task) startClock(root, configDir, task.id);
@@ -92,9 +93,14 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
       pauseClocks();
     }
   });
-  pi.on("tool_execution_end", (event) => {
+  pi.on("tool_execution_end", (event, ctx) => {
     if (isSubagentProcess()) return;
     if (asking.delete(event.toolCallId)) resumeClocks();
+    // A task started, finished or taken over within the turn: the clock follows the task the session drives now.
+    if (event.toolName === "orchestrate") {
+      const root = detectProjectRoot(ctx.cwd, configDir);
+      clockTask(root, configDir, activeTask(root, configDir, ctx.sessionManager.getSessionId())?.id);
+    }
   });
   pi.on("agent_end", () => {
     if (isSubagentProcess()) return;

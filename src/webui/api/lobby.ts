@@ -9,23 +9,30 @@ import type { Task } from "../../schemas/task.ts";
 import type { ApiContext } from "./index.ts";
 import { withAttachments } from "../uploads.ts";
 import { fail } from "./index.ts";
-import { taskSteps } from "./plan-facts.ts";
+import { stepViews } from "./plan-facts.ts";
+import { TERMINAL_STATES } from "../../schemas/task.ts";
+import type { WorkProjection } from "../../state/work-time.ts";
 import type { LobbySnapshot, SnapshotTask } from "../protocol.ts";
 
-/** Plan facts the header shows: step progress plus the step under way, if any. */
-function planFacts(task: Task): Pick<SnapshotTask, "progress" | "currentStep"> {
-  const steps = taskSteps(task);
-  if (steps.length === 0) return {};
+/** Plan facts the header shows: step progress, the steps a worker is on (with their time) or else the next one, and the work time. */
+function planFacts(task: Task, work: WorkProjection | undefined): Pick<SnapshotTask, "progress" | "currentStep" | "activeSteps" | "work"> {
+  const clock = work ? { work: { workedMs: Math.round(work.workedMs), running: work.running && !TERMINAL_STATES.includes(task.state) } } : {};
+  const steps = stepViews(task, work);
+  if (steps.length === 0) return clock;
+  const active = steps.filter((step) => step.active);
   const current = steps.find((step) => step.status === "current");
   return {
     progress: { done: steps.filter((step) => step.status === "done").length, total: steps.length },
     ...(current ? { currentStep: current.text } : {}),
+    ...(active.length > 0 ? { activeSteps: active.map((step) => ({ text: step.text, workedMs: step.workedMs })) } : {}),
+    ...clock,
   };
 }
 
 function taskOf(ctx: ApiContext): LobbySnapshot["task"] {
   const task = ctx.service.zen().task;
   if (!task) return undefined;
+  const work = ctx.service.work?.(task.id);
   return {
     id: task.id,
     title: task.title,
@@ -33,7 +40,7 @@ function taskOf(ctx: ApiContext): LobbySnapshot["task"] {
     ...(task.track ? { track: { path: task.track.path, size: task.track.size } } : {}),
     domains: [...(task.domains ?? [])],
     ...(task.git ? { git: { branch: task.git.branch, ...(task.git.from ? { from: task.git.from } : {}) } } : {}),
-    ...planFacts(task),
+    ...planFacts(task, work),
   };
 }
 

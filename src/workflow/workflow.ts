@@ -55,6 +55,7 @@ import { assertNoPendingApprovals, pendingApprovals, requestApproval, resolveApp
 import { withBlockingRequest } from "../state/blocking-requests.ts";
 import { pingApproval } from "../pi/notify.ts";
 import { describeRun, runLogEntry } from "../pi/run-summary.ts";
+import { noteWorkerRun } from "../state/work-time.ts";
 import { nextStates } from "./transitions.ts";
 import type { FileHinter } from "../classifier/files.ts";
 import type { KnowledgePicker } from "../classifier/knowledge.ts";
@@ -1800,9 +1801,17 @@ export async function runWorkflowAction(params: OrchestrateParams, deps: Workflo
     cwd: taskCwd(task, deps.cwd),
     onUpdate: (run) => {
       if (run.status !== "running") finished.set(run.runId, run);
+      // Every window marks the steps a worker is on while it runs.
+      if (run.role === "worker") {
+        if (run.status === "running") working.add(run.runId);
+        else working.delete(run.runId);
+        noteWorkerRun(deps.root, deps.configDir, task.id, run);
+      }
       deps.onUpdate?.(run);
     },
   };
+  // The action waits for its workers, so once it is over none of them is still on a step (one that threw never said so).
+  const working = new Set<string>();
   try {
     const message = await handler(task, params, tracked);
     const runs = recordRunLog(task, finished, deps);
@@ -1812,6 +1821,8 @@ export async function runWorkflowAction(params: OrchestrateParams, deps: Workflo
     const runs = recordRunLog(task, finished, deps);
     saveTask(deps.root, deps.configDir, task);
     return { ok: false, taskId: task.id, state: task.state, message: `Rejected: ${(error as Error).message}${budgetFooter(task, deps)}`, runs };
+  } finally {
+    for (const runId of working) noteWorkerRun(deps.root, deps.configDir, task.id, { runId, startedAt: "", status: "cancelled" });
   }
 }
 
