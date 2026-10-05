@@ -197,8 +197,9 @@ const HEAD: ValueAnimationTransition<number> = { type: "spring", visualDuration:
 const TAIL: ValueAnimationTransition<number> = { type: "spring", visualDuration: 0.17, bounce: 0.05, delay: 0.07 }
 const FILL: ValueAnimationTransition<number> = { type: "spring", visualDuration: 0.22, bounce: 0.25 }
 const RING: ValueAnimationTransition<number> = { type: "spring", visualDuration: 0.2, bounce: 0 }
-// A physical spring (a time-defined one ignores its starting velocity): the kick is the velocity, in px a second.
-const BUDGE: ValueAnimationTransition<number> = { type: "spring", stiffness: 900, damping: 18, velocity: 150, restDelta: 0.05, restSpeed: 2 }
+// A physical spring (a time-defined one ignores its starting velocity): the kick is the velocity, in px a second,
+// and the knock's size goes with it (45 knocks the pill about 1px and swings it back about 0.4px).
+const BUDGE: ValueAnimationTransition<number> = { type: "spring", stiffness: 900, damping: 18, velocity: 45, restDelta: 0.02, restSpeed: 1 }
 
 /** When, in seconds after the tint starts, it first reaches the far wall. */
 const SPLASH = (() => {
