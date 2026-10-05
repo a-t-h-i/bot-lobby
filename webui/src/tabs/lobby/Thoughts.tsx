@@ -4,7 +4,8 @@
  * with that agent's name beside it; it opens a pane lit in the same colour, its
  * edge pulsing while anyone thinks or works, with no title bar, where every agent has its own labelled bubble and each thought
  * reads as steps rather than one block of text. Esc, the backdrop or the
- * Thinking key closes it.
+ * Thinking key closes it. With no thoughts and nobody at work there is no
+ * orb at all.
  */
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { createPortal } from "react-dom"
@@ -116,9 +117,11 @@ export function Thoughts({ thoughts, collapsed, onToggle, shortcut, busy = [] }:
   const visible = useOverlaySlot(!collapsed, PRIORITY.sheet)
   const overlay = useAnyOverlay()
   useThinkingKey(visible, shortcut, onToggle)
+  // Nothing thought and nobody at work: no orb (the Thinking key still opens the pane).
+  const worthShowing = shown.length > 0 || busy.length > 0
   return (
     <>
-      {createPortal(
+      {worthShowing && createPortal(
         <ThinkingOrb
           ref={bubble}
           spotlight={spotlight}
