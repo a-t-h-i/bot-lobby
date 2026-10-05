@@ -36,7 +36,7 @@ function Typed({ dialog, send }: { dialog: SessionDialog; send: Send }) {
       </label>
       <Textarea id={id} rows={dialog.method === "editor" ? 4 : 2} value={text} placeholder={dialog.placeholder} onChange={(event) => setText(event.target.value)} />
       <div className="flex self-end">
-        <ActionButton label="Send the answer" icon={ArrowUp} tone="primary" disabled={!text.trim()} onClick={() => void send({ value: text.trim() })} />
+        <ActionButton label="Send the answer" text="Send" icon={ArrowUp} tone="primary" disabled={!text.trim()} onClick={() => void send({ value: text.trim() })} />
       </div>
     </div>
   )
@@ -60,14 +60,14 @@ function Card({ sessionKey, dialog, onAnswered }: { sessionKey: string; dialog: 
     if (await act("sessions.answer", { key: sessionKey, dialogId: dialog.id, answer })) onAnswered()
   }
   return (
-    <div className="flex flex-col gap-3 border-t border-border px-3 py-2">
+    <div className="flex flex-col gap-3 rounded-lg border border-border bg-background/60 p-3">
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-foreground">{dialog.title}</p>
         {dialog.message ? <p className="text-sm text-muted-foreground">{dialog.message}</p> : null}
       </div>
       <Answer dialog={dialog} send={send} />
       <div className="flex self-start">
-        <ActionButton label="Put it away" icon={X} onClick={() => void send({ cancelled: true })} />
+        <ActionButton label="Put it away" text="Put away" icon={X} onClick={() => void send({ cancelled: true })} />
       </div>
     </div>
   )

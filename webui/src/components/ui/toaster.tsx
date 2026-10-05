@@ -10,7 +10,7 @@ const TONES: Record<ToastKind, string> = { info: "text-primary", success: "text-
 
 /**
  * The one toast on screen: it scales up with a bounce just above the composer,
- * on a pane with a light blur behind it. It waits while a pop-up is
+ * on a pane with a light blur behind it (the composer's height is `--composer-h`). It waits while a pop-up is
  * open and leaves sooner when more are queued.
  */
 export function Toaster() {
@@ -30,7 +30,7 @@ export function Toaster() {
       aria-live="polite"
       aria-atomic="true"
       className="pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4"
-      style={{ bottom: "calc(var(--composer-h, 0px) + 0.5rem)" }}
+      style={{ bottom: "calc(var(--composer-h, 0px) + 0.25rem)" }}
     >
       <AnimatePresence mode="wait">
         {showing ? (
@@ -40,7 +40,7 @@ export function Toaster() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.92, y: 6, transition: { duration: 0.14, ease: "easeIn" } }}
             transition={{ type: "spring", stiffness: 560, damping: 15, mass: 0.8 }}
-            className="pointer-events-auto flex max-w-[min(32rem,100%)] items-center gap-3 rounded-lg border border-glass-border bg-popover/75 px-4 py-3 text-sm text-popover-foreground shadow-glass backdrop-blur-xs"
+            className="pointer-events-auto flex max-w-[min(32rem,100%)] items-center gap-3 rounded-xl border border-glass-border bg-popover/80 px-4 py-2.5 text-sm text-popover-foreground shadow-glass backdrop-blur-xs"
           >
             <ToastIcon kind={item.kind} />
             <span className="min-w-0 break-words">{item.message}</span>

@@ -1,15 +1,32 @@
-import { useEffect, useRef, useState } from "react"
+/**
+ * Which project this page is looking at: the name and branch in the top bar,
+ * and a list of the running, authorised projects behind them (`P` opens it).
+ * Choosing one reloads the page into that project, which drops the stores,
+ * the streams and any unsent draft on purpose.
+ */
+import { useEffect, useRef, useState, type KeyboardEvent } from "react"
+import { Popover } from "radix-ui"
+import { Check, ChevronsUpDown, GitBranch, RefreshCw, TriangleAlert } from "lucide-react"
 import type { ProjectInfo } from "@protocol"
 import { call } from "@/lib/api"
+import { useHotkey } from "@/lib/hotkeys"
 import { selectedProject, switchProject } from "@/lib/project"
-import { Button } from "@/components/ui/button"
-import { Combobox } from "@/components/ui/combobox"
+import { Keys } from "@/components/ui/kbd"
+import { Spinner } from "@/components/ui/spinner"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { cn } from "@/lib/utils"
 
-interface ProjectList { projects: ProjectInfo[]; currentId: string }
+interface ProjectList {
+  projects: ProjectInfo[]
+  currentId: string
+}
 
 function selection(): { id?: string; error?: string } {
-  try { return { id: selectedProject() } }
-  catch (error) { return { error: (error as Error).message } }
+  try {
+    return { id: selectedProject() }
+  } catch (error) {
+    return { error: (error as Error).message }
+  }
 }
 
 function projectError(data: ProjectList | undefined, id: string | undefined): string | undefined {
@@ -19,42 +36,192 @@ function projectError(data: ProjectList | undefined, id: string | undefined): st
   return undefined
 }
 
-function ProjectSelect({ data, id, busy, tab }: { data?: ProjectList; id?: string; busy: boolean; tab: string }) {
-  const active = id ?? data?.currentId ?? ""
-  const known = data?.projects.some((project) => project.id === active)
-  const options = data?.projects.map((project) => ({ value: project.id, label: project.name, hint: `${project.cwd} :${project.port}` })) ?? []
-  if (!known) options.unshift({ value: active, label: busy ? "Loading projects…" : active ? "Selected project unavailable" : "Choose a project", hint: "Refresh or choose a running project" })
-  return <div className="flex min-w-0 flex-1 items-center gap-2 text-xs text-muted-foreground">
-    <span>Project</span>
-    <Combobox value={active} options={options} label="Project" disabled={!data?.projects.length} className="min-h-11 flex-1" onChange={(value) => { if (data?.projects.some((project) => project.id === value)) switchProject(value, tab) }} />
-  </div>
-}
-
-function useProjects() {
+export function useProjects() {
   const [data, setData] = useState<ProjectList>()
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState(false)
   const request = useRef(0)
   async function refresh() {
     const version = ++request.current
-    setBusy(true); setError(undefined)
-    try { const result = await call<ProjectList>("projects.list", {}); if (version === request.current) setData(result) }
-    catch (failure) { if (version === request.current) setError((failure as Error).message) }
-    finally { if (version === request.current) setBusy(false) }
+    setBusy(true)
+    setError(undefined)
+    try {
+      const result = await call<ProjectList>("projects.list", {})
+      if (version === request.current) setData(result)
+    } catch (failure) {
+      if (version === request.current) setError((failure as Error).message)
+    } finally {
+      if (version === request.current) setBusy(false)
+    }
   }
-  useEffect(() => { void refresh(); return () => { request.current++ } }, [])
-  return { data, error, busy, refresh }
+  useEffect(() => {
+    void refresh()
+    return () => {
+      request.current++
+    }
+  }, [])
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    // A lookup that is quick never flashes a spinner in the bar.
+    if (!busy) return setSlow(false)
+    const timer = setTimeout(() => setSlow(true), 300)
+    return () => clearTimeout(timer)
+  }, [busy])
+  return { data, error, busy, slow, refresh }
 }
 
-export function ProjectSwitcher({ tab }: { tab: string }) {
-  const { data, error, busy, refresh } = useProjects()
+export type Projects = ReturnType<typeof useProjects>
+
+/** What is wrong with the project this page is looking at, in words; nothing when all is well. */
+function problem({ data, error }: Projects): string | undefined {
   const selected = selection()
-  const message = selected.error ?? error ?? projectError(data, selected.id)
-  return <div aria-busy={busy} className="flex min-w-0 max-w-lg flex-col gap-1 [grid-area:project]">
-    <div className="flex min-w-0 items-center gap-1">
-      <ProjectSelect data={data} id={selected.error ? "invalid" : selected.id} busy={busy} tab={tab} />
-      <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void refresh()} className="min-h-11" aria-label="Refresh projects">{busy ? "Loading…" : "Refresh"}</Button>
+  return selected.error ?? error ?? projectError(data, selected.id)
+}
+
+/** The one line under the bar that says why no project can be chosen, with the way to try again. */
+export function ProjectNotice({ projects }: { projects: Projects }) {
+  const message = problem(projects)
+  if (!message) return null
+  return (
+    <p role="alert" className="notice flex min-w-0 items-start gap-2 pt-1 pb-0.5 text-xs break-words text-destructive">
+      <TriangleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+      <span>{message}</span>
+    </p>
+  )
+}
+
+/** Up and Down walk the options, Home and End jump, like a native list box. */
+function walk(event: KeyboardEvent<HTMLElement>) {
+  const step = event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0
+  const edge = event.key === "Home" ? "first" : event.key === "End" ? "last" : undefined
+  if (!step && !edge) return
+  const options = [...event.currentTarget.querySelectorAll<HTMLElement>("[role='option']")]
+  if (options.length === 0) return
+  event.preventDefault()
+  const at = options.indexOf(document.activeElement as HTMLElement)
+  const next = edge === "first" ? 0 : edge === "last" ? options.length - 1 : Math.max(0, Math.min(options.length - 1, (at < 0 ? (step > 0 ? -1 : options.length) : at) + step))
+  options[next]?.focus()
+}
+
+export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Projects; tab: string; name: string; branch?: string | undefined }) {
+  const { data, busy, slow, refresh } = projects
+  const [open, setOpen] = useState(false)
+  const selected = selection()
+  const message = problem(projects)
+  const active = selected.error ? "invalid" : selected.id ?? data?.currentId ?? ""
+  const canOpen = Boolean(data?.projects.length)
+  useHotkey("p", () => setOpen(true), { enabled: canOpen })
+  useHotkey("r", () => void refresh(), { enabled: open, inDialog: true })
+
+  function choose(id: string) {
+    setOpen(false)
+    if (id !== active) switchProject(id, tab)
+  }
+
+  return (
+    <div aria-busy={busy} className="flex min-w-0 items-center gap-1.5">
+      <Popover.Root open={open && canOpen} onOpenChange={setOpen}>
+        <Popover.Trigger
+          type="button"
+          role="combobox"
+          aria-label="Project"
+          aria-description={`${name}${branch ? `, branch ${branch}` : ""}`}
+          aria-haspopup="listbox"
+          aria-expanded={open && canOpen}
+          aria-keyshortcuts="P ArrowDown"
+          disabled={!canOpen}
+          onKeyDown={(event) => {
+            if (event.key !== "ArrowDown" || event.altKey || event.metaKey || event.ctrlKey) return
+            event.preventDefault()
+            setOpen(true)
+          }}
+          className="group flex h-10 min-w-0 items-center gap-2 rounded-lg px-2.5 text-sm font-medium outline-none transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none aria-expanded:bg-accent"
+        >
+          <span aria-hidden="true" className={cn("size-2.5 shrink-0 rounded-full", message ? "bg-destructive" : "bg-primary")} />
+          <span className="truncate">{name}</span>
+          <ChevronsUpDown aria-hidden="true" className={cn("size-3.5 shrink-0 text-muted-foreground", !canOpen && "opacity-40")} />
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content
+            align="start"
+            sideOffset={6}
+            aria-label="Projects"
+            onKeyDown={walk}
+            onOpenAutoFocus={(event) => {
+              const chosen = (event.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>("[role='option'][aria-selected='true']") ?? (event.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>("[role='option']")
+              if (chosen) {
+                event.preventDefault()
+                chosen.focus()
+              }
+            }}
+            className="glass-pop z-50 flex w-[min(26rem,calc(100vw-1.5rem))] origin-(--radix-popover-content-transform-origin) flex-col overflow-hidden rounded-xl outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95"
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+              <span className="text-xs font-medium text-muted-foreground">Running projects</span>
+              <button
+                type="button"
+                onClick={() => void refresh()}
+                disabled={busy}
+                aria-label="Refresh list"
+                aria-keyshortcuts="R"
+                className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-60"
+              >
+                {busy ? <Spinner aria-hidden="true" role="presentation" className="size-3" /> : <RefreshCw aria-hidden="true" className="size-3" />}
+                Refresh
+                <Keys chord="R" className="kbd-hint" />
+              </button>
+            </div>
+            <div role="listbox" aria-label="Projects" className="flex max-h-72 flex-col overflow-y-auto p-1">
+              {data?.projects.map((project) => {
+                const on = project.id === active
+                return (
+                  <button
+                    key={project.id}
+                    type="button"
+                    role="option"
+                    aria-selected={on}
+                    onClick={() => choose(project.id)}
+                    className={cn(
+                      "flex min-h-10 w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:ring-3 focus-visible:ring-ring/30",
+                      on && "bg-accent"
+                    )}
+                  >
+                    <span className="flex h-5 w-4 shrink-0 items-center justify-center">{on ? <Check aria-hidden="true" className="size-3.5 text-primary" /> : null}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{project.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {project.cwd} · :{project.port}
+                      </span>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+      {branch ? (
+        <span className="hidden min-w-0 items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground sm:inline-flex">
+          <GitBranch aria-hidden="true" className="size-3 shrink-0" />
+          <span className="truncate">{branch}</span>
+        </span>
+      ) : null}
+      {slow || message ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label="Refresh projects"
+              disabled={busy}
+              onClick={() => void refresh()}
+              className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-60"
+            >
+              {busy ? <Spinner aria-hidden="true" role="presentation" className="size-4" /> : <RefreshCw aria-hidden="true" className="size-4" />}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Refresh projects</TooltipContent>
+        </Tooltip>
+      ) : null}
     </div>
-    {message ? <p role="alert" className="break-words text-xs text-destructive">{message}</p> : null}
-  </div>
+  )
 }

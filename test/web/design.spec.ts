@@ -172,19 +172,21 @@ test("the box grows with what is typed, carries lists on, formats with Ctrl+B an
   await expect(page.getByRole("region", { name: "Markdown preview" }).locator("strong"), "the preview renders it").toHaveText("make this bold");
 });
 
-test("the box grows and shrinks with the text on its own, over the page instead of pushing it", async ({ page, server }) => {
+test("the box grows and shrinks with the text on its own, and the page above gives way instead of running under it", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   const box = page.locator("#composer-text");
+  const card = box.locator("xpath=ancestor::div[contains(@class,'group/composer')]");
   const before = (await box.boundingBox())!.height;
   const mainBefore = (await page.locator("#main").boundingBox())!;
   await box.fill("one\ntwo\nthree\nfour\nfive\nsix");
   await expect.poll(async () => (await box.boundingBox())!.height, { message: "six lines make the box taller" }).toBeGreaterThan(before + 100);
   const mainAfter = (await page.locator("#main").boundingBox())!;
-  expect(Math.abs(mainAfter.y - mainBefore.y), "the composer floats: the page does not move down").toBeLessThanOrEqual(2);
-  expect(Math.abs(mainAfter.height - mainBefore.height), "nor grow").toBeLessThanOrEqual(2);
-  const reserve = await page.evaluate(() => document.documentElement.style.getPropertyValue("--composer-min-h"));
-  expect(reserve, "the page keeps the empty box's height clear while it holds text").not.toBe("");
+  const cardBox = (await card.boundingBox())!;
+  expect(Math.abs(mainAfter.y - mainBefore.y), "the page does not move down").toBeLessThanOrEqual(2);
+  expect(mainAfter.height, "it gives up room to the taller box").toBeLessThan(mainBefore.height - 80);
+  expect(mainAfter.y + mainAfter.height, "and never runs under it").toBeLessThanOrEqual(cardBox.y + 1);
+  expect(cardBox.y + cardBox.height, "the box stays on the screen").toBeLessThanOrEqual(900);
   await box.fill("");
   await expect.poll(async () => (await box.boundingBox())!.height, { message: "and shrinks back when emptied" }).toBeLessThan(before + 20);
   await expect(page.getByRole("button", { name: /Open the box wider and taller|Make the box smaller/ }), "there is no expand or collapse toggle").toHaveCount(0);
@@ -229,13 +231,13 @@ test("Plan, Quick fix and an open task each give the composer its own target", a
   }
 });
 
-test("zen palettes: cool mist in light, near-black in dark, an indigo accent, one 8px radius, composer clear of the page", async ({ page, server }) => {
+test("zen palettes: cool mist in light, near-black in dark, an indigo accent, a 12px surface under 8px controls, composer clear of the page", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const look = await page.evaluate(() => {
     const rgb = (el: any) => getComputedStyle(el).backgroundColor.match(/\d+/g)!.map(Number);
     const dark = document.documentElement.classList.contains("dark");
-    const card = document.querySelector("#main section");
+    const card = document.querySelector("#main");
     const box = (el: any) => el.getBoundingClientRect();
     const composer = box(document.querySelector("#composer-text").closest(".group\\/composer"));
     const main = box(document.querySelector("#main"));
@@ -264,12 +266,12 @@ test("zen palettes: cool mist in light, near-black in dark, an indigo accent, on
   const [ar, , ab] = accent!.slice(1).map((part) => parseInt(part, 16)) as [number, number, number];
   expect(ab - ar, "the accent leans blue, not warm").toBeGreaterThan(60);
   expect(look.body, "flat page, no wash").toBe("none");
-  expect(look.cardRadius).toBe("8px");
-  expect(look.inputRadius).toBe("8px");
+  expect(look.cardRadius, "the page's surface").toBe("12px");
+  expect(look.inputRadius, "the message box sits on it with the same corners").toBe("12px");
   expect(look.inactiveBorder, "inactive tabs are plain text").toBe("0px");
   expect(look.pillRadius, "the active pill has the same 8px corners").toBe("8px");
   expect(look.cardBottom, "the composer stays on the screen").toBeLessThanOrEqual(look.inner);
-  expect(look.mainBottom, "and the page keeps its empty height clear of the floating box").toBeGreaterThanOrEqual(look.composerTop);
+  expect(look.mainBottom, "and the page ends above the box instead of running under it").toBeLessThanOrEqual(look.composerTop);
 });
 
 test("keyboard hints: the box prints its keys, the header button opens the key list, a tab's tooltip names its key", async ({ page, server }) => {
@@ -449,13 +451,18 @@ test("Alt+A and Alt+T respect text entry and open Thinking from the bubble", asy
   await page.keyboard.press("Alt+t");
   await expect(page.getByRole("dialog", { name: "Thinking", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Thinking", exact: true })).toBeHidden();
   await page.keyboard.press("Alt+h");
   const keys = page.getByRole("dialog", { name: "Keys" });
   await expect(keys.getByText("show or hide Activity on the Lobby"), "the key list has it").toBeVisible();
   await page.keyboard.press("Escape");
+  await expect(keys, "a dialog on its way out still blocks the keys").toBeHidden();
   await page.evaluate(() => {
     window.location.hash = "#/tasks";
   });
+  // Alt+A is typing while the cursor is in the message box; Esc steps out to the tab bar first.
+  await page.locator("#composer-text").focus();
+  await page.keyboard.press("Escape");
   await page.keyboard.press("Alt+a");
   await expect(page, "off the Lobby it takes you there").toHaveURL(/#\/lobby/);
 });
@@ -495,6 +502,7 @@ test("colour themes: a built-in one repaints the page and survives a reload; a t
   const light = await page.evaluate(() => document.documentElement.classList.contains("light"));
   expect(await primary(), light ? "light uses the :root block" : "dark uses the .dark block").toBe(light ? "#e11d48" : "#f80");
   await page.getByRole("button", { name: /Remove Custom theme/ }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: /Remove theme/ }).click();
   await expect(group.getByRole("radio", { name: /Custom theme/ }), "removing it").toHaveCount(0);
   await expect(group.getByRole("radio", { name: /Mist/ })).toHaveAttribute("aria-checked", "true");
   expect(await primary()).toBe(before);
@@ -520,7 +528,9 @@ test("switching tabs puts the cursor in the message box; arrowing along the tab 
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole("tab", { name: /Git/ }).click();
   await expect(page.locator("#composer-text"), "a click on a tab").toBeFocused();
+  await page.keyboard.press("Escape");
   await page.keyboard.press("Alt+2");
+  await expect(page, "an Alt+N jump from the tab bar").toHaveURL(/#\/tasks/);
   await expect(page.locator("#composer-text"), "an Alt+N jump").toBeFocused();
   await page.getByRole("tab", { name: /Tasks/ }).focus();
   await page.keyboard.press("ArrowRight");
@@ -563,7 +573,7 @@ test("choices use the right inputs: real checkboxes for several, a switch for on
   expect(await page.getByText("[x]").count() + (await page.getByText("[ ]").count()), "no text-drawn boxes").toBe(0);
 });
 
-test("action buttons are icons with tooltips, and stay pinned in view while the detail scrolls", async ({ page, server }) => {
+test("action buttons say what they do and which key does it, and stay pinned in view while the detail scrolls", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 500 });
   await page.evaluate(() => {
@@ -572,10 +582,13 @@ test("action buttons are icons with tooltips, and stay pinned in view while the 
   const bar = page.getByRole("toolbar", { name: "Actions" });
   await expect(bar).toBeVisible();
   const archive = bar.getByRole("button", { name: "Archive" });
-  await expect(archive, "an icon button named for what it does").toBeVisible();
-  expect((await archive.textContent())?.trim(), "no text label on it").toBe("");
-  await archive.hover();
-  await expect(page.locator('[data-slot="tooltip-content"]').first(), "the tooltip says what it does").toContainText("Archive");
+  await expect(archive, "a button named for what it does").toBeVisible();
+  await expect(archive, "with the word on it").toContainText("Archive");
+  await expect(archive.locator("kbd").first(), "and the key that does it").toHaveText("E");
+  await expect(archive).toHaveAttribute("aria-keyshortcuts", "E");
+  const remove = bar.getByRole("button", { name: "Delete" });
+  await expect(remove).toContainText("Delete");
+  await expect(remove.locator("kbd").first(), "Delete is the Delete key").toHaveText("Del");
   const detail = page.locator('[data-pane="detail"]');
   await detail.evaluate((el: any) => {
     el.scrollTop = el.scrollHeight;
@@ -585,6 +598,34 @@ test("action buttons are icons with tooltips, and stay pinned in view while the 
   const pane = (await detail.boundingBox())!;
   expect(box!.y, "after scrolling to the bottom the bar is still at the top of the pane").toBeLessThanOrEqual(pane.y + 4);
   await expect(bar.getByRole("button", { name: "Delete" })).toBeVisible();
+});
+
+test("the keys printed on the buttons work from the page, ask before anything is lost, and leave the message box alone", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.evaluate(() => {
+    window.location.hash = "#/tasks/T-mock-1";
+  });
+  const composer = page.locator("#composer-text");
+  await expect(composer, "a tab switch leaves the cursor in the message box").toBeFocused();
+  await page.keyboard.press("e");
+  await expect(composer, "the letter is typed, not taken as a shortcut").toHaveValue("e");
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+  await composer.fill("");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tab", { name: /Tasks/ }), "Esc leaves the box for the tab bar").toBeFocused();
+  await page.keyboard.press("e");
+  const archive = page.getByRole("alertdialog");
+  await expect(archive, "E asks to archive").toContainText("Archive");
+  await expect(archive.getByRole("button", { name: /Keep it/ }).locator('[data-slot="kbd"]'), "Esc keeps it").toHaveText("Esc");
+  await expect(archive.getByRole("button", { name: /^Archive/ }).locator('[data-slot="kbd"]'), "Y goes ahead").toHaveText("Y");
+  await expect(archive.getByRole("button", { name: /Keep it/ }), "focus starts on the safe choice").toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(archive).toHaveCount(0);
+  await page.keyboard.press("Delete");
+  await expect(page.getByRole("alertdialog"), "Delete asks before it deletes").toContainText("for good");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
 });
 
 test("the Lobby's task header is one slim line", async ({ page, server }) => {
@@ -620,4 +661,126 @@ test("every tab carries an icon", async ({ page, server }) => {
   const tabs = page.getByRole("tab");
   const count = await tabs.count();
   for (let i = 0; i < count; i += 1) await expect(tabs.nth(i).locator("svg"), `tab ${i + 1}`).toHaveCount(1);
+});
+
+test("the project switcher is a list you open with P, not a native select", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(page.locator("header select"), "no native select in the top bar").toHaveCount(0);
+  await page.getByRole("tab", { name: /Tasks/ }).focus();
+  await page.keyboard.press("p");
+  const list = page.getByRole("listbox", { name: "Projects" });
+  await expect(list, "P opens the list of running projects").toBeVisible();
+  await expect(list.getByRole("option").first(), "the open project is marked").toHaveAttribute("aria-selected", "true");
+  await expect(list.getByRole("option").first()).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(list, "Esc closes it").toBeHidden();
+  await expect(page.getByRole("combobox", { name: "Project", exact: true }), "and gives focus back").toBeFocused();
+});
+
+test("below 1024px the Lobby shows one pane at a time behind a switcher, and the chat keeps the room", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 390, height: 844 });
+  const panes = page.getByRole("radiogroup", { name: "Pane" });
+  await expect(panes).toBeVisible();
+  const chat = page.getByRole("log", { name: "Conversation" });
+  await expect(chat).toBeVisible();
+  expect((await chat.boundingBox())!.height, "the conversation is not squeezed into a sliver").toBeGreaterThan(300);
+  await panes.getByRole("radio", { name: /Activity/ }).click();
+  await expect(page.getByRole("log", { name: "Activity" })).toBeVisible();
+  await expect(chat, "the others step aside").toBeHidden();
+  await expect(panes.getByRole("radio", { name: /Thinking/ }), "Thinking is a bubble, not a pane").toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Open Thinking" })).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow, "no sideways scroll").toBeLessThanOrEqual(0);
+});
+
+test("the message box sits under the page and never covers a button", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 640 });
+  for (const hash of ["#/lobby", "#/tasks/T-mock-1", "#/plan", "#/settings", "#/metrics"]) {
+    await page.evaluate((to) => {
+      window.location.hash = to;
+    }, hash);
+    await page.waitForTimeout(200);
+    const run = await page.evaluate(() => {
+      const main = (document.getElementById("main") as any).getBoundingClientRect();
+      const box = (document.getElementById("composer-text") as any).closest(".group\\/composer").getBoundingClientRect();
+      return { mainBottom: main.bottom, boxTop: box.top };
+    });
+    expect(run.mainBottom, `${hash}: the page ends above the box`).toBeLessThanOrEqual(run.boxTop);
+  }
+});
+
+test("Esc leaves the message box on Sessions and Settings too, so the keys on those pages work", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.evaluate(() => {
+    window.location.hash = "#/sessions";
+  });
+  const composer = page.locator("#composer-text");
+  await expect(page.getByRole("button", { name: "Back to this window" }), "the page has switched").toBeVisible();
+  // The switch hands the cursor to the message box on the next frame; wait it out so Esc is the last thing to move it.
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(undefined)))));
+  await expect(composer, "a page switch leaves the cursor in the message box").toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(composer, "Esc leaves it though no tab is selected").not.toBeFocused();
+  await expect(page.getByRole("button", { name: "Back to this window" }).locator('[data-slot="kbd"]'), "the button prints its key").toHaveText("B");
+  await page.keyboard.press("b");
+  await expect(page, "and B takes you back to the Lobby").toHaveURL(/#\/lobby/);
+});
+
+test("on Excalidraw R reveals the link and O opens the board in a new tab", async ({ page, server }) => {
+  await page.context().route("https://whiteboard.example/**", (route) => route.fulfill({ contentType: "text/html", body: "<title>board</title>" }));
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.evaluate(() => {
+    window.location.hash = "#/excalidraw/x1";
+  });
+  await expect(page.getByRole("button", { name: "Reveal the link" })).toBeVisible();
+  await expect(page.locator("#composer-text")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("r");
+  await expect(page.locator("#main"), "R reveals the full room link").toContainText("whiteboard.example");
+  const open = page.getByRole("link", { name: "Open board" });
+  await expect(open.locator('[data-slot="kbd"]'), "Open board prints its key").toHaveText("O");
+  const popup = page.waitForEvent("popup");
+  await page.keyboard.press("o");
+  expect((await popup).url(), "O opens it in a new tab").toContain("whiteboard.example");
+});
+
+test("a button's key never fires from a form: Enter elsewhere does not send a half-written note", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.evaluate(() => {
+    window.location.hash = "#/excalidraw/x1";
+  });
+  const note = page.getByLabel("Add by link");
+  await expect(note).toBeVisible();
+  await note.fill("https://whiteboard.example/#room=zzz,AAAAAAAAAAAAAAAAAAAAAA");
+  await page.locator("#main").focus();
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(300);
+  await expect(note, "the note is still waiting to be sent").toHaveValue(/whiteboard\.example/);
+});
+
+test("quick key presses on the effort slider add up instead of each starting from the saved level", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => {
+    window.location.hash = "#/settings";
+  });
+  const slider = page.getByRole("slider", { name: "Master effort" });
+  await slider.focus();
+  await page.keyboard.press("Home");
+  await expect(slider).toHaveAttribute("aria-valuetext", "low");
+  // No waiting between them: the server has not answered the first when the second arrives.
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await expect(slider, "two quick presses climb two stops").toHaveAttribute("aria-valuetext", "high");
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowRight");
+  await expect(slider, "left then right ends where it began").toHaveAttribute("aria-valuetext", "high");
+  await page.waitForTimeout(600);
+  await expect(slider, "and it stays there once the server has answered").toHaveAttribute("aria-valuetext", "high");
 });

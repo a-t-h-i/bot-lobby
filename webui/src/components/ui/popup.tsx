@@ -14,6 +14,7 @@ interface PopupProps {
   /** When false, clicking the backdrop never closes it (a question keeps its answers). */
   dismissOnBackdrop?: boolean
   className?: string
+  /** Where focus goes when it closes (the control that opened it, unless the caller says otherwise). */
   onCloseAutoFocus?: (event: Event) => void
   children: ReactNode
 }
@@ -59,7 +60,7 @@ export function Popup({ open, onOpenChange, label, description, dismissOnBackdro
                 {...(description ? {} : { "aria-describedby": undefined })}
               >
                 <motion.div
-                  className={cn("glass-pop pointer-events-auto flex max-h-[min(86svh,48rem)] w-full max-w-2xl flex-col overflow-hidden rounded-lg outline-none", className)}
+                  className={cn("glass-pop pointer-events-auto flex max-h-[min(86svh,48rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl outline-none", className)}
                   initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.92, y: reduceMotion ? 0 : 18 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: reduceMotion ? 1 : 0.96, y: reduceMotion ? 0 : 8, transition: { duration: 0.12, ease: "easeIn" } }}

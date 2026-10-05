@@ -14,6 +14,8 @@ export interface ApiRead<T> {
   data: T | undefined
   error: string | undefined
   loading: boolean
+  /** When the request that produced `data` was sent (`performance.now()`), so a caller can tell an old answer from a new one. */
+  requestedAt: number
   reload: () => void
 }
 
@@ -24,7 +26,7 @@ export function useApiRead<Name extends ApiName>(
   enabled = true
 ): ApiRead<Api[Name]["result"]> {
   useStoreVersion()
-  const [state, setState] = useState<{ data?: Api[Name]["result"]; error?: string; loading: boolean }>({ loading: true })
+  const [state, setState] = useState<{ data?: Api[Name]["result"]; error?: string; loading: boolean; at: number }>({ loading: true, at: 0 })
   const [tick, setTick] = useState(0)
   // A reconnect rereads too: changes announced while the stream was down were missed.
   const versions = [lobbyStore.status().connection, ...topics.map((topic) => lobbyStore.get(topic).version)].join(",")
@@ -33,9 +35,10 @@ export function useApiRead<Name extends ApiName>(
   useEffect(() => {
     if (!enabled) return
     let alive = true
+    const at = performance.now()
     setState((now) => ({ ...now, loading: true }))
     call(name, JSON.parse(key) as Api[Name]["request"]).then(
-      (data) => alive && setState({ data, loading: false }),
+      (data) => alive && setState({ data, loading: false, at }),
       (error: unknown) => alive && setState((now) => ({ ...now, error: error instanceof Error ? error.message : String(error), loading: false }))
     )
     return () => {
@@ -44,5 +47,5 @@ export function useApiRead<Name extends ApiName>(
   }, [name, key, versions, tick, enabled])
 
   const reload = useCallback(() => setTick((count) => count + 1), [])
-  return { data: state.data, error: state.error, loading: state.loading, reload }
+  return { data: state.data, error: state.error, loading: state.loading, requestedAt: state.at, reload }
 }
