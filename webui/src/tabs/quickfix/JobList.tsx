@@ -25,7 +25,7 @@ function Row({ job, selected, now, onSelect }: { job: QuickFixJob; selected: boo
   const time = elapsed(job, now)
   return (
     <li>
-      <button
+      <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
         type="button"
         data-row
         aria-current={selected ? "true" : undefined}

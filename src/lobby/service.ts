@@ -5,7 +5,15 @@
  */
 import { SessionManager, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
-import { loadTask, peekTasks } from "../state/persistence.ts";
+import { updateBlockingRequest } from "../state/blocking-requests.ts";
+import { randomUUID } from "node:crypto";
+import { realpathSync } from "node:fs";
+import { resolve } from "node:path";
+import { loadTask, ownedTask, peekTasks, saveTask } from "../state/persistence.ts";
+import { refreshReview, deferReview } from "../delivery/review.ts";
+import { deliver, type DeliveryRequest, type DeliveryStore } from "../delivery/operations.ts";
+import type { LockIdentity } from "../delivery/lock.ts";
+import { execCommand } from "./issues.ts";
 import { releaseAttachments } from "../state/attachments.ts";
 import { loadConfig, saveConfig as writeConfig } from "../state/project.ts";
 import { addPlanComment, editComment, readPlanComments, type PlanComment } from "../state/comments.ts";
@@ -39,6 +47,34 @@ import type { LobbyAgentKind, PanelMember } from "../schemas/configuration.ts";
 import type { LiveSession, LobbyService, SwitchTarget } from "./host.ts";
 import { pushNotice, type NoticeLevel } from "../webui/notices.ts";
 import type { Runtime } from "./runtime.ts";
+
+function deliveryTask(state: Runtime, taskId: string): Task {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/.test(taskId) || taskId === "." || taskId === "..") throw new Error("Invalid task ID.");
+  const task = loadTask(state.root, state.configDir, taskId);
+  if (!task || task.state !== "completed" || !task.delivery) throw new Error("Completed task delivery review is unavailable in this project.");
+  return task;
+}
+
+function recoveryDeliveryStore(state: Runtime, identity: LockIdentity): DeliveryStore {
+  if (identity.configDir !== resolve(state.configDir) || realpathSync(identity.projectRoot) !== identity.projectRoot) throw new Error("Interrupted owner has an untrusted project/config identity.");
+  return deliveryStore({ ...state, root: identity.projectRoot }, identity.taskId);
+}
+function deliveryStore(state: Runtime, taskId: string): DeliveryStore {
+  let baseline: string | undefined;
+  return {
+    identity: { projectRoot: realpathSync(state.root), configDir: resolve(state.configDir) },
+    recoveryStore: (identity) => recoveryDeliveryStore(state, identity),
+    load: () => { const task = deliveryTask(state, taskId); baseline = JSON.stringify(task.delivery); return task; },
+    save: (task) => {
+      const latest = deliveryTask(state, taskId);
+      if (JSON.stringify(latest.delivery) !== baseline) throw new Error("Delivery changed during operation; reconcile before retrying.");
+      latest.delivery = structuredClone(task.delivery);
+      saveTask(state.root, state.configDir, latest);
+      baseline = JSON.stringify(latest.delivery);
+      lobbyTopics.bump("tasks");
+    },
+  };
+}
 
 /** The state background callbacks report to; set while the lobby service runs. */
 let serviceState: Runtime | undefined;
@@ -210,6 +246,20 @@ function sessionsChanged(): void {
   }
 }
 
+function dialogTracker(state: Runtime): (id: string, pending: boolean, sessionId?: string) => void {
+  const requests = new Map<string, { taskId: string; sessionId: string; requestId: string }>();
+  const prefix = `dialog:${randomUUID()}`;
+  return (id, pending, sessionId) => {
+    if (!sessionId) return;
+    const task = pending ? ownedTask(state.root, state.configDir, sessionId) : undefined;
+    if (task && !requests.has(id)) requests.set(id, { taskId: task.id, sessionId, requestId: `${prefix}:${id}` });
+    const request = requests.get(id);
+    if (!request) return;
+    updateBlockingRequest({ root: state.root, configDir: state.configDir, ...request }, request.requestId, pending);
+    if (!pending) requests.delete(id);
+  };
+}
+
 /** Start a task in its own new pi session, named after the task; the session, or why not. */
 function startSession(state: Runtime, start: { request?: string; plan?: PlannedTask; auto?: boolean }): BackgroundSession | string {
   const request = start.request?.trim();
@@ -224,7 +274,7 @@ function startSession(state: Runtime, start: { request?: string; plan?: PlannedT
   // A request may lead with flags (`--worktree add login`); the session is named after what follows them.
   const name = taskName(plan?.title ?? (stripStartFlags(request!) || request!));
   try {
-    const session = sessionRegistry().start(state.ctx.cwd, { name, ...(plan ? { planId: plan.id } : { request: request! }), ...(start.auto ? { auto: true } : {}) }, sessionModel(state.ctx));
+    const session = sessionRegistry().start(state.ctx.cwd, { name, projectRoot: state.root, onDialog: dialogTracker(state), ...(plan ? { planId: plan.id } : { request: request! }), ...(start.auto ? { auto: true } : {}) }, sessionModel(state.ctx));
     lobbyFeed.log("LOBBY", `started "${name}" in a new session`, "success");
     return session;
   } catch (error) {
@@ -520,6 +570,26 @@ export function createLobbyService(state: Runtime): LobbyService {
     feed: lobbyFeed,
     masterBusy: () => !state.ctx.isIdle(),
     tasks: () => peekTasks(state.root, state.configDir),
+    deliveryDeliver: (taskId, request: DeliveryRequest) => deliver(request, { cwd: state.root, exec: execCommand }, deliveryStore(state, taskId)),
+    deliveryReview: async (taskId) => {
+      const task = deliveryTask(state, taskId);
+      const baseline = JSON.stringify(task.delivery);
+      const delivery = await refreshReview(task, { cwd: state.root, exec: execCommand });
+      // An async lookup must not overwrite intervening deferrals or operations.
+      const latest = deliveryTask(state, taskId);
+      if (JSON.stringify(latest.delivery) !== baseline) throw new Error("Review changed during lookup; refresh again.");
+      latest.delivery = delivery;
+      saveTask(state.root, state.configDir, latest);
+      lobbyTopics.bump("tasks");
+      return delivery;
+    },
+    deliveryDefer: (taskId, reviewId) => {
+      const task = deliveryTask(state, taskId);
+      const delivery = deferReview(task, reviewId);
+      saveTask(state.root, state.configDir, task);
+      lobbyTopics.bump("tasks");
+      return delivery;
+    },
     plans: () => listPlannedTasks(state.root, state.configDir),
     comments: (taskId) => readPlanComments(state.root, state.configDir, taskId),
     metrics: () => readMetrics(state.root, state.configDir),
@@ -584,7 +654,7 @@ export function createLobbyService(state: Runtime): LobbyService {
     workspace: () => state.workspace,
     refreshWorkspace: () => refreshWorkspace(state),
     sessionName: () => state.pi.getSessionName(),
-    sessions: () => backgroundSessions(),
+    sessions: () => backgroundSessions().filter((session) => session.projectRoot === state.root),
     startSession: (start) => startSession(state, start),
     isAuto: (taskId) => autoFor(state, taskId),
     setAuto: (taskId, on) => switchAuto(state, taskId, on),

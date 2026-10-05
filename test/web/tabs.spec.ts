@@ -171,6 +171,7 @@ test("settings change saves with a notice and round-trips", async ({ page, serve
   const trap = await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 800 });
   await gotoRoute(page, "#/settings", "Each agent's model and effort");
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Lobby", exact: true }).click();
   const mouse = page.getByRole("switch", { name: "Issues tab" });
   await expect(mouse, "Issues toggle").toBeVisible();
   const before = await mouse.getAttribute("aria-checked");
@@ -181,6 +182,7 @@ test("settings change saves with a notice and round-trips", async ({ page, serve
   await page.reload();
   await page.locator('[role="tablist"]').waitFor();
   await gotoRoute(page, "#/settings", "Each agent's model and effort");
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Lobby", exact: true }).click();
   expect(await page.getByRole("switch", { name: "Issues tab" }).getAttribute("aria-checked"), "value round-trips").toBe(after);
   await expectNoSidewaysScroll(page);
   expect(cspErrors(trap.errors), "no CSP violations").toEqual([]);
