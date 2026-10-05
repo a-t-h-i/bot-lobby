@@ -116,7 +116,8 @@ test("unavailable checks block merge beside action without disabling independent
 test("timing renders running, overlapping waits, resumes only after final resolution and legacy unavailable", async ({ page, server }) => {
   const now = new Date().toISOString();
   let timing: unknown = { phase: "implementing", elapsedMs: 65000, runningSince: now, waiting: false, serverNow: now };
-  await detail(page, () => ({ timing }));
+  // A task from before work time was kept: its phase clock is all there is.
+  await detail(page, () => ({ timing, work: undefined }));
   await openScenario(page, server, "full");
   await task(page);
   await expect(page.getByText(/implementing.*execution/).last()).toBeVisible();

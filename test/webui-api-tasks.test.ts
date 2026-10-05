@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { ensureProjectStructure, saveTask } from "../src/state/persistence.ts";
+import { updateWork } from "../src/state/work-time.ts";
 import { addPlanComment, readPlanComments } from "../src/state/comments.ts";
 import { savePlannedTask } from "../src/state/backlog.ts";
 import { createTask } from "../src/schemas/task.ts";
@@ -314,6 +315,36 @@ test("tasks.get reads a plan's checklist: steps, no request when it equals the t
       blockers: [],
       runs: [],
     });
+  } finally {
+    await close();
+  }
+});
+
+test("tasks.get marks the steps a worker is on with their time, keeps the plan's detail apart from its steps, and says how long the agents worked", async () => {
+  const { call, close, root } = await setup();
+  try {
+    const task = createTask("TASK-timed", "timed", "2026-10-05T12:00:00.000Z", "time it", "s1");
+    task.state = "implementing";
+    task.plan = "## Steps\n1. Add the clock\n2. Show it\n\n## Details\n### Step 1: Add the clock\nIn `src/state/budget.ts`.";
+    saveTask(root, ".pi", task);
+    const startedAt = new Date(Date.now() - 90_000).toISOString();
+    updateWork(root, ".pi", "TASK-timed", (work) => {
+      work.workedMs = 600_000;
+      work.runningSince = new Date(Date.now() - 30_000).toISOString();
+      work.active = [{ runId: "r1", instruction: "Step 2: show it", startedAt }];
+    });
+    const got = await call("tasks.get", { taskId: "TASK-timed" });
+    assert.equal(got.status, 200, got.body);
+    const detail = got.payload.result as { steps: Array<{ text: string; status: string; active?: boolean; workedMs?: number }>; work: { workedMs: number; running: boolean }; planDetails: string };
+    assert.deepEqual(detail.steps.map((step) => [step.text, step.status, Boolean(step.active)]), [["Add the clock", "done", false], ["Show it", "current", true]]);
+    assert.ok(detail.steps[1]!.workedMs! >= 89_000 && detail.steps[1]!.workedMs! < 100_000, `step time ${detail.steps[1]!.workedMs}`);
+    assert.equal(detail.steps[0]!.workedMs, undefined, "only steps under way carry a time");
+    assert.equal(detail.work.running, true);
+    assert.ok(detail.work.workedMs >= 629_000 && detail.work.workedMs < 640_000, `worked ${detail.work.workedMs}`);
+    assert.equal(detail.planDetails, "## Details\n### Step 1: Add the clock\nIn `src/state/budget.ts`.");
+    const rows = await call("tasks.list", {});
+    const row = (rows.payload.result!.rows as Array<{ id: string; work?: { running: boolean } }>).find((entry) => entry.id === "TASK-timed");
+    assert.equal(row?.work?.running, true, "the row carries the clock too");
   } finally {
     await close();
   }

@@ -1390,3 +1390,44 @@ test("the panel's mockups show as thumbnails on its questions in the Plan tab an
   await page.keyboard.press("Escape");
   await expect(viewer).toBeHidden();
 });
+
+test("a task's short steps come first, the one being worked on marked active with its time ticking, the plan's detail folded under them, and how long the agents worked", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() => {
+    window.location.hash = "#/tasks/T-mock-1";
+  });
+  const steps = page.getByRole("list", { name: "Steps" });
+  await expect(steps.getByRole("listitem")).toHaveCount(3);
+  await expect(steps.getByRole("listitem").nth(0), "done").toHaveAttribute("data-step", "done");
+  const active = steps.getByRole("listitem").nth(1);
+  await expect(active, "the step a worker is on").toHaveAttribute("data-step", "active");
+  await expect(active).toContainText(/Check the mock over HTTP\s*active · 1m 3\ds/);
+  await expect(steps.getByRole("listitem").nth(2)).toHaveAttribute("data-step", "open");
+  const article = page.getByRole("article", { name: "Add offline mock fixtures" });
+  const worked = article.locator("[data-work-clock]");
+  await expect(worked, "the agents' time, idle left out").toHaveText(/^worked 12m 3\ds$/);
+  await expect(worked).toHaveAttribute("data-work-clock", "running");
+  const [stepTime, workTime] = [await active.textContent(), await worked.textContent()];
+  await page.waitForTimeout(2300);
+  expect(await active.textContent(), "the step's time ticks").not.toBe(stepTime);
+  expect(await worked.textContent(), "and so does the task's").not.toBe(workTime);
+  const [stepsBox, requestBox] = await Promise.all([steps.boundingBox(), article.getByText("Give the page an offline mock").boundingBox()]);
+  expect(stepsBox!.y, "the steps come before everything else").toBeLessThan(requestBox!.y);
+  // The detail of each step is there for whoever wants it, folded away until asked for.
+  const more = article.getByRole("button", { name: "Read the details of each step" });
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+  await expect(article.getByText(/Serve each scenario from/)).toHaveCount(0);
+  await more.click();
+  await expect(article.getByRole("button", { name: "Hide the details" })).toHaveAttribute("aria-expanded", "true");
+  await expect(article.getByText(/Serve each scenario from/)).toBeVisible();
+  await expect(article.getByRole("heading", { name: "Step 2: Check the mock over HTTP" })).toBeVisible();
+  // The list row and the Lobby's header say the same.
+  await expect(page.getByRole("button", { name: /Add offline mock fixtures/ }).first()).toContainText(/worked 12m/);
+  await page.evaluate(() => {
+    window.location.hash = "#/lobby";
+  });
+  const header = page.getByRole("group", { name: "Task" });
+  await expect(header).toContainText(/worked 12m \d+s/);
+  await expect(header).toContainText(/Check the mock over HTTP\s*active · 1m \d+s/);
+});

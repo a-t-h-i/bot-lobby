@@ -1,5 +1,6 @@
-import type { TaskDetail } from "../../../src/webui/protocol.ts"
+import type { TaskDetail, WorkClock } from "../../../src/webui/protocol.ts"
 export type PhaseClock = NonNullable<TaskDetail["timing"]>
+export type { WorkClock }
 
 /** Server wall anchors establish the baseline; only monotonic client time advances it. */
 export function executionMs(timing: PhaseClock, sinceSample = 0, stopped = false): number {

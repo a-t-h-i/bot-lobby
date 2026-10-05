@@ -13,7 +13,9 @@ import type { TaskDetail } from "../protocol.ts";
 import type { ApiContext } from "./index.ts";
 import { withAttachments } from "../uploads.ts";
 import { fail } from "./index.ts";
-import { taskSteps } from "./plan-facts.ts";
+import { stepViews } from "./plan-facts.ts";
+import { planDetails } from "../../pi/plan-checklist.ts";
+import type { WorkProjection } from "../../state/work-time.ts";
 import type { TaskSection } from "../../lobby/task-rows.ts";
 import { projectPhaseTiming } from "../../state/phase-timing.ts";
 import type { DeliveryRequest } from "../../delivery/operations.ts";
@@ -51,6 +53,7 @@ interface RowContext {
   names: ReadonlyMap<string, string>;
   auto: ReadonlySet<string>;
   live: ReadonlySet<string>;
+  work: (taskId: string) => WorkProjection | undefined;
 }
 
 function checkOf(task: Task): TaskRow["check"] {
@@ -59,10 +62,16 @@ function checkOf(task: Task): TaskRow["check"] {
   return "open";
 }
 
-function progressOf(task: Task): TaskRow["progress"] {
-  const steps = taskSteps(task);
+function progressOf(task: Task, work: WorkProjection | undefined, now: number): TaskRow["progress"] {
+  const steps = stepViews(task, work, now);
   if (steps.length === 0) return undefined;
   return { done: steps.filter((step) => step.status === "done").length, total: steps.length };
+}
+
+/** The work clock as the page shows it; a finished task's no longer counts. */
+function clockOf(task: Task, work: WorkProjection | undefined): TaskRow["work"] {
+  if (!work) return undefined;
+  return { workedMs: Math.round(work.workedMs), running: work.running && !TERMINAL_STATES.includes(task.state) };
 }
 
 /** How long ago, as `3h` (mirrors the lobby layout's `ago`). */
@@ -86,7 +95,9 @@ function ownerOf(task: Task, sessionId: string | undefined, ctx: RowContext): st
 }
 
 function rowOf(task: Task, section: TaskSection, ctx: RowContext, sessionId: string | undefined, now: number): TaskRow {
-  const progress = section === "recent" ? undefined : progressOf(task);
+  const work = ctx.work(task.id);
+  const progress = section === "recent" ? undefined : progressOf(task, work, now);
+  const clock = clockOf(task, work);
   return {
     kind: "task",
     id: task.id,
@@ -98,6 +109,7 @@ function rowOf(task: Task, section: TaskSection, ctx: RowContext, sessionId: str
     ...(task.paused && section !== "recent" ? { paused: true } : {}),
     check: checkOf(task),
     ...(progress ? { progress } : {}),
+    ...(clock ? { work: clock } : {}),
     ...(section === "others" ? { owner: ownerOf(task, sessionId, ctx) } : {}),
     ...(section === "recent" ? { age: ago(now - Date.parse(task.updatedAt)) } : {}),
     ...(section !== "recent" && ctx.auto.has(task.id) ? { auto: true } : {}),
@@ -141,7 +153,7 @@ function contextOf(ctx: ApiContext, tasks: readonly Task[]): RowContext {
     if (session.sessionId && session.alive) names.set(session.sessionId, session.name);
   }
   const auto = new Set(tasks.filter((task) => !TERMINAL_STATES.includes(task.state) && ctx.service.isAuto(task.id)).map((task) => task.id));
-  return { names, auto, live: new Set(ctx.service.liveSessions().map((session) => session.sessionId)) };
+  return { names, auto, live: new Set(ctx.service.liveSessions().map((session) => session.sessionId)), work: (taskId) => ctx.service.work?.(taskId) };
 }
 
 /** Every task, plan and recent row, oldest groups first like the terminal. */
@@ -255,13 +267,22 @@ export function tasksGet(body: { taskId: string }, ctx: ApiContext): TaskDetail 
   const found = task as Task;
   const request = taskRequest(found);
   const now = Date.now();
+  const work = ctx.service.work?.(found.id);
+  const clock = clockOf(found, work);
+  const details = found.plan ? planDetails(found.plan) : undefined;
   return {
     timing: projectPhaseTiming(found, new Date(now).toISOString()),
+    ...(clock ? { work: clock } : {}),
     ...(found.delivery ? { delivery: found.delivery } : {}),
     ...(request !== found.title ? { request } : {}),
     ...(!found.plan && found.proposal ? { proposal: found.proposal } : {}),
     ...(found.plan ? { plan: found.plan } : {}),
-    steps: taskSteps(found).map((step) => ({ text: step.text, status: step.status === "pending" ? "open" : step.status })),
+    ...(details ? { planDetails: details } : {}),
+    steps: stepViews(found, work, now).map((step) => ({
+      text: step.text,
+      status: step.status === "pending" ? "open" : step.status,
+      ...(step.active ? { active: true, workedMs: step.workedMs } : {}),
+    })),
     amendments: [...found.amendments],
     waiting: waitingOf(found),
     blockers: found.blockers.map((blocker) => ({ reason: blocker.reason, need: blocker.need })),

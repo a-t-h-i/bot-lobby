@@ -22,6 +22,8 @@ export interface TaskRow {
   check: CheckState;
   /** Plan steps done, once the task has a plan. */
   progress?: { done: number; total: number };
+  /** How long the task's agents have worked on it, idle time left out (ms, as of the reply). */
+  work?: { workedMs: number; running: boolean };
   /** Who drives it, for tasks other sessions own. */
   owner?: string;
   /** How long ago it finished (finished tasks), was saved (plans) or was archived, as `3h`. */

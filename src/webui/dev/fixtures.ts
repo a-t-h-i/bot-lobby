@@ -64,6 +64,8 @@ export interface ScenarioFixture {
   questionAfterSend: FixturePrompt | null;
   /** Tasks backing `tasks.list` (absent means none). */
   mockTasks?: Array<Record<string, unknown>>;
+  /** Work clocks by task id (`work.json` as the owner keeps it); a run's start is given as how long ago, so it reads live. */
+  mockWork?: Record<string, { workedMs: number; running: boolean; active?: Array<{ runId: string; instruction: string; startedAgoMs: number }> }>;
   /** Saved plans backing `plans.start`/`plans.discard` and the pending rows. */
   mockPlans?: Array<{ id: string; title: string; brief: string }>;
   /** Archived tasks backing `tasks.archived`. */
