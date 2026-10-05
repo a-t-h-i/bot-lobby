@@ -4,20 +4,16 @@ import { cn } from "@/lib/utils"
 import { Slot } from "radix-ui"
 
 const buttonVariants = cva(
-  "group/button pointer-coarse:min-h-10 pointer-coarse:min-w-10 motion-reduce:transition-none motion-reduce:active:transform-none inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-[0.8125rem] font-medium whitespace-nowrap transition-[transform,background-color,box-shadow,color,border-color,filter] duration-150 ease-snap outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/40 active:not-aria-[haspopup]:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button pointer-coarse:min-h-10 pointer-coarse:min-w-10 motion-reduce:transition-none motion-reduce:active:translate-none inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-[0.8125rem] font-medium whitespace-nowrap transition-[transform,background-color,box-shadow,color,border-color,filter] duration-150 active:not-aria-[haspopup]:translate-y-px ease-snap outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:brightness-110",
-        soft: "bg-accent text-foreground hover:bg-primary/20",
-        outline:
-          "border-input bg-card text-foreground hover:bg-muted aria-expanded:bg-muted",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-accent aria-expanded:bg-accent",
-        ghost:
-          "text-foreground hover:bg-accent aria-expanded:bg-accent",
-        destructive:
-          "bg-destructive text-background hover:brightness-110 focus-visible:ring-destructive/30",
+        default: "btn-tint text-primary-foreground [--tint:var(--primary)]",
+        soft: "btn-raised btn-soft text-foreground",
+        outline: "btn-raised bg-card text-foreground",
+        secondary: "btn-raised bg-card text-secondary-foreground",
+        ghost: "btn-ghost text-foreground",
+        destructive: "btn-tint text-background [--tint:var(--destructive)] focus-visible:ring-destructive/30",
         link: "text-link underline-offset-4 hover:underline",
       },
       size: {

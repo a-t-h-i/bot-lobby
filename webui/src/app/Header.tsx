@@ -11,7 +11,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Keys } from "@/components/ui/kbd"
 import { useTheme } from "@/components/theme-provider"
 import type { ConnectionState } from "@/lib/events"
-import { cn } from "@/lib/utils"
 import type { SnapshotTask, StatusInfo } from "@protocol"
 import type { Route } from "./router.ts"
 import { ProjectNotice, ProjectSwitcher, useProjects } from "./ProjectSwitcher.tsx"
@@ -43,8 +42,9 @@ function Connection({ state }: { state: ConnectionState }) {
 }
 
 /** The flat icon buttons on the right. */
+/** A header tool: a slim icon that rises when pointed at and sinks when on or pressed. */
 const ICON =
-  "inline-flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:scale-95"
+  "btn-ghost inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-[background-color,color,box-shadow,translate] duration-150 ease-snap outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:active:translate-none aria-[current=page]:text-foreground"
 
 function IconLink({ label, hint, href, active, children }: { label: string; hint: string; href: string; active: boolean; children: ReactNode }) {
   return (
@@ -56,7 +56,7 @@ function IconLink({ label, hint, href, active, children }: { label: string; hint
           aria-current={active ? "page" : undefined}
           aria-keyshortcuts={hint}
           aria-describedby="focused-action-help"
-          className={cn(ICON, active && "bg-accent text-foreground")}
+          className={ICON}
         >
           {children}
         </a>

@@ -871,3 +871,34 @@ test("the Thinking pane has no title bar; every agent has its own labelled bubbl
   await page.keyboard.press("Escape");
   await expect(pane).toBeHidden();
 });
+
+test("buttons are slim and stand a little raised: a lit face, a rim and a soft shadow, sinking when pressed", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => {
+    window.location.hash = "#/tasks/T-mock-1";
+  });
+  const archive = page.getByRole("toolbar", { name: "Actions" }).getByRole("button", { name: "Archive" });
+  await expect(archive).toBeVisible();
+  const look = await archive.evaluate((el: any) => {
+    const style = getComputedStyle(el);
+    return { height: el.getBoundingClientRect().height, image: style.backgroundImage, shadow: style.boxShadow, radius: style.borderTopLeftRadius };
+  });
+  expect(look.height, "slim: 30px, not 40").toBeLessThan(34);
+  expect(look.image, "a face lit from above").toContain("linear-gradient");
+  expect(look.shadow, "standing on a soft shadow").not.toBe("none");
+  expect(look.shadow, "with a bright top edge").toContain("inset");
+  expect(look.radius, "the corners are as they were").toBe("8px");
+  await archive.hover();
+  await page.mouse.down();
+  await page.waitForTimeout(300);
+  const pressed = await archive.evaluate((el: any) => getComputedStyle(el).boxShadow);
+  // Let go elsewhere, so the press never becomes a click.
+  await page.mouse.move(2, 2);
+  await page.mouse.up();
+  expect(pressed, "pressed, the shadow moves inside").not.toBe(look.shadow);
+  await page.keyboard.press("Escape");
+  const send = page.getByRole("button", { name: "Send" });
+  expect((await send.boundingBox())!.height, "the send button stays compact").toBeLessThan(34);
+  expect(await send.evaluate((el: any) => getComputedStyle(el).backgroundImage)).toContain("linear-gradient");
+});

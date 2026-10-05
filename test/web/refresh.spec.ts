@@ -47,7 +47,9 @@ test("toolbar touch targets, context, keyboard hint activation and modal guard",
   await expect(header.getByLabel("Connected", { exact: true })).toBeVisible();
   const controls = header.locator("button:visible, a:visible");
   const heights = await controls.evaluateAll((els) => els.map((el: any) => ({ name: el.textContent || el.getAttribute("aria-label"), height: el.getBoundingClientRect().height })));
-  for (const control of heights) expect(control.height, `toolbar ${control.name} target >=40px`).toBeGreaterThanOrEqual(40);
+  // Slim under a mouse (never under WCAG 2.5.8's 24px), 44px under a finger.
+  const finger = await page.evaluate(() => window.matchMedia("(pointer: coarse)").matches);
+  for (const control of heights) expect(control.height, `toolbar ${control.name} target`).toBeGreaterThanOrEqual(finger ? 44 : 24);
   await header.getByRole("button", { name: "Keyboard shortcuts", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog", { name: "Keys", exact: true })).toBeVisible();

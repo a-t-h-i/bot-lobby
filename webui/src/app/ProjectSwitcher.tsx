@@ -135,7 +135,7 @@ export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Pro
             event.preventDefault()
             setOpen(true)
           }}
-          className="group flex h-10 min-w-0 items-center gap-2 rounded-lg px-2.5 text-sm font-medium outline-none transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none aria-expanded:bg-accent"
+          className="btn-ghost group flex h-8 min-w-0 items-center gap-2 rounded-lg border border-transparent px-2.5 text-sm font-medium outline-none transition-[box-shadow,background-color] duration-150 focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none"
         >
           <span aria-hidden="true" className={cn("size-2.5 shrink-0 rounded-full", message ? "bg-destructive" : "bg-primary")} />
           <span className="truncate">{name}</span>
@@ -214,7 +214,7 @@ export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Pro
               aria-label="Refresh projects"
               disabled={busy}
               onClick={() => void refresh()}
-              className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-60"
+              className="btn-ghost inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-muted-foreground outline-none transition-[box-shadow,color,translate] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px disabled:opacity-60"
             >
               {busy ? <Spinner aria-hidden="true" role="presentation" className="size-4" /> : <RefreshCw aria-hidden="true" className="size-4" />}
             </button>

@@ -105,9 +105,32 @@
 
   /* The dock's height from the bottom of the window, so toasts and the page can clear it. */
   --composer-h: 6.5rem;
+
+  /*
+   * Buttons sit a little proud of the page: a face lit from above, a bright
+   * top edge, a hairline rim and a soft contact shadow. Pressed, the face
+   * sinks and the shadow moves inside.
+   */
+  --btn-face: linear-gradient(180deg, #ffffff 0%, #f5f4f1 100%);
+  --btn-face-hover: linear-gradient(180deg, #ffffff 0%, #f9f8f6 100%);
+  --btn-face-press: linear-gradient(180deg, #ecebe7 0%, #f4f3f0 100%);
+  --btn-rim: rgb(32 28 20 / 0.13);
+  --btn-raise: inset 0 1px 0 rgb(255 255 255 / 1), inset 0 -1px 0 rgb(32 28 20 / 0.05), 0 1px 1.5px rgb(32 28 20 / 0.08), 0 2px 6px -2px rgb(32 28 20 / 0.1);
+  --btn-raise-hover: inset 0 1px 0 rgb(255 255 255 / 1), inset 0 -1px 0 rgb(32 28 20 / 0.05), 0 1px 2px rgb(32 28 20 / 0.09), 0 6px 14px -5px rgb(32 28 20 / 0.17);
+  --btn-press: inset 0 1px 2.5px rgb(32 28 20 / 0.13), inset 0 0 0 0.5px rgb(32 28 20 / 0.04);
+  --btn-gloss: linear-gradient(180deg, rgb(255 255 255 / 0.2) 0%, rgb(255 255 255 / 0.04) 52%, rgb(0 0 0 / 0.06) 100%);
 }
 
 .dark {
+  --btn-face: linear-gradient(180deg, #26262c 0%, #1c1c21 100%);
+  --btn-face-hover: linear-gradient(180deg, #2c2c33 0%, #212127 100%);
+  --btn-face-press: linear-gradient(180deg, #17171b 0%, #1d1d22 100%);
+  --btn-rim: rgb(255 255 255 / 0.085);
+  --btn-raise: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 1px 2px rgb(0 0 0 / 0.5), 0 3px 8px -3px rgb(0 0 0 / 0.55);
+  --btn-raise-hover: inset 0 1px 0 rgb(255 255 255 / 0.09), 0 1px 2px rgb(0 0 0 / 0.55), 0 7px 16px -6px rgb(0 0 0 / 0.7);
+  --btn-press: inset 0 1px 3px rgb(0 0 0 / 0.55);
+  --btn-gloss: linear-gradient(180deg, rgb(255 255 255 / 0.16) 0%, rgb(255 255 255 / 0.03) 52%, rgb(0 0 0 / 0.08) 100%);
+
   /* Deep ink */
   --background: #0b0b0d;
   --foreground: #e8e7e4;
@@ -318,6 +341,61 @@
   .glass {
     @apply border border-glass-border bg-card text-card-foreground shadow-card;
   }
+  /*
+   * The raised button looks (see --btn-* above). The shadow goes through
+   * --tw-shadow, so a focus ring adds to it instead of replacing it.
+   */
+  .btn-raised,
+  .btn-ghost:is(:hover, [aria-expanded="true"], [aria-pressed="true"], [aria-current="page"]),
+  .btn-tint {
+    --tw-shadow: var(--btn-raise);
+    box-shadow: var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+  }
+  .btn-raised,
+  .btn-ghost:is(:hover, [aria-expanded="true"], [aria-pressed="true"], [aria-current="page"]) {
+    background-image: var(--btn-face);
+    border-color: var(--btn-rim);
+  }
+  .btn-raised:hover {
+    background-image: var(--btn-face-hover);
+    --tw-shadow: var(--btn-raise-hover);
+  }
+  .btn-raised:is(:active, [aria-expanded="true"], [aria-pressed="true"]),
+  .btn-ghost:is(:active, [aria-expanded="true"], [aria-pressed="true"], [aria-current="page"]) {
+    background-image: var(--btn-face-press);
+    --tw-shadow: var(--btn-press);
+  }
+  /* A tinted button: the colour (--tint) under a gloss, with a darker rim and a shadow in its own colour. */
+  .btn-tint {
+    background-color: var(--tint);
+    background-image: var(--btn-gloss);
+    border-color: color-mix(in oklab, var(--tint) 76%, black);
+    --tw-shadow: inset 0 1px 0 rgb(255 255 255 / 0.26), inset 0 -1px 0 rgb(0 0 0 / 0.12), 0 1px 2px color-mix(in oklab, var(--tint) 34%, transparent), 0 4px 10px -4px color-mix(in oklab, var(--tint) 58%, transparent);
+  }
+  .btn-tint:hover {
+    filter: brightness(1.07);
+    --tw-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3), inset 0 -1px 0 rgb(0 0 0 / 0.12), 0 1px 2px color-mix(in oklab, var(--tint) 38%, transparent), 0 7px 16px -6px color-mix(in oklab, var(--tint) 68%, transparent);
+  }
+  .btn-tint:active {
+    filter: brightness(0.97);
+    background-image: linear-gradient(180deg, rgb(0 0 0 / 0.08), rgb(255 255 255 / 0.04));
+    --tw-shadow: inset 0 1px 3px rgb(0 0 0 / 0.28);
+  }
+  /* Nothing to do yet: a quiet raised face instead of the colour. */
+  .btn-tint:disabled {
+    background-color: var(--card);
+    background-image: var(--btn-face);
+    border-color: var(--btn-rim);
+    --tw-shadow: var(--btn-raise);
+    filter: none;
+  }
+  .btn-soft {
+    background-image: linear-gradient(var(--accent), var(--accent)), var(--btn-face);
+  }
+  .btn-soft:hover {
+    background-image: linear-gradient(var(--accent), var(--accent)), var(--btn-face-hover);
+  }
+
   .glass-pop {
     @apply border border-glass-border bg-popover text-popover-foreground shadow-glass backdrop-blur-md;
   }
@@ -331,9 +409,13 @@
 }
 
 
-/* Controls are never smaller than 40px, 44px under a finger; switches, checkboxes and the message box's compact buttons carry their own hit area. */
+/*
+ * With a mouse a control keeps its drawn size (30px for most, never under the
+ * 24px of WCAG 2.5.8), so buttons stay slim. Under a finger it is never
+ * smaller than 44px; switches, checkboxes and the message box's compact
+ * buttons carry their own hit area.
+ */
 :root { --touch-target: 44px; --control-target: 40px; --thinking-lift: -2px; --thinking-scale: 1.04; }
-button:not([role="switch"]):not([role="checkbox"]):not([data-compact]), [role="tab"], header a[aria-keyshortcuts] { min-height: var(--control-target); min-width: var(--control-target); }
 @media (pointer: coarse) { button:not([role="switch"]):not([role="checkbox"]):not([data-compact]), [role="combobox"], [role="tab"], header a[aria-keyshortcuts] { min-height: var(--touch-target); min-width: var(--touch-target); } }
 [hidden] { display: none !important; }
 

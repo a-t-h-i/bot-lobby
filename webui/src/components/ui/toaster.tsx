@@ -47,7 +47,7 @@ export function Toaster() {
             {item.action ? (
               <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
                 type="button"
-                className="-my-2 -mr-2 h-8 shrink-0 rounded-lg px-3 font-medium text-primary transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none"
+                className="btn-raised -my-1.5 -mr-1 h-7 shrink-0 rounded-lg border bg-card px-2.5 font-medium text-primary transition-[box-shadow,translate] active:translate-y-px focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none"
                 onClick={() => {
                   item.action?.onClick()
                   dismissToast(item.id)
