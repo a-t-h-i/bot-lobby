@@ -15,16 +15,18 @@ declare const getComputedStyle: any;
 // A real 1x1 PNG.
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
 
-test("switching tabs pours the colour along the connectors like a straw, then fills the chosen tab exactly", async ({ page, server }) => {
-  await openScenario(page, server, "full");
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.waitForTimeout(500);
-  const run = await page.evaluate(async () => {
+/** Clicks the tab named `name` and records the straw, the fill, both rings and how far the tab is knocked on every frame for 1.3s. */
+async function recordSwitch(page: any, name: string) {
+  return page.evaluate(async (name: string) => {
     const fill = document.querySelector("[data-tab-fill]") as any;
     const drain = document.querySelector("[data-tab-drain]") as any;
-    const target = [...document.querySelectorAll('[role="tab"]')].find((el: any) => /Git/.test(el.textContent)) as any;
+    const ring = document.querySelector("[data-tab-ring]") as any;
+    const unring = document.querySelector("[data-tab-unring]") as any;
+    const target = [...document.querySelectorAll('[role="tab"]')].find((el: any) => el.textContent.includes(name)) as any;
     const source = document.querySelector('[role="tab"][aria-selected="true"]') as any;
-    const frames: Array<{ t: number; liquid: number[]; drain: number; fill: number }> = [];
+    // How far round a ring is drawn (0 when hidden), and the side it is drawn from.
+    const rim = (el: any) => ({ amount: Number(getComputedStyle(el).opacity) > 0 ? parseFloat(el.children[0].style.strokeDasharray) || 0 : 0, port: el.dataset.port as string });
+    const frames: Array<{ t: number; liquid: number[]; drain: number; fill: number; ring: { amount: number; port: string }; unring: { amount: number; port: string }; budge: number }> = [];
     const start = performance.now();
     target.click();
     await new Promise<void>((resolve) => {
@@ -34,35 +36,73 @@ test("switching tabs pours the colour along the connectors like a straw, then fi
           liquid: [...document.querySelectorAll("[data-tab-liquid]")].map((el: any) => el.getBoundingClientRect().width),
           drain: Number(getComputedStyle(drain).opacity) * drain.getBoundingClientRect().width,
           fill: Number(getComputedStyle(fill).opacity) * fill.getBoundingClientRect().width,
+          ring: rim(ring),
+          unring: rim(unring),
+          budge: parseFloat(target.style.translate) || 0,
         });
         if (performance.now() - start < 1300) requestAnimationFrame(tick);
         else resolve();
       };
       tick();
     });
-    const box = target.getBoundingClientRect();
-    const end = fill.getBoundingClientRect();
-    return { frames, from: source.getBoundingClientRect().width, tab: { left: box.left, top: box.top, width: box.width, height: box.height }, end: { left: end.left, top: end.top, width: end.width, height: end.height } };
-  });
+    const shape = (el: any) => {
+      const box = el.getBoundingClientRect();
+      return { left: box.left, top: box.top, width: box.width, height: box.height };
+    };
+    return { frames, from: source.getBoundingClientRect().width, tab: shape(target), end: shape(fill), ring: shape(ring), rest: target.style.translate };
+  }, name);
+}
+
+test("switching tabs pours the colour along the connectors like a straw, runs it round the chosen tab into its border, and the splash knocks the pill", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(500);
+  const run = await recordSwitch(page, "Git");
   const links = run.frames[0]!.liquid.length;
-  const wet = new Set(run.frames.flatMap((frame) => frame.liquid.map((width, n) => (width > 1 ? n : -1)).filter((n) => n >= 0)));
+  const wet = new Set(run.frames.flatMap((frame: any) => frame.liquid.map((width: number, n: number) => (width > 1 ? n : -1)).filter((n: number) => n >= 0)));
   expect(links, "dotted connectors join the tabs").toBeGreaterThan(3);
   expect(wet.size, "the colour flows through every connector between Lobby and Git").toBeGreaterThanOrEqual(4);
-  expect(run.frames.some((frame) => frame.drain > 2 && frame.drain < run.from - 2), "Lobby drains into the straw").toBe(true);
-  expect(run.frames.some((frame) => frame.fill > 2 && frame.fill < run.tab.width - 2), "Git fills up").toBe(true);
-  expect(run.frames.at(-1)!.liquid.every((width) => width < 1), "and the straw is empty again").toBe(true);
-  // Springs: quick, and the new tab overfills a little before it settles.
-  expect(run.frames.some((frame) => frame.fill > run.tab.width + 1), "the fill bounces past full").toBe(true);
-  const settled = run.frames.find((frame) => frame.t > 50 && frame.liquid.every((width) => width < 1) && Math.abs(frame.fill - run.tab.width) < 1.5 && frame.drain < 1);
+  expect(run.frames.some((frame: any) => frame.drain > 2 && frame.drain < run.from - 2), "Lobby drains into the straw").toBe(true);
+  expect(run.frames.some((frame: any) => frame.unring.amount > 0.05 && frame.unring.amount < 0.95 && frame.unring.port === "right"), "and its ring is sucked back round to the side the straw leaves from").toBe(true);
+  // The ring starts on Git's left, where the colour comes in, only once the colour has reached the connector beside it.
+  const reached = run.frames.find((frame: any) => frame.liquid[4] > 1);
+  const rung = run.frames.find((frame: any) => frame.ring.amount > 0 && frame.ring.amount < 1);
+  expect(rung, "the colour runs round Git").toBeDefined();
+  expect(rung.ring.port, "from the side it came from").toBe("left");
+  expect(rung.t, "as it arrives").toBeGreaterThanOrEqual(reached.t);
+  expect(run.frames.some((frame: any) => frame.ring.amount > 0.3 && frame.ring.amount < 0.8), "a ring part way round").toBe(true);
+  expect(run.frames.some((frame: any) => frame.fill > 2 && frame.fill < run.tab.width - 2), "Git fills up behind it").toBe(true);
+  expect(run.frames.filter((frame: any) => frame.t >= rung.t).every((frame: any) => frame.fill < run.tab.width + 1), "and the tint stays inside the ring").toBe(true);
+  expect(run.frames.at(-1)!.liquid.every((width: number) => width < 1), "and the straw is empty again").toBe(true);
+  expect(run.frames.at(-1)!.ring.amount, "the ring closes into Git's border").toBeGreaterThanOrEqual(1);
+  // The tint splashing against Git's far wall knocks the pill a little along the way it flowed, and it bounces back.
+  const knocked = run.frames.find((frame: any) => Math.abs(frame.budge) > 0.5);
+  expect(knocked, "the pill budges").toBeDefined();
+  expect(knocked.fill, "when the tint reaches the far wall").toBeGreaterThan(run.tab.width * 0.85);
+  const furthest = Math.max(...run.frames.map((frame: any) => frame.budge));
+  expect(furthest, "to the right, the way the colour flowed").toBeGreaterThan(1.5);
+  expect(furthest, "only slightly").toBeLessThan(6);
+  expect(Math.min(...run.frames.map((frame: any) => frame.budge)), "swings back past its place").toBeLessThan(-0.2);
+  expect(run.rest, "and settles where it was").toBe("");
+  // Springs: quick.
+  const settled = run.frames.find((frame: any) => frame.t > 50 && frame.liquid.every((width: number) => width < 1) && Math.abs(frame.fill - run.tab.width) < 1.5 && frame.drain < 1 && frame.ring.amount >= 1 && frame.unring.amount === 0);
   expect(settled?.t ?? Infinity, "the whole switch is over in well under a second").toBeLessThan(700);
   expect(Math.abs(run.end.left - run.tab.left), "the fill lands on the tab").toBeLessThan(2);
   expect(Math.abs(run.end.width - run.tab.width), "at the tab's width").toBeLessThan(2);
   expect(Math.abs(run.end.top - run.tab.top) + Math.abs(run.end.height - run.tab.height), "and its height, so the label sits in the middle").toBeLessThan(2);
+  expect(Math.abs(run.ring.left - run.tab.left) + Math.abs(run.ring.width - run.tab.width) + Math.abs(run.ring.top - run.tab.top) + Math.abs(run.ring.height - run.tab.height), "the ring sits on the tab's edge").toBeLessThan(3);
   await expect(page.getByRole("tab", { name: /Git/ })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tab", { name: /Git/ }), "the tab shows its number").toContainText("6");
+  // Back to the left: the colour comes into Tasks from its right.
+  const back = await recordSwitch(page, "Tasks");
+  expect(back.frames.find((frame: any) => frame.ring.amount > 0 && frame.ring.amount < 1)?.ring.port, "coming back, the ring starts on the right").toBe("right");
+  expect(back.frames.some((frame: any) => frame.unring.amount > 0.05 && frame.unring.amount < 0.95 && frame.unring.port === "left"), "and Git's ring drains out to the left").toBe(true);
+  expect(back.frames.at(-1)!.ring.amount, "and closes round Tasks").toBeGreaterThanOrEqual(1);
+  expect(Math.min(...back.frames.map((frame: any) => frame.budge)), "which is knocked to the left").toBeLessThan(-1.5);
+  expect(back.rest, "and settles too").toBe("");
 });
 
-test("under reduced motion the fill simply moves, with no flow", async ({ page, server }) => {
+test("under reduced motion the fill and the ring simply move, with no flow and no knock", async ({ page, server }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -70,21 +110,27 @@ test("under reduced motion the fill simply moves, with no flow", async ({ page, 
   const run = await page.evaluate(async () => {
     const target = [...document.querySelectorAll('[role="tab"]')].find((el: any) => /Git/.test(el.textContent)) as any;
     let wet = 0;
+    let moved = 0;
     const start = performance.now();
     target.click();
     await new Promise<void>((resolve) => {
       const tick = () => {
         wet = Math.max(wet, ...[...document.querySelectorAll("[data-tab-liquid]")].map((el: any) => el.getBoundingClientRect().width));
+        moved = Math.max(moved, Math.abs(parseFloat(target.style.translate) || 0));
         if (performance.now() - start < 500) requestAnimationFrame(tick);
         else resolve();
       };
       tick();
     });
     const fill = (document.querySelector("[data-tab-fill]") as any).getBoundingClientRect();
-    return { wet, fill: fill.left, tab: target.getBoundingClientRect().left };
+    const ring = document.querySelector("[data-tab-ring]") as any;
+    return { wet, moved, fill: fill.left, ring: ring.getBoundingClientRect().left, rung: ring.children[0].style.strokeDasharray, tab: target.getBoundingClientRect().left };
   });
   expect(run.wet, "nothing flows").toBeLessThan(1);
+  expect(run.moved, "and the pill is not knocked").toBe(0);
   expect(Math.abs(run.fill - run.tab), "the fill is simply on the new tab").toBeLessThan(2);
+  expect(Math.abs(run.ring - run.tab), "and so is its ring").toBeLessThan(2);
+  expect(parseFloat(run.rung), "all the way round").toBe(1);
 });
 
 test("the effort slider skips the levels a model does not support", async ({ page, server }) => {
@@ -290,7 +336,7 @@ test("zen palettes: warm paper in light, deep ink in dark, a quiet indigo accent
   expect(look.body, "flat page, no wash").toBe("none");
   expect(look.cardRadius, "the page's surface").toBe("12px");
   expect(look.inputRadius, "the floating dock has softer corners").toBe("16px");
-  expect(look.inactiveBorder, "inactive tabs are plain text").toBe("0px");
+  expect(look.inactiveBorder, "inactive tabs are pills with a thin border").toBe("1px");
   expect(look.pillRadius, "the active pill has the same 8px corners").toBe("8px");
   expect(look.cardBottom, "the composer stays on the screen").toBeLessThanOrEqual(look.inner);
   expect(look.mainBottom, "and the page runs on under the dock").toBeGreaterThan(look.composerTop);
