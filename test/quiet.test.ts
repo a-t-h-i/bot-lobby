@@ -9,6 +9,7 @@ import { registerQuietTools } from "../src/pi/tool-renderers.ts";
 import { registerLifecycle } from "../src/pi/events.ts";
 import { applyStatus, isMinimized, registerRevealShortcut, setMinimized, STATUS_KEY } from "../src/pi/ui.ts";
 import { registerCommands } from "../src/pi/commands.ts";
+import { registerSwitch } from "../src/pi/switch.ts";
 import { createTask } from "../src/schemas/task.ts";
 import { createTaskDir, ensureProjectStructure, listTasks, loadTask } from "../src/state/persistence.ts";
 
@@ -258,7 +259,7 @@ test("alt+t flips quiet, restores tool expansion, and refreshes the status", () 
   setQuiet(true);
   const fake = makePi(["read"]);
   registerRevealShortcut(asPi(fake), ".pi");
-  assert.deepEqual(fake.shortcuts, ["alt+t", "ctrl+shift+m"]);
+  assert.deepEqual(fake.shortcuts, ["alt+t"], "ctrl+shift+m is the on/off switch's (switch.ts)");
   const { ctx, ui } = makeCtx(tempDir("dh-reveal-"), false);
   fake.shortcutHandlers["alt+t"]!(ctx);
   assert.equal(isQuiet(), false);
@@ -277,16 +278,62 @@ test("session_shutdown clears the bot-lobby status", () => {
   assert.deepEqual(ui.statuses.at(-1), { key: STATUS_KEY, text: undefined });
 });
 
-test("ctrl+shift+m minimizes and restores bot-lobby without touching ownership", () => {
+test("ctrl+shift+m turns bot-lobby off and on without touching ownership", async () => {
   setMinimized(false);
   const fake = makePi(["read"]);
-  registerRevealShortcut(asPi(fake), ".pi");
+  registerSwitch(asPi(fake), ".pi");
   const { ctx, ui } = makeCtx(tempDir("dh-minimize-"));
-  fake.shortcutHandlers["ctrl+shift+m"]!(ctx);
+  await fake.shortcutHandlers["ctrl+shift+m"]!(ctx);
   assert.equal(isMinimized(), true);
-  assert.ok(ui.statuses.at(-1)!.text?.includes("minimized"), "the footer signals minimize");
-  fake.shortcutHandlers["ctrl+shift+m"]!(ctx);
+  assert.match(ui.statuses.at(-1)!.text ?? "", /^bot-lobby off \(ctrl\+shift\+m\)/, "the footer says it is off, and how to turn it on");
+  assert.match(ui.notifications.at(-1)!.message, /bot-lobby off — pi is plain pi/);
+  await fake.shortcutHandlers["ctrl+shift+m"]!(ctx);
   assert.equal(isMinimized(), false);
+  assert.match(ui.notifications.at(-1)!.message, /bot-lobby on/);
+});
+
+test("a new pi session starts with bot-lobby off; one that drives a task under way, or with startOn set, starts on", async () => {
+  const fake = makePi(["read"]);
+  registerLifecycle(asPi(fake), ".pi");
+  const start = fake.handlers.get("session_start")!;
+  const plain = makeCtx(tempDir("dh-start-off-"));
+  setMinimized(false);
+  await start({ type: "session_start" }, plain.ctx);
+  assert.equal(isMinimized(), true, "off by default: pi is plain pi");
+  assert.match(plain.ui.statuses.at(-1)!.text ?? "", /^bot-lobby off \(ctrl\+shift\+m\)/);
+  const root = ownedProject("session-a", "dh-start-owned-");
+  await start({ type: "session_start" }, makeCtx(root, false, "session-a").ctx);
+  assert.equal(isMinimized(), false, "a resumed session picks its task back up");
+  const config = tempDir("dh-start-config-");
+  writeFileSync(join(config, "config.json"), JSON.stringify({ lobby: { startOn: true } }));
+  const before = process.env.BOT_LOBBY_CONFIG_DIR;
+  process.env.BOT_LOBBY_CONFIG_DIR = config;
+  try {
+    await start({ type: "session_start" }, makeCtx(tempDir("dh-start-on-")).ctx);
+    assert.equal(isMinimized(), false, "settings can start it on");
+  } finally {
+    if (before === undefined) delete process.env.BOT_LOBBY_CONFIG_DIR;
+    else process.env.BOT_LOBBY_CONFIG_DIR = before;
+  }
+});
+
+test("/bot-lobby on|off switch it, and a request turns it on", async () => {
+  const fake = makePi(["read"]);
+  registerCommands(asPi(fake), ".pi");
+  const run = fake.commandHandlers["bot-lobby"]!;
+  const { ctx, ui } = makeCtx(tempDir("dh-cmd-switch-"));
+  setMinimized(false);
+  await run("off", ctx);
+  assert.equal(isMinimized(), true);
+  await run("off", ctx);
+  assert.match(ui.notifications.at(-1)!.message, /already off/);
+  await run("on", ctx);
+  assert.equal(isMinimized(), false);
+  setMinimized(true);
+  await run("status", ctx);
+  assert.equal(isMinimized(), true, "looking around does not turn it on");
+  await run("restore", ctx);
+  assert.equal(isMinimized(), false, "the old restore still works");
 });
 
 function ownedProject(sessionId: string, prefix: string): string {
@@ -309,7 +356,7 @@ test("applyStatus shows the task only for the owning session", () => {
   assert.ok(owner.ui.statuses.at(-1)!.text?.includes("TASK-owned"));
   setMinimized(true);
   applyStatus(owner.ctx, root, ".pi");
-  assert.ok(owner.ui.statuses.at(-1)!.text?.includes("minimized"));
+  assert.ok(owner.ui.statuses.at(-1)!.text?.includes("bot-lobby off"));
   setMinimized(false);
   applyStatus(owner.ctx, root, ".pi");
   assert.ok(owner.ui.statuses.at(-1)!.text?.includes("TASK-owned"), "restore brings the task back");
@@ -405,7 +452,7 @@ test("/bot-lobby <request> stamps the starting session as owner", async () => {
   }
 });
 
-test("/bot-lobby minimize and restore toggle the per-session mode without releasing ownership", async () => {
+test("/bot-lobby minimize and restore (now off and on) toggle the per-session mode without releasing ownership", async () => {
   setMinimized(false);
   const root = ownedProject("session-1", "dh-min-cmd-");
   const fake = makePi(["read"]);
@@ -413,7 +460,7 @@ test("/bot-lobby minimize and restore toggle the per-session mode without releas
   const { ctx, ui } = makeCtx(root, false, "session-1");
   await fake.commandHandlers["bot-lobby"]!("minimize", ctx);
   assert.equal(isMinimized(), true);
-  assert.ok(ui.statuses.at(-1)!.text?.includes("minimized"));
+  assert.ok(ui.statuses.at(-1)!.text?.includes("bot-lobby off"));
   await fake.commandHandlers["bot-lobby"]!("restore", ctx);
   assert.equal(isMinimized(), false);
   assert.ok(ui.statuses.at(-1)!.text?.includes("TASK-owned"), "restore brings the task back");

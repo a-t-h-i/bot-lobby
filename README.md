@@ -17,7 +17,8 @@ The questionnaire and web tools are built in, so don't also install extensions w
 
 ## Use
 
-1. In Pi, run `/bot-lobby add a login page`. The lobby opens in your browser.
+1. In Pi, run `/bot-lobby add a login page`. Bot-lobby turns on and the lobby opens in your browser.
+   A new pi session starts with bot-lobby off, as plain pi: `Ctrl+Shift+M` or `/bot-lobby on|off` switches it.
 2. Answer the oracle's questions and approve its plan, or agree one with the panel in **Plan** first.
 3. Follow the agents in **Lobby**. Models, effort and time limits are in **Settings**.
 
@@ -43,7 +44,7 @@ to off, advise or block. Visual questions come with mockups that expand and scro
 The lobby is keyboard-first, and every action button shows its key (`Archive E`, `Delete Del`).
 `Alt+1`…`Alt+9` switch tabs, `j` / `k` move through lists, `/` focuses search or the message box,
 `p` switches project, `d` flips the theme and `?` lists every key. Alt and Ctrl shortcuts can be
-rebound with `lobby.keys`. In Pi, `Alt+G` toggles auto mode and `Ctrl+Shift+M` hides or restores bot-lobby.
+rebound with `lobby.keys`. In Pi, `Alt+G` toggles auto mode and `Ctrl+Shift+M` turns bot-lobby on or off.
 
 ## Screenshots
 

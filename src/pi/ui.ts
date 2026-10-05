@@ -1,5 +1,4 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Key } from "@earendil-works/pi-tui";
 import type { AgentRun } from "../schemas/findings.ts";
 import type { Task } from "../schemas/task.ts";
 import { activeTask } from "../state/persistence.ts";
@@ -17,7 +16,7 @@ export function summarizeRun(run: AgentRun): string {
 /** One-line footer text, always carrying the quiet-mode hint. */
 export function statusText(task: Task | undefined, minimized = false): string {
   const mode = isQuiet() ? "tools hidden (alt+t)" : "tools shown";
-  if (minimized) return `bot-lobby minimized (ctrl+shift+m) · ${mode}`;
+  if (minimized) return `bot-lobby off (ctrl+shift+m) · ${mode}`;
   if (!task) return `bot-lobby · ${mode}`;
   return `bot-lobby ${task.id} · ${task.paused ? `${task.state} (paused)` : task.state} · ${mode}`;
 }
@@ -73,7 +72,7 @@ function setZenState(task: Task | undefined, live: AgentRun[]): void {
   zenState = { task, live, runs: mergeRuns(persistedRuns(task), live) };
 }
 
-/** Per-session standard-pi mode: the Master prompt is hidden but ownership stays. */
+/** Bot-lobby off for this session (plain pi): the Master prompt is hidden but ownership stays (see switch.ts). */
 let minimized = false;
 
 export function isMinimized(): boolean {
@@ -82,13 +81,6 @@ export function isMinimized(): boolean {
 
 export function setMinimized(value: boolean): void {
   minimized = value;
-}
-
-/** Flip minimize/restore and refresh the footer; the session is unchanged. */
-export function toggleMinimized(ctx: ExtensionContext, configDir: string): void {
-  setMinimized(!minimized);
-  applyStatus(ctx, detectProjectRoot(ctx.cwd, configDir), configDir, zenState.live);
-  ctx.ui.notify(minimized ? "bot-lobby minimized — ctrl+shift+m or /bot-lobby restore to return" : "bot-lobby restored", "info");
 }
 
 /**
@@ -143,10 +135,6 @@ export function registerRevealShortcut(pi: ExtensionAPI, configDir: string): voi
   pi.registerShortcut("alt+t", {
     description: "bot-lobby: reveal or hide built-in tool rows",
     handler: (ctx) => revealTools(ctx, configDir),
-  });
-  pi.registerShortcut(Key.ctrlShift("m"), {
-    description: "bot-lobby: minimize or restore bot-lobby for this session",
-    handler: (ctx) => toggleMinimized(ctx, configDir),
   });
 }
 

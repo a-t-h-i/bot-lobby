@@ -119,6 +119,16 @@ function resetCommand(ctx: ExtensionCommandContext): void {
   ctx.ui.notify(`bot-lobby web: the link changed: ${link}`, "info");
 }
 
+/** Close the page's server when bot-lobby is turned off; quiet, and nothing when it is not running. */
+export async function stopWebServer(ctx: ExtensionContext): Promise<void> {
+  const running = currentWebServer();
+  if (!running) return;
+  await running.close();
+  latestLink = undefined;
+  heartbeat();
+  showAddress(ctx, undefined);
+}
+
 /** Run one `web` subcommand; a failure is a notice, never a throw. */
 export async function webCommand(ctx: ExtensionCommandContext, word: string | undefined, deps?: WebCommandDeps): Promise<void> {
   const action = webAction(word);
@@ -137,9 +147,10 @@ export async function webCommand(ctx: ExtensionCommandContext, word: string | un
 }
 
 /**
- * On `session_start`: follow the fresh lobby service, and start the server
- * (the first time) with the browser opening on it. The page is always on in
- * an interactive session; a subagent or a one-shot run serves nothing.
+ * On `session_start` (and when bot-lobby is turned on): follow the fresh
+ * lobby service, and start the server (the first time) with the browser
+ * opening on it. The page runs while bot-lobby is on in an interactive
+ * session; off, a subagent or a one-shot run serves nothing.
  */
 export function webSessionStarted(ctx: ExtensionContext, deps?: WebCommandDeps): void {
   if (isSubagentProcess() || !servesPage(ctx)) return;
