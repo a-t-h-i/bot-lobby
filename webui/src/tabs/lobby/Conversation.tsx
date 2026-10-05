@@ -1,20 +1,21 @@
 /**
- * The conversation pane: chat newest-last, the oracle's replies as Markdown
- * on the left under their name and time, yours in a tinted bubble on the right,
- * messages from one speaker within five minutes under one header, notes as
- * centred rules, the streaming reply marked, older history loaded from
+ * The conversation pane: chat newest-last in a centred column, the oracle's
+ * replies as Markdown beside its avatar under its name and time, yours in a
+ * tinted bubble on the right, messages from one speaker within five minutes
+ * under one header (a follow-on shows its time when pointed at), notes as
+ * rules across the column, three dots until the reply starts, older history loaded from
  * `lobby.history` at the top, and a "Jump to latest" button while scrolled
  * up. New messages ease in; settled ones are memoised by id, so only the
  * streaming reply redraws on each delta.
  */
-import { memo, useCallback, useEffect, useMemo, useState, type ReactNode, type RefObject } from "react"
+import { memo, useCallback, useEffect, useMemo, useState, type RefObject } from "react"
 import { useStickToBottom } from "@/lib/useStickToBottom"
 import { ArrowDown, MessageSquare } from "lucide-react"
+import { AgentMessage, ChatNote, TypingDots, YourMessage } from "./ChatParts"
 import { motion } from "motion/react"
 import { ActionButton } from "@/ui/Actions"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Keys } from "@/components/ui/kbd"
-import { Spinner } from "@/components/ui/spinner"
 import { call } from "@/lib/api"
 import { formatClock } from "@/lib/format"
 import { Frame } from "@/ui/Frame"
@@ -30,55 +31,27 @@ const NO_TASK_HINT = "Type a request below and press enter to start one: the ora
 const NOTHING_SAID = "Nothing said yet. Type below to talk to the oracle about this task."
 
 function NoteEntry({ entry }: { entry: ChatEntry }) {
-  const failed = entry.text.startsWith("✗")
   return (
-    <div className={failed ? "flex justify-center text-sm text-destructive" : "flex justify-center text-sm text-muted-foreground"}>
-      <span className="max-w-[80%] text-center">
-        {entry.text}
-        {entry.at ? ` · ${formatClock(entry.at)}` : ""}
-      </span>
-    </div>
-  )
-}
-
-/** The speaker's name with the time (or what it is doing) at the far end. */
-function OracleHead({ name, children }: { name: string; children?: ReactNode }) {
-  return (
-    <span className="flex items-center gap-2 text-sm">
-      <span aria-hidden="true" className="size-2 rounded-full bg-primary" />
-      <span className="font-medium">{name}</span>
-      <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">{children}</span>
-    </span>
+    <ChatNote failed={entry.text.startsWith("✗")}>
+      {entry.text}
+      {entry.at ? ` · ${formatClock(entry.at)}` : ""}
+    </ChatNote>
   )
 }
 
 function MessageBody({ entry, head }: { entry: ChatEntry; head: boolean }) {
   if (entry.role === "you") {
     return (
-      <div className="flex flex-col items-end gap-1">
-        {head ? (
-          <span className="flex items-baseline gap-2 text-sm">
-            <span className="text-xs text-muted-foreground">{formatClock(entry.at)}</span>
-            <span className="font-medium">You</span>
-          </span>
-        ) : null}
-        <div className="max-w-[78%] rounded-xl rounded-tr-sm border border-primary/10 bg-you px-3.5 py-2">
-          <Markdown text={entry.text} />
-        </div>
-      </div>
+      <YourMessage time={formatClock(entry.at)} head={head}>
+        <Markdown text={entry.text} />
+      </YourMessage>
     )
   }
+  const panel = entry.role === "panel"
   return (
-    <div className="flex flex-col gap-1">
-      {head ? (
-        <OracleHead name={entry.role === "panel" ? "Panel" : "Oracle"}>
-          <time>{formatClock(entry.at)}</time>
-        </OracleHead>
-      ) : null}
-      <div className="max-w-[88%] pl-4">
-        <Markdown text={entry.text} />
-      </div>
-    </div>
+    <AgentMessage source={panel ? "PLANNER" : "ORACLE"} name={panel ? "Panel" : "Oracle"} time={formatClock(entry.at)} head={head}>
+      <Markdown text={entry.text} />
+    </AgentMessage>
   )
 }
 
@@ -101,21 +74,9 @@ function LiveReply({ text, busy }: { text?: string; busy: boolean }) {
   const writing = Boolean(text?.trim())
   if (!writing && !busy) return null
   return (
-    <div className="flex flex-col gap-1">
-      <OracleHead name="Oracle">
-        {busy ? (
-          <>
-            <Spinner aria-hidden="true" role="presentation" className="size-3" />
-            {writing ? "writing" : "working…"}
-          </>
-        ) : null}
-      </OracleHead>
-      {writing ? (
-        <div className="max-w-[88%] pl-4">
-          <Markdown text={text ?? ""} />
-        </div>
-      ) : null}
-    </div>
+    <AgentMessage source="ORACLE" name="Oracle" head live={busy} aside={busy && writing ? "writing…" : undefined}>
+      {writing ? <Markdown text={text ?? ""} /> : <TypingDots className="mt-1" />}
+    </AgentMessage>
   )
 }
 
@@ -210,11 +171,11 @@ export function Conversation({
   useEffect(() => setSettled(true), [])
   return (
     <Frame aria-label="Conversation" {...(bare ? {} : { title: "Conversation" })} note={more ? OLDER_NOTE : undefined} className="flex-1">
-      <div ref={ref} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto px-5 pt-4 pb-dock outline-none focus-visible:bg-muted/30" role="log" aria-label="Conversation" tabIndex={0}>
+      <div ref={ref} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-4 pb-dock outline-none focus-visible:bg-muted/30" role="log" aria-label="Conversation" tabIndex={0}>
         {empty ? (
           <ConversationEmpty hasTask={hasTask} />
         ) : (
-          <div className="flex flex-col gap-5">
+          <div className="chat-column">
             {merged.map((entry, index) => {
               const previous = merged[index - 1]
               const head = !previous || previous.role !== entry.role || entry.at - previous.at > GROUP_MS
