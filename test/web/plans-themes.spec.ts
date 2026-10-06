@@ -74,18 +74,46 @@ test("a theme is saved under its own name, renamed, and kept with pi for every s
   await fresh.context().close();
 });
 
-test("every button casts shadow-sm and wears a border the colour of its text", async ({ page, server }, info) => {
+test("every button casts shadow-sm; its border shows only on hover, two tones lighter than its text", async ({ page, server }, info) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.evaluate(() => { window.location.hash = "#/tasks"; });
-  await expect(page.locator("[data-slot='button']").first()).toBeVisible();
+  await page.evaluate(() => { window.location.hash = "#/tasks/T-mock-1"; });
+  await expect(page.locator("#main .btn-tint:visible").first()).toBeVisible();
+  await page.mouse.move(0, 899);
   const off = await page.evaluate(() => [...document.querySelectorAll(".btn-raised, .btn-ghost, .btn-tint")]
-    .filter((el: any) => el.getBoundingClientRect().width > 0)
+    .filter((el: any) => el.getBoundingClientRect().width > 0 && !el.matches(":hover"))
     .map((el: any) => {
       const style = getComputedStyle(el);
-      return { label: el.getAttribute("aria-label") ?? el.textContent.trim(), border: style.borderTopColor, text: style.color, shadow: style.boxShadow };
+      return { label: el.getAttribute("aria-label") ?? el.textContent.trim(), border: style.borderTopColor, shadow: style.boxShadow };
     })
-    .filter((button: any) => button.border !== button.text || !/0px 1px 3px 0px rgba\(0, 0, 0, 0\.1\), rgba\(0, 0, 0, 0\.1\) 0px 1px 2px -1px|rgba\(0, 0, 0, 0\.1\) 0px 1px 3px 0px, rgba\(0, 0, 0, 0\.1\) 0px 1px 2px -1px/.test(button.shadow)));
-  expect(off, "buttons without the shadow or the text-coloured border").toEqual([]);
-  await page.screenshot({ path: info.outputPath("buttons.png") });
+    .filter((button: any) => button.border !== "rgba(0, 0, 0, 0)" || !/0px 1px 3px 0px rgba\(0, 0, 0, 0\.1\), rgba\(0, 0, 0, 0\.1\) 0px 1px 2px -1px|rgba\(0, 0, 0, 0\.1\) 0px 1px 3px 0px, rgba\(0, 0, 0, 0\.1\) 0px 1px 2px -1px/.test(button.shadow)));
+  expect(off, "at rest: shadow-sm and no visible border").toEqual([]);
+
+  // The text colour two tones lighter: a quarter white mixed in.
+  const lighter = (text: string) => page.evaluate((color) => {
+    const probe = document.createElement("span");
+    probe.style.color = color;
+    probe.style.borderTop = "1px solid color-mix(in oklab, currentColor 75%, white)";
+    document.body.append(probe);
+    const value = getComputedStyle(probe).borderTopColor;
+    probe.remove();
+    return value;
+  }, text);
+  // One of each face: tinted, raised and quiet.
+  const hovered = [".btn-tint", ".btn-raised", ".btn-ghost"].map((face) => page.locator(`#main ${face}:visible, header ${face}:visible`).first());
+  for (const button of hovered) {
+    await button.hover();
+    const text = await button.evaluate((el: any) => getComputedStyle(el).color);
+    const want = await lighter(text);
+    await expect.poll(() => button.evaluate((el: any) => getComputedStyle(el).borderTopColor), { message: "hovered: the border is its text two tones lighter" }).toBe(want);
+    expect(want).not.toBe(text);
+  }
+  const bar = page.locator("#main [data-pane='detail']").getByRole("button").first().locator("xpath=..");
+  const box = (await bar.boundingBox())!;
+  const clip = { x: box.x - 6, y: box.y - 6, width: Math.min(620, box.width + 12), height: box.height + 12 };
+  await page.mouse.move(0, 899);
+  await page.screenshot({ path: info.outputPath("buttons-rest.png"), clip });
+  await bar.getByRole("button").nth(1).hover();
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: info.outputPath("buttons-hover.png"), clip });
 });
