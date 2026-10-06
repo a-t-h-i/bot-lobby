@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { completionBlockers } from "../src/master/decisions.ts";
@@ -23,10 +24,11 @@ const FAIL = "## Verdict\nCHANGES_REQUIRED\n\n## Findings\n- [major] regression 
 const FLOW: TaskState[] = ["clarifying", "scouting", "synthesizing", "awaiting_approval", "planning", "implementing", "reviewing"];
 
 function makeDeps(overrides: Partial<WorkflowDeps> = {}): WorkflowDeps {
+  const root = mkdtempSync(join(tmpdir(), "dh-qa-"));
   return {
-    root: mkdtempSync(join(tmpdir(), "dh-qa-")),
+    root,
     configDir: ".pi",
-    cwd: process.cwd(),
+    cwd: root,
     config: DEFAULT_CONFIG,
     ask: async () => undefined,
     choose: async () => undefined,
@@ -311,4 +313,45 @@ test("the plan keeps its acceptance criteria and testing when cut for length", a
   assert.match(cut, /## Files\nsrc\/a\.ts/);
   assert.match(cut, /\[Left out for length: Steps\. The whole plan is plan\.md in the task folder\.\]$/);
   assert.equal(planWithin("## Objective\nshort", 1000), "## Objective\nshort");
+});
+
+/* ------------------------------------------------------------ the QA risk */
+
+/** A repository with a README and an auth module, committed; the task's work starts from its HEAD. */
+function repoTask(prompts: string[]): { deps: WorkflowDeps; dir: string } {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "bl-qa-risk-")));
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: dir, stdio: "ignore" });
+  git("init", "-q");
+  git("config", "user.email", "t@example.com");
+  git("config", "user.name", "t");
+  mkdirSync(join(dir, "src/auth"), { recursive: true });
+  writeFileSync(join(dir, "README.md"), "# App\n");
+  writeFileSync(join(dir, "src/auth/reset.ts"), "export function reset(password: string) {\n  return password;\n}\n");
+  git("add", ".");
+  git("commit", "-q", "-m", "init");
+  const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
+  const deps = makeDeps({ root: dir, cwd: dir, runProcess: reviewer([PASS], prompts) });
+  const task = withTask(deps);
+  task.baseline = { at: new Date().toISOString(), files: [], head };
+  saveTask(deps.root, deps.configDir, task);
+  return { deps, dir };
+}
+
+test("QA scales with the change: nothing that runs passes on the engine's checks, a security change gets a deep review", async () => {
+  const prompts: string[] = [];
+  const { deps, dir } = repoTask(prompts);
+  writeFileSync(join(dir, "README.md"), `# App\n\n${"How to reset a password.\n".repeat(200)}`);
+  const docs = await act(deps, { action: "qa" });
+  assert.match(docs.message, /^QA gate: PASS on the engine's checks; no QA agent ran\. QA risk: none \(rules\)/);
+  assert.equal(prompts.length, 0, "no QA agent for documentation");
+  const passed = loadTask(deps.root, deps.configDir, "TASK-1")!;
+  assert.deepEqual([passed.qaVerdict, passed.qaRisk?.risk, passed.qaRisk?.qaRequired], ["pass", "none", false]);
+
+  writeFileSync(join(dir, "src/auth/reset.ts"), "export function reset(password: string) {\n  if (password.length < 8) throw new Error(\"too short\");\n  return password;\n}\n");
+  const auth = await act(deps, { action: "qa" });
+  assert.match(auth.message, /QA gate: PASS \(run success\)\nQA risk: high \(rules\) · 2-6 new tests at most · security/);
+  assert.equal(prompts.length, 1);
+  assert.match(prompts[0]!, /## QA risk: HIGH \(the engine's rules\)\nDepth: deep and adversarial\. Test budget: 2-6 new behavioural tests at most — a ceiling, never a quota/);
+  assert.match(prompts[0]!, /security: src\/auth\/reset\.ts \("password"\)/);
+  assert.match((await act(deps, { action: "status" })).message, /QA risk: high \(rules\)/, "the status carries it");
 });

@@ -55,6 +55,8 @@ export interface ReviewRecord {
   findings: { severity: Severity; text: string }[];
   requiredChanges: string[];
   createdAt: string;
+  /** The engine's deterministic checks decided the round: no QA agent ran (a change with nothing that runs). */
+  checksOnly?: boolean;
 }
 /**
  * One finished worker delegation, kept on the task so the plan checklist can be
@@ -115,6 +117,32 @@ export interface TaskTriage {
   kind?: string;
   kindProbability?: number;
   likelyFiles?: string[];
+  at: string;
+}
+
+/** How much verification a finished change warrants, lowest first. */
+export const QA_RISKS = ["none", "low", "medium", "high"] as const;
+export type QaRisk = (typeof QA_RISKS)[number];
+
+/**
+ * What the change a task built warrants of QA, read from its diff once the
+ * implementation is done: the QA gate's verification budget. The test budget
+ * is a ceiling, never a quota.
+ */
+export interface QaRiskAssessment {
+  risk: QaRisk;
+  /** Whether an LLM QA pass is needed at all: without one, the engine's deterministic checks decide. */
+  qaRequired: boolean;
+  /** New behavioural tests that may be worth writing, at most `max`. */
+  testBudget: { min: number; max: number };
+  /** What QA should verify first, as words. */
+  focusAreas: string[];
+  /** The evidence behind the level: what the diff touches, with paths. */
+  riskFactors: string[];
+  existingTestsLikelySufficient: boolean;
+  reasoning: string;
+  /** Jev's read of the diff, or the engine's rules alone when Jev is off, failed or had nothing to read. */
+  source: "classifier" | "rules";
   at: string;
 }
 
@@ -227,6 +255,8 @@ export interface Task {
   git?: TaskGit;
   /** The lint gate's last report on the files this task's agents touched. */
   lint?: LintReport;
+  /** The last read of what the built change warrants of QA, taken as the QA gate starts. */
+  qaRisk?: QaRiskAssessment;
   /** Set only by the user: the work is accepted with the lint errors it has, so the task may complete. */
   lintWaiver?: { at: string };
 }
