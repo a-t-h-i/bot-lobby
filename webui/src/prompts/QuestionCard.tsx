@@ -383,7 +383,7 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
             />
           ))}
           <label className="flex min-h-9 flex-col gap-1 rounded-lg border border-input px-3 py-1.5 text-sm focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30">
-            <span className="text-muted-foreground">{OWN_ANSWER}</span>
+            <span className="text-xs text-muted-foreground">Your own answer</span>
             <Textarea
               data-nav=""
               value={ownText}

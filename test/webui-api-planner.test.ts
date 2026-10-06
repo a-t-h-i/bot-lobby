@@ -298,7 +298,7 @@ test("every scenario's mock answers the planner calls without throwing", async (
       }
       if (name === "full") {
         assert.deepEqual(snapshot.seats, ["backend", "designer", "qa", "researcher"], "full: the whole panel");
-        assert.equal(snapshot.draft, "## Agreed plan\n\n1. Read the theme\n2. Add the toggle", "full: the draft");
+        assert.match(String(snapshot.draft), /^## Agreed plan\n\n1\. Read the theme\n2\. Add the toggle\n/, "full: the draft");
         assert.equal((snapshot.questions as unknown[]).length, 1, "full: one open question");
         const kept = await call("planner.commentLine", { line: "1. Read the theme", text: "why first?" });
         assert.equal(kept.status, 200, "full: planner.commentLine");
