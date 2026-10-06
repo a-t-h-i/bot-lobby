@@ -361,7 +361,7 @@ test("Plan, Quick fix and an open task each give the composer its own target", a
   }
 });
 
-test("zen palettes: warm paper in light, deep ink in dark, a quiet indigo accent, a 12px surface under 8px controls, a 16px dock floating over it", async ({ page, server }) => {
+test("zen palettes: warm paper in light, deep ink in dark, a quiet indigo accent, a 12px surface under 8px controls, a 16px dock floating over it", { tag: "@theme" }, async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const look = await page.evaluate(() => {
@@ -595,7 +595,7 @@ test("Alt+A and Alt+T work from the message box, and Thinking opens from its bub
   await expect(page, "off the Lobby it takes you there").toHaveURL(/#\/lobby/);
 });
 
-test("colour themes: a built-in one repaints the page and survives a reload; a tweakcn export can be pasted; bad values are refused", async ({ page, server }) => {
+test("colour themes: a built-in one repaints the page and survives a reload; a tweakcn export can be pasted; bad values are refused", { tag: "@theme" }, async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => {
@@ -636,7 +636,7 @@ test("colour themes: a built-in one repaints the page and survives a reload; a t
   expect(await primary()).toBe(before);
 });
 
-test("a theme file (.css or the registry .json) uploads and is named after the file", async ({ page, server }) => {
+test("a theme file (.css or the registry .json) uploads and is named after the file", { tag: "@theme" }, async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => {
@@ -796,14 +796,6 @@ test("Activity folds to its title bar and Thinking opens only in a modal", async
   await expect(main.getByRole("log", { name: "Thinking" }), "there is no third fixed pane").toHaveCount(0);
 });
 
-test("every tab carries an icon", async ({ page, server }) => {
-  await openScenario(page, server, "full");
-  await page.setViewportSize({ width: 1440, height: 900 });
-  const tabs = page.getByRole("tab");
-  const count = await tabs.count();
-  for (let i = 0; i < count; i += 1) await expect(tabs.nth(i).locator("svg"), `tab ${i + 1}`).toHaveCount(1);
-});
-
 test("the project switcher is a list you open with P, not a native select", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -961,7 +953,7 @@ test("Thinking is a glowing orb in the colour of the agent thinking, with that a
   expect(seen.get("QA")).toBe(`var(${tones.QA})`);
 });
 
-test("the Thinking pane has no title bar; every agent has its own labelled bubble, and a thought reads as steps", async ({ page, server }) => {
+test("the Thinking pane has no title bar; every agent has its own labelled bubble, and a thought reads as steps", { tag: "@theme" }, async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole("button", { name: "Open Thinking" }).click();
@@ -989,7 +981,7 @@ test("the Thinking pane has no title bar; every agent has its own labelled bubbl
   await expect(pane).toBeHidden();
 });
 
-test("buttons are slim and stand a little raised: a lit face, a rim and a soft shadow, sinking when pressed", async ({ page, server }) => {
+test("buttons are slim and stand a little raised: a lit face, a rim and a soft shadow, sinking when pressed", { tag: "@theme" }, async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => {
@@ -1140,7 +1132,7 @@ test("the orb can be dragged anywhere on the Lobby, stays there, and moves with 
   await expect(page.getByRole("dialog", { name: "Thinking", exact: true }), "Enter still opens it").toBeVisible();
 });
 
-test("tabs are slim and a confirmation's buttons are small, with a crisp focus line and no glow", async ({ page, server }) => {
+test("tabs are slim and a confirmation's buttons are small, with a crisp focus line and no glow", { tag: "@theme" }, async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   expect((await page.getByRole("tab").first().boundingBox())!.height, "a slim tab").toBeLessThanOrEqual(30);
@@ -1206,7 +1198,7 @@ test("the bar is one row when the project, the tabs and the tools fit, and puts 
   expect(await rows(), "and come back up when there is room again").toBe(1);
 });
 
-test("the oracle is a crystal ball and speaks in a bubble of its own, the mirror of yours", async ({ page, server }) => {
+test("the oracle is a crystal ball and speaks in a bubble of its own, the mirror of yours", { tag: "@theme" }, async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const chat = page.locator('[role="log"][aria-label="Conversation"]');

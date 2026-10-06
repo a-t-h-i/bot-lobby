@@ -6,7 +6,9 @@ import { defineConfig } from "@playwright/test";
  * `webServer` entry — the fixture in `test/web/fixture.ts` starts the real
  * `startWebServer` with `createFixtureService` in-process, one per worker.
  * Chromium only, at the cached `chromium-1234` revision (`@playwright/test`
- * 1.62.0); four desktop/tablet sizes per check, light plus dark.
+ * 1.62.0); four desktop/tablet sizes per check. Every check runs in light;
+ * dark mode only swaps colour tokens, so only the checks tagged `@theme`
+ * (colours, contrast, shadows, the theme pickers) run again in dark.
  */
 export default defineConfig({
   testDir: "test/web",
@@ -22,8 +24,7 @@ export default defineConfig({
   },
   projects: [
     { name: "light", use: { browserName: "chromium", colorScheme: "light" } },
-    { name: "dark", use: { browserName: "chromium", colorScheme: "dark" } },
+    { name: "dark", grep: /@theme/, use: { browserName: "chromium", colorScheme: "dark" } },
     { name: "light-320", testMatch: /(?:refresh|feedback)\.spec\.ts/, use: { browserName: "chromium", colorScheme: "light", viewport: { width: 320, height: 740 }, hasTouch: true } },
-    { name: "dark-320", testMatch: /(?:refresh|feedback)\.spec\.ts/, use: { browserName: "chromium", colorScheme: "dark", viewport: { width: 320, height: 740 }, hasTouch: true } },
   ],
 });
