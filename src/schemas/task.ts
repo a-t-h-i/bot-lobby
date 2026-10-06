@@ -170,6 +170,8 @@ export interface TaskTrack {
   userChoice?: TrackPath;
   /** The engine keeps the plan (fast track): each delegation adds its step. */
   autoPlan?: boolean;
+  /** QA sat out the planning panel that agreed the plan: the task runs without a QA gate, unless the oracle puts QA back on the roster. */
+  qaOut?: boolean;
   at: string;
 }
 

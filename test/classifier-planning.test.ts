@@ -151,6 +151,10 @@ test("the classifier seats only the members the idea touches, pinned seats alway
   const round2 = seen.slice(4);
   assert.ok(round2.every((call) => call.prompt.includes("Decided by the classifier") && call.prompt.includes("- [QA] Which browsers must pass? → Evergreen (0.96)")));
   assert.equal(session.reply?.status, "ready");
+  // The saved plan says who took part: DESIGN sat it out, and QA does too once unseated.
+  assert.deepEqual(session.panel, ["backend", "qa", "researcher"]);
+  session.toggle("qa");
+  assert.deepEqual(session.save().panel, ["backend", "researcher"]);
 });
 
 test("when the classifier settles every question the panel continues once on its own, then waits for you", async () => {

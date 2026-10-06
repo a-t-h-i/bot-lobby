@@ -11,6 +11,7 @@ import { writeFileEnsured } from "../knowledge/store.ts";
 import { forgetCachedUnder, readJsonCached } from "./file-cache.ts";
 import { dataRoot } from "./project.ts";
 import { taskSlug } from "./persistence.ts";
+import type { PanelMember } from "../schemas/configuration.ts";
 
 export interface IssueRef {
   number: number;
@@ -44,6 +45,8 @@ export interface PlannedTask {
   startedTaskId?: string;
   /** Set when the plan was split into several tasks and this is one of them. */
   split?: SplitInfo;
+  /** The panel seats that took part in planning it (sat a round and were not unseated); absent on plans saved before this was kept. */
+  panel?: PanelMember[];
 }
 
 export function backlogDir(root: string, configDir: string): string {
@@ -63,7 +66,7 @@ function isPlannedTask(value: unknown): value is PlannedTask {
 export function savePlannedTask(
   root: string,
   configDir: string,
-  input: { title: string; brief: string; issue?: IssueRef; split?: SplitInfo },
+  input: { title: string; brief: string; issue?: IssueRef; split?: SplitInfo; panel?: readonly PanelMember[] },
   now = new Date(),
 ): PlannedTask {
   const title = input.title.trim() || "planned task";
@@ -73,7 +76,7 @@ export function savePlannedTask(
   let id = base;
   for (let n = 2; existsSync(entryPath(root, configDir, id)); n++) id = `${base}-${n}`;
   const at = now.toISOString();
-  const entry: PlannedTask = { id, title, brief, createdAt: at, updatedAt: at, status: "pending", ...(input.issue ? { issue: input.issue } : {}), ...(input.split ? { split: input.split } : {}) };
+  const entry: PlannedTask = { id, title, brief, createdAt: at, updatedAt: at, status: "pending", ...(input.issue ? { issue: input.issue } : {}), ...(input.split ? { split: input.split } : {}), ...(input.panel ? { panel: [...input.panel] } : {}) };
   writeFileEnsured(entryPath(root, configDir, id), JSON.stringify(entry, null, 2));
   return entry;
 }
@@ -131,9 +134,22 @@ export function splitLine(split: SplitInfo): string {
   return `This is part ${split.part} of ${split.of} of one plan that was split into separate tasks: ${others}.${before} Do only this part; the others are their own tasks.`;
 }
 
+/** Where a planned task's request moves on from what it is to the plan itself. */
+const AGREED_PLAN = "\n\nAgreed plan (from the planning session):\n";
+
 /** The request a started task carries: the agreed plan, plus the issue it came from, plus where it sits in a split plan. */
 export function plannedTaskRequest(entry: PlannedTask): string {
   const source = entry.issue ? `\n\nFrom GitHub issue #${entry.issue.number}: ${entry.issue.title}${entry.issue.url ? ` (${entry.issue.url})` : ""}` : "";
   const part = entry.split ? `\n\n${splitLine(entry.split)}` : "";
-  return `${entry.title}${part}\n\nAgreed plan (from the planning session):\n${entry.brief}${source}`;
+  return `${entry.title}${part}${AGREED_PLAN}${entry.brief}${source}`;
+}
+
+/**
+ * A planned task's request without the plan in it (its title, and where it
+ * sits in a split plan), for prompts that carry the plan on its own: the plan
+ * is not sent twice. Any other request is returned whole.
+ */
+export function requestBesidePlan(request: string): string {
+  const at = request.indexOf(AGREED_PLAN);
+  return at < 0 ? request : `${request.slice(0, at)}\n\n(The agreed plan is the task's plan.)`;
 }
