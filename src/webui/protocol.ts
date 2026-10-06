@@ -158,7 +158,7 @@ export interface BackgroundSessionInfo {
   dialogs: SessionDialog[];
 }
 
-/** How loud a lobby notice is (sonner's levels). */
+/** How loud a lobby notice is. */
 export type NoticeLevel = "info" | "success" | "warning" | "error";
 
 /** One model Pi offers, for the settings page's picker. */
