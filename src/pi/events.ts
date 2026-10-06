@@ -68,12 +68,15 @@ export function masterTaskContext(task: Task, comments: readonly PlanComment[] =
 export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
   // Web tools the oracle put away for the task in hand, given back when it ends.
   let hiddenWeb: string[] = [];
-  pi.on("session_start", (_event, ctx) => {
+  pi.on("session_start", (event, ctx) => {
     // Master-only: subagents keep their own --tools allowlist (see quiet.ts).
     if (!isSubagentProcess()) registerQuietTools(pi);
     const root = detectProjectRoot(ctx.cwd, configDir);
-    // A new session starts with bot-lobby off unless settings or its own task say otherwise (switch.ts).
-    setMinimized(!isSubagentProcess() && !startsOn(ctx, configDir));
+    // pi starting decides afresh: off unless settings or the session's own task say otherwise (switch.ts).
+    // A session replaced in this window (switched to, new, forked, reloaded) keeps bot-lobby as it was,
+    // so switching sessions from the lobby never leaves the page behind; it turns on for a task under way.
+    const fresh = !event?.reason || event.reason === "startup";
+    setMinimized(!isSubagentProcess() && (fresh || isMinimized()) && !startsOn(ctx, configDir));
     applyStatus(ctx, root, configDir);
   });
 

@@ -9,11 +9,11 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { LobbyFeed } from "../src/lobby/feed.ts";
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { LobbyFeed, lobbyFeed } from "../src/lobby/feed.ts";
 import { loadConfig, saveConfig } from "../src/state/project.ts";
 import { currentWebServer } from "../src/webui/server.ts";
-import { webAction, webCommand, webLink, webSessionStarted } from "../src/webui/command.ts";
+import { registerWebServer, webAction, webCommand, webLink, webSessionStarted } from "../src/webui/command.ts";
 import { fakeWebService } from "./webui-fake.ts";
 
 process.env.BOT_LOBBY_CONFIG_DIR ??= mkdtempSync(join(tmpdir(), "bl-webcmd-"));
@@ -154,4 +154,38 @@ test("a session starting brings the page up on its own, opens the browser once a
   assert.equal(currentWebServer(), server, "a later session reuses the server");
   assert.equal(opened.length, 1, "and does not open another window");
   await server!.close();
+});
+
+test("switching sessions: a call the replaced session cannot answer is a quiet 503; a session with bot-lobby off stops the page; a reload brings it back on the same port", async () => {
+  useConfig({ port: 0, openBrowser: true });
+  const notices: string[] = [];
+  const interactive = { mode: "tui", ui: { notify: (message: string) => void notices.push(message), setStatus: () => {} } } as unknown as ExtensionContext;
+  // The lobby service of a session pi has replaced: every use of its context throws pi's refusal.
+  const stale = { ...fakeWebService(new LobbyFeed()), planner: () => { throw new Error("This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession()."); } };
+  opened.length = 0;
+  webSessionStarted(interactive, { ...deps, service: stale });
+  for (let i = 0; i < 50 && !currentWebServer(); i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+  const server = currentWebServer()!;
+  const login = await send(server.port, { method: "POST", path: "/api/auth.login", headers: json, body: JSON.stringify({ token: tokenOf(server.link) }) });
+  const cookie = String(login.headers["set-cookie"]).split(";")[0]!;
+  const reply = await send(server.port, { method: "POST", path: "/api/planner.get", headers: { ...json, cookie }, body: "{}" });
+  assert.equal(reply.status, 503);
+  assert.match(JSON.parse(reply.body).error, /switching sessions/);
+  assert.equal(lobbyFeed.activity.some((entry) => /could not do that/.test(entry.text)), false, "and no error in the activity log");
+
+  // pi reloads the extension: this copy's server closes and leaves its port for the next copy.
+  const handlers = new Map<string, (event: unknown) => unknown>();
+  registerWebServer({ on: (name: string, handler: (event: unknown) => unknown) => void handlers.set(name, handler) } as unknown as ExtensionAPI);
+  const port = server.port;
+  await handlers.get("session_shutdown")!({ type: "session_shutdown", reason: "reload" });
+  assert.equal(currentWebServer(), undefined, "the reloaded copy's server is closed");
+  webSessionStarted(interactive, deps);
+  for (let i = 0; i < 50 && !currentWebServer(); i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(currentWebServer()?.port, port, "the new copy serves the same port, so the open page reconnects");
+  assert.equal(opened.length, 1, "without opening another window");
+
+  // A session where bot-lobby is off has no lobby to serve: the page's server stops.
+  webSessionStarted(interactive, { open: deps.open });
+  for (let i = 0; i < 50 && currentWebServer(); i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(currentWebServer(), undefined);
 });

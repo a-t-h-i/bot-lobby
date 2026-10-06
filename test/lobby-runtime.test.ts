@@ -10,7 +10,8 @@ import { createTaskDir, ensureProjectStructure, saveTask } from "../src/state/pe
 import { transition } from "../src/state/task-state.ts";
 import { addPlanComment, readPlanComments } from "../src/state/comments.ts";
 import { readMetrics } from "../src/state/metrics.ts";
-import { applyStatus, clearStatus, setMinimized } from "../src/pi/ui.ts";
+import { applyStatus, clearStatus, isMinimized, setMinimized } from "../src/pi/ui.ts";
+import { registerLifecycle } from "../src/pi/events.ts";
 import { backgroundSessions, currentLobbyService, deliverComments, registerLobbyEvents, setSessionLauncher } from "../src/lobby/runtime.ts";
 import { onNotice, type Notice } from "../src/webui/notices.ts";
 import { isAutoMode } from "../src/state/auto.ts";
@@ -324,5 +325,28 @@ test("a window that starts after another stopped unexpectedly carries its planni
   } finally {
     await stop(fake, ctx);
     setSessionLauncher(undefined);
+  }
+});
+
+test("switching this window to a session without a task keeps bot-lobby on, so the page follows; pi starting afresh decides again", async () => {
+  setMinimized(false);
+  const root = project(false);
+  const fake = fakePi();
+  (fake.pi as unknown as { getAllTools: () => unknown[] }).getAllTools = () => [];
+  const ui = fakeUi();
+  const { ctx } = context(root, ui.ui);
+  registerLifecycle(fake.pi, ".pi");
+  registerLobbyEvents(fake.pi, ".pi");
+  try {
+    await fake.emit("session_start", { type: "session_start", reason: "resume", previousSessionFile: "/sessions/task.jsonl" }, ctx);
+    assert.equal(isMinimized(), false, "on as it was, though this session drives no task");
+    assert.ok(currentLobbyService(), "the lobby runs for the session switched to");
+    await fake.emit("session_shutdown", { type: "session_shutdown", reason: "quit" }, ctx);
+    await fake.emit("session_start", { type: "session_start", reason: "startup" }, ctx);
+    assert.equal(isMinimized(), true, "a fresh pi with no task under way starts off (lobby.startOn)");
+    assert.equal(currentLobbyService(), undefined);
+  } finally {
+    setMinimized(false);
+    await stop(fake, ctx);
   }
 });

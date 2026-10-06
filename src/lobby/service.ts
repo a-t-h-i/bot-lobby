@@ -95,7 +95,13 @@ export function setServiceState(state: Runtime | undefined): void {
 export function lobbyNotify(state: Runtime, message: string, level: "info" | "warning" | "error" = "info"): void {
   lobbyTopics.bump("notices");
   pushNotice(message, level as NoticeLevel);
-  if (level !== "info") state.ctx.ui.notify(message, level);
+  // Work the lobby started may finish after pi replaced the session: its terminal is the new session's then.
+  if (level === "info" || state !== serviceState) return;
+  try {
+    state.ctx.ui.notify(message, level);
+  } catch {
+    // A replaced session's terminal: the page has the notice.
+  }
 }
 
 function sessionModel(ctx: ExtensionContext): string | undefined {
