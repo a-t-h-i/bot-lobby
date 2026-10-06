@@ -4,12 +4,14 @@
  * the line does the same. Lines the user has commented on wear a dot with their
  * comments beneath, as the terminal draws them.
  */
+import { memo, useMemo } from "react"
 import { MessageSquarePlus } from "lucide-react"
 import type { PanelNote } from "@protocol"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { Markdown } from "@/ui/Markdown"
 import { Section } from "@/ui/Section"
+import { useGradual } from "@/lib/useGradual"
 import { sourceColor, sourceLabel } from "../lobby/types"
 import { SEATS_NEED } from "./words"
 
@@ -47,11 +49,15 @@ interface LineProps {
   onComment: (line: string) => void
 }
 
-function Line({ row, notes, onComment }: LineProps) {
+/** A line without comments: one shared list, so an untouched line is not drawn again as more lines arrive. */
+const NO_NOTES: string[] = []
+
+const Line = memo(function Line({ row, notes, onComment }: LineProps) {
   const line = row.text.trim()
   const open = () => onComment(line)
   return (
-    <li className="group/line">
+    // Lines out of view are not laid out until scrolled to: a plan of hundreds of lines lands in one cheap frame.
+    <li className="group/line [contain-intrinsic-size:auto_2.75rem] [content-visibility:auto]">
       <div className="flex items-start gap-1">
         <span className="flex w-4 shrink-0 justify-center pt-3.5" aria-hidden="true">
           {notes.length > 0 ? <span className="size-2 rounded-full bg-primary" /> : null}
@@ -69,14 +75,17 @@ function Line({ row, notes, onComment }: LineProps) {
       <Notes notes={notes} />
     </li>
   )
-}
+})
 
 export function DraftBody({ draft, comments, onComment }: { draft: string; comments: ReadonlyMap<string, string[]>; onComment: (line: string) => void }) {
+  const rows = useMemo(() => draftRows(draft), [draft])
+  // A screenful at once, the rest a chunk a frame: a long plan never holds up the tab switch that shows it.
+  const shown = useGradual(rows.length)
   return (
     <ul className="flex flex-col" aria-label="Draft plan lines">
-      {draftRows(draft).map((row, index) =>
+      {rows.slice(0, shown).map((row, index) =>
         row.text.trim() ? (
-          <Line key={index} row={row} notes={comments.get(row.text.trim()) ?? []} onComment={onComment} />
+          <Line key={index} row={row} notes={comments.get(row.text.trim()) ?? NO_NOTES} onComment={onComment} />
         ) : (
           <li key={index} aria-hidden="true" className="h-2" />
         )

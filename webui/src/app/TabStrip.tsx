@@ -26,6 +26,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils"
 import type { TabInfo } from "@protocol"
 import { PLAY_SECONDS, TabIcon } from "./TabIcons"
+import { switchEnded, switchStarted } from "@/lib/switching"
 
 interface TabStripProps {
   tabs: TabInfo[]
@@ -255,6 +256,8 @@ function useStraw(activeId: string | undefined, tabCount: number) {
       paintRim(ring.current, box, "left", 1)
       paintRim(unring.current, undefined, "left", 0)
       for (const liquid of liquids.current) if (liquid) liquid.style.width = "0px"
+      // The switch has played (or there was none): a long page may build the rest of itself now.
+      switchEnded()
     },
     [boxOf, stop]
   )
@@ -265,6 +268,8 @@ function useStraw(activeId: string | undefined, tabCount: number) {
       const b = boxOf(to)
       if (!a || !b) return rest(to)
       stop()
+      // Long pages hold back all but their first screenful until this has played (rest says it has).
+      switchStarted()
       at.current = to
       const dir = b.left > a.left ? 1 : -1
       const start = dir > 0 ? a.right : a.left
@@ -329,6 +334,10 @@ function useStraw(activeId: string | undefined, tabCount: number) {
         landed = true
         const done = spring("filled", 0, FILL, (value) => {
           level.current = value
+        })
+        // Once the tint is in, the rest is the bounce settling: a long page may go on building now.
+        void done.then(() => {
+          if (at.current === to) switchEnded()
         })
         spring("squash", 0.8, WOBBLE)
         spring("rung", 0, RING, (value) => {

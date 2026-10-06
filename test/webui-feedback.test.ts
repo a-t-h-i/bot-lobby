@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { executionMs, executionWords } from "../webui/src/lib/phaseTiming.ts";
 import { codeSource, shouldCopy, writeCode } from "../webui/src/lib/codeCopy.ts";
+import { markdownSections } from "../webui/src/lib/markdown.ts";
 import { PromptSeen, promptIdentity, dialogIdentity, deliveryIdentity } from "../webui/src/lib/promptSeen.ts";
 import { previewPayload, staticCss, staticPreviewDocument, PREVIEW_CSP, type PreviewParser } from "../webui/src/lib/staticPreview.ts";
 import { parsePrompt } from "../webui/src/prompts/payload.ts";
@@ -151,4 +152,14 @@ test("delivery actions use authoritative blocks, explicit APIs and confirmed dir
   assert.match(detail, /detail\.data\?\.delivery/);
   assert.match(source("ui/SplitPane.tsx"), /forceMount=\{open && mounted\.current/);
   assert.match(source("components/ui/sheet.tsx"), /hidden \? null : <SheetOverlay/);
+});
+
+test("a long text renders in sections cut before its headings, never inside a code fence, and loses nothing", () => {
+  const filler = "A sentence that pads the section out. ".repeat(80);
+  const long = ["# Plan", filler, "```md", "# not a heading inside a fence", "```", "## Steps", "1. one", "## Details", filler].join("\n");
+  const sections = markdownSections(long);
+  assert.deepEqual(sections.map((section) => section.split("\n")[0]), ["# Plan", "## Steps", "## Details"]);
+  assert.equal(sections.join("\n"), long, "joined back, it is the text it was");
+  assert.deepEqual(markdownSections("# Short\n\ntext\n## Two"), ["# Short\n\ntext\n## Two"], "a short text stays whole");
+  assert.equal(markdownSections(`${long}\n\n[ref]: https://example.com`).length, 1, "reference links resolve across the whole text");
 });
