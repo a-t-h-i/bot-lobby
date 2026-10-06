@@ -32,4 +32,6 @@ export interface TaskRow {
   issue?: number;
   /** Auto mode is on: the oracle drives it without asking. */
   auto?: boolean;
+  /** Resume can carry it on from the Tasks screen: it is paused, or no running session drives it. */
+  resumable?: boolean;
 }

@@ -7,6 +7,7 @@ import { hasScoutThinking, SCOUT_THINKING } from "../schemas/configuration.ts";
 import {
   activeTask,
   claimTask,
+  loadTask,
   ownedTask,
   ownerlessTask,
   saveTask,
@@ -33,6 +34,8 @@ import { budgetLine, budgetState, parseMinutes, readBudget, setBudget, startCloc
 import { qaStillDue } from "../workflow/track.ts";
 import type { GitIsolation } from "../schemas/configuration.ts";
 import { START_FLAG } from "./start-flags.ts";
+import { livePresence } from "../state/presence.ts";
+import { carryOnMessage } from "../lobby/resume.ts";
 
 const HELP = [
   "/bot-lobby                  Open the web lobby in your browser: tasks, plan, quick fix, metrics",
@@ -54,6 +57,7 @@ const HELP = [
   "/bot-lobby config           Show effective configuration",
   "/bot-lobby on|off           Turn bot-lobby on or off for this session (ctrl+shift+m); a new session starts off",
   "/bot-lobby claim <taskId>    Take ownership of an orphaned task",
+  "/bot-lobby carry-on <taskId>   Take over a task no running session drives, unpause it and have the oracle carry it on (the Tasks screen's Resume)",
   "/bot-lobby auto [on|off]    Auto mode: the oracle drives this session's task without asking (alt+g)",
   "/bot-lobby start-plan PLAN-… [auto]   Start a planned task here; its agreed plan needs no approval",
   "/bot-lobby switch <session.jsonl>   Run a saved session in this window (the web lobby's session browser uses it)",
@@ -62,10 +66,10 @@ const HELP = [
 ].join("\n");
 
 /** Subcommands only win when no free-form text follows (so tasks still start). */
-const SUBCOMMANDS = new Set(["lobby", "help", "status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "accept", "budget", "knowledge", "config", "settings", "on", "off", "minimize", "restore", "claim", "auto", "start-plan", "switch", "web"]);
+const SUBCOMMANDS = new Set(["lobby", "help", "status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "accept", "budget", "knowledge", "config", "settings", "on", "off", "minimize", "restore", "claim", "carry-on", "auto", "start-plan", "switch", "web"]);
 
 /** Subcommands that act on a task or open the lobby turn bot-lobby on first; the rest work while it is off. */
-const TURNS_ON = new Set(["lobby", "settings", "resume", "approve", "amend", "decline", "accept", "claim", "auto", "start-plan", "switch", "web"]);
+const TURNS_ON = new Set(["lobby", "settings", "resume", "approve", "amend", "decline", "accept", "claim", "carry-on", "auto", "start-plan", "switch", "web"]);
 
 /** `Task-Change-Table-Font-27-09-2026`, or an older `TASK-add-login` id. */
 function isTaskId(value: string | undefined): boolean {
@@ -209,6 +213,36 @@ function claimTaskCommand(ctx: ExtensionCommandContext, configDir: string, taskI
   applyStatus(ctx, root, configDir);
   ctx.ui.notify(`bot-lobby now owns ${claimed.id}.`, "info");
 }
+/**
+ * `/bot-lobby carry-on <taskId>`: take over a task no running session drives
+ * (or this session's own, when it is started again from its file), unpause it
+ * and have the oracle carry it on. A background session resumed from the
+ * Tasks screen runs it as its first message.
+ */
+function carryOnCommand(pi: ExtensionAPI, ctx: ExtensionCommandContext, configDir: string, taskId?: string): void {
+  if (!isTaskId(taskId)) return ctx.ui.notify("Usage: /bot-lobby carry-on <taskId>", "warning");
+  const root = detectProjectRoot(ctx.cwd, configDir);
+  const sessionId = ctx.sessionManager.getSessionId();
+  const current = ownedTask(root, configDir, sessionId);
+  if (current && current.id !== taskId && !TERMINAL_STATES.includes(current.state)) {
+    return ctx.ui.notify(`bot-lobby ${current.id} is already active in this session; cancel it before carrying ${taskId} on.`, "warning");
+  }
+  const task = loadTask(root, configDir, taskId!);
+  if (!task) return ctx.ui.notify(`No task ${taskId}.`, "warning");
+  if (TERMINAL_STATES.includes(task.state)) return ctx.ui.notify(`${task.id} is already ${task.state}.`, "warning");
+  const owner = task.ownerSessionId;
+  if (owner && owner !== sessionId && livePresence(root, configDir).some((presence) => presence.sessionId === owner)) {
+    return ctx.ui.notify(`${task.id} is driven by a session that is still running; carry it on there.`, "warning");
+  }
+  task.ownerSessionId = sessionId;
+  task.paused = false;
+  task.updatedAt = new Date().toISOString();
+  saveTask(root, configDir, task);
+  applyStatus(ctx, root, configDir);
+  ctx.ui.notify(`bot-lobby carries ${task.id} on in this session.`, "info");
+  pi.sendUserMessage(carryOnMessage(task, "stopped"), ctx.isIdle() ? undefined : { deliverAs: "followUp" });
+}
+
 function answerProposal(
   ctx: ExtensionCommandContext,
   configDir: string,
@@ -391,6 +425,8 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
           return turnOn(pi, ctx, configDir);
         case "claim":
           return claimTaskCommand(ctx, configDir, rest[0]);
+        case "carry-on":
+          return carryOnCommand(pi, ctx, configDir, rest[0]);
         case "auto":
           return autoCommand(ctx, configDir, rest[0]);
         case "switch":

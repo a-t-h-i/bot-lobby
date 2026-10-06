@@ -75,7 +75,7 @@ export interface ScenarioFixture {
   /** Comments by task id for `tasks.comments`. */
   taskComments?: Record<string, Array<Record<string, unknown>>>;
   /** Background sessions for `sessions.list` (plain data, made live below). */
-  backgroundSessions?: Array<{ key: string; name: string; status: string; sessionId?: string; planId?: string; dialogs?: Array<Record<string, unknown>> }>;
+  backgroundSessions?: Array<{ key: string; name: string; status: string; sessionId?: string; planId?: string; taskId?: string; dialogs?: Array<Record<string, unknown>> }>;
   /** Live sessions in other terminals for `sessions.list`. */
   liveSessions?: Array<{ sessionId: string; pid: number; name?: string; taskId?: string; mode: string }>;
   /** Previous plans (planning sessions never saved as a task) for `planner.previous*`. */

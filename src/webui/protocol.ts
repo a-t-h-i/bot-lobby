@@ -597,6 +597,7 @@ export interface Api {
   "tasks.message": { request: { taskId: string; text: string; attachments?: string[] }; result: { notice: string } };
   "tasks.get": { request: { taskId: string }; result: TaskDetail };
   "tasks.open": { request: { taskId: string }; result: { sessionId?: string; key?: string; notice?: string } };
+  "tasks.resume": { request: { taskId: string }; result: { notice: string; key?: string } };
   "tasks.deliveryReview": { request: { taskId: string }; result: { delivery: Delivery } };
   "tasks.deliveryDefer": { request: { taskId: string; reviewId: string }; result: { delivery: Delivery } };
   "tasks.deliver": { request: { taskId: string; reviewId: string; action: DeliveryAction; confirmMain?: boolean }; result: { delivery: Delivery } };
