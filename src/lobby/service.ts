@@ -42,6 +42,7 @@ import { askUser } from "../ask/web.ts";
 import type { Asker } from "../ask/types.ts";
 import { PlanningSession, type PlannerDeps, type PlannerSeed } from "./planner.ts";
 import type { Relaunch } from "./recovery.ts";
+import { archivePlan as archivePlanOnDisk, deletePlan as deletePlanOnDisk, isPlanId, previousPlans, readPlan, type PlanRecord, type PlanSummary } from "../state/plan-history.ts";
 import { applyMasterModel } from "../pi/model-settings.ts";
 import { lobbyTopics } from "./topics.ts";
 import { checkSession } from "../excalidraw/check.ts";
@@ -471,10 +472,58 @@ export function seatProfile(state: Runtime, member: PanelMember) {
 }
 
 function newPlanner(state: Runtime, seed?: PlannerSeed, seats?: readonly PanelMember[]): PlanningSession {
+  // The session left behind stays among the project's previous plans, as it stood.
+  state.keeper?.planner.flush();
   state.planner?.cancel();
   state.planner = new PlanningSession(plannerDeps(state, seats ?? loadConfig().lobby.planningPanel), seed);
   state.keeper?.planner.schedule();
   return state.planner;
+}
+
+/** Previous plans: the project's planning sessions never saved as a task, other than the one on screen. */
+function plansBefore(state: Runtime, archived: boolean): PlanSummary[] {
+  return previousPlans(state.root, state.configDir, { archived, except: state.planner?.id });
+}
+
+/** A previous plan to read: never the one on screen, and never one saved as a task. */
+function previousPlan(state: Runtime, id: string): PlanRecord {
+  const record = isPlanId(id) ? readPlan(state.root, state.configDir, id) : undefined;
+  if (!record) throw new Error(`no plan ${id}`);
+  if (record.savedAs?.length) throw new Error(`${id} was saved as ${record.savedAs.join(", ")}`);
+  return record;
+}
+
+function onScreen(state: Runtime, id: string): void {
+  if (state.planner?.id === id) throw new Error("that is the plan on screen — start a new plan first");
+}
+
+function archivePrevious(state: Runtime, id: string, archived: boolean): string {
+  onScreen(state, id);
+  const record = archivePlanOnDisk(state.root, state.configDir, id, archived);
+  lobbyTopics.bump("planner");
+  return archived ? `archived "${record.title}" — show archived plans to bring it back` : `"${record.title}" is back among the previous plans`;
+}
+
+function deletePrevious(state: Runtime, id: string): string {
+  onScreen(state, id);
+  const record = previousPlan(state, id);
+  deletePlanOnDisk(state.root, state.configDir, id);
+  lobbyTopics.bump("planner");
+  return `deleted "${record.title}" for good`;
+}
+
+/** Carry a previous plan on: it becomes the plan on screen, and the one there joins the previous plans. */
+function reopenPlan(state: Runtime, id: string): string {
+  if (state.planner?.busy) return "the panel is still thinking — wait for the round to finish";
+  onScreen(state, id);
+  const record = previousPlan(state, id);
+  state.keeper?.planner.flush();
+  state.planner?.cancel();
+  state.planner = PlanningSession.restore(plannerDeps(state, record.snapshot.seats), { ...record.snapshot, id: record.id, running: false });
+  if (record.archivedAt) archivePlanOnDisk(state.root, state.configDir, id, false);
+  state.keeper?.planner.schedule();
+  lobbyTopics.bump("planner");
+  return `carrying on "${record.title}"`;
 }
 
 /** What a planning session in this window runs with; every change is kept on disk, so it carries on after a crash. */
@@ -638,6 +687,11 @@ export function createLobbyService(state: Runtime): LobbyService {
     quickfix: state.quickfix,
     planner: () => state.planner,
     newPlanner: (seed, seats) => newPlanner(state, seed, seats),
+    previousPlans: (archived) => plansBefore(state, archived),
+    previousPlan: (id) => previousPlan(state, id),
+    archivePlan: (id, archived) => archivePrevious(state, id, archived),
+    deletePlan: (id) => deletePrevious(state, id),
+    reopenPlan: (id) => reopenPlan(state, id),
     answerPanel: () => answerPanel(state),
     savePlan: () => savePlan(state),
     defaultPanel: () => loadConfig().lobby.planningPanel,

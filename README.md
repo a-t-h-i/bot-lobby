@@ -21,6 +21,8 @@ The questionnaire and web tools are built in, so don't also install extensions w
    A new pi session starts with bot-lobby off, as plain pi: `Ctrl+Shift+M` or `/bot-lobby on|off` switches it.
 2. Answer the oracle's questions and approve its plan, or agree one with the panel in **Plan** first.
    A plan opens with a short list of steps; the detail of each follows for whoever wants it.
+   Plans you leave without saving them as a task wait under **Plan → Previous**. You can read, carry on,
+   archive or delete them there. A plan saved as a task leaves that list.
 3. Follow the agents in **Lobby**: the step being worked on reads `active · 1m 12s`, and each task shows
    how long its agents have worked on it (idle time left out). Models, effort and time limits are in **Settings**.
 
@@ -71,5 +73,6 @@ rebound with `lobby.keys`. In Pi, `Alt+G` toggles auto mode and `Ctrl+Shift+M` t
 ## Configuration
 
 Settings live in `~/.pi/bot-lobby/config.json` (`BOT_LOBBY_CONFIG_DIR` moves them), and
-`/bot-lobby config` shows what is in effect. Tasks and project knowledge stay in `.pi/bot-lobby/`
+`/bot-lobby config` shows what is in effect. Colour themes you import, under a name you choose,
+are kept in `themes.json` beside it, so every pi session and project shows them. Tasks and project knowledge stay in `.pi/bot-lobby/`
 inside your project.

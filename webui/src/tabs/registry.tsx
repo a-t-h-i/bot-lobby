@@ -38,7 +38,7 @@ export function routeBody(route: Route): ReactNode {
     case "tasks":
       return <TasksTab id={detailId(route.rest)} />
     case "plan":
-      return <PlanTab />
+      return <PlanTab rest={route.rest} />
     case "quickfix":
       return <QuickfixTab id={detailId(route.rest)} />
     case "issues":

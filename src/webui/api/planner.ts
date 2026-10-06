@@ -6,7 +6,7 @@
  */
 import { MEMBER_LABELS, type PlannerMessage } from "../../lobby/planner.ts";
 import type { PanelMember } from "../../schemas/configuration.ts";
-import type { PlannerSnapshot } from "../protocol.ts";
+import type { PlannerSnapshot, PreviousPlanDetail, PreviousPlanInfo } from "../protocol.ts";
 import type { ApiContext } from "./index.ts";
 import { withAttachments } from "../uploads.ts";
 import { fail } from "./index.ts";
@@ -110,4 +110,50 @@ export async function plannerSave(ctx: ApiContext): Promise<{ notice: string }> 
   const session = ctx.service.planner();
   if (!session?.reply?.plan) fail(409, "conflict", "no plan to save yet — describe a task in the Plan tab");
   return { notice: await ctx.service.savePlan() };
+}
+
+function attempt<T>(run: () => T, status: 404 | 409 = 409): T {
+  try {
+    return run();
+  } catch (error) {
+    const message = (error as Error).message;
+    return fail(/^no plan /.test(message) ? 404 : status, /^no plan /.test(message) ? "not_found" : "conflict", message);
+  }
+}
+
+/** The previous plans: never saved as a task, newest first; the archived ones when asked. */
+export function plannerPrevious(body: { archived?: boolean }, ctx: ApiContext): { plans: PreviousPlanInfo[] } {
+  return { plans: ctx.service.previousPlans(Boolean(body.archived)) };
+}
+
+/** One previous plan, to read: its conversation, draft and the seats' notes. */
+export function plannerPreviousGet(body: { id: string }, ctx: ApiContext): PreviousPlanDetail {
+  const record = attempt(() => ctx.service.previousPlan(body.id));
+  const snapshot = record.snapshot;
+  return {
+    id: record.id,
+    title: record.title,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    ...(record.archivedAt ? { archivedAt: record.archivedAt } : {}),
+    rounds: snapshot.turns,
+    seats: [...snapshot.seats],
+    messages: snapshot.messages.map((message) => ({ ...message })),
+    ...(snapshot.reply?.plan ? { draft: snapshot.reply.plan } : {}),
+    notes: snapshot.notes.map((note) => ({ ...note })),
+    ...(snapshot.seed ? { seed: `From issue #${snapshot.seed.issue.number}: ${snapshot.seed.issue.title}` } : {}),
+  };
+}
+
+export function plannerPreviousArchive(body: { id: string; archived: boolean }, ctx: ApiContext): { notice: string } {
+  return { notice: attempt(() => ctx.service.archivePlan(body.id, body.archived)) };
+}
+
+export function plannerPreviousDelete(body: { id: string }, ctx: ApiContext): { notice: string } {
+  return { notice: attempt(() => ctx.service.deletePlan(body.id)) };
+}
+
+/** Carry a previous plan on: it becomes the plan on screen. */
+export function plannerPreviousOpen(body: { id: string }, ctx: ApiContext): { notice: string } {
+  return { notice: attempt(() => ctx.service.reopenPlan(body.id)) };
 }

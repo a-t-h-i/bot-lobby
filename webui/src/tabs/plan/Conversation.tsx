@@ -108,7 +108,7 @@ function Decided({ message }: { message: PlannerMessage }) {
   )
 }
 
-function UserTurn({ message, index, busy }: { message: PlannerMessage; index: number; busy: boolean }) {
+function UserTurn({ message, index, busy, readOnly }: { message: PlannerMessage; index: number; busy: boolean; readOnly: boolean }) {
   const [editing, setEditing] = useState(false)
   const [saved, setSaved] = useState<PlannerMessage>()
   const current = saved && (saved.editedAt ?? 0) > (message.editedAt ?? 0) ? saved : message
@@ -117,7 +117,7 @@ function UserTurn({ message, index, busy }: { message: PlannerMessage; index: nu
     const result = await call("planner.editMessage", { messageIndex: index, at: message.at, text })
     setSaved(result.message)
   }
-  const edit = !message.settled?.length && !editing ? (
+  const edit = !readOnly && !message.settled?.length && !editing ? (
     <Button size="xs" variant="ghost" disabled={waiting} onClick={() => setEditing(true)} className="text-muted-foreground">
       <Pencil aria-hidden="true" />
       Edit
@@ -130,8 +130,8 @@ function UserTurn({ message, index, busy }: { message: PlannerMessage; index: nu
   )
 }
 
-function Turn({ message, index, busy }: { message: PlannerMessage; index: number; busy: boolean }) {
-  if (message.role === "you") return <UserTurn message={message} index={index} busy={busy} />
+function Turn({ message, index, busy, readOnly }: { message: PlannerMessage; index: number; busy: boolean; readOnly: boolean }) {
+  if (message.role === "you") return <UserTurn message={message} index={index} busy={busy} readOnly={readOnly} />
   const asked = message.questions ?? []
   return (
     <AgentMessage source="PLANNER" name="Panel" time={message.at > 0 ? formatClock(message.at) : undefined} head bubble={asked.length === 0} aside={asked.length ? `${asked.length} question${asked.length === 1 ? "" : "s"}` : undefined}>
@@ -141,12 +141,13 @@ function Turn({ message, index, busy }: { message: PlannerMessage; index: number
   )
 }
 
-export function PanelConversation({ messages, seed, busy = false }: { messages: PlannerMessage[]; seed?: string; busy?: boolean }) {
+/** The panel's conversation; `readOnly` (a previous plan) offers no edits. */
+export function PanelConversation({ messages, seed, busy = false, readOnly = false }: { messages: PlannerMessage[]; seed?: string; busy?: boolean; readOnly?: boolean }) {
   return (
     <div className="chat-column" role="log" aria-label="Panel conversation">
       {seed ? <ChatNote>{seed}</ChatNote> : null}
       {messages.map((message, index) => (
-        <Turn key={`${message.at}-${index}`} message={message} index={index} busy={busy} />
+        <Turn key={`${message.at}-${index}`} message={message} index={index} busy={busy} readOnly={readOnly} />
       ))}
       {busy ? (
         <AgentMessage source="PLANNER" name="Panel" head live aside="the panel is thinking">

@@ -3,7 +3,8 @@
  * buttons the session allows — Answer questions while some wait, Retry when a
  * round can be run again, New plan, Save.
  */
-import { FilePlus, MessageCircleQuestion, RotateCw, Save } from "lucide-react"
+import { FilePlus, History, MessageCircleQuestion, RotateCw, Save } from "lucide-react"
+import { go, tabHash } from "@/app/router"
 import { Spinner } from "@/components/ui/spinner"
 import { act } from "@/lib/act"
 import type { PlannerSnapshot, StatusInfo } from "@protocol"
@@ -24,6 +25,11 @@ function Status({ snap }: { snap: PlannerSnapshot }) {
   )
 }
 
+/** To the plans left behind without being saved as a task. */
+export function PreviousButton() {
+  return <ActionButton label="Previous plans" text="Previous" icon={History} shortcut="H" onClick={() => go(tabHash("plan", "previous"))} />
+}
+
 function Actions({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) {
   const shortcut = useTopic<StatusInfo>("status").data?.keys.find((key) => key.action === "savePlan")?.label
   const run = (name: "planner.answer" | "planner.retry" | "planner.save") => async () => {
@@ -33,6 +39,7 @@ function Actions({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }
     <div className="flex flex-wrap items-center gap-1">
       {snap.questions.length > 0 && !snap.busy ? <ActionButton label="Answer questions" icon={MessageCircleQuestion} tone="primary" shortcut="A" onClick={() => void run("planner.answer")()} /> : null}
       {snap.retryable ? <ActionButton label="Retry" icon={RotateCw} shortcut="R" onClick={() => void run("planner.retry")()} /> : null}
+      <PreviousButton />
       <ActionButton data-plan-save label="Save the plan" text="Save" icon={Save} shortcut={shortcut ?? "Ctrl+S"} disabled={!snap.draft || snap.busy} onClick={() => void run("planner.save")()} />
       <ConfirmButton
         icon={FilePlus}

@@ -525,6 +525,9 @@ export function memberPrompt(member: PanelMember, instructions?: string): string
 /** A planning session as JSON: what `PlanningSession.snapshot` writes and `restore` reads. */
 export interface PlanningSnapshot {
   version: 1;
+  /** Absent on snapshots kept before sessions had ids: a restore gives them one. */
+  id?: string;
+  createdAt?: number;
   messages: PlannerMessage[];
   seed?: PlannerSeed;
   reply?: PlannerReply;
@@ -570,7 +573,15 @@ interface RunOutcome {
   usage: { input: number; output: number; cost: number; turns: number };
 }
 
+/** A new planning session's id: `PS-` and the time, so ids sort by when they began. */
+export function planningId(now = Date.now()): string {
+  return `PS-${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
 export class PlanningSession {
+  /** Names the session among the project's plans (src/state/plan-history.ts). */
+  id = planningId();
+  createdAt = Date.now();
   messages: PlannerMessage[] = [];
   seed?: PlannerSeed;
   /** The oracle's latest reply; its plan is the current draft. */
@@ -762,6 +773,8 @@ export class PlanningSession {
   snapshot(): PlanningSnapshot {
     return {
       version: 1,
+      id: this.id,
+      createdAt: this.createdAt,
       messages: this.messages,
       ...(this.seed ? { seed: this.seed } : {}),
       ...(this.reply ? { reply: this.reply } : {}),
@@ -793,6 +806,8 @@ export class PlanningSession {
    */
   static restore(deps: PlannerDeps, snapshot: PlanningSnapshot): PlanningSession {
     const session = new PlanningSession({ ...deps, panel: snapshot.seats }, snapshot.seed);
+    if (snapshot.id) session.id = snapshot.id;
+    if (typeof snapshot.createdAt === "number") session.createdAt = snapshot.createdAt;
     session.messages = snapshot.messages;
     if (snapshot.reply) session.reply = snapshot.reply;
     session.questions = snapshot.questions;

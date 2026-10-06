@@ -1,6 +1,6 @@
 {
-  "hash": "a799aefa99a53d7f90ae2ef6c781d1c930a9cc3933f0874c0c53386b5c8fad37",
-  "builtAt": "2026-10-06T14:22:18.001Z",
+  "hash": "cb2bca05c68244b433cad3ad5a6a580492454208b2229bc28a9c5a99896e6303",
+  "builtAt": "2026-10-06T14:39:02.412Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -8,7 +8,7 @@
     },
     {
       "path": "src/webui/protocol.ts",
-      "sha256": "d6315b685814b5865753264d5d1a779c7e78767e8734ec3a250969cf078abead"
+      "sha256": "f9059e98f786207630cc360e4467d133bd416317d92fdc0ee0ca3544c927543f"
     },
     {
       "path": "webui/components.json",
@@ -28,7 +28,7 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "ebb613b3acae70e04cbab7cd16bbe89f38e101818aeeee61c1b4fc47f3515203"
+      "sha256": "bde580e296cc7cd1c588e250115c3cd5cab454cbb725f0c367659d4dc32fb0ba"
     },
     {
       "path": "webui/src/app/Header.tsx",
@@ -40,7 +40,7 @@
     },
     {
       "path": "webui/src/app/Shell.tsx",
-      "sha256": "fd73c4942df922869c89b966132fa57bcbd01cd04aeaa22af79af76cdd3bf6aa"
+      "sha256": "221408bec1ecbbcbfb9313ff5dc69469a8a9bd732b5d916574034205969d5701"
     },
     {
       "path": "webui/src/app/SignIn.tsx",
@@ -87,12 +87,8 @@
       "sha256": "c784d25d87f5cbd572981f358d6f8120a0fc43e41cced3adf1aa418f4d3402fb"
     },
     {
-      "path": "webui/src/app/palette-core.ts",
-      "sha256": "0cc60049bf5a834aba09b41752ad581b0e330fc5191896bc45834550c3a0a605"
-    },
-    {
       "path": "webui/src/app/palette.ts",
-      "sha256": "5e8f1def00bbb512750a707b7811cce93973382d707a85366b8327553ae13b75"
+      "sha256": "5efbfc51d70b16a5eb016ba61fcb0f3ffdcf8133bec2b3e2cefed8097b34db9b"
     },
     {
       "path": "webui/src/app/readTopic.ts",
@@ -196,7 +192,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "00880e3b9815104fc528239b7d0a1877d515334d6f3dfe818c11625bb7235183"
+      "sha256": "7b3a82c362a8b8e0ce9f9921e95632d003a125ca2456690611ea10770b33a903"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -464,7 +460,7 @@
     },
     {
       "path": "webui/src/tabs/plan/Conversation.tsx",
-      "sha256": "93f035670d196c5cac66ca91a566515ea690fada98ad4f5c771c01f7d9496f62"
+      "sha256": "097dc3e9dde63fe79d532d3ac1a16e915b83c78d6518a52d1cb6edb534a76fef"
     },
     {
       "path": "webui/src/tabs/plan/Draft.tsx",
@@ -472,7 +468,7 @@
     },
     {
       "path": "webui/src/tabs/plan/Header.tsx",
-      "sha256": "87328322a4b67f84db0e1d6ccee2a1589189688164c0f6ce154eba286c4c5692"
+      "sha256": "29ba36791f68a53b9fbdac2b4b87fe7bd33c02393e12358c228f5a7e1db69b3d"
     },
     {
       "path": "webui/src/tabs/plan/LineComment.tsx",
@@ -480,7 +476,11 @@
     },
     {
       "path": "webui/src/tabs/plan/PlanTab.tsx",
-      "sha256": "16a15c796600cdafa43e296399656ad9fee9466f661d757ad28743d29112e3f4"
+      "sha256": "b30855090dc86cc88cee640cb88e8316eb52f75f7e998e70c746e78525de3efe"
+    },
+    {
+      "path": "webui/src/tabs/plan/Previous.tsx",
+      "sha256": "558bda0c362b1bf810fabd949b3e621c3de58b63150791af8a900538ce8e555f"
     },
     {
       "path": "webui/src/tabs/plan/Roster.tsx",
@@ -508,7 +508,7 @@
     },
     {
       "path": "webui/src/tabs/registry.tsx",
-      "sha256": "85d36ee0e1e440a32e71a9dbada5797a1f690c61c35bfc0d0384c0b6adbfa15e"
+      "sha256": "14a26691b9f5fda1f85e3c64becbeddd77a583930142e9282248e57a6019b865"
     },
     {
       "path": "webui/src/tabs/sessions/ChatView.tsx",
@@ -548,7 +548,7 @@
     },
     {
       "path": "webui/src/tabs/settings/ThemeGroup.tsx",
-      "sha256": "27ab9d261e238f9db24c7cbdbd5381643feda82cc58d72d24e867f4e6426096d"
+      "sha256": "fb2c1099c5416d45c43463c1283df9357901cc8aa2e9bc57686f5f6b9b67308c"
     },
     {
       "path": "webui/src/tabs/settings/parts.tsx",
@@ -656,11 +656,11 @@
     },
     {
       "path": "webui/tsconfig.json",
-      "sha256": "2acd31a2ec81c342f1513b3bd1803fb944acf9bee926f27839daa8b4035c0251"
+      "sha256": "fb4cfad5da46e0cb928c86b476eeca11b088db830b6537e0e9b3b7f27121948b"
     },
     {
       "path": "webui/vite.config.ts",
-      "sha256": "3378acfeb57b5ecd5de7cb8639759595f47d2fb0f9b46c18b4eef854ff7f8f9b"
+      "sha256": "15abea2c8cc876ad815d839771476d6ef2530ac7dda39d737f783d78eeec3fe8"
     }
   ]
 }

@@ -13,6 +13,7 @@ import type { ChatEntry, LobbyFeed } from "./feed.ts";
 import type { BackgroundSession } from "./sessions.ts";
 import type { QuickFixQueue } from "./quickfix.ts";
 import type { PlannerSeed, PlanningSession } from "./planner.ts";
+import type { PlanRecord, PlanSummary } from "../state/plan-history.ts";
 import type { IssuesState } from "./issues.ts";
 import type { PullsState } from "./pulls.ts";
 import type { PullReviews } from "./pr-review.ts";
@@ -115,6 +116,16 @@ export interface LobbyService {
   abortMaster(): void;
   quickfix: QuickFixQueue;
   planner(): PlanningSession | undefined;
+  /** The project's previous plans (never saved as a task), newest first; the archived ones when asked. */
+  previousPlans(archived: boolean): PlanSummary[];
+  /** One previous plan, whole; throws when there is none (or it was saved as a task). */
+  previousPlan(id: string): PlanRecord;
+  /** Archive a previous plan, or bring it back; returns a notice (throws when it cannot). */
+  archivePlan(id: string, archived: boolean): string;
+  /** Delete a previous plan for good; returns a notice (throws when it cannot). */
+  deletePlan(id: string): string;
+  /** Carry a previous plan on as the plan on screen; returns a notice. */
+  reopenPlan(id: string): string;
   /** Start a planning session (replacing any other) with these seats on the panel. */
   newPlanner(seed?: PlannerSeed, seats?: readonly PanelMember[]): PlanningSession;
   /** The oracle puts the panel's open questions to the user, one questionnaire at a time; returns a notice. */

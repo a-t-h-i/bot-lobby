@@ -13,7 +13,7 @@ import type { LobbyService } from "../../lobby/host.ts";
 import { statusGet } from "./status.ts";
 import { lobbyAbort, lobbyHistory, lobbySend, lobbySnapshot } from "./lobby.ts";
 import { promptsAnswer, promptsDismiss, promptsList } from "./prompts.ts";
-import { plannerAnswer, plannerCommentLine, plannerGet, plannerNew, plannerRetry, plannerSend, plannerEditMessage, plannerToggleSeat, plannerSave } from "./planner.ts";
+import { plannerAnswer, plannerCommentLine, plannerGet, plannerNew, plannerRetry, plannerSend, plannerEditMessage, plannerToggleSeat, plannerSave, plannerPrevious, plannerPreviousArchive, plannerPreviousDelete, plannerPreviousGet, plannerPreviousOpen } from "./planner.ts";
 import { quickfixCancel, quickfixList, quickfixMovedToTask, quickfixRunAnyway, quickfixSubmit } from "./quickfix.ts";
 import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksEditComment, tasksGet, tasksList, tasksMessage, tasksRestore, tasksOpen, tasksDeliveryReview, tasksDeliveryDefer, tasksDeliver } from "./tasks.ts";
 import { metricsGet } from "./metrics.ts";
@@ -24,6 +24,7 @@ import { gitCancelReview, gitJev, gitPull, gitPulls, gitReview } from "./git.ts"
 import { issuesCreate, issuesGet, issuesList } from "./issues.ts";
 import { sessionsAnswer, sessionsChat, sessionsList, sessionsMessage, sessionsStart, sessionsStop, sessionsSwitch } from "./sessions.ts";
 import { settingsGet, settingsLinters, settingsSet } from "./settings.ts";
+import { themesChoose, themesGet, themesRemove, themesRename, themesSave } from "./themes.ts";
 import { noticeText, pushNotice } from "../notices.ts";
 
 /** What a handler reads besides the request body. */
@@ -242,6 +243,12 @@ function buildRoutes(): Record<string, Route> {
   };
   routes["planner.answer"] = { schema: Empty, run: (_body, ctx) => plannerAnswer(ctx) };
   routes["planner.save"] = { schema: Empty, run: (_body, ctx) => plannerSave(ctx) };
+  const PlanId = Type.String({ minLength: 1, maxLength: 40 });
+  routes["planner.previous"] = { schema: Type.Object({ archived: Type.Optional(Type.Boolean()) }, { additionalProperties: false }), run: (body, ctx) => plannerPrevious(body as { archived?: boolean }, ctx) };
+  routes["planner.previousGet"] = { schema: Type.Object({ id: PlanId }, { additionalProperties: false }), run: (body, ctx) => plannerPreviousGet(body as { id: string }, ctx) };
+  routes["planner.previousArchive"] = { schema: Type.Object({ id: PlanId, archived: Type.Boolean() }, { additionalProperties: false }), run: (body, ctx) => plannerPreviousArchive(body as { id: string; archived: boolean }, ctx) };
+  routes["planner.previousDelete"] = { schema: Type.Object({ id: PlanId }, { additionalProperties: false }), run: (body, ctx) => plannerPreviousDelete(body as { id: string }, ctx) };
+  routes["planner.previousOpen"] = { schema: Type.Object({ id: PlanId }, { additionalProperties: false }), run: (body, ctx) => plannerPreviousOpen(body as { id: string }, ctx) };
   routes["quickfix.list"] = { schema: Empty, run: (_body, ctx) => quickfixList(ctx) };
   routes["quickfix.submit"] = {
     schema: Type.Object({ text: NoticeText, attachments: Attachments }, { additionalProperties: false }),
@@ -368,6 +375,17 @@ function buildRoutes(): Record<string, Route> {
     run: (body, ctx) => settingsSet(body as { patch: Record<string, unknown> }, ctx),
   };
   routes["settings.linters"] = { schema: Empty, run: (_body, ctx) => settingsLinters(ctx) };
+  const ThemeId = Type.String({ minLength: 1, maxLength: 40 });
+  const ThemeName = Type.String({ minLength: 1, maxLength: 200 });
+  const ThemeVars = Type.Optional(Type.Record(Type.String({ maxLength: 60 }), Type.String({ maxLength: 400 })));
+  routes["themes.get"] = { schema: Empty, run: () => themesGet() };
+  routes["themes.save"] = {
+    schema: Type.Object({ name: ThemeName, light: ThemeVars, dark: ThemeVars }, { additionalProperties: false }),
+    run: (body) => themesSave(body as { name: string; light?: Record<string, string>; dark?: Record<string, string> }),
+  };
+  routes["themes.rename"] = { schema: Type.Object({ id: ThemeId, name: ThemeName }, { additionalProperties: false }), run: (body) => themesRename(body as { id: string; name: string }) };
+  routes["themes.remove"] = { schema: Type.Object({ id: ThemeId }, { additionalProperties: false }), run: (body) => themesRemove(body as { id: string }) };
+  routes["themes.choose"] = { schema: Type.Object({ id: ThemeId }, { additionalProperties: false }), run: (body) => themesChoose(body as { id: string }) };
   return routes;
 }
 

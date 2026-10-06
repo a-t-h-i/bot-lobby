@@ -103,7 +103,7 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
       aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
       onClick={onRemove}
       className={cn(
-        "flex shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40",
+        "btn-ghost flex shrink-0 items-center justify-center rounded-lg border text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40",
         file.image ? "absolute top-1 right-1 size-5 bg-background/80 text-foreground backdrop-blur-sm" : "size-7"
       )}
     >
@@ -474,7 +474,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
                   aria-haspopup="dialog"
                   data-compact
                   onClick={onHelp}
-                  className="kbd-hint inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-1.5 text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+                  className="kbd-hint btn-ghost inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border px-1.5 text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
                 >
                   <Keys chord={keys.help ?? "Alt+H"} className="kbd-hint" />
                   <span className="hidden @[8rem]:inline">shortcuts</span>

@@ -1,17 +1,19 @@
 /**
  * Appearance: light, dark or follow the system, and the colour theme. A few
  * themes come with the page; a theme from tweakcn (its CSS, pasted, or a
- * `.css` / `.json` file) can be imported and is kept in this browser. Nothing
- * here is sent to the server.
+ * `.css` / `.json` file) can be imported under a name of your own. Saved
+ * themes, and which theme is chosen, are kept with pi (in its global config
+ * folder), so every pi session and project shows them.
  */
 import { useRef, useState, type KeyboardEvent } from "react"
-import { Check, ExternalLink, Trash2, Upload } from "lucide-react"
+import { Check, ExternalLink, Pencil, Trash2, Upload, X } from "lucide-react"
+import { Input } from "@/components/ui/input"
 import { useTheme } from "@/components/theme-provider"
 import { Switch } from "@/components/ui/switch"
 import { setSoundMuted, useSoundMuted } from "@/app/sound"
 import { Textarea } from "@/components/ui/textarea"
 import { usePalette } from "@/app/palette"
-import { MAX_THEME_BYTES, parseTheme, swatch, type Palette } from "@/app/palette-core"
+import { MAX_THEME_BYTES, parseTheme, swatch, type Palette } from "@palette"
 import { toast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 import { ActionButton } from "@/ui/Actions"
@@ -77,7 +79,7 @@ function ThemePicker() {
             <span className="flex items-center justify-between gap-2 px-0.5 text-[0.8125rem] font-medium">
               <span className="truncate">
                 {entry.name}
-                {entry.id === "custom" ? <span className="ml-1.5 text-xs font-normal text-muted-foreground">imported</span> : null}
+                {palette.isSaved(entry.id) ? <span className="ml-1.5 text-xs font-normal text-muted-foreground">saved</span> : null}
               </span>
               {on ? <Check aria-hidden="true" className="size-3.5 shrink-0 text-primary" /> : null}
             </span>
@@ -88,23 +90,96 @@ function ThemePicker() {
   )
 }
 
+/** One saved theme: its name, which can be changed in place, and a way to remove it. */
+function SavedRow({ entry }: { entry: Palette }) {
+  const palette = usePalette()
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(entry.name)
+  const [error, setError] = useState<string>()
+  async function rename() {
+    const next = name.trim()
+    if (!next || next === entry.name) return setEditing(false)
+    try {
+      await palette.rename(entry.id, next)
+      setEditing(false)
+      setError(undefined)
+      toast.success(`Renamed to ${next}.`)
+    } catch (failure) {
+      setError((failure as Error).message)
+    }
+  }
+  return (
+    <li className="flex min-h-10 flex-wrap items-center gap-2 py-1.5">
+      {editing ? (
+        <form className="flex min-w-0 flex-1 items-center gap-1" onSubmit={(event) => { event.preventDefault(); void rename() }}>
+          <Input
+            autoFocus
+            value={name}
+            maxLength={40}
+            aria-label={`New name for ${entry.name}`}
+            aria-invalid={error ? true : undefined}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape") return
+              event.preventDefault()
+              event.stopPropagation()
+              setName(entry.name)
+              setEditing(false)
+            }}
+            className="h-8 max-w-64"
+          />
+          <ActionButton label="Save the name" text="Save" icon={Check} tone="primary" type="submit" disabled={!name.trim()} />
+          <ActionButton label="Keep the old name" icon={X} iconOnly onClick={() => { setName(entry.name); setEditing(false) }} />
+        </form>
+      ) : (
+        <>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">{entry.name}</span>
+          <ActionButton label={`Rename ${entry.name}`} text="Rename" icon={Pencil} onClick={() => { setName(entry.name); setEditing(true) }} />
+          <ConfirmButton label={`Remove ${entry.name}`} text="Remove" title={`Remove ${entry.name}?`} description="It is removed for every pi session. Keep a copy of its CSS if you want to use it again." confirmLabel="Remove theme" icon={Trash2} variant="destructive" onConfirm={() => void palette.remove(entry.id).catch((failure: Error) => toast.error(failure.message))} />
+        </>
+      )}
+      {error ? <p role="alert" className="w-full text-xs text-destructive">{error}</p> : null}
+    </li>
+  )
+}
+
+function SavedThemes() {
+  const palette = usePalette()
+  if (palette.saved.length === 0) return <p className="text-xs text-muted-foreground">No saved themes yet. Import one below and give it a name.</p>
+  return (
+    <ul aria-label="Saved themes" className="divide-y divide-border">
+      {palette.saved.map((entry) => <SavedRow key={entry.id} entry={entry} />)}
+    </ul>
+  )
+}
+
 function ImportTheme() {
   const palette = usePalette()
   const [text, setText] = useState("")
+  const [name, setName] = useState("")
   const [error, setError] = useState<string>()
+  const [saving, setSaving] = useState(false)
   const picker = useRef<HTMLInputElement>(null)
 
-  function apply(source: string, fallbackName: string) {
+  async function apply(source: string, fallbackName: string) {
     const parsed = parseTheme(source)
     if ("error" in parsed) {
       setError(parsed.error)
       return
     }
     setError(undefined)
-    const kept = palette.adopt(parsed, fallbackName)
-    setText("")
-    const missing = !parsed.light ? "light" : !parsed.dark ? "dark" : undefined
-    toast.success(missing ? `${kept.name} applied. It has no ${missing} colours, so ${missing} mode keeps the default ones.` : `${kept.name} applied.`)
+    setSaving(true)
+    try {
+      const kept = await palette.adopt(parsed, name.trim() || parsed.name || fallbackName)
+      setText("")
+      setName("")
+      const missing = !parsed.light ? "light" : !parsed.dark ? "dark" : undefined
+      toast.success(missing ? `${kept.name} saved and applied. It has no ${missing} colours, so ${missing} mode keeps the default ones.` : `${kept.name} saved and applied.`)
+    } catch (failure) {
+      setError((failure as Error).message)
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function onFile(file: File | undefined) {
@@ -113,7 +188,7 @@ function ImportTheme() {
       setError("That file is too large to be a theme.")
       return
     }
-    apply(await file.text(), file.name.replace(/\.[^.]+$/, "") || "Custom theme")
+    await apply(await file.text(), file.name.replace(/\.[^.]+$/, "") || "Custom theme")
   }
 
   return (
@@ -125,6 +200,10 @@ function ImportTheme() {
         </a>
         , press Code, copy it, and paste it here, or save it as a file and upload that. Colours and fonts are used; corners stay the page's own.
       </p>
+      <label className="grid gap-1 text-xs text-muted-foreground">
+        Name
+        <Input value={name} maxLength={40} placeholder="the theme's own name, or the file's" onChange={(event) => setName(event.target.value)} className="h-8 max-w-80 text-foreground" />
+      </label>
       <Textarea
         value={text}
         onChange={(event) => {
@@ -143,9 +222,8 @@ function ImportTheme() {
           void onFile(event.target.files?.[0])
           event.target.value = ""
         }} />
-        <ActionButton label="Apply the pasted theme" text="Apply" icon={Check} tone="primary" disabled={!text.trim()} onClick={() => apply(text, "Custom theme")} />
-        <ActionButton label="Upload a .css or .json theme file" text="Upload file" icon={Upload} onClick={() => picker.current?.click()} />
-        {palette.custom ? <ConfirmButton label={`Remove ${palette.custom.name}`} text="Remove" title="Remove the imported theme?" description="The imported theme is stored in this browser. Keep a copy if you want to use it again." confirmLabel="Remove theme" icon={Trash2} variant="destructive" onConfirm={() => palette.removeCustom()} /> : null}
+        <ActionButton label="Save and apply the pasted theme" text="Save theme" icon={Check} tone="primary" disabled={!text.trim() || saving} onClick={() => void apply(text, "Custom theme")} />
+        <ActionButton label="Upload a .css or .json theme file" text="Upload file" icon={Upload} disabled={saving} onClick={() => picker.current?.click()} />
         {error ? (
           <p role="alert" className="ml-2 min-w-0 text-xs text-destructive">
             {error}
@@ -168,8 +246,11 @@ export function ThemeGroup() {
         <Field label={PAGE.themeLabel} help={PAGE.appearanceHelp}>
           <Choice value={theme} items={PAGE.themeItems.map((item) => ({ value: item.id, label: item.label }))} label={PAGE.themeLabel} onChange={(value) => setTheme(value as "light" | "dark" | "system")} />
         </Field>
-        <Field label="Colour theme" help="The page's colours. Kept in this browser only." stacked>
+        <Field label="Colour theme" help="The page's colours, the same in every pi session." stacked>
           <ThemePicker />
+        </Field>
+        <Field label="Saved themes" help="Themes you imported, kept with pi for every session and project." stacked>
+          <SavedThemes />
         </Field>
         <Field label="Import a theme" stacked>
           <ImportTheme />

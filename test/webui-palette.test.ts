@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PRESETS, paletteCss, parseTheme, safeValue, swatch } from "../webui/src/app/palette-core.ts";
+import { PRESETS, paletteCss, parseTheme, safeValue, swatch } from "../src/webui/palette-core.ts";
 
 const TWEAKCN = `
 :root {

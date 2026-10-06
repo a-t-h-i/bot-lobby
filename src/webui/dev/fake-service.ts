@@ -12,6 +12,7 @@ import type { BackgroundSession, DialogAnswer, SessionDialog } from "../../lobby
 import type { PlanComment } from "../../state/comments.ts";
 import type { LobbyService } from "../../lobby/host.ts";
 import { loadScenario, type ScenarioFixture } from "./fixtures.ts";
+import type { PlanRecord, PlanSummary } from "../../state/plan-history.ts";
 
 interface StreamState {
   step?: ReturnType<typeof setTimeout>;
@@ -537,6 +538,7 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     },
     liveSessions: () => [...(fixture.liveSessions ?? [])],
     planner: () => planning,
+    ...previousPlansFake(fixture.mockPreviousPlans ?? []),
     newPlanner: (seed?: { issue: { number: number; title: string; url?: string }; body: string }, seats?: string[]) => {
       planning = fakePlanner({ ...defaultPlanner(), ...(seed ? { messages: [{ role: "you", text: seed.body, at: Date.now() }] } : {}), ...(seats ? { seats } : {}) });
       return planning;
@@ -570,4 +572,43 @@ export function disposeFixtureService(service: LobbyService): void {
   stopStream(service);
   for (const id of opened.get(service) ?? []) promptHub.dismiss(id);
   opened.delete(service);
+}
+
+/** Previous plans held in memory: listed, read, archived, deleted and carried on as the page asks. */
+function previousPlansFake(seed: NonNullable<ScenarioFixture["mockPreviousPlans"]>) {
+  const records = seed.map((plan) => ({ ...plan }))
+  const find = (id: string) => {
+    const record = records.find((entry) => entry.id === id && !entry.savedAs?.length)
+    if (!record) throw new Error(`no plan ${id}`)
+    return record
+  }
+  const asRecord = (plan: (typeof records)[number]) => ({
+    id: plan.id,
+    title: plan.title,
+    createdAt: plan.createdAt,
+    updatedAt: plan.updatedAt,
+    ...(plan.archivedAt ? { archivedAt: plan.archivedAt } : {}),
+    snapshot: { version: 1, messages: plan.messages, ...(plan.draft ? { reply: { status: "grilling", questions: [], plan: plan.draft } } : {}), questions: [], notes: plan.notes ?? [], members: [], seats: ["backend", "designer", "qa", "researcher"], pins: [], satOut: [], lastStatus: [], sat: [], memberNotes: [], turns: plan.rounds ?? 1, mode: "normal", answered: [], lineComments: [], savedParts: [], autoContinued: false, attempts: 1, running: false },
+  }) as unknown as PlanRecord
+  return {
+    previousPlans: (archived: boolean): PlanSummary[] => records
+      .filter((plan) => !plan.savedAs?.length && Boolean(plan.archivedAt) === archived)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map((plan) => ({ id: plan.id, title: plan.title, createdAt: plan.createdAt, updatedAt: plan.updatedAt, ...(plan.archivedAt ? { archivedAt: plan.archivedAt } : {}), messages: plan.messages.length, rounds: plan.rounds ?? 1, hasDraft: Boolean(plan.draft) })),
+    previousPlan: (id: string) => asRecord(find(id)),
+    archivePlan: (id: string, archived: boolean) => {
+      const plan = find(id)
+      if (archived) plan.archivedAt = new Date().toISOString()
+      else delete plan.archivedAt
+      lobbyTopics.bump("planner")
+      return archived ? `archived "${plan.title}" — show archived plans to bring it back` : `"${plan.title}" is back among the previous plans`
+    },
+    deletePlan: (id: string) => {
+      const plan = find(id)
+      records.splice(records.indexOf(plan), 1)
+      lobbyTopics.bump("planner")
+      return `deleted "${plan.title}" for good`
+    },
+    reopenPlan: (id: string) => `carrying on "${find(id).title}"`,
+  }
 }

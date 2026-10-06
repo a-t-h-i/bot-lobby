@@ -16,7 +16,8 @@ import type { PlannerSnapshot } from "@protocol"
 import { Pane, useWide } from "@/ui/SplitPane"
 import { PanelConversation } from "./Conversation"
 import { DraftBody, SeatNeeds } from "./Draft"
-import { PlanHeader } from "./Header"
+import { PlanHeader, PreviousButton } from "./Header"
+import { PreviousPlans } from "./Previous"
 import { LineComment } from "./LineComment"
 import { Seats } from "./Roster"
 import { DRAFT_WAITS, INTRO_LEAD, NO_DRAFT, PLAN_STEPS, isFresh, seatCells, seatedCount } from "./words"
@@ -62,7 +63,10 @@ function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) 
               <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">{INTRO_LEAD}</p>
             </div>
           </div>
-          <Rounds limit={snap.limit} />
+          <div className="flex flex-col items-start gap-2 @3xl:items-end">
+            <PreviousButton />
+            <Rounds limit={snap.limit} />
+          </div>
         </header>
 
         <section aria-labelledby="plan-panel" className="flex flex-col gap-3">
@@ -150,7 +154,12 @@ function Session({ snap, reload }: { snap: PlannerSnapshot; reload: () => void }
   )
 }
 
-export function PlanTab() {
+export function PlanTab({ rest = [] }: { rest?: string[] }) {
+  if (rest[0] === "previous") return <PreviousPlans id={rest[1]} />
+  return <CurrentPlan />
+}
+
+function CurrentPlan() {
   const read = useApiRead("planner.get", {}, ["planner"])
   const snap = read.data
   if (!snap && read.error) return <ErrorState message={`Could not load the plan. ${read.error}`} onRetry={read.reload} />
