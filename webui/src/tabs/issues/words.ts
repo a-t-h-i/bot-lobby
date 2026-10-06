@@ -8,7 +8,7 @@ import { formatSince } from "@/lib/format"
 
 export const LIST_TITLE = "Issues"
 export const DETAIL_TITLE = "Issue"
-export const ACTION_LINE = "p plans it with the planning panel, then save it as a task"
+export const ACTION_LINE = "Plan it opens a planning session on this issue; save the plan as a task once the panel agrees it."
 export const NOT_LOADED = "Refresh to load open issues with the GitHub CLI (gh)."
 export const EMPTY_LIST = "No open issues. File one with New issue."
 export const LOADING_LIST = "loading issues from GitHub…"
