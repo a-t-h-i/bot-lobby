@@ -22,18 +22,19 @@ import { classifier, effortFor, hintsFor } from "../classifier/instance.ts";
 import { checkThinking } from "../pi/model-support.ts";
 import { QuickFixQueue } from "./quickfix.ts";
 import type { Asker } from "../ask/types.ts";
-import type { PlanningSession } from "./planner.ts";
 import { execCommand, IssuesState } from "./issues.ts";
 import { PullsState } from "./pulls.ts";
 import { PullReviews } from "./pr-review.ts";
 import { KnowledgeBook } from "./knowledge.ts";
 import { ExcalidrawBook } from "../excalidraw/sessions.ts";
 import type { LobbyService } from "./host.ts";
-import { createLobbyService, lobbyNotify, lobbyProfile, reviewProfile, seatProfile, setServiceState, savePlan as serviceSavePlan, answerPanel as serviceAnswerPanel } from "./service.ts";
+import { backgroundSessions, createLobbyService, lobbyNotify, lobbyProfile, plannerDeps, resumeSession, reviewProfile, seatProfile, setServiceState, savePlan as serviceSavePlan, answerPanel as serviceAnswerPanel } from "./service.ts";
 import { lobbyTopics } from "./topics.ts";
 export { backgroundSessions, setSessionLauncher } from "./service.ts";
 import { deliverComments, onOwnerEvent } from "../pi/owner.ts";
 import { pushNotice } from "../webui/notices.ts";
+import { listenForSignals, NUDGE_DELAY_MS, recover, stoppingOnSignal, WindowKeeper } from "./recovery.ts";
+import { PlanningSession, type PlanningSnapshot } from "./planner.ts";
 
 export { deliverComments };
 
@@ -57,6 +58,10 @@ export interface Runtime {
   /** The repository (or folder) and branch the page's title shows, and whether git is being asked now. */
   workspace: WorkspaceInfo;
   readingWorkspace: boolean;
+  /** Keeps what this window does on disk, so the next window carries it on after a crash. */
+  keeper?: WindowKeeper;
+  /** What this window carried on from one that stopped, as the page announces it once. */
+  recovered?: { at: number; text: string };
 }
 
 let runtime: Runtime | undefined;
@@ -89,12 +94,18 @@ export function lobbyWorkRunning(): string | undefined {
 
 /** Stop the lobby's backend (bot-lobby turned off, or the session ended). */
 export function stopLobbyService(): void {
-  shutdown();
+  shutdown(false);
 }
 
-function shutdown(): void {
+/**
+ * Stop the lobby. `carryOn` (pi is stopping on a signal) keeps what it was
+ * doing on disk for the next window; any other stop records it as stopped.
+ */
+function shutdown(carryOn: boolean): void {
   const state = runtime;
   if (!state) return;
+  // Before anything is cancelled, so what is kept is what was running.
+  state.keeper?.stop(carryOn);
   runtime = undefined;
   lobbyService = undefined;
   setServiceState(undefined);
@@ -129,7 +140,7 @@ function handToQuickFix(state: Runtime, request: string, builder: Domain | undef
  * every interactive master session, not a subagent.
  */
 export function startLobbyService(pi: ExtensionAPI, ctx: ExtensionContext, configDir: string): Runtime | undefined {
-  shutdown();
+  shutdown(false);
   if (isSubagentProcess() || !servesPage(ctx)) return undefined;
   const root = detectProjectRoot(ctx.cwd, configDir);
   const workflow = loadConfig().workflow;
@@ -175,7 +186,10 @@ export function startLobbyService(pi: ExtensionAPI, ctx: ExtensionContext, confi
     stallTimeoutMs: workflow.stallTimeoutMs,
     toolStallTimeoutMs: workflow.toolStallTimeoutMs,
     feed: lobbyFeed,
-    onChange: () => lobbyTopics.bump("quickfix"),
+    onChange: () => {
+      lobbyTopics.bump("quickfix");
+      state.keeper?.quickfix.schedule();
+    },
     notify: (message, level) => lobbyNotify(state, message, level),
     hints: hintsFor({ cwd: ctx.cwd, root, configDir }),
     classifier: classifier(),
@@ -196,6 +210,7 @@ export function startLobbyService(pi: ExtensionAPI, ctx: ExtensionContext, confi
   // Only the newest messages are kept; the feed learns whether earlier ones exist, and loads them when scrolled to.
   lobbyFeed.seedChat(chatFromEntries(ctx.sessionManager.getBranch(), Number.POSITIVE_INFINITY));
   state.unsubscribeFeed = lobbyFeed.onChange(() => lobbyTopics.bump("lobby"));
+  carryOn(state);
   onRunUpdates((runs) => {
     lobbyFeed.runs(runs);
     lobbyTopics.bump("tasks");
@@ -210,6 +225,61 @@ export function startLobbyService(pi: ExtensionAPI, ctx: ExtensionContext, confi
     else lobbyFeed.log("LOBBY", `auto mode: no progress on ${event.taskId} — it needs you`, "warning");
   });
   return state;
+}
+
+/**
+ * Keep this window's work on disk from now on, and carry on what a window
+ * that stopped unexpectedly was doing (src/lobby/recovery.ts).
+ */
+function carryOn(state: Runtime): void {
+  listenForSignals();
+  const { root, configDir, ctx } = state;
+  state.keeper = new WindowKeeper({
+    root,
+    configDir,
+    sessionId: () => state.ctx.sessionManager.getSessionId(),
+    sessionFile: () => state.ctx.sessionManager.getSessionFile?.(),
+    working: () => !state.ctx.isIdle(),
+    planner: () => state.planner,
+    quickfix: () => state.quickfix.snapshot(),
+    background: () => backgroundSessions(),
+  });
+  let summary: string | undefined;
+  try {
+    summary = recover({
+      root,
+      configDir,
+      sessionId: ctx.sessionManager.getSessionId(),
+      relaunch: (start) => resumeSession(state, start),
+      restorePlanner: (snapshot) => restorePlanner(state, snapshot),
+      restoreQuickFixes: (jobs) => state.quickfix.restore(jobs).length,
+      nudge: (message) => nudgeWhenIdle(state, message),
+    });
+  } catch (error) {
+    lobbyFeed.log("LOBBY", `could not carry on what the stopped session was doing: ${(error as Error).message}`, "warning");
+  }
+  state.keeper.window.flush();
+  if (!summary) return;
+  state.recovered = { at: Date.now(), text: summary };
+  lobbyFeed.log("LOBBY", summary, "success");
+  state.ctx.ui.notify(`bot-lobby: ${summary}`, "info");
+  lobbyTopics.bump("status");
+}
+
+/** The planning panel as a kept snapshot left it; a round pi cut off runs again. */
+function restorePlanner(state: Runtime, snapshot: PlanningSnapshot): void {
+  state.planner = PlanningSession.restore(plannerDeps(state, snapshot.seats), snapshot);
+  lobbyTopics.bump("planner");
+  void state.planner.resume().catch(() => {});
+}
+
+/** Pick this window's interrupted turn back up once pi has settled, unless the user has already started one. */
+function nudgeWhenIdle(state: Runtime, message: string): void {
+  const timer = setTimeout(() => {
+    if (runtime !== state || !state.ctx.isIdle()) return;
+    state.pi.sendUserMessage(message);
+  }, NUDGE_DELAY_MS);
+  timer.unref?.();
 }
 
 /**
@@ -252,7 +322,8 @@ export function registerLobbyEvents(pi: ExtensionAPI, configDir: string): void {
     // Off (the default for a new session) runs no lobby until bot-lobby is turned on (see pi/switch.ts).
     if (!isMinimized()) startLobbyService(pi, ctx, configDir);
   });
-  pi.on("session_shutdown", () => shutdown());
+  // A quit on a signal (a closed terminal, a kill) is not one the user asked for: its work carries on in the next window.
+  pi.on("session_shutdown", (event) => shutdown(event.reason === "quit" && stoppingOnSignal()));
   pi.on("ui_prompt_start", () => {
     lobbyTopics.bump("status");
   });
@@ -261,6 +332,7 @@ export function registerLobbyEvents(pi: ExtensionAPI, configDir: string): void {
   });
   pi.on("agent_start", (_event, ctx) => {
     track(ctx);
+    runtime?.keeper?.window.schedule();
     lobbyTopics.bump("status");
     const taskId = currentZenTask()?.id;
     turn = { startedAt: Date.now(), ...(taskId ? { taskId } : {}), ...(ctx.model ? { model: modelRef(ctx.model) } : {}), thinking: pi.getThinkingLevel(), tools: 0, turns: 0, input: 0, output: 0, cost: 0 };
@@ -284,6 +356,7 @@ export function registerLobbyEvents(pi: ExtensionAPI, configDir: string): void {
   });
   pi.on("agent_end", (event, ctx) => {
     track(ctx);
+    runtime?.keeper?.window.schedule();
     const finished = turn;
     turn = undefined;
     lobbyFeed.replyEnd();

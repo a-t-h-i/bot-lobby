@@ -39,6 +39,12 @@ on the engine's checks with no QA agent, and a small one gets a light check. One
 security, data, concurrency or orchestration gets a deep, adversarial review. The test budget is a
 ceiling, never a quota, and the Tasks tab shows the read and why. With Jev off, the engine's rules decide.
 
+If pi crashes, is killed or loses its terminal, the lobby page keeps everything on screen and
+reconnects when pi is back. The next pi started in the project carries on what was running. The
+planning session returns as it was, and a round that was cut off runs again. Queued quick fixes
+run, and every task's session starts again from its saved file, picking up where it stopped. A
+quit on purpose stops this work, and `pi -c` brings back the planning session.
+
 | Agent | Does |
 | --- | --- |
 | Oracle | Your Pi session: questions, plan, delegation and approvals |

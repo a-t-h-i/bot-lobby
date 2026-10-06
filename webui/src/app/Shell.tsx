@@ -23,6 +23,7 @@ import { TabStrip } from "./TabStrip.tsx"
 import { Thinking } from "./Thinking.tsx"
 import { QuestionPopup, QuestionsPill } from "@/prompts/QuestionPopup"
 import { useEvents } from "./useEvents.ts"
+import { useRecoveredNotice } from "./recovered.ts"
 import { useLobbyKeys } from "./useLobbyKeys.ts"
 import { useDesktopNotifications } from "./notify.ts"
 import { usePrompts } from "./usePrompts.ts"
@@ -47,9 +48,28 @@ function handleAction(action: string, route: Route, toggleHelp: () => void, cycl
   else if (action === "savePlan" && route.kind === "tab" && route.tab === "plan") void act("planner.save", {})
 }
 
+/** How long a stream that was live may be reconnecting before the page says pi is gone. */
+const OUTAGE_MS = 2500
+
+/**
+ * Whether pi is gone: the stream closed, or a stream that was live has been
+ * reconnecting for a few seconds (pi stopped; the browser keeps retrying).
+ * A blip of a reconnect says nothing.
+ */
+function useOutage(connection: ConnectionState): boolean {
+  const [long, setLong] = useState(false)
+  const wasLive = useRef(false)
+  if (connection === "live") wasLive.current = true
+  useEffect(() => {
+    if (connection !== "connecting" || !wasLive.current) return setLong(false)
+    const timer = setTimeout(() => setLong(true), OUTAGE_MS)
+    return () => clearTimeout(timer)
+  }, [connection])
+  return connection === "offline" || (connection === "connecting" && long)
+}
+
 function Banner({ connection, onRetry }: { connection: ConnectionState; onRetry: () => void }) {
-  if (connection === "offline") return <ReconnectingState onRetry={onRetry} />
-  return null
+  return useOutage(connection) ? <ReconnectingState onRetry={onRetry} /> : null
 }
 
 /**
@@ -83,6 +103,7 @@ export function Shell() {
   useDesktopNotifications()
 
   const status = statusRecord.data
+  useRecoveredNotice(status)
   const tabs = status?.tabs ?? []
   const keys = status?.keys ?? []
   const activeId = route.kind === "tab" ? route.tab : undefined

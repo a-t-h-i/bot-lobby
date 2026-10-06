@@ -65,6 +65,8 @@ export interface QuickFixJob {
   profile?: QuickFixProfile;
   /** The oracle sent it here from a request typed to the lobby. */
   routed?: boolean;
+  /** An earlier run was cut off when pi stopped: some of its edits may already be in the tree. */
+  interrupted?: boolean;
 }
 
 /** How a job enters the queue besides its prompt. */
@@ -111,6 +113,10 @@ export interface QuickFixDeps {
 
 export const MAX_JOBS = 30;
 export const MAX_STEPS = 200;
+/** Steps a snapshot keeps per job: enough to read what it did. */
+const MAX_KEPT_STEPS = 40;
+/** What a job pi stopped in the middle of is told when it runs again. */
+export const INTERRUPTED_NOTE = "An earlier run of this request was cut off when pi stopped, so some of its edits may already be in the tree: look at the files before you change them, and finish the request.";
 
 function isActive(job: QuickFixJob): boolean {
   return job.status === "queued" || job.status === "running";
@@ -202,6 +208,39 @@ export class QuickFixQueue {
     return true;
   }
 
+  /** The queue as JSON, for the next pi process to carry on from. */
+  snapshot(): QuickFixJob[] {
+    return this.jobs.map((job) => ({ ...job, steps: job.steps.slice(-MAX_KEPT_STEPS) }));
+  }
+
+  /**
+   * Take up a queue an earlier pi process left: finished jobs stay as they
+   * ended, and the one that was running when pi stopped goes back to the front
+   * of the queue, told that it was cut off. Returns the jobs that will run.
+   */
+  restore(jobs: readonly QuickFixJob[]): QuickFixJob[] {
+    const kept = jobs.map((job): QuickFixJob => job.status !== "running" ? { ...job } : {
+      ...job,
+      status: "queued",
+      interrupted: true,
+      note: "pi stopped while this ran; it runs again from where the tree is",
+      steps: job.steps.map((step) => ({ ...step, pending: false })),
+    });
+    // Queues from more than one stopped window may share ids: a repeated one is numbered on.
+    const number = (job: QuickFixJob) => Number(/^QF-(\d+)$/.exec(job.id)?.[1] ?? 0);
+    this.counter = Math.max(this.counter, ...this.jobs.map(number), ...kept.map(number));
+    const taken = new Set(this.jobs.map((job) => job.id));
+    for (const job of kept) {
+      if (taken.has(job.id)) job.id = `QF-${++this.counter}`;
+      taken.add(job.id);
+    }
+    const resumed = kept.filter((job) => job.interrupted && job.status === "queued");
+    this.jobs = [...resumed, ...kept.filter((job) => !resumed.includes(job)), ...this.jobs];
+    this.changed();
+    this.pump();
+    return this.jobs.filter(isActive);
+  }
+
   /** Abort everything (session shutdown). */
   cancelAll(): void {
     for (const job of this.jobs) if (job.status === "queued") job.status = "cancelled";
@@ -259,7 +298,7 @@ export class QuickFixQueue {
       const attempt = (model: string | undefined, thinking: string) => runPiAgent(
         {
           cwd: this.deps.cwd,
-          task: likely ? `${job.prompt}\n\n${likely}` : job.prompt,
+          task: [job.prompt, job.interrupted ? INTERRUPTED_NOTE : "", likely].filter(Boolean).join("\n\n"),
           systemPrompt: quickFixPrompt(profile.instructions),
           tools: [...QUICK_FIX_TOOLS, ...(this.deps.hints?.tools() ?? [])],
           ...grantOption("quickfix"),

@@ -1,6 +1,6 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -18,6 +18,8 @@ import { readInbox } from "../src/state/inbox.ts";
 import { FakeSessionProcess } from "./fake-session.ts";
 import { lobbyFeed } from "../src/lobby/feed.ts";
 import { registerOwner } from "../src/pi/owner.ts";
+import { PlanningSession } from "../src/lobby/planner.ts";
+import { recoveryDir, writeSessionState } from "../src/state/recovery.ts";
 
 let ambientSubagent: string | undefined;
 let ambientConfig: string | undefined;
@@ -281,6 +283,44 @@ test("switching to a background session stops its process, then asks pi to run i
     await switching;
     assert.deepEqual(launched[0]!.signals, ["SIGTERM"], "the background process ends first");
     assert.deepEqual(fake.sent.at(-1), { text: "/bot-lobby switch /sessions/child-1.jsonl", options: { expandPromptTemplates: true } });
+  } finally {
+    await stop(fake, ctx);
+    setSessionLauncher(undefined);
+  }
+});
+
+test("a window that starts after another stopped unexpectedly carries its planning panel and task on", async () => {
+  const launched: Array<{ args: string[]; proc: FakeSessionProcess }> = [];
+  setSessionLauncher((args) => {
+    const proc = new FakeSessionProcess();
+    launched.push({ args, proc });
+    return proc;
+  });
+  setMinimized(false);
+  const root = project(false);
+  const task = createTask("TASK-cut", "cut off", new Date().toISOString(), "build it", "session-old");
+  createTaskDir(root, ".pi", task);
+  transition(task, "clarifying");
+  saveTask(root, ".pi", task);
+  const windows = join(recoveryDir(root, ".pi"), "windows");
+  mkdirSync(windows, { recursive: true });
+  writeFileSync(join(windows, "2147483646-dead.json"), JSON.stringify({ pid: 2147483646, token: "dead", sessionId: "session-old", sessionFile: "/sessions/old.jsonl", working: true, background: [], startedAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:01.000Z" }));
+  const snapshot = new PlanningSession({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high", timeoutMs: 1000 }) }).snapshot();
+  writeSessionState(root, ".pi", "planner", "session-old", { ...snapshot, messages: [{ role: "you", text: "plan the export", at: 1 }] });
+
+  const fake = fakePi();
+  const ui = fakeUi();
+  const { ctx } = context(root, ui.ui);
+  registerLobbyEvents(fake.pi, ".pi");
+  await fake.emit("session_start", { type: "session_start" }, ctx);
+  try {
+    const service = currentLobbyService()!;
+    assert.equal(service.planner()?.messages[0]?.text, "plan the export", "the planning panel is back where it was");
+    assert.equal(launched.length, 1, "the stopped session that drove the task starts again");
+    assert.deepEqual(launched[0]!.args.slice(0, 4), ["--mode", "rpc", "--session", "/sessions/old.jsonl"]);
+    assert.match(String(launched[0]!.proc.written.find((command) => command.type === "prompt")?.message), /pi stopped unexpectedly while you were working on TASK-cut/);
+    assert.match(service.recovered!()!.text, /carried on with the planning session and task TASK-cut/);
+    assert.ok(ui.notes.some((note) => /carried on/.test(note)), "the terminal says so too");
   } finally {
     await stop(fake, ctx);
     setSessionLauncher(undefined);

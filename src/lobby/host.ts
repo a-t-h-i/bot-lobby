@@ -150,6 +150,8 @@ export interface LobbyService {
   sessionModel?(): string | undefined;
   /** The Issues tab is switched on (`lobby.issues`). */
   issuesEnabled(): boolean;
+  /** What this window carried on from one that stopped unexpectedly, when it did. */
+  recovered?(): { at: number; text: string } | undefined;
   /** This window's pi session name, when it has one. */
   sessionName(): string | undefined;
   /** Background sessions this window started, oldest first. */

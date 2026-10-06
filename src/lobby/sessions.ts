@@ -48,6 +48,10 @@ export interface SessionStart {
   request?: string;
   planId?: string;
   auto?: boolean;
+  /** Carry on this saved session instead of starting a new one (after the window that drove it stopped). */
+  sessionFile?: string;
+  /** Sent once it is up, as the user's message (the nudge that picks an interrupted turn back up). */
+  message?: string;
 }
 
 let counter = 0;
@@ -103,6 +107,7 @@ export class BackgroundSession {
     this.write({ type: "get_state" });
     if (start.planId) this.prompt(`/bot-lobby start-plan ${start.planId}${start.auto ? " auto" : ""}`);
     else if (start.request) this.prompt(`/bot-lobby --task ${start.auto ? "--auto " : ""}${start.request}`);
+    else if (start.message) this.prompt(start.message);
   }
 
   private ended(code: number | null, reason: string): void {
@@ -277,8 +282,8 @@ export function extensionArgs(argv: readonly string[] = process.argv): string[] 
   return forwarded;
 }
 
-export function sessionArgs(name: string, model?: string, argv: readonly string[] = process.argv): string[] {
-  return ["--mode", "rpc", "--name", name, ...(model ? ["--model", model] : []), ...extensionArgs(argv)];
+export function sessionArgs(name: string, model?: string, argv: readonly string[] = process.argv, sessionFile?: string): string[] {
+  return ["--mode", "rpc", ...(sessionFile ? ["--session", sessionFile] : []), "--name", name, ...(model ? ["--model", model] : []), ...extensionArgs(argv)];
 }
 
 const POSIX = process.platform !== "win32";
@@ -307,7 +312,7 @@ export class SessionRegistry {
   }
 
   start(cwd: string, start: SessionStart, model?: string): BackgroundSession {
-    const proc = this.launcher(sessionArgs(start.name, model), cwd);
+    const proc = this.launcher(sessionArgs(start.name, model, process.argv, start.sessionFile), cwd);
     const session = new BackgroundSession(proc, start, this.onChange);
     this.sessions.push(session);
     this.prune();

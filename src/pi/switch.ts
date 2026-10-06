@@ -12,6 +12,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { Key } from "@earendil-works/pi-tui";
 import { currentLobbyService, lobbyWorkRunning, servesPage, startLobbyService, stopLobbyService } from "../lobby/runtime.ts";
 import { activeTask } from "../state/persistence.ts";
+import { workToCarryOn } from "../lobby/recovery.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { stopWebServer, webSessionStarted } from "../webui/command.ts";
 import { isSubagentProcess } from "./quiet.ts";
@@ -23,11 +24,15 @@ export function isOn(): boolean {
   return !isMinimized();
 }
 
-/** Whether a new session starts on: when settings say so, or it owns a task still under way. */
+/**
+ * Whether a new session starts on: when settings say so, when it owns a task
+ * still under way, or when a window in the project stopped unexpectedly and
+ * its work is waiting to carry on.
+ */
 export function startsOn(ctx: ExtensionContext, configDir: string): boolean {
   if (loadConfig().lobby.startOn) return true;
   const root = detectProjectRoot(ctx.cwd, configDir);
-  return Boolean(activeTask(root, configDir, ctx.sessionManager.getSessionId()));
+  return Boolean(activeTask(root, configDir, ctx.sessionManager.getSessionId())) || (servesPage(ctx) && workToCarryOn(root, configDir));
 }
 
 /** Turn bot-lobby on: the oracle's prompt comes back and the web lobby starts (opening the browser if settings say so). */
