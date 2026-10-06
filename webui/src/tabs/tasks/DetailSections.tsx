@@ -2,7 +2,8 @@
  * The sections of a task's detail: Request, Steps (the plan's short list, the
  * steps a worker is on marked `active · 1m 12s` and ticking), the full plan
  * folded away under them (or Proposal / the empty Plan note), Amendments,
- * Waiting on and Recent runs. The plan text and steps arrive with `tasks.get`.
+ * Waiting on, QA risk (Jev's read of the built change) and Recent runs. The
+ * plan text and steps arrive with `tasks.get`.
  */
 import { useId, useState } from "react"
 import { AlertCircle, CheckCircle2, ChevronRight, Circle, XCircle } from "lucide-react"
@@ -12,6 +13,7 @@ import { useElapsed } from "@/lib/useElapsed"
 import { cn } from "@/lib/utils"
 import { Markdown } from "@/ui/Markdown"
 import { Section } from "@/ui/Section"
+import { QA_RISK_WORDS, qaRiskNote } from "./words"
 
 type StepData = TaskDetailData["steps"][number]
 
@@ -159,6 +161,30 @@ function Waiting({ detail }: { detail: TaskDetailData }) {
   )
 }
 
+/** How much QA the built change warrants, as Jev read its diff: the level, how deep QA goes, where it looks and why. */
+function QaRisk({ risk }: { risk: NonNullable<TaskDetailData["qaRisk"]> }) {
+  const words = QA_RISK_WORDS[risk.risk]
+  return (
+    <Section title="QA risk" right={qaRiskNote(risk)}>
+      <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm" data-qa-risk={risk.risk}>
+        <span className={cn("rounded-md px-2 py-0.5 text-xs font-medium", words.tone)}>{words.label}</span>
+        <span className="text-muted-foreground">{words.depth}</span>
+      </p>
+      {risk.focusAreas.length > 0 ? (
+        <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-muted-foreground" aria-label="What QA looks at first">
+          {risk.focusAreas.map((area) => (
+            <li key={area} className="break-words">{area}</li>
+          ))}
+        </ul>
+      ) : null}
+      <p className="text-xs break-words text-muted-foreground">
+        {risk.riskFactors.join(" · ")}
+        {risk.qaRequired ? ` · existing tests ${risk.existingTestsLikelySufficient ? "likely enough" : "likely not enough"}` : ""}
+      </p>
+    </Section>
+  )
+}
+
 function Runs({ runs }: { runs: string[] }) {
   if (runs.length === 0) return null
   return (
@@ -189,12 +215,13 @@ export function PlanSections({ detail, finished }: { detail: TaskDetailData; fin
   )
 }
 
-/** Amendments, Waiting on and Recent runs — the sections below Comments. */
+/** Amendments, Waiting on, QA risk and Recent runs — the sections below Comments. */
 export function DetailTrailer({ detail }: { detail: TaskDetailData }) {
   return (
     <>
       <Amendments amendments={detail.amendments} />
       <Waiting detail={detail} />
+      {detail.qaRisk ? <QaRisk risk={detail.qaRisk} /> : null}
       <Runs runs={detail.runs} />
     </>
   )
