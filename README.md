@@ -26,6 +26,10 @@ The questionnaire and web tools are built in, so don't also install extensions w
 3. Follow the agents in **Lobby**: the step being worked on reads `active · 1m 12s`, and each task shows
    how long its agents have worked on it (idle time left out). Models, effort and time limits are in **Settings**.
 
+**Issues** lists the repository's open issues (with `lobby.issues` on), and **Plan it** starts a
+planning session from one. **Git** lists open pull requests; an agent reviews one on request,
+read-only, and nothing is posted to GitHub. Both read GitHub through `gh`.
+
 Small changes go to **Quick fix**. `--task` forces a full task, `--fast` / `--full` picks the workflow,
 and `--branch` / `--worktree` isolates it in git. A finished isolated task pushes its branch and tries
 to open a PR through `gh`; nothing merges on its own.
@@ -68,13 +72,13 @@ rebound with `lobby.keys`. In Pi, `Alt+G` toggles auto mode and `Ctrl+Shift+M` t
 
 ## Screenshots
 
-| Plan | Tasks |
+| Planning | Tasks |
 | --- | --- |
-| ![The Plan start page: the panel as seats](.github/screenshots/plan.png) | ![A stopped task with Resume in its action bar](.github/screenshots/tasks.png) |
-| **Previous plans** | **Thinking** |
-| ![A plan left unsaved, to read, carry on, archive or delete](.github/screenshots/previous.png) | ![Each agent's latest thought, in steps](.github/screenshots/thinking.png) |
-| **Settings** | **Excalidraw** |
-| ![Each agent's model, effort and time limit](.github/screenshots/settings.png) | ![A shared Excalidraw session](.github/screenshots/excalidraw.png) |
+| ![A planning session: the panel's questions with mockups, and the draft plan](.github/screenshots/plan.png) | ![The task list across sessions, with one task's steps](.github/screenshots/tasks.png) |
+| **Thinking** | **Questionnaire** |
+| ![The Thinking pop-up: each agent's thoughts, in steps](.github/screenshots/thinking.png) | ![A question with a mockup for each option](.github/screenshots/questionnaire.png) |
+| **Issues** | **Git** |
+| ![An open issue, ready to plan with the panel](.github/screenshots/issues.png) | ![A pull request with an agent's review](.github/screenshots/git.png) |
 
 ## Configuration
 

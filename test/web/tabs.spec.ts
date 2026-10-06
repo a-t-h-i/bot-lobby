@@ -157,6 +157,17 @@ test("issues tab lists issues (issues)", async ({ page, server }) => {
   trap.stop();
 });
 
+test("Plan it starts a planning session from an issue (issues)", async ({ page, server }) => {
+  await openScenario(page, server, "issues");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.evaluate(() => { (globalThis as any).location.hash = "#/issues/57"; });
+  const detail = page.getByRole("article", { name: "Issue #57" });
+  await detail.getByRole("button", { name: "Plan #57 with the panel" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Plan it" }).click();
+  await expect(page, "the Plan tab opens on it").toHaveURL(/#\/plan$/);
+  await expect(page.getByText("The page paints white for a moment before the theme applies.").first()).toBeVisible();
+});
+
 test("issues tab is off without lobby.issues (empty)", async ({ page, server }) => {
   const trap = await openScenario(page, server, "empty");
   await page.setViewportSize({ width: 1280, height: 800 });

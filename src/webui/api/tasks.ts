@@ -54,6 +54,8 @@ interface RowContext {
   names: ReadonlyMap<string, string>;
   auto: ReadonlySet<string>;
   live: ReadonlySet<string>;
+  /** Names of the sessions in other terminals, when they have one. */
+  liveNames: ReadonlyMap<string, string>;
   /** Who could be driving each task, for Resume. */
   drivers: Drivers;
   work: (taskId: string) => WorkProjection | undefined;
@@ -96,7 +98,9 @@ function ownerOf(task: Task, sessionId: string | undefined, ctx: RowContext): st
   if (ctx.drivers.carrying.has(task.id)) return "background";
   if (!task.ownerSessionId) return "not running";
   if (task.ownerSessionId === sessionId) return "this session";
-  return !ctx.live.has(task.ownerSessionId) ? "not running" : `session ${task.ownerSessionId.slice(0, 8)}`;
+  if (!ctx.live.has(task.ownerSessionId)) return "not running";
+  const other = ctx.liveNames.get(task.ownerSessionId);
+  return other && other !== task.title ? `other terminal · ${other}` : "other terminal";
 }
 
 function rowOf(task: Task, section: TaskSection, ctx: RowContext, sessionId: string | undefined, now: number): TaskRow {
@@ -162,10 +166,12 @@ function contextOf(ctx: ApiContext, tasks: readonly Task[]): RowContext {
     if (session.taskId) carrying.add(session.taskId);
   }
   const auto = new Set(tasks.filter((task) => !TERMINAL_STATES.includes(task.state) && ctx.service.isAuto(task.id)).map((task) => task.id));
-  const live = new Set(ctx.service.liveSessions().map((session) => session.sessionId));
+  const sessions = ctx.service.liveSessions();
+  const live = new Set(sessions.map((session) => session.sessionId));
+  const liveNames = new Map(sessions.flatMap((session) => (session.name ? [[session.sessionId, session.name] as const] : [])));
   const me = ctx.service.sessionId();
   const drivers: Drivers = { ...(me ? { me } : {}), background: new Set(names.keys()), carrying, live };
-  return { names, auto, live, drivers, work: (taskId) => ctx.service.work?.(taskId) };
+  return { names, auto, live, liveNames, drivers, work: (taskId) => ctx.service.work?.(taskId) };
 }
 
 /** Every task, plan and recent row, oldest groups first like the terminal. */

@@ -232,7 +232,7 @@ test("every scenario's mock answers the issues calls without throwing", async ()
       assert.equal((await call("issues.create", { text: "A title\n\nbody" })).status, on ? 200 : 404, `${name}: issues.create`);
       if (!on) continue;
       const after = (await call("issues.list")).payload.result as unknown as { issues: Array<{ number: number }> };
-      assert.deepEqual(after.issues.map((issue) => issue.number), [58, 57, 55, 51], `${name}: the new issue leads the list`);
+      assert.deepEqual(after.issues.map((issue) => issue.number), [61, 60, 59, 58, 57, 55, 51], `${name}: the new issue leads the list`);
       const detail = (await call("issues.get", { number: 57 })).payload.result as unknown as { issue: { comments: unknown[]; body: string } };
       assert.equal(detail.issue.comments.length, 1);
       assert.match(detail.issue.body, /paints white/);

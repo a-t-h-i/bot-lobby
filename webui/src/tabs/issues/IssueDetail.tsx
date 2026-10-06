@@ -1,8 +1,14 @@
 /**
- * One issue's detail: its facts, the planning hint, the body as
- * GitHub Markdown and its comments. The `issues` topic rereads it.
+ * One issue's detail: Plan it (a planning session seeded with the issue), its
+ * facts, the body as GitHub Markdown and its comments. The `issues` topic
+ * rereads it.
  */
+import { Workflow } from "lucide-react"
 import type { IssueDetailInfo } from "@protocol"
+import { go, tabHash } from "@/app/router"
+import { act } from "@/lib/act"
+import { ActionBar } from "@/ui/Actions"
+import { ConfirmButton } from "@/ui/ConfirmButton"
 import { Spinner } from "@/components/ui/spinner"
 import { useApiRead } from "@/app/useApiRead"
 import { formatSince } from "@/lib/format"
@@ -53,6 +59,26 @@ function Comments({ comments, now }: { comments: Comment[]; now: number }) {
   )
 }
 
+/** Plan it: a new planning session that starts from the issue, on the Plan tab. */
+function PlanIt({ issue }: { issue: IssueDetailInfo }) {
+  const plan = async () => {
+    const seed = { issue: { number: issue.number, title: issue.title, ...(issue.url ? { url: issue.url } : {}) }, body: issue.body }
+    if (await act("planner.new", { seed })) go(tabHash("plan"))
+  }
+  return (
+    <ConfirmButton
+      icon={Workflow}
+      label={`Plan #${issue.number} with the panel`}
+      text="Plan it"
+      shortcut="N"
+      title={`Plan #${issue.number} with the panel?`}
+      description="A new planning session starts from this issue. A plan already under way waits under Plan → Previous."
+      confirmLabel="Plan it"
+      onConfirm={() => void plan()}
+    />
+  )
+}
+
 export function IssueDetail({ number }: { number: number }) {
   const read = useApiRead("issues.get", { number }, ["issues"])
   const now = Date.now()
@@ -68,6 +94,9 @@ export function IssueDetail({ number }: { number: number }) {
   const issue = read.data.issue
   return (
     <article className="flex flex-col gap-4" aria-label={`${DETAIL_TITLE} #${number}`}>
+      <ActionBar>
+        <PlanIt issue={issue} />
+      </ActionBar>
       <Header issue={issue} now={now} />
       <p className="text-xs text-muted-foreground">{ACTION_LINE}</p>
       <Section title="Description">
