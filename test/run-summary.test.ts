@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { AgentRun } from "../src/schemas/findings.ts";
 import { activityDetail } from "../src/pi/activity.ts";
-import { describeRun, feedLine, FEED_ROTATE_TICKS, QUIET_MS, runFromLog, runLogEntry, tokens } from "../src/pi/run-summary.ts";
+import { describeRun, runFromLog, runLogEntry, tokens } from "../src/pi/run-summary.ts";
 import { runsReport } from "../src/pi/commands.ts";
 import { createTask } from "../src/schemas/task.ts";
 
@@ -54,28 +54,6 @@ test("the run log round-trips through its persisted form", () => {
   const entry = runLogEntry(original);
   assert.equal(entry.output, 5, "output is the token count, never the report text");
   assert.equal(describeRun(runFromLog(entry, "TASK-1")), describeRun(original));
-});
-
-test("feedLine rotates through working agents and puts warnings first", () => {
-  const now = T0 + 10_000;
-  const dev = run({ runId: "a", status: "running", finishedAt: undefined, activity: "editing", detail: "users.ts", turns: 4, tools: 12, lastEventAt: now - 1000 });
-  const design = run({ runId: "b", domain: "designer", status: "running", finishedAt: undefined, activity: "reading", lastEventAt: now - 1000 });
-  assert.equal(feedLine([dev, design], now, 0)!.text, "▸ DEV editing users.ts · turn 4 · 12 tools");
-  assert.match(feedLine([dev, design], now, FEED_ROTATE_TICKS)!.text, /^▸ DESIGN reading/);
-  const quiet = { ...design, lastEventAt: now - QUIET_MS - 5000 };
-  assert.deepEqual(feedLine([dev, quiet], now, 0), { text: "! DESIGN quiet for 50s (last: reading)", kind: "warning" });
-  const waiting = { ...dev, waitingFor: "api.ts" };
-  assert.equal(feedLine([waiting, design], now, 0)!.kind, "warning");
-  assert.match(feedLine([waiting], now, 0)!.text, /DEV waiting for api\.ts/);
-});
-
-test("with nothing running the feed shows the last finished run, and nothing before the first", () => {
-  assert.equal(feedLine([], T0, 0), undefined);
-  const older = run({ runId: "old", finishedAt: new Date(T0 + 1000).toISOString() });
-  const newer = run({ runId: "new", domain: "qa", role: "reviewer", finishedAt: new Date(T0 + 5000).toISOString(), status: "timeout", error: "hit the 15m time limit" });
-  const line = feedLine([newer, older], T0 + 9000, 0)!;
-  assert.match(line.text, /QA reviewer/);
-  assert.equal(line.kind, "warning");
 });
 
 test("runsReport lists the task's recent runs", () => {

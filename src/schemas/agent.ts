@@ -33,7 +33,3 @@ export interface DomainSpec {
 export function isDomain(value: string): value is Domain {
   return (DOMAINS as readonly string[]).includes(value);
 }
-
-export function isRole(value: string): value is Role {
-  return (ROLES as readonly string[]).includes(value);
-}

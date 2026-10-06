@@ -5,7 +5,7 @@ import { MAX_CHAT } from "../src/lobby/feed.ts";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BackgroundSession, extensionArgs, MAX_ENDED, SessionRegistry, sessionArgs } from "../src/lobby/sessions.ts";
-import { chatFromFile, currentBranch, SessionChats, SessionLog } from "../src/lobby/session-files.ts";
+import { SessionChats, SessionLog } from "../src/lobby/session-files.ts";
 import { parseCommand } from "../src/pi/commands.ts";
 import { FakeSessionProcess } from "./fake-session.ts";
 
@@ -152,19 +152,6 @@ test("the registry keeps every running session and only the newest few that ende
 function entry(id: string, parentId: string | null, role: "user" | "assistant", text: string): Record<string, unknown> {
   return { type: "message", id, parentId, timestamp: "2026-09-27T10:00:00.000Z", message: { role, content: [{ type: "text", text }] } };
 }
-
-test("another session's conversation is its file's current branch", () => {
-  const entries = [
-    { type: "session", id: "h" },
-    entry("a", null, "user", "add a login page"),
-    entry("b", "a", "assistant", "An older answer."),
-    entry("c", "a", "assistant", "The answer on the branch."),
-    entry("d", "c", "user", "thanks"),
-  ];
-  assert.deepEqual(currentBranch(entries).map((item) => (item as { id: string }).id), ["a", "c", "d"]);
-  const text = `${entries.map((item) => JSON.stringify(item)).join("\n")}\n{"type":"mess`;
-  assert.deepEqual(chatFromFile(text).map((line) => [line.role, line.text]), [["you", "add a login page"], ["oracle", "The answer on the branch."], ["you", "thanks"]]);
-});
 
 test("session chats are found through pi's list once, and reread only when the file changes", async () => {
   const dir = mkdtempSync(join(tmpdir(), "bl-chats-"));

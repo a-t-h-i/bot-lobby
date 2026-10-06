@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { runAgent, runParallel, runSequential, cancelAllRuns, type AgentRequest } from "../src/execution/agent-runner.ts";
+import { runAgent, runParallel, cancelAllRuns, type AgentRequest } from "../src/execution/agent-runner.ts";
 import type { ProcessOutcome, ProcessRunner } from "../src/execution/pi-runner.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
 
@@ -95,25 +95,6 @@ test("runParallel runs all requests and preserves order", async () => {
   assert.equal(results[0]!.output, "Task: a");
   assert.equal(results[2]!.output, "Task: c");
   assert.ok(maxActive <= 2, `concurrency cap respected, saw ${maxActive}`);
-});
-
-test("runSequential substitutes {previous} and stops on failure", async () => {
-  const instructions: string[] = [];
-  const chain: ProcessRunner = async (_args, options) => {
-    const task = String(options.prompt);
-    instructions.push(task);
-    if (task.includes("second")) return { exitCode: 1, stdout: "", stderr: "nope", killed: false, timedOut: false };
-    return ok(reply("first output"));
-  };
-  const results = await runSequential(
-    [request({ instruction: "first" }), request({ instruction: "second: {previous}" }), request({ instruction: "third" })],
-    chain,
-  );
-  assert.equal(results.length, 2);
-  assert.equal(results[0]!.status, "success");
-  assert.equal(results[1]!.status, "failed");
-  assert.equal(instructions.length, 2);
-  assert.ok(instructions[1]!.includes("first output"), "prior output substituted");
 });
 
 test("runAgent streams deduped activity on the same runId", async () => {

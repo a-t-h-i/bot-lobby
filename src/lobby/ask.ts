@@ -6,7 +6,6 @@
  * The panel's questions become questionnaires of at most four, and the
  * answers become the user's turn for the next round.
  */
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { PanelQuestion, SettledQuestion } from "./planner.ts";
 import { MAX_HEADER, MAX_LABEL, MAX_OPTIONS, MAX_QUESTIONS, MIN_OPTIONS, RESERVED, type AskAnswer, type AskOption, type AskQuestion, type AskResult, type Asker } from "../ask/types.ts";
 
@@ -121,18 +120,4 @@ export function answerMessage(questions: readonly PanelQuestion[], results: read
     ...(notes.length > 0 ? ["", `Note: ${notes.join(" ")}`] : []),
     ...(skipped.length > 0 ? ["", "Not answered this round:", ...skipped] : []),
   ].join("\n");
-}
-
-/**
- * Put every question to the user, one questionnaire after another. Stopping
- * a questionnaire (esc) stops the rest; what was answered before it is kept.
- */
-export async function askPanel(questions: readonly PanelQuestion[], ask: Asker, ctx: ExtensionContext): Promise<{ results: AskResult[]; stopped: boolean }> {
-  const results: AskResult[] = [];
-  for (const chunk of questionnaires(questions)) {
-    const result = await ask(chunk, ctx);
-    if (result.cancelled) return { results, stopped: true };
-    results.push(result);
-  }
-  return { results, stopped: false };
 }

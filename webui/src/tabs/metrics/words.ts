@@ -68,12 +68,6 @@ export function status(rate: number): RateStatus {
   return { icon: "✗", word: "failing", tone: "failing" }
 }
 
-/** The class a tone's glyph and meter wear (never colour alone: the glyph stays). */
-export function toneClass(tone: RateStatus["tone"]): string {
-  if (tone === "healthy") return "text-primary"
-  return tone === "failing" ? "text-destructive" : "text-foreground"
-}
-
 /** The label in force: `by model · thinking` or `by model · thinking · agent`. */
 export function byLabel(groupBy: GroupBy): string {
   return groupBy === "model" ? "by model · thinking" : "by model · thinking · agent"

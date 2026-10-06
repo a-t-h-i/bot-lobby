@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createTask, isTaskState, TASK_STATES, TERMINAL_STATES } from "../src/schemas/task.ts";
-import { isDomain, isRole } from "../src/schemas/agent.ts";
+import { isDomain } from "../src/schemas/agent.ts";
 
 test("createTask produces a valid initial task", () => {
   const task = createTask("TASK-1", "Add feature X", "2026-01-01T00:00:00.000Z");
@@ -19,8 +19,6 @@ test("state and domain guards", () => {
   assert.ok(!isTaskState("nonsense"));
   assert.ok(isDomain("backend"));
   assert.ok(!isDomain("master"));
-  assert.ok(isRole("reviewer"));
-  assert.ok(!isRole("orchestrator"));
   assert.ok(TERMINAL_STATES.includes("completed"));
   assert.ok(TERMINAL_STATES.includes("abandoned"));
 });

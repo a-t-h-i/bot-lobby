@@ -45,8 +45,3 @@ function subscribe(listener: () => void): () => void {
 export function useComposerContext(): Context {
   return useSyncExternalStore(subscribe, () => context, () => context)
 }
-
-/** The task open in the Tasks tab, if any. */
-export function useComposerTask(): string | undefined {
-  return useComposerContext().taskId
-}
