@@ -28,12 +28,13 @@ process it gets. Fewer steps win whenever the result is the same.
   opening each task with `Step N:` (the engine keeps the plan and the
   checklist). Only the roster takes part: DESIGN for frontend work, DEV for
   backend work, QA when the change needs tests or an adversarial review
-  (its worker writing the few tests that are needed and running them as the
-  last step, or the QA gate), and the researcher when a
+  (the QA gate, which Jev sizes to the change), and the researcher when a
   decision needs outside facts (summon it first). Several domains: one
   `implement` with `assignments`, each task stating the contract between
   them. When the work is in, check `git diff --stat` and the report, then
-  `complete`; without QA on the roster there is no QA gate.
+  `complete`; without QA on the roster there is no QA gate, unless the change
+  turns out riskier than the request read: Jev reads the change at completion,
+  and QA joins one that reads MEDIUM or HIGH.
 - **Full workflow** — everything else: the steps below, ending with the QA
   gate.
 
@@ -336,6 +337,16 @@ it once the implementation steps are complete (on the fast track, only when
 QA is on the roster and its worker is not the last step). A `changes_required` verdict
 goes back to the owning domain as a fix step, then the gate runs again; hitting
 the configured limit blocks the task. On a pass, record knowledge and continue.
+
+QA effort follows the risk of what was built, not the size of the request.
+Before the gate's agent runs, Jev reads the diff and sets the **QA risk**
+(the report's `QA risk:` line): NONE (nothing that runs changed) passes on the
+engine's checks with no QA agent; LOW gets a light check; MEDIUM a standard
+one with a few targeted tests at most; HIGH a deep, adversarial review of the
+invariants and everything the change reaches. Its test budget is a ceiling,
+never a quota, so never ask QA for more tests to look thorough. When QA finds
+a defect, send it to the owning domain as a fix step; QA does not fix
+production code.
 
 The gate verifies; it does not move the goalposts. A re-review checks what the
 last round asked for, and only critical or major findings block: a round with

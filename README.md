@@ -33,12 +33,18 @@ After every worker step, before QA and at completion, the engine runs the projec
 changed lines count, and QA judges any lint suppression a worker adds. **Settings → Linting** sets it
 to off, advise or block. Visual questions come with mockups that expand and scroll side by side.
 
+QA is sized to what was built, not to the request. Once the work is in, Jev (the fast classifier)
+reads the diff and sets the QA risk. A change with nothing that runs (docs, styles, comments) passes
+on the engine's checks with no QA agent, and a small one gets a light check. One that touches
+security, data, concurrency or orchestration gets a deep, adversarial review. The test budget is a
+ceiling, never a quota, and the Tasks tab shows the read and why. With Jev off, the engine's rules decide.
+
 | Agent | Does |
 | --- | --- |
 | Oracle | Your Pi session: questions, plan, delegation and approvals |
 | DESIGN | UI, frontend logic, styling and accessibility |
 | DEV | Backend, APIs, data, security and integrations |
-| QA | Targeted tests and the final quality gate |
+| QA | The final quality gate, at the depth the change's risk calls for |
 | RESEARCH | External facts, with sources |
 
 ## Keys
