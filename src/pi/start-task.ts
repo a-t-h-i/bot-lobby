@@ -7,7 +7,7 @@ import { existsSync } from "node:fs";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createTask, taskRequest, type Task, type TaskTrack, type TaskTriage, type TrackPath } from "../schemas/task.ts";
 import type { Domain } from "../schemas/agent.ts";
-import { chooseTrack, qaRequired, trackLine, trackSummary } from "../workflow/track.ts";
+import { chooseTrack, qaRequired, rosterWords, trackLine, trackSummary } from "../workflow/track.ts";
 import { startFromAgreedPlan } from "../workflow/workflow.ts";
 import { lobbyFeed } from "../lobby/feed.ts";
 import { createTaskDir, ensureProjectStructure, loadTask, nextTaskId, ownedTask, saveTask, taskDirFor } from "../state/persistence.ts";
@@ -65,11 +65,13 @@ function plannedSteps(task: Task): string[] {
       ? "Once every step is done, run orchestrate action=qa (Jev sizes it to the change), then action=complete with a one-line summary."
       : "Once every step is done, call orchestrate action=complete with a one-line summary. QA sat out the planning panel, so there is no QA gate.",
   ];
+  const out = task.track?.satOut ?? [];
   return [
     `Planned task: the user agreed this plan in the planning panel (${task.approvedPlan}), and it is already the task's plan. The panel asked the questions and read the code, so there is no clarifying, scouting, proposal or plan to write: start building.`,
+    out.length > 0 ? `Only the members who sat on the panel work on it (${rosterWords(task.track?.roster ?? [])}). ${rosterWords(out)} sat out, so give ${out.length === 1 ? "it" : "them"} nothing; if a step truly needs one, ask the user with orchestrate action=track (the roster with it, and why).` : "",
     ...steps.map((step, index) => `${index + 1}. ${step}`),
     "If the code contradicts the plan, amend it with action=plan (the plan with the change made) and tell the user in one line, rather than starting over.",
-  ];
+  ].filter(Boolean);
 }
 
 export function kickoff(task: Task, budgetMinutes = 0, options: { fastTrack?: boolean; routed?: boolean } = {}): string {

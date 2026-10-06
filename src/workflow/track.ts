@@ -313,12 +313,10 @@ export function chooseTrack(request: string, triage: TaskTriage | undefined, opt
       : !options.fastTrack
         ? ["full", ["the fast track is off in settings"], source]
         : [fast ? "fast" : "full", [], source];
-  // The full workflow ends with the QA gate, unless QA sat out the panel that agreed the plan: that was the user's call.
-  const qaOut = Boolean(options.approvedPlan && options.planPanel && !options.planPanel.includes("qa"));
-  if (qaOut) {
-    roster.delete("qa");
-    why.push("QA sat out the planning panel: no QA gate");
-  } else if (path === "full") roster.add("qa");
+  // An agreed plan's panel decides who works on it; otherwise the full workflow always ends with the QA gate.
+  const panel = options.approvedPlan ? options.planPanel : undefined;
+  const benched = panel ? seatPlanPanel(roster, panel, why) : [];
+  if (!panel && path === "full") roster.add("qa");
   return {
     path,
     size,
@@ -326,9 +324,34 @@ export function chooseTrack(request: string, triage: TaskTriage | undefined, opt
     reasons: [...why, ...reasons],
     source: by,
     ...(options.forced ? { userChoice: options.forced } : {}),
-    ...(qaOut ? { qaOut: true } : {}),
+    ...(benched.length > 0 ? { satOut: benched } : {}),
     at: now,
   };
+}
+
+const BUILDERS: readonly TrackMember[] = ["designer", "backend"];
+
+/**
+ * The roster of a task from an agreed plan: exactly the members who took part
+ * in the panel. One who sat it out (the classifier left it out, or the user
+ * unseated it) does not work on the task, and without QA there is no QA gate.
+ * When no builder sat (the oracle planned alone), the request's reading picks
+ * who builds. Returns who sat out, and says why in `why`.
+ */
+function seatPlanPanel(roster: Set<TrackMember>, panel: readonly string[], why: string[]): TrackMember[] {
+  const sat = parseRoster(panel.filter((member) => MEMBER_ALIASES[member]));
+  const builders = sat.some((member) => BUILDERS.includes(member)) ? [] : [...roster].filter((member) => BUILDERS.includes(member));
+  const kept = new Set([...sat, ...builders]);
+  roster.clear();
+  for (const member of TRACK_MEMBERS) if (kept.has(member)) roster.add(member);
+  const out = TRACK_MEMBERS.filter((member) => !kept.has(member));
+  why.push(`the planning panel decides who works on it${out.length > 0 ? `; sat out: ${rosterWords(out)}` : ""}${builders.length > 0 ? `; no builder sat, so the request picks ${rosterWords(builders)}` : ""}`);
+  return out;
+}
+
+/** A member who sat out the planning panel of the task's plan and was not let back in: it does not work on the task. */
+export function satOut(task: Task, member: TrackMember): boolean {
+  return Boolean(task.track?.satOut?.includes(member));
 }
 
 /* ------------------------------------------------------------ quick fix or task */
@@ -394,7 +417,7 @@ export function onFastTrack(task: Task): boolean {
  */
 export function qaRequired(task: Task): boolean {
   if (task.track?.roster.includes("qa")) return true;
-  return !onFastTrack(task) && !task.track?.qaOut;
+  return !onFastTrack(task) && !satOut(task, "qa");
 }
 
 function finishedAt(run: { startedAt: string; finishedAt?: string }): number {
@@ -439,7 +462,8 @@ export function rosterWords(roster: readonly TrackMember[]): string {
 /** The track in one line, for the oracle's context and `/bot-lobby status`. */
 export function trackSummary(track: TaskTrack): string {
   const path = track.path === "fast" ? "fast track" : "full workflow";
-  return `Track: ${path} (${track.size}; set by ${track.source}) · who takes part: ${rosterWords(track.roster)} · why: ${track.reasons.join("; ")}`;
+  const out = track.satOut?.length ? ` · sat out the plan, so not working on it: ${rosterWords(track.satOut)}` : "";
+  return `Track: ${path} (${track.size}; set by ${track.source}) · who takes part: ${rosterWords(track.roster)}${out} · why: ${track.reasons.join("; ")}`;
 }
 
 /** A short line for the activity log. */

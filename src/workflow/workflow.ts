@@ -63,7 +63,7 @@ import type { EffortRouter } from "../classifier/effort.ts";
 import { answerClarify } from "../classifier/triage.ts";
 import { appendMetrics, metricFromRun } from "../state/metrics.ts";
 import { markCommentsAddressed, pendingComments, readPlanComments } from "../state/comments.ts";
-import { builtSomething, fastNext, onFastTrack, parseRoster, PLANNED_NEXT, qaRequired, qaStillDue, qaTookPart, readRequest, rosterWords, trackSummary } from "./track.ts";
+import { builtSomething, fastNext, onFastTrack, parseRoster, PLANNED_NEXT, qaRequired, qaStillDue, qaTookPart, readRequest, rosterWords, satOut, trackSummary } from "./track.ts";
 import { requestBesidePlan } from "../state/backlog.ts";
 import { missingWorktree, taskCwd } from "../execution/workspace.ts";
 import { completionReview } from "../delivery/review.ts";
@@ -72,7 +72,7 @@ import type { LintExec } from "../execution/lint.ts";
 import type { LintReport } from "../schemas/lint.ts";
 import { lintBrief, lintContext, lintHolds, lintNote, lintRefusal, lintSummary, runLintGate } from "./lint.ts";
 import { assessQaRisk, DEPTHS, qaRiskBrief, qaRiskLine, unreadRisk } from "../classifier/qa-risk.ts";
-import type { QaRiskAssessment } from "../schemas/task.ts";
+import type { QaRiskAssessment, TrackMember } from "../schemas/task.ts";
 
 export const ORCHESTRATE_ACTIONS = [
   "clarify",
@@ -471,6 +471,8 @@ function researchRequestFor(
 
 async function handleResearch(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
   requireState(task, RESEARCH_STATES);
+  const benched = benchedRefusal(task, "researcher");
+  if (benched) throw new Error(benched);
   const domain = parseDomain(params.domain, "research");
   const instruction = params.instruction?.trim();
   if (!instruction) throw new Error("research requires instruction (the question to investigate)");
@@ -981,6 +983,8 @@ async function handleImplement(task: Task, params: OrchestrateParams, deps: Work
   }
   if (!starting) requireState(task, ["planning", "implementing", "reviewing"]);
   const assignments = parseAssignments(params);
+  const benched = assignments.map((entry) => benchedRefusal(task, entry.domain)).filter(Boolean);
+  if (benched.length > 0) throw new Error(benched.join("\n"));
   const short = !deps.config.workflow.briefCheck ? [] : assignments.map((entry) => briefRejection(task.id, entry.domain, entry.instruction)).filter(Boolean);
   if (short.length > 0) throw new Error(short.join("\n"));
   for (const { domain } of assignments) assertNoPendingApprovals(task, domain);
@@ -1052,8 +1056,15 @@ export function startFromAgreedPlan(task: Task, plan: string, taskDir: string): 
   for (const state of ["clarifying", "awaiting_approval", "planning"] as const) if (task.state !== state) transition(task, state);
   task.plan = plan;
   writeFileEnsured(join(taskDir, "plan.md"), plan);
-  const qa = task.track?.qaOut ? " QA sat out the panel, so the task runs without a QA gate." : "";
-  recordDecision(task, `Started from the plan agreed in the planning panel (${task.approvedPlan}): no clarifying, scouting or proposal round.${qa}`);
+  const out = task.track?.satOut ?? [];
+  const benched = out.length > 0 ? ` ${rosterWords(out)} sat out the panel, so ${out.length === 1 ? "it does" : "they do"} not work on the task${out.includes("qa") ? " and there is no QA gate" : ""}.` : "";
+  recordDecision(task, `Started from the plan agreed in the planning panel (${task.approvedPlan}): no clarifying, scouting or proposal round.${benched}`);
+}
+
+/** The refusal for work given to a member who sat out the task's planning panel, or "" when it took part. */
+function benchedRefusal(task: Task, member: TrackMember): string {
+  if (!satOut(task, member)) return "";
+  return `${rosterWords([member])} sat out the planning panel for this plan (${task.approvedPlan}), so it does not work on this task. Give the step to a member who took part (${rosterWords(task.track?.roster ?? [])}); if it truly needs ${rosterWords([member])}, ask the user to let it join with action=track (roster with it, and the reason).`;
 }
 
 /** `Step 3: …`, `Steps 2-4 — …` at the start of a delegation. */
@@ -1328,6 +1339,7 @@ function checksVerdict(lint: LintReport | undefined, deps: WorkflowDeps, waived:
 
 async function handleQa(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
   requireState(task, ["implementing", "reviewing"]);
+  if (satOut(task, "qa")) throw new Error(`${benchedRefusal(task, "qa")} There is no QA gate: complete once every step is done.`);
   if (task.state !== "reviewing") transition(task, "reviewing");
   const iterations = (task.reviewIterations?.qa ?? 0) + 1;
   task.reviewIterations = { qa: iterations };
@@ -1579,7 +1591,18 @@ function handleResume(task: Task, params: OrchestrateParams): string {
  * or the settings; once work is under way a track only gets stricter (the
  * full workflow, more members, QA never dropped).
  */
-function handleTrack(task: Task, params: OrchestrateParams, deps: WorkflowDeps): string {
+/** Let members who sat out the plan's panel join the task: only the user can, and nobody is asked in auto mode. */
+async function letJoin(task: Task, joining: readonly TrackMember[], reason: string, deps: WorkflowDeps): Promise<void> {
+  const words = rosterWords(joining);
+  const them = joining.length === 1 ? "it" : "them";
+  if (isAutoMode(deps.root, deps.configDir, task.id)) throw new Error(`${words} sat out the planning panel for this plan, and only the user can let ${them} work on the task (auto mode is on: nobody can be asked)`);
+  const yes = `Let ${them} join`;
+  const choice = await deps.choose(`${words} sat out the planning panel for ${task.id}. The oracle asks to add ${them}: ${reason}`, [yes, `Keep ${them} out`]);
+  if (choice !== yes) throw new Error(`the user kept ${words} out of this task: give the work to the members who took part in the plan`);
+  recordDecision(task, `The user let ${words} join the task, though ${joining.length === 1 ? "it" : "they"} sat out the planning panel: ${reason}`);
+}
+
+async function handleTrack(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
   const current = task.track;
   if (!params.track && !params.roster) return current ? trackSummary(current) : "This task began before tracks: it takes the full workflow.";
   const reason = oneLine(params.reason?.trim() || params.text?.trim() || "", 240);
@@ -1592,8 +1615,12 @@ function handleTrack(task: Task, params: OrchestrateParams, deps: WorkflowDeps):
     if (!shaping) throw new Error(`a task takes the fast track before its work is planned; this one is ${task.state}`);
   }
   const asked = params.roster ? parseRoster(params.roster) : [...(current?.roster ?? [])];
-  // The full workflow ends with the QA gate, unless QA sat out the planning panel (the oracle may still name it).
-  const roster = path === "full" && !current?.qaOut ? parseRoster([...asked, "qa"]) : asked;
+  // A member who sat out the plan's panel joins only when the user says so.
+  const joining = (current?.satOut ?? []).filter((member) => asked.includes(member));
+  if (joining.length > 0) await letJoin(task, joining, reason, deps);
+  const benched = (current?.satOut ?? []).filter((member) => !joining.includes(member));
+  // The full workflow ends with the QA gate, unless QA sat out the planning panel.
+  const roster = path === "full" && !benched.includes("qa") ? parseRoster([...asked, "qa"]) : asked;
   if (!shaping && current?.roster.includes("qa") && !roster.includes("qa")) throw new Error("QA stays on the roster once the work is under way");
   const grew = current?.path === "fast" && path === "full";
   task.track = {
@@ -1604,7 +1631,7 @@ function handleTrack(task: Task, params: OrchestrateParams, deps: WorkflowDeps):
     source: "oracle",
     ...(current?.userChoice ? { userChoice: current.userChoice } : {}),
     ...(current?.autoPlan ? { autoPlan: true } : {}),
-    ...(current?.qaOut ? { qaOut: true } : {}),
+    ...(benched.length > 0 ? { satOut: benched } : {}),
     at: new Date().toISOString(),
   };
   recordDecision(task, `Track: ${path === "fast" ? "fast track" : "full workflow"}; ${rosterWords(roster)} — ${reason}`);
