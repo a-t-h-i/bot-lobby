@@ -276,6 +276,8 @@ export interface TrackOptions {
   forced?: TrackPath;
   /** The task follows a plan agreed in the planning panel. */
   approvedPlan?: boolean;
+  /** That panel's seats that took part; QA not among them sat the plan out, and the task runs without it. Absent: not known (an older plan). */
+  planPanel?: readonly string[];
 }
 
 /**
@@ -311,8 +313,12 @@ export function chooseTrack(request: string, triage: TaskTriage | undefined, opt
       : !options.fastTrack
         ? ["full", ["the fast track is off in settings"], source]
         : [fast ? "fast" : "full", [], source];
-  // The full workflow always ends with the QA gate.
-  if (path === "full") roster.add("qa");
+  // The full workflow ends with the QA gate, unless QA sat out the panel that agreed the plan: that was the user's call.
+  const qaOut = Boolean(options.approvedPlan && options.planPanel && !options.planPanel.includes("qa"));
+  if (qaOut) {
+    roster.delete("qa");
+    why.push("QA sat out the planning panel: no QA gate");
+  } else if (path === "full") roster.add("qa");
   return {
     path,
     size,
@@ -320,6 +326,7 @@ export function chooseTrack(request: string, triage: TaskTriage | undefined, opt
     reasons: [...why, ...reasons],
     source: by,
     ...(options.forced ? { userChoice: options.forced } : {}),
+    ...(qaOut ? { qaOut: true } : {}),
     at: now,
   };
 }
@@ -380,9 +387,14 @@ export function onFastTrack(task: Task): boolean {
   return task.track?.path === "fast";
 }
 
-/** Whether QA must take part before the task completes: always on the full workflow, on the fast track when the change needs tests. */
+/**
+ * Whether QA must take part before the task completes: when it is on the
+ * roster, and always on the full workflow, except for a plan QA sat out in the
+ * planning panel (the user's call).
+ */
 export function qaRequired(task: Task): boolean {
-  return !onFastTrack(task) || Boolean(task.track?.roster.includes("qa"));
+  if (task.track?.roster.includes("qa")) return true;
+  return !onFastTrack(task) && !task.track?.qaOut;
 }
 
 function finishedAt(run: { startedAt: string; finishedAt?: string }): number {
@@ -435,6 +447,9 @@ export function trackLine(track: TaskTrack): string {
   const members = track.roster.map((member) => MEMBER_LABELS[member].split(" ")[0]).join(", ");
   return `track: ${track.path} · ${track.size} · ${members || "domain to pick"} · ${track.source}`;
 }
+
+/** What the oracle does next on a planned task QA sat out, once a worker has reported. */
+export const PLANNED_NEXT = "Next: check `git diff --stat` and this report, then delegate the plan's next step. Once every step is done, call action=complete: QA sat out the planning panel, so there is no QA gate.";
 
 /** What the oracle does next on the fast track, once a worker has reported. */
 export function fastNext(task: Task): string {

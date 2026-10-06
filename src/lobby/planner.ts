@@ -563,6 +563,8 @@ export class PlanningSession {
   satOut = new Map<PanelMember, number>();
   /** How each seat left the last round it sat. */
   private readonly lastStatus = new Map<PanelMember, "ready" | "open">();
+  /** Seats that answered in at least one round: who took part in the plan. */
+  private readonly sat = new Set<PanelMember>();
   /** The last round was started by the classifier settling every question; the next one waits for the user. */
   private autoContinued = false;
   private controller?: AbortController;
@@ -707,6 +709,15 @@ export class PlanningSession {
     this.controller?.abort();
   }
 
+  /**
+   * The seats that took part in the plan: each answered in a round and is
+   * still on the panel. One the classifier always left out, or the user
+   * unseated, sat the plan out, and the task it becomes runs without it.
+   */
+  get panel(): PanelMember[] {
+    return PANEL_MEMBERS.filter((member) => this.sat.has(member) && this.seats.has(member));
+  }
+
   /** Save the latest draft as a pending task. */
   save(now = new Date()): PlannedTask {
     const plan = this.reply?.plan;
@@ -715,6 +726,7 @@ export class PlanningSession {
       title: this.title ?? this.messages[0]?.text.split("\n")[0] ?? "planned task",
       brief: plan,
       ...(this.seed ? { issue: this.seed.issue } : {}),
+      panel: this.panel,
     }, now);
     this.deps.feed?.log(ORACLE_LABEL, `saved ${this.saved.id} to pending tasks`, "success");
     this.deps.onChange?.();
@@ -733,6 +745,7 @@ export class PlanningSession {
       brief: partBrief({ plan, steps, proposal, index }),
       ...(this.seed ? { issue: this.seed.issue } : {}),
       split: partInfo(proposal, index, group),
+      panel: this.panel,
     }, new Date(now.getTime() + (proposal.tasks.length - index))));
     this.savedParts = parts;
     this.saved = parts[0];
@@ -966,6 +979,7 @@ export class PlanningSession {
       const transcript = [plannerTranscript(this.messages, this.seed, this.reply?.plan, ""), likely].filter(Boolean).join("\n\n");
       const outcomes = await Promise.all(this.members.map((state) => this.runMember(state, transcript, controller.signal, effort)));
       if (controller.signal.aborted) throw new Error("stopped");
+      for (const outcome of outcomes) if (outcome.reply) this.sat.add(outcome.member);
       this.notes = PANEL_MEMBERS.flatMap((member) => (this.memberNotes.get(member) ?? []).map((text) => ({ from: MEMBER_LABELS[member], text })));
       this.step = "writing the plan";
       this.deps.onChange?.();
