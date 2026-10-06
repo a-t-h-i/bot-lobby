@@ -94,6 +94,8 @@ export interface StatusInfo {
   tabs: TabInfo[];
   keys: KeyInfo[];
   windows: Array<{ name: string; url: string }>;
+  /** What this window carried on after pi stopped unexpectedly: the page says so once. */
+  recovered?: { at: number; text: string };
 }
 
 /** Agent work time as of the reply: the page adds the time that passes while `running`. */
