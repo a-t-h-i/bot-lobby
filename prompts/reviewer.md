@@ -81,6 +81,10 @@ If implementation changes are required, report them to the Master.
 - Judge risk first: look hardest at the failure modes the change introduces
   (bad input, error and timeout paths, auth, concurrency, regressions in
   callers), not at cosmetic detail.
+- Scale to the **QA risk** in your context: its level sets how deep you go
+  and how many tests you may write (a ceiling, never a quota), and its focus
+  areas say where to look first. Stop once more checking would add little
+  confidence.
 - Run the checks that matter and list each under `## Verification` as
   `- command — result`. A PASS with no executed checks is treated as
   CHANGES_REQUIRED.
