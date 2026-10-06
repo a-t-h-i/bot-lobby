@@ -157,23 +157,48 @@ export function webSessionStarted(ctx: ExtensionContext, deps?: WebCommandDeps):
   const service = resolveService(deps);
   const running = currentWebServer();
   if (running) {
+    // The page follows the new session; with bot-lobby off in it there is no lobby to serve.
     if (service) running.rebind(service);
+    else void stopWebServer(ctx);
     return;
   }
   if (!service) return;
-  startWebServer({ service, port: loadConfig().lobby.web.port })
+  // Back after a reload: the same port, quietly (the open page reconnects to it).
+  const reloaded = takeReloadedPort();
+  startWebServer({ service, port: reloaded ?? loadConfig().lobby.web.port })
     .then((server) => {
       latestLink = server.link;
       heartbeat();
       showAddress(ctx, server.port);
+      if (reloaded !== undefined && server.port === reloaded) return;
       ctx.ui.notify(`bot-lobby web: ${server.link}`, "info");
       openLink(server.link, deps);
     })
     .catch((error: Error) => ctx.ui.notify(`bot-lobby web could not start — ${error.message}`, "warning"));
 }
 
+/**
+ * A reload imports the extension afresh, so the server this copy runs would
+ * stay bound to a session that is gone while the new copy starts another.
+ * It closes instead, and leaves its port on the process for the new copy.
+ */
+const RELOADED = Symbol.for("bot-lobby.web.reloadedPort");
+const processState = globalThis as { [RELOADED]?: number };
+
+function takeReloadedPort(): number | undefined {
+  const port = processState[RELOADED];
+  delete processState[RELOADED];
+  return port;
+}
+
 /** Wire the web server's lifecycle; called with the other session wiring. */
 export function registerWebServer(pi: ExtensionAPI): void {
   if (isSubagentProcess()) return;
   pi.on("session_start", (_event, ctx) => webSessionStarted(ctx));
+  pi.on("session_shutdown", async (event) => {
+    const running = currentWebServer();
+    if (event.reason !== "reload" || !running) return;
+    processState[RELOADED] = running.port;
+    await running.close();
+  });
 }

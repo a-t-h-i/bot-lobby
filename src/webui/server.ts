@@ -31,6 +31,14 @@ import { EventHub } from "./events.ts";
 import { servePreview } from "./files.ts";
 import { MAX_UPLOAD_BYTES, saveUpload } from "./uploads.ts";
 
+/** What a call made while pi switches sessions is told; the page reads again once the new session is up. */
+export const SWITCHING = "pi is switching sessions — the page catches up in a moment";
+
+/** pi's refusal of a context from a session it has replaced or reloaded. */
+export function staleSession(error: unknown): boolean {
+  return /ctx is stale after session replacement or reload/i.test((error as Error)?.message ?? "");
+}
+
 /** The default port; the server tries it, then the next free port up to +20. */
 export const DEFAULT_PORT = 7347;
 /** How many ports past the base are tried. */
@@ -320,6 +328,8 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
         return;
       }
       if (error instanceof HttpError) sendError(res, error.code, error.message, error.status);
+      // Between pi replacing the session and the lobby following it, the old session answers nothing.
+      else if (staleSession(error)) sendError(res, "failed", SWITCHING, 503);
       else {
         lobbyFeed.log("LOBBY", `the web server could not do that — ${error.message}`, "error");
         sendError(res, "failed", "the lobby could not do that", 500);
