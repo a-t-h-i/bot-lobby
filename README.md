@@ -1,7 +1,7 @@
 # Bot-Lobby
 
-A [Pi](https://pi.dev) extension for multi-agent software development. Describe a change, agree a plan
-with the oracle, and follow the agents in a local browser lobby. Approvals, domain boundaries and QA
+A [Pi](https://pi.dev) extension for multi-agent software development. Describe a change, agree on a
+plan with the oracle, and follow the agents in a local browser lobby. Approvals, domain boundaries and QA
 are enforced before anything is called done.
 
 ![The Lobby: the conversation, the agents' activity and the Thinking orb](.github/screenshots/lobby.png)
@@ -18,8 +18,8 @@ The questionnaire and web tools are built in, so don't also install extensions w
 ## Use
 
 1. In Pi, run `/bot-lobby add a login page`. Bot-lobby turns on and the lobby opens in your browser.
-   A new pi session starts with bot-lobby off, as plain pi: `Ctrl+Shift+M` or `/bot-lobby on|off` switches it.
-2. Answer the oracle's questions and approve its plan, or agree one with the panel in **Plan** first.
+   A new Pi session starts with bot-lobby off, as plain Pi: `Ctrl+Shift+M` or `/bot-lobby on|off` switches it.
+2. Answer the oracle's questions and approve its plan, or agree on one with the panel in **Plan** first.
    A plan opens with a short list of steps; the detail of each follows for whoever wants it.
    Plans you leave without saving them as a task wait under **Plan → Previous**. You can read, carry on,
    archive or delete them there. A plan saved as a task leaves that list.
@@ -39,17 +39,17 @@ QA is sized to what was built, not to the request. Once the work is in, Jev (the
 reads the diff and sets the QA risk. A change with nothing that runs (docs, styles, comments) passes
 on the engine's checks with no QA agent, and a small one gets a light check. One that touches
 security, data, concurrency or orchestration gets a deep, adversarial review. The test budget is a
-ceiling, never a quota, and the Tasks tab shows the read and why. With Jev off, the engine's rules decide.
+ceiling, never a quota, and the Tasks tab shows Jev's read and why. With Jev off, the engine's rules decide.
 
-If pi crashes, is killed or loses its terminal, the lobby page keeps everything on screen and
-reconnects when pi is back. The next pi started in the project carries on what was running. The
+If Pi crashes, is killed or loses its terminal, the lobby page keeps everything on screen and
+reconnects when Pi is back. The next Pi started in the project carries on what was running. The
 planning session returns as it was, and a round that was cut off runs again. Queued quick fixes
 run, and every task's session starts again from its saved file, picking up where it stopped. A
 quit on purpose stops this work, and `pi -c` brings back the planning session.
 
 A task that is paused, or that no running session drives, shows **Resume** (`R`) in **Tasks**.
 It carries the task on without moving your window: a paused task is unpaused where it runs, and a
-stopped one carries on in a background session, its own session again when its file is found.
+stopped one carries on in a background session, which restarts its own session when its file is found.
 
 | Agent | Does |
 | --- | --- |
@@ -70,13 +70,15 @@ rebound with `lobby.keys`. In Pi, `Alt+G` toggles auto mode and `Ctrl+Shift+M` t
 
 | Plan | Tasks |
 | --- | --- |
-| ![The Plan start page: the panel as seats](.github/screenshots/plan.png) | ![A task with its action bar](.github/screenshots/tasks.png) |
-| **Thinking** | **Excalidraw** |
-| ![Each agent's latest thought, in steps](.github/screenshots/thinking.png) | ![A shared Excalidraw session](.github/screenshots/excalidraw.png) |
+| ![The Plan start page: the panel as seats](.github/screenshots/plan.png) | ![A stopped task with Resume in its action bar](.github/screenshots/tasks.png) |
+| **Previous plans** | **Thinking** |
+| ![A plan left unsaved, to read, carry on, archive or delete](.github/screenshots/previous.png) | ![Each agent's latest thought, in steps](.github/screenshots/thinking.png) |
+| **Settings** | **Excalidraw** |
+| ![Each agent's model, effort and time limit](.github/screenshots/settings.png) | ![A shared Excalidraw session](.github/screenshots/excalidraw.png) |
 
 ## Configuration
 
 Settings live in `~/.pi/bot-lobby/config.json` (`BOT_LOBBY_CONFIG_DIR` moves them), and
 `/bot-lobby config` shows what is in effect. Colour themes you import, under a name you choose,
-are kept in `themes.json` beside it, so every pi session and project shows them. Tasks and project knowledge stay in `.pi/bot-lobby/`
-inside your project.
+are kept in `themes.json` beside it, so every Pi session and project shows them. Tasks and
+project knowledge stay in `.pi/bot-lobby/` inside your project.
