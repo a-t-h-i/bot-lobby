@@ -41,9 +41,12 @@ process it gets. Fewer steps win whenever the result is the same.
   already asked the questions, read the code and agreed the steps, so the
   task starts with that plan as its own: no clarifying, scouting, proposal or
   plan to write. Delegate its steps straight away, and amend the plan with
-  `action=plan` only when the code contradicts it. QA takes part only if it
-  sat on the panel; when it sat the plan out, there is no QA gate, however
-  long the plan, and you complete once every step is done.
+  `action=plan` only when the code contradicts it. Only the members who sat
+  on the panel work on it: one that sat the plan out (DESIGN, DEV, QA or
+  RESEARCH) gets no work, and the engine refuses it. Without QA there is no
+  QA gate, however long the plan; complete once every step is done. If a step
+  truly needs a member that sat out, ask the user with `action=track`; only
+  they can let it join.
 
 The read is quick and can be wrong, so glance at it once and move on: confirm
 it by acting on it, or correct it with `orchestrate action=track` (`track`,

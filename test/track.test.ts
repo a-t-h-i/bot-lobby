@@ -315,23 +315,40 @@ test("a task from an agreed plan starts building at once, and a long plan QA sat
     },
   });
   const task = plannedTask(deps, ["backend", "designer"]);
-  assert.deepEqual([task.state, task.track!.path, task.track!.roster.includes("qa"), task.track!.qaOut], ["planning", "full", false, true]);
+  assert.deepEqual([task.state, task.track!.path, task.track!.roster, task.track!.satOut], ["planning", "full", ["designer", "backend"], ["qa", "researcher"]]);
   assert.match(kickoff(task), /no clarifying, scouting, proposal or plan to write: start building\.[\s\S]*no QA gate/);
   const built = await act(deps, { action: "implement", domain: "designer", task: "Steps 1-12: build the theming parts" });
   assert.equal(built.ok, true, built.message);
   assert.match(built.message, /QA sat out the planning panel, so there is no QA gate/);
   assert.equal(prompts[0]!.match(/Build part 12 of the new theming architecture/g)?.length, 1, "the plan reaches the worker once, not again inside the request");
+  assert.match((await act(deps, { action: "qa" })).message, /QA \(tests\) sat out the planning panel[\s\S]*There is no QA gate/, "QA does not work on it either");
   const done = await act(deps, { action: "complete", text: "Dark mode." });
   assert.equal(done.ok, true, done.message);
   assert.equal(prompts.length, 1, "one agent run: the worker, no QA");
 
-  // QA on the panel keeps the gate.
-  const gated = makeDeps([]);
-  const withQa = plannedTask(gated, ["backend", "qa"]);
-  assert.ok(withQa.track!.roster.includes("qa"));
-  assert.match(kickoff(withQa), /run orchestrate action=qa/);
-  await act(gated, { action: "implement", domain: "designer", task: "Steps 1-12: build the theming parts" });
-  assert.match((await act(gated, { action: "complete" })).message, /not allowed in state "implementing"/);
+});
+
+test("every member that sat out an agreed plan's panel stays off the task, unless the user lets it join", async () => {
+  const titles: string[] = [];
+  let answer = "Keep it out";
+  const deps = makeDeps([], { choose: async (title, options) => (titles.push(title), options.find((option) => option === answer)) });
+  const task = plannedTask(deps, ["backend", "qa"]);
+  assert.deepEqual([task.track!.roster, task.track!.satOut], [["backend", "qa"], ["designer", "researcher"]]);
+  assert.match(kickoff(task), /Only the members who sat on the panel work on it \(DEV \(backend\), QA \(tests\)\)\. DESIGN \(frontend\), RESEARCH \(web\) sat out[\s\S]*run orchestrate action=qa/);
+  const refused = await act(deps, { action: "implement", domain: "designer", task: "Step 1: build the toggle" });
+  assert.equal(refused.ok, false);
+  assert.match(refused.message, /DESIGN \(frontend\) sat out the planning panel for this plan \(PLAN-dark\), so it does not work on this task/);
+  assert.match((await act(deps, { action: "research", domain: "designer", instruction: "which colour tokens?" })).message, /RESEARCH \(web\) sat out/);
+
+  // Only the user lets one in.
+  const kept = await act(deps, { action: "track", roster: ["backend", "qa", "designer"], reason: "step 3 is a component" });
+  assert.match(kept.message, /the user kept DESIGN \(frontend\) out of this task/);
+  answer = "Let it join";
+  assert.equal((await act(deps, { action: "track", roster: ["backend", "qa", "designer"], reason: "step 3 is a component" })).ok, true);
+  assert.match(titles[1]!, /DESIGN \(frontend\) sat out the planning panel for TASK-1\. The oracle asks to add it: step 3 is a component/);
+  assert.deepEqual(loadTask(deps.root, deps.configDir, "TASK-1")!.track!.satOut, ["researcher"]);
+  assert.equal((await act(deps, { action: "implement", domain: "designer", task: "Step 3: build the toggle component" })).ok, true);
+  assert.match((await act(deps, { action: "complete" })).message, /not allowed in state "implementing"/, "QA sat on the panel: its gate stays");
 });
 
 test("QA's part comes last only when it started after the other domains finished; the budget reserve follows", () => {
