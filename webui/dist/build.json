@@ -1,6 +1,6 @@
 {
-  "hash": "fe09907f6b2d4ac2d933891ce6f4999ddd4d3fdba2e7d0ff74f18f0282e7ec3d",
-  "builtAt": "2026-10-06T10:18:40.960Z",
+  "hash": "a799aefa99a53d7f90ae2ef6c781d1c930a9cc3933f0874c0c53386b5c8fad37",
+  "builtAt": "2026-10-06T14:22:18.001Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -8,7 +8,7 @@
     },
     {
       "path": "src/webui/protocol.ts",
-      "sha256": "1815944e6c171c20e7ad1ff121e3d6946c8c3c34bf905e971e99b376c7575096"
+      "sha256": "d6315b685814b5865753264d5d1a779c7e78767e8734ec3a250969cf078abead"
     },
     {
       "path": "webui/components.json",
@@ -36,11 +36,11 @@
     },
     {
       "path": "webui/src/app/ProjectSwitcher.tsx",
-      "sha256": "50ad09f96dabed345623ba70587fa224fc10089a191a7dd2df9b04f0de898c7d"
+      "sha256": "17f571ba31829607c1e44a14aa1263ad55391dd204b956fc650b55ca8aa8217e"
     },
     {
       "path": "webui/src/app/Shell.tsx",
-      "sha256": "974b16611631bb31d9af26b0db7b052318fdf666158e778183dc25a9f7af329f"
+      "sha256": "fd73c4942df922869c89b966132fa57bcbd01cd04aeaa22af79af76cdd3bf6aa"
     },
     {
       "path": "webui/src/app/SignIn.tsx",
@@ -48,7 +48,7 @@
     },
     {
       "path": "webui/src/app/States.tsx",
-      "sha256": "25f892f66e0cf976fe62637a3cbdeaaf2c16c52265ed4b7e34adaa9b895db918"
+      "sha256": "fd4078284a69f80e8c2df8b6c54c430f830d9d0cad892c915b29933b373c78b4"
     },
     {
       "path": "webui/src/app/TabIcons.tsx",
@@ -99,6 +99,10 @@
       "sha256": "9ad1c6b1761878e595498195909118334f11b518a41308265f189d411b34e3fd"
     },
     {
+      "path": "webui/src/app/recovered.ts",
+      "sha256": "2f6fbe264ad2ca62f9a5b4b76915aa4e2562c3f2e4d19f7eea0a4ec795e1edb2"
+    },
+    {
       "path": "webui/src/app/router.ts",
       "sha256": "a2dc69d7074f3ad6d8820b2c9ebdc8939dac382edf24bf5826d934d7f68505f0"
     },
@@ -112,7 +116,7 @@
     },
     {
       "path": "webui/src/app/useEvents.ts",
-      "sha256": "8ede721a753619bdba126ad5159a0e6034025be1c8723e6b6e2df7ab888169ea"
+      "sha256": "91dec386bd076f4bea3a91bf5a4c89228cc970075d1b8e6dbd0348185f8191d0"
     },
     {
       "path": "webui/src/app/useLobbyKeys.ts",
@@ -244,7 +248,7 @@
     },
     {
       "path": "webui/src/lib/project.ts",
-      "sha256": "828f8402f3161652a5f314f865f3a5f6a64973bc10a8457a22919e19960e11c9"
+      "sha256": "7c6066999ce18ebbcc893f218969a4282d10ff10e46798439e536a298a90dbd7"
     },
     {
       "path": "webui/src/lib/promptSeen.ts",

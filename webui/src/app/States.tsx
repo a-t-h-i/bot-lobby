@@ -38,7 +38,7 @@ export function ErrorState({ message, onRetry }: { message?: string; onRetry?: (
   )
 }
 
-/** A dropped stream; data stays on screen, the banner offers a manual retry. */
+/** A dropped stream (pi stopped or restarting); data stays on screen, the banner offers a manual retry. */
 export function ReconnectingState({ onRetry }: { onRetry?: () => void }) {
   return (
     <div
@@ -46,7 +46,7 @@ export function ReconnectingState({ onRetry }: { onRetry?: () => void }) {
       className="mx-3 mb-1 flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive max-sm:mx-2"
     >
       <WifiOff className="size-4" aria-hidden="true" />
-      <span>Connection lost — retrying every 2 s.</span>
+      <span>Lost pi — reconnecting every 2 s. Your planning session and tasks carry on when it is back.</span>
       {onRetry ? (
         <Button variant="link" className="h-8 px-1 text-destructive" onClick={onRetry}>
           Retry now

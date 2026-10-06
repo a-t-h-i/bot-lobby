@@ -522,6 +522,46 @@ export function memberPrompt(member: PanelMember, instructions?: string): string
   return [base, loadPrompt("panel.md"), `## Your seat\n\n${MEMBER_SEATS[member]}`].join("\n\n---\n\n");
 }
 
+/** A planning session as JSON: what `PlanningSession.snapshot` writes and `restore` reads. */
+export interface PlanningSnapshot {
+  version: 1;
+  messages: PlannerMessage[];
+  seed?: PlannerSeed;
+  reply?: PlannerReply;
+  questions: PanelQuestion[];
+  notes: PanelNote[];
+  members: MemberState[];
+  seats: PanelMember[];
+  pins: PanelMember[];
+  satOut: Array<[PanelMember, number]>;
+  lastStatus: Array<[PanelMember, "ready" | "open"]>;
+  sat: PanelMember[];
+  memberNotes: Array<[PanelMember, string[]]>;
+  turns: number;
+  mode: RoundMode;
+  answered: AskResult[];
+  lineComments: LineComment[];
+  saved?: PlannedTask;
+  savedParts: PlannedTask[];
+  error?: string;
+  autoContinued: boolean;
+  attempts: number;
+  /** A round was running when it was taken. */
+  running: boolean;
+}
+
+/** What a seat that was thinking when pi stopped shows until its round runs again. */
+export const STOPPED_WITH_PI = "pi stopped during the round";
+
+/** Whether a parsed file is a snapshot this version reads; a torn or foreign file is not. */
+export function isPlanningSnapshot(value: unknown): value is PlanningSnapshot {
+  const snapshot = value as PlanningSnapshot;
+  return Boolean(snapshot) && snapshot.version === 1 && Array.isArray(snapshot.messages) && Array.isArray(snapshot.questions) && Array.isArray(snapshot.seats)
+    && Array.isArray(snapshot.members) && Array.isArray(snapshot.pins) && Array.isArray(snapshot.satOut) && Array.isArray(snapshot.lastStatus)
+    && Array.isArray(snapshot.sat) && Array.isArray(snapshot.memberNotes) && Array.isArray(snapshot.answered) && Array.isArray(snapshot.lineComments)
+    && Array.isArray(snapshot.savedParts) && Array.isArray(snapshot.notes) && typeof snapshot.turns === "number";
+}
+
 interface RunOutcome {
   status: MetricRecord["status"];
   output: string;
@@ -716,6 +756,82 @@ export class PlanningSession {
    */
   get panel(): PanelMember[] {
     return PANEL_MEMBERS.filter((member) => this.sat.has(member) && this.seats.has(member));
+  }
+
+  /** Everything the session needs to carry on in another pi process, as JSON. */
+  snapshot(): PlanningSnapshot {
+    return {
+      version: 1,
+      messages: this.messages,
+      ...(this.seed ? { seed: this.seed } : {}),
+      ...(this.reply ? { reply: this.reply } : {}),
+      questions: this.questions,
+      notes: this.notes,
+      members: this.members,
+      seats: [...this.seats],
+      pins: [...this.pins],
+      satOut: [...this.satOut],
+      lastStatus: [...this.lastStatus],
+      sat: [...this.sat],
+      memberNotes: [...this.memberNotes],
+      turns: this.turns,
+      mode: this.mode,
+      answered: this.answered,
+      lineComments: this.lineComments,
+      ...(this.saved ? { saved: this.saved } : {}),
+      savedParts: this.savedParts,
+      ...(this.error ? { error: this.error } : {}),
+      autoContinued: this.autoContinued,
+      attempts: this.attempts,
+      running: this.busy,
+    };
+  }
+
+  /**
+   * A session as a snapshot left it. A round that was running when pi
+   * stopped is marked interrupted: `resume` runs it again.
+   */
+  static restore(deps: PlannerDeps, snapshot: PlanningSnapshot): PlanningSession {
+    const session = new PlanningSession({ ...deps, panel: snapshot.seats }, snapshot.seed);
+    session.messages = snapshot.messages;
+    if (snapshot.reply) session.reply = snapshot.reply;
+    session.questions = snapshot.questions;
+    session.notes = snapshot.notes;
+    session.members = snapshot.members.map((member) => member.status === "thinking" ? { ...member, status: "failed", error: STOPPED_WITH_PI, step: undefined } : member);
+    for (const member of snapshot.pins) session.pins.add(member);
+    session.satOut = new Map(snapshot.satOut);
+    for (const [member, status] of snapshot.lastStatus) session.lastStatus.set(member, status);
+    for (const member of snapshot.sat) session.sat.add(member);
+    for (const [member, notes] of snapshot.memberNotes) session.memberNotes.set(member, notes);
+    session.turns = snapshot.turns;
+    session.mode = snapshot.mode;
+    session.answered = snapshot.answered;
+    session.lineComments = snapshot.lineComments;
+    if (snapshot.saved) session.saved = snapshot.saved;
+    session.savedParts = snapshot.savedParts;
+    if (snapshot.error) session.error = snapshot.error;
+    session.autoContinued = snapshot.autoContinued;
+    session.attempts = snapshot.attempts;
+    session.interrupted = snapshot.running;
+    return session;
+  }
+
+  /** A round was running when pi stopped, and has not run again yet. */
+  interrupted = false;
+
+  /** Run again the round pi stopped in the middle of; nothing when none was. */
+  async resume(): Promise<void> {
+    if (!this.interrupted || this.busy) return;
+    this.interrupted = false;
+    const last = this.messages.at(-1);
+    if (last?.role === "you") return this.retry();
+    // The seed alone had started the first round.
+    if (this.messages.length === 0 && this.seed) {
+      this.turns = Math.max(0, this.turns - 1);
+      return this.open();
+    }
+    // The round had already written its reply: only its last checks were cut off.
+    this.deps.onChange?.();
   }
 
   /** Save the latest draft as a pending task. */

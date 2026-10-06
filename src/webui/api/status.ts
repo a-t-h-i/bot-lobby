@@ -30,6 +30,7 @@ export function statusGet(ctx: ApiContext): StatusInfo {
   const workspace = service.workspace?.() ?? { name: "bot-lobby" };
   // The service's own config when it has one, so a saved panes or keys change shows without a restart.
   const config = service.config?.() ?? loadConfig();
+  const recovered = service.recovered?.();
   return {
     workspace: { name: workspace.name, ...(workspace.branch ? { branch: workspace.branch } : {}) },
     ...(workspace.branch ? { branch: workspace.branch } : {}),
@@ -42,5 +43,6 @@ export function statusGet(ctx: ApiContext): StatusInfo {
     tabs: tabs(issuesEnabled),
     keys: keys(config.lobby.keys),
     windows: [],
+    ...(recovered ? { recovered } : {}),
   };
 }

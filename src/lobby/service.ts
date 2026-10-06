@@ -40,7 +40,8 @@ import { SessionChats } from "./session-files.ts";
 import { answerMessage, questionnaires, settledQuestions } from "./ask.ts";
 import { askUser } from "../ask/web.ts";
 import type { Asker } from "../ask/types.ts";
-import { PlanningSession, type PlannerSeed } from "./planner.ts";
+import { PlanningSession, type PlannerDeps, type PlannerSeed } from "./planner.ts";
+import type { Relaunch } from "./recovery.ts";
 import { applyMasterModel } from "../pi/model-settings.ts";
 import { lobbyTopics } from "./topics.ts";
 import { checkSession } from "../excalidraw/check.ts";
@@ -235,6 +236,7 @@ export function backgroundSessions(): readonly BackgroundSession[] {
 function sessionsChanged(): void {
   lobbyTopics.bump("sessions");
   const state = serviceState;
+  state?.keeper?.window.schedule();
   for (const session of registry?.sessions ?? []) {
     if (session.sessionId && session.sessionFile) chats.remember(session.sessionId, session.sessionFile);
     const seen = announced.get(session.key) ?? 0;
@@ -281,6 +283,23 @@ function startSession(state: Runtime, start: { request?: string; plan?: PlannedT
     return session;
   } catch (error) {
     return `could not start a new session — ${(error as Error).message}`;
+  }
+}
+
+/** Start again, in the background, a session a stopped window drove; the session, or why not. */
+export function resumeSession(state: Runtime, start: Relaunch): BackgroundSession | string {
+  try {
+    const session = sessionRegistry().start(state.ctx.cwd, {
+      name: start.name,
+      projectRoot: state.root,
+      onDialog: dialogTracker(state),
+      sessionFile: start.sessionFile,
+      ...(start.message ? { message: start.message } : {}),
+    });
+    lobbyFeed.log("LOBBY", `carried "${start.name}" (${start.taskId}) on in the background`, "success");
+    return session;
+  } catch (error) {
+    return `could not carry ${start.taskId} on — ${(error as Error).message}`;
   }
 }
 
@@ -453,15 +472,25 @@ export function seatProfile(state: Runtime, member: PanelMember) {
 
 function newPlanner(state: Runtime, seed?: PlannerSeed, seats?: readonly PanelMember[]): PlanningSession {
   state.planner?.cancel();
-  const config = loadConfig();
-  const workflow = config.workflow;
-  state.planner = new PlanningSession({
+  state.planner = new PlanningSession(plannerDeps(state, seats ?? loadConfig().lobby.planningPanel), seed);
+  state.keeper?.planner.schedule();
+  return state.planner;
+}
+
+/** What a planning session in this window runs with; every change is kept on disk, so it carries on after a crash. */
+export function plannerDeps(state: Runtime, seats: readonly PanelMember[]): PlannerDeps {
+  const workflow = loadConfig().workflow;
+  const changed = () => {
+    lobbyTopics.bump("planner");
+    state.keeper?.planner.schedule();
+  };
+  return {
     cwd: state.ctx.cwd,
     root: state.root,
     configDir: state.configDir,
     profile: () => lobbyProfile(state, "planner"),
     memberProfile: (member) => seatProfile(state, member),
-    panel: seats ?? config.lobby.planningPanel,
+    panel: seats,
     maxRounds: () => loadConfig().lobby.maxPlanningRounds,
     classifier: classifier(),
     hints: hintsFor({ cwd: state.ctx.cwd, root: state.root, configDir: state.configDir }),
@@ -469,10 +498,9 @@ function newPlanner(state: Runtime, seed?: PlannerSeed, seats?: readonly PanelMe
     stallTimeoutMs: workflow.stallTimeoutMs,
     toolStallTimeoutMs: workflow.toolStallTimeoutMs,
     feed: lobbyFeed,
-    onChange: () => lobbyTopics.bump("planner"),
-    onRound: () => lobbyTopics.bump("planner"),
-  }, seed);
-  return state.planner;
+    onChange: changed,
+    onRound: changed,
+  };
 }
 
 /** The questionnaire in the page; tests swap it. */
@@ -638,6 +666,7 @@ export function createLobbyService(state: Runtime): LobbyService {
       }
     },
     issuesEnabled: () => loadConfig().lobby.issues,
+    recovered: () => state.recovered,
     seatLabel: (member) => {
       const profile = seatProfile(state, member);
       return `${profile.model ?? "session model"} · ${profile.thinking}`;

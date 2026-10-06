@@ -10,7 +10,7 @@ import { Check, ChevronsUpDown, GitBranch, RefreshCw, TriangleAlert } from "luci
 import type { ProjectInfo } from "@protocol"
 import { call } from "@/lib/api"
 import { useHotkey } from "@/lib/hotkeys"
-import { selectedProject, switchProject } from "@/lib/project"
+import { rememberProjects, selectedProject, switchProject } from "@/lib/project"
 import { Keys } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -47,6 +47,7 @@ export function useProjects() {
     setError(undefined)
     try {
       const result = await call<ProjectList>("projects.list", {})
+      rememberProjects(result.projects)
       if (version === request.current) setData(result)
     } catch (failure) {
       if (version === request.current) setError((failure as Error).message)

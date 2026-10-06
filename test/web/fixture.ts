@@ -20,6 +20,10 @@ export interface MockServer {
   /** Append one activity entry to the live feed, so a test can watch the log react. */
   log: (source: string, text: string) => void;
   bump: (topic: LobbyTopic) => void;
+  /** Stop the server, as pi stopping takes it down; the page keeps whatever it shows. */
+  stop: () => Promise<void>;
+  /** Start it again on the same port and secret, as pi coming back does; `change` adjusts the service first. */
+  start: (change?: (service: LobbyService) => void) => Promise<void>;
 }
 
 export interface ErrorTrap {
@@ -70,7 +74,10 @@ export const test = base.extend<object, { server: MockServer }>({
       const configDir = mkdtempSync(join(tmpdir(), "bot-lobby-web-"));
       process.env.BOT_LOBBY_CONFIG_DIR = configDir;
       let current: LobbyService = createFixtureService("full");
-      const web = await startWebServer({ service: current, port: 0, secret: randomBytes(32) });
+      const secret = randomBytes(32);
+      let web = await startWebServer({ service: current, port: 0, secret });
+      let up = true;
+      const port = web.port;
       const mock: MockServer = {
         link: web.link,
         use: (scenario: string) => {
@@ -79,13 +86,24 @@ export const test = base.extend<object, { server: MockServer }>({
           web.rebind(current);
         },
         bump: (topic) => { lobbyTopics.bump(topic); },
+        stop: async () => {
+          if (!up) return;
+          up = false;
+          await web.close();
+        },
+        start: async (change) => {
+          change?.(current);
+          if (up) return;
+          web = await startWebServer({ service: current, port, secret });
+          up = true;
+        },
         log: (source, text) => {
           (current.feed as { log: (source: string, text: string) => void }).log(source, text);
         },
       };
       await use(mock);
       disposeFixtureService(current);
-      await web.close();
+      if (up) await web.close();
       rmSync(configDir, { recursive: true, force: true });
     },
     { scope: "worker" },
