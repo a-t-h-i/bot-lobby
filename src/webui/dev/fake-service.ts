@@ -265,6 +265,7 @@ function fakeBackground(entry: NonNullable<ScenarioFixture["backgroundSessions"]
     },
     ...(entry.sessionId ? { sessionId: entry.sessionId } : {}),
     ...(entry.planId ? { planId: entry.planId } : {}),
+    ...(entry.taskId ? { taskId: entry.taskId } : {}),
     feed,
     dialogs,
     get alive() {
@@ -529,6 +530,24 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     },
     sendToTask: (taskId: string, _text: string) => (tasks.some((task) => (task as { id: string }).id === taskId) ? `sent — the session driving ${taskId} passes it to its oracle` : `no task ${taskId}`),
     sendToSession: (_sessionId: string, _text: string) => "sent — that session passes it to its oracle within a few seconds",
+    resumeTask: async (taskId: string) => {
+      const task = tasks.find((entry) => (entry as { id: string }).id === taskId) as { id: string; title: string; paused?: boolean; ownerSessionId?: string } | undefined;
+      if (!task) return { notice: `no task ${taskId}` };
+      const owner = task.ownerSessionId;
+      const background = backgrounds.find((session) => session.alive && ((owner && session.sessionId === owner) || session.taskId === taskId));
+      const elsewhere = Boolean(owner && (fixture.liveSessions ?? []).some((session) => session.sessionId === owner));
+      lobbyTopics.bump("tasks");
+      if (owner === fixture.status.sessionId || background || elsewhere) {
+        task.paused = false;
+        const where = background ? `in ${background.name}` : elsewhere ? "— the session driving it in another terminal carries on" : "in this window";
+        return { notice: `resumed ${taskId} ${where}`, ...(background ? { key: background.key } : {}) };
+      }
+      task.paused = false;
+      const session = fakeBackground({ key: `S${backgrounds.length + 1}`, name: task.title, status: "starting", taskId });
+      backgrounds.push(session);
+      lobbyTopics.bump("sessions");
+      return { notice: `resumed ${taskId} in a background session`, key: session.key };
+    },
     sessions: () => [...backgrounds],
     startSession: (start: { request?: string; plan?: { id: string; title: string }; auto?: boolean }) => {
       const key = `S${backgrounds.length + 1}`;

@@ -18,6 +18,7 @@ import { planDetails } from "../../pi/plan-checklist.ts";
 import type { WorkProjection } from "../../state/work-time.ts";
 import type { TaskSection } from "../../lobby/task-rows.ts";
 import { projectPhaseTiming } from "../../state/phase-timing.ts";
+import { resumable, type Drivers } from "../../lobby/resume.ts";
 import type { DeliveryRequest } from "../../delivery/operations.ts";
 
 function deliveryTask(body: { taskId: string }, ctx: ApiContext): Task {
@@ -53,6 +54,8 @@ interface RowContext {
   names: ReadonlyMap<string, string>;
   auto: ReadonlySet<string>;
   live: ReadonlySet<string>;
+  /** Who could be driving each task, for Resume. */
+  drivers: Drivers;
   work: (taskId: string) => WorkProjection | undefined;
 }
 
@@ -87,10 +90,12 @@ function ago(ms: number): string {
 }
 
 function ownerOf(task: Task, sessionId: string | undefined, ctx: RowContext): string {
+  const name = task.ownerSessionId ? ctx.names.get(task.ownerSessionId) : undefined;
+  if (name) return name === task.title ? "background" : `background · ${name}`;
+  // Resumed from the Tasks screen: its background session is starting.
+  if (ctx.drivers.carrying.has(task.id)) return "background";
   if (!task.ownerSessionId) return "not running";
   if (task.ownerSessionId === sessionId) return "this session";
-  const name = ctx.names.get(task.ownerSessionId);
-  if (name) return name === task.title ? "background" : `background · ${name}`;
   return !ctx.live.has(task.ownerSessionId) ? "not running" : `session ${task.ownerSessionId.slice(0, 8)}`;
 }
 
@@ -113,6 +118,7 @@ function rowOf(task: Task, section: TaskSection, ctx: RowContext, sessionId: str
     ...(section === "others" ? { owner: ownerOf(task, sessionId, ctx) } : {}),
     ...(section === "recent" ? { age: ago(now - Date.parse(task.updatedAt)) } : {}),
     ...(section !== "recent" && ctx.auto.has(task.id) ? { auto: true } : {}),
+    ...(section !== "recent" && resumable(task, ctx.drivers) ? { resumable: true } : {}),
   };
 }
 
@@ -149,11 +155,17 @@ function buildRows(tasks: readonly Task[], plans: readonly PlannedTask[], sessio
 
 function contextOf(ctx: ApiContext, tasks: readonly Task[]): RowContext {
   const names = new Map<string, string>();
+  const carrying = new Set<string>();
   for (const session of ctx.service.sessions()) {
-    if (session.sessionId && session.alive) names.set(session.sessionId, session.name);
+    if (!session.alive) continue;
+    if (session.sessionId) names.set(session.sessionId, session.name);
+    if (session.taskId) carrying.add(session.taskId);
   }
   const auto = new Set(tasks.filter((task) => !TERMINAL_STATES.includes(task.state) && ctx.service.isAuto(task.id)).map((task) => task.id));
-  return { names, auto, live: new Set(ctx.service.liveSessions().map((session) => session.sessionId)), work: (taskId) => ctx.service.work?.(taskId) };
+  const live = new Set(ctx.service.liveSessions().map((session) => session.sessionId));
+  const me = ctx.service.sessionId();
+  const drivers: Drivers = { ...(me ? { me } : {}), background: new Set(names.keys()), carrying, live };
+  return { names, auto, live, drivers, work: (taskId) => ctx.service.work?.(taskId) };
 }
 
 /** Every task, plan and recent row, oldest groups first like the terminal. */
@@ -237,6 +249,18 @@ export function tasksAuto(body: { taskId: string; on: boolean }, ctx: ApiContext
 export function tasksMessage(body: { taskId: string; text: string; attachments?: string[] }, ctx: ApiContext): { notice: string } {
   if (!body.text.trim() && !body.attachments?.length) return { notice: "type something first" };
   return { notice: ctx.service.sendToTask(body.taskId, withAttachments(body.text, body.attachments, body.taskId, ctx.service.projectRoot?.())) };
+}
+
+/**
+ * Resume a task without moving this window: unpaused where it runs, or
+ * carried on in a background session (its key comes back to open it).
+ */
+export async function tasksResume(body: { taskId: string }, ctx: ApiContext): Promise<{ notice: string; key?: string }> {
+  const task = ctx.service.tasks().find((entry) => entry.id === body.taskId);
+  if (!task) fail(404, "not_found", `no task ${body.taskId} in this project`);
+  if (TERMINAL_STATES.includes((task as Task).state)) fail(400, "bad_request", `${body.taskId} is ${(task as Task).state}; there is nothing to resume`);
+  if (!ctx.service.resumeTask) fail(400, "bad_request", "resuming tasks is unavailable");
+  return ctx.service.resumeTask!(body.taskId);
 }
 
 /** Select existing owner chat metadata only; never start, claim or switch a process. */

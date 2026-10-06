@@ -174,6 +174,12 @@ export interface LobbyService {
   setAuto(taskId: string, on: boolean): void;
   /** Leave a message for a task's oracle, delivered by whichever session drives it (now or once one resumes it); returns a notice. */
   sendToTask(taskId: string, text: string): string;
+  /**
+   * Resume a task from the Tasks screen, leaving this window where it is: a
+   * paused task is unpaused where it runs, one nothing runs carries on in a
+   * background session. A notice, and the background session's key.
+   */
+  resumeTask?(taskId: string): Promise<{ notice: string; key?: string }>;
   /** Leave a message for a session running in another terminal; it delivers it within seconds. Returns a notice. */
   sendToSession(sessionId: string, text: string): string;
   /** Sessions running in this project, other than this window's, from their heartbeats. */

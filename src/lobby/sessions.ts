@@ -52,6 +52,8 @@ export interface SessionStart {
   sessionFile?: string;
   /** Sent once it is up, as the user's message (the nudge that picks an interrupted turn back up). */
   message?: string;
+  /** The task it was started to carry on (resumed from the Tasks screen). */
+  taskId?: string;
 }
 
 let counter = 0;
@@ -65,6 +67,8 @@ export class BackgroundSession {
   readonly name: string;
   /** The planned task it was started from. */
   readonly planId?: string;
+  /** The task it was started to carry on. */
+  readonly taskId?: string;
   readonly feed = new LobbyFeed();
   readonly startedAt = Date.now();
   status: SessionStatus = "starting";
@@ -90,6 +94,7 @@ export class BackgroundSession {
     this.name = start.name;
     this.projectRoot = start.projectRoot;
     if (start.planId) this.planId = start.planId;
+    if (start.taskId) this.taskId = start.taskId;
     this.onDialog = start.onDialog ?? (() => {});
     this.proc = proc;
     this.onChange = onChange;

@@ -47,6 +47,10 @@ planning session returns as it was, and a round that was cut off runs again. Que
 run, and every task's session starts again from its saved file, picking up where it stopped. A
 quit on purpose stops this work, and `pi -c` brings back the planning session.
 
+A task that is paused, or that no running session drives, shows **Resume** (`R`) in **Tasks**.
+It carries the task on without moving your window: a paused task is unpaused where it runs, and a
+stopped one carries on in a background session, its own session again when its file is found.
+
 | Agent | Does |
 | --- | --- |
 | Oracle | Your Pi session: questions, plan, delegation and approvals |

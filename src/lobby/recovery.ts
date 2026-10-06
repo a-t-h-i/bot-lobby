@@ -55,18 +55,20 @@ function liveTask(root: string, configDir: string, sessionId: string): Task | un
   return task && !TERMINAL_STATES.includes(task.state) ? task : undefined;
 }
 
+const INTERRUPTED_DECISION = "pi stopped unexpectedly; the task carried on in the next session (steps that were running stopped with it)";
+
 /**
  * Clear what the stopped process left marked as under way on a task: the
  * questions it was waiting on (they no longer wait), the time given to the
  * steps it was running, and the runs it noted as active. A decision records
  * the stop, so the task's history says what happened.
  */
-export function settleInterrupted(root: string, configDir: string, taskId: string, now = new Date()): void {
+export function settleInterrupted(root: string, configDir: string, taskId: string, now = new Date(), note = INTERRUPTED_DECISION): void {
   const task = loadTask(root, configDir, taskId);
   if (!task) return;
   const at = now.toISOString();
   for (const id of [...(task.blockingRequestIds ?? task.phaseTiming?.blockingRequestIds ?? [])]) resolvePhaseTiming(task, id, at);
-  task.decisions.push({ domain: "master", text: "pi stopped unexpectedly; the task carried on in the next session (steps that were running stopped with it)", createdAt: at });
+  task.decisions.push({ domain: "master", text: note, createdAt: at });
   task.updatedAt = at;
   saveTask(root, configDir, task);
   updateBudget(root, configDir, taskId, (budget) => {

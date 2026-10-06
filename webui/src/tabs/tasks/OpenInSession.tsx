@@ -1,7 +1,9 @@
 /**
  * The one place the Tasks screen moves a session: "Open in session" (S), an
  * explicit action of its own. "Conversation" (O) beside it only shows the
- * owner's chat and never starts, claims or switches anything.
+ * owner's chat and never starts, claims or switches anything; "Resume" (R)
+ * carries a paused or stopped task on and leaves this window where it is (it
+ * is the main action then, so this one steps back).
  */
 import { useEffect, useRef } from "react"
 import { ArrowRightToLine } from "lucide-react"
@@ -19,7 +21,7 @@ import { ActionButton } from "@/ui/Actions"
  * task no running session owns is taken over here. One in another terminal
  * stays there (the toast says so). The server refuses while the oracle works.
  */
-export function OpenInSession({ row }: { row: TaskRow }) {
+export function OpenInSession({ row, quiet = false }: { row: TaskRow; quiet?: boolean }) {
   const alive = useRef(true)
   useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
   async function open() {
@@ -43,7 +45,7 @@ export function OpenInSession({ row }: { row: TaskRow }) {
       label={here ? "Open in its session: this window" : "Open in its session"}
       text="Open in session"
       icon={ArrowRightToLine}
-      tone="primary"
+      tone={quiet ? "neutral" : "primary"}
       shortcut="S"
       onClick={() => void open()}
     />

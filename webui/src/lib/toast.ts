@@ -1,7 +1,8 @@
 /**
  * Toasts, one at a time. `toast()` queues a message; the Toaster shows the
  * first, then the next, never two together. A message already waiting is not
- * queued twice, and when more are waiting the one on screen leaves sooner.
+ * queued twice (a repeat that brings an action gives it to the first), and
+ * when more are waiting the one on screen leaves sooner.
  */
 import { useSyncExternalStore } from "react"
 
@@ -37,7 +38,18 @@ function emit(): void {
 function push(kind: ToastKind, message: string, options?: ToastOptions): void {
   const text = message.trim()
   if (!text) return
-  if (current?.message === text || waiting.some((item) => item.message === text)) return
+  const same = current?.message === text ? current : waiting.find((item) => item.message === text)
+  if (same) {
+    // The server's copy of an action's notice often lands first, without the
+    // action's Undo or Watch: the page's copy brings it to the one shown.
+    if (options?.action && !same.action) {
+      const upgraded = { ...same, action: options.action }
+      if (same === current) current = upgraded
+      else waiting = waiting.map((item) => (item === same ? upgraded : item))
+      emit()
+    }
+    return
+  }
   const item: ToastItem = { id: ++seq, kind, message: text, duration: options?.duration ?? DURATION[kind], ...(options?.action ? { action: options.action } : {}) }
   if (!current) current = item
   else waiting = [...waiting, item].slice(-MAX_WAITING)
