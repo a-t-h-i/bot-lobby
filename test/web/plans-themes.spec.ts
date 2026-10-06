@@ -74,7 +74,7 @@ test("a theme is saved under its own name, renamed, and kept with pi for every s
   await fresh.context().close();
 });
 
-test("every button casts shadow-sm; its border shows only on hover, two tones lighter than its text", async ({ page, server }, info) => {
+test("every button casts shadow-sm; its border shows only on hover, much lighter than its text", async ({ page, server }, info) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => { window.location.hash = "#/tasks/T-mock-1"; });
@@ -89,11 +89,11 @@ test("every button casts shadow-sm; its border shows only on hover, two tones li
     .filter((button: any) => button.border !== "rgba(0, 0, 0, 0)" || !/0px 1px 3px 0px rgba\(0, 0, 0, 0\.1\), rgba\(0, 0, 0, 0\.1\) 0px 1px 2px -1px|rgba\(0, 0, 0, 0\.1\) 0px 1px 3px 0px, rgba\(0, 0, 0, 0\.1\) 0px 1px 2px -1px/.test(button.shadow)));
   expect(off, "at rest: shadow-sm and no visible border").toEqual([]);
 
-  // The text colour two tones lighter: a quarter white mixed in.
+  // The text colour much lighter: a quarter of it, the rest white.
   const lighter = (text: string) => page.evaluate((color) => {
     const probe = document.createElement("span");
     probe.style.color = color;
-    probe.style.borderTop = "1px solid color-mix(in oklab, currentColor 75%, white)";
+    probe.style.borderTop = "1px solid color-mix(in oklab, currentColor 25%, white)";
     document.body.append(probe);
     const value = getComputedStyle(probe).borderTopColor;
     probe.remove();
@@ -105,7 +105,7 @@ test("every button casts shadow-sm; its border shows only on hover, two tones li
     await button.hover();
     const text = await button.evaluate((el: any) => getComputedStyle(el).color);
     const want = await lighter(text);
-    await expect.poll(() => button.evaluate((el: any) => getComputedStyle(el).borderTopColor), { message: "hovered: the border is its text two tones lighter" }).toBe(want);
+    await expect.poll(() => button.evaluate((el: any) => getComputedStyle(el).borderTopColor), { message: "hovered: the border is its text, much lighter" }).toBe(want);
     expect(want).not.toBe(text);
   }
   const bar = page.locator("#main [data-pane='detail']").getByRole("button").first().locator("xpath=..");
