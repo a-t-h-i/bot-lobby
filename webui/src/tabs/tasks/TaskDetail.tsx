@@ -2,7 +2,8 @@
  * A task's detail: title with its mark, state facts, id, track and branch
  * (from the Lobby snapshot when it is the session's own task), the request,
  * the plan checklist and text (`tasks.get`), comments, amendments, what the
- * task waits on, recent runs and the actions the row allows. Comments and
+ * task waits on, recent runs and the actions the row allows (Resume carries a
+ * paused or stopped task on without opening it in a session). Comments and
  * messages to the task's oracle are written in the floating box below. A saved
  * plan has its own body (`PlanDetail`).
  */
@@ -29,6 +30,7 @@ import { Comments } from "./Comments"
 import { DetailTrailer, PlanSections } from "./DetailSections"
 import { OpenInSession } from "./OpenInSession"
 import { PlanDetail } from "./PlanDetail"
+import { ResumeTask } from "./ResumeTask"
 import { CHECK_WORDS, agoWords, stateWords } from "./words"
 
 interface DetailProps {
@@ -138,9 +140,11 @@ function Actions(props: DetailProps) {
   const { row } = props
   const { restore, archive, remove, toggleAuto } = useActions(props)
   const archived = row.kind === "archived"
+  const resumable = row.kind === "task" && row.check === "open" && Boolean(row.resumable)
   return (
     <ActionBar>
-      {row.kind === "task" && row.check === "open" ? <OpenInSession row={row} /> : null}
+      {resumable ? <ResumeTask row={row} onResumed={props.onChanged} /> : null}
+      {row.kind === "task" && row.check === "open" ? <OpenInSession row={row} quiet={resumable} /> : null}
       {row.kind === "task" ? <OpenTask taskId={row.id} /> : null}
       {archived ? <ActionButton label="Restore" icon={RotateCcw} shortcut="R" onClick={() => void restore()} /> : null}
       {row.check === "open" && !archived ? <AutoMode on={Boolean(row.auto)} toggle={toggleAuto} /> : null}

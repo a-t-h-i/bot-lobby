@@ -24,7 +24,7 @@ import { livePresence } from "../state/presence.ts";
 import { archiveTask as archiveTaskOnDisk, deleteTask as deleteTaskOnDisk, listArchivedTasks, restoreTask as restoreTaskOnDisk } from "../state/archive.ts";
 import { discardPlannedTask, listPlannedTasks, type PlannedTask } from "../state/backlog.ts";
 import { readClassifierMetrics, readMetrics } from "../state/metrics.ts";
-import { currentZenTask, taskSnapshot } from "../pi/ui.ts";
+import { applyStatus, currentZenTask, taskSnapshot } from "../pi/ui.ts";
 import { taskName } from "../text.ts";
 import { describeWorkspace } from "../execution/workspace.ts";
 import { stripStartFlags } from "../pi/start-flags.ts";
@@ -41,7 +41,8 @@ import { answerMessage, questionnaires, settledQuestions } from "./ask.ts";
 import { askUser } from "../ask/web.ts";
 import type { Asker } from "../ask/types.ts";
 import { PlanningSession, type PlannerDeps, type PlannerSeed } from "./planner.ts";
-import type { Relaunch } from "./recovery.ts";
+import { settleInterrupted, type Relaunch } from "./recovery.ts";
+import { carryOnMessage, resumeRoute, RESUMED_DECISION, type Drivers } from "./resume.ts";
 import { archivePlan as archivePlanOnDisk, deletePlan as deletePlanOnDisk, isPlanId, previousPlans, readPlan, type PlanRecord, type PlanSummary } from "../state/plan-history.ts";
 import { applyMasterModel } from "../pi/model-settings.ts";
 import { lobbyTopics } from "./topics.ts";
@@ -307,6 +308,100 @@ export function resumeSession(state: Runtime, start: Relaunch): BackgroundSessio
     return session;
   } catch (error) {
     return `could not carry ${start.taskId} on — ${(error as Error).message}`;
+  }
+}
+
+/** The sessions that could drive a task, as this window sees them. */
+function taskDrivers(state: Runtime): Drivers {
+  const mine = backgroundSessions().filter((session) => session.alive && session.projectRoot === state.root);
+  return {
+    me: state.ctx.sessionManager.getSessionId(),
+    background: new Set(mine.flatMap((session) => (session.sessionId ? [session.sessionId] : []))),
+    carrying: new Set(mine.flatMap((session) => (session.taskId ? [session.taskId] : []))),
+    live: new Set(liveSessions(state).map((session) => session.sessionId)),
+  };
+}
+
+/** Tasks between a Resume click and their background session starting, so a second click starts nothing. */
+const resuming = new Set<string>();
+
+function unpause(state: Runtime, taskId: string): void {
+  const task = loadTask(state.root, state.configDir, taskId);
+  if (!task?.paused) return;
+  task.paused = false;
+  task.updatedAt = new Date().toISOString();
+  saveTask(state.root, state.configDir, task);
+}
+
+/**
+ * Resume a task from the Tasks screen, leaving this window where it is. A
+ * paused task is unpaused where it runs and its oracle told to carry on; one
+ * no running session drives carries on in a background session: its own
+ * session started again from its file when there is one, else a fresh one
+ * that takes it over.
+ */
+async function resumeTask(state: Runtime, taskId: string): Promise<{ notice: string; key?: string }> {
+  const task = loadTask(state.root, state.configDir, taskId);
+  if (!task) return { notice: `no task ${taskId}` };
+  if (resuming.has(taskId)) return { notice: `${taskId} is already being resumed` };
+  const route = resumeRoute(task, taskDrivers(state));
+  const background = () => backgroundSessions().find((session) => session.alive && session.projectRoot === state.root && ((task.ownerSessionId && session.sessionId === task.ownerSessionId) || session.taskId === taskId));
+  switch (route.kind) {
+    case "finished":
+      return { notice: `${taskId} is ${task.state}; there is nothing to resume` };
+    case "running": {
+      const session = route.where === "background" ? background() : undefined;
+      const where = route.where === "here" ? "in this window" : session ? `in ${session.name}` : "in another terminal";
+      return { notice: `${taskId} is already under way ${where}`, ...(session ? { key: session.key } : {}) };
+    }
+    case "paused": {
+      unpause(state, taskId);
+      lobbyTopics.bump("tasks");
+      const message = carryOnMessage(task, "paused");
+      if (route.where === "here") {
+        state.pi.sendUserMessage(message, state.ctx.isIdle() ? undefined : { deliverAs: "followUp" });
+        try { applyStatus(state.ctx, state.root, state.configDir); } catch {}
+        lobbyFeed.log("LOBBY", `resumed ${taskId}`, "success");
+        return { notice: `resumed ${taskId} in this window` };
+      }
+      const session = route.where === "background" ? background() : undefined;
+      if (session) {
+        session.send(message);
+        lobbyFeed.log("LOBBY", `resumed ${taskId} in ${session.name}`, "success");
+        return { notice: `resumed ${taskId} in ${session.name}`, key: session.key };
+      }
+      try {
+        sendToInbox(state.root, state.configDir, taskId, message, state.ctx.sessionManager.getSessionId());
+      } catch (error) {
+        return { notice: `unpaused ${taskId}, but could not tell its oracle — ${(error as Error).message}` };
+      }
+      lobbyFeed.log("LOBBY", `resumed ${taskId} in another terminal`, "success");
+      return { notice: `resumed ${taskId} — the session driving it in another terminal carries on` };
+    }
+    case "stopped":
+      break;
+  }
+  resuming.add(taskId);
+  try {
+    const file = task.ownerSessionId ? await chats.locate(task.ownerSessionId) : undefined;
+    settleInterrupted(state.root, state.configDir, taskId, new Date(), RESUMED_DECISION);
+    // `/bot-lobby carry-on` unpauses it too; done here as well, the Tasks screen shows it at once.
+    unpause(state, taskId);
+    const session = sessionRegistry().start(state.ctx.cwd, {
+      name: task.title,
+      projectRoot: state.root,
+      onDialog: dialogTracker(state),
+      taskId,
+      ...(file ? { sessionFile: file } : {}),
+      message: `/bot-lobby carry-on ${taskId}`,
+    }, file ? undefined : sessionModel(state.ctx));
+    lobbyFeed.log("LOBBY", `resumed "${task.title}" (${taskId}) in the background`, "success");
+    lobbyTopics.bump("tasks");
+    return { notice: `resumed ${taskId} in a background session`, key: session.key };
+  } catch (error) {
+    return { notice: `could not resume ${taskId} — ${(error as Error).message}` };
+  } finally {
+    resuming.delete(taskId);
   }
 }
 
@@ -752,6 +847,7 @@ export function createLobbyService(state: Runtime): LobbyService {
     isAuto: (taskId) => autoFor(state, taskId),
     setAuto: (taskId, on) => switchAuto(state, taskId, on),
     sendToTask: (taskId, text) => sendToTask(state, taskId, text),
+    resumeTask: (taskId) => resumeTask(state, taskId),
     sendToSession: (sessionId, text) => sendToSession(state, sessionId, text),
     liveSessions: () => liveSessions(state),
     switchTo: (target) => switchTo(state, target),
