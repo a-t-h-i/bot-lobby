@@ -12,6 +12,7 @@ import type { LiveSession } from "../lobby/host.ts";
 import type { TaskRow } from "../lobby/task-rows.ts";
 import type { PlanComment } from "../state/comments.ts";
 import type { BotLobbyConfig, PanelMember } from "../schemas/configuration.ts";
+import type { QaRiskAssessment } from "../schemas/task.ts";
 import type { MemberState, PanelNote, PanelQuestion, PlannerMessage } from "../lobby/planner.ts";
 import type { QuickFixJob } from "../lobby/quickfix.ts";
 
@@ -381,6 +382,8 @@ export interface TaskDetail {
   blockers: Array<{ reason: string; need: string }>;
   /** The last six runs, one line each (`✓ DEV worker · 3m 12s · …`). */
   runs: string[];
+  /** Jev's last read of what the built change warrants of QA: level, test budget, focus and evidence. */
+  qaRisk?: QaRiskAssessment;
 }
 
 /** `plans.get`: one saved plan. */

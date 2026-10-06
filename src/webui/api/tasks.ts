@@ -287,5 +287,6 @@ export function tasksGet(body: { taskId: string }, ctx: ApiContext): TaskDetail 
     waiting: waitingOf(found),
     blockers: found.blockers.map((blocker) => ({ reason: blocker.reason, need: blocker.need })),
     runs: (found.runLog ?? []).slice(-DETAIL_RUNS).map((entry) => describeRun(runFromLog(entry, found.id), now)),
+    ...(found.qaRisk ? { qaRisk: found.qaRisk } : {}),
   };
 }
