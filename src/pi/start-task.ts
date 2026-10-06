@@ -7,7 +7,8 @@ import { existsSync } from "node:fs";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createTask, taskRequest, type Task, type TaskTrack, type TaskTriage, type TrackPath } from "../schemas/task.ts";
 import type { Domain } from "../schemas/agent.ts";
-import { chooseTrack, trackLine, trackSummary } from "../workflow/track.ts";
+import { chooseTrack, qaRequired, trackLine, trackSummary } from "../workflow/track.ts";
+import { startFromAgreedPlan } from "../workflow/workflow.ts";
 import { lobbyFeed } from "../lobby/feed.ts";
 import { createTaskDir, ensureProjectStructure, loadTask, nextTaskId, ownedTask, saveTask, taskDirFor } from "../state/persistence.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
@@ -54,6 +55,23 @@ function fastSteps(track: TaskTrack): string[] {
   ].filter(Boolean);
 }
 
+/** A task from an agreed plan: straight to building its steps; QA only when it took part in the panel. */
+function plannedSteps(task: Task): string[] {
+  const qa = qaRequired(task);
+  const steps = [
+    'Delegate the plan\'s steps now with orchestrate action=implement, opening each task with "Step N:" and briefing it in full from the plan. Give one domain its consecutive steps in one call, and run independent domains together with assignments.',
+    "After each report, check `git diff --stat` and the report, then delegate the next step.",
+    qa
+      ? "Once every step is done, run orchestrate action=qa (Jev sizes it to the change), then action=complete with a one-line summary."
+      : "Once every step is done, call orchestrate action=complete with a one-line summary. QA sat out the planning panel, so there is no QA gate.",
+  ];
+  return [
+    `Planned task: the user agreed this plan in the planning panel (${task.approvedPlan}), and it is already the task's plan. The panel asked the questions and read the code, so there is no clarifying, scouting, proposal or plan to write: start building.`,
+    ...steps.map((step, index) => `${index + 1}. ${step}`),
+    "If the code contradicts the plan, amend it with action=plan (the plan with the change made) and tell the user in one line, rather than starting over.",
+  ];
+}
+
 export function kickoff(task: Task, budgetMinutes = 0, options: { fastTrack?: boolean; routed?: boolean } = {}): string {
   const track = task.track;
   const head = [
@@ -68,6 +86,7 @@ export function kickoff(task: Task, budgetMinutes = 0, options: { fastTrack?: bo
     "",
   ];
   if (track?.path === "fast") return [...head, ...fastSteps(track)].join("\n");
+  if (task.approvedPlan && task.plan && task.state === "planning") return [...head, ...plannedSteps(task)].join("\n");
   const fastAllowed = Boolean(track) && options.fastTrack !== false && track?.userChoice !== "full" && track?.source !== "plan";
   return [
     ...head,
@@ -105,6 +124,10 @@ async function giveWorkspace(ctx: ExtensionContext, root: string, configDir: str
 export interface StartOptions {
   /** The planned task (PLAN-…) this task starts from: the user agreed its plan, so its proposal needs no approval. */
   approvedPlan?: string;
+  /** That plan: it becomes the task's plan, and the task starts at delegating its steps. */
+  plan?: string;
+  /** The panel seats that took part in that plan; one that sat it out (QA) is not part of the task. */
+  panel?: readonly string[];
   /** Start in auto mode: the oracle drives it to completion without asking. */
   auto?: boolean;
   /** The task's short title (a planned task's own title); derived from the request otherwise. */
@@ -140,8 +163,10 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   if (triage) task.triage = triage;
   // How serious the request reads: who takes part, and whether it takes the fast track or the full workflow.
   const config = loadConfig();
-  task.track = chooseTrack(request, triage, { fastTrack: config.workflow.fastTrack, ...(options.track ? { forced: options.track } : {}), ...(options.approvedPlan ? { approvedPlan: true } : {}) });
+  task.track = chooseTrack(request, triage, { fastTrack: config.workflow.fastTrack, ...(options.track ? { forced: options.track } : {}), ...(options.approvedPlan ? { approvedPlan: true } : {}), ...(options.panel ? { planPanel: options.panel } : {}) });
   lobbyFeed.log("LOBBY", trackLine(task.track), "info");
+  // An agreed plan is the task's plan: it goes straight to delegating its steps.
+  if (options.approvedPlan && options.plan) startFromAgreedPlan(task, options.plan, taskDirFor(root, configDir, task.id));
   await giveWorkspace(ctx, root, configDir, task, options.isolation ?? config.workflow.gitIsolation);
   saveTask(root, configDir, task);
   const budgetMinutes = options.budget ?? config.workflow.taskBudgetMinutes;
@@ -192,7 +217,7 @@ export async function startPlannedTask(pi: ExtensionAPI, ctx: ExtensionContext, 
   if (!plan) return `no planned task ${planId}`;
   if (plan.status !== "pending") return `${planId} was already started${plan.startedTaskId ? ` as ${plan.startedTaskId}` : ""}`;
   const waiting = unfinishedBefore(root, configDir, plan);
-  const task = await startTask(pi, ctx, configDir, plannedTaskRequest(plan), { approvedPlan: plan.id, title: plan.title, ...(options.auto ? { auto: true } : {}) });
+  const task = await startTask(pi, ctx, configDir, plannedTaskRequest(plan), { approvedPlan: plan.id, plan: plan.brief, ...(plan.panel ? { panel: plan.panel } : {}), title: plan.title, ...(options.auto ? { auto: true } : {}) });
   if (!task) return `this session already drives a task; finish or cancel it first`;
   markPlannedTaskStarted(root, configDir, plan.id, task.id);
   if (waiting.length > 0) {

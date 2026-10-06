@@ -13,6 +13,7 @@ import { isSubagentProcess, webToolsFor } from "./quiet.ts";
 import { registerQuietTools } from "./tool-renderers.ts";
 import { taskRequest, type Task, type TaskState } from "../schemas/task.ts";
 import { pendingComments, readPlanComments, type PlanComment } from "../state/comments.ts";
+import { requestBesidePlan } from "../state/backlog.ts";
 import { isAutoMode } from "../state/auto.ts";
 import { triageContext } from "../classifier/triage.ts";
 import { qaStillDue } from "../workflow/track.ts";
@@ -47,12 +48,12 @@ export function masterTaskContext(task: Task, comments: readonly PlanComment[] =
   const open = pendingComments(comments);
   return [
     `Task ${task.id}: ${task.title}`,
-    `Request: ${truncate(taskRequest(task), 2000)}`,
+    `Request: ${truncate(task.approvedPlan && task.plan ? requestBesidePlan(taskRequest(task)) : taskRequest(task), 2000)}`,
     task.proposal ? `Current proposal:\n${truncate(task.proposal, 2000)}` : "",
     task.plan ? `Approved plan:\n${truncate(task.plan, 3000)}` : "",
     task.amendments.length > 0 ? `User amendments:\n${task.amendments.map((entry) => `- ${entry}`).join("\n")}` : "",
     open.length > 0 ? `Open plan comments (from the lobby):\n${open.map((comment) => `- ${truncate(comment.text, 600)}`).join("\n")}` : "",
-    task.approvedPlan ? `The user agreed this task's plan in the planning panel (${task.approvedPlan}): follow it, do not ask them to approve a proposal (propose is approved automatically), and answer open questions from the plan.` : "",
+    task.approvedPlan ? `The user agreed this task's plan in the planning panel (${task.approvedPlan}), and it is the task's plan: delegate its steps without clarifying, scouting or proposing, and answer open questions from the plan.${task.track?.qaOut && !task.track.roster.includes("qa") ? " QA sat out the panel, so there is no QA gate: complete once every step is done." : ""}` : "",
     auto ? "AUTO MODE is on: drive this task to completion without the user. Do not ask them anything (clarify and ask_user_question are not answered); decide yourself, record each decision, and keep calling the orchestrate tool until the task is complete or truly blocked." : "",
   ]
     .filter((line) => line.length > 0)

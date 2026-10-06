@@ -12,6 +12,7 @@ import { completionBlockers } from "../src/master/decisions.ts";
 import { runWorkflowAction, type OrchestrateParams, type WorkflowDeps } from "../src/workflow/workflow.ts";
 import { chooseTrack, parseRoster, qaStillDue, qaWorkerCameLast, readRequest, trackLine, trackSummary } from "../src/workflow/track.ts";
 import { kickoff } from "../src/pi/start-task.ts";
+import { startFromAgreedPlan } from "../src/workflow/workflow.ts";
 import { parseCommand } from "../src/pi/commands.ts";
 import type { ProcessRunner } from "../src/execution/pi-runner.ts";
 
@@ -289,6 +290,48 @@ test("a fast task whose change turns out to touch security gets QA before it com
   assert.deepEqual(task.track!.roster, ["designer", "qa"]);
   assert.match((await act(deps, { action: "qa" })).message, /QA gate: PASS/);
   assert.equal((await act(deps, { action: "complete" })).state, "completed");
+});
+
+/** A task started from a plan the panel agreed, as startTask makes it: `panel` is who sat on it. */
+function plannedTask(deps: WorkflowDeps, panel: string[]): Task {
+  ensureProjectStructure(deps.root, deps.configDir);
+  const brief = ["## Steps", ...Array.from({ length: 12 }, (_, index) => `${index + 1}. Build part ${index + 1} of the new theming architecture`), "", "## Details", "Across the whole app."].join("\n");
+  const task = createTask("TASK-1", "Dark mode", "2026-01-01T00:00:00.000Z", `Dark mode\n\nAgreed plan (from the planning session):\n${brief}`);
+  task.approvedPlan = "PLAN-dark";
+  createTaskDir(deps.root, deps.configDir, task);
+  transition(task, "clarifying");
+  task.track = chooseTrack(task.request, undefined, { fastTrack: true, approvedPlan: true, planPanel: panel }, "2026-01-01T00:00:00.000Z");
+  startFromAgreedPlan(task, brief, taskDirFor(deps.root, deps.configDir, task.id));
+  saveTask(deps.root, deps.configDir, task);
+  return task;
+}
+
+test("a task from an agreed plan starts building at once, and a long plan QA sat out completes without a QA gate", async () => {
+  const prompts: string[] = [];
+  const deps = makeDeps([], {
+    runProcess: async (args) => {
+      prompts.push(readFileSync(args[args.indexOf("--append-system-prompt") + 1]!, "utf8"));
+      return { exitCode: 0, stdout: message(WORKER), stderr: "", killed: false, timedOut: false };
+    },
+  });
+  const task = plannedTask(deps, ["backend", "designer"]);
+  assert.deepEqual([task.state, task.track!.path, task.track!.roster.includes("qa"), task.track!.qaOut], ["planning", "full", false, true]);
+  assert.match(kickoff(task), /no clarifying, scouting, proposal or plan to write: start building\.[\s\S]*no QA gate/);
+  const built = await act(deps, { action: "implement", domain: "designer", task: "Steps 1-12: build the theming parts" });
+  assert.equal(built.ok, true, built.message);
+  assert.match(built.message, /QA sat out the planning panel, so there is no QA gate/);
+  assert.equal(prompts[0]!.match(/Build part 12 of the new theming architecture/g)?.length, 1, "the plan reaches the worker once, not again inside the request");
+  const done = await act(deps, { action: "complete", text: "Dark mode." });
+  assert.equal(done.ok, true, done.message);
+  assert.equal(prompts.length, 1, "one agent run: the worker, no QA");
+
+  // QA on the panel keeps the gate.
+  const gated = makeDeps([]);
+  const withQa = plannedTask(gated, ["backend", "qa"]);
+  assert.ok(withQa.track!.roster.includes("qa"));
+  assert.match(kickoff(withQa), /run orchestrate action=qa/);
+  await act(gated, { action: "implement", domain: "designer", task: "Steps 1-12: build the theming parts" });
+  assert.match((await act(gated, { action: "complete" })).message, /not allowed in state "implementing"/);
 });
 
 test("QA's part comes last only when it started after the other domains finished; the budget reserve follows", () => {

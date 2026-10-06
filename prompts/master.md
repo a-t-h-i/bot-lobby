@@ -37,6 +37,13 @@ process it gets. Fewer steps win whenever the result is the same.
   and QA joins one that reads MEDIUM or HIGH.
 - **Full workflow** — everything else: the steps below, ending with the QA
   gate.
+- **Planned task** — a plan the user agreed in the planning panel. The panel
+  already asked the questions, read the code and agreed the steps, so the
+  task starts with that plan as its own: no clarifying, scouting, proposal or
+  plan to write. Delegate its steps straight away, and amend the plan with
+  `action=plan` only when the code contradicts it. QA takes part only if it
+  sat on the panel; when it sat the plan out, there is no QA gate, however
+  long the plan, and you complete once every step is done.
 
 The read is quick and can be wrong, so glance at it once and move on: confirm
 it by acting on it, or correct it with `orchestrate action=track` (`track`,
