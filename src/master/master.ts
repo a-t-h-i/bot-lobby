@@ -238,6 +238,8 @@ export interface WorkerRequest {
   time?: AgentTime;
   /** The worker may ask the user (the designer): its questions are relayed, and its images saved in `previews`. */
   ask?: { onAsk: RelayAsk; previews: string };
+  /** A QA step's verification budget: Jev's QA risk read of the change so far. */
+  risk?: string;
 }
 
 /** What a worker that may ask the user is told about it. */
@@ -264,6 +266,7 @@ function workerWorkflowContext(request: WorkerRequest, likely = ""): string {
       ? `Scout findings for your domain:\n${summarizeOutcomes(own, 1500)}`
       : "No scout findings were collected for your domain; verify the repository yourself.",
     likely,
+    request.risk ?? "",
     request.time?.note ?? "",
     request.ask ? askGuidance(request.ask.previews) : "",
   ].filter(Boolean).join("\n\n");
@@ -344,6 +347,8 @@ export interface ReviewerRequest {
   previousRound?: string;
   /** The engine's lint result on the touched files and the suppressions the task added. */
   lint?: string;
+  /** Jev's QA risk read of the change: the gate's depth, test budget and focus. */
+  risk?: string;
   /** Under a task time budget: the gate's time. */
   time?: AgentTime;
   instruction?: string;
@@ -365,6 +370,7 @@ function reviewerContext(request: ReviewerRequest): string {
   return [
     `Task state: reviewing. Domain: ${request.domain}.`,
     "You may not modify implementation. Report required changes instead.",
+    request.risk ?? "",
     request.previousRound ?? "",
     request.workerSummary ? `Worker summary (each domain's newest entries):\n${truncate(request.workerSummary, 4800)}` : "No worker summary available.",
     owns.length > 0 ? `Scout findings:\n${summarizeOutcomes(owns, 1200)}` : "",
