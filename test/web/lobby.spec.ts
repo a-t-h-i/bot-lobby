@@ -223,7 +223,7 @@ test("the activity log follows its newest entry, lets a reader who scrolled up s
   await expect.poll(gap, { message: "Jump to latest lands on the newest entry" }).toBeLessThanOrEqual(2);
 });
 
-test("contrast meets 4.5:1", async ({ page, server }) => {
+test("contrast meets 4.5:1", { tag: "@theme" }, async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 800 });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

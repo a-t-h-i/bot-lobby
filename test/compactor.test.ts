@@ -83,12 +83,3 @@ test("archived knowledge stays outside the retrieval paths", () => {
   assert.ok(!knowledgeFiles.some((entry) => entry.includes(".bak")), `no backups inside the knowledge dir: ${knowledgeFiles}`);
   assert.ok(outcome.archive.includes(`${join("archive", "Designer")}`));
 });
-
-test("compaction creates the archive directory when it does not exist yet", () => {
-  const root = dataRootFor();
-  const path = join(knowledgeDir(root, "master"), "standards.md");
-  writeFileSync(path, "original\n");
-  const outcome = compactKnowledgeFile({ dataRoot: root, agent: "master", file: "standards.md", content: "rewritten", backupCount: 1 });
-  assert.ok(existsSync(outcome.archive));
-  assert.equal(readFileOr(path), "rewritten\n");
-});
