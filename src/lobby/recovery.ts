@@ -32,6 +32,7 @@ import {
   type WindowRecord,
 } from "../state/recovery.ts";
 import { isPlanningSnapshot, type PlanningSession, type PlanningSnapshot } from "./planner.ts";
+import { keepPlan } from "../state/plan-history.ts";
 import type { QuickFixJob } from "./quickfix.ts";
 import type { BackgroundSession } from "./sessions.ts";
 
@@ -300,13 +301,19 @@ export class WindowKeeper {
     this.window = new Debounced(() => writeWindow(source.root, source.configDir, this.record()));
     this.planner = new Debounced(() => {
       const session = source.planner();
-      if (session) writeSessionState(source.root, source.configDir, "planner", source.sessionId(), session.snapshot());
+      if (session) this.keepPlanner(session, session.snapshot());
     });
     this.quickfix = new Debounced(() => {
       const jobs = source.quickfix();
       if (jobs.length > 0) writeSessionState(source.root, source.configDir, "quickfix", source.sessionId(), jobs);
       else removeSessionState(source.root, source.configDir, "quickfix", source.sessionId());
     });
+  }
+
+  /** The panel as this window's (to carry on) and among the project's plans (to read again later). */
+  private keepPlanner(session: PlanningSession, snapshot: PlanningSnapshot): void {
+    writeSessionState(this.source.root, this.source.configDir, "planner", this.source.sessionId(), snapshot);
+    keepPlan(this.source.root, this.source.configDir, session.id, session.createdAt, snapshot);
   }
 
   private record(): Omit<WindowRecord, "pid" | "token" | "updatedAt"> {
@@ -338,7 +345,7 @@ export class WindowKeeper {
     const sessionId = this.source.sessionId();
     try {
       const session = this.source.planner();
-      if (session) writeSessionState(root, configDir, "planner", sessionId, stoppedSnapshot(session.snapshot()));
+      if (session) this.keepPlanner(session, stoppedSnapshot(session.snapshot()));
       const jobs = this.source.quickfix().map(stoppedJob);
       if (jobs.length > 0) writeSessionState(root, configDir, "quickfix", sessionId, jobs);
       else removeSessionState(root, configDir, "quickfix", sessionId);

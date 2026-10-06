@@ -24,6 +24,7 @@ import { Thinking } from "./Thinking.tsx"
 import { QuestionPopup, QuestionsPill } from "@/prompts/QuestionPopup"
 import { useEvents } from "./useEvents.ts"
 import { useRecoveredNotice } from "./recovered.ts"
+import { syncThemes } from "./palette.ts"
 import { useLobbyKeys } from "./useLobbyKeys.ts"
 import { useDesktopNotifications } from "./notify.ts"
 import { usePrompts } from "./usePrompts.ts"
@@ -104,6 +105,11 @@ export function Shell() {
 
   const status = statusRecord.data
   useRecoveredNotice(status)
+  // Signed in: the themes pi keeps replace this browser's copy.
+  const signedIn = Boolean(status) && !signedOut
+  useEffect(() => {
+    if (signedIn) void syncThemes()
+  }, [signedIn])
   const tabs = status?.tabs ?? []
   const keys = status?.keys ?? []
   const activeId = route.kind === "tab" ? route.tab : undefined

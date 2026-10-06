@@ -117,8 +117,10 @@
   --btn-face-hover: linear-gradient(180deg, #ffffff 0%, #f9f8f6 100%);
   --btn-face-press: linear-gradient(180deg, #ecebe7 0%, #f4f3f0 100%);
   --btn-rim: rgb(32 28 20 / 0.13);
-  --btn-raise: inset 0 1px 0 rgb(255 255 255 / 1), inset 0 -1px 0 rgb(32 28 20 / 0.05), 0 1px 1.5px rgb(32 28 20 / 0.08), 0 2px 6px -2px rgb(32 28 20 / 0.1);
-  --btn-raise-hover: inset 0 1px 0 rgb(255 255 255 / 1), inset 0 -1px 0 rgb(32 28 20 / 0.05), 0 1px 2px rgb(32 28 20 / 0.09), 0 6px 14px -5px rgb(32 28 20 / 0.17);
+  /* Every button casts Tailwind's shadow-sm, whatever its face. */
+  --btn-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --btn-raise: inset 0 1px 0 rgb(255 255 255 / 1), inset 0 -1px 0 rgb(32 28 20 / 0.05), var(--btn-sm);
+  --btn-raise-hover: inset 0 1px 0 rgb(255 255 255 / 1), inset 0 -1px 0 rgb(32 28 20 / 0.05), var(--btn-sm);
   --btn-press: inset 0 1px 2.5px rgb(32 28 20 / 0.13), inset 0 0 0 0.5px rgb(32 28 20 / 0.04);
   --btn-gloss: linear-gradient(180deg, rgb(255 255 255 / 0.2) 0%, rgb(255 255 255 / 0.04) 52%, rgb(0 0 0 / 0.06) 100%);
 
@@ -137,8 +139,8 @@
   --btn-face-hover: linear-gradient(180deg, #2c2c33 0%, #212127 100%);
   --btn-face-press: linear-gradient(180deg, #17171b 0%, #1d1d22 100%);
   --btn-rim: rgb(255 255 255 / 0.085);
-  --btn-raise: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 1px 2px rgb(0 0 0 / 0.5), 0 3px 8px -3px rgb(0 0 0 / 0.55);
-  --btn-raise-hover: inset 0 1px 0 rgb(255 255 255 / 0.09), 0 1px 2px rgb(0 0 0 / 0.55), 0 7px 16px -6px rgb(0 0 0 / 0.7);
+  --btn-raise: inset 0 1px 0 rgb(255 255 255 / 0.07), var(--btn-sm);
+  --btn-raise-hover: inset 0 1px 0 rgb(255 255 255 / 0.09), var(--btn-sm);
   --btn-press: inset 0 1px 3px rgb(0 0 0 / 0.55);
   --btn-gloss: linear-gradient(180deg, rgb(255 255 255 / 0.16) 0%, rgb(255 255 255 / 0.03) 52%, rgb(0 0 0 / 0.08) 100%);
   --card-face: linear-gradient(180deg, color-mix(in oklab, var(--card) 95%, white) 0%, var(--card) 100%);
@@ -397,7 +399,7 @@
    * --tw-shadow, so a focus ring adds to it instead of replacing it.
    */
   .btn-raised,
-  .btn-ghost:is(:hover, [aria-expanded="true"], [aria-pressed="true"], [aria-current="page"]),
+  .btn-ghost,
   .btn-tint {
     --tw-shadow: var(--btn-raise);
     box-shadow: var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
@@ -421,11 +423,11 @@
     background-color: var(--tint);
     background-image: var(--btn-gloss);
     border-color: color-mix(in oklab, var(--tint) 76%, black);
-    --tw-shadow: inset 0 1px 0 rgb(255 255 255 / 0.22), inset 0 -1px 0 rgb(0 0 0 / 0.12), 0 1px 1.5px rgb(0 0 0 / 0.14);
+    --tw-shadow: inset 0 1px 0 rgb(255 255 255 / 0.22), inset 0 -1px 0 rgb(0 0 0 / 0.12), var(--btn-sm);
   }
   .btn-tint:hover {
     filter: brightness(1.07);
-    --tw-shadow: inset 0 1px 0 rgb(255 255 255 / 0.26), inset 0 -1px 0 rgb(0 0 0 / 0.12), 0 1px 2px rgb(0 0 0 / 0.16), 0 3px 6px -3px rgb(0 0 0 / 0.18);
+    --tw-shadow: inset 0 1px 0 rgb(255 255 255 / 0.26), inset 0 -1px 0 rgb(0 0 0 / 0.12), var(--btn-sm);
   }
   .btn-tint:active {
     filter: brightness(0.97);
@@ -1042,4 +1044,14 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .effort-word { animation: none !important; background-position: 50% 0; }
+}
+
+/*
+ * Every button wears a border the colour of its text. Outside the layers, so
+ * it wins over the transparent border a quiet button is written with.
+ */
+.btn-raised,
+.btn-ghost,
+.btn-tint {
+  border-color: currentColor;
 }

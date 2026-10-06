@@ -616,14 +616,20 @@ test("colour themes: a built-in one repaints the page and survives a reload; a t
   await expect(page.getByRole("radiogroup", { name: "Colour theme" }).getByRole("radio", { name: /Ocean/ }), "the choice is remembered").toHaveAttribute("aria-checked", "true");
 
   const box = page.getByLabel("Theme CSS from tweakcn");
-  const apply = page.getByRole("button", { name: "Apply the pasted theme" });
+  const apply = page.getByRole("button", { name: "Save and apply the pasted theme" });
   await box.fill("hello");
   await apply.click();
   await expect(page.getByRole("alert"), "text that is not a theme says so").toContainText("No theme colours");
   const pasted = (value: string) => `:root{--background:#fafafa;--foreground:#111;--card:#fff;--card-foreground:#111;--primary:${value};--primary-foreground:#fff;--muted:#eee;--border:#ddd}.dark{--background:#000;--foreground:#eee;--card:#111;--card-foreground:#eee;--primary:#f80;--primary-foreground:#000}`;
+  const name = page.getByLabel("Name", { exact: true });
+  await name.fill("Unsafe");
   await box.fill(pasted("url(https://evil.example/x.png)"));
   await apply.click();
+  await expect(group.getByRole("radio", { name: /Unsafe/ })).toHaveAttribute("aria-checked", "true");
   expect(await primary(), "an unsafe value is dropped, not applied").not.toContain("evil");
+  await page.getByRole("button", { name: "Remove Unsafe" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: /Remove theme/ }).click();
+  await expect(group.getByRole("radio", { name: /Unsafe/ })).toHaveCount(0);
   await box.fill(pasted("#e11d48"));
   await apply.click();
   await expect(group.getByRole("radio", { name: /Custom theme/ }), "the pasted theme is kept and selected").toHaveAttribute("aria-checked", "true");

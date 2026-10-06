@@ -81,6 +81,21 @@ export interface KeyInfo {
 }
 
 /** `status.get`: everything the page shell needs before it reads a tab. */
+/** A colour theme the user saved, kept for every pi session (`themes.json`). */
+export interface SavedThemeInfo {
+  id: string;
+  name: string;
+  light?: Record<string, string>;
+  dark?: Record<string, string>;
+  savedAt: string;
+}
+
+/** The saved themes and the chosen one. */
+export interface ThemeStoreInfo {
+  themes: SavedThemeInfo[];
+  active?: string;
+}
+
 export interface StatusInfo {
   workspace: { name: string; branch?: string };
   branch?: string;
@@ -216,6 +231,34 @@ export interface PlannerSnapshot {
   retryable: boolean;
   /** Whether the panel is thinking now. */
   busy: boolean;
+}
+
+/** A previous plan as a list shows it: a planning session never saved as a task. */
+export interface PreviousPlanInfo {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+  messages: number;
+  rounds: number;
+  hasDraft: boolean;
+}
+
+/** A previous plan, whole, to read. */
+export interface PreviousPlanDetail {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+  rounds: number;
+  seats: PanelMember[];
+  messages: PlannerMessage[];
+  draft?: string;
+  notes: PanelNote[];
+  /** Where it started, when it came from an issue. */
+  seed?: string;
 }
 
 /** One issue a planning session can start from. */
@@ -578,6 +621,11 @@ export interface Api {
   "planner.retry": { request: Record<string, never>; result: { notice: string } };
   "planner.commentLine": { request: { line: string; text: string }; result: { notice: string } };
   "planner.answer": { request: Record<string, never>; result: { notice: string } };
+  "planner.previous": { request: { archived?: boolean }; result: { plans: PreviousPlanInfo[] } };
+  "planner.previousGet": { request: { id: string }; result: PreviousPlanDetail };
+  "planner.previousArchive": { request: { id: string; archived: boolean }; result: { notice: string } };
+  "planner.previousDelete": { request: { id: string }; result: { notice: string } };
+  "planner.previousOpen": { request: { id: string }; result: { notice: string } };
   "planner.save": { request: Record<string, never>; result: { notice: string } };
   "quickfix.list": { request: Record<string, never>; result: { jobs: QuickFixJob[] } };
   "quickfix.submit": { request: { text: string; attachments?: string[] }; result: { notice: string; id: string } };
@@ -614,6 +662,11 @@ export interface Api {
   "settings.get": { request: Record<string, never>; result: SettingsInfo };
   "settings.set": { request: { patch: Record<string, unknown> }; result: { config: BotLobbyConfig } };
   "settings.linters": { request: Record<string, never>; result: { linters: SettingsLinter[] } };
+  "themes.get": { request: Record<string, never>; result: ThemeStoreInfo };
+  "themes.save": { request: { name: string; light?: Record<string, string>; dark?: Record<string, string> }; result: ThemeStoreInfo & { id: string } };
+  "themes.rename": { request: { id: string; name: string }; result: ThemeStoreInfo };
+  "themes.remove": { request: { id: string }; result: ThemeStoreInfo };
+  "themes.choose": { request: { id: string }; result: ThemeStoreInfo };
 }
 
 export type ApiName = keyof Api;

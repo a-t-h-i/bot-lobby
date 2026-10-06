@@ -19,7 +19,8 @@
     "paths": {
       "@/*": ["./src/*"],
       "@protocol": ["../src/webui/protocol.ts"],
-      "@shared": ["../src/lobby/prompts.ts"]
+      "@shared": ["../src/lobby/prompts.ts"],
+      "@palette": ["../src/webui/palette-core.ts"]
     }
   },
   "include": ["src"]
