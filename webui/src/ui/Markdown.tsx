@@ -5,11 +5,12 @@ import remarkGfm from "remark-gfm"
 import { Check, Copy } from "lucide-react"
 import { ActionButton } from "./Actions"
 import { cn } from "@/lib/utils"
-import { safeHref } from "@/lib/markdown"
+import { markdownSections, safeHref } from "@/lib/markdown"
 import { codeSource, shouldCopy, writeCode, type SourcePosition } from "@/lib/codeCopy"
 import { projectUrl } from "@/lib/project"
 import { toast } from "@/lib/toast"
 import { AttachmentList, splitAttachments } from "./Attachments"
+import { useGradual } from "@/lib/useGradual"
 
 interface Node {
   type?: string; value?: string; tagName?: string; position?: SourcePosition
@@ -74,10 +75,16 @@ function componentsFor(source: string): Components {
   }
 }
 
+const Section = memo(function Section({ text }: { text: string }) {
+  return <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[copyPlugin]} urlTransform={safeHref} components={componentsFor(text)}>{text}</ReactMarkdown>
+})
+
 export const Markdown = memo(function Markdown({ text, className }: { text: string; className?: string }) {
   const { body, files } = splitAttachments(text)
+  const sections = body ? markdownSections(body) : []
+  const shown = useGradual(sections.length, 3)
   return <div className={cn("md-body", className)}>
-    {body ? <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[copyPlugin]} urlTransform={safeHref} components={componentsFor(body)}>{body}</ReactMarkdown> : null}
+    {sections.slice(0, shown).map((section, index) => <Section key={index} text={section} />)}
     <AttachmentList files={files} />
   </div>
 })
