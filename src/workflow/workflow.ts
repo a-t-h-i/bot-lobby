@@ -63,7 +63,8 @@ import type { EffortRouter } from "../classifier/effort.ts";
 import { answerClarify } from "../classifier/triage.ts";
 import { appendMetrics, metricFromRun } from "../state/metrics.ts";
 import { markCommentsAddressed, pendingComments, readPlanComments } from "../state/comments.ts";
-import { builtSomething, fastNext, onFastTrack, parseRoster, qaRequired, qaStillDue, qaTookPart, readRequest, rosterWords, trackSummary } from "./track.ts";
+import { builtSomething, fastNext, onFastTrack, parseRoster, PLANNED_NEXT, qaRequired, qaStillDue, qaTookPart, readRequest, rosterWords, trackSummary } from "./track.ts";
+import { requestBesidePlan } from "../state/backlog.ts";
 import { missingWorktree, taskCwd } from "../execution/workspace.ts";
 import { completionReview } from "../delivery/review.ts";
 import { execCommand, type Exec } from "../lobby/issues.ts";
@@ -546,8 +547,8 @@ function handlePlan(task: Task, params: OrchestrateParams, deps: WorkflowDeps): 
   requireState(task, ["planning", ...AMEND_PLAN_STATES]);
   const plan = params.plan?.trim();
   if (!plan) throw new Error("plan requires the plan text");
-  // The fast track keeps a short plan: the full plan's required areas are the full workflow's.
-  const missing = onFastTrack(task) ? [] : validatePlan(plan);
+  // The fast track keeps a short plan, and a planned task's is the one the panel agreed: the required areas are for a plan the oracle writes.
+  const missing = onFastTrack(task) || task.approvedPlan ? [] : validatePlan(plan);
   if (missing.length > 0) throw new Error(`plan is missing: ${missing.join(", ")}`);
   const amending = AMEND_PLAN_STATES.includes(task.state);
   task.plan = plan;
@@ -677,7 +678,8 @@ export function planWithin(plan: string, budget: number): string {
 
 function workerTaskText(task: Task, planBudget = 6000): string {
   return [
-    `Requirements: ${taskRequest(task)}`,
+    // A planned task's request is its plan: it is sent once, as the plan.
+    `Requirements: ${task.approvedPlan && task.plan ? requestBesidePlan(taskRequest(task)) : taskRequest(task)}`,
     task.proposal ? `Approved objective: ${task.proposal}` : "",
     task.plan ? `Approved plan:\n${planWithin(task.plan, planBudget)}` : "",
     task.amendments.length > 0 ? `User amendments:\n${task.amendments.map((entry) => `- ${entry}`).join("\n")}` : "",
@@ -918,7 +920,7 @@ function absorbWorkerOutcome(task: Task, deps: WorkflowDeps, outcome: WorkerOutc
   task.blockers = [...task.blockers.filter((blocker) => blocker.domain !== domain), ...outcome.result.blockers];
   updateScratchpad(deps, task, outcome);
   const grown = qaJoinsGrownFastTask(task, outcome);
-  const report = workerReport(outcome, approvals, pushback, onFastTrack(task) ? fastNext(task) : FULL_NEXT);
+  const report = workerReport(outcome, approvals, pushback, onFastTrack(task) ? fastNext(task) : qaRequired(task) ? FULL_NEXT : PLANNED_NEXT);
   return [report, grown, timeReport(outcome)].filter(Boolean).join("\n");
 }
 
@@ -1037,6 +1039,21 @@ function startFast(task: Task): void {
     track.autoPlan = true;
   }
   recordDecision(task, `Fast track: started without a proposal round (${track.size}; ${rosterWords(track.roster)}).`);
+}
+
+/**
+ * A task from a plan agreed in the planning panel starts with that plan as
+ * its own: the panel already asked the questions, read the code and agreed
+ * the steps, so there is no clarifying, scouting, proposal or plan to write.
+ * The engine walks the same states (every transition stays legal) to
+ * planning, where the oracle delegates the first step.
+ */
+export function startFromAgreedPlan(task: Task, plan: string, taskDir: string): void {
+  for (const state of ["clarifying", "awaiting_approval", "planning"] as const) if (task.state !== state) transition(task, state);
+  task.plan = plan;
+  writeFileEnsured(join(taskDir, "plan.md"), plan);
+  const qa = task.track?.qaOut ? " QA sat out the panel, so the task runs without a QA gate." : "";
+  recordDecision(task, `Started from the plan agreed in the planning panel (${task.approvedPlan}): no clarifying, scouting or proposal round.${qa}`);
 }
 
 /** `Step 3: …`, `Steps 2-4 — …` at the start of a delegation. */
@@ -1479,8 +1496,8 @@ function handleWhiteboard(task: Task, params: OrchestrateParams, deps: WorkflowD
 
 /** §63: record history, drop scratchpads, then mark the task completed. */
 async function handleComplete(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
-  // The fast track completes straight from its work; the full workflow from review.
-  requireState(task, onFastTrack(task) ? ["implementing", "reviewing", "blocked"] : ["reviewing", "blocked"]);
+  // The fast track (and a plan QA sat out) completes straight from its work; the full workflow from review.
+  requireState(task, onFastTrack(task) || !qaRequired(task) ? ["implementing", "reviewing", "blocked"] : ["reviewing", "blocked"]);
   const joined = await qaJoinsRiskyFastTask(task, deps);
   if (joined) throw new Error(joined);
   // Without QA's part (where the track asks for it) only the user can let the task finish: they are asked, never overruled.
@@ -1575,8 +1592,8 @@ function handleTrack(task: Task, params: OrchestrateParams, deps: WorkflowDeps):
     if (!shaping) throw new Error(`a task takes the fast track before its work is planned; this one is ${task.state}`);
   }
   const asked = params.roster ? parseRoster(params.roster) : [...(current?.roster ?? [])];
-  // The full workflow always ends with the QA gate.
-  const roster = path === "full" ? parseRoster([...asked, "qa"]) : asked;
+  // The full workflow ends with the QA gate, unless QA sat out the planning panel (the oracle may still name it).
+  const roster = path === "full" && !current?.qaOut ? parseRoster([...asked, "qa"]) : asked;
   if (!shaping && current?.roster.includes("qa") && !roster.includes("qa")) throw new Error("QA stays on the roster once the work is under way");
   const grew = current?.path === "fast" && path === "full";
   task.track = {
@@ -1587,13 +1604,14 @@ function handleTrack(task: Task, params: OrchestrateParams, deps: WorkflowDeps):
     source: "oracle",
     ...(current?.userChoice ? { userChoice: current.userChoice } : {}),
     ...(current?.autoPlan ? { autoPlan: true } : {}),
+    ...(current?.qaOut ? { qaOut: true } : {}),
     at: new Date().toISOString(),
   };
   recordDecision(task, `Track: ${path === "fast" ? "fast track" : "full workflow"}; ${rosterWords(roster)} — ${reason}`);
   if (path === "fast") {
     return `Fast track: ${rosterWords(roster)}. Delegate straight away with action=implement (open each task with "Step N:"); no scouts, proposal or plan. ${qaRequired(task) ? "QA takes part before completion: action=qa, sized to the change." : "No QA gate unless the change turns out riskier than it read."} Then action=complete.`;
   }
-  if (!shaping) return `Full workflow from here: ${rosterWords(roster)}. The QA gate runs before the task completes${grew ? "; tell the user in one line why the task grew" : ""}.`;
+  if (!shaping) return `Full workflow from here: ${rosterWords(roster)}. ${qaRequired(task) ? "The QA gate runs before the task completes" : "No QA gate: QA sat out the planning panel"}${grew ? "; tell the user in one line why the task grew" : ""}.`;
   return `Full workflow: ${rosterWords(roster)}. Scout what the request touches, then propose a short bullet list for approval.`;
 }
 
