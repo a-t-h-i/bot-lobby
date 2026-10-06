@@ -20,6 +20,7 @@ export default defineConfig({
       "@": resolve(root, "src"),
       "@protocol": resolve(root, "../src/webui/protocol.ts"),
       "@shared": resolve(root, "../src/lobby/prompts.ts"),
+      "@palette": resolve(root, "../src/webui/palette-core.ts"),
     },
   },
 })

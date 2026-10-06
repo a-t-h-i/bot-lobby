@@ -78,6 +78,8 @@ export interface ScenarioFixture {
   backgroundSessions?: Array<{ key: string; name: string; status: string; sessionId?: string; planId?: string; dialogs?: Array<Record<string, unknown>> }>;
   /** Live sessions in other terminals for `sessions.list`. */
   liveSessions?: Array<{ sessionId: string; pid: number; name?: string; taskId?: string; mode: string }>;
+  /** Previous plans (planning sessions never saved as a task) for `planner.previous*`. */
+  mockPreviousPlans?: Array<{ id: string; title: string; createdAt: string; updatedAt: string; archivedAt?: string; savedAs?: string[]; draft?: string; rounds?: number; messages: Array<Record<string, unknown>>; notes?: Array<Record<string, unknown>> }>;
   /** The planning session for the `planner.*` calls (absent means none started). */
   mockPlanner?: {
     seats: string[];
@@ -164,6 +166,7 @@ export function loadScenario(name: string | undefined): ScenarioFixture {
     autoTasks: Array.isArray(parsed.autoTasks) ? (parsed.autoTasks as string[]) : [],
     backgroundSessions: Array.isArray(parsed.backgroundSessions) ? (parsed.backgroundSessions as ScenarioFixture["backgroundSessions"]) : [],
     liveSessions: Array.isArray(parsed.liveSessions) ? (parsed.liveSessions as ScenarioFixture["liveSessions"]) : [],
+    mockPreviousPlans: Array.isArray(parsed.mockPreviousPlans) ? (parsed.mockPreviousPlans as ScenarioFixture["mockPreviousPlans"]) : [],
     mockPlanner: isRecord(parsed.mockPlanner) ? (parsed.mockPlanner as unknown as ScenarioFixture["mockPlanner"]) : undefined,
     mockQuickfix: Array.isArray(parsed.mockQuickfix) ? (parsed.mockQuickfix as ScenarioFixture["mockQuickfix"]) : [],
     mockMetrics: Array.isArray(parsed.mockMetrics) ? (parsed.mockMetrics as ScenarioFixture["mockMetrics"]) : [],

@@ -81,6 +81,8 @@ export const test = base.extend<object, { server: MockServer }>({
       const mock: MockServer = {
         link: web.link,
         use: (scenario: string) => {
+          // Saved themes live in the global config folder: each check starts with none.
+          rmSync(join(configDir, "themes.json"), { force: true });
           disposeFixtureService(current);
           current = createFixtureService(scenario);
           web.rebind(current);
