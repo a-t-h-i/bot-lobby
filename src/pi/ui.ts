@@ -72,8 +72,14 @@ function setZenState(task: Task | undefined, live: AgentRun[]): void {
   zenState = { task, live, runs: mergeRuns(persistedRuns(task), live) };
 }
 
-/** Bot-lobby off for this session (plain pi): the Master prompt is hidden but ownership stays (see switch.ts). */
-let minimized = false;
+/**
+ * Bot-lobby off for this session (plain pi): the Master prompt is hidden but
+ * ownership stays (see switch.ts). Kept on the process, not the module: a
+ * reload imports the extension afresh, and on or off must outlive it.
+ */
+const SWITCH = Symbol.for("bot-lobby.minimized");
+const processState = globalThis as { [SWITCH]?: boolean };
+let minimized = processState[SWITCH] ?? false;
 
 export function isMinimized(): boolean {
   return minimized;
@@ -81,6 +87,7 @@ export function isMinimized(): boolean {
 
 export function setMinimized(value: boolean): void {
   minimized = value;
+  processState[SWITCH] = value;
 }
 
 /**
