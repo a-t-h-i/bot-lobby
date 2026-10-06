@@ -7,7 +7,8 @@ import { builtSomething, onFastTrack, qaRequired, qaTookPart } from "../workflow
 /**
  * §19: everything the engine requires before completion may be declared. The
  * fast track asks for a finished worker step instead of a QA pass, and for
- * QA's part only when the change needs tests.
+ * QA's part only when the change needs tests; so does a planned task whose
+ * QA sat out the planning panel.
  */
 export function completionBlockers(task: Task, pendingCount: number): string[] {
   const blockers: string[] = [];
@@ -15,6 +16,8 @@ export function completionBlockers(task: Task, pendingCount: number): string[] {
   if (onFastTrack(task)) {
     if (!builtSomething(task)) blockers.push("no worker step has finished yet");
     if (qaRequired(task) && !qaTookPart(task) && !task.qaWaiver) blockers.push("QA has not taken part (run the QA gate: action=qa)");
+  } else if (!qaRequired(task)) {
+    if (!builtSomething(task)) blockers.push("no worker step has finished yet");
   } else if (task.qaVerdict !== "pass" && !task.qaWaiver) blockers.push(`QA gate is ${task.qaVerdict ?? "not run"}`);
   if (pendingCount > 0) blockers.push(`${pendingCount} unresolved approval request(s)`);
   if (task.blockers.length > 0) blockers.push(`${task.blockers.length} unresolved blocker(s)`);
