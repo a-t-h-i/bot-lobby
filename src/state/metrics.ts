@@ -356,7 +356,6 @@ export function aggregateMetrics(records: readonly MetricRecord[], by: GroupBy =
 }
 
 export type SortKey = "runs" | "avg" | "success" | "cost";
-export const SORT_KEYS: readonly SortKey[] = ["runs", "avg", "success", "cost"];
 
 export function sortGroups(groups: readonly MetricGroup[], key: SortKey): MetricGroup[] {
   const score = (group: MetricGroup): number => {

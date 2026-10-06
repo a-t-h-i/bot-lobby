@@ -373,11 +373,6 @@ function buildRoutes(): Record<string, Route> {
 
 const ROUTES = buildRoutes();
 
-/** Whether the router knows a call (defined names only; never inherited ones). */
-export function isKnownCall(name: string): boolean {
-  return Object.hasOwn(ROUTES, name);
-}
-
 /**
  * Run `POST /api/<name>` with an already-parsed body. Throws `HttpError` for
  * refusals (unknown call, a body that is no object, a schema mismatch, or a

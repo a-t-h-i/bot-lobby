@@ -188,6 +188,3 @@ export const PAGE = {
   fullscreenOn: "Exit fullscreen",
   fullscreenOff: "Go fullscreen",
 } as const
-
-/** The toast after a save. */
-export const SAVED_TO_CONFIG = "saved to the bot-lobby config"

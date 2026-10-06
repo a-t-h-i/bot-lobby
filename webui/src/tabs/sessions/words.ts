@@ -14,7 +14,6 @@ export const NOTHING_SAID = "Nothing said yet."
 export const OTHER_TERMINAL_NOTE =
   "This session runs in another terminal: its conversation shows here and your messages reach its oracle within seconds, but live activity only streams from sessions started in this window."
 export const NO_OTHERS = "No other sessions. Start one below."
-export const STARTER_LABEL = "Start a task in a new session"
 
 export interface Entry {
   /** The route key: `here`, a background key such as `S1`, or a live session id. */

@@ -154,14 +154,6 @@ export async function createIssue(exec: Exec, cwd: string, title: string, body: 
   return { url, ...(Number.isFinite(number) ? { number } : {}) };
 }
 
-/** The issue as text for the planner: body plus comments. */
-export function issueText(issue: IssueDetail): string {
-  const comments = issue.comments
-    .filter((comment) => comment.body.trim())
-    .map((comment) => `**${comment.author ?? "someone"}** commented:\n${comment.body.trim()}`);
-  return [issue.body.trim() || "(no description)", ...comments].join("\n\n");
-}
-
 /** Lobby state for the Issues tab: the list, the open issue, and what is loading. */
 export class IssuesState {
   issues: IssueSummary[] = [];

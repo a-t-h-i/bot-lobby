@@ -10,7 +10,6 @@ import { expect, openScenario, test, type ErrorTrap, type MockServer, type Page 
 declare const document: any;
 declare const window: any;
 declare const getComputedStyle: any;
-type Element = any;
 
 const SIZES = [
   { width: 768, height: 1024 },
@@ -180,7 +179,6 @@ test("the Lobby fills the window: the page never scrolls, each pane does, and Th
   await openScenario(page, server, "full");
   for (const size of SIZES.filter((entry) => entry.width === 1280 || entry.width === 768)) {
     await page.setViewportSize(size);
-    const main = page.locator("#main");
     await expect(page.getByRole("button", { name: "Open Thinking" })).toBeVisible();
     const run = await page.evaluate(() => {
       const el = document.getElementById("main") as any;

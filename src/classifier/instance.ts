@@ -76,11 +76,6 @@ export function keyStatus(piProvider: string): KeyStatus | undefined {
   return binding?.status(piProvider);
 }
 
-/** Tests: use this classifier for the process (undefined restores the default). */
-export function useClassifier(next: Classifier | undefined): void {
-  instance = next;
-}
-
 /** Register the `typesafe` login entry and bind the classifier to each session's key store. */
 export function registerClassifier(pi: ExtensionAPI, configDir: string): void {
   registerJevProvider(pi);

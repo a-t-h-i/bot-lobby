@@ -7,51 +7,7 @@
  * parent, and the text of user and assistant messages (never tool output).
  */
 import { closeSync, openSync, readSync, statSync } from "node:fs";
-import { chatFromEntries, chatText, CLEARED_NOTE, isClearedMark, MAX_CHAT, textOf, type ChatEntry } from "./feed.ts";
-
-interface EntryLike {
-  type?: string;
-  id?: string;
-  parentId?: string | null;
-}
-
-/** The entries on the branch that ends at the newest entry, oldest first (a session file is a tree). */
-export function currentBranch(entries: readonly unknown[]): unknown[] {
-  const byId = new Map<string, EntryLike>();
-  let leaf: EntryLike | undefined;
-  for (const entry of entries) {
-    const record = entry as EntryLike;
-    if (!record || typeof record.id !== "string") continue;
-    byId.set(record.id, record);
-    leaf = record;
-  }
-  const branch: unknown[] = [];
-  const seen = new Set<string>();
-  for (let entry = leaf; entry?.id && !seen.has(entry.id); entry = entry.parentId ? byId.get(entry.parentId) : undefined) {
-    seen.add(entry.id);
-    branch.push(entry);
-  }
-  return branch.reverse();
-}
-
-/** Parse a session file's JSON lines, skipping torn ones. */
-export function parseEntries(text: string): unknown[] {
-  const entries: unknown[] = [];
-  for (const line of text.split("\n")) {
-    if (!line.trim()) continue;
-    try {
-      entries.push(JSON.parse(line));
-    } catch {
-      // A line being written right now; the next read has it.
-    }
-  }
-  return entries;
-}
-
-/** The conversation a session file holds, as the lobby's chat entries. */
-export function chatFromFile(text: string, max = MAX_CHAT): ChatEntry[] {
-  return chatFromEntries(currentBranch(parseEntries(text)), max).map((line, index) => ({ id: index + 1, at: line.at ?? 0, role: line.role, text: line.text }));
-}
+import { chatText, CLEARED_NOTE, isClearedMark, MAX_CHAT, textOf, type ChatEntry } from "./feed.ts";
 
 /** What a session log keeps of one entry: its parent, and its conversation lines if it is a message. */
 interface LogNode {

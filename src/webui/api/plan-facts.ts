@@ -33,11 +33,6 @@ function activeRuns(task: Task, work: WorkProjection | undefined): AgentRun[] {
     .map((run) => ({ runId: run.runId, taskId: task.id, domain: "backend" as const, role: "worker" as const, status: "running" as const, instruction: run.instruction, output: "", attempts: 1, startedAt: run.startedAt }));
 }
 
-/** The plan's steps with their state; none when the task has no plan. */
-export function taskSteps(task: Task): PlanStep[] {
-  return task.plan ? planChecklist(task.plan, persistedTaskRuns(task)) : [];
-}
-
 /** One step as the lobby shows it: its state, and while a worker is on it, how long they have worked on it. */
 export interface StepView {
   text: string;

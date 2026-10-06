@@ -20,7 +20,7 @@ import type { Domain } from "../schemas/agent.ts";
 import { chatFromEntries, lobbyFeed, narrateEvent, type AgentEventLike } from "./feed.ts";
 import { classifier, effortFor, hintsFor } from "../classifier/instance.ts";
 import { checkThinking } from "../pi/model-support.ts";
-import { jobTitle, QuickFixQueue } from "./quickfix.ts";
+import { QuickFixQueue } from "./quickfix.ts";
 import type { Asker } from "../ask/types.ts";
 import type { PlanningSession } from "./planner.ts";
 import { execCommand, IssuesState } from "./issues.ts";

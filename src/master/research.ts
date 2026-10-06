@@ -1,4 +1,3 @@
-import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Domain } from "../schemas/agent.ts";
 import { profileFor, type BotLobbyConfig, type ProfileResolver } from "../schemas/configuration.ts";
@@ -37,21 +36,6 @@ export function researchResultPath(taskDir: string, domain: Domain): string {
 
 export function saveResearchResult(taskDir: string, outcome: ResearchOutcome): void {
   writeFileEnsured(researchResultPath(taskDir, outcome.result.domain), JSON.stringify(outcome, null, 2));
-}
-
-/** Re-read persisted research reports for the given domains. */
-export function loadResearchResults(taskDir: string, domains: Domain[]): ResearchOutcome[] {
-  const outcomes: ResearchOutcome[] = [];
-  for (const domain of domains) {
-    const path = researchResultPath(taskDir, domain);
-    if (!existsSync(path)) continue;
-    try {
-      outcomes.push(JSON.parse(readFileSync(path, "utf8")) as ResearchOutcome);
-    } catch {
-      // Corrupted research artifact: skip it rather than failing the workflow.
-    }
-  }
-  return outcomes;
 }
 
 function researchContext(request: ResearchRequest): AgentRequest["context"] {

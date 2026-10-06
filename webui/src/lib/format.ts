@@ -25,20 +25,6 @@ export function formatElapsed(ms: number): string {
   return `${Math.floor(minutes / 60)}h ${twoDigits(minutes % 60)}m`
 }
 
-const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB"] as const
-
-/** A size as `512 B` or `1.2 KB`; `0` for a non-finite or non-positive size. */
-export function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return "0"
-  let value = bytes
-  let unit = 0
-  while (value >= 1024 && unit < BYTE_UNITS.length - 1) {
-    value /= 1024
-    unit += 1
-  }
-  return `${unit === 0 ? Math.round(value) : value.toFixed(1)} ${BYTE_UNITS[unit]}`
-}
-
 /** How long ago, as `now`, `40s`, `12m`, `3h` or `4d` (mirrors the terminal's `ago`). */
 export function formatAgo(ms: number): string {
   if (!Number.isFinite(ms) || ms < 5_000) return "now"

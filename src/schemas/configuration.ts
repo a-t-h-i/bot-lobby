@@ -13,8 +13,6 @@ export type ThinkingLevelName = (typeof THINKING_LEVELS)[number];
  */
 const INHERIT = "inherit";
 export const INHERIT_MODEL = INHERIT;
-/** Legacy thinking sentinel; configs that still carry it migrate to `DEFAULT_THINKING`. */
-export const INHERIT_THINKING = INHERIT;
 /** Level used for a missing, legacy `inherit` or unknown thinking value. */
 export const DEFAULT_THINKING: ThinkingLevelName = "medium";
 /** Scouts are reconnaissance: always fast, never configurable. */

@@ -1,5 +1,5 @@
 /**
- * The page's non-content states: loading, empty, error and reconnecting. Each
+ * The page's non-content states: loading, error and reconnecting. Each
  * is a real state rather than a spinner over whatever was on screen before.
  */
 import { RotateCw, TriangleAlert, WifiOff } from "lucide-react"
@@ -14,18 +14,6 @@ export function LoadingState({ label = "Connecting…" }: { label?: string }) {
       <Spinner />
       <span>{label}</span>
     </div>
-  )
-}
-
-/** A screen with nothing to show yet. */
-export function EmptyState({ title, description }: { title: string; description?: string }) {
-  return (
-    <Empty className="m-4 flex-1">
-      <EmptyHeader>
-        <EmptyTitle>{title}</EmptyTitle>
-        {description ? <EmptyDescription>{description}</EmptyDescription> : null}
-      </EmptyHeader>
-    </Empty>
   )
 }
 

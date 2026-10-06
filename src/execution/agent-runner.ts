@@ -380,21 +380,3 @@ export async function mapConcurrent<TIn, TOut>(items: TIn[], limit: number, fn: 
 export async function runParallel(requests: AgentRequest[], limit: number, run: ProcessRunner = spawnPiProcess): Promise<AgentRun[]> {
   return mapWithConcurrencyLimit(requests, limit, (request) => runAgent(request, run));
 }
-
-function lastOutput(results: AgentRun[]): string {
-  return results.length > 0 ? results[results.length - 1]!.output : "";
-}
-
-/** Run agents in order, substituting `{previous}` with the prior output. */
-export async function runSequential(requests: AgentRequest[], run: ProcessRunner = spawnPiProcess): Promise<AgentRun[]> {
-  const results: AgentRun[] = [];
-  for (const request of requests) {
-    const instruction = request.instruction.includes("{previous}")
-      ? request.instruction.replaceAll("{previous}", lastOutput(results))
-      : request.instruction;
-    const result = await runAgent({ ...request, instruction }, run);
-    results.push(result);
-    if (result.status !== "success") break;
-  }
-  return results;
-}

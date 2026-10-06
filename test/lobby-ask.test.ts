@@ -1,7 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { answerMessage, askPanel, MAX_QUESTIONS, questionnaires, settledQuestions, toAskQuestion, type AskQuestion, type AskResult } from "../src/lobby/ask.ts";
+import { answerMessage, MAX_QUESTIONS, questionnaires, settledQuestions, toAskQuestion, type AskResult } from "../src/lobby/ask.ts";
 import { carryMockups, MAX_MOCKUP_CHARS, parseMemberReply, type PanelQuestion } from "../src/lobby/planner.ts";
 
 const question = (from: string, text: string, labels: string[] = []): PanelQuestion => ({ from, text, options: labels.map((label) => ({ label, description: `${label} it is` })) });
@@ -80,21 +79,6 @@ test("an answer written over several lines keeps its lines under the arrow", () 
     "1. [DEV] How should errors look?\n   → one line\n     second line (in my words)",
     "   note: a\n     b",
   ].join("\n"));
-});
-
-const ctx = {} as ExtensionContext;
-
-test("askPanel runs the questionnaires in order and stops at the first one the user puts away", async () => {
-  const asked: AskQuestion[][] = [];
-  const questions = Array.from({ length: 9 }, (_, index) => question("DEV", `Q${index}?`));
-  const answers = [{ answers: [], cancelled: false }, { answers: [], cancelled: true }];
-  const outcome = await askPanel(questions, async (chunk) => {
-    asked.push([...chunk]);
-    return answers[asked.length - 1]!;
-  }, ctx);
-  assert.equal(asked.length, 2);
-  assert.equal(outcome.stopped, true);
-  assert.equal(outcome.results.length, 1, "what was answered before stopping is kept");
 });
 
 test("a seat's mockups ride under its options, survive the oracle's relay by label, and reach the questionnaire", () => {

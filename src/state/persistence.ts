@@ -270,8 +270,3 @@ export function removeTaskScratchpads(root: string, configDir: string, taskId: s
     if (file.startsWith("scout-")) rmSync(join(dir, file), { force: true });
   }
 }
-
-/** Delete the temporary task dir after knowledge has been distilled. */
-export function cleanupTaskDir(root: string, configDir: string, taskId: string): void {
-  rmSync(taskDir(dataRoot(root, configDir), taskId), { recursive: true, force: true });
-}

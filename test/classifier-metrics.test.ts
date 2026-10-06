@@ -1,6 +1,5 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { Classifier } from "../src/classifier/classifier.ts";
 import type { Answer, FetchLike, Question } from "../src/classifier/client.ts";
 import { chooseSeats } from "../src/classifier/seats.ts";

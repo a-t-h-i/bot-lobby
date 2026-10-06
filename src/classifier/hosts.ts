@@ -40,11 +40,6 @@ export const JEV_HOST_TABLE: Readonly<Record<JevHostId, JevHost>> = Object.freez
 /** The hosts `auto` tries, in order: OpenCode's free Jev first. */
 export const AUTO_ORDER: readonly JevHostId[] = ["opencode", "typesafe"];
 
-/** How a host name reads in settings. */
-export function hostLabel(name: JevHostName): string {
-  return name === "auto" ? "Auto (OpenCode's free Jev, else TypeSafe)" : JEV_HOST_TABLE[name].label;
-}
-
 /** Resolves a pi provider's API key (stored credential, then its environment variable). */
 export type KeySource = (piProvider: string) => Promise<string | undefined>;
 
@@ -120,12 +115,6 @@ export function keyHint(config: Pick<ClassifierConfig, "provider">): string {
   const how = (host: JevHost) => (host.name === "typesafe" ? `/login typesafe (Use an API key) or set ${host.env}` : `/login ${host.piProviders[0]} or set ${host.env}`);
   if (config.provider === "auto") return `sign in to OpenCode for its free Jev (${how(opencode)}), or ${how(typesafe)}`;
   return how(JEV_HOST_TABLE[config.provider]);
-}
-
-/** `ts_ab…cd`: enough to recognise which key is loaded, never the key. */
-export function maskKey(key: string): string {
-  if (key.length <= 8) return "*".repeat(key.length);
-  return `${key.slice(0, 4)}…${key.slice(-4)}`;
 }
 
 /** One line on where a host's key comes from, for settings and `/bot-lobby config`. */

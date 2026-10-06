@@ -149,19 +149,3 @@ export function parsePrompt(prompt: WebPrompt): PromptView | undefined {
   const dialog = dialogOf(payload.dialog)
   return dialog ? { kind: "sessionDialog", dialog } : undefined
 }
-
-/** A short line naming the active prompt, for the minimised chip. */
-export function promptSummary(view: PromptView): string {
-  switch (view.kind) {
-    case "questionnaire":
-      return view.questions[0]?.header ?? "Questionnaire"
-    case "choose":
-      return view.title
-    case "confirm":
-      return view.question
-    case "text":
-      return view.question
-    case "sessionDialog":
-      return view.dialog.title
-  }
-}

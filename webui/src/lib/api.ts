@@ -71,13 +71,3 @@ export async function signIn(): Promise<boolean> {
   lobbyStore.onStatus({ signedOut: false })
   return true
 }
-
-/** Drop the session; the page is signed out even when the call fails. */
-export async function signOut(): Promise<void> {
-  try {
-    await call<Record<string, never>>("auth.logout", {})
-  } catch {
-    // No endpoint or an already-dead session; either way the page signs out.
-  }
-  lobbyStore.onStatus({ signedOut: true })
-}

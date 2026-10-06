@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { researcherSpec, isResearchResultUsable, parseResearchResult, validateResearchResult } from "../src/roles/researcher.ts";
-import { loadResearchResults, researchResultPath, runResearch } from "../src/master/research.ts";
+import { researchResultPath, runResearch } from "../src/master/research.ts";
 import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
 import type { ProcessRunner } from "../src/execution/pi-runner.ts";
 
@@ -119,10 +119,10 @@ test("runResearch maps a canned report to an outcome and persists it", async () 
   assert.equal(outcome.run.role, "researcher");
   assert.equal(outcome.usable, true);
   assert.deepEqual(outcome.issues, []);
-  const [loaded] = loadResearchResults(taskDir, ["backend"]);
-  assert.equal(loaded!.result.sources[0]!.url, "https://example.com/docs");
+  // The report is saved where the oracle is told to find it.
   assert.equal(researchResultPath(taskDir, "backend"), join(taskDir, "research-backend.json"));
-  assert.deepEqual(loadResearchResults(taskDir, ["qa"]), []);
+  const saved = JSON.parse(readFileSync(researchResultPath(taskDir, "backend"), "utf8")) as { result: { sources: Array<{ url: string }> } };
+  assert.equal(saved.result.sources[0]!.url, "https://example.com/docs");
 });
 
 test("a sourceless or failed research run is marked unusable", async () => {

@@ -9,7 +9,7 @@ import { chatFromEntries, chatText, LobbyFeed, MAX_CHAT, textOf } from "../src/l
 import { QUICK_FIX_TOOLS, QuickFixQueue, jobTitle, quickFixPrompt } from "../src/lobby/quickfix.ts";
 import { PLANNER_TOOLS, RESEARCH_PANEL_TOOLS, PlanningSession, appendAssumptions, commentBlock, memberPrompt, oracleClosing, optionLabel, panelSection, parseMemberReply, parseOption, parsePlannerReply, plannerSays, plannerTranscript, recommendedOption, roundMode, roundQuestions, sameQuestion, settledBlock, withoutSettled } from "../src/lobby/planner.ts";
 import { MAX_QUESTIONS } from "../src/lobby/ask.ts";
-import { createIssue, ghError, IssuesState, issueText, listIssues, splitIssueText, viewIssue, type Exec } from "../src/lobby/issues.ts";
+import { createIssue, ghError, IssuesState, listIssues, splitIssueText, viewIssue, type Exec } from "../src/lobby/issues.ts";
 import { listPlannedTasks } from "../src/state/backlog.ts";
 import { readMetrics } from "../src/state/metrics.ts";
 import { readChanges } from "../src/state/changes.ts";
@@ -573,7 +573,7 @@ test("issues list, view and create through gh", async () => {
   const issues = await listIssues(exec, "/repo");
   assert.deepEqual(issues, [{ number: 3, title: "Crash on save", labels: ["bug"], author: "ana", url: "https://gh/3" }]);
   const detail = await viewIssue(exec, "/repo", 3);
-  assert.equal(issueText(detail), "Steps...\n\n**bo** commented:\nsame here");
+  assert.deepEqual([detail.body, detail.comments], ["Steps...", [{ body: "same here", author: "bo" }]]);
   assert.deepEqual(await createIssue(exec, "/repo", "New bug", "details"), { url: "https://github.com/o/r/issues/9", number: 9 });
   assert.deepEqual(calls[2], ["issue", "create", "--title", "New bug", "--body", "details"]);
   await assert.rejects(createIssue(exec, "/repo", "  ", ""), /needs a title/);

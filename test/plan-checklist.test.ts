@@ -1,7 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { MAX_PLAN_STEPS, explicitStepIndex, planChecklist, planDetails, planSteps } from "../src/pi/plan-checklist.ts";
-import { createTask, type Task } from "../src/schemas/task.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
 
 function run(overrides: Partial<AgentRun> = {}): AgentRun {

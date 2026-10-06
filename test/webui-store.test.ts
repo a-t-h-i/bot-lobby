@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { ApiError, call } from "../webui/src/lib/api.ts";
 import { openEvents, type EventSourceLike } from "../webui/src/lib/events.ts";
 import { createLobbyStore, lobbyStore } from "../webui/src/lib/store.ts";
-import { formatBytes, formatClock, formatElapsed } from "../webui/src/lib/format.ts";
+import { formatClock, formatElapsed } from "../webui/src/lib/format.ts";
 
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
@@ -126,7 +126,5 @@ test("formatters guard non-finite input and never render NaN", () => {
   assert.equal(formatClock(Number.NaN), "0");
   assert.equal(formatElapsed(Number.NaN), "0s");
   assert.equal(formatElapsed(-1), "0s");
-  assert.equal(formatBytes(Number.NaN), "0");
   assert.equal(formatElapsed(1_500), "1s");
-  assert.equal(formatBytes(2048), "2.0 KB");
 });

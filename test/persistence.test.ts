@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   capScratchpad,
-  cleanupTaskDir,
   createTaskDir,
   ensureProjectStructure,
   loadTask,
@@ -106,16 +105,6 @@ test("capScratchpad enforces paragraph and character limits", () => {
   const cfg = { ...DEFAULT_CONFIG.knowledge, scratchpadMaxParagraphs: 2, scratchpadMaxChars: 20 };
   assert.equal(capScratchpad("a\n\nb\n\nc", cfg), "a\n\nb");
   assert.match(capScratchpad("x".repeat(50), cfg), /\[truncated\]$/);
-});
-
-test("cleanupTaskDir removes the temporary task directory", () => {
-  const root = project();
-  const task = createTask("TASK-004", "Cleanup");
-  createTaskDir(root, ".pi", task);
-  const dir = taskDirFor(root, ".pi", "TASK-004");
-  assert.ok(existsSync(dir));
-  cleanupTaskDir(root, ".pi", "TASK-004");
-  assert.ok(!existsSync(dir));
 });
 
 test("taskSlug turns a request into a bounded dash slug", () => {

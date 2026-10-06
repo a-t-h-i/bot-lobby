@@ -40,12 +40,6 @@ export function seatedCount(cells: readonly SeatCell[]): string {
   return `${seats.filter((cell) => cell.seated).length} of ${seats.length} seated`
 }
 
-/** The seating intro before a session: one sentence, with the round bound when there is one. */
-export function introText(limit: number): string {
-  const bound = limit > 0 ? ` (at most ${limit} rounds; the last one the oracle settles alone)` : ""
-  return `Describe a task below and the panel questions you until the plan is clear${bound}.`
-}
-
 /** `round 3/5`, `final round 5/5` or `round 6 · past the limit, revising`; `round 3` without a limit. */
 export function roundLabel(turns: number, limit = 0): string {
   if (limit <= 0) return `round ${turns}`
