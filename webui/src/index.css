@@ -1047,9 +1047,9 @@
 }
 
 /*
- * A button shows a border only while it is hovered: its text colour, two
- * tones lighter (a quarter white, about two steps up a Tailwind scale). At
- * rest the border is there but clear, so nothing shifts when it appears.
+ * A button shows a border only while it is hovered: its text colour, much
+ * lighter (a quarter of it, the rest white). At rest the border is there but
+ * clear, so nothing shifts when it appears.
  * Outside the layers, so it wins over the rims and the transparent border
  * the buttons are written with.
  */
@@ -1061,5 +1061,5 @@
 .btn-raised:hover,
 .btn-ghost:hover,
 .btn-tint:hover {
-  border-color: color-mix(in oklab, currentColor 75%, white);
+  border-color: color-mix(in oklab, currentColor 25%, white);
 }
