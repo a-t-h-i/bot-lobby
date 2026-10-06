@@ -43,7 +43,7 @@ function fastSteps(track: TaskTrack): string[] {
   const steps = [
     ...(track.roster.includes("researcher") ? ["First summon the researcher for the outside facts it needs: orchestrate action=research with a domain and the question."] : []),
     `Delegate now with orchestrate action=implement: ${builders}; open each task with "Step 1:" (the engine keeps the plan).`,
-    ...(track.roster.includes("qa") && building.length > 0 ? ["QA takes part (tests): once the change is in, give qa the tests as the last step (action=implement domain=qa), or run action=qa."] : []),
+    ...(track.roster.includes("qa") && building.length > 0 ? ["QA takes part: once the change is in, run orchestrate action=qa. Jev reads the change and sizes QA to its risk; one with nothing that runs passes on the engine's checks."] : []),
     "Check `git diff --stat` and the report, then orchestrate action=complete with a one-line summary.",
   ];
   return [

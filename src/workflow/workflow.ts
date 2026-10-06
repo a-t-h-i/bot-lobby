@@ -39,7 +39,6 @@ import {
   runReviewer,
   runScouts,
   runWorker,
-  type ReviewerOutcome,
   type ReviewerRequest,
   type ScoutOutcome,
   type WorkerOutcome,
@@ -64,13 +63,15 @@ import type { EffortRouter } from "../classifier/effort.ts";
 import { answerClarify } from "../classifier/triage.ts";
 import { appendMetrics, metricFromRun } from "../state/metrics.ts";
 import { markCommentsAddressed, pendingComments, readPlanComments } from "../state/comments.ts";
-import { fastNext, onFastTrack, parseRoster, qaRequired, qaStillDue, qaTookPart, rosterWords, trackSummary } from "./track.ts";
+import { builtSomething, fastNext, onFastTrack, parseRoster, qaRequired, qaStillDue, qaTookPart, readRequest, rosterWords, trackSummary } from "./track.ts";
 import { missingWorktree, taskCwd } from "../execution/workspace.ts";
 import { completionReview } from "../delivery/review.ts";
 import { execCommand, type Exec } from "../lobby/issues.ts";
 import type { LintExec } from "../execution/lint.ts";
 import type { LintReport } from "../schemas/lint.ts";
 import { lintBrief, lintContext, lintHolds, lintNote, lintRefusal, lintSummary, runLintGate } from "./lint.ts";
+import { assessQaRisk, DEPTHS, qaRiskBrief, qaRiskLine, unreadRisk } from "../classifier/qa-risk.ts";
+import type { QaRiskAssessment } from "../schemas/task.ts";
 
 export const ORCHESTRATE_ACTIONS = [
   "clarify",
@@ -167,6 +168,8 @@ export interface WorkflowDeps {
   lintExec?: LintExec;
   /** Told each new lint report on a task's touched files (the lobby's activity log). */
   onLint?: (taskId: string, report: LintReport) => void;
+  /** Told each QA risk read of a task's change (the lobby's activity log). */
+  onQaRisk?: (taskId: string, assessment: QaRiskAssessment) => void;
 }
 
 export interface WorkflowResult {
@@ -233,6 +236,7 @@ export function describeTask(task: Task): string {
     `Title: ${task.title}`,
     `Request: ${truncate(taskRequest(task), 200)}`,
     task.track ? trackSummary(task.track) : "",
+    task.qaRisk ? `${qaRiskLine(task.qaRisk)} — ${task.qaRisk.reasoning}` : "",
     task.domains.length > 0 ? `Domains: ${task.domains.join(", ")}` : "",
     `Review iterations: ${Object.entries(task.reviewIterations).map(([d, n]) => `${d}=${n}`).join(", ")}`,
     pendingApprovals(task).length > 0
@@ -687,6 +691,8 @@ function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instructi
   return {
     ...(time ? { time } : {}),
     ...(ask ? { ask } : {}),
+    // QA writing tests works to the same budget as the gate: the risk of what is built so far.
+    ...(domain === "qa" && task.qaRisk ? { risk: qaRiskBrief(task.qaRisk) } : {}),
     taskId: task.id,
     domain,
     instruction,
@@ -932,6 +938,37 @@ function qaJoinsGrownFastTask(task: Task, outcome: WorkerOutcome): string {
   return "QA now takes part: a fast-track change that needs a new dependency or an architecture change is checked before it completes.";
 }
 
+/** Read the risk of what the task has built so far, from its diff: the gate's way in, for a QA step or completion. */
+async function assessBuilt(task: Task, deps: WorkflowDeps): Promise<QaRiskAssessment | undefined> {
+  const base = await reviewBase(task, deps);
+  const [diff, tree] = await Promise.all([
+    readRepositoryDiff(deps.cwd, { ...(base ? { base } : {}), exclude: ownRecords(deps) }),
+    changeState(deps, task, base),
+  ]);
+  const read = await readTaskRisk(task, deps, diff, tree, base);
+  if (read) {
+    task.qaRisk = read;
+    deps.onQaRisk?.(task.id, read);
+  }
+  return read;
+}
+
+/**
+ * The fast track left QA out because the request read small and safe; the
+ * change it built is what counts. One Jev reads as MEDIUM or HIGH risk gets
+ * QA before it completes. Returns the refusal for the oracle, or "".
+ */
+async function qaJoinsRiskyFastTask(task: Task, deps: WorkflowDeps): Promise<string> {
+  const track = task.track;
+  if (!track || track.path !== "fast" || track.roster.includes("qa") || task.qaWaiver || !builtSomething(task)) return "";
+  const risk = await assessBuilt(task, deps);
+  if (!risk || (risk.risk !== "medium" && risk.risk !== "high")) return "";
+  track.roster = parseRoster([...track.roster, "qa"]);
+  track.reasons = [...track.reasons, `tests: the change reads ${risk.risk} risk`];
+  recordDecision(task, `QA joined the fast track: the change reads ${risk.risk.toUpperCase()} risk (${truncate(risk.riskFactors.join("; "), 200)}).`);
+  return `QA joins before completion: ${qaRiskLine(risk)}. Run action=qa, then complete.`;
+}
+
 /** States a fast task starts its work from: before anything is planned, and never while the user decides on a proposal. */
 const FAST_START_STATES: readonly TaskState[] = ["created", "clarifying", "scouting", "synthesizing"];
 
@@ -953,6 +990,8 @@ async function handleImplement(task: Task, params: OrchestrateParams, deps: Work
   if (task.track?.autoPlan) addFastSteps(task, deps, assignments);
   if (task.state !== "implementing") transition(task, "implementing");
   await takeBaseline(task, deps);
+  // A QA step after work is in verifies it at its risk: read the change first.
+  if (assignments.some((entry) => entry.domain === "qa") && builtSomething(task)) await assessBuilt(task, deps);
   let report: string;
   try {
     if (assignments.length === 1) {
@@ -993,7 +1032,7 @@ function startFast(task: Task): void {
       oneLine(taskRequest(task), 600),
       "",
       "## Track",
-      `Fast track (${track.size}): ${rosterWords(track.roster)}. No scouts, proposal round or plan review; ${qaRequired(task) ? "QA takes part before completion (its tests as the last step, or the QA gate)" : "no QA gate, as nothing here needs tests"}.`,
+      `Fast track (${track.size}): ${rosterWords(track.roster)}. No scouts, proposal round or plan review; ${qaRequired(task) ? "QA takes part before completion (the QA gate, sized to the change)" : "no QA gate unless the change turns out riskier than it read"}.`,
     ].join("\n");
     track.autoPlan = true;
   }
@@ -1114,13 +1153,14 @@ function handleResolveApproval(task: Task, params: OrchestrateParams): string {
 function scratchpadSummary(deps: WorkflowDeps, task: Task, domain: Domain): string {
   return readTaskArtifact(deps.root, deps.configDir, task.id, `${domain}.md`) ?? "";
 }
-function recordReview(task: Task, domain: Domain, result: ReviewResult): void {
+function recordReview(task: Task, domain: Domain, result: ReviewResult, checksOnly = false): void {
   task.reviewRecords.push({
     domain,
     verdict: result.verdict,
     findings: result.findings.map((finding) => ({ severity: finding.severity, text: finding.text })),
     requiredChanges: result.requiredChanges,
     createdAt: new Date().toISOString(),
+    ...(checksOnly ? { checksOnly: true } : {}),
   });
 }
 /** Each domain's scratchpad, its newest entries kept when it is long (the latest fix round matters most). */
@@ -1151,14 +1191,17 @@ function previousRound(task: Task): string {
   ].join("\n");
 }
 
-const QA_INSTRUCTION = [
-  "Run the QA quality gate for the completed feature.",
-  "Verify requirements, acceptance criteria, regression risk, edge cases, security, accessibility,",
-  "UX, reliability, and tests. Passing automated tests alone is not acceptance.",
-].join(" ");
+/** The gate's brief at the change's risk: the depth and budget come from Jev's read, the levels from qa.md. */
+function qaInstruction(risk: QaRiskAssessment): string {
+  return [
+    `Run the QA gate on the completed work at ${risk.risk.toUpperCase()} risk: ${DEPTHS[risk.risk]} verification, as "QA risk" in your context sets it.`,
+    "Check the acceptance criteria and the focus areas; run the existing tests that cover them before writing any; stay within the test budget, a ceiling and never a quota;",
+    "and stop as soon as more checking would add little confidence. Report an implementation defect as a finding for its owner to fix; do not fix production code yourself.",
+  ].join(" ");
+}
 
 /** The QA gate looks at every domain's work, not just one worker's diff, knowing who changed each file. */
-function qaRequest(deps: WorkflowDeps, task: Task, diff: string, instruction?: string, provenance?: readonly FileProvenance[], lint?: LintReport): ReviewerRequest {
+function qaRequest(deps: WorkflowDeps, task: Task, diff: string, risk: QaRiskAssessment, instruction?: string, provenance?: readonly FileProvenance[], lint?: LintReport): ReviewerRequest {
   const rounds = previousRound(task);
   return {
     taskId: task.id,
@@ -1168,9 +1211,10 @@ function qaRequest(deps: WorkflowDeps, task: Task, diff: string, instruction?: s
     ...(rounds ? { previousRound: rounds } : {}),
     scoutOutcomes: loadScoutResults(taskReadDirs(deps.root, deps.configDir, task.id), [...new Set<Domain>(["qa", ...task.domains])]),
     diff,
+    risk: qaRiskBrief(risk),
     ...(provenance && provenance.length > 0 ? { provenance: provenanceLines(provenance) } : {}),
     ...(lint ? { lint: lintContext(lint, deps.config.lint.mode) } : {}),
-    instruction: instruction?.trim() || QA_INSTRUCTION,
+    instruction: instruction?.trim() || qaInstruction(risk),
     cwd: deps.cwd,
     dataRoots: readDataRoots(deps.root, deps.configDir),
     config: deps.config,
@@ -1184,11 +1228,10 @@ function qaRequest(deps: WorkflowDeps, task: Task, diff: string, instruction?: s
 /** What the loop does after a QA round: finish, fix and review again, stop, or (the user's call) accept the work as it is. */
 type LoopDecision = "accept" | "iterate" | "blocked" | "waived";
 
-function qaReport(outcome: ReviewerOutcome, decision: LoopDecision, provenance?: readonly FileProvenance[], lint = ""): string {
-  const { result, run, issues } = outcome;
+function qaReport(header: string, result: ReviewResult, decision: LoopDecision, provenance?: readonly FileProvenance[], lint = "", issues: readonly string[] = []): string {
   const passed = result.verdict === "pass";
   return [
-    `QA gate: ${result.verdict.toUpperCase()} (run ${run.status}${run.error ? `: ${run.error}` : ""})${result.relaxed ? " — only minor findings, which never hold the gate" : ""}`,
+    header,
     result.findings.length > 0
       ? `Findings:\n${result.findings.map((finding) => `- [${finding.severity}] ${truncate(finding.text, 300)}`).join("\n")}`
       : "",
@@ -1211,12 +1254,66 @@ function qaReport(outcome: ReviewerOutcome, decision: LoopDecision, provenance?:
     .join("\n");
 }
 
+/** Changes of this task's own: its agents' (or nobody's on record), not quick fixes, other tasks' or what was there before. */
+const TASKS_OWN = new Set(["planned", "unattributed"]);
+
+/**
+ * Jev's read of what the task built, from its diff (the engine's rules when
+ * Jev is off), saved on the task and told to the lobby; undefined when git
+ * cannot say what changed or nothing of the task's has.
+ */
+async function readTaskRisk(task: Task, deps: WorkflowDeps, diff: string, tree: { files: FileProvenance[] } | undefined, base: string | undefined): Promise<QaRiskAssessment | undefined> {
+  const files = tree ? tree.files.filter((file) => file.kinds.some((kind) => TASKS_OWN.has(kind))).map((file) => file.path) : (await treeChanges(deps, base))?.files;
+  if (!files || files.length === 0) return undefined;
+  const reasons = readRequest(taskRequest(task)).reasons;
+  const bugfix = task.triage?.kind === "bugfix" || reasons.some((reason) => reason.startsWith("tests: a bug fix"));
+  return assessQaRisk({ files, diff, request: taskRequest(task), bugfix }, deps.classifier, deps.signal);
+}
+
+/** The QA risk the gate works to: the read, or a full review when the change could not be read. */
+async function assessTask(task: Task, deps: WorkflowDeps, diff: string, tree: { files: FileProvenance[] } | undefined, base: string | undefined): Promise<QaRiskAssessment> {
+  const read = await readTaskRisk(task, deps, diff, tree, base);
+  let risk = read ?? unreadRisk(/^Unable to read git state/.test(diff) ? "git could not say what changed" : "no change of this task's is in the working tree");
+  const still = qaStillNeeded(task);
+  if (!risk.qaRequired && still) risk = { ...risk, qaRequired: true, reasoning: `${risk.reasoning} QA runs anyway: ${still}.` };
+  task.qaRisk = risk;
+  deps.onQaRisk?.(task.id, risk);
+  return risk;
+}
+
+/** Why a change with nothing that runs still gets a QA agent: the user asked for tests, or QA asked for changes it must see made. */
+function qaStillNeeded(task: Task): string | undefined {
+  const last = task.reviewRecords.filter((record) => record.domain === "qa").at(-1);
+  if (last && last.verdict !== "pass" && !last.checksOnly) return "the last QA round asked for changes, and QA checks they are made";
+  if (readRequest(taskRequest(task)).reasons.some((reason) => reason.startsWith("tests: asked for"))) return "the request asks for tests";
+  return undefined;
+}
+
+/**
+ * The verdict of the engine's deterministic checks on a change with nothing
+ * that runs: new lint errors on its lines hold it in block mode, as they hold
+ * completion; anything else passes without a QA agent.
+ */
+function checksVerdict(lint: LintReport | undefined, deps: WorkflowDeps, waived: boolean): ReviewResult {
+  const holds = lintHolds(lint, deps.config.lint.mode, waived);
+  const ran = lint && lint.state !== "skipped" && deps.config.lint.mode !== "off";
+  return {
+    domain: "qa",
+    role: "reviewer",
+    verdict: holds ? "changes_required" : "pass",
+    findings: holds && lint ? [{ severity: "major", text: `new lint errors on lines the task changed: ${lintSummary(lint)}` }] : [],
+    verification: ran ? `- engine lint on the touched files — ${lintSummary(lint)}` : "- engine lint — nothing to lint, or lint is off",
+    requiredChanges: holds ? ["Fix the new lint errors at their cause (never silence the rule), then re-run action=qa."] : [],
+    optionalImprovements: [],
+    raw: "",
+  };
+}
+
 async function handleQa(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
   requireState(task, ["implementing", "reviewing"]);
   if (task.state !== "reviewing") transition(task, "reviewing");
   const iterations = (task.reviewIterations?.qa ?? 0) + 1;
   task.reviewIterations = { qa: iterations };
-  const time = qaTime(task, deps);
   const base = await reviewBase(task, deps);
   const [diff, tree] = await Promise.all([
     readRepositoryDiff(deps.cwd, { ...(base ? { base } : {}), exclude: ownRecords(deps) }),
@@ -1225,16 +1322,34 @@ async function handleQa(task: Task, params: OrchestrateParams, deps: WorkflowDep
   const provenance = tree?.files;
   // The gate's base is the task's own; a legacy task measured from an older commit lints from a fresh look.
   const lint = await lintTask(task, deps, base === task.baseline?.head ? tree : undefined);
-  const outcome = await runReviewer({ ...qaRequest(deps, task, diff, params.task, provenance, lint), ...(time ? { time } : {}) }, deps.runProcess ?? spawnPiProcess);
+  const lintLine = lintBrief(lint, deps.config.lint.mode, Boolean(task.lintWaiver));
+  // Before any QA agent runs, Jev reads what was built: the gate's depth and test budget follow its risk.
+  const risk = await assessTask(task, deps, diff, tree, base);
+  if (!risk.qaRequired) {
+    const result = checksVerdict(lint, deps, Boolean(task.lintWaiver));
+    const decision = await settleQaRound(task, result, iterations, deps, true);
+    const header = `QA gate: ${result.verdict.toUpperCase()} on the engine's checks; no QA agent ran. ${qaRiskLine(risk)}.\nWhy: ${risk.reasoning}\nChecks:\n${result.verification}`;
+    return qaReport(header, result, decision, provenance, lintLine);
+  }
+  const time = qaTime(task, deps);
+  const outcome = await runReviewer({ ...qaRequest(deps, task, diff, risk, params.task, provenance, lint), ...(time ? { time } : {}) }, deps.runProcess ?? spawnPiProcess);
   if (time) settleAllotment(task, deps, time.id, "finished");
-  task.qaVerdict = outcome.result.verdict;
-  recordReview(task, "qa", outcome.result);
-  recordAdvisoryPushbacks(task, [{ pushback: outcome.result.pushback, who: "qa" }]);
-  if (outcome.result.relaxed) recordDecision(task, `QA round ${iterations} passed: ${outcome.result.relaxed}.`, "qa");
-  let decision: LoopDecision = decideReviewLoop(outcome.result.verdict, iterations, reviewLimit(task, deps));
-  if (decision === "blocked") decision = await askAtReviewLimit(task, outcome.result, iterations, deps);
+  const { result, run } = outcome;
+  recordAdvisoryPushbacks(task, [{ pushback: result.pushback, who: "qa" }]);
+  if (result.relaxed) recordDecision(task, `QA round ${iterations} passed: ${result.relaxed}.`, "qa");
+  const decision = await settleQaRound(task, result, iterations, deps);
+  const header = `QA gate: ${result.verdict.toUpperCase()} (run ${run.status}${run.error ? `: ${run.error}` : ""})${result.relaxed ? " — only minor findings, which never hold the gate" : ""}\n${qaRiskLine(risk)}`;
+  return qaReport(header, result, decision, provenance, lintLine, outcome.issues);
+}
+
+/** A QA round's verdict, recorded on the task; then the loop decides, and at its limit the user. */
+async function settleQaRound(task: Task, result: ReviewResult, iterations: number, deps: WorkflowDeps, checksOnly = false): Promise<LoopDecision> {
+  task.qaVerdict = result.verdict;
+  recordReview(task, "qa", result, checksOnly);
+  let decision: LoopDecision = decideReviewLoop(result.verdict, iterations, reviewLimit(task, deps));
+  if (decision === "blocked") decision = await askAtReviewLimit(task, result, iterations, deps);
   if (decision === "accept") task.blockers = task.blockers.filter((blocker) => blocker.domain !== "qa");
-  return qaReport(outcome, decision, provenance, lintBrief(lint, deps.config.lint.mode, Boolean(task.lintWaiver)));
+  return decision;
 }
 
 /** Review rounds allowed: the configured limit plus any the user granted. */
@@ -1366,6 +1481,8 @@ function handleWhiteboard(task: Task, params: OrchestrateParams, deps: WorkflowD
 async function handleComplete(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
   // The fast track completes straight from its work; the full workflow from review.
   requireState(task, onFastTrack(task) ? ["implementing", "reviewing", "blocked"] : ["reviewing", "blocked"]);
+  const joined = await qaJoinsRiskyFastTask(task, deps);
+  if (joined) throw new Error(joined);
   // Without QA's part (where the track asks for it) only the user can let the task finish: they are asked, never overruled.
   if (qaRequired(task) && !qaTookPart(task) && !task.qaWaiver) await offerAcceptance(task, deps);
   if (task.state === "blocked") throw new Error("cannot complete: the task is blocked, and the user did not accept its work as it is");
@@ -1474,7 +1591,7 @@ function handleTrack(task: Task, params: OrchestrateParams, deps: WorkflowDeps):
   };
   recordDecision(task, `Track: ${path === "fast" ? "fast track" : "full workflow"}; ${rosterWords(roster)} — ${reason}`);
   if (path === "fast") {
-    return `Fast track: ${rosterWords(roster)}. Delegate straight away with action=implement (open each task with "Step N:"); no scouts, proposal or plan. ${qaRequired(task) ? "QA takes part before completion: its tests as the last step, or action=qa." : "No QA gate: nothing here needs tests."} Then action=complete.`;
+    return `Fast track: ${rosterWords(roster)}. Delegate straight away with action=implement (open each task with "Step N:"); no scouts, proposal or plan. ${qaRequired(task) ? "QA takes part before completion: action=qa, sized to the change." : "No QA gate unless the change turns out riskier than it read."} Then action=complete.`;
   }
   if (!shaping) return `Full workflow from here: ${rosterWords(roster)}. The QA gate runs before the task completes${grew ? "; tell the user in one line why the task grew" : ""}.`;
   return `Full workflow: ${rosterWords(roster)}. Scout what the request touches, then propose a short bullet list for approval.`;

@@ -438,7 +438,7 @@ export function trackLine(track: TaskTrack): string {
 
 /** What the oracle does next on the fast track, once a worker has reported. */
 export function fastNext(task: Task): string {
-  if (!qaRequired(task)) return "Next (fast track): check `git diff --stat` and this report; if the work is in, call action=complete. No QA gate on this track: nothing here needs tests.";
+  if (!qaRequired(task)) return "Next (fast track): check `git diff --stat` and this report; if the work is in, call action=complete. No QA gate on this track: nothing here needs tests (Jev reads the change at completion, and QA joins one that turns out riskier).";
   if (qaTookPart(task)) return "Next (fast track): QA has taken part (its step came last). Check `git diff --stat`, then call action=complete.";
-  return "Next (fast track): check `git diff --stat`. QA takes part before completion: give qa the tests as the last step (action=implement domain=qa), or run action=qa; then call action=complete.";
+  return "Next (fast track): check `git diff --stat`. QA takes part before completion: run action=qa (Jev sizes it to the change; one with nothing that runs passes on the engine's checks); then call action=complete.";
 }

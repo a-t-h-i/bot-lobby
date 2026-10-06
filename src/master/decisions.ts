@@ -14,7 +14,7 @@ export function completionBlockers(task: Task, pendingCount: number): string[] {
   if (!task.plan) blockers.push("no approved plan is recorded");
   if (onFastTrack(task)) {
     if (!builtSomething(task)) blockers.push("no worker step has finished yet");
-    if (qaRequired(task) && !qaTookPart(task) && !task.qaWaiver) blockers.push("QA has not taken part (give qa the tests as the last step, or run the QA gate)");
+    if (qaRequired(task) && !qaTookPart(task) && !task.qaWaiver) blockers.push("QA has not taken part (run the QA gate: action=qa)");
   } else if (task.qaVerdict !== "pass" && !task.qaWaiver) blockers.push(`QA gate is ${task.qaVerdict ?? "not run"}`);
   if (pendingCount > 0) blockers.push(`${pendingCount} unresolved approval request(s)`);
   if (task.blockers.length > 0) blockers.push(`${task.blockers.length} unresolved blocker(s)`);

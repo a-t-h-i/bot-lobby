@@ -16,6 +16,7 @@ import { isQuiet } from "./quiet.ts";
 import { checkThinking, createProfileResolver, modelRef, type ModelLookup } from "./model-support.ts";
 import { agentName, describeRun } from "./run-summary.ts";
 import { lintFeed } from "../workflow/lint.ts";
+import { qaRiskLine } from "../classifier/qa-risk.ts";
 import { lobbyFeed } from "../lobby/feed.ts";
 import {
   ORCHESTRATE_ACTIONS,
@@ -140,6 +141,8 @@ export function workflowDeps(
       const line = lintFeed(taskId, report);
       lobbyFeed.log("LINT", line.text, line.kind);
     },
+    // Jev's QA risk read of each task's change, as the QA gate starts.
+    onQaRisk: (taskId, assessment) => lobbyFeed.log("CLASSIFIER", `${taskId} ${qaRiskLine(assessment)}`, "info"),
   };
 }
 

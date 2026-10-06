@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_CONFIG, resolveConfig } from "../src/schemas/configuration.ts";
@@ -258,6 +259,38 @@ test("a fast task whose worker asks for a dependency gets QA", async () => {
   assert.match(task.decisions.map((decision) => decision.text).join("\n"), /QA joined the fast track: DESIGN asked for a colour library/);
 });
 
+test("a fast task whose change turns out to touch security gets QA before it completes", async () => {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "bl-track-git-")));
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: dir, stdio: "ignore" });
+  git("init", "-q");
+  git("config", "user.email", "t@example.com");
+  git("config", "user.name", "t");
+  mkdirSync(join(dir, "src"));
+  writeFileSync(join(dir, "src/form.ts"), "export const label = \"Save\";\n");
+  git("add", ".");
+  git("commit", "-q", "-m", "init");
+  const runs: string[] = [];
+  // The request reads as a colour change; what the worker built checks a password.
+  const deps = makeDeps(runs, {
+    root: dir,
+    cwd: dir,
+    runProcess: async (args) => {
+      runs.push(String(args.at(-1)));
+      writeFileSync(join(dir, "src/form.ts"), "export const label = \"Save\";\nexport const valid = (password: string) => password.length >= 8;\n");
+      return { exitCode: 0, stdout: message(WORKER), stderr: "", killed: false, timedOut: false };
+    },
+  });
+  withTask(deps, "change the submit button colour to blue");
+  await act(deps, { action: "implement", domain: "designer", task: "Step 1: make it blue" });
+  const held = await act(deps, { action: "complete" });
+  assert.equal(held.ok, false);
+  assert.match(held.message, /QA joins before completion: QA risk: high \(rules\)[^\n]*Run action=qa, then complete/);
+  const task = loadTask(deps.root, deps.configDir, "TASK-1")!;
+  assert.deepEqual(task.track!.roster, ["designer", "qa"]);
+  assert.match((await act(deps, { action: "qa" })).message, /QA gate: PASS/);
+  assert.equal((await act(deps, { action: "complete" })).state, "completed");
+});
+
 test("QA's part comes last only when it started after the other domains finished; the budget reserve follows", () => {
   const task = createTask("TASK-1", "x");
   task.track = read("the save button crashes when the name is empty");
@@ -291,7 +324,7 @@ test("the kickoff follows the track", () => {
 
   const researched = createTask("TASK-2", "x", "2026-01-01T00:00:00.000Z", "check the latest Tailwind docs and fix the deprecated class on the header");
   researched.track = read(researched.request);
-  assert.match(kickoff(researched), /1\. First summon the researcher[\s\S]*2\. Delegate now[\s\S]*3\. QA takes part \(tests\)[\s\S]*4\. Check `git diff --stat`/);
+  assert.match(kickoff(researched), /1\. First summon the researcher[\s\S]*2\. Delegate now[\s\S]*3\. QA takes part[\s\S]*4\. Check `git diff --stat`/);
 
   const fullTask = createTask("TASK-3", "login", "2026-01-01T00:00:00.000Z", "add a login page");
   fullTask.track = read(fullTask.request);
