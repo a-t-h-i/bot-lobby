@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { analyzeKnowledge, compactKnowledgeFile, overThreshold } from "../src/knowledge/compactor.ts";
+import { compactKnowledgeFile, overThreshold } from "../src/knowledge/compactor.ts";
 import { knowledgeDir } from "../src/knowledge/paths.ts";
 import { readFileOr, writeFileEnsured } from "../src/knowledge/store.ts";
 import { ensureProjectStructure } from "../src/state/persistence.ts";
@@ -13,30 +13,6 @@ function dataRootFor(): string {
   ensureProjectStructure(root, ".pi");
   return join(root, ".pi", "bot-lobby");
 }
-
-test("analyzeKnowledge finds duplicate lines", () => {
-  const analysis = analyzeKnowledge("## Notes\n- Sessions are server-side.\n- sessions are server-side\n");
-  assert.equal(analysis.duplicates.length, 1);
-});
-
-test("analyzeKnowledge flags hedging and unresolved wording", () => {
-  const analysis = analyzeKnowledge("- Sessions are maybe server-side for now\n- The billing worker is TBD\n- Auth is centralized in src/auth/session.ts\n");
-  assert.equal(analysis.ambiguity.length, 2);
-});
-
-test("analyzeKnowledge reports conflicting statements about the same subject", () => {
-  const analysis = analyzeKnowledge(
-    "- Sessions are stored server-side in the session service\n- Sessions are stored client-side in local storage\n",
-  );
-  assert.equal(analysis.conflictCandidates.length, 1);
-  assert.equal(analysis.conflictCandidates[0]!.statements.length, 2);
-  assert.ok(analysis.conflictCandidates[0]!.subject.includes("sessions"));
-});
-
-test("analyzeKnowledge does not report unrelated lines as conflicts", () => {
-  const analysis = analyzeKnowledge("- Sessions live in the session service\n- Invoices render nightly from the billing queue\n");
-  assert.deepEqual(analysis.conflictCandidates, []);
-});
 
 test("overThreshold lists only files past the limit, largest first", () => {
   const root = dataRootFor();

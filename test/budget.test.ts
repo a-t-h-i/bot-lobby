@@ -30,7 +30,6 @@ import { transition } from "../src/state/task-state.ts";
 import { setAutoMode } from "../src/state/auto.ts";
 import { runWorkflowAction, type OrchestrateParams, type WorkflowDeps } from "../src/workflow/workflow.ts";
 import type { ProcessOutcome, ProcessRunner, ProcessRunOptions } from "../src/execution/pi-runner.ts";
-import type { AgentRun } from "../src/schemas/findings.ts";
 
 const LENIENT = { ...DEFAULT_CONFIG, workflow: { ...DEFAULT_CONFIG.workflow, briefCheck: false } };
 
@@ -227,7 +226,7 @@ test("auto mode gives more once, and only from time the task still has", async (
 });
 
 test("a spent budget starts no new work; the oracle asks the user for more with action=budget", async () => {
-  const { root, titles, act } = budgeted({ used: 80, choose: pick("Give 20") });
+  const { titles, act } = budgeted({ used: 80, choose: pick("Give 20") });
   const refused = await act({ action: "implement", domain: "backend", task: "Add the endpoint" });
   assert.equal(refused.ok, false);
   assert.match(refused.message, /the task's time budget has no room for the backend step: 1h 20m of 1h 30m used, 10m left, 10m of it kept for the QA gate\. Ask the user for more time with action=budget/);

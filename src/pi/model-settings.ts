@@ -18,7 +18,6 @@ import { describeKey, jevEndpoint, type StatusSource } from "../classifier/hosts
 
 /** One settings entry: the master or a subagent profile. */
 export type SettingsKind = "master" | SubagentKind;
-export const SETTINGS_KINDS: readonly SettingsKind[] = ["master", ...SUBAGENT_KINDS];
 
 /** The editable fields of one entry; scouts have no thinking and no instructions of their own. */
 export interface EntryView {

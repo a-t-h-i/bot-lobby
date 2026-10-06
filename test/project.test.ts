@@ -14,7 +14,7 @@ import {
   loadConfig,
   saveConfig,
 } from "../src/state/project.ts";
-import { agentProfile, DEFAULT_CONFIG, hasScoutThinking, INHERIT_THINKING, resolveConfig, SCOUT_THINKING } from "../src/schemas/configuration.ts";
+import { agentProfile, DEFAULT_CONFIG, hasScoutThinking, resolveConfig, SCOUT_THINKING } from "../src/schemas/configuration.ts";
 
 /** Point the global config at a temp dir for the duration of one test. */
 function withConfig(dir: string, run: () => void): void {
@@ -146,7 +146,7 @@ test("saveConfig round-trips through loadConfig", () => {
 });
 
 test("thinking never inherits: legacy inherit and unknown levels fall back to the default level", () => {
-  const cfg = resolveConfig({ agents: { designer: { thinking: INHERIT_THINKING }, backend: { thinking: "turbo" }, qa: { thinking: "max" } } });
+  const cfg = resolveConfig({ agents: { designer: { thinking: "inherit" }, backend: { thinking: "turbo" }, qa: { thinking: "max" } } });
   assert.equal(cfg.agents.designer.thinking, "medium");
   assert.equal(cfg.agents.backend.thinking, "medium");
   assert.equal(cfg.agents.qa.thinking, "max", "an explicit level is kept");

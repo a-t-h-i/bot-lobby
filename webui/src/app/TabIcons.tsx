@@ -166,9 +166,6 @@ const ICONS: Record<string, (props: { play: number }) => ReactNode> = {
   excalidraw: Excalidraw,
 }
 
-/** Whether a tab has an icon that plays. */
-export const hasTabIcon = (id: string): boolean => id in ICONS
-
 /** A tab's icon, playing once each time `play` goes up. */
 export function TabIcon({ id, play, className }: { id: string; play: number; className?: string }) {
   const Parts = ICONS[id]

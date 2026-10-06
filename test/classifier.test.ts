@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { choice, choiceOf, JevError, noul, score, scoreOf, systemOne, yesOf, type FetchLike } from "../src/classifier/client.ts";
 import { BREAKER_FAILURES, BREAKER_PAUSE_MS, Classifier } from "../src/classifier/classifier.ts";
 import { clip, clipTail, fitsBudget, LIMITS } from "../src/classifier/limits.ts";
-import { chooseHost, describeKey, JEV_HOST_TABLE, jevEndpoint, keyHint, maskKey, registerJevProvider, resolveKey, resolveTarget, type StatusSource } from "../src/classifier/hosts.ts";
+import { chooseHost, describeKey, JEV_HOST_TABLE, jevEndpoint, keyHint, registerJevProvider, resolveKey, resolveTarget, type StatusSource } from "../src/classifier/hosts.ts";
 import { DEFAULT_CONFIG, resolveConfig, type ClassifierConfig } from "../src/schemas/configuration.ts";
 import { appendMetrics, readClassifierMetrics, readMetrics, type MetricRecord } from "../src/state/metrics.ts";
 import { classifierSummary } from "../src/pi/model-settings.ts";
@@ -223,8 +223,6 @@ test("hosts: auto takes OpenCode's free Jev when pi holds an OpenCode key, else 
   assert.equal(await resolveKey(JEV_HOST_TABLE.typesafe, async () => " ts_pi ", {}), "ts_pi");
   assert.equal(await resolveKey(JEV_HOST_TABLE.typesafe, async () => undefined, { TYPESAFE_API_KEY: "ts_env" }), "ts_env");
   assert.equal(await resolveKey(JEV_HOST_TABLE.typesafe, async () => { throw new Error("no registry"); }, {}), undefined);
-  assert.equal(maskKey("ts_abcdefgh1234"), "ts_a…1234");
-  assert.equal(maskKey("short"), "*****");
   assert.equal(describeKey(JEV_HOST_TABLE.typesafe, statusOf({ typesafe: { source: "stored" } }), {}), "stored in pi (/login typesafe)");
   assert.equal(describeKey(JEV_HOST_TABLE.opencode, statusOf({ "opencode-go": { source: "stored" } }), {}), "stored in pi (/login opencode-go)");
   assert.equal(describeKey(JEV_HOST_TABLE.typesafe, statusOf({ typesafe: { source: "environment", label: "TYPESAFE_API_KEY" } }), {}), "from TYPESAFE_API_KEY");

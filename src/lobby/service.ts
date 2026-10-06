@@ -35,7 +35,7 @@ import { pendingRequest, startRequest } from "../pi/route.ts";
 import { deliverComments, setAuto } from "../pi/owner.ts";
 import { chatFromEntries, lobbyFeed, type ChatEntry } from "./feed.ts";
 import { classifier, effortFor, hintsFor } from "../classifier/instance.ts";
-import { launchPi, SessionRegistry, type BackgroundSession, type DialogAnswer, type SessionLauncher } from "./sessions.ts";
+import { launchPi, SessionRegistry, type BackgroundSession, type SessionLauncher } from "./sessions.ts";
 import { SessionChats } from "./session-files.ts";
 import { answerMessage, questionnaires, settledQuestions } from "./ask.ts";
 import { askUser } from "../ask/web.ts";

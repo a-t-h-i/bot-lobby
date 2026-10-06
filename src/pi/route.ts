@@ -14,7 +14,6 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { Container, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import type { Domain } from "../schemas/agent.ts";
-import type { TaskTriage } from "../schemas/task.ts";
 import { chooseRoute, type RequestRoute } from "../workflow/track.ts";
 import { triageFor } from "../classifier/instance.ts";
 import { ownedTask } from "../state/persistence.ts";

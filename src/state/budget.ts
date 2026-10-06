@@ -10,7 +10,6 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { taskDirFor } from "./persistence.ts";
-import { readJsonCached } from "./file-cache.ts";
 import { clearStaleRuns, updateWork } from "./work-time.ts";
 
 /** What one delegation was given. */
@@ -73,18 +72,6 @@ function writeBudget(root: string, configDir: string, taskId: string, budget: Ta
   const path = budgetPath(root, configDir, taskId);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify({ ...budget, allotments: budget.allotments.slice(-MAX_ALLOTMENTS) }, null, 2)}\n`, "utf8");
-}
-
-/** A task's budget as a display reads it every frame: parsed again only when the file changes. */
-export function peekBudget(root: string, configDir: string, taskId: string): TaskBudget | undefined {
-  const value = readJsonCached(budgetPath(root, configDir, taskId), isBudget);
-  return value ? { minutes: value.minutes, granted: value.granted ?? 0, usedMs: value.usedMs, allotments: Array.isArray(value.allotments) ? value.allotments : [] } : undefined;
-}
-
-/** Work time spent of the whole, for the lobby's status box; undefined without a budget. */
-export function budgetClock(root: string, configDir: string, taskId: string, now = Date.now()): { usedMs: number; totalMs: number } | undefined {
-  const budget = peekBudget(root, configDir, taskId);
-  return budget ? { usedMs: usedMs(taskId, budget, now), totalMs: (budget.minutes + budget.granted) * 60_000 } : undefined;
 }
 
 /** Change a task's budget in place (read afresh, written back); undefined when it has none. */
