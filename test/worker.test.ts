@@ -241,6 +241,19 @@ test("a failed worker run is reported without changing the workflow state", asyn
   assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.state, "implementing");
 });
 
+test("while its worker runs, the task reads implementing to every window, not the planning it started from", async () => {
+  const seen: TaskState[] = [];
+  const deps = makeDeps();
+  const reply = deps.runProcess!;
+  deps.runProcess = async (args, options) => {
+    seen.push(loadTask(deps.root, deps.configDir, "TASK-1")!.state);
+    return reply(args, options);
+  };
+  withTask(deps, "planning");
+  await act(deps, { action: "implement", domain: "backend", task: "Add pagination." });
+  assert.deepEqual(seen, ["implementing"]);
+});
+
 test("auto-approval is recorded as a decision when the config disables the gate", async () => {
   const config = {
     ...LENIENT,

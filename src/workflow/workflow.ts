@@ -1961,6 +1961,11 @@ export async function runWorkflowAction(params: OrchestrateParams, deps: Workflo
     ...(deps.askQuestions ? { askQuestions: (...args: Parameters<NonNullable<WorkflowDeps["askQuestions"]>>) => wait(() => deps.askQuestions!(...args)) } : {}),
     // Every agent, diff and desk of a task with its own worktree works there.
     cwd: taskCwd(task, deps.cwd),
+    // An agent can work for an hour: what the action has done so far (implementing, reviewing) is saved before it starts, so every window reads it.
+    runProcess: (args, options) => {
+      saveTask(deps.root, deps.configDir, task);
+      return (deps.runProcess ?? spawnPiProcess)(args, options);
+    },
     onUpdate: (run) => {
       if (run.status !== "running") finished.set(run.runId, run);
       // Every window marks the steps a worker is on while it runs.
