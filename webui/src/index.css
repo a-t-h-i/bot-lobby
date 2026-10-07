@@ -111,16 +111,20 @@
   /*
    * Buttons sit a little proud of the page: a face lit from above, a bright
    * top edge, a hairline rim and a soft contact shadow. Pressed, the face
-   * sinks and the shadow moves inside.
+   * sinks and the shadow moves inside. The face is the card stepped toward
+   * the ink, so a button stands off the card and the page without a border,
+   * in any colour theme.
    */
-  --btn-face: linear-gradient(180deg, #ffffff 0%, #f5f4f1 100%);
-  --btn-face-hover: linear-gradient(180deg, #ffffff 0%, #f9f8f6 100%);
-  --btn-face-press: linear-gradient(180deg, #ecebe7 0%, #f4f3f0 100%);
+  --btn-face: linear-gradient(180deg, color-mix(in oklab, var(--card) 94%, var(--foreground)) 0%, color-mix(in oklab, var(--card) 87%, var(--foreground)) 100%);
+  --btn-face-hover: linear-gradient(180deg, color-mix(in oklab, var(--card) 96%, var(--foreground)) 0%, color-mix(in oklab, var(--card) 89.5%, var(--foreground)) 100%);
+  --btn-face-press: linear-gradient(180deg, color-mix(in oklab, var(--card) 85%, var(--foreground)) 0%, color-mix(in oklab, var(--card) 89%, var(--foreground)) 100%);
+  /* A quiet button (ghost) at rest: half the step, so it reads as a button a notch below the rest. */
+  --btn-face-quiet: linear-gradient(180deg, color-mix(in oklab, var(--card) 96.5%, var(--foreground)) 0%, color-mix(in oklab, var(--card) 90.5%, var(--foreground)) 100%);
   --btn-rim: rgb(32 28 20 / 0.13);
   /* Every button casts Tailwind's shadow-sm, whatever its face. */
   --btn-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  --btn-raise: inset 0 1px 0 rgb(255 255 255 / 1), inset 0 -1px 0 rgb(32 28 20 / 0.05), var(--btn-sm);
-  --btn-raise-hover: inset 0 1px 0 rgb(255 255 255 / 1), inset 0 -1px 0 rgb(32 28 20 / 0.05), var(--btn-sm);
+  --btn-raise: inset 0 1px 0 rgb(255 255 255 / 0.9), inset 0 -1px 0 rgb(32 28 20 / 0.09), var(--btn-sm);
+  --btn-raise-hover: inset 0 1px 0 rgb(255 255 255 / 0.9), inset 0 -1px 0 rgb(32 28 20 / 0.09), var(--btn-sm);
   --btn-press: inset 0 1px 2.5px rgb(32 28 20 / 0.13), inset 0 0 0 0.5px rgb(32 28 20 / 0.04);
   --btn-gloss: linear-gradient(180deg, rgb(255 255 255 / 0.2) 0%, rgb(255 255 255 / 0.04) 52%, rgb(0 0 0 / 0.06) 100%);
 
@@ -135,12 +139,13 @@
 }
 
 .dark {
-  --btn-face: linear-gradient(180deg, #26262c 0%, #1c1c21 100%);
-  --btn-face-hover: linear-gradient(180deg, #2c2c33 0%, #212127 100%);
-  --btn-face-press: linear-gradient(180deg, #17171b 0%, #1d1d22 100%);
+  --btn-face: linear-gradient(180deg, color-mix(in oklab, var(--card) 77%, var(--foreground)) 0%, color-mix(in oklab, var(--card) 83%, var(--foreground)) 100%);
+  --btn-face-hover: linear-gradient(180deg, color-mix(in oklab, var(--card) 73%, var(--foreground)) 0%, color-mix(in oklab, var(--card) 79%, var(--foreground)) 100%);
+  --btn-face-press: linear-gradient(180deg, color-mix(in oklab, var(--card) 88%, var(--foreground)) 0%, color-mix(in oklab, var(--card) 85%, var(--foreground)) 100%);
+  --btn-face-quiet: linear-gradient(180deg, color-mix(in oklab, var(--card) 85%, var(--foreground)) 0%, color-mix(in oklab, var(--card) 89%, var(--foreground)) 100%);
   --btn-rim: rgb(255 255 255 / 0.085);
-  --btn-raise: inset 0 1px 0 rgb(255 255 255 / 0.07), var(--btn-sm);
-  --btn-raise-hover: inset 0 1px 0 rgb(255 255 255 / 0.09), var(--btn-sm);
+  --btn-raise: inset 0 1px 0 rgb(255 255 255 / 0.1), var(--btn-sm);
+  --btn-raise-hover: inset 0 1px 0 rgb(255 255 255 / 0.12), var(--btn-sm);
   --btn-press: inset 0 1px 3px rgb(0 0 0 / 0.55);
   --btn-gloss: linear-gradient(180deg, rgb(255 255 255 / 0.16) 0%, rgb(255 255 255 / 0.03) 52%, rgb(0 0 0 / 0.08) 100%);
   --card-face: linear-gradient(180deg, color-mix(in oklab, var(--card) 95%, white) 0%, var(--card) 100%);
@@ -403,6 +408,10 @@
   .btn-tint {
     --tw-shadow: var(--btn-raise);
     box-shadow: var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+  }
+  /* An unchosen option in a group (aria-checked="false") stays plain, so the chosen one stands out. */
+  .btn-ghost:not([aria-checked="false"]) {
+    background-image: var(--btn-face-quiet);
   }
   .btn-raised,
   .btn-ghost:is(:hover, [aria-expanded="true"], [aria-pressed="true"], [aria-current="page"]) {

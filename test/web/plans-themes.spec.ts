@@ -117,3 +117,45 @@ test("every button casts shadow-sm; its border shows only on hover, much lighter
   await page.waitForTimeout(250);
   await page.screenshot({ path: info.outputPath("buttons-hover.png"), clip });
 });
+
+test("with no border at rest, a button's face still stands clear of what it sits on; a quiet (ghost) one a notch less", { tag: "@theme" }, async ({ page, server }, info) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => { window.location.hash = "#/tasks/T-mock-1"; });
+  const raised = page.locator("#main [data-pane='detail'] .btn-raised:visible").first();
+  const quiet = page.locator("header .btn-ghost:visible").first();
+  await expect(raised).toBeVisible();
+  await page.mouse.move(0, 899);
+  const standOff = (button: typeof raised) => button.evaluate((el: any) => {
+    // Every colour as sRGB, read back off a canvas: the face's stops are oklab.
+    const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
+    const srgb = (color: string): number[] => {
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, 1, 1);
+      return [...ctx.getImageData(0, 0, 1, 1).data.slice(0, 3)];
+    };
+    const luminance = (rgb: number[]) => {
+      const [r, g, b] = rgb.map((c) => { const v = c / 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+      return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+    };
+    const stops: number[][] = getComputedStyle(el).backgroundImage.match(/(?:rgba?|oklab|oklch|lab|lch|color)\([^)]*\)/g)!.map(srgb);
+    const face = stops[0]!.map((_, i) => stops.reduce((sum, stop) => sum + stop[i]!, 0) / stops.length);
+    let under = el.parentElement;
+    while (under && /rgba\(0, 0, 0, 0\)|transparent/.test(getComputedStyle(under).backgroundColor)) under = under.parentElement;
+    const surface = srgb(getComputedStyle(under ?? document.body).backgroundColor);
+    const [hi, lo] = [luminance(face), luminance(surface)].sort((a, b) => b - a);
+    return { dark: document.documentElement.classList.contains("dark"), contrast: (hi! + 0.05) / (lo! + 0.05), border: getComputedStyle(el).borderTopColor };
+  });
+  const face = await standOff(raised);
+  const ghost = await standOff(quiet);
+  const scheme = face.dark ? "dark" : "light";
+  expect([face.border, ghost.border], "still no border at rest").toEqual(["rgba(0, 0, 0, 0)", "rgba(0, 0, 0, 0)"]);
+  // Was 1.04 in light and 1.16 in dark: a white key on a white card, a near-black one on a near-black card.
+  expect(face.contrast, `a button against its card (${scheme})`).toBeGreaterThanOrEqual(face.dark ? 1.45 : 1.2);
+  // A ghost had no face at all: in dark only its invisible shadow said it was there.
+  expect(ghost.contrast, `a quiet button against the page (${scheme})`).toBeGreaterThanOrEqual(face.dark ? 1.3 : 1.05);
+  const box = (await raised.locator("xpath=..").boundingBox())!;
+  await page.screenshot({ path: info.outputPath("buttons-face.png"), clip: { x: box.x - 6, y: box.y - 6, width: Math.min(620, box.width + 12), height: box.height + 12 } });
+  await page.screenshot({ path: info.outputPath("buttons-quiet.png"), clip: { x: 900, y: 0, width: 380, height: 44 } });
+});
