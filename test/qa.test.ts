@@ -90,12 +90,19 @@ test("a failing QA gate tells the Master to send work back", async () => {
   assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.qaVerdict, "changes_required");
 });
 
-test("qa is accepted from implementing and transitions to reviewing", async () => {
+test("qa is accepted from implementing and transitions to reviewing, which every window reads while QA runs", async () => {
+  const seen: string[] = [];
   const deps = makeDeps();
+  const reply = deps.runProcess!;
+  deps.runProcess = async (args, options) => {
+    seen.push(loadTask(deps.root, deps.configDir, "TASK-1")!.state);
+    return reply(args, options);
+  };
   withTask(deps, { state: "implementing" });
   const result = await act(deps, { action: "qa" });
   assert.equal(result.ok, true, result.message);
   assert.equal(result.state, "reviewing");
+  assert.deepEqual(seen, ["reviewing"]);
   assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.reviewIterations.qa, 1);
 });
 
