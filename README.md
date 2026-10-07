@@ -63,6 +63,22 @@ stopped one carries on in a background session, which restarts its own session w
 | QA | The final quality gate, at the depth the change's risk calls for |
 | RESEARCH | External facts, with sources |
 
+## Knowledge
+
+Each agent keeps what it learns about your project in `.pi/bot-lobby/<Agent>/knowledge/`:
+stable facts (`knowledge.md`), its standards (design language, engineering or testing standards),
+decisions with their reasons, and a short history of completed tasks. Workers only propose
+knowledge and the oracle records it, so nothing gets in unchecked; research stays evidence until
+the oracle keeps it. When a file is long, Jev picks the parts that matter to each step, so prompts
+stay short. A task cannot complete while a file is over `knowledge.compactionThreshold` (20,000
+characters): the oracle rewrites it shorter, and the version before is kept under `archive/`.
+
+The **Knowledge** tab shows the files as a tree, from the project to each agent and the model it
+runs on. Open a file to edit, add or delete its entries, or leave a note on one ("outdated, we
+moved to Redis"). A note travels with its entry into every agent's prompt.
+
+![The Knowledge tab: each agent's files, and one open with notes on its entries](.github/screenshots/knowledge.png)
+
 ## Keys
 
 The lobby is keyboard-first, and every action button shows its key (`Archive E`, `Delete Del`).
