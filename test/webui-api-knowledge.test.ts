@@ -166,8 +166,8 @@ test("every scenario's mock answers the knowledge calls without throwing", async
         const opened = await call("knowledge.open", { agent: "master", file: "knowledge.md" });
         assert.equal(opened.status, 200, "full: knowledge.open");
         const view = opened.payload.result!.view as { entries: unknown[]; attached: Array<{ id: string }> };
-        assert.equal(view.entries.length, 1, "full: one entry");
-        assert.equal(view.attached.length, 1, "full: one note");
+        assert.equal(view.entries.length, 11, "full: headings, a paragraph and bullets");
+        assert.equal(view.attached.length, 2, "full: two notes");
         assert.equal((await call("knowledge.unnote", { id: view.attached[0]!.id })).status, 200, "full: unnote");
       } else {
         assert.deepEqual(files.payload.result!.files, [], `${name}: no files`);
