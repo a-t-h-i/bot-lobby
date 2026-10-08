@@ -45,7 +45,9 @@
   --typing: #7078cc;
   --tab-active: #efeee9;
   /* The chosen tab's fill and the colour that flows between tabs, both from the accent so themes follow. */
-  --tab-fill: color-mix(in oklab, var(--primary) 11%, transparent);
+  --tab-fill: color-mix(in oklab, var(--primary) 18%, transparent);
+  --tab-outline: color-mix(in oklab, var(--foreground) 36%, var(--background));
+  --tab-idle: color-mix(in oklab, var(--foreground) 6%, var(--background));
   --tab-liquid: color-mix(in oklab, var(--primary) 72%, transparent);
   /* The liquid's colour made solid, so the chosen tab's ring hides the border under it and its halves meet without a seam. */
   --tab-rim: color-mix(in oklab, var(--primary) 72%, var(--background));
@@ -169,7 +171,7 @@
   --ring: #9aa2f0;
   --typing: #9aa2f0;
   --tab-active: #1d1d22;
-  --tab-fill: color-mix(in oklab, var(--primary) 17%, transparent);
+  --tab-fill: color-mix(in oklab, var(--primary) 25%, transparent);
   --tab-liquid: color-mix(in oklab, var(--primary) 80%, transparent);
   --tab-rim: color-mix(in oklab, var(--primary) 80%, var(--background));
 

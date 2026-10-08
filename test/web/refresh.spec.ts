@@ -163,10 +163,10 @@ test("project loading, empty, failure and refresh recovery use accessible Combob
   });
   await openScenario(page, server, "full");
   const project = page.getByRole("combobox", { name: "Project", exact: true });
-  await expect(project).toBeDisabled();
+  await expect(project).toBeEnabled();
   await expect(page.getByRole("button", { name: "Refresh projects" })).toBeDisabled();
   release();
-  await expect(page.getByText("No authorized running projects found. Start a project in Pi, then refresh.")).toBeVisible();
+  await expect(page.getByText("No authorized running projects found. Open a folder from the Project menu, or refresh.")).toBeVisible();
   mode = "failure";
   await page.getByRole("button", { name: "Refresh projects" }).click();
   await expect(page.getByText("Fixture project lookup failed")).toBeVisible();

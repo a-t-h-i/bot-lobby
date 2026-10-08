@@ -55,6 +55,11 @@ A task that is paused, or that no running session drives, shows **Resume** (`R`)
 It carries the task on without moving your window: a paused task is unpaused where it runs, and a
 stopped one carries on in a background session, which restarts its own session when its file is found.
 
+The **Tasks** screen has **List** and **Board** subtabs. Board groups saved plans and new tasks
+in **Backlog**, active work in **In progress**, and finished work in **Completed**. Abandoned
+work stays labeled in Backlog until archived. Cards open the existing task details and actions;
+archiving removes a card immediately, while the List view can still show the archive.
+
 | Agent | Does |
 | --- | --- |
 | Oracle | Your Pi session: questions, plan, delegation and approvals |
@@ -62,6 +67,16 @@ stopped one carries on in a background session, which restarts its own session w
 | DEV | Backend, APIs, data, security and integrations |
 | QA | The final quality gate, at the depth the change's risk calls for |
 | RESEARCH | External facts, with sources |
+
+## Projects
+
+Click the project name (or press `P`) to switch between running projects or choose **Open folder…**.
+The folder browser lists directories on the machine running bot-lobby, not the browser's machine;
+you can browse, go to a parent, or enter an absolute path. An existing project is reused; otherwise
+a dedicated Pi session starts for the folder's detected project root. It loads this copy of bot-lobby
+without other extensions and does not automatically trust project-local resources. Switching projects
+reloads the page and discards unsent drafts. Projects opened this way stop when their hosting lobby
+stops; opening a folder does not start a task or merge work.
 
 ## Knowledge
 
@@ -78,6 +93,11 @@ runs on. Open a file to edit, add or delete its entries, or leave a note on one 
 moved to Redis"). A note travels with its entry into every agent's prompt.
 
 ![The Knowledge tab: each agent's files, and one open with notes on its entries](.github/screenshots/knowledge.png)
+
+Ask project questions directly from the **Knowledge** composer. The oracle checks saved knowledge
+first, searches the codebase for missing information, and records verified findings in the relevant
+agent's knowledge. Answers appear in the side pane; the **Chat / Docs** toggle inside the composer
+switches back to the selected document. Questions do not create tasks.
 
 ## Keys
 

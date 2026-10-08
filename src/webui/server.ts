@@ -10,6 +10,8 @@ import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { canonicalRoot } from "../state/previews.ts";
 import { ProjectRegistry, registryDirectory, projectInfo, listProjects, browserSession } from "./projects.ts";
 import { gateway } from "./gateway.ts";
+import { browseFolders, folderPath } from "./project-folders.ts";
+import { ProjectOpener } from "./project-open.ts";
 import { lobbyFeed } from "../lobby/feed.ts";
 import type { LobbyService } from "../lobby/host.ts";
 import {
@@ -166,6 +168,7 @@ interface RouteState {
   root: string;
   projectRoot: string;
   registry?: ProjectRegistry;
+  opener?: ProjectOpener;
 }
 
 async function login(req: IncomingMessage, res: ServerResponse, state: RouteState): Promise<void> {
@@ -191,6 +194,15 @@ function openStream(req: IncomingMessage, res: ServerResponse, url: URL, state: 
   req.on("close", () => state.hub.remove(res));
 }
 
+async function projectFolderRequest(req: IncomingMessage, res: ServerResponse, url: URL, state: RouteState): Promise<void> {
+  const body = await readJson(req, false);
+  const empty = body && typeof body === "object" && !Array.isArray(body) && Object.keys(body).length === 0;
+  const path = folderPath(url.pathname.endsWith(".browse") && empty ? { path: state.projectRoot } : body);
+  const result = url.pathname.endsWith(".browse") ? await browseFolders(path)
+    : { project: await state.opener!.open(path, browserSession(req.headers.cookie)) };
+  sendJson(res, 200, { ok: true, result });
+}
+
 async function routeApi(req: IncomingMessage, res: ServerResponse, url: URL, state: RouteState): Promise<void> {
   if (req.method !== "POST") {
     sendError(res, "unsupported", "only POST", 405);
@@ -214,6 +226,7 @@ async function routeApi(req: IncomingMessage, res: ServerResponse, url: URL, sta
     sendJson(res, 200, { ok: true, result });
     return;
   }
+  if (url.pathname === "/api/projects.browse" || url.pathname === "/api/projects.open") return projectFolderRequest(req, res, url, state);
   const name = callName(url);
   if (name === undefined) {
     sendError(res, "not_found", `no call ${url.pathname.slice("/api/".length)}`, 404);
@@ -354,6 +367,7 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
   state.port = bound;
   try { state.registry = new ProjectRegistry(options.registryDir ?? registryDirectory(), state.projectRoot, bound); }
   catch (error) { hub.close(); server.close(); throw error; }
+  state.opener = new ProjectOpener(state.registry);
   hookExit();
   const api: WebServer = {
     link: `http://127.0.0.1:${bound}/#token=${link}`,
@@ -374,6 +388,7 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
       return `http://127.0.0.1:${state.port}/#token=${state.link}`;
     },
     close: async () => {
+      state.opener!.close();
       state.registry!.close();
       hub.close();
       await new Promise<void>((resolve) => {

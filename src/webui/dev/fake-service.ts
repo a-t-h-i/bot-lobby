@@ -512,12 +512,14 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
       const index = tasks.findIndex((task) => (task as { id: string }).id === taskId);
       if (index < 0) return `no task ${taskId}`;
       archived.unshift(tasks.splice(index, 1)[0]!);
+      lobbyTopics.bump("tasks");
       return `archived ${taskId} — v shows archived tasks, a restores one`;
     },
     restoreTask: (taskId: string) => {
       const index = archived.findIndex((task) => (task as { id: string }).id === taskId);
       if (index < 0) return `no archived task ${taskId}`;
       tasks.unshift(archived.splice(index, 1)[0]!);
+      lobbyTopics.bump("tasks");
       return `restored ${taskId} to the task list`;
     },
     deleteTask: (taskId: string, where: "list" | "archive") => {
@@ -525,6 +527,7 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
       const index = list.findIndex((task) => (task as { id: string }).id === taskId);
       if (index < 0) return `no task ${taskId}`;
       list.splice(index, 1);
+      lobbyTopics.bump("tasks");
       return `deleted ${taskId} for good`;
     },
     isAuto: (taskId: string) => auto.has(taskId),

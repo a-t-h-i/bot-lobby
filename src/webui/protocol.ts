@@ -17,6 +17,7 @@ import type { MemberState, PanelNote, PanelQuestion, PlannerMessage } from "../l
 import type { QuickFixJob } from "../lobby/quickfix.ts";
 
 export interface ProjectInfo { id: string; name: string; cwd: string; port: number }
+export interface FolderListing { path: string; parent?: string; folders: Array<{ name: string; path: string }>; truncated: boolean }
 
 export type { WebPrompt };
 export type { LobbyTopic };
@@ -634,6 +635,8 @@ export interface Api {
   "quickfix.runAnyway": { request: { id: string }; result: { notice: string } };
   "quickfix.movedToTask": { request: { id: string }; result: { notice: string; key?: string } };
   "metrics.get": { request: { groupBy: "model" | "model-kind"; query?: string }; result: MetricsData };
+  "projects.browse": { request: { path?: string }; result: FolderListing };
+  "projects.open": { request: { path: string }; result: { project: ProjectInfo } };
   "knowledge.files": { request: Record<string, never>; result: { files: KnowledgeFileInfo[]; models?: Partial<Record<KnowledgeAgentName, string>> } };
   "knowledge.ask": { request: { text: string; attachments?: string[] }; result: { notice: string } };
   "knowledge.open": { request: { agent: KnowledgeAgentName; file: string }; result: { view: KnowledgeViewData } };

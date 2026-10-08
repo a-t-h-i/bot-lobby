@@ -55,7 +55,7 @@ function resolveService(deps?: WebCommandDeps): LobbyService | undefined {
 }
 
 function openLink(url: string, deps?: WebCommandDeps): void {
-  if (!loadConfig().lobby.web.openBrowser) return;
+  if (process.env.BOT_LOBBY_WEB_PROJECT === "1" || !loadConfig().lobby.web.openBrowser) return;
   try {
     (deps?.open ?? openBrowser)(url);
   } catch {

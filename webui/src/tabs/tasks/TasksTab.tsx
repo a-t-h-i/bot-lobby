@@ -5,6 +5,8 @@
  * or `plans` topic changes.
  */
 import { ListChecks } from "lucide-react"
+import { Tabs } from "radix-ui"
+import { TaskBoard } from "./TaskBoard"
 import { useEffect, useState } from "react"
 import { go, tabHash } from "@/app/router"
 import { setComposerTask } from "@/lib/composerContext"
@@ -49,7 +51,18 @@ function ArchivedToggle({ shown, count, onToggle }: { shown: boolean; count: num
   )
 }
 
-export function TasksTab({ id }: { id?: string }) {
+export function TasksTab({ id, board = false }: { id?: string; board?: boolean }) {
+  return <Tabs.Root value={board ? "board" : "list"} onValueChange={(value) => go(tabHash("tasks", ...(value === "board" ? ["board"] : [])))} className="flex min-h-0 flex-1 flex-col">
+    <Tabs.List aria-label="Task views" className="flex gap-1 border-b border-border px-4 py-2">
+      <Tabs.Trigger value="list" className="rounded-lg border border-input px-3 py-1.5 text-sm text-muted-foreground data-[state=active]:bg-tab-fill data-[state=active]:text-foreground focus-visible:ring-3 focus-visible:ring-ring">List</Tabs.Trigger>
+      <Tabs.Trigger value="board" className="rounded-lg border border-input px-3 py-1.5 text-sm text-muted-foreground data-[state=active]:bg-tab-fill data-[state=active]:text-foreground focus-visible:ring-3 focus-visible:ring-ring">Board</Tabs.Trigger>
+    </Tabs.List>
+    <Tabs.Content value="list" className="flex min-h-0 flex-1 flex-col"><TasksListView id={id} /></Tabs.Content>
+    <Tabs.Content value="board" className="flex min-h-0 flex-1 flex-col"><TaskBoard id={id} /></Tabs.Content>
+  </Tabs.Root>
+}
+
+function TasksListView({ id }: { id?: string }) {
   const wide = useWide()
   const [showArchived, setShowArchived] = useState(false)
   const tasks = useApiRead("tasks.list", {}, ["tasks", "plans"])

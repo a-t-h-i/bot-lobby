@@ -7,6 +7,7 @@ import type { Route } from "@/app/router"
 import { GitTab } from "./git/GitTab"
 import { IssuesTab } from "./issues/IssuesTab"
 import { KnowledgeTab } from "./knowledge/KnowledgeTab"
+import { taskRoute } from "@/app/taskRoute"
 import { ExcalidrawTab } from "./excalidraw/ExcalidrawTab"
 import { LobbyTab } from "./lobby/LobbyTab"
 import { MetricsTab } from "./metrics/MetricsTab"
@@ -36,7 +37,7 @@ export function routeBody(route: Route): ReactNode {
     case "lobby":
       return <LobbyTab />
     case "tasks":
-      return <TasksTab id={detailId(route.rest)} />
+      return <TasksTab {...taskRoute(route.rest)} />
     case "plan":
       return <PlanTab rest={route.rest} />
     case "quickfix":

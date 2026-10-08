@@ -294,10 +294,12 @@ export function sessionArgs(name: string, model?: string, argv: readonly string[
 const POSIX = process.platform !== "win32";
 
 /** The real launcher: the same pi build as this session, in its own process group, without subagent markers. */
-export const launchPi: SessionLauncher = (args, cwd) => {
+export const launchPi = (args: string[], cwd: string, overrides: NodeJS.ProcessEnv = {}): SessionProcess => {
   const invocation = resolvePiInvocation(args);
   const env: NodeJS.ProcessEnv = { ...process.env, PI_SKIP_VERSION_CHECK: "1" };
   delete env.BOT_LOBBY_SUBAGENT;
+  delete env.BOT_LOBBY_WEB_PROJECT;
+  Object.assign(env, overrides);
   const proc: ChildProcess = spawn(invocation.command, invocation.args, { cwd, env, shell: false, detached: POSIX, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
   return proc as unknown as SessionProcess;
 };
