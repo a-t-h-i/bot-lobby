@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 import { Popover } from "radix-ui"
-import { Check, ChevronsUpDown, GitBranch, RefreshCw, TriangleAlert } from "lucide-react"
+import { Check, ChevronsUpDown, FolderOpen, GitBranch, RefreshCw, TriangleAlert } from "lucide-react"
 import type { ProjectInfo } from "@protocol"
 import { call } from "@/lib/api"
 import { useHotkey } from "@/lib/hotkeys"
@@ -15,6 +15,7 @@ import { Keys } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { ProjectFolderDialog } from "./ProjectFolderDialog"
 
 interface ProjectList {
   projects: ProjectInfo[]
@@ -32,7 +33,7 @@ function selection(): { id?: string; error?: string } {
 function projectError(data: ProjectList | undefined, id: string | undefined): string | undefined {
   if (!data) return undefined
   if (id && !data.projects.some((project) => project.id === id)) return "Selected project is unknown or offline. Refresh or choose a running project."
-  if (!data.projects.length) return "No authorized running projects found. Start a project in Pi, then refresh."
+  if (!data.projects.length) return "No authorized running projects found. Open a folder from the Project menu, or refresh."
   return undefined
 }
 
@@ -107,11 +108,11 @@ function walk(event: KeyboardEvent<HTMLElement>) {
 export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Projects; tab: string; name: string; branch?: string | undefined }) {
   const { data, busy, slow, refresh } = projects
   const [open, setOpen] = useState(false)
+  const [browsing, setBrowsing] = useState(false)
   const selected = selection()
   const message = problem(projects)
   const active = selected.error ? "invalid" : selected.id ?? data?.currentId ?? ""
-  const canOpen = Boolean(data?.projects.length)
-  useHotkey("p", () => setOpen(true), { enabled: canOpen })
+  useHotkey("p", () => setOpen(true))
   useHotkey("r", () => void refresh(), { enabled: open, inDialog: true })
 
   function choose(id: string) {
@@ -121,16 +122,15 @@ export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Pro
 
   return (
     <div aria-busy={busy} className="flex min-w-0 items-center gap-1.5">
-      <Popover.Root open={open && canOpen} onOpenChange={setOpen}>
+      <Popover.Root open={open} onOpenChange={setOpen}>
         <Popover.Trigger
           type="button"
           role="combobox"
           aria-label="Project"
           aria-description={`${name}${branch ? `, branch ${branch}` : ""}`}
           aria-haspopup="listbox"
-          aria-expanded={open && canOpen}
+          aria-expanded={open}
           aria-keyshortcuts="P ArrowDown"
-          disabled={!canOpen}
           onKeyDown={(event) => {
             if (event.key !== "ArrowDown" || event.altKey || event.metaKey || event.ctrlKey) return
             event.preventDefault()
@@ -140,7 +140,7 @@ export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Pro
         >
           <span aria-hidden="true" className={cn("size-2.5 shrink-0 rounded-full", message ? "bg-destructive" : "bg-primary")} />
           <span className="truncate">{name}</span>
-          <ChevronsUpDown aria-hidden="true" className={cn("size-3.5 shrink-0 text-muted-foreground", !canOpen && "opacity-40")} />
+          <ChevronsUpDown aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Content
@@ -198,9 +198,12 @@ export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Pro
                 )
               })}
             </div>
+            <button type="button" className="flex items-center gap-2 border-t border-border px-3 py-3 text-sm font-medium outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40"
+              onClick={() => { setOpen(false); setBrowsing(true) }}><FolderOpen aria-hidden="true" className="size-4" />Open folder…</button>
           </Popover.Content>
         </Popover.Portal>
       </Popover.Root>
+      <ProjectFolderDialog open={browsing} onClose={() => setBrowsing(false)} tab={tab} />
       {branch ? (
         <span className="hidden min-w-0 items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground sm:inline-flex">
           <GitBranch aria-hidden="true" className="size-3 shrink-0" />

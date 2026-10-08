@@ -86,9 +86,9 @@ const TabCell = forwardRef<HTMLAnchorElement, { tab: TabInfo; active: boolean }>
           tabIndex={active ? 0 : -1}
           onPointerEnter={onPointerEnter}
           className={cn(
-            "relative z-10 inline-flex h-7.5 shrink-0 items-center gap-1.5 rounded-lg border border-input px-2.5 text-[0.8125rem] leading-none font-medium whitespace-nowrap outline-none",
+            "relative z-10 inline-flex h-7.5 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--tab-outline)] px-2.5 text-[0.8125rem] leading-none font-medium whitespace-nowrap outline-none",
             "transition-colors duration-200 ease-snap focus-visible:ring-3 focus-visible:ring-ring/40",
-            active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+            active ? "text-foreground" : "bg-[var(--tab-idle)] text-muted-foreground hover:text-foreground"
           )}
         >
           <TabIcon id={tab.id} play={play} className={cn("size-3.5 shrink-0 transition-colors duration-200", active && "text-primary")} />

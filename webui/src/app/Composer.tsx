@@ -31,6 +31,7 @@ import { useTopic } from "./hooks"
 import { go, type Route } from "./router"
 import { knowledgeHash } from "./knowledgeView"
 import { KnowledgePaneToggle } from "./KnowledgePaneToggle"
+import { taskRoute } from "./taskRoute"
 
 type TargetId = "oracle" | "knowledge" | "panel" | "quickfix" | "comment" | "task" | "session" | "newsession"
 
@@ -47,15 +48,6 @@ interface Target {
 
 const ORACLE: Target = { id: "oracle", pill: "Oracle", label: "Message the oracle", placeholder: "Message the oracle…" }
 
-function decode(part: string | undefined): string | undefined {
-  if (!part) return undefined
-  try {
-    return decodeURIComponent(part)
-  } catch {
-    return part
-  }
-}
-
 /** Who a message can go to from this route: the tab's own target first, the oracle always. */
 function targetsFor(route: Route, openTask: string | undefined, session: ComposerSession | undefined): Target[] {
   if (route.kind === "sessions") {
@@ -68,7 +60,7 @@ function targetsFor(route: Route, openTask: string | undefined, session: Compose
   if (route.tab === "knowledge") return [{ id: "knowledge", pill: "Oracle", label: "Ask the oracle about this project", placeholder: "Ask about this project — the oracle searches the code and learns what is missing…" }]
   if (route.tab === "plan") return [{ id: "panel", pill: "Panel", label: "Message the panel", placeholder: "Describe a task, or answer the panel…" }, ORACLE]
   if (route.tab === "quickfix") return [{ id: "quickfix", pill: "Quick fix", label: "Describe a quick fix", placeholder: "Describe a small change…" }, ORACLE]
-  const task = route.tab === "tasks" ? decode(route.rest[0]) ?? openTask : undefined
+  const task = route.tab === "tasks" ? taskRoute(route.rest).id ?? openTask : undefined
   if (task) {
     return [
       { id: "comment", pill: "Comment", label: `Comment on ${task}`, placeholder: `Comment on ${task}'s plan…`, taskId: task },

@@ -31,9 +31,17 @@ function titleClass(row: TaskRow): string {
   return "text-foreground"
 }
 
-function Row({ row, selected, onSelect }: { row: TaskRow; selected: boolean; onSelect: (id: string) => void }) {
-  return (
-    <li>
+function TaskItemFacts({ row, card }: { row: TaskRow; card: boolean }) {
+  return <>
+    {card ? <span className="pl-6 text-xs text-muted-foreground">{row.status.replaceAll("_", " ")}</span> : null}
+    {row.check === "open" ? <span className="pl-6 text-xs text-muted-foreground">{detailsLine(row)}</span> : null}
+    {row.kind !== "plan" ? <span className="pl-6 text-xs text-muted-foreground"><PhaseTiming timing={row.timing} {...(row.work ? { work: row.work } : {})} stopped={row.check !== "open"} /></span> : null}
+    {row.delivery ? <span className="pl-6 text-xs text-foreground">Delivery: {row.delivery.status.replaceAll("_", " ")} · open task to review</span> : null}
+  </>
+}
+
+export function TaskItem({ row, selected, onSelect, card = false }: { row: TaskRow; selected: boolean; onSelect: (id: string) => void; card?: boolean }) {
+  return <li className={card ? "overflow-hidden rounded-lg border border-input bg-card shadow-sm" : undefined}>
       <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
         type="button"
         data-row
@@ -47,12 +55,9 @@ function Row({ row, selected, onSelect }: { row: TaskRow; selected: boolean; onS
           <span className={cn("min-w-0 flex-1 break-words", titleClass(row), selected && "font-medium text-foreground")}>{row.title}</span>
           <Trailing row={row} />
         </span>
-        {row.check === "open" ? <span className="pl-6 text-xs text-muted-foreground">{detailsLine(row)}</span> : null}
-        {row.kind !== "plan" ? <span className="pl-6 text-xs text-muted-foreground"><PhaseTiming timing={row.timing} {...(row.work ? { work: row.work } : {})} stopped={row.check !== "open"} /></span> : null}
-        {row.delivery ? <span className="pl-6 text-xs text-foreground">Delivery: {row.delivery.status.replaceAll("_", " ")} · open task to review</span> : null}
+        <TaskItemFacts row={row} card={card} />
       </button>
     </li>
-  )
 }
 
 export function TaskList({ rows, selectedId, onSelect }: { rows: readonly TaskRow[]; selectedId?: string; onSelect: (id: string) => void }) {
@@ -65,7 +70,7 @@ export function TaskList({ rows, selectedId, onSelect }: { rows: readonly TaskRo
           </h3>
           <ul className={ROWS}>
             {group.map((row) => (
-              <Row key={`${row.kind}-${row.id}`} row={row} selected={row.id === selectedId} onSelect={onSelect} />
+              <TaskItem key={`${row.kind}-${row.id}`} row={row} selected={row.id === selectedId} onSelect={onSelect} />
             ))}
           </ul>
         </div>

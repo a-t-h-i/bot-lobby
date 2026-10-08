@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, statSync, writeFileSync, symlinkSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, statSync, writeFileSync, symlinkSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -50,6 +50,7 @@ test("scan considers at most 128 records", () => {
 
 test("project endpoints retain root auth/JSON/method validation and rebind/close lifecycle", async () => {
   const dir = temp(); const root = temp(); const secret = randomBytes(32);
+  mkdirSync(join(root, ".git"));
   const service = { ...fakeWebService(new LobbyFeed()), projectRoot: () => root };
   const server = await startWebServer({ service, secret, port: 0, registryDir: dir });
   const cookie = `bl_session=${sessionValue(secret)}`;
@@ -68,6 +69,7 @@ test("project endpoints retain root auth/JSON/method validation and rebind/close
     assert.equal((await call("/api/projects.self", "{}", { "content-type": "text/plain" })).status, 415);
     assert.equal((await call("/api/projects.list", "{}", {}, "GET")).status, 405);
     assert.equal((await call("/api/projects.list", "{}", { origin: "https://evil.test" })).status, 403);
+    await checkFolderEndpoints(call, root, self.result.project.id);
     server.rebind({ ...service, projectRoot: () => temp() });
     const rebound = await (await call("/api/projects.self")).json() as { result: { project: ProjectInfo } };
     assert.notEqual(rebound.result.project.id, self.result.project.id);
@@ -75,3 +77,17 @@ test("project endpoints retain root auth/JSON/method validation and rebind/close
   } finally { await server.close(); }
   assert.equal(scanProjects(dir).length, 0);
 });
+
+async function checkFolderEndpoints(call: (path: string, body?: string, headers?: Record<string, string>, method?: string) => Promise<Response>, root: string, id: string) {
+  const browsed = await (await call("/api/projects.browse")).json() as { result: { path: string } };
+  assert.equal(browsed.result.path, root);
+  const opened = await (await call("/api/projects.open", JSON.stringify({ path: root }))).json() as { result: { project: ProjectInfo } };
+  assert.equal(opened.result.project.id, id);
+  for (const endpoint of ["projects.browse", "projects.open"]) {
+    assert.equal((await call(`/api/${endpoint}`, "{}", { cookie: "" })).status, 401);
+    assert.equal((await call(`/api/${endpoint}`, "{}", { origin: "https://evil.test" })).status, 403);
+    assert.equal((await call(`/api/${endpoint}`, "{}", {}, "GET")).status, 405);
+    assert.equal((await call(`/api/${endpoint}`, '{"path":"relative"}')).status, 400);
+    assert.equal((await call(`/projects/${id}/api/${endpoint}`, "{}")).status, 403);
+  }
+}

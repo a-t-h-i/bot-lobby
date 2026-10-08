@@ -286,9 +286,10 @@ function nudgeWhenIdle(state: Runtime, message: string): void {
  * Whether this pi process serves the web page: an interactive session. A
  * one-shot run has nobody to answer, and the background sessions the lobby
  * starts (RPC) are shown by the page of the window that started them.
+ * Explicitly opened project folders get their own managed RPC web server.
  */
 export function servesPage(ctx: ExtensionContext): boolean {
-  return ctx.mode === "tui";
+  return ctx.mode === "tui" || (ctx.mode === "rpc" && process.env.BOT_LOBBY_WEB_PROJECT === "1");
 }
 
 interface MasterTurn {
