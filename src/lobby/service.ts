@@ -16,7 +16,8 @@ import { deliver, type DeliveryRequest, type DeliveryStore } from "../delivery/o
 import type { LockIdentity } from "../delivery/lock.ts";
 import { execCommand } from "./issues.ts";
 import { releaseAttachments } from "../state/attachments.ts";
-import { loadConfig, saveConfig as writeConfig } from "../state/project.ts";
+import { loadConfig, readDataRoots, saveConfig as writeConfig } from "../state/project.ts";
+import { knowledgeQuestion } from "./knowledge.ts";
 import { addPlanComment, editComment, readPlanComments, type PlanComment } from "../state/comments.ts";
 import { isAutoMode } from "../state/auto.ts";
 import { sendToInbox, sendToSession as leaveForSession } from "../state/inbox.ts";
@@ -777,6 +778,9 @@ export function createLobbyService(state: Runtime): LobbyService {
     metrics: () => readMetrics(state.root, state.configDir),
     classifierMetrics: () => readClassifierMetrics(state.root, state.configDir),
     toOracle: (text) => toOracle(state, text),
+    askKnowledge: (text) => {
+      state.pi.sendUserMessage(knowledgeQuestion(text, readDataRoots(state.root, state.configDir)), state.ctx.isIdle() ? undefined : { deliverAs: "followUp" });
+    },
     comment: (taskId, text) => addComment(state, taskId, text),
     editComment: (taskId, commentId, text) => editOwnComment(state, taskId, commentId, text),
     startPlanned: (plan) => startPlanned(state, plan),

@@ -18,6 +18,7 @@ export function fakeWebService(feed = new LobbyFeed()): LobbyService {
     zen: () => ({ runs: [] }),
     feed,
     toOracle: () => undefined,
+    askKnowledge: () => {},
     abortMaster: () => {},
     chatHistory: () => [],
     tasks: () => [...tasks],

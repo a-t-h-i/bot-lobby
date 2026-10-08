@@ -28,7 +28,7 @@ import {
 
 const OrchestrateSchema = Type.Object({
   action: StringEnum(ORCHESTRATE_ACTIONS, { description: "Workflow step to run" }),
-  taskId: Type.Optional(Type.String({ description: "Task id; defaults to the active task" })),
+  taskId: Type.Optional(Type.String({ description: "Task id; defaults to the active task. For knowledge/compact, omit to update project facts without changing a task." })),
   question: Type.Optional(Type.String({ description: "clarify: question for the user" })),
   options: Type.Optional(Type.Array(Type.String(), { description: "clarify: optional answer choices, neutral and unranked; mark one (Recommended) only when the answer is quite obvious" })),
   domains: Type.Optional(Type.Array(Type.String(), { description: "scout: any of designer, backend, qa" })),
@@ -75,8 +75,8 @@ const DESCRIPTION = [
   "read-only researcher for cited internet evidence on a complex change, tool, plugin, doc set or",
   "dependency), propose (record the proposal and request approval), plan (record the internal",
   "plan, or amend it later with the full revised plan), implement (delegate a step to a domain worker, or several domains in parallel with assignments), qa (final quality gate and the only",
-  "review), knowledge (record approved knowledge or a decision),",
-  "compact (replace a knowledge file with a rewritten version, archiving the old one, dispersing domain-relevant facts to action=knowledge (domain=designer|backend|qa) first), whiteboard (create your own Excalidraw session and assign it to yourself),",
+  "review), knowledge (record approved project knowledge or a decision; works without a task),",
+  "compact (replace a knowledge file with a rewritten version, archiving the old one; works without a task; disperse domain-relevant facts to action=knowledge (domain=designer|backend|qa) first), whiteboard (create your own Excalidraw session and assign it to yourself),",
   "resolve_approval (approve or reject a request), complete (declare the task done after the gates",
   "pass), block/resume (escalate or continue), budget (under a time budget: where it stands, or ask the",
   "user for more minutes with a reason), track (the task's path and who takes part: show it, or correct it with",

@@ -23,6 +23,7 @@ import { transition } from "../src/state/task-state.ts";
 import { knowledgeDir } from "../src/knowledge/paths.ts";
 import { selectKnowledge } from "../src/knowledge/selector.ts";
 import { runWorkflowAction, type OrchestrateParams, type WorkflowDeps } from "../src/workflow/workflow.ts";
+import { lobbyTopics } from "../src/lobby/topics.ts";
 
 // Hermetic whiteboard sessions: the book lives under the user-global config dir,
 // so park the ambient gates and point it at a temp dir for this file.
@@ -81,6 +82,31 @@ function withTask(deps: WorkflowDeps, state: TaskState): Task {
 function act(deps: WorkflowDeps, params: Partial<OrchestrateParams>) {
   return runWorkflowAction({ action: "status", taskId: "TASK-1", ...params } as OrchestrateParams, deps);
 }
+
+test("project knowledge learns, deduplicates and corrects facts without creating or advancing a task", async () => {
+  const deps = makeDeps();
+  ensureProjectStructure(deps.root, deps.configDir);
+  const params: OrchestrateParams = { action: "knowledge", domain: "backend", text: "Authentication is checked in src/auth.ts." };
+  const version = lobbyTopics.version("knowledge");
+  assert.equal((await runWorkflowAction(params, deps)).ok, true);
+  assert.equal(lobbyTopics.version("knowledge"), version + 1);
+  const path = knowledgeFilePath(join(deps.root, ".pi", "bot-lobby"), "backend", "knowledge");
+  assert.match(readFileOr(path), /src\/auth.ts/);
+  assert.match((await runWorkflowAction(params, deps)).message, /Already recorded/);
+  assert.equal(lobbyTopics.version("knowledge"), version + 1);
+  assert.equal((await runWorkflowAction({ action: "knowledge", text: " " }, deps)).ok, false);
+  const task = withTask(deps, "created");
+  task.paused = true;
+  saveTask(deps.root, deps.configDir, task);
+  const before = loadTask(deps.root, deps.configDir, task.id);
+  const corrected = await runWorkflowAction({ action: "compact", domain: "backend", file: "knowledge.md", text: "Authentication is checked in src/security.ts." }, deps);
+  assert.equal(corrected.ok, true, corrected.message);
+  assert.match(corrected.message, /Previous version archived/);
+  assert.match(readFileOr(path), /src\/security.ts/);
+  assert.doesNotMatch(readFileOr(path), /src\/auth.ts/);
+  assert.deepEqual(loadTask(deps.root, deps.configDir, task.id), before, "a paused task stays untouched");
+  assert.equal((await runWorkflowAction({ ...params, taskId: "missing" }, deps)).ok, false, "explicit task ids still use the task guards");
+});
 
 test("knowledgeFilePath maps kinds onto the documented files", () => {
   const root = dataRootFor();

@@ -48,7 +48,7 @@ export function routeBody(route: Route): ReactNode {
     case "git":
       return <GitTab rest={route.rest} />
     case "knowledge":
-      return <KnowledgeTab agent={route.rest[0]} file={route.rest[1]} />
+      return <KnowledgeTab rest={route.rest} />
     case "excalidraw":
       return <ExcalidrawTab id={detailId(route.rest)} />
   }

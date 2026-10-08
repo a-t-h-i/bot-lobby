@@ -22,6 +22,7 @@ import { appendCompletedTask, appendDecision, applyKnowledge, readFileOr, writeF
 import { compactKnowledgeFile, overThreshold } from "../knowledge/compactor.ts";
 import { ExcalidrawBook } from "../excalidraw/sessions.ts";
 import { knowledgeDir, type KnowledgeAgent } from "../knowledge/paths.ts";
+import { lobbyTopics } from "../lobby/topics.ts";
 import { writeScratchpad } from "../state/persistence.ts";
 import { spawnPiProcess, type ProcessRunner, type RelayAsk } from "../execution/pi-runner.ts";
 import { previewDir } from "../ask/relay.ts";
@@ -1460,7 +1461,7 @@ export function lastQaAsks(task: Task): string[] {
  * domain agents never receive this tool. Proposals are accepted by calling this
  * with rewritten text, or silently dropped by not calling it.
  */
-function handleKnowledge(task: Task, params: OrchestrateParams, deps: WorkflowDeps): string {
+function handleKnowledge(task: Task | undefined, params: OrchestrateParams, deps: WorkflowDeps): string {
   const text = params.text?.trim();
   if (!text) throw new Error("knowledge requires text");
   const kind: KnowledgeKind = params.kind ?? "knowledge";
@@ -1468,7 +1469,8 @@ function handleKnowledge(task: Task, params: OrchestrateParams, deps: WorkflowDe
   const outcome = applyKnowledge({ dataRoot: dataRoot(deps.root, deps.configDir), agent, kind, text });
   if (outcome.result === "empty") throw new Error("knowledge text is empty");
   if (outcome.result === "duplicate") return `Already recorded in ${outcome.path}; nothing changed.`;
-  recordDecision(task, `Recorded ${kind} for ${agent}: ${truncate(text, 200)}`);
+  if (task) recordDecision(task, `Recorded ${kind} for ${agent}: ${truncate(text, 200)}`);
+  lobbyTopics.bump("knowledge");
   return `Recorded ${kind} for ${agent} in ${outcome.path}.`;
 }
 
@@ -1476,7 +1478,7 @@ function handleKnowledge(task: Task, params: OrchestrateParams, deps: WorkflowDe
  * §24: the Master rewrites the file (asking the user about ambiguity), the
  * engine archives the previous version and writes the compacted text.
  */
-function handleCompact(task: Task, params: OrchestrateParams, deps: WorkflowDeps): string {
+function handleCompact(task: Task | undefined, params: OrchestrateParams, deps: WorkflowDeps): string {
   const agent: KnowledgeAgent = params.domain && isDomain(params.domain) ? params.domain : "master";
   const file = params.file?.trim();
   const content = params.text?.trim();
@@ -1489,7 +1491,8 @@ function handleCompact(task: Task, params: OrchestrateParams, deps: WorkflowDeps
     content,
     backupCount: deps.config.knowledge.backupCount,
   });
-  recordDecision(task, `Compacted ${agent}/${file} (${outcome.before} -> ${outcome.after} chars)`);
+  if (task) recordDecision(task, `Compacted ${agent}/${file} (${outcome.before} -> ${outcome.after} chars)`);
+  lobbyTopics.bump("knowledge");
   return `Compacted ${agent}/${file}: ${outcome.before} -> ${outcome.after} chars. Previous version archived at ${outcome.archive}.`;
 }
 
@@ -1927,6 +1930,15 @@ const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams
  * calling agent — decides whether an action is legal in the current state.
  */
 export async function runWorkflowAction(params: OrchestrateParams, deps: WorkflowDeps): Promise<WorkflowResult> {
+  // Project knowledge can be learned without starting or changing a task.
+  if ((params.action === "knowledge" || params.action === "compact") && !params.taskId) {
+    try {
+      const message = params.action === "knowledge" ? handleKnowledge(undefined, params, deps) : handleCompact(undefined, params, deps);
+      return { ok: true, taskId: "", state: "created", message };
+    } catch (error) {
+      return { ok: false, taskId: "", state: "created", message: `Rejected: ${(error as Error).message}` };
+    }
+  }
   const selected = selectTask(deps.root, deps.configDir, params.taskId, deps.sessionId);
   const task = selected ?? (params.taskId ? undefined : ownerlessTask(deps.root, deps.configDir));
   if (params.action !== "status" && task?.ownerSessionId && deps.sessionId && task.ownerSessionId !== deps.sessionId) {

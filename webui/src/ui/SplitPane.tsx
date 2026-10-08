@@ -37,6 +37,9 @@ interface SplitPaneProps {
   hint: string
   /** Read by screen readers when the Sheet opens. */
   describe: string
+  /** Keep the detail inline on narrow screens so the page composer stays usable. */
+  inlineDetail?: boolean
+  detailClassName?: string
 }
 
 function DetailSheet({ open, onClose, describe, children }: Pick<SplitPaneProps, "open" | "onClose" | "describe"> & { children: ReactNode }) {
@@ -69,7 +72,16 @@ function DetailSheet({ open, onClose, describe, children }: Pick<SplitPaneProps,
   )
 }
 
-export function SplitPane({ wide, list, detail, open, onClose, hint, describe }: SplitPaneProps) {
+function InlinePanes({ list, detail, open, detailClassName }: Pick<SplitPaneProps, "list" | "detail" | "open" | "detailClassName">) {
+  const shown = open && detail !== null
+  return <div className={cn("grid min-h-0 flex-1", shown ? "grid-rows-[minmax(0,1fr)_minmax(0,2fr)]" : "grid-rows-1")}>
+    <Pane data-pane="list" className={cn("overflow-y-auto", shown ? "border-b border-border" : "pb-dock")}>{list}</Pane>
+    {shown ? <Pane data-pane="detail" aria-label="Detail" tabIndex={0}
+      className={cn("overflow-y-auto px-5 pt-5 pb-dock", detailClassName)}>{detail}</Pane> : null}
+  </div>
+}
+
+export function SplitPane({ wide, list, detail, open, onClose, hint, describe, inlineDetail, detailClassName }: SplitPaneProps) {
   const listPane = useRef<HTMLElement>(null)
   const detailPane = useRef<HTMLElement>(null)
 
@@ -99,6 +111,7 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe }:
     }
   }
 
+  if (!wide && inlineDetail) return <InlinePanes list={list} detail={detail} open={open} detailClassName={detailClassName} />
   if (!wide) {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-dock">
@@ -116,7 +129,7 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe }:
       <Pane data-pane="list" ref={listPane} onKeyDown={onListKey} className="overflow-y-auto border-r border-border pb-dock">
         {list}
       </Pane>
-      <Pane data-pane="detail" ref={detailPane} tabIndex={0} aria-label="Detail" onKeyDown={onDetailKey} className="overflow-y-auto px-5 pt-5 pb-dock outline-none focus-visible:bg-muted/30">
+      <Pane data-pane="detail" ref={detailPane} tabIndex={0} aria-label="Detail" onKeyDown={onDetailKey} className={cn("overflow-y-auto px-5 pt-5 pb-dock outline-none focus-visible:bg-muted/30", detailClassName)}>
         {detail ?? (
           <div className="grid h-full min-h-48 place-items-center">
             <div className="flex max-w-xs flex-col items-center gap-3 text-center">

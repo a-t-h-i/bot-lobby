@@ -22,6 +22,7 @@ import type { Runtime } from "../src/lobby/runtime.ts";
 import { createFixtureService, disposeFixtureService } from "../src/webui/dev/fake-service.ts";
 import { SCENARIOS } from "../src/webui/dev/fixtures.ts";
 import { startWebServer } from "../src/webui/server.ts";
+import { chatText } from "../src/lobby/feed.ts";
 
 process.env.BOT_LOBBY_CONFIG_DIR ??= mkdtempSync(join(tmpdir(), "bl-knowledge-"));
 
@@ -70,7 +71,7 @@ async function login(port: number, token: string): Promise<string> {
 
 const SEED = "- First entry.\n\n- Second entry.\n";
 
-async function setup() {
+async function setup(busy = false) {
   const root = mkdtempSync(join(tmpdir(), "bl-knowledge-root-"));
   ensureProjectStructure(root, ".pi");
   const dir = knowledgeDir(dataRoot(root, ".pi"), "master");
@@ -80,18 +81,44 @@ async function setup() {
     cwd: root,
     ui: { notify() {} },
     sessionManager: { getSessionId: () => "session-1", getBranch: () => [] },
-    isIdle: () => true,
+    isIdle: () => !busy,
     abort() {},
   } as unknown as ExtensionContext;
-  const pi = { sendUserMessage() {}, getSessionName: () => "test window" } as unknown as ExtensionAPI;
+  const sent: Array<{ text: string; options?: { deliverAs?: string } }> = [];
+  const pi = { sendUserMessage(text: string, options?: { deliverAs?: string }) { sent.push({ text, options }); }, getSessionName: () => "test window" } as unknown as ExtensionAPI;
   const quickfix = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low", timeoutMs: 60_000 }), runProcess: () => Promise.resolve({ exitCode: 0, stdout: "", stderr: "", killed: false, timedOut: false }) });
   const knowledge = new KnowledgeBook({ root, configDir: ".pi", threshold: () => 20_000, backups: () => 3, sessionId: () => "session-1" });
   const service = createLobbyService({ root, ctx, pi, quickfix, knowledge, configDir: ".pi" } as unknown as Runtime);
   const server = await startWebServer({ service, port: 0, secret: randomBytes(32), dist: DIST });
   const cookie = await login(server.port, new URL(server.link).hash.replace("#token=", ""));
   const call = async (name: string, body: unknown = {}) => send(server.port, `/api/${name}`, { ...json, cookie }, JSON.stringify(body));
-  return { server, call, close: () => server.close() };
+  return { server, call, sent, root, close: () => server.close() };
 }
+
+test("knowledge.ask bypasses task routing, checks saved facts first and queues behind a busy oracle", async () => {
+  for (const busy of [false, true]) {
+    const { call, sent, root, close } = await setup(busy);
+    try {
+      const question = "Where is authentication checked?\nWhich files enforce it?";
+      const answer = await call("knowledge.ask", { text: question });
+      assert.equal(answer.status, 200, answer.body);
+      assert.equal(sent.length, 1);
+      assert.match(sent[0]!.text, /^bot-lobby: a knowledge question\./);
+      assert.ok(sent[0]!.text.includes(root));
+      assert.match(sent[0]!.text, /First read the relevant saved knowledge/);
+      assert.match(sent[0]!.text, /If saved knowledge does not answer.*search and read the codebase/);
+      assert.match(sent[0]!.text, /orchestrate action=knowledge, without taskId/);
+      assert.match(sent[0]!.text, /domain=designer\|backend\|qa/);
+      assert.deepEqual(chatText("user", sent[0]!.text), [{ role: "you", text: question }]);
+      assert.deepEqual(sent[0]!.options, busy ? { deliverAs: "followUp" } : undefined);
+      if (busy) assert.match(String(answer.payload.result!.notice), /queued/);
+      for (const text of ["", "   ", "x".repeat(20_001)]) assert.equal((await call("knowledge.ask", { text })).status, 400);
+      assert.equal(sent.length, 1, "invalid questions were not sent");
+    } finally {
+      await close();
+    }
+  }
+});
 
 test("knowledge.files lists every agent's files; knowledge.open reads entries with refs and notes", async () => {
   const { call, close } = await setup();
