@@ -42,10 +42,9 @@ function Connection({ state }: { state: ConnectionState }) {
   return <span className="text-xs font-medium text-destructive">Connection lost</span>
 }
 
-/** The flat icon buttons on the right. */
-/** A header tool: a slim icon that rises when pointed at and sinks when on or pressed. */
+/** Header tools keep a visible surface and rim in either theme. */
 const ICON =
-  "btn-ghost inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-[background-color,color,box-shadow,translate] duration-150 ease-snap outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:active:translate-none aria-[current=page]:text-foreground"
+  "toolbar-button inline-flex size-8 shrink-0 items-center justify-center rounded-lg border text-foreground transition-[background-color,border-color,translate] duration-150 ease-snap outline-none focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:active:translate-none"
 
 function IconLink({ label, hint, href, active, children }: { label: string; hint: string; href: string; active: boolean; children: ReactNode }) {
   return (
@@ -222,7 +221,7 @@ export function Header({
         <ProjectSwitcher projects={projects} tab={route.kind === "tab" ? route.tab : route.kind} name={name} branch={branch} />
       </div>
       <div className="tabs min-w-0">{tabs}</div>
-      <div className="tools flex min-w-0 items-center justify-end gap-0.5">
+      <div className="tools flex min-w-0 items-center justify-end gap-2">
         {extra}
         <SessionChip busy={busy} {...(task ? { task } : {})} {...(status?.sessionName ? { sessionName: status.sessionName } : {})} />
         <Connection state={connection} />

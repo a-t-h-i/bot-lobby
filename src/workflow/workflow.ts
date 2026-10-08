@@ -16,7 +16,7 @@ import {
 } from "../schemas/task.ts";
 import { isDomain, type Domain } from "../schemas/agent.ts";
 import { transition } from "../state/task-state.ts";
-import { ownerlessTask, readTaskArtifact, removeTaskScratchpads, saveTask, selectTask, taskDirFor, taskReadDirs } from "../state/persistence.ts";
+import { loadTask, ownerlessTask, readTaskArtifact, removeTaskScratchpads, saveTask, selectTask, taskDirFor, taskReadDirs } from "../state/persistence.ts";
 import { dataRoot, readDataRoots } from "../state/project.ts";
 import { appendCompletedTask, appendDecision, applyKnowledge, readFileOr, writeFileEnsured, type KnowledgeKind } from "../knowledge/store.ts";
 import { compactKnowledgeFile, overThreshold } from "../knowledge/compactor.ts";
@@ -67,7 +67,9 @@ import { markCommentsAddressed, pendingComments, readPlanComments } from "../sta
 import { builtSomething, fastNext, onFastTrack, parseRoster, PLANNED_NEXT, qaRequired, qaStillDue, qaTookPart, readRequest, rosterWords, satOut, trackSummary } from "./track.ts";
 import { requestBesidePlan } from "../state/backlog.ts";
 import { missingWorktree, taskCwd } from "../execution/workspace.ts";
-import { completionReview } from "../delivery/review.ts";
+import { completionReview, deferReview, refreshReview } from "../delivery/review.ts";
+import { deliver } from "../delivery/operations.ts";
+import { deliveryStore } from "../delivery/store.ts";
 import { execCommand, type Exec } from "../lobby/issues.ts";
 import type { LintExec } from "../execution/lint.ts";
 import type { LintReport } from "../schemas/lint.ts";
@@ -1535,8 +1537,44 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
   task.delivery = await completionReview(task, deps.root, { cwd: deps.root, exec: deps.exec ?? execCommand });
   deps.notify(`Task ${task.id} is completed. Delivery review is available; publishing requires your approval.`, "info");
   flushDecisions(deps, task);
+  const delivery = await offerDelivery(task, deps);
   const left = lint?.state === "failing" ? ` ${task.lintWaiver ? "Accepted by the user with lint errors" : "Lint (advisory)"}: ${lintSummary(lint)} Tell the user.` : "";
-  return `Task ${task.id} completed. History recorded and temporary scratchpads removed. Delivery review is available; nothing was published.${left}`;
+  return `Task ${task.id} completed. History recorded and temporary scratchpads removed. ${delivery}${left}`;
+}
+
+/** Completion always offers delivery to the user, including in auto mode. */
+async function offerDelivery(task: Task, deps: WorkflowDeps): Promise<string> {
+  const pending = "Delivery review is available; nothing was published.";
+  if (!task.git || task.delivery!.blocked.create_pr) return pending;
+  const ctx = { cwd: deps.root, exec: deps.exec ?? execCommand };
+  try {
+    const review = await refreshReview(task, ctx);
+    saveTask(deps.root, deps.configDir, task);
+    if (review.blocked.merge_main) return `${pending} Merge is blocked: ${review.blocked.merge_main}`;
+    const baseline = JSON.stringify(review);
+    const store = deliveryStore(deps.root, deps.configDir, task.id);
+    const confirm = "Merge and push main";
+    const choice = await deps.choose([
+      `Merge completed task ${task.id}: ${task.title}?`,
+      `Project: ${review.project}\nRepository: ${review.remote}\nSource: ${review.sourceBranch} · ${review.sourceCommit}\nTarget: main · ${review.targetCommit}`,
+      review.verification!.summary,
+      `This updates and pushes main.${task.git.mode === "worktree" ? ` After the merge is verified, remove the task worktree ${task.git.path}. Its branch is kept.` : ""}`,
+    ].join("\n\n"), [confirm, "Not now"]);
+    const latest = store.load();
+    if (JSON.stringify(latest.delivery) !== baseline) return "Delivery changed while waiting; inspect the current delivery review in Tasks.";
+    if (choice !== confirm || deps.signal?.aborted) {
+      if (choice === "Not now") { deferReview(latest, review.reviewId); store.save(latest); }
+      return pending;
+    }
+    task.delivery = await deliver({ reviewId: review.reviewId, action: "merge_main", confirmMain: true }, ctx, store);
+    if (task.delivery.status !== "successful") return `Delivery needs attention: ${task.delivery.error ?? task.delivery.blocked.merge_main ?? "refresh the delivery review and approve again"}.`;
+    return `Merged and pushed main.${task.delivery.operation?.worktreeRemoved ? " Task worktree removed." : ""}${task.delivery.cleanupError ? ` ${task.delivery.cleanupError}` : ""}`;
+  } catch (error) {
+    return `Delivery needs attention: ${(error as Error).message}. Completed work is retained.`;
+  } finally {
+    const latest = loadTask(deps.root, deps.configDir, task.id);
+    if (latest?.delivery) task.delivery = latest.delivery;
+  }
 }
 
 /** Asked when the oracle completes a task QA has not passed (the user told it to finish, say). */

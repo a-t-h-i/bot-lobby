@@ -1,6 +1,6 @@
 {
-  "hash": "104e309def94f5220c4ebbe9e379937d1957514be988b23ec27348ceeefcdec6",
-  "builtAt": "2026-10-08T10:22:49.306Z",
+  "hash": "2d5c7ef29084729fde290e4c772e9cdb235213ba21ea198f4ad53b2ef01a5150",
+  "builtAt": "2026-10-08T10:13:13.044Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -28,11 +28,11 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "30666deafeeb50665b420ad4cad4c954445c497e070b0f6d8324fc8b5654856c"
+      "sha256": "9d4b085277ee27849e293f506e56a7d959547a2e6be3241643ae3a523c30535a"
     },
     {
       "path": "webui/src/app/Header.tsx",
-      "sha256": "61e05d4e800367370f6aff35e6da7ef89a0d2c98787ccd634fcc23a9b7696c68"
+      "sha256": "7841a941105f05412b219de5a467dc2fc90c5602c0938049b1052d89aba4f053"
     },
     {
       "path": "webui/src/app/KnowledgePaneToggle.tsx",
@@ -208,7 +208,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "34997427d343de1967d13a9b0f0112f5a603b56f9752a763547736e9cae4e33c"
+      "sha256": "7fddc9628d3ba3599c7f4a80a498f86e25c6ac5bcc8b9b8cba86c5d8e9e33751"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -412,11 +412,11 @@
     },
     {
       "path": "webui/src/tabs/lobby/Conversation.tsx",
-      "sha256": "61e234cd5247bc8a1174e5f0ec42df37203d499e45f7d0e3a21599b9e312731c"
+      "sha256": "b0cc5bbbc912bbad5d526dd4f86cd16cb27ece5a69074072fbc14d1018a20bea"
     },
     {
       "path": "webui/src/tabs/lobby/LobbyTab.tsx",
-      "sha256": "96e87fe959ab7587756c59ac8e7b23633029eb73bbf166968999ce9564af59af"
+      "sha256": "cc87c1545b10f1782ce870054398c27f2fd6f932217b58af5f603297e38ed779"
     },
     {
       "path": "webui/src/tabs/lobby/Orb.tsx",
@@ -580,7 +580,7 @@
     },
     {
       "path": "webui/src/tabs/tasks/DeliveryReview.tsx",
-      "sha256": "21d07cc51b64dfd77e8e979edb4cdb9a436cd9a72eaa34b0fc27af3b90ec5790"
+      "sha256": "f214189d9edc436a3b2faf0790b4844819f2a3eb80e11703bafebcd99a336760"
     },
     {
       "path": "webui/src/tabs/tasks/DetailSections.tsx",

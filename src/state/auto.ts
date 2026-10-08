@@ -1,6 +1,7 @@
 /**
  * Auto mode, per task: the oracle drives the task to completion without
- * asking the user anything. The flag lives in its own file beside the task,
+ * asking implementation questions. Publishing and worktree removal still
+ * require the user's confirmation. The flag lives in its own file beside the task,
  * not in state.json, so any session can switch it (from the lobby, for a task
  * another session drives) without racing the owner's saves of the task.
  */

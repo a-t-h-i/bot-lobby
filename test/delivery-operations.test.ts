@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, symlinkSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync, symlinkSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -9,6 +9,10 @@ import { completionReview, refreshReview } from "../src/delivery/review.ts";
 import { deliver, type DeliveryRequest } from "../src/delivery/operations.ts";
 import { acquireDeliveryLock, recoverDeliveryLock, type LockIdentity } from "../src/delivery/lock.ts";
 import type { Exec } from "../src/lobby/issues.ts";
+import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
+import { createTaskDir, loadTask, saveTask } from "../src/state/persistence.ts";
+import { setAutoMode } from "../src/state/auto.ts";
+import { runWorkflowAction } from "../src/workflow/workflow.ts";
 
 function git(cwd: string, ...args: string[]): string {
   const r = spawnSync("git", args, { cwd, encoding: "utf8", timeout: 10_000 });
@@ -115,11 +119,19 @@ test("isolated merge excludes dirty checkout and unrelated local main commits; l
   assert.equal(git(f.paths.bare, "ls-tree", "--name-only", "main").includes("unrelated"), false);
   assert.equal(readFileSync(join(f.paths.repo, "base"), "utf8"), "dirty");
   assert.equal(f.controls.calls.some((c) => c.includes("--force") && c.includes("push")), false);
+  assert.equal(existsSync(f.paths.source), false);
+  assert.equal(result.operation!.worktreeRemoved, true);
+  assert.equal(git(f.paths.repo, "rev-parse", "task-x"), result.operation!.sourceCommit);
+  const removals = f.controls.calls.filter((c) => c[1] === "worktree" && c[2] === "remove" && c[3] === f.paths.source);
+  assert.equal(removals.length, 1);
+  await deliver(f.request("merge_main"), f.ctx, f.store);
+  assert.equal(f.controls.calls.filter((c) => c[1] === "worktree" && c[2] === "remove" && c[3] === f.paths.source).length, 1);
 }));
 test("merge succeeded push failed restart retries recorded commit and identity", async () => fixture(async (f) => {
   f.controls.failPush = true;
   const failed = await deliver(f.request("merge_main"), f.ctx, f.store);
   assert.equal(failed.status, "recoverable_failure"); assert.ok(failed.operation!.mergeCommit);
+  assert.equal(existsSync(f.paths.source), true);
   const id = failed.operation!.id, commit = failed.operation!.mergeCommit;
   f.controls.failPush = false;
   const result = await deliver(f.request("merge_main"), f.ctx, f.store);
@@ -187,14 +199,86 @@ test("fresh source approval supersedes non-delivered PR intent without losing hi
   assert.equal(result.previousOperations![0]!.id, oldId);
 }));
 test("moved source after remote success is reconciled against persisted SHA before source validation", async () => fixture(async (f) => {
-  const result = await deliver(f.request("merge_main"), f.ctx, f.store);
+  const exec: Exec = async (tool, args, options) => {
+    const result = await f.ctx.exec(tool, args, options);
+    if (tool === "git" && args[0] === "push") {
+      writeFileSync(join(f.paths.source, "later"), "later"); git(f.paths.source, "add", "."); git(f.paths.source, "commit", "-m", "later source");
+    }
+    return result;
+  };
+  const result = await deliver(f.request("merge_main"), { ...f.ctx, exec }, f.store);
+  assert.equal(existsSync(f.paths.source), true); assert.match(result.cleanupError!, /source.*changed/i);
   const task = f.store.load(); task.delivery!.status = "in_progress"; delete task.delivery!.result; f.store.save(task);
-  writeFileSync(join(f.paths.source, "later"), "later"); git(f.paths.source, "add", "."); git(f.paths.source, "commit", "-m", "later source");
   const before = f.controls.calls.filter((c) => c.includes("push")).length;
   const recovered = await deliver(f.request("merge_main"), f.ctx, f.store);
   assert.equal(recovered.status, "successful"); assert.equal(recovered.result!.commit, result.result!.commit);
   assert.equal(f.controls.calls.filter((c) => c.includes("push")).length, before);
+  assert.equal(existsSync(f.paths.source), true);
 }));
+
+test("dirty worktree after a verified push is retained; explicit cleanup retry never pushes again", async () => fixture(async (f) => {
+  const later = join(f.paths.source, "later");
+  const exec: Exec = async (tool, args, options) => {
+    const result = await f.ctx.exec(tool, args, options);
+    if (tool === "git" && args[0] === "push") writeFileSync(later, "keep me");
+    return result;
+  };
+  const result = await deliver(f.request("merge_main"), { ...f.ctx, exec }, f.store);
+  assert.equal(result.status, "successful"); assert.match(result.cleanupError!, /uncommitted/);
+  assert.equal(readFileSync(later, "utf8"), "keep me");
+  const pushes = f.controls.calls.filter((c) => c[1] === "push").length;
+  await assert.rejects(deliver({ ...f.request("merge_main"), confirmMain: false }, f.ctx, f.store), /confirmation/);
+  await assert.rejects(deliver({ ...f.request("merge_main"), reviewId: "stale" }, f.ctx, f.store), /changed/);
+  unlinkSync(later);
+  const retried = await deliver(f.request("merge_main"), f.ctx, f.store);
+  assert.equal(retried.operation!.worktreeRemoved, true); assert.equal(retried.cleanupError, undefined);
+  assert.equal(existsSync(f.paths.source), false);
+  assert.equal(f.controls.calls.filter((c) => c[1] === "push").length, pushes);
+}));
+
+test("completion offers verified merge and cleanup, including auto mode; no approval or failed delivery retains work", async () => {
+  for (const mode of ["approve", "decline", "unanswered", "free-text", "checks-fail", "push-fails", "main-moves", "review-changes"] as const) {
+    await fixture(async (f) => {
+      const task = f.store.load(); task.state = "reviewing"; delete task.delivery;
+      createTaskDir(f.paths.repo, ".pi", task); saveTask(f.paths.repo, ".pi", task);
+      setAutoMode(f.paths.repo, ".pi", task.id, true);
+      f.controls.failing = mode === "checks-fail";
+      f.controls.failPush = mode === "push-fails";
+      const before = git(f.paths.bare, "rev-parse", "main");
+      let asked = 0;
+      const result = await runWorkflowAction({ action: "complete", taskId: task.id }, {
+        root: f.paths.repo, cwd: f.paths.repo, configDir: ".pi",
+        config: { ...DEFAULT_CONFIG, lint: { ...DEFAULT_CONFIG.lint, mode: "off" } },
+        exec: f.ctx.exec, ask: async () => undefined, notify: () => {},
+        choose: async (title, options) => {
+          asked++;
+          const saved = loadTask(f.paths.repo, ".pi", task.id)!;
+          assert.equal(saved.state, "completed"); assert.ok(saved.delivery!.fingerprint);
+          assert.match(title, /pushes? main/); assert.ok(title.includes(f.paths.source));
+          assert.ok(title.includes(saved.delivery!.sourceCommit!));
+          if (mode === "review-changes") { saved.delivery!.status = "deferred"; saveTask(f.paths.repo, ".pi", saved); }
+          if (mode === "main-moves") {
+            writeFileSync(join(f.paths.repo, "remote-update"), "new main"); git(f.paths.repo, "add", "remote-update"); git(f.paths.repo, "commit", "-m", "remote update"); git(f.paths.repo, "push", "origin", "main");
+          }
+          return mode === "decline" ? options[1] : mode === "unanswered" ? undefined : mode === "free-text" ? "maybe later" : options[0];
+        },
+      });
+      assert.equal(result.ok, true, `${mode}: ${result.message}`); assert.equal(result.state, "completed");
+      assert.equal(asked, mode === "checks-fail" ? 0 : 1);
+      const saved = loadTask(f.paths.repo, ".pi", task.id)!;
+      assert.equal(existsSync(f.paths.source), mode !== "approve", `${mode}: ${result.message}`);
+      if (mode === "approve") {
+        assert.equal(saved.delivery!.status, "successful"); assert.equal(saved.delivery!.operation!.worktreeRemoved, true);
+        assert.equal(git(f.paths.bare, "rev-parse", "main"), saved.delivery!.result!.commit);
+        assert.match(result.message, /Merged and pushed main.*worktree removed/);
+      } else {
+        assert.equal(saved.delivery!.status, mode === "decline" || mode === "review-changes" ? "deferred" : mode === "push-fails" ? "recoverable_failure" : "pending_approval");
+        if (mode !== "main-moves") assert.equal(git(f.paths.bare, "rev-parse", "main"), before);
+        assert.equal(f.controls.calls.filter((c) => c[1] === "push").length, mode === "push-fails" ? 1 : 0);
+      }
+    });
+  }
+});
 test("fresh main approval supersedes failed merge; check resolution requires a new explicit action", async () => fixture(async (f) => {
   f.controls.failPush = true;
   const failed = await deliver(f.request("merge_main"), f.ctx, f.store);

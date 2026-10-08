@@ -78,7 +78,7 @@ const DESCRIPTION = [
   "review), knowledge (record approved project knowledge or a decision; works without a task),",
   "compact (replace a knowledge file with a rewritten version, archiving the old one; works without a task; disperse domain-relevant facts to action=knowledge (domain=designer|backend|qa) first), whiteboard (create your own Excalidraw session and assign it to yourself),",
   "resolve_approval (approve or reject a request), complete (declare the task done after the gates",
-  "pass), block/resume (escalate or continue), budget (under a time budget: where it stands, or ask the",
+  "pass, then ask the user to confirm merging and pushing main and removing its worktree), block/resume (escalate or continue), budget (under a time budget: where it stands, or ask the",
   "user for more minutes with a reason), track (the task's path and who takes part: show it, or correct it with",
   "track=fast|full, roster and a reason), status, cancel.",
   "Every instruction you give an agent is read by a possibly smaller, cheaper model that cannot infer intent: write each one as a complete, explicit brief with the goal, files, actions, contracts, constraints and done criteria, then check the report against it.",

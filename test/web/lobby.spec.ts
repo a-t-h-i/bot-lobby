@@ -20,6 +20,42 @@ const SIZES = [
 
 const SCENARIOS = ["full", "empty", "question"] as const;
 
+test("toolbar actions have spacing and readable contrast @theme", async ({ page, server }) => {
+  await openScenario(page, server, "empty");
+  for (const width of [320, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    const metrics = await page.evaluate(() => {
+      const buttons = [...document.querySelectorAll(".toolbar-button")];
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 1;
+      const ctx = canvas.getContext("2d");
+      const luminance = (color: string) => {
+        ctx.fillStyle = color;
+        ctx.fillRect(0, 0, 1, 1);
+        const rgb = [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3).map((value: number) => {
+          const channel = value / 255;
+          return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+        });
+        return rgb[0]! * 0.2126 + rgb[1]! * 0.7152 + rgb[2]! * 0.0722;
+      };
+      const contrast = buttons.map((button: any) => {
+        const style = getComputedStyle(button);
+        const a = luminance(style.color);
+        const b = luminance(style.backgroundColor);
+        return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+      });
+      const gap = (a: any, b: any) => b.getBoundingClientRect().left - a.getBoundingClientRect().right;
+      const tools = buttons.filter((button: any) => button.closest("header"));
+      const composer = buttons.filter((button: any) => !button.closest("header"));
+      return { contrast, headerGaps: tools.slice(1).map((button: any, i: number) => gap(tools[i], button)), composerGap: gap(composer[0], composer[1]) };
+    });
+    expect(Math.min(...metrics.contrast), "icons contrast with their button surface").toBeGreaterThanOrEqual(4.5);
+    expect(Math.min(...metrics.headerGaps), "header actions have room between them").toBeGreaterThanOrEqual(7);
+    expect(metrics.composerGap, "Attach and Preview have room between them").toBeGreaterThanOrEqual(7);
+    await expectNoSidewaysScroll(page);
+  }
+});
+
 function cspErrors(trap: ErrorTrap): string[] {
   return trap.errors.filter((text) => /content[ -]security|refus/i.test(text));
 }
@@ -96,6 +132,7 @@ test("lobby tab streams a reply and stops", async ({ page, server }) => {
   const main = page.locator("#main");
   await expect(main.getByText("Add offline mock fixtures", { exact: true }), "task header").toBeVisible();
   await expect(main.getByRole("log", { name: "Conversation" }), "conversation").toBeVisible();
+  await expect(main.getByRole("heading", { name: "Conversation", exact: true }), "redundant strip removed").toHaveCount(0);
   await expect(main.getByRole("log", { name: "Activity" }), "activity").toBeVisible();
   await expect(page.getByRole("button", { name: "Open Thinking" }), "thoughts open from the bubble").toBeVisible();
   await expect(main.getByText("fixtures per scenario"), "seeded chat").toBeVisible();

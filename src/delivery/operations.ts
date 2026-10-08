@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Task } from "../schemas/task.ts";
 import type { Delivery, DeliveryAction, DeliveryOperation, DeliveryResult } from "./types.ts";
@@ -18,7 +18,7 @@ export interface DeliveryStore {
 }
 function approved(task: Task, request: DeliveryRequest): Delivery {
   if (task.state !== "completed") throw new Error("Only completed work can be delivered.");
-  if (request.action === "merge_main" && request.confirmMain !== true) throw new Error("Explicit confirmation is required: direct merge updates and pushes main.");
+  if (request.action === "merge_main" && request.confirmMain !== true) throw new Error("Explicit confirmation is required: direct merge updates and pushes main, then removes the task worktree.");
   return validateReview(task, request.reviewId);
 }
 function intent(delivery: Delivery, action: DeliveryAction): DeliveryOperation {
@@ -66,6 +66,7 @@ async function prepare(task: Task, request: DeliveryRequest, ctx: DeliveryContex
   if (next.blocked[request.action]) throw new Error(next.blocked[request.action]);
   task.delivery = next; next.previousOperations = old.previousOperations;
   next.operation = reapprove(old, next, request.action, operationId);
+  if (request.action === "merge_main" && task.git?.mode === "worktree") next.operation.worktreePath ??= task.git.path;
   task.delivery.status = "in_progress"; delete task.delivery.error;
   store.save(task); return true;
 }
@@ -118,7 +119,25 @@ async function execute(task: Task, request: DeliveryRequest, ctx: DeliveryContex
     task.delivery!.error = (error as Error).message; store.save(task); return task.delivery!;
   }
 }
-/** Explicit API only. Lock covers refresh, approval, durable intent, reconciliation and side effects. */
+async function cleanupWorktree(task: Task, ctx: DeliveryContext, store: DeliveryStore): Promise<Delivery> {
+  const delivery = task.delivery!, op = delivery.operation;
+  if (!op?.worktreePath || op.worktreeRemoved) return delivery;
+  try {
+    if (existsSync(op.worktreePath)) {
+      if (task.git?.mode !== "worktree" || task.git.path !== op.worktreePath) throw new Error("Task worktree changed since approval; it was retained.");
+      await verify(task, op, ctx);
+      await command(ctx, "git", ["worktree", "remove", op.worktreePath]);
+    }
+    op.worktreeRemoved = true;
+    delete delivery.cleanupError;
+  } catch (error) {
+    delivery.cleanupError = `Main was delivered, but the task worktree was retained: ${(error as Error).message}`;
+  }
+  store.save(task);
+  return delivery;
+}
+
+/** Lock covers refresh, user approval, durable intent, reconciliation and cleanup. */
 export async function deliver(request: DeliveryRequest, ctx: DeliveryContext, store: DeliveryStore): Promise<Delivery> {
   const common = realpathSync(resolve(ctx.cwd, await command(ctx, "git", ["rev-parse", "--git-common-dir"])));
   const task = store.load();
@@ -129,6 +148,12 @@ export async function deliver(request: DeliveryRequest, ctx: DeliveryContext, st
     store.save(value);
     if (value.delivery?.operation) release.setOperation(value.delivery.operation.id);
   } };
-  try { return await execute(store.load(), request, ctx, lockedStore, operationId); }
+  try {
+    const result = await execute(store.load(), request, ctx, lockedStore, operationId);
+    if (result.status !== "successful" || result.result?.action !== "merge_main" || request.action !== "merge_main") return result;
+    const latest = lockedStore.load();
+    approved(latest, request);
+    return await cleanupWorktree(latest, ctx, lockedStore);
+  }
   finally { release(); }
 }
