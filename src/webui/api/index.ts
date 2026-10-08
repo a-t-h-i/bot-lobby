@@ -17,7 +17,7 @@ import { plannerAnswer, plannerCommentLine, plannerGet, plannerNew, plannerRetry
 import { quickfixCancel, quickfixList, quickfixMovedToTask, quickfixRunAnyway, quickfixSubmit } from "./quickfix.ts";
 import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksEditComment, tasksGet, tasksList, tasksMessage, tasksRestore, tasksOpen, tasksResume, tasksDeliveryReview, tasksDeliveryDefer, tasksDeliver } from "./tasks.ts";
 import { metricsGet } from "./metrics.ts";
-import { knowledgeAdd, knowledgeComment, knowledgeEdit, knowledgeFiles, knowledgeOpen, knowledgeRemove, knowledgeReplaceFile, knowledgeUnnote } from "./knowledge.ts";
+import { knowledgeAdd, knowledgeAsk, knowledgeComment, knowledgeEdit, knowledgeFiles, knowledgeOpen, knowledgeRemove, knowledgeReplaceFile, knowledgeUnnote } from "./knowledge.ts";
 import { excalidrawAdd, excalidrawCheck, excalidrawCreate, excalidrawList, excalidrawRemove, excalidrawRename, excalidrawReveal, excalidrawToggleAgent, excalidrawToggleAll, excalidrawToggleContribute } from "./excalidraw.ts";
 import { plansDiscard, plansGet, plansStart } from "./plans.ts";
 import { gitCancelReview, gitJev, gitPull, gitPulls, gitReview } from "./git.ts";
@@ -275,6 +275,10 @@ function buildRoutes(): Record<string, Route> {
     run: (body, ctx) => metricsGet(body as { groupBy: "model" | "model-kind"; query?: string }, ctx),
   };
   routes["knowledge.files"] = { schema: Empty, run: (_body, ctx) => knowledgeFiles(ctx) };
+  routes["knowledge.ask"] = {
+    schema: Type.Object({ text: NoticeText, attachments: Attachments }, { additionalProperties: false }),
+    run: (body, ctx) => knowledgeAsk(body as { text: string; attachments?: string[] }, ctx),
+  };
   routes["knowledge.open"] = {
     schema: Type.Object({ agent: KnowledgeAgent, file: KnowledgeFile }, { additionalProperties: false }),
     run: (body, ctx) => knowledgeOpen(body as { agent: "master" | "designer" | "backend" | "qa"; file: string }, ctx),

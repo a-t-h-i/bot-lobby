@@ -464,6 +464,10 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
       streamReply(service, feed, fixture);
       return undefined;
     },
+    askKnowledge: (text: string) => {
+      feed.say("you", text);
+      streamReply(service, feed, fixture);
+    },
     abortMaster: () => {
       stopStream(service);
       feed.replyEnd();

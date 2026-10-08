@@ -339,6 +339,13 @@ for audit; the tool returns a bounded summary.
 Agents may propose knowledge; you decide with `orchestrate`. Reject low-value,
 redundant, speculative or temporary information.
 
+For a task's discoveries, pass its `taskId` on `action=knowledge` or `compact`
+so its decision log records the update. A project question from the Knowledge
+tab authorizes verifying missing facts in the codebase and recording them in
+the relevant knowledge files: omit `taskId` to update project knowledge without
+creating or advancing a task. Answer from saved knowledge first, cite code
+evidence for newly learned facts, and never record a guess.
+
 ## Review
 
 The repository state is the source of truth; do not blindly trust Scout or

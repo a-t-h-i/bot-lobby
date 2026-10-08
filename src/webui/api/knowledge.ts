@@ -12,6 +12,15 @@ import { INHERIT_MODEL, type BotLobbyConfig } from "../../schemas/configuration.
 import { loadConfig } from "../../state/project.ts";
 import type { ApiContext } from "./index.ts";
 import { fail } from "./index.ts";
+import { withAttachments } from "../uploads.ts";
+
+/** Ask the oracle directly; a knowledge question never starts a task. */
+export function knowledgeAsk(body: { text: string; attachments?: string[] }, ctx: ApiContext): { notice: string } {
+  if (!body.text.trim() && !body.attachments?.length) fail(400, "bad_request", "type a question first");
+  const busy = ctx.service.masterBusy();
+  ctx.service.askKnowledge(withAttachments(body.text, body.attachments, undefined, ctx.service.projectRoot?.()));
+  return { notice: busy ? "question queued — the oracle answers after its current turn" : "the oracle is checking project knowledge" };
+}
 
 /** The terminal's stale-entry refusal, as `KnowledgeBook` words it. */
 function isStale(notice: string): boolean {

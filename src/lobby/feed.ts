@@ -316,6 +316,8 @@ export function chatText(role: "user" | "assistant", text: string): Array<{ role
   const body = text.trim();
   if (!body) return [];
   if (role === "assistant") return [{ role: "oracle", text: body }];
+  const knowledge = /^bot-lobby: a knowledge question\.[\s\S]*?\n\nQuestion:\n([\s\S]*)$/.exec(body);
+  if (knowledge) return [{ role: "you", text: knowledge[1]!.trim() }];
   // bot-lobby's kickoff: the task starting, then what the user asked for, in their words.
   const kickoff = /^A bot-lobby task is active: (\S+)\nTitle: (.*)/.exec(body);
   if (kickoff) {

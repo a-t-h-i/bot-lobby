@@ -29,8 +29,10 @@ import { projectUrl } from "@/lib/project"
 import type { LobbySnapshot, StatusInfo, UploadInfo } from "@protocol"
 import { useTopic } from "./hooks"
 import { go, type Route } from "./router"
+import { knowledgeHash } from "./knowledgeView"
+import { KnowledgePaneToggle } from "./KnowledgePaneToggle"
 
-type TargetId = "oracle" | "panel" | "quickfix" | "comment" | "task" | "session" | "newsession"
+type TargetId = "oracle" | "knowledge" | "panel" | "quickfix" | "comment" | "task" | "session" | "newsession"
 
 interface Target {
   id: TargetId
@@ -63,6 +65,7 @@ function targetsFor(route: Route, openTask: string | undefined, session: Compose
       : [fresh, ORACLE]
   }
   if (route.kind !== "tab") return [ORACLE]
+  if (route.tab === "knowledge") return [{ id: "knowledge", pill: "Oracle", label: "Ask the oracle about this project", placeholder: "Ask about this project — the oracle searches the code and learns what is missing…" }]
   if (route.tab === "plan") return [{ id: "panel", pill: "Panel", label: "Message the panel", placeholder: "Describe a task, or answer the panel…" }, ORACLE]
   if (route.tab === "quickfix") return [{ id: "quickfix", pill: "Quick fix", label: "Describe a quick fix", placeholder: "Describe a small change…" }, ORACLE]
   const task = route.tab === "tasks" ? decode(route.rest[0]) ?? openTask : undefined
@@ -246,6 +249,9 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
       if (target.id === "oracle") {
         const result = await call("lobby.send", body)
         if (result.notice) toast(result.notice)
+      } else if (target.id === "knowledge") {
+        done = (await act("knowledge.ask", body)) !== undefined
+        if (done && route.kind === "tab") go(knowledgeHash(route.rest, true))
       } else if (target.id === "panel") done = (await act("planner.send", body)) !== undefined
       else if (target.id === "quickfix") done = (await act("quickfix.submit", body)) !== undefined
       else if (target.id === "task") done = (await act("tasks.message", { taskId: target.taskId!, ...body })) !== undefined
@@ -265,7 +271,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
     } finally {
       setSending(false)
     }
-  }, [canSend, ready, target, text])
+  }, [canSend, ready, target, text, route])
 
   const stop = useCallback(async () => {
     try {
@@ -424,7 +430,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
             </Tooltip>
 
             <span aria-hidden="true" className="mx-1.5 h-4 w-px bg-border" />
-            {targets.length > 1 ? (
+            {route.kind === "tab" && route.tab === "knowledge" ? <KnowledgePaneToggle rest={route.rest} /> : targets.length > 1 ? (
               <div role="radiogroup" aria-label="Send to" className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5 shadow-[inset_0_1px_2px_rgb(0_0_0/0.07)]">
                 {targets.map((entry) => (
                   <button

@@ -82,6 +82,27 @@ const ROUTES: RouteCheck[] = [
   },
 ];
 
+test("knowledge questions stay on the Knowledge tab and use the dedicated endpoint", async ({ page, server }) => {
+  const trap = await openScenario(page, server, "empty");
+  await page.getByRole("tab", { name: /Knowledge/ }).click();
+  await expect(page.getByRole("button", { name: "Ask about the project" })).toHaveCount(0);
+  const toggle = page.locator(".group\\/composer").getByRole("group", { name: "Knowledge pane" });
+  await toggle.getByRole("button", { name: "Chat", exact: true }).click();
+  await expect(page.locator('[data-pane="detail"]')).toContainText("searches the codebase for missing information");
+  const question = "Where is authentication checked?";
+  await page.getByRole("textbox", { name: "Ask the oracle about this project" }).fill(question);
+  const request = page.waitForRequest((req) => req.url().endsWith("/api/knowledge.ask"));
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  expect((await request).postDataJSON()).toEqual({ text: question });
+  await expect(page).toHaveURL(/#\/knowledge\/ask$/);
+  await expect(page.getByRole("log", { name: "Conversation" })).toContainText(question);
+  await expect(page.getByRole("textbox", { name: "Ask the oracle about this project" })).toHaveValue("");
+  await toggle.getByRole("button", { name: "Docs", exact: true }).click();
+  await expect(page.locator("#main")).toContainText("No knowledge files yet.");
+  expect(trap.errors).toEqual([]);
+  trap.stop();
+});
+
 function cspErrors(errors: string[]): string[] {
   return errors.filter((text) => /content[ -]security|refus/i.test(text));
 }

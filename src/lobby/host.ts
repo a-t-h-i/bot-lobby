@@ -108,6 +108,8 @@ export interface LobbyService {
   classifierMetrics?(): MetricRecord[];
   /** Send text to the oracle, or start a task when none is active; returns a notice. */
   toOracle(text: string): string | undefined;
+  /** Answer a project question and learn from the codebase, without creating a task. */
+  askKnowledge(text: string): void;
   comment(taskId: string, text: string): string;
   /** Correct a comment this session sent; returns the edited comment. */
   editComment(taskId: string, commentId: string, text: string): PlanComment;
@@ -204,4 +206,3 @@ export interface LobbyService {
   /** Ask for the workspace to be read again (the branch may have changed); it arrives through `workspace()`. */
   refreshWorkspace?(): void;
 }
-
