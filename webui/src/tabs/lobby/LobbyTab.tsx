@@ -131,7 +131,7 @@ function NarrowView({ data, status }: LobbyViewProps) {
           })}
         </div>
       ) : null}
-      {view.id === "conversation" ? <Conversation chat={data?.chat ?? []} reply={data?.reply} busy={status?.busy ?? false} hasOlder={data?.hasOlderChat ?? false} hasTask={Boolean(data?.task)} bare /> : null}
+      {view.id === "conversation" ? <Conversation chat={data?.chat ?? []} reply={data?.reply} busy={status?.busy ?? false} hasOlder={data?.hasOlderChat ?? false} hasTask={Boolean(data?.task)} /> : null}
       {view.id === "activity" ? <ActivityLog entries={data?.activity ?? []} collapsed={false} bare /> : null}
     </div>
   )

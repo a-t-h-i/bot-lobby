@@ -25,7 +25,6 @@ import type { ChatEntry } from "./types"
 /** Messages from one speaker this close together share a header. */
 const GROUP_MS = 5 * 60_000
 
-const OLDER_NOTE = "earlier messages load as you scroll up"
 const NO_TASK = "No task is running in this session."
 const NO_TASK_HINT = "Type a request below and press enter to start one: the oracle scouts, proposes, plans and delegates."
 const NOTHING_SAID = "Nothing said yet. Type below to talk to the oracle about this task."
@@ -148,15 +147,12 @@ export function Conversation({
   busy,
   hasOlder,
   hasTask,
-  bare,
 }: {
   chat: ChatEntry[]
   reply?: string
   busy: boolean
   hasOlder: boolean
   hasTask: boolean
-  /** Without its own title row (the switcher above already names it). */
-  bare?: boolean
 }) {
   const { ref, atBottom, stick, onScroll } = useStickToBottom(chat.length + (reply?.length ?? 0))
   const { merged, more, loading, load } = useOlderChat(chat, hasOlder, ref)
@@ -170,12 +166,13 @@ export function Conversation({
   const [settled, setSettled] = useState(false)
   useEffect(() => setSettled(true), [])
   return (
-    <Frame aria-label="Conversation" {...(bare ? {} : { title: "Conversation" })} note={more ? OLDER_NOTE : undefined} className="flex-1">
+    <Frame aria-label="Conversation" className="flex-1">
       <div ref={ref} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-4 pb-dock outline-none focus-visible:bg-muted/30" role="log" aria-label="Conversation" tabIndex={0}>
         {empty ? (
           <ConversationEmpty hasTask={hasTask} />
         ) : (
           <div className="chat-column">
+            {more ? <p className="mb-4 text-center text-xs text-muted-foreground">Earlier messages load as you scroll up.</p> : null}
             {merged.map((entry, index) => {
               const previous = merged[index - 1]
               const head = !previous || previous.role !== entry.role || entry.at - previous.at > GROUP_MS

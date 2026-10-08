@@ -7,13 +7,11 @@ import { SessionManager, type ExtensionContext } from "@earendil-works/pi-coding
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { updateBlockingRequest } from "../state/blocking-requests.ts";
 import { randomUUID } from "node:crypto";
-import { realpathSync } from "node:fs";
-import { resolve } from "node:path";
 import { loadTask, ownedTask, peekTasks, saveTask } from "../state/persistence.ts";
 import { taskWork } from "../state/work-time.ts";
 import { refreshReview, deferReview } from "../delivery/review.ts";
-import { deliver, type DeliveryRequest, type DeliveryStore } from "../delivery/operations.ts";
-import type { LockIdentity } from "../delivery/lock.ts";
+import { deliver, type DeliveryRequest } from "../delivery/operations.ts";
+import { deliveryStore, deliveryTask } from "../delivery/store.ts";
 import { execCommand } from "./issues.ts";
 import { releaseAttachments } from "../state/attachments.ts";
 import { loadConfig, readDataRoots, saveConfig as writeConfig } from "../state/project.ts";
@@ -53,34 +51,6 @@ import type { LiveSession, LobbyService, SwitchTarget } from "./host.ts";
 import { pushNotice, type NoticeLevel } from "../webui/notices.ts";
 import type { Runtime } from "./runtime.ts";
 import { findLinters } from "../execution/lint.ts";
-
-function deliveryTask(state: Runtime, taskId: string): Task {
-  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/.test(taskId) || taskId === "." || taskId === "..") throw new Error("Invalid task ID.");
-  const task = loadTask(state.root, state.configDir, taskId);
-  if (!task || task.state !== "completed" || !task.delivery) throw new Error("Completed task delivery review is unavailable in this project.");
-  return task;
-}
-
-function recoveryDeliveryStore(state: Runtime, identity: LockIdentity): DeliveryStore {
-  if (identity.configDir !== resolve(state.configDir) || realpathSync(identity.projectRoot) !== identity.projectRoot) throw new Error("Interrupted owner has an untrusted project/config identity.");
-  return deliveryStore({ ...state, root: identity.projectRoot }, identity.taskId);
-}
-function deliveryStore(state: Runtime, taskId: string): DeliveryStore {
-  let baseline: string | undefined;
-  return {
-    identity: { projectRoot: realpathSync(state.root), configDir: resolve(state.configDir) },
-    recoveryStore: (identity) => recoveryDeliveryStore(state, identity),
-    load: () => { const task = deliveryTask(state, taskId); baseline = JSON.stringify(task.delivery); return task; },
-    save: (task) => {
-      const latest = deliveryTask(state, taskId);
-      if (JSON.stringify(latest.delivery) !== baseline) throw new Error("Delivery changed during operation; reconcile before retrying.");
-      latest.delivery = structuredClone(task.delivery);
-      saveTask(state.root, state.configDir, latest);
-      baseline = JSON.stringify(latest.delivery);
-      lobbyTopics.bump("tasks");
-    },
-  };
-}
 
 /** The state background callbacks report to; set while the lobby service runs. */
 let serviceState: Runtime | undefined;
@@ -753,13 +723,13 @@ export function createLobbyService(state: Runtime): LobbyService {
     masterBusy: () => !state.ctx.isIdle(),
     tasks: () => peekTasks(state.root, state.configDir),
     work: (taskId) => taskWork(state.root, state.configDir, taskId),
-    deliveryDeliver: (taskId, request: DeliveryRequest) => deliver(request, { cwd: state.root, exec: execCommand }, deliveryStore(state, taskId)),
+    deliveryDeliver: (taskId, request: DeliveryRequest) => deliver(request, { cwd: state.root, exec: execCommand }, deliveryStore(state.root, state.configDir, taskId)),
     deliveryReview: async (taskId) => {
-      const task = deliveryTask(state, taskId);
+      const task = deliveryTask(state.root, state.configDir, taskId);
       const baseline = JSON.stringify(task.delivery);
       const delivery = await refreshReview(task, { cwd: state.root, exec: execCommand });
       // An async lookup must not overwrite intervening deferrals or operations.
-      const latest = deliveryTask(state, taskId);
+      const latest = deliveryTask(state.root, state.configDir, taskId);
       if (JSON.stringify(latest.delivery) !== baseline) throw new Error("Review changed during lookup; refresh again.");
       latest.delivery = delivery;
       saveTask(state.root, state.configDir, latest);
@@ -767,7 +737,7 @@ export function createLobbyService(state: Runtime): LobbyService {
       return delivery;
     },
     deliveryDefer: (taskId, reviewId) => {
-      const task = deliveryTask(state, taskId);
+      const task = deliveryTask(state.root, state.configDir, taskId);
       const delivery = deferReview(task, reviewId);
       saveTask(state.root, state.configDir, task);
       lobbyTopics.bump("tasks");

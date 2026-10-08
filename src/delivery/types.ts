@@ -22,6 +22,9 @@ export interface DeliveryOperation {
   fingerprint?: string;
   reviewId?: string;
   integrationPath?: string;
+  /** Task worktree covered by the merge confirmation; never removed with force. */
+  worktreePath?: string;
+  worktreeRemoved?: boolean;
   targetCommit?: string;
   stage: string;
   mergeCommit?: string;
@@ -56,5 +59,6 @@ export interface Delivery {
   /** Reconciled, non-delivered intents superseded only by explicit fresh approval. */
   previousOperations?: DeliveryOperation[];
   error?: string;
+  cleanupError?: string;
   result?: DeliveryResult;
 }

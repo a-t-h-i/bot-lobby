@@ -31,8 +31,10 @@ planning session from one. **Git** lists open pull requests; an agent reviews on
 read-only, and nothing is posted to GitHub. Both read GitHub through `gh`.
 
 Small changes go to **Quick fix**. `--task` forces a full task, `--fast` / `--full` picks the workflow,
-and `--branch` / `--worktree` isolates it in git. A finished isolated task pushes its branch and tries
-to open a PR through `gh`; nothing merges on its own.
+and `--branch` / `--worktree` isolates it in git. When an isolated task completes, the oracle asks
+you to confirm merging and pushing main, then removes its worktree after verifying the merge.
+Declining or failed verification keeps the worktree. Delivery can also be reviewed in **Tasks**,
+where you can create a PR instead. The task branch is kept.
 
 After every worker step, before QA and at completion, the engine runs the project's own linter
 (ESLint, Biome, Oxlint, Ruff, or a command you set) on the files the task touched. Only problems on

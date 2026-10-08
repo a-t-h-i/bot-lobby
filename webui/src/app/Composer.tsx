@@ -82,9 +82,9 @@ interface Pending {
 
 let keySeq = 0
 
-/** The flat icon buttons under the box. */
+/** The icon buttons under the box. */
 const TOOL =
-  "btn-ghost relative inline-flex size-8 items-center justify-center rounded-lg border border-transparent before:absolute before:-inset-1 before:content-[''] text-muted-foreground transition-[box-shadow,color,translate] duration-150 ease-snap outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:active:translate-none aria-pressed:text-foreground"
+  "toolbar-button relative inline-flex size-8 items-center justify-center rounded-lg border text-foreground transition-[background-color,border-color,translate] duration-150 ease-snap outline-none focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:active:translate-none"
 
 function isSend(event: KeyboardEvent): boolean {
   return event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing
@@ -389,7 +389,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-1 gap-y-1 px-2 pt-1 pb-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-2 pt-1 pb-2">
             <input
               ref={picker}
               type="file"

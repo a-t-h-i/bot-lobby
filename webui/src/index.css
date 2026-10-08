@@ -652,6 +652,16 @@
   50% { box-shadow: var(--glass-shadow), 0 0 0 1px color-mix(in oklab, var(--orb) 40%, transparent), 0 0 34px 2px color-mix(in oklab, var(--orb) 38%, transparent), 0 24px 80px -24px color-mix(in oklab, var(--orb) 70%, transparent); }
 }
 
+/* Visible toolbar surfaces use the current theme's foreground and card. */
+.toolbar-button {
+  background-color: color-mix(in oklab, var(--foreground) 10%, var(--card));
+  border-color: color-mix(in oklab, var(--foreground) 40%, var(--card));
+}
+.toolbar-button:is(:hover, [aria-pressed="true"], [aria-current="page"]) {
+  background-color: color-mix(in oklab, var(--foreground) 18%, var(--card));
+  border-color: color-mix(in oklab, var(--foreground) 60%, var(--card));
+}
+
 /*
  * The Knowledge tree: a trunk from the project's knowledge down to each agent,
  * and from each agent a branch to its files, drawn as rounded elbows, the

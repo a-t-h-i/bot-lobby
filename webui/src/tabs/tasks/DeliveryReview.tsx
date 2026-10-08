@@ -11,7 +11,7 @@ type Delivery = NonNullable<TaskDetail["delivery"]>
 type Action = "create_pr" | "merge_main"
 type RequestKind = "refresh" | "defer" | Action
 interface ReviewProps { taskId: string; title: string; delivery: Delivery; onChanged: () => void }
-const CONFIRM = "This directly merges the reviewed commit into main and pushes main. It does not create a pull request."
+const CONFIRM = "This merges the reviewed commit into main and pushes main, then removes the task worktree after verifying the merge. The task branch is kept."
 const STATUS = { pending_approval: "Ready for your review", deferred: "Saved for later", in_progress: "Delivery in progress", successful: "Delivered", recoverable_failure: "Delivery needs attention" }
 
 function Facts({ delivery: d, title }: { delivery: Delivery; title: string }) {
@@ -31,10 +31,11 @@ function Facts({ delivery: d, title }: { delivery: Delivery; title: string }) {
 
 function DeliveryAction({ action, delivery, busy, onAction }: { action: Action; delivery: Delivery; busy: boolean; onAction: (action: Action) => void }) {
   const reason = delivery.blocked[action]
-  const disabled = busy || delivery.status === "in_progress" || delivery.status === "successful" || Boolean(reason)
+  const retryCleanup = action === "merge_main" && delivery.status === "successful" && Boolean(delivery.cleanupError)
+  const disabled = busy || delivery.status === "in_progress" || (delivery.status === "successful" && !retryCleanup) || Boolean(reason)
   return <div className="grid gap-1">
-    <Button variant="outline" disabled={disabled} onClick={() => onAction(action)}>{action === "create_pr" ? "Create PR" : "Merge to main"}</Button>
-    <p className="text-xs text-muted-foreground">{action === "create_pr" ? "Pushes the task branch and opens a PR targeting main. Does not merge." : "Directly updates and pushes main. Requires confirmation."}</p>
+    <Button variant="outline" disabled={disabled} onClick={() => onAction(action)}>{action === "create_pr" ? "Create PR" : retryCleanup ? "Retry worktree cleanup" : "Merge to main"}</Button>
+    <p className="text-xs text-muted-foreground">{action === "create_pr" ? "Pushes the task branch and opens a PR targeting main. Does not merge." : retryCleanup ? "Main was delivered. Removes the retained worktree after confirmation." : "Updates and pushes main, then removes the task worktree. Requires confirmation."}</p>
     {reason ? <p className="text-sm text-destructive">{reason} Refresh review after resolving this restriction, then choose the action again.</p> : null}
   </div>
 }
@@ -105,6 +106,8 @@ function Status({ review: r }: { review: Controller }) {
     <p className="mt-2 text-sm text-muted-foreground">Task completion is recorded separately. Nothing is published without your approval.</p>
     <p role="status" className="text-sm">{r.busy ? "Updating delivery…" : r.current.operation ? `Operation: ${r.current.operation.stage}` : STATUS[r.current.status]}</p>
     {r.current.error || r.error ? <p role="alert" className="text-sm text-destructive">{r.error ?? r.current.error} Completed work is retained. Refresh review to reconcile the result before retrying.</p> : null}
+    {r.current.cleanupError ? <p role="alert" className="text-sm text-destructive">{r.current.cleanupError} Retry cleanup after resolving it.</p> : null}
+    {r.current.operation?.worktreeRemoved ? <p className="text-sm">Task worktree removed.</p> : null}
     {r.current.result ? <p className="text-sm break-all">{r.current.result.action === "create_pr" ? `PR #${r.current.result.pullNumber ?? ""} created` : `main pushed · ${r.current.result.commit ?? ""}`}{r.current.result.pullUrl ? <span> · {r.current.result.pullUrl}</span> : null}</p> : null}
   </>
 }
@@ -123,14 +126,16 @@ function Actions({ review: r }: { review: Controller }) {
 }
 
 function Confirmation({ review: r }: { review: Controller }) {
-  return <Popup open={r.slot} onOpenChange={r.setConfirm} label="Confirm merge to main" description={CONFIRM} onCloseAutoFocus={(event) => { event.preventDefault(); requestAnimationFrame(() => r.trigger.current?.focus()) }}>
+  const retryCleanup = r.current.status === "successful" && Boolean(r.current.cleanupError)
+  const description = retryCleanup ? "Main was already delivered. Remove the task worktree if it still contains only the reviewed commit. The task branch is kept." : CONFIRM
+  return <Popup open={r.slot} onOpenChange={r.setConfirm} label={retryCleanup ? "Confirm worktree removal" : "Confirm merge to main"} description={description} onCloseAutoFocus={(event) => { event.preventDefault(); requestAnimationFrame(() => r.trigger.current?.focus()) }}>
     <div className="grid gap-4 p-4">
-      <h3 className="font-medium">Merge to main?</h3>
-      <p className="text-sm">{CONFIRM}</p>
+      <h3 className="font-medium">{retryCleanup ? "Remove task worktree?" : "Merge to main?"}</h3>
+      <p className="text-sm">{description}</p>
       <p className="break-all text-sm text-muted-foreground">{r.current.repository} · {r.current.sourceCommit} → main</p>
       <div className="flex flex-wrap justify-end gap-2">
         <Button variant="outline" onClick={() => r.setConfirm(false)}>Cancel</Button>
-        <Button disabled={r.busy || Boolean(r.current.blocked.merge_main) || r.terminal} onClick={() => void r.request("merge_main")}>Confirm merge and push main</Button>
+        <Button disabled={r.busy || Boolean(r.current.blocked.merge_main) || (r.terminal && !retryCleanup)} onClick={() => void r.request("merge_main")}>{retryCleanup ? "Confirm worktree removal" : "Confirm merge and push main"}</Button>
       </div>
     </div>
   </Popup>

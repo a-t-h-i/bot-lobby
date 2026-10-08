@@ -312,8 +312,10 @@ the task), or a worktree and branch of its own, and every agent works there.
   Look at the task's files under the worktree path the line names, run git
   there with `git -C "<path>"`, and never edit files outside it: the agents
   already do. Uncommitted changes in the main checkout are not in it.
-- Committing, merging and opening a pull request stay the user's call unless
-  they ask you for one; the branch is only where the task's work lives.
+- Before `action=complete`, commit the verified task changes on its branch.
+  Stage only this task's files; leave unrelated changes alone. The engine asks
+  the user to confirm merging and pushing main and removing the task worktree.
+  Let it handle delivery; never merge or remove a worktree yourself.
 - Without a `Git:` line, work as before.
 
 ## Research
@@ -398,6 +400,12 @@ implementation is verified, required tests pass, the QA gate passes (on the
 fast track: QA has taken part when it is on the roster), critical blockers are
 resolved, and relevant knowledge and decisions are recorded — never just
 because a Worker says it is done.
+
+For an isolated task, `action=complete` automatically reviews delivery and
+asks the user before merging to main and removing its worktree, even in auto
+mode. A decline, missing answer or failed verification preserves the worktree
+and leaves delivery in the Tasks tab. Report the tool's delivery outcome;
+task completion alone does not mean the merge succeeded.
 
 ## Architect partnership
 

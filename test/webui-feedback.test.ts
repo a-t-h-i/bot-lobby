@@ -140,7 +140,7 @@ test("delivery actions use authoritative blocks, explicit APIs and confirmed dir
   for (const api of ["tasks.deliveryReview", "tasks.deliveryDefer", "tasks.deliver"]) assert.ok(panel.includes(`"${api}"`));
   assert.match(panel, /confirmMain: true/);
   assert.match(panel, /delivery\.blocked\[action\]/);
-  assert.match(panel, /This directly merges the reviewed commit into main and pushes main\. It does not create a pull request\./);
+  assert.match(panel, /merges the reviewed commit into main and pushes main, then removes the task worktree after verifying the merge/);
   assert.match(panel, /setConfirm\(true\)/);
   assert.match(panel, /project === selectedProject\(\)/);
   const detail = source("tabs/tasks/TaskDetail.tsx");
