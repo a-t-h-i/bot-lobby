@@ -133,6 +133,8 @@
    */
   --card-face: linear-gradient(180deg, color-mix(in oklab, var(--card) 97%, white) 0%, color-mix(in oklab, var(--card) 98.5%, black) 100%);
   --card-rim: rgb(32 28 20 / 0.11);
+  --workspace-card: var(--card);
+  --workspace-border: color-mix(in oklab, var(--foreground) 22%, var(--card));
   --card-raise: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 1px 1.5px rgb(32 28 20 / 0.06), 0 3px 10px -4px rgb(32 28 20 / 0.12);
 }
 
@@ -147,6 +149,7 @@
   --btn-gloss: linear-gradient(180deg, rgb(255 255 255 / 0.16) 0%, rgb(255 255 255 / 0.03) 52%, rgb(0 0 0 / 0.08) 100%);
   --card-face: linear-gradient(180deg, color-mix(in oklab, var(--card) 95%, white) 0%, var(--card) 100%);
   --card-rim: rgb(255 255 255 / 0.075);
+  --workspace-card: color-mix(in oklab, var(--card) 94%, var(--foreground));
   --card-raise: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 1px 2px rgb(0 0 0 / 0.45), 0 4px 12px -5px rgb(0 0 0 / 0.55);
 
   /* Deep ink */
@@ -375,6 +378,7 @@
   /* The big pane every tab lives in, set into the page with a margin. Edge to edge on a phone. */
   .surface {
     @apply min-h-0 min-w-0 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-surface;
+    background-color: var(--background);
   }
   @media (max-width: 639px) {
     .surface {
@@ -396,6 +400,22 @@
     --tw-shadow: var(--card-raise);
     box-shadow: var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
   }
+  /* Page surfaces are opaque, with a clear rim against the workspace ground. */
+  .surface :is(.glass, .card-raised, .workspace-pane, .workspace-frame, .workspace-section),
+  .reui-menu,
+  .reui-select {
+    background-color: var(--workspace-card);
+    background-image: none;
+    border-color: var(--workspace-border);
+  }
+  .surface [data-slot="frame"] {
+    --frame-border-color: var(--workspace-border);
+    --frame-panel-border-color: var(--workspace-border);
+    --frame-panel-bg: var(--workspace-card);
+    background-color: color-mix(in oklab, var(--workspace-card) 65%, var(--background));
+  }
+  .reui-menu { box-shadow: var(--glass-shadow); }
+  .reui-select { box-shadow: var(--btn-sm); }
   /*
    * The raised button looks (see --btn-* above). The shadow goes through
    * --tw-shadow, so a focus ring adds to it instead of replacing it.
@@ -1056,6 +1076,51 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .effort-word { animation: none !important; background-position: 50% 0; }
+}
+
+.brain-shape { transform-origin: 32px 34px; }
+[data-slot="effort-mascot"][data-level="minimal"] .brain-shape { animation: brain-breathe 5s ease-in-out infinite; }
+[data-slot="effort-mascot"][data-level="low"] .brain-shape { animation: brain-breathe 3.5s ease-in-out infinite; }
+[data-slot="effort-mascot"][data-level="medium"] .brain-shape { animation: brain-focus 4s ease-in-out infinite; }
+[data-slot="effort-mascot"][data-level="high"] .brain-shape { animation: brain-glitch 6s steps(1, end) infinite; }
+[data-slot="effort-mascot"][data-level="xhigh"] .brain-shape { animation: brain-glitch 4s steps(1, end) infinite; --brain-shift: 3px; }
+[data-slot="effort-mascot"][data-level="max"] .brain-shape { animation: brain-phase 5s ease-in-out infinite; }
+.brain-phase-echo { opacity: 0; animation: brain-afterimage 5s ease-in-out infinite; }
+.brain-phase-echo[data-brain-phase="cyan"] { color: var(--rainbow-5); --brain-direction: -1; }
+.brain-phase-echo[data-brain-phase="magenta"] { color: var(--rainbow-7); --brain-direction: 1; animation-delay: -0.15s; }
+.brain-phase-scan { animation: brain-scan 3s linear infinite; }
+@keyframes brain-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.025); }
+}
+@keyframes brain-focus {
+  0%, 100% { transform: rotate(0deg); }
+  35% { transform: rotate(-2deg); }
+  65% { transform: rotate(2deg); }
+}
+@keyframes brain-glitch {
+  0%, 87%, 96%, 100% { transform: translateX(0); }
+  89%, 93% { transform: translateX(var(--brain-shift, 1.5px)) skewX(2deg); }
+  91%, 95% { transform: translateX(calc(-1 * var(--brain-shift, 1.5px))) skewX(-2deg); }
+}
+@keyframes brain-phase {
+  0%, 55%, 100% { transform: translateX(0) scaleX(1); opacity: 1; }
+  63%, 78% { transform: translateX(-2px) scaleX(0.97) skewY(2deg); opacity: 0.8; }
+  70%, 86% { transform: translateX(2px) scaleX(1.03) skewY(-2deg); opacity: 0.95; }
+}
+@keyframes brain-afterimage {
+  0%, 50%, 100% { transform: translateX(0); opacity: 0; }
+  65%, 85% { transform: translate(calc(var(--brain-direction) * 4px), -1px); opacity: 0.4; }
+  75% { transform: translate(calc(var(--brain-direction) * 2px), 1px); opacity: 0.2; }
+}
+@keyframes brain-scan {
+  from { transform: translateY(0); }
+  to { transform: translateY(42px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brain-shape, .brain-phase-echo, .brain-phase-scan { animation: none !important; }
+  .brain-phase-echo { opacity: 0.12; transform: translateX(calc(var(--brain-direction) * 1px)); }
+  .brain-phase-scan { display: none; }
 }
 
 /*

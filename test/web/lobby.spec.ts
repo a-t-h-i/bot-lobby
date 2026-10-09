@@ -263,6 +263,8 @@ test("the activity log follows its newest entry, lets a reader who scrolled up s
 test("contrast meets 4.5:1", { tag: "@theme" }, async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 800 });
+  // Audit the label's settled colors while its agent names crossfade.
+  await page.addStyleTag({ content: ".orb-label, .orb-label > span { opacity: 1 !important; transition: none !important; }" });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const results = await new AxeBuilder({ page: page as any }).withRules(["color-contrast"]).analyze();
   const detail = results.violations.flatMap((v) =>

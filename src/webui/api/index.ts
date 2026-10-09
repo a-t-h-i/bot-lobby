@@ -271,8 +271,8 @@ function buildRoutes(): Record<string, Route> {
     run: (body, ctx) => quickfixMovedToTask(body as { id: string }, ctx),
   };
   routes["metrics.get"] = {
-    schema: Type.Object({ groupBy: Type.Union([Type.Literal("model"), Type.Literal("model-kind")]), query: Type.Optional(Type.String({ maxLength: 500 })) }, { additionalProperties: false }),
-    run: (body, ctx) => metricsGet(body as { groupBy: "model" | "model-kind"; query?: string }, ctx),
+    schema: Type.Object({ groupBy: Type.Union([Type.Literal("model"), Type.Literal("model-kind")]), query: Type.Optional(Type.String({ maxLength: 500 })), from: Type.Optional(Type.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" })), to: Type.Optional(Type.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" })), timeZone: Type.Optional(Type.String({ maxLength: 100 })) }, { additionalProperties: false }),
+    run: (body, ctx) => metricsGet(body as Parameters<typeof metricsGet>[0], ctx),
   };
   routes["knowledge.files"] = { schema: Empty, run: (_body, ctx) => knowledgeFiles(ctx) };
   routes["knowledge.ask"] = {

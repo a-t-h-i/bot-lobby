@@ -5,7 +5,7 @@
  * the streams and any unsent draft on purpose.
  */
 import { useEffect, useRef, useState, type KeyboardEvent } from "react"
-import { Popover } from "radix-ui"
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/reui/popover"
 import { Check, ChevronsUpDown, FolderOpen, GitBranch, RefreshCw, TriangleAlert } from "lucide-react"
 import type { ProjectInfo } from "@protocol"
 import { call } from "@/lib/api"
@@ -122,8 +122,8 @@ export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Pro
 
   return (
     <div aria-busy={busy} className="flex min-w-0 items-center gap-1.5">
-      <Popover.Root open={open} onOpenChange={setOpen}>
-        <Popover.Trigger
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger
           type="button"
           role="combobox"
           aria-label="Project"
@@ -141,68 +141,66 @@ export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Pro
           <span aria-hidden="true" className={cn("size-2.5 shrink-0 rounded-full", message ? "bg-destructive" : "bg-primary")} />
           <span className="truncate">{name}</span>
           <ChevronsUpDown aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
-        </Popover.Trigger>
-        <Popover.Portal>
-          <Popover.Content
-            align="start"
-            sideOffset={6}
-            aria-label="Projects"
-            onKeyDown={walk}
-            onOpenAutoFocus={(event) => {
-              const chosen = (event.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>("[role='option'][aria-selected='true']") ?? (event.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>("[role='option']")
-              if (chosen) {
-                event.preventDefault()
-                chosen.focus()
-              }
-            }}
-            className="glass-pop z-50 flex w-[min(26rem,calc(100vw-1.5rem))] origin-(--radix-popover-content-transform-origin) flex-col overflow-hidden rounded-xl outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95"
-          >
-            <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-              <span className="text-xs font-medium text-muted-foreground">Running projects</span>
-              <button
-                type="button"
-                onClick={() => void refresh()}
-                disabled={busy}
-                aria-label="Refresh list"
-                aria-keyshortcuts="R"
-                className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-60"
-              >
-                {busy ? <Spinner aria-hidden="true" role="presentation" className="size-3" /> : <RefreshCw aria-hidden="true" className="size-3" />}
-                Refresh
-                <Keys chord="R" className="kbd-hint" />
-              </button>
-            </div>
-            <div role="listbox" aria-label="Projects" className="flex max-h-72 flex-col overflow-y-auto p-1">
-              {data?.projects.map((project) => {
-                const on = project.id === active
-                return (
-                  <button
-                    key={project.id}
-                    type="button"
-                    role="option"
-                    aria-selected={on}
-                    onClick={() => choose(project.id)}
-                    className={cn(
-                      "flex min-h-10 w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:ring-3 focus-visible:ring-ring/30",
-                      on && "bg-accent"
-                    )}
-                  >
-                    <span className="flex h-5 w-4 shrink-0 items-center justify-center">{on ? <Check aria-hidden="true" className="size-3.5 text-primary" /> : null}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">{project.name}</span>
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {project.cwd} · :{project.port}
-                      </span>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          sideOffset={6}
+          aria-label="Projects"
+          onKeyDown={walk}
+          onOpenAutoFocus={(event) => {
+            const chosen = (event.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>("[role='option'][aria-selected='true']") ?? (event.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>("[role='option']")
+            if (chosen) {
+              event.preventDefault()
+              chosen.focus()
+            }
+          }}
+          className="p-0 flex w-[min(26rem,calc(100vw-1.5rem))] origin-(--radix-popover-content-transform-origin) flex-col overflow-hidden rounded-xl outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95"
+        >
+          <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+            <span className="text-xs font-medium text-muted-foreground">Running projects</span>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              disabled={busy}
+              aria-label="Refresh list"
+              aria-keyshortcuts="R"
+              className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-60"
+            >
+              {busy ? <Spinner aria-hidden="true" role="presentation" className="size-3" /> : <RefreshCw aria-hidden="true" className="size-3" />}
+              Refresh
+              <Keys chord="R" className="kbd-hint" />
+            </button>
+          </div>
+          <div role="listbox" aria-label="Projects" className="flex max-h-72 flex-col overflow-y-auto p-1">
+            {data?.projects.map((project) => {
+              const on = project.id === active
+              return (
+                <button
+                  key={project.id}
+                  type="button"
+                  role="option"
+                  aria-selected={on}
+                  onClick={() => choose(project.id)}
+                  className={cn(
+                    "flex min-h-10 w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:ring-3 focus-visible:ring-ring/30",
+                    on && "bg-accent"
+                  )}
+                >
+                  <span className="flex h-5 w-4 shrink-0 items-center justify-center">{on ? <Check aria-hidden="true" className="size-3.5 text-primary" /> : null}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{project.name}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {project.cwd} · :{project.port}
                     </span>
-                  </button>
-                )
-              })}
-            </div>
-            <button type="button" className="flex items-center gap-2 border-t border-border px-3 py-3 text-sm font-medium outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40"
-              onClick={() => { setOpen(false); setBrowsing(true) }}><FolderOpen aria-hidden="true" className="size-4" />Open folder…</button>
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          <button type="button" className="flex items-center gap-2 border-t border-border px-3 py-3 text-sm font-medium outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40"
+            onClick={() => { setOpen(false); setBrowsing(true) }}><FolderOpen aria-hidden="true" className="size-4" />Open folder…</button>
+        </PopoverContent>
+        </Popover>
       <ProjectFolderDialog open={browsing} onClose={() => setBrowsing(false)} tab={tab} />
       {branch ? (
         <span className="hidden min-w-0 items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground sm:inline-flex">

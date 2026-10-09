@@ -78,7 +78,7 @@ test("every button casts shadow-sm; its border shows only on hover, much lighter
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => { window.location.hash = "#/tasks/T-mock-1"; });
-  await expect(page.locator("#main .btn-tint:visible").first()).toBeVisible();
+  await expect(page.locator("#main [data-tone=primary]:visible").first()).toBeVisible();
   await page.mouse.move(0, 899);
   const off = await page.evaluate(() => [...document.querySelectorAll(".btn-raised, .btn-ghost, .btn-tint")]
     .filter((el: any) => el.getBoundingClientRect().width > 0 && !el.matches(":hover"))
@@ -99,8 +99,8 @@ test("every button casts shadow-sm; its border shows only on hover, much lighter
     probe.remove();
     return value;
   }, text);
-  // One of each face: tinted, raised and quiet.
-  const hovered = [".btn-tint", ".btn-raised", ".btn-ghost"].map((face) => page.locator(`#main ${face}:visible, header ${face}:visible`).first());
+  // One of each face: primary, raised and quiet.
+  const hovered = ["[data-tone=primary]", ".btn-raised", ".btn-ghost"].map((face) => page.locator(`#main ${face}:visible, header ${face}:visible`).first());
   for (const button of hovered) {
     await button.hover();
     const text = await button.evaluate((el: any) => getComputedStyle(el).color);

@@ -8,6 +8,7 @@ import { useEffect, useState } from "react"
 import type { ReactNode } from "react"
 import { Check, X } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
+import { Badge } from "@/components/ui/badge"
 import { formatElapsed } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { agentName, sourceColor, sourceLabel, type LobbyRun } from "./types"
@@ -41,13 +42,15 @@ export function RunsStrip({ runs }: { runs: LobbyRun[] }) {
   return (
     <ul className="-mt-1 flex shrink-0 flex-wrap items-center gap-1.5 px-4 pb-3" aria-label="Runs">
       {runs.map((run, index) => (
-        <li key={run.runId ?? index} className="flex items-center gap-2 rounded-full bg-muted py-1 pr-3 pl-2 text-xs">
+        <Badge asChild key={run.runId ?? index} variant="secondary" radius="full" className="h-auto gap-2 py-1 pr-3 pl-2">
+        <li>
           <span className="flex size-4 items-center justify-center">{statusMark(run.status)}</span>
           <span className="sr-only">{run.status ?? "unknown"}</span>
           <span className={cn("font-medium", sourceColor(agentName(run)))}>{sourceLabel(agentName(run))}</span>
           {run.activity ?? run.step ? <span className="max-w-[18rem] truncate text-muted-foreground">{run.activity ?? run.step}</span> : null}
           <span className="tabular-nums text-muted-foreground">{elapsedOf(run, now)}</span>
         </li>
+        </Badge>
       ))}
     </ul>
   )

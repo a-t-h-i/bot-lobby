@@ -11,7 +11,8 @@ import { useApiRead } from "@/app/useApiRead"
 import { Button } from "@/components/ui/button"
 import { Keys } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
-import { AvgTime, SuccessRate, TimeShare } from "./Charts"
+import { AvgTime, DailyTrends, SuccessRate, TimeShare } from "./Charts"
+import { DateFilter, type DateRange } from "./DateFilter"
 import { Classifier } from "./Classifier"
 import { MetricsTable } from "./MetricsTable"
 import { Tiles } from "./Tiles"
@@ -25,7 +26,7 @@ function GroupToggle({ groupBy, onGroup }: { groupBy: GroupBy; onGroup: (value: 
     <div
       role="radiogroup"
       aria-label="Group by"
-      className="flex gap-0.5 rounded-lg bg-muted p-0.5"
+      className="flex max-w-full flex-wrap gap-0.5 rounded-lg bg-muted p-0.5"
       onKeyDown={(event) => {
         // Arrows move between the choices and pick, as a radio group does.
         const step = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0
@@ -57,7 +58,7 @@ function GroupToggle({ groupBy, onGroup }: { groupBy: GroupBy; onGroup: (value: 
 
 function SearchBox({ query, onQuery }: { query: string; onQuery: (value: string) => void }) {
   return (
-    <label className="relative flex items-center">
+    <label className="relative flex max-w-full items-center">
       <span className="sr-only">Search runs</span>
       <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 size-3.5 text-muted-foreground" />
       <input
@@ -76,24 +77,19 @@ function SearchBox({ query, onQuery }: { query: string; onQuery: (value: string)
 
 function Body({ data, groupBy, query }: { data: MetricsData; groupBy: GroupBy; query: string }) {
   const label = (group: MetricsData["groups"][number]) => groupLabel(group, groupBy)
-  if (data.tiles.runs === 0) {
-    return (
-      <div className="flex flex-col gap-4">
-        <Tiles tiles={data.tiles} />
-        <p className="card-raised rounded-xl border p-4 text-sm text-muted-foreground">{query ? `No run matches "${query}".` : EMPTY}</p>
-      </div>
-    )
-  }
   return (
     <div className="flex flex-col gap-4">
       <Tiles tiles={data.tiles} />
+      {data.tiles.runs === 0 ? <p className="card-raised rounded-xl border p-4 text-sm text-muted-foreground">{query ? `No run matches "${query}" in this period.` : `No runs in this period. ${EMPTY}`}</p> : null}
+      {data.daily.length > 0 ? <DailyTrends daily={data.daily} /> : null}
       {data.classifier ? <Classifier summary={data.classifier} /> : null}
-      <div className="grid gap-4 lg:grid-cols-2">
+      {data.tiles.runs > 0 ? <><div className="grid gap-4 lg:grid-cols-2">
         <AvgTime groups={data.groups} label={label} />
         <SuccessRate groups={data.groups} label={label} />
       </div>
-      <TimeShare timeShare={data.timeShare} />
       <MetricsTable groups={data.groups} groupBy={groupBy} />
+      </> : null}
+      {data.tiles.runs > 0 || data.timeShare.taskTimes.length > 0 ? <TimeShare timeShare={data.timeShare} /> : null}
     </div>
   )
 }
@@ -111,18 +107,29 @@ function Skeleton() {
 export function MetricsTab() {
   const [groupBy, setGroupBy] = useState<GroupBy>("model")
   const [query, setQuery] = useState("")
-  const read = useApiRead("metrics.get", { groupBy, query }, ["metrics"])
+  const [range, setRange] = useState<DateRange>({})
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const read = useApiRead("metrics.get", { groupBy, query, ...range, timeZone }, ["metrics"])
   if (!read.data && read.error) return <ErrorState message={`Could not load metrics. ${read.error}`} onRetry={read.reload} />
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-5 pt-5 pb-dock">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <h1 className="text-lg font-semibold tracking-tight">Metrics</h1>
+        <div><h1 className="text-lg font-semibold tracking-tight">Metrics</h1><p className="mt-1 text-xs text-muted-foreground">Daily trends and model performance</p></div>
         {read.loading && read.data ? <span className="flex items-center gap-2 text-xs text-muted-foreground"><Spinner className="size-3" aria-hidden="true" role="presentation" /> refreshing</span> : null}
         <span aria-hidden="true" className="min-w-4 flex-1" />
-        <GroupToggle groupBy={groupBy} onGroup={setGroupBy} />
-        <SearchBox query={query} onQuery={setQuery} />
       </header>
-      {read.data ? <Body data={read.data} groupBy={groupBy} query={query} /> : <Skeleton />}
+      <section aria-label="Metrics filters" className="workspace-section flex flex-wrap items-end gap-4 rounded-xl border p-4">
+        <DateFilter onChange={setRange} />
+        <div className="flex w-full min-w-0 flex-wrap items-end gap-3 lg:w-auto lg:flex-1 lg:justify-end">
+          <GroupToggle groupBy={groupBy} onGroup={setGroupBy} />
+          <SearchBox query={query} onQuery={setQuery} />
+        </div>
+        <p className="w-full text-xs text-muted-foreground">{range.from ? `${range.from} – ${range.to}` : "All recorded dates"} · {timeZone}. Runs and active tasks use their start date; completed tasks use their completion date.</p>
+      </section>
+      {read.error ? <p role="alert" className="text-sm text-destructive">Could not refresh metrics. {read.error}</p> : null}
+      <div aria-busy={read.loading} className={read.loading && read.data ? "opacity-60" : undefined}>
+        {read.data ? <Body key={JSON.stringify([read.data, groupBy])} data={read.data} groupBy={groupBy} query={query} /> : <Skeleton />}
+      </div>
     </div>
   )
 }

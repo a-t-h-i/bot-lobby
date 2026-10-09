@@ -1,6 +1,7 @@
 /** The small pieces the settings groups share: a row, a card of rows, a searchable drop-down. */
 import type { ReactNode } from "react"
 import { Combobox } from "@/components/ui/combobox"
+import { Frame, FramePanel } from "@/components/reui/frame"
 
 export interface ChoiceItem {
   value: string
@@ -24,7 +25,7 @@ export function Field({ label, help, children, stacked }: { label: string; help?
 
 /** Several settings in one card, hairlines between them. */
 export function Rows({ children }: { children: ReactNode }) {
-  return <div className="card-raised flex flex-col divide-y divide-border rounded-xl border px-4 [&>*]:py-3">{children}</div>
+  return <Frame dense><FramePanel className="flex flex-col divide-y divide-border py-0 [&>*]:py-3">{children}</FramePanel></Frame>
 }
 
 /** Every drop-down on the page is a searchable one. */

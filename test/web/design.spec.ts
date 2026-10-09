@@ -465,9 +465,10 @@ test("lists are walked with the keyboard: Down from the tab bar, arrows between 
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.getByRole("tab", { name: /Tasks/ }).click();
+  const list = page.locator('[data-pane="list"]');
+  await expect(list.locator("[data-row]").first()).toBeVisible();
   await page.getByRole("tab", { name: /Tasks/ }).focus();
   await page.keyboard.press("ArrowDown");
-  const list = page.locator('[data-pane="list"]');
   await expect(list.locator(":focus"), "Down from the tab bar lands on a row of the list").toHaveCount(1);
   const first = await list.locator(":focus").textContent();
   await page.keyboard.press("ArrowDown");

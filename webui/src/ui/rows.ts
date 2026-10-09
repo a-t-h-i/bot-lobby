@@ -6,10 +6,10 @@
 
 /** A row of a list: a button the arrow keys step through (`data-row`). */
 export const ROW =
-  "flex min-h-10 w-full flex-col gap-0.5 rounded-lg px-2.5 py-2 text-left outline-none transition-colors duration-150 hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:bg-accent"
+  "flex min-h-10 w-full flex-col gap-1 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-colors duration-150 hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=true]:border-primary/40 aria-[current=true]:bg-accent"
 
 /** The list around the rows. */
-export const ROWS = "flex flex-col gap-0.5 px-2 pb-2"
+export const ROWS = "flex flex-col gap-1 px-2 pb-3"
 
 /** The group heading above some rows. */
 export const GROUP = "px-4 pt-4 pb-1 text-xs font-medium text-muted-foreground"

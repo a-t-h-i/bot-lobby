@@ -3,10 +3,10 @@
  * time goes, and what the classifier did — the same figures the terminal
  * tab draws, as data. Search narrows runs exactly like the tab's `/`.
  */
-import { aggregateMetrics, collectMetrics, sortGroups, summarizeClassifier, taskStats, taskTimesByModel, type GroupBy, type MetricRecord } from "../../state/metrics.ts";
+import { aggregateMetrics, collectMetrics, sortGroups, summarizeClassifier, taskStats, taskTimesByModel, type MetricRecord } from "../../state/metrics.ts";
 import { filterRecords } from "../../lobby/models/metrics.ts";
-import type { MetricsData } from "../protocol.ts";
-import type { ApiContext } from "./index.ts";
+import type { Api, MetricsData } from "../protocol.ts";
+import { fail, type ApiContext } from "./index.ts";
 
 function timed(records: readonly MetricRecord[]): MetricRecord[] {
   return records.filter((record) => record.status !== "cancelled" && record.durationMs > 0);
@@ -49,15 +49,48 @@ function shareOf(records: readonly MetricRecord[]): MetricsData["timeShare"]["by
 }
 
 /** The dashboard figures for one grouping and search. */
-export function metricsGet(body: { groupBy: GroupBy; query?: string }, ctx: ApiContext): MetricsData {
-  const tasks = ctx.service.tasks();
-  const records = filterRecords(collectMetrics(ctx.service.metrics(), tasks), body.query);
+export function metricsGet(body: Api["metrics.get"]["request"], ctx: ApiContext): MetricsData {
+  const { from, to } = body;
+  const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+  if ((from === undefined) !== (to === undefined) || (from !== undefined && (!validDate(from) || !validDate(to!) || from > to!))) {
+    fail(400, "bad_request", "Choose a valid start and end date, with the start on or before the end.");
+  }
+  let formatter: Intl.DateTimeFormat;
+  try {
+    formatter = new Intl.DateTimeFormat("en", { timeZone: body.timeZone ?? "UTC", year: "numeric", month: "2-digit", day: "2-digit" });
+  } catch {
+    fail(400, "bad_request", "Choose a valid time zone.");
+  }
+  const dayOf = (timestamp: string) => {
+    const date = new Date(timestamp);
+    if (!Number.isFinite(date.getTime())) return "";
+    const parts = formatter.formatToParts(date);
+    return ["year", "month", "day"].map((part) => parts.find((item) => item.type === part)!.value).join("-");
+  };
+  const inRange = (timestamp: string) => !from || (dayOf(timestamp) >= from && dayOf(timestamp) <= to!);
+  const allTasks = ctx.service.tasks();
+  const tasks = allTasks.filter((task) => inRange(task.state === "completed" ? task.updatedAt : task.createdAt));
+  const allRecords = filterRecords(collectMetrics(ctx.service.metrics(), allTasks), body.query);
+  const records = allRecords.filter((record) => inRange(record.startedAt));
   const stats = taskStats(tasks);
-  const classifier = summarizeClassifier(ctx.service.classifierMetrics?.() ?? [], records);
+  const classifier = summarizeClassifier((ctx.service.classifierMetrics?.() ?? []).filter((record) => inRange(record.startedAt)), records);
+  const daily = new Map<string, MetricsData["daily"][number]>();
+  for (const record of records) {
+    const date = dayOf(record.startedAt);
+    if (!date) continue;
+    const entry = daily.get(date) ?? { date, runs: 0, successes: 0, cost: 0 };
+    entry.runs += 1;
+    entry.successes += Number(record.status === "success");
+    entry.cost += record.cost ?? 0;
+    daily.set(date, entry);
+  }
+  // Include range edges without allocating an entry for every empty day.
+  for (const date of [from, to]) if (date && !daily.has(date)) daily.set(date, { date, runs: 0, successes: 0, cost: 0 });
   return {
     tiles: tilesOf(records, stats),
+    daily: [...daily.values()].sort((a, b) => a.date.localeCompare(b.date)),
     groups: sortGroups(aggregateMetrics(records, body.groupBy), "runs"),
-    timeShare: { byAgent: shareOf(records), taskTimes: taskTimesByModel(tasks, records) },
+    timeShare: { byAgent: shareOf(records), taskTimes: taskTimesByModel(tasks, allRecords) },
     ...(classifier ? { classifier } : {}),
   };
 }

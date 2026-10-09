@@ -7,6 +7,8 @@ import { ListSkeleton, SplitPane } from "@/ui/SplitPane"
 import { TaskDetail } from "./TaskDetail"
 import { TaskItem } from "./TaskList"
 import type { TaskRow } from "@protocol"
+import { Badge } from "@/components/ui/badge"
+import { Frame, FrameHeader, FramePanel } from "@/components/reui/frame"
 
 const close = () => go(tabHash("tasks", "board"))
 const select = (id: string) => go(tabHash("tasks", "board", id))
@@ -20,13 +22,15 @@ function columnFor(row: TaskRow): typeof columns[number] | undefined {
 }
 
 function BoardColumn({ title, rows, id }: { title: string; rows: TaskRow[]; id?: string }) {
-  return <section aria-label={title} className="min-w-0 rounded-xl border border-input bg-muted p-3">
-    <h2 className="mb-3 flex items-center justify-between gap-2 text-sm font-semibold">{title}<span className="text-muted-foreground">{rows.length}</span></h2>
+  return <Frame role="region" aria-label={title} spacing="sm" className="min-w-0">
+    <FrameHeader className="py-2"><h2 className="flex items-center justify-between gap-2 text-sm font-semibold">{title}<Badge variant="secondary" radius="full">{rows.length}</Badge></h2></FrameHeader>
+    <FramePanel>
     <ul className="flex flex-col gap-3">
       {rows.map((row) => <TaskItem key={`${row.kind}-${row.id}`} row={row} selected={row.id === id} onSelect={select} card />)}
     </ul>
     {!rows.length ? <p className="py-4 text-sm text-muted-foreground">No tasks here.</p> : null}
-  </section>
+    </FramePanel>
+  </Frame>
 }
 
 function Board({ rows, id }: { rows: TaskRow[]; id?: string }) {
