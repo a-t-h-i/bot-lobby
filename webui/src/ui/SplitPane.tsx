@@ -125,8 +125,8 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe, i
     )
   }
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[clamp(17rem,28%,23rem)_minmax(0,1fr)]">
-      <Pane data-pane="list" ref={listPane} onKeyDown={onListKey} className="overflow-y-auto border-r border-border pb-dock">
+    <div className="grid min-h-0 flex-1 grid-cols-[clamp(17rem,28%,23rem)_minmax(0,1fr)] gap-3 p-3">
+      <Pane data-pane="list" ref={listPane} onKeyDown={onListKey} className="workspace-pane overflow-y-auto rounded-xl border pb-dock shadow-xs">
         {list}
       </Pane>
       <Pane data-pane="detail" ref={detailPane} tabIndex={0} aria-label="Detail" onKeyDown={onDetailKey} className={cn("overflow-y-auto px-5 pt-5 pb-dock outline-none focus-visible:bg-muted/30", detailClassName)}>

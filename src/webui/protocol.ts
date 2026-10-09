@@ -335,6 +335,7 @@ export interface MetricsClassifier {
 export interface MetricsData {
   tiles: MetricsTiles;
   groups: MetricGroupInfo[];
+  daily: Array<{ date: string; runs: number; successes: number; cost: number }>;
   timeShare: { byAgent: MetricsAgentShare[]; taskTimes: MetricsTaskTime[] };
   classifier?: MetricsClassifier;
 }
@@ -634,7 +635,7 @@ export interface Api {
   "quickfix.cancel": { request: { id: string }; result: { notice: string } };
   "quickfix.runAnyway": { request: { id: string }; result: { notice: string } };
   "quickfix.movedToTask": { request: { id: string }; result: { notice: string; key?: string } };
-  "metrics.get": { request: { groupBy: "model" | "model-kind"; query?: string }; result: MetricsData };
+  "metrics.get": { request: { groupBy: "model" | "model-kind"; query?: string; from?: string; to?: string; timeZone?: string }; result: MetricsData };
   "projects.browse": { request: { path?: string }; result: FolderListing };
   "projects.open": { request: { path: string }; result: { project: ProjectInfo } };
   "knowledge.files": { request: Record<string, never>; result: { files: KnowledgeFileInfo[]; models?: Partial<Record<KnowledgeAgentName, string>> } };

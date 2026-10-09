@@ -5,7 +5,7 @@
  * Enter picks, Esc closes and gives focus back to the trigger.
  */
 import { useEffect, useId, useMemo, useRef, useState } from "react"
-import { Popover } from "radix-ui"
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/reui/popover"
 import { Check, ChevronDown, Search } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -90,8 +90,8 @@ export function Combobox({ value, options, onChange, label, className, disabled 
   }
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
         type="button"
         role="combobox"
         aria-label={label}
@@ -110,63 +110,61 @@ export function Combobox({ value, options, onChange, label, className, disabled 
         }}
         data-slot="select-trigger"
         className={cn(
-          "btn-raised flex h-8 w-full min-w-0 items-center justify-between gap-2 overflow-hidden rounded-lg border bg-card px-2.5 text-[0.8125rem] whitespace-nowrap outline-none transition-[border-color,box-shadow] duration-150 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50",
+          "reui-select flex h-8 w-full min-w-0 items-center justify-between gap-2 overflow-hidden rounded-lg border bg-card px-2.5 text-[0.8125rem] whitespace-nowrap outline-none transition-[border-color,box-shadow] duration-150 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50",
           className
         )}
       >
         <span className="min-w-0 truncate">{chosen?.label ?? value}</span>
         <ChevronDown aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content
-          align="start"
-          sideOffset={4}
-          collisionPadding={8}
-          onOpenAutoFocus={(event) => {
-            event.preventDefault()
-            ;(event.currentTarget as HTMLElement).querySelector<HTMLElement>("input")?.focus()
-          }}
-          className="glass-pop z-50 flex max-h-[min(20rem,var(--radix-popover-content-available-height))] w-[max(var(--radix-popover-trigger-width),17rem)] max-w-(--radix-popover-content-available-width) flex-col overflow-hidden rounded-lg outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0"
-        >
-          <div className="flex items-center gap-2 border-b border-border px-2.5">
-            <Search aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={onKeyDown}
-              role="searchbox"
-              aria-label={`Search ${label}`}
-              aria-controls={id}
-              aria-activedescendant={shown[active] ? `${id}-${active}` : undefined}
-              placeholder="Search…"
-              autoComplete="off"
-              spellCheck={false}
-              className="h-8 min-w-0 flex-1 bg-transparent text-[0.8125rem] outline-none placeholder:text-muted-foreground"
-            />
-          </div>
-          <div ref={list} id={id} role="listbox" aria-label={label} className="min-h-0 flex-1 overflow-y-auto p-1">
-            {shown.length === 0 ? <p className="px-2.5 py-2 text-xs text-muted-foreground">Nothing matches “{query}”.</p> : null}
-            {shown.map((option, index) => (
-              <div
-                key={option.value}
-                id={`${id}-${index}`}
-                role="option"
-                aria-selected={option.value === value}
-                data-index={index}
-                onPointerMove={() => setActive(index)}
-                onClick={() => pick(option)}
-                className={cn("flex cursor-default items-center gap-2 rounded-lg px-2.5 py-1.5 text-[0.8125rem] select-none", index === active && "bg-accent")}
-              >
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate">{option.label}</span>
-                  {option.hint ? <span className="line-clamp-2 text-xs text-muted-foreground">{option.hint}</span> : null}
-                </span>
-                {option.value === value ? <Check aria-hidden="true" className="size-3.5 shrink-0 text-primary" /> : null}
-              </div>
-            ))}
-          </div>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        sideOffset={4}
+        collisionPadding={8}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          ;(event.currentTarget as HTMLElement).querySelector<HTMLElement>("input")?.focus()
+        }}
+        className="p-0 flex max-h-[min(20rem,var(--radix-popover-content-available-height))] w-[max(var(--radix-popover-trigger-width),17rem)] max-w-(--radix-popover-content-available-width) flex-col overflow-hidden rounded-lg outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0"
+      >
+        <div className="flex items-center gap-2 border-b border-border px-2.5">
+          <Search aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={onKeyDown}
+            role="searchbox"
+            aria-label={`Search ${label}`}
+            aria-controls={id}
+            aria-activedescendant={shown[active] ? `${id}-${active}` : undefined}
+            placeholder="Search…"
+            autoComplete="off"
+            spellCheck={false}
+            className="h-8 min-w-0 flex-1 bg-transparent text-[0.8125rem] outline-none placeholder:text-muted-foreground"
+          />
+        </div>
+        <div ref={list} id={id} role="listbox" aria-label={label} className="min-h-0 flex-1 overflow-y-auto p-1">
+          {shown.length === 0 ? <p className="px-2.5 py-2 text-xs text-muted-foreground">Nothing matches “{query}”.</p> : null}
+          {shown.map((option, index) => (
+            <div
+              key={option.value}
+              id={`${id}-${index}`}
+              role="option"
+              aria-selected={option.value === value}
+              data-index={index}
+              onPointerMove={() => setActive(index)}
+              onClick={() => pick(option)}
+              className={cn("flex cursor-default items-center gap-2 rounded-lg px-2.5 py-1.5 text-[0.8125rem] select-none", index === active && "bg-accent")}
+            >
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate">{option.label}</span>
+                {option.hint ? <span className="line-clamp-2 text-xs text-muted-foreground">{option.hint}</span> : null}
+              </span>
+              {option.value === value ? <Check aria-hidden="true" className="size-3.5 shrink-0 text-primary" /> : null}
+            </div>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }

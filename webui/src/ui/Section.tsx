@@ -5,8 +5,8 @@ import { Rule } from "./Frame"
 
 export function Section({ title, right, prominent, children }: { title: string; right?: string; prominent?: boolean; children: ReactNode }) {
   return (
-    <section className={cn("flex flex-col", prominent ? "gap-3" : "gap-2.5")}>
-      <h3 className={prominent ? "text-sm text-foreground" : "text-xs text-muted-foreground"}>
+    <section className={cn("flex min-w-0 flex-col", prominent ? "gap-4" : "workspace-section gap-3 rounded-xl border p-4 shadow-xs")}>
+      <h3 className="text-sm font-semibold text-foreground">
         <Rule title={title} right={right} className={prominent ? "[&>span:first-child]:font-semibold" : undefined} />
       </h3>
       {children}

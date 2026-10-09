@@ -19,6 +19,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { EffortMascot } from "@/ui/EffortMascot"
 import { EffortSlider, nearestSupported } from "@/ui/EffortSlider"
+import { FrameHeader, FramePanel, frameVariants } from "@/components/reui/frame"
 import { call } from "@/lib/api"
 import { useApiRead } from "@/app/useApiRead"
 import { Section } from "@/ui/Section"
@@ -261,25 +262,26 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
     if (kind !== "scout" && !levelsFor(models, model).includes(entry.thinking)) fields.thinking = levelOn(levelsFor(models, model), entry.thinking)
     set(fields)
   }
-  // The mascot acts out what the model really runs at (an unsupported level is clamped).
+  // Scouts have fixed effort; adjustable brains follow the slider's live preview.
   const effective = kind === "scout" ? FIXED_SCOUT_THINKING : levelOn(supported, entry.thinking)
   const hasInstructions = kind !== "scout" && kind !== "researcher"
   const [showNotes, setShowNotes] = useState(Boolean(entry.instructions))
   return (
-    <section className="glass flex min-w-0 flex-col gap-3 rounded-xl p-4">
-      <header className="flex items-baseline justify-between gap-3">
+    <section className={cn(frameVariants({ spacing: "default" }), "glass min-w-0")}>
+      <FrameHeader className="flex-row items-baseline justify-between gap-3 py-3">
         <h3 className="text-sm font-semibold">{name}</h3>
         <span className="truncate text-xs text-muted-foreground">
           {entry.model === INHERIT_MODEL ? "session model" : entry.model} · {kind === "scout" ? FIXED_SCOUT_THINKING : entry.thinking}
         </span>
-      </header>
+      </FrameHeader>
+      <FramePanel className="flex min-w-0 flex-col gap-3">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
         <Mini label={FIELD_LABELS.model}>
           <ModelChoice value={entry.model} models={models} label={`${name} model`} inherit={kind === "master"} onChange={chooseModel} />
         </Mini>
       </div>
       <div className="flex items-center gap-3 rounded-lg bg-muted p-3">
-        <EffortMascot level={effective} className="size-16" />
+        {kind === "scout" ? <EffortMascot level={effective} /> : null}
         <div className="min-w-0 flex-1">
           {kind === "scout" ? (
             <div className="grid gap-1">
@@ -323,6 +325,7 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
         ) : null}
       </div>
       {hasInstructions && showNotes ? <InstructionsField value={entry.instructions ?? ""} label={`${name} instructions`} onSave={(text) => set({ instructions: text })} /> : null}
+      </FramePanel>
     </section>
   )
 }

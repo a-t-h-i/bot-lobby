@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react"
 import { motion } from "motion/react"
 import { cn } from "@/lib/utils"
+import { EffortMascot } from "./EffortMascot"
 
 export interface EffortSliderProps {
   /** The saved level. */
@@ -141,7 +142,9 @@ export function EffortSlider({ value, levels, supported, model, label, disabled,
   }
 
   return (
-    <div className={cn("flex flex-col gap-1", disabled && "opacity-60")}>
+    <div className={cn("flex min-w-0 flex-col items-center gap-3 min-[360px]:flex-row", disabled && "opacity-60")}>
+      <EffortMascot level={level} />
+      <div className="flex w-full min-w-0 flex-1 flex-col gap-1">
       <div className="flex items-baseline justify-between gap-3">
         <span data-level={level} className="effort-word text-[0.8125rem] font-medium capitalize" aria-hidden="true">
           {level}
@@ -214,6 +217,7 @@ export function EffortSlider({ value, levels, supported, model, label, disabled,
           {value} is not supported by {model ?? "this model"}, so it runs at {level}.
         </p>
       ) : null}
+      </div>
     </div>
   )
 }

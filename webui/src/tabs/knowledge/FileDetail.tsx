@@ -177,7 +177,7 @@ export function FileDetail({ agent, file, onChanged }: { agent: KnowledgeAgentNa
       <Actions draft={draft} picked={picked} setDraft={setDraft} onEditFile={() => setFileOpen(true)} onDelete={remove} />
       <Header view={view} />
       {entries.length === 0 ? <p className="text-sm text-muted-foreground">Nothing here yet. Add the first entry below.</p> : null}
-      <ul className="flex flex-col gap-2">
+      <ul className="workspace-section flex flex-col gap-2 rounded-xl border p-3 shadow-xs">
         {entries.map((entry, index) => (
           <EntryRow
             key={`${index}-${entry.text}`}

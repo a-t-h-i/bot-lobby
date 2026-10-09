@@ -4,31 +4,43 @@
  * its status and a badge for the questions it waits on you for.
  */
 import { Spinner } from "@/components/ui/spinner"
+import { Badge } from "@/components/ui/badge"
+import { motion, useReducedMotion } from "motion/react"
 import { cn } from "@/lib/utils"
 import { Rule } from "@/ui/Frame"
-import { GROUP, ROW, ROWS } from "@/ui/rows"
+import { GROUP, ROW } from "@/ui/rows"
 import { WhereIcon } from "./WhereIcon"
 import { SECTION_OF, SECTION_ORDER, type Entry, type Where } from "./words"
 
 function Row({ entry, selected, onSelect }: { entry: Entry; selected: boolean; onSelect: (id: string) => void }) {
+  const reduce = useReducedMotion()
   return (
-    <li>
+    // Adapted from ObsidianUI Active Sessions; session actions still use the lobby API.
+    // https://github.com/Atharvsinh-codez/ObsidianUI/blob/main/src/components/block/active-sessions.tsx
+    <motion.li layout={reduce ? false : "position"} initial={false} data-slot="active-session" className="border-t border-border first:border-t-0">
       <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
         type="button"
         data-row
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(entry.id)}
-        className={cn(ROW, "flex-row items-start gap-2.5 text-sm")}
+        className={cn(ROW, "flex-row items-start gap-3 rounded-none px-4 py-3 text-sm focus-visible:ring-inset")}
       >
-        <WhereIcon where={entry.where} className="mt-0.5" />
-        <span className={cn("min-w-0 flex-1 break-words text-foreground", selected && "font-medium")}>{entry.name}</span>
-        <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+        <span aria-hidden="true" className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-foreground/4 text-foreground/75 shadow-[inset_0_0_0_1px_var(--border)]">
+          <WhereIcon where={entry.where} />
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className={cn("flex flex-wrap items-center gap-2 break-words text-foreground", selected && "font-medium")}>
+            {entry.name}
+            {entry.where === "this window" ? <Badge variant="secondary" radius="full" size="sm">This window</Badge> : null}
+          </span>
+        <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           {entry.status === "working" || entry.status === "starting" ? <Spinner className="size-3" aria-hidden="true" /> : null}
           {entry.status.replace(/_/g, " ")}
-          {entry.waiting > 0 ? <span className="rounded-md bg-warning/15 px-1.5 py-0.5 font-medium text-warning tabular-nums">{entry.waiting}</span> : null}
+          {entry.waiting > 0 ? <Badge variant="warning-light" radius="full" className="text-warning tabular-nums">{entry.waiting} waiting</Badge> : null}
+        </span>
         </span>
       </button>
-    </li>
+    </motion.li>
   )
 }
 
@@ -38,7 +50,7 @@ function Group({ where, entries, selectedId, onSelect }: { where: Where; entries
       <h3 className={GROUP}>
         <Rule title={SECTION_OF[where]} right={String(entries.length)} className="[&>span:first-child]:font-medium [&>span:first-child]:text-muted-foreground" />
       </h3>
-      <ul className={ROWS}>
+      <ul className="workspace-section mx-3 mb-2 flex flex-col overflow-hidden rounded-xl border shadow-xs">
         {entries.map((entry) => (
           <Row key={entry.id} entry={entry} selected={entry.id === selectedId} onSelect={onSelect} />
         ))}

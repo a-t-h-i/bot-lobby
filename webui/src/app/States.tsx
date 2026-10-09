@@ -6,6 +6,7 @@ import { RotateCw, TriangleAlert, WifiOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { Spinner } from "@/components/ui/spinner"
+import { Alert, AlertAction, AlertDescription } from "@/components/reui/alert"
 
 /** First paint, before the first answer lands. */
 export function LoadingState({ label = "Connecting…" }: { label?: string }) {
@@ -41,17 +42,19 @@ export function ErrorState({ message, onRetry }: { message?: string; onRetry?: (
 /** A dropped stream (pi stopped or restarting); data stays on screen, the banner offers a manual retry. */
 export function ReconnectingState({ onRetry }: { onRetry?: () => void }) {
   return (
-    <div
+    <Alert variant="destructive"
       role="status"
-      className="mx-3 mb-1 flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive max-sm:mx-2"
+      className="mx-3 mb-1 w-auto max-sm:mx-2"
     >
       <WifiOff className="size-4" aria-hidden="true" />
-      <span>Lost pi — reconnecting every 2 s. Your planning session and tasks carry on when it is back.</span>
+      <AlertDescription>Lost pi — reconnecting every 2 s. Your planning session and tasks carry on when it is back.</AlertDescription>
       {onRetry ? (
+        <AlertAction>
         <Button variant="link" className="h-8 px-1 text-destructive" onClick={onRetry}>
           Retry now
         </Button>
+        </AlertAction>
       ) : null}
-    </div>
+    </Alert>
   )
 }

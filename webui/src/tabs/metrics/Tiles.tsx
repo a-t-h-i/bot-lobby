@@ -12,7 +12,7 @@ const DOT = { healthy: "bg-success", shaky: "bg-warning", failing: "bg-destructi
 
 function Stat({ label, value, sub, dot }: { label: string; value: string; sub: string; dot?: { tone: keyof typeof DOT; word: string } }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 bg-card px-4 py-3.5">
+    <div className="workspace-section flex min-w-0 flex-col gap-1 rounded-xl border px-4 py-4 shadow-xs">
       <span className="text-xs text-muted-foreground">{label}</span>
       <span className="flex items-center gap-2 text-2xl leading-tight font-semibold tracking-tight tabular-nums">
         {dot ? (
@@ -33,7 +33,7 @@ export function Tiles({ tiles }: { tiles: Tiles }) {
   const state = status(rate)
   const failures = tiles.runs - tiles.successes
   return (
-    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border shadow-card sm:grid-cols-5 [&>:last-child]:col-span-2 sm:[&>:last-child]:col-span-1">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-5 [&>:last-child]:col-span-2 sm:[&>:last-child]:col-span-1">
       <Stat label="Runs" value={String(tiles.runs)} sub={tiles.runs === 0 ? "no runs yet" : ""} />
       <Stat
         label="Success"

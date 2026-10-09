@@ -14,6 +14,7 @@ import { Keys } from "@/components/ui/kbd"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { isHotkey, useHotkey } from "@/lib/hotkeys"
 import { cn } from "@/lib/utils"
+import "@/components/obsidian/discover-button.css"
 
 type Tone = "neutral" | "primary" | "danger"
 
@@ -46,11 +47,21 @@ export function ActionButton({ label, icon: Icon, tone = "neutral", shortcut, hr
 
   const icon = <Icon aria-hidden="true" />
   // A worded action stands raised on the page; an icon-only tool rises when pointed at.
-  const variant = tone === "primary" ? "default" : iconOnly ? "ghost" : "outline"
-  const look = cn(!iconOnly && "px-2.5", TONES[tone], className)
+  const discover = tone === "primary" && !iconOnly
+  const variant = iconOnly ? (tone === "primary" ? "default" : "ghost") : "outline"
+  const look = cn(!iconOnly && "px-2.5", discover && "obsidian-discover-button", TONES[tone], className)
   const size = iconOnly ? "icon" : "default"
   const body = iconOnly ? (
     icon
+  ) : discover ? (
+    <>
+      <span className="obsidian-discover-button__fill" aria-hidden="true" />
+      <span className="obsidian-discover-button__icon">{icon}</span>
+      <span className="obsidian-discover-button__text">
+        {text ?? label}
+        {shortcut ? <Keys chord={shortcut} className="kbd-hint ml-1" /> : null}
+      </span>
+    </>
   ) : (
     <>
       {icon}

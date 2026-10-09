@@ -12,7 +12,8 @@ import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { ensureProjectStructure } from "../src/state/persistence.ts";
+import { ensureProjectStructure, saveTask } from "../src/state/persistence.ts";
+import { createTask, type Task } from "../src/schemas/task.ts";
 import { appendMetrics } from "../src/state/metrics.ts";
 import { createLobbyService } from "../src/lobby/service.ts";
 import { QuickFixQueue } from "../src/lobby/quickfix.ts";
@@ -73,10 +74,11 @@ const RECORDS = [
   { id: "c1", kind: "classifier", agent: "JEV", status: "success", startedAt: "2026-10-01T00:00:00.000Z", durationMs: 400, purpose: "triage", saved: 1 },
 ] as Parameters<typeof appendMetrics>[2];
 
-async function setup() {
+async function setup(records = RECORDS, tasks: Task[] = []) {
   const root = mkdtempSync(join(tmpdir(), "bl-metrics-root-"));
   ensureProjectStructure(root, ".pi");
-  appendMetrics(root, ".pi", RECORDS);
+  appendMetrics(root, ".pi", records);
+  for (const task of tasks) saveTask(root, ".pi", task);
   const ctx = {
     cwd: root,
     ui: { notify() {} },
@@ -137,6 +139,73 @@ test("metrics.get splits by model-kind and narrows with the query", async () => 
   } finally {
     await close();
   }
+});
+
+test("metrics.get filters inclusive calendar dates in the caller's time zone and aggregates daily totals", async () => {
+  const { call, close } = await setup([
+    { ...RECORDS[0]!, startedAt: "2026-10-01T06:59:59Z" },
+    { ...RECORDS[1]!, startedAt: "2026-10-01T07:00:00Z" },
+    { ...RECORDS[2]!, startedAt: "2026-10-02T06:59:59Z" },
+    { ...RECORDS[0]!, id: "after", startedAt: "2026-10-02T07:00:00Z" },
+    { ...RECORDS[3]!, startedAt: "2026-10-01T06:59:59Z" },
+  ]);
+  try {
+    const answer = await call("metrics.get", { groupBy: "model", from: "2026-10-01", to: "2026-10-01", timeZone: "America/Los_Angeles" });
+    assert.equal(answer.status, 200, answer.body);
+    const result = answer.payload.result!;
+    const tiles = result.tiles as Record<string, number>;
+    assert.equal(tiles.runs, 2);
+    assert.equal(tiles.successes, 1);
+    assert.equal(tiles.avgMs, 45_000);
+    assert.equal(tiles.cost, 0.03);
+    assert.equal(result.classifier, undefined, "classifier outside the period is excluded");
+    assert.deepEqual(result.daily, [{ date: "2026-10-01", runs: 2, successes: 1, cost: 0.03 }]);
+    assert.deepEqual((result.timeShare as { byAgent: Array<{ agent: string }> }).byAgent.map((entry) => entry.agent), ["DEV", "QUICK FIX"]);
+    assert.equal((result.groups as unknown[]).length, 2);
+    const searched = await call("metrics.get", { groupBy: "model", from: "2026-10-01", to: "2026-10-03", query: "dev", timeZone: "America/Los_Angeles" });
+    assert.deepEqual(searched.payload.result!.daily, [{ date: "2026-10-01", runs: 1, successes: 1, cost: 0.02 }, { date: "2026-10-03", runs: 0, successes: 0, cost: 0 }]);
+  } finally { await close(); }
+});
+
+test("metrics.get rejects invalid, incomplete or reversed ranges and unknown time zones", async () => {
+  const { call, close } = await setup();
+  try {
+    for (const range of [
+      { from: "2026-10-01" }, { to: "2026-10-01" },
+      { from: "2026-02-30", to: "2026-03-01" },
+      { from: "2026-10-02", to: "2026-10-01" },
+      { from: "2026-10-01T00:00:00Z", to: "2026-10-02" },
+      { timeZone: "Mars/Olympus" },
+    ]) {
+      const answer = await call("metrics.get", { groupBy: "model", ...range });
+      assert.equal(answer.status, 400, JSON.stringify(range));
+      assert.equal(answer.payload.code, "bad_request");
+    }
+    const empty = await call("metrics.get", { groupBy: "model", from: "2026-11-01", to: "2026-11-07" });
+    assert.equal((empty.payload.result!.tiles as { runs: number }).runs, 0);
+    assert.deepEqual(empty.payload.result!.daily, [{ date: "2026-11-01", runs: 0, successes: 0, cost: 0 }, { date: "2026-11-07", runs: 0, successes: 0, cost: 0 }]);
+  } finally { await close(); }
+});
+
+test("metrics.get counts task completion in the period and attributes its model across earlier runs", async () => {
+  const done = createTask("T-1", "Finished", "2026-09-30T12:00:00Z");
+  done.state = "completed";
+  done.updatedAt = "2026-10-02T12:00:00Z";
+  const earlier = createTask("T-earlier", "Earlier", "2026-09-29T12:00:00Z");
+  earlier.state = "completed";
+  earlier.updatedAt = "2026-10-01T12:00:00Z";
+  const active = createTask("T-active", "Active", "2026-10-02T12:00:00Z");
+  const oldActive = createTask("T-old-active", "Older", "2026-09-29T12:00:00Z");
+  const { call, close } = await setup(RECORDS, [done, earlier, active, oldActive]);
+  try {
+    const answer = await call("metrics.get", { groupBy: "model", from: "2026-10-02", to: "2026-10-02" });
+    assert.equal(answer.status, 200, answer.body);
+    const result = answer.payload.result!;
+    assert.equal((result.tiles as { runs: number }).runs, 0);
+    assert.equal((result.tiles as { completed: number }).completed, 1);
+    assert.equal((result.tiles as { active: number }).active, 1);
+    assert.deepEqual((result.timeShare as { taskTimes: unknown[] }).taskTimes, [{ model: "alpha", thinking: "low", tasks: 1, avgMs: 172_800_000 }]);
+  } finally { await close(); }
 });
 
 test("every scenario's mock answers metrics.get without throwing", async () => {

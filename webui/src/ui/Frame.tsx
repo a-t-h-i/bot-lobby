@@ -22,7 +22,7 @@ interface FrameProps extends Omit<React.ComponentProps<"section">, "title"> {
 export function Frame({ title, note, className, children, collapsed, onToggle, shortcut, ...props }: FrameProps) {
   const name = typeof title === "string" ? title : "pane"
   return (
-    <section className={cn("group/frame relative flex min-h-0 min-w-0 flex-col", collapsed && "flex-none", className)} {...props}>
+    <section className={cn("workspace-frame group/frame relative flex min-h-0 min-w-0 flex-col rounded-xl border shadow-xs", collapsed && "flex-none", className)} {...props}>
       {title || note || onToggle ? (
         <div className={cn("flex min-h-12 shrink-0 items-center justify-between gap-3 px-4", !collapsed && "border-b border-border")}>
           {title ? <h2 className="min-w-0 truncate text-sm font-medium">{title}</h2> : <span />}

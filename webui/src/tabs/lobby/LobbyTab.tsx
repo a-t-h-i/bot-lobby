@@ -70,7 +70,7 @@ function MainPanes(props: LobbyViewProps) {
   if (!panes.conversation && !activity) return null
   const both = panes.conversation && activity
   return (
-    <div className={cn("grid min-h-0 flex-1", both ? "grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] divide-x divide-border" : "grid-cols-1")}>
+    <div className={cn("grid min-h-0 flex-1 gap-3 p-3", both ? "grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]" : "grid-cols-1")}>
       {panes.conversation ? <Conversation chat={data?.chat ?? []} reply={data?.reply} busy={status?.busy ?? false} hasOlder={data?.hasOlderChat ?? false} hasTask={Boolean(data?.task)} /> : null}
       {activity ? <ActivityLog entries={data?.activity ?? []} collapsed={false} onToggle={toggleActivity} shortcut={keyOf(status, "activity")} /> : null}
     </div>

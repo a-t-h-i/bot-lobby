@@ -109,7 +109,7 @@ function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) 
 function ConversationPane({ snap, wide }: { snap: PlannerSnapshot; wide: boolean }) {
   const { ref, onScroll } = useStickToBottom(JSON.stringify(snap.messages))
   return (
-    <Pane className="flex flex-col">
+    <Pane className="workspace-pane flex flex-col rounded-xl border shadow-xs">
       <h2 className="flex min-h-12 shrink-0 items-center border-b border-border px-4 text-sm font-medium">
         <Rule title="Conversation" className="w-full" />
       </h2>
@@ -122,7 +122,7 @@ function ConversationPane({ snap, wide }: { snap: PlannerSnapshot; wide: boolean
 
 function DraftPane({ snap, comments, onComment, wide }: { snap: PlannerSnapshot; comments: Comments; onComment: (line: string) => void; wide: boolean }) {
   return (
-    <Pane className="flex flex-col">
+    <Pane className="workspace-pane flex flex-col rounded-xl border shadow-xs">
       <h2 className="flex min-h-12 shrink-0 items-center border-b border-border px-4 text-sm font-medium">
         <Rule title="Draft plan" className="w-full" />
       </h2>
@@ -140,8 +140,8 @@ function Session({ snap, reload }: { snap: PlannerSnapshot; reload: () => void }
   const [comments, setComments] = useState<Comments>(new Map())
   const remember = (at: string, text: string) => setComments((now) => new Map(now).set(at, [...(now.get(at) ?? []), text]))
   const grid = wide
-    ? "grid min-h-0 flex-1 grid-cols-[minmax(0,46fr)_minmax(0,54fr)] grid-rows-[minmax(0,1fr)] divide-x divide-border"
-    : "flex flex-col divide-y divide-border"
+    ? "grid min-h-0 flex-1 grid-cols-[minmax(0,46fr)_minmax(0,54fr)] grid-rows-[minmax(0,1fr)] gap-3 p-3"
+    : "flex flex-col gap-3 p-3"
   return (
     <>
       <PlanHeader snap={snap} onDone={reload} />
