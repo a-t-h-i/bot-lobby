@@ -8,6 +8,7 @@ import type { AgentRun } from "../schemas/findings.ts";
  */
 import { loadPrompt } from "../prompts/loader.ts";
 import { runPiAgent, spawnPiProcess, type PiStreamEvent, type ProcessRunner } from "../execution/pi-runner.ts";
+import { MAX_CHILDREN } from "../execution/delegation.ts";
 import { grantOption } from "../excalidraw/sessions.ts";
 import { describeToolCall } from "../pi/activity.ts";
 import { appendMetrics, type MetricRecord } from "../state/metrics.ts";
@@ -298,7 +299,7 @@ export class QuickFixQueue {
     this.edits.set(job.id, new EditLog(this.deps.cwd));
     try {
       const [likely, route] = await Promise.all([this.likely(job.prompt, controller.signal), this.route(job.prompt, profile, controller.signal)]);
-      const quota = { used: 0 };
+      const quota = { used: MAX_CHILDREN };
       const attempt = (model: string | undefined, thinking: string) => runPiAgent(
         {
           cwd: this.deps.cwd,
