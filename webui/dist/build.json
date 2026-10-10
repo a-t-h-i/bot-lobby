@@ -1,6 +1,6 @@
 {
-  "hash": "dba1a47fcbf0eed0b156580344dc1a5d0cfbb119ecaa052117e324219359a6ad",
-  "builtAt": "2026-10-10T00:31:41.693Z",
+  "hash": "92ecb791ea299250f5f79f411e52f42f004bbda9f16dcea6cda435e548ae8f32",
+  "builtAt": "2026-10-10T09:15:53.639Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -452,7 +452,7 @@
     },
     {
       "path": "webui/src/tabs/lobby/TaskHeader.tsx",
-      "sha256": "a8cc1051a1cb42d1a7b9c25114c45e06166ccf0a40f31496d0b638e6dfcb14c6"
+      "sha256": "d8a2fe363d0a620926a5c9633fe96499d2c46d5559f6422e2a9814e79d53a9f0"
     },
     {
       "path": "webui/src/tabs/lobby/Thoughts.tsx",
@@ -612,7 +612,7 @@
     },
     {
       "path": "webui/src/tabs/tasks/DetailSections.tsx",
-      "sha256": "35f3a501177c9c3df4fa1fa04a8fe18ae7134fe7a046b9b4ba239c2812806198"
+      "sha256": "77409b92a508131d111b5d821ca7a66e17d3c117d6412589d4437bfe2f749c52"
     },
     {
       "path": "webui/src/tabs/tasks/OpenInSession.tsx",
