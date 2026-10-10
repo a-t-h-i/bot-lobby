@@ -180,7 +180,7 @@ test("quick fixes run one at a time with full tools and land in metrics", async 
   assert.equal(second.status, "success");
   assert.equal(seen.length, 2);
   const args = seen[0]!.args;
-  assert.equal(args[args.indexOf("--tools") + 1], QUICK_FIX_TOOLS.join(","));
+  assert.equal(args[args.indexOf("--tools") + 1], [...QUICK_FIX_TOOLS, "codemode", "tool_search", "delegate_subtasks", "claim_file", "handover_file", "my_files", "wait_for_files"].join(","));
   assert.equal(args[args.indexOf("--model") + 1], "p/fast");
   assert.equal(args[args.indexOf("--thinking") + 1], "low");
   assert.equal(seen[0]!.options.prompt, "Task: rename foo to bar\nin a.ts");
@@ -306,8 +306,8 @@ test("a panel round asks every seat on its own model, then lets the oracle fold 
   assert.deepEqual(seen.map((call) => call.who), ["DEV", "QA", "RESEARCH", "ORACLE"], "seats first, then the oracle");
   const arg = (call: { args: string[] }, flag: string) => call.args[call.args.indexOf(flag) + 1];
   assert.deepEqual(seen.map((call) => arg(call, "--model")), ["p/dev", "p/qa", "p/research", "p/oracle"], "every seat runs on its own model");
-  assert.equal(arg(seen[0]!, "--tools"), PLANNER_TOOLS.join(","));
-  assert.equal(arg(seen[2]!, "--tools"), RESEARCH_PANEL_TOOLS.join(","), "RESEARCH may use the web tools");
+  assert.equal(arg(seen[0]!, "--tools"), [...PLANNER_TOOLS, "codemode", "tool_search", "delegate_subtasks"].join(","));
+  assert.equal(arg(seen[2]!, "--tools"), [...RESEARCH_PANEL_TOOLS, "codemode", "tool_search", "delegate_subtasks"].join(","), "RESEARCH may use the web tools");
   assert.match(seen[3]!.prompt, /### DEV — OPEN\nQuestions for the user:\n- REST or RPC\?\nNotes:\n- routes live in src\/api/);
   assert.match(seen[3]!.prompt, /### QA — READY/);
   assert.deepEqual(session.questions, [

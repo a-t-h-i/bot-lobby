@@ -1,3 +1,7 @@
+import type { AgentRun } from "../schemas/findings.ts";
+import type { Domain, Role } from "../schemas/agent.ts";
+import { delegationHost } from "./delegation.ts";
+import { fileURLToPath } from "node:url";
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -6,7 +10,7 @@ import { activityWord } from "../pi/activity.ts";
 import { shortDuration } from "../text.ts";
 import { readRelayRequest } from "../ask/relay.ts";
 import type { AskQuestion, AskResult } from "../ask/types.ts";
-import { grantEnv, grantNote, toolsOf, type Grant } from "../excalidraw/sessions.ts";
+import { grantEnv, grantNote, type Grant } from "../excalidraw/sessions.ts";
 
 /** Live control over one running subagent: queue a steering message for its next turn. */
 export interface RunHandle {
@@ -20,6 +24,10 @@ export interface RunHandle {
 export type RelayAsk = (questions: AskQuestion[], signal: AbortSignal) => Promise<AskResult>;
 
 export interface PiRunOptions {
+  agent?: { runId: string; taskId: string; domain: Domain; role: Role; depth?: number };
+  mcpTools?: string[];
+  delegationQuota?: { used: number };
+  onChildRun?: (run: AgentRun) => void;
   cwd: string;
   task: string;
   systemPrompt?: string;
@@ -96,6 +104,7 @@ export type PiStreamEvent =
   | { type: "retry"; attempt: number; maxAttempts: number; delayMs: number; error: string }
   | { type: "retry_end"; success: boolean }
   | { type: "compaction" }
+  | { type: "compaction_end"; error?: string }
   | { type: "usage"; input: number; output: number; cost: number; model?: string }
   | { type: "wrap_up" }
   /** Its allotted time is up: it was asked to stop and report where it left off. */
@@ -139,6 +148,7 @@ export type ProcessRunner = (
 ) => Promise<ProcessOutcome>;
 
 export interface PiRunResult {
+  children?: AgentRun[];
   status: "success" | "failed" | "cancelled" | "timeout";
   output: string;
   error?: string;
@@ -186,6 +196,7 @@ export interface ControlEvent {
   /** extension_ui_request: the dialog's title and (editor) prefilled text. */
   title?: string;
   prefill?: string;
+  message?: string;
 }
 
 /** Buffers one JSON-mode stream, keeping only lines parsePiStream consumes. */
@@ -203,6 +214,7 @@ const INTERESTING = [
   '"turn_start"',
   '"auto_retry_',
   '"compaction_start"',
+  '"compaction_end"',
   '"agent_settled"',
   '"agent_end"',
   '"extension_ui_request"',
@@ -241,6 +253,8 @@ function streamEvent(event: RawEvent): PiStreamEvent | undefined {
       return { type: "retry_end", success: event.success === true };
     case "compaction_start":
       return { type: "compaction" };
+    case "compaction_end":
+      return { type: "compaction_end", ...(typeof event.errorMessage === "string" ? { error: event.errorMessage } : {}) };
     case "message_end": {
       const message = event.message;
       if (message?.role !== "assistant") return undefined;
@@ -345,7 +359,7 @@ export function finishedThought(line: string): string | undefined {
 
 /** Build the `pi` argv for one isolated, headless RPC agent run; the task goes over stdin. */
 export function buildPiArgs(options: Omit<PiRunOptions, "task"> & { systemPromptFile?: string }): string[] {
-  const args = ["--mode", "rpc", "--no-session", "--no-prompt-templates", "--no-themes"];
+  const args = ["--mode", "rpc", "--no-session", "--no-prompt-templates", "--no-themes", "--extension", fileURLToPath(new URL("../index.ts", import.meta.url))];
   if (options.model && options.model !== "inherit") args.push("--model", options.model);
   if (options.thinking) args.push("--thinking", options.thinking);
   if (options.tools && options.tools.length > 0) args.push("--tools", options.tools.join(","));
@@ -608,6 +622,11 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
         });
     };
     const onControl = (event: ControlEvent) => {
+      if (event.type === "extension_ui_request" && event.method === "notify") {
+        if (event.message === "Compacting agent context") options.onEvent?.({ type: "compaction" });
+        else if (event.message === "Agent context compacted") options.onEvent?.({ type: "compaction_end" });
+        else if (event.message?.startsWith("Context compaction failed:")) options.onEvent?.({ type: "compaction_end", error: event.message });
+      }
       const relayed = event.type === "extension_ui_request" && event.method === "editor" && options.onAsk ? readRelayRequest(event.title, event.prefill) : undefined;
       if (event.type === "response" && event.command === "prompt" && event.success === false) {
         state.protocolError = event.error ?? "the prompt was rejected";
@@ -744,31 +763,38 @@ function writePromptFile(prompt: string): { file: string; cleanup: () => void } 
 
 /** Run one isolated subagent and normalise its outcome. */
 export async function runPiAgent(options: PiRunOptions, run: ProcessRunner = spawnPiProcess): Promise<PiRunResult> {
-  const prompt = options.systemPrompt ? writePromptFile(options.systemPrompt) : undefined;
+  const host = await delegationHost(options, run);
+  let prompt: ReturnType<typeof writePromptFile> | undefined;
   const grant = options.excalidraw;
-  // An agent with an allowlist gets the Excalidraw tools added to it; one without is not restricted, so already has them.
-  const tools = grant && options.tools ? [...new Set([...options.tools, ...toolsOf(grant)])] : options.tools;
   try {
-    const args = buildPiArgs({ ...options, ...(tools ? { tools } : {}), systemPromptFile: prompt?.file });
+    prompt = writePromptFile([options.systemPrompt, host.note].filter(Boolean).join("\n\n"));
+    if (options.signal?.aborted) return { status: "cancelled", output: "", usage: { input: 0, output: 0, cost: 0, turns: 0 } };
+    const args = buildPiArgs({ ...options, tools: host.tools, systemPromptFile: prompt.file });
     const outcome = await run(args, {
       cwd: options.cwd,
       signal: options.signal,
       timeoutMs: options.timeoutMs,
       prompt: `Task: ${options.task}${grant ? `\n\n${grantNote(grant)}` : ""}`,
-      env: grant ? { ...options.env, ...grantEnv(grant) } : options.env,
+      env: grant ? { ...host.env, ...grantEnv(grant) } : host.env,
       stallTimeoutMs: options.stallTimeoutMs,
       toolStallTimeoutMs: options.toolStallTimeoutMs,
       wrapUpAtMs: options.wrapUpAtMs,
       ...(options.time ? { time: options.time } : {}),
       ...(options.onAsk ? { onAsk: options.onAsk } : {}),
-      onStart: options.onStart,
+      onStart: host.onStart,
       onEvent: (event) => {
+        if (event.type === "asking") host.pause?.();
+        if (event.type === "answered") host.extend?.(event.waitedMs);
+        if (event.type === "extended") host.extend?.(event.ms, true);
         if (event.type === "tool_execution_start") options.onActivity?.(activityWord(event.toolName));
         options.onEvent?.(event);
       },
     });
-    return toResult(parsePiStream(outcome.stdout), outcome, options.signal?.aborted === true, options);
+    const result = toResult(parsePiStream(outcome.stdout), outcome, options.signal?.aborted === true, options);
+    await host.close();
+    return host.children.length ? { ...result, children: host.children } : result;
   } finally {
     prompt?.cleanup();
+    await host.close();
   }
 }

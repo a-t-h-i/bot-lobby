@@ -332,13 +332,15 @@ test("tasks.get marks the steps a worker is on with their time, keeps the plan's
       work.workedMs = 600_000;
       work.runningSince = new Date(Date.now() - 30_000).toISOString();
       work.active = [{ runId: "r1", instruction: "Step 2: show it", startedAt }];
+      for (let index = 0; index < 5; index++) work.active.push({ runId: `child-${index}`, parentRunId: "r1", instruction: "A separate part", startedAt });
     });
     const got = await call("tasks.get", { taskId: "TASK-timed" });
     assert.equal(got.status, 200, got.body);
-    const detail = got.payload.result as { steps: Array<{ text: string; status: string; active?: boolean; workedMs?: number }>; work: { workedMs: number; running: boolean }; planDetails: string };
+    const detail = got.payload.result as { steps: Array<{ text: string; status: string; active?: boolean; workedMs?: number; activeAgentCount?: number }>; work: { workedMs: number; running: boolean }; planDetails: string };
     assert.deepEqual(detail.steps.map((step) => [step.text, step.status, Boolean(step.active)]), [["Add the clock", "done", false], ["Show it", "current", true]]);
     assert.ok(detail.steps[1]!.workedMs! >= 89_000 && detail.steps[1]!.workedMs! < 100_000, `step time ${detail.steps[1]!.workedMs}`);
     assert.equal(detail.steps[0]!.workedMs, undefined, "only steps under way carry a time");
+    assert.equal(detail.steps[1]!.activeAgentCount, 6, "the HTTP response includes the parent and its five active children");
     assert.equal(detail.work.running, true);
     assert.ok(detail.work.workedMs >= 629_000 && detail.work.workedMs < 640_000, `worked ${detail.work.workedMs}`);
     assert.equal(detail.planDetails, "## Details\n### Step 1: Add the clock\nIn `src/state/budget.ts`.");

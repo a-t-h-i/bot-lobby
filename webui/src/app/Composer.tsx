@@ -339,7 +339,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
       <div className="pointer-events-auto mx-auto w-full max-w-3xl">
         <div
           className={cn(
-            "group/composer relative rounded-2xl border border-dock-border bg-dock shadow-dock backdrop-blur-xl backdrop-saturate-150 transition-[border-color,box-shadow] duration-300 ease-snap focus-within:border-ring/45 focus-within:shadow-dock-focus",
+            "group/composer relative rounded-2xl border border-dock-border bg-dock shadow-dock transition-[border-color,box-shadow] duration-300 ease-snap focus-within:border-ring focus-within:shadow-dock-focus",
             dragging && "border-primary shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_30%,transparent)]"
           )}
           onDragOver={(event) => {
@@ -435,7 +435,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
                     onClick={() => setChosen(entry.id)}
                     className={cn(
                       "h-6 rounded-md border border-transparent px-2.5 text-xs font-medium transition-[background-color,color,box-shadow] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
-                      entry.id === target.id ? "btn-raised bg-card text-foreground" : "text-muted-foreground hover:text-foreground"
+                      entry.id === target.id ? "btn-raised btn-soft bg-card text-foreground" : "btn-ghost text-muted-foreground hover:text-foreground"
                     )}
                   >
                     {entry.pill}

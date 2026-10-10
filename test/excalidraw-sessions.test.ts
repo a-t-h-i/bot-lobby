@@ -165,18 +165,18 @@ test("the grant of a process's book decides which runs get the tools, the room l
     };
     // A run with an allowlist gets the tools added to it.
     await runPiAgent({ cwd: "/p", task: "fix it", timeoutMs: 1000, tools: ["read", "edit"], env: { KEEP: "1" }, ...grantOption("quickfix") }, capture);
-    assert.equal(seen!.args[seen!.args.indexOf("--tools") + 1], "read,edit,excalidraw_read,excalidraw_draw");
+    assert.equal(seen!.args[seen!.args.indexOf("--tools") + 1], "read,edit,excalidraw_read,excalidraw_draw,codemode,tool_search,delegate_subtasks,claim_file,handover_file,my_files,wait_for_files");
     assert.equal(seen!.env!.KEEP, "1");
     assert.deepEqual(readGrant(seen!.env), excalidrawGrant("quickfix"), "the room links travel in the environment");
     assert.match(seen!.prompt!, /^Task: fix it\n\nShared Excalidraw whiteboard assigned to you: "Board"\./);
     // A run without a grant is untouched.
     await runPiAgent({ cwd: "/p", task: "fix it", timeoutMs: 1000, tools: ["read"], ...grantOption("qa") }, capture);
-    assert.equal(seen!.args[seen!.args.indexOf("--tools") + 1], "read");
-    assert.equal(seen!.env, undefined);
+    assert.equal(seen!.args[seen!.args.indexOf("--tools") + 1], "read,codemode,tool_search,delegate_subtasks");
+    assert.ok(seen!.env!.BOT_LOBBY_AGENT_POLICY);
     assert.equal(seen!.prompt, "Task: fix it");
-    // With no allowlist an agent already has every tool, so none is added.
+    // Without an allowlist the standard built-ins are retained.
     await runPiAgent({ cwd: "/p", task: "x", timeoutMs: 1000, ...grantOption("quickfix") }, capture);
-    assert.ok(!seen!.args.includes("--tools"));
+    assert.equal(seen!.args[seen!.args.indexOf("--tools") + 1], "read,bash,edit,write,grep,find,ls,excalidraw_read,excalidraw_draw,codemode,tool_search,delegate_subtasks,claim_file,handover_file,my_files,wait_for_files");
   } finally {
     bindExcalidraw(undefined);
   }
@@ -199,9 +199,9 @@ test("workflow agents get the tools by their role or domain, and only when a ses
     await runAgent(base, capture);
     await runAgent({ ...base, domain: "backend", role: "worker" }, capture);
     await runAgent({ ...base, domain: "designer", role: "worker" }, capture);
-    assert.equal(tools[0], "read,grep,find,ls,excalidraw_read", "a scout of any domain is a scout; look-only, so no drawing");
-    assert.equal(tools[1], "read,bash,edit,write,grep,find,ls", "the backend worker has no session");
-    assert.equal(tools[2], "read,bash,edit,write,grep,find,ls,excalidraw_read", "the designer's worker has the look-only one");
+    assert.equal(tools[0], "read,grep,find,ls,excalidraw_read,codemode,tool_search,delegate_subtasks", "a scout of any domain is a scout; look-only, so no drawing");
+    assert.equal(tools[1], "read,bash,edit,write,grep,find,ls,codemode,tool_search,delegate_subtasks,claim_file,handover_file,my_files,wait_for_files", "the backend worker has no session");
+    assert.equal(tools[2], "read,bash,edit,write,grep,find,ls,excalidraw_read,codemode,tool_search,delegate_subtasks,claim_file,handover_file,my_files,wait_for_files", "the designer's worker has the look-only one");
   } finally {
     bindExcalidraw(undefined);
   }

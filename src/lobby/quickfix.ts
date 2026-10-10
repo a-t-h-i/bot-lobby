@@ -1,3 +1,4 @@
+import type { AgentRun } from "../schemas/findings.ts";
 /**
  * Quick fixes: a direct prompt from the lobby goes straight to one coding
  * subagent — no scouting, proposal, plan or QA gate — while any bot-lobby task
@@ -38,6 +39,7 @@ export interface QuickFixStep {
 }
 
 export interface QuickFixJob {
+  children?: AgentRun[];
   id: string;
   prompt: string;
   status: QuickFixStatus;
@@ -83,6 +85,7 @@ export interface QuickFixProfile {
   thinking: string;
   timeoutMs: number;
   instructions?: string;
+  mcpTools?: string[];
   /** Where the job goes when its model runs out of usage or is unavailable. */
 }
 
@@ -295,6 +298,7 @@ export class QuickFixQueue {
     this.edits.set(job.id, new EditLog(this.deps.cwd));
     try {
       const [likely, route] = await Promise.all([this.likely(job.prompt, controller.signal), this.route(job.prompt, profile, controller.signal)]);
+      const quota = { used: 0 };
       const attempt = (model: string | undefined, thinking: string) => runPiAgent(
         {
           cwd: this.deps.cwd,
@@ -304,6 +308,18 @@ export class QuickFixQueue {
           ...grantOption("quickfix"),
           model,
           thinking,
+          mcpTools: profile.mcpTools,
+          delegationQuota: quota,
+          agent: { runId: job.id, taskId: job.id, domain: "backend", role: "worker" },
+          onChildRun: (child) => {
+            const edits = this.edits.get(job.id);
+            for (const path of child.edited ?? []) edits?.note("edit", { path });
+            if (edits) job.files = edits.shown();
+            job.children = [...(job.children ?? []).filter((entry) => entry.runId !== child.runId), child];
+            this.deps.feed?.step(QUICK_FIX_SOURCE, `child ${child.runId.slice(0, 8)}: ${child.step ?? child.status}`, child.runId);
+            if (child.status !== "running") this.deps.feed?.end(child.runId, child.status !== "success");
+            this.changed();
+          },
           timeoutMs: profile.timeoutMs,
           signal: controller.signal,
           stallTimeoutMs: this.deps.stallTimeoutMs,

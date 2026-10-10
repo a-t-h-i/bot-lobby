@@ -133,7 +133,7 @@ test("the reviewer is a read-only agent given the pull request, its diff and the
   assert.equal(review.status, "done");
   assert.equal(seen.length, 1);
   const call = seen[0]!;
-  assert.equal(call.args[call.args.indexOf("--tools") + 1], REVIEW_TOOLS.join(","), "it can read the repository but never change it");
+  assert.equal(call.args[call.args.indexOf("--tools") + 1], [...REVIEW_TOOLS, "codemode", "tool_search", "delegate_subtasks"].join(","), "it can read the repository but never change it");
   assert.equal(call.args[call.args.indexOf("--model") + 1], "p/qa");
   assert.equal(call.cwd, root);
   assert.match(call.prompt, /Review pull request #12 — Fix the table font\nby ana · fix\/table-font → main · \+12 −3 in 2 files · checks pending/);

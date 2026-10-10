@@ -77,6 +77,10 @@ export const MAX_WORKER_RECORDS = 64;
 /** One finished subagent run of any role, kept for `/bot-lobby runs`. */
 export interface RunLogEntry {
   runId: string;
+  parentRunId?: string;
+  depth?: number;
+  instruction?: string;
+  stepInstruction?: string;
   domain: Domain;
   role: Role;
   status: "running" | "success" | "failed" | "cancelled" | "timeout";

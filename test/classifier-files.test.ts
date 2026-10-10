@@ -210,13 +210,13 @@ test("scouts and workers start with their likely files and may look more up; the
   const seen: Array<{ tools: string; system: string; task: string }> = [];
   const data = tempDir();
   await runScouts({ taskId: "T", taskText: "Add pagination", instruction: "Find the list endpoints.", domains: ["backend"], cwd: data, dataRoots: [data], taskDir: tempDir(), config: DEFAULT_CONFIG, hints: HINTS }, recorder("## Scope\nx", seen));
-  assert.equal(seen[0]!.tools, `read,grep,find,ls,${FIND_FILES_TOOL}`);
+  assert.equal(seen[0]!.tools, `read,grep,find,ls,${FIND_FILES_TOOL},codemode,tool_search,delegate_subtasks`);
   assert.match(seen[0]!.system, /## Workflow Context\n\nTask state: scouting[\s\S]*## Likely files\n\n- `src\/api\.ts` \(0\.91\) for Find the list endpoints\./);
   await runWorker({ taskId: "T", domain: "backend", instruction: "Step 2: add the cursor param", taskText: "Add pagination", scoutOutcomes: [], cwd: data, dataRoots: [data], config: DEFAULT_CONFIG, hints: HINTS, agent: { extraTools: ["claim_file", "handover_file"] } }, recorder("## Completed\nx", seen));
-  assert.equal(seen[1]!.tools, `read,bash,edit,write,grep,find,ls,claim_file,handover_file,${FIND_FILES_TOOL}`);
+  assert.equal(seen[1]!.tools, `read,bash,edit,write,grep,find,ls,claim_file,handover_file,${FIND_FILES_TOOL},codemode,tool_search,delegate_subtasks,my_files,wait_for_files`);
   assert.match(seen[1]!.system, /## Likely files\n\n- `src\/api\.ts` \(0\.91\) for Step 2: add the cursor param/);
   await runWorker({ taskId: "T", domain: "backend", instruction: "x", taskText: "y", scoutOutcomes: [], cwd: data, dataRoots: [data], config: DEFAULT_CONFIG }, recorder("## Completed\nx", seen));
-  assert.equal(seen[2]!.tools, "read,bash,edit,write,grep,find,ls", "no hints, no change");
+  assert.equal(seen[2]!.tools, "read,bash,edit,write,grep,find,ls,codemode,tool_search,delegate_subtasks,claim_file,handover_file,my_files,wait_for_files", "no hints");
   assert.doesNotMatch(seen[2]!.system, /## Likely files/);
 });
 
@@ -228,12 +228,12 @@ test("a quick fix and a planning round get their likely files too", async () => 
   for (let i = 0; i < 20 && queue.running; i++) await new Promise((resolve) => setTimeout(resolve, 5));
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.match(seen[0]!.task, /^Task: rename getUser\n\n## Likely files/);
-  assert.ok(seen[0]!.tools.endsWith(`,${FIND_FILES_TOOL}`));
+  assert.ok(seen[0]!.tools.split(",").includes(FIND_FILES_TOOL));
 
   const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: ["qa"], profile: () => ({ thinking: "high", timeoutMs: 60_000 }), runProcess: recorder("## Status\nREADY\n## Plan\n1. x", seen), hints: HINTS });
   await session.send("dark mode");
   const round = seen.slice(1);
   assert.equal(round.length, 2, "QA, then the oracle");
   assert.ok(round.every((call) => /## Likely files\n\n- `src\/api\.ts` \(0\.91\) for dark mode/.test(call.task)), "ranked once for the round, read by every seat and the oracle");
-  assert.ok(round.every((call) => call.tools.endsWith(`,${FIND_FILES_TOOL}`)));
+  assert.ok(round.every((call) => call.tools.split(",").includes(FIND_FILES_TOOL)));
 });

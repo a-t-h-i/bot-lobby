@@ -2012,7 +2012,10 @@ export async function runWorkflowAction(params: OrchestrateParams, deps: Workflo
     // Every agent, diff and desk of a task with its own worktree works there.
     cwd: taskCwd(task, deps.cwd),
     onUpdate: (run) => {
-      if (run.status !== "running") finished.set(run.runId, run);
+      if (run.status !== "running") {
+        finished.set(run.runId, run);
+        if (run.parentRunId) writeFileEnsured(join(taskDirFor(deps.root, deps.configDir, task.id), "children", `${run.runId}.json`), `${JSON.stringify(run)}\n`);
+      }
       // Every window marks the steps a worker is on while it runs.
       if (run.role === "worker") {
         if (run.status === "running") working.add(run.runId);

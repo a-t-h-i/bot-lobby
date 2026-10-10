@@ -46,7 +46,7 @@ export function ActionButton({ label, icon: Icon, tone = "neutral", shortcut, hr
   useHotkey(bound ? shortcut : undefined, () => node.current?.click(), { enabled: bound && !disabled })
 
   const icon = <Icon aria-hidden="true" />
-  // A worded action stands raised on the page; an icon-only tool rises when pointed at.
+  // Primary worded actions keep their animated accent fill.
   const discover = tone === "primary" && !iconOnly
   const variant = iconOnly ? (tone === "primary" ? "default" : "ghost") : "outline"
   const look = cn(!iconOnly && "px-2.5", discover && "obsidian-discover-button", TONES[tone], className)

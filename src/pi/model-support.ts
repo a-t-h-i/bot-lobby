@@ -90,7 +90,7 @@ export function createProfileResolver(config: BotLobbyConfig, options: ResolverO
   };
 }
 
-type RunProfile = { model?: string; thinking: string; timeoutMs: number; instructions?: string };
+type RunProfile = { model?: string; thinking: string; timeoutMs: number; instructions?: string; mcpTools?: string[] };
 
 /** Unset models run on the session's; thinking is clamped to the model, with a one-time warning. */
 function resolveRunProfile(profile: RunProfile, label: string, options: ResolverOptions): RunProfile {

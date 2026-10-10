@@ -100,6 +100,10 @@ export interface ResearchResult {
 
 export interface AgentRun {
   runId: string;
+  parentRunId?: string;
+  depth?: number;
+  /** Parent instruction used to assign children to plan steps. */
+  stepInstruction?: string;
   taskId: string;
   domain: Domain;
   role: Role;

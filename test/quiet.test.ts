@@ -1,6 +1,6 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
@@ -109,7 +109,9 @@ function makeCtx(cwd: string, expanded = false, sessionId = "session-1") {
 }
 
 function tempDir(prefix: string): string {
-  return mkdtempSync(join(tmpdir(), prefix));
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  mkdirSync(join(root, ".pi"));
+  return root;
 }
 
 // The suite also runs inside a subagent process (BOT_LOBBY_SUBAGENT=1), where

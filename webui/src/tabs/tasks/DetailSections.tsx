@@ -35,6 +35,7 @@ function ActiveMark() {
 
 function Step({ step, index, stopped }: { step: StepData; index: number; stopped: boolean }) {
   const active = Boolean(step.active) && !stopped
+  const count = step.activeAgentCount ?? 1
   const done = step.status === "done"
   const markClass = done ? "text-success" : step.status === "current" ? "text-primary" : "text-muted-foreground"
   const Icon = done ? CheckCircle2 : Circle
@@ -42,7 +43,7 @@ function Step({ step, index, stopped }: { step: StepData; index: number; stopped
     <li className="flex items-start gap-2.5 text-sm" data-step={active ? "active" : step.status}>
       {active ? <ActiveMark /> : <Icon aria-hidden="true" className={`mt-0.5 size-4 shrink-0 ${markClass}`} />}
       <span className="shrink-0 text-xs leading-5 text-muted-foreground tabular-nums">{index + 1}.</span>
-      <span className={cn("min-w-0 break-words", active || step.status === "current" ? "text-foreground" : "text-muted-foreground")}>{step.text}</span>
+      <span className={cn("min-w-0 break-words", active || step.status === "current" ? "text-foreground" : "text-muted-foreground")}>{step.text}{active ? <span className="ml-1 text-xs text-primary">({count} {count === 1 ? "dev working" : "devs working"})</span> : null}</span>
       {active ? (
         <span className="shrink-0 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
           active · <StepTime step={step} stopped={stopped} />

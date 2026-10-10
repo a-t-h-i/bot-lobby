@@ -413,12 +413,12 @@ test("rpc: a silent agent is killed as stalled", async () => {
 test("rpc: provider retries extend the silence allowance and are forwarded", async () => {
   const script = rpcStub(`
     if (cmd.type !== "prompt") return;
-    emit({ type: "auto_retry_start", attempt: 1, maxAttempts: 3, delayMs: 800, errorMessage: "429 rate limited" });
+    emit({ type: "auto_retry_start", attempt: 1, maxAttempts: 3, delayMs: 4_000, errorMessage: "429 rate limited" });
     emit({ type: "compaction_start", reason: "threshold" });
-    setTimeout(() => { emit({ type: "auto_retry_end", success: true, attempt: 1 }); report("## done"); settle(); }, 600);`);
+    setTimeout(() => { emit({ type: "auto_retry_end", success: true, attempt: 1 }); report("## done"); settle(); }, 3_200);`);
   await withStub(script, async () => {
     const events: string[] = [];
-    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 20_000, stallTimeoutMs: 400, onEvent: (event) => events.push(event.type) });
+    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 20_000, stallTimeoutMs: 3_000, onEvent: (event) => events.push(event.type) });
     assert.equal(result.status, "success", result.error);
     assert.ok(events.includes("retry") && events.includes("retry_end") && events.includes("compaction"));
   });
@@ -441,7 +441,7 @@ test("rpc: the agent is steered to wrap up before the deadline and its report is
 test("rpc: the deadline aborts the agent and times it out", async () => {
   const script = rpcStub("", "setInterval(() => emit({ type: 'turn_start' }), 50); process.stdin.removeAllListeners('end');");
   await withStub(script, async (log) => {
-    const pending = spawnPiProcess([], { cwd: process.cwd(), timeoutMs: 300, prompt: "Task: t", graceMs: 100 });
+    const pending = spawnPiProcess([], { cwd: process.cwd(), timeoutMs: 3_000, prompt: "Task: t", graceMs: 1_000 });
     const outcome = await pending;
     assert.equal(outcome.timedOut, true);
     assert.ok(log.read().some((command) => command.type === "abort"), "abort sent before the kill");
@@ -530,8 +530,8 @@ test("rpc: out of time and not given more, the run ends with its left-off report
 test("rpc: while the user decides, neither the deadline nor the stall watchdog stops the waiting agent", async () => {
   await withStub(TIMED_STUB, async () => {
     const result = await runPiAgent({
-      cwd: process.cwd(), task: "build it", timeoutMs: 600, stallTimeoutMs: 300,
-      time: { upAtMs: 150, upMessage: "time is up", graceMs: 400, onTimeUp: () => new Promise((resolve) => setTimeout(() => resolve({ extraMs: 5_000, message: "carry on" }), 1_200)) },
+      cwd: process.cwd(), task: "build it", timeoutMs: 4_000, stallTimeoutMs: 3_000,
+      time: { upAtMs: 2_000, upMessage: "time is up", graceMs: 3_000, onTimeUp: () => new Promise((resolve) => setTimeout(() => resolve({ extraMs: 5_000, message: "carry on" }), 5_000)) },
     });
     assert.equal(result.status, "success", result.error);
     assert.equal(result.output, "## Completed\nall of it");
@@ -559,14 +559,14 @@ test("rpc: a relayed question waits on the user with the deadline, the allotment
     const result = await runPiAgent({
       cwd: process.cwd(),
       task: "t",
-      timeoutMs: 700,
-      stallTimeoutMs: 250,
-      toolStallTimeoutMs: 250,
-      time: { upAtMs: 500, upMessage: "time is up", graceMs: 100 },
+      timeoutMs: 4_000,
+      stallTimeoutMs: 3_000,
+      toolStallTimeoutMs: 3_000,
+      time: { upAtMs: 3_000, upMessage: "time is up", graceMs: 1_000 },
       onEvent: (event) => events.push(event.type === "answered" ? `answered after ${event.waitedMs >= 900 ? "900+" : event.waitedMs}ms` : event.type),
       onAsk: async (questions) => {
         asked = questions;
-        await new Promise((done) => setTimeout(done, 1000));
+        await new Promise((done) => setTimeout(done, 5_000));
         return { cancelled: false, answers: [{ questionIndex: 0, question: "Which layout?", kind: "option", answer: "Sidebar" }] };
       },
     });

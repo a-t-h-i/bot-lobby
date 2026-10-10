@@ -69,6 +69,7 @@ export function runFlags(run: Pick<AgentRun, "status" | "stalled" | "wrappedUp" 
  */
 export function describeRun(run: AgentRun, now = Date.now()): string {
   const parts = [`${STATUS_ICONS[run.status]} ${agentName(run)} ${run.role}`, shortDuration(durationOf(run, now))];
+  if (run.parentRunId) parts.push(`child of ${run.parentRunId}`);
   const turns = run.turns ?? run.usage?.turns;
   if (turns) parts.push(`${turns} turn${turns === 1 ? "" : "s"}`);
   if (run.tools) parts.push(`${run.tools} tool${run.tools === 1 ? "" : "s"}`);
@@ -84,6 +85,10 @@ export function describeRun(run: AgentRun, now = Date.now()): string {
 export function runLogEntry(run: AgentRun): RunLogEntry {
   return {
     runId: run.runId,
+    ...(run.parentRunId ? { parentRunId: run.parentRunId } : {}),
+    ...(run.depth ? { depth: run.depth } : {}),
+    ...(run.instruction ? { instruction: run.instruction } : {}),
+    ...(run.stepInstruction ? { stepInstruction: run.stepInstruction } : {}),
     domain: run.domain,
     role: run.role,
     status: run.status,
@@ -106,6 +111,10 @@ export function runLogEntry(run: AgentRun): RunLogEntry {
 export function runFromLog(entry: RunLogEntry, taskId: string): AgentRun {
   return {
     runId: entry.runId,
+    ...(entry.parentRunId ? { parentRunId: entry.parentRunId } : {}),
+    ...(entry.depth ? { depth: entry.depth } : {}),
+    ...(entry.instruction ? { instruction: entry.instruction } : {}),
+    ...(entry.stepInstruction ? { stepInstruction: entry.stepInstruction } : {}),
     taskId,
     domain: entry.domain,
     role: entry.role,

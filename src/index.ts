@@ -1,3 +1,5 @@
+import { registerAgentPermissions, registerDelegation } from "./pi/delegation.ts";
+import { registerAutoCompaction } from "./pi/auto-compaction.ts";
 import { CONFIG_DIR_NAME, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerCommands } from "./pi/commands.ts";
 import { registerLifecycle } from "./pi/events.ts";
@@ -20,6 +22,9 @@ import { registerWebTools } from "./web/tools.ts";
 import { registerExcalidrawTools } from "./excalidraw/tools.ts";
 
 export default function (pi: ExtensionAPI): void {
+  registerAgentPermissions(pi);
+  registerDelegation(pi);
+  registerAutoCompaction(pi);
   let root = detectProjectRoot(process.cwd(), CONFIG_DIR_NAME);
   pi.on("session_start", (_event, ctx) => { root = detectProjectRoot(ctx.cwd, CONFIG_DIR_NAME); });
   // First, so every session_start handler below finds the classifier bound to this session's keys.

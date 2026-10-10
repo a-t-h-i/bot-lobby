@@ -71,6 +71,7 @@ interface AgentView {
   thinking: string
   timeoutMs?: number
   instructions?: string
+  mcpTools?: string[]
 }
 
 /** Where each agent's fields live in the config (`agents.<kind>` for the three domains). */
@@ -100,6 +101,7 @@ function entryOf(config: Config, kind: AgentKind): AgentView {
         model: config.scout.model,
         thinking: FIXED_SCOUT_THINKING,
         timeoutMs: config.scout.timeoutMs,
+        mcpTools: config.scout.mcpTools,
       }
     case "researcher":
       return config.researcher
@@ -325,6 +327,8 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
         ) : null}
       </div>
       {hasInstructions && showNotes ? <InstructionsField value={entry.instructions ?? ""} label={`${name} instructions`} onSave={(text) => set({ instructions: text })} /> : null}
+      <InstructionsField value={(entry.mcpTools ?? []).join("\n")} label={`${name} MCP tool grants (one exact tool name per line)`} onSave={(text) => set({ mcpTools: text.split(/\s+/).filter(Boolean) })} />
+      <p className="text-xs text-muted-foreground">Grant exact names such as mcp__github__get_issue. Children inherit these grants; read-only agents also require read-only tools.</p>
       </FramePanel>
     </section>
   )

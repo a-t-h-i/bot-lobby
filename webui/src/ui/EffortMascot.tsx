@@ -4,8 +4,8 @@ import { cn } from "@/lib/utils"
 
 const LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
 const OUTLINE = "M32 17 C28 10 19 12 17 19 C10 19 7 26 10 32 C5 38 9 46 15 47 C16 54 25 56 32 50 C39 56 48 54 49 47 C55 46 59 38 54 32 C57 26 54 19 47 19 C45 12 36 10 32 17Z"
-const SMOOTH = "M32 17 C23 8 10 17 10 33 C10 48 21 56 32 50 C43 56 54 48 54 33 C54 17 41 8 32 17Z"
-// Folds start at medium; higher stops add pairs of gyri.
+const SOFT = "M32 17 C28 12 21 12 18 19 C12 19 9 25 11 31 C7 36 9 44 15 46 C16 53 26 55 32 50 C38 55 48 53 49 46 C55 44 57 36 53 31 C55 25 52 19 46 19 C43 12 36 12 32 17Z"
+// Higher stops add pairs of gyri.
 const FOLDS = [
   "M19 22 C16 25 17 29 22 29 C27 29 28 33 25 36",
   "M12 35 C16 32 20 35 18 39 C16 43 20 47 24 45",
@@ -18,7 +18,7 @@ const FOLDS = [
 export function EffortMascot({ level, className }: { level: string; className?: string }) {
   const reduce = useReducedMotion()
   const rank = Math.max(0, LEVELS.indexOf(level))
-  const foldCount = [0, 0, 0, 2, 3, 4, 6][rank]!
+  const foldCount = [0, 1, 2, 2, 3, 4, 6][rank]!
   const elevated = rank === LEVELS.length - 1
   const id = `brain-${useId().replace(/[^a-zA-Z0-9]/g, "")}`
   return (
@@ -34,6 +34,12 @@ export function EffortMascot({ level, className }: { level: string; className?: 
           <stop offset="0.55" stopColor="var(--rainbow-7)" stopOpacity="0.18" />
           <stop offset="1" stopColor="var(--rainbow-5)" stopOpacity="0" />
         </radialGradient>
+        <linearGradient id={`${id}-shine`}>
+          <stop stopColor="var(--card)" stopOpacity="0" />
+          <stop offset="0.5" stopColor="var(--primary)" stopOpacity="0.6" />
+          <stop offset="0.6" stopColor="var(--card)" stopOpacity="0.9" />
+          <stop offset="1" stopColor="var(--card)" stopOpacity="0" />
+        </linearGradient>
         <filter id={`${id}-glow`} x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="1.4" />
           <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
@@ -55,7 +61,7 @@ export function EffortMascot({ level, className }: { level: string; className?: 
         )) : null}
         <g id={`${id}-shape`} data-brain-shape className="brain-shape">
         <path d="M30 49 L30 56 Q32 59 35 57 L35 51" className="fill-primary/15" />
-        <path d={rank <= 2 ? SMOOTH : OUTLINE} className={rank === 0 ? "fill-muted" : "fill-primary/10"} />
+        <path d={rank <= 3 ? SOFT : OUTLINE} className={rank === 0 ? "fill-muted" : rank <= 3 ? "fill-primary/15" : "fill-primary/10"} />
         <path d="M32 17 C29 24 34 28 32 34 C30 40 34 45 32 50" fill="none" opacity={rank === 0 ? 0.35 : 0.8} />
         {[false, true].map((mirrored) => (
           <g key={String(mirrored)} transform={mirrored ? "translate(64 0) scale(-1 1)" : undefined} fill="none">
@@ -64,6 +70,14 @@ export function EffortMascot({ level, className }: { level: string; className?: 
             ))}
           </g>
         ))}
+        {rank > 0 && rank < 5 ? <g stroke="none" fill="var(--primary)">
+          {[[20, 27], [43, 36], [25, 44]].slice(0, Math.min(rank, 3)).map(([cx, cy], index) => (
+            <circle key={cx} cx={cx} cy={cy} r="1.4" className="brain-spark" style={{ animationDelay: `${index * -0.7}s` }} />
+          ))}
+        </g> : null}
+        {rank >= 5 ? <g clipPath={`url(#${id}-silhouette)`} stroke="none">
+          <rect data-brain-shimmer className="brain-shimmer" x="-24" y="10" width="18" height="48" fill={`url(#${id}-shine)`} />
+        </g> : null}
         </g>
         {elevated ? <g clipPath={`url(#${id}-silhouette)`} stroke="none">
           <path d={OUTLINE} fill={`url(#${id}-hologram)`} />
