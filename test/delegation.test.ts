@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AGENT_ENV, DELEGATION_ENV, reserveChildren, type AgentPolicy } from "../src/execution/delegation.ts";
+import { AGENT_ENV, DELEGATION_ENV, DELEGATE_TOOL, MAX_CHILDREN, canDelegate, delegationHost, reserveChildren, type AgentPolicy } from "../src/execution/delegation.ts";
 import { runPiAgent, type ProcessOutcome, type ProcessRunner } from "../src/execution/pi-runner.ts";
 import { createDeskClient } from "../src/desk/ipc.ts";
 import { DESK_ENV } from "../src/desk/session.ts";
@@ -184,4 +184,79 @@ test("a retry shares its five child slots and a time grant resets an expired dea
     };
     assert.equal((await runPiAgent({ cwd, task: "t", tools: ["read"], timeoutMs: 30_000, time: { upAtMs: 10, upMessage: "Stop", graceMs: 0 } }, extended)).children?.[0]?.status, "success");
   } finally { rmSync(cwd, { recursive: true, force: true }); }
+});
+
+const noopRun: ProcessRunner = async () => ({ exitCode: 0, killed: false, timedOut: false, stderr: "", stdout: "{}" });
+
+type HostAgent = { runId: string; taskId: string; domain: "designer" | "backend" | "qa"; role: "scout" | "worker" | "reviewer" | "researcher"; depth?: number };
+
+async function hostToolsAndNote(agent: HostAgent, quotaUsed?: number): Promise<{ tools: string[]; note: string }> {
+  const cwd = mkdtempSync(join(tmpdir(), "bl-delegation-eligibility-"));
+  mkdirSync(join(cwd, ".pi"), { recursive: true });
+  const host = await delegationHost({ cwd, task: "t", tools: ["read"], timeoutMs: 30_000, agent, ...(quotaUsed === undefined ? {} : { delegationQuota: { used: quotaUsed } }) }, noopRun);
+  try {
+    return { tools: [...host.tools], note: host.note };
+  } finally {
+    await host.close();
+    rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
+test("only DESIGN/DEV workers and the QA gate may delegate", () => {
+  assert.equal(canDelegate({ role: "worker", domain: "backend" }, 0), true);
+  assert.equal(canDelegate({ role: "worker", domain: "designer" }, 0), true);
+  assert.equal(canDelegate({ role: "reviewer", domain: "qa" }, 0), true);
+  assert.equal(canDelegate({ role: "worker", domain: "backend", depth: 1 }, 0), true);
+  assert.equal(canDelegate({ role: "scout", domain: "backend" }, 0), false);
+  assert.equal(canDelegate({ role: "researcher", domain: "backend" }, 0), false);
+  assert.equal(canDelegate({ role: "reviewer", domain: "backend" }, 0), false);
+  assert.equal(canDelegate({ role: "worker", domain: "qa" }, 0), false);
+  assert.equal(canDelegate({ role: "worker", domain: "backend", depth: 2 }, 0), false);
+  assert.equal(canDelegate({ role: "reviewer", domain: "qa", depth: 2 }, 0), false);
+  assert.equal(canDelegate({ role: "worker", domain: "backend" }, MAX_CHILDREN), false);
+  assert.equal(canDelegate({ role: "worker", domain: "backend" }, MAX_CHILDREN - 1), true);
+  assert.equal(MAX_CHILDREN, 5);
+});
+
+test("delegationHost grants delegate_subtasks only to eligible agents", async () => {
+  const eligible: HostAgent[] = [
+    { runId: "p", taskId: "T", domain: "backend", role: "worker" },
+    { runId: "p", taskId: "T", domain: "designer", role: "worker" },
+    { runId: "p", taskId: "T", domain: "qa", role: "reviewer" },
+  ];
+  for (const agent of eligible) {
+    const host = await hostToolsAndNote(agent);
+    assert.ok(host.tools.includes(DELEGATE_TOOL), `${agent.role}/${agent.domain} should receive ${DELEGATE_TOOL}`);
+  }
+  const ineligible: HostAgent[] = [
+    { runId: "p", taskId: "T", domain: "backend", role: "scout" },
+    { runId: "p", taskId: "T", domain: "backend", role: "researcher" },
+    { runId: "p", taskId: "T", domain: "backend", role: "reviewer" },
+    { runId: "p", taskId: "T", domain: "qa", role: "worker" },
+    { runId: "p", taskId: "T", domain: "backend", role: "worker", depth: 2 },
+  ];
+  for (const agent of ineligible) {
+    const host = await hostToolsAndNote(agent);
+    assert.equal(host.tools.includes(DELEGATE_TOOL), false, `${agent.role}/${agent.domain} must not receive ${DELEGATE_TOOL}`);
+  }
+});
+
+test("a quick-fix run with an exhausted quota receives no delegate_subtasks tool", async () => {
+  const host = await hostToolsAndNote({ runId: "q", taskId: "q", domain: "backend", role: "worker" }, MAX_CHILDREN);
+  assert.equal(host.tools.includes(DELEGATE_TOOL), false);
+});
+
+test("the parent note mandates two sub-briefs for eligible agents and stays silent otherwise", async () => {
+  const worker = await hostToolsAndNote({ runId: "p", taskId: "T", domain: "backend", role: "worker" });
+  assert.match(worker.note, /first two sub-briefs/);
+  assert.match(worker.note, /five children/);
+  assert.match(worker.note, /delegate_subtasks/);
+  const qaGate = await hostToolsAndNote({ runId: "p", taskId: "T", domain: "qa", role: "reviewer" });
+  assert.match(qaGate.note, /first two sub-briefs/);
+  assert.match(qaGate.note, /five children/);
+  const scout = await hostToolsAndNote({ runId: "p", taskId: "T", domain: "backend", role: "scout" });
+  assert.equal(scout.note.includes("delegate_subtasks"), false);
+  assert.equal(scout.note.includes("sub-brief"), false);
+  const child = await hostToolsAndNote({ runId: "c", taskId: "T", domain: "backend", role: "worker", depth: 2 });
+  assert.match(child.note, /cannot delegate further/);
 });

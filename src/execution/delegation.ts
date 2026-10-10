@@ -5,6 +5,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import type { AgentRun } from "../schemas/findings.ts";
+import type { Domain, Role } from "../schemas/agent.ts";
 import { agentProfile } from "../schemas/configuration.ts";
 import { dataRoot, detectProjectRoot, loadConfig } from "../state/project.ts";
 import { EditLog } from "../state/changes.ts";
@@ -17,6 +18,13 @@ export const MAX_CHILDREN = 5;
 export const DELEGATE_TOOL = "delegate_subtasks";
 export const AGENT_ENV = "BOT_LOBBY_AGENT_POLICY";
 export const DELEGATION_ENV = "BOT_LOBBY_DELEGATION";
+
+/** Only DESIGN/DEV workers and the QA gate may spawn children. */
+export function canDelegate(agent: { role: Role; domain: Domain; depth?: number }, quotaUsed: number): boolean {
+  if ((agent.depth ?? 1) !== 1 || quotaUsed >= MAX_CHILDREN) return false;
+  if (agent.role === "worker") return agent.domain === "designer" || agent.domain === "backend";
+  return agent.role === "reviewer" && agent.domain === "qa";
+}
 
 /** One shared child pool per task; parents waiting on children never hold its slots. */
 const pools = new Map<string, { active: number; users: number; waiters: Array<() => void> }>();
@@ -63,7 +71,7 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
   const agent = options.agent ?? { runId: id, taskId: id, domain: "backend" as const, role: editable ? "worker" as const : "reviewer" as const };
   const depth = agent.depth ?? 1;
   const quota = options.delegationQuota ?? { used: 0 };
-  const tools = [...new Set([...baseTools, ...(options.excalidraw ? toolsOf(options.excalidraw) : []), "codemode", "tool_search", ...(depth === 1 ? [DELEGATE_TOOL] : [])])];
+  const tools = [...new Set([...baseTools, ...(options.excalidraw ? toolsOf(options.excalidraw) : []), "codemode", "tool_search", ...(canDelegate(agent, quota.used) ? [DELEGATE_TOOL] : [])])];
   const mcpTools = options.mcpTools ?? agentProfile(config, agent.domain, agent.role).mcpTools ?? [];
   const policy: AgentPolicy = { tools, mcpTools, readOnly: !editable, depth };
   if (depth > 1) return { tools, env: { ...options.env, [AGENT_ENV]: JSON.stringify(policy), [DELEGATION_ENV]: "" }, note: "You are a child agent. Finish only your assigned brief and report evidence to your parent; you cannot delegate further.", close: async () => {}, onStart: options.onStart, children: [] as AgentRun[] };
@@ -165,7 +173,7 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
   return {
     tools: desk ? [...new Set([...tools, ...DESK_TOOLS])] : tools,
     env: { ...options.env, ...(desk ? desk.env(parentDeskId) : {}), [AGENT_ENV]: JSON.stringify({ ...policy, tools: desk ? [...new Set([...tools, ...DESK_TOOLS])] : tools }), [DELEGATION_ENV]: JSON.stringify({ address: server.address, token, timeoutMs: options.timeoutMs }) },
-    note: `For substantial, separable work, use ${DELEGATE_TOOL} with complete briefs (goal, files, contracts, constraints, done criteria). You have at most five children total; children cannot delegate. Integrate and verify their work yourself. Use codemode for concise parallel calls, inspect failures, and return only useful evidence.${desk ? " Before edit/write, claim_file; handover_file when finished. Release files before delegating or waiting." : ""}`,
+    note: `${canDelegate(agent, quota.used) ? `Begin every step by delegating your first two sub-briefs via ${DELEGATE_TOOL} — split the work into two disjoint pieces with separate files. If you need more brainpower, delegate more, at most five children total; children cannot delegate further. Integrate and verify their work yourself. ` : ""}Use codemode for concise parallel calls, inspect failures, and return only useful evidence.${desk ? " Before edit/write, claim_file; handover_file when finished. Release files before delegating or waiting." : ""}`,
     onStart: (handle: Parameters<NonNullable<PiRunOptions["onStart"]>>[0]) => {
       desk?.attach(parentDeskId, { runId: id, steer: handle.steer, annotate: () => {} });
       options.onStart?.(handle);

@@ -40,7 +40,7 @@ test("runAgent returns metadata and role-restricted tools", async () => {
   assert.equal(run.taskId, "TASK-1");
   assert.equal(run.domain, "backend");
   assert.equal(run.role, "scout");
-  assert.equal(tools, "read,grep,find,ls,codemode,tool_search,delegate_subtasks");
+  assert.equal(tools, "read,grep,find,ls,codemode,tool_search");
   assert.ok(run.finishedAt);
 });
 
