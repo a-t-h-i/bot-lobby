@@ -40,7 +40,7 @@ function Under({ active, current }: { active?: SnapshotTask["activeSteps"]; curr
     return (
       <span className="hidden max-w-[20rem] min-w-0 items-center gap-1.5 xl:inline-flex">
         <span className="truncate text-foreground" title={first.text}>{first.text}</span>
-        <span className="shrink-0 text-primary">({count} {count === 1 ? "dev working" : "devs working"})</span>
+        <span className="shrink-0 text-primary">({count} {count === 1 ? "agent working" : "agents working"})</span>
         <span className="shrink-0 rounded-md bg-primary/10 px-1.5 py-px font-medium text-primary">
           active · <Ticking ms={first.workedMs} running sample={first} />
         </span>
