@@ -118,7 +118,7 @@
   --btn-face: linear-gradient(180deg, var(--card), color-mix(in oklab, var(--foreground) 6%, var(--card)));
   --btn-face-hover: linear-gradient(180deg, var(--card), color-mix(in oklab, var(--primary) 10%, var(--card)));
   --btn-face-press: linear-gradient(180deg, color-mix(in oklab, var(--foreground) 12%, var(--card)), var(--card));
-  --btn-rim: color-mix(in oklab, var(--foreground) 55%, var(--card));
+  --btn-rim: color-mix(in oklab, var(--foreground) 35%, var(--card));
   /* Every button casts Tailwind's shadow-sm, whatever its face. */
   --btn-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
   --btn-raise: inset 0 1px 0 rgb(255 255 255 / 1), inset 0 -1px 0 rgb(32 28 20 / 0.05), var(--btn-sm);
