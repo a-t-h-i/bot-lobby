@@ -4,7 +4,7 @@ declare const document: any;
 declare const window: any;
 declare const getComputedStyle: any;
 
-test("the effort brain stays smooth at low effort, grows folds, glitches and phases at max", { tag: "@theme" }, async ({ page, server }, info) => {
+test("the effort brain grows folds, animates each effort level and shimmers at xhigh", { tag: "@theme" }, async ({ page, server }, info) => {
   const trap = await openScenario(page, server, "full");
   await page.setViewportSize({ width: info.project.name === "light-320" ? 320 : 390, height: 844 });
   await page.evaluate(() => { window.location.hash = "#/settings"; });
@@ -14,16 +14,18 @@ test("the effort brain stays smooth at low effort, grows folds, glitches and pha
   await slider.focus();
   await slider.press("Home");
   const levels = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
-  const folds = [0, 0, 0, 4, 6, 8, 12];
+  const folds = [0, 2, 4, 4, 6, 8, 12];
+  const animations = ["none", "brain-breathe", "brain-drift", "brain-focus", "brain-glitch", "brain-glitch", "brain-phase"];
   for (let rank = 0; rank < levels.length; rank += 1) {
     if (rank) await slider.press("ArrowRight");
     await expect(brain).toHaveAttribute("data-level", levels[rank]!);
     await expect(brain.locator("[data-brain-fold]")).toHaveCount(folds[rank]!);
     await expect(brain.locator("[data-brain-halo]")).toHaveCount(rank === 6 ? 1 : 0);
     await expect(brain.locator("[data-brain-phase]")).toHaveCount(rank === 6 ? 2 : 0);
-    if (rank >= 4) {
-      expect(await brain.locator("[data-brain-shape]").evaluate((el: any) => getComputedStyle(el).animationName)).toBe(rank === 6 ? "brain-phase" : "brain-glitch");
-    }
+    await expect(brain.locator("[data-brain-shimmer]")).toHaveCount(rank >= 5 ? 1 : 0);
+    expect(await brain.locator("[data-brain-shape]").evaluate((el: any) => getComputedStyle(el).animationName)).toBe(animations[rank]);
+    if (rank >= 5) expect(await brain.locator("[data-brain-shimmer]").evaluate((el: any) => getComputedStyle(el).animationName)).toBe("brain-shimmer");
+    if ([1, 2, 3, 5].includes(rank)) await brain.screenshot({ path: info.outputPath(`brain-${levels[rank]}.png`) });
   }
   await expect(brain).toHaveAttribute("data-elevated", "true");
   await expect(brain.locator("[data-brain-body]")).toHaveAttribute("filter", /-glow\)/);
@@ -56,6 +58,10 @@ test("the effort brain stays smooth at low effort, grows folds, glitches and pha
   expect(await pose()).toBe("matrix(1, 0, 0, 1, 0, -5)");
   expect(await brain.locator("[data-brain-shape]").evaluate((el: any) => getComputedStyle(el).animationName)).toBe("none");
   await expect(brain.locator("[data-brain-scan]")).toBeHidden();
+  await expect(brain.locator("[data-brain-shimmer]")).toBeHidden();
+  await slider.press("Home");
+  await slider.press("ArrowRight");
+  expect(await brain.locator(".brain-spark").first().evaluate((el: any) => getComputedStyle(el).animationName)).toBe("none");
   expect(trap.errors).toEqual([]);
   trap.stop();
 });

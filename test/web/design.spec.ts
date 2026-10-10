@@ -1401,7 +1401,7 @@ test("a task's short steps come first, the one being worked on marked active wit
   await expect(steps.getByRole("listitem").nth(0), "done").toHaveAttribute("data-step", "done");
   const active = steps.getByRole("listitem").nth(1);
   await expect(active, "the step a worker is on").toHaveAttribute("data-step", "active");
-  await expect(active).toContainText(/Check the mock over HTTP\s*active · 1m 3\ds/);
+  await expect(active).toContainText(/Check the mock over HTTP\s*\(6 devs working\)\s*active · 1m 3\ds/);
   await expect(steps.getByRole("listitem").nth(2)).toHaveAttribute("data-step", "open");
   const article = page.getByRole("article", { name: "Add offline mock fixtures" });
   const worked = article.locator("[data-work-clock]");
@@ -1428,5 +1428,5 @@ test("a task's short steps come first, the one being worked on marked active wit
   });
   const header = page.getByRole("group", { name: "Task" });
   await expect(header).toContainText(/worked 12m \d+s/);
-  await expect(header).toContainText(/Check the mock over HTTP\s*active · 1m \d+s/);
+  await expect(header).toContainText(/Check the mock over HTTP\s*\(6 devs working\)\s*active · 1m \d+s/);
 });

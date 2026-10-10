@@ -110,7 +110,7 @@ async function setup(hang: boolean) {
   const server = await startWebServer({ service, port: 0, secret: randomBytes(32), dist: DIST });
   const cookie = await login(server.port, new URL(server.link).hash.replace("#token=", ""));
   const call = async (name: string, body: unknown = {}) => send(server.port, `/api/${name}`, { ...json, cookie }, JSON.stringify(body));
-  return { server, call, service, close: () => server.close() };
+  return { server, call, service, close: async () => { state.quickfix.cancelAll(); await server.close(); } };
 }
 
 test("quickfix.list starts empty; quickfix.submit runs a job and lists newest first", async () => {

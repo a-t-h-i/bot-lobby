@@ -118,3 +118,22 @@ test("steps run side by side all read as under way, never done, with the running
   const idle = stepViews(task, undefined, now);
   assert.deepEqual(idle.map((step) => [step.status, step.active]), [["done", false], ["current", false], ["pending", false]], "with nothing running the next step is current, not active");
 });
+
+
+test("active step counts include parents and running children without advancing progress", () => {
+  const task = createTask("T-team", "feature", "2026-10-05T12:00:00.000Z");
+  task.plan = "## Steps\n1. Small feature\n2. Large feature\n3. Verify";
+  const now = Date.parse("2026-10-05T12:01:00.000Z");
+  const active = [
+    { runId: "parent", instruction: "Step 2: Large feature", startedAt: "2026-10-05T12:00:00.000Z" },
+    ...Array.from({ length: 5 }, (_, index) => ({ runId: `child-${index}`, parentRunId: "parent", stepInstruction: "Step 2: Large feature", instruction: "Step 3: unrelated wording in child brief", startedAt: "2026-10-05T12:00:30.000Z" })),
+  ];
+  const work = { workedMs: 60_000, running: true, active };
+  const steps = stepViews(task, work, now);
+  assert.equal(steps[1]!.activeAgentCount, 6);
+  assert.equal(steps[2]!.activeAgentCount, 0);
+  const reduced = stepViews(task, { ...work, active: active.slice(0, 4) }, now);
+  assert.equal(reduced[1]!.activeAgentCount, 4);
+  const finished = stepViews(task, { ...work, active: [] }, now);
+  assert.ok(finished.every((step) => !step.active && step.activeAgentCount === 0));
+});

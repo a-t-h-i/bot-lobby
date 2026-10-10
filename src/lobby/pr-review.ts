@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 /**
  * Reviewing pull requests from the Git tab. A read-only agent (on QA's model,
  * thinking and time limit) gets the pull request's description, changed files
@@ -264,17 +265,25 @@ export class PullReviews {
 
   private async run(review: PullReview, task: string, signal: AbortSignal): Promise<RunUsage> {
     const profile = this.deps.profile();
+    const runId = randomUUID();
     if (profile.model) review.model = profile.model;
     review.thinking = profile.thinking;
     this.step(review, "reading the diff");
     const attempt = (model: string | undefined, thinking: string) => runPiAgent(
       {
         cwd: this.deps.cwd,
+        agent: { runId, taskId: runId, domain: "qa", role: "reviewer" },
         task,
         systemPrompt: reviewPrompt(profile.instructions),
         tools: REVIEW_TOOLS,
         model,
         thinking,
+        mcpTools: profile.mcpTools,
+        onChildRun: (child) => {
+          this.deps.feed?.step(REVIEW_SOURCE, `child ${child.runId.slice(0, 8)}: ${child.step ?? child.status}`, child.runId);
+          if (child.status !== "running") this.deps.feed?.end(child.runId, child.status !== "success");
+          this.deps.onChange?.();
+        },
         timeoutMs: profile.timeoutMs,
         signal,
         stallTimeoutMs: this.deps.stallTimeoutMs,

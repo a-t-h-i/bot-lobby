@@ -47,6 +47,7 @@ export function RunsStrip({ runs }: { runs: LobbyRun[] }) {
           <span className="flex size-4 items-center justify-center">{statusMark(run.status)}</span>
           <span className="sr-only">{run.status ?? "unknown"}</span>
           <span className={cn("font-medium", sourceColor(agentName(run)))}>{sourceLabel(agentName(run))}</span>
+          {run.parentRunId ? <span className="text-muted-foreground" title={`Child of ${run.parentRunId}`}>child</span> : null}
           {run.activity ?? run.step ? <span className="max-w-[18rem] truncate text-muted-foreground">{run.activity ?? run.step}</span> : null}
           <span className="tabular-nums text-muted-foreground">{elapsedOf(run, now)}</span>
         </li>

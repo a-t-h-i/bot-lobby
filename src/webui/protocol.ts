@@ -131,7 +131,7 @@ export interface SnapshotTask {
   progress?: { done: number; total: number };
   currentStep?: string;
   /** The steps a worker is on right now, with the worker time on each (ms, as of the snapshot). */
-  activeSteps?: Array<{ text: string; workedMs: number }>;
+  activeSteps?: Array<{ text: string; workedMs: number; activeAgentCount?: number }>;
   /** How long the task's agents have worked on it, idle time left out. */
   work?: WorkClock;
 }
@@ -420,7 +420,7 @@ export interface TaskDetail {
    * The plan as a checklist, in order; `current` is the step under way, `active` the steps a worker is on right now,
    * each with its worker time (ms, as of the reply).
    */
-  steps: Array<{ text: string; status: "done" | "current" | "open"; active?: boolean; workedMs?: number }>;
+  steps: Array<{ text: string; status: "done" | "current" | "open"; active?: boolean; workedMs?: number; activeAgentCount?: number }>;
   /** How long the task's agents have worked on it, idle time left out (ms, as of the reply); `running` while they work. */
   work?: WorkClock;
   amendments: string[];

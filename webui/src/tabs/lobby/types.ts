@@ -31,6 +31,7 @@ export interface ThoughtEntry {
 
 /** An `AgentRun` as the snapshot carries it (a superset of what the strip shows). */
 export interface LobbyRun {
+  parentRunId?: string
   runId?: string
   role?: string
   domain?: string

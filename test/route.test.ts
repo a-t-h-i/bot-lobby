@@ -1,6 +1,6 @@
 import { after, before, beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -72,6 +72,7 @@ test("the classifier's one-engineer answer decides when it is sure; risk and amb
 
 function fakes(idle = true) {
   const root = mkdtempSync(join(tmpdir(), "bl-route-"));
+  mkdirSync(join(root, ".pi"));
   const sent: Array<{ text: string; options?: unknown }> = [];
   const handlers = new Map<string, Array<(event: unknown, ctx: unknown) => unknown>>();
   const tools: Array<{ name: string; execute: (...args: unknown[]) => Promise<{ content: Array<{ text: string }> }> }> = [];

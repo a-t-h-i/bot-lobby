@@ -92,9 +92,9 @@
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
 
-  /* The floating message box: the card, a little see-through, lifted on a soft shadow. Themes get it for free. */
-  --dock: color-mix(in oklab, var(--card) 86%, transparent);
-  --dock-border: color-mix(in oklab, var(--foreground) 8%, transparent);
+  /* An opaque message box and a visible rim keep it distinct from content behind it. */
+  --dock: var(--card);
+  --dock-border: var(--btn-rim);
   --dock-shadow: 0 1px 1px rgb(32 28 20 / 0.03), 0 2px 8px -4px rgb(32 28 20 / 0.06), 0 16px 40px -14px rgb(32 28 20 / 0.2);
   --dock-focus-shadow: var(--dock-shadow), 0 0 0 4px color-mix(in oklab, var(--ring) 12%, transparent);
 
@@ -112,13 +112,13 @@
 
   /*
    * Buttons sit a little proud of the page: a face lit from above, a bright
-   * top edge, a hairline rim and a soft contact shadow. Pressed, the face
+   * top edge, a visible rim and a soft contact shadow. Pressed, the face
    * sinks and the shadow moves inside.
    */
-  --btn-face: linear-gradient(180deg, #ffffff 0%, #f5f4f1 100%);
-  --btn-face-hover: linear-gradient(180deg, #ffffff 0%, #f9f8f6 100%);
-  --btn-face-press: linear-gradient(180deg, #ecebe7 0%, #f4f3f0 100%);
-  --btn-rim: rgb(32 28 20 / 0.13);
+  --btn-face: linear-gradient(180deg, var(--card), color-mix(in oklab, var(--foreground) 6%, var(--card)));
+  --btn-face-hover: linear-gradient(180deg, var(--card), color-mix(in oklab, var(--primary) 10%, var(--card)));
+  --btn-face-press: linear-gradient(180deg, color-mix(in oklab, var(--foreground) 12%, var(--card)), var(--card));
+  --btn-rim: color-mix(in oklab, var(--foreground) 55%, var(--card));
   /* Every button casts Tailwind's shadow-sm, whatever its face. */
   --btn-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
   --btn-raise: inset 0 1px 0 rgb(255 255 255 / 1), inset 0 -1px 0 rgb(32 28 20 / 0.05), var(--btn-sm);
@@ -139,10 +139,9 @@
 }
 
 .dark {
-  --btn-face: linear-gradient(180deg, #26262c 0%, #1c1c21 100%);
-  --btn-face-hover: linear-gradient(180deg, #2c2c33 0%, #212127 100%);
-  --btn-face-press: linear-gradient(180deg, #17171b 0%, #1d1d22 100%);
-  --btn-rim: rgb(255 255 255 / 0.085);
+  --btn-face: linear-gradient(180deg, color-mix(in oklab, var(--foreground) 14%, var(--card)), color-mix(in oklab, var(--foreground) 8%, var(--card)));
+  --btn-face-hover: linear-gradient(180deg, color-mix(in oklab, var(--foreground) 18%, var(--card)), color-mix(in oklab, var(--foreground) 12%, var(--card)));
+  --btn-face-press: linear-gradient(180deg, var(--card), color-mix(in oklab, var(--foreground) 8%, var(--card)));
   --btn-raise: inset 0 1px 0 rgb(255 255 255 / 0.07), var(--btn-sm);
   --btn-raise-hover: inset 0 1px 0 rgb(255 255 255 / 0.09), var(--btn-sm);
   --btn-press: inset 0 1px 3px rgb(0 0 0 / 0.55);
@@ -205,8 +204,6 @@
   --rainbow-6: #a492ff;
   --rainbow-7: #f08ad8;
 
-  --dock: color-mix(in oklab, var(--card) 80%, transparent);
-  --dock-border: color-mix(in oklab, var(--foreground) 9%, transparent);
   --dock-shadow: 0 1px 1px rgb(0 0 0 / 0.3), 0 18px 44px -14px rgb(0 0 0 / 0.75);
 }
 
@@ -427,11 +424,12 @@
     box-shadow: var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
   }
   .btn-raised,
-  .btn-ghost:is(:hover, [aria-expanded="true"], [aria-pressed="true"], [aria-current="page"]) {
+  .btn-ghost {
     background-image: var(--btn-face);
     border-color: var(--btn-rim);
   }
-  .btn-raised:hover {
+  .btn-raised:hover,
+  .btn-ghost:hover {
     background-image: var(--btn-face-hover);
     --tw-shadow: var(--btn-raise-hover);
   }
@@ -675,7 +673,7 @@
 /* Visible toolbar surfaces use the current theme's foreground and card. */
 .toolbar-button {
   background-color: color-mix(in oklab, var(--foreground) 10%, var(--card));
-  border-color: color-mix(in oklab, var(--foreground) 40%, var(--card));
+  border-color: var(--btn-rim);
 }
 .toolbar-button:is(:hover, [aria-pressed="true"], [aria-current="page"]) {
   background-color: color-mix(in oklab, var(--foreground) 18%, var(--card));
@@ -1080,7 +1078,7 @@
 
 .brain-shape { transform-origin: 32px 34px; }
 [data-slot="effort-mascot"][data-level="minimal"] .brain-shape { animation: brain-breathe 5s ease-in-out infinite; }
-[data-slot="effort-mascot"][data-level="low"] .brain-shape { animation: brain-breathe 3.5s ease-in-out infinite; }
+[data-slot="effort-mascot"][data-level="low"] .brain-shape { animation: brain-drift 3.5s ease-in-out infinite; }
 [data-slot="effort-mascot"][data-level="medium"] .brain-shape { animation: brain-focus 4s ease-in-out infinite; }
 [data-slot="effort-mascot"][data-level="high"] .brain-shape { animation: brain-glitch 6s steps(1, end) infinite; }
 [data-slot="effort-mascot"][data-level="xhigh"] .brain-shape { animation: brain-glitch 4s steps(1, end) infinite; --brain-shift: 3px; }
@@ -1089,14 +1087,33 @@
 .brain-phase-echo[data-brain-phase="cyan"] { color: var(--rainbow-5); --brain-direction: -1; }
 .brain-phase-echo[data-brain-phase="magenta"] { color: var(--rainbow-7); --brain-direction: 1; animation-delay: -0.15s; }
 .brain-phase-scan { animation: brain-scan 3s linear infinite; }
+.brain-shimmer { animation: brain-shimmer 3.2s ease-in-out infinite; }
+.brain-spark { animation: brain-spark 3s ease-in-out infinite; }
+[data-level="minimal"] .brain-spark { animation-duration: 5s; }
+[data-level="medium"] .brain-spark { animation-duration: 2.2s; }
+[data-level="high"] .brain-spark { animation-duration: 1.6s; }
 @keyframes brain-breathe {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.025); }
+  50% { transform: translateY(-1px) scale(1.045); }
+}
+@keyframes brain-drift {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50% { transform: translateY(-3px) rotate(3deg); }
 }
 @keyframes brain-focus {
-  0%, 100% { transform: rotate(0deg); }
-  35% { transform: rotate(-2deg); }
-  65% { transform: rotate(2deg); }
+  0%, 100% { transform: scale(1); }
+  35% { transform: translateY(-2px) rotate(-2deg) scale(1.04); }
+  65% { transform: translateY(-2px) rotate(2deg) scale(1.04); }
+}
+@keyframes brain-spark {
+  0%, 100% { opacity: 0.25; }
+  45%, 55% { opacity: 1; }
+}
+@keyframes brain-shimmer {
+  0%, 15% { transform: translateX(0); opacity: 0; }
+  30% { opacity: 0.7; }
+  65% { opacity: 0.7; }
+  80%, 100% { transform: translateX(100px); opacity: 0; }
 }
 @keyframes brain-glitch {
   0%, 87%, 96%, 100% { transform: translateX(0); }
@@ -1118,25 +1135,23 @@
   to { transform: translateY(42px); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .brain-shape, .brain-phase-echo, .brain-phase-scan { animation: none !important; }
+  .brain-shape, .brain-phase-echo, .brain-phase-scan, .brain-shimmer, .brain-spark { animation: none !important; }
   .brain-phase-echo { opacity: 0.12; transform: translateX(calc(var(--brain-direction) * 1px)); }
-  .brain-phase-scan { display: none; }
+  .brain-phase-scan, .brain-shimmer { display: none; }
 }
 
-/*
- * A button shows a border only while it is hovered: its text colour, much
- * lighter (a quarter of it, the rest white). At rest the border is there but
- * clear, so nothing shifts when it appears.
- * Outside the layers, so it wins over the rims and the transparent border
- * the buttons are written with.
- */
+/* Outside the layers so utility border-transparent cannot hide an action's edge. */
 .btn-raised,
-.btn-ghost,
-.btn-tint {
-  border-color: transparent;
+.btn-ghost {
+  border-color: var(--btn-rim);
 }
 .btn-raised:hover,
-.btn-ghost:hover,
-.btn-tint:hover {
-  border-color: color-mix(in oklab, currentColor 25%, white);
+.btn-ghost:hover {
+  border-color: color-mix(in oklab, var(--foreground) 70%, var(--card));
+}
+.btn-tint {
+  border-color: color-mix(in oklab, var(--tint) 76%, black);
+}
+.btn-tint:disabled {
+  border-color: var(--btn-rim);
 }

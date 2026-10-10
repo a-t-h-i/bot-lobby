@@ -46,7 +46,7 @@ test("file allowlist ships the extension entry and prompt layers", () => {
 
 test("Pi supplies its runtime packages as peer dependencies only", () => {
   for (const name of PI_SUPPLIED) {
-    assert.equal(pkg.peerDependencies?.[name], "*", `${name} peer range`);
+    assert.equal(pkg.peerDependencies?.[name], name === "typebox" ? "*" : ">=1.0.1 <1.1.0", `${name} peer range`);
     assert.equal(pkg.dependencies?.[name], undefined, `${name} hard dependency`);
   }
 });

@@ -95,7 +95,7 @@ test("cancellation is never retried", async () => {
   const pending = runAgent(request({ retries: 3, timeoutMs: 60_000 }), hanging);
   cancelAllRuns();
   const run = await pending;
-  assert.equal(calls, 1, "an aborted run must not be repeated");
+  assert.equal(calls, 0, "cancellation during host setup never starts a process");
   assert.equal(run.status, "cancelled");
 });
 

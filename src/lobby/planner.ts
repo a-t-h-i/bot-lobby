@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 /**
  * Task planning mode: a planning panel. The user describes an idea (or picks a
  * GitHub issue) and every seat questions them from its own domain — DEV,
@@ -998,14 +999,22 @@ export class PlanningSession {
 
   private async run(label: string, kind: "planner" | "panel", profile: QuickFixProfile, request: { task: string; systemPrompt: string; tools: readonly string[]; excalidraw?: Grant }, signal: AbortSignal, setStep: (step: string) => void, routedFrom?: string): Promise<RunOutcome> {
     const startedAt = Date.now();
+    const runId = randomUUID();
     let outcome: RunOutcome;
     try {
       const attempt = (model: string | undefined, thinking: string) => runPiAgent(
         {
           cwd: this.deps.cwd,
+          agent: { runId, taskId: runId, domain: label === "DESIGN" ? "designer" : label === "QA" ? "qa" : "backend", role: label === "RESEARCH" ? "researcher" : "reviewer" },
           ...request,
           model,
           thinking,
+          mcpTools: profile.mcpTools,
+          onChildRun: (child) => {
+            this.deps.feed?.step(label, `child ${child.runId.slice(0, 8)}: ${child.step ?? child.status}`, child.runId);
+            if (child.status !== "running") this.deps.feed?.end(child.runId, child.status !== "success");
+            this.deps.onChange?.();
+          },
           timeoutMs: profile.timeoutMs,
           signal,
           stallTimeoutMs: this.deps.stallTimeoutMs,

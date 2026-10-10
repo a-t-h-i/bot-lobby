@@ -63,6 +63,12 @@ export interface DeskSessionOptions {
 }
 
 /** Master-side desk for one batch of parallel workers. */
+const sessions = new Map<string, DeskSession>();
+
+export function deskSessionAt(address: string): DeskSession | undefined {
+  return sessions.get(address);
+}
+
 export class DeskSession {
   readonly desk: FileDesk;
   private server?: DeskServer;
@@ -77,6 +83,7 @@ export class DeskSession {
 
   async open(): Promise<void> {
     this.server = await startDeskServer((request) => this.handle(request));
+    sessions.set(this.server.address, this);
   }
 
   /** Environment that points one worker's pi process at this desk. */
@@ -97,8 +104,13 @@ export class DeskSession {
 
   /** End of one attempt: hand everything it held to whoever is next, with `note` for them. */
   release(worker: WorkerId, note: (path: string, next: Claim) => string): void {
-    this.handles.get(worker)?.annotate({ waitingFor: undefined });
+    this.releaseFiles(worker, note);
     this.handles.delete(worker);
+  }
+
+  /** A coordinating worker releases claims but still receives steering messages. */
+  releaseFiles(worker: WorkerId, note: (path: string, next: Claim) => string): void {
+    this.handles.get(worker)?.annotate({ waitingFor: undefined });
     for (const handover of this.desk.release(worker, note)) this.options.onHandover?.(handover);
   }
 
@@ -107,6 +119,7 @@ export class DeskSession {
   }
 
   async close(): Promise<void> {
+    if (this.server) sessions.delete(this.server.address);
     this.desk.close();
     await this.server?.close();
     this.server = undefined;

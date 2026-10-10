@@ -27,12 +27,15 @@ export interface AgentModelConfig {
   thinking: string;
   /** Free-form instructions layered on top of this agent's built-in prompt. */
   instructions?: string;
+  /** Exact native MCP tool names this profile may call; empty grants none. */
+  mcpTools?: string[];
   /** Time limit per run; falls back to `workflow.agentTimeoutMs`. */
   timeoutMs?: number;
 }
 
 /** Scouts pick a model and a time limit only; their thinking is fixed at `SCOUT_THINKING`. */
 export interface ScoutConfig {
+  mcpTools?: string[];
   model: ModelRef;
   timeoutMs: number;
 }
@@ -320,20 +323,27 @@ function positive(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
+export function normalizeMcpTools(value: unknown): string[] {
+  return Array.isArray(value) ? [...new Set(value.filter((tool): tool is string => typeof tool === "string" && /^mcp__[A-Za-z0-9_]+__[A-Za-z0-9_]+$/.test(tool)))] : [];
+}
+
 /** Merge one agent's override over its default; legacy `inherit` or unknown thinking falls back to the default level. */
 function normalizeAgent(base: AgentModelConfig, override: Partial<AgentModelConfig> | undefined): AgentModelConfig {
   const merged = { ...base, ...(override ?? {}) };
   const thinking = isThinkingLevel(merged.thinking) ? merged.thinking : base.thinking;
   const timeoutMs = positive(merged.timeoutMs) ?? base.timeoutMs;
-  return { model: merged.model, thinking, ...(typeof merged.instructions === "string" ? { instructions: merged.instructions } : {}), ...(timeoutMs ? { timeoutMs } : {}) };
+  const mcpTools = normalizeMcpTools(merged.mcpTools);
+  return { model: merged.model, thinking, ...(mcpTools.length ? { mcpTools } : {}), ...(typeof merged.instructions === "string" ? { instructions: merged.instructions } : {}), ...(timeoutMs ? { timeoutMs } : {}) };
 }
 
 /** Scouts keep a model and a time limit; any thinking value in the file is dropped. */
 function normalizeScout(override: Partial<ScoutConfig> | undefined): ScoutConfig {
   const base = DEFAULT_CONFIG.scout;
+  const mcpTools = normalizeMcpTools(override?.mcpTools);
   return {
     model: typeof override?.model === "string" && override.model.trim() ? override.model : base.model,
     timeoutMs: positive(override?.timeoutMs) ?? base.timeoutMs,
+    ...(mcpTools.length ? { mcpTools } : {}),
   };
 }
 
@@ -479,6 +489,8 @@ export interface AgentProfile {
   thinking: string;
   timeoutMs: number;
   instructions?: string;
+  /** Exact native MCP tool names this profile may call; empty grants none. */
+  mcpTools?: string[];
 }
 
 /** The settings entry a domain/role run draws from. */
@@ -503,10 +515,10 @@ export function agentProfile(config: BotLobbyConfig, domain: Domain, role: Role)
   const instructions = config.agents[domain].instructions;
   const fallback = config.workflow.agentTimeoutMs;
   if (kind === "scout") {
-    return { kind, model: modelOf(config.scout.model), thinking: SCOUT_THINKING, timeoutMs: config.scout.timeoutMs || fallback, instructions };
+    return { kind, model: modelOf(config.scout.model), thinking: SCOUT_THINKING, timeoutMs: config.scout.timeoutMs || fallback, instructions, ...(config.scout.mcpTools?.length ? { mcpTools: config.scout.mcpTools } : {}) };
   }
   const entry = kind === "researcher" ? config.researcher : config.agents[kind];
-  return { kind, model: modelOf(entry.model), thinking: entry.thinking, timeoutMs: entry.timeoutMs ?? fallback, instructions };
+  return { kind, model: modelOf(entry.model), thinking: entry.thinking, timeoutMs: entry.timeoutMs ?? fallback, instructions, ...(entry.mcpTools?.length ? { mcpTools: entry.mcpTools } : {}) };
 }
 
 /** The settings entry of a lobby agent (quick fix or planner). */
@@ -515,19 +527,19 @@ export function lobbyAgentConfig(config: BotLobbyConfig, kind: LobbyAgentKind): 
 }
 
 /** Profile for a lobby agent run, from settings alone; `model` is undefined while unset. */
-export function lobbyAgentProfile(config: BotLobbyConfig, kind: LobbyAgentKind): { model?: string; thinking: string; timeoutMs: number; instructions?: string } {
+export function lobbyAgentProfile(config: BotLobbyConfig, kind: LobbyAgentKind): { model?: string; thinking: string; timeoutMs: number; instructions?: string; mcpTools?: string[] } {
   const entry = lobbyAgentConfig(config, kind);
-  return { model: modelOf(entry.model), thinking: entry.thinking, timeoutMs: entry.timeoutMs ?? config.workflow.agentTimeoutMs, instructions: entry.instructions };
+  return { model: modelOf(entry.model), thinking: entry.thinking, timeoutMs: entry.timeoutMs ?? config.workflow.agentTimeoutMs, instructions: entry.instructions, ...(entry.mcpTools?.length ? { mcpTools: entry.mcpTools } : {}) };
 }
 
 /**
  * A planning panel seat's profile: the domain's (or the researcher's) model,
  * thinking and custom instructions, bounded by the planner's per-turn limit.
  */
-export function panelMemberProfile(config: BotLobbyConfig, member: PanelMember): { model?: string; thinking: string; timeoutMs: number; instructions?: string } {
+export function panelMemberProfile(config: BotLobbyConfig, member: PanelMember): { model?: string; thinking: string; timeoutMs: number; instructions?: string; mcpTools?: string[] } {
   const entry = member === "researcher" ? config.researcher : config.agents[member];
   const timeoutMs = config.planner.timeoutMs ?? config.workflow.agentTimeoutMs;
-  return { model: modelOf(entry.model), thinking: entry.thinking, timeoutMs, instructions: entry.instructions };
+  return { model: modelOf(entry.model), thinking: entry.thinking, timeoutMs, instructions: entry.instructions, ...(entry.mcpTools?.length ? { mcpTools: entry.mcpTools } : {}) };
 }
 
 /** Resolves the model, thinking and time limit one subagent run uses. */

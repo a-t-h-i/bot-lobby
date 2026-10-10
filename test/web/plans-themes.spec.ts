@@ -74,39 +74,63 @@ test("a theme is saved under its own name, renamed, and kept with pi for every s
   await fresh.context().close();
 });
 
-test("every button casts shadow-sm; its border shows only on hover, much lighter than its text", async ({ page, server }, info) => {
+test("buttons and composer have visible borders before hover", { tag: "@theme" }, async ({ page, server }, info) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => { window.location.hash = "#/tasks/T-mock-1"; });
   await expect(page.locator("#main [data-tone=primary]:visible").first()).toBeVisible();
   await page.mouse.move(0, 899);
-  const off = await page.evaluate(() => [...document.querySelectorAll(".btn-raised, .btn-ghost, .btn-tint")]
-    .filter((el: any) => el.getBoundingClientRect().width > 0 && !el.matches(":hover"))
-    .map((el: any) => {
-      const style = getComputedStyle(el);
-      return { label: el.getAttribute("aria-label") ?? el.textContent.trim(), border: style.borderTopColor, shadow: style.boxShadow };
-    })
-    .filter((button: any) => button.border !== "rgba(0, 0, 0, 0)" || !/0px 1px 3px 0px rgba\(0, 0, 0, 0\.1\), rgba\(0, 0, 0, 0\.1\) 0px 1px 2px -1px|rgba\(0, 0, 0, 0\.1\) 0px 1px 3px 0px, rgba\(0, 0, 0, 0\.1\) 0px 1px 2px -1px/.test(button.shadow)));
-  expect(off, "at rest: shadow-sm and no visible border").toEqual([]);
-
-  // The text colour much lighter: a quarter of it, the rest white.
-  const lighter = (text: string) => page.evaluate((color) => {
+  const checkEdges = async () => {
+    const edges = await page.evaluate(() => {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 1;
+      const ctx = canvas.getContext("2d");
+      const luminance = (color: string) => {
+        ctx.clearRect(0, 0, 1, 1);
+        ctx.fillStyle = color;
+        ctx.fillRect(0, 0, 1, 1);
+        const rgba = [...ctx.getImageData(0, 0, 1, 1).data];
+        const rgb = rgba.slice(0, 3).map((value: number) => {
+          const channel = value / 255;
+          return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+        });
+        return { value: rgb[0]! * 0.2126 + rgb[1]! * 0.7152 + rgb[2]! * 0.0722, alpha: rgba[3] };
+      };
+      const root = getComputedStyle(document.documentElement);
+      const surfaces = ["--card", "--background"].map((token) => luminance(root.getPropertyValue(token)).value);
+      return [...document.querySelectorAll('.btn-raised, .btn-ghost, .btn-tint, .toolbar-button, .group\\/composer')]
+        .filter((el: any) => el.getBoundingClientRect().width > 0 && !el.matches(":disabled"))
+        .map((el: any) => {
+          const style = getComputedStyle(el);
+          const border = luminance(style.borderTopColor);
+          return {
+            label: el.getAttribute("aria-label") ?? el.className,
+            width: Number.parseFloat(style.borderTopWidth),
+            alpha: border.alpha,
+            contrast: Math.min(...surfaces.map((surface) => (Math.max(border.value, surface) + 0.05) / (Math.min(border.value, surface) + 0.05))),
+          };
+        });
+    });
+    expect(edges.length).toBeGreaterThan(5);
+    expect(edges.filter((edge) => edge.width < 1 || edge.alpha < 255 || edge.contrast < 3), "control edges contrast at least 3:1 with the card and page").toEqual([]);
+  };
+  await checkEdges();
+  const composer = page.locator(".group\\/composer");
+  expect(await composer.evaluate((el: any) => {
     const probe = document.createElement("span");
-    probe.style.color = color;
-    probe.style.borderTop = "1px solid color-mix(in oklab, currentColor 25%, white)";
-    document.body.append(probe);
-    const value = getComputedStyle(probe).borderTopColor;
+    probe.style.backgroundColor = "var(--card)";
+    el.append(probe);
+    const same = getComputedStyle(el).backgroundColor === getComputedStyle(probe).backgroundColor;
     probe.remove();
-    return value;
-  }, text);
-  // One of each face: primary, raised and quiet.
+    return same;
+  }), "the composer is an opaque card").toBe(true);
+  await composer.getByRole("textbox").fill("Check the send button");
+  await checkEdges();
+
   const hovered = ["[data-tone=primary]", ".btn-raised", ".btn-ghost"].map((face) => page.locator(`#main ${face}:visible, header ${face}:visible`).first());
   for (const button of hovered) {
     await button.hover();
-    const text = await button.evaluate((el: any) => getComputedStyle(el).color);
-    const want = await lighter(text);
-    await expect.poll(() => button.evaluate((el: any) => getComputedStyle(el).borderTopColor), { message: "hovered: the border is its text, much lighter" }).toBe(want);
-    expect(want).not.toBe(text);
+    await checkEdges();
   }
   const bar = page.locator("#main [data-pane='detail']").getByRole("button").first().locator("xpath=..");
   const box = (await bar.boundingBox())!;
@@ -116,4 +140,14 @@ test("every button casts shadow-sm; its border shows only on hover, much lighter
   await bar.getByRole("button").nth(1).hover();
   await page.waitForTimeout(250);
   await page.screenshot({ path: info.outputPath("buttons-hover.png"), clip });
+  await composer.screenshot({ path: info.outputPath("composer.png") });
+  await page.evaluate(() => { window.location.hash = "#/plan"; });
+  await page.getByRole("button", { name: "Previous plans" }).click();
+  await page.getByRole("list", { name: "Previous plans" }).getByRole("button", { name: /Export tasks as CSV/ }).click();
+  await checkEdges();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page.getByRole("alertdialog")).toBeVisible();
+  await checkEdges();
+  await page.getByRole("alertdialog").screenshot({ path: info.outputPath("delete-confirm.png") });
+  await page.keyboard.press("Escape");
 });

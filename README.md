@@ -124,3 +124,33 @@ Settings live in `~/.pi/bot-lobby/config.json` (`BOT_LOBBY_CONFIG_DIR` moves the
 `/bot-lobby config` shows what is in effect. Colour themes you import, under a name you choose,
 are kept in `themes.json` beside it, so every Pi session and project shows them. Tasks and
 project knowledge stay in `.pi/bot-lobby/` inside your project.
+
+
+Requires **Pi 1.0.x** (1.0.1 or later). Every bot-lobby agent can use
+`delegate_subtasks` for substantial, separable work. Each parent gets five child
+slots total, shared across retries; children inherit its model, thinking, role,
+permissions, worktree and remaining time. Children report to their parent, which
+integrates and verifies the result. Children cannot delegate further. Active
+children share `workflow.maxParallelWorkers`; waiting parents do not use those
+child slots. Cancelling or finishing a parent stops its children and releases
+their file claims. Full reports are saved under `.pi/bot-lobby/delegations/`.
+
+Active task steps show the parent and active worker children, for example
+**Step 6 – Implement large feature (6 devs working)**. Queued and finished agents
+are excluded. A child finishing does not complete a checklist step.
+
+The oracle, agents and children compact at settled turn boundaries before context
+reaches 250,000 estimated tokens, or earlier at 80% of the model window or Pi's
+native reserve threshold. Recent messages and summaries retain unfinished work;
+raw session history remains available. A failed summary leaves context intact.
+The boundary gives headroom below 300,000 tokens; a single very large input or tool
+result can temporarily exceed it before the next boundary.
+
+Pi's native MCP, `tool_search` and `codemode` are available. **MCP tools** in each
+agent's Settings entry grants exact tool names, one per line, such as
+`mcp__github__get_issue`. In `config.json` the same field is `mcpTools: ["mcp__github__get_issue"]`
+on `master`, `agents.backend`, `agents.designer`, `agents.qa`, `scout`, `researcher`,
+`quickFix` and `planner`. Grants default to empty and children inherit them.
+Read-only roles also require the server's `readOnlyHint: true`; hidden tools and
+ungranted calls are blocked, including calls nested inside codemode. Configure
+server connections through Pi's native MCP settings.

@@ -15,6 +15,8 @@ import { taskDirFor } from "./persistence.ts";
 /** A worker run under way: the step it works on is found from its instruction. */
 export interface ActiveRun {
   runId: string;
+  parentRunId?: string;
+  stepInstruction?: string;
   instruction: string;
   startedAt: string;
 }
@@ -97,7 +99,7 @@ export function taskWork(root: string, configDir: string, taskId: string, now = 
 const noted = new Map<string, Set<string>>();
 
 /** A worker run of the task started or ended: the steps it works on read as active while it runs. */
-export function noteWorkerRun(root: string, configDir: string, taskId: string, run: { runId: string; instruction?: string; startedAt: string; status: string }): void {
+export function noteWorkerRun(root: string, configDir: string, taskId: string, run: { runId: string; parentRunId?: string; stepInstruction?: string; instruction?: string; startedAt: string; status: string }): void {
   const running = run.status === "running";
   const ids = noted.get(taskId) ?? new Set<string>();
   if (running === ids.has(run.runId)) return;
@@ -106,7 +108,7 @@ export function noteWorkerRun(root: string, configDir: string, taskId: string, r
   noted.set(taskId, ids);
   updateWork(root, configDir, taskId, (work) => {
     work.active = work.active.filter((entry) => entry.runId !== run.runId);
-    if (running) work.active.push({ runId: run.runId, instruction: run.instruction ?? "", startedAt: run.startedAt });
+    if (running) work.active.push({ runId: run.runId, instruction: run.instruction ?? "", startedAt: run.startedAt, ...(run.parentRunId ? { parentRunId: run.parentRunId } : {}), ...(run.stepInstruction ? { stepInstruction: run.stepInstruction } : {}) });
   });
 }
 

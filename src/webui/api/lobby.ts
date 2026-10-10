@@ -24,7 +24,7 @@ function planFacts(task: Task, work: WorkProjection | undefined): Pick<SnapshotT
   return {
     progress: { done: steps.filter((step) => step.status === "done").length, total: steps.length },
     ...(current ? { currentStep: current.text } : {}),
-    ...(active.length > 0 ? { activeSteps: active.map((step) => ({ text: step.text, workedMs: step.workedMs })) } : {}),
+    ...(active.length > 0 ? { activeSteps: active.map((step) => ({ text: step.text, workedMs: step.workedMs, activeAgentCount: step.activeAgentCount })) } : {}),
     ...clock,
   };
 }

@@ -315,7 +315,7 @@ export function targetStep(steps: readonly string[], instruction: string | undef
 export function latestWorkerRun(runs: readonly AgentRun[]): AgentRun | undefined {
   let latest: AgentRun | undefined;
   for (const run of runs) {
-    if (run.role !== "worker" || !run.instruction) continue;
+    if (run.role !== "worker" || run.parentRunId || !run.instruction) continue;
     if (!latest || Date.parse(run.startedAt) >= Date.parse(latest.startedAt)) latest = run;
   }
   return latest;
@@ -360,7 +360,7 @@ function replaySteps(steps: readonly string[], runs: readonly AgentRun[]): { com
   const latestRun = latestWorkerRun(runs);
   let latest = -1;
   for (const run of byStart(runs)) {
-    if (run.role !== "worker") continue;
+    if (run.role !== "worker" || run.parentRunId) continue;
     const matched = targetStep(steps, run.instruction, completed);
     if (run === latestRun) latest = matched >= 0 && run.status === "success" ? matched + 1 : matched;
     if (run.status !== "success") continue;
@@ -401,6 +401,7 @@ export interface StepWork {
   ms: number;
   /** A worker is on it right now. */
   active: boolean;
+  activeAgentCount: number;
 }
 
 /** The steps a run works on: every step of a range it names, else the step it targets, else the next one still open. */
@@ -419,19 +420,29 @@ function runSteps(steps: readonly string[], instruction: string | undefined, com
  * completes them, so a later run that names no step goes to the next one.
  */
 export function stepWork(steps: readonly string[], runs: readonly AgentRun[], now = Date.now()): StepWork[] {
-  const work = steps.map(() => ({ ms: 0, active: false }));
+  const work = steps.map(() => ({ ms: 0, active: false, activeAgentCount: 0 }));
+  const assigned = new Map<string, number[]>();
+  const counted = new Set<string>();
   const completed = new Set<number>();
   for (const run of byStart(runs)) {
     if (run.role !== "worker") continue;
-    const covered = runSteps(steps, run.instruction, completed);
+    if (counted.has(run.runId)) continue;
+    counted.add(run.runId);
+    const covered = run.parentRunId
+      ? assigned.get(run.parentRunId) ?? runSteps(steps, run.stepInstruction, completed)
+      : runSteps(steps, run.instruction, completed);
+    assigned.set(run.runId, covered);
     const start = Date.parse(run.startedAt);
     const end = run.finishedAt ? Date.parse(run.finishedAt) : now;
     const ms = Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, end - start) : 0;
     for (const index of covered) {
-      work[index]!.ms += ms;
-      if (run.status === "running") work[index]!.active = true;
+      if (!run.parentRunId) work[index]!.ms += ms;
+      if (run.status === "running") {
+        work[index]!.active = true;
+        work[index]!.activeAgentCount += 1;
+      }
     }
-    if (run.status === "success" && covered.length > 0) markThrough(completed, covered[covered.length - 1]!);
+    if (!run.parentRunId && run.status === "success" && covered.length > 0) markThrough(completed, covered[covered.length - 1]!);
   }
   return work;
 }

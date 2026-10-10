@@ -42,8 +42,8 @@ export function registerDeskClient(pi: ExtensionAPI, client?: DeskClient): void 
     const path = editPath(event.input);
     if (!path) return undefined;
     const answer = await desk.request({ op: "check", path });
-    // If the desk is gone the batch is over; never wedge the worker on it.
-    if (!answer.ok || answer.allowed) return undefined;
+    // A vanished coordinator must not let an orphaned worker edit shared files.
+    if (answer.ok && answer.allowed) return undefined;
     return { block: true, reason: answer.text };
   });
 

@@ -193,7 +193,7 @@ test("the worker-side extension blocks unclaimed edits and registers the desk to
   answers.check = { ok: true, allowed: true, text: "" };
   assert.equal(await toolCall({ toolName: "write", input: { path: "a.ts" } }), undefined);
   answers.check = { ok: false, text: "the file desk is unavailable" };
-  assert.equal(await toolCall({ toolName: "edit", input: { path: "a.ts" } }), undefined, "a vanished desk never wedges the worker");
+  assert.deepEqual(await toolCall({ toolName: "edit", input: { path: "a.ts" } }), { block: true, reason: "the file desk is unavailable" }, "a vanished coordinator blocks orphaned edits");
   const claimed = await tools.get("claim_file")!.execute("id", { path: "a.ts", intent: "x" });
   assert.equal(claimed.content[0]!.text, "yours");
   assert.ok(seen.includes("claim"));

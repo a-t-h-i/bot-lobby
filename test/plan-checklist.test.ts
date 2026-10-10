@@ -272,3 +272,11 @@ test("a plan that opens with a short steps list keeps it as the checklist, and i
   assert.equal(planDetails(headed), undefined);
   assert.equal(planDetails("## Steps\n1. Only steps"), undefined, "nothing beyond the list");
 });
+
+
+test("successful child workers cannot advance their parent's plan step", () => {
+  const text = plan("Small feature", "Large feature", "Verify");
+  const parent = worker("parent", "Step 2: Large feature", 1, "running");
+  const child = { ...worker("child", "Step 3: Verify", 2, "success"), parentRunId: "parent", stepInstruction: parent.instruction };
+  assert.deepEqual(statuses(planChecklist(text, [parent, child])), ["done", "current", "pending"]);
+});

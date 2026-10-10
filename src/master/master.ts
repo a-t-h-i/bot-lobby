@@ -52,7 +52,7 @@ export interface ScoutRequest {
 /** Model, thinking and time limit for one run, from settings. */
 function profileFields(config: BotLobbyConfig, resolver: ProfileResolver | undefined, domain: Domain, role: AgentRequest["role"]) {
   const profile = profileFor(config, resolver, domain, role);
-  return { model: profile.model, thinking: profile.thinking, timeoutMs: profile.timeoutMs };
+  return { model: profile.model, mcpTools: profile.mcpTools, thinking: profile.thinking, timeoutMs: profile.timeoutMs };
 }
 
 function scoutInstruction(request: ScoutRequest, domain: Domain): string {
@@ -141,6 +141,7 @@ export async function runScouts(request: ScoutRequest, run: ProcessRunner = spaw
   ]);
   const extraTools = request.hints?.tools() ?? [];
   const requests: AgentRequest[] = request.domains.map((domain, index) => ({
+    delegationQuota: { used: 0 },
     taskId: request.taskId,
     domain,
     role: "scout",
@@ -286,6 +287,7 @@ export async function runWorker(
   const hintTools = request.hints?.tools() ?? [];
   const extraTools = [...(request.agent?.extraTools ?? []), ...hintTools];
   const base: AgentRequest = {
+    delegationQuota: { used: 0 },
     taskId: request.taskId,
     domain: request.domain,
     role: "worker",

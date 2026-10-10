@@ -9,7 +9,7 @@ import { createConnection, createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-export type DeskOp = "hello" | "check" | "claim" | "handover" | "mine" | "wait";
+export type DeskOp = "hello" | "check" | "claim" | "handover" | "mine" | "wait" | "delegate" | "cancel_delegate";
 
 export interface DeskRequest {
   id: number;
@@ -17,6 +17,7 @@ export interface DeskRequest {
   op: DeskOp;
   path?: string;
   intent?: string;
+  briefs?: string[];
   note?: string;
   timeoutMs?: number;
 }
@@ -79,12 +80,12 @@ function serve(socket: Socket, handler: DeskHandler): void {
 }
 
 /** Start a desk server on a fresh private socket. */
-export async function startDeskServer(handler: DeskHandler): Promise<DeskServer> {
+export async function startDeskServer(handler: DeskHandler, onDisconnect?: () => void): Promise<DeskServer> {
   const address = socketAddress();
   const sockets = new Set<Socket>();
   const server = createServer((socket) => {
     sockets.add(socket);
-    socket.on("close", () => sockets.delete(socket));
+    socket.on("close", () => { sockets.delete(socket); onDisconnect?.(); });
     serve(socket, handler);
   });
   await new Promise<void>((done, fail) => {
