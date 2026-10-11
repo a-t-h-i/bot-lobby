@@ -8,12 +8,13 @@
  * comment on the open task on Tasks. While a pop-up is open it steps aside, so
  * only one thing asks for you at a time.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { ArrowUp, Eye, FileText, Paperclip, Square, X } from "lucide-react"
 import { Keys, KeyHint } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/reui/select"
 import { call } from "@/lib/api"
 import { act } from "@/lib/act"
 import { useComposerContext, type ComposerSession } from "@/lib/composerContext"
@@ -27,7 +28,7 @@ import { continueList, link, wrap, type Edit } from "./markdownEdit"
 import { cn } from "@/lib/utils"
 import { projectUrl } from "@/lib/project"
 import type { LobbySnapshot, StatusInfo, UploadInfo } from "@protocol"
-import { useTopic } from "./hooks"
+import { useCompactLandscape, useTopic } from "./hooks"
 import { go, type Route } from "./router"
 import { knowledgeHash } from "./knowledgeView"
 import { KnowledgePaneToggle } from "./KnowledgePaneToggle"
@@ -148,7 +149,7 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
   )
 }
 
-export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<string, string>; onHelp: () => void }) {
+export function Composer({ route, keys, onHelp, dockNav }: { route: Route; keys: Record<string, string>; onHelp: () => void; dockNav?: ReactNode }) {
   const [text, setText] = useState("")
   const [files, setFiles] = useState<Pending[]>([])
   const [preview, setPreview] = useState(false)
@@ -159,6 +160,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
   const lobby = useTopic<LobbySnapshot>("lobby")
   const blocked = useAnyOverlay()
   const busy = (status.data?.busy ?? false) || Boolean(lobby.data?.reply?.trim())
+  const compact = useCompactLandscape()
 
   const { taskId: openTask, session: openSession } = useComposerContext()
   const targets = useMemo(() => targetsFor(route, openTask, openSession), [route, openTask, openSession])
@@ -329,13 +331,15 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
 
   return (
     <div
+      id="app-dock"
       ref={card}
       className={cn(
-        "dock pointer-events-none absolute inset-x-0 bottom-0 z-30 px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] transition-opacity duration-200 ease-snap max-sm:px-2 max-sm:pb-[max(0.5rem,env(safe-area-inset-bottom))]",
+        "dock pointer-events-none absolute inset-x-0 bottom-0 z-30 px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] transition-opacity duration-200 ease-snap max-md:px-2 max-md:pb-[max(0.5rem,env(safe-area-inset-bottom))]",
         blocked && "opacity-0"
       )}
       inert={blocked}
     >
+      {dockNav ? <div className="pointer-events-auto mx-auto mb-1.5 w-full max-w-3xl">{dockNav}</div> : null}
       <div className="pointer-events-auto mx-auto w-full max-w-3xl">
         <div
           className={cn(
@@ -422,31 +426,44 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
             </Tooltip>
 
             <span aria-hidden="true" className="mx-1.5 h-4 w-px bg-border" />
-            {route.kind === "tab" && route.tab === "knowledge" ? <KnowledgePaneToggle rest={route.rest} /> : targets.length > 1 ? (
-              <div role="radiogroup" aria-label="Send to" className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5 shadow-[inset_0_1px_2px_rgb(0_0_0/0.07)]">
-                {targets.map((entry) => (
-                  <button
-                    key={entry.id}
-                    aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
-                    type="button"
-                    role="radio"
-                    data-compact
-                    aria-checked={entry.id === target.id}
-                    onClick={() => setChosen(entry.id)}
-                    className={cn(
-                      "h-6 rounded-md border border-transparent px-2.5 text-xs font-medium transition-[background-color,color,box-shadow] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
-                      entry.id === target.id ? "btn-raised btn-soft bg-card text-foreground" : "btn-ghost text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    {entry.pill}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <span className="px-1 text-xs text-muted-foreground">To the {target.pill.toLowerCase()}</span>
-            )}
+            <div className={cn("contents", !compact && "max-md:block max-md:w-full max-md:order-last")}>
+              {route.kind === "tab" && route.tab === "knowledge" ? <KnowledgePaneToggle rest={route.rest} /> : compact && targets.length > 1 ? (
+                <Select value={target.id} onValueChange={(id) => setChosen(id as TargetId)}>
+                  <SelectTrigger aria-label="Send to" className="h-7 min-w-0 gap-1.5 px-2 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {targets.map((entry) => (
+                      <SelectItem key={entry.id} value={entry.id}>{entry.pill}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : targets.length > 1 ? (
+                <div role="radiogroup" aria-label="Send to" className="flex max-md:flex-wrap items-center gap-0.5 rounded-lg bg-muted p-0.5 shadow-[inset_0_1px_2px_rgb(0_0_0/0.07)]">
+                  {targets.map((entry) => (
+                    <button
+                      key={entry.id}
+                      aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
+                      type="button"
+                      role="radio"
+                      data-compact
+                      aria-checked={entry.id === target.id}
+                      onClick={() => setChosen(entry.id)}
+                      className={cn(
+                        "h-6 rounded-md border border-transparent px-2.5 text-xs font-medium transition-[background-color,color,box-shadow] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
+                        entry.id === target.id ? "btn-raised btn-soft bg-card text-foreground" : "btn-ghost text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {entry.pill}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <span className="px-1 text-xs text-muted-foreground">To the {target.pill.toLowerCase()}</span>
+              )}
+            </div>
 
-            <div className="@container ml-auto flex min-w-0 flex-1 items-center justify-end overflow-hidden px-2">
+            <div className="@container ml-auto flex min-w-0 flex-1 items-center justify-end overflow-hidden px-2 max-md:hidden">
               <div className="flex items-center justify-end gap-3.5">
                 {route.kind === "tab" && route.tab === "plan" ? (
                   <KeyHint chord={keys.savePlan ?? "Ctrl+S"} className="hidden @[34rem]:inline-flex">
@@ -480,6 +497,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
               </div>
             </div>
 
+            <div className="contents max-md:ml-auto max-md:flex max-md:items-center max-md:gap-2">
             {busy && target.id === "oracle" ? (
               <ConfirmButton label="Stop" icon={Square} iconOnly compact title="Stop the oracle?" description="The current response stops. Work already recorded is kept." confirmLabel="Stop" variant="destructive" onConfirm={() => void stop()} />
             ) : null}
@@ -501,6 +519,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
                 Send <Keys chord="Enter" />
               </TooltipContent>
             </Tooltip>
+            </div>
           </div>
 
           {dragging ? (

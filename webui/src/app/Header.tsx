@@ -15,6 +15,7 @@ import type { ConnectionState } from "@/lib/events"
 import type { SnapshotTask, StatusInfo } from "@protocol"
 import type { Route } from "./router.ts"
 import { ProjectNotice, ProjectSwitcher, useProjects } from "./ProjectSwitcher.tsx"
+import { useMediaQuery } from "./hooks.ts"
 import { setSoundMuted, useSoundMuted } from "./sound"
 
 /** What the link to the server is doing: a green dot when live, words when it is not. */
@@ -62,7 +63,7 @@ function IconLink({ label, hint, href, active, children }: { label: string; hint
         </a>
       </TooltipTrigger>
       <TooltipContent side="bottom">
-        {label} <Keys chord={hint} />
+        {label} <span className="max-md:hidden"><Keys chord={hint} /></span>
       </TooltipContent>
     </Tooltip>
   )
@@ -85,16 +86,24 @@ function HelpButton({ hint, onHelp }: { hint: string; onHelp: () => void }) {
 
 function SoundToggle() {
   const muted = useSoundMuted()
-  const label = muted ? "Unmute prompt sounds" : "Mute prompt sounds"
+  const phone = useMediaQuery("(max-width: 767.98px)")
+  const label = phone ? "App sounds" : muted ? "Unmute prompt sounds" : "Mute prompt sounds"
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button type="button" aria-label={label} aria-pressed={muted} aria-describedby="focused-action-help" className={ICON} onClick={() => setSoundMuted(!muted)}>
-          {muted ? <VolumeX aria-hidden="true" className="size-[1.05rem]" /> : <Volume2 aria-hidden="true" className="size-[1.05rem]" />}
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">{label}</TooltipContent>
-    </Tooltip>
+    <>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" aria-label={label} aria-pressed={muted} aria-describedby={phone ? "app-sounds-help focused-action-help" : "focused-action-help"} className={ICON} onClick={() => setSoundMuted(!muted)}>
+            {muted ? <VolumeX aria-hidden="true" className="size-[1.05rem]" /> : <Volume2 aria-hidden="true" className="size-[1.05rem]" />}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{label}</TooltipContent>
+      </Tooltip>
+      {phone ? (
+        <span id="app-sounds-help" className="sr-only">
+          App sounds controls prompt tones and navigation ticks.
+        </span>
+      ) : null}
+    </>
   )
 }
 
@@ -116,7 +125,7 @@ function ThemeToggle() {
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom">
-        {dark ? "Light mode" : "Dark mode"} <Keys chord="D" />
+        {dark ? "Light mode" : "Dark mode"} <span className="max-md:hidden"><Keys chord="D" /></span>
       </TooltipContent>
     </Tooltip>
   )
@@ -214,24 +223,37 @@ export function Header({
   const busy = status?.busy ?? false
   const projects = useProjects()
   const { header, one } = useOneRow()
+  // Rendered rather than hidden: a phone must not carry duplicate Connection/Session
+  // controls or a hidden shortcut button in the accessibility tree.
+  const phone = useMediaQuery("(max-width: 767.98px)")
 
   return (
     <header ref={header} className="app-header shrink-0" data-one-row={one || undefined}>
       <div className="where flex min-w-0 items-center">
         <ProjectSwitcher projects={projects} tab={route.kind === "tab" ? route.tab : route.kind} name={name} branch={branch} />
       </div>
+      {phone ? (
+        <div className="phone-status flex min-w-0 items-center justify-end gap-2">
+          <SessionChip busy={busy} {...(task ? { task } : {})} {...(status?.sessionName ? { sessionName: status.sessionName } : {})} />
+          <Connection state={connection} />
+        </div>
+      ) : null}
       <div className="tabs min-w-0">{tabs}</div>
       <div className="tools flex min-w-0 items-center justify-end gap-2">
         {extra}
-        <SessionChip busy={busy} {...(task ? { task } : {})} {...(status?.sessionName ? { sessionName: status.sessionName } : {})} />
-        <Connection state={connection} />
+        {phone ? null : (
+          <div className="flex min-w-0 items-center gap-2">
+            <SessionChip busy={busy} {...(task ? { task } : {})} {...(status?.sessionName ? { sessionName: status.sessionName } : {})} />
+            <Connection state={connection} />
+          </div>
+        )}
         <IconLink label="Sessions" hint={keys.sessions ?? "Alt+O"} href="#/sessions" active={route.kind === "sessions"}>
           <Layers aria-hidden="true" className="size-[1.05rem]" />
         </IconLink>
         <IconLink label="Settings" hint={keys.settings ?? "Alt+S"} href="#/settings" active={route.kind === "settings"}>
           <Settings aria-hidden="true" className="size-[1.05rem]" />
         </IconLink>
-        <HelpButton hint={keys.help ?? "Alt+H"} onHelp={onHelp} />
+        {phone ? null : <HelpButton hint={keys.help ?? "Alt+H"} onHelp={onHelp} />}
         <ThemeToggle />
         <SoundToggle />
         <span id="focused-action-help" className="sr-only">
