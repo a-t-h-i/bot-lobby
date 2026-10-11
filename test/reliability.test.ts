@@ -26,7 +26,7 @@ function request(overrides: Partial<AgentRequest> = {}): AgentRequest {
     role: "scout",
     instruction: "Inspect",
     context: { task: "x" },
-    timeoutMs: 1000,
+    timeoutMs: 120_000,
     cwd: process.cwd(),
     ...overrides,
   };

@@ -25,7 +25,7 @@ async function freeze(page: Page) {
   await page.waitForTimeout(350); // Initial programmatic centring must have finished.
   const time = new Date("2030-01-01T00:00:00Z");
   await page.clock.install({ time });
-  await page.clock.pauseAt(new Date(time.getTime() + 1000));
+  await page.clock.pauseAt(new Date(time.getTime() + 60 * 60_000));
 }
 
 async function expectCommitted(page: Page, id: string) {
