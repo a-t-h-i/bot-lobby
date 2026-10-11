@@ -17,7 +17,7 @@ function Line({ entry }: { entry: ChatEntry }) {
   const time = entry.at ? formatClock(entry.at) : ""
   if (entry.role === "note") {
     return (
-      <li className="text-center text-xs text-muted-foreground">
+      <li className="break-words text-center text-xs text-muted-foreground [overflow-wrap:anywhere]">
         {entry.text}
         {time ? ` · ${time}` : ""}
       </li>
@@ -26,7 +26,7 @@ function Line({ entry }: { entry: ChatEntry }) {
   const you = entry.role === "you"
   if (you) {
     return (
-      <li className="flex flex-col items-end gap-1">
+      <li className="flex min-w-0 flex-col items-end gap-1">
         <span className="flex items-baseline gap-2 text-xs text-muted-foreground">
           {time} <span className="font-medium text-foreground">You</span>
         </span>
@@ -37,7 +37,7 @@ function Line({ entry }: { entry: ChatEntry }) {
     )
   }
   return (
-    <li className="flex flex-col gap-1">
+    <li className="flex min-w-0 flex-col gap-1">
       <span className="flex items-center gap-2 text-xs text-muted-foreground">
         <span aria-hidden="true" className="size-2 rounded-full bg-primary" />
         <span className="font-medium text-foreground">Oracle</span> {time}
@@ -59,7 +59,7 @@ interface ChatViewProps {
 
 export function ChatView({ entries, more, loading, onMore, empty }: ChatViewProps) {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-w-0 max-w-full flex-col gap-3">
       {more ? (
         <div className="flex self-center">
           <ActionButton label="Load earlier messages" icon={ChevronsUp} disabled={loading} onClick={onMore ?? (() => undefined)} />
@@ -68,7 +68,7 @@ export function ChatView({ entries, more, loading, onMore, empty }: ChatViewProp
       {entries.length === 0 ? (
         <p className="text-sm text-muted-foreground">{empty}</p>
       ) : (
-        <ol aria-label="Conversation" className="flex flex-col gap-4">
+        <ol aria-label="Conversation" className="flex min-w-0 flex-col gap-4">
           {entries.map((entry) => (
             <Line key={entry.id} entry={entry} />
           ))}

@@ -168,8 +168,8 @@ function ModelChoice(props: { value: string; models: SettingsModelInfo[]; label:
     <div className="flex flex-col gap-2">
       <Choice value={props.value} items={items} label={props.label} onChange={choose} />
       {typing ? (
-        <div className="flex gap-2">
-          <Input autoFocus value={text} placeholder="provider/model" aria-label="Model id" onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); use() } }} />
+        <div className="flex min-w-0 flex-wrap items-start gap-2">
+          <Input autoFocus value={text} placeholder="provider/model" aria-label="Model id" className="min-w-0 flex-1 max-md:h-11 max-md:min-h-11" onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); use() } }} />
           <ActionButton label="Use this model" icon={Check} tone="primary" onClick={use} />
         </div>
       ) : null}
@@ -179,10 +179,10 @@ function ModelChoice(props: { value: string; models: SettingsModelInfo[]; label:
 
 function ToggleField({ label, help, checked, onChange }: { label: string; help?: string; checked: boolean; onChange: (next: boolean) => void }) {
   return (
-    <div className="flex items-center justify-between gap-4">
+    <div className="flex min-h-0 items-center justify-between gap-4 max-md:min-h-11 max-md:items-start">
       <div className="min-w-0">
-        <div className="text-[0.8125rem] font-medium">{label}</div>
-        {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
+        <div className="break-words text-[0.8125rem] font-medium">{label}</div>
+        {help ? <p className="break-words text-xs text-muted-foreground">{help}</p> : null}
       </div>
       <Switch checked={checked} onCheckedChange={onChange} aria-label={label} />
     </div>
@@ -196,7 +196,7 @@ function TextValue({ value, onSave, placeholder, label }: { value: string; onSav
     const next = text.trim()
     if (next !== value) onSave(next)
   }
-  return <Input value={text} placeholder={placeholder} aria-label={label} onChange={(event) => setText(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit() } }} />
+  return <Input value={text} placeholder={placeholder} aria-label={label} className="max-md:h-11 max-md:min-h-11" onChange={(event) => setText(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit() } }} />
 }
 
 function MinutesField({ value, label, onSave }: { value: number; label: string; onSave: (ms: number) => void }) {
@@ -236,7 +236,7 @@ function NumberField({ label, value, min, max, suffix, onSave }: { label: string
   }
   return (
     <div className="relative">
-      <Input type="number" inputMode="numeric" min={min} max={max} value={text} aria-label={label} className={suffix ? "pr-10" : undefined} onChange={(event) => setText(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit() } }} />
+      <Input type="number" inputMode="numeric" min={min} max={max} value={text} aria-label={label} className={cn(suffix ? "pr-10" : undefined, "max-md:h-11 max-md:min-h-11")} onChange={(event) => setText(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit() } }} />
       {suffix ? <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">{suffix}</span> : null}
     </div>
   )
@@ -270,9 +270,9 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
   const [showNotes, setShowNotes] = useState(Boolean(entry.instructions))
   return (
     <section className={cn(frameVariants({ spacing: "default" }), "glass min-w-0")}>
-      <FrameHeader className="flex-row items-baseline justify-between gap-3 py-3">
-        <h3 className="text-sm font-semibold">{name}</h3>
-        <span className="truncate text-xs text-muted-foreground">
+      <FrameHeader className="flex-row items-baseline justify-between gap-3 py-3 max-md:flex-col max-md:items-start">
+        <h3 className="text-sm font-semibold max-md:max-w-full max-md:break-words">{name}</h3>
+        <span className="truncate text-xs text-muted-foreground max-md:min-w-0 max-md:max-w-full max-md:break-words max-md:overflow-visible max-md:text-clip max-md:whitespace-normal">
           {entry.model === INHERIT_MODEL ? "session model" : entry.model} · {kind === "scout" ? FIXED_SCOUT_THINKING : entry.thinking}
         </span>
       </FrameHeader>
@@ -282,7 +282,7 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
           <ModelChoice value={entry.model} models={models} label={`${name} model`} inherit={kind === "master"} onChange={chooseModel} />
         </Mini>
       </div>
-      <div className="flex items-center gap-3 rounded-lg bg-muted p-3">
+      <div className="flex items-center gap-3 rounded-lg bg-muted p-3 max-md:items-start max-md:[&_[role=slider]]:h-11">
         {kind === "scout" ? <EffortMascot level={effective} /> : null}
         <div className="min-w-0 flex-1">
           {kind === "scout" ? (
@@ -302,13 +302,13 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
           )}
         </div>
       </div>
-      <div className="flex min-h-7 items-center justify-between gap-3">
+      <div className="flex min-h-7 items-center justify-between gap-3 max-md:flex-wrap max-md:items-start">
         {hasInstructions ? (
           <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
             type="button"
             aria-expanded={showNotes}
             onClick={() => setShowNotes((now) => !now)}
-            className="flex min-h-8 items-center gap-1 rounded-md text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30"
+            className="flex min-h-8 max-w-full items-center gap-1 rounded-md text-left text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30 max-md:h-auto max-md:min-h-11"
           >
             <ChevronRight aria-hidden="true" className={cn("size-3.5 transition-transform duration-200 ease-snap", showNotes && "rotate-90")} />
             {FIELD_LABELS.instructions}
@@ -318,8 +318,8 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
           <span />
         )}
         {kind !== "master" ? (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Time limit</span>
+          <div className="flex min-w-0 items-center gap-2 max-md:flex-wrap">
+            <span className="break-words text-xs text-muted-foreground">Time limit</span>
             <div className="w-24">
               <MinutesField value={entry.timeoutMs ?? config.workflow.agentTimeoutMs} label={`${name} time limit`} onSave={(ms) => set({ timeoutMs: ms })} />
             </div>
@@ -375,15 +375,15 @@ function FoundLinters({ replaced }: { replaced: boolean }) {
   return (
     <Field label={LINT.found} help={replaced ? LINT.foundReplaced : LINT.foundHelp}>
       {!linters ? (
-        <p className="text-sm text-muted-foreground sm:text-right">{read.error ? read.error : "Looking…"}</p>
+        <p className="break-words text-sm text-muted-foreground md:text-right">{read.error ? read.error : "Looking…"}</p>
       ) : linters.length === 0 ? (
-        <p className="text-sm text-muted-foreground sm:text-right">{LINT.foundNone}</p>
+        <p className="break-words text-sm text-muted-foreground md:text-right">{LINT.foundNone}</p>
       ) : (
-        <ul aria-label={LINT.found} className={cn("flex flex-col gap-1.5 sm:items-end", replaced && "opacity-60")}>
+        <ul aria-label={LINT.found} className={cn("flex flex-col gap-1.5 md:items-end", replaced && "opacity-60")}>
           {linters.map((linter) => (
-            <li key={`${linter.tool}:${linter.folder}`} className="flex min-w-0 items-center gap-2 text-sm">
-              <span className="font-medium">{linter.tool}</span>
-              <span className="truncate text-xs text-muted-foreground">{folderLabel(linter.folder)}</span>
+            <li key={`${linter.tool}:${linter.folder}`} className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
+              <span className="min-w-0 break-words font-medium">{linter.tool}</span>
+              <span className="min-w-0 break-words text-xs text-muted-foreground">{folderLabel(linter.folder)}</span>
               <span
                 title={linter.installed ? undefined : LINT.missingHelp}
                 className={cn("inline-flex shrink-0 items-center gap-1 text-xs", linter.installed ? "text-success" : "text-warning")}
@@ -464,7 +464,7 @@ function ClassifierGroup({ config, models, save }: { config: Config; models: Set
           <TextValue value={classifier.model} label={CLASSIFIER_LABELS.model} placeholder="the host's default" onSave={(value) => void save({ classifier: { model: value } })} />
         </Field>
         <Field label={CLASSIFIER_LABELS.key} help={CLASSIFIER_LABELS.keyNote}>
-          <p className="text-sm text-muted-foreground sm:text-right">{host ?? classifier.provider}</p>
+          <p className="break-words text-sm text-muted-foreground md:text-right">{host ?? classifier.provider}</p>
         </Field>
         {CLASSIFIER_FEATURE_ITEMS.map((feature) => (
           <ToggleField key={feature.id} label={feature.label} help={feature.help} checked={classifier.features[feature.id]} onChange={(next) => void save({ classifier: { features: { [feature.id]: next } } })} />
@@ -503,7 +503,7 @@ function InstallGroup() {
       <Rows>
         <Field label={PAGE.installLabel} help={installed ? PAGE.installedNow : PAGE.installHelp}>
           {installed ? null : (
-            <div className="flex sm:justify-end">
+            <div className="flex md:justify-end">
             <ActionButton
               label={PAGE.installButton}
               icon={Download}
@@ -515,7 +515,7 @@ function InstallGroup() {
         </Field>
         {fullscreen.supported ? (
           <Field label={PAGE.fullscreenLabel} help={PAGE.fullscreenHelp}>
-            <div className="flex sm:justify-end">
+            <div className="flex md:justify-end">
               <ActionButton label={fullscreen.on ? PAGE.fullscreenOn : PAGE.fullscreenOff} icon={fullscreen.on ? Minimize : Maximize} pressed={fullscreen.on} onClick={() => void fullscreen.toggle()} />
             </div>
           </Field>
@@ -548,12 +548,12 @@ export function SettingsForm({ config, models, onConfig }: { config: Config; mod
     return next
   }
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-5 pt-5 pb-dock sm:px-8 sm:pt-8">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-5 pt-5 pb-dock md:px-8 md:pt-8">
       <header className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold tracking-tight">{PAGE.title}</h1>
         <p className="text-sm text-muted-foreground">{PAGE.intro}</p>
       </header>
-      <nav aria-label="Settings sections" className="-mx-1 flex flex-wrap gap-1 border-b border-border pb-3">
+      <nav aria-label="Settings sections" className="-mx-1 min-w-0 flex flex-wrap gap-1 border-b border-border pb-3 max-md:flex-nowrap max-md:overflow-x-auto max-md:overscroll-x-contain max-md:pb-2">
         {SECTIONS.map((name) => (
           <button
             key={name}
@@ -564,7 +564,7 @@ export function SettingsForm({ config, models, onConfig }: { config: Config; mod
             aria-controls={`settings-${name.split(" ")[0]}`}
             onClick={() => setSection(name)}
             className={cn(
-              "h-8 rounded-lg border border-transparent px-3 text-sm font-medium outline-none transition-[box-shadow,color] focus-visible:ring-3 focus-visible:ring-ring/40",
+              "h-8 rounded-lg border border-transparent px-3 text-sm font-medium outline-none transition-[box-shadow,color] focus-visible:ring-3 focus-visible:ring-ring/40 max-md:min-h-11 max-md:h-auto max-md:shrink-0 max-md:whitespace-nowrap",
               section === name ? "btn-raised bg-card text-foreground" : "text-muted-foreground hover:text-foreground"
             )}
           >

@@ -66,7 +66,7 @@ function EntryRow({
         event.preventDefault()
         pick()
       }}
-      className={selected ? "flex min-h-9 cursor-pointer flex-col gap-1 rounded-lg border border-primary/30 bg-accent px-3 py-2.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/40" : "flex min-h-9 cursor-pointer flex-col gap-1 rounded-lg border border-border px-3 py-2.5 outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/40"}
+      className={selected ? "flex min-h-9 cursor-pointer flex-col gap-1 rounded-lg border border-primary/30 bg-accent px-3 py-2.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/40 max-md:min-h-11" : "flex min-h-9 cursor-pointer flex-col gap-1 rounded-lg border border-border px-3 py-2.5 outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/40 max-md:min-h-11"}
     >
       <div className="flex gap-2">
         <div className="min-w-0 flex-1">
@@ -101,7 +101,7 @@ function Header({ view }: { view: KnowledgeViewData }) {
   const entries = view.entries.length
   return (
     <header className="flex flex-col gap-1.5">
-      <h2 className="text-lg font-semibold tracking-tight">
+      <h2 className="min-w-0 break-words text-lg font-semibold tracking-tight">
         {AGENT_DIR_NAMES[view.agent]} <span className="font-normal text-muted-foreground">· {view.file}</span>
       </h2>
       <p className="text-xs text-muted-foreground">

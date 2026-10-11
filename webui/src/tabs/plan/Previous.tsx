@@ -40,7 +40,7 @@ function facts(plan: { rounds: number; updatedAt: string }, messages: number): s
 function Row({ plan, selected }: { plan: PreviousPlanInfo; selected: boolean }) {
   return (
     <li>
-      <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help" type="button" data-row aria-current={selected ? "true" : undefined} onClick={() => open(plan.id)} className={ROW}>
+      <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help" type="button" data-row aria-current={selected ? "true" : undefined} onClick={() => open(plan.id)} className={cn(ROW, "max-md:min-h-11")}>
         <span className="flex items-center gap-2 text-sm">
           <span className={cn("min-w-0 flex-1 break-words text-foreground", selected && "font-medium")}>{plan.title}</span>
           {plan.hasDraft ? <Badge variant="secondary">draft</Badge> : null}

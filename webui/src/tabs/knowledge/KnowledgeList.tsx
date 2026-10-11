@@ -48,7 +48,7 @@ function Leaf({ info, selected, onSelect }: { info: KnowledgeFileInfo; selected:
         data-row
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(fileKey(info))}
-        className={cn(ROW, "ktree-file min-h-9 flex-row items-center gap-2 py-1.5")}
+        className={cn(ROW, "ktree-file min-h-9 flex-row items-center gap-2 py-1.5 max-md:min-h-11")}
       >
         <span aria-hidden="true" className="ktree-bud" />
         <span className={cn("min-w-0 flex-1 truncate text-sm text-foreground", selected && "font-medium")}>{info.label}</span>
@@ -124,7 +124,7 @@ export function KnowledgeList({ files, models = {}, selectedKey, onSelect }: { f
                       if (!open) setOpen(group.agent, true)
                     }
                   }}
-                  className="ktree-node"
+                  className="ktree-node max-md:min-h-11"
                 >
                   <span aria-hidden="true" className="ktree-tile">
                     <AgentIcon source={source} strokeWidth={2.25} className={source === "ORACLE" ? "size-5" : "size-3.5"} />

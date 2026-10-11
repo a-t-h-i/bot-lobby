@@ -16,8 +16,20 @@ import { PlanTab } from "./plan/PlanTab"
 import { QuickfixTab } from "./quickfix/QuickfixTab"
 import { SessionsTab } from "./sessions/SessionsTab"
 import { TasksTab } from "./tasks/TasksTab"
+import { useMediaQuery } from "@/app/hooks"
 
 export const goKey = { l: "lobby", p: "plan", t: "tasks", i: "issues", u: "git", s: "sessions", n: "knowledge", q: "quickfix", m: "metrics", e: "settings", x: "excalidraw" } as const
+
+function MetricsRoute() {
+  const phone = useMediaQuery("(max-width: 767.98px)")
+  if (!phone) return <MetricsTab />
+  return (
+    <section className="flex min-h-full flex-1 flex-col items-center justify-center gap-4 px-6 py-12 text-center">
+      <h1 className="text-lg font-medium">Metrics is unavailable on phones.</h1>
+      <a href="#/lobby" className="btn-tint inline-flex min-h-11 items-center justify-center rounded-lg border px-5 text-sm font-medium focus-visible:ring-3 focus-visible:ring-ring/40">Lobby</a>
+    </section>
+  )
+}
 
 /** The first path segment after the tab, decoded (`#/tasks/T-1` → `T-1`). */
 function detailId(rest: string[]): string | undefined {
@@ -45,7 +57,7 @@ export function routeBody(route: Route): ReactNode {
     case "issues":
       return <IssuesTab rest={route.rest} />
     case "metrics":
-      return <MetricsTab />
+      return <MetricsRoute />
     case "git":
       return <GitTab rest={route.rest} />
     case "knowledge":

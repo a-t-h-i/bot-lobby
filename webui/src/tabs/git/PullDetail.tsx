@@ -40,7 +40,7 @@ function Header({ pull, now }: { pull: PullDetailInfo; now: number }) {
       <p className="text-sm tabular-nums">{branchLine(pull)}</p>
       {stateLine(pull) ? <p className="text-sm text-muted-foreground">{stateLine(pull)}</p> : null}
       {pull.url ? (
-        <a href={pull.url} target="_blank" rel="noopener noreferrer nofollow" className="text-xs break-all text-primary underline underline-offset-4">
+        <a href={pull.url} target="_blank" rel="noopener noreferrer nofollow" className="inline-flex max-w-full break-all text-xs text-primary underline underline-offset-4 max-md:min-h-11 max-md:items-center">
           {pull.url}
         </a>
       ) : null}
@@ -97,7 +97,7 @@ function FocusInput({ number, focus, onChange }: { number: number; focus: string
       <label htmlFor={`focus-${number}`} className="text-[0.8125rem] font-medium text-foreground">
         {FOCUS_LABEL}
       </label>
-      <Textarea id={`focus-${number}`} value={focus} rows={2} maxLength={2000} onChange={(event) => onChange(event.target.value)} />
+      <Textarea id={`focus-${number}`} value={focus} rows={2} maxLength={2000} className="max-md:min-h-11" onChange={(event) => onChange(event.target.value)} />
       <p className="text-xs text-muted-foreground">{FOCUS_HINT}</p>
     </div>
   )

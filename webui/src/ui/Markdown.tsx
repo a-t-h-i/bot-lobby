@@ -39,7 +39,7 @@ function useCopy(text: string) {
 function CopyableCode({ text, children, block = false }: { text: string; children: ReactNode; block?: boolean }) {
   const { copy } = useCopy(text)
   const pointer = useRef<{ x: number; y: number; moved: boolean } | undefined>(undefined)
-  return <code role="button" tabIndex={0} aria-label="Copy code" aria-keyshortcuts="Enter Space" title="Copy code · Enter / Space" className="cursor-copy focus-visible:outline-2 focus-visible:outline-ring"
+  return <code role="button" tabIndex={0} aria-label="Copy code" aria-keyshortcuts="Enter Space" title="Copy code · Enter / Space" className={cn("cursor-copy focus-visible:outline-2 focus-visible:outline-ring", !block && "max-md:break-words max-md:[overflow-wrap:anywhere]")}
     onPointerDown={(e) => { pointer.current = { x: e.clientX, y: e.clientY, moved: false } }}
     onPointerMove={(e) => { const p = pointer.current; if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 4) p.moved = true }}
     onClick={(e) => { e.stopPropagation(); if (shouldCopy(window.getSelection()?.toString() ?? "", pointer.current?.moved ?? false)) void copy(); pointer.current = undefined }}
@@ -54,9 +54,9 @@ function CodeBlock({ node, children, source }: { node?: unknown; children?: Reac
   const { copied, copy } = useCopy(text)
   const names = n?.children?.find((child) => child.tagName === "code")?.properties?.className
   const language = (Array.isArray(names) ? names : []).map(String).find((name) => name.startsWith("language-"))?.slice(9)
-  return <div className="relative my-3 rounded-lg bg-muted">
+  return <div className="relative my-3 max-md:min-w-0 max-md:max-w-full rounded-lg bg-muted">
     <div className="flex items-center justify-between pl-3"><span className="text-xs text-muted-foreground">{language && /^[\w+#.-]{1,20}$/.test(language) ? language : "code"} · tap to copy</span><ActionButton label={copied ? "Copied" : "Copy the code"} icon={copied ? Check : Copy} iconOnly onClick={() => void copy()} /></div>
-    <pre className="!my-0 overflow-x-auto !rounded-t-none !bg-transparent px-3 pb-3 text-sm leading-relaxed [&>code]:block">{children}</pre>
+    <pre className="!my-0 max-md:max-w-full overflow-x-auto max-md:overscroll-x-contain !rounded-t-none !bg-transparent px-3 pb-3 text-sm leading-relaxed [&>code]:block">{children}</pre>
   </div>
 }
 
@@ -71,7 +71,7 @@ function componentsFor(source: string): Components {
     },
     a: ({ href, children }) => <a href={href ? projectUrl(href) : undefined} target="_blank" rel="noopener noreferrer nofollow">{children}</a>,
     img: ({ src, alt }) => <img src={src ? projectUrl(src) : undefined} alt={alt ?? ""} loading="lazy" />,
-    table: ({ children }) => <div className="my-3 w-full overflow-x-auto"><table className="w-full border-collapse text-sm">{children}</table></div>,
+    table: ({ children }) => <div className="my-3 w-full max-md:min-w-0 max-md:max-w-full overflow-x-auto max-md:overscroll-x-contain"><table className="w-full max-md:min-w-max border-collapse text-sm">{children}</table></div>,
   }
 }
 
@@ -83,7 +83,7 @@ export const Markdown = memo(function Markdown({ text, className }: { text: stri
   const { body, files } = splitAttachments(text)
   const sections = body ? markdownSections(body) : []
   const shown = useGradual(sections.length, 3)
-  return <div className={cn("md-body", className)}>
+  return <div className={cn("md-body max-md:min-w-0 max-md:max-w-full max-md:break-words max-md:[overflow-wrap:anywhere]", className)}>
     {sections.slice(0, shown).map((section, index) => <Section key={index} text={section} />)}
     <AttachmentList files={files} />
   </div>

@@ -16,9 +16,9 @@ type Send = (answer: DialogAnswer) => Promise<void>
 
 function Options({ options, send }: { options: string[]; send: Send }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex min-w-0 flex-wrap gap-2">
       {options.map((option) => (
-        <Button key={option} variant="outline" onClick={() => void send({ value: option })}>
+        <Button key={option} variant="outline" className="max-w-full min-w-0 whitespace-normal break-words text-left max-md:h-auto max-md:min-h-11" onClick={() => void send({ value: option })}>
           {option}
         </Button>
       ))}
@@ -46,9 +46,9 @@ function Answer({ dialog, send }: { dialog: SessionDialog; send: Send }) {
   if (dialog.method === "select") return <Options options={dialog.options ?? []} send={send} />
   if (dialog.method === "confirm") {
     return (
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={() => void send({ confirmed: true })}>Yes</Button>
-        <Button variant="outline" onClick={() => void send({ confirmed: false })}>No</Button>
+      <div className="flex min-w-0 flex-wrap gap-2">
+        <Button className="max-md:h-auto max-md:min-h-11" onClick={() => void send({ confirmed: true })}>Yes</Button>
+        <Button variant="outline" className="max-md:h-auto max-md:min-h-11" onClick={() => void send({ confirmed: false })}>No</Button>
       </div>
     )
   }
@@ -60,10 +60,10 @@ function Card({ sessionKey, dialog, onAnswered }: { sessionKey: string; dialog: 
     if (await act("sessions.answer", { key: sessionKey, dialogId: dialog.id, answer })) onAnswered()
   }
   return (
-    <div className="card-raised flex flex-col gap-3 rounded-lg border p-3">
-      <div className="flex flex-col gap-1">
-        <p className="text-sm font-medium text-foreground">{dialog.title}</p>
-        {dialog.message ? <p className="text-sm text-muted-foreground">{dialog.message}</p> : null}
+    <div className="card-raised flex min-w-0 flex-col gap-3 rounded-lg border p-3">
+      <div className="flex min-w-0 flex-col gap-1">
+        <p className="break-words text-sm font-medium text-foreground">{dialog.title}</p>
+        {dialog.message ? <p className="break-words text-sm text-muted-foreground">{dialog.message}</p> : null}
       </div>
       <Answer dialog={dialog} send={send} />
       <div className="flex self-start">

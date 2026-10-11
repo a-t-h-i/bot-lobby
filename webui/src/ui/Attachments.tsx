@@ -38,15 +38,15 @@ const IMAGES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"])
 export function AttachmentList({ files }: { files: AttachmentRef[] }) {
   if (files.length === 0) return null
   return (
-    <ul className="mt-2 flex flex-wrap gap-2" aria-label="Attached files">
+    <ul className="mt-2 flex min-w-0 max-w-full flex-wrap gap-2" aria-label="Attached files">
       {files.map((file) => (
         <li key={file.id}>
           {IMAGES.has(file.mime) ? (
-            <a href={projectUrl(`/files/preview/attachments/${file.id}`)} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-lg border border-border bg-muted/40 transition-transform duration-150 ease-snap hover:scale-[1.02]">
-              <img src={projectUrl(`/files/preview/attachments/${file.id}`)} alt={file.name} loading="lazy" className="max-h-40 max-w-56 object-cover" />
+            <a href={projectUrl(`/files/preview/attachments/${file.id}`)} target="_blank" rel="noopener noreferrer" className="block max-w-full overflow-hidden rounded-lg border border-border bg-muted/40 transition-transform duration-150 ease-snap hover:scale-[1.02] focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11 max-md:min-w-11">
+              <img src={projectUrl(`/files/preview/attachments/${file.id}`)} alt={file.name} loading="lazy" className="max-h-40 max-w-[min(14rem,100%)] object-cover" />
             </a>
           ) : (
-            <span className="inline-flex max-w-64 items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            <span className="inline-flex max-w-[min(16rem,100%)] min-w-0 items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
               {file.mime === "application/pdf" ? <FileText aria-hidden="true" className="size-4 shrink-0" /> : <Paperclip aria-hidden="true" className="size-4 shrink-0" />}
               <span className="truncate">{file.name}</span>
             </span>
