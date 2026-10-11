@@ -41,7 +41,7 @@ function NoPulls({ loading, loaded, error, onRetry }: { loading: boolean; loaded
         <EmptyDescription className={error ? "text-destructive" : undefined}>{text}</EmptyDescription>
       </EmptyHeader>
       {error ? (
-        <Button variant="outline" onClick={onRetry}>
+        <Button variant="outline" className="max-md:min-h-11" onClick={onRetry}>
           Retry
         </Button>
       ) : null}

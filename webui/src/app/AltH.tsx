@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Kbd, Keys } from "@/components/ui/kbd"
 import { Popup } from "@/components/ui/popup"
 import { PRIORITY, useOverlaySlot } from "@/lib/overlay"
+import { useMediaQuery } from "./hooks"
 import type { KeyInfo, TabInfo } from "@protocol"
 import { goKey } from "@/tabs/registry"
 import { matchKey } from "./useLobbyKeys"
@@ -143,10 +144,16 @@ export function AltH({
   keys: KeyInfo[]
   tabs: TabInfo[]
 }) {
-  const shown = useOverlaySlot(open, PRIORITY.help)
+  const phone = useMediaQuery("(max-width: 767.98px)")
+  const wants = open && !phone
+  const shown = useOverlaySlot(wants, PRIORITY.help)
 
   useEffect(() => {
-    if (!open || !shown) return
+    if (phone && open) onOpenChange(false)
+  }, [phone, open, onOpenChange])
+
+  useEffect(() => {
+    if (!wants || !shown) return
     // Do not consume activation, typing or focus movement inside the dialog.
     const close = (event: KeyboardEvent) => {
       const helpKey = keys.find((key) => key.action === "help")?.key
@@ -154,10 +161,11 @@ export function AltH({
     }
     window.addEventListener("keydown", close, true)
     return () => window.removeEventListener("keydown", close, true)
-  }, [open, shown, onOpenChange, keys])
+  }, [keys, onOpenChange, shown, wants])
 
+  if (phone) return null
   return (
-    <Popup open={open && shown} onOpenChange={onOpenChange} label="Keys" className="max-w-4xl">
+    <Popup open={wants && shown} onOpenChange={onOpenChange} label="Keys" className="max-w-4xl">
       <header className="flex items-center justify-between gap-3 border-b border-border px-6 py-4">
         <h2 aria-hidden="true" className="text-base font-semibold tracking-tight">
           Keyboard shortcuts

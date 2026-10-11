@@ -49,7 +49,13 @@ export function ActionButton({ label, icon: Icon, tone = "neutral", shortcut, hr
   // Primary worded actions keep their animated accent fill.
   const discover = tone === "primary" && !iconOnly
   const variant = iconOnly ? (tone === "primary" ? "default" : "ghost") : "outline"
-  const look = cn(!iconOnly && "px-2.5", discover && "obsidian-discover-button", TONES[tone], className)
+  const look = cn(
+    !iconOnly && "px-2.5",
+    iconOnly ? "max-md:size-11" : "max-md:min-h-11 max-md:min-w-11 max-md:h-auto max-md:whitespace-normal",
+    discover && "obsidian-discover-button",
+    TONES[tone],
+    className,
+  )
   const size = iconOnly ? "icon" : "default"
   const body = iconOnly ? (
     icon
@@ -59,14 +65,14 @@ export function ActionButton({ label, icon: Icon, tone = "neutral", shortcut, hr
       <span className="obsidian-discover-button__icon">{icon}</span>
       <span className="obsidian-discover-button__text">
         {text ?? label}
-        {shortcut ? <Keys chord={shortcut} className="kbd-hint ml-1" /> : null}
+        {shortcut ? <Keys chord={shortcut} className="kbd-hint ml-1 max-md:hidden" /> : null}
       </span>
     </>
   ) : (
     <>
       {icon}
       <span>{text ?? label}</span>
-      {shortcut ? <Keys chord={shortcut} className="kbd-hint ml-1" /> : null}
+      {shortcut ? <Keys chord={shortcut} className="kbd-hint ml-1 max-md:hidden" /> : null}
     </>
   )
   const button = href ? (
@@ -98,7 +104,7 @@ export function ActionButton({ label, icon: Icon, tone = "neutral", shortcut, hr
       <TooltipTrigger asChild>{button}</TooltipTrigger>
       <TooltipContent>
         {label}
-        <Keys chord={shortcut ?? (href ? "Enter" : "Enter / Space")} />
+        <Keys chord={shortcut ?? (href ? "Enter" : "Enter / Space")} className="max-md:hidden" />
       </TooltipContent>
     </Tooltip>
   )
@@ -122,7 +128,7 @@ export function ActionBar({ children, className }: { children: ReactNode; classN
       role="toolbar"
       aria-label="Actions"
       onKeyDown={onKeyDown}
-      className={cn("sticky -top-5 z-10 -mx-5 -mt-5 flex min-h-12 flex-wrap items-center gap-1 border-b border-border bg-card/90 px-4 py-2 backdrop-blur-sm [&>[data-tone=danger]:not(:first-child)]:ml-auto", className)}
+      className={cn("sticky -top-5 z-10 -mx-5 -mt-5 flex min-h-12 flex-wrap items-center gap-1 border-b border-border bg-card/90 px-4 py-2 backdrop-blur-sm [&>[data-tone=danger]:not(:first-child)]:ml-auto max-md:static max-md:z-auto max-md:mx-0 max-md:mt-0 max-md:min-h-11 max-md:gap-2 max-md:border-b-0 max-md:bg-transparent max-md:px-0 max-md:py-1 max-md:backdrop-blur-none", className)}
     >
       {children}
     </div>

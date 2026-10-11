@@ -14,34 +14,69 @@ import { Keys } from "@/components/ui/kbd"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { AgentIcon } from "@/ui/AgentIcon"
+import { useMediaQuery } from "@/app/hooks"
 import { busyLabel } from "./busy"
 import { sourceLabel } from "./types"
-import { clampPoint, loadPlace, savePlace, toPlace, toPoint, type Area, type Place } from "./orbPlace"
+import { clampPoint, clipAreaBottom, intersectAreas, loadPlace, savePlace, toPlace, toPoint, type Area, type Place } from "./orbPlace"
 
 /** A press that travels less than this is a click, not a drag. */
 const SLOP = 5
 const NUDGE = 16
+const DEFAULT_PLACE: Place = { fx: 1, fy: 1 }
 
-function cardArea(): Area | undefined {
-  const rect = document.getElementById("main")?.getBoundingClientRect()
-  return rect ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height } : undefined
+function rectArea(rect: { left: number; top: number; width: number; height: number }): Area {
+  return { left: rect.left, top: rect.top, width: rect.width, height: rect.height }
 }
 
-/** The card's box, read again whenever the window or the card changes size. */
-function useCardArea(): Area | undefined {
-  const [area, setArea] = useState<Area | undefined>(cardArea)
+function cardArea(phone: boolean): Area | undefined {
+  const main = document.getElementById("main")?.getBoundingClientRect()
+  if (!main) return undefined
+  if (!phone) return rectArea(main)
+  const viewport = window.visualViewport
+  const view = rectArea({
+    left: viewport?.offsetLeft ?? 0,
+    top: viewport?.offsetTop ?? 0,
+    width: viewport?.width ?? window.innerWidth,
+    height: viewport?.height ?? window.innerHeight,
+  })
+  const visible = intersectAreas(rectArea(main), view)
+  if (!visible) return undefined
+  const dockTop = document.getElementById("app-dock")?.getBoundingClientRect().top
+  return dockTop === undefined ? visible : clipAreaBottom(visible, dockTop)
+}
+
+function sameArea(first: Area | undefined, second: Area | undefined): boolean {
+  if (!first || !second) return first === second
+  return first.left === second.left && first.top === second.top && first.width === second.width && first.height === second.height
+}
+
+/** The card's visible box, read again whenever the page, dock, or viewport changes size. */
+function useCardArea(phone: boolean): Area | undefined {
+  const [area, setArea] = useState<Area | undefined>(() => cardArea(phone))
   useEffect(() => {
-    const read = () => setArea(cardArea())
+    const read = () => {
+      const next = cardArea(phone)
+      setArea((current) => sameArea(current, next) ? current : next)
+    }
     const main = document.getElementById("main")
-    const observer = typeof ResizeObserver === "undefined" || !main ? undefined : new ResizeObserver(read)
+    const dock = document.getElementById("app-dock")
+    const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(read)
     if (main) observer?.observe(main)
+    if (dock) observer?.observe(dock)
+    const viewport = window.visualViewport
     window.addEventListener("resize", read)
+    window.addEventListener("orientationchange", read)
+    viewport?.addEventListener("resize", read)
+    viewport?.addEventListener("scroll", read)
     read()
     return () => {
       observer?.disconnect()
       window.removeEventListener("resize", read)
+      window.removeEventListener("orientationchange", read)
+      viewport?.removeEventListener("resize", read)
+      viewport?.removeEventListener("scroll", read)
     }
-  }, [])
+  }, [phone])
   return area
 }
 
@@ -60,7 +95,8 @@ interface OrbProps {
 }
 
 export const ThinkingOrb = forwardRef<HTMLButtonElement, OrbProps>(function ThinkingOrb({ spotlight, thinking, busy = [], tone, expanded, hidden, shortcut, onOpen }, ref) {
-  const area = useCardArea()
+  const phone = useMediaQuery("(max-width: 767.98px)")
+  const area = useCardArea(phone)
   const [place, setPlace] = useState<Place | undefined>(loadPlace)
   const [live, setLive] = useState<{ x: number; y: number }>()
   const [tip, setTip] = useState(false)
@@ -68,14 +104,20 @@ export const ThinkingOrb = forwardRef<HTMLButtonElement, OrbProps>(function Thin
   const swallowClick = useRef(false)
   const size = useRef(44)
 
-  const point = live ?? (place && area ? toPoint(place, area, size.current) : undefined)
+  const savedOrDefault = place ?? (phone ? DEFAULT_PLACE : undefined)
+  const point = live ?? (savedOrDefault && area ? toPoint(savedOrDefault, area, size.current) : undefined)
   const keep = useCallback((x: number, y: number) => {
-    const now = cardArea()
+    const now = cardArea(phone)
     if (!now) return
     const next = toPlace(x, y, now, size.current)
     setPlace(next)
     savePlace(next)
-  }, [])
+  }, [phone])
+
+  useEffect(() => {
+    if (!area) return
+    setLive((current) => current ? clampPoint(current.x, current.y, area, size.current) : current)
+  }, [area])
 
   function onPointerDown(event: PointerEvent<HTMLButtonElement>) {
     if (event.button !== 0) return
@@ -91,7 +133,7 @@ export const ThinkingOrb = forwardRef<HTMLButtonElement, OrbProps>(function Thin
     const dy = event.clientY - now.sy
     if (!now.moved && Math.hypot(dx, dy) < SLOP) return
     now.moved = true
-    const bounds = cardArea()
+    const bounds = cardArea(phone)
     if (bounds) setLive(clampPoint(now.ox + dx, now.oy + dy, bounds, size.current))
   }
   function onPointerUp(event: PointerEvent<HTMLButtonElement>) {
@@ -187,7 +229,7 @@ export const ThinkingOrb = forwardRef<HTMLButtonElement, OrbProps>(function Thin
         </button>
       </TooltipTrigger>
       <TooltipContent side="top">
-        Thinking {shortcut ? <Keys chord={shortcut} /> : null}
+        Thinking {!phone && shortcut ? <Keys chord={shortcut} /> : null}
         <span className="text-background/70"> · drag to move</span>
       </TooltipContent>
     </Tooltip>

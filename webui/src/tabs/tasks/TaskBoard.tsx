@@ -22,7 +22,7 @@ function columnFor(row: TaskRow): typeof columns[number] | undefined {
 }
 
 function BoardColumn({ title, rows, id }: { title: string; rows: TaskRow[]; id?: string }) {
-  return <Frame role="region" aria-label={title} spacing="sm" className="min-w-0">
+  return <Frame role="region" aria-label={title} spacing="sm" className="min-w-0 max-md:rounded-lg">
     <FrameHeader className="py-2"><h2 className="flex items-center justify-between gap-2 text-sm font-semibold">{title}<Badge variant="secondary" radius="full">{rows.length}</Badge></h2></FrameHeader>
     <FramePanel>
     <ul className="flex flex-col gap-3">
@@ -34,7 +34,7 @@ function BoardColumn({ title, rows, id }: { title: string; rows: TaskRow[]; id?:
 }
 
 function Board({ rows, id }: { rows: TaskRow[]; id?: string }) {
-  return <div className="grid items-start gap-4 p-4 md:grid-cols-3" aria-label="Task board">
+  return <div className="grid min-w-0 items-start gap-4 p-4 max-md:gap-3 max-md:p-3 md:grid-cols-3" aria-label="Task board">
     {columns.map((title) => <BoardColumn key={title} title={title} rows={rows.filter((row) => columnFor(row) === title)} id={id} />)}
   </div>
 }

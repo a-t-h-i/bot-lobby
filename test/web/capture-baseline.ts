@@ -50,6 +50,7 @@ function runPlaywright(): void {
   const configPath = join(temporary, "capture.config.ts");
   const original = join(root, "playwright.config.ts");
   const config = `import original from ${JSON.stringify(original)};
+const chromiumLaunch = original.projects?.find(project => project.use?.browserName === "chromium")?.use?.launchOptions;
 export default {
   ...original,
   testDir: ${JSON.stringify(join(root, "test/web"))},
@@ -65,8 +66,8 @@ export default {
       browserName: "chromium",
       colorScheme: name,
       launchOptions: {
-        ...original.use?.launchOptions,
-        args: [...(original.use?.launchOptions?.args ?? []), "--mute-audio"],
+        ...chromiumLaunch,
+        args: [...(chromiumLaunch?.args ?? []), "--mute-audio"],
       },
     },
   })),

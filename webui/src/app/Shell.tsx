@@ -119,12 +119,13 @@ export function Shell() {
   const phone = useMediaQuery("(max-width: 767.98px)")
   const cycle = useCallback(
     (delta: number) => {
-      if (tabs.length === 0) return
-      const index = Math.max(0, tabs.findIndex((tab) => tab.id === activeId))
-      const next = tabs[(index + delta + tabs.length) % tabs.length]
+      const available = phone ? tabs.filter((tab) => tab.id !== "metrics") : tabs
+      if (available.length === 0) return
+      const index = Math.max(0, available.findIndex((tab) => tab.id === activeId))
+      const next = available[(index + delta + available.length) % available.length]
       if (next) go(tabHash(next.id as TabId))
     },
-    [tabs, activeId]
+    [tabs, activeId, phone]
   )
   const toggleHelp = useCallback(() => setHelp((open) => !open), [])
   const onAction = useCallback((action: string) => {
@@ -156,8 +157,9 @@ export function Shell() {
     const frame = requestAnimationFrame(() => {
       if (focusMovedSinceRoute() || document.querySelector("[role='dialog']:not([data-state='closed'])")) return
       const box = document.getElementById("composer-text") as HTMLTextAreaElement | null
-      const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches
-      if (box && !box.disabled && !touch) box.focus({ preventScroll: true })
+      const phoneNow = window.matchMedia("(max-width: 767.98px)").matches
+      const coarse = window.matchMedia("(pointer: coarse)").matches
+      if (!phoneNow && !coarse && box && !box.disabled) box.focus({ preventScroll: true })
       else if (document.activeElement?.id !== "composer-text") document.getElementById("main")?.focus({ preventScroll: true })
     })
     return () => cancelAnimationFrame(frame)

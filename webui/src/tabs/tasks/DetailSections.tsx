@@ -40,7 +40,7 @@ function Step({ step, index, stopped }: { step: StepData; index: number; stopped
   const markClass = done ? "text-success" : step.status === "current" ? "text-primary" : "text-muted-foreground"
   const Icon = done ? CheckCircle2 : Circle
   return (
-    <li className="flex items-start gap-2.5 text-sm" data-step={active ? "active" : step.status}>
+    <li className="flex min-w-0 items-start gap-2.5 text-sm max-md:flex-wrap" data-step={active ? "active" : step.status}>
       {active ? <ActiveMark /> : <Icon aria-hidden="true" className={`mt-0.5 size-4 shrink-0 ${markClass}`} />}
       <span className="shrink-0 text-xs leading-5 text-muted-foreground tabular-nums">{index + 1}.</span>
       <span className={cn("min-w-0 break-words", active || step.status === "current" ? "text-foreground" : "text-muted-foreground")}>{step.text}{active ? <span className="ml-1 text-xs text-primary">({count} {count === 1 ? "agent working" : "agents working"})</span> : null}</span>
@@ -82,7 +82,7 @@ function FullPlan({ text }: { text: string }) {
         aria-expanded={open}
         aria-controls={body}
         onClick={() => setOpen((now) => !now)}
-        className="inline-flex w-fit items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+        className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
       >
         <ChevronRight aria-hidden="true" className={cn("size-4 transition-transform duration-200 ease-snap", open && "rotate-90")} />
         {open ? "Hide the details" : "Read the details of each step"}

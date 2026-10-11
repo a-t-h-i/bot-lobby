@@ -51,7 +51,7 @@ function Rounds({ limit }: { limit: number }) {
 function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) {
   const cells = seatCells(snap)
   return (
-    <div className="@container flex-1 overflow-y-auto px-5 pt-8 pb-dock sm:px-8 sm:pt-10">
+    <div className="@container flex-1 overflow-y-auto px-5 pt-8 pb-dock max-md:px-4 max-md:pt-5 md:px-8 md:pt-10">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
         <header className="flex flex-col gap-4 @3xl:flex-row @3xl:items-end @3xl:justify-between">
           <div className="flex items-start gap-4">
@@ -98,8 +98,8 @@ function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) 
         <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
           <ArrowDown aria-hidden="true" className="size-4 text-primary motion-safe:animate-bounce" />
           Start in the box below.
-          <KeyHint chord="/">write</KeyHint>
-          <KeyHint chord="Enter">send to the panel</KeyHint>
+          <KeyHint chord="/" className="max-md:hidden">write</KeyHint>
+          <KeyHint chord="Enter" className="max-md:hidden">send to the panel</KeyHint>
         </p>
       </div>
     </div>
@@ -145,7 +145,7 @@ function Session({ snap, reload }: { snap: PlannerSnapshot; reload: () => void }
   return (
     <>
       <PlanHeader snap={snap} onDone={reload} />
-      <div className={grid}>
+      <div className={cn(grid, "min-w-0")}>
         <ConversationPane snap={snap} wide={wide} />
         <DraftPane snap={snap} comments={comments} onComment={setLine} wide={wide} />
       </div>

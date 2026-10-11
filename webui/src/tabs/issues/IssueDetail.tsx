@@ -26,7 +26,7 @@ function Header({ issue, now }: { issue: IssueDetailInfo; now: number }) {
       </h2>
       <p className="text-sm text-muted-foreground">{factsLine(issue, now)}</p>
       {issue.url ? (
-        <a href={issue.url} target="_blank" rel="noopener noreferrer nofollow" className="text-xs break-all text-primary underline underline-offset-4">
+        <a href={issue.url} target="_blank" rel="noopener noreferrer nofollow" className="inline-flex max-w-full break-all text-xs text-primary underline underline-offset-4 max-md:min-h-11 max-md:items-center">
           {issue.url}
         </a>
       ) : null}
