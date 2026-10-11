@@ -8,6 +8,8 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react"
 import { Check, ChevronLeft, ChevronRight, Minimize2 } from "lucide-react"
+import { useMediaQuery } from "@/app/hooks"
+import { usePhoneViewport } from "@/app/usePhoneViewport"
 import { useReducedMotion } from "motion/react"
 import { Button } from "@/components/ui/button"
 import { KeyHint } from "@/components/ui/kbd"
@@ -30,6 +32,8 @@ export interface MockupOption {
 const RECOMMENDED = /\s*\(recommended\)\s*$/i
 /** Narrower than this, a mockup is laid out at this width and scaled down rather than reflowed. */
 const MIN_PAGE_WIDTH = 1024
+const PHONE_QUERY = "(max-width: 767.98px)"
+const PHONE_SHORTCUT = "max-md:hidden"
 
 /** An option's name without its `(Recommended)` marker. */
 export const plainLabel = (label: string): string => label.replace(RECOMMENDED, "")
@@ -70,6 +74,8 @@ interface ViewerProps {
 
 export function MockupViewer({ options, start, title, picked = [], multi = false, onChoose, onClose, onIndex }: ViewerProps) {
   const reduceMotion = useReducedMotion()
+  const phone = useMediaQuery(PHONE_QUERY)
+  const { keyboardOpen, keyboardInset } = usePhoneViewport()
   const track = useRef<HTMLDivElement>(null)
   const root = useRef<HTMLDivElement>(null)
   const [index, setIndex] = useState(() => Math.min(Math.max(0, start), options.length - 1))
@@ -136,10 +142,13 @@ export function MockupViewer({ options, start, title, picked = [], multi = false
   }
 
   const on = picked.includes(index)
+  const viewportStyle = phone && keyboardOpen
+    ? { height: `calc(100vh - ${keyboardInset}px - 1.5rem)`, maxHeight: `calc(100vh - ${keyboardInset}px - 1.5rem)` }
+    : undefined
   return (
-    <div ref={root} tabIndex={-1} data-autofocus="" onKeyDown={onKeyDown} className="mockup-viewer flex h-full min-h-0 flex-col outline-none" role="region" aria-label={`Mockups: ${title}`} aria-roledescription="carousel">
+    <div ref={root} tabIndex={-1} data-autofocus="" onKeyDown={onKeyDown} style={viewportStyle} className="mockup-viewer flex h-full min-h-0 flex-col outline-none max-md:h-[calc(100svh-1.5rem)] max-md:max-h-[calc(100svh-1.5rem)]" role="region" aria-label={`Mockups: ${title}`} aria-roledescription="carousel">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-4 py-3 sm:px-5">
-        <Button type="button" variant="ghost" size="icon-sm" aria-label="Back to the question" title="Back · Esc" onClick={() => onClose(index)}>
+        <Button type="button" variant="ghost" size="icon-sm" aria-label="Back to the question" title={phone ? "Back to the question" : "Back · Esc"} onClick={() => onClose(index)} className="max-md:size-11">
           <Minimize2 aria-hidden="true" />
         </Button>
         <p className="min-w-0 flex-1 truncate text-sm font-medium">{title}</p>
@@ -157,7 +166,7 @@ export function MockupViewer({ options, start, title, picked = [], multi = false
               data-compact=""
               onClick={() => go(position)}
               className={cn(
-                "inline-flex h-7 max-w-48 items-center gap-1 rounded-lg border px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
+                "inline-flex h-7 max-w-48 items-center gap-1 rounded-lg border px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/40 max-md:h-11 max-md:min-w-11",
                 position === index ? "border-primary/50 bg-accent text-foreground" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
@@ -178,7 +187,7 @@ export function MockupViewer({ options, start, title, picked = [], multi = false
               aria-roledescription="slide"
               aria-label={`${position + 1} of ${options.length}: ${plainLabel(entry.label)}`}
               aria-hidden={position !== index}
-              className="flex h-full w-full shrink-0 snap-center snap-always flex-col gap-2 px-4 py-4 sm:px-14"
+              className="flex h-full w-full shrink-0 snap-center snap-always flex-col gap-2 overflow-y-hidden px-4 py-4 sm:px-14 max-md:overflow-y-auto max-md:overscroll-contain"
             >
               <div className="flex items-baseline gap-2 text-sm">
                 <span className="text-muted-foreground tabular-nums">{position + 1}.</span>
@@ -194,24 +203,24 @@ export function MockupViewer({ options, start, title, picked = [], multi = false
           ))}
         </div>
         {index > 0 ? (
-          <Button type="button" variant="outline" size="icon" aria-label="Previous option" title="Previous · ←" onClick={() => go(index - 1)} className="absolute top-1/2 left-2 -translate-y-1/2 rounded-full max-sm:hidden">
+          <Button type="button" variant="outline" size="icon" aria-label="Previous option" title={phone ? "Previous option" : "Previous · ←"} onClick={() => go(index - 1)} className="absolute top-1/2 left-2 -translate-y-1/2 rounded-full max-md:hidden max-md:size-11">
             <ChevronLeft aria-hidden="true" />
           </Button>
         ) : null}
         {index < last ? (
-          <Button type="button" variant="outline" size="icon" aria-label="Next option" title="Next · →" onClick={() => go(index + 1)} className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full max-sm:hidden">
+          <Button type="button" variant="outline" size="icon" aria-label="Next option" title={phone ? "Next option" : "Next · →"} onClick={() => go(index + 1)} className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full max-md:hidden max-md:size-11">
             <ChevronRight aria-hidden="true" />
           </Button>
         ) : null}
       </div>
       <footer className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border px-4 py-3 sm:px-5">
         <p className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
-          <KeyHint chord="←→">option</KeyHint>
-          {onChoose ? <KeyHint chord="Enter">{multi ? (on ? "unpick" : "pick") : "choose"}</KeyHint> : null}
-          <KeyHint chord="Esc">back</KeyHint>
+          <KeyHint chord="←→" className={PHONE_SHORTCUT}>option</KeyHint>
+          {onChoose ? <KeyHint chord="Enter" className={PHONE_SHORTCUT}>{multi ? (on ? "unpick" : "pick") : "choose"}</KeyHint> : null}
+          <KeyHint chord="Esc" className={PHONE_SHORTCUT}>back</KeyHint>
         </p>
         {onChoose && option ? (
-          <Button type="button" onClick={() => onChoose(index)} className="max-w-full">
+          <Button type="button" onClick={() => onChoose(index)} className="max-w-full max-md:min-h-11 max-md:min-w-11">
             {multi && on ? "Unpick" : multi ? "Pick" : "Choose"}
             <span className="truncate">{plainLabel(option.label)}</span>
           </Button>

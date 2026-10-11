@@ -28,7 +28,7 @@ import { syncThemes } from "./palette.ts"
 import { useLobbyKeys } from "./useLobbyKeys.ts"
 import { useDesktopNotifications } from "./notify.ts"
 import { usePrompts } from "./usePrompts.ts"
-import { useStatus, useTopic } from "./hooks.ts"
+import { useMediaQuery, useStatus, useTopic } from "./hooks.ts"
 import { go, parseHash, tabHash, useRoute, type Route } from "./router.ts"
 import { routeBody } from "@/tabs/registry.tsx"
 import { focusTab, isTyping, tabWalk } from "@/prompts/nav"
@@ -115,14 +115,17 @@ export function Shell() {
   const activeId = route.kind === "tab" ? route.tab : undefined
 
   const select = useCallback((id: string) => go(tabHash(id as TabId)), [])
+  const tabStrip = <TabStrip tabs={tabs} activeId={activeId} onSelect={select} />
+  const phone = useMediaQuery("(max-width: 767.98px)")
   const cycle = useCallback(
     (delta: number) => {
-      if (tabs.length === 0) return
-      const index = Math.max(0, tabs.findIndex((tab) => tab.id === activeId))
-      const next = tabs[(index + delta + tabs.length) % tabs.length]
+      const available = phone ? tabs.filter((tab) => tab.id !== "metrics") : tabs
+      if (available.length === 0) return
+      const index = Math.max(0, available.findIndex((tab) => tab.id === activeId))
+      const next = available[(index + delta + available.length) % available.length]
       if (next) go(tabHash(next.id as TabId))
     },
-    [tabs, activeId]
+    [tabs, activeId, phone]
   )
   const toggleHelp = useCallback(() => setHelp((open) => !open), [])
   const onAction = useCallback((action: string) => {
@@ -154,8 +157,9 @@ export function Shell() {
     const frame = requestAnimationFrame(() => {
       if (focusMovedSinceRoute() || document.querySelector("[role='dialog']:not([data-state='closed'])")) return
       const box = document.getElementById("composer-text") as HTMLTextAreaElement | null
-      const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches
-      if (box && !box.disabled && !touch) box.focus({ preventScroll: true })
+      const phoneNow = window.matchMedia("(max-width: 767.98px)").matches
+      const coarse = window.matchMedia("(pointer: coarse)").matches
+      if (!phoneNow && !coarse && box && !box.disabled) box.focus({ preventScroll: true })
       else if (document.activeElement?.id !== "composer-text") document.getElementById("main")?.focus({ preventScroll: true })
     })
     return () => cancelAnimationFrame(frame)
@@ -169,13 +173,13 @@ export function Shell() {
         route={route}
         keys={keyLabels}
         onHelp={toggleHelp}
-        tabs={<TabStrip tabs={tabs} activeId={activeId} onSelect={select} />}
+        tabs={phone ? null : tabStrip}
         extra={putAway && prompts.length > 0 ? <QuestionsPill count={prompts.length} onOpen={() => setPutAway(false)} /> : null}
       />
   if (signedOut || !status) return (
     <div ref={rootRef} className="fixed inset-0 flex flex-col">
       {header}
-      <main className="surface mx-3 mb-3 flex min-h-0 flex-1 flex-col overflow-y-auto max-sm:mx-0 max-sm:mb-0">
+      <main className="surface mx-3 mb-3 flex min-h-0 flex-1 flex-col overflow-y-auto max-md:mx-0 max-md:mb-0">
         {signedOut ? <SignIn /> : statusRecord.error ? <ErrorState message={statusRecord.error} onRetry={reload} /> : <LoadingState />}
       </main>
     </div>
@@ -195,7 +199,7 @@ export function Shell() {
         }}
         role={activeId ? "tabpanel" : undefined}
         aria-labelledby={activeId ? `tab-${activeId}` : undefined}
-        className="surface mx-3 mb-3 flex min-h-0 flex-1 flex-col overflow-y-auto outline-none max-sm:mx-0 max-sm:mb-0"
+        className="surface mx-3 mb-3 flex min-h-0 flex-1 flex-col overflow-y-auto outline-none max-md:mx-0 max-md:mb-0"
       >
         <motion.div
           key={routeKey(route)}
@@ -207,7 +211,7 @@ export function Shell() {
           {routeBody(route)}
         </motion.div>
       </main>
-      <Composer route={route} keys={keyLabels} onHelp={toggleHelp} />
+      <Composer route={route} keys={keyLabels} onHelp={toggleHelp} dockNav={phone ? tabStrip : null} />
       <Thinking status={status} lobby={lobbyRecord.data} />
       <QuestionPopup prompts={prompts} answer={answer} dismiss={dismiss} minimized={putAway} onMinimize={setPutAway} />
       <AltH open={help} onOpenChange={setHelp} keys={keys} tabs={tabs} />

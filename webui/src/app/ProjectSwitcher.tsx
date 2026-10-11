@@ -136,7 +136,7 @@ export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Pro
             event.preventDefault()
             setOpen(true)
           }}
-          className="btn-ghost group flex h-8 min-w-0 items-center gap-2 rounded-lg border border-transparent px-2.5 text-sm font-medium outline-none transition-[box-shadow,background-color] duration-150 focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none"
+          className="btn-ghost group flex h-8 min-w-0 items-center gap-2 rounded-lg border border-transparent px-2.5 text-sm font-medium outline-none transition-[box-shadow,background-color] duration-150 focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none max-md:h-11"
         >
           <span aria-hidden="true" className={cn("size-2.5 shrink-0 rounded-full", message ? "bg-destructive" : "bg-primary")} />
           <span className="truncate">{name}</span>
@@ -154,7 +154,7 @@ export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Pro
               chosen.focus()
             }
           }}
-          className="p-0 flex w-[min(26rem,calc(100vw-1.5rem))] origin-(--radix-popover-content-transform-origin) flex-col overflow-hidden rounded-xl outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95"
+          className="p-0 flex max-h-[calc(100svh-2rem)] w-[min(26rem,calc(100vw-1.5rem))] origin-(--radix-popover-content-transform-origin) flex-col overflow-hidden rounded-xl outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 max-md:w-[calc(100vw-2rem)]"
         >
           <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
             <span className="text-xs font-medium text-muted-foreground">Running projects</span>
@@ -164,14 +164,14 @@ export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Pro
               disabled={busy}
               aria-label="Refresh list"
               aria-keyshortcuts="R"
-              className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-60"
+              className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-60 max-md:h-11"
             >
               {busy ? <Spinner aria-hidden="true" role="presentation" className="size-3" /> : <RefreshCw aria-hidden="true" className="size-3" />}
               Refresh
               <Keys chord="R" className="kbd-hint" />
             </button>
           </div>
-          <div role="listbox" aria-label="Projects" className="flex max-h-72 flex-col overflow-y-auto p-1">
+          <div role="listbox" aria-label="Projects" className="flex max-h-72 flex-col overflow-y-auto overscroll-contain p-1 max-md:max-h-[calc(100svh-12rem)]">
             {data?.projects.map((project) => {
               const on = project.id === active
               return (
@@ -182,14 +182,14 @@ export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Pro
                   aria-selected={on}
                   onClick={() => choose(project.id)}
                   className={cn(
-                    "flex min-h-10 w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:ring-3 focus-visible:ring-ring/30",
+                    "flex min-h-10 w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:ring-3 focus-visible:ring-ring/30 max-md:min-h-11",
                     on && "bg-accent"
                   )}
                 >
                   <span className="flex h-5 w-4 shrink-0 items-center justify-center">{on ? <Check aria-hidden="true" className="size-3.5 text-primary" /> : null}</span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{project.name}</span>
-                    <span className="block truncate text-xs text-muted-foreground">
+                    <span className="block whitespace-normal break-words text-sm font-medium">{project.name}</span>
+                    <span className="block whitespace-normal break-all text-xs text-muted-foreground">
                       {project.cwd} · :{project.port}
                     </span>
                   </span>
@@ -197,7 +197,7 @@ export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Pro
               )
             })}
           </div>
-          <button type="button" className="flex items-center gap-2 border-t border-border px-3 py-3 text-sm font-medium outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40"
+          <button type="button" className="flex min-h-11 items-center gap-2 border-t border-border px-3 py-3 text-sm font-medium outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40"
             onClick={() => { setOpen(false); setBrowsing(true) }}><FolderOpen aria-hidden="true" className="size-4" />Open folder…</button>
         </PopoverContent>
         </Popover>
@@ -216,7 +216,7 @@ export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Pro
               aria-label="Refresh projects"
               disabled={busy}
               onClick={() => void refresh()}
-              className="btn-ghost inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-muted-foreground outline-none transition-[box-shadow,color,translate] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px disabled:opacity-60"
+              className="btn-ghost inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-muted-foreground outline-none transition-[box-shadow,color,translate] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px disabled:opacity-60 max-md:size-11"
             >
               {busy ? <Spinner aria-hidden="true" role="presentation" className="size-4" /> : <RefreshCw aria-hidden="true" className="size-4" />}
             </button>

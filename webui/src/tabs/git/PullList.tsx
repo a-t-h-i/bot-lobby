@@ -28,7 +28,7 @@ function Row({ pull, selected, onSelect }: { pull: PullInfo; selected: boolean; 
         data-row
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(pull.number)}
-        className={ROW}
+        className={cn(ROW, "max-md:min-h-11")}
       >
         <span className="flex items-start gap-2 text-sm">
           <span className="shrink-0 text-muted-foreground tabular-nums">#{pull.number}</span>

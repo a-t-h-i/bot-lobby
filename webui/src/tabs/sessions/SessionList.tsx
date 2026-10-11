@@ -17,23 +17,23 @@ function Row({ entry, selected, onSelect }: { entry: Entry; selected: boolean; o
   return (
     // Adapted from ObsidianUI Active Sessions; session actions still use the lobby API.
     // https://github.com/Atharvsinh-codez/ObsidianUI/blob/main/src/components/block/active-sessions.tsx
-    <motion.li layout={reduce ? false : "position"} initial={false} data-slot="active-session" className="border-t border-border first:border-t-0">
+    <motion.li layout={reduce ? false : "position"} initial={false} data-slot="active-session" className="min-w-0 border-t border-border first:border-t-0">
       <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
         type="button"
         data-row
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(entry.id)}
-        className={cn(ROW, "flex-row items-start gap-3 rounded-none px-4 py-3 text-sm focus-visible:ring-inset")}
+        className={cn(ROW, "min-w-0 flex-row items-start gap-3 rounded-none px-4 py-3 text-sm focus-visible:ring-inset max-md:min-h-11 max-md:h-auto")}
       >
         <span aria-hidden="true" className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-foreground/4 text-foreground/75 shadow-[inset_0_0_0_1px_var(--border)]">
           <WhereIcon where={entry.where} />
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className={cn("flex flex-wrap items-center gap-2 break-words text-foreground", selected && "font-medium")}>
-            {entry.name}
+          <span className={cn("flex min-w-0 flex-wrap items-center gap-2 text-foreground", selected && "font-medium")}>
+            <span className="min-w-0 break-words">{entry.name}</span>
             {entry.where === "this window" ? <Badge variant="secondary" radius="full" size="sm">This window</Badge> : null}
           </span>
-        <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="flex min-w-0 flex-wrap items-center gap-1.5 break-words text-xs text-muted-foreground">
           {entry.status === "working" || entry.status === "starting" ? <Spinner className="size-3" aria-hidden="true" /> : null}
           {entry.status.replace(/_/g, " ")}
           {entry.waiting > 0 ? <Badge variant="warning-light" radius="full" className="text-warning tabular-nums">{entry.waiting} waiting</Badge> : null}

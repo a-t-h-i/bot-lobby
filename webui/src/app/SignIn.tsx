@@ -39,13 +39,13 @@ export function SignIn() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-      <form onSubmit={submit} className="glass flex w-full max-w-md flex-col gap-4 rounded-xl p-6">
+    <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-6 max-md:items-start max-md:p-4">
+      <form onSubmit={submit} className="glass flex min-h-0 w-full max-w-md flex-col gap-4 rounded-xl p-6 max-md:max-h-[calc(100svh-2rem)] max-md:max-w-[28rem] max-md:overflow-y-auto max-md:p-4">
         <div className="flex items-center gap-2">
           <KeyRound className="size-5" aria-hidden="true" />
           <h1 className="text-base font-medium">Sign in to bot-lobby</h1>
         </div>
-        <p className="text-sm text-muted-foreground">
+        <p className="break-words text-sm text-muted-foreground">
           Pi printed a link when it started (or run <code className="rounded-lg bg-muted px-1.5 py-0.5 font-mono text-xs">/bot-lobby web</code>
           to see it again). Paste it here.
         </p>
@@ -57,7 +57,7 @@ export function SignIn() {
             autoComplete="off"
             spellCheck={false}
             placeholder="http://127.0.0.1:7347/#token=…"
-            className="h-8 rounded-lg border border-input bg-background px-3.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+            className="h-8 min-w-0 rounded-lg border border-input bg-background px-3.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 max-md:h-11"
           />
         </label>
         {error ? (
@@ -65,11 +65,11 @@ export function SignIn() {
             {error}
           </p>
         ) : null}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" disabled={busy} onClick={() => void attempt(undefined)}>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button type="button" variant="ghost" disabled={busy} onClick={() => void attempt(undefined)} className="max-md:min-h-11">
             Retry
           </Button>
-          <Button type="submit" disabled={busy || !value.trim()}>
+          <Button type="submit" disabled={busy || !value.trim()} className="max-md:min-h-11">
             Sign in
           </Button>
         </div>

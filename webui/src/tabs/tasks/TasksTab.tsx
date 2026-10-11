@@ -34,7 +34,7 @@ function NoTasks() {
         </EmptyMedia>
         <EmptyDescription>{EMPTY_LIST}</EmptyDescription>
       </EmptyHeader>
-      <Button onClick={() => go(tabHash("plan"))}>
+      <Button className="max-md:min-h-11 max-md:whitespace-normal" onClick={() => go(tabHash("plan"))}>
         Plan a task
       </Button>
     </Empty>
@@ -43,7 +43,7 @@ function NoTasks() {
 
 function ArchivedToggle({ shown, count, onToggle }: { shown: boolean; count: number; onToggle: () => void }) {
   return (
-    <label className="btn-raised flex h-7 cursor-pointer items-center gap-2 rounded-lg border bg-card px-2 text-xs font-medium transition-[box-shadow]">
+    <label className="btn-raised flex h-7 min-w-0 cursor-pointer items-center gap-2 rounded-lg border bg-card px-2 text-xs font-medium transition-[box-shadow] max-md:h-11 max-md:min-w-11">
       <Checkbox checked={shown} onCheckedChange={onToggle} aria-label="Show archived tasks" className="size-4" />
       Archived
       <Badge variant="secondary" className="h-5 px-1.5">{count}</Badge>
@@ -53,7 +53,7 @@ function ArchivedToggle({ shown, count, onToggle }: { shown: boolean; count: num
 
 export function TasksTab({ id, board = false }: { id?: string; board?: boolean }) {
   return <Tabs.Root value={board ? "board" : "list"} onValueChange={(value) => go(tabHash("tasks", ...(value === "board" ? ["board"] : [])))} className="flex min-h-0 flex-1 flex-col">
-    <Tabs.List aria-label="Task views" className="flex gap-1 border-b border-border px-4 py-2">
+    <Tabs.List aria-label="Task views" className="flex gap-1 border-b border-border px-4 py-2 max-md:px-3 max-md:py-1.5">
       <Tabs.Trigger value="list" className="rounded-lg border border-input px-3 py-1.5 text-sm text-muted-foreground data-[state=active]:bg-tab-fill data-[state=active]:text-foreground focus-visible:ring-3 focus-visible:ring-ring">List</Tabs.Trigger>
       <Tabs.Trigger value="board" className="rounded-lg border border-input px-3 py-1.5 text-sm text-muted-foreground data-[state=active]:bg-tab-fill data-[state=active]:text-foreground focus-visible:ring-3 focus-visible:ring-ring">Board</Tabs.Trigger>
     </Tabs.List>

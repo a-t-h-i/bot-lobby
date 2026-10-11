@@ -12,7 +12,7 @@ function Clock({ timing, stopped }: { timing: PhaseClock; stopped: boolean }) {
     const timer = window.setInterval(() => setDelta(performance.now() - sampled), 1000)
     return () => window.clearInterval(timer)
   }, [timing, stopped])
-  return <span className="tabular-nums">{timing.waiting ? "Waiting for you · " : ""}{timing.phase.replaceAll("_", " ")} · {executionWords(executionMs(timing, delta, stopped))} execution</span>
+  return <span className="tabular-nums break-words">{timing.waiting ? "Waiting for you · " : ""}{timing.phase.replaceAll("_", " ")} · {executionWords(executionMs(timing, delta, stopped))} execution</span>
 }
 
 /** How long the task's agents have worked on it, idle time left out, ticking while they work. */
@@ -20,7 +20,7 @@ function Worked({ work, timing, stopped }: { work: WorkClock; timing?: PhaseCloc
   const counting = work.running && !stopped && !timing?.waiting
   const elapsed = useElapsed(counting, work)
   return (
-    <span className="tabular-nums" data-work-clock={counting ? "running" : "stopped"}>
+    <span className="tabular-nums break-words" data-work-clock={counting ? "running" : "stopped"}>
       {timing?.waiting ? "Waiting for you · " : ""}
       {timing ? `${timing.phase.replaceAll("_", " ")} · ` : ""}
       worked {executionWords(work.workedMs + elapsed)}

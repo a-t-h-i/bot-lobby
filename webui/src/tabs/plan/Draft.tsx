@@ -58,7 +58,7 @@ const Line = memo(function Line({ row, notes, onComment }: LineProps) {
   return (
     // Lines out of view are not laid out until scrolled to: a plan of hundreds of lines lands in one cheap frame.
     <li className="group/line [contain-intrinsic-size:auto_2.75rem] [content-visibility:auto]">
-      <div className="flex items-start gap-1">
+      <div className="flex min-w-0 items-start gap-1">
         <span className="flex w-4 shrink-0 justify-center pt-3.5" aria-hidden="true">
           {notes.length > 0 ? <span className="size-2 rounded-full bg-primary" /> : null}
         </span>
@@ -68,7 +68,7 @@ const Line = memo(function Line({ row, notes, onComment }: LineProps) {
         >
           {row.fenced ? row.text : <Markdown text={row.text} />}
         </div>
-        <Button type="button" variant="ghost" size="icon" className="shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/line:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100" aria-label={`Comment on this line: ${line}`} onClick={open}>
+        <Button type="button" variant="ghost" size="icon" className="shrink-0 text-muted-foreground max-md:size-11 opacity-0 transition-opacity group-hover/line:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100" aria-label={`Comment on this line: ${line}`} onClick={open}>
           <MessageSquarePlus aria-hidden="true" />
         </Button>
       </div>
@@ -100,7 +100,7 @@ export function SeatNeeds({ notes }: { notes: PanelNote[] }) {
     <Section title={SEATS_NEED}>
       <dl className="flex flex-col gap-2 text-sm">
         {notes.map((note, index) => (
-          <div key={index} className="flex gap-3">
+          <div key={index} className="flex min-w-0 gap-3 max-md:flex-wrap">
             <dt className={cn("w-20 shrink-0 font-medium", sourceColor(note.from))}>{sourceLabel(note.from)}</dt>
             <dd className="min-w-0 flex-1">
               <Markdown text={note.text} />

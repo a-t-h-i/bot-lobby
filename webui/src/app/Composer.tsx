@@ -8,12 +8,13 @@
  * comment on the open task on Tasks. While a pop-up is open it steps aside, so
  * only one thing asks for you at a time.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { ArrowUp, Eye, FileText, Paperclip, Square, X } from "lucide-react"
 import { Keys, KeyHint } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/reui/select"
 import { call } from "@/lib/api"
 import { act } from "@/lib/act"
 import { useComposerContext, type ComposerSession } from "@/lib/composerContext"
@@ -27,7 +28,8 @@ import { continueList, link, wrap, type Edit } from "./markdownEdit"
 import { cn } from "@/lib/utils"
 import { projectUrl } from "@/lib/project"
 import type { LobbySnapshot, StatusInfo, UploadInfo } from "@protocol"
-import { useTopic } from "./hooks"
+import { useCompactLandscape, useMediaQuery, useTopic } from "./hooks"
+import { usePhoneViewport } from "./usePhoneViewport"
 import { go, type Route } from "./router"
 import { knowledgeHash } from "./knowledgeView"
 import { KnowledgePaneToggle } from "./KnowledgePaneToggle"
@@ -148,7 +150,7 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
   )
 }
 
-export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<string, string>; onHelp: () => void }) {
+export function Composer({ route, keys, onHelp, dockNav }: { route: Route; keys: Record<string, string>; onHelp: () => void; dockNav?: ReactNode }) {
   const [text, setText] = useState("")
   const [files, setFiles] = useState<Pending[]>([])
   const [preview, setPreview] = useState(false)
@@ -159,6 +161,9 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
   const lobby = useTopic<LobbySnapshot>("lobby")
   const blocked = useAnyOverlay()
   const busy = (status.data?.busy ?? false) || Boolean(lobby.data?.reply?.trim())
+  const compact = useCompactLandscape()
+  const phone = useMediaQuery("(max-width: 767.98px)")
+  const { keyboardOpen, keyboardInset } = usePhoneViewport()
 
   const { taskId: openTask, session: openSession } = useComposerContext()
   const targets = useMemo(() => targetsFor(route, openTask, openSession), [route, openTask, openSession])
@@ -192,7 +197,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
     const el = card.current
     if (!el) return
     const root = document.documentElement
-    const set = () => root.style.setProperty("--composer-h", blocked ? "0px" : `${Math.ceil(el.getBoundingClientRect().height)}px`)
+    const set = () => root.style.setProperty("--composer-h", blocked ? "0px" : `${Math.ceil(el.getBoundingClientRect().height + (phone ? keyboardInset : 0))}px`)
     set()
     const observer = new ResizeObserver(set)
     observer.observe(el)
@@ -200,7 +205,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
       observer.disconnect()
       root.style.setProperty("--composer-h", "0px")
     }
-  }, [blocked])
+  }, [blocked, keyboardInset, keyboardOpen, phone])
 
   const attach = useCallback((list: Iterable<File>) => {
     const incoming = [...list]
@@ -329,17 +334,22 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
 
   return (
     <div
+      id="app-dock"
       ref={card}
+      style={phone && keyboardOpen ? { bottom: `${keyboardInset}px` } : undefined}
       className={cn(
-        "dock pointer-events-none absolute inset-x-0 bottom-0 z-30 px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] transition-opacity duration-200 ease-snap max-sm:px-2 max-sm:pb-[max(0.5rem,env(safe-area-inset-bottom))]",
+        "dock pointer-events-none absolute inset-x-0 bottom-0 z-30 px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] transition-opacity duration-200 ease-snap max-md:px-2",
+        phone && keyboardOpen ? "max-md:pb-2" : "max-md:pb-[max(0.5rem,env(safe-area-inset-bottom))]",
         blocked && "opacity-0"
       )}
       inert={blocked}
     >
+      {dockNav ? <div className="pointer-events-auto mx-auto mb-1.5 w-full max-w-3xl">{dockNav}</div> : null}
       <div className="pointer-events-auto mx-auto w-full max-w-3xl">
         <div
           className={cn(
             "group/composer relative rounded-2xl border border-dock-border bg-dock shadow-dock transition-[border-color,box-shadow] duration-300 ease-snap focus-within:border-ring focus-within:shadow-dock-focus",
+            compact && "min-[500px]:max-md:grid min-[500px]:max-md:grid-cols-[minmax(0,1fr)_auto] min-[500px]:max-md:min-w-0",
             dragging && "border-primary shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_30%,transparent)]"
           )}
           onDragOver={(event) => {
@@ -359,7 +369,10 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
                 exit={{ height: 0, opacity: 0 }}
                 transition={{ type: "spring", stiffness: 420, damping: 36 }}
                 aria-label="Attachments"
-                className="flex flex-wrap items-end gap-2 overflow-hidden px-3 pt-3"
+                className={cn(
+                  "flex flex-wrap items-end gap-2 overflow-hidden px-3 pt-3",
+                  compact && "min-[500px]:max-md:col-span-full min-[500px]:max-md:min-w-0 min-[500px]:max-md:max-w-full"
+                )}
               >
                 {files.map((file) => (
                   <Chip key={file.key} file={file} onRemove={() => forget(file.key)} />
@@ -369,12 +382,24 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
           </AnimatePresence>
 
           {preview ? (
-            <div aria-label="Markdown preview" role="region" className="max-h-48 overflow-y-auto border-b border-border px-4 py-3">
+            <div
+              aria-label="Markdown preview"
+              role="region"
+              className={cn(
+                "max-h-48 overflow-y-auto border-b border-border px-4 py-3",
+                compact && "min-[500px]:max-md:col-span-full min-[500px]:max-md:min-w-0 min-[500px]:max-md:max-w-full"
+              )}
+            >
               {text.trim() ? <Markdown text={text} /> : <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>}
             </div>
           ) : null}
 
-          <div className="flex px-4 pt-3 pb-1">
+          <div
+            className={cn(
+              "flex px-4 pt-3 pb-1",
+              compact && "min-[500px]:max-md:col-start-1 min-[500px]:max-md:min-w-0 min-[500px]:max-md:max-w-full min-[500px]:max-md:pt-1 min-[500px]:max-md:pb-1"
+            )}
+          >
             <textarea
               ref={field}
               id="composer-text"
@@ -385,11 +410,19 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
               onPaste={onPaste}
               placeholder={busy && target.id === "oracle" ? "The oracle is working. Enter steers it…" : target.placeholder}
               rows={1}
-              className="field-sizing-content max-h-[min(45vh,20rem)] min-h-[1.75rem] w-full min-w-0 flex-1 resize-none bg-transparent text-base leading-relaxed caret-primary outline-none placeholder:text-muted-foreground md:text-[0.9375rem] md:leading-relaxed"
+              className={cn(
+                "field-sizing-content max-h-[min(45vh,20rem)] min-h-[1.75rem] w-full min-w-0 flex-1 resize-none bg-transparent text-base leading-relaxed caret-primary outline-none placeholder:text-muted-foreground md:text-[0.9375rem] md:leading-relaxed",
+                compact && "min-[500px]:max-md:max-h-[44px] min-[500px]:max-md:overflow-y-auto"
+              )}
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-2 pt-1 pb-2">
+          <div
+            className={cn(
+              "flex flex-wrap items-center gap-x-2 gap-y-2 px-2 pt-1 pb-2",
+              compact && "min-[500px]:max-md:col-start-2 min-[500px]:max-md:min-w-0 min-[500px]:max-md:flex-nowrap min-[500px]:max-md:gap-y-0 min-[500px]:max-md:pt-1 min-[500px]:max-md:pb-1"
+            )}
+          >
             <input
               ref={picker}
               type="file"
@@ -422,31 +455,44 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
             </Tooltip>
 
             <span aria-hidden="true" className="mx-1.5 h-4 w-px bg-border" />
-            {route.kind === "tab" && route.tab === "knowledge" ? <KnowledgePaneToggle rest={route.rest} /> : targets.length > 1 ? (
-              <div role="radiogroup" aria-label="Send to" className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5 shadow-[inset_0_1px_2px_rgb(0_0_0/0.07)]">
-                {targets.map((entry) => (
-                  <button
-                    key={entry.id}
-                    aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
-                    type="button"
-                    role="radio"
-                    data-compact
-                    aria-checked={entry.id === target.id}
-                    onClick={() => setChosen(entry.id)}
-                    className={cn(
-                      "h-6 rounded-md border border-transparent px-2.5 text-xs font-medium transition-[background-color,color,box-shadow] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
-                      entry.id === target.id ? "btn-raised btn-soft bg-card text-foreground" : "btn-ghost text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    {entry.pill}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <span className="px-1 text-xs text-muted-foreground">To the {target.pill.toLowerCase()}</span>
-            )}
+            <div className={cn("contents", phone && !compact && "max-md:block max-md:w-full max-md:order-last")}>
+              {route.kind === "tab" && route.tab === "knowledge" ? <KnowledgePaneToggle rest={route.rest} /> : compact && targets.length > 1 ? (
+                <Select value={target.id} onValueChange={(id) => setChosen(id as TargetId)}>
+                  <SelectTrigger aria-label="Send to" className="h-7 min-w-0 gap-1.5 px-2 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {targets.map((entry) => (
+                      <SelectItem key={entry.id} value={entry.id}>{entry.pill}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : targets.length > 1 ? (
+                <div role="radiogroup" aria-label="Send to" className="flex max-md:flex-wrap items-center gap-0.5 rounded-lg bg-muted p-0.5 shadow-[inset_0_1px_2px_rgb(0_0_0/0.07)]">
+                  {targets.map((entry) => (
+                    <button
+                      key={entry.id}
+                      aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
+                      type="button"
+                      role="radio"
+                      data-compact
+                      aria-checked={entry.id === target.id}
+                      onClick={() => setChosen(entry.id)}
+                      className={cn(
+                        "h-6 rounded-md border border-transparent px-2.5 text-xs font-medium transition-[background-color,color,box-shadow] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
+                        entry.id === target.id ? "btn-raised btn-soft bg-card text-foreground" : "btn-ghost text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {entry.pill}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <span className="px-1 text-xs text-muted-foreground">To the {target.pill.toLowerCase()}</span>
+              )}
+            </div>
 
-            <div className="@container ml-auto flex min-w-0 flex-1 items-center justify-end overflow-hidden px-2">
+            <div className="@container ml-auto flex min-w-0 flex-1 items-center justify-end overflow-hidden px-2 max-md:hidden">
               <div className="flex items-center justify-end gap-3.5">
                 {route.kind === "tab" && route.tab === "plan" ? (
                   <KeyHint chord={keys.savePlan ?? "Ctrl+S"} className="hidden @[34rem]:inline-flex">
@@ -480,6 +526,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
               </div>
             </div>
 
+            <div className="contents max-md:ml-auto max-md:flex max-md:items-center max-md:gap-2">
             {busy && target.id === "oracle" ? (
               <ConfirmButton label="Stop" icon={Square} iconOnly compact title="Stop the oracle?" description="The current response stops. Work already recorded is kept." confirmLabel="Stop" variant="destructive" onConfirm={() => void stop()} />
             ) : null}
@@ -501,6 +548,7 @@ export function Composer({ route, keys, onHelp }: { route: Route; keys: Record<s
                 Send <Keys chord="Enter" />
               </TooltipContent>
             </Tooltip>
+            </div>
           </div>
 
           {dragging ? (

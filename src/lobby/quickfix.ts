@@ -311,8 +311,6 @@ export class QuickFixQueue {
           thinking,
           mcpTools: profile.mcpTools,
           delegationQuota: quota,
-          effort: this.deps.effort,
-          effortProfile: profile,
           agent: { runId: job.id, taskId: job.id, domain: "backend", role: "worker" },
           onChildRun: (child) => {
             const edits = this.edits.get(job.id);

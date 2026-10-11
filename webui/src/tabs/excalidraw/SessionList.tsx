@@ -29,7 +29,7 @@ function Row({ session, check, checking, selected, onSelect }: { session: Excali
         data-row
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(session.id)}
-        className={ROW}
+        className={cn(ROW, "max-md:min-h-11")}
       >
         <span className="flex items-center gap-2 text-sm">
           <Mark check={check} checking={checking} />

@@ -58,7 +58,7 @@ function ThemePicker() {
   }
 
   return (
-    <div ref={group} role="radiogroup" aria-label="Colour theme" onKeyDown={onKeyDown} className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+    <div ref={group} role="radiogroup" aria-label="Colour theme" onKeyDown={onKeyDown} className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
       {palette.all.map((entry) => {
         const on = entry.id === palette.active.id
         return (
@@ -76,8 +76,8 @@ function ThemePicker() {
             )}
           >
             <Swatch palette={entry} dark={dark} />
-            <span className="flex items-center justify-between gap-2 px-0.5 text-[0.8125rem] font-medium">
-              <span className="truncate">
+            <span className="flex min-w-0 items-center justify-between gap-2 px-0.5 text-[0.8125rem] font-medium">
+              <span className="truncate max-md:break-words max-md:overflow-visible max-md:text-clip max-md:whitespace-normal">
                 {entry.name}
                 {palette.isSaved(entry.id) ? <span className="ml-1.5 text-xs font-normal text-muted-foreground">saved</span> : null}
               </span>
@@ -111,7 +111,7 @@ function SavedRow({ entry }: { entry: Palette }) {
   return (
     <li className="flex min-h-10 flex-wrap items-center gap-2 py-1.5">
       {editing ? (
-        <form className="flex min-w-0 flex-1 items-center gap-1" onSubmit={(event) => { event.preventDefault(); void rename() }}>
+        <form className="flex min-w-0 flex-1 items-center gap-1 max-md:flex-wrap" onSubmit={(event) => { event.preventDefault(); void rename() }}>
           <Input
             autoFocus
             value={name}
@@ -126,14 +126,14 @@ function SavedRow({ entry }: { entry: Palette }) {
               setName(entry.name)
               setEditing(false)
             }}
-            className="h-8 max-w-64"
+            className="h-8 max-w-64 max-md:h-11 max-md:min-h-11 max-md:min-w-0 max-md:flex-1"
           />
           <ActionButton label="Save the name" text="Save" icon={Check} tone="primary" type="submit" disabled={!name.trim()} />
           <ActionButton label="Keep the old name" icon={X} iconOnly onClick={() => { setName(entry.name); setEditing(false) }} />
         </form>
       ) : (
         <>
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">{entry.name}</span>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium max-md:break-words max-md:overflow-visible max-md:text-clip max-md:whitespace-normal">{entry.name}</span>
           <ActionButton label={`Rename ${entry.name}`} text="Rename" icon={Pencil} onClick={() => { setName(entry.name); setEditing(true) }} />
           <ConfirmButton label={`Remove ${entry.name}`} text="Remove" title={`Remove ${entry.name}?`} description="It is removed for every pi session. Keep a copy of its CSS if you want to use it again." confirmLabel="Remove theme" icon={Trash2} variant="destructive" onConfirm={() => void palette.remove(entry.id).catch((failure: Error) => toast.error(failure.message))} />
         </>
@@ -202,7 +202,7 @@ function ImportTheme() {
       </p>
       <label className="grid gap-1 text-xs text-muted-foreground">
         Name
-        <Input value={name} maxLength={40} placeholder="the theme's own name, or the file's" onChange={(event) => setName(event.target.value)} className="h-8 max-w-80 text-foreground" />
+        <Input value={name} maxLength={40} placeholder="the theme's own name, or the file's" onChange={(event) => setName(event.target.value)} className="h-8 max-w-80 text-foreground max-md:h-11 max-md:min-h-11" />
       </label>
       <Textarea
         value={text}
@@ -217,7 +217,7 @@ function ImportTheme() {
         placeholder={":root {\n  --background: oklch(0.98 0 0);\n  --primary: oklch(0.55 0.2 260);\n  …\n}\n.dark { … }"}
         className="max-h-56 font-mono text-xs md:text-xs"
       />
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 max-md:flex-wrap">
         <input ref={picker} type="file" accept=".css,.json,text/css,application/json" hidden tabIndex={-1} aria-label="Upload a theme file" onChange={(event) => {
           void onFile(event.target.files?.[0])
           event.target.value = ""
@@ -225,7 +225,7 @@ function ImportTheme() {
         <ActionButton label="Save and apply the pasted theme" text="Save theme" icon={Check} tone="primary" disabled={!text.trim() || saving} onClick={() => void apply(text, "Custom theme")} />
         <ActionButton label="Upload a .css or .json theme file" text="Upload file" icon={Upload} disabled={saving} onClick={() => picker.current?.click()} />
         {error ? (
-          <p role="alert" className="ml-2 min-w-0 text-xs text-destructive">
+          <p role="alert" className="ml-2 min-w-0 text-xs text-destructive max-md:ml-0 max-md:basis-full">
             {error}
           </p>
         ) : null}

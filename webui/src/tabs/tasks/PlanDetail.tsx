@@ -67,7 +67,7 @@ export function PlanDetail({ row, onGone }: { row: TaskRow; onGone: () => void }
     if (await act("plans.discard", { planId: row.id })) onGone()
   }
   return (
-    <article className="flex flex-col gap-4" aria-label={row.title}>
+    <article className="flex min-w-0 flex-col gap-4" aria-label={row.title}>
       <ActionBar>
         <ActionButton label="Start here" icon={Play} tone="primary" shortcut="S" onClick={() => void start("here")} />
         <ActionButton label="Start in a new session" text="New session" icon={SquareArrowOutUpRight} shortcut="N" onClick={() => void start("session")} />

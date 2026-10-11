@@ -124,7 +124,7 @@ function AutoMode({ on, toggle }: { on: boolean; toggle: () => void }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-[0.8125rem] font-medium transition-colors hover:bg-accent">
+        <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-[0.8125rem] font-medium transition-colors hover:bg-accent max-md:min-h-11">
           <RefreshCw aria-hidden="true" className="size-4 text-muted-foreground" />
           <span>Auto</span>
           <Switch checked={on} onCheckedChange={toggle} aria-label="Auto mode" aria-keyshortcuts="A" />
@@ -194,7 +194,7 @@ export function TaskDetail(props: DetailProps) {
   // The detail, once read, says whether the task keeps work time; the row stands in until then.
   const work = detail.data ? detail.data.work : row.work
   return (
-    <article className="flex flex-col gap-5" aria-label={row.title}>
+    <article className="flex min-w-0 flex-col gap-5" aria-label={row.title}>
       <Actions {...props} />
       <Header row={row} task={task} />
       <p className="text-sm text-muted-foreground"><PhaseTiming timing={detail.data?.timing ?? row.timing} {...(work ? { work } : {})} stopped={row.check !== "open"} /></p>

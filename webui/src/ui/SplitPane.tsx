@@ -44,6 +44,7 @@ interface SplitPaneProps {
 
 function DetailSheet({ open, onClose, describe, children }: Pick<SplitPaneProps, "open" | "onClose" | "describe"> & { children: ReactNode }) {
   const shown = useOverlaySlot(open, PRIORITY.sheet)
+  const phone = useMediaQuery("(max-width: 767.98px)")
   const mounted = useRef(false)
   if (shown) mounted.current = true
   if (!open) mounted.current = false
@@ -53,16 +54,23 @@ function DetailSheet({ open, onClose, describe, children }: Pick<SplitPaneProps,
         forceMount={open && mounted.current ? true : undefined}
         hidden={!shown}
         showCloseButton={false}
-        className={cn("gap-0 data-[side=right]:w-[92%] data-[side=right]:sm:max-w-3xl", !shown && "!hidden")}
+        side={phone ? "bottom" : "right"}
+        className={cn(
+          "gap-0",
+          phone
+            ? "data-[side=bottom]:inset-0 data-[side=bottom]:h-full data-[side=bottom]:max-w-none data-[side=bottom]:rounded-none"
+            : "data-[side=right]:w-[92%] data-[side=right]:sm:max-w-3xl",
+          !shown && "!hidden",
+        )}
       >
         <SheetHeader className="flex-row items-center justify-between border-b px-4 py-2">
           <SheetTitle className="text-sm">Detail</SheetTitle>
           <SheetDescription className="sr-only">{describe}</SheetDescription>
           <SheetClose asChild>
-            <Button variant="ghost" size="sm" aria-label="Close detail" title="Close · Esc" className="gap-2">
+            <Button variant="ghost" size="sm" aria-label="Close detail" title="Close · Esc" className={cn("gap-2", phone && "h-11 px-3 text-sm")}>
               <X aria-hidden="true" />
               Close
-              <Keys chord="Esc" className="kbd-hint" />
+              {phone ? null : <Keys chord="Esc" className="kbd-hint" />}
             </Button>
           </SheetClose>
         </SheetHeader>
@@ -72,12 +80,17 @@ function DetailSheet({ open, onClose, describe, children }: Pick<SplitPaneProps,
   )
 }
 
-function InlinePanes({ list, detail, open, detailClassName }: Pick<SplitPaneProps, "list" | "detail" | "open" | "detailClassName">) {
+function InlinePanes({ list, detail, open, detailClassName, listPane, detailPane, onListKey, onDetailKey }: Pick<SplitPaneProps, "list" | "detail" | "open" | "detailClassName"> & {
+  listPane: React.RefObject<HTMLElement | null>
+  detailPane: React.RefObject<HTMLElement | null>
+  onListKey: (event: KeyboardEvent<HTMLElement>) => void
+  onDetailKey: (event: KeyboardEvent<HTMLElement>) => void
+}) {
   const shown = open && detail !== null
-  return <div className={cn("grid min-h-0 flex-1", shown ? "grid-rows-[minmax(0,1fr)_minmax(0,2fr)]" : "grid-rows-1")}>
-    <Pane data-pane="list" className={cn("overflow-y-auto", shown ? "border-b border-border" : "pb-dock")}>{list}</Pane>
-    {shown ? <Pane data-pane="detail" aria-label="Detail" tabIndex={0}
-      className={cn("overflow-y-auto px-5 pt-5 pb-dock", detailClassName)}>{detail}</Pane> : null}
+  return <div className={cn("grid min-h-0 min-w-0 flex-1", shown ? "grid-rows-[minmax(0,1fr)_minmax(0,2fr)]" : "grid-rows-1")}>
+    <Pane data-pane="list" ref={listPane} onKeyDown={onListKey} className={cn("min-w-0 overflow-x-hidden overflow-y-auto", shown ? "border-b border-border" : "pb-dock")}>{list}</Pane>
+    {shown ? <Pane data-pane="detail" ref={detailPane} aria-label="Detail" tabIndex={0} onKeyDown={onDetailKey}
+      className={cn("min-w-0 overflow-x-hidden overflow-y-auto px-5 pt-5 pb-dock", detailClassName)}>{detail}</Pane> : null}
   </div>
 }
 
@@ -96,7 +109,7 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe, i
     } else if (event.key === "Home" || event.key === "End") {
       event.preventDefault()
       stepRows(root, event.target as Element, event.key === "Home" ? "first" : "last")
-    } else if (wide && horizontalStep(event.key) === 1 && detailPane.current) {
+    } else if ((wide || inlineDetail) && horizontalStep(event.key) === 1 && detailPane.current) {
       event.preventDefault()
       detailPane.current.focus()
     }
@@ -111,11 +124,11 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe, i
     }
   }
 
-  if (!wide && inlineDetail) return <InlinePanes list={list} detail={detail} open={open} detailClassName={detailClassName} />
+  if (!wide && inlineDetail) return <InlinePanes list={list} detail={detail} open={open} detailClassName={detailClassName} listPane={listPane} detailPane={detailPane} onListKey={onListKey} onDetailKey={onDetailKey} />
   if (!wide) {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-dock">
-        <Pane data-pane="list" ref={listPane} onKeyDown={onListKey}>
+        <Pane data-pane="list" ref={listPane} onKeyDown={onListKey} className="max-md:shrink-0">
           {list}
         </Pane>
         <DetailSheet open={open && detail !== null} onClose={onClose} describe={describe}>
@@ -159,7 +172,7 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe, i
 /** The list pane's title row: `Tasks            2 open · 2 finished`, then any controls; it stays put while the list scrolls. */
 export function PaneHeader({ title, count, children }: { title: string; count?: string; children?: ReactNode }) {
   return (
-    <div className="sticky top-0 z-10 flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-card/90 px-4 py-2 backdrop-blur-sm">
+    <div className="sticky top-0 z-10 flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-card/90 px-4 py-2 backdrop-blur-sm max-md:static max-md:z-auto max-md:bg-transparent max-md:px-3 max-md:py-2 max-md:backdrop-blur-none">
       <h2 className="text-sm font-medium">{title}</h2>
       <span aria-hidden="true" className="min-w-2 flex-1" />
       {count ? <span className="text-xs text-muted-foreground tabular-nums">{count}</span> : null}

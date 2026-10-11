@@ -35,7 +35,7 @@ function OptionMockups({ question }: { question: PanelQuestion }) {
   const options = question.options.map((option) => ({ label: option.label, description: option.description, ...(option.mockup ? { htmlPreview: option.mockup } : {}) }))
   return (
     <>
-      <ul aria-label="Mockups" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <ul aria-label="Mockups" className="grid grid-cols-2 gap-2 md:grid-cols-3">
         {drawn.map(({ option, index, mockup }) => (
           <li key={index} className="flex min-w-0 flex-col gap-1">
             <StaticPreview preview={mockup} label={plainLabel(option.label)} frameWidth={MOCKUP_WIDTH} onOpen={() => setOpen(index)} className="aspect-[3/2] h-auto" />
@@ -62,7 +62,7 @@ function Asked({ questions }: { questions: PanelQuestion[] }) {
   return (
     <ol className="mt-1 flex flex-col gap-2">
       {questions.map((question, index) => (
-        <li key={index} className="card-raised flex flex-col gap-2 rounded-xl border p-3 text-sm" style={{ "--orb": sourceTone(question.from) } as CSSProperties}>
+        <li key={index} className="card-raised flex min-w-0 flex-col gap-2 rounded-xl border p-3 text-sm" style={{ "--orb": sourceTone(question.from) } as CSSProperties}>
           <p className="flex items-start gap-2">
             <span className="mt-px inline-flex shrink-0 items-center gap-1 rounded-full bg-[color-mix(in_oklab,var(--orb)_12%,transparent)] px-2 py-0.5 text-xs font-medium text-[color-mix(in_oklab,var(--orb)_85%,var(--foreground))]">
               <AgentIcon source={question.from} className="size-3" />
@@ -118,7 +118,7 @@ function UserTurn({ message, index, busy, readOnly }: { message: PlannerMessage;
     setSaved(result.message)
   }
   const edit = !readOnly && !message.settled?.length && !editing ? (
-    <Button size="xs" variant="ghost" disabled={waiting} onClick={() => setEditing(true)} className="text-muted-foreground">
+    <Button size="xs" variant="ghost" disabled={waiting} onClick={() => setEditing(true)} className="text-muted-foreground max-md:min-h-11 max-md:whitespace-normal">
       <Pencil aria-hidden="true" />
       Edit
     </Button>
