@@ -4,7 +4,7 @@ import { profileFor, type BotLobbyConfig, type ProfileResolver } from "../schema
 import type { Domain } from "../schemas/agent.ts";
 import type { AgentRun, ReviewResult, ScoutResult, WorkerResult } from "../schemas/findings.ts";
 import { domainSpec } from "../agents/registry.ts";
-import { runAgent, runParallel, watchdogOptions, type AgentRequest, type AgentTime } from "../execution/agent-runner.ts";
+import { boundedAgentTime, runAgent, runParallel, watchdogOptions, type AgentRequest, type AgentTime } from "../execution/agent-runner.ts";
 import { spawnPiProcess, type ProcessRunner, type RelayAsk } from "../execution/pi-runner.ts";
 import { knowledgeFilePath, readAgentKnowledge, writeFileEnsured } from "../knowledge/store.ts";
 import { selectKnowledge, type KnowledgeSelection } from "../knowledge/selector.ts";
@@ -52,7 +52,7 @@ export interface ScoutRequest {
 /** Model, thinking and time limit for one run, from settings. */
 function profileFields(config: BotLobbyConfig, resolver: ProfileResolver | undefined, domain: Domain, role: AgentRequest["role"]) {
   const profile = profileFor(config, resolver, domain, role);
-  return { model: profile.model, mcpTools: profile.mcpTools, thinking: profile.thinking, timeoutMs: profile.timeoutMs };
+  return { model: profile.model, mcpTools: profile.mcpTools, thinking: profile.thinking, timeoutMs: profile.timeoutMs, time: boundedAgentTime(profile.timeoutMs) };
 }
 
 function scoutInstruction(request: ScoutRequest, domain: Domain): string {
@@ -142,6 +142,7 @@ export async function runScouts(request: ScoutRequest, run: ProcessRunner = spaw
   const extraTools = request.hints?.tools() ?? [];
   const requests: AgentRequest[] = request.domains.map((domain, index) => ({
     delegationQuota: { used: 0 },
+    effort: request.effort,
     taskId: request.taskId,
     domain,
     role: "scout",
@@ -161,7 +162,7 @@ export async function runScouts(request: ScoutRequest, run: ProcessRunner = spaw
   const runs = await runParallel(first, request.config.workflow.maxParallelScouts, run);
   let outcomes = runs.map((agentRun) => toOutcome(agentRun, agentRun.domain));
   // A routed scout that came back unusable runs again on its configured model.
-  const again = outcomes.map((outcome, index) => (routes[index] && !outcome.usable && outcome.run.status !== "cancelled" && !request.signal?.aborted ? index : -1)).filter((index) => index >= 0);
+  const again = outcomes.map((outcome, index) => (routes[index] && !outcome.usable && outcome.run.status !== "cancelled" && !request.signal?.aborted && requests[index]!.time!.endsAt > Date.now() ? index : -1)).filter((index) => index >= 0);
   if (again.length > 0) {
     const reruns = await runParallel(again.map((index) => requests[index]!), request.config.workflow.maxParallelScouts, run);
     outcomes = outcomes.map((outcome, index) => {
@@ -288,6 +289,8 @@ export async function runWorker(
   const extraTools = [...(request.agent?.extraTools ?? []), ...hintTools];
   const base: AgentRequest = {
     delegationQuota: { used: 0 },
+    effort: request.effort,
+    effortProfile: configured,
     taskId: request.taskId,
     domain: request.domain,
     role: "worker",
@@ -311,7 +314,7 @@ export async function runWorker(
   };
   let outcome = workerOutcome(request.domain, await runAgent(route ? { ...base, ...routedFields(route) } : base, run));
   // A routed step that fell short runs again at the configured model and thinking.
-  if (route && fellShort(outcome.run, outcome.issues) && !request.signal?.aborted) {
+  if (route && fellShort(outcome.run, outcome.issues) && !request.signal?.aborted && base.time!.endsAt > Date.now()) {
     const routed = outcome.run.edited ?? [];
     outcome = workerOutcome(request.domain, await runAgent(base, run));
     // The step owns what the routed attempt edited too.
@@ -337,6 +340,7 @@ export interface ReviewerOutcome {
 }
 
 export interface ReviewerRequest {
+  effort?: EffortRouter;
   taskId: string;
   domain: Domain;
   taskText: string;
@@ -400,6 +404,7 @@ function reviewerAgentRequest(request: ReviewerRequest, selected: KnowledgeSelec
     taskId: request.taskId,
     domain: request.domain,
     role: "reviewer",
+    effort: request.effort,
     instruction:
       request.instruction?.trim() ||
       "Review the current repository changes against the approved requirements and plan.",
@@ -434,7 +439,7 @@ export async function runReviewer(
   const agentRequest = reviewerAgentRequest(request, selected);
   const attempts = Math.max(1, request.config.workflow.maxAgentRetries + 1);
   let agentRun = await runAgent(agentRequest, run);
-  for (let attempt = 2; attempt <= attempts && isRetryableReviewRun(agentRun); attempt++) {
+  for (let attempt = 2; attempt <= attempts && isRetryableReviewRun(agentRun) && agentRequest.time!.endsAt > Date.now(); attempt++) {
     agentRun = await runAgent(agentRequest, run);
   }
   const result = parseReviewResult(request.domain, agentRun.output);

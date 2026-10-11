@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { runAgent, runParallel, cancelAllRuns, type AgentRequest } from "../src/execution/agent-runner.ts";
+import { boundedAgentTime, runAgent, runParallel, cancelAllRuns, type AgentRequest } from "../src/execution/agent-runner.ts";
 import type { ProcessOutcome, ProcessRunner } from "../src/execution/pi-runner.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
 
@@ -27,6 +27,33 @@ function request(overrides: Partial<AgentRequest> = {}): AgentRequest {
     ...overrides,
   };
 }
+
+test("retries share a capped deadline and exhausted assignments never spawn", async () => {
+  assert.equal(boundedAgentTime(3_600_000).allotMs, 900_000);
+  const times: number[] = [];
+  const req = request({ timeoutMs: 120_000, retries: 1 });
+  await runAgent(req, async (_args, options) => {
+    times.push(options.timeoutMs);
+    assert.equal(options.time?.hardLimit, true);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return { exitCode: 1, stdout: "", stderr: "crashed", killed: false, timedOut: false };
+  });
+  assert.equal(times.length, 2);
+  assert.ok(times[1]! < times[0]!);
+  assert.ok(req.time!.usedMs! >= 40);
+  const seen: string[] = [];
+  req.time!.endsAt = Date.now() - 1;
+  req.onUpdate = (run) => seen.push(run.status);
+  assert.equal((await runAgent(req, async () => { throw new Error("must not spawn"); })).status, "timeout");
+  assert.deepEqual(seen, ["timeout"]);
+});
+
+test("exceptions emit a terminal update and release the working row", async () => {
+  const seen: string[] = [];
+  const final = await runAgent(request({ onUpdate: (run) => seen.push(run.status) }), async () => { throw new Error("spawn failed"); });
+  assert.equal(final.status, "failed");
+  assert.deepEqual(seen, ["running", "failed"]);
+});
 
 test("runAgent returns metadata and role-restricted tools", async () => {
   let tools: string | undefined;

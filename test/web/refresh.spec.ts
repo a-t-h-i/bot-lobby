@@ -5,6 +5,33 @@ declare const window: any;
 declare const getComputedStyle: any;
 
 let releasePending: (() => void) | undefined;
+test("working agents appear beneath the current step and leave when finished", async ({ page, server }) => {
+  let finished = false;
+  await page.route("**/api/lobby.snapshot", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.result.task.activeSteps = [{ text: "Step 2: Integrate the feature", runIds: ["parent", "child"], workedMs: 1000, activeAgentCount: finished ? 0 : 2 }];
+    body.result.runs = [
+      { runId: "parent", role: "worker", domain: "backend", status: finished ? "success" : "running", instruction: "Integrate the feature", startedAt: new Date().toISOString(), endsAt: Date.now() + 60000 },
+      { runId: "child", parentRunId: "parent", role: "worker", domain: "backend", status: finished ? "failed" : "running", instruction: "Check concurrency", startedAt: new Date().toISOString() },
+      { runId: "old", role: "worker", status: "success", instruction: "Finished history" },
+    ];
+    await route.fulfill({ response, json: body });
+  });
+  await openScenario(page, server, "full");
+  const work = page.locator('section[aria-label="Current step agents"]');
+  await expect(work).toBeVisible();
+  await expect(work).toContainText("2 working");
+  await expect(work.getByRole("listitem")).toHaveCount(2);
+  await expect(work).toContainText("Check concurrency");
+  await expect(page.locator("header").filter({ has: work })).toHaveCount(0);
+  await expect(work.getByText("Finished history")).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+  finished = true;
+  server.bump("lobby");
+  await expect(work).toHaveCount(0);
+});
+
 test.afterEach(() => { releasePending?.(); releasePending = undefined; });
 
 const SECTIONS = ["Agents", "Workflow", "Linting", "Lobby", "Classifier", "Appearance & notifications"];

@@ -282,6 +282,13 @@ Every delegation costs a full agent run, so keep the loop short:
 
 ## Time budget
 
+Every assignment has at most 15 minutes total, or its shorter configured limit,
+including retries, children, tools, compaction and reporting. Step allowances
+persist across reassignments: name the plan step explicitly, and do not reword
+or split an exhausted step to reset its clock. Only the user can extend it,
+including in auto mode. Return an unfinished report when time is spent; stop
+repeating failed approaches. Waiting for the user pauses clocks.
+
 When the task has a time budget (your context says how much is used and
 left), it covers everyone: you, scouts, workers and the QA gate. The clock
 runs while you work and stops while you wait on the user.

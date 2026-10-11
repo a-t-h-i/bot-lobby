@@ -8,7 +8,7 @@
  * up. New messages ease in; settled ones are memoised by id, so only the
  * streaming reply redraws on each delta.
  */
-import { memo, useCallback, useEffect, useMemo, useState, type RefObject } from "react"
+import { memo, useCallback, useEffect, useMemo, useState, type ReactNode, type RefObject } from "react"
 import { useStickToBottom } from "@/lib/useStickToBottom"
 import { ArrowDown, MessageSquare } from "lucide-react"
 import { AgentMessage, ChatNote, TypingDots, YourMessage } from "./ChatParts"
@@ -147,12 +147,14 @@ export function Conversation({
   busy,
   hasOlder,
   hasTask,
+  work,
 }: {
   chat: ChatEntry[]
   reply?: string
   busy: boolean
   hasOlder: boolean
   hasTask: boolean
+  work?: ReactNode
 }) {
   const { ref, atBottom, stick, onScroll } = useStickToBottom(chat.length + (reply?.length ?? 0))
   const { merged, more, loading, load } = useOlderChat(chat, hasOlder, ref)
@@ -167,6 +169,7 @@ export function Conversation({
   useEffect(() => setSettled(true), [])
   return (
     <Frame aria-label="Conversation" className="flex-1">
+      {work}
       <div ref={ref} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-4 pb-dock outline-none focus-visible:bg-muted/30" role="log" aria-label="Conversation" tabIndex={0}>
         {empty ? (
           <ConversationEmpty hasTask={hasTask} />

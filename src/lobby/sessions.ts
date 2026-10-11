@@ -64,7 +64,7 @@ export const STOP_GRACE_MS = 5000;
 export class BackgroundSession {
   readonly key: string;
   readonly projectRoot?: string;
-  readonly name: string;
+  name: string;
   /** The planned task it was started from. */
   readonly planId?: string;
   /** The task it was started to carry on. */

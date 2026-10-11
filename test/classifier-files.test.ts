@@ -210,7 +210,7 @@ test("scouts and workers start with their likely files and may look more up; the
   const seen: Array<{ tools: string; system: string; task: string }> = [];
   const data = tempDir();
   await runScouts({ taskId: "T", taskText: "Add pagination", instruction: "Find the list endpoints.", domains: ["backend"], cwd: data, dataRoots: [data], taskDir: tempDir(), config: DEFAULT_CONFIG, hints: HINTS }, recorder("## Scope\nx", seen));
-  assert.equal(seen[0]!.tools, `read,grep,find,ls,${FIND_FILES_TOOL},codemode,tool_search,delegate_subtasks`);
+  assert.equal(seen[0]!.tools, `read,grep,find,ls,${FIND_FILES_TOOL},codemode,tool_search`);
   assert.match(seen[0]!.system, /## Workflow Context\n\nTask state: scouting[\s\S]*## Likely files\n\n- `src\/api\.ts` \(0\.91\) for Find the list endpoints\./);
   await runWorker({ taskId: "T", domain: "backend", instruction: "Step 2: add the cursor param", taskText: "Add pagination", scoutOutcomes: [], cwd: data, dataRoots: [data], config: DEFAULT_CONFIG, hints: HINTS, agent: { extraTools: ["claim_file", "handover_file"] } }, recorder("## Completed\nx", seen));
   assert.equal(seen[1]!.tools, `read,bash,edit,write,grep,find,ls,claim_file,handover_file,${FIND_FILES_TOOL},codemode,tool_search,delegate_subtasks,my_files,wait_for_files`);

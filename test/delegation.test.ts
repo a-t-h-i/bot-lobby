@@ -14,6 +14,9 @@ import { normalizeMcpTools } from "../src/schemas/configuration.ts";
 import { registerAgentPermissions } from "../src/pi/delegation.ts";
 import type { ExtensionAPI, ToolCallEvent } from "@earendil-works/pi-coding-agent";
 import { runAgent } from "../src/execution/agent-runner.ts";
+import { Classifier } from "../src/classifier/classifier.ts";
+import { effortRouter } from "../src/classifier/effort.ts";
+import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
 
 const reply = (text: string): ProcessOutcome => ({ exitCode: 0, killed: false, timedOut: false, stderr: "", stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], usage: { input: 10, output: 5, cost: { total: 0.01 } } } }) });
 
@@ -122,6 +125,43 @@ test("children inherit permissions, share a desk, report separately, and cannot 
   } finally { rmSync(cwd, { recursive: true, force: true }); }
 });
 
+test("children use Jev effort per brief, including a capable model when their parent was routed down", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "bl-child-effort-"));
+  mkdirSync(join(cwd, ".pi"));
+  const jev = new Classifier({
+    config: () => ({ ...DEFAULT_CONFIG.classifier, enabled: true, effort: { cheapModel: "p/cheap" } }),
+    keys: async () => "key",
+    fetch: async (_url, init) => {
+      const brief = JSON.parse(String(init.body)).state.step;
+      return new Response(JSON.stringify({ answers: { effort: { type: "score", score: brief === "rename" ? 0 : 3, confidence: 0.99 } } }));
+    },
+  });
+  const seen: string[][] = [];
+  const run: ProcessRunner = async (args, options) => {
+    const policy = JSON.parse(options.env![AGENT_ENV]!) as AgentPolicy;
+    if (policy.depth === 2) {
+      seen.push([args[args.indexOf("--model") + 1]!, args[args.indexOf("--thinking") + 1]!]);
+      assert.ok(options.timeoutMs <= 30_000);
+      assert.equal(policy.tools.includes(DELEGATE_TOOL), false);
+      return reply("done");
+    }
+    const target = JSON.parse(options.env![DELEGATION_ENV]!);
+    const client = createDeskClient(target.address, target.token);
+    try { assert.equal((await client.request({ op: "delegate", briefs: ["rename", "concurrency"] })).ok, true); }
+    finally { client.close(); }
+    return reply("integrated");
+  };
+  try {
+    const result = await runPiAgent({ cwd, task: "Step 1", tools: ["read", "edit"], model: "p/cheap", thinking: "low", timeoutMs: 30_000,
+      agent: { runId: "parent", taskId: "T", domain: "backend", role: "worker" },
+      effortProfile: { model: "p/big", thinking: "medium" }, effort: effortRouter(jev, { clamp: (_model, level) => level === "max" ? "xhigh" : level }),
+    }, run);
+    assert.equal(result.status, "success");
+    assert.deepEqual(seen.sort(), [["p/big", "xhigh"], ["p/cheap", "low"]]);
+    assert.ok(result.children!.every((child) => child.route && child.status === "success"));
+  } finally { rmSync(cwd, { recursive: true, force: true }); }
+});
+
 test("a parent that exits with children outstanding cancels and waits for them", async () => {
   const cwd = mkdtempSync(join(tmpdir(), "bl-child-cancel-"));
   mkdirSync(join(cwd, ".pi"));
@@ -168,7 +208,7 @@ test("a retry shares its five child slots and a time grant resets an expired dea
     } finally { client.close(); }
   };
   try {
-    const request = { taskId: "TASK-retry", domain: "backend" as const, role: "scout" as const, instruction: "Inspect", context: { task: "Inspect" }, cwd, timeoutMs: 30_000, retries: 1 };
+    const request = { taskId: "TASK-retry", domain: "backend" as const, role: "worker" as const, instruction: "Inspect", context: { task: "Inspect" }, cwd, timeoutMs: 120_000, retries: 1 };
     assert.equal((await runAgent(request, run)).status, "success");
     assert.equal(attempts, 2);
     const extended: ProcessRunner = async (_args, options) => {
@@ -182,7 +222,7 @@ test("a retry shares its five child slots and a time grant resets an expired dea
       finally { client.close(); }
       return reply("Done after grant");
     };
-    assert.equal((await runPiAgent({ cwd, task: "t", tools: ["read"], timeoutMs: 30_000, time: { upAtMs: 10, upMessage: "Stop", graceMs: 0 } }, extended)).children?.[0]?.status, "success");
+    assert.equal((await runPiAgent({ cwd, task: "t", tools: ["read"], timeoutMs: 30_000, agent: { runId: "parent", taskId: "T", domain: "backend", role: "worker" }, time: { upAtMs: 10, upMessage: "Stop", graceMs: 0 } }, extended)).children?.[0]?.status, "success");
   } finally { rmSync(cwd, { recursive: true, force: true }); }
 });
 
@@ -246,13 +286,13 @@ test("a quick-fix run with an exhausted quota receives no delegate_subtasks tool
   assert.equal(host.tools.includes(DELEGATE_TOOL), false);
 });
 
-test("the parent note mandates two sub-briefs for eligible agents and stays silent otherwise", async () => {
+test("eligible parents delegate only useful separable work", async () => {
   const worker = await hostToolsAndNote({ runId: "p", taskId: "T", domain: "backend", role: "worker" });
-  assert.match(worker.note, /first two sub-briefs/);
+  assert.match(worker.note, /only for useful, separable work/);
   assert.match(worker.note, /five children/);
   assert.match(worker.note, /delegate_subtasks/);
   const qaGate = await hostToolsAndNote({ runId: "p", taskId: "T", domain: "qa", role: "reviewer" });
-  assert.match(qaGate.note, /first two sub-briefs/);
+  assert.match(qaGate.note, /only for useful, separable work/);
   assert.match(qaGate.note, /five children/);
   const scout = await hostToolsAndNote({ runId: "p", taskId: "T", domain: "backend", role: "scout" });
   assert.equal(scout.note.includes("delegate_subtasks"), false);

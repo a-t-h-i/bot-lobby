@@ -119,6 +119,8 @@ export interface AgentRun {
   usage?: { input: number; output: number; cost: number; turns: number };
   startedAt: string;
   finishedAt?: string;
+  /** Active time across attempts, excluding user waits. */
+  activeMs?: number;
   /** Short target of the activity in flight: a file, command head or pattern. */
   detail?: string;
   /** The tool call in flight in plain words (`reading users.ts`); feeds the lobby's activity log. */

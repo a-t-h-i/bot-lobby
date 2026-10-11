@@ -18,7 +18,7 @@ import { useWide } from "@/ui/SplitPane"
 import type { LobbySnapshot, StatusInfo } from "@protocol"
 import { ActivityLog } from "./ActivityLog"
 import { Conversation } from "./Conversation"
-import { RunsStrip } from "./RunsStrip"
+import { CurrentWork } from "./CurrentWork"
 import { TaskHeader } from "./TaskHeader"
 import { runsOf } from "./types"
 
@@ -71,7 +71,7 @@ function MainPanes(props: LobbyViewProps) {
   const both = panes.conversation && activity
   return (
     <div className={cn("grid min-h-0 flex-1 gap-3 p-3", both ? "grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]" : "grid-cols-1")}>
-      {panes.conversation ? <Conversation chat={data?.chat ?? []} reply={data?.reply} busy={status?.busy ?? false} hasOlder={data?.hasOlderChat ?? false} hasTask={Boolean(data?.task)} /> : null}
+      {panes.conversation ? <Conversation chat={data?.chat ?? []} reply={data?.reply} busy={status?.busy ?? false} hasOlder={data?.hasOlderChat ?? false} hasTask={Boolean(data?.task)} work={<CurrentWork task={data?.task} runs={runsOf(data)} />} /> : null}
       {activity ? <ActivityLog entries={data?.activity ?? []} collapsed={false} onToggle={toggleActivity} shortcut={keyOf(status, "activity")} /> : null}
     </div>
   )
@@ -131,7 +131,7 @@ function NarrowView({ data, status }: LobbyViewProps) {
           })}
         </div>
       ) : null}
-      {view.id === "conversation" ? <Conversation chat={data?.chat ?? []} reply={data?.reply} busy={status?.busy ?? false} hasOlder={data?.hasOlderChat ?? false} hasTask={Boolean(data?.task)} /> : null}
+      {view.id === "conversation" ? <Conversation chat={data?.chat ?? []} reply={data?.reply} busy={status?.busy ?? false} hasOlder={data?.hasOlderChat ?? false} hasTask={Boolean(data?.task)} work={<CurrentWork task={data?.task} runs={runsOf(data)} />} /> : null}
       {view.id === "activity" ? <ActivityLog entries={data?.activity ?? []} collapsed={false} bare /> : null}
     </div>
   )
@@ -144,7 +144,6 @@ function LobbyView(props: LobbyViewProps) {
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 border-b border-border">
         <TaskHeader task={data?.task} status={status} />
-        <RunsStrip runs={runsOf(data)} />
       </div>
       {wide ? <WideView {...props} /> : <NarrowView {...props} />}
     </div>

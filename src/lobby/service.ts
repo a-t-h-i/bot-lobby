@@ -7,7 +7,7 @@ import { SessionManager, type ExtensionContext } from "@earendil-works/pi-coding
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { updateBlockingRequest } from "../state/blocking-requests.ts";
 import { randomUUID } from "node:crypto";
-import { loadTask, ownedTask, peekTasks, saveTask } from "../state/persistence.ts";
+import { loadTask, ownedTask, peekOwnedTask, peekTasks, saveTask } from "../state/persistence.ts";
 import { taskWork } from "../state/work-time.ts";
 import { refreshReview, deferReview } from "../delivery/review.ts";
 import { deliver, type DeliveryRequest } from "../delivery/operations.ts";
@@ -221,12 +221,19 @@ function sessionsChanged(): void {
     const seen = announced.get(session.key) ?? 0;
     announced.set(session.key, session.dialogs.length);
     if (!state) continue;
+    syncTaskName(state, session);
     if (session.dialogs.length > seen) lobbyNotify(state, `bot-lobby: ${session.name} is waiting for you — see the Sessions page`, "info");
     if (!session.alive && !exitsSaid.has(session.key)) {
       exitsSaid.add(session.key);
       if (session.exitCode) lobbyNotify(state, `bot-lobby: ${session.name} exited (${session.exitCode})${session.lastError() ? `: ${session.lastError()}` : ""}`, "warning");
     }
   }
+}
+
+function syncTaskName(state: Runtime, session: BackgroundSession): void {
+  if (!session.sessionId) return;
+  const task = peekOwnedTask(state.root, state.configDir, session.sessionId);
+  if (task) session.name = task.id;
 }
 
 function dialogTracker(state: Runtime): (id: string, pending: boolean, sessionId?: string) => void {

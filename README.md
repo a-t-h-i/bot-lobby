@@ -36,6 +36,11 @@ you to confirm merging and pushing main, then removes its worktree after verifyi
 Declining or failed verification keeps the worktree. Delivery can also be reviewed in **Tasks**,
 where you can create a PR instead. The task branch is kept.
 
+New tasks get a short title summarizing the full request, which also names their branch and
+session. Naming uses low reasoning on `classifier.effort.cheapModel` when configured, otherwise
+the session model. If naming fails or takes more than eight seconds, the request's first content
+words are used. Tasks started from an agreed plan keep that plan's title.
+
 After every worker step, before QA and at completion, the engine runs the project's own linter
 (ESLint, Biome, Oxlint, Ruff, or a command you set) on the files the task touched. Only problems on
 changed lines count, and QA judges any lint suppression a worker adds. **Settings → Linting** sets it
@@ -126,25 +131,33 @@ are kept in `themes.json` beside it, so every Pi session and project shows them.
 project knowledge stay in `.pi/bot-lobby/` inside your project.
 
 
-Requires **Pi 1.0.x** (1.0.1 or later). Every bot-lobby agent can use
-`delegate_subtasks` for substantial, separable work. Each parent gets five child
-slots total, shared across retries; children inherit its model, thinking, role,
+Requires **Pi 1.0.x** (1.0.1 or later). DEV and DESIGN workers and QA reviewers can use
+`delegate_subtasks` for useful, separable work. Delegation is optional. Each parent gets five child
+slots total, shared across retries; Jev selects each child’s model and reasoning effort from its brief, lowering
+inference for simple work and raising reasoning for complex work on the configured
+model. Children inherit the parent’s role,
 permissions, worktree and remaining time. Children report to their parent, which
 integrates and verifies the result. Children cannot delegate further. Active
 children share `workflow.maxParallelWorkers`; waiting parents do not use those
 child slots. Cancelling or finishing a parent stops its children and releases
 their file claims. Full reports are saved under `.pi/bot-lobby/delegations/`.
 
-Active task steps show the parent and active worker children, for example
+Every assignment has a 15-minute total allowance (or its shorter configured limit),
+including startup, tools, retries, children, compaction and reporting. Per-step
+allowances persist across reassignments; only the user can extend them, including
+in auto mode. Waiting for user answers pauses clocks.
+
+The conversation pane groups running agents beneath their current step, for example
 **Step 6 – Implement large feature (6 devs working)**. Queued and finished agents
 are excluded. A child finishing does not complete a checklist step.
 
 The oracle, agents and children compact at settled turn boundaries before context
-reaches 250,000 estimated tokens, or earlier at 80% of the model window or Pi's
+reaches 64,000 estimated tokens, or earlier at 60% of the model window or Pi's
 native reserve threshold. Recent messages and summaries retain unfinished work;
 raw session history remains available. A failed summary leaves context intact.
-The boundary gives headroom below 300,000 tokens; a single very large input or tool
-result can temporarily exceed it before the next boundary.
+Checkpoints preserve constraints, decisions, changed files, verification, failed
+approaches, and next actions. A single large input can exceed the threshold before
+the next settled boundary.
 
 Pi's native MCP, `tool_search` and `codemode` are available. **MCP tools** in each
 agent's Settings entry grants exact tool names, one per line, such as

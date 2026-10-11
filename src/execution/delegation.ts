@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import type { AgentRun } from "../schemas/findings.ts";
 import type { Domain, Role } from "../schemas/agent.ts";
+import { effortFor } from "../classifier/instance.ts";
+import { fellShort, profileLabel, routeLabel } from "../classifier/effort.ts";
 import { agentProfile } from "../schemas/configuration.ts";
 import { dataRoot, detectProjectRoot, loadConfig } from "../state/project.ts";
 import { EditLog } from "../state/changes.ts";
@@ -108,17 +110,26 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
 
   const childRun = async (brief: string, signal: AbortSignal): Promise<AgentRun> => {
     const childId = randomUUID();
-    const base: AgentRun = { runId: childId, parentRunId: id, depth: 2, taskId: agent.taskId, domain: agent.domain, role: agent.role, instruction: brief, stepInstruction: options.task, status: "running", output: "", attempts: 1, startedAt: new Date().toISOString(), ...(options.thinking ? { thinking: options.thinking } : {}) };
+    const base: AgentRun = { runId: childId, parentRunId: id, depth: 2, taskId: agent.taskId, domain: agent.domain, role: agent.role, instruction: brief, stepInstruction: options.task, status: "running", endsAt: deadlineAt, output: "", attempts: 1, startedAt: new Date().toISOString(), ...(options.thinking ? { thinking: options.thinking } : {}) };
     const edits = new EditLog(options.cwd);
     const live = createLiveRun(base, { onUpdate: update, timeoutMs: options.timeoutMs }, edits);
     update(base);
     try {
-      const left = deadlineAt - Date.now();
-      if (left <= 0) throw new Error("The parent's time is up.");
-      const result = await runPiAgent({
+      const configured = options.effortProfile ?? { model: options.model, thinking: options.thinking ?? "medium" };
+      const effort = options.effort ?? effortFor();
+      const route = await effort.childRoute?.(brief, configured, { context: options.task, signal }).catch(() => undefined);
+      const attempt = async (model: string | undefined, thinking: string) => {
+        const left = deadlineAt - Date.now();
+        signal.throwIfAborted();
+        if (left <= 0) throw new Error("The parent's time is up.");
+        const routed = route && model === route.model && thinking === route.thinking;
+        live.annotate({ model, thinking, route: routed ? routeLabel(route) : undefined, routedFrom: routed ? profileLabel(route.from) : undefined, note: routed ? routeLabel(route) : undefined, noteKind: "info" });
+        return runPiAgent({
         ...options,
         agent: { ...agent, runId: childId, depth: 2 },
         task: brief,
+        model,
+        thinking,
         tools: [...new Set([...tools.filter((tool) => tool !== DELEGATE_TOOL), ...(desk ? DESK_TOOLS : [])])],
         mcpTools,
         timeoutMs: left,
@@ -131,11 +142,18 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
         env: { ...options.env, ...(desk ? desk.env(childId) : {}) },
         onStart: (handle) => desk?.attach(childId, { runId: childId, steer: handle.steer, annotate: live.annotate }),
       }, run);
-      const final: AgentRun = { ...live.current(), ...result, edited: edits.list(), finishedAt: new Date().toISOString(), note: undefined, noteKind: undefined };
+      };
+      let result = await attempt(route?.model ?? configured.model, route?.thinking ?? configured.thinking);
+      let retried = false;
+      if (route && (route.level === "simple" || route.level === "trivial") && fellShort(result) && !signal.aborted && deadlineAt - Date.now() >= 60_000) {
+        retried = true;
+        result = await attempt(configured.model, configured.thinking);
+      }
+      const final: AgentRun = { ...live.current(), ...result, thinking: retried ? configured.thinking : route?.thinking ?? configured.thinking, attempts: retried ? 2 : 1, ...(route && !retried ? { route: routeLabel(route), routedFrom: profileLabel(route.from) } : {}), edited: edits.list(), finishedAt: new Date().toISOString(), note: undefined, noteKind: undefined };
       update(final);
       return final;
     } catch (error) {
-      const final: AgentRun = { ...live.current(), edited: edits.list(), status: signal.aborted ? "cancelled" : "failed", error: (error as Error).message, finishedAt: new Date().toISOString() };
+      const final: AgentRun = { ...live.current(), edited: edits.list(), status: Date.now() >= deadlineAt ? "timeout" : signal.aborted ? "cancelled" : "failed", error: (error as Error).message, finishedAt: new Date().toISOString(), note: undefined, noteKind: undefined };
       update(final);
       return final;
     } finally {
@@ -173,7 +191,7 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
   return {
     tools: desk ? [...new Set([...tools, ...DESK_TOOLS])] : tools,
     env: { ...options.env, ...(desk ? desk.env(parentDeskId) : {}), [AGENT_ENV]: JSON.stringify({ ...policy, tools: desk ? [...new Set([...tools, ...DESK_TOOLS])] : tools }), [DELEGATION_ENV]: JSON.stringify({ address: server.address, token, timeoutMs: options.timeoutMs }) },
-    note: `${canDelegate(agent, quota.used) ? `Begin every step by delegating your first two sub-briefs via ${DELEGATE_TOOL} — split the work into two disjoint pieces with separate files. If you need more brainpower, delegate more, at most five children total; children cannot delegate further. Integrate and verify their work yourself. ` : ""}Use codemode for concise parallel calls, inspect failures, and return only useful evidence.${desk ? " Before edit/write, claim_file; handover_file when finished. Release files before delegating or waiting." : ""}`,
+    note: `${canDelegate(agent, quota.used) ? `Work directly when you can finish the brief yourself. Use ${DELEGATE_TOOL} only for useful, separable work with disjoint files, at most five children total; children share your remaining time and cannot delegate further. Integrate and verify their work yourself. ` : ""}Use codemode for concise parallel calls, inspect failures, and return only useful evidence.${desk ? " Before edit/write, claim_file; handover_file when finished. Release files before delegating or waiting." : ""}`,
     onStart: (handle: Parameters<NonNullable<PiRunOptions["onStart"]>>[0]) => {
       desk?.attach(parentDeskId, { runId: id, steer: handle.steer, annotate: () => {} });
       options.onStart?.(handle);
