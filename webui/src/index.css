@@ -377,7 +377,7 @@
     @apply min-h-0 min-w-0 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-surface;
     background-color: var(--background);
   }
-  @media (max-width: 639px) {
+  @media (max-width: 767.98px) {
     .surface {
       border-radius: 0;
       border-inline-width: 0;
@@ -473,7 +473,15 @@
     @apply border border-glass-border bg-popover text-popover-foreground shadow-glass backdrop-blur-md;
   }
 
-  /* The key cap hints are for keyboards: a touch screen has none to press. */
+  /* Key caps and their explanatory text are not part of the phone UI. */
+  @media (max-width: 767.98px) {
+    [data-slot="kbd"],
+    [data-slot="kbd-group"],
+    .kbd-hint {
+      display: none !important;
+    }
+  }
+  /* Touch tablets still omit the small explanatory hints, without changing their layout. */
   @media (hover: none) and (pointer: coarse) {
     .kbd-hint {
       display: none;
@@ -485,10 +493,26 @@
 /*
  * Controls keep their drawn size everywhere (30px for most, never under the
  * 24px of WCAG 2.5.8), on a tablet too: under a finger each gets an invisible
- * margin to 40px instead (see the base layer). Switches, checkboxes and the
- * message box's compact buttons carry their own hit area.
+ * margin to the shared target (40px generally, 44px on phones). Switches and
+ * checkboxes keep their own hit area; compact dock controls get an explicit
+ * phone slot below.
  */
 :root { --touch-target: 44px; --control-target: 40px; --thinking-lift: -2px; --thinking-scale: 1.04; }
+@media (max-width: 767.98px) {
+  :root { --control-target: 44px; }
+  :where(button, header a, .toolbar-button, [data-slot="button"], [data-row], [role="tab"], [role="combobox"], a[role="button"]):not([data-compact], [role="switch"], [role="checkbox"]) {
+    min-block-size: 44px;
+    min-inline-size: 44px;
+  }
+  #app-dock button[data-compact],
+  #app-dock .toolbar-button {
+    min-block-size: 44px;
+    min-inline-size: 44px;
+  }
+  :where(button, [role="tab"], [role="combobox"], header a[aria-keyshortcuts]):not([role="switch"], [role="checkbox"], [data-compact])::after {
+    inset: 0;
+  }
+}
 [hidden] { display: none !important; }
 
 /*
@@ -595,7 +619,7 @@
   width: var(--touch-target);
   height: var(--touch-target);
   right: max(1rem, env(safe-area-inset-right));
-  bottom: calc(var(--composer-h) + 1rem + env(safe-area-inset-bottom));
+  bottom: calc(var(--composer-h) + 1rem);
   cursor: pointer;
   transition: transform 150ms ease-out;
 }
@@ -919,21 +943,42 @@
   padding: 0.5rem 0.75rem 0.25rem;
 }
 /* A phone has no room for the project and the tools side by side: the tools take a row of their own. */
-@media (max-width: 639px) {
+@media (max-width: 767.98px) {
   .app-header {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
-      "where"
-      "tools"
-      "tabs";
+      "where status"
+      "tools tools";
+    padding: 0.375rem 0.75rem 0.25rem;
+  }
+  .app-header > .tabs {
+    display: none;
   }
   .app-header > .tools {
     justify-content: flex-start;
     flex-wrap: wrap;
   }
+  .app-header > .phone-status {
+    grid-area: status;
+    justify-self: end;
+  }
+}
+/* A short landscape phone keeps the bar on one compact row. */
+@media (max-width: 767.98px) and (orientation: landscape) and (max-height: 500px) {
+  .app-header {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "where status tools";
+    padding: 0.25rem 0.75rem;
+  }
+  .app-header > .tools {
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow-x: auto;
+  }
 }
 /* Everything on one row when it fits (Header measures it); the tabs sit centred in the room between. */
-@media (min-width: 640px) {
+@media (min-width: 768px) {
   .app-header[data-one-row] {
     grid-template-columns: auto minmax(0, 1fr) auto;
     grid-template-areas: "where tabs tools";
@@ -952,6 +997,120 @@
 /* Why no project can be chosen, on a row of its own under the bar. */
 .app-header > .notice {
   grid-column: 1 / -1;
+}
+
+/* The phone carousel owns one quiet, fixed-height row immediately above the composer. */
+@media (max-width: 767.98px) {
+  .phone-tabs {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 60px;
+    min-height: 60px;
+    overflow: hidden;
+  }
+  .phone-tabs-scroller {
+    width: 100%;
+    height: 60px;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    touch-action: pan-x;
+    scroll-behavior: auto;
+  }
+  .phone-tabs-scroller::-webkit-scrollbar { display: none; }
+  .phone-tabs-track {
+    display: flex;
+    width: max-content;
+    height: 60px;
+    align-items: center;
+    gap: 6px;
+    padding-inline: var(--phone-period-pad, 0px);
+  }
+  .phone-tabs-period {
+    display: flex;
+    height: 60px;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+  }
+  .phone-tab-card {
+    min-height: 44px;
+    min-width: 44px;
+    border-color: color-mix(in oklab, var(--foreground) 24%, var(--card));
+    background: color-mix(in oklab, var(--foreground) 5%, var(--card));
+    color: var(--muted-foreground);
+    box-shadow: var(--btn-sm);
+    transition: background-color 180ms ease-out, border-color 180ms ease-out, color 180ms ease-out;
+  }
+  .phone-tab-card:is([aria-selected="true"], [data-active="true"]) {
+    border-color: color-mix(in oklab, var(--primary) 62%, var(--card));
+    background: var(--accent);
+    color: var(--foreground);
+    box-shadow: var(--btn-raise);
+  }
+  .phone-tab-card:active { transform: translateY(1px); }
+  .phone-tabs::before,
+  .phone-tabs::after {
+    position: absolute;
+    z-index: 10;
+    top: 0;
+    bottom: 0;
+    width: 1.25rem;
+    pointer-events: none;
+    content: "";
+  }
+  .phone-tabs::before { left: 0; background: linear-gradient(to right, var(--dock), transparent); }
+  .phone-tabs::after { right: 0; background: linear-gradient(to left, var(--dock), transparent); }
+  .phone-tabs-page-handle {
+    position: absolute;
+    z-index: 11;
+    left: 50%;
+    top: 50%;
+    max-width: min(12rem, calc(100% - 2rem));
+    transform: translate(-50%, -50%);
+    border: 1px solid var(--dock-border);
+    border-radius: 0.75rem;
+    background: var(--dock);
+    padding: 0.625rem 1rem;
+    color: var(--foreground);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    box-shadow: var(--btn-sm);
+    pointer-events: none;
+  }
+  .phone-tabs-handle {
+    height: 44px;
+    min-height: 44px;
+    justify-content: center;
+  }
+  .phone-tabs-current {
+    border-color: var(--dock-border);
+    background: var(--dock);
+    color: var(--foreground);
+    box-shadow: var(--btn-sm);
+  }
+  .phone-tabs-close {
+    position: absolute;
+    z-index: 12;
+    right: 0.25rem;
+    top: 50%;
+    display: inline-flex;
+    min-height: 44px;
+    min-width: 44px;
+    transform: translateY(-50%);
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.75rem;
+    color: var(--muted-foreground);
+  }
+  #app-dock { max-width: 100vw; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .phone-tab-card { transition: none; }
 }
 
 /* The activity indicator: three dots that hop in turn. */

@@ -30,7 +30,7 @@ function Row({ job, selected, now, onSelect }: { job: QuickFixJob; selected: boo
         data-row
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(job.id)}
-        className={cn(ROW, "flex-row items-start gap-2.5 text-sm")}
+        className={cn(ROW, "flex-row items-start gap-2.5 text-sm max-md:min-h-11")}
       >
         <span className="flex h-5 w-4 shrink-0 items-center justify-center">
           <StatusMark status={job.status} />

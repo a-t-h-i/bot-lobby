@@ -50,10 +50,10 @@ export function EntryEditor({ initial, busy, onSave, onCancel }: EntryEditorProp
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-muted-foreground">{ARCHIVE_HINT}</span>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={onCancel} disabled={busy}>
+          <Button variant="outline" className="max-md:min-h-11" onClick={onCancel} disabled={busy}>
             Cancel
           </Button>
-          <Button onClick={save} disabled={busy || !text.trim()}>
+          <Button className="max-md:min-h-11 max-md:whitespace-normal" onClick={save} disabled={busy || !text.trim()}>
             {busy ? <Spinner /> : null}
             Save
           </Button>
@@ -85,10 +85,10 @@ export function FileEditor({ open, file, initial, busy, onClose, onSave }: FileE
         </div>
         <Textarea value={text} rows={14} className="min-h-0 flex-1 font-mono text-sm" onChange={(event) => setText(event.target.value)} />
         <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onClose} disabled={busy}>
+          <Button variant="outline" className="max-md:min-h-11" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button onClick={() => onSave(text)} disabled={busy}>
+          <Button className="max-md:min-h-11 max-md:whitespace-normal" onClick={() => onSave(text)} disabled={busy}>
             {busy ? <Spinner /> : null}
             Save file
           </Button>

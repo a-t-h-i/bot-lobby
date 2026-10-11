@@ -47,7 +47,7 @@ export function TaskItem({ row, selected, onSelect, card = false }: { row: TaskR
         data-row
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(row.id)}
-        className={ROW}
+        className={cn(ROW, "max-md:min-h-11")}
       >
         <span className="flex items-start gap-2 text-sm">
           <CheckMark check={row.check} className="mt-0.5" />

@@ -68,7 +68,7 @@ function Overview({ count, onChanged }: { count: number; onChanged: () => void }
 /** No session at all: what a session is and the steps on one side, the boxes to add the first on the other. */
 function ExcalidrawEmpty({ onChanged }: { onChanged: () => void }) {
   return (
-    <div className="@container flex-1 overflow-y-auto px-5 pt-10 pb-dock sm:px-8">
+    <div className="@container flex-1 overflow-y-auto px-5 pt-10 pb-dock md:px-8">
       <div className="mx-auto grid max-w-5xl gap-8 @4xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
         <div className="flex flex-col gap-5">
           <span aria-hidden="true" className="card-raised grid size-11 place-items-center rounded-xl border text-primary">

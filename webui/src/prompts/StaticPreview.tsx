@@ -41,7 +41,7 @@ export function StaticPreview({ preview, label, className, frameWidth, minWidth,
   const width = frameWidth ?? Math.max(size?.width ?? 0, minWidth ?? 0)
   const scale = size && size.width > 0 && width > 0 ? Math.min(1, size.width / width) : 1
   return (
-    <div ref={box} className={cn("group/mock relative h-80 w-full overflow-hidden rounded-lg border bg-background", className)}>
+    <div ref={box} className={cn("group/mock relative h-80 w-full max-w-full overflow-hidden rounded-lg border bg-background max-md:min-h-0 max-md:max-h-full max-md:overflow-x-hidden max-md:overflow-y-auto max-md:overscroll-contain", className)}>
       <iframe
         title={`Static mockup: ${label}`}
         sandbox=""
@@ -57,7 +57,7 @@ export function StaticPreview({ preview, label, className, frameWidth, minWidth,
           data-compact=""
           onClick={onOpen}
           aria-label={`Expand the mockup: ${label}`}
-          className="absolute inset-0 flex items-end justify-end p-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:ring-inset"
+          className="absolute inset-0 flex items-end justify-end p-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:ring-inset max-md:p-3"
         >
           <span className="inline-flex items-center gap-1 rounded-md border border-border bg-card/90 px-1.5 py-0.5 text-[0.6875rem] font-medium text-muted-foreground opacity-0 shadow-sm backdrop-blur transition-opacity group-hover/mock:opacity-100 group-focus-within/mock:opacity-100">
             <Maximize2 aria-hidden="true" className="size-3" />

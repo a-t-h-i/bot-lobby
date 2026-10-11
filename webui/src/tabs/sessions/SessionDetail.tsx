@@ -19,7 +19,7 @@ import { NOTHING_SAID, OTHER_TERMINAL_NOTE, addressOf, emptyNote, factsLine, wai
 function TaskLine({ task }: { task: NonNullable<LobbySnapshot["task"]> }) {
   const progress = task.progress
   return (
-    <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+    <p className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-muted-foreground">
       <span className="break-all">{task.id}</span>
       {progress && progress.total > 0 ? (
         <>
@@ -73,18 +73,18 @@ function Conversation({ entry, lobby }: { entry: Entry; lobby?: LobbySnapshot })
 
 export function SessionDetail({ entry, lobby, onChanged }: { entry: Entry; lobby?: LobbySnapshot; onChanged: () => void }) {
   return (
-    <article aria-label="Session detail" className="flex flex-col gap-4">
+    <article aria-label="Session detail" className="flex min-w-0 max-w-full flex-col gap-4 max-md:pb-dock">
       <Actions entry={entry} />
-      <header className="flex flex-col gap-1.5">
-        <h3 className="flex items-center gap-2.5 text-lg font-semibold tracking-tight text-foreground">
+      <header className="flex min-w-0 flex-col gap-1.5">
+        <h3 className="flex min-w-0 max-w-full flex-wrap items-center gap-2.5 text-lg font-semibold tracking-tight text-foreground">
           <WhereIcon where={entry.where} className="size-[1.1rem]" />
-          {entry.name}
+          <span className="min-w-0 break-words">{entry.name}</span>
         </h3>
-        <p className="text-sm text-muted-foreground">{factsLine(entry)}</p>
+        <p className="break-words text-sm text-muted-foreground">{factsLine(entry)}</p>
         {entry.task ? <TaskLine task={entry.task} /> : null}
         {entry.where !== "background" && entry.waiting > 0 ? <p className="text-sm text-foreground">{waitingText(entry.waiting)}</p> : null}
       </header>
-      {entry.where === "other terminal" ? <p className="text-sm text-muted-foreground">{OTHER_TERMINAL_NOTE}</p> : null}
+      {entry.where === "other terminal" ? <p className="break-words text-sm text-muted-foreground">{OTHER_TERMINAL_NOTE}</p> : null}
       {entry.key ? <Dialogs sessionKey={entry.key} dialogs={entry.dialogs} onAnswered={onChanged} /> : null}
       <Section title="Conversation">
         <Conversation entry={entry} lobby={lobby} />

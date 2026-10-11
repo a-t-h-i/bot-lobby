@@ -111,7 +111,7 @@ function FieldForm({ label, hint, buttonLabel, placeholder, initial = "", requir
   return (
     <form className="flex min-w-0 flex-col gap-2" onSubmit={(event) => { event.preventDefault(); void take() }}>
       <label htmlFor={id} className="text-xs font-medium text-muted-foreground">{label}</label>
-      <div className="flex gap-2">
+      <div className="flex gap-2 max-md:flex-wrap">
         <input
           id={id}
           value={value}
@@ -120,7 +120,7 @@ function FieldForm({ label, hint, buttonLabel, placeholder, initial = "", requir
           aria-describedby={hint ? `${id}-hint` : undefined}
           onChange={(event) => setValue(event.target.value)}
           className={cn(
-            "h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30",
+            "h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 max-md:min-h-11",
             mono && "font-mono text-[0.8125rem]"
           )}
         />
@@ -193,9 +193,9 @@ function CheckFact({ check, checking }: { check?: ExcalidrawCheck; checking: boo
 /** One labelled line of the Room card. */
 function Line({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[6rem_minmax(0,1fr)] items-baseline gap-3 text-sm">
+    <div className="grid grid-cols-[6rem_minmax(0,1fr)] items-baseline gap-3 text-sm max-md:grid-cols-[minmax(5rem,6rem)_minmax(0,1fr)]">
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="min-w-0">{children}</dd>
+      <dd className="min-w-0 break-words">{children}</dd>
     </div>
   )
 }
@@ -218,7 +218,7 @@ function AgentChip({ agent, on, onToggle }: { agent: ExcalidrawAgentName; on: bo
     <li>
       <label
         className={cn(
-          "flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-lg border px-2.5 text-sm transition-[background-color,border-color,color]",
+          "flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-lg border px-2.5 text-sm transition-[background-color,border-color,color] max-md:min-h-11",
           on ? "border-primary/25 bg-accent text-foreground" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
         )}
       >

@@ -56,7 +56,7 @@ function Actions({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }
 
 export function PlanHeader({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) {
   return (
-    <header className="flex shrink-0 flex-col gap-3 border-b border-border px-5 py-3">
+    <header className="flex shrink-0 flex-col gap-3 border-b border-border px-5 py-3 max-md:shrink max-md:px-4 max-md:py-2.5">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="flex min-w-0 flex-col gap-0.5">
           <h2 className="text-lg font-semibold tracking-tight">Planning</h2>

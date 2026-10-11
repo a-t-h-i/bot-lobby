@@ -10,6 +10,7 @@
  */
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
 import { Check, Maximize2 } from "lucide-react"
+import { useMediaQuery } from "@/app/hooks"
 import { Button } from "@/components/ui/button"
 import { KeyHint } from "@/components/ui/kbd"
 import { Textarea } from "@/components/ui/textarea"
@@ -35,6 +36,8 @@ const RECOMMENDED = /\s*\(recommended\)\s*$/i
 /** The page width a mockup is laid out at before it is scaled into the preview. */
 const MOCKUP_WIDTH = 1200
 const OWN_ANSWER = "Type something."
+const PHONE_QUERY = "(max-width: 767.98px)"
+const PHONE_SHORTCUT = "max-md:hidden"
 
 function splitRecommended(label: string): { text: string; recommended: boolean } {
   return { text: label.replace(RECOMMENDED, ""), recommended: RECOMMENDED.test(label) }
@@ -43,7 +46,7 @@ function splitRecommended(label: string): { text: string; recommended: boolean }
 function OptionLabel({ label }: { label: string }) {
   const { text, recommended } = splitRecommended(label)
   return (
-    <span className="leading-snug">
+    <span className="leading-snug break-words">
       {text}
       {recommended ? <span className="ms-1 font-medium text-primary">(Recommended)</span> : null}
     </span>
@@ -87,7 +90,7 @@ function OptionRow({
     <div className="grid gap-1">
     <label
       className={cn(
-        "flex min-h-9 cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 text-start text-sm transition-[background-color,border-color,transform] duration-150 ease-snap active:scale-[0.99]",
+        "flex min-h-9 cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 text-start text-sm transition-[background-color,border-color,transform] duration-150 ease-snap active:scale-[0.99] max-md:min-h-11",
         selected ? "border-primary/50 bg-accent" : "border-input bg-background hover:bg-accent/60",
         "has-[:focus-visible]:border-ring has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/30"
       )}
@@ -107,12 +110,13 @@ function OptionRow({
 }
 
 function Preview({ option, onExpand }: { option?: AskOption; onExpand: () => void }) {
+  const phone = useMediaQuery(PHONE_QUERY)
   if (!option || !hasMockup(option)) return null
   return (
-    <div className="card-raised flex flex-col gap-2 rounded-lg border p-3">
+    <div className="card-raised flex min-w-0 max-w-full flex-col gap-2 rounded-lg border p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="min-w-0 truncate text-xs font-medium text-muted-foreground">Preview · {splitRecommended(option.label).text}</p>
-        <Button type="button" variant="ghost" size="xs" onClick={onExpand} aria-keyshortcuts="E" title="Expand · E" className="-my-1 shrink-0">
+        <Button type="button" variant="ghost" size="xs" onClick={onExpand} aria-keyshortcuts="E" title={phone ? "Expand mockup" : "Expand · E"} className="-my-1 shrink-0 max-md:h-auto max-md:min-h-11 max-md:min-w-11 max-md:whitespace-normal">
           <Maximize2 aria-hidden="true" />
           Expand
         </Button>
@@ -140,11 +144,11 @@ function CardFooter({
   onCancel: () => void
 }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <Button type="button" variant="ghost" onClick={onCancel}>
+    <div className="flex items-center justify-between gap-2 max-md:flex-wrap max-md:justify-start">
+      <Button type="button" variant="ghost" onClick={onCancel} className="max-md:h-auto max-md:min-h-11 max-md:min-w-11 max-md:whitespace-normal">
         Cancel
       </Button>
-      <Button type={primary} disabled={disabled || submitting}>
+      <Button type={primary} disabled={disabled || submitting} className="max-md:h-auto max-md:min-h-11 max-md:min-w-11 max-md:whitespace-normal">
         {submitting ? "Sending…" : primaryLabel}
       </Button>
     </div>
@@ -175,12 +179,12 @@ function Chips({ questions, picks, own, index, onGo }: { questions: AskQuestion[
             onClick={() => onGo(position)}
             aria-current={position === index}
             className={cn(
-              "inline-flex min-h-8 items-center gap-1 rounded-lg border px-3 text-xs font-medium transition-colors",
+              "inline-flex min-h-8 min-w-0 items-center gap-1 rounded-lg border px-3 text-xs font-medium transition-colors max-md:h-auto max-md:min-h-11 max-md:min-w-11 max-md:whitespace-normal",
               position === index ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"
             )}
           >
-            {position + 1} {question.header}
-            {answered ? <Check className="size-3" aria-hidden="true" /> : null}
+            <span className="min-w-0 break-words text-start">{position + 1} {question.header}</span>
+            {answered ? <Check className="size-3 shrink-0" aria-hidden="true" /> : null}
           </button>
         )
       })}
@@ -360,7 +364,7 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
   }
 
   return (
-    <form ref={form} className="flex flex-col gap-3" onSubmit={submit} onKeyDown={onKeyDown}>
+    <form ref={form} className="flex min-w-0 flex-col gap-3" onSubmit={submit} onKeyDown={onKeyDown}>
       <Chips questions={questions} picks={picks} own={own} index={index} onGo={setIndex} />
       <div>
         <p className="text-xs text-muted-foreground">
@@ -382,7 +386,7 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
               onFocusOption={() => setFocused({ ...focused, [index]: position })}
             />
           ))}
-          <label className="flex min-h-9 flex-col gap-1 rounded-lg border border-input px-3 py-1.5 text-sm focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30">
+          <label className="flex min-h-9 min-w-0 flex-col gap-1 rounded-lg border border-input px-3 py-1.5 text-sm focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30 max-md:min-h-11">
             <span className="text-xs text-muted-foreground">Your own answer</span>
             <Textarea
               data-nav=""
@@ -394,7 +398,7 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
               placeholder={OWN_ANSWER}
               aria-label="Your own answer"
               rows={2}
-              className="min-h-9 resize-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0 md:text-sm"
+              className="min-h-9 resize-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0 md:text-sm max-md:min-h-11"
             />
           </label>
         </div>
@@ -402,12 +406,12 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
       </div>
       <p className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
         <span>{multi ? "Pick several" : "Pick one"}</span>
-        <KeyHint chord="↑↓">move</KeyHint>
-        <KeyHint chord={multi ? "Space" : "Enter"}>{multi ? "pick" : "choose"}</KeyHint>
-        {multi ? <KeyHint chord="Enter">next</KeyHint> : null}
-        {questions.length > 1 ? <KeyHint chord="←→">question</KeyHint> : null}
-        {mockups ? <KeyHint chord="E">expand mockups</KeyHint> : null}
-        <KeyHint chord="Esc">later</KeyHint>
+        <KeyHint chord="↑↓" className={PHONE_SHORTCUT}>move</KeyHint>
+        <KeyHint chord={multi ? "Space" : "Enter"} className={PHONE_SHORTCUT}>{multi ? "pick" : "choose"}</KeyHint>
+        {multi ? <KeyHint chord="Enter" className={PHONE_SHORTCUT}>next</KeyHint> : null}
+        {questions.length > 1 ? <KeyHint chord="←→" className={PHONE_SHORTCUT}>question</KeyHint> : null}
+        {mockups ? <KeyHint chord="E" className={PHONE_SHORTCUT}>expand mockups</KeyHint> : null}
+        <KeyHint chord="Esc" className={PHONE_SHORTCUT}>later</KeyHint>
       </p>
       <CardFooter
         primary="submit"
@@ -454,7 +458,7 @@ function ChoiceCard({ view, submitting, onAnswer, onCancel }: CardProps & { view
   return (
     <form
       ref={form}
-      className="flex flex-col gap-3"
+      className="flex min-w-0 flex-col gap-3"
       onSubmit={(event) => {
         event.preventDefault()
         if (value) onAnswer(value)
@@ -475,9 +479,9 @@ function ChoiceCard({ view, submitting, onAnswer, onCancel }: CardProps & { view
         ))}
       </div>
       <p className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
-        <KeyHint chord="↑↓">move</KeyHint>
-        <KeyHint chord="Enter">choose</KeyHint>
-        <KeyHint chord="Esc">later</KeyHint>
+        <KeyHint chord="↑↓" className={PHONE_SHORTCUT}>move</KeyHint>
+        <KeyHint chord="Enter" className={PHONE_SHORTCUT}>choose</KeyHint>
+        <KeyHint chord="Esc" className={PHONE_SHORTCUT}>later</KeyHint>
       </p>
       <CardFooter primary="submit" primaryLabel="Choose" disabled={!value} submitting={submitting} onCancel={onCancel} />
     </form>
@@ -494,22 +498,22 @@ function ConfirmCard({ view, submitting, onAnswer }: CardProps & { view: Extract
     else if (key === "n") onAnswer(false)
   }
   return (
-    <div ref={box} tabIndex={-1} data-autofocus="" onKeyDown={onKeyDown} className="flex flex-col gap-3 outline-none">
+    <div ref={box} tabIndex={-1} data-autofocus="" onKeyDown={onKeyDown} className="flex min-w-0 flex-col gap-3 outline-none">
       <div>
         <Markdown text={view.question} className="text-base" />
         {view.detail ? <Markdown text={view.detail} className="mt-1 text-muted-foreground" /> : null}
       </div>
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 max-md:flex-wrap max-md:justify-start">
         <p className="flex items-center gap-x-4 text-xs text-muted-foreground">
-          <KeyHint chord="Y">yes</KeyHint>
-          <KeyHint chord="N">no</KeyHint>
-          <KeyHint chord="Esc">later</KeyHint>
+          <KeyHint chord="Y" className={PHONE_SHORTCUT}>yes</KeyHint>
+          <KeyHint chord="N" className={PHONE_SHORTCUT}>no</KeyHint>
+          <KeyHint chord="Esc" className={PHONE_SHORTCUT}>later</KeyHint>
         </p>
         <span className="flex items-center gap-2">
-          <Button type="button" variant="outline" disabled={submitting} onClick={() => onAnswer(false)}>
+          <Button type="button" variant="outline" disabled={submitting} onClick={() => onAnswer(false)} className="max-md:h-auto max-md:min-h-11 max-md:min-w-11 max-md:whitespace-normal">
             No
           </Button>
-          <Button type="button" disabled={submitting} onClick={() => onAnswer(true)}>
+          <Button type="button" disabled={submitting} onClick={() => onAnswer(true)} className="max-md:h-auto max-md:min-h-11 max-md:min-w-11 max-md:whitespace-normal">
             {submitting ? "Sending…" : "Yes"}
           </Button>
         </span>
@@ -522,7 +526,7 @@ function TextCard({ view, submitting, onAnswer, onCancel }: CardProps & { view: 
   const [text, setText] = useState("")
   return (
     <form
-      className="flex flex-col gap-3"
+      className="flex min-w-0 flex-col gap-3"
       onSubmit={(event) => {
         event.preventDefault()
         if (text.trim()) onAnswer(text.trim())
@@ -542,12 +546,12 @@ function TextCard({ view, submitting, onAnswer, onCancel }: CardProps & { view: 
         placeholder={view.placeholder ?? OWN_ANSWER}
         aria-label={view.question}
         rows={3}
-        className="min-h-9 resize-none text-sm md:text-sm"
+        className="min-h-9 resize-none text-sm md:text-sm max-md:min-h-11"
       />
       <p className="flex items-center gap-x-4 text-xs text-muted-foreground">
-        <KeyHint chord="Enter">answer</KeyHint>
-        <KeyHint chord="Shift+Enter">new line</KeyHint>
-        <KeyHint chord="Esc">later</KeyHint>
+        <KeyHint chord="Enter" className={PHONE_SHORTCUT}>answer</KeyHint>
+        <KeyHint chord="Shift+Enter" className={PHONE_SHORTCUT}>new line</KeyHint>
+        <KeyHint chord="Esc" className={PHONE_SHORTCUT}>later</KeyHint>
       </p>
       <CardFooter primary="submit" primaryLabel="Answer" disabled={!text.trim()} submitting={submitting} onCancel={onCancel} />
     </form>
@@ -574,7 +578,7 @@ function SessionDialogCard({ dialog, submitting, onAnswer }: CardProps & { dialo
   return (
     <form
       ref={form}
-      className="flex flex-col gap-3"
+      className="flex min-w-0 flex-col gap-3"
       onSubmit={submit}
       onKeyDown={(event) => {
         if (dialog.method !== "select") return
@@ -604,24 +608,24 @@ function SessionDialogCard({ dialog, submitting, onAnswer }: CardProps & { dialo
           placeholder={dialog.placeholder ?? OWN_ANSWER}
           aria-label={dialog.title}
           rows={dialog.method === "editor" ? 4 : 2}
-          className="min-h-9 resize-none text-sm md:text-sm"
+          className="min-h-9 resize-none text-sm md:text-sm max-md:min-h-11"
         />
       ) : null}
-      <div className="flex items-center justify-end gap-2">
-        <Button type="button" variant="outline" disabled={submitting} onClick={() => onAnswer({ cancelled: true })}>
+      <div className="flex items-center justify-end gap-2 max-md:flex-wrap max-md:justify-start">
+        <Button type="button" variant="outline" disabled={submitting} onClick={() => onAnswer({ cancelled: true })} className="max-md:h-auto max-md:min-h-11 max-md:min-w-11 max-md:whitespace-normal">
           Cancel
         </Button>
         {dialog.method === "confirm" ? (
           <>
-            <Button type="button" variant="outline" disabled={submitting} onClick={() => onAnswer({ confirmed: false })}>
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => onAnswer({ confirmed: false })} className="max-md:h-auto max-md:min-h-11 max-md:min-w-11 max-md:whitespace-normal">
               No
             </Button>
-            <Button type="button" disabled={submitting} onClick={() => onAnswer({ confirmed: true })}>
+            <Button type="button" disabled={submitting} onClick={() => onAnswer({ confirmed: true })} className="max-md:h-auto max-md:min-h-11 max-md:min-w-11 max-md:whitespace-normal">
               {submitting ? "Sending…" : "Yes"}
             </Button>
           </>
         ) : (
-          <Button type="submit" disabled={!ready || submitting}>
+          <Button type="submit" disabled={!ready || submitting} className="max-md:h-auto max-md:min-h-11 max-md:min-w-11 max-md:whitespace-normal">
             {submitting ? "Sending…" : "Answer"}
           </Button>
         )}
