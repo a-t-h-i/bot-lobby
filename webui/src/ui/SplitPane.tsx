@@ -44,6 +44,7 @@ interface SplitPaneProps {
 
 function DetailSheet({ open, onClose, describe, children }: Pick<SplitPaneProps, "open" | "onClose" | "describe"> & { children: ReactNode }) {
   const shown = useOverlaySlot(open, PRIORITY.sheet)
+  const phone = useMediaQuery("(max-width: 767.98px)")
   const mounted = useRef(false)
   if (shown) mounted.current = true
   if (!open) mounted.current = false
@@ -53,16 +54,23 @@ function DetailSheet({ open, onClose, describe, children }: Pick<SplitPaneProps,
         forceMount={open && mounted.current ? true : undefined}
         hidden={!shown}
         showCloseButton={false}
-        className={cn("gap-0 data-[side=right]:w-[92%] data-[side=right]:sm:max-w-3xl", !shown && "!hidden")}
+        side={phone ? "bottom" : "right"}
+        className={cn(
+          "gap-0",
+          phone
+            ? "data-[side=bottom]:inset-y-0 data-[side=bottom]:h-full"
+            : "data-[side=right]:w-[92%] data-[side=right]:sm:max-w-3xl",
+          !shown && "!hidden",
+        )}
       >
         <SheetHeader className="flex-row items-center justify-between border-b px-4 py-2">
           <SheetTitle className="text-sm">Detail</SheetTitle>
           <SheetDescription className="sr-only">{describe}</SheetDescription>
           <SheetClose asChild>
-            <Button variant="ghost" size="sm" aria-label="Close detail" title="Close · Esc" className="gap-2">
+            <Button variant="ghost" size="sm" aria-label="Close detail" title="Close · Esc" className={cn("gap-2", phone && "h-11 px-3 text-sm")}>
               <X aria-hidden="true" />
               Close
-              <Keys chord="Esc" className="kbd-hint" />
+              {phone ? null : <Keys chord="Esc" className="kbd-hint" />}
             </Button>
           </SheetClose>
         </SheetHeader>
