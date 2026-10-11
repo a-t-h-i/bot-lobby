@@ -13,7 +13,8 @@ import { lobbyFeed } from "../lobby/feed.ts";
 import { createTaskDir, ensureProjectStructure, loadTask, nextTaskId, ownedTask, saveTask, taskDirFor } from "../state/persistence.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { transition } from "../state/task-state.ts";
-import { shortTitle } from "../text.ts";
+import { taskName } from "../text.ts";
+import { generateTaskTitle } from "./task-title.ts";
 import { applyStatus } from "./ui.ts";
 import { applyMasterModel } from "./model-settings.ts";
 import { setAutoMode } from "../state/auto.ts";
@@ -147,16 +148,22 @@ export interface StartOptions {
   isolation?: GitIsolation;
 }
 
+function alreadyOwnsTask(ctx: ExtensionContext, root: string, configDir: string, sessionId: string): boolean {
+  const existing = ownedTask(root, configDir, sessionId);
+  if (!existing) return false;
+  ctx.ui.notify(`bot-lobby ${existing.id} is already active in this session. Finish it or run /bot-lobby cancel ${existing.id} first.`, "warning");
+  return true;
+}
+
 export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configDir: string, request: string, options: StartOptions = {}): Promise<Task | undefined> {
   const root = detectProjectRoot(ctx.cwd, configDir);
   ensureProjectStructure(root, configDir);
   const sessionId = ctx.sessionManager.getSessionId();
-  const existing = ownedTask(root, configDir, sessionId);
-  if (existing) {
-    ctx.ui.notify(`bot-lobby ${existing.id} is already active in this session. Finish it or run /bot-lobby cancel ${existing.id} first.`, "warning");
-    return undefined;
-  }
-  const task = createTask(uniqueTaskId(root, configDir, options.title ?? request), options.title ?? shortTitle(request), new Date().toISOString(), request, sessionId);
+  if (alreadyOwnsTask(ctx, root, configDir, sessionId)) return undefined;
+  const config = loadConfig();
+  const title = options.title ?? await generateTaskTitle(ctx, request, config);
+  if (alreadyOwnsTask(ctx, root, configDir, sessionId)) return undefined;
+  const task = createTask(uniqueTaskId(root, configDir, title), title, new Date().toISOString(), request, sessionId);
   if (options.approvedPlan) task.approvedPlan = options.approvedPlan;
   createTaskDir(root, configDir, task);
   transition(task, "clarifying");
@@ -164,7 +171,6 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   const triage = options.triaged ? options.triage : await triageFor({ cwd: ctx.cwd, root, configDir }, request);
   if (triage) task.triage = triage;
   // How serious the request reads: who takes part, and whether it takes the fast track or the full workflow.
-  const config = loadConfig();
   task.track = chooseTrack(request, triage, { fastTrack: config.workflow.fastTrack, ...(options.track ? { forced: options.track } : {}), ...(options.approvedPlan ? { approvedPlan: true } : {}), ...(options.panel ? { planPanel: options.panel } : {}) });
   lobbyFeed.log("LOBBY", trackLine(task.track), "info");
   // An agreed plan is the task's plan: it goes straight to delegating its steps.
@@ -175,7 +181,7 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   if (budgetMinutes > 0) setBudget(root, configDir, task.id, budgetMinutes);
   if (options.auto) setAutoMode(root, configDir, task.id, true, sessionId);
   // A session that starts a task is named after it (its friendly name), so /resume and the lobby list it by name.
-  if (!pi.getSessionName()) pi.setSessionName(task.id);
+  if (!pi.getSessionName() || pi.getSessionName() === taskName(request)) pi.setSessionName(task.id);
   applyStatus(ctx, root, configDir);
   await applyMasterModel(pi, ctx, loadConfig());
   ctx.ui.notify(`bot-lobby ${task.id} started`, "info");

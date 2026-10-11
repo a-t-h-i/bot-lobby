@@ -402,10 +402,11 @@ export interface StepWork {
   /** A worker is on it right now. */
   active: boolean;
   activeAgentCount: number;
+  runIds: string[];
 }
 
 /** The steps a run works on: every step of a range it names, else the step it targets, else the next one still open. */
-function runSteps(steps: readonly string[], instruction: string | undefined, completed: ReadonlySet<number>): number[] {
+export function runSteps(steps: readonly string[], instruction: string | undefined, completed: ReadonlySet<number> = new Set()): number[] {
   const range = instruction ? explicitStepRange(instruction, steps.length) : undefined;
   if (range) return Array.from({ length: range[1] - range[0] + 1 }, (_value, offset) => range[0] + offset);
   const target = targetStep(steps, instruction, completed);
@@ -420,7 +421,7 @@ function runSteps(steps: readonly string[], instruction: string | undefined, com
  * completes them, so a later run that names no step goes to the next one.
  */
 export function stepWork(steps: readonly string[], runs: readonly AgentRun[], now = Date.now()): StepWork[] {
-  const work = steps.map(() => ({ ms: 0, active: false, activeAgentCount: 0 }));
+  const work: StepWork[] = steps.map(() => ({ ms: 0, active: false, activeAgentCount: 0, runIds: [] }));
   const assigned = new Map<string, number[]>();
   const counted = new Set<string>();
   const completed = new Set<number>();
@@ -440,6 +441,7 @@ export function stepWork(steps: readonly string[], runs: readonly AgentRun[], no
       if (run.status === "running") {
         work[index]!.active = true;
         work[index]!.activeAgentCount += 1;
+        work[index]!.runIds.push(run.runId);
       }
     }
     if (!run.parentRunId && run.status === "success" && covered.length > 0) markThrough(completed, covered[covered.length - 1]!);

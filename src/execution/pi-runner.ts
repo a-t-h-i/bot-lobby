@@ -11,6 +11,7 @@ import { shortDuration } from "../text.ts";
 import { readRelayRequest } from "../ask/relay.ts";
 import type { AskQuestion, AskResult } from "../ask/types.ts";
 import { grantEnv, grantNote, type Grant } from "../excalidraw/sessions.ts";
+import type { EffortRouter, RunProfileLike } from "../classifier/effort.ts";
 
 /** Live control over one running subagent: queue a steering message for its next turn. */
 export interface RunHandle {
@@ -24,6 +25,8 @@ export interface RunHandle {
 export type RelayAsk = (questions: AskQuestion[], signal: AbortSignal) => Promise<AskResult>;
 
 export interface PiRunOptions {
+  effort?: EffortRouter;
+  effortProfile?: RunProfileLike;
   agent?: { runId: string; taskId: string; domain: Domain; role: Role; depth?: number };
   mcpTools?: string[];
   delegationQuota?: { used: number };
@@ -67,6 +70,8 @@ export interface PiRunOptions {
  * the decision is pending, and move out with any time granted.
  */
 export interface TimeLimit {
+  /** Reporting time is included in the allowance, including extensions. */
+  hardLimit?: boolean;
   upAtMs: number;
   headsUpAtMs?: number;
   headsUpMessage?: string;
@@ -584,11 +589,12 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
         turnDone = false;
         clockStart = Date.now();
         lastOutput = clockStart;
-        upAtMs = extraMs;
+        upAtMs = time?.hardLimit ? Math.max(1, extraMs - Math.min(time.graceMs, Math.floor(extraMs / 4))) : extraMs;
         // The user just named the time it has: no heads-up quoting the old allotment.
         headsUpAtMs = 0;
-        deadlineAt = Date.now() + extraMs + (time?.graceMs ?? 0);
-        deadline = setTimeout(onDeadline, extraMs + (time?.graceMs ?? 0));
+        const nextLimit = extraMs + (time?.hardLimit ? 0 : time?.graceMs ?? 0);
+        deadlineAt = Date.now() + nextLimit;
+        deadline = setTimeout(onDeadline, nextLimit);
         input.send({ type: "prompt", message: message ?? "You have more time: carry on from where you left off and finish." });
         options.onEvent?.({ type: "extended", ms: extraMs });
       }, () => {

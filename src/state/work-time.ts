@@ -29,6 +29,7 @@ export interface WorkTime {
   active: ActiveRun[];
   /** When the owning session last wrote it. */
   updatedAt: string;
+  stepLimits?: Record<string, { limitMs: number; usedMs: number }>;
 }
 
 /** The clock as a reader sees it at one moment. */
@@ -48,32 +49,36 @@ export function workPath(root: string, configDir: string, taskId: string): strin
 
 function isWork(value: unknown): value is WorkTime {
   const work = value as Partial<WorkTime> | undefined;
-  return Boolean(work && typeof work.workedMs === "number" && typeof work.updatedAt === "string");
+  return Boolean(work && Number.isFinite(work.workedMs) && typeof work.updatedAt === "string"
+    && (work.stepLimits === undefined || (work.stepLimits !== null && typeof work.stepLimits === "object" && !Array.isArray(work.stepLimits)
+      && Object.values(work.stepLimits).every((entry) => entry && Number.isFinite(entry.limitMs) && Number.isFinite(entry.usedMs) && entry.limitMs >= 0 && entry.usedMs >= 0))));
 }
 
-export function readWork(root: string, configDir: string, taskId: string): WorkTime | undefined {
+export function readWork(root: string, configDir: string, taskId: string, strict = false): WorkTime | undefined {
   try {
     const value: unknown = JSON.parse(readFileSync(workPath(root, configDir, taskId), "utf8"));
-    if (!isWork(value)) return undefined;
-    return { workedMs: value.workedMs, ...(value.runningSince ? { runningSince: value.runningSince } : {}), active: Array.isArray(value.active) ? value.active : [], updatedAt: value.updatedAt };
-  } catch {
+    if (!isWork(value)) throw new Error("Invalid task work record");
+    return { workedMs: value.workedMs, ...(value.runningSince ? { runningSince: value.runningSince } : {}), active: Array.isArray(value.active) ? value.active : [], updatedAt: value.updatedAt, ...(value.stepLimits ? { stepLimits: value.stepLimits } : {}) };
+  } catch (error) {
+    if (strict && (error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     return undefined;
   }
 }
 
 /** Change a task's work time in place (read afresh, written back atomically), starting it when there is none. */
-export function updateWork(root: string, configDir: string, taskId: string, change: (work: WorkTime) => void, now = new Date()): void {
-  const work = readWork(root, configDir, taskId) ?? { workedMs: 0, active: [], updatedAt: now.toISOString() };
-  change(work);
-  work.updatedAt = now.toISOString();
+export function updateWork(root: string, configDir: string, taskId: string, change: (work: WorkTime) => void, now = new Date(), strict = false): void {
   try {
+    const work = readWork(root, configDir, taskId, true) ?? { workedMs: 0, active: [], updatedAt: now.toISOString() };
+    change(work);
+    work.updatedAt = now.toISOString();
     const path = workPath(root, configDir, taskId);
     mkdirSync(dirname(path), { recursive: true });
     const tmp = `${path}.${process.pid}.tmp`;
     writeFileSync(tmp, `${JSON.stringify(work, null, 2)}\n`, "utf8");
     renameSync(tmp, path);
-  } catch {
-    // A read-only tree must never fail the workflow; the time just stops being saved.
+  } catch (error) {
+    if (strict) throw error;
+    // Display clocks may stop; never overwrite an unreadable allowance ledger.
   }
 }
 

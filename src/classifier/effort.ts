@@ -30,9 +30,9 @@ export interface RunProfileLike {
 }
 
 export interface EffortRoute extends RunProfileLike {
-  level: "trivial" | "simple";
+  level: EffortLevel;
   confidence: number;
-  /** The configured profile the route came down from. */
+  /** The configured profile before routing. */
   from: RunProfileLike;
 }
 
@@ -109,6 +109,8 @@ export interface EffortScore {
 
 /** Lowers the model or thinking of a step the classifier judges simple or trivial. */
 export interface EffortRouter {
+  /** Children may raise reasoning for complex work, using the parent's configured model. */
+  childRoute?(instruction: string, profile: RunProfileLike, options?: { context?: string; signal?: AbortSignal }): Promise<EffortRoute | undefined>;
   /** Score a step and plan its route in one go. */
   route(instruction: string, profile: RunProfileLike, options?: { thinkingFixed?: boolean; context?: string; signal?: AbortSignal }): Promise<EffortRoute | undefined>;
   /** Score a step once (several agents may share it)… */
@@ -119,6 +121,16 @@ export interface EffortRouter {
 
 export function effortRouter(classifier: Classifier, deps: { clamp?: RouteOptions["clamp"]; log?: (text: string) => void } = {}): EffortRouter {
   const router: EffortRouter = {
+    async childRoute(instruction, profile, options = {}) {
+      const scored = await router.score(instruction, options);
+      if (!scored) return undefined;
+      if (scored.level !== "complex" || scored.confidence < classifier.config.thresholds.simpleAt) return router.plan(scored, profile);
+      const thinking = profile.model && deps.clamp ? deps.clamp(profile.model, "max") : rank(profile.thinking) > rank("high") ? profile.thinking : "high";
+      if (thinking === profile.thinking) return undefined;
+      const route: EffortRoute = { ...profile, thinking, level: scored.level, confidence: scored.confidence, from: { ...profile } };
+      deps.log?.(`routed child ${routeLabel(route)}`);
+      return route;
+    },
     async score(instruction, options = {}) {
       if (!classifier.enabled("effort")) return undefined;
       return scoreEffort(classifier, instruction, options.context, options.signal);

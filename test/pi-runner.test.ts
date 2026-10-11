@@ -527,6 +527,20 @@ test("rpc: out of time and not given more, the run ends with its left-off report
   });
 });
 
+test("rpc: a hard allowance includes reporting after a user-approved extension", async () => {
+  const script = rpcStub(`
+    if (cmd.type === "steer" && !sent) { sent = true; report("## Left Off\\nunfinished"); settle(); }
+    if (cmd.type === "prompt" && !cmd.message.startsWith("Task:")) return;`, "let sent = false;");
+  await withStub(script, async () => {
+    const started = Date.now();
+    const result = await runPiAgent({ cwd: process.cwd(), task: "build", timeoutMs: 20_000,
+      time: { hardLimit: true, upAtMs: 150, upMessage: "report now", graceMs: 15_000, onTimeUp: async () => ({ extraMs: 1200, message: "continue" }) },
+    });
+    assert.equal(result.status, "timeout");
+    assert.ok(Date.now() - started < 10_000, "reporting cannot add 15 seconds to the granted allowance");
+  });
+});
+
 test("rpc: while the user decides, neither the deadline nor the stall watchdog stops the waiting agent", async () => {
   await withStub(TIMED_STUB, async () => {
     const result = await runPiAgent({

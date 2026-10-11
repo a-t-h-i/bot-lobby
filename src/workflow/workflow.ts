@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
-import type { BotLobbyConfig, ProfileResolver } from "../schemas/configuration.ts";
+import { profileFor, type BotLobbyConfig, type ProfileResolver } from "../schemas/configuration.ts";
 import type { AgentRun, Pushback, ResearchResult, ReviewResult, WorkerResult } from "../schemas/findings.ts";
 import {
   MAX_RUN_LOG,
@@ -55,6 +55,8 @@ import { assertNoPendingApprovals, pendingApprovals, requestApproval, resolveApp
 import { withBlockingRequest } from "../state/blocking-requests.ts";
 import { pingApproval } from "../pi/notify.ts";
 import { describeRun, runLogEntry } from "../pi/run-summary.ts";
+import { planChecklist, planSteps, runSteps } from "../pi/plan-checklist.ts";
+import { STEP_LIMIT_MS, grantStepTime, reserveStepTime, stepTimeLeft } from "../state/step-limits.ts";
 import { noteWorkerRun } from "../state/work-time.ts";
 import { nextStates } from "./transitions.ts";
 import type { FileHinter } from "../classifier/files.ts";
@@ -993,7 +995,6 @@ async function handleImplement(task: Task, params: OrchestrateParams, deps: Work
   for (const { domain } of assignments) assertNoPendingApprovals(task, domain);
   for (const { domain } of assignments) if (!task.domains.includes(domain)) task.domains.push(domain);
   // Under a time budget every step is given its share before any starts; a spent budget starts none.
-  const times = workerTimes(task, deps, assignments);
   if (task.track && onFastTrack(task)) task.track.roster = parseRoster([...task.track.roster, ...assignments.map((entry) => entry.domain)]);
   if (starting) startFast(task);
   if (task.track?.autoPlan) addFastSteps(task, deps, assignments);
@@ -1001,6 +1002,7 @@ async function handleImplement(task: Task, params: OrchestrateParams, deps: Work
   await takeBaseline(task, deps);
   // A QA step after work is in verifies it at its risk: read the change first.
   if (assignments.some((entry) => entry.domain === "qa") && builtSomething(task)) await assessBuilt(task, deps);
+  const times = await workerTimes(task, deps, assignments);
   let report: string;
   try {
     if (assignments.length === 1) {
@@ -1010,7 +1012,10 @@ async function handleImplement(task: Task, params: OrchestrateParams, deps: Work
     } else report = await runParallelWorkers(task, deps, assignments, times);
   } finally {
     // A step that never reported (the call failed) does not stay "running" in the budget.
-    for (const time of times.values()) settleAllotment(task, deps, time.id, "stopped");
+    for (const time of times.values()) {
+      settleAllotment(task, deps, time.id, "stopped");
+      time.finish?.();
+    }
   }
   const tree = await changeState(deps, task, task.baseline?.head);
   const lint = lintNote(await lintTask(task, deps, tree), deps.config.lint.mode, ownersOf(tree?.files));
@@ -1364,7 +1369,7 @@ async function handleQa(task: Task, params: OrchestrateParams, deps: WorkflowDep
     return qaReport(header, result, decision, provenance, lintLine);
   }
   const time = qaTime(task, deps);
-  const outcome = await runReviewer({ ...qaRequest(deps, task, diff, risk, params.task, provenance, lint), ...(time ? { time } : {}) }, deps.runProcess ?? spawnPiProcess);
+  const outcome = await runReviewer({ ...qaRequest(deps, task, diff, risk, params.task, provenance, lint), effort: deps.effort, ...(time ? { time } : {}) }, deps.runProcess ?? spawnPiProcess);
   if (time) settleAllotment(task, deps, time.id, "finished");
   const { result, run } = outcome;
   recordAdvisoryPushbacks(task, [{ pushback: result.pushback, who: "qa" }]);
@@ -1705,7 +1710,7 @@ const RESEARCH_SHARE = 0.15;
 const DEFAULT_MORE_MINUTES = 10;
 
 /** A delegation's time, with the allotment it is recorded under. */
-type WorkerTime = AgentTime & { id: string };
+type WorkerTime = AgentTime & { id: string; finish?: () => void };
 
 /** The task's budget and where it stands, when it has one. */
 function budgetFor(task: Task, deps: WorkflowDeps): { budget: TaskBudget; state: BudgetState } | undefined {
@@ -1726,7 +1731,7 @@ function timeNote(allotMs: number, state: BudgetState, worker: boolean): string 
     "## Time",
     `You have ${formatMinutes(allotMs)} for this ${worker ? "step" : "work"}; the task has ${formatMinutes(state.leftMs)} of its ${formatMinutes(state.totalMs)} left.`,
     worker
-      ? "At about 75% you get a heads-up. When the time is up you are asked to stop and report where you left off (`## Left Off`) and how much more you need (`## More Time`); the user decides whether you get it. Land the most important part first, and keep every file consistent as you go."
+      ? "This is the total allowance shared across startup, retries, children, tools and reporting. At about 75% you get a heads-up. Before the hard deadline, stop and report where you left off (`## Left Off`) and how much more you need (`## More Time`); only the user can grant it. Land the most important part first, and keep every file consistent as you go."
       : "When the time is up you are asked to stop and report what you have, so cover the most important questions first.",
   ].join("\n");
 }
@@ -1752,7 +1757,7 @@ function oneLine(text: string, max: number): string {
 function readerTime(task: Task, deps: WorkflowDeps, who: string, what: string, share: number, limitMs: number, label: string): WorkerTime | undefined {
   const now = budgetFor(task, deps);
   if (!now) return undefined;
-  const ms = readerAllotment(now.state, share, limitMs);
+  const ms = readerAllotment(now.state, share, Math.min(STEP_LIMIT_MS, limitMs));
   if (ms === undefined) throw budgetSpent(now.state, label);
   const id = `${who.toLowerCase()}-${Date.now().toString(36)}`;
   recordAllotment(task, deps, { id, who, what: oneLine(what, 120), minutes: Math.round(ms / 60_000) });
@@ -1763,7 +1768,7 @@ function readerTime(task: Task, deps: WorkflowDeps, who: string, what: string, s
 function qaTime(task: Task, deps: WorkflowDeps): WorkerTime | undefined {
   const now = budgetFor(task, deps);
   if (!now) return undefined;
-  const ms = qaAllotment(now.state, deps.config.agents.qa.timeoutMs ?? deps.config.workflow.agentTimeoutMs);
+  const ms = qaAllotment(now.state, Math.min(STEP_LIMIT_MS, deps.config.agents.qa.timeoutMs ?? deps.config.workflow.agentTimeoutMs));
   if (ms === undefined) throw budgetSpent(now.state, "the QA gate");
   const id = `qa-${Date.now().toString(36)}`;
   recordAllotment(task, deps, { id, who: "QA gate", what: "review the task's work", minutes: Math.round(ms / 60_000) });
@@ -1781,18 +1786,58 @@ function openSlots(task: Task, batch: readonly Domain[]): number {
  * for (it divides by scope) or an even share, never past what is left before
  * the QA gate's reserve. A spent budget starts nothing.
  */
-function workerTimes(task: Task, deps: WorkflowDeps, assignments: readonly Assignment[]): Map<Domain, WorkerTime> {
+async function workerTimes(task: Task, deps: WorkflowDeps, assignments: readonly Assignment[]): Promise<Map<Domain, WorkerTime>> {
   const times = new Map<Domain, WorkerTime>();
   const now = budgetFor(task, deps);
-  if (!now) return times;
   const slots = openSlots(task, assignments.map((entry) => entry.domain));
+  const steps = planSteps(task.plan ?? "");
+  const completed = new Set(planChecklist(task.plan ?? "", (task.workerRuns ?? []).map((record) => ({ ...record, taskId: task.id, role: "worker" as const, output: "", attempts: 1 }))).flatMap((step, index) => step.status === "done" ? [index] : []));
+  const prepared = [];
   for (const { domain, instruction, minutes } of assignments) {
-    const given = workerAllotment(now.state, minutes, slots);
-    if (!given) throw budgetSpent(now.state, `the ${domain} step`);
-    const id = `${domain}-${Date.now().toString(36)}`;
-    recordAllotment(task, deps, { id, who: AGENT_LABELS[domain], what: oneLine(instruction, 120), minutes: Math.round(given.ms / 60_000) });
-    if (given.note) recordDecision(task, `${AGENT_LABELS[domain]}'s step: ${given.note}.`);
-    times.set(domain, { id, endsAt: Date.now() + given.ms, allotMs: given.ms, note: timeNote(given.ms, now.state, true), onTimeUp: moreTimeFor(task, deps, domain, instruction, id) });
+    const covered = runSteps(steps, instruction, completed);
+    const keys = covered.length ? covered.map((index) => `${domain}:step-${index + 1}`) : [`${domain}:unplanned`];
+    const limitMs = Math.min(STEP_LIMIT_MS, profileFor(deps.config, deps.profile, domain, "worker").timeoutMs);
+    let left = stepTimeLeft(deps.root, deps.configDir, task.id, keys, limitMs);
+    if (left <= 0) {
+      const wanted = DEFAULT_MORE_MINUTES;
+      const granted = await decideMoreTime(task, deps, {
+        label: AGENT_LABELS[domain], instruction, wanted,
+        result: parseWorkerResult(domain, scratchpadSummary(deps, task, domain)),
+        run: { runId: "", taskId: task.id, domain, role: "worker", status: "timeout", output: "", attempts: 1, startedAt: new Date().toISOString(), allotMs: limitMs },
+        state: now?.state,
+      });
+      if (granted <= 0) throw new Error(`${AGENT_LABELS[domain]}'s step allowance is exhausted. Return the unfinished report; continuing requires user-approved time.`);
+      grantStepTime(deps.root, deps.configDir, task.id, keys, limitMs, granted * 60_000);
+      recordDecision(task, `The user gave ${AGENT_LABELS[domain]}'s exhausted step ${granted} more minutes.`);
+      left = stepTimeLeft(deps.root, deps.configDir, task.id, keys, limitMs);
+    }
+    const given = now ? workerAllotment(now.state, minutes, slots) : { ms: left };
+    if (!given) throw budgetSpent(now!.state, `the ${domain} step`);
+    const ms = Math.min(left, given.ms);
+    prepared.push({ domain, instruction, keys, limitMs, ms });
+  }
+  try {
+    for (const { domain, instruction, keys, limitMs, ms } of prepared) {
+      const reservation = reserveStepTime(deps.root, deps.configDir, task.id, keys, limitMs, ms);
+      const id = `${domain}-${Date.now().toString(36)}`;
+      let exhausted = false;
+      const askMore = moreTimeFor(task, deps, domain, instruction, id, (extraMs) => reservation.grant(extraMs));
+      recordAllotment(task, deps, { id, who: AGENT_LABELS[domain], what: oneLine(instruction, 120), minutes: Math.round(ms / 60_000) });
+      const time: WorkerTime = { id, endsAt: Date.now() + ms, allotMs: ms, strict: true,
+        note: now ? timeNote(ms, now.state, true) : `## Time\nYou have ${formatMinutes(ms)} total for this step, shared across retries and children. Report unfinished work before the deadline; only the user can grant more time.`,
+        onTimeUp: async (run, report) => {
+          const extraMs = await askMore(run, report);
+          const result = parseWorkerResult(domain, report);
+          if (extraMs <= 0 && (result.leftOff || result.moreTime)) exhausted = true;
+          return extraMs;
+        },
+      };
+      time.finish = () => reservation.finish(time.usedMs ?? ms, exhausted);
+      times.set(domain, time);
+    }
+  } catch (error) {
+    for (const time of times.values()) { time.usedMs = 0; time.finish?.(); }
+    throw error;
   }
   return times;
 }
@@ -1809,30 +1854,27 @@ function oneAtATime<T>(ask: () => Promise<T>): Promise<T> {
 
 /**
  * A worker out of time has reported what it did, where it left off and how
- * much more it needs. The user decides (auto mode: once, and only from what
- * is left before the QA gate's reserve); a grant past that grows the budget,
+ * much more it needs. Only the user grants more time; a grant past the task budget grows it,
  * and the same agent carries on. Resolves with the ms granted, 0 to stop it.
  */
-function moreTimeFor(task: Task, deps: WorkflowDeps, domain: Domain, instruction: string, id: string): NonNullable<AgentTime["onTimeUp"]> {
-  let asked = 0;
+function moreTimeFor(task: Task, deps: WorkflowDeps, domain: Domain, instruction: string, id: string, onGrant?: (ms: number) => void): NonNullable<AgentTime["onTimeUp"]> {
   return (run, report) => oneAtATime(async () => {
     const result = parseWorkerResult(domain, report);
     // A report with nothing left to do finished in time.
     if (!result.leftOff && !result.moreTime) return 0;
-    asked += 1;
     const label = AGENT_LABELS[domain];
     const wanted = result.moreTime?.minutes ?? DEFAULT_MORE_MINUTES;
     const now = budgetFor(task, deps);
-    if (!now) return 0;
-    const minutes = await decideMoreTime(task, deps, { label, instruction, result, wanted, run, asked, state: now.state });
+    const minutes = await decideMoreTime(task, deps, { label, instruction, result, wanted, run, state: now?.state });
     if (minutes <= 0) return 0;
-    const over = Math.max(0, Math.ceil((minutes * 60_000 - now.state.windowMs) / 60_000));
+    const over = Math.max(0, Math.ceil((minutes * 60_000 - (now?.state.windowMs ?? minutes * 60_000)) / 60_000));
     updateBudget(deps.root, deps.configDir, task.id, (budget) => {
       budget.granted += over;
       const entry = budget.allotments.find((allotment) => allotment.id === id);
       if (entry) Object.assign(entry, { minutes: entry.minutes + minutes, granted: entry.granted + minutes });
     });
-    recordDecision(task, `${label} ran out of time; ${isAutoMode(deps.root, deps.configDir, task.id) ? "auto mode gave it" : "the user gave it"} ${minutes} more minutes${over > 0 ? `, ${over} of them added to the task's budget` : ""}. Left off: ${oneLine(result.leftOff ?? result.moreTime?.reason ?? "", 200)}`);
+    recordDecision(task, `${label} ran out of time; the user gave it ${minutes} more minutes${over > 0 ? `, ${over} of them added to the task's budget` : ""}. Left off: ${oneLine(result.leftOff ?? result.moreTime?.reason ?? "", 200)}`);
+    onGrant?.(minutes * 60_000);
     return minutes * 60_000;
   });
 }
@@ -1843,22 +1885,19 @@ interface MoreTimeAsk {
   result: WorkerResult;
   wanted: number;
   run: AgentRun;
-  asked: number;
-  state: BudgetState;
+  state?: BudgetState;
 }
 
 const MORE_TIME = "Give it the time it asks for";
 const OTHER_TIME = "Give a different amount";
 
 async function decideMoreTime(task: Task, deps: WorkflowDeps, ask: MoreTimeAsk): Promise<number> {
-  const { label, instruction, result, wanted, run, asked, state } = ask;
+  const { label, instruction, result, wanted, run, state } = ask;
   if (isAutoMode(deps.root, deps.configDir, task.id)) {
-    // Nobody to ask: once, and only from time the task still has before the QA gate's reserve.
-    if (asked === 1 && wanted * 60_000 <= state.windowMs) return wanted;
-    recordDecision(task, `Auto mode: ${label} ran out of time and was not given more (${asked > 1 ? "it already had more once" : `it asked for ${wanted} minutes, ${formatMinutes(state.windowMs)} were left`}).`);
+    recordDecision(task, `Auto mode: ${label}'s step allowance is spent. More time requires the user; return the unfinished report.`);
     return 0;
   }
-  const over = Math.max(0, Math.ceil((wanted * 60_000 - state.windowMs) / 60_000));
+  const over = Math.max(0, Math.ceil((wanted * 60_000 - (state?.windowMs ?? wanted * 60_000)) / 60_000));
   const had = run.allotMs ?? 0;
   const choice = await deps.choose(
     [
@@ -1866,7 +1905,7 @@ async function decideMoreTime(task: Task, deps: WorkflowDeps, ask: MoreTimeAsk):
       result.completed ? `Done so far: ${oneLine(result.completed, 400)}` : "",
       result.leftOff ? `Left to do: ${oneLine(result.leftOff, 400)}` : "",
       `It needs about ${wanted} more minutes${result.moreTime?.reason ? `: ${oneLine(result.moreTime.reason, 200)}` : ""}.`,
-      `The task has used ${formatMinutes(state.usedMs)} of ${formatMinutes(state.totalMs)} (${formatMinutes(state.leftMs)} left)${over > 0 ? `; ${wanted} more minutes adds ${over} to its budget` : ""}.`,
+      state ? `The task has used ${formatMinutes(state.usedMs)} of ${formatMinutes(state.totalMs)} (${formatMinutes(state.leftMs)} left)${over > 0 ? `; ${wanted} more minutes adds ${over} to its budget` : ""}.` : "This step has a shared allowance even though the task has no overall time budget.",
       `Give ${label} ${wanted} more minutes to finish?`,
     ].filter(Boolean).join("\n\n"),
     [MORE_TIME, OTHER_TIME, `Stop ${label} here`],
@@ -1879,7 +1918,7 @@ async function decideMoreTime(task: Task, deps: WorkflowDeps, ask: MoreTimeAsk):
 
 /** Stopped at its time with work left: a report that finished everything as time ran out is not. */
 function stoppedForTime(outcome: WorkerOutcome): boolean {
-  return Boolean(outcome.run.timeUp && (outcome.result.leftOff || outcome.result.moreTime));
+  return Boolean(outcome.run.status === "timeout" || (outcome.run.timeUp && (outcome.result.leftOff || outcome.result.moreTime)));
 }
 
 /** How a step's time went, for the oracle: out of time and stopped, or given more. */

@@ -4,9 +4,9 @@ import type { ExtensionAPI, ExtensionContext, SessionEntry, TurnEndEvent, compac
 import { compactionThreshold, registerAutoCompaction } from "../src/pi/auto-compaction.ts";
 
 test("compaction leaves headroom on large and small windows and honours earlier reserves", () => {
-  assert.equal(compactionThreshold(1_000_000), 250_000);
-  assert.equal(compactionThreshold(200_000), 160_000);
-  assert.equal(compactionThreshold(100_000, 30_000), 70_000);
+  assert.equal(compactionThreshold(1_000_000), 64_000);
+  assert.equal(compactionThreshold(200_000), 64_000);
+  assert.equal(compactionThreshold(100_000, 30_000), 60_000);
   assert.equal(compactionThreshold(8_000), 4_000);
 });
 

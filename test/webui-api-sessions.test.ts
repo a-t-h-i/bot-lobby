@@ -13,9 +13,10 @@ import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { ensureProjectStructure } from "../src/state/persistence.ts";
+import { ensureProjectStructure, saveTask } from "../src/state/persistence.ts";
+import { createTask } from "../src/schemas/task.ts";
 import { savePlannedTask } from "../src/state/backlog.ts";
-import { createLobbyService, setSessionLauncher } from "../src/lobby/service.ts";
+import { createLobbyService, setSessionLauncher, setServiceState } from "../src/lobby/service.ts";
 import type { Runtime } from "../src/lobby/runtime.ts";
 import { FakeSessionProcess } from "./fake-session.ts";
 import { createFixtureService, disposeFixtureService } from "../src/webui/dev/fake-service.ts";
@@ -130,6 +131,23 @@ test("sessions.list starts empty, then shows the background sessions this window
     assert.deepEqual(background[0]!.dialogs, []);
     assert.equal(background[0]!.alive, true);
   } finally {
+    await close();
+  }
+});
+
+test("a background session adopts its task's generated name once startup completes", async () => {
+  const { call, service, procs, state, close } = await setup();
+  setServiceState({ ...state, configDir: ".pi" } as unknown as Runtime);
+  try {
+    const started = await call("sessions.start", { request: "I was looking at the lobby. Improve task names." });
+    const task = createTask("Task-Improve-Task-Naming-01-01-2026", "Improve task naming", new Date().toISOString(), "full request", "child");
+    task.state = "clarifying";
+    saveTask(state.root, ".pi", task);
+    procs[0]!.emit({ type: "response", command: "get_state", data: { sessionId: "child" } });
+    const session = service.sessions().find((entry) => entry.key === started.payload.result!.key)!;
+    assert.equal(session.name, task.id);
+  } finally {
+    setServiceState(undefined);
     await close();
   }
 });

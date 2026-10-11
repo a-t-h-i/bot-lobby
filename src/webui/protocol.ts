@@ -131,7 +131,7 @@ export interface SnapshotTask {
   progress?: { done: number; total: number };
   currentStep?: string;
   /** The steps a worker is on right now, with the worker time on each (ms, as of the snapshot). */
-  activeSteps?: Array<{ text: string; workedMs: number; activeAgentCount?: number }>;
+  activeSteps?: Array<{ text: string; workedMs: number; activeAgentCount?: number; runIds?: string[] }>;
   /** How long the task's agents have worked on it, idle time left out. */
   work?: WorkClock;
 }

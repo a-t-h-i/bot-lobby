@@ -8,6 +8,8 @@ import { EditLog } from "../state/changes.ts";
 import { formatMinutes, REPORT_GRACE_MS } from "../state/budget.ts";
 import { runPiAgent, spawnPiProcess, type ProcessRunner, type RelayAsk } from "./pi-runner.ts";
 import { ASK_ENV } from "../ask/relay.ts";
+import { STEP_LIMIT_MS } from "../state/step-limits.ts";
+import type { EffortRouter, RunProfileLike } from "../classifier/effort.ts";
 import { ASK_TOOL } from "../ask/types.ts";
 import { agentOfRun, grantOption } from "../excalidraw/sessions.ts";
 
@@ -22,7 +24,7 @@ export interface AgentContext {
 }
 
 /** Live fields a caller (the file desk) may set on a running agent. */
-export type LivePatch = Pick<AgentRun, "note" | "noteKind" | "waitingFor">;
+export type LivePatch = Pick<AgentRun, "note" | "noteKind" | "waitingFor" | "model" | "thinking" | "route" | "routedFrom">;
 
 /** Control over one running attempt, handed to `onStart`. */
 export interface AgentHandle {
@@ -35,6 +37,8 @@ export interface AgentRequest {
   taskId: string;
   domain: Domain;
   role: Role;
+  effort?: EffortRouter;
+  effortProfile?: RunProfileLike;
   /** Concrete instruction sent as the subagent's task message. */
   instruction: string;
   /** Prompt layers selected for this run. */
@@ -78,6 +82,10 @@ export interface AgentRequest {
  * (the engine asking the user) grants more, and the same agent carries on.
  */
 export interface AgentTime {
+  /** Active time shared across attempts and model fallbacks. */
+  usedMs?: number;
+  /** Include reporting in the hard allowance. */
+  strict?: boolean;
   /** When the delegation's time runs out (epoch ms); moved out when more is granted, shared by retries and re-runs. */
   endsAt: number;
   /** The allotment, as the agent and the lobby see it. */
@@ -108,6 +116,11 @@ export function carryOnMessage(extraMs: number): string {
 /** Least time an attempt starts with; a retry with less than this left is not started. */
 const MIN_ATTEMPT_MS = 60_000;
 
+export function boundedAgentTime(timeoutMs: number): AgentTime {
+  const allotMs = Math.min(STEP_LIMIT_MS, timeoutMs);
+  return { endsAt: Date.now() + allotMs, allotMs, strict: true };
+}
+
 /** The watchdog fields of an AgentRequest, taken from the workflow config. */
 export function watchdogOptions(workflow: {
   maxAgentRetries: number;
@@ -137,7 +150,19 @@ function retryable(run: AgentRun): boolean {
  * and a slow agent cannot double its time budget.
  */
 export async function runAgent(request: AgentRequest, run: ProcessRunner = spawnPiProcess): Promise<AgentRun> {
+  request.time ??= boundedAgentTime(request.timeoutMs);
+  if (!request.time.strict) {
+    request.time.endsAt = Math.min(request.time.endsAt, Date.now() + Math.min(STEP_LIMIT_MS, request.timeoutMs));
+    request.time.allotMs = Math.min(request.time.allotMs, STEP_LIMIT_MS, request.timeoutMs);
+    request.time.strict = true;
+  }
+  request.time.usedMs ??= Math.max(0, request.time.allotMs - (request.time.endsAt - Date.now()));
   const startedAt = new Date().toISOString();
+  if (request.time.endsAt <= Date.now()) {
+    const stopped: AgentRun = { ...baseRun(request, `${request.taskId}:${randomUUID()}`, startedAt), status: "timeout", error: "The assignment's shared time limit is spent; request user-approved time before continuing.", finishedAt: startedAt, timeUp: true };
+    request.onUpdate?.(stopped);
+    return stopped;
+  }
   const attempts = Math.max(1, (request.retries ?? 0) + 1);
   // A failed attempt may have edited files before the retry: the run owns every edit.
   const edits = new EditLog(request.cwd);
@@ -193,21 +218,36 @@ function toolsFor(request: AgentRequest): readonly string[] | undefined {
 async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: number, startedAt: string, edits: EditLog, quota: { used: number }): Promise<AgentRun> {
   const base = baseRun(request, `${request.taskId}:${request.domain}:${request.role}:${randomUUID()}`, startedAt, attempt);
   request.onUpdate?.(base);
-  const live = createLiveRun(base, request, edits);
+  const time = request.time!;
+  const attemptStart = Date.now();
+  let pausedMs = 0;
+  let asking = 0;
+  let askStarted = 0;
+  let expired = false;
+  const elapsed = () => Math.max(0, Date.now() - attemptStart - pausedMs - (asking ? Date.now() - askStarted : 0));
+  const live = createLiveRun(base, { ...request, onUpdate: (update) => request.onUpdate?.({ ...update, activeMs: (time.usedMs ?? 0) + elapsed(), endsAt: time.endsAt }) }, edits);
 
   const controller = new AbortController();
   activeControllers.add(controller);
   const signal = request.signal ? AbortSignal.any([request.signal, controller.signal]) : controller.signal;
+  let deadline: ReturnType<typeof setTimeout>;
+  const arm = () => {
+    clearTimeout(deadline);
+    deadline = setTimeout(() => { expired = true; controller.abort(new Error("Assignment time limit reached")); }, Math.max(0, time.endsAt - Date.now()));
+  };
+  arm();
   try {
     const systemPrompt = compilePrompt({ domain: request.domain, role: request.role, ...request.context });
-    const time = request.time;
-    const left = time ? Math.max(MIN_ATTEMPT_MS, time.endsAt - Date.now()) : 0;
-    const wrapUp = time ? 0 : request.wrapUpAt && request.wrapUpAt > 0 && request.wrapUpAt < 1 ? Math.floor(request.timeoutMs * request.wrapUpAt) : 0;
+    const left = Math.max(1, time.endsAt - Date.now());
+    const reportMs = Math.min(REPORT_GRACE_MS, Math.floor(left / 4));
+    const wrapUp = Math.floor(left * (request.wrapUpAt || 0.75));
     const onTimeUp = time?.onTimeUp;
     const result = await runPiAgent({
       cwd: request.cwd,
       agent: { runId: base.runId, taskId: request.taskId, domain: request.domain, role: request.role },
       delegationQuota: quota,
+      effort: request.effort,
+      effortProfile: request.effortProfile,
       onChildRun: (child) => {
         for (const path of child.edited ?? []) edits.note("edit", { path });
         request.onUpdate?.(child);
@@ -218,21 +258,28 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
       tools: toolsFor(request),
       model: request.model,
       thinking: request.thinking,
-      timeoutMs: time ? left + REPORT_GRACE_MS : request.timeoutMs,
+      timeoutMs: left,
       ...(time ? {
         time: {
-          upAtMs: left,
+          hardLimit: true,
+          upAtMs: Math.max(1, left - reportMs),
           headsUpAtMs: left >= 4 * 60_000 ? Math.floor(left * 0.75) : 0,
           headsUpMessage: headsUpMessage(left - Math.floor(left * 0.75), time.allotMs),
-          upMessage: timeUpMessage(time.allotMs, Boolean(onTimeUp)),
-          graceMs: REPORT_GRACE_MS,
+          upMessage: `bot-lobby: your shared step allowance is nearly spent. Start nothing new; finish or revert the edit in progress and report completed work, verification, failed approaches, blockers, and the next action now.${onTimeUp ? " Include ## Left Off and ## More Time (minutes and reason). Only the user can grant more time." : ""}`,
+          graceMs: reportMs,
           ...(onTimeUp ? {
             onTimeUp: async (report: string) => {
-              const extraMs = await onTimeUp(live.current(), report);
+              clearTimeout(deadline);
+              const waiting = Date.now();
+              let extraMs: number;
+              try { extraMs = await onTimeUp(live.current(), report); }
+              finally { pausedMs += Date.now() - waiting; }
+              time.endsAt += Date.now() - waiting;
               if (extraMs > 0) {
                 time.endsAt = Date.now() + extraMs;
                 live.annotate({ note: `given ${formatMinutes(extraMs)} more`, noteKind: "info" });
               }
+              arm();
               return { extraMs, message: carryOnMessage(extraMs) };
             },
           } : {}),
@@ -245,30 +292,42 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
       stallTimeoutMs: request.stallTimeoutMs,
       toolStallTimeoutMs: request.toolStallTimeoutMs,
       wrapUpAtMs: wrapUp,
-      onEvent: live.onEvent,
+      onEvent: (event) => {
+        if (event.type === "asking") { if (!asking) askStarted = Date.now(); asking += 1; clearTimeout(deadline); }
+        if (event.type === "answered") { asking = 0; pausedMs += event.waitedMs; }
+        live.onEvent(event);
+        if (event.type === "answered" && asking === 0) arm();
+      },
       onStart: (handle) => request.onStart?.({ runId: base.runId, steer: handle.steer, annotate: live.annotate }),
     }, run);
     const current = live.current();
     const final: AgentRun = {
       ...base,
-      status: result.status,
+      status: expired ? "timeout" : result.status,
       output: result.output,
-      error: result.error ? describeError(result.error, current, result.stalled === true) : undefined,
+      error: expired ? describeError("hit the shared assignment time limit", current, false) : result.error ? describeError(result.error, current, result.stalled === true) : undefined,
       usage: result.usage,
       finishedAt: new Date().toISOString(),
+      activeMs: (time.usedMs ?? 0) + elapsed(),
       turns: current.turns ?? (result.usage.turns || undefined),
       tools: current.tools,
       model: result.model ?? current.model,
       ...(result.stalled ? { stalled: true } : {}),
       ...(result.wrappedUp ? { wrappedUp: true } : {}),
-      ...(result.timeUp ? { timeUp: true } : {}),
+      ...(result.timeUp || expired ? { timeUp: true } : {}),
       ...(result.extendedMs ? { extendedMs: result.extendedMs } : {}),
       note: undefined,
       noteKind: undefined,
     };
     request.onUpdate?.(final);
     return final;
+  } catch (error) {
+    const final: AgentRun = { ...live.current(), status: expired ? "timeout" : signal.aborted ? "cancelled" : "failed", error: (error as Error).message, activeMs: (time.usedMs ?? 0) + elapsed(), edited: edits.list(), finishedAt: new Date().toISOString(), note: undefined, noteKind: undefined, ...(expired ? { timeUp: true } : {}) };
+    request.onUpdate?.(final);
+    return final;
   } finally {
+    clearTimeout(deadline!);
+    time.usedMs = (time.usedMs ?? 0) + elapsed();
     activeControllers.delete(controller);
   }
 }

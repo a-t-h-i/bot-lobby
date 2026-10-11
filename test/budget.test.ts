@@ -29,6 +29,7 @@ import { createTaskDir, ensureProjectStructure, loadTask, saveTask } from "../sr
 import { transition } from "../src/state/task-state.ts";
 import { setAutoMode } from "../src/state/auto.ts";
 import { runWorkflowAction, type OrchestrateParams, type WorkflowDeps } from "../src/workflow/workflow.ts";
+import { reserveStepTime, STEP_LIMIT_MS } from "../src/state/step-limits.ts";
 import type { ProcessOutcome, ProcessRunner, ProcessRunOptions } from "../src/execution/pi-runner.ts";
 
 const LENIENT = { ...DEFAULT_CONFIG, workflow: { ...DEFAULT_CONFIG.workflow, briefCheck: false } };
@@ -183,11 +184,11 @@ test("each step gets the minutes the oracle gave it, and the worker is told them
   const { root, seen, act } = budgeted({ choose: pick("Give it") });
   const result = await act({ action: "implement", domain: "backend", task: "Add the endpoint", minutes: 30 });
   assert.equal(result.ok, true, result.message);
-  assert.match(seen.prompts[0]!, /## Time\nYou have 30m for this step; the task has 1h 30m of its 1h 30m left\./);
-  assert.equal(seen.times[0]!.upAtMs > 29 * MINUTE && seen.times[0]!.upAtMs <= 30 * MINUTE, true);
+  assert.match(seen.prompts[0]!, /## Time\nYou have 15m for this step; the task has 1h 30m of its 1h 30m left\./);
+  assert.equal(seen.times[0]!.upAtMs > 12 * MINUTE && seen.times[0]!.upAtMs <= 15 * MINUTE, true);
   assert.match(result.message, /Time budget: 90m \(\+0m|Time budget: 90m ·/);
   const allotted = readBudget(root, ".pi", "TASK-1")!.allotments[0]!;
-  assert.deepEqual([allotted.who, allotted.minutes, allotted.granted, allotted.outcome], ["DEV", 40, 10, "finished"], "30 given, 10 more granted");
+  assert.deepEqual([allotted.who, allotted.minutes, allotted.granted, allotted.outcome], ["DEV", 25, 10, "finished"], "15 given, 10 more granted");
 });
 
 test("out of time, the user is told what the agent did and what is left, and the same agent finishes with more", async () => {
@@ -213,13 +214,17 @@ test("a different amount can be given", async () => {
   assert.equal(readBudget(root, ".pi", "TASK-1")!.allotments[0]!.granted, 25);
 });
 
-test("auto mode gives more once, and only from time the task still has", async () => {
+test("auto mode stops unfinished work and never grants itself more time", async () => {
   const { root, titles, act } = budgeted();
   setAutoMode(root, ".pi", "TASK-1", true);
   const result = await act({ action: "implement", domain: "backend", task: "Add the endpoint", minutes: 20 });
-  assert.match(result.message, /was given 10m more/);
+  assert.match(result.message, /was not given more/);
   assert.equal(titles.length, 0, "nobody is asked");
   assert.equal(readBudget(root, ".pi", "TASK-1")!.granted, 0, "auto mode never grows the budget");
+  const again = await act({ action: "implement", domain: "backend", task: "Finish the same endpoint" });
+  assert.equal(again.ok, false);
+  assert.equal(titles.length, 0);
+  assert.match(again.message, /step allowance is exhausted/);
   const tight = budgeted({ used: 70 });
   setAutoMode(tight.root, ".pi", "TASK-1", true);
   assert.match((await tight.act({ action: "implement", domain: "backend", task: "Add the endpoint", minutes: 5 })).message, /was not given more/);
@@ -252,7 +257,7 @@ test("the QA gate and the scouts are given their share and told it", async () =>
   assert.equal(seen.times.at(-1)!.onTimeUp, undefined, "the gate reports what it has; it is not extended");
 });
 
-test("a task without a budget runs exactly as before", async () => {
+test("a task without an overall budget still has a shared step allowance", async () => {
   const root = tempRoot();
   const seen: Seen = { prompts: [], times: [] };
   ensureProjectStructure(root, ".pi");
@@ -265,9 +270,22 @@ test("a task without a budget runs exactly as before", async () => {
   const deps: WorkflowDeps = { root, configDir: ".pi", cwd: root, config: LENIENT, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess: outOfTime(seen) };
   const result = await runWorkflowAction({ action: "implement", taskId: "TASK-1", domain: "backend", task: "Add it" } as OrchestrateParams, deps);
   assert.equal(result.ok, true, result.message);
-  assert.equal(seen.times[0], undefined);
-  assert.doesNotMatch(seen.prompts[0]!, /## Time\nYou have/);
+  assert.equal(seen.times[0]?.hardLimit, true);
+  assert.match(seen.prompts[0]!, /## Time\nYou have 15m total for this step/);
   assert.doesNotMatch(result.message, /Time budget/);
+});
+
+test("an exhausted step cannot be reset by rewording or restarting its assignment", async () => {
+  const { root, seen, act } = budgeted();
+  const task = loadTask(root, ".pi", "TASK-1")!;
+  task.plan = "## Steps\n1. Add the endpoint\n2. Test it";
+  saveTask(root, ".pi", task);
+  reserveStepTime(root, ".pi", task.id, ["backend:step-1"], STEP_LIMIT_MS, STEP_LIMIT_MS).finish(STEP_LIMIT_MS);
+  setAutoMode(root, ".pi", task.id, true);
+  const refused = await act({ action: "implement", domain: "backend", task: "Step 1: finish this differently" });
+  assert.equal(refused.ok, false);
+  assert.match(refused.message, /step allowance is exhausted/);
+  assert.equal(seen.prompts.length, 0);
 });
 
 test("a report that finished as its time ran out is a finished step, not an unfinished one", async () => {
@@ -287,7 +305,8 @@ test("a step whose call failed does not stay running in the budget", async () =>
   const { root, deps, act } = budgeted();
   deps.runProcess = async () => { throw new Error("pi is gone"); };
   const result = await act({ action: "implement", domain: "backend", task: "Add the endpoint", minutes: 10 });
-  assert.equal(result.ok, false);
+  assert.match(result.message, /pi is gone/);
+  assert.equal(loadTask(root, ".pi", "TASK-1")!.workerRuns?.at(-1)?.status, "failed");
   const [entry] = readBudget(root, ".pi", "TASK-1")!.allotments;
   assert.equal(entry!.outcome, "stopped");
 });

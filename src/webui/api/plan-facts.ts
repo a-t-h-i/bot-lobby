@@ -39,6 +39,7 @@ export interface StepView {
   status: PlanStep["status"];
   active: boolean;
   activeAgentCount: number;
+  runIds: string[];
   /** Worker time on the step, in ms. */
   workedMs: number;
 }
@@ -54,7 +55,7 @@ export function stepViews(task: Task, work: WorkProjection | undefined, now = Da
   const checklist = planChecklist(task.plan, runs);
   const times = stepWork(planSteps(task.plan), runs, now);
   return checklist.map((step, index) => {
-    const time = times[index] ?? { ms: 0, active: false, activeAgentCount: 0 };
-    return { text: step.text, status: time.active ? "current" : step.status, active: time.active, activeAgentCount: time.activeAgentCount, workedMs: Math.round(time.ms) };
+    const time = times[index] ?? { ms: 0, active: false, activeAgentCount: 0, runIds: [] };
+    return { text: step.text, status: time.active ? "current" : step.status, active: time.active, activeAgentCount: time.activeAgentCount, runIds: time.runIds, workedMs: Math.round(time.ms) };
   });
 }

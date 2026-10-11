@@ -171,7 +171,7 @@ test("the grant of a process's book decides which runs get the tools, the room l
     assert.match(seen!.prompt!, /^Task: fix it\n\nShared Excalidraw whiteboard assigned to you: "Board"\./);
     // A run without a grant is untouched.
     await runPiAgent({ cwd: "/p", task: "fix it", timeoutMs: 1000, tools: ["read"], ...grantOption("qa") }, capture);
-    assert.equal(seen!.args[seen!.args.indexOf("--tools") + 1], "read,codemode,tool_search,delegate_subtasks");
+    assert.equal(seen!.args[seen!.args.indexOf("--tools") + 1], "read,codemode,tool_search");
     assert.ok(seen!.env!.BOT_LOBBY_AGENT_POLICY);
     assert.equal(seen!.prompt, "Task: fix it");
     // Without an allowlist the standard built-ins are retained.
@@ -199,7 +199,7 @@ test("workflow agents get the tools by their role or domain, and only when a ses
     await runAgent(base, capture);
     await runAgent({ ...base, domain: "backend", role: "worker" }, capture);
     await runAgent({ ...base, domain: "designer", role: "worker" }, capture);
-    assert.equal(tools[0], "read,grep,find,ls,excalidraw_read,codemode,tool_search,delegate_subtasks", "a scout of any domain is a scout; look-only, so no drawing");
+    assert.equal(tools[0], "read,grep,find,ls,excalidraw_read,codemode,tool_search", "a scout of any domain is a scout; look-only, so no drawing");
     assert.equal(tools[1], "read,bash,edit,write,grep,find,ls,codemode,tool_search,delegate_subtasks,claim_file,handover_file,my_files,wait_for_files", "the backend worker has no session");
     assert.equal(tools[2], "read,bash,edit,write,grep,find,ls,excalidraw_read,codemode,tool_search,delegate_subtasks,claim_file,handover_file,my_files,wait_for_files", "the designer's worker has the look-only one");
   } finally {

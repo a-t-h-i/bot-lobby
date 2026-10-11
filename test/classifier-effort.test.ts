@@ -68,6 +68,20 @@ test("the router scores once and plans each profile; it is silent when effort ro
   assert.equal(await router(2, 0.95).route("x", { thinking: "high" }), undefined, "moderate work keeps its profile");
 });
 
+test("Jev children save inference for simple briefs and raise reasoning for complex work", async () => {
+  const profile = { model: "p/big", thinking: "medium" };
+  assert.equal((await router(0, 0.95).childRoute!("rename a label", profile))?.model, "p/cheap");
+  assert.equal((await router(1, 0.9).childRoute!("follow an existing pattern", profile))?.thinking, "low");
+  assert.equal(await router(2, 0.9).childRoute!("add logic", profile), undefined);
+  assert.equal((await router(3, 0.9).childRoute!("debug concurrent writes", profile))?.thinking, "high");
+  assert.equal(await router(3, 0.5).childRoute!("uncertain brief", profile), undefined);
+  assert.equal(await router(0, 0.9, { features: { ...DEFAULT_CONFIG.classifier.features, effort: false } }).childRoute!("rename", profile), undefined);
+  const jev = new Classifier({ config: () => ({ ...DEFAULT_CONFIG.classifier, enabled: true }), keys: async () => "key", fetch: scoring(3, 0.95) });
+  const capable = effortRouter(jev, { clamp: (_model, thinking) => thinking === "max" ? "xhigh" : thinking });
+  assert.equal((await capable.childRoute!("complex brief", profile))?.thinking, "xhigh");
+  assert.equal(await capable.childRoute!("complex brief", { ...profile, thinking: "xhigh" }), undefined);
+});
+
 function reply(text: string): string {
   return JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], model: "p/served", stopReason: "stop", usage: { input: 1, output: 1, cost: { total: 0 } } } });
 }

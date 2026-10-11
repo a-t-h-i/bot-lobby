@@ -8,7 +8,8 @@ import type { Domain } from "../src/schemas/agent.ts";
 import type { TaskTriage } from "../src/schemas/task.ts";
 import { chooseRoute, chooseTrack } from "../src/workflow/track.ts";
 import { clearPendingRequest, pendingRequest, registerRouteTool, routeMessage, routeRequest, ROUTE_TOOL, setQuickFixHandoff, startRequest } from "../src/pi/route.ts";
-import { ROUTED_LINE } from "../src/pi/start-task.ts";
+import { ROUTED_LINE, startTask } from "../src/pi/start-task.ts";
+import { taskName } from "../src/text.ts";
 import { chatText } from "../src/lobby/feed.ts";
 import { peekTasks } from "../src/state/persistence.ts";
 import { QuickFixQueue } from "../src/lobby/quickfix.ts";
@@ -167,6 +168,48 @@ test("a request for the team, a placed request, or no lobby starts a task at onc
   setQuickFixHandoff(undefined);
   const headless = fakes();
   assert.equal(await startRequest(headless.pi, headless.ctx, ".pi", "change the submit button colour to blue"), "task", "no lobby runs quick fixes here");
+});
+
+test("starting a task uses its gist for title, ID and session without changing the request", async () => {
+  const { root, pi, ctx } = fakes();
+  const request = "I was looking at the lobby. Task names should reflect the goal, not the opening words.";
+  let calls = 0;
+  let name = taskName(request);
+  pi.getSessionName = () => name;
+  pi.setSessionName = (value) => { name = value; };
+  ctx.model = { id: "test", provider: "test" } as NonNullable<ExtensionContext["model"]>;
+  ctx.modelRegistry = { streamSimple: () => {
+    calls += 1;
+    return { result: async () => ({ stopReason: "stop", content: [{ type: "text", text: "Improve task naming" }] }) };
+  } } as unknown as ExtensionContext["modelRegistry"];
+  const task = await startTask(pi, ctx, ".pi", request, { triaged: true, isolation: "off" });
+  assert.equal(task?.title, "Improve task naming");
+  assert.equal(task?.id, taskName("Improve task naming"));
+  assert.equal(name, task?.id);
+  assert.equal(peekTasks(root, ".pi")[0]?.request, request);
+  assert.equal(calls, 1);
+});
+
+test("a task started while naming is pending prevents a duplicate owned task", async () => {
+  const { root, pi, ctx } = fakes();
+  let finish!: (reply: unknown) => void;
+  ctx.model = { id: "test", provider: "test" } as NonNullable<ExtensionContext["model"]>;
+  ctx.modelRegistry = { streamSimple: () => ({ result: () => new Promise((resolve) => { finish = resolve; }) }) } as unknown as ExtensionContext["modelRegistry"];
+  const pending = startTask(pi, ctx, ".pi", "first request", { triaged: true, isolation: "off" });
+  const task = await startTask(pi, ctx, ".pi", "second request", { title: "Explicit title", triaged: true, isolation: "off" });
+  finish({ stopReason: "stop", content: [{ type: "text", text: "First task" }] });
+  assert.equal(await pending, undefined);
+  assert.equal(peekTasks(root, ".pi").length, 1);
+  assert.equal(peekTasks(root, ".pi")[0]?.id, task?.id);
+});
+
+test("an explicit task title bypasses generation and preserves an intentional session name", async () => {
+  const { pi, ctx } = fakes();
+  ctx.modelRegistry = { streamSimple: () => { throw new Error("must not be called"); } } as unknown as ExtensionContext["modelRegistry"];
+  const task = await startTask(pi, ctx, ".pi", "the full agreed plan", { title: "Export report CSV", triaged: true, isolation: "off" });
+  assert.equal(task?.title, "Export report CSV");
+  assert.equal(task?.id, taskName("Export report CSV"));
+  assert.equal(pi.getSessionName(), "window");
 });
 
 test("a routed job skips the 'looks like a task' hold and runs on its builder's profile", async () => {

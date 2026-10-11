@@ -2,10 +2,10 @@ import { compact, DEFAULT_COMPACTION_SETTINGS, estimateTokens, findCutPoint, typ
 import { contextMarks, freshContextOn } from "./fresh-context.ts";
 import { isSubagentProcess } from "./quiet.ts";
 
-export const CONTEXT_TARGET = 250_000;
+export const CONTEXT_TARGET = 64_000;
 
 export function compactionThreshold(window: number, reserve = DEFAULT_COMPACTION_SETTINGS.reserveTokens): number {
-  return Math.max(1, Math.min(CONTEXT_TARGET, Math.floor(window * 0.8), window - Math.min(reserve, Math.floor(window / 2))));
+  return Math.max(1, Math.min(CONTEXT_TARGET, Math.floor(window * 0.6), window - Math.min(reserve, Math.floor(window / 2))));
 }
 
 /** Compact at a settled tool boundary; ctx.compact() would abort the turn we need to continue. */
@@ -30,7 +30,7 @@ export function registerAutoCompaction(pi: ExtensionAPI, summarize: typeof compa
       if (boundary !== undefined) entries = entries.filter((entry) => Date.parse(entry.timestamp) >= boundary);
     }
     if (entries.length < 2) return;
-    const keepRecentTokens = Math.min(override?.keepRecentTokens ?? configured?.keepRecentTokens ?? DEFAULT_COMPACTION_SETTINGS.keepRecentTokens, Math.floor(threshold / 4));
+    const keepRecentTokens = Math.min(16_000, override?.keepRecentTokens ?? configured?.keepRecentTokens ?? DEFAULT_COMPACTION_SETTINGS.keepRecentTokens, Math.floor(threshold / 4));
     const cut = findCutPoint(entries, 0, entries.length, keepRecentTokens);
     if (cut.firstKeptEntryIndex <= 0) return;
     const prefix = entries.slice(0, cut.firstKeptEntryIndex);
@@ -61,7 +61,7 @@ export function registerAutoCompaction(pi: ExtensionAPI, summarize: typeof compa
       const headers = auth.headers ? Object.fromEntries(Object.entries(auth.headers).filter((entry): entry is [string, string] => entry[1] !== null)) : undefined;
       const retry = pi.getSettings().retry;
       const retryPolicy = { enabled: retry?.enabled ?? true, maxRetries: retry?.maxRetries ?? 3, baseDelayMs: retry?.baseDelayMs ?? 2_000, maxAgentDelayMs: retry?.maxAgentDelayMs };
-      const result = await summarize({ firstKeptEntryId, messagesToSummarize: messages, turnPrefixMessages: [], isSplitTurn: false, tokensBefore: estimate, previousSummary: previous?.type === "compaction" ? previous.summary : undefined, fileOps, settings: { enabled: true, reserveTokens: reserve, keepRecentTokens } }, auth.baseUrl ? { ...ctx.model, baseUrl: auth.baseUrl } : ctx.model, auth.apiKey, headers, "Preserve goals, constraints, decisions, file references, verification evidence, unfinished work and outstanding delegated subtasks. The parent remains responsible for integration and verification.", ctx.signal, undefined, undefined, auth.env, retryPolicy);
+      const result = await summarize({ firstKeptEntryId, messagesToSummarize: messages, turnPrefixMessages: [], isSplitTurn: false, tokensBefore: estimate, previousSummary: previous?.type === "compaction" ? previous.summary : undefined, fileOps, settings: { enabled: true, reserveTokens: reserve, keepRecentTokens } }, auth.baseUrl ? { ...ctx.model, baseUrl: auth.baseUrl } : ctx.model, auth.apiKey, headers, "Write a concise checkpoint with: Requirements and constraints; Decisions; Files changed; Verification and evidence; Failed approaches (do not repeat); Unfinished work and next action; Outstanding children and their assignments. Preserve concrete file references and distinguish verified facts from guesses. The parent remains responsible for integration and verification.", ctx.signal, undefined, undefined, auth.env, retryPolicy);
       ctx.signal?.throwIfAborted();
       ctx.ui.notify("Agent context compacted", "info");
       return { entries: [...event.entries, { type: "compaction" as const, summary: result.summary, firstKeptEntryId, usage: result.usage, details: result.details }] };

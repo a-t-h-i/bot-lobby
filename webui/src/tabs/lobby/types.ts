@@ -29,7 +29,7 @@ export interface ThoughtEntry {
   live: boolean
 }
 
-/** An `AgentRun` as the snapshot carries it (a superset of what the strip shows). */
+/** An `AgentRun` as the snapshot carries it. */
 export interface LobbyRun {
   parentRunId?: string
   runId?: string
@@ -41,6 +41,12 @@ export interface LobbyRun {
   error?: string
   startedAt?: string
   finishedAt?: string
+  instruction?: string
+  detail?: string
+  note?: string
+  endsAt?: number
+  activeMs?: number
+  lastEventAt?: number
 }
 
 /**
