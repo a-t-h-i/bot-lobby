@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, realpathSync } from "node:fs";
-import { isAbsolute, join, relative } from "node:path";
+import { existsSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { profileFor, type BotLobbyConfig, type ProfileResolver } from "../schemas/configuration.ts";
 import type { AgentRun, Pushback, ResearchResult, ReviewResult, WorkerResult } from "../schemas/findings.ts";
 import {
@@ -24,6 +24,7 @@ import { ExcalidrawBook } from "../excalidraw/sessions.ts";
 import { knowledgeDir, type KnowledgeAgent } from "../knowledge/paths.ts";
 import { lobbyTopics } from "../lobby/topics.ts";
 import { writeScratchpad } from "../state/persistence.ts";
+import { saveScript } from "../scripts/library.ts";
 import { spawnPiProcess, type ProcessRunner, type RelayAsk } from "../execution/pi-runner.ts";
 import { previewDir } from "../ask/relay.ts";
 import type { AskQuestion, AskResult } from "../ask/types.ts";
@@ -90,6 +91,7 @@ export const ORCHESTRATE_ACTIONS = [
   "qa",
   "knowledge",
   "compact",
+  "script",
   "whiteboard",
   "complete",
   "block",
@@ -126,10 +128,14 @@ export interface OrchestrateParams {
   minutes?: number;
   /** knowledge: which persistent file the text belongs to. */
   kind?: KnowledgeKind;
-  /** compact: the knowledge file being rewritten. */
+  /** compact: the knowledge file being rewritten; script: a drafted script to take instead of `text`. */
   file?: string;
-  /** whiteboard: name for the new Excalidraw session. */
+  /** whiteboard: name for the new Excalidraw session; script: the script's file name (`seed_public_holidays.py`). */
   name?: string;
+  /** script: one line on what the script does. */
+  purpose?: string;
+  /** script: how to run it, with its arguments. */
+  usage?: string;
   approvalId?: string;
   decision?: "approved" | "rejected";
   note?: string;
@@ -634,6 +640,9 @@ function workerReport(outcome: WorkerOutcome, approvals: Approval[], pushback?: 
       : "",
     result.knowledgeProposals.length > 0
       ? `Knowledge proposals (accept with action=knowledge, or ignore): ${result.knowledgeProposals.map((proposal) => `${proposal.kind}: ${truncate(proposal.content, 160)}`).join("; ")}`
+      : "",
+    result.scriptProposals?.length
+      ? `Script proposals (save with action=script name purpose usage file=<draft>, when the job will come back; or ignore): ${result.scriptProposals.map((proposal) => `${proposal.name}${proposal.purpose ? ` — ${truncate(proposal.purpose, 120)}` : ""}${proposal.draft ? ` (draft: ${proposal.draft})` : ""}`).join("; ")}`
       : "",
     issues.length > 0 ? `Issues: ${issues.join("; ")}` : "",
     pushback && objection
@@ -1482,6 +1491,34 @@ function handleKnowledge(task: Task | undefined, params: OrchestrateParams, deps
 }
 
 /**
+ * The oracle adds a script to the shared library, or replaces one, so every
+ * agent can run it the next time the job comes up. Its body is `text`, or a
+ * file a worker drafted (`file`, inside the project or the task's directory).
+ */
+function handleScript(task: Task | undefined, params: OrchestrateParams, deps: WorkflowDeps): string {
+  const name = params.name?.trim();
+  if (!name) throw new Error("script requires name: what it does in snake_case, with its extension (seed_public_holidays.py)");
+  const purpose = params.purpose?.trim();
+  if (!purpose) throw new Error("script requires purpose: one line on what it does");
+  const body = params.file?.trim() ? readDraft(params.file.trim(), task, deps) : params.text;
+  if (!body?.trim()) throw new Error("script requires text (the script) or file (a drafted script)");
+  const saved = saveScript({ dataRoot: dataRoot(deps.root, deps.configDir), name, purpose, body, ...(params.usage?.trim() ? { usage: params.usage.trim() } : {}) });
+  const { entry } = saved;
+  if (task) recordDecision(task, `${saved.archived ? "Replaced" : "Saved"} the shared script ${entry.name}: ${truncate(entry.purpose, 160)}`);
+  lobbyTopics.bump("knowledge");
+  return [`${saved.archived ? "Replaced" : "Saved"} ${entry.name} in the shared scripts library (${entry.path}); run: ${entry.usage}.`, saved.archived ? `The previous version is kept at ${saved.archived}.` : "", "Agents whose steps it fits are told to run it."].filter(Boolean).join(" ");
+}
+
+/** A drafted script, read only from inside the project, its worktree or the task's directory. */
+function readDraft(file: string, task: Task | undefined, deps: WorkflowDeps): string {
+  const roots = [deps.cwd, deps.root, ...(task ? [taskDirFor(deps.root, deps.configDir, task.id)] : [])].map((dir) => resolve(dir));
+  const path = isAbsolute(file) ? resolve(file) : resolve(deps.cwd, file);
+  if (!roots.some((root) => path === root || path.startsWith(`${root}${sep}`))) throw new Error(`the drafted script must be inside the project: ${file}`);
+  if (!existsSync(path)) throw new Error(`no drafted script at ${file}`);
+  return readFileSync(path, "utf8");
+}
+
+/**
  * §24: the Master rewrites the file (asking the user about ambiguity), the
  * engine archives the previous version and writes the compacted text.
  */
@@ -1990,6 +2027,7 @@ const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams
   resolve_approval: handleResolveApproval,
   qa: handleQa,
   knowledge: handleKnowledge,
+  script: handleScript,
   compact: handleCompact,
   whiteboard: handleWhiteboard,
   complete: handleComplete,
@@ -2008,9 +2046,9 @@ const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams
  */
 export async function runWorkflowAction(params: OrchestrateParams, deps: WorkflowDeps): Promise<WorkflowResult> {
   // Project knowledge can be learned without starting or changing a task.
-  if ((params.action === "knowledge" || params.action === "compact") && !params.taskId) {
+  if ((params.action === "knowledge" || params.action === "compact" || params.action === "script") && !params.taskId) {
     try {
-      const message = params.action === "knowledge" ? handleKnowledge(undefined, params, deps) : handleCompact(undefined, params, deps);
+      const message = params.action === "knowledge" ? handleKnowledge(undefined, params, deps) : params.action === "script" ? handleScript(undefined, params, deps) : handleCompact(undefined, params, deps);
       return { ok: true, taskId: "", state: "created", message };
     } catch (error) {
       return { ok: false, taskId: "", state: "created", message: `Rejected: ${(error as Error).message}` };

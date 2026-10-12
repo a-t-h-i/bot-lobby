@@ -173,7 +173,7 @@ export interface LobbyConfig {
 }
 
 /** Decisions the classifier can make, each switched on or off on its own. */
-export const CLASSIFIER_FEATURES = ["seats", "answers", "files", "triage", "effort", "review", "knowledge", "qa"] as const;
+export const CLASSIFIER_FEATURES = ["seats", "answers", "files", "triage", "effort", "review", "knowledge", "scripts", "qa"] as const;
 export type ClassifierFeature = (typeof CLASSIFIER_FEATURES)[number];
 
 /** Hosts that serve Jev behind the same System One API; `auto` takes OpenCode's free Jev when pi holds an OpenCode key, else TypeSafe. */
@@ -194,6 +194,8 @@ export interface ClassifierThresholds {
   fileRelevantAt: number;
   /** A section of a knowledge file that is over the prompt budget stays in at this relevance. */
   knowledgeRelevantAt: number;
+  /** A shared script is suggested for a step at this probability that it does part of it. */
+  scriptRelevantAt: number;
   /** A step scored simple at this confidence runs one thinking level lower. */
   simpleAt: number;
   /** A step scored trivial at this confidence runs on the cheaper model. */
@@ -294,7 +296,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     model: "",
     baseUrl: "",
     timeoutMs: 4000,
-    features: { seats: true, answers: true, files: true, triage: true, effort: true, review: true, knowledge: true, qa: true },
+    features: { seats: true, answers: true, files: true, triage: true, effort: true, review: true, knowledge: true, scripts: true, qa: true },
     thresholds: {
       seatAt: 0.35,
       reseatReadyAt: 0.6,
@@ -302,6 +304,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
       autoAnswerMargin: 0.5,
       fileRelevantAt: 0.5,
       knowledgeRelevantAt: 0.4,
+      scriptRelevantAt: 0.5,
       simpleAt: 0.7,
       trivialAt: 0.8,
       quickFixAt: 0.7,

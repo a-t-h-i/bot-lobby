@@ -141,6 +141,7 @@ export const CLASSIFIER_FEATURE_ITEMS = [
   { id: "qa", label: "QA risk", help: "once a task's work is in, Jev reads the diff and sizes QA to it: no QA agent for a change with nothing that runs, a light check for a small one, deep review where a defect would spread; with it off the engine's rules decide" },
   { id: "review", label: "Pull request read", help: "the Git tab's quick read of a pull request: its size, and how likely it is risky, security-relevant, breaking or untested, before an agent reviews it" },
   { id: "knowledge", label: "Relevant knowledge", help: "when an agent's knowledge, standards or decisions file is too long for its prompt, Jev picks the sections that bear on the step, and the agent is told where the rest is" },
+  { id: "scripts", label: "Shared scripts", help: "Jev matches each step to the shared scripts that do part of it, and the agent is told to run them instead of redoing the work" },
   { id: "files", label: "File hints", help: "scouts, workers, quick fixes and the planning panel start with the files most likely needed, and can look more up with find_relevant_files" },
 ] as const
 

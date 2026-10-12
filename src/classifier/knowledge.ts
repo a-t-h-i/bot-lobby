@@ -16,6 +16,7 @@ import { score, selectRelevant, splitSections, tokenize, type KnowledgeInput, ty
 import type { Classifier } from "./classifier.ts";
 import { noul, yesOf, type SystemOneRequest } from "./client.ts";
 import { clip } from "./limits.ts";
+import type { ScriptPicker } from "../scripts/pick.ts";
 
 /** How many characters of each knowledge file a prompt has room for. */
 export const KNOWLEDGE_BUDGET_CHARS = 4000;
@@ -27,7 +28,7 @@ export const MAX_SECTIONS = 60;
 export const KNOWLEDGE_BUDGET_MS = 1500;
 
 /** The three files a prompt carries: `knowledge`, `standards` and `decisions`. */
-export type KnowledgeSlice = keyof KnowledgeSelection;
+export type KnowledgeSlice = Exclude<keyof KnowledgeSelection, "scripts">;
 export type KnowledgePaths = Partial<Record<KnowledgeSlice, string>>;
 
 export interface SectionCall {
@@ -100,9 +101,11 @@ export function leftOutNote(kept: Kept, name: string, path?: string): string {
     : `_Kept ${kept.kept} of ${kept.total} sections of ${name} for this step.${where}_`;
 }
 
-/** Picks what an agent's prompt carries of its knowledge files. */
+/** Picks what an agent's prompt carries of its knowledge files, and of the shared scripts. */
 export interface KnowledgePicker {
   select(task: string, files: KnowledgeInput, options?: { signal?: AbortSignal; paths?: KnowledgePaths }): Promise<KnowledgeSelection>;
+  /** Which shared scripts fit a step; shared words when absent. */
+  scripts?: ScriptPicker;
 }
 
 const SLICES: readonly KnowledgeSlice[] = ["knowledge", "standards", "decisions"];

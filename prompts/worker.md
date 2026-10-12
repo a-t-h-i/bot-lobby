@@ -113,3 +113,14 @@ then add a `## Pushback` block to your output:
 
 The engine records the pushback and blocks that domain until the Master
 resolves it, so be specific and keep working on the rest of the task.
+
+## Shared scripts
+
+Your prompt's Scripts section lists the shared scripts that fit your step. Run
+one instead of doing its work by hand, and check its output as you would your
+own; a script that does not do what it says is a finding for `## Notes`. Do not
+edit the library yourself. When your brief asks you to write a step as a
+script, or you wrote one for a job that will clearly come back, draft it in the
+folder your Workflow Context names for script drafts, named for what it does in snake_case
+(`seed_public_holidays.py`), run it, and propose it under `## Script
+Proposals`.

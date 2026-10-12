@@ -15,6 +15,8 @@ export interface CompileInput {
   standards?: string;
   knowledge?: string;
   decisions?: string;
+  /** The shared scripts that fit the step, or the library for the oracle. */
+  scripts?: string;
   workflowContext?: string;
 }
 
@@ -29,7 +31,7 @@ function section(title: string, body?: string): string {
 
 /**
  * Compose the layered prompt: global + domain + role + task context +
- * standards + knowledge + decisions + workflow context + output contract.
+ * standards + knowledge + decisions + scripts + workflow context + output contract.
  * Empty layers are dropped so agents never receive empty headings.
  */
 export function compilePrompt(input: CompileInput): string {
@@ -43,6 +45,7 @@ export function compilePrompt(input: CompileInput): string {
     section("Standards", input.standards),
     section("Knowledge", input.knowledge),
     section("Decisions", input.decisions),
+    section("Scripts", input.scripts),
     section("Workflow Context", input.workflowContext),
     spec?.contract ?? "",
   ];

@@ -106,6 +106,18 @@ first, searches the codebase for missing information, and records verified findi
 agent's knowledge. Answers appear in the side pane; the **Chat / Docs** toggle inside the composer
 switches back to the selected document. Questions do not create tasks.
 
+## Scripts
+
+Jobs that come back (seeding data, regenerating fixtures, a set of checks before review) are kept
+as scripts in `.pi/bot-lobby/scripts/`, shared by every agent, so a step done once is run the next
+time instead of being worked out again, which saves tokens and time. Each is named for what it
+does, in snake_case with its language's extension (`seed_public_holidays.py`,
+`run_changed_tests.sh`), and its first lines say what it is for and how to run it. The oracle
+decides when a step is worth a script and saves it (`action=script`); workers only propose one, and
+a replaced script is kept under `archive/`. For each step, Jev picks the scripts that do part of it
+and the agent is told to run them (**Settings → Classifier → Shared scripts**; with Jev off, scripts
+whose names share words with the step are suggested).
+
 ## Keys
 
 The lobby is keyboard-first, and every action button shows its key (`Archive E`, `Delete Del`).

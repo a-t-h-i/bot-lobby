@@ -23,6 +23,8 @@ import { isAbsolute, join, relative } from "node:path";
 import type { LintConfig } from "../schemas/configuration.ts";
 import { repositoryTop } from "../execution/git.ts";
 import type { LintExec } from "../execution/lint.ts";
+import { scriptsFor, type ScriptPicker } from "../scripts/pick.ts";
+import { dataRoot } from "../state/project.ts";
 import { lintFeed, runLintGate } from "../workflow/lint.ts";
 
 /** A quick fix edits code, so it gets the full coding tool set. */
@@ -105,6 +107,8 @@ export interface QuickFixDeps {
   notify?: (message: string, level: "info" | "warning" | "error") => void;
   /** Likely files for the prompt, and the lookup tool, while the classifier's file hints are on. */
   hints?: FileHinter;
+  /** Which shared scripts fit the request; shared words when absent. */
+  scripts?: ScriptPicker;
   /** Holds a request it judges large (a task, not a quick fix) instead of spending a run on it. */
   classifier?: Classifier;
   /** Lowers thinking or the model for a request the classifier judges simple or trivial. */
@@ -298,12 +302,16 @@ export class QuickFixQueue {
     this.deps.feed?.log(QUICK_FIX_SOURCE, `started: ${jobTitle(job)}`, "info", job.startedAt);
     this.edits.set(job.id, new EditLog(this.deps.cwd));
     try {
-      const [likely, route] = await Promise.all([this.likely(job.prompt, controller.signal), this.route(job.prompt, profile, controller.signal)]);
+      const [likely, route, scripts] = await Promise.all([
+        this.likely(job.prompt, controller.signal),
+        this.route(job.prompt, profile, controller.signal),
+        scriptsFor(dataRoot(this.deps.root, this.deps.configDir), job.prompt, this.deps.scripts, controller.signal),
+      ]);
       const quota = { used: MAX_CHILDREN };
       const attempt = (model: string | undefined, thinking: string) => runPiAgent(
         {
           cwd: this.deps.cwd,
-          task: [job.prompt, job.interrupted ? INTERRUPTED_NOTE : "", likely].filter(Boolean).join("\n\n"),
+          task: [job.prompt, job.interrupted ? INTERRUPTED_NOTE : "", likely, scripts ? `## Scripts\n\n${scripts}` : ""].filter(Boolean).join("\n\n"),
           systemPrompt: quickFixPrompt(profile.instructions),
           tools: [...QUICK_FIX_TOOLS, ...(this.deps.hints?.tools() ?? [])],
           ...grantOption("quickfix"),

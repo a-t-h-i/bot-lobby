@@ -1,6 +1,6 @@
 import type { Domain, RoleSpec } from "../schemas/agent.ts";
 import type { Blocker } from "../schemas/task.ts";
-import type { FileChange, KnowledgeProposal, WorkerResult } from "../schemas/findings.ts";
+import type { FileChange, KnowledgeProposal, ScriptProposal, WorkerResult } from "../schemas/findings.ts";
 import { bullets, fieldValue, findSection, parseFileBullet, parsePushback, parseSections } from "./markdown.ts";
 
 /**
@@ -18,6 +18,7 @@ export const workerSpec: RoleSpec = {
     "Respond with exactly these sections and nothing else: `## Completed`, `## Files Changed`,",
     "`## Verification`, `## Brief Check` (one `- criterion — met|not met — evidence` line per \"Done when\" item of your brief), `## Notes`, `## Blockers`, `## Dependencies Needed`, `## Architecture Changes`,",
     "`## Knowledge Proposals` (`- knowledge: ...`, `- standard: ...`, or `- decision: ...`).",
+    "An optional `## Script Proposals` (`- \\`name.ext\\` — what it does — draft: \\`path\\``) proposes a script you wrote for a job that will come back, for the shared library.",
     "`## Files Changed` entries are `- \\`path\\` — change`.",
     "`## Verification` entries are `- command — result`.",
     "Blocked work uses `**Blocker:**`, `**Tried:**`, `**Need:**` under `## Blockers`.",
@@ -36,6 +37,18 @@ export function parseKnowledgeProposals(domain: Domain, text: string | undefined
     const match = /^(knowledge|standard|decision|completed)\s*:\s*(.+)$/i.exec(entry);
     const kind = (match?.[1]?.toLowerCase() ?? "knowledge") as KnowledgeProposal["kind"];
     return { domain, kind, content: (match?.[2] ?? entry).trim() };
+  });
+}
+
+/** Parse `` - `name.ext` — purpose — draft: `path` `` proposals; one without a name is dropped. */
+export function parseScriptProposals(domain: Domain, text: string | undefined): ScriptProposal[] {
+  return bullets(text).flatMap((entry): ScriptProposal[] => {
+    const draftMatch = /\bdraft\s*:\s*`?([^`\s]+)`?/i.exec(entry);
+    const rest = (draftMatch ? entry.slice(0, draftMatch.index) : entry).replace(/[\s—–(-]+$/, "");
+    const named = /^`?([A-Za-z0-9_.-]+\.[A-Za-z0-9]+)`?\s*(?:[—–:-]+\s*)?(.*)$/.exec(rest.trim());
+    if (!named) return [];
+    const purpose = named[2]!.replace(/^[—–:-]+\s*/, "").trim();
+    return [{ domain, name: named[1]!, purpose, ...(draftMatch ? { draft: draftMatch[1]! } : {}) }];
   });
 }
 
@@ -100,6 +113,7 @@ export function parseWorkerResult(domain: Domain, raw: string, now = new Date().
     notes: findSection(sections, "notes") ?? "",
     blockers: parseBlockers(sections, domain, now),
     knowledgeProposals: parseKnowledgeProposals(domain, findSection(sections, "knowledge proposals")),
+    scriptProposals: parseScriptProposals(domain, findSection(sections, "script proposals")),
     pushback: parsePushback(sections),
     dependencyNeeds: realAsks(bullets(findSection(sections, "dependencies needed"))),
     architectureChanges: realAsks(bullets(findSection(sections, "architecture changes"))),

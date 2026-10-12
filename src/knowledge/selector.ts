@@ -9,6 +9,8 @@ export interface KnowledgeSelection {
   knowledge: string;
   standards: string;
   decisions: string;
+  /** The shared scripts that fit the step and how to run them (see `scripts/pick.ts`). */
+  scripts?: string;
 }
 
 export interface KnowledgeInput {

@@ -9,6 +9,8 @@ import { appendMetrics } from "../state/metrics.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { isSubagentProcess } from "../pi/quiet.ts";
 import { Classifier } from "./classifier.ts";
+import { scriptPicker } from "./scripts.ts";
+import type { ScriptPicker } from "../scripts/pick.ts";
 import { registerJevProvider, type KeySource, type KeyStatus } from "./hosts.ts";
 import { fileHinter, type FileHinter, type FileScope } from "./files.ts";
 import { knowledgePicker, type KnowledgePicker } from "./knowledge.ts";
@@ -46,9 +48,15 @@ export function hintsFor(scope: FileScope): FileHinter {
   return fileHinter(classifier(), scope, (text) => lobbyFeed.log("CLASSIFIER", text, "info"));
 }
 
-/** Relevant knowledge for agents, with what Jev kept of each long file logged to the lobby's activity feed. */
+/** Relevant knowledge and shared scripts for agents, with what Jev kept and matched logged to the lobby's activity feed. */
 export function knowledgeFor(): KnowledgePicker {
-  return knowledgePicker(classifier(), (text) => lobbyFeed.log("CLASSIFIER", text, "info"));
+  const log = (text: string) => lobbyFeed.log("CLASSIFIER", text, "info");
+  return { ...knowledgePicker(classifier(), log), scripts: scriptPicker(classifier(), log) };
+}
+
+/** Shared scripts for a quick fix, with what Jev matched logged to the lobby's activity feed. */
+export function scriptsPickerFor(): ScriptPicker {
+  return scriptPicker(classifier(), (text) => lobbyFeed.log("CLASSIFIER", text, "info"));
 }
 
 /** Triage a request for a task in a tree, logged to the lobby's activity feed; undefined when triage is off or fails. */

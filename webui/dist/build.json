@@ -1,6 +1,6 @@
 {
-  "hash": "4d612ebbc8b7b9c050819f89cd5eaf1b1cba5ff3eaa198fdbf13676b6204a7e0",
-  "builtAt": "2026-10-11T20:31:03.834Z",
+  "hash": "db4380f4cb072d227fe1429d3dcb536590e2d6f26b23bd077ae697989f6af727",
+  "builtAt": "2026-10-12T07:51:02.663Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -620,7 +620,7 @@
     },
     {
       "path": "webui/src/tabs/settings/words.ts",
-      "sha256": "de0e44809491e87bdca2b19d1f4a9d84aef4f79c530e8f750c913e006d104ebc"
+      "sha256": "d673f560f4ea989dc004d2bb7d4038f975efe3f1626310b4c9650175298f5783"
     },
     {
       "path": "webui/src/tabs/tasks/Comments.tsx",
