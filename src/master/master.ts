@@ -7,7 +7,9 @@ import { domainSpec } from "../agents/registry.ts";
 import { boundedAgentTime, runAgent, runParallel, watchdogOptions, type AgentRequest, type AgentTime } from "../execution/agent-runner.ts";
 import { spawnPiProcess, type ProcessRunner, type RelayAsk } from "../execution/pi-runner.ts";
 import { knowledgeFilePath, readAgentKnowledge, writeFileEnsured } from "../knowledge/store.ts";
+import { taskDir } from "../knowledge/paths.ts";
 import { selectKnowledge, type KnowledgeSelection } from "../knowledge/selector.ts";
+import { scriptsFor } from "../scripts/pick.ts";
 import { summarizeOutcomes } from "./synthesis.ts";
 import { parseWorkerResult, validateWorkerResult } from "../roles/worker.ts";
 import { parseReviewResult, validateReviewResult } from "../roles/reviewer.ts";
@@ -73,9 +75,14 @@ function knowledgePaths(dataRoots: readonly string[], agent: Domain): KnowledgeP
 /**
  * What an agent's prompt carries of its knowledge for a step: Jev's picks from
  * the files that are too long when a picker is given, the keyword selection
- * otherwise and whenever the picker fails.
+ * otherwise and whenever the picker fails; and the shared scripts that fit it.
  */
 async function pickKnowledge(request: { knowledge?: KnowledgePicker; dataRoots: readonly string[]; signal?: AbortSignal }, agent: Domain, query: string): Promise<KnowledgeSelection> {
+  const [selected, scripts] = await Promise.all([pickFiles(request, agent, query), scriptsFor(request.dataRoots[0], query, request.knowledge?.scripts, request.signal)]);
+  return scripts ? { ...selected, scripts } : selected;
+}
+
+async function pickFiles(request: { knowledge?: KnowledgePicker; dataRoots: readonly string[]; signal?: AbortSignal }, agent: Domain, query: string): Promise<KnowledgeSelection> {
   const slices = readAgentKnowledge(request.dataRoots, agent);
   if (!request.knowledge) return selectKnowledge(query, slices);
   try {
@@ -271,6 +278,7 @@ function workerWorkflowContext(request: WorkerRequest, likely = ""): string {
     request.risk ?? "",
     request.time?.note ?? "",
     request.ask ? askGuidance(request.ask.previews) : "",
+    request.dataRoots[0] ? `Scripts you draft for the shared library go in \`${join(taskDir(request.dataRoots[0], request.taskId), "scripts")}\`.` : "",
   ].filter(Boolean).join("\n\n");
 }
 

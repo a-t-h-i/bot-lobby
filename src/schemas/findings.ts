@@ -24,6 +24,16 @@ export interface KnowledgeProposal {
   content: string;
 }
 
+/** A script a worker thinks the shared library should keep, for the oracle to save or ignore. */
+export interface ScriptProposal {
+  domain: Domain;
+  /** The file name it proposes: `seed_public_holidays.py`. */
+  name: string;
+  purpose: string;
+  /** Where the worker drafted it, when it did. */
+  draft?: string;
+}
+
 export interface ScoutResult {
   domain: Domain;
   role: "scout";
@@ -51,6 +61,8 @@ export interface WorkerResult {
   notes: string;
   blockers: Blocker[];
   knowledgeProposals: KnowledgeProposal[];
+  /** Scripts the worker proposes for the shared library. */
+  scriptProposals?: ScriptProposal[];
   dependencyNeeds: string[];
   architectureChanges: string[];
   pushback?: Pushback;

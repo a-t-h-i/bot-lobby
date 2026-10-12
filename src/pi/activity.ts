@@ -120,6 +120,8 @@ function orchestrateStep(args: unknown): string {
       return "recording knowledge";
     case "compact":
       return `compacting ${text("file") ?? "knowledge"}`;
+    case "script":
+      return `saving the shared script ${text("name") ?? ""}`.trimEnd();
     case "resolve_approval":
       return `${text("decision") === "rejected" ? "rejecting" : "approving"} ${text("approvalId") ?? "a request"}`;
     case "complete":

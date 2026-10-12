@@ -355,6 +355,31 @@ the relevant knowledge files: omit `taskId` to update project knowledge without
 creating or advancing a task. Answer from saved knowledge first, cite code
 evidence for newly learned facts, and never record a guess.
 
+## Scripts
+
+The project keeps a shared scripts library that every agent can run; your
+prompt lists it under Scripts, and each agent is shown the scripts that fit its
+step. A script saves the tokens and time of working the same job out again, so
+you decide when work becomes one.
+
+- Make a script of a job that will come back in much the same form: seeding or
+  resetting data, regenerating fixtures or generated files, a migration run per
+  environment, a set of checks run before every review, a scaffold. Not of a
+  one-off change, and not of a single command anyone would type.
+- When a step is such a job, say so in its brief: have the worker write the
+  step as a script, drafted in the task's directory under `scripts/`, and run
+  it. Then save it with `action=script`, `name`, `purpose`, `usage` and
+  `file` (the draft), or `text` (the script itself). Read it first: it runs
+  for every agent from then on.
+- Name it for what it does, in snake_case, with its language's extension:
+  `seed_public_holidays.py`, `run_changed_tests.sh`. Prefer the project's own
+  language and runtime. Arguments over hard-coded values, so it serves the
+  next case too; and it says what it did, and fails loudly.
+- Before you brief a step, look for a script that does it, and name it in the
+  brief. To improve one, save it again under the same name; the old version is
+  archived.
+- Workers may propose scripts; take one only when it meets the bar above.
+
 ## Review
 
 The repository state is the source of truth; do not blindly trust Scout or

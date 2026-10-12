@@ -18,7 +18,7 @@ import { modelLookup } from "../pi/tools.ts";
 import { setQuickFixHandoff } from "../pi/route.ts";
 import type { Domain } from "../schemas/agent.ts";
 import { chatFromEntries, lobbyFeed, narrateEvent, type AgentEventLike } from "./feed.ts";
-import { classifier, effortFor, hintsFor } from "../classifier/instance.ts";
+import { classifier, effortFor, hintsFor, scriptsPickerFor } from "../classifier/instance.ts";
 import { checkThinking } from "../pi/model-support.ts";
 import { QuickFixQueue } from "./quickfix.ts";
 import type { Asker } from "../ask/types.ts";
@@ -192,6 +192,7 @@ export function startLobbyService(pi: ExtensionAPI, ctx: ExtensionContext, confi
     },
     notify: (message, level) => lobbyNotify(state, message, level),
     hints: hintsFor({ cwd: ctx.cwd, root, configDir }),
+    scripts: scriptsPickerFor(),
     classifier: classifier(),
     effort: effortFor((model, thinking) => checkThinking(modelLookup(ctx)(model), thinking).level),
     lint: () => loadConfig().lint,

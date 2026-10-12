@@ -4,6 +4,7 @@ import { detectProjectRoot, loadConfig, readDataRoots } from "../state/project.t
 import { compilePrompt } from "../prompts/compiler.ts";
 import { readAgentKnowledge } from "../knowledge/store.ts";
 import { selectKnowledge } from "../knowledge/selector.ts";
+import { libraryBlock } from "../scripts/pick.ts";
 import { cancelAllRuns } from "../execution/agent-runner.ts";
 import { describeTask } from "../workflow/workflow.ts";
 import { truncate } from "../text.ts";
@@ -137,7 +138,8 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
       else delete event.systemPromptOptions.sections["bot-lobby"];
       return;
     }
-    const slices = readAgentKnowledge(readDataRoots(root, configDir), "master");
+    const dataRoots = readDataRoots(root, configDir);
+    const slices = readAgentKnowledge(dataRoots, "master");
     const selected = selectKnowledge(`${taskRequest(task)} ${task.proposal ?? ""}`, slices);
     event.systemPromptOptions.sections["bot-lobby"] = compilePrompt({
       domain: "master",
@@ -145,6 +147,7 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
       standards: selected.standards,
       knowledge: selected.knowledge,
       decisions: selected.decisions,
+      scripts: dataRoots[0] ? libraryBlock(dataRoots[0]) : "",
       workflowContext: masterWorkflowContext(task, budgetContext(root, configDir, task)),
       instructions: loadConfig().master.instructions,
     });
