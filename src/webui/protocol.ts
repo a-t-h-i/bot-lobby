@@ -200,6 +200,14 @@ export interface SettingsLinter {
 export interface SettingsInfo {
   config: BotLobbyConfig;
   models: SettingsModelInfo[];
+  /** Classifier models pi can call with the logins it holds (Jev on each host, Cloudflare's clef, Liquid's d1, …). */
+  classifierModels?: SettingsClassifierModel[];
+}
+
+/** A classifier model for the classifier's picker: `provider/id` and its name. */
+export interface SettingsClassifierModel {
+  id: string;
+  label: string;
 }
 
 /** One message on the event stream (`GET /api/events`, server-sent events). */

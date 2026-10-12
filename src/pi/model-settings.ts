@@ -83,10 +83,12 @@ export function prefillModels(config: BotLobbyConfig, sessionModel: string | und
   return { config: next, filled };
 }
 
-/** `on · OpenCode Zen · jev-1.13-free · key stored in pi`, for the settings menu and `/bot-lobby config`. */
+/** `on · OpenCode Zen · jev-1.13-free · key stored in pi` (or `on · openai/gpt-5-nano · your pi login`), for the settings menu and `/bot-lobby config`. */
 export function classifierSummary(config: BotLobbyConfig, status: StatusSource | undefined): string {
+  const state = config.classifier.enabled ? "on" : "off";
+  if (config.classifier.engine) return [state, config.classifier.engine, "your pi login"].join(" · ");
   const { host, model } = jevEndpoint(config.classifier, status);
   const via = config.classifier.provider === "auto" ? `${host.label} (auto)` : host.label;
-  return [config.classifier.enabled ? "on" : "off", via, model, `key ${describeKey(host, status)}`].join(" · ");
+  return [state, via, model, `key ${describeKey(host, status)}`].join(" · ");
 }
 

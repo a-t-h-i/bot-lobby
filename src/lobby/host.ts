@@ -159,6 +159,8 @@ export interface LobbyService {
   configChanged?(): void;
   /** The models Pi offers, for the settings page's picker. */
   models?(): ModelChoice[];
+  /** The classifier models pi can call with its logins, for the classifier's picker. */
+  classifierModels?(): Array<{ id: string; label: string }>;
   /** The model this window's session runs on (`provider/id`), when it has one. */
   sessionModel?(): string | undefined;
   /** The Issues tab is switched on (`lobby.issues`). */

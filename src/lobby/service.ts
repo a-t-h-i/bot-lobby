@@ -33,7 +33,7 @@ import { startPlannedTask } from "../pi/start-task.ts";
 import { pendingRequest, startRequest } from "../pi/route.ts";
 import { deliverComments, setAuto } from "../pi/owner.ts";
 import { chatFromEntries, lobbyFeed, type ChatEntry } from "./feed.ts";
-import { classifier, effortFor, hintsFor } from "../classifier/instance.ts";
+import { availableClassifiers, classifier, effortFor, hintsFor } from "../classifier/instance.ts";
 import { launchPi, SessionRegistry, type BackgroundSession, type SessionLauncher } from "./sessions.ts";
 import { SessionChats } from "./session-files.ts";
 import { answerMessage, questionnaires, settledQuestions } from "./ask.ts";
@@ -801,6 +801,7 @@ export function createLobbyService(state: Runtime): LobbyService {
         return [];
       }
     },
+    classifierModels: () => availableClassifiers().map((model) => ({ id: model.id, label: model.label })),
     issuesEnabled: () => loadConfig().lobby.issues,
     recovered: () => state.recovered,
     seatLabel: (member) => {

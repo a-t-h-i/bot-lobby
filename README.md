@@ -52,11 +52,11 @@ After every worker step, before QA and at completion, the engine runs the projec
 changed lines count, and QA judges any lint suppression a worker adds. **Settings → Linting** sets it
 to off, advise or block. Visual questions come with mockups that expand and scroll side by side.
 
-QA is sized to what was built, not to the request. Once the work is in, Jev (the fast classifier)
+QA is sized to what was built, not to the request. Once the work is in, the classifier
 reads the diff and sets the QA risk. A change with nothing that runs (docs, styles, comments) passes
 on the engine's checks with no QA agent, and a small one gets a light check. One that touches
 security, data, concurrency or orchestration gets a deep, adversarial review. The test budget is a
-ceiling, never a quota, and the Tasks tab shows Jev's read and why. With Jev off, the engine's rules decide.
+ceiling, never a quota, and the Tasks tab shows the classifier's read and why. With it off, the engine's rules decide.
 
 If Pi crashes, is killed or loses its terminal, the lobby page keeps everything on screen and
 reconnects when Pi is back. The next Pi started in the project carries on what was running. The
@@ -97,7 +97,7 @@ Each agent keeps what it learns about your project in `.pi/bot-lobby/<Agent>/kno
 stable facts (`knowledge.md`), its standards (design language, engineering or testing standards),
 decisions with their reasons, and a short history of completed tasks. Workers only propose
 knowledge and the oracle records it, so nothing gets in unchecked; research stays evidence until
-the oracle keeps it. When a file is long, Jev picks the parts that matter to each step, so prompts
+the oracle keeps it. When a file is long, the classifier picks the parts that matter to each step, so prompts
 stay short. A task cannot complete while a file is over `knowledge.compactionThreshold` (20,000
 characters): the oracle rewrites it shorter, and the version before is kept under `archive/`.
 
@@ -120,9 +120,28 @@ time instead of being worked out again, which saves tokens and time. Each is nam
 does, in snake_case with its language's extension (`seed_public_holidays.py`,
 `run_changed_tests.sh`), and its first lines say what it is for and how to run it. The oracle
 decides when a step is worth a script and saves it (`action=script`); workers only propose one, and
-a replaced script is kept under `archive/`. For each step, Jev picks the scripts that do part of it
-and the agent is told to run them (**Settings → Classifier → Shared scripts**; with Jev off, scripts
+a replaced script is kept under `archive/`. For each step, the classifier picks the scripts that do part of it
+and the agent is told to run them (**Settings → Classifier → Shared scripts**; with it off, scripts
 whose names share words with the step are suggested).
+
+## Classifier
+
+A fast classifier makes the small decisions so the large models don't spend tokens on them: who
+sits on the planning panel, a task's size, how hard each step is, which files, knowledge and
+scripts it needs, and how much QA a change warrants. It is off until you turn it on in
+**Settings → Classifier**, and every decision falls back to plain rules when it is off or fails.
+
+**Answered by** picks who answers, from the models your pi logins offer:
+
+- **Jev on a host** (the default): TypeSafe's classifier on OpenCode Zen (free while it lasts),
+  TypeSafe, OpenRouter or the Vercel AI Gateway.
+- **Another classifier model** pi lists for your logins, such as Cloudflare's clef, Liquid's d1,
+  Upstage's solar-decide or Inception's mercury-decide. These answer the same typed questions natively.
+- **Any chat model you are signed in to** (an OpenAI, Anthropic or Google account, an API key,
+  OpenRouter, …). It answers the same questions as JSON with the least reasoning the model allows.
+  It is slower and less calibrated than a classifier model, so pick a small, fast one.
+
+The thresholds in `config.json` are tuned for Jev; raise them if another model decides too eagerly.
 
 ## Keys
 
@@ -151,7 +170,7 @@ project knowledge stay in `.pi/bot-lobby/` inside your project.
 
 Requires **Pi 1.0.x** (1.0.1 or later). DEV and DESIGN workers and QA reviewers can use
 `delegate_subtasks` for useful, separable work. Delegation is optional. Each parent gets five child
-slots total, shared across retries; Jev selects each child’s model and reasoning effort from its brief, lowering
+slots total, shared across retries; the classifier selects each child’s model and reasoning effort from its brief, lowering
 inference for simple work and raising reasoning for complex work on the configured
 model. Children inherit the parent’s role,
 permissions, worktree and remaining time. Children report to their parent, which

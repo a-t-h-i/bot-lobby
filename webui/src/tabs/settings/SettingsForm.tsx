@@ -25,7 +25,7 @@ import { useApiRead } from "@/app/useApiRead"
 import { Section } from "@/ui/Section"
 import { Choice, Field, Rows, type ChoiceItem } from "./parts"
 import { ThemeGroup } from "./ThemeGroup"
-import type { BotLobbyConfig, SettingsModelInfo } from "@protocol"
+import type { BotLobbyConfig, SettingsClassifierModel, SettingsModelInfo } from "@protocol"
 import {
   AGENT_LABELS,
   AGENT_ORDER,
@@ -450,22 +450,69 @@ function LobbyGroup({ config, save }: { config: Config; save: Save }) {
   )
 }
 
-function ClassifierGroup({ config, models, save }: { config: Config; models: SettingsModelInfo[]; save: Save }) {
+/**
+ * Who answers the classifier's questions: Jev on a host (the rows below it),
+ * or any classifier or chat model pi is signed in to, picked from the models
+ * your logins offer (or typed as `provider/id`).
+ */
+function EngineChoice({ value, models, classifiers, onChange }: { value: string; models: SettingsModelInfo[]; classifiers: SettingsClassifierModel[]; onChange: (value: string) => void }) {
+  const [typing, setTyping] = useState(false)
+  const [text, setText] = useState("")
+  const ids = new Set([...classifiers.map((model) => model.id), ...models.map((model) => model.id)])
+  const items: ChoiceItem[] = [
+    { value: "", label: CLASSIFIER_LABELS.engineJev, help: CLASSIFIER_LABELS.engineJevHelp },
+    ...classifiers.map((model) => ({ value: model.id, label: model.id, help: `${CLASSIFIER_LABELS.engineClassifier}${model.label !== model.id ? ` · ${model.label}` : ""}` })),
+    ...models.map((model) => ({ value: model.id, label: model.id, help: `${CLASSIFIER_LABELS.engineChat}${model.label && model.label !== model.id ? ` · ${model.label}` : ""}` })),
+    ...(value && !ids.has(value) ? [{ value, label: value, help: CUSTOM_HELP }] : []),
+    { value: CUSTOM_MODEL, label: CUSTOM_LABEL, help: CUSTOM_HELP },
+  ]
+  const choose = (next: string) => {
+    if (next !== CUSTOM_MODEL) return onChange(next)
+    setText(ids.has(value) ? "" : value)
+    setTyping(true)
+  }
+  const use = () => {
+    const next = text.trim()
+    setTyping(false)
+    if (next !== value) onChange(next)
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <Choice value={value} items={items} label={CLASSIFIER_LABELS.engine} onChange={choose} />
+      {typing ? (
+        <div className="flex min-w-0 flex-wrap items-start gap-2">
+          <Input autoFocus value={text} placeholder="provider/model" aria-label="Classifier model id" className="min-w-0 flex-1 max-md:h-11 max-md:min-h-11" onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); use() } }} />
+          <ActionButton label="Use this model" icon={Check} tone="primary" onClick={use} />
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function ClassifierGroup({ config, models, classifiers, save }: { config: Config; models: SettingsModelInfo[]; classifiers: SettingsClassifierModel[]; save: Save }) {
   const classifier = config.classifier
   const host = JEV_HOST_ITEMS.find((item) => item.id === classifier.provider)?.label
+  const jev = !classifier.engine
   return (
     <Section prominent title={GROUP_TITLES.classifier}>
       <Rows>
         <ToggleField label={CLASSIFIER_LABELS.enabled} help={CLASSIFIER_LABELS.enabledHelp} checked={classifier.enabled} onChange={(next) => void save({ classifier: { enabled: next } })} />
-        <Field label={CLASSIFIER_LABELS.host}>
-          <Choice value={classifier.provider} items={JEV_HOST_ITEMS.map((item) => ({ value: item.id, label: item.label }))} label={CLASSIFIER_LABELS.host} onChange={(value) => void save({ classifier: { provider: value } })} />
+        <Field label={CLASSIFIER_LABELS.engine} help={CLASSIFIER_LABELS.engineHelp}>
+          <EngineChoice value={classifier.engine} models={models} classifiers={classifiers} onChange={(value) => void save({ classifier: { engine: value } })} />
         </Field>
-        <Field label={CLASSIFIER_LABELS.model} help={CLASSIFIER_LABELS.modelHelp}>
-          <TextValue value={classifier.model} label={CLASSIFIER_LABELS.model} placeholder="the host's default" onSave={(value) => void save({ classifier: { model: value } })} />
-        </Field>
-        <Field label={CLASSIFIER_LABELS.key} help={CLASSIFIER_LABELS.keyNote}>
-          <p className="break-words text-sm text-muted-foreground md:text-right">{host ?? classifier.provider}</p>
-        </Field>
+        {jev ? (
+          <>
+            <Field label={CLASSIFIER_LABELS.host}>
+              <Choice value={classifier.provider} items={JEV_HOST_ITEMS.map((item) => ({ value: item.id, label: item.label }))} label={CLASSIFIER_LABELS.host} onChange={(value) => void save({ classifier: { provider: value } })} />
+            </Field>
+            <Field label={CLASSIFIER_LABELS.model} help={CLASSIFIER_LABELS.modelHelp}>
+              <TextValue value={classifier.model} label={CLASSIFIER_LABELS.model} placeholder="the host's default" onSave={(value) => void save({ classifier: { model: value } })} />
+            </Field>
+            <Field label={CLASSIFIER_LABELS.key} help={CLASSIFIER_LABELS.keyNote}>
+              <p className="break-words text-sm text-muted-foreground md:text-right">{host ?? classifier.provider}</p>
+            </Field>
+          </>
+        ) : null}
         {CLASSIFIER_FEATURE_ITEMS.map((feature) => (
           <ToggleField key={feature.id} label={feature.label} help={feature.help} checked={classifier.features[feature.id]} onChange={(next) => void save({ classifier: { features: { [feature.id]: next } } })} />
         ))}
@@ -527,7 +574,7 @@ function InstallGroup() {
 
 const SECTIONS = ["Agents", "Workflow", "Linting", "Lobby", "Classifier", "Appearance & notifications"]
 
-export function SettingsForm({ config, models, onConfig }: { config: Config; models: SettingsModelInfo[]; onConfig: (config: Config) => void }) {
+export function SettingsForm({ config, models, classifierModels = [], onConfig }: { config: Config; models: SettingsModelInfo[]; classifierModels?: SettingsClassifierModel[]; onConfig: (config: Config) => void }) {
   const [section, setSection] = useState("Agents")
   // One save at a time, in the order they were made: the form shows the config of the last reply, so replies must come back in order.
   const queue = useRef<Promise<unknown>>(Promise.resolve())
@@ -582,7 +629,7 @@ export function SettingsForm({ config, models, onConfig }: { config: Config; mod
       <div id="settings-Workflow" hidden={section !== "Workflow"} aria-hidden={section !== "Workflow"}><WorkflowGroup config={config} save={save} /></div>
       <div id="settings-Linting" hidden={section !== "Linting"} aria-hidden={section !== "Linting"}><LintGroup config={config} save={save} /></div>
       <div id="settings-Lobby" hidden={section !== "Lobby"} aria-hidden={section !== "Lobby"}><LobbyGroup config={config} save={save} /></div>
-      <div id="settings-Classifier" hidden={section !== "Classifier"} aria-hidden={section !== "Classifier"}><ClassifierGroup config={config} models={models} save={save} /></div>
+      <div id="settings-Classifier" hidden={section !== "Classifier"} aria-hidden={section !== "Classifier"}><ClassifierGroup config={config} models={models} classifiers={classifierModels} save={save} /></div>
       <div id="settings-Appearance" hidden={section !== "Appearance & notifications"} aria-hidden={section !== "Appearance & notifications"}>
         <div className="flex flex-col gap-8"><ThemeGroup /><NotificationsGroup /><InstallGroup /></div>
       </div>

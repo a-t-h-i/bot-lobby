@@ -2,7 +2,9 @@
  * The classifier facade every feature calls. It never throws into the
  * workflow: any failure (no key, a timeout, an API error, a request over
  * budget) returns undefined, and the caller falls back to what bot-lobby did
- * before the classifier existed. Three failures in a row pause it for ten
+ * before the classifier existed. It answers with Jev on its host, or with the
+ * model `classifier.engine` names (any classifier or chat model pi is signed
+ * in to; see `models.ts`). Three failures in a row pause it for ten
  * minutes with a single warning, so a dead endpoint cannot tax every step.
  * Every call lands in the metrics log (kind `classifier`).
  */
@@ -11,6 +13,7 @@ import type { MetricRecord } from "../state/metrics.ts";
 import { JevError, noul, systemOne, type Answer, type FetchLike, type SystemOneRequest } from "./client.ts";
 import { fitsBudget, requestSize, LIMITS } from "./limits.ts";
 import { keyHint, resolveTarget, type KeySource } from "./hosts.ts";
+import type { EngineAnswer } from "./models.ts";
 
 export type ClassifierPurpose = ClassifierFeature | "test";
 
@@ -27,6 +30,8 @@ export interface ClassifierDeps {
   /** Read live, so a settings change applies to the next call. */
   config: () => ClassifierConfig;
   keys?: KeySource;
+  /** Answers with the model `classifier.engine` names, through pi's registry; absent before a session starts. */
+  engine?: EngineAnswer;
   fetch?: FetchLike;
   sleep?: (ms: number) => Promise<void>;
   env?: NodeJS.ProcessEnv;
@@ -97,6 +102,7 @@ export class Classifier {
 
   private async call(purpose: ClassifierPurpose, request: SystemOneRequest, options: { signal?: AbortSignal; timeoutMs?: number; force?: boolean; saved?: (answers: Record<string, Answer>) => number }): Promise<{ ok: true; value: Classified } | { ok: false; error: string }> {
     const config = this.deps.config();
+    if (config.engine) return this.callEngine(purpose, config.engine, request, options);
     const { host, baseUrl, model, key } = await resolveTarget(config, this.deps.keys, this.deps.env);
     if (!key) {
       const error = `no Jev key: ${keyHint(config)}`;
@@ -118,16 +124,7 @@ export class Classifier {
         ...(this.deps.fetch ? { fetch: this.deps.fetch } : {}),
         ...(this.deps.sleep ? { sleep: this.deps.sleep } : {}),
       });
-      const ms = Math.max(0, this.now() - started);
-      this.failures = 0;
-      let saved = 0;
-      try {
-        saved = options.saved?.(response.answers) ?? 0;
-      } catch {
-        saved = 0;
-      }
-      this.record(purpose, "success", started, ms, response.model, response.usage, saved);
-      return { ok: true, value: { answers: response.answers, model: response.model, ms } };
+      return this.succeed(purpose, started, response, options.saved);
     } catch (error) {
       const ms = Math.max(0, this.now() - started);
       if (options.signal?.aborted) {
@@ -143,6 +140,44 @@ export class Classifier {
       if (!options.force) this.fail(message);
       return { ok: false, error: message };
     }
+  }
+
+  /** A call to the model `classifier.engine` names: the same answers, through pi's registry and its logins. */
+  private async callEngine(purpose: ClassifierPurpose, ref: string, request: SystemOneRequest, options: { signal?: AbortSignal; timeoutMs?: number; force?: boolean; saved?: (answers: Record<string, Answer>) => number }): Promise<{ ok: true; value: Classified } | { ok: false; error: string }> {
+    const config = this.deps.config();
+    if (!this.deps.engine) return { ok: false, error: `${ref} is not reachable before a pi session starts` };
+    const started = this.now();
+    try {
+      const response = await this.deps.engine(ref, request, {
+        timeoutMs: options.timeoutMs ?? config.timeoutMs,
+        chatTimeoutMs: config.timeoutMs,
+        ...(options.signal ? { signal: options.signal } : {}),
+      });
+      return this.succeed(purpose, started, response, options.saved);
+    } catch (error) {
+      const ms = Math.max(0, this.now() - started);
+      if (options.signal?.aborted) {
+        this.record(purpose, "cancelled", started, ms, ref);
+        return { ok: false, error: "cancelled" };
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      this.record(purpose, /timed out/i.test(message) ? "timeout" : "failed", started, ms, ref);
+      if (!options.force) this.fail(message);
+      return { ok: false, error: message };
+    }
+  }
+
+  private succeed(purpose: ClassifierPurpose, started: number, response: { answers: Record<string, Answer>; model: string; usage?: { input_tokens: number; output_tokens: number } }, saved?: (answers: Record<string, Answer>) => number): { ok: true; value: Classified } {
+    const ms = Math.max(0, this.now() - started);
+    this.failures = 0;
+    let spared = 0;
+    try {
+      spared = saved?.(response.answers) ?? 0;
+    } catch {
+      spared = 0;
+    }
+    this.record(purpose, "success", started, ms, response.model, response.usage, spared);
+    return { ok: true, value: { answers: response.answers, model: response.model, ms } };
   }
 
   private fail(message: string): void {
