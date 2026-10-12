@@ -206,9 +206,15 @@ export interface ClassifierThresholds {
   quickFixLargeAt: number;
 }
 
-/** The Jev classifier: a fast model for obvious decisions, so large models spend fewer tokens on them. */
+/** The classifier: a fast model for obvious decisions, so large models spend fewer tokens on them. */
 export interface ClassifierConfig {
   enabled: boolean;
+  /**
+   * The model that answers, as `provider/id`: any classifier model pi lists
+   * (Jev, Cloudflare's clef, Liquid's d1, …) or any chat model you are signed
+   * in to (OpenAI, Anthropic, Google, …). Empty calls Jev on `provider`.
+   */
+  engine: string;
   /** Where Jev is called; the key comes from pi's own key store for that host. */
   provider: JevHostName;
   /** A pinned Jev model; empty uses the host's default. */
@@ -292,6 +298,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
   },
   classifier: {
     enabled: false,
+    engine: "",
     provider: "auto",
     model: "",
     baseUrl: "",
@@ -432,6 +439,7 @@ function normalizeClassifier(value: unknown): ClassifierConfig {
   const provider = typeof source.provider === "string" && (JEV_HOSTS as readonly string[]).includes(source.provider) ? source.provider as JevHostName : defaults.provider;
   return {
     enabled: flag(source.enabled, defaults.enabled),
+    engine: text(source.engine, defaults.engine).trim(),
     provider,
     model: text(source.model, defaults.model),
     baseUrl: text(source.baseUrl, defaults.baseUrl),

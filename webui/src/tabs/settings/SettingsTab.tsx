@@ -36,5 +36,5 @@ export function SettingsTab() {
   }, [read.data, read.requestedAt])
   if (!config && read.error) return <ErrorState message={`${PAGE.loadFailed} ${read.error}`} onRetry={read.reload} />
   if (!config) return <Skeleton />
-  return <SettingsForm config={config} models={read.data?.models ?? []} onConfig={saved} />
+  return <SettingsForm config={config} models={read.data?.models ?? []} classifierModels={read.data?.classifierModels ?? []} onConfig={saved} />
 }

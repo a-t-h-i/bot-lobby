@@ -78,6 +78,7 @@ test("settings.get answers the effective config and the models Pi offers", async
     assert.equal(typeof (config.lobby as Record<string, unknown>).web, "object", "lobby.web is there");
     const models = result.models as Array<{ id: string; label: string; thinkingLevels: string[] }>;
     assert.deepEqual(models, [{ id: "mock/model", label: "Mock Model", thinkingLevels: ["low", "medium", "high"] }]);
+    assert.deepEqual(result.classifierModels, [{ id: "openrouter/liquid/d1", label: "Liquid D1" }], "and the classifier models pi's logins can call");
   } finally {
     await close();
   }

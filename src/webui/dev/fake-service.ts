@@ -455,6 +455,7 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     },
     configChanged: () => {},
     models: () => models.map((model) => ({ id: model.id, label: model.label, thinkingLevels: [...model.thinkingLevels] })),
+    classifierModels: () => [{ id: "opencode/jev-1.13-free", label: "Jev 1.13 (free)" }, { id: "openrouter/liquid/d1", label: "Liquid D1" }],
     issuesEnabled: () => fixture.status.issuesEnabled,
     workspace: () => ({ ...fixture.status.workspace }),
     zen: () => ({ ...(fixture.zen.task ? { task: { ...fixture.zen.task } } : {}), runs: [...fixture.zen.runs] }),

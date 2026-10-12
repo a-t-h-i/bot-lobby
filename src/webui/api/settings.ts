@@ -90,7 +90,8 @@ export function settingsGet(ctx: ApiContext): SettingsInfo {
     config = prefilled.config;
     pushNotice(`${prefilled.filled.map(kindLabel).join(", ")} now run on the session model; change them here any time.`);
   }
-  return { config: stripSecrets(config), models: ctx.service.models?.() ?? [] };
+  const classifiers = ctx.service.classifierModels?.() ?? [];
+  return { config: stripSecrets(config), models: ctx.service.models?.() ?? [], ...(classifiers.length > 0 ? { classifierModels: classifiers } : {}) };
 }
 
 /** The linters the project configures (its top and a few folders below), and whether each is installed. */
