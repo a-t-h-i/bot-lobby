@@ -10,10 +10,10 @@
  */
 import { memo, useCallback, useEffect, useMemo, useState, type RefObject } from "react"
 import { useStickToBottom } from "@/lib/useStickToBottom"
-import { ArrowDown, MessageSquare } from "lucide-react"
+import { MessageSquare } from "lucide-react"
 import { AgentMessage, ChatNote, TypingDots, YourMessage } from "./ChatParts"
 import { motion } from "motion/react"
-import { ActionButton } from "@/ui/Actions"
+import { JumpToLatest } from "@/ui/JumpToLatest"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Keys } from "@/components/ui/kbd"
 import { call } from "@/lib/api"
@@ -184,7 +184,7 @@ export function Conversation({
       </div>
       {!atBottom ? (
         <div className="absolute right-4 bottom-dock z-10">
-          <ActionButton label="Jump to latest" text="Latest" icon={ArrowDown} className="rounded-full bg-card shadow-card" onClick={stick} />
+          <JumpToLatest onClick={stick} />
         </div>
       ) : null}
     </Frame>

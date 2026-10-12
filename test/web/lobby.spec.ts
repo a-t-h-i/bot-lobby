@@ -253,6 +253,11 @@ test("the activity log follows its newest entry, lets a reader who scrolled up s
   // The conversation has its own way back; this is the log's.
   const jump = page.getByRole("region", { name: "Activity" }).getByRole("button", { name: "Jump to latest" });
   await expect(jump, "scrolling up offers the way back").toBeVisible();
+  await expect(jump, "just an arrow, no words").toHaveText("");
+  await jump.hover();
+  const bounce = await jump.locator("svg").evaluate((el: any) => el.getAnimations().map((a: any) => ({ name: a.animationName, iterations: a.effect.getComputedTiming().iterations })));
+  expect(bounce, "hovering bounces the arrow once").toEqual([{ name: "jump-latest-bounce", iterations: 1 }]);
+  await page.screenshot({ path: test.info().outputPath("jump-latest.png") });
   server.log("MASTER", "a step the reader has not caught up with");
   await expect(log).toContainText("a step the reader has not caught up with");
   expect(await log.evaluate((el: any) => el.scrollTop), "the reader is not pulled away from what they were reading").toBeLessThanOrEqual(2);

@@ -6,11 +6,11 @@
  * only signal.
  */
 import { useStickToBottom } from "@/lib/useStickToBottom"
-import { AlertTriangle, ArrowDown, Check, X } from "lucide-react"
+import { AlertTriangle, Check, X } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 import { formatClock } from "@/lib/format"
-import { ActionButton } from "@/ui/Actions"
+import { JumpToLatest } from "@/ui/JumpToLatest"
 import { Frame } from "@/ui/Frame"
 import { sourceColor, sourceLabel, type ActivityEntry } from "./types"
 
@@ -52,7 +52,7 @@ export function ActivityLog({ entries, collapsed, onToggle, shortcut, bare }: { 
       </div>
       {!atBottom ? (
         <div className="absolute inset-x-0 bottom-dock z-10 flex justify-center">
-          <ActionButton label="Jump to latest" text="Latest" icon={ArrowDown} className="rounded-full bg-card shadow-card" onClick={stick} />
+          <JumpToLatest onClick={stick} />
         </div>
       ) : null}
     </Frame>
