@@ -311,7 +311,7 @@ export function tasksGet(body: { taskId: string }, ctx: ApiContext): TaskDetail 
     steps: stepViews(found, work, now).map((step) => ({
       text: step.text,
       status: step.status === "pending" ? "open" : step.status,
-      ...(step.active ? { active: true, workedMs: step.workedMs, activeAgentCount: step.activeAgentCount } : {}),
+      ...(step.active ? { active: true, workedMs: step.workedMs, activeAgentCount: step.activeAgentCount, agents: step.agents } : {}),
     })),
     amendments: [...found.amendments],
     waiting: waitingOf(found),

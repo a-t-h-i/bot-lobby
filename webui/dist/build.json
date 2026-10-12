@@ -1,6 +1,6 @@
 {
-  "hash": "faa8055b4f09123e4ecb0a332cf280fba2050b0f0fcd25a48f96bea4436952d6",
-  "builtAt": "2026-10-12T12:41:39.571Z",
+  "hash": "dee4fe45c9eda74619d191b1f29a0b19959d1aba06b024453d9bfb903a488fa9",
+  "builtAt": "2026-10-12T12:50:53.690Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -8,7 +8,7 @@
     },
     {
       "path": "src/webui/protocol.ts",
-      "sha256": "bbb07aca52f16e57f02431a0aeac704279adf2b2d5ec99af2f72b4392a8e1f41"
+      "sha256": "e25a902b398c33b0a1a9ab550d4d49b9e661fe5bed1d2863eca82228ce70376a"
     },
     {
       "path": "webui/components.json",
@@ -460,23 +460,15 @@
     },
     {
       "path": "webui/src/tabs/lobby/LobbyTab.tsx",
-      "sha256": "3c489659f40d96641c8d3d4a668c0f09c5f412c74542a1fa436cb42380273034"
+      "sha256": "c9102e8c2e29a6abdc65ec980cd3912f6a0aa648722b846a5fc6576fb44867aa"
     },
     {
       "path": "webui/src/tabs/lobby/Orb.tsx",
       "sha256": "b1ef59a80c4bdbb48a7f750d1405974776f24c855eb9d218bee80b8c156dbda1"
     },
     {
-      "path": "webui/src/tabs/lobby/TaskHeader.tsx",
-      "sha256": "3ce90bc327de25d009d9c55b3c83c0b22f874debee7fa89373bcb3b0809e1c58"
-    },
-    {
       "path": "webui/src/tabs/lobby/Thoughts.tsx",
       "sha256": "66658f6b428531e3e3c648d52f0bac6285fc997b0d99c45d78a05d837169336d"
-    },
-    {
-      "path": "webui/src/tabs/lobby/WorkingAgents.tsx",
-      "sha256": "94b2cc38efdd6956c155573f86a09fec5d9088554c8454f778c251647d763e9c"
     },
     {
       "path": "webui/src/tabs/lobby/busy.ts",
@@ -632,7 +624,7 @@
     },
     {
       "path": "webui/src/tabs/tasks/DetailSections.tsx",
-      "sha256": "c228cc804aa89b0105466012ffac7920bf674d8eeae44d4f992220d942331948"
+      "sha256": "dddcfbe1b587ee447a332614f0886f703fdaf3101015751786d2fd8dfc598ea1"
     },
     {
       "path": "webui/src/tabs/tasks/OpenInSession.tsx",
@@ -716,7 +708,7 @@
     },
     {
       "path": "webui/src/ui/SplitPane.tsx",
-      "sha256": "4563f0fc58a9bcd16998e520e2047209794345251e488245a3934081ee1e3dcc"
+      "sha256": "562dd658524762720e31674a37f06cdd45c1d65b23effd0304e3c7a14ff590e8"
     },
     {
       "path": "webui/src/ui/rows.ts",

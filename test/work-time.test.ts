@@ -132,8 +132,13 @@ test("active step counts include parents and running children without advancing 
   const steps = stepViews(task, work, now);
   assert.equal(steps[1]!.activeAgentCount, 6);
   assert.equal(steps[2]!.activeAgentCount, 0);
+  assert.deepEqual(steps[1]!.agents.slice(0, 2), [
+    { runId: "parent", domain: "backend", instruction: "Step 2: Large feature", startedAt: "2026-10-05T12:00:00.000Z" },
+    { runId: "child-0", parentRunId: "parent", domain: "backend", instruction: "Step 3: unrelated wording in child brief", startedAt: "2026-10-05T12:00:30.000Z" },
+  ], "who is on the step, children naming their parent");
+  assert.equal(steps[1]!.agents.length, 6);
   const reduced = stepViews(task, { ...work, active: active.slice(0, 4) }, now);
   assert.equal(reduced[1]!.activeAgentCount, 4);
   const finished = stepViews(task, { ...work, active: [] }, now);
-  assert.ok(finished.every((step) => !step.active && step.activeAgentCount === 0));
+  assert.ok(finished.every((step) => !step.active && step.activeAgentCount === 0 && step.agents.length === 0), "finished agents leave the step");
 });

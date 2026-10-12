@@ -18,8 +18,6 @@ import { useWide } from "@/ui/SplitPane"
 import type { LobbySnapshot, StatusInfo } from "@protocol"
 import { ActivityLog } from "./ActivityLog"
 import { Conversation } from "./Conversation"
-import { TaskHeader } from "./TaskHeader"
-import { runsOf } from "./types"
 
 interface LobbyViewProps {
   data?: LobbySnapshot
@@ -137,13 +135,9 @@ function NarrowView({ data, status }: LobbyViewProps) {
 }
 
 function LobbyView(props: LobbyViewProps) {
-  const { data, status } = props
   const wide = useWide()
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 border-b border-border">
-        <TaskHeader task={data?.task} status={status} runs={runsOf(data)} />
-      </div>
       {wide ? <WideView {...props} /> : <NarrowView {...props} />}
     </div>
   )

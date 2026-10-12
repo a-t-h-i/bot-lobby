@@ -30,7 +30,7 @@ function activeRuns(task: Task, work: WorkProjection | undefined): AgentRun[] {
   const finished = new Set((task.workerRuns ?? []).map((record) => record.runId));
   return (work?.active ?? [])
     .filter((run) => !finished.has(run.runId))
-    .map((run) => ({ runId: run.runId, parentRunId: run.parentRunId, stepInstruction: run.stepInstruction, taskId: task.id, domain: "backend" as const, role: "worker" as const, status: "running" as const, instruction: run.instruction, output: "", attempts: 1, startedAt: run.startedAt }));
+    .map((run) => ({ runId: run.runId, parentRunId: run.parentRunId, stepInstruction: run.stepInstruction, taskId: task.id, domain: (run.domain === "designer" || run.domain === "qa" ? run.domain : "backend") as AgentRun["domain"], role: "worker" as const, status: "running" as const, instruction: run.instruction, output: "", attempts: 1, startedAt: run.startedAt }));
 }
 
 /** One step as the lobby shows it: its state, and while a worker is on it, how long they have worked on it. */
@@ -40,8 +40,18 @@ export interface StepView {
   active: boolean;
   activeAgentCount: number;
   runIds: string[];
+  /** The agents on it right now: who, doing what, since when; a child names its parent. */
+  agents: StepAgent[];
   /** Worker time on the step, in ms. */
   workedMs: number;
+}
+
+export interface StepAgent {
+  runId: string;
+  parentRunId?: string;
+  domain: string;
+  instruction: string;
+  startedAt: string;
 }
 
 /**
@@ -54,8 +64,13 @@ export function stepViews(task: Task, work: WorkProjection | undefined, now = Da
   const runs = [...persistedTaskRuns(task), ...activeRuns(task, work)];
   const checklist = planChecklist(task.plan, runs);
   const times = stepWork(planSteps(task.plan), runs, now);
+  const byId = new Map(runs.map((run) => [run.runId, run]));
   return checklist.map((step, index) => {
     const time = times[index] ?? { ms: 0, active: false, activeAgentCount: 0, runIds: [] };
-    return { text: step.text, status: time.active ? "current" : step.status, active: time.active, activeAgentCount: time.activeAgentCount, runIds: time.runIds, workedMs: Math.round(time.ms) };
+    const agents = time.runIds.flatMap((runId) => {
+      const run = byId.get(runId);
+      return run ? [{ runId, ...(run.parentRunId ? { parentRunId: run.parentRunId } : {}), domain: run.domain, instruction: (run.instruction ?? "").split("\n")[0]!.trim(), startedAt: run.startedAt }] : [];
+    });
+    return { text: step.text, status: time.active ? "current" : step.status, active: time.active, activeAgentCount: time.activeAgentCount, runIds: time.runIds, agents, workedMs: Math.round(time.ms) };
   });
 }
