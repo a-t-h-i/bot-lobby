@@ -775,12 +775,12 @@ test("the keys printed on the buttons work from the page, ask before anything is
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
 });
 
-test("the Lobby's task header is one slim line", async ({ page, server }) => {
+test("the Lobby has no task tracker: a task's steps and agents live in Tasks", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 800 });
-  const header = page.getByRole("group", { name: "Task" });
-  await expect(header).toContainText("Add offline mock fixtures");
-  expect((await header.boundingBox())!.height, "a single line, not a card").toBeLessThanOrEqual(48);
+  await expect(page.getByRole("log", { name: "Conversation" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Task" })).toHaveCount(0);
+  await expect(page.locator("#main").getByText(/agents? working/)).toHaveCount(0);
 });
 
 test("Activity folds to its title bar and Thinking opens only in a modal", async ({ page, server }) => {
@@ -1421,20 +1421,15 @@ test("a task's short steps come first, the one being worked on marked active wit
   await expect(article.getByRole("button", { name: "Hide the details" })).toHaveAttribute("aria-expanded", "true");
   await expect(article.getByText(/Serve each scenario from/)).toBeVisible();
   await expect(article.getByRole("heading", { name: "Step 2: Check the mock over HTTP" })).toBeVisible();
-  // The list row and the Lobby's header say the same.
+  // The list row says the same.
   await expect(page.getByRole("button", { name: /Add offline mock fixtures/ }).first()).toContainText(/worked 12m/);
-  await page.evaluate(() => {
-    window.location.hash = "#/lobby";
-  });
-  const header = page.getByRole("group", { name: "Task" });
-  await expect(header).toContainText(/worked 12m \d+s/);
-  await expect(header).toContainText(/Check the mock over HTTP\s*active · 1m \d+s/);
   // Counts refresh as agents finish, and disappear when the step is idle.
   let count = 1;
   await page.route("**/api/tasks.get", async (route) => {
     const response = await route.fetch();
     const body = await response.json();
     body.result.steps[1].activeAgentCount = count;
+    body.result.steps[1].agents = (body.result.steps[1].agents ?? []).slice(0, count);
     body.result.steps[1].active = count > 0;
     await route.fulfill({ response, json: body });
   });

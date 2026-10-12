@@ -5,42 +5,40 @@ declare const window: any;
 declare const getComputedStyle: any;
 
 let releasePending: (() => void) | undefined;
-test("working agents unfold from the task tracker, not the lobby, and leave when finished", async ({ page, server }, info) => {
+test("a step's working agents unfold from it in Tasks, and leave when finished", async ({ page, server }, info) => {
   let finished = false;
-  await page.route("**/api/lobby.snapshot", async (route) => {
+  await page.route("**/api/tasks.get", async (route) => {
     const response = await route.fetch();
     const body = await response.json();
-    body.result.task.activeSteps = [{ text: "Step 2: Integrate the feature", runIds: ["parent", "child", "done"], workedMs: 1000, activeAgentCount: finished ? 0 : 2 }];
-    body.result.runs = [
-      { runId: "parent", role: "worker", domain: "backend", status: finished ? "success" : "running", instruction: "Integrate the feature", startedAt: new Date().toISOString(), endsAt: Date.now() + 60000 },
-      { runId: "child", parentRunId: "parent", role: "worker", domain: "backend", status: finished ? "failed" : "running", instruction: "Check concurrency", startedAt: new Date().toISOString() },
-      { runId: "done", parentRunId: "parent", role: "worker", domain: "backend", status: "running", finishedAt: new Date().toISOString(), instruction: "Already finished child" },
-      { runId: "old", role: "worker", status: "success", instruction: "Finished history" },
-    ];
+    const step = body.result.steps.find((entry: { active?: boolean }) => entry.active);
+    if (step) {
+      const parent = step.agents[0];
+      step.agents = finished ? [] : [parent, { runId: "child", parentRunId: parent.runId, domain: "backend", instruction: "Check concurrency", startedAt: new Date().toISOString() }];
+      step.activeAgentCount = step.agents.length;
+      step.active = !finished;
+    }
     await route.fulfill({ response, json: body });
   });
   await openScenario(page, server, "full");
-  const tracker = page.getByRole("group", { name: "Task" });
-  const toggle = tracker.getByRole("button", { name: /2 agents working/ });
-  await expect(toggle).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() => { window.location.hash = "#/tasks/T-mock-1"; });
+  const steps = page.getByRole("list", { name: "Steps" });
+  const toggle = steps.getByRole("button", { name: /2 agents working/ });
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
-  const work = page.locator('section[aria-label="Working agents"]');
-  await expect(work).toHaveCount(0);
-  await expect(page.getByRole("log", { name: "Conversation" }).getByText("Check concurrency")).toHaveCount(0);
+  const agents = steps.getByRole("list", { name: "Agents on this step" });
+  await expect(agents).toHaveCount(0);
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
-  await expect(work).toBeVisible();
-  await expect(work.getByRole("listitem")).toHaveCount(2);
-  await expect(work).toContainText("Check concurrency");
-  await expect(work.getByText("Already finished child")).toHaveCount(0);
-  await expect(work.getByText("Finished history")).toHaveCount(0);
+  await expect(agents.getByRole("listitem")).toHaveCount(2);
+  await expect(agents).toContainText("Check concurrency");
+  await expect(agents).toContainText("child");
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
-  await page.screenshot({ path: info.outputPath("working-agents.png") });
+  await page.screenshot({ path: info.outputPath("step-agents.png") });
   await page.emulateMedia({ colorScheme: "dark" });
-  await page.screenshot({ path: info.outputPath("working-agents-dark.png") });
+  await page.screenshot({ path: info.outputPath("step-agents-dark.png") });
   finished = true;
-  server.bump("lobby");
-  await expect(work).toHaveCount(0);
+  server.bump("tasks");
+  await expect(agents).toHaveCount(0);
   await expect(toggle).toHaveCount(0);
 });
 

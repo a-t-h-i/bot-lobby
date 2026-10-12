@@ -420,7 +420,7 @@ export interface TaskDetail {
    * The plan as a checklist, in order; `current` is the step under way, `active` the steps a worker is on right now,
    * each with its worker time (ms, as of the reply).
    */
-  steps: Array<{ text: string; status: "done" | "current" | "open"; active?: boolean; workedMs?: number; activeAgentCount?: number }>;
+  steps: Array<{ text: string; status: "done" | "current" | "open"; active?: boolean; workedMs?: number; activeAgentCount?: number; agents?: StepAgentInfo[] }>;
   /** How long the task's agents have worked on it, idle time left out (ms, as of the reply); `running` while they work. */
   work?: WorkClock;
   amendments: string[];
@@ -676,3 +676,12 @@ export interface Api {
 }
 
 export type ApiName = keyof Api;
+
+/** An agent on a step right now: its domain, what it was told (first line), since when; a child names its parent. */
+export interface StepAgentInfo {
+  runId: string;
+  parentRunId?: string;
+  domain: string;
+  instruction: string;
+  startedAt: string;
+}
