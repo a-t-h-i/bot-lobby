@@ -1,6 +1,6 @@
 {
-  "hash": "1864c068946c40fa308c15c2645b8a65210681e46d9d37a7390918ffcdd2a5be",
-  "builtAt": "2026-10-12T20:33:36.561Z",
+  "hash": "badd6f28614dbb3dd0e7f31b50aa17b78d3d63687c810296329728eb0323b09e",
+  "builtAt": "2026-10-12T21:59:25.920Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -524,7 +524,7 @@
     },
     {
       "path": "webui/src/tabs/plan/Header.tsx",
-      "sha256": "c1cfc33e346cdebc135127a05c647a493060eb7a03e5ddb1bbcd055f8a511778"
+      "sha256": "ea0e05f55f59f46b036a89b16cd07dd1abf5b48958dac4ebcc9c4f1072c7dde0"
     },
     {
       "path": "webui/src/tabs/plan/LineComment.tsx",
@@ -540,7 +540,7 @@
     },
     {
       "path": "webui/src/tabs/plan/Roster.tsx",
-      "sha256": "1c47b6a2d0cf6e1613c230d7f7ebdd501e115504c9f024dc9fdcfb8b1be400e0"
+      "sha256": "2433bf891ae14cf47b213f08a57d10f2379a2633d70770fddff3d82a7c786019"
     },
     {
       "path": "webui/src/tabs/plan/words.ts",
@@ -721,6 +721,10 @@
     {
       "path": "webui/src/ui/task-facts.tsx",
       "sha256": "613c91230e6ee9b85c1773d044e1be016f8a298ef4beeb5fa04d71c8c5383bff"
+    },
+    {
+      "path": "webui/src/ui/useEffortSlider.ts",
+      "sha256": "b3721ff41b6c22bf82e68557d32b032d338bd3af06061cf803495f2e960f2c9c"
     },
     {
       "path": "webui/tsconfig.json",
