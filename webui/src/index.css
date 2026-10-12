@@ -1314,3 +1314,14 @@
 .btn-tint:disabled {
   border-color: var(--btn-rim);
 }
+
+/* Jump to latest: on hover the arrow bounces down and back up once. */
+@keyframes jump-latest-bounce {
+  0%, 100% { translate: 0 0; }
+  35% { translate: 0 4px; }
+  60% { translate: 0 -2px; }
+  80% { translate: 0 1px; }
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .jump-latest:hover svg { animation: jump-latest-bounce 600ms cubic-bezier(0.3, 0.7, 0.4, 1) 1; }
+}
