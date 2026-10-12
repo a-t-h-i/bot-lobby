@@ -214,3 +214,66 @@ export async function addedLines(top: string, base: string | undefined, files: r
     return undefined;
   }
 }
+
+/** Longest first line a commit message may have. */
+export const MAX_COMMIT_SUBJECT = 72;
+/** Most lines a commit message may add below its first. */
+export const MAX_COMMIT_BODY_LINES = 3;
+
+/**
+ * A commit message kept short: one first line of at most
+ * `MAX_COMMIT_SUBJECT` characters, then, after a blank line, at most
+ * `MAX_COMMIT_BODY_LINES` short lines. Throws saying what is too long.
+ */
+export function commitMessage(text: string): string {
+  const lines = text.replace(/\r\n?/g, "\n").trim().split("\n").map((line) => line.trimEnd());
+  const subject = lines[0]?.trim() ?? "";
+  if (!subject) throw new Error("the commit message is empty");
+  if (subject.length > MAX_COMMIT_SUBJECT) throw new Error(`the commit message's first line is ${subject.length} characters; keep it to ${MAX_COMMIT_SUBJECT} or fewer, saying what changed`);
+  const body = lines.slice(1).filter((line) => line.trim().length > 0);
+  if (body.length > MAX_COMMIT_BODY_LINES) throw new Error(`the commit message has ${body.length} lines below its first; keep it to ${MAX_COMMIT_BODY_LINES} or fewer`);
+  if (body.some((line) => line.trim().length > MAX_COMMIT_SUBJECT)) throw new Error(`keep each line of the commit message to ${MAX_COMMIT_SUBJECT} characters or fewer`);
+  return body.length > 0 ? `${subject}\n\n${body.map((line) => line.trim()).join("\n")}` : subject;
+}
+
+/** `git status` of `files` (relative to `top`): each changed path with its two-letter code, a rename's old path beside its new one. */
+async function statusOf(top: string, files: readonly string[]): Promise<Array<{ path: string; code: string }>> {
+  if (files.length === 0) return [];
+  const { stdout } = await run("git", ["status", "--porcelain", "-z", "--untracked-files=all", "--", ...files], { cwd: top, maxBuffer: MAX_BUFFER });
+  const entries = stdout.split("\0");
+  const out: Array<{ path: string; code: string }> = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
+    if (entry.length < 4) continue;
+    const code = entry.slice(0, 2);
+    out.push({ path: entry.slice(3), code });
+    if (/[RC]/.test(code) && entries[index + 1]) out.push({ path: entries[++index]!, code: "D " });
+  }
+  return out;
+}
+
+/** Which of `files` (relative to `top`) have changes git has not committed, with a rename's old path beside its new one. */
+export async function uncommitted(top: string, files: readonly string[]): Promise<string[]> {
+  return [...new Set((await statusOf(top, files)).map((entry) => entry.path))];
+}
+
+/**
+ * Commit `files` (relative to `top`) as they stand, and nothing else: what
+ * else is staged stays staged. The commit, or undefined when none of them
+ * has anything to commit. Throws with git's reason when it refuses (a hook).
+ */
+export async function commitFiles(top: string, files: readonly string[], message: string): Promise<{ commit: string; files: string[] } | undefined> {
+  const status = await statusOf(top, files);
+  const dirty = [...new Set(status.map((entry) => entry.path))];
+  if (dirty.length === 0) return undefined;
+  // Only what the working tree holds beyond the index needs adding; a staged deletion is no longer there to add.
+  const unstaged = [...new Set(status.filter((entry) => entry.code[1] !== " ").map((entry) => entry.path))];
+  try {
+    if (unstaged.length > 0) await run("git", ["add", "-A", "--", ...unstaged], { cwd: top, maxBuffer: MAX_BUFFER });
+    await run("git", ["commit", "-q", "-m", message, "--", ...dirty], { cwd: top, maxBuffer: MAX_BUFFER });
+  } catch (error) {
+    const failure = error as { stderr?: string; stdout?: string; message: string };
+    throw new Error(truncate((failure.stderr || failure.stdout || failure.message).trim(), 600));
+  }
+  return { commit: await git(top, ["rev-parse", "HEAD"]), files: dirty };
+}

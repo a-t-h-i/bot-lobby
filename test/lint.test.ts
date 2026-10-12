@@ -269,9 +269,18 @@ test("the engine lints what a task's workers touched after each step, gives QA t
   assert.ok(feed.length === 2 && /1 new error/.test(feed[0]!) && /no new problems/.test(feed[1]!), "each new result is a line in the lobby's activity log");
   const qa2 = await act({ action: "qa" });
   assert.equal(qa2.ok, true, qa2.message);
-  const done = await act({ action: "complete", text: "Added a." });
+  const uncommitted = await act({ action: "complete", text: "Added a." });
+  assert.equal(uncommitted.ok, false);
+  assert.match(uncommitted.message, /cannot complete: commit the agents' changes first\. Call complete again with message[^\n]*: src\/a\.ts$/);
+  const wordy = await act({ action: "complete", text: "Added a.", message: `Add a${" and more".repeat(10)}` });
+  assert.match(wordy.message, /cannot complete: the commit message's first line is 95 characters; keep it to 72 or fewer/);
+  writeFileSync(join(dir, "notes.txt"), "the user's own\n");
+  const done = await act({ action: "complete", text: "Added a.", message: "Add a" });
   assert.equal(done.ok, true, done.message);
+  assert.match(done.message, /Committed 1 file as [0-9a-f]{7}: "Add a"\. Left uncommitted, not this task's agents' work: notes\.txt\./);
   assert.doesNotMatch(done.message, /Lint/, "nothing left to tell");
+  assert.equal(execFileSync("git", ["log", "-1", "--format=%s", "--name-only"], { cwd: dir, encoding: "utf8" }).trim(), "Add a\n\nsrc/a.ts", "the oracle's message, on the agents' file alone");
+  assert.match(execFileSync("git", ["status", "--porcelain"], { cwd: dir, encoding: "utf8" }), /\?\? notes\.txt/, "the user's own change stays uncommitted");
 });
 
 test("the user can accept work with its lint errors, and advise mode never holds it", async () => {
@@ -290,8 +299,9 @@ test("the user can accept work with its lint errors, and advise mode never holds
     return deps;
   };
   ensureProjectStructure(dir, ".pi");
+  const start = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
   for (const [id, mode] of [["TASK-1", "block"], ["TASK-2", "advise"]] as const) {
-    execFileSync("git", ["checkout", "-q", "--", "src/a.ts"], { cwd: dir });
+    execFileSync("git", ["reset", "-q", "--hard", start], { cwd: dir });
     const deps = setUp(mode);
     const task = createTask(id, "Add a");
     createTaskDir(dir, ".pi", task);
@@ -308,7 +318,7 @@ test("the user can accept work with its lint errors, and advise mode never holds
       waiveLint(held, "with /bot-lobby accept");
       saveTask(dir, ".pi", held);
     }
-    const done = await act({ action: "complete" });
+    const done = await act({ action: "complete", message: "Write a" });
     assert.equal(done.ok, true, done.message);
     assert.match(done.message, mode === "block" ? /Accepted by the user with lint errors: ESLint on 1 touched file: 1 new error\. Tell the user\./ : /Lint \(advisory\): ESLint on 1 touched file: 1 new error\. Tell the user\./);
     if (mode === "block") assert.ok(loadTask(dir, ".pi", id)!.decisions.some((decision) => /accepted the work with its lint errors \(with \/bot-lobby accept\)/.test(decision.text)));

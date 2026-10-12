@@ -60,6 +60,7 @@ const OrchestrateSchema = Type.Object({
   ),
   roster: Type.Optional(Type.Array(Type.String(), { description: "track: who takes part — any of designer, backend, qa, researcher" })),
   text: Type.Optional(Type.String({ description: "decide/complete/knowledge/script: the decision, completion summary, knowledge text, or the script itself" })),
+  message: Type.Optional(Type.String({ description: "complete: the commit message for the agents' changes, which the engine commits (only their files): a first line of 72 characters or fewer saying what changed, at most three short lines below it" })),
   file: Type.Optional(Type.String({ description: "compact: the knowledge file to rewrite, e.g. knowledge.md; script: a script a worker drafted, to save instead of text" })),
   name: Type.Optional(Type.String({ description: "whiteboard: name for the new Excalidraw session; script: the file name, what it does in snake_case with its language's extension (seed_public_holidays.py, run_changed_tests.sh)" })),
   purpose: Type.Optional(Type.String({ description: "script: one line on what the script does" })),

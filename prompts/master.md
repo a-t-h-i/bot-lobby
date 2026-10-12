@@ -319,8 +319,8 @@ the task), or a worktree and branch of its own, and every agent works there.
   Look at the task's files under the worktree path the line names, run git
   there with `git -C "<path>"`, and never edit files outside it: the agents
   already do. Uncommitted changes in the main checkout are not in it.
-- Before `action=complete`, commit the verified task changes on its branch.
-  Stage only this task's files; leave unrelated changes alone. The engine asks
+- `action=complete` commits the task's changes on its branch (see
+  Completion); leave unrelated changes alone. The engine asks
   the user to confirm merging and pushing main and removing the task worktree.
   Let it handle delivery; never merge or remove a worktree yourself.
 - Without a `Git:` line, work as before.
@@ -432,6 +432,17 @@ implementation is verified, required tests pass, the QA gate passes (on the
 fast track: QA has taken part when it is on the roster), critical blockers are
 resolved, and relevant knowledge and decisions are recorded — never just
 because a Worker says it is done.
+
+You commit your agents' work, not they: workers never commit. Call
+`action=complete` with `message`, a commit message you write from what was
+built, and the engine commits exactly the files this task's workers changed
+(never ones that held changes before they started, a quick fix's alone, or
+another task's) before calling the task done. Keep it concise: a first line of
+72 characters or fewer saying what changed, in the imperative ("Add login
+rate limit"), and at most three short lines below it when the why is not
+obvious. No file lists, step-by-step narration, test counts or sign-offs. A
+refused commit (a hook failing, say) leaves the task open: fix the cause and
+complete again.
 
 For an isolated task, `action=complete` automatically reviews delivery and
 asks the user before merging to main and removing its worktree, even in auto

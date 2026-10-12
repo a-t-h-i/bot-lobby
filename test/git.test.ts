@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { changedFiles, readRepositoryDiff } from "../src/execution/git.ts";
+import { changedFiles, commitFiles, commitMessage, readRepositoryDiff } from "../src/execution/git.ts";
 
 function repo(): string {
   const root = mkdtempSync(join(tmpdir(), "dh-git-"));
@@ -82,4 +82,30 @@ test("readRepositoryDiff from the task's start commit shows committed work and n
   const tree = await changedFiles(root, base);
   assert.deepEqual(tree?.files.sort(), [".pi/bot-lobby/state.json", "fresh.ts", "tracked.txt"]);
   assert.deepEqual((await changedFiles(root))?.files.sort(), [".pi/bot-lobby/state.json", "fresh.ts"], "without a base, only what is uncommitted");
+});
+
+test("commitMessage keeps messages short: a first line of 72 or fewer, at most three lines below", () => {
+  assert.equal(commitMessage("  Add login rate limit  "), "Add login rate limit");
+  assert.equal(commitMessage("Add login rate limit\n\n  Bursts locked accounts out.\n"), "Add login rate limit\n\nBursts locked accounts out.");
+  assert.throws(() => commitMessage(" \n "), /empty/);
+  assert.throws(() => commitMessage("x".repeat(73)), /73 characters; keep it to 72 or fewer/);
+  assert.throws(() => commitMessage("Add it\n\none\ntwo\nthree\nfour"), /4 lines below its first; keep it to 3 or fewer/);
+});
+
+test("commitFiles commits only the given files, new and deleted ones too, and leaves the rest alone", async () => {
+  const root = repo();
+  writeFileSync(join(root, "a.txt"), "a\n");
+  writeFileSync(join(root, "gone.txt"), "x\n");
+  execFileSync("git", ["add", "."], { cwd: root });
+  execFileSync("git", ["commit", "-qm", "init"], { cwd: root });
+  writeFileSync(join(root, "a.txt"), "a2\n");
+  writeFileSync(join(root, "new.txt"), "n\n");
+  execFileSync("git", ["rm", "-q", "gone.txt"], { cwd: root });
+  writeFileSync(join(root, "theirs.txt"), "t\n");
+  execFileSync("git", ["add", "theirs.txt"], { cwd: root });
+  assert.equal(await commitFiles(root, ["missing.txt"], "Nothing"), undefined, "nothing of these to commit");
+  const result = await commitFiles(root, ["a.txt", "new.txt", "gone.txt"], "Update a");
+  assert.deepEqual(result?.files.sort(), ["a.txt", "gone.txt", "new.txt"]);
+  assert.equal(execFileSync("git", ["log", "-1", "--format=%H %s"], { cwd: root, encoding: "utf8" }).trim(), `${result!.commit} Update a`);
+  assert.equal(execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" }), "A  theirs.txt\n", "what else was staged stays staged");
 });

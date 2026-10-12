@@ -32,7 +32,7 @@ import { mapConcurrent } from "../execution/agent-runner.ts";
 import { parseWorkerResult } from "../roles/worker.ts";
 import { autoNote, DESK_TOOLS, DeskSession } from "../desk/session.ts";
 import type { Handover } from "../desk/desk.ts";
-import { changedFiles, commitBefore, headCommit, readRepositoryDiff } from "../execution/git.ts";
+import { changedFiles, commitBefore, commitFiles, commitMessage, headCommit, readRepositoryDiff, uncommitted } from "../execution/git.ts";
 import { appendChange, explainChanges, provenanceLines, provenanceSummary, readChanges, type FileProvenance } from "../state/changes.ts";
 import { budgetLine, budgetState, formatMinutes, MIN_READ_MS, parseMinutes, qaAllotment, readBudget, readerAllotment, updateBudget, workerAllotment, type Allotment, type BudgetState, type TaskBudget } from "../state/budget.ts";
 import type { AgentTime } from "../execution/agent-runner.ts";
@@ -141,6 +141,8 @@ export interface OrchestrateParams {
   note?: string;
   reason?: string;
   text?: string;
+  /** complete: the commit message for the agents' changes. */
+  message?: string;
   /** track: the path the task takes. */
   track?: "fast" | "full";
   /** track: who takes part (designer, backend, qa, researcher). */
@@ -1570,6 +1572,7 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
   // The gate refuses before any side effect, so a refusal leaves the task untouched.
   const oversized = overThreshold(readDataRoots(deps.root, deps.configDir), deps.config.knowledge.compactionThreshold);
   if (oversized.length > 0) throw new Error(`cannot complete: knowledge files over the compaction threshold: ${oversized.map((entry) => `${entry.agent}/${entry.file} (${entry.chars})`).join(", ")}. First record domain-relevant facts where they belong with action=knowledge (domain=designer|backend|qa), then rewrite each oversized file with action=compact, then call complete again.`);
+  const committed = await commitTaskWork(task, params, deps);
   const summary = params.text?.trim() || task.proposal || task.title;
   recordCompletion(deps, task, summary);
   removeTaskScratchpads(deps.root, deps.configDir, task.id);
@@ -1581,7 +1584,43 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
   flushDecisions(deps, task);
   const delivery = await offerDelivery(task, deps);
   const left = lint?.state === "failing" ? ` ${task.lintWaiver ? "Accepted by the user with lint errors" : "Lint (advisory)"}: ${lintSummary(lint)} Tell the user.` : "";
-  return `Task ${task.id} completed. History recorded and temporary scratchpads removed. ${delivery}${left}`;
+  return `Task ${task.id} completed.${committed} History recorded and temporary scratchpads removed. ${delivery}${left}`;
+}
+
+/** The files a task's own workers changed: not one that held changes before they started, nor another task's. */
+function agentsWork(files: readonly FileProvenance[]): string[] {
+  return files.filter((file) => file.kinds.includes("planned") && !file.kinds.includes("pre-existing") && !file.kinds.includes("other-task")).map((file) => file.path);
+}
+
+/**
+ * The oracle commits what its agents changed before the task is called done,
+ * with its own short message (`message`); nothing else in the tree is
+ * staged or committed. "" when git is not in use or nothing is left to commit.
+ */
+async function commitTaskWork(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
+  const state = await changeState(deps, task, await reviewBase(task, deps));
+  if (!state) return "";
+  const ours = agentsWork(state.files);
+  const dirty = await uncommitted(state.top, ours).catch(() => []);
+  if (dirty.length === 0) return "";
+  const listed = dirty.slice(0, 20).join(", ") + (dirty.length > 20 ? ` and ${dirty.length - 20} more` : "");
+  if (!params.message?.trim()) throw new Error(`cannot complete: commit the agents' changes first. Call complete again with message: a concise commit message for them (a first line of 72 characters or fewer saying what changed, at most three short lines below it). The engine commits only these files: ${listed}`);
+  let message: string;
+  try {
+    message = commitMessage(params.message);
+  } catch (error) {
+    throw new Error(`cannot complete: ${(error as Error).message}`);
+  }
+  let result: Awaited<ReturnType<typeof commitFiles>>;
+  try {
+    result = await commitFiles(state.top, dirty, message);
+  } catch (error) {
+    throw new Error(`cannot complete: git refused the commit: ${(error as Error).message}`);
+  }
+  if (!result) return "";
+  const others = await uncommitted(state.top, state.files.map((file) => file.path).filter((path) => !ours.includes(path))).catch(() => []);
+  const left = others.length > 0 ? ` Left uncommitted, not this task's agents' work: ${others.slice(0, 10).join(", ")}${others.length > 10 ? ` and ${others.length - 10} more` : ""}.` : "";
+  return ` Committed ${result.files.length} file${result.files.length === 1 ? "" : "s"} as ${result.commit.slice(0, 7)}: "${message.split("\n")[0]}".${left}`;
 }
 
 /** Completion always offers delivery to the user, including in auto mode. */
