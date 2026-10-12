@@ -1,6 +1,6 @@
 {
-  "hash": "dee4fe45c9eda74619d191b1f29a0b19959d1aba06b024453d9bfb903a488fa9",
-  "builtAt": "2026-10-12T12:50:53.690Z",
+  "hash": "73028b92ae34a035ef4951039eda8ae19e0a5d53bba7facceaeb70453b9896f9",
+  "builtAt": "2026-10-12T13:00:47.533Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -456,7 +456,7 @@
     },
     {
       "path": "webui/src/tabs/lobby/Conversation.tsx",
-      "sha256": "b0cc5bbbc912bbad5d526dd4f86cd16cb27ece5a69074072fbc14d1018a20bea"
+      "sha256": "800c3766c191e252ed273efeb9cd59c432fb588dcb5e0830429043b82ff86661"
     },
     {
       "path": "webui/src/tabs/lobby/LobbyTab.tsx",
@@ -664,7 +664,7 @@
     },
     {
       "path": "webui/src/ui/Actions.tsx",
-      "sha256": "11c628db32094e8a11c8bfd68d910f7f42acdf780fcb29f9067df53929be7732"
+      "sha256": "3319a3e163e9dd0c24485069cd55ebce57d6d07973ab4c266470193bf08bf9f5"
     },
     {
       "path": "webui/src/ui/AgentIcon.tsx",
@@ -708,7 +708,7 @@
     },
     {
       "path": "webui/src/ui/SplitPane.tsx",
-      "sha256": "562dd658524762720e31674a37f06cdd45c1d65b23effd0304e3c7a14ff590e8"
+      "sha256": "7519d9eee9bdcb2977ceee43a972b88322abbe65a280e81ad5de546f49e87eb2"
     },
     {
       "path": "webui/src/ui/rows.ts",

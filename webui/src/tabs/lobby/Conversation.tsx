@@ -184,7 +184,7 @@ export function Conversation({
       </div>
       {!atBottom ? (
         <div className="absolute right-4 bottom-dock z-10">
-          <ActionButton label="Jump to latest" text="Latest" icon={ArrowDown} tone="primary" className="rounded-full shadow-sm" onClick={stick} />
+          <ActionButton label="Jump to latest" text="Latest" icon={ArrowDown} className="rounded-full bg-card shadow-card" onClick={stick} />
         </div>
       ) : null}
     </Frame>
