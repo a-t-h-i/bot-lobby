@@ -1,3 +1,8 @@
+/**
+ * The task tracker's working agents: the agents running now, grouped under
+ * the step each works on, children beneath their parent. A finished agent
+ * drops out at once; the header shows the count, and this list unfolds from it.
+ */
 import { useEffect, useState } from "react"
 import type { SnapshotTask } from "@protocol"
 import { Spinner } from "@/components/ui/spinner"
@@ -45,7 +50,12 @@ function AgentRow({ run, now }: { run: LobbyRun; now: number }) {
   )
 }
 
-export function CurrentWork({ task, runs }: { task?: SnapshotTask; runs: LobbyRun[] }) {
+/** The agents running now, as one list: every group's members, children beneath their parent. */
+export function workingCount(task: SnapshotTask | undefined, runs: LobbyRun[]): number {
+  return workingGroups(task, runs).reduce((sum, group) => sum + group.runs.length, 0)
+}
+
+export function WorkingAgents({ task, runs }: { task?: SnapshotTask; runs: LobbyRun[] }) {
   const groups = workingGroups(task, runs)
   const active = groups.length > 0
   const [now, setNow] = useState(Date.now)
@@ -57,18 +67,18 @@ export function CurrentWork({ task, runs }: { task?: SnapshotTask; runs: LobbyRu
   }, [active])
   if (!active) return null
   return (
-    <section aria-label="Current step agents" className="max-h-[40%] shrink-0 overflow-y-auto border-b border-border bg-muted/20 px-5 py-3">
+    <section id="working-agents" aria-label="Working agents" className="max-h-72 overflow-y-auto border-t border-border bg-muted/20 px-4 py-2">
       {groups.map((group, index) => (
-        <details key={`${index}:${group.text}`} open className="py-1">
-          <summary className="cursor-pointer text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            {group.text} <span className="ml-2 text-xs font-normal text-muted-foreground">{group.runs.length} working</span>
-          </summary>
-          <ul aria-label={`Agents working on ${group.text}`} className="mt-1">
+        <div key={`${index}:${group.text}`} className="py-1">
+          <h3 className="text-xs font-medium">
+            {group.text} <span className="ml-1 font-normal text-muted-foreground">{group.runs.length} working</span>
+          </h3>
+          <ul aria-label={`Agents working on ${group.text}`}>
             {group.runs.filter((run) => !run.parentRunId || !group.runs.some((parent) => parent.runId === run.parentRunId))
               .flatMap((parent) => [parent, ...group.runs.filter((child) => child.parentRunId === parent.runId)])
               .map((run, row) => <AgentRow key={run.runId ?? row} run={run} now={now} />)}
           </ul>
-        </details>
+        </div>
       ))}
     </section>
   )

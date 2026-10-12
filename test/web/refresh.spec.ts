@@ -5,31 +5,43 @@ declare const window: any;
 declare const getComputedStyle: any;
 
 let releasePending: (() => void) | undefined;
-test("working agents appear beneath the current step and leave when finished", async ({ page, server }) => {
+test("working agents unfold from the task tracker, not the lobby, and leave when finished", async ({ page, server }, info) => {
   let finished = false;
   await page.route("**/api/lobby.snapshot", async (route) => {
     const response = await route.fetch();
     const body = await response.json();
-    body.result.task.activeSteps = [{ text: "Step 2: Integrate the feature", runIds: ["parent", "child"], workedMs: 1000, activeAgentCount: finished ? 0 : 2 }];
+    body.result.task.activeSteps = [{ text: "Step 2: Integrate the feature", runIds: ["parent", "child", "done"], workedMs: 1000, activeAgentCount: finished ? 0 : 2 }];
     body.result.runs = [
       { runId: "parent", role: "worker", domain: "backend", status: finished ? "success" : "running", instruction: "Integrate the feature", startedAt: new Date().toISOString(), endsAt: Date.now() + 60000 },
       { runId: "child", parentRunId: "parent", role: "worker", domain: "backend", status: finished ? "failed" : "running", instruction: "Check concurrency", startedAt: new Date().toISOString() },
+      { runId: "done", parentRunId: "parent", role: "worker", domain: "backend", status: "running", finishedAt: new Date().toISOString(), instruction: "Already finished child" },
       { runId: "old", role: "worker", status: "success", instruction: "Finished history" },
     ];
     await route.fulfill({ response, json: body });
   });
   await openScenario(page, server, "full");
-  const work = page.locator('section[aria-label="Current step agents"]');
+  const tracker = page.getByRole("group", { name: "Task" });
+  const toggle = tracker.getByRole("button", { name: /2 agents working/ });
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  const work = page.locator('section[aria-label="Working agents"]');
+  await expect(work).toHaveCount(0);
+  await expect(page.getByRole("log", { name: "Conversation" }).getByText("Check concurrency")).toHaveCount(0);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(work).toBeVisible();
-  await expect(work).toContainText("2 working");
   await expect(work.getByRole("listitem")).toHaveCount(2);
   await expect(work).toContainText("Check concurrency");
-  await expect(page.locator("header").filter({ has: work })).toHaveCount(0);
+  await expect(work.getByText("Already finished child")).toHaveCount(0);
   await expect(work.getByText("Finished history")).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: info.outputPath("working-agents.png") });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.screenshot({ path: info.outputPath("working-agents-dark.png") });
   finished = true;
   server.bump("lobby");
   await expect(work).toHaveCount(0);
+  await expect(toggle).toHaveCount(0);
 });
 
 test.afterEach(() => { releasePending?.(); releasePending = undefined; });
