@@ -438,7 +438,8 @@ export function stepWork(steps: readonly string[], runs: readonly AgentRun[], no
     const ms = Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, end - start) : 0;
     for (const index of covered) {
       if (!run.parentRunId) work[index]!.ms += ms;
-      if (run.status === "running") {
+      // A run that has finished is off the step, whatever its last status said.
+      if (run.status === "running" && !run.finishedAt) {
         work[index]!.active = true;
         work[index]!.activeAgentCount += 1;
         work[index]!.runIds.push(run.runId);

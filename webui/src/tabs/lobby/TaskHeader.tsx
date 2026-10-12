@@ -2,15 +2,21 @@
  * The Lobby tab's task header as one slim line: the task's title and state,
  * its facts as quiet text (id, track, domains, git branch), how long the
  * agents have worked on it, and a progress bar with the step a worker is on
- * (`active · 1m 12s`, ticking) or else the next one. `lobby.snapshot.task`
- * carries the facts; without a task the line says how to start one.
+ * (`active · 1m 12s`, ticking) or else the next one. While agents work, a
+ * button names how many and unfolds who is doing what beneath the line; an
+ * agent that finishes leaves it. `lobby.snapshot.task` carries the facts;
+ * without a task the line says how to start one.
  */
-import { GitBranch, Timer } from "lucide-react"
+import { useState } from "react"
+import { ChevronDown, GitBranch, Timer } from "lucide-react"
 import { motion } from "motion/react"
 import type { SnapshotTask, StatusInfo } from "@protocol"
 import { executionWords } from "@/lib/phaseTiming"
 import { useElapsed } from "@/lib/useElapsed"
+import { cn } from "@/lib/utils"
 import { trackText } from "@/ui/task-facts"
+import type { LobbyRun } from "./types"
+import { WorkingAgents, workingCount } from "./WorkingAgents"
 
 function Dot({ children }: { children: React.ReactNode }) {
   return <span className="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground md:inline-flex">{children}</span>
@@ -36,11 +42,9 @@ function Worked({ work }: { work: NonNullable<SnapshotTask["work"]> }) {
 function Under({ active, current }: { active?: SnapshotTask["activeSteps"]; current?: string }) {
   const first = active?.[0]
   if (first) {
-    const count = first.activeAgentCount ?? 1
     return (
       <span className="hidden max-w-[20rem] min-w-0 items-center gap-1.5 xl:inline-flex">
         <span className="truncate text-foreground" title={first.text}>{first.text}</span>
-        <span className="shrink-0 text-primary">({count} {count === 1 ? "agent working" : "agents working"})</span>
         <span className="shrink-0 rounded-md bg-primary/10 px-1.5 py-px font-medium text-primary">
           active · <Ticking ms={first.workedMs} running sample={first} />
         </span>
@@ -70,35 +74,57 @@ function Progress({ done, total, current, active }: { done: number; total: numbe
   )
 }
 
-/** One line: the title and state, the facts in quiet text, then the progress. */
-export function TaskHeader({ task, status }: { task?: SnapshotTask; status?: StatusInfo }) {
+/** How many agents are working, as a button that unfolds who is doing what. */
+function WorkingToggle({ count, open, onToggle }: { count: number; open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      aria-controls="working-agents"
+      onClick={onToggle}
+      className="btn-ghost inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-primary outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+    >
+      {count} {count === 1 ? "agent working" : "agents working"}
+      <ChevronDown aria-hidden="true" className={cn("size-3.5 transition-transform", open && "rotate-180")} />
+    </button>
+  )
+}
+
+/** One line: the title and state, the facts in quiet text, then the progress; the working agents unfold beneath it. */
+export function TaskHeader({ task, status, runs = [] }: { task?: SnapshotTask; status?: StatusInfo; runs?: LobbyRun[] }) {
   const branch = status?.branch ?? status?.workspace.branch
   const where = task?.git?.branch ?? branch
+  const working = task ? workingCount(task, runs) : 0
+  const [open, setOpen] = useState(false)
   return (
-    <section className="flex h-12 shrink-0 items-center gap-3 px-4" aria-label="Task" role="group">
-      <h2 className="min-w-0 flex-1 truncate text-[0.8125rem] font-medium" title={task?.title}>
-        {task?.title ?? "No task yet"}
-        {!task ? <span className="ml-2 font-normal text-muted-foreground">{status?.sessionName ?? "Type a request below to start one."}</span> : null}
-      </h2>
-      {task ? (
-        <>
-          <span className="shrink-0 rounded-md bg-accent px-2 py-0.5 text-xs font-medium">{task.state.replace(/_/g, " ")}</span>
-          <Dot>{task.id}</Dot>
-          {task.track ? <Dot>{trackText(task.track)}</Dot> : null}
-          {(task.domains ?? []).length > 0 ? <Dot>{task.domains.join(", ")}</Dot> : null}
-          {where ? (
-            <span className="hidden max-w-48 shrink-0 items-center gap-1 text-xs text-muted-foreground lg:inline-flex">
-              <GitBranch aria-hidden="true" className="size-3 shrink-0" />
-              <span className="truncate">
-                {where}
-                {task.git?.from ? ` · from ${task.git.from}` : ""}
+    <div>
+      <section className="flex h-12 shrink-0 items-center gap-3 px-4" aria-label="Task" role="group">
+        <h2 className="min-w-0 flex-1 truncate text-[0.8125rem] font-medium" title={task?.title}>
+          {task?.title ?? "No task yet"}
+          {!task ? <span className="ml-2 font-normal text-muted-foreground">{status?.sessionName ?? "Type a request below to start one."}</span> : null}
+        </h2>
+        {task ? (
+          <>
+            <span className="shrink-0 rounded-md bg-accent px-2 py-0.5 text-xs font-medium">{task.state.replace(/_/g, " ")}</span>
+            <Dot>{task.id}</Dot>
+            {task.track ? <Dot>{trackText(task.track)}</Dot> : null}
+            {(task.domains ?? []).length > 0 ? <Dot>{task.domains.join(", ")}</Dot> : null}
+            {where ? (
+              <span className="hidden max-w-48 shrink-0 items-center gap-1 text-xs text-muted-foreground lg:inline-flex">
+                <GitBranch aria-hidden="true" className="size-3 shrink-0" />
+                <span className="truncate">
+                  {where}
+                  {task.git?.from ? ` · from ${task.git.from}` : ""}
+                </span>
               </span>
-            </span>
-          ) : null}
-          {task.work ? <Worked work={task.work} /> : null}
-          {task.progress ? <Progress done={task.progress.done} total={task.progress.total} {...(task.currentStep ? { current: task.currentStep } : {})} {...(task.activeSteps ? { active: task.activeSteps } : {})} /> : null}
-        </>
-      ) : null}
-    </section>
+            ) : null}
+            {task.work ? <Worked work={task.work} /> : null}
+            {task.progress ? <Progress done={task.progress.done} total={task.progress.total} {...(task.currentStep ? { current: task.currentStep } : {})} {...(task.activeSteps ? { active: task.activeSteps } : {})} /> : null}
+            {working > 0 ? <WorkingToggle count={working} open={open} onToggle={() => setOpen((value) => !value)} /> : null}
+          </>
+        ) : null}
+      </section>
+      {open && working > 0 ? <WorkingAgents task={task} runs={runs} /> : null}
+    </div>
   )
 }

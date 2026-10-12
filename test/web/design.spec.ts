@@ -1428,7 +1428,7 @@ test("a task's short steps come first, the one being worked on marked active wit
   });
   const header = page.getByRole("group", { name: "Task" });
   await expect(header).toContainText(/worked 12m \d+s/);
-  await expect(header).toContainText(/Check the mock over HTTP\s*\(6 agents working\)\s*active · 1m \d+s/);
+  await expect(header).toContainText(/Check the mock over HTTP\s*active · 1m \d+s/);
   // Counts refresh as agents finish, and disappear when the step is idle.
   let count = 1;
   await page.route("**/api/tasks.get", async (route) => {

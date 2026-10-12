@@ -1,6 +1,6 @@
 {
-  "hash": "db4380f4cb072d227fe1429d3dcb536590e2d6f26b23bd077ae697989f6af727",
-  "builtAt": "2026-10-12T07:51:02.663Z",
+  "hash": "faa8055b4f09123e4ecb0a332cf280fba2050b0f0fcd25a48f96bea4436952d6",
+  "builtAt": "2026-10-12T12:41:39.571Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -456,15 +456,11 @@
     },
     {
       "path": "webui/src/tabs/lobby/Conversation.tsx",
-      "sha256": "2db892d7d18100885170a4afbf55edd34e1afe2cbbfa8b654f5f1151c0670d77"
-    },
-    {
-      "path": "webui/src/tabs/lobby/CurrentWork.tsx",
-      "sha256": "68d73828563415334a25e2fc333e7bdcd6e4483e8fc1997fd1e7a35772be8b43"
+      "sha256": "b0cc5bbbc912bbad5d526dd4f86cd16cb27ece5a69074072fbc14d1018a20bea"
     },
     {
       "path": "webui/src/tabs/lobby/LobbyTab.tsx",
-      "sha256": "ec7aa22f9c580a5585dde3cb2eb21208244f38478c421ea8b50cdca6438fa71b"
+      "sha256": "3c489659f40d96641c8d3d4a668c0f09c5f412c74542a1fa436cb42380273034"
     },
     {
       "path": "webui/src/tabs/lobby/Orb.tsx",
@@ -472,11 +468,15 @@
     },
     {
       "path": "webui/src/tabs/lobby/TaskHeader.tsx",
-      "sha256": "d8a2fe363d0a620926a5c9633fe96499d2c46d5559f6422e2a9814e79d53a9f0"
+      "sha256": "3ce90bc327de25d009d9c55b3c83c0b22f874debee7fa89373bcb3b0809e1c58"
     },
     {
       "path": "webui/src/tabs/lobby/Thoughts.tsx",
       "sha256": "66658f6b428531e3e3c648d52f0bac6285fc997b0d99c45d78a05d837169336d"
+    },
+    {
+      "path": "webui/src/tabs/lobby/WorkingAgents.tsx",
+      "sha256": "94b2cc38efdd6956c155573f86a09fec5d9088554c8454f778c251647d763e9c"
     },
     {
       "path": "webui/src/tabs/lobby/busy.ts",
