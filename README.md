@@ -23,8 +23,8 @@ The questionnaire and web tools are built in, so don't also install extensions w
    A plan opens with a short list of steps; the detail of each follows for whoever wants it.
    Plans you leave without saving them as a task wait under **Plan → Previous**. You can read, carry on,
    archive or delete them there. A plan saved as a task leaves that list.
-3. Follow the agents in **Lobby**: the step being worked on reads `active · 1m 12s`, and each task shows
-   how long its agents have worked on it (idle time left out). Models, effort and time limits are in **Settings**.
+3. Follow the agents in **Lobby** and **Tasks**: in a task's steps, the one being worked on reads
+   `active · 1m 12s`, and each task shows how long its agents have worked on it (idle time left out). Models, effort and time limits are in **Settings**.
 
 **Issues** lists the repository's open issues (with `lobby.issues` on), and **Plan it** starts a
 planning session from one. **Git** lists open pull requests; an agent reviews one on request,
@@ -165,9 +165,10 @@ including startup, tools, retries, children, compaction and reporting. Per-step
 allowances persist across reassignments; only the user can extend them, including
 in auto mode. Waiting for user answers pauses clocks.
 
-The conversation pane groups running agents beneath their current step, for example
-**Step 6 – Implement large feature (6 devs working)**. Queued and finished agents
-are excluded. A child finishing does not complete a checklist step.
+In **Tasks**, a step being worked on shows how many agents are on it, for example
+**Implement large feature (6 agents working)**. Click the count to see which agent is
+doing what, with children under their parent. Queued and finished agents are left out,
+and a child finishing does not complete a checklist step.
 
 The oracle, agents and children compact at settled turn boundaries before context
 reaches 64,000 estimated tokens, or earlier at 60% of the model window or Pi's
