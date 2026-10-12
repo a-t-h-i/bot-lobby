@@ -15,6 +15,10 @@ import { parseWorkerResult, validateWorkerResult } from "../roles/worker.ts";
 import { parseReviewResult, validateReviewResult } from "../roles/reviewer.ts";
 import { truncate } from "../text.ts";
 import { isScoutResultUsable, parseScoutResult, validateScoutResult } from "../roles/scout.ts";
+import { treeState } from "../execution/git.ts";
+import { toolBudgetEnv, toolBudgetNote } from "../pi/tool-budget.ts";
+import { recordFileNotes } from "../knowledge/file-notes.ts";
+import { readCachedScout, scoutKey, writeCachedScout } from "./scout-cache.ts";
 import type { FileHinter } from "../classifier/files.ts";
 import type { KnowledgePaths, KnowledgePicker } from "../classifier/knowledge.ts";
 import { fellShort, profileLabel, routeLabel, type EffortRoute, type EffortRouter } from "../classifier/effort.ts";
@@ -24,6 +28,8 @@ export interface ScoutOutcome {
   run: AgentRun;
   issues: string[];
   usable: boolean;
+  /** When these findings were taken, if they were reused: the same question on a tree that has not changed since. */
+  reused?: string;
 }
 
 export interface ScoutRequest {
@@ -97,7 +103,7 @@ function scoutContext(request: ScoutRequest, domain: Domain, selected: Knowledge
     task: request.taskText,
     ...selected,
     instructions: request.config.agents[domain].instructions,
-    workflowContext: [`Task state: scouting. Domain: ${domain}. Read-only reconnaissance; no implementation.`, likely, request.time?.note ?? ""].filter(Boolean).join("\n\n"),
+    workflowContext: [`Task state: scouting. Domain: ${domain}. Read-only reconnaissance; no implementation.`, toolBudgetNote(request.config.scout.maxToolCalls), likely, request.time?.note ?? ""].filter(Boolean).join("\n\n"),
   };
 }
 
@@ -139,8 +145,38 @@ function toOutcome(run: AgentRun, domain: Domain): ScoutOutcome {
   return { result, run, issues: validateScoutResult(result), usable: isScoutResultUsable(result) };
 }
 
-/** Run the selected domain scouts concurrently and persist their findings. */
+/**
+ * Run the selected domain scouts concurrently and persist their findings. A
+ * domain asked the same thing before on an unchanged tree reuses its earlier
+ * findings (`workflow.reuseScouts`); every new finding's Relevant Files are
+ * kept as file notes for the repository map.
+ */
 export async function runScouts(request: ScoutRequest, run: ProcessRunner = spawnPiProcess): Promise<ScoutOutcome[]> {
+  const dataDir = request.dataRoots[0];
+  const tree = dataDir && request.config.workflow.reuseScouts ? await treeState(request.cwd, request.dataRoots) : undefined;
+  const keys = request.domains.map((domain) => scoutKey(domain, scoutInstruction(request, domain), request.taskText));
+  const cached = keys.map((key) => (dataDir && tree ? readCachedScout(dataDir, key, tree) : undefined));
+  const fresh = request.domains.filter((_domain, index) => !cached[index]);
+  const ran = fresh.length > 0 ? await scoutDomains({ ...request, domains: fresh }, run) : [];
+  let next = 0;
+  const outcomes = request.domains.map((_domain, index) => cached[index] ?? ran[next++]!);
+  saveScoutResults(request.taskDir, outcomes);
+  if (dataDir) await remember(dataDir, request, outcomes, keys, tree);
+  return outcomes;
+}
+
+/** Keep what new scouts found: their answers for reuse while the tree is as it was, their files' notes for the map. */
+async function remember(dataDir: string, request: ScoutRequest, outcomes: readonly ScoutOutcome[], keys: readonly string[], tree: string | undefined): Promise<void> {
+  const found = outcomes.map((outcome, index) => ({ outcome, key: keys[index]! })).filter(({ outcome }) => !outcome.reused && outcome.usable);
+  if (found.length === 0) return;
+  // Scouts only read: a tree that changed meanwhile was changed by someone else, and their answers may not match it.
+  if (tree && (await treeState(request.cwd, request.dataRoots)) === tree) {
+    for (const { outcome, key } of found) writeCachedScout(dataDir, key, tree, outcome);
+  }
+  await Promise.all(found.map(({ outcome }) => recordFileNotes(dataDir, request.cwd, outcome.result.domain, outcome.result.relevantFiles).catch(() => 0)));
+}
+
+async function scoutDomains(request: ScoutRequest, run: ProcessRunner): Promise<ScoutOutcome[]> {
   // Each scout gets the files most likely to answer its own instruction and focus.
   const [likely, selected] = await Promise.all([
     Promise.all(request.domains.map((domain) => likelyFor(request.hints, `${request.instruction}\n${domainSpec(domain).scoutFocus}`, request.signal, request.taskText))),
@@ -156,6 +192,7 @@ export async function runScouts(request: ScoutRequest, run: ProcessRunner = spaw
     instruction: scoutInstruction(request, domain),
     context: scoutContext(request, domain, selected[index]!, likely[index]),
     ...(extraTools.length > 0 ? { extraTools } : {}),
+    env: toolBudgetEnv(request.config.scout.maxToolCalls),
     ...profileFields(request.config, request.profile, domain, "scout"),
     ...(request.time ? { time: { ...request.time } } : {}),
     cwd: request.cwd,
@@ -177,7 +214,6 @@ export async function runScouts(request: ScoutRequest, run: ProcessRunner = spaw
       return position >= 0 ? toOutcome(reruns[position]!, reruns[position]!.domain) : outcome;
     });
   }
-  saveScoutResults(request.taskDir, outcomes);
   return outcomes;
 }
 export function scoutResultPath(taskDir: string, domain: Domain): string {

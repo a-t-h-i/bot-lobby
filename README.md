@@ -124,6 +124,23 @@ a replaced script is kept under `archive/`. For each step, the classifier picks 
 and the agent is told to run them (**Settings → Classifier → Shared scripts**; with it off, scripts
 whose names share words with the step are suggested).
 
+## Less searching
+
+Agents spend most of their time finding things, so bot-lobby hands them what it already knows:
+
+- **Repository map.** Scouts, workers, quick fixes and the planner get the project's layout and the
+  files that match their step, each with what it says it is for and the names it declares. It is
+  read from the files themselves, so it needs no model and works with the classifier off
+  (`workflow.repoMap`).
+- **Scout notes.** What a scout found about a file is kept and shown in the map as long as the file is
+  unchanged, so the next task starts from it. A changed file's note is dropped.
+- **Reused scouts.** The same question for the same task on a tree with no changes reuses the earlier
+  findings instead of running again, for example after a crash and resume (`workflow.reuseScouts`).
+- **Line anchors.** Scouts report `path:12-40`, and the oracle copies those anchors into each brief,
+  so a worker opens the exact place.
+- **Tool budget.** A scout is told to wrap up after 60% of `scout.maxToolCalls` (30). Past the limit,
+  further calls are refused, so it reports with what it has (0 means no limit).
+
 ## Classifier
 
 A fast classifier makes the small decisions so the large models don't spend tokens on them: who

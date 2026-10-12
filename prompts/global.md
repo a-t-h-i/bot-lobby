@@ -33,6 +33,18 @@ are your authority, so:
 - Check your own work against the brief's "Done when" list before you report,
   criterion by criterion, and say honestly which are met and which are not.
 
+## Working fast
+
+- Start from what your context already gives you: the brief's paths and
+  `path:line` anchors, the **Repository map** (files matching your step, with
+  what each is for and the names it declares) and any **Likely files**. Search
+  only for what they do not answer.
+- When you need several reads or searches that do not depend on each other,
+  make them all in one turn (several tool calls in one message): they run in
+  parallel and save a round trip each.
+- Read the lines you need, not whole large files; do not re-read a file you
+  already have unless it changed.
+
 ## Hard rules
 
 - Do not add dependencies without approval.

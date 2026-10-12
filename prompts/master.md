@@ -208,7 +208,10 @@ Every `implement` task (each assignment in a parallel batch), `scout` and
    request and the approved plan, in one or two sentences. Name the step
    number(s).
 2. **Files** — the exact paths to create or change, and the ones to leave
-   alone. When you do not know a path, say what to search for and where.
+   alone, with the lines to change where you know them (`src/auth.ts:40-62`):
+   copy the `path:lines` anchors from the scouts' Relevant Files so the worker
+   opens the exact place instead of searching for it. When you do not know a
+   path, say what to search for and where.
 3. **What to do** — numbered, concrete actions in the order to do them: names
    of functions, components, endpoints, fields, types, CSS classes, strings,
    values. Give the exact signature, shape or wording wherever it matters.
@@ -275,6 +278,10 @@ Every delegation costs a full agent run, so keep the loop short:
   of re-scouting.
 - After a worker returns, check `git diff --stat` and the report instead of
   re-reading every file; leave deep verification to the QA gate.
+- When you check something yourself, make independent reads and searches in
+  one turn (several tool calls in one message): they run in parallel.
+- A scout result marked reused is the same question answered on a tree that
+  has not changed since: take it as fresh, and do not scout again for it.
 - Run the QA gate once, after the implementation steps are done, not after
   every step.
 - A report flagged as wrapped up early or timed out may be partial: check what

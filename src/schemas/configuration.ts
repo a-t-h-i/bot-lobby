@@ -38,6 +38,8 @@ export interface ScoutConfig {
   mcpTools?: string[];
   model: ModelRef;
   timeoutMs: number;
+  /** Tool calls a scout may make: it is told to wrap up at 60% and refused more past this, so it reports with what it has; 0 = no limit. */
+  maxToolCalls: number;
 }
 
 /** Subagent kinds with their own settings entry. */
@@ -91,6 +93,10 @@ export interface WorkflowConfig {
   routeQuickFixes: boolean;
   /** A new task gets a git branch or worktree of its own, named after it; `--branch` and `--worktree` decide for one task. */
   gitIsolation: GitIsolation;
+  /** Scouts, workers, quick fixes and the planner get the repository map: the layout and the files matching their step, with each file's purpose, names and unchanged scout notes. */
+  repoMap: boolean;
+  /** A scout asked the same thing again for the same task, on a tree that has not changed, reuses its findings instead of running. */
+  reuseScouts: boolean;
 }
 
 /**
@@ -256,7 +262,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     backend: { model: INHERIT_MODEL, thinking: DEFAULT_THINKING, instructions: "", timeoutMs: 15 * 60 * 1000 },
     qa: { model: INHERIT_MODEL, thinking: DEFAULT_THINKING, instructions: "", timeoutMs: 15 * 60 * 1000 },
   },
-  scout: { model: INHERIT_MODEL, timeoutMs: 8 * 60 * 1000 },
+  scout: { model: INHERIT_MODEL, timeoutMs: 8 * 60 * 1000, maxToolCalls: 30 },
   researcher: { model: INHERIT_MODEL, thinking: "low", instructions: "", timeoutMs: 10 * 60 * 1000 },
   quickFix: { model: INHERIT_MODEL, thinking: "low", instructions: "", timeoutMs: 10 * 60 * 1000 },
   planner: { model: INHERIT_MODEL, thinking: "high", instructions: "", timeoutMs: 5 * 60 * 1000 },
@@ -278,6 +284,8 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     briefCheck: true,
     routeQuickFixes: true,
     gitIsolation: "off",
+    repoMap: true,
+    reuseScouts: true,
   },
   lint: { mode: "advise", command: "", extensions: [], timeoutMs: 2 * 60 * 1000 },
   knowledge: {
@@ -353,6 +361,7 @@ function normalizeScout(override: Partial<ScoutConfig> | undefined): ScoutConfig
   return {
     model: typeof override?.model === "string" && override.model.trim() ? override.model : base.model,
     timeoutMs: positive(override?.timeoutMs) ?? base.timeoutMs,
+    maxToolCalls: typeof override?.maxToolCalls === "number" && Number.isFinite(override.maxToolCalls) && override.maxToolCalls >= 0 ? Math.round(override.maxToolCalls) : base.maxToolCalls,
     ...(mcpTools.length ? { mcpTools } : {}),
   };
 }
@@ -464,6 +473,8 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
   workflow.fastTrack = workflow.fastTrack !== false;
   workflow.briefCheck = workflow.briefCheck !== false;
   workflow.routeQuickFixes = workflow.routeQuickFixes !== false;
+  workflow.repoMap = workflow.repoMap !== false;
+  workflow.reuseScouts = workflow.reuseScouts !== false;
   workflow.gitIsolation = isGitIsolation(workflow.gitIsolation) ? workflow.gitIsolation : DEFAULT_CONFIG.workflow.gitIsolation;
   workflow.taskBudgetMinutes = typeof workflow.taskBudgetMinutes === "number" && workflow.taskBudgetMinutes > 0 ? Math.min(24 * 60, Math.round(workflow.taskBudgetMinutes)) : 0;
   const knowledge = { ...DEFAULT_CONFIG.knowledge, ...(src.knowledge as Partial<KnowledgeConfig> | undefined) };

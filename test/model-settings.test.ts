@@ -5,7 +5,7 @@ import { DEFAULT_CONFIG, resolveConfig } from "../src/schemas/configuration.ts";
 
 test("patchEntry never stores a thinking level on scouts", () => {
   const next = patchEntry(DEFAULT_CONFIG, "scout", { model: "p/fast", thinking: "max" });
-  assert.deepEqual(next.scout, { model: "p/fast", timeoutMs: DEFAULT_CONFIG.scout.timeoutMs });
+  assert.deepEqual(next.scout, { model: "p/fast", timeoutMs: DEFAULT_CONFIG.scout.timeoutMs, maxToolCalls: DEFAULT_CONFIG.scout.maxToolCalls });
   assert.equal(patchEntry(DEFAULT_CONFIG, "researcher", { thinking: "high" }).researcher.thinking, "high");
   assert.equal(DEFAULT_CONFIG.researcher.thinking, "low", "the input is not mutated");
 });
