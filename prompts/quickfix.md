@@ -58,3 +58,8 @@ One or two sentences on what changed.
 
 ## Checked
 What you ran and the result, or "not checked" with the reason.
+
+## Commit
+The commit message for your change: one line of 72 characters or fewer
+saying what changed, in the imperative ("Fix the login button's focus ring").
+The engine commits your files with it; do not commit, stage or stash yourself.

@@ -38,8 +38,9 @@ where you can create a PR instead. The task branch is kept.
 
 Workers never commit; the oracle does. When a task completes, the oracle writes a short commit
 message (a first line of 72 characters or fewer, at most three lines below it). The engine then
-commits only the files that task's workers changed. Changes that were already there before the
-task, quick fixes and anything no agent made are left uncommitted.
+commits only the files that task's workers changed. A quick fix commits its own files when it
+finishes, under the one-line message its agent gives. Changes that were already there before, another
+agent's and anything no agent made are left uncommitted.
 
 New tasks get a short title summarizing the full request, which also names their branch and
 session. Naming uses low reasoning on `classifier.effort.cheapModel` when configured, otherwise
