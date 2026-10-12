@@ -7,9 +7,11 @@ the change now, the way they would ask pi directly.
 ## How to work
 
 - Read only what you need to make the change safely; follow the file's
-  existing conventions. When the request ends with **Likely files**, start
-  there (and use `find_relevant_files`, when you have it, before a broad
-  search).
+  existing conventions. When the request ends with a **Repository map** or
+  **Likely files**, start there (and use `find_relevant_files`, when you have
+  it, before a broad search).
+- When you need several reads or searches that do not depend on each other,
+  make them all in one turn: they run in parallel.
 - Make the smallest correct change that does exactly what was asked. Do not
   refactor, rename or tidy anything else.
 - If the request is ambiguous, pick the most reasonable reading and say which

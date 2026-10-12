@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
-import { readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { readFileSync, realpathSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
 import { promisify } from "node:util";
 import { truncate } from "../text.ts";
 
@@ -26,6 +27,48 @@ async function diffAgainst(cwd: string, base: string, extra: readonly string[] =
 export async function headCommit(cwd: string): Promise<string | undefined> {
   try {
     return (await git(cwd, ["rev-parse", "--verify", "HEAD"])) || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A path with its links resolved (git reports real paths), or as it is when it does not exist. */
+function realPath(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
+/** Changed files stat'ed at most for a tree's state; past this the status text alone stands for them. */
+const MAX_STATED = 2000;
+
+/**
+ * A fingerprint of the work tree: HEAD, and each changed or untracked file's
+ * status, size and modification time, leaving out paths under `ignore`
+ * (bot-lobby's own data). Two equal fingerprints mean nothing in the tree
+ * changed in between; undefined outside git.
+ */
+export async function treeState(cwd: string, ignore: readonly string[] = []): Promise<string | undefined> {
+  try {
+    const top = await git(cwd, ["rev-parse", "--show-toplevel"]);
+    const head = (await headCommit(top)) ?? "";
+    const { stdout } = await run("git", ["status", "--porcelain=v1", "-z", "--untracked-files=all"], { cwd: top, maxBuffer: MAX_BUFFER });
+    const skipped = ignore.map((dir) => relative(top, realPath(dir))).filter((dir) => dir && !dir.startsWith("..")).map((dir) => `${dir.split("\\").join("/")}/`);
+    const entries = stdout.split("\0").filter((entry) => entry.length > 3 && !skipped.some((dir) => entry.slice(3).startsWith(dir)));
+    const hash = createHash("sha1").update(head);
+    entries.forEach((entry, index) => {
+      hash.update(`\0${entry}`);
+      if (index >= MAX_STATED) return;
+      try {
+        const info = statSync(join(top, entry.slice(3)));
+        hash.update(`\0${info.size}:${info.mtimeMs}`);
+      } catch {
+        hash.update("\0gone");
+      }
+    });
+    return hash.digest("hex");
   } catch {
     return undefined;
   }

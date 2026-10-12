@@ -13,6 +13,7 @@ import { scriptPicker } from "./scripts.ts";
 import type { ScriptPicker } from "../scripts/pick.ts";
 import { registerJevProvider, type KeySource, type KeyStatus } from "./hosts.ts";
 import { fileHinter, type FileHinter, type FileScope } from "./files.ts";
+import { withRepoMap } from "../knowledge/repo-map.ts";
 import { knowledgePicker, type KnowledgePicker } from "./knowledge.ts";
 import { lobbyFeed } from "../lobby/feed.ts";
 import { triageLine, triageWithContext } from "./triage.ts";
@@ -50,9 +51,13 @@ export function classifier(): Classifier {
   return instance;
 }
 
-/** Likely files for agents working in a tree, with what was found logged to the lobby's activity feed. */
+/**
+ * Likely files for agents working in a tree, with what was found logged to the
+ * lobby's activity feed, and the repository map while `workflow.repoMap` is on.
+ */
 export function hintsFor(scope: FileScope): FileHinter {
-  return fileHinter(classifier(), scope, (text) => lobbyFeed.log("CLASSIFIER", text, "info"));
+  const hinter = fileHinter(classifier(), scope, (text) => lobbyFeed.log("CLASSIFIER", text, "info"));
+  return withRepoMap(hinter, scope, () => ({ on: loadConfig().workflow.repoMap, exclude: classifier().config.exclude }));
 }
 
 /** Relevant knowledge and shared scripts for agents, with what Jev kept and matched logged to the lobby's activity feed. */

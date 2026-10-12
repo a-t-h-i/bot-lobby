@@ -20,6 +20,7 @@ import { registerFreshContext } from "./pi/fresh-context.ts";
 import { registerAskTool } from "./ask/tool.ts";
 import { registerWebTools } from "./web/tools.ts";
 import { registerExcalidrawTools } from "./excalidraw/tools.ts";
+import { registerToolBudget } from "./pi/tool-budget.ts";
 
 export default function (pi: ExtensionAPI): void {
   registerAgentPermissions(pi);
@@ -54,4 +55,6 @@ export default function (pi: ExtensionAPI): void {
   if (isSubagentProcess()) registerDeskClient(pi);
   // Subagents look files up with the classifier (the engine allows the tool only while file hints are on).
   if (isSubagentProcess()) registerClassifierTools(pi);
+  // A subagent given a tool budget (scouts) is warned, then refused, so it reports instead of searching on.
+  if (isSubagentProcess()) registerToolBudget(pi);
 }

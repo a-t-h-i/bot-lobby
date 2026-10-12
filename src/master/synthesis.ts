@@ -1,4 +1,5 @@
 import type { Domain } from "../schemas/agent.ts";
+import type { RelevantFile } from "../schemas/findings.ts";
 import { truncate } from "../text.ts";
 import type { ScoutOutcome } from "./master.ts";
 
@@ -34,16 +35,23 @@ export function detectSharedFiles(outcomes: ScoutOutcome[]): { path: string; dom
     .map(([path, domains]) => ({ path, domains: [...domains] }));
 }
 
+/** A relevant file as `path:lines — why`, the way a brief should point at it. */
+export function fileAnchor(file: RelevantFile, reasonChars = 140): string {
+  const anchor = file.lines ? `${file.path}:${file.lines}` : file.path;
+  return file.reason ? `${anchor} — ${truncate(file.reason, reasonChars)}` : anchor;
+}
+
 function describeOutcome(outcome: ScoutOutcome, rawLimit: number): string {
   const { result } = outcome;
+  const reused = outcome.reused ? `, reused from ${outcome.reused.slice(0, 16).replace("T", " ")} UTC: same question, tree unchanged` : "";
   const lines = [
-    `### ${result.domain} (${outcome.run.status}${outcome.usable ? "" : ", unusable"}) — confidence: ${result.confidence}`,
+    `### ${result.domain} (${outcome.run.status}${outcome.usable ? "" : ", unusable"}${reused}) — confidence: ${result.confidence}`,
     result.scope ? `Scope: ${result.scope}` : "",
     ...result.findings.slice(0, 12).map((finding) => `- ${finding}`),
     ...result.risks.slice(0, 5).map((risk) => `- RISK: ${risk}`),
     ...result.recommendations.slice(0, 5).map((rec) => `- REC: ${rec}`),
     result.relevantFiles.length > 0
-      ? `Files: ${result.relevantFiles.slice(0, 10).map((file) => file.path).join(", ")}`
+      ? `Files:\n${result.relevantFiles.slice(0, 10).map((file) => `- ${fileAnchor(file)}`).join("\n")}`
       : "",
     outcome.issues.length > 0 ? `Issues: ${outcome.issues.join("; ")}` : "",
     result.raw.trim() ? `Raw (truncated): ${truncate(result.raw.trim(), rawLimit)}` : "",

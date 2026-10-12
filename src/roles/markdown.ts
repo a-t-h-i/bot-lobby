@@ -56,9 +56,17 @@ export function bullets(text: string | undefined): string[] {
     .filter((line) => line.length > 0);
 }
 
-/** Parse a `path — reason` bullet into its parts. */
-export function parseFileBullet(text: string): { path: string; reason: string } {
+/** Split a `path:12-40` (or `path#L12-L40`) anchor into the path and its lines. */
+function splitAnchor(anchor: string): { path: string; lines?: string } {
+  const match = /^(.+?)(?::|#L)(\d+)(?::\d+)?(?:\s*[-–]\s*L?(\d+)(?::\d+)?)?$/.exec(anchor);
+  if (!match) return { path: anchor };
+  return { path: match[1]!, lines: match[3] && match[3] !== match[2] ? `${match[2]}-${match[3]}` : match[2]! };
+}
+
+/** Parse a `path — reason` bullet (the path may carry lines: `path:12-40`) into its parts. */
+export function parseFileBullet(text: string): { path: string; lines?: string; reason: string } {
   const match = /^`?([^`\s]+)`?\s*(?:[—–]|--|-)\s*(.*)$/.exec(text);
-  if (match) return { path: match[1]!, reason: match[2]!.trim() };
-  return { path: text.trim(), reason: "" };
+  const [anchor, reason] = match ? [match[1]!, match[2]!.trim()] : [text.trim().replace(/^`|`$/g, ""), ""];
+  const { path, lines } = splitAnchor(anchor);
+  return lines ? { path, lines, reason } : { path, reason };
 }

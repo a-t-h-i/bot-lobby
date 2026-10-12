@@ -47,7 +47,7 @@ interface EntryPatch {
 export function patchEntry(config: BotLobbyConfig, kind: SettingsKind, patch: EntryPatch): BotLobbyConfig {
   const next: BotLobbyConfig = { ...config, agents: { ...config.agents } };
   if (kind === "master") next.master = { ...config.master, ...patch } as AgentModelConfig;
-  else if (kind === "scout") next.scout = { model: patch.model ?? config.scout.model, timeoutMs: patch.timeoutMs ?? config.scout.timeoutMs };
+  else if (kind === "scout") next.scout = { ...config.scout, model: patch.model ?? config.scout.model, timeoutMs: patch.timeoutMs ?? config.scout.timeoutMs };
   else if (kind === "researcher") next.researcher = { ...config.researcher, ...patch } as AgentModelConfig;
   else if (kind === "quickfix") next.quickFix = { ...config.quickFix, ...patch } as AgentModelConfig;
   else if (kind === "planner") next.planner = { ...config.planner, ...patch } as AgentModelConfig;

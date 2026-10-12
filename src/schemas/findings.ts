@@ -3,6 +3,8 @@ import type { Blocker, Verdict } from "./task.ts";
 
 export interface RelevantFile {
   path: string;
+  /** The lines that matter (`42` or `12-40`), when the scout gave them as `path:12-40`. */
+  lines?: string;
   reason: string;
 }
 

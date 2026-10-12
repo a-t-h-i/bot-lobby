@@ -14,7 +14,7 @@
  */
 import { execFile } from "node:child_process";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { open, readdir, stat } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { dataRoot } from "../state/project.ts";
@@ -36,6 +36,10 @@ export interface FileScope {
 export interface IndexedFile {
   path: string;
   excerpt: string;
+  /** What the file says it is for: its opening comment (a Markdown file's first heading), one line; "" when it says nothing. */
+  purpose?: string;
+  /** The top-level names it declares or exports (a Markdown file's headings), in file order. */
+  symbols?: string[];
 }
 
 export interface LikelyFile {
@@ -122,9 +126,12 @@ const COMMENT = /^(\/\/|\/\*|\*|#(?![!#])|"""|'''|<!--|--\s|;)/;
  * signatures (headings for Markdown), then its imports; the first lines when
  * none of those exist.
  */
-export function excerptOf(path: string, text: string, max = EXCERPT_CHARS): string {
-  const lines = text.split(/\r?\n/).slice(0, 600);
-  const markdown = /\.(md|mdx|markdown|rst|txt)$/i.test(path);
+function isMarkdown(path: string): boolean {
+  return /\.(md|mdx|markdown|rst|txt)$/i.test(path);
+}
+
+/** The words of a file's opening comment, a line each (at most four); none for Markdown or code that starts without one. */
+function leadComment(lines: readonly string[], markdown: boolean): string[] {
   const lead: string[] = [];
   for (const line of lines) {
     const trimmed = line.trim();
@@ -134,10 +141,17 @@ export function excerptOf(path: string, text: string, max = EXCERPT_CHARS): stri
     }
     if (trimmed.startsWith("#!")) continue;
     if (markdown || !COMMENT.test(trimmed)) break;
-    const words = trimmed.replace(/^(\/\*+|\*+\/?|\/\/+|#+|"""|'''|<!--|--|;+)\s*/, "").replace(/\*\/$|-->$/, "").trim();
+    const words = trimmed.replace(/^(\/\*+|\*+\/?|\/\/+|#+|"""|'''|<!--|--|;+)\s*/, "").replace(/\*\/$|-->$|"""$|'''$/, "").trim();
     if (words) lead.push(words);
     if (lead.length >= 4) break;
   }
+  return lead;
+}
+
+export function excerptOf(path: string, text: string, max = EXCERPT_CHARS): string {
+  const lines = text.split(/\r?\n/).slice(0, 600);
+  const markdown = isMarkdown(path);
+  const lead = leadComment(lines, markdown);
   const signatures: string[] = [];
   const imports: string[] = [];
   for (const line of lines) {
@@ -155,10 +169,68 @@ export function excerptOf(path: string, text: string, max = EXCERPT_CHARS): stri
   return clip(body, max);
 }
 
+const PURPOSE_CHARS = 120;
+
+/** What a file says it is for, in one line: the first sentence of its opening comment, or a Markdown file's first heading; "" for a licence header or none. */
+export function purposeOf(path: string, text: string): string {
+  const lines = text.split(/\r?\n/).slice(0, 80);
+  if (isMarkdown(path)) {
+    const heading = lines.map((line) => /^#{1,3}\s+(.+?)\s*#*\s*$/.exec(line.trim())?.[1]).find(Boolean);
+    return heading ? clip(heading, PURPOSE_CHARS) : "";
+  }
+  const lead = leadComment(lines, false).join(" ").replace(/^@(?:file|fileoverview|module)\s+/i, "");
+  if (!lead || /copyright|licen[cs]e|spdx-|eslint-|@ts-|prettier-ignore|biome-ignore|^use strict/i.test(lead)) return "";
+  const sentence = /^(.+?[.!?])(?:\s|$)/.exec(lead)?.[1] ?? lead;
+  return clip(sentence, PURPOSE_CHARS);
+}
+
+/** Top-level declarations by language; each pattern's groups are the names. Indented (nested) code is left out. */
+const SYMBOL_PATTERNS: readonly RegExp[] = [
+  /^export\s+(?:default\s+)?(?:declare\s+)?(?:abstract\s+)?(?:async\s+)?(?:function\*?|class|interface|type|const\s+enum|enum|const|let|var|namespace)\s+([A-Za-z_$][\w$]*)/,
+  /^(?:async\s+)?def\s+([A-Za-z]\w*)/,
+  /^class\s+([A-Za-z]\w*)/,
+  /^func\s+(?:\([^)]*\)\s*)?([A-Za-z]\w*)/,
+  /^type\s+([A-Z]\w*)\s+(?:struct|interface|func|map|\[|\w)/,
+  /^pub(?:\([\w:]+\))?\s+(?:async\s+)?(?:unsafe\s+)?(?:fn|struct|enum|trait|type|const|static|mod)\s+([A-Za-z_]\w*)/,
+  /^(?:module|def)\s+([A-Za-z_][\w:.]*[?!]?)/,
+  /^(?:public\s+|internal\s+|open\s+|export\s+)?(?:abstract\s+|final\s+|sealed\s+|data\s+|static\s+)*(?:class|interface|enum|record|struct|object|protocol)\s+([A-Za-z_]\w*)/,
+];
+/** Plain top-level functions and classes, for a script that exports nothing. */
+const LOCAL_PATTERNS: readonly RegExp[] = [/^(?:async\s+)?function\*?\s+([A-Za-z_$][\w$]*)/, /^(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)\s*=>|function)/];
+export const MAX_SYMBOLS = 12;
+
+/** The top-level names a file declares or exports, in order, at most `max`; a Markdown file's section headings. */
+export function symbolsOf(path: string, text: string, max = MAX_SYMBOLS): string[] {
+  const lines = text.split(/\r?\n/);
+  const found = new Set<string>();
+  const add = (name: string | undefined) => {
+    const clean = name?.trim();
+    if (clean && found.size < max && !clean.startsWith("_")) found.add(clean);
+  };
+  if (isMarkdown(path)) {
+    for (const line of lines) add(/^##\s+(.+?)\s*#*\s*$/.exec(line)?.[1]?.slice(0, 60));
+    return [...found];
+  }
+  for (const line of lines) {
+    if (found.size >= max) break;
+    const named = /^export\s*(?:type\s*)?\{([^}]*)\}/.exec(line);
+    if (named) for (const part of named[1]!.split(",")) add(part.split(/\s+as\s+/).pop()?.replace(/^type\s+/, ""));
+    else if (/^export\s+default\s+(?!(?:async\s+)?(?:function|class)\s+[A-Za-z_$])/.test(line)) add("default");
+    else for (const pattern of SYMBOL_PATTERNS) add(pattern.exec(line)?.[1]);
+  }
+  // A script that exports nothing still has its functions; a test's helpers are not worth naming.
+  if (found.size === 0 && /\.(c|m)?(j|t)sx?$/i.test(path) && !/(^|\/)(tests?|__tests__|spec)\/|\.(test|spec)\.\w+$/i.test(path)) {
+    for (const line of lines) for (const pattern of LOCAL_PATTERNS) add(pattern.exec(line)?.[1]);
+  }
+  return [...found];
+}
+
 interface CacheEntry {
   mtimeMs: number;
   size: number;
   excerpt: string;
+  purpose?: string;
+  symbols?: string[];
 }
 
 interface CacheFile {
@@ -222,22 +294,17 @@ async function walkFiles(cwd: string): Promise<string[]> {
   return found.slice(0, MAX_FILES);
 }
 
-async function readHead(path: string): Promise<string | undefined> {
-  const handle = await open(path, "r");
-  try {
-    const buffer = Buffer.alloc(HEAD_BYTES);
-    const { bytesRead } = await handle.read(buffer, 0, HEAD_BYTES, 0);
-    const head = buffer.subarray(0, bytesRead);
-    return head.includes(0) ? undefined : head.toString("utf8");
-  } finally {
-    await handle.close();
-  }
+/** A text file's opening 8 KB (for its excerpt) and all of it (for its names); undefined for a binary file. */
+async function readText(path: string): Promise<{ head: string; text: string } | undefined> {
+  const buffer = await readFile(path);
+  const head = buffer.subarray(0, HEAD_BYTES);
+  return head.includes(0) ? undefined : { head: head.toString("utf8"), text: buffer.toString("utf8") };
 }
 
 /**
- * The repository's files with their excerpts. Unchanged files come from the
- * cache (same size and modification time); new or changed ones are read
- * (their first 8 KB) and the cache is rewritten.
+ * The repository's files with their excerpts, purposes and names. Unchanged
+ * files come from the cache (same size and modification time); new or
+ * changed ones are read and the cache is rewritten.
  */
 export async function indexFiles(scope: FileScope, exclude: readonly string[] = []): Promise<IndexedFile[]> {
   const listed = (await gitFiles(scope.cwd)) ?? (await walkFiles(scope.cwd));
@@ -255,11 +322,12 @@ export async function indexFiles(scope: FileScope, exclude: readonly string[] = 
         const info = await stat(join(scope.cwd, path));
         if (!info.isFile() || info.size > MAX_FILE_BYTES) return undefined;
         const hit = cached[path];
-        if (hit && hit.mtimeMs === info.mtimeMs && hit.size === info.size) return [path, hit];
-        const head = await readHead(join(scope.cwd, path));
-        if (head === undefined) return undefined;
+        // An entry from before files had names is read again once.
+        if (hit && hit.mtimeMs === info.mtimeMs && hit.size === info.size && Array.isArray(hit.symbols)) return [path, hit];
+        const read = await readText(join(scope.cwd, path));
+        if (read === undefined) return undefined;
         changed = true;
-        return [path, { mtimeMs: info.mtimeMs, size: info.size, excerpt: excerptOf(path, head) }];
+        return [path, { mtimeMs: info.mtimeMs, size: info.size, excerpt: excerptOf(path, read.head), purpose: purposeOf(path, read.head), symbols: symbolsOf(path, read.text) }];
       } catch {
         return undefined;
       }
@@ -267,7 +335,7 @@ export async function indexFiles(scope: FileScope, exclude: readonly string[] = 
     for (const entry of entries) {
       if (!entry) continue;
       next[entry[0]] = entry[1];
-      indexed.push({ path: entry[0], excerpt: entry[1].excerpt });
+      indexed.push({ path: entry[0], excerpt: entry[1].excerpt, purpose: entry[1].purpose ?? "", symbols: entry[1].symbols ?? [] });
     }
   }
   if (changed) writeCache(scope, next);
