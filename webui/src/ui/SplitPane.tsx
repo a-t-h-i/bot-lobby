@@ -139,32 +139,37 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe, i
   }
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[clamp(17rem,28%,23rem)_minmax(0,1fr)] gap-3 p-3">
-      <Pane data-pane="list" ref={listPane} onKeyDown={onListKey} className="workspace-pane overflow-y-auto rounded-xl border pb-dock shadow-xs">
-        {list}
-      </Pane>
-      <Pane data-pane="detail" ref={detailPane} tabIndex={0} aria-label="Detail" onKeyDown={onDetailKey} className={cn("workspace-pane overflow-y-auto rounded-xl border px-5 pt-5 pb-dock shadow-xs outline-none focus-visible:bg-muted/30", detailClassName)}>
-        {detail ?? (
-          <div className="grid h-full min-h-48 place-items-center">
-            <div className="flex max-w-xs flex-col items-center gap-3 text-center">
-              <span aria-hidden="true" className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-                <PanelRight className="size-5" />
-              </span>
-              <p className="text-sm text-muted-foreground">{hint}</p>
-              <p className="kbd-hint flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <Keys chord="ArrowUp" />
-                  <Keys chord="ArrowDown" />
-                  move
+      {/* The frame holds the border and clips to it; the pane inside scrolls, so its scrollbar never paints over the rim. */}
+      <div className="workspace-pane min-h-0 min-w-0 overflow-hidden rounded-xl border shadow-xs">
+        <Pane data-pane="list" ref={listPane} onKeyDown={onListKey} className="h-full overflow-y-auto pb-dock">
+          {list}
+        </Pane>
+      </div>
+      <div className="workspace-pane min-h-0 min-w-0 overflow-hidden rounded-xl border shadow-xs">
+        <Pane data-pane="detail" ref={detailPane} tabIndex={0} aria-label="Detail" onKeyDown={onDetailKey} className={cn("h-full overflow-y-auto px-5 pt-5 pb-dock outline-none focus-visible:bg-muted/30", detailClassName)}>
+          {detail ?? (
+            <div className="grid h-full min-h-48 place-items-center">
+              <div className="flex max-w-xs flex-col items-center gap-3 text-center">
+                <span aria-hidden="true" className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                  <PanelRight className="size-5" />
                 </span>
-                <span className="inline-flex items-center gap-1">
-                  <Keys chord="ArrowRight" />
-                  open
-                </span>
-              </p>
+                <p className="text-sm text-muted-foreground">{hint}</p>
+                <p className="kbd-hint flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1">
+                    <Keys chord="ArrowUp" />
+                    <Keys chord="ArrowDown" />
+                    move
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Keys chord="ArrowRight" />
+                    open
+                  </span>
+                </p>
+              </div>
             </div>
-          </div>
-        )}
-      </Pane>
+          )}
+        </Pane>
+      </div>
     </div>
   )
 }
@@ -172,7 +177,7 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe, i
 /** The list pane's title row: `Tasks            2 open · 2 finished`, then any controls; it stays put while the list scrolls. */
 export function PaneHeader({ title, count, children }: { title: string; count?: string; children?: ReactNode }) {
   return (
-    <div className="sticky top-0 z-10 flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-card/90 px-4 py-2 backdrop-blur-sm max-md:static max-md:z-auto max-md:bg-transparent max-md:px-3 max-md:py-2 max-md:backdrop-blur-none">
+    <div className="sticky top-0 z-10 flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-[var(--workspace-card)] px-4 py-2 max-md:static max-md:z-auto max-md:bg-transparent max-md:px-3 max-md:py-2 max-md:backdrop-blur-none">
       <h2 className="text-sm font-medium">{title}</h2>
       <span aria-hidden="true" className="min-w-2 flex-1" />
       {count ? <span className="text-xs text-muted-foreground tabular-nums">{count}</span> : null}

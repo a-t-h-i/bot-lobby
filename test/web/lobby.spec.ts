@@ -130,7 +130,7 @@ test("lobby tab streams a reply and stops", async ({ page, server }) => {
   const trap = await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 800 });
   const main = page.locator("#main");
-  await expect(main.getByText("Add offline mock fixtures", { exact: true }), "task header").toBeVisible();
+  await expect(main.getByRole("group", { name: "Task" }), "no task tracker: a task's steps live in Tasks").toHaveCount(0);
   await expect(main.getByRole("log", { name: "Conversation" }), "conversation").toBeVisible();
   await expect(main.getByRole("heading", { name: "Conversation", exact: true }), "redundant strip removed").toHaveCount(0);
   await expect(main.getByRole("log", { name: "Activity" }), "activity").toBeVisible();
@@ -297,5 +297,5 @@ test("scrolling past the end of a chat full of code never drags the Lobby page u
     await page.waitForTimeout(300);
     expect(await main.evaluate((el: any) => el.scrollTop), `${name}: the page stays where it is`).toBe(0);
   }
-  await expect(page.getByText("Add offline mock fixtures", { exact: true }), "the task header is still in view").toBeInViewport();
+  await expect(page.getByRole("tab", { name: /Lobby/ }), "the tabs are still in view").toBeInViewport();
 });
