@@ -1,12 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, realpathSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describeToolCall } from "../src/pi/activity.ts";
 import { createStreamCollector, finishedThought, MAX_THOUGHT_CHARS, type PiStreamEvent, type ProcessOutcome, type ProcessRunner, type ProcessRunOptions } from "../src/execution/pi-runner.ts";
 import { chatFromEntries, chatText, LobbyFeed, MAX_CHAT, textOf } from "../src/lobby/feed.ts";
-import { QUICK_FIX_TOOLS, QuickFixQueue, jobTitle, quickFixPrompt } from "../src/lobby/quickfix.ts";
+import { QUICK_FIX_TOOLS, QuickFixQueue, jobTitle, quickFixCommitMessage, quickFixPrompt } from "../src/lobby/quickfix.ts";
 import { PLANNER_TOOLS, RESEARCH_PANEL_TOOLS, PlanningSession, appendAssumptions, commentBlock, memberPrompt, oracleClosing, optionLabel, panelSection, parseMemberReply, parseOption, parsePlannerReply, plannerSays, plannerTranscript, recommendedOption, roundMode, roundQuestions, sameQuestion, settledBlock, withoutSettled } from "../src/lobby/planner.ts";
 import { MAX_QUESTIONS } from "../src/lobby/ask.ts";
 import { createIssue, ghError, IssuesState, listIssues, splitIssueText, viewIssue, type Exec } from "../src/lobby/issues.ts";
@@ -170,7 +171,7 @@ test("quick fixes run one at a time with full tools and land in metrics", async 
   const first = queue.submit("rename foo to bar\nin a.ts");
   const second = queue.submit("fix the typo");
   assert.equal(second.status, "queued", "the second job waits for the first");
-  await settle();
+  for (let i = 0; i < 200 && !second.finishedAt; i++) await new Promise((resolve) => setTimeout(resolve, 5));
   assert.equal(first.status, "success");
   assert.equal(first.report, "## Done\nRenamed it.");
   assert.equal(first.model, "p/served");
@@ -589,4 +590,38 @@ test("gh failures read as one actionable line", async () => {
   await state.refresh();
   assert.match(state.error!, /not installed/);
   assert.equal(state.loading, false);
+});
+
+test("a quick fix's commit message comes from its report, kept short, or from the request", () => {
+  assert.equal(quickFixCommitMessage({ prompt: "make the button blue", report: "## Done\nBlue.\n\n## Commit\nMake the save button blue\n" }), "Make the save button blue");
+  assert.equal(quickFixCommitMessage({ prompt: "make the button blue", report: "## Commit\n```\nMake it blue\n```\n\n## Files\n- a" }), "Make it blue");
+  assert.equal(quickFixCommitMessage({ prompt: "make the button blue\nplease", report: `## Commit\n${"x".repeat(80)}` }), "make the button blue", "too long: the request names it");
+  assert.equal(quickFixCommitMessage({ prompt: "y".repeat(90) }).length, 72);
+});
+
+test("a finished quick fix commits only the files it edited, with its message", async () => {
+  const root = realpathSync(tempRoot());
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: root, encoding: "utf8" });
+  git("init", "-q");
+  git("config", "user.email", "test@example.com");
+  git("config", "user.name", "Test");
+  writeFileSync(join(root, "a.txt"), "a\n");
+  writeFileSync(join(root, "mine.txt"), "mine\n");
+  git("add", ".");
+  git("commit", "-qm", "init");
+  writeFileSync(join(root, "mine.txt"), "the user's edit\n");
+  const logged: string[] = [];
+  const runner: ProcessRunner = async (_args, options) => {
+    options.onEvent?.({ type: "tool_execution_start", toolName: "write", args: { path: "a.txt" } } as PiStreamEvent);
+    options.onEvent?.({ type: "tool_execution_start", toolName: "edit", args: { path: "mine.txt" } } as PiStreamEvent);
+    writeFileSync(join(root, "a.txt"), "b\n");
+    return { exitCode: 0, stdout: reply("## Done\nChanged a.\n\n## Commit\nChange a to b"), stderr: "", killed: false, timedOut: false };
+  };
+  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low", timeoutMs: 60_000 }), runProcess: runner, feed: { log: (_source: string, text: string) => logged.push(text), step: () => {}, end: () => {}, thought: () => {}, liveThought: () => {}, settleThought: () => {} } as never });
+  const job = queue.submit("change a to b");
+  for (let i = 0; i < 100 && !job.commit; i++) await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(git("log", "-1", "--format=%s", "--name-only").trim(), "Change a to b\n\na.txt", "its own file, its message");
+  assert.equal(job.commit?.subject, "Change a to b");
+  assert.ok(logged.some((line) => /^committed [0-9a-f]{7}: Change a to b$/.test(line)));
+  assert.match(git("status", "--porcelain"), /^ M mine\.txt/m, "a file the user had changed before it ran stays theirs, uncommitted");
 });

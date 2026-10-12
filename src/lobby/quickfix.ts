@@ -21,7 +21,7 @@ import { fellShort, profileLabel, routeLabel, type EffortRoute, type EffortRoute
 import { existsSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
 import type { LintConfig } from "../schemas/configuration.ts";
-import { repositoryTop } from "../execution/git.ts";
+import { changedFiles, commitFiles, commitMessage, MAX_COMMIT_SUBJECT, repositoryTop } from "../execution/git.ts";
 import type { LintExec } from "../execution/lint.ts";
 import { scriptsFor, type ScriptPicker } from "../scripts/pick.ts";
 import { dataRoot } from "../state/project.ts";
@@ -72,6 +72,10 @@ export interface QuickFixJob {
   routed?: boolean;
   /** An earlier run was cut off when pi stopped: some of its edits may already be in the tree. */
   interrupted?: boolean;
+  /** Files (relative to the repository) that had uncommitted changes before its first run: never its to commit. */
+  before?: string[];
+  /** The commit its changes went in, and its message's first line. */
+  commit?: { sha: string; subject: string };
 }
 
 /** How a job enters the queue besides its prompt. */
@@ -134,6 +138,24 @@ function isActive(job: QuickFixJob): boolean {
 export function quickFixPrompt(instructions?: string): string {
   const custom = instructions?.trim();
   return custom ? `${loadPrompt("quickfix.md")}\n\n## Custom Instructions\n\n${custom}` : loadPrompt("quickfix.md");
+}
+
+/**
+ * The commit message a quick fix's report gives under `## Commit`, kept short
+ * (see `commitMessage`); the request's first line, clipped, when it gives none
+ * or one too long.
+ */
+export function quickFixCommitMessage(job: Pick<QuickFixJob, "prompt" | "report">): string {
+  const section = /^## Commit[^\n]*\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(job.report ?? "")?.[1]?.replace(/^\s*```[^\n]*\n?|```\s*$/g, "").trim();
+  if (section) {
+    try {
+      return commitMessage(section);
+    } catch {
+      // Too long or empty: the request names it instead.
+    }
+  }
+  const title = jobTitle(job).replace(/\s+/g, " ");
+  return title.length > MAX_COMMIT_SUBJECT ? `${title.slice(0, MAX_COMMIT_SUBJECT - 1).trimEnd()}…` : title;
 }
 
 /** First line of a prompt, for lists. */
@@ -301,6 +323,8 @@ export class QuickFixQueue {
     }
     this.deps.feed?.log(QUICK_FIX_SOURCE, `started: ${jobTitle(job)}`, "info", job.startedAt);
     this.edits.set(job.id, new EditLog(this.deps.cwd));
+    // What was uncommitted before it ran is someone else's; a run cut off and resumed keeps its first look.
+    job.before ??= (await changedFiles(this.deps.cwd))?.files ?? [];
     try {
       const [likely, route, scripts] = await Promise.all([
         this.likely(job.prompt, controller.signal),
@@ -363,6 +387,12 @@ export class QuickFixQueue {
       job.error = result.error;
       job.usage = result.usage;
       if (result.model) job.model = result.model;
+      const edited = this.edits.get(job.id)?.list() ?? [];
+      if (job.status === "success" && edited.length > 0) {
+        // Lint reads what changed since HEAD, so it goes before the commit.
+        await this.lintAfter(job, edited);
+        await this.commitAfter(job, edited);
+      }
     } catch (error) {
       job.status = "failed";
       job.error = (error as Error).message;
@@ -440,9 +470,32 @@ export class QuickFixQueue {
     this.deps.feed?.log(QUICK_FIX_SOURCE, `${outcome}: ${jobTitle(job)}`, ok ? "success" : job.status === "cancelled" ? "warning" : "error", job.finishedAt);
     appendMetrics(this.deps.root, this.deps.configDir, [quickFixMetric(job)]);
     this.deps.notify?.(`bot-lobby quick fix ${outcome}: ${jobTitle(job)}`, ok ? "info" : "warning");
-    if (ok && edited.length > 0) void this.lintAfter(job, edited);
     this.changed();
     this.pump();
+  }
+
+  /**
+   * Commit what a finished quick fix edited, with the message its report
+   * gives: only its own files, never one that held uncommitted changes before
+   * it ran. A refused commit is a line in the activity log; the fix stands.
+   */
+  private async commitAfter(job: QuickFixJob, edited: readonly string[]): Promise<void> {
+    const top = await repositoryTop(this.deps.cwd);
+    if (!top) return;
+    const before = new Set(job.before ?? []);
+    const files = edited.map((file) => relative(top, file).split("\\").join("/")).filter((file) => file && !file.startsWith("..") && !isAbsolute(file) && !before.has(file));
+    const own = relative(top, dataRoot(this.deps.root, this.deps.configDir)).split("\\").join("/");
+    const ours = own && !own.startsWith("..") ? files.filter((file) => !file.startsWith(`${own}/`)) : files;
+    if (ours.length === 0) return;
+    const message = quickFixCommitMessage(job);
+    try {
+      const commit = await commitFiles(top, ours, message);
+      if (!commit) return;
+      job.commit = { sha: commit.commit, subject: message.split("\n")[0]! };
+      this.deps.feed?.log(QUICK_FIX_SOURCE, `committed ${commit.commit.slice(0, 7)}: ${job.commit.subject}`, "info");
+    } catch (error) {
+      this.deps.feed?.log(QUICK_FIX_SOURCE, `not committed: ${(error as Error).message.split("\n")[0]}`, "warning");
+    }
   }
 
   /**
