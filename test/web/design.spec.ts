@@ -1441,3 +1441,21 @@ test("a task's short steps come first, the one being worked on marked active wit
   await expect(active).not.toContainText("working)");
   await expect(active).toHaveAttribute("data-step", "current");
 });
+
+test("the Plan header puts the panel on the buttons' row when wide, and below them when not", { tag: "@theme" }, async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() => {
+    window.location.hash = "#/plan";
+  });
+  const header = page.locator("#main header").filter({ has: page.getByRole("heading", { name: "Planning" }) });
+  const panel = header.getByRole("list", { name: "Panel" });
+  const save = header.getByRole("button", { name: /Save the plan/ });
+  await expect(panel).toBeVisible();
+  const middle = (box: { y: number; height: number }) => box.y + box.height / 2;
+  const [wide, button] = await Promise.all([panel.boundingBox(), save.boundingBox()]);
+  expect(Math.abs(middle(wide!) - middle(button!)), "wide: the seats share the buttons' row").toBeLessThan(4);
+  expect(wide!.x + wide!.width, "to the left of the buttons").toBeLessThanOrEqual(button!.x);
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await expect.poll(async () => (await panel.boundingBox())!.y - (await save.boundingBox())!.y, { message: "narrower: the seats drop to their own row" }).toBeGreaterThan(20);
+});
