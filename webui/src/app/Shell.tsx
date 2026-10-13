@@ -1,7 +1,7 @@
 /**
  * The shell that wraps every route: the rail on the left (Settings and the
  * app's switches; a sheet on a phone) and beside it, top to bottom, the
- * top bar with the tabs, one bordered surface for the page of the route
+ * top bar with the tabs, the page of the route lying flat beside the rail
  * (it eases in when the tab changes) and the composer under it. The composer
  * sits in the flow, so a tall message gives the page less room instead of
  * covering it; the page behind it never scrolls, only its panes do. Pop-ups
@@ -212,7 +212,7 @@ export function Shell() {
   if (signedOut || !status) return (
     <div ref={rootRef} className="fixed inset-0 flex flex-col">
       {header}
-      <main className="surface mx-3 mb-3 flex min-h-0 flex-1 flex-col overflow-y-auto max-md:mx-0 max-md:mb-0">
+      <main className="surface flex min-h-0 flex-1 flex-col overflow-y-auto">
         {signedOut ? <SignIn /> : statusRecord.error ? <ErrorState message={statusRecord.error} onRetry={reload} /> : <LoadingState />}
       </main>
     </div>
@@ -235,7 +235,7 @@ export function Shell() {
         }}
         role={activeId ? "tabpanel" : undefined}
         aria-labelledby={activeId ? `tab-${activeId}` : undefined}
-        className="surface mr-3 mb-3 flex min-h-0 flex-1 flex-col overflow-y-auto outline-none max-md:mx-0 max-md:mb-0"
+        className="surface flex min-h-0 flex-1 flex-col overflow-y-auto outline-none"
       >
         <motion.div
           key={routeKey(route)}

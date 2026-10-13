@@ -1,3 +1,4 @@
+// Adapted from T3 Code (MIT), apps/web/src/components/ui/sidebar.tsx
 /**
  * The rail on the left of every page, as in the coding harnesses it takes
  * after: the app's switches (the key list, light or dark, the sounds) and
@@ -20,7 +21,7 @@ export interface SidebarProps {
 }
 
 const ITEM =
-  "group/item flex min-h-9 w-full min-w-0 items-center gap-2.5 rounded-lg px-2 text-sm text-sidebar-foreground/85 outline-none transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=page]:bg-sidebar-accent aria-[current=page]:font-medium aria-[current=page]:text-sidebar-foreground max-md:min-h-11"
+  "group/item flex min-h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2.5 text-sm text-sidebar-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:bg-sidebar-accent aria-[current=page]:bg-[var(--sidebar-selected)] aria-[current=page]:font-medium [&>svg]:text-[var(--sidebar-icon)] hover:[&>svg]:text-sidebar-foreground aria-[current=page]:[&>svg]:text-sidebar-foreground max-md:min-h-11"
 
 function SettingsLink({ route, keys, rail }: { route: Route; keys: Record<string, string>; rail?: boolean }) {
   const hint = keys.settings ?? "Alt+S"
@@ -58,7 +59,7 @@ function SidebarBody({ route, keys, onHelp, closer, phone = false }: SidebarProp
 }
 
 const RAIL_ITEM =
-  "inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none transition-[background-color,color,translate] duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px aria-[current=page]:bg-sidebar-accent aria-[current=page]:text-sidebar-foreground motion-reduce:active:translate-none"
+  "inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-[var(--sidebar-icon)] outline-none transition-[background-color,color,scale] duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.97] aria-pressed:text-sidebar-foreground aria-[current=page]:bg-[var(--sidebar-selected)] aria-[current=page]:text-sidebar-foreground aria-[current=page]:shadow-control motion-reduce:active:scale-100"
 
 function RailTip({ label, hint, side = "right", children }: { label: string; hint?: string; side?: "right" | "top"; children: ReactNode }) {
   return (

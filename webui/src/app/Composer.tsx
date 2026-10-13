@@ -1,3 +1,4 @@
+// Adapted from T3 Code (MIT), apps/web/src/components/chat/ComposerSurface.tsx
 /**
  * The one text box for everything, after the coding harnesses: a tray tucked
  * behind the top of the box says where you are and who the message goes to
@@ -89,11 +90,11 @@ let keySeq = 0
 
 /** The icon buttons under the box. */
 const TOOL =
-  "toolbar-button composer-tool relative inline-flex size-8 items-center justify-center rounded-full border text-foreground transition-[background-color,border-color,translate] duration-150 ease-snap outline-none focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:active:translate-none"
+  "toolbar-button composer-tool relative inline-flex size-8 items-center justify-center rounded-full border text-foreground transition-[background-color,border-color,scale] duration-150 ease-snap outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.97] motion-reduce:active:scale-100"
 
 /** A chip in the tray behind the box. */
 const CHIP =
-  "composer-chip inline-flex h-7 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium outline-none transition-colors duration-150 focus-visible:ring-3 focus-visible:ring-ring/40"
+  "composer-chip inline-flex h-7 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
 
 function isSend(event: KeyboardEvent): boolean {
   return event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing
@@ -441,12 +442,12 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
       )}
       inert={blocked}
     >
-      {dockNav ? <div className="pointer-events-auto mx-auto mb-1.5 w-full max-w-3xl">{dockNav}</div> : null}
+      {dockNav ? <div className="pointer-events-auto mx-auto mb-1.5 w-full max-w-[46rem]">{dockNav}</div> : null}
       {tray}
-      <div className="pointer-events-auto relative mx-auto w-full max-w-3xl">
+      <div className="pointer-events-auto relative mx-auto w-full max-w-[46rem]">
         <div
           className={cn(
-            "group/composer relative rounded-[22px] border border-dock-border bg-dock shadow-dock transition-[border-color,box-shadow] duration-300 ease-snap focus-within:border-[color-mix(in_oklab,var(--ring)_50%,var(--dock-border))] focus-within:shadow-dock-focus",
+            "group/composer relative rounded-[22px] border border-dock-border bg-dock shadow-dock transition-[border-color,box-shadow] duration-200 ease-snap focus-within:border-[color-mix(in_oklab,var(--ring)_28%,var(--dock-border))] focus-within:shadow-dock-focus",
             compact && "min-[500px]:max-md:grid min-[500px]:max-md:grid-cols-[minmax(0,1fr)_auto] min-[500px]:max-md:min-w-0",
             dragging && "border-primary shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_30%,transparent)]"
           )}
@@ -572,7 +573,7 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
                   data-compact
                   onClick={() => void send()}
                   disabled={!canSend}
-                  className="btn-tint relative inline-flex size-8 items-center justify-center rounded-full border [--tint:var(--primary)] before:absolute before:-inset-1 before:content-[''] text-primary-foreground transition-[background-color,color,box-shadow,translate,filter] duration-150 ease-snap outline-none focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:active:translate-none disabled:text-muted-foreground"
+                  className="relative inline-flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xs shadow-primary/24 inset-shadow-[0_1px_rgb(255_255_255/16%)] before:absolute before:-inset-1 before:content-[''] transition-[background-color,box-shadow,scale] duration-150 ease-snap outline-none hover:scale-105 hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background active:inset-shadow-[0_1px_rgb(0_0_0/8%)] active:shadow-none disabled:opacity-64 disabled:shadow-none disabled:hover:scale-100 motion-reduce:hover:scale-100"
                 >
                   {sending ? <Spinner aria-hidden="true" role="presentation" className="size-3.5 text-primary-foreground" /> : <ArrowUp aria-hidden="true" className="size-4" strokeWidth={2.25} />}
                 </button>
