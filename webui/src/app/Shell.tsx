@@ -1,6 +1,6 @@
 /**
- * The shell that wraps every route: the sidebar on the left (the sessions,
- * Settings and the app's switches; a sheet on a phone) and beside it, top to bottom, the
+ * The shell that wraps every route: the rail on the left (Settings and the
+ * app's switches; a sheet on a phone) and beside it, top to bottom, the
  * top bar with the tabs, one bordered surface for the page of the route
  * (it eases in when the tab changes) and the composer under it. The composer
  * sits in the flow, so a tall message gives the page less room instead of
@@ -37,13 +37,12 @@ import { go, parseHash, tabHash, useRoute, type Route } from "./router.ts"
 import { routeBody } from "@/tabs/registry.tsx"
 import { ACTIVITY_OPEN } from "@/tabs/lobby/InlineActivity"
 import { focusTab, isTyping, tabWalk } from "@/prompts/nav"
-import { toggleCollapsed, useCollapsed } from "@/lib/collapsed"
+import { toggleCollapsed } from "@/lib/collapsed"
 
 function handleAction(action: string, route: Route, toggleHelp: () => void, cycle: (delta: number) => void, toggleSidebar: () => void): void {
   if (action === "search") (document.querySelector<HTMLElement>("#main input[type='search']") ?? document.getElementById("composer-text"))?.focus()
   else if (action === "help") toggleHelp()
   else if (action === "settings") go("#/settings")
-  else if (action === "sessions") go("#/sessions")
   else if (action === "thinking") toggleCollapsed("lobby.thinking")
   else if (action === "sidebar") toggleSidebar()
   else if (action === "activity") {
@@ -139,18 +138,11 @@ export function Shell() {
   )
   const toggleHelp = useCallback(() => setHelp((open) => !open), [])
   const projects = useProjects()
-  const [sidebarFolded, toggleFolded] = useCollapsed("shell.sidebar")
   const [sheet, setSheet] = useState(false)
-  // Below 1200 px the open sidebar would squeeze the tabs: it rests as the rail and opens over the page instead.
-  const roomy = useMediaQuery("(min-width: 1200px)")
-  const [peek, setPeek] = useState(false)
+  // On a phone the sidebar is a sheet; wider, the rail is always there and has nothing to unfold.
   const toggleSidebar = useCallback(() => {
     if (phone) setSheet((open) => !open)
-    else if (roomy) toggleFolded()
-    else setPeek((open) => !open)
-  }, [phone, roomy, toggleFolded])
-  const hash = route.kind === "tab" ? route.tab : JSON.stringify(route)
-  useEffect(() => setPeek(false), [hash, roomy])
+  }, [phone])
   const onAction = useCallback((action: string) => {
     if ((action === "thinking" || action === "activity") && status?.panels?.[action] === false) return
     // The route as the address bar has it right now: a key pressed in the frame after a jump must not act on the page just left.
@@ -204,8 +196,6 @@ export function Shell() {
     </span>
   )
   const header = <Header
-        status={status}
-        task={lobbyRecord.data?.task}
         connection={connection}
         projects={projects}
         lead={lead}
@@ -227,10 +217,10 @@ export function Shell() {
       </main>
     </div>
   )
-  const sidebarProps = { route, keys: keyLabels, status, onHelp: toggleHelp }
+  const sidebarProps = { route, keys: keyLabels, onHelp: toggleHelp }
   return (
     <div ref={rootRef} className="fixed inset-0 flex">
-      {phone ? null : <Sidebar {...sidebarProps} folded={roomy ? sidebarFolded : !peek} over={!roomy && peek} onToggle={toggleSidebar} />}
+      {phone ? null : <Sidebar {...sidebarProps} />}
       <div className="relative flex min-w-0 flex-1 flex-col">
       {header}
       <Banner connection={connection} onRetry={retry} />

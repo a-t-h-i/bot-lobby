@@ -350,3 +350,15 @@ test("switching this window to a session without a task keeps bot-lobby on, so t
     await stop(fake, ctx);
   }
 });
+
+test("a message sent while the oracle is busy shows at once, and its delivery later does not repeat it", async () => {
+  const { LobbyFeed, narrateEvent } = await import("../src/lobby/feed.ts");
+  const feed = new LobbyFeed();
+  feed.sayQueued("also check the stored procs");
+  assert.deepEqual(feed.chat.map((entry) => [entry.role, entry.text]), [["you", "also check the stored procs"]], "on show before the oracle reads it");
+  const delivered = { type: "message_end", message: { role: "user", content: [{ type: "text", text: "also check the stored procs" }] } };
+  narrateEvent(feed, delivered as never, () => "");
+  assert.equal(feed.chat.length, 1, "the steer's delivery is the same message");
+  narrateEvent(feed, delivered as never, () => "");
+  assert.equal(feed.chat.length, 2, "the same words sent again later are a new message");
+});

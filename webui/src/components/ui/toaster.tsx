@@ -9,8 +9,9 @@ const ICONS: Record<ToastKind, typeof Info> = { info: Info, success: CheckCircle
 const TONES: Record<ToastKind, string> = { info: "text-primary", success: "text-success", warning: "text-warning", error: "text-destructive" }
 
 /**
- * The one toast on screen: it scales up with a bounce just above the composer,
- * on a pane with a light blur behind it (the composer's height is `--composer-h`). It waits while a pop-up is
+ * The one toast on screen: it scales up with a bounce just above the composer and
+ * centred on it, on a pane with a light blur behind it (the composer publishes its
+ * height, left edge and width as `--composer-h`, `--composer-x` and `--composer-w`). It waits while a pop-up is
  * open and leaves sooner when more are queued.
  */
 export function Toaster() {
@@ -29,8 +30,8 @@ export function Toaster() {
       role="status"
       aria-live="polite"
       aria-atomic="true"
-      className="pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4"
-      style={{ bottom: "calc(var(--composer-h, 0px) + 0.25rem)" }}
+      className="pointer-events-none fixed z-40 flex justify-center px-4"
+      style={{ bottom: "calc(var(--composer-h, 0px) + 0.25rem)", left: "var(--composer-x, 0px)", width: "var(--composer-w, 100%)" }}
     >
       <AnimatePresence mode="wait">
         {showing ? (

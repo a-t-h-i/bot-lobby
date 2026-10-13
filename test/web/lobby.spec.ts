@@ -281,60 +281,33 @@ test("the conversation follows new steps, lets a reader who scrolled up stay put
 
 const SWITCHES = ["Keyboard shortcuts", "Switch to dark mode|Switch to light mode", "Mute prompt sounds|Unmute prompt sounds"];
 
-test("the sidebar holds the sessions, Settings and the app's switches, and folds to a rail with Alt+B", async ({ page, server }) => {
+test("the rail holds Settings and the app's switches; there is no Sessions page or task name in the bar, and the tabs sit centred", async ({ page, server }) => {
   await openScenario(page, server, "full");
-  await page.setViewportSize({ width: 1280, height: 800 });
-  const header = page.getByRole("banner");
-  for (const name of ["Sessions", "Settings"]) await expect(header.getByRole("link", { name, exact: true }), `${name} left the top bar`).toHaveCount(0);
-  for (const name of SWITCHES) await expect(header.getByRole("button", { name: new RegExp(`^(${name})$`) }), `${name} left the top bar`).toHaveCount(0);
-  await expect(header.getByRole("combobox", { name: "Project", exact: true }), "so did the project").toHaveCount(0);
-  await expect(header.getByRole("tablist"), "the tabs stay where they were").toBeVisible();
+  for (const width of [1280, 1000]) {
+    await page.setViewportSize({ width, height: 800 });
+    const header = page.getByRole("banner");
+    await expect(header.getByRole("link", { name: "Settings", exact: true }), "Settings left the top bar").toHaveCount(0);
+    for (const name of SWITCHES) await expect(header.getByRole("button", { name: new RegExp(`^(${name})$`) }), `${name} left the top bar`).toHaveCount(0);
+    await expect(header.getByRole("combobox", { name: "Project", exact: true }), "so did the project").toHaveCount(0);
+    await expect(header, "the bar does not name the task").not.toContainText("T-148");
+    const bar = (await header.boundingBox())!;
+    const tabs = (await header.getByRole("tablist").boundingBox())!;
+    expect(Math.abs(tabs.x + tabs.width / 2 - (bar.x + bar.width / 2)), `the tabs are centred at ${width}px`).toBeLessThan(2);
+    const sidebar = page.getByRole("complementary", { name: "Sidebar" });
+    expect((await sidebar.boundingBox())!.width, "a rail of icons").toBeLessThan(64);
+    await expect(sidebar.getByRole("link", { name: "Sessions" }), "no Sessions page").toHaveCount(0);
+    await expect(sidebar.getByRole("navigation", { name: "Sessions list" }), "no list of sessions").toHaveCount(0);
+    for (const name of SWITCHES) await expect(sidebar.getByRole("button", { name: new RegExp(`^(${name})$`) }), `${name} sits on the rail`).toBeVisible();
+  }
   const sidebar = page.getByRole("complementary", { name: "Sidebar" });
-  await expect(sidebar.getByRole("combobox", { name: "Project", exact: true }), "the project is chosen over the composer, not here").toHaveCount(0);
-  await expect(page.getByRole("group", { name: "Message context" }).getByRole("combobox", { name: "Project", exact: true })).toBeVisible();
-  for (const name of SWITCHES) await expect(sidebar.getByRole("button", { name: new RegExp(`^(${name})$`) }), `${name} sits at the foot of the sidebar`).toBeVisible();
   const dark = () => page.locator("html").evaluate((el: any) => el.classList.contains("dark"));
   const was = await dark();
   await sidebar.getByRole("button", { name: /^Switch to (dark|light) mode$/ }).click();
   await expect.poll(dark, "the theme switch works from there").toBe(!was);
-  const sessions = sidebar.getByRole("navigation", { name: "Sessions list" });
-  await expect(sessions.getByRole("link", { name: /mock lobby/ }), "this window's session is the Lobby").toHaveAttribute("aria-current", "page");
-  await sessions.getByRole("link", { name: /Mock background task/ }).click();
-  await expect(page).toHaveURL(/#\/sessions\/[^/]+$/);
-  await expect(sessions.getByRole("link", { name: /Mock background task/ })).toHaveAttribute("aria-current", "page");
   await sidebar.getByRole("link", { name: "Settings", exact: true }).click();
   await expect(page.getByRole("navigation", { name: "Settings sections" })).toBeVisible();
-  const width = async () => (await sidebar.boundingBox())!.width;
-  expect(await width(), "open, it is a column").toBeGreaterThan(200);
-  await page.locator("#composer-text").focus();
-  await page.keyboard.press("Alt+b");
-  await expect(sidebar.getByRole("button", { name: "Expand sidebar" }), "Alt+B folds it to a rail").toBeVisible();
-  expect(await width(), "a rail of icons").toBeLessThan(64);
-  for (const name of ["Sessions", "Settings"]) await expect(sidebar.getByRole("link", { name, exact: true }), `${name} stays a click away`).toBeVisible();
-  for (const name of SWITCHES) await expect(sidebar.getByRole("button", { name: new RegExp(`^(${name})$`) }), `and so does ${name}`).toBeVisible();
-  await page.reload();
-  await page.locator('[role="tablist"]').waitFor();
-  await expect(sidebar.getByRole("button", { name: "Expand sidebar" }), "the fold is remembered").toBeVisible();
-  await sidebar.getByRole("button", { name: "Expand sidebar" }).click();
-  await expect(sidebar.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
-});
-
-test("in a narrow window the sidebar rests as the rail and opens over the page, so the tabs keep their room", async ({ page, server }) => {
-  await openScenario(page, server, "full");
-  await page.setViewportSize({ width: 1000, height: 800 });
-  const sidebar = page.getByRole("complementary", { name: "Sidebar" });
-  const expand = sidebar.getByRole("button", { name: "Expand sidebar" });
-  await expect(expand, "the rail, though the sidebar was left open").toBeVisible();
-  const main = (await page.locator("#main").boundingBox())!;
-  await expand.click();
-  await expect(sidebar.getByRole("navigation", { name: "Sessions list" })).toBeVisible();
-  expect((await page.locator("#main").boundingBox())!.x, "it lies over the page, which does not move").toBe(main.x);
-  await page.keyboard.press("Escape");
-  await expect(expand, "Esc puts it away").toBeVisible();
-  await expand.click();
-  await sidebar.getByRole("link", { name: "Settings", exact: true }).click();
-  await expect(page.getByRole("navigation", { name: "Settings sections" })).toBeVisible();
-  await expect(expand, "and so does going somewhere").toBeVisible();
+  await page.evaluate(() => { (globalThis as any).location.hash = "#/sessions"; });
+  await expect(page, "the old Sessions address lands on the Lobby").toHaveURL(/#\/lobby$/);
 });
 
 test("contrast meets 4.5:1", { tag: "@theme" }, async ({ page, server }) => {

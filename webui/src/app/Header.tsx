@@ -1,16 +1,15 @@
 /**
- * The top bar: the numbered tabs, and what this session is doing on the right,
- * on one row whenever they fit side by side; when they do not, the tabs take
- * a row of their own under the tools (the grid lives in `index.css`).
- * Sessions, Settings, the key help, light or dark and the sounds live in the
- * sidebar, the project in the composer; on a phone the bar starts with the
- * button that opens the sidebar and the project.
+ * The top bar: the numbered tabs, always centred, and the connection on the
+ * right, on one row whenever they fit side by side; when they do not, the tabs
+ * take a row of their own under the tools (the grid lives in `index.css`).
+ * Settings, the key help, light or dark and the sounds live in the sidebar,
+ * the project in the composer; on a phone the bar starts with the button that
+ * opens the sidebar and the project.
  */
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { ConnectionState } from "@/lib/events"
-import type { SnapshotTask, StatusInfo } from "@protocol"
 import { ProjectNotice, type Projects } from "./ProjectSwitcher.tsx"
 import { useMediaQuery } from "./hooks.ts"
 
@@ -37,23 +36,6 @@ function Connection({ state }: { state: ConnectionState }) {
     )
   }
   return <span className="text-xs font-medium text-destructive">Connection lost</span>
-}
-
-/** The session's task and whether the oracle is busy, as one quiet chip. */
-function SessionChip({ busy, task, sessionName }: { busy: boolean; task?: SnapshotTask; sessionName?: string }) {
-  return (
-    <div className="mr-1 flex min-w-0 items-center gap-2 text-[0.8125rem]">
-      {busy ? <Spinner aria-hidden="true" role="presentation" className="size-3.5" /> : null}
-      {task ? (
-        <span className="hidden max-w-[16rem] truncate md:inline">
-          <span className="font-medium">{task.id}</span>
-          <span className="hidden text-muted-foreground min-[1500px]:inline"> · {task.state.replace(/_/g, " ")}</span>
-        </span>
-      ) : (
-        <span className="hidden max-w-[10rem] truncate text-muted-foreground min-[1500px]:inline">{sessionName ?? "no task in this session"}</span>
-      )}
-    </div>
-  )
 }
 
 /** How wide a part of the bar would be with nothing cut short: its children's extent, plus whatever truncation hides. */
@@ -107,8 +89,6 @@ function useOneRow() {
 }
 
 export function Header({
-  status,
-  task,
   connection,
   projects,
   lead,
@@ -116,8 +96,6 @@ export function Header({
   extra,
   tools,
 }: {
-  status?: StatusInfo
-  task?: SnapshotTask
   connection: ConnectionState
   projects: Projects
   /** What starts the bar: on a phone, the way into the sidebar and the project's name. */
@@ -128,7 +106,6 @@ export function Header({
   /** The app's switches, only where there is no sidebar to hold them (signing in, loading). */
   tools?: ReactNode
 }) {
-  const busy = status?.busy ?? false
   const { header, one } = useOneRow()
   // Rendered rather than hidden: a phone must not carry duplicate Connection/Session
   // controls or a hidden shortcut button in the accessibility tree.
@@ -139,19 +116,13 @@ export function Header({
       <div className="where flex min-w-0 items-center gap-2">{lead}</div>
       {phone ? (
         <div className="phone-status flex min-w-0 items-center justify-end gap-2">
-          <SessionChip busy={busy} {...(task ? { task } : {})} {...(status?.sessionName ? { sessionName: status.sessionName } : {})} />
           <Connection state={connection} />
         </div>
       ) : null}
       <div className="tabs min-w-0">{tabs}</div>
       <div className="tools flex min-w-0 items-center justify-end gap-2">
         {extra}
-        {phone ? null : (
-          <div className="flex min-w-0 items-center gap-2">
-            <SessionChip busy={busy} {...(task ? { task } : {})} {...(status?.sessionName ? { sessionName: status.sessionName } : {})} />
-            <Connection state={connection} />
-          </div>
-        )}
+        {phone ? null : <Connection state={connection} />}
         {tools}
         <span id="focused-action-help" className="sr-only">
           Focused buttons: Enter or Space. Links: Enter. Checkboxes: Space.

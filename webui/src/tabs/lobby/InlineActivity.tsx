@@ -53,7 +53,7 @@ export function workedFor(ms: number): string {
 }
 
 /** The words on the folded line: the running step, or how many steps and whose. */
-function summary(entries: ActivityEntry[]): { live?: ActivityEntry; took: number; count: string; sources: string; errors: number; warnings: number } {
+export function summary(entries: ActivityEntry[]): { live?: ActivityEntry; took: number; count: string; sources: string; errors: number; warnings: number } {
   const live = [...entries].reverse().find((entry) => entry.pending)
   const sources = [...new Set(entries.map((entry) => sourceLabel(entry.source)))]
   return {

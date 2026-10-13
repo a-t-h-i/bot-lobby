@@ -4,7 +4,7 @@
  * tinted bubble on the right, messages from one speaker within five minutes
  * under one header (a follow-on shows its time when pointed at), notes as
  * rules across the column, the agents' activity folded in place between the
- * messages it came between (see `InlineActivity.tsx`), three dots until the reply starts, older history loaded from
+ * messages it came between (see `InlineActivity.tsx`), three dots until the reply starts (none while a working step already shows), older history loaded from
  * `lobby.history` at the top, and a "Jump to latest" button while scrolled
  * up. New messages ease in; settled ones are memoised by id, so only the
  * streaming reply redraws on each delta.
@@ -21,7 +21,7 @@ import { call } from "@/lib/api"
 import { formatClock } from "@/lib/format"
 import { Frame } from "@/ui/Frame"
 import { Markdown } from "@/ui/Markdown"
-import { InlineActivity } from "./InlineActivity"
+import { InlineActivity, summary } from "./InlineActivity"
 import type { ActivityEntry, ChatEntry } from "./types"
 import { weave } from "./weave"
 
@@ -72,9 +72,10 @@ const Message = memo(
     before.entry.at === after.entry.at
 )
 
-function LiveReply({ text, busy }: { text?: string; busy: boolean }) {
+/** The oracle's reply as it streams; three dots until it starts, unless a working step above already says the work is under way. */
+function LiveReply({ text, busy, working }: { text?: string; busy: boolean; working: boolean }) {
   const writing = Boolean(text?.trim())
-  if (!writing && !busy) return null
+  if (!writing && (!busy || working)) return null
   return (
     <AgentMessage source="ORACLE" name="Oracle" head live={busy} aside={busy && writing ? "writing…" : undefined}>
       {writing ? <Markdown text={text ?? ""} /> : <TypingDots className="mt-1" />}
@@ -174,6 +175,8 @@ export function Conversation({
   }, [onScroll, ref, more, loading, load])
   const timeline = useMemo(() => weave(merged, steps), [merged, steps])
   const empty = merged.length === 0 && steps.length === 0 && !reply?.trim() && !busy
+  const last = timeline.at(-1)
+  const liveRun = last?.kind === "activity" && Boolean(summary(last.entries).live)
   // Messages present when the pane first drew do not ease in; later ones do.
   const [settled, setSettled] = useState(false)
   useEffect(() => setSettled(true), [])
@@ -193,7 +196,7 @@ export function Conversation({
               const head = !previous || previous.role !== item.entry.role || item.entry.at - previous.at > GROUP_MS
               return <Message key={item.entry.id} entry={item.entry} head={head} fresh={settled} />
             })}
-            <LiveReply text={reply} busy={busy} />
+            <LiveReply text={reply} busy={busy} working={liveRun} />
           </div>
         )}
       </div>

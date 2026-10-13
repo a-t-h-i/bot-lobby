@@ -199,18 +199,27 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
     setText(change.value)
   }, [])
 
-  // The toasts sit just above the composer, wherever its height has got to.
+  // The toasts sit just above the composer and centred on it, wherever its height and the sidebar have put it.
   useEffect(() => {
     const el = card.current
     if (!el) return
     const root = document.documentElement
-    const set = () => root.style.setProperty("--composer-h", blocked ? "0px" : `${Math.ceil(el.getBoundingClientRect().height + (phone ? keyboardInset : 0))}px`)
+    const set = () => {
+      const box = el.getBoundingClientRect()
+      root.style.setProperty("--composer-h", blocked ? "0px" : `${Math.ceil(box.height + (phone ? keyboardInset : 0))}px`)
+      root.style.setProperty("--composer-x", `${Math.round(box.left)}px`)
+      root.style.setProperty("--composer-w", `${Math.round(box.width)}px`)
+    }
     set()
     const observer = new ResizeObserver(set)
     observer.observe(el)
+    window.addEventListener("resize", set)
     return () => {
       observer.disconnect()
+      window.removeEventListener("resize", set)
       root.style.setProperty("--composer-h", "0px")
+      root.style.removeProperty("--composer-x")
+      root.style.removeProperty("--composer-w")
     }
   }, [blocked, keyboardInset, keyboardOpen, phone])
 

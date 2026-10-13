@@ -37,6 +37,7 @@ import {
   FIELD_LABELS,
   FIXED_SCOUT_THINKING,
   GIT_ISOLATION_ITEMS,
+  RECOMMENDED_THINKING,
   GIT_LABEL,
   GROUP_TITLES,
   INHERIT_HELP,
@@ -295,6 +296,7 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
               value={entry.thinking}
               levels={THINKING_LEVELS}
               supported={supported}
+              recommended={RECOMMENDED_THINKING[kind]}
               model={entry.model === INHERIT_MODEL ? "the session model" : entry.model}
               label={`${name} effort`}
               onChange={(level) => set({ thinking: level })}

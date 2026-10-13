@@ -1,6 +1,7 @@
 /**
- * The sections of a task's detail: Request, Steps (the plan's short list, the
- * steps a worker is on marked `active · 1m 12s` and ticking), the full plan
+ * The sections of a task's detail: Request, Steps (the plan's short list; a
+ * step agents are on carries their icons, how many and its ticking time, and
+ * opens to who is doing what), the full plan
  * folded away under them (or Proposal / the empty Plan note), Amendments,
  * Waiting on, QA risk (Jev's read of the built change) and Recent runs. The
  * plan text and steps arrive with `tasks.get`.
@@ -14,6 +15,8 @@ import { cn } from "@/lib/utils"
 import { Markdown } from "@/ui/Markdown"
 import { Section } from "@/ui/Section"
 import { agentName, sourceColor, sourceLabel } from "@/tabs/lobby/types"
+import { AgentIcon } from "@/ui/AgentIcon"
+import { WorkingMark } from "@/ui/WorkingMark"
 import { QA_RISK_WORDS, qaRiskNote } from "./words"
 
 type StepData = TaskDetailData["steps"][number]
@@ -36,8 +39,23 @@ function ActiveMark() {
 
 type StepAgent = NonNullable<StepData["agents"]>[number]
 
+/** What an agent was told, without the `Step 2:` its brief opens with (the row is under that step already). */
+export function briefLine(instruction: string): string {
+  const first = instruction.split("\n").find((line) => line.trim())?.trim() ?? ""
+  return first.replace(/^steps?\s+\d+(?:\s*[-–]\s*\d+)?\s*[:.\-–]\s*/i, "").replace(/^\*\*?goal\*\*?\s*[:\-–]\s*/i, "")
+}
+
+/** An agent's mark: its icon on a tile in its colour. */
+function AgentTile({ name, className }: { name: string; className?: string }) {
+  return (
+    <span aria-hidden="true" className={cn("grid size-5 shrink-0 place-items-center rounded-md border border-border bg-card", sourceColor(name), className)}>
+      <AgentIcon source={name} className="size-3" />
+    </span>
+  )
+}
+
 /** The step's agents right now, children beneath their parent, each with what it was told and how long it has worked. */
-function StepAgents({ id, agents }: { id: string; agents: StepAgent[] }) {
+function StepAgents({ id, agents, stepText }: { id: string; agents: StepAgent[]; stepText: string }) {
   const [now, setNow] = useState(Date.now)
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
@@ -46,16 +64,26 @@ function StepAgents({ id, agents }: { id: string; agents: StepAgent[] }) {
   const top = agents.filter((agent) => !agent.parentRunId || !agents.some((parent) => parent.runId === agent.parentRunId))
   const ordered = top.flatMap((parent) => [parent, ...agents.filter((child) => child.parentRunId === parent.runId)])
   return (
-    <ul id={id} aria-label="Agents on this step" className="mt-1.5 flex flex-col gap-1 rounded-lg border border-border bg-muted/30 px-3 py-2">
+    <ul id={id} aria-label="Agents on this step" className="mt-2 flex flex-col overflow-hidden rounded-lg border border-border bg-card">
       {ordered.map((agent) => {
         const name = agentName({ domain: agent.domain } as Parameters<typeof agentName>[0])
         const child = Boolean(agent.parentRunId) && agents.some((parent) => parent.runId === agent.parentRunId)
         const started = Date.parse(agent.startedAt)
+        const brief = briefLine(agent.instruction)
+        const own = brief && brief.toLowerCase() !== stepText.trim().toLowerCase() ? brief : ""
         return (
-          <li key={agent.runId} className={cn("flex min-w-0 items-baseline gap-2 text-xs", child && "ml-4 border-l border-border pl-3")}>
-            <span className={cn("shrink-0 font-medium", sourceColor(name))}>{sourceLabel(name)}</span>
-            {child ? <span className="shrink-0 text-muted-foreground">child</span> : null}
-            <span className="min-w-0 flex-1 truncate text-foreground" title={agent.instruction}>{agent.instruction || "Working"}</span>
+          <li key={agent.runId} className="flex min-w-0 items-center gap-2.5 border-b border-border px-3 py-2 text-xs last:border-b-0">
+            {child ? <span aria-hidden="true" className="ml-1.5 h-4 w-3 shrink-0 rounded-bl-md border-b border-l border-border" /> : null}
+            <AgentTile name={name} />
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className={cn("font-medium", sourceColor(name))}>{sourceLabel(name)}</span>
+                {child ? <span className="text-muted-foreground">child</span> : null}
+                <WorkingMark className="size-3 text-muted-foreground" />
+                <span className="text-muted-foreground">working</span>
+              </span>
+              {own ? <span className="truncate text-muted-foreground" title={agent.instruction}>{own}</span> : null}
+            </span>
             {Number.isFinite(started) ? <span className="shrink-0 tabular-nums text-muted-foreground">{executionWords(Math.max(0, now - started))}</span> : null}
           </li>
         )
@@ -63,6 +91,28 @@ function StepAgents({ id, agents }: { id: string; agents: StepAgent[] }) {
     </ul>
   )
 }
+
+/** The agents on a step at a glance: their icons, how many, and how long the step has been worked on. */
+function AgentsBadge({ agents, count, step, stopped }: { agents: StepAgent[]; count: number; step: StepData; stopped: boolean }) {
+  const names = [...new Set(agents.map((agent) => agentName({ domain: agent.domain } as Parameters<typeof agentName>[0])))].slice(0, 3)
+  return (
+    <>
+      {names.length > 0 ? (
+        <span className="flex -space-x-1.5">
+          {names.map((name) => <AgentTile key={name} name={name} className="size-[1.125rem] ring-2 ring-card" />)}
+        </span>
+      ) : null}
+      <span>
+        {count} {count === 1 ? "agent" : "agents"}
+        <span className="sr-only"> working</span>
+      </span>
+      <span aria-hidden="true" className="text-muted-foreground/60">·</span>
+      <StepTime step={step} stopped={stopped} />
+    </>
+  )
+}
+
+const BADGE = "inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 pr-2 pl-1 text-xs font-medium text-primary"
 
 function Step({ step, index, stopped }: { step: StepData; index: number; stopped: boolean }) {
   const active = Boolean(step.active) && !stopped
@@ -73,7 +123,6 @@ function Step({ step, index, stopped }: { step: StepData; index: number; stopped
   const done = step.status === "done"
   const markClass = done ? "text-success" : step.status === "current" ? "text-primary" : "text-muted-foreground"
   const Icon = done ? CheckCircle2 : Circle
-  const words = `${count} ${count === 1 ? "agent working" : "agents working"}`
   return (
     <li className="flex min-w-0 flex-col" data-step={active ? "active" : step.status}>
       <div className="flex min-w-0 items-start gap-2.5 text-sm max-md:flex-wrap">
@@ -86,17 +135,15 @@ function Step({ step, index, stopped }: { step: StepData; index: number; stopped
             aria-expanded={open}
             aria-controls={listId}
             onClick={() => setOpen((value) => !value)}
-            className="btn-ghost inline-flex h-5 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-xs text-primary outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+            className={cn(BADGE, "-my-0.5 transition-colors outline-none hover:bg-primary/10 focus-visible:ring-3 focus-visible:ring-ring/40")}
           >
-            ({words})
-            <ChevronDown aria-hidden="true" className={cn("size-3 transition-transform", open && "rotate-180")} />
+            <AgentsBadge agents={agents} count={count} step={step} stopped={stopped} />
+            <ChevronDown aria-hidden="true" className={cn("size-3 transition-transform duration-200", open && "rotate-180")} />
+            <span className="sr-only"> (being worked on now)</span>
           </button>
         ) : active ? (
-          <span className="shrink-0 text-xs leading-5 text-primary">({words})</span>
-        ) : null}
-        {active ? (
-          <span className="shrink-0 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-            active · <StepTime step={step} stopped={stopped} />
+          <span className={cn(BADGE, "-my-0.5")}>
+            <AgentsBadge agents={agents} count={count} step={step} stopped={stopped} />
             <span className="sr-only"> (being worked on now)</span>
           </span>
         ) : step.status === "current" && !stopped ? (
@@ -105,7 +152,7 @@ function Step({ step, index, stopped }: { step: StepData; index: number; stopped
           </span>
         ) : null}
       </div>
-      {open && agents.length > 0 ? <div className="pl-[3.25rem] max-md:pl-0"><StepAgents id={listId} agents={agents} /></div> : null}
+      {open && agents.length > 0 ? <div className="pl-[3.25rem] max-md:pl-0"><StepAgents id={listId} agents={agents} stepText={step.text} /></div> : null}
     </li>
   )
 }

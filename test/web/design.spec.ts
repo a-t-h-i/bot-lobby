@@ -880,20 +880,20 @@ test("the message box floats over the page, and every page scrolls clear of it",
   }
 });
 
-test("Esc leaves the message box on Sessions and Settings too, so the keys on those pages work", async ({ page, server }) => {
+test("Esc leaves the message box on a session's conversation and Settings too, so the keys on those pages work", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.evaluate(() => {
-    window.location.hash = "#/sessions";
+    window.location.hash = "#/sessions/S1";
   });
   const composer = page.locator("#composer-text");
-  await expect(page.getByRole("button", { name: "Back to this window" }), "the page has switched").toBeVisible();
+  await expect(page.getByRole("button", { name: "Move here" }), "the page has switched").toBeVisible();
   await composer.focus();
   await page.keyboard.press("Escape");
   await expect(composer, "Esc leaves it though no tab is selected").not.toBeFocused();
-  await expect(page.getByRole("button", { name: "Back to this window" }).locator('[data-slot="kbd"]'), "the button prints its key").toHaveText("B");
-  await page.keyboard.press("b");
-  await expect(page, "and B takes you back to the Lobby").toHaveURL(/#\/lobby/);
+  await expect(page.getByRole("button", { name: "Move here" }).locator('[data-slot="kbd"]'), "the button prints its key").toHaveText("M");
+  await page.evaluate(() => { window.location.hash = "#/sessions/here"; });
+  await expect(page, "this window's own session is the Lobby").toHaveURL(/#\/lobby/);
 });
 
 test("on Excalidraw R reveals the link and O opens the board in a new tab", async ({ page, server }) => {
@@ -1275,7 +1275,7 @@ test("the tray over the box names the project and the target, opens the project 
 test("the orb is on every page, and opens Thinking from any of them", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
-  for (const hash of ["#/tasks", "#/plan", "#/settings", "#/sessions"]) {
+  for (const hash of ["#/tasks", "#/plan", "#/settings", "#/sessions/S1"]) {
     await page.evaluate((to) => {
       window.location.hash = to;
     }, hash);
@@ -1283,7 +1283,7 @@ test("the orb is on every page, and opens Thinking from any of them", async ({ p
   }
   await page.getByRole("button", { name: "Open Thinking" }).click();
   await expect(page.getByRole("dialog", { name: "Thinking", exact: true }), "it opens Thinking without leaving the page").toBeVisible();
-  await expect(page).toHaveURL(/#\/sessions$/);
+  await expect(page).toHaveURL(/#\/sessions\/S1$/);
   await page.keyboard.press("Escape");
   await page.keyboard.press("Alt+T");
   await expect(page.getByRole("dialog", { name: "Thinking", exact: true }), "and so does its key").toBeVisible();
@@ -1449,7 +1449,7 @@ test("a task's short steps come first, the one being worked on marked active wit
   await expect(steps.getByRole("listitem").nth(0), "done").toHaveAttribute("data-step", "done");
   const active = steps.getByRole("listitem").nth(1);
   await expect(active, "the step a worker is on").toHaveAttribute("data-step", "active");
-  await expect(active).toContainText(/Check the mock over HTTP\s*\(6 agents working\)\s*active · 1m 3\ds/);
+  await expect(active).toContainText(/Check the mock over HTTP\s*6 agents working\s*·\s*1m 3\ds/);
   await expect(steps.getByRole("listitem").nth(2)).toHaveAttribute("data-step", "open");
   const article = page.getByRole("article", { name: "Add offline mock fixtures" });
   const worked = article.locator("[data-work-clock]");
@@ -1483,10 +1483,10 @@ test("a task's short steps come first, the one being worked on marked active wit
   });
   await page.evaluate(() => { window.location.hash = "#/tasks/T-mock-1"; });
   server.bump("tasks");
-  await expect(active).toContainText("(1 agent working)");
+  await expect(active).toContainText("1 agent working");
   count = 0;
   server.bump("tasks");
-  await expect(active).not.toContainText("working)");
+  await expect(active).not.toContainText("agent working");
   await expect(active).toHaveAttribute("data-step", "current");
 });
 
