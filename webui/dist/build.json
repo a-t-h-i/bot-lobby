@@ -1,6 +1,6 @@
 {
-  "hash": "689d8288f295f8c2324a527f9812d9b545175f7fcbaaddf017b721b56692ccd6",
-  "builtAt": "2026-10-13T09:41:59.880Z",
+  "hash": "2c0f72ee344af38e90d7f2a8228a4affad89834cbbb170cf733bdf621ac5bbbe",
+  "builtAt": "2026-10-13T09:42:28.577Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -536,7 +536,7 @@
     },
     {
       "path": "webui/src/tabs/plan/Header.tsx",
-      "sha256": "c1cfc33e346cdebc135127a05c647a493060eb7a03e5ddb1bbcd055f8a511778"
+      "sha256": "ea0e05f55f59f46b036a89b16cd07dd1abf5b48958dac4ebcc9c4f1072c7dde0"
     },
     {
       "path": "webui/src/tabs/plan/LineComment.tsx",
@@ -552,7 +552,7 @@
     },
     {
       "path": "webui/src/tabs/plan/Roster.tsx",
-      "sha256": "1c47b6a2d0cf6e1613c230d7f7ebdd501e115504c9f024dc9fdcfb8b1be400e0"
+      "sha256": "2433bf891ae14cf47b213f08a57d10f2379a2633d70770fddff3d82a7c786019"
     },
     {
       "path": "webui/src/tabs/plan/words.ts",

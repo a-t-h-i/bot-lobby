@@ -1,7 +1,8 @@
 /**
  * The Plan tab's top: the title with its status line, the roster, and the
  * buttons the session allows — Answer questions while some wait, Retry when a
- * round can be run again, New plan, Save.
+ * round can be run again, New plan, Save. When the header is wide enough the
+ * roster sits on the buttons' row; otherwise it drops to a row of its own.
  */
 import { FilePlus, History, MessageCircleQuestion, RotateCw, Save } from "lucide-react"
 import { go, tabHash } from "@/app/router"
@@ -56,15 +57,15 @@ function Actions({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }
 
 export function PlanHeader({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) {
   return (
-    <header className="flex shrink-0 flex-col gap-3 border-b border-border px-5 py-3 max-md:shrink max-md:px-4 max-md:py-2.5">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+    <header className="@container shrink-0 border-b border-border px-5 py-3 max-md:shrink max-md:px-4 max-md:py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 @min-[84rem]:flex-nowrap">
         <div className="flex min-w-0 flex-col gap-0.5">
           <h2 className="text-lg font-semibold tracking-tight">Planning</h2>
           <Status snap={snap} />
         </div>
+        <Roster cells={seatCells(snap)} intro={false} onToggled={onDone} className="order-last basis-full @min-[84rem]:order-none @min-[84rem]:min-w-0 @min-[84rem]:flex-1 @min-[84rem]:basis-auto @min-[84rem]:justify-end" />
         <Actions snap={snap} onDone={onDone} />
       </div>
-      <Roster cells={seatCells(snap)} intro={false} onToggled={onDone} />
     </header>
   )
 }
