@@ -1,6 +1,6 @@
 {
-  "hash": "082797a5a880ca510828358c716e65f8ca61dc4b69cb34a6746a0de0c4b1daa6",
-  "builtAt": "2026-10-13T14:07:40.089Z",
+  "hash": "03a07d4e9108100636d2376f0ff6a2bf894886faa8d00efc448ae8103b025568",
+  "builtAt": "2026-10-13T14:14:43.411Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -32,7 +32,7 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "4032d9317929ebfca10149ff07e3dd72f263c2688d30a41163741b639b3f915d"
+      "sha256": "d64b179e3c38c6f67c1d616e66958d7d5481652fc3cbe097c6715a40f4fbe8d0"
     },
     {
       "path": "webui/src/app/Header.tsx",
@@ -60,11 +60,11 @@
     },
     {
       "path": "webui/src/app/Shell.tsx",
-      "sha256": "d5cde3cf889d44f07f7467d5a4e08a8335fadede67fe6b5fb59ce152d49a0abc"
+      "sha256": "65da614a2e782dc0698a57f08dac37dce3f2ac748c44fe47d581fb741b516f1c"
     },
     {
       "path": "webui/src/app/Sidebar.tsx",
-      "sha256": "30951dbaef3472d9aadb9dd81b76a3265370b359a9845eb3cea09d8a7c4f3739"
+      "sha256": "1498785ecee04073cbadfe514ab60cfbfe8cfb7e3179403812809f55131134c0"
     },
     {
       "path": "webui/src/app/SignIn.tsx",
@@ -80,7 +80,7 @@
     },
     {
       "path": "webui/src/app/TabStrip.tsx",
-      "sha256": "318dcede4f76c6ae2af2ad092699d05e0cfed0d593330286728fc0822d7bc8a7"
+      "sha256": "7dcdf4843bddf36d5ec1606897c2fedfd758de167224da2bb5103425a25a006b"
     },
     {
       "path": "webui/src/app/Thinking.tsx",
@@ -260,7 +260,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "91182720f8c7909485832666db3af8c821fdbb212455ef334a4369d94c81ba70"
+      "sha256": "2551ee977f83e3474f51f3d9e35c88d00e883bc79c78ee8dfed91c34ad031910"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -464,7 +464,7 @@
     },
     {
       "path": "webui/src/tabs/lobby/InlineActivity.tsx",
-      "sha256": "19f5b7050e3d68bee7402c2970e948316631bd179d9fc699fe00987bef17ec16"
+      "sha256": "8ece14f983c5560292ffc982a2cc124aa69e4684efd263c833531e1b4d01a720"
     },
     {
       "path": "webui/src/tabs/lobby/LobbyTab.tsx",

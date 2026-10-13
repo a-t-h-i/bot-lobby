@@ -43,7 +43,7 @@
   /* The chosen tab's fill and the colour that flows between tabs, both from the accent so themes follow. */
   --tab-fill: color-mix(in oklab, var(--primary) 10%, transparent);
   --tab-outline: color-mix(in srgb, var(--foreground) 30%, var(--background));
-  --tab-idle: transparent;
+  --tab-idle: var(--background);
   --tab-liquid: color-mix(in oklab, var(--primary) 72%, transparent);
   /* The liquid's colour made solid, so the chosen tab's ring hides the border under it and its halves meet without a seam. */
   --tab-rim: color-mix(in oklab, var(--primary) 72%, var(--background));
@@ -98,7 +98,7 @@
   --dock: var(--card);
   --dock-border: rgb(0 0 0 / 0.08);
   --dock-shadow: 0 12px 28px -18px rgb(0 0 0 / 0.4);
-  --dock-focus-shadow: var(--dock-shadow), 0 0 0 3px color-mix(in oklab, var(--ring) 16%, transparent);
+  --dock-focus-shadow: var(--dock-shadow);
 
   /* The rainbow for max effort: deep enough to read on white. */
   --rainbow-1: #e0475b;

@@ -1,10 +1,11 @@
+// Adapted from T3 Code (MIT), apps/web/src/components/chat/WorkLog.tsx
 /**
- * Activity in the conversation, after the coding harnesses: each run of
- * agents' steps between two messages folds into one line over a rule ("Worked
+ * Activity in the conversation, as work-log rows after the coding harnesses: each run of
+ * agents' steps between two messages folds into one quiet line ("Worked
  * for 2m 59s · 6 steps · Master, Dev, QA"), or, while a step is running, that
  * step beside the working mark, in its agent's colour: the word "Working"
- * glints, each new step slides in over the last, the clock counts up and a
- * light runs along the rule. Opening it lists the steps as quiet lines, each with a
+ * glints, each new step slides in over the last and the clock counts up.
+ * Opening it lists the steps as quiet lines, each with a
  * mark per kind (the working mark for a running step, a tick for done, an alert for a
  * warning, a cross for an error) and its agent in its colour. Colour is never
  * the only signal. Alt+A opens or folds every run.
@@ -31,13 +32,13 @@ function KindMark({ entry }: { entry: ActivityEntry }) {
 function StepRow({ entry }: { entry: ActivityEntry }) {
   return (
     <li className="activity-step" title={formatClock(entry.at)} style={entry.pending ? ({ "--orb": sourceTone(entry.source) } as CSSProperties) : undefined}>
-      <span aria-hidden="true" className="flex h-5 items-center justify-center">
+      <span aria-hidden="true" className="flex h-5 w-6 items-center justify-center">
         <KindMark entry={entry} />
       </span>
       <span className="sr-only">{entry.pending ? "pending" : entry.kind}</span>
       <span className="min-w-0 break-words">
         <span className={cn("font-medium", sourceColor(entry.source))}>{sourceLabel(entry.source)}</span>{" "}
-        <span className={entry.kind === "error" ? "text-destructive" : entry.pending ? "text-foreground" : "text-muted-foreground"}>{entry.pending ? `${entry.text}…` : entry.text}</span>
+        <span className={entry.kind === "error" ? "text-destructive" : entry.pending ? "text-foreground" : undefined}>{entry.pending ? `${entry.text}…` : entry.text}</span>
       </span>
     </li>
   )
@@ -101,20 +102,20 @@ export function InlineActivity({ entries }: { entries: ActivityEntry[] }) {
                 <span className={cn("font-medium", sourceColor(live.source))}>{sourceLabel(live.source)}</span> <span className="text-foreground">{live.text}…</span>
               </span>
             </span>
-            <span className="shrink-0 tabular-nums text-muted-foreground">
+            <span className="shrink-0 tabular-nums">
               {count}
               {entries[0] && now - entries[0].at >= 1000 ? ` · ${workedFor(now - entries[0].at)}` : ""}
             </span>
           </>
         ) : (
           <span className="min-w-0 truncate">
-            <span className="text-foreground">{took >= 1000 ? `Worked for ${workedFor(took)}` : "Worked"}</span>
-            <span className="text-muted-foreground"> · {count}{sources ? ` · ${sources}` : ""}</span>
+            <span className="font-medium">{took >= 1000 ? `Worked for ${workedFor(took)}` : "Worked"}</span>
+            <span> · {count}{sources ? ` · ${sources}` : ""}</span>
           </span>
         )}
         {errors ? <span className="shrink-0 text-destructive">{errors} {errors === 1 ? "error" : "errors"}</span> : null}
         {warnings ? <span className="shrink-0 text-warning">{warnings} {warnings === 1 ? "warning" : "warnings"}</span> : null}
-        <ChevronDown aria-hidden="true" className="activity-chevron size-4 shrink-0 text-muted-foreground" />
+        <ChevronDown aria-hidden="true" className="activity-chevron size-3.5 shrink-0" />
       </button>
       {open ? (
         <ol id={list} aria-label="Activity" className="activity-steps">
