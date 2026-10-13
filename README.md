@@ -4,8 +4,6 @@ A [Pi](https://pi.dev) extension for multi-agent software development. Describe 
 plan with the oracle, and follow the agents in a local browser lobby. Approvals, domain boundaries and QA
 are enforced before anything is called done.
 
-![The Lobby: the conversation with the agents' work inline, and the sidebar of sessions](.github/screenshots/lobby.png)
-
 ## Install
 
 ```bash
@@ -50,20 +48,6 @@ The sidebar holds your sessions, settings, the key list, the theme and sounds. T
 | DEV | Backend, APIs, data, security and integrations |
 | QA | The final quality gate, at the depth the change's risk calls for |
 | RESEARCH | External facts, with sources |
-
-## Screenshots
-
-| Planning | The draft plan |
-| --- | --- |
-| ![A planning session: the panel's questions with mockups](.github/screenshots/plan.png) | ![The draft plan in a slide-out over the blurred page](.github/screenshots/plan-draft.png) |
-| **Tasks** | **Thinking** |
-| ![The task list across sessions, with one task's steps](.github/screenshots/tasks.png) | ![The Thinking pop-up: each agent's thoughts, in steps](.github/screenshots/thinking.png) |
-| **Questionnaire** | **Knowledge** |
-| ![A question with a mockup for each option](.github/screenshots/questionnaire.png) | ![The Knowledge tab: one agent's file open](.github/screenshots/knowledge.png) |
-| **Issues** | **Git** |
-| ![An open issue, ready to plan with the panel](.github/screenshots/issues.png) | ![A pull request with an agent's review](.github/screenshots/git.png) |
-| **Dark mode** | |
-| ![The Lobby in dark mode](.github/screenshots/lobby-dark.png) | |
 
 ## Keys
 
