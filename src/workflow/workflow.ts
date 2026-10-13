@@ -1289,7 +1289,9 @@ function qaReport(header: string, result: ReviewResult, decision: LoopDecision, 
       : decision === "waived"
         ? "The user accepted the work as it is, without a QA pass. Call action=complete now with a short summary that names what QA still asked for."
         : decision === "iterate"
-          ? "The QA gate did not pass: delegate the required changes to the owning domain, then re-run action=qa."
+          ? result.unread
+            ? "QA returned no readable verdict, so nothing is known about the work yet: re-run action=qa; there is nothing to fix first."
+            : "The QA gate did not pass: delegate the required changes to the owning domain, then re-run action=qa."
           : "The review limit is reached and the user did not accept the work: mark the task blocked and tell the user what QA still asks for. They can accept it with /bot-lobby accept.",
     result.pushback ? pushbackLine(result.pushback, "qa") : "",
     issues.length > 0 ? `Issues: ${issues.join("; ")}` : "",

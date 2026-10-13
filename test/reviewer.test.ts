@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseReviewResult, UNVERIFIED_PASS, validateReviewResult } from "../src/roles/reviewer.ts";
+import { NO_VERDICT, parseReviewResult, UNVERIFIED_PASS, validateReviewResult } from "../src/roles/reviewer.ts";
 import { decideReviewLoop } from "../src/master/decisions.ts";
 import { DEFAULT_CONFIG, type BotLobbyConfig } from "../src/schemas/configuration.ts";
 import { createTask, type Task, type TaskState } from "../src/schemas/task.ts";
@@ -81,11 +81,61 @@ test("parseReviewResult extracts findings with severities and required changes",
   assert.equal(parseReviewResult("backend", `${CHANGES}\n\n## Pushback\n**Request:** x\n**Reason:** y`).pushback?.reason, "y");
 });
 
-test("an unknown or missing verdict is never treated as a pass", () => {
-  assert.equal(parseReviewResult("backend", "Looks fine to me!").verdict, "blocked");
-  assert.equal(parseReviewResult("backend", "## Verdict\nMAYBE\n\n## Findings\n- [minor] x").verdict, "blocked");
+test("an unknown or missing verdict is never a pass, and never stops the task: the review runs again", () => {
+  for (const raw of ["Looks fine to me!", "## Verdict\nMAYBE\n\n## Findings\n- [minor] x", ""]) {
+    const result = parseReviewResult("backend", raw);
+    assert.equal(result.verdict, "changes_required", raw);
+    assert.equal(result.unread, NO_VERDICT);
+    assert.ok(result.requiredChanges.some((change) => /Re-run the QA gate/.test(change)));
+    assert.equal(decideReviewLoop(result.verdict, 1, 2), "iterate");
+  }
   const missing = parseReviewResult("backend", "no sections here");
   assert.ok(validateReviewResult(missing).includes("missing Verdict section"));
+});
+
+test("a FAIL verdict asks for a fix round instead of blocking the task", () => {
+  const result = parseReviewResult("qa", "## Verdict\nFAIL\n\n## Findings\n- [major] off by one — `src/page.ts:9`\n\n## Verification\n- `npm test` — 1 failing");
+  assert.equal(result.verdict, "changes_required");
+  assert.equal(decideReviewLoop(result.verdict, 1, 2), "iterate");
+});
+
+test("the verdict is the first verdict word, wherever the reviewer put it", () => {
+  const checks = "\n\n## Verification\n- `npm test` — 40 passing";
+  const cases: Array<[string, string]> = [
+    [`## Verdict\nPASS — no changes required.${checks}`, "pass"],
+    [`## Verdict\n**PASS**${checks}`, "pass"],
+    [`**Verdict:** PASS${checks}`, "pass"],
+    [`**Verdict:** CHANGES_REQUIRED\n\n## Findings\n- [major] x — \`a.ts:1\`${checks}`, "changes_required"],
+    [`## Verdict\nCHANGES REQUESTED: the tests passed but criterion 2 is unmet${checks}`, "changes_required"],
+    [`## Verdict\nBLOCKED — the project does not build${checks}`, "blocked"],
+  ];
+  for (const [raw, verdict] of cases) assert.equal(parseReviewResult("qa", raw).verdict, verdict, raw);
+  assert.deepEqual(validateReviewResult(parseReviewResult("qa", `**Verdict:** PASS${checks}`)), []);
+});
+
+test("checks listed as numbered items, table rows or check marks count as executed", () => {
+  for (const verification of [
+    "1. `npm test` — 40 passed\n2. `npx tsc --noEmit` — clean",
+    "| Command | Result |\n|---|---|\n| npm test | 40 passed |",
+    "- ✅ `npm test` (40/40)",
+    "- `npm run typecheck` passed",
+  ]) {
+    const result = parseReviewResult("qa", `## Verdict\nPASS\n\n## Verification\n${verification}`);
+    assert.equal(result.verdict, "pass", verification);
+    assert.equal(result.downgraded, undefined);
+  }
+  const header = parseReviewResult("qa", "## Verdict\nPASS\n\n## Verification\n| Command | Result |\n|---|---|");
+  assert.equal(header.downgraded, UNVERIFIED_PASS);
+});
+
+test("low and nit findings never hold the gate; high ones do", () => {
+  const checks = "\n\n## Verification\n- `npm test` — passing";
+  const low = parseReviewResult("qa", `## Verdict\nCHANGES_REQUIRED\n\n## Findings\n- [low] rename x\n- **[nit]** spacing${checks}`);
+  assert.equal(low.verdict, "pass");
+  assert.deepEqual(low.findings.map((finding) => finding.severity), ["minor", "minor"]);
+  const high = parseReviewResult("qa", `## Verdict\nCHANGES_REQUIRED\n\n## Findings\n- [high] data loss on retry${checks}`);
+  assert.equal(high.verdict, "changes_required");
+  assert.equal(high.findings[0]!.severity, "major");
 });
 
 test("a PASS token in the verdict heading parses as a pass", () => {
@@ -193,7 +243,8 @@ test("an always off-contract reviewer is bounded by maxAgentRetries", async () =
   };
   const result = await runReviewer(reviewerRequest(), runner);
   assert.equal(calls, REVIEW_CONFIG.workflow.maxAgentRetries + 1);
-  assert.equal(result.result.verdict, "blocked");
+  assert.equal(result.result.verdict, "changes_required");
+  assert.equal(result.result.unread, NO_VERDICT);
   assert.ok(result.issues.includes("missing Verdict section"));
 });
 

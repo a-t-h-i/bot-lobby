@@ -12,7 +12,7 @@ import { selectKnowledge, type KnowledgeSelection } from "../knowledge/selector.
 import { scriptsFor } from "../scripts/pick.ts";
 import { summarizeOutcomes } from "./synthesis.ts";
 import { parseWorkerResult, validateWorkerResult } from "../roles/worker.ts";
-import { parseReviewResult, validateReviewResult } from "../roles/reviewer.ts";
+import { parseReviewResult, readVerdict, validateReviewResult } from "../roles/reviewer.ts";
 import { truncate } from "../text.ts";
 import { isScoutResultUsable, parseScoutResult, validateScoutResult } from "../roles/scout.ts";
 import { treeState } from "../execution/git.ts";
@@ -433,9 +433,9 @@ function reviewerContext(request: ReviewerRequest): string {
     .join("\n\n");
 }
 
-/** True when the output carries the reviewer contract's required heading. */
+/** True when a verdict can be read from the output (the contract's heading, or a line naming it). */
 export function hasReviewVerdict(text: string): boolean {
-  return /##\s*verdict/i.test(text);
+  return readVerdict(text) !== undefined;
 }
 
 /** A success without the Verdict section is off-contract and worth resampling. */

@@ -55,7 +55,7 @@ you state in the report.
 6. Run the smallest useful set of them.
 7. Decide what confidence is still missing.
 8. Only for a meaningful uncovered risk, add a behavioural test.
-9. PASS or FAIL.
+9. Give the verdict: PASS, CHANGES_REQUIRED or BLOCKED.
 
 Never duplicate coverage that exists, and never rewrite existing tests because
 you prefer another style.
@@ -101,6 +101,12 @@ re-running it. Use the project's own type checker, build and existing tests
 before judging by reading, and run the narrowest command that answers the
 question (one test file, one test name, the touched package's typecheck).
 Run a whole suite only at HIGH risk, or when the change touches shared logic.
+A failure is the task's only when the change causes it. A test that fails in
+code the diff does not touch, for a reason the diff cannot explain, was
+already failing: list it as an `info` finding and judge the change on the rest.
+When you cannot tell, run that one test at the task's base commit in a
+throwaway worktree (`git worktree add <tmp dir> <base>`; remove it after) —
+never stash, reset or check out over the working tree.
 Do not re-run a check the worker already ran on the same files with the same
 result; cite it. Always pass a bash `timeout`, and never start watch mode or
 long-running servers.
@@ -147,9 +153,11 @@ A PASS is a claim backed by evidence, not an absence of complaints.
   A PASS without executed checks is downgraded by the engine to
   CHANGES_REQUIRED.
 - Check every acceptance criterion; an unmet or unverifiable one is a finding.
-- If you could not verify something important (no test runner, a failing
-  environment, missing access), say so and return CHANGES_REQUIRED or BLOCKED —
-  never PASS on assumption.
+- If you could not verify something important, say so and never PASS on
+  assumption. Verify it another way first (the typecheck, a narrower test,
+  reading the code path); if it stays unverifiable, return CHANGES_REQUIRED
+  with what is missing. BLOCKED is only for a review that cannot happen at
+  all, and it stops the task until the user steps in.
 
 ## Testing conventions
 
