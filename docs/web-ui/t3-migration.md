@@ -58,7 +58,7 @@ whole page follows.
 | --- | --- | --- | --- |
 | `--background` | `--background` | `zinc-25` `#fcfcfc` | `neutral-950` `#0a0a0a` |
 | `--foreground` | `--foreground` | `zinc-800` `#27272a` | `neutral-100` `#f5f5f5` |
-| `--muted-foreground` | `--muted-foreground` | `zinc-500` `#71717a` | `neutral-500` + 10% white `#818181` |
+| `--muted-foreground` | `--muted-foreground` | `zinc-500`, a step darker for 4.5:1 `#6b6b75` | `neutral-500` lifted `#8a8a8a` |
 | `--card`, `--card-foreground` | `--card` | `#ffffff` | bg 97% + white `#111111` |
 | `--popover` | `--popover` (glass) | `white / 92%` | `#111111 / 92%` |
 | `--primary` | `--primary` | `#1b4ed8` | `#346bf1` |

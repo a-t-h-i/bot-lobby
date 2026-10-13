@@ -10,7 +10,7 @@ export function KnowledgePaneToggle({ rest }: { rest: string[] }) {
         <button key={label} type="button" aria-pressed={chat === (label === "Chat")}
           onClick={() => go(knowledgeHash(rest, label === "Chat"))}
           className={cn("h-6 rounded-md border px-2.5 text-xs font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
-            chat === (label === "Chat") ? "btn-raised btn-soft bg-card text-foreground" : "btn-ghost text-muted-foreground hover:text-foreground")}>
+            chat === (label === "Chat") ? "btn-outline btn-soft bg-card text-foreground" : "btn-ghost text-muted-foreground hover:text-foreground")}>
           {label}
         </button>
       ))}

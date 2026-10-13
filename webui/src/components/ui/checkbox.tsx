@@ -1,3 +1,4 @@
+// Adapted from T3 Code (MIT), apps/web/src/components/ui/checkbox.tsx
 import * as React from "react"
 import { Check } from "lucide-react"
 import { Checkbox as CheckboxPrimitive } from "radix-ui"
@@ -14,7 +15,7 @@ function Checkbox({ className, ...props }: React.ComponentProps<typeof CheckboxP
       aria-description="When focused, press Space to toggle."
       data-slot="checkbox"
       className={cn(
-        "peer relative flex size-[1.125rem] shrink-0 items-center justify-center rounded-[5px] border border-input bg-background text-primary-foreground transition-colors duration-150 outline-none before:absolute before:-inset-3 before:content-[''] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-primary data-[state=checked]:bg-primary",
+        "peer relative flex size-[1.125rem] shrink-0 items-center justify-center rounded-[.25rem] border border-input bg-background bg-clip-padding text-primary-foreground shadow-control transition-[background-color,border-color,box-shadow] duration-150 outline-none before:absolute before:-inset-3 before:content-[''] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-64 data-[state=checked]:shadow-none dark:bg-input/32 data-[state=checked]:border-primary data-[state=checked]:bg-primary",
         className
       )}
       {...props}

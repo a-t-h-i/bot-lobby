@@ -80,7 +80,7 @@ function Body({ data, groupBy, query }: { data: MetricsData; groupBy: GroupBy; q
   return (
     <div className="flex flex-col gap-4">
       <Tiles tiles={data.tiles} />
-      {data.tiles.runs === 0 ? <p className="card-raised rounded-xl border p-4 text-sm text-muted-foreground">{query ? `No run matches "${query}" in this period.` : `No runs in this period. ${EMPTY}`}</p> : null}
+      {data.tiles.runs === 0 ? <p className="card-flat rounded-xl border p-4 text-sm text-muted-foreground">{query ? `No run matches "${query}" in this period.` : `No runs in this period. ${EMPTY}`}</p> : null}
       {data.daily.length > 0 ? <DailyTrends daily={data.daily} /> : null}
       {data.classifier ? <Classifier summary={data.classifier} /> : null}
       {data.tiles.runs > 0 ? <><div className="grid gap-4 lg:grid-cols-2">

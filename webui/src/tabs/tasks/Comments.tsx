@@ -41,7 +41,7 @@ function CommentItem({ comment, taskId, own }: { comment: PlanComment; taskId: s
     const result = await call("tasks.editComment", { taskId, commentId: comment.id, text })
     setSaved(result.comment)
   }
-  return <li className="card-raised min-w-0 rounded-lg border px-3.5 py-2.5">
+  return <li className="card-flat min-w-0 rounded-lg border px-3.5 py-2.5">
     {editing ? <InlineEditor text={current.text} onSave={save} onCancel={() => setEditing(false)} /> : <Markdown text={current.text} />}
     <div className="flex items-center justify-between gap-2"><CommentMeta comment={current} />
       {own && !editing ? <Button size="sm" variant="ghost" className="max-md:min-h-11" onClick={() => setEditing(true)}>Edit</Button> : null}

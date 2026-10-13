@@ -1,3 +1,4 @@
+// Adapted from T3 Code (MIT), apps/web/src/components/ui/combobox.tsx
 /**
  * A drop-down with a search box: the trigger shows the chosen option, the
  * list opens under it with a field that filters as you type. Keyboard first:
@@ -110,7 +111,7 @@ export function Combobox({ value, options, onChange, label, className, disabled 
         }}
         data-slot="select-trigger"
         className={cn(
-          "reui-select flex h-8 w-full min-w-0 items-center justify-between gap-2 overflow-hidden rounded-lg border bg-card px-2.5 text-[0.8125rem] whitespace-nowrap outline-none transition-[border-color,box-shadow] duration-150 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50",
+          "reui-select flex h-8 w-full min-w-0 items-center justify-between gap-2 overflow-hidden rounded-lg border bg-card px-2.5 text-sm whitespace-nowrap outline-none transition-[border-color,box-shadow] duration-150 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/24 disabled:pointer-events-none disabled:opacity-64",
           className
         )}
       >
@@ -125,7 +126,7 @@ export function Combobox({ value, options, onChange, label, className, disabled 
           event.preventDefault()
           ;(event.currentTarget as HTMLElement).querySelector<HTMLElement>("input")?.focus()
         }}
-        className="p-0 flex max-h-[min(20rem,var(--radix-popover-content-available-height))] w-[max(var(--radix-popover-trigger-width),17rem)] max-w-(--radix-popover-content-available-width) flex-col overflow-hidden rounded-lg outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0"
+        className="p-0 flex max-h-[min(20rem,var(--radix-popover-content-available-height))] w-[max(var(--radix-popover-trigger-width),17rem)] max-w-(--radix-popover-content-available-width) flex-col overflow-hidden rounded-lg outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-[0.98] data-closed:animate-out data-closed:fade-out-0"
       >
         <div className="flex items-center gap-2 border-b border-border px-2.5">
           <Search aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
@@ -140,7 +141,7 @@ export function Combobox({ value, options, onChange, label, className, disabled 
             placeholder="Search…"
             autoComplete="off"
             spellCheck={false}
-            className="h-8 min-w-0 flex-1 bg-transparent text-[0.8125rem] outline-none placeholder:text-muted-foreground"
+            className="h-8 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
         </div>
         <div ref={list} id={id} role="listbox" aria-label={label} className="min-h-0 flex-1 overflow-y-auto p-1">
@@ -154,7 +155,7 @@ export function Combobox({ value, options, onChange, label, className, disabled 
               data-index={index}
               onPointerMove={() => setActive(index)}
               onClick={() => pick(option)}
-              className={cn("flex cursor-default items-center gap-2 rounded-lg px-2.5 py-1.5 text-[0.8125rem] select-none", index === active && "bg-accent")}
+              className={cn("flex min-h-8 cursor-default items-center gap-2 rounded-md px-2 py-1 text-sm select-none", index === active && "bg-accent")}
             >
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate">{option.label}</span>

@@ -1,12 +1,13 @@
+// Adapted from T3 Code (MIT), apps/web/src/components/ui/kbd.tsx
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
 
-/** The look of one key cap: hairline-edged and quiet, with the small lip of a real key. It reads on a button, in a tooltip and on the page. */
+/** The look of one key cap: a quiet muted fill with no edge, as in the harnesses. It reads on a button, in a tooltip and on the page. */
 export const KBD_CLASS = cn(
-  "pointer-events-none inline-flex h-[1.125rem] min-w-[1.125rem] w-fit items-center justify-center gap-1 rounded-[5px] border border-border bg-background px-1 font-sans text-[0.7rem] leading-none font-medium text-muted-foreground shadow-[inset_0_-1px_0_var(--border)] select-none",
-  "in-data-[slot=tooltip-content]:border-background/25 in-data-[slot=tooltip-content]:bg-transparent in-data-[slot=tooltip-content]:text-background in-data-[slot=tooltip-content]:shadow-none",
-  "in-data-[variant=default]:border-primary-foreground/35 in-data-[variant=default]:bg-primary-foreground/10 in-data-[variant=default]:text-primary-foreground in-data-[variant=default]:shadow-none",
-  "in-data-[variant=destructive]:border-background/40 in-data-[variant=destructive]:bg-background/10 in-data-[variant=destructive]:text-background in-data-[variant=destructive]:shadow-none",
+  "pointer-events-none inline-flex h-[1.125rem] min-w-[1.125rem] w-fit items-center justify-center gap-1 rounded-[4px] bg-accent px-1 font-sans text-2xs leading-none font-medium text-muted-foreground select-none",
+  "in-data-[slot=tooltip-content]:bg-accent in-data-[slot=tooltip-content]:text-muted-foreground",
+  "in-data-[variant=default]:bg-primary-foreground/16 in-data-[variant=default]:text-primary-foreground",
+  "in-data-[variant=destructive]:bg-white/16 in-data-[variant=destructive]:text-current",
   "[&_svg:not([class*='size-'])]:size-3"
 )
 

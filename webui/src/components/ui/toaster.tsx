@@ -1,3 +1,4 @@
+// Adapted from T3 Code (MIT), apps/web/src/components/ui/toast.tsx
 import { useEffect } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { AlertTriangle, CheckCircle2, Info, XCircle } from "lucide-react"
@@ -6,7 +7,7 @@ import { dismissToast, useToast, type ToastKind } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 
 const ICONS: Record<ToastKind, typeof Info> = { info: Info, success: CheckCircle2, warning: AlertTriangle, error: XCircle }
-const TONES: Record<ToastKind, string> = { info: "text-primary", success: "text-success", warning: "text-warning", error: "text-destructive" }
+const TONES: Record<ToastKind, string> = { info: "text-info", success: "text-success", warning: "text-warning", error: "text-destructive" }
 
 /**
  * The one toast on screen: it scales up with a bounce just above the composer and
@@ -41,14 +42,14 @@ export function Toaster() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.92, y: 6, transition: { duration: 0.14, ease: "easeIn" } }}
             transition={{ type: "spring", stiffness: 560, damping: 15, mass: 0.8 }}
-            className="pointer-events-auto flex max-w-[min(32rem,100%)] items-center gap-3 rounded-xl border border-glass-border bg-popover/80 px-4 py-2.5 text-sm text-popover-foreground shadow-glass backdrop-blur-xs"
+            className="pointer-events-auto flex max-w-[min(32rem,100%)] items-center gap-2.5 rounded-lg border border-glass-border bg-popover px-3.5 py-2.5 text-sm text-popover-foreground shadow-xl shadow-black/25 backdrop-blur-xs"
           >
             <ToastIcon kind={item.kind} />
             <span className="min-w-0 break-words">{item.message}</span>
             {item.action ? (
               <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
                 type="button"
-                className="btn-raised -my-1.5 -mr-1 h-7 shrink-0 rounded-lg border bg-card px-2.5 font-medium text-primary transition-[box-shadow,translate] active:translate-y-px focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none"
+                className="btn-outline -my-1.5 -mr-1 h-7 shrink-0 rounded-lg border px-2.5 text-xs font-medium text-foreground transition-[box-shadow,scale] active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 onClick={() => {
                   item.action?.onClick()
                   dismissToast(item.id)
@@ -66,5 +67,5 @@ export function Toaster() {
 
 function ToastIcon({ kind }: { kind: ToastKind }) {
   const Icon = ICONS[kind]
-  return <Icon aria-hidden="true" className={cn("size-5 shrink-0", TONES[kind])} />
+  return <Icon aria-hidden="true" className={cn("size-4 shrink-0", TONES[kind])} />
 }

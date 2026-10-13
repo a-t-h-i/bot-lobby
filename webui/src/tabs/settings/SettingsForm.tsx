@@ -614,7 +614,7 @@ export function SettingsForm({ config, models, classifierModels = [], onConfig }
             onClick={() => setSection(name)}
             className={cn(
               "h-8 rounded-lg border border-transparent px-3 text-sm font-medium outline-none transition-[box-shadow,color] focus-visible:ring-3 focus-visible:ring-ring/40 max-md:min-h-11 max-md:h-auto max-md:shrink-0 max-md:whitespace-nowrap",
-              section === name ? "btn-raised bg-card text-foreground" : "text-muted-foreground hover:text-foreground"
+              section === name ? "btn-outline bg-card text-foreground" : "text-muted-foreground hover:text-foreground"
             )}
           >
             {name}

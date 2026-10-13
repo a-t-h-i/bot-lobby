@@ -98,7 +98,7 @@ test("buttons and composer have visible borders before hover", { tag: "@theme" }
       };
       const root = getComputedStyle(document.documentElement);
       const surfaces = ["--card", "--background"].map((token) => luminance(root.getPropertyValue(token)).value);
-      return [...document.querySelectorAll('.btn-raised, .btn-ghost, .btn-tint, .toolbar-button, .group\\/composer')]
+      return [...document.querySelectorAll('.btn-outline, .btn-ghost, .btn-tint, .toolbar-button, .group\\/composer')]
         .filter((el: any) => el.getBoundingClientRect().width > 0 && !el.matches(":disabled"))
         .map((el: any) => {
           const style = getComputedStyle(el);
@@ -127,7 +127,7 @@ test("buttons and composer have visible borders before hover", { tag: "@theme" }
   await composer.getByRole("textbox").fill("Check the send button");
   await checkEdges();
 
-  const hovered = ["[data-tone=primary]", ".btn-raised", ".btn-ghost"].map((face) => page.locator(`#main ${face}:visible, header ${face}:visible`).first());
+  const hovered = ["[data-tone=primary]", ".btn-outline", ".btn-ghost"].map((face) => page.locator(`#main ${face}:visible, header ${face}:visible`).first());
   for (const button of hovered) {
     await button.hover();
     await checkEdges();
