@@ -13,9 +13,7 @@ async function mockFolders(page: Page) {
 }
 
 async function openFolders(page: Page) {
-  // On a phone the project lives in the sidebar sheet.
-  const menu = page.getByRole("button", { name: "Open sidebar" });
-  if (await menu.isVisible()) await menu.click();
+  // The project is a chip over the composer, or on a phone the name in the bar.
   await page.getByRole("combobox", { name: "Project", exact: true }).click();
   await page.getByRole("button", { name: "Open folder…" }).click();
   await expect(page.getByRole("dialog", { name: "Open project folder" })).toBeVisible();

@@ -1,22 +1,18 @@
 /**
- * The top bar: the numbered tabs, and what this session is doing on the right
- * with the key help, the light/dark switch and the sounds, all on one row
- * whenever they fit side by side; when they do not, the tabs take a row of
- * their own under the tools (the grid lives in `index.css`). The project,
- * Sessions and Settings live in the sidebar; on a phone the bar starts with
- * the button that opens it.
+ * The top bar: the numbered tabs, and what this session is doing on the right,
+ * on one row whenever they fit side by side; when they do not, the tabs take
+ * a row of their own under the tools (the grid lives in `index.css`).
+ * Sessions, Settings, the key help, light or dark and the sounds live in the
+ * sidebar, the project in the composer; on a phone the bar starts with the
+ * button that opens the sidebar and the project.
  */
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react"
-import { Keyboard, Moon, Sun, Volume2, VolumeX } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { Keys } from "@/components/ui/kbd"
-import { useTheme } from "@/components/theme-provider"
 import type { ConnectionState } from "@/lib/events"
 import type { SnapshotTask, StatusInfo } from "@protocol"
 import { ProjectNotice, type Projects } from "./ProjectSwitcher.tsx"
 import { useMediaQuery } from "./hooks.ts"
-import { setSoundMuted, useSoundMuted } from "./sound"
 
 /** What the link to the server is doing: a green dot when live, words when it is not. */
 function Connection({ state }: { state: ConnectionState }) {
@@ -41,72 +37,6 @@ function Connection({ state }: { state: ConnectionState }) {
     )
   }
   return <span className="text-xs font-medium text-destructive">Connection lost</span>
-}
-
-/** Header tools keep a visible surface and rim in either theme. */
-const ICON =
-  "toolbar-button inline-flex size-8 shrink-0 items-center justify-center rounded-lg border text-foreground transition-[background-color,border-color,translate] duration-150 ease-snap outline-none focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:active:translate-none"
-
-function HelpButton({ hint, onHelp }: { hint: string; onHelp: () => void }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button type="button" aria-label="Keyboard shortcuts" aria-haspopup="dialog" aria-keyshortcuts={hint} aria-describedby="focused-action-help" onClick={onHelp} className={ICON}>
-          <Keyboard aria-hidden="true" className="size-[1.05rem]" />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">
-        Keyboard shortcuts <Keys chord={hint} />
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
-function SoundToggle() {
-  const muted = useSoundMuted()
-  const phone = useMediaQuery("(max-width: 767.98px)")
-  const label = phone ? "App sounds" : muted ? "Unmute prompt sounds" : "Mute prompt sounds"
-  return (
-    <>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button type="button" aria-label={label} aria-pressed={muted} aria-describedby={phone ? "app-sounds-help focused-action-help" : "focused-action-help"} className={ICON} onClick={() => setSoundMuted(!muted)}>
-            {muted ? <VolumeX aria-hidden="true" className="size-[1.05rem]" /> : <Volume2 aria-hidden="true" className="size-[1.05rem]" />}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">{label}</TooltipContent>
-      </Tooltip>
-      {phone ? (
-        <span id="app-sounds-help" className="sr-only">
-          App sounds controls prompt tones and navigation ticks.
-        </span>
-      ) : null}
-    </>
-  )
-}
-
-function ThemeToggle() {
-  const { theme, setTheme } = useTheme()
-  const dark = theme === "dark" || (theme === "system" && typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches)
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-          aria-keyshortcuts="D"
-          aria-describedby="focused-action-help"
-          onClick={() => setTheme(dark ? "light" : "dark")}
-          className={ICON}
-        >
-          {dark ? <Sun aria-hidden="true" className="size-[1.05rem]" /> : <Moon aria-hidden="true" className="size-[1.05rem]" />}
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">
-        {dark ? "Light mode" : "Dark mode"} <span className="max-md:hidden"><Keys chord="D" /></span>
-      </TooltipContent>
-    </Tooltip>
-  )
 }
 
 /** The session's task and whether the oracle is busy, as one quiet chip. */
@@ -184,8 +114,7 @@ export function Header({
   lead,
   tabs,
   extra,
-  keys,
-  onHelp,
+  tools,
 }: {
   status?: StatusInfo
   task?: SnapshotTask
@@ -196,8 +125,8 @@ export function Header({
   tabs: ReactNode
   /** Shown before the status (the way back to a question put away). */
   extra?: ReactNode
-  keys: Record<string, string>
-  onHelp: () => void
+  /** The app's switches, only where there is no sidebar to hold them (signing in, loading). */
+  tools?: ReactNode
 }) {
   const busy = status?.busy ?? false
   const { header, one } = useOneRow()
@@ -223,9 +152,7 @@ export function Header({
             <Connection state={connection} />
           </div>
         )}
-        {phone ? null : <HelpButton hint={keys.help ?? "Alt+H"} onHelp={onHelp} />}
-        <ThemeToggle />
-        <SoundToggle />
+        {tools}
         <span id="focused-action-help" className="sr-only">
           Focused buttons: Enter or Space. Links: Enter. Checkboxes: Space.
         </span>

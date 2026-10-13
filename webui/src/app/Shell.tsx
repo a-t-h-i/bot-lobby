@@ -1,6 +1,6 @@
 /**
- * The shell that wraps every route: the sidebar on the left (the project, its
- * sessions and Settings; a sheet on a phone) and beside it, top to bottom, the
+ * The shell that wraps every route: the sidebar on the left (the sessions,
+ * Settings and the app's switches; a sheet on a phone) and beside it, top to bottom, the
  * top bar with the tabs, one bordered surface for the page of the route
  * (it eases in when the tab changes) and the composer under it. The composer
  * sits in the flow, so a tall message gives the page less room instead of
@@ -16,9 +16,10 @@ import type { ConnectionState } from "@/lib/events"
 import type { LobbySnapshot, StatusInfo } from "@protocol"
 import type { TabId } from "@shared"
 import { AltH } from "./AltH.tsx"
+import { SoundToggle, ThemeToggle } from "./AppTools.tsx"
 import { Composer } from "./Composer.tsx"
 import { Header } from "./Header.tsx"
-import { useProjects } from "./ProjectSwitcher.tsx"
+import { ProjectSwitcher, useProjects } from "./ProjectSwitcher.tsx"
 import { Sidebar, SidebarMenuButton, SidebarSheet } from "./Sidebar.tsx"
 import { SignIn } from "./SignIn.tsx"
 import { ErrorState, LoadingState, ReconnectingState } from "./States.tsx"
@@ -37,7 +38,6 @@ import { routeBody } from "@/tabs/registry.tsx"
 import { ACTIVITY_OPEN } from "@/tabs/lobby/InlineActivity"
 import { focusTab, isTyping, tabWalk } from "@/prompts/nav"
 import { toggleCollapsed, useCollapsed } from "@/lib/collapsed"
-import { useHotkey } from "@/lib/hotkeys"
 
 function handleAction(action: string, route: Route, toggleHelp: () => void, cycle: (delta: number) => void, toggleSidebar: () => void): void {
   if (action === "search") (document.querySelector<HTMLElement>("#main input[type='search']") ?? document.getElementById("composer-text"))?.focus()
@@ -54,6 +54,10 @@ function handleAction(action: string, route: Route, toggleHelp: () => void, cycl
   else if (action === "prevTab") cycle(-1)
   else if (action === "savePlan" && route.kind === "tab" && route.tab === "plan") void act("planner.save", {})
 }
+
+/** The app's switches in the bar, before there is a sidebar to hold them. */
+const BAR_TOOL =
+  "toolbar-button inline-flex size-8 shrink-0 items-center justify-center rounded-lg border text-foreground transition-[background-color,border-color,translate] duration-150 ease-snap outline-none focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:active:translate-none"
 
 /** How long a stream that was live may be reconnecting before the page says pi is gone. */
 const OUTAGE_MS = 2500
@@ -147,8 +151,6 @@ export function Shell() {
   }, [phone, roomy, toggleFolded])
   const hash = route.kind === "tab" ? route.tab : JSON.stringify(route)
   useEffect(() => setPeek(false), [hash, roomy])
-  // On a phone the project list lives in the sheet: P opens the sheet first.
-  useHotkey("p", () => setSheet(true), { enabled: phone && !sheet })
   const onAction = useCallback((action: string) => {
     if ((action === "thinking" || action === "activity") && status?.panels?.[action] === false) return
     // The route as the address bar has it right now: a key pressed in the frame after a jump must not act on the page just left.
@@ -188,25 +190,34 @@ export function Shell() {
 
   const keyLabels = Object.fromEntries(keys.map((key) => [key.action, key.label]))
   const signedIn = Boolean(status) && !signedOut
-  const lead = phone ? (
+  const name = status?.workspace.name ?? "bot-lobby"
+  // A phone's bar starts with the way into the sidebar and the project, which a wider screen keeps in the composer's tray.
+  const lead = !phone ? null : signedIn ? (
     <>
-      {signedIn ? <SidebarMenuButton expanded={sheet} onOpen={() => setSheet(true)} /> : null}
-      <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
-        <span aria-hidden="true" className="project-mark">{(status?.workspace.name ?? "bot-lobby").charAt(0).toUpperCase()}</span>
-        <span className="truncate">{status?.workspace.name ?? "bot-lobby"}</span>
-      </span>
+      <SidebarMenuButton expanded={sheet} onOpen={() => setSheet(true)} />
+      <ProjectSwitcher look="bar" projects={projects} tab={tab} name={name} branch={status?.branch ?? status?.workspace.branch} />
     </>
-  ) : null
+  ) : (
+    <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
+      <span aria-hidden="true" className="project-mark">{name.charAt(0).toUpperCase()}</span>
+      <span className="truncate">{name}</span>
+    </span>
+  )
   const header = <Header
         status={status}
         task={lobbyRecord.data?.task}
         connection={connection}
         projects={projects}
         lead={lead}
-        keys={keyLabels}
-        onHelp={toggleHelp}
         tabs={phone ? null : tabStrip}
         extra={putAway && prompts.length > 0 ? <QuestionsPill count={prompts.length} onOpen={() => setPutAway(false)} /> : null}
+        // With no sidebar yet (signing in, loading) light or dark and the sounds wait in the bar.
+        tools={signedIn ? null : (
+          <>
+            <ThemeToggle className={BAR_TOOL} side="bottom" />
+            <SoundToggle className={BAR_TOOL} side="bottom" />
+          </>
+        )}
       />
   if (signedOut || !status) return (
     <div ref={rootRef} className="fixed inset-0 flex flex-col">
@@ -216,7 +227,7 @@ export function Shell() {
       </main>
     </div>
   )
-  const sidebarProps = { projects, route, keys: keyLabels, status }
+  const sidebarProps = { route, keys: keyLabels, status, onHelp: toggleHelp }
   return (
     <div ref={rootRef} className="fixed inset-0 flex">
       {phone ? null : <Sidebar {...sidebarProps} folded={roomy ? sidebarFolded : !peek} over={!roomy && peek} onToggle={toggleSidebar} />}
@@ -246,7 +257,7 @@ export function Shell() {
           {routeBody(route)}
         </motion.div>
       </main>
-      <Composer route={route} keys={keyLabels} onHelp={toggleHelp} dockNav={phone ? tabStrip : null} />
+      <Composer route={route} keys={keyLabels} projects={projects} onHelp={toggleHelp} dockNav={phone ? tabStrip : null} />
       </div>
       {phone ? <SidebarSheet {...sidebarProps} open={sheet} onOpenChange={setSheet} /> : null}
       <Thinking status={status} lobby={lobbyRecord.data} />

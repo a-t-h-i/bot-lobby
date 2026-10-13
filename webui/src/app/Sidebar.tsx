@@ -1,10 +1,11 @@
 /**
  * The sidebar on the left of every page, as in the coding harnesses it takes
- * after: the project at the top, this project's sessions under it (this
- * window's opens the Lobby, any other its conversation on the Sessions page)
- * and Settings at the foot. Folded (Alt+B, or its button) it narrows to a rail
- * of icons, so the project, Sessions and Settings stay one click away. On a
- * phone it is a sheet from the left, opened from the menu button in the bar.
+ * after: this project's sessions (this window's opens the Lobby, any other its
+ * conversation on the Sessions page), and at the foot Settings with the app's
+ * switches (the key list, light or dark, the sounds). The project itself is
+ * chosen in the composer. Folded (Alt+B, or its button) it narrows to a rail
+ * of icons, so all of it stays one click away. On a phone it is a sheet from
+ * the left, opened from the menu button in the bar.
  */
 import { useEffect, type ReactNode } from "react"
 import { Layers, Menu, PanelLeftClose, PanelLeftOpen, Settings, X } from "lucide-react"
@@ -18,15 +19,15 @@ import type { LobbySnapshot, StatusInfo } from "@protocol"
 import { WhereIcon } from "@/tabs/sessions/WhereIcon"
 import { buildEntries, type Entry } from "@/tabs/sessions/words"
 import { useTopic } from "./hooks.ts"
-import { ProjectSwitcher, type Projects } from "./ProjectSwitcher.tsx"
+import { HelpButton, SoundToggle, ThemeToggle } from "./AppTools.tsx"
 import type { Route } from "./router.ts"
 import { useApiRead } from "./useApiRead.ts"
 
 export interface SidebarProps {
-  projects: Projects
   route: Route
   keys: Record<string, string>
   status?: StatusInfo
+  onHelp: () => void
 }
 
 /** The sessions the sidebar lists: the same entries as the Sessions page, read on every `sessions` change. */
@@ -81,22 +82,25 @@ function SectionHead({ children, action }: { children: ReactNode; action?: React
   )
 }
 
-function Sessions({ route, keys, status }: Omit<SidebarProps, "projects">) {
+function Sessions({ route, keys, status, edge }: Pick<SidebarProps, "route" | "keys" | "status"> & { edge?: ReactNode }) {
   const { entries, loaded } = useSessionEntries(status)
   return (
     <nav aria-label="Sessions list" className="flex min-h-0 flex-1 flex-col">
       <SectionHead
         action={
-          <a
-            href="#/sessions"
-            aria-label="Sessions"
-            aria-current={route.kind === "sessions" && !route.key ? "page" : undefined}
-            aria-keyshortcuts={keys.sessions ?? "Alt+O"}
-            className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=page]:text-sidebar-foreground max-md:h-11"
-          >
-            <Layers aria-hidden="true" className="size-3.5" />
-            View all
-          </a>
+          <span className="flex items-center gap-0.5">
+            <a
+              href="#/sessions"
+              aria-label="Sessions"
+              aria-current={route.kind === "sessions" && !route.key ? "page" : undefined}
+              aria-keyshortcuts={keys.sessions ?? "Alt+O"}
+              className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=page]:text-sidebar-foreground max-md:h-11"
+            >
+              <Layers aria-hidden="true" className="size-3.5" />
+              View all
+            </a>
+            {edge}
+          </span>
         }
       >
         Sessions
@@ -119,48 +123,37 @@ function SettingsLink({ route, keys, rail }: { route: Route; keys: Record<string
       aria-label="Settings"
       aria-current={route.kind === "settings" ? "page" : undefined}
       aria-keyshortcuts={hint}
-      className={rail ? RAIL_ITEM : ITEM}
+      className={rail ? RAIL_ITEM : cn(ITEM, "flex-1")}
     >
       <Settings aria-hidden="true" className="size-4 shrink-0" />
-      {rail ? null : (
-        <>
-          <span className="flex-1">Settings</span>
-          <Keys chord={hint} className="kbd-hint max-md:hidden" />
-        </>
-      )}
+      {rail ? null : <span className="flex-1">Settings</span>}
     </a>
   )
-  return rail ? <RailTip label="Settings" hint={hint}>{link}</RailTip> : link
+  return <RailTip label="Settings" hint={hint} side={rail ? "right" : "top"}>{link}</RailTip>
 }
 
 function CollapseButton({ hint, onCollapse }: { hint: string; onCollapse: () => void }) {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button type="button" aria-label="Collapse sidebar" aria-expanded={true} aria-controls="app-sidebar" aria-keyshortcuts={hint} onClick={onCollapse} className={RAIL_ITEM}>
-          <PanelLeftClose aria-hidden="true" className="size-4" />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="right">
-        Collapse sidebar <Keys chord={hint} />
-      </TooltipContent>
-    </Tooltip>
+    <RailTip label="Collapse sidebar" hint={hint} side="right">
+      <button type="button" aria-label="Collapse sidebar" aria-expanded={true} aria-controls="app-sidebar" aria-keyshortcuts={hint} onClick={onCollapse} className={cn(RAIL_ITEM, "size-7")}>
+        <PanelLeftClose aria-hidden="true" className="size-4" />
+      </button>
+    </RailTip>
   )
 }
 
-/** The whole sidebar's content: the project, the sessions and Settings (also the phone sheet's). */
-function SidebarBody({ projects, route, keys, status, onCollapse, closer }: SidebarProps & { onCollapse?: () => void; closer?: ReactNode }) {
-  const name = status?.workspace.name ?? "bot-lobby"
-  const branch = status?.branch ?? status?.workspace.branch
+/** The whole sidebar's content: the sessions, then Settings and the app's switches (also the phone sheet's). */
+function SidebarBody({ route, keys, status, onHelp, onCollapse, closer, phone = false }: SidebarProps & { onCollapse?: () => void; closer?: ReactNode; phone?: boolean }) {
+  const tool = cn(RAIL_ITEM, phone ? "size-11" : "size-8")
   return (
     <>
-      <div className="flex min-w-0 items-center gap-1 px-1 pt-2">
-        <ProjectSwitcher projects={projects} tab={route.kind === "tab" ? route.tab : route.kind} name={name} branch={branch} />
-        {onCollapse ? <CollapseButton hint={keys.sidebar ?? "Alt+B"} onCollapse={onCollapse} /> : closer}
-      </div>
-      <Sessions route={route} keys={keys} {...(status ? { status } : {})} />
-      <div className="border-t border-sidebar-border px-1 py-2">
+      <Sessions route={route} keys={keys} {...(status ? { status } : {})} edge={onCollapse ? <CollapseButton hint={keys.sidebar ?? "Alt+B"} onCollapse={onCollapse} /> : closer} />
+      <div className="sidebar-foot flex items-center gap-1 px-1 py-2">
         <SettingsLink route={route} keys={keys} />
+        {/* No key list on a phone: there are no keys to list. */}
+        {phone ? null : <HelpButton hint={keys.help ?? "Alt+H"} onHelp={onHelp} className={tool} />}
+        <ThemeToggle className={tool} />
+        <SoundToggle className={tool} />
       </div>
     </>
   )
@@ -169,21 +162,19 @@ function SidebarBody({ projects, route, keys, status, onCollapse, closer }: Side
 const RAIL_ITEM =
   "inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none transition-[background-color,color,translate] duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px aria-[current=page]:bg-sidebar-accent aria-[current=page]:text-sidebar-foreground motion-reduce:active:translate-none"
 
-function RailTip({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+function RailTip({ label, hint, side = "right", children }: { label: string; hint?: string; side?: "right" | "top"; children: ReactNode }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side="right">
+      <TooltipContent side={side}>
         {label} {hint ? <Keys chord={hint} /> : null}
       </TooltipContent>
     </Tooltip>
   )
 }
 
-/** The folded sidebar: the same three ways out as icons, and the button that opens it again. */
-function Rail({ projects, route, keys, status, onExpand }: SidebarProps & { onExpand: () => void }) {
-  const name = status?.workspace.name ?? "bot-lobby"
-  const branch = status?.branch ?? status?.workspace.branch
+/** The folded sidebar: the same ways out as icons, and the button that opens it again. */
+function Rail({ route, keys, onHelp, onExpand }: SidebarProps & { onExpand: () => void }) {
   const hint = keys.sidebar ?? "Alt+B"
   return (
     <>
@@ -192,13 +183,15 @@ function Rail({ projects, route, keys, status, onExpand }: SidebarProps & { onEx
           <PanelLeftOpen aria-hidden="true" className="size-4" />
         </button>
       </RailTip>
-      <ProjectSwitcher projects={projects} tab={route.kind === "tab" ? route.tab : route.kind} name={name} branch={branch} rail />
       <RailTip label="Sessions" hint={keys.sessions ?? "Alt+O"}>
         <a href="#/sessions" aria-label="Sessions" aria-current={route.kind === "sessions" ? "page" : undefined} aria-keyshortcuts={keys.sessions ?? "Alt+O"} className={RAIL_ITEM}>
           <Layers aria-hidden="true" className="size-4" />
         </a>
       </RailTip>
       <span className="flex-1" />
+      <HelpButton hint={keys.help ?? "Alt+H"} onHelp={onHelp} className={RAIL_ITEM} side="right" />
+      <ThemeToggle className={RAIL_ITEM} side="right" />
+      <SoundToggle className={RAIL_ITEM} side="right" />
       <SettingsLink route={route} keys={keys} rail />
     </>
   )
@@ -241,12 +234,13 @@ export function SidebarSheet({ open, onOpenChange, ...props }: SidebarProps & { 
       <SheetContent side="left" showCloseButton={false} aria-describedby="sidebar-sheet-description" className="app-sidebar-sheet gap-0 p-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
         <SheetTitle className="sr-only">Sidebar</SheetTitle>
         <SheetDescription id="sidebar-sheet-description" className="sr-only">
-          The project, its sessions and settings.
+          This project's sessions, settings and the app's switches.
         </SheetDescription>
         {/* Following any link closes the sheet: the page it leads to is the point. */}
         <div className="flex min-h-0 flex-1 flex-col px-1" onClick={(event) => { if ((event.target as HTMLElement).closest("a[href]")) onOpenChange(false) }}>
           <SidebarBody
             {...props}
+            phone
             closer={
               <SheetClose aria-label="Close sidebar" className={cn(RAIL_ITEM, "size-11")}>
                 <X aria-hidden="true" className="size-4" />
@@ -261,7 +255,7 @@ export function SidebarSheet({ open, onOpenChange, ...props }: SidebarProps & { 
 
 export function SidebarMenuButton({ onOpen, expanded }: { onOpen: () => void; expanded: boolean }) {
   return (
-    <button type="button" aria-label="Open sidebar" aria-haspopup="dialog" aria-expanded={expanded} onClick={onOpen} className="toolbar-button inline-flex size-11 shrink-0 items-center justify-center rounded-lg border text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/40">
+    <button type="button" aria-label="Open sidebar" aria-haspopup="dialog" aria-expanded={expanded} onClick={onOpen} className={cn(RAIL_ITEM, "size-11 text-foreground")}>
       <Menu aria-hidden="true" className="size-[1.15rem]" />
     </button>
   )
