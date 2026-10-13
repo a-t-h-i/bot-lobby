@@ -4,87 +4,40 @@ declare const document: any;
 declare const window: any;
 declare const getComputedStyle: any;
 
-test("the effort brain grows folds, animates each effort level and shimmers at xhigh", { tag: "@theme" }, async ({ page, server }, info) => {
+test("effort is a menu of every level with what each one does, stepped by the arrow keys", { tag: "@theme" }, async ({ page, server }, info) => {
   const trap = await openScenario(page, server, "full");
   await page.setViewportSize({ width: info.project.name === "light-320" ? 320 : 390, height: 844 });
   await page.evaluate(() => { window.location.hash = "#/settings"; });
   const card = page.locator("section.glass", { hasText: "Backend" }).first();
-  const brain = card.locator('[data-slot="effort-mascot"]');
-  const slider = card.getByRole("slider", { name: "Backend effort" });
-  await slider.focus();
-  await slider.press("Home");
+  const effort = card.getByRole("button", { name: "Backend effort" });
+  await expect(effort).toHaveAttribute("aria-haspopup", "menu");
+  await expect(effort.locator('[data-slot="effort-value"]')).toHaveText("medium");
+  await effort.focus();
+  await effort.press("Home");
+  await expect(effort).toHaveAttribute("data-level", "off");
   const levels = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
-  const folds = [0, 2, 4, 4, 6, 8, 12];
-  const animations = ["none", "brain-breathe", "brain-drift", "brain-focus", "brain-glitch", "brain-glitch", "brain-phase"];
-  for (let rank = 0; rank < levels.length; rank += 1) {
-    if (rank) await slider.press("ArrowRight");
-    await expect(brain).toHaveAttribute("data-level", levels[rank]!);
-    await expect(brain.locator("[data-brain-fold]")).toHaveCount(folds[rank]!);
-    await expect(brain.locator("[data-brain-halo]")).toHaveCount(rank === 6 ? 1 : 0);
-    await expect(brain.locator("[data-brain-phase]")).toHaveCount(rank === 6 ? 2 : 0);
-    await expect(brain.locator("[data-brain-shimmer]")).toHaveCount(rank >= 5 ? 1 : 0);
-    expect(await brain.locator("[data-brain-shape]").evaluate((el: any) => getComputedStyle(el).animationName)).toBe(animations[rank]);
-    if (rank >= 5) expect(await brain.locator("[data-brain-shimmer]").evaluate((el: any) => getComputedStyle(el).animationName)).toBe("brain-shimmer");
-    if ([1, 2, 3, 5].includes(rank)) await brain.screenshot({ path: info.outputPath(`brain-${levels[rank]}.png`) });
+  for (const level of levels.slice(1)) {
+    await effort.press("ArrowRight");
+    await expect(effort, "Right steps one level without opening the list").toHaveAttribute("data-level", level);
   }
-  await expect(brain).toHaveAttribute("data-elevated", "true");
-  await expect(brain.locator("[data-brain-body]")).toHaveAttribute("filter", /-glow\)/);
-  await expect(card.getByText("Faster", { exact: true })).toBeVisible();
-  await expect(card.getByText("Smarter", { exact: true })).toBeVisible();
-  await expect(card.locator('[data-slot="effort-recommended"]'), "the default level is marked").toHaveText("Recommended");
-  await expect(card.locator('[data-slot="effort-bubble"]'), "the focused thumb says its level").toHaveText("max");
-  await expect(card.locator('[data-slot="effort-fill"]')).toHaveAttribute("data-level", "max");
-  await card.scrollIntoViewIfNeeded();
-  await card.screenshot({ path: info.outputPath("brain-max.png") });
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await effort.press("ArrowLeft");
+  await expect(effort).toHaveAttribute("data-level", "xhigh");
 
-  await slider.press("Home");
-  await expect(brain).toHaveAttribute("data-level", "off");
-  const box = (await slider.boundingBox())!;
-  await page.mouse.move(box.x + 1, box.y + box.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await expect(brain).toHaveAttribute("data-level", "medium");
-  await page.mouse.up();
-  await expect(slider).toHaveAttribute("aria-valuetext", "medium");
+  await effort.press("Enter");
+  const menu = page.getByRole("menu");
+  await expect(menu).toBeVisible();
+  const items = menu.getByRole("menuitemradio");
+  await expect(items).toHaveCount(levels.length);
+  await expect(menu.getByRole("menuitemradio", { name: /xhigh/i })).toHaveAttribute("aria-checked", "true");
+  await expect(menu.getByRole("menuitemradio", { name: /^medium/i })).toContainText("Balanced reasoning for most work.");
+  await expect(menu.locator('[data-slot="effort-recommended"]'), "the default level is marked").toHaveText("Recommended");
+  await menu.screenshot({ path: info.outputPath("effort-menu.png") });
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
-
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.reload();
-  await slider.press("End");
-  await expect(brain).toHaveAttribute("data-elevated", "true");
-  const pose = () => brain.locator("[data-brain-body]").evaluate((el: any) => getComputedStyle(el).transform);
-  await expect.poll(pose).toBe("matrix(1, 0, 0, 1, 0, -5)");
-  await page.waitForTimeout(150);
-  expect(await pose()).toBe("matrix(1, 0, 0, 1, 0, -5)");
-  expect(await brain.locator("[data-brain-shape]").evaluate((el: any) => getComputedStyle(el).animationName)).toBe("none");
-  await expect(brain.locator("[data-brain-scan]")).toBeHidden();
-  await expect(brain.locator("[data-brain-shimmer]")).toBeHidden();
-  await slider.press("Home");
-  await slider.press("ArrowRight");
-  expect(await brain.locator(".brain-spark").first().evaluate((el: any) => getComputedStyle(el).animationName)).toBe("none");
-  expect(trap.errors).toEqual([]);
-  trap.stop();
-});
-
-test("a change in effort walks through every level in between", async ({ page, server }) => {
-  const trap = await openScenario(page, server, "full");
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await page.evaluate(() => { window.location.hash = "#/settings"; });
-  const card = page.locator("section.glass", { hasText: "Backend" }).first();
-  const slider = card.getByRole("slider", { name: "Backend effort" });
-  await slider.focus();
-  await slider.press("Home");
-  await expect(slider.locator("xpath=.")).toHaveAttribute("data-passing", "off");
-  await slider.evaluate((el: any) => {
-    window.__passed = [];
-    new window.MutationObserver(() => window.__passed.push(el.getAttribute("data-passing"))).observe(el, { attributes: true, attributeFilter: ["data-passing"] });
-  });
-  await slider.press("End");
-  await expect(slider, "the value is the target at once").toHaveAttribute("aria-valuetext", "max");
-  await expect(slider).toHaveAttribute("data-passing", "max");
-  expect(await page.evaluate(() => window.__passed), "every level lights up on the way").toEqual(["minimal", "low", "medium", "high", "xhigh", "max"]);
-  await expect(card.locator(".effort-spark").first(), "sparks in the fill at the top").toBeAttached();
-  await card.locator('[data-slot="effort-track"]').screenshot({ path: test.info().outputPath("effort-max.png") });
+  await menu.getByRole("menuitemradio", { name: /^low/i }).click();
+  await expect(menu).toBeHidden();
+  await expect(effort).toHaveAttribute("data-level", "low");
+  await expect(effort, "focus comes back to the field").toBeFocused();
   expect(trap.errors).toEqual([]);
   trap.stop();
 });
@@ -93,9 +46,9 @@ test("a toast is centred over the composer, clear of it", async ({ page, server 
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(() => { window.location.hash = "#/settings"; });
-  const slider = page.getByRole("slider", { name: "Backend effort" });
-  await slider.focus();
-  await slider.press("ArrowRight");
+  const effort = page.getByRole("button", { name: "Backend effort" });
+  await effort.focus();
+  await effort.press("ArrowRight");
   const toast = page.locator('[role="status"] > div').filter({ hasText: "Settings saved" });
   await expect(toast).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(400);

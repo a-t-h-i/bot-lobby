@@ -7,7 +7,8 @@
  */
 import { useEffect, useId, useMemo, useRef, useState } from "react"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/reui/popover"
-import { Check, ChevronDown, Search } from "lucide-react"
+import { ChevronDown, Search } from "lucide-react"
+import { SELECT_CHEVRON, SELECT_FIELD } from "@/components/reui/select"
 import { cn } from "@/lib/utils"
 
 export interface ComboOption {
@@ -111,12 +112,13 @@ export function Combobox({ value, options, onChange, label, className, disabled 
         }}
         data-slot="select-trigger"
         className={cn(
-          "reui-select flex h-8 w-full min-w-0 items-center justify-between gap-2 overflow-hidden rounded-lg border bg-card px-2.5 text-sm whitespace-nowrap outline-none transition-[border-color,box-shadow] duration-150 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/24 disabled:pointer-events-none disabled:opacity-64",
+          SELECT_FIELD,
+          "w-full min-w-0 overflow-hidden whitespace-nowrap",
           className
         )}
       >
         <span className="min-w-0 truncate">{chosen?.label ?? value}</span>
-        <ChevronDown aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+        <ChevronDown aria-hidden="true" strokeWidth={2.25} className={SELECT_CHEVRON} />
       </PopoverTrigger>
       <PopoverContent
         align="start"
@@ -155,13 +157,12 @@ export function Combobox({ value, options, onChange, label, className, disabled 
               data-index={index}
               onPointerMove={() => setActive(index)}
               onClick={() => pick(option)}
-              className={cn("flex min-h-8 cursor-default items-center gap-2 rounded-md px-2 py-1 text-sm select-none", index === active && "bg-accent")}
+              className={cn("flex min-h-8 cursor-pointer items-center gap-2 rounded-sm px-2 py-1 text-sm select-none sm:min-h-7", option.value === value && "bg-foreground/[0.08]", index === active && "bg-accent text-accent-foreground")}
             >
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate">{option.label}</span>
-                {option.hint ? <span className="line-clamp-2 text-xs text-muted-foreground">{option.hint}</span> : null}
+                {option.hint ? <span className="line-clamp-2 text-pretty text-xs text-muted-foreground/80">{option.hint}</span> : null}
               </span>
-              {option.value === value ? <Check aria-hidden="true" className="size-3.5 shrink-0 text-primary" /> : null}
             </div>
           ))}
         </div>
