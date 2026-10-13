@@ -1150,23 +1150,8 @@
   padding: 0.5rem 0;
   border-right: 1px solid var(--sidebar-border);
 }
-/* A narrow window's open sidebar lies over the page; the rail's width stays in the row so nothing shifts. */
-.app-sidebar-room { position: relative; flex-shrink: 0; width: 3.5rem; z-index: 40; }
-.app-sidebar-room > .app-sidebar {
-  position: absolute;
-  inset-block: 0;
-  left: 0;
-  border-right: 1px solid var(--sidebar-border);
-  box-shadow: var(--glass-shadow, 0 16px 40px -14px rgb(0 0 0 / 0.3));
-  animation: sidebar-in 160ms var(--ease-snap, ease-out);
-}
-.app-sidebar-scrim { position: fixed; inset: 0; background: color-mix(in oklab, var(--foreground) 6%, transparent); }
-@keyframes sidebar-in { from { translate: -0.75rem 0; opacity: 0; } }
-@media (prefers-reduced-motion: reduce) {
-  .app-sidebar-room > .app-sidebar { animation: none; }
-}
 @media (max-width: 767.98px) {
-  .app-sidebar, .app-sidebar-room { display: none; }
+  .app-sidebar { display: none; }
 }
 .app-sidebar-sheet {
   width: min(20rem, 85vw) !important;

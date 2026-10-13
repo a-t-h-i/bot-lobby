@@ -1,3 +1,4 @@
+/** Adapted from T3 Code (MIT), apps/web/src/components/ui/dialog.tsx and dialog-styles.ts. */
 import type { CSSProperties, ReactNode } from "react"
 import { Dialog } from "radix-ui"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"

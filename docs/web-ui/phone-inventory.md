@@ -175,7 +175,7 @@ Owning files: `webui/src/tabs/issues/{IssuesTab,IssueList,IssueDetail}.tsx`.
 | Detail loading | `#/issues/<number>` | `IssueDetail.tsx:96` | sheet | `<Spinner/> loading #{number}…` | — |
 | Detail error | `issues.get` fails | `IssueDetail.tsx:97` | sheet | "Could not load #{number}. …" (no retry) | — |
 | Detail | `#/issues/<number>` | `IssueDetail.tsx`, `SplitPane.tsx` | **sheet** `w-[92%]` | `NO_DESCRIPTION` | title `#N` `break-words`; `issue.url` `break-all`; `ActionBar` sticky; Description Markdown |
-| Comments | `issue.comments` | `IssueDetail.tsx` `Comments`/`Comment` | sheet | hidden when none | `card-raised` cards; long author/body |
+| Comments | `issue.comments` | `IssueDetail.tsx` `Comments`/`Comment` | sheet | hidden when none | `card-flat` cards; long author/body |
 | Plan it | `PlanIt` in detail | `IssueDetail.tsx` `PlanIt`, `ConfirmButton` | **AlertDialog** | — | "Plan #N with the panel?"; confirm → `go("#/plan")` + seed session |
 
 `issueNumber` accepts only positive integers (else list). `IssueDetail` computes `now = Date.now()` once per render (no ticker). Composer target on Issues is Oracle only.
@@ -572,7 +572,7 @@ non-viewport CSS queries 7 (`pointer:coarse` ×2, `hover:none + pointer:coarse`
 | `(hover: none) and (pointer: coarse)` | `index.css:477` | CSS media | `.kbd-hint { display:none }` — key caps hidden on touch |
 | `[@media(hover:none)]:opacity-100` | `tabs/plan/Draft.tsx:71` | Tailwind arbitrary | line-comment button always visible on non-hover devices |
 | `(pointer: coarse)` | `app/Shell.tsx:157` | JS matchMedia | switches tab-change autofocus away from composer to `#main` |
-| `(prefers-reduced-motion: reduce)` | `index.css:824,897,1041,1075,1137`; `components/obsidian/discover-button.css:37` | CSS media | orb/chat/site-wide/effort/brain animations |
+| `(prefers-reduced-motion: reduce)` | `index.css:824,897,1041,1075,1137` | CSS media | orb/chat/site-wide/effort/brain animations |
 | `(prefers-reduced-motion: reduce)` | `app/TabStrip.tsx:365` | JS matchMedia | tab liquid transition uses instant scroll |
 | `(prefers-color-scheme: dark)` | `components/theme-provider.tsx:18,34,129`; `tabs/settings/ThemeGroup.tsx:29`; `app/Header.tsx:103` | JS matchMedia | theme resolution/labels |
 | `(display-mode: fullscreen/standalone/minimal-ui)` | `app/install.ts:61,63` | JS matchMedia | installed-app detection |

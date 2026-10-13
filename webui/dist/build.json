@@ -1,6 +1,6 @@
 {
-  "hash": "fd76c9689b9b2b42673aff1b0f466e41f95012bf1cc739c354acf5de8802af61",
-  "builtAt": "2026-10-13T14:25:45.063Z",
+  "hash": "321807ea51e68eb67b10f9485ac85792142c8d94aeb7b22f757f9cab54ae2b51",
+  "builtAt": "2026-10-13T14:32:57.235Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -184,11 +184,11 @@
     },
     {
       "path": "webui/src/components/reui/popover.tsx",
-      "sha256": "18d6b9770a37c1c151e96f8d539fc45aa3af23eeb2361b10a8a58710bae8bd58"
+      "sha256": "9ec583c3a047cc327b68725bcff283fbeab831e043707a832119febf3c72081c"
     },
     {
       "path": "webui/src/components/reui/select.tsx",
-      "sha256": "f7399b5be313ede7d10dbeda74c805b0da778ceccd71ca95e6356d26524d0a72"
+      "sha256": "7a29a1e19da88a3f340fa6a5c975771441fda271fbfa993df9d018b2e1d53172"
     },
     {
       "path": "webui/src/components/theme-provider.tsx",
@@ -228,7 +228,7 @@
     },
     {
       "path": "webui/src/components/ui/popup.tsx",
-      "sha256": "125c74f1fabed7a042c367c9275320fce2585fc4382881175bf84c84a1d1d5c8"
+      "sha256": "f53d21f6295aedbe422f92292dd9acae13539b2013a7147ec8e2eb9d7974a5be"
     },
     {
       "path": "webui/src/components/ui/sheet.tsx",
@@ -256,7 +256,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "a46fc5e7515ebdb4caadb2bbabb7f4aa47f5fcd817f203d1bb9b5584df79d3ba"
+      "sha256": "fda95d1b38be438ba6fba4e99721748ff843de4e4f69bd2d6f7aa0825dc954c2"
     },
     {
       "path": "webui/src/lib/act.ts",
