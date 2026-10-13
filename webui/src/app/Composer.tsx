@@ -1,7 +1,9 @@
 /**
- * The one text box for everything: a single card with roomy text at the top
- * and, inside it at the bottom, the tools, who it goes to, the key hints and
- * the send button. It sits under the page (the shell gives it its row), grows
+ * The one text box for everything, after the coding harnesses: a tray tucked
+ * behind the top of the box says where you are and who the message goes to
+ * (the project, the target, the key help and the models), and the box itself
+ * is a round card with roomy text, the add and preview buttons and a round
+ * send button. On a phone the tray folds into the box. It sits under the page (the shell gives it its row), grows
  * with what you type up to a cap, takes images, PDFs and other files (pick,
  * paste or drop them) and sends Markdown to whoever the tab talks to: the
  * oracle everywhere, the planning panel on Plan, a quick fix on Quick fix, a
@@ -10,7 +12,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { ArrowUp, Eye, FileText, Paperclip, Square, X } from "lucide-react"
+import { ArrowUp, Eye, FileText, Folder, MessageSquare, Plus, Settings2, Square, X } from "lucide-react"
 import { Keys, KeyHint } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -33,6 +35,7 @@ import { usePhoneViewport } from "./usePhoneViewport"
 import { go, type Route } from "./router"
 import { knowledgeHash } from "./knowledgeView"
 import { KnowledgePaneToggle } from "./KnowledgePaneToggle"
+import { OPEN_PROJECTS } from "./ProjectSwitcher"
 import { taskRoute } from "./taskRoute"
 
 type TargetId = "oracle" | "knowledge" | "panel" | "quickfix" | "comment" | "task" | "session" | "newsession"
@@ -86,7 +89,11 @@ let keySeq = 0
 
 /** The icon buttons under the box. */
 const TOOL =
-  "toolbar-button relative inline-flex size-8 items-center justify-center rounded-lg border text-foreground transition-[background-color,border-color,translate] duration-150 ease-snap outline-none focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:active:translate-none"
+  "toolbar-button composer-tool relative inline-flex size-8 items-center justify-center rounded-full border text-foreground transition-[background-color,border-color,translate] duration-150 ease-snap outline-none focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:active:translate-none"
+
+/** A chip in the tray behind the box. */
+const CHIP =
+  "composer-chip inline-flex h-7 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium outline-none transition-colors duration-150 focus-visible:ring-3 focus-visible:ring-ring/40"
 
 function isSend(event: KeyboardEvent): boolean {
   return event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing
@@ -332,6 +339,90 @@ export function Composer({ route, keys, onHelp, dockNav }: { route: Route; keys:
     if (event.dataTransfer.files.length > 0) attach(event.dataTransfer.files)
   }
 
+  const knowledge = route.kind === "tab" && route.tab === "knowledge"
+  // Who it goes to: chips in the tray on a wide screen, in the box on a phone or a short landscape one.
+  const inTray = !phone && !compact
+  const targetControl = compact && targets.length > 1 ? (
+    <Select value={target.id} onValueChange={(id) => setChosen(id as TargetId)}>
+      <SelectTrigger aria-label="Send to" className="h-7 min-w-0 gap-1.5 px-2 text-xs">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {targets.map((entry) => (
+          <SelectItem key={entry.id} value={entry.id}>{entry.pill}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  ) : targets.length > 1 ? (
+    <div role="radiogroup" aria-label="Send to" className={cn("flex items-center gap-0.5 max-md:flex-wrap", !inTray && "rounded-lg bg-muted p-0.5 shadow-[inset_0_1px_2px_rgb(0_0_0/0.07)]")}>
+      {targets.map((entry) => (
+        <button
+          key={entry.id}
+          aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
+          type="button"
+          role="radio"
+          data-compact
+          aria-checked={entry.id === target.id}
+          onClick={() => setChosen(entry.id)}
+          className={cn(
+            inTray ? CHIP : "h-6 rounded-md border border-transparent px-2.5 text-xs font-medium transition-[background-color,color,box-shadow] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
+            inTray ? (entry.id === target.id ? "composer-chip-on" : "text-muted-foreground hover:text-foreground") : entry.id === target.id ? "btn-raised btn-soft bg-card text-foreground" : "btn-ghost text-muted-foreground hover:text-foreground"
+          )}
+        >
+          {entry.pill}
+        </button>
+      ))}
+    </div>
+  ) : inTray ? (
+    <span className={cn(CHIP, "text-muted-foreground")}>
+      <MessageSquare aria-hidden="true" className="size-3.5 shrink-0" />
+      To the {target.pill.toLowerCase()}
+    </span>
+  ) : (
+    <span className="px-1 text-xs text-muted-foreground">To the {target.pill.toLowerCase()}</span>
+  )
+  const project = status.data?.workspace.name ?? "bot-lobby"
+  const branch = status.data?.branch ?? status.data?.workspace.branch
+  const tray = inTray ? (
+    <div className="composer-tray pointer-events-auto mx-auto w-full max-w-3xl" aria-label="Message context" role="group">
+      <button type="button" aria-label={`Switch project: ${project}`} aria-haspopup="listbox" data-compact title={branch ? `${project} · ${branch}` : project} onClick={() => window.dispatchEvent(new Event(OPEN_PROJECTS))} className={cn(CHIP, "text-foreground hover:bg-[var(--composer-chip-hover)]")}>
+        <Folder aria-hidden="true" className="size-3.5 shrink-0" />
+        <span className="truncate">{project}</span>
+      </button>
+      {knowledge ? null : targetControl}
+      <div className="@container ml-auto flex min-w-0 flex-1 items-center justify-end gap-3 overflow-hidden">
+        {route.kind === "tab" && route.tab === "plan" ? (
+          <KeyHint chord={keys.savePlan ?? "Ctrl+S"} className="hidden @[24rem]:inline-flex">
+            save plan
+          </KeyHint>
+        ) : null}
+        <KeyHint chord="Shift+Enter" className="hidden @[14rem]:inline-flex">
+          new line
+        </KeyHint>
+        <button
+          type="button"
+          aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
+          aria-label="Keyboard shortcuts"
+          aria-haspopup="dialog"
+          data-compact
+          onClick={onHelp}
+          className={cn(CHIP, "kbd-hint shrink-0 px-1.5 text-muted-foreground hover:text-foreground")}
+        >
+          <Keys chord={keys.help ?? "Alt+H"} className="kbd-hint" />
+          <span className="hidden @[8rem]:inline">shortcuts</span>
+        </button>
+      </div>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <a href="#/settings" aria-label="Models and effort" className={cn(CHIP, "size-7 shrink-0 justify-center px-0 text-muted-foreground hover:text-foreground")}>
+            <Settings2 aria-hidden="true" className="size-4" />
+          </a>
+        </TooltipTrigger>
+        <TooltipContent>Each agent's model and effort</TooltipContent>
+      </Tooltip>
+    </div>
+  ) : null
+
   return (
     <div
       id="app-dock"
@@ -345,10 +436,11 @@ export function Composer({ route, keys, onHelp, dockNav }: { route: Route; keys:
       inert={blocked}
     >
       {dockNav ? <div className="pointer-events-auto mx-auto mb-1.5 w-full max-w-3xl">{dockNav}</div> : null}
-      <div className="pointer-events-auto mx-auto w-full max-w-3xl">
+      {tray}
+      <div className="pointer-events-auto relative mx-auto w-full max-w-3xl">
         <div
           className={cn(
-            "group/composer relative rounded-2xl border border-dock-border bg-dock shadow-dock transition-[border-color,box-shadow] duration-300 ease-snap focus-within:border-ring focus-within:shadow-dock-focus",
+            "group/composer relative rounded-[22px] border border-dock-border bg-dock shadow-dock transition-[border-color,box-shadow] duration-300 ease-snap focus-within:border-ring focus-within:shadow-dock-focus",
             compact && "min-[500px]:max-md:grid min-[500px]:max-md:grid-cols-[minmax(0,1fr)_auto] min-[500px]:max-md:min-w-0",
             dragging && "border-primary shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_30%,transparent)]"
           )}
@@ -396,7 +488,7 @@ export function Composer({ route, keys, onHelp, dockNav }: { route: Route; keys:
 
           <div
             className={cn(
-              "flex px-4 pt-3 pb-1",
+              "flex px-4 pt-3.5 pb-1",
               compact && "min-[500px]:max-md:col-start-1 min-[500px]:max-md:min-w-0 min-[500px]:max-md:max-w-full min-[500px]:max-md:pt-1 min-[500px]:max-md:pb-1"
             )}
           >
@@ -411,7 +503,7 @@ export function Composer({ route, keys, onHelp, dockNav }: { route: Route; keys:
               placeholder={busy && target.id === "oracle" ? "The oracle is working. Enter steers it…" : target.placeholder}
               rows={1}
               className={cn(
-                "field-sizing-content max-h-[min(45vh,20rem)] min-h-[1.75rem] w-full min-w-0 flex-1 resize-none bg-transparent text-base leading-relaxed caret-primary outline-none placeholder:text-muted-foreground md:text-[0.9375rem] md:leading-relaxed",
+                "field-sizing-content max-h-[min(45vh,20rem)] min-h-[1.75rem] md:min-h-[2.75rem] w-full min-w-0 flex-1 resize-none bg-transparent text-base leading-relaxed caret-primary outline-none placeholder:text-muted-foreground md:text-[0.9375rem] md:leading-relaxed",
                 compact && "min-[500px]:max-md:max-h-[44px] min-[500px]:max-md:overflow-y-auto"
               )}
             />
@@ -438,7 +530,7 @@ export function Composer({ route, keys, onHelp, dockNav }: { route: Route; keys:
             <Tooltip>
               <TooltipTrigger asChild>
                 <button type="button" aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help" aria-label="Attach images, PDFs or files" data-compact onClick={() => picker.current?.click()} className={TOOL}>
-                  <Paperclip aria-hidden="true" className="size-4" />
+                  <Plus aria-hidden="true" className="size-[1.125rem]" />
                 </button>
               </TooltipTrigger>
               <TooltipContent>Attach images, PDFs or files</TooltipContent>
@@ -454,77 +546,12 @@ export function Composer({ route, keys, onHelp, dockNav }: { route: Route; keys:
               </TooltipContent>
             </Tooltip>
 
-            <span aria-hidden="true" className="mx-1.5 h-4 w-px bg-border" />
-            <div className={cn("contents", phone && !compact && "max-md:block max-md:w-full max-md:order-last")}>
-              {route.kind === "tab" && route.tab === "knowledge" ? <KnowledgePaneToggle rest={route.rest} /> : compact && targets.length > 1 ? (
-                <Select value={target.id} onValueChange={(id) => setChosen(id as TargetId)}>
-                  <SelectTrigger aria-label="Send to" className="h-7 min-w-0 gap-1.5 px-2 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {targets.map((entry) => (
-                      <SelectItem key={entry.id} value={entry.id}>{entry.pill}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : targets.length > 1 ? (
-                <div role="radiogroup" aria-label="Send to" className="flex max-md:flex-wrap items-center gap-0.5 rounded-lg bg-muted p-0.5 shadow-[inset_0_1px_2px_rgb(0_0_0/0.07)]">
-                  {targets.map((entry) => (
-                    <button
-                      key={entry.id}
-                      aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
-                      type="button"
-                      role="radio"
-                      data-compact
-                      aria-checked={entry.id === target.id}
-                      onClick={() => setChosen(entry.id)}
-                      className={cn(
-                        "h-6 rounded-md border border-transparent px-2.5 text-xs font-medium transition-[background-color,color,box-shadow] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
-                        entry.id === target.id ? "btn-raised btn-soft bg-card text-foreground" : "btn-ghost text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      {entry.pill}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <span className="px-1 text-xs text-muted-foreground">To the {target.pill.toLowerCase()}</span>
-              )}
-            </div>
-
-            <div className="@container ml-auto flex min-w-0 flex-1 items-center justify-end overflow-hidden px-2 max-md:hidden">
-              <div className="flex items-center justify-end gap-3.5">
-                {route.kind === "tab" && route.tab === "plan" ? (
-                  <KeyHint chord={keys.savePlan ?? "Ctrl+S"} className="hidden @[34rem]:inline-flex">
-                    save plan
-                  </KeyHint>
-                ) : null}
-                <KeyHint chord="/" className="hidden group-focus-within/composer:!hidden @[28rem]:inline-flex">
-                  write
-                </KeyHint>
-                <KeyHint chord="Esc" className="hidden group-[:not(:focus-within)]/composer:!hidden @[28rem]:inline-flex">
-                  tabs
-                </KeyHint>
-                <KeyHint chord="Shift+Enter" className="hidden @[22rem]:inline-flex">
-                  new line
-                </KeyHint>
-                <KeyHint chord="Enter" className="hidden @[11rem]:inline-flex">
-                  send
-                </KeyHint>
-                <button
-                  type="button"
-                  aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
-                  aria-label="Keyboard shortcuts"
-                  aria-haspopup="dialog"
-                  data-compact
-                  onClick={onHelp}
-                  className="kbd-hint btn-ghost inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border px-1.5 text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
-                >
-                  <Keys chord={keys.help ?? "Alt+H"} className="kbd-hint" />
-                  <span className="hidden @[8rem]:inline">shortcuts</span>
-                </button>
+            {knowledge || !inTray ? (
+              <div className={cn("contents", phone && !compact && "max-md:block max-md:w-full max-md:order-last")}>
+                {knowledge ? <KnowledgePaneToggle rest={route.kind === "tab" ? route.rest : []} /> : targetControl}
               </div>
-            </div>
+            ) : null}
+            <span className="flex-1" />
 
             <div className="contents max-md:ml-auto max-md:flex max-md:items-center max-md:gap-2">
             {busy && target.id === "oracle" ? (
@@ -539,7 +566,7 @@ export function Composer({ route, keys, onHelp, dockNav }: { route: Route; keys:
                   data-compact
                   onClick={() => void send()}
                   disabled={!canSend}
-                  className="btn-tint relative inline-flex size-8 items-center justify-center rounded-lg border [--tint:var(--primary)] before:absolute before:-inset-1 before:content-[''] text-primary-foreground transition-[background-color,color,box-shadow,translate,filter] duration-150 ease-snap outline-none focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:active:translate-none disabled:text-muted-foreground"
+                  className="btn-tint relative inline-flex size-8 items-center justify-center rounded-full border [--tint:var(--primary)] before:absolute before:-inset-1 before:content-[''] text-primary-foreground transition-[background-color,color,box-shadow,translate,filter] duration-150 ease-snap outline-none focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:active:translate-none disabled:text-muted-foreground"
                 >
                   {sending ? <Spinner aria-hidden="true" role="presentation" className="size-3.5 text-primary-foreground" /> : <ArrowUp aria-hidden="true" className="size-4" strokeWidth={2.25} />}
                 </button>

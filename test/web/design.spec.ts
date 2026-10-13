@@ -308,8 +308,9 @@ test("the dock grows and shrinks with the text on its own, over the page, and th
   const before = (await box.boundingBox())!.height;
   const mainBefore = (await page.locator("#main").boundingBox())!;
   const padBefore = await pad();
-  await box.fill("one\ntwo\nthree\nfour\nfive\nsix");
-  await expect.poll(async () => (await box.boundingBox())!.height, { message: "six lines make the box taller" }).toBeGreaterThan(before + 100);
+  // The box starts two lines tall, so it takes a few more before it grows.
+  await box.fill("one\ntwo\nthree\nfour\nfive\nsix\nseven\neight");
+  await expect.poll(async () => (await box.boundingBox())!.height, { message: "eight lines make the box taller" }).toBeGreaterThan(before + 100);
   const mainAfter = (await page.locator("#main").boundingBox())!;
   const cardBox = (await card.boundingBox())!;
   expect(Math.abs(mainAfter.y - mainBefore.y), "the page does not move").toBeLessThanOrEqual(2);
@@ -361,7 +362,7 @@ test("Plan, Quick fix and an open task each give the composer its own target", a
   }
 });
 
-test("zen palettes: warm paper in light, deep ink in dark, a quiet indigo accent, a 12px surface under 8px controls, a 16px dock floating over it", { tag: "@theme" }, async ({ page, server }) => {
+test("zen palettes: warm paper in light, deep ink in dark, a quiet indigo accent, a 12px surface under 8px controls, a round 22px dock floating over it", { tag: "@theme" }, async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const look = await page.evaluate(() => {
@@ -397,7 +398,7 @@ test("zen palettes: warm paper in light, deep ink in dark, a quiet indigo accent
   expect(ab - ar, "the accent leans blue, not warm").toBeGreaterThan(60);
   expect(look.body, "flat page, no wash").toBe("none");
   expect(look.cardRadius, "the page's surface").toBe("12px");
-  expect(look.inputRadius, "the floating dock has softer corners").toBe("16px");
+  expect(look.inputRadius, "the floating dock is round, like the harnesses' boxes").toBe("22px");
   expect(look.inactiveBorder, "inactive tabs are pills with a thin border").toBe("1px");
   expect(look.pillRadius, "the active pill has the same 8px corners").toBe("8px");
   expect(look.cardBottom, "the composer stays on the screen").toBeLessThanOrEqual(look.inner);
@@ -407,8 +408,8 @@ test("zen palettes: warm paper in light, deep ink in dark, a quiet indigo accent
 test("keyboard hints: the box prints its keys, the header button opens the key list, a tab's tooltip names its key", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
-  const hints = page.locator("#composer-text").locator("xpath=ancestor::div[contains(@class,'group/composer')][1]");
-  await expect(hints.getByText("new line"), "Shift+Enter is hinted").toBeVisible();
+  const hints = page.getByRole("group", { name: "Message context" });
+  await expect(hints.getByText("new line"), "Shift+Enter is hinted in the tray over the box").toBeVisible();
   await expect(hints.getByText("shortcuts"), "and the way to the full list").toBeVisible();
   await page.getByRole("tab", { name: /Tasks/ }).hover();
   await expect(page.locator('[data-slot="tooltip-content"]').first(), "a tab's tooltip shows its Alt+N").toContainText(/Alt\s*(plus)?\s*2/);
@@ -1181,14 +1182,14 @@ test("tabs are slim and a confirmation's buttons are small, with a crisp focus l
   await page.keyboard.press("Escape");
 });
 
-test("the chats read alike: avatars beside agents, your words in bubbles, notes as rules, the panel's questions as cards", async ({ page, server }) => {
+test("the chats read alike: the agents' words as plain prose, yours in filled bubbles, notes as quiet lines, the panel's questions as cards", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const chat = page.locator('[role="log"][aria-label="Conversation"]');
-  await expect(chat.locator(".chat-avatar").first(), "the oracle has an avatar").toBeVisible();
-  await expect(chat.locator('[data-agent-icon="ORACLE"]').first(), "with the oracle's icon").toBeAttached();
+  await expect(chat.locator(".chat-avatar"), "no avatars").toHaveCount(0);
+  await expect(chat.locator(".chat-prose").filter({ hasText: "Done: ten sets" }), "the oracle writes plain prose").toBeVisible();
   await expect(chat.locator(".chat-bubble").first(), "your words in a bubble").toBeVisible();
-  await expect(chat.getByRole("note").filter({ hasText: "task started" }), "a note across the column").toBeVisible();
+  await expect(chat.getByRole("note").filter({ hasText: "task started" }), "a note in the column").toBeVisible();
   const column = (await chat.locator(".chat-column").boundingBox())!;
   expect(column.width, "a readable line, not the whole pane").toBeLessThanOrEqual(46 * 15 + 1);
   await page.evaluate(() => {
@@ -1221,23 +1222,49 @@ test("the bar is one row when the project, the tabs and the tools fit, and puts 
   expect(await rows(), "and come back up when there is room again").toBe(1);
 });
 
-test("the oracle is a crystal ball and speaks in a bubble of its own, the mirror of yours", { tag: "@theme" }, async ({ page, server }) => {
+test("the oracle writes plain prose across the column; yours sits in a filled bubble on the right; times show when pointed at", { tag: "@theme" }, async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const chat = page.locator('[role="log"][aria-label="Conversation"]');
-  const ball = chat.locator(".chat-avatar .agent-oracle").first();
-  await expect(ball, "the oracle's own picture").toBeVisible();
-  expect(await ball.evaluate((el: any) => getComputedStyle(el).backgroundImage), "a drawn crystal ball").toMatch(/oracle.*\.png/);
-  const said = chat.locator(".chat-bubble-agent").filter({ hasText: "Done: ten sets" });
-  await expect(said, "the oracle's words sit in a bubble").toBeVisible();
+  const said = chat.locator(".chat-prose").filter({ hasText: "Done: ten sets" });
+  await expect(said, "the oracle's words").toBeVisible();
   const look = await said.evaluate((el: any) => {
     const style = getComputedStyle(el);
-    return { border: style.borderTopWidth, background: style.backgroundColor, card: getComputedStyle(el.closest("#main")).backgroundColor };
+    return { border: style.borderTopWidth, background: style.backgroundColor };
   });
-  expect(look.border, "with an edge").not.toBe("0px");
-  expect(look.background, "tinted apart from the page").not.toBe(look.card);
-  const [mine, theirs] = await Promise.all([chat.locator(".chat-bubble").first().boundingBox(), said.boundingBox()]);
-  expect(theirs!.x, "on the left, yours on the right").toBeLessThan(mine!.x);
+  expect(look.border, "no bubble edge").toBe("0px");
+  expect(look.background, "no bubble fill").toBe("rgba(0, 0, 0, 0)");
+  const mine = chat.locator(".chat-bubble").first();
+  const fill = await mine.evaluate((el: any) => {
+    const style = getComputedStyle(el);
+    return { background: style.backgroundColor, color: style.color, page: getComputedStyle(el.closest("#main")).backgroundColor };
+  });
+  expect(fill.background, "your bubble is filled").not.toBe(fill.page);
+  expect(fill.background, "and opaque").not.toBe("rgba(0, 0, 0, 0)");
+  const [box, theirs] = await Promise.all([mine.boundingBox(), said.boundingBox()]);
+  expect(theirs!.x, "the oracle on the left, you on the right").toBeLessThan(box!.x);
+  const time = said.locator("xpath=..").locator(".chat-meta");
+  expect(await time.evaluate((el: any) => getComputedStyle(el).opacity), "the time waits to be pointed at").toBe("0");
+  await said.hover();
+  await expect.poll(() => time.evaluate((el: any) => getComputedStyle(el).opacity)).toBe("1");
+});
+
+test("the tray over the box names the project and the target, opens the project list and leads to the models", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const tray = page.getByRole("group", { name: "Message context" });
+  await expect(tray.getByText("To the oracle"), "who it goes to").toBeVisible();
+  await tray.getByRole("button", { name: /Switch project: bot-lobby/ }).click();
+  await expect(page.getByRole("listbox", { name: "Projects" }), "the project chip opens the list of projects").toBeVisible();
+  await page.keyboard.press("Escape");
+  const card = (await page.locator(".group\\/composer").boundingBox())!;
+  const behind = (await tray.boundingBox())!;
+  expect(behind.y + behind.height, "the tray tucks under the top of the box").toBeGreaterThan(card.y);
+  expect(behind.width, "a little narrower than the box").toBeLessThan(card.width);
+  await page.evaluate(() => { window.location.hash = "#/plan"; });
+  await expect(tray.getByRole("radiogroup", { name: "Send to" }), "a tab with more than one target picks it in the tray").toBeVisible();
+  await tray.getByRole("link", { name: "Models and effort" }).click();
+  await expect(page).toHaveURL(/#\/settings$/);
 });
 
 test("the orb is on every page, and opens Thinking from any of them", async ({ page, server }) => {

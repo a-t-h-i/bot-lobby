@@ -105,6 +105,9 @@ function walk(event: KeyboardEvent<HTMLElement>) {
   options[next]?.focus()
 }
 
+/** Asks the project list to open from elsewhere (the composer's project chip). */
+export const OPEN_PROJECTS = "bot-lobby:open-projects"
+
 export function ProjectSwitcher({ projects, tab, name, branch, rail = false }: { projects: Projects; tab: string; name: string; branch?: string | undefined; rail?: boolean }) {
   const { data, busy, slow, refresh } = projects
   const [open, setOpen] = useState(false)
@@ -113,6 +116,11 @@ export function ProjectSwitcher({ projects, tab, name, branch, rail = false }: {
   const message = problem(projects)
   const active = selected.error ? "invalid" : selected.id ?? data?.currentId ?? ""
   useHotkey("p", () => setOpen(true))
+  useEffect(() => {
+    const show = () => setOpen(true)
+    window.addEventListener(OPEN_PROJECTS, show)
+    return () => window.removeEventListener(OPEN_PROJECTS, show)
+  }, [])
   useHotkey("r", () => void refresh(), { enabled: open, inDialog: true })
 
   function choose(id: string) {
