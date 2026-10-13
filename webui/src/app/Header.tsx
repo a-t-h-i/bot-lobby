@@ -1,20 +1,20 @@
 /**
- * The top bar: the project you are in on the left, the numbered tabs in the
- * middle, and what this session is doing on the right with the way to
- * Sessions, Settings, the key help and the light/dark switch, all on one row
+ * The top bar: the numbered tabs, and what this session is doing on the right
+ * with the key help, the light/dark switch and the sounds, all on one row
  * whenever they fit side by side; when they do not, the tabs take a row of
- * their own under the other two (the grid lives in `index.css`).
+ * their own under the tools (the grid lives in `index.css`). The project,
+ * Sessions and Settings live in the sidebar; on a phone the bar starts with
+ * the button that opens it.
  */
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react"
-import { Keyboard, Layers, Moon, Settings, Sun, Volume2, VolumeX } from "lucide-react"
+import { Keyboard, Moon, Sun, Volume2, VolumeX } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Keys } from "@/components/ui/kbd"
 import { useTheme } from "@/components/theme-provider"
 import type { ConnectionState } from "@/lib/events"
 import type { SnapshotTask, StatusInfo } from "@protocol"
-import type { Route } from "./router.ts"
-import { ProjectNotice, ProjectSwitcher, useProjects } from "./ProjectSwitcher.tsx"
+import { ProjectNotice, type Projects } from "./ProjectSwitcher.tsx"
 import { useMediaQuery } from "./hooks.ts"
 import { setSoundMuted, useSoundMuted } from "./sound"
 
@@ -46,28 +46,6 @@ function Connection({ state }: { state: ConnectionState }) {
 /** Header tools keep a visible surface and rim in either theme. */
 const ICON =
   "toolbar-button inline-flex size-8 shrink-0 items-center justify-center rounded-lg border text-foreground transition-[background-color,border-color,translate] duration-150 ease-snap outline-none focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:active:translate-none"
-
-function IconLink({ label, hint, href, active, children }: { label: string; hint: string; href: string; active: boolean; children: ReactNode }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <a
-          href={href}
-          aria-label={label}
-          aria-current={active ? "page" : undefined}
-          aria-keyshortcuts={hint}
-          aria-describedby="focused-action-help"
-          className={ICON}
-        >
-          {children}
-        </a>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">
-        {label} <span className="max-md:hidden"><Keys chord={hint} /></span>
-      </TooltipContent>
-    </Tooltip>
-  )
-}
 
 function HelpButton({ hint, onHelp }: { hint: string; onHelp: () => void }) {
   return (
@@ -202,7 +180,8 @@ export function Header({
   status,
   task,
   connection,
-  route,
+  projects,
+  lead,
   tabs,
   extra,
   keys,
@@ -211,17 +190,16 @@ export function Header({
   status?: StatusInfo
   task?: SnapshotTask
   connection: ConnectionState
-  route: Route
+  projects: Projects
+  /** What starts the bar: on a phone, the way into the sidebar and the project's name. */
+  lead?: ReactNode
   tabs: ReactNode
   /** Shown before the status (the way back to a question put away). */
   extra?: ReactNode
   keys: Record<string, string>
   onHelp: () => void
 }) {
-  const name = status?.workspace.name ?? "bot-lobby"
-  const branch = status?.branch ?? status?.workspace.branch
   const busy = status?.busy ?? false
-  const projects = useProjects()
   const { header, one } = useOneRow()
   // Rendered rather than hidden: a phone must not carry duplicate Connection/Session
   // controls or a hidden shortcut button in the accessibility tree.
@@ -229,9 +207,7 @@ export function Header({
 
   return (
     <header ref={header} className="app-header shrink-0" data-one-row={one || undefined}>
-      <div className="where flex min-w-0 items-center">
-        <ProjectSwitcher projects={projects} tab={route.kind === "tab" ? route.tab : route.kind} name={name} branch={branch} />
-      </div>
+      <div className="where flex min-w-0 items-center gap-2">{lead}</div>
       {phone ? (
         <div className="phone-status flex min-w-0 items-center justify-end gap-2">
           <SessionChip busy={busy} {...(task ? { task } : {})} {...(status?.sessionName ? { sessionName: status.sessionName } : {})} />
@@ -247,12 +223,6 @@ export function Header({
             <Connection state={connection} />
           </div>
         )}
-        <IconLink label="Sessions" hint={keys.sessions ?? "Alt+O"} href="#/sessions" active={route.kind === "sessions"}>
-          <Layers aria-hidden="true" className="size-[1.05rem]" />
-        </IconLink>
-        <IconLink label="Settings" hint={keys.settings ?? "Alt+S"} href="#/settings" active={route.kind === "settings"}>
-          <Settings aria-hidden="true" className="size-[1.05rem]" />
-        </IconLink>
         {phone ? null : <HelpButton hint={keys.help ?? "Alt+H"} onHelp={onHelp} />}
         <ThemeToggle />
         <SoundToggle />

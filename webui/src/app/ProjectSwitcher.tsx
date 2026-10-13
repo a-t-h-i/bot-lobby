@@ -1,6 +1,6 @@
 /**
- * Which project this page is looking at: the name and branch in the top bar,
- * and a list of the running, authorised projects behind them (`P` opens it).
+ * Which project this page is looking at: the name and branch at the top of the
+ * sidebar (only a dot on the folded rail), and a list of the running, authorised projects behind them (`P` opens it).
  * Choosing one reloads the page into that project, which drops the stores,
  * the streams and any unsent draft on purpose.
  */
@@ -105,7 +105,7 @@ function walk(event: KeyboardEvent<HTMLElement>) {
   options[next]?.focus()
 }
 
-export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Projects; tab: string; name: string; branch?: string | undefined }) {
+export function ProjectSwitcher({ projects, tab, name, branch, rail = false }: { projects: Projects; tab: string; name: string; branch?: string | undefined; rail?: boolean }) {
   const { data, busy, slow, refresh } = projects
   const [open, setOpen] = useState(false)
   const [browsing, setBrowsing] = useState(false)
@@ -121,7 +121,7 @@ export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Pro
   }
 
   return (
-    <div aria-busy={busy} className="flex min-w-0 items-center gap-1.5">
+    <div aria-busy={busy} className={cn("flex min-w-0 items-center gap-1.5", !rail && "w-full")}>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           type="button"
@@ -136,14 +136,32 @@ export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Pro
             event.preventDefault()
             setOpen(true)
           }}
-          className="btn-ghost group flex h-8 min-w-0 items-center gap-2 rounded-lg border border-transparent px-2.5 text-sm font-medium outline-none transition-[box-shadow,background-color] duration-150 focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none max-md:h-11"
+          className={cn(
+            "btn-ghost group flex min-w-0 items-center rounded-lg border border-transparent text-sm font-medium outline-none transition-[box-shadow,background-color] duration-150 focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none",
+            rail ? "size-9 justify-center" : "h-10 w-full gap-2.5 px-2 max-md:h-11"
+          )}
         >
-          <span aria-hidden="true" className={cn("size-2.5 shrink-0 rounded-full", message ? "bg-destructive" : "bg-primary")} />
-          <span className="truncate">{name}</span>
-          <ChevronsUpDown aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+          <span aria-hidden="true" className="project-mark" data-problem={message ? true : undefined}>
+            {name.trim().charAt(0).toUpperCase() || "?"}
+          </span>
+          {rail ? null : (
+            <>
+              <span className="flex min-w-0 flex-1 flex-col text-left leading-tight">
+                <span className="truncate">{name}</span>
+                {branch ? (
+                  <span className="flex min-w-0 items-center gap-1 text-xs font-normal text-muted-foreground">
+                    <GitBranch aria-hidden="true" className="size-3 shrink-0" />
+                    <span className="truncate">{branch}</span>
+                  </span>
+                ) : null}
+              </span>
+              <ChevronsUpDown aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+            </>
+          )}
         </PopoverTrigger>
         <PopoverContent
           align="start"
+          side={rail ? "right" : "bottom"}
           sideOffset={6}
           aria-label="Projects"
           onKeyDown={walk}
@@ -202,13 +220,7 @@ export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Pro
         </PopoverContent>
         </Popover>
       <ProjectFolderDialog open={browsing} onClose={() => setBrowsing(false)} tab={tab} />
-      {branch ? (
-        <span className="hidden min-w-0 items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground sm:inline-flex">
-          <GitBranch aria-hidden="true" className="size-3 shrink-0" />
-          <span className="truncate">{branch}</span>
-        </span>
-      ) : null}
-      {slow || message ? (
+      {!rail && (slow || message) ? (
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -221,7 +233,7 @@ export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Pro
               {busy ? <Spinner aria-hidden="true" role="presentation" className="size-4" /> : <RefreshCw aria-hidden="true" className="size-4" />}
             </button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Refresh projects</TooltipContent>
+          <TooltipContent side="right">Refresh projects</TooltipContent>
         </Tooltip>
       ) : null}
     </div>

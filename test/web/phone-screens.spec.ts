@@ -91,12 +91,20 @@ async function screenChecks(page: Page) {
 }
 
 async function headerPages(page: Page) {
-  await page.getByRole("banner").getByRole("link", { name: "Settings", exact: true }).tap();
+  const sidebar = page.getByRole("dialog", { name: "Sidebar" });
+  await page.getByRole("banner").getByRole("button", { name: "Open sidebar" }).tap();
+  await expect(sidebar).toBeVisible();
+  await bounded(page, sidebar);
+  await essentialTargets(sidebar.locator("a:visible, button:visible"));
+  await sidebar.getByRole("link", { name: "Settings", exact: true }).tap();
+  await expect(sidebar, "following a link closes the sheet").toBeHidden();
   const sections = page.getByRole("navigation", { name: "Settings sections" });
   await expect(sections).toBeVisible();
   await essentialTargets(sections.getByRole("button"));
   await screenChecks(page);
-  await page.getByRole("banner").getByRole("link", { name: "Sessions", exact: true }).tap();
+  await page.getByRole("banner").getByRole("button", { name: "Open sidebar" }).tap();
+  await sidebar.getByRole("link", { name: "Sessions", exact: true }).tap();
+  await expect(sidebar).toBeHidden();
   await expect(page.locator("#main")).toContainText("Mock background task");
   await screenChecks(page);
 }

@@ -1,6 +1,7 @@
 /**
- * The shell that wraps every route, laid out top to bottom: the top bar with
- * the project and the tabs, one bordered surface for the page of the route
+ * The shell that wraps every route: the sidebar on the left (the project, its
+ * sessions and Settings; a sheet on a phone) and beside it, top to bottom, the
+ * top bar with the tabs, one bordered surface for the page of the route
  * (it eases in when the tab changes) and the composer under it. The composer
  * sits in the flow, so a tall message gives the page less room instead of
  * covering it; the page behind it never scrolls, only its panes do. Pop-ups
@@ -17,6 +18,8 @@ import type { TabId } from "@shared"
 import { AltH } from "./AltH.tsx"
 import { Composer } from "./Composer.tsx"
 import { Header } from "./Header.tsx"
+import { useProjects } from "./ProjectSwitcher.tsx"
+import { Sidebar, SidebarMenuButton, SidebarSheet } from "./Sidebar.tsx"
 import { SignIn } from "./SignIn.tsx"
 import { ErrorState, LoadingState, ReconnectingState } from "./States.tsx"
 import { TabStrip } from "./TabStrip.tsx"
@@ -31,18 +34,21 @@ import { usePrompts } from "./usePrompts.ts"
 import { useMediaQuery, useStatus, useTopic } from "./hooks.ts"
 import { go, parseHash, tabHash, useRoute, type Route } from "./router.ts"
 import { routeBody } from "@/tabs/registry.tsx"
+import { ACTIVITY_OPEN } from "@/tabs/lobby/InlineActivity"
 import { focusTab, isTyping, tabWalk } from "@/prompts/nav"
-import { toggleCollapsed } from "@/lib/collapsed"
+import { toggleCollapsed, useCollapsed } from "@/lib/collapsed"
+import { useHotkey } from "@/lib/hotkeys"
 
-function handleAction(action: string, route: Route, toggleHelp: () => void, cycle: (delta: number) => void): void {
+function handleAction(action: string, route: Route, toggleHelp: () => void, cycle: (delta: number) => void, toggleSidebar: () => void): void {
   if (action === "search") (document.querySelector<HTMLElement>("#main input[type='search']") ?? document.getElementById("composer-text"))?.focus()
   else if (action === "help") toggleHelp()
   else if (action === "settings") go("#/settings")
   else if (action === "sessions") go("#/sessions")
   else if (action === "thinking") toggleCollapsed("lobby.thinking")
+  else if (action === "sidebar") toggleSidebar()
   else if (action === "activity") {
-    // Activity lives on the Lobby: there the key folds or opens it, elsewhere it takes you there first.
-    if (route.kind === "tab" && route.tab === "lobby") toggleCollapsed("lobby.activity")
+    // Activity is the steps between the Lobby's messages: there the key opens or folds them all, elsewhere it takes you there first.
+    if (route.kind === "tab" && route.tab === "lobby") toggleCollapsed(ACTIVITY_OPEN)
     else go(tabHash("lobby"))
   } else if (action === "nextTab") cycle(1)
   else if (action === "prevTab") cycle(-1)
@@ -106,10 +112,10 @@ export function Shell() {
   const status = statusRecord.data
   useRecoveredNotice(status)
   // Signed in: the themes pi keeps replace this browser's copy.
-  const signedIn = Boolean(status) && !signedOut
+  const themed = Boolean(status) && !signedOut
   useEffect(() => {
-    if (signedIn) void syncThemes()
-  }, [signedIn])
+    if (themed) void syncThemes()
+  }, [themed])
   const tabs = status?.tabs ?? []
   const keys = status?.keys ?? []
   const activeId = route.kind === "tab" ? route.tab : undefined
@@ -128,11 +134,26 @@ export function Shell() {
     [tabs, activeId, phone]
   )
   const toggleHelp = useCallback(() => setHelp((open) => !open), [])
+  const projects = useProjects()
+  const [sidebarFolded, toggleFolded] = useCollapsed("shell.sidebar")
+  const [sheet, setSheet] = useState(false)
+  // Below 1200 px the open sidebar would squeeze the tabs: it rests as the rail and opens over the page instead.
+  const roomy = useMediaQuery("(min-width: 1200px)")
+  const [peek, setPeek] = useState(false)
+  const toggleSidebar = useCallback(() => {
+    if (phone) setSheet((open) => !open)
+    else if (roomy) toggleFolded()
+    else setPeek((open) => !open)
+  }, [phone, roomy, toggleFolded])
+  const hash = route.kind === "tab" ? route.tab : JSON.stringify(route)
+  useEffect(() => setPeek(false), [hash, roomy])
+  // On a phone the project list lives in the sheet: P opens the sheet first.
+  useHotkey("p", () => setSheet(true), { enabled: phone && !sheet })
   const onAction = useCallback((action: string) => {
     if ((action === "thinking" || action === "activity") && status?.panels?.[action] === false) return
     // The route as the address bar has it right now: a key pressed in the frame after a jump must not act on the page just left.
-    handleAction(action, parseHash(window.location.hash) ?? route, toggleHelp, cycle)
-  }, [route, toggleHelp, cycle, status?.panels])
+    handleAction(action, parseHash(window.location.hash) ?? route, toggleHelp, cycle, toggleSidebar)
+  }, [route, toggleHelp, cycle, toggleSidebar, status?.panels])
   const insideApp = useCallback(() => {
     const el = document.activeElement
     if (!el || el === document.body || rootRef.current?.contains(el) === true || el.closest(".thinking-bubble")) return true
@@ -166,11 +187,22 @@ export function Shell() {
   }, [tab, ready])
 
   const keyLabels = Object.fromEntries(keys.map((key) => [key.action, key.label]))
+  const signedIn = Boolean(status) && !signedOut
+  const lead = phone ? (
+    <>
+      {signedIn ? <SidebarMenuButton expanded={sheet} onOpen={() => setSheet(true)} /> : null}
+      <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
+        <span aria-hidden="true" className="project-mark">{(status?.workspace.name ?? "bot-lobby").charAt(0).toUpperCase()}</span>
+        <span className="truncate">{status?.workspace.name ?? "bot-lobby"}</span>
+      </span>
+    </>
+  ) : null
   const header = <Header
         status={status}
         task={lobbyRecord.data?.task}
         connection={connection}
-        route={route}
+        projects={projects}
+        lead={lead}
         keys={keyLabels}
         onHelp={toggleHelp}
         tabs={phone ? null : tabStrip}
@@ -184,8 +216,11 @@ export function Shell() {
       </main>
     </div>
   )
+  const sidebarProps = { projects, route, keys: keyLabels, status }
   return (
-    <div ref={rootRef} className="fixed inset-0 flex flex-col">
+    <div ref={rootRef} className="fixed inset-0 flex">
+      {phone ? null : <Sidebar {...sidebarProps} folded={roomy ? sidebarFolded : !peek} over={!roomy && peek} onToggle={toggleSidebar} />}
+      <div className="relative flex min-w-0 flex-1 flex-col">
       {header}
       <Banner connection={connection} onRetry={retry} />
       <main
@@ -199,7 +234,7 @@ export function Shell() {
         }}
         role={activeId ? "tabpanel" : undefined}
         aria-labelledby={activeId ? `tab-${activeId}` : undefined}
-        className="surface mx-3 mb-3 flex min-h-0 flex-1 flex-col overflow-y-auto outline-none max-md:mx-0 max-md:mb-0"
+        className="surface mr-3 mb-3 flex min-h-0 flex-1 flex-col overflow-y-auto outline-none max-md:mx-0 max-md:mb-0"
       >
         <motion.div
           key={routeKey(route)}
@@ -212,6 +247,8 @@ export function Shell() {
         </motion.div>
       </main>
       <Composer route={route} keys={keyLabels} onHelp={toggleHelp} dockNav={phone ? tabStrip : null} />
+      </div>
+      {phone ? <SidebarSheet {...sidebarProps} open={sheet} onOpenChange={setSheet} /> : null}
       <Thinking status={status} lobby={lobbyRecord.data} />
       <QuestionPopup prompts={prompts} answer={answer} dismiss={dismiss} minimized={putAway} onMinimize={setPutAway} />
       <AltH open={help} onOpenChange={setHelp} keys={keys} tabs={tabs} />

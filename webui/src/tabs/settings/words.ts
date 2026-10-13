@@ -68,7 +68,7 @@ export const LOBBY_SWITCH_ITEMS = [
 /** The panes the Lobby tab can show. */
 export const PANEL_ITEMS = [
   { id: "conversation", label: "Conversation pane" },
-  { id: "activity", label: "Activity log pane" },
+  { id: "activity", label: "Activity steps in the conversation" },
   { id: "thinking", label: "Thinking bubble" },
 ] as const
 export const PANEL_HELP = "shown on the Lobby tab"
