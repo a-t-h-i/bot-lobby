@@ -43,9 +43,9 @@ function Chip({ cell, intro, onToggled }: { cell: SeatCell; intro: boolean; onTo
   )
 }
 
-export function Roster({ cells, intro, onToggled }: { cells: SeatCell[]; intro: boolean; onToggled: () => void }) {
+export function Roster({ cells, intro, onToggled, className }: { cells: SeatCell[]; intro: boolean; onToggled: () => void; className?: string }) {
   return (
-    <ul aria-label="Panel" className="flex flex-wrap gap-2">
+    <ul aria-label="Panel" className={cn("flex flex-wrap gap-2", className)}>
       {cells.map((cell) => (
         <Chip key={cell.label} cell={cell} intro={intro} onToggled={onToggled} />
       ))}
