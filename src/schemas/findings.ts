@@ -89,6 +89,8 @@ export interface ReviewResult {
   downgraded?: string;
   /** Set when the engine passed a CHANGES_REQUIRED that named only minor or info findings. */
   relaxed?: string;
+  /** Set when no verdict could be read from the review (a failed or off-contract run). */
+  unread?: string;
   raw: string;
 }
 

@@ -108,7 +108,13 @@ If implementation changes are required, report them to the Master.
   behaviour, a failing check, an unmet acceptance criterion, a security
   problem. Tag every finding with its severity.
 - **BLOCKED** only when you cannot review at all (it does not build, the
-  checks cannot run).
+  checks cannot run). It stops the task until the user steps in, so never use
+  it for something the workers can fix.
+- **Pre-existing failures are not the task's.** A check that fails in code
+  the diff does not touch, for a reason the diff cannot explain, was already
+  failing: note it as an `info` finding and judge the change on the rest. When
+  unsure, run that check at the task's base commit in a throwaway worktree
+  (`git worktree add`), never by stashing or resetting the working tree.
 - **A re-review verifies; it does not start over.** When your context lists
   what the previous round asked for, check each item first and say which are
   addressed. Do not raise the bar between rounds: a new blocking finding must
