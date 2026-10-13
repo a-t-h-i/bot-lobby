@@ -28,6 +28,7 @@ import { spawnPiProcess, type ProcessRunner, type RelayAsk } from "../execution/
 import { previewDir } from "../ask/relay.ts";
 import type { AskQuestion, AskResult } from "../ask/types.ts";
 import { mapConcurrent } from "../execution/agent-runner.ts";
+import { taskExecution } from "../execution/task-cancellation.ts";
 import { parseWorkerResult } from "../roles/worker.ts";
 import { autoNote, DESK_TOOLS, DeskSession } from "../desk/session.ts";
 import type { Handover } from "../desk/desk.ts";
@@ -1171,7 +1172,7 @@ function handoverLog(handovers: readonly Handover[]): string {
   return `File handovers:\n${lines.join("\n")}`;
 }
 
-function handleResolveApproval(task: Task, params: OrchestrateParams): string {
+export function handleResolveApproval(task: Task, params: OrchestrateParams): string {
   const id = params.approvalId?.trim();
   const decision = params.decision;
   if (!id || (decision !== "approved" && decision !== "rejected")) {
@@ -1557,7 +1558,9 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
   // The gate refuses before any side effect, so a refusal leaves the task untouched.
   const oversized = overThreshold(readDataRoots(deps.root, deps.configDir), deps.config.knowledge.compactionThreshold);
   if (oversized.length > 0) throw new Error(`cannot complete: knowledge files over the compaction threshold: ${oversized.map((entry) => `${entry.agent}/${entry.file} (${entry.chars})`).join(", ")}. First record domain-relevant facts where they belong with action=knowledge (domain=designer|backend|qa), then rewrite each oversized file with action=compact, then call complete again.`);
+  deps.signal?.throwIfAborted();
   const committed = await commitTaskWork(task, params, deps);
+  deps.signal?.throwIfAborted();
   const summary = params.text?.trim() || task.proposal || task.title;
   recordCompletion(deps, task, summary);
   removeTaskScratchpads(deps.root, deps.configDir, task.id);
@@ -1598,6 +1601,7 @@ async function commitTaskWork(task: Task, params: OrchestrateParams, deps: Workf
   }
   let result: Awaited<ReturnType<typeof commitFiles>>;
   try {
+    deps.signal?.throwIfAborted();
     result = await commitFiles(state.top, dirty, message);
   } catch (error) {
     throw new Error(`cannot complete: git refused the commit: ${(error as Error).message}`);
@@ -2098,14 +2102,19 @@ export async function runWorkflowAction(params: OrchestrateParams, deps: Workflo
   }
   const gone = missingWorktree(task);
   if (gone && params.action !== "status") return { ok: false, taskId: task.id, state: task.state, message: `Rejected: ${gone}` };
+  const execution = taskExecution(deps.root, deps.configDir, task.id, deps.signal);
   const finished = new Map<string, AgentRun>();
   const identity = { root: deps.root, configDir: deps.configDir, taskId: task.id, sessionId: task.ownerSessionId };
-  const wait = <T>(run: () => Promise<T>) => {
+  const wait = async <T>(run: () => Promise<T>) => {
+    execution.signal.throwIfAborted();
     saveTask(deps.root, deps.configDir, task);
-    return withBlockingRequest(identity, run);
+    const result = await withBlockingRequest(identity, run);
+    execution.signal.throwIfAborted();
+    return result;
   };
   const tracked: WorkflowDeps = {
     ...deps,
+    signal: execution.signal,
     choose: (...args) => wait(() => deps.choose(...args)),
     ask: (...args) => wait(() => deps.ask(...args)),
     ...(deps.askQuestions ? { askQuestions: (...args: Parameters<NonNullable<WorkflowDeps["askQuestions"]>>) => wait(() => deps.askQuestions!(...args)) } : {}),
@@ -2113,6 +2122,7 @@ export async function runWorkflowAction(params: OrchestrateParams, deps: Workflo
     cwd: taskCwd(task, deps.cwd),
     // An agent can work for an hour: what the action has done so far (implementing, reviewing) is saved before it starts, so every window reads it.
     runProcess: (args, options) => {
+      execution.signal.throwIfAborted();
       saveTask(deps.root, deps.configDir, task);
       return (deps.runProcess ?? spawnPiProcess)(args, options);
     },
@@ -2134,6 +2144,7 @@ export async function runWorkflowAction(params: OrchestrateParams, deps: Workflo
   const working = new Set<string>();
   try {
     const message = await handler(task, params, tracked);
+    execution.signal.throwIfAborted();
     const runs = recordRunLog(task, finished, deps);
     saveTask(deps.root, deps.configDir, task);
     return { ok: true, taskId: task.id, state: task.state, message: `${message}${runsFooter(runs)}${budgetFooter(task, deps)}`, runs };
@@ -2142,6 +2153,7 @@ export async function runWorkflowAction(params: OrchestrateParams, deps: Workflo
     saveTask(deps.root, deps.configDir, task);
     return { ok: false, taskId: task.id, state: task.state, message: `Rejected: ${(error as Error).message}${budgetFooter(task, deps)}`, runs };
   } finally {
+    execution.release();
     for (const runId of working) noteWorkerRun(deps.root, deps.configDir, task.id, { runId, startedAt: "", status: "cancelled" });
   }
 }

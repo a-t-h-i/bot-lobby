@@ -129,7 +129,7 @@ function Confirmation({ review: r }: { review: Controller }) {
   const retryCleanup = r.current.status === "successful" && Boolean(r.current.cleanupError)
   const description = retryCleanup ? "Main was already delivered. Remove the task worktree if it still contains only the reviewed commit. The task branch is kept." : CONFIRM
   return <Popup open={r.slot} onOpenChange={r.setConfirm} label={retryCleanup ? "Confirm worktree removal" : "Confirm merge to main"} description={description} onCloseAutoFocus={(event) => { event.preventDefault(); requestAnimationFrame(() => r.trigger.current?.focus()) }}>
-    <div className="grid gap-4 p-4">
+    <div className="grid gap-3 p-4 max-md:p-3">
       <h3 className="font-medium">{retryCleanup ? "Remove task worktree?" : "Merge to main?"}</h3>
       <p className="text-sm">{description}</p>
       <p className="break-all text-sm text-muted-foreground">{r.current.repository} · {r.current.sourceCommit} → main</p>

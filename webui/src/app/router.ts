@@ -17,7 +17,8 @@ const KNOWN = new Set<string>(TAB_IDS)
 export function legacyHash(hash: string): string | undefined {
   const parts = hash.replace(/^#\/?/, "").split("/").filter(Boolean)
   if (parts[0] === "issues") return ["#/git/issues", ...parts.slice(1, 2)].join("/")
-  if (parts[0] === "sessions" || parts[0] === "excalidraw") return "#/lobby"
+  if (parts[0] === "sessions" || parts[0] === "excalidraw" || parts[0] === "metrics") return "#/lobby"
+  if (parts[0] === "tasks" && parts[1] === "board") return ["#/tasks", ...parts.slice(2, 3)].join("/")
   return undefined
 }
 

@@ -4,7 +4,7 @@
  * `node:*`): the web page imports this file directly.
  */
 
-export const TAB_IDS = ["lobby", "tasks", "plan", "quickfix", "git", "knowledge", "metrics"] as const;
+export const TAB_IDS = ["lobby", "tasks", "plan", "quickfix", "git", "knowledge"] as const;
 export type TabId = (typeof TAB_IDS)[number];
 
 export const TAB_LABELS: Record<TabId, string> = {
@@ -12,7 +12,6 @@ export const TAB_LABELS: Record<TabId, string> = {
   tasks: "Tasks",
   plan: "Plan",
   quickfix: "Quick fix",
-  metrics: "Metrics",
   git: "Git",
   knowledge: "Knowledge",
 };

@@ -276,78 +276,6 @@ export interface PlannerSeedInfo {
   body: string;
 }
 
-/** The Metrics tab's KPI row as data: runs, success, average run, cost, tasks. */
-export interface MetricsTiles {
-  runs: number;
-  successes: number;
-  stalls: number;
-  avgMs: number;
-  p90Ms: number;
-  cost: number;
-  completed: number;
-  active: number;
-  avgCompleteMs: number;
-}
-
-/** One per-model group as `metrics.get` carries it. */
-export interface MetricGroupInfo {
-  model: string;
-  thinking: string;
-  kinds: string[];
-  runs: number;
-  successes: number;
-  timeouts: number;
-  avgMs: number;
-  p50Ms: number;
-  p90Ms: number;
-  avgTurns: number;
-  avgTools: number;
-  avgTokens: number;
-  avgCost: number;
-  totalCost: number;
-  tokensPerSecond: number;
-}
-
-/** One agent's share of all run time. */
-export interface MetricsAgentShare {
-  agent: string;
-  runs: number;
-  ms: number;
-  share: number;
-}
-
-/** Completed tasks' request-to-done time by the oracle's model and thinking. */
-export interface MetricsTaskTime {
-  model: string;
-  thinking: string;
-  tasks: number;
-  avgMs: number;
-}
-
-/** What the classifier did and spared, when it has run. */
-export interface MetricsClassifier {
-  calls: number;
-  ok: number;
-  p50Ms: number;
-  p90Ms: number;
-  input: number;
-  byPurpose: Record<string, number>;
-  seatRunsSkipped: number;
-  questionsAnswered: number;
-  quickFixesHeld: number;
-  routed: number;
-  routedOk: number;
-}
-
-/** `metrics.get`: the dashboard figures for one grouping and search. */
-export interface MetricsData {
-  tiles: MetricsTiles;
-  groups: MetricGroupInfo[];
-  daily: Array<{ date: string; runs: number; successes: number; cost: number }>;
-  timeShare: { byAgent: MetricsAgentShare[]; taskTimes: MetricsTaskTime[] };
-  classifier?: MetricsClassifier;
-}
-
 /** Who a knowledge file belongs to. */
 export type KnowledgeAgentName = "master" | "designer" | "backend" | "qa";
 
@@ -395,6 +323,8 @@ export interface EntryRefInfo {
 
 /** `tasks.get`: one task read whole, in the terminal's wording. */
 export interface TaskDetail {
+  canAccept: boolean;
+  canForceClose: boolean;
   timing?: TimingProjection;
   delivery?: Delivery;
   /** The full request, when it says more than the title. */
@@ -414,7 +344,7 @@ export interface TaskDetail {
   work?: WorkClock;
   amendments: string[];
   /** Approvals waiting on you: `kind` plus `for <domain>: <detail>`. */
-  waiting: Array<{ kind: string; detail: string }>;
+  waiting: Array<{ id: string; domain: string; kind: string; detail: string }>;
   blockers: Array<{ reason: string; need: string }>;
   /** The last six runs, one line each (`✓ DEV worker · 3m 12s · …`). */
   runs: string[];
@@ -589,6 +519,9 @@ export interface Api {
   "tasks.get": { request: { taskId: string }; result: TaskDetail };
   "tasks.open": { request: { taskId: string }; result: { sessionId?: string; key?: string; notice?: string } };
   "tasks.resume": { request: { taskId: string }; result: { notice: string; key?: string } };
+  "tasks.accept": { request: { taskId: string }; result: { notice: string } };
+  "tasks.forceClose": { request: { taskId: string; title: string }; result: { notice: string } };
+  "tasks.resolveApproval": { request: { taskId: string; approvalId: string; decision: "approved" | "rejected"; note?: string }; result: { notice: string } };
   "tasks.deliveryReview": { request: { taskId: string }; result: { delivery: Delivery } };
   "tasks.deliveryDefer": { request: { taskId: string; reviewId: string }; result: { delivery: Delivery } };
   "tasks.deliver": { request: { taskId: string; reviewId: string; action: DeliveryAction; confirmMain?: boolean }; result: { delivery: Delivery } };
@@ -624,7 +557,6 @@ export interface Api {
   "quickfix.cancel": { request: { id: string }; result: { notice: string } };
   "quickfix.runAnyway": { request: { id: string }; result: { notice: string } };
   "quickfix.movedToTask": { request: { id: string }; result: { notice: string; key?: string } };
-  "metrics.get": { request: { groupBy: "model" | "model-kind"; query?: string; from?: string; to?: string; timeZone?: string }; result: MetricsData };
   "projects.browse": { request: { path?: string }; result: FolderListing };
   "projects.open": { request: { path: string }; result: { project: ProjectInfo } };
   "knowledge.files": { request: Record<string, never>; result: { files: KnowledgeFileInfo[]; models?: Partial<Record<KnowledgeAgentName, string>> } };

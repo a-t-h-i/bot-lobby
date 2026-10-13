@@ -4,7 +4,7 @@ import { ANSWERED_ELSEWHERE, TAB_IDS, TAB_LABELS, visibleTabs } from "../src/lob
 import { keyMap, keyLabel, LOBBY_ACTIONS } from "../src/lobby/keys.ts";
 
 test("TAB_IDS keeps the lobby's tab order", () => {
-  assert.deepEqual([...TAB_IDS], ["lobby", "tasks", "plan", "quickfix", "git", "knowledge", "metrics"]);
+  assert.deepEqual([...TAB_IDS], ["lobby", "tasks", "plan", "quickfix", "git", "knowledge"]);
 });
 
 test("TAB_LABELS keeps the lobby's tab names", () => {
@@ -13,14 +13,13 @@ test("TAB_LABELS keeps the lobby's tab names", () => {
     tasks: "Tasks",
     plan: "Plan",
     quickfix: "Quick fix",
-    metrics: "Metrics",
     git: "Git",
     knowledge: "Knowledge",
   });
 });
 
 test("Git remains visible while Issues is switched off", () => {
-  assert.deepEqual(visibleTabs(false), ["lobby", "tasks", "plan", "quickfix", "git", "knowledge", "metrics"]);
+  assert.deepEqual(visibleTabs(false), ["lobby", "tasks", "plan", "quickfix", "git", "knowledge"]);
   assert.deepEqual(visibleTabs(true), [...TAB_IDS]);
 });
 

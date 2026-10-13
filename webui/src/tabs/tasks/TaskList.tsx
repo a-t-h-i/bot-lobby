@@ -31,17 +31,16 @@ function titleClass(row: TaskRow): string {
   return "text-foreground"
 }
 
-function TaskItemFacts({ row, card }: { row: TaskRow; card: boolean }) {
+function TaskItemFacts({ row }: { row: TaskRow }) {
   return <>
-    {card ? <span className="pl-6 text-xs text-muted-foreground">{row.status.replaceAll("_", " ")}</span> : null}
     {row.check === "open" ? <span className="pl-6 text-xs text-muted-foreground">{detailsLine(row)}</span> : null}
     {row.kind !== "plan" ? <span className="pl-6 text-xs text-muted-foreground"><PhaseTiming timing={row.timing} {...(row.work ? { work: row.work } : {})} stopped={row.check !== "open"} /></span> : null}
     {row.delivery ? <span className="pl-6 text-xs text-foreground">Delivery: {row.delivery.status.replaceAll("_", " ")} · open task to review</span> : null}
   </>
 }
 
-export function TaskItem({ row, selected, onSelect, card = false }: { row: TaskRow; selected: boolean; onSelect: (id: string) => void; card?: boolean }) {
-  return <li className={card ? "overflow-hidden rounded-lg border border-input bg-card shadow-sm" : undefined}>
+export function TaskItem({ row, selected, onSelect }: { row: TaskRow; selected: boolean; onSelect: (id: string) => void }) {
+  return <li>
       <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
         type="button"
         data-row
@@ -55,7 +54,7 @@ export function TaskItem({ row, selected, onSelect, card = false }: { row: TaskR
           <span className={cn("min-w-0 flex-1 break-words", titleClass(row), selected && "font-medium text-foreground")}>{row.title}</span>
           <Trailing row={row} />
         </span>
-        <TaskItemFacts row={row} card={card} />
+        <TaskItemFacts row={row} />
       </button>
     </li>
 }

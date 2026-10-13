@@ -1,10 +1,10 @@
-import { useMemo, type CSSProperties } from "react"
+import type { CSSProperties } from "react"
 import { ChevronDown, ChevronUp } from "lucide-react"
 import { useReducedMotion } from "motion/react"
 import type { TabInfo } from "@protocol"
 import { useAnyOverlay } from "@/lib/overlay"
 import { usePhoneViewport } from "./usePhoneViewport"
-import { availablePhoneTabs, pageLabel } from "./phoneCarousel"
+import { pageLabel } from "./phoneCarousel"
 import { PhonePeriods } from "./PhoneTabCards"
 import { usePhoneCarousel } from "./usePhoneCarousel"
 
@@ -18,12 +18,11 @@ function currentPage(activeId: string | undefined, tabs: TabInfo[]): string {
   return pageLabel(activeId, tabs, window.location.hash)
 }
 
-export function PhoneTabs({ tabs: suppliedTabs, activeId, onSelect }: PhoneTabsProps) {
-  const tabs = useMemo(() => availablePhoneTabs(suppliedTabs), [suppliedTabs])
+export function PhoneTabs({ tabs, activeId, onSelect }: PhoneTabsProps) {
   const blocked = useAnyOverlay()
   const { keyboardOpen } = usePhoneViewport()
   const reduced = Boolean(useReducedMotion())
-  const label = currentPage(activeId, suppliedTabs)
+  const label = currentPage(activeId, tabs)
   const carousel = usePhoneCarousel({ tabs, activeId, blocked, keyboardOpen, reduced, onSelect })
 
   if (!tabs.length) return null

@@ -9,6 +9,8 @@ import { updateBlockingRequest } from "../state/blocking-requests.ts";
 import { randomUUID } from "node:crypto";
 import { loadTask, ownedTask, peekOwnedTask, peekTasks, saveTask } from "../state/persistence.ts";
 import { taskWork } from "../state/work-time.ts";
+import { transition } from "../state/task-state.ts";
+import { cancelTaskExecutions } from "../execution/task-cancellation.ts";
 import { refreshReview, deferReview } from "../delivery/review.ts";
 import { deliver, type DeliveryRequest } from "../delivery/operations.ts";
 import { deliveryStore, deliveryTask } from "../delivery/store.ts";
@@ -18,7 +20,7 @@ import { loadConfig, readDataRoots, saveConfig as writeConfig } from "../state/p
 import { knowledgeQuestion } from "./knowledge.ts";
 import { addPlanComment, editComment, readPlanComments, type PlanComment } from "../state/comments.ts";
 import { isAutoMode } from "../state/auto.ts";
-import { sendToInbox, sendToSession as leaveForSession } from "../state/inbox.ts";
+import { markInboxDelivered, sendToInbox, sendToSession as leaveForSession } from "../state/inbox.ts";
 import { livePresence } from "../state/presence.ts";
 import { archiveTask as archiveTaskOnDisk, deleteTask as deleteTaskOnDisk, listArchivedTasks, restoreTask as restoreTaskOnDisk } from "../state/archive.ts";
 import { discardPlannedTask, listPlannedTasks, type PlannedTask } from "../state/backlog.ts";
@@ -50,6 +52,9 @@ import type { LiveSession, LobbyService, SwitchTarget } from "./host.ts";
 import { pushNotice, type NoticeLevel } from "../webui/notices.ts";
 import type { Runtime } from "./runtime.ts";
 import { findLinters } from "../execution/lint.ts";
+import { handleResolveApproval, lastQaAsks, waiveLint, waiveQa } from "../workflow/workflow.ts";
+import { recordDecision } from "../master/decisions.ts";
+import { fail } from "../webui/api/index.ts";
 
 /** The state background callbacks report to; set while the lobby service runs. */
 let serviceState: Runtime | undefined;
@@ -382,6 +387,73 @@ async function resumeTask(state: Runtime, taskId: string): Promise<{ notice: str
   } finally {
     resuming.delete(taskId);
   }
+}
+
+function mutableTask(state: Runtime, taskId: string): Task {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/.test(taskId)) fail(400, "bad_request", "invalid task ID");
+  const task = loadTask(state.root, state.configDir, taskId);
+  if (!task) fail(404, "not_found", "task not found in this project");
+  if (TERMINAL_STATES.includes(task.state)) fail(400, "bad_request", "task is terminal");
+  return task;
+}
+
+async function wakeTask(state: Runtime, task: Task, message: string): Promise<string> {
+  const inbox = sendToInbox(state.root, state.configDir, task.id, message, state.ctx.sessionManager.getSessionId());
+  const route = resumeRoute(task, taskDrivers(state));
+  if (route.kind === "stopped" || route.kind === "paused") return (await resumeTask(state, task.id)).notice;
+  if (task.ownerSessionId === state.ctx.sessionManager.getSessionId()) {
+    state.pi.sendUserMessage(message, state.ctx.isIdle() ? undefined : { deliverAs: "followUp" });
+    markInboxDelivered(state.root, state.configDir, task.id, [inbox.id]);
+  } else {
+    const session = backgroundSessions().find((entry) => entry.alive && entry.projectRoot === state.root && entry.sessionId === task.ownerSessionId);
+    if (session) {
+      session.send(message);
+      markInboxDelivered(state.root, state.configDir, task.id, [inbox.id]);
+    }
+  }
+  return "the owning oracle has been notified";
+}
+
+function canForceCloseTask(state: Runtime, taskId: string): boolean {
+  const task = loadTask(state.root, state.configDir, taskId);
+  return Boolean(task && !TERMINAL_STATES.includes(task.state) && (!task.ownerSessionId || task.ownerSessionId === state.ctx.sessionManager.getSessionId()));
+}
+
+async function forceCloseTask(state: Runtime, taskId: string, title: string): Promise<{ notice: string }> {
+  const task = mutableTask(state, taskId);
+  if (title !== task.title) fail(400, "bad_request", "the title must match exactly");
+  if (!canForceCloseTask(state, taskId)) fail(400, "bad_request", "cancel this task in its owning session; remote cancellation is unavailable");
+  recordDecision(task, "The user force-closed the task from the Tasks screen; work abandoned, code and worktree retained.");
+  transition(task, "abandoned");
+  saveTask(state.root, state.configDir, task);
+  cancelTaskExecutions(state.root, state.configDir, task.id);
+  if (task.ownerSessionId === state.ctx.sessionManager.getSessionId()) state.ctx.abort();
+  lobbyTopics.bump("tasks");
+  return { notice: `${task.id} abandoned; code, worktree and history retained` };
+}
+
+async function acceptTask(state: Runtime, taskId: string): Promise<{ notice: string }> {
+  const task = mutableTask(state, taskId);
+  if (!["implementing", "reviewing", "blocked"].includes(task.state)) fail(400, "bad_request", "there is no work to accept yet");
+  const asks = lastQaAsks(task);
+  if (task.qaVerdict !== "pass" && !task.qaWaiver) waiveQa(task, asks, "from the Tasks screen");
+  if (task.lint?.state === "failing") waiveLint(task, "from the Tasks screen");
+  recordDecision(task, "The user accepted the work as it is from the Tasks screen; the oracle was asked to complete it.");
+  saveTask(state.root, state.configDir, task);
+  lobbyTopics.bump("tasks");
+  const wake = await wakeTask(state, task, `The user accepted ${task.id}'s work as it is. Call orchestrate action=complete now with a short summary naming outstanding QA/lint asks: ${asks.join("; ") || "none recorded"}. Read the persisted gate waivers first. Do not merge automatically.`);
+  return { notice: `${task.id} accepted as it is; ${wake}` };
+}
+
+async function resolveTaskApproval(state: Runtime, taskId: string, approvalId: string, decision: "approved" | "rejected", note?: string): Promise<{ notice: string }> {
+  const task = mutableTask(state, taskId);
+  if (!task.approvals.some((entry) => entry.id === approvalId && entry.status === "pending")) fail(409, "conflict", "approval is no longer pending");
+  let message: string;
+  try { message = handleResolveApproval(task, { action: "resolve_approval", approvalId, decision, note }); }
+  catch (error) { return fail(400, "bad_request", (error as Error).message); }
+  saveTask(state.root, state.configDir, task);
+  lobbyTopics.bump("tasks");
+  return { notice: `${message}; ${await wakeTask(state, task, message)}` };
 }
 
 /** Leave a message for a task another terminal's session drives; its owner passes it to the oracle. */
@@ -826,6 +898,10 @@ export function createLobbyService(state: Runtime): LobbyService {
     setAuto: (taskId, on) => switchAuto(state, taskId, on),
     sendToTask: (taskId, text) => sendToTask(state, taskId, text),
     resumeTask: (taskId) => resumeTask(state, taskId),
+    acceptTask: (taskId) => acceptTask(state, taskId),
+    forceCloseTask: (taskId, title) => forceCloseTask(state, taskId, title),
+    canForceCloseTask: (taskId) => canForceCloseTask(state, taskId),
+    resolveTaskApproval: (taskId, approvalId, decision, note) => resolveTaskApproval(state, taskId, approvalId, decision, note),
     sendToSession: (sessionId, text) => sendToSession(state, sessionId, text),
     liveSessions: () => liveSessions(state),
     switchTo: (target) => switchTo(state, target),

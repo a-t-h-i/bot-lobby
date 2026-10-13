@@ -86,17 +86,17 @@ function FolderBrowser({ tab, close, busyChanged }: { tab: string; close: () => 
   const project = useOpenProject(tab)
   useEffect(() => busyChanged(project.opening), [project.opening, busyChanged])
   return <div className="flex min-h-0 max-h-full w-[min(40rem,calc(100vw-2rem))] flex-col overflow-y-auto max-md:max-h-[calc(100svh-2rem)]">
-    <div className="flex flex-col gap-1 border-b border-border px-5 pt-4 pb-3 max-md:px-4">
+    <div className="flex flex-col gap-1 border-b border-border px-4 py-3 max-md:px-3">
       <h2 className="text-[0.9375rem] font-semibold">Open project folder</h2>
       <p className="break-words text-xs text-muted-foreground">Folders on the machine running bot-lobby. The project opens in a session of its own; this one keeps running, and its project-local extensions stay off until you enable them.</p>
     </div>
-    <div className="flex min-h-0 flex-col gap-3 px-5 py-4 max-md:px-4">
+    <div className="flex min-h-0 flex-col gap-3 p-4 max-md:p-3">
       <FolderPath path={read.data?.path ?? path ?? ""} parent={read.data?.parent} busy={project.opening} browse={setPath} />
       <FolderList data={read.data} loading={read.loading} busy={read.loading || project.opening} browse={setPath} />
       {read.loading ? <p role="status" className="sr-only">Loading folders…</p> : null}
       {read.error || project.error ? <p role="alert" className="break-words text-xs text-destructive">{read.error ?? project.error}</p> : null}
     </div>
-    <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-muted/30 px-5 py-3 max-md:px-4">
+    <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-muted/30 px-4 py-3 max-md:px-3">
       {read.error ? <Button variant="outline" onClick={read.reload} disabled={read.loading} className="max-md:min-h-11">Retry</Button> : null}
       <Button variant="outline" onClick={close} disabled={project.opening} className="max-md:min-h-11">Cancel</Button>
       <Button disabled={!read.data || read.loading || Boolean(read.error) || project.opening} onClick={() => void project.open(read.data!.path)} className="max-md:min-h-11">{project.opening ? "Opening project…" : "Open this folder"}</Button>

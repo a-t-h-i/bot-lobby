@@ -35,7 +35,7 @@ interface QuestionPopupProps {
 
 function LeavePrompt({ submitting, onKeep, onLeave }: { submitting: boolean; onKeep: () => void; onLeave: () => void }) {
   return (
-    <div className="flex flex-col gap-4" role="alert">
+    <div className="flex flex-col gap-3" role="alert">
       <p className="text-sm">Leave without answering? The oracle will not guess for you.</p>
       <div className="flex items-center justify-end gap-2 max-md:flex-wrap max-md:justify-start">
         <Button type="button" variant="outline" onClick={onKeep} className="max-md:h-auto max-md:min-h-11 max-md:min-w-11 max-md:whitespace-normal">
@@ -117,7 +117,7 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
     >
       {active ? (
         <section aria-label="Question from the lobby" className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <header className={cn("flex items-center gap-3 px-6 pt-5 pb-3 max-md:px-4 max-md:pt-4 max-md:pb-2", expanded && "hidden")}>
+          <header className={cn("flex items-center gap-3 px-4 pt-4 pb-2 max-md:px-3 max-md:pt-3", expanded && "hidden")}>
             <p className="min-w-0 flex-1 truncate text-sm font-medium text-muted-foreground first-letter:uppercase">
               {who}
               {count > 1 ? ` · 1 of ${count}` : ""}
@@ -126,7 +126,7 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
               <X aria-hidden="true" />
             </Button>
           </header>
-          <div className={expanded ? "flex min-h-0 min-w-0 flex-1 flex-col" : "min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-6 max-md:px-4 max-md:pb-4"}>
+          <div className={expanded ? "flex min-h-0 min-w-0 flex-1 flex-col" : "min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 max-md:px-3 max-md:pb-3"}>
             {view ? (
               leaving ? (
                 <LeavePrompt submitting={submitting} onKeep={() => setLeaving(false)} onLeave={() => void settle(dismiss(active.id), "Could not leave the question")} />

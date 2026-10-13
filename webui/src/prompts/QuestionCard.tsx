@@ -8,7 +8,7 @@
  * and `sessionDialog` reuse the same surface with their own controls and
  * answer shapes.
  */
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from "react"
 import { Check, Maximize2 } from "lucide-react"
 import { useMediaQuery } from "@/app/hooks"
 import { Button } from "@/components/ui/button"
@@ -130,6 +130,59 @@ function Preview({ option, onExpand }: { option?: AskOption; onExpand: () => voi
   )
 }
 
+function RailOption({ option, index, multi, name, selected, active, onToggle, onFocusOption }: {
+  option: AskOption
+  index: number
+  multi: boolean
+  name: string
+  selected: boolean
+  active: boolean
+  onToggle: () => void
+  onFocusOption: () => void
+}) {
+  const { text, recommended } = splitRecommended(option.label)
+  const full = recommended ? `${text} (Recommended)` : text
+  return (
+    <label title={full} data-active={active || undefined} className="q-rail-item group relative flex min-h-10 min-w-0 cursor-pointer items-center gap-2 rounded-lg border border-transparent px-2.5 text-sm transition-colors duration-150 hover:bg-accent/60 data-[active]:bg-accent has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/30 max-md:min-h-11 max-md:shrink-0 max-md:rounded-full">
+      <input type={multi ? "checkbox" : "radio"} name={name} data-nav="" data-option={index} aria-label={full} className="sr-only" checked={selected} onChange={onToggle} onFocus={onFocusOption} />
+      <CheckMark multi={multi} on={selected} />
+      <span aria-hidden="true" className="text-muted-foreground tabular-nums">{index + 1}.</span>
+      <span className="min-w-0 flex-1 truncate group-hover:whitespace-normal group-has-[:focus-visible]:whitespace-normal max-md:max-w-48">{text}</span>
+      {recommended ? <span aria-hidden="true" className="shrink-0 text-xs font-medium text-primary">★</span> : null}
+    </label>
+  )
+}
+
+function RailGlide({ rail, active }: { rail: RefObject<HTMLDivElement | null>; active: number }) {
+  const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
+  useEffect(() => {
+    const item = rail.current?.querySelectorAll<HTMLElement>(".q-rail-item")[active]
+    setBox(item ? { x: item.offsetLeft, y: item.offsetTop, w: item.offsetWidth, h: item.offsetHeight } : null)
+  }, [rail, active])
+  if (!box) return null
+  return <span aria-hidden="true" className="q-glide" style={{ width: box.w, height: box.h, transform: `translate(${box.x}px, ${box.y}px)` }} />
+}
+
+function OptionPanel({ option, position, onExpand }: { option?: AskOption; position: number; onExpand: () => void }) {
+  if (!option) return null
+  const { text, recommended } = splitRecommended(option.label)
+  const mockup = hasMockup(option)
+  return (
+    <div key={position} aria-live="polite" className="q-panel card-flat flex min-w-0 flex-col gap-3 rounded-lg border p-4 max-md:p-3">
+      <div className={cn("grid min-w-0 gap-4", mockup ? "md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]" : "")}>
+        <div className="flex min-w-0 flex-col gap-2">
+          <p className="text-center text-sm font-medium break-words">
+            {text}
+            {recommended ? <span className="ms-1 text-primary">(Recommended)</span> : null}
+          </p>
+          {option.description ? <Markdown text={option.description} className="min-w-0 text-muted-foreground" /> : <span className="text-sm text-muted-foreground">No further detail.</span>}
+        </div>
+        {mockup ? <Preview option={option} onExpand={onExpand} /> : null}
+      </div>
+    </div>
+  )
+}
+
 function CardFooter({
   primary,
   primaryLabel,
@@ -206,6 +259,7 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
   const [own, setOwn] = useState<Record<number, string>>({})
   const [focused, setFocused] = useState<Record<number, number>>({})
   const form = useRef<HTMLFormElement>(null)
+  const rail = useRef<HTMLDivElement>(null)
   const question = questions[index]
   const picked = picks[index] ?? []
   const ownText = own[index] ?? ""
@@ -272,6 +326,12 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
     setFocused({ ...focused, [index]: option })
   }
 
+  /** Explicit browsing (arrows) in a single-answer question picks the option in view; multi only previews. */
+  function browse(element: Element | null) {
+    const option = element instanceof HTMLInputElement && element.dataset.option !== undefined ? Number(element.dataset.option) : -1
+    if (option >= 0 && !multi) toggle(option)
+  }
+
   /** Go on with these answers: the next question, or send them all. */
   function proceed(nextPicks: Record<number, number[]>, nextOwn: Record<number, string>) {
     if (!answerFor(questions, nextPicks, nextOwn, index)) return
@@ -313,14 +373,10 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
       return
     }
     const step = verticalStep(event.key)
-    if (step) {
+    if (step || event.key === "Home" || event.key === "End") {
       event.preventDefault()
-      moveNav(root, target, step)
-      return
-    }
-    if (event.key === "Home" || event.key === "End") {
-      event.preventDefault()
-      moveNav(root, target, event.key === "Home" ? "first" : "last")
+      moveNav(root, target, step || (event.key === "Home" ? "first" : "last"))
+      browse(document.activeElement)
       return
     }
     const across = horizontalStep(event.key)
@@ -366,27 +422,33 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
   return (
     <form ref={form} className="flex min-w-0 flex-col gap-3" onSubmit={submit} onKeyDown={onKeyDown}>
       <Chips questions={questions} picks={picks} own={own} index={index} onGo={setIndex} />
-      <div>
+      <div className="text-center">
         <p className="text-xs text-muted-foreground">
           {questions.length > 1 ? `Question ${index + 1} of ${questions.length}` : "Question"}
         </p>
         <Markdown text={question.question} className="mt-1 text-base" />
       </div>
-      <div className={cn("grid min-w-0 gap-4", previewOption?.preview || previewOption?.image || previewOption?.htmlPreview ? "lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]" : "")}>
-        <div className="flex min-w-0 flex-col gap-2">
+      <div className="grid min-w-0 gap-4 md:grid-cols-[11rem_minmax(0,1fr)] md:gap-3">
+        <div ref={rail} role={multi ? "group" : "radiogroup"} aria-label="Options" className="q-rail relative flex min-w-0 flex-col gap-1 max-md:flex-row max-md:overflow-x-auto max-md:pb-1">
           {question.options.map((option, position) => (
-            <OptionRow
+            <RailOption
               key={position}
               option={option}
               index={position}
               multi={multi}
               name={`question-${index}`}
               selected={picked.includes(position)}
+              active={question.options.indexOf(previewOption!) === position}
               onToggle={() => toggle(position)}
               onFocusOption={() => setFocused({ ...focused, [index]: position })}
             />
           ))}
-          <label className="flex min-h-9 min-w-0 flex-col gap-1 rounded-lg border border-input px-3 py-1.5 text-sm focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30 max-md:min-h-11">
+          <RailGlide rail={rail} active={question.options.indexOf(previewOption!)} />
+        </div>
+        <OptionPanel option={previewOption} position={question.options.indexOf(previewOption!)} onExpand={() => openViewer(question.options.indexOf(previewOption!))} />
+      </div>
+      <div className="mx-auto w-full max-w-xl">
+          <label className="flex min-h-10 min-w-0 flex-col gap-1 rounded-lg border border-input px-3 py-1.5 text-sm focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30 max-md:min-h-11">
             <span className="text-xs text-muted-foreground">Your own answer</span>
             <Textarea
               data-nav=""
@@ -395,14 +457,12 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
                 setOwn({ ...own, [index]: event.target.value })
                 if (event.target.value) setPicks({ ...picks, [index]: [] })
               }}
-              placeholder={OWN_ANSWER}
+              placeholder="Type something else…"
               aria-label="Your own answer"
               rows={2}
               className="min-h-9 resize-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0 md:text-sm max-md:min-h-11"
             />
           </label>
-        </div>
-        <Preview option={previewOption} onExpand={() => openViewer(question.options.indexOf(previewOption!))} />
       </div>
       <p className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
         <span>{multi ? "Pick several" : "Pick one"}</span>

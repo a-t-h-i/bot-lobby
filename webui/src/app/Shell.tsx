@@ -128,13 +128,12 @@ export function Shell() {
   const phone = useMediaQuery("(max-width: 767.98px)")
   const cycle = useCallback(
     (delta: number) => {
-      const available = phone ? tabs.filter((tab) => tab.id !== "metrics") : tabs
-      if (available.length === 0) return
-      const index = Math.max(0, available.findIndex((tab) => tab.id === activeId))
-      const next = available[(index + delta + available.length) % available.length]
+      if (tabs.length === 0) return
+      const index = Math.max(0, tabs.findIndex((tab) => tab.id === activeId))
+      const next = tabs[(index + delta + tabs.length) % tabs.length]
       if (next) go(tabHash(next.id as TabId))
     },
-    [tabs, activeId, phone]
+    [tabs, activeId]
   )
   const toggleHelp = useCallback(() => setHelp((open) => !open), [])
   const projects = useProjects()
