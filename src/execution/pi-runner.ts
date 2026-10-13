@@ -10,7 +10,6 @@ import { activityWord } from "../pi/activity.ts";
 import { shortDuration } from "../text.ts";
 import { readRelayRequest } from "../ask/relay.ts";
 import type { AskQuestion, AskResult } from "../ask/types.ts";
-import { grantEnv, grantNote, type Grant } from "../excalidraw/sessions.ts";
 import type { EffortRouter, RunProfileLike } from "../classifier/effort.ts";
 
 /** Live control over one running subagent: queue a steering message for its next turn. */
@@ -57,8 +56,6 @@ export interface PiRunOptions {
   time?: TimeLimit;
   /** Answers the agent's relayed questions; without it they are cancelled like any other dialog. */
   onAsk?: RelayAsk;
-  /** The Excalidraw sessions assigned to this agent: its tools, the room links in its environment, and a note on them in its task. */
-  excalidraw?: Grant;
 }
 
 /**
@@ -771,7 +768,6 @@ function writePromptFile(prompt: string): { file: string; cleanup: () => void } 
 export async function runPiAgent(options: PiRunOptions, run: ProcessRunner = spawnPiProcess): Promise<PiRunResult> {
   const host = await delegationHost(options, run);
   let prompt: ReturnType<typeof writePromptFile> | undefined;
-  const grant = options.excalidraw;
   try {
     prompt = writePromptFile([options.systemPrompt, host.note].filter(Boolean).join("\n\n"));
     if (options.signal?.aborted) return { status: "cancelled", output: "", usage: { input: 0, output: 0, cost: 0, turns: 0 } };
@@ -780,8 +776,8 @@ export async function runPiAgent(options: PiRunOptions, run: ProcessRunner = spa
       cwd: options.cwd,
       signal: options.signal,
       timeoutMs: options.timeoutMs,
-      prompt: `Task: ${options.task}${grant ? `\n\n${grantNote(grant)}` : ""}`,
-      env: grant ? { ...host.env, ...grantEnv(grant) } : host.env,
+      prompt: `Task: ${options.task}`,
+      env: host.env,
       stallTimeoutMs: options.stallTimeoutMs,
       toolStallTimeoutMs: options.toolStallTimeoutMs,
       wrapUpAtMs: options.wrapUpAtMs,

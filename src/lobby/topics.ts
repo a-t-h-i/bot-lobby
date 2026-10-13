@@ -16,7 +16,6 @@ export const LOBBY_TOPICS = [
   "git",
   "issues",
   "knowledge",
-  "excalidraw",
   "prompts",
   "notices",
   "status",

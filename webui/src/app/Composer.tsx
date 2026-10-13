@@ -20,7 +20,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/reui/select"
 import { call } from "@/lib/api"
 import { act } from "@/lib/act"
-import { useComposerContext, type ComposerSession } from "@/lib/composerContext"
+import { useComposerContext } from "@/lib/composerContext"
 import { useAnyOverlay } from "@/lib/overlay"
 import { focusTab } from "@/prompts/nav"
 import { toast } from "@/lib/toast"
@@ -39,7 +39,7 @@ import { KnowledgePaneToggle } from "./KnowledgePaneToggle"
 import { ProjectSwitcher, type Projects } from "./ProjectSwitcher"
 import { taskRoute } from "./taskRoute"
 
-type TargetId = "oracle" | "knowledge" | "panel" | "quickfix" | "comment" | "task" | "session" | "newsession"
+type TargetId = "oracle" | "knowledge" | "panel" | "quickfix" | "comment" | "task"
 
 interface Target {
   id: TargetId
@@ -49,19 +49,19 @@ interface Target {
   label: string
   placeholder: string
   taskId?: string
-  session?: ComposerSession
 }
 
 const ORACLE: Target = { id: "oracle", pill: "Oracle", label: "Message the oracle", placeholder: "Message the oracle…" }
 
+/** The tabs that carry the composer; everywhere else it stays mounted (drafts and uploads survive) but hidden and inert. */
+const COMPOSER_TABS: ReadonlySet<string> = new Set(["lobby", "tasks", "plan", "quickfix", "knowledge"])
+
+export function composerVisible(route: Route): boolean {
+  return route.kind === "tab" && COMPOSER_TABS.has(route.tab)
+}
+
 /** Who a message can go to from this route: the tab's own target first, the oracle always. */
-function targetsFor(route: Route, openTask: string | undefined, session: ComposerSession | undefined): Target[] {
-  if (route.kind === "sessions") {
-    const fresh: Target = { id: "newsession", pill: "New session", label: "Start a task in a new session", placeholder: "Describe a task for a new session…" }
-    return session
-      ? [{ id: "session", pill: "Message", label: `Message ${session.name}`, placeholder: `Message ${session.name}…`, session }, fresh, ORACLE]
-      : [fresh, ORACLE]
-  }
+function targetsFor(route: Route, openTask: string | undefined): Target[] {
   if (route.kind !== "tab") return [ORACLE]
   if (route.tab === "knowledge") return [{ id: "knowledge", pill: "Oracle", label: "Ask the oracle about this project", placeholder: "Ask about this project — the oracle searches the code and learns what is missing…" }]
   if (route.tab === "plan") return [{ id: "panel", pill: "Panel", label: "Message the panel", placeholder: "Describe a task, or answer the panel…" }, ORACLE]
@@ -173,9 +173,12 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
   const phone = useMediaQuery("(max-width: 767.98px)")
   const { keyboardOpen, keyboardInset } = usePhoneViewport()
 
-  const { taskId: openTask, session: openSession } = useComposerContext()
-  const targets = useMemo(() => targetsFor(route, openTask, openSession), [route, openTask, openSession])
-  const targetKey = targets.map((entry) => `${entry.id}:${entry.taskId ?? entry.session?.name ?? ""}`).join("|")
+  const visible = composerVisible(route)
+  const visibleRef = useRef(visible)
+  visibleRef.current = visible
+  const { taskId: openTask } = useComposerContext()
+  const targets = useMemo(() => targetsFor(route, openTask), [route, openTask])
+  const targetKey = targets.map((entry) => `${entry.id}:${entry.taskId ?? ""}`).join("|")
   const target = targets.find((entry) => entry.id === chosen) ?? targets[0]!
   useEffect(() => setChosen(undefined), [targetKey])
 
@@ -207,7 +210,7 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
     const root = document.documentElement
     const set = () => {
       const box = el.getBoundingClientRect()
-      root.style.setProperty("--composer-h", blocked ? "0px" : `${Math.ceil(box.height + (phone ? keyboardInset : 0))}px`)
+      root.style.setProperty("--composer-h", blocked || !visible ? "0px" : `${Math.ceil(box.height + (phone ? keyboardInset : 0))}px`)
       root.style.setProperty("--composer-x", `${Math.round(box.left)}px`)
       root.style.setProperty("--composer-w", `${Math.round(box.width)}px`)
     }
@@ -222,9 +225,10 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
       root.style.removeProperty("--composer-x")
       root.style.removeProperty("--composer-w")
     }
-  }, [blocked, keyboardInset, keyboardOpen, phone])
+  }, [blocked, keyboardInset, keyboardOpen, phone, visible])
 
   const attach = useCallback((list: Iterable<File>) => {
+    if (!visibleRef.current) return
     const incoming = [...list]
     const room = MAX_ATTACHMENTS - filesRef.current.length
     if (incoming.length > room) toast.warning(`At most ${MAX_ATTACHMENTS} files go with one message.`)
@@ -254,7 +258,7 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
   const canSend = (text.trim().length > 0 || ready.length > 0) && !uploading && !sending
 
   const send = useCallback(async () => {
-    if (!canSend) return
+    if (!canSend || !visibleRef.current) return
     setSending(true)
     const attachments = ready.length > 0 ? ready : undefined
     const body = { text, ...(attachments ? { attachments } : {}) }
@@ -269,12 +273,7 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
       } else if (target.id === "panel") done = (await act("planner.send", body)) !== undefined
       else if (target.id === "quickfix") done = (await act("quickfix.submit", body)) !== undefined
       else if (target.id === "task") done = (await act("tasks.message", { taskId: target.taskId!, ...body })) !== undefined
-      else if (target.id === "session") done = (await act("sessions.message", { ...target.session!.address, ...body })) !== undefined
-      else if (target.id === "newsession") {
-        const result = await act("sessions.start", { request: text, ...(attachments ? { attachments } : {}) })
-        done = result !== undefined
-        if (result?.key) go(`#/sessions/${encodeURIComponent(result.key)}`)
-      } else done = (await act("tasks.comment", { taskId: target.taskId!, ...body })) !== undefined
+      else done = (await act("tasks.comment", { taskId: target.taskId!, ...body })) !== undefined
       if (done) {
         setText("")
         for (const entry of filesRef.current) if (entry.image) URL.revokeObjectURL(entry.image)
@@ -440,7 +439,9 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
         phone && keyboardOpen ? "max-md:pb-2" : "max-md:pb-[max(0.5rem,env(safe-area-inset-bottom))]",
         blocked && "opacity-0"
       )}
-      inert={blocked}
+      hidden={!visible}
+      aria-hidden={visible ? undefined : true}
+      inert={blocked || !visible}
     >
       {dockNav ? <div className="pointer-events-auto mx-auto mb-1.5 w-full max-w-[46rem]">{dockNav}</div> : null}
       {tray}

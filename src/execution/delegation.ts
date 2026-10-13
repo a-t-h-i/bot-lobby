@@ -1,4 +1,3 @@
-import { toolsOf } from "../excalidraw/sessions.ts";
 import { appendMetrics, metricFromRun } from "../state/metrics.ts";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -73,7 +72,7 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
   const agent = options.agent ?? { runId: id, taskId: id, domain: "backend" as const, role: editable ? "worker" as const : "reviewer" as const };
   const depth = agent.depth ?? 1;
   const quota = options.delegationQuota ?? { used: 0 };
-  const tools = [...new Set([...baseTools, ...(options.excalidraw ? toolsOf(options.excalidraw) : []), "codemode", "tool_search", ...(canDelegate(agent, quota.used) ? [DELEGATE_TOOL] : [])])];
+  const tools = [...new Set([...baseTools, "codemode", "tool_search", ...(canDelegate(agent, quota.used) ? [DELEGATE_TOOL] : [])])];
   const mcpTools = options.mcpTools ?? agentProfile(config, agent.domain, agent.role).mcpTools ?? [];
   const policy: AgentPolicy = { tools, mcpTools, readOnly: !editable, depth };
   if (depth > 1) return { tools, env: { ...options.env, [AGENT_ENV]: JSON.stringify(policy), [DELEGATION_ENV]: "" }, note: "You are a child agent. Finish only your assigned brief and report evidence to your parent; you cannot delegate further.", close: async () => {}, onStart: options.onStart, children: [] as AgentRun[] };

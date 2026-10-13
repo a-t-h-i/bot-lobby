@@ -17,7 +17,7 @@ import type { LobbySnapshot, StatusInfo } from "@protocol"
 import type { TabId } from "@shared"
 import { AltH } from "./AltH.tsx"
 import { SoundToggle, ThemeToggle } from "./AppTools.tsx"
-import { Composer } from "./Composer.tsx"
+import { Composer, composerVisible } from "./Composer.tsx"
 import { Header } from "./Header.tsx"
 import { ProjectSwitcher, useProjects } from "./ProjectSwitcher.tsx"
 import { Sidebar, SidebarMenuButton, SidebarSheet } from "./Sidebar.tsx"
@@ -174,7 +174,7 @@ export function Shell() {
       const box = document.getElementById("composer-text") as HTMLTextAreaElement | null
       const phoneNow = window.matchMedia("(max-width: 767.98px)").matches
       const coarse = window.matchMedia("(pointer: coarse)").matches
-      if (!phoneNow && !coarse && box && !box.disabled) box.focus({ preventScroll: true })
+      if (!phoneNow && !coarse && box && !box.disabled && !box.closest("[inert]")) box.focus({ preventScroll: true })
       else if (document.activeElement?.id !== "composer-text") document.getElementById("main")?.focus({ preventScroll: true })
     })
     return () => cancelAnimationFrame(frame)
@@ -218,6 +218,7 @@ export function Shell() {
     </div>
   )
   const sidebarProps = { route, keys: keyLabels, onHelp: toggleHelp }
+  const dockShown = composerVisible(route)
   return (
     <div ref={rootRef} className="fixed inset-0 flex">
       {phone ? null : <Sidebar {...sidebarProps} />}
@@ -247,7 +248,9 @@ export function Shell() {
           {routeBody(route)}
         </motion.div>
       </main>
-      <Composer route={route} keys={keyLabels} projects={projects} onHelp={toggleHelp} dockNav={phone ? tabStrip : null} />
+      {/* Off the composer's tabs it is hidden, so a phone's tab bar sits in the flow below the page instead. */}
+      {phone && !dockShown ? <div className="shrink-0 px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">{tabStrip}</div> : null}
+      <Composer route={route} keys={keyLabels} projects={projects} onHelp={toggleHelp} dockNav={phone && dockShown ? tabStrip : null} />
       </div>
       {phone ? <SidebarSheet {...sidebarProps} open={sheet} onOpenChange={setSheet} /> : null}
       <Thinking status={status} lobby={lobbyRecord.data} />

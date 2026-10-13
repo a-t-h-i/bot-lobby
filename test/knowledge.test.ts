@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ExcalidrawBook } from "../src/excalidraw/sessions.ts";
 import { overThreshold } from "../src/knowledge/compactor.ts";
 import { readDataRoots } from "../src/state/project.ts";
 import {
@@ -25,8 +24,7 @@ import { selectKnowledge } from "../src/knowledge/selector.ts";
 import { runWorkflowAction, type OrchestrateParams, type WorkflowDeps } from "../src/workflow/workflow.ts";
 import { lobbyTopics } from "../src/lobby/topics.ts";
 
-// Hermetic whiteboard sessions: the book lives under the user-global config dir,
-// so park the ambient gates and point it at a temp dir for this file.
+// Park ambient gates and use a hermetic config directory for workflow checks.
 let ambientConfig: string | undefined;
 let ambientSubagent: string | undefined;
 let ambientDevSubagent: string | undefined;
@@ -259,35 +257,3 @@ test("complete is refused while knowledge is over the threshold, then succeeds a
   assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.state, "completed");
 });
 
-test("whiteboard creates a session for Master and returns its join link", async () => {
-  const deps = makeDeps();
-  withTask(deps, "implementing");
-  const result = await act(deps, { action: "whiteboard" });
-  assert.equal(result.ok, true, result.message);
-  assert.match(result.message, /Join link:/);
-  assert.match(result.message, /excalidraw_read/);
-  const sessions = new ExcalidrawBook({ root: deps.root }).list();
-  assert.equal(sessions.length, 1);
-  assert.deepEqual(sessions[0]!.agents, ["master"]);
-  assert.ok(result.message.includes(sessions[0]!.link), "the join link is the session's link");
-});
-
-test("whiteboard honours a name and refuses when the book is full", async () => {
-  const deps = makeDeps();
-  withTask(deps, "implementing");
-  const named = await act(deps, { action: "whiteboard", name: "Plan" });
-  assert.equal(named.ok, true, named.message);
-  assert.match(named.message, /"Plan"/);
-  assert.match(named.message, /Join link:/);
-  const sessions = new ExcalidrawBook({ root: deps.root }).list();
-  assert.equal(sessions[0]!.name, "Plan");
-  assert.deepEqual(sessions[0]!.agents, ["master"]);
-
-  const fullDeps = makeDeps();
-  withTask(fullDeps, "implementing");
-  const book = new ExcalidrawBook({ root: fullDeps.root });
-  for (let index = 0; index < 5; index += 1) assert.ok(book.create(`Board ${index + 1}`).session);
-  const full = await act(fullDeps, { action: "whiteboard" });
-  assert.equal(full.ok, false);
-  assert.match(full.message, /all 5 sessions are in use/);
-});

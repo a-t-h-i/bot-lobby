@@ -4,7 +4,6 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { ExcalidrawSession } from "../src/excalidraw/sessions.ts";
 import { ensureProjectStructure } from "../src/state/persistence.ts";
 import { createTask } from "../src/schemas/task.ts";
 import { createTaskDir, saveTask } from "../src/state/persistence.ts";
@@ -199,7 +198,7 @@ test("background sessions bump sessions; a question bumps notices", async () => 
   }
 });
 
-test("the hub bumps prompts; a link check bumps excalidraw", async () => {
+test("the hub bumps prompts; removed topics and service methods stay absent", async () => {
   const { fake, ctx } = await start(false);
   try {
     const service = currentLobbyService()!;
@@ -208,11 +207,9 @@ test("the hub bumps prompts; a link check bumps excalidraw", async () => {
     assert.equal(lobbyTopics.version("prompts"), prompts + 1);
     assert.equal(promptHub.answer(prompt.id, true), true);
     assert.equal(lobbyTopics.version("prompts"), prompts + 2);
-    const excalidraw = lobbyTopics.version("excalidraw");
-    const session = { id: "x", name: "x", link: "not-a-link", agents: [], contribute: false, addedAt: "" } as unknown as ExcalidrawSession;
-    const checked = await service.checkExcalidraw(session);
-    assert.equal(checked.ok, false);
-    assert.equal(lobbyTopics.version("excalidraw"), excalidraw + 1);
+    assert.equal("excalidraw" in lobbyTopics.versions(), false);
+    assert.equal("checkExcalidraw" in service, false);
+    assert.equal("excalidraw" in service, false);
   } finally {
     await stop(fake, ctx);
   }

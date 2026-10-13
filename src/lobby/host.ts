@@ -18,17 +18,10 @@ import type { IssuesState } from "./issues.ts";
 import type { PullsState } from "./pulls.ts";
 import type { PullReviews } from "./pr-review.ts";
 import type { KnowledgeBook } from "./knowledge.ts";
-import type { ExcalidrawBook, ExcalidrawSession } from "../excalidraw/sessions.ts";
 import type { WorkspaceInfo } from "../execution/workspace.ts";
 
 export { TAB_IDS, TAB_LABELS, visibleTabs } from "./prompts.ts";
 export type { TabId } from "./prompts.ts";
-
-/** What a checked Excalidraw session reported. */
-export interface SessionCheck {
-  ok: boolean;
-  text: string;
-}
 
 /**
  * Which session the Lobby tab shows and talks to: this window, one it started
@@ -147,10 +140,6 @@ export interface LobbyService {
   reviews: PullReviews;
   /** Every agent's knowledge files: read, edited, commented on. */
   knowledge: KnowledgeBook;
-  /** The shared Excalidraw sessions (five at most) and which agents each is assigned to. */
-  excalidraw: ExcalidrawBook;
-  /** Join a session's room for a moment and report what is there. */
-  checkExcalidraw(session: ExcalidrawSession): Promise<SessionCheck>;
   /** The effective config, never a secret; the web settings page reads it. */
   config?(): BotLobbyConfig;
   /** Save a whole config, the way the settings menu does; the web settings page writes it. */
@@ -163,7 +152,7 @@ export interface LobbyService {
   classifierModels?(): Array<{ id: string; label: string }>;
   /** The model this window's session runs on (`provider/id`), when it has one. */
   sessionModel?(): string | undefined;
-  /** The Issues tab is switched on (`lobby.issues`). */
+  /** Git's Issues view is switched on (`lobby.issues`). */
   issuesEnabled(): boolean;
   /** What this window carried on from one that stopped unexpectedly, when it did. */
   recovered?(): { at: number; text: string } | undefined;

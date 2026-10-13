@@ -9,7 +9,6 @@ import type { AgentRun } from "../schemas/findings.ts";
 import { loadPrompt } from "../prompts/loader.ts";
 import { runPiAgent, spawnPiProcess, type PiStreamEvent, type ProcessRunner } from "../execution/pi-runner.ts";
 import { MAX_CHILDREN } from "../execution/delegation.ts";
-import { grantOption } from "../excalidraw/sessions.ts";
 import { describeToolCall } from "../pi/activity.ts";
 import { appendMetrics, type MetricRecord } from "../state/metrics.ts";
 import { appendChange, EditLog } from "../state/changes.ts";
@@ -338,7 +337,6 @@ export class QuickFixQueue {
           task: [job.prompt, job.interrupted ? INTERRUPTED_NOTE : "", likely, scripts ? `## Scripts\n\n${scripts}` : ""].filter(Boolean).join("\n\n"),
           systemPrompt: quickFixPrompt(profile.instructions),
           tools: [...QUICK_FIX_TOOLS, ...(this.deps.hints?.tools() ?? [])],
-          ...grantOption("quickfix"),
           model,
           thinking,
           mcpTools: profile.mcpTools,

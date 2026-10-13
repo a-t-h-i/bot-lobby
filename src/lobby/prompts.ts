@@ -4,7 +4,7 @@
  * `node:*`): the web page imports this file directly.
  */
 
-export const TAB_IDS = ["lobby", "tasks", "plan", "quickfix", "issues", "excalidraw", "git", "knowledge", "metrics"] as const;
+export const TAB_IDS = ["lobby", "tasks", "plan", "quickfix", "git", "knowledge", "metrics"] as const;
 export type TabId = (typeof TAB_IDS)[number];
 
 export const TAB_LABELS: Record<TabId, string> = {
@@ -12,16 +12,14 @@ export const TAB_LABELS: Record<TabId, string> = {
   tasks: "Tasks",
   plan: "Plan",
   quickfix: "Quick fix",
-  issues: "Issues",
   metrics: "Metrics",
   git: "Git",
   knowledge: "Knowledge",
-  excalidraw: "Excalidraw",
 };
 
-/** The tabs on show: Issues only while `lobby.issues` switches it on. */
-export function visibleTabs(issues: boolean): TabId[] {
-  return TAB_IDS.filter((tab) => issues || tab !== "issues");
+/** The tabs on show; issues are available inside Git. */
+export function visibleTabs(_issues: boolean): TabId[] {
+  return [...TAB_IDS];
 }
 
 /** A question answered in another window of the page (or put away) before this one's answer arrived. */

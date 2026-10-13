@@ -199,21 +199,21 @@ for (const cancellation of ["route", "overlay"] as const) {
 test("tap on a decorative seam occurrence commits immediately and keyboard navigation cancels pending selection", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await freeze(page);
-  await wheelTo(page, "excalidraw", -1);
-  const copy = page.locator('[data-phone-period="copy"] [data-phone-tab-id="excalidraw"]');
+  await wheelTo(page, "knowledge", -1);
+  const copy = page.locator('[data-phone-period="copy"] [data-phone-tab-id="knowledge"]');
   const visible = await copy.evaluateAll((els: any[]) => els.findIndex((el) => {
     const r = el.getBoundingClientRect();
     return r.left >= 0 && r.right <= window.innerWidth;
   }));
   expect(visible, "a real decorative seam target is visible").toBeGreaterThanOrEqual(0);
   await copy.nth(visible).tap();
-  await expectCommitted(page, "excalidraw");
+  await expectCommitted(page, "knowledge");
   await wheelTo(page, "plan");
-  await page.locator("#tab-excalidraw").focus();
+  await page.locator("#tab-knowledge").focus();
   await page.keyboard.press("ArrowRight");
-  await expectCommitted(page, "git");
+  await expectCommitted(page, "metrics");
   await page.clock.runFor(1000);
-  await expectCommitted(page, "git");
+  await expectCommitted(page, "metrics");
 });
 
 test("canonical touch tap commits without waiting", async ({ page, server }) => {

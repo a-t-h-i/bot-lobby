@@ -26,7 +26,6 @@ import { execCommand, IssuesState } from "./issues.ts";
 import { PullsState } from "./pulls.ts";
 import { PullReviews } from "./pr-review.ts";
 import { KnowledgeBook } from "./knowledge.ts";
-import { ExcalidrawBook } from "../excalidraw/sessions.ts";
 import type { LobbyService } from "./host.ts";
 import { backgroundSessions, createLobbyService, lobbyNotify, lobbyProfile, plannerDeps, resumeSession, reviewProfile, seatProfile, setServiceState, savePlan as serviceSavePlan, answerPanel as serviceAnswerPanel } from "./service.ts";
 import { lobbyTopics } from "./topics.ts";
@@ -49,7 +48,6 @@ export interface Runtime {
   pulls: PullsState;
   reviews: PullReviews;
   knowledge: KnowledgeBook;
-  excalidraw: ExcalidrawBook;
   unsubscribeFeed?: () => void;
   /** Puts the panel's questions to the user: the web page's questionnaire unless a test sets another. */
   asker?: Asker;
@@ -163,7 +161,6 @@ export function startLobbyService(pi: ExtensionAPI, ctx: ExtensionContext, confi
       backups: () => loadConfig().knowledge.backupCount,
       sessionId: () => ctx.sessionManager.getSessionId(),
     }),
-    excalidraw: new ExcalidrawBook({ root }),
   };
   state.reviews = new PullReviews({
     cwd: ctx.cwd,
@@ -204,8 +201,7 @@ export function startLobbyService(pi: ExtensionAPI, ctx: ExtensionContext, confi
   // changes and the web page rereads it. lobbyFeed (lobby), run updates (tasks),
   // quick fix (quickfix), planner (planner), background sessions (sessions),
   // metrics (metrics), pulls/reviews (git), issues (issues), the prompt hub
-  // (prompts), owner/notify events (notices), busy/workspace (status), link
-  // checks (excalidraw).
+  // (prompts), owner/notify events (notices), busy/workspace (status).
   setQuickFixHandoff((request, builder, reason) => (runtime === state ? handToQuickFix(state, request, builder, reason) : undefined));
   lobbyFeed.clear();
   // Only the newest messages are kept; the feed learns whether earlier ones exist, and loads them when scrolled to.

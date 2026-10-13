@@ -342,10 +342,6 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
   const classifierMetrics = (fixture.mockClassifierMetrics ?? []).map((record) => ({ ...record }));
   const knowledgeFiles = (fixture.mockKnowledge ?? []).map((file) => ({ ...file }));
   const knowledgeView = fixture.mockKnowledgeView ? { ...fixture.mockKnowledgeView, entries: [...fixture.mockKnowledgeView.entries], attached: [...fixture.mockKnowledgeView.attached], detached: [...fixture.mockKnowledgeView.detached] } : undefined;
-  const xSessions = (fixture.mockExcalidraw ?? []).map((session) => ({ ...session, agents: [...session.agents] }));
-  const xLinks = new Map<string, string>();
-  if (xSessions[0] && fixture.mockExcalidrawLink) xLinks.set(xSessions[0].id, fixture.mockExcalidrawLink);
-  const xLinkOf = (id: string): string => xLinks.get(id) ?? `https://whiteboard.example/#room=${id},AAAAAAAAAAAAAAAAAAAAAA`;
   const knowledge = {
     files: () => knowledgeFiles.map((file) => ({ ...file })),
     open: (agent: string, file: string) => {
@@ -358,57 +354,6 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     replaceFile: () => "saved mock/agent/mock.md — the version before is in archive/Mock",
     comment: () => "note saved — every agent reads it under this entry",
     unnote: () => "note removed",
-  };
-  const excalidraw = {
-    list: () => xSessions.map((session) => ({ id: session.id, name: session.name, link: xLinkOf(session.id), agents: [...session.agents], contribute: session.contribute, addedAt: session.addedAt })),
-    add: (link: string, name?: string) => {
-      if (!link.includes("#room=")) return { notice: "that is not an Excalidraw room link — it looks like https://excalidraw.com/#room=<id>,<key>" };
-      const session = { id: `x${xSessions.length + 1}`, name: name || `Session ${xSessions.length + 1}`, link, agents: [] as string[], contribute: true, addedAt: new Date().toISOString() };
-      xSessions.push({ id: session.id, name: session.name, masked: "", agents: [], contribute: true, addedAt: session.addedAt });
-      xLinks.set(session.id, link);
-      return { notice: `added “${session.name}” — assign it to agents with enter`, session };
-    },
-    create: (name?: string) => {
-      const id = `x${xSessions.length + 1}`;
-      const link = `https://whiteboard.example/#room=mock${xSessions.length + 1},AAAAAAAAAAAAAAAAAAAAAA`;
-      const session = { id, name: name || `Session ${xSessions.length + 1}`, link, agents: [] as string[], contribute: true, addedAt: new Date().toISOString() };
-      xSessions.push({ id, name: session.name, masked: "", agents: [], contribute: true, addedAt: session.addedAt });
-      xLinks.set(id, link);
-      return { notice: `added “${session.name}” — assign it to agents with enter`, session };
-    },
-    remove: (id: string) => {
-      const index = xSessions.findIndex((session) => session.id === id);
-      if (index < 0) return "no such session";
-      const [gone] = xSessions.splice(index, 1);
-      return `removed “${gone!.name}”`;
-    },
-    rename: (id: string, name: string) => {
-      const session = xSessions.find((entry) => entry.id === id);
-      if (!session) return "no such session";
-      if (!name.trim()) return "a session needs a name";
-      session.name = name.trim().slice(0, 40);
-      return `renamed to “${session.name}”`;
-    },
-    toggleAgent: (id: string, agent: string) => {
-      const session = xSessions.find((entry) => entry.id === id);
-      if (!session) return "no such session";
-      const at = session.agents.indexOf(agent);
-      if (at >= 0) session.agents.splice(at, 1);
-      else session.agents.push(agent);
-      return at >= 0 ? `${agent} no longer has this session` : `${agent} has this session now`;
-    },
-    toggleAll: (id: string) => {
-      const session = xSessions.find((entry) => entry.id === id);
-      if (!session) return "no such session";
-      session.agents = session.agents.length > 0 ? [] : ["master"];
-      return session.agents.length > 0 ? "assigned to every agent" : "taken back from every agent";
-    },
-    toggleContribute: (id: string) => {
-      const session = xSessions.find((entry) => entry.id === id);
-      if (!session) return "no such session";
-      session.contribute = !session.contribute;
-      return session.contribute ? "agents may draw in this session" : "agents may only look at this session";
-    },
   };
   const qfJobs = fakeQuickFixJobs(fixture.mockQuickfix ?? []);
   let qfCounter = qfJobs.length;
@@ -485,8 +430,6 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     metrics: () => metrics.map((record) => ({ ...record })),
     classifierMetrics: () => classifierMetrics.map((record) => ({ ...record })),
     knowledge,
-    excalidraw,
-    checkExcalidraw: async () => ({ ok: true, text: "reached the server; nobody has this session open yet — open the link in Excalidraw, and agents can read and draw" }),
     comments: (taskId: string) => [...(comments.get(taskId) ?? [])],
     comment: (taskId: string, text: string) => {
       const entry = { id: `C-mock-${(commentSeq += 1)}`, taskId, text, by: fixture.status.sessionId, createdAt: new Date().toISOString(), status: "open" };

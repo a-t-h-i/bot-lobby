@@ -393,25 +393,6 @@ export interface EntryRefInfo {
   occurrence: number;
 }
 
-/** Who an Excalidraw session can be assigned to. */
-export type ExcalidrawAgentName = "master" | "designer" | "backend" | "qa" | "scout" | "researcher" | "quickfix" | "planner";
-
-/** One shared session with its key hidden (`room <id>`). */
-export interface ExcalidrawSessionInfo {
-  id: string;
-  name: string;
-  masked: string;
-  agents: ExcalidrawAgentName[];
-  contribute: boolean;
-  addedAt: string;
-}
-
-/** What the last check of a session found. */
-export interface ExcalidrawCheck {
-  ok: boolean;
-  text: string;
-}
-
 /** `tasks.get`: one task read whole, in the terminal's wording. */
 export interface TaskDetail {
   timing?: TimingProjection;
@@ -655,16 +636,6 @@ export interface Api {
   "knowledge.replaceFile": { request: { agent: KnowledgeAgentName; file: string; text: string }; result: { notice: string } };
   "knowledge.comment": { request: { agent: KnowledgeAgentName; file: string; ref: EntryRefInfo; text: string }; result: { notice: string } };
   "knowledge.unnote": { request: { id: string }; result: { notice: string } };
-  "excalidraw.list": { request: Record<string, never>; result: { sessions: ExcalidrawSessionInfo[] } };
-  "excalidraw.add": { request: { link: string; name?: string }; result: { notice: string; id?: string } };
-  "excalidraw.create": { request: { name?: string }; result: { notice: string; id?: string } };
-  "excalidraw.remove": { request: { id: string }; result: { notice: string } };
-  "excalidraw.rename": { request: { id: string; name: string }; result: { notice: string } };
-  "excalidraw.toggleAgent": { request: { id: string; agent: ExcalidrawAgentName }; result: { notice: string } };
-  "excalidraw.toggleAll": { request: { id: string }; result: { notice: string } };
-  "excalidraw.toggleContribute": { request: { id: string }; result: { notice: string } };
-  "excalidraw.check": { request: { id: string }; result: ExcalidrawCheck };
-  "excalidraw.reveal": { request: { id: string }; result: { link: string } };
   "git.pulls": { request: { refresh?: boolean }; result: GitPulls };
   "git.pull": { request: { number: number }; result: GitPull };
   "git.review": { request: { number: number; focus?: string }; result: { notice: string } };

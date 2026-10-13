@@ -22,7 +22,7 @@ const defaultOutDir = join(root, "test/web/phone-baseline");
 const outDir = resolve(process.env.OUT_DIR ?? defaultOutDir);
 const widths = [768, 800, 1024, 1280, 1440];
 const themes = ["light", "dark"] as const;
-const screens = ["lobby", "tasks", "plan", "issues", "quickfix", "git", "knowledge", "excalidraw", "metrics", "settings", "sessions"];
+const screens = ["lobby", "tasks", "plan", "git/issues", "quickfix", "git", "knowledge", "metrics", "settings", "sessions"];
 const content: Record<string, string> = {
   lobby: "We need an offline mock",
   tasks: "Add offline mock fixtures",
@@ -31,7 +31,6 @@ const content: Record<string, string> = {
   quickfix: "Fix the typo in the header",
   git: "Add the dark mode toggle",
   knowledge: "Engineering standards",
-  excalidraw: "Mock board",
   metrics: "mock-model",
   sessions: "Mock background task",
 };

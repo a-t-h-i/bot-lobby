@@ -11,7 +11,6 @@ import { ASK_ENV } from "../ask/relay.ts";
 import { STEP_LIMIT_MS } from "../state/step-limits.ts";
 import type { EffortRouter, RunProfileLike } from "../classifier/effort.ts";
 import { ASK_TOOL } from "../ask/types.ts";
-import { agentOfRun, grantOption } from "../excalidraw/sessions.ts";
 
 export interface AgentContext {
   task: string;
@@ -289,7 +288,6 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
       } : {}),
       signal,
       ...(request.onAsk ? { onAsk: request.onAsk } : {}),
-      ...grantOption(agentOfRun(request.domain, request.role)),
       env: request.onAsk ? { ...request.env, [ASK_ENV]: "1" } : request.env,
       stallTimeoutMs: request.stallTimeoutMs,
       toolStallTimeoutMs: request.toolStallTimeoutMs,

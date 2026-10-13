@@ -11,7 +11,7 @@ declare const getComputedStyle: any;
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
 const field = (page: Page) => page.locator("#composer-text");
 const question = (page: Page) => page.getByRole("dialog", { name: "Question from the lobby", exact: true });
-const CONTENT = { lobby: "We need an offline mock", tasks: "Add offline mock fixtures", plan: "Plan dark mode for the lobby", quickfix: "Fix the typo in the header", git: "Add the dark mode toggle", knowledge: "Engineering standards", excalidraw: "Mock board" };
+const CONTENT = { lobby: "We need an offline mock", tasks: "Add offline mock fixtures", plan: "Plan dark mode for the lobby", quickfix: "Fix the typo in the header", git: "Add the dark mode toggle", knowledge: "Engineering standards" };
 
 async function selectTab(page: Page, id: string) {
   const tab = page.locator(`#tab-${id}`);
@@ -29,7 +29,7 @@ async function bounded(page: Page, control: Locator, clearDock = false) {
   expect(box.x).toBeGreaterThanOrEqual(-1);
   expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
   expect(box.y).toBeGreaterThanOrEqual(-1);
-  const bottom = clearDock ? (await page.locator("#app-dock").boundingBox())!.y : viewport.height;
+  const bottom = clearDock && await page.locator("#app-dock").isVisible() ? (await page.locator("#app-dock").boundingBox())!.y : viewport.height;
   expect(box.y + box.height).toBeLessThanOrEqual(bottom + 1);
 }
 
@@ -85,8 +85,8 @@ async function screenChecks(page: Page) {
   await page.waitForTimeout(350); // Measure the settled page entrance, not its transient transform.
   await noOverflow(page);
   await essentialTargets(page.locator('header.app-header a:visible, header.app-header button:visible'));
-  await essentialTargets(page.locator('#app-dock .toolbar-button:visible, #app-dock button[aria-label="Send"]:visible, #app-dock button[aria-label="Stop"]:visible'));
-  await bounded(page, field(page));
+  if (await field(page).isVisible()) await essentialTargets(page.locator('#app-dock .toolbar-button:visible, #app-dock button[aria-label="Send"]:visible, #app-dock button[aria-label="Stop"]:visible'));
+  if (await field(page).isVisible()) await bounded(page, field(page));
   await pageEdges(page);
 }
 
@@ -102,10 +102,10 @@ async function headerPages(page: Page) {
   await expect(sections).toBeVisible();
   await essentialTargets(sections.getByRole("button"));
   await screenChecks(page);
-  await page.getByRole("banner").getByRole("button", { name: "Open sidebar" }).tap();
-  await sidebar.getByRole("link", { name: "Sessions", exact: true }).tap();
-  await expect(sidebar).toBeHidden();
-  await expect(page.locator("#main")).toContainText("Mock background task");
+  await expect(page.locator("#app-dock")).toBeHidden();
+  await expect(page.locator("#composer-text")).toBeAttached();
+  await page.evaluate(() => { window.location.hash = "#/sessions"; });
+  await expect(page).toHaveURL(/#\/lobby$/);
   await screenChecks(page);
 }
 
@@ -147,7 +147,8 @@ test("all available phone tabs and header pages fit, with bounded rows and essen
   trap.stop();
   expect(trap.errors).toEqual([]);
   await openScenario(page, server, "issues");
-  await selectTab(page, "issues");
+  await selectTab(page, "git");
+  await page.getByRole("radio", { name: "Issues", exact: true }).tap();
   await expect(page.locator("#main")).toContainText("Dark mode flashes white on load");
   await screenChecks(page);
 });

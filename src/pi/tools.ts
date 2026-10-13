@@ -62,7 +62,7 @@ const OrchestrateSchema = Type.Object({
   text: Type.Optional(Type.String({ description: "decide/complete/knowledge/script: the decision, completion summary, knowledge text, or the script itself" })),
   message: Type.Optional(Type.String({ description: "complete: the commit message for the agents' changes, which the engine commits (only their files): a first line of 72 characters or fewer saying what changed, at most three short lines below it" })),
   file: Type.Optional(Type.String({ description: "compact: the knowledge file to rewrite, e.g. knowledge.md; script: a script a worker drafted, to save instead of text" })),
-  name: Type.Optional(Type.String({ description: "whiteboard: name for the new Excalidraw session; script: the file name, what it does in snake_case with its language's extension (seed_public_holidays.py, run_changed_tests.sh)" })),
+  name: Type.Optional(Type.String({ description: "script: the file name, what it does in snake_case with its language's extension (seed_public_holidays.py, run_changed_tests.sh)" })),
   purpose: Type.Optional(Type.String({ description: "script: one line on what the script does" })),
   usage: Type.Optional(Type.String({ description: "script: the command that runs it, with its arguments" })),
   kind: Type.Optional(
@@ -79,7 +79,7 @@ const DESCRIPTION = [
   "dependency), propose (record the proposal and request approval), plan (record the internal",
   "plan, or amend it later with the full revised plan), implement (delegate a step to a domain worker, or several domains in parallel with assignments), qa (final quality gate and the only",
   "review), knowledge (record approved project knowledge or a decision; works without a task),",
-  "compact (replace a knowledge file with a rewritten version, archiving the old one; works without a task; disperse domain-relevant facts to action=knowledge (domain=designer|backend|qa) first), script (save a script to the shared scripts library, or replace one, for a job that comes back; works without a task), whiteboard (create your own Excalidraw session and assign it to yourself),",
+  "compact (replace a knowledge file with a rewritten version, archiving the old one; works without a task; disperse domain-relevant facts to action=knowledge (domain=designer|backend|qa) first), script (save a script to the shared scripts library, or replace one, for a job that comes back; works without a task),",
   "resolve_approval (approve or reject a request), complete (declare the task done after the gates",
   "pass, then ask the user to confirm merging and pushing main and removing its worktree), block/resume (escalate or continue), budget (under a time budget: where it stands, or ask the",
   "user for more minutes with a reason), track (the task's path and who takes part: show it, or correct it with",
