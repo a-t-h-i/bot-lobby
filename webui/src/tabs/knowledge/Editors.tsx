@@ -78,7 +78,7 @@ export function FileEditor({ open, file, initial, busy, onClose, onSave }: FileE
   const shown = useOverlaySlot(open, PRIORITY.confirm)
   return (
     <Popup open={open && shown} onOpenChange={(next) => !next && onClose()} label={`Edit ${file}`} description={ARCHIVE_HINT} dismissOnBackdrop={false} className="max-w-3xl">
-      <div className="flex min-h-0 flex-1 flex-col gap-3 p-6">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 p-4 max-md:p-3">
         <div>
           <h2 className="text-base font-medium">Edit {file}</h2>
           <p className="text-sm text-muted-foreground">{ARCHIVE_HINT}</p>

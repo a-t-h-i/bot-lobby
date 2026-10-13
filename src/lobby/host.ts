@@ -173,6 +173,10 @@ export interface LobbyService {
    * background session. A notice, and the background session's key.
    */
   resumeTask?(taskId: string): Promise<{ notice: string; key?: string }>;
+  acceptTask?(taskId: string): Promise<{ notice: string }>;
+  forceCloseTask?(taskId: string, title: string): Promise<{ notice: string }>;
+  canForceCloseTask?(taskId: string): boolean;
+  resolveTaskApproval?(taskId: string, approvalId: string, decision: "approved" | "rejected", note?: string): Promise<{ notice: string }>;
   /** Leave a message for a session running in another terminal; it delivers it within seconds. Returns a notice. */
   sendToSession(sessionId: string, text: string): string;
   /** Sessions running in this project, other than this window's, from their heartbeats. */

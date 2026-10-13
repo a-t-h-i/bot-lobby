@@ -505,6 +505,20 @@
     .glass-pop { background-color: var(--card); }
   }
 
+  /* A toast: the same glass, visibly see-through (78% of the popover colour) and
+     blurred hard enough that busy content behind it stays a soft wash under the text. */
+  .glass-toast {
+    @apply border text-popover-foreground;
+    border-color: var(--glass-border);
+    background-color: color-mix(in oklab, var(--popover) 78%, transparent);
+    box-shadow: var(--glass-shadow);
+    -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.5)) saturate(var(--glass-saturation));
+    backdrop-filter: blur(calc(var(--glass-blur) * 1.5)) saturate(var(--glass-saturation));
+  }
+  @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    .glass-toast { background-color: var(--popover); }
+  }
+
   /* Key caps and their explanatory text are not part of the phone UI. */
   @media (max-width: 767.98px) {
     [data-slot="kbd"],
@@ -1511,57 +1525,114 @@
 }
 
 /*
- * The composer answers focus calmly: only the box breathes (97%, then 103%,
- * then settles) from its top edge, so the tray above it stays put and attached.
- * Reduced motion keeps the focus border and shadow and drops the movement.
+ * The composer answers focus calmly: no scale or lift. When focus enters from
+ * outside, one faint highlight crosses the top edge once and the placeholder
+ * fades back; the focus border and shadow stay. :focus-within keeps matching
+ * while focus moves among the composer's own controls, so the sweep never
+ * restarts there. Reduced motion keeps the border and drops the sweep.
  */
-:root { --dur-composer-focus: 360ms; }
-@keyframes composer-focus {
-  0% { scale: 1; }
-  35% { scale: 0.97; }
-  70% { scale: 1.03; }
-  100% { scale: 1; }
+:root { --dur-composer-focus: 900ms; }
+.composer-box::before {
+  content: "";
+  position: absolute;
+  inset: 0 22px auto;
+  height: 1px;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--ring) 70%, var(--foreground)) 50%, transparent);
+  transform: translateX(-60%) scaleX(0.4);
 }
+@keyframes composer-sheen {
+  0% { opacity: 0; transform: translateX(-60%) scaleX(0.4); }
+  25% { opacity: 0.9; }
+  100% { opacity: 0; transform: translateX(60%) scaleX(0.4); }
+}
+@keyframes composer-placeholder { from { opacity: 0.25; } to { opacity: 1; } }
 @media (prefers-reduced-motion: no-preference) {
-  .composer-box:focus-within {
-    transform-origin: 50% 0;
-    animation: composer-focus var(--dur-composer-focus) ease-out;
-  }
+  .composer-box:focus-within::before { animation: composer-sheen var(--dur-composer-focus) ease-out 1; }
+  .composer-box:focus-within ::placeholder { animation: composer-placeholder 400ms ease-out 1; }
 }
 
-/* The effort slider: a chunky track, a fill that glows in the level's colour, a brain for a thumb. */
-.effort-track { background: color-mix(in oklab, var(--foreground) 7%, transparent); box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.08); }
-.dark .effort-track { background: color-mix(in oklab, var(--foreground) 6%, #000); box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.5); }
+/*
+ * The effort slider: a slim 8px rail, a fill in the level's colour, a 20px brain for a thumb. Each level moves
+ * its fill its own way, rising in pace and layering as effort grows; Max is a twinkling mosaic under a sweeping
+ * sheen. Only transform and opacity animate; reduced motion keeps every fill (and the mosaic) still.
+ */
+.effort-rail { background: color-mix(in oklab, var(--foreground) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 22%, transparent); }
+.dark .effort-rail { background: color-mix(in oklab, var(--foreground) 14%, #000); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 26%, transparent); }
 .effort-fill {
+  overflow: hidden;
   border-radius: 9999px;
-  background: linear-gradient(90deg, color-mix(in oklab, var(--effort-tone) 10%, transparent), color-mix(in oklab, var(--effort-tone) 72%, transparent));
+  background: linear-gradient(90deg, color-mix(in oklab, var(--effort-tone) 35%, transparent), var(--effort-tone));
   transition: background 200ms ease;
+}
+.effort-fill::before, .effort-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.55) 50%, transparent);
+  transform: translateX(-100%);
 }
 .effort-brain {
   color: #fff;
   background: radial-gradient(circle at 35% 30%, color-mix(in oklab, var(--effort-tone) 70%, #fff), var(--effort-tone) 70%);
-  box-shadow: 0 2px 6px rgb(0 0 0 / 0.25), 0 0 0 3px color-mix(in oklab, var(--effort-tone) 22%, transparent), 0 0 18px color-mix(in oklab, var(--effort-tone) 45%, transparent);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.3), 0 0 0 2px var(--background), 0 0 0 3px color-mix(in oklab, var(--effort-tone) 80%, var(--foreground));
   transition: background 200ms ease, box-shadow 200ms ease;
 }
-[data-top] .effort-brain { background: radial-gradient(circle at 35% 30%, oklch(0.78 0.12 230), oklch(0.55 0.22 285) 75%); box-shadow: 0 2px 6px rgb(0 0 0 / 0.3), 0 0 0 3px oklch(0.7 0.16 300 / 0.3), 0 0 24px oklch(0.7 0.2 320 / 0.6); }
+[data-top] .effort-brain { background: radial-gradient(circle at 35% 30%, oklch(0.78 0.12 230), oklch(0.55 0.22 285) 75%); }
 .effort-mosaic {
-  grid-template-columns: repeat(72, 6px);
-  grid-auto-rows: 6px;
+  grid-template-columns: repeat(160, 3px);
+  grid-auto-rows: 3px;
   justify-content: end;
   gap: 1px;
   /* Plain gradient at the slow end, squares towards the brain. */
-  mask-image: linear-gradient(90deg, transparent 15%, #000 75%);
+  mask-image: linear-gradient(90deg, transparent 5%, #000 55%);
 }
-.effort-mosaic > i { border-radius: 1px; }
-.effort-sparks { position: absolute; left: 0; top: 0; pointer-events: none; }
-.effort-sparks > i { position: absolute; left: -1.5px; top: -1.5px; width: 3px; height: 3px; border-radius: 1px; opacity: 0; }
+.effort-mosaic > i { border-radius: 0.5px; }
 @media (prefers-reduced-motion: no-preference) {
-  .effort-mosaic > i { animation: effort-twinkle 2.6s ease-in-out infinite; animation-delay: var(--twinkle, 0s); }
-  .effort-sparks > i { animation: effort-spark 1.8s cubic-bezier(0.2, 0.6, 0.3, 1) infinite; animation-delay: var(--delay, 0s); }
+  [data-level="off"] .effort-fill { animation: effort-breathe 3.6s ease-in-out infinite; }
+  [data-level="minimal"] .effort-fill::after { opacity: 0.35; animation: effort-sweep 6s linear infinite; }
+  [data-level="low"] .effort-fill::after { opacity: 0.6; animation: effort-sweep 3.2s ease-in-out infinite; }
+  [data-level="medium"] .effort-fill::before { opacity: 0.4; animation: effort-sweep 2.8s ease-in-out infinite; }
+  [data-level="medium"] .effort-fill::after { opacity: 0.4; animation: effort-sweep 2.8s ease-in-out -1.4s infinite; }
+  [data-level="high"] .effort-fill::after { opacity: 0.75; animation: effort-sweep 1.4s ease-in-out infinite; }
+  [data-level="xhigh"] .effort-fill::before { opacity: 0.5; animation: effort-sweep 1.8s ease-in-out infinite; }
+  [data-level="xhigh"] .effort-fill::after { opacity: 0.6; animation: effort-pulse 1.1s ease-in-out infinite; transform: none; background: rgb(255 255 255 / 0.3); }
+  [data-top] .effort-fill::after { opacity: 0.85; z-index: 1; animation: effort-sweep 1.6s ease-in-out infinite; }
+  [data-top] .effort-mosaic > i { animation: effort-twinkle 1.8s ease-in-out infinite; animation-delay: var(--twinkle, 0s); }
 }
-@keyframes effort-twinkle { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.6); } }
-@keyframes effort-spark {
-  0% { opacity: 0; translate: 0 0; scale: 1; }
-  15% { opacity: 1; }
-  100% { opacity: 0; translate: var(--dx) var(--dy); scale: 0.4; }
+@keyframes effort-breathe { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.85; } }
+@keyframes effort-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+@keyframes effort-pulse { 0%, 100% { opacity: 0; } 50% { opacity: 0.55; } }
+@keyframes effort-twinkle { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+
+/* Questionnaire: the active rail option connects into the panel; the panel crossfades per option. */
+.q-glide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  border: 1px solid var(--ring);
+  border-radius: var(--radius-lg, 0.5rem);
 }
+@media (min-width: 768px) {
+  /* One shared ring + connector that glide together to the active option. */
+  .q-glide::after {
+    content: "";
+    position: absolute;
+    inset-inline-end: calc(-0.75rem - 2px);
+    top: 50%;
+    width: 0.75rem;
+    border-top: 1px solid var(--ring);
+  }
+}
+@media (max-width: 767.98px) {
+  .q-glide { border-width: 0 0 2px; border-radius: 0; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .q-panel { animation: q-panel-in 200ms ease-out; }
+  .q-glide { transition: transform 200ms ease-out; }
+}
+@keyframes q-panel-in { from { opacity: 0; transform: translateX(6px); } to { opacity: 1; transform: none; } }

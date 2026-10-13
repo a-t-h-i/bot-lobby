@@ -2,7 +2,7 @@
  * The tab pills' icons, drawn part by part from Lucide's own shapes so each
  * can play a little animation of its own: the Lobby's bubble talks, Tasks
  * ticks its boxes, Plan draws its route, Quick fix jolts, Issues pulses, the
- * Metrics bars grow, Git draws its branch and Knowledge claps its book.
+ * Git draws its branch and Knowledge claps its book.
  * A play is numbered: each new number plays once
  * (the parts remount and run from the start), and before the first the icon
  * simply rests. Every animation ends on the icon exactly as Lucide draws it.
@@ -111,18 +111,6 @@ function Issues({ play }: { play: number }) {
   )
 }
 
-function Metrics({ play }: { play: number }) {
-  return (
-    <>
-      <path d="M3 3v16a2 2 0 0 0 2 2h16" />
-      {/* The bars grow up from the axis one after another. */}
-      {["M8 17v-3", "M13 17V5", "M18 17V9"].map((d, n) => (
-        <motion.path key={d} d={d} style={about(0.5, 1)} {...part(play, { scaleY: [0, 0, 1.18, 1] }, { times: span(0.08 + n * 0.14, 0.4 + n * 0.14), ease: "easeOut" })} />
-      ))}
-    </>
-  )
-}
-
 function Git({ play }: { play: number }) {
   return (
     <>
@@ -149,7 +137,6 @@ const ICONS: Record<string, (props: { play: number }) => ReactNode> = {
   plan: Plan,
   quickfix: QuickFix,
   issues: Issues,
-  metrics: Metrics,
   git: Git,
   knowledge: Knowledge,
 }

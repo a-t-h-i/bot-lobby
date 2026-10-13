@@ -7,6 +7,7 @@ import { dismissToast, useToast, type ToastKind } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 
 const ICONS: Record<ToastKind, typeof Info> = { info: Info, success: CheckCircle2, warning: AlertTriangle, error: XCircle }
+const KIND_WORDS: Record<ToastKind, string> = { info: "Note:", success: "Done:", warning: "Warning:", error: "Error:" }
 const TONES: Record<ToastKind, string> = { info: "text-info", success: "text-success", warning: "text-warning", error: "text-destructive" }
 
 /**
@@ -42,10 +43,10 @@ export function Toaster() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.92, y: 6, transition: { duration: 0.14, ease: "easeIn" } }}
             transition={{ type: "spring", stiffness: 560, damping: 15, mass: 0.8 }}
-            className="pointer-events-auto flex max-w-[min(32rem,100%)] items-center gap-2.5 rounded-lg border border-glass-border bg-popover px-3.5 py-2.5 text-sm text-popover-foreground shadow-xl shadow-black/25 backdrop-blur-xs"
+            className="pointer-events-auto flex max-w-[min(32rem,100%)] items-center gap-2.5 glass-toast rounded-lg px-3.5 py-2.5 text-sm"
           >
             <ToastIcon kind={item.kind} />
-            <span className="min-w-0 break-words">{item.message}</span>
+            <span className="min-w-0 break-words"><span className="sr-only">{KIND_WORDS[item.kind]} </span>{item.message}</span>
             {item.action ? (
               <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
                 type="button"

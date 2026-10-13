@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PRESETS } from "../src/webui/palette-core.ts";
 import { chooseTheme, readThemes, removeTheme, renameTheme, saveTheme, themesPath } from "../src/state/themes.ts";
 
 test("saved themes are named, kept in the global config folder for every session, and only ever recolour the page", () => {
@@ -21,8 +22,12 @@ test("saved themes are named, kept in the global config folder for every session
     assert.throws(() => renameTheme(dusk.id, "   "), /needs a name/);
     assert.throws(() => saveTheme({ name: "Empty", light: { "font-weight": "700" } }), /no colours/);
 
-    chooseTheme("grove");
-    assert.equal(readThemes().active, "grove", "a theme of the page's own can be chosen too");
+    const saved = readThemes().themes;
+    for (const preset of PRESETS) {
+      chooseTheme(preset.id);
+      assert.equal(readThemes().active, preset.id, "each built-in selection persists");
+      assert.deepEqual(readThemes().themes, saved, "choosing a preset preserves saved themes");
+    }
     assert.throws(() => chooseTheme("nope"), /no such theme/);
 
     // Hand edits are read with the same filter.

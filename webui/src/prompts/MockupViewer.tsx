@@ -147,7 +147,7 @@ export function MockupViewer({ options, start, title, picked = [], multi = false
     : undefined
   return (
     <div ref={root} tabIndex={-1} data-autofocus="" onKeyDown={onKeyDown} style={viewportStyle} className="mockup-viewer flex h-full min-h-0 flex-col outline-none max-md:h-[calc(100svh-1.5rem)] max-md:max-h-[calc(100svh-1.5rem)]" role="region" aria-label={`Mockups: ${title}`} aria-roledescription="carousel">
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-4 py-3 sm:px-5">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-4 py-3 max-md:px-3">
         <Button type="button" variant="ghost" size="icon-sm" aria-label="Back to the question" title={phone ? "Back to the question" : "Back · Esc"} onClick={() => onClose(index)} className="max-md:size-11">
           <Minimize2 aria-hidden="true" />
         </Button>
@@ -213,7 +213,7 @@ export function MockupViewer({ options, start, title, picked = [], multi = false
           </Button>
         ) : null}
       </div>
-      <footer className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border px-4 py-3 sm:px-5">
+      <footer className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border px-4 py-3 max-md:px-3">
         <p className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
           <KeyHint chord="←→" className={PHONE_SHORTCUT}>option</KeyHint>
           {onChoose ? <KeyHint chord="Enter" className={PHONE_SHORTCUT}>{multi ? (on ? "unpick" : "pick") : "choose"}</KeyHint> : null}

@@ -15,8 +15,7 @@ import { lobbyAbort, lobbyHistory, lobbySend, lobbySnapshot } from "./lobby.ts";
 import { promptsAnswer, promptsDismiss, promptsList } from "./prompts.ts";
 import { plannerAnswer, plannerCommentLine, plannerGet, plannerNew, plannerRetry, plannerSend, plannerEditMessage, plannerToggleSeat, plannerSave, plannerPrevious, plannerPreviousArchive, plannerPreviousDelete, plannerPreviousGet, plannerPreviousOpen } from "./planner.ts";
 import { quickfixCancel, quickfixList, quickfixMovedToTask, quickfixRunAnyway, quickfixSubmit } from "./quickfix.ts";
-import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksEditComment, tasksGet, tasksList, tasksMessage, tasksRestore, tasksOpen, tasksResume, tasksDeliveryReview, tasksDeliveryDefer, tasksDeliver } from "./tasks.ts";
-import { metricsGet } from "./metrics.ts";
+import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksEditComment, tasksGet, tasksList, tasksMessage, tasksRestore, tasksOpen, tasksResume, tasksDeliveryReview, tasksDeliveryDefer, tasksDeliver, tasksAccept, tasksForceClose, tasksResolveApproval } from "./tasks.ts";
 import { knowledgeAdd, knowledgeAsk, knowledgeComment, knowledgeEdit, knowledgeFiles, knowledgeOpen, knowledgeRemove, knowledgeReplaceFile, knowledgeUnnote } from "./knowledge.ts";
 import { plansDiscard, plansGet, plansStart } from "./plans.ts";
 import { gitCancelReview, gitJev, gitPull, gitPulls, gitReview } from "./git.ts";
@@ -130,6 +129,18 @@ function buildRoutes(): Record<string, Route> {
   routes["tasks.resume"] = {
     schema: Type.Object({ taskId: TaskId }, { additionalProperties: false }),
     run: (body, ctx) => tasksResume(body as { taskId: string }, ctx),
+  };
+  routes["tasks.accept"] = {
+    schema: Type.Object({ taskId: TaskId }, { additionalProperties: false }),
+    run: (body, ctx) => tasksAccept(body as { taskId: string }, ctx),
+  };
+  routes["tasks.forceClose"] = {
+    schema: Type.Object({ taskId: TaskId, title: Type.String({ maxLength: 20_000 }) }, { additionalProperties: false }),
+    run: (body, ctx) => tasksForceClose(body as { taskId: string; title: string }, ctx),
+  };
+  routes["tasks.resolveApproval"] = {
+    schema: Type.Object({ taskId: TaskId, approvalId: TaskId, decision: Type.Union([Type.Literal("approved"), Type.Literal("rejected")]), note: Type.Optional(NoticeText) }, { additionalProperties: false }),
+    run: (body, ctx) => tasksResolveApproval(body as Parameters<typeof tasksResolveApproval>[0], ctx),
   };
   routes["tasks.deliveryReview"] = {
     schema: Type.Object({ taskId: TaskId }, { additionalProperties: false }),
@@ -267,10 +278,6 @@ function buildRoutes(): Record<string, Route> {
   routes["quickfix.movedToTask"] = {
     schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
     run: (body, ctx) => quickfixMovedToTask(body as { id: string }, ctx),
-  };
-  routes["metrics.get"] = {
-    schema: Type.Object({ groupBy: Type.Union([Type.Literal("model"), Type.Literal("model-kind")]), query: Type.Optional(Type.String({ maxLength: 500 })), from: Type.Optional(Type.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" })), to: Type.Optional(Type.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" })), timeZone: Type.Optional(Type.String({ maxLength: 100 })) }, { additionalProperties: false }),
-    run: (body, ctx) => metricsGet(body as Parameters<typeof metricsGet>[0], ctx),
   };
   routes["knowledge.files"] = { schema: Empty, run: (_body, ctx) => knowledgeFiles(ctx) };
   routes["knowledge.ask"] = {

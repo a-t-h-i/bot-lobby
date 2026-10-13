@@ -21,11 +21,6 @@ export function tabNumber(key: string): string | undefined {
   return /(\d)$/.exec(key)?.[1]
 }
 
-/** Metrics is unavailable on phones; every other tab stays in server order. */
-export function availablePhoneTabs(tabs: TabInfo[]): TabInfo[] {
-  return tabs.filter((tab) => tab.id !== "metrics")
-}
-
 interface CardGeometry {
   id: string
   left: number
@@ -59,7 +54,6 @@ export function pageLabel(activeId: string | undefined, tabs: TabInfo[], hash: s
   if (active) return active.label
   const head = hash.replace(/^#\/?/, "").split("/")[0]
   if (head === "settings") return "Settings"
-  if (head === "metrics") return "Metrics"
   if (head) return head.charAt(0).toUpperCase() + head.slice(1)
   return "Lobby"
 }

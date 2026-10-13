@@ -114,6 +114,98 @@ async function setup() {
   return { server, service, call, root: state.root, close: () => server.close() };
 }
 
+test("task interventions reject unauthenticated, invalid, foreign and terminal requests before service calls", async () => {
+  const { server, call, service, close } = await setup();
+  let calls = 0;
+  service.acceptTask = async () => { calls++; return { notice: "accepted" }; };
+  service.forceCloseTask = async () => { calls++; return { notice: "closed" }; };
+  service.resolveTaskApproval = async () => { calls++; return { notice: "resolved" }; };
+  try {
+    for (const [route, fields] of [
+      ["tasks.accept", {}],
+      ["tasks.forceClose", { title: "Mine" }],
+      ["tasks.resolveApproval", { approvalId: "APR-1", decision: "approved" }],
+    ] as const) {
+      assert.equal((await send(server.port, `/api/${route}`, json, JSON.stringify({ taskId: "TASK-mine", ...fields }))).status, 401);
+      for (const [taskId, status] of [["../escape", 400], ["foreign", 404], ["TASK-done", 400]] as const) {
+        const answer = await call(route, { taskId, ...fields });
+        assert.equal(answer.status, status, answer.body);
+        assert.equal(answer.payload.code, status === 404 ? "not_found" : "bad_request");
+      }
+      assert.equal((await call(route, { taskId: "TASK-mine", ...fields, unknown: true })).status, 400);
+      assert.equal((await call(route, fields)).status, 400);
+    }
+    assert.equal(calls, 0);
+  } finally { await close(); }
+});
+
+test("tasks.accept limits states and tasks.forceClose requires the exact title and an available service", async () => {
+  const { call, service, root, close } = await setup();
+  const accepted: string[] = [];
+  const closed: Array<[string, string]> = [];
+  service.acceptTask = async (id) => { accepted.push(id); return { notice: "accepted for completion" }; };
+  service.forceCloseTask = undefined;
+  try {
+    assert.equal((await call("tasks.get", { taskId: "TASK-mine" })).payload.result!.canAccept, true);
+    assert.equal((await call("tasks.get", { taskId: "TASK-mine" })).payload.result!.canForceClose, false);
+    assert.equal((await call("tasks.forceClose", { taskId: "TASK-mine", title: "Mine" })).status, 400);
+    service.forceCloseTask = async (id, title) => { closed.push([id, title]); return { notice: "abandoned" }; };
+    assert.equal((await call("tasks.get", { taskId: "TASK-mine" })).payload.result!.canForceClose, true);
+    for (const title of ["mine", " Mine", "Mine "]) {
+      assert.equal((await call("tasks.forceClose", { taskId: "TASK-mine", title })).status, 400);
+    }
+    assert.deepEqual((await call("tasks.forceClose", { taskId: "TASK-mine", title: "Mine" })).payload.result, { notice: "abandoned" });
+    assert.deepEqual(closed, [["TASK-mine", "Mine"]]);
+    for (const state of ["implementing", "reviewing", "blocked", "planning", "awaiting_approval", "completed", "abandoned"] as const) {
+      const task = createTask("TASK-state", "State"); task.state = state; saveTask(root, ".pi", task);
+      const allowed = ["implementing", "reviewing", "blocked"].includes(state);
+      assert.equal((await call("tasks.get", { taskId: task.id })).payload.result!.canAccept, allowed);
+      assert.equal((await call("tasks.accept", { taskId: task.id })).status, allowed ? 200 : 400);
+    }
+    assert.equal(accepted.length, 3);
+    await call("tasks.archive", { taskId: "TASK-other" });
+    const archived = (await call("tasks.get", { taskId: "TASK-other" })).payload.result!;
+    assert.equal(archived.canAccept, false);
+    assert.equal(archived.canForceClose, false);
+    assert.equal((await call("tasks.accept", { taskId: "TASK-other" })).status, 404);
+    service.acceptTask = undefined;
+    assert.equal((await call("tasks.accept", { taskId: "TASK-mine" })).status, 400);
+    assert.equal((await call("tasks.get", { taskId: "TASK-mine" })).payload.result!.canAccept, false);
+  } finally { await close(); }
+});
+
+test("tasks.resolveApproval requires pending membership and passes only explicit decisions and optional notes", async () => {
+  const { call, service, root, close } = await setup();
+  const task = createTask("TASK-approval", "Approval"); task.state = "blocked";
+  task.approvals = [
+    { id: "APR-1", kind: "dependency", domain: "backend", detail: "add library", status: "pending", createdAt: task.createdAt },
+    { id: "APR-2", kind: "architecture", domain: "designer", detail: "answered", status: "approved", createdAt: task.createdAt },
+  ];
+  saveTask(root, ".pi", task);
+  const calls: unknown[][] = [];
+  service.resolveTaskApproval = async (...args) => { calls.push(args); return { notice: "decision recorded" }; };
+  const body = { taskId: task.id, approvalId: "APR-1", decision: "approved", note: "explicit consent" };
+  try {
+    assert.deepEqual((await call("tasks.get", { taskId: task.id })).payload.result!.waiting, [
+      { id: "APR-1", domain: "backend", kind: "dependency", detail: "for backend: add library" },
+    ]);
+    for (const approvalId of ["APR-2", "foreign-approval"]) {
+      const answer = await call("tasks.resolveApproval", { ...body, approvalId });
+      assert.equal(answer.status, 409);
+      assert.equal(answer.payload.code, "conflict");
+    }
+    for (const invalid of [{ decision: "accept" }, { note: 42 }, { approvalId: "" }]) {
+      assert.equal((await call("tasks.resolveApproval", { ...body, ...invalid })).status, 400);
+    }
+    assert.equal(calls.length, 0);
+    assert.deepEqual((await call("tasks.resolveApproval", body)).payload.result, { notice: "decision recorded" });
+    assert.equal((await call("tasks.resolveApproval", { taskId: task.id, approvalId: "APR-1", decision: "rejected" })).status, 200);
+    assert.deepEqual(calls, [[task.id, "APR-1", "approved", "explicit consent"], [task.id, "APR-1", "rejected", undefined]]);
+    service.resolveTaskApproval = undefined;
+    assert.equal((await call("tasks.resolveApproval", body)).status, 400);
+  } finally { await close(); }
+});
+
 test("tasks.open selects actual owner metadata without claiming or replacing sessions", async () => {
   const { call, service, close } = await setup();
   try {
@@ -303,7 +395,9 @@ test("tasks.get reads a plan's checklist: steps, no request when it equals the t
   try {
     const got = await call("tasks.get", { taskId: "TASK-mine" });
     assert.equal(got.status, 200, got.body);
-    const { timing, ...detail } = got.payload.result!;
+    const { timing, canAccept, canForceClose, ...detail } = got.payload.result!;
+    assert.equal(typeof canAccept, "boolean");
+    assert.equal(typeof canForceClose, "boolean");
     assert.equal((timing as { waiting: boolean }).waiting, false);
     assert.equal((timing as { elapsedMs: number }).elapsedMs, 0);
     assert.ok(Number.isFinite(Date.parse((timing as { serverNow: string }).serverNow)));
@@ -374,7 +468,7 @@ test("tasks.get carries the request, proposal, amendments, waits, blockers and t
     assert.equal(result.plan, undefined);
     assert.deepEqual(result.steps, []);
     assert.deepEqual(result.amendments, ["Keep the old endpoint."]);
-    assert.deepEqual(result.waiting, [{ kind: "dependency", detail: "for backend: add zod" }]);
+    assert.deepEqual(result.waiting, [{ id: "APR-1", domain: "backend", kind: "dependency", detail: "for backend: add zod" }]);
     assert.deepEqual(result.blockers, [{ reason: "No database in CI", need: "a test database" }]);
     assert.equal(result.runs.length, 6, "the last six");
     assert.match(result.runs[0]!, /^✓ DEV worker · 3m 12s/);

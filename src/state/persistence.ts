@@ -89,11 +89,36 @@ export function readTaskArtifact(
 
 export function saveTask(root: string, configDir: string, task: Task): void {
   const latest = loadTask(root, configDir, task.id);
-  if (latest) mergePhaseTiming(task, timingBaselines.get(task), latest);
+  // Abandonment is final: an in-flight action must not overwrite its audit or resurrect it.
+  if (latest?.state === "abandoned") {
+    Object.assign(task, latest);
+    return;
+  }
+  if (latest) {
+    preserveUserInterventions(task, latest);
+    mergePhaseTiming(task, timingBaselines.get(task), latest);
+  }
   const path = join(taskDir(dataRoot(root, configDir), task.id), "state.json");
   forgetCached(path);
   writeFileEnsured(path, JSON.stringify(task, null, 2));
   rememberTiming(task);
+}
+
+/** Explicit user waivers and resolved approvals must survive an in-flight worker's snapshot. */
+function preserveUserInterventions(task: Task, latest: Task): void {
+  const newlyWaived = !task.qaWaiver && latest.qaWaiver;
+  task.qaWaiver ??= latest.qaWaiver;
+  task.lintWaiver ??= latest.lintWaiver;
+  if (newlyWaived && !TERMINAL_STATES.includes(task.state)) {
+    task.blockers = [];
+    if (["implementing", "blocked"].includes(task.state)) task.state = "reviewing";
+  }
+  for (const approval of task.approvals) {
+    const resolved = latest.approvals.find((entry) => entry.id === approval.id && entry.status !== "pending");
+    if (approval.status === "pending" && resolved) Object.assign(approval, resolved);
+  }
+  const keys = new Set(task.decisions.map((entry) => JSON.stringify(entry)));
+  task.decisions.push(...latest.decisions.filter((entry) => !keys.has(JSON.stringify(entry))));
 }
 
 /** Read a task state: the bot-lobby copy wins, else the newest pre-rename copy. */

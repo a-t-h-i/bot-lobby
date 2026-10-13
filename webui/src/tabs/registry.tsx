@@ -8,25 +8,12 @@ import { GitTab } from "./git/GitTab"
 import { KnowledgeTab } from "./knowledge/KnowledgeTab"
 import { taskRoute } from "@/app/taskRoute"
 import { LobbyTab } from "./lobby/LobbyTab"
-import { MetricsTab } from "./metrics/MetricsTab"
 import { SettingsTab } from "./settings/SettingsTab"
 import { PlanTab } from "./plan/PlanTab"
 import { QuickfixTab } from "./quickfix/QuickfixTab"
 import { TasksTab } from "./tasks/TasksTab"
-import { useMediaQuery } from "@/app/hooks"
 
-export const goKey = { l: "lobby", p: "plan", t: "tasks", u: "git", n: "knowledge", q: "quickfix", m: "metrics", e: "settings" } as const
-
-function MetricsRoute() {
-  const phone = useMediaQuery("(max-width: 767.98px)")
-  if (!phone) return <MetricsTab />
-  return (
-    <section className="flex min-h-full flex-1 flex-col items-center justify-center gap-4 px-6 py-12 text-center">
-      <h1 className="text-lg font-medium">Metrics is unavailable on phones.</h1>
-      <a href="#/lobby" className="btn-tint inline-flex min-h-11 items-center justify-center rounded-lg border px-5 text-sm font-medium focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">Lobby</a>
-    </section>
-  )
-}
+export const goKey = { l: "lobby", p: "plan", t: "tasks", u: "git", n: "knowledge", q: "quickfix", e: "settings" } as const
 
 /** The first path segment after the tab, decoded (`#/tasks/T-1` → `T-1`). */
 function detailId(rest: string[]): string | undefined {
@@ -50,8 +37,6 @@ export function routeBody(route: Route): ReactNode {
       return <PlanTab rest={route.rest} />
     case "quickfix":
       return <QuickfixTab id={detailId(route.rest)} />
-    case "metrics":
-      return <MetricsRoute />
     case "git":
       return <GitTab rest={route.rest} />
     case "knowledge":

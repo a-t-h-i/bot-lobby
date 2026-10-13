@@ -87,7 +87,7 @@ async function interceptTabs(page: Page, count?: number) {
     const envelope = await response.json();
     expect(envelope.ok).toBe(true);
     supplied.splice(0, supplied.length, ...envelope.result.tabs);
-    if (count !== undefined) envelope.result.tabs = supplied.filter((tab) => tab.id !== "metrics").slice(0, count);
+    if (count !== undefined) envelope.result.tabs = supplied.slice(0, count);
     await route.fulfill({ response, json: envelope });
   });
   return supplied;
@@ -211,9 +211,9 @@ test("tap on a decorative seam occurrence commits immediately and keyboard navig
   await wheelTo(page, "plan");
   await page.locator("#tab-knowledge").focus();
   await page.keyboard.press("ArrowRight");
-  await expectCommitted(page, "metrics");
+  await expectCommitted(page, "lobby");
   await page.clock.runFor(1000);
-  await expectCommitted(page, "metrics");
+  await expectCommitted(page, "lobby");
 });
 
 test("canonical touch tap commits without waiting", async ({ page, server }) => {
@@ -258,7 +258,7 @@ for (const direction of [-1, 1]) {
 test("one semantic tablist preserves server order, complete names and original digits while filtering Metrics", async ({ page, server }) => {
   const supplied = await interceptTabs(page);
   await openScenario(page, server, "issues");
-  const tabs = supplied.filter((tab) => tab.id !== "metrics");
+  const tabs = supplied;
   await expect(applicationTablists(page)).toHaveCount(1);
   await expect(applicationTabs(page)).toHaveCount(tabs.length);
   expect(await applicationTabs(page).evaluateAll((els: any[]) => els.map((el) => el.id))).toEqual(tabs.map((tab) => `tab-${tab.id}`));
@@ -329,23 +329,18 @@ for (const count of [0, 1, 2]) {
   });
 }
 
-test("Metrics keeps its explicit route and hardware shortcut, returning to the original page at 768", async ({ page, server }) => {
+test("retired Metrics falls back to Lobby and remaining hardware shortcuts survive 768px", async ({ page, server }) => {
   const supplied = await interceptTabs(page);
   await page.setViewportSize({ width: 767, height: 844 });
   await openScenario(page, server, "issues");
-  await freeze(page);
-  await page.keyboard.press(supplied.find((tab) => tab.id === "metrics")!.key);
-  await expect(page).toHaveURL(/#\/metrics$/);
-  await expect(page.locator("#main")).toContainText(/Metrics.*(?:phone|larger)|(?:phone|larger).*Metrics/is);
-  await expect(page.locator("#main").getByRole("link", { name: /Lobby/ })).toBeVisible();
-  await page.setViewportSize({ width: 768, height: 844 });
-  await expectCommitted(page, "metrics");
-  await expect(page.locator("#main").getByRole("heading", { name: "Metrics", exact: true })).toBeVisible();
-  await expect(page.locator("#main")).toContainText("Daily trends and model performance");
-  await expect(page.locator("#main").getByRole("link", { name: /Lobby/ })).toHaveCount(0);
-  await page.setViewportSize({ width: 767, height: 844 });
-  await expect(page.locator("#main")).toContainText(/Metrics.*(?:phone|larger)|(?:phone|larger).*Metrics/is);
-  await page.clock.runFor(350); // Finish the explicit-route entrance before the normal stable click.
-  await page.locator("#main").getByRole("link", { name: /Lobby/ }).click();
+  expect(supplied.map((tab) => tab.id)).not.toContain("metrics");
+  await page.evaluate(() => { window.location.hash = "#/metrics"; });
   await expectCommitted(page, "lobby");
+  await page.keyboard.press(supplied.find((tab) => tab.id === "knowledge")!.key);
+  await expectCommitted(page, "knowledge");
+  for (const width of [768, 767]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expectCommitted(page, "knowledge");
+    await expect(applicationTablists(page)).toHaveCount(1);
+  }
 });

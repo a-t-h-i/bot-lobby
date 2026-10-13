@@ -127,8 +127,8 @@ test("each tab's icon plays an animation of its own when the pointer comes onto 
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const ids = await page.locator('[role="tab"] svg[data-tab-icon]').evaluateAll((icons: any[]) => icons.map((icon) => icon.dataset.tabIcon));
-  expect(ids, "every tab has its own icon").toEqual(["lobby", "tasks", "plan", "quickfix", "git", "knowledge", "metrics"]);
-  await expect(page.locator('svg[data-tab-icon][data-play="0"]'), "resting until something happens").toHaveCount(7);
+  expect(ids, "every tab has its own icon").toEqual(["lobby", "tasks", "plan", "quickfix", "git", "knowledge"]);
+  await expect(page.locator('svg[data-tab-icon][data-play="0"]'), "resting until something happens").toHaveCount(6);
   // Hovering Tasks ticks its boxes: the strokes are drawn again from nothing, then the icon rests as Lucide draws it.
   await page.getByRole("tab", { name: /Tasks/ }).hover();
   const ticks = await iconFrames(page, "tasks", 900);
@@ -426,7 +426,7 @@ test("keyboard hints: the box prints its keys, the header button opens the key l
 test("the page itself never scrolls: no empty page below the composer, whatever the tab", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1024, height: 700 });
-  for (const hash of ["#/lobby", "#/tasks", "#/metrics", "#/settings", "#/knowledge", "#/git"]) {
+  for (const hash of ["#/lobby", "#/tasks", "#/plan", "#/settings", "#/knowledge", "#/git"]) {
     await page.evaluate((h) => {
       window.location.hash = h;
     }, hash);
@@ -680,13 +680,11 @@ test("the Settings page offers the fullscreen install and a fullscreen toggle", 
 });
 
 
-test("choices retain checkboxes, switches and radio groups", async ({ page, server }) => {
+test("choices retain checkboxes and switches", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => { window.location.hash = "#/plan"; });
   await expect(page.getByRole("checkbox").first()).toBeVisible();
-  await page.evaluate(() => { window.location.hash = "#/metrics"; });
-  await expect(page.getByRole("radiogroup", { name: "Group by" }).getByRole("radio")).toHaveCount(2);
   await page.evaluate(() => { window.location.hash = "#/tasks/T-mock-1"; });
   await expect(page.getByRole("switch", { name: "Auto mode" })).toBeVisible();
 });

@@ -75,13 +75,27 @@ test("status.get has the C5 shape: workspace, tabs, keys, windows", async () => 
     assert.equal(result.issuesEnabled, false);
     assert.ok(typeof result.port === "number");
     const tabs = result.tabs as Array<{ id: string; label: string; key: string }>;
-    assert.deepEqual(tabs.map((tab) => tab.id), ["lobby", "tasks", "plan", "quickfix", "git", "knowledge", "metrics"]);
+    assert.deepEqual(tabs.map((tab) => tab.id), ["lobby", "tasks", "plan", "quickfix", "git", "knowledge"]);
+    assert.deepEqual(tabs.map((tab) => tab.key), ["Alt+1", "Alt+2", "Alt+3", "Alt+4", "Alt+5", "Alt+6"]);
     assert.equal(tabs[0]?.label, "Lobby");
     assert.equal(tabs[0]?.key, "Alt+1");
     const keys = result.keys as Array<{ action: string; key: string; label: string; help: string }>;
     assert.ok(keys.some((entry) => entry.action === "help" && entry.key === "alt+h"));
     assert.ok(keys.some((entry) => entry.action === "nextTab" && entry.key === "alt+]"), "web tab cycling defaults apply");
     assert.deepEqual(result.windows, []);
+  } finally {
+    await close();
+  }
+});
+
+test("the removed metrics.get call is unsupported", async () => {
+  const { call, close } = await signedIn();
+  try {
+    const answer = await call("metrics.get", { groupBy: "model" });
+    assert.equal(answer.status, 404, answer.body);
+    assert.equal(answer.json.ok, false);
+    assert.equal(answer.json.code, "not_found");
+    assert.equal(answer.json.result, undefined);
   } finally {
     await close();
   }

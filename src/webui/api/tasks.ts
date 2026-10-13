@@ -282,17 +282,52 @@ export function tasksOpen(body: { taskId: string }, ctx: ApiContext): { sessionI
   return { notice: "The task's owning session has ended or is unavailable. No replacement session was created." };
 }
 
+/** Interventions only apply to an active task in this project, never an archive. */
+function interventionTask(taskId: string, ctx: ApiContext): Task {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/.test(taskId)) fail(400, "bad_request", "invalid task ID");
+  const task = ctx.service.tasks().find((entry) => entry.id === taskId);
+  if (!task) fail(404, "not_found", "task not found in this project");
+  if (TERMINAL_STATES.includes(task.state)) fail(400, "bad_request", "this task is already finished");
+  return task;
+}
+
+function acceptable(task: Task): boolean {
+  return ["implementing", "reviewing", "blocked"].includes(task.state);
+}
+
+export async function tasksAccept(body: { taskId: string }, ctx: ApiContext): Promise<{ notice: string }> {
+  const task = interventionTask(body.taskId, ctx);
+  if (!acceptable(task)) fail(400, "bad_request", "only implementing, reviewing or blocked tasks can be accepted");
+  if (!ctx.service.acceptTask) fail(400, "bad_request", "accepting tasks is unavailable");
+  return ctx.service.acceptTask(body.taskId);
+}
+
+export async function tasksForceClose(body: { taskId: string; title: string }, ctx: ApiContext): Promise<{ notice: string }> {
+  const task = interventionTask(body.taskId, ctx);
+  if (body.title !== task.title) fail(400, "bad_request", "the title must match exactly");
+  if (!ctx.service.forceCloseTask) fail(400, "bad_request", "force closing tasks is unavailable");
+  return ctx.service.forceCloseTask(body.taskId, body.title);
+}
+
+export async function tasksResolveApproval(body: { taskId: string; approvalId: string; decision: "approved" | "rejected"; note?: string }, ctx: ApiContext): Promise<{ notice: string }> {
+  const task = interventionTask(body.taskId, ctx);
+  if (!pendingApprovals(task).some((approval) => approval.id === body.approvalId)) fail(409, "conflict", "approval is no longer pending; refresh the task");
+  if (!ctx.service.resolveTaskApproval) fail(400, "bad_request", "resolving task approvals is unavailable");
+  return ctx.service.resolveTaskApproval(body.taskId, body.approvalId, body.decision, body.note);
+}
+
 /** How many recent runs the detail lists (the terminal's count). */
 const DETAIL_RUNS = 6;
 
 /** The terminal's "Waiting on" approvals: `kind` plus `for <domain>: <detail>`. */
 function waitingOf(task: Task): TaskDetail["waiting"] {
-  return pendingApprovals(task).map((approval) => ({ kind: approval.kind, detail: `for ${approval.domain}: ${approval.detail}` }));
+  return pendingApprovals(task).map((approval) => ({ id: approval.id, domain: approval.domain, kind: approval.kind, detail: `for ${approval.domain}: ${approval.detail}` }));
 }
 
 /** One task read whole: request, plan or proposal, step checklist, waits and recent runs. */
 export function tasksGet(body: { taskId: string }, ctx: ApiContext): TaskDetail {
-  const task = [...ctx.service.tasks(), ...ctx.service.archivedTasks()].find((entry) => entry.id === body.taskId);
+  const active = ctx.service.tasks().find((entry) => entry.id === body.taskId);
+  const task = active ?? ctx.service.archivedTasks().find((entry) => entry.id === body.taskId);
   if (!task) fail(404, "not_found", `no task ${body.taskId}`);
   const found = task as Task;
   const request = taskRequest(found);
@@ -301,6 +336,8 @@ export function tasksGet(body: { taskId: string }, ctx: ApiContext): TaskDetail 
   const clock = clockOf(found, work);
   const details = found.plan ? planDetails(found.plan) : undefined;
   return {
+    canAccept: Boolean(active && ctx.service.acceptTask) && acceptable(found),
+    canForceClose: Boolean(active && ctx.service.forceCloseTask) && !TERMINAL_STATES.includes(found.state) && (ctx.service.canForceCloseTask?.(found.id) ?? true),
     timing: projectPhaseTiming(found, new Date(now).toISOString()),
     ...(clock ? { work: clock } : {}),
     ...(found.delivery ? { delivery: found.delivery } : {}),

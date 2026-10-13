@@ -163,7 +163,7 @@ export function AltH({
   if (phone) return null
   return (
     <Popup open={wants && shown} onOpenChange={onOpenChange} label="Keys" className="max-w-4xl">
-      <header className="flex items-center justify-between gap-3 border-b border-border px-6 py-4">
+      <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 max-md:px-3">
         <h2 aria-hidden="true" className="text-base font-semibold tracking-tight">
           Keyboard shortcuts
         </h2>
@@ -174,7 +174,7 @@ export function AltH({
           </Button>
         </span>
       </header>
-      <div className="grid min-h-0 flex-1 gap-x-10 gap-y-6 overflow-y-auto px-6 py-5 md:grid-cols-2">
+      <div className="grid min-h-0 flex-1 gap-x-10 gap-y-6 overflow-y-auto p-4 max-md:p-3 md:grid-cols-2">
         <div className="flex flex-col gap-6">
           <Section title="Everywhere" lines={fromKeys(keys)} />
           <Section title="Jump to a tab" lines={tabKeys(tabs)} />
