@@ -100,15 +100,6 @@
   --dock-shadow: 0 12px 28px -18px rgb(0 0 0 / 0.4);
   --dock-focus-shadow: var(--dock-shadow);
 
-  /* The rainbow for max effort: deep enough to read on white. */
-  --rainbow-1: #e0475b;
-  --rainbow-2: #e2792c;
-  --rainbow-3: #c99a06;
-  --rainbow-4: #2f9a5d;
-  --rainbow-5: #2a82d4;
-  --rainbow-6: #6a57d8;
-  --rainbow-7: #c34fae;
-
   /* The dock's height from the bottom of the window, so toasts and the page can clear it. */
   --composer-h: 6.5rem;
 
@@ -172,13 +163,6 @@
   --sidebar-accent: rgb(255 255 255 / 0.08);
   --sidebar-selected: rgb(255 255 255 / 0.07);
 
-  --rainbow-1: #ff7a8a;
-  --rainbow-2: #ffa25c;
-  --rainbow-3: #ffd65c;
-  --rainbow-4: #6ee39a;
-  --rainbow-5: #62b6ff;
-  --rainbow-6: #a492ff;
-  --rainbow-7: #f08ad8;
 
   --dock: var(--card);
   --dock-border: rgb(255 255 255 / 0.07);
@@ -372,8 +356,7 @@
     --tw-shadow: var(--card-shadow);
     box-shadow: var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
   }
-  .surface :is(.glass, .card-flat, .workspace-pane, .workspace-frame, .workspace-section),
-  .reui-select {
+  .surface :is(.glass, .card-flat, .workspace-pane, .workspace-frame, .workspace-section) {
     background-color: var(--workspace-card);
     border-color: var(--workspace-border);
   }
@@ -387,16 +370,44 @@
     --frame-panel-bg: var(--workspace-card);
     background-color: var(--muted);
   }
-  /* Menus and lists that drop down: glass over a blur, as in the harnesses' dropdowns. */
-  .reui-menu {
-    border-color: var(--glass-border);
+  /*
+   * Adapted from T3 Code (MIT), apps/web/src/components/ui/select.tsx and
+   * index.css `dropdown-glass`: a select field is the page colour on the
+   * input line with a contact shadow and a hairline under its face (over it
+   * in dark); what drops down is glass over a blur with a long soft shadow.
+   */
+  .reui-select {
+    position: relative;
+    border-color: var(--input);
+    background-color: var(--background);
+    background-clip: padding-box;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  }
+  .reui-select::before {
+    position: absolute;
+    inset: 0;
+    border-radius: calc(var(--radius-lg) - 1px);
+    box-shadow: 0 1px rgb(0 0 0 / 0.04);
+    content: "";
+    pointer-events: none;
+  }
+  .reui-select:is(:focus-visible, :disabled, [data-state="open"], [aria-expanded="true"]),
+  .reui-select:is(:focus-visible, :disabled, [data-state="open"], [aria-expanded="true"])::before { box-shadow: none; }
+  .reui-select:focus-visible { border-color: var(--ring); }
+  .dark .reui-select { background-color: color-mix(in srgb, var(--input) 32%, transparent); }
+  .dark .reui-select::before { box-shadow: 0 -1px rgb(255 255 255 / 0.06); }
+  .reui-menu,
+  .dropdown-glass {
+    border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
     background-color: var(--popover);
-    box-shadow: var(--glass-shadow);
+    box-shadow: 0 16px 40px -18px rgb(0 0 0 / 0.55);
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
     backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
   }
-  .reui-select { box-shadow: var(--control-shadow); }
-  .dark .reui-select { background-color: color-mix(in srgb, var(--input) 32%, transparent); box-shadow: none; }
+  .dark :is(.reui-menu, .dropdown-glass) { box-shadow: 0 18px 44px -18px rgb(0 0 0 / 0.8); }
+  @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    .reui-menu, .dropdown-glass { background-color: var(--card); }
+  }
   /*
    * Adapted from T3 Code (MIT), apps/web/src/components/ui/button.tsx: flat
    * controls. An outline button is the card colour on the input line with a
@@ -1406,151 +1417,6 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-}
-
-/*
- * The effort word above the slider: xhigh glints as a light passes over it,
- * max shimmers through the rainbow (the way a terminal lights up ultrathink).
- */
-.effort-word[data-level="xhigh"],
-.effort-word[data-level="max"] {
-  background-size: 250% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: effort-shimmer 2.4s linear infinite;
-}
-.effort-word[data-level="xhigh"] {
-  background-image: linear-gradient(100deg, var(--foreground) 35%, var(--primary) 50%, var(--foreground) 65%);
-}
-.effort-word[data-level="max"] {
-  background-image: linear-gradient(90deg, var(--rainbow-1), var(--rainbow-2), var(--rainbow-3), var(--rainbow-4), var(--rainbow-5), var(--rainbow-6), var(--rainbow-7), var(--rainbow-1));
-  font-weight: 650;
-}
-@keyframes effort-shimmer {
-  from { background-position: 125% 0; }
-  to { background-position: -125% 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .effort-word { animation: none !important; background-position: 50% 0; }
-}
-
-/*
- * The effort slider: a fill that warms from blue to violet to pink along the
- * whole track (the clip shows as much of it as the level reaches), sparks that
- * twinkle in it at xhigh, and a rainbow that flows through it at max. The pill
- * thumb picks up the fill's colour as a glow from high up.
- */
-:root {
-  --effort-track: color-mix(in oklab, var(--foreground) 9%, transparent);
-  --effort-cool: #5b6cf2;
-  --effort-mid: #9b5cf0;
-  --effort-hot: #ec4c8f;
-  --effort-ping: color-mix(in oklab, var(--effort-mid) 70%, transparent);
-}
-.dark {
-  --effort-track: color-mix(in oklab, var(--foreground) 12%, transparent);
-  --effort-cool: #7584ff;
-  --effort-mid: #b07cff;
-  --effort-hot: #ff6aa6;
-}
-.effort-fill {
-  --effort-p: 0;
-  background-image: linear-gradient(90deg, var(--effort-cool), var(--effort-mid) 55%, var(--effort-hot));
-}
-.effort-fill[data-level="max"] {
-  background-image: linear-gradient(90deg, var(--rainbow-5), var(--rainbow-6), var(--rainbow-7), var(--rainbow-1), var(--rainbow-2), var(--rainbow-6), var(--rainbow-5));
-  background-size: 200% 100%;
-  animation: effort-flow 3s linear infinite;
-}
-.effort-spark {
-  opacity: 0;
-  box-shadow: 0 0 4px 1px rgb(255 255 255 / 0.8);
-  animation: effort-twinkle 1.8s ease-in-out infinite;
-}
-.effort-thumb {
-  background: #fff;
-  border: 1px solid color-mix(in oklab, var(--foreground) 12%, transparent);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12), 0 2px 8px -2px rgb(0 0 0 / 0.18);
-  transition: box-shadow 200ms ease;
-}
-.effort-thumb[data-level="high"] { box-shadow: 0 1px 2px rgb(0 0 0 / 0.12), 0 0 10px -1px color-mix(in oklab, var(--effort-mid) 55%, transparent); }
-.effort-thumb[data-level="xhigh"] { box-shadow: 0 1px 2px rgb(0 0 0 / 0.12), 0 0 14px 0 color-mix(in oklab, var(--effort-hot) 60%, transparent); }
-.effort-thumb[data-level="max"] { box-shadow: 0 1px 2px rgb(0 0 0 / 0.12), 0 0 16px 2px color-mix(in oklab, var(--rainbow-6) 60%, transparent); }
-@keyframes effort-twinkle {
-  0%, 100% { opacity: 0; transform: scale(0.4); }
-  50% { opacity: 1; transform: scale(1); }
-}
-@keyframes effort-flow {
-  from { background-position: 0% 0; }
-  to { background-position: -200% 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .effort-fill, .effort-spark { animation: none !important; }
-}
-
-.brain-shape { transform-origin: 32px 34px; }
-[data-slot="effort-mascot"][data-level="minimal"] .brain-shape { animation: brain-breathe 5s ease-in-out infinite; }
-[data-slot="effort-mascot"][data-level="low"] .brain-shape { animation: brain-drift 3.5s ease-in-out infinite; }
-[data-slot="effort-mascot"][data-level="medium"] .brain-shape { animation: brain-focus 4s ease-in-out infinite; }
-[data-slot="effort-mascot"][data-level="high"] .brain-shape { animation: brain-glitch 6s steps(1, end) infinite; }
-[data-slot="effort-mascot"][data-level="xhigh"] .brain-shape { animation: brain-glitch 4s steps(1, end) infinite; --brain-shift: 3px; }
-[data-slot="effort-mascot"][data-level="max"] .brain-shape { animation: brain-phase 5s ease-in-out infinite; }
-.brain-phase-echo { opacity: 0; animation: brain-afterimage 5s ease-in-out infinite; }
-.brain-phase-echo[data-brain-phase="cyan"] { color: var(--rainbow-5); --brain-direction: -1; }
-.brain-phase-echo[data-brain-phase="magenta"] { color: var(--rainbow-7); --brain-direction: 1; animation-delay: -0.15s; }
-.brain-phase-scan { animation: brain-scan 3s linear infinite; }
-.brain-shimmer { animation: brain-shimmer 3.2s ease-in-out infinite; }
-.brain-spark { animation: brain-spark 3s ease-in-out infinite; }
-[data-level="minimal"] .brain-spark { animation-duration: 5s; }
-[data-level="medium"] .brain-spark { animation-duration: 2.2s; }
-[data-level="high"] .brain-spark { animation-duration: 1.6s; }
-@keyframes brain-breathe {
-  0%, 100% { transform: scale(1); }
-  50% { transform: translateY(-1px) scale(1.045); }
-}
-@keyframes brain-drift {
-  0%, 100% { transform: translateY(0) rotate(-3deg); }
-  50% { transform: translateY(-3px) rotate(3deg); }
-}
-@keyframes brain-focus {
-  0%, 100% { transform: scale(1); }
-  35% { transform: translateY(-2px) rotate(-2deg) scale(1.04); }
-  65% { transform: translateY(-2px) rotate(2deg) scale(1.04); }
-}
-@keyframes brain-spark {
-  0%, 100% { opacity: 0.25; }
-  45%, 55% { opacity: 1; }
-}
-@keyframes brain-shimmer {
-  0%, 15% { transform: translateX(0); opacity: 0; }
-  30% { opacity: 0.7; }
-  65% { opacity: 0.7; }
-  80%, 100% { transform: translateX(100px); opacity: 0; }
-}
-@keyframes brain-glitch {
-  0%, 87%, 96%, 100% { transform: translateX(0); }
-  89%, 93% { transform: translateX(var(--brain-shift, 1.5px)) skewX(2deg); }
-  91%, 95% { transform: translateX(calc(-1 * var(--brain-shift, 1.5px))) skewX(-2deg); }
-}
-@keyframes brain-phase {
-  0%, 55%, 100% { transform: translateX(0) scaleX(1); opacity: 1; }
-  63%, 78% { transform: translateX(-2px) scaleX(0.97) skewY(2deg); opacity: 0.8; }
-  70%, 86% { transform: translateX(2px) scaleX(1.03) skewY(-2deg); opacity: 0.95; }
-}
-@keyframes brain-afterimage {
-  0%, 50%, 100% { transform: translateX(0); opacity: 0; }
-  65%, 85% { transform: translate(calc(var(--brain-direction) * 4px), -1px); opacity: 0.4; }
-  75% { transform: translate(calc(var(--brain-direction) * 2px), 1px); opacity: 0.2; }
-}
-@keyframes brain-scan {
-  from { transform: translateY(0); }
-  to { transform: translateY(42px); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .brain-shape, .brain-phase-echo, .brain-phase-scan, .brain-shimmer, .brain-spark { animation: none !important; }
-  .brain-phase-echo { opacity: 0.12; transform: translateX(calc(var(--brain-direction) * 1px)); }
-  .brain-phase-scan, .brain-shimmer { display: none; }
 }
 
 /* Outside the layers so a utility border-transparent cannot hide an outline button's edge. */

@@ -8,7 +8,7 @@
  * notification and install rows are page-only and never sent to the server.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { Check, ChevronRight, CircleAlert, CircleCheck, Download, Maximize, Minimize } from "lucide-react"
+import { Brain, Check, ChevronRight, CircleAlert, CircleCheck, Download, Maximize, Minimize } from "lucide-react"
 import { toast } from "@/lib/toast"
 import { useFullscreen, useInstallPrompt, useInstalled } from "@/app/install"
 import { disableNotifications, enableNotifications, useNotificationsEnabled } from "@/app/notify"
@@ -17,8 +17,8 @@ import { cn } from "@/lib/utils"
 import { ActionButton } from "@/ui/Actions"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { EffortMascot } from "@/ui/EffortMascot"
-import { EffortSlider, nearestSupported } from "@/ui/EffortSlider"
+import { EffortPicker } from "@/ui/EffortPicker"
+import { nearestSupported } from "@/ui/effortLevels"
 import { FrameHeader, FramePanel, frameVariants } from "@/components/reui/frame"
 import { call } from "@/lib/api"
 import { useApiRead } from "@/app/useApiRead"
@@ -265,8 +265,6 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
     if (kind !== "scout" && !levelsFor(models, model).includes(entry.thinking)) fields.thinking = levelOn(levelsFor(models, model), entry.thinking)
     set(fields)
   }
-  // Scouts have fixed effort; adjustable brains follow the slider's live preview.
-  const effective = kind === "scout" ? FIXED_SCOUT_THINKING : levelOn(supported, entry.thinking)
   const hasInstructions = kind !== "scout" && kind !== "researcher"
   const [showNotes, setShowNotes] = useState(Boolean(entry.instructions))
   return (
@@ -282,17 +280,14 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
         <Mini label={FIELD_LABELS.model}>
           <ModelChoice value={entry.model} models={models} label={`${name} model`} inherit={kind === "master"} onChange={chooseModel} />
         </Mini>
-      </div>
-      <div className="flex items-center gap-3 rounded-lg bg-muted p-3 max-md:items-start max-md:[&_[role=slider]]:h-11">
-        {kind === "scout" ? <EffortMascot level={effective} /> : null}
-        <div className="min-w-0 flex-1">
+        <Mini label={FIELD_LABELS.thinking}>
           {kind === "scout" ? (
-            <div className="grid gap-1">
-              <span className="text-xs text-muted-foreground">{FIELD_LABELS.thinking}</span>
-              <p className="text-sm text-muted-foreground">{FIXED_SCOUT_THINKING} (fixed for scouts)</p>
-            </div>
+            <p className="flex h-8 items-center gap-2 text-sm text-muted-foreground">
+              <Brain aria-hidden="true" className="size-4" />
+              <span className="capitalize">{FIXED_SCOUT_THINKING}</span> (fixed for scouts)
+            </p>
           ) : (
-            <EffortSlider
+            <EffortPicker
               value={entry.thinking}
               levels={THINKING_LEVELS}
               supported={supported}
@@ -302,7 +297,7 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
               onChange={(level) => set({ thinking: level })}
             />
           )}
-        </div>
+        </Mini>
       </div>
       <div className="flex min-h-7 items-center justify-between gap-3 max-md:flex-wrap max-md:items-start">
         {hasInstructions ? (

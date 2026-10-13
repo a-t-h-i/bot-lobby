@@ -1,6 +1,6 @@
 /**
  * The redesign's own behaviour: the droplet that slides between tab pills, the
- * effort slider that skips what a model cannot do, one pop-up and one toast at
+ * effort menu that skips what a model cannot do, one pop-up and one toast at
  * a time, the zen palettes and shapes, and the composer taking files.
  */
 import { expect, openScenario, test } from "./fixture.ts";
@@ -195,34 +195,35 @@ test("under reduced motion the fill and the ring simply move, with no flow and n
   expect(parseFloat(run.rung), "all the way round").toBe(1);
 });
 
-test("the effort slider skips the levels a model does not support", async ({ page, server }) => {
+test("the effort menu skips the levels a model does not support", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => {
     window.location.hash = "#/settings";
   });
-  const slider = page.getByRole("slider", { name: "Master effort" });
-  await expect(slider).toBeVisible();
+  const effort = page.getByRole("button", { name: "Master effort" });
+  await expect(effort).toBeVisible();
   // The mock model supports low, medium and high.
-  await slider.focus();
+  await effort.focus();
   await page.keyboard.press("Home");
-  await expect(slider, "Home lands on the lowest supported level").toHaveAttribute("aria-valuetext", "low");
+  await expect(effort, "Home lands on the lowest supported level").toHaveAttribute("data-level", "low");
   await page.keyboard.press("ArrowRight");
-  await expect(slider).toHaveAttribute("aria-valuetext", "medium");
+  await expect(effort).toHaveAttribute("data-level", "medium");
   await page.keyboard.press("ArrowRight");
-  await expect(slider).toHaveAttribute("aria-valuetext", "high");
+  await expect(effort).toHaveAttribute("data-level", "high");
   await page.keyboard.press("ArrowRight");
-  await expect(slider, "there is nowhere above high to go").toHaveAttribute("aria-valuetext", "high");
+  await expect(effort, "there is nowhere above high to go").toHaveAttribute("data-level", "high");
   await page.keyboard.press("End");
-  await expect(slider).toHaveAttribute("aria-valuetext", "high");
-  // Dragging to the far end snaps back to the highest supported stop.
-  const box = (await slider.boundingBox())!;
-  await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(box.x + box.width - 1, box.y + box.height / 2, { steps: 6 });
-  await page.mouse.up();
-  await expect(slider, "dragging past the last supported level stays on it").toHaveAttribute("aria-valuetext", "high");
-  await expect(page.locator('[title="mock/gpt-5 does not support xhigh"]').first(), "unsupported stops say so").toBeVisible();
+  await expect(effort).toHaveAttribute("data-level", "high");
+  await page.keyboard.press("ArrowDown");
+  const menu = page.getByRole("menu");
+  await expect(menu, "Down opens the list").toBeVisible();
+  const xhigh = menu.getByRole("menuitemradio", { name: /xhigh/i });
+  await expect(xhigh, "an unsupported level cannot be picked").toHaveAttribute("aria-disabled", "true");
+  await expect(xhigh, "and says why").toContainText("Not supported by mock/gpt-5.");
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  await expect(effort).toBeFocused();
 });
 
 test("only one toast shows at a time, with a light blur behind it", async ({ page, server }) => {
@@ -539,28 +540,6 @@ test("a drop-down opens with the arrow key and its list is wide enough to read",
   expect(box?.width ?? 0, "wider than a narrow trigger").toBeGreaterThanOrEqual(240);
   await page.keyboard.press("Tab");
   await expect(list, "Tab leaves it").toBeHidden();
-});
-
-test("the mascot on each agent acts out its effort level, and the page never scrolls sideways", async ({ page, server }) => {
-  await openScenario(page, server, "full");
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.evaluate(() => {
-    window.location.hash = "#/settings";
-  });
-  const card = page.locator("section.glass", { hasText: "Backend" }).first();
-  const mascot = card.locator('[data-slot="effort-mascot"]');
-  await expect(mascot).toBeVisible();
-  await expect(mascot, "medium by default").toHaveAttribute("data-level", "medium");
-  const slider = card.getByRole("slider", { name: "Backend effort" });
-  await slider.focus();
-  await slider.press("Home");
-  await expect(mascot, "Home is the lowest: asleep").toHaveAttribute("data-level", "off");
-  await slider.press("End");
-  await expect(mascot, "End is the highest: blazing").toHaveAttribute("data-level", "max");
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow, "no sideways scroll").toBeLessThanOrEqual(0);
-  await slider.press("Home");
-  await expect(mascot).toHaveAttribute("data-level", "off");
 });
 
 test("Alt+A and Alt+T work from the message box, and Thinking opens from its bubble", async ({ page, server }) => {
@@ -930,25 +909,25 @@ test("a button's key never fires from a form: Enter elsewhere does not send a ha
   await expect(note, "the note is still waiting to be sent").toHaveValue(/whiteboard\.example/);
 });
 
-test("quick key presses on the effort slider add up instead of each starting from the saved level", async ({ page, server }) => {
+test("quick key presses on the effort field add up instead of each starting from the saved level", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => {
     window.location.hash = "#/settings";
   });
-  const slider = page.getByRole("slider", { name: "Master effort" });
+  const slider = page.getByRole("button", { name: "Master effort" });
   await slider.focus();
   await page.keyboard.press("Home");
-  await expect(slider).toHaveAttribute("aria-valuetext", "low");
+  await expect(slider).toHaveAttribute("data-level", "low");
   // No waiting between them: the server has not answered the first when the second arrives.
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowRight");
-  await expect(slider, "two quick presses climb two stops").toHaveAttribute("aria-valuetext", "high");
+  await expect(slider, "two quick presses climb two stops").toHaveAttribute("data-level", "high");
   await page.keyboard.press("ArrowLeft");
   await page.keyboard.press("ArrowRight");
-  await expect(slider, "left then right ends where it began").toHaveAttribute("aria-valuetext", "high");
+  await expect(slider, "left then right ends where it began").toHaveAttribute("data-level", "high");
   await page.waitForTimeout(600);
-  await expect(slider, "and it stays there once the server has answered").toHaveAttribute("aria-valuetext", "high");
+  await expect(slider, "and it stays there once the server has answered").toHaveAttribute("data-level", "high");
 });
 
 test("Thinking is a glowing orb in the colour of the agent thinking, with that agent's name beside it", async ({ page, server }) => {

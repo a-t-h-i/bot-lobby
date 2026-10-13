@@ -3,8 +3,8 @@
 ## T3 Code
 
 The web UI's look (colours, radii, shadows, control and dialog styles, the
-sidebar rail, the chat rows, the work log and the composer surface) is adapted
-from T3 Code, https://github.com/pingdotgg/t3code. No T3 Code package is a
+sidebar rail, the chat rows, the work log, the composer surface, the select
+fields and menus, and the effort picker) is adapted from T3 Code, https://github.com/pingdotgg/t3code. No T3 Code package is a
 dependency; the styles and markup below were ported into this repository and
 rewired to bot-lobby's own data layer. Each adapted file starts with a comment
 naming the file it came from.
@@ -25,12 +25,14 @@ naming the file it came from.
 | `webui/src/components/ui/toaster.tsx` | `apps/web/src/components/ui/toast.tsx` |
 | `webui/src/components/ui/combobox.tsx` | `apps/web/src/components/ui/combobox.tsx` |
 | `webui/src/components/ui/empty.tsx` | `apps/web/src/components/ui/empty.tsx` |
+| `webui/src/components/ui/menu.tsx` | `apps/web/src/components/ui/menu.tsx` |
 | `webui/src/components/reui/badge.tsx` | `apps/web/src/components/ui/badge.tsx` |
 | `webui/src/components/reui/select.tsx` | `apps/web/src/components/ui/select.tsx` |
 | `webui/src/components/reui/popover.tsx` | `apps/web/src/components/ui/popover.tsx` |
 | `webui/src/app/Sidebar.tsx` | `apps/web/src/components/ui/sidebar.tsx` |
 | `webui/src/app/Composer.tsx` | `apps/web/src/components/chat/ComposerSurface.tsx` |
 | `webui/src/tabs/lobby/InlineActivity.tsx` | `apps/web/src/components/chat/WorkLog.tsx` |
+| `webui/src/ui/EffortPicker.tsx` | `apps/web/src/components/chat/TraitsPicker.tsx` |
 
 ```
 MIT License

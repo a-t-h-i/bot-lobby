@@ -222,3 +222,10 @@ The adapted files and the MIT notice are listed in `THIRD_PARTY_NOTICES.md`.
   `"Inter Variable"` first in its fallback stack; with the font no longer
   bundled the browser skips it, and changing it would touch the engine.
 - The tab strip keeps its own liquid pill rather than T3 Code's panel tabs.
+- Effort was a slider with a mascot; it is now T3 Code's effort picker
+  (`ui/EffortPicker.tsx`, after `TraitsPicker.tsx`): a select field with a
+  brain that opens a menu of every level and what it does, unsupported levels
+  dimmed, the recommended one badged. Left and Right still step through the
+  supported levels without opening it, and quick presses still add up.
+- Every drop-down (Radix Select, the Combobox, the new `ui/menu.tsx`) uses
+  T3 Code's select field and `dropdown-glass` popup.
