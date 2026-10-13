@@ -7,14 +7,9 @@
  * messages to the task's oracle are written in the floating box below. A saved
  * plan has its own body (`PlanDetail`).
  */
-import { useEffect, useRef } from "react"
-import { go } from "@/app/router"
-import { call } from "@/lib/api"
-import { selectedProject } from "@/lib/project"
-import { toast } from "@/lib/toast"
 import { PhaseTiming } from "./PhaseTiming"
 import { DeliveryReview } from "./DeliveryReview"
-import { Archive, MessageSquare, RefreshCw, RotateCcw, Trash2 } from "lucide-react"
+import { Archive, RefreshCw, RotateCcw, Trash2 } from "lucide-react"
 import type { LobbySnapshot, SnapshotTask, TaskRow } from "@protocol"
 import { useTopic } from "@/app/hooks"
 import { useApiRead } from "@/app/useApiRead"
@@ -145,7 +140,6 @@ function Actions(props: DetailProps) {
     <ActionBar>
       {resumable ? <ResumeTask row={row} onResumed={props.onChanged} /> : null}
       {row.kind === "task" && row.check === "open" ? <OpenInSession row={row} quiet={resumable} /> : null}
-      {row.kind === "task" ? <OpenTask taskId={row.id} /> : null}
       {archived ? <ActionButton label="Restore" icon={RotateCcw} shortcut="R" onClick={() => void restore()} /> : null}
       {row.check === "open" && !archived ? <AutoMode on={Boolean(row.auto)} toggle={toggleAuto} /> : null}
       {archived ? null : <ArchiveButton row={row} archive={archive} />}
@@ -162,27 +156,6 @@ function Actions(props: DetailProps) {
       />
     </ActionBar>
   )
-}
-
-function OpenTask({ taskId }: { taskId: string }) {
-  const alive = useRef(true)
-  useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
-  async function open() {
-    const project = selectedProject()
-    try {
-      const result = await call("tasks.open", { taskId })
-      if (!alive.current || selectedProject() !== project) return
-      if (result.notice) toast.info(result.notice)
-      const status = await call("status.get", {})
-      if (!alive.current || selectedProject() !== project) return
-      const id = result.key ?? (result.sessionId === status.sessionId ? "here" : result.sessionId)
-      // This window's conversation is the Lobby; a background session's opens on its own.
-      if (id === "here") go("#/lobby")
-      else if (id) go(`#/sessions/${encodeURIComponent(id)}`)
-      else if (!result.notice) toast.info("This task has no active session. No replacement session was created.")
-    } catch (e) { if (alive.current && selectedProject() === project) toast.error(e instanceof Error ? e.message : String(e)) }
-  }
-  return <ActionButton label="Open task conversation" text="Conversation" icon={MessageSquare} shortcut="O" onClick={() => void open()} />
 }
 
 export function TaskDetail(props: DetailProps) {

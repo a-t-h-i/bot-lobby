@@ -159,10 +159,9 @@ check), so none is swapped.
 | `tabs/quickfix/*` | none | Restyle only |
 | `tabs/knowledge/*` | `ChangedFilesTree.tsx` (tree rows) | Restyle only |
 | `tabs/git/*` (PRs, reviews) | `PullRequestThreadDialog.tsx`, `ThreadDetailsPrRow.tsx` | Restyle only; no diff view (see risks) |
-| `tabs/excalidraw/*` | none | Restyle only |
 | `tabs/metrics/*` | `ContextWindowMeter.tsx`, `usage/` | Restyle only |
 | `tabs/settings/*`, `ui/EffortSlider.tsx` | `settings/` panels | Restyle only; the slider keeps its behaviour with new tokens |
-| `tabs/issues/*`, `tabs/sessions/*` | none | Restyle only |
+| Git Issues view | none | Issues retained inside Git; Sessions conversation page removed |
 | `prompts/QuestionPopup.tsx`, `QuestionCard.tsx`, `MockupViewer.tsx` | `ComposerPendingUserInputPanel.tsx`, `ui/dialog.tsx` | Restyle |
 | `app/Thinking.tsx`, `tabs/lobby/Orb.tsx`, `Thoughts.tsx` | none | Restyle only |
 | `app/AltH.tsx` (key help) | `CommandPalette.tsx` look, `ui/kbd.tsx` | Restyle |
@@ -180,7 +179,7 @@ check), so none is swapped.
    rows, work-log activity and the composer surface. Screenshot at 1440 and
    390 in both themes and compare before going on.
 4. Every other screen in this order: Tasks, Plan, Quick fix, Knowledge, Git,
-   Excalidraw, Metrics, Settings, the question pop-up, Thinking, the key help,
+   Metrics, Settings, the question pop-up, Thinking, the key help,
    the folder picker and the phone layout.
 5. The full suite, a dead-code pass, `THIRD_PARTY_NOTICES.md`, the README, and
    the merge.
@@ -240,9 +239,11 @@ The adapted files and the MIT notice are listed in `THIRD_PARTY_NOTICES.md`.
 - The built-in themes are T3 Code's (in `src/webui/palette-core.ts`, the one
   change in `src/`, agreed with the owner): Default, Blossom (their T3 Chat
   theme), Grove, Ocean, Ember and Iris, each in light and dark.
-- The composer answers focus: 95%, then 110%, then rest in 150ms, the tray
-  following 40ms behind and popping up like an iOS message bubble (squash,
-  stretch, damped wobble), the icons lagging the box.
+- Simplify Features supersedes the original focus treatment: about 360ms ease-out
+  within ±3% scale, animating only the top-anchored box. The attached tray stays
+  stationary without icon wobble; reduced motion retains a focus indicator.
+  Composer visibility is limited to Lobby, Tasks, Plan, Quick fix and Knowledge;
+  elsewhere it stays mounted, hidden and inert to preserve drafts and uploads.
 - Your messages sit in a bubble mixed from the theme's text and page colours
   (9% light, 15% dark) with a hairline, so they stand off the page in every
   theme.

@@ -9,10 +9,17 @@ import { TAB_IDS, type TabId } from "@shared"
 
 export type Route =
   | { kind: "tab"; tab: TabId; rest: string[] }
-  | { kind: "sessions"; key?: string }
   | { kind: "settings" }
 
 const KNOWN = new Set<string>(TAB_IDS)
+
+/** Where a retired address lives now, or `undefined` when it is current. */
+export function legacyHash(hash: string): string | undefined {
+  const parts = hash.replace(/^#\/?/, "").split("/").filter(Boolean)
+  if (parts[0] === "issues") return ["#/git/issues", ...parts.slice(1, 2)].join("/")
+  if (parts[0] === "sessions" || parts[0] === "excalidraw") return "#/lobby"
+  return undefined
+}
 
 /** The route a fragment names, or `undefined` when it names nothing. */
 export function parseHash(hash: string): Route | undefined {
@@ -20,7 +27,6 @@ export function parseHash(hash: string): Route | undefined {
   const head = parts[0]
   if (!head || head === "lobby") return { kind: "tab", tab: "lobby", rest: parts.slice(1) }
   if (head === "settings") return { kind: "settings" }
-  if (head === "sessions") return { kind: "sessions", ...(parts[1] ? { key: parts[1] } : {}) }
   if (KNOWN.has(head)) return { kind: "tab", tab: head as TabId, rest: parts.slice(1) }
   return undefined
 }
@@ -38,15 +44,13 @@ export function go(hash: string): void {
 
 /** The current route, kept in step with back/forward. */
 export function useRoute(): Route {
-  const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash) ?? { kind: "tab", tab: "lobby", rest: [] })
+  const [route, setRoute] = useState<Route>(() => parseHash(legacyHash(window.location.hash) ?? window.location.hash) ?? { kind: "tab", tab: "lobby", rest: [] })
   useEffect(() => {
     const sync = () => {
-      const next = parseHash(window.location.hash)
-      if (next) setRoute(next)
-      else {
-        window.history.replaceState(null, "", "#/lobby")
-        setRoute({ kind: "tab", tab: "lobby", rest: [] })
-      }
+      const moved = legacyHash(window.location.hash)
+      const next = moved ? parseHash(moved) : parseHash(window.location.hash)
+      if (moved || !next) window.history.replaceState(null, "", moved ?? "#/lobby")
+      setRoute(next ?? { kind: "tab", tab: "lobby", rest: [] })
     }
     sync()
     window.addEventListener("hashchange", sync)

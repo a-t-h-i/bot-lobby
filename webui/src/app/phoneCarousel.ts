@@ -59,7 +59,6 @@ export function pageLabel(activeId: string | undefined, tabs: TabInfo[], hash: s
   if (active) return active.label
   const head = hash.replace(/^#\/?/, "").split("/")[0]
   if (head === "settings") return "Settings"
-  if (head === "sessions") return "Sessions"
   if (head === "metrics") return "Metrics"
   if (head) return head.charAt(0).toUpperCase() + head.slice(1)
   return "Lobby"

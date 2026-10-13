@@ -2,12 +2,12 @@
  * Resume (R): carry a paused or stopped task on from the Tasks screen, without
  * opening it in a session. The server unpauses it where it runs, or starts it
  * in a background session (its old one again when it can); this window and
- * this page stay where they are. The toast offers to watch the session.
+ * this page stay where they are. The toast offers a way back to the task.
  */
 import { useEffect, useRef, useState } from "react"
 import { Play } from "lucide-react"
 import type { TaskRow } from "@protocol"
-import { go } from "@/app/router"
+import { go, tabHash } from "@/app/router"
 import { call } from "@/lib/api"
 import { selectedProject } from "@/lib/project"
 import { toast } from "@/lib/toast"
@@ -23,8 +23,7 @@ export function ResumeTask({ row, onResumed }: { row: TaskRow; onResumed: () => 
     try {
       const result = await call("tasks.resume", { taskId: row.id })
       if (selectedProject() !== project) return
-      const key = result.key
-      toast(result.notice, key ? { action: { label: "Watch", onClick: () => go(`#/sessions/${encodeURIComponent(key)}`) } } : undefined)
+      toast(result.notice, { action: { label: "View task", onClick: () => go(tabHash("tasks", row.id)) } })
       onResumed()
     } catch (e) {
       if (selectedProject() === project) toast.error(e instanceof Error ? e.message : String(e))
