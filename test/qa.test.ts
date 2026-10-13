@@ -117,6 +117,22 @@ test("a failing QA gate iterates until the review limit, then blocks", async () 
   assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.reviewIterations.qa, 2);
 });
 
+test("a QA round that says FAIL, or returns no readable verdict, gets a fix round instead of blocking the task", async () => {
+  const fail = "## Verdict\nFAIL\n\n## Findings\n- [major] regression in the empty state\n\n## Verification\n- `npm test` — 1 failing";
+  for (const output of [fail, "I ran out of time before writing the report."]) {
+    const deps = makeDeps({ runProcess: reviewer([output]) });
+    withTask(deps, { state: "implementing" });
+    const first = await act(deps, { action: "qa" });
+    assert.equal(first.state, "reviewing", first.message);
+    assert.match(first.message, /QA gate: CHANGES_REQUIRED/);
+    assert.match(first.message, /re-run action=qa/);
+    assert.doesNotMatch(first.message, /mark the task blocked/);
+  }
+  const unread = makeDeps({ runProcess: reviewer(["no report"]) });
+  withTask(unread, { state: "implementing" });
+  assert.match((await act(unread, { action: "qa" })).message, /no readable verdict.*nothing to fix first/);
+});
+
 test("complete is refused until every gate passes", async () => {
   const deps = makeDeps();
   withTask(deps, { qa: "changes_required" });
