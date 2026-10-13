@@ -1,15 +1,17 @@
 /**
- * Effort (the thinking level) as a drag slider, one stop per level from `off`
- * to `max`, each named under the track. A model supports only some levels:
- * the others stay on the track, hollow and dimmed, and the thumb never rests
- * on one. Dragging snaps to the nearest supported stop and saves on release;
- * a name under the track jumps there; the arrow keys skip unsupported stops,
- * and quick presses add up (see `useEffortSlider`).
+ * Effort (the thinking level) as a chunky drag slider, one stop per level from `off` to `max`. A model supports
+ * only some levels: the others stay on the track as hollow dots, and the thumb never rests on one. Dragging snaps
+ * to the nearest supported stop and saves on release, a press anywhere on the track jumps there, the arrow keys
+ * skip unsupported stops, and quick presses add up (see `useEffortSlider`).
  *
- * The fill and the thumb follow with a spring, the thumb swells while held,
- * and a line under the track says what the level does. Reduced motion jumps.
+ * The fill glows warmer as the level rises and the thumb is a brain in the level's colour. The top level turns
+ * the fill into a twinkling mosaic with sparks around the brain. Reduced motion keeps the colours and drops the
+ * movement.
  */
+import type { CSSProperties } from "react"
+import { Brain, CircleHelp } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { EFFORT_HINTS, nearestSupported } from "./effortLevels"
 import { useEffortSlider } from "./useEffortSlider"
@@ -35,28 +37,68 @@ const NAMES: Record<string, string> = { xhigh: "Extra high" }
 const nameOf = (level: string) => NAMES[level] ?? `${level.charAt(0).toUpperCase()}${level.slice(1)}`
 const SPRING = { type: "spring", stiffness: 520, damping: 38 } as const
 
+/** Each level's colour, cool and quiet at the bottom, pink near the top. */
+const TONES: Record<string, string> = {
+  off: "var(--muted-foreground)",
+  minimal: "oklch(0.68 0.07 250)",
+  low: "oklch(0.66 0.12 255)",
+  medium: "oklch(0.62 0.17 270)",
+  high: "oklch(0.6 0.2 292)",
+  xhigh: "oklch(0.66 0.21 335)",
+  max: "oklch(0.64 0.21 300)",
+}
+// The rail runs this far in from each end of the track, so the thumb sits inside it at both ends.
+const INSET = "1.375rem"
+const MOSAIC = ["oklch(0.62 0.22 300)", "oklch(0.7 0.19 340)", "oklch(0.8 0.12 215)", "oklch(0.55 0.2 275)"]
+const SPARKS = 10
+
+// A fixed pseudo-random sequence, so the mosaic looks the same on every render.
+function seeded(index: number): number {
+  const x = Math.sin(index * 12.9898 + 78.233) * 43758.5453
+  return x - Math.floor(x)
+}
+
 export function EffortSlider({ value, levels, supported, recommended, model, label, disabled, onChange }: EffortSliderProps) {
   const reduce = useReducedMotion() ?? false
   const slider = useEffortSlider({ levels, supported, value, disabled, onChange })
   const { shown, dragging } = slider
   const last = Math.max(levels.length - 1, 1)
   const at = Math.max(shown, 0)
-  const percent = (at / last) * 100
   const level = levels[shown] ?? value
+  const top = at === levels.length - 1 && levels.length > 1
   const clamped = shown >= 0 && !dragging && level !== value
   const recommendedAt = recommended ? nearestSupported(levels, supported, Math.max(0, levels.indexOf(recommended))) : -1
   const modelName = model ?? "this model"
   const motionFor = dragging || reduce ? { duration: 0 } : SPRING
+  const tone = TONES[level] ?? "var(--primary)"
+  const along = (index: number) => `calc(${INSET} + (100% - 2 * ${INSET}) * ${index / last})`
 
   return (
-    <div className={cn("grid min-w-0 gap-2", disabled && "opacity-64")}>
-      <div className="flex items-baseline justify-between gap-3" aria-hidden="true">
-        <span className="text-xs text-muted-foreground">Faster</span>
-        <span data-slot="effort-value" className="text-sm font-medium text-foreground">{nameOf(level)}</span>
-        <span className="text-xs text-muted-foreground">Smarter</span>
+    <div className={cn("grid min-w-0 gap-2.5", disabled && "opacity-64")} style={{ "--effort-tone": tone } as CSSProperties}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground" aria-hidden="true">
+          Effort{" "}
+          <span
+            data-slot="effort-value"
+            className={cn("font-semibold transition-colors duration-200", top ? "text-[oklch(0.72_0.12_225)] dark:text-[oklch(0.82_0.1_220)]" : "text-(--effort-tone)", level === "off" && "text-foreground")}
+          >
+            {nameOf(level)}
+          </span>
+        </p>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button type="button" aria-label="About effort" className="rounded-full text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+              <CircleHelp className="size-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>More effort means more reasoning before each answer: slower and costlier, better on hard problems.</TooltipContent>
+        </Tooltip>
+      </div>
+      <div className="flex justify-between px-1 text-xs text-muted-foreground" aria-hidden="true">
+        <span>Faster</span>
+        <span>Smarter</span>
       </div>
       <div
-        ref={slider.track}
         role="slider"
         tabIndex={disabled ? -1 : 0}
         aria-label={label}
@@ -68,18 +110,22 @@ export function EffortSlider({ value, levels, supported, recommended, model, lab
         {...slider.handlers}
         data-slot="effort-track"
         data-level={level}
+        data-top={top || undefined}
         data-dragging={dragging || undefined}
-        className="group/effort relative mx-2.5 h-6 cursor-pointer touch-none rounded-full outline-none select-none max-md:h-11"
+        className="effort-track relative h-11 cursor-pointer touch-none rounded-full outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
-        <span aria-hidden="true" className="absolute inset-x-[-0.625rem] top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] group-focus-visible/effort:ring-2 group-focus-visible/effort:ring-ring group-focus-visible/effort:ring-offset-2 group-focus-visible/effort:ring-offset-background" />
-        <motion.span
-          aria-hidden="true"
-          data-slot="effort-fill"
-          className="absolute top-1/2 left-[-0.625rem] h-1.5 -translate-y-1/2 rounded-full bg-primary"
-          initial={false}
-          animate={{ width: `calc(${percent}% + 0.625rem)` }}
-          transition={motionFor}
-        />
+        <span aria-hidden="true" className="absolute inset-0 overflow-hidden rounded-full">
+          <motion.span
+            data-slot="effort-fill"
+            className="effort-fill absolute inset-y-0 left-0"
+            initial={false}
+            animate={{ width: `calc(${INSET} + (100% - 2 * ${INSET}) * ${at / last} + ${INSET})` }}
+            transition={motionFor}
+          >
+            {top ? <Mosaic /> : null}
+          </motion.span>
+        </span>
+        <div ref={slider.track} aria-hidden="true" className="absolute inset-y-0" style={{ left: INSET, right: INSET }} />
         {levels.map((name, index) => {
           const ok = supported.includes(name)
           return (
@@ -87,64 +133,52 @@ export function EffortSlider({ value, levels, supported, recommended, model, lab
               key={name}
               aria-hidden="true"
               data-stop={name}
+              data-supported={ok}
               title={ok ? nameOf(name) : `Not supported by ${modelName}`}
               className={cn(
-                "absolute top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors duration-150",
-                !ok ? "bg-background ring-1 ring-muted-foreground/40" : index <= at ? "bg-primary-foreground/80" : "bg-muted-foreground/50"
+                "absolute top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors duration-200",
+                !ok ? "ring-1 ring-muted-foreground/45" : index <= at ? "bg-white/70" : "bg-muted-foreground/45"
               )}
-              style={{ left: `${(index / last) * 100}%` }}
+              style={{ left: along(index) }}
             />
           )
         })}
+        {recommendedAt >= 0 && recommendedAt !== at ? (
+          <span aria-hidden="true" data-slot="effort-recommended-mark" className="absolute top-1/2 h-3.5 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground/35" style={{ left: along(recommendedAt) }} />
+        ) : null}
         <motion.span
           aria-hidden="true"
           data-slot="effort-thumb"
           className="absolute top-1/2 z-10"
           initial={false}
-          animate={{ left: `${percent}%` }}
+          animate={{ left: along(at) }}
           transition={motionFor}
         >
+          {top && !reduce ? <Sparks /> : null}
           <motion.span
-            className="block size-[1.125rem] -translate-x-1/2 -translate-y-1/2 rounded-full border border-black/10 bg-white shadow-[0_1px_3px_rgb(0_0_0/0.2),0_0_0_4px_color-mix(in_srgb,var(--primary)_14%,transparent)] dark:border-white/10"
-            animate={{ scale: dragging ? 1.18 : 1 }}
-            transition={{ type: "spring", stiffness: 600, damping: 26 }}
-          />
+            key={level}
+            className="effort-brain relative flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full"
+            initial={reduce ? false : { scale: 0.86 }}
+            animate={{ scale: dragging !== undefined ? 1.12 : 1 }}
+            transition={{ type: "spring", stiffness: 600, damping: 18 }}
+          >
+            <Brain className="size-5" strokeWidth={2} />
+          </motion.span>
         </motion.span>
       </div>
-      <div className="relative mx-2.5 h-5 text-xs">
-        {levels.map((name, index) => {
-          const ok = supported.includes(name)
-          const edge = index === 0 ? "left-[-0.625rem]" : index === last ? "right-[-0.625rem]" : "-translate-x-1/2"
-          return (
-            <button
-              key={name}
-              type="button"
-              tabIndex={-1}
-              disabled={disabled || !ok}
-              data-label={name}
-              aria-hidden="true"
-              onClick={() => slider.jump(index)}
-              className={cn(
-                "absolute top-0 whitespace-nowrap rounded-sm px-0.5 transition-colors duration-150 outline-none",
-                edge,
-                // On a narrow card only the ends, the chosen level and the recommended one keep their names.
-                index !== 0 && index !== last && index !== at && index !== recommendedAt && "max-[30rem]:hidden",
-                index === at ? "font-medium text-foreground" : ok ? "text-muted-foreground hover:text-foreground" : "cursor-not-allowed text-muted-foreground/45"
-              )}
-              style={index === 0 || index === last ? undefined : { left: `${(index / last) * 100}%` }}
-            >
-              {nameOf(name)}
-            </button>
-          )
-        })}
-      </div>
-      <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground" aria-live="polite">
-        <span>{EFFORT_HINTS[level] ?? ""}</span>
+      <div className="relative h-4 text-xs" aria-hidden={recommendedAt < 0 || undefined}>
         {recommendedAt >= 0 ? (
-          <span data-slot="effort-recommended" className={cn("rounded-full border px-1.5 py-px text-3xs font-medium", at === recommendedAt ? "border-primary/30 bg-primary/8 text-primary" : "border-border")}>
-            {at === recommendedAt ? "Recommended" : `Recommended: ${nameOf(levels[recommendedAt]!)}`}
+          <span
+            data-slot="effort-recommended"
+            className={cn("absolute top-0 -translate-x-1/2 whitespace-nowrap transition-colors", at === recommendedAt ? "font-medium text-foreground" : "text-muted-foreground")}
+            style={{ left: `clamp(2.5rem, ${along(recommendedAt)}, calc(100% - 2.5rem))` }}
+          >
+            Recommended
           </span>
         ) : null}
+      </div>
+      <p className="text-xs text-muted-foreground" aria-live="polite">
+        {EFFORT_HINTS[level] ?? ""}
       </p>
       {clamped ? (
         <p className="text-xs text-warning">
@@ -152,5 +186,47 @@ export function EffortSlider({ value, levels, supported, recommended, model, lab
         </p>
       ) : null}
     </div>
+  )
+}
+
+/** The top level's fill: a mosaic of small squares that twinkle, fading in towards the brain. */
+function Mosaic() {
+  const cells = Array.from({ length: 6 * 72 }, (_, index) => index)
+  return (
+    <span className="effort-mosaic absolute inset-0 grid content-center" data-slot="effort-mosaic">
+      {cells.map((index) => (
+        <i
+          key={index}
+          style={{
+            background: MOSAIC[Math.floor(seeded(index) * MOSAIC.length)],
+            opacity: 0.35 + seeded(index + 997) * 0.65,
+            "--twinkle": `${(seeded(index + 31) * 3).toFixed(2)}s`,
+          } as CSSProperties}
+        />
+      ))}
+    </span>
+  )
+}
+
+/** Sparks that fly out from the brain at the top level. */
+function Sparks() {
+  return (
+    <span className="effort-sparks" data-slot="effort-sparks">
+      {Array.from({ length: SPARKS }, (_, index) => {
+        const angle = (index / SPARKS) * Math.PI * 2 + seeded(index) * 0.5
+        const reach = 26 + seeded(index + 7) * 14
+        return (
+          <i
+            key={index}
+            style={{
+              "--dx": `${(Math.cos(angle) * reach).toFixed(1)}px`,
+              "--dy": `${(Math.sin(angle) * reach * 0.7).toFixed(1)}px`,
+              "--delay": `${(seeded(index + 3) * 1.6).toFixed(2)}s`,
+              background: MOSAIC[index % MOSAIC.length],
+            } as CSSProperties}
+          />
+        )
+      })}
+    </span>
   )
 }

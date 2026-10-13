@@ -96,7 +96,7 @@ export function InlineActivity({ entries }: { entries: ActivityEntry[] }) {
           <>
             <WorkingMark />
             <span className="min-w-0 truncate">
-              <span className="activity-shimmer">Working</span>
+              <ShimmerWord text="Working" />
               <span className="text-muted-foreground"> · </span>
               <span key={live.id} className="activity-live-step">
                 <span className={cn("font-medium", sourceColor(live.source))}>{sourceLabel(live.source)}</span> <span className="text-foreground">{live.text}…</span>
@@ -125,5 +125,17 @@ export function InlineActivity({ entries }: { entries: ActivityEntry[] }) {
         </ol>
       ) : null}
     </div>
+  )
+}
+
+/** A word a light passes over letter by letter, then rests, on a loop (see `.activity-shimmer` in index.css). */
+function ShimmerWord({ text }: { text: string }) {
+  return (
+    <span className="activity-shimmer">
+      <span className="sr-only">{text}</span>
+      {[...text].map((letter, index) => (
+        <span key={index} aria-hidden="true" style={{ "--i": index } as CSSProperties}>{letter}</span>
+      ))}
+    </span>
   )
 }

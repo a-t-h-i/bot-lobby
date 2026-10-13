@@ -1,6 +1,6 @@
 {
-  "hash": "cf87989684b8a4e1546b56c6976a5bd406a706ca9bd0a29bbdf92f7a0907a421",
-  "builtAt": "2026-10-13T16:50:35.024Z",
+  "hash": "94101de16d74326899a0ac448c5e04a721f32608442e634da80afe4b872d85c9",
+  "builtAt": "2026-10-13T17:24:12.510Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -260,7 +260,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "d12e93b4cef746f294a978400344178c4354a4ec34206cb715a246bb1ff6e618"
+      "sha256": "83fd0f5beda78f2a06fea060fc2665a08413748e58829278a45ee3ad93011a06"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -464,7 +464,7 @@
     },
     {
       "path": "webui/src/tabs/lobby/InlineActivity.tsx",
-      "sha256": "8ece14f983c5560292ffc982a2cc124aa69e4684efd263c833531e1b4d01a720"
+      "sha256": "d9f74f3ebd26ce5dfb5593bc20456dc517420961065b54fdcc0da98153605e9d"
     },
     {
       "path": "webui/src/tabs/lobby/LobbyTab.tsx",
@@ -608,7 +608,7 @@
     },
     {
       "path": "webui/src/tabs/settings/SettingsForm.tsx",
-      "sha256": "662c237614a31a443cc485531f04b6bf2706696e15206407ca94e6ac49288efa"
+      "sha256": "6e67ba997c601a0f160148b05366d192c88f753008f258d6e748f4eb9f406fce"
     },
     {
       "path": "webui/src/tabs/settings/SettingsTab.tsx",
@@ -692,7 +692,7 @@
     },
     {
       "path": "webui/src/ui/EffortSlider.tsx",
-      "sha256": "028095cae45e0dfd6a7003248bef7ec296b0271175902ce24c27213c4cefa7b5"
+      "sha256": "07e0c939f2545262241a32e20b83c15d0d4e511940df2e389e82094c81e90595"
     },
     {
       "path": "webui/src/ui/Frame.tsx",

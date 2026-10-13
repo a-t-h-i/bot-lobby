@@ -22,7 +22,9 @@ test("effort is a drag slider that names every level, steps by key and snaps whe
   }
   await expect(card.locator('[data-slot="effort-value"]')).toHaveText("Max");
   await expect(card.getByText("As deep as the model goes.")).toBeVisible();
-  await expect(card.locator('[data-slot="effort-recommended"]'), "away from it, the mark names it").toHaveText("Recommended: Medium");
+  await expect(card.locator('[data-slot="effort-recommended"]'), "away from it, the mark names it").toHaveText("Recommended");
+  await expect(card.locator('[data-slot="effort-recommended-mark"]'), "and a bar on the track marks its stop").toBeVisible();
+  await expect(card.locator('[data-slot="effort-mosaic"]'), "the top level turns the fill into a mosaic").toBeVisible();
   await card.scrollIntoViewIfNeeded();
   await card.screenshot({ path: info.outputPath("effort-slider.png") });
 
@@ -39,15 +41,15 @@ test("effort is a drag slider that names every level, steps by key and snaps whe
   trap.stop();
 });
 
-test("a level's name under the slider jumps to it", async ({ page, server }) => {
+test("a press on a stop jumps to it", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => { window.location.hash = "#/settings"; });
   const card = page.locator("section.glass", { hasText: "Backend" }).first();
   const slider = card.getByRole("slider", { name: "Backend effort" });
-  await card.locator('[data-label="high"]').click();
+  await card.locator('[data-stop="high"]').click({ force: true });
   await expect(slider).toHaveAttribute("aria-valuetext", "high");
-  await card.locator('[data-label="off"]').click();
+  await card.locator('[data-stop="off"]').click({ force: true });
   await expect(slider).toHaveAttribute("aria-valuetext", "off");
 });
 
