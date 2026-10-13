@@ -2,24 +2,26 @@
  * Activity in the conversation, after the coding harnesses: each run of
  * agents' steps between two messages folds into one line over a rule ("Worked
  * for 2m 59s · 6 steps · Master, Dev, QA"), or, while a step is running, that
- * step with a spinner. Opening it lists the steps as quiet lines, each with a
- * mark per kind (a running step spins, a tick for done, an alert for a
+ * step beside the working mark, in its agent's colour: the word "Working"
+ * glints, each new step slides in over the last, the clock counts up and a
+ * light runs along the rule. Opening it lists the steps as quiet lines, each with a
+ * mark per kind (the working mark for a running step, a tick for done, an alert for a
  * warning, a cross for an error) and its agent in its colour. Colour is never
  * the only signal. Alt+A opens or folds every run.
  */
-import { useEffect, useId, useState } from "react"
+import { useEffect, useId, useState, type CSSProperties } from "react"
 import { AlertTriangle, Check, ChevronDown, X } from "lucide-react"
-import { Spinner } from "@/components/ui/spinner"
 import { useCollapsed } from "@/lib/collapsed"
 import { formatClock } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { sourceColor, sourceLabel, type ActivityEntry } from "./types"
+import { WorkingMark } from "@/ui/WorkingMark"
+import { sourceColor, sourceLabel, sourceTone, type ActivityEntry } from "./types"
 
 /** Whether every run of steps is open; remembered in this browser (`useCollapsed` stores it, folded is the default). */
 export const ACTIVITY_OPEN = "lobby.activity.open"
 
 function KindMark({ entry }: { entry: ActivityEntry }) {
-  if (entry.pending) return <Spinner aria-hidden="true" role="presentation" className="size-3" />
+  if (entry.pending) return <WorkingMark className="size-3" />
   if (entry.kind === "error") return <X aria-hidden="true" className="size-3.5 text-destructive" />
   if (entry.kind === "warning") return <AlertTriangle aria-hidden="true" className="size-3.5 text-warning" />
   if (entry.kind === "success") return <Check aria-hidden="true" className="size-3.5 text-success" />
@@ -28,7 +30,7 @@ function KindMark({ entry }: { entry: ActivityEntry }) {
 
 function StepRow({ entry }: { entry: ActivityEntry }) {
   return (
-    <li className="activity-step" title={formatClock(entry.at)}>
+    <li className="activity-step" title={formatClock(entry.at)} style={entry.pending ? ({ "--orb": sourceTone(entry.source) } as CSSProperties) : undefined}>
       <span aria-hidden="true" className="flex h-5 items-center justify-center">
         <KindMark entry={entry} />
       </span>
@@ -64,6 +66,18 @@ function summary(entries: ActivityEntry[]): { live?: ActivityEntry; took: number
   }
 }
 
+/** The time now, ticking each second while `running`. */
+function useNow(running: boolean): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!running) return
+    setNow(Date.now())
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [running])
+  return now
+}
+
 export function InlineActivity({ entries }: { entries: ActivityEntry[] }) {
   const [all] = useCollapsed(ACTIVITY_OPEN)
   const [own, setOwn] = useState<boolean>()
@@ -72,18 +86,25 @@ export function InlineActivity({ entries }: { entries: ActivityEntry[] }) {
   const open = own ?? all
   const list = useId()
   const { live, took, count, sources, errors, warnings } = summary(entries)
+  const now = useNow(Boolean(live))
+  const style = live ? ({ "--orb": sourceTone(live.source) } as CSSProperties) : undefined
   return (
-    <div className="activity-run" data-live={live ? true : undefined} data-open={open || undefined}>
+    <div className="activity-run" data-live={live ? true : undefined} data-open={open || undefined} style={style}>
       <button type="button" aria-expanded={open} aria-controls={list} onClick={() => setOwn(!open)} className="activity-toggle">
         {live ? (
           <>
-            <Spinner aria-hidden="true" role="presentation" className="size-3.5 shrink-0" />
+            <WorkingMark />
             <span className="min-w-0 truncate">
               <span className="activity-shimmer">Working</span>
               <span className="text-muted-foreground"> · </span>
-              <span className={cn("font-medium", sourceColor(live.source))}>{sourceLabel(live.source)}</span> <span className="text-foreground">{live.text}…</span>
+              <span key={live.id} className="activity-live-step">
+                <span className={cn("font-medium", sourceColor(live.source))}>{sourceLabel(live.source)}</span> <span className="text-foreground">{live.text}…</span>
+              </span>
             </span>
-            <span className="shrink-0 tabular-nums text-muted-foreground">{count}</span>
+            <span className="shrink-0 tabular-nums text-muted-foreground">
+              {count}
+              {entries[0] && now - entries[0].at >= 1000 ? ` · ${workedFor(now - entries[0].at)}` : ""}
+            </span>
           </>
         ) : (
           <span className="min-w-0 truncate">
