@@ -2,8 +2,8 @@
  * The tab pills' icons, drawn part by part from Lucide's own shapes so each
  * can play a little animation of its own: the Lobby's bubble talks, Tasks
  * ticks its boxes, Plan draws its route, Quick fix jolts, Issues pulses, the
- * Metrics bars grow, Git draws its branch, Knowledge claps its book and
- * Excalidraw's pen scribbles. A play is numbered: each new number plays once
+ * Metrics bars grow, Git draws its branch and Knowledge claps its book.
+ * A play is numbered: each new number plays once
  * (the parts remount and run from the start), and before the first the icon
  * simply rests. Every animation ends on the icon exactly as Lucide draws it.
  */
@@ -143,17 +143,6 @@ function Knowledge({ play }: { play: number }) {
   )
 }
 
-function Excalidraw({ play }: { play: number }) {
-  return (
-    <motion.g style={about(0.6, 0.6)} {...part(play, { x: [0, 1.5, -1.5, 1, 0], y: [0, -1, 0.5, -0.5, 0], rotate: [0, -8, 6, -3, 0] }, { ease: "easeInOut" })}>
-      <path d="M15.707 21.293a1 1 0 0 1-1.414 0l-1.586-1.586a1 1 0 0 1 0-1.414l5.586-5.586a1 1 0 0 1 1.414 0l1.586 1.586a1 1 0 0 1 0 1.414z" />
-      <path d="m18 13-1.375-6.874a1 1 0 0 0-.746-.776L3.235 2.028a1 1 0 0 0-1.207 1.207L5.35 15.879a1 1 0 0 0 .776.746L13 18" />
-      <motion.path d="m2.3 2.3 7.286 7.286" {...draw(play, 0.1, 0.6)} />
-      <motion.circle cx={11} cy={11} r={2} style={about()} {...pulse(play, 0.5, 1.5)} />
-    </motion.g>
-  )
-}
-
 const ICONS: Record<string, (props: { play: number }) => ReactNode> = {
   lobby: Lobby,
   tasks: Tasks,
@@ -163,7 +152,6 @@ const ICONS: Record<string, (props: { play: number }) => ReactNode> = {
   metrics: Metrics,
   git: Git,
   knowledge: Knowledge,
-  excalidraw: Excalidraw,
 }
 
 /** A tab's icon, playing once each time `play` goes up. */

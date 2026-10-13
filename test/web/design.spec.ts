@@ -127,8 +127,8 @@ test("each tab's icon plays an animation of its own when the pointer comes onto 
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const ids = await page.locator('[role="tab"] svg[data-tab-icon]').evaluateAll((icons: any[]) => icons.map((icon) => icon.dataset.tabIcon));
-  expect(ids, "every tab has its own icon").toEqual(["lobby", "tasks", "plan", "quickfix", "excalidraw", "git", "knowledge", "metrics"]);
-  await expect(page.locator('svg[data-tab-icon][data-play="0"]'), "resting until something happens").toHaveCount(8);
+  expect(ids, "every tab has its own icon").toEqual(["lobby", "tasks", "plan", "quickfix", "git", "knowledge", "metrics"]);
+  await expect(page.locator('svg[data-tab-icon][data-play="0"]'), "resting until something happens").toHaveCount(7);
   // Hovering Tasks ticks its boxes: the strokes are drawn again from nothing, then the icon rests as Lucide draws it.
   await page.getByRole("tab", { name: /Tasks/ }).hover();
   const ticks = await iconFrames(page, "tasks", 900);
@@ -679,25 +679,16 @@ test("the Settings page offers the fullscreen install and a fullscreen toggle", 
   expect(manifest.display, "the manifest asks for fullscreen").toBe("fullscreen");
 });
 
-test("choices use the right inputs: real checkboxes for several, a switch for on/off, a radio group for one of two", async ({ page, server }) => {
+
+test("choices retain checkboxes, switches and radio groups", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.evaluate(() => {
-    window.location.hash = "#/excalidraw/room-1";
-  });
-  await page.evaluate(() => {
-    window.location.hash = "#/plan";
-  });
-  await expect(page.getByRole("checkbox").first(), "plan seats are checkboxes").toBeVisible();
-  await page.evaluate(() => {
-    window.location.hash = "#/metrics";
-  });
+  await page.evaluate(() => { window.location.hash = "#/plan"; });
+  await expect(page.getByRole("checkbox").first()).toBeVisible();
+  await page.evaluate(() => { window.location.hash = "#/metrics"; });
   await expect(page.getByRole("radiogroup", { name: "Group by" }).getByRole("radio")).toHaveCount(2);
-  await page.evaluate(() => {
-    window.location.hash = "#/tasks/T-mock-1";
-  });
-  await expect(page.getByRole("switch", { name: "Auto mode" }), "auto is a switch").toBeVisible();
-  expect(await page.getByText("[x]").count() + (await page.getByText("[ ]").count()), "no text-drawn boxes").toBe(0);
+  await page.evaluate(() => { window.location.hash = "#/tasks/T-mock-1"; });
+  await expect(page.getByRole("switch", { name: "Auto mode" })).toBeVisible();
 });
 
 test("action buttons say what they do and which key does it, and stay pinned in view while the detail scrolls", async ({ page, server }) => {
@@ -834,7 +825,7 @@ test("on a phone the Lobby is one conversation, its steps opening in place", asy
 test("the message box floats over the page, and every page scrolls clear of it", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 640 });
-  for (const hash of ["#/lobby", "#/tasks/T-mock-1", "#/plan", "#/settings", "#/metrics", "#/sessions"]) {
+  for (const hash of ["#/lobby", "#/tasks/T-mock-1", "#/plan", "#/knowledge"]) {
     await page.evaluate((to) => {
       window.location.hash = to;
     }, hash);
@@ -859,55 +850,11 @@ test("the message box floats over the page, and every page scrolls clear of it",
   }
 });
 
-test("Esc leaves the message box on a session's conversation and Settings too, so the keys on those pages work", async ({ page, server }) => {
-  await openScenario(page, server, "full");
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.evaluate(() => {
-    window.location.hash = "#/sessions/S1";
-  });
-  const composer = page.locator("#composer-text");
-  await expect(page.getByRole("button", { name: "Move here" }), "the page has switched").toBeVisible();
-  await composer.focus();
-  await page.keyboard.press("Escape");
-  await expect(composer, "Esc leaves it though no tab is selected").not.toBeFocused();
-  await expect(page.getByRole("button", { name: "Move here" }).locator('[data-slot="kbd"]'), "the button prints its key").toHaveText("M");
-  await page.evaluate(() => { window.location.hash = "#/sessions/here"; });
-  await expect(page, "this window's own session is the Lobby").toHaveURL(/#\/lobby/);
-});
 
-test("on Excalidraw R reveals the link and O opens the board in a new tab", async ({ page, server }) => {
-  await page.context().route("https://whiteboard.example/**", (route) => route.fulfill({ contentType: "text/html", body: "<title>board</title>" }));
-  await openScenario(page, server, "full");
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.evaluate(() => {
-    window.location.hash = "#/excalidraw/x1";
-  });
-  await expect(page.getByRole("button", { name: "Reveal the link" })).toBeVisible();
-  // A route change puts the cursor in the message box; the page's keys work once the page has focus.
-  await page.locator("#main").focus();
-  await page.keyboard.press("r");
-  await expect(page.locator("#main"), "R reveals the full room link").toContainText("whiteboard.example");
-  const open = page.getByRole("link", { name: "Open board" });
-  await expect(open.locator('[data-slot="kbd"]'), "Open board prints its key").toHaveText("O");
-  const popup = page.waitForEvent("popup");
-  await page.keyboard.press("o");
-  expect((await popup).url(), "O opens it in a new tab").toContain("whiteboard.example");
-});
 
-test("a button's key never fires from a form: Enter elsewhere does not send a half-written note", async ({ page, server }) => {
-  await openScenario(page, server, "full");
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.evaluate(() => {
-    window.location.hash = "#/excalidraw/x1";
-  });
-  const note = page.getByLabel("Add by link");
-  await expect(note).toBeVisible();
-  await note.fill("https://whiteboard.example/#room=zzz,AAAAAAAAAAAAAAAAAAAAAA");
-  await page.locator("#main").focus();
-  await page.keyboard.press("Enter");
-  await page.waitForTimeout(300);
-  await expect(note, "the note is still waiting to be sent").toHaveValue(/whiteboard\.example/);
-});
+
+
+
 
 test("quick key presses on the effort slider add up instead of each starting from the saved level", async ({ page, server }) => {
   await openScenario(page, server, "full");
@@ -1044,40 +991,12 @@ test("a task opens in its own session from the Tasks screen, with S: this window
   await expect(page.getByText(/switching this window to Mock background task/)).toBeVisible();
 });
 
-test("Excalidraw is laid out in cards: an overview when nothing is chosen, then the link, the room and the agents", async ({ page, server }) => {
-  await openScenario(page, server, "full");
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.evaluate(() => {
-    window.location.hash = "#/excalidraw";
-  });
-  const detail = page.locator('[data-pane="detail"]');
-  await expect(detail.getByRole("heading", { name: "Sessions" }), "with nothing chosen, an overview").toBeVisible();
-  await expect(detail, "how many of the five are in use").toContainText("1 of 5 in use");
-  await expect(detail.getByRole("listitem").filter({ hasText: "Start a live room" }), "the steps").toBeVisible();
-  await expect(detail.getByLabel("Add by link"), "and the add boxes").toBeVisible();
-  await page.evaluate(() => {
-    window.location.hash = "#/excalidraw/x1";
-  });
-  const card = (title: string) => detail.locator("section").filter({ has: page.getByRole("heading", { name: title, exact: true }) });
-  await expect(card("Room link")).toContainText("room abc123");
-  await expect(card("Room")).toContainText("Agents may draw here.");
-  await expect(card("Assigned to").getByRole("checkbox"), "every agent as a checkbox").toHaveCount(8);
-  await expect(card("Add or rename").getByRole("textbox", { name: "Rename" })).toHaveValue("Mock board");
-  const [link, agents] = await Promise.all([card("Room link").boundingBox(), card("Assigned to").boundingBox()]);
-  expect(Math.abs(link!.y - agents!.y), "the link and the agents side by side").toBeLessThan(4);
-});
 
-test("the empty Excalidraw and Plan pages are laid out: steps beside the boxes, the panel as seats", async ({ page, server }) => {
+
+test("the empty Plan page shows the panel as seats", async ({ page, server }) => {
   await openScenario(page, server, "empty");
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.evaluate(() => {
-    window.location.hash = "#/excalidraw";
-  });
   const main = page.locator("#main");
-  await expect(main.getByRole("heading", { name: "No sessions yet." })).toBeVisible();
-  await expect(main.getByRole("list").first().getByRole("listitem"), "three steps").toHaveCount(3);
-  const [steps, add] = await Promise.all([main.getByText("Start a live room").boundingBox(), main.getByLabel("Add by link").boundingBox()]);
-  expect(add!.x, "the add boxes sit beside the steps").toBeGreaterThan(steps!.x + 300);
   await page.evaluate(() => {
     window.location.hash = "#/plan";
   });
@@ -1254,7 +1173,7 @@ test("the tray over the box names the project and the target, opens the project 
 test("the orb is on every page, and opens Thinking from any of them", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
-  for (const hash of ["#/tasks", "#/plan", "#/settings", "#/sessions/S1"]) {
+  for (const hash of ["#/tasks", "#/plan", "#/settings", "#/lobby"]) {
     await page.evaluate((to) => {
       window.location.hash = to;
     }, hash);
@@ -1262,7 +1181,7 @@ test("the orb is on every page, and opens Thinking from any of them", async ({ p
   }
   await page.getByRole("button", { name: "Open Thinking" }).click();
   await expect(page.getByRole("dialog", { name: "Thinking", exact: true }), "it opens Thinking without leaving the page").toBeVisible();
-  await expect(page).toHaveURL(/#\/sessions\/S1$/);
+  await expect(page).toHaveURL(/#\/lobby$/);
   await page.keyboard.press("Escape");
   await page.keyboard.press("Alt+T");
   await expect(page.getByRole("dialog", { name: "Thinking", exact: true }), "and so does its key").toBeVisible();

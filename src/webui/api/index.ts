@@ -18,7 +18,6 @@ import { quickfixCancel, quickfixList, quickfixMovedToTask, quickfixRunAnyway, q
 import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksEditComment, tasksGet, tasksList, tasksMessage, tasksRestore, tasksOpen, tasksResume, tasksDeliveryReview, tasksDeliveryDefer, tasksDeliver } from "./tasks.ts";
 import { metricsGet } from "./metrics.ts";
 import { knowledgeAdd, knowledgeAsk, knowledgeComment, knowledgeEdit, knowledgeFiles, knowledgeOpen, knowledgeRemove, knowledgeReplaceFile, knowledgeUnnote } from "./knowledge.ts";
-import { excalidrawAdd, excalidrawCheck, excalidrawCreate, excalidrawList, excalidrawRemove, excalidrawRename, excalidrawReveal, excalidrawToggleAgent, excalidrawToggleAll, excalidrawToggleContribute } from "./excalidraw.ts";
 import { plansDiscard, plansGet, plansStart } from "./plans.ts";
 import { gitCancelReview, gitJev, gitPull, gitPulls, gitReview } from "./git.ts";
 import { issuesCreate, issuesGet, issuesList } from "./issues.ts";
@@ -93,7 +92,6 @@ const KnowledgeAgent = Type.Union([Type.Literal("master"), Type.Literal("designe
 const KnowledgeFile = Type.String({ minLength: 1, maxLength: 200 });
 const KnowledgeText = Type.String({ minLength: 1, maxLength: 100_000 });
 const EntryRef = Type.Object({ text: Type.String({ minLength: 1, maxLength: 100_000 }), occurrence: Type.Integer({ minimum: 0, maximum: 100000 }) }, { additionalProperties: false });
-const ExcalidrawAgent = Type.Union([Type.Literal("master"), Type.Literal("designer"), Type.Literal("backend"), Type.Literal("qa"), Type.Literal("scout"), Type.Literal("researcher"), Type.Literal("quickfix"), Type.Literal("planner")]);
 const PlannerSeed = Type.Object({
   issue: Type.Object({ number: Type.Integer({ minimum: 1 }), title: Type.String({ minLength: 1, maxLength: 500 }), url: Type.Optional(Type.String({ maxLength: 2000 })) }, { additionalProperties: false }),
   body: Type.String({ maxLength: 20_000 }),
@@ -306,43 +304,6 @@ function buildRoutes(): Record<string, Route> {
   routes["knowledge.unnote"] = {
     schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
     run: (body, ctx) => knowledgeUnnote(body as { id: string }, ctx),
-  };
-  routes["excalidraw.list"] = { schema: Empty, run: (_body, ctx) => excalidrawList(ctx) };
-  routes["excalidraw.add"] = {
-    schema: Type.Object({ link: Type.String({ minLength: 1, maxLength: 2000 }), name: Type.Optional(Type.String({ maxLength: 40 })) }, { additionalProperties: false }),
-    run: (body, ctx) => excalidrawAdd(body as { link: string; name?: string }, ctx),
-  };
-  routes["excalidraw.create"] = {
-    schema: Type.Object({ name: Type.Optional(Type.String({ maxLength: 40 })) }, { additionalProperties: false }),
-    run: (body, ctx) => excalidrawCreate(body as { name?: string }, ctx),
-  };
-  routes["excalidraw.remove"] = {
-    schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
-    run: (body, ctx) => excalidrawRemove(body as { id: string }, ctx),
-  };
-  routes["excalidraw.rename"] = {
-    schema: Type.Object({ id: TaskId, name: Type.String({ maxLength: 40 }) }, { additionalProperties: false }),
-    run: (body, ctx) => excalidrawRename(body as { id: string; name: string }, ctx),
-  };
-  routes["excalidraw.toggleAgent"] = {
-    schema: Type.Object({ id: TaskId, agent: ExcalidrawAgent }, { additionalProperties: false }),
-    run: (body, ctx) => excalidrawToggleAgent(body as { id: string; agent: "master" | "designer" | "backend" | "qa" | "scout" | "researcher" | "quickfix" | "planner" }, ctx),
-  };
-  routes["excalidraw.toggleAll"] = {
-    schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
-    run: (body, ctx) => excalidrawToggleAll(body as { id: string }, ctx),
-  };
-  routes["excalidraw.toggleContribute"] = {
-    schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
-    run: (body, ctx) => excalidrawToggleContribute(body as { id: string }, ctx),
-  };
-  routes["excalidraw.check"] = {
-    schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
-    run: (body, ctx) => excalidrawCheck(body as { id: string }, ctx),
-  };
-  routes["excalidraw.reveal"] = {
-    schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
-    run: (body, ctx) => excalidrawReveal(body as { id: string }, ctx),
   };
   routes["git.pulls"] = {
     schema: Type.Object({ refresh: Type.Optional(Type.Boolean()) }, { additionalProperties: false }),

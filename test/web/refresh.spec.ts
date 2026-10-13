@@ -45,7 +45,7 @@ test("a step's working agents unfold from it in Tasks, and leave when finished",
 test.afterEach(() => { releasePending?.(); releasePending = undefined; });
 
 const SECTIONS = ["Agents", "Workflow", "Linting", "Lobby", "Classifier", "Appearance & notifications"];
-const PAGES = ["lobby", "tasks", "plan", "quickfix", "issues", "metrics", "git", "knowledge", "excalidraw", "settings"];
+const PAGES = ["lobby", "tasks", "plan", "quickfix", "git/issues", "metrics", "git", "knowledge", "settings"];
 
 async function route(page: Page, name: string): Promise<void> {
   await page.evaluate((hash) => { window.location.hash = hash; }, `#/${name}`);

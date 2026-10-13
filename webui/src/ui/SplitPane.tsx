@@ -176,10 +176,11 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe, i
 }
 
 /** The list pane's title row: `Tasks            2 open · 2 finished`, then any controls; it stays put while the list scrolls. */
-export function PaneHeader({ title, count, children }: { title: string; count?: string; children?: ReactNode }) {
+export function PaneHeader({ title, count, lead, children }: { title: string; count?: string; lead?: ReactNode; children?: ReactNode }) {
   return (
     <div className="sticky top-0 z-10 flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-[var(--workspace-card)] px-4 py-2 max-md:static max-md:z-auto max-md:bg-transparent max-md:px-3 max-md:py-2 max-md:backdrop-blur-none">
-      <h2 className="text-sm font-medium">{title}</h2>
+      <h2 className={lead ? "sr-only" : "text-sm font-medium"}>{title}</h2>
+      {lead}
       <span aria-hidden="true" className="min-w-2 flex-1" />
       {count ? <span className="text-xs text-muted-foreground tabular-nums">{count}</span> : null}
       {children ? <div className="flex items-center gap-1.5">{children}</div> : null}

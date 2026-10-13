@@ -11,6 +11,7 @@ import { expect, openScenario, test, type Page } from "./fixture.ts";
 /** DOM ambient for `page.evaluate` callbacks (the root tsconfig has no DOM lib). */
 declare const document: any;
 declare const window: any;
+declare const getComputedStyle: any;
 
 interface RouteCheck {
   route: string;
@@ -71,9 +72,9 @@ const ROUTES: RouteCheck[] = [
     empty: "No knowledge files yet.",
   },
   {
-    route: "#/excalidraw",
-    full: ["Mock board"],
-    empty: "No sessions yet.",
+    route: "#/git/issues",
+    full: ["issues are off (lobby.issues)"],
+    empty: "issues are off (lobby.issues)",
   },
 ];
 
@@ -120,7 +121,7 @@ async function gotoRoute(page: Page, hash: string, text: string): Promise<void> 
 }
 
 for (const check of ROUTES) {
-  test(`tab route ${check.route} renders (full)`, async ({ page, server }) => {
+  test(`tab route ${check.route} renders (full) @theme`, async ({ page, server }) => {
     const trap = await openScenario(page, server, "full");
     await page.setViewportSize({ width: 1280, height: 800 });
     for (const text of check.full) {
@@ -132,7 +133,7 @@ for (const check of ROUTES) {
     trap.stop();
   });
 
-  test(`tab route ${check.route} has an empty state (empty)`, async ({ page, server }) => {
+  test(`tab route ${check.route} has an empty state (empty) @theme`, async ({ page, server }) => {
     const trap = await openScenario(page, server, "empty");
     await page.setViewportSize({ width: 1280, height: 800 });
     await gotoRoute(page, check.route, check.empty);
@@ -148,25 +149,10 @@ for (const check of ROUTES) {
   });
 }
 
-test("excalidraw reveal shows the full link with Copy and Open board", async ({ page, server }) => {
-  const trap = await openScenario(page, server, "full");
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await gotoRoute(page, "#/excalidraw", "Mock board");
-  await page.getByText("Mock board", { exact: true }).click();
-  await page.getByRole("button", { name: "Reveal" }).click();
-  await expect(page.locator("#main"), "full room link").toContainText("whiteboard.example");
-  await expect(page.getByRole("button", { name: "Copy" }), "Copy exists").toBeVisible();
-  await expect(page.getByRole("link", { name: "Open board" }), "Open board exists").toBeVisible();
-  await expectNoSidewaysScroll(page);
-  expect(cspErrors(trap.errors), "no CSP violations").toEqual([]);
-  expect(trap.errors, "no console errors").toEqual([]);
-  trap.stop();
-});
-
-test("issues tab lists issues (issues)", async ({ page, server }) => {
+test("Git issues lists issues @theme", async ({ page, server }) => {
   const trap = await openScenario(page, server, "issues");
   await page.setViewportSize({ width: 1280, height: 800 });
-  await gotoRoute(page, "#/issues", "Dark mode flashes white on load");
+  await gotoRoute(page, "#/git/issues", "Dark mode flashes white on load");
   await expectNoSidewaysScroll(page);
   expect(cspErrors(trap.errors), "no CSP violations").toEqual([]);
   expect(trap.errors, "no console errors").toEqual([]);
@@ -176,7 +162,7 @@ test("issues tab lists issues (issues)", async ({ page, server }) => {
 test("Plan it starts a planning session from an issue (issues)", async ({ page, server }) => {
   await openScenario(page, server, "issues");
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.evaluate(() => { (globalThis as any).location.hash = "#/issues/57"; });
+  await page.evaluate(() => { (globalThis as any).location.hash = "#/git/issues/57"; });
   const detail = page.getByRole("article", { name: "Issue #57" });
   await detail.getByRole("button", { name: "Plan #57 with the panel" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Plan it" }).click();
@@ -184,10 +170,10 @@ test("Plan it starts a planning session from an issue (issues)", async ({ page, 
   await expect(page.getByText("The page paints white for a moment before the theme applies.").first()).toBeVisible();
 });
 
-test("issues tab is off without lobby.issues (empty)", async ({ page, server }) => {
+test("Git issues is off without lobby.issues @theme", async ({ page, server }) => {
   const trap = await openScenario(page, server, "empty");
   await page.setViewportSize({ width: 1280, height: 800 });
-  await gotoRoute(page, "#/issues", "issues are off (lobby.issues)");
+  await gotoRoute(page, "#/git/issues", "issues are off (lobby.issues)");
   await expectNoSidewaysScroll(page);
   expect(cspErrors(trap.errors), "no CSP violations").toEqual([]);
   expect(trap.errors, "no console errors").toEqual([]);
@@ -199,7 +185,7 @@ test("settings change saves with a notice and round-trips", async ({ page, serve
   await page.setViewportSize({ width: 1280, height: 800 });
   await gotoRoute(page, "#/settings", "Each agent's model and effort");
   await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Lobby", exact: true }).click();
-  const mouse = page.getByRole("switch", { name: "Issues tab" });
+  const mouse = page.getByRole("switch", { name: "Issues", exact: true });
   await expect(mouse, "Issues toggle").toBeVisible();
   const before = await mouse.getAttribute("aria-checked");
   await mouse.click();
@@ -210,9 +196,49 @@ test("settings change saves with a notice and round-trips", async ({ page, serve
   await page.locator('[role="tablist"]').waitFor();
   await gotoRoute(page, "#/settings", "Each agent's model and effort");
   await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Lobby", exact: true }).click();
-  expect(await page.getByRole("switch", { name: "Issues tab" }).getAttribute("aria-checked"), "value round-trips").toBe(after);
+  expect(await page.getByRole("switch", { name: "Issues", exact: true }).getAttribute("aria-checked"), "value round-trips").toBe(after);
   await expectNoSidewaysScroll(page);
   expect(cspErrors(trap.errors), "no CSP violations").toEqual([]);
   expect(trap.errors, "no console errors").toEqual([]);
   trap.stop();
+});
+
+
+test("removed routes resolve to Lobby @theme", async ({ page, server }) => {
+  const trap = await openScenario(page, server, "full");
+  for (const hash of ["#/sessions", "#/sessions/S1", "#/excalidraw", "#/excalidraw/x1"]) {
+    await page.evaluate((to) => { window.location.hash = to; }, hash);
+    await expect(page).toHaveURL(/#\/lobby$/);
+    await expect(page.locator("#composer-text")).toBeVisible();
+  }
+  expect(trap.errors).toEqual([]);
+});
+
+test("hidden composer retains drafts and rejects focus shortcuts @theme", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.locator("#composer-text").fill("Keep my draft");
+  for (const hash of ["#/git", "#/metrics", "#/settings"]) {
+    await page.evaluate((to) => { window.location.hash = to; }, hash);
+    await expect(page.locator("#app-dock")).toBeHidden();
+    await expect(page.locator("#composer-text")).toBeAttached();
+    await page.keyboard.press("/");
+    await expect(page.locator("#composer-text")).not.toBeFocused();
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--composer-h").trim())).toBe("0px");
+  }
+  await page.evaluate(() => { window.location.hash = "#/lobby"; });
+  await expect(page.locator("#composer-text")).toHaveValue("Keep my draft");
+});
+
+test("Git switch routes keyboard selection and legacy bookmarks @theme", async ({ page, server }) => {
+  await openScenario(page, server, "issues");
+  await page.evaluate(() => { window.location.hash = "#/issues/42"; });
+  await expect(page).toHaveURL(/#\/git\/issues\/42$/);
+  const issues = page.getByRole("radio", { name: "Issues", exact: true });
+  await issues.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(page).toHaveURL(/#\/git$/);
+  await expect(page.getByRole("radio", { name: "Pull requests", exact: true })).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect(page).toHaveURL(/#\/git\/issues$/);
+  expect((await issues.boundingBox())!.height).toBeGreaterThanOrEqual(44);
 });

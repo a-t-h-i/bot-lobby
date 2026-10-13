@@ -20,7 +20,6 @@ import { loadTask, ownerlessTask, readTaskArtifact, removeTaskScratchpads, saveT
 import { dataRoot, readDataRoots } from "../state/project.ts";
 import { appendCompletedTask, appendDecision, applyKnowledge, readFileOr, writeFileEnsured, type KnowledgeKind } from "../knowledge/store.ts";
 import { compactKnowledgeFile, overThreshold } from "../knowledge/compactor.ts";
-import { ExcalidrawBook } from "../excalidraw/sessions.ts";
 import { knowledgeDir, type KnowledgeAgent } from "../knowledge/paths.ts";
 import { lobbyTopics } from "../lobby/topics.ts";
 import { writeScratchpad } from "../state/persistence.ts";
@@ -92,7 +91,6 @@ export const ORCHESTRATE_ACTIONS = [
   "knowledge",
   "compact",
   "script",
-  "whiteboard",
   "complete",
   "block",
   "resume",
@@ -130,7 +128,7 @@ export interface OrchestrateParams {
   kind?: KnowledgeKind;
   /** compact: the knowledge file being rewritten; script: a drafted script to take instead of `text`. */
   file?: string;
-  /** whiteboard: name for the new Excalidraw session; script: the script's file name (`seed_public_holidays.py`). */
+  /** script: the script's file name (`seed_public_holidays.py`). */
   name?: string;
   /** script: one line on what the script does. */
   purpose?: string;
@@ -1542,19 +1540,6 @@ function handleCompact(task: Task | undefined, params: OrchestrateParams, deps: 
   return `Compacted ${agent}/${file}: ${outcome.before} -> ${outcome.after} chars. Previous version archived at ${outcome.archive}.`;
 }
 
-/**
- * The Master creates its own whiteboard: a room on the configured server,
- * assigned to itself so its seat keeps the room alive for this pi session.
- */
-function handleWhiteboard(task: Task, params: OrchestrateParams, deps: WorkflowDeps): string {
-  const book = new ExcalidrawBook({ root: deps.root });
-  const made = book.create(params.name?.trim() || undefined);
-  if (!made.session) throw new Error(made.notice);
-  book.toggleAgent(made.session.id, "master");
-  recordDecision(task, `Created Excalidraw session "${made.session.name}" and assigned it to Master.`);
-  return `Created Excalidraw session "${made.session.name}" and assigned it to you. Join link: ${made.session.link}. Call excalidraw_read to open your seat; the connection stays open for this pi session and keeps the room alive without anyone else in it. It ends when the pi session ends.`;
-}
-
 /** §63: record history, drop scratchpads, then mark the task completed. */
 async function handleComplete(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
   // The fast track (and a plan QA sat out) completes straight from its work; the full workflow from review.
@@ -2068,7 +2053,6 @@ const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams
   knowledge: handleKnowledge,
   script: handleScript,
   compact: handleCompact,
-  whiteboard: handleWhiteboard,
   complete: handleComplete,
   block: handleBlock,
   resume: handleResume,

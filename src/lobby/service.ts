@@ -45,7 +45,6 @@ import { carryOnMessage, resumeRoute, RESUMED_DECISION, type Drivers } from "./r
 import { archivePlan as archivePlanOnDisk, deletePlan as deletePlanOnDisk, isPlanId, previousPlans, readPlan, type PlanRecord, type PlanSummary } from "../state/plan-history.ts";
 import { applyMasterModel } from "../pi/model-settings.ts";
 import { lobbyTopics } from "./topics.ts";
-import { checkSession } from "../excalidraw/check.ts";
 import type { LobbyAgentKind, PanelMember } from "../schemas/configuration.ts";
 import type { LiveSession, LobbyService, SwitchTarget } from "./host.ts";
 import { pushNotice, type NoticeLevel } from "../webui/notices.ts";
@@ -814,11 +813,6 @@ export function createLobbyService(state: Runtime): LobbyService {
     pulls: state.pulls,
     reviews: state.reviews,
     knowledge: state.knowledge,
-    excalidraw: state.excalidraw,
-    checkExcalidraw: (session) => {
-      lobbyTopics.bump("excalidraw");
-      return checkSession(session.link, session.name);
-    },
     profileLabel: (kind) => {
       const profile = lobbyProfile(state, kind);
       return `${profile.model ?? "session model"} · ${profile.thinking}`;
