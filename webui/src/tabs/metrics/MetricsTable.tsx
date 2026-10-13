@@ -41,7 +41,7 @@ export function MetricsTable({ groups, groupBy }: { groups: MetricGroupInfo[]; g
         <span>All models</span>
         <span className="text-xs font-normal text-muted-foreground">{groupBy === "model" ? "by model · thinking" : "by model · thinking · agent"} · sorted by runs</span>
       </h2>
-      <div className="max-h-80 overflow-auto outline-none focus-visible:ring-3 focus-visible:ring-ring/40" tabIndex={0} role="region" aria-label="All model metrics, scroll horizontally to see all columns">
+      <div className="max-h-80 overflow-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" tabIndex={0} role="region" aria-label="All model metrics, scroll horizontally to see all columns">
         <table className="w-full border-collapse text-xs">
           <thead className="sticky top-0 bg-card text-muted-foreground">
             <tr>

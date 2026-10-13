@@ -4,7 +4,7 @@ import type { TabInfo } from "@protocol"
 import { TabIcon } from "./TabIcons"
 import { PHONE_PERIODS, tabNumber } from "./phoneCarousel"
 
-const CARD_CLASS = "phone-tab-card inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border px-2.5 text-sm font-medium whitespace-nowrap outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+const CARD_CLASS = "phone-tab-card inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-sm font-medium whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
 
 export interface PhoneCardProps {
   tab: TabInfo

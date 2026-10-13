@@ -1255,19 +1255,19 @@
   .phone-tab-card {
     min-height: 44px;
     min-width: 44px;
-    border-color: color-mix(in oklab, var(--foreground) 24%, var(--card));
-    background: color-mix(in oklab, var(--foreground) 5%, var(--card));
+    border-color: var(--border);
+    background: var(--card);
     color: var(--muted-foreground);
     box-shadow: var(--control-shadow);
-    transition: background-color 180ms ease-out, border-color 180ms ease-out, color 180ms ease-out;
+    transition: background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out, scale 150ms ease-out;
   }
   .phone-tab-card:is([aria-selected="true"], [data-active="true"]) {
-    border-color: color-mix(in oklab, var(--primary) 62%, var(--card));
+    border-color: color-mix(in srgb, var(--primary) 55%, var(--border));
     background: var(--accent);
     color: var(--foreground);
     box-shadow: none;
   }
-  .phone-tab-card:active { transform: translateY(1px); }
+  .phone-tab-card:active { scale: 0.97; }
   .phone-tabs::before,
   .phone-tabs::after {
     position: absolute;

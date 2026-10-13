@@ -310,7 +310,7 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
             type="button"
             aria-expanded={showNotes}
             onClick={() => setShowNotes((now) => !now)}
-            className="flex min-h-8 max-w-full items-center gap-1 rounded-md text-left text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30 max-md:h-auto max-md:min-h-11"
+            className="flex min-h-8 max-w-full items-center gap-1 rounded-md text-left text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-md:h-auto max-md:min-h-11"
           >
             <ChevronRight aria-hidden="true" className={cn("size-3.5 transition-transform duration-200 ease-snap", showNotes && "rotate-90")} />
             {FIELD_LABELS.instructions}
@@ -613,8 +613,8 @@ export function SettingsForm({ config, models, classifierModels = [], onConfig }
             aria-controls={`settings-${name.split(" ")[0]}`}
             onClick={() => setSection(name)}
             className={cn(
-              "h-8 rounded-lg border border-transparent px-3 text-sm font-medium outline-none transition-[box-shadow,color] focus-visible:ring-3 focus-visible:ring-ring/40 max-md:min-h-11 max-md:h-auto max-md:shrink-0 max-md:whitespace-nowrap",
-              section === name ? "btn-outline bg-card text-foreground" : "text-muted-foreground hover:text-foreground"
+              "h-8 rounded-lg border border-transparent px-3 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-md:min-h-11 max-md:h-auto max-md:shrink-0 max-md:whitespace-nowrap",
+              section === name ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
             )}
           >
             {name}

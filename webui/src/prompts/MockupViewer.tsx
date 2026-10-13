@@ -166,7 +166,7 @@ export function MockupViewer({ options, start, title, picked = [], multi = false
               data-compact=""
               onClick={() => go(position)}
               className={cn(
-                "inline-flex h-7 max-w-48 items-center gap-1 rounded-lg border px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/40 max-md:h-11 max-md:min-w-11",
+                "inline-flex h-7 max-w-48 items-center gap-1 rounded-lg border px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-md:h-11 max-md:min-w-11",
                 position === index ? "border-primary/50 bg-accent text-foreground" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
