@@ -40,15 +40,16 @@ export function AgentMessage({ source, name, time, head, live, children, aside }
 }
 
 /** Your message: a filled bubble on the right; its time shows under it while it is pointed at. */
-export function YourMessage({ time, head: _head, note, children, below }: { time?: string; head: boolean; note?: string; children: ReactNode; below?: ReactNode }) {
+export function YourMessage({ time, head: _head, note, children, below, actions }: { time?: string; head: boolean; note?: string; children: ReactNode; below?: ReactNode; actions?: ReactNode }) {
   return (
     <div className="group/msg flex flex-col items-end gap-1">
       <div className="chat-bubble">{children}</div>
-      {time || note ? (
-        <p className="chat-meta flex items-baseline gap-2">
+      {time || note || actions ? (
+        <div className="chat-meta flex items-center gap-2">
+          {actions}
           {note ? <span>{note}</span> : null}
           {time ? <time className="tabular-nums">{time}</time> : null}
-        </p>
+        </div>
       ) : null}
       {below}
     </div>

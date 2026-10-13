@@ -1,6 +1,7 @@
 /**
  * The Plan tab: the seating intro before a session, then the panel's
- * conversation beside the draft plan (stacked below 1024 px); the floating box
+ * conversation across the page, like the Lobby's; once there is a draft, the
+ * "View plan" link in the header opens it in a slide-out. The floating box
  * sends to the panel (its Panel target). The session is read again on every
  * `planner` topic change; the panel's questions arrive through the prompt
  * slideout, started by Answer questions. Line comments are remembered here
@@ -13,14 +14,12 @@ import { ErrorState } from "@/app/States"
 import { useApiRead } from "@/app/useApiRead"
 import { cn } from "@/lib/utils"
 import type { PlannerSnapshot } from "@protocol"
-import { Pane, useWide } from "@/ui/SplitPane"
 import { PanelConversation } from "./Conversation"
-import { DraftBody, SeatNeeds } from "./Draft"
 import { PlanHeader, PreviousButton } from "./Header"
+import { PlanSheet } from "./PlanSheet"
 import { PreviousPlans } from "./Previous"
-import { LineComment } from "./LineComment"
 import { Seats } from "./Roster"
-import { DRAFT_WAITS, INTRO_LEAD, NO_DRAFT, PLAN_STEPS, isFresh, seatCells, seatedCount } from "./words"
+import { INTRO_LEAD, PLAN_STEPS, isFresh, seatCells, seatedCount } from "./words"
 import { Rule } from "@/ui/Frame"
 
 import { useStickToBottom } from "@/lib/useStickToBottom"
@@ -106,50 +105,18 @@ function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) 
   )
 }
 
-function ConversationPane({ snap, wide }: { snap: PlannerSnapshot; wide: boolean }) {
-  const { ref, onScroll } = useStickToBottom(JSON.stringify(snap.messages))
-  return (
-    <Pane className="workspace-pane flex flex-col rounded-xl border shadow-xs">
-      <h2 className="flex min-h-12 shrink-0 items-center border-b border-border px-4 text-sm font-medium">
-        <Rule title="Conversation" className="w-full" />
-      </h2>
-      <div ref={ref} onScroll={onScroll} className={cn("min-h-0 overflow-y-auto overscroll-y-contain", wide ? "flex-1 px-5 pt-5 pb-dock" : "max-h-[45svh] p-5")}>
-        <PanelConversation messages={snap.messages} busy={snap.busy} />
-      </div>
-    </Pane>
-  )
-}
-
-function DraftPane({ snap, comments, onComment, wide }: { snap: PlannerSnapshot; comments: Comments; onComment: (line: string) => void; wide: boolean }) {
-  return (
-    <Pane className="workspace-pane flex flex-col rounded-xl border shadow-xs">
-      <h2 className="flex min-h-12 shrink-0 items-center border-b border-border px-4 text-sm font-medium">
-        <Rule title="Draft plan" className="w-full" />
-      </h2>
-      <div className={cn("flex min-h-0 flex-col gap-5 overflow-y-auto overscroll-y-contain px-5 pt-5 pb-dock", wide && "flex-1")}>
-        {snap.draft ? <DraftBody draft={snap.draft} comments={comments} onComment={onComment} /> : <p className="text-sm text-muted-foreground">{snap.busy ? DRAFT_WAITS : NO_DRAFT}</p>}
-        <SeatNeeds notes={snap.notes} />
-      </div>
-    </Pane>
-  )
-}
-
 function Session({ snap, reload }: { snap: PlannerSnapshot; reload: () => void }) {
-  const wide = useWide()
-  const [line, setLine] = useState<string>()
+  const [viewing, setViewing] = useState(false)
   const [comments, setComments] = useState<Comments>(new Map())
   const remember = (at: string, text: string) => setComments((now) => new Map(now).set(at, [...(now.get(at) ?? []), text]))
-  const grid = wide
-    ? "grid min-h-0 flex-1 grid-cols-[minmax(0,46fr)_minmax(0,54fr)] grid-rows-[minmax(0,1fr)] gap-3 p-3"
-    : "flex flex-col gap-3 p-3"
+  const { ref, onScroll } = useStickToBottom(`${JSON.stringify(snap.messages)}${snap.busy}`)
   return (
     <>
-      <PlanHeader snap={snap} onDone={reload} />
-      <div className={cn(grid, "min-w-0")}>
-        <ConversationPane snap={snap} wide={wide} />
-        <DraftPane snap={snap} comments={comments} onComment={setLine} wide={wide} />
+      <PlanHeader snap={snap} onDone={reload} onViewPlan={() => setViewing(true)} />
+      <div ref={ref} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-5 pb-dock max-md:px-4">
+        <PanelConversation messages={snap.messages} busy={snap.busy} />
       </div>
-      <LineComment line={line} onClose={() => setLine(undefined)} onSent={remember} />
+      <PlanSheet open={viewing} onClose={() => setViewing(false)} snap={snap} comments={comments} onSent={remember} />
     </>
   )
 }

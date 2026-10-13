@@ -40,7 +40,7 @@ const ROUTES: RouteCheck[] = [
   },
   {
     route: "#/plan",
-    full: ["Agreed plan"],
+    full: ["Plan dark mode for the lobby", "View plan"],
     empty: "Plan with the panel",
   },
   {
