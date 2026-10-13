@@ -25,7 +25,7 @@ import { Comments } from "./Comments"
 import { DetailTrailer, PlanSections } from "./DetailSections"
 import { OpenInSession } from "./OpenInSession"
 import { PlanDetail } from "./PlanDetail"
-import { ResumeTask } from "./ResumeTask"
+import { TaskInterventions } from "./TaskInterventions"
 import { CHECK_WORDS, agoWords, stateWords } from "./words"
 
 interface DetailProps {
@@ -138,7 +138,6 @@ function Actions(props: DetailProps) {
   const resumable = row.kind === "task" && row.check === "open" && Boolean(row.resumable)
   return (
     <ActionBar>
-      {resumable ? <ResumeTask row={row} onResumed={props.onChanged} /> : null}
       {row.kind === "task" && row.check === "open" ? <OpenInSession row={row} quiet={resumable} /> : null}
       {archived ? <ActionButton label="Restore" icon={RotateCcw} shortcut="R" onClick={() => void restore()} /> : null}
       {row.check === "open" && !archived ? <AutoMode on={Boolean(row.auto)} toggle={toggleAuto} /> : null}
@@ -172,6 +171,7 @@ export function TaskDetail(props: DetailProps) {
     <article className="flex min-w-0 flex-col gap-5" aria-label={row.title}>
       <Actions {...props} />
       <Header row={row} task={task} />
+      {detail.data ? <TaskInterventions row={row} detail={detail.data} onChanged={() => { detail.reload(); props.onChanged() }} /> : null}
       <p className="text-sm text-muted-foreground"><PhaseTiming timing={detail.data?.timing ?? row.timing} {...(work ? { work } : {})} stopped={row.check !== "open"} /></p>
       {detail.data?.delivery ? <DeliveryReview key={row.id} taskId={row.id} title={row.title} delivery={detail.data.delivery} onChanged={detail.reload} /> : null}
       {detail.data ? <PlanSections detail={detail.data} finished={!open} /> : null}

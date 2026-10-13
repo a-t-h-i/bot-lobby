@@ -7,7 +7,7 @@
  * plan text and steps arrive with `tasks.get`.
  */
 import { useEffect, useId, useState } from "react"
-import { AlertCircle, CheckCircle2, ChevronDown, ChevronRight, Circle, XCircle } from "lucide-react"
+import { CheckCircle2, ChevronDown, ChevronRight, Circle } from "lucide-react"
 import type { TaskDetail as TaskDetailData } from "@protocol"
 import { executionWords } from "@/lib/phaseTiming"
 import { useElapsed } from "@/lib/useElapsed"
@@ -235,32 +235,6 @@ function Amendments({ amendments }: { amendments: string[] }) {
   )
 }
 
-function Waiting({ detail }: { detail: TaskDetailData }) {
-  if (detail.waiting.length === 0 && detail.blockers.length === 0) return null
-  return (
-    <Section title="Waiting on">
-      <ul className="flex flex-col gap-1 text-sm">
-        {detail.waiting.map((item, index) => (
-          <li key={`${index}-${item.kind}`} className="flex gap-2">
-            <AlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning" />
-            <span className="min-w-0 break-words text-muted-foreground">
-              {item.kind} {item.detail}
-            </span>
-          </li>
-        ))}
-        {detail.blockers.map((blocker, index) => (
-          <li key={`${index}-${blocker.reason}`} className="flex gap-2">
-            <XCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-destructive" />
-            <span className="min-w-0 break-words text-muted-foreground">
-              {blocker.reason} (needs: {blocker.need})
-            </span>
-          </li>
-        ))}
-      </ul>
-    </Section>
-  )
-}
-
 /** How much QA the built change warrants, as Jev read its diff: the level, how deep QA goes, where it looks and why. */
 function QaRisk({ risk }: { risk: NonNullable<TaskDetailData["qaRisk"]> }) {
   const words = QA_RISK_WORDS[risk.risk]
@@ -320,7 +294,6 @@ export function DetailTrailer({ detail }: { detail: TaskDetailData }) {
   return (
     <>
       <Amendments amendments={detail.amendments} />
-      <Waiting detail={detail} />
       {detail.qaRisk ? <QaRisk risk={detail.qaRisk} /> : null}
       <Runs runs={detail.runs} />
     </>

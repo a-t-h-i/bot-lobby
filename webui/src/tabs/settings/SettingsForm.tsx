@@ -7,7 +7,7 @@
  * is driven by the config the server last returned. The appearance,
  * notification and install rows are page-only and never sent to the server.
  */
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Brain, Check, ChevronRight, CircleAlert, CircleCheck, Download, Maximize, Minimize } from "lucide-react"
 import { toast } from "@/lib/toast"
 import { useFullscreen, useInstallPrompt, useInstalled } from "@/app/install"
@@ -19,7 +19,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { EffortSlider } from "@/ui/EffortSlider"
 import { nearestSupported } from "@/ui/effortLevels"
-import { FrameHeader, FramePanel, frameVariants } from "@/components/reui/frame"
+import { AgentIcon } from "@/ui/AgentIcon"
 import { call } from "@/lib/api"
 import { useApiRead } from "@/app/useApiRead"
 import { Section } from "@/ui/Section"
@@ -34,7 +34,6 @@ import {
   CUSTOM_HELP,
   CUSTOM_LABEL,
   CUSTOM_MODEL,
-  FIELD_LABELS,
   FIXED_SCOUT_THINKING,
   GIT_ISOLATION_ITEMS,
   RECOMMENDED_THINKING,
@@ -134,15 +133,6 @@ const roundLabel = (value: number): string => (value > 0 ? `${value} round${valu
 const splitLabel = (value: number): string => (value > 0 ? `over ${value} steps` : "never")
 
 /** A small label above a control, for the dense grids inside an agent's card. */
-function Mini({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="grid min-w-0 gap-1">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      {children}
-    </div>
-  )
-}
-
 function ModelChoice(props: { value: string; models: SettingsModelInfo[]; label: string; none?: boolean; inherit?: boolean; onChange: (value: string) => void }) {
   const [typing, setTyping] = useState(false)
   const [text, setText] = useState("")
@@ -266,68 +256,60 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
     set(fields)
   }
   const hasInstructions = kind !== "scout" && kind !== "researcher"
-  const [showNotes, setShowNotes] = useState(Boolean(entry.instructions))
+  const [open, setOpen] = useState(false)
+  const custom = customCount(entry, kind)
   return (
-    <section className={cn(frameVariants({ spacing: "default" }), "glass min-w-0")}>
-      <FrameHeader className="flex-row items-baseline justify-between gap-3 py-3 max-md:flex-col max-md:items-start">
-        <h3 className="text-sm font-semibold max-md:max-w-full max-md:break-words">{name}</h3>
-        <span className="truncate text-xs text-muted-foreground max-md:min-w-0 max-md:max-w-full max-md:break-words max-md:overflow-visible max-md:text-clip max-md:whitespace-normal">
-          {entry.model === INHERIT_MODEL ? "session model" : entry.model} · {kind === "scout" ? FIXED_SCOUT_THINKING : entry.thinking}
-        </span>
-      </FrameHeader>
-      <FramePanel className="flex min-w-0 flex-col gap-3">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
-        <Mini label={FIELD_LABELS.model}>
+    <section data-slot="agent-row" className="glass min-w-0 rounded-xl border border-border px-3 py-2">
+      <div className="grid min-w-0 items-center gap-x-3 gap-y-1 md:grid-cols-[minmax(7rem,9rem)_minmax(0,14rem)_minmax(0,1fr)_auto] max-md:grid-cols-[minmax(0,1fr)_auto]">
+        <h3 className="flex min-w-0 items-center gap-2 break-words text-sm font-semibold"><AgentIcon source={kind} className="size-4 shrink-0 text-muted-foreground" />{name}</h3>
+        <div className="min-w-0 max-md:order-3 max-md:col-span-2">
           <ModelChoice value={entry.model} models={models} label={`${name} model`} inherit={kind === "master"} onChange={chooseModel} />
-        </Mini>
-        {kind === "scout" ? (
-          <Mini label={FIELD_LABELS.thinking}>
-            <p className="flex h-8 items-center gap-2 text-sm text-muted-foreground">
-              <Brain aria-hidden="true" className="size-4" />
-              <span className="capitalize">{FIXED_SCOUT_THINKING}</span> (fixed for scouts)
-            </p>
-          </Mini>
-        ) : (
-          <EffortSlider
-            value={entry.thinking}
-            levels={THINKING_LEVELS}
-            supported={supported}
-            recommended={RECOMMENDED_THINKING[kind]}
-            model={entry.model === INHERIT_MODEL ? "the session model" : entry.model}
-            label={`${name} effort`}
-            onChange={(level) => set({ thinking: level })}
-          />
-        )}
+        </div>
+        <div className="min-w-0 max-md:order-4 max-md:col-span-2">
+          {kind === "scout" ? <ScoutEffort /> : (
+            <EffortSlider value={entry.thinking} levels={THINKING_LEVELS} supported={supported} recommended={RECOMMENDED_THINKING[kind]}
+              model={entry.model === INHERIT_MODEL ? "the session model" : entry.model} label={`${name} effort`} onChange={(level) => set({ thinking: level })} />
+          )}
+        </div>
+        <MoreButton open={open} custom={custom} onToggle={() => setOpen((now) => !now)} />
       </div>
-      <div className="flex min-h-7 items-center justify-between gap-3 max-md:flex-wrap max-md:items-start">
-        {hasInstructions ? (
-          <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
-            type="button"
-            aria-expanded={showNotes}
-            onClick={() => setShowNotes((now) => !now)}
-            className="flex min-h-8 max-w-full items-center gap-1 rounded-md text-left text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-md:h-auto max-md:min-h-11"
-          >
-            <ChevronRight aria-hidden="true" className={cn("size-3.5 transition-transform duration-200 ease-snap", showNotes && "rotate-90")} />
-            {FIELD_LABELS.instructions}
-            {!showNotes && entry.instructions ? <span className="text-primary">· set</span> : null}
-          </button>
-        ) : (
-          <span />
-        )}
+      <div hidden={!open} className="mt-2 grid gap-2 border-t border-border pt-2">
         {kind !== "master" ? (
-          <div className="flex min-w-0 items-center gap-2 max-md:flex-wrap">
-            <span className="break-words text-xs text-muted-foreground">Time limit</span>
-            <div className="w-24">
-              <MinutesField value={entry.timeoutMs ?? config.workflow.agentTimeoutMs} label={`${name} time limit`} onSave={(ms) => set({ timeoutMs: ms })} />
-            </div>
-          </div>
+          <Field label="Time limit" help="Minutes before this agent's run stops.">
+            <MinutesField value={entry.timeoutMs ?? config.workflow.agentTimeoutMs} label={`${name} time limit`} onSave={(ms) => set({ timeoutMs: ms })} />
+          </Field>
         ) : null}
+        {hasInstructions ? <InstructionsField value={entry.instructions ?? ""} label={`${name} instructions`} onSave={(text) => set({ instructions: text })} /> : null}
+        <InstructionsField value={(entry.mcpTools ?? []).join("\n")} label={`${name} MCP tool grants (one exact tool name per line)`} onSave={(text) => set({ mcpTools: text.split(/\s+/).filter(Boolean) })} />
+        <p className="text-xs text-muted-foreground">Grant exact names such as mcp__github__get_issue. Children inherit these grants; read-only agents also require read-only tools.</p>
       </div>
-      {hasInstructions && showNotes ? <InstructionsField value={entry.instructions ?? ""} label={`${name} instructions`} onSave={(text) => set({ instructions: text })} /> : null}
-      <InstructionsField value={(entry.mcpTools ?? []).join("\n")} label={`${name} MCP tool grants (one exact tool name per line)`} onSave={(text) => set({ mcpTools: text.split(/\s+/).filter(Boolean) })} />
-      <p className="text-xs text-muted-foreground">Grant exact names such as mcp__github__get_issue. Children inherit these grants; read-only agents also require read-only tools.</p>
-      </FramePanel>
     </section>
+  )
+}
+
+/** How many settings under More differ from their defaults, shown on the collapsed row. */
+function customCount(entry: AgentView, kind: AgentKind): number {
+  const notes = kind !== "scout" && kind !== "researcher" && Boolean(entry.instructions)
+  return [entry.timeoutMs !== undefined, notes, (entry.mcpTools ?? []).length > 0].filter(Boolean).length
+}
+
+function ScoutEffort() {
+  return (
+    <p className="flex min-h-10 items-center gap-2 text-sm text-muted-foreground">
+      <Brain aria-hidden="true" className="size-4" />
+      Effort <span className="capitalize">{FIXED_SCOUT_THINKING}</span> (fixed for scouts)
+    </p>
+  )
+}
+
+function MoreButton({ open, custom, onToggle }: { open: boolean; custom: number; onToggle: () => void }) {
+  return (
+    <button type="button" aria-expanded={open} onClick={onToggle}
+      className="flex min-h-10 items-center gap-1 justify-self-end rounded-md px-2 text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-md:order-2 max-md:min-h-11">
+      <ChevronRight aria-hidden="true" className={cn("size-3.5 transition-transform duration-200 ease-snap", open && "rotate-90")} />
+      More
+      {custom > 0 ? <span className="text-primary">· {custom} customised</span> : null}
+    </button>
   )
 }
 
@@ -618,7 +600,7 @@ export function SettingsForm({ config, models, classifierModels = [], onConfig }
       </nav>
       <div id="settings-Agents" hidden={section !== "Agents"} aria-hidden={section !== "Agents"}>
         <Section prominent title={GROUP_TITLES.agents}>
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2">
             {AGENT_ORDER.map((kind) => <AgentCard key={kind} kind={kind} config={config} models={models} save={save} />)}
           </div>
         </Section>
