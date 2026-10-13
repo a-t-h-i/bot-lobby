@@ -21,8 +21,8 @@ test("saved themes are named, kept in the global config folder for every session
     assert.throws(() => renameTheme(dusk.id, "   "), /needs a name/);
     assert.throws(() => saveTheme({ name: "Empty", light: { "font-weight": "700" } }), /no colours/);
 
-    chooseTheme("forest");
-    assert.equal(readThemes().active, "forest", "a theme of the page's own can be chosen too");
+    chooseTheme("grove");
+    assert.equal(readThemes().active, "grove", "a theme of the page's own can be chosen too");
     assert.throws(() => chooseTheme("nope"), /no such theme/);
 
     // Hand edits are read with the same filter.

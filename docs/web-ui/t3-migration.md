@@ -222,10 +222,21 @@ The adapted files and the MIT notice are listed in `THIRD_PARTY_NOTICES.md`.
   `"Inter Variable"` first in its fallback stack; with the font no longer
   bundled the browser skips it, and changing it would touch the engine.
 - The tab strip keeps its own liquid pill rather than T3 Code's panel tabs.
-- Effort was a slider with a mascot; it is now T3 Code's effort picker
-  (`ui/EffortPicker.tsx`, after `TraitsPicker.tsx`): a select field with a
-  brain that opens a menu of every level and what it does, unsupported levels
-  dimmed, the recommended one badged. Left and Right still step through the
-  supported levels without opening it, and quick presses still add up.
-- Every drop-down (Radix Select, the Combobox, the new `ui/menu.tsx`) uses
-  T3 Code's select field and `dropdown-glass` popup.
+- Effort is a drag slider again, in the style of Codex's: a thin track filled
+  in the primary colour, a white thumb that swells while held, every level
+  named under the track (a name jumps there; levels the model lacks are
+  dimmed), and a line on what the level does with a Recommended mark. Keys
+  and quick presses work as before.
+- Every drop-down (Radix Select and the Combobox) uses T3 Code's select field
+  and `dropdown-glass` popup.
+- A Frame is one flat card, as T3 Code's settings sections are: its header,
+  panels and footer are bands split by hairlines, so no page nests deeper than
+  body, card, card.
+- Loading placeholders use T3 Code's `Skeleton` and stepped `skeleton`
+  breath; the live step mark and the reconnecting dot use `status-ping` and
+  `status-pulse`.
+- The built-in themes are T3 Code's (in `src/webui/palette-core.ts`, the one
+  change in `src/`, agreed with the owner): Default, Blossom (their T3 Chat
+  theme), Grove, Ocean, Ember and Iris, each in light and dark.
+- The composer answers focus: 95%, then 110%, then rest in 150ms, the tray
+  following 40ms behind and the icons lagging the box.

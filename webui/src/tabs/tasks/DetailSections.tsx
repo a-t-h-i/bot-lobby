@@ -31,7 +31,7 @@ function StepTime({ step, stopped }: { step: StepData; stopped: boolean }) {
 function ActiveMark() {
   return (
     <span aria-hidden="true" className="relative mt-[0.3125rem] grid size-4 shrink-0 place-items-center">
-      <span className="absolute size-2.5 rounded-full bg-primary/30 motion-safe:animate-ping" />
+      <span className="absolute size-2.5 rounded-full bg-primary/30 motion-safe:animate-status-ping" />
       <span className="size-2 rounded-full bg-primary" />
     </span>
   )

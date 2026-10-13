@@ -86,7 +86,7 @@ test("the style sheet carries the theme, fills in the page's own variables, and 
   assert.doesNotMatch(css, /url\(/);
 });
 
-test("the built-in themes: Mist sets nothing, the others set both modes, and each has a preview", () => {
+test("the built-in themes: the default sets nothing, the others set both modes, and each has a preview", () => {
   assert.equal(paletteCss(PRESETS[0]!), "");
   assert.ok(PRESETS.length >= 5);
   for (const preset of PRESETS.slice(1)) {

@@ -1,23 +1,27 @@
-// Adapted from https://reui.io/r/radix-nova/frame.json (MIT).
+// Adapted from https://reui.io/r/radix-nova/frame.json (MIT) and T3 Code (MIT), apps/web/src/components/settings/settingsLayout.tsx
 import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
 /**
- * Frame sets --frame-panel-bg and --frame-panel-border-color; FramePanel reads
- * them back as bg-(--frame-panel-bg) and border-(--frame-panel-border-color).
+ * One flat card, as T3 Code's settings sections are: the frame is the card,
+ * and its header, panels and footer are bands inside it split by hairlines,
+ * never cards of their own, so a page is at most body, card, card.
+ *
+ * Frame sets --frame-panel-border-color; the hairlines between its bands read
+ * it back as border-(--frame-panel-border-color).
  * So variant="inverse" re-points every panel from one place, and a consumer's
  * own bg-* on a panel still wins on source order, with no :not() and no `!`.
  */
 const frameVariants = cva(
   [
-    "relative flex flex-col bg-muted/50 gap-(--frame-gap) px-(--frame-px) py-(--frame-py) rounded-(--frame-radius)",
+    "relative flex flex-col overflow-hidden bg-card text-card-foreground rounded-(--frame-radius)",
     // Each rung is the radius that style's own .cn-card resolves through, so a
     // Frame and a Card side by side agree. lyra/sera are 0px, NOT
     // var(--radius-none): no such token exists, and it only reached 0 by being
     // invalid, which also left --frame-radius empty for anything reading it.
     "[--frame-radius:var(--radius-xl)]",
-    "[--frame-gap:--spacing(0.75)] [--frame-px:--spacing(0.75)] [--frame-py:--spacing(0.75)] [--frame-panel-header-gap:0rem] [--frame-panel-footer-gap:--spacing(1)]",
+    "[--frame-gap:0px] [--frame-px:0px] [--frame-py:0px] [--frame-panel-header-gap:0rem] [--frame-panel-footer-gap:--spacing(1)]",
     "[--frame-panel-px-adjust:0px] [--frame-panel-py-adjust:0px] [--frame-panel-header-px-adjust:0px] [--frame-panel-header-py-adjust:0px] [--frame-panel-footer-px-adjust:0px] [--frame-panel-footer-py-adjust:0px]",
     "[--frame-panel-px:calc(var(--frame-panel-px-base)+var(--frame-panel-px-adjust))] [--frame-panel-py:calc(var(--frame-panel-py-base)+var(--frame-panel-py-adjust))] [--frame-panel-header-px:calc(var(--frame-panel-header-px-base)+var(--frame-panel-header-px-adjust))] [--frame-panel-header-py:calc(var(--frame-panel-header-py-base)+var(--frame-panel-header-py-adjust))] [--frame-panel-footer-px:calc(var(--frame-panel-footer-px-base)+var(--frame-panel-footer-px-adjust))] [--frame-panel-footer-py:calc(var(--frame-panel-footer-py-base)+var(--frame-panel-footer-py-adjust))]",
     // Luma alone re-times the frame: wider gap and padding, roomier bars.
@@ -48,19 +52,7 @@ const frameVariants = cva(
           "[--frame-panel-px-base:--spacing(4)] [--frame-panel-py-base:--spacing(4)] [--frame-panel-header-px-base:--spacing(4)] [--frame-panel-header-py-base:--spacing(2)] [--frame-panel-footer-px-base:--spacing(4)] [--frame-panel-footer-py-base:--spacing(2)]",
         lg: "[--frame-panel-px-base:--spacing(5)] [--frame-panel-py-base:--spacing(5)] [--frame-panel-header-px-base:--spacing(5)] [--frame-panel-header-py-base:--spacing(2.5)] [--frame-panel-footer-px-base:--spacing(5)] [--frame-panel-footer-py-base:--spacing(2.5)]",
       },
-      stacked: {
-        true: [
-          "gap-0 *:has-[+[data-slot=frame-panel]]:rounded-b-none",
-          "*:has-[+[data-slot=frame-panel]]:before:hidden",
-          "*:[[data-slot=frame-panel]+[data-slot=frame-panel]]:rounded-t-none",
-          "*:[[data-slot=frame-panel]+[data-slot=frame-panel]]:border-t-0",
-        ],
-        false: [
-          "data-[spacing=sm]:*:[[data-slot=frame-panel]+[data-slot=frame-panel]]:mt-0.5",
-          "data-[spacing=default]:*:[[data-slot=frame-panel]+[data-slot=frame-panel]]:mt-1",
-          "data-[spacing=lg]:*:[[data-slot=frame-panel]+[data-slot=frame-panel]]:mt-2",
-        ],
-      },
+      stacked: { true: "", false: "" },
       dense: {
         // Parent selectors, not CSS vars: these are positional. Panels are
         // pulled flush (-mx-px), so corners align with the frame's own radius.
@@ -106,11 +98,9 @@ function FramePanel({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-(--frame-panel-radius) border border-(--frame-panel-border-color) bg-(--frame-panel-bg) bg-clip-padding shadow-xs",
+        "relative min-w-0 [[data-slot=frame-panel-header]+&]:border-t [[data-slot=frame-panel]+&]:border-t border-(--frame-panel-border-color)",
         // `fit` sizes the panel to its content; otherwise it grows to fill the frame.
         !fit && "grow",
-        "before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--frame-panel-radius)-1px)] before:shadow-black/5",
-        "dark:bg-clip-border dark:before:shadow-white/5",
         "px-(--frame-panel-px) py-(--frame-panel-py)",
         className
       )}
@@ -160,7 +150,7 @@ function FrameFooter({ className, ...props }: React.ComponentProps<"footer">) {
   return (
     <footer
       className={cn(
-        "flex flex-col gap-(--frame-panel-footer-gap) px-(--frame-panel-footer-px) py-(--frame-panel-footer-py)",
+        "flex flex-col gap-(--frame-panel-footer-gap) border-t border-(--frame-panel-border-color) px-(--frame-panel-footer-px) py-(--frame-panel-footer-py)",
         className
       )}
       data-slot="frame-panel-footer"

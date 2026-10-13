@@ -15,3 +15,14 @@ export function stepSupported(levels: readonly string[], supported: readonly str
   for (let i = index + direction; i >= 0 && i < levels.length; i += direction) if (supported.includes(levels[i]!)) return i
   return index
 }
+
+/** What each level does, said under the slider. */
+export const EFFORT_HINTS: Record<string, string> = {
+  off: "No extra reasoning: the quickest, cheapest answer.",
+  minimal: "A moment of reasoning, barely.",
+  low: "Light reasoning for simple work.",
+  medium: "Balanced reasoning for most work.",
+  high: "Careful reasoning: slower, better on hard problems.",
+  xhigh: "Very deep reasoning: slow and costly.",
+  max: "As deep as the model goes.",
+}

@@ -10,12 +10,13 @@ import { useApiRead } from "@/app/useApiRead"
 import type { BotLobbyConfig } from "@protocol"
 import { SettingsForm } from "./SettingsForm"
 import { PAGE } from "./words"
+import { Skeleton } from "@/components/ui/skeleton"
 
-function Skeleton() {
+function Loading() {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-5 pt-5 pb-dock md:px-8 md:pt-8" role="status" aria-label={PAGE.loading}>
       {[0, 1, 2, 3].map((card) => (
-        <div key={card} className="h-48 rounded-lg bg-muted motion-safe:animate-pulse" />
+        <Skeleton key={card} shape="card" className="h-48" />
       ))}
     </div>
   )
@@ -35,6 +36,6 @@ export function SettingsTab() {
     if (read.data && read.requestedAt > answeredAt.current) setConfig(read.data.config)
   }, [read.data, read.requestedAt])
   if (!config && read.error) return <ErrorState message={`${PAGE.loadFailed} ${read.error}`} onRetry={read.reload} />
-  if (!config) return <Skeleton />
+  if (!config) return <Loading />
   return <SettingsForm config={config} models={read.data?.models ?? []} classifierModels={read.data?.classifierModels ?? []} onConfig={saved} />
 }

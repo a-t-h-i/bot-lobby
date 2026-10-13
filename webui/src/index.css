@@ -176,6 +176,28 @@
 }
 
 @theme inline {
+  /*
+   * Adapted from T3 Code (MIT), apps/web/src/index.css: duty-cycled loading and
+   * status animations. Long holds with stepped ramps, so the compositor draws a
+   * few discrete frames a cycle instead of one every vsync.
+   */
+  --animate-skeleton: skeleton 2.4s infinite;
+  --animate-status-pulse: status-pulse 2s infinite;
+  --animate-status-ping: status-ping 2s infinite;
+  @keyframes skeleton {
+    0%, 42% { opacity: 1; animation-timing-function: steps(4); }
+    50%, 92% { opacity: 0.55; animation-timing-function: steps(4); }
+    100% { opacity: 1; }
+  }
+  @keyframes status-pulse {
+    0%, 40% { opacity: 1; animation-timing-function: steps(6); }
+    50%, 90% { opacity: 0.5; animation-timing-function: steps(6); }
+    100% { opacity: 1; }
+  }
+  @keyframes status-ping {
+    0% { opacity: 0.9; scale: 0.75; animation-timing-function: steps(8); }
+    40%, 100% { opacity: 0; scale: 2; }
+  }
   /* A theme from tweakcn may name its own fonts (--app-font-*); with none, these. */
   --font-sans: var(--app-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif);
   --font-mono: var(--app-font-mono, ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace);
@@ -367,8 +389,8 @@
   .surface [data-slot="frame"] {
     --frame-border-color: var(--workspace-border);
     --frame-panel-border-color: var(--workspace-border);
-    --frame-panel-bg: var(--workspace-card);
-    background-color: var(--muted);
+    background-color: var(--workspace-card);
+    box-shadow: var(--card-shadow);
   }
   /*
    * Adapted from T3 Code (MIT), apps/web/src/components/ui/select.tsx and
@@ -1486,4 +1508,45 @@
 }
 @keyframes line-comment-in {
   from { opacity: 0; translate: 0 -4px; }
+}
+
+/*
+ * The composer answers focus: the box gives a little (95%), springs past its
+ * size (110%) and settles, in 150ms. The tray behind its top follows a beat
+ * later, and the icons lag the box the way a loose part lags a moving body:
+ * they swell while it shrinks and dip while it overshoots.
+ */
+@keyframes composer-focus {
+  0% { scale: 1; }
+  30% { scale: 0.95; }
+  70% { scale: 1.1; }
+  100% { scale: 1; }
+}
+@keyframes composer-tray-focus {
+  0% { scale: 1; translate: 0 0; }
+  30% { scale: 0.96; translate: 0 2px; }
+  70% { scale: 1.06; translate: 0 -2px; }
+  100% { scale: 1; translate: 0 0; }
+}
+@keyframes composer-icon-react {
+  0% { scale: 1; rotate: 0deg; }
+  30% { scale: 1.08; rotate: -4deg; }
+  70% { scale: 0.94; rotate: 3deg; }
+  100% { scale: 1; rotate: 0deg; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .composer-box:focus-within {
+    transform-origin: 50% 100%;
+    animation: composer-focus 150ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .composer-box:focus-within :is(button, [role="button"]) svg {
+    animation: composer-icon-react 150ms cubic-bezier(0.32, 0.72, 0, 1) 25ms backwards;
+  }
+  #app-dock:has(.composer-box:focus-within) .composer-tray {
+    transform-origin: 50% 100%;
+    animation: composer-tray-focus 150ms cubic-bezier(0.32, 0.72, 0, 1) 40ms backwards;
+  }
+  #app-dock:has(.composer-box:focus-within) .composer-tray svg {
+    animation: composer-icon-react 150ms cubic-bezier(0.32, 0.72, 0, 1) 65ms backwards;
+  }
 }
