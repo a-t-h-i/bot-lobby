@@ -2,11 +2,13 @@
  * The Git page: the open pull requests on the left with their
  * checks, draft mark, review outcome and size, and the selected pull's facts,
  * review, Jev's read, files, description and comments on the right (a Sheet
- * below 1024 px). `#/git/<number>` selects a pull request; the list is read
+ * below 1024 px). A Pull requests / Issues switch heads the list: `#/git/issues`
+ * and `#/git/issues/<number>` show the issues (see IssuesTab), `#/git/<number>`
+ * selects a pull request; the list is read
  * again on every `git` topic change, which also carries a running review's
  * steps. Nothing here is ever posted to GitHub.
  */
-import { useCallback } from "react"
+import { useCallback, type KeyboardEvent, type ReactNode } from "react"
 import { go, tabHash } from "@/app/router"
 import { ErrorState } from "@/app/States"
 import { useApiRead } from "@/app/useApiRead"
@@ -20,6 +22,8 @@ import { ListSkeleton, PaneHeader, SplitPane, useWide } from "@/ui/SplitPane"
 import { PullDetail } from "./PullDetail"
 import { PullList } from "./PullList"
 import { EMPTY_LIST, LIST_TITLE, LOADING_LIST, NOT_LOADED } from "./words"
+import { IssuesView, useIssues, type IssuesRead } from "../issues/IssuesTab"
+import { LIST_TITLE as ISSUES_TITLE } from "../issues/words"
 
 const close = () => go(tabHash("git"))
 const select = (number: number) => go(tabHash("git", String(number)))
@@ -49,28 +53,85 @@ function NoPulls({ loading, loaded, error, onRetry }: { loading: boolean; loaded
   )
 }
 
-export function GitTab({ rest }: { rest: readonly string[] }) {
+type View = "pulls" | "issues"
+const VIEWS: Array<{ id: View; label: string; hash: string }> = [
+  { id: "pulls", label: LIST_TITLE, hash: tabHash("git") },
+  { id: "issues", label: ISSUES_TITLE, hash: tabHash("git", "issues") },
+]
+
+/** The Pull requests / Issues switch: route-driven, arrow keys move between the two. */
+function ViewSwitch({ view }: { view: View }) {
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return
+    event.preventDefault()
+    const next = VIEWS.find((item) => item.id !== view)!
+    go(next.hash)
+    requestAnimationFrame(() => document.getElementById(`git-view-${next.id}`)?.focus())
+  }
+  return (
+    <div role="radiogroup" aria-label="Show" onKeyDown={onKeyDown} className="inline-flex rounded-lg bg-muted p-0.5">
+      {VIEWS.map((item) => (
+        <button key={item.id} id={`git-view-${item.id}`} type="button" role="radio" aria-checked={item.id === view} tabIndex={item.id === view ? 0 : -1} onClick={() => go(item.hash)}
+          className={cn("min-h-11 min-w-11 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", item.id === view && "bg-background text-foreground shadow-sm")}>
+          {item.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/** One R for the page: both lists refresh on their own, so one failing never holds up the other. */
+function useRefresh(pulls: { reload: () => void }, issues: IssuesRead) {
+  return useCallback(() => {
+    void act("git.pulls", { refresh: true }).then(() => pulls.reload())
+    if (issues.enabled) void act("issues.list", { refresh: true }).then(() => issues.read.reload())
+  }, [pulls, issues])
+}
+
+function Header({ view, count, busy, refresh }: { view: View; count?: string; busy: boolean; refresh: () => void }) {
+  return (
+    <PaneHeader title={view === "issues" ? ISSUES_TITLE : LIST_TITLE} count={count} lead={<ViewSwitch view={view} />}>
+      <ActionButton label="Refresh" icon={RefreshCw} shortcut="R" disabled={busy} className={cn("h-7", busy && "[&_svg]:animate-spin")} onClick={refresh} />
+    </PaneHeader>
+  )
+}
+
+function PullsView({ read, rest, top }: { read: ReturnType<typeof usePulls>; rest: readonly string[]; top: ReactNode }) {
   const wide = useWide()
-  const read = useApiRead("git.pulls", {}, ["git"])
   const id = pullNumber(rest)
   const pulls = read.data?.pulls ?? []
-  const refresh = useCallback(() => {
-    void act("git.pulls", { refresh: true }).then(() => read.reload())
-  }, [read])
-  if (!read.data && read.error) return <ErrorState message={`Could not load pull requests. ${read.error}`} onRetry={read.reload} />
-  if (read.data && pulls.length === 0) return <NoPulls loading={read.data.loading} loaded={read.data.loaded} error={read.data.error} onRetry={read.reload} />
-  const busy = read.loading || Boolean(read.data?.loading)
+  if (!read.data && read.error) return <>{top}<ErrorState message={`Could not load pull requests. ${read.error}`} onRetry={read.reload} /></>
+  if (read.data && pulls.length === 0) return <>{top}<NoPulls loading={read.data.loading} loaded={read.data.loaded} error={read.data.error} onRetry={read.reload} /></>
   const list = (
     <>
-      <PaneHeader title={LIST_TITLE} count={read.data ? `${pulls.length} open` : undefined}>
-        <ActionButton label="Refresh" icon={RefreshCw} shortcut="R" disabled={busy} className={cn("h-7", busy && "[&_svg]:animate-spin")} onClick={refresh} />
-      </PaneHeader>
+      {top}
       {read.data?.error ? <p className="px-3 pt-2 text-sm text-destructive">✗ {read.data.error}</p> : null}
       {read.data ? <PullList pulls={pulls} selectedId={id} onSelect={select} /> : <ListSkeleton />}
     </>
   )
   const detail = id !== undefined ? <PullDetail key={id} number={id} onChanged={read.reload} /> : null
-  return (
-    <SplitPane wide={wide} list={list} detail={detail} open={id !== undefined} onClose={close} hint="Select a pull request to see its detail." describe="Pull request detail" />
-  )
+  return <SplitPane wide={wide} list={list} detail={detail} open={id !== undefined} onClose={close} hint="Select a pull request to see its detail." describe="Pull request detail" />
+}
+
+const usePulls = () => useApiRead("git.pulls", {}, ["git"])
+
+function headerFacts(view: View, pulls: ReturnType<typeof usePulls>, issues: IssuesRead) {
+  const read = view === "issues" ? issues.read : pulls
+  const items = view === "issues" ? issues.read.data?.issues : pulls.data?.pulls
+  const busy = pulls.loading || Boolean(pulls.data?.loading) || (issues.enabled && (issues.read.loading || Boolean(issues.read.data?.loading)))
+  const count = items && (view === "pulls" || issues.enabled) ? `${items.length} open` : undefined
+  return { busy: busy || read.loading, count }
+}
+
+export function GitTab({ rest }: { rest: readonly string[] }) {
+  const pulls = usePulls()
+  const issues = useIssues()
+  const refresh = useRefresh(pulls, issues)
+  const view: View = rest[0] === "issues" ? "issues" : "pulls"
+  const { busy, count } = headerFacts(view, pulls, issues)
+  const top = <Header view={view} count={count} busy={busy} refresh={refresh} />
+  const body = view === "issues"
+    ? <IssuesView issues={issues} rest={rest.slice(1)} top={top} />
+    : <PullsView read={pulls} rest={rest} top={top} />
+  return <div className="flex min-h-0 flex-1 flex-col">{body}</div>
 }

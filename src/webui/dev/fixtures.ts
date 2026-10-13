@@ -101,10 +101,6 @@ export interface ScenarioFixture {
   mockKnowledge?: Array<{ agent: string; file: string; label: string; chars: number; over: boolean; notes: number }>;
   /** One open knowledge file for `knowledge.open` (absent means an empty file). */
   mockKnowledgeView?: { agent: string; file: string; label: string; chars: number; over: boolean; notes: number; content: string; entries: Array<Record<string, unknown>>; attached: Array<Record<string, unknown>>; detached: Array<Record<string, unknown>> };
-  /** Excalidraw sessions for `excalidraw.list` (masked links only; absent means none). */
-  mockExcalidraw?: Array<{ id: string; name: string; masked: string; agents: string[]; contribute: boolean; addedAt: string }>;
-  /** The full link `excalidraw.reveal` returns (absent means none). */
-  mockExcalidrawLink?: string;
   /** Open pull requests for the `git.*` calls, each with its detail fields (absent means none). */
   mockPulls?: Array<Record<string, unknown>>;
   /** Saved reviews of those pull requests, by number. */
@@ -173,8 +169,6 @@ export function loadScenario(name: string | undefined): ScenarioFixture {
     mockClassifierMetrics: Array.isArray(parsed.mockClassifierMetrics) ? (parsed.mockClassifierMetrics as ScenarioFixture["mockClassifierMetrics"]) : [],
     mockKnowledge: Array.isArray(parsed.mockKnowledge) ? (parsed.mockKnowledge as ScenarioFixture["mockKnowledge"]) : [],
     mockKnowledgeView: isRecord(parsed.mockKnowledgeView) ? (parsed.mockKnowledgeView as unknown as ScenarioFixture["mockKnowledgeView"]) : undefined,
-    mockExcalidraw: Array.isArray(parsed.mockExcalidraw) ? (parsed.mockExcalidraw as ScenarioFixture["mockExcalidraw"]) : [],
-    mockExcalidrawLink: typeof parsed.mockExcalidrawLink === "string" ? (parsed.mockExcalidrawLink as string) : undefined,
     mockPulls: Array.isArray(parsed.mockPulls) ? (parsed.mockPulls as ScenarioFixture["mockPulls"]) : [],
     mockReviews: Array.isArray(parsed.mockReviews) ? (parsed.mockReviews as ScenarioFixture["mockReviews"]) : [],
     mockReads: Array.isArray(parsed.mockReads) ? (parsed.mockReads as ScenarioFixture["mockReads"]) : [],

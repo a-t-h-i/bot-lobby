@@ -33,14 +33,25 @@ files the task changed, after the project's linter and a QA pass sized to the ch
 - **Plan**: plan with a panel of agents. **View plan** (`V`) opens the draft in a slide-out, where
   any line takes a comment.
 - **Tasks**: every task across sessions as a list or a board, with its steps, timings and **Resume**.
-- **Issues** and **Git**: plan from an open issue, or have an agent review a pull request read-only.
-  Both read GitHub through `gh` and post nothing.
+- **Git**: use the **Pull requests / Issues** switch to review pull requests or browse open issues
+  through `gh`. Issues retain descriptions, existing comments, **File issue** and **Plan it**;
+  pull-request reviews remain read-only and post nothing.
 - **Knowledge**: what each agent has learned about the project, which you can edit, annotate or ask
   about.
 
 The rail on the left holds settings, the key list, the theme and sounds. The project switcher
-(`P`) sits in the message box and opens any folder on the machine running bot-lobby. A task running
-in a background session opens its conversation from **Tasks**.
+(`P`) opens any folder on the machine running bot-lobby. Background sessions still run tasks;
+follow their progress and use **Resume** in **Tasks**, without a separate Sessions conversation page.
+
+Git opens pull requests at `#/git` and `#/git/<number>`, and issues at `#/git/issues` and
+`#/git/issues/<number>`. Old `#/issues` bookmarks redirect to Git. Former Sessions and Excalidraw
+addresses fall back to Lobby; Excalidraw integration is removed without deleting saved room links
+or external boards.
+
+The composer appears only on **Lobby**, **Tasks**, **Plan**, **Quick fix** and **Knowledge**, including
+supported detail routes and Knowledge's Docs/Chat views. On Git, Metrics and Settings it stays mounted
+but hidden and inert, preserving drafts and attachments (including uploads that finish while hidden)
+without taking space. Phone navigation remains available.
 
 | Agent | Does |
 | --- | --- |

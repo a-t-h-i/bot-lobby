@@ -22,7 +22,32 @@ Boundaries used throughout:
 
 ---
 
-## 1. Tab registry
+## Active Simplify Features policy
+
+This inventory was captured for the earlier phone redesign. The policy below supersedes
+its old registry, page tables and file anchors: removed surfaces are not supported screens.
+
+- Git replaces standalone Issues with a **Pull requests / Issues** switch (44px minimum
+  targets, arrow-key navigation), visible in loading, empty, disabled and error states.
+- `#/git` and `#/git/<number>` retain pull-request workflows; `#/git/issues` and
+  `#/git/issues/<number>` retain issue lists, descriptions, existing comments, creation
+  and **Plan it**. Local **File issue** remains available on empty lists.
+- Legacy Issues routes redirect to Git without dead history entries. With `lobby.issues`
+  off, explain the disabled state, retain API `404/not_found` and keep PRs accessible.
+  One `R` refreshes both lists independently when enabled, otherwise only PRs.
+- Sessions and Excalidraw pages, navigation and help are removed. Their old root/detail
+  routes fall back to Lobby. Background session management, task resume, execution and
+  Thinking/activity remain; no conversation replacement is embedded in Tasks.
+- Composer visibility is limited to Lobby, Tasks, Plan, Quick fix and Knowledge,
+  including details and Docs/Chat. On Git, Metrics and Settings it stays mounted but
+  hidden and inert, with `--composer-h` zero and no focus, attachment handling,
+  submission or shortcut activation. Drafts and uploads finishing while hidden survive;
+  phone navigation remains independently available.
+- Focus animates only the top-anchored box for about 360ms ease-out within ±3% scale.
+  The attached tray stays stationary without icon wobble; reduced motion retains a
+  focus indicator without animation.
+
+## 1. Prior tab registry (superseded by policy above)
 
 Tab numbers are **not stored in the code**: `src/webui/api/status.ts:13` builds
 each tab's shortcut as `` `Alt+${index + 1}` `` over the `visibleTabs()` order,
@@ -36,31 +61,20 @@ therefore shifts the numbers of the tabs after it today.
 | 2 | `tasks` | Tasks | `#/tasks`, `#/tasks/board`, `#/tasks/<id>`, `#/tasks/board/<id>` | `webui/src/tabs/tasks/TasksTab.tsx` (dispatches via `taskRoute(rest)`) | always |
 | 3 | `plan` | Plan | `#/plan`, `#/plan/previous`, `#/plan/previous/<id>` | `webui/src/tabs/plan/PlanTab.tsx` | always |
 | 4 | `quickfix` | Quick fix | `#/quickfix`, `#/quickfix/<id>` | `webui/src/tabs/quickfix/QuickfixTab.tsx` | always |
-| 5 | `issues` | Issues | `#/issues`, `#/issues/<number>` | `webui/src/tabs/issues/IssuesTab.tsx` | only while `lobby.issues` is on (`visibleTabs(issues)` filters it out when off); `IssuesOff` renders when the route is reached with the feature off |
-| 6 | `excalidraw` | Excalidraw | `#/excalidraw`, `#/excalidraw/<id>` | `webui/src/tabs/excalidraw/ExcalidrawTab.tsx` | always |
-| 7 | `git` | Git | `#/git`, `#/git/<number>` | `webui/src/tabs/git/GitTab.tsx` | always |
-| 8 | `knowledge` | Knowledge | `#/knowledge`, `#/knowledge/<agent>/<file>`, `#/knowledge/ask`, `#/knowledge/ask/<agent>/<file>` | `webui/src/tabs/knowledge/KnowledgeTab.tsx` | always |
-| 9 | `metrics` | Metrics | `#/metrics` | `webui/src/tabs/metrics/MetricsTab.tsx` | always in the registry today; **excluded from the phone carousel by the plan** and preserved unchanged at ≥768px |
+| 5 | `git` | Git | `#/git`, `#/git/<number>`, `#/git/issues`, `#/git/issues/<number>` | Git | always |
+| 6 | `knowledge` | Knowledge | `#/knowledge` and details/Chat | Knowledge | always |
+| 7 | `metrics` | Metrics | `#/metrics` | Metrics | desktop; excluded from phone carousel |
 
 Notes:
 
-- **`TAB_IDS` has 9 entries**; `visibleTabs(true)` returns all 9,
-  `visibleTabs(false)` returns 8 (Issues removed, order otherwise unchanged).
-  Because numbers are `index + 1`, hiding Issues makes Metrics `Alt+8` instead
-  of `Alt+9`. The plan requires this numbering **not** to be renumbered by the
-  phone carousel filter.
+- Issues is now a Git view; disabling it does not remove Git or renumber following tabs.
 - `src/lobby/prompts.ts` also holds `ANSWERED_ELSEWHERE` ("already answered in
   another window") and `ATTACHMENTS_MARK` ("Attached files:").
-- **Settings and Sessions are separate `Route` kinds, not tabs**: `#/settings`
-  → `webui/src/tabs/settings/SettingsTab.tsx`; `#/sessions` and
-  `#/sessions/<key>` → `webui/src/tabs/sessions/SessionsTab.tsx`. They have no
-  number and never appear in the tablist (`webui/src/app/router.ts:22-23`).
+- Settings remains an unnumbered route; removed-page fallbacks are described above.
 - `goKey` (`webui/src/tabs/registry.tsx:20`) is a separate letter→tab map used
   by the `g` chord (`webui/src/app/useLobbyKeys.ts:134`) and the Alt+H help
   rows (`webui/src/app/AltH.tsx:38`); it is not the visible tab number.
-- `registry.tsx` `routeBody` is exhaustive over `TabId`, so every tab id above
-  has a body. `detailId` (`registry.tsx:10`) decodes the first path segment for
-  sessions/quickfix/excalidraw, but Plan and Issues receive raw `route.rest`.
+- Git distinguishes issues by the `issues` segment.
 
 ---
 
@@ -109,7 +123,7 @@ Route parsing: `webui/src/app/taskRoute.ts` → `{ board, id }`.
 | Delivery review | `detail.data.delivery` | `DeliveryReview.tsx` (`DeliveryReview`, `Panel`, `Facts`, `Status`, `Actions`, `Confirmation`, `useDeliveryController`) | inline `Section` + confirmation `Popup` (`PRIORITY.confirm`) | busy "Updating delivery…" `role="status"`; errors `role="alert"`; `STATUS` map `pending_approval/deferred/in_progress/successful/recoverable_failure` | action grid `sm:grid-cols-2` stacks below 640; `break-all`; buttons `h-8` |
 | Comments | inside detail | `Comments.tsx` (`Comments`, `CommentItem`, `CommentMeta`), `ui/InlineEditor.tsx` | inline list; `InlineEditor` replaces body | empty copy varies (`finished`/`canComment`); **`read.error` never surfaced** (`Comments.tsx:53`) | "Edit" `size="sm"`; Markdown; textarea |
 | Action bar / dialogs | top of detail | `TaskDetail.tsx` (`Actions`), `ui/Actions.tsx` (`ActionBar`, `ActionButton`), `ui/ConfirmButton.tsx` | sticky `role="toolbar"`; confirm dialogs | archive confirm; delete "This cannot be undone." | buttons `h-8`; `flex-wrap`; visible `E/R/A/O/S/Delete`; `AutoMode` `Switch` |
-| Resume / Open in session / Conversation | detail actions | `ResumeTask.tsx`, `OpenInSession.tsx`, `TaskDetail.tsx` (`OpenTask`) | navigation / toast | busy/disabled; toasts | navigation to `#/lobby` or `#/sessions/<id>`; toasts clear `--composer-h` |
+| Resume / background execution | Tasks actions | Tasks | action / toast | busy/disabled | no Sessions conversation link; retain Thinking/activity |
 
 Interaction triggers: detail nav is a **route change** (`#/tasks/<id>`, `#/tasks`, `#/tasks/board[/id]`); List/Board switch goes through `go(tabHash("tasks", …))`; composer target set by `setComposerTask(commentable)` and cleared on cleanup; draft is Shell-level single state (`Composer.tsx:152`).
 
@@ -136,7 +150,7 @@ Owning files: `webui/src/tabs/plan/{PlanTab,Conversation,Draft,Header,LineCommen
 | Previous plan — detail | `#/plan/previous/<id>` | `Previous.tsx` `Detail` | sheet | loading returns `null` (blank) (`:80`); error `ErrorState` | sticky `ActionBar`; `Markdown(plan.draft)`; full `PanelConversation` |
 | New plan / Delete plan | header / detail | `Header.tsx`, `Previous.tsx`, `ConfirmButton` | **AlertDialog** `PRIORITY.confirm` | — | dialog `max-w-[calc(100%-2rem)] sm:max-w-md`; `Esc`/`Y`/`Delete` caps |
 
-Route quirk: `#/plan/previous/<id>` passes raw (encoded) `rest` to `PlanTab`, unlike sessions/quickfix/excalidraw which decode.
+Route note: Plan and Quick fix detail routes remain.
 
 ### 2.4 Quickfix (`#/quickfix`)
 
@@ -160,43 +174,9 @@ Owning files: `webui/src/tabs/quickfix/{QuickfixTab,JobList,JobDetail}.tsx`.
 
 Status strings: `queued`, `running`, `success`, `failed`, `timeout`, `cancelled`, `held`. New jobs are submitted only through the global composer (`act("quickfix.submit", …)`). Composer target `{id:"quickfix", pill:"Quick fix"}` + Oracle.
 
-### 2.5 Issues (`#/issues`)
+### 2.5 Git Issues
 
-Owning files: `webui/src/tabs/issues/{IssuesTab,IssueList,IssueDetail}.tsx`.
-
-| Screen / state | Route / trigger | Owning file(s) | Detail mechanism | Empty / loading / error | Phone risks |
-|---|---|---|---|---|---|
-| Feature off | `lobby.issues` off | `IssuesTab.tsx` `IssuesOff` | inline | `EmptyTitle "Issues are off"`, `EmptyDescription` `font-mono` `OFF` | — |
-| List loading | `#/issues` | `IssuesTab.tsx:100` | sheet on select | `ListSkeleton` | — |
-| List error | `issues.list` fails (not "off") | `IssuesTab.tsx:96` | inline | `ErrorState` | — |
-| List empty | loaded, no open issues | `IssuesTab.tsx` `NoIssues` | inline | `NOT_LOADED` / `LOADING_LIST` / `EMPTY_LIST` / `✗ {error}` + Retry | `NoIssues` plus a second `CreateBox` in a `pb-dock` wrapper (`:111`) — two `CreateBox` instances on this path |
-| List | `#/issues` | `IssueList.tsx`, `IssuesTab.tsx` `CreateBox`, `SplitPane.tsx` | list pane + **sheet** | row error line when `read.data.error` | rows `ROW min-h-10`; row may grow tall when title wraps; labels wrap |
-| New issue composer | always in list pane | `IssuesTab.tsx` `CreateBox`, `ui/NoteForm.tsx` | inline `Pane` | `NoteForm` keeps text on failure | "File issue" 32px |
-| Detail loading | `#/issues/<number>` | `IssueDetail.tsx:96` | sheet | `<Spinner/> loading #{number}…` | — |
-| Detail error | `issues.get` fails | `IssueDetail.tsx:97` | sheet | "Could not load #{number}. …" (no retry) | — |
-| Detail | `#/issues/<number>` | `IssueDetail.tsx`, `SplitPane.tsx` | **sheet** `w-[92%]` | `NO_DESCRIPTION` | title `#N` `break-words`; `issue.url` `break-all`; `ActionBar` sticky; Description Markdown |
-| Comments | `issue.comments` | `IssueDetail.tsx` `Comments`/`Comment` | sheet | hidden when none | `card-flat` cards; long author/body |
-| Plan it | `PlanIt` in detail | `IssueDetail.tsx` `PlanIt`, `ConfirmButton` | **AlertDialog** | — | "Plan #N with the panel?"; confirm → `go("#/plan")` + seed session |
-
-`issueNumber` accepts only positive integers (else list). `IssueDetail` computes `now = Date.now()` once per render (no ticker). Composer target on Issues is Oracle only.
-
-### 2.6 Excalidraw (`#/excalidraw`)
-
-Owning files: `webui/src/tabs/excalidraw/{ExcalidrawTab,SessionList,SessionDetail}.tsx`.
-
-**The board is never embedded.** There is no iframe, no `@excalidraw/excalidraw` import and no `<canvas>`; `Open board` is an external `<a target="_blank">` (`ExcalidrawTab.tsx:6-10`, `Actions.tsx:96-99`). Any pinch/scroll board requirement applies to the external site, not this app. `MAX_SESSIONS = 5`.
-
-| Screen / state | Route / trigger | Owning file(s) | Detail mechanism | Empty / loading / error | Phone risks |
-|---|---|---|---|---|---|
-| No sessions at all | `#/excalidraw`, `sessions.length === 0` | `ExcalidrawTab.tsx` `ExcalidrawEmpty` | full page (not `SplitPane`), `@container @4xl:grid-cols-[…]` | `EMPTY_HEADLINE` "No sessions yet.", `EMPTY_LEAD`, `EMPTY_LIMIT` | single column at phone |
-| Session list | `#/excalidraw` (sessions exist) | `ExcalidrawTab.tsx` `list`, `SessionList.tsx` | list pane; ≥1024 two-pane | count `${sessions.length}/${MAX_SESSIONS}`; `ListSkeleton`; `ErrorState "Could not load sessions."` | rows `ROW min-h-10` (comment claims 44px); masked link `font-mono break-all` |
-| No session selected (desktop only) | `wide && read.data && !selected` | `ExcalidrawTab.tsx` `Overview` | ≥1024 detail pane | capacity/`Steps`/add boxes | **not rendered below 1024px** (`:74-76`): phone with sessions and none selected shows the list alone, no overview |
-| Session detail | `#/excalidraw/<id>` | `SessionDetail.tsx` | **sheet** below 1024; two-pane ≥1024 | `ActionBar` Copy / Open board or Reveal / Look only / Check / Remove; facts `draw`/`look only`, agent count, `not checked yet` / `checking the room…` / `reachable` / `unreachable` | `ActionBar` wraps; `Line` `grid-cols-[6rem_minmax(0,1fr)]` tight at 320px; revealed link `break-all` |
-| Reveal link | "Reveal" (`R`) | `SessionDetail.tsx` `reveal` | inline call | toast `REVEAL_FAILED` | `LINK_NOTE` "Masked until revealed…" |
-| Agent assignment | checkbox chips | `SessionDetail.tsx` `AgentCard`, `AgentChip` | inline card | `EXCALIDRAW_AGENTS` | `AgentChip h-9` (36px); `@md:grid-cols-2` |
-| Rename / Add by link / New room | field forms | `SessionDetail.tsx` `FieldForm`, `RenameForm`, `LinkForm`, `NewRoomForm`, `AddForms` | inline | `required` disables empty; busy spinner; `ADD_HINT`, `NEW_ROOM_HINT` | input `h-8` (32px) |
-| Check room | "Check" (`T`) | `ExcalidrawTab.tsx` `check`, `SessionDetail.tsx` `CheckLine` | inline | `CHECKING_ROOM`, `CHECK_HINT` | — |
-| Remove session | "Remove" (`Delete`) | `SessionDetail.tsx` `ConfirmButton` | **overlay confirm** | `Remove "<name>"?` | — |
+See the active policy above for routes, switch, states and retained local form/detail actions.
 
 ### 2.7 Git (`#/git`)
 
@@ -301,7 +281,7 @@ wraps unfiltered (`Shell.tsx:114-122`); Metrics is a normal `TabId`
 | Toasts / notifications | `toast.*` | `webui/src/lib/toast.ts`, `webui/src/components/ui/toaster.tsx` | one fixed toast at `bottom: calc(var(--composer-h) + 0.25rem)` | `role="status"` / `aria-live`; waits while `useAnyOverlay` | depends on `--composer-h`; **no safe-area term** |
 | Browser notifications | Settings toggle | `webui/src/app/notify.ts` | only while `document.hidden`; `useSoundUnlock` | `enableNotifications` → granted/denied/unsupported | `Notification` may be unsupported on phone; sound needs a user gesture |
 
-Header controls (`Header.tsx`): `IconLink` Sessions (`Alt+O`), Settings
+Header controls (`Header.tsx`): Settings
 (`Alt+S`), `HelpButton` (`Alt+H`), `ThemeToggle` (`D`), `SoundToggle`,
 `Connection`, `SessionChip`. There is **no Thinking control in the header**; the
 Thinking key is surfaced only by the orb/thoughts pane.
@@ -321,31 +301,13 @@ panels are `<div hidden>` (client-only, no per-section route).
 | Agents | per agent (`AGENT_ORDER`, 8): Model (`ModelChoice` Combobox + custom input), Effort (`EffortSlider`), Instructions (disclosure), Time limit (`MinutesField w-24`), MCP tool grants (`Textarea rows=2`) | `md:grid-cols-2`, `xl:grid-cols-2`; card header `truncate`; `min-h-8` disclosure |
 | Workflow | Git isolation `off`/`branch`/`worktree` (`Combobox`) | — |
 | Linting | Lint gate `off`/`advise`/`block`, Command, File types (when command custom), Time limit, "Found in this project" (`foundNone`, installed/not installed) | long folder `truncate` |
-| Lobby | On when pi starts, Issues tab, Conversation pane, Activity log pane, Thinking bubble (switches), Planning rounds, Split long plans, Port, Open browser | row label + `Switch` |
+| Lobby | On when pi starts, Issues in Git, Conversation pane, Activity log pane, Thinking bubble (switches), Planning rounds, Split long plans, Port, Open browser | row label + `Switch` |
 | Classifier | enabled, Host, Model, API key, 8 feature switches (Planning seats, Obvious answers, Task triage, Effort routing, QA risk, Pull request read, Relevant knowledge, File hints), Cheaper model | 8 long help rows |
 | Appearance & notifications | Prompt sounds, Mode (light/dark/system), Colour theme `ThemePicker` (`role=radiogroup`, swatch `grid-cols-2 sm:grid-cols-3 lg:grid-cols-4`), Saved themes (rename/remove), Import a theme (`Textarea` + file input, `MAX_THEME_BYTES`), Browser notifications, Install as app, Fullscreen when supported | switches at 640, not 768; rename form `flex-wrap`; buttons row may wrap |
 
-### 3.3 Sessions (`#/sessions`, `#/sessions/<key>`)
+### 3.3 Background sessions
 
-Owning files: `webui/src/tabs/sessions/{SessionsTab,SessionList,SessionDetail,ChatView,Dialogs,WhereIcon}.tsx`.
-Not numbered.
-
-| Screen / state | Route / trigger | Owning file(s) | Detail mechanism | Empty / loading / error | Phone risks |
-|---|---|---|---|---|---|
-| Sessions list | `#/sessions` | `SessionsTab.tsx:52-81`, `SessionList.tsx` | list; detail **sheet** below 1024 | `ListSkeleton`; `ErrorState` on `sessions.list` error | `PaneHeader` sticky `top-0`; row `px-4 py-3`; `--control-target: 40px` |
-| This window / Background / Other terminals groups | derived | `SessionList.tsx:62-71`, `words.ts:9-10` | inline sections | groups hidden when empty | — |
-| Session row | tap/click | `SessionList.tsx:15-52` | button row, `WhereIcon`, "This window" badge, spinner, "N waiting" | status text | 44px claim vs `--control-target: 40px` |
-| "No other sessions" | one entry | `SessionsTab.tsx:73` | inline | `NO_OTHERS` | — |
-| Other windows links | `status.windows` | `SessionsTab.tsx:24-46` | inline `Section` | hidden if none | `min-h-8` (32px) links |
-| Session detail | `#/sessions/<key>` | `SessionDetail.tsx:74-87` | sheet below 1024; inline ≥1024 | — | "Back · B", "Move · M", "Stop · S" key hints visible |
-| Detail actions | this-window → "Back to the Lobby"; else "Move here" + Stop confirm | `SessionDetail.tsx:36-63` | `ActionBar`; Stop `ConfirmButton` `PRIORITY.confirm` | Stop disabled if not alive | — |
-| Task / waiting / other-terminal note | task, dialogs | `SessionDetail.tsx:21-34,78-83` | inline | `NOTHING_SAID`, `OTHER_TERMINAL_NOTE` | — |
-| Missing session | key not in list | `SessionsTab.tsx:48-50` | inline | "That session is not on the list any more." | — |
-| Questions waiting | `entry.dialogs` | `Dialogs.tsx:76-88` | inline cards | `waitingText(n)` `role="status"` | select buttons wrap; typed `Textarea rows=2/4` |
-| Answer select/confirm/typed | method field | `Dialogs.tsx:45-57` | inline | Send disabled when empty | — |
-| Put away | button | `Dialogs.tsx:70-72` | sends `cancelled` | — | — |
-| Conversation | — | `ChatView.tsx:60-82` | inline ordered list | `empty` text; "Load earlier messages" | you-bubble `max-w-[85%]`, oracle `max-w-[90%]` |
-| Remote conversation | background/other-terminal | `ChatView.tsx:84-100` `RemoteChat`, `useApiRead("sessions.chat")` paged `before` | inline | "Loading the conversation…", `emptyNote()` | — |
+Session management and execution remain; there is no Sessions conversation page.
 
 ### 3.4 Question popups and cards
 
@@ -468,7 +430,7 @@ Users of `useOverlaySlot`/`PRIORITY` (grep-verified): `AltH.tsx:11,146` (help),
 | Pending question | `prompts` topic non-empty, not minimised | `QuestionPopup.tsx:63-67` (`PRIORITY.question`), `Shell.tsx:206`; header pill when minimised (`:181`) | centered `Popup`, blurred backdrop; one of N; Later/Cancel | `max-w-3xl`; expanded `92svh`; pill label `sm:inline` |
 | Blocking overlay open | any `useOverlaySlot` winner | `lib/overlay.ts`, `Composer.tsx:20,191-196`, `toaster.tsx:6`, `keyGuards.ts` | composer `opacity-0` + `inert`, `--composer-h` → `0px`; configured keys blocked | composer vanishes; the page regains the dock height |
 | Software keyboard open | none | — | **no handler**: no `visualViewport`/`innerHeight`/`dvh`; `html,body { height:100%; overflow:hidden }` (`index.css:305-313`) | real risk for a fixed-percentage shell; keyboard height untracked |
-| Session switch / busy transition | `switchProject` / `act("sessions.switch")` | `lib/switching.ts:10-38`, `Shell.tsx:141`, `SessionDetail.tsx:48` | `switchStarted`/`switchEnded` gate first paint via `afterSwitch`; `SwitchProject` reloads the page | reload drops drafts on purpose; 900ms safety cap |
+| Project switch | project switcher | Shell | reload | distinct from draft-preserving in-app navigation |
 
 Boot: `webui/src/app/bootstrap.ts` `useBootstrap` (`:14-30`) signs in and marks
 `SHELL_TOPICS`; `install.ts` handles `beforeinstallprompt` and
@@ -521,7 +483,7 @@ non-viewport CSS queries 7 (`pointer:coarse` ×2, `hover:none + pointer:coarse`
 | `data-[side=right]:sm:max-w-sm`; `data-[side=right]:sm:max-w-3xl` | `components/ui/sheet.tsx:69`; `ui/SplitPane.tsx:56` | Tailwind | Sheet width; SplitPane overrides to `3xl` |
 | `sm:px-5` ×2, `sm:w-auto`, `sm:px-14` | `prompts/MockupViewer.tsx:141,149,181,207` | Tailwind | viewer chrome |
 | `sm:inline` | `prompts/QuestionPopup.tsx:54` | Tailwind | QuestionsPill "waiting" word |
-| `sm:px-8` | `tabs/excalidraw/ExcalidrawTab.tsx:71` | Tailwind | Excalidraw page padding |
+
 | `sm:p-4` | `tabs/lobby/Thoughts.tsx:154` | Tailwind | thoughts log padding |
 | `sm:grid-cols-4` | `tabs/metrics/Classifier.tsx:30` | Tailwind | classifier grid |
 | `sm:grid-cols-3`, `sm:grid-cols-5`, `sm:[&>:last-child]:col-span-1` | `tabs/metrics/MetricsTab.tsx:99`, `tabs/metrics/Tiles.tsx:36` | Tailwind | metrics tiles/grids |
@@ -551,7 +513,7 @@ non-viewport CSS queries 7 (`pointer:coarse` ×2, `hover:none + pointer:coarse`
 
 | Breakpoint / query | Where defined | Kind | Affects |
 |---|---|---|---|
-| `(min-width: 1024px)` | `ui/SplitPane.tsx:20` (`useWide` via `app/hooks.ts:30 useMediaQuery`) | JS matchMedia | list+detail: sheet below 1024 → two panes at ≥1024 (Tasks, Issues, Git, Quickfix, Sessions, Knowledge, Excalidraw) |
+| `(min-width: 1024px)` | `ui/SplitPane.tsx:20` (`useWide` via `app/hooks.ts:30 useMediaQuery`) | JS matchMedia | list+detail: sheet below 1024 → two panes at ≥1024 (Tasks, Git PRs/issues, Quick fix, Knowledge) |
 | `lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]` | `prompts/QuestionCard.tsx:371` | Tailwind | options beside focused preview |
 | `lg:inline-flex` | `tabs/lobby/TaskHeader.tsx:90` | Tailwind | task-header step |
 | `lg:grid-cols-2` | `tabs/metrics/Charts.tsx:62` | Tailwind | chart pair |
@@ -577,7 +539,7 @@ non-viewport CSS queries 7 (`pointer:coarse` ×2, `hover:none + pointer:coarse`
 | `(prefers-color-scheme: dark)` | `components/theme-provider.tsx:18,34,129`; `tabs/settings/ThemeGroup.tsx:29`; `app/Header.tsx:103` | JS matchMedia | theme resolution/labels |
 | `(display-mode: fullscreen/standalone/minimal-ui)` | `app/install.ts:61,63` | JS matchMedia | installed-app detection |
 | `@container` + `@[8rem]/@[11rem]/@[22rem]/@[28rem]/@[34rem]:` | `app/Composer.tsx:449,452,456,459,462,465,478` | Tailwind container | composer key-hint cluster |
-| `@container` + `@md/@lg/@2xl/@3xl/@4xl:` | `tabs/excalidraw/ExcalidrawTab.tsx:72`; `tabs/excalidraw/SessionDetail.tsx:69,156,242,310,330`; `tabs/plan/PlanTab.tsx:56,66,83`; `tabs/plan/Roster.tsx:95` | Tailwind container | Excalidraw/Plan internal grids |
+| Container grids | Plan and roster | Tailwind | Plan internal grids |
 
 ### Where phone treatment is split today
 
@@ -622,12 +584,7 @@ The trickiest screens and the seams that will decide the redesign:
    Option rows and chips are 32–36px, below the 44px target. The plan removes
    visible key hints here (`Y`/`N`, `E`, digits, arrows) but must keep the
    keyboard behaviour.
-3. **Excalidraw.** No canvas is rendered in the webui: the board is an external
-   link. So "Excalidraw canvas" work is really the session list/detail sheet,
-   the masked `break-all` link, the `grid-cols-[6rem_minmax(0,1fr)]` fact lines,
-   and the desktop-only `Overview` that does not exist below 1024px (phone with
-   sessions but nothing selected shows the list alone). Do not add an embedded
-   board.
+3. **Removed pages.** Former Sessions/Excalidraw routes fall back to Lobby.
 4. **Wide tables and code.** `Markdown` already wraps tables (`overflow-x-auto`)
    and `<pre>` (`overflow-x-auto`); the Metrics table is a 15-column
    `max-h-80 overflow-auto` region; Git `Files` is an `overflow-x-auto` table;
@@ -697,9 +654,7 @@ The trickiest screens and the seams that will decide the redesign:
    dock's `env(safe-area-inset-bottom)` (`Composer.tsx:334`) while
    `.thinking-bubble` adds it again (`index.css:598`) and `Toaster` omits it
    (`toaster.tsx:33`).
-10. **Excalidraw `Overview` is desktop-only** (`ExcalidrawTab.tsx:74-76`): a
-    phone with sessions and nothing selected gets the list alone, with no
-    overview and no empty-detail hint.
+10. **Removed routes** follow destination composer visibility.
 11. **Git has no diff renderer**: `Files` is a path/size table and code blocks
     appear only inside Markdown bodies.
 12. **Attachment images have no in-app preview dialog**: `AttachmentList` opens
@@ -709,10 +664,9 @@ The trickiest screens and the seams that will decide the redesign:
     hidden by input device, not width, so `Keys` rendered without that class
     (ActionBars, confirm dialogs, Sheet close, Plan intro, Metrics search)
     remain visible in narrow non-touch windows.
-14. **Plan and Issues do not decode their route segments** (`registry.tsx:55`
-    passes raw `rest`), unlike sessions/quickfix/excalidraw (`detailId`).
+14. **Git routes** distinguish issue details from pull requests.
 15. **Phone baseline captures are incomplete**: `test/web/phone-baseline/`
     covers only lobby, tasks, plan, issues, quickfix and the git list at
-    768/800/1024/1280, light theme; there are no knowledge, excalidraw or
+    768/800/1024/1280, light theme; there are no knowledge or
     metrics captures and no detail/overlay captures. Plan step 1's "capture the
     larger layouts" is unmet for those.

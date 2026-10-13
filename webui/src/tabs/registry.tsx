@@ -2,29 +2,20 @@
  * Route → tab body. The tab switch is exhaustive over `TabId`, so adding a
  * tab to the shared list fails the build until it has a body here.
  */
-import { useEffect, type ReactNode } from "react"
-import { go, type Route } from "@/app/router"
+import type { ReactNode } from "react"
+import type { Route } from "@/app/router"
 import { GitTab } from "./git/GitTab"
-import { IssuesTab } from "./issues/IssuesTab"
 import { KnowledgeTab } from "./knowledge/KnowledgeTab"
 import { taskRoute } from "@/app/taskRoute"
-import { ExcalidrawTab } from "./excalidraw/ExcalidrawTab"
 import { LobbyTab } from "./lobby/LobbyTab"
 import { MetricsTab } from "./metrics/MetricsTab"
 import { SettingsTab } from "./settings/SettingsTab"
 import { PlanTab } from "./plan/PlanTab"
 import { QuickfixTab } from "./quickfix/QuickfixTab"
-import { SessionsTab } from "./sessions/SessionsTab"
 import { TasksTab } from "./tasks/TasksTab"
 import { useMediaQuery } from "@/app/hooks"
 
-export const goKey = { l: "lobby", p: "plan", t: "tasks", i: "issues", u: "git", n: "knowledge", q: "quickfix", m: "metrics", e: "settings", x: "excalidraw" } as const
-
-/** An address that leads nowhere any more sends the page on to `to`. */
-function Redirect({ to }: { to: string }) {
-  useEffect(() => go(to), [to])
-  return null
-}
+export const goKey = { l: "lobby", p: "plan", t: "tasks", u: "git", n: "knowledge", q: "quickfix", m: "metrics", e: "settings" } as const
 
 function MetricsRoute() {
   const phone = useMediaQuery("(max-width: 767.98px)")
@@ -50,8 +41,6 @@ function detailId(rest: string[]): string | undefined {
 
 export function routeBody(route: Route): ReactNode {
   if (route.kind === "settings") return <SettingsTab />
-  // No list of sessions: a task's background session still opens its conversation here; the bare address is the Lobby.
-  if (route.kind === "sessions") return route.key ? <SessionsTab id={detailId([route.key])!} /> : <Redirect to="#/lobby" />
   switch (route.tab) {
     case "lobby":
       return <LobbyTab />
@@ -61,15 +50,11 @@ export function routeBody(route: Route): ReactNode {
       return <PlanTab rest={route.rest} />
     case "quickfix":
       return <QuickfixTab id={detailId(route.rest)} />
-    case "issues":
-      return <IssuesTab rest={route.rest} />
     case "metrics":
       return <MetricsRoute />
     case "git":
       return <GitTab rest={route.rest} />
     case "knowledge":
       return <KnowledgeTab rest={route.rest} />
-    case "excalidraw":
-      return <ExcalidrawTab id={detailId(route.rest)} />
   }
 }

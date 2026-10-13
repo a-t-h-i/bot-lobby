@@ -1,6 +1,12 @@
 # Phone verification handoff
 
-## Current evidence (not a completion verdict)
+## Prior phone-redesign evidence (not Simplify Features verification)
+
+These results predate Simplify Features. Rerun retained workflows and the updated checklist
+on desktop Chromium and phone Chromium/WebKit at 320, 390 and 767px, light/dark; tag relevant
+desktop dark checks `@theme`. Verify Git switching, removed-route fallbacks, hidden-control
+isolation, reclaimed space, draft/upload preservation, reduced motion and console/CSP errors.
+No new runtime result is claimed here.
 
 - **PASS — focused Chromium light 390:** `/tmp/task-phone-focus.log` records **22/22 passed (2.3m, 2 workers)** on a fresh build: 16 carousel tests and 6 workflow tests. This supersedes the obsolete partial-failure report. No audio assertions were run.
 - **FINAL PASS — master `npm run typecheck` and `npm run web:build`:** master reports both passed again after the final Tasks `min-h-11` desktop-guard fix. This source-only handoff did not execute those checks.
@@ -16,7 +22,7 @@
 | Engine / owner | Widths and themes | States / evidence | Status |
 | --- | --- | --- | --- |
 | Chromium automation | Focused light 390 (including explicit 767/768 and short-landscape cases) | `phone-carousel.spec.ts`: 120ms settling + 500ms commitment, neutral candidate through 499ms, restart/cancellation, immediate tap/keyboard selection, drag, repeated wraps both directions, semantic tablist/original digits, 767/768 draft and attachment preservation, keyboard handle, 0/1/2 tabs, Metrics route/shortcut | **PASS: 16 tests** in the fresh-build focused run; predates final Tasks sizing removal |
-| Chromium automation | Focused light 390 (including short landscape) | `phone-screens.spec.ts`: all available non-Metrics tabs plus Settings/Sessions; bounded rows and essential targets; Tasks sheet/Back and Knowledge inline draft; landscape orb/dock; attachment thumbnail/navigation/Send/Stop using the real held fixture; questions/custom/multi-select; mockup expansion/Escape | **FINAL PASS: 6/6 tests (1.4m, 1 worker)** after the final desktop-guard fix; `/tmp/task-phone-final-smoke.log` |
+| Chromium automation | Focused light 390 (including short landscape) | `phone-screens.spec.ts`: all available non-Metrics tabs plus Settings (Sessions coverage belonged to the prior UI); bounded rows and essential targets; Tasks sheet/Back and Knowledge inline draft; landscape orb/dock; attachment thumbnail/navigation/Send/Stop using the real held fixture; questions/custom/multi-select; mockup expansion/Escape | **FINAL PASS: 6/6 tests (1.4m, 1 worker)** after the final desktop-guard fix; `/tmp/task-phone-final-smoke.log` |
 | Chromium automation | 320, 390, 767; light + dark | Both phone files across the full configured width/theme matrix | **PENDING**: earlier 132-test attempt timed out; focused 22/22 is not a full-matrix result |
 | WebKit automation | 320, 390, 767; light + dark | Same carousel and workflow contracts, including short landscape | **BLOCKED at launch**: supported runtime required; no UI assertion result |
 | Larger-screen regression | 768, 800, 1024, 1280, 1440; light + dark | 110 baseline PNGs; full after-shots and comparisons; non-audio interaction regressions; preserve 768–1023 detail sheets and 1024 two-pane boundary | Baselines **COMPLETED**; full after-capture/comparison **PENDING**; 42 Lobby/tab + 31 support passes are **EARLIER, NOT FINAL** |
@@ -36,7 +42,7 @@ These remain requirements, not automatically waived by the user's request to fin
 
 ## Manual non-gates
 
-The unchanged checklist is `docs/web-ui/phone-device-checklist.md`. Actual Android Chrome/iPhone Safari testing and **all sound testing** belong to the user and do not block implementation completion. Browser automation does not establish real keyboard, safe-area or audio behaviour. These non-gates do not waive the pending automated matrix, larger-screen comparisons or final QA gate.
+The updated checklist is `docs/web-ui/phone-device-checklist.md`. Actual Android Chrome/iPhone Safari testing and **all sound testing** belong to the user and do not block implementation completion. Browser automation does not establish real keyboard, safe-area or audio behaviour. These non-gates do not waive the pending automated matrix, larger-screen comparisons or final QA gate.
 
 ## Run handoff
 

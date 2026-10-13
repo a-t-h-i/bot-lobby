@@ -1,30 +1,28 @@
 /**
- * The Issues page: the open issues on the left, the selected
+ * The Issues view inside Git: the open issues on the left, the selected
  * one's body and comments on the right (a Sheet below 1024 px), and the box
- * that files a new one underneath. `#/issues/<number>` selects an issue; the
+ * that files a new one underneath. `#/git/issues/<number>` selects an issue; the
  * list is read again on every `issues` topic change. With `lobby.issues` off
  * the server refuses every call and the page says so.
  */
-import { useCallback } from "react"
+import type { ReactNode } from "react"
 import { go, tabHash } from "@/app/router"
 import { ErrorState } from "@/app/States"
 import { useTopic } from "@/app/hooks"
 import { useApiRead } from "@/app/useApiRead"
-import { RefreshCw, CircleDot } from "lucide-react"
-import { ActionButton } from "@/ui/Actions"
+import { CircleDot } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyMedia, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { act } from "@/lib/act"
-import { cn } from "@/lib/utils"
 import { NoteForm } from "@/ui/NoteForm"
-import { ListSkeleton, Pane, PaneHeader, SplitPane, useWide } from "@/ui/SplitPane"
+import { ListSkeleton, Pane, SplitPane, useWide } from "@/ui/SplitPane"
 import type { StatusInfo } from "@protocol"
 import { IssueDetail } from "./IssueDetail"
 import { IssueList } from "./IssueList"
-import { EMPTY_LIST, LIST_TITLE, LOADING_LIST, NOT_LOADED, OFF } from "./words"
+import { EMPTY_LIST, LOADING_LIST, NOT_LOADED, OFF } from "./words"
 
-const close = () => go(tabHash("issues"))
-const select = (number: number) => go(tabHash("issues", String(number)))
+const close = () => go(tabHash("git", "issues"))
+const select = (number: number) => go(tabHash("git", "issues", String(number)))
 
 /** `rest[0]` as an issue number; anything non-numeric means the list. */
 export function issueNumber(rest: readonly string[]): number | undefined {
@@ -78,44 +76,45 @@ function CreateBox({ onCreate }: { onCreate: (text: string) => Promise<boolean> 
   )
 }
 
-export function IssuesTab({ rest }: { rest: readonly string[] }) {
-  const wide = useWide()
+export type IssuesRead = ReturnType<typeof useIssues>
+
+/** The issue list read, never sent while `lobby.issues` is off. */
+export function useIssues() {
   const enabled = useTopic<StatusInfo>("status").data?.issuesEnabled ?? true
   const read = useApiRead("issues.list", {}, ["issues"], enabled)
+  return { enabled, read }
+}
+
+function issuesProblem({ enabled, read }: IssuesRead): ReactNode {
+  if (!enabled || read.error?.includes("issues are off")) return <IssuesOff />
+  if (!read.data && read.error) return <ErrorState message={`Could not load issues. ${read.error}`} onRetry={read.reload} />
+  return null
+}
+
+/** The Issues half of the Git page: `rest` is what follows `#/git/issues`. */
+export function IssuesView({ issues: state, rest, top }: { issues: IssuesRead; rest: readonly string[]; top: ReactNode }) {
+  const wide = useWide()
+  const { read } = state
   const id = issueNumber(rest)
   const issues = read.data?.issues ?? []
-  const now = Date.now()
-  const refresh = useCallback(() => {
-    void act("issues.list", { refresh: true }).then(() => read.reload())
-  }, [read])
   const create = async (text: string) => {
-    const result = await act("issues.create", { text })
-    if (!result) return false
+    if (!(await act("issues.create", { text }))) return false
     read.reload()
     return true
   }
-  if (!enabled) return <IssuesOff />
-  if (!read.data && read.error) {
-    return read.error.includes("issues are off") ? <IssuesOff /> : <ErrorState message={`Could not load issues. ${read.error}`} onRetry={read.reload} />
+  const problem = issuesProblem(state)
+  if (problem) return <>{top}{problem}</>
+  if (read.data && issues.length === 0) {
+    return <>{top}<NoIssues loading={read.data.loading} loaded={read.data.loaded} error={read.data.error} onRetry={read.reload} /><div className="shrink-0 pb-dock"><CreateBox onCreate={create} /></div></>
   }
-  const busy = read.loading || Boolean(read.data?.loading)
   const list = (
     <>
-      <PaneHeader title={LIST_TITLE} count={read.data ? `${issues.length} open` : undefined}>
-        <ActionButton label="Refresh" icon={RefreshCw} shortcut="R" disabled={busy} className={cn("h-7", busy && "[&_svg]:animate-spin")} onClick={refresh} />
-      </PaneHeader>
+      {top}
       {read.data?.error ? <p className="px-3 pt-2 text-sm text-destructive">✗ {read.data.error}</p> : null}
-      {read.data ? <IssueList issues={issues} selectedId={id} now={now} onSelect={select} /> : <ListSkeleton />}
+      {read.data ? <IssueList issues={issues} selectedId={id} now={Date.now()} onSelect={select} /> : <ListSkeleton />}
       <CreateBox onCreate={create} />
     </>
   )
   const detail = id !== undefined ? <IssueDetail key={id} number={id} /> : null
-  const body = read.data && issues.length === 0
-    ? <><NoIssues loading={read.data.loading} loaded={read.data.loaded} error={read.data.error} onRetry={read.reload} /><div className="shrink-0 pb-dock"><CreateBox onCreate={create} /></div></>
-    : <SplitPane wide={wide} list={list} detail={detail} open={id !== undefined} onClose={close} hint="Select an issue to read it." describe="Issue detail" />
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      {body}
-    </div>
-  )
+  return <SplitPane wide={wide} list={list} detail={detail} open={id !== undefined} onClose={close} hint="Select an issue to read it." describe="Issue detail" />
 }

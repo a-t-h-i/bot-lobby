@@ -48,11 +48,8 @@ const PAGES: Array<{ id: string; page: string; keys: Array<[string, string]> }> 
   { id: "saved", page: "Saved plan", keys: [["S", "start here"], ["N", "new session"], ["Delete", "discard"]] },
   { id: "plan", page: "Plan", keys: [["A", "answer"], ["R", "retry"], ["Ctrl+S", "save"], ["N", "new plan"]] },
   { id: "quickfix", page: "Quick fix", keys: [["R", "run anyway"], ["T", "make a task"], ["C", "cancel"]] },
-  { id: "git", page: "Git", keys: [["R", "refresh"], ["V", "review"], ["Q", "Jev's read"], ["X", "stop"]] },
-  { id: "issues", page: "Issues", keys: [["R", "refresh"]] },
+  { id: "git", page: "Git", keys: [["R", "refresh both lists"], ["V", "review"], ["Q", "Jev's read"], ["X", "stop"], ["N", "plan an issue"]] },
   { id: "knowledge", page: "Knowledge", keys: [["E", "edit"], ["A", "add"], ["C", "comment"], ["F", "edit file"], ["Delete", "delete"]] },
-  { id: "excalidraw", page: "Excalidraw", keys: [["R", "reveal"], ["C", "copy"], ["O", "open"], ["W", "draw"], ["T", "check"], ["Delete", "remove"]] },
-  { id: "sessions", page: "Sessions", keys: [["M", "move here"], ["S", "stop"], ["B", "back"]] },
   { id: "confirm", page: "Asked to confirm", keys: [["Y", "yes, do it"], ["Esc", "keep it"]] },
 ]
 
