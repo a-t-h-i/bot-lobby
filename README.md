@@ -38,8 +38,9 @@ files the task changed, after the project's linter and a QA pass sized to the ch
 - **Knowledge**: what each agent has learned about the project, which you can edit, annotate or ask
   about.
 
-The sidebar holds your sessions, settings, the key list, the theme and sounds. The project switcher
-(`P`) sits in the message box and opens any folder on the machine running bot-lobby.
+The rail on the left holds settings, the key list, the theme and sounds. The project switcher
+(`P`) sits in the message box and opens any folder on the machine running bot-lobby. A task running
+in a background session opens its conversation from **Tasks**.
 
 | Agent | Does |
 | --- | --- |

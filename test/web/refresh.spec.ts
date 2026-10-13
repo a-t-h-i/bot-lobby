@@ -45,13 +45,12 @@ test("a step's working agents unfold from it in Tasks, and leave when finished",
 test.afterEach(() => { releasePending?.(); releasePending = undefined; });
 
 const SECTIONS = ["Agents", "Workflow", "Linting", "Lobby", "Classifier", "Appearance & notifications"];
-const PAGES = ["lobby", "tasks", "plan", "quickfix", "issues", "metrics", "git", "knowledge", "excalidraw", "sessions", "settings"];
+const PAGES = ["lobby", "tasks", "plan", "quickfix", "issues", "metrics", "git", "knowledge", "excalidraw", "settings"];
 
 async function route(page: Page, name: string): Promise<void> {
   await page.evaluate((hash) => { window.location.hash = hash; }, `#/${name}`);
   await expect(page).toHaveURL(new RegExp(`#/${name}$`));
   if (name === "settings") await expect(page.getByRole("navigation", { name: "Settings sections" })).toBeVisible();
-  else if (name === "sessions") await expect(page.locator("#main").getByText("Sessions", { exact: true }).first()).toBeVisible();
   else await expect(page.getByRole("tab", { name: new RegExp(name === "quickfix" ? "Quick" : name, "i") })).toHaveAttribute("aria-selected", "true");
 }
 

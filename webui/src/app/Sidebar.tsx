@@ -1,119 +1,26 @@
 /**
- * The sidebar on the left of every page, as in the coding harnesses it takes
- * after: this project's sessions (this window's opens the Lobby, any other its
- * conversation on the Sessions page), and at the foot Settings with the app's
- * switches (the key list, light or dark, the sounds). The project itself is
- * chosen in the composer. Folded (Alt+B, or its button) it narrows to a rail
- * of icons, so all of it stays one click away. On a phone it is a sheet from
- * the left, opened from the menu button in the bar.
+ * The rail on the left of every page, as in the coding harnesses it takes
+ * after: the app's switches (the key list, light or dark, the sounds) and
+ * Settings. The project itself is chosen in the composer. On a phone it is a
+ * sheet from the left, opened from the menu button in the bar.
  */
-import { useEffect, type ReactNode } from "react"
-import { Layers, Menu, PanelLeftClose, PanelLeftOpen, Settings, X } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import type { ReactNode } from "react"
+import { Menu, Settings, X } from "lucide-react"
 import { Keys } from "@/components/ui/kbd"
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
-import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
-import type { LobbySnapshot, StatusInfo } from "@protocol"
-import { WhereIcon } from "@/tabs/sessions/WhereIcon"
-import { buildEntries, type Entry } from "@/tabs/sessions/words"
-import { useTopic } from "./hooks.ts"
 import { HelpButton, SoundToggle, ThemeToggle } from "./AppTools.tsx"
 import type { Route } from "./router.ts"
-import { useApiRead } from "./useApiRead.ts"
 
 export interface SidebarProps {
   route: Route
   keys: Record<string, string>
-  status?: StatusInfo
   onHelp: () => void
-}
-
-/** The sessions the sidebar lists: the same entries as the Sessions page, read on every `sessions` change. */
-function useSessionEntries(status: StatusInfo | undefined): { entries: Entry[]; loaded: boolean } {
-  const lobby = useTopic<LobbySnapshot>("lobby").data
-  const asked = useTopic<{ prompts: unknown[] }>("prompts").data?.prompts.length ?? 0
-  const read = useApiRead("sessions.list", {}, ["sessions"])
-  return { entries: buildEntries(status, lobby, asked, read.data?.background ?? [], read.data?.live ?? []), loaded: Boolean(read.data) }
-}
-
-/** Where a session's row leads: this window's conversation is the Lobby. */
-function hrefOf(entry: Entry): string {
-  return entry.where === "this window" ? "#/lobby" : `#/sessions/${encodeURIComponent(entry.id)}`
-}
-
-function isOpen(entry: Entry, route: Route): boolean {
-  if (entry.where === "this window") return route.kind === "tab" && route.tab === "lobby"
-  return route.kind === "sessions" && route.key === entry.id
 }
 
 const ITEM =
   "group/item flex min-h-9 w-full min-w-0 items-center gap-2.5 rounded-lg px-2 text-sm text-sidebar-foreground/85 outline-none transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=page]:bg-sidebar-accent aria-[current=page]:font-medium aria-[current=page]:text-sidebar-foreground max-md:min-h-11"
-
-function SessionRow({ entry, open }: { entry: Entry; open: boolean }) {
-  const working = entry.status === "working" || entry.status === "starting"
-  return (
-    <li>
-      <a href={hrefOf(entry)} aria-current={open ? "page" : undefined} className={cn(ITEM, "py-1.5")}>
-        <WhereIcon where={entry.where} className="size-3.5" />
-        <span className="flex min-w-0 flex-1 flex-col leading-tight">
-          <span className="truncate">{entry.name}</span>
-          <span className="truncate text-xs font-normal text-muted-foreground">{entry.where === "this window" ? "this window" : entry.where} · {entry.status.replace(/_/g, " ")}</span>
-        </span>
-        {entry.waiting > 0 ? (
-          <Badge variant="warning-light" radius="full" size="sm" className="text-warning tabular-nums" aria-label={`${entry.waiting} waiting`}>
-            {entry.waiting}
-          </Badge>
-        ) : working ? (
-          <Spinner aria-label="working" className="size-3 text-muted-foreground" />
-        ) : null}
-      </a>
-    </li>
-  )
-}
-
-function SectionHead({ children, action }: { children: ReactNode; action?: ReactNode }) {
-  return (
-    <div className="flex min-h-8 items-center justify-between gap-2 px-2 pt-3 pb-1">
-      <h2 className="text-xs font-medium text-muted-foreground">{children}</h2>
-      {action}
-    </div>
-  )
-}
-
-function Sessions({ route, keys, status, edge }: Pick<SidebarProps, "route" | "keys" | "status"> & { edge?: ReactNode }) {
-  const { entries, loaded } = useSessionEntries(status)
-  return (
-    <nav aria-label="Sessions list" className="flex min-h-0 flex-1 flex-col">
-      <SectionHead
-        action={
-          <span className="flex items-center gap-0.5">
-            <a
-              href="#/sessions"
-              aria-label="Sessions"
-              aria-current={route.kind === "sessions" && !route.key ? "page" : undefined}
-              aria-keyshortcuts={keys.sessions ?? "Alt+O"}
-              className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-3 focus-visible:ring-ring/40 aria-[current=page]:text-sidebar-foreground max-md:h-11"
-            >
-              <Layers aria-hidden="true" className="size-3.5" />
-              View all
-            </a>
-            {edge}
-          </span>
-        }
-      >
-        Sessions
-      </SectionHead>
-      <ul className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain px-1 pb-2">
-        {entries.map((entry) => (
-          <SessionRow key={entry.id} entry={entry} open={isOpen(entry, route)} />
-        ))}
-        {!loaded ? <li className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground"><Spinner aria-hidden="true" role="presentation" className="size-3" />Loading sessions…</li> : null}
-      </ul>
-    </nav>
-  )
-}
 
 function SettingsLink({ route, keys, rail }: { route: Route; keys: Record<string, string>; rail?: boolean }) {
   const hint = keys.settings ?? "Alt+S"
@@ -132,22 +39,13 @@ function SettingsLink({ route, keys, rail }: { route: Route; keys: Record<string
   return <RailTip label="Settings" hint={hint} side={rail ? "right" : "top"}>{link}</RailTip>
 }
 
-function CollapseButton({ hint, onCollapse }: { hint: string; onCollapse: () => void }) {
-  return (
-    <RailTip label="Collapse sidebar" hint={hint} side="right">
-      <button type="button" aria-label="Collapse sidebar" aria-expanded={true} aria-controls="app-sidebar" aria-keyshortcuts={hint} onClick={onCollapse} className={cn(RAIL_ITEM, "size-7")}>
-        <PanelLeftClose aria-hidden="true" className="size-4" />
-      </button>
-    </RailTip>
-  )
-}
-
-/** The whole sidebar's content: the sessions, then Settings and the app's switches (also the phone sheet's). */
-function SidebarBody({ route, keys, status, onHelp, onCollapse, closer, phone = false }: SidebarProps & { onCollapse?: () => void; closer?: ReactNode; phone?: boolean }) {
+/** The phone sheet's content: the way to close it, then Settings and the app's switches. */
+function SidebarBody({ route, keys, onHelp, closer, phone = false }: SidebarProps & { closer?: ReactNode; phone?: boolean }) {
   const tool = cn(RAIL_ITEM, phone ? "size-11" : "size-8")
   return (
     <>
-      <Sessions route={route} keys={keys} {...(status ? { status } : {})} edge={onCollapse ? <CollapseButton hint={keys.sidebar ?? "Alt+B"} onCollapse={onCollapse} /> : closer} />
+      <div className="flex min-h-12 items-center justify-end px-1">{closer}</div>
+      <span className="flex-1" />
       <div className="sidebar-foot flex items-center gap-1 px-1 py-2">
         <SettingsLink route={route} keys={keys} />
         {/* No key list on a phone: there are no keys to list. */}
@@ -173,21 +71,10 @@ function RailTip({ label, hint, side = "right", children }: { label: string; hin
   )
 }
 
-/** The folded sidebar: the same ways out as icons, and the button that opens it again. */
-function Rail({ route, keys, onHelp, onExpand }: SidebarProps & { onExpand: () => void }) {
-  const hint = keys.sidebar ?? "Alt+B"
+/** The sidebar from 768 px: a rail of icons, the app's switches at its foot and Settings last. */
+function Rail({ route, keys, onHelp }: SidebarProps) {
   return (
     <>
-      <RailTip label="Expand sidebar" hint={hint}>
-        <button type="button" aria-label="Expand sidebar" aria-expanded={false} aria-controls="app-sidebar" aria-keyshortcuts={hint} onClick={onExpand} className={RAIL_ITEM}>
-          <PanelLeftOpen aria-hidden="true" className="size-4" />
-        </button>
-      </RailTip>
-      <RailTip label="Sessions" hint={keys.sessions ?? "Alt+O"}>
-        <a href="#/sessions" aria-label="Sessions" aria-current={route.kind === "sessions" ? "page" : undefined} aria-keyshortcuts={keys.sessions ?? "Alt+O"} className={RAIL_ITEM}>
-          <Layers aria-hidden="true" className="size-4" />
-        </a>
-      </RailTip>
       <span className="flex-1" />
       <HelpButton hint={keys.help ?? "Alt+H"} onHelp={onHelp} className={RAIL_ITEM} side="right" />
       <ThemeToggle className={RAIL_ITEM} side="right" />
@@ -197,33 +84,11 @@ function Rail({ route, keys, onHelp, onExpand }: SidebarProps & { onExpand: () =
   )
 }
 
-/**
- * The sidebar from 768 px: full width, or folded to the rail. `over` is a
- * narrow window's open sidebar: it lies over the page, the rail's room kept
- * beside it, until Esc, a click outside or a new page puts it away.
- */
-export function Sidebar({ folded, over = false, onToggle, ...props }: SidebarProps & { folded: boolean; over?: boolean; onToggle: () => void }) {
-  useEffect(() => {
-    if (!over) return
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented || document.querySelector("[role='dialog']:not([data-state='closed']), [role='listbox']")) return
-      event.preventDefault()
-      onToggle()
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [over, onToggle])
-  const aside = (
-    <aside id="app-sidebar" aria-label="Sidebar" data-folded={folded || undefined} data-over={over || undefined} className="app-sidebar">
-      {folded ? <Rail {...props} onExpand={onToggle} /> : <SidebarBody {...props} onCollapse={onToggle} />}
-    </aside>
-  )
-  if (!over) return aside
+export function Sidebar(props: SidebarProps) {
   return (
-    <div className="app-sidebar-room">
-      <div aria-hidden="true" className="app-sidebar-scrim" onClick={onToggle} />
-      {aside}
-    </div>
+    <aside id="app-sidebar" aria-label="Sidebar" data-folded className="app-sidebar">
+      <Rail {...props} />
+    </aside>
   )
 }
 
@@ -234,7 +99,7 @@ export function SidebarSheet({ open, onOpenChange, ...props }: SidebarProps & { 
       <SheetContent side="left" showCloseButton={false} aria-describedby="sidebar-sheet-description" className="app-sidebar-sheet gap-0 p-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
         <SheetTitle className="sr-only">Sidebar</SheetTitle>
         <SheetDescription id="sidebar-sheet-description" className="sr-only">
-          This project's sessions, settings and the app's switches.
+          Settings and the app's switches.
         </SheetDescription>
         {/* Following any link closes the sheet: the page it leads to is the point. */}
         <div className="flex min-h-0 flex-1 flex-col px-1" onClick={(event) => { if ((event.target as HTMLElement).closest("a[href]")) onOpenChange(false) }}>

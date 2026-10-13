@@ -29,11 +29,11 @@ test("the effort brain grows folds, animates each effort level and shimmers at x
   }
   await expect(brain).toHaveAttribute("data-elevated", "true");
   await expect(brain.locator("[data-brain-body]")).toHaveAttribute("filter", /-glow\)/);
-  const labelsFit = await slider.locator("..").locator("div[aria-hidden=true] > span").evaluateAll((stops: any[]) => {
-    const boxes = stops.map((stop) => stop.getBoundingClientRect());
-    return boxes.every((box, index) => index === 0 || boxes[index - 1].right <= box.left);
-  });
-  expect(labelsFit, "the stop labels do not overlap on narrow screens").toBe(true);
+  await expect(card.getByText("Faster", { exact: true })).toBeVisible();
+  await expect(card.getByText("Smarter", { exact: true })).toBeVisible();
+  await expect(card.locator('[data-slot="effort-recommended"]'), "the default level is marked").toHaveText("Recommended");
+  await expect(card.locator('[data-slot="effort-bubble"]'), "the focused thumb says its level").toHaveText("max");
+  await expect(card.locator('[data-slot="effort-fill"]')).toHaveAttribute("data-level", "max");
   await card.scrollIntoViewIfNeeded();
   await card.screenshot({ path: info.outputPath("brain-max.png") });
 
@@ -66,6 +66,46 @@ test("the effort brain grows folds, animates each effort level and shimmers at x
   trap.stop();
 });
 
+test("a change in effort walks through every level in between", async ({ page, server }) => {
+  const trap = await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => { window.location.hash = "#/settings"; });
+  const card = page.locator("section.glass", { hasText: "Backend" }).first();
+  const slider = card.getByRole("slider", { name: "Backend effort" });
+  await slider.focus();
+  await slider.press("Home");
+  await expect(slider.locator("xpath=.")).toHaveAttribute("data-passing", "off");
+  await slider.evaluate((el: any) => {
+    window.__passed = [];
+    new window.MutationObserver(() => window.__passed.push(el.getAttribute("data-passing"))).observe(el, { attributes: true, attributeFilter: ["data-passing"] });
+  });
+  await slider.press("End");
+  await expect(slider, "the value is the target at once").toHaveAttribute("aria-valuetext", "max");
+  await expect(slider).toHaveAttribute("data-passing", "max");
+  expect(await page.evaluate(() => window.__passed), "every level lights up on the way").toEqual(["minimal", "low", "medium", "high", "xhigh", "max"]);
+  await expect(card.locator(".effort-spark").first(), "sparks in the fill at the top").toBeAttached();
+  await card.locator('[data-slot="effort-track"]').screenshot({ path: test.info().outputPath("effort-max.png") });
+  expect(trap.errors).toEqual([]);
+  trap.stop();
+});
+
+test("a toast is centred over the composer, clear of it", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() => { window.location.hash = "#/settings"; });
+  const slider = page.getByRole("slider", { name: "Backend effort" });
+  await slider.focus();
+  await slider.press("ArrowRight");
+  const toast = page.locator('[role="status"] > div').filter({ hasText: "Settings saved" });
+  await expect(toast).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(400);
+  const composer = (await page.locator(".group\\/composer").boundingBox())!;
+  const dock = (await page.locator("#app-dock").boundingBox())!;
+  const box = (await toast.boundingBox())!;
+  expect(Math.abs(box.x + box.width / 2 - (composer.x + composer.width / 2)), "centred on the composer").toBeLessThan(2);
+  expect(box.y + box.height, "above the composer and its strip").toBeLessThanOrEqual(dock.y + 1);
+});
+
 test("ReUI panels and Obsidian session cards keep the existing navigation and composer", async ({ page, server }) => {
   const trap = await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -75,9 +115,7 @@ test("ReUI panels and Obsidian session cards keep the existing navigation and co
   const tabsBefore = (await tabs.boundingBox())!;
   const toastOffset = () => page.locator('.fixed[aria-live="polite"]').evaluate((el: any) => getComputedStyle(el).bottom);
   const toastBefore = await toastOffset();
-  await page.getByRole("link", { name: "Sessions", exact: true }).click();
-  await expect(page.locator('[data-slot="active-session"]')).not.toHaveCount(0);
-  await expect(page.locator('[data-slot="active-session"]').first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sessions", exact: true }), "there is no Sessions page to go to").toHaveCount(0);
   await page.getByRole("tab", { name: /Metrics/ }).click();
   await expect(page.locator('[data-slot="frame-panel"]').first()).toBeVisible();
   await page.getByRole("tab", { name: /Lobby/ }).click();

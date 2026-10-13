@@ -44,6 +44,18 @@ export const CUSTOM_MODEL = "__custom__"
 export const CUSTOM_LABEL = "custom…"
 export const CUSTOM_HELP = "Type a provider/model id"
 export const FIXED_SCOUT_THINKING = "low"
+
+/** The effort each agent is meant to run at (bot-lobby's defaults), marked Recommended on its slider. */
+export const RECOMMENDED_THINKING: Record<AgentKind, string> = {
+  master: "high",
+  designer: "medium",
+  backend: "medium",
+  qa: "medium",
+  scout: FIXED_SCOUT_THINKING,
+  researcher: "low",
+  quickfix: "low",
+  planner: "high",
+}
 /** Every effort level, lowest to highest; a model supports only some of them. */
 export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const
 

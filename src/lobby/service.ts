@@ -151,6 +151,8 @@ function toOracle(state: Runtime, text: string): string | undefined {
     return "reading your request — a quick fix or a task, the oracle takes it from here";
   }
   state.pi.sendUserMessage(text, busy ? { deliverAs: "steer" } : undefined);
+  // A steer reaches the oracle only when its turn lets it in; the conversation shows it now.
+  if (busy) lobbyFeed.sayQueued(text);
   return undefined;
 }
 

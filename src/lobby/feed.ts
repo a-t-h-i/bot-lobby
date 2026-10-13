@@ -46,6 +46,8 @@ export const MAX_ACTIVITY = 400;
 export const MAX_THOUGHTS = 40;
 /** Messages the conversation keeps in memory; earlier ones are loaded from the session when scrolled to. */
 export const MAX_CHAT = 100;
+/** Queued messages remembered for their delivery; older ones are let go. */
+const MAX_QUEUED = 20;
 /** Longest thought kept; a streaming thought keeps its newest text. */
 export const MAX_THOUGHT_TEXT = 4000;
 /** The streaming reply kept: several panes' worth; past it, whole blocks are dropped from its start. */
@@ -199,6 +201,25 @@ export class LobbyFeed {
     if (!this.reply) return;
     this.reply = "";
     this.touch();
+  }
+
+  /** What the user sent while the oracle was busy: shown at once, so its delivery later is not shown again. */
+  private queued: string[] = [];
+
+  /** Show a message the oracle will only read once its current turn lets it in (a steer). */
+  sayQueued(text: string, at = Date.now()): void {
+    const body = text.trim();
+    if (!body) return;
+    this.queued = [...this.queued, body].slice(-MAX_QUEUED);
+    this.say("you", body, at);
+  }
+
+  /** Whether `text` is a queued message already on show; it is forgotten once delivered. */
+  takeQueued(text: string): boolean {
+    const index = this.queued.indexOf(text.trim());
+    if (index < 0) return false;
+    this.queued.splice(index, 1);
+    return true;
   }
 
   say(role: ChatRole, text: string, at = Date.now()): void {
@@ -408,7 +429,11 @@ export function narrateEvent(feed: LobbyFeed, event: AgentEventLike, describe: (
         }
       }
       if (message.role !== "user" && message.role !== "assistant") return;
-      for (const line of chatText(message.role, textOf(message.content))) feed.say(line.role, line.text);
+      for (const line of chatText(message.role, textOf(message.content))) {
+        // A steer was shown when it was sent; its delivery is the same message.
+        if (line.role === "you" && feed.takeQueued(line.text)) continue;
+        feed.say(line.role, line.text);
+      }
       return;
     }
     case "agent_end":

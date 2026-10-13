@@ -49,11 +49,6 @@ const ROUTES: RouteCheck[] = [
     empty: "Describe a small change",
   },
   {
-    route: "#/sessions",
-    full: ["Mock background task", "Background"],
-    empty: "No other sessions. Start one below.",
-  },
-  {
     route: "#/metrics",
     full: ["mock-model"],
     empty: "No runs recorded yet.",

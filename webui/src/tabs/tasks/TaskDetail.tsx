@@ -176,7 +176,9 @@ function OpenTask({ taskId }: { taskId: string }) {
       const status = await call("status.get", {})
       if (!alive.current || selectedProject() !== project) return
       const id = result.key ?? (result.sessionId === status.sessionId ? "here" : result.sessionId)
-      if (id) go(`#/sessions/${encodeURIComponent(id)}`)
+      // This window's conversation is the Lobby; a background session's opens on its own.
+      if (id === "here") go("#/lobby")
+      else if (id) go(`#/sessions/${encodeURIComponent(id)}`)
       else if (!result.notice) toast.info("This task has no active session. No replacement session was created.")
     } catch (e) { if (alive.current && selectedProject() === project) toast.error(e instanceof Error ? e.message : String(e)) }
   }
