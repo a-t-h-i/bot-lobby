@@ -1452,3 +1452,50 @@
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
   .jump-latest:hover svg { animation: jump-latest-bounce 600ms cubic-bezier(0.3, 0.7, 0.4, 1) 1; }
 }
+
+/* The Plan tab: the link to the draft, and the quiet note under what the classifier settled for you. */
+.plan-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--link);
+  text-underline-offset: 3px;
+  outline: none;
+}
+.plan-link:hover { text-decoration: underline; }
+.plan-link:focus-visible { box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 40%, transparent); }
+.decided-hint {
+  margin-left: 0.5rem;
+  font-size: 0.6875rem;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+/* A quiet action beside a message's time (Edit), shown with it. */
+.chat-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 0.375rem;
+  padding: 0 0.25rem;
+  color: var(--muted-foreground);
+  outline: none;
+  transition: color 150ms ease;
+}
+.chat-action:hover { color: var(--foreground); }
+.chat-action:focus-visible { box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 40%, transparent); }
+.chat-action:disabled { opacity: 0.5; pointer-events: none; }
+/* A comment being written under a line of the draft. */
+.line-comment {
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--foreground) 5%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .line-comment { animation: line-comment-in 160ms ease-out; }
+}
+@keyframes line-comment-in {
+  from { opacity: 0; translate: 0 -4px; }
+}

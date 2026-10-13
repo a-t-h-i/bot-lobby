@@ -26,7 +26,7 @@ const screens = ["lobby", "tasks", "plan", "issues", "quickfix", "git", "knowled
 const content: Record<string, string> = {
   lobby: "We need an offline mock",
   tasks: "Add offline mock fixtures",
-  plan: "Agreed plan",
+  plan: "Plan dark mode for the lobby",
   issues: "Dark mode flashes white on load",
   quickfix: "Fix the typo in the header",
   git: "Add the dark mode toggle",

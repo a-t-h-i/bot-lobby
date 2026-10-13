@@ -1,7 +1,8 @@
 /**
- * The panel roster as chips: the oracle chairing, then DEV, DESIGN, QA and
- * RESEARCH. A seat is a checkbox (several can sit) beside text that says what
- * it is doing; the oracle is a plain chip because it always sits.
+ * The panel roster as slim chips on the header's row: the oracle chairing,
+ * then DEV, DESIGN, QA and RESEARCH. A seat is a checkbox (several can sit)
+ * beside a word on what it is doing once it has something to say; the oracle
+ * is a plain chip because it always sits.
  */
 import { Checkbox } from "@/components/ui/checkbox"
 import { Spinner } from "@/components/ui/spinner"
@@ -16,27 +17,28 @@ function Inside({ cell, intro }: { cell: SeatCell; intro: boolean }) {
   const state = intro ? (cell.member ? (cell.seated ? "seated" : "not seated") : "chairs") : cell.text
   return (
     <>
-      <span className={cn("inline-flex items-center gap-1.5 font-medium", cell.seated ? sourceColor(cell.label) : "text-muted-foreground")}>
-        <AgentIcon source={cell.label} className="size-3.5" />
+      <span className={cn("inline-flex items-center gap-1 font-medium", cell.seated ? sourceColor(cell.label) : "text-muted-foreground")}>
+        <AgentIcon source={cell.label} className="size-3" />
         {sourceLabel(cell.label)}
       </span>
-      {cell.working && !intro ? <Spinner className="size-3.5" aria-hidden="true" /> : null}
-      <span className="text-muted-foreground">{state}</span>
+      {cell.working && !intro ? <Spinner className="size-3" aria-hidden="true" /> : null}
+      {/* Nothing to say yet ("·") is left unsaid. */}
+      {state === "·" ? null : <span className="text-muted-foreground">{state}</span>}
     </>
   )
 }
 
 function Chip({ cell, intro, onToggled }: { cell: SeatCell; intro: boolean; onToggled: () => void }) {
   const { member } = cell
-  const look = "inline-flex min-h-8 items-center gap-2 rounded-lg border border-border px-3 text-[0.8125rem] max-md:min-h-11"
-  if (!member) return <li className={cn(look, "bg-muted")}><Inside cell={cell} intro={intro} /></li>
+  const look = "roster-chip inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs whitespace-nowrap max-md:min-h-11"
+  if (!member) return <li className={cn(look, "border-transparent bg-muted")}><Inside cell={cell} intro={intro} /></li>
   const toggle = async () => {
     if (await act("planner.toggleSeat", { member })) onToggled()
   }
   return (
     <li>
-      <label className={cn(look, "cursor-pointer transition-colors", cell.seated ? "btn-raised bg-card" : "border-dashed text-muted-foreground hover:bg-muted")}>
-        <Checkbox checked={cell.seated} onCheckedChange={() => void toggle()} aria-label={`${sourceLabel(cell.label)} sits on the panel`} />
+      <label className={cn(look, "cursor-pointer pl-1.5 transition-colors", cell.seated ? "border-border bg-card hover:bg-muted" : "border-dashed border-border text-muted-foreground hover:bg-muted")}>
+        <Checkbox checked={cell.seated} onCheckedChange={() => void toggle()} aria-label={`${sourceLabel(cell.label)} sits on the panel`} className="size-3.5 rounded-[4px] [&_svg]:size-2.5" />
         <Inside cell={cell} intro={intro} />
       </label>
     </li>
@@ -45,7 +47,7 @@ function Chip({ cell, intro, onToggled }: { cell: SeatCell; intro: boolean; onTo
 
 export function Roster({ cells, intro, onToggled, className }: { cells: SeatCell[]; intro: boolean; onToggled: () => void; className?: string }) {
   return (
-    <ul aria-label="Panel" className={cn("flex flex-wrap gap-2", className)}>
+    <ul aria-label="Panel" className={cn("flex flex-wrap items-center gap-1.5", className)}>
       {cells.map((cell) => (
         <Chip key={cell.label} cell={cell} intro={intro} onToggled={onToggled} />
       ))}

@@ -1202,7 +1202,10 @@ test("the chats read alike: the agents' words as plain prose, yours in filled bu
   await expect(cards.first(), "naming who asks").toContainText("Design");
   await expect(cards.first().locator('[data-agent-icon="DESIGN"]')).toBeAttached();
   await expect(cards.first().getByRole("list", { name: "Options" }).getByRole("listitem"), "with its options").toHaveCount(2);
-  await expect(panel, "and what the classifier settled").toContainText("decided by the classifier");
+  const settled = panel.getByRole("list", { name: "Settled for you" }).getByRole("listitem");
+  await expect(settled, "and what the classifier settled").toContainText("Remember the choice in this browser?");
+  await expect(settled.locator(".decided-hint"), "with a quiet hint on how to overrule it").toHaveText(/auto · \d+% · comment to overrule/);
+  expect(await settled.evaluate((el: any) => getComputedStyle(el).backgroundColor), "a line, not a filled box").toBe("rgba(0, 0, 0, 0)");
 });
 
 test("the bar is one row when the project, the tabs and the tools fit, and puts the tabs on a second row when they do not", async ({ page, server }) => {
@@ -1503,4 +1506,37 @@ test("the Plan header puts the panel on the buttons' row when wide, and below th
   expect(wide!.x + wide!.width, "to the left of the buttons").toBeLessThanOrEqual(button!.x);
   await page.setViewportSize({ width: 1024, height: 900 });
   await expect.poll(async () => (await panel.boundingBox())!.y - (await save.boundingBox())!.y, { message: "narrower: the seats drop to their own row" }).toBeGreaterThan(20);
+});
+
+test("the Plan tab is one conversation; View plan opens the draft in a slide-out over a blurred page, where lines still take comments", { tag: "@theme" }, async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() => {
+    window.location.hash = "#/plan";
+  });
+  const main = page.locator("#main");
+  await expect(main.getByRole("log", { name: "Panel conversation" })).toBeVisible();
+  await expect(main.getByText("Agreed plan"), "the draft is not a second card beside the conversation").toHaveCount(0);
+  const link = main.getByRole("button", { name: /^View plan/ });
+  await expect(link, "a link to the draft once there is one").toBeVisible();
+  expect(await link.evaluate((el: any) => getComputedStyle(el).borderTopWidth), "drawn as a link, not a button").toBe("0px");
+  await link.click();
+  const sheet = page.getByRole("dialog", { name: "Draft plan" });
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByRole("list", { name: "Draft plan lines" })).toContainText("Agreed plan");
+  const blur = await page.locator('[data-slot="sheet-overlay"]').evaluate((el: any) => getComputedStyle(el).backdropFilter);
+  expect(blur, "the page behind is blurred (blur-sm)").toContain("blur(8px)");
+  await sheet.getByRole("button", { name: /^Comment on this line: .*Read the theme/ }).first().click();
+  const comment = sheet.getByRole("group", { name: "Comment on this line" });
+  await expect(comment, "a line's comment opens right under it").toBeVisible();
+  await expect(comment.getByRole("textbox"), "ready to write").toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(comment, "Esc drops the comment first").toHaveCount(0);
+  await expect(sheet, "and the plan stays").toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(sheet, "Esc again puts it away").toBeHidden();
+  await main.focus();
+  await page.keyboard.press("v");
+  await expect(sheet, "V opens it from anywhere on the tab").toBeVisible();
+  await page.keyboard.press("Escape");
 });

@@ -1,40 +1,42 @@
 /**
- * "Comment on this line": a pop-up with a plain textarea. Enter adds the
- * comment (the panel revises the draft, or keeps it for the answers) and
- * closes the pop-up; Esc cancels.
+ * "Comment on this line", written right under the line in the draft: a plain
+ * textarea that takes focus. Enter adds the comment (the panel revises the
+ * draft, or keeps it for the answers) and puts the form away; Esc or Cancel
+ * puts it away unsent.
  */
-import { Popup } from "@/components/ui/popup"
+import { useEffect, useRef } from "react"
+import { X } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { act } from "@/lib/act"
-import { PRIORITY, useOverlaySlot } from "@/lib/overlay"
 import { NoteForm } from "@/ui/NoteForm"
 
 interface LineCommentProps {
-  /** The draft line being commented on; `undefined` keeps the pop-up closed. */
-  line: string | undefined
-  onClose: () => void
-  /** Called with the line and the comment once the server took it. */
-  onSent: (line: string, text: string) => void
+  /** The draft line being commented on. */
+  line: string
+  onCancel: () => void
+  /** Called with the comment once the server took it. */
+  onSent: (text: string) => void
 }
 
-export function LineComment({ line, onClose, onSent }: LineCommentProps) {
-  const shown = useOverlaySlot(line !== undefined, PRIORITY.confirm)
+export function LineComment({ line, onCancel, onSent }: LineCommentProps) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const box = ref.current?.querySelector("textarea")
+    box?.focus()
+    box?.scrollIntoView({ block: "nearest" })
+  }, [])
   const send = async (text: string) => {
-    if (line === undefined) return false
     const result = await act("planner.commentLine", { line, text: text.trim() })
     if (!result) return false
-    onSent(line, text.trim())
-    onClose()
+    onSent(text.trim())
     return true
   }
   return (
-    <Popup open={line !== undefined && shown} onOpenChange={(next) => !next && onClose()} label="Comment on this line" className="max-w-xl">
-      <div className="flex min-h-0 flex-1 flex-col gap-3 p-6 max-md:p-4">
-        <div>
-          <h2 className="text-base font-medium">Comment on this line</h2>
-          <p className="mt-1 line-clamp-3 text-sm break-words text-muted-foreground">{line}</p>
-        </div>
-        <NoteForm label="Your comment" hint="Enter adds the comment · Esc cancels" buttonLabel="Add comment" onSend={send} />
-      </div>
-    </Popup>
+    <div ref={ref} role="group" aria-label="Comment on this line" className="line-comment relative mt-1 mb-2 ml-6 rounded-xl border p-3">
+      <Button type="button" variant="ghost" size="icon" aria-label="Cancel the comment" title="Cancel · Esc" onClick={onCancel} className="absolute top-1.5 right-1.5 size-7 text-muted-foreground max-md:size-11">
+        <X aria-hidden="true" />
+      </Button>
+      <NoteForm label="Your comment" hint="Enter adds the comment · Esc cancels" buttonLabel="Add comment" onSend={send} />
+    </div>
   )
 }

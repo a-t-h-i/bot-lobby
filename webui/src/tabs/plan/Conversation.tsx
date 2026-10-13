@@ -11,7 +11,6 @@ import { Popup } from "@/components/ui/popup"
 import { PRIORITY, useOverlaySlot } from "@/lib/overlay"
 import { MockupViewer, plainLabel } from "@/prompts/MockupViewer"
 import { StaticPreview } from "@/prompts/StaticPreview"
-import { Button } from "@/components/ui/button"
 import { InlineEditor } from "@/ui/InlineEditor"
 import { call } from "@/lib/api"
 import { Check, Pencil } from "lucide-react"
@@ -94,13 +93,15 @@ function Decided({ message }: { message: PlannerMessage }) {
   const decided = message.decided ?? []
   if (!decided.length) return null
   return (
-    <ul className="mt-1 flex flex-col gap-1.5">
+    <ul aria-label="Settled for you" className="mt-1 flex flex-col gap-1">
       {decided.map((entry, index) => (
-        <li key={index} className="flex items-start gap-2 rounded-lg bg-muted/60 px-2.5 py-1.5 text-sm">
-          <Check aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-success" />
+        <li key={index} className="flex min-w-0 items-start gap-2 text-sm" title={`Settled by the classifier, ${Math.round(entry.probability * 100)}% sure. Comment on the plan to overrule it.`}>
+          <Check aria-hidden="true" className="mt-[0.1875rem] size-3.5 shrink-0 text-success" />
           <span className="min-w-0">
-            <span className={cn("font-medium", sourceColor(entry.from))}>{sourceLabel(entry.from)}</span> {entry.question} → <strong>{entry.answer}</strong>
-            <span className="block text-xs text-muted-foreground">decided by the classifier ({entry.probability.toFixed(2)}); comment on the plan to overrule</span>
+            <span className={cn("font-medium", sourceColor(entry.from))}>{sourceLabel(entry.from)}</span> <span className="text-muted-foreground">{entry.question}</span> <span className="font-medium">{entry.answer}</span>
+            <span className="decided-hint">
+              auto · {Math.round(entry.probability * 100)}% · comment to overrule
+            </span>
           </span>
         </li>
       ))}
@@ -117,14 +118,15 @@ function UserTurn({ message, index, busy, readOnly }: { message: PlannerMessage;
     const result = await call("planner.editMessage", { messageIndex: index, at: message.at, text })
     setSaved(result.message)
   }
+  // A quiet word beside the time, shown with it when the message is pointed at or focused.
   const edit = !readOnly && !message.settled?.length && !editing ? (
-    <Button size="xs" variant="ghost" disabled={waiting} onClick={() => setEditing(true)} className="text-muted-foreground max-md:min-h-11 max-md:whitespace-normal">
-      <Pencil aria-hidden="true" />
+    <button type="button" disabled={waiting} onClick={() => setEditing(true)} className="chat-action">
+      <Pencil aria-hidden="true" className="size-3" />
       Edit
-    </Button>
+    </button>
   ) : null
   return (
-    <YourMessage time={message.at > 0 ? formatClock(message.at) : undefined} head note={current.editedAt ? "(edited)" : undefined} below={edit}>
+    <YourMessage time={message.at > 0 ? formatClock(message.at) : undefined} head note={current.editedAt ? "(edited)" : undefined} actions={edit}>
       {editing ? <InlineEditor text={current.text} disabled={busy} onSave={save} onCancel={() => setEditing(false)} /> : <Markdown text={current.text} />}
     </YourMessage>
   )

@@ -11,7 +11,7 @@ declare const getComputedStyle: any;
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
 const field = (page: Page) => page.locator("#composer-text");
 const question = (page: Page) => page.getByRole("dialog", { name: "Question from the lobby", exact: true });
-const CONTENT = { lobby: "We need an offline mock", tasks: "Add offline mock fixtures", plan: "Agreed plan", quickfix: "Fix the typo in the header", git: "Add the dark mode toggle", knowledge: "Engineering standards", excalidraw: "Mock board" };
+const CONTENT = { lobby: "We need an offline mock", tasks: "Add offline mock fixtures", plan: "Plan dark mode for the lobby", quickfix: "Fix the typo in the header", git: "Add the dark mode toggle", knowledge: "Engineering standards", excalidraw: "Mock board" };
 
 async function selectTab(page: Page, id: string) {
   const tab = page.locator(`#tab-${id}`);

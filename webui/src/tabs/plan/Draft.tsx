@@ -1,10 +1,11 @@
 /**
  * The draft plan, line by line. Each source line renders as Markdown (lines
  * inside a code fence stay literal) with a Comment button beside it; clicking
- * the line does the same. Lines the user has commented on wear a dot with their
- * comments beneath, as the terminal draws them.
+ * the line does the same, and the comment is written right under the line.
+ * Lines the user has commented on wear a dot with their comments beneath, as
+ * the terminal draws them.
  */
-import { memo, useMemo } from "react"
+import { memo, useMemo, type ReactNode } from "react"
 import { MessageSquarePlus } from "lucide-react"
 import type { PanelNote } from "@protocol"
 import { Button } from "@/components/ui/button"
@@ -45,25 +46,28 @@ function Notes({ notes }: { notes: string[] }) {
 
 interface LineProps {
   row: DraftRow
+  index: number
   notes: string[]
-  onComment: (line: string) => void
+  /** The comment being written on this line, drawn under it. */
+  form?: ReactNode
+  onComment: (index: number) => void
 }
 
 /** A line without comments: one shared list, so an untouched line is not drawn again as more lines arrive. */
 const NO_NOTES: string[] = []
 
-const Line = memo(function Line({ row, notes, onComment }: LineProps) {
+const Line = memo(function Line({ row, index, notes, form, onComment }: LineProps) {
   const line = row.text.trim()
-  const open = () => onComment(line)
+  const open = () => onComment(index)
   return (
     // Lines out of view are not laid out until scrolled to: a plan of hundreds of lines lands in one cheap frame.
-    <li className="group/line [contain-intrinsic-size:auto_2.75rem] [content-visibility:auto]">
+    <li data-line={index} className={cn("group/line", !form && "[contain-intrinsic-size:auto_2.75rem] [content-visibility:auto]")}>
       <div className="flex min-w-0 items-start gap-1">
         <span className="flex w-4 shrink-0 justify-center pt-3.5" aria-hidden="true">
           {notes.length > 0 ? <span className="size-2 rounded-full bg-primary" /> : null}
         </span>
         <div
-          className={cn("min-w-0 flex-1 cursor-pointer rounded-lg px-2 py-1.5 transition-colors hover:bg-muted", row.fenced && "font-mono text-sm whitespace-pre-wrap break-words")}
+          className={cn("min-w-0 flex-1 cursor-pointer rounded-lg px-2 py-1.5 transition-colors hover:bg-muted", form && "bg-muted", row.fenced && "font-mono text-sm whitespace-pre-wrap break-words")}
           onClick={(event) => !(event.target as HTMLElement).closest("a") && open()}
         >
           {row.fenced ? row.text : <Markdown text={row.text} />}
@@ -73,11 +77,13 @@ const Line = memo(function Line({ row, notes, onComment }: LineProps) {
         </Button>
       </div>
       <Notes notes={notes} />
+      {form}
     </li>
   )
 })
 
-export function DraftBody({ draft, comments, onComment }: { draft: string; comments: ReadonlyMap<string, string[]>; onComment: (line: string) => void }) {
+/** The draft's lines; `commenting` is the line a comment is being written on, with its `form`. */
+export function DraftBody({ draft, comments, commenting, form, onComment }: { draft: string; comments: ReadonlyMap<string, string[]>; commenting?: number; form?: ReactNode; onComment: (index: number) => void }) {
   const rows = useMemo(() => draftRows(draft), [draft])
   // A screenful at once, the rest a chunk a frame: a long plan never holds up the tab switch that shows it.
   const shown = useGradual(rows.length)
@@ -85,7 +91,7 @@ export function DraftBody({ draft, comments, onComment }: { draft: string; comme
     <ul className="flex flex-col" aria-label="Draft plan lines">
       {rows.slice(0, shown).map((row, index) =>
         row.text.trim() ? (
-          <Line key={index} row={row} notes={comments.get(row.text.trim()) ?? NO_NOTES} onComment={onComment} />
+          <Line key={index} row={row} index={index} notes={comments.get(row.text.trim()) ?? NO_NOTES} form={index === commenting ? form : undefined} onComment={onComment} />
         ) : (
           <li key={index} aria-hidden="true" className="h-2" />
         )

@@ -135,7 +135,7 @@ test("wheel candidate stays compact and neutral for 499ms after settling, then c
   await page.clock.runFor(1);
   await expectCommitted(page, "plan");
   await expect(field(page)).toHaveAttribute("aria-label", "Message the panel");
-  await expect(page.locator("#main")).toContainText("Agreed plan");
+  await expect(page.locator("#main")).toContainText("Plan dark mode for the lobby");
 });
 
 test("further wheel movement restarts the entire settling and selection delay", async ({ page, server }) => {
