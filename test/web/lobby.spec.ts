@@ -214,6 +214,14 @@ test("markdown never runs page scripts", async ({ page, server }: { page: Page; 
 });
 
 test("the Lobby fills the window: the page never scrolls, each pane does, and Thinking waits in its bubble", async ({ page, server }) => {
+  // A conversation longer than any window, so the pane has something to scroll.
+  await page.route("**/api/lobby.snapshot", async (route) => {
+    const response = await route.fetch();
+    const envelope = await response.json();
+    const extra = Array.from({ length: 24 }, (_, i) => ({ id: 5000 + i, at: 1, role: i % 2 ? "oracle" : "you", text: `filler message ${i}` }));
+    envelope.result.chat = [...extra, ...envelope.result.chat];
+    await route.fulfill({ response, json: envelope });
+  });
   await openScenario(page, server, "full");
   for (const size of SIZES.filter((entry) => entry.width === 1280 || entry.width === 768)) {
     await page.setViewportSize(size);

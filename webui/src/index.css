@@ -59,6 +59,9 @@
   --border: #ebe9e4;
   --input: #dad8d1;
   --you: #f3f2ee;
+  /* Your chat bubble: the accent, filled. */
+  --bubble: var(--primary);
+  --bubble-foreground: var(--primary-foreground);
 
   /* Meaning */
   --destructive: #b2362f;
@@ -183,6 +186,9 @@
   --border: #1e1e23;
   --input: #2c2c33;
   --you: #19191d;
+  /* A deep accent with white words, not the bright one buttons use. */
+  --bubble: color-mix(in oklab, var(--primary) 46%, #0c0c16);
+  --bubble-foreground: #ffffff;
 
   --destructive: #f0958e;
   --success: #82cfa2;
@@ -856,110 +862,85 @@
 }
 
 /*
- * The chats (Lobby and Plan): a centred column a comfortable line wide; an
- * agent's avatar in a gutter on the left with its text beside it, your words
- * in a bubble on the right, notes as a rule across the column.
+ * The chats (Lobby and Plan), after the coding harnesses: a centred column a
+ * comfortable line wide; the agents' words as plain prose, yours in a filled
+ * bubble on the right, notes as a quiet centred line. Times show under a
+ * message while it is pointed at.
  */
-.chat-column { display: flex; flex-direction: column; gap: 1.125rem; width: 100%; max-width: 46rem; margin-inline: auto; }
-.chat-row { position: relative; display: grid; grid-template-columns: 1.75rem minmax(0, 1fr); column-gap: 0.75rem; }
-.chat-row + .chat-row:not(:has(.chat-avatar)) { margin-top: -0.5rem; }
-.chat-gutter { display: flex; justify-content: center; padding-top: 0.0625rem; }
-.chat-speaker { display: flex; align-items: baseline; gap: 0.5rem; min-height: 1.75rem; padding-top: 0.25rem; font-size: 0.8125rem; line-height: 1.25rem; }
-.chat-hover-time { padding-top: 0.25rem; font-size: 0.625rem; color: var(--muted-foreground); font-variant-numeric: tabular-nums; opacity: 0; transition: opacity 150ms ease; }
-.group\/msg:hover .chat-hover-time { opacity: 1; }
-.chat-avatar {
-  display: grid;
-  place-items: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: 9999px;
-  color: color-mix(in oklab, var(--orb) 85%, var(--foreground));
-  background: color-mix(in oklab, var(--orb) 13%, var(--card));
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--orb) 22%, transparent), 0 1px 2px rgb(0 0 0 / 0.05);
-}
-.chat-avatar[data-live] { animation: avatar-live 1.8s ease-in-out infinite; }
-@keyframes avatar-live {
-  0%, 100% { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--orb) 22%, transparent), 0 0 0 0 color-mix(in oklab, var(--orb) 28%, transparent); }
-  50% { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--orb) 30%, transparent), 0 0 0 5px color-mix(in oklab, var(--orb) 0%, transparent); }
-}
-/* The oracle's crystal ball, a picture rather than a line icon; it is its own round avatar. */
+.chat-column { display: flex; flex-direction: column; gap: 1rem; width: 100%; max-width: 46rem; margin-inline: auto; }
+.chat-agent { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+.chat-speaker { display: flex; align-items: baseline; gap: 0.5rem; font-size: 0.8125rem; line-height: 1.25rem; }
+.chat-prose { min-width: 0; font-size: 0.9375rem; line-height: 1.65; color: var(--foreground); }
+.chat-meta { min-height: 1rem; font-size: 0.6875rem; color: var(--muted-foreground); font-variant-numeric: tabular-nums; opacity: 0; transition: opacity 150ms ease; }
+.group\/msg:is(:hover, :focus-within) .chat-meta { opacity: 1; }
+@media (hover: none) { .chat-meta { opacity: 1; } }
+/* The oracle's crystal ball, a picture rather than a line icon. */
 .agent-oracle {
   display: inline-block;
   background: url("./assets/oracle.png") center / contain no-repeat;
 }
-.chat-avatar[data-oracle] { background: none; box-shadow: none; }
-.chat-avatar[data-oracle][data-live] { animation: oracle-live 2.4s ease-in-out infinite; }
-@keyframes oracle-live { 50% { filter: drop-shadow(0 0 6px color-mix(in oklab, var(--primary) 55%, transparent)); scale: 1.06; } }
-/* An agent's words: a bubble on the left in the agent's tint, the tail at the top left, the mirror of yours. */
-.chat-bubble-agent {
-  width: fit-content;
-  max-width: min(100%, 40rem);
-  margin-top: 0.125rem;
-  padding: 0.5rem 0.875rem;
-  border-radius: 0.375rem 1rem 1rem 1rem;
-  border: 1px solid color-mix(in oklab, var(--orb) 16%, var(--border));
-  background: color-mix(in oklab, var(--orb) 6%, var(--card));
-  box-shadow: 0 1px 1px rgb(0 0 0 / 0.03);
-}
-.chat-bubble-agent:has(pre, table) { width: 100%; }
+/* Your words: a filled bubble in the accent, white text, the corner by you a little tighter. */
 .chat-bubble {
   max-width: min(80%, 36rem);
-  padding: 0.5rem 0.875rem;
-  border-radius: 1rem 1rem 0.375rem 1rem;
-  border: 1px solid color-mix(in oklab, var(--primary) 12%, var(--border));
-  background: var(--you);
-  box-shadow: 0 1px 1px rgb(0 0 0 / 0.03);
+  padding: 0.625rem 1rem;
+  border-radius: 1.25rem 1.25rem 0.5rem 1.25rem;
+  background: var(--bubble);
+  color: var(--bubble-foreground);
+  font-size: 0.9375rem;
+  line-height: 1.55;
 }
+.chat-bubble :is(a, a:visited) { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.chat-bubble :is(code, pre) { background: color-mix(in oklab, var(--bubble-foreground) 16%, transparent) !important; color: inherit !important; border-color: transparent !important; }
+.chat-bubble :is(blockquote) { border-color: color-mix(in oklab, var(--bubble-foreground) 45%, transparent); color: inherit; }
 /*
- * Activity between the messages: one muted line in the agents' column that
- * opens into the steps, the way the coding harnesses show their tool calls.
+ * Activity between the messages, after the coding harnesses: "Worked for 2m
+ * 59s" over a rule across the column, opening into the steps as quiet lines.
  */
-.activity-run { margin-left: 2.5rem; margin-block: -0.375rem; }
+.activity-run { display: flex; flex-direction: column; margin-block: -0.25rem; }
 .activity-toggle {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  max-width: 100%;
-  min-height: 2rem;
-  padding: 0.25rem 0.625rem 0.25rem 0.375rem;
-  border-radius: 0.5rem;
-  font-size: 0.8125rem;
-  color: var(--muted-foreground);
+  width: 100%;
+  min-height: 2.25rem;
+  padding: 0.375rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.875rem;
   text-align: left;
   outline: none;
-  transition: background-color 150ms ease, color 150ms ease;
+  transition: color 150ms ease;
 }
-.activity-toggle:hover { background: var(--muted); color: var(--foreground); }
-.activity-toggle:focus-visible { box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 40%, transparent); }
-.activity-mark { display: grid; place-items: center; width: 1rem; flex-shrink: 0; }
-.activity-chevron { transition: rotate 150ms ease; }
-.activity-run[data-open] .activity-chevron { rotate: 90deg; }
-.activity-steps {
-  margin: 0.25rem 0 0.25rem 0.875rem;
-  padding: 0.125rem 0 0.125rem 0.75rem;
-  border-left: 1px solid var(--border);
-}
+.activity-toggle:hover .activity-chevron { color: var(--foreground); }
+.activity-toggle:focus-visible { box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 40%, transparent); border-radius: 0.375rem; }
+.activity-chevron { rotate: -90deg; transition: rotate 150ms ease, color 150ms ease; }
+.activity-run[data-open] .activity-chevron { rotate: 0deg; }
+.activity-steps { display: flex; flex-direction: column; gap: 0.125rem; padding: 0.625rem 0 0.25rem; }
 .activity-step {
   display: grid;
-  grid-template-columns: 2.75rem 4.5rem 1rem minmax(0, 1fr);
-  align-items: baseline;
-  column-gap: 0.5rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.375rem;
-  font-size: 0.8125rem;
+  grid-template-columns: 1rem minmax(0, 1fr);
+  align-items: start;
+  column-gap: 0.625rem;
+  padding: 0.25rem 0;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
 }
-.activity-step:hover { background: var(--muted); }
+/* The word "Working" glints while a step runs; still under reduced motion. */
+.activity-shimmer {
+  background: linear-gradient(90deg, var(--muted-foreground) 0%, var(--foreground) 50%, var(--muted-foreground) 100%) 0 0 / 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: activity-shimmer 2s linear infinite;
+}
+@keyframes activity-shimmer { to { background-position: -200% 0; } }
 @media (max-width: 767.98px) {
-  .activity-run { margin-left: 0; }
   .activity-toggle { min-height: 2.75rem; }
-  .activity-step { grid-template-columns: 4rem 1rem minmax(0, 1fr); }
-  .activity-step > :first-child { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .activity-chevron, .activity-toggle { transition: none; }
+  .activity-shimmer { animation: none; color: var(--foreground); background: none; }
 }
-.chat-note { display: flex; align-items: center; gap: 0.75rem; font-size: 0.75rem; color: var(--muted-foreground); }
-.chat-note::before, .chat-note::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.chat-note { display: flex; justify-content: center; font-size: 0.75rem; color: var(--muted-foreground); }
 .chat-note > span { max-width: 80%; text-align: center; }
 .typing-dots { display: inline-flex; align-items: center; gap: 3px; height: 1.25rem; }
 .typing-dots > span { width: 5px; height: 5px; border-radius: 9999px; background: var(--muted-foreground); opacity: 0.35; animation: typing 1.2s ease-in-out infinite; }
@@ -967,7 +948,8 @@
 .typing-dots > span:nth-child(3) { animation-delay: 300ms; }
 @keyframes typing { 0%, 60%, 100% { opacity: 0.35; translate: 0 0; } 30% { opacity: 1; translate: 0 -3px; } }
 @media (prefers-reduced-motion: reduce) {
-  .chat-avatar[data-live], .chat-avatar[data-oracle][data-live], .typing-dots > span { animation: none; }
+  .typing-dots > span { animation: none; }
+  .chat-meta { transition: none; }
 }
 
 /*
@@ -1023,6 +1005,39 @@
     overflow-x: auto;
   }
 }
+/*
+ * The composer, after the coding harnesses: a tray tucked behind the top of
+ * the round box, a shade between the page and the box, carrying chips for the
+ * project and who the message goes to.
+ */
+.composer-tray {
+  --composer-chip-hover: color-mix(in oklab, var(--foreground) 8%, transparent);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  width: auto;
+  max-width: calc(48rem - 2rem);
+  margin-bottom: -1rem;
+  margin-inline: auto;
+  padding: 0.3125rem 0.5rem 1.3125rem;
+  border: 1px solid var(--dock-border);
+  border-bottom: 0;
+  border-radius: 1.125rem 1.125rem 0 0;
+  background: color-mix(in oklab, var(--foreground) 4%, var(--background));
+}
+.composer-tray + div { z-index: 1; }
+@media (min-width: 768px) {
+  .composer-tray { width: calc(100% - 2rem); }
+}
+.composer-chip { color: var(--muted-foreground); }
+.composer-chip:hover { background: var(--composer-chip-hover); }
+.composer-chip-on { color: var(--foreground); background: var(--dock); box-shadow: inset 0 0 0 1px var(--dock-border); }
+.composer-chip .kbd-hint, .composer-chip kbd { pointer-events: none; }
+/* The add and preview buttons are quiet round icons until they are used. */
+#app-dock .composer-tool { border-color: transparent; background-color: var(--dock); color: var(--muted-foreground); }
+#app-dock .composer-tool:is(:hover, [aria-pressed="true"]) { border-color: transparent; background-color: color-mix(in oklab, var(--foreground) 9%, var(--dock)); color: var(--foreground); }
+
 /*
  * The sidebar on the left of every page: the project, its sessions and
  * Settings, a quiet column on the page's own background. Folded it is a rail
