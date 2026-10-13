@@ -12,7 +12,7 @@ export interface ChoiceItem {
 /** A setting as a row: its name and help on the left, the control on the right (or below, `stacked`). */
 export function Field({ label, help, children, stacked }: { label: string; help?: string; children: ReactNode; stacked?: boolean }) {
   return (
-    <div className={stacked ? "grid gap-1.5" : "grid gap-1.5 md:grid-cols-[minmax(0,1fr)_minmax(0,18rem)] md:items-center md:gap-6"}>
+    <div className={stacked ? "grid gap-1" : "grid gap-1 md:grid-cols-[minmax(0,1fr)_minmax(0,18rem)] md:items-center md:gap-4"}>
       <div className="min-w-0 break-words">
         <div className="break-words text-[0.8125rem] font-medium">{label}</div>
         {help ? <p className="break-words text-xs text-muted-foreground">{help}</p> : null}
@@ -25,7 +25,7 @@ export function Field({ label, help, children, stacked }: { label: string; help?
 
 /** Several settings in one card, hairlines between them. */
 export function Rows({ children }: { children: ReactNode }) {
-  return <Frame dense><FramePanel className="flex flex-col divide-y divide-border py-0 [&>*]:py-3">{children}</FramePanel></Frame>
+  return <Frame dense><FramePanel className="flex flex-col divide-y divide-border py-0 [&>*]:py-2">{children}</FramePanel></Frame>
 }
 
 /** Every drop-down on the page is a searchable one. */
