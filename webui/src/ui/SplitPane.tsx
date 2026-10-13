@@ -14,6 +14,7 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTi
 import { PRIORITY, hasOverlay, useOverlaySlot } from "@/lib/overlay"
 import { currentRow, horizontalStep, isTyping, stepRows, verticalStep } from "@/prompts/nav"
 import { cn } from "@/lib/utils"
+import { Skeleton } from "@/components/ui/skeleton"
 
 /** Two panes side by side from this width, in pixels. */
 export function useWide(): boolean {
@@ -191,7 +192,7 @@ export function ListSkeleton() {
   return (
     <div className="flex flex-col gap-1.5 p-3" role="status" aria-label="Loading">
       {[0, 1, 2, 3].map((row) => (
-        <div key={row} className="h-11 rounded-lg bg-muted motion-safe:animate-pulse" />
+        <Skeleton key={row} shape="card" className="h-11" />
       ))}
     </div>
   )

@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils"
 import { ActionButton } from "@/ui/Actions"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { EffortPicker } from "@/ui/EffortPicker"
+import { EffortSlider } from "@/ui/EffortSlider"
 import { nearestSupported } from "@/ui/effortLevels"
 import { FrameHeader, FramePanel, frameVariants } from "@/components/reui/frame"
 import { call } from "@/lib/api"
@@ -287,7 +287,7 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
               <span className="capitalize">{FIXED_SCOUT_THINKING}</span> (fixed for scouts)
             </p>
           ) : (
-            <EffortPicker
+            <EffortSlider
               value={entry.thinking}
               levels={THINKING_LEVELS}
               supported={supported}

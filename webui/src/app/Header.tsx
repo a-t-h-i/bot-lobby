@@ -7,7 +7,6 @@
  * opens the sidebar and the project.
  */
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react"
-import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { ConnectionState } from "@/lib/events"
 import { ProjectNotice, type Projects } from "./ProjectSwitcher.tsx"
@@ -30,7 +29,7 @@ function Connection({ state }: { state: ConnectionState }) {
   if (state === "connecting") {
     return (
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Spinner aria-hidden="true" role="presentation" className="size-3" />
+        <span aria-hidden="true" className="size-2 rounded-full bg-warning motion-safe:animate-status-pulse" />
         reconnecting…
       </span>
     )

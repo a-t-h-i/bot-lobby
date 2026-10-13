@@ -4,51 +4,60 @@ declare const document: any;
 declare const window: any;
 declare const getComputedStyle: any;
 
-test("effort is a menu of every level with what each one does, stepped by the arrow keys", { tag: "@theme" }, async ({ page, server }, info) => {
+test("effort is a drag slider that names every level, steps by key and snaps when dragged", { tag: "@theme" }, async ({ page, server }, info) => {
   const trap = await openScenario(page, server, "full");
   await page.setViewportSize({ width: info.project.name === "light-320" ? 320 : 390, height: 844 });
   await page.evaluate(() => { window.location.hash = "#/settings"; });
   const card = page.locator("section.glass", { hasText: "Backend" }).first();
-  const effort = card.getByRole("button", { name: "Backend effort" });
-  await expect(effort).toHaveAttribute("aria-haspopup", "menu");
-  await expect(effort.locator('[data-slot="effort-value"]')).toHaveText("medium");
-  await effort.focus();
-  await effort.press("Home");
-  await expect(effort).toHaveAttribute("data-level", "off");
+  const slider = card.getByRole("slider", { name: "Backend effort" });
+  await expect(slider).toHaveAttribute("aria-valuetext", "medium");
+  await expect(card.locator('[data-slot="effort-recommended"]'), "the default level is marked").toHaveText("Recommended");
+  await slider.focus();
+  await slider.press("Home");
   const levels = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+  await expect(slider).toHaveAttribute("aria-valuetext", "off");
   for (const level of levels.slice(1)) {
-    await effort.press("ArrowRight");
-    await expect(effort, "Right steps one level without opening the list").toHaveAttribute("data-level", level);
+    await slider.press("ArrowRight");
+    await expect(slider).toHaveAttribute("aria-valuetext", level);
   }
-  await expect(page.getByRole("menu")).toHaveCount(0);
-  await effort.press("ArrowLeft");
-  await expect(effort).toHaveAttribute("data-level", "xhigh");
+  await expect(card.locator('[data-slot="effort-value"]')).toHaveText("Max");
+  await expect(card.getByText("As deep as the model goes.")).toBeVisible();
+  await expect(card.locator('[data-slot="effort-recommended"]'), "away from it, the mark names it").toHaveText("Recommended: Medium");
+  await card.scrollIntoViewIfNeeded();
+  await card.screenshot({ path: info.outputPath("effort-slider.png") });
 
-  await effort.press("Enter");
-  const menu = page.getByRole("menu");
-  await expect(menu).toBeVisible();
-  const items = menu.getByRole("menuitemradio");
-  await expect(items).toHaveCount(levels.length);
-  await expect(menu.getByRole("menuitemradio", { name: /xhigh/i })).toHaveAttribute("aria-checked", "true");
-  await expect(menu.getByRole("menuitemradio", { name: /^medium/i })).toContainText("Balanced reasoning for most work.");
-  await expect(menu.locator('[data-slot="effort-recommended"]'), "the default level is marked").toHaveText("Recommended");
-  await menu.screenshot({ path: info.outputPath("effort-menu.png") });
+  await slider.press("Home");
+  const box = (await slider.boundingBox())!;
+  await page.mouse.move(box.x + 1, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 4 });
+  await expect(slider, "dragging follows the pointer").toHaveAttribute("data-dragging", "true");
+  await page.mouse.up();
+  await expect(slider, "and snaps to the stop under it").toHaveAttribute("aria-valuetext", "medium");
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
-  await menu.getByRole("menuitemradio", { name: /^low/i }).click();
-  await expect(menu).toBeHidden();
-  await expect(effort).toHaveAttribute("data-level", "low");
-  await expect(effort, "focus comes back to the field").toBeFocused();
   expect(trap.errors).toEqual([]);
   trap.stop();
+});
+
+test("a level's name under the slider jumps to it", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => { window.location.hash = "#/settings"; });
+  const card = page.locator("section.glass", { hasText: "Backend" }).first();
+  const slider = card.getByRole("slider", { name: "Backend effort" });
+  await card.locator('[data-label="high"]').click();
+  await expect(slider).toHaveAttribute("aria-valuetext", "high");
+  await card.locator('[data-label="off"]').click();
+  await expect(slider).toHaveAttribute("aria-valuetext", "off");
 });
 
 test("a toast is centred over the composer, clear of it", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(() => { window.location.hash = "#/settings"; });
-  const effort = page.getByRole("button", { name: "Backend effort" });
-  await effort.focus();
-  await effort.press("ArrowRight");
+  const slider = page.getByRole("slider", { name: "Backend effort" });
+  await slider.focus();
+  await slider.press("ArrowRight");
   const toast = page.locator('[role="status"] > div').filter({ hasText: "Settings saved" });
   await expect(toast).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(400);
@@ -63,6 +72,9 @@ test("ReUI panels and Obsidian session cards keep the existing navigation and co
   const trap = await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const composer = page.locator(".group\\/composer");
+  // The box gives and springs back when it takes focus; measure it at rest.
+  const settled = () => composer.evaluate((el: any) => Promise.all(el.getAnimations().map((animation: any) => animation.finished)));
+  await settled();
   const before = (await composer.boundingBox())!;
   const tabs = page.getByRole("tablist");
   const tabsBefore = (await tabs.boundingBox())!;
@@ -73,6 +85,7 @@ test("ReUI panels and Obsidian session cards keep the existing navigation and co
   await expect(page.locator('[data-slot="frame-panel"]').first()).toBeVisible();
   await page.getByRole("tab", { name: /Lobby/ }).click();
   await expect(page.locator('[data-tab-fill]')).toBeAttached();
+  await settled();
   const after = (await composer.boundingBox())!;
   expect(after.x).toBeCloseTo(before.x, 0);
   expect(after.y).toBeCloseTo(before.y, 0);

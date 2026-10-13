@@ -18,6 +18,7 @@ import { MetricsTable } from "./MetricsTable"
 import { Tiles } from "./Tiles"
 import { byLabel, groupLabel, type GroupBy } from "./words"
 import type { MetricsData } from "@protocol"
+import { Skeleton } from "@/components/ui/skeleton"
 
 const EMPTY = "No runs recorded yet. Every Master turn, subagent run, quick fix and planning round lands here with its model, thinking level, time, tokens and cost."
 
@@ -94,11 +95,11 @@ function Body({ data, groupBy, query }: { data: MetricsData; groupBy: GroupBy; q
   )
 }
 
-function Skeleton() {
+function Loading() {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" role="status" aria-label="Loading metrics">
       {[0, 1, 2, 3, 4].map((tile) => (
-        <div key={tile} className="h-20 rounded-lg bg-muted motion-safe:animate-pulse" />
+        <Skeleton key={tile} shape="card" className="h-20" />
       ))}
     </div>
   )
@@ -128,7 +129,7 @@ export function MetricsTab() {
       </section>
       {read.error ? <p role="alert" className="text-sm text-destructive">Could not refresh metrics. {read.error}</p> : null}
       <div aria-busy={read.loading} className={read.loading && read.data ? "opacity-60" : undefined}>
-        {read.data ? <Body key={JSON.stringify([read.data, groupBy])} data={read.data} groupBy={groupBy} query={query} /> : <Skeleton />}
+        {read.data ? <Body key={JSON.stringify([read.data, groupBy])} data={read.data} groupBy={groupBy} query={query} /> : <Loading />}
       </div>
     </div>
   )

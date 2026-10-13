@@ -1,6 +1,6 @@
 /**
  * The redesign's own behaviour: the droplet that slides between tab pills, the
- * effort menu that skips what a model cannot do, one pop-up and one toast at
+ * effort slider that skips what a model cannot do, one pop-up and one toast at
  * a time, the zen palettes and shapes, and the composer taking files.
  */
 import { expect, openScenario, test } from "./fixture.ts";
@@ -195,35 +195,35 @@ test("under reduced motion the fill and the ring simply move, with no flow and n
   expect(parseFloat(run.rung), "all the way round").toBe(1);
 });
 
-test("the effort menu skips the levels a model does not support", async ({ page, server }) => {
+test("the effort slider skips the levels a model does not support", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => {
     window.location.hash = "#/settings";
   });
-  const effort = page.getByRole("button", { name: "Master effort" });
-  await expect(effort).toBeVisible();
+  const slider = page.getByRole("slider", { name: "Master effort" });
+  await expect(slider).toBeVisible();
   // The mock model supports low, medium and high.
-  await effort.focus();
+  await slider.focus();
   await page.keyboard.press("Home");
-  await expect(effort, "Home lands on the lowest supported level").toHaveAttribute("data-level", "low");
+  await expect(slider, "Home lands on the lowest supported level").toHaveAttribute("aria-valuetext", "low");
   await page.keyboard.press("ArrowRight");
-  await expect(effort).toHaveAttribute("data-level", "medium");
+  await expect(slider).toHaveAttribute("aria-valuetext", "medium");
   await page.keyboard.press("ArrowRight");
-  await expect(effort).toHaveAttribute("data-level", "high");
+  await expect(slider).toHaveAttribute("aria-valuetext", "high");
   await page.keyboard.press("ArrowRight");
-  await expect(effort, "there is nowhere above high to go").toHaveAttribute("data-level", "high");
+  await expect(slider, "there is nowhere above high to go").toHaveAttribute("aria-valuetext", "high");
   await page.keyboard.press("End");
-  await expect(effort).toHaveAttribute("data-level", "high");
-  await page.keyboard.press("ArrowDown");
-  const menu = page.getByRole("menu");
-  await expect(menu, "Down opens the list").toBeVisible();
-  const xhigh = menu.getByRole("menuitemradio", { name: /xhigh/i });
-  await expect(xhigh, "an unsupported level cannot be picked").toHaveAttribute("aria-disabled", "true");
-  await expect(xhigh, "and says why").toContainText("Not supported by mock/gpt-5.");
-  await page.keyboard.press("Escape");
-  await expect(menu).toBeHidden();
-  await expect(effort).toBeFocused();
+  await expect(slider).toHaveAttribute("aria-valuetext", "high");
+  // Dragging to the far end snaps back to the highest supported stop.
+  const box = (await slider.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 1, box.y + box.height / 2, { steps: 6 });
+  await page.mouse.up();
+  await expect(slider, "dragging past the last supported level stays on it").toHaveAttribute("aria-valuetext", "high");
+  await expect(page.locator('[title="Not supported by mock/gpt-5"]').first(), "unsupported stops say so").toBeAttached();
+  await expect(page.locator('[data-label="xhigh"]').first(), "and their names cannot be picked").toBeDisabled();
 });
 
 test("only one toast shows at a time, with a light blur behind it", async ({ page, server }) => {
@@ -586,11 +586,11 @@ test("colour themes: a built-in one repaints the page and survives a reload; a t
   const before = await primary();
   await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Appearance & notifications", exact: true }).click();
   const group = page.getByRole("radiogroup", { name: "Colour theme" });
-  await expect(group.getByRole("radio", { name: /Mist/ }), "the page's own colours are the default").toHaveAttribute("aria-checked", "true");
-  await group.getByRole("radio", { name: /Forest/ }).click();
-  await expect(group.getByRole("radio", { name: /Forest/ })).toHaveAttribute("aria-checked", "true");
-  expect(await primary(), "Forest changes the accent").not.toBe(before);
-  await group.getByRole("radio", { name: /Forest/ }).press("ArrowRight");
+  await expect(group.getByRole("radio", { name: /Default/ }), "the page's own colours are the default").toHaveAttribute("aria-checked", "true");
+  await group.getByRole("radio", { name: /Grove/ }).click();
+  await expect(group.getByRole("radio", { name: /Grove/ })).toHaveAttribute("aria-checked", "true");
+  expect(await primary(), "Grove changes the accent").not.toBe(before);
+  await group.getByRole("radio", { name: /Grove/ }).press("ArrowRight");
   await expect(group.getByRole("radio", { name: /Ocean/ }), "arrows walk the themes").toHaveAttribute("aria-checked", "true");
   await page.reload();
   await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Appearance & notifications", exact: true }).click();
@@ -619,7 +619,7 @@ test("colour themes: a built-in one repaints the page and survives a reload; a t
   await page.getByRole("button", { name: /Remove Custom theme/ }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: /Remove theme/ }).click();
   await expect(group.getByRole("radio", { name: /Custom theme/ }), "removing it").toHaveCount(0);
-  await expect(group.getByRole("radio", { name: /Mist/ })).toHaveAttribute("aria-checked", "true");
+  await expect(group.getByRole("radio", { name: /Default/ })).toHaveAttribute("aria-checked", "true");
   expect(await primary()).toBe(before);
 });
 
@@ -909,25 +909,25 @@ test("a button's key never fires from a form: Enter elsewhere does not send a ha
   await expect(note, "the note is still waiting to be sent").toHaveValue(/whiteboard\.example/);
 });
 
-test("quick key presses on the effort field add up instead of each starting from the saved level", async ({ page, server }) => {
+test("quick key presses on the effort slider add up instead of each starting from the saved level", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => {
     window.location.hash = "#/settings";
   });
-  const slider = page.getByRole("button", { name: "Master effort" });
+  const slider = page.getByRole("slider", { name: "Master effort" });
   await slider.focus();
   await page.keyboard.press("Home");
-  await expect(slider).toHaveAttribute("data-level", "low");
+  await expect(slider).toHaveAttribute("aria-valuetext", "low");
   // No waiting between them: the server has not answered the first when the second arrives.
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowRight");
-  await expect(slider, "two quick presses climb two stops").toHaveAttribute("data-level", "high");
+  await expect(slider, "two quick presses climb two stops").toHaveAttribute("aria-valuetext", "high");
   await page.keyboard.press("ArrowLeft");
   await page.keyboard.press("ArrowRight");
-  await expect(slider, "left then right ends where it began").toHaveAttribute("data-level", "high");
+  await expect(slider, "left then right ends where it began").toHaveAttribute("aria-valuetext", "high");
   await page.waitForTimeout(600);
-  await expect(slider, "and it stays there once the server has answered").toHaveAttribute("data-level", "high");
+  await expect(slider, "and it stays there once the server has answered").toHaveAttribute("aria-valuetext", "high");
 });
 
 test("Thinking is a glowing orb in the colour of the agent thinking, with that agent's name beside it", async ({ page, server }) => {
