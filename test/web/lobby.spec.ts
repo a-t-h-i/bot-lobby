@@ -99,7 +99,8 @@ async function touchTargetMisses(page: Page): Promise<string[]> {
 }
 
 async function expectShell(page: Page, tabs: number): Promise<void> {
-  await expect(page.locator("header").getByText("bot-lobby", { exact: true }), "header").toBeVisible();
+  const project = page.getByRole("complementary", { name: "Sidebar" }).getByRole("combobox", { name: "Project", exact: true }).or(page.locator("header").getByText("bot-lobby", { exact: true }));
+  await expect(project, "the project, in the sidebar or (on a phone) the bar").toBeVisible();
   await expect(page.getByRole("tab"), `eight pills`).toHaveCount(tabs);
   await expect(page.locator("#main"), "main pane").toBeVisible();
   await expect(page.getByLabel("Message the oracle"), "composer").toBeVisible();
@@ -133,7 +134,7 @@ test("lobby tab streams a reply and stops", async ({ page, server }) => {
   await expect(main.getByRole("group", { name: "Task" }), "no task tracker: a task's steps live in Tasks").toHaveCount(0);
   await expect(main.getByRole("log", { name: "Conversation" }), "conversation").toBeVisible();
   await expect(main.getByRole("heading", { name: "Conversation", exact: true }), "redundant strip removed").toHaveCount(0);
-  await expect(main.getByRole("log", { name: "Activity" }), "activity").toBeVisible();
+  await expect(main.getByRole("log", { name: "Conversation" }).getByRole("button", { name: /steps/ }), "activity, in the conversation").toBeVisible();
   await expect(page.getByRole("button", { name: "Open Thinking" }), "thoughts open from the bubble").toBeVisible();
   await expect(main.getByText("fixtures per scenario"), "seeded chat").toBeVisible();
   await page.getByLabel("Message the oracle").fill("hello mock");
@@ -231,27 +232,30 @@ test("the Lobby fills the window: the page never scrolls, each pane does, and Th
   await expect(page.getByRole("dialog", { name: "Thinking", exact: true }), "the bubble opens the thoughts").toBeVisible();
 });
 
-test("the activity log follows its newest entry, lets a reader who scrolled up stay put, and jumps back on request", async ({ page, server }) => {
+test("the conversation follows new steps, lets a reader who scrolled up stay put, and jumps back on request", async ({ page, server }) => {
   await openScenario(page, server, "full");
-  // A short window so the seeded log overflows its pane and following is visible.
+  // A short window so the conversation overflows and following is visible.
   await page.setViewportSize({ width: 1280, height: 480 });
-  const log = page.locator('[role="log"][aria-label="Activity"]');
+  const log = page.locator('[role="log"][aria-label="Conversation"]');
   await expect(log).toBeVisible();
-  expect(await log.evaluate((el: any) => el.scrollHeight > el.clientHeight), "the log overflows, so following is visible").toBe(true);
+  await log.getByRole("button", { name: /10 steps/ }).click();
+  const steps = log.getByRole("list", { name: "Activity" });
+  await expect(steps).toBeVisible();
+  expect(await log.evaluate((el: any) => el.scrollHeight > el.clientHeight), "the chat overflows, so following is visible").toBe(true);
   const gap = () => log.evaluate((el: any) => Math.abs(el.scrollTop + el.clientHeight - el.scrollHeight));
-  expect(await gap(), "it opens at its newest entry").toBeLessThanOrEqual(2);
+  await log.evaluate((el: any) => { el.scrollTop = el.scrollHeight; });
+  await expect.poll(gap, { message: "it rests at its newest line" }).toBeLessThanOrEqual(2);
   // A window that changes size keeps a following reader on the newest line.
   await page.setViewportSize({ width: 1280, height: 520 });
   await expect.poll(gap, { message: "a resize keeps it at the bottom" }).toBeLessThanOrEqual(2);
   server.log("MASTER", "a step that arrives while following");
-  await expect(log).toContainText("a step that arrives while following");
-  await expect.poll(gap, { message: "a new entry keeps following" }).toBeLessThanOrEqual(2);
+  await expect(steps).toContainText("a step that arrives while following");
+  await expect.poll(gap, { message: "a new step keeps following" }).toBeLessThanOrEqual(2);
   // A reader who scrolled up is left where they are, with a way back.
   await log.evaluate((el: any) => {
     el.scrollTop = 0;
   });
-  // The conversation has its own way back; this is the log's.
-  const jump = page.getByRole("region", { name: "Activity" }).getByRole("button", { name: "Jump to latest" });
+  const jump = page.getByRole("region", { name: "Conversation" }).getByRole("button", { name: "Jump to latest" });
   await expect(jump, "scrolling up offers the way back").toBeVisible();
   await expect(jump, "just an arrow, no words").toHaveText("");
   await jump.hover();
@@ -259,10 +263,59 @@ test("the activity log follows its newest entry, lets a reader who scrolled up s
   expect(bounce, "hovering bounces the arrow once").toEqual([{ name: "jump-latest-bounce", iterations: 1 }]);
   await page.screenshot({ path: test.info().outputPath("jump-latest.png") });
   server.log("MASTER", "a step the reader has not caught up with");
-  await expect(log).toContainText("a step the reader has not caught up with");
+  await expect(steps).toContainText("a step the reader has not caught up with");
   expect(await log.evaluate((el: any) => el.scrollTop), "the reader is not pulled away from what they were reading").toBeLessThanOrEqual(2);
   await jump.click();
-  await expect.poll(gap, { message: "Jump to latest lands on the newest entry" }).toBeLessThanOrEqual(2);
+  await expect.poll(gap, { message: "Jump to latest lands on the newest line" }).toBeLessThanOrEqual(2);
+});
+
+test("the sidebar holds the project, the sessions and Settings, and folds to a rail with Alt+B", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const header = page.getByRole("banner");
+  for (const name of ["Sessions", "Settings"]) await expect(header.getByRole("link", { name, exact: true }), `${name} left the top bar`).toHaveCount(0);
+  await expect(header.getByRole("combobox", { name: "Project", exact: true }), "so did the project").toHaveCount(0);
+  await expect(header.getByRole("tablist"), "the tabs stay where they were").toBeVisible();
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" });
+  await expect(sidebar.getByRole("combobox", { name: "Project", exact: true })).toBeVisible();
+  const sessions = sidebar.getByRole("navigation", { name: "Sessions list" });
+  await expect(sessions.getByRole("link", { name: /mock lobby/ }), "this window's session is the Lobby").toHaveAttribute("aria-current", "page");
+  await sessions.getByRole("link", { name: /Mock background task/ }).click();
+  await expect(page).toHaveURL(/#\/sessions\/[^/]+$/);
+  await expect(sessions.getByRole("link", { name: /Mock background task/ })).toHaveAttribute("aria-current", "page");
+  await sidebar.getByRole("link", { name: "Settings", exact: true }).click();
+  await expect(page.getByRole("navigation", { name: "Settings sections" })).toBeVisible();
+  const width = async () => (await sidebar.boundingBox())!.width;
+  expect(await width(), "open, it is a column").toBeGreaterThan(200);
+  await page.locator("#composer-text").focus();
+  await page.keyboard.press("Alt+b");
+  await expect(sidebar.getByRole("button", { name: "Expand sidebar" }), "Alt+B folds it to a rail").toBeVisible();
+  expect(await width(), "a rail of icons").toBeLessThan(64);
+  for (const name of ["Sessions", "Settings"]) await expect(sidebar.getByRole("link", { name, exact: true }), `${name} stays a click away`).toBeVisible();
+  await expect(sidebar.getByRole("combobox", { name: "Project", exact: true }), "and so does the project").toBeVisible();
+  await page.reload();
+  await page.locator('[role="tablist"]').waitFor();
+  await expect(sidebar.getByRole("button", { name: "Expand sidebar" }), "the fold is remembered").toBeVisible();
+  await sidebar.getByRole("button", { name: "Expand sidebar" }).click();
+  await expect(sidebar.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
+});
+
+test("in a narrow window the sidebar rests as the rail and opens over the page, so the tabs keep their room", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1000, height: 800 });
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" });
+  const expand = sidebar.getByRole("button", { name: "Expand sidebar" });
+  await expect(expand, "the rail, though the sidebar was left open").toBeVisible();
+  const main = (await page.locator("#main").boundingBox())!;
+  await expand.click();
+  await expect(sidebar.getByRole("navigation", { name: "Sessions list" })).toBeVisible();
+  expect((await page.locator("#main").boundingBox())!.x, "it lies over the page, which does not move").toBe(main.x);
+  await page.keyboard.press("Escape");
+  await expect(expand, "Esc puts it away").toBeVisible();
+  await expand.click();
+  await sidebar.getByRole("link", { name: "Settings", exact: true }).click();
+  await expect(page.getByRole("navigation", { name: "Settings sections" })).toBeVisible();
+  await expect(expand, "and so does going somewhere").toBeVisible();
 });
 
 test("contrast meets 4.5:1", { tag: "@theme" }, async ({ page, server }) => {
@@ -295,7 +348,7 @@ test("scrolling past the end of a chat full of code never drags the Lobby page u
   const main = page.locator("#main");
   const sizes = await main.evaluate((el: any) => [el.scrollHeight, el.clientHeight]);
   expect(sizes[0], "the page is no taller than the window").toBeLessThanOrEqual(sizes[1]);
-  for (const name of ["Conversation", "Activity"]) {
+  for (const name of ["Conversation"]) {
     const log = (await page.locator(`[role="log"][aria-label="${name}"]`).boundingBox())!;
     await page.mouse.move(log.x + log.width / 2, log.y + log.height / 2);
     for (let i = 0; i < 25; i += 1) await page.mouse.wheel(0, 500);

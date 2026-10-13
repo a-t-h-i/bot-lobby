@@ -80,7 +80,8 @@ for (const name of PAGES) {
 test("toolbar touch targets, context, keyboard hint activation and modal guard", async ({ page, server }) => {
   await openScenario(page, server, "full");
   const header = page.locator("header").first();
-  await expect(header.getByRole("combobox", { name: "Project", exact: true })).toBeVisible();
+  // The project sits in the sidebar; a phone reaches it through the bar's menu button.
+  await expect(page.getByRole("complementary", { name: "Sidebar" }).getByRole("combobox", { name: "Project", exact: true }).or(header.getByRole("button", { name: "Open sidebar" }))).toBeVisible();
   await expect(header.getByLabel("Connected", { exact: true })).toBeVisible();
   const controls = header.locator("button:visible, a:visible");
   // Drawn slim everywhere (never under WCAG 2.5.8's 24px); under a finger an invisible margin makes each 40px to hit.
@@ -199,6 +200,9 @@ test("project loading, empty, failure and refresh recovery use accessible Combob
     await request.fulfill({ json: mode === "failure" ? { ok: false, code: "failed", error: "Fixture project lookup failed" } : { ok: true, result } });
   });
   await openScenario(page, server, "full");
+  // On a phone the project lives in the sidebar sheet.
+  const menu = page.getByRole("button", { name: "Open sidebar" });
+  if (await menu.isVisible()) await menu.click();
   const project = page.getByRole("combobox", { name: "Project", exact: true });
   await expect(project).toBeEnabled();
   await expect(page.getByRole("button", { name: "Refresh projects" })).toBeDisabled();

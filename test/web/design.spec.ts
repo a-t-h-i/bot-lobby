@@ -568,16 +568,16 @@ test("Alt+A and Alt+T work from the message box, and Thinking opens from its bub
   await page.evaluate(() => {
     window.location.hash = "#/lobby";
   });
-  const activity = page.getByRole("button", { name: /Minimize Activity|Expand Activity/ });
+  const activity = page.locator("#main").getByRole("button", { name: /\d+ steps/ });
   const thinking = page.getByRole("button", { name: "Open Thinking" });
-  await expect(activity).toHaveAttribute("aria-expanded", "true");
-  await expect(activity, "the tooltip names the key").toHaveAttribute("title", /Alt\+A/);
+  await expect(activity, "the steps start folded into one line").toHaveAttribute("aria-expanded", "false");
   await expect(thinking).toHaveAttribute("aria-expanded", "false");
   await page.locator("#composer-text").focus();
   await page.keyboard.press("Alt+a");
-  await expect(activity, "Alt+A folds Activity from the message box too").toHaveAttribute("aria-expanded", "false");
+  await expect(activity, "Alt+A opens every run of steps from the message box too").toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("#main").getByRole("list", { name: "Activity" })).toBeVisible();
   await page.keyboard.press("Alt+a");
-  await expect(activity, "and opens it again").toHaveAttribute("aria-expanded", "true");
+  await expect(activity, "and folds them again").toHaveAttribute("aria-expanded", "false");
   await expect(page.locator("#composer-text"), "the cursor stays in the box").toBeFocused();
   await page.keyboard.press("Alt+t");
   await expect(page.getByRole("dialog", { name: "Thinking", exact: true }), "Alt+T opens Thinking from the box").toBeVisible();
@@ -585,7 +585,7 @@ test("Alt+A and Alt+T work from the message box, and Thinking opens from its bub
   await expect(page.getByRole("dialog", { name: "Thinking", exact: true })).toBeHidden();
   await page.keyboard.press("Alt+h");
   const keys = page.getByRole("dialog", { name: "Keys" });
-  await expect(keys.getByText("show or hide Activity on the Lobby"), "the key list has it").toBeVisible();
+  await expect(keys.getByText("open or fold every step in the Lobby conversation"), "the key list has it").toBeVisible();
   await page.keyboard.press("Escape");
   await expect(keys, "a dialog on its way out still blocks the keys").toBeHidden();
   await page.evaluate(() => {
@@ -783,14 +783,20 @@ test("the Lobby has no task tracker: a task's steps and agents live in Tasks", a
   await expect(page.locator("#main").getByText(/agents? working/)).toHaveCount(0);
 });
 
-test("Activity folds to its title bar and Thinking opens only in a modal", async ({ page, server }) => {
+test("Activity opens in place in the conversation, there is no Activity pane, and Thinking opens only in a modal", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const main = page.locator("#main");
-  await expect(main.getByRole("log", { name: "Activity" })).toBeVisible();
-  await page.getByRole("button", { name: "Minimize Activity" }).click();
-  await expect(main.getByRole("log", { name: "Activity" }), "the log is gone").toBeHidden();
-  await expect(page.getByRole("button", { name: "Expand Activity" }), "its bar stays").toBeVisible();
+  await expect(main.getByRole("log", { name: "Activity" }), "no side pane for activity").toHaveCount(0);
+  const run = main.getByRole("log", { name: "Conversation" }).getByRole("button", { name: /10 steps/ });
+  await expect(run, "the steps sit in the conversation, folded").toHaveAttribute("aria-expanded", "false");
+  await expect(run, "with who worked and what went wrong").toContainText(/Master, Dev, QA \+1.*1 warning/);
+  await run.click();
+  const steps = main.getByRole("list", { name: "Activity" });
+  await expect(steps.getByRole("listitem")).toHaveCount(10);
+  await expect(steps, "each step keeps its words").toContainText("fixtures load for all ten scenarios");
+  await run.click();
+  await expect(steps).toBeHidden();
   await page.getByRole("button", { name: "Open Thinking" }).click();
   await expect(page.getByRole("dialog", { name: "Thinking", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
@@ -798,9 +804,22 @@ test("Activity folds to its title bar and Thinking opens only in a modal", async
   await page.reload();
   await page.locator('[role="tablist"]').waitFor();
   await expect(page.getByRole("button", { name: "Open Thinking" })).toHaveAttribute("aria-expanded", "false");
-  await page.getByRole("button", { name: "Expand Activity" }).click();
-  await expect(main.getByRole("log", { name: "Activity" })).toBeVisible();
-  await expect(main.getByRole("log", { name: "Thinking" }), "there is no third fixed pane").toHaveCount(0);
+  await expect(main.getByRole("log", { name: "Thinking" }), "there is no fixed Thinking pane").toHaveCount(0);
+});
+
+test("a running step shows on the folded line with a spinner", async ({ page, server }) => {
+  await page.route("**/api/lobby.snapshot", async (route) => {
+    const response = await route.fetch();
+    const envelope = await response.json();
+    const last = envelope.result.activity.at(-1);
+    envelope.result.activity.push({ id: last.id + 1, at: last.at + 1, source: "DEV", text: "running the type checker", kind: "info", pending: true });
+    await route.fulfill({ response, json: envelope });
+  });
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const run = page.locator("#main").getByRole("button", { name: /running the type checker/ });
+  await expect(run, "the step at work names itself").toContainText("Dev running the type checker…");
+  await expect(run).toContainText("11 steps");
 });
 
 test("the project switcher is a list you open with P, not a native select", async ({ page, server }) => {
@@ -818,19 +837,16 @@ test("the project switcher is a list you open with P, not a native select", asyn
   await expect(page.getByRole("combobox", { name: "Project", exact: true }), "and gives focus back").toBeFocused();
 });
 
-test("below 1024px the Lobby shows one pane at a time behind a switcher, and the chat keeps the room", async ({ page, server }) => {
+test("on a phone the Lobby is one conversation, its steps opening in place", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 390, height: 844 });
-  const panes = page.getByRole("radiogroup", { name: "Pane" });
-  await expect(panes).toBeVisible();
+  await expect(page.getByRole("radiogroup", { name: "Pane" }), "no pane switcher").toHaveCount(0);
   const chat = page.getByRole("log", { name: "Conversation" });
   await expect(chat).toBeVisible();
   expect((await chat.boundingBox())!.height, "the conversation is not squeezed into a sliver").toBeGreaterThan(300);
-  await panes.getByRole("radio", { name: /Activity/ }).click();
-  await expect(page.getByRole("log", { name: "Activity" })).toBeVisible();
-  await expect(chat, "the others step aside").toBeHidden();
-  await expect(panes.getByRole("radio", { name: /Thinking/ }), "Thinking is a bubble, not a pane").toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Open Thinking" })).toBeVisible();
+  await chat.getByRole("button", { name: /10 steps/ }).click();
+  await expect(chat.getByRole("list", { name: "Activity" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open Thinking" }), "Thinking is a bubble, not a pane").toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow, "no sideways scroll").toBeLessThanOrEqual(0);
 });

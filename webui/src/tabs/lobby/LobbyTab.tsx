@@ -1,144 +1,33 @@
 /*
- * The Lobby. From 1024 px the Conversation and the Activity log sit side by
- * side; Activity folds away into a button in the side rail (Alt+A). Thinking is
- * not a pane: its orb floats over every page (see `app/Thinking.tsx`). Below 1024
- * px there is room for one pane at a time, so a switcher picks between them.
+ * The Lobby: the conversation with the oracle, the agents' activity folded in
+ * place between its messages (Alt+A opens or folds every run of steps). One
+ * column at every width. Thinking is not a pane: its orb floats over every
+ * page (see `app/Thinking.tsx`).
  */
-import { useState } from "react"
-import { Activity, MessageSquare, type LucideIcon } from "lucide-react"
 import { ErrorState } from "@/app/States"
 import { useTopic } from "@/app/hooks"
-import { Keys } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { useCollapsed } from "@/lib/collapsed"
 import { lobbyStore } from "@/lib/store"
-import { cn } from "@/lib/utils"
-import { useWide } from "@/ui/SplitPane"
 import type { LobbySnapshot, StatusInfo } from "@protocol"
-import { ActivityLog } from "./ActivityLog"
 import { Conversation } from "./Conversation"
+import type { ActivityEntry } from "./types"
 
-interface LobbyViewProps {
-  data?: LobbySnapshot
-  status?: StatusInfo
-  activityFolded: boolean
-  toggleActivity: () => void
-}
-const keyOf = (status: StatusInfo | undefined, action: string) => status?.keys.find((key) => key.action === action)?.label
 const panesOf = (status?: StatusInfo) => status?.panels ?? { conversation: true, activity: true, thinking: true }
 
-function RailButton({ name, icon: Icon, shortcut, onClick }: { name: string; icon: LucideIcon; shortcut?: string | undefined; onClick: () => void }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          aria-label={`Expand ${name}`}
-          aria-expanded={false}
-          aria-keyshortcuts={shortcut}
-          onClick={onClick}
-          className="btn-ghost inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-[box-shadow,color,translate] duration-150 ease-snap outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:active:translate-none"
-        >
-          <Icon aria-hidden="true" className="size-4" />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="left">
-        Expand {name}
-        {shortcut ? <Keys chord={shortcut} /> : null}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
-function SideRail(props: LobbyViewProps) {
-  const panes = panesOf(props.status)
-  return (
-    <aside aria-label="Minimized panes" className="flex w-12 shrink-0 flex-col items-center gap-1 border-l border-border py-2">
-      {panes.activity && props.activityFolded ? <RailButton name="Activity" icon={Activity} shortcut={keyOf(props.status, "activity")} onClick={props.toggleActivity} /> : null}
-    </aside>
-  )
-}
-
-function MainPanes(props: LobbyViewProps) {
-  const { data, status, activityFolded, toggleActivity } = props
+function LobbyView({ data, status }: { data?: LobbySnapshot; status?: StatusInfo }) {
   const panes = panesOf(status)
-  const activity = panes.activity && !activityFolded
-  if (!panes.conversation && !activity) return null
-  const both = panes.conversation && activity
+  if (!panes.conversation) return null
+  const activity = panes.activity ? (data?.activity as ActivityEntry[] | undefined) : undefined
   return (
-    <div className={cn("grid min-h-0 flex-1 gap-3 p-3", both ? "grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]" : "grid-cols-1")}>
-      {panes.conversation ? <Conversation chat={data?.chat ?? []} reply={data?.reply} busy={status?.busy ?? false} hasOlder={data?.hasOlderChat ?? false} hasTask={Boolean(data?.task)} /> : null}
-      {activity ? <ActivityLog entries={data?.activity ?? []} collapsed={false} onToggle={toggleActivity} shortcut={keyOf(status, "activity")} /> : null}
-    </div>
-  )
-}
-
-function WideView(props: LobbyViewProps) {
-  const { status } = props
-  const panes = panesOf(status)
-  const rail = panes.activity && props.activityFolded
-  return (
-    <div className="flex min-h-0 flex-1">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <MainPanes {...props} />
-      </div>
-      {rail ? <SideRail {...props} /> : null}
-    </div>
-  )
-}
-
-type Pane = "conversation" | "activity"
-
-/** One pane at a time on a small screen: a switcher with a hint of what is going on in the others. */
-function NarrowView({ data, status }: LobbyViewProps) {
-  const panes = panesOf(status)
-  const available: Array<{ id: Pane; label: string; icon: LucideIcon }> = [
-    ...(panes.conversation ? [{ id: "conversation" as const, label: "Conversation", icon: MessageSquare }] : []),
-    ...(panes.activity ? [{ id: "activity" as const, label: "Activity", icon: Activity }] : []),
-  ]
-  const [picked, setPicked] = useState<Pane>("conversation")
-  const view = available.find((entry) => entry.id === picked) ?? available[0]
-  const running = (data?.activity ?? []).filter((entry) => entry.pending).length
-  if (!view) return null
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      {available.length > 1 ? (
-        <div role="radiogroup" aria-label="Pane" className="flex shrink-0 items-center gap-0.5 border-b border-border px-3 py-2">
-          {available.map((entry) => {
-            const on = entry.id === view.id
-            const Icon = entry.icon
-            return (
-              <button
-                key={entry.id}
-                type="button"
-                role="radio"
-                aria-checked={on}
-                onClick={() => setPicked(entry.id)}
-                className={cn(
-                  "inline-flex h-8 items-center gap-1.5 rounded-lg border border-transparent px-2.5 text-[0.8125rem] font-medium outline-none transition-[box-shadow,color] focus-visible:ring-3 focus-visible:ring-ring/40",
-                  on ? "btn-raised bg-card text-foreground" : "btn-ghost text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Icon aria-hidden="true" className="size-4" />
-                {entry.label}
-                {entry.id === "activity" && running > 0 ? <Spinner aria-hidden="true" role="presentation" className="size-3" /> : null}
-              </button>
-            )
-          })}
-        </div>
-      ) : null}
-      {view.id === "conversation" ? <Conversation chat={data?.chat ?? []} reply={data?.reply} busy={status?.busy ?? false} hasOlder={data?.hasOlderChat ?? false} hasTask={Boolean(data?.task)} /> : null}
-      {view.id === "activity" ? <ActivityLog entries={data?.activity ?? []} collapsed={false} bare /> : null}
-    </div>
-  )
-}
-
-function LobbyView(props: LobbyViewProps) {
-  const wide = useWide()
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      {wide ? <WideView {...props} /> : <NarrowView {...props} />}
+    <div className="flex min-h-0 flex-1 flex-col p-3 max-md:p-0">
+      <Conversation
+        chat={data?.chat ?? []}
+        {...(activity ? { activity } : {})}
+        reply={data?.reply}
+        busy={status?.busy ?? false}
+        hasOlder={data?.hasOlderChat ?? false}
+        hasTask={Boolean(data?.task)}
+      />
     </div>
   )
 }
@@ -146,8 +35,7 @@ function LobbyView(props: LobbyViewProps) {
 export function LobbyTab() {
   const lobby = useTopic<LobbySnapshot>("lobby")
   const status = useTopic<StatusInfo>("status")
-  const [activityFolded, toggleActivity] = useCollapsed("lobby.activity")
   if (!lobby.data && lobby.loading) return <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner /><span>Connecting…</span></div>
   if (!lobby.data && lobby.error) return <ErrorState message={lobby.error} onRetry={() => lobbyStore.onHello({})} />
-  return <LobbyView data={lobby.data} status={status.data} activityFolded={activityFolded} toggleActivity={toggleActivity} />
+  return <LobbyView data={lobby.data} status={status.data} />
 }
