@@ -5,7 +5,7 @@
  * and hues come from the theme's tokens. Long lists show the first few rows
  * and a button for the rest.
  */
-import { useId, useState } from "react"
+import { useState } from "react"
 import { motion, useReducedMotion } from "motion/react"
 import { Frame, FrameHeader, FramePanel } from "@/components/reui/frame"
 import type { MetricGroupInfo, MetricsData } from "@protocol"
@@ -15,7 +15,6 @@ import { agentFill, duration, shortDuration, status } from "./words"
 const SHOWN = 6
 
 function TrendChart({ daily, cost }: { daily: MetricsData["daily"]; cost?: boolean }) {
-  const id = useId().replace(/:/g, "")
   const reduce = useReducedMotion()
   const [active, setActive] = useState<MetricsData["daily"][number] | null>(null)
   const title = cost ? "Daily cost" : "Daily runs"
@@ -35,7 +34,6 @@ function TrendChart({ daily, cost }: { daily: MetricsData["daily"]; cost?: boole
       {active ? <><span className="font-medium">{dateLabel(active.date)}</span><span className="text-muted-foreground">{cost ? format(active.cost) : `${active.runs} runs · ${active.successes} successful`}</span></> : <span className="text-muted-foreground">Hover or focus a day to inspect it.</span>}
     </div>
     <svg viewBox="0 0 512 220" className="w-full overflow-visible" role="group" aria-label={title}>
-      <defs><linearGradient id={`${id}-fill`} x1="0" y1="0" x2="0" y2="1"><stop stopColor="var(--primary)" /><stop offset="1" stopColor="var(--primary)" stopOpacity="0.5" /></linearGradient></defs>
       {scale.map((value) => <g key={value} aria-hidden="true">
         <line x1="36" x2="494" y1={180 - value / max * 144} y2={180 - value / max * 144} stroke="var(--workspace-border)" strokeDasharray="3 5" opacity="0.6" />
         <text x="29" y={184 - value / max * 144} textAnchor="end" fill="var(--muted-foreground)" fontSize="10">{format(value)}</text>
@@ -48,7 +46,7 @@ function TrendChart({ daily, cost }: { daily: MetricsData["daily"]; cost?: boole
         return <g key={day.date} role="img" aria-label={description} tabIndex={0} className="outline-none" onFocus={() => setActive(day)} onBlur={() => setActive(null)} onPointerEnter={() => setActive(day)} onPointerLeave={() => setActive(null)}>
           <title>{description}</title>
           <rect x={cx - Math.max(width, 12) / 2} y="26" width={Math.max(width, 12)} height="156" rx="4" fill="var(--accent)" opacity={active?.date === day.date ? 1 : 0} />
-          <motion.rect data-trend-bar x={cx - width / 2} width={width} rx="3" fill={`url(#${id}-fill)`} initial={reduce ? false : { height: 0, y: 180 }} animate={{ height, y: 180 - height }} transition={{ duration: reduce ? 0 : 0.65, delay: reduce ? 0 : Math.min(index * 0.04, 0.3), ease: [0.22, 1, 0.36, 1] }} />
+          <motion.rect data-trend-bar x={cx - width / 2} width={width} rx="3" fill="var(--chart-1)" initial={reduce ? false : { height: 0, y: 180 }} animate={{ height, y: 180 - height }} transition={{ duration: reduce ? 0 : 0.65, delay: reduce ? 0 : Math.min(index * 0.04, 0.3), ease: [0.22, 1, 0.36, 1] }} />
           {!cost ? <motion.rect x={cx - width / 2} width={width} rx="3" fill="var(--success)" initial={reduce ? false : { height: 0, y: 180 }} animate={{ height: day.successes / max * 144, y: 180 - day.successes / max * 144 }} transition={{ duration: reduce ? 0 : 0.65, delay: reduce ? 0 : Math.min(index * 0.04, 0.3) }} /> : null}
         </g>
       })}
@@ -88,7 +86,7 @@ function Rows<T>({ rows, render }: { rows: T[]; render: (row: T) => React.ReactN
           type="button"
           aria-expanded={all}
           onClick={() => setAll((now) => !now)}
-          className="h-6 self-start rounded-lg text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30"
+          className="h-6 self-start rounded-lg text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
           {all ? "Show fewer" : `Show all ${rows.length}`}
         </button>

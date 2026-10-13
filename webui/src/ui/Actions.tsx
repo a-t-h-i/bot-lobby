@@ -14,7 +14,6 @@ import { Keys } from "@/components/ui/kbd"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { isHotkey, useHotkey } from "@/lib/hotkeys"
 import { cn } from "@/lib/utils"
-import "@/components/obsidian/discover-button.css"
 
 type Tone = "neutral" | "primary" | "danger"
 
@@ -46,28 +45,17 @@ export function ActionButton({ label, icon: Icon, tone = "neutral", shortcut, hr
   useHotkey(bound ? shortcut : undefined, () => node.current?.click(), { enabled: bound && !disabled })
 
   const icon = <Icon aria-hidden="true" />
-  // Primary worded actions keep their animated accent fill.
-  const discover = tone === "primary" && !iconOnly
-  const variant = iconOnly ? (tone === "primary" ? "default" : "ghost") : "outline"
+  // The main action is filled in the accent, as in the harnesses; the rest are outlined, or bare when only an icon.
+  const variant = tone === "primary" ? "default" : iconOnly ? "ghost" : "outline"
   const look = cn(
     !iconOnly && "px-2.5",
     iconOnly ? "max-md:size-11" : "max-md:min-h-11 max-md:min-w-11 max-md:h-auto max-md:whitespace-normal",
-    discover && "obsidian-discover-button",
     TONES[tone],
     className,
   )
   const size = iconOnly ? "icon" : "default"
   const body = iconOnly ? (
     icon
-  ) : discover ? (
-    <>
-      <span className="obsidian-discover-button__fill" aria-hidden="true" />
-      <span className="obsidian-discover-button__icon">{icon}</span>
-      <span className="obsidian-discover-button__text">
-        {text ?? label}
-        {shortcut ? <Keys chord={shortcut} className="kbd-hint ml-1 max-md:hidden" /> : null}
-      </span>
-    </>
   ) : (
     <>
       {icon}

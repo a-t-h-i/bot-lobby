@@ -152,7 +152,7 @@ export function ProjectSwitcher({ projects, tab, name, branch, look }: { project
           }}
           title={branch ? `${name} · ${branch}` : name}
           className={cn(
-            "group flex min-w-0 items-center outline-none transition-colors duration-150 focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none",
+            "group flex min-w-0 items-center outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none",
             chip
               ? "composer-chip h-7 gap-1.5 rounded-full px-2.5 text-xs font-medium text-foreground aria-expanded:bg-[var(--composer-chip-hover)]"
               : "h-10 gap-2 rounded-lg px-1.5 text-sm font-medium hover:bg-accent aria-expanded:bg-accent"
@@ -195,7 +195,7 @@ export function ProjectSwitcher({ projects, tab, name, branch, look }: { project
               disabled={busy}
               aria-label="Refresh list"
               aria-keyshortcuts="R"
-              className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-60 max-md:h-11"
+              className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:opacity-60 max-md:h-11"
             >
               {busy ? <Spinner aria-hidden="true" role="presentation" className="size-3" /> : <RefreshCw aria-hidden="true" className="size-3" />}
               Refresh
@@ -213,7 +213,7 @@ export function ProjectSwitcher({ projects, tab, name, branch, look }: { project
                   aria-selected={on}
                   onClick={() => choose(project.id)}
                   className={cn(
-                    "flex min-h-10 w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:ring-3 focus-visible:ring-ring/30 max-md:min-h-11",
+                    "flex min-h-10 w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-md:min-h-11",
                     on && "bg-accent"
                   )}
                 >
@@ -228,7 +228,7 @@ export function ProjectSwitcher({ projects, tab, name, branch, look }: { project
               )
             })}
           </div>
-          <button type="button" className="flex min-h-11 items-center gap-2 border-t border-border px-3 py-3 text-sm font-medium outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40"
+          <button type="button" className="flex min-h-11 items-center gap-2 border-t border-border px-3 py-3 text-sm font-medium outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             onClick={() => { setOpen(false); setBrowsing(true) }}><FolderOpen aria-hidden="true" className="size-4" />Open folder…</button>
         </PopoverContent>
         </Popover>
@@ -242,7 +242,7 @@ export function ProjectSwitcher({ projects, tab, name, branch, look }: { project
               disabled={busy}
               onClick={() => void refresh()}
               className={cn(
-                "inline-flex shrink-0 items-center justify-center text-muted-foreground outline-none transition-[background-color,color,translate] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px disabled:opacity-60 motion-reduce:active:translate-none",
+                "inline-flex shrink-0 items-center justify-center text-muted-foreground outline-none transition-[background-color,color,scale] hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.97] disabled:opacity-60 motion-reduce:active:scale-100",
                 chip ? "composer-chip size-7 rounded-full" : "size-8 rounded-lg hover:bg-accent max-md:size-11"
               )}
             >

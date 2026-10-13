@@ -135,7 +135,7 @@ function Step({ step, index, stopped }: { step: StepData; index: number; stopped
             aria-expanded={open}
             aria-controls={listId}
             onClick={() => setOpen((value) => !value)}
-            className={cn(BADGE, "-my-0.5 transition-colors outline-none hover:bg-primary/10 focus-visible:ring-3 focus-visible:ring-ring/40")}
+            className={cn(BADGE, "-my-0.5 transition-colors outline-none hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring")}
           >
             <AgentsBadge agents={agents} count={count} step={step} stopped={stopped} />
             <ChevronDown aria-hidden="true" className={cn("size-3 transition-transform duration-200", open && "rotate-180")} />
@@ -181,7 +181,7 @@ function FullPlan({ text }: { text: string }) {
         aria-expanded={open}
         aria-controls={body}
         onClick={() => setOpen((now) => !now)}
-        className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+        className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
         <ChevronRight aria-hidden="true" className={cn("size-4 transition-transform duration-200 ease-snap", open && "rotate-90")} />
         {open ? "Hide the details" : "Read the details of each step"}

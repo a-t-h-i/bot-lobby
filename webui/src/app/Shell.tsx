@@ -56,7 +56,7 @@ function handleAction(action: string, route: Route, toggleHelp: () => void, cycl
 
 /** The app's switches in the bar, before there is a sidebar to hold them. */
 const BAR_TOOL =
-  "toolbar-button inline-flex size-8 shrink-0 items-center justify-center rounded-lg border text-foreground transition-[background-color,border-color,translate] duration-150 ease-snap outline-none focus-visible:ring-3 focus-visible:ring-ring/40 active:translate-y-px motion-reduce:active:translate-none"
+  "toolbar-button inline-flex size-8 shrink-0 items-center justify-center rounded-lg border text-foreground transition-[background-color,border-color,scale] duration-150 ease-snap outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.97] motion-reduce:active:scale-100"
 
 /** How long a stream that was live may be reconnecting before the page says pi is gone. */
 const OUTAGE_MS = 2500

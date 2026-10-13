@@ -41,7 +41,7 @@ export function PhoneTabs({ tabs: suppliedTabs, activeId, onSelect }: PhoneTabsP
 function CollapsedHandle({ label, onOpen }: { label: string; onOpen: () => void }) {
   return (
     <div className="phone-tabs phone-tabs-handle">
-      <button type="button" data-phone-tabs-handle aria-expanded="false" aria-label={`Open tabs, current page ${label}`} onPointerDown={(event) => event.preventDefault()} onClick={onOpen} className="phone-tabs-current inline-flex min-h-11 items-center gap-2 rounded-xl border px-4 text-sm font-medium focus-visible:ring-3 focus-visible:ring-ring/40">
+      <button type="button" data-phone-tabs-handle aria-expanded="false" aria-label={`Open tabs, current page ${label}`} onPointerDown={(event) => event.preventDefault()} onClick={onOpen} className="phone-tabs-current inline-flex min-h-11 items-center gap-2 rounded-lg border px-4 text-sm font-medium focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
         <span className="truncate">{label}</span><ChevronUp aria-hidden="true" className="size-4" />
       </button>
     </div>

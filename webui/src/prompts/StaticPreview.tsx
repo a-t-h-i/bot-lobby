@@ -57,7 +57,7 @@ export function StaticPreview({ preview, label, className, frameWidth, minWidth,
           data-compact=""
           onClick={onOpen}
           aria-label={`Expand the mockup: ${label}`}
-          className="absolute inset-0 flex items-end justify-end p-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:ring-inset max-md:p-3"
+          className="absolute inset-0 flex items-end justify-end p-2 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:ring-inset max-md:p-3"
         >
           <span className="inline-flex items-center gap-1 rounded-md border border-border bg-card/90 px-1.5 py-0.5 text-[0.6875rem] font-medium text-muted-foreground opacity-0 shadow-sm backdrop-blur transition-opacity group-hover/mock:opacity-100 group-focus-within/mock:opacity-100">
             <Maximize2 aria-hidden="true" className="size-3" />

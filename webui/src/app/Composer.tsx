@@ -108,7 +108,7 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
       aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
       onClick={onRemove}
       className={cn(
-        "btn-ghost flex shrink-0 items-center justify-center rounded-lg border text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40",
+        "btn-ghost flex shrink-0 items-center justify-center rounded-lg border text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
         file.image ? "absolute top-1 right-1 size-5 bg-background/80 text-foreground backdrop-blur-sm" : "size-7"
       )}
     >
@@ -375,7 +375,7 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
           aria-checked={entry.id === target.id}
           onClick={() => setChosen(entry.id)}
           className={cn(
-            inTray ? CHIP : "h-6 rounded-md border border-transparent px-2.5 text-xs font-medium transition-[background-color,color,box-shadow] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
+            inTray ? CHIP : "h-6 rounded-md border border-transparent px-2.5 text-xs font-medium transition-[background-color,color,box-shadow] duration-150 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
             inTray ? (entry.id === target.id ? "composer-chip-on" : "text-muted-foreground hover:text-foreground") : entry.id === target.id ? "btn-outline btn-soft bg-card text-foreground" : "btn-ghost text-muted-foreground hover:text-foreground"
           )}
         >

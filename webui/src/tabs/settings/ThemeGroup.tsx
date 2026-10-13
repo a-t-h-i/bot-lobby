@@ -71,7 +71,7 @@ function ThemePicker() {
             tabIndex={on ? 0 : -1}
             onClick={() => palette.choose(entry.id)}
             className={cn(
-              "grid gap-1.5 rounded-lg border p-2 text-left outline-none transition-[border-color,box-shadow,background-color] duration-150 focus-visible:ring-3 focus-visible:ring-ring/40",
+              "grid gap-1.5 rounded-lg border p-2 text-left outline-none transition-[border-color,box-shadow,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
               on ? "border-primary bg-accent shadow-[0_0_0_1px_var(--primary)]" : "border-border hover:bg-accent/50"
             )}
           >

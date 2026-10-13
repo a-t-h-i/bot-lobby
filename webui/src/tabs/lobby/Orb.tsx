@@ -194,7 +194,7 @@ export const ThinkingOrb = forwardRef<HTMLButtonElement, OrbProps>(function Thin
           data-dragging={live ? "" : undefined}
           data-placed={point ? "" : undefined}
           data-flip={flip || undefined}
-          className={cn("thinking-bubble fixed z-20 touch-none rounded-full outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/40", hidden && "invisible")}
+          className={cn("thinking-bubble fixed z-20 touch-none rounded-full outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring", hidden && "invisible")}
         >
           <AnimatePresence initial={false}>
             {tag ? (
