@@ -113,7 +113,7 @@ function Preview({ option, onExpand }: { option?: AskOption; onExpand: () => voi
   const phone = useMediaQuery(PHONE_QUERY)
   if (!option || !hasMockup(option)) return null
   return (
-    <div className="card-raised flex min-w-0 max-w-full flex-col gap-2 rounded-lg border p-3">
+    <div className="card-flat flex min-w-0 max-w-full flex-col gap-2 rounded-lg border p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="min-w-0 truncate text-xs font-medium text-muted-foreground">Preview · {splitRecommended(option.label).text}</p>
         <Button type="button" variant="ghost" size="xs" onClick={onExpand} aria-keyshortcuts="E" title={phone ? "Expand mockup" : "Expand · E"} className="-my-1 shrink-0 max-md:h-auto max-md:min-h-11 max-md:min-w-11 max-md:whitespace-normal">

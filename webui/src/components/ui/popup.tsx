@@ -83,12 +83,12 @@ export function Popup({ open, onOpenChange, label, description, dismissOnBackdro
                 {...(description ? {} : { "aria-describedby": undefined })}
               >
                 <motion.div
-                  className={cn("glass-pop pointer-events-auto flex max-h-[min(86svh,48rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl outline-none", className)}
+                  className={cn("glass-pop pointer-events-auto flex max-h-[min(86svh,48rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl outline-none", className)}
                   style={{ ...style, ...(bounds?.content ?? {}) }}
-                  initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.92, y: reduceMotion ? 0 : 18 }}
+                  initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.98, y: reduceMotion ? 0 : 6 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: reduceMotion ? 1 : 0.96, y: reduceMotion ? 0 : 8, transition: { duration: 0.12, ease: "easeIn" } }}
-                  transition={{ type: "spring", stiffness: 460, damping: 32, mass: 0.9 }}
+                  exit={{ opacity: 0, scale: reduceMotion ? 1 : 0.98, transition: { duration: 0.15, ease: "easeIn" } }}
+                  transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
                 >
                   <Dialog.Title className="sr-only">{label}</Dialog.Title>
                   {description ? <Dialog.Description className="sr-only">{description}</Dialog.Description> : null}

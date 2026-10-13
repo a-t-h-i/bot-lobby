@@ -362,7 +362,7 @@ test("Plan, Quick fix and an open task each give the composer its own target", a
   }
 });
 
-test("zen palettes: warm paper in light, deep ink in dark, a quiet indigo accent, a 12px surface under 8px controls, a round 22px dock floating over it", { tag: "@theme" }, async ({ page, server }) => {
+test("palettes: near-white in light, near-black in dark, one blue accent, a flat page under 8px controls, a round 22px dock floating over it", { tag: "@theme" }, async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const look = await page.evaluate(() => {
@@ -390,14 +390,14 @@ test("zen palettes: warm paper in light, deep ink in dark, a quiet indigo accent
     };
   });
   const [r, g, b] = look.page as [number, number, number];
-  if (look.dark) expect(Math.max(r, g, b), "near-black is dark").toBeLessThan(32);
-  else expect(Math.min(r, g, b), "paper is light").toBeGreaterThan(230);
+  if (look.dark) expect(Math.max(r, g, b), "near-black is dark").toBeLessThan(16);
+  else expect(Math.min(r, g, b), "near-white is light").toBeGreaterThan(248);
   const accent = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(look.primary);
   expect(accent, `the accent is a hex colour (${look.primary})`).not.toBeNull();
   const [ar, , ab] = accent!.slice(1).map((part) => parseInt(part, 16)) as [number, number, number];
   expect(ab - ar, "the accent leans blue, not warm").toBeGreaterThan(60);
   expect(look.body, "flat page, no wash").toBe("none");
-  expect(look.cardRadius, "the page's surface").toBe("12px");
+  expect(look.cardRadius, "the page lies flat beside the sidebar, with no card round it").toBe("0px");
   expect(look.inputRadius, "the floating dock is round, like the harnesses' boxes").toBe("22px");
   expect(look.inactiveBorder, "inactive tabs are pills with a thin border").toBe("1px");
   expect(look.pillRadius, "the active pill has the same 8px corners").toBe("8px");
@@ -1005,7 +1005,7 @@ test("the Thinking pane has no title bar; every agent has its own labelled bubbl
   await expect(pane).toBeHidden();
 });
 
-test("buttons are slim and stand a little raised: a lit face, a rim and a soft shadow, sinking when pressed", { tag: "@theme" }, async ({ page, server }) => {
+test("buttons are slim and flat: a solid face on a hairline with a soft contact shadow, shrinking a touch when pressed", { tag: "@theme" }, async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => {
@@ -1015,25 +1015,25 @@ test("buttons are slim and stand a little raised: a lit face, a rim and a soft s
   await expect(archive).toBeVisible();
   const look = await archive.evaluate((el: any) => {
     const style = getComputedStyle(el);
-    return { height: el.getBoundingClientRect().height, image: style.backgroundImage, shadow: style.boxShadow, radius: style.borderTopLeftRadius };
+    return { height: el.getBoundingClientRect().height, image: style.backgroundImage, shadow: style.boxShadow, radius: style.borderTopLeftRadius, border: style.borderTopWidth };
   });
   expect(look.height, "slim: 30px, not 40").toBeLessThan(34);
-  expect(look.image, "a face lit from above").toContain("linear-gradient");
-  expect(look.shadow, "standing on a soft shadow").not.toBe("none");
-  expect(look.shadow, "with a bright top edge").toContain("inset");
-  expect(look.radius, "the corners are as they were").toBe("8px");
+  expect(look.image, "a flat face, no gradient").toBe("none");
+  expect(look.border, "on a hairline").toBe("1px");
+  expect(look.shadow, "standing on a soft contact shadow").not.toBe("none");
+  expect(look.radius, "8px corners").toBe("8px");
   await archive.hover();
   await page.mouse.down();
   await page.waitForTimeout(300);
-  const pressed = await archive.evaluate((el: any) => getComputedStyle(el).boxShadow);
+  const pressed = await archive.evaluate((el: any) => getComputedStyle(el).scale);
   // Let go elsewhere, so the press never becomes a click.
   await page.mouse.move(2, 2);
   await page.mouse.up();
-  expect(pressed, "pressed, the shadow moves inside").not.toBe(look.shadow);
+  expect(pressed, "pressed, it shrinks a touch").toBe("0.97");
   await page.keyboard.press("Escape");
   const send = page.getByRole("button", { name: "Send" });
   expect((await send.boundingBox())!.height, "the send button stays compact").toBeLessThan(34);
-  expect(await send.evaluate((el: any) => getComputedStyle(el).backgroundImage)).toContain("linear-gradient");
+  expect(await send.evaluate((el: any) => getComputedStyle(el).backgroundImage), "flat too").toBe("none");
 });
 
 test("a task opens in its own session from the Tasks screen, with S: this window's goes to the Lobby, a background one moves here", async ({ page, server }) => {

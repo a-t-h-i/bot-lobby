@@ -89,7 +89,7 @@ export function KnowledgeList({ files, models = {}, selectedKey, onSelect }: { f
   return (
     <div className="ktree px-3 pt-1 pb-3">
       <p className="ktree-root">
-        <span aria-hidden="true" className="card-raised grid size-8 shrink-0 place-items-center rounded-lg border text-primary">
+        <span aria-hidden="true" className="card-flat grid size-8 shrink-0 place-items-center rounded-lg border text-primary">
           <BookOpen className="size-4" />
         </span>
         <span className="min-w-0">

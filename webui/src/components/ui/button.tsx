@@ -1,19 +1,20 @@
+// Adapted from T3 Code (MIT), apps/web/src/components/ui/button.tsx
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 import { Slot } from "radix-ui"
 
 const buttonVariants = cva(
-  "group/button motion-reduce:transition-none motion-reduce:active:translate-none inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-[0.8125rem] font-medium whitespace-nowrap transition-[transform,background-color,box-shadow,color,border-color,filter] duration-150 active:not-aria-[haspopup]:translate-y-px ease-snap outline-none select-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button motion-reduce:transition-none motion-reduce:active:scale-100 inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-[scale,background-color,box-shadow,color,border-color] duration-150 active:not-aria-[haspopup]:scale-[0.97] ease-snap outline-none select-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
         default: "btn-tint text-primary-foreground [--tint:var(--primary)] disabled:text-muted-foreground",
-        soft: "btn-raised btn-soft text-foreground",
-        outline: "btn-raised bg-card text-foreground",
-        secondary: "btn-raised bg-card text-secondary-foreground",
-        ghost: "btn-ghost text-foreground",
-        destructive: "btn-tint text-background [--tint:var(--destructive)] focus-visible:outline-destructive disabled:text-muted-foreground",
+        soft: "btn-soft text-foreground",
+        outline: "btn-outline text-foreground [&_svg]:text-muted-foreground",
+        secondary: "btn-soft text-secondary-foreground",
+        ghost: "btn-ghost text-foreground [&_svg]:text-muted-foreground hover:[&_svg]:text-foreground",
+        destructive: "btn-tint text-white [--tint:var(--destructive)] focus-visible:outline-destructive disabled:text-muted-foreground dark:text-background",
         link: "text-link underline-offset-4 hover:underline",
       },
       size: {

@@ -375,7 +375,7 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
           onClick={() => setChosen(entry.id)}
           className={cn(
             inTray ? CHIP : "h-6 rounded-md border border-transparent px-2.5 text-xs font-medium transition-[background-color,color,box-shadow] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
-            inTray ? (entry.id === target.id ? "composer-chip-on" : "text-muted-foreground hover:text-foreground") : entry.id === target.id ? "btn-raised btn-soft bg-card text-foreground" : "btn-ghost text-muted-foreground hover:text-foreground"
+            inTray ? (entry.id === target.id ? "composer-chip-on" : "text-muted-foreground hover:text-foreground") : entry.id === target.id ? "btn-outline btn-soft bg-card text-foreground" : "btn-ghost text-muted-foreground hover:text-foreground"
           )}
         >
           {entry.pill}
