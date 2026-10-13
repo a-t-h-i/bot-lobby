@@ -2,7 +2,8 @@
  * The pieces both chats (the Lobby's and the planning panel's) are made of,
  * so they read as one, after the coding harnesses: the agents' words as plain
  * prose across the column, yours in a filled bubble on the right, notes as a
- * quiet centred line, and three dots while someone is still typing.
+ * quiet centred line, and three dots while someone is still typing. A reply
+ * still being written ends in a beating dot, in its speaker's colour.
  */
 import type { CSSProperties, ReactNode } from "react"
 import { cn } from "@/lib/utils"
@@ -20,7 +21,7 @@ import { sourceTone } from "./types"
 export function AgentMessage({ source, name, time, head, live, children, aside }: { source: string; name: string; time?: string; head: boolean; live?: boolean; children: ReactNode; aside?: ReactNode; bubble?: boolean }) {
   const named = head && !isOracle(source)
   return (
-    <div className="chat-agent group/msg" data-live={live || undefined}>
+    <div className="chat-agent group/msg" data-live={live || undefined} style={live ? ({ "--orb": sourceTone(source) } as CSSProperties) : undefined}>
       {named || aside ? (
         <p className="chat-speaker">
           {named ? (
@@ -65,7 +66,7 @@ export function ChatNote({ failed, children }: { failed?: boolean; children: Rea
   )
 }
 
-/** Three dots, for a reply on its way. */
+/** Three dots in a wave that lights them in the speaker's colour, for a reply on its way. */
 export function TypingDots({ className }: { className?: string }) {
   return (
     <span aria-hidden="true" className={cn("typing-dots", className)}>

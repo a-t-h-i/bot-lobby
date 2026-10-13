@@ -930,31 +930,126 @@
   font-size: 0.875rem;
   line-height: 1.25rem;
 }
-/* The word "Working" glints while a step runs; still under reduced motion. */
+/*
+ * Work under way, in the colour of whoever is at work (`--orb`): the word
+ * "Working" glints, each new step slides in over the last and a light runs
+ * along the rule under the line. All still under reduced motion.
+ */
+.activity-run[data-live] { --live: color-mix(in oklab, var(--orb, var(--primary)) 80%, var(--foreground)); }
+.activity-run[data-live] .activity-toggle { position: relative; }
+.activity-run[data-live] .activity-toggle::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--live), transparent) 0 0 / 35% 100% no-repeat;
+  animation: activity-rule 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  pointer-events: none;
+}
+@keyframes activity-rule {
+  from { background-position: -60% 0; }
+  to { background-position: 160% 0; }
+}
 .activity-shimmer {
-  background: linear-gradient(90deg, var(--muted-foreground) 0%, var(--foreground) 50%, var(--muted-foreground) 100%) 0 0 / 200% 100%;
+  background: linear-gradient(100deg, var(--muted-foreground) 30%, var(--live, var(--foreground)) 50%, var(--muted-foreground) 70%) 0 0 / 250% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: activity-shimmer 2s linear infinite;
+  animation: activity-shimmer 2.2s ease-in-out infinite;
 }
-@keyframes activity-shimmer { to { background-position: -200% 0; } }
+@keyframes activity-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -150% 0; }
+}
+.activity-live-step { display: inline; animation: activity-step-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes activity-step-in {
+  from { opacity: 0; translate: 0 0.4em; filter: blur(2px); }
+}
+.working-mark {
+  --mark: color-mix(in oklab, var(--orb, var(--primary)) 80%, var(--foreground));
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 9999px;
+  box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--mark) 14%, transparent);
+}
+/* The comet's tail, fading in behind its head, and the head itself: they turn together. */
+.working-mark::before,
+.working-mark::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  animation: working-orbit 1.15s cubic-bezier(0.55, 0.1, 0.45, 0.9) infinite;
+}
+.working-mark::before {
+  background: conic-gradient(from 0turn, transparent 0turn 0.12turn, var(--mark) 0.78turn, transparent 0.78turn);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 1.75px), #000 calc(100% - 1.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 1.75px), #000 calc(100% - 1.5px));
+}
+.working-mark::after {
+  rotate: 0.78turn;
+  background: radial-gradient(circle at 50% 0.75px, var(--mark) 1.1px, transparent 1.6px);
+  animation-name: working-orbit-head;
+}
+.working-mark-core {
+  width: 30%;
+  height: 30%;
+  border-radius: 9999px;
+  background: var(--mark);
+  animation: working-beat 1.4s ease-in-out infinite;
+}
+@keyframes working-orbit { from { rotate: 0turn; } to { rotate: 1turn; } }
+@keyframes working-orbit-head { from { rotate: 0.78turn; } to { rotate: 1.78turn; } }
+@keyframes working-beat {
+  0%, 100% { scale: 0.6; opacity: 0.6; box-shadow: 0 0 0 0 color-mix(in oklab, var(--mark) 0%, transparent); }
+  50% { scale: 1; opacity: 1; box-shadow: 0 0 0 2.5px color-mix(in oklab, var(--mark) 22%, transparent); }
+}
 @media (max-width: 767.98px) {
   .activity-toggle { min-height: 2.75rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .activity-chevron, .activity-toggle { transition: none; }
   .activity-shimmer { animation: none; color: var(--foreground); background: none; }
+  .activity-live-step, .working-mark::before, .working-mark::after, .working-mark-core { animation: none; }
+  .working-mark-core { scale: 1; }
+  .activity-run[data-live] .activity-toggle::after { animation: none; background-size: 100% 100%; opacity: 0.5; }
 }
 .chat-note { display: flex; justify-content: center; font-size: 0.75rem; color: var(--muted-foreground); }
 .chat-note > span { max-width: 80%; text-align: center; }
-.typing-dots { display: inline-flex; align-items: center; gap: 3px; height: 1.25rem; }
-.typing-dots > span { width: 5px; height: 5px; border-radius: 9999px; background: var(--muted-foreground); opacity: 0.35; animation: typing 1.2s ease-in-out infinite; }
-.typing-dots > span:nth-child(2) { animation-delay: 150ms; }
-.typing-dots > span:nth-child(3) { animation-delay: 300ms; }
-@keyframes typing { 0%, 60%, 100% { opacity: 0.35; translate: 0 0; } 30% { opacity: 1; translate: 0 -3px; } }
+/* Three dots in a wave that lifts each in turn and lights it in the speaker's colour. */
+.typing-dots { --mark: color-mix(in oklab, var(--orb, var(--muted-foreground)) 80%, var(--foreground)); display: inline-flex; align-items: center; gap: 4px; height: 1.25rem; }
+.typing-dots > span { width: 6px; height: 6px; border-radius: 9999px; background: var(--muted-foreground); opacity: 0.35; animation: typing 1.3s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+.typing-dots > span:nth-child(2) { animation-delay: 160ms; }
+.typing-dots > span:nth-child(3) { animation-delay: 320ms; }
+@keyframes typing {
+  0%, 64%, 100% { opacity: 0.35; translate: 0 0; scale: 0.85; background: var(--muted-foreground); }
+  32% { opacity: 1; translate: 0 -4px; scale: 1.1; background: var(--mark); }
+}
+/* A reply still being written ends in a beating dot, in its speaker's colour. */
+.chat-agent[data-live] .md-body > :is(p, h1, h2, h3, h4, blockquote):last-child::after,
+.chat-agent[data-live] .md-body > :is(ul, ol):last-child > li:last-child::after {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 0.5em;
+  margin-left: 0.3em;
+  border-radius: 9999px;
+  vertical-align: 0.05em;
+  background: color-mix(in oklab, var(--orb, var(--primary)) 80%, var(--foreground));
+  animation: stream-dot 1.1s ease-in-out infinite;
+}
+@keyframes stream-dot {
+  0%, 100% { scale: 0.7; opacity: 0.55; }
+  50% { scale: 1; opacity: 1; }
+}
 @media (prefers-reduced-motion: reduce) {
   .typing-dots > span { animation: none; }
+  .chat-agent[data-live] .md-body > :is(p, h1, h2, h3, h4, blockquote):last-child::after,
+  .chat-agent[data-live] .md-body > :is(ul, ol):last-child > li:last-child::after { animation: none; }
   .chat-meta { transition: none; }
 }
 
