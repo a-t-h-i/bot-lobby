@@ -178,7 +178,7 @@ export function Conversation({
   const [settled, setSettled] = useState(false)
   useEffect(() => setSettled(true), [])
   return (
-    <Frame aria-label="Conversation" className="flex-1">
+    <Frame aria-label="Conversation" data-bare className="flex-1 rounded-none border-0 shadow-none">
       <div ref={ref} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-4 pb-dock outline-none focus-visible:bg-muted/30" role="log" aria-label="Conversation" tabIndex={0}>
         {empty ? (
           <ConversationEmpty hasTask={hasTask} />

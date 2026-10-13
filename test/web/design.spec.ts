@@ -1214,7 +1214,8 @@ test("the bar is one row when the project, the tabs and the tools fit, and puts 
   };
   await page.setViewportSize({ width: 1600, height: 900 });
   expect(await rows(), "wide: one row").toBe(1);
-  await page.setViewportSize({ width: 1100, height: 900 });
+  // The bar holds only the tabs and the session's state (the app's switches live in the sidebar), so it takes a narrow window to split it.
+  await page.setViewportSize({ width: 960, height: 900 });
   expect(await rows(), "narrower: the tabs drop to their own row").toBe(2);
   const scroller = page.getByRole("tablist").locator("..");
   expect(await scroller.evaluate((el: any) => el.scrollWidth <= el.clientWidth + 1), "and show in full").toBe(true);
@@ -1254,7 +1255,8 @@ test("the tray over the box names the project and the target, opens the project 
   await page.setViewportSize({ width: 1440, height: 900 });
   const tray = page.getByRole("group", { name: "Message context" });
   await expect(tray.getByText("To the oracle"), "who it goes to").toBeVisible();
-  await tray.getByRole("button", { name: /Switch project: bot-lobby/ }).click();
+  await expect(tray.getByRole("combobox", { name: "Project", exact: true }), "the project's chip names it").toContainText("bot-lobby");
+  await tray.getByRole("combobox", { name: "Project", exact: true }).click();
   await expect(page.getByRole("listbox", { name: "Projects" }), "the project chip opens the list of projects").toBeVisible();
   await page.keyboard.press("Escape");
   const card = (await page.locator(".group\\/composer").boundingBox())!;

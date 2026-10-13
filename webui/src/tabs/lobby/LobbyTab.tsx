@@ -19,7 +19,7 @@ function LobbyView({ data, status }: { data?: LobbySnapshot; status?: StatusInfo
   if (!panes.conversation) return null
   const activity = panes.activity ? (data?.activity as ActivityEntry[] | undefined) : undefined
   return (
-    <div className="flex min-h-0 flex-1 flex-col p-3 max-md:p-0">
+    <div className="flex min-h-0 flex-1 flex-col">
       <Conversation
         chat={data?.chat ?? []}
         {...(activity ? { activity } : {})}

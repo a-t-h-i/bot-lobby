@@ -45,12 +45,13 @@ test("toolbar actions have spacing and readable contrast @theme", async ({ page,
         return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
       });
       const gap = (a: any, b: any) => b.getBoundingClientRect().left - a.getBoundingClientRect().right;
-      const tools = buttons.filter((button: any) => button.closest("header"));
-      const composer = buttons.filter((button: any) => !button.closest("header"));
-      return { contrast, headerGaps: tools.slice(1).map((button: any, i: number) => gap(tools[i], button)), composerGap: gap(composer[0], composer[1]) };
+      // The app's switches sit side by side at the foot of the open sidebar.
+      const tools = [...document.querySelectorAll("#app-sidebar .sidebar-foot > *")];
+      const composer = buttons.filter((button: any) => button.closest("#app-dock"));
+      return { contrast, sidebarGaps: tools.slice(1).map((button: any, i: number) => gap(tools[i], button)), composerGap: gap(composer[0], composer[1]) };
     });
     expect(Math.min(...metrics.contrast), "icons contrast with their button surface").toBeGreaterThanOrEqual(4.5);
-    expect(Math.min(...metrics.headerGaps), "header actions have room between them").toBeGreaterThanOrEqual(7);
+    if (metrics.sidebarGaps.length) expect(Math.min(...metrics.sidebarGaps), "the sidebar's switches keep apart").toBeGreaterThanOrEqual(2);
     expect(metrics.composerGap, "Attach and Preview have room between them").toBeGreaterThanOrEqual(7);
     await expectNoSidewaysScroll(page);
   }
@@ -99,8 +100,9 @@ async function touchTargetMisses(page: Page): Promise<string[]> {
 }
 
 async function expectShell(page: Page, tabs: number): Promise<void> {
-  const project = page.getByRole("complementary", { name: "Sidebar" }).getByRole("combobox", { name: "Project", exact: true }).or(page.locator("header").getByText("bot-lobby", { exact: true }));
-  await expect(project, "the project, in the sidebar or (on a phone) the bar").toBeVisible();
+  const project = page.getByRole("combobox", { name: "Project", exact: true });
+  await expect(project, "the project, over the composer or (on a phone) in the bar").toBeVisible();
+  await expect(project).toContainText("bot-lobby");
   await expect(page.getByRole("tab"), `eight pills`).toHaveCount(tabs);
   await expect(page.locator("#main"), "main pane").toBeVisible();
   await expect(page.getByLabel("Message the oracle"), "composer").toBeVisible();
@@ -277,15 +279,24 @@ test("the conversation follows new steps, lets a reader who scrolled up stay put
   await expect.poll(gap, { message: "Jump to latest lands on the newest line" }).toBeLessThanOrEqual(2);
 });
 
-test("the sidebar holds the project, the sessions and Settings, and folds to a rail with Alt+B", async ({ page, server }) => {
+const SWITCHES = ["Keyboard shortcuts", "Switch to dark mode|Switch to light mode", "Mute prompt sounds|Unmute prompt sounds"];
+
+test("the sidebar holds the sessions, Settings and the app's switches, and folds to a rail with Alt+B", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 800 });
   const header = page.getByRole("banner");
   for (const name of ["Sessions", "Settings"]) await expect(header.getByRole("link", { name, exact: true }), `${name} left the top bar`).toHaveCount(0);
+  for (const name of SWITCHES) await expect(header.getByRole("button", { name: new RegExp(`^(${name})$`) }), `${name} left the top bar`).toHaveCount(0);
   await expect(header.getByRole("combobox", { name: "Project", exact: true }), "so did the project").toHaveCount(0);
   await expect(header.getByRole("tablist"), "the tabs stay where they were").toBeVisible();
   const sidebar = page.getByRole("complementary", { name: "Sidebar" });
-  await expect(sidebar.getByRole("combobox", { name: "Project", exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("combobox", { name: "Project", exact: true }), "the project is chosen over the composer, not here").toHaveCount(0);
+  await expect(page.getByRole("group", { name: "Message context" }).getByRole("combobox", { name: "Project", exact: true })).toBeVisible();
+  for (const name of SWITCHES) await expect(sidebar.getByRole("button", { name: new RegExp(`^(${name})$`) }), `${name} sits at the foot of the sidebar`).toBeVisible();
+  const dark = () => page.locator("html").evaluate((el: any) => el.classList.contains("dark"));
+  const was = await dark();
+  await sidebar.getByRole("button", { name: /^Switch to (dark|light) mode$/ }).click();
+  await expect.poll(dark, "the theme switch works from there").toBe(!was);
   const sessions = sidebar.getByRole("navigation", { name: "Sessions list" });
   await expect(sessions.getByRole("link", { name: /mock lobby/ }), "this window's session is the Lobby").toHaveAttribute("aria-current", "page");
   await sessions.getByRole("link", { name: /Mock background task/ }).click();
@@ -300,7 +311,7 @@ test("the sidebar holds the project, the sessions and Settings, and folds to a r
   await expect(sidebar.getByRole("button", { name: "Expand sidebar" }), "Alt+B folds it to a rail").toBeVisible();
   expect(await width(), "a rail of icons").toBeLessThan(64);
   for (const name of ["Sessions", "Settings"]) await expect(sidebar.getByRole("link", { name, exact: true }), `${name} stays a click away`).toBeVisible();
-  await expect(sidebar.getByRole("combobox", { name: "Project", exact: true }), "and so does the project").toBeVisible();
+  for (const name of SWITCHES) await expect(sidebar.getByRole("button", { name: new RegExp(`^(${name})$`) }), `and so does ${name}`).toBeVisible();
   await page.reload();
   await page.locator('[role="tablist"]').waitFor();
   await expect(sidebar.getByRole("button", { name: "Expand sidebar" }), "the fold is remembered").toBeVisible();

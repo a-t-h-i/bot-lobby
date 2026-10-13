@@ -84,7 +84,7 @@ async function pageEdges(page: Page) {
 async function screenChecks(page: Page) {
   await page.waitForTimeout(350); // Measure the settled page entrance, not its transient transform.
   await noOverflow(page);
-  await essentialTargets(page.locator('header.app-header a:visible, header.app-header button:visible:not([aria-label="App sounds"])'));
+  await essentialTargets(page.locator('header.app-header a:visible, header.app-header button:visible'));
   await essentialTargets(page.locator('#app-dock .toolbar-button:visible, #app-dock button[aria-label="Send"]:visible, #app-dock button[aria-label="Stop"]:visible'));
   await bounded(page, field(page));
   await pageEdges(page);

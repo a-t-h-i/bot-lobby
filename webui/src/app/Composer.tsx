@@ -12,7 +12,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { ArrowUp, Eye, FileText, Folder, MessageSquare, Plus, Settings2, Square, X } from "lucide-react"
+import { ArrowUp, Eye, FileText, MessageSquare, Plus, Settings2, Square, X } from "lucide-react"
 import { Keys, KeyHint } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -35,7 +35,7 @@ import { usePhoneViewport } from "./usePhoneViewport"
 import { go, type Route } from "./router"
 import { knowledgeHash } from "./knowledgeView"
 import { KnowledgePaneToggle } from "./KnowledgePaneToggle"
-import { OPEN_PROJECTS } from "./ProjectSwitcher"
+import { ProjectSwitcher, type Projects } from "./ProjectSwitcher"
 import { taskRoute } from "./taskRoute"
 
 type TargetId = "oracle" | "knowledge" | "panel" | "quickfix" | "comment" | "task" | "session" | "newsession"
@@ -157,7 +157,7 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
   )
 }
 
-export function Composer({ route, keys, onHelp, dockNav }: { route: Route; keys: Record<string, string>; onHelp: () => void; dockNav?: ReactNode }) {
+export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Route; keys: Record<string, string>; projects: Projects; onHelp: () => void; dockNav?: ReactNode }) {
   const [text, setText] = useState("")
   const [files, setFiles] = useState<Pending[]>([])
   const [preview, setPreview] = useState(false)
@@ -385,10 +385,7 @@ export function Composer({ route, keys, onHelp, dockNav }: { route: Route; keys:
   const branch = status.data?.branch ?? status.data?.workspace.branch
   const tray = inTray ? (
     <div className="composer-tray pointer-events-auto mx-auto w-full max-w-3xl" aria-label="Message context" role="group">
-      <button type="button" aria-label={`Switch project: ${project}`} aria-haspopup="listbox" data-compact title={branch ? `${project} · ${branch}` : project} onClick={() => window.dispatchEvent(new Event(OPEN_PROJECTS))} className={cn(CHIP, "text-foreground hover:bg-[var(--composer-chip-hover)]")}>
-        <Folder aria-hidden="true" className="size-3.5 shrink-0" />
-        <span className="truncate">{project}</span>
-      </button>
+      <ProjectSwitcher look="chip" projects={projects} tab={route.kind === "tab" ? route.tab : route.kind} name={project} branch={branch} />
       {knowledge ? null : targetControl}
       <div className="@container ml-auto flex min-w-0 flex-1 items-center justify-end gap-3 overflow-hidden">
         {route.kind === "tab" && route.tab === "plan" ? (
@@ -440,7 +437,7 @@ export function Composer({ route, keys, onHelp, dockNav }: { route: Route; keys:
       <div className="pointer-events-auto relative mx-auto w-full max-w-3xl">
         <div
           className={cn(
-            "group/composer relative rounded-[22px] border border-dock-border bg-dock shadow-dock transition-[border-color,box-shadow] duration-300 ease-snap focus-within:border-ring focus-within:shadow-dock-focus",
+            "group/composer relative rounded-[22px] border border-dock-border bg-dock shadow-dock transition-[border-color,box-shadow] duration-300 ease-snap focus-within:border-[color-mix(in_oklab,var(--ring)_50%,var(--dock-border))] focus-within:shadow-dock-focus",
             compact && "min-[500px]:max-md:grid min-[500px]:max-md:grid-cols-[minmax(0,1fr)_auto] min-[500px]:max-md:min-w-0",
             dragging && "border-primary shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_30%,transparent)]"
           )}
