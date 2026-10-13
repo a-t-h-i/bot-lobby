@@ -223,7 +223,7 @@ test("the effort slider skips the levels a model does not support", async ({ pag
   await page.mouse.up();
   await expect(slider, "dragging past the last supported level stays on it").toHaveAttribute("aria-valuetext", "high");
   await expect(page.locator('[title="Not supported by mock/gpt-5"]').first(), "unsupported stops say so").toBeAttached();
-  await expect(page.locator('[data-label="xhigh"]').first(), "and their names cannot be picked").toBeDisabled();
+  await expect(page.locator('[data-stop="xhigh"]').first(), "and are drawn hollow").toHaveAttribute("data-supported", "false");
 });
 
 test("only one toast shows at a time, with a light blur behind it", async ({ page, server }) => {

@@ -222,11 +222,13 @@ The adapted files and the MIT notice are listed in `THIRD_PARTY_NOTICES.md`.
   `"Inter Variable"` first in its fallback stack; with the font no longer
   bundled the browser skips it, and changing it would touch the engine.
 - The tab strip keeps its own liquid pill rather than T3 Code's panel tabs.
-- Effort is a drag slider again, in the style of Codex's: a thin track filled
-  in the primary colour, a white thumb that swells while held, every level
-  named under the track (a name jumps there; levels the model lacks are
-  dimmed), and a line on what the level does with a Recommended mark. Keys
-  and quick presses work as before.
+- Effort is a chunky drag slider, after the owner's reference: "Effort
+  <level>" with a help tip, Faster and Smarter at the ends, a fill that
+  glows in each level's colour (cool at the bottom, pink near the top), a
+  brain for the thumb, a bar and a "Recommended" label at the recommended
+  stop, and at the top level a twinkling mosaic fill with sparks around the
+  brain. A press on the track jumps; levels the model lacks are hollow dots.
+  Keys and quick presses work as before.
 - Every drop-down (Radix Select and the Combobox) uses T3 Code's select field
   and `dropdown-glass` popup.
 - A Frame is one flat card, as T3 Code's settings sections are: its header,
@@ -239,4 +241,9 @@ The adapted files and the MIT notice are listed in `THIRD_PARTY_NOTICES.md`.
   change in `src/`, agreed with the owner): Default, Blossom (their T3 Chat
   theme), Grove, Ocean, Ember and Iris, each in light and dark.
 - The composer answers focus: 95%, then 110%, then rest in 150ms, the tray
-  following 40ms behind and the icons lagging the box.
+  following 40ms behind and popping up like an iOS message bubble (squash,
+  stretch, damped wobble), the icons lagging the box.
+- Your messages sit in a bubble mixed from the theme's text and page colours
+  (9% light, 15% dark) with a hairline, so they stand off the page in every
+  theme.
+- "Working" shimmers letter by letter, a wave every 2.4s.

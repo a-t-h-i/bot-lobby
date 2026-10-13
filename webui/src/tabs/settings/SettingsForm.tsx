@@ -280,24 +280,24 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
         <Mini label={FIELD_LABELS.model}>
           <ModelChoice value={entry.model} models={models} label={`${name} model`} inherit={kind === "master"} onChange={chooseModel} />
         </Mini>
-        <Mini label={FIELD_LABELS.thinking}>
-          {kind === "scout" ? (
+        {kind === "scout" ? (
+          <Mini label={FIELD_LABELS.thinking}>
             <p className="flex h-8 items-center gap-2 text-sm text-muted-foreground">
               <Brain aria-hidden="true" className="size-4" />
               <span className="capitalize">{FIXED_SCOUT_THINKING}</span> (fixed for scouts)
             </p>
-          ) : (
-            <EffortSlider
-              value={entry.thinking}
-              levels={THINKING_LEVELS}
-              supported={supported}
-              recommended={RECOMMENDED_THINKING[kind]}
-              model={entry.model === INHERIT_MODEL ? "the session model" : entry.model}
-              label={`${name} effort`}
-              onChange={(level) => set({ thinking: level })}
-            />
-          )}
-        </Mini>
+          </Mini>
+        ) : (
+          <EffortSlider
+            value={entry.thinking}
+            levels={THINKING_LEVELS}
+            supported={supported}
+            recommended={RECOMMENDED_THINKING[kind]}
+            model={entry.model === INHERIT_MODEL ? "the session model" : entry.model}
+            label={`${name} effort`}
+            onChange={(level) => set({ thinking: level })}
+          />
+        )}
       </div>
       <div className="flex min-h-7 items-center justify-between gap-3 max-md:flex-wrap max-md:items-start">
         {hasInstructions ? (
