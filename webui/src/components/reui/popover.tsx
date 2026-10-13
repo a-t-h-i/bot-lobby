@@ -1,4 +1,4 @@
-/** Adapted from ReUI's Radix popover; local theme utilities replace cn-* styles. MIT, public/licenses/reui.txt. */
+/** Adapted from ReUI's Radix popover (MIT, public/licenses/reui.txt) and T3 Code (MIT), apps/web/src/components/ui/popover.tsx. */
 import type { ComponentProps } from "react"
 import { Popover as Primitive } from "radix-ui"
 import { cn } from "@/lib/utils"

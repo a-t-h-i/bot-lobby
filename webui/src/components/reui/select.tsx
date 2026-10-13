@@ -1,4 +1,4 @@
-/** Adapted from ReUI's Radix select; local theme utilities and Lucide icons. MIT, public/licenses/reui.txt. */
+/** Adapted from ReUI's Radix select (MIT, public/licenses/reui.txt) and T3 Code (MIT), apps/web/src/components/ui/select.tsx. */
 import type { ComponentProps } from "react"
 import { Select as Primitive } from "radix-ui"
 import { Check, ChevronDown, ChevronUp } from "lucide-react"

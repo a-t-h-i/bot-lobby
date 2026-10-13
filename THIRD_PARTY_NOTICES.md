@@ -1,0 +1,57 @@
+# Third-party notices
+
+## T3 Code
+
+The web UI's look (colours, radii, shadows, control and dialog styles, the
+sidebar rail, the chat rows, the work log and the composer surface) is adapted
+from T3 Code, https://github.com/pingdotgg/t3code. No T3 Code package is a
+dependency; the styles and markup below were ported into this repository and
+rewired to bot-lobby's own data layer. Each adapted file starts with a comment
+naming the file it came from.
+
+| Our file | Adapted from (T3 Code) |
+| --- | --- |
+| `webui/src/index.css` | `apps/web/src/index.css`, `components/ui/button.tsx`, `components/chat/MessagesTimeline.tsx`, `components/chat/WorkLog.tsx`, `components/chat/TimelineSystemDivider.tsx` |
+| `webui/src/components/ui/button.tsx` | `apps/web/src/components/ui/button.tsx` |
+| `webui/src/components/ui/input.tsx` | `apps/web/src/components/ui/input.tsx` |
+| `webui/src/components/ui/textarea.tsx` | `apps/web/src/components/ui/textarea.tsx` |
+| `webui/src/components/ui/tooltip.tsx` | `apps/web/src/components/ui/tooltip.tsx` |
+| `webui/src/components/ui/kbd.tsx` | `apps/web/src/components/ui/kbd.tsx` |
+| `webui/src/components/ui/checkbox.tsx` | `apps/web/src/components/ui/checkbox.tsx` |
+| `webui/src/components/ui/switch.tsx` | `apps/web/src/components/ui/switch.tsx` |
+| `webui/src/components/ui/popup.tsx` | `apps/web/src/components/ui/dialog.tsx`, `dialog-styles.ts` |
+| `webui/src/components/ui/alert-dialog.tsx` | `apps/web/src/components/ui/alert-dialog.tsx` |
+| `webui/src/components/ui/sheet.tsx` | `apps/web/src/components/ui/sheet.tsx` |
+| `webui/src/components/ui/toaster.tsx` | `apps/web/src/components/ui/toast.tsx` |
+| `webui/src/components/ui/combobox.tsx` | `apps/web/src/components/ui/combobox.tsx` |
+| `webui/src/components/ui/empty.tsx` | `apps/web/src/components/ui/empty.tsx` |
+| `webui/src/components/reui/badge.tsx` | `apps/web/src/components/ui/badge.tsx` |
+| `webui/src/components/reui/select.tsx` | `apps/web/src/components/ui/select.tsx` |
+| `webui/src/components/reui/popover.tsx` | `apps/web/src/components/ui/popover.tsx` |
+| `webui/src/app/Sidebar.tsx` | `apps/web/src/components/ui/sidebar.tsx` |
+| `webui/src/app/Composer.tsx` | `apps/web/src/components/chat/ComposerSurface.tsx` |
+| `webui/src/tabs/lobby/InlineActivity.tsx` | `apps/web/src/components/chat/WorkLog.tsx` |
+
+```
+MIT License
+
+Copyright (c) 2026 T3 Tools Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

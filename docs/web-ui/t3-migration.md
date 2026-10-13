@@ -207,3 +207,18 @@ check), so none is swapped.
 - **Licence.** Files whose structure follows theirs carry a one-line
   "Adapted from T3 Code (MIT)" comment and are listed in
   `THIRD_PARTY_NOTICES.md`. Their name, logo and wordmark never appear in the UI.
+
+## (e) Outcome
+
+Every screen in table (b) was restyled in place; no T3 Code component was
+copied whole, because each one depends on Base UI, Effect atoms or Tiptap.
+The adapted files and the MIT notice are listed in `THIRD_PARTY_NOTICES.md`.
+
+- The bundled Inter font and the Obsidian-style Discover button are gone; the
+  UI uses the system font stack and a filled primary button.
+- `@pierre/diffs` and `@pierre/trees` were not added: the API sends no diffs,
+  so the Git tab keeps its commit list.
+- `src/` is unchanged. `src/webui/palette-core.ts` still lists
+  `"Inter Variable"` first in its fallback stack; with the font no longer
+  bundled the browser skips it, and changing it would touch the engine.
+- The tab strip keeps its own liquid pill rather than T3 Code's panel tabs.
