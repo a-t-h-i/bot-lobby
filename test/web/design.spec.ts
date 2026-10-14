@@ -1238,7 +1238,7 @@ test("Linting in Settings: the gate's mode, a command of your own with its file 
   await page.evaluate(() => {
     window.location.hash = "#/settings";
   });
-  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Linting", exact: true }).click();
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Workflow", exact: true }).click();
   const found = page.getByRole("list", { name: "Found in this project" });
   await expect(found.getByRole("listitem")).toHaveCount(2);
   await expect(found.getByRole("listitem").first()).toContainText("ESLint");
@@ -1263,7 +1263,7 @@ test("Linting in Settings: the gate's mode, a command of your own with its file 
   await expect(page.getByText("The command replaces these.")).toBeVisible();
   await page.reload();
   await page.locator('[role="tablist"]').waitFor();
-  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Linting", exact: true }).click();
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Workflow", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Lint gate" }), "round-trips").toContainText("block");
   await expect(page.getByRole("textbox", { name: "Command" })).toHaveValue("ruff check {files}");
   expect(trap.errors, "no console errors").toEqual([]);

@@ -8,7 +8,8 @@
  * and `sessionDialog` reuse the same surface with their own controls and
  * answer shapes.
  */
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from "react"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from "react"
+import { animate, type AnimationPlaybackControls, type ValueAnimationTransition } from "motion/react"
 import { Check, Maximize2 } from "lucide-react"
 import { useMediaQuery } from "@/app/hooks"
 import { Button } from "@/components/ui/button"
@@ -130,7 +131,14 @@ function Preview({ option, onExpand }: { option?: AskOption; onExpand: () => voi
   )
 }
 
-function RailOption({ option, index, multi, name, selected, active, onToggle, onFocusOption }: {
+/**
+ * The options as dots on a dotted line down the left, the one in view ringed and joined to the panel by a short
+ * line. Switching works like the tab bar's straw: a drop of colour runs down (or up) the dotted line from the old
+ * dot to the new, the old ring drains away, and where it lands the new ring springs open, its line shoots out to
+ * the panel and the panel takes a little knock the way the colour was going. Under reduced motion the ring just
+ * moves. Each dot's name shows beside it on hover and focus, and the panel names the one in view.
+ */
+function DotOption({ option, index, multi, name, selected, active, onToggle, onFocusOption }: {
   option: AskOption
   index: number
   multi: boolean
@@ -143,39 +151,131 @@ function RailOption({ option, index, multi, name, selected, active, onToggle, on
   const { text, recommended } = splitRecommended(option.label)
   const full = recommended ? `${text} (Recommended)` : text
   return (
-    <label title={full} data-active={active || undefined} className="q-rail-item group relative flex min-h-10 min-w-0 cursor-pointer items-center gap-2 rounded-lg border border-transparent px-2.5 text-sm transition-colors duration-150 hover:bg-accent/60 data-[active]:bg-accent has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/30 max-md:min-h-11 max-md:shrink-0 max-md:rounded-full">
+    <label data-active={active || undefined} data-picked={selected || undefined} className="q-dot group relative flex h-11 w-full shrink-0 cursor-pointer items-center justify-center outline-none">
       <input type={multi ? "checkbox" : "radio"} name={name} data-nav="" data-option={index} aria-label={full} className="sr-only" checked={selected} onChange={onToggle} onFocus={onFocusOption} />
-      <CheckMark multi={multi} on={selected} />
-      <span aria-hidden="true" className="text-muted-foreground tabular-nums">{index + 1}.</span>
-      <span className="min-w-0 flex-1 truncate group-hover:whitespace-normal group-has-[:focus-visible]:whitespace-normal max-md:max-w-48">{text}</span>
-      {recommended ? <span aria-hidden="true" className="shrink-0 text-xs font-medium text-primary">★</span> : null}
+      <span aria-hidden="true" className={cn("q-dot-mark relative z-10 block size-2 rounded-full transition-[background-color,scale] duration-200 ease-snap group-hover:scale-125", recommended && "q-dot-star")} />
+      <span aria-hidden="true" className="q-dot-tag pointer-events-none absolute top-1/2 left-[calc(100%+0.5rem)] z-30 -translate-y-1/2 rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap opacity-0 transition-[opacity,translate] duration-150 ease-snap group-hover:opacity-100 group-has-[:focus-visible]:opacity-100 group-data-[active]:!opacity-0">
+        {index + 1}. {full}
+      </span>
     </label>
   )
 }
 
-function RailGlide({ rail, active }: { rail: RefObject<HTMLDivElement | null>; active: number }) {
-  const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
+const DROP_HEAD: ValueAnimationTransition<number> = { type: "spring", visualDuration: 0.2, bounce: 0.12 }
+const DROP_TAIL: ValueAnimationTransition<number> = { type: "spring", visualDuration: 0.2, bounce: 0.04, delay: 0.06 }
+const RING_OPEN: ValueAnimationTransition<number> = { type: "spring", visualDuration: 0.28, bounce: 0.55 }
+const LINE_OUT: ValueAnimationTransition<number> = { type: "spring", visualDuration: 0.2, bounce: 0 }
+const KNOCK: ValueAnimationTransition<number> = { type: "spring", stiffness: 900, damping: 18, velocity: 50, restDelta: 0.02, restSpeed: 1 }
+
+/** The ring on the dot in view, its line to the panel, and the drop that runs between dots on a switch. */
+function useDotRail(rail: RefObject<HTMLDivElement | null>, panel: RefObject<HTMLDivElement | null>, active: number, view: string) {
+  const ring = useRef<HTMLSpanElement>(null)
+  const line = useRef<HTMLSpanElement>(null)
+  const drop = useRef<HTMLSpanElement>(null)
+  const was = useRef<number | undefined>(undefined)
+  const runs = useRef<AnimationPlaybackControls[]>([])
+
+  const centre = useCallback((index: number) => {
+    const dot = rail.current?.querySelectorAll<HTMLElement>(".q-dot")[index]
+    return dot ? dot.offsetTop + dot.offsetHeight / 2 : undefined
+  }, [rail])
+
+  const place = useCallback((y: number | undefined, open = 1, reach = 1) => {
+    const ringEl = ring.current
+    const lineEl = line.current
+    if (!ringEl || !lineEl) return
+    if (y === undefined) {
+      ringEl.style.opacity = "0"
+      lineEl.style.opacity = "0"
+      return
+    }
+    ringEl.style.opacity = String(Math.min(1, open * 3))
+    ringEl.style.transform = `translate(-50%, ${y}px) translateY(-50%) scale(${Math.max(0, open)})`
+    lineEl.style.opacity = reach > 0.02 ? "1" : "0"
+    lineEl.style.transform = `translateY(${y}px) scaleX(${Math.max(0, Math.min(1, reach))})`
+  }, [])
+
+  // A new question, or the rail back from the mockup viewer: the ring is placed, not poured.
+  const seen = useRef(view)
+  useLayoutEffect(() => {
+    if (seen.current !== view) {
+      seen.current = view
+      was.current = undefined
+    }
+    for (const run of runs.current) run.stop()
+    runs.current = []
+    if (panel.current) panel.current.style.translate = ""
+    const from = was.current
+    was.current = active
+    const to = centre(active)
+    const start = from === undefined ? undefined : centre(from)
+    const reduced = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    const dropEl = drop.current
+    if (dropEl) dropEl.style.opacity = "0"
+    if (to === undefined || start === undefined || from === active || reduced || !dropEl) {
+      place(to)
+      return
+    }
+    const dir = to > start ? 1 : -1
+    const now = { head: 0, tail: 0 }
+    let landed = false
+    const spring = (from: number, to: number, transition: ValueAnimationTransition<number>, onUpdate: (value: number) => void) => {
+      const run = animate(from, to, { ...transition, onUpdate })
+      runs.current.push(run)
+      return run
+    }
+    const drawDrop = () => {
+      const head = start + (to - start) * now.head
+      const tail = start + (to - start) * now.tail
+      dropEl.style.opacity = Math.abs(head - tail) > 1 ? "1" : "0"
+      dropEl.style.transform = `translateY(${Math.min(head, tail)}px)`
+      dropEl.style.height = `${Math.abs(head - tail)}px`
+    }
+    const land = () => {
+      if (landed) return
+      landed = true
+      const state = { open: 0, reach: 0 }
+      spring(0, 1, RING_OPEN, (value) => { state.open = value; place(to, state.open, state.reach) })
+      spring(0, 1, { ...LINE_OUT, delay: 0.05 }, (value) => { state.reach = value; place(to, state.open, state.reach) })
+      const box = panel.current
+      if (box) spring(0, 0, { ...KNOCK, delay: 0.1 }, (value) => { box.style.translate = Math.abs(value) > 0.01 ? `0 ${(dir * value).toFixed(2)}px` : "" })
+    }
+    // The old ring drains as the drop leaves it.
+    spring(1, 0, { type: "spring", visualDuration: 0.12, bounce: 0 }, (value) => { if (!landed) place(start, value, value) })
+    spring(0, 1, DROP_HEAD, (value) => { now.head = value; drawDrop(); if (value > 0.85) land() })
+    spring(0, 1, DROP_TAIL, (value) => { now.tail = value; drawDrop() })
+    return () => {
+      for (const run of runs.current) run.stop()
+    }
+  }, [active, view, centre, panel, place])
+
+  // A resize (the window, the panel growing with an option's text) re-seats the ring without animating.
   useEffect(() => {
-    const item = rail.current?.querySelectorAll<HTMLElement>(".q-rail-item")[active]
-    setBox(item ? { x: item.offsetLeft, y: item.offsetTop, w: item.offsetWidth, h: item.offsetHeight } : null)
-  }, [rail, active])
-  if (!box) return null
-  return <span aria-hidden="true" className="q-glide" style={{ width: box.w, height: box.h, transform: `translate(${box.x}px, ${box.y}px)` }} />
+    const el = rail.current
+    if (!el || typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver(() => {
+      if (runs.current.length === 0 || runs.current.every((run) => run.state === "finished")) place(centre(was.current ?? 0))
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [rail, centre, place])
+
+  return { ring, line, drop }
 }
 
-function OptionPanel({ option, position, onExpand }: { option?: AskOption; position: number; onExpand: () => void }) {
+function OptionPanel({ option, position, onExpand, panel }: { option?: AskOption; position: number; onExpand: () => void; panel: RefObject<HTMLDivElement | null> }) {
   if (!option) return null
   const { text, recommended } = splitRecommended(option.label)
   const mockup = hasMockup(option)
   return (
-    <div key={position} aria-live="polite" className="q-panel card-flat flex min-w-0 flex-col gap-3 rounded-lg border p-4 max-md:p-3">
-      <div className={cn("grid min-w-0 gap-4", mockup ? "md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]" : "")}>
-        <div className="flex min-w-0 flex-col gap-2">
+    <div ref={panel} className="q-panel min-w-0 rounded-2xl p-4 max-md:p-3">
+      <div key={position} aria-live="polite" className={cn("q-panel-body grid min-w-0 gap-4", mockup ? "md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]" : "")}>
+        <div className="flex min-w-0 flex-col gap-2 py-1">
           <p className="text-center text-sm font-medium break-words">
             {text}
             {recommended ? <span className="ms-1 text-primary">(Recommended)</span> : null}
           </p>
-          {option.description ? <Markdown text={option.description} className="min-w-0 text-muted-foreground" /> : <span className="text-sm text-muted-foreground">No further detail.</span>}
+          {option.description ? <Markdown text={option.description} className="min-w-0 text-muted-foreground" /> : <span className="text-center text-sm text-muted-foreground">No further detail.</span>}
         </div>
         {mockup ? <Preview option={option} onExpand={onExpand} /> : null}
       </div>
@@ -260,12 +360,15 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
   const [focused, setFocused] = useState<Record<number, number>>({})
   const form = useRef<HTMLFormElement>(null)
   const rail = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const question = questions[index]
   const picked = picks[index] ?? []
   const ownText = own[index] ?? ""
   const previewOption = question?.options[focused[index] ?? picked[0] ?? 0]
   const current = answerFor(questions, picks, own, index)
   const multi = question?.multiSelect === true
+  const activeAt = Math.max(0, question?.options.indexOf(previewOption!) ?? 0)
+  const dots = useDotRail(rail, panelRef, activeAt, `${index}:${expanded}`)
 
   // Each question opens with focus on its first option (or the one already picked).
   useEffect(() => {
@@ -423,46 +526,46 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
     <form ref={form} className="flex min-w-0 flex-col gap-3" onSubmit={submit} onKeyDown={onKeyDown}>
       <Chips questions={questions} picks={picks} own={own} index={index} onGo={setIndex} />
       <div className="text-center">
-        <p className="text-xs text-muted-foreground">
+        <p className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">
           {questions.length > 1 ? `Question ${index + 1} of ${questions.length}` : "Question"}
         </p>
-        <Markdown text={question.question} className="mt-1 text-base" />
+        <Markdown text={question.question} className="mt-1 text-base font-medium" />
       </div>
-      <div className="grid min-w-0 gap-4 md:grid-cols-[11rem_minmax(0,1fr)] md:gap-3">
-        <div ref={rail} role={multi ? "group" : "radiogroup"} aria-label="Options" className="q-rail relative flex min-w-0 flex-col gap-1 max-md:flex-row max-md:overflow-x-auto max-md:pb-1">
+      <div className="relative grid min-w-0 grid-cols-[2.25rem_minmax(0,1fr)] gap-x-3">
+        <div ref={rail} role={multi ? "group" : "radiogroup"} aria-label="Options" className="q-rail relative flex min-w-0 flex-col justify-evenly py-2">
+          <span aria-hidden="true" className="q-rail-line pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2" />
+          <span ref={dots.drop} aria-hidden="true" className="q-drop pointer-events-none absolute top-0 left-1/2 w-[3px] -translate-x-1/2 rounded-full opacity-0" />
+          <span ref={dots.ring} aria-hidden="true" className="q-ring pointer-events-none absolute top-0 left-1/2 z-20 size-4 rounded-full opacity-0" />
+          <span ref={dots.line} aria-hidden="true" className="q-line pointer-events-none absolute top-0 left-[calc(50%+0.5rem)] z-10 h-px w-[calc(50%-0.5rem+0.75rem)] origin-left opacity-0" />
           {question.options.map((option, position) => (
-            <RailOption
+            <DotOption
               key={position}
               option={option}
               index={position}
               multi={multi}
               name={`question-${index}`}
               selected={picked.includes(position)}
-              active={question.options.indexOf(previewOption!) === position}
+              active={activeAt === position}
               onToggle={() => toggle(position)}
               onFocusOption={() => setFocused({ ...focused, [index]: position })}
             />
           ))}
-          <RailGlide rail={rail} active={question.options.indexOf(previewOption!)} />
         </div>
-        <OptionPanel option={previewOption} position={question.options.indexOf(previewOption!)} onExpand={() => openViewer(question.options.indexOf(previewOption!))} />
+        <OptionPanel panel={panelRef} option={previewOption} position={activeAt} onExpand={() => openViewer(activeAt)} />
       </div>
-      <div className="mx-auto w-full max-w-xl">
-          <label className="flex min-h-10 min-w-0 flex-col gap-1 rounded-lg border border-input px-3 py-1.5 text-sm focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30 max-md:min-h-11">
-            <span className="text-xs text-muted-foreground">Your own answer</span>
-            <Textarea
-              data-nav=""
-              value={ownText}
-              onChange={(event) => {
-                setOwn({ ...own, [index]: event.target.value })
-                if (event.target.value) setPicks({ ...picks, [index]: [] })
-              }}
-              placeholder="Type something else…"
-              aria-label="Your own answer"
-              rows={2}
-              className="min-h-9 resize-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0 md:text-sm max-md:min-h-11"
-            />
-          </label>
+      <div className="mx-auto w-full max-w-sm">
+        <Textarea
+          data-nav=""
+          value={ownText}
+          onChange={(event) => {
+            setOwn({ ...own, [index]: event.target.value })
+            if (event.target.value) setPicks({ ...picks, [index]: [] })
+          }}
+          placeholder="Type something else…"
+          aria-label="Your own answer"
+          rows={1}
+          className="q-own field-sizing-content max-h-32 min-h-9 resize-none rounded-full px-4 py-2 text-center text-sm shadow-none md:text-sm max-md:min-h-11 focus:text-start"
+        />
       </div>
       <p className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
         <span>{multi ? "Pick several" : "Pick one"}</span>

@@ -1,6 +1,7 @@
 import "./nonce"
 import "@/app/install"
 import "@/app/palette"
+import "@/app/typeface"
 
 import { StrictMode } from "react"
 import { MotionConfig } from "motion/react"
