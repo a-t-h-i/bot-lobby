@@ -21,10 +21,10 @@ test("effort is a drag slider that names every level, steps by key and snaps whe
     await expect(slider).toHaveAttribute("aria-valuetext", level);
   }
   await expect(card.locator('[data-slot="effort-value"]')).toHaveText("Max");
-  await expect(card.getByText("As deep as the model goes.")).toBeVisible();
+  await expect(card.locator('[data-slot="effort-hint"]'), "the level's meaning describes the slider").toHaveText("As deep as the model goes.");
   await expect(card.locator('[data-slot="effort-recommended"]'), "away from it, the mark names it").toHaveText("Recommended");
   await expect(card.locator('[data-slot="effort-recommended-mark"]'), "and a bar on the track marks its stop").toBeVisible();
-  await expect(card.locator('[data-slot="effort-mosaic"]'), "the top level turns the fill into a mosaic").toBeVisible();
+  await expect(card.locator('[data-slot="effort-sheen"]'), "the top level sends a sheen along the fill").toBeAttached();
   await card.scrollIntoViewIfNeeded();
   await card.screenshot({ path: info.outputPath("effort-slider.png") });
 

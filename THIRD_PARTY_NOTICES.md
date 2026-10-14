@@ -60,3 +60,13 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Typefaces
+
+The web UI bundles the Latin subset of these variable fonts (from the
+fontsource packages, `@fontsource-variable/*`) as files in `webui/dist/assets`,
+so the Typeface setting works offline. Each is under the SIL Open Font
+License 1.1 (https://openfontlicense.org): Inter (The Inter Project Authors),
+Geist and Geist Mono (Vercel), IBM Plex Sans (IBM Corp.), Manrope (The
+Manrope Project Authors) and JetBrains Mono (The JetBrains Mono Project
+Authors).

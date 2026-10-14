@@ -240,5 +240,5 @@ test("Git switch routes keyboard selection and legacy bookmarks @theme", async (
   await expect(page.getByRole("radio", { name: "Pull requests", exact: true })).toBeFocused();
   await page.keyboard.press("ArrowRight");
   await expect(page).toHaveURL(/#\/git\/issues$/);
-  expect((await issues.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  expect((await issues.boundingBox())!.height, "a compact segment on a desktop (44px on a phone)").toBeGreaterThanOrEqual(24);
 });

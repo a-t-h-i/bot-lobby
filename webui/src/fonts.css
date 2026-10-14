@@ -1,0 +1,17 @@
+/*
+ * The bundled typefaces (fontsource, OFL): Latin only, variable weights, fetched only when chosen. `html[data-font]`
+ * and `html[data-mono]` (app/typeface.ts) put one first in the stack, ahead of a colour theme's own fonts.
+ */
+@font-face { font-family: "Inter Variable"; font-style: normal; font-display: swap; font-weight: 100 900; src: url("../../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2") format("woff2-variations"); }
+@font-face { font-family: "Geist Variable"; font-style: normal; font-display: swap; font-weight: 100 900; src: url("../../node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2") format("woff2-variations"); }
+@font-face { font-family: "IBM Plex Sans Variable"; font-style: normal; font-display: swap; font-weight: 100 700; src: url("../../node_modules/@fontsource-variable/ibm-plex-sans/files/ibm-plex-sans-latin-wght-normal.woff2") format("woff2-variations"); }
+@font-face { font-family: "Manrope Variable"; font-style: normal; font-display: swap; font-weight: 200 800; src: url("../../node_modules/@fontsource-variable/manrope/files/manrope-latin-wght-normal.woff2") format("woff2-variations"); }
+@font-face { font-family: "JetBrains Mono Variable"; font-style: normal; font-display: swap; font-weight: 100 800; src: url("../../node_modules/@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2") format("woff2-variations"); }
+@font-face { font-family: "Geist Mono Variable"; font-style: normal; font-display: swap; font-weight: 100 900; src: url("../../node_modules/@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2") format("woff2-variations"); }
+
+html[data-font="inter"] { --pick-font-sans: "Inter Variable", system-ui, sans-serif; }
+html[data-font="geist"] { --pick-font-sans: "Geist Variable", system-ui, sans-serif; }
+html[data-font="plex"] { --pick-font-sans: "IBM Plex Sans Variable", system-ui, sans-serif; }
+html[data-font="manrope"] { --pick-font-sans: "Manrope Variable", system-ui, sans-serif; }
+html[data-mono="jetbrains"] { --pick-font-mono: "JetBrains Mono Variable", ui-monospace, monospace; }
+html[data-mono="geist-mono"] { --pick-font-mono: "Geist Mono Variable", ui-monospace, monospace; }
