@@ -23,6 +23,7 @@ import { AgentIcon } from "@/ui/AgentIcon"
 import { call } from "@/lib/api"
 import { useApiRead } from "@/app/useApiRead"
 import { Section } from "@/ui/Section"
+import { Segmented } from "@/ui/Segmented"
 import { Choice, Field, Rows, type ChoiceItem } from "./parts"
 import { ThemeGroup } from "./ThemeGroup"
 import type { BotLobbyConfig, SettingsClassifierModel, SettingsModelInfo } from "@protocol"
@@ -259,8 +260,8 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
   const [open, setOpen] = useState(false)
   const custom = customCount(entry, kind)
   return (
-    <section data-slot="agent-row" className="glass min-w-0 rounded-xl border border-border px-3 py-2">
-      <div className="grid min-w-0 items-center gap-x-3 gap-y-1 md:grid-cols-[minmax(7rem,9rem)_minmax(0,14rem)_minmax(0,1fr)_auto] max-md:grid-cols-[minmax(0,1fr)_auto]">
+    <section data-slot="agent-row" className="glass min-w-0 rounded-xl border px-3.5 py-2.5">
+      <div className="grid min-w-0 items-center gap-x-3 gap-y-1 md:grid-cols-[minmax(7rem,9rem)_minmax(0,14rem)_minmax(0,1fr)_8.5rem] max-md:grid-cols-[minmax(0,1fr)_auto]">
         <h3 className="flex min-w-0 items-center gap-2 break-words text-sm font-semibold"><AgentIcon source={kind} className="size-4 shrink-0 text-muted-foreground" />{name}</h3>
         <div className="min-w-0 max-md:order-3 max-md:col-span-2">
           <ModelChoice value={entry.model} models={models} label={`${name} model`} inherit={kind === "master"} onChange={chooseModel} />
@@ -551,10 +552,12 @@ function InstallGroup() {
   )
 }
 
-const SECTIONS = ["Agents", "Workflow", "Linting", "Lobby", "Classifier", "Appearance & notifications"]
+const SECTIONS = ["Agents", "Workflow", "Lobby", "Classifier", "Appearance & notifications"] as const
+type SectionName = (typeof SECTIONS)[number]
+const sectionId = (name: SectionName) => `settings-${name.split(" ")[0]}`
 
 export function SettingsForm({ config, models, classifierModels = [], onConfig }: { config: Config; models: SettingsModelInfo[]; classifierModels?: SettingsClassifierModel[]; onConfig: (config: Config) => void }) {
-  const [section, setSection] = useState("Agents")
+  const [section, setSection] = useState<SectionName>("Agents")
   // One save at a time, in the order they were made: the form shows the config of the last reply, so replies must come back in order.
   const queue = useRef<Promise<unknown>>(Promise.resolve())
   const save: Save = (patch) => {
@@ -574,43 +577,29 @@ export function SettingsForm({ config, models, classifierModels = [], onConfig }
     return next
   }
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-5 pt-5 pb-dock md:px-8 md:pt-8">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight">{PAGE.title}</h1>
-        <p className="text-sm text-muted-foreground">{PAGE.intro}</p>
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 pt-4 pb-dock md:px-6 md:pt-6">
+      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0">
+          <h1 className="text-lg font-semibold tracking-tight">{PAGE.title}</h1>
+          <p className="max-w-xl text-xs text-muted-foreground">{PAGE.intro}</p>
+        </div>
+        <nav aria-label="Settings sections" className="min-w-0 max-w-full">
+          <Segmented as="nav" label="Settings sections" items={SECTIONS.map((name) => ({ id: name, label: name, controls: sectionId(name) }))} value={section} onChange={setSection} />
+        </nav>
       </header>
-      <nav aria-label="Settings sections" className="-mx-1 min-w-0 flex flex-wrap gap-1 border-b border-border pb-3 max-md:flex-nowrap max-md:overflow-x-auto max-md:overscroll-x-contain max-md:pb-2">
-        {SECTIONS.map((name) => (
-          <button
-            key={name}
-            type="button"
-            aria-keyshortcuts="Enter Space"
-            aria-describedby="focused-action-help"
-            aria-current={section === name ? "page" : undefined}
-            aria-controls={`settings-${name.split(" ")[0]}`}
-            onClick={() => setSection(name)}
-            className={cn(
-              "h-8 rounded-lg border border-transparent px-3 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-md:min-h-11 max-md:h-auto max-md:shrink-0 max-md:whitespace-nowrap",
-              section === name ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-            )}
-          >
-            {name}
-          </button>
-        ))}
-      </nav>
-      <div id="settings-Agents" hidden={section !== "Agents"} aria-hidden={section !== "Agents"}>
-        <Section prominent title={GROUP_TITLES.agents}>
-          <div className="grid grid-cols-1 gap-2">
-            {AGENT_ORDER.map((kind) => <AgentCard key={kind} kind={kind} config={config} models={models} save={save} />)}
-          </div>
-        </Section>
+      <div id={sectionId("Agents")} hidden={section !== "Agents"} aria-hidden={section !== "Agents"}>
+        <h2 className="sr-only">{GROUP_TITLES.agents}</h2>
+        <div className="grid grid-cols-1 gap-2">
+          {AGENT_ORDER.map((kind) => <AgentCard key={kind} kind={kind} config={config} models={models} save={save} />)}
+        </div>
       </div>
-      <div id="settings-Workflow" hidden={section !== "Workflow"} aria-hidden={section !== "Workflow"}><WorkflowGroup config={config} save={save} /></div>
-      <div id="settings-Linting" hidden={section !== "Linting"} aria-hidden={section !== "Linting"}><LintGroup config={config} save={save} /></div>
-      <div id="settings-Lobby" hidden={section !== "Lobby"} aria-hidden={section !== "Lobby"}><LobbyGroup config={config} save={save} /></div>
-      <div id="settings-Classifier" hidden={section !== "Classifier"} aria-hidden={section !== "Classifier"}><ClassifierGroup config={config} models={models} classifiers={classifierModels} save={save} /></div>
-      <div id="settings-Appearance" hidden={section !== "Appearance & notifications"} aria-hidden={section !== "Appearance & notifications"}>
-        <div className="flex flex-col gap-8"><ThemeGroup /><NotificationsGroup /><InstallGroup /></div>
+      <div id={sectionId("Workflow")} hidden={section !== "Workflow"} aria-hidden={section !== "Workflow"}>
+        <div className="flex flex-col gap-6"><WorkflowGroup config={config} save={save} /><LintGroup config={config} save={save} /></div>
+      </div>
+      <div id={sectionId("Lobby")} hidden={section !== "Lobby"} aria-hidden={section !== "Lobby"}><LobbyGroup config={config} save={save} /></div>
+      <div id={sectionId("Classifier")} hidden={section !== "Classifier"} aria-hidden={section !== "Classifier"}><ClassifierGroup config={config} models={models} classifiers={classifierModels} save={save} /></div>
+      <div id={sectionId("Appearance & notifications")} hidden={section !== "Appearance & notifications"} aria-hidden={section !== "Appearance & notifications"}>
+        <div className="flex flex-col gap-6"><ThemeGroup /><NotificationsGroup /><InstallGroup /></div>
       </div>
     </div>
   )

@@ -116,7 +116,7 @@ export function ActionBar({ children, className }: { children: ReactNode; classN
       role="toolbar"
       aria-label="Actions"
       onKeyDown={onKeyDown}
-      className={cn("sticky -top-5 z-10 -mx-5 -mt-5 flex min-h-12 flex-wrap items-center gap-1 border-b border-border bg-[var(--workspace-card)] px-4 py-2 [&>[data-tone=danger]:not(:first-child)]:ml-auto max-md:static max-md:z-auto max-md:mx-0 max-md:mt-0 max-md:min-h-11 max-md:gap-2 max-md:border-b-0 max-md:bg-transparent max-md:px-0 max-md:py-1 max-md:backdrop-blur-none", className)}
+      className={cn("sticky -top-5 z-10 -mx-5 -mt-5 flex min-h-12 flex-wrap items-center gap-1 border-b border-[var(--glass-edge)] sticky-glass px-4 py-2 [&>[data-tone=danger]:not(:first-child)]:ml-auto max-md:static max-md:z-auto max-md:mx-0 max-md:mt-0 max-md:min-h-11 max-md:gap-2 max-md:border-b-0 max-md:bg-transparent max-md:px-0 max-md:py-1 max-md:backdrop-blur-none", className)}
     >
       {children}
     </div>

@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils"
 import { ActionButton } from "@/ui/Actions"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { Section } from "@/ui/Section"
+import { TypefacePicker } from "@/ui/TypefacePicker"
 import { Choice, Field, Rows } from "./parts"
 import { GROUP_TITLES, PAGE } from "./words"
 
@@ -234,6 +235,8 @@ function ImportTheme() {
   )
 }
 
+export { ThemePicker }
+
 export function ThemeGroup() {
   const { theme, setTheme } = useTheme()
   const muted = useSoundMuted()
@@ -248,6 +251,12 @@ export function ThemeGroup() {
         </Field>
         <Field label="Colour theme" help="The page's colours, the same in every pi session." stacked>
           <ThemePicker />
+        </Field>
+        <Field label="Typeface" help="The face for the page's text, kept in this browser." stacked>
+          <TypefacePicker kind="font" />
+        </Field>
+        <Field label="Code typeface" help="The face for code, paths and commands." stacked>
+          <TypefacePicker kind="mono" />
         </Field>
         <Field label="Saved themes" help="Themes you imported, kept with pi for every session and project." stacked>
           <SavedThemes />

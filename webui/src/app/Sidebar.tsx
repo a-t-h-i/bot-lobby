@@ -1,8 +1,9 @@
 // Adapted from T3 Code (MIT), apps/web/src/components/ui/sidebar.tsx
 /**
  * The rail on the left of every page, as in the coding harnesses it takes
- * after: the app's switches (the key list, light or dark, the sounds) and
- * Settings. The project itself is chosen in the composer. On a phone it is a
+ * after: up top the things you reach for while working (the look, desktop
+ * notifications, full screen), at the foot the app's switches (the key list,
+ * light or dark, the sounds) and Settings. The project itself is chosen in the composer. On a phone it is a
  * sheet from the left, opened from the menu button in the bar.
  */
 import type { ReactNode } from "react"
@@ -11,7 +12,7 @@ import { Keys } from "@/components/ui/kbd"
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
-import { HelpButton, SoundToggle, ThemeToggle } from "./AppTools.tsx"
+import { AppearanceButton, FullscreenToggle, HelpButton, NotifyToggle, SoundToggle, ThemeToggle } from "./AppTools.tsx"
 import type { Route } from "./router.ts"
 
 export interface SidebarProps {
@@ -54,6 +55,11 @@ function SidebarBody({ route, keys, onHelp, closer, phone = false }: SidebarProp
         <ThemeToggle className={tool} />
         <SoundToggle className={tool} />
       </div>
+      <div className="flex items-center gap-1 border-t border-[var(--glass-edge)] px-1 py-2">
+        <AppearanceButton className={tool} />
+        <NotifyToggle className={tool} />
+        <FullscreenToggle className={tool} />
+      </div>
     </>
   )
 }
@@ -76,6 +82,9 @@ function RailTip({ label, hint, side = "right", children }: { label: string; hin
 function Rail({ route, keys, onHelp }: SidebarProps) {
   return (
     <>
+      <AppearanceButton className={RAIL_ITEM} side="right" />
+      <NotifyToggle className={RAIL_ITEM} side="right" />
+      <FullscreenToggle className={RAIL_ITEM} side="right" />
       <span className="flex-1" />
       <HelpButton hint={keys.help ?? "Alt+H"} onHelp={onHelp} className={RAIL_ITEM} side="right" />
       <ThemeToggle className={RAIL_ITEM} side="right" />
