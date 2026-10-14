@@ -11,7 +11,7 @@
  * comment on the open task on Tasks. While a pop-up is open it steps aside, so
  * only one thing asks for you at a time.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { ArrowUp, Eye, FileText, MessageSquare, Plus, Settings2, Square, X } from "lucide-react"
 import { Keys, KeyHint } from "@/components/ui/kbd"
@@ -158,6 +158,45 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
   )
 }
 
+/**
+ * The composer gets out of the way while you read: a scroll of the page under it (by wheel, touch or the
+ * scroll keys, not the page following a reply) shrinks it to a slim pill, and focus, or a press on it, opens
+ * it back up. It never shrinks while it has focus.
+ */
+function useShrinkOnScroll(dock: RefObject<HTMLDivElement | null>, active: boolean, route: Route) {
+  const [shrunk, setShrunk] = useState(false)
+  const place = route.kind === "tab" ? route.tab : route.kind
+  useEffect(() => setShrunk(false), [place])
+  useEffect(() => {
+    if (!active) return
+    let intent = 0
+    const mark = (event: Event) => {
+      if (!dock.current?.contains(event.target as Node)) intent = performance.now()
+    }
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (["PageDown", "PageUp", "ArrowDown", "ArrowUp", "Home", "End", " "].includes(event.key) && !dock.current?.contains(event.target as Node)) intent = performance.now()
+    }
+    const onScroll = (event: Event) => {
+      const el = dock.current
+      if (!el || performance.now() - intent > 400) return
+      if (el.contains(document.activeElement) || el.contains(event.target as Node)) return
+      setShrunk(true)
+    }
+    document.addEventListener("wheel", mark, { capture: true, passive: true })
+    document.addEventListener("touchmove", mark, { capture: true, passive: true })
+    document.addEventListener("keydown", onKey, { capture: true })
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true })
+    return () => {
+      document.removeEventListener("wheel", mark, { capture: true })
+      document.removeEventListener("touchmove", mark, { capture: true })
+      document.removeEventListener("keydown", onKey, { capture: true })
+      document.removeEventListener("scroll", onScroll, { capture: true })
+    }
+  }, [active, dock])
+  const expand = useCallback(() => setShrunk(false), [])
+  return { shrunk, expand }
+}
+
 export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Route; keys: Record<string, string>; projects: Projects; onHelp: () => void; dockNav?: ReactNode }) {
   const [text, setText] = useState("")
   const [files, setFiles] = useState<Pending[]>([])
@@ -183,6 +222,7 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
   useEffect(() => setChosen(undefined), [targetKey])
 
   const card = useRef<HTMLDivElement>(null)
+  const { shrunk, expand } = useShrinkOnScroll(card, visible && !blocked, route)
   const field = useRef<HTMLTextAreaElement>(null)
   const picker = useRef<HTMLInputElement>(null)
   const filesRef = useRef(files)
@@ -211,6 +251,12 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
     const set = () => {
       const box = el.getBoundingClientRect()
       root.style.setProperty("--composer-h", blocked || !visible ? "0px" : `${Math.ceil(box.height + (phone ? keyboardInset : 0))}px`)
+      // A hidden composer measures 0 wide: the toasts then centre on the window instead of shrinking to nothing.
+      if (!visible || box.width === 0) {
+        root.style.removeProperty("--composer-x")
+        root.style.removeProperty("--composer-w")
+        return
+      }
       root.style.setProperty("--composer-x", `${Math.round(box.left)}px`)
       root.style.setProperty("--composer-w", `${Math.round(box.width)}px`)
     }
@@ -433,6 +479,8 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
     <div
       id="app-dock"
       ref={card}
+      data-shrunk={shrunk || undefined}
+      onFocus={expand}
       style={phone && keyboardOpen ? { bottom: `${keyboardInset}px` } : undefined}
       className={cn(
         "dock pointer-events-none absolute inset-x-0 bottom-0 z-30 px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] transition-opacity duration-200 ease-snap max-md:px-2",
@@ -444,8 +492,9 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
       inert={blocked || !visible}
     >
       {dockNav ? <div className="pointer-events-auto mx-auto mb-1.5 w-full max-w-[46rem]">{dockNav}</div> : null}
+      <div className="composer-shell mx-auto w-full max-w-[46rem]">
       {tray}
-      <div className="pointer-events-auto relative mx-auto w-full max-w-[46rem]">
+      <div className="pointer-events-auto relative mx-auto w-full max-w-[46rem]" onPointerDown={expand}>
         <div
           className={cn(
             "group/composer composer-box relative rounded-[22px] border border-dock-border bg-dock shadow-dock transition-[border-color,box-shadow] duration-200 ease-snap focus-within:border-[color-mix(in_oklab,var(--ring)_28%,var(--dock-border))] focus-within:shadow-dock-focus",
@@ -470,7 +519,7 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
                 transition={{ type: "spring", stiffness: 420, damping: 36 }}
                 aria-label="Attachments"
                 className={cn(
-                  "flex flex-wrap items-end gap-2 overflow-hidden px-3 pt-3",
+                  "composer-files flex flex-wrap items-end gap-2 overflow-hidden px-3 pt-3",
                   compact && "min-[500px]:max-md:col-span-full min-[500px]:max-md:min-w-0 min-[500px]:max-md:max-w-full"
                 )}
               >
@@ -496,7 +545,7 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
 
           <div
             className={cn(
-              "flex px-4 pt-3.5 pb-1",
+              "composer-text flex px-4 pt-3.5 pb-1",
               compact && "min-[500px]:max-md:col-start-1 min-[500px]:max-md:min-w-0 min-[500px]:max-md:max-w-full min-[500px]:max-md:pt-1 min-[500px]:max-md:pb-1"
             )}
           >
@@ -519,7 +568,7 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
 
           <div
             className={cn(
-              "flex flex-wrap items-center gap-x-2 gap-y-2 px-2 pt-1 pb-2",
+              "composer-tools flex flex-wrap items-center gap-x-2 gap-y-2 px-2 pt-1 pb-2",
               compact && "min-[500px]:max-md:col-start-2 min-[500px]:max-md:min-w-0 min-[500px]:max-md:flex-nowrap min-[500px]:max-md:gap-y-0 min-[500px]:max-md:pt-1 min-[500px]:max-md:pb-1"
             )}
           >
@@ -592,6 +641,7 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
             </div>
           ) : null}
         </div>
+      </div>
       </div>
     </div>
   )

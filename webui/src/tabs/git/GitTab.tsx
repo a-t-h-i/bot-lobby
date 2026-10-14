@@ -8,12 +8,13 @@
  * again on every `git` topic change, which also carries a running review's
  * steps. Nothing here is ever posted to GitHub.
  */
-import { useCallback, type KeyboardEvent, type ReactNode } from "react"
+import { useCallback, type ReactNode } from "react"
 import { go, tabHash } from "@/app/router"
 import { ErrorState } from "@/app/States"
 import { useApiRead } from "@/app/useApiRead"
 import { RefreshCw, GitPullRequest } from "lucide-react"
 import { ActionButton } from "@/ui/Actions"
+import { Segmented } from "@/ui/Segmented"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyMedia, EmptyDescription, EmptyHeader } from "@/components/ui/empty"
 import { act } from "@/lib/act"
@@ -61,23 +62,7 @@ const VIEWS: Array<{ id: View; label: string; hash: string }> = [
 
 /** The Pull requests / Issues switch: route-driven, arrow keys move between the two. */
 function ViewSwitch({ view }: { view: View }) {
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return
-    event.preventDefault()
-    const next = VIEWS.find((item) => item.id !== view)!
-    go(next.hash)
-    requestAnimationFrame(() => document.getElementById(`git-view-${next.id}`)?.focus())
-  }
-  return (
-    <div role="radiogroup" aria-label="Show" onKeyDown={onKeyDown} className="inline-flex rounded-lg bg-muted p-0.5">
-      {VIEWS.map((item) => (
-        <button key={item.id} id={`git-view-${item.id}`} type="button" role="radio" aria-checked={item.id === view} tabIndex={item.id === view ? 0 : -1} onClick={() => go(item.hash)}
-          className={cn("min-h-11 min-w-11 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", item.id === view && "bg-background text-foreground shadow-sm")}>
-          {item.label}
-        </button>
-      ))}
-    </div>
-  )
+  return <Segmented label="Show" items={VIEWS} value={view} idPrefix="git-view" onChange={(id) => go(VIEWS.find((item) => item.id === id)!.hash)} />
 }
 
 /** One R for the page: both lists refresh on their own, so one failing never holds up the other. */
@@ -91,7 +76,7 @@ function useRefresh(pulls: { reload: () => void }, issues: IssuesRead) {
 function Header({ view, count, busy, refresh }: { view: View; count?: string; busy: boolean; refresh: () => void }) {
   return (
     <PaneHeader title={view === "issues" ? ISSUES_TITLE : LIST_TITLE} count={count} lead={<ViewSwitch view={view} />}>
-      <ActionButton label="Refresh" icon={RefreshCw} shortcut="R" disabled={busy} className={cn("h-7", busy && "[&_svg]:animate-spin")} onClick={refresh} />
+      <ActionButton label="Refresh" icon={RefreshCw} iconOnly shortcut="R" disabled={busy} className={cn("size-7", busy && "[&_svg]:animate-spin")} onClick={refresh} />
     </PaneHeader>
   )
 }
