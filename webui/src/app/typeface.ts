@@ -18,12 +18,22 @@ export const TEXT_FACES: readonly Typeface[] = [
   { id: "geist", label: "Geist", help: "Crisp and modern" },
   { id: "plex", label: "IBM Plex Sans", help: "Technical, with character" },
   { id: "manrope", label: "Manrope", help: "Round and friendly" },
+  { id: "dm-sans", label: "DM Sans", help: "Geometric, low contrast" },
+  { id: "jakarta", label: "Plus Jakarta Sans", help: "Polished product sans" },
+  { id: "figtree", label: "Figtree", help: "Clean and approachable" },
+  { id: "outfit", label: "Outfit", help: "Geometric display feel" },
+  { id: "nunito", label: "Nunito", help: "Soft rounded terminals" },
+  { id: "space-grotesk", label: "Space Grotesk", help: "Quirky, technical" },
+  { id: "source-sans", label: "Source Sans 3", help: "Classic UI workhorse" },
 ]
 
 export const CODE_FACES: readonly Typeface[] = [
   { id: "theme", label: "System mono", help: "The system's own (or the colour theme's)" },
   { id: "jetbrains", label: "JetBrains Mono", help: "Tall, made for code" },
   { id: "geist-mono", label: "Geist Mono", help: "Pairs with Geist" },
+  { id: "fira-code", label: "Fira Code", help: "Ligatures for operators" },
+  { id: "roboto-mono", label: "Roboto Mono", help: "Even and compact" },
+  { id: "source-code", label: "Source Code Pro", help: "Open and readable" },
 ]
 
 type Kind = "font" | "mono"
@@ -74,4 +84,14 @@ export const FACE_STACKS: Record<string, string> = {
   manrope: '"Manrope Variable", system-ui, sans-serif',
   jetbrains: '"JetBrains Mono Variable", ui-monospace, monospace',
   "geist-mono": '"Geist Mono Variable", ui-monospace, monospace',
+  "dm-sans": '"DM Sans Variable", system-ui, sans-serif',
+  jakarta: '"Plus Jakarta Sans Variable", system-ui, sans-serif',
+  figtree: '"Figtree Variable", system-ui, sans-serif',
+  outfit: '"Outfit Variable", system-ui, sans-serif',
+  nunito: '"Nunito Variable", system-ui, sans-serif',
+  "space-grotesk": '"Space Grotesk Variable", system-ui, sans-serif',
+  "source-sans": '"Source Sans 3 Variable", system-ui, sans-serif',
+  "fira-code": '"Fira Code Variable", ui-monospace, monospace',
+  "roboto-mono": '"Roboto Mono Variable", ui-monospace, monospace',
+  "source-code": '"Source Code Pro Variable", ui-monospace, monospace',
 }

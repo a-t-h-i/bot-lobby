@@ -210,6 +210,14 @@ Checkpoints preserve constraints, decisions, changed files, verification, failed
 approaches, and next actions. A single large input can exceed the threshold before
 the next settled boundary.
 
+Each agent's card in Settings → Agents has an **Auto-compact** switch (on by
+default; `autoCompact: false` in the agent's settings entry). With it off, that
+agent is never compacted by bot-lobby; children inherit their parent's choice.
+When the oracle compacts, its checkpoint also lists what it learned that is
+worth keeping, tagged by agent, and those lines go into the knowledge base: the
+oracle's own files, and the designer's, backend's and QA's where they concern
+them. Duplicates are skipped.
+
 ## MCP tools
 
 Pi's native MCP, `tool_search` and `codemode` are available. **MCP tools** in each

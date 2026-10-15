@@ -68,5 +68,10 @@ fontsource packages, `@fontsource-variable/*`) as files in `webui/dist/assets`,
 so the Typeface setting works offline. Each is under the SIL Open Font
 License 1.1 (https://openfontlicense.org): Inter (The Inter Project Authors),
 Geist and Geist Mono (Vercel), IBM Plex Sans (IBM Corp.), Manrope (The
-Manrope Project Authors) and JetBrains Mono (The JetBrains Mono Project
-Authors).
+Manrope Project Authors), JetBrains Mono (The JetBrains Mono Project
+Authors), DM Sans (The DM Sans Project Authors), Plus Jakarta Sans (The Plus
+Jakarta Sans Project Authors), Figtree (The Figtree Project Authors), Outfit
+(The Outfit Project Authors), Nunito (The Nunito Project Authors), Space
+Grotesk (The Space Grotesk Project Authors), Source Sans 3 and Source Code Pro
+(Adobe), Fira Code (The Fira Code Project Authors) and Roboto Mono (The Roboto
+Mono Project Authors).

@@ -1,6 +1,6 @@
 {
-  "hash": "74121171985d6f7fb293e9f98f37cb52ff5ed8f33f36aac6ceaf936a7240e0b5",
-  "builtAt": "2026-10-15T09:00:40.227Z",
+  "hash": "cfbcbbbd8501bdebafeb386a9156db01d832f92193fe2676ba1922540e7b3f43",
+  "builtAt": "2026-10-15T09:06:44.949Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -144,7 +144,7 @@
     },
     {
       "path": "webui/src/app/typeface.ts",
-      "sha256": "fc8614da8f6835951da10a3fe59db2bd62626073fc454ce940d5db61226b358d"
+      "sha256": "77eb782099b5e51c6e62c890577233191aacad5b3ed37042182e2a36e9422ca9"
     },
     {
       "path": "webui/src/app/useApiRead.ts",
@@ -260,11 +260,11 @@
     },
     {
       "path": "webui/src/fonts.css",
-      "sha256": "c0e7110979aa9122ca443c0a3d06b4314633d5d81e0c54422d45b8e117ebf353"
+      "sha256": "28d947c84e5b108025afe733de3e9a5ebbd7dae22c9ad25fa8a22c95a2007d46"
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "1a08031ac8d991646e57f59a4a0dd89a1bc38f2e5460985c2f8ddeca3d169662"
+      "sha256": "c6970f4a4193a94cc1d3ed596cb4b32a78089780720da0b91ed910728b532e7e"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -548,7 +548,7 @@
     },
     {
       "path": "webui/src/tabs/settings/SettingsForm.tsx",
-      "sha256": "90738ab368ea1e05692c28ad3edbe12931fc484b320b8ef7a9b70b55e3051e2f"
+      "sha256": "de4a89ddbfef35fbfb11dd900f8b66a782de7a8c775663e11a5b1bfd8fd9db78"
     },
     {
       "path": "webui/src/tabs/settings/SettingsTab.tsx",
@@ -668,7 +668,7 @@
     },
     {
       "path": "webui/src/ui/TypefacePicker.tsx",
-      "sha256": "e25079a764b41726935c5dc1bc5b61892137cf83150b20f97aae9efa16b789aa"
+      "sha256": "75d84d7d6cac126a3d7ca055326fe23b62bc3a3152468466cc9481eb3838a68a"
     },
     {
       "path": "webui/src/ui/WorkingMark.tsx",

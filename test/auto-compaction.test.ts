@@ -10,11 +10,11 @@ test("compaction leaves headroom on large and small windows and honours earlier 
   assert.equal(compactionThreshold(8_000), 4_000);
 });
 
-function harness(summarize: typeof compact) {
+function harness(summarize: typeof compact, options: Parameters<typeof registerAutoCompaction>[2] = { enabled: () => true, share: () => "" }) {
   const handlers = new Map<string, (event: TurnEndEvent, ctx: ExtensionContext) => Promise<unknown>>();
   const notices: string[] = [];
   const pi = { on: (name: string, handler: typeof handlers extends Map<string, infer H> ? H : never) => handlers.set(name, handler), getSettings: () => ({ compaction: { reserveTokens: 16_384 }, retry: { enabled: false } }) } as unknown as ExtensionAPI;
-  registerAutoCompaction(pi, summarize);
+  registerAutoCompaction(pi, summarize, options);
   const entries = Array.from({ length: 50 }, (_, index) => ({ type: "message", id: String(index), parentId: index ? String(index - 1) : null, timestamp: new Date(index).toISOString(), message: { role: index % 2 === 0 ? "user" : "assistant", content: [{ type: "text", text: "x".repeat(5_000) }], timestamp: index } })) as SessionEntry[];
   let tokens = 90_000;
   let leaf = "49";
@@ -50,4 +50,28 @@ test("failed summaries preserve history and cannot loop at the same boundary", a
   assert.equal(calls, 1);
   assert.equal(JSON.stringify(h.entries), before);
   assert.match(h.notices.at(-1)!, /provider unavailable/);
+});
+
+test("an agent whose settings turn auto-compaction off is never compacted", async () => {
+  let calls = 0;
+  const h = harness(async (preparation) => { calls += 1; return { summary: "x", firstKeptEntryId: preparation.firstKeptEntryId, tokensBefore: 0 }; }, { enabled: () => false });
+  assert.equal(await h.check(), undefined);
+  assert.equal(calls, 0);
+  assert.deepEqual(h.notices, []);
+});
+
+test("the oracle's checkpoint asks for knowledge by agent and shares what it lists", async () => {
+  let instruction = "";
+  const shared: unknown[] = [];
+  const h = harness(async (preparation, _model, _key, _headers, custom) => {
+    instruction = custom ?? "";
+    return { summary: "## Decisions\n- kept\n\n## Knowledge to share\n- [designer:standard] Buttons are 32px tall.\n- [backend:knowledge] The API lives under /api/<group>.<action>.\n- [ops:knowledge] dropped", firstKeptEntryId: preparation.firstKeptEntryId, tokensBefore: preparation.tokensBefore };
+  }, { enabled: () => true, share: (items) => { shared.push(...items); return "1 for the designer, 1 for backend"; } });
+  await h.check();
+  assert.match(instruction, /Knowledge to share/);
+  assert.deepEqual(shared, [
+    { agent: "designer", kind: "standard", text: "Buttons are 32px tall." },
+    { agent: "backend", kind: "knowledge", text: "The API lives under /api/<group>.<action>." },
+  ]);
+  assert.equal(h.notices.at(-1), "Knowledge updated: 1 for the designer, 1 for backend");
 });
