@@ -378,24 +378,32 @@
 }
 .scroll-hint {
   opacity: 0;
-  scale: 0.6;
+  translate: 0 var(--hint-from, 0);
+  scale: 0.95;
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity 160ms ease, scale 160ms ease, color 120ms ease;
+  transition: opacity 160ms ease, scale 160ms ease, translate 160ms ease, color 120ms ease, visibility 0s linear 160ms;
 }
 .scroll-hint[data-shown] {
   opacity: 0.8;
   scale: 1;
+  translate: 0 0;
+  visibility: visible;
   pointer-events: auto;
+  transition-delay: 0s;
 }
 .scroll-hint[data-shown]:hover {
   opacity: 1;
 }
 .scroll-hint[data-shown]:active {
-  scale: 0.9;
+  scale: 0.94;
 }
 @media (prefers-reduced-motion: no-preference) {
   .scroll-hint {
-    transition: opacity 200ms ease, scale 380ms cubic-bezier(0.34, 1.56, 0.64, 1), color 120ms ease;
+    transition: opacity 200ms ease, scale 380ms cubic-bezier(0.34, 1.56, 0.64, 1), translate 380ms cubic-bezier(0.34, 1.56, 0.64, 1), color 120ms ease, visibility 0s linear 200ms;
+  }
+  .scroll-hint[data-shown] {
+    transition-delay: 0s;
   }
   .scroll-hint[data-shown][data-direction="down"]:hover svg {
     animation: scroll-hint-nudge 600ms ease;
@@ -413,6 +421,12 @@
   0%, 100% { translate: 0 0; }
   40% { translate: 0 -2px; }
   70% { translate: 0 1px; }
+}
+.scroll-hint[data-direction="up"] {
+  --hint-from: 6px;
+}
+.scroll-hint[data-direction="down"] {
+  --hint-from: -6px;
 }
 /* Under a finger the pane scrolls with a swipe; the arrows would only cover the text. */
 @media (pointer: coarse) {
