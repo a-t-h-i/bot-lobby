@@ -377,25 +377,34 @@
   display: none;
 }
 .scroll-hint {
+  backdrop-filter: blur(4px);
   opacity: 0;
-  scale: 0.6;
+  translate: 0 var(--hint-from, 0);
+  scale: 0.95;
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity 160ms ease, scale 160ms ease, color 120ms ease;
+  transition: opacity 160ms ease, scale 160ms ease, translate 160ms ease, color 120ms ease, visibility 0s linear 160ms;
 }
 .scroll-hint[data-shown] {
   opacity: 0.8;
   scale: 1;
+  translate: 0 0;
+  visibility: visible;
   pointer-events: auto;
+  transition-delay: 0s;
 }
 .scroll-hint[data-shown]:hover {
   opacity: 1;
 }
 .scroll-hint[data-shown]:active {
-  scale: 0.9;
+  scale: 0.94;
 }
 @media (prefers-reduced-motion: no-preference) {
   .scroll-hint {
-    transition: opacity 200ms ease, scale 380ms cubic-bezier(0.34, 1.56, 0.64, 1), color 120ms ease;
+    transition: opacity 200ms ease, scale 380ms cubic-bezier(0.34, 1.56, 0.64, 1), translate 380ms cubic-bezier(0.34, 1.56, 0.64, 1), color 120ms ease, visibility 0s linear 200ms;
+  }
+  .scroll-hint[data-shown] {
+    transition-delay: 0s;
   }
   .scroll-hint[data-shown][data-direction="down"]:hover svg {
     animation: scroll-hint-nudge 600ms ease;
@@ -413,6 +422,12 @@
   0%, 100% { translate: 0 0; }
   40% { translate: 0 -2px; }
   70% { translate: 0 1px; }
+}
+.scroll-hint[data-direction="up"] {
+  --hint-from: 6px;
+}
+.scroll-hint[data-direction="down"] {
+  --hint-from: -6px;
 }
 /* Under a finger the pane scrolls with a swipe; the arrows would only cover the text. */
 @media (pointer: coarse) {
@@ -1818,6 +1833,29 @@
   border: 2px dotted color-mix(in oklab, var(--foreground) 22%, transparent);
   background-image: var(--glass-fill);
 }
+/* The option in view: its number, name and what it means, readable at a glance; solid once it is the choice. */
+.q-panel { transition: border-color 200ms ease, opacity 300ms ease; }
+.q-panel[data-chosen] { border-style: solid; border-color: color-mix(in oklab, var(--primary) 45%, transparent); }
+.q-panel-number { background: color-mix(in oklab, var(--foreground) 8%, transparent); color: var(--muted-foreground); }
+.q-panel[data-chosen] .q-panel-number { background: var(--primary); color: var(--primary-foreground); }
+.q-panel-text { color: color-mix(in oklab, var(--foreground) 82%, var(--muted-foreground)); }
+.q-recommended { background: color-mix(in oklab, var(--primary) 12%, transparent); color: var(--primary); }
+.q-chosen { background: color-mix(in oklab, var(--primary) 12%, transparent); color: var(--primary); }
+/* The plan pill over the planning chat. */
+.plan-pill {
+  border-color: var(--glass-edge);
+  background: color-mix(in oklab, var(--card) 82%, transparent);
+  transition: scale 200ms cubic-bezier(0.34, 1.56, 0.64, 1), background-color 150ms ease;
+}
+.plan-pill:hover { background: var(--card); scale: 1.03; }
+.plan-pill:active { scale: 0.97; }
+/* The footer's "You choose: …" line, which changes with every pick. */
+.q-intent[data-empty] { color: var(--muted-foreground); }
+@media (prefers-reduced-motion: no-preference) {
+  .q-intent-text { animation: q-intent-in 260ms cubic-bezier(0.34, 1.4, 0.64, 1); }
+  .q-chosen { animation: q-intent-in 260ms cubic-bezier(0.34, 1.4, 0.64, 1); }
+}
+@keyframes q-intent-in { from { opacity: 0; translate: 0 3px; } to { opacity: 1; translate: 0 0; } }
 /*
  * The own answer: a slim centred pill that opens, on focus, into a full-width box with a formatting bar. The
  * rail's drop lands in it (data-landed): a ring springs out from its edge and the box gives a little bounce.

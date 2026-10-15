@@ -25,6 +25,8 @@ archiving removes a card immediately, while the List view can still show the arc
 A task that is paused, or that no running session drives, shows **Resume** (`R`) in **Tasks**.
 It carries the task on without moving your window: a paused task is unpaused where it runs, and a
 stopped one carries on in a background session, which restarts its own session when its file is found.
+Whatever a background session asks (its questionnaires, picks, yes/no and free-text questions) pops up
+in the window you are in, named after the session, so you never switch sessions to answer.
 
 New tasks get a short title summarizing the full request, which also names their branch and
 session. Naming uses low reasoning on `classifier.effort.cheapModel` when configured, otherwise
@@ -50,7 +52,7 @@ agent's and anything no agent made are left uncommitted.
 After every worker step, before QA and at completion, the engine runs the project's own linter
 (ESLint, Biome, Oxlint, Ruff, or a command you set) on the files the task touched. Only problems on
 changed lines count, and QA judges any lint suppression a worker adds. **Settings → Linting** sets it
-to off, advise or block. Visual questions come with mockups that expand and scroll side by side.
+to off, advise or block. Visual questions come with interactive mockups that expand and scroll side by side; they are drawn with the project's own stylesheets (its tokens and component classes) when it has them.
 
 QA is sized to what was built, not to the request. Once the work is in, the classifier
 reads the diff and sets the QA risk. A change with nothing that runs (docs, styles, comments) passes
