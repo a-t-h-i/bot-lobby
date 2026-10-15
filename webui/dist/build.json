@@ -1,6 +1,6 @@
 {
-  "hash": "243720f48943c47a9030eb1524a8012cf202dd1883e789d6250af7b538667a58",
-  "builtAt": "2026-10-15T08:38:07.439Z",
+  "hash": "74121171985d6f7fb293e9f98f37cb52ff5ed8f33f36aac6ceaf936a7240e0b5",
+  "builtAt": "2026-10-15T09:00:40.227Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -171,10 +171,6 @@
       "sha256": "7f578b7eba14200ee46bd3a711b09ef782492cd2269f607247d697a80dbc832b"
     },
     {
-      "path": "webui/src/assets/oracle.png",
-      "sha256": "475f7b45a46692b843a2f89e9812377a5da07cd8f91c3aed4f780624a2202a40"
-    },
-    {
       "path": "webui/src/components/reui/alert.tsx",
       "sha256": "419ee01a65c397e0a9bdb2984cc9de8ba8be97ff6d193f5ae66afd881a99eed0"
     },
@@ -268,7 +264,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "c607d69a6c05bad06fd4839f2553dc7667b6f7bf4883798b5de74a79d7d5e46f"
+      "sha256": "1a08031ac8d991646e57f59a4a0dd89a1bc38f2e5460985c2f8ddeca3d169662"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -328,7 +324,7 @@
     },
     {
       "path": "webui/src/lib/staticPreview.ts",
-      "sha256": "64ebfd4bc4d967b94af6fbdda78bb2bfc19e5c51a79fd36ba285dc758439844f"
+      "sha256": "63f4a7e4676a4e8da332e8721faa3c728cf6789608db9f023c203f1aef59aff1"
     },
     {
       "path": "webui/src/lib/store.ts",
@@ -380,7 +376,7 @@
     },
     {
       "path": "webui/src/prompts/QuestionPopup.tsx",
-      "sha256": "61cecbd3359f120a8216d21f790264bbbcbae7689ab937fdfde52073d3544aba"
+      "sha256": "425293892fab949bc76428e6185e1ecf0bdfeb37036c50505f1d7241d8ca3b80"
     },
     {
       "path": "webui/src/prompts/RichAnswer.tsx",
@@ -388,7 +384,7 @@
     },
     {
       "path": "webui/src/prompts/StaticPreview.tsx",
-      "sha256": "ec71fcf01328fec6a6a9306f4253731feaeb7cb4d9b9392a7f22d9696c6b69fb"
+      "sha256": "772e7b78e5913e28d439da2c62436c27a5fe37cea9e139bfd83276703e1f1bdd"
     },
     {
       "path": "webui/src/prompts/nav.ts",
@@ -440,7 +436,7 @@
     },
     {
       "path": "webui/src/tabs/knowledge/KnowledgeList.tsx",
-      "sha256": "ae154be30051269a156956e5aaa8bf944ea563dd4ec2080d01a8591f5a74a274"
+      "sha256": "f3b5143283eb9a5f93bb1fd81e1f6e81c2b3d7fd8d51fef75b1ee5133d6e2a13"
     },
     {
       "path": "webui/src/tabs/knowledge/KnowledgeTab.tsx",
@@ -624,7 +620,7 @@
     },
     {
       "path": "webui/src/ui/AgentIcon.tsx",
-      "sha256": "8416ac911623488ddff357c2bd17e68c1a3fd6eeebf0eaf14d055af46df7c600"
+      "sha256": "2870a6acabe790c7f4252c925f76557c1ba17bee11e3046670dc075bf214c42d"
     },
     {
       "path": "webui/src/ui/Attachments.tsx",

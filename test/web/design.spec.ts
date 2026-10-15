@@ -324,7 +324,7 @@ test("the dock grows and shrinks with the text on its own, over the page, and th
   await expect(page.getByRole("button", { name: /Open the box wider and taller|Make the box smaller/ }), "there is no expand or collapse toggle").toHaveCount(0);
 });
 
-test("on Settings the model selectors stack inside the agent card, one card per row on a tablet", async ({ page, server }) => {
+test("on Settings the model selectors stack inside the agent card, three cards to a row on a desktop and one on a phone", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.evaluate(() => {
@@ -338,13 +338,16 @@ test("on Settings the model selectors stack inside the agent card, one card per 
   const modelBox = (await model.boundingBox())!;
   const cardBox = (await masterCard.boundingBox())!;
   expect(modelBox.x + modelBox.width, "the selector stays within the card").toBeLessThanOrEqual(cardBox.x + cardBox.width);
-  await page.setViewportSize({ width: 1024, height: 768 });
-  const designerCard = page.locator("section.glass").filter({ has: page.getByRole("heading", { name: "Designer", exact: true }) });
-  await expect(designerCard, "the Designer's card").toBeVisible();
-  const designerBox = (await designerCard.boundingBox())!;
-  const masterAtTablet = (await masterCard.boundingBox())!;
-  expect(Math.abs(designerBox.x - masterAtTablet.x), "one card per row at tablet width").toBeLessThanOrEqual(2);
-  expect(designerBox.y, "the next card is below, not beside").toBeGreaterThan(masterAtTablet.y + 20);
+  const card = (name: string) => page.locator("section.glass").filter({ has: page.getByRole("heading", { name, exact: true }) });
+  const [designerBox, backendBox, qaBox] = await Promise.all(["Designer", "Backend", "QA"].map(async (name) => (await card(name).boundingBox())!));
+  expect(Math.abs(backendBox!.y - cardBox.y), "three cards share the first row").toBeLessThanOrEqual(2);
+  expect(designerBox!.x, "side by side").toBeGreaterThan(cardBox.x + cardBox.width - 2);
+  expect(qaBox!.y, "the fourth starts the next row").toBeGreaterThan(cardBox.y + 20);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const designerAtPhone = (await card("Designer").boundingBox())!;
+  const masterAtPhone = (await masterCard.boundingBox())!;
+  expect(Math.abs(designerAtPhone.x - masterAtPhone.x), "one card per row on a phone").toBeLessThanOrEqual(2);
+  expect(designerAtPhone.y, "the next card is below, not beside").toBeGreaterThan(masterAtPhone.y + 20);
 });
 
 test("Plan, Quick fix and an open task each give the composer its own target", async ({ page, server }) => {
