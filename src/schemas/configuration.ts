@@ -31,6 +31,8 @@ export interface AgentModelConfig {
   mcpTools?: string[];
   /** Time limit per run; falls back to `workflow.agentTimeoutMs`. */
   timeoutMs?: number;
+  /** Compact this agent's context on its own as it fills (on unless false); the oracle's also updates the knowledge base. */
+  autoCompact?: boolean;
 }
 
 /** Scouts pick a model and a time limit only; their thinking is fixed at `SCOUT_THINKING`. */
@@ -40,6 +42,8 @@ export interface ScoutConfig {
   timeoutMs: number;
   /** Tool calls a scout may make: it is told to wrap up at 60% and refused more past this, so it reports with what it has; 0 = no limit. */
   maxToolCalls: number;
+  /** Compact a scout's context on its own as it fills (on unless false). */
+  autoCompact?: boolean;
 }
 
 /** Subagent kinds with their own settings entry. */
@@ -351,7 +355,7 @@ function normalizeAgent(base: AgentModelConfig, override: Partial<AgentModelConf
   const thinking = isThinkingLevel(merged.thinking) ? merged.thinking : base.thinking;
   const timeoutMs = positive(merged.timeoutMs) ?? base.timeoutMs;
   const mcpTools = normalizeMcpTools(merged.mcpTools);
-  return { model: merged.model, thinking, ...(mcpTools.length ? { mcpTools } : {}), ...(typeof merged.instructions === "string" ? { instructions: merged.instructions } : {}), ...(timeoutMs ? { timeoutMs } : {}) };
+  return { model: merged.model, thinking, ...(mcpTools.length ? { mcpTools } : {}), ...(typeof merged.instructions === "string" ? { instructions: merged.instructions } : {}), ...(timeoutMs ? { timeoutMs } : {}), ...(merged.autoCompact === false ? { autoCompact: false } : {}) };
 }
 
 /** Scouts keep a model and a time limit; any thinking value in the file is dropped. */
@@ -363,6 +367,7 @@ function normalizeScout(override: Partial<ScoutConfig> | undefined): ScoutConfig
     timeoutMs: positive(override?.timeoutMs) ?? base.timeoutMs,
     maxToolCalls: typeof override?.maxToolCalls === "number" && Number.isFinite(override.maxToolCalls) && override.maxToolCalls >= 0 ? Math.round(override.maxToolCalls) : base.maxToolCalls,
     ...(mcpTools.length ? { mcpTools } : {}),
+    ...(override?.autoCompact === false ? { autoCompact: false } : {}),
   };
 }
 
@@ -513,6 +518,13 @@ export interface AgentProfile {
   instructions?: string;
   /** Exact native MCP tool names this profile may call; empty grants none. */
   mcpTools?: string[];
+  /** False when its settings turn auto-compaction off. */
+  autoCompact?: boolean;
+}
+
+/** `{ autoCompact: false }` when an entry turns auto-compaction off, else nothing. */
+function compactField(entry: { autoCompact?: boolean }): { autoCompact?: false } {
+  return entry.autoCompact === false ? { autoCompact: false } : {};
 }
 
 /** The settings entry a domain/role run draws from. */
@@ -537,10 +549,10 @@ export function agentProfile(config: BotLobbyConfig, domain: Domain, role: Role)
   const instructions = config.agents[domain].instructions;
   const fallback = config.workflow.agentTimeoutMs;
   if (kind === "scout") {
-    return { kind, model: modelOf(config.scout.model), thinking: SCOUT_THINKING, timeoutMs: config.scout.timeoutMs || fallback, instructions, ...(config.scout.mcpTools?.length ? { mcpTools: config.scout.mcpTools } : {}) };
+    return { kind, model: modelOf(config.scout.model), thinking: SCOUT_THINKING, timeoutMs: config.scout.timeoutMs || fallback, instructions, ...(config.scout.mcpTools?.length ? { mcpTools: config.scout.mcpTools } : {}), ...compactField(config.scout) };
   }
   const entry = kind === "researcher" ? config.researcher : config.agents[kind];
-  return { kind, model: modelOf(entry.model), thinking: entry.thinking, timeoutMs: entry.timeoutMs ?? fallback, instructions, ...(entry.mcpTools?.length ? { mcpTools: entry.mcpTools } : {}) };
+  return { kind, model: modelOf(entry.model), thinking: entry.thinking, timeoutMs: entry.timeoutMs ?? fallback, instructions, ...(entry.mcpTools?.length ? { mcpTools: entry.mcpTools } : {}), ...compactField(entry) };
 }
 
 /** The settings entry of a lobby agent (quick fix or planner). */
@@ -549,19 +561,19 @@ export function lobbyAgentConfig(config: BotLobbyConfig, kind: LobbyAgentKind): 
 }
 
 /** Profile for a lobby agent run, from settings alone; `model` is undefined while unset. */
-export function lobbyAgentProfile(config: BotLobbyConfig, kind: LobbyAgentKind): { model?: string; thinking: string; timeoutMs: number; instructions?: string; mcpTools?: string[] } {
+export function lobbyAgentProfile(config: BotLobbyConfig, kind: LobbyAgentKind): { model?: string; thinking: string; timeoutMs: number; instructions?: string; mcpTools?: string[]; autoCompact?: boolean } {
   const entry = lobbyAgentConfig(config, kind);
-  return { model: modelOf(entry.model), thinking: entry.thinking, timeoutMs: entry.timeoutMs ?? config.workflow.agentTimeoutMs, instructions: entry.instructions, ...(entry.mcpTools?.length ? { mcpTools: entry.mcpTools } : {}) };
+  return { model: modelOf(entry.model), thinking: entry.thinking, timeoutMs: entry.timeoutMs ?? config.workflow.agentTimeoutMs, instructions: entry.instructions, ...(entry.mcpTools?.length ? { mcpTools: entry.mcpTools } : {}), ...compactField(entry) };
 }
 
 /**
  * A planning panel seat's profile: the domain's (or the researcher's) model,
  * thinking and custom instructions, bounded by the planner's per-turn limit.
  */
-export function panelMemberProfile(config: BotLobbyConfig, member: PanelMember): { model?: string; thinking: string; timeoutMs: number; instructions?: string; mcpTools?: string[] } {
+export function panelMemberProfile(config: BotLobbyConfig, member: PanelMember): { model?: string; thinking: string; timeoutMs: number; instructions?: string; mcpTools?: string[]; autoCompact?: boolean } {
   const entry = member === "researcher" ? config.researcher : config.agents[member];
   const timeoutMs = config.planner.timeoutMs ?? config.workflow.agentTimeoutMs;
-  return { model: modelOf(entry.model), thinking: entry.thinking, timeoutMs, instructions: entry.instructions, ...(entry.mcpTools?.length ? { mcpTools: entry.mcpTools } : {}) };
+  return { model: modelOf(entry.model), thinking: entry.thinking, timeoutMs, instructions: entry.instructions, ...(entry.mcpTools?.length ? { mcpTools: entry.mcpTools } : {}), ...compactField(entry) };
 }
 
 /** Resolves the model, thinking and time limit one subagent run uses. */

@@ -878,7 +878,7 @@ test("quick key presses on the effort slider add up instead of each starting fro
   await expect(slider, "and it stays there once the server has answered").toHaveAttribute("aria-valuetext", "high");
 });
 
-test("Thinking is a glowing orb in the colour of the agent thinking, with that agent's name beside it", async ({ page, server }) => {
+test("Thinking is a flat orb in the colour of the agent thinking, with that agent's name beside it", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const orb = page.getByRole("button", { name: "Open Thinking" });
@@ -890,12 +890,12 @@ test("Thinking is a glowing orb in the colour of the agent thinking, with that a
     const now = await orb.evaluate((el: any) => ({
       name: el.querySelector(".orb-label")?.textContent?.trim() ?? "",
       tone: el.style.getPropertyValue("--orb").trim(),
-      glow: getComputedStyle(el.querySelector(".orb")).boxShadow,
+      fill: getComputedStyle(el.querySelector(".orb")).backgroundImage,
     }));
     // Mid-swap both names are briefly in the tag; only a settled one counts.
     if (now.name === "Dev" || now.name === "QA") {
       seen.set(now.name, now.tone);
-      expect(now.glow, "the orb glows").not.toBe("none");
+      expect(now.fill, "the orb is flat: no gradient, highlight or sheen").toBe("none");
     }
     await page.waitForTimeout(200);
   }

@@ -70,6 +70,7 @@ type Save = (patch: Record<string, unknown>) => Promise<boolean>
 interface AgentView {
   model: string
   thinking: string
+  autoCompact?: boolean
   timeoutMs?: number
   instructions?: string
   mcpTools?: string[]
@@ -103,6 +104,7 @@ function entryOf(config: Config, kind: AgentKind): AgentView {
         thinking: FIXED_SCOUT_THINKING,
         timeoutMs: config.scout.timeoutMs,
         mcpTools: config.scout.mcpTools,
+        ...(config.scout.autoCompact === false ? { autoCompact: false } : {}),
       }
     case "researcher":
       return config.researcher
@@ -169,14 +171,14 @@ function ModelChoice(props: { value: string; models: SettingsModelInfo[]; label:
   )
 }
 
-function ToggleField({ label, help, checked, onChange }: { label: string; help?: string; checked: boolean; onChange: (next: boolean) => void }) {
+function ToggleField({ label, help, checked, onChange, name }: { label: string; help?: string; checked: boolean; onChange: (next: boolean) => void; name?: string }) {
   return (
     <div className="flex min-h-0 items-center justify-between gap-4 max-md:min-h-11 max-md:items-start">
       <div className="min-w-0">
         <div className="break-words text-[0.8125rem] font-medium">{label}</div>
         {help ? <p className="break-words text-xs text-muted-foreground">{help}</p> : null}
       </div>
-      <Switch checked={checked} onCheckedChange={onChange} aria-label={label} />
+      <Switch checked={checked} onCheckedChange={onChange} aria-label={name ?? label} />
     </div>
   )
 }
@@ -270,6 +272,13 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
         <EffortSlider value={entry.thinking} levels={THINKING_LEVELS} supported={supported} recommended={RECOMMENDED_THINKING[kind]}
           model={entry.model === INHERIT_MODEL ? "the session model" : entry.model} label={`${name} effort`} onChange={(level) => set({ thinking: level })} />
       )}
+      <ToggleField
+        label="Auto-compact"
+        help={kind === "master" ? "Compacts the oracle's context as it fills, and files what it learned into the knowledge base, shared with the agents it concerns." : "Compacts this agent's context as it fills."}
+        checked={entry.autoCompact !== false}
+        onChange={(on) => set({ autoCompact: on })}
+        name={`${name} auto-compact`}
+      />
       <div hidden={!open} className="grid gap-2 border-t border-border pt-2">
         {kind !== "master" ? (
           <Field label="Time limit" help="Minutes before this agent's run stops.">

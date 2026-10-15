@@ -71,6 +71,7 @@ export async function runResearch(request: ResearchRequest, run: ProcessRunner =
       context: researchContext(request),
       model: profile.model,
       mcpTools: profile.mcpTools,
+      ...(profile.autoCompact === false ? { autoCompact: false } : {}),
       thinking: profile.thinking,
       timeoutMs: profile.timeoutMs,
       ...(request.time ? { time: request.time } : {}),

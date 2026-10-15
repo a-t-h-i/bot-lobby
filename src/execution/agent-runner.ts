@@ -46,6 +46,8 @@ export interface AgentRequest {
   context: AgentContext;
   model?: string;
   mcpTools?: string[];
+  /** False when the agent's settings turn its auto-compaction off. */
+  autoCompact?: boolean;
   delegationQuota?: { used: number };
   thinking?: string;
   timeoutMs: number;
@@ -254,6 +256,7 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
         request.onUpdate?.(child);
       },
       mcpTools: request.mcpTools,
+      ...(request.autoCompact === false ? { autoCompact: false } : {}),
       task: request.instruction,
       systemPrompt,
       tools: toolsFor(request),

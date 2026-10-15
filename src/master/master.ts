@@ -60,7 +60,7 @@ export interface ScoutRequest {
 /** Model, thinking and time limit for one run, from settings. */
 function profileFields(config: BotLobbyConfig, resolver: ProfileResolver | undefined, domain: Domain, role: AgentRequest["role"]) {
   const profile = profileFor(config, resolver, domain, role);
-  return { model: profile.model, mcpTools: profile.mcpTools, thinking: profile.thinking, timeoutMs: profile.timeoutMs, time: boundedAgentTime(profile.timeoutMs) };
+  return { model: profile.model, mcpTools: profile.mcpTools, ...(profile.autoCompact === false ? { autoCompact: false } : {}), thinking: profile.thinking, timeoutMs: profile.timeoutMs, time: boundedAgentTime(profile.timeoutMs) };
 }
 
 function scoutInstruction(request: ScoutRequest, domain: Domain): string {

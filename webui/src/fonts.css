@@ -8,6 +8,16 @@
 @font-face { font-family: "Manrope Variable"; font-style: normal; font-display: swap; font-weight: 200 800; src: url("../../node_modules/@fontsource-variable/manrope/files/manrope-latin-wght-normal.woff2") format("woff2-variations"); }
 @font-face { font-family: "JetBrains Mono Variable"; font-style: normal; font-display: swap; font-weight: 100 800; src: url("../../node_modules/@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2") format("woff2-variations"); }
 @font-face { font-family: "Geist Mono Variable"; font-style: normal; font-display: swap; font-weight: 100 900; src: url("../../node_modules/@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2") format("woff2-variations"); }
+@font-face { font-family: "DM Sans Variable"; font-style: normal; font-display: swap; font-weight: 100 1000; src: url("../../node_modules/@fontsource-variable/dm-sans/files/dm-sans-latin-wght-normal.woff2") format("woff2-variations"); }
+@font-face { font-family: "Plus Jakarta Sans Variable"; font-style: normal; font-display: swap; font-weight: 200 800; src: url("../../node_modules/@fontsource-variable/plus-jakarta-sans/files/plus-jakarta-sans-latin-wght-normal.woff2") format("woff2-variations"); }
+@font-face { font-family: "Figtree Variable"; font-style: normal; font-display: swap; font-weight: 300 900; src: url("../../node_modules/@fontsource-variable/figtree/files/figtree-latin-wght-normal.woff2") format("woff2-variations"); }
+@font-face { font-family: "Outfit Variable"; font-style: normal; font-display: swap; font-weight: 100 900; src: url("../../node_modules/@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2") format("woff2-variations"); }
+@font-face { font-family: "Nunito Variable"; font-style: normal; font-display: swap; font-weight: 200 1000; src: url("../../node_modules/@fontsource-variable/nunito/files/nunito-latin-wght-normal.woff2") format("woff2-variations"); }
+@font-face { font-family: "Space Grotesk Variable"; font-style: normal; font-display: swap; font-weight: 300 700; src: url("../../node_modules/@fontsource-variable/space-grotesk/files/space-grotesk-latin-wght-normal.woff2") format("woff2-variations"); }
+@font-face { font-family: "Source Sans 3 Variable"; font-style: normal; font-display: swap; font-weight: 200 900; src: url("../../node_modules/@fontsource-variable/source-sans-3/files/source-sans-3-latin-wght-normal.woff2") format("woff2-variations"); }
+@font-face { font-family: "Fira Code Variable"; font-style: normal; font-display: swap; font-weight: 300 700; src: url("../../node_modules/@fontsource-variable/fira-code/files/fira-code-latin-wght-normal.woff2") format("woff2-variations"); }
+@font-face { font-family: "Roboto Mono Variable"; font-style: normal; font-display: swap; font-weight: 100 700; src: url("../../node_modules/@fontsource-variable/roboto-mono/files/roboto-mono-latin-wght-normal.woff2") format("woff2-variations"); }
+@font-face { font-family: "Source Code Pro Variable"; font-style: normal; font-display: swap; font-weight: 200 900; src: url("../../node_modules/@fontsource-variable/source-code-pro/files/source-code-pro-latin-wght-normal.woff2") format("woff2-variations"); }
 
 html[data-font="inter"] { --pick-font-sans: "Inter Variable", system-ui, sans-serif; }
 html[data-font="geist"] { --pick-font-sans: "Geist Variable", system-ui, sans-serif; }
@@ -15,3 +25,13 @@ html[data-font="plex"] { --pick-font-sans: "IBM Plex Sans Variable", system-ui, 
 html[data-font="manrope"] { --pick-font-sans: "Manrope Variable", system-ui, sans-serif; }
 html[data-mono="jetbrains"] { --pick-font-mono: "JetBrains Mono Variable", ui-monospace, monospace; }
 html[data-mono="geist-mono"] { --pick-font-mono: "Geist Mono Variable", ui-monospace, monospace; }
+html[data-font="dm-sans"] { --pick-font-sans: "DM Sans Variable", system-ui, sans-serif; }
+html[data-font="jakarta"] { --pick-font-sans: "Plus Jakarta Sans Variable", system-ui, sans-serif; }
+html[data-font="figtree"] { --pick-font-sans: "Figtree Variable", system-ui, sans-serif; }
+html[data-font="outfit"] { --pick-font-sans: "Outfit Variable", system-ui, sans-serif; }
+html[data-font="nunito"] { --pick-font-sans: "Nunito Variable", system-ui, sans-serif; }
+html[data-font="space-grotesk"] { --pick-font-sans: "Space Grotesk Variable", system-ui, sans-serif; }
+html[data-font="source-sans"] { --pick-font-sans: "Source Sans 3 Variable", system-ui, sans-serif; }
+html[data-mono="fira-code"] { --pick-font-mono: "Fira Code Variable", ui-monospace, monospace; }
+html[data-mono="roboto-mono"] { --pick-font-mono: "Roboto Mono Variable", ui-monospace, monospace; }
+html[data-mono="source-code"] { --pick-font-mono: "Source Code Pro Variable", ui-monospace, monospace; }

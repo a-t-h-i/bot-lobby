@@ -1,6 +1,6 @@
 /**
  * The typeface choice: a tile per face with a sample drawn in it, as a radio group (arrow keys move and pick).
- * `dense` is the sidebar's version: one line per face.
+ * `dense` is the sidebar's version: one line per face, two columns.
  */
 import { useRef, type KeyboardEvent } from "react"
 import { Check } from "lucide-react"
@@ -25,7 +25,7 @@ export function TypefacePicker({ kind, dense = false }: { kind: "font" | "mono";
 
   return (
     <div ref={group} role="radiogroup" aria-label={kind === "font" ? "Typeface" : "Code typeface"} onKeyDown={onKeyDown}
-      className={dense ? "flex flex-col gap-0.5" : "grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5"}>
+      className={dense ? "grid grid-cols-2 gap-0.5" : "grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"}>
       {faces.map((face) => {
         const on = face.id === current
         const stack = FACE_STACKS[face.id]

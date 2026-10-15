@@ -1,6 +1,31 @@
-import { compact, DEFAULT_COMPACTION_SETTINGS, estimateTokens, findCutPoint, type ExtensionAPI, type TurnEndEvent } from "@earendil-works/pi-coding-agent";
+import { compact, CONFIG_DIR_NAME, DEFAULT_COMPACTION_SETTINGS, estimateTokens, findCutPoint, type ExtensionAPI, type ExtensionContext, type TurnEndEvent } from "@earendil-works/pi-coding-agent";
 import { contextMarks, freshContextOn } from "./fresh-context.ts";
-import { isSubagentProcess } from "./quiet.ts";
+import { AUTO_COMPACT_ENV, isSubagentProcess } from "./quiet.ts";
+import { dataRoot, detectProjectRoot, loadConfig } from "../state/project.ts";
+import { describeShared, DIGEST_INSTRUCTION, parseDigest, shareDigest, type DigestItem } from "../knowledge/oracle-digest.ts";
+
+const CHECKPOINT = "Write a concise checkpoint with: Requirements and constraints; Decisions; Files changed; Verification and evidence; Failed approaches (do not repeat); Unfinished work and next action; Outstanding children and their assignments. Preserve concrete file references and distinguish verified facts from guesses. The parent remains responsible for integration and verification.";
+
+export interface AutoCompactionOptions {
+  /** Whether this agent compacts on its own: a subagent by its environment, the oracle by its settings. */
+  enabled?: () => boolean;
+  /** Where the oracle's shared knowledge goes; by default the project's knowledge files. */
+  share?: (items: DigestItem[], ctx: ExtensionContext) => string;
+}
+
+function enabledBySettings(): boolean {
+  if (isSubagentProcess()) return process.env[AUTO_COMPACT_ENV] !== "0";
+  try {
+    return loadConfig().master.autoCompact !== false;
+  } catch {
+    return true;
+  }
+}
+
+function shareWithAgents(items: DigestItem[], ctx: ExtensionContext): string {
+  const root = detectProjectRoot(ctx.cwd, CONFIG_DIR_NAME);
+  return describeShared(shareDigest(dataRoot(root, CONFIG_DIR_NAME), items));
+}
 
 export const CONTEXT_TARGET = 64_000;
 
@@ -8,13 +33,20 @@ export function compactionThreshold(window: number, reserve = DEFAULT_COMPACTION
   return Math.max(1, Math.min(CONTEXT_TARGET, Math.floor(window * 0.6), window - Math.min(reserve, Math.floor(window / 2))));
 }
 
-/** Compact at a settled tool boundary; ctx.compact() would abort the turn we need to continue. */
-export function registerAutoCompaction(pi: ExtensionAPI, summarize: typeof compact = compact): void {
+/**
+ * Compact at a settled tool boundary; ctx.compact() would abort the turn we need to continue. Each agent's settings
+ * can turn it off. The oracle's checkpoint also lists what it learned that is worth keeping, tagged by agent, and
+ * that goes into the knowledge base: its own, and the designer's, backend's and QA's where it concerns them.
+ */
+export function registerAutoCompaction(pi: ExtensionAPI, summarize: typeof compact = compact, options: AutoCompactionOptions = {}): void {
+  const enabled = options.enabled ?? enabledBySettings;
+  const share = options.share ?? shareWithAgents;
+  const oracle = !isSubagentProcess();
   let busy = false;
   let lastLeaf: string | null | undefined;
   pi.on("session_start", () => { busy = false; lastLeaf = undefined; });
   pi.on("turn_end", async (event: TurnEndEvent, ctx) => {
-    if (busy || !ctx.model) return;
+    if (busy || !ctx.model || !enabled()) return;
     const leaf = ctx.sessionManager.getLeafId();
     if (leaf === lastLeaf) return;
     const configured = pi.getSettings().compaction;
@@ -61,9 +93,18 @@ export function registerAutoCompaction(pi: ExtensionAPI, summarize: typeof compa
       const headers = auth.headers ? Object.fromEntries(Object.entries(auth.headers).filter((entry): entry is [string, string] => entry[1] !== null)) : undefined;
       const retry = pi.getSettings().retry;
       const retryPolicy = { enabled: retry?.enabled ?? true, maxRetries: retry?.maxRetries ?? 3, baseDelayMs: retry?.baseDelayMs ?? 2_000, maxAgentDelayMs: retry?.maxAgentDelayMs };
-      const result = await summarize({ firstKeptEntryId, messagesToSummarize: messages, turnPrefixMessages: [], isSplitTurn: false, tokensBefore: estimate, previousSummary: previous?.type === "compaction" ? previous.summary : undefined, fileOps, settings: { enabled: true, reserveTokens: reserve, keepRecentTokens } }, auth.baseUrl ? { ...ctx.model, baseUrl: auth.baseUrl } : ctx.model, auth.apiKey, headers, "Write a concise checkpoint with: Requirements and constraints; Decisions; Files changed; Verification and evidence; Failed approaches (do not repeat); Unfinished work and next action; Outstanding children and their assignments. Preserve concrete file references and distinguish verified facts from guesses. The parent remains responsible for integration and verification.", ctx.signal, undefined, undefined, auth.env, retryPolicy);
+      const result = await summarize({ firstKeptEntryId, messagesToSummarize: messages, turnPrefixMessages: [], isSplitTurn: false, tokensBefore: estimate, previousSummary: previous?.type === "compaction" ? previous.summary : undefined, fileOps, settings: { enabled: true, reserveTokens: reserve, keepRecentTokens } }, auth.baseUrl ? { ...ctx.model, baseUrl: auth.baseUrl } : ctx.model, auth.apiKey, headers, oracle ? `${CHECKPOINT} ${DIGEST_INSTRUCTION}` : CHECKPOINT, ctx.signal, undefined, undefined, auth.env, retryPolicy);
       ctx.signal?.throwIfAborted();
       ctx.ui.notify("Agent context compacted", "info");
+      if (oracle) {
+        try {
+          const items = parseDigest(result.summary);
+          const shared = items.length ? share(items, ctx) : "";
+          if (shared) ctx.ui.notify(`Knowledge updated: ${shared}`, "info");
+        } catch (error) {
+          ctx.ui.notify(`Could not update knowledge: ${(error as Error).message}`, "warning");
+        }
+      }
       return { entries: [...event.entries, { type: "compaction" as const, summary: result.summary, firstKeptEntryId, usage: result.usage, details: result.details }] };
     } catch (error) {
       ctx.ui.notify(`Context compaction failed: ${(error as Error).message}`, "warning");

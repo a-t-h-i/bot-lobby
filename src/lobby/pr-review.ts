@@ -279,6 +279,7 @@ export class PullReviews {
         model,
         thinking,
         mcpTools: profile.mcpTools,
+        ...(profile.autoCompact === false ? { autoCompact: false } : {}),
         onChildRun: (child) => {
           this.deps.feed?.step(REVIEW_SOURCE, `child ${child.runId.slice(0, 8)}: ${child.step ?? child.status}`, child.runId);
           if (child.status !== "running") this.deps.feed?.end(child.runId, child.status !== "success");
