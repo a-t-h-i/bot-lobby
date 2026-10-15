@@ -22,6 +22,7 @@ import { StaticPreview } from "./StaticPreview"
 import { hasMockup, MockupViewer } from "./MockupViewer"
 import { horizontalStep, isTyping, moveNav, verticalStep } from "./nav"
 import type { AskAnswer, AskQuestion, AskResult, AskOption, PromptView, SessionDialog } from "./payload"
+import { RichAnswer, type RichAnswerHandle } from "./RichAnswer"
 
 interface CardProps {
   view: PromptView
@@ -31,6 +32,18 @@ interface CardProps {
   /** The mockup viewer is open (the pop-up widens for it and Esc closes it first). */
   expanded?: boolean
   onExpand?: (expanded: boolean) => void
+  /** How much room the question in view wants: the pop-up widens for long questions and mockups. */
+  onSize?: (size: QuestionSize) => void
+}
+
+export type QuestionSize = "md" | "lg" | "xl"
+
+/** Mockups get the widest pop-up; a long question or many options a wider one. */
+export function sizeFor(question: AskQuestion | undefined): QuestionSize {
+  if (!question) return "md"
+  if (question.options.some(hasMockup)) return "xl"
+  const words = question.question.length + question.options.reduce((sum, option) => sum + option.label.length + (option.description?.length ?? 0), 0)
+  return words > 700 || question.options.length > 6 ? "lg" : "md"
 }
 
 const RECOMMENDED = /\s*\(recommended\)\s*$/i
@@ -153,7 +166,7 @@ function DotOption({ option, index, multi, name, selected, active, onToggle, onF
   return (
     <label data-active={active || undefined} data-picked={selected || undefined} className="q-dot group relative flex h-11 w-full shrink-0 cursor-pointer items-center justify-center outline-none">
       <input type={multi ? "checkbox" : "radio"} name={name} data-nav="" data-option={index} aria-label={full} className="sr-only" checked={selected} onChange={onToggle} onFocus={onFocusOption} />
-      <span aria-hidden="true" className={cn("q-dot-mark relative z-10 block size-2 rounded-full transition-[background-color,scale] duration-200 ease-snap group-hover:scale-125", recommended && "q-dot-star")} />
+      <span aria-hidden="true" className={cn("q-dot-mark relative z-10 flex size-5 items-center justify-center rounded-full text-[0.625rem] font-semibold tabular-nums transition-[background-color,color,scale] duration-200 ease-snap group-hover:scale-110", recommended && "q-dot-star")}>{index + 1}</span>
       <span aria-hidden="true" className="q-dot-tag pointer-events-none absolute top-1/2 left-[calc(100%+0.5rem)] z-30 -translate-y-1/2 rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap opacity-0 transition-[opacity,translate] duration-150 ease-snap group-hover:opacity-100 group-has-[:focus-visible]:opacity-100 group-data-[active]:!opacity-0">
         {index + 1}. {full}
       </span>
@@ -167,17 +180,45 @@ const RING_OPEN: ValueAnimationTransition<number> = { type: "spring", visualDura
 const LINE_OUT: ValueAnimationTransition<number> = { type: "spring", visualDuration: 0.2, bounce: 0 }
 const KNOCK: ValueAnimationTransition<number> = { type: "spring", stiffness: 900, damping: 18, velocity: 50, restDelta: 0.02, restSpeed: 1 }
 
-/** The ring on the dot in view, its line to the panel, and the drop that runs between dots on a switch. */
-function useDotRail(rail: RefObject<HTMLDivElement | null>, panel: RefObject<HTMLDivElement | null>, active: number, view: string) {
+/** Where the rail hands over to the own-answer field: `active` is this when the field has the focus. */
+const OWN = -1
+
+/**
+ * The ring on the dot in view, its line to the panel, the dotted line from the first dot to the last, and the drop
+ * that runs between dots on a switch. With the own-answer field in focus (`active` is OWN) the ring drains and the
+ * drop runs on past the last dot into the field, where `onOwnLand` lights it up; leaving the field pours it back.
+ */
+function useDotRail(rail: RefObject<HTMLDivElement | null>, panel: RefObject<HTMLDivElement | null>, own: RefObject<RichAnswerHandle | null>, active: number, view: string, onOwnLand: () => void) {
+  const track = useRef<HTMLSpanElement>(null)
   const ring = useRef<HTMLSpanElement>(null)
   const line = useRef<HTMLSpanElement>(null)
   const drop = useRef<HTMLSpanElement>(null)
   const was = useRef<number | undefined>(undefined)
   const runs = useRef<AnimationPlaybackControls[]>([])
 
+  const landOwn = useRef(onOwnLand)
+  landOwn.current = onOwnLand
+
   const centre = useCallback((index: number) => {
+    if (index === OWN) {
+      const field = own.current?.element
+      const box = rail.current
+      return field && box ? field.getBoundingClientRect().top - box.getBoundingClientRect().top + 6 : undefined
+    }
     const dot = rail.current?.querySelectorAll<HTMLElement>(".q-dot")[index]
     return dot ? dot.offsetTop + dot.offsetHeight / 2 : undefined
+  }, [rail, own])
+
+  // The dotted line runs from the first dot to the last, no further.
+  const seat = useCallback(() => {
+    const line = track.current
+    const dots = rail.current?.querySelectorAll<HTMLElement>(".q-dot")
+    if (!line || !dots || dots.length === 0) return
+    const first = dots[0]!
+    const last = dots[dots.length - 1]!
+    const top = first.offsetTop + first.offsetHeight / 2
+    line.style.top = `${top}px`
+    line.style.height = `${Math.max(0, last.offsetTop + last.offsetHeight / 2 - top)}px`
   }, [rail])
 
   const place = useCallback((y: number | undefined, open = 1, reach = 1) => {
@@ -202,6 +243,7 @@ function useDotRail(rail: RefObject<HTMLDivElement | null>, panel: RefObject<HTM
       seen.current = view
       was.current = undefined
     }
+    seat()
     for (const run of runs.current) run.stop()
     runs.current = []
     if (panel.current) panel.current.style.translate = ""
@@ -213,7 +255,8 @@ function useDotRail(rail: RefObject<HTMLDivElement | null>, panel: RefObject<HTM
     const dropEl = drop.current
     if (dropEl) dropEl.style.opacity = "0"
     if (to === undefined || start === undefined || from === active || reduced || !dropEl) {
-      place(to)
+      place(active === OWN ? undefined : to)
+      if (active === OWN && from !== active && from !== undefined) landOwn.current()
       return
     }
     const dir = to > start ? 1 : -1
@@ -234,6 +277,11 @@ function useDotRail(rail: RefObject<HTMLDivElement | null>, panel: RefObject<HTM
     const land = () => {
       if (landed) return
       landed = true
+      if (active === OWN) {
+        place(undefined)
+        landOwn.current()
+        return
+      }
       const state = { open: 0, reach: 0 }
       spring(0, 1, RING_OPEN, (value) => { state.open = value; place(to, state.open, state.reach) })
       spring(0, 1, { ...LINE_OUT, delay: 0.05 }, (value) => { state.reach = value; place(to, state.open, state.reach) })
@@ -241,34 +289,35 @@ function useDotRail(rail: RefObject<HTMLDivElement | null>, panel: RefObject<HTM
       if (box) spring(0, 0, { ...KNOCK, delay: 0.1 }, (value) => { box.style.translate = Math.abs(value) > 0.01 ? `0 ${(dir * value).toFixed(2)}px` : "" })
     }
     // The old ring drains as the drop leaves it.
-    spring(1, 0, { type: "spring", visualDuration: 0.12, bounce: 0 }, (value) => { if (!landed) place(start, value, value) })
+    spring(1, 0, { type: "spring", visualDuration: 0.12, bounce: 0 }, (value) => { if (!landed) place(from === OWN ? undefined : start, value, value) })
     spring(0, 1, DROP_HEAD, (value) => { now.head = value; drawDrop(); if (value > 0.85) land() })
     spring(0, 1, DROP_TAIL, (value) => { now.tail = value; drawDrop() })
     return () => {
       for (const run of runs.current) run.stop()
     }
-  }, [active, view, centre, panel, place])
+  }, [active, view, centre, panel, place, seat])
 
   // A resize (the window, the panel growing with an option's text) re-seats the ring without animating.
   useEffect(() => {
     const el = rail.current
     if (!el || typeof ResizeObserver === "undefined") return
     const observer = new ResizeObserver(() => {
-      if (runs.current.length === 0 || runs.current.every((run) => run.state === "finished")) place(centre(was.current ?? 0))
+      seat()
+      if (runs.current.length === 0 || runs.current.every((run) => run.state === "finished")) place(was.current === OWN ? undefined : centre(was.current ?? 0))
     })
     observer.observe(el)
     return () => observer.disconnect()
-  }, [rail, centre, place])
+  }, [rail, centre, place, seat])
 
-  return { ring, line, drop }
+  return { track, ring, line, drop }
 }
 
-function OptionPanel({ option, position, onExpand, panel }: { option?: AskOption; position: number; onExpand: () => void; panel: RefObject<HTMLDivElement | null> }) {
+function OptionPanel({ option, position, onExpand, panel, dim }: { option?: AskOption; position: number; onExpand: () => void; panel: RefObject<HTMLDivElement | null>; dim?: boolean }) {
   if (!option) return null
   const { text, recommended } = splitRecommended(option.label)
   const mockup = hasMockup(option)
   return (
-    <div ref={panel} className="q-panel min-w-0 rounded-2xl p-4 max-md:p-3">
+    <div ref={panel} data-dim={dim || undefined} className="q-panel min-w-0 rounded-2xl p-4 transition-opacity duration-300 data-[dim]:opacity-55 max-md:p-3">
       <div key={position} aria-live="polite" className={cn("q-panel-body grid min-w-0 gap-4", mockup ? "md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]" : "")}>
         <div className="flex min-w-0 flex-col gap-2 py-1">
           <p className="text-center text-sm font-medium break-words">
@@ -345,7 +394,7 @@ function Chips({ questions, picks, own, index, onGo }: { questions: AskQuestion[
   )
 }
 
-function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded: shown, onExpand }: { questions: AskQuestion[] } & Omit<CardProps, "view">) {
+function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded: shown, onExpand, onSize }: { questions: AskQuestion[] } & Omit<CardProps, "view">) {
   const [index, setIndex] = useState(0)
   // Open or closed from the pop-up when it holds the state (Esc closes the viewer first), here otherwise.
   const [ownExpanded, setOwnExpanded] = useState(false)
@@ -357,6 +406,10 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
   const wasExpanded = useRef(false)
   const [picks, setPicks] = useState<Record<number, number[]>>({})
   const [own, setOwn] = useState<Record<number, string>>({})
+  const [ownHtml, setOwnHtml] = useState<Record<number, string>>({})
+  const [ownFocused, setOwnFocused] = useState(false)
+  const [landed, setLanded] = useState(false)
+  const ownField = useRef<RichAnswerHandle>(null)
   const [focused, setFocused] = useState<Record<number, number>>({})
   const form = useRef<HTMLFormElement>(null)
   const rail = useRef<HTMLDivElement>(null)
@@ -367,8 +420,19 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
   const previewOption = question?.options[focused[index] ?? picked[0] ?? 0]
   const current = answerFor(questions, picks, own, index)
   const multi = question?.multiSelect === true
-  const activeAt = Math.max(0, question?.options.indexOf(previewOption!) ?? 0)
-  const dots = useDotRail(rail, panelRef, activeAt, `${index}:${expanded}`)
+  const panelAt = Math.max(0, question?.options.indexOf(previewOption!) ?? 0)
+  // The field in focus, or an answer of the user's own, takes the ring off the dots.
+  const ownMode = ownFocused || ownText.trim() !== ""
+  const activeAt = ownMode ? OWN : panelAt
+  const dots = useDotRail(rail, panelRef, ownField, activeAt, `${index}:${expanded}`, () => setLanded(true))
+
+  useEffect(() => {
+    if (!landed) return
+    const timer = window.setTimeout(() => setLanded(false), 700)
+    return () => window.clearTimeout(timer)
+  }, [landed])
+
+  useEffect(() => onSize?.(sizeFor(question)), [question, onSize])
 
   // Each question opens with focus on its first option (or the one already picked).
   useEffect(() => {
@@ -425,7 +489,10 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
   function toggle(option: number) {
     const next = multi ? (picked.includes(option) ? picked.filter((i) => i !== option) : [...picked, option]) : [option]
     setPicks({ ...picks, [index]: next })
-    if (!multi) setOwn({ ...own, [index]: "" })
+    if (!multi) {
+      setOwn({ ...own, [index]: "" })
+      setOwnHtml({ ...ownHtml, [index]: "" })
+    }
     setFocused({ ...focused, [index]: option })
   }
 
@@ -464,17 +531,8 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
       if (!submitting) proceed(picks, own)
       return
     }
-    if (target instanceof HTMLTextAreaElement) {
-      // In the own-answer box: Enter answers, Shift+Enter is a new line, Up at the top goes back to the options.
-      if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-        event.preventDefault()
-        if (!submitting) proceed(picks, own)
-      } else if (event.key === "ArrowUp" && target.selectionStart === 0 && target.selectionEnd === 0) {
-        event.preventDefault()
-        moveNav(root, target, -1)
-      }
-      return
-    }
+    // The own-answer field handles its own keys (Enter answers, Up at the start goes back to the options).
+    if (isTyping(target)) return
     const step = verticalStep(event.key)
     if (step || event.key === "Home" || event.key === "End") {
       event.preventDefault()
@@ -500,6 +558,7 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
         const nextOwn = { ...own, [index]: "" }
         setPicks(nextPicks)
         setOwn(nextOwn)
+        setOwnHtml({ ...ownHtml, [index]: "" })
         proceed(nextPicks, nextOwn)
       }
       return
@@ -533,10 +592,10 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
       </div>
       <div className="relative grid min-w-0 grid-cols-[2.25rem_minmax(0,1fr)] gap-x-3">
         <div ref={rail} role={multi ? "group" : "radiogroup"} aria-label="Options" className="q-rail relative flex min-w-0 flex-col justify-evenly py-2">
-          <span aria-hidden="true" className="q-rail-line pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2" />
+          <span ref={dots.track} aria-hidden="true" className="q-rail-line pointer-events-none absolute top-0 left-1/2 h-0 -translate-x-1/2" />
           <span ref={dots.drop} aria-hidden="true" className="q-drop pointer-events-none absolute top-0 left-1/2 w-[3px] -translate-x-1/2 rounded-full opacity-0" />
-          <span ref={dots.ring} aria-hidden="true" className="q-ring pointer-events-none absolute top-0 left-1/2 z-20 size-4 rounded-full opacity-0" />
-          <span ref={dots.line} aria-hidden="true" className="q-line pointer-events-none absolute top-0 left-[calc(50%+0.5rem)] z-10 h-px w-[calc(50%-0.5rem+0.75rem)] origin-left opacity-0" />
+          <span ref={dots.ring} aria-hidden="true" className="q-ring pointer-events-none absolute top-0 left-1/2 z-20 size-7 rounded-full opacity-0" />
+          <span ref={dots.line} aria-hidden="true" className="q-line pointer-events-none absolute top-0 left-[calc(50%+0.875rem)] z-10 h-px w-[calc(50%-0.875rem+0.75rem)] origin-left opacity-0" />
           {question.options.map((option, position) => (
             <DotOption
               key={position}
@@ -551,20 +610,24 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
             />
           ))}
         </div>
-        <OptionPanel panel={panelRef} option={previewOption} position={activeAt} onExpand={() => openViewer(activeAt)} />
+        <OptionPanel panel={panelRef} option={previewOption} position={panelAt} dim={ownMode} onExpand={() => openViewer(panelAt)} />
       </div>
-      <div className="mx-auto w-full max-w-sm">
-        <Textarea
-          data-nav=""
-          value={ownText}
-          onChange={(event) => {
-            setOwn({ ...own, [index]: event.target.value })
-            if (event.target.value) setPicks({ ...picks, [index]: [] })
-          }}
+      <div className="q-own-wrap mx-auto w-full">
+        <RichAnswer
+          key={index}
+          ref={ownField}
+          html={ownHtml[index] ?? ""}
           placeholder="Type something else…"
-          aria-label="Your own answer"
-          rows={1}
-          className="q-own field-sizing-content max-h-32 min-h-9 resize-none rounded-full px-4 py-2 text-center text-sm shadow-none md:text-sm max-md:min-h-11 focus:text-start"
+          label="Your own answer"
+          landed={landed}
+          onChange={(markdown, html) => {
+            setOwn((now) => ({ ...now, [index]: markdown }))
+            setOwnHtml((now) => ({ ...now, [index]: html }))
+            if (markdown) setPicks((now) => ({ ...now, [index]: [] }))
+          }}
+          onFocusChange={setOwnFocused}
+          onSubmit={() => { if (!submitting) proceed(picks, own) }}
+          onUp={() => { const root = form.current; if (root) moveNav(root, ownField.current?.element ?? null, -1) }}
         />
       </div>
       <p className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
@@ -799,7 +862,7 @@ function SessionDialogCard({ dialog, submitting, onAnswer }: CardProps & { dialo
 
 export function QuestionCard(props: CardProps) {
   const { view } = props
-  if (view.kind === "questionnaire") return <QuestionnaireCard questions={view.questions} submitting={props.submitting} onAnswer={props.onAnswer} onCancel={props.onCancel} {...(props.onExpand ? { expanded: props.expanded ?? false, onExpand: props.onExpand } : {})} />
+  if (view.kind === "questionnaire") return <QuestionnaireCard questions={view.questions} submitting={props.submitting} onAnswer={props.onAnswer} onCancel={props.onCancel} onSize={props.onSize} {...(props.onExpand ? { expanded: props.expanded ?? false, onExpand: props.onExpand } : {})} />
   if (view.kind === "choose") return <ChoiceCard {...props} view={view} />
   if (view.kind === "confirm") return <ConfirmCard {...props} view={view} />
   if (view.kind === "text") return <TextCard {...props} view={view} />

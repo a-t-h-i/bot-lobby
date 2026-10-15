@@ -27,8 +27,15 @@ function browserParser(): PreviewParser {
   return new ctor()
 }
 export const PREVIEW_CSP = "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src 'none'; font-src 'none'; connect-src 'none'; media-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'"
-const ELEMENTS = new Set("div span p br hr h1 h2 h3 h4 h5 h6 section article header footer main aside nav ul ol li dl dt dd strong em b i u s small sub sup blockquote pre code table thead tbody tfoot tr th td caption colgroup col figure figcaption style".split(" "))
-const ATTRIBUTES = new Set("class id title role aria-label aria-hidden colspan rowspan scope".split(" "))
+// Controls are kept so a mockup can be tried, not just looked at: with no scripts (the sandbox and the CSP both
+// forbid them) they still hover, focus, type, check, open (details) and animate through CSS alone. Forms, links
+// and anything that loads a resource stay out; a submit could go nowhere anyway (no allow-forms, form-action 'none').
+const ELEMENTS = new Set("div span p br hr h1 h2 h3 h4 h5 h6 section article header footer main aside nav ul ol li dl dt dd strong em b i u s small sub sup blockquote pre code table thead tbody tfoot tr th td caption colgroup col figure figcaption style button input label select option optgroup textarea details summary fieldset legend progress meter output kbd mark".split(" "))
+const ATTRIBUTES = new Set("class id title role aria-label aria-hidden aria-expanded aria-selected aria-checked aria-pressed aria-current colspan rowspan scope type name value placeholder for checked selected disabled readonly open min max step rows cols tabindex".split(" "))
+// Input types that only take what is typed or picked; the rest (file, image, …) fall back to text.
+const INPUT_TYPES = new Set("text search email tel url number password checkbox radio range color date time month week button reset submit".split(" "))
+// Every mockup's controls answer the pointer and keyboard with a short, quiet transition, unless motion is reduced.
+const INTERACTION_CSS = "button,input,select,textarea,summary,label,[role=button],[role=tab]{transition:background-color .18s ease,color .18s ease,border-color .18s ease,box-shadow .18s ease,transform .18s ease,opacity .18s ease}button,summary,label,select,[role=button],[role=tab],input[type=checkbox],input[type=radio],input[type=range]{cursor:pointer}button:active,[role=button]:active{transform:scale(.97)}details[open]>:not(summary){animation:mockup-in .22s ease-out}@keyframes mockup-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}"
 
 export function previewPayload(value: unknown): HtmlPreview | undefined {
   if (!value || typeof value !== "object") return undefined
@@ -50,6 +57,10 @@ function cleanElement(element: PreviewElement): void {
     if (attr.name === "style") element.setAttribute("style", staticCss(attr.value))
     else if (!ATTRIBUTES.has(attr.name)) element.removeAttribute(attr.name)
   }
+  if (element.localName === "input") {
+    const type = [...element.attributes].find((attr) => attr.name === "type")?.value.toLowerCase()
+    if (type !== undefined && !INPUT_TYPES.has(type)) element.setAttribute("type", "text")
+  }
   if (element.localName === "style") element.textContent = staticCss(element.textContent ?? "")
   for (const child of [...element.children]) cleanElement(child)
 }
@@ -68,5 +79,5 @@ function sanitizedDocument(preview: HtmlPreview, parser: PreviewParser): string 
   for (const child of [...doc.head.children, ...doc.body.children]) cleanElement(child)
   const styles = [...doc.head.querySelectorAll("style")].map((style) => style.outerHTML).join("")
   const css = staticCss(preview.css ?? "").replace(/</g, "\\3c ")
-  return `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${PREVIEW_CSP}"><meta name="referrer" content="no-referrer"><style>body{margin:16px;overflow-wrap:anywhere}*{box-sizing:border-box}${css}</style>${styles}</head><body>${doc.body.innerHTML}</body></html>`
+  return `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${PREVIEW_CSP}"><meta name="referrer" content="no-referrer"><style>body{margin:16px;overflow-wrap:anywhere}*{box-sizing:border-box}${INTERACTION_CSS}${css}</style>${styles}</head><body>${doc.body.innerHTML}</body></html>`
 }

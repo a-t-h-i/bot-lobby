@@ -19,10 +19,15 @@ import { PRIORITY, useOverlaySlot } from "@/lib/overlay"
 import { toast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 import type { WebPrompt } from "@protocol"
-import { QuestionCard } from "./QuestionCard"
+import { QuestionCard, type QuestionSize } from "./QuestionCard"
 import { parsePrompt } from "./payload"
 
 const PHONE_QUERY = "(max-width: 767.98px)"
+const SIZES: Record<QuestionSize, string> = {
+  md: "max-w-3xl",
+  lg: "max-w-4xl max-h-[min(88svh,52rem)]",
+  xl: "max-w-5xl max-h-[min(90svh,58rem)]",
+}
 
 interface QuestionPopupProps {
   prompts: WebPrompt[]
@@ -64,6 +69,8 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
   const [leaving, setLeaving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  // The question in view says how much room it wants (wider for long questions, widest for mockups).
+  const [size, setSize] = useState<QuestionSize>("md")
   const phone = useMediaQuery(PHONE_QUERY)
   const { keyboardOpen, keyboardInset } = usePhoneViewport()
   const count = prompts.length
@@ -82,6 +89,7 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
   // Each question starts with its mockups folded.
   const activeId = active?.id
   useEffect(() => setExpanded(false), [activeId])
+
 
   async function settle(action: Promise<void>, failure: string): Promise<void> {
     setSubmitting(true)
@@ -110,7 +118,8 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
       }}
       style={phone && keyboardOpen ? { maxHeight: `calc(100vh - ${keyboardInset}px - 1.5rem)` } : undefined}
       className={cn(
-        expanded ? "h-[min(92svh,60rem)] max-h-[min(92svh,60rem)] max-w-6xl" : "max-w-3xl",
+        "transition-[max-width] duration-300 ease-snap",
+        expanded ? "h-[min(92svh,60rem)] max-h-[min(92svh,60rem)] max-w-6xl" : SIZES[view?.kind === "questionnaire" ? size : "md"],
         "max-md:w-[calc(100vw-2rem)] max-md:max-w-[calc(100vw-2rem)] max-md:max-h-[calc(100svh-1.5rem)]",
         expanded && "max-md:h-[calc(100svh-1.5rem)]"
       )}
@@ -139,6 +148,7 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
                   onCancel={() => setLeaving(true)}
                   expanded={expanded}
                   onExpand={setExpanded}
+                  onSize={setSize}
                 />
               )
             ) : (

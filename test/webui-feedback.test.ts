@@ -111,13 +111,16 @@ test("DOM allowlist removes hostile elements, handlers and resource/navigation a
   const body = new ElementStub("body"), head = new ElementStub("head");
   const paragraph = new ElementStub("p", [{ name: "class", value: "local" }, { name: "onclick", value: "bad" }, { name: "src", value: "https://bad" }, { name: "style", value: "color:red" }]);
   const svg = new ElementStub("div"); svg.namespaceURI = "http://www.w3.org/2000/svg";
-  body.children = [paragraph, svg, ..."script img form a base meta iframe object embed svg math input audio video link".split(" ").map((name) => new ElementStub(name))];
+  const field = new ElementStub("input", [{ name: "type", value: "file" }, { name: "placeholder", value: "Name" }, { name: "formaction", value: "https://bad" }, { name: "onfocus", value: "bad" }]);
+  body.children = [paragraph, svg, field, new ElementStub("button", [{ name: "type", value: "button" }, { name: "onclick", value: "bad" }]), ..."script img form a base meta iframe object embed svg math audio video link".split(" ").map((name) => new ElementStub(name))];
   const style = new ElementStub("style"); style.textContent = "@import 'https://bad'"; head.children = [style, new ElementStub("link")];
   const parser: PreviewParser = { parseFromString: () => ({ head, body }) };
   const html = staticPreviewDocument({ html: "unused by injected DOM", css: "p{color:blue}" }, parser);
   assert.ok(html.includes('class="local" style="color:red"'));
   assert.ok(html.includes("p{color:blue}"));
-  assert.doesNotMatch(html, /https:\/\/bad|onclick|<script|<img|<form|<a>|<base|<iframe|<object|<embed|<svg|<math|<input|<audio|<video|<link/);
+  assert.doesNotMatch(html, /https:\/\/bad|onclick|onfocus|formaction|type="file"|<script|<img|<form|<a>|<base|<iframe|<object|<embed|<svg|<math|<audio|<video|<link/);
+  assert.ok(html.includes('<input placeholder="Name" type="text">') || html.includes('type="text"'), "a control stays, as a plain text field");
+  assert.ok(html.includes('<button type="button">'), "a button stays, without its handler");
 });
 
 test("static preview fails closed when native parsing is unavailable or sanitization fails", () => {

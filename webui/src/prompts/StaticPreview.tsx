@@ -2,7 +2,8 @@
  * A static HTML/CSS mockup in its sandbox. Given `frameWidth`, it is laid out
  * at that width (a desktop page) and scaled down to fit its box, so a small
  * preview reads as a thumbnail of the real thing instead of reflowing into a
- * narrow column; `onOpen` then makes the thumbnail open it larger. Given
+ * narrow column; `onOpen` adds a corner button that opens it larger, while the thumbnail itself stays live (its
+ * controls hover, type and animate). Given
  * `minWidth`, it fills its box and is scaled only where the box is narrower
  * than that (the expanded viewer on a phone).
  */
@@ -47,8 +48,7 @@ export function StaticPreview({ preview, label, className, frameWidth, minWidth,
         sandbox=""
         referrerPolicy="no-referrer"
         srcDoc={source}
-        tabIndex={onOpen ? -1 : undefined}
-        className={cn("absolute top-0 left-0 origin-top-left border-0", onOpen && "pointer-events-none")}
+        className="absolute top-0 left-0 origin-top-left border-0"
         style={{ width: width || "100%", height: size ? size.height / scale : "100%", transform: `scale(${scale})` }}
       />
       {onOpen ? (
@@ -57,9 +57,9 @@ export function StaticPreview({ preview, label, className, frameWidth, minWidth,
           data-compact=""
           onClick={onOpen}
           aria-label={`Expand the mockup: ${label}`}
-          className="absolute inset-0 flex items-end justify-end p-2 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:ring-inset max-md:p-3"
+          className="group/open absolute right-2 bottom-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:right-3 max-md:bottom-3"
         >
-          <span className="inline-flex items-center gap-1 rounded-md border border-border bg-card/90 px-1.5 py-0.5 text-[0.6875rem] font-medium text-muted-foreground opacity-0 shadow-sm backdrop-blur transition-opacity group-hover/mock:opacity-100 group-focus-within/mock:opacity-100">
+          <span className="inline-flex items-center gap-1 rounded-md border border-border bg-card/90 px-1.5 py-0.5 text-[0.6875rem] font-medium text-muted-foreground opacity-60 shadow-sm backdrop-blur-sm transition-opacity group-hover/mock:opacity-100 group-focus-visible/open:opacity-100 max-md:min-h-11 max-md:px-3">
             <Maximize2 aria-hidden="true" className="size-3" />
             Expand
           </span>

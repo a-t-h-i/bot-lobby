@@ -4,11 +4,15 @@
  * to the nearest supported stop and saves on release, a press anywhere on the track jumps there, the arrow keys
  * skip unsupported stops, and quick presses add up (see `useEffortSlider`).
  *
- * After the user's reference: "Effort High" over a deep pill of a track with a
- * warm pink-to-peach fill running up under a white pill of a thumb, a dot per stop, and "Recommended" under the
- * stop this agent is meant to run at, between "Faster" and "Smarter" at the ends. The top level sends a sheen along the fill. The level's one-line meaning
+ * After the user's reference: "Effort High" over a deep track with soft corners, a fill running up under a white
+ * thumb, a dot per stop, and "Recommended" under the stop this agent is meant to run at, between "Faster" and
+ * "Smarter" at the ends. The fill is alive at every level and gets hotter as it climbs: a slow cool drift low down,
+ * a warm flow in the middle, embers rising from High, and at Max a time warp through space (deep space, stars
+ * rushing past, streaks of light) under a slow, heavy aura. Climbing to Extra high or Max powers up: the thumb
+ * travels slowly and heavily, the track trembles and the aura flares when it lands. The level's one-line meaning
  * is the help button's description. Reduced motion keeps the colours and drops the movement.
  */
+import { useEffect, useRef, useState } from "react"
 import { motion, useReducedMotion } from "motion/react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
@@ -35,6 +39,30 @@ export interface EffortSliderProps {
 const NAMES: Record<string, string> = { xhigh: "Extra high" }
 const nameOf = (level: string) => NAMES[level] ?? `${level.charAt(0).toUpperCase()}${level.slice(1)}`
 const SPRING = { type: "spring", stiffness: 520, damping: 36 } as const
+// Powering up: heavy and slow, the way the top levels should feel.
+const CHARGE = {
+  xhigh: { type: "spring", stiffness: 120, damping: 20, mass: 1.4 },
+  max: { type: "spring", stiffness: 46, damping: 13, mass: 2.2 },
+} as const
+const CHARGE_MS = { xhigh: 1100, max: 2000 } as const
+type Charge = keyof typeof CHARGE
+const STARS = 3
+
+/** Set for a moment when the level climbs to Extra high or Max (not on first draw). */
+function useCharge(level: string, reduce: boolean): Charge | undefined {
+  const [charge, setCharge] = useState<Charge | undefined>()
+  const was = useRef(level)
+  useEffect(() => {
+    const from = was.current
+    was.current = level
+    if (reduce || from === level || !(level === "xhigh" || level === "max")) return
+    if (level === "xhigh" && from === "max") return
+    setCharge(level)
+    const timer = window.setTimeout(() => setCharge(undefined), CHARGE_MS[level])
+    return () => window.clearTimeout(timer)
+  }, [level, reduce])
+  return charge
+}
 // The stops run this far in from each end of the track, so the pill of a thumb sits inside it at both ends.
 const INSET = "1.625rem"
 // Half the thumb's width: the fill runs on under the thumb to about its far edge.
@@ -51,7 +79,9 @@ export function EffortSlider({ value, levels, supported, recommended, model, lab
   const clamped = shown >= 0 && !dragging && level !== value
   const recommendedAt = recommended ? nearestSupported(levels, supported, Math.max(0, levels.indexOf(recommended))) : -1
   const modelName = model ?? "this model"
-  const motionFor = dragging || reduce ? { duration: 0 } : SPRING
+  const charge = useCharge(level, reduce)
+  const motionFor = dragging || reduce ? { duration: 0 } : charge ? CHARGE[charge] : SPRING
+  const hot = ["high", "xhigh", "max"].includes(level)
   const along = (index: number) => `calc(${INSET} + (100% - 2 * ${INSET}) * ${index / last})`
   const hintId = `${label.replace(/\W+/g, "-")}-hint`
 
@@ -66,7 +96,7 @@ export function EffortSlider({ value, levels, supported, recommended, model, lab
         </p>
         <Tooltip>
           <TooltipTrigger asChild>
-            <button type="button" aria-label="About effort" aria-describedby={hintId} data-compact className="effort-help inline-flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+            <button type="button" aria-label="About effort" aria-describedby={hintId} data-compact className="effort-help inline-flex size-6 shrink-0 items-center justify-center rounded-md text-xs font-semibold text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
               ?
             </button>
           </TooltipTrigger>
@@ -88,16 +118,27 @@ export function EffortSlider({ value, levels, supported, recommended, model, lab
         data-level={level}
         data-top={top || undefined}
         data-dragging={dragging || undefined}
-        className="effort-track relative h-10 cursor-pointer touch-none rounded-full outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background max-md:h-11"
+        data-charge={charge}
+        className="effort-track relative h-10 cursor-pointer touch-none rounded-md outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background max-md:h-11"
       >
-        <span aria-hidden="true" data-slot="effort-rail" className="effort-rail absolute inset-0 overflow-hidden rounded-full">
+        {level === "max" ? <span aria-hidden="true" data-slot="effort-aura" className="effort-aura pointer-events-none absolute -inset-1 rounded-lg" /> : null}
+        <span aria-hidden="true" data-slot="effort-rail" className="effort-rail absolute inset-0 overflow-hidden rounded-md">
           <motion.span
             data-slot="effort-fill"
-            className="effort-fill absolute inset-y-0 left-0"
+            className="effort-fill absolute inset-y-0 left-0 rounded-md"
             initial={false}
             animate={{ width: `calc(${along(at)} + ${HALF_THUMB})` }}
             transition={motionFor}
           >
+            <span className="effort-flow absolute inset-y-0 left-0" />
+            {hot && level !== "max" ? <span data-slot="effort-embers" className="effort-embers absolute inset-0" /> : null}
+            {level === "max" ? (
+              <span data-slot="effort-warp" className="effort-warp absolute inset-0">
+                {Array.from({ length: STARS }, (_, layer) => <span key={layer} className="effort-stars absolute inset-y-0 left-0" data-layer={layer} />)}
+                <span className="effort-streaks absolute inset-y-0 left-0" />
+                <span className="effort-tunnel absolute inset-0" />
+              </span>
+            ) : null}
             {top ? <span data-slot="effort-sheen" className="effort-sheen absolute inset-0" /> : null}
           </motion.span>
         </span>
@@ -113,7 +154,7 @@ export function EffortSlider({ value, levels, supported, recommended, model, lab
               title={ok ? nameOf(name) : `Not supported by ${modelName}`}
               className={cn(
                 "absolute top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors duration-200",
-                !ok ? "ring-1 ring-muted-foreground/50" : index <= at ? "bg-white/85" : "effort-dot"
+                !ok ? "ring-1 ring-muted-foreground/50" : index <= at ? "effort-dot-lit" : "effort-dot"
               )}
               style={{ left: along(index) }}
             />
@@ -131,7 +172,7 @@ export function EffortSlider({ value, levels, supported, recommended, model, lab
           transition={motionFor}
         >
           <motion.span
-            className="effort-thumb block h-8 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full"
+            className="effort-thumb block h-8 w-10 -translate-x-1/2 -translate-y-1/2 rounded-md"
             initial={false}
             animate={{ scale: dragging !== undefined ? 1.08 : 1, scaleX: dragging !== undefined ? 1.12 : 1 }}
             transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 600, damping: 20 }}

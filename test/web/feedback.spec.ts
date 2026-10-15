@@ -195,7 +195,10 @@ test("explicit HTML mockup isolates hostile payloads and retains local CSS and M
   await expect(csp).toHaveAttribute("content", "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src 'none'; font-src 'none'; connect-src 'none'; media-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'");
   await expect(page.locator("strong").filter({ hasText: "Markdown retained" })).toBeVisible();
   expect(await frame.locator("h1").evaluate((el) => getComputedStyle(el).color)).toBe("rgb(1, 2, 3)");
-  await expect(frame.locator("button, input, a")).toHaveCount(0);
+  await expect(frame.locator("a, form"), "links and forms are dropped").toHaveCount(0);
+  await expect(frame.getByRole("button", { name: "Click me" }), "a control stays so the mockup can be tried, without its handler").toHaveCount(1);
+  await frame.getByRole("button", { name: "Click me" }).click({ force: true }).catch(() => undefined);
+  expect(await page.evaluate(() => (window as any).pwned), "clicking it runs nothing").toBeUndefined();
   await page.waitForTimeout(200);
   expect(requests, "no external resources are requested, not just blocked afterwards").toEqual([]);
   expect(await page.evaluate(() => window.pwned)).toBeUndefined();

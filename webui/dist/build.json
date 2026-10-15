@@ -1,6 +1,6 @@
 {
-  "hash": "56dcd349378fe3008e95b540d11d84045f859e52c86a04678883ffe79b22b4d2",
-  "builtAt": "2026-10-14T05:49:26.037Z",
+  "hash": "243720f48943c47a9030eb1524a8012cf202dd1883e789d6250af7b538667a58",
+  "builtAt": "2026-10-15T08:38:07.439Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -268,7 +268,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "a8e09f9247c1665e0957fc3bcf96e6f90befe84d9714c7bd2a3795a56bd64655"
+      "sha256": "c607d69a6c05bad06fd4839f2553dc7667b6f7bf4883798b5de74a79d7d5e46f"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -376,11 +376,15 @@
     },
     {
       "path": "webui/src/prompts/QuestionCard.tsx",
-      "sha256": "71a2cd5175918b5f393d81d34445b5810c136519700f5d0c245e9fedfa16550c"
+      "sha256": "dcb019a5be835fb72e92744aac9a9d60cef1cd548092d0d67ece5b19608e018e"
     },
     {
       "path": "webui/src/prompts/QuestionPopup.tsx",
-      "sha256": "1db09e21bc793672b68f3bdd099de50fe5a2069362ef0ca9f22bb58be4fa793d"
+      "sha256": "61cecbd3359f120a8216d21f790264bbbcbae7689ab937fdfde52073d3544aba"
+    },
+    {
+      "path": "webui/src/prompts/RichAnswer.tsx",
+      "sha256": "eacc7ae663a8a16abff962129f4148114134718fb199b639742abf712e4de095"
     },
     {
       "path": "webui/src/prompts/StaticPreview.tsx",
@@ -548,7 +552,7 @@
     },
     {
       "path": "webui/src/tabs/settings/SettingsForm.tsx",
-      "sha256": "5dad4d3081ad579d714aae0872f39596f823c08db7c9192d732f5d5084028b0c"
+      "sha256": "90738ab368ea1e05692c28ad3edbe12931fc484b320b8ef7a9b70b55e3051e2f"
     },
     {
       "path": "webui/src/tabs/settings/SettingsTab.tsx",
@@ -632,7 +636,7 @@
     },
     {
       "path": "webui/src/ui/EffortSlider.tsx",
-      "sha256": "faf1ed2ca0b34e68f41cc705be6e5e5cc10f9282e1a51bd617bf80e4336e78d7"
+      "sha256": "49b39a4407477fd8811ef98cde98dcfeb8d129357bf402bb2298eabef77a4eaf"
     },
     {
       "path": "webui/src/ui/Frame.tsx",

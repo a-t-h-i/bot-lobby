@@ -37,7 +37,7 @@
   /* The page's wash: two faint pools of colour from the theme, as light behind the glass. */
   --wash-a: color-mix(in oklab, var(--primary) 7%, transparent);
   --wash-b: color-mix(in oklab, oklch(0.72 0.15 350) 6%, transparent);
-  --scrim: color-mix(in srgb, var(--background) 60%, transparent);
+  --scrim: color-mix(in srgb, var(--background) 30%, transparent);
   /* A control's contact shadow (shadow-xs/5) and a card's. */
   --control-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --card-shadow: var(--glass-lift);
@@ -138,7 +138,7 @@
   --glass-lift: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 12px 32px -20px rgb(0 0 0 / 0.8);
   --wash-a: color-mix(in oklab, var(--primary) 11%, transparent);
   --wash-b: color-mix(in oklab, oklch(0.62 0.17 340) 8%, transparent);
-  --scrim: color-mix(in srgb, var(--background) 64%, transparent);
+  --scrim: color-mix(in srgb, var(--background) 38%, transparent);
   --control-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   --card-shadow: var(--glass-lift);
 
@@ -798,76 +798,42 @@
 }
 
 /*
- * The Knowledge tree: a trunk from the project's knowledge down to each agent,
- * and from each agent a branch to its files, drawn as rounded elbows, the
- * branches in the agent's colour.
+ * The Knowledge tree, drawn like an editor's file explorer: compact rows with a chevron, a folder or file-type
+ * icon and the name; children indented on a faint guide line; the open file highlighted.
  */
-.ktree { --trunk: color-mix(in oklab, var(--foreground) 16%, transparent); --stroke: 1.5px; }
-.ktree-root { display: flex; align-items: center; gap: 0.625rem; padding: 0.5rem 0.25rem 0.25rem; }
+.ktree { --guide: color-mix(in oklab, var(--foreground) 12%, transparent); font-size: 0.8125rem; }
 .ktree-branches, .ktree-leaves { list-style: none; margin: 0; padding: 0; }
-/* The trunk drops from the middle of the root's tile. */
-.ktree-branches { margin-left: 1.25rem; }
-.ktree-branch, .ktree-leaf { position: relative; padding-left: 1rem; }
-.ktree-branch { --elbow: 1.5rem; --twig: color-mix(in oklab, var(--orb) 55%, var(--border)); }
-.ktree-leaf { --elbow: 1.125rem; }
-/* Down to this node, then across to it, round the corner. */
-.ktree-branch::after,
-.ktree-leaf::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 0.875rem;
-  height: var(--elbow);
-  border-left: var(--stroke) solid var(--trunk);
-  border-bottom: var(--stroke) solid var(--twig);
-  border-bottom-left-radius: 0.625rem;
-  pointer-events: none;
-}
-.ktree-leaf::after { border-left-color: var(--twig); }
-/* And on past it to the next one. */
-.ktree-branch:not(:last-child)::before,
-.ktree-leaf:not(:last-child)::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  border-left: var(--stroke) solid var(--trunk);
-  pointer-events: none;
-}
-.ktree-leaf:not(:last-child)::before { border-left-color: var(--twig); }
-.ktree-node {
+.ktree-row {
   display: flex;
   width: 100%;
-  min-height: 3rem;
+  min-height: 1.75rem;
   align-items: center;
-  gap: 0.625rem;
-  padding: 0.375rem 0.5rem;
-  border-radius: var(--radius-lg);
+  gap: 0.375rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-md);
   text-align: left;
   outline: none;
-  transition: background-color 150ms ease;
+  color: var(--foreground);
+  transition: background-color 120ms ease;
 }
-.ktree-node:hover { background: var(--muted); }
-.ktree-node:focus-visible { box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 40%, transparent); }
-/* The agent's raised tile, tinted in its colour. */
-.ktree-tile {
-  display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  flex: none;
-  border-radius: 0.5rem;
-  border: 1px solid color-mix(in oklab, var(--orb) 30%, var(--border));
-  background: color-mix(in oklab, var(--orb) 12%, var(--card));
-  color: color-mix(in oklab, var(--orb) 85%, var(--foreground));
-  box-shadow: var(--card-shadow);
-}
-/* The files hang from the middle of the agent's tile. */
-.ktree-leaves { margin-left: 1.5rem; padding-bottom: 0.25rem; }
-.ktree-bud { width: 0.375rem; height: 0.375rem; flex: none; border-radius: 9999px; background: var(--twig); }
-.ktree-file[aria-current="true"] .ktree-bud { background: color-mix(in oklab, var(--orb) 85%, var(--foreground)); box-shadow: 0 0 0 3px color-mix(in oklab, var(--orb) 18%, transparent); }
+@media (max-width: 767.98px) { .ktree-row { min-height: 2.75rem; } }
+.ktree-node:hover, .ktree-file:hover { background: color-mix(in oklab, var(--foreground) 6%, transparent); }
+.ktree-node:focus-visible, .ktree-file:focus-visible { box-shadow: inset 0 0 0 1.5px var(--ring); }
+.ktree-file[aria-current="true"] { background: color-mix(in oklab, var(--primary) 14%, transparent); }
+.ktree-file[aria-current="true"]:focus-visible { box-shadow: inset 0 0 0 1.5px var(--ring); }
+.ktree-chevron { width: 0.875rem; height: 0.875rem; flex: none; color: var(--muted-foreground); transition: rotate 160ms var(--ease-snap); }
+.ktree-icon { width: 1rem; height: 1rem; flex: none; color: var(--muted-foreground); stroke-width: 1.75; }
+.ktree-folder { color: color-mix(in oklab, var(--foreground) 62%, transparent); }
+.ktree-icon[data-ext="md"] { color: oklch(0.62 0.12 245); }
+.ktree-icon[data-ext="data"] { color: oklch(0.68 0.13 85); }
+.dark .ktree-icon[data-ext="md"] { color: oklch(0.74 0.11 245); }
+.ktree-root { padding-left: 0.5rem; }
+/* Folders sit one step in from the root, files one more, each level on a guide line under its parent's icon. */
+.ktree-branches { margin-left: 0.75rem; }
+.ktree-leaves { position: relative; margin-left: 1.625rem; }
+.ktree-branches, .ktree-leaves { border-left: 1px solid var(--guide); }
+.ktree-branch .ktree-node { padding-left: 0.375rem; }
+.ktree-leaf .ktree-file { padding-left: 0.875rem; }
 
 /* One agent's bubble, edged and tinted in its colour, its name on a tag. */
 .thought {
@@ -961,10 +927,6 @@
 .group\/msg:is(:hover, :focus-within) .chat-meta { opacity: 1; }
 @media (hover: none) { .chat-meta { opacity: 1; } }
 /* The oracle's crystal ball, a picture rather than a line icon. */
-.agent-oracle {
-  display: inline-block;
-  background: url("./assets/oracle.png") center / contain no-repeat;
-}
 /* Adapted from T3 Code (MIT), MessagesTimeline.tsx: your words in a soft filled block on the right, round on every corner. */
 .chat-bubble {
   max-width: 80%;
@@ -1633,10 +1595,25 @@
 #app-dock[data-shrunk] .composer-box { cursor: text; box-shadow: var(--dock-shadow), 0 8px 24px -12px rgb(0 0 0 / 0.25); }
 
 /*
- * The effort slider, after the user's reference: a deep pill of a track, a warm pink-to-peach fill running up
- * under a white pill of a thumb, a dot per stop. Off greys the fill; the top level sends a sheen along it. Only
- * transform and opacity animate; reduced motion keeps the colours and drops the sheen.
+ * The effort slider, after the user's reference: a deep track with soft corners, a fill running up under a white
+ * thumb, a dot per stop. The fill is alive at every level and runs hotter as it climbs (--effort-a/b/c, and the
+ * pace of its drift in --effort-pace): cool and slow low down, warm in the middle, embers from High, and at Max a
+ * time warp through deep space under a slow aura. Climbing to Extra high or Max trembles the track and flares the
+ * aura (data-charge). Only transform and opacity animate; reduced motion keeps the colours and stops the rest.
  */
+.effort-track {
+  --effort-a: oklch(0.74 0.13 355);
+  --effort-b: oklch(0.81 0.11 55);
+  --effort-c: oklch(0.78 0.13 20);
+  --effort-pace: 6s;
+}
+.effort-track[data-level="off"] { --effort-a: oklch(0.72 0.01 260); --effort-b: oklch(0.82 0.01 260); --effort-c: oklch(0.76 0.01 260); --effort-pace: 14s; }
+.effort-track[data-level="minimal"] { --effort-a: oklch(0.78 0.08 220); --effort-b: oklch(0.84 0.07 185); --effort-c: oklch(0.8 0.08 240); --effort-pace: 10s; }
+.effort-track[data-level="low"] { --effort-a: oklch(0.74 0.11 250); --effort-b: oklch(0.8 0.1 200); --effort-c: oklch(0.76 0.12 290); --effort-pace: 8s; }
+.effort-track[data-level="medium"] { --effort-a: oklch(0.74 0.13 355); --effort-b: oklch(0.81 0.11 55); --effort-c: oklch(0.76 0.13 320); --effort-pace: 6s; }
+.effort-track[data-level="high"] { --effort-a: oklch(0.68 0.19 20); --effort-b: oklch(0.8 0.15 65); --effort-c: oklch(0.72 0.2 350); --effort-pace: 4s; }
+.effort-track[data-level="xhigh"] { --effort-a: oklch(0.7 0.19 45); --effort-b: oklch(0.88 0.17 95); --effort-c: oklch(0.66 0.22 25); --effort-pace: 2.6s; }
+.effort-track[data-level="max"] { --effort-a: oklch(0.55 0.25 290); --effort-b: oklch(0.72 0.18 230); --effort-c: oklch(0.6 0.26 330); --effort-pace: 3.2s; }
 .effort-rail {
   background: color-mix(in oklab, var(--foreground) 7%, transparent);
   box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.08), inset 0 0 0 1px color-mix(in oklab, var(--foreground) 6%, transparent);
@@ -1647,30 +1624,135 @@
 }
 .effort-fill {
   overflow: hidden;
-  border-radius: 9999px;
-  background: linear-gradient(90deg, oklch(0.74 0.13 355), oklch(0.81 0.11 55));
-  transition: filter 200ms ease;
+  isolation: isolate;
+  background: var(--effort-a);
+  transition: background-color 400ms ease;
 }
-.dark .effort-fill { background: linear-gradient(90deg, oklch(0.7 0.14 355), oklch(0.78 0.12 50)); }
-[data-off] .effort-fill { filter: grayscale(1) opacity(0.5); }
+/* Twice as wide as the fill and seamless at its middle, so sliding it half its width loops without a seam. */
+.effort-flow {
+  width: 200%;
+  background: linear-gradient(90deg, var(--effort-a) 0%, var(--effort-b) 16.6%, var(--effort-c) 33.3%, var(--effort-a) 50%, var(--effort-b) 66.6%, var(--effort-c) 83.3%, var(--effort-a) 100%);
+}
+.effort-embers {
+  background-image:
+    radial-gradient(circle at 12% 80%, rgb(255 244 214 / 0.9) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 37% 60%, rgb(255 236 200 / 0.8) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 63% 90%, rgb(255 250 230 / 0.9) 0 1.2px, transparent 1.8px),
+    radial-gradient(circle at 86% 70%, rgb(255 230 190 / 0.8) 0 1px, transparent 1.6px);
+  background-size: 3.5rem 100%;
+  mix-blend-mode: screen;
+  opacity: 0.8;
+}
+.effort-track[data-level="xhigh"] .effort-embers { background-size: 2.5rem 100%; opacity: 1; }
+.effort-track[data-level="xhigh"] .effort-fill { box-shadow: inset 0 0 12px rgb(255 240 180 / 0.55); }
+/* Max: deep space, three layers of stars at different speeds, streaks of light, and a pulse down the tunnel. */
+.effort-warp {
+  background:
+    radial-gradient(120% 180% at 100% 50%, color-mix(in oklab, var(--effort-c) 70%, transparent), transparent 55%),
+    radial-gradient(80% 140% at 70% 50%, color-mix(in oklab, var(--effort-a) 60%, transparent), transparent 70%),
+    linear-gradient(90deg, #07041a, #120a3a 45%, #1b0d4f);
+}
+.effort-stars {
+  width: 200%;
+  background-image:
+    radial-gradient(circle, #fff 0 0.7px, transparent 1.3px),
+    radial-gradient(circle, rgb(200 220 255 / 0.9) 0 0.6px, transparent 1.2px);
+  background-size: 1.9rem 0.9rem, 2.7rem 1.3rem;
+  background-position: 0 0, 0.9rem 0.45rem;
+}
+.effort-stars[data-layer="1"] { background-size: 3.1rem 1.5rem, 4.3rem 1.1rem; background-position: 1.2rem 0.3rem, 0.4rem 0.9rem; opacity: 0.8; }
+.effort-stars[data-layer="2"] { background-size: 5rem 2.5rem, 6.4rem 1.7rem; background-position: 2rem 0.8rem, 3rem 0.2rem; filter: blur(0.3px); }
+.effort-streaks {
+  width: 200%;
+  background-image:
+    linear-gradient(90deg, transparent, rgb(190 210 255 / 0.85) 40%, #fff 50%, transparent 52%),
+    linear-gradient(90deg, transparent, rgb(240 170 255 / 0.75) 45%, #fff 50%, transparent 52%),
+    linear-gradient(90deg, transparent, rgb(150 220 255 / 0.7) 48%, #fff 50%, transparent 51%);
+  background-size: 9rem 1px, 13rem 1px, 7rem 1px;
+  background-position: 0 28%, 4rem 58%, 2rem 80%;
+  background-repeat: repeat-x;
+  mix-blend-mode: screen;
+}
+.effort-tunnel {
+  background: radial-gradient(60% 120% at 100% 50%, rgb(255 255 255 / 0.55), rgb(180 140 255 / 0.25) 35%, transparent 70%);
+  mix-blend-mode: screen;
+  opacity: 0.5;
+  transform-origin: right center;
+}
+.effort-aura {
+  background: radial-gradient(closest-side, transparent 70%, transparent);
+  box-shadow: 0 0 10px 1px color-mix(in oklab, var(--effort-a) 70%, transparent), 0 0 26px 4px color-mix(in oklab, var(--effort-c) 45%, transparent);
+  opacity: 0.55;
+}
+[data-off] .effort-fill { filter: saturate(0.4); }
 .effort-dot { background: color-mix(in oklab, var(--foreground) 32%, transparent); }
+.effort-dot-lit { background: rgb(255 255 255 / 0.85); }
+.effort-track[data-level="max"] .effort-dot-lit { background: #fff; box-shadow: 0 0 4px rgb(200 180 255 / 0.9); }
 .effort-mark { box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--foreground) 40%, transparent); }
 .effort-thumb {
   background: #fff;
   box-shadow: 0 1px 1px rgb(0 0 0 / 0.08), 0 3px 10px -2px rgb(0 0 0 / 0.28), inset 0 -1px 0 rgb(0 0 0 / 0.06), 0 0 0 0.5px rgb(0 0 0 / 0.1);
+  transition: box-shadow 400ms ease;
 }
+.effort-track[data-level="xhigh"] .effort-thumb { box-shadow: 0 1px 1px rgb(0 0 0 / 0.08), 0 3px 10px -2px rgb(0 0 0 / 0.28), 0 0 12px 1px color-mix(in oklab, var(--effort-b) 70%, transparent); }
+.effort-track[data-level="max"] .effort-thumb { box-shadow: 0 3px 10px -2px rgb(0 0 0 / 0.4), 0 0 0 1px color-mix(in oklab, var(--effort-a) 60%, white), 0 0 16px 2px color-mix(in oklab, var(--effort-a) 75%, transparent); }
 .effort-help {
   border: 1px solid var(--glass-border);
   background: color-mix(in oklab, var(--foreground) 6%, transparent);
 }
 .effort-sheen {
-  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.6) 50%, transparent);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35) 50%, transparent);
   transform: translateX(-100%);
+  mix-blend-mode: screen;
 }
 @media (prefers-reduced-motion: no-preference) {
-  .effort-sheen { animation: effort-sweep 1.8s ease-in-out infinite; }
+  .effort-flow { animation: effort-drift var(--effort-pace) linear infinite; }
+  .effort-embers { animation: effort-rise 2.4s linear infinite; }
+  .effort-track[data-level="xhigh"] .effort-embers { animation-duration: 1.5s; }
+  .effort-track[data-level="xhigh"] .effort-fill { animation: effort-glow 1.6s ease-in-out infinite; }
+  .effort-stars { animation: effort-drift 9s linear infinite; }
+  .effort-stars[data-layer="1"] { animation-duration: 5s; }
+  .effort-stars[data-layer="2"] { animation-duration: 2.6s; }
+  .effort-streaks { animation: effort-drift 1.4s linear infinite; }
+  .effort-tunnel { animation: effort-pulse 3.2s ease-in-out infinite; }
+  .effort-aura { animation: effort-aura 3.2s ease-in-out infinite; }
+  .effort-track[data-level="max"] .effort-thumb { animation: effort-thrum 3.2s ease-in-out infinite; }
+  .effort-sheen { animation: effort-sweep 3.2s ease-in-out infinite; }
+  .effort-track[data-charge] { animation: effort-tremble 90ms linear infinite; }
+  .effort-track[data-charge="xhigh"] { animation-iteration-count: 10; }
+  .effort-track[data-charge="max"] { animation-iteration-count: 18; }
+  .effort-track[data-charge="max"] .effort-aura { animation: effort-flare 2s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+  .effort-track[data-charge="max"] .effort-tunnel { animation: effort-burst 2s ease-out both; }
 }
 @keyframes effort-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+@keyframes effort-drift { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+@keyframes effort-rise {
+  from { transform: translateY(40%); opacity: 0; }
+  30% { opacity: 0.9; }
+  to { transform: translateY(-60%); opacity: 0; }
+}
+@keyframes effort-glow { 50% { box-shadow: inset 0 0 18px rgb(255 245 200 / 0.85); } }
+@keyframes effort-pulse { 0%, 100% { opacity: 0.35; transform: scaleX(1); } 50% { opacity: 0.8; transform: scaleX(1.15); } }
+@keyframes effort-aura { 0%, 100% { opacity: 0.4; transform: scale(1); } 50% { opacity: 0.85; transform: scale(1.025, 1.12); } }
+@keyframes effort-thrum { 0%, 100% { scale: 1; } 50% { scale: 1.05 1.08; } }
+@keyframes effort-tremble {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(0.6px, -0.5px); }
+  50% { transform: translate(-0.6px, 0.4px); }
+  75% { transform: translate(0.4px, 0.6px); }
+  100% { transform: translate(0, 0); }
+}
+@keyframes effort-flare {
+  0% { opacity: 0; transform: scale(1); }
+  55% { opacity: 0.4; transform: scale(1.01, 1.05); }
+  70% { opacity: 1; transform: scale(1.06, 1.5); }
+  100% { opacity: 0.55; transform: scale(1); }
+}
+@keyframes effort-burst {
+  0%, 55% { opacity: 0.2; transform: scaleX(0.6); }
+  72% { opacity: 1; transform: scaleX(1.6); }
+  100% { opacity: 0.5; transform: scaleX(1); }
+}
 
 /*
  * Questionnaire, after the user's sketch: the options as dots on a dotted line, the one in view ringed and joined
@@ -1678,14 +1760,23 @@
  * pours a drop of the accent along the line on a switch, like the tab bar's straw.
  */
 .q-rail-line { width: 0; border-left: 2px dotted color-mix(in oklab, var(--foreground) 28%, transparent); }
-.q-dot-mark { background: color-mix(in oklab, var(--foreground) 55%, var(--background)); box-shadow: 0 0 0 3px var(--background); }
-.q-dot[data-picked] .q-dot-mark { background: var(--primary); }
+.q-dot-mark {
+  color: var(--muted-foreground);
+  background: color-mix(in oklab, var(--foreground) 9%, var(--background));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 18%, transparent), 0 0 0 3px var(--background);
+}
+.q-dot[data-active] .q-dot-mark { color: var(--primary); background: color-mix(in oklab, var(--primary) 14%, var(--background)); }
+.q-dot[data-picked] .q-dot-mark { color: var(--primary-foreground); background: var(--primary); box-shadow: 0 0 0 3px var(--background); }
 .q-dot-star::after {
   content: "";
   position: absolute;
-  inset: -3px;
+  top: -2px;
+  right: -2px;
+  width: 6px;
+  height: 6px;
   border-radius: 9999px;
-  box-shadow: 0 0 0 1px color-mix(in oklab, var(--primary) 55%, transparent);
+  background: var(--primary);
+  box-shadow: 0 0 0 1.5px var(--background);
 }
 .q-dot-tag {
   translate: -4px 0;
@@ -1697,23 +1788,42 @@
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
 }
 .q-dot:hover .q-dot-tag, .q-dot:has(:focus-visible) .q-dot-tag { translate: 0 0; }
-.q-ring {
-  background: var(--background);
-  box-shadow: inset 0 0 0 2px var(--primary), 0 0 0 3px color-mix(in oklab, var(--primary) 18%, transparent);
-}
-.q-ring::after { content: ""; position: absolute; inset: 5px; border-radius: 9999px; background: var(--primary); }
+.q-ring { box-shadow: inset 0 0 0 2px var(--primary), 0 0 0 3px color-mix(in oklab, var(--primary) 18%, transparent); }
 .q-line { background: var(--primary); }
 .q-drop { background: var(--tab-liquid); box-shadow: 0 0 8px var(--tab-liquid); }
 .q-panel {
   border: 2px dotted color-mix(in oklab, var(--foreground) 22%, transparent);
   background-image: var(--glass-fill);
 }
+/*
+ * The own answer: a slim centred pill that opens, on focus, into a full-width box with a formatting bar. The
+ * rail's drop lands in it (data-landed): a ring springs out from its edge and the box gives a little bounce.
+ */
+.q-own-wrap { max-width: 24rem; transition: max-width 460ms cubic-bezier(0.34, 1.36, 0.5, 1); }
+.q-own-wrap:has([data-open]) { max-width: 100%; }
 .q-own {
   border-color: var(--glass-edge);
+  border-radius: 1.25rem;
   background: color-mix(in oklab, var(--card) 70%, transparent);
+  transition: border-radius 300ms ease, border-color 200ms ease, box-shadow 300ms ease, background-color 200ms ease;
 }
-.q-own:focus { border-radius: 1rem; }
+.q-own[data-open] { border-radius: 0.875rem; background: var(--card); }
+.q-own:focus-within { border-color: color-mix(in oklab, var(--primary) 55%, var(--glass-edge)); box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 16%, transparent), 0 10px 30px -18px rgb(0 0 0 / 0.4); }
+.q-own-text { text-align: center; max-height: 16rem; overflow-y: auto; transition: min-height 460ms cubic-bezier(0.34, 1.36, 0.5, 1); }
+.q-own[data-open] .q-own-text { text-align: start; min-height: 6rem; }
+.q-own-text[data-empty]::before { content: attr(data-placeholder); color: var(--muted-foreground); pointer-events: none; }
+.q-own-bar { max-height: 0; opacity: 0; padding-bottom: 0; transition: max-height 300ms ease, opacity 200ms ease, padding 300ms ease; }
+.q-own:focus-within .q-own-bar { max-height: 2.5rem; opacity: 1; padding-bottom: 0.375rem; }
+@media (prefers-reduced-motion: reduce) {
+  .q-own-wrap, .q-own, .q-own-text, .q-own-bar { transition: none; }
+}
 @media (prefers-reduced-motion: no-preference) {
   .q-panel-body { animation: q-panel-in 240ms var(--ease-snap, ease-out); }
+  .q-own[data-landed] { animation: q-own-land 620ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+}
+@keyframes q-own-land {
+  0% { scale: 0.985; box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 55%, transparent); }
+  35% { scale: 1.012; }
+  100% { scale: 1; box-shadow: 0 0 0 10px color-mix(in oklab, var(--primary) 0%, transparent); }
 }
 @keyframes q-panel-in { from { opacity: 0; transform: translateY(4px); filter: blur(2px); } to { opacity: 1; transform: none; filter: none; } }
