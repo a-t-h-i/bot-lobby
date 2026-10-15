@@ -22,9 +22,9 @@ export { ASK_TOOL };
 
 const OptionSchema = Type.Object({
   htmlPreview: Type.Optional(Type.Object({
-    html: Type.String({ maxLength: MAX_PREVIEW_HTML, description: "Static HTML of a mockup of this option; scripts, images, fonts and links are stripped." }),
+    html: Type.String({ maxLength: MAX_PREVIEW_HTML, description: "HTML of a mockup of this option. Controls (button, input, select, textarea, label, details/summary) stay live and CSS transitions and keyframes run, so the user can try it; scripts, forms, images, fonts and links are stripped." }),
     css: Type.Optional(Type.String({ maxLength: MAX_PREVIEW_CSS })),
-  }, { additionalProperties: false, description: "A static HTML/CSS mockup of this option, laid out for a page about 1200px wide: shown as a thumbnail beside the question, which the user expands to scroll through every option's mockup. Give one to every option of a visual question (a layout, a screen, a component's look)." })),
+  }, { additionalProperties: false, description: "An interactive HTML/CSS mockup of this option (no scripts: interaction through CSS states), laid out for a page about 1200px wide: shown as a thumbnail beside the question, which the user expands to scroll through every option's mockup. Give one to every option of a visual question (a layout, a screen, a component's look)." })),
   label: Type.String({ maxLength: MAX_LABEL, description: `The option as the user sees and picks it: 1-5 words, at most ${MAX_LABEL} characters.` }),
   description: Type.Optional(Type.String({ description: "What choosing it means: its trade-offs or consequences. Markdown." })),
   preview: Type.Optional(Type.String({ description: "Markdown shown beside the options while this one is focused: a mockup, a code snippet, a diagram, a config. Only when seeing it helps the user compare." })),

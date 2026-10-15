@@ -260,21 +260,17 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
   const [open, setOpen] = useState(false)
   const custom = customCount(entry, kind)
   return (
-    <section data-slot="agent-row" className="glass min-w-0 rounded-xl border px-3.5 py-2.5">
-      <div className="grid min-w-0 items-center gap-x-3 gap-y-1 md:grid-cols-[minmax(7rem,9rem)_minmax(0,14rem)_minmax(0,1fr)_8.5rem] max-md:grid-cols-[minmax(0,1fr)_auto]">
+    <section data-slot="agent-row" className="glass flex min-w-0 flex-col gap-2.5 rounded-xl border px-3.5 pt-2.5 pb-3">
+      <div className="flex min-w-0 items-center justify-between gap-2">
         <h3 className="flex min-w-0 items-center gap-2 break-words text-sm font-semibold"><AgentIcon source={kind} className="size-4 shrink-0 text-muted-foreground" />{name}</h3>
-        <div className="min-w-0 max-md:order-3 max-md:col-span-2">
-          <ModelChoice value={entry.model} models={models} label={`${name} model`} inherit={kind === "master"} onChange={chooseModel} />
-        </div>
-        <div className="min-w-0 max-md:order-4 max-md:col-span-2">
-          {kind === "scout" ? <ScoutEffort /> : (
-            <EffortSlider value={entry.thinking} levels={THINKING_LEVELS} supported={supported} recommended={RECOMMENDED_THINKING[kind]}
-              model={entry.model === INHERIT_MODEL ? "the session model" : entry.model} label={`${name} effort`} onChange={(level) => set({ thinking: level })} />
-          )}
-        </div>
         <MoreButton open={open} custom={custom} onToggle={() => setOpen((now) => !now)} />
       </div>
-      <div hidden={!open} className="mt-2 grid gap-2 border-t border-border pt-2">
+      <ModelChoice value={entry.model} models={models} label={`${name} model`} inherit={kind === "master"} onChange={chooseModel} />
+      {kind === "scout" ? <ScoutEffort /> : (
+        <EffortSlider value={entry.thinking} levels={THINKING_LEVELS} supported={supported} recommended={RECOMMENDED_THINKING[kind]}
+          model={entry.model === INHERIT_MODEL ? "the session model" : entry.model} label={`${name} effort`} onChange={(level) => set({ thinking: level })} />
+      )}
+      <div hidden={!open} className="grid gap-2 border-t border-border pt-2">
         {kind !== "master" ? (
           <Field label="Time limit" help="Minutes before this agent's run stops.">
             <MinutesField value={entry.timeoutMs ?? config.workflow.agentTimeoutMs} label={`${name} time limit`} onSave={(ms) => set({ timeoutMs: ms })} />
@@ -296,7 +292,7 @@ function customCount(entry: AgentView, kind: AgentKind): number {
 
 function ScoutEffort() {
   return (
-    <p className="flex min-h-10 items-center gap-2 text-sm text-muted-foreground">
+    <p className="flex min-h-[4.5rem] items-center gap-2 text-sm text-muted-foreground">
       <Brain aria-hidden="true" className="size-4" />
       Effort <span className="capitalize">{FIXED_SCOUT_THINKING}</span> (fixed for scouts)
     </p>
@@ -306,7 +302,7 @@ function ScoutEffort() {
 function MoreButton({ open, custom, onToggle }: { open: boolean; custom: number; onToggle: () => void }) {
   return (
     <button type="button" aria-expanded={open} onClick={onToggle}
-      className="flex min-h-10 items-center gap-1 justify-self-end rounded-md px-2 text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-md:order-2 max-md:min-h-11">
+      className="-mr-1.5 flex min-h-8 shrink-0 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-md:min-h-11">
       <ChevronRight aria-hidden="true" className={cn("size-3.5 transition-transform duration-200 ease-snap", open && "rotate-90")} />
       More
       {custom > 0 ? <span className="text-primary">· {custom} customised</span> : null}
@@ -577,7 +573,7 @@ export function SettingsForm({ config, models, classifierModels = [], onConfig }
     return next
   }
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 pt-4 pb-dock md:px-6 md:pt-6">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 pt-4 pb-dock md:px-6 md:pt-6">
       <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div className="min-w-0">
           <h1 className="text-lg font-semibold tracking-tight">{PAGE.title}</h1>
@@ -589,7 +585,7 @@ export function SettingsForm({ config, models, classifierModels = [], onConfig }
       </header>
       <div id={sectionId("Agents")} hidden={section !== "Agents"} aria-hidden={section !== "Agents"}>
         <h2 className="sr-only">{GROUP_TITLES.agents}</h2>
-        <div className="grid grid-cols-1 gap-2">
+        <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2 lg:grid-cols-3">
           {AGENT_ORDER.map((kind) => <AgentCard key={kind} kind={kind} config={config} models={models} save={save} />)}
         </div>
       </div>

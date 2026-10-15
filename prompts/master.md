@@ -142,9 +142,10 @@ and reason about the change inside it:
 For anything the user will see (a UI request, a layout, a screen, a visual
 direction), show the choices rather than describe them. When you ask about a
 visual decision, use `ask_user_question` and give each option an
-`htmlPreview` mockup (static HTML and CSS of that option, laid out for a page
-about 1200px wide); the user expands the mockups and scrolls through the
-options side by side. When the choice needs real design work, delegate it to
+`htmlPreview` mockup (HTML and CSS of that option in the project's existing
+design language, laid out for a page about 1200px wide, with real controls and
+CSS states and animations so the user can try it); the user expands the
+mockups and scrolls through the options side by side. When the choice needs real design work, delegate it to
 the designer, who asks with its own mockups. In planning, the panel draws
 mockups under its options the same way.
 
