@@ -24,6 +24,11 @@ export function browserCss(source: string): string {
     .replace(/@(import|plugin|source|config|reference|custom-variant|tailwind)\b[^;{]*;/g, "")
     .replace(/@apply\b[^;}]*;?/g, "")
     .replace(/url\([^)]*\)/g, "none")
+    .replace(/image-set\([^;]*\)/g, "none")
+    // The preview refuses a whole stylesheet that holds a backslash (escaped class names, CSS escapes), so those rules go.
+    .replace(/[^{}]*\{[^{}]*\}/g, (rule) => (rule.includes("\\") ? "" : rule))
+    .replace(/^[^{}\n]*\\[^{}\n]*;\s*$/gm, "")
+    .replace(/(expression|behavior|-moz-binding)[^;}]*;?/gi, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }

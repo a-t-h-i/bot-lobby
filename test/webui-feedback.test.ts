@@ -77,7 +77,7 @@ test("prompt identities catch same-count replacement and persist seen IDs even w
 
 test("explicit mockup payload validates sizes without trimming and retains Markdown preview", () => {
   assert.deepEqual(previewPayload({ html: " <p>demo</p> ", css: " p { color: red } " }), { html: " <p>demo</p> ", css: " p { color: red } " });
-  for (const value of ["<p>chat</p>", { html: 1 }, { html: "a".repeat(100001) }, { html: "ok", css: "a".repeat(50001) }, { html: "ok", css: 1 }]) assert.equal(previewPayload(value), undefined);
+  for (const value of ["<p>chat</p>", { html: 1 }, { html: "a".repeat(100001) }, { html: "ok", css: "a".repeat(120001) }, { html: "ok", css: 1 }]) assert.equal(previewPayload(value), undefined);
   const view = parsePrompt({ id: "a", kind: "questionnaire", from: "ask", createdAt: 1, payload: { questions: [{ question: "Choose", options: [{ label: "A", preview: "**Markdown**", htmlPreview: { html: "<p>A</p>" } }] }] } });
   assert.equal(view?.kind, "questionnaire");
   if (view?.kind === "questionnaire") { assert.equal(view.questions[0]?.options[0]?.preview, "**Markdown**"); assert.equal(view.questions[0]?.options[0]?.htmlPreview?.html, "<p>A</p>"); }
