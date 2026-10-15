@@ -37,6 +37,7 @@ import { deliverComments, setAuto } from "../pi/owner.ts";
 import { chatFromEntries, lobbyFeed, type ChatEntry } from "./feed.ts";
 import { availableClassifiers, classifier, effortFor, hintsFor } from "../classifier/instance.ts";
 import { launchPi, SessionRegistry, type BackgroundSession, type SessionLauncher } from "./sessions.ts";
+import { askForSession } from "./session-questions.ts";
 import { SessionChats } from "./session-files.ts";
 import { answerMessage, questionnaires, settledQuestions } from "./ask.ts";
 import { askUser } from "../ask/web.ts";
@@ -270,7 +271,7 @@ function startSession(state: Runtime, start: { request?: string; plan?: PlannedT
   // A request may lead with flags (`--worktree add login`); the session is named after what follows them.
   const name = taskName(plan?.title ?? (stripStartFlags(request!) || request!));
   try {
-    const session = sessionRegistry().start(state.ctx.cwd, { name, projectRoot: state.root, onDialog: dialogTracker(state), ...(plan ? { planId: plan.id } : { request: request! }), ...(start.auto ? { auto: true } : {}) }, sessionModel(state.ctx));
+    const session = sessionRegistry().start(state.ctx.cwd, { name, projectRoot: state.root, onDialog: dialogTracker(state), ask: askForSession, ...(plan ? { planId: plan.id } : { request: request! }), ...(start.auto ? { auto: true } : {}) }, sessionModel(state.ctx));
     lobbyFeed.log("LOBBY", `started "${name}" in a new session`, "success");
     return session;
   } catch (error) {
@@ -284,7 +285,7 @@ export function resumeSession(state: Runtime, start: Relaunch): BackgroundSessio
     const session = sessionRegistry().start(state.ctx.cwd, {
       name: start.name,
       projectRoot: state.root,
-      onDialog: dialogTracker(state),
+      onDialog: dialogTracker(state), ask: askForSession,
       sessionFile: start.sessionFile,
       ...(start.message ? { message: start.message } : {}),
     });
@@ -374,7 +375,7 @@ async function resumeTask(state: Runtime, taskId: string): Promise<{ notice: str
     const session = sessionRegistry().start(state.ctx.cwd, {
       name: task.title,
       projectRoot: state.root,
-      onDialog: dialogTracker(state),
+      onDialog: dialogTracker(state), ask: askForSession,
       taskId,
       ...(file ? { sessionFile: file } : {}),
       message: `/bot-lobby carry-on ${taskId}`,

@@ -132,8 +132,8 @@ export function workflowDeps(
     effort: effortFor((model, thinking) => checkThinking(modelLookup(ctx)(model), thinking).level),
     // Time spent waiting on the user is not the task's: its budget clock waits too.
     // The questions go to the web page, where a free-text answer may run to several lines.
-    ask: async (question) => (canAsk() ? whileAsking(() => askText(question)) : undefined),
-    choose: async (title, options) => (canAsk() ? whileAsking(() => askChoice(title, options)) : undefined),
+    ask: async (question) => (canAsk() ? whileAsking(() => askText(question, undefined, ctx)) : undefined),
+    choose: async (title, options) => (canAsk() ? whileAsking(() => askChoice(title, options, undefined, ctx)) : undefined),
     // An agent's own questions (the designer's), relayed as the questionnaire.
     ...(canAsk() ? { askQuestions: (questions: AskQuestion[], from: string, askSignal?: AbortSignal) => whileAsking(() => askUser(questions, ctx, askSignal, from)) } : {}),
     notify: (message, level = "info") => {

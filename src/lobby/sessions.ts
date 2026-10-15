@@ -54,6 +54,11 @@ export interface SessionStart {
   message?: string;
   /** The task it was started to carry on (resumed from the Tasks screen). */
   taskId?: string;
+  /**
+   * Put a dialog to the user (this window's question pop-up); resolves with the answer, or undefined when the
+   * dialog was settled some other way first (`signal` aborts then).
+   */
+  ask?: (question: { from: string; dialog: SessionDialog; signal: AbortSignal }) => Promise<DialogAnswer | undefined>;
 }
 
 let counter = 0;
@@ -80,6 +85,9 @@ export class BackgroundSession {
   /** Dialogs the session waits on, oldest first. */
   readonly dialogs: SessionDialog[] = [];
   private readonly onDialog: NonNullable<SessionStart["onDialog"]>;
+  private readonly ask?: SessionStart["ask"];
+  /** The dialogs being asked in the question pop-up, to take back when they are settled another way. */
+  private readonly asking = new Map<string, AbortController>();
   private readonly proc: SessionProcess;
   private buffer = "";
   private stderr = "";
@@ -96,6 +104,7 @@ export class BackgroundSession {
     if (start.planId) this.planId = start.planId;
     if (start.taskId) this.taskId = start.taskId;
     this.onDialog = start.onDialog ?? (() => {});
+    if (start.ask) this.ask = start.ask;
     this.proc = proc;
     this.onChange = onChange;
     proc.stdout?.on("data", (chunk) => this.receive(String(chunk)));
@@ -121,6 +130,8 @@ export class BackgroundSession {
     this.exitCode = code;
     for (const dialog of this.dialogs) this.onDialog(dialog.id, false, this.sessionId);
     this.dialogs.length = 0;
+    for (const controller of this.asking.values()) controller.abort();
+    this.asking.clear();
     if (this.killTimer) clearTimeout(this.killTimer);
     this.feed.say("note", reason);
     for (const resolve of this.exitWaiters.splice(0)) resolve();
@@ -175,6 +186,8 @@ export class BackgroundSession {
     const index = this.dialogs.findIndex((dialog) => dialog.id === id);
     if (index < 0) return;
     this.dialogs.splice(index, 1);
+    this.asking.get(id)?.abort();
+    this.asking.delete(id);
     this.onDialog(id, false, this.sessionId);
     if (this.alive && this.proc.stdin) this.proc.stdin.write(`${JSON.stringify({ type: "extension_ui_response", id, ...answer })}\n`);
     this.onChange();
@@ -248,6 +261,21 @@ export class BackgroundSession {
     this.onChange();
   }
 
+  /** Ask the dialog in the question pop-up, wherever the user is; its answer goes back to the session. */
+  private putToUser(dialog: SessionDialog): void {
+    if (!this.ask) return;
+    const controller = new AbortController();
+    this.asking.set(dialog.id, controller);
+    this.ask({ from: this.name, dialog, signal: controller.signal }).then(
+      (answer) => {
+        if (this.asking.get(dialog.id) !== controller) return;
+        this.asking.delete(dialog.id);
+        if (answer) this.answer(dialog.id, answer);
+      },
+      () => this.asking.delete(dialog.id),
+    );
+  }
+
   private uiRequest(event: Record<string, unknown>): void {
     const id = String(event.id ?? "");
     const method = String(event.method ?? "");
@@ -262,6 +290,7 @@ export class BackgroundSession {
         ...(typeof event.prefill === "string" ? { prefill: event.prefill } : {}),
       });
       this.onDialog(id, true, this.sessionId);
+      this.putToUser(this.dialogs.at(-1)!);
       this.feed.log("LOBBY", `waiting for you: ${String(event.title ?? "a question").split("\n")[0]}`, "warning");
     } else if (method === "notify") {
       const level = event.notifyType === "error" ? "error" : event.notifyType === "warning" ? "warning" : "info";
@@ -299,6 +328,8 @@ export const launchPi = (args: string[], cwd: string, overrides: NodeJS.ProcessE
   const env: NodeJS.ProcessEnv = { ...process.env, PI_SKIP_VERSION_CHECK: "1" };
   delete env.BOT_LOBBY_SUBAGENT;
   delete env.BOT_LOBBY_WEB_PROJECT;
+  // It has no page of its own: its questions come to this window (see ask/web.ts).
+  env.BOT_LOBBY_BACKGROUND = "1";
   Object.assign(env, overrides);
   const proc: ChildProcess = spawn(invocation.command, invocation.args, { cwd, env, shell: false, detached: POSIX, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
   return proc as unknown as SessionProcess;
