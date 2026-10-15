@@ -22,6 +22,15 @@ test("a project stylesheet reaches a mockup as browser CSS: @theme tokens kept, 
   assert.match(css, /color: red/);
 });
 
+test("rules the preview would refuse (escapes, bindings) are dropped so the rest of the stylesheet still reaches it", async () => {
+  const { staticCss } = await import("../webui/src/lib/staticPreview.ts");
+  const css = browserCss(`.md\\:flex { display: flex; }\n.q::before { content: "\\201C"; }\n.ok { color: red; }\n@media (min-width: 1px) { .sm\\:p-2 { padding: 2px; } .fine { margin: 0; } }\n.x { background: image-set("a.png" 1x); }`);
+  assert.doesNotMatch(css, /\\/);
+  assert.match(css, /\.ok \{ color: red; \}/);
+  assert.match(css, /\.fine \{ margin: 0; \}/);
+  assert.notEqual(staticCss(css), "");
+});
+
 test("a mockup naming the project's stylesheets carries their rules in front of its own CSS", () => {
   const root = project();
   const dressed = withProjectStyles(root, { html: "<button class=\"btn\">Go</button>", css: ".extra{color:red}", stylesheets: ["src/index.css"] });

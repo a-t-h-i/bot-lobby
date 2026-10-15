@@ -377,6 +377,7 @@
   display: none;
 }
 .scroll-hint {
+  backdrop-filter: blur(4px);
   opacity: 0;
   translate: 0 var(--hint-from, 0);
   scale: 0.95;
@@ -1832,6 +1833,29 @@
   border: 2px dotted color-mix(in oklab, var(--foreground) 22%, transparent);
   background-image: var(--glass-fill);
 }
+/* The option in view: its number, name and what it means, readable at a glance; solid once it is the choice. */
+.q-panel { transition: border-color 200ms ease, opacity 300ms ease; }
+.q-panel[data-chosen] { border-style: solid; border-color: color-mix(in oklab, var(--primary) 45%, transparent); }
+.q-panel-number { background: color-mix(in oklab, var(--foreground) 8%, transparent); color: var(--muted-foreground); }
+.q-panel[data-chosen] .q-panel-number { background: var(--primary); color: var(--primary-foreground); }
+.q-panel-text { color: color-mix(in oklab, var(--foreground) 82%, var(--muted-foreground)); }
+.q-recommended { background: color-mix(in oklab, var(--primary) 12%, transparent); color: var(--primary); }
+.q-chosen { background: color-mix(in oklab, var(--primary) 12%, transparent); color: var(--primary); }
+/* The plan pill over the planning chat. */
+.plan-pill {
+  border-color: var(--glass-edge);
+  background: color-mix(in oklab, var(--card) 82%, transparent);
+  transition: scale 200ms cubic-bezier(0.34, 1.56, 0.64, 1), background-color 150ms ease;
+}
+.plan-pill:hover { background: var(--card); scale: 1.03; }
+.plan-pill:active { scale: 0.97; }
+/* The footer's "You choose: …" line, which changes with every pick. */
+.q-intent[data-empty] { color: var(--muted-foreground); }
+@media (prefers-reduced-motion: no-preference) {
+  .q-intent-text { animation: q-intent-in 260ms cubic-bezier(0.34, 1.4, 0.64, 1); }
+  .q-chosen { animation: q-intent-in 260ms cubic-bezier(0.34, 1.4, 0.64, 1); }
+}
+@keyframes q-intent-in { from { opacity: 0; translate: 0 3px; } to { opacity: 1; translate: 0 0; } }
 /*
  * The own answer: a slim centred pill that opens, on focus, into a full-width box with a formatting bar. The
  * rail's drop lands in it (data-landed): a ring springs out from its edge and the box gives a little bounce.

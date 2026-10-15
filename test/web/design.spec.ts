@@ -1416,7 +1416,7 @@ test("the Plan tab is one conversation; View plan opens the draft in a slide-out
   const main = page.locator("#main");
   await expect(main.getByRole("log", { name: "Panel conversation" })).toBeVisible();
   await expect(main.getByText("Agreed plan"), "the draft is not a second card beside the conversation").toHaveCount(0);
-  const link = main.getByRole("button", { name: /^View plan/ });
+  const link = main.getByRole("button", { name: /^View plan/ }).first();
   await expect(link, "a link to the draft once there is one").toBeVisible();
   expect(await link.evaluate((el: any) => getComputedStyle(el).borderTopWidth), "drawn as a link, not a button").toBe("0px");
   await link.click();
