@@ -119,7 +119,7 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
       style={phone && keyboardOpen ? { maxHeight: `calc(100vh - ${keyboardInset}px - 1.5rem)` } : undefined}
       className={cn(
         "transition-[max-width] duration-300 ease-snap",
-        expanded ? "h-[min(92svh,60rem)] max-h-[min(92svh,60rem)] max-w-6xl" : SIZES[view?.kind === "questionnaire" ? size : "md"],
+        expanded ? "h-[min(92svh,60rem)] max-h-[min(92svh,60rem)] max-w-7xl" : SIZES[view?.kind === "questionnaire" ? size : "md"],
         "max-md:w-[calc(100vw-2rem)] max-md:max-w-[calc(100vw-2rem)] max-md:max-h-[calc(100svh-1.5rem)]",
         expanded && "max-md:h-[calc(100svh-1.5rem)]"
       )}
