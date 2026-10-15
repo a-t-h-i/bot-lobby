@@ -8,7 +8,7 @@
  * only (the snapshot does not carry them) and go with the session.
  */
 import { useRef, useState } from "react"
-import { ArrowDown, Route } from "lucide-react"
+import { ArrowDown, FileText, Route } from "lucide-react"
 import { KeyHint } from "@/components/ui/kbd"
 import { ErrorState } from "@/app/States"
 import { useApiRead } from "@/app/useApiRead"
@@ -19,7 +19,7 @@ import { PlanHeader, PreviousButton } from "./Header"
 import { PlanSheet } from "./PlanSheet"
 import { PreviousPlans } from "./Previous"
 import { Seats } from "./Roster"
-import { INTRO_LEAD, PLAN_STEPS, isFresh, seatCells, seatedCount } from "./words"
+import { INTRO_LEAD, PLAN_STEPS, isFresh, roundLabel, seatCells, seatedCount } from "./words"
 import { Rule } from "@/ui/Frame"
 import { ScrollHints } from "@/ui/ScrollHints"
 
@@ -110,6 +110,20 @@ function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) 
   )
 }
 
+/** The draft, one click away from anywhere in the chat: a pill that stays at the top of the conversation as it scrolls. */
+function PlanPill({ snap, onOpen }: { snap: PlannerSnapshot; onOpen: () => void }) {
+  if (!snap.draft) return null
+  return (
+    <div className="pointer-events-none sticky top-0 z-10 -mt-2 mb-3 flex justify-center">
+      <button type="button" aria-haspopup="dialog" onClick={onOpen} className="plan-pill pointer-events-auto inline-flex items-center gap-2 rounded-full border py-1.5 ps-2.5 pe-3 text-sm font-medium shadow-card backdrop-blur-sm">
+        <FileText aria-hidden="true" className="size-4 text-primary" />
+        View plan
+        {snap.round > 0 ? <span className="text-xs font-normal text-muted-foreground">{roundLabel(snap.round, snap.limit)}</span> : null}
+      </button>
+    </div>
+  )
+}
+
 function Session({ snap, reload }: { snap: PlannerSnapshot; reload: () => void }) {
   const [viewing, setViewing] = useState(false)
   const [comments, setComments] = useState<Comments>(new Map())
@@ -119,6 +133,7 @@ function Session({ snap, reload }: { snap: PlannerSnapshot; reload: () => void }
     <>
       <PlanHeader snap={snap} onDone={reload} onViewPlan={() => setViewing(true)} />
       <div ref={ref} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-5 pb-dock max-md:px-4">
+        <PlanPill snap={snap} onOpen={() => setViewing(true)} />
         <PanelConversation messages={snap.messages} busy={snap.busy} />
       </div>
       <ScrollHints target={ref} />

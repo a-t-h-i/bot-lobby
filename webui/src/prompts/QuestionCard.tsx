@@ -282,9 +282,11 @@ function useDotRail(rail: RefObject<HTMLDivElement | null>, panel: RefObject<HTM
         landOwn.current()
         return
       }
+      // Placed where the dot is now, not where it was when the drop left: the layout can shift on the way.
       const state = { open: 0, reach: 0 }
-      spring(0, 1, RING_OPEN, (value) => { state.open = value; place(to, state.open, state.reach) })
-      spring(0, 1, { ...LINE_OUT, delay: 0.05 }, (value) => { state.reach = value; place(to, state.open, state.reach) })
+      const here = () => centre(active) ?? to
+      spring(0, 1, RING_OPEN, (value) => { state.open = value; place(here(), state.open, state.reach) })
+      spring(0, 1, { ...LINE_OUT, delay: 0.05 }, (value) => { state.reach = value; place(here(), state.open, state.reach) })
       const box = panel.current
       if (box) spring(0, 0, { ...KNOCK, delay: 0.1 }, (value) => { box.style.translate = Math.abs(value) > 0.01 ? `0 ${(dir * value).toFixed(2)}px` : "" })
     }
@@ -297,34 +299,57 @@ function useDotRail(rail: RefObject<HTMLDivElement | null>, panel: RefObject<HTM
     }
   }, [active, view, centre, panel, place, seat])
 
-  // A resize (the window, the panel growing with an option's text) re-seats the ring without animating.
+  // Anything that moves the dots (the window, the pop-up widening, the panel or the own-answer field growing) puts
+  // the ring back onto the active dot without animating.
   useEffect(() => {
     const el = rail.current
     if (!el || typeof ResizeObserver === "undefined") return
-    const observer = new ResizeObserver(() => {
+    let frame = 0
+    const reseat = () => {
+      frame = 0
       seat()
-      if (runs.current.length === 0 || runs.current.every((run) => run.state === "finished")) place(was.current === OWN ? undefined : centre(was.current ?? 0))
-    })
+      // A ring still springing open follows the dot by itself; otherwise it is put there now.
+      if (!runs.current.some((run) => run.state === "running")) place(was.current === OWN ? undefined : centre(was.current ?? 0))
+    }
+    const observer = new ResizeObserver(() => { if (!frame) frame = requestAnimationFrame(reseat) })
     observer.observe(el)
-    return () => observer.disconnect()
-  }, [rail, centre, place, seat])
+    if (panel.current) observer.observe(panel.current)
+    const field = own.current?.element
+    if (field) observer.observe(field)
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+    }
+  }, [rail, panel, own, centre, place, seat])
 
   return { track, ring, line, drop }
 }
 
-function OptionPanel({ option, position, onExpand, panel, dim }: { option?: AskOption; position: number; onExpand: () => void; panel: RefObject<HTMLDivElement | null>; dim?: boolean }) {
+function OptionPanel({ option, position, count, chosen, onExpand, panel, dim }: { option?: AskOption; position: number; count: number; chosen: boolean; onExpand: () => void; panel: RefObject<HTMLDivElement | null>; dim?: boolean }) {
   if (!option) return null
   const { text, recommended } = splitRecommended(option.label)
   const mockup = hasMockup(option)
   return (
-    <div ref={panel} data-dim={dim || undefined} className="q-panel min-w-0 rounded-2xl p-4 transition-opacity duration-300 data-[dim]:opacity-55 max-md:p-3">
+    <div ref={panel} data-dim={dim || undefined} data-chosen={chosen || undefined} className="q-panel min-w-0 rounded-2xl p-4 transition-opacity duration-300 data-[dim]:opacity-55 max-md:p-3">
       <div key={position} aria-live="polite" className={cn("q-panel-body grid min-w-0 gap-4", mockup ? "md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]" : "")}>
-        <div className="flex min-w-0 flex-col gap-2 py-1">
-          <p className="text-center text-sm font-medium break-words">
-            {text}
-            {recommended ? <span className="ms-1 text-primary">(Recommended)</span> : null}
-          </p>
-          {option.description ? <Markdown text={option.description} className="min-w-0 text-muted-foreground" /> : <span className="text-center text-sm text-muted-foreground">No further detail.</span>}
+        <div className="flex min-w-0 flex-col gap-2.5 py-0.5">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <span aria-hidden="true" className="q-panel-number mt-px flex size-6 shrink-0 items-center justify-center rounded-md text-xs font-semibold tabular-nums">{position + 1}</span>
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <p className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">Option {position + 1} of {count}</p>
+              <p className="text-base font-semibold break-words">
+                {text}
+                {recommended ? <span className="q-recommended ms-2 inline-flex translate-y-[-1px] items-center rounded-md px-1.5 py-0.5 align-middle text-2xs font-medium">Recommended</span> : null}
+              </p>
+            </div>
+            {chosen ? (
+              <span className="q-chosen inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium">
+                <Check aria-hidden="true" className="size-3.5" />
+                Chosen
+              </span>
+            ) : null}
+          </div>
+          {option.description ? <Markdown text={option.description} className="q-panel-text min-w-0 text-sm leading-relaxed" /> : <span className="text-sm text-muted-foreground">No further detail.</span>}
         </div>
         {mockup ? <Preview option={option} onExpand={onExpand} /> : null}
       </div>
@@ -338,23 +363,44 @@ function CardFooter({
   disabled,
   submitting,
   onCancel,
+  intent,
 }: {
   primary: "submit" | "button"
   primaryLabel: string
   disabled: boolean
   submitting: boolean
   onCancel: () => void
+  /** What the primary button will send, in words: "You choose: Node 22". */
+  intent?: { lead: string; text: string; empty?: boolean }
 }) {
   return (
     <div className="flex items-center justify-between gap-2 max-md:flex-wrap max-md:justify-start">
       <Button type="button" variant="ghost" onClick={onCancel} className="max-md:h-auto max-md:min-h-11 max-md:min-w-11 max-md:whitespace-normal">
         Cancel
       </Button>
+      {intent ? (
+        <p role="status" aria-live="polite" data-empty={intent.empty || undefined} className="q-intent flex min-w-0 flex-1 items-center justify-end gap-1.5 text-sm max-md:order-first max-md:basis-full max-md:justify-start">
+          <span key={`${intent.lead}${intent.text}`} className="q-intent-text flex min-w-0 items-center gap-1.5">
+            <span className="shrink-0 text-muted-foreground">{intent.lead}</span>
+            {intent.empty ? null : <span className="truncate font-medium">{intent.text}</span>}
+          </span>
+        </p>
+      ) : null}
       <Button type={primary} disabled={disabled || submitting} className="max-md:h-auto max-md:min-h-11 max-md:min-w-11 max-md:whitespace-normal">
         {submitting ? "Sending…" : primaryLabel}
       </Button>
     </div>
   )
+}
+
+/** The footer's line on what the answer will be. */
+function intentOf(answer: AskAnswer | undefined): { lead: string; text: string; empty?: boolean } {
+  if (!answer?.answer) return { lead: "Nothing chosen yet", text: "", empty: true }
+  if (answer.kind === "custom") {
+    const plain = answer.answer.replace(/[*_`#>]/g, "").replace(/\s+/g, " ").trim()
+    return { lead: "You answer:", text: `“${plain.length > 80 ? `${plain.slice(0, 79)}…` : plain}”` }
+  }
+  return { lead: "You choose:", text: (answer.selected ?? [answer.answer]).map((label) => splitRecommended(label).text).join(", ") }
 }
 
 function answerFor(questions: AskQuestion[], picks: Record<number, number[]>, own: Record<number, string>, index: number): AskAnswer | undefined {
@@ -610,7 +656,7 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
             />
           ))}
         </div>
-        <OptionPanel panel={panelRef} option={previewOption} position={panelAt} dim={ownMode} onExpand={() => openViewer(panelAt)} />
+        <OptionPanel panel={panelRef} option={previewOption} position={panelAt} count={question.options.length} chosen={!ownMode && picked.includes(panelAt)} dim={ownMode} onExpand={() => openViewer(panelAt)} />
       </div>
       <div className="q-own-wrap mx-auto w-full">
         <RichAnswer
@@ -645,6 +691,7 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
         disabled={!current}
         submitting={submitting}
         onCancel={onCancel}
+        intent={intentOf(current)}
       />
     </form>
   )

@@ -88,8 +88,8 @@ test("the style sheet carries the theme, fills in the page's own variables, and 
 
 test("the built-in themes: the default sets nothing, the others set both modes, and each has a preview", () => {
   assert.equal(paletteCss(PRESETS[0]!), "");
-  assert.deepEqual(PRESETS.map((preset) => preset.id), ["mist", "blossom", "grove", "ocean", "ember", "iris", "slate", "sand", "rosewood", "aurora", "midnight"]);
-  assert.equal(new Set(PRESETS.map((preset) => preset.id)).size, 11);
+  assert.deepEqual(PRESETS.map((preset) => preset.id), ["mist", "blossom", "grove", "ocean", "ember", "iris", "slate", "sand", "rosewood", "aurora", "midnight", "graphite", "lagoon", "dune", "plum", "moss", "crimson"]);
+  assert.equal(new Set(PRESETS.map((preset) => preset.id)).size, 17);
   for (const preset of PRESETS.slice(1)) {
     assert.ok(preset.light && preset.dark, preset.id);
     assert.ok(safeValue(preset.light.primary!));
@@ -113,7 +113,7 @@ function contrast(a: string, b: string): number {
   return (Math.max(...values) + 0.05) / (Math.min(...values) + 0.05);
 }
 
-test("the five complementary palettes have AA text and contrasting focus rings in both modes", () => {
+test("the complementary palettes have AA text and contrasting focus rings in both modes", () => {
   const textPairs = [
     ["foreground", "background"], ["card-foreground", "card"], ["popover-foreground", "popover"],
     ["primary-foreground", "primary"], ["secondary-foreground", "secondary"],

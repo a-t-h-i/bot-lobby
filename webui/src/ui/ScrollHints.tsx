@@ -136,7 +136,7 @@ export function ScrollHints({ target, up: showUp = true, down: showDown = true, 
         }}
         onPointerLeave={stop}
         onPointerCancel={stop}
-        className="scroll-hint grid size-7 place-items-center rounded-md border bg-card/85 text-muted-foreground shadow-card backdrop-blur-sm hover:text-foreground"
+        className="scroll-hint grid size-7 place-items-center rounded-md border bg-card/85 text-muted-foreground shadow-card hover:text-foreground"
       >
         <Icon aria-hidden="true" className="size-4" />
       </button>

@@ -17,7 +17,7 @@ export const MAX_OPTIONS = 4;
 export const MAX_HEADER = 16;
 export const MAX_LABEL = 60;
 export const MAX_PREVIEW_HTML = 100_000;
-export const MAX_PREVIEW_CSS = 50_000;
+export const MAX_PREVIEW_CSS = 120_000;
 
 /** The row under every question's options where the user writes their own answer. */
 export const OWN_ANSWER = "Type something.";
