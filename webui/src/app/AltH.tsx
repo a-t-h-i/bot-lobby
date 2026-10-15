@@ -3,7 +3,8 @@
  * it, or any other key. The lines for the whole page and the tabs come from
  * the server's key table; the message box and pop-up keys are the page's own.
  */
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
+import { ScrollHints } from "@/ui/ScrollHints"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Kbd, Keys } from "@/components/ui/kbd"
@@ -144,6 +145,7 @@ export function AltH({
   const phone = useMediaQuery("(max-width: 767.98px)")
   const wants = open && !phone
   const shown = useOverlaySlot(wants, PRIORITY.help)
+  const pane = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (phone && open) onOpenChange(false)
@@ -174,7 +176,7 @@ export function AltH({
           </Button>
         </span>
       </header>
-      <div className="grid min-h-0 flex-1 gap-x-10 gap-y-6 overflow-y-auto p-4 max-md:p-3 md:grid-cols-2">
+      <div ref={pane} className="grid min-h-0 flex-1 gap-x-10 gap-y-6 overflow-y-auto p-4 max-md:p-3 md:grid-cols-2">
         <div className="flex flex-col gap-6">
           <Section title="Everywhere" lines={fromKeys(keys)} />
           <Section title="Jump to a tab" lines={tabKeys(tabs)} />
@@ -187,6 +189,7 @@ export function AltH({
           <Section title="Questions" lines={QUESTIONS} />
         </div>
       </div>
+      <ScrollHints target={pane} />
     </Popup>
   )
 }

@@ -366,6 +366,62 @@
 }
 
 /*
+ * Panes with scroll hints (ui/ScrollHints) hide their scrollbar: the up/down
+ * pair at their edge shows where there is more and moves through it. Each
+ * arrow pops in when there is room that way and tucks away when there is not.
+ */
+[data-scroll-hints] {
+  scrollbar-width: none;
+}
+[data-scroll-hints]::-webkit-scrollbar {
+  display: none;
+}
+.scroll-hint {
+  opacity: 0;
+  scale: 0.6;
+  pointer-events: none;
+  transition: opacity 160ms ease, scale 160ms ease, color 120ms ease;
+}
+.scroll-hint[data-shown] {
+  opacity: 0.8;
+  scale: 1;
+  pointer-events: auto;
+}
+.scroll-hint[data-shown]:hover {
+  opacity: 1;
+}
+.scroll-hint[data-shown]:active {
+  scale: 0.9;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .scroll-hint {
+    transition: opacity 200ms ease, scale 380ms cubic-bezier(0.34, 1.56, 0.64, 1), color 120ms ease;
+  }
+  .scroll-hint[data-shown][data-direction="down"]:hover svg {
+    animation: scroll-hint-nudge 600ms ease;
+  }
+  .scroll-hint[data-shown][data-direction="up"]:hover svg {
+    animation: scroll-hint-nudge-up 600ms ease;
+  }
+}
+@keyframes scroll-hint-nudge {
+  0%, 100% { translate: 0 0; }
+  40% { translate: 0 2px; }
+  70% { translate: 0 -1px; }
+}
+@keyframes scroll-hint-nudge-up {
+  0%, 100% { translate: 0 0; }
+  40% { translate: 0 -2px; }
+  70% { translate: 0 1px; }
+}
+/* Under a finger the pane scrolls with a swipe; the arrows would only cover the text. */
+@media (pointer: coarse) {
+  .scroll-hints {
+    display: none;
+  }
+}
+
+/*
  * The message box floats over the page as a dock. Whatever scrolls under it
  * leaves room at its end to scroll clear of it, and keyboard scrolling stops
  * short of it too.

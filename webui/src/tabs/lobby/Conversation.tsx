@@ -15,6 +15,7 @@ import { MessageSquare } from "lucide-react"
 import { AgentMessage, ChatNote, TypingDots, YourMessage } from "./ChatParts"
 import { motion } from "motion/react"
 import { JumpToLatest } from "@/ui/JumpToLatest"
+import { ScrollHints } from "@/ui/ScrollHints"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Keys } from "@/components/ui/kbd"
 import { call } from "@/lib/api"
@@ -200,6 +201,7 @@ export function Conversation({
           </div>
         )}
       </div>
+      <ScrollHints target={ref} down={false} />
       {!atBottom ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-dock z-10 flex justify-center [&>*]:pointer-events-auto">
           <JumpToLatest onClick={stick} />

@@ -6,6 +6,7 @@
  * under the line.
  */
 import { useMemo, useRef, useState } from "react"
+import { ScrollHints } from "@/ui/ScrollHints"
 import { X } from "lucide-react"
 import type { PlannerSnapshot } from "@protocol"
 import { useMediaQuery } from "@/app/hooks"
@@ -88,6 +89,7 @@ export function PlanSheet({ open, onClose, snap, comments, onSent }: {
           )}
           <SeatNeeds notes={snap.notes} />
         </div>
+        <ScrollHints target={body} />
       </SheetContent>
     </Sheet>
   )

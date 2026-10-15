@@ -16,6 +16,7 @@ import { PRIORITY, useAnyOverlay, useOverlaySlot } from "@/lib/overlay"
 import { matchKey } from "@/app/useLobbyKeys"
 import { AgentIcon } from "@/ui/AgentIcon"
 import { Markdown } from "@/ui/Markdown"
+import { ScrollHints } from "@/ui/ScrollHints"
 import { ThinkingOrb } from "./Orb"
 import { latestThoughts, sourceLabel, sourceTone, type ThoughtEntry } from "./types"
 import { thoughtSteps } from "./thoughtSteps"
@@ -115,6 +116,7 @@ export function Thoughts({ thoughts, collapsed, onToggle, shortcut, busy = [] }:
   // Someone thinking, or at work with nothing to show yet: the pane's edge pulses in their colour.
   const working = spotlight ? "thinking" : busy.length ? "busy" : undefined
   const bubble = useRef<HTMLButtonElement>(null)
+  const log = useRef<HTMLDivElement>(null)
   const minimized = useRef(collapsed)
   minimized.current = collapsed
   useEffect(() => () => { if (!minimized.current) onToggle() }, [onToggle])
@@ -151,7 +153,7 @@ export function Thoughts({ thoughts, collapsed, onToggle, shortcut, busy = [] }:
         }}
       >
         <div aria-hidden="true" className="thought-aura" data-working={working} />
-        <div className="relative min-h-0 overflow-y-auto p-3 outline-none md:p-4" role="log" aria-label="Latest thoughts" tabIndex={0}>
+        <div ref={log} className="relative min-h-0 overflow-y-auto p-3 outline-none md:p-4" role="log" aria-label="Latest thoughts" tabIndex={0}>
           {shown.length ? (
             <ul className="flex flex-col gap-2.5">
               {shown.map((thought) => <ThoughtBubble key={thought.id} thought={thought} />)}
@@ -160,6 +162,7 @@ export function Thoughts({ thoughts, collapsed, onToggle, shortcut, busy = [] }:
             <p className="px-2 py-6 text-center text-sm text-muted-foreground">Thoughts from the oracle and every agent appear here, and only here.</p>
           )}
         </div>
+        <ScrollHints target={log} />
       </Popup>
     </>
   )
