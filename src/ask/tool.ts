@@ -12,9 +12,10 @@ import { Type } from "typebox";
 import { isSubagentProcess } from "../pi/quiet.ts";
 import { askUser } from "./web.ts";
 import { relayAsker, relayEnabled } from "./relay.ts";
-import { ASK_TOOL, isImagePath, validHtmlPreview, MAX_PREVIEW_HTML, MAX_PREVIEW_CSS, MAX_HEADER, MAX_LABEL, MAX_OPTIONS, MAX_QUESTIONS, MIN_OPTIONS, RESERVED, type AskQuestion, type AskResult, type Asker } from "./types.ts";
+import { ASK_TOOL, isImagePath, validHtmlPreview, MAX_PREVIEW_HTML, MAX_PREVIEW_CSS, MAX_HEADER, MAX_LABEL, MAX_OPTIONS, MAX_QUESTIONS, MIN_OPTIONS, RESERVED, type AskOption, type AskQuestion, type AskResult, type Asker } from "./types.ts";
 
 import { detectProjectRoot } from "../state/project.ts";
+import { MAX_STYLESHEETS, withProjectStyles } from "./project-styles.ts";
 import { ownedTask } from "../state/persistence.ts";
 import { withBlockingRequest } from "../state/blocking-requests.ts";
 
@@ -24,6 +25,7 @@ const OptionSchema = Type.Object({
   htmlPreview: Type.Optional(Type.Object({
     html: Type.String({ maxLength: MAX_PREVIEW_HTML, description: "HTML of a mockup of this option. Controls (button, input, select, textarea, label, details/summary) stay live and CSS transitions and keyframes run, so the user can try it; scripts, forms, images, fonts and links are stripped." }),
     css: Type.Optional(Type.String({ maxLength: MAX_PREVIEW_CSS })),
+    stylesheets: Type.Optional(Type.Array(Type.String(), { maxItems: MAX_STYLESHEETS, description: "Project-relative paths of the project's own CSS files (design tokens, theme, component styles, e.g. \"src/index.css\") whose rules go in front of `css`, so the mockup uses the project's real variables and classes. Tailwind `@theme` tokens are kept; build-time directives such as `@apply` are dropped. Together with `css` at most " + MAX_PREVIEW_CSS + " characters." })),
   }, { additionalProperties: false, description: "An interactive HTML/CSS mockup of this option (no scripts: interaction through CSS states), laid out for a page about 1200px wide: shown as a thumbnail beside the question, which the user expands to scroll through every option's mockup. Give one to every option of a visual question (a layout, a screen, a component's look)." })),
   label: Type.String({ maxLength: MAX_LABEL, description: `The option as the user sees and picks it: 1-5 words, at most ${MAX_LABEL} characters.` }),
   description: Type.Optional(Type.String({ description: "What choosing it means: its trade-offs or consequences. Markdown." })),
@@ -73,6 +75,23 @@ export function invalidQuestions(questions: readonly AskQuestion[]): string | un
   return undefined;
 }
 
+/** Each mockup that names project stylesheets gets their rules in front of its own CSS. */
+export function dressMockups(questions: readonly AskQuestion[], root: string | undefined): AskQuestion[] {
+  return questions.map((question, index) => ({
+    ...question,
+    options: question.options.map((option) => {
+      const preview = option.htmlPreview as (AskOption["htmlPreview"] & { stylesheets?: string[] }) | undefined;
+      if (!preview?.stylesheets) return option;
+      if (!root) throw new Error(`question ${index + 1}: the project's stylesheets cannot be read here; put the styles in \`css\`.`);
+      try {
+        return { ...option, htmlPreview: withProjectStyles(root, preview) };
+      } catch (error) {
+        throw new Error(`question ${index + 1}, "${option.label}": ${error instanceof Error ? error.message : String(error)}.`);
+      }
+    }),
+  }));
+}
+
 /** What the model does with questions the user left unanswered: wait, never fill them in. */
 const STILL_OPEN = "Do not assume answers, do not pick the recommended options, and do not go on with work that depends on them. Say in one short line that the questions are waiting, end your turn, and put them to the user again when they next write.";
 const NOT_ANSWERED = `The user left the questions without answering. ${STILL_OPEN}`;
@@ -119,11 +138,11 @@ export function registerAskTool(pi: ExtensionAPI, ask?: Asker, configDir = ".pi"
     ],
     parameters: AskParams,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const questions = (params as { questions: AskQuestion[] }).questions;
-      const invalid = invalidQuestions(questions);
-      if (invalid) throw new Error(`${invalid}.`);
       // A context without a cwd or session cannot be attributed to a task, so the ask runs untracked.
       const root = ctx.cwd ? detectProjectRoot(ctx.cwd, configDir) : undefined;
+      const questions = dressMockups((params as { questions: AskQuestion[] }).questions, root ?? ctx.cwd);
+      const invalid = invalidQuestions(questions);
+      if (invalid) throw new Error(`${invalid}.`);
       const sessionId = ctx.sessionManager?.getSessionId();
       const task = subagent || !root || !sessionId ? undefined : ownedTask(root, configDir, sessionId);
       const tracked = task && root && sessionId ? { root, configDir, taskId: task.id, sessionId } : undefined;

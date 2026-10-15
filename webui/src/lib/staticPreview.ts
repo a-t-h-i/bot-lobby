@@ -41,7 +41,7 @@ export function previewPayload(value: unknown): HtmlPreview | undefined {
   if (!value || typeof value !== "object") return undefined
   const p = value as Record<string, unknown>
   if (typeof p.html !== "string" || p.html.length > 100000) return undefined
-  if (p.css !== undefined && (typeof p.css !== "string" || p.css.length > 50000)) return undefined
+  if (p.css !== undefined && (typeof p.css !== "string" || p.css.length > 120000)) return undefined
   return { html: p.html, ...(typeof p.css === "string" ? { css: p.css } : {}) }
 }
 

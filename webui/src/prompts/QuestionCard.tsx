@@ -282,9 +282,11 @@ function useDotRail(rail: RefObject<HTMLDivElement | null>, panel: RefObject<HTM
         landOwn.current()
         return
       }
+      // Placed where the dot is now, not where it was when the drop left: the layout can shift on the way.
       const state = { open: 0, reach: 0 }
-      spring(0, 1, RING_OPEN, (value) => { state.open = value; place(to, state.open, state.reach) })
-      spring(0, 1, { ...LINE_OUT, delay: 0.05 }, (value) => { state.reach = value; place(to, state.open, state.reach) })
+      const here = () => centre(active) ?? to
+      spring(0, 1, RING_OPEN, (value) => { state.open = value; place(here(), state.open, state.reach) })
+      spring(0, 1, { ...LINE_OUT, delay: 0.05 }, (value) => { state.reach = value; place(here(), state.open, state.reach) })
       const box = panel.current
       if (box) spring(0, 0, { ...KNOCK, delay: 0.1 }, (value) => { box.style.translate = Math.abs(value) > 0.01 ? `0 ${(dir * value).toFixed(2)}px` : "" })
     }
@@ -297,17 +299,28 @@ function useDotRail(rail: RefObject<HTMLDivElement | null>, panel: RefObject<HTM
     }
   }, [active, view, centre, panel, place, seat])
 
-  // A resize (the window, the panel growing with an option's text) re-seats the ring without animating.
+  // Anything that moves the dots (the window, the pop-up widening, the panel or the own-answer field growing) puts
+  // the ring back onto the active dot without animating.
   useEffect(() => {
     const el = rail.current
     if (!el || typeof ResizeObserver === "undefined") return
-    const observer = new ResizeObserver(() => {
+    let frame = 0
+    const reseat = () => {
+      frame = 0
       seat()
-      if (runs.current.length === 0 || runs.current.every((run) => run.state === "finished")) place(was.current === OWN ? undefined : centre(was.current ?? 0))
-    })
+      // A ring still springing open follows the dot by itself; otherwise it is put there now.
+      if (!runs.current.some((run) => run.state === "running")) place(was.current === OWN ? undefined : centre(was.current ?? 0))
+    }
+    const observer = new ResizeObserver(() => { if (!frame) frame = requestAnimationFrame(reseat) })
     observer.observe(el)
-    return () => observer.disconnect()
-  }, [rail, centre, place, seat])
+    if (panel.current) observer.observe(panel.current)
+    const field = own.current?.element
+    if (field) observer.observe(field)
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+    }
+  }, [rail, panel, own, centre, place, seat])
 
   return { track, ring, line, drop }
 }

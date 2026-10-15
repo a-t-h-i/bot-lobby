@@ -1,6 +1,6 @@
 {
-  "hash": "b8f863ac7d7dedd83835a176340810ec987233029ebae20f8cb09c564357229d",
-  "builtAt": "2026-10-15T09:13:03.649Z",
+  "hash": "864d76f2d9aca0a0560d8f32d08283a31c6ad2f67d6a624618d8ac4f63e5152d",
+  "builtAt": "2026-10-15T09:47:15.490Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -264,7 +264,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "72fc17d0fe8a17dc769c94c530df202c1ca9956adfd560d712817bf21bbe07e5"
+      "sha256": "e342268c3eb3a18ced4dff95b68fea483ab4ff735028e80a53591bf3c044c706"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -324,7 +324,7 @@
     },
     {
       "path": "webui/src/lib/staticPreview.ts",
-      "sha256": "63f4a7e4676a4e8da332e8721faa3c728cf6789608db9f023c203f1aef59aff1"
+      "sha256": "b639836aaf6c0b694d65ba50419434ca1ad49dfbfe552541e5e32f72c5985faf"
     },
     {
       "path": "webui/src/lib/store.ts",
@@ -372,7 +372,7 @@
     },
     {
       "path": "webui/src/prompts/QuestionCard.tsx",
-      "sha256": "dcb019a5be835fb72e92744aac9a9d60cef1cd548092d0d67ece5b19608e018e"
+      "sha256": "746a9a0b7eebbd13e3c49e87abe7805d8b1a1bd6dc87b5b8afb12a97af7b8704"
     },
     {
       "path": "webui/src/prompts/QuestionPopup.tsx",

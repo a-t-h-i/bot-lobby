@@ -125,7 +125,21 @@ describe it: ask with `ask_user_question` and give every option an
 `htmlPreview`, a mockup of that option in HTML and CSS, laid out for a page
 about 1200px wide, with the real content, palette and proportions of what you
 would build, in the project's existing design language, never grey
-placeholder boxes. Make every mockup interactive: use real `button`, `input`,
+placeholder boxes.
+
+Build mockups from the project's real styles whenever it has them, not from a
+lookalike. Find the stylesheets that carry its design tokens, theme and
+component styles (for example `src/index.css`, `app/globals.css`, a
+`theme.css`) and name them in the mockup's `stylesheets`: their rules go in
+front of your CSS, Tailwind `@theme` tokens included, so `var(--primary)`, the
+font stacks, the radii and the project's own classes work in the mockup. Use
+the markup and class names of the project's existing components (read them
+first), and write CSS only for what the option changes. Utility classes that
+only exist after a build (Tailwind's `px-3`, `bg-primary`) do not reach the
+mockup: write those few rules yourself with the project's variables. When the
+styles live in JavaScript (CSS-in-JS, a theme object), copy their actual
+values into the mockup's CSS. Only a project with no UI yet gets styles you
+choose, and then you ask first. Make every mockup interactive: use real `button`, `input`,
 `select`, `textarea`, `label` and `details`/`summary` elements with their
 hover, focus, active, checked and open states, and CSS transitions and
 `@keyframes` for the motion the option proposes (a pop-over opening, a
