@@ -15,6 +15,7 @@ import { PRIORITY, hasOverlay, useOverlaySlot } from "@/lib/overlay"
 import { currentRow, horizontalStep, isTyping, stepRows, verticalStep } from "@/prompts/nav"
 import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ScrollHints } from "./ScrollHints"
 
 /** Two panes side by side from this width, in pixels. */
 export function useWide(): boolean {
@@ -47,6 +48,7 @@ function DetailSheet({ open, onClose, describe, children }: Pick<SplitPaneProps,
   const shown = useOverlaySlot(open, PRIORITY.sheet)
   const phone = useMediaQuery("(max-width: 767.98px)")
   const mounted = useRef(false)
+  const body = useRef<HTMLDivElement>(null)
   if (shown) mounted.current = true
   if (!open) mounted.current = false
   return (
@@ -75,7 +77,8 @@ function DetailSheet({ open, onClose, describe, children }: Pick<SplitPaneProps,
             </Button>
           </SheetClose>
         </SheetHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
+        <div ref={body} className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
+        <ScrollHints target={body} />
       </SheetContent>
     </Sheet>
   )
@@ -88,16 +91,19 @@ function InlinePanes({ list, detail, open, detailClassName, listPane, detailPane
   onDetailKey: (event: KeyboardEvent<HTMLElement>) => void
 }) {
   const shown = open && detail !== null
-  return <div className={cn("grid min-h-0 min-w-0 flex-1", shown ? "grid-rows-[minmax(0,1fr)_minmax(0,2fr)]" : "grid-rows-1")}>
+  return <div className={cn("relative grid min-h-0 min-w-0 flex-1", shown ? "grid-rows-[minmax(0,1fr)_minmax(0,2fr)]" : "grid-rows-1")}>
     <Pane data-pane="list" ref={listPane} onKeyDown={onListKey} className={cn("min-w-0 overflow-x-hidden overflow-y-auto", shown ? "border-b border-border" : "pb-dock")}>{list}</Pane>
     {shown ? <Pane data-pane="detail" ref={detailPane} aria-label="Detail" tabIndex={0} onKeyDown={onDetailKey}
       className={cn("min-w-0 overflow-x-hidden overflow-y-auto px-5 pt-5 pb-dock", detailClassName)}>{detail}</Pane> : null}
+    <ScrollHints target={listPane} />
+    {shown ? <ScrollHints target={detailPane} /> : null}
   </div>
 }
 
 export function SplitPane({ wide, list, detail, open, onClose, hint, describe, inlineDetail, detailClassName }: SplitPaneProps) {
   const listPane = useRef<HTMLElement>(null)
   const detailPane = useRef<HTMLElement>(null)
+  const narrow = useRef<HTMLDivElement>(null)
 
   // List: up/down (or k/j) step through the rows, Home/End jump, right (or l) goes into the detail.
   function onListKey(event: KeyboardEvent<HTMLElement>) {
@@ -128,13 +134,16 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe, i
   if (!wide && inlineDetail) return <InlinePanes list={list} detail={detail} open={open} detailClassName={detailClassName} listPane={listPane} detailPane={detailPane} onListKey={onListKey} onDetailKey={onDetailKey} />
   if (!wide) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-dock">
-        <Pane data-pane="list" ref={listPane} onKeyDown={onListKey} className="max-md:shrink-0">
-          {list}
-        </Pane>
-        <DetailSheet open={open && detail !== null} onClose={onClose} describe={describe}>
-          {detail}
-        </DetailSheet>
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div ref={narrow} className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-dock">
+          <Pane data-pane="list" ref={listPane} onKeyDown={onListKey} className="max-md:shrink-0">
+            {list}
+          </Pane>
+          <DetailSheet open={open && detail !== null} onClose={onClose} describe={describe}>
+            {detail}
+          </DetailSheet>
+        </div>
+        <ScrollHints target={narrow} />
       </div>
     )
   }
@@ -145,6 +154,7 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe, i
         <Pane data-pane="list" ref={listPane} onKeyDown={onListKey} className="h-full overflow-y-auto pb-dock">
           {list}
         </Pane>
+        <ScrollHints target={listPane} />
       </div>
       <div className="workspace-pane min-h-0 min-w-0 overflow-hidden rounded-xl border shadow-xs">
         <Pane data-pane="detail" ref={detailPane} tabIndex={0} aria-label="Detail" onKeyDown={onDetailKey} className={cn("h-full overflow-y-auto px-5 pt-5 pb-dock outline-none focus-visible:bg-muted/30", detailClassName)}>
@@ -170,6 +180,7 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe, i
             </div>
           )}
         </Pane>
+        <ScrollHints target={detailPane} />
       </div>
     </div>
   )

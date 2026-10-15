@@ -7,7 +7,7 @@
  * mockups expand in place: the pop-up grows to nearly the whole window for the
  * mockup viewer, and Esc goes back to the question before it puts it away.
  */
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { HelpCircle, X } from "lucide-react"
 import { useMediaQuery } from "@/app/hooks"
 import { usePhoneViewport } from "@/app/usePhoneViewport"
@@ -19,6 +19,7 @@ import { PRIORITY, useOverlaySlot } from "@/lib/overlay"
 import { toast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 import type { WebPrompt } from "@protocol"
+import { ScrollHints } from "@/ui/ScrollHints"
 import { QuestionCard, type QuestionSize } from "./QuestionCard"
 import { parsePrompt } from "./payload"
 
@@ -69,6 +70,7 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
   const [leaving, setLeaving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const body = useRef<HTMLDivElement>(null)
   // The question in view says how much room it wants (wider for long questions, widest for mockups).
   const [size, setSize] = useState<QuestionSize>("md")
   const phone = useMediaQuery(PHONE_QUERY)
@@ -135,7 +137,7 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
               <X aria-hidden="true" />
             </Button>
           </header>
-          <div className={expanded ? "flex min-h-0 min-w-0 flex-1 flex-col" : "min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 max-md:px-3 max-md:pb-3"}>
+          <div ref={body} className={expanded ? "flex min-h-0 min-w-0 flex-1 flex-col" : "min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 max-md:px-3 max-md:pb-3"}>
             {view ? (
               leaving ? (
                 <LeavePrompt submitting={submitting} onKeep={() => setLeaving(false)} onLeave={() => void settle(dismiss(active.id), "Could not leave the question")} />
@@ -160,6 +162,7 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
               </div>
             )}
           </div>
+          {expanded ? null : <ScrollHints target={body} />}
         </section>
       ) : null}
     </Popup>
