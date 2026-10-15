@@ -25,6 +25,8 @@ archiving removes a card immediately, while the List view can still show the arc
 A task that is paused, or that no running session drives, shows **Resume** (`R`) in **Tasks**.
 It carries the task on without moving your window: a paused task is unpaused where it runs, and a
 stopped one carries on in a background session, which restarts its own session when its file is found.
+Whatever a background session asks (its questionnaires, picks, yes/no and free-text questions) pops up
+in the window you are in, named after the session, so you never switch sessions to answer.
 
 New tasks get a short title summarizing the full request, which also names their branch and
 session. Naming uses low reasoning on `classifier.effort.cheapModel` when configured, otherwise
