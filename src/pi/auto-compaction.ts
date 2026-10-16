@@ -1,5 +1,5 @@
 import { compact, CONFIG_DIR_NAME, DEFAULT_COMPACTION_SETTINGS, estimateTokens, findCutPoint, type ExtensionAPI, type ExtensionContext, type TurnEndEvent } from "@earendil-works/pi-coding-agent";
-import { contextMarks, freshContextOn } from "./fresh-context.ts";
+import { contextMarks, freshContextOn, staleCompaction } from "./fresh-context.ts";
 import { AUTO_COMPACT_ENV, isSubagentProcess } from "./quiet.ts";
 import { dataRoot, detectProjectRoot, loadConfig } from "../state/project.ts";
 import { describeShared, DIGEST_INSTRUCTION, parseDigest, shareDigest, type DigestItem } from "../knowledge/oracle-digest.ts";
@@ -34,8 +34,9 @@ export function compactionThreshold(window: number, reserve = DEFAULT_COMPACTION
 }
 
 /**
- * Compact at a settled tool boundary; ctx.compact() would abort the turn we need to continue. Each agent's settings
- * can turn it off. The oracle's checkpoint also lists what it learned that is worth keeping, tagged by agent, and
+ * Compact at a settled tool boundary, below pi's own threshold (pi 1.3 still sets that only per model in settings, and
+ * ctx.compact() would abort the turn we need to continue). Each agent's settings can turn it off. Compactions pi
+ * starts itself get the same checkpoint through `session_before_compact`. The oracle's checkpoint also lists what it learned that is worth keeping, tagged by agent, and
  * that goes into the knowledge base: its own, and the designer's, backend's and QA's where it concerns them.
  */
 export function registerAutoCompaction(pi: ExtensionAPI, summarize: typeof compact = compact, options: AutoCompactionOptions = {}): void {
@@ -88,26 +89,52 @@ export function registerAutoCompaction(pi: ExtensionAPI, summarize: typeof compa
     busy = true;
     ctx.ui.notify("Compacting agent context", "info");
     try {
-      const auth = await ctx.modelRegistry.getApiKeyAndHeaders(ctx.model);
-      if (!auth.ok) throw new Error(auth.error);
-      const headers = auth.headers ? Object.fromEntries(Object.entries(auth.headers).filter((entry): entry is [string, string] => entry[1] !== null)) : undefined;
-      const retry = pi.getSettings().retry;
-      const retryPolicy = { enabled: retry?.enabled ?? true, maxRetries: retry?.maxRetries ?? 3, baseDelayMs: retry?.baseDelayMs ?? 2_000, maxAgentDelayMs: retry?.maxAgentDelayMs };
-      const result = await summarize({ firstKeptEntryId, messagesToSummarize: messages, turnPrefixMessages: [], isSplitTurn: false, tokensBefore: estimate, previousSummary: previous?.type === "compaction" ? previous.summary : undefined, fileOps, settings: { enabled: true, reserveTokens: reserve, keepRecentTokens } }, auth.baseUrl ? { ...ctx.model, baseUrl: auth.baseUrl } : ctx.model, auth.apiKey, headers, oracle ? `${CHECKPOINT} ${DIGEST_INSTRUCTION}` : CHECKPOINT, ctx.signal, undefined, undefined, auth.env, retryPolicy);
-      ctx.signal?.throwIfAborted();
+      const result = await checkpoint({ firstKeptEntryId, messagesToSummarize: messages, turnPrefixMessages: [], isSplitTurn: false, tokensBefore: estimate, previousSummary: previous?.type === "compaction" ? previous.summary : undefined, fileOps, settings: { enabled: true, reserveTokens: reserve, keepRecentTokens } }, ctx, ctx.signal);
       ctx.ui.notify("Agent context compacted", "info");
-      if (oracle) {
-        try {
-          const items = parseDigest(result.summary);
-          const shared = items.length ? share(items, ctx) : "";
-          if (shared) ctx.ui.notify(`Knowledge updated: ${shared}`, "info");
-        } catch (error) {
-          ctx.ui.notify(`Could not update knowledge: ${(error as Error).message}`, "warning");
-        }
-      }
+      learn(result.summary, ctx);
       return { entries: [...event.entries, { type: "compaction" as const, summary: result.summary, firstKeptEntryId, usage: result.usage, details: result.details }] };
     } catch (error) {
       ctx.ui.notify(`Context compaction failed: ${(error as Error).message}`, "warning");
     } finally { busy = false; }
   });
+  // pi's own compactions (its context threshold, overflow recovery, /compact) write the same checkpoint from pi's
+  // preparation, so every summary an agent continues from has the same shape and the oracle's still feeds knowledge.
+  pi.on("session_before_compact", async (event, ctx) => {
+    if (staleCompaction(event) || !ctx.model) return undefined;
+    try {
+      const compaction = await checkpoint(event.preparation, ctx, event.signal, event.customInstructions);
+      learn(compaction.summary, ctx);
+      return { compaction };
+    } catch (error) {
+      if (event.signal.aborted) throw error;
+      ctx.ui.notify(`Checkpoint failed, using pi's summary: ${(error as Error).message}`, "warning");
+      return undefined;
+    }
+  });
+
+  /** Summarize with the checkpoint prompt (and, for the oracle, its knowledge digest) on the session's model. */
+  async function checkpoint(preparation: Parameters<typeof compact>[0], ctx: ExtensionContext, signal: AbortSignal | undefined, extra?: string) {
+    const model = ctx.model!;
+    const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+    if (!auth.ok) throw new Error(auth.error);
+    const headers = auth.headers ? Object.fromEntries(Object.entries(auth.headers).filter((entry): entry is [string, string] => entry[1] !== null)) : undefined;
+    const retry = pi.getSettings().retry;
+    const retryPolicy = { enabled: retry?.enabled ?? true, maxRetries: retry?.maxRetries ?? 3, baseDelayMs: retry?.baseDelayMs ?? 2_000, maxAgentDelayMs: retry?.maxAgentDelayMs };
+    const instructions = [oracle ? `${CHECKPOINT} ${DIGEST_INSTRUCTION}` : CHECKPOINT, extra].filter(Boolean).join("\n\n");
+    const result = await summarize(preparation, auth.baseUrl ? { ...model, baseUrl: auth.baseUrl } : model, auth.apiKey, headers, instructions, signal, undefined, undefined, auth.env, retryPolicy);
+    signal?.throwIfAborted();
+    return result;
+  }
+
+  /** The oracle's digest from a checkpoint, shared into the knowledge base. */
+  function learn(summary: string, ctx: ExtensionContext): void {
+    if (!oracle) return;
+    try {
+      const items = parseDigest(summary);
+      const shared = items.length ? share(items, ctx) : "";
+      if (shared) ctx.ui.notify(`Knowledge updated: ${shared}`, "info");
+    } catch (error) {
+      ctx.ui.notify(`Could not update knowledge: ${(error as Error).message}`, "warning");
+    }
+  }
 }
