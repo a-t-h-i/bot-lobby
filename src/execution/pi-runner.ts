@@ -362,12 +362,21 @@ export function finishedThought(line: string): string | undefined {
   return text.length > MAX_THOUGHT_CHARS ? `${text.slice(0, MAX_THOUGHT_CHARS - 1)}…` : text;
 }
 
+/** pi's MCP resource tools; the agent policy lets them reach only servers with a granted tool. */
+export const MCP_RESOURCE_TOOLS: readonly string[] = ["list_mcp_resources", "list_mcp_resource_templates", "read_mcp_resource"];
+
 /** Build the `pi` argv for one isolated, headless RPC agent run; the task goes over stdin. */
 export function buildPiArgs(options: Omit<PiRunOptions, "task"> & { systemPromptFile?: string }): string[] {
   const args = ["--mode", "rpc", "--no-session", "--no-prompt-templates", "--no-themes", "--extension", fileURLToPath(new URL("../index.ts", import.meta.url))];
   if (options.model && options.model !== "inherit") args.push("--model", options.model);
   if (options.thinking) args.push("--thinking", options.thinking);
-  if (options.tools && options.tools.length > 0) args.push("--tools", options.tools.join(","));
+  if (options.tools && options.tools.length > 0) {
+    // pi keeps every MCP tool under --tools unless an entry names one, so name the granted ones (and the resource
+    // tools their servers need), or run without MCP at all when nothing is granted.
+    const mcp = options.mcpTools?.filter((name) => name.startsWith("mcp__")) ?? [];
+    args.push("--tools", [...options.tools, ...(mcp.length ? [...mcp, ...MCP_RESOURCE_TOOLS] : [])].join(","));
+    if (!mcp.length) args.push("--no-mcp");
+  }
   if (options.systemPromptFile) args.push("--append-system-prompt", options.systemPromptFile);
   return args;
 }
@@ -775,7 +784,7 @@ export async function runPiAgent(given: PiRunOptions, run: ProcessRunner = spawn
   try {
     prompt = writePromptFile([options.systemPrompt, host.note].filter(Boolean).join("\n\n"));
     if (options.signal?.aborted) return { status: "cancelled", output: "", usage: { input: 0, output: 0, cost: 0, turns: 0 } };
-    const args = buildPiArgs({ ...options, tools: host.tools, systemPromptFile: prompt.file });
+    const args = buildPiArgs({ ...options, tools: host.tools, mcpTools: host.mcpTools, systemPromptFile: prompt.file });
     const outcome = await run(args, {
       cwd: options.cwd,
       signal: options.signal,
