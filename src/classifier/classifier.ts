@@ -2,7 +2,8 @@
  * The classifier facade every feature calls. It never throws into the
  * workflow: any failure (no key, a timeout, an API error, a request over
  * budget) returns undefined, and the caller falls back to what bot-lobby did
- * before the classifier existed. It answers with Jev on its host, or with the
+ * before the classifier existed. It answers with Jev on its host (through pi's
+ * classifier catalog and logins when pi lists it), or with the
  * model `classifier.engine` names (any classifier or chat model pi is signed
  * in to; see `models.ts`). Three failures in a row pause it for ten
  * minutes with a single warning, so a dead endpoint cannot tax every step.
@@ -12,7 +13,7 @@ import type { ClassifierConfig, ClassifierFeature } from "../schemas/configurati
 import type { MetricRecord } from "../state/metrics.ts";
 import { JevError, noul, systemOne, type Answer, type FetchLike, type SystemOneRequest } from "./client.ts";
 import { fitsBudget, requestSize, LIMITS } from "./limits.ts";
-import { keyHint, resolveTarget, type KeySource } from "./hosts.ts";
+import { keyHint, piModelRef, resolveTarget, type KeySource } from "./hosts.ts";
 import type { EngineAnswer } from "./models.ts";
 
 export type ClassifierPurpose = ClassifierFeature | "test";
@@ -32,6 +33,8 @@ export interface ClassifierDeps {
   keys?: KeySource;
   /** Answers with the model `classifier.engine` names, through pi's registry; absent before a session starts. */
   engine?: EngineAnswer;
+  /** Whether pi's registry lists a classifier model (`provider/id`); Jev on its host goes through pi when it does. */
+  lists?: (ref: string) => boolean;
   fetch?: FetchLike;
   sleep?: (ms: number) => Promise<void>;
   env?: NodeJS.ProcessEnv;
@@ -111,6 +114,15 @@ export class Classifier {
         this.deps.warn?.(`bot-lobby classifier is on but has ${error}. Until then bot-lobby decides without it.`);
       }
       return { ok: false, error };
+    }
+    const ref = piModelRef(host, config);
+    if (!config.baseUrl && this.deps.engine && this.deps.lists?.(ref)) {
+      const result = await this.callEngine(purpose, ref, request, options);
+      // A limited-time free model that ends answers 404/410; never switch to the paid one silently.
+      if (!result.ok && model.endsWith("-free") && /\b(404|410)\b|not found|gone/i.test(result.error)) {
+        return { ok: false, error: `${result.error} — ${host.label}'s free ${model} may have ended; set the classifier's model to ${model.replace(/-free$/, "")} (paid) in /bot-lobby settings to keep using Jev there` };
+      }
+      return result;
     }
     const started = this.now();
     try {

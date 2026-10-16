@@ -12,7 +12,7 @@ pi install npm:@a-t-h-i/bot-lobby
 
 Try it first with `pi -e npm:@a-t-h-i/bot-lobby`, or from a checkout with `pi -e ./src/index.ts`.
 The questionnaire and web tools are built in, so don't also install extensions with the same tool names.
-Requires **Pi 1.0.x** (1.0.1 or later).
+Requires **Pi 1.3.x** (1.3.0 or later).
 
 ## Use
 

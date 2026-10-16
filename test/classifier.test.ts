@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { choice, choiceOf, JevError, noul, score, scoreOf, systemOne, yesOf, type FetchLike } from "../src/classifier/client.ts";
 import { BREAKER_FAILURES, BREAKER_PAUSE_MS, Classifier } from "../src/classifier/classifier.ts";
 import { clip, clipTail, fitsBudget, LIMITS } from "../src/classifier/limits.ts";
-import { chooseHost, describeKey, JEV_HOST_TABLE, jevEndpoint, keyHint, registerJevProvider, resolveKey, resolveTarget, type StatusSource } from "../src/classifier/hosts.ts";
+import { chooseHost, describeKey, JEV_HOST_TABLE, jevEndpoint, keyHint, piModelRef, resolveKey, resolveTarget, type StatusSource } from "../src/classifier/hosts.ts";
 import { DEFAULT_CONFIG, resolveConfig, type ClassifierConfig } from "../src/schemas/configuration.ts";
 import { appendMetrics, readClassifierMetrics, readMetrics, type MetricRecord } from "../src/state/metrics.ts";
 import { classifierSummary } from "../src/pi/model-settings.ts";
@@ -229,10 +229,10 @@ test("hosts: auto takes OpenCode's free Jev when pi holds an OpenCode key, else 
   assert.equal(describeKey(JEV_HOST_TABLE.typesafe, statusOf({}), {}), "missing: /login typesafe → Use an API key, or set TYPESAFE_API_KEY");
   assert.equal(describeKey(JEV_HOST_TABLE.opencode, statusOf({}), {}), "missing: /login opencode, or set OPENCODE_API_KEY");
   assert.equal(keyHint({ provider: "opencode" }), "/login opencode or set OPENCODE_API_KEY");
-  const registered: Array<[string, unknown]> = [];
-  assert.equal(registerJevProvider({ registerProvider: (name: string, cfg: unknown) => registered.push([name, cfg]) } as never), true);
-  assert.deepEqual(registered, [["typesafe", { name: "TypeSafe (Jev classifier)", baseUrl: "https://api.typesafe.ai", apiKey: "$TYPESAFE_API_KEY", models: [] }]], "a login entry with no chat models; the key reference is pi's $ENV form");
-  assert.equal(registerJevProvider({ registerProvider: () => { throw new Error("old pi"); } } as never), false);
+  assert.equal(piModelRef(JEV_HOST_TABLE.typesafe, { model: "" }), "typesafe/jev-latest");
+  assert.equal(piModelRef(JEV_HOST_TABLE.opencode, { model: "" }), "opencode/jev-1.13-free");
+  assert.equal(piModelRef(JEV_HOST_TABLE.openrouter, { model: "" }), "openrouter/~typesafe/jev-latest");
+  assert.equal(piModelRef(JEV_HOST_TABLE.vercel, { model: "typesafe-ai/jev-1.14.0" }), "vercel-ai-gateway/typesafe-ai/jev-1.14.0");
 });
 
 test("OpenCode's free Jev is called at the Zen endpoint, and when it ends the classifier says to pick the paid model instead of switching", async () => {
@@ -277,4 +277,29 @@ test("classifier calls share the metrics log but stay out of the agent tables", 
   ]);
   assert.deepEqual(readMetrics(root, ".pi").map((record) => record.id), ["w1"]);
   assert.deepEqual(readClassifierMetrics(root, ".pi").map((record) => record.id), ["c1"]);
+});
+
+test("Jev on its host goes through pi's classifier catalog when pi lists the model, and straight to the API otherwise", async () => {
+  const refs: string[] = [];
+  const sent: Sent[] = [];
+  const engine = async (ref: string) => { refs.push(ref); return { model: ref, answers: { a: { type: "noul" as const, noul: 0.8 } } }; };
+  const make = (cfg: Partial<ClassifierConfig>, lists: (ref: string) => boolean) => new Classifier({
+    config: () => config({ provider: "typesafe", ...cfg }),
+    keys: async () => "ts_key",
+    engine,
+    lists,
+    fetch: fakeFetch([OK], sent),
+    sleep: async () => {},
+    env: {},
+  });
+  const viaPi = await make({}, (ref) => ref === "typesafe/jev-latest").test();
+  assert.deepEqual(viaPi, { ok: true, model: "typesafe/jev-latest", ms: viaPi.ok ? viaPi.ms : 0 });
+  assert.deepEqual(refs, ["typesafe/jev-latest"]);
+  assert.equal(sent.length, 0, "no direct API call when pi lists the model");
+  const custom = await make({ baseUrl: "https://jev.internal" }, () => true).test();
+  assert.equal(custom.ok, true);
+  assert.equal(sent.length, 1, "a custom URL is called directly");
+  assert.equal(refs.length, 1);
+  await make({ model: "jev-next" }, () => false).test();
+  assert.equal(sent.length, 2, "a model pi does not list is called directly");
 });
