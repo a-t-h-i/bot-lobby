@@ -181,7 +181,7 @@ The thresholds in `config.json` are tuned for Jev; raise them if another model d
 
 ## Delegation and time limits
 
-Requires **Pi 1.0.x** (1.0.1 or later). DEV and DESIGN workers and QA reviewers can use
+Requires **Pi 1.3.x** (1.3.0 or later). DEV and DESIGN workers and QA reviewers can use
 `delegate_subtasks` for useful, separable work. Delegation is optional. Each parent gets five child
 slots total, shared across retries; the classifier selects each child’s model and reasoning effort from its brief, lowering
 inference for simple work and raising reasoning for complex work on the configured

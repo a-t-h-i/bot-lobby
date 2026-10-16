@@ -6,14 +6,17 @@
  * - OpenCode Zen serves Jev with the OpenCode key pi uses for Zen and Go
  *   (`/login opencode` or `opencode-go`, or OPENCODE_API_KEY), on the free
  *   `jev-1.13-free` model while OpenCode offers it.
- * - TypeSafe direct: bot-lobby registers a `typesafe` provider so `/login
- *   typesafe` stores the key in pi's auth.json.
+ * - TypeSafe direct: pi's own `typesafe` provider (`/login typesafe` or
+ *   TYPESAFE_API_KEY).
  * - OpenRouter and Vercel AI Gateway use the key pi holds for them.
+ *
+ * Every host's Jev is in pi's classifier catalog, so the classifier calls it
+ * through pi (`piModel` is its id there); only a custom URL or a model pi does
+ * not list goes to the System One API directly (see `classifier.ts`).
  *
  * `auto` (the default) takes OpenCode when pi holds an OpenCode key, else
  * TypeSafe.
  */
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { ClassifierConfig, JevHostName } from "../schemas/configuration.ts";
 
 export type JevHostId = Exclude<JevHostName, "auto">;
@@ -27,13 +30,15 @@ export interface JevHost {
   env: string;
   baseUrl: string;
   model: string;
+  /** The default model's id in pi's classifier catalog, when it differs from `model`. */
+  piModel?: string;
   headers?: Readonly<Record<string, string>>;
 }
 
 export const JEV_HOST_TABLE: Readonly<Record<JevHostId, JevHost>> = Object.freeze({
   opencode: { name: "opencode", label: "OpenCode Zen", piProviders: ["opencode", "opencode-go"], env: "OPENCODE_API_KEY", baseUrl: "https://opencode.ai/zen", model: "jev-1.13-free" },
   typesafe: { name: "typesafe", label: "TypeSafe", piProviders: ["typesafe"], env: "TYPESAFE_API_KEY", baseUrl: "https://api.typesafe.ai", model: "jev-latest" },
-  openrouter: { name: "openrouter", label: "OpenRouter", piProviders: ["openrouter"], env: "OPENROUTER_API_KEY", baseUrl: "https://openrouter.ai/api", model: "jev-latest", headers: { "HTTP-Referer": "https://github.com/a-t-h-i/bot-lobby", "X-Title": "bot-lobby" } },
+  openrouter: { name: "openrouter", label: "OpenRouter", piProviders: ["openrouter"], env: "OPENROUTER_API_KEY", baseUrl: "https://openrouter.ai/api", model: "jev-latest", piModel: "~typesafe/jev-latest", headers: { "HTTP-Referer": "https://github.com/a-t-h-i/bot-lobby", "X-Title": "bot-lobby" } },
   vercel: { name: "vercel", label: "Vercel AI Gateway", piProviders: ["vercel-ai-gateway"], env: "AI_GATEWAY_API_KEY", baseUrl: "https://ai-gateway.vercel.sh/typesafe", model: "typesafe-ai/jev" },
 });
 
@@ -129,18 +134,7 @@ export function describeKey(host: JevHost, status: StatusSource | undefined, env
   return `missing: ${host.name === "typesafe" ? "/login typesafe → Use an API key" : `/login ${host.piProviders[0]}`}, or set ${host.env}`;
 }
 
-/**
- * Register TypeSafe as a pi provider with no chat models, so `/login
- * typesafe` stores the Jev key with pi's own locking and `/logout` removes
- * it. Nothing is added to `/model`. A pi that refuses the registration only
- * loses the login entry: the environment variable still works.
- */
-export function registerJevProvider(pi: ExtensionAPI): boolean {
-  const host = JEV_HOST_TABLE.typesafe;
-  try {
-    pi.registerProvider(host.piProviders[0]!, { name: "TypeSafe (Jev classifier)", baseUrl: host.baseUrl, apiKey: `$${host.env}`, models: [] });
-    return true;
-  } catch {
-    return false;
-  }
+/** The `provider/id` pi lists a host's Jev under: the host's first pi provider, with the config's model if it names one. */
+export function piModelRef(host: JevHost, config: Pick<ClassifierConfig, "model">): string {
+  return `${host.piProviders[0]}/${config.model || host.piModel || host.model}`;
 }

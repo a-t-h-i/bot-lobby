@@ -75,7 +75,7 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
   const tools = [...new Set([...baseTools, "codemode", "tool_search", ...(canDelegate(agent, quota.used) ? [DELEGATE_TOOL] : [])])];
   const mcpTools = options.mcpTools ?? agentProfile(config, agent.domain, agent.role).mcpTools ?? [];
   const policy: AgentPolicy = { tools, mcpTools, readOnly: !editable, depth };
-  if (depth > 1) return { tools, env: { ...options.env, [AGENT_ENV]: JSON.stringify(policy), [DELEGATION_ENV]: "" }, note: "You are a child agent. Finish only your assigned brief and report evidence to your parent; you cannot delegate further.", close: async () => {}, onStart: options.onStart, children: [] as AgentRun[] };
+  if (depth > 1) return { tools, mcpTools, env: { ...options.env, [AGENT_ENV]: JSON.stringify(policy), [DELEGATION_ENV]: "" }, note: "You are a child agent. Finish only your assigned brief and report evidence to your parent; you cannot delegate further.", close: async () => {}, onStart: options.onStart, children: [] as AgentRun[] };
 
   const address = options.env?.[DESK_ENV.address];
   let desk = address ? deskSessionAt(address) : undefined;
@@ -189,6 +189,7 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
   let closed = false;
   return {
     tools: desk ? [...new Set([...tools, ...DESK_TOOLS])] : tools,
+    mcpTools,
     env: { ...options.env, ...(desk ? desk.env(parentDeskId) : {}), [AGENT_ENV]: JSON.stringify({ ...policy, tools: desk ? [...new Set([...tools, ...DESK_TOOLS])] : tools }), [DELEGATION_ENV]: JSON.stringify({ address: server.address, token, timeoutMs: options.timeoutMs }) },
     note: `${canDelegate(agent, quota.used) ? `Work directly when you can finish the brief yourself. Use ${DELEGATE_TOOL} only for useful, separable work with disjoint files, at most five children total; children share your remaining time and cannot delegate further. Integrate and verify their work yourself. ` : ""}Use codemode for concise parallel calls, inspect failures, and return only useful evidence.${desk ? " Before edit/write, claim_file; handover_file when finished. Release files before delegating or waiting." : ""}`,
     onStart: (handle: Parameters<NonNullable<PiRunOptions["onStart"]>>[0]) => {
