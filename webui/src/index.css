@@ -115,6 +115,20 @@
 
   /* The dock's height from the bottom of the window, so toasts and the page can clear it. */
   --composer-h: 6.5rem;
+  /*
+   * Adapted from T3 Code (MIT), apps/web/src/index.css: the tokens its composer
+   * is drawn with (ComposerSurface, ComposerControl, ComposerPrimaryActions).
+   */
+  --control-radius: 0.5rem;
+  --glass-opacity: 80%;
+  --chat-content-max-width: 46rem;
+  --surface-raised: color-mix(in srgb, var(--card) 20%, transparent);
+  --placeholder: var(--muted-foreground);
+  --secondary-label: var(--muted-foreground);
+  --icon-muted: var(--muted-foreground);
+  --message-action: var(--primary);
+  --message-action-foreground: var(--primary-foreground);
+  --message-action-hover: color-mix(in srgb, var(--primary) 90%, var(--background));
 
   /* Cards inside the page. */
   --workspace-card: color-mix(in oklab, var(--card) 80%, transparent);
@@ -186,6 +200,7 @@
   --dock-solid: color-mix(in srgb, rgb(24 24 27) 72%, var(--background));
   --dock-border: rgb(255 255 255 / 0.09);
   --dock-shadow: inset 0 1px rgb(255 255 255 / 0.06), 0 18px 40px -20px rgb(0 0 0 / 0.9);
+  --surface-raised: color-mix(in srgb, var(--background) 97%, #ffffff);
   --workspace-card: transparent;
 }
 
@@ -243,6 +258,20 @@
   --shadow-dock: var(--dock-shadow);
   --shadow-dock-focus: var(--dock-focus-shadow);
   --shadow-control: var(--control-shadow);
+  --color-placeholder: var(--placeholder);
+  --color-secondary-label: var(--secondary-label);
+  --color-icon-muted: var(--icon-muted);
+  --color-surface-raised: var(--surface-raised);
+  --color-message-action: var(--message-action);
+  --color-message-action-foreground: var(--message-action-foreground);
+  --color-message-action-hover: var(--message-action-hover);
+  --inset-shadow-control-highlight: 0 1px rgb(255 255 255 / 16%);
+  --inset-shadow-control-pressed: 0 1px rgb(0 0 0 / 8%);
+  --shadow-composer: 0 12px 28px -18px rgb(0 0 0 / 40%);
+  --shadow-composer-dark: 0 14px 32px -18px rgb(0 0 0 / 75%);
+  --background-image-composer-seam-below:
+    linear-gradient(to bottom, transparent 0 1rem, rgb(0 0 0 / 18%) 1rem, transparent calc(1rem + 10px)),
+    linear-gradient(rgb(255 255 255 / 1%), rgb(255 255 255 / 1%));
   /* Corners: 8px for controls and rows, 12px for cards, 18px for dialogs and sheets, 22px for the composer. Only dots, bars and switches stay fully round. */
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -1211,43 +1240,8 @@
     overflow-x: auto;
   }
 }
-/*
- * The composer, after the coding harness it takes after: the round box, and
- * a strip tucked under its bottom edge, inset from its sides, a shade between
- * the page and the box, carrying the project chip and the key hints.
- */
-.composer-strip {
-  --composer-chip-hover: color-mix(in oklab, var(--foreground) 8%, transparent);
-  position: relative;
-  z-index: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  width: calc(100% - 2.75rem);
-  margin: -1rem auto 0;
-  padding: 1.25rem 0.375rem 0.25rem;
-  border: 1px solid var(--dock-border);
-  border-top: 0;
-  border-radius: 0 0 var(--radius-2xl) var(--radius-2xl);
-  background: color-mix(in srgb, var(--foreground) 3%, var(--background));
-  font-size: 0.75rem;
-}
-:where(.composer-chip) { color: var(--muted-foreground); }
-.composer-chip:hover { background: var(--composer-chip-hover); }
-.composer-strip .composer-chip { border-radius: var(--radius-lg); font-weight: 400; }
-.composer-chip .kbd-hint, .composer-chip kbd { pointer-events: none; }
-/* The left controls scroll sideways rather than wrap, with no scrollbar drawn. */
-.composer-controls { scrollbar-width: none; }
-.composer-controls::-webkit-scrollbar { display: none; }
-/* Files dragged over the box tint it and ring it in the accent. */
-.composer-box.composer-drop { background-color: color-mix(in oklab, var(--accent) 45%, var(--dock)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 70%, transparent); }
-/* Stop is a round red button beside send. */
-#app-dock .composer-actions button[aria-label="Stop"] { border-radius: 9999px; border-color: transparent; background-color: color-mix(in oklab, var(--destructive) 90%, transparent); color: #fff; box-shadow: 0 1px 2px color-mix(in oklab, var(--destructive) 24%, transparent); }
-#app-dock .composer-actions button[aria-label="Stop"]:hover { background-color: var(--destructive); }
-#app-dock .composer-actions button[aria-label="Stop"] svg { fill: currentColor; }
-/* The add and preview buttons are quiet round icons until they are used. */
-#app-dock .composer-tool { border-color: transparent; background-color: var(--dock-solid); color: var(--muted-foreground); }
-#app-dock .composer-tool:is(:hover, [aria-pressed="true"]) { border-color: transparent; background-color: var(--accent); color: var(--foreground); }
+/* The composer is the coding harness's own (app/composer/ComposerSurface.tsx); the key hints in its strip stay quiet. */
+.composer-strip .kbd-hint, .composer-strip kbd { pointer-events: none; }
 
 /*
  * The sidebar on the left of every page: the running sessions, the app's
@@ -1735,45 +1729,17 @@ html[data-resizing="row"] * { cursor: row-resize !important; user-select: none; 
 
 /*
  * The composer answers focus with a spring: the whole of it, the strip under it included, swells a little
- * (1.5%) with an overshoot and settles, and a wash of the accent pours down through it, starting in the box and
- * running on into the strip under it, while both their edges take the accent's tint. :focus-within keeps matching while
- * focus moves among the composer's own controls, so the wash never restarts there. Reduced motion keeps the
- * tinted edges and drops the swell and the wash.
+ * (1.5%) with an overshoot and settles. Reduced motion drops the swell.
  */
-:root { --dur-composer-focus: 700ms; --composer-spring: cubic-bezier(0.34, 1.45, 0.64, 1); }
+:root { --composer-spring: cubic-bezier(0.34, 1.45, 0.64, 1); }
 .composer-shell { transform-origin: 50% 100%; transition: transform 380ms var(--composer-spring), max-width 460ms var(--composer-spring); }
-.composer-strip, .composer-box { transition: border-color 240ms ease, box-shadow 240ms ease; }
-#app-dock:focus-within .composer-strip,
-#app-dock:focus-within .composer-box { border-color: color-mix(in oklab, var(--ring) 32%, var(--dock-border)); }
-.composer-box { -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5); }
-.composer-strip::after,
-.composer-box::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  opacity: 0;
-  background: linear-gradient(180deg, transparent, color-mix(in oklab, var(--ring) 16%, transparent) 50%, transparent) no-repeat;
-  background-size: 100% 70%;
-  background-position: 0 -200%;
-}
-@keyframes composer-wash {
-  0% { opacity: 1; background-position: 0 -200%; }
-  80% { opacity: 1; }
-  100% { opacity: 0; background-position: 0 300%; }
-}
-@keyframes composer-placeholder { from { opacity: 0.25; } to { opacity: 1; } }
 @media (prefers-reduced-motion: no-preference) {
   #app-dock:focus-within .composer-shell { transform: scale(1.015); }
-  #app-dock:focus-within .composer-box::before { animation: composer-wash var(--dur-composer-focus) ease-out 1; }
-  #app-dock:focus-within .composer-strip::after { animation: composer-wash 380ms ease-in 420ms 1 backwards; }
-  .composer-box:focus-within ::placeholder { animation: composer-placeholder 400ms ease-out 1; }
 }
 
 /*
- * Shrunk while you scroll (Composer's useShrinkOnScroll): a slim pill of one line, its tray, attachments and
- * buttons folded away, narrower, springing back to full size on focus.
+ * Shrunk while you scroll (Composer's useShrinkOnScroll): a slim pill of one line, its strip, attachments and
+ * footer folded away, narrower, springing back to full size on focus.
  */
 .composer-strip, .composer-tools, .composer-files {
   transition: max-height 320ms var(--ease-calm), opacity 200ms ease, padding 320ms var(--ease-calm), margin 320ms var(--ease-calm);
@@ -1788,10 +1754,10 @@ html[data-resizing="row"] * { cursor: row-resize !important; user-select: none; 
   overflow: hidden;
   pointer-events: none;
 }
-#app-dock[data-shrunk] .composer-strip { margin-top: 0; border-width: 0; }
+#app-dock[data-shrunk] .composer-strip { margin-top: 0; }
 #app-dock[data-shrunk] .composer-text { padding-block: 0.55rem; }
 #app-dock[data-shrunk] .composer-text textarea { min-height: 1.5rem; max-height: 1.5rem; overflow: hidden; cursor: text; }
-#app-dock[data-shrunk] .composer-box { cursor: text; box-shadow: var(--dock-shadow), 0 8px 24px -12px rgb(0 0 0 / 0.25); }
+#app-dock[data-shrunk] .composer-box { cursor: text; }
 
 /*
  * The effort slider, after the user's reference: a deep track with soft corners, a fill running up under a white

@@ -16,6 +16,7 @@ import { Keys } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { composerControlClassName } from "./composer/ComposerControl"
 import { ProjectFolderDialog } from "./ProjectFolderDialog"
 
 interface ProjectList {
@@ -154,12 +155,12 @@ export function ProjectSwitcher({ projects, tab, name, branch, look }: { project
           className={cn(
             "group flex min-w-0 items-center outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none",
             chip
-              ? "composer-chip h-7 gap-1.5 rounded-full px-2.5 text-xs font-medium text-foreground aria-expanded:bg-[var(--composer-chip-hover)]"
+              ? composerControlClassName("xs", "min-w-0 justify-start")
               : "h-10 gap-2 rounded-lg px-1.5 text-sm font-medium hover:bg-accent aria-expanded:bg-accent"
           )}
         >
           {chip ? (
-            <Folder aria-hidden="true" className={cn("size-3.5 shrink-0", message && "text-destructive")} />
+            <Folder aria-hidden="true" className={cn("size-3 shrink-0", message && "text-destructive")} />
           ) : (
             <span aria-hidden="true" className="project-mark" data-problem={message ? true : undefined}>
               {name.trim().charAt(0).toUpperCase() || "?"}
@@ -167,7 +168,7 @@ export function ProjectSwitcher({ projects, tab, name, branch, look }: { project
           )}
           <span className="truncate">{name}</span>
           {chip ? (
-            <ChevronDown aria-hidden="true" className="size-3 shrink-0 text-muted-foreground transition-transform duration-150 group-aria-expanded:rotate-180 motion-reduce:transition-none" />
+            <ChevronDown aria-hidden="true" className="size-3 shrink-0 opacity-50" />
           ) : (
             <ChevronsUpDown aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
           )}
@@ -243,7 +244,7 @@ export function ProjectSwitcher({ projects, tab, name, branch, look }: { project
               onClick={() => void refresh()}
               className={cn(
                 "inline-flex shrink-0 items-center justify-center text-muted-foreground outline-none transition-[background-color,color,scale] hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.97] disabled:opacity-60 motion-reduce:active:scale-100",
-                chip ? "composer-chip size-7 rounded-full" : "size-8 rounded-lg hover:bg-accent max-md:size-11"
+                chip ? composerControlClassName("xs", "w-7 px-0 sm:w-6") : "size-8 rounded-lg hover:bg-accent max-md:size-11"
               )}
             >
               {busy ? <Spinner aria-hidden="true" role="presentation" className="size-3.5" /> : <RefreshCw aria-hidden="true" className="size-3.5" />}

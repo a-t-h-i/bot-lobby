@@ -1,26 +1,28 @@
 // Adapted from T3 Code (MIT), apps/web/src/components/chat/ComposerSurface.tsx, ChatComposer.tsx, ComposerPrimaryActions.tsx, ComposerControl.tsx
 /**
- * The one text box for everything, laid out like the coding harness it takes
- * after: a round card with the attachments and the text on top and a footer
- * row under them, the box's own controls on its left (who the message goes
- * to, the Markdown preview, the Knowledge pane's switch) and its actions on
- * its right (attach, stop, a round send button). A strip tucked under the
- * bottom of the card carries the project (its list opens from there) and the
- * key hints. On a phone the strip stays out (the bar has the project), and on
- * a narrow box the target becomes a menu. It sits under the page (the shell
- * gives it its row), grows with what you type up to a cap, takes images, PDFs
- * and other files (pick, paste or drop them) and sends Markdown to whoever
- * the tab talks to: the oracle everywhere, the planning panel on Plan, a
- * quick fix on Quick fix, a comment on the open task on Tasks. While a pop-up
- * is open it steps aside, so only one thing asks for you at a time.
+ * The one text box for everything, built from the coding harness's own
+ * composer (ComposerSurface, ComposerControl, ComposerPrimaryActions, copied
+ * into ./composer): a glass box with the attachments and the text on top and a
+ * footer row under them, who the message goes to and the Markdown preview on
+ * its left, attach, stop and a round send button on its right. The context
+ * strip tucked under the box carries the project (its explorer opens from
+ * there) and the key hints. On a phone the strip stays out (the bar has the
+ * project). It grows with what you type up to a cap, takes images, PDFs and
+ * other files (pick, paste or drop them) and sends Markdown to whoever the tab
+ * talks to: the oracle everywhere, the planning panel on Plan, a quick fix on
+ * Quick fix, a comment on the open task on Tasks. While a pop-up is open it
+ * steps aside, so only one thing asks for you at a time.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { Eye, FileText, MessageSquare, Paperclip, Square, X } from "lucide-react"
+import { Eye, FileText, Paperclip, X } from "lucide-react"
+import { Select as SelectPrimitive } from "radix-ui"
 import { Keys, KeyHint } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/reui/select"
+import { Select, SelectContent, SelectItem } from "@/components/reui/select"
+import { Button } from "@/components/ui/button"
+import { AgentIcon } from "@/ui/AgentIcon"
 import { call } from "@/lib/api"
 import { act } from "@/lib/act"
 import { useComposerContext } from "@/lib/composerContext"
@@ -29,7 +31,6 @@ import { focusTab } from "@/prompts/nav"
 import { toast } from "@/lib/toast"
 import { MAX_ATTACHMENTS, sizeLabel, uploadFile } from "@/lib/uploads"
 import { Markdown } from "@/ui/Markdown"
-import { ConfirmButton } from "@/ui/ConfirmButton"
 import { continueList, link, wrap, type Edit } from "./markdownEdit"
 import { cn } from "@/lib/utils"
 import { projectUrl } from "@/lib/project"
@@ -41,6 +42,9 @@ import { knowledgeHash } from "./knowledgeView"
 import { KnowledgePaneToggle } from "./KnowledgePaneToggle"
 import { ProjectSwitcher, type Projects } from "./ProjectSwitcher"
 import { taskRoute } from "./taskRoute"
+import { ComposerSurface } from "./composer/ComposerSurface"
+import { ComposerControl, ComposerControlChevron, ComposerControlIcon, ComposerControlSeparator, composerControlClassName } from "./composer/ComposerControl"
+import { ComposerSendButton, ComposerStopButton } from "./composer/ComposerPrimaryActions"
 
 type TargetId = "oracle" | "knowledge" | "panel" | "quickfix" | "comment" | "task"
 
@@ -91,17 +95,8 @@ interface Pending {
 
 let keySeq = 0
 
-/** A control in the footer's left group: quiet text until pointed at or on. */
-const CONTROL =
-  "relative inline-flex h-7 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent px-2.5 text-sm font-medium text-muted-foreground outline-none transition-[background-color,color,scale] duration-150 ease-snap hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-checked:bg-accent aria-checked:text-foreground aria-pressed:bg-accent aria-pressed:text-foreground active:scale-[0.97] motion-reduce:active:scale-100 [&_svg]:pointer-events-none [&_svg]:shrink-0"
-
-/** An icon button in the footer's right group. */
-const TOOL =
-  "toolbar-button composer-tool relative inline-flex size-8 items-center justify-center rounded-full border text-foreground transition-[background-color,border-color,scale] duration-150 ease-snap outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.97] motion-reduce:active:scale-100"
-
-/** A chip in the strip under the box. */
-const CHIP =
-  "composer-chip inline-flex h-7 min-w-0 items-center gap-1.5 rounded-lg px-2 text-xs outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+/** The icon beside each target, as the harness shows its model's. */
+const TARGET_ICON: Record<TargetId, string> = { oracle: "ORACLE", knowledge: "ORACLE", panel: "PLANNER", quickfix: "QUICK FIX", comment: "LOBBY", task: "ORACLE" }
 
 function isSend(event: KeyboardEvent): boolean {
   return event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing
@@ -406,71 +401,58 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
   const knowledge = route.kind === "tab" && route.tab === "knowledge"
   // The strip under the box is for a wide screen; a phone has the project in its bar.
   const withStrip = !phone && !compact
-  // Who it goes to: a row of choices when the box is wide enough, a menu when it is not.
+  // Who it goes to, as the harness shows its model: a quiet control with an icon and a chevron that opens the list.
   const targetControl = targets.length > 1 ? (
-    <>
-      <div role="radiogroup" aria-label="Send to" className="hidden items-center gap-0.5 @[34rem]/composer:flex">
+    <Select value={target.id} onValueChange={(id) => setChosen(id as TargetId)}>
+      <SelectPrimitive.Trigger aria-label="Send to" data-compact className={composerControlClassName("sm", "min-w-0")}>
+        <AgentIcon source={TARGET_ICON[target.id]} className="size-4 shrink-0" />
+        <span className="truncate">{target.pill}</span>
+        <ComposerControlChevron />
+      </SelectPrimitive.Trigger>
+      <SelectContent side="top" align="start">
         {targets.map((entry) => (
-          <button
-            key={entry.id}
-            aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
-            type="button"
-            role="radio"
-            data-compact
-            aria-checked={entry.id === target.id}
-            onClick={() => setChosen(entry.id)}
-            className={CONTROL}
-          >
-            {entry.pill}
-          </button>
+          <SelectItem key={entry.id} value={entry.id}>{entry.pill}</SelectItem>
         ))}
-      </div>
-      <div className="@[34rem]/composer:hidden">
-        <Select value={target.id} onValueChange={(id) => setChosen(id as TargetId)}>
-          <SelectTrigger aria-label="Send to" data-compact className={cn(CONTROL, "w-auto min-w-0 bg-transparent shadow-none data-[state=open]:bg-accent")}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {targets.map((entry) => (
-              <SelectItem key={entry.id} value={entry.id}>{entry.pill}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-    </>
+      </SelectContent>
+    </Select>
   ) : (
-    <span className="inline-flex h-7 shrink-0 items-center gap-1.5 px-2.5 text-sm font-medium text-muted-foreground">
-      <MessageSquare aria-hidden="true" className="size-4 shrink-0" />
-      <span className="hidden @[24rem]/composer:inline">To the {target.pill.toLowerCase()}</span>
-      <span className="@[24rem]/composer:hidden">{target.pill}</span>
+    <span className={composerControlClassName("sm", "pointer-events-none")}>
+      <AgentIcon source={TARGET_ICON[target.id]} className="size-4 shrink-0" />
+      <span className="hidden @[24rem]/composer-surface:inline">To the {target.pill.toLowerCase()}</span>
+      <span className="@[24rem]/composer-surface:hidden">{target.pill}</span>
     </span>
   )
   const project = status.data?.workspace.name ?? "bot-lobby"
   const branch = status.data?.branch ?? status.data?.workspace.branch
   const strip = withStrip ? (
-    <div className="composer-strip pointer-events-auto" aria-label="Message context" role="group">
-      <ProjectSwitcher look="chip" projects={projects} tab={route.kind === "tab" ? route.tab : route.kind} name={project} branch={branch} />
-      <div className="@container ml-auto flex min-w-0 flex-1 items-center justify-end gap-3 overflow-hidden">
-        {route.kind === "tab" && route.tab === "plan" ? (
-          <KeyHint chord={keys.savePlan ?? "Ctrl+S"} className="hidden @[24rem]:inline-flex">
-            save plan
-          </KeyHint>
-        ) : null}
-        <KeyHint chord="Shift+Enter" className="hidden @[14rem]:inline-flex">
-          new line
-        </KeyHint>
-        <button
-          type="button"
-          aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
-          aria-label="Keyboard shortcuts"
-          aria-haspopup="dialog"
-          data-compact
-          onClick={onHelp}
-          className={cn(CHIP, "kbd-hint shrink-0 px-1.5 text-muted-foreground hover:text-foreground")}
-        >
-          <Keys chord={keys.help ?? "Alt+H"} className="kbd-hint" />
-          <span className="hidden @[8rem]:inline">shortcuts</span>
-        </button>
+    <div className="min-h-0">
+      <div className="relative z-0">
+        <ComposerSurface.ContextStrip role="group" aria-label="Message context" className="composer-strip gap-1 text-xs font-normal text-muted-foreground/70">
+          <ProjectSwitcher look="chip" projects={projects} tab={route.kind === "tab" ? route.tab : route.kind} name={project} branch={branch} />
+          <div className="@container ml-auto flex min-w-0 flex-1 items-center justify-end gap-3 overflow-hidden pe-1">
+            {route.kind === "tab" && route.tab === "plan" ? (
+              <KeyHint chord={keys.savePlan ?? "Ctrl+S"} className="hidden @[24rem]:inline-flex">
+                save plan
+              </KeyHint>
+            ) : null}
+            <KeyHint chord="Shift+Enter" className="hidden @[14rem]:inline-flex">
+              new line
+            </KeyHint>
+            <ComposerControl
+              size="xs"
+              aria-keyshortcuts="Enter Space"
+              aria-describedby="focused-action-help"
+              aria-label="Keyboard shortcuts"
+              aria-haspopup="dialog"
+              data-compact
+              onClick={onHelp}
+              className="kbd-hint"
+            >
+              <Keys chord={keys.help ?? "Alt+H"} className="kbd-hint" />
+              <span className="hidden @[8rem]:inline">shortcuts</span>
+            </ComposerControl>
+          </div>
+        </ComposerSurface.ContextStrip>
       </div>
     </div>
   ) : null
@@ -491,152 +473,158 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
       aria-hidden={visible ? undefined : true}
       inert={blocked || !visible}
     >
-      {dockNav ? <div className="pointer-events-auto mx-auto mb-1.5 w-full max-w-[46rem]">{dockNav}</div> : null}
-      <div className="composer-shell mx-auto w-full max-w-[46rem]">
-      <div className="pointer-events-auto relative z-10 mx-auto w-full max-w-[46rem]" onPointerDown={expand}>
-        <div
-          className={cn(
-            "group/composer @container/composer composer-box relative rounded-[22px] border border-dock-border bg-dock shadow-dock transition-[border-color,box-shadow,background-color] duration-200 ease-snap focus-within:border-[color-mix(in_oklab,var(--ring)_28%,var(--dock-border))] focus-within:shadow-dock-focus",
-            compact && "min-[500px]:max-md:grid min-[500px]:max-md:grid-cols-[minmax(0,1fr)_auto] min-[500px]:max-md:min-w-0",
-            dragging && "composer-drop"
-          )}
-          onDragOver={(event) => {
-            if (!event.dataTransfer.types.includes("Files")) return
-            event.preventDefault()
-            setDragging(true)
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={onDrop}
-        >
-          <div
-            className={cn(
-              "composer-text relative px-3 pt-3.5 pb-2 sm:px-4 sm:pt-4",
-              compact && "min-[500px]:max-md:col-start-1 min-[500px]:max-md:min-w-0 min-[500px]:max-md:max-w-full min-[500px]:max-md:pt-1 min-[500px]:max-md:pb-1"
-            )}
-          >
-            <AnimatePresence initial={false}>
-              {files.length > 0 ? (
-                <motion.ul
-                  key="files"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ type: "spring", stiffness: 420, damping: 36 }}
-                  aria-label="Attachments"
-                  className="composer-files -mx-1 flex flex-wrap items-end gap-2 overflow-hidden px-1 pt-1 pb-3"
+      {dockNav ? <div className="pointer-events-auto mx-auto mb-1.5 w-full max-w-(--chat-content-max-width)">{dockNav}</div> : null}
+      <ComposerSurface.Shell contextStrip={Boolean(strip)} className="composer-shell pointer-events-auto">
+        <ComposerSurface.Host onPointerDown={expand}>
+          <div className="relative z-10">
+            <ComposerSurface.Main
+              className={cn("group/composer composer-box", compact && "min-[500px]:max-md:min-w-0")}
+              onDragOver={(event) => {
+                if (!event.dataTransfer.types.includes("Files")) return
+                event.preventDefault()
+                setDragging(true)
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={onDrop}
+            >
+              <div
+                data-chat-composer-surface="true"
+                className={cn(
+                  "rounded-3xl transition-[background-color] duration-200",
+                  dragging && "bg-accent/45 ring-1 ring-inset ring-primary/70",
+                  compact && "min-[500px]:max-md:grid min-[500px]:max-md:grid-cols-[minmax(0,1fr)_auto]"
+                )}
+              >
+                <div
+                  data-chat-composer-body="true"
+                  className={cn(
+                    "composer-text relative px-3 pb-2 sm:px-4",
+                    "pt-3.5 sm:pt-4",
+                    compact && "min-[500px]:max-md:min-w-0 min-[500px]:max-md:py-2"
+                  )}
                 >
-                  {files.map((file) => (
-                    <Chip key={file.key} file={file} onRemove={() => forget(file.key)} />
-                  ))}
-                </motion.ul>
-              ) : null}
-            </AnimatePresence>
+                  <AnimatePresence initial={false}>
+                    {files.length > 0 ? (
+                      <motion.ul
+                        key="files"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ type: "spring", stiffness: 420, damping: 36 }}
+                        aria-label="Attachments"
+                        className="composer-files mb-3 flex max-w-full flex-wrap gap-2 overflow-hidden"
+                      >
+                        {files.map((file) => (
+                          <Chip key={file.key} file={file} onRemove={() => forget(file.key)} />
+                        ))}
+                      </motion.ul>
+                    ) : null}
+                  </AnimatePresence>
 
-            {preview ? (
-              <div aria-label="Markdown preview" role="region" className="mb-3 max-h-48 overflow-y-auto rounded-lg bg-muted/60 px-3 py-2">
-                {text.trim() ? <Markdown text={text} /> : <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>}
-              </div>
-            ) : null}
+                  {preview ? (
+                    <div aria-label="Markdown preview" role="region" className="mb-3 max-h-48 overflow-y-auto rounded-lg bg-muted/60 px-3 py-2">
+                      {text.trim() ? <Markdown text={text} /> : <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>}
+                    </div>
+                  ) : null}
 
-            <textarea
-              ref={field}
-              id="composer-text"
-              aria-label={target.label}
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              onKeyDown={onKeyDown}
-              onPaste={onPaste}
-              placeholder={busy && target.id === "oracle" ? "The oracle is working. Enter steers it…" : target.placeholder}
-              rows={1}
-              className={cn(
-                "block field-sizing-content max-h-[min(45vh,20rem)] min-h-[1.75rem] md:min-h-[2.75rem] w-full min-w-0 resize-none bg-transparent text-base leading-relaxed caret-primary outline-none placeholder:text-muted-foreground md:text-[0.9375rem] md:leading-relaxed",
-                compact && "min-[500px]:max-md:max-h-[44px] min-[500px]:max-md:overflow-y-auto"
-              )}
-            />
-          </div>
+                  <div className="relative flow-root font-sans text-sm max-sm:pointer-coarse:text-base">
+                    <textarea
+                      ref={field}
+                      id="composer-text"
+                      aria-label={target.label}
+                      value={text}
+                      onChange={(event) => setText(event.target.value)}
+                      onKeyDown={onKeyDown}
+                      onPaste={onPaste}
+                      placeholder={busy && target.id === "oracle" ? "The oracle is working. Enter steers it…" : target.placeholder}
+                      rows={1}
+                      className={cn(
+                        "-m-1 block field-sizing-content max-h-52 min-h-19.5 w-[calc(100%+0.5rem)] resize-none overflow-y-auto bg-transparent p-1 leading-relaxed whitespace-pre-wrap text-foreground caret-primary outline-none placeholder:text-placeholder/75 max-md:min-h-12",
+                        compact && "min-[500px]:max-md:max-h-[44px] min-[500px]:max-md:min-h-0"
+                      )}
+                    />
+                  </div>
+                </div>
 
-          <div
-            className={cn(
-              "composer-tools flex min-w-0 flex-nowrap items-center justify-between gap-3 px-3 pb-3 sm:px-4 sm:pb-3.5",
-              compact && "min-[500px]:max-md:col-start-2 min-[500px]:max-md:min-w-0 min-[500px]:max-md:pt-1 min-[500px]:max-md:pb-1"
-            )}
-          >
-            <div className="composer-controls relative -m-1 -ms-2.5 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-1 ps-2.5">
-              {knowledge ? <KnowledgePaneToggle rest={route.kind === "tab" ? route.rest : []} /> : targetControl}
-              <span aria-hidden="true" className="mx-0.5 h-4 w-px shrink-0 bg-border" />
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button type="button" aria-label="Preview the Markdown" aria-pressed={preview} aria-keyshortcuts="Alt+P" aria-describedby="focused-action-help" data-compact onClick={() => setPreview((value) => !value)} className={cn(TOOL, "w-auto gap-1.5 rounded-lg px-2 text-sm font-medium @max-[26rem]/composer:w-8 @max-[26rem]/composer:px-0")}>
-                    <Eye aria-hidden="true" className="size-4" />
-                    <span className="@max-[26rem]/composer:hidden">Preview</span>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  Preview <Keys chord="Alt+P" />
-                </TooltipContent>
-              </Tooltip>
-            </div>
-
-            <div className="composer-actions flex shrink-0 flex-nowrap items-center justify-end gap-2">
-              <input
-                ref={picker}
-                type="file"
-                multiple
-                hidden
-                tabIndex={-1}
-                aria-label="Attach files"
-                onChange={(event) => {
-                  attach(event.target.files ?? [])
-                  event.target.value = ""
-                }}
-              />
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button type="button" aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help" aria-label="Attach images, PDFs or files" data-compact onPointerDown={(event) => event.preventDefault()} onClick={() => picker.current?.click()} className={TOOL}>
-                    <Paperclip aria-hidden="true" className="size-4" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>Attach images, PDFs or files</TooltipContent>
-              </Tooltip>
-              {busy && target.id === "oracle" ? (
-                <ConfirmButton label="Stop" icon={Square} iconOnly compact title="Stop the oracle?" description="The current response stops. Work already recorded is kept." confirmLabel="Stop" variant="destructive" onConfirm={() => void stop()} />
-              ) : null}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="Send"
-                    aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
-                    data-compact
-                    onClick={() => void send()}
-                    disabled={!canSend}
-                    className="composer-send relative isolate flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xs shadow-primary/24 inset-shadow-[0_1px_rgb(255_255_255/16%)] transition-[background-color,box-shadow,scale,opacity] duration-150 ease-snap outline-none hover:scale-105 hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background active:inset-shadow-[0_1px_rgb(0_0_0/8%)] active:shadow-none disabled:opacity-64 disabled:shadow-none disabled:hover:scale-100 sm:size-8 motion-reduce:hover:scale-100 [&_svg]:pointer-events-none"
+                <div
+                  data-chat-composer-footer="true"
+                  className={cn(
+                    "composer-tools flex min-w-0 flex-nowrap items-center justify-between gap-2 overflow-visible px-3 pb-3 sm:gap-0 sm:px-4 sm:pb-4",
+                    compact && "min-[500px]:max-md:pt-2 min-[500px]:max-md:pb-2"
+                  )}
+                >
+                  <div
+                    data-chat-composer-controls="left"
+                    className={cn("composer-controls relative -m-1 -ms-3.5 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-1 ps-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", compact && "min-[500px]:max-md:hidden")}
                   >
-                    {sending ? (
-                      <Spinner aria-hidden="true" role="presentation" className="size-3.5 text-primary-foreground" />
-                    ) : (
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                        <path d="M7 11.5V2.5M7 2.5L3 6.5M7 2.5L11 6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    )}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  Send <Keys chord="Enter" />
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
+                    {knowledge ? <KnowledgePaneToggle rest={route.kind === "tab" ? route.rest : []} /> : targetControl}
+                    <ComposerControlSeparator />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <ComposerControl
+                          aria-label="Preview the Markdown"
+                          aria-pressed={preview}
+                          aria-keyshortcuts="Alt+P"
+                          aria-describedby="focused-action-help"
+                          data-compact
+                          onClick={() => setPreview((value) => !value)}
+                        >
+                          <ComposerControlIcon icon={Eye} />
+                          <span className="sr-only sm:not-sr-only">Preview</span>
+                        </ComposerControl>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        Preview <Keys chord="Alt+P" />
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
 
-          {dragging ? (
-            <div aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-[inherit] text-sm font-medium text-primary">
-              Drop to attach
-            </div>
-          ) : null}
-        </div>
-      </div>
-      {strip}
-      </div>
+                  <div data-chat-composer-actions="right" className="flex shrink-0 flex-nowrap items-center justify-end gap-2">
+                    <input
+                      ref={picker}
+                      type="file"
+                      multiple
+                      hidden
+                      tabIndex={-1}
+                      aria-label="Attach files"
+                      onChange={(event) => {
+                        attach(event.target.files ?? [])
+                        event.target.value = ""
+                      }}
+                    />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="Attach images, PDFs or files"
+                          data-compact
+                          onPointerDown={(event) => event.preventDefault()}
+                          onClick={() => picker.current?.click()}
+                          className="pointer-coarse:after:absolute pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11"
+                        >
+                          <Paperclip aria-hidden="true" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">Attach files</TooltipContent>
+                    </Tooltip>
+                    {busy && target.id === "oracle" ? <ComposerStopButton onStop={() => void stop()} /> : null}
+                    <ComposerSendButton sending={sending} disabled={!canSend} steering={busy && target.id === "oracle"} onSend={() => void send()} />
+                  </div>
+                </div>
+              </div>
+
+              {dragging ? (
+                <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-[inherit] text-sm font-medium text-primary">
+                  Drop to attach
+                </div>
+              ) : null}
+            </ComposerSurface.Main>
+          </div>
+        </ComposerSurface.Host>
+        {strip}
+      </ComposerSurface.Shell>
     </div>
   )
 }
