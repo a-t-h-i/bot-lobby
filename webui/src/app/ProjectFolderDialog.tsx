@@ -85,7 +85,7 @@ function FolderBrowser({ tab, close, busyChanged }: { tab: string; close: () => 
   const read = useApiRead("projects.browse", path === undefined ? {} : { path }, [])
   const project = useOpenProject(tab)
   useEffect(() => busyChanged(project.opening), [project.opening, busyChanged])
-  return <div className="flex min-h-0 max-h-full w-[min(40rem,calc(100vw-2rem))] flex-col overflow-y-auto max-md:max-h-[calc(100svh-2rem)]">
+  return <div className="flex min-h-0 max-h-full w-full flex-col overflow-y-auto max-md:max-h-[calc(100svh-2rem)]">
     <div className="flex flex-col gap-1 border-b border-border px-4 py-3 max-md:px-3">
       <h2 className="text-[0.9375rem] font-semibold">Open project folder</h2>
       <p className="break-words text-xs text-muted-foreground">Folders on the machine running bot-lobby. The project opens in a session of its own; this one keeps running, and its project-local extensions stay off until you enable them.</p>
@@ -107,7 +107,7 @@ function FolderBrowser({ tab, close, busyChanged }: { tab: string; close: () => 
 export function ProjectFolderDialog({ open, onClose, tab }: { open: boolean; onClose: () => void; tab: string }) {
   const shown = useOverlaySlot(open, PRIORITY.help)
   const [busy, setBusy] = useState(false)
-  return <Popup open={shown} label="Open project folder" className="max-md:max-h-[calc(100svh-2rem)] max-md:max-w-[calc(100vw-2rem)]" onOpenChange={(next) => { if (!next && !busy) onClose() }} dismissOnBackdrop={!busy}
+  return <Popup open={shown} label="Open project folder" className="max-w-[40rem] max-md:max-h-[calc(100svh-2rem)] max-md:max-w-[calc(100vw-2rem)]" onOpenChange={(next) => { if (!next && !busy) onClose() }} dismissOnBackdrop={!busy}
     onCloseAutoFocus={(event) => { event.preventDefault(); document.querySelector<HTMLElement>('[role="combobox"][aria-label="Project"]')?.focus() }}>
     {open ? <FolderBrowser tab={tab} close={onClose} busyChanged={setBusy} /> : null}
   </Popup>
