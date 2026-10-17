@@ -12,6 +12,7 @@ export const LOBBY_ACTIONS = {
   sidebar: { key: "alt+b", help: "fold or open the sidebar (on a phone, open it)" },
   activity: { key: "alt+a", help: "open or fold every step in the Lobby conversation" },
   thinking: { key: "alt+t", help: "show or hide Thinking on the Lobby" },
+  terminal: { key: "ctrl+`", help: "show or hide the terminal" },
   nextTab: { key: "alt+]", help: "next tab" },
   prevTab: { key: "alt+[", help: "previous tab" },
 } as const;

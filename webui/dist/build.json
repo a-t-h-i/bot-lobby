@@ -1,6 +1,6 @@
 {
-  "hash": "b3f85b91ed5915a6b24f2e887eed3e176bd81a2ac73e42d74a50be8e591bfc61",
-  "builtAt": "2026-10-17T05:31:42.201Z",
+  "hash": "34be82c1a436532444b7047223559e23401025e8b9890a2ba93b9a82493c0922",
+  "builtAt": "2026-10-17T08:38:45.413Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -8,7 +8,7 @@
     },
     {
       "path": "src/webui/protocol.ts",
-      "sha256": "5540bbec5d8569fa0e865c7b5ed8a64d0340d82c071a5330b89e3d9fa22f9bbf"
+      "sha256": "9f8aba7f11af448ec90b0d543f71b9931a1ad2f09b97961f5008bdf1167574f4"
     },
     {
       "path": "webui/components.json",
@@ -64,7 +64,7 @@
     },
     {
       "path": "webui/src/app/Shell.tsx",
-      "sha256": "a335e2d32b0827e4c88886d0fc1cb797d5bb88e9936460c243687dc2cd5832ec"
+      "sha256": "6d787688a81d631674a46c1eb1faf7e70a562cce0eb2691973ab787550b0330f"
     },
     {
       "path": "webui/src/app/Sidebar.tsx",
@@ -85,6 +85,14 @@
     {
       "path": "webui/src/app/TabStrip.tsx",
       "sha256": "7dcdf4843bddf36d5ec1606897c2fedfd758de167224da2bb5103425a25a006b"
+    },
+    {
+      "path": "webui/src/app/TerminalDrawer.tsx",
+      "sha256": "8d9f9d5517e906c65d30f59a8a0375fcea535794672ded76cbef910eb687a953"
+    },
+    {
+      "path": "webui/src/app/TerminalView.tsx",
+      "sha256": "36d6298c341c78f86ef72f82a962cab76682c70ccfccc237f0ff1ff3d7ba5dd8"
     },
     {
       "path": "webui/src/app/Thinking.tsx",
@@ -151,6 +159,10 @@
       "sha256": "0d683f985c5f3787bef4a481dbefea30b93c960523879313c25cea01ec1208cd"
     },
     {
+      "path": "webui/src/app/terminalStore.ts",
+      "sha256": "e86852f3c68b640b71388b7d3df2d9ef20376fb0c1ff7f2bbdb8f2082156ad9d"
+    },
+    {
       "path": "webui/src/app/typeface.ts",
       "sha256": "77eb782099b5e51c6e62c890577233191aacad5b3ed37042182e2a36e9422ca9"
     },
@@ -164,7 +176,7 @@
     },
     {
       "path": "webui/src/app/useLobbyKeys.ts",
-      "sha256": "4767144922dca40d4a3aedbf481ddaaa309bfc67286908a60cf26092e58a3ccd"
+      "sha256": "f5038bca1bf25db2bc13f1aceb94cbaaac64ab9c7ad24c0418be22f59df199c5"
     },
     {
       "path": "webui/src/app/usePhoneCarousel.ts",
@@ -260,7 +272,7 @@
     },
     {
       "path": "webui/src/components/ui/toaster.tsx",
-      "sha256": "6b77318cdbb2e03883bab82709fd5fe856edd6c3ebeb0d3e29f8900aad342e04"
+      "sha256": "73679bcd1578eb240d28533d2e4182db941aa239400071fc5efddaee7d3a9c8e"
     },
     {
       "path": "webui/src/components/ui/tooltip.tsx",
@@ -272,7 +284,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "3a561df16abfb44f6c1425f97872509eec3d5407f1a790547881f7f4ba32a9e7"
+      "sha256": "620106dfbfe7fb65858fd0d757041876a6507e799ed599b77d603b8aa829ffa8"
     },
     {
       "path": "webui/src/lib/act.ts",

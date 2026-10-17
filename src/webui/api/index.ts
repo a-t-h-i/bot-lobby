@@ -22,6 +22,8 @@ import { gitCancelReview, gitJev, gitPull, gitPulls, gitReview } from "./git.ts"
 import { issuesCreate, issuesGet, issuesList } from "./issues.ts";
 import { sessionsAnswer, sessionsChat, sessionsList, sessionsMessage, sessionsStart, sessionsStop, sessionsSwitch } from "./sessions.ts";
 import { settingsGet, settingsLinters, settingsSet } from "./settings.ts";
+import { terminalClose, terminalInput, terminalList, terminalOpen, terminalResize } from "./terminal.ts";
+import { MAX_INPUT_CHARS } from "../terminal.ts";
 import { themesChoose, themesGet, themesRemove, themesRename, themesSave } from "./themes.ts";
 import { noticeText, pushNotice } from "../notices.ts";
 
@@ -222,6 +224,26 @@ function buildRoutes(): Record<string, Route> {
   routes["sessions.switch"] = {
     schema: Type.Object({ key: Type.Optional(TaskId), sessionId: Type.Optional(TaskId), claimTaskId: Type.Optional(TaskId) }, { additionalProperties: false }),
     run: (body, ctx) => sessionsSwitch(body as { key?: string; sessionId?: string; claimTaskId?: string }, ctx),
+  };
+  const TerminalId = Type.String({ minLength: 1, maxLength: 40 });
+  const Cols = Type.Integer({ minimum: 2, maximum: 500 });
+  const Rows = Type.Integer({ minimum: 2, maximum: 300 });
+  routes["terminal.list"] = { schema: Empty, run: () => terminalList() };
+  routes["terminal.open"] = {
+    schema: Type.Object({ cols: Cols, rows: Rows }, { additionalProperties: false }),
+    run: (body, ctx) => terminalOpen(body as { cols: number; rows: number }, ctx),
+  };
+  routes["terminal.input"] = {
+    schema: Type.Object({ id: TerminalId, data: Type.String({ minLength: 1, maxLength: MAX_INPUT_CHARS }) }, { additionalProperties: false }),
+    run: (body) => terminalInput(body as { id: string; data: string }),
+  };
+  routes["terminal.resize"] = {
+    schema: Type.Object({ id: TerminalId, cols: Cols, rows: Rows }, { additionalProperties: false }),
+    run: (body) => terminalResize(body as { id: string; cols: number; rows: number }),
+  };
+  routes["terminal.close"] = {
+    schema: Type.Object({ id: TerminalId }, { additionalProperties: false }),
+    run: (body) => terminalClose(body as { id: string }),
   };
   routes["sessions.answer"] = {
     schema: Type.Object({ key: TaskId, dialogId: TaskId, answer: DialogAnswer }, { additionalProperties: false }),
