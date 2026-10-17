@@ -21,14 +21,6 @@ export interface SessionEntry {
   sessionId?: string
 }
 
-/** What the row says under the name. */
-export function sessionNote(entry: SessionEntry): string {
-  if (entry.where === "here") return entry.state === "working" ? "This window · working" : "This window"
-  if (entry.where === "elsewhere") return "Another terminal"
-  if (entry.waiting > 0) return entry.waiting === 1 ? "1 question for you" : `${entry.waiting} questions for you`
-  return { working: "Working", idle: "Idle", starting: "Starting…", exited: "Ended", asking: "Asking" }[entry.state]
-}
-
 function backgroundState(session: BackgroundSessionInfo): SessionState {
   if (session.waiting > 0 && session.alive) return "asking"
   if (session.status === "exited" || !session.alive) return "exited"
@@ -57,10 +49,4 @@ export function sessionEntries(status: Pick<StatusInfo, "sessionId" | "sessionNa
   // Ended background sessions go last among their kind: the live ones are what you switch between.
   background.sort((a, b) => Number(a.state === "exited") - Number(b.state === "exited"))
   return [here, ...background, ...elsewhere]
-}
-
-/** The letter a folded rail shows of a session. */
-export function sessionInitial(name: string): string {
-  const letter = name.trim().match(/[\p{L}\p{N}]/u)?.[0]
-  return (letter ?? "•").toUpperCase()
 }

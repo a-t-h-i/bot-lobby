@@ -46,12 +46,16 @@ test("toolbar actions have spacing and readable contrast @theme", async ({ page,
       });
       const gap = (a: any, b: any) => b.getBoundingClientRect().left - a.getBoundingClientRect().right;
       // The app's switches sit side by side at the foot of the open sidebar.
-      const tools = [...document.querySelectorAll("#app-sidebar .sidebar-foot > *")];
+      const tools = [...document.querySelectorAll("#app-sidebar .sidebar-foot > div > *")];
       const composer = buttons.filter((button: any) => button.closest("#app-dock"));
       return { contrast, sidebarGaps: tools.slice(1).map((button: any, i: number) => gap(tools[i], button)), composerGap: gap(composer[0], composer[1]) };
     });
     expect(Math.min(...metrics.contrast), "icons contrast with their button surface").toBeGreaterThanOrEqual(4.5);
-    if (metrics.sidebarGaps.length) expect(Math.min(...metrics.sidebarGaps), "the sidebar's switches keep apart").toBeGreaterThanOrEqual(2);
+    // Read again until the sidebar has settled: it may still be sliding in after the resize.
+    if (metrics.sidebarGaps.length) await expect.poll(() => page.evaluate(() => {
+      const tools = [...document.querySelectorAll("#app-sidebar .sidebar-foot > div > *")];
+      return Math.min(...tools.slice(1).map((button: any, i: number) => button.getBoundingClientRect().left - tools[i]!.getBoundingClientRect().right));
+    }), "the sidebar's switches keep apart").toBeGreaterThanOrEqual(2);
     expect(metrics.composerGap, "Attach and Preview have room between them").toBeGreaterThanOrEqual(7);
     await expectNoSidewaysScroll(page);
   }
@@ -291,18 +295,24 @@ test("the sidebar holds the sessions, Settings and the app's switches; there is 
     await expect(header.getByRole("combobox", { name: "Project", exact: true }), "so did the project").toHaveCount(0);
     await expect(header, "the bar does not name the task").not.toContainText("T-148");
     const sidebar = page.getByRole("complementary", { name: "Sidebar" });
-    // Open on a wide window, unpicked it starts as a rail of icons under 1024 px.
-    await expect.poll(async () => (await sidebar.boundingBox())!.width, width >= 1024 ? "open, it lists the sessions" : "a rail of icons").toBeGreaterThan(width >= 1024 ? 200 : 0);
-    if (width < 1024) await expect.poll(async () => (await sidebar.boundingBox())!.width, "a rail of icons").toBeLessThan(64);
+    // Open on a wide window, unpicked it starts folded off the page under 1024 px, with a way back at the start of the bar.
+    const sideWidth = async () => (await sidebar.boundingBox())?.width ?? 0;
+    if (width >= 1024) await expect.poll(sideWidth, "open, it lists the sessions").toBeGreaterThan(200);
+    else await expect.poll(sideWidth, "folded away").toBeLessThan(2);
     // Once the sidebar has settled, the tabs sit centred in the bar beside it.
     await expect.poll(async () => {
       const bar = (await header.boundingBox())!;
       const tabs = (await header.getByRole("tablist").boundingBox())!;
       return Math.abs(tabs.x + tabs.width / 2 - (bar.x + bar.width / 2));
     }, `the tabs are centred at ${width}px`).toBeLessThan(2);
+    if (width < 1024) {
+      await header.getByRole("button", { name: "Expand sidebar" }).click();
+      await expect.poll(sideWidth, "the bar's button brings it back").toBeGreaterThan(200);
+      await expect(header.getByRole("button", { name: "Expand sidebar" }), "and steps aside").toHaveCount(0);
+    }
     await expect(sidebar.getByRole("link", { name: "Sessions" }), "no Sessions page").toHaveCount(0);
-    await expect(sidebar.getByRole("navigation", { name: "Sessions list" }), "the running sessions, open or folded").toBeVisible();
-    for (const name of SWITCHES) await expect(sidebar.getByRole("button", { name: new RegExp(`^(${name})$`) }), `${name} sits on the rail`).toBeVisible();
+    await expect(sidebar.getByRole("navigation", { name: "Sessions list" }), "the running sessions").toBeVisible();
+    for (const name of SWITCHES) await expect(sidebar.getByRole("button", { name: new RegExp(`^(${name})$`) }), `${name} sits at the sidebar's foot`).toBeVisible();
   }
   const sidebar = page.getByRole("complementary", { name: "Sidebar" });
   const dark = () => page.locator("html").evaluate((el: any) => el.classList.contains("dark"));

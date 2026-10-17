@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { blocksConfiguredAction } from "../webui/src/app/keyGuards.ts";
 import { initiallyCollapsed } from "../webui/src/lib/panePreference.ts";
-import { sessionEntries, sessionInitial, sessionNote } from "../webui/src/app/sessionList.ts";
+import { sessionEntries } from "../webui/src/app/sessionList.ts";
 
 const source = (path: string) => readFileSync(new URL(`../webui/src/${path}`, import.meta.url), "utf8");
 
@@ -76,11 +76,5 @@ test("the sidebar lists this window first, then its background sessions, then ot
     ["Old run", "background", "exited"],
     ["Terminal two", "elsewhere", "idle"],
   ]);
-  assert.equal(sessionNote(entries[0]!), "This window · working");
-  assert.equal(sessionNote(entries[1]!), "2 questions for you");
-  assert.equal(sessionNote(entries[2]!), "Ended");
-  assert.equal(sessionNote(entries[3]!), "Another terminal");
   assert.equal(sessionEntries(undefined, undefined)[0]!.name, "This window");
-  assert.equal(sessionInitial("  #42 fix it"), "4");
-  assert.equal(sessionInitial("éclair"), "É");
 });

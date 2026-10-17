@@ -32,7 +32,7 @@ naming the file it came from.
 | `webui/src/components/reui/badge.tsx` | `apps/web/src/components/ui/badge.tsx` |
 | `webui/src/components/reui/select.tsx` | `apps/web/src/components/ui/select.tsx` |
 | `webui/src/components/reui/popover.tsx` | `apps/web/src/components/ui/popover.tsx` |
-| `webui/src/app/Sidebar.tsx` | `apps/web/src/components/ui/sidebar.tsx` |
+| `webui/src/app/Sidebar.tsx` | `apps/web/src/components/Sidebar.tsx`, `apps/web/src/components/ui/sidebar.tsx` |
 | `webui/src/app/Composer.tsx` | `apps/web/src/components/chat/ComposerSurface.tsx` |
 | `webui/src/tabs/lobby/InlineActivity.tsx` | `apps/web/src/components/chat/WorkLog.tsx` |
 | `src/webui/palette-core.ts` (the built-in themes) | `packages/shared/src/themePalettes.ts` (Blossom is their T3 Chat theme, renamed) |
