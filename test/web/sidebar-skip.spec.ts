@@ -139,3 +139,65 @@ test("a plan step is skipped only with a reason, which then shows under the stru
   await expect(page.getByText("1 skipped", { exact: false })).toBeVisible();
   await expect(steps.getByRole("button", { name: "Skip step 3" }), "a skipped step has no Skip").toHaveCount(0);
 });
+
+test("the sidebar and the bar are one surface, the page set in it on a rounded corner that squares off when the sidebar folds @theme", async ({ page, server }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openScenario(page, server, "full");
+  const look = () => page.evaluate(() => {
+    const g = globalThis as any;
+    const style = (selector: string) => g.getComputedStyle(g.document.querySelector(selector));
+    const chrome = style(".app-chrome");
+    const sidebar = style("#app-sidebar");
+    const header = style(".app-header");
+    const frame = style(".app-page");
+    return { chrome: chrome.backgroundColor, sidebar: sidebar.backgroundColor, header: header.backgroundColor, line: sidebar.borderRightColor, corner: parseFloat(frame.borderTopLeftRadius), page: frame.backgroundColor };
+  });
+  const open = await look();
+  expect(open.sidebar, "the sidebar shows the frame through").toBe("rgba(0, 0, 0, 0)");
+  expect(open.header, "and so does the bar").toBe("rgba(0, 0, 0, 0)");
+  expect(open.line, "no line between them").toBe("rgba(0, 0, 0, 0)");
+  expect(open.page, "the page is its own surface").not.toBe(open.chrome);
+  expect(open.corner, "rounded where the sidebar and the bar meet").toBeGreaterThan(8);
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect.poll(async () => (await look()).corner, "no corner without the sidebar").toBe(0);
+});
+
+test("a session is renamed from the sidebar, by its pencil or a double-click; Esc keeps the old name", async ({ page, server }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openScenario(page, server, "full");
+  const list = page.getByRole("navigation", { name: "Sessions list" });
+  await list.getByRole("button", { name: "mock lobby, this window" }).hover();
+  await list.getByRole("button", { name: "Rename mock lobby" }).click();
+  const field = list.getByRole("textbox", { name: "New name for mock lobby" });
+  await expect(field).toBeFocused();
+  await field.fill("Login page work");
+  const renamed = page.waitForRequest((request) => request.url().endsWith("/api/sessions.rename"));
+  await field.press("Enter");
+  expect((await renamed).postDataJSON()).toEqual({ name: "Login page work" });
+  await expect(list.getByRole("button", { name: "Login page work, this window" })).toBeVisible();
+
+  await list.getByRole("button", { name: "Switch to Mock background task" }).dblclick();
+  const other = list.getByRole("textbox", { name: "New name for Mock background task" });
+  await other.fill("Never mind");
+  await other.press("Escape");
+  await expect(list.getByRole("button", { name: "Switch to Mock background task" }), "Esc keeps the old name").toBeVisible();
+  await expect(list.getByRole("button", { name: "Rename Other window" }), "a session in another terminal is not ours to rename").toHaveCount(0);
+});
+
+test("an ended session is archived from the sidebar with Undo; Archive all clears the shelf; a running one has no Archive", async ({ page, server }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openScenario(page, server, "full");
+  const list = page.getByRole("navigation", { name: "Sessions list" });
+  await expect(list.getByRole("button", { name: "Archive Mock background task" }), "still running").toHaveCount(0);
+  await page.evaluate(() => fetch("/api/sessions.stop", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: "S1" }) }));
+  const shelf = list.getByRole("region", { name: "Ended" });
+  const card = shelf.getByRole("button", { name: "Switch to Mock background task" });
+  await expect(card, "an ended session moves to the Ended shelf").toBeVisible();
+  await card.hover();
+  await shelf.getByRole("button", { name: "Archive Mock background task" }).click();
+  await expect(shelf, "archived, the shelf goes").toHaveCount(0);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(card, "Undo brings it back").toBeVisible();
+  await shelf.getByRole("button", { name: "Archive all" }).click();
+  await expect(shelf).toHaveCount(0);
+});

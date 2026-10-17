@@ -160,6 +160,10 @@ export interface LobbyService {
   sessionName(): string | undefined;
   /** Background sessions this window started, oldest first. */
   sessions(): readonly BackgroundSession[];
+  /** Rename this window's session (no key) or a background one; returns a notice (throws when it cannot). */
+  renameSession?(key: string | undefined, name: string): string;
+  /** Put an ended background session away from the list, or bring it back; returns a notice (throws when it cannot). */
+  archiveSession?(key: string, archived: boolean): string;
   /** Start a task in a new background session, named after the task; the session, or why not. */
   startSession(start: { request?: string; plan?: PlannedTask; auto?: boolean }): BackgroundSession | string;
   /** Auto mode for any task, whichever session drives it. */

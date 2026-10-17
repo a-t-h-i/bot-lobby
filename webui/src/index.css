@@ -1242,6 +1242,29 @@
   transition: width 320ms cubic-bezier(0.32, 0.72, 0, 1), border-color 320ms;
 }
 .app-sidebar[data-folded] { border-right-color: transparent; }
+/*
+ * The app's frame: the sidebar and the bar are one surface in the sidebar's
+ * colour, with no line between them, and the page sits in it on a hairline
+ * with its inner corner rounded where the two meet. With the sidebar folded
+ * away there is no corner to round, so the page runs to the window's edge.
+ */
+.app-chrome { background: var(--sidebar); }
+.app-chrome .app-sidebar { background: transparent; border-right-color: transparent; }
+@media (min-width: 768px) {
+  .app-chrome .app-page {
+    background: var(--background);
+    border-top: 1px solid var(--sidebar-border);
+    border-left: 1px solid var(--sidebar-border);
+    border-top-left-radius: 0.875rem;
+    overflow: hidden;
+    transition: border-top-left-radius 320ms cubic-bezier(0.32, 0.72, 0, 1), border-left-color 320ms;
+  }
+  .app-chrome[data-sidebar="folded"] .app-page { border-top-left-radius: 0; border-left-color: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-chrome .app-page { transition: none; }
+}
+
 .app-sidebar[data-resizing] { transition: none; user-select: none; }
 .app-sidebar .sidebar-panel {
   flex-shrink: 0;
@@ -1346,6 +1369,11 @@ html[data-resizing="row"] * { cursor: row-resize !important; user-select: none; 
 .terminal-view .xterm-viewport { background-color: transparent !important; }
 @media (prefers-reduced-motion: reduce) {
   .terminal-drawer { animation: none; }
+}
+/* A session card's Rename and Archive wait out of sight until the card is hovered or focused; under a finger they are always there. */
+@media (hover: hover) and (pointer: fine) {
+  .session-actions { opacity: 0; transition: opacity 150ms; }
+  .session-item:hover .session-actions, .session-item:focus-within .session-actions { opacity: 1; }
 }
 /* A plan step's Skip waits out of sight until the row is hovered or focused; under a finger it is always there. */
 @media (hover: hover) and (pointer: fine) {
