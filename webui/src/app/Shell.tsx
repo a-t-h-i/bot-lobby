@@ -39,7 +39,8 @@ import { go, parseHash, tabHash, useRoute, type Route } from "./router.ts"
 import { routeBody } from "@/tabs/registry.tsx"
 import { ACTIVITY_OPEN } from "@/tabs/lobby/InlineActivity"
 import { focusTab, isTyping, tabWalk } from "@/prompts/nav"
-import { toggleCollapsed } from "@/lib/collapsed"
+import { toggleCollapsed, useCollapsed } from "@/lib/collapsed"
+import { NARROW_SIDEBAR } from "@/lib/panePreference"
 
 function handleAction(action: string, route: Route, toggleHelp: () => void, cycle: (delta: number) => void, toggleSidebar: () => void): void {
   if (action === "search") (document.querySelector<HTMLElement>("#main input[type='search']") ?? document.getElementById("composer-text"))?.focus()
@@ -145,6 +146,9 @@ export function Shell() {
   const toggleHelp = useCallback(() => setHelp((open) => !open), [])
   const projects = useProjects()
   const [sheet, setSheet] = useState(false)
+  // Read again when the window crosses the narrow width, where an unpicked sidebar folds.
+  useMediaQuery(NARROW_SIDEBAR)
+  const [sidebarFolded] = useCollapsed(SIDEBAR_KEY)
   // On a phone the sidebar is a sheet; wider, the key folds it off the page or brings it back.
   const toggleSidebar = useCallback(() => {
     if (phone) setSheet((open) => !open)
@@ -228,10 +232,12 @@ export function Shell() {
   const sidebarProps = { route, keys: keyLabels, onHelp: toggleHelp }
   const dockShown = composerVisible(route)
   return (
-    <div ref={rootRef} className="fixed inset-0 flex">
+    // The sidebar and the bar are one surface, the app's frame; the page sits in it on a rounded inner corner.
+    <div ref={rootRef} className="app-chrome fixed inset-0 flex" data-sidebar={phone ? undefined : sidebarFolded ? "folded" : "open"}>
       {phone ? null : <Sidebar {...sidebarProps} />}
       <div className="relative flex min-w-0 flex-1 flex-col">
       {header}
+      <div className="app-page relative flex min-h-0 flex-1 flex-col">
       <Banner connection={connection} onRetry={retry} />
       {/* The page and the composer floating over its foot; the terminal drawer, when open, sits under both. */}
       <div className="relative flex min-h-0 flex-1 flex-col">
@@ -263,6 +269,7 @@ export function Shell() {
       <Composer route={route} keys={keyLabels} projects={projects} onHelp={toggleHelp} dockNav={phone && dockShown ? tabStrip : null} />
       </div>
       {phone ? null : <TerminalDrawer toggleKey={keyLabels.terminal ?? "Ctrl+`"} />}
+      </div>
       </div>
       {phone ? <SidebarSheet {...sidebarProps} open={sheet} onOpenChange={setSheet} /> : null}
       <Thinking status={status} lobby={lobbyRecord.data} />

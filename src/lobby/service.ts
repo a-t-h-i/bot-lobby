@@ -36,7 +36,7 @@ import { pendingRequest, startRequest } from "../pi/route.ts";
 import { deliverComments, setAuto } from "../pi/owner.ts";
 import { chatFromEntries, lobbyFeed, type ChatEntry } from "./feed.ts";
 import { availableClassifiers, classifier, effortFor, hintsFor } from "../classifier/instance.ts";
-import { launchPi, SessionRegistry, type BackgroundSession, type SessionLauncher } from "./sessions.ts";
+import { cleanSessionName, launchPi, SessionRegistry, type BackgroundSession, type SessionLauncher } from "./sessions.ts";
 import { askForSession } from "./session-questions.ts";
 import { SessionChats } from "./session-files.ts";
 import { answerMessage, questionnaires, settledQuestions } from "./ask.ts";
@@ -218,6 +218,31 @@ function sessionRegistry(): SessionRegistry {
 
 export function backgroundSessions(): readonly BackgroundSession[] {
   return registry?.sessions ?? [];
+}
+
+/** Rename this window's session (no key) or one of its background sessions. */
+function renameSession(state: Runtime, key: string | undefined, name: string): string {
+  const clean = cleanSessionName(name);
+  if (!key) {
+    state.pi.setSessionName(clean);
+    lobbyTopics.bump("status");
+    lobbyTopics.bump("sessions");
+    return `renamed this window to ${clean}`;
+  }
+  const session = backgroundSessions().find((entry) => entry.key === key && entry.projectRoot === state.root);
+  if (!session) throw new Error(`no session ${key}`);
+  session.rename(clean);
+  return `renamed ${key} to ${clean}`;
+}
+
+/** Put an ended background session away from the sidebar, or bring it back. */
+function archiveSession(state: Runtime, key: string, archived: boolean): string {
+  const list = registry ? (archived ? registry.sessions : registry.archived) : [];
+  const session = list.find((entry) => entry.key === key && entry.projectRoot === state.root);
+  if (!session) throw new Error(archived ? `no session ${key} to archive` : `no archived session ${key}`);
+  if (session.alive) throw new Error(`${session.name} is still running: stop it before archiving it`);
+  registry!.archive(key, archived);
+  return archived ? `archived ${session.name}` : `brought back ${session.name}`;
 }
 
 /** A background session changed: say so when one asks something or fails. */
@@ -933,6 +958,8 @@ export function createLobbyService(state: Runtime): LobbyService {
     refreshWorkspace: () => refreshWorkspace(state),
     sessionName: () => state.pi.getSessionName(),
     sessions: () => backgroundSessions().filter((session) => session.projectRoot === state.root),
+    renameSession: (key, name) => renameSession(state, key, name),
+    archiveSession: (key, archived) => archiveSession(state, key, archived),
     startSession: (start) => startSession(state, start),
     isAuto: (taskId) => autoFor(state, taskId),
     setAuto: (taskId, on) => switchAuto(state, taskId, on),

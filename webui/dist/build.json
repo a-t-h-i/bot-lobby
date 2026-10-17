@@ -1,6 +1,6 @@
 {
-  "hash": "34be82c1a436532444b7047223559e23401025e8b9890a2ba93b9a82493c0922",
-  "builtAt": "2026-10-17T08:38:45.413Z",
+  "hash": "ff76ae1cad8d26dd373850beff0bb8ae1688e1a3763c057820412e50e6728b63",
+  "builtAt": "2026-10-17T14:03:43.367Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -8,7 +8,7 @@
     },
     {
       "path": "src/webui/protocol.ts",
-      "sha256": "9f8aba7f11af448ec90b0d543f71b9931a1ad2f09b97961f5008bdf1167574f4"
+      "sha256": "534fb6bc46d56b7459cfc1d7d4a270285710965dade19b4da5b5ceb7e35024ff"
     },
     {
       "path": "webui/components.json",
@@ -64,11 +64,11 @@
     },
     {
       "path": "webui/src/app/Shell.tsx",
-      "sha256": "6d787688a81d631674a46c1eb1faf7e70a562cce0eb2691973ab787550b0330f"
+      "sha256": "7aeaf41508a97227e7c08d1dd319739f09d45be1e47d6ecd085958a53e97459e"
     },
     {
       "path": "webui/src/app/Sidebar.tsx",
-      "sha256": "8e0510912cee70891ecbdf8492193a71fed42aab94721bd185d27f7bae130a6b"
+      "sha256": "2c5b782008cc3f20adf61d0c01e4ba25e9b22ce9ee1f3fda1cbe16d76705bad7"
     },
     {
       "path": "webui/src/app/SignIn.tsx",
@@ -284,7 +284,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "620106dfbfe7fb65858fd0d757041876a6507e799ed599b77d603b8aa829ffa8"
+      "sha256": "6c6e697b4ec0120917bd40695c0eb001ce5c335a0f7e46686f83c1c275d69c41"
     },
     {
       "path": "webui/src/lib/act.ts",
