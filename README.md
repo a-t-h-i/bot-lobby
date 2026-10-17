@@ -51,7 +51,7 @@ or external boards.
 The composer appears only on **Lobby**, **Tasks**, **Plan**, **Quick fix** and **Knowledge**, including
 supported detail routes and Knowledge's Docs/Chat views. On Git, Metrics and Settings it stays mounted
 but hidden and inert, preserving drafts and attachments (including uploads that finish while hidden)
-without taking space. Phone navigation remains available.
+without taking space.
 
 | Agent | Does |
 | --- | --- |

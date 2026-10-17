@@ -6,14 +6,13 @@
  * footer row under them, who the message goes to and the Markdown preview on
  * its left, attach, stop and a round send button on its right. The context
  * strip tucked under the box carries the project (its explorer opens from
- * there) and the key hints. On a phone the strip stays out (the bar has the
- * project). It grows with what you type up to a cap, takes images, PDFs and
+ * there) and the key hints. It grows with what you type up to a cap, takes images, PDFs and
  * other files (pick, paste or drop them) and sends Markdown to whoever the tab
  * talks to: the oracle everywhere, the planning panel on Plan, a quick fix on
  * Quick fix, a comment on the open task on Tasks. While a pop-up is open it
  * steps aside, so only one thing asks for you at a time.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type RefObject } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { Eye, FileText, Paperclip, X } from "lucide-react"
 import { Select as SelectPrimitive } from "radix-ui"
@@ -35,8 +34,7 @@ import { continueList, link, wrap, type Edit } from "./markdownEdit"
 import { cn } from "@/lib/utils"
 import { projectUrl } from "@/lib/project"
 import type { LobbySnapshot, StatusInfo, UploadInfo } from "@protocol"
-import { useCompactLandscape, useMediaQuery, useTopic } from "./hooks"
-import { usePhoneViewport } from "./usePhoneViewport"
+import { useTopic } from "./hooks"
 import { go, type Route } from "./router"
 import { knowledgeHash } from "./knowledgeView"
 import { KnowledgePaneToggle } from "./KnowledgePaneToggle"
@@ -201,7 +199,7 @@ function useShrinkOnScroll(dock: RefObject<HTMLDivElement | null>, active: boole
   return { shrunk, expand }
 }
 
-export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Route; keys: Record<string, string>; projects: Projects; onHelp: () => void; dockNav?: ReactNode }) {
+export function Composer({ route, keys, projects, onHelp }: { route: Route; keys: Record<string, string>; projects: Projects; onHelp: () => void }) {
   const [text, setText] = useState("")
   const [files, setFiles] = useState<Pending[]>([])
   const [preview, setPreview] = useState(false)
@@ -212,9 +210,6 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
   const lobby = useTopic<LobbySnapshot>("lobby")
   const blocked = useAnyOverlay()
   const busy = (status.data?.busy ?? false) || Boolean(lobby.data?.reply?.trim())
-  const compact = useCompactLandscape()
-  const phone = useMediaQuery("(max-width: 767.98px)")
-  const { keyboardOpen, keyboardInset } = usePhoneViewport()
 
   const visible = composerVisible(route)
   const visibleRef = useRef(visible)
@@ -254,7 +249,7 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
     const root = document.documentElement
     const set = () => {
       const box = el.getBoundingClientRect()
-      root.style.setProperty("--composer-h", blocked || !visible ? "0px" : `${Math.ceil(box.height + (phone ? keyboardInset : 0))}px`)
+      root.style.setProperty("--composer-h", blocked || !visible ? "0px" : `${Math.ceil(box.height)}px`)
       // A hidden composer measures 0 wide: the toasts then centre on the window instead of shrinking to nothing.
       if (!visible || box.width === 0) {
         root.style.removeProperty("--composer-x")
@@ -275,7 +270,7 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
       root.style.removeProperty("--composer-x")
       root.style.removeProperty("--composer-w")
     }
-  }, [blocked, keyboardInset, keyboardOpen, phone, visible])
+  }, [blocked, visible])
 
   const attach = useCallback((list: Iterable<File>) => {
     if (!visibleRef.current) return
@@ -399,8 +394,6 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
   }
 
   const knowledge = route.kind === "tab" && route.tab === "knowledge"
-  // The strip under the box is for a wide screen; a phone has the project in its bar.
-  const withStrip = !phone && !compact
   // Who it goes to, as the harness shows its model: a quiet control with an icon and a chevron that opens the list.
   const targetControl = targets.length > 1 ? (
     <Select value={target.id} onValueChange={(id) => setChosen(id as TargetId)}>
@@ -424,11 +417,11 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
   )
   const project = status.data?.workspace.name ?? "bot-lobby"
   const branch = status.data?.branch ?? status.data?.workspace.branch
-  const strip = withStrip ? (
+  const strip = (
     <div className="min-h-0">
       <div className="relative z-0">
         <ComposerSurface.ContextStrip role="group" aria-label="Message context" className="composer-strip gap-1 text-xs font-normal text-muted-foreground/70">
-          <ProjectSwitcher look="chip" projects={projects} tab={route.kind === "tab" ? route.tab : route.kind} name={project} branch={branch} />
+          <ProjectSwitcher projects={projects} tab={route.kind === "tab" ? route.tab : route.kind} name={project} branch={branch} />
           <div className="@container ml-auto flex min-w-0 flex-1 items-center justify-end gap-3 overflow-hidden pe-1">
             {route.kind === "tab" && route.tab === "plan" ? (
               <KeyHint chord={keys.savePlan ?? "Ctrl+S"} className="hidden @[24rem]:inline-flex">
@@ -455,7 +448,7 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
         </ComposerSurface.ContextStrip>
       </div>
     </div>
-  ) : null
+  )
 
   return (
     <div
@@ -463,22 +456,19 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
       ref={card}
       data-shrunk={shrunk || undefined}
       onFocus={expand}
-      style={phone && keyboardOpen ? { bottom: `${keyboardInset}px` } : undefined}
       className={cn(
-        "dock pointer-events-none absolute inset-x-0 bottom-0 z-30 px-6 pb-[max(1rem,env(safe-area-inset-bottom))] transition-opacity duration-200 ease-snap max-md:px-2",
-        phone && keyboardOpen ? "max-md:pb-2" : "max-md:pb-[max(0.5rem,env(safe-area-inset-bottom))]",
+        "dock pointer-events-none absolute inset-x-0 bottom-0 z-30 px-6 pb-[max(1rem,env(safe-area-inset-bottom))] transition-opacity duration-200 ease-snap",
         blocked && "opacity-0"
       )}
       hidden={!visible}
       aria-hidden={visible ? undefined : true}
       inert={blocked || !visible}
     >
-      {dockNav ? <div className="pointer-events-auto mx-auto mb-1.5 w-full max-w-(--chat-content-max-width)">{dockNav}</div> : null}
-      <ComposerSurface.Shell contextStrip={Boolean(strip)} className="composer-shell pointer-events-auto">
+      <ComposerSurface.Shell contextStrip className="composer-shell pointer-events-auto">
         <ComposerSurface.Host onPointerDown={expand}>
           <div className="relative z-10">
             <ComposerSurface.Main
-              className={cn("group/composer composer-box", compact && "min-[500px]:max-md:min-w-0")}
+              className="group/composer composer-box"
               onDragOver={(event) => {
                 if (!event.dataTransfer.types.includes("Files")) return
                 event.preventDefault()
@@ -491,16 +481,14 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
                 data-chat-composer-surface="true"
                 className={cn(
                   "rounded-3xl transition-[background-color] duration-200",
-                  dragging && "bg-accent/45 ring-1 ring-inset ring-primary/70",
-                  compact && "min-[500px]:max-md:grid min-[500px]:max-md:grid-cols-[minmax(0,1fr)_auto]"
+                  dragging && "bg-accent/45 ring-1 ring-inset ring-primary/70"
                 )}
               >
                 <div
                   data-chat-composer-body="true"
                   className={cn(
                     "composer-text relative px-3 pb-2 sm:px-4",
-                    "pt-3.5 sm:pt-4",
-                    compact && "min-[500px]:max-md:min-w-0 min-[500px]:max-md:py-2"
+                    "pt-3.5 sm:pt-4"
                   )}
                 >
                   <AnimatePresence initial={false}>
@@ -539,8 +527,7 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
                       placeholder={busy && target.id === "oracle" ? "The oracle is working. Enter steers it…" : target.placeholder}
                       rows={1}
                       className={cn(
-                        "-m-1 block field-sizing-content max-h-52 min-h-19.5 w-[calc(100%+0.5rem)] resize-none overflow-y-auto bg-transparent p-1 leading-relaxed whitespace-pre-wrap text-foreground caret-primary outline-none placeholder:text-placeholder/75 max-md:min-h-12",
-                        compact && "min-[500px]:max-md:max-h-[44px] min-[500px]:max-md:min-h-0"
+                        "-m-1 block field-sizing-content max-h-52 min-h-19.5 w-[calc(100%+0.5rem)] resize-none overflow-y-auto bg-transparent p-1 leading-relaxed whitespace-pre-wrap text-foreground caret-primary outline-none placeholder:text-placeholder/75"
                       )}
                     />
                   </div>
@@ -549,13 +536,12 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
                 <div
                   data-chat-composer-footer="true"
                   className={cn(
-                    "composer-tools flex min-w-0 flex-nowrap items-center justify-between gap-2 overflow-visible px-3 pb-3 sm:gap-0 sm:px-4 sm:pb-4",
-                    compact && "min-[500px]:max-md:pt-2 min-[500px]:max-md:pb-2"
+                    "composer-tools flex min-w-0 flex-nowrap items-center justify-between gap-2 overflow-visible px-3 pb-3 sm:gap-0 sm:px-4 sm:pb-4"
                   )}
                 >
                   <div
                     data-chat-composer-controls="left"
-                    className={cn("composer-controls relative -m-1 -ms-3.5 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-1 ps-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", compact && "min-[500px]:max-md:hidden")}
+                    className="composer-controls relative -m-1 -ms-3.5 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-1 ps-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                   >
                     {knowledge ? <KnowledgePaneToggle rest={route.kind === "tab" ? route.rest : []} /> : targetControl}
                     <ComposerControlSeparator />

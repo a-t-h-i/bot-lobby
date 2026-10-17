@@ -13,8 +13,7 @@
  * Dragging its edge makes it wider or narrower, a double-click puts the width
  * back, and both the width and whether it is folded are remembered in this
  * browser; unpicked it starts folded on a window under 1024 px. The project
- * itself is chosen in the composer. On a phone it is a sheet from the left,
- * opened from the menu button in the bar.
+ * itself is chosen in the composer.
  */
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react"
 import {
@@ -22,7 +21,6 @@ import {
   ChevronDown,
   CircleCheck,
   CircleDashed,
-  Menu,
   MessageCircleQuestion,
   PanelLeft,
   PanelLeftClose,
@@ -30,11 +28,9 @@ import {
   Search,
   Settings,
   SquarePen,
-  X,
 } from "lucide-react"
 import type { StatusInfo } from "@protocol"
 import { Keys } from "@/components/ui/kbd"
-import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { act } from "@/lib/act"
 import { useCollapsed } from "@/lib/collapsed"
@@ -62,9 +58,9 @@ export const SIDEBAR_KEY = "app.sidebar"
 const WIDTH = { start: 16, min: 13, max: 24 }
 const WIDTH_KEY = "bot-lobby.sidebar.width"
 
-/** An icon button in the sidebar (and the bar's open button): 28 px as in the harness, a finger's width on a phone. */
+/** An icon button in the sidebar (and the bar's open button): 28 px as in the harness. */
 const ICON_BUTTON =
-  "inline-flex size-7 shrink-0 items-center justify-center rounded-md text-[var(--sidebar-icon)] outline-none transition-[background-color,color,scale] duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.96] aria-pressed:text-sidebar-foreground aria-[current=page]:bg-[var(--sidebar-selected)] aria-[current=page]:text-sidebar-foreground motion-reduce:active:scale-100 max-md:size-11"
+  "inline-flex size-7 shrink-0 items-center justify-center rounded-md text-[var(--sidebar-icon)] outline-none transition-[background-color,color,scale] duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.96] aria-pressed:text-sidebar-foreground aria-[current=page]:bg-[var(--sidebar-selected)] aria-[current=page]:text-sidebar-foreground motion-reduce:active:scale-100"
 
 const CARD =
   "session-card flex w-full min-w-0 flex-col rounded-md px-2.5 py-2 text-left outline-none transition-[background-color,scale] duration-150 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.98] aria-[current=true]:bg-[var(--sidebar-selected)] aria-[current=true]:shadow-control motion-reduce:active:scale-100"
@@ -177,10 +173,10 @@ function RenameField({ entry, onDone }: { entry: SessionEntry; onDone: () => voi
 }
 
 const CARD_ACTION =
-  "inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-[background-color,color] duration-150 hover:bg-[var(--sidebar-selected)] hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-md:size-9"
+  "inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-[background-color,color] duration-150 hover:bg-[var(--sidebar-selected)] hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
 
 /** A session as a card: where it runs and its state, its name, and a line on what it is; Rename and Archive on hover. */
-function SessionCard({ entry, branch, onPicked }: { entry: SessionEntry; branch: string | undefined; onPicked?: (() => void) | undefined }) {
+function SessionCard({ entry, branch }: { entry: SessionEntry; branch: string | undefined }) {
   const pick = useSwitch()
   const [renaming, setRenaming] = useState(false)
   const foot =
@@ -213,10 +209,7 @@ function SessionCard({ entry, branch, onPicked }: { entry: SessionEntry; branch:
           aria-label={entry.where === "here" ? `${entry.name}, this window` : entry.where === "elsewhere" ? `${entry.name}, in another terminal` : `Switch to ${entry.name}`}
           data-where={entry.where}
           data-state={entry.state}
-          onClick={() => {
-            onPicked?.()
-            void pick(entry)
-          }}
+          onClick={() => void pick(entry)}
           onDoubleClick={(event) => {
             if (!canRename) return
             event.preventDefault()
@@ -252,7 +245,7 @@ function SessionCard({ entry, branch, onPicked }: { entry: SessionEntry; branch:
 }
 
 /** A shelf of sessions at the sidebar's foot: a header with a rule and a chevron that folds it, remembered. */
-function Shelf({ id, label, entries, branch, onPicked, archivable = false }: { id: string; label: string; entries: SessionEntry[]; branch: string | undefined; onPicked?: (() => void) | undefined; archivable?: boolean }) {
+function Shelf({ id, label, entries, branch, archivable = false }: { id: string; label: string; entries: SessionEntry[]; branch: string | undefined; archivable?: boolean }) {
   const [folded, toggle] = useCollapsed(`app.sidebar.${id}`)
   const body = useId()
   if (entries.length === 0) return null
@@ -264,7 +257,7 @@ function Shelf({ id, label, entries, branch, onPicked, archivable = false }: { i
           aria-expanded={!folded}
           aria-controls={body}
           onClick={toggle}
-          className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none transition-colors duration-150 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-md:h-11"
+          className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none transition-colors duration-150 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
           <span>{label}</span>
           {folded ? <span className="tabular-nums">{entries.length}</span> : null}
@@ -275,7 +268,7 @@ function Shelf({ id, label, entries, branch, onPicked, archivable = false }: { i
           <button
             type="button"
             onClick={() => void (async () => { for (const entry of entries) if (entry.key) await act("sessions.archive", { key: entry.key }) })()}
-            className="h-7 shrink-0 rounded-md px-1.5 text-xs text-muted-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-md:h-11"
+            className="h-7 shrink-0 rounded-md px-1.5 text-xs text-muted-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
             Archive all
           </button>
@@ -283,7 +276,7 @@ function Shelf({ id, label, entries, branch, onPicked, archivable = false }: { i
       </div>
       {folded ? null : (
         <ul id={body} className="flex flex-col">
-          {entries.map((entry) => <SessionCard key={entry.id} entry={entry} branch={branch} onPicked={onPicked} />)}
+          {entries.map((entry) => <SessionCard key={entry.id} entry={entry} branch={branch} />)}
         </ul>
       )}
     </section>
@@ -300,7 +293,7 @@ function matches(entry: SessionEntry, query: string): boolean {
 function SearchRow({ query, onQuery, onNew }: { query: string; onQuery: (query: string) => void; onNew: () => void }) {
   return (
     <div className="flex items-center gap-1 px-1 pb-2">
-      <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition-colors duration-150 hover:bg-sidebar-accent focus-within:bg-sidebar-accent focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring max-md:h-11">
+      <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition-colors duration-150 hover:bg-sidebar-accent focus-within:bg-sidebar-accent focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring">
         <Search aria-hidden="true" className="size-4 shrink-0" />
         <input
           type="search"
@@ -328,7 +321,7 @@ function SearchRow({ query, onQuery, onNew }: { query: string; onQuery: (query: 
 }
 
 /** The sessions: the active ones as cards, then the shelves for other terminals and ended ones. */
-function Sessions({ query, onPicked }: { query: string; onPicked?: () => void }) {
+function Sessions({ query }: { query: string }) {
   const { entries, branch } = useSessions()
   const shown = entries.filter((entry) => matches(entry, query))
   const active = shown.filter((entry) => entry.where !== "elsewhere" && entry.state !== "exited")
@@ -342,13 +335,13 @@ function Sessions({ query, onPicked }: { query: string; onPicked?: () => void })
           <p className="px-2 py-1.5 text-xs text-muted-foreground">No sessions match “{query.trim()}”.</p>
         ) : (
           <ul className="flex flex-col">
-            {active.map((entry) => <SessionCard key={entry.id} entry={entry} branch={branch} onPicked={onPicked} />)}
+            {active.map((entry) => <SessionCard key={entry.id} entry={entry} branch={branch} />)}
           </ul>
         )}
         {!query.trim() && entries.length === 1 ? <p className="px-2.5 pt-1 text-xs text-muted-foreground">No other sessions are running.</p> : null}
         <div className="mt-auto flex flex-col pt-2">
-          <Shelf id="elsewhere" label="Other terminals" entries={elsewhere} branch={branch} onPicked={onPicked} />
-          <Shelf id="ended" label="Ended" entries={ended} branch={branch} onPicked={onPicked} archivable />
+          <Shelf id="elsewhere" label="Other terminals" entries={elsewhere} branch={branch} />
+          <Shelf id="ended" label="Ended" entries={ended} branch={branch} archivable />
         </div>
       </nav>
       <ScrollHints target={list} />
@@ -356,8 +349,8 @@ function Sessions({ query, onPicked }: { query: string; onPicked?: () => void })
   )
 }
 
-/** Settings and the app's switches at the sidebar's foot (and the phone's sheet). */
-function Foot({ route, keys, onHelp, phone = false }: SidebarProps & { phone?: boolean }) {
+/** Settings and the app's switches at the sidebar's foot. */
+function Foot({ route, keys, onHelp }: SidebarProps) {
   const hint = keys.settings ?? "Alt+S"
   return (
     <div className="sidebar-foot flex flex-col gap-1 border-t border-[var(--sidebar-border)] px-1 py-2">
@@ -366,15 +359,14 @@ function Foot({ route, keys, onHelp, phone = false }: SidebarProps & { phone?: b
         aria-label="Settings"
         aria-current={route.kind === "settings" ? "page" : undefined}
         aria-keyshortcuts={hint}
-        className="flex h-8 items-center gap-2 rounded-md px-2 text-sm text-sidebar-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-[current=page]:bg-[var(--sidebar-selected)] aria-[current=page]:font-medium max-md:h-11 [&>svg]:text-[var(--sidebar-icon)]"
+        className="flex h-8 items-center gap-2 rounded-md px-2 text-sm text-sidebar-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-[current=page]:bg-[var(--sidebar-selected)] aria-[current=page]:font-medium [&>svg]:text-[var(--sidebar-icon)]"
       >
         <Settings aria-hidden="true" className="size-4 shrink-0" />
         <span className="flex-1">Settings</span>
-        {phone ? null : <Keys chord={hint} />}
+        <Keys chord={hint} />
       </a>
       <div className="flex items-center justify-between">
-        {/* No key list on a phone: there are no keys to list. */}
-        {phone ? null : <HelpButton hint={keys.help ?? "Alt+H"} onHelp={onHelp} className={ICON_BUTTON} />}
+        <HelpButton hint={keys.help ?? "Alt+H"} onHelp={onHelp} className={ICON_BUTTON} />
         <ThemeToggle className={ICON_BUTTON} />
         <SoundToggle className={ICON_BUTTON} />
         <AppearanceButton className={ICON_BUTTON} />
@@ -532,44 +524,5 @@ export function SidebarOpenButton({ hint }: { hint?: string | undefined }) {
         <PanelLeft aria-hidden="true" className="size-4" />
       </button>
     </Tip>
-  )
-}
-
-/** The phone's way in: a menu button in the bar that opens the sidebar as a sheet. */
-export function SidebarSheet({ open, onOpenChange, ...props }: SidebarProps & { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const [query, setQuery] = useState("")
-  const [starting, setStarting] = useState(false)
-  return (
-    <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="left" showCloseButton={false} aria-describedby="sidebar-sheet-description" className="app-sidebar-sheet gap-0 p-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-          <SheetTitle className="sr-only">Sidebar</SheetTitle>
-          <SheetDescription id="sidebar-sheet-description" className="sr-only">
-            The running sessions, Settings and the app's switches.
-          </SheetDescription>
-          {/* Following any link closes the sheet: the page it leads to is the point. */}
-          <div className="flex min-h-0 flex-1 flex-col px-1" onClick={(event) => { if ((event.target as HTMLElement).closest("a[href]")) onOpenChange(false) }}>
-            <div className="flex min-h-12 items-center gap-2 pl-3">
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">Bot Lobby</span>
-              <SheetClose aria-label="Close sidebar" className={ICON_BUTTON}>
-                <X aria-hidden="true" className="size-4" />
-              </SheetClose>
-            </div>
-            <SearchRow query={query} onQuery={setQuery} onNew={() => { onOpenChange(false); setStarting(true) }} />
-            <Sessions query={query} onPicked={() => onOpenChange(false)} />
-            <Foot {...props} phone />
-          </div>
-        </SheetContent>
-      </Sheet>
-      <NewSessionDialog open={starting} onOpenChange={setStarting} />
-    </>
-  )
-}
-
-export function SidebarMenuButton({ onOpen, expanded }: { onOpen: () => void; expanded: boolean }) {
-  return (
-    <button type="button" aria-label="Open sidebar" aria-haspopup="dialog" aria-expanded={expanded} onClick={onOpen} className={cn(ICON_BUTTON, "size-11 text-foreground")}>
-      <Menu aria-hidden="true" className="size-[1.15rem]" />
-    </button>
   )
 }

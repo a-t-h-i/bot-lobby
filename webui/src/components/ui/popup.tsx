@@ -3,13 +3,6 @@ import type { CSSProperties, ReactNode } from "react"
 import { Dialog } from "radix-ui"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { cn } from "@/lib/utils"
-import { useMediaQuery } from "@/app/hooks"
-import { usePhoneViewport } from "@/app/usePhoneViewport"
-
-interface PhonePopupBounds {
-  wrapper: CSSProperties
-  content: CSSProperties
-}
 
 interface PopupProps {
   open: boolean
@@ -35,22 +28,8 @@ interface PopupProps {
  * show it only while they hold the page's one overlay slot (see
  * `lib/overlay.ts`), so two never stack.
  */
-function phonePopupBounds(phone: boolean, keyboardOpen: boolean, keyboardInset: number): PhonePopupBounds | undefined {
-  if (!phone || typeof window === "undefined") return undefined
-  const viewport = window.visualViewport
-  const height = viewport?.height ?? Math.max(0, window.innerHeight - (keyboardOpen ? keyboardInset : 0))
-  const top = Math.max(0, viewport?.offsetTop ?? 0)
-  return {
-    wrapper: { top: `${top}px`, bottom: "auto", height: `${height}px` },
-    content: { width: "calc(100vw - 24px)", maxWidth: "calc(100vw - 24px)", maxHeight: `${Math.max(0, height - 32)}px` },
-  }
-}
-
 export function Popup({ open, onOpenChange, label, description, dismissOnBackdrop = true, className, style, onCloseAutoFocus, children }: PopupProps) {
   const reduceMotion = useReducedMotion()
-  const phone = useMediaQuery("(max-width: 767.98px)")
-  const { keyboardOpen, keyboardInset } = usePhoneViewport()
-  const bounds = phonePopupBounds(phone, keyboardOpen, keyboardInset)
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <AnimatePresence>
@@ -65,7 +44,7 @@ export function Popup({ open, onOpenChange, label, description, dismissOnBackdro
                 transition={{ duration: 0.16, ease: "easeOut" }}
               />
             </Dialog.Overlay>
-            <div className={cn("pointer-events-none fixed inset-0 z-50 grid place-items-center", phone ? "p-3" : "p-4")} style={bounds?.wrapper}>
+            <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center p-4">
               <Dialog.Content
                 asChild
                 forceMount
@@ -85,7 +64,7 @@ export function Popup({ open, onOpenChange, label, description, dismissOnBackdro
               >
                 <motion.div
                   className={cn("glass-pop pointer-events-auto flex max-h-[min(86svh,48rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl outline-none", className)}
-                  style={{ ...style, ...(bounds?.content ?? {}) }}
+                  style={style}
                   initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.98, y: reduceMotion ? 0 : 6 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: reduceMotion ? 1 : 0.98, transition: { duration: 0.15, ease: "easeIn" } }}

@@ -2,8 +2,7 @@
  * The app's own switches: the look (mode, colour theme and typeface in one pop-over), desktop notifications,
  * full screen, the key list, light or dark and the prompt sounds. Those were buried in Settings; they are
  * things you reach for while working, so they live on the sidebar's rail.
- * They sit at the foot of the sidebar (as icons on its folded rail, beside
- * Settings in the phone's sheet), and in the bar only on the sign-in and
+ * They sit at the foot of the sidebar, and in the bar only on the sign-in and
  * loading pages, which have no sidebar. Each takes the look of where it sits.
  */
 import { Bell, BellOff, Keyboard, Maximize, Minimize, Moon, Palette, Sun, Volume2, VolumeX } from "lucide-react"
@@ -17,7 +16,6 @@ import { disableNotifications, enableNotifications, useNotificationsEnabled } fr
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Keys } from "@/components/ui/kbd"
 import { useTheme } from "@/components/theme-provider"
-import { useMediaQuery } from "./hooks.ts"
 import { setSoundMuted, useSoundMuted } from "./sound"
 
 type Side = "top" | "right" | "bottom"
@@ -41,23 +39,17 @@ export function HelpButton({ hint, onHelp, className, side = "top" }: { hint: st
 
 export function SoundToggle({ className, side = "top" }: { className: string; side?: Side }) {
   const muted = useSoundMuted()
-  const phone = useMediaQuery("(max-width: 767.98px)")
-  const label = phone ? "App sounds" : muted ? "Unmute prompt sounds" : "Mute prompt sounds"
+  const label = muted ? "Unmute prompt sounds" : "Mute prompt sounds"
   return (
     <>
       <Tooltip>
         <TooltipTrigger asChild>
-          <button type="button" aria-label={label} aria-pressed={muted} aria-describedby={phone ? "app-sounds-help focused-action-help" : "focused-action-help"} className={className} onClick={() => setSoundMuted(!muted)}>
+          <button type="button" aria-label={label} aria-pressed={muted} aria-describedby="focused-action-help" className={className} onClick={() => setSoundMuted(!muted)}>
             {muted ? <VolumeX aria-hidden="true" className={ICON} /> : <Volume2 aria-hidden="true" className={ICON} />}
           </button>
         </TooltipTrigger>
         <TooltipContent side={side}>{label}</TooltipContent>
       </Tooltip>
-      {phone ? (
-        <span id="app-sounds-help" className="sr-only">
-          App sounds controls prompt tones and navigation ticks.
-        </span>
-      ) : null}
     </>
   )
 }
@@ -80,7 +72,7 @@ export function ThemeToggle({ className, side = "top" }: { className: string; si
         </button>
       </TooltipTrigger>
       <TooltipContent side={side}>
-        {dark ? "Light mode" : "Dark mode"} <span className="max-md:hidden"><Keys chord="D" /></span>
+        {dark ? "Light mode" : "Dark mode"} <Keys chord="D" />
       </TooltipContent>
     </Tooltip>
   )

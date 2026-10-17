@@ -74,7 +74,6 @@ export function SkipStep({ taskId, index, text, onSkipped }: Props) {
         className={cn(
           "step-skip -my-0.5 ml-auto inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground outline-none",
           "transition-[opacity,background-color,color,scale] duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.96] motion-reduce:active:scale-100",
-          "max-md:h-11 max-md:px-2.5",
         )}
       >
         <SkipForward aria-hidden="true" className="size-3.5" />
@@ -117,8 +116,8 @@ export function SkipStep({ taskId, index, text, onSkipped }: Props) {
         </div>
         {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={busy} className="max-md:min-h-11 max-md:whitespace-normal">Cancel</AlertDialogCancel>
-          <Button disabled={!why || busy} aria-busy={busy} className="max-md:min-h-11 max-md:whitespace-normal" onClick={() => void submit()}>
+          <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+          <Button disabled={!why || busy} aria-busy={busy} onClick={() => void submit()}>
             {busy ? "Skipping…" : "Skip step"}
           </Button>
         </AlertDialogFooter>

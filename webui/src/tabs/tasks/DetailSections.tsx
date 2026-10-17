@@ -134,14 +134,14 @@ function SkippedStep({ step, index }: { step: StepData; index: number }) {
   const when = step.skip ? skippedAt(step.skip.at) : ""
   return (
     <li className="flex min-w-0 flex-col" data-step="skipped">
-      <div className="flex min-w-0 items-start gap-2.5 text-sm max-md:flex-wrap">
+      <div className="flex min-w-0 items-start gap-2.5 text-sm">
         <CircleSlash aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         <span className="shrink-0 text-xs leading-5 text-muted-foreground tabular-nums">{index + 1}.</span>
         <span className="min-w-0 break-words text-muted-foreground line-through decoration-muted-foreground/50">{step.text}</span>
         <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">skipped</span>
       </div>
       {step.skip ? (
-        <p className="step-skip-reason mt-1 ml-[3.25rem] border-l-2 border-border pl-2.5 text-xs break-words text-muted-foreground max-md:ml-0">
+        <p className="step-skip-reason mt-1 ml-[3.25rem] border-l-2 border-border pl-2.5 text-xs break-words text-muted-foreground">
           <span className="font-medium text-foreground/80">Why: </span>
           {step.skip.reason}
           {when ? <span className="text-muted-foreground/70"> · {when}</span> : null}
@@ -163,7 +163,7 @@ function Step({ step, index, stopped, skip }: { step: StepData; index: number; s
   if (step.status === "skipped") return <SkippedStep step={step} index={index} />
   return (
     <li className="group/step flex min-w-0 flex-col" data-step={active ? "active" : step.status}>
-      <div className="flex min-w-0 items-start gap-2.5 text-sm max-md:flex-wrap">
+      <div className="flex min-w-0 items-start gap-2.5 text-sm">
         {active ? <ActiveMark /> : <Icon aria-hidden="true" className={`mt-0.5 size-4 shrink-0 ${markClass}`} />}
         <span className="shrink-0 text-xs leading-5 text-muted-foreground tabular-nums">{index + 1}.</span>
         <span className={cn("min-w-0 break-words", active || step.status === "current" ? "text-foreground" : "text-muted-foreground")}>{step.text}</span>
@@ -191,7 +191,7 @@ function Step({ step, index, stopped, skip }: { step: StepData; index: number; s
         ) : null}
         {skip && !done && !stopped ? <SkipStep taskId={skip.taskId} index={index} text={step.text} onSkipped={skip.onSkipped} /> : null}
       </div>
-      {open && agents.length > 0 ? <div className="pl-[3.25rem] max-md:pl-0"><StepAgents id={listId} agents={agents} stepText={step.text} /></div> : null}
+      {open && agents.length > 0 ? <div className="pl-[3.25rem]"><StepAgents id={listId} agents={agents} stepText={step.text} /></div> : null}
     </li>
   )
 }

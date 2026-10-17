@@ -69,13 +69,13 @@ export function ConfirmButton({ label, text, shortcut, title, description, confi
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel className="max-md:min-h-11 max-md:whitespace-normal">
+          <AlertDialogCancel>
             Keep it
-            <Keys chord="Esc" className="kbd-hint ml-1 max-md:hidden" />
+            <Keys chord="Esc" className="kbd-hint ml-1" />
           </AlertDialogCancel>
-          <AlertDialogAction variant={destructive ? "destructive" : "default"} className="max-md:min-h-11 max-md:whitespace-normal" onClick={onConfirm}>
+          <AlertDialogAction variant={destructive ? "destructive" : "default"} onClick={onConfirm}>
             {confirmLabel}
-            <Keys chord="Y" className="kbd-hint ml-1 max-md:hidden" />
+            <Keys chord="Y" className="kbd-hint ml-1" />
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

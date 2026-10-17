@@ -325,7 +325,7 @@ test("the dock grows and shrinks with the text on its own, over the page, and th
   await expect(page.getByRole("button", { name: /Open the box wider and taller|Make the box smaller/ }), "there is no expand or collapse toggle").toHaveCount(0);
 });
 
-test("on Settings the model selectors stack inside the agent card, three cards to a row on a desktop and one on a phone", async ({ page, server }) => {
+test("on Settings the model selectors stack inside the agent card, three cards to a row", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.evaluate(() => {
@@ -344,11 +344,6 @@ test("on Settings the model selectors stack inside the agent card, three cards t
   expect(Math.abs(backendBox!.y - cardBox.y), "three cards share the first row").toBeLessThanOrEqual(2);
   expect(designerBox!.x, "side by side").toBeGreaterThan(cardBox.x + cardBox.width - 2);
   expect(qaBox!.y, "the fourth starts the next row").toBeGreaterThan(cardBox.y + 20);
-  await page.setViewportSize({ width: 390, height: 844 });
-  const designerAtPhone = (await card("Designer").boundingBox())!;
-  const masterAtPhone = (await masterCard.boundingBox())!;
-  expect(Math.abs(designerAtPhone.x - masterAtPhone.x), "one card per row on a phone").toBeLessThanOrEqual(2);
-  expect(designerAtPhone.y, "the next card is below, not beside").toBeGreaterThan(masterAtPhone.y + 20);
 });
 
 test("Plan, Quick fix and an open task each give the composer its own target", async ({ page, server }) => {
@@ -808,20 +803,6 @@ test("the project switcher is a list you open with P, not a native select", asyn
   await page.keyboard.press("Escape");
   await expect(list, "Esc closes it").toBeHidden();
   await expect(page.getByRole("combobox", { name: "Project", exact: true }), "and gives focus back").toBeFocused();
-});
-
-test("on a phone the Lobby is one conversation, its steps opening in place", async ({ page, server }) => {
-  await openScenario(page, server, "full");
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByRole("radiogroup", { name: "Pane" }), "no pane switcher").toHaveCount(0);
-  const chat = page.getByRole("log", { name: "Conversation" });
-  await expect(chat).toBeVisible();
-  expect((await chat.boundingBox())!.height, "the conversation is not squeezed into a sliver").toBeGreaterThan(300);
-  await chat.getByRole("button", { name: /10 steps/ }).click();
-  await expect(chat.getByRole("list", { name: "Activity" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Open Thinking" }), "Thinking is a bubble, not a pane").toBeVisible();
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow, "no sideways scroll").toBeLessThanOrEqual(0);
 });
 
 test("the message box floats over the page, and every page scrolls clear of it", async ({ page, server }) => {
