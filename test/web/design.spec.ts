@@ -413,7 +413,7 @@ test("keyboard hints: the box prints its keys, the header button opens the key l
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const hints = page.getByRole("group", { name: "Message context" });
-  await expect(hints.getByText("new line"), "Shift+Enter is hinted in the tray over the box").toBeVisible();
+  await expect(hints.getByText("new line"), "Shift+Enter is hinted in the strip under the box").toBeVisible();
   await expect(hints.getByText("shortcuts"), "and the way to the full list").toBeVisible();
   await page.getByRole("tab", { name: /Tasks/ }).hover();
   await expect(page.locator('[data-slot="tooltip-content"]').first(), "a tab's tooltip shows its Alt+N").toContainText(/Alt\s*(plus)?\s*2/);
@@ -1157,21 +1157,25 @@ test("the oracle writes plain prose across the column; yours sits in a filled bu
   await expect.poll(() => time.evaluate((el: any) => getComputedStyle(el).opacity)).toBe("1");
 });
 
-test("the tray over the box names the project and the target, opens the project list, and has no settings link", async ({ page, server }) => {
+test("the strip under the box names the project and opens the project list; the box's footer picks the target; there is no settings link", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const tray = page.getByRole("group", { name: "Message context" });
-  await expect(tray.getByText("To the oracle"), "who it goes to").toBeVisible();
+  const box = page.locator(".group\\/composer");
+  await expect(box.getByText("To the oracle"), "who it goes to, in the box's footer").toBeVisible();
   await expect(tray.getByRole("combobox", { name: "Project", exact: true }), "the project's chip names it").toContainText("bot-lobby");
   await tray.getByRole("combobox", { name: "Project", exact: true }).click();
   await expect(page.getByRole("listbox", { name: "Projects" }), "the project chip opens the list of projects").toBeVisible();
   await page.keyboard.press("Escape");
-  const card = (await page.locator(".group\\/composer").boundingBox())!;
+  const card = (await box.boundingBox())!;
   const behind = (await tray.boundingBox())!;
-  expect(behind.y + behind.height, "the tray tucks under the top of the box").toBeGreaterThan(card.y);
+  expect(behind.y, "the strip tucks under the bottom of the box").toBeLessThan(card.y + card.height);
+  expect(behind.y + behind.height, "and shows below it").toBeGreaterThan(card.y + card.height + 10);
   expect(behind.width, "a little narrower than the box").toBeLessThan(card.width);
   await page.evaluate(() => { window.location.hash = "#/plan"; });
-  await expect(tray.getByRole("radiogroup", { name: "Send to" }), "a tab with more than one target picks it in the tray").toBeVisible();
+  await expect(box.getByRole("radiogroup", { name: "Send to" }), "a tab with more than one target picks it in the box's footer").toBeVisible();
+  await page.setViewportSize({ width: 480, height: 900 });
+  await expect(box.getByRole("combobox", { name: "Send to" }), "a narrow box picks it from a menu").toBeVisible();
   await expect(tray.getByRole("link", { name: "Models and effort" }), "settings live in the sidebar, not the composer").toHaveCount(0);
 });
 

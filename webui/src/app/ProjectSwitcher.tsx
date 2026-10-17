@@ -110,7 +110,7 @@ function walk(event: KeyboardEvent<HTMLElement>) {
 export const OPEN_PROJECTS = "bot-lobby:open-projects"
 
 /**
- * `chip`: the quiet chip in the composer's tray, its list opening upwards.
+ * `chip`: the quiet chip in the strip under the composer, its list opening upwards.
  * `bar`: the phone's bar, the project's initial on a tile beside its name.
  */
 export function ProjectSwitcher({ projects, tab, name, branch, look }: { projects: Projects; tab: string; name: string; branch?: string | undefined; look: "chip" | "bar" }) {

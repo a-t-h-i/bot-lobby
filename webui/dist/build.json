@@ -1,6 +1,6 @@
 {
-  "hash": "0a229ca96af22562becf72a96518929f8699b5790869c028c7e22c9180175943",
-  "builtAt": "2026-10-17T15:40:09.797Z",
+  "hash": "5b7d3308d480194cca4b9a950845152f14cf0002a566f49e40f28dcd9dd11796",
+  "builtAt": "2026-10-17T16:23:12.819Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -32,7 +32,7 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "a6958dac4131b0494ff3c72a97d042041fc2554e6b1b5c3db049b427a52e4175"
+      "sha256": "e850ddf03f8545f222585b0ed8c9c76db81f76a55742051a6f8c5d86f3c7aeb8"
     },
     {
       "path": "webui/src/app/Header.tsx",
@@ -56,11 +56,11 @@
     },
     {
       "path": "webui/src/app/ProjectFolderDialog.tsx",
-      "sha256": "a2bd027322c72a947c4c85ee583f3b401c9415a46a55a38fc93efc2de7030b34"
+      "sha256": "4c55045950a74ed2960b39b27bc2b9f8e9a46c0d694a8c94c7334ec9c676fee3"
     },
     {
       "path": "webui/src/app/ProjectSwitcher.tsx",
-      "sha256": "c1fbaa0ed9cde7ce77c418f4b513934ae6f262678e1fc50bfbb3649e34803295"
+      "sha256": "0236f944821fa52ed5edca2db40bf0995a393be56bd7f5da2151686bdebc9074"
     },
     {
       "path": "webui/src/app/Shell.tsx",
@@ -284,7 +284,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "d4c83ffec1ecff3f1058069fd8ff24d0f7fc34817190762df27a1660cf3cd890"
+      "sha256": "3b6253c666664dbe01dfec70b3857b26f93fc68643154bd2f26988132d21ac82"
     },
     {
       "path": "webui/src/lib/act.ts",

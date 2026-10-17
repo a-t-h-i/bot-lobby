@@ -18,6 +18,9 @@ async function openFolders(page: Page) {
   await page.getByRole("button", { name: "Open folder…" }).click();
   await expect(page.getByRole("dialog", { name: "Open project folder" })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Folder path" })).toHaveValue("/workspace");
+  const dialog = (await page.getByRole("dialog", { name: "Open project folder" }).boundingBox())!;
+  const foot = (await page.getByRole("button", { name: "Open this folder" }).locator("xpath=..").boundingBox())!;
+  expect(Math.abs(foot.x - dialog.x) + Math.abs(foot.x + foot.width - (dialog.x + dialog.width)), "the content fills the pop-up edge to edge").toBeLessThan(4);
 }
 
 for (const width of [1280, 320]) {
