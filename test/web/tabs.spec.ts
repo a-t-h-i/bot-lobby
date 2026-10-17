@@ -243,3 +243,23 @@ test("Git switch routes keyboard selection and legacy bookmarks @theme", async (
   await expect(issues).toBeVisible();
   expect((await issues.boundingBox())!.height, "a compact segment").toBeGreaterThanOrEqual(24);
 });
+
+for (const width of [1280, 360]) {
+  test(`an agent's More section stays readable at ${width}px`, async ({ page, server }) => {
+    await openScenario(page, server, "full");
+    await page.setViewportSize({ width, height: 800 });
+    await gotoRoute(page, "#/settings", "Each agent's model and effort");
+    const card = page.locator('[data-slot="agent-row"]').filter({ hasText: "Backend" }).first();
+    await card.getByRole("button", { name: /^More/ }).click();
+    const limit = card.getByRole("spinbutton", { name: /time limit$/ });
+    await expect(limit).toBeVisible();
+    await expect(card.getByRole("textbox", { name: /instructions$/ })).toBeVisible();
+    await expect(card.getByRole("textbox", { name: /MCP tool grants/ })).toBeVisible();
+    const help = card.getByText("Minutes before this agent's run stops.");
+    expect((await help.boundingBox())!.width, "the help is not crushed").toBeGreaterThan(120);
+    const box = (await card.boundingBox())!;
+    const field = (await limit.boundingBox())!;
+    expect(field.x + field.width, "the field fits the card").toBeLessThanOrEqual(box.x + box.width + 1);
+    await expectNoSidewaysScroll(page);
+  });
+}

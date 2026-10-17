@@ -1,4 +1,4 @@
-import { expect, openScenario, test } from "./fixture.ts";
+import { expect, openScenario, test, type Page } from "./fixture.ts";
 
 declare const document: any;
 declare const window: any;
@@ -175,3 +175,32 @@ test("workspace panels have distinct fills and visible boundaries in both themes
   expect(trap.errors).toEqual([]);
   trap.stop();
 });
+
+const composerGlass = (page: Page) => page.evaluate(() => {
+  const shell = document.querySelector(".composer-shell");
+  const host = shell.querySelector('[data-slot="composer-host"]');
+  const before = getComputedStyle(shell, "::before");
+  const gap = shell.getBoundingClientRect().bottom - parseFloat(before.bottom) - host.getBoundingClientRect().bottom;
+  return { radius: before.borderTopLeftRadius, clip: before.clipPath, gap, outline: getComputedStyle(host, "::after").display };
+});
+
+const setShrunk = (page: Page, shrunk: boolean) => page.evaluate((on: boolean) => {
+  const dock = document.querySelector("#app-dock");
+  if (on) dock.setAttribute("data-shrunk", "");
+  else dock.removeAttribute("data-shrunk");
+}, shrunk);
+
+for (const width of [1280, 360]) {
+  test(`the composer's glass follows its rounded shape, open and shrunk, at ${width}px @theme`, { tag: "@theme" }, async ({ page, server }) => {
+    await openScenario(page, server, "full");
+    await page.setViewportSize({ width, height: 800 });
+    await setShrunk(page, false);
+    const open = await composerGlass(page);
+    expect(open.radius, "the glass keeps its corners under the strip's cut-out").toBe("22px");
+    expect(open.outline, "the outline stays drawn").not.toBe("none");
+    await setShrunk(page, true);
+    await expect(page.locator("#app-dock")).toHaveAttribute("data-shrunk", "");
+    await expect.poll(async () => (await composerGlass(page)).clip, "the shrunk pill drops the strip's cut-out").toBe("none");
+    await expect.poll(async () => Math.abs((await composerGlass(page)).gap), "and its glass ends with the pill").toBeLessThan(1);
+  });
+}

@@ -281,7 +281,7 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
       />
       <div hidden={!open} className="grid gap-2 border-t border-border pt-2">
         {kind !== "master" ? (
-          <Field label="Time limit" help="Minutes before this agent's run stops.">
+          <Field stacked label="Time limit" help="Minutes before this agent's run stops.">
             <MinutesField value={entry.timeoutMs ?? config.workflow.agentTimeoutMs} label={`${name} time limit`} onSave={(ms) => set({ timeoutMs: ms })} />
           </Field>
         ) : null}

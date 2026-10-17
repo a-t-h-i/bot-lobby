@@ -188,7 +188,7 @@ function SessionCard({ entry, branch }: { entry: SessionEntry; branch: string | 
   const top = (
     <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
       <StateDot entry={entry} />
-      <span className="min-w-0 flex-1 truncate">{WHERE[entry.where]}</span>
+      <span className="min-w-0 flex-1 truncate">{entry.where === "here" ? null : WHERE[entry.where]}</span>
       <CardStatus entry={entry} />
     </span>
   )
