@@ -78,9 +78,13 @@ function fakeState() {
     isIdle: () => true,
     abort() {},
   } as unknown as ExtensionContext;
+  let name = "test window";
   const pi = {
     sendUserMessage() {},
-    getSessionName: () => "test window",
+    getSessionName: () => name,
+    setSessionName: (next: string) => {
+      name = next;
+    },
   } as unknown as ExtensionAPI;
   return { root, ctx, pi };
 }
@@ -237,6 +241,45 @@ test("sessions.stop ends a background session; unknown keys are 404", async () =
     const unknown = await call("sessions.stop", { key: "S9999" });
     assert.equal(unknown.status, 404);
     assert.equal(unknown.payload.code, "not_found");
+  } finally {
+    await close();
+  }
+});
+
+test("sessions.rename names this window or a background session (its pi too); blanks and unknown keys are refused", async () => {
+  const { call, procs, close } = await setup();
+  try {
+    const here = await call("sessions.rename", { name: "  Login   page work " });
+    assert.equal(here.status, 200, here.body);
+    assert.equal((await call("status.get")).payload.result!.sessionName, "Login page work");
+    const key = (await call("sessions.start", { request: "a background task" })).payload.result!.key as string;
+    const renamed = await call("sessions.rename", { key, name: "Docs pass" });
+    assert.equal(renamed.status, 200, renamed.body);
+    const background = (await call("sessions.list")).payload.result!.background as Array<{ key: string; name: string }>;
+    assert.equal(background.find((session) => session.key === key)?.name, "Docs pass");
+    assert.deepEqual(procs.at(-1)!.commands("set_session_name").map((command) => command.name), ["Docs pass"], "the session's pi takes the name too");
+    assert.equal((await call("sessions.rename", { key, name: "   " })).payload.code, "bad_request");
+    assert.equal((await call("sessions.rename", { key: "S9999", name: "x" })).payload.code, "not_found");
+  } finally {
+    await close();
+  }
+});
+
+test("sessions.archive puts an ended session away from the list and brings it back; a running one is refused", async () => {
+  const { call, close } = await setup();
+  try {
+    const key = (await call("sessions.start", { request: "a short-lived task" })).payload.result!.key as string;
+    const running = await call("sessions.archive", { key });
+    assert.equal(running.status, 409, running.body);
+    await call("sessions.stop", { key });
+    const keys = async () => ((await call("sessions.list")).payload.result!.background as Array<{ key: string }>).map((session) => session.key);
+    const archived = await call("sessions.archive", { key });
+    assert.equal(archived.status, 200, archived.body);
+    assert.ok(!(await keys()).includes(key), "gone from the list");
+    const back = await call("sessions.archive", { key, archived: false });
+    assert.equal(back.status, 200, back.body);
+    assert.ok((await keys()).includes(key), "and back");
+    assert.equal((await call("sessions.archive", { key: "S9999" })).payload.code, "not_found");
   } finally {
     await close();
   }

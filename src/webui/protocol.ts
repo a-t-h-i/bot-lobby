@@ -555,6 +555,8 @@ export interface Api {
   "sessions.message": { request: { key?: string; sessionId?: string; text: string; attachments?: string[] }; result: { notice?: string } };
   "sessions.switch": { request: { key?: string; sessionId?: string; claimTaskId?: string }; result: { notice: string } };
   "sessions.answer": { request: { key: string; dialogId: string; answer: DialogAnswer }; result: { notice: string } };
+  "sessions.rename": { request: { key?: string; name: string }; result: { notice: string } };
+  "sessions.archive": { request: { key: string; archived?: boolean }; result: { notice: string } };
   "terminal.list": { request: Record<string, never>; result: { available: boolean; reason?: string; terminals: TerminalInfo[] } };
   "terminal.open": { request: { cols: number; rows: number }; result: TerminalInfo };
   "terminal.input": { request: { id: string; data: string }; result: Record<string, never> };
