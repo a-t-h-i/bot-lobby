@@ -4,7 +4,7 @@
  * right now and the work time. Kept here (not via `persistedRuns`) so the
  * server never loads the TUI.
  */
-import { planChecklist, planSteps, stepWork, type PlanStep } from "../../pi/plan-checklist.ts";
+import { planChecklist, planSteps, skippedIndexes, stepWork, type PlanStep } from "../../pi/plan-checklist.ts";
 import type { AgentRun } from "../../schemas/findings.ts";
 import type { Task } from "../../schemas/task.ts";
 import type { WorkProjection } from "../../state/work-time.ts";
@@ -44,6 +44,8 @@ export interface StepView {
   agents: StepAgent[];
   /** Worker time on the step, in ms. */
   workedMs: number;
+  /** The user skipped it: why, and when. */
+  skip?: { reason: string; at: string };
 }
 
 export interface StepAgent {
@@ -62,8 +64,10 @@ export interface StepAgent {
 export function stepViews(task: Task, work: WorkProjection | undefined, now = Date.now()): StepView[] {
   if (!task.plan) return [];
   const runs = [...persistedTaskRuns(task), ...activeRuns(task, work)];
-  const checklist = planChecklist(task.plan, runs);
-  const times = stepWork(planSteps(task.plan), runs, now);
+  const texts = planSteps(task.plan);
+  const checklist = planChecklist(task.plan, runs, task.skippedSteps);
+  const times = stepWork(texts, runs, now, skippedIndexes(texts, task.skippedSteps));
+  const skipOf = (text: string) => task.skippedSteps?.find((entry) => skippedIndexes([text], [entry]).size > 0);
   const byId = new Map(runs.map((run) => [run.runId, run]));
   return checklist.map((step, index) => {
     const time = times[index] ?? { ms: 0, active: false, activeAgentCount: 0, runIds: [] };
@@ -71,6 +75,7 @@ export function stepViews(task: Task, work: WorkProjection | undefined, now = Da
       const run = byId.get(runId);
       return run ? [{ runId, ...(run.parentRunId ? { parentRunId: run.parentRunId } : {}), domain: run.domain, instruction: (run.instruction ?? "").split("\n")[0]!.trim(), startedAt: run.startedAt }] : [];
     });
-    return { text: step.text, status: time.active ? "current" : step.status, active: time.active, activeAgentCount: time.activeAgentCount, runIds: time.runIds, agents, workedMs: Math.round(time.ms) };
+    const skip = step.status === "skipped" ? skipOf(step.text) : undefined;
+    return { text: step.text, status: time.active && !skip ? "current" : step.status, active: time.active && !skip, activeAgentCount: time.activeAgentCount, runIds: time.runIds, agents, workedMs: Math.round(time.ms), ...(skip ? { skip: { reason: skip.reason, at: skip.at } } : {}) };
   });
 }

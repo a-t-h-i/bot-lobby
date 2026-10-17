@@ -20,7 +20,7 @@ import { SoundToggle, ThemeToggle } from "./AppTools.tsx"
 import { Composer, composerVisible } from "./Composer.tsx"
 import { Header } from "./Header.tsx"
 import { ProjectSwitcher, useProjects } from "./ProjectSwitcher.tsx"
-import { Sidebar, SidebarMenuButton, SidebarSheet } from "./Sidebar.tsx"
+import { Sidebar, SidebarMenuButton, SidebarSheet, SIDEBAR_KEY } from "./Sidebar.tsx"
 import { SignIn } from "./SignIn.tsx"
 import { ErrorState, LoadingState, ReconnectingState } from "./States.tsx"
 import { TabStrip } from "./TabStrip.tsx"
@@ -138,9 +138,10 @@ export function Shell() {
   const toggleHelp = useCallback(() => setHelp((open) => !open), [])
   const projects = useProjects()
   const [sheet, setSheet] = useState(false)
-  // On a phone the sidebar is a sheet; wider, the rail is always there and has nothing to unfold.
+  // On a phone the sidebar is a sheet; wider, the key folds it to its rail or opens it again.
   const toggleSidebar = useCallback(() => {
     if (phone) setSheet((open) => !open)
+    else toggleCollapsed(SIDEBAR_KEY)
   }, [phone])
   const onAction = useCallback((action: string) => {
     if ((action === "thinking" || action === "activity") && status?.panels?.[action] === false) return

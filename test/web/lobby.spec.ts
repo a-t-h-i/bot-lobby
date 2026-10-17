@@ -281,7 +281,7 @@ test("the conversation follows new steps, lets a reader who scrolled up stay put
 
 const SWITCHES = ["Keyboard shortcuts", "Switch to dark mode|Switch to light mode", "Mute prompt sounds|Unmute prompt sounds"];
 
-test("the rail holds Settings and the app's switches; there is no Sessions page or task name in the bar, and the tabs sit centred", async ({ page, server }) => {
+test("the sidebar holds the sessions, Settings and the app's switches; there is no Sessions page or task name in the bar, and the tabs sit centred", async ({ page, server }) => {
   await openScenario(page, server, "full");
   for (const width of [1280, 1000]) {
     await page.setViewportSize({ width, height: 800 });
@@ -290,13 +290,18 @@ test("the rail holds Settings and the app's switches; there is no Sessions page 
     for (const name of SWITCHES) await expect(header.getByRole("button", { name: new RegExp(`^(${name})$`) }), `${name} left the top bar`).toHaveCount(0);
     await expect(header.getByRole("combobox", { name: "Project", exact: true }), "so did the project").toHaveCount(0);
     await expect(header, "the bar does not name the task").not.toContainText("T-148");
-    const bar = (await header.boundingBox())!;
-    const tabs = (await header.getByRole("tablist").boundingBox())!;
-    expect(Math.abs(tabs.x + tabs.width / 2 - (bar.x + bar.width / 2)), `the tabs are centred at ${width}px`).toBeLessThan(2);
     const sidebar = page.getByRole("complementary", { name: "Sidebar" });
-    expect((await sidebar.boundingBox())!.width, "a rail of icons").toBeLessThan(64);
+    // Open on a wide window, unpicked it starts as a rail of icons under 1024 px.
+    await expect.poll(async () => (await sidebar.boundingBox())!.width, width >= 1024 ? "open, it lists the sessions" : "a rail of icons").toBeGreaterThan(width >= 1024 ? 200 : 0);
+    if (width < 1024) await expect.poll(async () => (await sidebar.boundingBox())!.width, "a rail of icons").toBeLessThan(64);
+    // Once the sidebar has settled, the tabs sit centred in the bar beside it.
+    await expect.poll(async () => {
+      const bar = (await header.boundingBox())!;
+      const tabs = (await header.getByRole("tablist").boundingBox())!;
+      return Math.abs(tabs.x + tabs.width / 2 - (bar.x + bar.width / 2));
+    }, `the tabs are centred at ${width}px`).toBeLessThan(2);
     await expect(sidebar.getByRole("link", { name: "Sessions" }), "no Sessions page").toHaveCount(0);
-    await expect(sidebar.getByRole("navigation", { name: "Sessions list" }), "no list of sessions").toHaveCount(0);
+    await expect(sidebar.getByRole("navigation", { name: "Sessions list" }), "the running sessions, open or folded").toBeVisible();
     for (const name of SWITCHES) await expect(sidebar.getByRole("button", { name: new RegExp(`^(${name})$`) }), `${name} sits on the rail`).toBeVisible();
   }
   const sidebar = page.getByRole("complementary", { name: "Sidebar" });

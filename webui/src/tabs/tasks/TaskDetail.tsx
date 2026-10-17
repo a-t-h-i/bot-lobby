@@ -174,7 +174,7 @@ export function TaskDetail(props: DetailProps) {
       {detail.data ? <TaskInterventions row={row} detail={detail.data} onChanged={() => { detail.reload(); props.onChanged() }} /> : null}
       <p className="text-sm text-muted-foreground"><PhaseTiming timing={detail.data?.timing ?? row.timing} {...(work ? { work } : {})} stopped={row.check !== "open"} /></p>
       {detail.data?.delivery ? <DeliveryReview key={row.id} taskId={row.id} title={row.title} delivery={detail.data.delivery} onChanged={detail.reload} /> : null}
-      {detail.data ? <PlanSections detail={detail.data} finished={!open} /> : null}
+      {detail.data ? <PlanSections detail={detail.data} finished={!open} {...(open && detail.data.canSkip ? { skip: { taskId: row.id, onSkipped: () => { detail.reload(); props.onChanged() } } } : {})} /> : null}
       <Comments taskId={row.id} finished={!open} canComment={open} />
       {detail.data ? <DetailTrailer detail={detail.data} /> : null}
       {detail.error && !detail.data ? <p className="text-sm text-muted-foreground">Could not load the plan detail. {detail.error}</p> : null}

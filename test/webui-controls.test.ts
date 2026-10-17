@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { blocksConfiguredAction } from "../webui/src/app/keyGuards.ts";
 import { initiallyCollapsed } from "../webui/src/lib/panePreference.ts";
+import { sessionEntries, sessionInitial, sessionNote } from "../webui/src/app/sessionList.ts";
 
 const source = (path: string) => readFileSync(new URL(`../webui/src/${path}`, import.meta.url), "utf8");
 
@@ -40,4 +41,46 @@ test("all five Settings sections remain mounted behind hidden wrappers", () => {
   assert.doesNotMatch(settings, /fallbackModel|fallbackThinking|chooseFallback/);
   assert.match(settings, /<ThemeGroup \/><NotificationsGroup \/><InstallGroup \/>/);
   assert.doesNotMatch(source("app/ProjectSwitcher.tsx"), /<select\b/);
+});
+
+test("the sidebar remembers the user's pick and, unpicked, folds only on a narrow window", () => {
+  assert.equal(initiallyCollapsed("app.sidebar", "1"), true);
+  assert.equal(initiallyCollapsed("app.sidebar", "0"), false);
+  const media = (globalThis as { matchMedia?: unknown }).matchMedia;
+  try {
+    (globalThis as { matchMedia?: unknown }).matchMedia = () => ({ matches: true });
+    assert.equal(initiallyCollapsed("app.sidebar"), true);
+    assert.equal(initiallyCollapsed("app.sidebar", "0"), false, "a pick wins over the width");
+    (globalThis as { matchMedia?: unknown }).matchMedia = () => ({ matches: false });
+    assert.equal(initiallyCollapsed("app.sidebar", null), false);
+  } finally {
+    (globalThis as { matchMedia?: unknown }).matchMedia = media;
+  }
+});
+
+test("the sidebar lists this window first, then its background sessions, then other terminals, each once", () => {
+  const background = [
+    { key: "S2", name: "Old run", status: "exited", busy: false, alive: false, sessionId: "s-old", waiting: 0, dialogs: [] },
+    { key: "S1", name: "Fix the parser", status: "working", busy: true, alive: true, sessionId: "s-bg", waiting: 2, dialogs: [] },
+    { key: "S3", name: "Mirror of here", status: "idle", busy: false, alive: true, sessionId: "s-here", waiting: 0, dialogs: [] },
+  ] as never[];
+  const live = [
+    { sessionId: "s-bg", pid: 1, mode: "rpc" },
+    { sessionId: "s-tui", pid: 2, name: "Terminal two", mode: "tui" },
+    { sessionId: "s-here", pid: 3, mode: "tui" },
+  ] as never[];
+  const entries = sessionEntries({ sessionId: "s-here", sessionName: "main", busy: true }, { background, live });
+  assert.deepEqual(entries.map((entry) => [entry.name, entry.where, entry.state]), [
+    ["main", "here", "working"],
+    ["Fix the parser", "background", "asking"],
+    ["Old run", "background", "exited"],
+    ["Terminal two", "elsewhere", "idle"],
+  ]);
+  assert.equal(sessionNote(entries[0]!), "This window · working");
+  assert.equal(sessionNote(entries[1]!), "2 questions for you");
+  assert.equal(sessionNote(entries[2]!), "Ended");
+  assert.equal(sessionNote(entries[3]!), "Another terminal");
+  assert.equal(sessionEntries(undefined, undefined)[0]!.name, "This window");
+  assert.equal(sessionInitial("  #42 fix it"), "4");
+  assert.equal(sessionInitial("éclair"), "É");
 });

@@ -174,6 +174,8 @@ export interface LobbyService {
    */
   resumeTask?(taskId: string): Promise<{ notice: string; key?: string }>;
   acceptTask?(taskId: string): Promise<{ notice: string }>;
+  /** Skip a plan step (0-based, named by its text too) with the user's reason. */
+  skipTaskStep?(taskId: string, step: number, text: string, reason: string): Promise<{ notice: string }>;
   forceCloseTask?(taskId: string, title: string): Promise<{ notice: string }>;
   canForceCloseTask?(taskId: string): boolean;
   resolveTaskApproval?(taskId: string, approvalId: string, decision: "approved" | "rejected", note?: string): Promise<{ notice: string }>;
