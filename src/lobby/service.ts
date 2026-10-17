@@ -4,7 +4,7 @@
  * the prompt hub (see ../ask/web.ts).
  */
 import { SessionManager, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
+import { MAX_SKIP_REASON, TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { updateBlockingRequest } from "../state/blocking-requests.ts";
 import { randomUUID } from "node:crypto";
 import { loadTask, ownedTask, peekOwnedTask, peekTasks, saveTask } from "../state/persistence.ts";
@@ -55,6 +55,8 @@ import type { Runtime } from "./runtime.ts";
 import { findLinters } from "../execution/lint.ts";
 import { handleResolveApproval, lastQaAsks, waiveLint, waiveQa } from "../workflow/workflow.ts";
 import { recordDecision } from "../master/decisions.ts";
+import { stepViews } from "../webui/api/plan-facts.ts";
+import { truncate } from "../text.ts";
 import { fail } from "../webui/api/index.ts";
 
 /** The state background callbacks report to; set while the lobby service runs. */
@@ -399,9 +401,19 @@ function mutableTask(state: Runtime, taskId: string): Task {
 }
 
 async function wakeTask(state: Runtime, task: Task, message: string): Promise<string> {
+  if (!tellOracle(state, task, message)) return (await resumeTask(state, task.id)).notice;
+  return "the owning oracle has been notified";
+}
+
+/**
+ * Leave a message in the task's inbox and hand it to its oracle now when a
+ * session here runs the task; false when the task is paused or stopped, so the
+ * oracle reads it once the task carries on.
+ */
+function tellOracle(state: Runtime, task: Task, message: string): boolean {
   const inbox = sendToInbox(state.root, state.configDir, task.id, message, state.ctx.sessionManager.getSessionId());
   const route = resumeRoute(task, taskDrivers(state));
-  if (route.kind === "stopped" || route.kind === "paused") return (await resumeTask(state, task.id)).notice;
+  if (route.kind === "stopped" || route.kind === "paused") return false;
   if (task.ownerSessionId === state.ctx.sessionManager.getSessionId()) {
     state.pi.sendUserMessage(message, state.ctx.isIdle() ? undefined : { deliverAs: "followUp" });
     markInboxDelivered(state.root, state.configDir, task.id, [inbox.id]);
@@ -412,7 +424,7 @@ async function wakeTask(state: Runtime, task: Task, message: string): Promise<st
       markInboxDelivered(state.root, state.configDir, task.id, [inbox.id]);
     }
   }
-  return "the owning oracle has been notified";
+  return true;
 }
 
 function canForceCloseTask(state: Runtime, taskId: string): boolean {
@@ -444,6 +456,33 @@ async function acceptTask(state: Runtime, taskId: string): Promise<{ notice: str
   lobbyTopics.bump("tasks");
   const wake = await wakeTask(state, task, `The user accepted ${task.id}'s work as it is. Call orchestrate action=complete now with a short summary naming outstanding QA/lint asks: ${asks.join("; ") || "none recorded"}. Read the persisted gate waivers first. Do not merge automatically.`);
   return { notice: `${task.id} accepted as it is; ${wake}` };
+}
+
+/**
+ * Skip a plan step on the user's word, with their reason: kept on the task
+ * (the checklist shows it skipped, the reason under it), recorded as a
+ * decision, and passed to the task's oracle so it carries on without it. A
+ * paused or stopped task is not resumed: its oracle reads it when it carries on.
+ */
+async function skipTaskStep(state: Runtime, taskId: string, step: number, text: string, reason: string): Promise<{ notice: string }> {
+  const task = mutableTask(state, taskId);
+  const why = reason.trim().replace(/\s+/g, " ");
+  if (!why) fail(400, "bad_request", "say why you are skipping this step");
+  if (why.length > MAX_SKIP_REASON) fail(400, "bad_request", `keep the reason under ${MAX_SKIP_REASON} characters`);
+  if (!task.plan) fail(400, "bad_request", "this task has no plan yet");
+  const steps = stepViews(task, taskWork(state.root, state.configDir, task.id));
+  const found = steps[step];
+  if (!found || found.text !== text) fail(409, "conflict", "the plan changed; refresh the task");
+  if (found.status === "done") fail(409, "conflict", "that step is already done");
+  if (found.status === "skipped") fail(409, "conflict", "that step is already skipped");
+  task.skippedSteps = [...(task.skippedSteps ?? []), { text, reason: why, at: new Date().toISOString() }];
+  recordDecision(task, `The user skipped step ${step + 1} ("${truncate(text, 200)}") from the Tasks screen. Reason: ${why}`);
+  saveTask(state.root, state.configDir, task);
+  lobbyTopics.bump("tasks");
+  lobbyTopics.bump("lobby");
+  const message = `The user skipped step ${step + 1} of ${task.id}'s plan: "${text}". Their reason: ${why}. Do not delegate, build or review that step; if an agent is on it now, let it stop there or tell it to. Carry on with the next open step.`;
+  if (!tellOracle(state, task, message)) return { notice: `step ${step + 1} skipped; the oracle reads why when the task carries on` };
+  return { notice: `step ${step + 1} skipped; the oracle has been told` };
 }
 
 async function resolveTaskApproval(state: Runtime, taskId: string, approvalId: string, decision: "approved" | "rejected", note?: string): Promise<{ notice: string }> {
@@ -900,6 +939,7 @@ export function createLobbyService(state: Runtime): LobbyService {
     sendToTask: (taskId, text) => sendToTask(state, taskId, text),
     resumeTask: (taskId) => resumeTask(state, taskId),
     acceptTask: (taskId) => acceptTask(state, taskId),
+    skipTaskStep: (taskId, step, text, reason) => skipTaskStep(state, taskId, step, text, reason),
     forceCloseTask: (taskId, title) => forceCloseTask(state, taskId, title),
     canForceCloseTask: (taskId) => canForceCloseTask(state, taskId),
     resolveTaskApproval: (taskId, approvalId, decision, note) => resolveTaskApproval(state, taskId, approvalId, decision, note),
