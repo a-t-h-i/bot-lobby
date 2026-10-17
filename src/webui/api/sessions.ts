@@ -114,3 +114,24 @@ export function sessionsAnswer(body: { key: string; dialogId: string; answer: Di
   session!.answer(body.dialogId, body.answer);
   return { notice: "answer sent" };
 }
+
+/** Rename this window's session (no key) or a background one. */
+export function sessionsRename(body: { key?: string; name: string }, ctx: ApiContext): { notice: string } {
+  if (!ctx.service.renameSession) fail(501, "unsupported", "this lobby cannot rename sessions");
+  try {
+    return { notice: ctx.service.renameSession!(body.key, body.name) };
+  } catch (error) {
+    fail(/^no session/.test((error as Error).message) ? 404 : 400, /^no session/.test((error as Error).message) ? "not_found" : "bad_request", (error as Error).message);
+  }
+}
+
+/** Put an ended background session away from the list (`archived` true, the default), or bring it back. */
+export function sessionsArchive(body: { key: string; archived?: boolean }, ctx: ApiContext): { notice: string } {
+  if (!ctx.service.archiveSession) fail(501, "unsupported", "this lobby cannot archive sessions");
+  try {
+    return { notice: ctx.service.archiveSession!(body.key, body.archived ?? true) };
+  } catch (error) {
+    const message = (error as Error).message;
+    fail(/^no /.test(message) ? 404 : 409, /^no /.test(message) ? "not_found" : "conflict", message);
+  }
+}

@@ -11,7 +11,7 @@ import { Alert, AlertAction, AlertDescription } from "@/components/reui/alert"
 /** First paint, before the first answer lands. */
 export function LoadingState({ label = "Connecting…" }: { label?: string }) {
   return (
-    <div className="flex min-h-48 min-w-0 w-full max-w-full flex-1 items-center justify-center gap-2 overflow-y-auto px-4 py-8 text-sm text-muted-foreground max-md:min-h-32 max-md:text-center">
+    <div className="flex min-h-48 min-w-0 w-full max-w-full flex-1 items-center justify-center gap-2 overflow-y-auto px-4 py-8 text-sm text-muted-foreground">
       <Spinner />
       <span>{label}</span>
     </div>
@@ -21,7 +21,7 @@ export function LoadingState({ label = "Connecting…" }: { label?: string }) {
 /** A topic that failed to load, with a retry that rereads it. */
 export function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => void }) {
   return (
-    <Empty className="m-4 min-h-0 min-w-0 flex-1 overflow-y-auto max-md:m-2 max-md:max-h-full max-md:px-2">
+    <Empty className="m-4 min-h-0 min-w-0 flex-1 overflow-y-auto">
       <EmptyHeader>
         <EmptyTitle className="flex items-center gap-2">
           <TriangleAlert className="size-4 text-destructive" aria-hidden="true" />
@@ -44,13 +44,13 @@ export function ReconnectingState({ onRetry }: { onRetry?: () => void }) {
   return (
     <Alert variant="destructive"
       role="status"
-      className="mx-3 mb-1 max-h-32 w-auto min-w-0 overflow-y-auto max-sm:mx-2 max-md:items-start"
+      className="mx-3 mb-1 max-h-32 w-auto min-w-0 overflow-y-auto max-sm:mx-2"
     >
       <WifiOff className="size-4" aria-hidden="true" />
       <AlertDescription>Lost pi — reconnecting every 2 s. Your planning session and tasks carry on when it is back.</AlertDescription>
       {onRetry ? (
         <AlertAction>
-        <Button variant="link" className="h-8 px-1 text-destructive max-md:h-auto max-md:min-h-11" onClick={onRetry}>
+        <Button variant="link" className="h-8 px-1 text-destructive" onClick={onRetry}>
           Retry now
         </Button>
         </AlertAction>

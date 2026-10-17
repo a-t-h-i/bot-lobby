@@ -3,7 +3,7 @@
 ## T3 Code
 
 The web UI's look (colours, radii, shadows, control and dialog styles, the
-sidebar rail, the chat rows, the work log, the composer surface, the select
+sidebar rail, the chat rows, the work log, the composer (its surface, footer controls and send button), the select
 fields and drop-down lists, the loading and status animations and the
 built-in colour themes) is adapted from T3 Code,
 https://github.com/pingdotgg/t3code. No T3 Code package is a
@@ -32,8 +32,9 @@ naming the file it came from.
 | `webui/src/components/reui/badge.tsx` | `apps/web/src/components/ui/badge.tsx` |
 | `webui/src/components/reui/select.tsx` | `apps/web/src/components/ui/select.tsx` |
 | `webui/src/components/reui/popover.tsx` | `apps/web/src/components/ui/popover.tsx` |
-| `webui/src/app/Sidebar.tsx` | `apps/web/src/components/ui/sidebar.tsx` |
-| `webui/src/app/Composer.tsx` | `apps/web/src/components/chat/ComposerSurface.tsx` |
+| `webui/src/app/Sidebar.tsx` | `apps/web/src/components/Sidebar.tsx`, `apps/web/src/components/ui/sidebar.tsx` |
+| `webui/src/app/Composer.tsx` | `apps/web/src/components/chat/ComposerSurface.tsx`, `ChatComposer.tsx`, `ComposerPrimaryActions.tsx`, `ComposerControl.tsx` |
+| `webui/src/app/TerminalDrawer.tsx` | `apps/web/src/components/ThreadTerminalDrawer.tsx` (the drawer, its floating toolbar and terminal list) |
 | `webui/src/tabs/lobby/InlineActivity.tsx` | `apps/web/src/components/chat/WorkLog.tsx` |
 | `src/webui/palette-core.ts` (the built-in themes) | `packages/shared/src/themePalettes.ts` (Blossom is their T3 Chat theme, renamed) |
 

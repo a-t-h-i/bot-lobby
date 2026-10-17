@@ -32,7 +32,7 @@ function NoTasks() {
         </EmptyMedia>
         <EmptyDescription>{EMPTY_LIST}</EmptyDescription>
       </EmptyHeader>
-      <Button className="max-md:min-h-11 max-md:whitespace-normal" onClick={() => go(tabHash("plan"))}>
+      <Button onClick={() => go(tabHash("plan"))}>
         Plan a task
       </Button>
     </Empty>
@@ -41,7 +41,7 @@ function NoTasks() {
 
 function ArchivedToggle({ shown, count, onToggle }: { shown: boolean; count: number; onToggle: () => void }) {
   return (
-    <label className="btn-outline flex h-7 min-w-0 cursor-pointer items-center gap-2 rounded-lg border bg-card px-2 text-xs font-medium transition-[box-shadow] max-md:h-11 max-md:min-w-11">
+    <label className="btn-outline flex h-7 min-w-0 cursor-pointer items-center gap-2 rounded-lg border bg-card px-2 text-xs font-medium transition-[box-shadow]">
       <Checkbox checked={shown} onCheckedChange={onToggle} aria-label="Show archived tasks" className="size-4" />
       Archived
       <Badge variant="secondary" className="h-5 px-1.5">{count}</Badge>

@@ -27,8 +27,6 @@ import { cn } from "@/lib/utils"
 import type { TabInfo } from "@protocol"
 import { PLAY_SECONDS, TabIcon } from "./TabIcons"
 import { switchEnded, switchStarted } from "@/lib/switching"
-import { useMediaQuery } from "./hooks"
-import { PhoneTabs } from "./PhoneTabs"
 
 interface TabStripProps {
   tabs: TabInfo[]
@@ -411,7 +409,6 @@ function fadeFor(more: { left: boolean; right: boolean }): string | undefined {
 }
 
 export function TabStrip({ tabs, activeId, onSelect }: TabStripProps) {
-  const phone = useMediaQuery("(max-width: 767.98px)")
   const { track, fill, drain, ring, unring, cells, liquids } = useStraw(activeId, tabs.length)
   const scroller = useRef<HTMLDivElement>(null)
   const [more, setMore] = useState({ left: false, right: false })
@@ -465,8 +462,6 @@ export function TabStrip({ tabs, activeId, onSelect }: TabStripProps) {
     onSelect(next.id)
     cells.current[next.id]?.focus({ preventScroll: true })
   }
-
-  if (phone) return <PhoneTabs tabs={tabs} activeId={activeId} onSelect={onSelect} />
 
   return (
     <div

@@ -9,8 +9,6 @@
  */
 import { useEffect, useRef, useState } from "react"
 import { HelpCircle, X } from "lucide-react"
-import { useMediaQuery } from "@/app/hooks"
-import { usePhoneViewport } from "@/app/usePhoneViewport"
 import { ANSWERED_ELSEWHERE } from "@shared"
 import { Button } from "@/components/ui/button"
 import { Popup } from "@/components/ui/popup"
@@ -23,7 +21,6 @@ import { ScrollHints } from "@/ui/ScrollHints"
 import { QuestionCard, type QuestionSize } from "./QuestionCard"
 import { parsePrompt } from "./payload"
 
-const PHONE_QUERY = "(max-width: 767.98px)"
 const SIZES: Record<QuestionSize, string> = {
   md: "max-w-3xl",
   lg: "max-w-4xl max-h-[min(88svh,52rem)]",
@@ -43,11 +40,11 @@ function LeavePrompt({ submitting, onKeep, onLeave }: { submitting: boolean; onK
   return (
     <div className="flex flex-col gap-3" role="alert">
       <p className="text-sm">Leave without answering? The oracle will not guess for you.</p>
-      <div className="flex items-center justify-end gap-2 max-md:flex-wrap max-md:justify-start">
-        <Button type="button" variant="outline" onClick={onKeep} className="max-md:h-auto max-md:min-h-11 max-md:min-w-11 max-md:whitespace-normal">
+      <div className="flex items-center justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onKeep}>
           Keep answering
         </Button>
-        <Button type="button" disabled={submitting} onClick={onLeave} className="max-md:h-auto max-md:min-h-11 max-md:min-w-11 max-md:whitespace-normal">
+        <Button type="button" disabled={submitting} onClick={onLeave}>
           {submitting ? "Leaving…" : "Leave"}
         </Button>
       </div>
@@ -58,10 +55,10 @@ function LeavePrompt({ submitting, onKeep, onLeave }: { submitting: boolean; onK
 /** The header's way back to a question that was put away. */
 export function QuestionsPill({ count, onOpen }: { count: number; onOpen: () => void }) {
   return (
-    <Button type="button" variant="soft" onClick={onOpen} aria-label={`${count} question${count === 1 ? "" : "s"} waiting — open`} className="gap-1.5 text-warning max-md:h-auto max-md:min-h-11 max-md:min-w-11 max-md:whitespace-normal">
+    <Button type="button" variant="soft" onClick={onOpen} aria-label={`${count} question${count === 1 ? "" : "s"} waiting — open`} className="gap-1.5 text-warning">
       <HelpCircle aria-hidden="true" />
       <span className="tabular-nums">{count}</span>
-      <span className="hidden md:inline">waiting</span>
+      <span>waiting</span>
     </Button>
   )
 }
@@ -73,8 +70,6 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
   const body = useRef<HTMLDivElement>(null)
   // The question in view says how much room it wants (wider for long questions, widest for mockups).
   const [size, setSize] = useState<QuestionSize>("md")
-  const phone = useMediaQuery(PHONE_QUERY)
-  const { keyboardOpen, keyboardInset } = usePhoneViewport()
   const count = prompts.length
   const active = prompts[0]
   const view = active ? parsePrompt(active) : undefined
@@ -118,26 +113,23 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
         else if (leaving) setLeaving(false)
         else onMinimize(true)
       }}
-      style={phone && keyboardOpen ? { maxHeight: `calc(100vh - ${keyboardInset}px - 1.5rem)` } : undefined}
       className={cn(
         "transition-[max-width] duration-300 ease-snap",
         expanded ? "h-[min(92svh,60rem)] max-h-[min(92svh,60rem)] max-w-7xl" : SIZES[view?.kind === "questionnaire" ? size : "md"],
-        "max-md:w-[calc(100vw-2rem)] max-md:max-w-[calc(100vw-2rem)] max-md:max-h-[calc(100svh-1.5rem)]",
-        expanded && "max-md:h-[calc(100svh-1.5rem)]"
       )}
     >
       {active ? (
         <section aria-label="Question from the lobby" className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <header className={cn("flex items-center gap-3 px-4 pt-4 pb-2 max-md:px-3 max-md:pt-3", expanded && "hidden")}>
+          <header className={cn("flex items-center gap-3 px-4 pt-4 pb-2", expanded && "hidden")}>
             <p className="min-w-0 flex-1 truncate text-sm font-medium text-muted-foreground first-letter:uppercase">
               {who}
               {count > 1 ? ` · 1 of ${count}` : ""}
             </p>
-            <Button type="button" variant="ghost" size="icon" aria-label="Later: put the question away" title={phone ? "Later" : "Later · Esc"} onClick={() => onMinimize(true)} className="max-md:size-11">
+            <Button type="button" variant="ghost" size="icon" aria-label="Later: put the question away" title="Later · Esc" onClick={() => onMinimize(true)}>
               <X aria-hidden="true" />
             </Button>
           </header>
-          <div ref={body} className={expanded ? "flex min-h-0 min-w-0 flex-1 flex-col" : "min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 max-md:px-3 max-md:pb-3"}>
+          <div ref={body} className={expanded ? "flex min-h-0 min-w-0 flex-1 flex-col" : "min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4"}>
             {view ? (
               leaving ? (
                 <LeavePrompt submitting={submitting} onKeep={() => setLeaving(false)} onLeave={() => void settle(dismiss(active.id), "Could not leave the question")} />
@@ -154,9 +146,9 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
                 />
               )
             ) : (
-              <div className="flex items-center justify-between gap-3 max-md:flex-wrap max-md:justify-start">
-                <p className="max-md:min-w-0 max-md:flex-1 text-sm text-muted-foreground">This question cannot be shown here.</p>
-                <Button type="button" disabled={submitting} onClick={() => void settle(dismiss(active.id), "Could not dismiss the question")} className="max-md:h-auto max-md:min-h-11 max-md:min-w-11 max-md:whitespace-normal">
+              <div className="flex items-center justify-between gap-3">
+                <p className=" text-sm text-muted-foreground">This question cannot be shown here.</p>
+                <Button type="button" disabled={submitting} onClick={() => void settle(dismiss(active.id), "Could not dismiss the question")}>
                   Dismiss
                 </Button>
               </div>

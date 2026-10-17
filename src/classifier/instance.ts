@@ -11,7 +11,7 @@ import { isSubagentProcess } from "../pi/quiet.ts";
 import { Classifier } from "./classifier.ts";
 import { scriptPicker } from "./scripts.ts";
 import type { ScriptPicker } from "../scripts/pick.ts";
-import { registerJevProvider, type KeySource, type KeyStatus } from "./hosts.ts";
+import type { KeySource, KeyStatus } from "./hosts.ts";
 import { fileHinter, type FileHinter, type FileScope } from "./files.ts";
 import { withRepoMap } from "../knowledge/repo-map.ts";
 import { knowledgePicker, type KnowledgePicker } from "./knowledge.ts";
@@ -19,7 +19,7 @@ import { lobbyFeed } from "../lobby/feed.ts";
 import { triageLine, triageWithContext } from "./triage.ts";
 import type { TaskTriage } from "../schemas/task.ts";
 import { effortRouter, type EffortRouter } from "./effort.ts";
-import { engineAnswer, engineClassifiers, type EngineAnswer, type EngineModel, type Registry } from "./models.ts";
+import { engineAnswer, engineClassifiers, splitRef, type EngineAnswer, type EngineModel, type Registry } from "./models.ts";
 
 interface Binding {
   cwd: string;
@@ -42,6 +42,10 @@ export function classifier(): Classifier {
     engine: (ref, request, options) => {
       if (!binding) throw new Error(`${ref} is not reachable before a pi session starts`);
       return binding.engine(ref, request, options);
+    },
+    lists: (ref) => {
+      const parts = splitRef(ref);
+      return Boolean(parts && binding?.registry.findOfType("classifier", parts.provider, parts.id));
     },
     metrics: (record) => {
       if (binding) appendMetrics(binding.root, binding.configDir, [record]);
@@ -114,9 +118,8 @@ export function availableClassifiers(): EngineModel[] {
   return classifierModels;
 }
 
-/** Register the `typesafe` login entry and bind the classifier to each session's key store. */
+/** Bind the classifier to each session's key store and model registry. */
 export function registerClassifier(pi: ExtensionAPI, configDir: string): void {
-  registerJevProvider(pi);
   pi.on("session_start", (_event, ctx) => {
     binding = {
       cwd: ctx.cwd,

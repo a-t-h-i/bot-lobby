@@ -50,10 +50,10 @@ export function EntryEditor({ initial, busy, onSave, onCancel }: EntryEditorProp
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-muted-foreground">{ARCHIVE_HINT}</span>
         <div className="flex gap-2">
-          <Button variant="outline" className="max-md:min-h-11" onClick={onCancel} disabled={busy}>
+          <Button variant="outline" onClick={onCancel} disabled={busy}>
             Cancel
           </Button>
-          <Button className="max-md:min-h-11 max-md:whitespace-normal" onClick={save} disabled={busy || !text.trim()}>
+          <Button onClick={save} disabled={busy || !text.trim()}>
             {busy ? <Spinner /> : null}
             Save
           </Button>
@@ -78,17 +78,17 @@ export function FileEditor({ open, file, initial, busy, onClose, onSave }: FileE
   const shown = useOverlaySlot(open, PRIORITY.confirm)
   return (
     <Popup open={open && shown} onOpenChange={(next) => !next && onClose()} label={`Edit ${file}`} description={ARCHIVE_HINT} dismissOnBackdrop={false} className="max-w-3xl">
-      <div className="flex min-h-0 flex-1 flex-col gap-3 p-4 max-md:p-3">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
         <div>
           <h2 className="text-base font-medium">Edit {file}</h2>
           <p className="text-sm text-muted-foreground">{ARCHIVE_HINT}</p>
         </div>
         <Textarea value={text} rows={14} className="min-h-0 flex-1 font-mono text-sm" onChange={(event) => setText(event.target.value)} />
         <div className="flex justify-end gap-2">
-          <Button variant="outline" className="max-md:min-h-11" onClick={onClose} disabled={busy}>
+          <Button variant="outline" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button className="max-md:min-h-11 max-md:whitespace-normal" onClick={() => onSave(text)} disabled={busy}>
+          <Button onClick={() => onSave(text)} disabled={busy}>
             {busy ? <Spinner /> : null}
             Save file
           </Button>

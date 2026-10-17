@@ -72,7 +72,7 @@ const Line = memo(function Line({ row, index, notes, form, onComment }: LineProp
         >
           {row.fenced ? row.text : <Markdown text={row.text} />}
         </div>
-        <Button type="button" variant="ghost" size="icon" className="shrink-0 text-muted-foreground max-md:size-11 opacity-0 transition-opacity group-hover/line:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100" aria-label={`Comment on this line: ${line}`} onClick={open}>
+        <Button type="button" variant="ghost" size="icon" className="shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/line:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100" aria-label={`Comment on this line: ${line}`} onClick={open}>
           <MessageSquarePlus aria-hidden="true" />
         </Button>
       </div>
@@ -106,7 +106,7 @@ export function SeatNeeds({ notes }: { notes: PanelNote[] }) {
     <Section title={SEATS_NEED}>
       <dl className="flex flex-col gap-2 text-sm">
         {notes.map((note, index) => (
-          <div key={index} className="flex min-w-0 gap-3 max-md:flex-wrap">
+          <div key={index} className="flex min-w-0 gap-3">
             <dt className={cn("w-20 shrink-0 font-medium", sourceColor(note.from))}>{sourceLabel(note.from)}</dt>
             <dd className="min-w-0 flex-1">
               <Markdown text={note.text} />

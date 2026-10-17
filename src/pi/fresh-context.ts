@@ -13,7 +13,7 @@
  * already run as pi processes of their own, each with its own context, and
  * are not touched here.
  */
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, SessionBeforeCompactEvent } from "@earendil-works/pi-coding-agent";
 import { relative } from "node:path";
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { peekTasks, taskDirFor } from "../state/persistence.ts";
@@ -124,11 +124,13 @@ export function registerFreshContext(pi: ExtensionAPI, configDir: string): void 
   // It may have ended while the oracle was idle (abandoned or archived from the lobby, finished in another window).
   pi.on("before_agent_start", (_event, ctx) => void closeEndedTask(pi, ctx, configDir));
   // Compacting a conversation the next request drops anyway would only cost a model call.
-  pi.on("session_before_compact", (event) => {
-    if (event.reason === "manual" || !freshContextOn()) return undefined;
-    const last = contextMarks(event.branchEntries).at(-1);
-    if (!last) return undefined;
-    const since = event.branchEntries.some((entry) => entry.type === "message" && Date.parse(entry.timestamp) >= last.at);
-    return since ? undefined : { cancel: true };
-  });
+  pi.on("session_before_compact", (event) => (staleCompaction(event) ? { cancel: true } : undefined));
+}
+
+/** An automatic compaction of the oracle's conversation from before its latest boundary, which the next request drops anyway. */
+export function staleCompaction(event: Pick<SessionBeforeCompactEvent, "reason" | "branchEntries">): boolean {
+  if (isSubagentProcess() || event.reason === "manual" || !freshContextOn()) return false;
+  const last = contextMarks(event.branchEntries).at(-1);
+  if (!last) return false;
+  return !event.branchEntries.some((entry) => entry.type === "message" && Date.parse(entry.timestamp) >= last.at);
 }

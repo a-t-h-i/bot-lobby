@@ -1,13 +1,14 @@
 /**
  * The sections of a task's detail: Request, Steps (the plan's short list; a
  * step agents are on carries their icons, how many and its ticking time, and
- * opens to who is doing what), the full plan
+ * opens to who is doing what; a step not yet done can be skipped with a
+ * reason, and a skipped one reads struck through with that reason), the full plan
  * folded away under them (or Proposal / the empty Plan note), Amendments,
  * Waiting on, QA risk (Jev's read of the built change) and Recent runs. The
  * plan text and steps arrive with `tasks.get`.
  */
 import { useEffect, useId, useState } from "react"
-import { CheckCircle2, ChevronDown, ChevronRight, Circle } from "lucide-react"
+import { CheckCircle2, ChevronDown, ChevronRight, Circle, CircleSlash } from "lucide-react"
 import type { TaskDetail as TaskDetailData } from "@protocol"
 import { executionWords } from "@/lib/phaseTiming"
 import { useElapsed } from "@/lib/useElapsed"
@@ -18,6 +19,13 @@ import { agentName, sourceColor, sourceLabel } from "@/tabs/lobby/types"
 import { AgentIcon } from "@/ui/AgentIcon"
 import { WorkingMark } from "@/ui/WorkingMark"
 import { QA_RISK_WORDS, qaRiskNote } from "./words"
+import { SkipStep } from "./SkipStep"
+
+/** What the Skip on each open step needs: the task, and what to reread once a step is skipped. */
+interface SkipProps {
+  taskId: string
+  onSkipped: () => void
+}
 
 type StepData = TaskDetailData["steps"][number]
 
@@ -114,7 +122,36 @@ function AgentsBadge({ agents, count, step, stopped }: { agents: StepAgent[]; co
 
 const BADGE = "inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 pr-2 pl-1 text-xs font-medium text-primary"
 
-function Step({ step, index, stopped }: { step: StepData; index: number; stopped: boolean }) {
+/** When a step was skipped, as "16 Oct, 22:49". */
+function skippedAt(at: string): string {
+  const date = new Date(at)
+  if (Number.isNaN(date.getTime())) return ""
+  return date.toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+}
+
+/** A step the user skipped: struck through, with their reason under it. */
+function SkippedStep({ step, index }: { step: StepData; index: number }) {
+  const when = step.skip ? skippedAt(step.skip.at) : ""
+  return (
+    <li className="flex min-w-0 flex-col" data-step="skipped">
+      <div className="flex min-w-0 items-start gap-2.5 text-sm">
+        <CircleSlash aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <span className="shrink-0 text-xs leading-5 text-muted-foreground tabular-nums">{index + 1}.</span>
+        <span className="min-w-0 break-words text-muted-foreground line-through decoration-muted-foreground/50">{step.text}</span>
+        <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">skipped</span>
+      </div>
+      {step.skip ? (
+        <p className="step-skip-reason mt-1 ml-[3.25rem] border-l-2 border-border pl-2.5 text-xs break-words text-muted-foreground">
+          <span className="font-medium text-foreground/80">Why: </span>
+          {step.skip.reason}
+          {when ? <span className="text-muted-foreground/70"> · {when}</span> : null}
+        </p>
+      ) : null}
+    </li>
+  )
+}
+
+function Step({ step, index, stopped, skip }: { step: StepData; index: number; stopped: boolean; skip?: SkipProps | undefined }) {
   const active = Boolean(step.active) && !stopped
   const agents = active ? step.agents ?? [] : []
   const count = agents.length || (step.activeAgentCount ?? 1)
@@ -123,9 +160,10 @@ function Step({ step, index, stopped }: { step: StepData; index: number; stopped
   const done = step.status === "done"
   const markClass = done ? "text-success" : step.status === "current" ? "text-primary" : "text-muted-foreground"
   const Icon = done ? CheckCircle2 : Circle
+  if (step.status === "skipped") return <SkippedStep step={step} index={index} />
   return (
-    <li className="flex min-w-0 flex-col" data-step={active ? "active" : step.status}>
-      <div className="flex min-w-0 items-start gap-2.5 text-sm max-md:flex-wrap">
+    <li className="group/step flex min-w-0 flex-col" data-step={active ? "active" : step.status}>
+      <div className="flex min-w-0 items-start gap-2.5 text-sm">
         {active ? <ActiveMark /> : <Icon aria-hidden="true" className={`mt-0.5 size-4 shrink-0 ${markClass}`} />}
         <span className="shrink-0 text-xs leading-5 text-muted-foreground tabular-nums">{index + 1}.</span>
         <span className={cn("min-w-0 break-words", active || step.status === "current" ? "text-foreground" : "text-muted-foreground")}>{step.text}</span>
@@ -151,19 +189,21 @@ function Step({ step, index, stopped }: { step: StepData; index: number; stopped
             next<span className="sr-only"> (the step up next)</span>
           </span>
         ) : null}
+        {skip && !done && !stopped ? <SkipStep taskId={skip.taskId} index={index} text={step.text} onSkipped={skip.onSkipped} /> : null}
       </div>
-      {open && agents.length > 0 ? <div className="pl-[3.25rem] max-md:pl-0"><StepAgents id={listId} agents={agents} stepText={step.text} /></div> : null}
+      {open && agents.length > 0 ? <div className="pl-[3.25rem]"><StepAgents id={listId} agents={agents} stepText={step.text} /></div> : null}
     </li>
   )
 }
 
-function StepsSection({ steps, stopped }: { steps: TaskDetailData["steps"]; stopped: boolean }) {
+function StepsSection({ steps, stopped, skip }: { steps: TaskDetailData["steps"]; stopped: boolean; skip?: SkipProps | undefined }) {
   const done = steps.filter((step) => step.status === "done").length
+  const skipped = steps.filter((step) => step.status === "skipped").length
   return (
-    <Section title="Steps" right={`${done}/${steps.length} done`}>
+    <Section title="Steps" right={`${done}/${steps.length} done${skipped ? ` · ${skipped} skipped` : ""}`}>
       <ol className="flex flex-col gap-2" aria-label="Steps">
         {steps.map((step, index) => (
-          <Step key={`${index}-${step.text}`} step={step} index={index} stopped={stopped} />
+          <Step key={`${index}-${step.text}`} step={step} index={index} stopped={stopped} skip={skip} />
         ))}
       </ol>
     </Section>
@@ -275,10 +315,10 @@ function Runs({ runs }: { runs: string[] }) {
 }
 
 /** Steps first, to skim; then the request and the plan in full — the sections above Comments. */
-export function PlanSections({ detail, finished }: { detail: TaskDetailData; finished: boolean }) {
+export function PlanSections({ detail, finished, skip }: { detail: TaskDetailData; finished: boolean; skip?: SkipProps }) {
   return (
     <>
-      {detail.steps.length > 0 ? <StepsSection steps={detail.steps} stopped={finished} /> : null}
+      {detail.steps.length > 0 ? <StepsSection steps={detail.steps} stopped={finished} skip={skip} /> : null}
       {detail.request ? (
         <Section title="Request">
           <Markdown text={detail.request} />

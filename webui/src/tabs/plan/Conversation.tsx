@@ -34,7 +34,7 @@ function OptionMockups({ question }: { question: PanelQuestion }) {
   const options = question.options.map((option) => ({ label: option.label, description: option.description, ...(option.mockup ? { htmlPreview: option.mockup } : {}) }))
   return (
     <>
-      <ul aria-label="Mockups" className="grid grid-cols-2 gap-2 md:grid-cols-3">
+      <ul aria-label="Mockups" className="grid grid-cols-3 gap-2">
         {drawn.map(({ option, index, mockup }) => (
           <li key={index} className="flex min-w-0 flex-col gap-1">
             <StaticPreview preview={mockup} label={plainLabel(option.label)} frameWidth={MOCKUP_WIDTH} onOpen={() => setOpen(index)} className="aspect-[3/2] h-auto" />

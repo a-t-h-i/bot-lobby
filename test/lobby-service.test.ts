@@ -143,3 +143,28 @@ test("the service carries no terminal-only members", () => {
     assert.ok(!(member in service), `${member} stays with the terminal`);
   }
 });
+
+test("skipping a plan step needs a reason, survives a stale worker save, is recorded, and tells the oracle", async () => {
+  const state = fakeState();
+  const messages: string[] = [];
+  state.pi.sendUserMessage = (message) => { if (typeof message === "string") messages.push(message); };
+  const task = createTask("TASK-skip", "Skip", undefined, undefined, "session-1");
+  task.state = "implementing";
+  task.plan = "## Steps\n1. Write the parser\n2. Add the docs\n3. Ship it";
+  saveTask(state.root, state.configDir, task);
+  const stale = loadTask(state.root, state.configDir, task.id)!;
+  const service = createLobbyService(state);
+  const refused = (status: number) => (error: unknown) => error instanceof HttpError && error.status === status;
+  await assert.rejects(service.skipTaskStep!(task.id, 1, "Add the docs", "   "), refused(400));
+  await assert.rejects(service.skipTaskStep!(task.id, 1, "Add docs", "the plan moved"), refused(409));
+  await assert.rejects(service.skipTaskStep!(task.id, 7, "Ship it", "no such step"), refused(409));
+  assert.match((await service.skipTaskStep!(task.id, 1, "Add the docs", "  The docs site  is retired. ")).notice, /step 2 skipped/);
+  await assert.rejects(service.skipTaskStep!(task.id, 1, "Add the docs", "again"), refused(409));
+  saveTask(state.root, state.configDir, stale);
+  const saved = loadTask(state.root, state.configDir, task.id)!;
+  assert.deepEqual(saved.skippedSteps?.map(({ text, reason }) => ({ text, reason })), [{ text: "Add the docs", reason: "The docs site is retired." }]);
+  assert.ok(saved.decisions.some((entry) => entry.text.includes("skipped step 2") && entry.text.includes("The docs site is retired.")));
+  assert.match(messages[0]!, /skipped step 2 of TASK-skip's plan: "Add the docs"/);
+  assert.match(messages[0]!, /Do not delegate, build or review that step/);
+  await assert.rejects(service.skipTaskStep!("TASK-missing", 0, "x", "y"), refused(404));
+});

@@ -56,7 +56,7 @@ import { assertNoPendingApprovals, pendingApprovals, requestApproval, resolveApp
 import { withBlockingRequest } from "../state/blocking-requests.ts";
 import { pingApproval } from "../pi/notify.ts";
 import { describeRun, runLogEntry } from "../pi/run-summary.ts";
-import { planChecklist, planSteps, runSteps } from "../pi/plan-checklist.ts";
+import { planChecklist, planSteps, runSteps, skippedStepsNote } from "../pi/plan-checklist.ts";
 import { STEP_LIMIT_MS, grantStepTime, reserveStepTime, stepTimeLeft } from "../state/step-limits.ts";
 import { noteWorkerRun } from "../state/work-time.ts";
 import { nextStates } from "./transitions.ts";
@@ -256,6 +256,7 @@ export function describeTask(task: Task): string {
       ? `Pending approvals: ${pendingApprovals(task).map((a) => `${a.id} ${a.kind} for ${a.domain}: ${truncate(a.detail, 120)}`).join("; ")}`
       : "",
     task.blockers.length > 0 ? `Blockers: ${task.blockers.map((b) => b.reason).join("; ")}` : "",
+    skippedStepsNote(task.plan, task.skippedSteps),
     `Next legal states: ${nextStates(task.state).join(", ")}`,
   ];
   return lines.filter((line) => line.length > 0).join("\n");
@@ -1858,7 +1859,7 @@ async function workerTimes(task: Task, deps: WorkflowDeps, assignments: readonly
   const now = budgetFor(task, deps);
   const slots = openSlots(task, assignments.map((entry) => entry.domain));
   const steps = planSteps(task.plan ?? "");
-  const completed = new Set(planChecklist(task.plan ?? "", (task.workerRuns ?? []).map((record) => ({ ...record, taskId: task.id, role: "worker" as const, output: "", attempts: 1 }))).flatMap((step, index) => step.status === "done" ? [index] : []));
+  const completed = new Set(planChecklist(task.plan ?? "", (task.workerRuns ?? []).map((record) => ({ ...record, taskId: task.id, role: "worker" as const, output: "", attempts: 1 })), task.skippedSteps).flatMap((step, index) => step.status === "done" || step.status === "skipped" ? [index] : []));
   const prepared = [];
   for (const { domain, instruction, minutes } of assignments) {
     const covered = runSteps(steps, instruction, completed);

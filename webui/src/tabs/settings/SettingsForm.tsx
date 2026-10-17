@@ -163,7 +163,7 @@ function ModelChoice(props: { value: string; models: SettingsModelInfo[]; label:
       <Choice value={props.value} items={items} label={props.label} onChange={choose} />
       {typing ? (
         <div className="flex min-w-0 flex-wrap items-start gap-2">
-          <Input autoFocus value={text} placeholder="provider/model" aria-label="Model id" className="min-w-0 flex-1 max-md:h-11 max-md:min-h-11" onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); use() } }} />
+          <Input autoFocus value={text} placeholder="provider/model" aria-label="Model id" className="min-w-0 flex-1" onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); use() } }} />
           <ActionButton label="Use this model" icon={Check} tone="primary" onClick={use} />
         </div>
       ) : null}
@@ -173,7 +173,7 @@ function ModelChoice(props: { value: string; models: SettingsModelInfo[]; label:
 
 function ToggleField({ label, help, checked, onChange, name }: { label: string; help?: string; checked: boolean; onChange: (next: boolean) => void; name?: string }) {
   return (
-    <div className="flex min-h-0 items-center justify-between gap-4 max-md:min-h-11 max-md:items-start">
+    <div className="flex min-h-0 items-center justify-between gap-4">
       <div className="min-w-0">
         <div className="break-words text-[0.8125rem] font-medium">{label}</div>
         {help ? <p className="break-words text-xs text-muted-foreground">{help}</p> : null}
@@ -190,7 +190,7 @@ function TextValue({ value, onSave, placeholder, label }: { value: string; onSav
     const next = text.trim()
     if (next !== value) onSave(next)
   }
-  return <Input value={text} placeholder={placeholder} aria-label={label} className="max-md:h-11 max-md:min-h-11" onChange={(event) => setText(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit() } }} />
+  return <Input value={text} placeholder={placeholder} aria-label={label} onChange={(event) => setText(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit() } }} />
 }
 
 function MinutesField({ value, label, onSave }: { value: number; label: string; onSave: (ms: number) => void }) {
@@ -230,7 +230,7 @@ function NumberField({ label, value, min, max, suffix, onSave }: { label: string
   }
   return (
     <div className="relative">
-      <Input type="number" inputMode="numeric" min={min} max={max} value={text} aria-label={label} className={cn(suffix ? "pr-10" : undefined, "max-md:h-11 max-md:min-h-11")} onChange={(event) => setText(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit() } }} />
+      <Input type="number" inputMode="numeric" min={min} max={max} value={text} aria-label={label} className={suffix ? "pr-10" : undefined} onChange={(event) => setText(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit() } }} />
       {suffix ? <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">{suffix}</span> : null}
     </div>
   )
@@ -311,7 +311,7 @@ function ScoutEffort() {
 function MoreButton({ open, custom, onToggle }: { open: boolean; custom: number; onToggle: () => void }) {
   return (
     <button type="button" aria-expanded={open} onClick={onToggle}
-      className="-mr-1.5 flex min-h-8 shrink-0 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-md:min-h-11">
+      className="-mr-1.5 flex min-h-8 shrink-0 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
       <ChevronRight aria-hidden="true" className={cn("size-3.5 transition-transform duration-200 ease-snap", open && "rotate-90")} />
       More
       {custom > 0 ? <span className="text-primary">· {custom} customised</span> : null}
@@ -360,11 +360,11 @@ function FoundLinters({ replaced }: { replaced: boolean }) {
   return (
     <Field label={LINT.found} help={replaced ? LINT.foundReplaced : LINT.foundHelp}>
       {!linters ? (
-        <p className="break-words text-sm text-muted-foreground md:text-right">{read.error ? read.error : "Looking…"}</p>
+        <p className="break-words text-sm text-muted-foreground text-right">{read.error ? read.error : "Looking…"}</p>
       ) : linters.length === 0 ? (
-        <p className="break-words text-sm text-muted-foreground md:text-right">{LINT.foundNone}</p>
+        <p className="break-words text-sm text-muted-foreground text-right">{LINT.foundNone}</p>
       ) : (
-        <ul aria-label={LINT.found} className={cn("flex flex-col gap-1.5 md:items-end", replaced && "opacity-60")}>
+        <ul aria-label={LINT.found} className={cn("flex flex-col items-end gap-1.5", replaced && "opacity-60")}>
           {linters.map((linter) => (
             <li key={`${linter.tool}:${linter.folder}`} className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
               <span className="min-w-0 break-words font-medium">{linter.tool}</span>
@@ -466,7 +466,7 @@ function EngineChoice({ value, models, classifiers, onChange }: { value: string;
       <Choice value={value} items={items} label={CLASSIFIER_LABELS.engine} onChange={choose} />
       {typing ? (
         <div className="flex min-w-0 flex-wrap items-start gap-2">
-          <Input autoFocus value={text} placeholder="provider/model" aria-label="Classifier model id" className="min-w-0 flex-1 max-md:h-11 max-md:min-h-11" onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); use() } }} />
+          <Input autoFocus value={text} placeholder="provider/model" aria-label="Classifier model id" className="min-w-0 flex-1" onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); use() } }} />
           <ActionButton label="Use this model" icon={Check} tone="primary" onClick={use} />
         </div>
       ) : null}
@@ -494,7 +494,7 @@ function ClassifierGroup({ config, models, classifiers, save }: { config: Config
               <TextValue value={classifier.model} label={CLASSIFIER_LABELS.model} placeholder="the host's default" onSave={(value) => void save({ classifier: { model: value } })} />
             </Field>
             <Field label={CLASSIFIER_LABELS.key} help={CLASSIFIER_LABELS.keyNote}>
-              <p className="break-words text-sm text-muted-foreground md:text-right">{host ?? classifier.provider}</p>
+              <p className="break-words text-sm text-muted-foreground text-right">{host ?? classifier.provider}</p>
             </Field>
           </>
         ) : null}
@@ -535,7 +535,7 @@ function InstallGroup() {
       <Rows>
         <Field label={PAGE.installLabel} help={installed ? PAGE.installedNow : PAGE.installHelp}>
           {installed ? null : (
-            <div className="flex md:justify-end">
+            <div className="flex justify-end">
             <ActionButton
               label={PAGE.installButton}
               icon={Download}
@@ -547,7 +547,7 @@ function InstallGroup() {
         </Field>
         {fullscreen.supported ? (
           <Field label={PAGE.fullscreenLabel} help={PAGE.fullscreenHelp}>
-            <div className="flex md:justify-end">
+            <div className="flex justify-end">
               <ActionButton label={fullscreen.on ? PAGE.fullscreenOn : PAGE.fullscreenOff} icon={fullscreen.on ? Minimize : Maximize} pressed={fullscreen.on} onClick={() => void fullscreen.toggle()} />
             </div>
           </Field>
@@ -582,7 +582,7 @@ export function SettingsForm({ config, models, classifierModels = [], onConfig }
     return next
   }
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 pt-4 pb-dock md:px-6 md:pt-6">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-6 pt-6 pb-dock">
       <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div className="min-w-0">
           <h1 className="text-lg font-semibold tracking-tight">{PAGE.title}</h1>
@@ -594,7 +594,7 @@ export function SettingsForm({ config, models, classifierModels = [], onConfig }
       </header>
       <div id={sectionId("Agents")} hidden={section !== "Agents"} aria-hidden={section !== "Agents"}>
         <h2 className="sr-only">{GROUP_TITLES.agents}</h2>
-        <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 items-start gap-3 lg:grid-cols-3">
           {AGENT_ORDER.map((kind) => <AgentCard key={kind} kind={kind} config={config} models={models} save={save} />)}
         </div>
       </div>

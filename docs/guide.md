@@ -94,6 +94,21 @@ no session conversation is embedded in Tasks. Former `#/sessions[/<key>]` and Ex
 fall back to Lobby, whose composer policy applies. Excalidraw UI, APIs, agent tools and runtime
 integration are removed; external boards and locally saved room links are not deleted or read.
 
+## Sidebar and terminal
+
+The sidebar lists the running sessions as cards: this window's first, then the background sessions
+it started, with sessions in other terminals and ended ones on shelves at its foot. Click a card to
+bring that session into this window; **New session** starts one in the background from what you
+type, and the search filters the list. `Alt+B` folds the sidebar off the page (the button at the
+start of the bar brings it back), and dragging its edge resizes it.
+
+`` Ctrl+` `` (or the bar's **Terminal** button) opens a terminal drawer under the composer: a real
+shell in the project's folder, as many as eight, listed down its right side when there is more than
+one. Shells keep running while the drawer is hidden or the page reloads, and end when you end them
+or the lobby stops. Inside a terminal every key is the shell's except `` Ctrl+` ``. It uses
+`node-pty` when that is installed and otherwise Python's standard `pty` module (macOS and Linux);
+on Windows it needs `node-pty`.
+
 ## Crashes and restarts
 
 If Pi crashes, is killed or loses its terminal, the lobby page keeps everything on screen and
@@ -181,7 +196,7 @@ The thresholds in `config.json` are tuned for Jev; raise them if another model d
 
 ## Delegation and time limits
 
-Requires **Pi 1.0.x** (1.0.1 or later). DEV and DESIGN workers and QA reviewers can use
+Requires **Pi 1.3.x** (1.3.0 or later). DEV and DESIGN workers and QA reviewers can use
 `delegate_subtasks` for useful, separable work. Delegation is optional. Each parent gets five child
 slots total, shared across retries; the classifier selects each child’s model and reasoning effort from its brief, lowering
 inference for simple work and raising reasoning for complex work on the configured

@@ -17,22 +17,6 @@ export interface Area {
   height: number
 }
 
-/** The overlap of the supplied rectangles, or nothing when they do not meet. */
-export function intersectAreas(...areas: Array<Area | undefined>): Area | undefined {
-  const present = areas.filter((area): area is Area => Boolean(area))
-  if (!present.length) return undefined
-  const left = Math.max(...present.map((area) => area.left))
-  const top = Math.max(...present.map((area) => area.top))
-  const right = Math.min(...present.map((area) => area.left + area.width))
-  const bottom = Math.min(...present.map((area) => area.top + area.height))
-  return right > left && bottom > top ? { left, top, width: right - left, height: bottom - top } : undefined
-}
-
-/** Keep an area above a fixed dock without adding a second safe-area inset. */
-export function clipAreaBottom(area: Area, bottom: number): Area | undefined {
-  return intersectAreas(area, { left: area.left, top: area.top, width: area.width, height: Math.max(0, bottom - area.top) })
-}
-
 /** How far from the card's edges the orb is kept, in pixels. */
 const MARGIN = 6
 const KEY = "bot-lobby.orb"

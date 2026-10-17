@@ -75,3 +75,34 @@ test("the oracle's checkpoint asks for knowledge by agent and shares what it lis
   ]);
   assert.equal(h.notices.at(-1), "Knowledge updated: 1 for the designer, 1 for backend");
 });
+
+test("compactions pi starts itself get the checkpoint, with any /compact instructions, from pi's preparation", async () => {
+  let instruction = "";
+  const shared: unknown[] = [];
+  const handlers = new Map<string, (event: unknown, ctx: ExtensionContext) => Promise<unknown>>();
+  const pi = { on: (name: string, handler: (event: unknown, ctx: ExtensionContext) => Promise<unknown>) => handlers.set(name, handler), getSettings: () => ({ retry: { enabled: false } }) } as unknown as ExtensionAPI;
+  registerAutoCompaction(pi, async (preparation, _model, _key, _headers, custom) => {
+    instruction = custom ?? "";
+    return { summary: "## Knowledge to share\n- [qa:knowledge] Run the dark project too.", firstKeptEntryId: preparation.firstKeptEntryId, tokensBefore: preparation.tokensBefore };
+  }, { enabled: () => true, share: (items) => { shared.push(...items); return "1 for QA"; } });
+  const notices: string[] = [];
+  const ctx = { model: { id: "m", provider: "test", contextWindow: 100_000 }, modelRegistry: { getApiKeyAndHeaders: async () => ({ ok: true }) }, ui: { notify: (message: string) => notices.push(message) } } as unknown as ExtensionContext;
+  const preparation = { firstKeptEntryId: "7", messagesToSummarize: [], turnPrefixMessages: [], isSplitTurn: false, tokensBefore: 90_000, fileOps: { read: new Set(), written: new Set(), edited: new Set() }, settings: { enabled: true, reserveTokens: 16_384, keepRecentTokens: 20_000 } };
+  const result = await handlers.get("session_before_compact")!({ type: "session_before_compact", preparation, branchEntries: [], customInstructions: "Focus on the API", reason: "threshold", willRetry: false, signal: new AbortController().signal }, ctx) as { compaction: { firstKeptEntryId: string } };
+  assert.equal(result.compaction.firstKeptEntryId, "7");
+  assert.match(instruction, /Unfinished work/);
+  assert.match(instruction, /Focus on the API$/);
+  assert.deepEqual(shared, [{ agent: "qa", kind: "knowledge", text: "Run the dark project too." }]);
+  assert.deepEqual(notices, ["Knowledge updated: 1 for QA"]);
+});
+
+test("a checkpoint that fails leaves pi's own summary in place", async () => {
+  const handlers = new Map<string, (event: unknown, ctx: ExtensionContext) => Promise<unknown>>();
+  const pi = { on: (name: string, handler: (event: unknown, ctx: ExtensionContext) => Promise<unknown>) => handlers.set(name, handler), getSettings: () => ({}) } as unknown as ExtensionAPI;
+  registerAutoCompaction(pi, async () => { throw new Error("provider unavailable"); }, { enabled: () => true, share: () => "" });
+  const notices: string[] = [];
+  const ctx = { model: { id: "m", provider: "test", contextWindow: 100_000 }, modelRegistry: { getApiKeyAndHeaders: async () => ({ ok: true }) }, ui: { notify: (message: string) => notices.push(message) } } as unknown as ExtensionContext;
+  const result = await handlers.get("session_before_compact")!({ type: "session_before_compact", preparation: { firstKeptEntryId: "1" }, branchEntries: [], reason: "overflow", willRetry: true, signal: new AbortController().signal }, ctx);
+  assert.equal(result, undefined);
+  assert.match(notices[0]!, /using pi's summary: provider unavailable/);
+});

@@ -1,6 +1,6 @@
 /**
  * The shell that wraps every route: the rail on the left (Settings and the
- * app's switches; a sheet on a phone) and beside it, top to bottom, the
+ * app's switches) and beside it, top to bottom, the
  * top bar with the tabs, the page of the route lying flat beside the rail
  * (it eases in when the tab changes) and the composer under it. The composer
  * sits in the flow, so a tall message gives the page less room instead of
@@ -17,10 +17,12 @@ import type { LobbySnapshot, StatusInfo } from "@protocol"
 import type { TabId } from "@shared"
 import { AltH } from "./AltH.tsx"
 import { SoundToggle, ThemeToggle } from "./AppTools.tsx"
-import { Composer, composerVisible } from "./Composer.tsx"
+import { Composer } from "./Composer.tsx"
 import { Header } from "./Header.tsx"
-import { ProjectSwitcher, useProjects } from "./ProjectSwitcher.tsx"
-import { Sidebar, SidebarMenuButton, SidebarSheet } from "./Sidebar.tsx"
+import { useProjects } from "./ProjectSwitcher.tsx"
+import { Sidebar, SidebarOpenButton, SIDEBAR_KEY } from "./Sidebar.tsx"
+import { TerminalDrawer, TerminalToggle } from "./TerminalDrawer.tsx"
+import { toggleTerminal } from "./terminalStore.ts"
 import { SignIn } from "./SignIn.tsx"
 import { ErrorState, LoadingState, ReconnectingState } from "./States.tsx"
 import { TabStrip } from "./TabStrip.tsx"
@@ -37,7 +39,8 @@ import { go, parseHash, tabHash, useRoute, type Route } from "./router.ts"
 import { routeBody } from "@/tabs/registry.tsx"
 import { ACTIVITY_OPEN } from "@/tabs/lobby/InlineActivity"
 import { focusTab, isTyping, tabWalk } from "@/prompts/nav"
-import { toggleCollapsed } from "@/lib/collapsed"
+import { toggleCollapsed, useCollapsed } from "@/lib/collapsed"
+import { NARROW_SIDEBAR } from "@/lib/panePreference"
 
 function handleAction(action: string, route: Route, toggleHelp: () => void, cycle: (delta: number) => void, toggleSidebar: () => void): void {
   if (action === "search") (document.querySelector<HTMLElement>("#main input[type='search']") ?? document.getElementById("composer-text"))?.focus()
@@ -45,6 +48,7 @@ function handleAction(action: string, route: Route, toggleHelp: () => void, cycl
   else if (action === "settings") go("#/settings")
   else if (action === "thinking") toggleCollapsed("lobby.thinking")
   else if (action === "sidebar") toggleSidebar()
+  else if (action === "terminal") toggleTerminal()
   else if (action === "activity") {
     // Activity is the steps between the Lobby's messages: there the key opens or folds them all, elsewhere it takes you there first.
     if (route.kind === "tab" && route.tab === "lobby") toggleCollapsed(ACTIVITY_OPEN)
@@ -57,6 +61,10 @@ function handleAction(action: string, route: Route, toggleHelp: () => void, cycl
 /** The app's switches in the bar, before there is a sidebar to hold them. */
 const BAR_TOOL =
   "toolbar-button inline-flex size-8 shrink-0 items-center justify-center rounded-lg border text-foreground transition-[background-color,border-color,scale] duration-150 ease-snap outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.97] motion-reduce:active:scale-100"
+
+/** The bar's Terminal button: quiet like the sidebar's icons, lit while the drawer is open. */
+const TERMINAL_TOOL =
+  "inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,scale] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.97] aria-pressed:bg-accent aria-pressed:text-foreground motion-reduce:active:scale-100"
 
 /** How long a stream that was live may be reconnecting before the page says pi is gone. */
 const OUTAGE_MS = 2500
@@ -125,7 +133,6 @@ export function Shell() {
 
   const select = useCallback((id: string) => go(tabHash(id as TabId)), [])
   const tabStrip = <TabStrip tabs={tabs} activeId={activeId} onSelect={select} />
-  const phone = useMediaQuery("(max-width: 767.98px)")
   const cycle = useCallback(
     (delta: number) => {
       if (tabs.length === 0) return
@@ -137,11 +144,11 @@ export function Shell() {
   )
   const toggleHelp = useCallback(() => setHelp((open) => !open), [])
   const projects = useProjects()
-  const [sheet, setSheet] = useState(false)
-  // On a phone the sidebar is a sheet; wider, the rail is always there and has nothing to unfold.
-  const toggleSidebar = useCallback(() => {
-    if (phone) setSheet((open) => !open)
-  }, [phone])
+  // Read again when the window crosses the narrow width, where an unpicked sidebar folds.
+  useMediaQuery(NARROW_SIDEBAR)
+  const [sidebarFolded] = useCollapsed(SIDEBAR_KEY)
+  // The key folds the sidebar off the page or brings it back.
+  const toggleSidebar = useCallback(() => toggleCollapsed(SIDEBAR_KEY), [])
   const onAction = useCallback((action: string) => {
     if ((action === "thinking" || action === "activity") && status?.panels?.[action] === false) return
     // The route as the address bar has it right now: a key pressed in the frame after a jump must not act on the page just left.
@@ -171,9 +178,8 @@ export function Shell() {
     const frame = requestAnimationFrame(() => {
       if (focusMovedSinceRoute() || document.querySelector("[role='dialog']:not([data-state='closed'])")) return
       const box = document.getElementById("composer-text") as HTMLTextAreaElement | null
-      const phoneNow = window.matchMedia("(max-width: 767.98px)").matches
       const coarse = window.matchMedia("(pointer: coarse)").matches
-      if (!phoneNow && !coarse && box && !box.disabled && !box.closest("[inert]")) box.focus({ preventScroll: true })
+      if (!coarse && box && !box.disabled && !box.closest("[inert]")) box.focus({ preventScroll: true })
       else if (document.activeElement?.id !== "composer-text") document.getElementById("main")?.focus({ preventScroll: true })
     })
     return () => cancelAnimationFrame(frame)
@@ -181,27 +187,16 @@ export function Shell() {
 
   const keyLabels = Object.fromEntries(keys.map((key) => [key.action, key.label]))
   const signedIn = Boolean(status) && !signedOut
-  const name = status?.workspace.name ?? "bot-lobby"
-  // A phone's bar starts with the way into the sidebar and the project, which a wider screen keeps in the composer's tray.
-  const lead = !phone ? null : signedIn ? (
-    <>
-      <SidebarMenuButton expanded={sheet} onOpen={() => setSheet(true)} />
-      <ProjectSwitcher look="bar" projects={projects} tab={tab} name={name} branch={status?.branch ?? status?.workspace.branch} />
-    </>
-  ) : (
-    <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
-      <span aria-hidden="true" className="project-mark">{name.charAt(0).toUpperCase()}</span>
-      <span className="truncate">{name}</span>
-    </span>
-  )
+  // The bar starts with the way back to a folded sidebar.
+  const lead = signedIn ? <SidebarOpenButton hint={keyLabels.sidebar} /> : null
   const header = <Header
         connection={connection}
         projects={projects}
         lead={lead}
-        tabs={phone ? null : tabStrip}
+        tabs={tabStrip}
         extra={putAway && prompts.length > 0 ? <QuestionsPill count={prompts.length} onOpen={() => setPutAway(false)} /> : null}
         // With no sidebar yet (signing in, loading) light or dark and the sounds wait in the bar.
-        tools={signedIn ? null : (
+        tools={signedIn ? <TerminalToggle hint={keyLabels.terminal} className={TERMINAL_TOOL} /> : (
           <>
             <ThemeToggle className={BAR_TOOL} side="bottom" />
             <SoundToggle className={BAR_TOOL} side="bottom" />
@@ -217,13 +212,16 @@ export function Shell() {
     </div>
   )
   const sidebarProps = { route, keys: keyLabels, onHelp: toggleHelp }
-  const dockShown = composerVisible(route)
   return (
-    <div ref={rootRef} className="fixed inset-0 flex">
-      {phone ? null : <Sidebar {...sidebarProps} />}
+    // The sidebar and the bar are one surface, the app's frame; the page sits in it on a rounded inner corner.
+    <div ref={rootRef} className="app-chrome fixed inset-0 flex" data-sidebar={sidebarFolded ? "folded" : "open"}>
+      <Sidebar {...sidebarProps} />
       <div className="relative flex min-w-0 flex-1 flex-col">
       {header}
+      <div className="app-page relative flex min-h-0 flex-1 flex-col">
       <Banner connection={connection} onRetry={retry} />
+      {/* The page and the composer floating over its foot; the terminal drawer, when open, sits under both. */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
       <main
         id="main"
         tabIndex={-1}
@@ -247,11 +245,11 @@ export function Shell() {
           {routeBody(route)}
         </motion.div>
       </main>
-      {/* Off the composer's tabs it is hidden, so a phone's tab bar sits in the flow below the page instead. */}
-      {phone && !dockShown ? <div className="shrink-0 px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">{tabStrip}</div> : null}
-      <Composer route={route} keys={keyLabels} projects={projects} onHelp={toggleHelp} dockNav={phone && dockShown ? tabStrip : null} />
+      <Composer route={route} keys={keyLabels} projects={projects} onHelp={toggleHelp} />
       </div>
-      {phone ? <SidebarSheet {...sidebarProps} open={sheet} onOpenChange={setSheet} /> : null}
+      <TerminalDrawer toggleKey={keyLabels.terminal ?? "Ctrl+`"} />
+      </div>
+      </div>
       <Thinking status={status} lobby={lobbyRecord.data} />
       <QuestionPopup prompts={prompts} answer={answer} dismiss={dismiss} minimized={putAway} onMinimize={setPutAway} />
       <AltH open={help} onOpenChange={setHelp} keys={keys} tabs={tabs} />

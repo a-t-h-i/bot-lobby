@@ -207,6 +207,18 @@ export interface TaskGit {
   path?: string;
 }
 
+/** A plan step the user chose to skip, with the reason they gave; matched to the plan by its text. */
+export interface SkippedStep {
+  /** The step's text as the plan lists it. */
+  text: string;
+  /** Why the user skipped it, in their words (required). */
+  reason: string;
+  at: string;
+}
+
+/** Longest skip reason kept. */
+export const MAX_SKIP_REASON = 1000;
+
 export interface PhaseTiming {
   phase: TaskState;
   elapsedMs: number;
@@ -265,6 +277,8 @@ export interface Task {
   qaRisk?: QaRiskAssessment;
   /** Set only by the user: the work is accepted with the lint errors it has, so the task may complete. */
   lintWaiver?: { at: string };
+  /** Plan steps the user skipped, each with their reason; the oracle is told not to work on them. */
+  skippedSteps?: SkippedStep[];
 }
 
 export function createTask(

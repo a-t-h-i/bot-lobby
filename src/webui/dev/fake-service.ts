@@ -9,6 +9,7 @@ import { LobbyFeed } from "../../lobby/feed.ts";
 import { promptHub } from "../../lobby/prompt-hub.ts";
 import { lobbyTopics } from "../../lobby/topics.ts";
 import type { BackgroundSession, DialogAnswer, SessionDialog } from "../../lobby/sessions.ts";
+import { cleanSessionName } from "../../lobby/sessions.ts";
 import type { PlanComment } from "../../state/comments.ts";
 import type { LobbyService } from "../../lobby/host.ts";
 import { loadScenario, type ScenarioFixture } from "./fixtures.ts";
@@ -280,10 +281,15 @@ function fakeBackground(entry: NonNullable<ScenarioFixture["backgroundSessions"]
     stop() {
       status = "exited";
       dialogs.length = 0;
+      lobbyTopics.bump("sessions");
     },
     answer(id: string, _answer: DialogAnswer) {
       const index = dialogs.findIndex((dialog) => dialog.id === id);
       if (index >= 0) dialogs.splice(index, 1);
+    },
+    rename(name: string) {
+      session.name = name;
+      lobbyTopics.bump("sessions");
     },
   };
   return session as unknown as BackgroundSession;
@@ -335,6 +341,8 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
   const auto = new Set(fixture.autoTasks ?? []);
   const comments = new Map<string, Array<Record<string, unknown>>>(Object.entries(fixture.taskComments ?? {}));
   const backgrounds = (fixture.backgroundSessions ?? []).map(fakeBackground);
+  const archivedBackgrounds: BackgroundSession[] = [];
+  let sessionName = fixture.status.sessionName;
   let planning = fakePlanner(fixture.mockPlanner ?? defaultPlanner());
   let config: BotLobbyConfig = resolveConfig(fixture.settings?.config ?? {});
   const models = fixture.settings?.models ?? DEFAULT_MODELS;
@@ -391,7 +399,7 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
   let commentSeq = 0;
   const service = {
     sessionId: () => fixture.status.sessionId,
-    sessionName: () => fixture.status.sessionName,
+    sessionName: () => sessionName,
     masterBusy: () => fixture.status.busy,
     config: () => config,
     linters: () => fixture.settings?.linters ?? [{ tool: "ESLint", folder: "", installed: true }, { tool: "Ruff", folder: "services/api", installed: false }],
@@ -481,6 +489,15 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     },
     sendToTask: (taskId: string, _text: string) => (tasks.some((task) => (task as { id: string }).id === taskId) ? `sent — the session driving ${taskId} passes it to its oracle` : `no task ${taskId}`),
     sendToSession: (_sessionId: string, _text: string) => "sent — that session passes it to its oracle within a few seconds",
+    skipTaskStep: async (taskId: string, step: number, text: string, reason: string) => {
+      const task = tasks.find((entry) => (entry as { id: string }).id === taskId) as { id: string; skippedSteps?: Array<{ text: string; reason: string; at: string }>; decisions?: Array<{ domain: string; text: string; createdAt: string }> } | undefined;
+      if (!task) throw new Error(`no task ${taskId}`);
+      const at = new Date().toISOString();
+      task.skippedSteps = [...(task.skippedSteps ?? []), { text, reason: reason.trim(), at }];
+      task.decisions = [...(task.decisions ?? []), { domain: "master", text: `The user skipped step ${step + 1} ("${text}") from the Tasks screen. Reason: ${reason.trim()}`, createdAt: at }];
+      lobbyTopics.bump("tasks");
+      return { notice: `step ${step + 1} skipped; the oracle has been told` };
+    },
     resumeTask: async (taskId: string) => {
       const task = tasks.find((entry) => (entry as { id: string }).id === taskId) as { id: string; title: string; paused?: boolean; ownerSessionId?: string } | undefined;
       if (!task) return { notice: `no task ${taskId}` };
@@ -500,6 +517,30 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
       return { notice: `resumed ${taskId} in a background session`, key: session.key };
     },
     sessions: () => [...backgrounds],
+    renameSession: (key: string | undefined, name: string) => {
+      const clean = cleanSessionName(name);
+      if (!key) {
+        sessionName = clean;
+        lobbyTopics.bump("status");
+        lobbyTopics.bump("sessions");
+        return `renamed this window to ${clean}`;
+      }
+      const session = backgrounds.find((entry) => entry.key === key);
+      if (!session) throw new Error(`no session ${key}`);
+      session.rename(clean);
+      return `renamed ${key} to ${clean}`;
+    },
+    archiveSession: (key: string, archived: boolean) => {
+      const from = archived ? backgrounds : archivedBackgrounds;
+      const index = from.findIndex((entry) => entry.key === key);
+      if (index < 0) throw new Error(archived ? `no session ${key} to archive` : `no archived session ${key}`);
+      const session = from[index]!;
+      if (session.alive) throw new Error(`${session.name} is still running: stop it before archiving it`);
+      from.splice(index, 1);
+      (archived ? archivedBackgrounds : backgrounds).push(session);
+      lobbyTopics.bump("sessions");
+      return archived ? `archived ${session.name}` : `brought back ${session.name}`;
+    },
     startSession: (start: { request?: string; plan?: { id: string; title: string }; auto?: boolean }) => {
       const key = `S${backgrounds.length + 1}`;
       const session = fakeBackground({ key, name: start.plan?.title ?? start.request?.trim().slice(0, 40) ?? "mock session", status: "starting", ...(start.plan ? { planId: start.plan.id } : {}) });
