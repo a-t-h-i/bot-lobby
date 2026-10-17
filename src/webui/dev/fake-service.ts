@@ -481,6 +481,15 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     },
     sendToTask: (taskId: string, _text: string) => (tasks.some((task) => (task as { id: string }).id === taskId) ? `sent — the session driving ${taskId} passes it to its oracle` : `no task ${taskId}`),
     sendToSession: (_sessionId: string, _text: string) => "sent — that session passes it to its oracle within a few seconds",
+    skipTaskStep: async (taskId: string, step: number, text: string, reason: string) => {
+      const task = tasks.find((entry) => (entry as { id: string }).id === taskId) as { id: string; skippedSteps?: Array<{ text: string; reason: string; at: string }>; decisions?: Array<{ domain: string; text: string; createdAt: string }> } | undefined;
+      if (!task) throw new Error(`no task ${taskId}`);
+      const at = new Date().toISOString();
+      task.skippedSteps = [...(task.skippedSteps ?? []), { text, reason: reason.trim(), at }];
+      task.decisions = [...(task.decisions ?? []), { domain: "master", text: `The user skipped step ${step + 1} ("${text}") from the Tasks screen. Reason: ${reason.trim()}`, createdAt: at }];
+      lobbyTopics.bump("tasks");
+      return { notice: `step ${step + 1} skipped; the oracle has been told` };
+    },
     resumeTask: async (taskId: string) => {
       const task = tasks.find((entry) => (entry as { id: string }).id === taskId) as { id: string; title: string; paused?: boolean; ownerSessionId?: string } | undefined;
       if (!task) return { notice: `no task ${taskId}` };

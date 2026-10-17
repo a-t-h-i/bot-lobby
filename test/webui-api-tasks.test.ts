@@ -395,8 +395,9 @@ test("tasks.get reads a plan's checklist: steps, no request when it equals the t
   try {
     const got = await call("tasks.get", { taskId: "TASK-mine" });
     assert.equal(got.status, 200, got.body);
-    const { timing, canAccept, canForceClose, ...detail } = got.payload.result!;
+    const { timing, canAccept, canSkip, canForceClose, ...detail } = got.payload.result!;
     assert.equal(typeof canAccept, "boolean");
+    assert.equal(canSkip, true);
     assert.equal(typeof canForceClose, "boolean");
     assert.equal((timing as { waiting: boolean }).waiting, false);
     assert.equal((timing as { elapsedMs: number }).elapsedMs, 0);
@@ -530,4 +531,26 @@ test("every scenario's mock answers the tasks calls without throwing", async () 
       await server.close();
     }
   }
+});
+
+test("tasks.skipStep wants a reason, refuses tasks without a plan, and the detail shows the skipped step with its reason", async () => {
+  const { call, close } = await setup();
+  try {
+    const before = (await call("tasks.get", { taskId: "TASK-mine" })).payload.result!;
+    assert.equal(before.canSkip, true);
+    assert.equal((await call("tasks.get", { taskId: "TASK-other" })).payload.result!.canSkip, false, "no plan, nothing to skip");
+    for (const reason of ["", "   "]) assert.equal((await call("tasks.skipStep", { taskId: "TASK-mine", step: 1, text: "Add the header", reason })).status, 400);
+    assert.equal((await call("tasks.skipStep", { taskId: "TASK-mine", step: 1, text: "Add the header" })).status, 400, "the reason is required");
+    assert.equal((await call("tasks.skipStep", { taskId: "TASK-other", step: 0, text: "x", reason: "y" })).status, 400);
+    assert.equal((await call("tasks.skipStep", { taskId: "TASK-done", step: 0, text: "x", reason: "y" })).status, 400);
+    assert.equal((await call("tasks.skipStep", { taskId: "TASK-mine", step: 0, text: "Write the API", reason: "already done" })).status, 409, "a done step stays done");
+    const skipped = await call("tasks.skipStep", { taskId: "TASK-mine", step: 1, text: "Add the header", reason: "The header moved to another task." });
+    assert.equal(skipped.status, 200, skipped.body);
+    const after = (await call("tasks.get", { taskId: "TASK-mine" })).payload.result as unknown as { steps: Array<{ status: string; skip?: { reason: string } }> };
+    assert.equal(after.steps[1]!.status, "skipped");
+    assert.equal(after.steps[1]!.skip?.reason, "The header moved to another task.");
+    assert.equal(after.steps[2]!.status, "current", "the next open step carries on");
+    const rows = ((await call("tasks.list")).payload.result as unknown as { rows: Array<{ id: string; progress?: unknown }> }).rows;
+    assert.deepEqual(rows.find((entry) => entry.id === "TASK-mine")?.progress, { done: 2, total: 3 }, "a skipped step counts as settled");
+  } finally { await close(); }
 });

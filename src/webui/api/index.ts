@@ -15,7 +15,7 @@ import { lobbyAbort, lobbyHistory, lobbySend, lobbySnapshot } from "./lobby.ts";
 import { promptsAnswer, promptsDismiss, promptsList } from "./prompts.ts";
 import { plannerAnswer, plannerCommentLine, plannerGet, plannerNew, plannerRetry, plannerSend, plannerEditMessage, plannerToggleSeat, plannerSave, plannerPrevious, plannerPreviousArchive, plannerPreviousDelete, plannerPreviousGet, plannerPreviousOpen } from "./planner.ts";
 import { quickfixCancel, quickfixList, quickfixMovedToTask, quickfixRunAnyway, quickfixSubmit } from "./quickfix.ts";
-import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksEditComment, tasksGet, tasksList, tasksMessage, tasksRestore, tasksOpen, tasksResume, tasksDeliveryReview, tasksDeliveryDefer, tasksDeliver, tasksAccept, tasksForceClose, tasksResolveApproval } from "./tasks.ts";
+import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksEditComment, tasksGet, tasksList, tasksMessage, tasksRestore, tasksOpen, tasksResume, tasksDeliveryReview, tasksDeliveryDefer, tasksDeliver, tasksAccept, tasksSkipStep, tasksForceClose, tasksResolveApproval } from "./tasks.ts";
 import { knowledgeAdd, knowledgeAsk, knowledgeComment, knowledgeEdit, knowledgeFiles, knowledgeOpen, knowledgeRemove, knowledgeReplaceFile, knowledgeUnnote } from "./knowledge.ts";
 import { plansDiscard, plansGet, plansStart } from "./plans.ts";
 import { gitCancelReview, gitJev, gitPull, gitPulls, gitReview } from "./git.ts";
@@ -133,6 +133,10 @@ function buildRoutes(): Record<string, Route> {
   routes["tasks.accept"] = {
     schema: Type.Object({ taskId: TaskId }, { additionalProperties: false }),
     run: (body, ctx) => tasksAccept(body as { taskId: string }, ctx),
+  };
+  routes["tasks.skipStep"] = {
+    schema: Type.Object({ taskId: TaskId, step: Type.Integer({ minimum: 0, maximum: 49 }), text: Type.String({ minLength: 1, maxLength: 20_000 }), reason: Type.String({ minLength: 1, maxLength: 1000 }) }, { additionalProperties: false }),
+    run: (body, ctx) => tasksSkipStep(body as Parameters<typeof tasksSkipStep>[0], ctx),
   };
   routes["tasks.forceClose"] = {
     schema: Type.Object({ taskId: TaskId, title: Type.String({ maxLength: 20_000 }) }, { additionalProperties: false }),

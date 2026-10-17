@@ -70,7 +70,7 @@ function checkOf(task: Task): TaskRow["check"] {
 function progressOf(task: Task, work: WorkProjection | undefined, now: number): TaskRow["progress"] {
   const steps = stepViews(task, work, now);
   if (steps.length === 0) return undefined;
-  return { done: steps.filter((step) => step.status === "done").length, total: steps.length };
+  return { done: steps.filter((step) => step.status === "done" || step.status === "skipped").length, total: steps.length };
 }
 
 /** The work clock as the page shows it; a finished task's no longer counts. */
@@ -302,6 +302,15 @@ export async function tasksAccept(body: { taskId: string }, ctx: ApiContext): Pr
   return ctx.service.acceptTask(body.taskId);
 }
 
+/** Skip a plan step with the user's reason; refused once the plan changed under the page. */
+export async function tasksSkipStep(body: { taskId: string; step: number; text: string; reason: string }, ctx: ApiContext): Promise<{ notice: string }> {
+  const task = interventionTask(body.taskId, ctx);
+  if (!task.plan) fail(400, "bad_request", "this task has no plan yet");
+  if (!body.reason.trim()) fail(400, "bad_request", "say why you are skipping this step");
+  if (!ctx.service.skipTaskStep) fail(400, "bad_request", "skipping steps is unavailable");
+  return ctx.service.skipTaskStep(body.taskId, body.step, body.text, body.reason);
+}
+
 export async function tasksForceClose(body: { taskId: string; title: string }, ctx: ApiContext): Promise<{ notice: string }> {
   const task = interventionTask(body.taskId, ctx);
   if (body.title !== task.title) fail(400, "bad_request", "the title must match exactly");
@@ -337,6 +346,7 @@ export function tasksGet(body: { taskId: string }, ctx: ApiContext): TaskDetail 
   const details = found.plan ? planDetails(found.plan) : undefined;
   return {
     canAccept: Boolean(active && ctx.service.acceptTask) && acceptable(found),
+    canSkip: Boolean(active && ctx.service.skipTaskStep && found.plan) && !TERMINAL_STATES.includes(found.state),
     canForceClose: Boolean(active && ctx.service.forceCloseTask) && !TERMINAL_STATES.includes(found.state) && (ctx.service.canForceCloseTask?.(found.id) ?? true),
     timing: projectPhaseTiming(found, new Date(now).toISOString()),
     ...(clock ? { work: clock } : {}),
@@ -348,6 +358,7 @@ export function tasksGet(body: { taskId: string }, ctx: ApiContext): TaskDetail 
     steps: stepViews(found, work, now).map((step) => ({
       text: step.text,
       status: step.status === "pending" ? "open" : step.status,
+      ...(step.skip ? { skip: step.skip } : {}),
       ...(step.active ? { active: true, workedMs: step.workedMs, activeAgentCount: step.activeAgentCount, agents: step.agents } : {}),
     })),
     amendments: [...found.amendments],

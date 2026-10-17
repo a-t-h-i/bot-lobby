@@ -324,6 +324,8 @@ export interface EntryRefInfo {
 /** `tasks.get`: one task read whole, in the terminal's wording. */
 export interface TaskDetail {
   canAccept: boolean;
+  /** Open steps can be skipped (the user gives a reason). */
+  canSkip: boolean;
   canForceClose: boolean;
   timing?: TimingProjection;
   delivery?: Delivery;
@@ -337,9 +339,9 @@ export interface TaskDetail {
   planDetails?: string;
   /**
    * The plan as a checklist, in order; `current` is the step under way, `active` the steps a worker is on right now,
-   * each with its worker time (ms, as of the reply).
+   * each with its worker time (ms, as of the reply); `skip` carries the reason the user gave for skipping a step.
    */
-  steps: Array<{ text: string; status: "done" | "current" | "open"; active?: boolean; workedMs?: number; activeAgentCount?: number; agents?: StepAgentInfo[] }>;
+  steps: Array<{ text: string; status: "done" | "current" | "open" | "skipped"; skip?: { reason: string; at: string }; active?: boolean; workedMs?: number; activeAgentCount?: number; agents?: StepAgentInfo[] }>;
   /** How long the task's agents have worked on it, idle time left out (ms, as of the reply); `running` while they work. */
   work?: WorkClock;
   amendments: string[];
@@ -520,6 +522,7 @@ export interface Api {
   "tasks.open": { request: { taskId: string }; result: { sessionId?: string; key?: string; notice?: string } };
   "tasks.resume": { request: { taskId: string }; result: { notice: string; key?: string } };
   "tasks.accept": { request: { taskId: string }; result: { notice: string } };
+  "tasks.skipStep": { request: { taskId: string; step: number; text: string; reason: string }; result: { notice: string } };
   "tasks.forceClose": { request: { taskId: string; title: string }; result: { notice: string } };
   "tasks.resolveApproval": { request: { taskId: string; approvalId: string; decision: "approved" | "rejected"; note?: string }; result: { notice: string } };
   "tasks.deliveryReview": { request: { taskId: string }; result: { delivery: Delivery } };
