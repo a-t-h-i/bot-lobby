@@ -1,6 +1,6 @@
 {
-  "hash": "6c16a17ab345244ea4c368f5ecb0de97c2ca0449989969857d033aea071c3e89",
-  "builtAt": "2026-10-17T19:43:48.867Z",
+  "hash": "8e25f84b2ac449e12782f84f1e0cb83314f7bc1c0454a6b2154a7d6ca3f19034",
+  "builtAt": "2026-10-17T20:57:48.092Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -32,7 +32,7 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "72bf6332ada55e810001249c8fbdd869392e88f542990d0eccd862e9b62f9492"
+      "sha256": "07f61d6c64e96869ab001f815e1511a39b55df0efa0ab2a07711cd59710bc07a"
     },
     {
       "path": "webui/src/app/Header.tsx",
@@ -60,7 +60,7 @@
     },
     {
       "path": "webui/src/app/Sidebar.tsx",
-      "sha256": "084dbf50c0ff06a990d6c87d4324aef5cfb2c9410fd2eba470da2938e066a1a6"
+      "sha256": "23af9a988b070ea98a726ca0b7f1168b9935bee1c5ad65966ca740e4fe1a0dc4"
     },
     {
       "path": "webui/src/app/SignIn.tsx",
@@ -104,7 +104,7 @@
     },
     {
       "path": "webui/src/app/composer/ComposerSurface.tsx",
-      "sha256": "ed1aa7f9c9c4766b47c95494fe9868ab278ad5f82773640c0ab8e511e7e6aae7"
+      "sha256": "c249e3cda6263bccc82d042e5883994c5330a687b0d95ca62a7c01853f196b14"
     },
     {
       "path": "webui/src/app/hooks.ts",
@@ -276,7 +276,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "a0abbddd16374548bc451d8fcced33d2957b53c1559753239f759c8f11ab9342"
+      "sha256": "31f833b3bc0156e1ccc7afe17702bffdcf5381737a7e2fb45ddcf4b655163ab8"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -560,7 +560,7 @@
     },
     {
       "path": "webui/src/tabs/settings/SettingsForm.tsx",
-      "sha256": "e573a1861296b5c26fab647c5a339ede16f11fa481568e88994f200ddbb6c068"
+      "sha256": "90234ff81fbf42019332e7f379b6f76fe42e27c5600f08c5512ca873a50b5705"
     },
     {
       "path": "webui/src/tabs/settings/SettingsTab.tsx",

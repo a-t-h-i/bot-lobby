@@ -3,7 +3,7 @@
  * The one text box for everything, built from the coding harness's own
  * composer (ComposerSurface, ComposerControl, ComposerPrimaryActions, copied
  * into ./composer): a glass box with the attachments and the text on top and a
- * footer row under them, who the message goes to and the Markdown preview on
+ * footer row under them, who the message goes to on
  * its left, attach, stop and a round send button on its right. The context
  * strip tucked under the box carries the project (its explorer opens from
  * there) and the key hints. It grows with what you type up to a cap, takes images, PDFs and
@@ -14,7 +14,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type RefObject } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { Eye, FileText, Paperclip, X } from "lucide-react"
+import { FileText, Paperclip, X } from "lucide-react"
 import { Select as SelectPrimitive } from "radix-ui"
 import { Keys, KeyHint } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
@@ -29,7 +29,6 @@ import { useAnyOverlay } from "@/lib/overlay"
 import { focusTab } from "@/prompts/nav"
 import { toast } from "@/lib/toast"
 import { MAX_ATTACHMENTS, sizeLabel, uploadFile } from "@/lib/uploads"
-import { Markdown } from "@/ui/Markdown"
 import { continueList, link, wrap, type Edit } from "./markdownEdit"
 import { cn } from "@/lib/utils"
 import { projectUrl } from "@/lib/project"
@@ -41,7 +40,7 @@ import { KnowledgePaneToggle } from "./KnowledgePaneToggle"
 import { ProjectSwitcher, type Projects } from "./ProjectSwitcher"
 import { taskRoute } from "./taskRoute"
 import { ComposerSurface } from "./composer/ComposerSurface"
-import { ComposerControl, ComposerControlChevron, ComposerControlIcon, ComposerControlSeparator, composerControlClassName } from "./composer/ComposerControl"
+import { ComposerControl, ComposerControlChevron, composerControlClassName } from "./composer/ComposerControl"
 import { ComposerSendButton, ComposerStopButton } from "./composer/ComposerPrimaryActions"
 
 type TargetId = "oracle" | "knowledge" | "panel" | "quickfix" | "comment" | "task"
@@ -202,7 +201,6 @@ function useShrinkOnScroll(dock: RefObject<HTMLDivElement | null>, active: boole
 export function Composer({ route, keys, projects, onHelp }: { route: Route; keys: Record<string, string>; projects: Projects; onHelp: () => void }) {
   const [text, setText] = useState("")
   const [files, setFiles] = useState<Pending[]>([])
-  const [preview, setPreview] = useState(false)
   const [sending, setSending] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [chosen, setChosen] = useState<TargetId>()
@@ -355,11 +353,6 @@ export function Composer({ route, keys, projects, onHelp }: { route: Route; keys
       edit(key === "k" ? link(value, from, to) : wrap(value, from, to, key === "b" ? "**" : key === "i" ? "_" : "`"))
       return
     }
-    if (event.altKey && !event.ctrlKey && !event.metaKey && key === "p") {
-      event.preventDefault()
-      setPreview((value) => !value)
-      return
-    }
     if (event.key === "Enter" && event.shiftKey && !event.nativeEvent.isComposing && box.selectionStart === box.selectionEnd) {
       // Shift+Enter on a list line carries the list on.
       const next = continueList(box.value, box.selectionStart)
@@ -509,12 +502,6 @@ export function Composer({ route, keys, projects, onHelp }: { route: Route; keys
                     ) : null}
                   </AnimatePresence>
 
-                  {preview ? (
-                    <div aria-label="Markdown preview" role="region" className="mb-3 max-h-48 overflow-y-auto rounded-lg bg-muted/60 px-3 py-2">
-                      {text.trim() ? <Markdown text={text} /> : <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>}
-                    </div>
-                  ) : null}
-
                   <div className="relative flow-root font-sans text-sm max-sm:pointer-coarse:text-base">
                     <textarea
                       ref={field}
@@ -544,25 +531,6 @@ export function Composer({ route, keys, projects, onHelp }: { route: Route; keys
                     className="composer-controls relative -m-1 -ms-3.5 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-1 ps-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                   >
                     {knowledge ? <KnowledgePaneToggle rest={route.kind === "tab" ? route.rest : []} /> : targetControl}
-                    <ComposerControlSeparator />
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <ComposerControl
-                          aria-label="Preview the Markdown"
-                          aria-pressed={preview}
-                          aria-keyshortcuts="Alt+P"
-                          aria-describedby="focused-action-help"
-                          data-compact
-                          onClick={() => setPreview((value) => !value)}
-                        >
-                          <ComposerControlIcon icon={Eye} />
-                          <span className="sr-only sm:not-sr-only">Preview</span>
-                        </ComposerControl>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">
-                        Preview <Keys chord="Alt+P" />
-                      </TooltipContent>
-                    </Tooltip>
                   </div>
 
                   <div data-chat-composer-actions="right" className="flex shrink-0 flex-nowrap items-center justify-end gap-2">

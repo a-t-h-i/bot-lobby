@@ -278,7 +278,7 @@ test("the composer takes an image, shows it, and clears it once sent", async ({ 
   await expect(page.getByLabel("Message the oracle")).toHaveValue("");
 });
 
-test("the box grows with what is typed, carries lists on, formats with Ctrl+B and previews the Markdown", async ({ page, server }) => {
+test("the box grows with what is typed, carries lists on, formats with Ctrl+B and offers no Markdown preview", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   const box = page.getByLabel("Message the oracle");
@@ -296,8 +296,10 @@ test("the box grows with what is typed, carries lists on, formats with Ctrl+B an
   await box.press("Control+a");
   await box.press("Control+b");
   await expect(box).toHaveValue("**make this bold**");
-  await page.getByRole("button", { name: "Preview the Markdown" }).click();
-  await expect(page.getByRole("region", { name: "Markdown preview" }).locator("strong"), "the preview renders it").toHaveText("make this bold");
+  await expect(page.getByRole("button", { name: "Preview the Markdown" }), "the composer has no Preview button").toHaveCount(0);
+  await box.press("Alt+p");
+  await expect(page.getByRole("region", { name: "Markdown preview" }), "nor a preview pane").toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Attach images, PDFs or files" }), "attaching stays").toBeVisible();
 });
 
 test("the dock grows and shrinks with the text on its own, over the page, and the page makes room to scroll clear of it", async ({ page, server }) => {
