@@ -27,7 +27,8 @@ import {
   sessionCookie,
   sessionValue,
 } from "./auth.ts";
-import { callName, HttpError, routeApiCall, sendError, sendJson } from "./api/index.ts";
+import { applyBaseHeaders, callName, HttpError, routeApiCall, sendError, sendJson } from "./api/index.ts";
+import { terminals } from "./terminal.ts";
 import { distDir, serveStatic } from "./static.ts";
 import { EventHub } from "./events.ts";
 import { servePreview } from "./files.ts";
@@ -292,6 +293,19 @@ async function route(req: IncomingMessage, res: ServerResponse, state: RouteStat
     openStream(req, res, url, state);
     return;
   }
+  if (url.pathname === "/api/terminal.stream") {
+    if (req.method !== "GET") {
+      sendError(res, "unsupported", "only GET", 405);
+      return;
+    }
+    if (!isSignedIn(req.headers.cookie, state.session)) {
+      sendError(res, "unauthorized", "open the link Pi printed", 401);
+      return;
+    }
+    applyBaseHeaders(res);
+    if (!terminals.stream(req, res, url.searchParams.get("id") ?? "")) sendError(res, "not_found", "no such terminal", 404);
+    return;
+  }
   await routeApi(req, res, url, state);
 }
 
@@ -388,6 +402,7 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
       return `http://127.0.0.1:${state.port}/#token=${state.link}`;
     },
     close: async () => {
+      terminals.closeAll();
       state.opener!.close();
       state.registry!.close();
       hub.close();
