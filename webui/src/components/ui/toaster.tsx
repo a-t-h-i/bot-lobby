@@ -33,7 +33,7 @@ export function Toaster() {
       aria-live="polite"
       aria-atomic="true"
       className="pointer-events-none fixed z-40 flex justify-center px-4"
-      style={{ bottom: "calc(var(--composer-h, 0px) + 0.25rem)", left: "var(--composer-x, 0px)", width: "var(--composer-w, 100%)" }}
+      style={{ bottom: "calc(var(--composer-h, 0px) + var(--terminal-h, 0px) + 0.25rem)", left: "var(--composer-x, 0px)", width: "var(--composer-w, 100%)" }}
     >
       <AnimatePresence mode="wait">
         {showing ? (

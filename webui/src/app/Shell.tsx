@@ -21,6 +21,8 @@ import { Composer, composerVisible } from "./Composer.tsx"
 import { Header } from "./Header.tsx"
 import { ProjectSwitcher, useProjects } from "./ProjectSwitcher.tsx"
 import { Sidebar, SidebarMenuButton, SidebarOpenButton, SidebarSheet, SIDEBAR_KEY } from "./Sidebar.tsx"
+import { TerminalDrawer, TerminalToggle } from "./TerminalDrawer.tsx"
+import { toggleTerminal } from "./terminalStore.ts"
 import { SignIn } from "./SignIn.tsx"
 import { ErrorState, LoadingState, ReconnectingState } from "./States.tsx"
 import { TabStrip } from "./TabStrip.tsx"
@@ -45,6 +47,7 @@ function handleAction(action: string, route: Route, toggleHelp: () => void, cycl
   else if (action === "settings") go("#/settings")
   else if (action === "thinking") toggleCollapsed("lobby.thinking")
   else if (action === "sidebar") toggleSidebar()
+  else if (action === "terminal") toggleTerminal()
   else if (action === "activity") {
     // Activity is the steps between the Lobby's messages: there the key opens or folds them all, elsewhere it takes you there first.
     if (route.kind === "tab" && route.tab === "lobby") toggleCollapsed(ACTIVITY_OPEN)
@@ -57,6 +60,10 @@ function handleAction(action: string, route: Route, toggleHelp: () => void, cycl
 /** The app's switches in the bar, before there is a sidebar to hold them. */
 const BAR_TOOL =
   "toolbar-button inline-flex size-8 shrink-0 items-center justify-center rounded-lg border text-foreground transition-[background-color,border-color,scale] duration-150 ease-snap outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.97] motion-reduce:active:scale-100"
+
+/** The bar's Terminal button: quiet like the sidebar's icons, lit while the drawer is open. */
+const TERMINAL_TOOL =
+  "inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,scale] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.97] aria-pressed:bg-accent aria-pressed:text-foreground motion-reduce:active:scale-100"
 
 /** How long a stream that was live may be reconnecting before the page says pi is gone. */
 const OUTAGE_MS = 2500
@@ -203,7 +210,7 @@ export function Shell() {
         tabs={phone ? null : tabStrip}
         extra={putAway && prompts.length > 0 ? <QuestionsPill count={prompts.length} onOpen={() => setPutAway(false)} /> : null}
         // With no sidebar yet (signing in, loading) light or dark and the sounds wait in the bar.
-        tools={signedIn ? null : (
+        tools={signedIn ? (phone ? null : <TerminalToggle hint={keyLabels.terminal} className={TERMINAL_TOOL} />) : (
           <>
             <ThemeToggle className={BAR_TOOL} side="bottom" />
             <SoundToggle className={BAR_TOOL} side="bottom" />
@@ -226,6 +233,8 @@ export function Shell() {
       <div className="relative flex min-w-0 flex-1 flex-col">
       {header}
       <Banner connection={connection} onRetry={retry} />
+      {/* The page and the composer floating over its foot; the terminal drawer, when open, sits under both. */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
       <main
         id="main"
         tabIndex={-1}
@@ -252,6 +261,8 @@ export function Shell() {
       {/* Off the composer's tabs it is hidden, so a phone's tab bar sits in the flow below the page instead. */}
       {phone && !dockShown ? <div className="shrink-0 px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">{tabStrip}</div> : null}
       <Composer route={route} keys={keyLabels} projects={projects} onHelp={toggleHelp} dockNav={phone && dockShown ? tabStrip : null} />
+      </div>
+      {phone ? null : <TerminalDrawer toggleKey={keyLabels.terminal ?? "Ctrl+`"} />}
       </div>
       {phone ? <SidebarSheet {...sidebarProps} open={sheet} onOpenChange={setSheet} /> : null}
       <Thinking status={status} lobby={lobbyRecord.data} />
