@@ -2,8 +2,10 @@
  * The Thinking orb, on every page: a glowing sphere in the colour of the
  * agent thinking, with that agent's name on a tag beside it. While agents are
  * at work with no thought to show (a run, the oracle answering, a session in
- * the background) it breathes with the brain on it and names who is busy. Pointed at (or focused), it
- * swells with a ripple and shows the agent's icon. It can be dragged anywhere
+ * the background) it names who is busy. While anyone thinks or works it shows
+ * that agent's icon (the brain when several are busy) and pulses: it breathes
+ * and a flat ring rolls out from it. Pointed at (or focused), it swells with
+ * a ripple. It can be dragged anywhere
  * on the Lobby's card, or nudged with the arrow keys while focused (Shift for
  * bigger steps), and stays where it was put. A press that does not move opens
  * Thinking.
@@ -157,6 +159,9 @@ export const ThinkingOrb = forwardRef<HTMLButtonElement, OrbProps>(function Thin
   // Busy with nothing to show of its thoughts: the brain and the breathing say work is going on.
   const working = !spotlight && busy.length > 0
   const tag = spotlight ? sourceLabel(spotlight) : working ? busyLabel(busy) : undefined
+  // The icon on the orb: the agent thinking, else the one agent at work, else the brain.
+  const lone = busy.length === 1 && !busy[0]!.includes("background") ? busy[0] : undefined
+  const face = spotlight ?? (working ? lone : undefined)
   const told = spotlight ? `${thinking.map(sourceLabel).join(", ")} thinking. ` : working ? `${busy.join(", ")} at work. ` : ""
   // Near the card's left edge the name goes on the orb's right.
   const flip = point && area ? point.x - area.left < 140 : false
@@ -223,7 +228,7 @@ export const ThinkingOrb = forwardRef<HTMLButtonElement, OrbProps>(function Thin
           </AnimatePresence>
           <span aria-hidden="true" className="orb orb-float">
             <span className="orb-icon">
-              <AgentIcon source={spotlight} strokeWidth={2.25} className="size-3.5" />
+              <AgentIcon source={face} strokeWidth={2.25} className="size-3.5" />
             </span>
           </span>
         </button>

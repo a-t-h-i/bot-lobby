@@ -1010,17 +1010,22 @@ test("the empty Plan page shows the panel as seats", async ({ page, server }) =>
   await expect(main.getByRole("heading", { name: "Plan", exact: true }), "not a bare generic title").toHaveCount(0);
 });
 
-test("pointed at, the orb swells and shows the thinking agent's icon", async ({ page, server }) => {
+test("while an agent thinks the orb shows its icon and pulses; pointed at, it swells", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const orb = page.getByRole("button", { name: "Open Thinking" });
+  await expect(orb).toHaveAttribute("data-thinking", "");
   const icon = orb.locator(".orb-icon");
-  await expect.poll(() => icon.evaluate((el: any) => Number(getComputedStyle(el).opacity)), { message: "at rest the icon is hidden" }).toBeLessThan(0.1);
+  await expect.poll(() => icon.evaluate((el: any) => Number(getComputedStyle(el).opacity)), { message: "the icon shows without pointing at it" }).toBeGreaterThan(0.9);
+  const shown = await orb.evaluate((el: any) => el.querySelector("[data-agent-icon]")?.getAttribute("data-agent-icon"));
+  expect(["DEV", "QA"], "the icon is a thinking agent's").toContain(shown);
+  const float = orb.locator(".orb-float");
+  expect(await float.evaluate((el: any) => getComputedStyle(el).animationName), "it breathes").toContain("orb-breathe");
+  expect(await float.evaluate((el: any) => getComputedStyle(el, "::after").animationName), "and a ring rolls out").toContain("orb-pulse-ring");
+  const flat = await orb.locator(".orb").evaluate((el: any) => ({ image: getComputedStyle(el).backgroundImage, filter: getComputedStyle(el).filter }));
+  expect(flat, "still flat: no gradient or glow").toEqual({ image: "none", filter: "none" });
   await orb.hover();
-  await expect.poll(() => icon.evaluate((el: any) => Number(getComputedStyle(el).opacity)), { message: "pointed at, it shows" }).toBeGreaterThan(0.9);
-  await expect.poll(() => orb.locator(".orb-float").evaluate((el: any) => getComputedStyle(el).scale), { message: "and the orb swells" }).not.toBe("none");
-  const shown = await orb.evaluate((el: any) => ({ agent: el.querySelector("[data-agent-icon]")?.getAttribute("data-agent-icon"), name: el.querySelector(".orb-label")?.textContent?.trim() }));
-  expect(["DEV", "QA"], "the icon is a thinking agent's").toContain(shown.agent);
+  await expect.poll(() => float.evaluate((el: any) => getComputedStyle(el).scale), { message: "pointed at, the orb swells" }).not.toBe("none");
 });
 
 test("the orb can be dragged anywhere on the Lobby, stays there, and moves with the arrow keys", async ({ page, server }) => {
@@ -1152,7 +1157,7 @@ test("the oracle writes plain prose across the column; yours sits in a filled bu
   await expect.poll(() => time.evaluate((el: any) => getComputedStyle(el).opacity)).toBe("1");
 });
 
-test("the tray over the box names the project and the target, opens the project list and leads to the models", async ({ page, server }) => {
+test("the tray over the box names the project and the target, opens the project list, and has no settings link", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const tray = page.getByRole("group", { name: "Message context" });
@@ -1167,8 +1172,7 @@ test("the tray over the box names the project and the target, opens the project 
   expect(behind.width, "a little narrower than the box").toBeLessThan(card.width);
   await page.evaluate(() => { window.location.hash = "#/plan"; });
   await expect(tray.getByRole("radiogroup", { name: "Send to" }), "a tab with more than one target picks it in the tray").toBeVisible();
-  await tray.getByRole("link", { name: "Models and effort" }).click();
-  await expect(page).toHaveURL(/#\/settings$/);
+  await expect(tray.getByRole("link", { name: "Models and effort" }), "settings live in the sidebar, not the composer").toHaveCount(0);
 });
 
 test("the orb is on every page, and opens Thinking from any of them", async ({ page, server }) => {
