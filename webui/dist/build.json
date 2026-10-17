@@ -1,6 +1,6 @@
 {
-  "hash": "ff76ae1cad8d26dd373850beff0bb8ae1688e1a3763c057820412e50e6728b63",
-  "builtAt": "2026-10-17T14:03:43.367Z",
+  "hash": "0a229ca96af22562becf72a96518929f8699b5790869c028c7e22c9180175943",
+  "builtAt": "2026-10-17T15:40:09.797Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -32,7 +32,7 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "bc1857ac4cbea8d7ad71587372ed8a687e68f98e4779acea9c525222963cc12a"
+      "sha256": "a6958dac4131b0494ff3c72a97d042041fc2554e6b1b5c3db049b427a52e4175"
     },
     {
       "path": "webui/src/app/Header.tsx",
@@ -284,7 +284,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "6c6e697b4ec0120917bd40695c0eb001ce5c335a0f7e46686f83c1c275d69c41"
+      "sha256": "d4c83ffec1ecff3f1058069fd8ff24d0f7fc34817190762df27a1660cf3cd890"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -484,7 +484,7 @@
     },
     {
       "path": "webui/src/tabs/lobby/Orb.tsx",
-      "sha256": "8cc3c7b2a99f26d9da12bc5656f826aae4fa460196afc7eb7663ecda1211fcb7"
+      "sha256": "3bffab08e3ffb2688db765ffcfc443601940441ab773308c8cc3b0285b894ce4"
     },
     {
       "path": "webui/src/tabs/lobby/Thoughts.tsx",

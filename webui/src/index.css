@@ -733,13 +733,31 @@
   0% { opacity: 0.9; scale: 1; }
   100% { opacity: 0; scale: 2; }
 }
-/* Thinking, or at work with no thought to show: the flat orb breathes a little in size, nothing more. */
-[data-thinking] > .orb-float, [data-busy] > .orb-float { animation: orb-breathe 2.4s ease-in-out infinite; }
-.thinking-bubble[data-busy] .orb-icon { opacity: 1; scale: 1; rotate: 0deg; animation: brain-pulse 2.4s ease-in-out infinite; }
-@keyframes brain-pulse { 50% { scale: 1.12; } }
+/*
+ * Thinking, or at work with no thought to show: the agent's icon stays on the
+ * orb, the orb breathes, and a flat ring in its colour rolls out and fades,
+ * once a breath. No glow or sheen: the pulse is size and a hairline only.
+ */
+[data-thinking] > .orb-float, [data-busy] > .orb-float { animation: orb-breathe 1.6s ease-in-out infinite; }
+.thinking-bubble:is([data-thinking], [data-busy]) .orb-icon { opacity: 1; scale: 1; rotate: 0deg; animation: brain-pulse 1.6s ease-in-out infinite; }
+.orb-float::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 2px solid color-mix(in oklab, var(--orb) 75%, transparent);
+  opacity: 0;
+  pointer-events: none;
+}
+[data-thinking] > .orb-float::after, [data-busy] > .orb-float::after { animation: orb-pulse-ring 1.6s cubic-bezier(0.22, 0.61, 0.36, 1) infinite; }
+@keyframes brain-pulse { 50% { scale: 1.1; } }
+@keyframes orb-pulse-ring {
+  0% { opacity: 0.85; scale: 1; }
+  70%, 100% { opacity: 0; scale: 1.75; }
+}
 @keyframes orb-breathe {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.06); }
+  50% { transform: scale(1.12); }
 }
 
 /*
@@ -943,7 +961,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .thinking-bubble, .thinking-bubble:hover { transform: none !important; transition: none !important; }
-  [data-thinking] > .orb-float, [data-thinking] > .orb-float::after, [data-busy] > .orb-float, [data-busy] > .orb-float::after, .thinking-bubble[data-busy] .orb-icon, .thought-aura[data-working], .thought-pane-live, .thought-pane-live::after, .thought-ellipsis::after, .thought-steps > li[data-current]::before { animation: none !important; }
+  [data-thinking] > .orb-float, [data-thinking] > .orb-float::after, [data-busy] > .orb-float, [data-busy] > .orb-float::after, .thinking-bubble:is([data-thinking], [data-busy]) .orb-icon, .thought-aura[data-working], .thought-pane-live, .thought-pane-live::after, .thought-ellipsis::after, .thought-steps > li[data-current]::before { animation: none !important; }
   .orb, .orb-label, .thought-pane, .orb-icon { transition: none; }
   .thinking-bubble:is(:hover, :focus-visible, [data-dragging]) > .orb-float { scale: 1; }
   .thinking-bubble > .orb-float::before { animation: none !important; }
