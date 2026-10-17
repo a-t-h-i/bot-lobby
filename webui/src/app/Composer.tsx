@@ -13,7 +13,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { ArrowUp, Eye, FileText, MessageSquare, Plus, Settings2, Square, X } from "lucide-react"
+import { ArrowUp, Eye, FileText, MessageSquare, Plus, Square, X } from "lucide-react"
 import { Keys, KeyHint } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -464,14 +464,6 @@ export function Composer({ route, keys, projects, onHelp, dockNav }: { route: Ro
           <span className="hidden @[8rem]:inline">shortcuts</span>
         </button>
       </div>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <a href="#/settings" aria-label="Models and effort" className={cn(CHIP, "size-7 shrink-0 justify-center px-0 text-muted-foreground hover:text-foreground")}>
-            <Settings2 aria-hidden="true" className="size-4" />
-          </a>
-        </TooltipTrigger>
-        <TooltipContent>Each agent's model and effort</TooltipContent>
-      </Tooltip>
     </div>
   ) : null
 
