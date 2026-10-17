@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 function Loading() {
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-5 pt-5 pb-dock md:px-8 md:pt-8" role="status" aria-label={PAGE.loading}>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-8 pt-8 pb-dock" role="status" aria-label={PAGE.loading}>
       {[0, 1, 2, 3].map((card) => (
         <Skeleton key={card} shape="card" className="h-48" />
       ))}

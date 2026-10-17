@@ -23,8 +23,8 @@ export function InlineEditor({ text, disabled = false, onSave, onCancel }: Props
     catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); setPending(false) }
   }
   return <div className="flex w-full flex-col gap-2" onKeyDown={(event) => editorKey(event, () => void save(), () => { if (!pending) onCancel() })}>
-    <label className="text-sm">Edit message<Textarea ref={field} value={draft} onChange={(event) => setDraft(event.target.value)} disabled={pending} className="mt-2 max-h-[40vh] min-h-24 max-md:min-h-28" /></label>
+    <label className="text-sm">Edit message<Textarea ref={field} value={draft} onChange={(event) => setDraft(event.target.value)} disabled={pending} className="mt-2 max-h-[40vh] min-h-24" /></label>
     {error ? <p role="alert" className="text-sm text-destructive">Could not save. {error}</p> : null}
-    <div className="flex flex-wrap gap-2"><Button size="sm" className="max-md:min-h-11" onClick={() => void save()} disabled={disabled || pending || !draft.trim()}>{pending ? "Saving…" : "Save"}</Button><Button size="sm" variant="ghost" className="max-md:min-h-11" disabled={pending} onClick={onCancel}>Cancel</Button></div>
+    <div className="flex flex-wrap gap-2"><Button size="sm" onClick={() => void save()} disabled={disabled || pending || !draft.trim()}>{pending ? "Saving…" : "Save"}</Button><Button size="sm" variant="ghost" disabled={pending} onClick={onCancel}>Cancel</Button></div>
   </div>
 }

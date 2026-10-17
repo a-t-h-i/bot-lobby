@@ -290,6 +290,7 @@ test("the box grows with what is typed, carries lists on, formats with Ctrl+B an
   await box.press("Shift+Enter");
   await box.press("Shift+Enter");
   await expect(box, "an empty marker ends the list").toHaveValue("- one\n- two\n");
+  await box.fill("- one\n- two\n- three\n- four\n- five\n- six");
   expect((await box.boundingBox())!.height, "it grew with the lines").toBeGreaterThan(before + 20);
   await box.fill("make this bold");
   await box.press("Control+a");
@@ -303,7 +304,7 @@ test("the dock grows and shrinks with the text on its own, over the page, and th
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   const box = page.locator("#composer-text");
-  const card = box.locator("xpath=ancestor::div[contains(@class,'group/composer')]");
+  const card = box.locator("xpath=ancestor::div[contains(concat(' ', @class, ' '),' group/composer ')]");
   const chat = page.getByRole("log", { name: "Conversation" });
   const pad = () => chat.evaluate((el: any) => parseFloat(getComputedStyle(el).paddingBottom));
   const before = (await box.boundingBox())!.height;
@@ -324,7 +325,7 @@ test("the dock grows and shrinks with the text on its own, over the page, and th
   await expect(page.getByRole("button", { name: /Open the box wider and taller|Make the box smaller/ }), "there is no expand or collapse toggle").toHaveCount(0);
 });
 
-test("on Settings the model selectors stack inside the agent card, three cards to a row on a desktop and one on a phone", async ({ page, server }) => {
+test("on Settings the model selectors stack inside the agent card, three cards to a row", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.evaluate(() => {
@@ -343,11 +344,6 @@ test("on Settings the model selectors stack inside the agent card, three cards t
   expect(Math.abs(backendBox!.y - cardBox.y), "three cards share the first row").toBeLessThanOrEqual(2);
   expect(designerBox!.x, "side by side").toBeGreaterThan(cardBox.x + cardBox.width - 2);
   expect(qaBox!.y, "the fourth starts the next row").toBeGreaterThan(cardBox.y + 20);
-  await page.setViewportSize({ width: 390, height: 844 });
-  const designerAtPhone = (await card("Designer").boundingBox())!;
-  const masterAtPhone = (await masterCard.boundingBox())!;
-  expect(Math.abs(designerAtPhone.x - masterAtPhone.x), "one card per row on a phone").toBeLessThanOrEqual(2);
-  expect(designerAtPhone.y, "the next card is below, not beside").toBeGreaterThan(masterAtPhone.y + 20);
 });
 
 test("Plan, Quick fix and an open task each give the composer its own target", async ({ page, server }) => {
@@ -362,7 +358,7 @@ test("Plan, Quick fix and an open task each give the composer its own target", a
       window.location.hash = to;
     }, hash);
     await expect(page.getByLabel(label), hash).toBeVisible();
-    await expect(page.getByRole("radiogroup", { name: "Send to" }).or(page.getByText(/^To the /)), `${hash} says who it goes to`).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Send to" }).or(page.getByText(/^To the /)), `${hash} says who it goes to`).toBeVisible();
   }
 });
 
@@ -413,7 +409,7 @@ test("keyboard hints: the box prints its keys, the header button opens the key l
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const hints = page.getByRole("group", { name: "Message context" });
-  await expect(hints.getByText("new line"), "Shift+Enter is hinted in the tray over the box").toBeVisible();
+  await expect(hints.getByText("new line"), "Shift+Enter is hinted in the strip under the box").toBeVisible();
   await expect(hints.getByText("shortcuts"), "and the way to the full list").toBeVisible();
   await page.getByRole("tab", { name: /Tasks/ }).hover();
   await expect(page.locator('[data-slot="tooltip-content"]').first(), "a tab's tooltip shows its Alt+N").toContainText(/Alt\s*(plus)?\s*2/);
@@ -809,20 +805,6 @@ test("the project switcher is a list you open with P, not a native select", asyn
   await expect(page.getByRole("combobox", { name: "Project", exact: true }), "and gives focus back").toBeFocused();
 });
 
-test("on a phone the Lobby is one conversation, its steps opening in place", async ({ page, server }) => {
-  await openScenario(page, server, "full");
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByRole("radiogroup", { name: "Pane" }), "no pane switcher").toHaveCount(0);
-  const chat = page.getByRole("log", { name: "Conversation" });
-  await expect(chat).toBeVisible();
-  expect((await chat.boundingBox())!.height, "the conversation is not squeezed into a sliver").toBeGreaterThan(300);
-  await chat.getByRole("button", { name: /10 steps/ }).click();
-  await expect(chat.getByRole("list", { name: "Activity" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Open Thinking" }), "Thinking is a bubble, not a pane").toBeVisible();
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow, "no sideways scroll").toBeLessThanOrEqual(0);
-});
-
 test("the message box floats over the page, and every page scrolls clear of it", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 640 });
@@ -1010,17 +992,22 @@ test("the empty Plan page shows the panel as seats", async ({ page, server }) =>
   await expect(main.getByRole("heading", { name: "Plan", exact: true }), "not a bare generic title").toHaveCount(0);
 });
 
-test("pointed at, the orb swells and shows the thinking agent's icon", async ({ page, server }) => {
+test("while an agent thinks the orb shows its icon and pulses; pointed at, it swells", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const orb = page.getByRole("button", { name: "Open Thinking" });
+  await expect(orb).toHaveAttribute("data-thinking", "");
   const icon = orb.locator(".orb-icon");
-  await expect.poll(() => icon.evaluate((el: any) => Number(getComputedStyle(el).opacity)), { message: "at rest the icon is hidden" }).toBeLessThan(0.1);
+  await expect.poll(() => icon.evaluate((el: any) => Number(getComputedStyle(el).opacity)), { message: "the icon shows without pointing at it" }).toBeGreaterThan(0.9);
+  const shown = await orb.evaluate((el: any) => el.querySelector("[data-agent-icon]")?.getAttribute("data-agent-icon"));
+  expect(["DEV", "QA"], "the icon is a thinking agent's").toContain(shown);
+  const float = orb.locator(".orb-float");
+  expect(await float.evaluate((el: any) => getComputedStyle(el).animationName), "it breathes").toContain("orb-breathe");
+  expect(await float.evaluate((el: any) => getComputedStyle(el, "::after").animationName), "and a ring rolls out").toContain("orb-pulse-ring");
+  const flat = await orb.locator(".orb").evaluate((el: any) => ({ image: getComputedStyle(el).backgroundImage, filter: getComputedStyle(el).filter }));
+  expect(flat, "still flat: no gradient or glow").toEqual({ image: "none", filter: "none" });
   await orb.hover();
-  await expect.poll(() => icon.evaluate((el: any) => Number(getComputedStyle(el).opacity)), { message: "pointed at, it shows" }).toBeGreaterThan(0.9);
-  await expect.poll(() => orb.locator(".orb-float").evaluate((el: any) => getComputedStyle(el).scale), { message: "and the orb swells" }).not.toBe("none");
-  const shown = await orb.evaluate((el: any) => ({ agent: el.querySelector("[data-agent-icon]")?.getAttribute("data-agent-icon"), name: el.querySelector(".orb-label")?.textContent?.trim() }));
-  expect(["DEV", "QA"], "the icon is a thinking agent's").toContain(shown.agent);
+  await expect.poll(() => float.evaluate((el: any) => getComputedStyle(el).scale), { message: "pointed at, the orb swells" }).not.toBe("none");
 });
 
 test("the orb can be dragged anywhere on the Lobby, stays there, and moves with the arrow keys", async ({ page, server }) => {
@@ -1152,23 +1139,29 @@ test("the oracle writes plain prose across the column; yours sits in a filled bu
   await expect.poll(() => time.evaluate((el: any) => getComputedStyle(el).opacity)).toBe("1");
 });
 
-test("the tray over the box names the project and the target, opens the project list and leads to the models", async ({ page, server }) => {
+test("the strip under the box names the project and opens the project list; the box's footer picks the target; there is no settings link", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const tray = page.getByRole("group", { name: "Message context" });
-  await expect(tray.getByText("To the oracle"), "who it goes to").toBeVisible();
+  const box = page.locator(".group\\/composer");
+  await expect(box.getByText("To the oracle"), "who it goes to, in the box's footer").toBeVisible();
   await expect(tray.getByRole("combobox", { name: "Project", exact: true }), "the project's chip names it").toContainText("bot-lobby");
   await tray.getByRole("combobox", { name: "Project", exact: true }).click();
   await expect(page.getByRole("listbox", { name: "Projects" }), "the project chip opens the list of projects").toBeVisible();
   await page.keyboard.press("Escape");
-  const card = (await page.locator(".group\\/composer").boundingBox())!;
+  const card = (await box.boundingBox())!;
   const behind = (await tray.boundingBox())!;
-  expect(behind.y + behind.height, "the tray tucks under the top of the box").toBeGreaterThan(card.y);
+  expect(behind.y, "the strip tucks under the bottom of the box").toBeLessThan(card.y + card.height);
+  expect(behind.y + behind.height, "and shows below it").toBeGreaterThan(card.y + card.height + 10);
   expect(behind.width, "a little narrower than the box").toBeLessThan(card.width);
   await page.evaluate(() => { window.location.hash = "#/plan"; });
-  await expect(tray.getByRole("radiogroup", { name: "Send to" }), "a tab with more than one target picks it in the tray").toBeVisible();
-  await tray.getByRole("link", { name: "Models and effort" }).click();
-  await expect(page).toHaveURL(/#\/settings$/);
+  const picker = box.getByRole("combobox", { name: "Send to" });
+  await expect(picker, "a tab with more than one target picks it from a menu in the box's footer").toContainText("Panel");
+  await picker.click();
+  await page.getByRole("option", { name: "Oracle" }).click();
+  await expect(picker, "and the choice shows on it").toContainText("Oracle");
+  await expect(page.getByLabel("Message the oracle"), "the box now writes to the oracle").toBeVisible();
+  await expect(tray.getByRole("link", { name: "Models and effort" }), "settings live in the sidebar, not the composer").toHaveCount(0);
 });
 
 test("the orb is on every page, and opens Thinking from any of them", async ({ page, server }) => {

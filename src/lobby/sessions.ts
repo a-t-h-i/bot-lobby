@@ -197,6 +197,13 @@ export class BackgroundSession {
    * Stop the session: its process ends (its task keeps its state and can be
    * resumed or claimed later). One that does not end within `graceMs` is killed.
    */
+  /** Give the session a new name, here and in its pi (its saved session takes it too). */
+  rename(name: string): void {
+    this.name = name;
+    if (this.alive) this.write({ type: "set_session_name", name });
+    this.onChange();
+  }
+
   stop(graceMs = STOP_GRACE_MS): void {
     if (!this.alive) return;
     try {
@@ -337,6 +344,19 @@ export const launchPi = (args: string[], cwd: string, overrides: NodeJS.ProcessE
 
 /** Ended background sessions kept in the list (with their feeds); older ones are let go. */
 export const MAX_ENDED = 6;
+/** Archived sessions kept so an archive can be undone; older ones are let go. */
+export const MAX_ARCHIVED = 20;
+/** Longest session name the lobby sets. */
+export const MAX_SESSION_NAME = 120;
+
+/** A session name as the lobby keeps it: one line, spaces collapsed, not too long. */
+export function cleanSessionName(name: string): string {
+  const clean = name.replace(/\s+/g, " ").trim();
+  if (!clean) throw new Error("a session needs a name");
+  if (clean.length > MAX_SESSION_NAME) throw new Error(`keep the name under ${MAX_SESSION_NAME} characters`);
+  return clean;
+}
+
 
 /** Every background session this window started, oldest first (ended ones beyond the newest few let go). */
 export class SessionRegistry {
@@ -370,6 +390,21 @@ export class SessionRegistry {
 
   get(key: string): BackgroundSession | undefined {
     return this.sessions.find((session) => session.key === key);
+  }
+
+  /** Ended sessions put away from the list, newest last; one can come back while this pi runs. */
+  readonly archived: BackgroundSession[] = [];
+
+  /** Put an ended session away (true), or bring an archived one back (false); false when there was no such session. */
+  archive(key: string, archived = true): boolean {
+    const from = archived ? this.sessions : this.archived;
+    const index = from.findIndex((session) => session.key === key && !session.alive);
+    if (index < 0) return false;
+    const [session] = from.splice(index, 1);
+    (archived ? this.archived : this.sessions).push(session!);
+    if (this.archived.length > MAX_ARCHIVED) this.archived.splice(0, this.archived.length - MAX_ARCHIVED);
+    this.onChange();
+    return true;
   }
 
   /** The background session running a pi session id, if this window started it. */

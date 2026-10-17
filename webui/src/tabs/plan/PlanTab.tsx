@@ -53,7 +53,7 @@ function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) 
   const pane = useRef<HTMLDivElement>(null)
   return (
     <>
-      <div ref={pane} className="@container flex-1 overflow-y-auto px-5 pt-8 pb-dock max-md:px-4 max-md:pt-5 md:px-8 md:pt-10">
+      <div ref={pane} className="@container flex-1 overflow-y-auto px-8 pt-10 pb-dock">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
           <header className="flex flex-col gap-4 @3xl:flex-row @3xl:items-end @3xl:justify-between">
             <div className="flex items-start gap-4">
@@ -100,8 +100,8 @@ function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) 
           <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
             <ArrowDown aria-hidden="true" className="size-4 text-primary motion-safe:animate-bounce" />
             Start in the box below.
-            <KeyHint chord="/" className="max-md:hidden">write</KeyHint>
-            <KeyHint chord="Enter" className="max-md:hidden">send to the panel</KeyHint>
+            <KeyHint chord="/">write</KeyHint>
+            <KeyHint chord="Enter">send to the panel</KeyHint>
           </p>
         </div>
       </div>
@@ -132,7 +132,7 @@ function Session({ snap, reload }: { snap: PlannerSnapshot; reload: () => void }
   return (
     <>
       <PlanHeader snap={snap} onDone={reload} onViewPlan={() => setViewing(true)} />
-      <div ref={ref} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-5 pb-dock max-md:px-4">
+      <div ref={ref} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-5 pb-dock">
         <PlanPill snap={snap} onOpen={() => setViewing(true)} />
         <PanelConversation messages={snap.messages} busy={snap.busy} />
       </div>

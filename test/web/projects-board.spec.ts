@@ -13,14 +13,17 @@ async function mockFolders(page: Page) {
 }
 
 async function openFolders(page: Page) {
-  // The project is a chip over the composer, or on a phone the name in the bar.
+  // The project is a chip over the composer.
   await page.getByRole("combobox", { name: "Project", exact: true }).click();
   await page.getByRole("button", { name: "Open folder…" }).click();
   await expect(page.getByRole("dialog", { name: "Open project folder" })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Folder path" })).toHaveValue("/workspace");
+  const dialog = (await page.getByRole("dialog", { name: "Open project folder" }).boundingBox())!;
+  const foot = (await page.getByRole("button", { name: "Open this folder" }).locator("xpath=..").boundingBox())!;
+  expect(Math.abs(foot.x - dialog.x) + Math.abs(foot.x + foot.width - (dialog.x + dialog.width)), "the content fills the pop-up edge to edge").toBeLessThan(4);
 }
 
-for (const width of [1280, 320]) {
+for (const width of [1280, 768]) {
   test(`browse and open a project from the menu at ${width}px`, async ({ page, server }) => {
     await mockFolders(page);
     await openScenario(page, server, "full");
@@ -61,7 +64,7 @@ async function boardRows(page: Page) {
   await page.route("**/api/tasks.list", (route) => route.fulfill({ json: { ok: true, result: { rows } } }));
 }
 
-for (const width of [1280, 320]) {
+for (const width of [1280, 768]) {
   test(`task board groups tasks and excludes archived rows at ${width}px`, async ({ page, server }) => {
     await boardRows(page);
     await openScenario(page, server, "full");

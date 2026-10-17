@@ -3,14 +3,12 @@
  * right, on one row whenever they fit side by side; when they do not, the tabs
  * take a row of their own under the tools (the grid lives in `index.css`).
  * Settings, the key help, light or dark and the sounds live in the sidebar,
- * the project in the composer; on a phone the bar starts with the button that
- * opens the sidebar and the project.
+ * the project in the composer.
  */
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { ConnectionState } from "@/lib/events"
 import { ProjectNotice, type Projects } from "./ProjectSwitcher.tsx"
-import { useMediaQuery } from "./hooks.ts"
 
 /** What the link to the server is doing: a green dot when live, words when it is not. */
 function Connection({ state }: { state: ConnectionState }) {
@@ -97,7 +95,7 @@ export function Header({
 }: {
   connection: ConnectionState
   projects: Projects
-  /** What starts the bar: on a phone, the way into the sidebar and the project's name. */
+  /** What starts the bar: the way back to a folded sidebar. */
   lead?: ReactNode
   tabs: ReactNode
   /** Shown before the status (the way back to a question put away). */
@@ -106,22 +104,14 @@ export function Header({
   tools?: ReactNode
 }) {
   const { header, one } = useOneRow()
-  // Rendered rather than hidden: a phone must not carry duplicate Connection/Session
-  // controls or a hidden shortcut button in the accessibility tree.
-  const phone = useMediaQuery("(max-width: 767.98px)")
 
   return (
     <header ref={header} className="app-header shrink-0" data-one-row={one || undefined}>
       <div className="where flex min-w-0 items-center gap-2">{lead}</div>
-      {phone ? (
-        <div className="phone-status flex min-w-0 items-center justify-end gap-2">
-          <Connection state={connection} />
-        </div>
-      ) : null}
       <div className="tabs min-w-0">{tabs}</div>
       <div className="tools flex min-w-0 items-center justify-end gap-2">
         {extra}
-        {phone ? null : <Connection state={connection} />}
+        <Connection state={connection} />
         {tools}
         <span id="focused-action-help" className="sr-only">
           Focused buttons: Enter or Space. Links: Enter. Checkboxes: Space.

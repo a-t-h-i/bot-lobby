@@ -90,7 +90,7 @@ function TypedTitle({ expected, value, onChange, disabled }: { expected: string;
         Type the task's title to confirm
       </label>
       <p className="break-words rounded-md bg-muted px-2 py-1 font-mono text-xs select-all">{expected}</p>
-      <Input id={id} value={value} disabled={disabled} autoComplete="off" spellCheck={false} className="max-md:min-h-11" onChange={(event) => onChange(event.target.value)} />
+      <Input id={id} value={value} disabled={disabled} autoComplete="off" spellCheck={false} onChange={(event) => onChange(event.target.value)} />
     </div>
   )
 }
@@ -112,8 +112,8 @@ function AskButton(props: AskProps) {
         {props.typeToConfirm !== undefined ? <TypedTitle expected={props.typeToConfirm} value={ask.typed} onChange={ask.setTyped} disabled={ask.busy} /> : null}
         {ask.error ? <p role="alert" className="text-sm text-destructive">{ask.error}</p> : null}
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={ask.busy} className="max-md:min-h-11 max-md:whitespace-normal">Cancel</AlertDialogCancel>
-          <Button variant={tone === "danger" ? "destructive" : "default"} disabled={locked || ask.busy} aria-busy={ask.busy} className="max-md:min-h-11 max-md:whitespace-normal" onClick={() => void ask.submit()}>
+          <AlertDialogCancel disabled={ask.busy}>Cancel</AlertDialogCancel>
+          <Button variant={tone === "danger" ? "destructive" : "default"} disabled={locked || ask.busy} aria-busy={ask.busy} onClick={() => void ask.submit()}>
             {ask.busy ? "Working…" : props.confirmLabel}
           </Button>
         </AlertDialogFooter>

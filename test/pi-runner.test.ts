@@ -71,6 +71,15 @@ test("buildPiArgs contains RPC isolation flags and role tools, never the task", 
   assert.ok(!args.some((arg) => arg.includes("Do the thing")));
 });
 
+test("buildPiArgs names granted MCP tools, and turns MCP off when none are granted", () => {
+  const none = buildPiArgs({ cwd: "/p", tools: ["read", "codemode"], timeoutMs: 1 });
+  assert.equal(none[none.indexOf("--tools") + 1], "read,codemode");
+  assert.ok(none.includes("--no-mcp"));
+  const granted = buildPiArgs({ cwd: "/p", tools: ["read", "codemode"], mcpTools: ["mcp__docs__search"], timeoutMs: 1 });
+  assert.equal(granted[granted.indexOf("--tools") + 1], "read,codemode,mcp__docs__search,list_mcp_resources,list_mcp_resource_templates,read_mcp_resource");
+  assert.ok(!granted.includes("--no-mcp"));
+});
+
 test("buildPiArgs omits --model when inheriting", () => {
   const args = buildPiArgs({ cwd: "/p", model: "inherit", timeoutMs: 1 });
   assert.ok(!args.includes("--model"));

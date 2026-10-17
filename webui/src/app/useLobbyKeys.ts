@@ -39,6 +39,7 @@ const NAMED: Record<string, string> = {
   pagedown: "PageDown",
   home: "Home",
   end: "End",
+  "`": "Backquote",
   "]": "BracketRight",
   "[": "BracketLeft",
   "/": "Slash",
@@ -146,6 +147,14 @@ export function useLobbyKeys(options: LobbyKeyOptions): void {
     let prefixUntil = 0
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing) return
+      // In a terminal every key is the shell's (Alt+B is a word back there), the terminal key excepted.
+      if (event.target instanceof Element && event.target.closest(".xterm")) {
+        if (actionFor(event, options.keys) === "terminal") {
+          event.preventDefault()
+          options.onAction("terminal")
+        }
+        return
+      }
       if (!options.insideApp()) {
         // A pop-up holds focus outside the page. Only the key help still gets through: it waits for its turn.
         if (actionFor(event, options.keys) === "help") {

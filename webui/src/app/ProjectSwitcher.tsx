@@ -1,13 +1,13 @@
 /**
- * Which project this page is looking at: a chip in the tray over the composer
- * (on a phone, the name in the bar), and a list of the running, authorised
+ * Which project this page is looking at: a chip in the strip under the
+ * composer, and a list of the running, authorised
  * projects behind it (`P` opens it).
  * Choosing one reloads the page into that project, which drops the stores,
  * the streams and any unsent draft on purpose.
  */
 import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/reui/popover"
-import { Check, ChevronDown, ChevronsUpDown, Folder, FolderOpen, RefreshCw, TriangleAlert } from "lucide-react"
+import { Check, ChevronDown, Folder, FolderOpen, RefreshCw, TriangleAlert } from "lucide-react"
 import type { ProjectInfo } from "@protocol"
 import { call } from "@/lib/api"
 import { useHotkey } from "@/lib/hotkeys"
@@ -16,6 +16,7 @@ import { Keys } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { composerControlClassName } from "./composer/ComposerControl"
 import { ProjectFolderDialog } from "./ProjectFolderDialog"
 
 interface ProjectList {
@@ -109,12 +110,8 @@ function walk(event: KeyboardEvent<HTMLElement>) {
 /** Asks the project list to open from elsewhere. */
 export const OPEN_PROJECTS = "bot-lobby:open-projects"
 
-/**
- * `chip`: the quiet chip in the composer's tray, its list opening upwards.
- * `bar`: the phone's bar, the project's initial on a tile beside its name.
- */
-export function ProjectSwitcher({ projects, tab, name, branch, look }: { projects: Projects; tab: string; name: string; branch?: string | undefined; look: "chip" | "bar" }) {
-  const chip = look === "chip"
+/** The quiet chip in the strip under the composer, its list opening upwards. */
+export function ProjectSwitcher({ projects, tab, name, branch }: { projects: Projects; tab: string; name: string; branch?: string | undefined }) {
   const { data, busy, slow, refresh } = projects
   const [open, setOpen] = useState(false)
   const [browsing, setBrowsing] = useState(false)
@@ -153,28 +150,16 @@ export function ProjectSwitcher({ projects, tab, name, branch, look }: { project
           title={branch ? `${name} · ${branch}` : name}
           className={cn(
             "group flex min-w-0 items-center outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none",
-            chip
-              ? "composer-chip h-7 gap-1.5 rounded-full px-2.5 text-xs font-medium text-foreground aria-expanded:bg-[var(--composer-chip-hover)]"
-              : "h-10 gap-2 rounded-lg px-1.5 text-sm font-medium hover:bg-accent aria-expanded:bg-accent"
+            composerControlClassName("xs", "min-w-0 justify-start")
           )}
         >
-          {chip ? (
-            <Folder aria-hidden="true" className={cn("size-3.5 shrink-0", message && "text-destructive")} />
-          ) : (
-            <span aria-hidden="true" className="project-mark" data-problem={message ? true : undefined}>
-              {name.trim().charAt(0).toUpperCase() || "?"}
-            </span>
-          )}
+          <Folder aria-hidden="true" className={cn("size-3 shrink-0", message && "text-destructive")} />
           <span className="truncate">{name}</span>
-          {chip ? (
-            <ChevronDown aria-hidden="true" className="size-3 shrink-0 text-muted-foreground transition-transform duration-150 group-aria-expanded:rotate-180 motion-reduce:transition-none" />
-          ) : (
-            <ChevronsUpDown aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
-          )}
+          <ChevronDown aria-hidden="true" className="size-3 shrink-0 opacity-50" />
         </PopoverTrigger>
         <PopoverContent
           align="start"
-          side={chip ? "top" : "bottom"}
+          side="top"
           sideOffset={8}
           aria-label="Projects"
           onKeyDown={walk}
@@ -185,7 +170,7 @@ export function ProjectSwitcher({ projects, tab, name, branch, look }: { project
               chosen.focus()
             }
           }}
-          className="p-0 flex max-h-[calc(100svh-2rem)] w-[min(26rem,calc(100vw-1.5rem))] origin-(--radix-popover-content-transform-origin) flex-col overflow-hidden rounded-xl outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 max-md:w-[calc(100vw-2rem)]"
+          className="p-0 flex max-h-[calc(100svh-2rem)] w-[min(26rem,calc(100vw-1.5rem))] origin-(--radix-popover-content-transform-origin) flex-col overflow-hidden rounded-xl outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95"
         >
           <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
             <span className="text-xs font-medium text-muted-foreground">Running projects</span>
@@ -195,14 +180,14 @@ export function ProjectSwitcher({ projects, tab, name, branch, look }: { project
               disabled={busy}
               aria-label="Refresh list"
               aria-keyshortcuts="R"
-              className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:opacity-60 max-md:h-11"
+              className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:opacity-60"
             >
               {busy ? <Spinner aria-hidden="true" role="presentation" className="size-3" /> : <RefreshCw aria-hidden="true" className="size-3" />}
               Refresh
               <Keys chord="R" className="kbd-hint" />
             </button>
           </div>
-          <div role="listbox" aria-label="Projects" className="flex max-h-72 flex-col overflow-y-auto overscroll-contain p-1 max-md:max-h-[calc(100svh-12rem)]">
+          <div role="listbox" aria-label="Projects" className="flex max-h-72 flex-col overflow-y-auto overscroll-contain p-1">
             {data?.projects.map((project) => {
               const on = project.id === active
               return (
@@ -213,7 +198,7 @@ export function ProjectSwitcher({ projects, tab, name, branch, look }: { project
                   aria-selected={on}
                   onClick={() => choose(project.id)}
                   className={cn(
-                    "flex min-h-10 w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-md:min-h-11",
+                    "flex min-h-10 w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                     on && "bg-accent"
                   )}
                 >
@@ -243,13 +228,13 @@ export function ProjectSwitcher({ projects, tab, name, branch, look }: { project
               onClick={() => void refresh()}
               className={cn(
                 "inline-flex shrink-0 items-center justify-center text-muted-foreground outline-none transition-[background-color,color,scale] hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.97] disabled:opacity-60 motion-reduce:active:scale-100",
-                chip ? "composer-chip size-7 rounded-full" : "size-8 rounded-lg hover:bg-accent max-md:size-11"
+                composerControlClassName("xs", "w-7 px-0 sm:w-[1.625rem]")
               )}
             >
               {busy ? <Spinner aria-hidden="true" role="presentation" className="size-3.5" /> : <RefreshCw aria-hidden="true" className="size-3.5" />}
             </button>
           </TooltipTrigger>
-          <TooltipContent side={chip ? "top" : "bottom"}>Refresh projects</TooltipContent>
+          <TooltipContent side="top">Refresh projects</TooltipContent>
         </Tooltip>
       ) : null}
     </div>

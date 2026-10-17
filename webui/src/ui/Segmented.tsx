@@ -6,7 +6,7 @@
  * Arrow keys move between options with a roving tabindex; Home and End jump
  * to the ends. As `nav` the options are plain buttons marking the open one with
  * `aria-current`, for a caller that wraps them in its own `<nav>`. Under reduced motion the thumb simply moves. Short and compact
- * (28px) on a desktop; on a phone each option keeps a 44px target.
+ * (28px).
  */
 import { useId, type KeyboardEvent, type ReactNode } from "react"
 import { motion, useReducedMotion } from "motion/react"
@@ -89,7 +89,7 @@ export function Segmented<T extends string>({
             tabIndex={on || as === "nav" ? 0 : -1}
             onClick={() => onChange(item.id)}
             className={cn(
-              "relative isolate inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 font-medium whitespace-nowrap outline-none transition-colors duration-200 ease-snap focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-md:min-h-11",
+              "relative isolate inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 font-medium whitespace-nowrap outline-none transition-colors duration-200 ease-snap focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
               size === "sm" ? "h-7 text-[0.8125rem]" : "h-8 text-sm",
               on ? "text-foreground" : "text-muted-foreground hover:text-foreground"
             )}

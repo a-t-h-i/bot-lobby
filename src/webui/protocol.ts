@@ -218,6 +218,23 @@ export type StreamEvent =
   | { type: "reply"; text: string }
   | { type: "notice"; text: string; level: NoticeLevel };
 
+/** A terminal the server runs (`terminal.*`): a shell in the project's folder. */
+export interface TerminalInfo {
+  id: string;
+  title: string;
+  cwd: string;
+  alive: boolean;
+  /** The shell's exit code, once it ended. */
+  exitCode?: number;
+  startedAt: number;
+}
+
+/** One message on a terminal's stream (`GET /api/terminal.stream?id=…`). */
+export type TerminalStreamEvent =
+  | { type: "reset"; data: string; alive: boolean; code?: number }
+  | { type: "data"; data: string }
+  | { type: "exit"; code?: number };
+
 /** The planning session as `planner.get` describes it. */
 export interface PlannerSnapshot {
   /** Seats on the panel next round. */
@@ -324,6 +341,8 @@ export interface EntryRefInfo {
 /** `tasks.get`: one task read whole, in the terminal's wording. */
 export interface TaskDetail {
   canAccept: boolean;
+  /** Open steps can be skipped (the user gives a reason). */
+  canSkip: boolean;
   canForceClose: boolean;
   timing?: TimingProjection;
   delivery?: Delivery;
@@ -337,9 +356,9 @@ export interface TaskDetail {
   planDetails?: string;
   /**
    * The plan as a checklist, in order; `current` is the step under way, `active` the steps a worker is on right now,
-   * each with its worker time (ms, as of the reply).
+   * each with its worker time (ms, as of the reply); `skip` carries the reason the user gave for skipping a step.
    */
-  steps: Array<{ text: string; status: "done" | "current" | "open"; active?: boolean; workedMs?: number; activeAgentCount?: number; agents?: StepAgentInfo[] }>;
+  steps: Array<{ text: string; status: "done" | "current" | "open" | "skipped"; skip?: { reason: string; at: string }; active?: boolean; workedMs?: number; activeAgentCount?: number; agents?: StepAgentInfo[] }>;
   /** How long the task's agents have worked on it, idle time left out (ms, as of the reply); `running` while they work. */
   work?: WorkClock;
   amendments: string[];
@@ -520,6 +539,7 @@ export interface Api {
   "tasks.open": { request: { taskId: string }; result: { sessionId?: string; key?: string; notice?: string } };
   "tasks.resume": { request: { taskId: string }; result: { notice: string; key?: string } };
   "tasks.accept": { request: { taskId: string }; result: { notice: string } };
+  "tasks.skipStep": { request: { taskId: string; step: number; text: string; reason: string }; result: { notice: string } };
   "tasks.forceClose": { request: { taskId: string; title: string }; result: { notice: string } };
   "tasks.resolveApproval": { request: { taskId: string; approvalId: string; decision: "approved" | "rejected"; note?: string }; result: { notice: string } };
   "tasks.deliveryReview": { request: { taskId: string }; result: { delivery: Delivery } };
@@ -535,6 +555,13 @@ export interface Api {
   "sessions.message": { request: { key?: string; sessionId?: string; text: string; attachments?: string[] }; result: { notice?: string } };
   "sessions.switch": { request: { key?: string; sessionId?: string; claimTaskId?: string }; result: { notice: string } };
   "sessions.answer": { request: { key: string; dialogId: string; answer: DialogAnswer }; result: { notice: string } };
+  "sessions.rename": { request: { key?: string; name: string }; result: { notice: string } };
+  "sessions.archive": { request: { key: string; archived?: boolean }; result: { notice: string } };
+  "terminal.list": { request: Record<string, never>; result: { available: boolean; reason?: string; terminals: TerminalInfo[] } };
+  "terminal.open": { request: { cols: number; rows: number }; result: TerminalInfo };
+  "terminal.input": { request: { id: string; data: string }; result: Record<string, never> };
+  "terminal.resize": { request: { id: string; cols: number; rows: number }; result: Record<string, never> };
+  "terminal.close": { request: { id: string }; result: Record<string, never> };
   "prompts.list": { request: Record<string, never>; result: { prompts: WebPrompt[] } };
   "prompts.answer": { request: { id: string; answer: unknown }; result: { notice?: string } };
   "prompts.dismiss": { request: { id: string }; result: Record<string, never> };

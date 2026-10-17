@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_PLAN_STEPS, explicitStepIndex, planChecklist, planDetails, planSteps } from "../src/pi/plan-checklist.ts";
+import { MAX_PLAN_STEPS, explicitStepIndex, planChecklist, planDetails, planSteps, skippedStepsNote, stepWork, skippedIndexes } from "../src/pi/plan-checklist.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
 
 function run(overrides: Partial<AgentRun> = {}): AgentRun {
@@ -279,4 +279,38 @@ test("successful child workers cannot advance their parent's plan step", () => {
   const parent = worker("parent", "Step 2: Large feature", 1, "running");
   const child = { ...worker("child", "Step 3: Verify", 2, "success"), parentRunId: "parent", stepInstruction: parent.instruction };
   assert.deepEqual(statuses(planChecklist(text, [parent, child])), ["done", "current", "pending"]);
+});
+
+test("a step the user skipped reads skipped, and the next open step becomes current", () => {
+  const steps = plan("`src/a.ts`: first", "`src/b.ts`: second", "`src/c.ts`: third");
+  const skip = [{ text: "`src/b.ts`: second", reason: "done by hand", at: "2026-01-01T00:00:00.000Z" }];
+  assert.deepEqual(statuses(planChecklist(steps, [], skip)), ["current", "skipped", "pending"]);
+  const first = [worker("w1", "Step 1: `src/a.ts`", 1)];
+  assert.deepEqual(statuses(planChecklist(steps, first, skip)), ["done", "skipped", "current"]);
+  // A run that names no step goes to the next one not skipped.
+  const unnamed = [worker("w1", "Step 1: `src/a.ts`", 1), worker("w2", "carry on with the rest", 2)];
+  assert.deepEqual(statuses(planChecklist(steps, unnamed, skip)), ["done", "skipped", "done"]);
+  // Skipping the first step moves the work straight to the second.
+  assert.deepEqual(statuses(planChecklist(steps, [], [{ ...skip[0]!, text: "`src/a.ts`: first" }])), ["skipped", "current", "pending"]);
+});
+
+test("a skip whose step a revised plan no longer lists drops out", () => {
+  const steps = plan("Write the parser", "Add tests");
+  const skip = [{ text: "A step that was rewritten", reason: "gone", at: "2026-01-01T00:00:00.000Z" }];
+  assert.deepEqual(statuses(planChecklist(steps, [], skip)), ["current", "pending"]);
+  assert.equal(skippedStepsNote(steps, skip), "");
+});
+
+test("stepWork never puts an unnamed run on a skipped step", () => {
+  const texts = planSteps(plan("First", "Second", "Third"));
+  const work = stepWork(texts, [worker("w1", "carry on", 1, "running")], Date.parse("2026-01-01T00:01:10.000Z"), skippedIndexes(texts, [{ text: "First" }]));
+  assert.deepEqual(work.map((step) => step.active), [false, true, false]);
+});
+
+test("the oracle reads each skipped step by number with the user's reason", () => {
+  const steps = plan("Write the parser", "Add tests", "Ship it");
+  const note = skippedStepsNote(steps, [{ text: "Ship it", reason: "the release train ships it" }]);
+  assert.match(note, /Steps the user skipped/);
+  assert.match(note, /- Step 3: Ship it \(reason: the release train ships it\)/);
+  assert.match(note, /do not delegate, build or review them/);
 });

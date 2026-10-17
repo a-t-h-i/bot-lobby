@@ -18,7 +18,7 @@ const TOP_LEVEL_BULLET = /^()([*-])\s+(.*\S)\s*$/;
 const STEP_HEADING = /^\s*(?:#{1,6}\s+)?(?:\*\*)?\s*(?:step|phase|stage)\s+#?\d+\s*(?:\*\*)?\s*[:.)\u2014\u2013-]\s*(?:\*\*)?\s*(.*?)\s*(?:\*\*)?\s*$/i;
 const MIN_STEP_HEADINGS = 2;
 
-export type PlanStepStatus = "done" | "current" | "pending";
+export type PlanStepStatus = "done" | "current" | "pending" | "skipped";
 
 export interface PlanStep {
   text: string;
@@ -355,8 +355,8 @@ function byStart(runs: readonly AgentRun[]): AgentRun[] {
  * grows and a failure can never tick one off. The latest worker run's own target
  * is reported separately so a running or failed step reads current.
  */
-function replaySteps(steps: readonly string[], runs: readonly AgentRun[]): { completed: number; latest: number } {
-  const completed = new Set<number>();
+function replaySteps(steps: readonly string[], runs: readonly AgentRun[], skipped: ReadonlySet<number>): { completed: Set<number>; latest: number } {
+  const completed = new Set<number>(skipped);
   const latestRun = latestWorkerRun(runs);
   let latest = -1;
   for (const run of byStart(runs)) {
@@ -367,27 +367,43 @@ function replaySteps(steps: readonly string[], runs: readonly AgentRun[]): { com
     const target = matched >= 0 ? matched : nextOpenStep(steps, completed);
     if (target >= 0) markThrough(completed, target);
   }
-  return { completed: completed.size, latest };
+  return { completed, latest };
+}
+
+/**
+ * The plan steps the user skipped, as indexes: each skip names its step by
+ * text, so a skip whose step a revised plan no longer lists drops out.
+ */
+export function skippedIndexes(steps: readonly string[], skipped: readonly { text: string }[] | undefined): Set<number> {
+  const found = new Set<number>();
+  if (!skipped?.length) return found;
+  const wanted = new Set(skipped.map((entry) => normalize(entry.text)));
+  steps.forEach((text, index) => { if (wanted.has(normalize(text))) found.add(index); });
+  return found;
 }
 
 /** One-entry memo: the panel asks for the same checklist several times per frame. */
-let checklistMemo: { plan: string; runs: readonly AgentRun[]; steps: PlanStep[] } | undefined;
+let checklistMemo: { plan: string; runs: readonly AgentRun[]; skipped: readonly { text: string }[] | undefined; steps: PlanStep[] } | undefined;
 
 /**
  * Done/current/pending per plan step. A succeeded run completes its step, so the
  * next step becomes current (and the last step reads done); running, failed,
  * cancelled and timeout runs keep it current. Progress is monotonic: steps
  * already completed by successful worker runs stay done, and a later call that
- * names an earlier step can never tick it back. Memoized on the exact plan text
- * and runs array, so callers must not mutate either.
+ * names an earlier step can never tick it back. A step the user skipped reads
+ * skipped and counts as behind the work: the next open step becomes current.
+ * Memoized on the exact plan text, runs and skips, so callers must not mutate them.
  */
-export function planChecklist(plan: string, runs: readonly AgentRun[]): PlanStep[] {
-  if (checklistMemo && checklistMemo.plan === plan && checklistMemo.runs === runs) return checklistMemo.steps;
+export function planChecklist(plan: string, runs: readonly AgentRun[], skips?: readonly { text: string }[]): PlanStep[] {
+  if (checklistMemo && checklistMemo.plan === plan && checklistMemo.runs === runs && checklistMemo.skipped === skips) return checklistMemo.steps;
   const texts = planSteps(plan);
-  const replay = replaySteps(texts, runs);
-  const current = Math.max(replay.completed, replay.latest);
-  const steps = texts.map((text, index) => ({ text, status: stepStatus(index, current) }));
-  checklistMemo = { plan, runs, steps };
+  const skipped = skippedIndexes(texts, skips);
+  const replay = replaySteps(texts, runs, skipped);
+  const open = nextOpenStep(texts, replay.completed);
+  let current = Math.max(open < 0 ? texts.length : open, replay.latest);
+  while (skipped.has(current)) current += 1;
+  const steps = texts.map((text, index) => ({ text, status: skipped.has(index) ? "skipped" as const : stepStatus(index, current) }));
+  checklistMemo = { plan, runs, skipped: skips, steps };
   return steps;
 }
 
@@ -420,11 +436,11 @@ export function runSteps(steps: readonly string[], instruction: string | undefin
  * step it works on (a `Steps 2-4` run toward all three), and its success
  * completes them, so a later run that names no step goes to the next one.
  */
-export function stepWork(steps: readonly string[], runs: readonly AgentRun[], now = Date.now()): StepWork[] {
+export function stepWork(steps: readonly string[], runs: readonly AgentRun[], now = Date.now(), skipped: ReadonlySet<number> = new Set()): StepWork[] {
   const work: StepWork[] = steps.map(() => ({ ms: 0, active: false, activeAgentCount: 0, runIds: [] }));
   const assigned = new Map<string, number[]>();
   const counted = new Set<string>();
-  const completed = new Set<number>();
+  const completed = new Set<number>(skipped);
   for (const run of byStart(runs)) {
     if (run.role !== "worker") continue;
     if (counted.has(run.runId)) continue;
@@ -448,4 +464,20 @@ export function stepWork(steps: readonly string[], runs: readonly AgentRun[], no
     if (!run.parentRunId && run.status === "success" && covered.length > 0) markThrough(completed, covered[covered.length - 1]!);
   }
   return work;
+}
+
+/**
+ * What the oracle reads of the steps the user skipped: each by its number in
+ * the plan, with the user's reason, and that none of them is to be built.
+ * Empty when nothing is skipped (or a revised plan no longer lists the step).
+ */
+export function skippedStepsNote(plan: string | undefined, skips: readonly { text: string; reason: string }[] | undefined): string {
+  if (!plan || !skips?.length) return "";
+  const steps = planSteps(plan);
+  const lines = skips.flatMap((skip) => {
+    const index = steps.findIndex((text) => normalize(text) === normalize(skip.text));
+    return index < 0 ? [] : [`- Step ${index + 1}: ${skip.text} (reason: ${skip.reason})`];
+  });
+  if (lines.length === 0) return "";
+  return `Steps the user skipped (do not delegate, build or review them; the task may complete without them, and the next open step carries on):\n${lines.join("\n")}`;
 }

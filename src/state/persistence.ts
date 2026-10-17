@@ -104,7 +104,7 @@ export function saveTask(root: string, configDir: string, task: Task): void {
   rememberTiming(task);
 }
 
-/** Explicit user waivers and resolved approvals must survive an in-flight worker's snapshot. */
+/** Explicit user waivers, skipped steps and resolved approvals must survive an in-flight worker's snapshot. */
 function preserveUserInterventions(task: Task, latest: Task): void {
   const newlyWaived = !task.qaWaiver && latest.qaWaiver;
   task.qaWaiver ??= latest.qaWaiver;
@@ -117,6 +117,9 @@ function preserveUserInterventions(task: Task, latest: Task): void {
     const resolved = latest.approvals.find((entry) => entry.id === approval.id && entry.status !== "pending");
     if (approval.status === "pending" && resolved) Object.assign(approval, resolved);
   }
+  const skipped = new Set((task.skippedSteps ?? []).map((entry) => entry.text));
+  const newSkips = (latest.skippedSteps ?? []).filter((entry) => !skipped.has(entry.text));
+  if (newSkips.length > 0) task.skippedSteps = [...(task.skippedSteps ?? []), ...newSkips];
   const keys = new Set(task.decisions.map((entry) => JSON.stringify(entry)));
   task.decisions.push(...latest.decisions.filter((entry) => !keys.has(JSON.stringify(entry))));
 }

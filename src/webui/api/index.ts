@@ -15,13 +15,15 @@ import { lobbyAbort, lobbyHistory, lobbySend, lobbySnapshot } from "./lobby.ts";
 import { promptsAnswer, promptsDismiss, promptsList } from "./prompts.ts";
 import { plannerAnswer, plannerCommentLine, plannerGet, plannerNew, plannerRetry, plannerSend, plannerEditMessage, plannerToggleSeat, plannerSave, plannerPrevious, plannerPreviousArchive, plannerPreviousDelete, plannerPreviousGet, plannerPreviousOpen } from "./planner.ts";
 import { quickfixCancel, quickfixList, quickfixMovedToTask, quickfixRunAnyway, quickfixSubmit } from "./quickfix.ts";
-import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksEditComment, tasksGet, tasksList, tasksMessage, tasksRestore, tasksOpen, tasksResume, tasksDeliveryReview, tasksDeliveryDefer, tasksDeliver, tasksAccept, tasksForceClose, tasksResolveApproval } from "./tasks.ts";
+import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksEditComment, tasksGet, tasksList, tasksMessage, tasksRestore, tasksOpen, tasksResume, tasksDeliveryReview, tasksDeliveryDefer, tasksDeliver, tasksAccept, tasksSkipStep, tasksForceClose, tasksResolveApproval } from "./tasks.ts";
 import { knowledgeAdd, knowledgeAsk, knowledgeComment, knowledgeEdit, knowledgeFiles, knowledgeOpen, knowledgeRemove, knowledgeReplaceFile, knowledgeUnnote } from "./knowledge.ts";
 import { plansDiscard, plansGet, plansStart } from "./plans.ts";
 import { gitCancelReview, gitJev, gitPull, gitPulls, gitReview } from "./git.ts";
 import { issuesCreate, issuesGet, issuesList } from "./issues.ts";
-import { sessionsAnswer, sessionsChat, sessionsList, sessionsMessage, sessionsStart, sessionsStop, sessionsSwitch } from "./sessions.ts";
+import { sessionsAnswer, sessionsArchive, sessionsChat, sessionsList, sessionsMessage, sessionsRename, sessionsStart, sessionsStop, sessionsSwitch } from "./sessions.ts";
 import { settingsGet, settingsLinters, settingsSet } from "./settings.ts";
+import { terminalClose, terminalInput, terminalList, terminalOpen, terminalResize } from "./terminal.ts";
+import { MAX_INPUT_CHARS } from "../terminal.ts";
 import { themesChoose, themesGet, themesRemove, themesRename, themesSave } from "./themes.ts";
 import { noticeText, pushNotice } from "../notices.ts";
 
@@ -134,6 +136,10 @@ function buildRoutes(): Record<string, Route> {
     schema: Type.Object({ taskId: TaskId }, { additionalProperties: false }),
     run: (body, ctx) => tasksAccept(body as { taskId: string }, ctx),
   };
+  routes["tasks.skipStep"] = {
+    schema: Type.Object({ taskId: TaskId, step: Type.Integer({ minimum: 0, maximum: 49 }), text: Type.String({ minLength: 1, maxLength: 20_000 }), reason: Type.String({ minLength: 1, maxLength: 1000 }) }, { additionalProperties: false }),
+    run: (body, ctx) => tasksSkipStep(body as Parameters<typeof tasksSkipStep>[0], ctx),
+  };
   routes["tasks.forceClose"] = {
     schema: Type.Object({ taskId: TaskId, title: Type.String({ maxLength: 20_000 }) }, { additionalProperties: false }),
     run: (body, ctx) => tasksForceClose(body as { taskId: string; title: string }, ctx),
@@ -218,6 +224,34 @@ function buildRoutes(): Record<string, Route> {
   routes["sessions.switch"] = {
     schema: Type.Object({ key: Type.Optional(TaskId), sessionId: Type.Optional(TaskId), claimTaskId: Type.Optional(TaskId) }, { additionalProperties: false }),
     run: (body, ctx) => sessionsSwitch(body as { key?: string; sessionId?: string; claimTaskId?: string }, ctx),
+  };
+  const TerminalId = Type.String({ minLength: 1, maxLength: 40 });
+  const Cols = Type.Integer({ minimum: 2, maximum: 500 });
+  const Rows = Type.Integer({ minimum: 2, maximum: 300 });
+  routes["terminal.list"] = { schema: Empty, run: () => terminalList() };
+  routes["terminal.open"] = {
+    schema: Type.Object({ cols: Cols, rows: Rows }, { additionalProperties: false }),
+    run: (body, ctx) => terminalOpen(body as { cols: number; rows: number }, ctx),
+  };
+  routes["terminal.input"] = {
+    schema: Type.Object({ id: TerminalId, data: Type.String({ minLength: 1, maxLength: MAX_INPUT_CHARS }) }, { additionalProperties: false }),
+    run: (body) => terminalInput(body as { id: string; data: string }),
+  };
+  routes["terminal.resize"] = {
+    schema: Type.Object({ id: TerminalId, cols: Cols, rows: Rows }, { additionalProperties: false }),
+    run: (body) => terminalResize(body as { id: string; cols: number; rows: number }),
+  };
+  routes["terminal.close"] = {
+    schema: Type.Object({ id: TerminalId }, { additionalProperties: false }),
+    run: (body) => terminalClose(body as { id: string }),
+  };
+  routes["sessions.rename"] = {
+    schema: Type.Object({ key: Type.Optional(TaskId), name: Type.String({ minLength: 1, maxLength: 500 }) }, { additionalProperties: false }),
+    run: (body, ctx) => sessionsRename(body as { key?: string; name: string }, ctx),
+  };
+  routes["sessions.archive"] = {
+    schema: Type.Object({ key: TaskId, archived: Type.Optional(Type.Boolean()) }, { additionalProperties: false }),
+    run: (body, ctx) => sessionsArchive(body as { key: string; archived?: boolean }, ctx),
   };
   routes["sessions.answer"] = {
     schema: Type.Object({ key: TaskId, dialogId: TaskId, answer: DialogAnswer }, { additionalProperties: false }),

@@ -12,7 +12,7 @@ export interface ChoiceItem {
 /** A setting as a row: its name and help on the left, the control on the right (or below, `stacked`). */
 export function Field({ label, help, children, stacked }: { label: string; help?: string; children: ReactNode; stacked?: boolean }) {
   return (
-    <div className={stacked ? "grid gap-1" : "grid gap-1 md:grid-cols-[minmax(0,1fr)_minmax(0,18rem)] md:items-center md:gap-4"}>
+    <div className={stacked ? "grid gap-1" : "grid grid-cols-[minmax(0,1fr)_minmax(0,18rem)] items-center gap-4"}>
       <div className="min-w-0 break-words">
         <div className="break-words text-[0.8125rem] font-medium">{label}</div>
         {help ? <p className="break-words text-xs text-muted-foreground">{help}</p> : null}
@@ -30,6 +30,6 @@ export function Rows({ children }: { children: ReactNode }) {
 
 /** Every drop-down on the page is a searchable one. */
 export function Choice({ value, items, label, onChange }: { value: string; items: ChoiceItem[]; label: string; onChange: (value: string) => void }) {
-  return <Combobox value={value} options={items.map((item) => ({ value: item.value, label: item.label, ...(item.help ? { hint: item.help } : {}) }))} label={label} onChange={onChange} className="max-md:h-auto max-md:min-h-11 max-md:items-start max-md:py-2 max-md:[&>span:first-child]:overflow-visible max-md:[&>span:first-child]:text-clip max-md:[&>span:first-child]:whitespace-normal max-md:[&>span:first-child]:break-words" />
+  return <Combobox value={value} options={items.map((item) => ({ value: item.value, label: item.label, ...(item.help ? { hint: item.help } : {}) }))} label={label} onChange={onChange} />
 }
 

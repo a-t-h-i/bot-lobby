@@ -4,8 +4,7 @@
  * slide-out). Under it one row carries the panel's seats and the buttons the
  * session allows: Answer questions while some wait, Retry when a round can be
  * run again, Previous, Save, New plan. When the header is too narrow for both
- * the seats drop below the buttons; on a phone they keep to one row that
- * scrolls sideways, and the quieter buttons are icons.
+ * the seats drop below the buttons.
  */
 import { useRef } from "react"
 import { ChevronRight, FilePlus, History, MessageCircleQuestion, RotateCw, Save } from "lucide-react"
@@ -15,7 +14,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { act } from "@/lib/act"
 import { useHotkey } from "@/lib/hotkeys"
 import type { PlannerSnapshot, StatusInfo } from "@protocol"
-import { useMediaQuery, useTopic } from "@/app/hooks"
+import { useTopic } from "@/app/hooks"
 import { ActionButton } from "@/ui/Actions"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { Roster } from "./Roster"
@@ -52,8 +51,6 @@ export function PreviousButton({ iconOnly }: { iconOnly?: boolean }) {
 
 function Actions({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) {
   const shortcut = useTopic<StatusInfo>("status").data?.keys.find((key) => key.action === "savePlan")?.label
-  // On a phone the quieter buttons are icons (named in a tooltip), so the row fits beside Answer questions.
-  const phone = useMediaQuery("(max-width: 767.98px)")
   const run = (name: "planner.answer" | "planner.retry" | "planner.save") => async () => {
     if (await act(name, {})) onDone()
   }
@@ -61,13 +58,12 @@ function Actions({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }
     <div className="flex min-w-0 flex-wrap items-center gap-1 @min-[68rem]:shrink-0">
       {snap.questions.length > 0 && !snap.busy ? <ActionButton label="Answer questions" icon={MessageCircleQuestion} tone="primary" shortcut="A" onClick={() => void run("planner.answer")()} /> : null}
       {snap.retryable ? <ActionButton label="Retry" icon={RotateCw} shortcut="R" onClick={() => void run("planner.retry")()} /> : null}
-      <PreviousButton iconOnly={phone} />
-      <ActionButton data-plan-save label="Save the plan" text="Save" icon={Save} shortcut={shortcut ?? "Ctrl+S"} iconOnly={phone} disabled={!snap.draft || snap.busy} onClick={() => void run("planner.save")()} />
+      <PreviousButton />
+      <ActionButton data-plan-save label="Save the plan" text="Save" icon={Save} shortcut={shortcut ?? "Ctrl+S"} disabled={!snap.draft || snap.busy} onClick={() => void run("planner.save")()} />
       <ConfirmButton
         icon={FilePlus}
         label="New plan"
         shortcut="N"
-        iconOnly={phone}
         title="Start a new plan?"
         description="The conversation and the draft are left behind. Saved plans are not touched."
         confirmLabel="New plan"
@@ -79,14 +75,14 @@ function Actions({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }
 
 export function PlanHeader({ snap, onDone, onViewPlan }: { snap: PlannerSnapshot; onDone: () => void; onViewPlan: () => void }) {
   return (
-    <header className="@container flex shrink-0 flex-col gap-2.5 border-b border-border px-5 pt-3 pb-3 max-md:shrink max-md:px-4 max-md:py-2.5">
+    <header className="@container flex shrink-0 flex-col gap-2.5 border-b border-border px-5 pt-3 pb-3">
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
         <h2 className="text-lg font-semibold tracking-tight">Planning</h2>
         <Status snap={snap} />
         {snap.draft ? <ViewPlan onOpen={onViewPlan} /> : null}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 @min-[68rem]:flex-nowrap">
-        <Roster cells={seatCells(snap)} intro={false} onToggled={onDone} className="order-last basis-full max-md:-mx-4 max-md:flex-nowrap max-md:overflow-x-auto max-md:px-4 max-md:[scrollbar-width:none] @min-[68rem]:order-none @min-[68rem]:min-w-0 @min-[68rem]:basis-auto" />
+        <Roster cells={seatCells(snap)} intro={false} onToggled={onDone} className="order-last basis-full @min-[68rem]:order-none @min-[68rem]:min-w-0 @min-[68rem]:basis-auto" />
         <Actions snap={snap} onDone={onDone} />
       </div>
     </header>
