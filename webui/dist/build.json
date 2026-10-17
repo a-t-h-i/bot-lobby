@@ -1,6 +1,6 @@
 {
-  "hash": "5b7d3308d480194cca4b9a950845152f14cf0002a566f49e40f28dcd9dd11796",
-  "builtAt": "2026-10-17T16:23:12.819Z",
+  "hash": "a69e89c6f838b68aaeacb5f310cdf239473c1e399e4cedc1ae3f6fcdff60fe7c",
+  "builtAt": "2026-10-17T18:51:33.000Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -32,7 +32,7 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "e850ddf03f8545f222585b0ed8c9c76db81f76a55742051a6f8c5d86f3c7aeb8"
+      "sha256": "c85acd4d933007463edd68908527d896f75a3ce714984fdee6fe85e0d3c8f1dc"
     },
     {
       "path": "webui/src/app/Header.tsx",
@@ -60,7 +60,7 @@
     },
     {
       "path": "webui/src/app/ProjectSwitcher.tsx",
-      "sha256": "0236f944821fa52ed5edca2db40bf0995a393be56bd7f5da2151686bdebc9074"
+      "sha256": "6abe2971bb50d8a7f1a4e0e5819d682df82754c3ee29f26134c634be3d70ba6a"
     },
     {
       "path": "webui/src/app/Shell.tsx",
@@ -101,6 +101,18 @@
     {
       "path": "webui/src/app/bootstrap.ts",
       "sha256": "e6157d69331f5b6a030916a8dee252dc843fa970eeb1b23442b624f6b23338f0"
+    },
+    {
+      "path": "webui/src/app/composer/ComposerControl.tsx",
+      "sha256": "1e8410c8894e9fb252fd42abeda5cfcac3eebf3a1fb16e9844535aeca938e57b"
+    },
+    {
+      "path": "webui/src/app/composer/ComposerPrimaryActions.tsx",
+      "sha256": "5248952c543c6673e2285bff9cc429bf5f3645047837ca505b44058464c47fa2"
+    },
+    {
+      "path": "webui/src/app/composer/ComposerSurface.tsx",
+      "sha256": "ed1aa7f9c9c4766b47c95494fe9868ab278ad5f82773640c0ab8e511e7e6aae7"
     },
     {
       "path": "webui/src/app/hooks.ts",
@@ -284,7 +296,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "3b6253c666664dbe01dfec70b3857b26f93fc68643154bd2f26988132d21ac82"
+      "sha256": "d23db8030f0ea43e5fb8c25a07d8a9e240c0a23fc3598c039e2a3679bb872939"
     },
     {
       "path": "webui/src/lib/act.ts",

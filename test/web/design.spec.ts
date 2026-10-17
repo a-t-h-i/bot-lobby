@@ -290,6 +290,7 @@ test("the box grows with what is typed, carries lists on, formats with Ctrl+B an
   await box.press("Shift+Enter");
   await box.press("Shift+Enter");
   await expect(box, "an empty marker ends the list").toHaveValue("- one\n- two\n");
+  await box.fill("- one\n- two\n- three\n- four\n- five\n- six");
   expect((await box.boundingBox())!.height, "it grew with the lines").toBeGreaterThan(before + 20);
   await box.fill("make this bold");
   await box.press("Control+a");
@@ -303,7 +304,7 @@ test("the dock grows and shrinks with the text on its own, over the page, and th
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   const box = page.locator("#composer-text");
-  const card = box.locator("xpath=ancestor::div[contains(@class,'group/composer')]");
+  const card = box.locator("xpath=ancestor::div[contains(concat(' ', @class, ' '),' group/composer ')]");
   const chat = page.getByRole("log", { name: "Conversation" });
   const pad = () => chat.evaluate((el: any) => parseFloat(getComputedStyle(el).paddingBottom));
   const before = (await box.boundingBox())!.height;
@@ -362,7 +363,7 @@ test("Plan, Quick fix and an open task each give the composer its own target", a
       window.location.hash = to;
     }, hash);
     await expect(page.getByLabel(label), hash).toBeVisible();
-    await expect(page.getByRole("radiogroup", { name: "Send to" }).or(page.getByText(/^To the /)), `${hash} says who it goes to`).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Send to" }).or(page.getByText(/^To the /)), `${hash} says who it goes to`).toBeVisible();
   }
 });
 
@@ -1173,9 +1174,12 @@ test("the strip under the box names the project and opens the project list; the 
   expect(behind.y + behind.height, "and shows below it").toBeGreaterThan(card.y + card.height + 10);
   expect(behind.width, "a little narrower than the box").toBeLessThan(card.width);
   await page.evaluate(() => { window.location.hash = "#/plan"; });
-  await expect(box.getByRole("radiogroup", { name: "Send to" }), "a tab with more than one target picks it in the box's footer").toBeVisible();
-  await page.setViewportSize({ width: 480, height: 900 });
-  await expect(box.getByRole("combobox", { name: "Send to" }), "a narrow box picks it from a menu").toBeVisible();
+  const picker = box.getByRole("combobox", { name: "Send to" });
+  await expect(picker, "a tab with more than one target picks it from a menu in the box's footer").toContainText("Panel");
+  await picker.click();
+  await page.getByRole("option", { name: "Oracle" }).click();
+  await expect(picker, "and the choice shows on it").toContainText("Oracle");
+  await expect(page.getByLabel("Message the oracle"), "the box now writes to the oracle").toBeVisible();
   await expect(tray.getByRole("link", { name: "Models and effort" }), "settings live in the sidebar, not the composer").toHaveCount(0);
 });
 
