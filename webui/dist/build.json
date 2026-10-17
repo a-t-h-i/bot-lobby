@@ -1,6 +1,6 @@
 {
-  "hash": "47e431c26ac0c576c9167a3cf0b6e57a6c9d34f90057a53874577b8ed7987267",
-  "builtAt": "2026-10-16T23:04:59.535Z",
+  "hash": "b3f85b91ed5915a6b24f2e887eed3e176bd81a2ac73e42d74a50be8e591bfc61",
+  "builtAt": "2026-10-17T05:31:42.201Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -43,6 +43,10 @@
       "sha256": "d5e4c0bc8b1ae06d008bc4c645e29fac32faa27f3688b3991f8106e28acf116e"
     },
     {
+      "path": "webui/src/app/NewSessionDialog.tsx",
+      "sha256": "1f5760d73b3e9fb34f4bab67dd0fe0d8f1f5391d356bc7f2d400dae964d12f95"
+    },
+    {
       "path": "webui/src/app/PhoneTabCards.tsx",
       "sha256": "34c821485528456852b59812c7e87814a2d0d66536d43a4acb859b9e113d2ac8"
     },
@@ -60,11 +64,11 @@
     },
     {
       "path": "webui/src/app/Shell.tsx",
-      "sha256": "63222f91731d4fb2d06ee3d97b30ddc8fa2020c1228009463275925b39395093"
+      "sha256": "a335e2d32b0827e4c88886d0fc1cb797d5bb88e9936460c243687dc2cd5832ec"
     },
     {
       "path": "webui/src/app/Sidebar.tsx",
-      "sha256": "d0f29fa549568628217d8857e82a5d919e9d6ac997f3d89847dfee1ad60b90bc"
+      "sha256": "8e0510912cee70891ecbdf8492193a71fed42aab94721bd185d27f7bae130a6b"
     },
     {
       "path": "webui/src/app/SignIn.tsx",
@@ -136,7 +140,7 @@
     },
     {
       "path": "webui/src/app/sessionList.ts",
-      "sha256": "79d5bd3a2d5b351fd4a7740b9bd85d02fe4a4a27755df0c57eca07fa63ba2d67"
+      "sha256": "cb7decd064d88699ec0ef1e934b14c14179c3d05783fb8bc815ad5af841c6a55"
     },
     {
       "path": "webui/src/app/sound.ts",
@@ -268,7 +272,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "93e2d80911e75e3f7438937efc8f27ef9c1823cc563558aab1f9133f4c1d8384"
+      "sha256": "3a561df16abfb44f6c1425f97872509eec3d5407f1a790547881f7f4ba32a9e7"
     },
     {
       "path": "webui/src/lib/act.ts",
