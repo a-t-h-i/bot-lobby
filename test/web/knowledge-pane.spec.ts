@@ -5,7 +5,7 @@ async function openDocument(page: Page) {
   await expect(page.locator('[data-pane="detail"]')).toContainText("Mock what the offline page needs.");
 }
 
-for (const width of [1280, 768, 320]) {
+for (const width of [1280, 768]) {
   test(`knowledge pane preserves docs and composer at ${width}px`, async ({ page, server }) => {
     await openScenario(page, server, "full");
     await page.setViewportSize({ width, height: 800 });

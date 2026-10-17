@@ -46,7 +46,6 @@ interface SplitPaneProps {
 
 function DetailSheet({ open, onClose, describe, children }: Pick<SplitPaneProps, "open" | "onClose" | "describe"> & { children: ReactNode }) {
   const shown = useOverlaySlot(open, PRIORITY.sheet)
-  const phone = useMediaQuery("(max-width: 767.98px)")
   const mounted = useRef(false)
   const body = useRef<HTMLDivElement>(null)
   if (shown) mounted.current = true
@@ -57,23 +56,17 @@ function DetailSheet({ open, onClose, describe, children }: Pick<SplitPaneProps,
         forceMount={open && mounted.current ? true : undefined}
         hidden={!shown}
         showCloseButton={false}
-        side={phone ? "bottom" : "right"}
-        className={cn(
-          "gap-0",
-          phone
-            ? "data-[side=bottom]:inset-0 data-[side=bottom]:h-full data-[side=bottom]:max-w-none data-[side=bottom]:rounded-none"
-            : "data-[side=right]:w-[92%] data-[side=right]:sm:max-w-3xl",
-          !shown && "!hidden",
-        )}
+        side="right"
+        className={cn("gap-0 data-[side=right]:w-[92%] data-[side=right]:sm:max-w-3xl", !shown && "!hidden")}
       >
         <SheetHeader className="flex-row items-center justify-between border-b px-4 py-2">
           <SheetTitle className="text-sm">Detail</SheetTitle>
           <SheetDescription className="sr-only">{describe}</SheetDescription>
           <SheetClose asChild>
-            <Button variant="ghost" size="sm" aria-label="Close detail" title="Close · Esc" className={cn("gap-2", phone && "h-11 px-3 text-sm")}>
+            <Button variant="ghost" size="sm" aria-label="Close detail" title="Close · Esc" className="gap-2">
               <X aria-hidden="true" />
               Close
-              {phone ? null : <Keys chord="Esc" className="kbd-hint" />}
+              <Keys chord="Esc" className="kbd-hint" />
             </Button>
           </SheetClose>
         </SheetHeader>
@@ -136,7 +129,7 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe, i
     return (
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div ref={narrow} className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-dock">
-          <Pane data-pane="list" ref={listPane} onKeyDown={onListKey} className="max-md:shrink-0">
+          <Pane data-pane="list" ref={listPane} onKeyDown={onListKey}>
             {list}
           </Pane>
           <DetailSheet open={open && detail !== null} onClose={onClose} describe={describe}>
@@ -189,7 +182,7 @@ export function SplitPane({ wide, list, detail, open, onClose, hint, describe, i
 /** The list pane's title row: `Tasks            2 open · 2 finished`, then any controls; it stays put while the list scrolls. */
 export function PaneHeader({ title, count, lead, children }: { title: string; count?: string; lead?: ReactNode; children?: ReactNode }) {
   return (
-    <div className="sticky top-0 z-10 flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--glass-edge)] sticky-glass px-4 py-2 max-md:static max-md:z-auto max-md:bg-transparent max-md:px-3 max-md:py-2 max-md:backdrop-blur-none">
+    <div className="sticky top-0 z-10 flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--glass-edge)] sticky-glass px-4 py-2">
       <h2 className={lead ? "sr-only" : "text-sm font-medium"}>{title}</h2>
       {lead}
       <span aria-hidden="true" className="min-w-2 flex-1" />

@@ -22,7 +22,7 @@ const SCENARIOS = ["full", "empty", "question"] as const;
 
 test("toolbar actions have spacing and readable contrast @theme", async ({ page, server }) => {
   await openScenario(page, server, "empty");
-  for (const width of [320, 768, 1280]) {
+  for (const width of [768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     const metrics = await page.evaluate(() => {
       const buttons = [...document.querySelectorAll(".toolbar-button")];
@@ -105,7 +105,7 @@ async function touchTargetMisses(page: Page): Promise<string[]> {
 
 async function expectShell(page: Page, tabs: number): Promise<void> {
   const project = page.getByRole("combobox", { name: "Project", exact: true });
-  await expect(project, "the project, over the composer or (on a phone) in the bar").toBeVisible();
+  await expect(project, "the project, over the composer").toBeVisible();
   await expect(project).toContainText("bot-lobby");
   await expect(page.getByRole("tab"), `eight pills`).toHaveCount(tabs);
   await expect(page.locator("#main"), "main pane").toBeVisible();

@@ -30,7 +30,7 @@ function Inside({ cell, intro }: { cell: SeatCell; intro: boolean }) {
 
 function Chip({ cell, intro, onToggled }: { cell: SeatCell; intro: boolean; onToggled: () => void }) {
   const { member } = cell
-  const look = "roster-chip inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs whitespace-nowrap max-md:min-h-11"
+  const look = "roster-chip inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs whitespace-nowrap"
   if (!member) return <li className={cn(look, "border-transparent bg-muted")}><Inside cell={cell} intro={intro} /></li>
   const toggle = async () => {
     if (await act("planner.toggleSeat", { member })) onToggled()

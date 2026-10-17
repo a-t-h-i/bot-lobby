@@ -6,7 +6,7 @@ declare const getComputedStyle: any;
 
 test("effort is a drag slider that names every level, steps by key and snaps when dragged", { tag: "@theme" }, async ({ page, server }, info) => {
   const trap = await openScenario(page, server, "full");
-  await page.setViewportSize({ width: info.project.name === "light-320" ? 320 : 390, height: 844 });
+  await page.setViewportSize({ width: 1280, height: 844 });
   await page.evaluate(() => { window.location.hash = "#/settings"; });
   const card = page.locator("section.glass", { hasText: "Backend" }).first();
   const slider = card.getByRole("slider", { name: "Backend effort" });
@@ -103,7 +103,7 @@ test("metrics uses ReUI date filters, daily trends and model comparisons", { tag
   const requests: Array<Record<string, string>> = [];
   page.on("request", (request) => { if (request.url().endsWith("/api/metrics.get")) requests.push(request.postDataJSON()); });
   const trap = await openScenario(page, server, "full");
-  if (info.project.name !== "light-320") await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole("tab", { name: /Metrics/ }).click();
   const trends = page.getByRole("region", { name: "Daily runs", exact: true });
   await expect(trends).toBeVisible();

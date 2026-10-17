@@ -107,7 +107,7 @@ shell in the project's folder, as many as eight, listed down its right side when
 one. Shells keep running while the drawer is hidden or the page reloads, and end when you end them
 or the lobby stops. Inside a terminal every key is the shell's except `` Ctrl+` ``. It uses
 `node-pty` when that is installed and otherwise Python's standard `pty` module (macOS and Linux);
-on Windows it needs `node-pty`. Not on a phone.
+on Windows it needs `node-pty`.
 
 ## Crashes and restarts
 

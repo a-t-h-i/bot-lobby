@@ -12,7 +12,7 @@ export function JumpToLatest({ onClick, className }: { onClick: () => void; clas
       aria-label="Jump to latest"
       title="Jump to latest"
       onClick={onClick}
-      className={cn("jump-latest btn-outline grid size-9 place-items-center rounded-full border bg-card text-foreground shadow-card outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-md:size-11", className)}
+      className={cn("jump-latest btn-outline grid size-9 place-items-center rounded-full border bg-card text-foreground shadow-card outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring", className)}
     >
       <ArrowDown aria-hidden="true" className="size-4" />
     </button>

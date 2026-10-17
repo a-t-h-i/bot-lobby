@@ -34,7 +34,7 @@ function DeliveryAction({ action, delivery, busy, onAction }: { action: Action; 
   const retryCleanup = action === "merge_main" && delivery.status === "successful" && Boolean(delivery.cleanupError)
   const disabled = busy || delivery.status === "in_progress" || (delivery.status === "successful" && !retryCleanup) || Boolean(reason)
   return <div className="grid min-w-0 gap-1">
-    <Button variant="outline" className="max-md:min-h-11 max-md:whitespace-normal" disabled={disabled} onClick={() => onAction(action)}>{action === "create_pr" ? "Create PR" : retryCleanup ? "Retry worktree cleanup" : "Merge to main"}</Button>
+    <Button variant="outline" disabled={disabled} onClick={() => onAction(action)}>{action === "create_pr" ? "Create PR" : retryCleanup ? "Retry worktree cleanup" : "Merge to main"}</Button>
     <p className="text-xs text-muted-foreground">{action === "create_pr" ? "Pushes the task branch and opens a PR targeting main. Does not merge." : retryCleanup ? "Main was delivered. Removes the retained worktree after confirmation." : "Updates and pushes main, then removes the task worktree. Requires confirmation."}</p>
     {reason ? <p className="text-sm text-destructive">{reason} Refresh review after resolving this restriction, then choose the action again.</p> : null}
   </div>
@@ -114,13 +114,13 @@ function Status({ review: r }: { review: Controller }) {
 
 function Actions({ review: r }: { review: Controller }) {
   return <>
-    <div className="mt-3 grid gap-3 max-md:grid-cols-1 md:grid-cols-2">
+    <div className="mt-3 grid grid-cols-2 gap-3">
       <DeliveryAction action="create_pr" delivery={r.current} busy={r.busy} onAction={() => void r.request("create_pr")} />
       <DeliveryAction action="merge_main" delivery={r.current} busy={r.busy} onAction={r.reviewMerge} />
     </div>
     <div className="mt-3 flex flex-wrap gap-2">
-      <Button variant="ghost" className="max-md:min-h-11" disabled={r.busy} onClick={() => void r.request("refresh")}>Refresh review</Button>
-      <Button variant="ghost" className="max-md:min-h-11" disabled={r.busy || r.terminal} onClick={() => void r.request("defer")}>Not now</Button>
+      <Button variant="ghost" disabled={r.busy} onClick={() => void r.request("refresh")}>Refresh review</Button>
+      <Button variant="ghost" disabled={r.busy || r.terminal} onClick={() => void r.request("defer")}>Not now</Button>
     </div>
   </>
 }
@@ -129,13 +129,13 @@ function Confirmation({ review: r }: { review: Controller }) {
   const retryCleanup = r.current.status === "successful" && Boolean(r.current.cleanupError)
   const description = retryCleanup ? "Main was already delivered. Remove the task worktree if it still contains only the reviewed commit. The task branch is kept." : CONFIRM
   return <Popup open={r.slot} onOpenChange={r.setConfirm} label={retryCleanup ? "Confirm worktree removal" : "Confirm merge to main"} description={description} onCloseAutoFocus={(event) => { event.preventDefault(); requestAnimationFrame(() => r.trigger.current?.focus()) }}>
-    <div className="grid gap-3 p-4 max-md:p-3">
+    <div className="grid gap-3 p-4">
       <h3 className="font-medium">{retryCleanup ? "Remove task worktree?" : "Merge to main?"}</h3>
       <p className="text-sm">{description}</p>
       <p className="break-all text-sm text-muted-foreground">{r.current.repository} · {r.current.sourceCommit} → main</p>
       <div className="flex flex-wrap justify-end gap-2">
-        <Button variant="outline" className="max-md:min-h-11" onClick={() => r.setConfirm(false)}>Cancel</Button>
-        <Button className="max-md:min-h-11 max-md:whitespace-normal" disabled={r.busy || Boolean(r.current.blocked.merge_main) || (r.terminal && !retryCleanup)} onClick={() => void r.request("merge_main")}>{retryCleanup ? "Confirm worktree removal" : "Confirm merge and push main"}</Button>
+        <Button variant="outline" onClick={() => r.setConfirm(false)}>Cancel</Button>
+        <Button disabled={r.busy || Boolean(r.current.blocked.merge_main) || (r.terminal && !retryCleanup)} onClick={() => void r.request("merge_main")}>{retryCleanup ? "Confirm worktree removal" : "Confirm merge and push main"}</Button>
       </div>
     </div>
   </Popup>

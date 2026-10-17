@@ -174,7 +174,7 @@ export const RichAnswer = forwardRef<RichAnswerHandle, {
         }}
         onFocus={() => { setFocused(true); onFocusChange(true) }}
         onBlur={() => { setFocused(false); onFocusChange(false) }}
-        className="q-own-text min-h-9 w-full min-w-0 px-4 py-2 text-sm break-words outline-none max-md:min-h-11 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.8125rem] [&_ol]:list-decimal [&_ol]:ps-5 [&_ul]:list-disc [&_ul]:ps-5"
+        className="q-own-text min-h-9 w-full min-w-0 px-4 py-2 text-sm break-words outline-none [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.8125rem] [&_ol]:list-decimal [&_ol]:ps-5 [&_ul]:list-disc [&_ul]:ps-5"
       />
       <div role="toolbar" aria-label="Formatting" aria-hidden={!focused} className={cn("q-own-bar flex items-center gap-0.5 px-2 pb-1.5", !focused && "pointer-events-none")}>
         {TOOLS.map(({ format: name, label: toolLabel, keys, icon: Icon }) => (
@@ -192,7 +192,7 @@ export const RichAnswer = forwardRef<RichAnswerHandle, {
             <Icon aria-hidden="true" className="size-3.5" />
           </button>
         ))}
-        <span className="ms-auto pe-1 text-2xs text-muted-foreground max-md:hidden">Enter answers · Shift+Enter new line</span>
+        <span className="ms-auto pe-1 text-2xs text-muted-foreground">Enter answers · Shift+Enter new line</span>
       </div>
     </div>
   )
