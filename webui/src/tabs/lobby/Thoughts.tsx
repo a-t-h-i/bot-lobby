@@ -153,7 +153,7 @@ export function Thoughts({ thoughts, collapsed, onToggle, shortcut, busy = [] }:
         }}
       >
         <div aria-hidden="true" className="thought-aura" data-working={working} />
-        <div ref={log} className="relative min-h-0 overflow-y-auto p-3 outline-none md:p-4" role="log" aria-label="Latest thoughts" tabIndex={0}>
+        <div ref={log} className="relative min-h-0 overflow-y-auto p-4 outline-none" role="log" aria-label="Latest thoughts" tabIndex={0}>
           {shown.length ? (
             <ul className="flex flex-col gap-2.5">
               {shown.map((thought) => <ThoughtBubble key={thought.id} thought={thought} />)}

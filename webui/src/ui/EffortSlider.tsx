@@ -119,7 +119,7 @@ export function EffortSlider({ value, levels, supported, recommended, model, lab
         data-top={top || undefined}
         data-dragging={dragging || undefined}
         data-charge={charge}
-        className="effort-track relative h-10 cursor-pointer touch-none rounded-md outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background max-md:h-11"
+        className="effort-track relative h-10 cursor-pointer touch-none rounded-md outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         {level === "max" ? <span aria-hidden="true" data-slot="effort-aura" className="effort-aura pointer-events-none absolute -inset-1 rounded-lg" /> : null}
         <span aria-hidden="true" data-slot="effort-rail" className="effort-rail absolute inset-0 overflow-hidden rounded-md">

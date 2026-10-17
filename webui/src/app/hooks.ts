@@ -40,7 +40,3 @@ export function useMediaQuery(query: string): boolean {
   return useSyncExternalStore(subscribe, snapshot)
 }
 
-/** Short landscape phones: compact chrome so the page keeps its room. The software keyboard shrinks the visual viewport, not the layout viewport, so it must not match here. */
-export function useCompactLandscape(): boolean {
-  return useMediaQuery("(max-width: 767.98px) and (orientation: landscape) and (max-height: 500px)")
-}

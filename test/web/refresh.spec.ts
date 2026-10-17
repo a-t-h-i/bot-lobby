@@ -68,7 +68,7 @@ for (const name of PAGES) {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow, `${name} document fits viewport`).toBeLessThanOrEqual(1);
     await expect(page.locator("select"), "native dropdowns removed").toHaveCount(0);
-    await page.getByRole("complementary", { name: "Sidebar" }).getByRole("button", { name: "Keyboard shortcuts", exact: true }).or(page.getByRole("banner").getByRole("button", { name: "Open sidebar" })).focus();
+    await page.getByRole("complementary", { name: "Sidebar" }).getByRole("button", { name: "Keyboard shortcuts", exact: true }).focus();
     await page.keyboard.press("Tab");
     const focus = await page.evaluate(() => ({ visible: document.activeElement.matches(":focus-visible"), width: document.activeElement.getBoundingClientRect().width }));
     expect(focus.visible, "keyboard focus is visible").toBe(true);
@@ -79,7 +79,7 @@ for (const name of PAGES) {
 test("toolbar touch targets, context, keyboard hint activation and modal guard", async ({ page, server }) => {
   await openScenario(page, server, "full");
   const header = page.locator("header").first();
-  // The project sits over the composer; a phone keeps it in the bar.
+  // The project sits over the composer.
   await expect(page.getByRole("combobox", { name: "Project", exact: true })).toBeVisible();
   await expect(header.getByLabel("Connected", { exact: true })).toBeVisible();
   const controls = header.locator("button:visible, a:visible");

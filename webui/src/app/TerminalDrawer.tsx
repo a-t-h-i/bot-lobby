@@ -7,7 +7,7 @@
  * them. Its top edge drags to make it taller, and both its height and whether
  * it is open are remembered. The terminal key (Ctrl+` unless rebound) or the
  * bar's Terminal button opens and hides it; the shells keep running while it
- * is hidden. Not on a phone.
+ * is hidden.
  */
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { ChevronDown, Plus, SquareTerminal, Trash2 } from "lucide-react"

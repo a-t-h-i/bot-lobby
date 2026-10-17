@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button"
 import { Kbd, Keys } from "@/components/ui/kbd"
 import { Popup } from "@/components/ui/popup"
 import { PRIORITY, useOverlaySlot } from "@/lib/overlay"
-import { useMediaQuery } from "./hooks"
 import type { KeyInfo, TabInfo } from "@protocol"
 import { goKey } from "@/tabs/registry"
 import { matchKey } from "./useLobbyKeys"
@@ -142,14 +141,9 @@ export function AltH({
   keys: KeyInfo[]
   tabs: TabInfo[]
 }) {
-  const phone = useMediaQuery("(max-width: 767.98px)")
-  const wants = open && !phone
+  const wants = open
   const shown = useOverlaySlot(wants, PRIORITY.help)
   const pane = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (phone && open) onOpenChange(false)
-  }, [phone, open, onOpenChange])
 
   useEffect(() => {
     if (!wants || !shown) return
@@ -162,10 +156,9 @@ export function AltH({
     return () => window.removeEventListener("keydown", close, true)
   }, [keys, onOpenChange, shown, wants])
 
-  if (phone) return null
   return (
     <Popup open={wants && shown} onOpenChange={onOpenChange} label="Keys" className="max-w-4xl">
-      <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 max-md:px-3">
+      <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
         <h2 aria-hidden="true" className="text-base font-semibold tracking-tight">
           Keyboard shortcuts
         </h2>
@@ -176,7 +169,7 @@ export function AltH({
           </Button>
         </span>
       </header>
-      <div ref={pane} className="grid min-h-0 flex-1 gap-x-10 gap-y-6 overflow-y-auto p-4 max-md:p-3 md:grid-cols-2">
+      <div ref={pane} className="grid min-h-0 flex-1 grid-cols-2 gap-x-10 gap-y-6 overflow-y-auto p-4">
         <div className="flex flex-col gap-6">
           <Section title="Everywhere" lines={fromKeys(keys)} />
           <Section title="Jump to a tab" lines={tabKeys(tabs)} />

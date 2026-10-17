@@ -34,7 +34,7 @@ export function TypefacePicker({ kind, dense = false }: { kind: "font" | "mono";
             className={cn(
               "outline-none transition-[background-color,border-color,box-shadow] duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
               dense
-                ? "flex min-h-8 items-center gap-2 rounded-lg px-2 text-left text-sm hover:bg-accent max-md:min-h-11"
+                ? "flex min-h-8 items-center gap-2 rounded-lg px-2 text-left text-sm hover:bg-accent"
                 : cn("grid gap-1 rounded-xl border p-2.5 text-left", on ? "border-primary bg-accent shadow-[0_0_0_1px_var(--primary)]" : "border-[var(--glass-edge)] hover:bg-accent/50")
             )}>
             <span aria-hidden="true" className={cn("leading-none", dense ? "w-7 text-base" : "text-2xl")} style={stack ? { fontFamily: stack } : kind === "mono" ? { fontFamily: "var(--app-font-mono, ui-monospace, monospace)" } : undefined}>

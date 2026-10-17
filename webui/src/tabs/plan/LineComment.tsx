@@ -33,7 +33,7 @@ export function LineComment({ line, onCancel, onSent }: LineCommentProps) {
   }
   return (
     <div ref={ref} role="group" aria-label="Comment on this line" className="line-comment relative mt-1 mb-2 ml-6 rounded-xl border p-3">
-      <Button type="button" variant="ghost" size="icon" aria-label="Cancel the comment" title="Cancel · Esc" onClick={onCancel} className="absolute top-1.5 right-1.5 size-7 text-muted-foreground max-md:size-11">
+      <Button type="button" variant="ghost" size="icon" aria-label="Cancel the comment" title="Cancel · Esc" onClick={onCancel} className="absolute top-1.5 right-1.5 size-7 text-muted-foreground">
         <X aria-hidden="true" />
       </Button>
       <NoteForm label="Your comment" hint="Enter adds the comment · Esc cancels" buttonLabel="Add comment" onSend={send} />

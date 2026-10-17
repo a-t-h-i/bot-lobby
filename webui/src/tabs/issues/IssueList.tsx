@@ -17,7 +17,7 @@ function Row({ issue, selected, now, onSelect }: { issue: IssueInfo; selected: b
         data-row
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(issue.number)}
-        className={cn(ROW, "max-md:min-h-11")}
+        className={ROW}
       >
         <span className="flex flex-wrap items-start gap-2 text-sm">
           <span className="shrink-0 text-muted-foreground tabular-nums">#{issue.number}</span>

@@ -41,11 +41,11 @@ export function NewSessionDialog({ open, onOpenChange }: { open: boolean; onOpen
   return (
     <Popup open={shown} label="New session" description="Starts a task in a session of its own, in the background." onOpenChange={(next) => { if (!next) close() }} dismissOnBackdrop={!busy}>
       <div className="flex w-[min(32rem,calc(100vw-2rem))] flex-col">
-        <div className="flex flex-col gap-1 border-b border-border px-4 py-3 max-md:px-3">
+        <div className="flex flex-col gap-1 border-b border-border px-4 py-3">
           <h2 className="text-[0.9375rem] font-semibold">New session</h2>
           <p className="text-xs text-muted-foreground">It runs in the background and shows up in the sidebar; this window carries on with what it is doing.</p>
         </div>
-        <div className="flex flex-col gap-1.5 p-4 max-md:p-3">
+        <div className="flex flex-col gap-1.5 p-4">
           <label htmlFor={field} className="text-sm font-medium">What should it do?</label>
           <Textarea
             id={field}
@@ -65,9 +65,9 @@ export function NewSessionDialog({ open, onOpenChange }: { open: boolean; onOpen
           />
           {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-muted/30 px-4 py-3 max-md:px-3">
-          <Button variant="outline" onClick={close} disabled={busy} className="max-md:min-h-11">Cancel</Button>
-          <Button onClick={() => void start()} disabled={!request.trim() || busy} aria-busy={busy} className="max-md:min-h-11">{busy ? "Starting…" : "Start session"}</Button>
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-muted/30 px-4 py-3">
+          <Button variant="outline" onClick={close} disabled={busy}>Cancel</Button>
+          <Button onClick={() => void start()} disabled={!request.trim() || busy} aria-busy={busy}>{busy ? "Starting…" : "Start session"}</Button>
         </div>
       </div>
     </Popup>

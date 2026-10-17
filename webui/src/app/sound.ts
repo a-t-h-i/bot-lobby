@@ -33,15 +33,3 @@ export function droplet(): void {
     oscillator.onended = () => { oscillator.disconnect(); gain.disconnect() }
   } catch { /* Audio failure never blocks a prompt. */ }
 }
-
-/** A quiet 30 ms tick the phone tab carousel plays when a card crosses the centre; best-effort like droplet, never queued or blocking. */
-export function navTick(): void {
-  if (soundMuted() || !context || context.state !== "running") return
-  try {
-    const now = context.currentTime, oscillator = context.createOscillator(), gain = context.createGain()
-    oscillator.frequency.setValueAtTime(1500, now)
-    gain.gain.setValueAtTime(0.0001, now); gain.gain.exponentialRampToValueAtTime(0.045, now + 0.004); gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.028)
-    oscillator.connect(gain); gain.connect(context.destination); oscillator.start(now); oscillator.stop(now + 0.03)
-    oscillator.onended = () => { oscillator.disconnect(); gain.disconnect() }
-  } catch { /* Audio failure never blocks a prompt. */ }
-}

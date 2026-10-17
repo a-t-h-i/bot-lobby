@@ -119,7 +119,7 @@ function AutoMode({ on, toggle }: { on: boolean; toggle: () => void }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-[0.8125rem] font-medium transition-colors hover:bg-accent max-md:min-h-11">
+        <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-[0.8125rem] font-medium transition-colors hover:bg-accent">
           <RefreshCw aria-hidden="true" className="size-4 text-muted-foreground" />
           <span>Auto</span>
           <Switch checked={on} onCheckedChange={toggle} aria-label="Auto mode" aria-keyshortcuts="A" />

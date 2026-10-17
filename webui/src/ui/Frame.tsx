@@ -37,9 +37,9 @@ export function Frame({ title, note, className, children, collapsed, onToggle, s
                 aria-keyshortcuts={shortcut ? `${shortcut} Enter Space` : "Enter Space"}
                 aria-describedby="focused-action-help"
                 onClick={onToggle}
-                className="btn-ghost -mr-1.5 inline-flex h-8 items-center gap-1.5 rounded-lg border border-transparent px-2 text-muted-foreground transition-[box-shadow,color,scale] duration-150 ease-snap outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.97] motion-reduce:active:scale-100 max-md:h-11 max-md:min-w-11 max-md:justify-center"
+                className="btn-ghost -mr-1.5 inline-flex h-8 items-center gap-1.5 rounded-lg border border-transparent px-2 text-muted-foreground transition-[box-shadow,color,scale] duration-150 ease-snap outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.97] motion-reduce:active:scale-100"
               >
-                {shortcut ? <Keys chord={shortcut} className="kbd-hint max-md:hidden" /> : null}
+                {shortcut ? <Keys chord={shortcut} className="kbd-hint" /> : null}
                 <ChevronDown aria-hidden="true" className={cn("size-4 transition-transform duration-200 ease-snap", collapsed && "-rotate-90")} />
               </button>
             ) : null}

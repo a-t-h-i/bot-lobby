@@ -6,7 +6,6 @@ import { useId, useState, type KeyboardEvent } from "react"
 import { ArrowUp, Loader } from "lucide-react"
 import { ActionButton } from "./Actions"
 import { Textarea } from "@/components/ui/textarea"
-import { cn } from "@/lib/utils"
 
 interface NoteFormProps {
   label: string
@@ -48,7 +47,7 @@ export function NoteForm({ label, hint, buttonLabel = "Send", onSend }: NoteForm
         }}
       />
       {hint ? (
-        <p id={`${id}-hint`} className={cn("text-xs text-muted-foreground", /(?:Enter|Esc)/.test(hint) && "max-md:hidden")}>
+        <p id={`${id}-hint`} className="text-xs text-muted-foreground">
           {hint}
         </p>
       ) : null}
