@@ -47,8 +47,8 @@ test("toolbar actions have spacing and readable contrast @theme", async ({ page,
       const gap = (a: any, b: any) => b.getBoundingClientRect().left - a.getBoundingClientRect().right;
       // The app's switches sit side by side at the foot of the open sidebar.
       const tools = [...document.querySelectorAll("#app-sidebar .sidebar-foot > div > *")];
-      const composer = buttons.filter((button: any) => button.closest("#app-dock"));
-      return { contrast, sidebarGaps: tools.slice(1).map((button: any, i: number) => gap(tools[i], button)), composerGap: gap(composer[0], composer[1]) };
+      const actions = [...document.querySelectorAll("#app-dock [data-chat-composer-actions] > *")].filter((el: any) => el.getBoundingClientRect().width > 0);
+      return { contrast, sidebarGaps: tools.slice(1).map((button: any, i: number) => gap(tools[i], button)), composerGap: gap(actions[0], actions[1]) };
     });
     expect(Math.min(...metrics.contrast), "icons contrast with their button surface").toBeGreaterThanOrEqual(4.5);
     // Read again until the sidebar has settled: it may still be sliding in after the resize.
@@ -56,7 +56,7 @@ test("toolbar actions have spacing and readable contrast @theme", async ({ page,
       const tools = [...document.querySelectorAll("#app-sidebar .sidebar-foot > div > *")];
       return Math.min(...tools.slice(1).map((button: any, i: number) => button.getBoundingClientRect().left - tools[i]!.getBoundingClientRect().right));
     }), "the sidebar's switches keep apart").toBeGreaterThanOrEqual(2);
-    expect(metrics.composerGap, "Attach and Preview have room between them").toBeGreaterThanOrEqual(7);
+    expect(metrics.composerGap, "Attach and Send have room between them").toBeGreaterThanOrEqual(7);
     await expectNoSidewaysScroll(page);
   }
 });
