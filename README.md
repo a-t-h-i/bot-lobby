@@ -1,9 +1,9 @@
 # Bot-Lobby
+Bot-lobby is a determenistic agentic coding engine. You can come up with a vague description of what you want to create, the agents (Oracle, Dev, Design, QA and Research) ask you a series of questions to help you form a clear picture from the vague description you've provided. The agents can even generate UI mockups that you can pick from. Once you come to an agreement with the agents, they will then get to work, and the harness will enforce the agreed upon plan. The agents are required to follow it faithfully. 
 
-A [Pi](https://pi.dev) extension for multi-agent software development. Describe a change, agree on a
-plan with the oracle, and follow the agents in a local browser lobby. Approvals, domain boundaries and QA
-are enforced before anything is called done.
+I came up with the name bot-lobby from my 6+ years worth of experience in playing online FPS games. The name is normally used as a joke or to mock the other players by stating that you're playing in a bot lobby (playing with robots) because of how incompetent they appear to be. The contrary is true for the bots in bot-lobby though, they are quite smart and capable... Well, depending on the models you choose of course.
 
+AI written wall of text below: 
 ## Install
 
 ```bash
