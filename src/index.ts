@@ -12,6 +12,7 @@ import { TERMINAL_STATES } from "./schemas/task.ts";
 import { pingTransition } from "./pi/notify.ts";
 import { isSubagentProcess } from "./pi/quiet.ts";
 import { registerDeskClient } from "./desk/client-extension.ts";
+import { registerBoardClient } from "./desk/board-client.ts";
 import { registerLobbyEvents } from "./lobby/runtime.ts";
 import { registerOwner } from "./pi/owner.ts";
 import { registerClassifier } from "./classifier/instance.ts";
@@ -50,6 +51,8 @@ export default function (pi: ExtensionAPI): void {
   registerWebTools(pi);
   // Parallel workers share files through the master's file desk.
   if (isSubagentProcess()) registerDeskClient(pi);
+  // Workers on a task post contracts, decisions and blockers to its board and read the others'.
+  if (isSubagentProcess()) registerBoardClient(pi);
   // Subagents look files up with the classifier (the engine allows the tool only while file hints are on).
   if (isSubagentProcess()) registerClassifierTools(pi);
   // A subagent given a tool budget (scouts) is warned, then refused, so it reports instead of searching on.

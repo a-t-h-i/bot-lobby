@@ -30,7 +30,8 @@ import type { AskQuestion, AskResult } from "../ask/types.ts";
 import { mapConcurrent } from "../execution/agent-runner.ts";
 import { taskExecution } from "../execution/task-cancellation.ts";
 import { parseWorkerResult } from "../roles/worker.ts";
-import { autoNote, DESK_TOOLS, DeskSession } from "../desk/session.ts";
+import { autoNote, DeskSession } from "../desk/session.ts";
+import { closeWorkerTrees, mapToTop, mergeWorkerTrees, openWorkerTrees, type MergeOutcome } from "../execution/worker-trees.ts";
 import type { Handover } from "../desk/desk.ts";
 import { changedFiles, commitBefore, commitFiles, commitMessage, headCommit, readRepositoryDiff, uncommitted } from "../execution/git.ts";
 import { appendChange, explainChanges, provenanceLines, provenanceSummary, readChanges, type FileProvenance } from "../state/changes.ts";
@@ -49,6 +50,9 @@ import {
 import { researchResultPath, runResearch, type ResearchOutcome, type ResearchRequest } from "../master/research.ts";
 import { assessReconnaissance, completionBlockers, decideReviewLoop, recordDecision } from "../master/decisions.ts";
 import { detectSharedFiles, summarizeOutcomes } from "../master/synthesis.ts";
+import { boardContext, boardPath, filterPosts, formatPosts, readBoard } from "../desk/board.ts";
+import { runGoalCheck } from "../master/goal-check.ts";
+import { createHash } from "node:crypto";
 import { tail, truncate } from "../text.ts";
 import { isAutoMode } from "../state/auto.ts";
 import { briefRejection } from "./brief.ts";
@@ -624,11 +628,12 @@ function recordAdvisoryPushbacks(task: Task, entries: Array<{ pushback?: Pushbac
 
 const FULL_NEXT = "Next: inspect the diff, then run action=qa once this domain's work is complete.";
 
-function workerReport(outcome: WorkerOutcome, approvals: Approval[], pushback?: Approval, next = FULL_NEXT): string {
+function workerReport(outcome: WorkerOutcome, approvals: Approval[], pushback?: Approval, next = FULL_NEXT, fullReport = ""): string {
   const { result, run, issues } = outcome;
   const objection = result.pushback;
   return [
     `Worker ${result.domain}: ${run.status}${run.error ? ` (${run.error})` : ""}`,
+    fullReport ? `Full report: ${fullReport} (read it for detail the lines below shorten)` : "",
     result.completed ? `Completed: ${truncate(result.completed, 1200)}` : "",
     result.filesChanged.length > 0
       ? `Files changed:\n${result.filesChanged.map((file) => `- ${file.path} — ${file.change}`).join("\n")}`
@@ -706,9 +711,22 @@ function workerTaskText(task: Task, planBudget = 6000): string {
     .join("\n\n");
 }
 
-function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instruction: string, time?: AgentTime): WorkerRequest {
+/** The task's board: one file in its directory that every agent of the task posts to and reads. */
+function taskBoard(deps: WorkflowDeps, task: Task): string {
+  return boardPath(taskDirFor(deps.root, deps.configDir, task.id));
+}
+
+/** What the agents posted to the board during this action, for the oracle. */
+function boardNews(deps: WorkflowDeps, task: Task, after: number): string {
+  const posts = filterPosts(readBoard(taskBoard(deps, task)), { after, limit: 40 });
+  return posts.length > 0 ? `Task board, new posts:\n${formatPosts(posts)}` : "";
+}
+
+function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instruction: string, time?: AgentTime, alongside?: readonly Domain[]): WorkerRequest {
   const ask = askRelay(task, deps, domain);
   return {
+    board: taskBoard(deps, task),
+    ...(alongside && alongside.length > 1 ? { alongside } : {}),
     ...(time ? { time } : {}),
     ...(ask ? { ask } : {}),
     // QA writing tests works to the same budget as the gate: the risk of what is built so far.
@@ -938,8 +956,30 @@ function absorbWorkerOutcome(task: Task, deps: WorkflowDeps, outcome: WorkerOutc
   task.blockers = [...task.blockers.filter((blocker) => blocker.domain !== domain), ...outcome.result.blockers];
   updateScratchpad(deps, task, outcome);
   const grown = qaJoinsGrownFastTask(task, outcome);
-  const report = workerReport(outcome, approvals, pushback, onFastTrack(task) ? fastNext(task) : qaRequired(task) ? FULL_NEXT : PLANNED_NEXT);
+  const full = saveFullReport(deps, task, outcome);
+  const report = workerReport(outcome, approvals, pushback, onFastTrack(task) ? fastNext(task) : qaRequired(task) ? FULL_NEXT : PLANNED_NEXT, full);
   return [report, grown, timeReport(outcome)].filter(Boolean).join("\n");
+}
+
+/** Reports longer than this are kept whole in a file and the oracle gets the path. */
+const LONG_REPORT = 2400;
+
+/**
+ * Keep a long worker report whole in the task's `reports/` folder, so the
+ * oracle reads what it needs from the file instead of getting a shortened
+ * copy relayed through its own context. Returns the path, or "".
+ */
+function saveFullReport(deps: WorkflowDeps, task: Task, outcome: WorkerOutcome): string {
+  const output = outcome.run.output?.trim() ?? "";
+  if (output.length <= LONG_REPORT) return "";
+  const stamp = (outcome.run.finishedAt ?? new Date().toISOString()).replace(/[:.]/g, "-");
+  const path = join(taskDirFor(deps.root, deps.configDir, task.id), "reports", `${outcome.result.domain}-${stamp}.md`);
+  try {
+    writeFileEnsured(path, `${output}\n`);
+    return path;
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -1014,6 +1054,7 @@ async function handleImplement(task: Task, params: OrchestrateParams, deps: Work
   // A QA step after work is in verifies it at its risk: read the change first.
   if (assignments.some((entry) => entry.domain === "qa") && builtSomething(task)) await assessBuilt(task, deps);
   const times = await workerTimes(task, deps, assignments);
+  const boardBefore = readBoard(taskBoard(deps, task)).at(-1)?.seq ?? 0;
   let report: string;
   try {
     if (assignments.length === 1) {
@@ -1030,7 +1071,7 @@ async function handleImplement(task: Task, params: OrchestrateParams, deps: Work
   }
   const tree = await changeState(deps, task, task.baseline?.head);
   const lint = lintNote(await lintTask(task, deps, tree), deps.config.lint.mode, ownersOf(tree?.files));
-  return [report, provenanceNote(tree?.files), lint].filter(Boolean).join("\n\n");
+  return [report, boardNews(deps, task, boardBefore), provenanceNote(tree?.files), lint].filter(Boolean).join("\n\n");
 }
 
 /**
@@ -1130,34 +1171,58 @@ function stepLine(instruction: string): string {
  * Several domains at once. The workers share one file desk: each claims a file
  * before editing it, queues for a busy one, and hands it over with a note; a
  * worker that finishes hands over whatever it still holds automatically.
+ * In `worktrees` mode each worker has a checkout of its own instead (no
+ * claims, no queues), and their changes are applied back when the batch ends.
+ * Either way the desk carries the board and the workers' questions to each other.
  */
 async function runParallelWorkers(task: Task, deps: WorkflowDeps, assignments: Assignment[], times: ReadonlyMap<Domain, WorkerTime>): Promise<string> {
-  const session = new DeskSession({ cwd: deps.cwd });
+  const batch = assignments.map((entry) => entry.domain);
+  const opened = deps.config.workflow.parallelMode === "worktrees" ? await openWorkerTrees(deps.cwd, batch) : undefined;
+  const trees = opened && typeof opened !== "string" ? opened : undefined;
+  const session = new DeskSession({ cwd: deps.cwd, boardPath: taskBoard(deps, task), peers: true, ...(trees ? { claims: false } : {}) });
   await session.open();
   let outcomes: WorkerOutcome[];
   let unenforced: Domain[];
+  let merged = "";
   try {
-    outcomes = await mapConcurrent(assignments, deps.config.workflow.maxParallelWorkers, ({ domain, instruction }) => {
-      const request = workerRequest(deps, task, domain, instruction, times.get(domain));
-      request.agent = {
-        env: session.env(domain),
-        extraTools: DESK_TOOLS,
-        onStart: (handle) => session.attach(domain, handle),
-        onAttemptEnd: (run) => {
-          const result = parseWorkerResult(domain, run.output);
-          session.release(domain, (path, next) => autoNote(domain, path, next, result.filesChanged, result.completed));
-        },
-      };
-      return runWorker(request, deps.runProcess ?? spawnPiProcess);
-    });
-    unenforced = assignments.map((entry) => entry.domain).filter((domain) => !session.greetedBy(domain));
+    try {
+      outcomes = await mapConcurrent(assignments, deps.config.workflow.maxParallelWorkers, ({ domain, instruction }) => {
+        const request = workerRequest(deps, task, domain, instruction, times.get(domain), batch);
+        const tree = trees?.trees.get(domain);
+        if (tree) {
+          request.cwd = tree.cwd;
+          request.ownCheckout = true;
+        }
+        request.agent = {
+          env: session.env(domain),
+          extraTools: session.tools(),
+          onStart: (handle) => session.attach(domain, handle),
+          onAttemptEnd: (run) => {
+            const result = parseWorkerResult(domain, run.output);
+            session.release(domain, (path, next) => autoNote(domain, path, next, result.filesChanged, result.completed));
+          },
+        };
+        return runWorker(request, deps.runProcess ?? spawnPiProcess);
+      });
+      unenforced = trees ? [] : assignments.map((entry) => entry.domain).filter((domain) => !session.greetedBy(domain));
+    } finally {
+      await session.close();
+    }
+    if (trees) {
+      const results = await mergeWorkerTrees(trees, batch, join(taskDirFor(deps.root, deps.configDir, task.id), "patches"));
+      // The edits were made in the worktrees: the task's record names the same files in its own tree.
+      outcomes = outcomes.map((outcome) => (outcome.run.edited?.length ? { ...outcome, run: { ...outcome.run, edited: outcome.run.edited.map((path) => mapToTop(trees, outcome.result.domain, path)) } } : outcome));
+      merged = mergeReport(results);
+    }
   } finally {
-    await session.close();
+    if (trees) await closeWorkerTrees(trees);
   }
   const reports = outcomes.map((outcome) => absorbWorkerOutcome(task, deps, outcome, times.get(outcome.result.domain)));
   return [
-    `Parallel batch: ${assignments.map((entry) => entry.domain).join(", ")}.`,
+    `Parallel batch: ${batch.join(", ")}${trees ? " (a worktree each)" : ""}.`,
+    typeof opened === "string" ? `Worktrees were not used (${opened}); the workers shared the file desk.` : "",
     ...reports,
+    merged,
     handoverLog(session.handovers()),
     unenforced.length > 0
       ? `File checkout was not enforced for ${unenforced.join(", ")} (bot-lobby did not load in those workers); inspect the diff for overlapping edits.`
@@ -1165,6 +1230,16 @@ async function runParallelWorkers(task: Task, deps: WorkflowDeps, assignments: A
   ]
     .filter((line) => line.length > 0)
     .join("\n\n");
+}
+
+/** What came of applying each worker's worktree back to the task's tree. */
+function mergeReport(results: readonly MergeOutcome[]): string {
+  const applied = results.filter((entry) => entry.status === "applied").map((entry) => AGENT_LABELS[entry.worker as Domain] ?? entry.worker);
+  const conflicts = results.filter((entry): entry is Extract<MergeOutcome, { status: "conflict" }> => entry.status === "conflict");
+  return [
+    applied.length > 0 ? `Worktrees merged back: ${applied.join(", ")}.` : "",
+    ...conflicts.map((entry) => `${AGENT_LABELS[entry.worker as Domain] ?? entry.worker}'s change did not apply (${truncate(entry.reason, 200)}), so none of it is in the tree.${entry.patch ? ` Its patch is ${entry.patch}: delegate a fix step to ${AGENT_LABELS[entry.worker as Domain] ?? entry.worker} to apply it onto the current files (\`git apply --3way\` or by hand), reconciling it with the others' changes.` : ""}`),
+  ].filter(Boolean).join("\n");
 }
 
 function handoverLog(handovers: readonly Handover[]): string {
@@ -1254,11 +1329,14 @@ function qaRequest(deps: WorkflowDeps, task: Task, diff: string, risk: QaRiskAss
     taskId: task.id,
     domain: "qa",
     taskText: workerTaskText(task, 9000),
-    workerSummary: allScratchpads(deps, task),
+    // A clean review sees what was built, not how the builders describe it.
+    workerSummary: deps.config.workflow.cleanReview ? "" : allScratchpads(deps, task),
+    ...(deps.config.workflow.cleanReview ? { clean: true } : {}),
     ...(rounds ? { previousRound: rounds } : {}),
-    scoutOutcomes: loadScoutResults(taskReadDirs(deps.root, deps.configDir, task.id), [...new Set<Domain>(["qa", ...task.domains])]),
+    scoutOutcomes: deps.config.workflow.cleanReview ? [] : loadScoutResults(taskReadDirs(deps.root, deps.configDir, task.id), [...new Set<Domain>(["qa", ...task.domains])]),
     diff,
     risk: qaRiskBrief(risk),
+    board: boardContext(taskBoard(deps, task), "qa"),
     ...(provenance && provenance.length > 0 ? { provenance: provenanceLines(provenance) } : {}),
     ...(lint ? { lint: lintContext(lint, deps.config.lint.mode) } : {}),
     instruction: instruction?.trim() || qaInstruction(risk),
@@ -1371,10 +1449,12 @@ async function handleQa(task: Task, params: OrchestrateParams, deps: WorkflowDep
   ]);
   const provenance = tree?.files;
   // The gate's base is the task's own; a legacy task measured from an older commit lints from a fresh look.
-  const lint = await lintTask(task, deps, base === task.baseline?.head ? tree : undefined);
+  // Before any QA agent runs, Jev reads what was built: the gate's depth and test budget follow its risk. Neither waits for the other.
+  const [lint, risk] = await Promise.all([
+    lintTask(task, deps, base === task.baseline?.head ? tree : undefined),
+    assessTask(task, deps, diff, tree, base),
+  ]);
   const lintLine = lintBrief(lint, deps.config.lint.mode, Boolean(task.lintWaiver));
-  // Before any QA agent runs, Jev reads what was built: the gate's depth and test budget follow its risk.
-  const risk = await assessTask(task, deps, diff, tree, base);
   if (!risk.qaRequired) {
     const result = checksVerdict(lint, deps, Boolean(task.lintWaiver));
     const decision = await settleQaRound(task, result, iterations, deps, true);
@@ -1558,6 +1638,8 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
   // New lint errors in what the task touched hold it in block mode, unless the user accepted the work as it is.
   const lint = await lintTask(task, deps);
   if (lint && lintHolds(lint, deps.config.lint.mode, Boolean(task.lintWaiver))) throw new Error(`cannot complete: ${lintRefusal(lint)}`);
+  const missed = await checkGoal(task, params, deps);
+  if (missed) throw new Error(missed);
   // The gate refuses before any side effect, so a refusal leaves the task untouched.
   const oversized = overThreshold(readDataRoots(deps.root, deps.configDir), deps.config.knowledge.compactionThreshold);
   if (oversized.length > 0) throw new Error(`cannot complete: knowledge files over the compaction threshold: ${oversized.map((entry) => `${entry.agent}/${entry.file} (${entry.chars})`).join(", ")}. First record domain-relevant facts where they belong with action=knowledge (domain=designer|backend|qa), then rewrite each oversized file with action=compact, then call complete again.`);
@@ -1576,6 +1658,43 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
   const delivery = await offerDelivery(task, deps);
   const left = lint?.state === "failing" ? ` ${task.lintWaiver ? "Accepted by the user with lint errors" : "Lint (advisory)"}: ${lintSummary(lint)} Tell the user.` : "";
   return `Task ${task.id} completed.${committed} History recorded and temporary scratchpads removed. ${delivery}${left}`;
+}
+
+/**
+ * The goal check before completion: one read-only agent compares the change
+ * with the user's own request (not the plan). Gaps refuse completion once;
+ * the oracle fixes them, or completes again with a `reason` when they are
+ * deliberate (the user agreed). The same change is never checked twice, and
+ * an unreadable check holds nothing.
+ */
+async function checkGoal(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
+  if (!deps.config.workflow.goalCheck || !builtSomething(task) || task.qaWaiver) return "";
+  const base = await reviewBase(task, deps);
+  const diff = await readRepositoryDiff(deps.cwd, { ...(base ? { base } : {}), exclude: ownRecords(deps) });
+  if (!diff.trim() || /^Unable to read git state/.test(diff)) return "";
+  const key = createHash("sha256").update(diff).digest("hex").slice(0, 16);
+  if (task.goalCheck?.key !== key) {
+    const result = await runGoalCheck({
+      taskId: task.id,
+      request: taskRequest(task),
+      amendments: task.amendments,
+      diff,
+      cwd: deps.cwd,
+      config: deps.config,
+      ...(deps.profile ? { profile: deps.profile } : {}),
+      ...(deps.signal ? { signal: deps.signal } : {}),
+      ...(deps.onUpdate ? { onUpdate: deps.onUpdate } : {}),
+    }, deps.runProcess ?? spawnPiProcess);
+    task.goalCheck = { key, verdict: result.verdict, gaps: result.gaps, at: new Date().toISOString() };
+  }
+  const check = task.goalCheck!;
+  if (check.verdict !== "not_met") return "";
+  const gaps = check.gaps.slice(0, 12).map((gap) => `- ${truncate(gap, 300)}`).join("\n");
+  if (params.reason?.trim()) {
+    recordDecision(task, `Completed although the goal check named gaps (${check.gaps.map((gap) => truncate(gap, 120)).join("; ")}): ${params.reason.trim()}`);
+    return "";
+  }
+  return `cannot complete: the goal check read the change against the user's request and found it does not meet all of it:\n${gaps}\nDelegate a fix step for each gap and complete again (the next check reads the new change). If a gap is deliberate (the user agreed to leave it out, or it is out of scope), call complete again with reason saying so; tell the user.`;
 }
 
 /** The files a task's own workers changed: not one that held changes before they started, nor another task's. */

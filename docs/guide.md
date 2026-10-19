@@ -217,6 +217,38 @@ In **Tasks**, a step being worked on shows how many agents are on it, for exampl
 doing what, with children under their parent. Queued and finished agents are left out,
 and a child finishing does not complete a checklist step.
 
+## Agents working together
+
+The oracle still decides what gets done and when a task is finished. The agents share facts
+without going through it:
+
+- **Task board.** Each task keeps a board (`board.jsonl` in its folder). Workers post typed
+  entries there: `contract`, `decision`, `blocker`, `question`, `done` and `note`. Each role reads
+  only the kinds it follows, and running workers hear about new contracts and blockers straight
+  away. Later steps and the QA gate read the board too, and each step's report lists its new posts.
+- **Peer questions.** Workers in one parallel batch can ask each other short questions with
+  `ask_peer` instead of guessing. The answer goes back to whoever asked and onto the board.
+  Questions only: no worker gives another work.
+- **QA alongside the build.** On the full workflow, QA can write its tests in the same batch as
+  the build. It works from the plan's contracts and acceptance criteria, then runs the tests as
+  pieces are posted `done`.
+- **A worktree per worker** (`workflow.parallelMode: "worktrees"`; the default is `"desk"`). Each
+  worker in a batch gets its own checkout, so nobody queues for files. Ignored folders such as
+  `node_modules` are linked in from your checkout. When the batch ends, each worker's change is
+  applied back in turn. A change that clashes with an earlier one is saved as a patch under the
+  task's `patches/` folder for the oracle to hand back. It is never half-applied.
+- **Expert advice** (`workflow.consultExpert`, on by default). A task's DESIGN and DEV workers can
+  ask a stronger model for advice on a hard step with `ask_expert`, up to twice per step. It uses
+  the oracle's model unless `workflow.expertModel` names another.
+- **Clean review** (`workflow.cleanReview`, on by default). The QA gate sees the request, the
+  plan, the board and the diff. It does not see the workers' own accounts of their work.
+- **Goal check** (`workflow.goalCheck`, on by default). Before a task completes, one read-only
+  agent compares the change with what you asked for, not with the plan. Gaps hold completion
+  until they are fixed, or until the oracle completes with a reason, such as that you agreed to
+  leave something out.
+- **Files, not relays.** A long worker report is kept whole under the task's `reports/` folder,
+  and the oracle gets its path.
+
 ## Compaction
 
 The oracle, agents and children compact at settled turn boundaries before context

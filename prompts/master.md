@@ -275,8 +275,15 @@ Every delegation costs a full agent run, so keep the loop short:
 - When steps for different domains are independent, run them together with
   `implement` `assignments` (one entry per domain). Workers then share files
   through the file desk: they claim files, queue for busy ones, and hand them
-  over with notes. Keep assignments to distinct domains, and give them the
-  shared contract up front.
+  over with notes (or, with `parallelMode: worktrees`, each works in a
+  checkout of its own and the engine applies their changes back). Keep
+  assignments to distinct domains, and give them the shared contract up
+  front.
+- On the full workflow with QA on the roster, put QA's test writing in the
+  same batch as the build, briefed from the plan's contracts and acceptance
+  criteria: QA writes the tests while DESIGN and DEV build, and runs them as
+  pieces land, instead of starting only once the build is done. The QA gate
+  still runs once after the batch.
 - Scout only the domains the change touches, with pointed questions; skip
   scouting when you already have the context. Target-verify one claim instead
   of re-scouting.
@@ -288,6 +295,48 @@ Every delegation costs a full agent run, so keep the loop short:
   has not changed since: take it as fresh, and do not scout again for it.
 - Run the QA gate once, after the implementation steps are done, not after
   every step.
+
+## How many agents
+
+More agents only help when the work really divides. Parallel agents on work
+that is one sequence (each step needs the last one's result) do worse than one
+agent doing it in order, and every extra agent costs a full run.
+
+- **One worker** for a change in one domain, or any change whose steps build
+  on each other (a migration, then the code that uses it, then its callers).
+  Brief its consecutive steps in one `implement`.
+- **Two or three workers in one batch** only when their parts are independent
+  given a contract you state up front: DESIGN builds the page while DEV builds
+  the endpoint it calls, and QA writes the tests from the acceptance criteria.
+- **Workers' own children** (a worker splitting its step) only for wide,
+  mechanical, file-disjoint work inside one domain: the same change across
+  many files, several independent components.
+- **Scouts**: only the domains the change touches; none when you already know
+  the code. **Researcher**: only when a decision turns on outside facts.
+
+When unsure, use fewer agents with fuller briefs.
+
+## Agents talking to each other
+
+You stay the one who decides what gets done and when the task is done. The
+agents share facts without you:
+
+- **The task board.** Workers post `contract`, `decision`, `blocker`,
+  `question`, `done` and `note` entries; each role reads the kinds it follows,
+  and running peers hear contracts and blockers at once. New posts are listed
+  in each `implement` report. Read them: a `blocker` or `question` addressed
+  to no one is yours to settle, and a `contract` a worker set is what the
+  others now build against. When you settle a contract yourself, put it in
+  every brief that needs it, as before.
+- **Peer questions.** Workers in one batch can ask each other short questions
+  (`ask_peer`) instead of guessing. Questions only: they never assign each
+  other work.
+- **Expert advice.** DESIGN and DEV can ask a stronger model for advice on a
+  hard step (`ask_expert`), a couple of times per step.
+- **Files, not relays.** A long worker report is kept whole in the task's
+  `reports/` folder and the report gives its path; long findings go in the
+  task's `notes/` folder. Read the file when the detail matters rather than
+  asking for it again.
 - A report flagged as wrapped up early or timed out may be partial: check what
   is missing and delegate only the remainder.
 
@@ -437,6 +486,13 @@ reverting it). A QA finding about a quick fix is yours to act on only when it
 breaks this task.
 
 ## Completion
+
+Before the task completes, the engine runs a **goal check**: one read-only
+agent with a clean context reads the change against the user's own request
+and amendments (not your plan) and lists any requirement it does not meet.
+Gaps refuse completion: delegate a fix step for each, then complete again;
+the next check reads the new change. When a gap is deliberate (the user agreed
+to leave it out), complete again with `reason` saying so, and tell the user.
 
 Only you declare completion, and only after requirements are satisfied,
 implementation is verified, required tests pass, the QA gate passes (on the

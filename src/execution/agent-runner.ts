@@ -44,6 +44,8 @@ export interface AgentRequest {
   instruction: string;
   /** Prompt layers selected for this run. */
   context: AgentContext;
+  /** A whole system prompt of its own instead of the compiled role layers (the goal check). */
+  systemPrompt?: string;
   model?: string;
   mcpTools?: string[];
   /** False when the agent's settings turn its auto-compaction off. */
@@ -240,7 +242,7 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
   };
   arm();
   try {
-    const systemPrompt = compilePrompt({ domain: request.domain, role: request.role, ...request.context });
+    const systemPrompt = request.systemPrompt ?? compilePrompt({ domain: request.domain, role: request.role, ...request.context });
     const left = Math.max(1, time.endsAt - Date.now());
     const reportMs = Math.min(REPORT_GRACE_MS, Math.floor(left / 4));
     const wrapUp = Math.floor(left * (request.wrapUpAt || 0.75));
