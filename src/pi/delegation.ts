@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { createDeskClient } from "../desk/ipc.ts";
@@ -73,9 +74,14 @@ export function registerDelegation(pi: ExtensionAPI): void {
     executionMode: "sequential",
     async execute(_id, params, signal) {
       signal?.throwIfAborted();
-      const answer = await client.request({ op: "consult", text: params.question }, EXPERT_TIMEOUT_MS + 30_000);
-      if (!answer.ok) throw new Error(answer.text);
-      return { content: [{ type: "text", text: `Expert advice:\n${answer.text}` }], details: undefined };
+      const consultId = randomUUID();
+      const cancel = () => { void client.request({ op: "cancel_consult", consultId }); };
+      signal?.addEventListener("abort", cancel, { once: true });
+      try {
+        const answer = await client.request({ op: "consult", text: params.question, consultId }, EXPERT_TIMEOUT_MS + 30_000);
+        if (!answer.ok) throw new Error(answer.text);
+        return { content: [{ type: "text", text: `Expert advice:\n${answer.text}` }], details: undefined };
+      } finally { signal?.removeEventListener("abort", cancel); }
     },
   });
 }

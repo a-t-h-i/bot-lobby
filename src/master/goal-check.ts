@@ -38,25 +38,43 @@ export interface GoalCheckRequest {
 
 /** At most this long: it reads, it does not test. */
 export const GOAL_CHECK_MS = 6 * 60 * 1000;
-const MAX_DIFF = 60_000;
+/** Most of the change it reads; a longer diff is cut, and the check reads the files it needs. */
+export const GOAL_DIFF_CHARS = 60_000;
 
 function section(text: string, title: string): string {
-  const match = new RegExp(`^##\\s+${title}\\s*$([\\s\\S]*?)(?=^##\\s|(?![\\s\\S]))`, "im").exec(text);
+  const match = new RegExp(`^#{1,3}\\s+${title}\\s*:?\\s*$([\\s\\S]*?)(?=^#{1,3}\\s|(?![\\s\\S]))`, "im").exec(text);
   return match?.[1]?.trim() ?? "";
 }
 
-/** The verdict and gaps from a goal check's report; `unread` when it has no verdict. */
+/** The verdict as written: on the heading line (`## Verdict: MET`, `**Verdict:** MET`) or the first line under it. */
+function verdictLine(text: string): string {
+  const inline = /^\s*(?:#{1,3}\s*)?\**verdict\**\s*:\**\s*(\S.*)$/im.exec(text);
+  if (inline?.[1]) return inline[1];
+  return section(text, "Verdict").split("\n").find((line) => line.trim()) ?? "";
+}
+
+/** Words that make a verdict anything but a plain MET. */
+const QUALIFIED = /\b(NOT|UNMET|PARTIAL(LY)?|MOSTLY|LARGELY|EXCEPT|BUT|SOME|INCOMPLETE|FAIL(ED|S)?)\b/;
+
+/**
+ * The verdict and gaps from a goal check's report; `unread` when it has no
+ * verdict. Only a plain MET is met: a qualified one (`NOT MET`, `NOT-MET`,
+ * `PARTIALLY MET`, `MET except …`) is not, and neither is a MET with gaps listed.
+ */
 export function parseGoalCheck(output: string): { verdict: GoalVerdict; gaps: string[] } {
-  const verdictText = section(output, "Verdict").toUpperCase();
-  const verdict: GoalVerdict = /\bNOT\s+MET\b/.test(verdictText) ? "not_met" : /\bMET\b/.test(verdictText) ? "met" : "unread";
+  const said = verdictLine(output).toUpperCase().replace(/[*_`]/g, " ").replace(/\s+/g, " ").trim();
   const gaps = section(output, "Gaps")
     .split("\n")
     .map((line) => line.replace(/^\s*[-*]\s*/, "").trim())
-    .filter((line) => line.length > 0 && !/^none\.?$/i.test(line));
+    .filter((line) => line.length > 0 && !/^\(?none\b[^a-z]*$/i.test(line) && !/^no gaps\.?$/i.test(line));
+  // The format line copied back (`MET or NOT MET`) says nothing.
+  if (/\bOR\b/.test(said)) return { verdict: "unread", gaps: [] };
+  let verdict: GoalVerdict = QUALIFIED.test(said) || /NOT[-_ ]?MET|UNMET/.test(said) ? "not_met" : /^MET\b/.test(said) ? "met" : "unread";
+  if (verdict === "met" && gaps.length > 0) verdict = "not_met";
   // A NOT MET without any gap named is still a gap: point at the requirements list.
   if (verdict === "not_met" && gaps.length === 0) {
-    const unmet = section(output, "Requirements").split("\n").filter((line) => /—\s*not met\s*—/i.test(line)).map((line) => line.replace(/^\s*[-*]\s*/, "").trim());
-    return { verdict, gaps: unmet.length > 0 ? unmet : ["the goal check found the request not fully met but named no gap"] };
+    const unmet = section(output, "Requirements").split("\n").filter((line) => /—\s*(not|partly|partially) met\s*—/i.test(line)).map((line) => line.replace(/^\s*[-*]\s*/, "").trim());
+    return { verdict, gaps: unmet.length > 0 ? unmet : [`the goal check found the request not fully met (${truncate(said, 120)}) but named no gap`] };
   }
   return { verdict, gaps: verdict === "met" ? [] : gaps };
 }
@@ -66,8 +84,14 @@ export function goalCheckInstruction(request: GoalCheckRequest): string {
     "Check this change against what the user asked for.",
     `## The user's request\n\n${request.request.trim()}`,
     request.amendments.length > 0 ? `## The user's amendments\n\n${request.amendments.map((entry) => `- ${entry}`).join("\n")}` : "",
-    `## The change\n\n${truncate(request.diff, MAX_DIFF)}`,
+    `## The change\n\n${truncate(request.diff, GOAL_DIFF_CHARS)}`,
   ].filter(Boolean).join("\n\n");
+}
+
+/** The goal check's prompt, with the QA settings' own instructions when the user gave any. */
+export function goalCheckPrompt(instructions?: string): string {
+  const custom = instructions?.trim();
+  return custom ? `${loadPrompt("goal-check.md")}\n\n## Custom Instructions\n\n${custom}` : loadPrompt("goal-check.md");
 }
 
 export async function runGoalCheck(request: GoalCheckRequest, run: ProcessRunner = spawnPiProcess): Promise<GoalCheckResult> {
@@ -79,7 +103,7 @@ export async function runGoalCheck(request: GoalCheckRequest, run: ProcessRunner
     role: "reviewer",
     instruction: goalCheckInstruction(request),
     context: { task: request.request },
-    systemPrompt: loadPrompt("goal-check.md"),
+    systemPrompt: goalCheckPrompt(profile.instructions),
     ...(profile.model ? { model: profile.model } : {}),
     thinking: profile.thinking,
     timeoutMs: Math.min(GOAL_CHECK_MS, profile.timeoutMs),

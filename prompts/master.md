@@ -281,9 +281,11 @@ Every delegation costs a full agent run, so keep the loop short:
   front.
 - On the full workflow with QA on the roster, put QA's test writing in the
   same batch as the build, briefed from the plan's contracts and acceptance
-  criteria: QA writes the tests while DESIGN and DEV build, and runs them as
-  pieces land, instead of starting only once the build is done. The QA gate
-  still runs once after the batch.
+  criteria: QA writes the tests while DESIGN and DEV build, instead of
+  starting only once the build is done. On the shared desk QA can run them as
+  pieces land (it follows `done` posts); in worktrees mode it cannot see the
+  others' changes until the batch merges, so the QA gate runs them. The gate
+  still runs once after the batch either way.
 - Scout only the domains the change touches, with pointed questions; skip
   scouting when you already have the context. Target-verify one claim instead
   of re-scouting.

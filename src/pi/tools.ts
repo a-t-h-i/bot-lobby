@@ -13,7 +13,7 @@ import { askChoice, askText, askUser, canAsk } from "../ask/web.ts";
 import type { AskQuestion } from "../ask/types.ts";
 import { unescapeBreaks } from "../lobby/blocks.ts";
 import { isQuiet } from "./quiet.ts";
-import { checkThinking, createProfileResolver, modelRef, type ModelLookup } from "./model-support.ts";
+import { checkThinking, createProfileResolver, modelRef, resolveExpertProfile, type ModelLookup } from "./model-support.ts";
 import { agentName, describeRun } from "./run-summary.ts";
 import { lintFeed } from "../workflow/lint.ts";
 import { qaRiskLine } from "../classifier/qa-risk.ts";
@@ -121,6 +121,7 @@ export function workflowDeps(
       sessionModel: ctx.model ? modelRef(ctx.model) : undefined,
       warn,
     }),
+    expert: resolveExpertProfile(config, { lookup: modelLookup(ctx), sessionModel: ctx.model ? modelRef(ctx.model) : undefined, warn }),
     sessionId: ctx.sessionManager.getSessionId(),
     signal,
     onUpdate,

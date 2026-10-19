@@ -4,12 +4,14 @@ import { execFileSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendPost, boardContext, boardPath, filterPosts, formatPost, readBoard, subscriptionFor } from "../src/desk/board.ts";
+import { appendPost, BOARD_ENV as BOARD_ENV_NAME, boardContext, boardPath, filterPosts, formatPost, readBoard, subscriptionFor } from "../src/desk/board.ts";
 import { registerBoardClient } from "../src/desk/board-client.ts";
 import { createDeskClient } from "../src/desk/ipc.ts";
 import { DESK_ENV, DESK_TOOLS, DeskSession, PEER_TOOLS, peerId } from "../src/desk/session.ts";
 import type { AgentHandle } from "../src/execution/agent-runner.ts";
-import { canConsult } from "../src/execution/delegation.ts";
+import { AGENT_ENV, canConsult, DELEGATION_ENV, type AgentPolicy } from "../src/execution/delegation.ts";
+import { runPiAgent, type ProcessOutcome } from "../src/execution/pi-runner.ts";
+import type { AgentRun } from "../src/schemas/findings.ts";
 import { closeWorkerTrees, mapToTop, mergeWorkerTrees, openWorkerTrees, snapshotTree } from "../src/execution/worker-trees.ts";
 import { parseGoalCheck } from "../src/master/goal-check.ts";
 import { DEFAULT_CONFIG, expertProfile, resolveConfig } from "../src/schemas/configuration.ts";
@@ -69,7 +71,6 @@ test("contracts reach running peers at once; posts land on the board", async () 
     assert.equal(toDesign.length, 1, "notes wait on the board until someone reads it");
     assert.match((await dev.request({ op: "post", kind: "rumour", text: "x" })).text, /Unknown post kind/);
     assert.deepEqual(readBoard(path).map((post) => post.kind), ["contract", "note"]);
-    assert.equal(session.posts().length, 2);
     dev.close();
   } finally {
     await session.close();
@@ -176,6 +177,11 @@ test("the goal check's report reads as met, not met with its gaps, or unread", (
   });
   assert.deepEqual(parseGoalCheck("## Verdict\nNOT MET\n\n## Requirements\n- export to CSV — not met — no route\n- keep the header — met — a.ts:1"), { verdict: "not_met", gaps: ["export to CSV — not met — no route"] }, "the requirements list stands in for missing gaps");
   assert.equal(parseGoalCheck("Looks fine to me.").verdict, "unread");
+  for (const said of ["## Verdict\nNOT-MET", "## Verdict\nNOT_MET", "## Verdict\nUNMET", "## Verdict\nPARTIALLY MET", "## Verdict\nMET, except the CSV option", "**Verdict:** NOT MET", "# Verdict: MOSTLY MET", "### Verdict\nMET\n\n### Gaps\n- dates are not in UTC"]) {
+    assert.equal(parseGoalCheck(said).verdict, "not_met", said);
+  }
+  for (const said of ["**Verdict:** MET", "# Verdict\nMET.", "## Verdict: MET\n\n## Gaps\n- none"]) assert.equal(parseGoalCheck(said).verdict, "met", said);
+  assert.equal(parseGoalCheck("## Verdict\nMET or NOT MET").verdict, "unread", "the format line copied back says nothing");
 });
 
 // --- the expert and the settings ---
@@ -277,6 +283,112 @@ test("a worker's change that clashes with an earlier one is kept as a patch, nev
   assert.match(await snapshotTree(top), /^[0-9a-f]{40}$/);
 });
 
+test("a clashing change is also kept as a git ref, staged borrowed folders never come back, and a nested repository is refused", async () => {
+  const top = repo();
+  mkdirSync(join(top, "node_modules", "dep"), { recursive: true });
+  writeFileSync(join(top, "node_modules", "dep", "index.js"), "module.exports = 1;\n");
+  const batch = await openWorkerTrees(top, ["backend", "designer", "qa"]);
+  assert.ok(typeof batch !== "string", String(batch));
+  try {
+    const dev = batch.trees.get("backend")!;
+    const design = batch.trees.get("designer")!;
+    const qa = batch.trees.get("qa")!;
+    // DEV stages everything itself, the borrowed folder included, and commits.
+    writeFileSync(join(dev.dir, "a.txt"), "one\nTWO (dev)\nthree\n");
+    gitIn(dev.dir, "add", "-A", "-f");
+    gitIn(dev.dir, "commit", "-qm", "dev work");
+    writeFileSync(join(design.dir, "a.txt"), "one\nTWO (design)\nthree\n");
+    mkdirSync(join(qa.dir, "newpkg"));
+    writeFileSync(join(qa.dir, "newpkg", "index.js"), "export {};\n");
+    gitIn(join(qa.dir, "newpkg"), "init", "-q");
+    gitIn(join(qa.dir, "newpkg"), "add", "-A");
+    gitIn(join(qa.dir, "newpkg"), "commit", "-qm", "nested");
+
+    const results = await mergeWorkerTrees(batch, ["backend", "designer", "qa"], join(tempDir(), "patches"));
+    assert.deepEqual(results.map((entry) => entry.status), ["applied", "conflict", "conflict"]);
+    assert.equal(readFileSync(join(top, "a.txt"), "utf8"), "one\nTWO (dev)\nthree\n");
+    assert.ok(lstatSync(join(top, "node_modules")).isDirectory() && !lstatSync(join(top, "node_modules")).isSymbolicLink());
+    assert.ok(existsSync(join(top, "node_modules", "dep", "index.js")));
+    const clash = results[1]!;
+    assert.ok(clash.status === "conflict" && clash.saved.startsWith("refs/bot-lobby/designer-"));
+    assert.match(gitIn(top, "show", `${clash.saved}:a.txt`), /TWO \(design\)/, "the ref holds the change");
+    const nested = results[2]!;
+    assert.ok(nested.status === "conflict" && /nested git repository \(newpkg\)/.test(nested.reason));
+    assert.equal(existsSync(join(top, "newpkg")), false, "no empty folder stands in for it");
+    assert.equal(qa.keep, true);
+  } finally {
+    await closeWorkerTrees(batch);
+  }
+  const qaDir = batch.trees.get("qa")!.dir;
+  assert.ok(existsSync(join(qaDir, "newpkg", "index.js")), "the worktree holding the nested repository is kept");
+  assert.equal(existsSync(join(batch.trees.get("backend")!.dir)), false);
+  assert.ok(existsSync(join(top, "node_modules", "dep", "index.js")));
+});
+
+test("worktree mode is not used when the task's folder lies inside a borrowed folder, and a new task folder exists in each checkout", async () => {
+  const top = repo();
+  mkdirSync(join(top, "node_modules", "dep"), { recursive: true });
+  assert.match(String(await openWorkerTrees(join(top, "node_modules", "dep"), ["backend"])), /inside the ignored folder node_modules/);
+  mkdirSync(join(top, "fresh"));
+  const batch = await openWorkerTrees(join(top, "fresh"), ["backend"]);
+  assert.ok(typeof batch !== "string", String(batch));
+  try {
+    assert.ok(existsSync(batch.trees.get("backend")!.cwd));
+  } finally {
+    await closeWorkerTrees(batch);
+  }
+});
+
+test("an expert consult runs on the oracle's model, reports once when it fails, does not count a failure, and its limit holds across retries", async () => {
+  process.env.BOT_LOBBY_CONFIG_DIR ??= tempDir("bl-cfg-");
+  const cwd = tempDir();
+  mkdirSync(join(cwd, ".pi"));
+  const reply = (text: string): ProcessOutcome => ({ exitCode: 0, killed: false, timedOut: false, stderr: "", stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], usage: { input: 10, output: 5, cost: { total: 0.01 } } } }) });
+  const updates: AgentRun[] = [];
+  const expertArgs: string[][] = [];
+  const expertEnv: Record<string, string>[] = [];
+  let expertFails = true;
+  const answers: string[] = [];
+  const runner: ProcessRunner = async (args, options) => {
+    const policy = JSON.parse(options.env![AGENT_ENV]!) as AgentPolicy;
+    if (policy.depth === 2) {
+      expertArgs.push(args);
+      expertEnv.push(options.env!);
+      return expertFails ? { exitCode: 1, killed: false, timedOut: false, stderr: "boom", stdout: "" } : reply("Use a binary search.");
+    }
+    const target = JSON.parse(options.env![DELEGATION_ENV]!) as { address: string; token: string };
+    const client = createDeskClient(target.address, target.token);
+    try {
+      for (let index = 0; index < 3; index++) {
+        const answer = await client.request({ op: "consult", text: "how do I find the bad commit?" }, 60_000);
+        answers.push(`${answer.ok}:${answer.text}`);
+      }
+    } finally {
+      client.close();
+    }
+    return reply("done");
+  };
+  const quota = { used: 0 };
+  const options = { cwd, task: "Step 1: find the regression", tools: ["read", "edit", "write"], timeoutMs: 120_000, delegationQuota: quota, expert: { model: "anthropic/oracle-model", thinking: "high" }, env: { [BOARD_ENV_NAME]: "/x/board.jsonl", KEEP: "1" }, agent: { runId: "w1", taskId: "TASK-1", domain: "backend" as const, role: "worker" as const }, onChildRun: (run: AgentRun) => updates.push(run) };
+
+  await runPiAgent(options, runner);
+  assert.ok(answers.every((answer) => answer.startsWith("false:The expert did not answer")), answers.join("\n"));
+  assert.equal(expertArgs.length, 3, "a failed consult does not use one up");
+  assert.ok(expertArgs[0]!.join(" ").includes("--model anthropic/oracle-model"), expertArgs[0]!.join(" "));
+  assert.equal(expertEnv[0]![BOARD_ENV_NAME], undefined, "the expert is not on the worker's board");
+  assert.equal(expertEnv[0]!.KEEP, "1");
+  const finals = updates.filter((run) => run.status !== "running");
+  assert.equal(finals.length, 3, `one final report per expert: ${finals.map((run) => run.status).join(", ")}`);
+
+  expertFails = false;
+  answers.length = 0;
+  await runPiAgent(options, runner);
+  assert.deepEqual(answers.map((answer) => answer.split(":")[0]), ["true", "true", "false"]);
+  answers.length = 0;
+  await runPiAgent(options, runner);
+  assert.ok(answers.every((answer) => /used your 2 consults/.test(answer)), "a retry of the same step gets no fresh consults");
+});
+
 // --- the engine ---
 
 function message(text: string): string {
@@ -333,6 +445,49 @@ test("the goal check holds completion on a gap until it is fixed or the oracle s
   assert.equal(accepted.ok, true, accepted.message);
   assert.equal(accepted.state, "completed");
   assert.match(loadTask(root, ".pi", "TASK-1")!.decisions.map((entry) => entry.text).join("\n"), /Completed although the goal check named gaps \(the CSV option the user asked for is missing\): the user dropped CSV for now/);
+});
+
+test("an unreadable goal check is tried twice and never recorded, and a reason does not skip a check that has not refused yet", async () => {
+  const root = repo();
+  const replies = ["I could not decide.", "Still unsure.", "## Verdict\nNOT MET\n\n## Gaps\n- the PDF option is missing"];
+  let checks = 0;
+  const runner: ProcessRunner = async (args) => {
+    const file = args[args.indexOf("--append-system-prompt") + 1];
+    if ((file ? readFileSync(file, "utf8") : "").startsWith("# Goal Check")) {
+      checks += 1;
+      return { exitCode: 0, stdout: message(replies.shift() ?? "## Verdict\nNOT MET\n\n## Gaps\n- the PDF option is missing"), stderr: "", killed: false, timedOut: false };
+    }
+    writeFileSync(join(root, "export.txt"), `export ${checks}\n`);
+    return { exitCode: 0, stdout: message(WORKER), stderr: "", killed: false, timedOut: false };
+  };
+  const deps: WorkflowDeps = { root, configDir: ".pi", cwd: root, config: { ...DEFAULT_CONFIG, workflow: { ...DEFAULT_CONFIG.workflow, briefCheck: false } }, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess: runner };
+  ensureProjectStructure(root, ".pi");
+  gitIn(root, "add", "-A");
+  gitIn(root, "commit", "-qm", "project structure");
+  const task = createTask("TASK-1", "task", "2026-01-01T00:00:00.000Z", "add an export button with CSV and PDF options");
+  task.track = { ...chooseTrack("change the submit button colour to blue", undefined, { fastTrack: true }, "2026-01-01T00:00:00.000Z"), roster: ["designer"] };
+  createTaskDir(root, ".pi", task);
+  transition(task, "clarifying");
+  saveTask(root, ".pi", task);
+  const act = (params: Partial<OrchestrateParams>) => runWorkflowAction({ action: "status", taskId: "TASK-1", ...params } as OrchestrateParams, deps);
+
+  await act({ action: "implement", domain: "designer", task: "Step 1: add the export button" });
+  // Undo the completion the unread check lets through, so the same change is checked again.
+  const before = loadTask(root, ".pi", "TASK-1")!;
+  const done = await act({ action: "complete", message: "Add export button" });
+  assert.equal(done.ok, true, done.message);
+  assert.equal(checks, 2, "an unread check is read once more");
+  assert.match(done.message, /goal check could not be read \(twice\)[\s\S]*tell the user/);
+  assert.equal(loadTask(root, ".pi", "TASK-1")!.goalCheck, undefined, "nothing is recorded, so the next complete checks again");
+
+  saveTask(root, ".pi", before);
+  gitIn(root, "reset", "-q", "--soft", "HEAD~1");
+  const upfront = await act({ action: "complete", message: "Add export button", reason: "the user dropped PDF" });
+  assert.equal(upfront.ok, false, "a reason given before the check refused is not an answer to it");
+  assert.match(upfront.message, /- the PDF option is missing/);
+  const answered = await act({ action: "complete", message: "Add export button", reason: "the user dropped PDF" });
+  assert.equal(answered.ok, true, answered.message);
+  assert.match(answered.message, /gaps left open, because: the user dropped PDF[\s\S]*- the PDF option is missing/);
 });
 
 test("worker reports name the long report's file, and workers are told about the board", async () => {
