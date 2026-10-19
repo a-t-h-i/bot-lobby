@@ -190,6 +190,37 @@ const setShrunk = (page: Page, shrunk: boolean) => page.evaluate((on: boolean) =
   else dock.removeAttribute("data-shrunk");
 }, shrunk);
 
+/** How far the textarea's one line sits from the middle of the shrunk pill's text row. */
+const shrunkOffset = (page: Page) => page.evaluate(() => {
+  const field = document.querySelector("#composer-text");
+  const row = document.querySelector(".composer-text").getBoundingClientRect();
+  const box = field.getBoundingClientRect();
+  const line = parseFloat(getComputedStyle(field).lineHeight);
+  return { centre: Math.abs(box.top + box.height / 2 - (row.top + row.height / 2)), spare: Math.abs(box.height - line) };
+});
+
+test("the shrunk composer centres its placeholder and typed line", { tag: "@theme" }, async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await setShrunk(page, true);
+  for (const value of ["", "typed line"]) {
+    await page.locator("#composer-text").evaluate((el: any, v: string) => { el.value = v; }, value);
+    await expect.poll(async () => (await shrunkOffset(page)).centre, `"${value}" sits mid-pill`).toBeLessThan(1);
+    expect((await shrunkOffset(page)).spare, "the line fills the box, nothing pushes it down").toBeLessThan(1);
+  }
+});
+
+test("rounded task panes clip their frosted headers to the corner", { tag: "@theme" }, async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.evaluate(() => { window.location.hash = "#/tasks/T-mock-1"; });
+  const panes = page.locator(".workspace-pane > [data-pane]");
+  await expect(panes).toHaveCount(2);
+  for (const clip of await panes.evaluateAll((els) => els.map((el) => getComputedStyle(el).clipPath))) {
+    expect(clip, "the scroller is clipped to the rounded frame").toMatch(/inset\(0px round \d/);
+  }
+});
+
 for (const width of [1280, 360]) {
   test(`the composer's glass follows its rounded shape, open and shrunk, at ${width}px @theme`, { tag: "@theme" }, async ({ page, server }) => {
     await openScenario(page, server, "full");

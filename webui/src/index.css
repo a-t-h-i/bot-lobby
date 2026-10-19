@@ -513,6 +513,13 @@
     background-image: var(--glass-fill);
     border-color: var(--glass-edge);
   }
+  /*
+   * Chrome paints a backdrop-filter (the frosted sticky headers) square past a rounded overflow clip; clip-path
+   * clips it, so the pane's scroller takes the frame's inner radius and the frame keeps its shadow.
+   */
+  .workspace-pane > [data-pane] {
+    clip-path: inset(0 round calc(var(--radius-xl) - 1px));
+  }
   /* The Lobby's conversation lies straight on the page, with no frame of its own. */
   .surface .workspace-frame[data-bare] {
     background-color: transparent;
@@ -1569,8 +1576,17 @@ html[data-resizing="row"] * { cursor: row-resize !important; user-select: none; 
 #app-dock[data-shrunk] .composer-shell::before { clip-path: none; bottom: 0; }
 #app-dock[data-shrunk] .composer-shell [data-slot="composer-host"]::after,
 #app-dock[data-shrunk] .composer-shell [data-chat-composer-main-surface]::after { clip-path: none; }
-#app-dock[data-shrunk] .composer-text { padding-block: 0.55rem; }
-#app-dock[data-shrunk] .composer-text textarea { min-height: 1.5rem; max-height: 1.5rem; overflow: hidden; cursor: text; }
+/* One line exactly as tall as the box: no block padding or margin on the textarea, so the text sits centred in the pill. */
+#app-dock[data-shrunk] .composer-text { padding-block: 0.3rem; }
+#app-dock[data-shrunk] .composer-text textarea {
+  min-height: 1.5rem;
+  max-height: 1.5rem;
+  padding-block: 0;
+  margin-block: 0;
+  line-height: 1.5rem;
+  overflow: hidden;
+  cursor: text;
+}
 #app-dock[data-shrunk] .composer-box { cursor: text; }
 
 /*
