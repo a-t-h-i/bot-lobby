@@ -348,19 +348,52 @@ test("on Settings the model selectors stack inside the agent card, three cards t
   expect(qaBox!.y, "the fourth starts the next row").toBeGreaterThan(cardBox.y + 20);
 });
 
-test("Plan, Quick fix and an open task each give the composer its own target", async ({ page, server }) => {
+test("the page decides where the composer sends, with no recipient picker, and a draft survives navigation", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
-  for (const [hash, label] of [
-    ["#/plan", "Message the panel"],
-    ["#/quickfix", "Describe a quick fix"],
-    ["#/tasks/T-mock-1", "Comment on T-mock-1"],
+  const box = page.locator(".group\\/composer");
+  for (const [hash, label, rpc] of [
+    ["#/lobby", "Message the oracle", "lobby.send"],
+    ["#/plan", "Message the panel", "planner.send"],
+    ["#/knowledge", "Ask the oracle about this project", "knowledge.ask"],
+    ["#/quickfix", "Describe a quick fix", "quickfix.submit"],
+    ["#/tasks/T-mock-1", "Comment on T-mock-1", "tasks.comment"],
   ] as const) {
     await page.evaluate((to: string) => {
       window.location.hash = to;
     }, hash);
-    await expect(page.getByLabel(label), hash).toBeVisible();
-    await expect(page.getByRole("combobox", { name: "Send to" }).or(page.getByText(/^To the /)), `${hash} says who it goes to`).toBeVisible();
+    const field = page.getByLabel(label);
+    await expect(field, hash).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Send to" }), `${hash} has no recipient picker`).toHaveCount(0);
+    await expect(box.getByText(/^To the /), `${hash} has no recipient label`).toHaveCount(0);
+    await field.fill(`hello from ${hash}`);
+    const sent = page.waitForRequest((request) => request.url().includes(`/api/${rpc}`));
+    await field.press("Enter");
+    const body = (await sent).postDataJSON();
+    expect(body.text, `${hash} sends to ${rpc}`).toBe(`hello from ${hash}`);
+    if (rpc === "tasks.comment") expect(body.taskId).toBe("T-mock-1");
+  }
+  await page.evaluate(() => { window.location.hash = "#/lobby"; });
+  await page.getByLabel("Message the oracle").fill("kept draft");
+  await page.evaluate(() => { window.location.hash = "#/plan"; });
+  await expect(page.getByLabel("Message the panel"), "the draft follows to Plan").toHaveValue("kept draft");
+  const sent = page.waitForRequest((request) => request.url().includes("/api/planner.send"));
+  await page.getByLabel("Message the panel").press("Enter");
+  await sent;
+});
+
+test("a comment follows the open task, never staying on the last one", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  for (const [hash, label, rpc, taskId] of [
+    ["#/tasks/T-mock-1", "Comment on T-mock-1", "tasks.comment", "T-mock-1"],
+    ["#/tasks/T-mock-2", "Comment on T-mock-2", "tasks.comment", "T-mock-2"],
+  ] as const) {
+    await page.evaluate((to: string) => { window.location.hash = to; }, hash);
+    await page.getByLabel(label).fill(`note ${hash}`);
+    const sent = page.waitForRequest((request) => request.url().includes(`/api/${rpc}`));
+    await page.getByLabel(label).press("Enter");
+    expect((await sent).postDataJSON().taskId, `${hash} is not stale`).toBe(taskId);
   }
 });
 
@@ -1141,12 +1174,12 @@ test("the oracle writes plain prose across the column; yours sits in a filled bu
   await expect.poll(() => time.evaluate((el: any) => getComputedStyle(el).opacity)).toBe("1");
 });
 
-test("the strip under the box names the project and opens the project list; the box's footer picks the target; there is no settings link", async ({ page, server }) => {
+test("the strip under the box names the project and opens the project list; the box's footer names no target; there is no settings link", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const tray = page.getByRole("group", { name: "Message context" });
   const box = page.locator(".group\\/composer");
-  await expect(box.getByText("To the oracle"), "who it goes to, in the box's footer").toBeVisible();
+  await expect(box.getByText("To the oracle"), "the page decides who it goes to, so the footer does not say").toHaveCount(0);
   await expect(tray.getByRole("combobox", { name: "Project", exact: true }), "the project's chip names it").toContainText("bot-lobby");
   await tray.getByRole("combobox", { name: "Project", exact: true }).click();
   await expect(page.getByRole("listbox", { name: "Projects" }), "the project chip opens the list of projects").toBeVisible();
@@ -1157,12 +1190,8 @@ test("the strip under the box names the project and opens the project list; the 
   expect(behind.y + behind.height, "and shows below it").toBeGreaterThan(card.y + card.height + 10);
   expect(behind.width, "a little narrower than the box").toBeLessThan(card.width);
   await page.evaluate(() => { window.location.hash = "#/plan"; });
-  const picker = box.getByRole("combobox", { name: "Send to" });
-  await expect(picker, "a tab with more than one target picks it from a menu in the box's footer").toContainText("Panel");
-  await picker.click();
-  await page.getByRole("option", { name: "Oracle" }).click();
-  await expect(picker, "and the choice shows on it").toContainText("Oracle");
-  await expect(page.getByLabel("Message the oracle"), "the box now writes to the oracle").toBeVisible();
+  await expect(box.getByRole("combobox", { name: "Send to" }), "Plan has no recipient picker").toHaveCount(0);
+  await expect(page.getByLabel("Message the panel"), "the box writes to the panel on Plan").toBeVisible();
   await expect(tray.getByRole("link", { name: "Models and effort" }), "settings live in the sidebar, not the composer").toHaveCount(0);
 });
 
