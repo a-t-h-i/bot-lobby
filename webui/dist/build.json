@@ -1,6 +1,6 @@
 {
-  "hash": "8e25f84b2ac449e12782f84f1e0cb83314f7bc1c0454a6b2154a7d6ca3f19034",
-  "builtAt": "2026-10-17T20:57:48.092Z",
+  "hash": "7f8934dbd2f9466868caf4fe5924c21f62bb3c2d4f3d5195802c1007c4a41959",
+  "builtAt": "2026-10-18T21:30:26.925Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -32,7 +32,7 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "07f61d6c64e96869ab001f815e1511a39b55df0efa0ab2a07711cd59710bc07a"
+      "sha256": "2ff32434d76d2dedefd2f3c256f7615cf3fba15291c80c4ca3b1707fc0b8d0c4"
     },
     {
       "path": "webui/src/app/Header.tsx",
@@ -276,7 +276,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "31f833b3bc0156e1ccc7afe17702bffdcf5381737a7e2fb45ddcf4b655163ab8"
+      "sha256": "dbbe4c50274fbb0ec083fa2c79ac478649c9337dde1d55c9afbe6e147d0e07e0"
     },
     {
       "path": "webui/src/lib/act.ts",
