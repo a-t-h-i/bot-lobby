@@ -9,7 +9,7 @@ import { createConnection, createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-export type DeskOp = "hello" | "check" | "claim" | "handover" | "mine" | "wait" | "delegate" | "cancel_delegate";
+export type DeskOp = "hello" | "check" | "claim" | "handover" | "mine" | "wait" | "delegate" | "cancel_delegate" | "consult" | "post" | "ask" | "answer";
 
 export interface DeskRequest {
   id: number;
@@ -20,6 +20,14 @@ export interface DeskRequest {
   briefs?: string[];
   note?: string;
   timeoutMs?: number;
+  /** post: the board post's kind and text, and the files it is about. */
+  kind?: string;
+  text?: string;
+  files?: string[];
+  /** ask: who the question is for (DEV, DESIGN, QA); `path` asks whoever holds that file. */
+  to?: string;
+  /** answer: the question being answered. */
+  questionId?: number;
 }
 
 export interface DeskResponse {

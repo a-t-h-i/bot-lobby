@@ -19,6 +19,7 @@ import { treeState } from "../execution/git.ts";
 import { toolBudgetEnv, toolBudgetNote } from "../pi/tool-budget.ts";
 import { recordFileNotes } from "../knowledge/file-notes.ts";
 import { readCachedScout, scoutKey, writeCachedScout } from "./scout-cache.ts";
+import { BOARD_ENV, BOARD_TOOLS, boardContext } from "../desk/board.ts";
 import type { FileHinter } from "../classifier/files.ts";
 import type { KnowledgePaths, KnowledgePicker } from "../classifier/knowledge.ts";
 import { fellShort, profileLabel, routeLabel, type EffortRoute, type EffortRouter } from "../classifier/effort.ts";
@@ -285,6 +286,37 @@ export interface WorkerRequest {
   ask?: { onAsk: RelayAsk; previews: string };
   /** A QA step's verification budget: Jev's QA risk read of the change so far. */
   risk?: string;
+  /** The task board's file: the worker reads what its role follows and posts contracts, decisions and blockers. */
+  board?: string;
+  /** Domains working at the same time as this one, in a parallel batch. */
+  alongside?: readonly Domain[];
+  /** The worker has a worktree of its own for the batch; its change is applied back when the batch ends. */
+  ownCheckout?: boolean;
+}
+
+/** How a worker uses the task board, and what it already says for its role. */
+function boardGuidance(request: WorkerRequest): string {
+  if (!request.board) return "";
+  return [
+    "Task board: post with `post_board` whenever you settle something another agent builds against or must follow (`contract`: a route, payload, type, event or file location; `decision`), when you are blocked on someone else's part (`blocker`), and when a piece is finished and testable (`done`). Exact facts in a line or two; no progress chatter. `read_board` shows what the others posted.",
+    boardContext(request.board, request.domain),
+  ].filter(Boolean).join("\n\n");
+}
+
+/** What a worker in a parallel batch is told about the others, and QA about testing alongside the build. */
+function alongsideGuidance(request: WorkerRequest): string {
+  const others = (request.alongside ?? []).filter((domain) => domain !== request.domain);
+  if (others.length === 0) return "";
+  const names = others.map((domain) => ({ backend: "DEV", designer: "DESIGN", qa: "QA" })[domain]).join(" and ");
+  const peers = `You work at the same time as ${names}. When you need a fact about their part (a name, a shape, a route), ask them with \`ask_peer\` instead of guessing; answer their questions with \`answer_peer\`. Questions only: neither of you takes work from the other.`;
+  const checkout = request.ownCheckout
+    ? " You work in a checkout of your own (no file claims needed): edit only the files your brief names, because when the batch ends your change is applied onto the others', and overlapping lines will not apply."
+    : "";
+  if (request.domain !== "qa") return `${peers}${checkout}`;
+  return [
+    `${peers}${checkout}`,
+    "You write the tests while the others build, so nobody waits for the build to finish first: work from the approved plan's contracts and acceptance criteria and the board's `contract` posts, not from their code. Write and claim test files only. When a builder posts `done` for a piece (or before you report), run your tests against what is there; a failing test against finished work is a finding for its owner, never a production fix of yours.",
+  ].join(" ");
 }
 
 /** What a worker that may ask the user is told about it. */
@@ -312,9 +344,12 @@ function workerWorkflowContext(request: WorkerRequest, likely = ""): string {
       : "No scout findings were collected for your domain; verify the repository yourself.",
     likely,
     request.risk ?? "",
+    alongsideGuidance(request),
+    boardGuidance(request),
     request.time?.note ?? "",
     request.ask ? askGuidance(request.ask.previews) : "",
     request.dataRoots[0] ? `Scripts you draft for the shared library go in \`${join(taskDir(request.dataRoots[0], request.taskId), "scripts")}\`.` : "",
+    request.dataRoots[0] ? `Long findings (an investigation, a list of call sites, a log excerpt) go in a file under \`${join(taskDir(request.dataRoots[0], request.taskId), "notes")}\`: give its path under Notes instead of pasting them into your report, so whoever needs them reads them whole.` : "",
   ].filter(Boolean).join("\n\n");
 }
 
@@ -330,7 +365,8 @@ export async function runWorker(
     routeFor(request.effort, request.instruction, { ...(configured.model ? { model: configured.model } : {}), thinking: configured.thinking }, { context: request.taskText, ...(request.signal ? { signal: request.signal } : {}) }),
   ]);
   const hintTools = request.hints?.tools() ?? [];
-  const extraTools = [...(request.agent?.extraTools ?? []), ...hintTools];
+  const extraTools = [...(request.agent?.extraTools ?? []), ...hintTools, ...(request.board ? BOARD_TOOLS : [])];
+  const env = request.board ? { ...request.agent?.env, [BOARD_ENV]: request.board, BOT_LOBBY_BOARD_FROM: request.domain } : request.agent?.env;
   const base: AgentRequest = {
     delegationQuota: { used: 0 },
     effort: request.effort,
@@ -351,6 +387,7 @@ export async function runWorker(
     onUpdate: request.onUpdate,
     ...watchdogOptions(request.config.workflow),
     ...request.agent,
+    ...(env ? { env } : {}),
     ...(extraTools.length > 0 ? { extraTools } : {}),
     // One allotment for the step: a routed attempt that falls short re-runs on what is left of it.
     ...(request.time ? { time: request.time } : {}),
@@ -399,6 +436,10 @@ export interface ReviewerRequest {
   lint?: string;
   /** Jev's QA risk read of the change: the gate's depth, test budget and focus. */
   risk?: string;
+  /** The task board's contracts, decisions, blockers and finished pieces, as posted by the task's agents. */
+  board?: string;
+  /** Review with a clean context: no worker summaries or scout findings, only the request, plan, board and diff. */
+  clean?: boolean;
   /** Under a task time budget: the gate's time. */
   time?: AgentTime;
   instruction?: string;
@@ -422,10 +463,13 @@ function reviewerContext(request: ReviewerRequest): string {
     "You may not modify implementation. Report required changes instead.",
     request.risk ?? "",
     request.previousRound ?? "",
-    request.workerSummary ? `Worker summary (each domain's newest entries):\n${truncate(request.workerSummary, 4800)}` : "No worker summary available.",
-    owns.length > 0 ? `Scout findings:\n${summarizeOutcomes(owns, 1200)}` : "",
+    request.clean
+      ? "You review with a clean context: the request, the approved plan, the task board and the diff, not the workers' own accounts of what they did. Judge the change by what the code does, and verify any claim yourself before you rely on it."
+      : request.workerSummary ? `Worker summary (each domain's newest entries):\n${truncate(request.workerSummary, 4800)}` : "No worker summary available.",
+    !request.clean && owns.length > 0 ? `Scout findings:\n${summarizeOutcomes(owns, 1200)}` : "",
     request.provenance ? `Who changed each file (bot-lobby's record of every agent's edit and write calls; judge each as your role's Change provenance says):\n${request.provenance}` : "",
     request.lint ?? "",
+    request.board ?? "",
     request.time?.note ?? "",
     `Repository changes:\n${request.diff}`,
   ]

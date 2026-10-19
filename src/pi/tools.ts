@@ -54,7 +54,7 @@ const OrchestrateSchema = Type.Object({
     StringEnum(["approved", "rejected"] as const, { description: "resolve_approval: approve or reject the request" }),
   ),
   note: Type.Optional(Type.String({ description: "resolve_approval: rationale, or what to do instead when rejected" })),
-  reason: Type.Optional(Type.String({ description: "block: why the task cannot continue; budget: why the task needs more time; track: why the task takes that path or needs those members" })),
+  reason: Type.Optional(Type.String({ description: "block: why the task cannot continue; budget: why the task needs more time; track: why the task takes that path or needs those members; complete: why gaps the goal check named are deliberate (the user agreed)" })),
   track: Type.Optional(
     StringEnum(["fast", "full"] as const, { description: "track: fast (straight to the roster's agents, no scouts, proposal or plan; QA only for tests) or full (the whole workflow)" }),
   ),

@@ -7,7 +7,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { createDeskClient, type DeskClient } from "./ipc.ts";
-import { DESK_ENV, isEditTool, MAX_WAIT_MS } from "./session.ts";
+import { ASK_WAIT_MS, DESK_ENV, isEditTool, MAX_ASK_WAIT_MS, MAX_WAIT_MS } from "./session.ts";
 
 function text(value: string) {
   return { content: [{ type: "text" as const, text: value }], details: undefined };
@@ -96,6 +96,36 @@ export function registerDeskClient(pi: ExtensionAPI, client?: DeskClient): void 
     async execute(_id, params) {
       const timeoutMs = Math.min(MAX_WAIT_MS, Math.max(1, params.seconds ?? 120) * 1000);
       return text((await desk.request({ op: "wait", timeoutMs }, timeoutMs + 5000)).text);
+    },
+  });
+
+  pi.registerTool({
+    name: "ask_peer",
+    label: "Ask a peer",
+    description:
+      "Ask another worker in this batch a short question about its part (a field name, a route, a shape it settled) and wait for its answer, instead of guessing. Name the peer (DEV, DESIGN or QA), or give a file path to ask whoever holds it. Questions only: peers cannot give each other work. Waits up to 90 seconds by default.",
+    parameters: Type.Object({
+      question: Type.String({ description: "The question, in one or two sentences" }),
+      to: Type.Optional(Type.String({ description: "DEV, DESIGN or QA" })),
+      path: Type.Optional(Type.String({ description: "Ask whoever holds this file instead" })),
+      seconds: Type.Optional(Type.Number({ description: "How long to wait, at most 180 seconds" })),
+    }),
+    async execute(_id, params) {
+      const timeoutMs = Math.min(MAX_ASK_WAIT_MS, Math.max(5, params.seconds ?? ASK_WAIT_MS / 1000) * 1000);
+      return text((await desk.request({ op: "ask", text: params.question, to: params.to ?? "", path: params.path ?? "", timeoutMs }, timeoutMs + 5000)).text);
+    },
+  });
+
+  pi.registerTool({
+    name: "answer_peer",
+    label: "Answer a peer",
+    description: "Answer a question another worker asked you (the desk tells you its id). Answer from what you know or have built, in a line or two, then carry on with your own work.",
+    parameters: Type.Object({
+      id: Type.Number({ description: "The question's id" }),
+      answer: Type.String({ description: "Your answer" }),
+    }),
+    async execute(_id, params) {
+      return text((await desk.request({ op: "answer", questionId: params.id, text: params.answer })).text);
     },
   });
 }

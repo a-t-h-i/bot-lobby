@@ -101,6 +101,24 @@ export interface WorkflowConfig {
   repoMap: boolean;
   /** A scout asked the same thing again for the same task, on a tree that has not changed, reuses its findings instead of running. */
   reuseScouts: boolean;
+  /** How a parallel batch shares the repository: one checkout with the file desk (`desk`), or a worktree per worker whose changes are merged back when the batch ends (`worktrees`). */
+  parallelMode: ParallelMode;
+  /** The QA gate reviews with a clean context: the request, plan, board contracts and diff, not the workers' own accounts of their work. */
+  cleanReview: boolean;
+  /** Before a task completes, one read-only agent checks the change against the user's original request (not the plan) and names any gap. */
+  goalCheck: boolean;
+  /** Workers may ask a stronger model for advice on a hard step (`ask_expert`), a couple of times per step. */
+  consultExpert: boolean;
+  /** The model `ask_expert` consults; empty uses the oracle's. */
+  expertModel: string;
+}
+
+/** How workers in one parallel batch share the repository. */
+export const PARALLEL_MODES = ["desk", "worktrees"] as const;
+export type ParallelMode = (typeof PARALLEL_MODES)[number];
+
+export function isParallelMode(value: unknown): value is ParallelMode {
+  return typeof value === "string" && (PARALLEL_MODES as readonly string[]).includes(value);
 }
 
 /**
@@ -290,6 +308,11 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     gitIsolation: "off",
     repoMap: true,
     reuseScouts: true,
+    parallelMode: "desk",
+    cleanReview: true,
+    goalCheck: true,
+    consultExpert: true,
+    expertModel: "",
   },
   lint: { mode: "advise", command: "", extensions: [], timeoutMs: 2 * 60 * 1000 },
   knowledge: {
@@ -480,6 +503,11 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
   workflow.routeQuickFixes = workflow.routeQuickFixes !== false;
   workflow.repoMap = workflow.repoMap !== false;
   workflow.reuseScouts = workflow.reuseScouts !== false;
+  workflow.parallelMode = isParallelMode(workflow.parallelMode) ? workflow.parallelMode : DEFAULT_CONFIG.workflow.parallelMode;
+  workflow.cleanReview = workflow.cleanReview !== false;
+  workflow.goalCheck = workflow.goalCheck !== false;
+  workflow.consultExpert = workflow.consultExpert !== false;
+  workflow.expertModel = typeof workflow.expertModel === "string" ? workflow.expertModel.trim() : "";
   workflow.gitIsolation = isGitIsolation(workflow.gitIsolation) ? workflow.gitIsolation : DEFAULT_CONFIG.workflow.gitIsolation;
   workflow.taskBudgetMinutes = typeof workflow.taskBudgetMinutes === "number" && workflow.taskBudgetMinutes > 0 ? Math.min(24 * 60, Math.round(workflow.taskBudgetMinutes)) : 0;
   const knowledge = { ...DEFAULT_CONFIG.knowledge, ...(src.knowledge as Partial<KnowledgeConfig> | undefined) };
@@ -574,6 +602,12 @@ export function panelMemberProfile(config: BotLobbyConfig, member: PanelMember):
   const entry = member === "researcher" ? config.researcher : config.agents[member];
   const timeoutMs = config.planner.timeoutMs ?? config.workflow.agentTimeoutMs;
   return { model: modelOf(entry.model), thinking: entry.thinking, timeoutMs, instructions: entry.instructions, ...(entry.mcpTools?.length ? { mcpTools: entry.mcpTools } : {}), ...compactField(entry) };
+}
+
+/** The model and thinking a worker's `ask_expert` consults: the configured expert, or the oracle's model. */
+export function expertProfile(config: BotLobbyConfig): { model?: string; thinking: string } {
+  const model = config.workflow.expertModel ? modelOf(config.workflow.expertModel) : modelOf(config.master.model);
+  return { ...(model ? { model } : {}), thinking: "high" };
 }
 
 /** Resolves the model, thinking and time limit one subagent run uses. */

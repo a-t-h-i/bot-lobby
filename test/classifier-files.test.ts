@@ -213,10 +213,10 @@ test("scouts and workers start with their likely files and may look more up; the
   assert.equal(seen[0]!.tools, `read,grep,find,ls,${FIND_FILES_TOOL},codemode,tool_search`);
   assert.match(seen[0]!.system, /## Workflow Context\n\nTask state: scouting[\s\S]*## Likely files\n\n- `src\/api\.ts` \(0\.91\) for Find the list endpoints\./);
   await runWorker({ taskId: "T", domain: "backend", instruction: "Step 2: add the cursor param", taskText: "Add pagination", scoutOutcomes: [], cwd: data, dataRoots: [data], config: DEFAULT_CONFIG, hints: HINTS, agent: { extraTools: ["claim_file", "handover_file"] } }, recorder("## Completed\nx", seen));
-  assert.equal(seen[1]!.tools, `read,bash,edit,write,grep,find,ls,claim_file,handover_file,${FIND_FILES_TOOL},codemode,tool_search,delegate_subtasks,my_files,wait_for_files`);
+  assert.equal(seen[1]!.tools, `read,bash,edit,write,grep,find,ls,claim_file,handover_file,${FIND_FILES_TOOL},codemode,tool_search,delegate_subtasks,ask_expert,my_files,wait_for_files`);
   assert.match(seen[1]!.system, /## Likely files\n\n- `src\/api\.ts` \(0\.91\) for Step 2: add the cursor param/);
   await runWorker({ taskId: "T", domain: "backend", instruction: "x", taskText: "y", scoutOutcomes: [], cwd: data, dataRoots: [data], config: DEFAULT_CONFIG }, recorder("## Completed\nx", seen));
-  assert.equal(seen[2]!.tools, "read,bash,edit,write,grep,find,ls,codemode,tool_search,delegate_subtasks,claim_file,handover_file,my_files,wait_for_files", "no hints");
+  assert.equal(seen[2]!.tools, "read,bash,edit,write,grep,find,ls,codemode,tool_search,delegate_subtasks,ask_expert,claim_file,handover_file,my_files,wait_for_files", "no hints");
   assert.doesNotMatch(seen[2]!.system, /## Likely files/);
 });
 
