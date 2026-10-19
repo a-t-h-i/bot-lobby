@@ -14,7 +14,7 @@ import { EditLog } from "../state/changes.ts";
 import { createLiveRun } from "./live-run.ts";
 import { runPiAgent, type PiRunOptions, type ProcessRunner } from "./pi-runner.ts";
 import { startDeskServer } from "../desk/ipc.ts";
-import { DESK_ENV, DeskSession, deskSessionAt } from "../desk/session.ts";
+import { DESK_ENV, DeskSession, deskSessionAt, PEER_TOOLS } from "../desk/session.ts";
 import { BOARD_ENV } from "../desk/board.ts";
 
 export const MAX_CHILDREN = 5;
@@ -24,6 +24,14 @@ export const EXPERT_TOOL = "ask_expert";
 export const MAX_CONSULTS = 2;
 /** Longest an expert may take to answer. */
 export const EXPERT_TIMEOUT_MS = 5 * 60 * 1000;
+/** Marks an expert's run, so its host gives it an adviser's note rather than a child's. */
+export const EXPERT_ENV = "BOT_LOBBY_EXPERT";
+
+/** The worker's env without its desk and board: an expert only reads and answers. */
+function withoutTeamEnv(env: Record<string, string> | undefined): Record<string, string> {
+  const { [DESK_ENV.address]: _address, [DESK_ENV.worker]: _worker, [BOARD_ENV]: _board, BOT_LOBBY_BOARD_FROM: _from, ...rest } = env ?? {};
+  return rest;
+}
 const EXPERT_TOOLS = ["read", "grep", "find", "ls"];
 export const AGENT_ENV = "BOT_LOBBY_AGENT_POLICY";
 export const DELEGATION_ENV = "BOT_LOBBY_DELEGATION";
@@ -90,14 +98,18 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
   const tools = [...new Set([...baseTools, "codemode", "tool_search", ...(canDelegate(agent, quota.used) ? [DELEGATE_TOOL] : []), ...(consults ? [EXPERT_TOOL] : [])])];
   const mcpTools = options.mcpTools ?? agentProfile(config, agent.domain, agent.role).mcpTools ?? [];
   const policy: AgentPolicy = { tools, mcpTools, readOnly: !editable, depth };
-  if (depth > 1) return { tools, mcpTools, env: { ...options.env, [AGENT_ENV]: JSON.stringify(policy), [DELEGATION_ENV]: "" }, note: "You are a child agent. Finish only your assigned brief and report evidence to your parent; you cannot delegate further.", close: async () => {}, onStart: options.onStart, children: [] as AgentRun[] };
+  if (depth > 1) return { tools, mcpTools, env: { ...options.env, [AGENT_ENV]: JSON.stringify(policy), [DELEGATION_ENV]: "" }, note: options.env?.[EXPERT_ENV] ? "You are advising a worker: read what you need, answer its question, and change nothing." : "You are a child agent. Finish only your assigned brief and report evidence to your parent; you cannot delegate further.", close: async () => {}, onStart: options.onStart, children: [] as AgentRun[] };
 
   const address = options.env?.[DESK_ENV.address];
   let desk = address ? deskSessionAt(address) : undefined;
   if (address && !desk) throw new Error("The inherited file desk is unavailable.");
   const board = options.env?.[BOARD_ENV];
-  const ownedDesk = editable && !desk ? new DeskSession({ cwd: options.cwd, ...(board ? { boardPath: board } : {}) }) : undefined;
-  if (ownedDesk) { await ownedDesk.open(); desk = ownedDesk; }
+  // A worker with a checkout of its own (no claims on the batch desk) still needs claims among its children.
+  const ownedDesk = editable && (!desk || !desk.usesClaims) ? new DeskSession({ cwd: options.cwd, ...(board ? { boardPath: board } : {}) }) : undefined;
+  if (ownedDesk) await ownedDesk.open();
+  // Children claim files among themselves; the parent keeps the batch desk (and its peers) when it has one.
+  const childDesk = ownedDesk ?? desk;
+  desk ??= ownedDesk;
   const controller = new AbortController();
   const lifetime = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
   let timeController = new AbortController();
@@ -145,7 +157,7 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
         task: brief,
         model,
         thinking,
-        tools: [...new Set([...tools.filter((tool) => tool !== DELEGATE_TOOL && tool !== EXPERT_TOOL), ...(desk ? desk.tools() : [])])],
+        tools: [...new Set([...tools.filter((tool) => tool !== DELEGATE_TOOL && tool !== EXPERT_TOOL), ...(childDesk ? childDesk.tools().filter((tool) => !PEER_TOOLS.includes(tool)) : [])])],
         mcpTools,
         timeoutMs: left,
         signal,
@@ -154,8 +166,8 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
         delegationQuota: undefined,
         onChildRun: undefined,
         onEvent: live.onEvent,
-        env: { ...options.env, ...(desk ? desk.env(childId) : {}) },
-        onStart: (handle) => desk?.attach(childId, { runId: childId, steer: handle.steer, annotate: live.annotate }),
+        env: { ...options.env, ...(childDesk ? childDesk.env(childId) : {}) },
+        onStart: (handle) => childDesk?.attach(childId, { runId: childId, steer: handle.steer, annotate: live.annotate }),
       }, run);
       };
       let result = await attempt(route?.model ?? configured.model, route?.thinking ?? configured.thinking);
@@ -172,19 +184,24 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
       update(final);
       return final;
     } finally {
-      desk?.release(childId, () => "Child finished; re-read the file and check its report before continuing.");
+      childDesk?.release(childId, () => "Child finished; re-read the file and check its report before continuing.");
     }
   };
 
-  let consulted = 0;
-  const consult = async (question: string, signal: AbortSignal): Promise<string> => {
+  // Kept on the quota, which a step's retries share, so a retry does not grant fresh consults.
+  quota.consults ??= 0;
+  const consultations = new Map<string, AbortController>();
+  const consult = async (question: string, signal: AbortSignal): Promise<{ ok: boolean; text: string }> => {
     const left = Math.min(EXPERT_TIMEOUT_MS, deadlineAt - Date.now());
-    if (left < 30_000) throw new Error("Too little of your time is left to consult; carry on with your best reading.");
-    const expert = expertProfile(config);
+    if (left < 30_000) return { ok: false, text: "Too little of your time is left to consult; carry on with your best reading." };
+    // The oracle resolves the expert (its session model when settings name none); settings alone, then the worker's own, without it.
+    const settled = options.expert ?? expertProfile(config);
+    const expert = { model: settled.model ?? options.model, thinking: settled.thinking };
     const expertId = randomUUID();
     const base: AgentRun = { runId: expertId, parentRunId: id, depth: 2, taskId: agent.taskId, domain: agent.domain, role: "reviewer", instruction: question, stepInstruction: options.task, status: "running", endsAt: Date.now() + left, output: "", attempts: 1, startedAt: new Date().toISOString(), thinking: expert.thinking, ...(expert.model ? { model: expert.model } : {}), note: "expert consult", noteKind: "info" };
     const live = createLiveRun(base, { onUpdate: update, timeoutMs: left }, new EditLog(options.cwd));
     update(base);
+    let final: AgentRun;
     try {
       const result = await runPiAgent({
         cwd: options.cwd,
@@ -197,39 +214,58 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
         thinking: expert.thinking,
         timeoutMs: left,
         wrapUpAtMs: Math.floor(left * 0.8),
+        ...(options.stallTimeoutMs !== undefined ? { stallTimeoutMs: options.stallTimeoutMs } : {}),
+        ...(options.toolStallTimeoutMs !== undefined ? { toolStallTimeoutMs: options.toolStallTimeoutMs } : {}),
         signal,
         onEvent: live.onEvent,
-        ...(options.env ? { env: options.env } : {}),
+        // Its own env: the expert is not one of the worker's children, nor on its desk or board.
+        env: { ...withoutTeamEnv(options.env), [EXPERT_ENV]: "1" },
       }, run);
-      const final: AgentRun = { ...live.current(), ...result, finishedAt: new Date().toISOString(), note: undefined, noteKind: undefined };
-      update(final);
-      if (final.status !== "success" || !final.output.trim()) throw new Error(`The expert did not answer (${final.status}${final.error ? `: ${final.error}` : ""}).`);
-      return final.output.trim().slice(0, 8000);
+      final = { ...live.current(), ...result, finishedAt: new Date().toISOString(), note: undefined, noteKind: undefined };
     } catch (error) {
-      const final: AgentRun = { ...live.current(), status: signal.aborted ? "cancelled" : "failed", error: (error as Error).message, finishedAt: new Date().toISOString(), note: undefined, noteKind: undefined };
-      if (live.current().status === "running") update(final);
-      throw error;
+      final = { ...live.current(), status: signal.aborted ? "cancelled" : "failed", error: (error as Error).message, finishedAt: new Date().toISOString(), note: undefined, noteKind: undefined };
     }
+    update(final);
+    if (final.status === "success" && final.output.trim()) return { ok: true, text: final.output.trim().slice(0, 8000) };
+    // An expert that never answered does not use up a consult.
+    quota.consults = Math.max(0, (quota.consults ?? 1) - 1);
+    return { ok: false, text: `The expert did not answer (${final.status}${final.error ? `: ${final.error}` : ""}); carry on with your best reading.` };
   };
 
   const token = randomUUID();
   const server = await startDeskServer(async (request) => {
     if (request.worker !== token) return { ok: false, text: "Unknown parent agent." };
     if (request.op === "cancel_delegate") { controller.abort(); return { ok: true, text: "Children cancelled." }; }
+    if (request.op === "cancel_consult") {
+      consultations.get(request.consultId ?? "")?.abort();
+      return { ok: true, text: "Consult cancelled." };
+    }
     if (request.op === "consult") {
       if (!consults) return { ok: false, text: "Consulting is off for this agent." };
-      if (consulted >= MAX_CONSULTS) return { ok: false, text: `You have used your ${MAX_CONSULTS} consults for this step; decide with what you have, or report the open question.` };
+      if ((quota.consults ?? 0) >= MAX_CONSULTS) return { ok: false, text: `You have used your ${MAX_CONSULTS} consults for this step; decide with what you have, or report the open question.` };
       const question = (request.text ?? "").trim();
       if (!question) return { ok: false, text: "ask_expert needs a question." };
-      consulted += 1;
-      return { ok: true, text: await consult(question.slice(0, 6000), childSignal()) };
+      quota.consults = (quota.consults ?? 0) + 1;
+      // Its own controller, so the worker abandoning its tool call stops this expert and nothing else.
+      const own = new AbortController();
+      const parent = childSignal();
+      const stop = () => own.abort();
+      parent.addEventListener("abort", stop, { once: true });
+      const consultId = request.consultId ?? randomUUID();
+      consultations.set(consultId, own);
+      try {
+        return await consult(question.slice(0, 6000), own.signal);
+      } finally {
+        consultations.delete(consultId);
+        parent.removeEventListener("abort", stop);
+      }
     }
     if (request.op !== "delegate") return { ok: false, text: "Unknown delegation operation." };
     const signal = childSignal();
     signal.throwIfAborted();
     const briefs = reserveChildren(quota, request.briefs);
     // A coordinating parent must release claims before waiting for children that may need them.
-    desk?.releaseFiles(parentDeskId, () => "Delegating this work; re-read before editing.");
+    for (const held of new Set([desk, childDesk])) held?.releaseFiles(parentDeskId, () => "Delegating this work; re-read before editing.");
     const runs = briefs.map((brief) => {
       const promise = inPool(key, Math.max(1, config.workflow.maxParallelWorkers), signal, () => childRun(brief, signal));
       pending.add(promise);
@@ -271,7 +307,7 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
       clearTimeout(deadline);
       await Promise.allSettled([...pending]);
       await server.close();
-      if (ownedDesk) { desk?.release(parentDeskId, () => "Parent finished; re-read before editing."); await ownedDesk.close(); }
+      if (ownedDesk) { ownedDesk.release(parentDeskId, () => "Parent finished; re-read before editing."); await ownedDesk.close(); }
       pool.users -= 1;
       if (pool.users === 0) pools.delete(key);
     },

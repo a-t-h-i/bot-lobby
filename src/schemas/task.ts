@@ -286,9 +286,11 @@ export interface Task {
 export interface GoalCheckRecord {
   /** Hash of the diff it read: the same change is not checked twice. */
   key: string;
-  verdict: "met" | "not_met" | "unread";
+  verdict: "met" | "not_met";
   gaps: string[];
   at: string;
+  /** When completion was refused for these gaps: only then can the oracle complete anyway with a reason. */
+  refusedAt?: string;
 }
 
 export function createTask(

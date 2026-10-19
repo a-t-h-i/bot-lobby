@@ -29,7 +29,9 @@ export interface PiRunOptions {
   effortProfile?: RunProfileLike;
   agent?: { runId: string; taskId: string; domain: Domain; role: Role; depth?: number };
   mcpTools?: string[];
-  delegationQuota?: { used: number };
+  delegationQuota?: { used: number; consults?: number };
+  /** The model and thinking ask_expert consults on, resolved by the oracle (its session model when settings name none). */
+  expert?: { model?: string; thinking: string };
   onChildRun?: (run: AgentRun) => void;
   cwd: string;
   task: string;

@@ -1,6 +1,7 @@
 import { clampThinkingLevel, getSupportedThinkingLevels, type Api, type Model, type ModelThinkingLevel } from "@earendil-works/pi-ai";
 import {
   agentProfile,
+  expertProfile,
   isThinkingLevel,
   lobbyAgentProfile,
   panelMemberProfile,
@@ -104,6 +105,12 @@ function resolveRunProfile(profile: RunProfile, label: string, options: Resolver
     }
   }
   return { ...profile, model, thinking: check.level };
+}
+
+/** The model ask_expert consults on: the expert setting's, else the oracle's, else the session's; thinking clamped to it. */
+export function resolveExpertProfile(config: BotLobbyConfig, options: ResolverOptions): { model?: string; thinking: string } {
+  const { model, thinking } = resolveRunProfile({ ...expertProfile(config), timeoutMs: 0 }, "Expert consult", options);
+  return { ...(model ? { model } : {}), thinking };
 }
 
 /** A lobby agent's model, thinking and time limit. */

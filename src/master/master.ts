@@ -292,6 +292,8 @@ export interface WorkerRequest {
   alongside?: readonly Domain[];
   /** The worker has a worktree of its own for the batch; its change is applied back when the batch ends. */
   ownCheckout?: boolean;
+  /** The model ask_expert consults on. */
+  expert?: { model?: string; thinking: string };
 }
 
 /** How a worker uses the task board, and what it already says for its role. */
@@ -369,6 +371,7 @@ export async function runWorker(
   const env = request.board ? { ...request.agent?.env, [BOARD_ENV]: request.board, BOT_LOBBY_BOARD_FROM: request.domain } : request.agent?.env;
   const base: AgentRequest = {
     delegationQuota: { used: 0 },
+    ...(request.expert ? { expert: request.expert } : {}),
     effort: request.effort,
     effortProfile: configured,
     taskId: request.taskId,
@@ -466,7 +469,8 @@ function reviewerContext(request: ReviewerRequest): string {
     request.clean
       ? "You review with a clean context: the request, the approved plan, the task board and the diff, not the workers' own accounts of what they did. Judge the change by what the code does, and verify any claim yourself before you rely on it."
       : request.workerSummary ? `Worker summary (each domain's newest entries):\n${truncate(request.workerSummary, 4800)}` : "No worker summary available.",
-    !request.clean && owns.length > 0 ? `Scout findings:\n${summarizeOutcomes(owns, 1200)}` : "",
+    // QA scouts planned these tests: their findings are the reviewer's own groundwork, not a worker's account.
+    owns.length > 0 ? `Scout findings:\n${summarizeOutcomes(owns, 1200)}` : "",
     request.provenance ? `Who changed each file (bot-lobby's record of every agent's edit and write calls; judge each as your role's Change provenance says):\n${request.provenance}` : "",
     request.lint ?? "",
     request.board ?? "",

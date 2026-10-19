@@ -9,7 +9,7 @@
  * gate and the oracle read the same record; a worker without a running desk
  * (a single step) appends to the file directly.
  */
-import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 export const POST_KINDS = ["contract", "decision", "blocker", "question", "done", "note"] as const;
@@ -104,16 +104,59 @@ export interface NewPost {
   files?: readonly string[];
 }
 
+/** Longest a board path in a post may be. */
+const MAX_FILE_CHARS = 300;
+/** How long a writer waits for another process's append, and when a lock is taken to be left behind. */
+const LOCK_WAIT_MS = 2000;
+const STALE_LOCK_MS = 10_000;
+
+function sleep(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * Run `write` holding the board's lock (a directory beside it, made
+ * atomically), so posts from several processes get distinct sequence
+ * numbers. A lock left by a crashed writer is broken once stale; past the
+ * wait the post goes in anyway rather than being lost.
+ */
+function withLock<T>(path: string, write: () => T): T {
+  const lock = `${path}.lock`;
+  const until = Date.now() + LOCK_WAIT_MS;
+  let held = false;
+  while (!held) {
+    try {
+      mkdirSync(lock);
+      held = true;
+    } catch {
+      try {
+        if (Date.now() - statSync(lock).mtimeMs > STALE_LOCK_MS) rmSync(lock, { recursive: true, force: true });
+      } catch {
+        // Released meanwhile.
+      }
+      if (Date.now() > until) break;
+      sleep(5);
+    }
+  }
+  try {
+    return write();
+  } finally {
+    if (held) rmSync(lock, { recursive: true, force: true });
+  }
+}
+
 /** Append a post and return it as stored. Throws on an empty text, so the caller can tell the agent. */
 export function appendPost(path: string, post: NewPost, now = new Date()): BoardPost {
   const text = clean(post.text, MAX_POST_CHARS);
   if (!text) throw new Error("a board post needs text");
-  const files = (post.files ?? []).map((file) => file.trim()).filter(Boolean).slice(0, MAX_FILES);
-  const seq = (readBoard(path).at(-1)?.seq ?? 0) + 1;
-  const stored: BoardPost = { seq, from: post.from, kind: post.kind, text, ...(files.length > 0 ? { files } : {}), at: now.toISOString() };
+  const files = (post.files ?? []).map((file) => clean(file, MAX_FILE_CHARS)).filter(Boolean).slice(0, MAX_FILES);
   mkdirSync(dirname(path), { recursive: true });
-  appendFileSync(path, `${JSON.stringify(stored)}\n`, "utf8");
-  return stored;
+  return withLock(path, () => {
+    const seq = (readBoard(path).at(-1)?.seq ?? 0) + 1;
+    const stored: BoardPost = { seq, from: post.from, kind: post.kind, text, ...(files.length > 0 ? { files } : {}), at: now.toISOString() };
+    appendFileSync(path, `${JSON.stringify(stored)}\n`, "utf8");
+    return stored;
+  });
 }
 
 export interface BoardFilter {
@@ -139,9 +182,10 @@ export function posterName(from: string): string {
   return NAMES[from] ?? (from.length > 12 ? `child ${from.slice(0, 8)}` : from.toUpperCase());
 }
 
+/** One post on one line: its text is flattened, so a post can never pass for a line of the engine's own. */
 export function formatPost(post: BoardPost): string {
   const files = post.files?.length ? ` (${post.files.join(", ")})` : "";
-  return `#${post.seq} [${post.kind}] ${posterName(post.from)}${files}: ${post.text}`;
+  return `#${post.seq} [${post.kind}] ${posterName(post.from)}${files}: ${post.text.replace(/\s+/g, " ")}`;
 }
 
 export function formatPosts(posts: readonly BoardPost[]): string {

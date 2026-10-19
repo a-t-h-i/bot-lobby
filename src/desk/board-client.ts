@@ -35,9 +35,9 @@ export function registerBoardClient(pi: ExtensionAPI, env: NodeJS.ProcessEnv = p
     }),
     async execute(_id, params) {
       if (desk) {
-        const answer = await desk.request({ op: "post", kind: params.kind, text: params.text, files: params.files ?? [] });
-        // A desk without the board (or gone) leaves the post to the file below.
-        if (answer.ok || /needs text|Unknown post kind/.test(answer.text)) return text(answer.text);
+        const answer = await desk.request({ op: "post", from: self, kind: params.kind, text: params.text, files: params.files ?? [] });
+        // Only a desk without the board, or one never reached, leaves the post to the file below; any other answer may follow a write.
+        if (answer.ok || !/^This task has no board\.$|^the file desk is unavailable$/.test(answer.text)) return text(answer.text);
       }
       try {
         const post = appendPost(path, { from: self, kind: params.kind, text: params.text, ...(params.files ? { files: params.files } : {}) });

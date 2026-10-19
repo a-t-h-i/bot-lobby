@@ -50,7 +50,9 @@ export interface AgentRequest {
   mcpTools?: string[];
   /** False when the agent's settings turn its auto-compaction off. */
   autoCompact?: boolean;
-  delegationQuota?: { used: number };
+  delegationQuota?: { used: number; consults?: number };
+  /** See PiRunOptions.expert. */
+  expert?: { model?: string; thinking: string };
   thinking?: string;
   timeoutMs: number;
   cwd: string;
@@ -251,6 +253,7 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
       cwd: request.cwd,
       agent: { runId: base.runId, taskId: request.taskId, domain: request.domain, role: request.role },
       delegationQuota: quota,
+      ...(request.expert ? { expert: request.expert } : {}),
       effort: request.effort,
       effortProfile: request.effortProfile,
       onChildRun: (child) => {
@@ -355,7 +358,10 @@ async function mapWithConcurrencyLimit<TIn, TOut>(items: TIn[], concurrency: num
       results[index] = await fn(items[index]!);
     }
   });
-  await Promise.all(workers);
+  // Every worker settles before a failure is raised, so no caller cleans up under a sibling still running.
+  const settled = await Promise.allSettled(workers);
+  const failed = settled.find((entry): entry is PromiseRejectedResult => entry.status === "rejected");
+  if (failed) throw failed.reason;
   return results;
 }
 

@@ -8,7 +8,7 @@ import { basename } from "node:path";
 import type { AgentHandle } from "../execution/agent-runner.ts";
 import { FileDesk, type Claim, type DeskEvent, type FileView, type Handover, type WorkerId } from "./desk.ts";
 import { startDeskServer, type DeskRequest, type DeskResponse, type DeskServer } from "./ipc.ts";
-import { appendPost, formatPost, isPostKind, PUSHED_KINDS, subscriptionFor, type BoardPost } from "./board.ts";
+import { appendPost, formatPost, isPostKind, PUSHED_KINDS, SUBSCRIPTIONS, subscriptionFor, type BoardPost } from "./board.ts";
 
 /** Tools the desk adds to every parallel worker's allowlist. */
 export const DESK_TOOLS: readonly string[] = ["claim_file", "handover_file", "my_files", "wait_for_files"];
@@ -114,7 +114,6 @@ export class DeskSession {
   private readonly options: DeskSessionOptions;
   private readonly questions = new Map<number, PeerQuestion>();
   private nextQuestion = 1;
-  private readonly posted: BoardPost[] = [];
 
   constructor(options: DeskSessionOptions) {
     this.options = options;
@@ -156,20 +155,12 @@ export class DeskSession {
   release(worker: WorkerId, note: (path: string, next: Claim) => string): void {
     this.releaseFiles(worker, note);
     this.handles.delete(worker);
-    // A finished worker can no longer answer, and nobody is left to read its answers.
+    // A finished worker can no longer answer, and its own questions need no answer.
     for (const question of [...this.questions.values()]) {
-      if (question.to === worker) this.settle(question, undefined);
-      else if (question.from === worker) {
-        clearTimeout(question.timer);
-        this.questions.delete(question.id);
-      }
+      if (question.to === worker || question.from === worker) this.settle(question, undefined);
     }
   }
 
-  /** Board posts made through this desk, oldest first: the batch's report lists them. */
-  posts(): BoardPost[] {
-    return [...this.posted];
-  }
 
   /** A coordinating worker releases claims but still receives steering messages. */
   releaseFiles(worker: WorkerId, note: (path: string, next: Claim) => string): void {
@@ -223,7 +214,7 @@ export class DeskSession {
       case "wait":
         return this.wait(worker, Math.min(MAX_WAIT_MS, Math.max(1000, request.timeoutMs ?? MAX_WAIT_MS)));
       case "post":
-        return this.post(worker, request.kind ?? "", request.text ?? "", request.files ?? []);
+        return this.post(request.from?.trim() || worker, worker, request.kind ?? "", request.text ?? "", request.files ?? []);
       case "ask":
         return this.ask(worker, request.to ?? "", request.path ?? "", request.text ?? "", Math.min(MAX_ASK_WAIT_MS, Math.max(5000, request.timeoutMs ?? ASK_WAIT_MS)));
       case "answer":
@@ -288,19 +279,19 @@ export class DeskSession {
     return { ok: true, text: `Still waiting:\n${this.mine(worker)}\nIf nothing else is left, finish your report and list the dependency under Notes; files are handed over automatically when their holder finishes.` };
   }
 
-  private post(worker: WorkerId, kind: string, text: string, files: readonly string[]): Omit<DeskResponse, "id"> {
+  private post(from: string, worker: WorkerId, kind: string, text: string, files: readonly string[]): Omit<DeskResponse, "id"> {
     if (!this.options.boardPath) return { ok: false, text: "This task has no board." };
     if (!isPostKind(kind)) return { ok: false, text: `Unknown post kind "${kind}".` };
     let post: BoardPost;
     try {
-      post = appendPost(this.options.boardPath, { from: worker, kind, text, files: files.map((file) => this.desk.normalize(file)) });
+      post = appendPost(this.options.boardPath, { from, kind, text, files: files.map((file) => this.desk.normalize(file)) });
     } catch (error) {
       return { ok: false, text: (error as Error).message };
     }
-    this.posted.push(post);
     let told: string[] = [];
     if (PUSHED_KINDS.has(post.kind)) {
-      told = [...this.handles.keys()].filter((peer) => peer !== worker && subscriptionFor(peer).includes(post.kind));
+      // Only the batch's named workers hear posts as they land; children read the board when they need it.
+      told = [...this.handles.keys()].filter((peer) => peer !== worker && peer in SUBSCRIPTIONS && subscriptionFor(peer).includes(post.kind));
       for (const peer of told) this.steer(peer, `bot-lobby board: ${formatPost(post)}`);
     }
     return { ok: true, text: `Posted #${post.seq}.${told.length > 0 ? ` ${told.map(label).join(", ")} ${told.length === 1 ? "was" : "were"} told now.` : ""}` };
@@ -310,13 +301,15 @@ export class DeskSession {
     if (!this.options.peers) return { ok: false, text: "No peers work alongside you here." };
     const text = flat(question, MAX_QUESTION);
     if (!text) return { ok: false, text: "ask_peer needs a question." };
+    if (path.trim() && !this.usesClaims) return { ok: false, text: "Every worker in this batch has a checkout of its own, so nobody holds files: name the peer (DEV, DESIGN or QA) instead." };
     const target = path.trim() ? this.desk.holderOf(path)?.worker : to.trim() ? peerId(to) : undefined;
     if (!target) return { ok: false, text: path.trim() ? `Nobody holds \`${this.desk.normalize(path)}\`; read it yourself.` : "Name the peer (DEV, DESIGN or QA) or a file its holder should answer about." };
     if (target === worker) return { ok: false, text: "That is you." };
     if (!this.handles.has(target)) return { ok: false, text: `${label(target)} is not working right now. Post a \`question\` on the board instead; the oracle sees it.` };
-    // Two workers each blocked on the other's question would both wait out the clock.
-    const theirs = [...this.questions.values()].find((entry) => entry.from === target && entry.to === worker);
-    if (theirs) return { ok: false, text: `${label(target)} is waiting on your answer to its question #${theirs.id} ("${theirs.question}"). Answer it with answer_peer first.` };
+    // A worker waiting on its own question cannot answer until that returns: asking it would chain the waits (or close a cycle).
+    const theirs = [...this.questions.values()].find((entry) => entry.from === target);
+    if (theirs?.to === worker) return { ok: false, text: `${label(target)} is waiting on your answer to its question #${theirs.id} ("${theirs.question}"). Answer it with answer_peer first.` };
+    if (theirs) return { ok: false, text: `${label(target)} is waiting on an answer from ${label(theirs.to)} and cannot answer yet. Carry on with your other work and ask again shortly, or post a \`question\` on the board.` };
     const id = this.nextQuestion++;
     const answer = await new Promise<string | undefined>((resolve) => {
       const timer = setTimeout(() => this.settle(this.questions.get(id), undefined), timeoutMs);
@@ -329,7 +322,7 @@ export class DeskSession {
     }
     if (this.options.boardPath) {
       try {
-        this.posted.push(appendPost(this.options.boardPath, { from: worker, kind: "question", text: `Asked ${label(target)}: ${text} Answer: ${answer}` }));
+        appendPost(this.options.boardPath, { from: worker, kind: "note", text: `Asked ${label(target)}: ${text} Answer: ${answer}` });
       } catch {
         // The answer still reaches the asker.
       }

@@ -161,6 +161,8 @@ export interface WorkflowDeps {
   config: BotLobbyConfig;
   /** Per-run model/thinking/time limit, clamped to each model; plain settings when absent. */
   profile?: ProfileResolver;
+  /** The model and thinking ask_expert consults on, resolved like the profiles; the settings' own when absent. */
+  expert?: { model?: string; thinking: string };
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
   ask: (question: string) => Promise<string | undefined>;
@@ -740,6 +742,7 @@ function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instructi
     dataRoots: readDataRoots(deps.root, deps.configDir),
     config: deps.config,
     profile: deps.profile,
+    ...(deps.expert ? { expert: deps.expert } : {}),
     signal: deps.signal,
     onUpdate: deps.onUpdate,
     ...(deps.hints ? { hints: deps.hints } : {}),
@@ -1209,7 +1212,11 @@ async function runParallelWorkers(task: Task, deps: WorkflowDeps, assignments: A
       await session.close();
     }
     if (trees) {
-      const results = await mergeWorkerTrees(trees, batch, join(taskDirFor(deps.root, deps.configDir, task.id), "patches"));
+      const results = await mergeWorkerTrees(trees, batch, join(taskDirFor(deps.root, deps.configDir, task.id), "patches")).catch((error: unknown) => {
+        // Keep every worktree: nothing is lost while the oracle sorts it out.
+        for (const tree of trees.trees.values()) tree.keep = true;
+        return batch.map((worker): MergeOutcome => ({ worker, status: "conflict", patch: "", saved: trees.trees.get(worker)?.dir ?? "", reason: `merging back failed (${(error as Error).message}); the worktree is kept as it was` }));
+      });
       // The edits were made in the worktrees: the task's record names the same files in its own tree.
       outcomes = outcomes.map((outcome) => (outcome.run.edited?.length ? { ...outcome, run: { ...outcome.run, edited: outcome.run.edited.map((path) => mapToTop(trees, outcome.result.domain, path)) } } : outcome));
       merged = mergeReport(results);
@@ -1234,11 +1241,19 @@ async function runParallelWorkers(task: Task, deps: WorkflowDeps, assignments: A
 
 /** What came of applying each worker's worktree back to the task's tree. */
 function mergeReport(results: readonly MergeOutcome[]): string {
-  const applied = results.filter((entry) => entry.status === "applied").map((entry) => AGENT_LABELS[entry.worker as Domain] ?? entry.worker);
-  const conflicts = results.filter((entry): entry is Extract<MergeOutcome, { status: "conflict" }> => entry.status === "conflict");
+  const label = (worker: string): string => AGENT_LABELS[worker as Domain] ?? worker;
+  const applied = results.filter((entry) => entry.status === "applied").map((entry) => label(entry.worker));
+  const kept = results.filter((entry): entry is Extract<MergeOutcome, { status: "conflict" | "partial" }> => entry.status === "conflict" || entry.status === "partial");
   return [
     applied.length > 0 ? `Worktrees merged back: ${applied.join(", ")}.` : "",
-    ...conflicts.map((entry) => `${AGENT_LABELS[entry.worker as Domain] ?? entry.worker}'s change did not apply (${truncate(entry.reason, 200)}), so none of it is in the tree.${entry.patch ? ` Its patch is ${entry.patch}: delegate a fix step to ${AGENT_LABELS[entry.worker as Domain] ?? entry.worker} to apply it onto the current files (\`git apply --3way\` or by hand), reconciling it with the others' changes.` : ""}`),
+    ...kept.map((entry) => {
+      const where = [entry.patch ? `patch ${entry.patch}` : "", entry.saved.startsWith("refs/") ? `git ref ${entry.saved}` : entry.saved ? `worktree ${entry.saved}` : ""].filter(Boolean).join(", ");
+      const state =
+        entry.status === "partial"
+          ? `, and applying it failed part way: these files are left changed and need checking: ${(entry.leftChanged ?? []).slice(0, 10).join(", ")}`
+          : ", so none of it is in the tree";
+      return `${label(entry.worker)}'s change did not apply (${truncate(entry.reason, 300)})${state}.${where ? ` It is saved (${where}): delegate a fix step to ${label(entry.worker)} to bring it onto the current files (\`git apply --3way\` on the patch, or \`git diff <ref>^ <ref>\`), reconciling it with the others' changes.` : ""}`;
+    }),
   ].filter(Boolean).join("\n");
 }
 
@@ -1638,8 +1653,12 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
   // New lint errors in what the task touched hold it in block mode, unless the user accepted the work as it is.
   const lint = await lintTask(task, deps);
   if (lint && lintHolds(lint, deps.config.lint.mode, Boolean(task.lintWaiver))) throw new Error(`cannot complete: ${lintRefusal(lint)}`);
-  const missed = await checkGoal(task, params, deps);
-  if (missed) throw new Error(missed);
+  const goal = await checkGoal(task, params, deps);
+  if (goal.refusal) {
+    // The refusal is recorded, so a reason on the next complete is an answer to it.
+    saveTask(deps.root, deps.configDir, task);
+    throw new Error(goal.refusal);
+  }
   // The gate refuses before any side effect, so a refusal leaves the task untouched.
   const oversized = overThreshold(readDataRoots(deps.root, deps.configDir), deps.config.knowledge.compactionThreshold);
   if (oversized.length > 0) throw new Error(`cannot complete: knowledge files over the compaction threshold: ${oversized.map((entry) => `${entry.agent}/${entry.file} (${entry.chars})`).join(", ")}. First record domain-relevant facts where they belong with action=knowledge (domain=designer|backend|qa), then rewrite each oversized file with action=compact, then call complete again.`);
@@ -1657,7 +1676,7 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
   flushDecisions(deps, task);
   const delivery = await offerDelivery(task, deps);
   const left = lint?.state === "failing" ? ` ${task.lintWaiver ? "Accepted by the user with lint errors" : "Lint (advisory)"}: ${lintSummary(lint)} Tell the user.` : "";
-  return `Task ${task.id} completed.${committed} History recorded and temporary scratchpads removed. ${delivery}${left}`;
+  return `Task ${task.id} completed.${committed} History recorded and temporary scratchpads removed. ${delivery}${left}${goal.note ?? ""}`;
 }
 
 /**
@@ -1667,34 +1686,51 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
  * deliberate (the user agreed). The same change is never checked twice, and
  * an unreadable check holds nothing.
  */
-async function checkGoal(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
-  if (!deps.config.workflow.goalCheck || !builtSomething(task) || task.qaWaiver) return "";
+/** Enough of the change to tell one from another; the check itself reads a shorter cut. */
+const GOAL_HASH_CHARS = 4_000_000;
+
+async function checkGoal(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<{ refusal?: string; note?: string }> {
+  if (!deps.config.workflow.goalCheck || !builtSomething(task) || task.qaWaiver) return {};
   const base = await reviewBase(task, deps);
-  const diff = await readRepositoryDiff(deps.cwd, { ...(base ? { base } : {}), exclude: ownRecords(deps) });
-  if (!diff.trim() || /^Unable to read git state/.test(diff)) return "";
+  // The whole change is hashed, so an edit past what the check reads still counts as a new change.
+  const diff = await readRepositoryDiff(deps.cwd, { ...(base ? { base } : {}), exclude: ownRecords(deps), limitChars: GOAL_HASH_CHARS });
+  if (!diff.trim() || /^Unable to read git state/.test(diff)) return {};
   const key = createHash("sha256").update(diff).digest("hex").slice(0, 16);
   if (task.goalCheck?.key !== key) {
-    const result = await runGoalCheck({
-      taskId: task.id,
-      request: taskRequest(task),
-      amendments: task.amendments,
-      diff,
-      cwd: deps.cwd,
-      config: deps.config,
-      ...(deps.profile ? { profile: deps.profile } : {}),
-      ...(deps.signal ? { signal: deps.signal } : {}),
-      ...(deps.onUpdate ? { onUpdate: deps.onUpdate } : {}),
-    }, deps.runProcess ?? spawnPiProcess);
+    let result: Awaited<ReturnType<typeof runGoalCheck>> | undefined;
+    // One more read when the first could not be read: a lost verdict should not let a gap through unseen.
+    for (let attempt = 0; attempt < 2 && result?.verdict !== "met" && result?.verdict !== "not_met"; attempt++) {
+      deps.signal?.throwIfAborted();
+      result = await runGoalCheck({
+        taskId: task.id,
+        request: taskRequest(task),
+        amendments: task.amendments,
+        diff,
+        cwd: deps.cwd,
+        config: deps.config,
+        ...(deps.profile ? { profile: deps.profile } : {}),
+        ...(deps.signal ? { signal: deps.signal } : {}),
+        ...(deps.onUpdate ? { onUpdate: deps.onUpdate } : {}),
+      }, deps.runProcess ?? spawnPiProcess);
+    }
+    deps.signal?.throwIfAborted();
+    if (!result || result.verdict === "unread") {
+      // Not recorded, so the next complete checks again.
+      const why = result?.run.error ? `: ${truncate(result.run.error, 160)}` : "";
+      return { note: ` The goal check could not be read (twice${why}), so the change was not checked against the request; tell the user.` };
+    }
     task.goalCheck = { key, verdict: result.verdict, gaps: result.gaps, at: new Date().toISOString() };
   }
   const check = task.goalCheck!;
-  if (check.verdict !== "not_met") return "";
+  if (check.verdict !== "not_met") return {};
   const gaps = check.gaps.slice(0, 12).map((gap) => `- ${truncate(gap, 300)}`).join("\n");
-  if (params.reason?.trim()) {
+  // A reason answers a refusal the oracle has seen; given up front, it is not an answer to anything yet.
+  if (params.reason?.trim() && check.refusedAt) {
     recordDecision(task, `Completed although the goal check named gaps (${check.gaps.map((gap) => truncate(gap, 120)).join("; ")}): ${params.reason.trim()}`);
-    return "";
+    return { note: ` Completed with the goal check's gaps left open, because: ${truncate(params.reason.trim(), 300)}. Tell the user which parts of their request are not done:\n${gaps}` };
   }
-  return `cannot complete: the goal check read the change against the user's request and found it does not meet all of it:\n${gaps}\nDelegate a fix step for each gap and complete again (the next check reads the new change). If a gap is deliberate (the user agreed to leave it out, or it is out of scope), call complete again with reason saying so; tell the user.`;
+  check.refusedAt = new Date().toISOString();
+  return { refusal: `cannot complete: the goal check read the change against the user's request and found it does not meet all of it:\n${gaps}\nDelegate a fix step for each gap and complete again (the next check reads the new change). If a gap is deliberate (the user agreed to leave it out, or it is out of scope), call complete again with reason saying so; tell the user.` };
 }
 
 /** The files a task's own workers changed: not one that held changes before they started, nor another task's. */
