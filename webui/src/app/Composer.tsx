@@ -3,25 +3,23 @@
  * The one text box for everything, built from the coding harness's own
  * composer (ComposerSurface, ComposerControl, ComposerPrimaryActions, copied
  * into ./composer): a glass box with the attachments and the text on top and a
- * footer row under them, who the message goes to on
- * its left, attach, stop and a round send button on its right. The context
+ * footer row under them: the Knowledge pane toggle on its left (on Knowledge),
+ * attach, stop and a round send button on its right. The context
  * strip tucked under the box carries the project (its explorer opens from
  * there) and the key hints. It grows with what you type up to a cap, takes images, PDFs and
- * other files (pick, paste or drop them) and sends Markdown to whoever the tab
- * talks to: the oracle everywhere, the planning panel on Plan, a quick fix on
- * Quick fix, a comment on the open task on Tasks. While a pop-up is open it
+ * other files (pick, paste or drop them) and sends Markdown to whoever the page
+ * talks to, with no picker: the oracle on Lobby and Tasks, the docs on
+ * Knowledge, the planning panel on Plan, a quick fix on Quick fix, a comment
+ * on the open task's plan on Tasks. While a pop-up is open it
  * steps aside, so only one thing asks for you at a time.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type RefObject } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { FileText, Paperclip, X } from "lucide-react"
-import { Select as SelectPrimitive } from "radix-ui"
 import { Keys, KeyHint } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { Select, SelectContent, SelectItem } from "@/components/reui/select"
 import { Button } from "@/components/ui/button"
-import { AgentIcon } from "@/ui/AgentIcon"
 import { call } from "@/lib/api"
 import { act } from "@/lib/act"
 import { useComposerContext } from "@/lib/composerContext"
@@ -34,28 +32,26 @@ import { cn } from "@/lib/utils"
 import { projectUrl } from "@/lib/project"
 import type { LobbySnapshot, StatusInfo, UploadInfo } from "@protocol"
 import { useTopic } from "./hooks"
-import { go, type Route } from "./router"
+import { go, parseHash, type Route } from "./router"
 import { knowledgeHash } from "./knowledgeView"
 import { KnowledgePaneToggle } from "./KnowledgePaneToggle"
 import { ProjectSwitcher, type Projects } from "./ProjectSwitcher"
 import { taskRoute } from "./taskRoute"
 import { ComposerSurface } from "./composer/ComposerSurface"
-import { ComposerControl, ComposerControlChevron, composerControlClassName } from "./composer/ComposerControl"
+import { ComposerControl } from "./composer/ComposerControl"
 import { ComposerSendButton, ComposerStopButton } from "./composer/ComposerPrimaryActions"
 
-type TargetId = "oracle" | "knowledge" | "panel" | "quickfix" | "comment" | "task"
+type TargetId = "oracle" | "knowledge" | "panel" | "quickfix" | "comment"
 
 interface Target {
   id: TargetId
-  /** The segmented control's word. */
-  pill: string
   /** The textarea's accessible name. */
   label: string
   placeholder: string
   taskId?: string
 }
 
-const ORACLE: Target = { id: "oracle", pill: "Oracle", label: "Message the oracle", placeholder: "Message the oracle…" }
+const ORACLE: Target = { id: "oracle", label: "Message the oracle", placeholder: "Message the oracle…" }
 
 /** The tabs that carry the composer; everywhere else it stays mounted (drafts and uploads survive) but hidden and inert. */
 const COMPOSER_TABS: ReadonlySet<string> = new Set(["lobby", "tasks", "plan", "quickfix", "knowledge"])
@@ -64,21 +60,14 @@ export function composerVisible(route: Route): boolean {
   return route.kind === "tab" && COMPOSER_TABS.has(route.tab)
 }
 
-/** Who a message can go to from this route: the tab's own target first, the oracle always. */
-function targetsFor(route: Route, openTask: string | undefined): Target[] {
-  if (route.kind !== "tab") return [ORACLE]
-  if (route.tab === "knowledge") return [{ id: "knowledge", pill: "Oracle", label: "Ask the oracle about this project", placeholder: "Ask about this project — the oracle searches the code and learns what is missing…" }]
-  if (route.tab === "plan") return [{ id: "panel", pill: "Panel", label: "Message the panel", placeholder: "Describe a task, or answer the panel…" }, ORACLE]
-  if (route.tab === "quickfix") return [{ id: "quickfix", pill: "Quick fix", label: "Describe a quick fix", placeholder: "Describe a small change…" }, ORACLE]
+/** The one recipient this route's messages go to: the page decides, the user does not pick. */
+function targetFor(route: Route, openTask: string | undefined): Target {
+  if (route.kind !== "tab") return ORACLE
+  if (route.tab === "knowledge") return { id: "knowledge", label: "Ask the oracle about this project", placeholder: "Ask about this project — the oracle searches the code and learns what is missing…" }
+  if (route.tab === "plan") return { id: "panel", label: "Message the panel", placeholder: "Describe a task, or answer the panel…" }
+  if (route.tab === "quickfix") return { id: "quickfix", label: "Describe a quick fix", placeholder: "Describe a small change…" }
   const task = route.tab === "tasks" ? taskRoute(route.rest).id ?? openTask : undefined
-  if (task) {
-    return [
-      { id: "comment", pill: "Comment", label: `Comment on ${task}`, placeholder: `Comment on ${task}'s plan…`, taskId: task },
-      { id: "task", pill: "Task's oracle", label: `Message ${task}'s oracle`, placeholder: `Leave a message for ${task}'s oracle…`, taskId: task },
-      ORACLE,
-    ]
-  }
-  return [ORACLE]
+  return task ? { id: "comment", label: `Comment on ${task}`, placeholder: `Comment on ${task}'s plan…`, taskId: task } : ORACLE
 }
 
 interface Pending {
@@ -91,9 +80,6 @@ interface Pending {
 }
 
 let keySeq = 0
-
-/** The icon beside each target, as the harness shows its model's. */
-const TARGET_ICON: Record<TargetId, string> = { oracle: "ORACLE", knowledge: "ORACLE", panel: "PLANNER", quickfix: "QUICK FIX", comment: "LOBBY", task: "ORACLE" }
 
 function isSend(event: KeyboardEvent): boolean {
   return event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing
@@ -203,7 +189,6 @@ export function Composer({ route, keys, projects, onHelp }: { route: Route; keys
   const [files, setFiles] = useState<Pending[]>([])
   const [sending, setSending] = useState(false)
   const [dragging, setDragging] = useState(false)
-  const [chosen, setChosen] = useState<TargetId>()
   const status = useTopic<StatusInfo>("status")
   const lobby = useTopic<LobbySnapshot>("lobby")
   const blocked = useAnyOverlay()
@@ -213,10 +198,7 @@ export function Composer({ route, keys, projects, onHelp }: { route: Route; keys
   const visibleRef = useRef(visible)
   visibleRef.current = visible
   const { taskId: openTask } = useComposerContext()
-  const targets = useMemo(() => targetsFor(route, openTask), [route, openTask])
-  const targetKey = targets.map((entry) => `${entry.id}:${entry.taskId ?? ""}`).join("|")
-  const target = targets.find((entry) => entry.id === chosen) ?? targets[0]!
-  useEffect(() => setChosen(undefined), [targetKey])
+  const target = useMemo(() => targetFor(route, openTask), [route, openTask])
 
   const card = useRef<HTMLDivElement>(null)
   const { shrunk, expand } = useShrinkOnScroll(card, visible && !blocked, route)
@@ -312,10 +294,10 @@ export function Composer({ route, keys, projects, onHelp }: { route: Route; keys
         if (result.notice) toast(result.notice)
       } else if (target.id === "knowledge") {
         done = (await act("knowledge.ask", body)) !== undefined
-        if (done && route.kind === "tab") go(knowledgeHash(route.rest, true))
+        const now = parseHash(window.location.hash)
+        if (done && now?.kind === "tab" && now.tab === "knowledge") go(knowledgeHash(now.rest, true))
       } else if (target.id === "panel") done = (await act("planner.send", body)) !== undefined
       else if (target.id === "quickfix") done = (await act("quickfix.submit", body)) !== undefined
-      else if (target.id === "task") done = (await act("tasks.message", { taskId: target.taskId!, ...body })) !== undefined
       else done = (await act("tasks.comment", { taskId: target.taskId!, ...body })) !== undefined
       if (done) {
         setText("")
@@ -387,27 +369,6 @@ export function Composer({ route, keys, projects, onHelp }: { route: Route; keys
   }
 
   const knowledge = route.kind === "tab" && route.tab === "knowledge"
-  // Who it goes to, as the harness shows its model: a quiet control with an icon and a chevron that opens the list.
-  const targetControl = targets.length > 1 ? (
-    <Select value={target.id} onValueChange={(id) => setChosen(id as TargetId)}>
-      <SelectPrimitive.Trigger aria-label="Send to" data-compact className={composerControlClassName("sm", "min-w-0")}>
-        <AgentIcon source={TARGET_ICON[target.id]} className="size-4 shrink-0" />
-        <span className="truncate">{target.pill}</span>
-        <ComposerControlChevron />
-      </SelectPrimitive.Trigger>
-      <SelectContent side="top" align="start">
-        {targets.map((entry) => (
-          <SelectItem key={entry.id} value={entry.id}>{entry.pill}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  ) : (
-    <span className={composerControlClassName("sm", "pointer-events-none")}>
-      <AgentIcon source={TARGET_ICON[target.id]} className="size-4 shrink-0" />
-      <span className="hidden @[24rem]/composer-surface:inline">To the {target.pill.toLowerCase()}</span>
-      <span className="@[24rem]/composer-surface:hidden">{target.pill}</span>
-    </span>
-  )
   const project = status.data?.workspace.name ?? "bot-lobby"
   const branch = status.data?.branch ?? status.data?.workspace.branch
   const strip = (
@@ -530,7 +491,7 @@ export function Composer({ route, keys, projects, onHelp }: { route: Route; keys
                     data-chat-composer-controls="left"
                     className="composer-controls relative -m-1 -ms-3.5 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-1 ps-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                   >
-                    {knowledge ? <KnowledgePaneToggle rest={route.kind === "tab" ? route.rest : []} /> : targetControl}
+                    {knowledge ? <KnowledgePaneToggle rest={route.kind === "tab" ? route.rest : []} /> : null}
                   </div>
 
                   <div data-chat-composer-actions="right" className="flex shrink-0 flex-nowrap items-center justify-end gap-2">
