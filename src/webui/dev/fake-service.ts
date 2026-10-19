@@ -572,7 +572,7 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     issues: fakeIssues((fixture.mockIssues ?? []).map((issue) => ({ ...issue }))),
     sessionChat: () => [],
     hasOlderChat: () => false,
-    switchTo: async (target: { name: string }) => `switching this window to ${target.name}…`,
+    switchTo: async (target: { name: string }) => (fixture.status.busy ? `${sessionName ?? "this window's session"} carries on in the background; switching this window to ${target.name}…` : `switching this window to ${target.name}…`),
   } as unknown as LobbyService;
   seedPrompts(service, fixture);
   return service;

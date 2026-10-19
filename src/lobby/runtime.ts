@@ -27,7 +27,7 @@ import { PullsState } from "./pulls.ts";
 import { PullReviews } from "./pr-review.ts";
 import { KnowledgeBook } from "./knowledge.ts";
 import type { LobbyService } from "./host.ts";
-import { backgroundSessions, createLobbyService, lobbyNotify, lobbyProfile, plannerDeps, resumeSession, reviewProfile, seatProfile, setServiceState, savePlan as serviceSavePlan, answerPanel as serviceAnswerPanel } from "./service.ts";
+import { backgroundSessions, carryHandOff, createLobbyService, lobbyNotify, lobbyProfile, plannerDeps, resumeSession, reviewProfile, seatProfile, setServiceState, savePlan as serviceSavePlan, answerPanel as serviceAnswerPanel } from "./service.ts";
 import { lobbyTopics } from "./topics.ts";
 export { backgroundSessions, setSessionLauncher } from "./service.ts";
 import { deliverComments, onOwnerEvent } from "../pi/owner.ts";
@@ -208,6 +208,7 @@ export function startLobbyService(pi: ExtensionAPI, ctx: ExtensionContext, confi
   lobbyFeed.seedChat(chatFromEntries(ctx.sessionManager.getBranch(), Number.POSITIVE_INFINITY));
   state.unsubscribeFeed = lobbyFeed.onChange(() => lobbyTopics.bump("lobby"));
   carryOn(state);
+  carryHandOff(state);
   onRunUpdates((runs) => {
     lobbyFeed.runs(runs);
     lobbyTopics.bump("tasks");

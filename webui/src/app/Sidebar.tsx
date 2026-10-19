@@ -2,11 +2,11 @@
 /**
  * The sidebar on the left of every page, laid out like the coding harness it
  * takes after. At its top the app's name and the fold button, then a search
- * over the sessions and a New session button; then the running sessions as
- * cards (this window's first, then the background sessions it started), with
- * the ones in other terminals and the ended ones on shelves at the foot that
- * fold away; and last Settings and the app's switches. Switching to a session
- * is a click on its card.
+ * over the sessions and a New session button; then the sessions as thin rows
+ * under small labels (this window's, then the background sessions it
+ * started), with the ones in other terminals and the ended ones in groups at
+ * the foot that fold away; and last Settings and the app's switches. Switching
+ * to a session is a click on its row.
  *
  * It folds off the page altogether (the button at its top, the sidebar key, or
  * a click on its edge), and a button at the start of the bar brings it back.
@@ -19,7 +19,6 @@ import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 
 import {
   Archive,
   ChevronDown,
-  CircleCheck,
   CircleDashed,
   MessageCircleQuestion,
   PanelLeft,
@@ -62,8 +61,9 @@ const WIDTH_KEY = "bot-lobby.sidebar.width"
 const ICON_BUTTON =
   "inline-flex size-7 shrink-0 items-center justify-center rounded-md text-[var(--sidebar-icon)] outline-none transition-[background-color,color,scale] duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.96] aria-pressed:text-sidebar-foreground aria-[current=page]:bg-[var(--sidebar-selected)] aria-[current=page]:text-sidebar-foreground motion-reduce:active:scale-100"
 
-const CARD =
-  "session-card flex w-full min-w-0 flex-col rounded-md px-2.5 py-2 text-left outline-none transition-[background-color,scale] duration-150 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.98] aria-[current=true]:bg-[var(--sidebar-selected)] aria-[current=true]:shadow-control motion-reduce:active:scale-100"
+/** A session as a thin row, as the chat app's sidebar draws its conversations: one line, a soft pill when it is the current one. */
+const ROW =
+  "session-row flex h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2.5 text-left text-sm outline-none transition-colors duration-150 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-[current=true]:bg-[var(--sidebar-selected)]"
 
 function Tip({ label, hint, side = "bottom", children }: { label: string; hint?: string | undefined; side?: "right" | "top" | "bottom"; children: ReactNode }) {
   return (
@@ -85,8 +85,8 @@ function useSessions(): { entries: SessionEntry[]; branch: string | undefined } 
 
 /**
  * Go to a session: this window's own is the Lobby; a background one is moved
- * into this window (the server refuses while this window's oracle works, and
- * says so); one in another terminal stays there.
+ * into this window (if this window is at work, its session carries on in the
+ * background); one in another terminal stays there.
  */
 function useSwitch(): (entry: SessionEntry) => Promise<void> {
   return useCallback(async (entry: SessionEntry) => {
@@ -101,31 +101,33 @@ function StateDot({ entry }: { entry: SessionEntry }) {
   return <span aria-hidden="true" data-state={entry.where === "elsewhere" ? "elsewhere" : entry.state} className="session-dot relative" />
 }
 
-/** What the card's top line says on its right: the state, with an icon while there is something to see. */
-function CardStatus({ entry }: { entry: SessionEntry }) {
-  if (entry.where === "elsewhere") return null
+/**
+ * What the row shows at its end: a question count while it asks you something, a turning ring while it
+ * works or starts, otherwise its state dot. The state is spelt out for screen readers.
+ */
+function RowStatus({ entry }: { entry: SessionEntry }) {
+  if (entry.where === "elsewhere") return <StateDot entry={entry} />
   if (entry.state === "asking")
     return (
-      <span className="inline-flex shrink-0 items-center gap-1 text-warning">
+      <span className="inline-flex shrink-0 items-center gap-1 text-xs text-warning tabular-nums">
         <MessageCircleQuestion aria-hidden="true" className="size-3.5" />
-        {entry.waiting === 1 ? "1 question" : `${entry.waiting} questions`}
+        {entry.waiting}
+        <span className="sr-only">{entry.waiting === 1 ? " question" : " questions"}, Waiting</span>
       </span>
     )
   if (entry.state === "working" || entry.state === "starting")
     return (
-      <span className={cn("inline-flex shrink-0 items-center gap-1", entry.state === "working" ? "text-primary" : "text-muted-foreground")}>
+      <span className={cn("inline-flex shrink-0", entry.state === "working" ? "text-primary" : "text-muted-foreground")}>
         <CircleDashed aria-hidden="true" className="session-spin size-3.5" />
-        {entry.state === "working" ? "Working" : "Starting"}
+        <span className="sr-only">{entry.state === "working" ? "Working" : "Starting"}</span>
       </span>
     )
-  if (entry.state === "exited")
-    return (
-      <span className="inline-flex shrink-0 items-center gap-1 text-muted-foreground">
-        <CircleCheck aria-hidden="true" className="size-3.5" />
-        Ended
-      </span>
-    )
-  return <span className="shrink-0 text-muted-foreground">Idle</span>
+  return (
+    <span className="inline-flex shrink-0">
+      <StateDot entry={entry} />
+      <span className="sr-only">{entry.state === "exited" ? "Ended" : "Idle"}</span>
+    </span>
+  )
 }
 
 const WHERE = { here: "This window", background: "Background", elsewhere: "Other terminal" }
@@ -167,46 +169,35 @@ function RenameField({ entry, onDone }: { entry: SessionEntry; onDone: () => voi
           onDone()
         }
       }}
-      className="-mx-1 mt-1 h-5 w-[calc(100%+0.5rem)] min-w-0 rounded-sm bg-background px-1 text-sm leading-5 text-sidebar-foreground outline-none ring-2 ring-ring"
+      className="-mx-1 h-6 w-[calc(100%+0.5rem)] min-w-0 rounded-sm bg-background px-1 text-sm leading-5 text-sidebar-foreground outline-none ring-2 ring-ring"
     />
   )
 }
 
-const CARD_ACTION =
-  "inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-[background-color,color] duration-150 hover:bg-[var(--sidebar-selected)] hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+const ROW_ACTION =
+  "inline-flex size-[1.625rem] items-center justify-center rounded-md text-muted-foreground outline-none transition-[background-color,color] duration-150 hover:bg-[var(--sidebar-selected)] hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
 
-/** A session as a card: where it runs and its state, its name, and a line on what it is; Rename and Archive on hover. */
-function SessionCard({ entry, branch }: { entry: SessionEntry; branch: string | undefined }) {
+/** A session as a thin row: its name and, at the end, its state; Rename and Archive take the state's place on hover. */
+function SessionRow({ entry }: { entry: SessionEntry }) {
   const pick = useSwitch()
   const [renaming, setRenaming] = useState(false)
-  const foot =
-    entry.where === "here" ? (branch ? `on ${branch}` : "Where you are now")
-    : entry.where === "elsewhere" ? "Switch in that terminal"
-    : entry.state === "exited" ? "Its task keeps its state"
-    : "Click to bring it here"
-  const nameClass = cn("mt-1 truncate text-sm", entry.where === "here" ? "font-medium text-sidebar-foreground" : entry.state === "exited" || entry.where === "elsewhere" ? "text-muted-foreground" : "text-sidebar-foreground")
-  const top = (
-    <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-      <StateDot entry={entry} />
-      <span className="min-w-0 flex-1 truncate">{entry.where === "here" ? null : WHERE[entry.where]}</span>
-      <CardStatus entry={entry} />
-    </span>
-  )
+  const quiet = entry.state === "exited" || entry.where === "elsewhere"
+  const nameClass = cn("min-w-0 flex-1 truncate", entry.where === "here" ? "font-medium text-sidebar-foreground" : quiet ? "text-muted-foreground" : "text-sidebar-foreground")
   const canRename = entry.where !== "elsewhere"
   const canArchive = entry.where === "background" && entry.state === "exited" && Boolean(entry.key)
+  const hasActions = canRename || canArchive
   return (
-    <li className="session-enter session-item relative py-0.5">
+    <li className="session-enter session-item relative">
       {renaming ? (
-        <div aria-current={entry.where === "here" ? "true" : undefined} className={cn(CARD, "hover:bg-transparent active:scale-100")}>
-          {top}
+        <div aria-current={entry.where === "here" ? "true" : undefined} className={cn(ROW, "hover:bg-transparent")}>
           <RenameField entry={entry} onDone={() => setRenaming(false)} />
-          <span className="mt-0.5 truncate text-xs text-muted-foreground">{foot}</span>
         </div>
       ) : (
         <button
           type="button"
           aria-current={entry.where === "here" ? "true" : undefined}
           aria-label={entry.where === "here" ? `${entry.name}, this window` : entry.where === "elsewhere" ? `${entry.name}, in another terminal` : `Switch to ${entry.name}`}
+          title={entry.name}
           data-where={entry.where}
           data-state={entry.state}
           onClick={() => void pick(entry)}
@@ -215,25 +206,26 @@ function SessionCard({ entry, branch }: { entry: SessionEntry; branch: string | 
             event.preventDefault()
             setRenaming(true)
           }}
-          className={CARD}
+          className={ROW}
         >
-          {top}
           <span className={nameClass}>{entry.name}</span>
-          <span className={cn("mt-0.5 truncate text-xs text-muted-foreground", (canRename || canArchive) && "pr-14")}>{foot}</span>
+          <span className={cn("flex shrink-0 items-center", hasActions && "session-state")}>
+            <RowStatus entry={entry} />
+          </span>
         </button>
       )}
-      {!renaming && (canRename || canArchive) ? (
-        <span className="session-actions absolute right-1 bottom-1 flex items-center gap-0.5">
+      {!renaming && hasActions ? (
+        <span className="session-actions absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-0.5">
           {canRename ? (
             <Tip label="Rename">
-              <button type="button" aria-label={`Rename ${entry.name}`} onClick={() => setRenaming(true)} className={CARD_ACTION}>
+              <button type="button" aria-label={`Rename ${entry.name}`} onClick={() => setRenaming(true)} className={ROW_ACTION}>
                 <Pencil aria-hidden="true" className="size-3.5" />
               </button>
             </Tip>
           ) : null}
           {canArchive ? (
             <Tip label="Archive">
-              <button type="button" aria-label={`Archive ${entry.name}`} onClick={() => void archive(entry)} className={CARD_ACTION}>
+              <button type="button" aria-label={`Archive ${entry.name}`} onClick={() => void archive(entry)} className={ROW_ACTION}>
                 <Archive aria-hidden="true" className="size-3.5" />
               </button>
             </Tip>
@@ -244,39 +236,41 @@ function SessionCard({ entry, branch }: { entry: SessionEntry; branch: string | 
   )
 }
 
-/** A shelf of sessions at the sidebar's foot: a header with a rule and a chevron that folds it, remembered. */
-function Shelf({ id, label, entries, branch, archivable = false }: { id: string; label: string; entries: SessionEntry[]; branch: string | undefined; archivable?: boolean }) {
+/** A section label over a group of rows, as "Pinned" and "Recents" sit in the chat app. */
+const LABEL = "flex h-7 items-center px-2.5 pt-2 text-xs font-medium text-muted-foreground"
+
+/** A group of sessions under its label; it folds away when its label is clicked, remembered. */
+function Shelf({ id, label, entries, archivable = false }: { id: string; label: string; entries: SessionEntry[]; archivable?: boolean }) {
   const [folded, toggle] = useCollapsed(`app.sidebar.${id}`)
   const body = useId()
   if (entries.length === 0) return null
   return (
-    <section aria-label={label} className="flex flex-col">
-      <div className="flex items-center gap-1">
+    <section aria-label={label} className="group/shelf flex flex-col">
+      <div className="flex items-center gap-1 pt-2">
         <button
           type="button"
           aria-expanded={!folded}
           aria-controls={body}
           onClick={toggle}
-          className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none transition-colors duration-150 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-muted-foreground outline-none transition-colors duration-150 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
           <span>{label}</span>
           {folded ? <span className="tabular-nums">{entries.length}</span> : null}
-          <span aria-hidden="true" className="h-px flex-1 bg-[var(--sidebar-border)]" />
-          <ChevronDown aria-hidden="true" className={cn("size-3.5 transition-transform duration-200 motion-reduce:transition-none", folded && "-rotate-90")} />
+          <ChevronDown aria-hidden="true" className={cn("size-3 opacity-0 transition-[opacity,rotate] duration-150 group-hover/shelf:opacity-100 group-focus-within/shelf:opacity-100 motion-reduce:transition-none", folded && "-rotate-90 opacity-100")} />
         </button>
         {archivable ? (
           <button
             type="button"
             onClick={() => void (async () => { for (const entry of entries) if (entry.key) await act("sessions.archive", { key: entry.key }) })()}
-            className="h-7 shrink-0 rounded-md px-1.5 text-xs text-muted-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            className="h-[1.625rem] shrink-0 rounded-md px-1.5 text-xs text-muted-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
             Archive all
           </button>
         ) : null}
       </div>
       {folded ? null : (
-        <ul id={body} className="flex flex-col">
-          {entries.map((entry) => <SessionCard key={entry.id} entry={entry} branch={branch} />)}
+        <ul id={body} className="flex flex-col gap-px">
+          {entries.map((entry) => <SessionRow key={entry.id} entry={entry} />)}
         </ul>
       )}
     </section>
@@ -320,28 +314,40 @@ function SearchRow({ query, onQuery, onNew }: { query: string; onQuery: (query: 
   )
 }
 
-/** The sessions: the active ones as cards, then the shelves for other terminals and ended ones. */
+/** The sessions: this window's under its label, then the background ones, then other terminals and ended ones. */
 function Sessions({ query }: { query: string }) {
-  const { entries, branch } = useSessions()
+  const { entries } = useSessions()
   const shown = entries.filter((entry) => matches(entry, query))
-  const active = shown.filter((entry) => entry.where !== "elsewhere" && entry.state !== "exited")
+  const here = shown.filter((entry) => entry.where === "here" && entry.state !== "exited")
+  const background = shown.filter((entry) => entry.where === "background" && entry.state !== "exited")
   const elsewhere = shown.filter((entry) => entry.where === "elsewhere")
   const ended = shown.filter((entry) => entry.where !== "elsewhere" && entry.state === "exited")
   const list = useRef<HTMLElement>(null)
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <nav ref={list} aria-label="Sessions list" className="flex min-h-0 flex-1 flex-col overflow-y-auto px-1 pb-2">
-        {shown.length === 0 ? (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">No sessions match “{query.trim()}”.</p>
-        ) : (
-          <ul className="flex flex-col">
-            {active.map((entry) => <SessionCard key={entry.id} entry={entry} branch={branch} />)}
-          </ul>
-        )}
-        {!query.trim() && entries.length === 1 ? <p className="px-2.5 pt-1 text-xs text-muted-foreground">No other sessions are running.</p> : null}
+        {shown.length === 0 ? <p className="px-2.5 py-1.5 text-xs text-muted-foreground">No sessions match “{query.trim()}”.</p> : null}
+        {here.length > 0 ? (
+          <>
+            <p className={LABEL}>This window</p>
+            <ul className="flex flex-col gap-px">
+              {here.map((entry) => <SessionRow key={entry.id} entry={entry} />)}
+            </ul>
+          </>
+        ) : null}
+        {background.length > 0 ? (
+          <>
+            <p className={cn(LABEL, "mt-2")}>Background</p>
+            <ul className="flex flex-col gap-px">
+              {background.map((entry) => <SessionRow key={entry.id} entry={entry} />)}
+            </ul>
+          </>
+        ) : !query.trim() && entries.length === 1 ? (
+          <p className="px-2.5 pt-2 text-xs text-muted-foreground">No other sessions are running.</p>
+        ) : null}
         <div className="mt-auto flex flex-col pt-2">
-          <Shelf id="elsewhere" label="Other terminals" entries={elsewhere} branch={branch} />
-          <Shelf id="ended" label="Ended" entries={ended} branch={branch} archivable />
+          <Shelf id="elsewhere" label="Other terminals" entries={elsewhere} />
+          <Shelf id="ended" label="Ended" entries={ended} archivable />
         </div>
       </nav>
       <ScrollHints target={list} />

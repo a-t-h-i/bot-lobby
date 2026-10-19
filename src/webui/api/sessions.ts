@@ -88,10 +88,9 @@ export function sessionsMessage(body: { key?: string; sessionId?: string; text: 
   return { notice: ctx.service.sendToSession(body.sessionId!, text) };
 }
 
-/** Run a session in this window (stopping its background process first). */
+/** Run a session in this window (stopping its background process first); a window at work carries its own session on in the background. */
 export async function sessionsSwitch(body: { key?: string; sessionId?: string; claimTaskId?: string }, ctx: ApiContext): Promise<{ notice: string }> {
   if (!body.key && !body.sessionId && !body.claimTaskId) fail(400, "bad_request", "a session key, id or task is required");
-  if (ctx.service.masterBusy()) return { notice: "this window's oracle is working — stop it, then switch" };
   if (body.claimTaskId) {
     const task = ctx.service.tasks().find((entry) => entry.id === body.claimTaskId);
     if (!task) fail(404, "not_found", `no task ${body.claimTaskId}`);

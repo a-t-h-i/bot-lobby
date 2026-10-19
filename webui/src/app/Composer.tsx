@@ -85,7 +85,7 @@ function isSend(event: KeyboardEvent): boolean {
   return event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing
 }
 
-const SPRING = { type: "spring", stiffness: 520, damping: 32 } as const
+const EASE = { duration: 0.16, ease: "easeOut" } as const
 
 /** An attachment: an image as a 64px thumbnail with its remove button in the corner, any other file as a row. */
 function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
@@ -107,10 +107,10 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
     return (
       <motion.li
         layout
-        initial={{ opacity: 0, scale: 0.8 }}
+        initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.8 }}
-        transition={SPRING}
+        exit={{ opacity: 0, scale: 0.96 }}
+        transition={EASE}
         title={`${file.name} · ${sizeLabel(file.size)}`}
         className="relative size-16 shrink-0 overflow-hidden rounded-lg border border-border/80 bg-background"
       >
@@ -131,7 +131,7 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 4 }}
-      transition={SPRING}
+      transition={EASE}
       className="flex min-w-0 basis-full items-center gap-2 text-sm text-foreground"
     >
       <FileText aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
@@ -452,7 +452,7 @@ export function Composer({ route, keys, projects, onHelp }: { route: Route; keys
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: "auto", opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        transition={{ type: "spring", stiffness: 420, damping: 36 }}
+                        transition={{ duration: 0.18, ease: "easeOut" }}
                         aria-label="Attachments"
                         className="composer-files mb-3 flex max-w-full flex-wrap gap-2 overflow-hidden"
                       >

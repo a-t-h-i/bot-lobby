@@ -600,20 +600,68 @@ function sendToSession(state: Runtime, sessionId: string, text: string): string 
  * task no session owns is claimed instead.
  */
 async function switchTo(state: Runtime, target: SwitchTarget): Promise<string> {
-  if (!state.ctx.isIdle()) return "this window's oracle is working — stop it, then switch";
   if (target.claimTaskId) {
+    if (!state.ctx.isIdle()) return "this window's oracle is working — stop it, then take the task over here";
     state.pi.sendUserMessage(`/bot-lobby claim ${target.claimTaskId}`, { expandPromptTemplates: true });
     return `taking ${target.claimTaskId} over in this window`;
   }
+  // A window at work hands its session to the background (it carries on there) and then switches.
+  const leaving = state.ctx.isIdle() ? undefined : await stepAside(state);
+  if (typeof leaving === "string") return leaving;
   let file = target.background?.sessionFile;
   if (target.background) {
     target.background.stop();
     await target.background.whenExited();
   }
   file ??= target.sessionId ? await chats.locate(target.sessionId) : undefined;
-  if (!file) return `could not find ${target.name}'s session file — /resume lists every saved session`;
+  if (!file) {
+    if (leaving) handOff = undefined;
+    return `could not find ${target.name}'s session file — /resume lists every saved session`;
+  }
   state.pi.sendUserMessage(`/bot-lobby switch ${file}`, { expandPromptTemplates: true });
-  return `switching this window to ${target.name}…`;
+  return leaving ? `${leaving.name} carries on in the background; switching this window to ${target.name}…` : `switching this window to ${target.name}…`;
+}
+
+/** The session this window was working in when it switched away, started in the background once the switch lands. */
+let handOff: { file: string; name: string; message: string } | undefined;
+
+/** How long a stopped turn gets to wind down before the switch gives up. */
+const STEP_ASIDE_MS = 10_000;
+
+/** Stop this window's turn and keep its session to carry on in the background; the hand-off, or why not. */
+async function stepAside(state: Runtime): Promise<{ name: string } | string> {
+  const file = state.ctx.sessionManager.getSessionFile?.();
+  if (!file) return "this window's session is not saved yet — stop the oracle, then switch";
+  const name = state.pi.getSessionName() ?? "this window's session";
+  const task = ownedTask(state.root, state.configDir, state.ctx.sessionManager.getSessionId());
+  state.ctx.abort();
+  const deadline = Date.now() + STEP_ASIDE_MS;
+  while (!state.ctx.isIdle()) {
+    if (Date.now() > deadline) return "the oracle did not stop in time — try the switch again";
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  const message = task && !TERMINAL_STATES.includes(task.state) && !task.paused
+    ? `bot-lobby: you were moved to the background while you worked on ${task.id}; your last turn was cut off. Read where the task stands with the orchestrate tool (action=status), run again any step that was cut off, and carry on.`
+    : "bot-lobby: you were moved to the background while you worked, and your last turn was cut off. Carry on where you left off.";
+  handOff = { file, name, message };
+  return { name };
+}
+
+/** Once this window runs its new session, carry the one it left on in the background (see `stepAside`). */
+export function carryHandOff(state: Runtime): void {
+  const pending = handOff;
+  handOff = undefined;
+  if (!pending) return;
+  if (state.ctx.sessionManager.getSessionFile?.() === pending.file) {
+    lobbyFeed.log("LOBBY", "the switch did not happen; the oracle was stopped — send a message to carry on", "warning");
+    return;
+  }
+  try {
+    sessionRegistry().start(state.ctx.cwd, { name: pending.name, projectRoot: state.root, onDialog: dialogTracker(state), ask: askForSession, sessionFile: pending.file, message: pending.message });
+    lobbyFeed.log("LOBBY", `${pending.name} carries on in the background`, "success");
+  } catch (error) {
+    lobbyFeed.log("LOBBY", `could not carry ${pending.name} on in the background — ${(error as Error).message}; /resume finds it`, "warning");
+  }
 }
 
 /** Why a task cannot be archived or deleted now: a running session drives it. */
