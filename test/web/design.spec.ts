@@ -1310,7 +1310,7 @@ test("a question's mockups expand into a viewer the user scrolls through, choose
   await page.keyboard.press("e");
   const viewer = dialog.getByRole("region", { name: "Mockups: Layout" });
   await expect(viewer, "E expands it").toBeVisible();
-  expect((await dialog.boundingBox())!.width, "the pop-up widens for it").toBeGreaterThan(before + 200);
+  await expect.poll(async () => (await dialog.boundingBox())!.width, "the pop-up widens for it").toBeGreaterThan(before + 200);
   const pills = viewer.getByRole("tablist", { name: "Options" }).getByRole("tab");
   await expect(pills).toHaveCount(3);
   await expect(pills.first()).toHaveAttribute("aria-selected", "true");

@@ -1118,24 +1118,12 @@
   background: radial-gradient(circle at 50% 0.75px, var(--mark) 1.1px, transparent 1.6px);
   animation-name: working-orbit-head;
 }
-.working-mark-core {
-  width: 30%;
-  height: 30%;
-  border-radius: 9999px;
-  background: var(--mark);
-  animation: working-beat 1.4s ease-in-out infinite;
-}
 @keyframes working-orbit { from { rotate: 0turn; } to { rotate: 1turn; } }
 @keyframes working-orbit-head { from { rotate: 0.78turn; } to { rotate: 1.78turn; } }
-@keyframes working-beat {
-  0%, 100% { scale: 0.6; opacity: 0.6; box-shadow: 0 0 0 0 color-mix(in oklab, var(--mark) 0%, transparent); }
-  50% { scale: 1; opacity: 1; box-shadow: 0 0 0 2.5px color-mix(in oklab, var(--mark) 22%, transparent); }
-}
 @media (prefers-reduced-motion: reduce) {
   .activity-chevron, .activity-toggle { transition: none; }
   .activity-shimmer > [aria-hidden] { animation: none; }
-  .activity-live-step, .working-mark::before, .working-mark::after, .working-mark-core { animation: none; }
-  .working-mark-core { scale: 1; }
+  .activity-live-step, .working-mark::before, .working-mark::after { animation: none; }
 }
 /* Adapted from T3 Code (MIT), TimelineSystemDivider.tsx: a note is a quiet label on a hairline across the column. */
 .chat-note { display: flex; min-width: 0; align-items: center; gap: 0.5rem; padding-block: 0.25rem; font-size: var(--text-2xs); color: var(--muted-foreground); }
@@ -1196,6 +1184,14 @@
 }
 /* The composer is the coding harness's own (app/composer/ComposerSurface.tsx); the key hints in its strip stay quiet. */
 .composer-strip .kbd-hint, .composer-strip kbd { pointer-events: none; }
+/*
+ * The box and the strip under it each carry their own near-solid fill, so the page never reads through them. The
+ * shell's glass backdrop alone covered them only where the browser cuts its curved outline (clip-path: shape())
+ * and blurs behind it; without that, the strip had no fill at all and the text under the composer showed through.
+ */
+.composer-shell { --composer-fill: color-mix(in srgb, var(--chat-composer-glass-surface) 94%, var(--background)); }
+.composer-shell [data-chat-composer-main-surface] { background-color: var(--composer-fill); }
+.composer-strip::before { background-color: var(--composer-fill); }
 
 /*
  * The sidebar on the left of every page: the running sessions, the app's
@@ -1272,8 +1268,8 @@
 /* A session's state: a static dot, primary while the session works or starts, amber while it asks, hollow once it ended. */
 .session-dot {
   flex-shrink: 0;
-  width: 0.5rem;
-  height: 0.5rem;
+  width: 0.375rem;
+  height: 0.375rem;
   border-radius: 9999px;
   background: var(--success);
 }
@@ -1282,8 +1278,9 @@
 .session-dot[data-state="asking"] { background: var(--warning); }
 .session-dot[data-state="exited"] { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted-foreground); }
 .session-dot[data-state="elsewhere"] { background: var(--muted-foreground); opacity: 0.6; }
-/* A session row pops in like an iOS list row when it appears. */
-.session-enter { animation: session-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+/* A session row fades in when it appears. */
+.session-enter { animation: session-fade 160ms ease-out both; }
+@keyframes session-fade { from { opacity: 0; } }
 @keyframes session-pop {
   from { opacity: 0; scale: 0.94; }
   to { opacity: 1; scale: 1; }
@@ -1331,10 +1328,18 @@ html[data-resizing="row"] * { cursor: row-resize !important; user-select: none; 
 @media (prefers-reduced-motion: reduce) {
   .terminal-drawer { animation: none; }
 }
-/* A session card's Rename and Archive wait out of sight until the card is hovered or focused; under a finger they are always there. */
+/*
+ * A session row's Rename and Archive wait out of sight until the row is hovered or focused, and take the
+ * place of its state at the end; under a finger they are always there and the state steps aside.
+ */
+.session-state { transition: opacity 150ms; }
 @media (hover: hover) and (pointer: fine) {
   .session-actions { opacity: 0; transition: opacity 150ms; }
   .session-item:hover .session-actions, .session-item:focus-within .session-actions { opacity: 1; }
+  .session-item:hover .session-state, .session-item:focus-within .session-state { opacity: 0; }
+}
+@media not ((hover: hover) and (pointer: fine)) {
+  .session-state { opacity: 0; min-width: 3.25rem; }
 }
 /* A plan step's Skip waits out of sight until the row is hovered or focused; under a finger it is always there. */
 @media (hover: hover) and (pointer: fine) {
@@ -1545,21 +1550,17 @@ html[data-resizing="row"] * { cursor: row-resize !important; user-select: none; 
 }
 
 /*
- * The composer answers focus with a spring: the whole of it, the strip under it included, swells a little
- * (1.5%) with an overshoot and settles. Reduced motion drops the swell.
+ * The composer keeps its motion quiet: no swell on focus, and folding to the slim pill and back eases
+ * calmly, with no overshoot.
  */
-:root { --composer-spring: cubic-bezier(0.34, 1.45, 0.64, 1); }
-.composer-shell { transform-origin: 50% 100%; transition: transform 380ms var(--composer-spring), max-width 460ms var(--composer-spring); }
-@media (prefers-reduced-motion: no-preference) {
-  #app-dock:focus-within .composer-shell { transform: scale(1.015); }
-}
+.composer-shell { transform-origin: 50% 100%; transition: max-width 220ms var(--ease-calm); }
 
 /*
  * Shrunk while you scroll (Composer's useShrinkOnScroll): a slim pill of one line, its strip, attachments and
- * footer folded away, narrower, springing back to full size on focus.
+ * footer folded away, narrower, back to full size on focus.
  */
 .composer-strip, .composer-tools, .composer-files {
-  transition: max-height 320ms var(--ease-calm), opacity 200ms ease, padding 320ms var(--ease-calm), margin 320ms var(--ease-calm);
+  transition: max-height 200ms var(--ease-calm), opacity 140ms ease, padding 200ms var(--ease-calm), margin 200ms var(--ease-calm);
 }
 .composer-strip { max-height: 4rem; }
 .composer-tools { max-height: 6rem; }

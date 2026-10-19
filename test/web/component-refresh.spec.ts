@@ -74,7 +74,7 @@ test("ReUI panels and Obsidian session cards keep the existing navigation and co
   const trap = await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const composer = page.locator(".group\\/composer");
-  // The box gives and springs back when it takes focus; measure it at rest.
+  // Measure the box once any motion has settled.
   const settled = () => composer.evaluate((el: any) => Promise.all(el.getAnimations().map((animation: any) => animation.finished)));
   await settled();
   const before = (await composer.boundingBox())!;

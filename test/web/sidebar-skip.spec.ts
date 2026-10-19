@@ -1,5 +1,5 @@
 /**
- * Browser checks for the collapsible sidebar (its session cards and shelves,
+ * Browser checks for the collapsible sidebar (its session rows and groups,
  * search, folding off the page and back by button and key, resizing by its
  * edge, New session, switching to a session, all remembered across a reload)
  * and for skipping a plan step with a required reason, against the `full`
@@ -8,7 +8,7 @@
 import { AxeBuilder } from "@axe-core/playwright";
 import { expect, openScenario, test } from "./fixture.ts";
 
-test("the sidebar lists the sessions as cards with shelves, searches them, folds off the page and back by button and key, and remembers it @theme", async ({ page, server }) => {
+test("the sidebar lists the sessions as thin rows under labels, searches them, folds off the page and back by button and key, and remembers it @theme", async ({ page, server }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await openScenario(page, server, "full");
   const sidebar = page.getByRole("complementary", { name: "Sidebar" });
@@ -17,10 +17,10 @@ test("the sidebar lists the sessions as cards with shelves, searches them, folds
   const here = list.getByRole("button", { name: "mock lobby, this window" });
   await expect(here, "this window first, marked current").toHaveAttribute("aria-current", "true");
   await expect(here, "the session's name stays").toContainText("mock lobby");
-  await expect(here, "no duplicate location label on the current card").not.toContainText("This window");
+  await expect(here, "no duplicate location label on the current row").not.toContainText("This window");
   await expect(here).toContainText(/Idle|Working|Waiting/);
   const dot = here.locator(".session-dot");
-  expect(await dot.evaluate((el) => getComputedStyle(el, "::after").animationName), "the state dot does not ping").toBe("none");
+  expect(await dot.evaluate((el: any) => (globalThis as any).getComputedStyle(el, "::after").animationName), "the state dot does not ping").toBe("none");
   await expect(list.getByRole("button", { name: "Switch to Mock background task" })).toContainText("1 question");
   const shelf = list.getByRole("region", { name: "Other terminals" });
   await expect(shelf.getByRole("button", { name: "Other window, in another terminal" }), "other terminals sit on their own shelf").toBeVisible();

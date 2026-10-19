@@ -290,6 +290,61 @@ test("switching to a background session stops its process, then asks pi to run i
   }
 });
 
+test("switching while this window works stops its turn, switches, and carries the session it left on in the background", async () => {
+  const launched: Array<{ args: string[]; proc: FakeSessionProcess }> = [];
+  setSessionLauncher((args) => {
+    const proc = new FakeSessionProcess();
+    launched.push({ args, proc });
+    return proc;
+  });
+  setMinimized(false);
+  const root = project(true);
+  const fake = fakePi();
+  const ui = fakeUi();
+  let idle = false;
+  let aborted = 0;
+  let file = "/sessions/window.jsonl";
+  const ctx = {
+    ...(context(root, ui.ui).ctx as object),
+    sessionManager: { getSessionId: () => "session-1", getSessionFile: () => file, getSessionDir: () => join(root, "sessions"), getBranch: () => [] },
+    isIdle: () => idle,
+    abort: () => {
+      aborted += 1;
+      setTimeout(() => { idle = true; }, 20);
+    },
+  } as unknown as ExtensionContext;
+  registerLobbyEvents(fake.pi, ".pi");
+  await fake.emit("session_start", { type: "session_start" }, ctx);
+  try {
+    const service = currentLobbyService()!;
+    service.startSession({ request: "add a footer" });
+    launched[0]!.proc.emit({ type: "response", command: "get_state", success: true, data: { sessionId: "child-1", sessionFile: "/sessions/child-1.jsonl" } });
+    const background = backgroundSessions().find((session) => session.sessionId === "child-1")!;
+    const switching = service.switchTo({ name: background.name, sessionId: "child-1", background });
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setImmediate(resolve));
+    const notice = await switching;
+    assert.equal(aborted, 1, "the turn under way is stopped");
+    assert.match(notice, /my window carries on in the background; switching this window to/);
+    assert.deepEqual(fake.sent.at(-1), { text: "/bot-lobby switch /sessions/child-1.jsonl", options: { expandPromptTemplates: true } });
+    assert.equal(launched.length, 1, "nothing starts in the background before the switch lands");
+
+    // pi runs the new session in this window: the one it left starts in the background.
+    file = "/sessions/child-1.jsonl";
+    await fake.emit("session_start", { type: "session_start" }, ctx);
+    assert.equal(launched.length, 2);
+    const args = launched[1]!.args;
+    assert.equal(args[args.indexOf("--session") + 1], "/sessions/window.jsonl", "the session it left, from its own file");
+    assert.equal(args[args.indexOf("--name") + 1], "my window");
+    const nudge = launched[1]!.proc.commands("prompt").map((command) => String(command.message));
+    assert.equal(nudge.length, 1);
+    assert.match(nudge[0]!, /moved to the background while you worked on TASK-live/, "it picks its task back up");
+  } finally {
+    await stop(fake, ctx);
+    setSessionLauncher(undefined);
+  }
+});
+
 test("a window that starts after another stopped unexpectedly carries its planning panel and task on", async () => {
   const launched: Array<{ args: string[]; proc: FakeSessionProcess }> = [];
   setSessionLauncher((args) => {
