@@ -1,7 +1,7 @@
 import type { AgentRun } from "../schemas/findings.ts";
 import type { Domain, Role } from "../schemas/agent.ts";
 import { delegationHost } from "./delegation.ts";
-import { AUTO_COMPACT_ENV } from "../pi/quiet.ts";
+import { AUTO_COMPACT_ENV, COMPACT_AT_ENV } from "../pi/quiet.ts";
 import { fileURLToPath } from "node:url";
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -53,6 +53,8 @@ export interface PiRunOptions {
   env?: Record<string, string>;
   /** False when the agent's settings turn its auto-compaction off. */
   autoCompact?: boolean;
+  /** Tokens at which the agent compacts its context; absent uses the built-in threshold. */
+  compactAt?: number;
   /** Kill the agent after this long without any output; 0 disables. */
   stallTimeoutMs?: number;
   /** Silence allowed while one tool call is in flight (tests, builds); 0 disables. */
@@ -656,7 +658,8 @@ function writePromptFile(prompt: string): { file: string; cleanup: () => void } 
 /** Run one isolated subagent and normalise its outcome. */
 export async function runPiAgent(given: PiRunOptions, run: ProcessRunner = spawnPiProcess): Promise<PiRunResult> {
   if (given.harness) return runHarnessAgent({ ...given, harness: given.harness });
-  const options = given.autoCompact === false ? { ...given, env: { ...given.env, [AUTO_COMPACT_ENV]: "0" } } : given;
+  const compactEnv = { ...(given.autoCompact === false ? { [AUTO_COMPACT_ENV]: "0" } : {}), ...(given.compactAt ? { [COMPACT_AT_ENV]: String(given.compactAt) } : {}) };
+  const options = Object.keys(compactEnv).length ? { ...given, env: { ...given.env, ...compactEnv } } : given;
   const host = await delegationHost(options, run);
   let prompt: ReturnType<typeof writePromptFile> | undefined;
   try {

@@ -98,6 +98,7 @@ export interface QuickFixProfile {
   autoCompact?: boolean;
   /** The third-party harness it runs on; absent runs it on pi. */
   harness?: HarnessRun;
+  compactAt?: number;
   /** Where the job goes when its model runs out of usage or is unavailable. */
 }
 
@@ -346,7 +347,7 @@ export class QuickFixQueue {
           model,
           thinking,
           mcpTools: profile.mcpTools,
-          ...(profile.autoCompact === false ? { autoCompact: false } : {}),
+          ...(profile.autoCompact === false ? { autoCompact: false } : {}), ...(profile.compactAt ? { compactAt: profile.compactAt } : {}),
           ...(profile.harness ? { harness: profile.harness } : {}),
           delegationQuota: quota,
           agent: { runId: job.id, taskId: job.id, domain: "backend", role: "worker" },

@@ -1,9 +1,9 @@
 /**
  * Tools & skills: what each agent may use beyond its built-in tools. On the
  * left the agents, each with a count of what it is granted; on the right one
- * card for the chosen agent, with a band for MCP tools (from the servers pi
- * has connected, grouped by server) and a band for skills (every skill pi
- * finds, or only the ones ticked). Grants pi no longer offers stay listed as
+ * card for the chosen agent, with a band for MCP tools (every tool pi has
+ * connected, or only the ones ticked, grouped by server) and a band for skills
+ * (every skill pi finds, or only the ones ticked). Grants pi no longer offers stay listed as
  * "not connected" so they can still be removed, and a tool can be added by
  * its exact name while its server is offline. Every tick saves at once.
  */
@@ -26,7 +26,8 @@ import { AGENT_LABELS, AGENT_ORDER, GRANTS, GROUP_TITLES, READ_ONLY_AGENTS, type
 type Save = (patch: Record<string, unknown>) => Promise<boolean>
 
 interface Grants {
-  mcpTools: string[]
+  /** Absent: every MCP tool pi has connected (the read-only ones for an agent that only reads). */
+  mcpTools?: string[]
   /** Absent: every skill pi finds. */
   skills?: string[]
 }
@@ -45,7 +46,7 @@ const PATH: Record<AgentKind, string[]> = {
 
 export function grantsOf(config: BotLobbyConfig, kind: AgentKind): Grants {
   const entry = PATH[kind].reduce<unknown>((at, key) => (at as Record<string, unknown>)[key], config) as { mcpTools?: string[]; skills?: string[] }
-  return { mcpTools: entry.mcpTools ?? [], ...(entry.skills ? { skills: entry.skills } : {}) }
+  return { ...(entry.mcpTools ? { mcpTools: entry.mcpTools } : {}), ...(entry.skills ? { skills: entry.skills } : {}) }
 }
 
 function patchOf(kind: AgentKind, fields: Record<string, unknown>): Record<string, unknown> {
@@ -54,7 +55,7 @@ function patchOf(kind: AgentKind, fields: Record<string, unknown>): Record<strin
 
 /** `2 tools · all skills`, as the agent list and the agent cards say it. */
 export function grantsLine(grants: Grants, kind: AgentKind): string {
-  const tools = grants.mcpTools.length === 0 ? GRANTS.noTools : `${grants.mcpTools.length} MCP tool${grants.mcpTools.length === 1 ? "" : "s"}`
+  const tools = !grants.mcpTools ? GRANTS.allTools : grants.mcpTools.length === 0 ? GRANTS.noTools : `${grants.mcpTools.length} MCP tool${grants.mcpTools.length === 1 ? "" : "s"}`
   if (kind === "master") return tools
   const skills = !grants.skills ? GRANTS.allSkills : grants.skills.length === 0 ? GRANTS.noSkills : `${grants.skills.length} skill${grants.skills.length === 1 ? "" : "s"}`
   return `${tools} · ${skills}`
@@ -122,17 +123,21 @@ function GrantRow({ id, name, help, tag, tagTone, checked, disabled, title, onCh
 function ToolsPanel({ kind, grants, offered, error, save }: { kind: AgentKind; grants: Grants; offered?: SettingsMcpTool[]; error?: string; save: Save }) {
   const [filter, setFilter] = useState("")
   const [typed, setTyped] = useState("")
-  const granted = new Set(grants.mcpTools)
+  const all = !grants.mcpTools
+  const list = grants.mcpTools ?? []
+  const granted = new Set(list)
   const readOnly = READ_ONLY_AGENTS.has(kind)
-  const set = (next: string[]) => save(patchOf(kind, { mcpTools: [...new Set(next)] }))
-  const toggle = (names: readonly string[], on: boolean) => void set(on ? [...grants.mcpTools, ...names] : grants.mcpTools.filter((name) => !names.includes(name)))
+  const set = (next: string[] | null) => save(patchOf(kind, { mcpTools: next ? [...new Set(next)] : null }))
+  const toggle = (names: readonly string[], on: boolean) => void set(on ? [...list, ...names] : list.filter((name) => !names.includes(name)))
   // Grants pi does not offer now (the server is off, or the tool is gone) stay listed, so they can be removed.
   const known = new Set((offered ?? []).map((tool) => tool.name))
-  const missing: SettingsMcpTool[] = grants.mcpTools.filter((name) => !known.has(name)).map((name) => ({ name, server: serverOf(name), description: "", readOnly: false }))
+  const missing: SettingsMcpTool[] = list.filter((name) => !known.has(name)).map((name) => ({ name, server: serverOf(name), description: "", readOnly: false }))
   const query = filter.trim().toLowerCase()
   const shown = [...(offered ?? []), ...missing].filter((tool) => !query || tool.name.toLowerCase().includes(query) || tool.description.toLowerCase().includes(query))
   const servers = [...new Set(shown.map((tool) => tool.server))]
   const usable = (tool: SettingsMcpTool) => !readOnly || tool.readOnly || !known.has(tool.name)
+  // Turning "every tool" off starts from what the agent had: every tool it could call now.
+  const chooseAll = (on: boolean) => void set(on ? null : (offered ?? []).filter(usable).map((tool) => tool.name))
   const add = () => {
     const name = typed.trim()
     if (!TOOL_NAME.test(name)) {
@@ -140,15 +145,22 @@ function ToolsPanel({ kind, grants, offered, error, save }: { kind: AgentKind; g
       return
     }
     setTyped("")
-    if (!granted.has(name)) void set([...grants.mcpTools, name])
+    if (!granted.has(name)) void set([...list, name])
   }
   return (
     <>
       <FrameHeader className="gap-1 border-b border-(--frame-panel-border-color) py-2.5">
-        <PanelHeading title={GRANTS.tools} note={`${grants.mcpTools.length} granted`} />
+        <PanelHeading title={GRANTS.tools} note={all ? GRANTS.allTools : `${list.length} granted`} />
         <p className="text-xs text-muted-foreground">{readOnly ? GRANTS.readOnlyHelp : kind === "qa" ? GRANTS.qaHelp : GRANTS.toolsHelp}</p>
       </FrameHeader>
       <FramePanel fit className="flex flex-col gap-3 py-3">
+        <div className="flex min-w-0 items-center justify-between gap-4 px-2">
+          <div className="min-w-0">
+            <div className="text-[0.8125rem] font-medium">{GRANTS.everyTool}</div>
+            <p className="text-xs text-muted-foreground">{readOnly ? GRANTS.everyToolReadOnlyHelp : GRANTS.everyToolHelp}</p>
+          </div>
+          <Switch checked={all} onCheckedChange={chooseAll} aria-label={`${AGENT_LABELS[kind]} ${GRANTS.everyTool.toLowerCase()}`} />
+        </div>
         {(offered?.length ?? 0) > 8 ? (
           <div className="relative">
             <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -163,13 +175,13 @@ function ToolsPanel({ kind, grants, offered, error, save }: { kind: AgentKind; g
         {servers.map((server) => {
           const tools = shown.filter((tool) => tool.server === server)
           const choosable = tools.filter(usable).map((tool) => tool.name)
-          const on = choosable.filter((name) => granted.has(name)).length
+          const on = all ? choosable.length : choosable.filter((name) => granted.has(name)).length
           return (
-            <div key={server} role="group" aria-label={`${server} tools`} className="flex flex-col gap-0.5">
+            <div key={server} role="group" aria-label={`${server} tools`} className={cn("flex flex-col gap-0.5", all && "opacity-60")}>
               <label className="flex items-center gap-3 px-2 py-1 text-xs font-medium text-muted-foreground">
                 <Checkbox
                   checked={on === 0 ? false : on === choosable.length ? true : "indeterminate"}
-                  disabled={choosable.length === 0}
+                  disabled={all || choosable.length === 0}
                   aria-label={`Every ${server} tool`}
                   onCheckedChange={(next) => toggle(choosable, next === true)}
                 />
@@ -187,8 +199,8 @@ function ToolsPanel({ kind, grants, offered, error, save }: { kind: AgentKind; g
                     help={connected ? tool.description || undefined : GRANTS.notConnectedHelp}
                     tag={!connected ? GRANTS.notConnected : tool.readOnly ? GRANTS.readOnly : GRANTS.writes}
                     tagTone={!connected ? "warning" : "muted"}
-                    checked={granted.has(tool.name)}
-                    disabled={blocked && !granted.has(tool.name)}
+                    checked={all ? !blocked : granted.has(tool.name)}
+                    disabled={all || (blocked && !granted.has(tool.name))}
                     {...(blocked ? { title: GRANTS.blockedHelp } : {})}
                     onChange={(next) => toggle([tool.name], next)}
                   />
@@ -197,7 +209,10 @@ function ToolsPanel({ kind, grants, offered, error, save }: { kind: AgentKind; g
             </div>
           )
         })}
-        <div className="flex min-w-0 items-center gap-2 border-t border-(--frame-panel-border-color) pt-3">
+        {!all && list.length === 0 ? (
+          <p className="flex items-center gap-1.5 px-2 text-xs text-warning"><CircleAlert aria-hidden="true" className="size-3.5" />{GRANTS.noToolsWarning}</p>
+        ) : null}
+        <div hidden={all} className="flex min-w-0 items-center gap-2 border-t border-(--frame-panel-border-color) pt-3">
           <Input value={typed} placeholder="mcp__server__tool" aria-label={GRANTS.addLabel} className="min-w-0 flex-1 font-mono" onChange={(event) => setTyped(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add() } }} />
           <ActionButton label={GRANTS.add} icon={Plus} onClick={add} />
         </div>

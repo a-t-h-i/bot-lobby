@@ -56,6 +56,16 @@ export function grantableTools(pi: ExtensionAPI | undefined = source): Grantable
 }
 
 /**
+ * The MCP tools a run may call: its settings' list as given, or, when the
+ * settings name none, every tool pi has connected now (only the read-only ones
+ * for an agent that must not change anything).
+ */
+export function mcpGrant(granted: readonly string[] | undefined, readOnly: boolean, pi: ExtensionAPI | undefined = source): string[] {
+  if (granted) return [...granted];
+  return grantableTools(pi).filter((tool) => !readOnly || tool.readOnly).map((tool) => tool.name);
+}
+
+/**
  * The skills an agent working in `cwd` would find: the session's own (its
  * skill commands, which include packages and settings paths) and pi's default
  * folders for `cwd`, first one per name.

@@ -6,7 +6,9 @@ import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { agentProfile, DEFAULT_CONFIG, lobbyAgentProfile, resolveConfig } from "../src/schemas/configuration.ts";
 import { buildPiArgs, runPiAgent, type ProcessRunner } from "../src/execution/pi-runner.ts";
-import { grantableSkills, grantableTools, skillFiles } from "../src/pi/grants.ts";
+import { bindGrants, grantableSkills, grantableTools, mcpGrant, skillFiles, unbindGrants } from "../src/pi/grants.ts";
+import { compactionThreshold } from "../src/pi/auto-compaction.ts";
+import { COMPACT_AT_ENV } from "../src/pi/quiet.ts";
 import { ORCHESTRATE_ACTIONS } from "../src/workflow/workflow.ts";
 import { parseCommand } from "../src/pi/commands.ts";
 import { loadPrompt } from "../src/prompts/loader.ts";
@@ -70,6 +72,78 @@ test("the grantable MCP tools are pi's connected ones, by server, with their rea
     { name: "mcp__github__get_issue", server: "github", description: "Read one issue.", readOnly: true },
   ]);
   assert.deepEqual(grantableTools(undefined), []);
+});
+
+const CONNECTED = { getAllTools: () => [
+  { name: "mcp__github__get_issue", description: "Read one issue.", exposure: "codemode", annotations: { readOnlyHint: true } },
+  { name: "mcp__github__create_pull_request", description: "Open a PR.", exposure: "codemode" },
+] } as unknown as ExtensionAPI;
+
+const ok: ProcessRunner = async () => ({ exitCode: 0, killed: false, stderr: "", stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "ok" }], stopReason: "stop" } }) });
+
+test("an MCP grant is absent (every connected tool), a list, or empty (none), and the empty list survives", () => {
+  const cfg = resolveConfig({ agents: { backend: { mcpTools: ["mcp__github__get_issue", "nope"] }, qa: { mcpTools: [] } }, scout: { mcpTools: [] } });
+  assert.deepEqual(cfg.agents.backend.mcpTools, ["mcp__github__get_issue"]);
+  assert.deepEqual(cfg.agents.qa.mcpTools, [], "an empty list grants none");
+  assert.deepEqual(cfg.scout.mcpTools, []);
+  assert.equal("mcpTools" in cfg.agents.designer, false, "no list: every connected tool");
+  assert.equal("mcpTools" in DEFAULT_CONFIG.master, false);
+  assert.deepEqual(agentProfile(cfg, "qa", "worker").mcpTools, []);
+  assert.equal("mcpTools" in agentProfile(cfg, "designer", "worker"), false);
+});
+
+test("with no list, an agent gets every tool pi has connected; one that only reads gets the read-only ones", () => {
+  assert.deepEqual(mcpGrant(undefined, false, CONNECTED), ["mcp__github__create_pull_request", "mcp__github__get_issue"]);
+  assert.deepEqual(mcpGrant(undefined, true, CONNECTED), ["mcp__github__get_issue"]);
+  assert.deepEqual(mcpGrant([], false, CONNECTED), []);
+  assert.deepEqual(mcpGrant(["mcp__linear__get"], false, CONNECTED), ["mcp__linear__get"]);
+});
+
+test("a run picks up the connected tools on its own, and a listed grant still narrows it", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "bl-mcp-"));
+  mkdirSync(join(cwd, ".pi", "bot-lobby"), { recursive: true });
+  bindGrants(CONNECTED);
+  try {
+    const toolsOf = async (options: Partial<Parameters<typeof runPiAgent>[0]>) => {
+      let seen: string[] = [];
+      await runPiAgent({ cwd, task: "t", tools: ["read", "edit"], ...options }, async (args, opts) => { seen = args; return ok(args, opts); });
+      return { tools: seen[seen.indexOf("--tools") + 1]!.split(","), noMcp: seen.includes("--no-mcp") };
+    };
+    const auto = await toolsOf({ mcpTools: undefined });
+    assert.ok(auto.tools.includes("mcp__github__create_pull_request") && auto.tools.includes("mcp__github__get_issue"));
+    assert.equal(auto.noMcp, false);
+    const reader = await toolsOf({ tools: ["read"], mcpTools: undefined });
+    assert.ok(reader.tools.includes("mcp__github__get_issue") && !reader.tools.includes("mcp__github__create_pull_request"));
+    const narrowed = await toolsOf({ mcpTools: ["mcp__github__get_issue"] });
+    assert.ok(narrowed.tools.includes("mcp__github__get_issue") && !narrowed.tools.includes("mcp__github__create_pull_request"));
+    const none = await toolsOf({ mcpTools: [] });
+    assert.ok(none.noMcp);
+  } finally {
+    unbindGrants();
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("the auto-compaction threshold is a whole number of tokens in range, carried to the agent and kept below the window", async () => {
+  const cfg = resolveConfig({ master: { compactAt: 120_000 }, agents: { backend: { compactAt: 30_000.4 }, qa: { compactAt: 10 } }, scout: { compactAt: 50_000 }, planner: { compactAt: "lots" } });
+  assert.equal(cfg.master.compactAt, 120_000);
+  assert.equal(cfg.agents.backend.compactAt, 30_000);
+  assert.equal("compactAt" in cfg.agents.qa, false, "below the minimum: the built-in threshold");
+  assert.equal("compactAt" in cfg.planner, false);
+  assert.equal(agentProfile(cfg, "designer", "scout").compactAt, 50_000);
+  assert.equal(lobbyAgentProfile(resolveConfig({ quickFix: { compactAt: 90_000 } }), "quickfix").compactAt, 90_000);
+  assert.equal(compactionThreshold(200_000, 16_384, 150_000), 150_000, "above the built-in 64K when asked");
+  assert.equal(compactionThreshold(200_000, 16_384, 8_000), 8_000);
+  assert.equal(compactionThreshold(100_000, 20_000, 500_000), 80_000, "never past the window less the reserve");
+  const cwd = mkdtempSync(join(tmpdir(), "bl-compact-"));
+  mkdirSync(join(cwd, ".pi", "bot-lobby"), { recursive: true });
+  try {
+    let env: Record<string, string | undefined> = {};
+    await runPiAgent({ cwd, task: "t", tools: ["read"], compactAt: 40_000 }, async (args, opts) => { env = opts.env ?? {}; return ok(args, opts); });
+    assert.equal(env[COMPACT_AT_ENV], "40000");
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
 });
 
 test("time limits are gone: no setting, no budget action or command, no time talk in the prompts", () => {

@@ -28,12 +28,14 @@ export interface AgentModelConfig extends HarnessChoice {
   thinking: string;
   /** Free-form instructions layered on top of this agent's built-in prompt. */
   instructions?: string;
-  /** Exact native MCP tool names this profile may call; empty grants none. */
+  /** Exact native MCP tool names this profile may call; absent gives it every tool pi has connected (read-only ones for read-only agents), empty gives it none. */
   mcpTools?: string[];
   /** Names of the skills this agent may load; absent gives it every skill pi finds, empty gives it none. */
   skills?: string[];
   /** Compact this agent's context on its own as it fills (on unless false); the oracle's also updates the knowledge base. */
   autoCompact?: boolean;
+  /** Context size, in tokens, at which auto-compaction starts; absent uses the built-in threshold. */
+  compactAt?: number;
 }
 
 /** Scouts pick a model only; their thinking is fixed at `SCOUT_THINKING`. */
@@ -46,6 +48,8 @@ export interface ScoutConfig extends HarnessChoice {
   maxToolCalls: number;
   /** Compact a scout's context on its own as it fills (on unless false). */
   autoCompact?: boolean;
+  /** See AgentModelConfig.compactAt. */
+  compactAt?: number;
 }
 
 /** Subagent kinds with their own settings entry. */
@@ -380,6 +384,26 @@ export function normalizeMcpTools(value: unknown): string[] {
   return Array.isArray(value) ? [...new Set(value.filter((tool): tool is string => typeof tool === "string" && /^mcp__[A-Za-z0-9_]+__[A-Za-z0-9_]+$/.test(tool)))] : [];
 }
 
+/** `{ mcpTools }` when an entry lists its tools (even none), else nothing, so the agent keeps every connected tool. */
+function mcpToolsField(value: unknown): { mcpTools?: string[] } {
+  return Array.isArray(value) ? { mcpTools: normalizeMcpTools(value) } : {};
+}
+
+/** The smallest and largest auto-compaction thresholds Settings accepts, in tokens. */
+export const COMPACT_AT_MIN = 4_000;
+export const COMPACT_AT_MAX = 2_000_000;
+
+/** A whole number of tokens within the accepted range, or absent for the built-in threshold. */
+export function normalizeCompactAt(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= COMPACT_AT_MIN && value <= COMPACT_AT_MAX ? Math.round(value) : undefined;
+}
+
+/** Auto-compaction off and its threshold, when an entry sets them. */
+function compactFields(entry: { autoCompact?: unknown; compactAt?: unknown } | undefined): { autoCompact?: false; compactAt?: number } {
+  const compactAt = normalizeCompactAt(entry?.compactAt);
+  return { ...(entry?.autoCompact === false ? { autoCompact: false } : {}), ...(compactAt ? { compactAt } : {}) };
+}
+
 /**
  * Merge one agent's override over its default; legacy `inherit` or unknown
  * thinking falls back to the default level. Only subagents may name a
@@ -389,21 +413,19 @@ export function normalizeMcpTools(value: unknown): string[] {
 function normalizeAgent(base: AgentModelConfig, override: Partial<AgentModelConfig> | undefined, harness = true): AgentModelConfig {
   const merged = { ...base, ...(override ?? {}) };
   const thinking = isThinkingLevel(merged.thinking) ? merged.thinking : base.thinking;
-  const mcpTools = normalizeMcpTools(merged.mcpTools);
   const choice = harness ? harnessChoiceFields(merged) : {};
-  return { model: merged.model, thinking, ...(mcpTools.length ? { mcpTools } : {}), ...skillsField(merged.skills), ...(typeof merged.instructions === "string" ? { instructions: merged.instructions } : {}), ...(merged.autoCompact === false ? { autoCompact: false } : {}), ...choice };
+  return { model: merged.model, thinking, ...mcpToolsField(merged.mcpTools), ...skillsField(merged.skills), ...(typeof merged.instructions === "string" ? { instructions: merged.instructions } : {}), ...compactFields(merged), ...choice };
 }
 
 /** Scouts keep a model and a tool-call cap; any thinking value in the file is dropped. */
 function normalizeScout(override: Partial<ScoutConfig> | undefined): ScoutConfig {
   const base = DEFAULT_CONFIG.scout;
-  const mcpTools = normalizeMcpTools(override?.mcpTools);
   return {
     model: typeof override?.model === "string" && override.model.trim() ? override.model : base.model,
     maxToolCalls: typeof override?.maxToolCalls === "number" && Number.isFinite(override.maxToolCalls) && override.maxToolCalls >= 0 ? Math.round(override.maxToolCalls) : base.maxToolCalls,
-    ...(mcpTools.length ? { mcpTools } : {}),
+    ...mcpToolsField(override?.mcpTools),
     ...skillsField(override?.skills),
-    ...(override?.autoCompact === false ? { autoCompact: false } : {}),
+    ...compactFields(override),
     ...harnessChoiceFields(override ?? {}),
   };
 }
@@ -559,12 +581,14 @@ export interface AgentProfile {
   model?: string;
   thinking: string;
   instructions?: string;
-  /** Exact native MCP tool names this profile may call; empty grants none. */
+  /** Exact native MCP tool names this profile may call; absent keeps every connected tool, empty grants none. */
   mcpTools?: string[];
   /** Skill names it may load; absent keeps every skill pi finds. */
   skills?: string[];
   /** False when its settings turn auto-compaction off. */
   autoCompact?: boolean;
+  /** Tokens at which auto-compaction starts, when set. */
+  compactAt?: number;
   /** The third-party harness it runs on; absent runs it on pi. */
   harness?: HarnessRun;
 }
@@ -575,14 +599,14 @@ function harnessField(config: BotLobbyConfig, entry: HarnessChoice): { harness?:
   return harness ? { harness } : {};
 }
 
-/** `{ autoCompact: false }` when an entry turns auto-compaction off, else nothing. */
-function compactField(entry: { autoCompact?: boolean }): { autoCompact?: false } {
-  return entry.autoCompact === false ? { autoCompact: false } : {};
+/** Auto-compaction off and its threshold, as an entry sets them. */
+function compactField(entry: { autoCompact?: boolean; compactAt?: number }): { autoCompact?: false; compactAt?: number } {
+  return { ...(entry.autoCompact === false ? { autoCompact: false } : {}), ...(entry.compactAt ? { compactAt: entry.compactAt } : {}) };
 }
 
 /** The MCP tools and skills an entry grants, leaving out what it does not name. */
 function grantFields(entry: { mcpTools?: string[]; skills?: string[] }): { mcpTools?: string[]; skills?: string[] } {
-  return { ...(entry.mcpTools?.length ? { mcpTools: entry.mcpTools } : {}), ...(entry.skills ? { skills: entry.skills } : {}) };
+  return { ...(entry.mcpTools ? { mcpTools: entry.mcpTools } : {}), ...(entry.skills ? { skills: entry.skills } : {}) };
 }
 
 /** The settings entry a domain/role run draws from. */
@@ -618,7 +642,7 @@ export function lobbyAgentConfig(config: BotLobbyConfig, kind: LobbyAgentKind): 
 }
 
 /** Profile for a lobby agent run, from settings alone; `model` is undefined while unset. */
-export function lobbyAgentProfile(config: BotLobbyConfig, kind: LobbyAgentKind): { model?: string; thinking: string; instructions?: string; mcpTools?: string[]; skills?: string[]; autoCompact?: boolean; harness?: HarnessRun } {
+export function lobbyAgentProfile(config: BotLobbyConfig, kind: LobbyAgentKind): { model?: string; thinking: string; instructions?: string; mcpTools?: string[]; skills?: string[]; autoCompact?: boolean; compactAt?: number; harness?: HarnessRun } {
   const entry = lobbyAgentConfig(config, kind);
   return { model: modelOf(entry.model), thinking: entry.thinking, instructions: entry.instructions, ...grantFields(entry), ...compactField(entry), ...harnessField(config, entry) };
 }
@@ -627,7 +651,7 @@ export function lobbyAgentProfile(config: BotLobbyConfig, kind: LobbyAgentKind):
  * A planning panel seat's profile: the domain's (or the researcher's) model,
  * thinking, custom instructions and grants.
  */
-export function panelMemberProfile(config: BotLobbyConfig, member: PanelMember): { model?: string; thinking: string; instructions?: string; mcpTools?: string[]; skills?: string[]; autoCompact?: boolean; harness?: HarnessRun } {
+export function panelMemberProfile(config: BotLobbyConfig, member: PanelMember): { model?: string; thinking: string; instructions?: string; mcpTools?: string[]; skills?: string[]; autoCompact?: boolean; compactAt?: number; harness?: HarnessRun } {
   const entry = member === "researcher" ? config.researcher : config.agents[member];
   return { model: modelOf(entry.model), thinking: entry.thinking, instructions: entry.instructions, ...grantFields(entry), ...compactField(entry), ...harnessField(config, entry) };
 }
