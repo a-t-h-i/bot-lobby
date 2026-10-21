@@ -125,7 +125,7 @@ function makeDeps(runs: string[], overrides: Partial<WorkflowDeps> = {}): Workfl
   const root = mkdtempSync(join(tmpdir(), "bl-track-"));
   const runner: ProcessRunner = async (args) => {
     runs.push(String(args.at(-1)));
-    return { exitCode: 0, stdout: message(WORKER), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: message(WORKER), stderr: "", killed: false };
   };
   return { root, configDir: ".pi", cwd: root, config: LENIENT, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess: runner, ...overrides };
 }
@@ -251,7 +251,7 @@ test("once work is under way a fast task only gets stricter: the full workflow's
 });
 
 test("a fast task whose worker asks for a dependency gets QA", async () => {
-  const deps = makeDeps([], { runProcess: async () => ({ exitCode: 0, stdout: message(DEPENDENT), stderr: "", killed: false, timedOut: false }) });
+  const deps = makeDeps([], { runProcess: async () => ({ exitCode: 0, stdout: message(DEPENDENT), stderr: "", killed: false }) });
   withTask(deps, "change the submit button colour to blue");
   const result = await act(deps, { action: "implement", domain: "designer", task: "Step 1: make it blue" });
   assert.match(result.message, /QA now takes part/);
@@ -278,7 +278,7 @@ test("a fast task whose change turns out to touch security gets QA before it com
     runProcess: async (args) => {
       runs.push(String(args.at(-1)));
       writeFileSync(join(dir, "src/form.ts"), "export const label = \"Save\";\nexport const valid = (password: string) => password.length >= 8;\n");
-      return { exitCode: 0, stdout: message(WORKER), stderr: "", killed: false, timedOut: false };
+      return { exitCode: 0, stdout: message(WORKER), stderr: "", killed: false };
     },
   });
   withTask(deps, "change the submit button colour to blue");
@@ -311,7 +311,7 @@ test("a task from an agreed plan starts building at once, and a long plan QA sat
   const deps = makeDeps([], {
     runProcess: async (args) => {
       prompts.push(readFileSync(args[args.indexOf("--append-system-prompt") + 1]!, "utf8"));
-      return { exitCode: 0, stdout: message(WORKER), stderr: "", killed: false, timedOut: false };
+      return { exitCode: 0, stdout: message(WORKER), stderr: "", killed: false };
     },
   });
   const task = plannedTask(deps, ["backend", "designer"]);
@@ -399,7 +399,7 @@ test("the kickoff follows the track", () => {
 
 test("--fast and --full start a task on that path", () => {
   assert.deepEqual(parseCommand("--fast fix the typo"), { sub: undefined, rest: [], restText: "fix the typo", track: "fast" });
-  assert.deepEqual(parseCommand("--full --auto --budget 30m change it"), { sub: undefined, rest: [], restText: "change it", track: "full", auto: true, budget: 30 });
+  assert.deepEqual(parseCommand("--full --auto change it"), { sub: undefined, rest: [], restText: "change it", track: "full", auto: true });
 });
 
 test("the status and the oracle's context carry the track", async () => {

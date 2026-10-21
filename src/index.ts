@@ -21,11 +21,14 @@ import { registerFreshContext } from "./pi/fresh-context.ts";
 import { registerAskTool } from "./ask/tool.ts";
 import { registerWebTools } from "./web/tools.ts";
 import { registerToolBudget } from "./pi/tool-budget.ts";
+import { bindGrants } from "./pi/grants.ts";
 
 export default function (pi: ExtensionAPI): void {
   registerAgentPermissions(pi);
   registerDelegation(pi);
   registerAutoCompaction(pi);
+  // Settings lists this session's MCP tools and skills to grant, and agents find their granted skills through it.
+  if (!isSubagentProcess()) bindGrants(pi);
   let root = detectProjectRoot(process.cwd(), CONFIG_DIR_NAME);
   pi.on("session_start", (_event, ctx) => { root = detectProjectRoot(ctx.cwd, CONFIG_DIR_NAME); });
   // First, so every session_start handler below finds the classifier bound to this session's keys.

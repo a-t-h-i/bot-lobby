@@ -47,7 +47,7 @@ function makeDeps(overrides: Partial<WorkflowDeps> = {}): WorkflowDeps {
     ask: async () => undefined,
     choose: async () => undefined,
     notify: () => {},
-    runProcess: async () => ({ exitCode: 0, stdout: scoutReply(), stderr: "", killed: false, timedOut: false }),
+    runProcess: async () => ({ exitCode: 0, stdout: scoutReply(), stderr: "", killed: false }),
     ...overrides,
   };
 }
@@ -125,7 +125,7 @@ test("scout runs the domains and moves to synthesizing", async () => {
   const seen: string[] = [];
   const runner: ProcessRunner = async (args) => {
     seen.push(String(args.at(-1)));
-    return { exitCode: 0, stdout: scoutReply(), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: scoutReply(), stderr: "", killed: false };
   };
   const deps = makeDeps({ runProcess: runner });
   withTask(deps, "clarifying");
@@ -141,7 +141,7 @@ test("scout runs the domains and moves to synthesizing", async () => {
 test("a scout pushback is recorded as a decision and does not gate the domain", async () => {
   const text = ["## Scope", "x", "", "## Findings", "- found", "", "## Pushback", "**Request:** Cache sessions in the client", "**Reason:** It would leak credentials", "", "## Confidence", "High"].join("\n");
   const stdout = JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], stopReason: "stop" } });
-  const deps = makeDeps({ runProcess: async () => ({ exitCode: 0, stdout, stderr: "", killed: false, timedOut: false }) });
+  const deps = makeDeps({ runProcess: async () => ({ exitCode: 0, stdout, stderr: "", killed: false }) });
   withTask(deps, "clarifying");
   const result = await act(deps, { action: "scout", domains: ["backend"] });
   assert.equal(result.ok, true, result.message);
@@ -338,7 +338,6 @@ function researchRunner(text: string): ProcessRunner {
     stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], stopReason: "stop" } }),
     stderr: "",
     killed: false,
-    timedOut: false,
   });
 }
 
@@ -394,7 +393,7 @@ test("an unusable research run is reported as degraded, never as findings", asyn
 });
 
 test("a failed research process reports the failure and the artifact path", async () => {
-  const failing: ProcessRunner = async () => ({ exitCode: 1, stdout: "", stderr: "boom", killed: false, timedOut: false });
+  const failing: ProcessRunner = async () => ({ exitCode: 1, stdout: "", stderr: "boom", killed: false });
   const deps = makeDeps({ runProcess: failing });
   withTask(deps, "clarifying");
   const result = await act(deps, { action: "research", domain: "designer", instruction: "Any trends?" });

@@ -86,7 +86,7 @@ async function setup(busy = false) {
   } as unknown as ExtensionContext;
   const sent: Array<{ text: string; options?: { deliverAs?: string } }> = [];
   const pi = { sendUserMessage(text: string, options?: { deliverAs?: string }) { sent.push({ text, options }); }, getSessionName: () => "test window" } as unknown as ExtensionAPI;
-  const quickfix = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low", timeoutMs: 60_000 }), runProcess: () => Promise.resolve({ exitCode: 0, stdout: "", stderr: "", killed: false, timedOut: false }) });
+  const quickfix = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), runProcess: () => Promise.resolve({ exitCode: 0, stdout: "", stderr: "", killed: false }) });
   const knowledge = new KnowledgeBook({ root, configDir: ".pi", threshold: () => 20_000, backups: () => 3, sessionId: () => "session-1" });
   const service = createLobbyService({ root, ctx, pi, quickfix, knowledge, configDir: ".pi" } as unknown as Runtime);
   const server = await startWebServer({ service, port: 0, secret: randomBytes(32), dist: DIST });

@@ -24,12 +24,11 @@ export interface EntryView {
   model: string;
   thinking?: string;
   instructions?: string;
-  timeoutMs?: number;
 }
 
 export function entryView(config: BotLobbyConfig, kind: SettingsKind): EntryView {
   if (kind === "master") return config.master;
-  if (kind === "scout") return { model: config.scout.model, timeoutMs: config.scout.timeoutMs };
+  if (kind === "scout") return { model: config.scout.model };
   if (kind === "researcher") return config.researcher;
   if (kind === "quickfix") return config.quickFix;
   if (kind === "planner") return config.planner;
@@ -40,14 +39,13 @@ interface EntryPatch {
   model?: string;
   thinking?: string;
   instructions?: string;
-  timeoutMs?: number;
 }
 
 /** Apply a patch to one entry in a config copy; scouts ignore thinking and instructions. */
 export function patchEntry(config: BotLobbyConfig, kind: SettingsKind, patch: EntryPatch): BotLobbyConfig {
   const next: BotLobbyConfig = { ...config, agents: { ...config.agents } };
   if (kind === "master") next.master = { ...config.master, ...patch } as AgentModelConfig;
-  else if (kind === "scout") next.scout = { ...config.scout, model: patch.model ?? config.scout.model, timeoutMs: patch.timeoutMs ?? config.scout.timeoutMs };
+  else if (kind === "scout") next.scout = { ...config.scout, model: patch.model ?? config.scout.model };
   else if (kind === "researcher") next.researcher = { ...config.researcher, ...patch } as AgentModelConfig;
   else if (kind === "quickfix") next.quickFix = { ...config.quickFix, ...patch } as AgentModelConfig;
   else if (kind === "planner") next.planner = { ...config.planner, ...patch } as AgentModelConfig;

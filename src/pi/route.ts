@@ -27,7 +27,7 @@ export const ROUTE_TOOL = "route_request";
 /**
  * Hands a request to the lobby's quick-fix agent and shows the Quick fix tab;
  * the job's id, or undefined without a lobby. `builder` is set for a quick
- * feature: it runs on that domain's model, thinking and time limit.
+ * feature: it runs on that domain's model, thinking and grants.
  */
 export type QuickFixHandoff = (request: string, builder: Domain | undefined, reason: string) => string | undefined;
 

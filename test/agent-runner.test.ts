@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { boundedAgentTime, runAgent, runParallel, cancelAllRuns, type AgentRequest } from "../src/execution/agent-runner.ts";
+import { runAgent, runParallel, cancelAllRuns, type AgentRequest } from "../src/execution/agent-runner.ts";
 import type { ProcessOutcome, ProcessRunner } from "../src/execution/pi-runner.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
 
@@ -12,7 +12,7 @@ function reply(text: string): string {
 }
 
 function ok(stdout: string): ProcessOutcome {
-  return { exitCode: 0, stdout, stderr: "", killed: false, timedOut: false };
+  return { exitCode: 0, stdout, stderr: "", killed: false };
 }
 
 function request(overrides: Partial<AgentRequest> = {}): AgentRequest {
@@ -22,30 +22,23 @@ function request(overrides: Partial<AgentRequest> = {}): AgentRequest {
     role: "scout",
     instruction: "Inspect the API layer",
     context: { task: "Add pagination" },
-    timeoutMs: 1000,
     cwd: "/proj",
     ...overrides,
   };
 }
 
-test("retries share a capped deadline and exhausted assignments never spawn", async () => {
-  assert.equal(boundedAgentTime(3_600_000).allotMs, 900_000);
-  const times: number[] = [];
-  const req = request({ timeoutMs: 120_000, retries: 1 });
-  await runAgent(req, async (_args, options) => {
-    times.push(options.timeoutMs);
-    assert.equal(options.time?.hardLimit, true);
+test("an agent has no time limit: no deadline reaches the process, and a retry is never cut short", async () => {
+  const seen: Array<Record<string, unknown>> = [];
+  const req = request({ retries: 1 });
+  const run = await runAgent(req, async (_args, options) => {
+    seen.push(options as unknown as Record<string, unknown>);
     await new Promise((resolve) => setTimeout(resolve, 20));
-    return { exitCode: 1, stdout: "", stderr: "crashed", killed: false, timedOut: false };
+    return { exitCode: 1, stdout: "", stderr: "crashed", killed: false };
   });
-  assert.equal(times.length, 2);
-  assert.ok(times[1]! < times[0]!);
-  assert.ok(req.time!.usedMs! >= 40);
-  const seen: string[] = [];
-  req.time!.endsAt = Date.now() - 1;
-  req.onUpdate = (run) => seen.push(run.status);
-  assert.equal((await runAgent(req, async () => { throw new Error("must not spawn"); })).status, "timeout");
-  assert.deepEqual(seen, ["timeout"]);
+  assert.equal(seen.length, 2);
+  for (const options of seen) for (const key of ["timeoutMs", "time", "wrapUpAtMs", "graceMs"]) assert.equal(key in options, false, `${key} is gone`);
+  assert.equal(run.status, "failed");
+  for (const key of ["endsAt", "allotMs", "timeUp", "extendedMs"]) assert.equal(key in run, false, `${key} is gone`);
 });
 
 test("exceptions emit a terminal update and release the working row", async () => {
@@ -80,7 +73,7 @@ test("workers get the full built-in tool set plus any extra tools", async () => 
 });
 
 test("runAgent reports a failed run without throwing", async () => {
-  const failing: ProcessRunner = async () => ({ exitCode: 1, stdout: "", stderr: "boom", killed: false, timedOut: false });
+  const failing: ProcessRunner = async () => ({ exitCode: 1, stdout: "", stderr: "boom", killed: false });
   const run = await runAgent(request(), failing);
   assert.equal(run.status, "failed");
   assert.match(run.error!, /boom/);
@@ -95,9 +88,9 @@ test("runAgent emits running then final updates", async () => {
 test("runAgent aborts when cancelled via the registry", async () => {
   const hanging: ProcessRunner = async (_args, options) =>
     new Promise((resolve) => {
-      options.signal?.addEventListener("abort", () => resolve({ exitCode: 0, stdout: "", stderr: "", killed: true, timedOut: false }));
+      options.signal?.addEventListener("abort", () => resolve({ exitCode: 0, stdout: "", stderr: "", killed: true }));
     });
-  const pending = runAgent(request({ timeoutMs: 60_000 }), hanging);
+  const pending = runAgent(request(), hanging);
   cancelAllRuns();
   const run = await pending;
   assert.equal(run.status, "cancelled");

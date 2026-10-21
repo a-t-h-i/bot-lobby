@@ -138,7 +138,7 @@ test("flags lead the request: they are read, stripped from the name, and never l
   assert.equal(parseCommand("--no-branch add login").isolation, "off");
   assert.equal(parseCommand("--worktree add login").restText, "add login");
   assert.equal(parseCommand("--branchy add login").isolation, undefined, "only whole flags count");
-  assert.equal(stripStartFlags("--task --worktree --budget 90m add login"), "add login");
+  assert.equal(stripStartFlags("--task --worktree add login"), "add login");
   assert.equal(stripStartFlags("add --worktree login"), "add --worktree login");
 });
 
@@ -167,7 +167,7 @@ async function taskWithWorkspace(mode: "branch" | "worktree") {
   const cwds: Array<string | undefined> = [];
   const runner: ProcessRunner = async (_args: string[], options: ProcessRunOptions) => {
     cwds.push(options.cwd);
-    return { exitCode: 0, stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: WORKER }], stopReason: "stop" } }), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: WORKER }], stopReason: "stop" } }), stderr: "", killed: false };
   };
   const deps: WorkflowDeps = { root, configDir: ".pi", cwd: root, config: { ...DEFAULT_CONFIG, workflow: { ...DEFAULT_CONFIG.workflow, briefCheck: false } }, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess: runner };
   const act = (params: Partial<OrchestrateParams>) => runWorkflowAction({ action: "status", taskId: task.id, ...params } as OrchestrateParams, deps);

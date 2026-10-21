@@ -24,8 +24,8 @@ function reply(text: string): string {
 function runner(text: string, prompts: string[] = [], hang = false): ProcessRunner {
   return (_args, options) => {
     prompts.push(options.prompt ?? "");
-    if (!hang) return Promise.resolve({ exitCode: 0, stdout: reply(text), stderr: "", killed: false, timedOut: false } satisfies ProcessOutcome);
-    return new Promise((resolve) => options.signal?.addEventListener("abort", () => resolve({ exitCode: 1, stdout: "", stderr: "", killed: true, timedOut: false }), { once: true }));
+    if (!hang) return Promise.resolve({ exitCode: 0, stdout: reply(text), stderr: "", killed: false } satisfies ProcessOutcome);
+    return new Promise((resolve) => options.signal?.addEventListener("abort", () => resolve({ exitCode: 1, stdout: "", stderr: "", killed: true }), { once: true }));
   };
 }
 
@@ -36,7 +36,7 @@ const settle = async () => {
 const PLAN = "## Status\nREADY\n## Title\nDark mode\n## Plan\n### Steps\n1. Add the tokens";
 
 function planner(root: string, run: ProcessRunner): PlanningSession {
-  return new PlanningSession({ cwd: root, root, configDir: ".pi", panel: [], profile: () => ({ thinking: "high", timeoutMs: 60_000 }), runProcess: run });
+  return new PlanningSession({ cwd: root, root, configDir: ".pi", panel: [], profile: () => ({ thinking: "high" }), runProcess: run });
 }
 
 test("a planning round pi stopped in the middle of comes back with the conversation and runs again", async () => {
@@ -49,7 +49,7 @@ test("a planning round pi stopped in the middle of comes back with the conversat
   assert.equal(kept.running, true, "the snapshot knows a round was running");
 
   const prompts: string[] = [];
-  const restored = PlanningSession.restore({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high", timeoutMs: 60_000 }), runProcess: runner(PLAN, prompts) }, kept);
+  const restored = PlanningSession.restore({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high" }), runProcess: runner(PLAN, prompts) }, kept);
   assert.equal(restored.interrupted, true);
   assert.deepEqual(restored.messages.map((message) => message.text), ["add dark mode"], "the user's message is still there");
   await restored.resume();
@@ -64,7 +64,7 @@ test("a planning round pi stopped in the middle of comes back with the conversat
   const stopped = stoppedSnapshot(kept);
   assert.equal(stopped.running, false);
   assert.match(stopped.error!, /retry runs the round again/);
-  const quiet = PlanningSession.restore({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high", timeoutMs: 60_000 }), runProcess: runner(PLAN) }, stopped);
+  const quiet = PlanningSession.restore({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high" }), runProcess: runner(PLAN) }, stopped);
   assert.equal(quiet.retryable, true);
   await quiet.resume();
   assert.equal(quiet.reply, undefined, "nothing ran on its own");
@@ -73,7 +73,7 @@ test("a planning round pi stopped in the middle of comes back with the conversat
 test("a quick fix pi cut off runs again first, told its edits may be half done; finished ones stay as they ended", async () => {
   const root = temp();
   const prompts: string[] = [];
-  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low", timeoutMs: 60_000 }), runProcess: runner("## Done", prompts) });
+  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), runProcess: runner("## Done", prompts) });
   const job = (id: string, status: QuickFixJob["status"], prompt: string): QuickFixJob => ({ id, prompt, status, createdAt: 1, steps: [{ at: 1, text: "editing a.ts", pending: true }], tools: 1, turns: 1, force: true });
   const running = queue.restore([job("QF-1", "success", "rename x"), job("QF-2", "running", "fix the header"), job("QF-3", "queued", "fix the footer")]);
   assert.deepEqual(running.map((entry) => entry.id), ["QF-2", "QF-3"]);
@@ -215,6 +215,6 @@ test("the keeper keeps a window's work as it changes; a quit removes its record,
 test("a seat that was thinking when pi stopped shows it until its round runs again", () => {
   const root = temp();
   const kept = { ...planner(root, runner("")).snapshot(), members: [{ member: "backend" as const, status: "thinking" as const, step: "reading a.ts" }], running: true };
-  const restored = PlanningSession.restore({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high", timeoutMs: 60_000 }) }, kept);
+  const restored = PlanningSession.restore({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high" }) }, kept);
   assert.deepEqual(restored.members, [{ member: "backend", status: "failed", error: STOPPED_WITH_PI, step: undefined }]);
 });

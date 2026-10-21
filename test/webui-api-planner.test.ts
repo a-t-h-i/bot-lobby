@@ -102,10 +102,10 @@ test("planner edits rerun corrected history without duplicating a user turn", as
   const runProcess: ProcessRunner = async (_args, options) => {
     prompts.push(options.prompt ?? "");
     const text = "## Status\nREADY\n## Title\nCorrected\n## Plan\n1. Corrected plan";
-    return { exitCode: 0, stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], stopReason: "stop" } }), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], stopReason: "stop" } }), stderr: "", killed: false };
   };
   let rounds = 0;
-  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: [], profile: () => ({ model: "p/model", thinking: "low", timeoutMs: 1000, instructions: "" }), runProcess, onRound: () => { rounds++; } });
+  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: [], profile: () => ({ model: "p/model", thinking: "low", instructions: "" }), runProcess, onRound: () => { rounds++; } });
   session.messages = [{ role: "you", text: "old idea", at: 1 }, { role: "planner", text: "prior reply", at: 2 }, { role: "you", text: "later answer", at: 3, settled: [{ from: "QA", question: "which?", answer: "yes" }] }];
   session.reply = { status: "ready", questions: [], plan: "stale draft" };
   const pending = session.editMessage(0, 1, " corrected idea ");
@@ -150,7 +150,7 @@ test("planner.editMessage HTTP validates missing, stale, busy, panel, answered a
 
 test("planner.editMessage returns a cloned updated message before its background round finishes", async () => {
   const root = mkdtempSync(join(tmpdir(), "bl-edit-response-"));
-  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: [], profile: () => ({ model: "p/model", thinking: "low", timeoutMs: 1000, instructions: "" }), runProcess: async () => ({ exitCode: 1, stdout: "", stderr: "fake failure", killed: false, timedOut: false }) });
+  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: [], profile: () => ({ model: "p/model", thinking: "low", instructions: "" }), runProcess: async () => ({ exitCode: 1, stdout: "", stderr: "fake failure", killed: false }) });
   session.messages = [{ role: "you", text: "old", at: 1 }];
   const ctx = { service: { planner: () => session } } as unknown as ApiContext;
   const result = plannerEditMessage({ messageIndex: 0, at: 1, text: "new" }, ctx);

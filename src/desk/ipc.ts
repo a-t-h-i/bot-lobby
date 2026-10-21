@@ -132,7 +132,7 @@ export interface DeskClient {
 export function createDeskClient(address: string, worker: string): DeskClient {
   let socket: Socket | undefined;
   let nextId = 1;
-  const pending = new Map<number, { done: (response: DeskResponse) => void; timer: ReturnType<typeof setTimeout> }>();
+  const pending = new Map<number, { done: (response: DeskResponse) => void; timer: ReturnType<typeof setTimeout> | undefined }>();
   const failAll = (text: string) => {
     for (const [id, entry] of pending) {
       clearTimeout(entry.timer);
@@ -170,10 +170,11 @@ export function createDeskClient(address: string, worker: string): DeskClient {
     request(request, timeoutMs = 10_000) {
       const id = nextId++;
       return new Promise((done) => {
-        const timer = setTimeout(() => {
+        // 0 waits for as long as the answer takes (a delegation, a consult): no time limit.
+        const timer = timeoutMs > 0 ? setTimeout(() => {
           pending.delete(id);
           done({ id, ok: false, text: "the file desk did not answer" });
-        }, timeoutMs);
+        }, timeoutMs) : undefined;
         pending.set(id, { done, timer });
         try {
           connect().write(`${JSON.stringify({ ...request, id, worker })}\n`);

@@ -157,25 +157,25 @@ test("every agent's thinking is configurable except scouts, which always run low
   const cfg = resolveConfig({
     agents: { designer: { thinking: "high" } },
     researcher: { thinking: "xhigh" },
-    scout: { model: "p/fast", thinking: "max", timeoutMs: 60_000 },
+    scout: { model: "p/fast", thinking: "max" },
   });
   assert.equal(agentProfile(cfg, "designer", "worker").thinking, "high");
   assert.equal(agentProfile(cfg, "backend", "researcher").thinking, "xhigh");
   const scout = agentProfile(cfg, "designer", "scout");
   assert.equal(scout.thinking, SCOUT_THINKING);
   assert.equal(scout.model, "p/fast");
-  assert.equal(scout.timeoutMs, 60_000);
   assert.ok(!("thinking" in cfg.scout), "a scout thinking value is dropped");
   assert.ok(hasScoutThinking({ scout: { thinking: "max" } }));
   assert.ok(!hasScoutThinking({ scout: { model: "x" } }));
 });
 
-test("agentProfile draws workers and the QA gate from their domain, with per-agent time limits", () => {
+test("agentProfile draws workers and the QA gate from their domain, and carries no time limit", () => {
   const cfg = resolveConfig({ agents: { qa: { model: "p/qa-model", thinking: "low", timeoutMs: 120_000 } } });
   const gate = agentProfile(cfg, "qa", "reviewer");
-  assert.deepEqual([gate.kind, gate.model, gate.thinking, gate.timeoutMs], ["qa", "p/qa-model", "low", 120_000]);
+  assert.deepEqual([gate.kind, gate.model, gate.thinking], ["qa", "p/qa-model", "low"]);
+  assert.equal("timeoutMs" in gate, false, "an old time limit in the file is dropped");
+  assert.equal("timeoutMs" in cfg.agents.qa, false);
   assert.equal(agentProfile(cfg, "backend", "worker").model, undefined, "an unset model stays unset");
-  assert.equal(agentProfile(cfg, "backend", "worker").timeoutMs, 15 * 60 * 1000);
-  assert.equal(agentProfile(DEFAULT_CONFIG, "backend", "scout").timeoutMs, 8 * 60 * 1000);
+  assert.equal("timeoutMs" in agentProfile(DEFAULT_CONFIG, "backend", "scout"), false);
   assert.equal(agentProfile(DEFAULT_CONFIG, "backend", "researcher").thinking, "low");
 });

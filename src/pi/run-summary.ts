@@ -51,21 +51,19 @@ const STATUS_ICONS: Record<AgentRun["status"], string> = {
 };
 
 /** Why a run ended the way it did, in words, when that is not plain success. */
-export function runFlags(run: Pick<AgentRun, "status" | "stalled" | "wrappedUp" | "attempts" | "route">): string[] {
+export function runFlags(run: Pick<AgentRun, "status" | "stalled" | "attempts" | "route">): string[] {
   const flags: string[] = [];
   if (run.route) flags.push(`routed ${run.route}`);
-  if (run.stalled) flags.push("stalled");
-  else if (run.status === "timeout") flags.push("hit its time limit");
+  if (run.stalled || run.status === "timeout") flags.push("stalled");
   else if (run.status === "failed") flags.push("failed");
   else if (run.status === "cancelled") flags.push("cancelled");
-  if (run.wrappedUp) flags.push(run.status === "success" ? "wrapped up early — report may be partial" : "asked to wrap up");
   if (run.attempts > 1) flags.push(`${run.attempts} attempts`);
   return flags;
 }
 
 /**
  * `✓ DEV worker · 3m 12s · 9 turns · 23 tools · 41k↑ 6k↓ · $0.12 · provider/model`,
- * followed by any flags (stalled, time limit, wrapped up early, attempts).
+ * followed by any flags (stalled, failed, cancelled, attempts).
  */
 export function describeRun(run: AgentRun, now = Date.now()): string {
   const parts = [`${STATUS_ICONS[run.status]} ${agentName(run)} ${run.role}`, shortDuration(durationOf(run, now))];
@@ -101,7 +99,6 @@ export function runLogEntry(run: AgentRun): RunLogEntry {
     ...(run.usage ? { input: run.usage.input, output: run.usage.output, cost: run.usage.cost } : {}),
     attempts: run.attempts,
     ...(run.stalled ? { stalled: true } : {}),
-    ...(run.wrappedUp ? { wrappedUp: true } : {}),
     ...(run.error ? { error: run.error.split("\n")[0]!.slice(0, 200) } : {}),
     ...(run.routedFrom ? { routedFrom: run.routedFrom } : {}),
   };
@@ -129,7 +126,6 @@ export function runFromLog(entry: RunLogEntry, taskId: string): AgentRun {
     ...(entry.tools ? { tools: entry.tools } : {}),
     ...(entry.input !== undefined ? { usage: { input: entry.input, output: entry.output ?? 0, cost: entry.cost ?? 0, turns: entry.turns ?? 0 } } : {}),
     ...(entry.stalled ? { stalled: true } : {}),
-    ...(entry.wrappedUp ? { wrappedUp: true } : {}),
     ...(entry.error ? { error: entry.error } : {}),
   };
 }

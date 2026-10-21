@@ -110,7 +110,7 @@ test("a scout asked the same thing on an unchanged tree reuses its findings; any
   const envs: Array<Record<string, string> | undefined> = [];
   const runner: ProcessRunner = async (_args, options) => {
     envs.push(options.env as Record<string, string> | undefined);
-    return { exitCode: 0, stdout: scoutReply(["src/auth/session.ts:3"]), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: scoutReply(["src/auth/session.ts:3"]), stderr: "", killed: false };
   };
   const request = (taskDir: string): ScoutRequest => ({ taskId: "TASK-1", taskText: "Expire sessions", instruction: "Where are sessions validated?", domains: ["backend"], cwd: root, dataRoots: [dataDir], taskDir, config: DEFAULT_CONFIG });
 

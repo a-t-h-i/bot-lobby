@@ -8,6 +8,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { activityWord } from "../pi/activity.ts";
+import { skillFiles } from "../pi/grants.ts";
 import { shortDuration } from "../text.ts";
 import { readRelayRequest } from "../ask/relay.ts";
 import type { AskQuestion, AskResult } from "../ask/types.ts";
@@ -39,7 +40,8 @@ export interface PiRunOptions {
   tools?: readonly string[];
   model?: string;
   thinking?: string;
-  timeoutMs: number;
+  /** Names of the skills this agent may load; absent keeps pi's own discovery. */
+  skills?: string[];
   signal?: AbortSignal;
   /** Reports the current one-word tool activity while the agent works. */
   onActivity?: (activity: string) => void;
@@ -53,34 +55,10 @@ export interface PiRunOptions {
   stallTimeoutMs?: number;
   /** Silence allowed while one tool call is in flight (tests, builds); 0 disables. */
   toolStallTimeoutMs?: number;
-  /** Ask the agent to wrap up and report at this elapsed time; 0 disables. */
-  wrapUpAtMs?: number;
   /** Receives the steering handle once the process is running. */
   onStart?: (handle: RunHandle) => void;
-  /** Under a task time budget: when the agent is warned, when its time is up, and who decides on more (see ProcessRunOptions). */
-  time?: TimeLimit;
   /** Answers the agent's relayed questions; without it they are cancelled like any other dialog. */
   onAsk?: RelayAsk;
-}
-
-/**
- * A run's allotted time under a task budget. At `headsUpAtMs` the agent is
- * told how much is left; at `upAtMs` it is steered to stop and report where it
- * left off. Once that report is in (its turn ended), `onTimeUp` decides: more
- * ms keeps the same process going with its context (a follow-up prompt), 0
- * ends it. The hard deadline (`timeoutMs`) and the stall watchdog wait while
- * the decision is pending, and move out with any time granted.
- */
-export interface TimeLimit {
-  /** Reporting time is included in the allowance, including extensions. */
-  hardLimit?: boolean;
-  upAtMs: number;
-  headsUpAtMs?: number;
-  headsUpMessage?: string;
-  upMessage: string;
-  onTimeUp?: (report: string) => Promise<{ extraMs: number; message?: string }>;
-  /** Time the agent gets to write its report after `upAtMs` before it is stopped. */
-  graceMs: number;
 }
 
 export interface ProcessOutcome {
@@ -88,17 +66,10 @@ export interface ProcessOutcome {
   stdout: string;
   stderr: string;
   killed: boolean;
-  timedOut: boolean;
   /** Killed by the watchdog after going silent. */
   stalled?: boolean;
-  /** The agent was asked to wrap up before its deadline. */
-  wrappedUp?: boolean;
   /** The RPC host rejected the prompt itself. */
   protocolError?: string;
-  /** Stopped at its allotted time and not given more: its report says where it left off. */
-  timeUp?: boolean;
-  /** Time granted past its allotment, in ms. */
-  extendedMs?: number;
 }
 
 /** Streaming agent events forwarded as they arrive on stdout. */
@@ -113,14 +84,9 @@ export type PiStreamEvent =
   | { type: "compaction" }
   | { type: "compaction_end"; error?: string }
   | { type: "usage"; input: number; output: number; cost: number; model?: string }
-  | { type: "wrap_up" }
-  /** Its allotted time is up: it was asked to stop and report where it left off. */
-  | { type: "time_up" }
-  /** It was given `ms` more and carries on. */
-  | { type: "extended"; ms: number }
   /** One finished thinking block, bounded to `MAX_THOUGHT_CHARS`. */
   | { type: "thought"; text: string }
-  /** It asked the user (relayed); its clocks wait until the answers are back. */
+  /** It asked the user (relayed); the stall watchdog waits until the answers are back. */
   | { type: "asking"; questions: number }
   /** The answers went back after `waitedMs` of waiting on the user. */
   | { type: "answered"; waitedMs: number }
@@ -132,7 +98,6 @@ export const MAX_THOUGHT_CHARS = 1500;
 export interface ProcessRunOptions {
   cwd: string;
   signal?: AbortSignal;
-  timeoutMs: number;
   /** The task message sent to the agent over RPC stdin. */
   prompt?: string;
   /** Optional sink for streaming agent events. */
@@ -140,12 +105,7 @@ export interface ProcessRunOptions {
   env?: Record<string, string>;
   stallTimeoutMs?: number;
   toolStallTimeoutMs?: number;
-  wrapUpAtMs?: number;
-  wrapUpMessage?: string;
   onStart?: (handle: RunHandle) => void;
-  /** Grace between the deadline abort and the hard kill. */
-  graceMs?: number;
-  time?: TimeLimit;
   onAsk?: RelayAsk;
 }
 
@@ -162,9 +122,6 @@ export interface PiRunResult {
   usage: { input: number; output: number; cost: number; turns: number };
   model?: string;
   stalled?: boolean;
-  wrappedUp?: boolean;
-  timeUp?: boolean;
-  extendedMs?: number;
 }
 
 export interface ParsedStream {
@@ -179,16 +136,7 @@ const MAX_STREAM_CHARS = 5_000_000;
 const HEARTBEAT_MS = 2000;
 const SETTLE_FALLBACK_MS = 3000;
 const EXIT_DRAIN_MS = 1500;
-const DEADLINE_GRACE_MS = 5000;
 const DIALOG_METHODS = new Set(["select", "confirm", "input", "editor"]);
-
-/** The steering message sent at the wrap-up point. */
-export const WRAP_UP_MESSAGE = [
-  "bot-lobby: you are close to your time limit.",
-  "Stop exploring now. Finish or revert any half-done edit so every file is consistent,",
-  "then write your final report in the required output format.",
-  "List anything unfinished under Blockers or Notes.",
-].join(" ");
 
 /** RPC protocol lines the process host reacts to (never forwarded to the caller). */
 export interface ControlEvent {
@@ -368,10 +316,15 @@ export function finishedThought(line: string): string | undefined {
 export const MCP_RESOURCE_TOOLS: readonly string[] = ["list_mcp_resources", "list_mcp_resource_templates", "read_mcp_resource"];
 
 /** Build the `pi` argv for one isolated, headless RPC agent run; the task goes over stdin. */
-export function buildPiArgs(options: Omit<PiRunOptions, "task"> & { systemPromptFile?: string }): string[] {
+export function buildPiArgs(options: Omit<PiRunOptions, "task"> & { systemPromptFile?: string; skillFiles?: string[] }): string[] {
   const args = ["--mode", "rpc", "--no-session", "--no-prompt-templates", "--no-themes", "--extension", fileURLToPath(new URL("../index.ts", import.meta.url))];
   if (options.model && options.model !== "inherit") args.push("--model", options.model);
   if (options.thinking) args.push("--thinking", options.thinking);
+  // A skill grant replaces pi's own discovery with exactly the granted skills.
+  if (options.skillFiles) {
+    args.push("--no-skills");
+    for (const file of options.skillFiles) args.push("--skill", file);
+  }
   if (options.tools && options.tools.length > 0) {
     // pi keeps every MCP tool under --tools unless an entry names one, so name the granted ones (and the resource
     // tools their servers need), or run without MCP at all when nothing is granted.
@@ -504,19 +457,11 @@ function rpcInput(proc: ChildProcess): { send(command: object): void; close(): v
 
 interface RunState {
   killed: boolean;
-  timedOut: boolean;
   stalled: boolean;
-  wrappedUp: boolean;
   settled: boolean;
   protocolError?: string;
-  /** Told its time is up; its next turn end waits on the decision. */
-  timeUp: boolean;
-  headsUp: boolean;
-  /** Waiting on the decision: the agent is idle, so the deadline and the stall watchdog wait too. */
-  deciding: boolean;
-  /** Relayed questions waiting on the user: every clock and the watchdog wait. */
+  /** Relayed questions waiting on the user: the watchdog waits. */
   asking: number;
-  extendedMs: number;
 }
 
 /** Smallest positive limit, used to pick a watchdog cadence that can see it. */
@@ -528,11 +473,11 @@ function watchInterval(...limits: Array<number | undefined>): number {
 
 /**
  * Default runner: spawn pi in RPC mode, send the task over stdin, and watch it.
- * The child leads its own process group so a stall, deadline or cancel takes
- * its grandchildren (dev servers, watch-mode tests) with it, and the run ends
- * on process exit rather than waiting for a pipe a grandchild may hold open.
- * Near the deadline the agent is steered to wrap up and report; at the
- * deadline it is aborted; after prolonged silence it is killed as stalled.
+ * The child leads its own process group so a stall or cancel takes its
+ * grandchildren (dev servers, watch-mode tests) with it, and the run ends on
+ * process exit rather than waiting for a pipe a grandchild may hold open.
+ * There is no time limit: a run ends when the agent finishes, is cancelled,
+ * or goes silent for so long it is killed as stalled.
  */
 export function spawnPiProcess(args: string[], options: ProcessRunOptions): Promise<ProcessOutcome> {
   return new Promise((resolve) => {
@@ -547,25 +492,16 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"],
     });
-    const state: RunState = { killed: false, timedOut: false, stalled: false, wrappedUp: false, settled: false, timeUp: false, headsUp: false, deciding: false, asking: 0, extendedMs: 0 };
+    const state: RunState = { killed: false, stalled: false, settled: false, asking: 0 };
     const input = rpcInput(proc);
-    const started = Date.now();
-    const time = options.time;
-    // The allotted time counts from here; a grant restarts it.
-    let clockStart = started;
-    let upAtMs = time?.upAtMs ?? 0;
-    let headsUpAtMs = time?.headsUpAtMs ?? 0;
-    let lastOutput = started;
+    let lastOutput = Date.now();
     let quietGraceUntil = 0;
     let toolsInFlight = 0;
     let stderr = "";
     let exitCode: number | undefined;
     let settleTimer: ReturnType<typeof setTimeout> | undefined;
     let done = false;
-    // Time spent waiting on the user's answers is not the agent's: its limits move out by it.
-    let deadlineAt = started + options.timeoutMs;
     let askStarted = 0;
-    let pausedMs = 0;
     const asks = new AbortController();
 
     const onEvent = (event: PiStreamEvent) => {
@@ -574,51 +510,18 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
       if (event.type === "retry") quietGraceUntil = Date.now() + event.delayMs;
       options.onEvent?.(event);
     };
-    // A turn that ended after the time ran out waits on the decision; any other ends the run.
+    // The run ends once its turn is over.
     let turnDone = false;
     const turnOver = () => {
       if (turnDone) return;
       turnDone = true;
       clearTimeout(settleTimer);
       settleTimer = undefined;
-      if (state.timeUp && time?.onTimeUp && !done && !state.killed) decide(time.onTimeUp);
-      else input.close();
-    };
-    const decide = (onTimeUp: NonNullable<TimeLimit["onTimeUp"]>) => {
-      state.deciding = true;
-      clearTimeout(deadline);
-      const report = parsePiStream(collector.peek()).text;
-      onTimeUp(report).then(({ extraMs, message }) => {
-        if (done || state.killed) return;
-        state.deciding = false;
-        if (extraMs <= 0) return input.close();
-        // Granted: the same agent carries on where it stopped, its context intact.
-        state.timeUp = false;
-        state.headsUp = false;
-        state.settled = false;
-        state.extendedMs += extraMs;
-        turnDone = false;
-        clockStart = Date.now();
-        lastOutput = clockStart;
-        upAtMs = time?.hardLimit ? Math.max(1, extraMs - Math.min(time.graceMs, Math.floor(extraMs / 4))) : extraMs;
-        // The user just named the time it has: no heads-up quoting the old allotment.
-        headsUpAtMs = 0;
-        const nextLimit = extraMs + (time?.hardLimit ? 0 : time?.graceMs ?? 0);
-        deadlineAt = Date.now() + nextLimit;
-        deadline = setTimeout(onDeadline, nextLimit);
-        input.send({ type: "prompt", message: message ?? "You have more time: carry on from where you left off and finish." });
-        options.onEvent?.({ type: "extended", ms: extraMs });
-      }, () => {
-        state.deciding = false;
-        input.close();
-      });
+      input.close();
     };
     const relay = (id: string | undefined, questions: AskQuestion[], ask: RelayAsk) => {
       state.asking += 1;
-      if (state.asking === 1) {
-        askStarted = Date.now();
-        clearTimeout(deadline);
-      }
+      if (state.asking === 1) askStarted = Date.now();
       options.onEvent?.({ type: "asking", questions: questions.length });
       ask(questions, asks.signal)
         .catch((): AskResult => ({ answers: [], cancelled: true }))
@@ -628,11 +531,7 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
           if (state.asking === 0) {
             const now = Date.now();
             const waited = now - askStarted;
-            pausedMs += waited;
-            deadlineAt += waited;
-            clockStart += waited;
             lastOutput = now;
-            if (!state.deciding) deadline = setTimeout(onDeadline, Math.max(0, deadlineAt - now));
             options.onEvent?.({ type: "answered", waitedMs: waited });
           }
           input.send({ type: "extension_ui_response", id, value: JSON.stringify(result) });
@@ -675,7 +574,6 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
     const finish = (code: number) => {
       if (done) return;
       done = true;
-      clearTimeout(deadline);
       clearTimeout(settleTimer);
       clearInterval(watch);
       // Questions still open when the run ends are put away.
@@ -684,9 +582,8 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
       input.close();
       // Reap anything the agent left running in its group.
       if (POSIX) signalGroup(proc, "SIGTERM");
-      const { killed, timedOut, stalled, wrappedUp, protocolError } = state;
-      const timeUp = state.timeUp && !killed;
-      resolve({ exitCode: code, stdout: collector.finish(), stderr, killed, timedOut, stalled, wrappedUp, protocolError, ...(timeUp ? { timeUp } : {}), ...(state.extendedMs > 0 ? { extendedMs: state.extendedMs } : {}) });
+      const { killed, stalled, protocolError } = state;
+      resolve({ exitCode: code, stdout: collector.finish(), stderr, killed, stalled, protocolError });
     };
     const onAbort = () => {
       state.killed = true;
@@ -694,31 +591,9 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
       input.close();
       terminate(proc, 3000);
     };
-    const onDeadline = () => {
-      state.killed = true;
-      state.timedOut = true;
-      input.send({ type: "abort" });
-      input.close();
-      setTimeout(() => terminate(proc), options.graceMs ?? DEADLINE_GRACE_MS).unref();
-    };
-    let deadline = setTimeout(onDeadline, options.timeoutMs);
     const watch = setInterval(() => {
-      if (state.killed || done || state.deciding || state.asking > 0) return;
+      if (state.killed || done || state.asking > 0) return;
       const now = Date.now();
-      if (!state.wrappedUp && !state.settled && options.wrapUpAtMs && options.wrapUpAtMs > 0 && now - started - pausedMs >= options.wrapUpAtMs) {
-        state.wrappedUp = true;
-        input.send({ type: "steer", message: options.wrapUpMessage ?? WRAP_UP_MESSAGE });
-        options.onEvent?.({ type: "wrap_up" });
-      }
-      if (time && !state.headsUp && !state.timeUp && !turnDone && headsUpAtMs > 0 && now - clockStart >= headsUpAtMs) {
-        state.headsUp = true;
-        if (time.headsUpMessage) input.send({ type: "steer", message: time.headsUpMessage });
-      }
-      if (time && !state.timeUp && !turnDone && upAtMs > 0 && now - clockStart >= upAtMs) {
-        state.timeUp = true;
-        input.send({ type: "steer", message: time.upMessage });
-        options.onEvent?.({ type: "time_up" });
-      }
       const limit = toolsInFlight > 0 ? options.toolStallTimeoutMs : options.stallTimeoutMs;
       if (limit && limit > 0 && now - Math.max(lastOutput, quietGraceUntil) >= limit) {
         state.killed = true;
@@ -726,7 +601,7 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
         input.close();
         terminate(proc, 3000);
       }
-    }, watchInterval(options.stallTimeoutMs, options.toolStallTimeoutMs, options.wrapUpAtMs, time?.upAtMs, time?.headsUpAtMs));
+    }, watchInterval(options.stallTimeoutMs, options.toolStallTimeoutMs));
     watch.unref();
 
     proc.on("exit", (code, signal) => {
@@ -747,14 +622,10 @@ export function spawnPiProcess(args: string[], options: ProcessRunOptions): Prom
 }
 
 function toResult(parsed: ParsedStream, outcome: ProcessOutcome, aborted: boolean, options: PiRunOptions): PiRunResult {
-  const base = { output: parsed.text, usage: parsed.usage, model: parsed.model, wrappedUp: outcome.wrappedUp === true, ...(outcome.timeUp ? { timeUp: true } : {}), ...(outcome.extendedMs ? { extendedMs: outcome.extendedMs } : {}) };
+  const base = { output: parsed.text, usage: parsed.usage, model: parsed.model };
   if (outcome.stalled) {
     const quiet = shortDuration(options.stallTimeoutMs ?? 0);
     return { ...base, status: "timeout", stalled: true, error: `stalled: no output for ${quiet}` };
-  }
-  if (outcome.timedOut) {
-    const note = outcome.wrappedUp ? " after a wrap-up request" : "";
-    return { ...base, status: "timeout", error: `hit the ${shortDuration(options.timeoutMs)} time limit${note}` };
   }
   if (outcome.killed || aborted || parsed.stopReason === "aborted") {
     return { ...base, status: "cancelled", error: "agent was cancelled" };
@@ -786,23 +657,17 @@ export async function runPiAgent(given: PiRunOptions, run: ProcessRunner = spawn
   try {
     prompt = writePromptFile([options.systemPrompt, host.note].filter(Boolean).join("\n\n"));
     if (options.signal?.aborted) return { status: "cancelled", output: "", usage: { input: 0, output: 0, cost: 0, turns: 0 } };
-    const args = buildPiArgs({ ...options, tools: host.tools, mcpTools: host.mcpTools, systemPromptFile: prompt.file });
+    const args = buildPiArgs({ ...options, tools: host.tools, mcpTools: host.mcpTools, systemPromptFile: prompt.file, ...(options.skills ? { skillFiles: skillFiles(options.skills, options.cwd) } : {}) });
     const outcome = await run(args, {
       cwd: options.cwd,
       signal: options.signal,
-      timeoutMs: options.timeoutMs,
       prompt: `Task: ${options.task}`,
       env: host.env,
       stallTimeoutMs: options.stallTimeoutMs,
       toolStallTimeoutMs: options.toolStallTimeoutMs,
-      wrapUpAtMs: options.wrapUpAtMs,
-      ...(options.time ? { time: options.time } : {}),
       ...(options.onAsk ? { onAsk: options.onAsk } : {}),
       onStart: host.onStart,
       onEvent: (event) => {
-        if (event.type === "asking") host.pause?.();
-        if (event.type === "answered") host.extend?.(event.waitedMs);
-        if (event.type === "extended") host.extend?.(event.ms, true);
         if (event.type === "tool_execution_start") options.onActivity?.(activityWord(event.toolName));
         options.onEvent?.(event);
       },

@@ -361,7 +361,7 @@ test("a window that starts after another stopped unexpectedly carries its planni
   const windows = join(recoveryDir(root, ".pi"), "windows");
   mkdirSync(windows, { recursive: true });
   writeFileSync(join(windows, "2147483646-dead.json"), JSON.stringify({ pid: 2147483646, token: "dead", sessionId: "session-old", sessionFile: "/sessions/old.jsonl", working: true, background: [], startedAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:01.000Z" }));
-  const snapshot = new PlanningSession({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high", timeoutMs: 1000 }) }).snapshot();
+  const snapshot = new PlanningSession({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high" }) }).snapshot();
   writeSessionState(root, ".pi", "planner", "session-old", { ...snapshot, messages: [{ role: "you", text: "plan the export", at: 1 }] });
 
   const fake = fakePi();

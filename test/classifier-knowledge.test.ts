@@ -151,7 +151,7 @@ test("a picker that throws never stops an agent starting", async () => {
   const runner: ProcessRunner = async (args) => {
     const file = args[args.indexOf("--append-system-prompt") + 1];
     seen.push(file ? readFileSync(file, "utf8") : "");
-    return { exitCode: 0, stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "## Completed\nx" }], model: "p/m", stopReason: "stop", usage: { input: 1, output: 1, cost: { total: 0 } } } }), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "## Completed\nx" }], model: "p/m", stopReason: "stop", usage: { input: 1, output: 1, cost: { total: 0 } } } }), stderr: "", killed: false };
   };
   const picker = { select: async () => { throw new Error("boom"); } };
   await runWorker({ taskId: "T", domain: "backend", instruction: "step", taskText: "Fix billing", scoutOutcomes: [], cwd: data, dataRoots: [data], config: DEFAULT_CONFIG, knowledge: picker }, runner);
@@ -164,7 +164,7 @@ function recorder(seen: string[]): ProcessRunner {
     const file = args[args.indexOf("--append-system-prompt") + 1];
     seen.push(file ? readFileSync(file, "utf8") : "");
     const text = args.includes("read,grep,find,ls") ? "## Scope\nx" : "## Completed\nx\n\n## Verdict\nPASS";
-    return { exitCode: 0, stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], model: "p/m", stopReason: "stop", usage: { input: 1, output: 1, cost: { total: 0 } } } }), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], model: "p/m", stopReason: "stop", usage: { input: 1, output: 1, cost: { total: 0 } } } }), stderr: "", killed: false };
   };
 }
 

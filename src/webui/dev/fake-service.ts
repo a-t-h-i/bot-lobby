@@ -409,6 +409,20 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     configChanged: () => {},
     models: () => models.map((model) => ({ id: model.id, label: model.label, thinkingLevels: [...model.thinkingLevels] })),
     classifierModels: () => [{ id: "opencode/jev-1.13-free", label: "Jev 1.13 (free)" }, { id: "openrouter/liquid/d1", label: "Liquid D1" }],
+    grants: () => ({
+      mcpTools: [
+        { name: "mcp__github__get_issue", server: "github", description: "Read one issue with its comments.", readOnly: true },
+        { name: "mcp__github__create_pull_request", server: "github", description: "Open a pull request.", readOnly: false },
+        { name: "mcp__github__search_code", server: "github", description: "Search code across repositories.", readOnly: true },
+        { name: "mcp__figma__get_frame", server: "figma", description: "Read a frame's layers and styles.", readOnly: true },
+        { name: "mcp__figma__export_image", server: "figma", description: "Export a frame as PNG or SVG.", readOnly: false },
+      ],
+      skills: [
+        { name: "pdf-tools", description: "Extract text and tables from PDF files.", path: "~/.pi/agent/skills/pdf-tools/SKILL.md" },
+        { name: "release-notes", description: "Write release notes from merged pull requests.", path: ".pi/skills/release-notes/SKILL.md" },
+        { name: "tailwind-review", description: "Check Tailwind classes against the design tokens.", path: ".agents/skills/tailwind-review/SKILL.md" },
+      ],
+    }),
     issuesEnabled: () => fixture.status.issuesEnabled,
     workspace: () => ({ ...fixture.status.workspace }),
     zen: () => ({ ...(fixture.zen.task ? { task: { ...fixture.zen.task } } : {}), runs: [...fixture.zen.runs] }),

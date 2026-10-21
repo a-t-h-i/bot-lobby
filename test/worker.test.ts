@@ -79,7 +79,7 @@ function makeDeps(overrides: Partial<WorkflowDeps> = {}): WorkflowDeps {
     ask: async () => undefined,
     choose: async () => undefined,
     notify: () => {},
-    runProcess: async () => ({ exitCode: 0, stdout: workerReply(WELL_FORMED), stderr: "", killed: false, timedOut: false }),
+    runProcess: async () => ({ exitCode: 0, stdout: workerReply(WELL_FORMED), stderr: "", killed: false }),
     ...overrides,
   };
 }
@@ -178,7 +178,7 @@ test("pending approvals block further work in that domain and are resolvable", a
 
 test("a worker pushback blocks its domain and the oracle resolves it with a counter-argument", async () => {
   const raw = PUSHBACK_WORKER;
-  const runner: ProcessRunner = async () => ({ exitCode: 0, stdout: workerReply(raw), stderr: "", killed: false, timedOut: false });
+  const runner: ProcessRunner = async () => ({ exitCode: 0, stdout: workerReply(raw), stderr: "", killed: false });
   const deps = makeDeps({ runProcess: runner });
   withTask(deps, "planning");
   const first = await act(deps, { action: "implement", domain: "backend", task: "Swap the session store." });
@@ -203,7 +203,7 @@ test("a worker pushback blocks its domain and the oracle resolves it with a coun
 });
 
 test("accepting a pushback drops the change and unblocks the domain", async () => {
-  const runner: ProcessRunner = async () => ({ exitCode: 0, stdout: workerReply(PUSHBACK_WORKER), stderr: "", killed: false, timedOut: false });
+  const runner: ProcessRunner = async () => ({ exitCode: 0, stdout: workerReply(PUSHBACK_WORKER), stderr: "", killed: false });
   const deps = makeDeps({ runProcess: runner });
   withTask(deps, "planning");
   await act(deps, { action: "implement", domain: "backend", task: "Swap the session store." });
@@ -231,7 +231,7 @@ test("implement updates the domain scratchpad with the worker summary", async ()
 });
 
 test("a failed worker run is reported without changing the workflow state", async () => {
-  const failing: ProcessRunner = async () => ({ exitCode: 1, stdout: "", stderr: "agent exploded", killed: false, timedOut: false });
+  const failing: ProcessRunner = async () => ({ exitCode: 1, stdout: "", stderr: "agent exploded", killed: false });
   const deps = makeDeps({ runProcess: failing });
   withTask(deps, "planning");
   const result = await act(deps, { action: "implement", domain: "backend", task: "Do work." });
@@ -301,7 +301,7 @@ test("implement records each worker delegation on the task for the plan checklis
 
 test("a vague delegation is sent back once with nothing started; the same text again goes through", async () => {
   let runs = 0;
-  const deps = makeDeps({ config: DEFAULT_CONFIG, runProcess: async () => { runs++; return { exitCode: 0, stdout: workerReply(WELL_FORMED), stderr: "", killed: false, timedOut: false }; } });
+  const deps = makeDeps({ config: DEFAULT_CONFIG, runProcess: async () => { runs++; return { exitCode: 0, stdout: workerReply(WELL_FORMED), stderr: "", killed: false }; } });
   withTask(deps, "planning");
   const vague = { action: "implement", domain: "backend", task: "Make the users list better." } as const;
   const sent = await act(deps, vague);

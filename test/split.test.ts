@@ -189,10 +189,10 @@ function saving(options: { plan?: string; answers?: string[]; choices?: Array<(q
   const runner: ProcessRunner = async (_args, run) => {
     prompts.push(run.prompt ?? "");
     const text = answers.length > 1 ? answers.shift()! : answers[0]!;
-    return { exitCode: 0, stdout: reply(text), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: reply(text), stderr: "", killed: false };
   };
   const feed = new LobbyFeed();
-  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: [], profile: () => ({ model: "p/oracle", thinking: "high", timeoutMs: 60_000 }), runProcess: runner, feed });
+  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: [], profile: () => ({ model: "p/oracle", thinking: "high" }), runProcess: runner, feed });
   session.reply = { status: "ready", questions: [], title: "Dark mode toggle", plan: options.plan ?? PLAN };
   const asked: AskQuestion[][] = [];
   const choices = [...(options.choices ?? [])];
@@ -297,7 +297,7 @@ test("when the oracle cannot produce a sound split the user is asked whether to 
   const left = saving({ answers: [bad] });
   assert.match(await left.session.saveWithSplit(left.ask, { splitAbove: 8 }), /^the plan was not saved/);
   const crash = saving();
-  const failing = new PlanningSession({ cwd: crash.root, root: crash.root, configDir: ".pi", panel: [], profile: () => ({ thinking: "high", timeoutMs: 1000 }), runProcess: async () => ({ exitCode: 1, stdout: "", stderr: "boom", killed: false, timedOut: false }) });
+  const failing = new PlanningSession({ cwd: crash.root, root: crash.root, configDir: ".pi", panel: [], profile: () => ({ thinking: "high" }), runProcess: async () => ({ exitCode: 1, stdout: "", stderr: "boom", killed: false }) });
   failing.reply = { status: "ready", questions: [], plan: PLAN };
   const notice = await failing.saveWithSplit(async () => ({ answers: [], cancelled: true }), { splitAbove: 8 });
   assert.match(notice, /^the plan was not saved/, "a failed run asks, and a question left open saves nothing");

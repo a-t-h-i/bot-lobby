@@ -72,7 +72,7 @@ test("runScouts runs the selected domains in parallel and persists results", asy
     const text = task.includes("Domain focus: backend")
       ? scoutMarkdown(["src/api.ts"])
       : scoutMarkdown(["src/ui.tsx"]);
-    return { exitCode: 0, stdout: reply(text), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: reply(text), stderr: "", killed: false };
   };
   const outcomes = await runScouts(
     {
@@ -96,7 +96,7 @@ test("runScouts runs the selected domains in parallel and persists results", asy
 
 test("runScouts marks a failed scout unusable with an issue", async () => {
   const taskDir = mkdtempSync(join(tmpdir(), "dh-scout2-"));
-  const failing: ProcessRunner = async () => ({ exitCode: 1, stdout: "", stderr: "boom", killed: false, timedOut: false });
+  const failing: ProcessRunner = async () => ({ exitCode: 1, stdout: "", stderr: "boom", killed: false });
   const outcomes = await runScouts(
     {
       taskId: "TASK-2",

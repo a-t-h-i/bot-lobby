@@ -131,7 +131,7 @@ test("a worker's prompt carries the scripts that fit its step, and where to draf
   const seen: string[] = [];
   const runner: ProcessRunner = async (args) => {
     seen.push(readFileSync(args[args.indexOf("--append-system-prompt") + 1]!, "utf8"));
-    return { exitCode: 0, stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "## Completed\nx" }], model: "p/m", stopReason: "stop", usage: { input: 1, output: 1, cost: { total: 0 } } } }), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "## Completed\nx" }], model: "p/m", stopReason: "stop", usage: { input: 1, output: 1, cost: { total: 0 } } } }), stderr: "", killed: false };
   };
   await runWorker({ taskId: "T-1", domain: "backend", instruction: "Step 1: repair public holiday seeding", taskText: "I can't seed public holidays", scoutOutcomes: [], cwd: data, dataRoots: [data], config: DEFAULT_CONFIG }, runner);
   assert.match(seen[0]!, /## Scripts\n\nThese shared scripts do part of this step[^\n]*\n- `seed_public_holidays\.py`/);

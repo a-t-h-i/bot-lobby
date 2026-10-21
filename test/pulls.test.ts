@@ -112,7 +112,7 @@ function reviews(overrides: Partial<ConstructorParameters<typeof PullReviews>[0]
   const runner: ProcessRunner = async (args, options) => {
     seen.push({ args, prompt: options.prompt ?? "", cwd: options.cwd });
     options.onEvent?.({ type: "tool_execution_start", toolName: "read", toolCallId: "1", args: { path: "src/table.css" } } as never);
-    return { exitCode: 0, stdout: reply(output), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: reply(output), stderr: "", killed: false };
   };
   const feed = new LobbyFeed();
   const notes: string[] = [];
@@ -120,7 +120,7 @@ function reviews(overrides: Partial<ConstructorParameters<typeof PullReviews>[0]
   const state = new PullReviews({
     cwd: root, root, configDir: ".pi",
     exec: fakeExec({ "pr view": { stdout: VIEW }, "pr diff": { stdout: DIFF } }, calls),
-    profile: () => ({ model: "p/qa", thinking: "medium", timeoutMs: 60_000, instructions: "Prefer small PRs." }),
+    profile: () => ({ model: "p/qa", thinking: "medium", instructions: "Prefer small PRs." }),
     runProcess: runner, feed, notify: (message) => notes.push(message),
     ...overrides,
   });
@@ -175,7 +175,7 @@ test("a finished review is kept on disk, comes back next session, and is stale o
   const { state, root, seen } = reviews();
   await state.start(12);
   assert.ok(existsSync(join(root, ".pi", "bot-lobby", "reviews", "pr-12.json")));
-  const again = new PullReviews({ cwd: root, root, configDir: ".pi", exec: fakeExec({}), profile: () => ({ thinking: "low", timeoutMs: 1 }) });
+  const again = new PullReviews({ cwd: root, root, configDir: ".pi", exec: fakeExec({}), profile: () => ({ thinking: "low" }) });
   const kept = again.review(12)!;
   assert.deepEqual([kept.status, kept.verdict, kept.saved, kept.text, kept.steps], ["done", "changes", true, REVIEW, []]);
   assert.equal(again.review(99), undefined);
@@ -208,7 +208,7 @@ test("a review that cannot start, or that the user stops, ends cleanly and is no
   assert.equal(broken.seen.length, 0, "no agent ran");
   assert.equal(loadReview(broken.root, ".pi", 12), undefined);
 
-  const hanging = reviews({ runProcess: (_args, options) => new Promise((resolve) => options.signal?.addEventListener("abort", () => resolve({ exitCode: 1, stdout: "", stderr: "", killed: true, timedOut: false }), { once: true })) });
+  const hanging = reviews({ runProcess: (_args, options) => new Promise((resolve) => options.signal?.addEventListener("abort", () => resolve({ exitCode: 1, stdout: "", stderr: "", killed: true }), { once: true })) });
   const running = hanging.state.start(12);
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(hanging.state.running(12), true);
@@ -229,7 +229,7 @@ test("a second request for a running review joins it instead of starting another
   const runner: ProcessRunner = () => {
     started += 1;
     return new Promise((resolve) => {
-      release = () => resolve({ exitCode: 0, stdout: reply(REVIEW), stderr: "", killed: false, timedOut: false });
+      release = () => resolve({ exitCode: 0, stdout: reply(REVIEW), stderr: "", killed: false });
     });
   };
   const { state } = reviews({ runProcess: runner });

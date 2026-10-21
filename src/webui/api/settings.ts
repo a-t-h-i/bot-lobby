@@ -10,7 +10,7 @@ import { lobbyTopics } from "../../lobby/topics.ts";
 import { prefillModels } from "../../pi/model-settings.ts";
 import { kindLabel } from "../../pi/model-support.ts";
 import { pushNotice } from "../notices.ts";
-import type { SettingsInfo, SettingsLinter } from "../protocol.ts";
+import type { SettingsGrants, SettingsInfo, SettingsLinter } from "../protocol.ts";
 import type { ApiContext } from "./index.ts";
 import { fail } from "./index.ts";
 
@@ -61,22 +61,6 @@ function checkPort(patch: Record<string, unknown>): void {
   }
 }
 
-function agentEntries(patch: Record<string, unknown>): unknown[] {
-  const agents = isPlain(patch.agents) ? Object.values(patch.agents) : [];
-  return [patch.master, ...agents, patch.researcher, patch.quickFix, patch.planner, patch.scout];
-}
-
-/** Reject a time limit that is not a positive number, . */
-function checkTimeouts(patch: Record<string, unknown>): void {
-  for (const entry of agentEntries(patch)) {
-    const timeout = isPlain(entry) ? entry.timeoutMs : undefined;
-    if (timeout === undefined) continue;
-    if (typeof timeout !== "number" || !Number.isFinite(timeout) || timeout <= 0) {
-      fail(400, "bad_request", `"${String(timeout)}" is not a positive number of minutes.`);
-    }
-  }
-}
-
 /**
  * The page's first settings call. Subagents never inherit a model silently:
  * any whose model is still unset is pinned to the session's model and saved,
@@ -99,10 +83,14 @@ export function settingsLinters(ctx: ApiContext): { linters: SettingsLinter[] } 
   return { linters: ctx.service.linters?.() ?? [] };
 }
 
+/** The MCP tools and skills pi offers now, for each agent's grants. */
+export function settingsGrants(ctx: ApiContext): SettingsGrants {
+  return ctx.service.grants?.() ?? { mcpTools: [], skills: [] };
+}
+
 /** Merge, normalise and save the patch; the lobby rereads the config. */
 export function settingsSet(body: { patch: Record<string, unknown> }, ctx: ApiContext): { config: BotLobbyConfig } {
   checkPort(body.patch);
-  checkTimeouts(body.patch);
   const config = stripSecrets(resolveConfig(mergeConfig(readConfig(ctx), body.patch)));
   writeConfig(ctx, config);
   ctx.service.configChanged?.();

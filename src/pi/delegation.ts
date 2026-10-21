@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { createDeskClient } from "../desk/ipc.ts";
-import { AGENT_ENV, DELEGATION_ENV, DELEGATE_TOOL, EXPERT_TIMEOUT_MS, EXPERT_TOOL, MAX_CHILDREN, MAX_CONSULTS, type AgentPolicy } from "../execution/delegation.ts";
+import { AGENT_ENV, DELEGATION_ENV, DELEGATE_TOOL, EXPERT_TOOL, MAX_CHILDREN, MAX_CONSULTS, type AgentPolicy } from "../execution/delegation.ts";
 import { loadConfig } from "../state/project.ts";
 import { isSubagentProcess } from "./quiet.ts";
 
@@ -45,7 +45,7 @@ export function registerAgentPermissions(pi: ExtensionAPI): void {
 
 export function registerDelegation(pi: ExtensionAPI): void {
   if (!isSubagentProcess() || !process.env[DELEGATION_ENV]) return;
-  const target = JSON.parse(process.env[DELEGATION_ENV]!) as { address: string; token: string; timeoutMs: number };
+  const target = JSON.parse(process.env[DELEGATION_ENV]!) as { address: string; token: string };
   const client = createDeskClient(target.address, target.token);
   pi.on("session_shutdown", () => client.close());
   pi.registerTool({
@@ -59,7 +59,7 @@ export function registerDelegation(pi: ExtensionAPI): void {
       const cancel = () => { void client.request({ op: "cancel_delegate" }); };
       signal?.addEventListener("abort", cancel, { once: true });
       try {
-        const answer = await client.request({ op: "delegate", briefs: params.briefs }, target.timeoutMs + 10_000);
+        const answer = await client.request({ op: "delegate", briefs: params.briefs }, 0);
         if (!answer.ok) throw new Error(answer.text);
         const children = JSON.parse(answer.text) as Array<{ runId: string; status: string; report: string; reportPath?: string; error?: string }>;
         return { content: [{ type: "text", text: children.map((child) => `Child ${child.runId}: ${child.status}\n${child.report}${child.reportPath ? `\nFull report: ${child.reportPath}` : ""}${child.error ? `\nError: ${child.error}` : ""}`).join("\n\n") }], details: { children } };
@@ -78,7 +78,7 @@ export function registerDelegation(pi: ExtensionAPI): void {
       const cancel = () => { void client.request({ op: "cancel_consult", consultId }); };
       signal?.addEventListener("abort", cancel, { once: true });
       try {
-        const answer = await client.request({ op: "consult", text: params.question, consultId }, EXPERT_TIMEOUT_MS + 30_000);
+        const answer = await client.request({ op: "consult", text: params.question, consultId }, 0);
         if (!answer.ok) throw new Error(answer.text);
         return { content: [{ type: "text", text: `Expert advice:\n${answer.text}` }], details: undefined };
       } finally { signal?.removeEventListener("abort", cancel); }

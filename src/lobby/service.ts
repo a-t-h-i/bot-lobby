@@ -47,6 +47,7 @@ import { settleInterrupted, type Relaunch } from "./recovery.ts";
 import { carryOnMessage, resumeRoute, RESUMED_DECISION, type Drivers } from "./resume.ts";
 import { archivePlan as archivePlanOnDisk, deletePlan as deletePlanOnDisk, isPlanId, previousPlans, readPlan, type PlanRecord, type PlanSummary } from "../state/plan-history.ts";
 import { applyMasterModel } from "../pi/model-settings.ts";
+import { grantableSkills, grantableTools } from "../pi/grants.ts";
 import { lobbyTopics } from "./topics.ts";
 import type { LobbyAgentKind, PanelMember } from "../schemas/configuration.ts";
 import type { LiveSession, LobbyService, SwitchTarget } from "./host.ts";
@@ -719,7 +720,7 @@ function deleteTask(state: Runtime, taskId: string, where: "list" | "archive"): 
   return `deleted ${taskId} for good`;
 }
 
-/** What a pull request review runs on: QA's model, thinking and time limit. */
+/** What a pull request review runs on: QA's model, thinking and grants. */
 export function reviewProfile(state: Runtime) {
   return resolveReviewProfile(loadConfig(), {
     lookup: modelLookup(state.ctx),
@@ -988,6 +989,7 @@ export function createLobbyService(state: Runtime): LobbyService {
       }
     },
     classifierModels: () => availableClassifiers().map((model) => ({ id: model.id, label: model.label })),
+    grants: () => ({ mcpTools: grantableTools(state.pi), skills: grantableSkills(state.root, state.pi) }),
     issuesEnabled: () => loadConfig().lobby.issues,
     recovered: () => state.recovered,
     seatLabel: (member) => {

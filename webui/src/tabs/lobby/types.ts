@@ -44,7 +44,6 @@ export interface LobbyRun {
   instruction?: string
   detail?: string
   note?: string
-  endsAt?: number
   activeMs?: number
   lastEventAt?: number
 }

@@ -98,8 +98,8 @@ function fakeExec(responses: Record<string, Partial<ExecResult>>, calls: string[
 
 const GOOD = { "pr list": { stdout: LIST }, "pr view": { stdout: VIEW }, "pr diff": { stdout: "diff --git a/x b/x\n" } };
 
-const answered: ProcessRunner = async () => ({ exitCode: 0, stdout: reply(REVIEW), stderr: "", killed: false, timedOut: false });
-const hanging: ProcessRunner = (_args, options) => new Promise((resolve) => options.signal?.addEventListener("abort", () => resolve({ exitCode: 1, stdout: "", stderr: "", killed: true, timedOut: false }), { once: true }));
+const answered: ProcessRunner = async () => ({ exitCode: 0, stdout: reply(REVIEW), stderr: "", killed: false });
+const hanging: ProcessRunner = (_args, options) => new Promise((resolve) => options.signal?.addEventListener("abort", () => resolve({ exitCode: 1, stdout: "", stderr: "", killed: true }), { once: true }));
 
 async function setup(responses: Record<string, Partial<ExecResult>> = GOOD, runProcess: ProcessRunner = answered) {
   const root = mkdtempSync(join(tmpdir(), "bl-git-root-"));
@@ -108,7 +108,7 @@ async function setup(responses: Record<string, Partial<ExecResult>> = GOOD, runP
   const exec = fakeExec(responses, calls);
   const ctx = { cwd: root, ui: { notify() {} }, sessionManager: { getSessionId: () => "session-1", getBranch: () => [] }, isIdle: () => true, abort() {} } as unknown as ExtensionContext;
   const pi = { sendUserMessage() {}, getSessionName: () => "test window" } as unknown as ExtensionAPI;
-  const reviews = new PullReviews({ cwd: root, root, configDir: ".pi", exec, profile: () => ({ model: "p/qa", thinking: "medium", timeoutMs: 60_000 }), runProcess });
+  const reviews = new PullReviews({ cwd: root, root, configDir: ".pi", exec, profile: () => ({ model: "p/qa", thinking: "medium" }), runProcess });
   const state = { root, ctx, pi, configDir: ".pi", pulls: new PullsState(exec, root), issues: new IssuesState(exec, root), reviews };
   const service = createLobbyService(state as unknown as Runtime);
   const server = await startWebServer({ service, port: 0, secret: randomBytes(32), dist: DIST });

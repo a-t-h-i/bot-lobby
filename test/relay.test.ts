@@ -88,7 +88,7 @@ function asking(seen: Seen[], before?: () => void): ProcessRunner {
       before?.();
       entry.answer = await options.onAsk([layout], new AbortController().signal);
     }
-    return { exitCode: 0, stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: DONE }], stopReason: "stop" } }), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: DONE }], stopReason: "stop" } }), stderr: "", killed: false };
   };
 }
 

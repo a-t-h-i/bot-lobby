@@ -18,7 +18,7 @@ import { Classifier } from "../src/classifier/classifier.ts";
 import { effortRouter } from "../src/classifier/effort.ts";
 import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
 
-const reply = (text: string): ProcessOutcome => ({ exitCode: 0, killed: false, timedOut: false, stderr: "", stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], usage: { input: 10, output: 5, cost: { total: 0.01 } } } }) });
+const reply = (text: string): ProcessOutcome => ({ exitCode: 0, killed: false, stderr: "", stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], usage: { input: 10, output: 5, cost: { total: 0.01 } } } }) });
 
 test("five lifetime slots are atomic, invalid requests consume none, failures do not refund slots", () => {
   const quota = { used: 0 };
@@ -86,7 +86,7 @@ test("children inherit permissions, share a desk, report separately, and cannot 
       assert.equal(options.env![DELEGATION_ENV], "");
       assert.equal(policy.tools.includes("delegate_subtasks"), false);
       assert.deepEqual(policy.mcpTools, ["mcp__github__get_issue"]);
-      assert.ok(options.timeoutMs <= 30_000);
+      assert.equal("timeoutMs" in options, false);
       assert.equal(options.env![DESK_ENV.address], deskAddress);
       identities.add(options.env![DESK_ENV.worker]!);
       active += 1;
@@ -111,7 +111,7 @@ test("children inherit permissions, share a desk, report separately, and cannot 
     } finally { client.close(); }
   };
   try {
-    const result = await runPiAgent({ cwd, task: "Step 6: large feature", tools: ["read", "edit", "write"], timeoutMs: 30_000, mcpTools: ["mcp__github__get_issue"], agent: { runId: "parent", taskId: "TASK-1", domain: "backend", role: "worker" }, onChildRun: (child) => updates.push(child) }, run);
+    const result = await runPiAgent({ cwd, task: "Step 6: large feature", tools: ["read", "edit", "write"], mcpTools: ["mcp__github__get_issue"], agent: { runId: "parent", taskId: "TASK-1", domain: "backend", role: "worker" }, onChildRun: (child) => updates.push(child) }, run);
     assert.equal(result.status, "success");
     assert.equal(result.usage.input, 10, "parent usage excludes separately recorded child usage");
     assert.equal(result.children?.length, 5);
@@ -141,7 +141,7 @@ test("children use Jev effort per brief, including a capable model when their pa
     const policy = JSON.parse(options.env![AGENT_ENV]!) as AgentPolicy;
     if (policy.depth === 2) {
       seen.push([args[args.indexOf("--model") + 1]!, args[args.indexOf("--thinking") + 1]!]);
-      assert.ok(options.timeoutMs <= 30_000);
+      assert.equal("timeoutMs" in options, false);
       assert.equal(policy.tools.includes(DELEGATE_TOOL), false);
       return reply("done");
     }
@@ -152,7 +152,7 @@ test("children use Jev effort per brief, including a capable model when their pa
     return reply("integrated");
   };
   try {
-    const result = await runPiAgent({ cwd, task: "Step 1", tools: ["read", "edit"], model: "p/cheap", thinking: "low", timeoutMs: 30_000,
+    const result = await runPiAgent({ cwd, task: "Step 1", tools: ["read", "edit"], model: "p/cheap", thinking: "low", 
       agent: { runId: "parent", taskId: "T", domain: "backend", role: "worker" },
       effortProfile: { model: "p/big", thinking: "medium" }, effort: effortRouter(jev, { clamp: (_model, level) => level === "max" ? "xhigh" : level }),
     }, run);
@@ -184,7 +184,7 @@ test("a parent that exits with children outstanding cancels and waits for them",
     return reply("Parent stopped");
   };
   try {
-    const result = await runPiAgent({ cwd, task: "t", tools: ["read"], timeoutMs: 30_000 }, run);
+    const result = await runPiAgent({ cwd, task: "t", tools: ["read"] }, run);
     assert.equal(cancelled, true);
     assert.equal(result.children?.[0]?.status, "cancelled");
   } finally { client?.close(); rmSync(cwd, { recursive: true, force: true }); }
@@ -208,32 +208,33 @@ test("a retry shares its five child slots and a time grant resets an expired dea
     } finally { client.close(); }
   };
   try {
-    const request = { taskId: "TASK-retry", domain: "backend" as const, role: "worker" as const, instruction: "Inspect", context: { task: "Inspect" }, cwd, timeoutMs: 120_000, retries: 1 };
+    const request = { taskId: "TASK-retry", domain: "backend" as const, role: "worker" as const, instruction: "Inspect", context: { task: "Inspect" }, cwd, retries: 1 };
     assert.equal((await runAgent(request, run)).status, "success");
     assert.equal(attempts, 2);
-    const extended: ProcessRunner = async (_args, options) => {
+    // A parent that works a long while before delegating still gets its children: there is no time to run out of.
+    const late: ProcessRunner = async (_args, options) => {
       const policy = JSON.parse(options.env![AGENT_ENV]!) as AgentPolicy;
-      if (policy.depth === 2) return reply("Child after grant");
+      if (policy.depth === 2) return reply("Child after a long while");
       await new Promise((resolve) => setTimeout(resolve, 30));
-      options.onEvent?.({ type: "extended", ms: 30_000 });
       const target = JSON.parse(options.env![DELEGATION_ENV]!);
+      assert.equal("timeoutMs" in target, false);
       const client = createDeskClient(target.address, target.token);
-      try { assert.equal((await client.request({ op: "delegate", briefs: ["New time"] })).ok, true); }
+      try { assert.equal((await client.request({ op: "delegate", briefs: ["Later"] }, 0)).ok, true); }
       finally { client.close(); }
-      return reply("Done after grant");
+      return reply("Done");
     };
-    assert.equal((await runPiAgent({ cwd, task: "t", tools: ["read"], timeoutMs: 30_000, agent: { runId: "parent", taskId: "T", domain: "backend", role: "worker" }, time: { upAtMs: 10, upMessage: "Stop", graceMs: 0 } }, extended)).children?.[0]?.status, "success");
+    assert.equal((await runPiAgent({ cwd, task: "t", tools: ["read"], agent: { runId: "parent", taskId: "T", domain: "backend", role: "worker" } }, late)).children?.[0]?.status, "success");
   } finally { rmSync(cwd, { recursive: true, force: true }); }
 });
 
-const noopRun: ProcessRunner = async () => ({ exitCode: 0, killed: false, timedOut: false, stderr: "", stdout: "{}" });
+const noopRun: ProcessRunner = async () => ({ exitCode: 0, killed: false, stderr: "", stdout: "{}" });
 
 type HostAgent = { runId: string; taskId: string; domain: "designer" | "backend" | "qa"; role: "scout" | "worker" | "reviewer" | "researcher"; depth?: number };
 
 async function hostToolsAndNote(agent: HostAgent, quotaUsed?: number): Promise<{ tools: string[]; note: string }> {
   const cwd = mkdtempSync(join(tmpdir(), "bl-delegation-eligibility-"));
   mkdirSync(join(cwd, ".pi"), { recursive: true });
-  const host = await delegationHost({ cwd, task: "t", tools: ["read"], timeoutMs: 30_000, agent, ...(quotaUsed === undefined ? {} : { delegationQuota: { used: quotaUsed } }) }, noopRun);
+  const host = await delegationHost({ cwd, task: "t", tools: ["read"], agent, ...(quotaUsed === undefined ? {} : { delegationQuota: { used: quotaUsed } }) }, noopRun);
   try {
     return { tools: [...host.tools], note: host.note };
   } finally {

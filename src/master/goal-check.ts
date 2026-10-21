@@ -8,7 +8,7 @@
 import type { AgentRun } from "../schemas/findings.ts";
 import type { BotLobbyConfig, ProfileResolver } from "../schemas/configuration.ts";
 import { profileFor } from "../schemas/configuration.ts";
-import { runAgent, watchdogOptions, type AgentTime } from "../execution/agent-runner.ts";
+import { runAgent, watchdogOptions } from "../execution/agent-runner.ts";
 import { spawnPiProcess, type ProcessRunner } from "../execution/pi-runner.ts";
 import { loadPrompt } from "../prompts/loader.ts";
 import { truncate } from "../text.ts";
@@ -33,11 +33,8 @@ export interface GoalCheckRequest {
   profile?: ProfileResolver;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
-  time?: AgentTime;
 }
 
-/** At most this long: it reads, it does not test. */
-export const GOAL_CHECK_MS = 6 * 60 * 1000;
 /** Most of the change it reads; a longer diff is cut, and the check reads the files it needs. */
 export const GOAL_DIFF_CHARS = 60_000;
 
@@ -106,8 +103,6 @@ export async function runGoalCheck(request: GoalCheckRequest, run: ProcessRunner
     systemPrompt: goalCheckPrompt(profile.instructions),
     ...(profile.model ? { model: profile.model } : {}),
     thinking: profile.thinking,
-    timeoutMs: Math.min(GOAL_CHECK_MS, profile.timeoutMs),
-    ...(request.time ? { time: request.time } : {}),
     cwd: request.cwd,
     ...(request.signal ? { signal: request.signal } : {}),
     ...(request.onUpdate ? { onUpdate: (update: AgentRun) => request.onUpdate!({ ...update, note: update.note ?? "goal check" }) } : {}),

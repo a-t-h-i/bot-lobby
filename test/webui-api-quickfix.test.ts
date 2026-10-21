@@ -74,9 +74,9 @@ function reply(text: string): string {
 /** A pi runner that answers at once, or hangs until the job is cancelled. */
 function runner(hang: boolean): ProcessRunner {
   return (_args, options) => {
-    if (!hang) return Promise.resolve({ exitCode: 0, stdout: reply("## Done\nDid it."), stderr: "", killed: false, timedOut: false });
+    if (!hang) return Promise.resolve({ exitCode: 0, stdout: reply("## Done\nDid it."), stderr: "", killed: false });
     return new Promise((resolve) => {
-      options.signal?.addEventListener("abort", () => resolve({ exitCode: 1, stdout: "", stderr: "", killed: true, timedOut: false }), { once: true });
+      options.signal?.addEventListener("abort", () => resolve({ exitCode: 1, stdout: "", stderr: "", killed: true }), { once: true });
     });
   };
 }
@@ -99,7 +99,7 @@ function fakeState(hang: boolean) {
     sendUserMessage() {},
     getSessionName: () => "test window",
   } as unknown as ExtensionAPI;
-  const quickfix = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low", timeoutMs: 60_000 }), runProcess: runner(hang) });
+  const quickfix = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), runProcess: runner(hang) });
   return { root, ctx, pi, quickfix };
 }
 

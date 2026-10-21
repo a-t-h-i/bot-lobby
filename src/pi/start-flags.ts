@@ -1,10 +1,10 @@
 /**
  * The flags that lead a task's request: `--task` (always a task), `--auto`,
- * `--fast`, `--full`, `--branch`, `--worktree`, `--no-branch` and
- * `--budget <time>` (or `--budget=<time>`). The command parses them; a session
+ * `--fast`, `--full`, `--branch`, `--worktree` and `--no-branch`. The
+ * command parses them; a session
  * started from the lobby is named from what follows them.
  */
-export const START_FLAG = /^--(task|auto|fast|full|branch|worktree|no-branch)(?=\s|$)\s*|^--budget(?:=|\s+)(\S+)\s*/;
+export const START_FLAG = /^--(task|auto|fast|full|branch|worktree|no-branch)(?=\s|$)\s*/;
 
 /** The request without its leading flags. */
 export function stripStartFlags(text: string): string {

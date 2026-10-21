@@ -148,6 +148,8 @@ export interface LobbyService {
   configChanged?(): void;
   /** The models Pi offers, for the settings page's picker. */
   models?(): ModelChoice[];
+  /** The MCP tools and skills pi offers to grant agents, for the settings page. */
+  grants?(): { mcpTools: Array<{ name: string; server: string; description: string; readOnly: boolean }>; skills: Array<{ name: string; description: string; path: string }> };
   /** The classifier models pi can call with its logins, for the classifier's picker. */
   classifierModels?(): Array<{ id: string; label: string }>;
   /** The model this window's session runs on (`provider/id`), when it has one. */

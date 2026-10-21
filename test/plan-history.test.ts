@@ -8,10 +8,10 @@ import { archivePlan, deletePlan, keepPlan, previousPlans, readPlan } from "../s
 import type { ProcessRunner } from "../src/execution/pi-runner.ts";
 
 const PLAN = "## Status\nREADY\n## Title\nExport as CSV\n## Plan\n### Steps\n1. Add the button";
-const runner: ProcessRunner = async () => ({ exitCode: 0, stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: PLAN }], stopReason: "stop", usage: { input: 1, output: 1, cost: { total: 0 } } } }), stderr: "", killed: false, timedOut: false });
+const runner: ProcessRunner = async () => ({ exitCode: 0, stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: PLAN }], stopReason: "stop", usage: { input: 1, output: 1, cost: { total: 0 } } } }), stderr: "", killed: false });
 
 function session(root: string): PlanningSession {
-  return new PlanningSession({ cwd: root, root, configDir: ".pi", panel: [], profile: () => ({ thinking: "high", timeoutMs: 60_000 }), runProcess: runner });
+  return new PlanningSession({ cwd: root, root, configDir: ".pi", panel: [], profile: () => ({ thinking: "high" }), runProcess: runner });
 }
 
 test("a plan left without saving it is a previous plan: listed, archived, deleted; saved as a task, it is flagged and leaves the list", async () => {
@@ -45,7 +45,7 @@ test("a plan left without saving it is a previous plan: listed, archived, delete
   archivePlan(root, ".pi", left.id, false);
   assert.deepEqual(previousPlans(root, ".pi").map((plan) => plan.id), [left.id]);
 
-  const restored = PlanningSession.restore({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high", timeoutMs: 60_000 }) }, readPlan(root, ".pi", left.id)!.snapshot);
+  const restored = PlanningSession.restore({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high" }) }, readPlan(root, ".pi", left.id)!.snapshot);
   assert.equal(restored.id, left.id, "carried on, it is the same plan");
   assert.equal(restored.reply?.plan?.includes("Add the button"), true);
 

@@ -239,7 +239,7 @@ test("implement with assignments runs domains in parallel and hands shared files
     }
     client.close();
     active -= 1;
-    return { exitCode: 0, stdout: reply(report), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: reply(report), stderr: "", killed: false };
   };
   const deps: WorkflowDeps = {
     root,

@@ -4,9 +4,9 @@ import { runAgent, type AgentRequest } from "../src/execution/agent-runner.ts";
 import type { ProcessOutcome, ProcessRunner } from "../src/execution/pi-runner.ts";
 import { agentProfile, resolveConfig } from "../src/schemas/configuration.ts";
 
-const outcome = (stdout: string): ProcessOutcome => ({ exitCode: 0, stdout, stderr: "", killed: false, timedOut: false });
+const outcome = (stdout: string): ProcessOutcome => ({ exitCode: 0, stdout, stderr: "", killed: false });
 const failing = (errorMessage: string) => JSON.stringify({ type: "message_end", message: { role: "assistant", content: [], stopReason: "error", errorMessage } });
-const request: AgentRequest = { taskId: "T", domain: "backend", role: "worker", instruction: "Do it", context: { task: "x" }, timeoutMs: 1000, cwd: process.cwd(), model: "primary/x", thinking: "high" };
+const request: AgentRequest = { taskId: "T", domain: "backend", role: "worker", instruction: "Do it", context: { task: "x" }, cwd: process.cwd(), model: "primary/x", thinking: "high" };
 
 test("legacy fallback keys are ignored without rejecting valid primary settings", () => {
   const entry = { model: "primary/x", thinking: "high", fallbackModel: "other/y", fallbackThinking: "low", instructions: "keep me" };

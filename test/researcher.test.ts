@@ -110,7 +110,7 @@ test("isResearchResultUsable needs at least one finding and one source", () => {
 
 test("runResearch maps a canned report to an outcome and persists it", async () => {
   const taskDir = mkdtempSync(join(tmpdir(), "dh-research-"));
-  const runner: ProcessRunner = async () => ({ exitCode: 0, stdout: reply(WELL_FORMED), stderr: "", killed: false, timedOut: false });
+  const runner: ProcessRunner = async () => ({ exitCode: 0, stdout: reply(WELL_FORMED), stderr: "", killed: false });
   const outcome = await runResearch(
     { taskId: "TASK-1", domain: "backend", instruction: "Does pi support web search?", cwd: process.cwd(), taskDir, config: DEFAULT_CONFIG },
     runner,
@@ -132,7 +132,6 @@ test("a sourceless or failed research run is marked unusable", async () => {
     stdout: reply("## Question\nWhy?\n\n## Findings\n- a claim\n\n## Confidence\nHigh"),
     stderr: "",
     killed: false,
-    timedOut: false,
   });
   const weak = await runResearch(
     { taskId: "TASK-2", domain: "qa", instruction: "What changed?", cwd: process.cwd(), taskDir, config: DEFAULT_CONFIG },
@@ -142,7 +141,7 @@ test("a sourceless or failed research run is marked unusable", async () => {
   assert.match(weak.issues.join("; "), /no sources reported/);
   assert.deepEqual(weak.result.sources, []);
 
-  const failed: ProcessRunner = async () => ({ exitCode: 1, stdout: "", stderr: "boom", killed: false, timedOut: false });
+  const failed: ProcessRunner = async () => ({ exitCode: 1, stdout: "", stderr: "boom", killed: false });
   const broken = await runResearch(
     { taskId: "TASK-3", domain: "designer", instruction: "Any trends?", cwd: process.cwd(), taskDir, config: DEFAULT_CONFIG },
     failed,

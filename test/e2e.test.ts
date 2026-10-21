@@ -24,7 +24,6 @@ test("backend scout runs in an isolated pi process", { skip: !enabled, timeout: 
     role: "scout",
     instruction: "List the top-level files of this repository in one short paragraph. Do not modify anything.",
     context: { task: "Verify the bot-lobby agent runner works end to end." },
-    timeoutMs: 240_000,
     cwd: process.cwd(),
   });
   assert.equal(run.status, "success", `expected success, got ${run.status}: ${run.error ?? ""}`);

@@ -20,7 +20,7 @@ import { triageContext } from "../classifier/triage.ts";
 import { qaStillDue, rosterWords } from "../workflow/track.ts";
 import { previousTaskNote } from "./fresh-context.ts";
 import { skippedStepsNote } from "./plan-checklist.ts";
-import { budgetLine, budgetState, clockTask, pauseClocks, readBudget, resumeClocks, startClock, stopClocks, turnStarted } from "../state/budget.ts";
+import { clockTask, pauseClocks, resumeClocks, startClock, stopClocks, turnStarted } from "../state/work-clock.ts";
 
 /** Tools that wait on the user: the task's clock waits with them. */
 const ASKING_TOOLS: ReadonlySet<string> = new Set(["ask_user_question"]);
@@ -28,22 +28,9 @@ const ASKING_TOOLS: ReadonlySet<string> = new Set(["ask_user_question"]);
 /** States in which the triage still helps the Master shape the task; once it is planned, the hints are noise. */
 const SHAPING_STATES: ReadonlySet<TaskState> = new Set(["created", "clarifying", "scouting", "synthesizing", "awaiting_approval"]);
 
-/** The Master's workflow context: the task's state, where its time budget stands, and the classifier's triage while the task is being shaped. */
-export function masterWorkflowContext(task: Task, time = ""): string {
-  return [describeTask(task), time, SHAPING_STATES.has(task.state) ? triageContext(task.triage) : ""].filter(Boolean).join("\n\n");
-}
-
-/** The oracle's view of the task's time budget: where it stands and how to spend it; "" without one. */
-export function budgetContext(root: string, configDir: string, task: Task): string {
-  const budget = readBudget(root, configDir, task.id);
-  if (!budget) return "";
-  const state = budgetState(task.id, budget, !qaStillDue(task));
-  const running = budget.allotments.filter((entry) => !entry.endedAt).map((entry) => `${entry.who} (${entry.minutes}m)`);
-  return [
-    budgetLine(budget, state),
-    running.length > 0 ? `Running now: ${running.join(", ")}.` : "",
-    "Divide what is left by scope: pass `minutes` on each implement (per assignment in a parallel batch), keeping the QA gate's reserve. Every agent is told its minutes; one that runs out reports where it left off and the user decides on more.",
-  ].filter(Boolean).join(" ");
+/** The Master's workflow context: the task's state, and the classifier's triage while the task is being shaped. */
+export function masterWorkflowContext(task: Task): string {
+  return [describeTask(task), SHAPING_STATES.has(task.state) ? triageContext(task.triage) : ""].filter(Boolean).join("\n\n");
 }
 
 export function masterTaskContext(task: Task, comments: readonly PlanComment[] = [], auto = false): string {
@@ -84,7 +71,7 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
   });
 
 
-  // A task's work time (and its time budget) counts while the oracle works on it, not while it waits on the user.
+  // A task's work time counts while the oracle works on it, not while it waits on the user.
   const asking = new Set<string>();
   pi.on("agent_start", (_event, ctx) => {
     if (isSubagentProcess()) return;
@@ -150,7 +137,7 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
       knowledge: selected.knowledge,
       decisions: selected.decisions,
       scripts: dataRoots[0] ? libraryBlock(dataRoots[0]) : "",
-      workflowContext: masterWorkflowContext(task, budgetContext(root, configDir, task)),
+      workflowContext: masterWorkflowContext(task),
       instructions: loadConfig().master.instructions,
     });
   });

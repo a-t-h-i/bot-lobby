@@ -95,7 +95,6 @@ export interface RunLogEntry {
   cost?: number;
   attempts?: number;
   stalled?: boolean;
-  wrappedUp?: boolean;
   error?: string;
   /** The classifier routed this run down from this configured profile. */
   routedFrom?: string;

@@ -218,10 +218,10 @@ test("a routed job skips the 'looks like a task' hold and runs on its builder's 
   const runner: ProcessRunner = async (args) => {
     const at = (flag: string) => { const index = args.indexOf(flag); return index >= 0 ? String(args[index + 1]) : undefined; };
     seen.push({ model: at("--model"), thinking: at("--thinking") });
-    return { exitCode: 0, stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "## Done\nx" }], stopReason: "stop" } }), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "## Done\nx" }], stopReason: "stop" } }), stderr: "", killed: false };
   };
-  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ model: "p/quick", thinking: "low", timeoutMs: 60_000 }), runProcess: runner });
-  const job = queue.submit(HOURGLASS, Date.now(), { force: true, profile: { model: "p/design", thinking: "high", timeoutMs: 900_000 }, note: "The oracle sent your request here." });
+  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ model: "p/quick", thinking: "low" }), runProcess: runner });
+  const job = queue.submit(HOURGLASS, Date.now(), { force: true, profile: { model: "p/design", thinking: "high" }, note: "The oracle sent your request here." });
   for (let i = 0; i < 50 && job.status !== "success"; i++) await new Promise((resolve) => setTimeout(resolve, 5));
   assert.equal(job.status, "success");
   assert.equal(job.routed, true);

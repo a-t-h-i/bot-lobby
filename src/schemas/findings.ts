@@ -54,10 +54,6 @@ export interface WorkerResult {
   domain: Domain;
   role: "worker";
   completed: string;
-  /** Stopped for time: what it was doing and what is still to do. */
-  leftOff?: string;
-  /** Stopped for time: the minutes it asks for, and why. */
-  moreTime?: { minutes?: number; reason: string };
   filesChanged: FileChange[];
   verification: string;
   notes: string;
@@ -157,8 +153,6 @@ export interface AgentRun {
   thinking?: string;
   /** Killed by the stall watchdog after going silent. */
   stalled?: boolean;
-  /** Asked to wrap up before its deadline; the report may be partial. */
-  wrappedUp?: boolean;
   /** File this worker is queued for at the file desk. */
   waitingFor?: string;
   /** The classifier routed this run down: the configured profile it came from (`p/big · medium`). */
@@ -167,10 +161,4 @@ export interface AgentRun {
   route?: string;
   /** Files the run changed with `edit`/`write`, absolute, across its attempts. */
   edited?: string[];
-  /** Under a task time budget: the time it was given, when that runs out (epoch ms), and any granted since. */
-  allotMs?: number;
-  endsAt?: number;
-  extendedMs?: number;
-  /** Stopped at its allotted time and not given more: its report says where it left off. */
-  timeUp?: boolean;
 }

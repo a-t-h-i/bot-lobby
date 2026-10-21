@@ -266,7 +266,7 @@ export class LobbyFeed {
       if (run.status !== "running") this.settleThought(key);
       if (run.status !== "running" && before !== run.status) {
         this.settle(undefined, key);
-        const kind: ActivityKind = run.status === "success" ? (run.wrappedUp ? "warning" : "success") : run.status === "cancelled" ? "warning" : "error";
+        const kind: ActivityKind = run.status === "success" ? "success" : run.status === "cancelled" ? "warning" : "error";
         this.log(source, `${run.role} ${run.status === "success" ? "finished" : run.status}${run.error ? ` — ${run.error.split("\n")[0]}` : ""}`, kind, at);
       }
     }

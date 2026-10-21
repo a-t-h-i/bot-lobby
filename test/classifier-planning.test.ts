@@ -73,8 +73,8 @@ function panelRunner(answers: Record<string, string | undefined>, seen: Array<{ 
     const who = /You are (DEV|DESIGN|QA|RESEARCH) on the planning panel/.exec(prompt)?.[1] ?? "ORACLE";
     seen.push({ who, prompt });
     const text = answers[who];
-    if (text === undefined) return Promise.resolve({ exitCode: 1, stdout: "", stderr: `${who} crashed`, killed: false, timedOut: false });
-    return Promise.resolve({ exitCode: 0, stdout: reply(text), stderr: "", killed: false, timedOut: false });
+    if (text === undefined) return Promise.resolve({ exitCode: 1, stdout: "", stderr: `${who} crashed`, killed: false });
+    return Promise.resolve({ exitCode: 0, stdout: reply(text), stderr: "", killed: false });
   };
 }
 
@@ -120,7 +120,7 @@ test("the classifier seats only the members the idea touches, pinned seats alway
   const session = new PlanningSession({
     cwd: root, root, configDir: ".pi", feed,
     panel: ["backend", "designer", "qa", "researcher"],
-    profile: () => ({ thinking: "high", timeoutMs: 60_000 }),
+    profile: () => ({ thinking: "high" }),
     runProcess: panelRunner(answers, seen),
     classifier: jev(fakeJev({ backend: 0.92, designer: 0.05, qa: 0.5, researcher: 0.1 }, { "Which browsers must pass?": ["Evergreen", 0.96] }, calls)),
   });
@@ -164,7 +164,7 @@ test("when the classifier settles every question the panel continues once on its
   const oracle = "## Status\nGRILLING\n## Questions\n1. [QA] Which browsers must pass?\n   - Evergreen (Recommended) — modern\n   - All — IE too\n## Plan\n### Steps\n1. x";
   const session = new PlanningSession({
     cwd: root, root, configDir: ".pi", panel: [],
-    profile: () => ({ thinking: "high", timeoutMs: 60_000 }),
+    profile: () => ({ thinking: "high" }),
     runProcess: panelRunner({ ORACLE: oracle }, seen),
     classifier: jev(fakeJev({}, { "Which browsers must pass?": ["Evergreen", 0.97] }, calls)),
   });
@@ -186,7 +186,7 @@ test("with the classifier off or failing, every seat sits and every question is 
     const seen: Array<{ who: string; prompt: string }> = [];
     const session = new PlanningSession({
       cwd: root, root, configDir: ".pi", panel: ["backend", "qa"],
-      profile: () => ({ thinking: "high", timeoutMs: 60_000 }),
+      profile: () => ({ thinking: "high" }),
       runProcess: panelRunner({ DEV: "## Status\nOPEN", QA: "## Status\nOPEN", ORACLE: oracle }, seen),
       classifier,
     });

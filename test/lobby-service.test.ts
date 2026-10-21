@@ -124,7 +124,7 @@ test("force close cancels an actual workflow worker signal and rejects unsupport
     runProcess: async (_args, options) => {
       started();
       await new Promise<void>((resolve) => options.signal!.addEventListener("abort", () => { cancelled = true; resolve(); }, { once: true }));
-      return { exitCode: 1, stdout: "", stderr: "cancelled", killed: true, timedOut: false };
+      return { exitCode: 1, stdout: "", stderr: "cancelled", killed: true };
     },
   });
   await ready; await service.forceCloseTask!(task.id, task.title);
