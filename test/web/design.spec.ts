@@ -61,7 +61,7 @@ test("switching tabs pours the colour along the connectors like a straw, runs it
   const links = run.frames[0]!.liquid.length;
   const wet = new Set(run.frames.flatMap((frame: any) => frame.liquid.map((width: number, n: number) => (width > 1 ? n : -1)).filter((n: number) => n >= 0)));
   expect(links, "dotted connectors join the tabs").toBeGreaterThan(3);
-  expect(wet.size, "the colour flows through every connector between Lobby and Git").toBeGreaterThanOrEqual(4);
+  expect(wet.size, "the colour flows through every connector between Lobby and Git").toBeGreaterThanOrEqual(3);
   expect(run.frames.some((frame: any) => frame.drain > 2 && frame.drain < run.from - 2), "Lobby drains into the straw").toBe(true);
   expect(run.frames.some((frame: any) => frame.unring.amount > 0.05 && frame.unring.amount < 0.95 && frame.unring.port === "right"), "and its ring is sucked back round to the side the straw leaves from").toBe(true);
   // The ring starts on Git's left, where the colour comes in, only once the colour has reached the connector beside it.
@@ -128,7 +128,7 @@ test("each tab's icon plays an animation of its own when the pointer comes onto 
   await page.setViewportSize({ width: 1440, height: 900 });
   const ids = await page.locator('[role="tab"] svg[data-tab-icon]').evaluateAll((icons: any[]) => icons.map((icon) => icon.dataset.tabIcon));
   expect(ids, "every tab has its own icon").toEqual(["lobby", "tasks", "plan", "git", "knowledge"]);
-  await expect(page.locator('svg[data-tab-icon][data-play="0"]'), "resting until something happens").toHaveCount(6);
+  await expect(page.locator('svg[data-tab-icon][data-play="0"]'), "resting until something happens").toHaveCount(5);
   // Hovering Tasks ticks its boxes: the strokes are drawn again from nothing, then the icon rests as Lucide draws it.
   await page.getByRole("tab", { name: /Tasks/ }).hover();
   const ticks = await iconFrames(page, "tasks", 900);
@@ -161,7 +161,7 @@ test("under reduced motion the tab icons stay still", async ({ page, server }) =
   await page.getByRole("tab", { name: /Tasks/ }).hover();
   await page.getByRole("tab", { name: /Git/ }).click();
   await page.waitForTimeout(500);
-  await expect(page.locator('svg[data-tab-icon][data-play="0"]'), "no icon plays").toHaveCount(8);
+  await expect(page.locator('svg[data-tab-icon][data-play="0"]'), "no icon plays").toHaveCount(5);
 });
 
 test("under reduced motion the fill and the ring simply move, with no flow and no knock", async ({ page, server }) => {
@@ -1138,7 +1138,7 @@ test("the bar is one row when the project, the tabs and the tools fit, and puts 
   await page.setViewportSize({ width: 1600, height: 900 });
   expect(await rows(), "wide: one row").toBe(1);
   // The bar holds only the tabs and the session's state (the app's switches live in the sidebar), so it takes a narrow window to split it.
-  await page.setViewportSize({ width: 960, height: 900 });
+  await page.setViewportSize({ width: 620, height: 900 });
   expect(await rows(), "narrower: the tabs drop to their own row").toBe(2);
   const scroller = page.getByRole("tablist").locator("..");
   expect(await scroller.evaluate((el: any) => el.scrollWidth <= el.clientWidth + 1), "and show in full").toBe(true);

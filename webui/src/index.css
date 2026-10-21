@@ -1003,6 +1003,8 @@
 .chat-prose { min-width: 0; font-size: 0.9375rem; line-height: 1.65; color: var(--foreground); }
 .chat-meta { min-height: 1rem; font-size: 0.6875rem; color: var(--muted-foreground); font-variant-numeric: tabular-nums; opacity: 0; transition: opacity 150ms ease; }
 .group\/msg:is(:hover, :focus-within) .chat-meta { opacity: 1; }
+/* Who a message went to (`to Design`) stays in view, so the reply below it reads in context. */
+.chat-meta[data-note] { opacity: 1; }
 @media (hover: none) { .chat-meta { opacity: 1; } }
 /* The oracle's crystal ball, a picture rather than a line icon. */
 /* Adapted from T3 Code (MIT), MessagesTimeline.tsx: your words in a soft filled block on the right, round on every corner. */

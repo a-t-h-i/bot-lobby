@@ -46,7 +46,7 @@ export function YourMessage({ time, head: _head, note, children, below, actions 
     <div className="group/msg flex flex-col items-end gap-1">
       <div className="chat-bubble">{children}</div>
       {time || note || actions ? (
-        <div className="chat-meta flex items-center gap-2">
+        <div className="chat-meta flex items-center gap-2" data-note={note ? "" : undefined}>
           {actions}
           {note ? <span>{note}</span> : null}
           {time ? <time className="tabular-nums">{time}</time> : null}

@@ -107,7 +107,7 @@ async function expectShell(page: Page, tabs: number): Promise<void> {
   const project = page.getByRole("combobox", { name: "Project", exact: true });
   await expect(project, "the project, over the composer").toBeVisible();
   await expect(project).toContainText("bot-lobby");
-  await expect(page.getByRole("tab"), `eight pills`).toHaveCount(tabs);
+  await expect(page.getByRole("tab"), `five pills`).toHaveCount(tabs);
   await expect(page.locator("#main"), "main pane").toBeVisible();
   await expect(page.getByLabel("Message the team"), "composer").toBeVisible();
 }
@@ -124,7 +124,7 @@ for (const scenario of SCENARIOS) {
     }
     for (const size of SIZES) {
       await page.setViewportSize(size);
-      await expectShell(page, 8);
+      await expectShell(page, 5);
       await expectNoSidewaysScroll(page);
     }
     expect(cspErrors(trap), "no CSP violations").toEqual([]);
