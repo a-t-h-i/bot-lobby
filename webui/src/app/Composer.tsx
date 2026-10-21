@@ -8,10 +8,13 @@
  * strip tucked under the box carries the project (its explorer opens from
  * there) and the key hints. It grows with what you type up to a cap, takes images, PDFs and
  * other files (pick, paste or drop them) and sends Markdown to whoever the page
- * talks to, with no picker: the oracle on Lobby and Tasks, the docs on
- * Knowledge, the planning panel on Plan, a quick fix on Quick fix, a comment
- * on the open task's plan on Tasks. While a pop-up is open it
- * steps aside, so only one thing asks for you at a time.
+ * talks to, with no picker: the team's chat on Lobby and Tasks, the docs on
+ * Knowledge, the planning panel on Plan, a comment on the open task's plan on
+ * Tasks. In the chat, a message that starts with `@` names the agent who
+ * answers and one that starts with `/` is a command (`/plan`, `/task`); a
+ * drawer of suggestions rises out of the box while you type either (see
+ * ./composer/ComposerCommandMenu). While a pop-up is open it steps aside, so
+ * only one thing asks for you at a time.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type RefObject } from "react"
 import { AnimatePresence, motion } from "motion/react"
@@ -32,7 +35,7 @@ import { cn } from "@/lib/utils"
 import { projectUrl } from "@/lib/project"
 import type { LobbySnapshot, StatusInfo, UploadInfo } from "@protocol"
 import { useTopic } from "./hooks"
-import { go, parseHash, type Route } from "./router"
+import { go, parseHash, tabHash, type Route } from "./router"
 import { knowledgeHash } from "./knowledgeView"
 import { KnowledgePaneToggle } from "./KnowledgePaneToggle"
 import { ProjectSwitcher, type Projects } from "./ProjectSwitcher"
@@ -40,8 +43,9 @@ import { taskRoute } from "./taskRoute"
 import { ComposerSurface } from "./composer/ComposerSurface"
 import { ComposerControl } from "./composer/ComposerControl"
 import { ComposerSendButton, ComposerStopButton } from "./composer/ComposerPrimaryActions"
+import { ComposerCommandMenu, composerItems, composerSuggestionOptionId, composerTrigger, type ComposerCommandItem } from "./composer/ComposerCommandMenu"
 
-type TargetId = "oracle" | "knowledge" | "panel" | "quickfix" | "comment"
+type TargetId = "oracle" | "knowledge" | "panel" | "comment"
 
 interface Target {
   id: TargetId
@@ -51,10 +55,10 @@ interface Target {
   taskId?: string
 }
 
-const ORACLE: Target = { id: "oracle", label: "Message the oracle", placeholder: "Message the oracle…" }
+const ORACLE: Target = { id: "oracle", label: "Message the team", placeholder: "Message the team… @ picks who answers, / for /plan and /task" }
 
 /** The tabs that carry the composer; everywhere else it stays mounted (drafts and uploads survive) but hidden and inert. */
-const COMPOSER_TABS: ReadonlySet<string> = new Set(["lobby", "tasks", "plan", "quickfix", "knowledge"])
+const COMPOSER_TABS: ReadonlySet<string> = new Set(["lobby", "tasks", "plan", "knowledge"])
 
 export function composerVisible(route: Route): boolean {
   return route.kind === "tab" && COMPOSER_TABS.has(route.tab)
@@ -65,7 +69,6 @@ function targetFor(route: Route, openTask: string | undefined): Target {
   if (route.kind !== "tab") return ORACLE
   if (route.tab === "knowledge") return { id: "knowledge", label: "Ask the oracle about this project", placeholder: "Ask about this project — the oracle searches the code and learns what is missing…" }
   if (route.tab === "plan") return { id: "panel", label: "Message the panel", placeholder: "Describe a task, or answer the panel…" }
-  if (route.tab === "quickfix") return { id: "quickfix", label: "Describe a quick fix", placeholder: "Describe a small change…" }
   const task = route.tab === "tasks" ? taskRoute(route.rest).id ?? openTask : undefined
   return task ? { id: "comment", label: `Comment on ${task}`, placeholder: `Comment on ${task}'s plan…`, taskId: task } : ORACLE
 }
@@ -207,6 +210,25 @@ export function Composer({ route, keys, projects, onHelp }: { route: Route; keys
   const filesRef = useRef(files)
   filesRef.current = files
   const selection = useRef<{ start: number; end: number } | undefined>(undefined)
+  // The `/command` or `@agent` drawer: where the caret is, which row is lit, and the text Esc closed it for.
+  const [caret, setCaret] = useState(0)
+  const [activeItem, setActiveItem] = useState<string | null>(null)
+  const [dismissedFor, setDismissedFor] = useState<string | undefined>(undefined)
+  const trigger = target.id === "oracle" ? composerTrigger(text, caret) : undefined
+  const menuItems = useMemo(() => (trigger ? composerItems(trigger) : []), [trigger?.kind, trigger?.query])
+  const menuOpen = Boolean(trigger) && menuItems.length > 0 && dismissedFor !== text && visible && !blocked
+  const lit = menuOpen ? (menuItems.find((item) => item.id === activeItem) ?? menuItems[0]!) : undefined
+  const listId = "composer-suggestions"
+  const pick = useCallback((item: ComposerCommandItem) => {
+    const rest = text.replace(/^\s*[/@][a-z]*\s*/i, "")
+    const value = `${item.insert} ${rest}`
+    const end = item.insert.length + 1
+    selection.current = { start: end, end }
+    setCaret(end)
+    setText(value)
+    setActiveItem(null)
+    field.current?.focus()
+  }, [text])
 
   // After a Markdown edit the selection goes where the edit says (the text is controlled, so it must be set after the render).
   useLayoutEffect(() => {
@@ -219,6 +241,7 @@ export function Composer({ route, keys, projects, onHelp }: { route: Route; keys
 
   const edit = useCallback((change: Edit) => {
     selection.current = { start: change.start, end: change.end }
+    setCaret(change.end)
     setText(change.value)
   }, [])
 
@@ -292,12 +315,12 @@ export function Composer({ route, keys, projects, onHelp }: { route: Route; keys
       if (target.id === "oracle") {
         const result = await call("lobby.send", body)
         if (result.notice) toast(result.notice)
+        if (result.open === "plan") go(tabHash("plan"))
       } else if (target.id === "knowledge") {
         done = (await act("knowledge.ask", body)) !== undefined
         const now = parseHash(window.location.hash)
         if (done && now?.kind === "tab" && now.tab === "knowledge") go(knowledgeHash(now.rest, true))
       } else if (target.id === "panel") done = (await act("planner.send", body)) !== undefined
-      else if (target.id === "quickfix") done = (await act("quickfix.submit", body)) !== undefined
       else done = (await act("tasks.comment", { taskId: target.taskId!, ...body })) !== undefined
       if (done) {
         setText("")
@@ -320,6 +343,26 @@ export function Composer({ route, keys, projects, onHelp }: { route: Route; keys
   }, [])
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (menuOpen && lit && !event.nativeEvent.isComposing) {
+      const at = menuItems.indexOf(lit)
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault()
+        const next = (at + (event.key === "ArrowDown" ? 1 : -1) + menuItems.length) % menuItems.length
+        setActiveItem(menuItems[next]!.id)
+        return
+      }
+      if ((event.key === "Enter" && !event.shiftKey) || event.key === "Tab") {
+        event.preventDefault()
+        pick(lit)
+        return
+      }
+      if (event.key === "Escape") {
+        // Esc closes the drawer first; the next one leaves the box.
+        event.preventDefault()
+        setDismissedFor(text)
+        return
+      }
+    }
     if (event.key === "Escape" && !event.nativeEvent.isComposing) {
       // Esc leaves the box (what you typed stays) for the tab bar.
       event.preventDefault()
@@ -419,6 +462,21 @@ export function Composer({ route, keys, projects, onHelp }: { route: Route; keys
       inert={blocked || !visible}
     >
       <ComposerSurface.Shell contextStrip className="composer-shell pointer-events-auto">
+        <AnimatePresence initial={false}>
+          {menuOpen && trigger && lit ? (
+            <motion.div
+              key="commands"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 6 }}
+              transition={EASE}
+              data-composer-drawer-layer="true"
+              className="absolute inset-x-(--chat-composer-drawer-inset) bottom-full z-0 -mb-[calc(1rem+1px)] flex flex-col"
+            >
+              <ComposerCommandMenu listId={listId} items={menuItems} triggerKind={trigger.kind} activeItemId={lit.id} onHighlightedItemChange={setActiveItem} onSelect={pick} />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
         <ComposerSurface.Host onPointerDown={expand}>
           <div className="relative z-10">
             <ComposerSurface.Main
@@ -468,8 +526,14 @@ export function Composer({ route, keys, projects, onHelp }: { route: Route; keys
                       ref={field}
                       id="composer-text"
                       aria-label={target.label}
+                      {...(target.id === "oracle" ? { role: "combobox", "aria-autocomplete": "list" as const, "aria-expanded": menuOpen, "aria-controls": menuOpen ? listId : undefined } : {})}
+                      {...(lit ? { "aria-activedescendant": composerSuggestionOptionId(listId, lit.id) } : {})}
                       value={text}
-                      onChange={(event) => setText(event.target.value)}
+                      onChange={(event) => {
+                        setText(event.target.value)
+                        setCaret(event.target.selectionStart)
+                      }}
+                      onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
                       onKeyDown={onKeyDown}
                       onPaste={onPaste}
                       placeholder={busy && target.id === "oracle" ? "The oracle is working. Enter steers it…" : target.placeholder}

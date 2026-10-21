@@ -19,7 +19,7 @@ import { dataRoot } from "../state/project.ts";
 import type { Classifier } from "../classifier/classifier.ts";
 import { readLine, readPull, type PullRead } from "../classifier/review.ts";
 import type { LobbyFeed } from "./feed.ts";
-import type { QuickFixProfile } from "./quickfix.ts";
+import type { LobbyRunProfile } from "./profile.ts";
 import { pullDiff, viewPull, type PullDetail } from "./pulls.ts";
 import type { Exec } from "./issues.ts";
 
@@ -75,7 +75,7 @@ export interface PullReviewDeps {
   configDir: string;
   exec: Exec;
   /** QA's model, thinking and grants, read as a review starts. */
-  profile: () => QuickFixProfile;
+  profile: () => LobbyRunProfile;
   stallTimeoutMs?: number;
   toolStallTimeoutMs?: number;
   feed?: LobbyFeed;

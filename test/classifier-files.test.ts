@@ -10,7 +10,7 @@ import { ANY_RELEVANT_FLOOR, BATCH_SIZE, FIND_FILES_TOOL, excerptOf, excludedBy,
 import { findRelevantFiles, formatLikely, registerClassifierTools } from "../src/classifier/tools.ts";
 import { DEFAULT_CONFIG, type ClassifierConfig } from "../src/schemas/configuration.ts";
 import { runScouts, runWorker } from "../src/master/master.ts";
-import { QuickFixQueue } from "../src/lobby/quickfix.ts";
+import { ChatAgents } from "../src/lobby/chat-agents.ts";
 import { PlanningSession } from "../src/lobby/planner.ts";
 import type { ProcessRunner } from "../src/execution/pi-runner.ts";
 
@@ -220,14 +220,14 @@ test("scouts and workers start with their likely files and may look more up; the
   assert.doesNotMatch(seen[2]!.system, /## Likely files/);
 });
 
-test("a quick fix and a planning round get their likely files too", async () => {
+test("a lobby chat reply and a planning round get their likely files too", async () => {
   const root = tempDir();
   const seen: Array<{ tools: string; system: string; task: string }> = [];
-  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), runProcess: recorder("## Done\nx", seen), hints: HINTS });
-  queue.submit("rename getUser");
-  for (let i = 0; i < 20 && queue.running; i++) await new Promise((resolve) => setTimeout(resolve, 5));
+  const chat = new ChatAgents({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), history: () => [], runProcess: recorder("Renamed.", seen), hints: HINTS });
+  chat.submit("backend", "rename getUser", "you named @dev");
+  for (let i = 0; i < 20 && chat.busy; i++) await new Promise((resolve) => setTimeout(resolve, 5));
   await new Promise((resolve) => setTimeout(resolve, 10));
-  assert.match(seen[0]!.task, /^Task: rename getUser\n\n## Likely files/);
+  assert.match(seen[0]!.task, /^Task: ## Message\n\nrename getUser\n\n## Likely files/);
   assert.ok(seen[0]!.tools.split(",").includes(FIND_FILES_TOOL));
 
   const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: ["qa"], profile: () => ({ thinking: "high" }), runProcess: recorder("## Status\nREADY\n## Plan\n1. x", seen), hints: HINTS });

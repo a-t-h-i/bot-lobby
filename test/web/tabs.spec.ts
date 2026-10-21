@@ -45,11 +45,6 @@ const ROUTES: RouteCheck[] = [
     empty: "Plan with the panel",
   },
   {
-    route: "#/quickfix",
-    full: ["Fix the typo in the header"],
-    empty: "Describe a small change",
-  },
-  {
     route: "#/metrics",
     full: ["mock-model"],
     empty: "No runs recorded yet.",

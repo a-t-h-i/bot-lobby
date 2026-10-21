@@ -14,7 +14,6 @@ import { statusGet } from "./status.ts";
 import { lobbyAbort, lobbyHistory, lobbySend, lobbySnapshot } from "./lobby.ts";
 import { promptsAnswer, promptsDismiss, promptsList } from "./prompts.ts";
 import { plannerAnswer, plannerCommentLine, plannerGet, plannerNew, plannerRetry, plannerSend, plannerEditMessage, plannerToggleSeat, plannerSave, plannerPrevious, plannerPreviousArchive, plannerPreviousDelete, plannerPreviousGet, plannerPreviousOpen } from "./planner.ts";
-import { quickfixCancel, quickfixList, quickfixMovedToTask, quickfixRunAnyway, quickfixSubmit } from "./quickfix.ts";
 import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksEditComment, tasksGet, tasksList, tasksMessage, tasksRestore, tasksOpen, tasksResume, tasksDeliveryReview, tasksDeliveryDefer, tasksDeliver, tasksAccept, tasksSkipStep, tasksForceClose, tasksResolveApproval } from "./tasks.ts";
 import { knowledgeAdd, knowledgeAsk, knowledgeComment, knowledgeEdit, knowledgeFiles, knowledgeOpen, knowledgeRemove, knowledgeReplaceFile, knowledgeUnnote } from "./knowledge.ts";
 import { plansDiscard, plansGet, plansStart } from "./plans.ts";
@@ -296,23 +295,6 @@ function buildRoutes(): Record<string, Route> {
   routes["planner.previousArchive"] = { schema: Type.Object({ id: PlanId, archived: Type.Boolean() }, { additionalProperties: false }), run: (body, ctx) => plannerPreviousArchive(body as { id: string; archived: boolean }, ctx) };
   routes["planner.previousDelete"] = { schema: Type.Object({ id: PlanId }, { additionalProperties: false }), run: (body, ctx) => plannerPreviousDelete(body as { id: string }, ctx) };
   routes["planner.previousOpen"] = { schema: Type.Object({ id: PlanId }, { additionalProperties: false }), run: (body, ctx) => plannerPreviousOpen(body as { id: string }, ctx) };
-  routes["quickfix.list"] = { schema: Empty, run: (_body, ctx) => quickfixList(ctx) };
-  routes["quickfix.submit"] = {
-    schema: Type.Object({ text: NoticeText, attachments: Attachments }, { additionalProperties: false }),
-    run: (body, ctx) => quickfixSubmit(body as { text: string; attachments?: string[] }, ctx),
-  };
-  routes["quickfix.cancel"] = {
-    schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
-    run: (body, ctx) => quickfixCancel(body as { id: string }, ctx),
-  };
-  routes["quickfix.runAnyway"] = {
-    schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
-    run: (body, ctx) => quickfixRunAnyway(body as { id: string }, ctx),
-  };
-  routes["quickfix.movedToTask"] = {
-    schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
-    run: (body, ctx) => quickfixMovedToTask(body as { id: string }, ctx),
-  };
   routes["knowledge.files"] = { schema: Empty, run: (_body, ctx) => knowledgeFiles(ctx) };
   routes["knowledge.ask"] = {
     schema: Type.Object({ text: NoticeText, attachments: Attachments }, { additionalProperties: false }),

@@ -76,7 +76,7 @@ for (const width of [1280, 768]) {
     await expect(page.getByRole("region", { name: "In progress", exact: true })).toContainText("Working task");
     await expect(page.getByRole("region", { name: "Completed", exact: true })).toContainText("Finished task");
     await expect(page.locator("#main")).not.toContainText("Hidden archive");
-    await expect(page.getByRole("textbox", { name: "Message the oracle" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Message the team" })).toBeVisible();
     await page.getByRole("tab", { name: "List", exact: true }).click();
     await expect(page).toHaveURL(/#\/tasks$/);
   });

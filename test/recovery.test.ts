@@ -5,8 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ProcessOutcome, ProcessRunner } from "../src/execution/pi-runner.ts";
 import { PlanningSession, STOPPED_WITH_PI, type PlanningSnapshot } from "../src/lobby/planner.ts";
-import { QuickFixQueue, INTERRUPTED_NOTE, type QuickFixJob } from "../src/lobby/quickfix.ts";
-import { recover, stoppedJob, stoppedSnapshot, WindowKeeper, type Relaunch } from "../src/lobby/recovery.ts";
+import { recover, stoppedSnapshot, WindowKeeper, type Relaunch } from "../src/lobby/recovery.ts";
 import type { BackgroundSession } from "../src/lobby/sessions.ts";
 import { readSessionState, recoveryDir, stoppedWindows, writeSessionState } from "../src/state/recovery.ts";
 import { createTask, type Task } from "../src/schemas/task.ts";
@@ -70,23 +69,6 @@ test("a planning round pi stopped in the middle of comes back with the conversat
   assert.equal(quiet.reply, undefined, "nothing ran on its own");
 });
 
-test("a quick fix pi cut off runs again first, told its edits may be half done; finished ones stay as they ended", async () => {
-  const root = temp();
-  const prompts: string[] = [];
-  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), runProcess: runner("## Done", prompts) });
-  const job = (id: string, status: QuickFixJob["status"], prompt: string): QuickFixJob => ({ id, prompt, status, createdAt: 1, steps: [{ at: 1, text: "editing a.ts", pending: true }], tools: 1, turns: 1, force: true });
-  const running = queue.restore([job("QF-1", "success", "rename x"), job("QF-2", "running", "fix the header"), job("QF-3", "queued", "fix the footer")]);
-  assert.deepEqual(running.map((entry) => entry.id), ["QF-2", "QF-3"]);
-  await settle();
-  assert.match(prompts[0]!, /fix the header/);
-  assert.ok(prompts[0]!.includes(INTERRUPTED_NOTE));
-  assert.equal(queue.jobs.find((entry) => entry.id === "QF-1")?.status, "success");
-  assert.equal(queue.submit("another").id, "QF-4", "new jobs number on from the restored ones");
-  queue.restore([job("QF-1", "failed", "from another window")]);
-  assert.equal(new Set(queue.jobs.map((entry) => entry.id)).size, queue.jobs.length, "a second stopped window's ids never clash");
-  assert.equal(stoppedJob(job("QF-5", "queued", "x")).status, "cancelled", "a quit cancels what was waiting");
-});
-
 /** A task some session drives, mid-implementation, waiting on a question that pi took down with it. */
 function drivenTask(root: string, id: string, sessionId: string): Task {
   const task = createTask(id, `Task ${id}`, new Date().toISOString(), `request ${id}`, sessionId);
@@ -102,7 +84,7 @@ function stoppedWindow(root: string, record: Record<string, unknown>): void {
   writeFileSync(join(dir, `${DEAD_PID}-dead.json`), JSON.stringify({ pid: DEAD_PID, token: "dead", startedAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:01.000Z", ...record }));
 }
 
-test("a window that stopped unexpectedly is carried on: its panel, its quick fixes, and every session driving a task", () => {
+test("a window that stopped unexpectedly is carried on: its panel and every session driving a task", () => {
   const root = temp();
   drivenTask(root, "T-window", "S-window");
   drivenTask(root, "T-background", "S-background");
@@ -122,17 +104,14 @@ test("a window that stopped unexpectedly is carried on: its panel, its quick fix
   });
   const snapshot = planner(root, runner("")).snapshot();
   writeSessionState(root, ".pi", "planner", "S-window", { ...snapshot, messages: [{ role: "you", text: "plan this", at: 1 }], running: true });
-  writeSessionState(root, ".pi", "quickfix", "S-window", [{ id: "QF-1", prompt: "fix it", status: "running", createdAt: 1, steps: [], tools: 0, turns: 0 }]);
 
   const relaunched: Relaunch[] = [];
   const restored: PlanningSnapshot[] = [];
-  const jobs: QuickFixJob[] = [];
   const nudges: string[] = [];
   const host = {
     root, configDir: ".pi", sessionId: "S-new",
     relaunch: (start: Relaunch) => { relaunched.push(start); return {} as BackgroundSession; },
     restorePlanner: (kept: PlanningSnapshot) => { restored.push(kept); },
-    restoreQuickFixes: (kept: readonly QuickFixJob[]) => { jobs.push(...kept); return kept.length; },
     nudge: (message: string) => { nudges.push(message); },
   };
   const summary = recover(host);
@@ -140,7 +119,6 @@ test("a window that stopped unexpectedly is carried on: its panel, its quick fix
   assert.equal(restored.length, 1, "the panel came back in the new window");
   assert.equal(restored[0]!.messages[0]!.text, "plan this");
   assert.equal(readSessionState(root, ".pi", "planner", "S-new") !== undefined, true, "and is now kept as the new window's");
-  assert.deepEqual(jobs.map((job) => job.id), ["QF-1"]);
   assert.deepEqual(relaunched.map((start) => [start.taskId, start.sessionFile, Boolean(start.message)]), [
     ["T-window", "/sessions/window.jsonl", true],
     ["T-background", "/sessions/background.jsonl", true],
@@ -152,7 +130,7 @@ test("a window that stopped unexpectedly is carried on: its panel, its quick fix
   const settled = loadTask(root, ".pi", "T-background")!;
   assert.deepEqual(settled.blockingRequestIds, [], "the question pi took down no longer reads as waiting");
   assert.match(settled.decisions.at(-1)!.text, /pi stopped unexpectedly/);
-  assert.match(summary!, /carried on with the planning session, 1 quick fix and tasks T-window, T-background, T-idle/);
+  assert.match(summary!, /carried on with the planning session and tasks T-window, T-background, T-idle/);
   assert.deepEqual(stoppedWindows(root, ".pi"), [], "the stopped window is taken, so no other window carries it on twice");
   assert.equal(recover(host), undefined, "nothing is left to carry on");
 });
@@ -167,7 +145,6 @@ test("the same session started again carries its own task on itself", () => {
     root, configDir: ".pi", sessionId: "S-same",
     relaunch: (start) => { relaunched.push(start); return {} as BackgroundSession; },
     restorePlanner: () => {},
-    restoreQuickFixes: () => 0,
     nudge: (message) => { nudges.push(message); },
   });
   assert.deepEqual(relaunched, []);
@@ -178,7 +155,6 @@ test("the same session started again carries its own task on itself", () => {
 
 test("the keeper keeps a window's work as it changes; a quit removes its record, a stop on a signal keeps it", async () => {
   const root = temp();
-  let jobs: QuickFixJob[] = [{ id: "QF-1", prompt: "fix it", status: "running", createdAt: 1, steps: [], tools: 0, turns: 0 }];
   const session = planner(root, runner("", [], true));
   void session.send("plan this");
   await settle();
@@ -188,26 +164,21 @@ test("the keeper keeps a window's work as it changes; a quit removes its record,
     sessionFile: () => "/sessions/keep.jsonl",
     working: () => true,
     planner: () => session,
-    quickfix: () => jobs,
     background: () => [],
   });
   const crashing = keeper();
   crashing.window.flush();
   crashing.planner.schedule();
-  crashing.quickfix.schedule();
   crashing.stop(true);
   const records = () => readdirSync(join(recoveryDir(root, ".pi"), "windows")).filter((file) => file.startsWith(`${process.pid}-`)).length;
   assert.equal(records(), 1, "a stop on a signal leaves the record for the next window");
   assert.equal((readSessionState(root, ".pi", "planner", "S-keep") as PlanningSnapshot).running, true);
-  assert.equal((readSessionState(root, ".pi", "quickfix", "S-keep") as QuickFixJob[])[0]!.status, "running");
 
   const quitting = keeper();
   quitting.window.flush();
   quitting.stop(false);
   assert.equal(records(), 0, "a quit removes this window's record");
   assert.equal((readSessionState(root, ".pi", "planner", "S-keep") as PlanningSnapshot).running, false, "and leaves its round stopped");
-  assert.equal((readSessionState(root, ".pi", "quickfix", "S-keep") as QuickFixJob[])[0]!.status, "cancelled");
-  jobs = [];
   session.cancel();
   assert.equal(existsSync(root), true);
 });

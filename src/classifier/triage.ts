@@ -3,8 +3,7 @@
  * size, which domains it touches, whether it needs outside facts or a
  * clarifying question, and what kind of work it is — in one call. The Master
  * reads the answers as hints (so it can skip reasoning them out and skip
- * scouts it does not need); nothing here becomes a workflow rule. The same
- * size question holds back a quick fix that is really a task, and a clarify
+ * scouts it does not need); nothing here becomes a workflow rule. A clarify
  * question whose recommended option is clearly right is answered here.
  */
 import type { Domain } from "../schemas/agent.ts";
@@ -48,7 +47,7 @@ function sizeQuestion(subject: string) {
   return score(`How big is the change ${subject} asks for, judged by what it would take to build and verify in this repository?`, SIZE_LEVELS);
 }
 
-/** Whether one agent can just do it: the quick fix or the team. */
+/** Whether one agent can just do it, or it needs the team: a self-contained build takes the fast track. */
 function soloQuestion(subject: string) {
   return noul(
     `Could one engineer do ${subject} alone, right away — in one file or one area of the code — with no contract to agree between frontend and backend, no unfamiliar codebase to survey first, no risky change (security, data, payments, migrations) and no decision the user must make first?`,
@@ -141,27 +140,6 @@ export async function triageWithContext(classifier: Classifier, scope: FileScope
   if (!triage) return undefined;
   const files = likely && likely.anyRelevant >= ANY_RELEVANT_FLOOR ? likely.files.map((file) => file.path) : [];
   return files.length > 0 ? { ...triage, likelyFiles: files } : triage;
-}
-
-/**
- * The size of a quick fix prompt, and how likely one engineer can do it alone,
- * or undefined when the classifier is off or fails. A large prompt is held as
- * a task unless it is still one engineer's work (a rich page in one file).
- */
-export async function quickFixSize(classifier: Classifier, prompt: string, signal?: AbortSignal): Promise<{ size: TriageSize; confidence: number; solo?: number } | undefined> {
-  if (!classifier.enabled("triage")) return undefined;
-  const { quickFixLargeAt: largeAt, quickFixAt } = classifier.config.thresholds;
-  const result = await classifier.ask("triage", { state: { prompt: clip(prompt, 6000) }, questions: { size: sizeQuestion("`prompt`"), solo: soloQuestion("`prompt`") } }, {
-    ...(signal ? { signal } : {}),
-    saved: (answers) => {
-      const sized = scoreOf(answers, "size");
-      return sized && sized.level >= TRIAGE_SIZES.length - 1 && sized.confidence >= largeAt && (yesOf(answers, "solo") ?? 0) < quickFixAt ? 1 : 0;
-    },
-  });
-  const size = scoreOf(result?.answers, "size");
-  if (!size) return undefined;
-  const solo = yesOf(result?.answers, "solo");
-  return { size: TRIAGE_SIZES[Math.max(0, Math.min(TRIAGE_SIZES.length - 1, size.level))]!, confidence: size.confidence, ...(solo !== undefined ? { solo } : {}) };
 }
 
 const HINT = 0.5;

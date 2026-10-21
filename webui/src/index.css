@@ -92,7 +92,7 @@
   --source-design: #a21caf;
   --source-qa: var(--warning);
   --source-research: #0f766e;
-  --source-quickfix: var(--primary);
+  --source-scout: var(--primary);
 
   --sidebar: #fafafa;
   --sidebar-foreground: var(--foreground);
@@ -195,7 +195,7 @@
 
   --source-design: #e879f9;
   --source-research: #5eead4;
-  --source-quickfix: #6b93f5;
+  --source-scout: #6b93f5;
 
   --sidebar: var(--card);
   --sidebar-accent: rgb(255 255 255 / 0.08);
@@ -321,7 +321,7 @@
   --color-source-design: var(--source-design);
   --color-source-qa: var(--source-qa);
   --color-source-research: var(--source-research);
-  --color-source-quickfix: var(--source-quickfix);
+  --color-source-scout: var(--source-scout);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);

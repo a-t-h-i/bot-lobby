@@ -31,7 +31,7 @@ function gitRepo(): string {
 }
 
 function record(overrides: Partial<ChangeRecord>): ChangeRecord {
-  return { source: "quickfix", id: "QF-1", what: "fix the typo", files: [], startedAt: "2026-09-28T10:00:00.000Z", finishedAt: "2026-09-28T10:01:00.000Z", status: "success", ...overrides };
+  return { source: "chat", id: "CHAT-1", what: "fix the typo", files: [], startedAt: "2026-09-28T10:00:00.000Z", finishedAt: "2026-09-28T10:01:00.000Z", status: "success", ...overrides };
 }
 
 test("only edit and write calls count as edits, each file once, wherever the path points", () => {
@@ -55,42 +55,44 @@ test("the ledger keeps records across sessions, skips torn lines, reads from a t
   const root = tempDir();
   appendChange(root, ".pi", record({ files: [] }));
   assert.deepEqual(readChanges(root, ".pi"), [], "a run that edited nothing leaves no record");
-  appendChange(root, ".pi", record({ id: "QF-1", files: ["/p/a.ts"], finishedAt: "2026-09-28T09:00:00.000Z" }));
-  appendFileSync(ledgerPath(root, ".pi"), '{"source":"quickfix","id":"QF-');
+  appendChange(root, ".pi", record({ id: "CHAT-1", files: ["/p/a.ts"], finishedAt: "2026-09-28T09:00:00.000Z" }));
+  appendFileSync(ledgerPath(root, ".pi"), '{"source":"chat","id":"CHAT-');
   appendFileSync(ledgerPath(root, ".pi"), "\n");
-  appendChange(root, ".pi", record({ id: "QF-2", files: ["/p/b.ts"] }));
-  assert.deepEqual(readChanges(root, ".pi").map((entry) => entry.id), ["QF-1", "QF-2"]);
-  assert.deepEqual(readChanges(root, ".pi", "2026-09-28T09:30:00.000Z").map((entry) => entry.id), ["QF-2"]);
+  appendChange(root, ".pi", record({ id: "CHAT-2", files: ["/p/b.ts"] }));
+  assert.deepEqual(readChanges(root, ".pi").map((entry) => entry.id), ["CHAT-1", "CHAT-2"]);
+  assert.deepEqual(readChanges(root, ".pi", "2026-09-28T09:30:00.000Z").map((entry) => entry.id), ["CHAT-2"]);
   const big = "x".repeat(2000);
-  for (let index = 0; index < 400; index += 1) appendChange(root, ".pi", record({ id: `QF-${index + 3}`, what: big, files: ["/p/c.ts"] }));
+  for (let index = 0; index < 400; index += 1) appendChange(root, ".pi", record({ id: `CHAT-${index + 3}`, what: big, files: ["/p/c.ts"] }));
   assert.ok(statSync(ledgerPath(root, ".pi")).size <= MAX_LEDGER_BYTES);
   const kept = readChanges(root, ".pi");
-  assert.equal(kept.at(-1)?.id, "QF-402", "the newest record survives trimming");
-  assert.ok(!kept.some((entry) => entry.id === "QF-1"), "the oldest ones go");
+  assert.equal(kept.at(-1)?.id, "CHAT-402", "the newest record survives trimming");
+  assert.ok(!kept.some((entry) => entry.id === "CHAT-1"), "the oldest ones go");
+  appendFileSync(ledgerPath(root, ".pi"), `${JSON.stringify({ source: "quickfix", id: "QF-9", what: "old", files: ["/p/d.ts"], startedAt: "2026-09-28T10:00:00.000Z", finishedAt: "2026-09-28T11:00:00.000Z", status: "success" })}\n`);
+  assert.equal(readChanges(root, ".pi").at(-1)?.source, "chat", "an older ledger's quick fix reads as a lobby chat change");
 });
 
-test("each changed file is explained: planned, quick fix, another task, pre-existing, or unattributed", () => {
+test("each changed file is explained: planned, lobby chat, another task, pre-existing, or unattributed", () => {
   const top = "/repo";
   const records = [
     record({ source: "worker", id: "run-1", taskId: "TASK-1", domain: "backend", what: "Add the login endpoint\nwith tests", files: ["/repo/src/api.ts", "/repo/src/shared.ts"] }),
-    record({ id: "QF-2", what: "fix the header typo", files: ["/repo/src/header.tsx", "/repo/src/shared.ts"] }),
+    record({ id: "CHAT-2", what: "fix the header typo", files: ["/repo/src/header.tsx", "/repo/src/shared.ts"] }),
     record({ source: "worker", id: "run-9", taskId: "TASK-2", domain: "designer", what: "restyle the footer", files: ["/repo/src/footer.css"] }),
-    record({ id: "QF-3", files: ["/elsewhere/x.ts"] }),
+    record({ id: "CHAT-3", files: ["/elsewhere/x.ts"] }),
   ];
   const files = explainChanges({ id: "TASK-1", baseline: { at: "t", files: ["README.md", "src/api.ts"] } }, ["src/api.ts", "src/shared.ts", "src/header.tsx", "src/footer.css", "README.md", "src/stray.ts"], top, records);
   const kinds = Object.fromEntries(files.map((file) => [file.path, file.kinds]));
   assert.deepEqual(kinds, {
     "src/api.ts": ["planned", "pre-existing"],
-    "src/shared.ts": ["planned", "quickfix"],
-    "src/header.tsx": ["quickfix"],
+    "src/shared.ts": ["planned", "chat"],
+    "src/header.tsx": ["chat"],
     "src/footer.css": ["other-task"],
     "README.md": ["pre-existing"],
     "src/stray.ts": ["unattributed"],
   });
   const header = files.find((file) => file.path === "src/header.tsx")!;
-  assert.match(header.notes[0]!, /^quick fix QF-2 at \d\d:\d\d, asked by the user: "fix the header typo"$/);
+  assert.match(header.notes[0]!, /^lobby chat CHAT-2 at \d\d:\d\d, asked by the user: "fix the header typo"$/);
   assert.match(files[0]!.notes[0]!, /^planned: DEV — Add the login endpoint with tests$/);
-  assert.equal(provenanceSummary(files), "2 planned · 2 by quick fix (QF-2) · 1 by another task · 2 pre-existing · 1 unattributed (src/stray.ts)");
+  assert.equal(provenanceSummary(files), "2 planned · 2 by lobby chat (CHAT-2) · 1 by another task · 2 pre-existing · 1 unattributed (src/stray.ts)");
   const lines = provenanceLines(files).split("\n");
   assert.match(lines[0]!, /^- src\/stray\.ts — unattributed/, "the unexplained come first");
   assert.equal(explainChanges({ id: "TASK-1" }, ["a.ts"], top, [])[0]!.kinds[0], "unattributed", "no baseline: nothing is pre-existing");
@@ -120,7 +122,7 @@ function reply(text: string): string {
   return JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], stopReason: "stop" } });
 }
 
-test("the QA gate and the Master are told which changes are planned, a quick fix, pre-existing or unattributed", async () => {
+test("the QA gate and the Master are told which changes are planned, from the lobby chat, pre-existing or unattributed", async () => {
   const dir = gitRepo();
   const prompts: string[] = [];
   // The worker edits src/a.ts through its edit tool; the reviewer passes.
@@ -143,15 +145,15 @@ test("the QA gate and the Master are told which changes are planned, a quick fix
   task.domains = ["backend"];
   task.plan = PLAN;
   saveTask(dir, ".pi", task);
-  // The user's own work before the task's agents start, and a quick fix the user asked for.
+  // The user's own work before the task's agents start, and a lobby chat change the user asked for.
   writeFileSync(join(dir, "src/pre.ts"), "export const pre = 1;\n");
   writeFileSync(join(dir, "src/q.ts"), "export const q = 1;\n");
-  appendChange(dir, ".pi", record({ id: "QF-1", what: "rename q", files: [join(dir, "src/q.ts")], finishedAt: new Date().toISOString() }));
+  appendChange(dir, ".pi", record({ id: "CHAT-1", what: "rename q", files: [join(dir, "src/q.ts")], finishedAt: new Date().toISOString() }));
   const act = (params: Partial<OrchestrateParams>) => runWorkflowAction({ action: "status", taskId: "TASK-1", ...params } as OrchestrateParams, deps);
   const implemented = await act({ action: "implement", domain: "backend", task: "Add a to src/a.ts" });
   assert.equal(implemented.ok, true, implemented.message);
   assert.deepEqual(loadTask(dir, ".pi", "TASK-1")!.baseline?.files.sort(), ["src/pre.ts", "src/q.ts"], "the tree as the first worker found it, without bot-lobby's own folder");
-  assert.match(implemented.message, /Changed files: 1 planned · 1 by quick fix \(QF-1\) · 2 pre-existing\./);
+  assert.match(implemented.message, /Changed files: 1 planned · 1 by lobby chat \(CHAT-1\) · 2 pre-existing\./);
   assert.ok(readChanges(dir, ".pi").some((entry) => entry.source === "worker" && entry.taskId === "TASK-1" && entry.files.includes(join(dir, "src/a.ts"))), "the worker's edit is on record");
   // The worker's change is committed before QA (the fixes in a long task often are); something no agent recorded appears.
   execFileSync("git", ["commit", "-q", "-m", "add a", "--", "src/a.ts"], { cwd: dir });
@@ -161,13 +163,13 @@ test("the QA gate and the Master are told which changes are planned, a quick fix
   const reviewer = prompts.at(-1)!;
   assert.match(reviewer, /## Change provenance/, "the reviewer's role says how to judge each source");
   assert.match(reviewer, /- src\/stray\.ts — unattributed: no bot-lobby agent recorded editing it/);
-  assert.match(reviewer, /- src\/q\.ts — quick fix QF-1 at \d\d:\d\d, asked by the user: "rename q"; pre-existing/);
+  assert.match(reviewer, /- src\/q\.ts — lobby chat CHAT-1 at \d\d:\d\d, asked by the user: "rename q"; pre-existing/);
   assert.match(reviewer, /- src\/a\.ts — planned: DEV — Add a to src\/a\.ts/, "committed, it is still this task's work");
   assert.match(reviewer, /Diff \(since [0-9a-f]{7}, where the task started[^\n]*\n[\s\S]*\+export const a = 1;/, "and its diff is still in front of the reviewer");
   assert.match(reviewer, /New files \(untracked\):\n--- src\/stray\.ts/);
   assert.match(reviewer, /- src\/pre\.ts — pre-existing/);
   assert.doesNotMatch(reviewer, /\.pi\/bot-lobby/, "bot-lobby's own records are not changes");
-  assert.match(qa.message, /Changed files: 1 planned · 1 by quick fix \(QF-1\) · 2 pre-existing · 1 unattributed \(src\/stray\.ts\)\. The user asked for the quick fixes directly: never revert them or send them back as fixes\. Pre-existing changes and other tasks' are not this task's to review or revert\. No agent recorded the unattributed edits: ask the user before counting them in or reverting them\./);
+  assert.match(qa.message, /Changed files: 1 planned · 1 by lobby chat \(CHAT-1\) · 2 pre-existing · 1 unattributed \(src\/stray\.ts\)\. The user asked for the lobby chat's changes directly: never revert them or send them back as fixes\. Pre-existing changes and other tasks' are not this task's to review or revert\. No agent recorded the unattributed edits: ask the user before counting them in or reverting them\./);
 });
 
 test("a task already under way before provenance existed is not misread", async () => {

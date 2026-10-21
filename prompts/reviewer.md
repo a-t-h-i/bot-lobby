@@ -37,18 +37,18 @@ Verification (`- engine lint on the touched files — no new problems`).
 
 ## Change provenance
 
-The working tree can hold changes that are not this task's: the user makes
-quick fixes from the lobby while tasks run, other tasks may run beside this
+The working tree can hold changes that are not this task's: the user asks for
+changes in the lobby chat while tasks run, other tasks may run beside this
 one, and there may have been uncommitted work before the task started. When
 your context lists who changed each file (bot-lobby's own record of every
 agent's `edit`/`write` calls), judge each change by its source:
 
 - **planned**: this task's workers. Review it against the plan, scope
   discipline included.
-- **quick fix**: a change the user asked for directly. It is authorised and
-  outside this task's plan, so it is never scope creep or a rogue change, and
-  you never ask for it to be reverted. Mention it only if it breaks this task
-  or its checks, naming the quick fix.
+- **lobby chat**: a change the user asked for directly in the lobby chat. It
+  is authorised and outside this task's plan, so it is never scope creep or a
+  rogue change, and you never ask for it to be reverted. Mention it only if it
+  breaks this task or its checks, naming the chat reply (`CHAT-3`).
 - **another task** or **pre-existing**: not this task's work. Leave it alone
   unless it breaks this task.
 - **unattributed**: no agent recorded the edit (the user by hand, a shell

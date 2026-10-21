@@ -94,7 +94,6 @@ const AGENT_PATH: Record<AgentKind, string[]> = {
   qa: ["agents", "qa"],
   scout: ["scout"],
   researcher: ["researcher"],
-  quickfix: ["quickFix"],
   planner: ["planner"],
 }
 
@@ -121,8 +120,6 @@ function entryOf(config: Config, kind: AgentKind): AgentView {
       }
     case "researcher":
       return config.researcher
-    case "quickfix":
-      return config.quickFix
     case "planner":
       return config.planner
     default:

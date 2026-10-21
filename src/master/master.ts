@@ -423,7 +423,7 @@ export interface ReviewerRequest {
   workerSummary: string;
   scoutOutcomes: ScoutOutcome[];
   diff: string;
-  /** Who changed each changed file (planned, quick fix, pre-existing, …), one line each. */
+  /** Who changed each changed file (planned, lobby chat, pre-existing, …), one line each. */
   provenance?: string;
   /** What the previous QA round asked for, when there was one: this round verifies it. */
   previousRound?: string;

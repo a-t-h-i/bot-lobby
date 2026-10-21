@@ -4,7 +4,6 @@ import { Classifier } from "../src/classifier/classifier.ts";
 import type { Answer, FetchLike, Question } from "../src/classifier/client.ts";
 import { chooseSeats } from "../src/classifier/seats.ts";
 import { autoAnswer } from "../src/classifier/answers.ts";
-import { quickFixSize } from "../src/classifier/triage.ts";
 import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
 import { summarizeClassifier, type MetricRecord } from "../src/state/metrics.ts";
 
@@ -19,16 +18,14 @@ function jev(fetch: FetchLike, records: MetricRecord[]): Classifier {
   return new Classifier({ config: () => ({ ...DEFAULT_CONFIG.classifier, enabled: true }), keys: async () => "ts_key", fetch, metrics: (record) => records.push(record), sleep: async () => {} });
 }
 
-test("each decision records what it spared: seat runs skipped, questions answered, quick fixes held", async () => {
+test("each decision records what it spared: seat runs skipped, questions answered", async () => {
   const records: MetricRecord[] = [];
   await chooseSeats(jev(answering((questions) => Object.fromEntries(Object.keys(questions).map((key) => [key, { type: "noul", noul: key === "seat_backend" ? 0.9 : 0.05 }]))), records), {
     round: 1, idea: "an API", latest: "an API",
     candidates: [{ member: "backend", label: "DEV", owns: "APIs" }, { member: "designer", label: "DESIGN", owns: "screens" }, { member: "qa", label: "QA", owns: "tests" }],
   });
   await autoAnswer(jev(answering(() => ({ q1: { type: "choice", choice: "CSV", probabilities: { CSV: 0.97 }, confidence: 0.97 } })), records), [{ index: 0, from: "QA", text: "Format?", options: [{ label: "CSV", description: "" }, { label: "PDF", description: "" }], recommended: "CSV" }], { request: "export", conversation: "" });
-  await quickFixSize(jev(answering(() => ({ size: { type: "score", score: 3, confidence: 0.9 } })), records), "rewrite auth");
-  await quickFixSize(jev(answering(() => ({ size: { type: "score", score: 1, confidence: 0.9 } })), records), "fix a typo");
-  assert.deepEqual(records.map((record) => [record.purpose, record.saved]), [["seats", 2], ["answers", 1], ["triage", 1], ["triage", undefined]]);
+  assert.deepEqual(records.map((record) => [record.purpose, record.saved]), [["seats", 2], ["answers", 1]]);
 });
 
 function call(purpose: string, durationMs: number, extra: Partial<MetricRecord> = {}): MetricRecord {
@@ -47,6 +44,6 @@ test("the summary counts calls, their speed and what they spared, and routed run
   assert.deepEqual(summary, {
     calls: 6, ok: 5, p50Ms: 400, p90Ms: 900, input: 600,
     byPurpose: { seats: 2, answers: 1, files: 1, triage: 1, effort: 1 },
-    seatRunsSkipped: 3, questionsAnswered: 3, quickFixesHeld: 1, routed: 2, routedOk: 1,
+    seatRunsSkipped: 3, questionsAnswered: 3, routed: 2, routedOk: 1,
   });
 });

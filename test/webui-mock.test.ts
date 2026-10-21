@@ -159,7 +159,7 @@ async function checkStatus(name: string, fixture: ScenarioFixture, call: Call): 
   assert.equal(result.busy, fixture.status.busy, `${name}: busy`);
   assert.equal(result.issuesEnabled, fixture.status.issuesEnabled, `${name}: issuesEnabled`);
   const tabs = result.tabs as Array<{ id: string; label: string; key: string }>;
-  assert.equal(tabs.length, fixture.status.issuesEnabled ? 9 : 8, `${name}: tab count`);
+  assert.equal(tabs.length, 5, `${name}: tab count`);
   assert.ok(tabs.every((tab) => tab.id && tab.label && tab.key), `${name}: tab shape`);
   assert.ok(Array.isArray(result.keys) && (result.keys as unknown[]).length > 0, `${name}: keys`);
   assert.deepEqual(result.windows, [], `${name}: windows`);

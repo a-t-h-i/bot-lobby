@@ -7,7 +7,8 @@ import { join } from "node:path";
 import { describeToolCall } from "../src/pi/activity.ts";
 import { createStreamCollector, finishedThought, MAX_THOUGHT_CHARS, type PiStreamEvent, type ProcessOutcome, type ProcessRunner, type ProcessRunOptions } from "../src/execution/pi-runner.ts";
 import { chatFromEntries, chatText, LobbyFeed, MAX_CHAT, textOf } from "../src/lobby/feed.ts";
-import { QUICK_FIX_TOOLS, QuickFixQueue, jobTitle, quickFixCommitMessage, quickFixPrompt } from "../src/lobby/quickfix.ts";
+import { CHAT_BUILDER_TOOLS, ChatAgents, chatAgentPrompt, chatAgentTask, type ChatJob } from "../src/lobby/chat-agents.ts";
+import { parseLobbyCommand, parseMention } from "../src/lobby/prompts.ts";
 import { PLANNER_TOOLS, RESEARCH_PANEL_TOOLS, PlanningSession, appendAssumptions, commentBlock, memberPrompt, oracleClosing, optionLabel, panelSection, parseMemberReply, parseOption, parsePlannerReply, plannerSays, plannerTranscript, recommendedOption, roundMode, roundQuestions, sameQuestion, settledBlock, withoutSettled } from "../src/lobby/planner.ts";
 import { MAX_QUESTIONS } from "../src/lobby/ask.ts";
 import { createIssue, ghError, IssuesState, listIssues, splitIssueText, viewIssue, type Exec } from "../src/lobby/issues.ts";
@@ -105,9 +106,9 @@ test("a running agent's thought stays live until its next one or until the run e
   feed.thinkEnd("MASTER");
   feed.runs([run({ thought: "add the limit param", status: "success" })], 3);
   assert.deepEqual(feed.thoughts.map((entry) => entry.live), [false, false, false], "a finished run thinks no more");
-  feed.liveThought("QUICK FIX", "rename it", "QF-1");
+  feed.liveThought("DESIGN", "rename it", "CHAT-1");
   assert.equal(feed.thoughts.at(-1)!.live, true);
-  feed.settleThought("QF-1");
+  feed.settleThought("CHAT-1");
   assert.equal(feed.thoughts.at(-1)!.live, false);
 });
 
@@ -158,55 +159,69 @@ test("the conversation keeps only its newest messages and remembers that earlier
   assert.deepEqual([feed.chat.length, feed.chat[0]?.text, feed.chatOlder], [MAX_CHAT, "s5", true]);
 });
 
-test("quick fixes run one at a time with full tools and land in metrics", async () => {
+test("lobby chat agents answer one at a time with their own tools, and their edits land in the ledger and metrics", async () => {
   const root = tempRoot();
   const seen: Array<{ args: string[]; options: ProcessRunOptions }> = [];
   const feed = new LobbyFeed();
+  const replies: ChatJob[] = [];
   const events: PiStreamEvent[] = [{ type: "turn_start" }, { type: "tool_execution_start", toolName: "edit", args: { path: "src/a.ts" } }, { type: "thought", text: "tiny change" }];
-  const queue = new QuickFixQueue({
+  const chat = new ChatAgents({
     cwd: root, root, configDir: ".pi", feed,
     profile: () => ({ model: "p/fast", thinking: "low", instructions: "keep it tiny" }),
-    runProcess: fakeRunner("## Done\nRenamed it.", events, seen),
+    history: () => ["You: hi", "MASTER: hello", "You: rename foo to bar\nin a.ts"],
+    onReply: (job) => replies.push(job),
+    runProcess: fakeRunner("Renamed it.", events, seen),
   });
-  const first = queue.submit("rename foo to bar\nin a.ts");
-  const second = queue.submit("fix the typo");
-  assert.equal(second.status, "queued", "the second job waits for the first");
+  const first = chat.submit("designer", "rename foo to bar\nin a.ts", "you named @design");
+  const second = chat.submit("scout", "where is getUser?", "the classifier (0.80)");
+  assert.equal(second.status, "queued", "the second waits for the first");
+  assert.equal(chat.busy, true);
   for (let i = 0; i < 200 && !second.finishedAt; i++) await new Promise((resolve) => setTimeout(resolve, 5));
   assert.equal(first.status, "success");
-  assert.equal(first.report, "## Done\nRenamed it.");
+  assert.equal(first.reply, "Renamed it.");
   assert.equal(first.model, "p/served");
-  assert.deepEqual(first.steps.map((step) => [step.text, step.pending]), [["editing a.ts", false]]);
-  assert.deepEqual(first.files, ["src/a.ts"], "what it edited, as the Quick fix tab shows it");
-  assert.deepEqual(readChanges(root, ".pi").map((entry) => [entry.source, entry.id, entry.what, entry.files]), [["quickfix", "QF-1", "rename foo to bar", [join(realpathSync(root), "src/a.ts")]], ["quickfix", "QF-2", "fix the typo", [join(realpathSync(root), "src/a.ts")]]], "a running task's QA gate reads its edits as the user's request");
-  assert.equal(second.status, "success");
-  assert.equal(seen.length, 2);
-  const args = seen[0]!.args;
-  assert.equal(args[args.indexOf("--tools") + 1], [...QUICK_FIX_TOOLS, "codemode", "tool_search", "claim_file", "handover_file", "my_files", "wait_for_files"].join(","));
-  assert.equal(args[args.indexOf("--model") + 1], "p/fast");
-  assert.equal(args[args.indexOf("--thinking") + 1], "low");
-  assert.equal(seen[0]!.options.prompt, "Task: rename foo to bar\nin a.ts");
-  assert.ok(feed.activity.some((entry) => entry.source === "QUICK FIX" && entry.text === "done: rename foo to bar"));
-  assert.deepEqual(feed.thoughts.map((entry) => entry.text), ["tiny change", "tiny change"]);
-  const metrics = readMetrics(root, ".pi");
-  assert.deepEqual(metrics.map((metric) => [metric.kind, metric.model, metric.thinking, metric.status]), [["quickfix", "p/served", "low", "success"], ["quickfix", "p/served", "low", "success"]]);
-  assert.equal(jobTitle(first), "rename foo to bar");
-  assert.match(quickFixPrompt("keep it tiny"), /Quick Fix Agent[\s\S]*## Custom Instructions\n\nkeep it tiny$/);
-  assert.throws(() => queue.submit("   "), /needs a prompt/);
+  assert.deepEqual(first.files, ["src/a.ts"]);
+  assert.deepEqual(replies.map((job) => job.id), ["CHAT-1", "CHAT-2"]);
+  assert.equal(chat.busy, false);
+  assert.deepEqual(readChanges(root, ".pi").map((entry) => [entry.source, entry.id, entry.what]), [["chat", "CHAT-1", "DESIGN: rename foo to bar"], ["chat", "CHAT-2", "SCOUT: where is getUser?"]], "a running task's QA gate reads its edits as the user's request");
+  const tools = (index: number) => seen[index]!.args[seen[index]!.args.indexOf("--tools") + 1]!.split(",");
+  assert.deepEqual(tools(0).slice(0, CHAT_BUILDER_TOOLS.length), [...CHAT_BUILDER_TOOLS], "DESIGN may edit");
+  assert.ok(!tools(1).includes("edit") && !tools(1).includes("write"), "a scout only reads");
+  assert.equal(seen[0]!.args[seen[0]!.args.indexOf("--model") + 1], "p/fast");
+  assert.equal(seen[0]!.options.prompt, "Task: ## Conversation so far\n\nYou: hi\n\nMASTER: hello\n\n## Message\n\nrename foo to bar\nin a.ts", "the message is not repeated in the history");
+  assert.ok(feed.activity.some((entry) => entry.source === "DESIGN" && entry.text === "editing a.ts"));
+  assert.deepEqual(readMetrics(root, ".pi").map((metric) => [metric.kind, metric.agent, metric.status]), [["chat", "DESIGN", "success"], ["chat", "SCOUT", "success"]]);
+  assert.match(chatAgentPrompt("designer", "keep it tiny"), /## Custom Instructions\n\nkeep it tiny[\s\S]*# Lobby Chat[\s\S]*## Your seat\n\nYou are DESIGN/);
+  assert.match(chatAgentPrompt("researcher"), /# Lobby Chat[\s\S]*## Your seat\n\nYou are RESEARCH/);
+  assert.equal(chatAgentTask("hi", []), "## Message\n\nhi");
+  assert.throws(() => chat.submit("qa", "   ", "x"), /needs some text/);
 });
 
-test("a running quick fix can be cancelled and a queued one is dropped", async () => {
+test("stopping the chat cancels the reply under way and drops the waiting ones", async () => {
   const root = tempRoot();
-  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), runProcess: fakeRunner("", [], [], true) });
-  const first = queue.submit("slow one");
-  const second = queue.submit("next one");
+  const replies: ChatJob[] = [];
+  const chat = new ChatAgents({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), history: () => [], onReply: (job) => replies.push(job), runProcess: fakeRunner("", [], [], true) });
+  const first = chat.submit("backend", "slow one", "x");
+  const second = chat.submit("qa", "next one", "x");
   await settle();
   assert.equal(first.status, "running");
-  assert.equal(queue.cancel(second.id), true);
-  assert.equal(second.status, "cancelled");
-  queue.cancel(first.id);
+  chat.cancelAll();
   await settle();
-  assert.equal(first.status, "cancelled");
-  assert.equal(queue.cancel(first.id), false, "finished jobs stay finished");
+  assert.deepEqual([first.status, second.status], ["cancelled", "cancelled"]);
+  assert.equal(chat.busy, false);
+});
+
+test("a leading @ mention names who answers, and /plan and /task are the lobby's commands", () => {
+  assert.deepEqual(parseMention("@design make the header sticky"), { agent: "designer", rest: "make the header sticky" });
+  assert.deepEqual(parseMention("  @Frontend why?"), { agent: "designer", rest: "why?" });
+  assert.deepEqual(parseMention("@dev"), { agent: "backend", rest: "" });
+  assert.deepEqual(parseMention("@oracle hi"), { agent: "master", rest: "hi" });
+  assert.equal(parseMention("@nobody hi"), undefined);
+  assert.equal(parseMention("email me@design.com"), undefined, "only at the start");
+  assert.deepEqual(parseLobbyCommand("/plan dark mode"), { command: "plan", rest: "dark mode" });
+  assert.deepEqual(parseLobbyCommand("/task"), { command: "task", rest: "" });
+  assert.equal(parseLobbyCommand("/planning x"), undefined);
+  assert.equal(parseLobbyCommand("/compact"), undefined, "pi's own commands pass through");
 });
 
 const READY_REPLY = [
@@ -592,36 +607,3 @@ test("gh failures read as one actionable line", async () => {
   assert.equal(state.loading, false);
 });
 
-test("a quick fix's commit message comes from its report, kept short, or from the request", () => {
-  assert.equal(quickFixCommitMessage({ prompt: "make the button blue", report: "## Done\nBlue.\n\n## Commit\nMake the save button blue\n" }), "Make the save button blue");
-  assert.equal(quickFixCommitMessage({ prompt: "make the button blue", report: "## Commit\n```\nMake it blue\n```\n\n## Files\n- a" }), "Make it blue");
-  assert.equal(quickFixCommitMessage({ prompt: "make the button blue\nplease", report: `## Commit\n${"x".repeat(80)}` }), "make the button blue", "too long: the request names it");
-  assert.equal(quickFixCommitMessage({ prompt: "y".repeat(90) }).length, 72);
-});
-
-test("a finished quick fix commits only the files it edited, with its message", async () => {
-  const root = realpathSync(tempRoot());
-  const git = (...args: string[]) => execFileSync("git", args, { cwd: root, encoding: "utf8" });
-  git("init", "-q");
-  git("config", "user.email", "test@example.com");
-  git("config", "user.name", "Test");
-  writeFileSync(join(root, "a.txt"), "a\n");
-  writeFileSync(join(root, "mine.txt"), "mine\n");
-  git("add", ".");
-  git("commit", "-qm", "init");
-  writeFileSync(join(root, "mine.txt"), "the user's edit\n");
-  const logged: string[] = [];
-  const runner: ProcessRunner = async (_args, options) => {
-    options.onEvent?.({ type: "tool_execution_start", toolName: "write", args: { path: "a.txt" } } as PiStreamEvent);
-    options.onEvent?.({ type: "tool_execution_start", toolName: "edit", args: { path: "mine.txt" } } as PiStreamEvent);
-    writeFileSync(join(root, "a.txt"), "b\n");
-    return { exitCode: 0, stdout: reply("## Done\nChanged a.\n\n## Commit\nChange a to b"), stderr: "", killed: false };
-  };
-  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), runProcess: runner, feed: { log: (_source: string, text: string) => logged.push(text), step: () => {}, end: () => {}, thought: () => {}, liveThought: () => {}, settleThought: () => {} } as never });
-  const job = queue.submit("change a to b");
-  for (let i = 0; i < 100 && !job.commit; i++) await new Promise((resolve) => setTimeout(resolve, 10));
-  assert.equal(git("log", "-1", "--format=%s", "--name-only").trim(), "Change a to b\n\na.txt", "its own file, its message");
-  assert.equal(job.commit?.subject, "Change a to b");
-  assert.ok(logged.some((line) => /^committed [0-9a-f]{7}: Change a to b$/.test(line)));
-  assert.match(git("status", "--porcelain"), /^ M mine\.txt/m, "a file the user had changed before it ran stays theirs, uncommitted");
-});

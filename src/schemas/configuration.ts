@@ -53,11 +53,11 @@ export interface ScoutConfig extends HarnessChoice {
 }
 
 /** Subagent kinds with their own settings entry. */
-export const SUBAGENT_KINDS = ["designer", "backend", "qa", "scout", "researcher", "quickfix", "planner"] as const;
+export const SUBAGENT_KINDS = ["designer", "backend", "qa", "scout", "researcher", "planner"] as const;
 export type SubagentKind = (typeof SUBAGENT_KINDS)[number];
 
-/** Lobby agents that run outside the workflow: direct quick fixes and the task planner. */
-export type LobbyAgentKind = "quickfix" | "planner";
+/** Lobby agents that run outside the workflow and have their own settings entry: the task planner. */
+export type LobbyAgentKind = "planner";
 
 /** Settings kinds a workflow run (domain + role) can draw from. */
 export type WorkflowProfileKind = Domain | "scout" | "researcher";
@@ -94,11 +94,9 @@ export interface WorkflowConfig {
   fastTrack: boolean;
   /** A delegation that names nothing concrete, or is long without done criteria, is sent back to the oracle once for a fuller brief (sending it again unchanged goes through). */
   briefCheck: boolean;
-  /** A new request that one agent can do alone goes to the quick-fix agent once the oracle confirms; false makes every request a task. */
-  routeQuickFixes: boolean;
   /** A new task gets a git branch or worktree of its own, named after it; `--branch` and `--worktree` decide for one task. */
   gitIsolation: GitIsolation;
-  /** Scouts, workers, quick fixes and the planner get the repository map: the layout and the files matching their step, with each file's purpose, names and unchanged scout notes. */
+  /** Scouts, workers, lobby chat replies and the planner get the repository map: the layout and the files matching their step, with each file's purpose, names and unchanged scout notes. */
   repoMap: boolean;
   /** A scout asked the same thing again for the same task, on a tree that has not changed, reuses its findings instead of running. */
   reuseScouts: boolean;
@@ -202,7 +200,7 @@ export interface LobbyConfig {
 }
 
 /** Decisions the classifier can make, each switched on or off on its own. */
-export const CLASSIFIER_FEATURES = ["seats", "answers", "files", "triage", "effort", "review", "knowledge", "scripts", "qa"] as const;
+export const CLASSIFIER_FEATURES = ["seats", "answers", "files", "triage", "effort", "review", "knowledge", "scripts", "qa", "lobby"] as const;
 export type ClassifierFeature = (typeof CLASSIFIER_FEATURES)[number];
 
 /** Hosts that serve Jev behind the same System One API; `auto` takes OpenCode's free Jev when pi holds an OpenCode key, else TypeSafe. */
@@ -229,10 +227,8 @@ export interface ClassifierThresholds {
   simpleAt: number;
   /** A step scored trivial at this confidence runs on the cheaper model. */
   trivialAt: number;
-  /** A new request goes to the quick-fix agent when one engineer can do it alone at least this likely (the oracle confirms). */
-  quickFixAt: number;
-  /** A quick fix scored large at this confidence is held instead of started. */
-  quickFixLargeAt: number;
+  /** A lobby message goes to the agent the classifier picks for it at least this likely; below it, the Master answers. */
+  lobbyAgentAt: number;
 }
 
 /** The classifier: a fast model for obvious decisions, so large models spend fewer tokens on them. */
@@ -266,8 +262,6 @@ export interface BotLobbyConfig {
   agents: Record<"designer" | "backend" | "qa", AgentModelConfig>;
   scout: ScoutConfig;
   researcher: AgentModelConfig;
-  /** Direct quick fixes from the lobby: no scouting, planning or review. */
-  quickFix: AgentModelConfig;
   /** The task planner that grills the user until a plan is clear. */
   planner: AgentModelConfig;
   workflow: WorkflowConfig;
@@ -289,7 +283,6 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
   },
   scout: { model: INHERIT_MODEL, maxToolCalls: 30 },
   researcher: { model: INHERIT_MODEL, thinking: "low", instructions: "" },
-  quickFix: { model: INHERIT_MODEL, thinking: "low", instructions: "" },
   planner: { model: INHERIT_MODEL, thinking: "high", instructions: "" },
   workflow: {
     maxReviewIterations: 2,
@@ -304,7 +297,6 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     freshContext: true,
     fastTrack: true,
     briefCheck: true,
-    routeQuickFixes: true,
     gitIsolation: "off",
     repoMap: true,
     reuseScouts: true,
@@ -338,7 +330,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     model: "",
     baseUrl: "",
     timeoutMs: 4000,
-    features: { seats: true, answers: true, files: true, triage: true, effort: true, review: true, knowledge: true, scripts: true, qa: true },
+    features: { seats: true, answers: true, files: true, triage: true, effort: true, review: true, knowledge: true, scripts: true, qa: true, lobby: true },
     thresholds: {
       seatAt: 0.35,
       reseatReadyAt: 0.6,
@@ -349,8 +341,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
       scriptRelevantAt: 0.5,
       simpleAt: 0.7,
       trivialAt: 0.8,
-      quickFixAt: 0.7,
-      quickFixLargeAt: 0.8,
+      lobbyAgentAt: 0.5,
     },
     fileHints: { topK: 8, maxCandidates: 480, budgetMs: 1500 },
     effort: { cheapModel: INHERIT_MODEL },
@@ -536,7 +527,6 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
   workflow.freshContext = workflow.freshContext !== false;
   workflow.fastTrack = workflow.fastTrack !== false;
   workflow.briefCheck = workflow.briefCheck !== false;
-  workflow.routeQuickFixes = workflow.routeQuickFixes !== false;
   workflow.repoMap = workflow.repoMap !== false;
   workflow.reuseScouts = workflow.reuseScouts !== false;
   workflow.parallelMode = isParallelMode(workflow.parallelMode) ? workflow.parallelMode : DEFAULT_CONFIG.workflow.parallelMode;
@@ -546,7 +536,8 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
   workflow.expertModel = typeof workflow.expertModel === "string" ? workflow.expertModel.trim() : "";
   workflow.gitIsolation = isGitIsolation(workflow.gitIsolation) ? workflow.gitIsolation : DEFAULT_CONFIG.workflow.gitIsolation;
   // Agent time limits are gone: a config file that still names them is cleaned on its next save.
-  for (const key of ["agentTimeoutMs", "wrapUpAt", "taskBudgetMinutes"]) delete (workflow as unknown as Record<string, unknown>)[key];
+  // So are quick fixes: the lobby chat does that work now.
+  for (const key of ["agentTimeoutMs", "wrapUpAt", "taskBudgetMinutes", "routeQuickFixes"]) delete (workflow as unknown as Record<string, unknown>)[key];
   const knowledge = { ...DEFAULT_CONFIG.knowledge, ...(src.knowledge as Partial<KnowledgeConfig> | undefined) };
   const srcAgents = (src.agents ?? {}) as Partial<BotLobbyConfig["agents"]>;
   return {
@@ -558,7 +549,6 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
     },
     scout: normalizeScout(src.scout as Partial<ScoutConfig> | undefined),
     researcher: normalizeAgent(DEFAULT_CONFIG.researcher, src.researcher as Partial<AgentModelConfig> | undefined),
-    quickFix: normalizeAgent(DEFAULT_CONFIG.quickFix, src.quickFix as Partial<AgentModelConfig> | undefined),
     planner: normalizeAgent(DEFAULT_CONFIG.planner, src.planner as Partial<AgentModelConfig> | undefined, false),
     workflow,
     lint: normalizeLint(src.lint),
@@ -636,9 +626,9 @@ export function agentProfile(config: BotLobbyConfig, domain: Domain, role: Role)
   return { kind, model: modelOf(entry.model), thinking: entry.thinking, instructions, ...grantFields(entry), ...compactField(entry), ...harnessField(config, entry) };
 }
 
-/** The settings entry of a lobby agent (quick fix or planner). */
-export function lobbyAgentConfig(config: BotLobbyConfig, kind: LobbyAgentKind): AgentModelConfig {
-  return kind === "quickfix" ? config.quickFix : config.planner;
+/** The settings entry of a lobby agent (the planner). */
+export function lobbyAgentConfig(config: BotLobbyConfig, _kind: LobbyAgentKind): AgentModelConfig {
+  return config.planner;
 }
 
 /** Profile for a lobby agent run, from settings alone; `model` is undefined while unset. */

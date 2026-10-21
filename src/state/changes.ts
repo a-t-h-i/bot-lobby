@@ -1,8 +1,9 @@
 /**
- * Who changed what: a project-wide ledger of the files each quick fix and each
- * task worker edited, read from their own `edit`/`write` tool calls (never
- * from their reports). The QA gate and the Master see every changed file of
- * the working tree against it, so a quick fix the user asked for, a planned
+ * Who changed what: a project-wide ledger of the files each lobby chat reply
+ * and each task worker edited, read from their own `edit`/`write` tool calls
+ * (never from their reports). The QA gate and the Master see every changed
+ * file of the working tree against it, so a change the user asked for in the
+ * lobby chat, a planned
  * step, work that was there before the task and an edit no agent made each
  * read as what they are, instead of all looking like unplanned changes.
  * Append-only JSON lines beside the metrics; best-effort like them.
@@ -13,11 +14,12 @@ import type { Domain } from "../schemas/agent.ts";
 import type { Task } from "../schemas/task.ts";
 import { dataRoot } from "./project.ts";
 
-export type ChangeSource = "quickfix" | "worker";
+/** `chat`: an agent answering the user in the lobby chat (older ledgers call it `quickfix`). */
+export type ChangeSource = "chat" | "worker";
 
 export interface ChangeRecord {
   source: ChangeSource;
-  /** The quick fix (`QF-3`) or the worker run that made the edits. */
+  /** The chat reply (`CHAT-3`) or the worker run that made the edits. */
   id: string;
   /** The task a worker ran for. */
   taskId?: string;
@@ -106,7 +108,7 @@ export function appendChange(root: string, configDir: string, record: ChangeReco
 function isRecord(value: unknown): value is ChangeRecord {
   if (!value || typeof value !== "object") return false;
   const record = value as Partial<ChangeRecord>;
-  return (record.source === "quickfix" || record.source === "worker") && typeof record.id === "string" && Array.isArray(record.files) && typeof record.finishedAt === "string";
+  return (record.source === "chat" || record.source === "worker" || (record.source as unknown) === "quickfix") && typeof record.id === "string" && Array.isArray(record.files) && typeof record.finishedAt === "string";
 }
 
 /** Every record in the ledger finished at or after `since` (ISO), oldest first. */
@@ -123,7 +125,7 @@ export function readChanges(root: string, configDir: string, since?: string): Ch
     if (!line.trim()) continue;
     try {
       const record: unknown = JSON.parse(line);
-      if (isRecord(record) && Date.parse(record.finishedAt) >= from) records.push(record);
+      if (isRecord(record) && Date.parse(record.finishedAt) >= from) records.push((record.source as unknown) === "quickfix" ? { ...record, source: "chat" } : record);
     } catch {
       // A torn line (a crash mid-append) is skipped.
     }
@@ -131,7 +133,7 @@ export function readChanges(root: string, configDir: string, since?: string): Ch
   return records;
 }
 
-export type Provenance = "planned" | "quickfix" | "other-task" | "pre-existing" | "unattributed";
+export type Provenance = "planned" | "chat" | "other-task" | "pre-existing" | "unattributed";
 
 export interface FileProvenance {
   /** Repository-relative, as git reports it. */
@@ -140,8 +142,8 @@ export interface FileProvenance {
   kinds: Provenance[];
   /** One clause per source: `planned: DEV — Add the login endpoint`. */
   notes: string[];
-  /** The quick fixes that edited it. */
-  quickFixes: string[];
+  /** The lobby chat replies that edited it. */
+  chats: string[];
   /** This task's domains whose workers edited it. */
   domains?: Domain[];
 }
@@ -161,7 +163,7 @@ function clock(iso: string): string {
 /**
  * Explain each changed file of the working tree (`changed`, relative to the
  * repository at `top`) for `task`: edits by its own workers are planned; by a
- * quick fix, the user's direct request; by another task's workers, that
+ * lobby chat reply, the user's direct request; by another task's workers, that
  * task's; changed before its agents started, pre-existing; anything else, no
  * agent recorded it. `records` should reach back to the task's start.
  */
@@ -181,16 +183,16 @@ export function explainChanges(task: Pick<Task, "id" | "baseline">, changed: rea
   return changed.map((path) => {
     const kinds: Provenance[] = [];
     const notes: string[] = [];
-    const quickFixes: string[] = [];
+    const chats: string[] = [];
     const domains: Domain[] = [];
     const add = (kind: Provenance, note: string) => {
       if (!kinds.includes(kind)) kinds.push(kind);
       if (!notes.includes(note)) notes.push(note);
     };
     for (const record of byFile.get(path) ?? []) {
-      if (record.source === "quickfix") {
-        add("quickfix", `quick fix ${record.id}${clock(record.finishedAt)}, asked by the user: "${clip(record.what)}"`);
-        if (!quickFixes.includes(record.id)) quickFixes.push(record.id);
+      if (record.source === "chat") {
+        add("chat", `lobby chat ${record.id}${clock(record.finishedAt)}, asked by the user: "${clip(record.what)}"`);
+        if (!chats.includes(record.id)) chats.push(record.id);
       } else if (record.taskId === task.id) {
         add("planned", `planned: ${DOMAIN_LABELS[record.domain ?? ""] ?? record.domain ?? "worker"} — ${clip(record.what)}`);
         if (record.domain && !domains.includes(record.domain)) domains.push(record.domain);
@@ -199,7 +201,7 @@ export function explainChanges(task: Pick<Task, "id" | "baseline">, changed: rea
     }
     if (before.has(path)) add("pre-existing", "pre-existing: it already had uncommitted changes before this task's agents started");
     if (kinds.length === 0) add("unattributed", "unattributed: no bot-lobby agent recorded editing it");
-    return { path, kinds, notes, quickFixes, ...(domains.length ? { domains } : {}) };
+    return { path, kinds, notes, chats, ...(domains.length ? { domains } : {}) };
   });
 }
 
@@ -208,7 +210,7 @@ export const MAX_PROVENANCE_LINES = 60;
 
 /** The provenance as the reviewer reads it: one line per changed file, the unexplained ones first, the rest counted past `max`. */
 export function provenanceLines(files: readonly FileProvenance[], max = MAX_PROVENANCE_LINES): string {
-  const order = (file: FileProvenance) => (file.kinds.includes("unattributed") ? 0 : file.kinds.includes("quickfix") ? 1 : 2);
+  const order = (file: FileProvenance) => (file.kinds.includes("unattributed") ? 0 : file.kinds.includes("chat") ? 1 : 2);
   const sorted = [...files].sort((a, b) => order(a) - order(b));
   const lines = sorted.slice(0, max).map((file) => `- ${file.path} — ${file.notes.join("; ")}`);
   const rest = sorted.slice(max);
@@ -216,16 +218,16 @@ export function provenanceLines(files: readonly FileProvenance[], max = MAX_PROV
   return lines.join("\n");
 }
 
-/** A one-line count for the Master: `4 planned · 1 quick fix (QF-2) · 1 unattributed (src/x.ts)`. */
+/** A one-line count for the Master: `4 planned · 1 by lobby chat (CHAT-2) · 1 unattributed (src/x.ts)`. */
 export function provenanceSummary(files: readonly FileProvenance[]): string {
   const count = (kind: Provenance) => files.filter((file) => file.kinds.includes(kind));
   const parts: string[] = [];
   const planned = count("planned").length;
   if (planned > 0) parts.push(`${planned} planned`);
-  const quick = count("quickfix");
-  if (quick.length > 0) {
-    const ids = [...new Set(quick.flatMap((file) => file.quickFixes))];
-    parts.push(`${quick.length} by quick fix (${ids.join(", ")})`);
+  const chat = count("chat");
+  if (chat.length > 0) {
+    const ids = [...new Set(chat.flatMap((file) => file.chats))];
+    parts.push(`${chat.length} by lobby chat (${ids.join(", ")})`);
   }
   const other = count("other-task").length;
   if (other > 0) parts.push(`${other} by another task`);

@@ -282,7 +282,7 @@ test("delegationHost grants delegate_subtasks only to eligible agents", async ()
   }
 });
 
-test("a quick-fix run with an exhausted quota receives no delegate_subtasks tool", async () => {
+test("a lobby chat run with an exhausted quota receives no delegate_subtasks tool", async () => {
   const host = await hostToolsAndNote({ runId: "q", taskId: "q", domain: "backend", role: "worker" }, MAX_CHILDREN);
   assert.equal(host.tools.includes(DELEGATE_TOOL), false);
 });

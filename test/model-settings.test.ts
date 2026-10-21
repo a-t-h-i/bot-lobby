@@ -13,9 +13,8 @@ test("patchEntry never stores a thinking level on scouts", () => {
 test("prefillModels pins every unset subagent model to the session model and leaves set ones", () => {
   const config = resolveConfig({ agents: { qa: { model: "p/qa" } } });
   const { config: next, filled } = prefillModels(config, "p/session");
-  assert.deepEqual(filled, ["designer", "backend", "scout", "researcher", "quickfix", "planner"]);
+  assert.deepEqual(filled, ["designer", "backend", "scout", "researcher", "planner"]);
   assert.equal(next.agents.qa.model, "p/qa");
-  assert.equal(next.quickFix.model, "p/session");
   assert.equal(next.planner.model, "p/session");
   assert.equal(next.agents.designer.model, "p/session");
   assert.equal(next.scout.model, "p/session");
@@ -23,14 +22,14 @@ test("prefillModels pins every unset subagent model to the session model and lea
   assert.deepEqual(prefillModels(config, undefined).filled, []);
 });
 
-test("quick fix and planner keep their own entries, and an unknown thinking level falls back", () => {
-  const config = resolveConfig({ quickFix: { model: "p/fast", thinking: "bogus" }, planner: { thinking: "xhigh" } });
-  assert.equal(config.quickFix.model, "p/fast");
-  assert.equal(config.quickFix.thinking, DEFAULT_CONFIG.quickFix.thinking);
-  assert.equal(config.planner.thinking, "xhigh");
-  const patched = patchEntry(DEFAULT_CONFIG, "quickfix", { model: "p/q", instructions: "tiny diffs" });
-  assert.equal(patched.quickFix.model, "p/q");
-  assert.equal(patched.quickFix.instructions, "tiny diffs");
+test("the planner keeps its own entry, an unknown thinking level falls back, and an old quick-fix entry is dropped", () => {
+  const config = resolveConfig({ quickFix: { model: "p/fast" }, planner: { model: "p/plan", thinking: "bogus" } });
+  assert.equal("quickFix" in config, false);
+  assert.equal(config.planner.model, "p/plan");
+  assert.equal(config.planner.thinking, DEFAULT_CONFIG.planner.thinking);
+  const patched = patchEntry(DEFAULT_CONFIG, "planner", { model: "p/q", instructions: "small plans" });
+  assert.equal(patched.planner.model, "p/q");
+  assert.equal(patched.planner.instructions, "small plans");
   assert.equal(patchEntry(DEFAULT_CONFIG, "planner", { thinking: "max" }).planner.thinking, "max");
 });
 

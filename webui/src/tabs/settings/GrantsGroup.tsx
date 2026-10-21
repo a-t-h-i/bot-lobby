@@ -40,7 +40,6 @@ const PATH: Record<AgentKind, string[]> = {
   qa: ["agents", "qa"],
   scout: ["scout"],
   researcher: ["researcher"],
-  quickfix: ["quickFix"],
   planner: ["planner"],
 }
 

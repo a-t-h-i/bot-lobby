@@ -23,13 +23,13 @@ function skillDir(): { cwd: string; done: () => void } {
 }
 
 test("a skill grant is kept as names: absent keeps every skill, a list keeps only those, junk is dropped", () => {
-  const cfg = resolveConfig({ agents: { backend: { skills: ["pdf-tools", "Not A Name", 4] } }, scout: { skills: [] }, quickFix: { skills: ["release-notes"] } });
+  const cfg = resolveConfig({ agents: { backend: { skills: ["pdf-tools", "Not A Name", 4] } }, scout: { skills: [] }, planner: { skills: ["release-notes"] } });
   assert.deepEqual(cfg.agents.backend.skills, ["pdf-tools"]);
   assert.equal("skills" in cfg.agents.designer, false, "no list: every skill pi finds");
   assert.deepEqual(agentProfile(cfg, "backend", "worker").skills, ["pdf-tools"]);
   assert.deepEqual(agentProfile(cfg, "designer", "scout").skills, [], "an empty list grants none");
   assert.equal("skills" in agentProfile(cfg, "designer", "worker"), false);
-  assert.deepEqual(lobbyAgentProfile(cfg, "quickfix").skills, ["release-notes"]);
+  assert.deepEqual(lobbyAgentProfile(cfg, "planner").skills, ["release-notes"]);
 });
 
 test("granted skills replace pi's discovery in the agent's command line; no grant leaves it alone", () => {
@@ -131,7 +131,7 @@ test("the auto-compaction threshold is a whole number of tokens in range, carrie
   assert.equal("compactAt" in cfg.agents.qa, false, "below the minimum: the built-in threshold");
   assert.equal("compactAt" in cfg.planner, false);
   assert.equal(agentProfile(cfg, "designer", "scout").compactAt, 50_000);
-  assert.equal(lobbyAgentProfile(resolveConfig({ quickFix: { compactAt: 90_000 } }), "quickfix").compactAt, 90_000);
+  assert.equal(lobbyAgentProfile(resolveConfig({ planner: { compactAt: 90_000 } }), "planner").compactAt, 90_000);
   assert.equal(compactionThreshold(200_000, 16_384, 150_000), 150_000, "above the built-in 64K when asked");
   assert.equal(compactionThreshold(200_000, 16_384, 8_000), 8_000);
   assert.equal(compactionThreshold(100_000, 20_000, 500_000), 80_000, "never past the window less the reserve");

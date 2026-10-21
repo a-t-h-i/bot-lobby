@@ -8,7 +8,6 @@ import type { FetchLike } from "../src/classifier/client.ts";
 import { effortRouter, fellShort, planRoute, routeLabel, stepDown, type EffortRouter } from "../src/classifier/effort.ts";
 import { DEFAULT_CONFIG, type ClassifierConfig } from "../src/schemas/configuration.ts";
 import { runScouts, runWorker } from "../src/master/master.ts";
-import { QuickFixQueue } from "../src/lobby/quickfix.ts";
 import { PlanningSession } from "../src/lobby/planner.ts";
 import { readMetrics, metricFromRun } from "../src/state/metrics.ts";
 import { describeRun } from "../src/pi/run-summary.ts";
@@ -135,29 +134,6 @@ test("a routed scout moves to the cheaper model only, and an unusable one runs a
   const outcomes = await runScouts({ taskId: "T", taskText: "rename", instruction: "Where is getUser?", domains: ["backend"], cwd: data, dataRoots: [data], taskDir: mkdtempSync(join(tmpdir(), "bl-effort-td-")), config, effort: router(0, 0.95) }, byModel({ "p/cheap": "", "p/scout": usable }, seen));
   assert.deepEqual(seen, [{ model: "p/cheap", thinking: "low" }, { model: "p/scout", thinking: "low" }]);
   assert.equal(outcomes[0]!.usable, true);
-});
-
-async function drain(queue: QuickFixQueue): Promise<void> {
-  for (let i = 0; i < 50 && queue.jobs.some((job) => job.status === "queued" || job.status === "running"); i++) await new Promise((resolve) => setTimeout(resolve, 5));
-}
-
-test("a routed quick fix records its routed attempt and re-runs on the configured profile when it falls short", async () => {
-  const root = mkdtempSync(join(tmpdir(), "bl-effort-qf-"));
-  const seen: Array<{ model: string; thinking: string }> = [];
-  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ model: "p/big", thinking: "medium" }), runProcess: byModel({ "p/big": "## Done\nx" }, seen), effort: router(0, 0.9) });
-  const job = queue.submit("fix the typo");
-  await drain(queue);
-  assert.deepEqual(seen, [{ model: "p/cheap", thinking: "low" }, { model: "p/big", thinking: "medium" }]);
-  assert.equal(job.status, "success");
-  assert.equal(job.route, undefined, "it finished on the configured profile");
-  const metrics = readMetrics(root, ".pi").filter((record) => record.kind === "quickfix");
-  assert.deepEqual(metrics.map((record) => [record.status, record.routedFrom]), [["failed", "p/big · medium"], ["success", undefined]]);
-
-  const fine = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ model: "p/big", thinking: "medium" }), runProcess: byModel({ "p/cheap": "## Done\nx" }, []), effort: router(0, 0.9) });
-  const cheap = fine.submit("fix another typo");
-  await drain(fine);
-  assert.equal(cheap.route, "trivial 0.90: p/big · medium → p/cheap · low");
-  assert.equal(cheap.model, "p/served");
 });
 
 test("planning seats share one effort score per round; a routed seat that fails asks again, and the oracle is never routed", async () => {

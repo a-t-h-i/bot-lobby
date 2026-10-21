@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Classifier } from "../src/classifier/classifier.ts";
 import type { Answer, FetchLike, Question } from "../src/classifier/client.ts";
-import { answerClarify, quickFixSize, repositoryLayout, suggestedPath, triageContext, triageLine, triageRequest, triageTask, triageWithContext } from "../src/classifier/triage.ts";
+import { answerClarify, repositoryLayout, suggestedPath, triageContext, triageLine, triageRequest, triageTask, triageWithContext } from "../src/classifier/triage.ts";
 import { ASK_THE_USER } from "../src/classifier/answers.ts";
 import { DEFAULT_CONFIG, type ClassifierConfig } from "../src/schemas/configuration.ts";
 import { createTask, type TaskTriage } from "../src/schemas/task.ts";
@@ -14,7 +14,7 @@ import { transition } from "../src/state/task-state.ts";
 import { setAutoMode } from "../src/state/auto.ts";
 import { runWorkflowAction, type OrchestrateParams, type WorkflowDeps } from "../src/workflow/workflow.ts";
 import { masterWorkflowContext } from "../src/pi/events.ts";
-import { QuickFixQueue } from "../src/lobby/quickfix.ts";
+import { routeChatMessage } from "../src/classifier/lobby.ts";
 import type { ProcessRunner } from "../src/execution/pi-runner.ts";
 
 const DOMAINS = [{ domain: "designer" as const, owns: "screens" }, { domain: "backend" as const, owns: "APIs" }, { domain: "qa" as const, owns: "tests" }];
@@ -177,54 +177,12 @@ function reply(text: string): string {
   return JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], model: "p/served", stopReason: "stop", usage: { input: 1, output: 1, cost: { total: 0 } } } });
 }
 
-async function drain(queue: QuickFixQueue): Promise<void> {
-  for (let i = 0; i < 50 && queue.jobs.some((job) => job.status === "queued" || job.status === "running"); i++) await new Promise((resolve) => setTimeout(resolve, 5));
-}
-
-test("a quick fix the classifier judges a task is held, not run; r runs it anyway, t moves it to a task", async () => {
-  const root = mkdtempSync(join(tmpdir(), "bl-qf-"));
-  const runs: string[] = [];
-  const runner: ProcessRunner = async (_args, options) => (runs.push(options.prompt ?? ""), { exitCode: 0, stdout: reply("## Done\nx"), stderr: "", killed: false });
-  const sizes: Array<[number, number]> = [[3, 0.9], [0.2, 0.9], [3, 0.6], [3, 0.95]];
-  const fetch: FetchLike = async (url, init) => scriptedJev({ size: sizes.shift() })(url, init);
-  const logged: string[] = [];
-  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), runProcess: runner, classifier: jev(fetch), feed: { log: (_source: string, text: string) => logged.push(text), step: () => {}, end: () => {}, thought: () => {}, liveThought: () => {}, settleThought: () => {} } as never });
-  const big = queue.submit("rewrite the auth system to use OAuth");
-  await drain(queue);
-  assert.equal(big.status, "held");
-  assert.equal(big.note, "looks like a task (large, 0.90)");
-  assert.deepEqual(runs, [], "nothing ran");
-  assert.ok(logged.some((line) => /^held: rewrite the auth system to use OAuth — looks like a task \(large, 0\.90\); r runs it anyway, t makes it a task$/.test(line)));
-
-  const small = queue.submit("fix the typo in README");
-  await drain(queue);
-  assert.equal(small.status, "success");
-  const unsure = queue.submit("migrate the settings screen");
-  await drain(queue);
-  assert.equal(unsure.status, "success", "large but not confident enough: it runs");
-
-  assert.equal(queue.runAnyway(big.id), true);
-  await drain(queue);
-  assert.equal(big.status, "success", "run anyway: not sized again");
-  assert.equal(runs.length, 3);
-
-  const other = queue.submit("replace the database with Postgres");
-  await drain(queue);
-  assert.equal(other.status, "held");
-  assert.equal(queue.movedToTask(other.id), true);
-  assert.equal(other.status, "cancelled");
-  assert.equal(other.note, "started as a task in a new session");
-  assert.equal(queue.runAnyway(small.id), false, "only a held job runs anyway");
-  assert.deepEqual(await quickFixSize(jev(scriptedJev({}), { enabled: false }), "x"), undefined);
-});
-
-test("a large quick fix that is still one engineer's work runs instead of being held", async () => {
-  const root = mkdtempSync(join(tmpdir(), "bl-qf-solo-"));
-  const runs: string[] = [];
-  const runner: ProcessRunner = async (_args, options) => (runs.push(options.prompt ?? ""), { exitCode: 0, stdout: reply("## Done\nx"), stderr: "", killed: false });
-  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), runProcess: runner, classifier: jev(scriptedJev({ size: [3, 0.95], solo: 0.9 })) });
-  const page = queue.submit("build a realistic three.js hourglass timer in one html file");
-  await drain(queue);
-  assert.equal(page.status, "success", "large, but one file one engineer can build");
-  assert.deepEqual(await quickFixSize(jev(scriptedJev({ size: [3, 0.95], solo: 0.2 })), "rewrite the billing system"), { size: "large", confidence: 0.95, solo: 0.2 });
+test("the lobby sends a message to the agent whose area it is, and anything unsure to the Master", async () => {
+  const calls: Array<Record<string, Question>> = [];
+  const routed = await routeChatMessage(jev(scriptedJev({ picks: { "Which member": ["designer", 0.86] } }, calls)), "why is the header button misaligned?", ["You: hi", "MASTER: hello"], { at: 0.5 });
+  assert.deepEqual(routed, { route: "designer", probability: 0.86 });
+  assert.deepEqual(Object.keys((calls[0]!.agent as Extract<Question, { type: "choice" }>).criteria).sort(), ["backend", "designer", "knowledge", "master", "qa", "researcher", "scout"]);
+  assert.equal(await routeChatMessage(jev(scriptedJev({ picks: { "Which member": ["scout", 0.4] } })), "where is getUser?", [], { at: 0.5 }), undefined, "not sure enough");
+  assert.equal(await routeChatMessage(jev(scriptedJev({ picks: { "Which member": ["nobody", 0.9] } })), "x", [], { at: 0.5 }), undefined, "an unknown pick");
+  assert.equal(await routeChatMessage(jev(scriptedJev({}), { features: { ...DEFAULT_CONFIG.classifier.features, lobby: false } }), "x", [], { at: 0.5 }), undefined, "off");
 });

@@ -1,6 +1,6 @@
 /**
  * Model performance records: one line per finished run of any agent — the
- * Master's own turns, scouts, workers, the QA gate, researchers, quick fixes,
+ * Master's own turns, scouts, workers, the QA gate, researchers, lobby chat agents,
  * planner turns and planning panel seats — so the lobby can show how long each model takes at each
  * thinking level, how often it succeeds and what it costs. Append-only JSON
  * lines per project; reads keep the newest `MAX_READ` records.
@@ -11,7 +11,8 @@ import type { AgentRun } from "../schemas/findings.ts";
 import type { RunLogEntry, Task } from "../schemas/task.ts";
 import { dataRoot } from "./project.ts";
 
-export const METRIC_KINDS = ["master", "scout", "worker", "reviewer", "researcher", "quickfix", "planner", "panel", "classifier"] as const;
+/** `chat`: an agent answering in the lobby chat; `quickfix` is kept so older logs still read. */
+export const METRIC_KINDS = ["master", "scout", "worker", "reviewer", "researcher", "chat", "quickfix", "planner", "panel", "classifier"] as const;
 export type MetricKind = (typeof METRIC_KINDS)[number];
 
 export type MetricStatus = "success" | "failed" | "cancelled" | "timeout";
@@ -19,7 +20,7 @@ export type MetricStatus = "success" | "failed" | "cancelled" | "timeout";
 export interface MetricRecord {
   id: string;
   kind: MetricKind;
-  /** Display name of the agent: MASTER, DEV, DESIGN, QA, RESEARCH, QUICK FIX, ORACLE (planning). */
+  /** Display name of the agent: MASTER, DEV, DESIGN, QA, RESEARCH, SCOUT, ORACLE (planning). */
   agent: string;
   model?: string;
   thinking?: string;
@@ -37,7 +38,7 @@ export interface MetricRecord {
   purpose?: string;
   /** A run the classifier routed down: the configured profile it came from. */
   routedFrom?: string;
-  /** Classifier calls: what the decision spared (seat runs skipped, questions answered, quick fixes held). */
+  /** Classifier calls: what the decision spared (seat runs skipped, questions answered). */
   saved?: number;
 }
 
@@ -53,7 +54,6 @@ export interface ClassifierSummary {
   byPurpose: Record<string, number>;
   seatRunsSkipped: number;
   questionsAnswered: number;
-  quickFixesHeld: number;
   /** Agent runs the classifier routed down, and how many of them succeeded. */
   routed: number;
   routedOk: number;
@@ -72,14 +72,12 @@ export function summarizeClassifier(calls: readonly MetricRecord[], runs: readon
   const byPurpose: Record<string, number> = {};
   let seatRunsSkipped = 0;
   let questionsAnswered = 0;
-  let quickFixesHeld = 0;
   for (const record of calls) {
     const purpose = record.purpose ?? "other";
     byPurpose[purpose] = (byPurpose[purpose] ?? 0) + 1;
     const saved = record.saved ?? 0;
     if (purpose === "seats") seatRunsSkipped += saved;
     else if (purpose === "answers") questionsAnswered += saved;
-    else if (purpose === "triage") quickFixesHeld += saved;
   }
   return {
     calls: calls.length,
@@ -90,7 +88,6 @@ export function summarizeClassifier(calls: readonly MetricRecord[], runs: readon
     byPurpose,
     seatRunsSkipped,
     questionsAnswered,
-    quickFixesHeld,
     routed: routed.length,
     routedOk: routed.filter((record) => record.status === "success").length,
   };

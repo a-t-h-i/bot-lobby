@@ -1,6 +1,6 @@
 /**
  * The lobby inside pi: one runtime per master session. It owns the lobby's
- * state (the quick-fix queue, planner, issues, pulls, knowledge), narrates the
+ * state (the chat agents, planner, issues, pulls, knowledge), narrates the
  * Master's own turn into the feed, passes plan comments to the Master that
  * owns a task and records each Master turn in the metrics log. The web server
  * (src/webui) is its only surface.
@@ -15,19 +15,17 @@ import { basename } from "node:path";
 import { isSubagentProcess } from "../pi/quiet.ts";
 import { modelRef } from "../pi/model-support.ts";
 import { modelLookup } from "../pi/tools.ts";
-import { setQuickFixHandoff } from "../pi/route.ts";
-import type { Domain } from "../schemas/agent.ts";
 import { chatFromEntries, lobbyFeed, narrateEvent, type AgentEventLike } from "./feed.ts";
 import { classifier, effortFor, hintsFor, scriptsPickerFor } from "../classifier/instance.ts";
 import { checkThinking } from "../pi/model-support.ts";
-import { QuickFixQueue } from "./quickfix.ts";
 import type { Asker } from "../ask/types.ts";
+import { ChatAgents } from "./chat-agents.ts";
 import { execCommand, IssuesState } from "./issues.ts";
 import { PullsState } from "./pulls.ts";
 import { PullReviews } from "./pr-review.ts";
 import { KnowledgeBook } from "./knowledge.ts";
 import type { LobbyService } from "./host.ts";
-import { backgroundSessions, carryHandOff, createLobbyService, lobbyNotify, lobbyProfile, plannerDeps, resumeSession, reviewProfile, seatProfile, setServiceState, savePlan as serviceSavePlan, answerPanel as serviceAnswerPanel } from "./service.ts";
+import { backgroundSessions, carryHandOff, chatProfile, chatReplied, chatHistoryLines, createLobbyService, lobbyNotify, lobbyProfile, plannerDeps, resumeSession, reviewProfile, seatProfile, setServiceState, savePlan as serviceSavePlan, answerPanel as serviceAnswerPanel } from "./service.ts";
 import { lobbyTopics } from "./topics.ts";
 export { backgroundSessions, setSessionLauncher } from "./service.ts";
 import { deliverComments, onOwnerEvent } from "../pi/owner.ts";
@@ -42,7 +40,8 @@ export interface Runtime {
   configDir: string;
   ctx: ExtensionContext;
   root: string;
-  quickfix: QuickFixQueue;
+  /** The lobby chat's agents other than the oracle, answering one at a time. */
+  chat: ChatAgents;
   planner?: PlanningSession;
   issues: IssuesState;
   pulls: PullsState;
@@ -80,11 +79,11 @@ export async function answerPanel(state: Runtime | undefined = runtime): Promise
   return serviceAnswerPanel(state);
 }
 
-/** What the lobby is running now (a quick fix, a review, a planning round), in words, or undefined. */
+/** What the lobby is running now (a chat agent's reply, a review, a planning round), in words, or undefined. */
 export function lobbyWorkRunning(): string | undefined {
   const state = runtime;
   if (!state) return undefined;
-  if (state.quickfix.running) return "A quick fix";
+  if (state.chat.running) return "A chat reply";
   if (state.planner?.busy) return "A planning round";
   if (state.reviews.busy) return "A pull request review";
   return undefined;
@@ -107,30 +106,11 @@ function shutdown(carryOn: boolean): void {
   runtime = undefined;
   lobbyService = undefined;
   setServiceState(undefined);
-  setQuickFixHandoff(undefined);
   state.unsubscribeFeed?.();
-  state.quickfix.cancelAll();
+  state.chat.cancelAll();
   state.reviews.cancelAll();
   state.planner?.cancel();
   onRunUpdates(undefined);
-}
-
-/**
- * The oracle routed a request to the quick-fix agent: queue it (no "looks like
- * a task" hold, the oracle already decided), on its builder's settings when it
- * is a quick feature, and tell the page where it went.
- */
-function handToQuickFix(state: Runtime, request: string, builder: Domain | undefined, reason: string): string {
-  const quick = lobbyProfile(state, "quickfix");
-  const profile = builder ? { ...seatProfile(state, builder), instructions: quick.instructions } : undefined;
-  const job = state.quickfix.submit(request, Date.now(), {
-    force: true,
-    ...(profile ? { profile } : {}),
-    note: `The oracle sent your request here: ${reason.replace(/[.\s]+$/, "")}.${builder ? ` A quick feature: it runs on ${builder === "designer" ? "DESIGN" : "DEV"}'s model, thinking and grants.` : ""}`,
-  });
-  lobbyTopics.bump("quickfix");
-  pushNotice("The oracle sent your request to the quick-fix agent.", "info");
-  return job.id;
 }
 
 /**
@@ -150,10 +130,10 @@ export function startLobbyService(pi: ExtensionAPI, ctx: ExtensionContext, confi
     asking: false,
     workspace: { name: basename(ctx.cwd) || ctx.cwd },
     readingWorkspace: false,
-    quickfix: undefined as unknown as QuickFixQueue,
     issues: new IssuesState(execCommand, ctx.cwd, () => lobbyTopics.bump("issues")),
     pulls: new PullsState(execCommand, ctx.cwd, () => lobbyTopics.bump("git")),
     reviews: undefined as unknown as PullReviews,
+    chat: undefined as unknown as ChatAgents,
     knowledge: new KnowledgeBook({
       root,
       configDir,
@@ -175,34 +155,30 @@ export function startLobbyService(pi: ExtensionAPI, ctx: ExtensionContext, confi
     notify: (message, level) => lobbyNotify(state, message, level),
     classifier: classifier(),
   });
-  state.quickfix = new QuickFixQueue({
+  state.chat = new ChatAgents({
     cwd: ctx.cwd,
     root,
     configDir,
-    profile: () => lobbyProfile(state, "quickfix"),
+    profile: (agent) => chatProfile(state, agent),
+    history: chatHistoryLines,
+    onReply: (job) => chatReplied(state, job),
+    onChange: () => {
+      lobbyTopics.bump("lobby");
+      lobbyTopics.bump("status");
+    },
+    feed: lobbyFeed,
+    hints: hintsFor({ cwd: ctx.cwd, root, configDir }),
     stallTimeoutMs: workflow.stallTimeoutMs,
     toolStallTimeoutMs: workflow.toolStallTimeoutMs,
-    feed: lobbyFeed,
-    onChange: () => {
-      lobbyTopics.bump("quickfix");
-      state.keeper?.quickfix.schedule();
-    },
-    notify: (message, level) => lobbyNotify(state, message, level),
-    hints: hintsFor({ cwd: ctx.cwd, root, configDir }),
-    scripts: scriptsPickerFor(),
-    classifier: classifier(),
-    effort: effortFor((model, thinking) => checkThinking(modelLookup(ctx)(model), thinking).level),
-    lint: () => loadConfig().lint,
   });
   runtime = state;
   lobbyService = createLobbyService(state);
   setServiceState(state);
   // Topic routing (src/lobby/topics.ts): sources bump a topic when their data
   // changes and the web page rereads it. lobbyFeed (lobby), run updates (tasks),
-  // quick fix (quickfix), planner (planner), background sessions (sessions),
+  // chat agents (lobby), planner (planner), background sessions (sessions),
   // metrics (metrics), pulls/reviews (git), issues (issues), the prompt hub
   // (prompts), owner/notify events (notices), busy/workspace (status).
-  setQuickFixHandoff((request, builder, reason) => (runtime === state ? handToQuickFix(state, request, builder, reason) : undefined));
   lobbyFeed.clear();
   // Only the newest messages are kept; the feed learns whether earlier ones exist, and loads them when scrolled to.
   lobbyFeed.seedChat(chatFromEntries(ctx.sessionManager.getBranch(), Number.POSITIVE_INFINITY));
@@ -239,7 +215,6 @@ function carryOn(state: Runtime): void {
     sessionFile: () => state.ctx.sessionManager.getSessionFile?.(),
     working: () => !state.ctx.isIdle(),
     planner: () => state.planner,
-    quickfix: () => state.quickfix.snapshot(),
     background: () => backgroundSessions(),
   });
   let summary: string | undefined;
@@ -250,7 +225,6 @@ function carryOn(state: Runtime): void {
       sessionId: ctx.sessionManager.getSessionId(),
       relaunch: (start) => resumeSession(state, start),
       restorePlanner: (snapshot) => restorePlanner(state, snapshot),
-      restoreQuickFixes: (jobs) => state.quickfix.restore(jobs).length,
       nudge: (message) => nudgeWhenIdle(state, message),
     });
   } catch (error) {

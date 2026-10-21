@@ -914,7 +914,7 @@ function provenanceNote(files: readonly FileProvenance[] | undefined): string {
   const kinds = new Set(files.flatMap((file) => file.kinds));
   return [
     `Changed files: ${provenanceSummary(files)}.`,
-    kinds.has("quickfix") ? "The user asked for the quick fixes directly: never revert them or send them back as fixes." : "",
+    kinds.has("chat") ? "The user asked for the lobby chat's changes directly: never revert them or send them back as fixes." : "",
     kinds.has("pre-existing") || kinds.has("other-task") ? "Pre-existing changes and other tasks' are not this task's to review or revert." : "",
     kinds.has("unattributed") ? "No agent recorded the unattributed edits: ask the user before counting them in or reverting them." : "",
   ]
@@ -1369,7 +1369,7 @@ function qaReport(header: string, result: ReviewResult, decision: LoopDecision, 
     .join("\n");
 }
 
-/** Changes of this task's own: its agents' (or nobody's on record), not quick fixes, other tasks' or what was there before. */
+/** Changes of this task's own: its agents' (or nobody's on record), not the lobby chat's, other tasks' or what was there before. */
 const TASKS_OWN = new Set(["planned", "unattributed"]);
 
 /**

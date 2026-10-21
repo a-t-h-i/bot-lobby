@@ -16,20 +16,26 @@ Requires **Pi 1.3.x** (1.3.0 or later).
 
 ## Use
 
-1. In Pi, run `/bot-lobby add a login page`. The lobby opens in your browser. `Ctrl+Shift+M` or
-   `/bot-lobby on|off` switches bot-lobby on or off; a new Pi session starts with it off.
-2. Answer the oracle's questions and approve its plan, or agree on one with the panel in **Plan** first.
-3. Follow the agents in **Lobby** and **Tasks**. Their steps fold into one line in the conversation
-   and open in place.
+1. In Pi, run `/bot-lobby` to open the lobby in your browser. `Ctrl+Shift+M` or `/bot-lobby on|off`
+   switches bot-lobby on or off; a new Pi session starts with it off.
+2. Chat with the team in **Lobby**. Questions, code changes and small fixes happen right there: the
+   classifier hands each message to the agent whose area it is (a styling question to DESIGN, a
+   library question to RESEARCH, "where is this?" to a scout), and every reply is labelled with who
+   wrote it. Start a message with `@design`, `@dev`, `@qa`, `@research`, `@scout` or `@master` to pick
+   who answers yourself.
+3. Type `/plan <idea>` to plan it with the panel in **Plan**, or `/task <request>` to start it as a
+   task for the team. Follow the agents in **Lobby** and **Tasks**; their steps fold into one line in
+   the conversation and open in place.
 
-Small changes go to **Quick fix**. `--task` forces a full task, `--fast` / `--full` picks the workflow,
-and `--branch` / `--worktree` isolates it in git. Workers never commit: the oracle commits only the
+`/bot-lobby <request>` in Pi also starts a task. `--fast` / `--full` picks the workflow, and
+`--branch` / `--worktree` isolates it in git. Workers never commit: the oracle commits only the
 files the task changed, after the project's linter and a QA pass sized to the change's risk.
 
 ## The lobby
 
-- **Lobby**: the conversation with the oracle, each run of agent steps inline, and **Thinking** for
-  their reasoning.
+- **Lobby**: the team chat. The oracle and the agents answer here, each reply under its agent's
+  name; each run of agent steps shows inline, and **Thinking** holds their reasoning. Typing `@` or
+  `/` at the start of a message opens a list of agents or commands to pick from.
 - **Plan**: plan with a panel of agents. **View plan** (`V`) opens the draft in a slide-out, where
   any line takes a comment.
 - **Tasks**: every task across sessions as a list or a board, with its steps, timings and **Resume**.
@@ -48,7 +54,7 @@ Git opens pull requests at `#/git` and `#/git/<number>`, and issues at `#/git/is
 addresses fall back to Lobby; Excalidraw integration is removed without deleting saved room links
 or external boards.
 
-The composer appears only on **Lobby**, **Tasks**, **Plan**, **Quick fix** and **Knowledge**, including
+The composer appears only on **Lobby**, **Tasks**, **Plan** and **Knowledge**, including
 supported detail routes and Knowledge's Docs/Chat views. On Git, Metrics and Settings it stays mounted
 but hidden and inert, preserving drafts and attachments (including uploads that finish while hidden)
 without taking space.

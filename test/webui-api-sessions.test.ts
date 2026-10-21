@@ -18,6 +18,7 @@ import { createTask } from "../src/schemas/task.ts";
 import { savePlannedTask } from "../src/state/backlog.ts";
 import { createLobbyService, setSessionLauncher, setServiceState } from "../src/lobby/service.ts";
 import type { Runtime } from "../src/lobby/runtime.ts";
+import { ChatAgents } from "../src/lobby/chat-agents.ts";
 import { FakeSessionProcess } from "./fake-session.ts";
 import { createFixtureService, disposeFixtureService } from "../src/webui/dev/fake-service.ts";
 import { SCENARIOS } from "../src/webui/dev/fixtures.ts";
@@ -86,7 +87,8 @@ function fakeState() {
       name = next;
     },
   } as unknown as ExtensionAPI;
-  return { root, ctx, pi };
+  const chat = new ChatAgents({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), history: () => [] });
+  return { root, ctx, pi, chat };
 }
 
 async function setup() {

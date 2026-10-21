@@ -189,7 +189,7 @@ test("the goal check's report reads as met, not met with its gaps, or unread", (
 test("only a task's DESIGN and DEV workers consult the expert, and the settings default to the new ways of working", () => {
   assert.equal(canConsult({ runId: "r", taskId: "T", role: "worker", domain: "backend" }, true), true);
   assert.equal(canConsult({ runId: "r", taskId: "T", role: "worker", domain: "designer", depth: 2 }, true), false, "children do not");
-  assert.equal(canConsult({ runId: "T", taskId: "T", role: "worker", domain: "backend" }, true), false, "a quick fix does not");
+  assert.equal(canConsult({ runId: "T", taskId: "T", role: "worker", domain: "backend" }, true), false, "a lobby chat reply does not");
   assert.equal(canConsult({ runId: "r", taskId: "T", role: "reviewer", domain: "qa" }, true), false);
   assert.equal(canConsult({ runId: "r", taskId: "T", role: "worker", domain: "backend" }, false), false);
   const config = resolveConfig({});

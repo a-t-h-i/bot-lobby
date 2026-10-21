@@ -43,9 +43,9 @@ export function canDelegate(agent: { role: Role; domain: Domain; depth?: number 
   return agent.role === "reviewer" && agent.domain === "qa";
 }
 
-/** A task's DESIGN/DEV workers (not their children, nor quick fixes) may consult a stronger model, when the setting is on. */
+/** A task's DESIGN/DEV workers (not their children, nor lobby chat agents) may consult a stronger model, when the setting is on. */
 export function canConsult(agent: { runId: string; taskId: string; role: Role; domain: Domain; depth?: number }, enabled: boolean): boolean {
-  // A lobby job (a quick fix) runs as its own task: it is one agent on a small change, not a task's worker.
+  // A lobby chat agent runs as its own task: it is one agent answering the user, not a task's worker.
   return enabled && agent.taskId !== agent.runId && (agent.depth ?? 1) === 1 && agent.role === "worker" && (agent.domain === "designer" || agent.domain === "backend");
 }
 

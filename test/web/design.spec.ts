@@ -127,7 +127,7 @@ test("each tab's icon plays an animation of its own when the pointer comes onto 
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const ids = await page.locator('[role="tab"] svg[data-tab-icon]').evaluateAll((icons: any[]) => icons.map((icon) => icon.dataset.tabIcon));
-  expect(ids, "every tab has its own icon").toEqual(["lobby", "tasks", "plan", "quickfix", "git", "knowledge"]);
+  expect(ids, "every tab has its own icon").toEqual(["lobby", "tasks", "plan", "git", "knowledge"]);
   await expect(page.locator('svg[data-tab-icon][data-play="0"]'), "resting until something happens").toHaveCount(6);
   // Hovering Tasks ticks its boxes: the strokes are drawn again from nothing, then the icon rests as Lucide draws it.
   await page.getByRole("tab", { name: /Tasks/ }).hover();
@@ -272,16 +272,16 @@ test("the composer takes an image, shows it, and clears it once sent", async ({ 
   const preview = chips.getByRole("img", { name: "mockup.png" });
   await expect(preview, "the image shows as a preview in the box").toBeVisible();
   await expect.poll(async () => (await preview.boundingBox())!.width, { message: "a real thumbnail, not an icon (it springs in first)" }).toBeGreaterThanOrEqual(56);
-  await page.getByLabel("Message the oracle").fill("see this");
+  await page.getByLabel("Message the team").fill("see this");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(chips).toHaveCount(0);
-  await expect(page.getByLabel("Message the oracle")).toHaveValue("");
+  await expect(page.getByLabel("Message the team")).toHaveValue("");
 });
 
 test("the box grows with what is typed, carries lists on, formats with Ctrl+B and offers no Markdown preview", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
-  const box = page.getByLabel("Message the oracle");
+  const box = page.getByLabel("Message the team");
   const before = (await box.boundingBox())!.height;
   await box.fill("- one");
   await box.press("Shift+Enter");
@@ -353,10 +353,9 @@ test("the page decides where the composer sends, with no recipient picker, and a
   await page.setViewportSize({ width: 1280, height: 900 });
   const box = page.locator(".group\\/composer");
   for (const [hash, label, rpc] of [
-    ["#/lobby", "Message the oracle", "lobby.send"],
+    ["#/lobby", "Message the team", "lobby.send"],
     ["#/plan", "Message the panel", "planner.send"],
     ["#/knowledge", "Ask the oracle about this project", "knowledge.ask"],
-    ["#/quickfix", "Describe a quick fix", "quickfix.submit"],
     ["#/tasks/T-mock-1", "Comment on T-mock-1", "tasks.comment"],
   ] as const) {
     await page.evaluate((to: string) => {
@@ -374,7 +373,7 @@ test("the page decides where the composer sends, with no recipient picker, and a
     if (rpc === "tasks.comment") expect(body.taskId).toBe("T-mock-1");
   }
   await page.evaluate(() => { window.location.hash = "#/lobby"; });
-  await page.getByLabel("Message the oracle").fill("kept draft");
+  await page.getByLabel("Message the team").fill("kept draft");
   await page.evaluate(() => { window.location.hash = "#/plan"; });
   await expect(page.getByLabel("Message the panel"), "the draft follows to Plan").toHaveValue("kept draft");
   const sent = page.waitForRequest((request) => request.url().includes("/api/planner.send"));
@@ -485,7 +484,7 @@ test("questions are answered from the keyboard alone: y/n, arrows, Space, Enter"
   await expect(popup).toContainText("Start the mock server on 7347?");
   await page.keyboard.press("y");
   await expect(popup, "y answers yes").toBeHidden();
-  await page.getByLabel("Message the oracle").fill("go");
+  await page.getByLabel("Message the team").fill("go");
   await page.keyboard.press("Enter");
   await expect(popup).toContainText("Which set should stream next?");
   await expect(popup.locator('[data-option="0"]'), "the first option has focus").toBeFocused();

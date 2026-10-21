@@ -33,9 +33,35 @@ session. Naming uses low reasoning on `classifier.effort.cheapModel` when config
 the session model. If naming fails or takes more than eight seconds, the request's first content
 words are used. Tasks started from an agreed plan keep that plan's title.
 
-## Quick fixes and delivery
+## Lobby chat
 
-Small changes go to **Quick fix**. `--task` forces a full task, `--fast` / `--full` picks the workflow,
+The **Lobby** is a chat with the team. Without a task the oracle (the Master) is your Pi session with
+its full tools, so everyday questions, code changes and minor fixes happen in the chat itself, with no
+plan, scouts or QA gate. Each message goes to whoever it belongs to: start it with an @ mention
+(`@design`, `@dev`, `@qa`, `@research`, `@scout` or `@master`; `@frontend`, `@backend` and `@oracle`
+work too), or leave it to the classifier, which hands a frontend question to DESIGN, a backend change
+to DEV, a test to QA, an outside fact to RESEARCH, "how does this work" to a scout and a question about
+the project's saved knowledge to the knowledge lookup. Anything it is unsure of goes to the Master.
+**Settings → Classifier → Lobby replies** turns the classifier's choice off (`classifier.features.lobby`;
+`classifier.thresholds.lobbyAgentAt`, 0.5 by default, is how sure it must be).
+
+An agent answers with its own model, effort, tools and skills (the DESIGN, DEV and QA entries, the
+researcher's and the scout's). DESIGN, DEV and QA may edit files; RESEARCH and scouts only read. One
+agent answers at a time; every reply shows under its agent's name, and it is kept in the Pi session,
+so the Master reads it as context. While a task runs, messages go to its oracle, as before.
+
+Two commands start the team's workflow, and only when you ask for it:
+
+- `/plan <idea>` plans it with the panel in **Plan** (a fresh planning session when the current one
+  has messages). `/plan` alone plans what the chat has been about.
+- `/task <request>` starts it as a task. `/task` alone makes a task of the chat so far.
+
+Typing `/` or `@` at the start of a message opens a list to pick from (arrow keys move, Enter or
+Tab picks, Esc closes). Any other `/` command goes to Pi.
+
+## Delivery
+
+`/bot-lobby <request>` in Pi starts a task as well. `--fast` / `--full` picks the workflow,
 and `--branch` / `--worktree` isolates it in git. When an isolated task completes, the oracle asks
 you to confirm merging and pushing main, then removes its worktree after verifying the merge.
 Declining or failed verification keeps the worktree. Delivery can also be reviewed in **Tasks**,
@@ -43,9 +69,9 @@ where you can create a PR instead. The task branch is kept.
 
 Workers never commit; the oracle does. When a task completes, the oracle writes a short commit
 message (a first line of 72 characters or fewer, at most three lines below it). The engine then
-commits only the files that task's workers changed. A quick fix commits its own files when it
-finishes, under the one-line message its agent gives. Changes that were already there before, another
-agent's and anything no agent made are left uncommitted.
+commits only the files that task's workers changed. The lobby chat does not commit unless you ask
+it to. Changes that were already there before, another agent's, the lobby chat's (recorded as
+yours, so QA never reverts them) and anything no agent made are left uncommitted.
 
 ## Checks
 
@@ -77,7 +103,7 @@ reviews are read-only and nothing is posted to GitHub. Both lists use `gh`.
 
 ## Composer and removed pages
 
-The composer is available only on **Lobby**, **Tasks**, **Plan**, **Quick fix** and **Knowledge**,
+The composer is available only on **Lobby**, **Tasks**, **Plan** and **Knowledge**,
 including their detail routes and Knowledge's Docs/Chat views. On Git, Metrics and Settings it stays
 mounted but hidden and inert: no focus, attachment input, submission or composer shortcut can activate
 it, and `--composer-h` is zero so the page reclaims its space. Draft text, completed attachments and
@@ -113,8 +139,7 @@ on Windows it needs `node-pty`.
 
 If Pi crashes, is killed or loses its terminal, the lobby page keeps everything on screen and
 reconnects when Pi is back. The next Pi started in the project carries on what was running. The
-planning session returns as it was, and a round that was cut off runs again. Queued quick fixes
-run, and every task's session starts again from its saved file, picking up where it stopped. A
+planning session returns as it was, and a round that was cut off runs again. Every task's session starts again from its saved file, picking up where it stopped. A
 quit on purpose stops this work, and `pi -c` brings back the planning session.
 
 ## Projects
@@ -162,7 +187,7 @@ whose names share words with the step are suggested).
 
 Agents spend most of their time finding things, so bot-lobby hands them what it already knows:
 
-- **Repository map.** Scouts, workers, quick fixes and the planner get the project's layout and the
+- **Repository map.** Scouts, workers, lobby chat agents and the planner get the project's layout and the
   files that match their step, each with what it says it is for and the names it declares. It is
   read from the files themselves, so it needs no model and works with the classifier off
   (`workflow.repoMap`).
@@ -288,7 +313,7 @@ none. The oracle is your Pi session itself, so it uses the skills Pi loads for i
 
 In `config.json` the fields are `mcpTools: ["mcp__github__get_issue"]` and
 `skills: ["pdf-tools"]` on `agents.backend`, `agents.designer`, `agents.qa`, `scout`,
-`researcher`, `quickFix` and `planner` (`master` takes `mcpTools`). For both, an absent field
+`researcher` and `planner` (`master` takes `mcpTools`). For both, an absent field
 means every one Pi has, and `[]` means none. Children inherit their parent's grants. A granted
 skill Pi no longer finds is skipped.
 

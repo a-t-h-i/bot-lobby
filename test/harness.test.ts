@@ -72,7 +72,7 @@ test("harness fields survive normalising for subagents and are dropped for the o
     planner: { model: "inherit", thinking: "high", harness: "claude" },
     agents: { backend: { model: "a/b", thinking: "high", harness: "codex", harnessModel: "gpt-6-astra" }, qa: { model: "a/b", thinking: "high", harness: "pi" } },
     scout: { model: "a/b", harness: "gemini" },
-    quickFix: { model: "a/b", thinking: "low", harness: "nope" },
+    researcher: { model: "a/b", thinking: "low", harness: "nope" },
     harnesses: { codex: { binaryPath: " /opt/codex ", compactAt: 5, customModels: ["my-model", "my-model", "has space"] }, claude: { injectPrompts: false } },
   });
   assert.equal(config.master.harness, undefined);
@@ -80,7 +80,7 @@ test("harness fields survive normalising for subagents and are dropped for the o
   assert.deepEqual([config.agents.backend.harness, config.agents.backend.harnessModel], ["codex", "gpt-6-astra"]);
   assert.equal(config.agents.qa.harness, undefined);
   assert.equal(config.scout.harness, "gemini");
-  assert.equal(config.quickFix.harness, undefined);
+  assert.equal(config.researcher.harness, undefined, "an unknown harness is dropped");
   assert.equal(config.harnesses.codex.binaryPath, "/opt/codex");
   assert.equal(config.harnesses.codex.compactAt, 10_000, "a threshold is clamped to the smallest one a harness accepts");
   assert.deepEqual(config.harnesses.codex.customModels, ["my-model"]);

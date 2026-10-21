@@ -29,12 +29,14 @@ import { applyStatus, currentZenTask, taskSnapshot } from "../pi/ui.ts";
 import { taskName } from "../text.ts";
 import { describeWorkspace } from "../execution/workspace.ts";
 import { stripStartFlags } from "../pi/start-flags.ts";
-import { checkThinking, modelRef, resolveLobbyProfile, resolvePanelProfile, resolveReviewProfile, supportedThinking } from "../pi/model-support.ts";
+import { checkThinking, modelRef, resolveChatProfile, resolveLobbyProfile, resolvePanelProfile, resolveReviewProfile, supportedThinking } from "../pi/model-support.ts";
 import { modelLookup } from "../pi/tools.ts";
-import { startPlannedTask } from "../pi/start-task.ts";
-import { pendingRequest, startRequest } from "../pi/route.ts";
+import { startPlannedTask, startTask } from "../pi/start-task.ts";
 import { deliverComments, setAuto } from "../pi/owner.ts";
-import { chatFromEntries, lobbyFeed, type ChatEntry } from "./feed.ts";
+import { CHAT_MARK, chatFromEntries, chatMarkContent, CLEARED_NOTE, lobbyFeed, type ChatEntry, type ChatMarkDetails } from "./feed.ts";
+import { CHAT_AGENT_SOURCES, parseLobbyCommand, parseMention, type LobbyCommand } from "./prompts.ts";
+import type { ChatJob, ChatWorker } from "./chat-agents.ts";
+import { routeChatMessage } from "../classifier/lobby.ts";
 import { availableClassifiers, classifier, effortFor, hintsFor } from "../classifier/instance.ts";
 import { cleanSessionName, launchPi, SessionRegistry, type BackgroundSession, type SessionLauncher } from "./sessions.ts";
 import { askForSession } from "./session-questions.ts";
@@ -147,21 +149,142 @@ function failed(state: Runtime, what: string, error: Error): void {
   lobbyNotify(state, `bot-lobby: ${what} — ${error.message}`, "error");
 }
 
-function toOracle(state: Runtime, text: string): string | undefined {
+/** What sending to the lobby chat did: nothing to say, a notice, or a notice and the tab to open. */
+export type LobbySendResult = string | { notice: string; open: "plan" } | undefined;
+
+function toOracle(state: Runtime, text: string): LobbySendResult {
   const busy = !state.ctx.isIdle();
+  const command = parseLobbyCommand(text);
+  if (command) return lobbyCommand(state, command.command, command.rest);
   if (text.startsWith("/")) {
     state.pi.sendUserMessage(text, { expandPromptTemplates: true, ...(busy ? { deliverAs: "followUp" as const } : {}) });
     return `sent ${text.split(/\s+/)[0]} to pi`;
   }
-  // While the oracle decides where a request goes, what the user types joins that conversation.
-  if (!currentZenTask() && !pendingRequest()) {
-    startRequest(state.pi, state.ctx, state.configDir, text).catch((error: Error) => failed(state, "could not start the task", error));
-    return "reading your request — a quick fix or a task, the oracle takes it from here";
+  // A task in this session: the oracle drives it, and what you say goes to it.
+  if (currentZenTask()) return toMaster(state, text);
+  const mention = parseMention(text);
+  if (mention?.agent === "master") return toMaster(state, mention.rest.trim() || text);
+  if (mention) {
+    const body = mention.rest.trim();
+    if (!body) return `say what you want ${CHAT_AGENT_SOURCES[mention.agent]} to do after @${mention.agent === "designer" ? "design" : mention.agent === "backend" ? "dev" : mention.agent === "researcher" ? "research" : mention.agent}`;
+    toAgent(state, mention.agent, body, `you named ${CHAT_AGENT_SOURCES[mention.agent]}`);
+    return undefined;
   }
+  // While the oracle is mid-turn, what you say steers it, as it always has.
+  if (busy) return toMaster(state, text);
+  lobbyFeed.sayQueued(text);
+  void routeChat(state, text).catch((error: Error) => failed(state, "could not pass your message on", error));
+  return undefined;
+}
+
+/** The oracle answers: a pi turn, or a steer while it is mid-turn. */
+function toMaster(state: Runtime, text: string): undefined {
+  const busy = !state.ctx.isIdle();
   state.pi.sendUserMessage(text, busy ? { deliverAs: "steer" } : undefined);
   // A steer reaches the oracle only when its turn lets it in; the conversation shows it now.
   if (busy) lobbyFeed.sayQueued(text);
   return undefined;
+}
+
+/** One line of the conversation as an agent reads it. */
+function chatLine(entry: ChatEntry): string {
+  if (entry.role === "you") return `You${entry.to ? ` (to ${entry.to})` : ""}: ${entry.text}`;
+  if (entry.role === "note") return `(${entry.text})`;
+  return `${entry.agent ?? "MASTER"}: ${entry.text}`;
+}
+
+/** The conversation since the oracle's context was last cleared, as lines. */
+export function chatHistoryLines(): string[] {
+  const chat = lobbyFeed.chat;
+  const cleared = chat.map((entry) => entry.text).lastIndexOf(CLEARED_NOTE);
+  return chat.slice(cleared + 1).map(chatLine);
+}
+
+/** Who answers a message nobody was named in: the classifier's pick when it is sure, else the Master. */
+async function routeChat(state: Runtime, text: string): Promise<void> {
+  const jev = classifier();
+  const lines = chatHistoryLines();
+  const picked = jev ? await routeChatMessage(jev, text, lines.slice(-7, -1), { at: loadConfig().classifier.thresholds.lobbyAgentAt }).catch(() => undefined) : undefined;
+  if (state !== serviceState) return;
+  if (!picked || picked.route === "master") {
+    toMaster(state, text);
+    return;
+  }
+  if (picked.route === "knowledge") {
+    lobbyFeed.log("LOBBY", `a knowledge question (${picked.probability.toFixed(2)}): the oracle reads the project's knowledge`, "info");
+    state.pi.sendUserMessage(knowledgeQuestion(text, readDataRoots(state.root, state.configDir)), state.ctx.isIdle() ? undefined : { deliverAs: "followUp" });
+    return;
+  }
+  toAgent(state, picked.route, text, `the classifier picked ${CHAT_AGENT_SOURCES[picked.route]} (${picked.probability.toFixed(2)})`, true);
+}
+
+/** An agent other than the oracle answers: the message joins the conversation (and the session) under its name, and its reply follows. */
+function toAgent(state: Runtime, agent: ChatWorker, text: string, why: string, shown = false): void {
+  const source = CHAT_AGENT_SOURCES[agent];
+  if (shown) {
+    lobbyFeed.takeQueued(text);
+    lobbyFeed.addressed(text, source);
+  } else lobbyFeed.say("you", text, Date.now(), { to: source });
+  keepChatLine(state, { role: "you", agent: source, text });
+  lobbyFeed.log("LOBBY", `${source} answers: ${why}`, "info");
+  state.chat.submit(agent, text, why);
+}
+
+/** Keep a line the oracle did not take part in, in its session: it reads it as context, and the conversation shows it again later. */
+function keepChatLine(state: Runtime, details: ChatMarkDetails): void {
+  try {
+    state.pi.sendMessage({ customType: CHAT_MARK, content: chatMarkContent(details), display: true, details }, { triggerTurn: false });
+  } catch {
+    // A session that cannot take it keeps the conversation in the page alone.
+  }
+}
+
+/** A chat agent finished: its reply joins the conversation and the session. */
+export function chatReplied(state: Runtime, job: ChatJob): void {
+  const source = CHAT_AGENT_SOURCES[job.agent];
+  const text = job.reply ?? (job.status === "success" ? "(no reply)" : "");
+  if (text) {
+    lobbyFeed.say("oracle", text, job.finishedAt ?? Date.now(), { agent: source });
+    keepChatLine(state, { role: "agent", agent: source, text });
+  }
+  if (job.status !== "success" && job.status !== "cancelled") lobbyFeed.say("note", `✗ ${source}'s reply ${job.status}${job.error ? `: ${job.error.split("\n")[0]}` : ""}`);
+}
+
+/** The model, thinking and grants a chat agent answers with. */
+export function chatProfile(state: Runtime, agent: ChatWorker) {
+  return resolveChatProfile(loadConfig(), agent, {
+    lookup: modelLookup(state.ctx),
+    sessionModel: sessionModel(state.ctx),
+    warn: (message) => lobbyNotify(state, message, "warning"),
+  });
+}
+
+/** The work a bare `/plan` or `/task` is about: the conversation so far. */
+function fromConversation(): string | undefined {
+  const lines = chatHistoryLines().filter((line) => !line.startsWith("("));
+  if (!lines.some((line) => line.startsWith("You"))) return undefined;
+  return `From the lobby chat:\n\n${lines.slice(-12).join("\n\n")}`;
+}
+
+/** `/plan` and `/task`: plan the work with the panel on the Plan tab, or start it as a task. */
+function lobbyCommand(state: Runtime, command: LobbyCommand, rest: string): LobbySendResult {
+  const request = rest.trim() || fromConversation();
+  if (!request) return `type what to ${command === "plan" ? "plan" : "do"} after /${command}`;
+  if (command === "task") {
+    const current = currentZenTask();
+    if (current) return `this session already drives ${current.id}; finish or cancel it first, or start the task from another session`;
+    startTask(state.pi, state.ctx, state.configDir, request)
+      .then(() => lobbyTopics.bump("tasks"))
+      .catch((error: Error) => failed(state, "could not start the task", error));
+    return "starting a task — the oracle takes it from here";
+  }
+  if (state.planner?.busy) return "the panel is still thinking — wait for the round to finish";
+  // A plan under way stays among the project's previous plans; this one starts afresh.
+  const fresh = state.planner && state.planner.messages.length > 0;
+  const session = fresh || !state.planner ? newPlanner(state, undefined, loadConfig().lobby.planningPanel) : state.planner;
+  session.send(request).catch((error: Error) => failed(state, "could not start planning", error));
+  lobbyTopics.bump("planner");
+  return { notice: fresh ? "planning on the Plan tab — your earlier plan is under Previous plans" : "planning on the Plan tab", open: "plan" };
 }
 
 function startPlanned(state: Runtime, plan: PlannedTask): string {
@@ -580,7 +703,7 @@ function liveSessions(state: Runtime): LiveSession[] {
  */
 function chatHistory(state: Runtime, sessionId?: string): ChatEntry[] {
   if (sessionId) return chats.history(sessionId);
-  return chatFromEntries(state.ctx.sessionManager.getBranch(), Number.POSITIVE_INFINITY).map((line, index) => ({ id: -(index + 1), at: line.at ?? 0, role: line.role, text: line.text }));
+  return chatFromEntries(state.ctx.sessionManager.getBranch(), Number.POSITIVE_INFINITY).map((line, index) => ({ ...line, id: -(index + 1), at: line.at ?? 0 }));
 }
 
 /** Leave a message for a session running in another terminal. */
@@ -914,7 +1037,11 @@ export function createLobbyService(state: Runtime): LobbyService {
       return { ...(snapshot.task ? { task: snapshot.task } : {}), runs: snapshot.runs };
     },
     feed: lobbyFeed,
-    masterBusy: () => !state.ctx.isIdle(),
+    masterBusy: () => !state.ctx.isIdle() || state.chat.busy,
+    answering: () => {
+      const job = state.chat.running;
+      return job ? CHAT_AGENT_SOURCES[job.agent] : undefined;
+    },
     tasks: () => peekTasks(state.root, state.configDir),
     work: (taskId) => taskWork(state.root, state.configDir, taskId),
     deliveryDeliver: (taskId, request: DeliveryRequest) => deliver(request, { cwd: state.root, exec: execCommand }, deliveryStore(state.root, state.configDir, taskId)),
@@ -952,8 +1079,10 @@ export function createLobbyService(state: Runtime): LobbyService {
       discardPlannedTask(state.root, state.configDir, id);
       lobbyTopics.bump("plans");
     },
-    abortMaster: () => state.ctx.abort(),
-    quickfix: state.quickfix,
+    abortMaster: () => {
+      state.chat.cancelAll();
+      if (!state.ctx.isIdle()) state.ctx.abort();
+    },
     planner: () => state.planner,
     newPlanner: (seed, seats) => newPlanner(state, seed, seats),
     previousPlans: (archived) => plansBefore(state, archived),

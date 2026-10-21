@@ -14,7 +14,7 @@ export type ActivityKind = "info" | "success" | "warning" | "error";
 export interface ActivityEntry {
   id: number;
   at: number;
-  /** Who acted: MASTER, DEV, DESIGN, QA, RESEARCH, QUICK FIX, PLANNER, LOBBY. */
+  /** Who acted: MASTER, DEV, DESIGN, QA, RESEARCH, SCOUT, PLANNER, LOBBY. */
   source: string;
   text: string;
   kind: ActivityKind;
@@ -35,12 +35,23 @@ export interface ThoughtEntry {
 
 export type ChatRole = "you" | "oracle" | "note";
 
-export interface ChatEntry {
+/** Who a message was for (yours) or who wrote it (a reply): `DESIGN`, `DEV`, …; absent is the oracle. */
+export interface ChatSpeaker {
+  /** The agent that wrote a reply. */
+  agent?: string;
+  /** The agent your message went to. */
+  to?: string;
+}
+
+export interface ChatEntry extends ChatSpeaker {
   id: number;
   at: number;
   role: ChatRole;
   text: string;
 }
+
+/** A conversation line before it is numbered: what the session's entries read as. */
+export type ChatLine = { role: ChatRole; text: string; at?: number } & ChatSpeaker;
 
 export const MAX_ACTIVITY = 400;
 export const MAX_THOUGHTS = 40;
@@ -71,7 +82,7 @@ export class LobbyFeed {
   /** Last step reported per run, so repeated run updates log each step once. */
   private readonly runSteps = new Map<string, string>();
   private readonly runThoughts = new Map<string, string>();
-  /** The live whole thought of each piece of work still under way (a run, a quick fix, a review), by its key. */
+  /** The live whole thought of each piece of work still under way (a run, a chat agent's reply, a review), by its key. */
   private readonly liveThoughts = new Map<string, number>();
   private readonly runStatus = new Map<string, AgentRun["status"]>();
   /** Runs already reported as switched to their fallback model. */
@@ -165,7 +176,7 @@ export class LobbyFeed {
   }
 
   /**
-   * A whole thought from work still under way (`key`: its run, quick fix or
+   * A whole thought from work still under way (`key`: its run, chat reply or
    * review): live, so the Thinking orb takes its agent's colour, until the
    * same work's next thought or `settleThought(key)` when it ends.
    */
@@ -214,6 +225,15 @@ export class LobbyFeed {
     this.say("you", body, at);
   }
 
+  /** Mark the newest message of yours with this text as one that went to `to` (an agent, not the oracle). */
+  addressed(text: string, to: string): void {
+    const body = text.trim();
+    const entry = [...this.chat].reverse().find((line) => line.role === "you" && line.text === body);
+    if (!entry || entry.to === to) return;
+    entry.to = to;
+    this.touch();
+  }
+
   /** Whether `text` is a queued message already on show; it is forgotten once delivered. */
   takeQueued(text: string): boolean {
     const index = this.queued.indexOf(text.trim());
@@ -222,10 +242,10 @@ export class LobbyFeed {
     return true;
   }
 
-  say(role: ChatRole, text: string, at = Date.now()): void {
+  say(role: ChatRole, text: string, at = Date.now(), speaker: ChatSpeaker = {}): void {
     const body = text.trim();
     if (!body) return;
-    this.chat.push({ id: this.nextId++, at, role, text: body });
+    this.chat.push({ id: this.nextId++, at, role, text: body, ...speaker });
     if (this.chat.length > MAX_CHAT) {
       this.chat.splice(0, this.chat.length - MAX_CHAT);
       this.chatOlder = true;
@@ -234,10 +254,10 @@ export class LobbyFeed {
   }
 
   /** Replace the conversation (seeding from the session when the lobby first opens); only the newest `MAX_CHAT` are kept. */
-  seedChat(entries: ReadonlyArray<{ role: ChatRole; text: string; at?: number }>): void {
+  seedChat(entries: readonly ChatLine[]): void {
     const kept = entries.filter((entry) => entry.text.trim());
     this.chatOlder = kept.length > MAX_CHAT;
-    this.chat = kept.slice(-MAX_CHAT).map((entry) => ({ id: this.nextId++, at: entry.at ?? 0, role: entry.role, text: entry.text.trim() }));
+    this.chat = kept.slice(-MAX_CHAT).map((entry) => ({ id: this.nextId++, at: entry.at ?? 0, role: entry.role, text: entry.text.trim(), ...(entry.agent ? { agent: entry.agent } : {}), ...(entry.to ? { to: entry.to } : {}) }));
     this.touch();
   }
 
@@ -343,13 +363,8 @@ export function chatText(role: "user" | "assistant", text: string): Array<{ role
   const kickoff = /^A bot-lobby task is active: (\S+)\nTitle: (.*)/.exec(body);
   if (kickoff) {
     const request = /\nRequest: ([\s\S]*?)(?:\nState: |$)/.exec(body)?.[1]?.trim();
-    // A request the oracle routed to the team is already in the conversation, under the routing note.
-    const shown = /\nRouted: /.test(body);
-    return [{ role: "note", text: `task started · ${kickoff[2]}` }, ...(request && !shown ? [{ role: "you" as const, text: request }] : [])];
+    return [{ role: "note", text: `task started · ${kickoff[2]}` }, ...(request ? [{ role: "you" as const, text: request }] : [])];
   }
-  // A new request the classifier read as a quick fix, before the oracle confirms where it goes.
-  const routing = /^bot-lobby: a new request, not a task yet\.\nRequest: ([\s\S]*?)\nRead: /.exec(body);
-  if (routing) return [{ role: "you", text: routing[1]!.trim() }, { role: "note", text: "reads as a quick fix · the oracle confirms where it goes" }];
   const comment = /^The user left (?:a comment|\d+ comments) on (the approved plan|the proposal) of (\S+) from the lobby:/.exec(body);
   if (comment) return [{ role: "note", text: `your comment on ${comment[1]} went to the oracle` }];
   return [{ role: "you", text: body }];
@@ -367,14 +382,45 @@ export function isClearedMark(entry: unknown): boolean {
   return record?.type === "custom" && record.customType === CONTEXT_MARK && record.data?.kind === "end";
 }
 
-/** Session entries (`{ type: "message", message }`) as conversation entries, oldest first. */
-export function chatFromEntries(entries: readonly unknown[], max = MAX_CHAT): Array<{ role: ChatRole; text: string; at?: number }> {
-  const chat: Array<{ role: ChatRole; text: string; at?: number }> = [];
+/** The session entry that keeps one line of the lobby chat an agent other than the oracle took part in. */
+export const CHAT_MARK = "bot-lobby-chat";
+
+/** What a `CHAT_MARK` entry carries: your message to an agent, or its reply. */
+export interface ChatMarkDetails {
+  role: "you" | "agent";
+  /** The agent: who it went to, or who replied. */
+  agent: string;
+  text: string;
+}
+
+/** What the Master reads of a lobby line it did not take part in (the entry's content). */
+export function chatMarkContent(details: ChatMarkDetails): string {
+  return details.role === "you" ? `The user asked ${details.agent} in the lobby chat:\n\n${details.text}` : `${details.agent} answered in the lobby chat:\n\n${details.text}`;
+}
+
+/** A `CHAT_MARK` session entry as its conversation line; undefined for any other entry. */
+export function chatMarkLine(entry: unknown): ChatLine | undefined {
+  const record = entry as { type?: string; customType?: string; details?: Partial<ChatMarkDetails> } | undefined;
+  if (record?.type !== "custom_message" || record.customType !== CHAT_MARK) return undefined;
+  const details = record.details;
+  if (!details || typeof details.text !== "string" || typeof details.agent !== "string") return undefined;
+  return details.role === "you" ? { role: "you", text: details.text, to: details.agent } : { role: "oracle", text: details.text, agent: details.agent };
+}
+
+/** Session entries (`{ type: "message", message }`, and the chat's own marks) as conversation entries, oldest first. */
+export function chatFromEntries(entries: readonly unknown[], max = MAX_CHAT): ChatLine[] {
+  const chat: ChatLine[] = [];
   for (const entry of entries) {
     const record = entry as { type?: string; timestamp?: string; message?: { role?: string; content?: unknown } };
     if (isClearedMark(entry)) {
       const at = record.timestamp ? Date.parse(record.timestamp) : Number.NaN;
       chat.push({ role: "note", text: CLEARED_NOTE, ...(Number.isFinite(at) ? { at } : {}) });
+      continue;
+    }
+    const marked = chatMarkLine(entry);
+    if (marked) {
+      const at = record.timestamp ? Date.parse(record.timestamp) : Number.NaN;
+      chat.push({ ...marked, ...(Number.isFinite(at) ? { at } : {}) });
       continue;
     }
     if (record?.type !== "message") continue;

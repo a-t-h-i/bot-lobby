@@ -55,6 +55,14 @@ export function masterTaskContext(task: Task, comments: readonly PlanComment[] =
  * operating prompt is patched into the system prompt as one cache-stable
  * section rather than replacing the whole prompt.
  */
+/** What the oracle is told while no task runs: the lobby is a chat, and the workflow waits for /plan or /task. */
+export const LOBBY_CHAT_NOTE = [
+  "## Bot Lobby chat",
+  "You are the Master in Bot Lobby's chat: the user talks to the team here, and everyday work (questions, code changes, updates, minor fixes) happens in the chat itself, so do it directly.",
+  "DESIGN, DEV, QA, RESEARCH and the scout answer in this chat too when the user names one with @ or the classifier gives a message to one; those lines reach you as \"The user asked …\" and \"… answered\" messages, for context: you need not answer them.",
+  "Bot Lobby's workflow (scouts, a plan, the QA gate) runs only when the user types /plan (plan it with the panel) or /task (start it as a task). When a request is large, risky or spans several areas, suggest one of them in a line; never start one yourself.",
+].join("\n");
+
 export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
   // Web tools the oracle put away for the task in hand, given back when it ends.
   let hiddenWeb: string[] = [];
@@ -121,10 +129,10 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
       }
     }
     if (!task) {
-      // After a task ended and cleared the context, a line on where its record is, in case the user refers back to it.
+      // The lobby chat, and after a task ended and cleared the context, a line on where its record is, in case the user refers back to it.
       const previous = hidden ? undefined : previousTaskNote(ctx, configDir);
-      if (previous) event.systemPromptOptions.sections["bot-lobby"] = previous;
-      else delete event.systemPromptOptions.sections["bot-lobby"];
+      if (isSubagentProcess() || hidden) delete event.systemPromptOptions.sections["bot-lobby"];
+      else event.systemPromptOptions.sections["bot-lobby"] = [LOBBY_CHAT_NOTE, previous ?? ""].filter(Boolean).join("\n\n");
       return;
     }
     const dataRoots = readDataRoots(root, configDir);

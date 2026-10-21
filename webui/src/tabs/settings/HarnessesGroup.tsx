@@ -31,7 +31,6 @@ export function harnessUsers(config: Config): Record<string, AgentKind[]> {
     ["qa", config.agents.qa],
     ["scout", config.scout],
     ["researcher", config.researcher],
-    ["quickfix", config.quickFix],
   ]
   const users: Record<string, AgentKind[]> = {}
   for (const [kind, entry] of entries) if (entry.harness && HARNESS_AGENTS.has(kind)) (users[entry.harness] ??= []).push(kind)

@@ -14,7 +14,6 @@ import type { PlanComment } from "../state/comments.ts";
 import type { BotLobbyConfig, PanelMember } from "../schemas/configuration.ts";
 import type { QaRiskAssessment } from "../schemas/task.ts";
 import type { MemberState, PanelNote, PanelQuestion, PlannerMessage } from "../lobby/planner.ts";
-import type { QuickFixJob } from "../lobby/quickfix.ts";
 import type { HarnessStatus } from "../harness/status.ts";
 import type { HarnessModel } from "../harness/catalog.ts";
 
@@ -26,7 +25,7 @@ export type { LobbyTopic };
 export type { DialogAnswer, SessionDialog, TaskRow, PlanComment };
 export type { LiveSession };
 export type { HarnessStatus, HarnessModel };
-export type { PanelMember, MemberState, PanelNote, PanelQuestion, PlannerMessage, QuickFixJob, BotLobbyConfig };
+export type { PanelMember, MemberState, PanelNote, PanelQuestion, PlannerMessage, BotLobbyConfig };
 
 /** Every API answer: the result, or why not. */
 export type ApiReply<T> = { ok: true; result: T } | { ok: false; error: string; code: ErrorCode };
@@ -155,7 +154,9 @@ export interface LobbySnapshot {
   task?: SnapshotTask;
   runs: unknown[];
   /** Newest chat messages (at most 100), oldest first. */
-  chat: Array<{ id: number; at: number; role: string; text: string }>;
+  chat: Array<{ id: number; at: number; role: string; text: string; agent?: string; to?: string }>;
+  /** The agent (other than the oracle) answering in the chat now: `DESIGN`, `DEV`, …; absent when none is. */
+  answering?: string;
   /** The oracle's reply while it streams; absent between replies. */
   reply?: string;
   /** Newest activity entries (at most 400), oldest first. */
@@ -553,7 +554,7 @@ export interface Api {
   "status.get": { request: Record<string, never>; result: StatusInfo };
   "lobby.snapshot": { request: Record<string, never>; result: LobbySnapshot };
   "lobby.history": { request: { before?: number }; result: { entries: unknown[]; hasOlder: boolean } };
-  "lobby.send": { request: { text: string; attachments?: string[] }; result: { notice?: string } };
+  "lobby.send": { request: { text: string; attachments?: string[] }; result: { notice?: string; open?: "plan" } };
   "lobby.abort": { request: Record<string, never>; result: Record<string, never> };
   "tasks.list": { request: Record<string, never>; result: { rows: TaskRow[] } };
   "tasks.archived": { request: Record<string, never>; result: { rows: TaskRow[] } };
@@ -609,11 +610,6 @@ export interface Api {
   "planner.previousDelete": { request: { id: string }; result: { notice: string } };
   "planner.previousOpen": { request: { id: string }; result: { notice: string } };
   "planner.save": { request: Record<string, never>; result: { notice: string } };
-  "quickfix.list": { request: Record<string, never>; result: { jobs: QuickFixJob[] } };
-  "quickfix.submit": { request: { text: string; attachments?: string[] }; result: { notice: string; id: string } };
-  "quickfix.cancel": { request: { id: string }; result: { notice: string } };
-  "quickfix.runAnyway": { request: { id: string }; result: { notice: string } };
-  "quickfix.movedToTask": { request: { id: string }; result: { notice: string; key?: string } };
   "projects.browse": { request: { path?: string }; result: FolderListing };
   "projects.open": { request: { path: string }; result: { project: ProjectInfo } };
   "knowledge.files": { request: Record<string, never>; result: { files: KnowledgeFileInfo[]; models?: Partial<Record<KnowledgeAgentName, string>> } };
