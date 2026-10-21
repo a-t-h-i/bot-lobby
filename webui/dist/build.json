@@ -1,6 +1,6 @@
 {
-  "hash": "1633d2a150dc787d207950c8e0c52f9217f92e16b9e8a39c48c5001f800a3f9f",
-  "builtAt": "2026-10-21T11:32:53.951Z",
+  "hash": "22c14419454cec7f2b7c340ebebc0e7dda4968d2da04d985491c79d2010fd4e0",
+  "builtAt": "2026-10-21T16:39:49.686Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -60,7 +60,7 @@
     },
     {
       "path": "webui/src/app/Sidebar.tsx",
-      "sha256": "49d51633d4ecfdb30ab2aaefee758054055bed05afe7a5adebff6f2820423ade"
+      "sha256": "69a58e523fb6bcc51f030accd6f8964efd8abc5a5591cc85cdaabe3256f28797"
     },
     {
       "path": "webui/src/app/SignIn.tsx",
