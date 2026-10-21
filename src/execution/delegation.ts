@@ -16,6 +16,7 @@ import { runPiAgent, type PiRunOptions, type ProcessRunner } from "./pi-runner.t
 import { startDeskServer } from "../desk/ipc.ts";
 import { DESK_ENV, DeskSession, deskSessionAt, PEER_TOOLS } from "../desk/session.ts";
 import { BOARD_ENV } from "../desk/board.ts";
+import { mcpGrant } from "../pi/grants.ts";
 
 export const MAX_CHILDREN = 5;
 export const DELEGATE_TOOL = "delegate_subtasks";
@@ -95,7 +96,8 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
   const quota = options.delegationQuota ?? { used: 0 };
   const consults = canConsult(agent, config.workflow.consultExpert);
   const tools = [...new Set([...baseTools, "codemode", "tool_search", ...(canDelegate(agent, quota.used) ? [DELEGATE_TOOL] : []), ...(consults ? [EXPERT_TOOL] : [])])];
-  const mcpTools = options.mcpTools ?? agentProfile(config, agent.domain, agent.role).mcpTools ?? [];
+  // A caller that passes its profile's grant (even an absent one, meaning every connected tool) wins over the role's.
+  const mcpTools = mcpGrant("mcpTools" in options ? options.mcpTools : agentProfile(config, agent.domain, agent.role).mcpTools, !editable);
   const policy: AgentPolicy = { tools, mcpTools, readOnly: !editable, depth };
   if (depth > 1) return { tools, mcpTools, env: { ...options.env, [AGENT_ENV]: JSON.stringify(policy), [DELEGATION_ENV]: "" }, note: options.env?.[EXPERT_ENV] ? "You are advising a worker: read what you need, answer its question, and change nothing." : "You are a child agent. Finish only your assigned brief and report evidence to your parent; you cannot delegate further.", close: async () => {}, onStart: options.onStart, children: [] as AgentRun[] };
 

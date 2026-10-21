@@ -254,12 +254,17 @@ for (const width of [1280, 360]) {
     await expect(card.getByRole("spinbutton", { name: /time limit$/ }), "agents have no time limit").toHaveCount(0)
     const notes = card.getByRole("textbox", { name: /instructions$/ });
     await expect(notes).toBeVisible();
-    const grants = card.getByText("no MCP tools · all skills");
+    const grants = card.getByText("all MCP tools · all skills");
     await expect(grants).toBeVisible();
     expect((await grants.boundingBox())!.width, "the grants line is not crushed").toBeGreaterThan(80);
     const box = (await card.boundingBox())!;
     const field = (await notes.boundingBox())!;
     expect(field.x + field.width, "the field fits the card").toBeLessThanOrEqual(box.x + box.width + 1);
+    // The compaction threshold is a typed number under the Auto-compact switch, and fits the card too.
+    const threshold = card.getByRole("spinbutton", { name: "Backend compact at" });
+    await expect(threshold).toBeVisible();
+    const input = (await threshold.boundingBox())!;
+    expect(input.x + input.width, "the threshold fits the card").toBeLessThanOrEqual(box.x + box.width + 1);
     await expectNoSidewaysScroll(page);
   });
 }
@@ -275,18 +280,30 @@ test("Tools & skills grants each agent MCP tools and skills, and saves every tic
   const grants = page.getByLabel("Backend tools and skills");
   await expect(grants).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Agents" }).getByRole("button", { name: /Backend/ })).toHaveAttribute("aria-current", "true");
-  // One tool, then a whole server.
+  // Every connected tool by default; switching that off keeps them all ticked, and unticking narrows the grant.
+  const backend = page.getByRole("navigation", { name: "Agents" }).getByRole("button", { name: /Backend/ });
+  await expect(backend).toContainText("all MCP tools · all skills");
+  await expect(grants.getByRole("checkbox", { name: /get_issue/ })).toBeChecked();
+  await expect(grants.getByRole("checkbox", { name: /get_issue/ })).toBeDisabled();
+  await grants.getByRole("switch", { name: /every mcp tool pi connects/ }).click();
+  await expect(backend).toContainText("5 MCP tools · all skills");
   await grants.getByRole("checkbox", { name: /get_issue/ }).click();
-  await expect(page.getByRole("navigation", { name: "Agents" }).getByRole("button", { name: /Backend/ })).toContainText("1 MCP tool · all skills");
+  await expect(backend).toContainText("4 MCP tools");
   await grants.getByRole("checkbox", { name: "Every figma tool" }).click();
-  await expect(page.getByRole("navigation", { name: "Agents" }).getByRole("button", { name: /Backend/ })).toContainText("3 MCP tools");
+  await expect(backend).toContainText("2 MCP tools");
   // Skills: every one by default; switching that off keeps them all ticked, and unticking one narrows the grant.
   await grants.getByRole("switch", { name: /every skill pi finds/ }).click();
   await grants.getByRole("checkbox", { name: /tailwind-review/ }).click();
-  await expect(page.getByRole("navigation", { name: "Agents" }).getByRole("button", { name: /Backend/ })).toContainText("3 MCP tools · 2 skills");
-  // A read-only agent cannot be given a tool that writes.
+  await expect(backend).toContainText("2 MCP tools · 2 skills");
+  // Back on, the agent picks up every tool again.
+  await grants.getByRole("switch", { name: /every mcp tool pi connects/ }).click();
+  await expect(backend).toContainText("all MCP tools · 2 skills");
+  // A read-only agent gets only the read-only tools, and cannot be given one that writes.
   await page.getByRole("navigation", { name: "Agents" }).getByRole("button", { name: /Scout/ }).click();
   const scout = page.getByLabel("Scout tools and skills");
+  await expect(scout.getByRole("checkbox", { name: /create_pull_request/ })).not.toBeChecked();
+  await scout.getByRole("switch", { name: /every mcp tool pi connects/ }).click();
+  await expect(page.getByRole("navigation", { name: "Agents" }).getByRole("button", { name: /Scout/ })).toContainText("3 MCP tools");
   await expect(scout.getByRole("checkbox", { name: /create_pull_request/ })).toBeDisabled();
   await expect(scout.getByRole("checkbox", { name: /search_code/ })).toBeEnabled();
   // A tool whose server is offline can be granted by its exact name, and shows as not connected.
@@ -294,4 +311,30 @@ test("Tools & skills grants each agent MCP tools and skills, and saves every tic
   await scout.getByRole("button", { name: "Grant" }).click();
   await expect(scout.getByText("not connected", { exact: true })).toBeVisible();
   await expectNoSidewaysScroll(page);
+});
+
+test("each agent's compaction threshold is a number box: a whole number saves, junk is refused, empty restores the built-in", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await gotoRoute(page, "#/settings", "Each agent's model and effort");
+  const card = page.locator('[data-slot="agent-row"]').filter({ hasText: "Planner" }).first();
+  const threshold = card.getByRole("spinbutton", { name: "Planner compact at" });
+  await expect(threshold).toHaveValue("");
+  await expect(threshold).toHaveAttribute("placeholder", "64000");
+  await threshold.fill("120000");
+  await threshold.press("Enter");
+  await expect(page.getByText("Settings saved")).toBeVisible();
+  await page.reload();
+  await expect(card.getByRole("spinbutton", { name: "Planner compact at" })).toHaveValue("120000");
+  await card.getByRole("spinbutton", { name: "Planner compact at" }).fill("12");
+  await card.getByRole("spinbutton", { name: "Planner compact at" }).press("Enter");
+  await expect(page.getByText(/is not a whole number of tokens/)).toBeVisible();
+  await expect(card.getByRole("spinbutton", { name: "Planner compact at" })).toHaveValue("120000");
+  await card.getByRole("spinbutton", { name: "Planner compact at" }).fill("");
+  await card.getByRole("spinbutton", { name: "Planner compact at" }).press("Enter");
+  await page.reload();
+  await expect(card.getByRole("spinbutton", { name: "Planner compact at" })).toHaveValue("");
+  // Off, the threshold has nothing to start.
+  await card.getByRole("switch", { name: "Planner auto-compact" }).click();
+  await expect(card.getByRole("spinbutton", { name: "Planner compact at" })).toHaveCount(0);
 });

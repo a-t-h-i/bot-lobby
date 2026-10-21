@@ -60,6 +60,8 @@ export function webToolsFor(active: string[], taskActive: boolean, hidden: reado
 
 /** Set to "0" in a subagent's environment when its settings turn auto-compaction off. */
 export const AUTO_COMPACT_ENV = "BOT_LOBBY_AUTO_COMPACT";
+/** The token count at which a subagent compacts, from its settings. */
+export const COMPACT_AT_ENV = "BOT_LOBBY_COMPACT_AT";
 
 /** True inside a bot-lobby subagent process (marked in `spawnPiProcess`). */
 export function isSubagentProcess(): boolean {

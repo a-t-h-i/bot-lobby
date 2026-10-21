@@ -63,6 +63,7 @@ import {
   WEB_BROWSER_LABEL,
   WEB_PORT_HELP,
   WEB_PORT_LABEL,
+  COMPACT_AT,
   type AgentKind,
 } from "./words"
 
@@ -73,6 +74,7 @@ interface AgentView {
   model: string
   thinking: string
   autoCompact?: boolean
+  compactAt?: number
   instructions?: string
   mcpTools?: string[]
   skills?: string[]
@@ -107,6 +109,7 @@ function entryOf(config: Config, kind: AgentKind): AgentView {
         mcpTools: config.scout.mcpTools,
         ...(config.scout.skills ? { skills: config.scout.skills } : {}),
         ...(config.scout.autoCompact === false ? { autoCompact: false } : {}),
+        ...(config.scout.compactAt ? { compactAt: config.scout.compactAt } : {}),
       }
     case "researcher":
       return config.researcher
@@ -210,6 +213,33 @@ function MinutesField({ value, label, onSave }: { value: number; label: string; 
   )
 }
 
+/** Auto-compaction's threshold in tokens; left empty, the built-in one. */
+function CompactAtField({ value, label, onSave }: { value?: number; label: string; onSave: (tokens: number | null) => void }) {
+  return (
+    <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+      <div className="min-w-0 flex-1">
+        <div className="text-[0.8125rem] font-medium">{COMPACT_AT.label}</div>
+        <p className="break-words text-xs text-muted-foreground">{COMPACT_AT.help}</p>
+      </div>
+      <div className="w-36 shrink-0">
+        <NumberField label={label} value={value ? String(value) : ""} min={COMPACT_AT.min} max={COMPACT_AT.max} step={1000} placeholder={COMPACT_AT.placeholder} suffix="tokens" onSave={(text) => {
+          if (text === "") {
+            onSave(null)
+            return true
+          }
+          const parsed = Number(text)
+          if (!Number.isInteger(parsed) || parsed < COMPACT_AT.min || parsed > COMPACT_AT.max) {
+            toast.error(COMPACT_AT.bad(text))
+            return false
+          }
+          onSave(parsed)
+          return true
+        }} />
+      </div>
+    </div>
+  )
+}
+
 function PortField({ value, onSave }: { value: number; onSave: (port: number) => void }) {
   return (
     <NumberField label={WEB_PORT_LABEL} value={String(value)} min={0} max={65535} onSave={(text) => {
@@ -223,7 +253,7 @@ function PortField({ value, onSave }: { value: number; onSave: (port: number) =>
   )
 }
 
-function NumberField({ label, value, min, max, suffix, onSave }: { label: string; value: string; min: number; max?: number; suffix?: string; onSave: (text: string) => boolean }) {
+function NumberField({ label, value, min, max, step, placeholder, suffix, onSave }: { label: string; value: string; min: number; max?: number; step?: number; placeholder?: string; suffix?: string; onSave: (text: string) => boolean }) {
   const [text, setText] = useState(value)
   useEffect(() => setText(value), [value])
   const commit = () => {
@@ -232,7 +262,7 @@ function NumberField({ label, value, min, max, suffix, onSave }: { label: string
   }
   return (
     <div className="relative">
-      <Input type="number" inputMode="numeric" min={min} max={max} value={text} aria-label={label} className={suffix ? "pr-10" : undefined} onChange={(event) => setText(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit() } }} />
+      <Input type="number" inputMode="numeric" min={min} max={max} step={step} placeholder={placeholder} value={text} aria-label={label} className={suffix ? (suffix.length > 3 ? "pr-14" : "pr-10") : undefined} onChange={(event) => setText(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit() } }} />
       {suffix ? <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">{suffix}</span> : null}
     </div>
   )
@@ -281,6 +311,7 @@ function AgentCard({ kind, config, models, save, onGrants }: { kind: AgentKind; 
         onChange={(on) => set({ autoCompact: on })}
         name={`${name} auto-compact`}
       />
+      {entry.autoCompact !== false ? <CompactAtField value={entry.compactAt} label={`${name} compact at`} onSave={(tokens) => set({ compactAt: tokens })} /> : null}
       <div hidden={!open} className="grid gap-2 border-t border-border pt-2">
         {hasInstructions ? <InstructionsField value={entry.instructions ?? ""} label={`${name} instructions`} onSave={(text) => set({ instructions: text })} /> : null}
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
@@ -295,7 +326,7 @@ function AgentCard({ kind, config, models, save, onGrants }: { kind: AgentKind; 
 /** How many settings under More differ from their defaults, shown on the collapsed row. */
 function customCount(entry: AgentView, kind: AgentKind): number {
   const notes = kind !== "scout" && kind !== "researcher" && Boolean(entry.instructions)
-  return [notes, (entry.mcpTools ?? []).length > 0, kind !== "master" && entry.skills !== undefined].filter(Boolean).length
+  return [notes, entry.mcpTools !== undefined, kind !== "master" && entry.skills !== undefined].filter(Boolean).length
 }
 
 function ScoutEffort() {

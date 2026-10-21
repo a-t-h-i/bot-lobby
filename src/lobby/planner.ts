@@ -1008,8 +1008,7 @@ export class PlanningSession {
           model,
           thinking,
           mcpTools: profile.mcpTools,
-        ...(profile.autoCompact === false ? { autoCompact: false } : {}),
-          ...(profile.autoCompact === false ? { autoCompact: false } : {}),
+          ...(profile.autoCompact === false ? { autoCompact: false } : {}), ...(profile.compactAt ? { compactAt: profile.compactAt } : {}),
           onChildRun: (child) => {
             this.deps.feed?.step(label, `child ${child.runId.slice(0, 8)}: ${child.step ?? child.status}`, child.runId);
             if (child.status !== "running") this.deps.feed?.end(child.runId, child.status !== "success");

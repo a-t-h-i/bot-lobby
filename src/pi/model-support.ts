@@ -91,7 +91,7 @@ export function createProfileResolver(config: BotLobbyConfig, options: ResolverO
   };
 }
 
-type RunProfile = { model?: string; thinking: string; instructions?: string; mcpTools?: string[]; skills?: string[] };
+type RunProfile = { model?: string; thinking: string; instructions?: string; mcpTools?: string[]; skills?: string[]; autoCompact?: boolean; compactAt?: number };
 
 /** Unset models run on the session's; thinking is clamped to the model, with a one-time warning. */
 function resolveRunProfile(profile: RunProfile, label: string, options: ResolverOptions): RunProfile {
@@ -129,7 +129,7 @@ export function resolvePanelProfile(config: BotLobbyConfig, member: PanelMember,
  */
 export function resolveReviewProfile(config: BotLobbyConfig, options: ResolverOptions): RunProfile {
   const profile = agentProfile(config, "qa", "reviewer");
-  return resolveRunProfile({ model: profile.model, thinking: profile.thinking, ...(profile.instructions ? { instructions: profile.instructions } : {}), ...(profile.mcpTools ? { mcpTools: profile.mcpTools } : {}), ...(profile.skills ? { skills: profile.skills } : {}) }, kindLabel("qa"), options);
+  return resolveRunProfile({ model: profile.model, thinking: profile.thinking, ...(profile.instructions ? { instructions: profile.instructions } : {}), ...(profile.mcpTools ? { mcpTools: profile.mcpTools } : {}), ...(profile.skills ? { skills: profile.skills } : {}), ...(profile.autoCompact === false ? { autoCompact: false } : {}), ...(profile.compactAt ? { compactAt: profile.compactAt } : {}) }, kindLabel("qa"), options);
 }
 
 /** Every configured subagent whose thinking level its model does not support, for `/bot-lobby config`. */

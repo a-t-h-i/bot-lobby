@@ -101,6 +101,7 @@ export async function runGoalCheck(request: GoalCheckRequest, run: ProcessRunner
     instruction: goalCheckInstruction(request),
     context: { task: request.request },
     systemPrompt: goalCheckPrompt(profile.instructions),
+    mcpTools: profile.mcpTools,
     ...(profile.model ? { model: profile.model } : {}),
     thinking: profile.thinking,
     cwd: request.cwd,

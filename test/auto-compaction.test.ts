@@ -52,6 +52,14 @@ test("failed summaries preserve history and cannot loop at the same boundary", a
   assert.match(h.notices.at(-1)!, /provider unavailable/);
 });
 
+test("an agent compacts at the token count its settings set, not before", async () => {
+  let calls = 0;
+  const h = harness(async (preparation) => { calls += 1; return { summary: "x", firstKeptEntryId: preparation.firstKeptEntryId, tokensBefore: 0 }; }, { enabled: () => true, target: () => 80_000, share: () => "" });
+  h.setTokens(70_000);
+  assert.equal(await h.check(), undefined, "70K is under the 80K set, though past the built-in 60K");
+  assert.equal(calls, 0);
+});
+
 test("an agent whose settings turn auto-compaction off is never compacted", async () => {
   let calls = 0;
   const h = harness(async (preparation) => { calls += 1; return { summary: "x", firstKeptEntryId: preparation.firstKeptEntryId, tokensBefore: 0 }; }, { enabled: () => false });

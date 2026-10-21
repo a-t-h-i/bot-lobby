@@ -95,6 +95,7 @@ export interface QuickFixProfile {
   skills?: string[];
   /** False when its settings turn the agent's auto-compaction off. */
   autoCompact?: boolean;
+  compactAt?: number;
   /** Where the job goes when its model runs out of usage or is unavailable. */
 }
 
@@ -343,8 +344,7 @@ export class QuickFixQueue {
           model,
           thinking,
           mcpTools: profile.mcpTools,
-        ...(profile.autoCompact === false ? { autoCompact: false } : {}),
-          ...(profile.autoCompact === false ? { autoCompact: false } : {}),
+          ...(profile.autoCompact === false ? { autoCompact: false } : {}), ...(profile.compactAt ? { compactAt: profile.compactAt } : {}),
           delegationQuota: quota,
           agent: { runId: job.id, taskId: job.id, domain: "backend", role: "worker" },
           onChildRun: (child) => {

@@ -74,13 +74,28 @@ export const GROUP_TITLES = {
 /** Agents that only read: they may call only the MCP tools their server marks read-only. */
 export const READ_ONLY_AGENTS: ReadonlySet<AgentKind> = new Set(["scout", "researcher", "planner"])
 
+/** The auto-compaction threshold field under each agent's Auto-compact switch. */
+export const COMPACT_AT = {
+  label: "Compact at",
+  help: "Empty: built-in 64K.",
+  placeholder: "64000",
+  min: 4000,
+  max: 2_000_000,
+  bad: (text: string) => `"${text}" is not a whole number of tokens from 4000 to 2000000.`,
+} as const
+
 /** The Tools & skills section's copy. */
 export const GRANTS = {
-  intro: "Choose what each agent may use beyond its own tools. MCP tools come from the servers pi has connected; skills are the ones pi finds in your skill folders and packages. Children an agent delegates to get the same grants. Every change saves at once.",
+  intro: "Every agent picks up the MCP tools of the servers pi has connected and the skills pi finds, including ones you add later. Narrow an agent here when it should use fewer. Children an agent delegates to get the same grants. Every change saves at once.",
   agents: "Agents",
   cardLabel: "tools and skills",
   tools: "MCP tools",
   toolsHelp: "Granted tools are the only MCP tools this agent can call, directly or from codemode.",
+  everyTool: "Every MCP tool pi connects",
+  everyToolHelp: "New servers and tools are picked up on the next run. Off: only the tools ticked below.",
+  everyToolReadOnlyHelp: "Every read-only tool, picked up on the next run as servers connect. Off: only the tools ticked below.",
+  allTools: "all MCP tools",
+  noToolsWarning: "This agent gets no MCP tools at all.",
   readOnlyHelp: "This agent only reads, so it can call only tools their server marks read-only.",
   qaHelp: "QA's tests may use any granted tool; the QA gate, which only reads, calls only the read-only ones.",
   blockedHelp: "This agent only reads; the server does not mark this tool read-only.",

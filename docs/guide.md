@@ -263,6 +263,9 @@ the next settled boundary.
 Each agent's card in Settings → Agents has an **Auto-compact** switch (on by
 default; `autoCompact: false` in the agent's settings entry). With it off, that
 agent is never compacted by bot-lobby; children inherit their parent's choice.
+Under the switch, **Compact at** takes the token count that starts a compaction
+(`compactAt`, 4,000 to 2,000,000). Left empty, the built-in threshold above applies.
+Whatever you set, compaction still starts before the window less Pi's reserve.
 When the oracle compacts, its checkpoint also lists what it learned that is
 worth keeping, tagged by agent, and those lines go into the knowledge base: the
 oracle's own files, and the designer's, backend's and QA's where they concern
@@ -270,9 +273,11 @@ them. Duplicates are skipped.
 
 ## Tools and skills
 
-Pi's native MCP, `tool_search` and `codemode` are available. **Settings → Tools & skills** grants
-each agent MCP tools and skills: pick an agent, then tick a whole server, single tools, or type an
-exact tool name that is not connected right now. Every tick saves. Scouts, the researcher and the
+Pi's native MCP, `tool_search` and `codemode` are available. Every agent picks up the tools of
+the MCP servers Pi has connected on its own, including servers added later (they show up on the
+agent's next run). **Settings → Tools & skills** narrows that per agent: pick an agent, switch off
+**Every MCP tool pi connects**, then tick a whole server, single tools, or type an exact tool name
+that is not connected right now. Every tick saves. Scouts, the researcher and the
 planner only get tools the server marks read-only (`readOnlyHint: true`); hidden tools and
 ungranted calls are blocked, including calls nested inside codemode. Configure server connections
 through Pi's native MCP settings.
@@ -283,8 +288,8 @@ none. The oracle is your Pi session itself, so it uses the skills Pi loads for i
 
 In `config.json` the fields are `mcpTools: ["mcp__github__get_issue"]` and
 `skills: ["pdf-tools"]` on `agents.backend`, `agents.designer`, `agents.qa`, `scout`,
-`researcher`, `quickFix` and `planner` (`master` takes `mcpTools`). Tools default to none; an
-absent `skills` means all and `[]` means none. Children inherit their parent's grants. A granted
+`researcher`, `quickFix` and `planner` (`master` takes `mcpTools`). For both, an absent field
+means every one Pi has, and `[]` means none. Children inherit their parent's grants. A granted
 skill Pi no longer finds is skipped.
 
 ## Keys
