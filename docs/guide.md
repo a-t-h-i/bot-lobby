@@ -299,8 +299,13 @@ compaction live there; on a harness, pi drives the harness as their model. Each 
 model provider (`claude-code/claude-opus-5-5`, `codex-cli/gpt-5.5`, `gemini-cli/default`, and so
 on), and each user turn starts the harness on the conversation so far with its own tools switched
 off. pi's tools reach it over a local MCP server, so questions, tasks, delegation and every other
-Bot Lobby tool work as they do on pi. The harness bills through its own login: driving Claude Code
-from Bot Lobby on a Claude subscription counts as a third-party app and draws from extra usage.
+Bot Lobby tool work as they do on pi. The harness bills through its own login.
+
+Claude Code runs through the Claude Agent SDK (an optional dependency, installed by default), which
+is Anthropic's supported way for apps to drive it on a Claude plan. It starts your installed
+`claude`, or the command set under Harnesses, else the SDK's own build; without the SDK, Bot Lobby
+falls back to `claude -p`. On a Claude plan, Anthropic bills app use from the plan's Agent SDK
+credit and then extra usage.
 
 Each step still gets its role prompt (instructions, knowledge, standards and the report format).
 Codex gets it as developer instructions, Claude Code appends it to its own system prompt, and ACP

@@ -45,6 +45,7 @@ naming the file it came from.
 | `src/harness/instructions.ts` | `packages/provider-core/src/server/runtimeInstructions.ts`, `orchestrationInstructions.ts` (`t3AcpPromptWithInstructions`) |
 | `src/harness/codex.ts` | `apps/server/src/textGeneration/CodexTextGeneration.ts`, `apps/server/src/provider/codexLaunchArgs.ts` |
 | `src/harness/claude.ts` | `apps/server/src/textGeneration/ClaudeTextGeneration.ts`, `apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts` (auto-compact window) |
+| `src/harness/claude-sdk.ts` | `apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts` (Agent SDK query options) |
 | `src/harness/acp.ts` | `apps/server/src/provider/acp/AntigravityProtocol.ts` (permission answers), `packages/provider-acp/src/server/sessionConfig.ts` (session option categories) |
 | `src/schemas/harness.ts`, `webui/src/tabs/settings/HarnessesGroup.tsx` | `packages/contracts/src/settings.ts` (provider settings fields), `apps/web/src/components/settings/ProviderInstanceCard.tsx` |
 

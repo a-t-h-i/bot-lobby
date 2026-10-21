@@ -16,7 +16,8 @@ import { HARNESSES, harnessCommand, harnessEffort, harnessModelId } from "./cata
 import { claudeArgs, claudeDriver } from "./claude.ts";
 import { codexArgs, codexDriver } from "./codex.ts";
 import { acpPromptWithInstructions, harnessInstructions } from "./instructions.ts";
-import { runHarnessProcess, type HarnessDriver, type HarnessIO, type HarnessOutcome, type HarnessSpawn } from "./process.ts";
+import { runHarnessProcess, type HarnessDriver, type HarnessIO, type HarnessOutcome, type HarnessProcessOptions, type HarnessSpawn } from "./process.ts";
+import { loadClaudeSdk, runClaudeSdk } from "./claude-sdk.ts";
 
 /** What one run is allowed to do, from its role's pi tool allowlist (absent: everything). */
 export interface HarnessAccess {
@@ -105,8 +106,23 @@ export function planHarnessRun(options: Pick<PiRunOptions, "systemPrompt" | "thi
   };
 }
 
+/** Starts one run and resolves when it ends: a harness process, or Claude Code through the Agent SDK. */
+export type HarnessStart = (collected: HarnessCollector, options: HarnessProcessOptions) => Promise<HarnessOutcome>;
+
+/** How one run starts; Claude Code goes through the Agent SDK when it is installed, else its CLI. */
+export function harnessLaunch(plan: HarnessPlan, options: Pick<PiRunOptions, "cwd" | "env"> & { prompt: string; access: HarnessAccess }, promptFile: () => string): HarnessStart {
+  const launched = processLaunch(plan, options, promptFile);
+  const fromProcess: HarnessStart = (collected, watch) => runHarnessProcess(launched.spawn, watch, (io) => launched.driver(io, collected));
+  if (HARNESSES[plan.harness.id].protocol !== "claude-stream") return fromProcess;
+  return async (collected, watch) => {
+    const query = await loadClaudeSdk();
+    if (!query) return fromProcess(collected, watch);
+    return runClaudeSdk(query, plan, options.access, { cwd: options.cwd, env: launched.spawn.env, launchArgs: launched.launchArgs, prompt: options.prompt }, collected, watch);
+  };
+}
+
 /** The process to start and the driver that speaks to it. */
-export function harnessLaunch(plan: HarnessPlan, options: Pick<PiRunOptions, "cwd" | "env"> & { prompt: string; access: HarnessAccess }, promptFile: () => string): { spawn: HarnessSpawn; driver: (io: HarnessIO, collected: HarnessCollector) => HarnessDriver } {
+function processLaunch(plan: HarnessPlan, options: Pick<PiRunOptions, "cwd" | "env"> & { prompt: string; access: HarnessAccess }, promptFile: () => string): { spawn: HarnessSpawn; launchArgs: string[]; driver: (io: HarnessIO, collected: HarnessCollector) => HarnessDriver } {
   const { id, settings } = plan.harness;
   const info = HARNESSES[id];
   const { command, args: launchArgs } = harnessCommand(id, settings);
@@ -119,14 +135,14 @@ export function harnessLaunch(plan: HarnessPlan, options: Pick<PiRunOptions, "cw
   if (info.protocol === "codex-exec") {
     const built = codexArgs(plan, access, launchArgs);
     const prompt = built.promptPrefix ? acpPromptWithInstructions(task, built.promptPrefix) : task;
-    return { spawn: { command, args: built.args, cwd: options.cwd, env }, driver: (io, collected) => codexDriver(io, plan, prompt, collected) };
+    return { spawn: { command, args: built.args, cwd: options.cwd, env }, launchArgs, driver: (io, collected) => codexDriver(io, plan, prompt, collected) };
   }
   if (info.protocol === "claude-stream") {
     const built = claudeArgs(plan, access, launchArgs, plan.instructions ? promptFile() : undefined);
-    return { spawn: { command, args: built.args, cwd: options.cwd, env: { ...env, ...built.env } }, driver: (io, collected) => claudeDriver(io, task, collected) };
+    return { spawn: { command, args: built.args, cwd: options.cwd, env: { ...env, ...built.env } }, launchArgs, driver: (io, collected) => claudeDriver(io, task, collected) };
   }
   const prompt = acpPromptWithInstructions(task, plan.instructions);
-  return { spawn: { command, args: launchArgs, cwd: options.cwd, env }, driver: (io, collected) => acpDriver(io, plan, prompt, collected, access, options.cwd) };
+  return { spawn: { command, args: launchArgs, cwd: options.cwd, env }, launchArgs, driver: (io, collected) => acpDriver(io, plan, prompt, collected, access, options.cwd) };
 }
 
 function toResult(collected: HarnessCollector, outcome: HarnessOutcome, aborted: boolean, options: PiRunOptions, label: string): PiRunResult {
@@ -161,14 +177,14 @@ export async function runHarnessAgent(options: PiRunOptions & { harness: Harness
     return file;
   };
   try {
-    let launch: ReturnType<typeof harnessLaunch>;
+    let start: HarnessStart;
     try {
-      launch = harnessLaunch(plan, { cwd: options.cwd, ...(options.env ? { env: options.env } : {}), prompt: `Task: ${options.task}`, access: accessOf(options.tools) }, promptFile);
+      start = harnessLaunch(plan, { cwd: options.cwd, ...(options.env ? { env: options.env } : {}), prompt: `Task: ${options.task}`, access: accessOf(options.tools) }, promptFile);
     } catch (error) {
       return { ...empty, status: "failed", error: (error as Error).message };
     }
     const collected = collector();
-    const outcome = await runHarnessProcess(launch.spawn, {
+    const outcome = await start(collected, {
       ...(options.signal ? { signal: options.signal } : {}),
       ...(options.stallTimeoutMs !== undefined ? { stallTimeoutMs: options.stallTimeoutMs } : {}),
       ...(options.toolStallTimeoutMs !== undefined ? { toolStallTimeoutMs: options.toolStallTimeoutMs } : {}),
@@ -177,7 +193,7 @@ export async function runHarnessAgent(options: PiRunOptions & { harness: Harness
         if (event.type === "tool_execution_start") options.onActivity?.(activityWord(event.toolName));
         options.onEvent?.(event);
       },
-    }, (io) => launch.driver(io, collected));
+    });
     return toResult(collected, outcome, options.signal?.aborted === true, options, label);
   } finally {
     if (dir) rmSync(dir, { recursive: true, force: true });

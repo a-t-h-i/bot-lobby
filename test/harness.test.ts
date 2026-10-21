@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { agentProfile, DEFAULT_CONFIG, livingModel, lobbyAgentProfile, resolveConfig } from "../src/schemas/configuration.ts";
 import { normalizeContext, type Api, type AssistantMessage, type AssistantMessageEventStream, type Message, type Model, type ToolCall } from "@earendil-works/pi-ai";
 import { bridgeStream } from "../src/harness/bridge/provider.ts";
+import { claudeSdkOptions, extraArgsOf, loadClaudeSdk, setClaudeSdkLoader } from "../src/harness/claude-sdk.ts";
+import type { Options, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { DEFAULT_HARNESS_SETTINGS, normalizeHarnesses, type HarnessRun, type HarnessSettings } from "../src/schemas/harness.ts";
 import { harnessEffort, harnessModelId, harnessModels } from "../src/harness/catalog.ts";
 import { codexArgs } from "../src/harness/codex.ts";
@@ -247,7 +249,17 @@ test("a failed Codex turn and a missing binary come back as failures naming the 
   assert.match(missing.error ?? "", /^Codex CLI: .*no-codex was not found/);
 });
 
-test("a step on Claude Code streams over stream-json, takes a steer, and ends on the result", async () => {
+/** Run `body` with the Agent SDK out of reach, so Claude Code falls back to its CLI. */
+async function withoutSdk<T>(body: () => Promise<T>): Promise<T> {
+  setClaudeSdkLoader(async () => undefined);
+  try {
+    return await body();
+  } finally {
+    setClaudeSdkLoader(async () => (await import("@anthropic-ai/claude-agent-sdk")).query as never);
+  }
+}
+
+test("without the Agent SDK, a step on Claude Code streams over stream-json, takes a steer, and ends on the result", () => withoutSdk(async () => {
   const claude = fakeHarness("claude", `
     const first = JSON.parse(await next());
     out({ type: "system", subtype: "init", model: "claude-opus-5-5" });
@@ -280,7 +292,7 @@ test("a step on Claude Code streams over stream-json, takes a steer, and ends on
   assert.equal(log.env.CLAUDE_CODE_USE_BEDROCK, "1");
   const file = log.argv[log.argv.indexOf("--append-system-prompt-file") + 1]!;
   assert.ok(!existsSync(file), "the instructions file is removed after the run");
-});
+}));
 
 test("a step on an ACP agent opens a session, sets model and effort, answers permissions and reports its message", async () => {
   const agent = fakeHarness("acp-agent", `
@@ -385,7 +397,7 @@ async function drain(stream: AssistantMessageEventStream): Promise<{ types: stri
 const textOf = (message: AssistantMessage) => message.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("|");
 const callsOf = (message: AssistantMessage) => message.content.filter((block): block is ToolCall => block.type === "toolCall");
 
-test("the oracle bridge runs pi's tools for the harness over MCP and ends the turn on its result", async () => {
+test("the oracle bridge runs pi's tools for the harness over MCP and ends the turn on its result", () => withoutSdk(async () => {
   const claude = fakeBridgedClaude("claude-bridged");
   const host = { config: () => resolveConfig({ harnesses: { claude: { binaryPath: claude.path } } }), cwd: () => dir };
   const model = { id: "claude-opus-5-5", name: "Claude Opus 5.5", api: "bot-lobby-claude", provider: "claude-code", baseUrl: "http://localhost", input: ["text"], reasoning: true, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 200_000, maxTokens: 64_000 } as unknown as Model<Api>;
@@ -427,7 +439,7 @@ test("the oracle bridge runs pi's tools for the harness over MCP and ends the tu
   controller.abort();
   const fourth = await drain(bridgeStream(host, "claude", model, context([ask, first.message, ...results, second.message, ask2, third.message, ...third2]), { sessionId: "s1", signal: controller.signal }));
   assert.equal(fourth.message.stopReason, "aborted");
-});
+}));
 
 test("a bridged harness that fails reports the error on the reply", async () => {
   const host = { config: () => resolveConfig({ harnesses: { codex: { binaryPath: join(dir, "no-such-codex") } } }), cwd: () => dir };
@@ -435,4 +447,68 @@ test("a bridged harness that fails reports the error on the reply", async () => 
   const reply = await drain(bridgeStream(host, "codex", model, normalizeContext({ systemPrompt: "P", messages: [{ role: "user", content: "hi", timestamp: 1 }] }), { sessionId: "s2" }));
   assert.equal(reply.message.stopReason, "error");
   assert.match(reply.message.errorMessage ?? "", /^Codex CLI: .*no-such-codex was not found/);
+});
+
+test("Claude Code goes through the Agent SDK when it is installed, with the role's prompt, effort, tools and settings", async () => {
+  assert.ok(await loadClaudeSdk(), "the SDK is installed as an optional dependency");
+  const seen: { options?: Options; prompts: string[] } = { prompts: [] };
+  setClaudeSdkLoader(async () => ((params: { prompt: AsyncIterable<SDKUserMessage>; options?: Options }) => {
+    seen.options = params.options;
+    return (async function* () {
+      const input = params.prompt[Symbol.asyncIterator]();
+      const text = async () => {
+        const next = await input.next();
+        const content = next.done ? undefined : next.value.message.content;
+        const value = Array.isArray(content) ? (content[0] as { text: string }).text : "";
+        seen.prompts.push(value);
+        return value;
+      };
+      const first = await text();
+      yield { type: "system", subtype: "init", model: "claude-opus-5-5" };
+      yield { type: "assistant", message: { id: "m1", content: [{ type: "tool_use", id: "tu1", name: "Edit", input: { file_path: `${dir}/c.ts` } }] } };
+      const steer = await text();
+      yield { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "tu1", is_error: false }] } };
+      yield { type: "result", subtype: "success", is_error: false, result: `sdk: ${first} / ${steer}`, total_cost_usd: 0.1, usage: { input_tokens: 7, output_tokens: 2 } };
+      assert.equal((await input.next()).done, true, "the input ends with the turn's result");
+    })() as never;
+  }) as never);
+  try {
+    const events: PiStreamEvent[] = [];
+    const result = await runPiAgent({
+      cwd: dir, task: "do it", systemPrompt: "ROLE", tools: ["read", "edit"],
+      harness: run("claude", "claude-opus-5-5", { binaryPath: "/opt/my-claude", modelProvider: "bedrock", launchArgs: "--foo=bar --verbose", compactAt: 300_000 }), thinking: "high",
+      onStart: (handle) => setTimeout(() => handle.steer("also this"), 20),
+      onEvent: (event) => events.push(event),
+    });
+    assert.equal(result.status, "success", result.error);
+    assert.equal(result.output, "sdk: Task: do it / also this");
+    assert.equal(result.usage.cost, 0.1);
+    assert.ok(events.some((event) => event.type === "tool_execution_start" && event.toolName === "edit"));
+    const options = seen.options!;
+    assert.equal(options.pathToClaudeCodeExecutable, "/opt/my-claude");
+    assert.equal(options.model, "claude-opus-5-5");
+    assert.equal(options.effort, "high");
+    assert.deepEqual(options.systemPrompt && typeof options.systemPrompt === "object" && !Array.isArray(options.systemPrompt) ? [options.systemPrompt.type, "preset" in options.systemPrompt ? options.systemPrompt.preset : ""] : [], ["preset", "claude_code"]);
+    assert.match(JSON.stringify(options.systemPrompt), /ROLE/);
+    assert.deepEqual([options.permissionMode, options.allowDangerouslySkipPermissions], ["bypassPermissions", true]);
+    assert.equal(options.persistSession, false);
+    assert.equal(options.env?.CLAUDE_CODE_USE_BEDROCK, "1");
+    assert.deepEqual(options.settings, { autoCompactWindow: 300_000 });
+    assert.deepEqual(options.extraArgs, { foo: "bar", verbose: null });
+  } finally {
+    setClaudeSdkLoader(async () => (await import("@anthropic-ai/claude-agent-sdk")).query as never);
+  }
+});
+
+test("through the SDK, read-only roles get only their tools and the oracle bridge only pi's", () => {
+  const input = { cwd: dir, env: {}, launchArgs: [], abort: new AbortController(), stderr: () => {} };
+  const plan = planHarnessRun({ harness: run("claude"), systemPrompt: "R", thinking: "low" });
+  const readOnly = claudeSdkOptions(plan, accessOf(["read", "grep", "bash"]), input);
+  assert.deepEqual([readOnly.tools, readOnly.allowedTools, readOnly.permissionMode], [["Read", "Grep", "Bash"], ["Read", "Grep", "Bash"], "dontAsk"]);
+  const bridged = claudeSdkOptions({ ...plan, mcp: { name: "bot-lobby", command: "node", args: ["s.mjs", "sock", "t"] } }, { writes: false, shell: false, web: false, tools: [], mcp: true }, input);
+  assert.deepEqual(bridged.tools, []);
+  assert.deepEqual(bridged.mcpServers, { "bot-lobby": { type: "stdio", command: "node", args: ["s.mjs", "sock", "t"] } });
+  assert.deepEqual([bridged.strictMcpConfig, bridged.allowedTools, bridged.permissionMode], [true, ["mcp__bot-lobby"], "dontAsk"]);
+  assert.equal(bridged.env?.MCP_TOOL_TIMEOUT, "86400000");
+  assert.deepEqual(extraArgsOf(["--a", "1", "-b", "--c=x=y", "loose"]), { a: "1", b: null, c: "x=y" });
 });

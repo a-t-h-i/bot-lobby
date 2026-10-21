@@ -64,7 +64,7 @@ export const HARNESSES: Record<HarnessId, HarnessInfo> = {
       { value: "vertex", label: "Google Vertex AI" },
     ],
     effort: "flag",
-    blurb: "Anthropic's coding agent, run headless with claude -p.",
+    blurb: "Anthropic's coding agent, driven through the Claude Agent SDK.",
   },
   antigravity: {
     id: "antigravity",

@@ -33,7 +33,6 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { BotLobbyConfig } from "../../schemas/configuration.ts";
 import { BRIDGE_DEFAULT_MODEL, BRIDGE_PROVIDERS, HARNESS_IDS, type HarnessId } from "../../schemas/harness.ts";
 import { HARNESSES, harnessModels } from "../catalog.ts";
-import { runHarnessProcess } from "../process.ts";
 import { collector, harnessLaunch, planHarnessRun, type HarnessAccess, type HarnessCollector } from "../runner.ts";
 import { openBridge, type BridgeCall, type BridgeTool } from "./mcp-host.ts";
 import { bridgeResult, bridgeTools, bridgeTurn } from "./transcript.ts";
@@ -260,8 +259,8 @@ function startRun(host: BridgeHost, id: HarnessId, model: Model<Api>, context: T
         writeFileSync(file, plan.instructions, { encoding: "utf8", mode: 0o600 });
         return file;
       };
-      const launch = harnessLaunch(plan, { cwd: host.cwd(), prompt: turn.prompt, access: BRIDGE_ACCESS }, promptFile);
-      const outcome = await runHarnessProcess(launch.spawn, { signal: run.abort.signal }, (io) => launch.driver(io, run.collected));
+      const start = harnessLaunch(plan, { cwd: host.cwd(), prompt: turn.prompt, access: BRIDGE_ACCESS }, promptFile);
+      const outcome = await start(run.collected, { signal: run.abort.signal });
       if (run.done) return;
       const error = outcome.spawnError ?? run.collected.error ?? (outcome.exitCode !== 0 && !run.collected.text.trim() ? outcome.stderr.trim().split("\n").slice(-3).join(" ").slice(0, 400) || `exited with code ${outcome.exitCode}` : undefined);
       // The reply pi is waiting on ends the turn; when pi is between replies, its next request starts a new run.
