@@ -4,7 +4,6 @@ import { CONFIG_DIR_NAME, type ExtensionAPI } from "@earendil-works/pi-coding-ag
 import { registerCommands } from "./pi/commands.ts";
 import { registerLifecycle } from "./pi/events.ts";
 import { registerOrchestrateTool } from "./pi/tools.ts";
-import { registerRouteTool } from "./pi/route.ts";
 import { onTransition } from "./state/task-state.ts";
 import { releaseAttachments } from "./state/attachments.ts";
 import { detectProjectRoot } from "./state/project.ts";
@@ -46,8 +45,6 @@ export default function (pi: ExtensionAPI): void {
   });
   registerCommands(pi, CONFIG_DIR_NAME);
   registerOrchestrateTool(pi, CONFIG_DIR_NAME);
-  // A new request one agent can do alone: the oracle confirms, and the lobby hands it to the quick-fix agent.
-  registerRouteTool(pi, CONFIG_DIR_NAME);
   // The questionnaire the oracle (and pi without a task) asks the user with; no other extension is needed for it.
   registerAskTool(pi, undefined, CONFIG_DIR_NAME);
   // The web tools, for the researcher and for pi without a task (the oracle leaves them to the researcher).

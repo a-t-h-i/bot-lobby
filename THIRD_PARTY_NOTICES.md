@@ -36,6 +36,7 @@ naming the file it came from.
 | `webui/src/components/reui/popover.tsx` | `apps/web/src/components/ui/popover.tsx` |
 | `webui/src/app/Sidebar.tsx` | `apps/web/src/components/Sidebar.tsx`, `apps/web/src/components/ui/sidebar.tsx` |
 | `webui/src/app/Composer.tsx` | `apps/web/src/components/chat/ComposerSurface.tsx`, `ChatComposer.tsx`, `ComposerPrimaryActions.tsx`, `ComposerControl.tsx` |
+| `webui/src/app/composer/ComposerCommandMenu.tsx` | `apps/web/src/components/chat/ComposerCommandMenu.tsx`, `ComposerBanner.tsx` (the attached drawer surface), `composer-logic.ts` (the `/` and `@` trigger) |
 | `webui/src/app/TerminalDrawer.tsx` | `apps/web/src/components/ThreadTerminalDrawer.tsx` (the drawer, its floating toolbar and terminal list) |
 | `webui/src/tabs/lobby/InlineActivity.tsx` | `apps/web/src/components/chat/WorkLog.tsx` |
 | `src/webui/palette-core.ts` (the built-in themes) | `packages/shared/src/themePalettes.ts` (Blossom is their T3 Chat theme, renamed) |

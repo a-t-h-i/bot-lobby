@@ -23,8 +23,7 @@ import { applyStatus, registerRevealShortcut } from "./ui.ts";
 import { isOn, registerSwitch, turnOff, turnOn } from "./switch.ts";
 import { classifierSummary } from "./model-settings.ts";
 import { keyStatus } from "../classifier/instance.ts";
-import { kickoff, startPlannedTask } from "./start-task.ts";
-import { startRequest } from "./route.ts";
+import { kickoff, startPlannedTask, startTask } from "./start-task.ts";
 import { setAuto, toggleOwnAuto } from "./owner.ts";
 import { registerWebServer, webCommand } from "../webui/command.ts";
 import { modelRef, thinkingMismatches } from "./model-support.ts";
@@ -37,8 +36,8 @@ import { livePresence } from "../state/presence.ts";
 import { carryOnMessage } from "../lobby/resume.ts";
 
 const HELP = [
-  "/bot-lobby                  Open the web lobby in your browser: tasks, plan, quick fix, metrics",
-  "/bot-lobby <request>        Start a request: a quick fix when one agent can do it alone (the oracle confirms), else a task",
+  "/bot-lobby                  Open the web lobby in your browser: chat, tasks, plan, metrics",
+  "/bot-lobby <request>        Start a task (in the lobby, /task <request> does the same)",
   "/bot-lobby --task [--auto] <request>   Always a task (also when the request begins with a subcommand word)",
   "/bot-lobby --fast|--full <request>   Start a task on the fast track (straight to the agents it needs) or the full workflow, whatever it reads as",
   "/bot-lobby --branch|--worktree|--no-branch <request>   Give the task its own git branch, or its own worktree, named after it (or neither), whatever workflow.gitIsolation says",
@@ -80,7 +79,7 @@ export interface ParsedCommand {
   auto?: boolean;
   /** `--fast` or `--full`: the task's path, whatever its request reads as. */
   track?: "fast" | "full";
-  /** `--task`: a task, never routed to the quick-fix agent. */
+  /** `--task`: the rest is a task's request, even when it begins with a subcommand word. */
   task?: boolean;
   /** `--branch`, `--worktree` or `--no-branch`: the task's git isolation, whatever the config says. */
   isolation?: GitIsolation;
@@ -336,13 +335,12 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
       return filtered.length > 0 ? filtered : null;
     },
     handler: async (args, ctx) => {
-      const { sub, rest, restText, auto, track, task, isolation } = parseCommand(args ?? "");
+      const { sub, rest, restText, auto, track, isolation } = parseCommand(args ?? "");
       // A request, the bare command or anything that drives a task needs bot-lobby on (`web stop` does not).
       if (!sub || (TURNS_ON.has(sub) && !(sub === "web" && rest[0] === "stop"))) turnOn(pi, ctx, configDir);
       if (!sub) {
         if (!restText) return webCommand(ctx, undefined);
-        // A request one agent can do alone may go to the quick-fix agent once the oracle confirms; the rest start as tasks.
-        await startRequest(pi, ctx, configDir, restText, { ...(auto ? { auto } : {}), ...(track ? { track } : {}), ...(task ? { task } : {}), ...(isolation ? { isolation } : {}) });
+        await startTask(pi, ctx, configDir, restText, { ...(auto ? { auto } : {}), ...(track ? { track } : {}), ...(isolation ? { isolation } : {}) });
         return;
       }
       switch (sub) {

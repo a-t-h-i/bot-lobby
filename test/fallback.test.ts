@@ -10,7 +10,7 @@ const request: AgentRequest = { taskId: "T", domain: "backend", role: "worker", 
 
 test("legacy fallback keys are ignored without rejecting valid primary settings", () => {
   const entry = { model: "primary/x", thinking: "high", fallbackModel: "other/y", fallbackThinking: "low", instructions: "keep me" };
-  const config = resolveConfig({ master: entry, agents: { backend: entry }, scout: { model: "scout/x", fallbackModel: "other/y" }, researcher: entry, planner: entry, quickFix: entry });
+  const config = resolveConfig({ master: entry, agents: { backend: entry }, scout: { model: "scout/x", fallbackModel: "other/y" }, researcher: entry, planner: entry });
   assert.equal(config.master.model, "primary/x");
   assert.equal(config.agents.backend.instructions, "keep me");
   assert.equal(agentProfile(config, "backend", "worker").model, "primary/x");

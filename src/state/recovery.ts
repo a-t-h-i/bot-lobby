@@ -6,8 +6,8 @@
  * background sessions it drives, and whether each was in the middle of a turn.
  * A window that quits on purpose removes it; one that stops any other way
  * leaves it behind, and the next window to start in the project takes it over
- * (`claimStoppedWindows`). Each session's planning panel and quick-fix queue
- * are kept beside it, by session, so they carry on as well.
+ * (`claimStoppedWindows`). Each session's planning panel is
+ * kept beside it, by session, so it carries on as well.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -39,7 +39,7 @@ export interface WindowRecord {
 }
 
 /** What each kept session state holds. */
-export type SessionStateKind = "planner" | "quickfix";
+export type SessionStateKind = "planner";
 
 /** This process's token: written into its record, so a later process with the same pid is not mistaken for it. */
 const TOKEN = randomBytes(8).toString("hex");

@@ -1,7 +1,8 @@
 /**
- * The conversation pane: chat newest-last in a centred column, the oracle's
- * replies as Markdown beside its avatar under its name and time, yours in a
- * tinted bubble on the right, messages from one speaker within five minutes
+ * The conversation pane: chat newest-last in a centred column, each reply as
+ * Markdown under its speaker's icon, name and time (the Master, or the agent
+ * that answered: Design, Dev, QA, Research, a scout), yours in a tinted bubble
+ * on the right with who it went to when that was not the Master, messages from one speaker within five minutes
  * under one header (a follow-on shows its time when pointed at), notes as
  * rules across the column, the agents' activity folded in place between the
  * messages it came between (see `InlineActivity.tsx`), three dots until the reply starts (none while a working step already shows), older history loaded from
@@ -23,14 +24,14 @@ import { formatClock } from "@/lib/format"
 import { Frame } from "@/ui/Frame"
 import { Markdown } from "@/ui/Markdown"
 import { InlineActivity, summary } from "./InlineActivity"
-import type { ActivityEntry, ChatEntry } from "./types"
+import { sourceLabel, speakerOf, type ActivityEntry, type ChatEntry } from "./types"
 import { weave } from "./weave"
 
 /** Messages from one speaker this close together share a header. */
 const GROUP_MS = 5 * 60_000
 
-const NO_TASK = "No task is running in this session."
-const NO_TASK_HINT = "Type a request below and press enter to start one: the oracle scouts, proposes, plans and delegates."
+const NO_TASK = "Talk to the team."
+const NO_TASK_HINT = "Ask a question or ask for a change below: the right agent answers and does it here."
 const NOTHING_SAID = "Nothing said yet. Type below to talk to the oracle about this task."
 
 function NoteEntry({ entry }: { entry: ChatEntry }) {
@@ -45,14 +46,14 @@ function NoteEntry({ entry }: { entry: ChatEntry }) {
 function MessageBody({ entry, head }: { entry: ChatEntry; head: boolean }) {
   if (entry.role === "you") {
     return (
-      <YourMessage time={formatClock(entry.at)} head={head}>
+      <YourMessage time={formatClock(entry.at)} head={head} {...(entry.to ? { note: `to ${sourceLabel(entry.to)}` } : {})}>
         <Markdown text={entry.text} />
       </YourMessage>
     )
   }
-  const panel = entry.role === "panel"
+  const source = speakerOf(entry)
   return (
-    <AgentMessage source={panel ? "PLANNER" : "ORACLE"} name={panel ? "Panel" : "Oracle"} time={formatClock(entry.at)} head={head}>
+    <AgentMessage source={source} name={source === "PLANNER" ? "Panel" : sourceLabel(source)} time={formatClock(entry.at)} head={head} named>
       <Markdown text={entry.text} />
     </AgentMessage>
   )
@@ -70,15 +71,17 @@ const Message = memo(
     before.head === after.head &&
     before.entry.id === after.entry.id &&
     before.entry.text === after.entry.text &&
-    before.entry.at === after.entry.at
+    before.entry.at === after.entry.at &&
+    before.entry.to === after.entry.to
 )
 
-/** The oracle's reply as it streams; three dots until it starts, unless a working step above already says the work is under way. */
-function LiveReply({ text, busy, working }: { text?: string; busy: boolean; working: boolean }) {
+/** The reply on its way: the oracle's as it streams, or another agent's (`answering`); three dots until it starts, unless a working step above already says the work is under way. */
+function LiveReply({ text, busy, working, answering }: { text?: string; busy: boolean; working: boolean; answering?: string }) {
   const writing = Boolean(text?.trim())
   if (!writing && (!busy || working)) return null
+  const source = writing ? "MASTER" : (answering ?? "MASTER")
   return (
-    <AgentMessage source="ORACLE" name="Oracle" head live={busy} aside={busy && writing ? "writing…" : undefined}>
+    <AgentMessage source={source} name={sourceLabel(source)} head named live={busy} aside={busy && writing ? "writing…" : undefined}>
       {writing ? <Markdown text={text ?? ""} /> : <TypingDots className="mt-1" />}
     </AgentMessage>
   )
@@ -97,10 +100,10 @@ function ConversationEmpty({ hasTask }: { hasTask: boolean }) {
       {hasTask ? null : (
         <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
           <li className="flex items-center justify-center gap-2">
-            Or plan it first with the whole panel in <Keys chord="3" /> Plan
+            <Keys chord="@" /> names who answers: @design, @dev, @qa, @research, @scout
           </li>
           <li className="flex items-center justify-center gap-2">
-            or make a direct change in <Keys chord="4" /> Quick fix
+            <Keys chord="/" /> /plan plans it with the panel, /task starts it as a task
           </li>
         </ul>
       )}
@@ -155,6 +158,7 @@ export function Conversation({
   activity = NO_STEPS,
   reply,
   busy,
+  answering,
   hasOlder,
   hasTask,
 }: {
@@ -163,6 +167,8 @@ export function Conversation({
   activity?: ActivityEntry[]
   reply?: string
   busy: boolean
+  /** The agent other than the oracle answering now. */
+  answering?: string
   hasOlder: boolean
   hasTask: boolean
 }) {
@@ -194,10 +200,10 @@ export function Conversation({
               const before = timeline[index - 1]
               const previous = before?.kind === "message" ? before.entry : undefined
               // Steps in between start the next message afresh, with its speaker.
-              const head = !previous || previous.role !== item.entry.role || item.entry.at - previous.at > GROUP_MS
+              const head = !previous || speakerOf(previous) !== speakerOf(item.entry) || item.entry.at - previous.at > GROUP_MS
               return <Message key={item.entry.id} entry={item.entry} head={head} fresh={settled} />
             })}
-            <LiveReply text={reply} busy={busy} working={liveRun} />
+            <LiveReply text={reply} busy={busy} working={liveRun} {...(answering ? { answering } : {})} />
           </div>
         )}
       </div>

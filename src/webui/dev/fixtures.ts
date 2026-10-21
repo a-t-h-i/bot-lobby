@@ -46,7 +46,7 @@ export interface ScenarioFixture {
   };
   zen: { task?: Partial<SnapshotTask> & { id: string; title: string; state: string; plan?: string }; runs: unknown[] };
   feed: {
-    chat: Array<{ role: ChatRole; text: string }>;
+    chat: Array<{ role: ChatRole; text: string; agent?: string; to?: string }>;
     activity: Array<{ source: string; text: string; kind: "info" | "success" | "warning" | "error"; pending: boolean }>;
     /** `live` thoughts are still streaming, as an agent thinking now. */
     thoughts: Array<{ source: string; text: string; live?: boolean }>;
@@ -91,8 +91,6 @@ export interface ScenarioFixture {
     round: number;
     retryable: boolean;
   };
-  /** Quick-fix jobs for the `quickfix.*` calls, oldest first (absent means none). */
-  mockQuickfix?: Array<Record<string, unknown>>;
   /** Metric records for `metrics.get` (absent means none). */
   mockMetrics?: Array<Record<string, unknown>>;
   /** Classifier records for `metrics.get` (absent means none). */
@@ -164,7 +162,6 @@ export function loadScenario(name: string | undefined): ScenarioFixture {
     liveSessions: Array.isArray(parsed.liveSessions) ? (parsed.liveSessions as ScenarioFixture["liveSessions"]) : [],
     mockPreviousPlans: Array.isArray(parsed.mockPreviousPlans) ? (parsed.mockPreviousPlans as ScenarioFixture["mockPreviousPlans"]) : [],
     mockPlanner: isRecord(parsed.mockPlanner) ? (parsed.mockPlanner as unknown as ScenarioFixture["mockPlanner"]) : undefined,
-    mockQuickfix: Array.isArray(parsed.mockQuickfix) ? (parsed.mockQuickfix as ScenarioFixture["mockQuickfix"]) : [],
     mockMetrics: Array.isArray(parsed.mockMetrics) ? (parsed.mockMetrics as ScenarioFixture["mockMetrics"]) : [],
     mockClassifierMetrics: Array.isArray(parsed.mockClassifierMetrics) ? (parsed.mockClassifierMetrics as ScenarioFixture["mockClassifierMetrics"]) : [],
     mockKnowledge: Array.isArray(parsed.mockKnowledge) ? (parsed.mockKnowledge as ScenarioFixture["mockKnowledge"]) : [],

@@ -10,7 +10,6 @@ export const LOBBY_TOPICS = [
   "tasks",
   "plans",
   "planner",
-  "quickfix",
   "sessions",
   "metrics",
   "git",

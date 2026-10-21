@@ -31,7 +31,7 @@ import type { AskQuestion, AskResult } from "../ask/types.ts";
 import { PANEL_MEMBERS, type PanelMember } from "../schemas/configuration.ts";
 import { truncate } from "../text.ts";
 import type { LobbyFeed } from "./feed.ts";
-import type { QuickFixProfile } from "./quickfix.ts";
+import type { LobbyRunProfile } from "./profile.ts";
 import { MAX_QUESTIONS } from "./ask.ts";
 import type { Classifier } from "../classifier/classifier.ts";
 import { chooseSeats } from "../classifier/seats.ts";
@@ -138,9 +138,9 @@ export interface PlannerDeps {
   root: string;
   configDir: string;
   /** The oracle chairing the panel (the Planner settings entry). */
-  profile: () => QuickFixProfile;
+  profile: () => LobbyRunProfile;
   /** A seat's model, thinking and grants; the oracle's profile when absent. */
-  memberProfile?: (member: PanelMember) => QuickFixProfile;
+  memberProfile?: (member: PanelMember) => LobbyRunProfile;
   /** Seats on the panel when the session starts; every seat when absent. */
   panel?: readonly PanelMember[];
   stallTimeoutMs?: number;
@@ -995,7 +995,7 @@ export class PlanningSession {
     this.deps.onChange?.();
   }
 
-  private async run(label: string, kind: "planner" | "panel", profile: QuickFixProfile, request: { task: string; systemPrompt: string; tools: readonly string[] }, signal: AbortSignal, setStep: (step: string) => void, routedFrom?: string): Promise<RunOutcome> {
+  private async run(label: string, kind: "planner" | "panel", profile: LobbyRunProfile, request: { task: string; systemPrompt: string; tools: readonly string[] }, signal: AbortSignal, setStep: (step: string) => void, routedFrom?: string): Promise<RunOutcome> {
     const startedAt = Date.now();
     const runId = randomUUID();
     let outcome: RunOutcome;
@@ -1271,7 +1271,7 @@ export function planningMetric(
   turn: number,
   startedAt: number,
   status: MetricRecord["status"],
-  profile: QuickFixProfile,
+  profile: LobbyRunProfile,
   model: string | undefined,
   usage: { input: number; output: number; cost: number; turns: number },
   now = Date.now(),

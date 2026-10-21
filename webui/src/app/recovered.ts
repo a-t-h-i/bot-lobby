@@ -1,6 +1,6 @@
 /**
  * After pi stopped unexpectedly, the window that came back says once what it
- * carried on (the planning session, quick fixes, tasks). Each carry-on is
+ * carried on (the planning session, tasks). Each carry-on is
  * announced once per tab, even across a reload.
  */
 import { useEffect } from "react"

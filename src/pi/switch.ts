@@ -5,7 +5,7 @@
  * that is still under way (a resumed session picks its task back up).
  * Ctrl+Shift+M and `/bot-lobby on|off` switch it; starting a task, opening the
  * web lobby or answering a task's proposal turns it on. Off stops the web
- * lobby too, and anything it runs (a quick fix, a review, a planning round)
+ * lobby too, and anything it runs (a chat agent's reply, a review, a planning round)
  * stops with it, so the user is asked first when something is running.
  */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";

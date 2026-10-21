@@ -1,7 +1,8 @@
 /*
- * The Lobby: the conversation with the oracle, the agents' activity folded in
- * place between its messages (Alt+A opens or folds every run of steps). One
- * column at every width. Thinking is not a pane: its orb floats over every
+ * The Lobby: the chat with the team (the oracle and, when a message is
+ * theirs, the other agents), the agents' activity folded in place between its
+ * messages (Alt+A opens or folds every run of steps). One column at every
+ * width. Thinking is not a pane: its orb floats over every
  * page (see `app/Thinking.tsx`).
  */
 import { ErrorState } from "@/app/States"
@@ -25,6 +26,7 @@ function LobbyView({ data, status }: { data?: LobbySnapshot; status?: StatusInfo
         {...(activity ? { activity } : {})}
         reply={data?.reply}
         busy={status?.busy ?? false}
+        {...(data?.answering ? { answering: data.answering } : {})}
         hasOlder={data?.hasOlderChat ?? false}
         hasTask={Boolean(data?.task)}
       />

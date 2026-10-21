@@ -92,7 +92,7 @@
   --source-design: #a21caf;
   --source-qa: var(--warning);
   --source-research: #0f766e;
-  --source-quickfix: var(--primary);
+  --source-scout: var(--primary);
 
   --sidebar: #fafafa;
   --sidebar-foreground: var(--foreground);
@@ -195,7 +195,7 @@
 
   --source-design: #e879f9;
   --source-research: #5eead4;
-  --source-quickfix: #6b93f5;
+  --source-scout: #6b93f5;
 
   --sidebar: var(--card);
   --sidebar-accent: rgb(255 255 255 / 0.08);
@@ -321,7 +321,7 @@
   --color-source-design: var(--source-design);
   --color-source-qa: var(--source-qa);
   --color-source-research: var(--source-research);
-  --color-source-quickfix: var(--source-quickfix);
+  --color-source-scout: var(--source-scout);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -1003,6 +1003,8 @@
 .chat-prose { min-width: 0; font-size: 0.9375rem; line-height: 1.65; color: var(--foreground); }
 .chat-meta { min-height: 1rem; font-size: 0.6875rem; color: var(--muted-foreground); font-variant-numeric: tabular-nums; opacity: 0; transition: opacity 150ms ease; }
 .group\/msg:is(:hover, :focus-within) .chat-meta { opacity: 1; }
+/* Who a message went to (`to Design`) stays in view, so the reply below it reads in context. */
+.chat-meta[data-note] { opacity: 1; }
 @media (hover: none) { .chat-meta { opacity: 1; } }
 /* The oracle's crystal ball, a picture rather than a line icon. */
 /* Adapted from T3 Code (MIT), MessagesTimeline.tsx: your words in a soft filled block on the right, round on every corner. */

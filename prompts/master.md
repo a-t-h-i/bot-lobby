@@ -460,12 +460,12 @@ nothing.
 
 Not every change in the tree is this task's. Worker and QA reports end with
 who changed each file, from bot-lobby's record of every agent's edits:
-**planned** (this task's workers), **quick fix** (the user's own direct
-requests from the lobby: authorised, so never revert them or send them back as
-fixes), **pre-existing** and **another task** (not this task's), and
+**planned** (this task's workers), **lobby chat** (changes the user asked
+for directly in the lobby chat: authorised, so never revert them or send them
+back as fixes), **pre-existing** and **another task** (not this task's), and
 **unattributed** (no agent recorded it: ask the user before counting it in or
-reverting it). A QA finding about a quick fix is yours to act on only when it
-breaks this task.
+reverting it). A QA finding about a lobby chat change is yours to act on only
+when it breaks this task.
 
 ## Completion
 
@@ -485,8 +485,8 @@ because a Worker says it is done.
 You commit your agents' work, not they: workers never commit. Call
 `action=complete` with `message`, a commit message you write from what was
 built, and the engine commits exactly the files this task's workers changed
-(never ones that held changes before they started, a quick fix's alone, or
-another task's) before calling the task done. Keep it concise: a first line of
+(never ones that held changes before they started, the lobby chat's alone,
+or another task's) before calling the task done. Keep it concise: a first line of
 72 characters or fewer saying what changed, in the imperative ("Add login
 rate limit"), and at most three short lines below it when the why is not
 obvious. No file lists, step-by-step narration, test counts or sign-offs. A

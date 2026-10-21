@@ -107,9 +107,9 @@ async function expectShell(page: Page, tabs: number): Promise<void> {
   const project = page.getByRole("combobox", { name: "Project", exact: true });
   await expect(project, "the project, over the composer").toBeVisible();
   await expect(project).toContainText("bot-lobby");
-  await expect(page.getByRole("tab"), `eight pills`).toHaveCount(tabs);
+  await expect(page.getByRole("tab"), `five pills`).toHaveCount(tabs);
   await expect(page.locator("#main"), "main pane").toBeVisible();
-  await expect(page.getByLabel("Message the oracle"), "composer").toBeVisible();
+  await expect(page.getByLabel("Message the team"), "composer").toBeVisible();
 }
 
 for (const scenario of SCENARIOS) {
@@ -124,7 +124,7 @@ for (const scenario of SCENARIOS) {
     }
     for (const size of SIZES) {
       await page.setViewportSize(size);
-      await expectShell(page, 8);
+      await expectShell(page, 5);
       await expectNoSidewaysScroll(page);
     }
     expect(cspErrors(trap), "no CSP violations").toEqual([]);
@@ -143,7 +143,7 @@ test("lobby tab streams a reply and stops", async ({ page, server }) => {
   await expect(main.getByRole("log", { name: "Conversation" }).getByRole("button", { name: /steps/ }), "activity, in the conversation").toBeVisible();
   await expect(page.getByRole("button", { name: "Open Thinking" }), "thoughts open from the bubble").toBeVisible();
   await expect(main.getByText("fixtures per scenario"), "seeded chat").toBeVisible();
-  await page.getByLabel("Message the oracle").fill("hello mock");
+  await page.getByLabel("Message the team").fill("hello mock");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByRole("button", { name: "Stop" }), "Stop while busy").toBeVisible();
   await expect(main.getByRole("log", { name: "Conversation" })).toContainText("Mock plan");
@@ -160,7 +160,7 @@ test("questionnaire slideout answers and dismisses", async ({ page, server }) =>
   await expect(slideout, "seeded question").toContainText("Start the mock server on 7347?");
   await slideout.getByRole("button", { name: "Yes" }).click();
   await expect(slideout, "one answer dismisses it").toBeHidden();
-  await page.getByLabel("Message the oracle").fill("go");
+  await page.getByLabel("Message the team").fill("go");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.locator("#main")).toContainText("One question first");
   await expect(slideout, "slideout after a send").toContainText("Which set should stream next?");
@@ -211,7 +211,7 @@ test("markdown never runs page scripts", async ({ page, server }: { page: Page; 
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.evaluate(() => void ((window as unknown as { __xss?: number }).__xss = undefined));
-  await page.getByLabel("Message the oracle").fill('<img src=x onerror="window.__xss=1">');
+  await page.getByLabel("Message the team").fill('<img src=x onerror="window.__xss=1">');
   await page.getByRole("button", { name: "Send" }).click();
   const conversation = page.getByRole("log", { name: "Conversation" });
   await expect(conversation).toContainText("img src=x");
@@ -345,7 +345,7 @@ test("contrast meets 4.5:1", { tag: "@theme" }, async ({ page, server }) => {
 test("scrolling past the end of a chat full of code never drags the Lobby page up", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1600, height: 1000 });
-  const box = page.getByLabel("Message the oracle");
+  const box = page.getByLabel("Message the team");
   // The scripted reply carries inline code; each code chip has a hidden screen-reader label.
   for (const text of ["one", "two", "three"]) {
     await box.fill(text);

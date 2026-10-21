@@ -156,7 +156,7 @@ check), so none is swapped.
 | `app/Composer.tsx` | `ComposerSurface.tsx`, `ChatComposer.tsx` | Port the surface (glass, 22px, outline, drop); keep our tray and keys |
 | `tabs/tasks/*` (list, board, detail, steps tracker) | sidebar rows, `ThreadDetailsPanel.tsx` | Restyle only |
 | `tabs/plan/*` (conversation, sheet, panel, mockups) | `MessagesTimeline.tsx`, `ProposedPlanCard.tsx`, `RightPanelSheet.tsx` | Restyle; the conversation shares the Lobby rows |
-| `tabs/quickfix/*` | none | Restyle only |
+| `app/composer/ComposerCommandMenu.tsx` (added later) | `chat/ComposerCommandMenu.tsx`, `ComposerBanner.tsx` | Adapted: the `/` and `@` drawer for /plan, /task and agent mentions (the Quick fix tab was removed when the lobby became a team chat) |
 | `tabs/knowledge/*` | `ChangedFilesTree.tsx` (tree rows) | Restyle only |
 | `tabs/git/*` (PRs, reviews) | `PullRequestThreadDialog.tsx`, `ThreadDetailsPrRow.tsx` | Restyle only; no diff view (see risks) |
 | `tabs/metrics/*` | `ContextWindowMeter.tsx`, `usage/` | Restyle only |
@@ -242,7 +242,7 @@ The adapted files and the MIT notice are listed in `THIRD_PARTY_NOTICES.md`.
 - Simplify Features supersedes the original focus treatment: about 360ms ease-out
   within ±3% scale, animating only the top-anchored box. The attached tray stays
   stationary without icon wobble; reduced motion retains a focus indicator.
-  Composer visibility is limited to Lobby, Tasks, Plan, Quick fix and Knowledge;
+  Composer visibility is limited to Lobby, Tasks, Plan and Knowledge;
   elsewhere it stays mounted, hidden and inert to preserve drafts and uploads.
 - Your messages sit in a bubble mixed from the theme's text and page colours
   (9% light, 15% dark) with a hairline, so they stand off the page in every

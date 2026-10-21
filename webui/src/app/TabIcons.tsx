@@ -1,7 +1,7 @@
 /**
  * The tab pills' icons, drawn part by part from Lucide's own shapes so each
  * can play a little animation of its own: the Lobby's bubble talks, Tasks
- * ticks its boxes, Plan draws its route, Quick fix jolts, Issues pulses, the
+ * ticks its boxes, Plan draws its route, Issues pulses, the
  * Git draws its branch and Knowledge claps its book.
  * A play is numbered: each new number plays once
  * (the parts remount and run from the start), and before the first the icon
@@ -88,18 +88,6 @@ function Plan({ play }: { play: number }) {
   )
 }
 
-function QuickFix({ play }: { play: number }) {
-  return (
-    <motion.g style={about()} {...part(play, { rotate: [0, -14, 10, -6, 0], scale: [1, 1.18, 0.94, 1.04, 1] }, { duration: 0.5, ease: "easeInOut" })}>
-      <motion.path
-        d="M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z"
-        fill="currentColor"
-        {...part(play, { fillOpacity: [0, 0.85, 0] }, { duration: 0.5, times: [0, 0.2, 1] })}
-      />
-    </motion.g>
-  )
-}
-
 function Issues({ play }: { play: number }) {
   return (
     <>
@@ -135,7 +123,6 @@ const ICONS: Record<string, (props: { play: number }) => ReactNode> = {
   lobby: Lobby,
   tasks: Tasks,
   plan: Plan,
-  quickfix: QuickFix,
   issues: Issues,
   git: Git,
   knowledge: Knowledge,

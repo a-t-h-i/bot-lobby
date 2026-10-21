@@ -53,7 +53,6 @@ const LABELS: Record<SubagentKind | "master", string> = {
   qa: "QA",
   scout: "Scout",
   researcher: "Researcher",
-  quickfix: "Quick fix",
   planner: "Planner",
 };
 
@@ -128,6 +127,17 @@ export function resolvePanelProfile(config: BotLobbyConfig, member: PanelMember,
 }
 
 /**
+ * A lobby chat agent's model, thinking and grants: the domain's (or the
+ * researcher's) settings, as on the planning panel; the scout's own model at
+ * its fixed thinking.
+ */
+export function resolveChatProfile(config: BotLobbyConfig, agent: "designer" | "backend" | "qa" | "researcher" | "scout", options: ResolverOptions): RunProfile {
+  if (agent !== "scout") return resolvePanelProfile(config, agent, options);
+  const profile = agentProfile(config, "backend", "scout");
+  return resolveRunProfile({ model: profile.model, thinking: profile.thinking, ...(profile.mcpTools ? { mcpTools: profile.mcpTools } : {}), ...(profile.skills ? { skills: profile.skills } : {}), ...(profile.autoCompact === false ? { autoCompact: false } : {}), ...(profile.compactAt ? { compactAt: profile.compactAt } : {}), ...(profile.harness ? { harness: profile.harness } : {}) }, kindLabel("scout"), options);
+}
+
+/**
  * The model, thinking and grants a pull request review runs on: QA's, the
  * agent whose job is judging work, with its custom instructions.
  */
@@ -144,7 +154,6 @@ export function thinkingMismatches(config: BotLobbyConfig, lookup: ModelLookup, 
     ["backend", config.agents.backend.model, config.agents.backend.thinking],
     ["qa", config.agents.qa.model, config.agents.qa.thinking],
     ["researcher", config.researcher.model, config.researcher.thinking],
-    ["quickfix", config.quickFix.model, config.quickFix.thinking],
     ["planner", config.planner.model, config.planner.thinking],
   ];
   return entries.flatMap(([kind, ref, level]) => {

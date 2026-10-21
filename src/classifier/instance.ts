@@ -70,7 +70,7 @@ export function knowledgeFor(): KnowledgePicker {
   return { ...knowledgePicker(classifier(), log), scripts: scriptPicker(classifier(), log) };
 }
 
-/** Shared scripts for a quick fix, with what Jev matched logged to the lobby's activity feed. */
+/** Shared scripts for a lobby chat agent, with what Jev matched logged to the lobby's activity feed. */
 export function scriptsPickerFor(): ScriptPicker {
   return scriptPicker(classifier(), (text) => lobbyFeed.log("CLASSIFIER", text, "info"));
 }

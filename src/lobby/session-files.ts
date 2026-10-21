@@ -7,7 +7,7 @@
  * parent, and the text of user and assistant messages (never tool output).
  */
 import { closeSync, openSync, readSync, statSync } from "node:fs";
-import { chatText, CLEARED_NOTE, isClearedMark, MAX_CHAT, textOf, type ChatEntry } from "./feed.ts";
+import { chatMarkLine, chatText, CLEARED_NOTE, isClearedMark, MAX_CHAT, textOf, type ChatEntry } from "./feed.ts";
 
 /** What a session log keeps of one entry: its parent, and its conversation lines if it is a message. */
 interface LogNode {
@@ -96,6 +96,9 @@ export class SessionLog {
       if (chat.length > 0) node.chat = chat;
     } else if (isClearedMark(entry)) {
       node.chat = [{ id: ++logIds, at, role: "note", text: CLEARED_NOTE }];
+    } else {
+      const marked = chatMarkLine(entry);
+      if (marked) node.chat = [{ ...marked, id: ++logIds, at }];
     }
     this.nodes.set(entry.id, node);
     this.leaf = entry.id;

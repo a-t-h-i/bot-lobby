@@ -8,6 +8,7 @@ import { resolveConfig, type BotLobbyConfig } from "../../schemas/configuration.
 import { LobbyFeed } from "../../lobby/feed.ts";
 import { promptHub } from "../../lobby/prompt-hub.ts";
 import { lobbyTopics } from "../../lobby/topics.ts";
+import { CHAT_AGENT_SOURCES, parseLobbyCommand, parseMention } from "../../lobby/prompts.ts";
 import type { BackgroundSession, DialogAnswer, SessionDialog } from "../../lobby/sessions.ts";
 import { cleanSessionName } from "../../lobby/sessions.ts";
 import type { PlanComment } from "../../state/comments.ts";
@@ -63,32 +64,6 @@ function fakePlanner(entry: NonNullable<ScenarioFixture["mockPlanner"]>): Record
 
 function defaultPlanner(): NonNullable<ScenarioFixture["mockPlanner"]> {
   return { seats: ["backend", "designer", "qa", "researcher"], members: [], messages: [], questions: [], notes: [], round: 0, retryable: false };
-}
-
-interface FakeQuickFixJob {
-  id: string;
-  prompt: string;
-  status: string;
-  createdAt: number;
-  steps: Array<{ at: number; text: string; pending: boolean }>;
-  tools: number;
-  turns: number;
-  note?: string;
-  report?: string;
-}
-
-function fakeQuickFixJobs(entries: Array<Record<string, unknown>>): FakeQuickFixJob[] {
-  return entries.map((job, index) => ({
-    id: typeof job.id === "string" ? job.id : `QF-${index + 1}`,
-    prompt: typeof job.prompt === "string" ? job.prompt : "",
-    status: typeof job.status === "string" ? job.status : "success",
-    createdAt: typeof job.createdAt === "number" ? job.createdAt : Date.now(),
-    steps: [],
-    tools: 0,
-    turns: 0,
-    ...(typeof job.note === "string" ? { note: job.note } : {}),
-    ...(typeof job.report === "string" ? { report: job.report } : {}),
-  }));
 }
 
 const DETAIL_ONLY = ["body", "state", "mergeable", "files", "notes", "comments"] as const;
@@ -365,39 +340,6 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     comment: () => "note saved — every agent reads it under this entry",
     unnote: () => "note removed",
   };
-  const qfJobs = fakeQuickFixJobs(fixture.mockQuickfix ?? []);
-  let qfCounter = qfJobs.length;
-  const quickfix = {
-    jobs: qfJobs,
-    get running() {
-      return qfJobs.find((job) => job.status === "running");
-    },
-    submit(prompt: string) {
-      const job: FakeQuickFixJob = { id: `QF-${(qfCounter += 1)}`, prompt: prompt.trim(), status: "queued", createdAt: Date.now(), steps: [], tools: 0, turns: 0 };
-      qfJobs.push(job);
-      return job;
-    },
-    cancel(id: string): boolean {
-      const job = qfJobs.find((entry) => entry.id === id);
-      if (!job || (job.status !== "queued" && job.status !== "running")) return false;
-      job.status = "cancelled";
-      return true;
-    },
-    runAnyway(id: string): boolean {
-      const job = qfJobs.find((entry) => entry.id === id);
-      if (!job || job.status !== "held") return false;
-      job.status = "queued";
-      delete job.note;
-      return true;
-    },
-    movedToTask(id: string): boolean {
-      const job = qfJobs.find((entry) => entry.id === id);
-      if (!job || job.status !== "held") return false;
-      job.status = "cancelled";
-      job.note = "started as a task in a new session";
-      return true;
-    },
-  };
   let commentSeq = 0;
   const service = {
     sessionId: () => fixture.status.sessionId,
@@ -441,7 +383,18 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     zen: () => ({ ...(fixture.zen.task ? { task: { ...fixture.zen.task } } : {}), runs: [...fixture.zen.runs] }),
     feed,
     toOracle: (text: string) => {
-      feed.say("you", text);
+      const command = parseLobbyCommand(text);
+      if (command?.command === "plan") return { notice: "planning on the Plan tab", open: "plan" as const };
+      if (command) return "starting a task — the oracle takes it from here";
+      const mention = parseMention(text);
+      if (mention && mention.agent !== "master") {
+        const source = CHAT_AGENT_SOURCES[mention.agent];
+        feed.say("you", mention.rest, Date.now(), { to: source });
+        const reply = setTimeout(() => feed.say("oracle", `${source} here: looked into it, and it is done.`, Date.now(), { agent: source }), 400);
+        unref(reply);
+        return undefined;
+      }
+      feed.say("you", mention?.rest || text);
       streamReply(service, feed, fixture);
       return undefined;
     },
@@ -593,7 +546,6 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     },
     defaultPanel: () => ["backend", "designer", "qa", "researcher"],
     planningRounds: () => 5,
-    quickfix,
     pulls: fakePulls(fixture.mockPulls ?? []),
     reviews: fakeReviews(fixture.mockReviews ?? [], fixture.mockReads ?? []),
     issues: fakeIssues((fixture.mockIssues ?? []).map((issue) => ({ ...issue }))),

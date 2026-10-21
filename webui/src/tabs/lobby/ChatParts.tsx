@@ -12,14 +12,14 @@ import { sourceTone } from "./types"
 
 /**
  * One message from an agent, the way the coding harnesses write theirs: plain
- * prose across the column, no bubble and no avatar. The oracle is the voice of
- * the Lobby, so it needs no name; any other speaker (the planning panel) gets a
- * small line with its icon and name over the first of a run. The time shows
- * under the message while it is pointed at. `bubble={false}` is kept for
- * content that brings its own cards (the panel's questions).
+ * prose across the column, no bubble and no avatar. A speaker gets a small
+ * line with its icon and name over the first of a run; the oracle only where
+ * other agents speak too (`named`: the Lobby, where any agent may answer).
+ * The time shows under the message while it is pointed at. `bubble={false}`
+ * is kept for content that brings its own cards (the panel's questions).
  */
-export function AgentMessage({ source, name, time, head, live, children, aside }: { source: string; name: string; time?: string; head: boolean; live?: boolean; children: ReactNode; aside?: ReactNode; bubble?: boolean }) {
-  const named = head && !isOracle(source)
+export function AgentMessage({ source, name, time, head, live, children, aside, named: always }: { source: string; name: string; time?: string; head: boolean; live?: boolean; children: ReactNode; aside?: ReactNode; bubble?: boolean; named?: boolean }) {
+  const named = head && (always || !isOracle(source))
   return (
     <div className="chat-agent group/msg" data-live={live || undefined} style={live ? ({ "--orb": sourceTone(source) } as CSSProperties) : undefined}>
       {named || aside ? (
@@ -46,7 +46,7 @@ export function YourMessage({ time, head: _head, note, children, below, actions 
     <div className="group/msg flex flex-col items-end gap-1">
       <div className="chat-bubble">{children}</div>
       {time || note || actions ? (
-        <div className="chat-meta flex items-center gap-2">
+        <div className="chat-meta flex items-center gap-2" data-note={note ? "" : undefined}>
           {actions}
           {note ? <span>{note}</span> : null}
           {time ? <time className="tabular-nums">{time}</time> : null}

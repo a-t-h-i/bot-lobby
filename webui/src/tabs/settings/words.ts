@@ -11,7 +11,6 @@ export const AGENT_ORDER = [
   "qa",
   "scout",
   "researcher",
-  "quickfix",
   "planner",
 ] as const
 
@@ -25,7 +24,6 @@ export const AGENT_LABELS: Record<AgentKind, string> = {
   qa: "QA",
   scout: "Scout",
   researcher: "Researcher",
-  quickfix: "Quick fix",
   planner: "Planner",
 }
 
@@ -52,7 +50,6 @@ export const RECOMMENDED_THINKING: Record<AgentKind, string> = {
   qa: "medium",
   scout: FIXED_SCOUT_THINKING,
   researcher: "low",
-  quickfix: "low",
   planner: "high",
 }
 /** Every effort level, lowest to highest; a model supports only some of them. */
@@ -204,13 +201,14 @@ export const JEV_HOST_ITEMS = [
 export const CLASSIFIER_FEATURE_ITEMS = [
   { id: "seats", label: "Planning seats", help: "each round, only the seats your idea or latest answers touch sit; 1-4 in the Plan tab pins one" },
   { id: "answers", label: "Obvious answers", help: "a panel question whose recommended option the conversation already makes clearly right is answered for you (listed under Assumptions)" },
-  { id: "triage", label: "Task triage", help: "a new task's size, domains and research need reach the Master as hints; a quick fix that is really a task is held for you" },
+  { id: "lobby", label: "Lobby replies", help: "each lobby message goes to the agent whose area it is: a frontend question to Design, a library question to Research, \"how does this work\" to a scout; when it is unsure, or off, the Master answers. Naming an agent with @ always decides" },
+  { id: "triage", label: "Task triage", help: "a new task's size, domains and research need reach the Master as hints" },
   { id: "effort", label: "Effort routing", help: "a simple step runs one thinking level lower, a trivial one on the cheaper model below; a routed run that falls short runs again on your settings" },
   { id: "qa", label: "QA risk", help: "once a task's work is in, the classifier reads the diff and sizes QA to it: no QA agent for a change with nothing that runs, a light check for a small one, deep review where a defect would spread; with it off the engine's rules decide" },
   { id: "review", label: "Pull request read", help: "the Git tab's quick read of a pull request: its size, and how likely it is risky, security-relevant, breaking or untested, before an agent reviews it" },
   { id: "knowledge", label: "Relevant knowledge", help: "when an agent's knowledge, standards or decisions file is too long for its prompt, the classifier picks the sections that bear on the step, and the agent is told where the rest is" },
   { id: "scripts", label: "Shared scripts", help: "the classifier matches each step to the shared scripts that do part of it, and the agent is told to run them instead of redoing the work" },
-  { id: "files", label: "File hints", help: "scouts, workers, quick fixes and the planning panel start with the files most likely needed, and can look more up with find_relevant_files" },
+  { id: "files", label: "File hints", help: "scouts, workers, chat agents and the planning panel start with the files most likely needed, and can look more up with find_relevant_files" },
 ] as const
 
 export const CLASSIFIER_LABELS = {
@@ -266,7 +264,7 @@ export const PAGE = {
 } as const
 
 /** Agents that can run on a third-party harness: every subagent but the planner, which lives in the pi session with the oracle. */
-export const HARNESS_AGENTS: ReadonlySet<AgentKind> = new Set(["designer", "backend", "qa", "scout", "researcher", "quickfix"])
+export const HARNESS_AGENTS: ReadonlySet<AgentKind> = new Set(["designer", "backend", "qa", "scout", "researcher"])
 
 /** The built-in harness; agents run on pi unless their settings name another. */
 export const PI_HARNESS = "pi"

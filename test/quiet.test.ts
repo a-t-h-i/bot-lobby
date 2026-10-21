@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { isQuiet, isSubagentProcess, setQuiet, toggleQuiet, visibleTools, WEB_TOOL_NAMES, webToolsFor } from "../src/pi/quiet.ts";
 import { registerQuietTools } from "../src/pi/tool-renderers.ts";
-import { registerLifecycle } from "../src/pi/events.ts";
+import { LOBBY_CHAT_NOTE, registerLifecycle } from "../src/pi/events.ts";
 import { applyStatus, isMinimized, registerRevealShortcut, setMinimized, STATUS_KEY } from "../src/pi/ui.ts";
 import { registerCommands } from "../src/pi/commands.ts";
 import { registerSwitch } from "../src/pi/switch.ts";
@@ -364,7 +364,7 @@ test("applyStatus shows the task only for the owning session", () => {
   assert.ok(owner.ui.statuses.at(-1)!.text?.includes("TASK-owned"), "restore brings the task back");
 });
 
-test("before_agent_start injects the Master section only for the owning session", () => {
+test("before_agent_start injects the Master section only for the owning session, and the lobby chat note elsewhere", () => {
   setMinimized(false);
   const root = ownedProject("session-a", "dh-owner-section-");
   const fake = makePi(["read"]);
@@ -372,7 +372,7 @@ test("before_agent_start injects the Master section only for the owning session"
   const handler = fake.handlers.get("before_agent_start")!;
   const foreign = { systemPromptOptions: { sections: {} as Record<string, string> } };
   handler(foreign, makeCtx(root, false, "session-b").ctx);
-  assert.equal(foreign.systemPromptOptions.sections["bot-lobby"], undefined);
+  assert.equal(foreign.systemPromptOptions.sections["bot-lobby"], LOBBY_CHAT_NOTE, "another session only gets the lobby chat note");
   const owner = { systemPromptOptions: { sections: {} as Record<string, string> } };
   handler(owner, makeCtx(root, false, "session-a").ctx);
   assert.ok(owner.systemPromptOptions.sections["bot-lobby"]?.includes("TASK-owned"));

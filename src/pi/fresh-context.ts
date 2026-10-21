@@ -9,7 +9,7 @@
  *
  * A boundary is a custom entry in the session file, which is never sent to
  * the model: it survives /resume and belongs to the branch it was made on.
- * Subagents (scouts, workers, reviewers, the planning panel, quick fixes)
+ * Subagents (scouts, workers, reviewers, the planning panel, lobby chat agents)
  * already run as pi processes of their own, each with its own context, and
  * are not touched here.
  */

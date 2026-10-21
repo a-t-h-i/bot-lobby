@@ -10,6 +10,17 @@ export interface ChatEntry {
   at: number
   role: string
   text: string
+  /** Who wrote a reply (`DESIGN`, `SCOUT`, …); absent is the oracle. */
+  agent?: string
+  /** Who your message went to, when it was not the oracle. */
+  to?: string
+}
+
+/** Who said a message, for grouping and its header: you, a note, or the agent that replied (the oracle when none is named). */
+export function speakerOf(entry: ChatEntry): string {
+  if (entry.role === "you" || entry.role === "note") return entry.role
+  if (entry.role === "panel") return "PLANNER"
+  return entry.agent ?? "MASTER"
 }
 
 export interface ActivityEntry {
@@ -59,12 +70,12 @@ const SOURCE_COLORS: Record<string, string> = {
   DESIGN: "text-source-design",
   QA: "text-source-qa",
   RESEARCH: "text-source-research",
-  "QUICK FIX": "text-source-quickfix",
+  SCOUT: "text-source-scout",
   ORACLE: "text-primary",
   LOBBY: "text-muted-foreground",
 }
 
-/** A source as it reads on the page: `MASTER` → `Master`, `QUICK FIX` → `Quick fix`, `QA` stays. */
+/** A source as it reads on the page: `MASTER` → `Master`, `SCOUT` → `Scout`, `QA` stays. */
 export function sourceLabel(source: string): string {
   if (source.length <= 2) return source
   return source.charAt(0) + source.slice(1).toLowerCase()
@@ -81,7 +92,7 @@ const SOURCE_TONES: Record<string, string> = {
   DESIGN: "var(--source-design)",
   QA: "var(--source-qa)",
   RESEARCH: "var(--source-research)",
-  "QUICK FIX": "var(--source-quickfix)",
+  SCOUT: "var(--source-scout)",
   ORACLE: "var(--primary)",
   LOBBY: "var(--muted-foreground)",
 }

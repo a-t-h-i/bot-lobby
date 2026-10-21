@@ -32,9 +32,6 @@ function uniqueTaskId(root: string, configDir: string, request: string): string 
   return id;
 }
 
-/** In a kickoff after the oracle routed the request to the team (the lobby then shows the request once). */
-export const ROUTED_LINE = "Routed: you sent this request to the team.";
-
 /** The fast track's steps: straight to the agents the request needs, QA only for tests, then complete. */
 function fastSteps(track: TaskTrack): string[] {
   const building = track.roster.filter((member): member is Domain => member === "designer" || member === "backend");
@@ -74,14 +71,13 @@ function plannedSteps(task: Task): string[] {
   ].filter(Boolean);
 }
 
-export function kickoff(task: Task, options: { fastTrack?: boolean; routed?: boolean } = {}): string {
+export function kickoff(task: Task, options: { fastTrack?: boolean } = {}): string {
   const track = task.track;
   const head = [
     `A bot-lobby task is active: ${task.id}`,
     `Title: ${task.title}`,
     `Request: ${taskRequest(task)}`,
     `State: ${task.state}`,
-    ...(options.routed ? [ROUTED_LINE] : []),
     ...(track ? [trackSummary(track)] : []),
     ...(task.git ? [gitLine(task.git)] : []),
     "",
@@ -135,11 +131,9 @@ export interface StartOptions {
   title?: string;
   /** The user's `--fast` or `--full`: the path the task takes, whatever its request reads as. */
   track?: TrackPath;
-  /** The classifier already read the request (routing did): `triage` is its read, or absent when it was off. */
+  /** The classifier already read the request: `triage` is its read, or absent when it was off. */
   triaged?: boolean;
   triage?: TaskTriage;
-  /** The oracle sent this request to the team after the classifier read it as a quick fix. */
-  routed?: boolean;
   /** `--branch`, `--worktree` or `--no-branch`: whether this task gets a git branch or worktree of its own; `workflow.gitIsolation` when absent. */
   isolation?: GitIsolation;
 }
@@ -182,7 +176,7 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   // The oracle takes the task on with a clean context: nothing said before the kickoff is sent to its model.
   if (freshContextOn()) markContext(pi, { kind: "start", taskId: task.id, at: Date.now() });
   // A kickoff while pi is still busy (another turn) queues behind it instead of throwing.
-  pi.sendUserMessage(kickoff(task, { fastTrack: config.workflow.fastTrack, ...(options.routed ? { routed: true } : {}) }), ctx.isIdle() ? undefined : { deliverAs: "followUp" });
+  pi.sendUserMessage(kickoff(task, { fastTrack: config.workflow.fastTrack }), ctx.isIdle() ? undefined : { deliverAs: "followUp" });
   return task;
 }
 

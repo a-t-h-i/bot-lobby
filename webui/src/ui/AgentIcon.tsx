@@ -3,10 +3,10 @@
  * (the Thinking orb, its bubbles, the planning panel, the chats): the oracle's
  * crystal ball (a schematic line drawing in the same stroke as the others),
  * code for DEV, a palette for DESIGN, a shield for QA, a
- * telescope for RESEARCH, a bolt for Quick fix, a checklist for the lint gate.
+ * telescope for RESEARCH, a compass for a scout, a checklist for the lint gate.
  * Anything else is a robot.
  */
-import { Bot, Brain, CodeXml, Compass, ListChecks, MessagesSquare, Palette, Route, ShieldCheck, Tags, Telescope, Zap, type LucideIcon } from "lucide-react"
+import { Bot, Brain, CodeXml, Compass, ListChecks, MessagesSquare, Palette, Route, ShieldCheck, Tags, Telescope, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const ICONS: Record<string, LucideIcon> = {
@@ -14,7 +14,6 @@ const ICONS: Record<string, LucideIcon> = {
   DESIGN: Palette,
   QA: ShieldCheck,
   RESEARCH: Telescope,
-  "QUICK FIX": Zap,
   SCOUT: Compass,
   PLANNER: Route,
   CLASSIFIER: Tags,

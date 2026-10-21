@@ -11,7 +11,6 @@ import type { MetricRecord } from "../state/metrics.ts";
 import type { BotLobbyConfig, LobbyAgentKind, PanelMember } from "../schemas/configuration.ts";
 import type { ChatEntry, LobbyFeed } from "./feed.ts";
 import type { BackgroundSession } from "./sessions.ts";
-import type { QuickFixQueue } from "./quickfix.ts";
 import type { PlannerSeed, PlanningSession } from "./planner.ts";
 import type { PlanRecord, PlanSummary } from "../state/plan-history.ts";
 import type { IssuesState } from "./issues.ts";
@@ -88,6 +87,8 @@ export interface LobbyService {
   zen(): { task?: Task; runs: readonly AgentRun[] };
   feed: LobbyFeed;
   masterBusy(): boolean;
+  /** The agent other than the oracle answering in the chat now (`DESIGN`, …), if any. */
+  answering?(): string | undefined;
   tasks(): Task[];
   /** How long a task's agents have worked on it, and the worker runs under way (`work.json`); undefined without one. */
   work?(taskId: string): import("../state/work-time.ts").WorkProjection | undefined;
@@ -99,8 +100,12 @@ export interface LobbyService {
   metrics(): MetricRecord[];
   /** Classifier calls (kind `classifier`), kept out of the agent tables. */
   classifierMetrics?(): MetricRecord[];
-  /** Send text to the oracle, or start a task when none is active; returns a notice. */
-  toOracle(text: string): string | undefined;
+  /**
+   * A message in the lobby chat: to the oracle, the agent it names or the
+   * classifier picks, or a `/plan` or `/task`; returns a notice, and the tab
+   * to open when it moved somewhere else.
+   */
+  toOracle(text: string): string | { notice: string; open: "plan" } | undefined;
   /** Answer a project question and learn from the codebase, without creating a task. */
   askKnowledge(text: string): void;
   comment(taskId: string, text: string): string;
@@ -109,7 +114,6 @@ export interface LobbyService {
   startPlanned(plan: PlannedTask): string;
   discardPlan(id: string): void;
   abortMaster(): void;
-  quickfix: QuickFixQueue;
   planner(): PlanningSession | undefined;
   /** The project's previous plans (never saved as a task), newest first; the archived ones when asked. */
   previousPlans(archived: boolean): PlanSummary[];

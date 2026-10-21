@@ -1,8 +1,9 @@
 /**
  * The Lobby tab over HTTP: one snapshot (task header, runs, newest chat,
  * streaming reply, activity, thoughts, older-chat flag), older chat history,
- * sending text to the oracle, and stopping its turn. Bounds come from the
- * feed module, so the page sees exactly what the terminal keeps.
+ * sending to the chat (the oracle, an agent, /plan or /task), and stopping
+ * whoever is answering. Bounds come from the feed module, so the page sees
+ * exactly what the terminal keeps.
  */
 import { MAX_ACTIVITY, MAX_CHAT, MAX_THOUGHTS } from "../../lobby/feed.ts";
 import type { Task } from "../../schemas/task.ts";
@@ -52,7 +53,8 @@ export function lobbySnapshot(ctx: ApiContext): LobbySnapshot {
   return {
     ...(taskOf(ctx) ? { task: taskOf(ctx)! } : {}),
     runs: [...service.zen().runs],
-    chat: feed.chat.slice(-MAX_CHAT).map((entry) => ({ id: entry.id, at: entry.at, role: entry.role, text: entry.text })),
+    chat: feed.chat.slice(-MAX_CHAT).map((entry) => ({ id: entry.id, at: entry.at, role: entry.role, text: entry.text, ...(entry.agent ? { agent: entry.agent } : {}), ...(entry.to ? { to: entry.to } : {}) })),
+    ...(service.answering?.() ? { answering: service.answering!()! } : {}),
     ...(reply ? { reply } : {}),
     activity: feed.activity.slice(-MAX_ACTIVITY).map((entry) => ({
       id: entry.id,
@@ -82,10 +84,11 @@ export function lobbyHistory(body: { before?: number }, ctx: ApiContext): { entr
 }
 
 /** Text for the oracle; a notice when it was not simply sent. */
-export function lobbySend(body: { text: string; attachments?: string[] }, ctx: ApiContext): { notice?: string } {
+export function lobbySend(body: { text: string; attachments?: string[] }, ctx: ApiContext): { notice?: string; open?: "plan" } {
   if (!body.text.trim() && !body.attachments?.length) return { notice: "type something first" };
-  const notice = ctx.service.toOracle(withAttachments(body.text, body.attachments, ctx.service.zen().task?.id, ctx.service.projectRoot?.()));
-  return notice ? { notice } : {};
+  const sent = ctx.service.toOracle(withAttachments(body.text, body.attachments, ctx.service.zen().task?.id, ctx.service.projectRoot?.()));
+  if (!sent) return {};
+  return typeof sent === "string" ? { notice: sent } : sent;
 }
 
 /** Stop the oracle's turn. */

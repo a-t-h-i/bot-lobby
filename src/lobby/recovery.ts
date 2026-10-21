@@ -1,14 +1,13 @@
 /**
  * Carrying on after pi stops unexpectedly. A window running the lobby keeps
- * what it is doing on disk as it changes: its planning panel and quick-fix
- * queue (by session), and a record of the sessions it drives and whether each
+ * what it is doing on disk as it changes: its planning panel (by session),
+ * and a record of the sessions it drives and whether each
  * was mid-turn (src/state/recovery.ts). Quitting on purpose removes the
  * record; a crash, a kill or a closed terminal leaves it.
  *
  * The next window to start the lobby in the project takes the stopped
  * windows over: the planning panel comes back where it was (a round that was
- * cut off runs again), queued quick fixes run (the one cut off runs again),
- * and every session that drove a task still under way is started again from
+ * cut off runs again), and every session that drove a task still under way is started again from
  * its saved file, its oracle told to pick up where it stopped when it was
  * mid-turn. A window that is that same session again (`pi -c`) carries its
  * own task on itself. Nothing here runs in a subagent or a background session.
@@ -32,7 +31,6 @@ import {
 } from "../state/recovery.ts";
 import { isPlanningSnapshot, type PlanningSession, type PlanningSnapshot } from "./planner.ts";
 import { keepPlan } from "../state/plan-history.ts";
-import type { QuickFixJob } from "./quickfix.ts";
 import type { BackgroundSession } from "./sessions.ts";
 
 /** Writes after a change wait this long, so a burst of changes is one write. */
@@ -87,7 +85,6 @@ export interface RecoveryPlan {
   windows: WindowRecord[];
   /** Kept state to hand to this session, from the newest stopped window that has it. */
   planner?: { from: string };
-  quickfix: string[];
   relaunch: Relaunch[];
   /** This window is the stopped one's session again, and its task is under way. */
   own?: { taskId: string; message?: string };
@@ -107,7 +104,7 @@ export function planRecovery(input: {
   running: ReadonlySet<string>;
 }): RecoveryPlan {
   const { root, configDir, sessionId } = input;
-  const plan: RecoveryPlan = { windows: [...input.windows], quickfix: [], relaunch: [] };
+  const plan: RecoveryPlan = { windows: [...input.windows], relaunch: [] };
   const hasOwnPlanner = isPlanningSnapshot(readSessionState(root, configDir, "planner", sessionId));
   const seen = new Set<string>();
   const consider = (session: { sessionId: string; sessionFile?: string; name?: string; working: boolean }) => {
@@ -127,7 +124,6 @@ export function planRecovery(input: {
     if (!hasOwnPlanner && !plan.planner && window.sessionId !== sessionId && isPlanningSnapshot(readSessionState(root, configDir, "planner", window.sessionId))) {
       plan.planner = { from: window.sessionId };
     }
-    if (window.sessionId !== sessionId && Array.isArray(readSessionState(root, configDir, "quickfix", window.sessionId))) plan.quickfix.push(window.sessionId);
     consider({ sessionId: window.sessionId, ...(window.sessionFile ? { sessionFile: window.sessionFile } : {}), working: window.working });
     for (const background of window.background) consider(background);
   }
@@ -143,17 +139,14 @@ export interface RecoveryHost {
   relaunch(start: Relaunch): BackgroundSession | string;
   /** Restore the planning panel from a snapshot (and run again a round it cut off). */
   restorePlanner(snapshot: PlanningSnapshot): void;
-  /** Take up quick-fix jobs a stopped process left; returns how many will run. */
-  restoreQuickFixes(jobs: readonly QuickFixJob[]): number;
   /** Send this window's oracle the nudge, once it is idle. */
   nudge(message: string): void;
 }
 
 /** What carried on, in words, or undefined when nothing did. */
-export function recoverySummary(parts: { planner: boolean; quickfixes: number; tasks: string[] }): string | undefined {
+export function recoverySummary(parts: { planner: boolean; tasks: string[] }): string | undefined {
   const done = [
     parts.planner ? "the planning session" : "",
-    parts.quickfixes > 0 ? `${parts.quickfixes} quick fix${parts.quickfixes === 1 ? "" : "es"}` : "",
     parts.tasks.length > 0 ? `${parts.tasks.length === 1 ? "task" : "tasks"} ${parts.tasks.join(", ")}` : "",
   ].filter(Boolean);
   if (done.length === 0) return undefined;
@@ -163,7 +156,7 @@ export function recoverySummary(parts: { planner: boolean; quickfixes: number; t
 
 /**
  * Carry on what the stopped windows were doing, and this session's own kept
- * planning panel and quick-fix queue. Returns the summary to show, if any.
+ * planning panel. Returns the summary to show, if any.
  */
 export function recover(host: RecoveryHost): string | undefined {
   const { root, configDir, sessionId } = host;
@@ -182,14 +175,6 @@ export function recover(host: RecoveryHost): string | undefined {
   const planner = isPlanningSnapshot(snapshot);
   if (planner) host.restorePlanner(snapshot);
 
-  const jobs: QuickFixJob[] = [];
-  for (const from of [sessionId, ...plan.quickfix]) {
-    const kept = readSessionState(root, configDir, "quickfix", from);
-    if (Array.isArray(kept)) jobs.push(...(kept as QuickFixJob[]));
-    if (from !== sessionId) removeSessionState(root, configDir, "quickfix", from);
-  }
-  const quickfixes = jobs.length > 0 ? host.restoreQuickFixes(jobs) : 0;
-
   const tasks: string[] = [];
   for (const start of plan.relaunch) {
     settleInterrupted(root, configDir, start.taskId);
@@ -202,7 +187,7 @@ export function recover(host: RecoveryHost): string | undefined {
     tasks.push(plan.own.taskId);
   }
   // A restart after a quit restores the panel quietly; only carrying on after a stop is announced.
-  return windows.length > 0 ? recoverySummary({ planner, quickfixes, tasks }) : undefined;
+  return windows.length > 0 ? recoverySummary({ planner, tasks }) : undefined;
 }
 
 /** Whether a window in this project stopped without quitting: the lobby then starts on, to carry its work on. */
@@ -271,22 +256,20 @@ export interface KeeperSource {
   /** This window's oracle is mid-turn. */
   working: () => boolean;
   planner: () => PlanningSession | undefined;
-  quickfix: () => readonly QuickFixJob[];
   background: () => readonly BackgroundSession[];
 }
 
 /**
- * Keeps this window's record, planning panel and quick-fix queue on disk as
+ * Keeps this window's record and planning panel on disk as
  * they change, for the next window to carry on after a stop.
  */
 export class WindowKeeper {
   private readonly startedAt = new Date().toISOString();
   readonly window: Debounced;
   readonly planner: Debounced;
-  readonly quickfix: Debounced;
   /** pi going down on an uncaught error skips the shutdown: what is waiting is written as the process exits. */
   private readonly onExit = () => {
-    for (const writer of [this.planner, this.quickfix, this.window]) writer.close();
+    for (const writer of [this.planner, this.window]) writer.close();
   };
   private readonly source: KeeperSource;
   constructor(source: KeeperSource) {
@@ -296,11 +279,6 @@ export class WindowKeeper {
     this.planner = new Debounced(() => {
       const session = source.planner();
       if (session) this.keepPlanner(session, session.snapshot());
-    });
-    this.quickfix = new Debounced(() => {
-      const jobs = source.quickfix();
-      if (jobs.length > 0) writeSessionState(source.root, source.configDir, "quickfix", source.sessionId(), jobs);
-      else removeSessionState(source.root, source.configDir, "quickfix", source.sessionId());
     });
   }
 
@@ -331,7 +309,6 @@ export class WindowKeeper {
     process.off("exit", this.onExit);
     if (carryOn) {
       this.planner.close();
-      this.quickfix.close();
       this.window.close();
       return;
     }
@@ -340,14 +317,11 @@ export class WindowKeeper {
     try {
       const session = this.source.planner();
       if (session) this.keepPlanner(session, stoppedSnapshot(session.snapshot()));
-      const jobs = this.source.quickfix().map(stoppedJob);
-      if (jobs.length > 0) writeSessionState(root, configDir, "quickfix", sessionId, jobs);
-      else removeSessionState(root, configDir, "quickfix", sessionId);
       removeWindow(root, configDir);
     } catch {
       // A read-only project keeps nothing.
     }
-    for (const writer of [this.planner, this.quickfix, this.window]) writer.cancel();
+    for (const writer of [this.planner, this.window]) writer.cancel();
   }
 }
 
@@ -355,12 +329,6 @@ export class WindowKeeper {
 export function stoppedSnapshot(snapshot: PlanningSnapshot): PlanningSnapshot {
   if (!snapshot.running) return snapshot;
   return { ...snapshot, running: false, members: snapshot.members.map((member) => member.status === "thinking" ? { ...member, status: "failed", error: "stopped" } : member), error: STOPPED_ROUND };
-}
-
-/** What a stop on purpose leaves of a quick fix that was queued or running: cancelled. */
-export function stoppedJob(job: QuickFixJob): QuickFixJob {
-  if (job.status !== "queued" && job.status !== "running") return job;
-  return { ...job, status: "cancelled", note: "stopped when the lobby stopped", ...(job.finishedAt ? {} : { finishedAt: Date.now() }) };
 }
 
 /** A round stopped by a quit, as the Plan tab shows it. */
