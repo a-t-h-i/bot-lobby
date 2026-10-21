@@ -1,7 +1,8 @@
 import { compact, CONFIG_DIR_NAME, DEFAULT_COMPACTION_SETTINGS, estimateTokens, findCutPoint, type ExtensionAPI, type ExtensionContext, type TurnEndEvent } from "@earendil-works/pi-coding-agent";
 import { contextMarks, freshContextOn, staleCompaction } from "./fresh-context.ts";
-import { AUTO_COMPACT_ENV, isSubagentProcess } from "./quiet.ts";
+import { AUTO_COMPACT_ENV, COMPACT_AT_ENV, isSubagentProcess } from "./quiet.ts";
 import { dataRoot, detectProjectRoot, loadConfig } from "../state/project.ts";
+import { normalizeCompactAt } from "../schemas/configuration.ts";
 import { describeShared, DIGEST_INSTRUCTION, parseDigest, shareDigest, type DigestItem } from "../knowledge/oracle-digest.ts";
 
 const CHECKPOINT = "Write a concise checkpoint with: Requirements and constraints; Decisions; Files changed; Verification and evidence; Failed approaches (do not repeat); Unfinished work and next action; Outstanding children and their assignments. Preserve concrete file references and distinguish verified facts from guesses. The parent remains responsible for integration and verification.";
@@ -9,6 +10,8 @@ const CHECKPOINT = "Write a concise checkpoint with: Requirements and constraint
 export interface AutoCompactionOptions {
   /** Whether this agent compacts on its own: a subagent by its environment, the oracle by its settings. */
   enabled?: () => boolean;
+  /** The token count set in this agent's settings to compact at; by default its environment, or the oracle's settings. */
+  target?: () => number | undefined;
   /** Where the oracle's shared knowledge goes; by default the project's knowledge files. */
   share?: (items: DigestItem[], ctx: ExtensionContext) => string;
 }
@@ -22,6 +25,15 @@ function enabledBySettings(): boolean {
   }
 }
 
+function targetBySettings(): number | undefined {
+  if (isSubagentProcess()) return normalizeCompactAt(Number(process.env[COMPACT_AT_ENV]));
+  try {
+    return loadConfig().master.compactAt;
+  } catch {
+    return undefined;
+  }
+}
+
 function shareWithAgents(items: DigestItem[], ctx: ExtensionContext): string {
   const root = detectProjectRoot(ctx.cwd, CONFIG_DIR_NAME);
   return describeShared(shareDigest(dataRoot(root, CONFIG_DIR_NAME), items));
@@ -29,18 +41,24 @@ function shareWithAgents(items: DigestItem[], ctx: ExtensionContext): string {
 
 export const CONTEXT_TARGET = 64_000;
 
-export function compactionThreshold(window: number, reserve = DEFAULT_COMPACTION_SETTINGS.reserveTokens): number {
-  return Math.max(1, Math.min(CONTEXT_TARGET, Math.floor(window * 0.6), window - Math.min(reserve, Math.floor(window / 2))));
+/**
+ * When to compact: a threshold set in Settings, else 64K or 60% of the window, whichever is smaller. Either way it
+ * stays below the window less pi's reserve, so the checkpoint still has room to be written.
+ */
+export function compactionThreshold(window: number, reserve = DEFAULT_COMPACTION_SETTINGS.reserveTokens, target?: number): number {
+  const room = window - Math.min(reserve, Math.floor(window / 2));
+  return Math.max(1, Math.min(target ?? Math.min(CONTEXT_TARGET, Math.floor(window * 0.6)), room));
 }
 
 /**
  * Compact at a settled tool boundary, below pi's own threshold (pi 1.3 still sets that only per model in settings, and
- * ctx.compact() would abort the turn we need to continue). Each agent's settings can turn it off. Compactions pi
+ * ctx.compact() would abort the turn we need to continue). Each agent's settings can turn it off or set the token count it starts at. Compactions pi
  * starts itself get the same checkpoint through `session_before_compact`. The oracle's checkpoint also lists what it learned that is worth keeping, tagged by agent, and
  * that goes into the knowledge base: its own, and the designer's, backend's and QA's where it concerns them.
  */
 export function registerAutoCompaction(pi: ExtensionAPI, summarize: typeof compact = compact, options: AutoCompactionOptions = {}): void {
   const enabled = options.enabled ?? enabledBySettings;
+  const target = options.target ?? targetBySettings;
   const share = options.share ?? shareWithAgents;
   const oracle = !isSubagentProcess();
   let busy = false;
@@ -53,7 +71,7 @@ export function registerAutoCompaction(pi: ExtensionAPI, summarize: typeof compa
     const configured = pi.getSettings().compaction;
     const override = configured?.modelOverrides?.[`${ctx.model.provider}/${ctx.model.id}`];
     const reserve = Math.min(override?.reserveTokens ?? configured?.reserveTokens ?? DEFAULT_COMPACTION_SETTINGS.reserveTokens, Math.floor(ctx.model.contextWindow / 2));
-    const threshold = compactionThreshold(ctx.model.contextWindow, reserve);
+    const threshold = compactionThreshold(ctx.model.contextWindow, reserve, target());
     const estimate = event.context.contextMessages.reduce((total, message) => total + estimateTokens(message), 0) + Math.ceil(ctx.getSystemPrompt().length / 4);
     const usage = ctx.getContextUsage();
     if (Math.max(estimate, usage?.tokens ?? 0) < threshold) return;

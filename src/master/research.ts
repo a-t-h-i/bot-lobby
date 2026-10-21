@@ -70,7 +70,7 @@ export async function runResearch(request: ResearchRequest, run: ProcessRunner =
       model: profile.model,
       mcpTools: profile.mcpTools,
       ...(profile.skills ? { skills: profile.skills } : {}),
-      ...(profile.autoCompact === false ? { autoCompact: false } : {}),
+      ...(profile.autoCompact === false ? { autoCompact: false } : {}), ...(profile.compactAt ? { compactAt: profile.compactAt } : {}),
       ...(profile.harness ? { harness: profile.harness } : {}),
       thinking: profile.thinking,
       cwd: request.cwd,

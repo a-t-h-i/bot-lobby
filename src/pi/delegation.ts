@@ -27,8 +27,9 @@ export function registerAgentPermissions(pi: ExtensionAPI): void {
     if (!info) return { block: true, reason: `Unknown tool ${event.toolName}.` };
     if (["list_mcp_resources", "list_mcp_resource_templates", "read_mcp_resource"].includes(event.toolName)) {
       const server = (event.input as { server?: unknown }).server;
-      const grants = policy?.mcpTools ?? loadConfig().master.mcpTools ?? [];
-      if (typeof server === "string" && grants.some((tool) => tool.startsWith(`mcp__${server.replace(/[^A-Za-z0-9_]/g, "_")}__`)) && info?.exposure !== "hidden") return;
+      // The oracle with no list in its settings may use every connected server.
+      const grants = policy?.mcpTools ?? loadConfig().master.mcpTools;
+      if (typeof server === "string" && (!grants || grants.some((tool) => tool.startsWith(`mcp__${server.replace(/[^A-Za-z0-9_]/g, "_")}__`))) && info?.exposure !== "hidden") return;
       return { block: true, reason: "Specify an MCP server with an explicit tool grant to read its resources." };
     }
     if (policy) {
@@ -36,7 +37,8 @@ export function registerAgentPermissions(pi: ExtensionAPI): void {
       return { block: true, reason: `This agent is not granted ${event.toolName}.` };
     }
     if (event.toolName.startsWith("mcp__")) {
-      if ((loadConfig().master.mcpTools ?? []).includes(event.toolName) && info?.exposure !== "hidden") return;
+      const granted = loadConfig().master.mcpTools;
+      if ((!granted || granted.includes(event.toolName)) && info?.exposure !== "hidden") return;
       return { block: true, reason: `Grant ${event.toolName} to the master in bot-lobby settings first.` };
     }
     if (event.parentToolCallId && !pi.getActiveTools().includes(event.toolName)) return { block: true, reason: `${event.toolName} is not active for this agent.` };

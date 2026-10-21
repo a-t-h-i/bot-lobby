@@ -49,6 +49,8 @@ export interface AgentRequest {
   mcpTools?: string[];
   /** False when the agent's settings turn its auto-compaction off. */
   autoCompact?: boolean;
+  /** Tokens at which this agent compacts, when its settings set it. */
+  compactAt?: number;
   delegationQuota?: { used: number; consults?: number };
   /** See PiRunOptions.expert. */
   expert?: { model?: string; thinking: string };
@@ -186,6 +188,7 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
       mcpTools: request.mcpTools,
       ...(request.skills ? { skills: request.skills } : {}),
       ...(request.autoCompact === false ? { autoCompact: false } : {}),
+      ...(request.compactAt ? { compactAt: request.compactAt } : {}),
       task: request.instruction,
       systemPrompt,
       tools: toolsFor(request),

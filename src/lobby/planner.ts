@@ -1008,7 +1008,7 @@ export class PlanningSession {
           model,
           thinking,
           mcpTools: profile.mcpTools,
-          ...(profile.autoCompact === false ? { autoCompact: false } : {}),
+          ...(profile.autoCompact === false ? { autoCompact: false } : {}), ...(profile.compactAt ? { compactAt: profile.compactAt } : {}),
           // Seats may run on a harness; the planner itself stays on pi (its settings cannot name one).
           ...(profile.harness ? { harness: profile.harness } : {}),
           onChildRun: (child) => {
