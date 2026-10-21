@@ -289,17 +289,13 @@ skill Pi no longer finds is skipped.
 
 ## Harnesses
 
-Any agent can run on another coding agent instead of pi: Codex CLI, Claude Code, Antigravity,
-Gemini CLI, OpenCode, or any agent that speaks the Agent Client Protocol (ACP). Pick one per agent
-with the **Harness** menu on its card in Settings > Agents. The model menu then lists that
-harness's own models, and the effort slider offers the levels the chosen model takes.
-
-The oracle and the planner stay in the pi session, because the workflow, the knowledge base and
-compaction live there; on a harness, pi drives the harness as their model. Each harness is a pi
-model provider (`claude-code/claude-opus-5-5`, `codex-cli/gpt-5.5`, `gemini-cli/default`, and so
-on), and each user turn starts the harness on the conversation so far with its own tools switched
-off. pi's tools reach it over a local MCP server, so questions, tasks, delegation and every other
-Bot Lobby tool work as they do on pi. The harness bills through its own login.
+Any subagent except the planner can run on another coding agent instead of pi: Codex CLI, Claude
+Code, Antigravity, Gemini CLI, OpenCode, or any agent that speaks the Agent Client Protocol (ACP).
+Pick one per agent with the **Harness** menu on its card in Settings > Agents. The model menu then
+lists that harness's own models, and the effort slider offers the levels the chosen model takes.
+The oracle and the planner always run in the pi session, because the workflow, the knowledge base
+and compaction live there. Give the oracle a Claude model through pi's own Anthropic login
+(`/login`).
 
 Claude Code runs through the Claude Agent SDK (an optional dependency, installed by default), which
 is Anthropic's supported way for apps to drive it on a Claude plan. It starts your installed
@@ -311,8 +307,7 @@ Each step still gets its role prompt (instructions, knowledge, standards and the
 Codex gets it as developer instructions, Claude Code appends it to its own system prompt, and ACP
 agents receive it in front of the first message. Read-only roles stay read-only: a read-only sandbox
 on Codex, only the matching tools in `dontAsk` mode on Claude Code, and refused permission requests
-on ACP agents. A harness uses its own login. A subagent on a harness cannot ask you questions, and
-it has no access to Bot Lobby's own tools (the file desk, the task board, `ask_expert`).
+on ACP agents. A harness uses its own login. It cannot ask you questions, and it has no access to Bot Lobby's own tools (the file desk, the task board, `ask_expert`).
 
 Settings > Harnesses shows whether each one is installed. Each harness has these settings: its
 command, launch arguments, home folder (`CODEX_HOME`, `CLAUDE_CONFIG_DIR`), model provider (Codex:

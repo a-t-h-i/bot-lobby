@@ -32,12 +32,6 @@ export function codexArgs(plan: HarnessPlan, access: HarnessAccess, launchArgs: 
   else if (provider) args.push("-c", `model_provider=${tomlString(provider)}`);
   if (plan.autoCompact === false) args.push("-c", `model_auto_compact_token_limit=${NO_COMPACTION}`);
   else if (settings.compactAt > 0) args.push("-c", `model_auto_compact_token_limit=${settings.compactAt}`);
-  if (plan.mcp) {
-    // The oracle bridge: pi's tools over MCP, approved up front and without Codex's tool time limit.
-    const key = `mcp_servers.${plan.mcp.name}`;
-    args.push("-c", `${key}.command=${tomlString(plan.mcp.command)}`, "-c", `${key}.args=[${plan.mcp.args.map(tomlString).join(",")}]`,
-      "-c", `${key}.default_tools_approval_mode="approve"`, "-c", `${key}.tool_timeout_sec=86400`);
-  }
   let promptPrefix = "";
   if (plan.instructions) {
     if (Buffer.byteLength(plan.instructions) <= MAX_ARG_BYTES) args.push("-c", `developer_instructions=${tomlString(plan.instructions)}`);
@@ -88,17 +82,11 @@ export function codexDriver(io: HarnessIO, plan: HarnessPlan, prompt: string, co
   const onItem = (phase: "started" | "updated" | "completed", item: CodexItem) => {
     if (item.type === "agent_message" && phase === "completed") {
       io.emit({ type: "writing" });
-      if (item.text?.trim()) {
-        collector.text = item.text;
-        collector.onDelta?.("text", item.text);
-      }
+      if (item.text?.trim()) collector.text = item.text;
       return;
     }
     if (item.type === "reasoning" && phase === "completed") {
-      if (item.text?.trim()) {
-        io.emit({ type: "thought", text: item.text.trim().slice(0, 1500) });
-        collector.onDelta?.("thinking", item.text);
-      }
+      if (item.text?.trim()) io.emit({ type: "thought", text: item.text.trim().slice(0, 1500) });
       return;
     }
     if (item.type === "file_change" && phase === "completed") {

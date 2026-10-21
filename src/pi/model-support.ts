@@ -3,7 +3,6 @@ import {
   agentProfile,
   expertProfile,
   isThinkingLevel,
-  livingModel,
   lobbyAgentProfile,
   panelMemberProfile,
   type LobbyAgentKind,
@@ -140,13 +139,13 @@ export function resolveReviewProfile(config: BotLobbyConfig, options: ResolverOp
 /** Every configured subagent whose thinking level its model does not support, for `/bot-lobby config`. */
 export function thinkingMismatches(config: BotLobbyConfig, lookup: ModelLookup, sessionModel?: string): string[] {
   const entries: Array<[SubagentKind | "master", string, string]> = [
-    ["master", livingModel(config.master), config.master.thinking],
+    ["master", config.master.model, config.master.thinking],
     ["designer", config.agents.designer.model, config.agents.designer.thinking],
     ["backend", config.agents.backend.model, config.agents.backend.thinking],
     ["qa", config.agents.qa.model, config.agents.qa.thinking],
     ["researcher", config.researcher.model, config.researcher.thinking],
     ["quickfix", config.quickFix.model, config.quickFix.thinking],
-    ["planner", livingModel(config.planner), config.planner.thinking],
+    ["planner", config.planner.model, config.planner.thinking],
   ];
   return entries.flatMap(([kind, ref, level]) => {
     const model = ref === "inherit" ? sessionModel : ref;

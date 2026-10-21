@@ -1,5 +1,5 @@
 import type { Domain, Role } from "./agent.ts";
-import { bridgeModelRef, defaultHarnesses, harnessChoiceFields, harnessRunOf, normalizeHarnesses, type HarnessChoice, type HarnessesConfig, type HarnessRun } from "./harness.ts";
+import { defaultHarnesses, harnessChoiceFields, harnessRunOf, normalizeHarnesses, type HarnessChoice, type HarnessesConfig, type HarnessRun } from "./harness.ts";
 
 export type ModelRef = "inherit" | string;
 
@@ -382,16 +382,15 @@ export function normalizeMcpTools(value: unknown): string[] {
 
 /**
  * Merge one agent's override over its default; legacy `inherit` or unknown
- * thinking falls back to the default level. A harness (`pi` or an unknown
- * one drops the field) runs a subagent on it directly; the oracle and the
- * planner live in pi, so pi drives theirs as its model (`livingModel`), and
- * `model` keeps the pi model to go back to.
+ * thinking falls back to the default level. Only subagents may name a
+ * harness (`pi` or an unknown one drops the field): the oracle and the
+ * planner live in the pi session.
  */
-function normalizeAgent(base: AgentModelConfig, override: Partial<AgentModelConfig> | undefined): AgentModelConfig {
+function normalizeAgent(base: AgentModelConfig, override: Partial<AgentModelConfig> | undefined, harness = true): AgentModelConfig {
   const merged = { ...base, ...(override ?? {}) };
   const thinking = isThinkingLevel(merged.thinking) ? merged.thinking : base.thinking;
   const mcpTools = normalizeMcpTools(merged.mcpTools);
-  const choice = harnessChoiceFields(merged);
+  const choice = harness ? harnessChoiceFields(merged) : {};
   return { model: merged.model, thinking, ...(mcpTools.length ? { mcpTools } : {}), ...skillsField(merged.skills), ...(typeof merged.instructions === "string" ? { instructions: merged.instructions } : {}), ...(merged.autoCompact === false ? { autoCompact: false } : {}), ...choice };
 }
 
@@ -529,7 +528,7 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
   const knowledge = { ...DEFAULT_CONFIG.knowledge, ...(src.knowledge as Partial<KnowledgeConfig> | undefined) };
   const srcAgents = (src.agents ?? {}) as Partial<BotLobbyConfig["agents"]>;
   return {
-    master: normalizeAgent(DEFAULT_CONFIG.master, src.master as Partial<AgentModelConfig> | undefined),
+    master: normalizeAgent(DEFAULT_CONFIG.master, src.master as Partial<AgentModelConfig> | undefined, false),
     agents: {
       designer: normalizeAgent(DEFAULT_CONFIG.agents.designer, srcAgents.designer),
       backend: normalizeAgent(DEFAULT_CONFIG.agents.backend, srcAgents.backend),
@@ -538,7 +537,7 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
     scout: normalizeScout(src.scout as Partial<ScoutConfig> | undefined),
     researcher: normalizeAgent(DEFAULT_CONFIG.researcher, src.researcher as Partial<AgentModelConfig> | undefined),
     quickFix: normalizeAgent(DEFAULT_CONFIG.quickFix, src.quickFix as Partial<AgentModelConfig> | undefined),
-    planner: normalizeAgent(DEFAULT_CONFIG.planner, src.planner as Partial<AgentModelConfig> | undefined),
+    planner: normalizeAgent(DEFAULT_CONFIG.planner, src.planner as Partial<AgentModelConfig> | undefined, false),
     workflow,
     lint: normalizeLint(src.lint),
     knowledge,
@@ -568,14 +567,6 @@ export interface AgentProfile {
   autoCompact?: boolean;
   /** The third-party harness it runs on; absent runs it on pi. */
   harness?: HarnessRun;
-}
-
-/**
- * The pi model an agent that lives in pi (the oracle, the planner) thinks on:
- * its harness's pi provider when it names one, else its own model.
- */
-export function livingModel(entry: AgentModelConfig): string {
-  return entry.harness ? bridgeModelRef(entry.harness, entry.harnessModel) : entry.model;
 }
 
 /** `{ harness }` when an entry runs on a third-party harness, else nothing. */
@@ -629,8 +620,7 @@ export function lobbyAgentConfig(config: BotLobbyConfig, kind: LobbyAgentKind): 
 /** Profile for a lobby agent run, from settings alone; `model` is undefined while unset. */
 export function lobbyAgentProfile(config: BotLobbyConfig, kind: LobbyAgentKind): { model?: string; thinking: string; instructions?: string; mcpTools?: string[]; skills?: string[]; autoCompact?: boolean; harness?: HarnessRun } {
   const entry = lobbyAgentConfig(config, kind);
-  // The planner lives in pi: a harness is its model there, not a harness run.
-  return { model: modelOf(kind === "planner" ? livingModel(entry) : entry.model), thinking: entry.thinking, instructions: entry.instructions, ...grantFields(entry), ...compactField(entry), ...(kind === "quickfix" ? harnessField(config, entry) : {}) };
+  return { model: modelOf(entry.model), thinking: entry.thinking, instructions: entry.instructions, ...grantFields(entry), ...compactField(entry), ...harnessField(config, entry) };
 }
 
 /**
@@ -644,7 +634,7 @@ export function panelMemberProfile(config: BotLobbyConfig, member: PanelMember):
 
 /** The model and thinking a worker's `ask_expert` consults: the configured expert, or the oracle's model. */
 export function expertProfile(config: BotLobbyConfig): { model?: string; thinking: string } {
-  const model = config.workflow.expertModel ? modelOf(config.workflow.expertModel) : modelOf(livingModel(config.master));
+  const model = config.workflow.expertModel ? modelOf(config.workflow.expertModel) : modelOf(config.master.model);
   return { ...(model ? { model } : {}), thinking: "high" };
 }
 

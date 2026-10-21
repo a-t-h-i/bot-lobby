@@ -56,8 +56,6 @@ const KIND_TOOLS: Record<string, string> = {
 /** Whether a role may run a tool of this ACP kind. */
 export function acpKindAllowed(kind: string | undefined, access: HarnessAccess): boolean {
   if (access.writes) return true;
-  // A bridged MCP tool is pi's own tool, which pi's rules already govern.
-  if (access.mcp && (kind === undefined || kind === "other")) return true;
   switch (kind) {
     case "read":
     case "search":
@@ -190,7 +188,6 @@ export function acpDriver(io: HarnessIO, plan: HarnessPlan, prompt: string, coll
         flushThought();
         if (!message) io.emit({ type: "writing" });
         message += text;
-        collector.onDelta?.("text", text);
         return;
       }
       case "agent_thought_chunk": {
@@ -198,7 +195,6 @@ export function acpDriver(io: HarnessIO, plan: HarnessPlan, prompt: string, coll
         if (!text) return;
         if (!thought) io.emit({ type: "thinking" });
         thought += text;
-        collector.onDelta?.("thinking", text);
         return;
       }
       case "tool_call": {
@@ -243,8 +239,7 @@ export function acpDriver(io: HarnessIO, plan: HarnessPlan, prompt: string, coll
     start() {
       request("initialize", { protocolVersion: ACP_PROTOCOL_VERSION, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: "bot-lobby", version: "1" } }, (reply) => {
         if (reply.error) return fail(`the agent did not start: ${reply.error.message ?? "initialize failed"}`);
-        const mcpServers = plan.mcp ? [{ name: plan.mcp.name, command: plan.mcp.command, args: plan.mcp.args, env: [] }] : [];
-        request("session/new", { cwd, mcpServers }, (created) => {
+        request("session/new", { cwd, mcpServers: [] }, (created) => {
           if (created.error || typeof created.result?.sessionId !== "string") return fail(`the agent did not open a session: ${created.error?.message ?? "no session id"}${/auth|key|sign|log ?in/i.test(created.error?.message ?? "") ? " (sign in to it once in a terminal)" : ""}`);
           sessionId = created.result.sessionId;
           collector.session = sessionId;

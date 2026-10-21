@@ -251,10 +251,7 @@ export const PAGE = {
 } as const
 
 /** Agents that can run on a third-party harness: every subagent but the planner, which lives in the pi session with the oracle. */
-export const HARNESS_AGENTS: ReadonlySet<AgentKind> = new Set(["master", "planner", "designer", "backend", "qa", "scout", "researcher", "quickfix"])
-
-/** Agents that live in pi: on a harness, pi drives it as their model and keeps every Bot Lobby tool. */
-export const BRIDGED_AGENTS: ReadonlySet<AgentKind> = new Set(["master", "planner"])
+export const HARNESS_AGENTS: ReadonlySet<AgentKind> = new Set(["designer", "backend", "qa", "scout", "researcher", "quickfix"])
 
 /** The built-in harness; agents run on pi unless their settings name another. */
 export const PI_HARNESS = "pi"
@@ -271,8 +268,7 @@ export const HARNESS = {
   older: "older",
   effortNote: "Applied when the agent offers effort levels in its session.",
   agentNote: "Runs in this harness with Bot Lobby's prompts. It cannot ask you questions or use Bot Lobby's own tools (desk, board, ask_expert).",
-  bridgeNote: "Thinks in this harness while pi keeps the session: questions, tasks and every Bot Lobby tool work as on pi. The harness's own tools are off; pi's reach it over a local MCP server.",
-  intro: "Run any agent on another coding agent, with its own login and models. Subagents hand their step over to the harness with their role prompt. The oracle and the planner stay in pi and think on the harness, so their questions, tasks and tools keep working. Pick the harness per agent under Agents.",
+  intro: "Run any agent but the oracle and the planner on another coding agent. The oracle stays on pi and hands each step over: the harness gets the agent's role prompt, and its own login and models. Pick the harness per agent under Agents.",
   installed: "Installed",
   notFound: "Not found",
   usedBy: "Used by",
@@ -289,7 +285,7 @@ export const HARNESS = {
   compact: "Compact after",
   compactHelp: "Tokens before it compacts an agent's context (10,000 to 2,000,000); empty keeps the harness's own. An agent with Auto-compact off never compacts.",
   inject: "Inject Bot Lobby's prompts",
-  injectHelp: "Give subagents their role prompt, knowledge and standards; off sends the task and the report format only. The oracle and the planner always get theirs.",
+  injectHelp: "Give it the agent's role prompt, knowledge and standards. Off sends the task and the report format only.",
   custom: "Extra models",
   customHelp: "Model ids it should also offer, separated by spaces.",
   harnessPath: "Harness path",

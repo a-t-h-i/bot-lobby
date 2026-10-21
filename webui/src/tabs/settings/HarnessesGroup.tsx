@@ -26,8 +26,6 @@ type HarnessId = keyof Config["harnesses"]
 /** Which agents run on each harness. */
 export function harnessUsers(config: Config): Record<string, AgentKind[]> {
   const entries: Array<[AgentKind, { harness?: string }]> = [
-    ["master", config.master],
-    ["planner", config.planner],
     ["designer", config.agents.designer],
     ["backend", config.agents.backend],
     ["qa", config.agents.qa],

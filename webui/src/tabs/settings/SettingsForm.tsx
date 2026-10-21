@@ -45,7 +45,6 @@ import {
   GROUP_TITLES,
   HARNESS,
   HARNESS_AGENTS,
-  BRIDGED_AGENTS,
   INHERIT_HELP,
   INHERIT_LABEL,
   INHERIT_MODEL,
@@ -361,13 +360,13 @@ function AgentCard({ kind, config, models, harnesses, save, onGrants }: { kind: 
       {onHarness && harness?.effort === "session" && kind !== "scout" ? <p className="-mt-1 text-xs text-muted-foreground">{HARNESS.effortNote}</p> : null}
       <ToggleField
         label="Auto-compact"
-        help={kind === "master" ? "Compacts the oracle's context as it fills, and files what it learned into the knowledge base, shared with the agents it concerns." : onHarness && !BRIDGED_AGENTS.has(kind) ? (harness?.protocol === "acp" ? `${harness.label} compacts on its own; this switch applies to pi, Codex and Claude Code.` : `Lets ${harness?.label ?? "the harness"} compact this agent's context, at the threshold under Harnesses.`) : "Compacts this agent's context as it fills."}
+        help={kind === "master" ? "Compacts the oracle's context as it fills, and files what it learned into the knowledge base, shared with the agents it concerns." : onHarness ? (harness?.protocol === "acp" ? `${harness.label} compacts on its own; this switch applies to pi, Codex and Claude Code.` : `Lets ${harness?.label ?? "the harness"} compact this agent's context, at the threshold under Harnesses.`) : "Compacts this agent's context as it fills."}
         checked={entry.autoCompact !== false}
         onChange={(on) => set({ autoCompact: on })}
         name={`${name} auto-compact`}
       />
       <div hidden={!open} className="grid gap-2 border-t border-border pt-2">
-        {onHarness ? <p className="break-words text-xs text-muted-foreground">{BRIDGED_AGENTS.has(kind) ? HARNESS.bridgeNote : HARNESS.agentNote}</p> : null}
+        {onHarness ? <p className="break-words text-xs text-muted-foreground">{HARNESS.agentNote}</p> : null}
         {hasInstructions ? <InstructionsField value={entry.instructions ?? ""} label={`${name} instructions`} onSave={(text) => set({ instructions: text })} /> : null}
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <p className="min-w-[7rem] flex-1 break-words text-xs text-muted-foreground">{grantsLine(grantsOf(config, kind), kind)}</p>

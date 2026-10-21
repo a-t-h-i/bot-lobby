@@ -72,14 +72,7 @@ export function claudeSdkOptions(plan: HarnessPlan, access: HarnessAccess, input
   };
   const compact = claudeCompactSettings(plan);
   if (compact) options.settings = compact as Options["settings"];
-  if (plan.mcp) {
-    // The oracle bridge: only pi's tools, over MCP; Claude Code's own are switched off.
-    options.tools = [];
-    options.mcpServers = { [plan.mcp.name]: { type: "stdio", command: plan.mcp.command, args: plan.mcp.args } };
-    options.strictMcpConfig = true;
-    options.allowedTools = [`mcp__${plan.mcp.name}`];
-    options.permissionMode = "dontAsk";
-  } else if (access.writes) {
+  if (access.writes) {
     options.permissionMode = "bypassPermissions";
     options.allowDangerouslySkipPermissions = true;
   } else {

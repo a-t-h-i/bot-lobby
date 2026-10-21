@@ -49,8 +49,7 @@ import { archivePlan as archivePlanOnDisk, deletePlan as deletePlanOnDisk, isPla
 import { applyMasterModel } from "../pi/model-settings.ts";
 import { grantableSkills, grantableTools } from "../pi/grants.ts";
 import { lobbyTopics } from "./topics.ts";
-import { livingModel, type LobbyAgentKind, type PanelMember } from "../schemas/configuration.ts";
-import { harnessOfProvider } from "../schemas/harness.ts";
+import type { LobbyAgentKind, PanelMember } from "../schemas/configuration.ts";
 import type { LiveSession, LobbyService, SwitchTarget } from "./host.ts";
 import { pushNotice, type NoticeLevel } from "../webui/notices.ts";
 import type { Runtime } from "./runtime.ts";
@@ -903,7 +902,7 @@ function refreshWorkspace(state: Runtime): void {
 export function createLobbyService(state: Runtime): LobbyService {
   const masterKey = () => {
     const { master } = loadConfig();
-    return `${livingModel(master)}|${master.thinking}`;
+    return `${master.model}|${master.thinking}`;
   };
   let appliedMaster = masterKey();
   return {
@@ -980,8 +979,7 @@ export function createLobbyService(state: Runtime): LobbyService {
       try {
         const scoped = state.ctx.scopedModels;
         const usable = scoped.length > 0 ? scoped.map((entry) => entry.model) : state.ctx.modelRegistry.getAvailable();
-        // A harness's pi provider is chosen with the Harness picker, not listed again among pi's models.
-        return usable.filter((model) => !harnessOfProvider(model.provider)).map((model) => {
+        return usable.map((model) => {
           const id = modelRef(model);
           return { id, label: model.name && model.name !== id ? model.name : id, thinkingLevels: supportedThinking(model) };
         });

@@ -3,9 +3,7 @@ import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { agentProfile, DEFAULT_CONFIG, livingModel, lobbyAgentProfile, resolveConfig } from "../src/schemas/configuration.ts";
-import { normalizeContext, type Api, type AssistantMessage, type AssistantMessageEventStream, type Message, type Model, type ToolCall } from "@earendil-works/pi-ai";
-import { bridgeStream } from "../src/harness/bridge/provider.ts";
+import { agentProfile, DEFAULT_CONFIG, resolveConfig } from "../src/schemas/configuration.ts";
 import { claudeSdkOptions, extraArgsOf, loadClaudeSdk, setClaudeSdkLoader } from "../src/harness/claude-sdk.ts";
 import type { Options, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { DEFAULT_HARNESS_SETTINGS, normalizeHarnesses, type HarnessRun, type HarnessSettings } from "../src/schemas/harness.ts";
@@ -68,7 +66,7 @@ const next = () => new Promise((resolve) => { if (lines.length) resolve(lines.sh
   return { path, log: () => JSON.parse(readFileSync(logFile, "utf8")) };
 }
 
-test("harness fields survive normalising; the oracle and planner run theirs through the harness's pi provider", () => {
+test("harness fields survive normalising for subagents and are dropped for the oracle and planner", () => {
   const config = resolveConfig({
     master: { model: "inherit", thinking: "high", harness: "codex" },
     planner: { model: "inherit", thinking: "high", harness: "claude" },
@@ -77,10 +75,8 @@ test("harness fields survive normalising; the oracle and planner run theirs thro
     quickFix: { model: "a/b", thinking: "low", harness: "nope" },
     harnesses: { codex: { binaryPath: " /opt/codex ", compactAt: 5, customModels: ["my-model", "my-model", "has space"] }, claude: { injectPrompts: false } },
   });
-  assert.deepEqual([config.master.harness, config.master.model, livingModel(config.master)], ["codex", "inherit", "codex-cli/default"], "the oracle keeps its pi model to go back to");
-  assert.deepEqual([config.planner.harness, livingModel(config.planner)], ["claude", "claude-code/default"]);
-  assert.equal(lobbyAgentProfile(config, "planner").harness, undefined, "the planner thinks on the harness from inside pi, not as a harness run");
-  assert.equal(lobbyAgentProfile(config, "planner").model, "claude-code/default");
+  assert.equal(config.master.harness, undefined);
+  assert.equal(config.planner.harness, undefined);
   assert.deepEqual([config.agents.backend.harness, config.agents.backend.harnessModel], ["codex", "gpt-6-astra"]);
   assert.equal(config.agents.qa.harness, undefined);
   assert.equal(config.scout.harness, "gemini");
@@ -353,102 +349,6 @@ test("cancelling a harness run ends it as cancelled", async () => {
   assert.equal(result.status, "cancelled");
 });
 
-/** A fake Claude Code that uses the oracle bridge's MCP server like the real one would. */
-function fakeBridgedClaude(name: string): ReturnType<typeof fakeHarness> {
-  return fakeHarness(name, `
-    const { spawn } = require("node:child_process");
-    const argv = process.argv.slice(2);
-    const server = Object.values(JSON.parse(argv[argv.indexOf("--mcp-config") + 1]).mcpServers)[0];
-    const mcp = spawn(server.command, server.args, { stdio: ["pipe", "pipe", "inherit"] });
-    const pending = new Map();
-    let mbuf = "";
-    let nid = 1;
-    mcp.stdout.setEncoding("utf8");
-    mcp.stdout.on("data", (chunk) => {
-      mbuf += chunk;
-      let i;
-      while ((i = mbuf.indexOf("\\n")) >= 0) {
-        const message = JSON.parse(mbuf.slice(0, i));
-        mbuf = mbuf.slice(i + 1);
-        pending.get(message.id)?.(message);
-        pending.delete(message.id);
-      }
-    });
-    const rpc = (method, params) => new Promise((resolve) => { const id = nid++; pending.set(id, resolve); mcp.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\\n"); });
-    const prompt = JSON.parse(await next()).message.content[0].text;
-    await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "fake", version: "1" } });
-    const list = await rpc("tools/list", {});
-    out({ type: "assistant", message: { id: "m1", content: [{ type: "thinking", thinking: "look first" }, { type: "text", text: "Reading it." }, { type: "tool_use", id: "t1", name: "mcp__bot-lobby__read", input: { path: "note.txt" } }] } });
-    const [a, b] = await Promise.all([rpc("tools/call", { name: "read", arguments: { path: "note.txt" } }), rpc("tools/call", { name: "read", arguments: { path: "other.txt" } })]);
-    out({ type: "assistant", message: { id: "m2", content: [{ type: "text", text: "It says " + a.result.content.map((c) => c.text).join(" ") + "; tools " + list.result.tools.map((t) => t.name).join(",") + "; other failed " + b.result.isError + "; replay " + prompt.includes("<conversation_so_far>") }] } });
-    out({ type: "result", subtype: "success", is_error: false, result: "done", total_cost_usd: 0.5, usage: { input_tokens: 100, output_tokens: 20 } });
-    mcp.stdin.end();
-    await next();
-    process.exit(0);
-  `);
-}
-
-async function drain(stream: AssistantMessageEventStream): Promise<{ types: string[]; message: AssistantMessage }> {
-  const types: string[] = [];
-  for await (const event of stream) types.push(event.type);
-  return { types, message: await stream.result() };
-}
-
-const textOf = (message: AssistantMessage) => message.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("|");
-const callsOf = (message: AssistantMessage) => message.content.filter((block): block is ToolCall => block.type === "toolCall");
-
-test("the oracle bridge runs pi's tools for the harness over MCP and ends the turn on its result", () => withoutSdk(async () => {
-  const claude = fakeBridgedClaude("claude-bridged");
-  const host = { config: () => resolveConfig({ harnesses: { claude: { binaryPath: claude.path } } }), cwd: () => dir };
-  const model = { id: "claude-opus-5-5", name: "Claude Opus 5.5", api: "bot-lobby-claude", provider: "claude-code", baseUrl: "http://localhost", input: ["text"], reasoning: true, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 200_000, maxTokens: 64_000 } as unknown as Model<Api>;
-  const tools = [{ name: "read", description: "Read a file", parameters: { type: "object", properties: { path: { type: "string" } } } }] as never;
-  const ask: Message = { role: "user", content: "What does note.txt say?", timestamp: 1 };
-  const context = (messages: Message[]) => normalizeContext({ systemPrompt: "ORACLE PROMPT", tools, messages });
-
-  const first = await drain(bridgeStream(host, "claude", model, context([ask]), { sessionId: "s1", reasoning: "high" }));
-  assert.equal(first.message.stopReason, "toolUse", first.message.errorMessage);
-  assert.equal(textOf(first.message), "Reading it.");
-  assert.ok(first.types.includes("thinking_delta") && first.types.includes("toolcall_end"));
-  const calls = callsOf(first.message);
-  assert.deepEqual(calls.map((call) => [call.name, call.arguments.path]), [["read", "note.txt"], ["read", "other.txt"]], "parallel calls come back in one reply");
-  const log = claude.log();
-  assert.equal(log.argv[log.argv.indexOf("--tools") + 1], "", "Claude Code's own tools are off");
-  assert.ok(log.argv.includes("--strict-mcp-config"));
-  assert.equal(log.argv[log.argv.indexOf("--allowedTools") + 1], "mcp__bot-lobby");
-  assert.equal(log.argv[log.argv.indexOf("--effort") + 1], "high");
-  assert.equal(JSON.parse(log.stdin[0]!).message.content[0].text, "What does note.txt say?");
-
-  const results: Message[] = calls.map((call) => ({ role: "toolResult", toolCallId: call.id, toolName: call.name, content: [{ type: "text", text: call.arguments.path === "note.txt" ? "hello" : "missing" }], isError: call.arguments.path !== "note.txt", timestamp: 3 }));
-  const added: Message = { role: "user", content: "keep it short", timestamp: 4 };
-  const second = await drain(bridgeStream(host, "claude", model, context([ask, first.message, ...results, added]), { sessionId: "s1" }));
-  assert.equal(second.message.stopReason, "stop", second.message.errorMessage);
-  assert.equal(textOf(second.message), "It says hello; tools read; other failed true; replay false", "each result answers its own call");
-  assert.equal(second.message.usage.cost.total, 0.5);
-  assert.equal(second.message.usage.input, 100);
-
-  // The next turn starts afresh on the conversation so far.
-  const ask2: Message = { role: "user", content: "And again?", timestamp: 5 };
-  const controller = new AbortController();
-  const third = await drain(bridgeStream(host, "claude", model, context([ask, first.message, ...results, second.message, ask2]), { sessionId: "s1", signal: controller.signal }));
-  assert.equal(third.message.stopReason, "toolUse");
-  const prompt = JSON.parse(claude.log().stdin[0]!).message.content[0].text as string;
-  assert.match(prompt, /<conversation_so_far>[\s\S]*What does note\.txt say\?[\s\S]*`read` result\nhello[\s\S]*It says hello[\s\S]*<\/conversation_so_far>\n\nAnd again\?$/);
-
-  // A cancel while pi runs the tools ends the run; the next reply is aborted.
-  const third2 = callsOf(third.message).map((call): Message => ({ role: "toolResult", toolCallId: call.id, toolName: call.name, content: [{ type: "text", text: "x" }], isError: false, timestamp: 6 }));
-  controller.abort();
-  const fourth = await drain(bridgeStream(host, "claude", model, context([ask, first.message, ...results, second.message, ask2, third.message, ...third2]), { sessionId: "s1", signal: controller.signal }));
-  assert.equal(fourth.message.stopReason, "aborted");
-}));
-
-test("a bridged harness that fails reports the error on the reply", async () => {
-  const host = { config: () => resolveConfig({ harnesses: { codex: { binaryPath: join(dir, "no-such-codex") } } }), cwd: () => dir };
-  const model = { id: "default", name: "Codex default", api: "bot-lobby-codex", provider: "codex-cli", baseUrl: "http://localhost", input: ["text"], reasoning: true, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 200_000, maxTokens: 64_000 } as unknown as Model<Api>;
-  const reply = await drain(bridgeStream(host, "codex", model, normalizeContext({ systemPrompt: "P", messages: [{ role: "user", content: "hi", timestamp: 1 }] }), { sessionId: "s2" }));
-  assert.equal(reply.message.stopReason, "error");
-  assert.match(reply.message.errorMessage ?? "", /^Codex CLI: .*no-such-codex was not found/);
-});
-
 test("Claude Code goes through the Agent SDK when it is installed, with the role's prompt, effort, tools and settings", async () => {
   assert.ok(await loadClaudeSdk(), "the SDK is installed as an optional dependency");
   const seen: { options?: Options; prompts: string[] } = { prompts: [] };
@@ -500,15 +400,10 @@ test("Claude Code goes through the Agent SDK when it is installed, with the role
   }
 });
 
-test("through the SDK, read-only roles get only their tools and the oracle bridge only pi's", () => {
+test("through the SDK, read-only roles get only their tools", () => {
   const input = { cwd: dir, env: {}, launchArgs: [], abort: new AbortController(), stderr: () => {} };
   const plan = planHarnessRun({ harness: run("claude"), systemPrompt: "R", thinking: "low" });
   const readOnly = claudeSdkOptions(plan, accessOf(["read", "grep", "bash"]), input);
   assert.deepEqual([readOnly.tools, readOnly.allowedTools, readOnly.permissionMode], [["Read", "Grep", "Bash"], ["Read", "Grep", "Bash"], "dontAsk"]);
-  const bridged = claudeSdkOptions({ ...plan, mcp: { name: "bot-lobby", command: "node", args: ["s.mjs", "sock", "t"] } }, { writes: false, shell: false, web: false, tools: [], mcp: true }, input);
-  assert.deepEqual(bridged.tools, []);
-  assert.deepEqual(bridged.mcpServers, { "bot-lobby": { type: "stdio", command: "node", args: ["s.mjs", "sock", "t"] } });
-  assert.deepEqual([bridged.strictMcpConfig, bridged.allowedTools, bridged.permissionMode], [true, ["mcp__bot-lobby"], "dontAsk"]);
-  assert.equal(bridged.env?.MCP_TOOL_TIMEOUT, "86400000");
   assert.deepEqual(extraArgsOf(["--a", "1", "-b", "--c=x=y", "loose"]), { a: "1", b: null, c: "x=y" });
 });

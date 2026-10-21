@@ -107,31 +107,6 @@ export function harnessChoiceFields(entry: { harness?: unknown; harnessModel?: u
   return { harness: entry.harness, ...(model ? { harnessModel: model } : {}) };
 }
 
-/**
- * The pi model providers that drive each harness as a model (the oracle
- * bridge): an agent that lives in pi (the oracle, the planner) runs on a
- * harness by using `<provider>/<model>` as its pi model.
- */
-export const BRIDGE_PROVIDERS: Record<HarnessId, string> = {
-  codex: "codex-cli",
-  claude: "claude-code",
-  antigravity: "antigravity-cli",
-  gemini: "gemini-cli",
-  opencode: "opencode-cli",
-  acp: "acp-agent",
-};
-
-/** The model a bridged harness gets when none is chosen: the harness's own default. */
-export const BRIDGE_DEFAULT_MODEL = "default";
-
-export function bridgeModelRef(id: HarnessId, model: string | undefined): string {
-  return `${BRIDGE_PROVIDERS[id]}/${model || BRIDGE_DEFAULT_MODEL}`;
-}
-
-export function harnessOfProvider(provider: string): HarnessId | undefined {
-  return HARNESS_IDS.find((id) => BRIDGE_PROVIDERS[id] === provider);
-}
-
 /** Everything one run on a harness needs from the settings. */
 export interface HarnessRun {
   id: HarnessId;

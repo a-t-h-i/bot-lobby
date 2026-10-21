@@ -301,17 +301,9 @@ test("an agent runs on a third-party harness with that harness's models, effort 
   await page.setViewportSize({ width: 1440, height: 1000 });
   await gotoRoute(page, "#/settings", "Each agent's model and effort");
   const card = page.locator('[data-slot="agent-row"]').filter({ hasText: "Backend" }).first();
-  // The oracle can think on a harness too; pi keeps its session and tools.
-  const master = page.locator('[data-slot="agent-row"]').filter({ hasText: "Master" }).first();
-  await master.getByRole("combobox", { name: "Master harness" }).click();
-  await page.getByRole("option", { name: /^Codex CLI/ }).click();
-  await expect(master.getByRole("combobox", { name: "Master harness" })).toContainText("Codex CLI");
-  await master.getByRole("combobox", { name: "Master model" }).click();
-  await page.getByRole("option", { name: /GPT-5\.5/ }).first().click();
-  await expect(master.getByRole("combobox", { name: "Master model" })).toContainText("GPT-5.5");
-  await master.getByRole("button", { name: /More/ }).click();
-  await expect(master).toContainText("every Bot Lobby tool work as on pi");
-  await master.screenshot({ path: info.outputPath("harness-master.png") });
+  // The oracle and the planner stay on pi: no harness picker on their cards.
+  await expect(page.locator('[data-slot="agent-row"]').filter({ hasText: "Master" }).first().getByRole("combobox", { name: "Master harness" })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Planner harness" })).toHaveCount(0);
   await card.getByRole("combobox", { name: "Backend harness" }).click();
   await expect(page.getByRole("option", { name: /Gemini CLI.*not found/ })).toBeVisible();
   await page.getByRole("option", { name: /^Claude Code/ }).click();
@@ -334,7 +326,6 @@ test("an agent runs on a third-party harness with that harness's models, effort 
   const claude = page.locator('[data-slot="harness-card"]').filter({ hasText: "Claude Code" });
   await expect(claude).toContainText("Installed · 2.1.306");
   await expect(claude).toContainText("Used by: Backend");
-  await expect(page.locator('[data-slot="harness-card"]').filter({ hasText: "Codex CLI" })).toContainText("Used by: Master");
   await expect(page.locator('[data-slot="harness-card"]').filter({ hasText: "Gemini CLI" })).toContainText("Not found");
   const compact = claude.getByRole("spinbutton", { name: "Claude Code compact after" });
   await compact.fill("300000");

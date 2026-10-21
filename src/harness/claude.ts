@@ -12,9 +12,6 @@
 import type { HarnessDriver, HarnessIO } from "./process.ts";
 import type { HarnessAccess, HarnessCollector, HarnessPlan } from "./runner.ts";
 
-/** A day: a bridged tool call ends when pi's tool does, not on a clock. */
-const BRIDGE_TOOL_TIMEOUT_MS = 86_400_000;
-
 /** pi's tool names and Claude Code's for the same job. */
 const CLAUDE_TOOLS: Record<string, string> = {
   read: "Read",
@@ -53,11 +50,7 @@ export function claudeArgs(plan: HarnessPlan, access: HarnessAccess, launchArgs:
   if (plan.model) args.push("--model", plan.model);
   if (plan.effort) args.push("--effort", plan.effort);
   if (promptFile) args.push("--append-system-prompt-file", promptFile);
-  if (plan.mcp) {
-    // The oracle bridge: only pi's tools, over MCP; Claude Code's own are switched off.
-    const config = { mcpServers: { [plan.mcp.name]: { type: "stdio", command: plan.mcp.command, args: plan.mcp.args } } };
-    args.push("--mcp-config", JSON.stringify(config), "--strict-mcp-config", "--tools", "", "--allowedTools", `mcp__${plan.mcp.name}`, "--permission-mode", "dontAsk");
-  } else if (access.writes) args.push("--permission-mode", "bypassPermissions");
+  if (access.writes) args.push("--permission-mode", "bypassPermissions");
   else {
     const tools = claudeTools(access.tools ?? []).join(",");
     args.push("--tools", tools, "--allowedTools", tools, "--permission-mode", "dontAsk");
@@ -72,13 +65,11 @@ export function claudeCompactSettings(plan: HarnessPlan): { autoCompactWindow: n
   return plan.autoCompact !== false && plan.harness.settings.compactAt > 0 ? { autoCompactWindow: plan.harness.settings.compactAt } : undefined;
 }
 
-/** The environment Claude Code runs with: compaction off, no MCP time limit on the bridge, and the model provider. */
+/** The environment Claude Code runs with: compaction off and the model provider. */
 export function claudeEnv(plan: HarnessPlan): Record<string, string> {
   const { settings } = plan.harness;
   const env: Record<string, string> = {};
   if (plan.autoCompact === false) env.DISABLE_AUTO_COMPACT = "1";
-  // A bridged tool can wait on the user (a question) or a whole task: no MCP time limit.
-  if (plan.mcp) env.MCP_TOOL_TIMEOUT = String(BRIDGE_TOOL_TIMEOUT_MS);
   if (settings.modelProvider === "bedrock") env.CLAUDE_CODE_USE_BEDROCK = "1";
   if (settings.modelProvider === "vertex") env.CLAUDE_CODE_USE_VERTEX = "1";
   return env;
@@ -142,13 +133,10 @@ export function claudeEvents(io: ClaudeSink, collector: HarnessCollector): (even
       }
       if (event.message.model) collector.model = event.message.model;
       for (const block of event.message.content) {
-        if (block.type === "thinking" && block.thinking?.trim()) {
-          io.emit({ type: "thought", text: block.thinking.trim().slice(0, 1500) });
-          collector.onDelta?.("thinking", block.thinking);
-        } else if (block.type === "text" && block.text?.trim()) {
+        if (block.type === "thinking" && block.thinking?.trim()) io.emit({ type: "thought", text: block.thinking.trim().slice(0, 1500) });
+        else if (block.type === "text" && block.text?.trim()) {
           io.emit({ type: "writing" });
           collector.text = block.text;
-          collector.onDelta?.("text", block.text);
         } else if (block.type === "tool_use" && block.id && block.name) {
           const name = PI_NAMES[block.name] ?? block.name;
           tools.set(block.id, name);

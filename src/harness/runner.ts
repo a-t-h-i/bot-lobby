@@ -25,8 +25,6 @@ export interface HarnessAccess {
   shell: boolean;
   web: boolean;
   tools?: readonly string[];
-  /** Bot Lobby's tools come over MCP (the oracle bridge): an ACP agent may call them. */
-  mcp?: boolean;
 }
 
 export function accessOf(tools: readonly string[] | undefined): HarnessAccess {
@@ -50,15 +48,6 @@ export interface HarnessPlan {
   level: string;
   instructions: string;
   autoCompact?: boolean;
-  /** The MCP server that hands the harness pi's tools (the oracle bridge); its own tools are then switched off where it allows. */
-  mcp?: HarnessMcp;
-}
-
-/** One stdio MCP server, as each harness's MCP config takes it. */
-export interface HarnessMcp {
-  name: string;
-  command: string;
-  args: string[];
 }
 
 /** What the stream told us, filled in by the driver. */
@@ -71,11 +60,9 @@ export interface HarnessCollector {
   warning?: string;
   stopReason?: string;
   addUsage(input: number, output: number, cost: number, model?: string): void;
-  /** The agent's words and reasoning as they come, for the oracle bridge. */
-  onDelta?(kind: "text" | "thinking", text: string): void;
 }
 
-export function collector(): HarnessCollector {
+function collector(): HarnessCollector {
   const out: HarnessCollector = {
     text: "",
     usage: { input: 0, output: 0, cost: 0, turns: 0 },
@@ -90,7 +77,7 @@ export function collector(): HarnessCollector {
   return out;
 }
 
-export function planHarnessRun(options: Pick<PiRunOptions, "systemPrompt" | "thinking" | "autoCompact" | "agent"> & { harness: HarnessRun; bridged?: boolean }): HarnessPlan {
+export function planHarnessRun(options: Pick<PiRunOptions, "systemPrompt" | "thinking" | "autoCompact" | "agent"> & { harness: HarnessRun }): HarnessPlan {
   const { harness } = options;
   const level = options.thinking ?? "medium";
   const effort = harnessEffort(harness.id, harness.settings, harness.model, level);
@@ -101,7 +88,7 @@ export function planHarnessRun(options: Pick<PiRunOptions, "systemPrompt" | "thi
     model,
     ...(effort && HARNESSES[harness.id].effort === "flag" ? { effort } : {}),
     level,
-    instructions: harnessInstructions({ harness, ...(options.systemPrompt ? { systemPrompt: options.systemPrompt } : {}), ...(contract ? { contract } : {}), ...(effort ? { effort } : {}), ...(options.bridged ? { bridged: true } : {}) }),
+    instructions: harnessInstructions({ harness, ...(options.systemPrompt ? { systemPrompt: options.systemPrompt } : {}), ...(contract ? { contract } : {}), ...(effort ? { effort } : {}) }),
     ...(options.autoCompact === false ? { autoCompact: false } : {}),
   };
 }

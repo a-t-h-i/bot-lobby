@@ -16,11 +16,6 @@ const HARNESS_NOTE = `## Running on another harness
 
 You run in Bot Lobby through a third-party harness, not pi. Where these instructions name pi's tools (read, edit, write, bash, grep, find, ls), use your own equivalents. Bot Lobby's own tools (ask_user_question, ask_expert, the file desk and task board tools, web_search and fetch_content) are not available here: work from the brief, use your own web tools if you have them, and put any open question or blocker in your report instead of asking.`;
 
-/** For a model pi drives through a harness (the oracle bridge): pi's tools come over MCP under the same names. */
-const BRIDGE_NOTE = `## Your tools
-
-You run in Bot Lobby through a third-party harness that pi drives. Every tool these instructions name is served by the bot-lobby MCP server under the same name (some harnesses show it as mcp__bot-lobby__<name>). Use those tools, not any built-in ones, and call them the way these instructions say.`;
-
 function toSingleLine(value: string): string {
   return value.replaceAll(/\s+/g, " ").trim();
 }
@@ -36,12 +31,10 @@ export function runtimeInstructions(harness: HarnessRun, effort?: string): strin
 /**
  * The instructions a harness run gets: the compiled role prompt and the
  * harness note when prompts are injected, else only the report format the
- * engine parses (`contract`), which a run cannot do without. A bridged run
- * (pi driving the harness as a model) always gets pi's prompt.
+ * engine parses (`contract`), which a run cannot do without.
  */
-export function harnessInstructions(input: { harness: HarnessRun; systemPrompt?: string; contract?: string; effort?: string; bridged?: boolean }): string {
-  // A bridged model is pi's model: it always gets pi's system prompt, which carries its tools and its job.
-  const body = input.bridged ? [input.systemPrompt ?? "", BRIDGE_NOTE] : input.harness.settings.injectPrompts ? [input.systemPrompt ?? "", HARNESS_NOTE] : [input.contract ?? ""];
+export function harnessInstructions(input: { harness: HarnessRun; systemPrompt?: string; contract?: string; effort?: string }): string {
+  const body = input.harness.settings.injectPrompts ? [input.systemPrompt ?? "", HARNESS_NOTE] : [input.contract ?? ""];
   return [...body, runtimeInstructions(input.harness, input.effort)].filter((part) => part.trim().length > 0).join("\n\n---\n\n");
 }
 
