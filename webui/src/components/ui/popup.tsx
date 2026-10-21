@@ -19,6 +19,8 @@ interface PopupProps {
   style?: CSSProperties
   /** Where focus goes when it closes (the control that opened it, unless the caller says otherwise). */
   onCloseAutoFocus?: (event: Event) => void
+  /** Called before Escape closes it; `preventDefault` keeps it open (a terminal keeps Esc for its shell). */
+  onEscapeKeyDown?: (event: KeyboardEvent) => void
   children: ReactNode
 }
 
@@ -28,7 +30,7 @@ interface PopupProps {
  * show it only while they hold the page's one overlay slot (see
  * `lib/overlay.ts`), so two never stack.
  */
-export function Popup({ open, onOpenChange, label, description, dismissOnBackdrop = true, className, style, onCloseAutoFocus, children }: PopupProps) {
+export function Popup({ open, onOpenChange, label, description, dismissOnBackdrop = true, className, style, onCloseAutoFocus, onEscapeKeyDown, children }: PopupProps) {
   const reduceMotion = useReducedMotion()
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -49,6 +51,7 @@ export function Popup({ open, onOpenChange, label, description, dismissOnBackdro
                 asChild
                 forceMount
                 onCloseAutoFocus={onCloseAutoFocus}
+                {...(onEscapeKeyDown ? { onEscapeKeyDown } : {})}
                 onInteractOutside={(event) => {
                   if (!dismissOnBackdrop) event.preventDefault()
                 }}

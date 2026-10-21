@@ -156,7 +156,7 @@ export function Shell() {
   }, [route, toggleHelp, cycle, toggleSidebar, status?.panels])
   const insideApp = useCallback(() => {
     const el = document.activeElement
-    if (!el || el === document.body || rootRef.current?.contains(el) === true || el.closest(".thinking-bubble")) return true
+    if (!el || el === document.body || rootRef.current?.contains(el) === true || el.closest(".thinking-bubble, .terminal-pop")) return true
     // A pop-up on its way out still holds focus for a moment; it is no longer in the way.
     return el.closest("[data-state='closed']") !== null
   }, [])

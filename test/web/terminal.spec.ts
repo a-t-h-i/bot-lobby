@@ -88,3 +88,57 @@ test("a second terminal adds a list to switch between them; ending one leaves th
   await drawer.getByRole("button", { name: "Hide terminal" }).click();
   await expect(drawer).toBeHidden();
 });
+
+test("the pop-out toggle beside New and End moves the terminal into a pop-up and back, the same shell, and the choice is remembered @theme", async ({ page, server }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openScenario(page, server, "full");
+  await closeAll(page);
+  await page.getByRole("banner").getByRole("button", { name: "Terminal", exact: true }).click();
+  const drawer = page.getByRole("region", { name: "Terminal", exact: true });
+  await expect(drawer.locator(".xterm-rows")).toContainText(/[$#%>]/, { timeout: 15_000 });
+  await drawer.locator(".xterm-helper-textarea").focus();
+  await page.keyboard.type("echo popped=$((2+3))");
+  await page.keyboard.press("Enter");
+  await expect(drawer.locator(".xterm-rows")).toContainText("popped=5");
+
+  const toggle = drawer.getByRole("button", { name: "Pop out terminal" });
+  await expect(toggle, "it sits with New and End").toHaveAttribute("aria-pressed", "false");
+  await toggle.click();
+  const popup = page.getByRole("dialog", { name: "Terminal" });
+  await expect(popup).toBeVisible();
+  await expect(drawer, "the drawer gives way").toHaveCount(0);
+  const screen = popup.locator(".xterm-rows");
+  await expect(screen, "the same shell, with what it printed").toContainText("popped=5", { timeout: 15_000 });
+  await expect(popup.getByRole("button", { name: "Pop out terminal" })).toHaveAttribute("aria-pressed", "true");
+  const box = (await popup.boundingBox())!;
+  expect(box.width, "a roomy pop-up in the middle of the window").toBeGreaterThan(700);
+  expect(Math.abs(box.x + box.width / 2 - 640)).toBeLessThan(4);
+
+  await expect(popup.locator(".xterm-helper-textarea"), "the cursor goes to the shell").toBeFocused();
+  await page.keyboard.type("echo inside=$((3*3))");
+  await page.keyboard.press("Enter");
+  await expect(screen, "typing reaches the shell").toContainText("inside=9");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  await expect(popup, "Esc in the terminal is the shell's").toBeVisible();
+
+  const results = await new AxeBuilder({ page: page as any }).include("[role='dialog']").exclude(".xterm").analyze();
+  expect(results.violations.map((violation) => violation.id)).toEqual([]);
+
+  await page.keyboard.press("Control+Backquote");
+  await expect(popup, "the terminal key closes it").toBeHidden();
+  await page.reload();
+  await page.locator('[role="tablist"]').waitFor();
+  await page.keyboard.press("Control+Backquote");
+  await expect(popup, "and opens it in the pop-up again, after a reload too").toBeVisible();
+  await popup.getByRole("button", { name: "Hide terminal" }).focus();
+  // The first Esc puts away the button's tooltip, the next closes the pop-up.
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(popup, "Esc from the toolbar closes it").toBeHidden();
+
+  await page.keyboard.press("Control+Backquote");
+  await page.getByRole("dialog", { name: "Terminal" }).getByRole("button", { name: "Pop out terminal" }).click();
+  await expect(drawer, "back in the drawer").toBeVisible();
+  await expect(drawer.locator(".xterm-rows")).toContainText("inside=9", { timeout: 15_000 });
+});
