@@ -2,7 +2,7 @@
  * How long a task's agents have actually worked on it, and which worker runs
  * are under way. Work time is the oracle's turns on the task — which include
  * every agent it runs — and not the time it waits on the user (between turns,
- * and while a dialog is open); the work clock in budget.ts measures it. The
+ * and while a dialog is open); the work clock in work-clock.ts measures it. The
  * session that owns the task keeps it beside the task's state as work.json,
  * refreshed while it works, so every window can show the time ticking and
  * mark the steps being worked on. A file its owner stopped refreshing (the
@@ -31,7 +31,6 @@ export interface WorkTime {
   active: ActiveRun[];
   /** When the owning session last wrote it. */
   updatedAt: string;
-  stepLimits?: Record<string, { limitMs: number; usedMs: number }>;
 }
 
 /** The clock as a reader sees it at one moment. */
@@ -51,16 +50,14 @@ export function workPath(root: string, configDir: string, taskId: string): strin
 
 function isWork(value: unknown): value is WorkTime {
   const work = value as Partial<WorkTime> | undefined;
-  return Boolean(work && Number.isFinite(work.workedMs) && typeof work.updatedAt === "string"
-    && (work.stepLimits === undefined || (work.stepLimits !== null && typeof work.stepLimits === "object" && !Array.isArray(work.stepLimits)
-      && Object.values(work.stepLimits).every((entry) => entry && Number.isFinite(entry.limitMs) && Number.isFinite(entry.usedMs) && entry.limitMs >= 0 && entry.usedMs >= 0))));
+  return Boolean(work && Number.isFinite(work.workedMs) && typeof work.updatedAt === "string");
 }
 
 export function readWork(root: string, configDir: string, taskId: string, strict = false): WorkTime | undefined {
   try {
     const value: unknown = JSON.parse(readFileSync(workPath(root, configDir, taskId), "utf8"));
     if (!isWork(value)) throw new Error("Invalid task work record");
-    return { workedMs: value.workedMs, ...(value.runningSince ? { runningSince: value.runningSince } : {}), active: Array.isArray(value.active) ? value.active : [], updatedAt: value.updatedAt, ...(value.stepLimits ? { stepLimits: value.stepLimits } : {}) };
+    return { workedMs: value.workedMs, ...(value.runningSince ? { runningSince: value.runningSince } : {}), active: Array.isArray(value.active) ? value.active : [], updatedAt: value.updatedAt };
   } catch (error) {
     if (strict && (error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     return undefined;
@@ -80,7 +77,7 @@ export function updateWork(root: string, configDir: string, taskId: string, chan
     renameSync(tmp, path);
   } catch (error) {
     if (strict) throw error;
-    // Display clocks may stop; never overwrite an unreadable allowance ledger.
+    // A display clock may stop; it never holds up the work.
   }
 }
 

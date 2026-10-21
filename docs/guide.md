@@ -15,7 +15,7 @@ leaves that list.
 
 Follow the agents in **Lobby** and **Tasks**: in a task's steps, the one being worked on reads
 `active · 1m 12s`, and each task shows how long its agents have worked on it (idle time left out).
-Models, effort and time limits are in **Settings**.
+Models, effort and each agent's tools and skills are in **Settings**.
 
 The **Tasks** screen has **List** and **Board** subtabs. Board groups saved plans and new tasks
 in **Backlog**, active work in **In progress**, and finished work in **Completed**. Abandoned
@@ -194,23 +194,24 @@ scripts it needs, and how much QA a change warrants. It is off until you turn it
 
 The thresholds in `config.json` are tuned for Jev; raise them if another model decides too eagerly.
 
-## Delegation and time limits
+## Delegation
 
 Requires **Pi 1.3.x** (1.3.0 or later). DEV and DESIGN workers and QA reviewers can use
 `delegate_subtasks` for useful, separable work. Delegation is optional. Each parent gets five child
 slots total, shared across retries; the classifier selects each child’s model and reasoning effort from its brief, lowering
 inference for simple work and raising reasoning for complex work on the configured
 model. Children inherit the parent’s role,
-permissions, worktree and remaining time. Children report to their parent, which
+permissions, grants and worktree. Children report to their parent, which
 integrates and verifies the result. Children cannot delegate further. Active
 children share `workflow.maxParallelWorkers`; waiting parents do not use those
 child slots. Cancelling or finishing a parent stops its children and releases
 their file claims. Full reports are saved under `.pi/bot-lobby/delegations/`.
 
-Every assignment has a 15-minute total allowance (or its shorter configured limit),
-including startup, tools, retries, children, compaction and reporting. Per-step
-allowances persist across reassignments; only the user can extend them, including
-in auto mode. Waiting for user answers pauses clocks.
+Agents have no time limit, in auto mode or not. An assignment runs until its agent
+reports, you press **Stop**, or the agent goes silent for so long that the stall watchdog
+(`stallTimeoutMs`, `toolStallTimeoutMs`) stops it and the oracle reassigns the step. Older
+`timeoutMs`, `workflow.agentTimeoutMs`, `wrapUpAt` and `taskBudgetMinutes` keys are ignored and
+dropped the next time Settings saves.
 
 In **Tasks**, a step being worked on shows how many agents are on it, for example
 **Implement large feature (6 agents working)**. Click the count to see which agent is
@@ -267,16 +268,24 @@ worth keeping, tagged by agent, and those lines go into the knowledge base: the
 oracle's own files, and the designer's, backend's and QA's where they concern
 them. Duplicates are skipped.
 
-## MCP tools
+## Tools and skills
 
-Pi's native MCP, `tool_search` and `codemode` are available. **MCP tools** in each
-agent's Settings entry grants exact tool names, one per line, such as
-`mcp__github__get_issue`. In `config.json` the same field is `mcpTools: ["mcp__github__get_issue"]`
-on `master`, `agents.backend`, `agents.designer`, `agents.qa`, `scout`, `researcher`,
-`quickFix` and `planner`. Grants default to empty and children inherit them.
-Read-only roles also require the server's `readOnlyHint: true`; hidden tools and
-ungranted calls are blocked, including calls nested inside codemode. Configure
-server connections through Pi's native MCP settings.
+Pi's native MCP, `tool_search` and `codemode` are available. **Settings → Tools & skills** grants
+each agent MCP tools and skills: pick an agent, then tick a whole server, single tools, or type an
+exact tool name that is not connected right now. Every tick saves. Scouts, the researcher and the
+planner only get tools the server marks read-only (`readOnlyHint: true`); hidden tools and
+ungranted calls are blocked, including calls nested inside codemode. Configure server connections
+through Pi's native MCP settings.
+
+Skills are the ones Pi finds for the session and the project (`.pi/skills`, packages, settings
+paths). By default an agent gets every skill; switch off **Every skill pi finds** to pick some or
+none. The oracle is your Pi session itself, so it uses the skills Pi loads for it.
+
+In `config.json` the fields are `mcpTools: ["mcp__github__get_issue"]` and
+`skills: ["pdf-tools"]` on `agents.backend`, `agents.designer`, `agents.qa`, `scout`,
+`researcher`, `quickFix` and `planner` (`master` takes `mcpTools`). Tools default to none; an
+absent `skills` means all and `[]` means none. Children inherit their parent's grants. A granted
+skill Pi no longer finds is skipped.
 
 ## Keys
 

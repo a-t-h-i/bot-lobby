@@ -42,7 +42,7 @@ function makeDeps(overrides: Partial<WorkflowDeps> = {}): WorkflowDeps {
     ask: async () => undefined,
     choose: async () => undefined,
     notify: () => {},
-    runProcess: async () => ({ exitCode: 0, stdout: review(PASS), stderr: "", killed: false, timedOut: false }),
+    runProcess: async () => ({ exitCode: 0, stdout: review(PASS), stderr: "", killed: false }),
     ...overrides,
   };
 }
@@ -219,7 +219,7 @@ function reviewerRequest(overrides: Partial<ReviewerRequest> = {}): ReviewerRequ
 }
 
 function outcome(stdout: string, overrides: Partial<ProcessOutcome> = {}): ProcessOutcome {
-  return { exitCode: 0, stdout, stderr: "", killed: false, timedOut: false, ...overrides };
+  return { exitCode: 0, stdout, stderr: "", killed: false, ...overrides };
 }
 
 test("an off-contract success is resampled and can still pass", async () => {

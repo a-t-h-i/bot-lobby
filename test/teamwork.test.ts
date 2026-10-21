@@ -343,7 +343,7 @@ test("an expert consult runs on the oracle's model, reports once when it fails, 
   process.env.BOT_LOBBY_CONFIG_DIR ??= tempDir("bl-cfg-");
   const cwd = tempDir();
   mkdirSync(join(cwd, ".pi"));
-  const reply = (text: string): ProcessOutcome => ({ exitCode: 0, killed: false, timedOut: false, stderr: "", stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], usage: { input: 10, output: 5, cost: { total: 0.01 } } } }) });
+  const reply = (text: string): ProcessOutcome => ({ exitCode: 0, killed: false, stderr: "", stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], usage: { input: 10, output: 5, cost: { total: 0.01 } } } }) });
   const updates: AgentRun[] = [];
   const expertArgs: string[][] = [];
   const expertEnv: Record<string, string>[] = [];
@@ -354,7 +354,7 @@ test("an expert consult runs on the oracle's model, reports once when it fails, 
     if (policy.depth === 2) {
       expertArgs.push(args);
       expertEnv.push(options.env!);
-      return expertFails ? { exitCode: 1, killed: false, timedOut: false, stderr: "boom", stdout: "" } : reply("Use a binary search.");
+      return expertFails ? { exitCode: 1, killed: false, stderr: "boom", stdout: "" } : reply("Use a binary search.");
     }
     const target = JSON.parse(options.env![DELEGATION_ENV]!) as { address: string; token: string };
     const client = createDeskClient(target.address, target.token);
@@ -369,7 +369,7 @@ test("an expert consult runs on the oracle's model, reports once when it fails, 
     return reply("done");
   };
   const quota = { used: 0 };
-  const options = { cwd, task: "Step 1: find the regression", tools: ["read", "edit", "write"], timeoutMs: 120_000, delegationQuota: quota, expert: { model: "anthropic/oracle-model", thinking: "high" }, env: { [BOARD_ENV_NAME]: "/x/board.jsonl", KEEP: "1" }, agent: { runId: "w1", taskId: "TASK-1", domain: "backend" as const, role: "worker" as const }, onChildRun: (run: AgentRun) => updates.push(run) };
+  const options = { cwd, task: "Step 1: find the regression", tools: ["read", "edit", "write"], delegationQuota: quota, expert: { model: "anthropic/oracle-model", thinking: "high" }, env: { [BOARD_ENV_NAME]: "/x/board.jsonl", KEEP: "1" }, agent: { runId: "w1", taskId: "TASK-1", domain: "backend" as const, role: "worker" as const }, onChildRun: (run: AgentRun) => updates.push(run) };
 
   await runPiAgent(options, runner);
   assert.ok(answers.every((answer) => answer.startsWith("false:The expert did not answer")), answers.join("\n"));
@@ -407,10 +407,10 @@ test("the goal check holds completion on a gap until it is fixed or the oracle s
     if (system.startsWith("# Goal Check")) {
       goalPrompts.push(options.prompt ?? "");
       const verdict = verdicts.shift()!;
-      return { exitCode: 0, stdout: message(`## Verdict\n${verdict}\n\n## Gaps\n${verdict === "MET" ? "- none" : "- the CSV option the user asked for is missing"}`), stderr: "", killed: false, timedOut: false };
+      return { exitCode: 0, stdout: message(`## Verdict\n${verdict}\n\n## Gaps\n${verdict === "MET" ? "- none" : "- the CSV option the user asked for is missing"}`), stderr: "", killed: false };
     }
     writeFileSync(join(root, "export.txt"), `export ${goalPrompts.length}\n`);
-    return { exitCode: 0, stdout: message(WORKER), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: message(WORKER), stderr: "", killed: false };
   };
   const deps: WorkflowDeps = { root, configDir: ".pi", cwd: root, config: { ...DEFAULT_CONFIG, workflow: { ...DEFAULT_CONFIG.workflow, briefCheck: false } }, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess: runner };
   ensureProjectStructure(root, ".pi");
@@ -455,10 +455,10 @@ test("an unreadable goal check is tried twice and never recorded, and a reason d
     const file = args[args.indexOf("--append-system-prompt") + 1];
     if ((file ? readFileSync(file, "utf8") : "").startsWith("# Goal Check")) {
       checks += 1;
-      return { exitCode: 0, stdout: message(replies.shift() ?? "## Verdict\nNOT MET\n\n## Gaps\n- the PDF option is missing"), stderr: "", killed: false, timedOut: false };
+      return { exitCode: 0, stdout: message(replies.shift() ?? "## Verdict\nNOT MET\n\n## Gaps\n- the PDF option is missing"), stderr: "", killed: false };
     }
     writeFileSync(join(root, "export.txt"), `export ${checks}\n`);
-    return { exitCode: 0, stdout: message(WORKER), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: message(WORKER), stderr: "", killed: false };
   };
   const deps: WorkflowDeps = { root, configDir: ".pi", cwd: root, config: { ...DEFAULT_CONFIG, workflow: { ...DEFAULT_CONFIG.workflow, briefCheck: false } }, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess: runner };
   ensureProjectStructure(root, ".pi");
@@ -497,7 +497,7 @@ test("worker reports name the long report's file, and workers are told about the
   const runner: ProcessRunner = async (args) => {
     const file = args[args.indexOf("--append-system-prompt") + 1];
     systems.push(file ? readFileSync(file, "utf8") : "");
-    return { exitCode: 0, stdout: message(long), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: message(long), stderr: "", killed: false };
   };
   const deps: WorkflowDeps = { root, configDir: ".pi", cwd: root, config: { ...DEFAULT_CONFIG, workflow: { ...DEFAULT_CONFIG.workflow, briefCheck: false } }, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess: runner };
   ensureProjectStructure(root, ".pi");
@@ -524,7 +524,7 @@ test("a parallel batch in worktrees mode gives each worker its own checkout and 
     const domain = options.env?.BOT_LOBBY_BOARD_FROM ?? "?";
     seen.push({ domain, cwd: options.cwd, tools: args[args.indexOf("--tools") + 1] ?? "" });
     writeFileSync(join(options.cwd, `${domain}.txt`), `${domain} was here\n`);
-    return { exitCode: 0, stdout: message(WORKER), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: message(WORKER), stderr: "", killed: false };
   };
   const config = { ...DEFAULT_CONFIG, workflow: { ...DEFAULT_CONFIG.workflow, briefCheck: false, parallelMode: "worktrees" as const } };
   const deps: WorkflowDeps = { root, configDir: ".pi", cwd: root, config, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess: runner };

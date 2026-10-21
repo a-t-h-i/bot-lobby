@@ -272,7 +272,7 @@ export interface MetricGroup {
   kinds: MetricKind[];
   runs: number;
   successes: number;
-  /** Runs that stalled or hit their time limit. */
+  /** Runs that stalled. */
   timeouts: number;
   avgMs: number;
   p50Ms: number;

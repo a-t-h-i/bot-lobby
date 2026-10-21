@@ -21,7 +21,6 @@ import { setAutoMode } from "../state/auto.ts";
 import { listPlannedTasks, loadPlannedTask, markPlannedTaskStarted, plannedTaskRequest, type PlannedTask } from "../state/backlog.ts";
 import { triageFor } from "../classifier/instance.ts";
 import { freshContextOn, markContext } from "./fresh-context.ts";
-import { setBudget } from "../state/budget.ts";
 import { createWorkspace, gitLine } from "../execution/workspace.ts";
 import type { GitIsolation } from "../schemas/configuration.ts";
 
@@ -75,7 +74,7 @@ function plannedSteps(task: Task): string[] {
   ].filter(Boolean);
 }
 
-export function kickoff(task: Task, budgetMinutes = 0, options: { fastTrack?: boolean; routed?: boolean } = {}): string {
+export function kickoff(task: Task, options: { fastTrack?: boolean; routed?: boolean } = {}): string {
   const track = task.track;
   const head = [
     `A bot-lobby task is active: ${task.id}`,
@@ -84,7 +83,6 @@ export function kickoff(task: Task, budgetMinutes = 0, options: { fastTrack?: bo
     `State: ${task.state}`,
     ...(options.routed ? [ROUTED_LINE] : []),
     ...(track ? [trackSummary(track)] : []),
-    ...(budgetMinutes > 0 ? [`Time budget: ${budgetMinutes} minutes of work, for you and every agent. Size the plan to fit it and divide it by scope (see Time budget in your prompt).`] : []),
     ...(task.git ? [gitLine(task.git)] : []),
     "",
   ];
@@ -135,8 +133,6 @@ export interface StartOptions {
   auto?: boolean;
   /** The task's short title (a planned task's own title); derived from the request otherwise. */
   title?: string;
-  /** Minutes of work time the task gets; `workflow.taskBudgetMinutes` when absent. */
-  budget?: number;
   /** The user's `--fast` or `--full`: the path the task takes, whatever its request reads as. */
   track?: TrackPath;
   /** The classifier already read the request (routing did): `triage` is its read, or absent when it was off. */
@@ -177,8 +173,6 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   if (options.approvedPlan && options.plan) startFromAgreedPlan(task, options.plan, taskDirFor(root, configDir, task.id));
   await giveWorkspace(ctx, root, configDir, task, options.isolation ?? config.workflow.gitIsolation);
   saveTask(root, configDir, task);
-  const budgetMinutes = options.budget ?? config.workflow.taskBudgetMinutes;
-  if (budgetMinutes > 0) setBudget(root, configDir, task.id, budgetMinutes);
   if (options.auto) setAutoMode(root, configDir, task.id, true, sessionId);
   // A session that starts a task is named after it (its friendly name), so /resume and the lobby list it by name.
   if (!pi.getSessionName() || pi.getSessionName() === taskName(request)) pi.setSessionName(task.id);
@@ -188,7 +182,7 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   // The oracle takes the task on with a clean context: nothing said before the kickoff is sent to its model.
   if (freshContextOn()) markContext(pi, { kind: "start", taskId: task.id, at: Date.now() });
   // A kickoff while pi is still busy (another turn) queues behind it instead of throwing.
-  pi.sendUserMessage(kickoff(task, budgetMinutes, { fastTrack: config.workflow.fastTrack, ...(options.routed ? { routed: true } : {}) }), ctx.isIdle() ? undefined : { deliverAs: "followUp" });
+  pi.sendUserMessage(kickoff(task, { fastTrack: config.workflow.fastTrack, ...(options.routed ? { routed: true } : {}) }), ctx.isIdle() ? undefined : { deliverAs: "followUp" });
   return task;
 }
 

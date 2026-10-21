@@ -42,7 +42,7 @@ function assistantEvent(text: string, extra: Record<string, unknown> = {}): stri
 }
 
 function outcome(stdout: string, overrides: Partial<ProcessOutcome> = {}): ProcessOutcome {
-  return { exitCode: 0, stdout, stderr: "", killed: false, timedOut: false, ...overrides };
+  return { exitCode: 0, stdout, stderr: "", killed: false, ...overrides };
 }
 
 const fake = (result: ProcessOutcome): ProcessRunner => async () => result;
@@ -60,7 +60,6 @@ test("buildPiArgs contains RPC isolation flags and role tools, never the task", 
     tools: ["read", "grep"],
     model: "provider/model",
     thinking: "high",
-    timeoutMs: 1000,
     systemPromptFile: "/tmp/system.md",
   });
   assert.deepEqual(args.slice(0, 5), ["--mode", "rpc", "--no-session", "--no-prompt-templates", "--no-themes"]);
@@ -72,16 +71,16 @@ test("buildPiArgs contains RPC isolation flags and role tools, never the task", 
 });
 
 test("buildPiArgs names granted MCP tools, and turns MCP off when none are granted", () => {
-  const none = buildPiArgs({ cwd: "/p", tools: ["read", "codemode"], timeoutMs: 1 });
+  const none = buildPiArgs({ cwd: "/p", tools: ["read", "codemode"] });
   assert.equal(none[none.indexOf("--tools") + 1], "read,codemode");
   assert.ok(none.includes("--no-mcp"));
-  const granted = buildPiArgs({ cwd: "/p", tools: ["read", "codemode"], mcpTools: ["mcp__docs__search"], timeoutMs: 1 });
+  const granted = buildPiArgs({ cwd: "/p", tools: ["read", "codemode"], mcpTools: ["mcp__docs__search"] });
   assert.equal(granted[granted.indexOf("--tools") + 1], "read,codemode,mcp__docs__search,list_mcp_resources,list_mcp_resource_templates,read_mcp_resource");
   assert.ok(!granted.includes("--no-mcp"));
 });
 
 test("buildPiArgs omits --model when inheriting", () => {
-  const args = buildPiArgs({ cwd: "/p", model: "inherit", timeoutMs: 1 });
+  const args = buildPiArgs({ cwd: "/p", model: "inherit" });
   assert.ok(!args.includes("--model"));
 });
 
@@ -103,7 +102,7 @@ test("parsePiStream survives malformed lines and non-assistant messages", () => 
 });
 
 test("runPiAgent returns success with parsed output", async () => {
-  const result = await runPiAgent({ cwd: "/p", task: "t", timeoutMs: 1000 }, fake(outcome(assistantEvent("done"))));
+  const result = await runPiAgent({ cwd: "/p", task: "t" }, fake(outcome(assistantEvent("done"))));
   assert.equal(result.status, "success");
   assert.equal(result.output, "done");
   assert.equal(result.usage.turns, 1);
@@ -111,7 +110,7 @@ test("runPiAgent returns success with parsed output", async () => {
 
 test("runPiAgent fails on non-zero exit and surfaces stderr", async () => {
   const result = await runPiAgent(
-    { cwd: "/p", task: "t", timeoutMs: 1000 },
+    { cwd: "/p", task: "t" },
     fake(outcome("", { exitCode: 1, stderr: "Error: model not found" })),
   );
   assert.equal(result.status, "failed");
@@ -119,28 +118,29 @@ test("runPiAgent fails on non-zero exit and surfaces stderr", async () => {
 });
 
 test("runPiAgent fails when the agent produced no usable output", async () => {
-  const result = await runPiAgent({ cwd: "/p", task: "t", timeoutMs: 1000 }, fake(outcome("")));
+  const result = await runPiAgent({ cwd: "/p", task: "t" }, fake(outcome("")));
   assert.equal(result.status, "failed");
   assert.match(result.error!, /no usable output/);
 });
 
 test("runPiAgent fails on a reported agent error", async () => {
   const stdout = assistantEvent("partial", { stopReason: "error", errorMessage: "tool exploded" });
-  const result = await runPiAgent({ cwd: "/p", task: "t", timeoutMs: 1000 }, fake(outcome(stdout)));
+  const result = await runPiAgent({ cwd: "/p", task: "t" }, fake(outcome(stdout)));
   assert.equal(result.status, "failed");
   assert.equal(result.error, "tool exploded");
 });
 
-test("runPiAgent reports timeouts", async () => {
-  const result = await runPiAgent({ cwd: "/p", task: "t", timeoutMs: 1000 }, fake(outcome("", { killed: true, timedOut: true })));
+test("runPiAgent reports a stall, the only way a run stops on its own", async () => {
+  const result = await runPiAgent({ cwd: "/p", task: "t", stallTimeoutMs: 1000 }, fake(outcome("", { killed: true, stalled: true })));
   assert.equal(result.status, "timeout");
+  assert.equal(result.stalled, true);
 });
 
 test("runPiAgent reports cancellation", async () => {
   const controller = new AbortController();
   controller.abort();
   const result = await runPiAgent(
-    { cwd: "/p", task: "t", timeoutMs: 1000, signal: controller.signal },
+    { cwd: "/p", task: "t", signal: controller.signal },
     fake(outcome("", { killed: true })),
   );
   assert.equal(result.status, "cancelled");
@@ -156,7 +156,7 @@ test("runPiAgent writes and cleans up the system prompt file", async () => {
     assert.match(readFileSync(file, "utf8"), /Global Engineering Agent/);
     return outcome(assistantEvent("ok"));
   };
-  await runPiAgent({ cwd: "/p", task: "t", timeoutMs: 1000, systemPrompt: "Global Engineering Agent" }, capture);
+  await runPiAgent({ cwd: "/p", task: "t", systemPrompt: "Global Engineering Agent" }, capture);
   const file = passedArgs[passedArgs.indexOf("--append-system-prompt") + 1]!;
   const { existsSync } = await import("node:fs");
   assert.ok(!existsSync(file), "prompt file should be removed after the run");
@@ -210,7 +210,7 @@ test("runPiAgent keeps the final report when the stream is 20x the old cap", asy
   const previous = process.env.BOT_LOBBY_PI_BIN;
   process.env.BOT_LOBBY_PI_BIN = stub;
   try {
-    const result = await runPiAgent({ cwd: dir, task: "review", timeoutMs: 120_000 });
+    const result = await runPiAgent({ cwd: dir, task: "review" });
     assert.equal(result.status, "success");
     assert.match(result.output, /## Verdict PASS/);
     assert.equal(result.usage.turns, 1);
@@ -267,7 +267,6 @@ test("a tool_execution_start stream drives onActivity through the spawned proces
     const result = await runPiAgent({
       cwd: process.cwd(),
       task: "explore",
-      timeoutMs: 30_000,
       onActivity: (word) => words.push(word),
     });
     assert.equal(result.status, "success");
@@ -284,7 +283,7 @@ test("runPiAgent maps streamed tool names to activity words", async () => {
     return outcome(assistantEvent("ok"));
   };
   const result = await runPiAgent(
-    { cwd: "/p", task: "t", timeoutMs: 1000, onActivity: (word) => words.push(word) },
+    { cwd: "/p", task: "t", onActivity: (word) => words.push(word) },
     streaming,
   );
   assert.equal(result.status, "success");
@@ -294,9 +293,9 @@ test("runPiAgent maps streamed tool names to activity words", async () => {
 test("absent onEvent and onActivity callbacks are optional", async () => {
   const cleanup = withFakePi(activityScript());
   try {
-    const spawned = await spawnPiProcess(["Task: t"], { cwd: process.cwd(), timeoutMs: 30_000 });
+    const spawned = await spawnPiProcess(["Task: t"], { cwd: process.cwd() });
     assert.equal(spawned.exitCode, 0);
-    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 30_000 });
+    const result = await runPiAgent({ cwd: process.cwd(), task: "t" });
     assert.equal(result.status, "success");
   } finally {
     cleanup();
@@ -394,7 +393,7 @@ test("rpc: the task arrives as a prompt on stdin and agent_settled ends the run"
     settle();`);
   await withStub(script, async (log) => {
     const events: string[] = [];
-    const result = await runPiAgent({ cwd: process.cwd(), task: "ship it", timeoutMs: 20_000, onEvent: (event) => events.push(event.type) });
+    const result = await runPiAgent({ cwd: process.cwd(), task: "ship it", onEvent: (event) => events.push(event.type) });
     assert.equal(result.status, "success");
     assert.match(result.output, /## done Task: ship it/);
     const commands = log.read();
@@ -411,7 +410,7 @@ test("rpc: a silent agent is killed as stalled", async () => {
   const script = rpcStub("", "setInterval(() => {}, 1000);");
   await withStub(script, async () => {
     const started = Date.now();
-    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 20_000, stallTimeoutMs: 300 });
+    const result = await runPiAgent({ cwd: process.cwd(), task: "t", stallTimeoutMs: 300 });
     assert.equal(result.status, "timeout");
     assert.equal(result.stalled, true);
     assert.match(result.error!, /stalled: no output/);
@@ -427,33 +426,22 @@ test("rpc: provider retries extend the silence allowance and are forwarded", asy
     setTimeout(() => { emit({ type: "auto_retry_end", success: true, attempt: 1 }); report("## done"); settle(); }, 3_200);`);
   await withStub(script, async () => {
     const events: string[] = [];
-    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 20_000, stallTimeoutMs: 3_000, onEvent: (event) => events.push(event.type) });
+    const result = await runPiAgent({ cwd: process.cwd(), task: "t", stallTimeoutMs: 3_000, onEvent: (event) => events.push(event.type) });
     assert.equal(result.status, "success", result.error);
     assert.ok(events.includes("retry") && events.includes("retry_end") && events.includes("compaction"));
   });
 });
 
-test("rpc: the agent is steered to wrap up before the deadline and its report is kept", async () => {
+test("rpc: a long run is never stopped for time, and no deadline or wrap-up is sent", async () => {
   const script = rpcStub(`
-    if (cmd.type === "steer") { report("## partial report"); settle(); }`, "setInterval(() => {}, 1000);");
+    if (cmd.type !== "prompt") return;
+    const working = setInterval(() => emit({ type: "turn_start" }), 50);
+    setTimeout(() => { clearInterval(working); report("## done after a long while"); settle(); }, 2_500);`);
   await withStub(script, async (log) => {
-    const events: string[] = [];
-    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 10_000, wrapUpAtMs: 200, onEvent: (event) => events.push(event.type) });
-    assert.equal(result.status, "success");
-    assert.equal(result.wrappedUp, true);
-    assert.match(result.output, /partial report/);
-    assert.ok(events.includes("wrap_up"));
-    assert.ok(log.read().some((command) => command.type === "steer"));
-  });
-});
-
-test("rpc: the deadline aborts the agent and times it out", async () => {
-  const script = rpcStub("", "setInterval(() => emit({ type: 'turn_start' }), 50); process.stdin.removeAllListeners('end');");
-  await withStub(script, async (log) => {
-    const pending = spawnPiProcess([], { cwd: process.cwd(), timeoutMs: 3_000, prompt: "Task: t", graceMs: 1_000 });
-    const outcome = await pending;
-    assert.equal(outcome.timedOut, true);
-    assert.ok(log.read().some((command) => command.type === "abort"), "abort sent before the kill");
+    const result = await runPiAgent({ cwd: process.cwd(), task: "t", stallTimeoutMs: 1_000 });
+    assert.equal(result.status, "success", result.error);
+    assert.match(result.output, /done after a long while/);
+    assert.deepEqual(log.read().map((command) => command.type), ["prompt"], "no steer to wrap up and no abort");
   });
 });
 
@@ -465,7 +453,7 @@ test("rpc: a grandchild holding stdout does not hang the run", async () => {
     settle();`, 'import { spawn } from "node:child_process";');
   await withStub(script, async () => {
     const started = Date.now();
-    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 20_000 });
+    const result = await runPiAgent({ cwd: process.cwd(), task: "t" });
     assert.equal(result.status, "success");
     assert.ok(Date.now() - started < 8_000, `finished in ${Date.now() - started}ms`);
   });
@@ -476,7 +464,7 @@ test("rpc: extension dialogs are cancelled instead of blocking the agent", async
     if (cmd.type === "prompt") emit({ type: "extension_ui_request", id: "d1", method: "select", title: "Pick", options: ["a"] });
     if (cmd.type === "extension_ui_response" && cmd.id === "d1" && cmd.cancelled) { report("## unblocked"); settle(); }`);
   await withStub(script, async () => {
-    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 20_000 });
+    const result = await runPiAgent({ cwd: process.cwd(), task: "t" });
     assert.equal(result.status, "success");
     assert.match(result.output, /unblocked/);
   });
@@ -486,7 +474,7 @@ test("rpc: a rejected prompt fails the run with the host's reason", async () => 
   const script = rpcStub(`
     if (cmd.type === "prompt") emit({ type: "response", id: cmd.id, command: "prompt", success: false, error: "model not found" });`);
   await withStub(script, async () => {
-    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 20_000 });
+    const result = await runPiAgent({ cwd: process.cwd(), task: "t" });
     assert.equal(result.status, "failed");
     assert.match(result.error!, /model not found/);
   });
@@ -496,68 +484,9 @@ test("rpc: onStart exposes a steering handle", async () => {
   const script = rpcStub(`
     if (cmd.type === "steer" && cmd.message === "hello worker") { report("## steered"); settle(); }`, "setInterval(() => {}, 1000);");
   await withStub(script, async () => {
-    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 20_000, onStart: (handle) => handle.steer("hello worker") });
+    const result = await runPiAgent({ cwd: process.cwd(), task: "t", onStart: (handle) => handle.steer("hello worker") });
     assert.equal(result.status, "success");
     assert.match(result.output, /steered/);
-  });
-});
-
-/** A stub that works until told its time is up, reports where it left off, and finishes when sent on. */
-const TIMED_STUB = rpcStub(`
-  if (cmd.type === "prompt" && cmd.message.startsWith("Task:")) return;
-  if (cmd.type === "steer" && cmd.message === "time is up") { clearInterval(working); report("## Completed\\nhalf\\n\\n## Left Off\\ntests remain\\n\\n## More Time\\n10 minutes — the tests"); settle(); }
-  if (cmd.type === "prompt" && cmd.message === "carry on") { report("## Completed\\nall of it"); settle(); }`, "const working = setInterval(() => emit({ type: 'turn_start' }), 50);");
-
-test("rpc: out of time, the agent reports where it left off and, given more, the same process finishes", async () => {
-  await withStub(TIMED_STUB, async (log) => {
-    const reports: string[] = [];
-    const events: string[] = [];
-    const result = await runPiAgent({
-      cwd: process.cwd(), task: "build it", timeoutMs: 20_000,
-      onEvent: (event) => events.push(event.type),
-      time: { upAtMs: 150, upMessage: "time is up", graceMs: 5_000, onTimeUp: async (report) => (reports.push(report), { extraMs: 10_000, message: "carry on" }) },
-    });
-    assert.equal(result.status, "success", result.error);
-    assert.match(reports[0]!, /## Left Off\ntests remain/);
-    assert.equal(result.output, "## Completed\nall of it");
-    assert.equal(result.extendedMs, 10_000);
-    assert.equal(result.timeUp, undefined, "it finished in the time it was given");
-    assert.ok(events.includes("time_up") && events.includes("extended"));
-    assert.deepEqual(log.read().map((command) => [command.type, command.message]), [["prompt", "Task: build it"], ["steer", "time is up"], ["prompt", "carry on"]]);
-  });
-});
-
-test("rpc: out of time and not given more, the run ends with its left-off report", async () => {
-  await withStub(TIMED_STUB, async () => {
-    const result = await runPiAgent({ cwd: process.cwd(), task: "build it", timeoutMs: 20_000, time: { upAtMs: 150, upMessage: "time is up", graceMs: 5_000, onTimeUp: async () => ({ extraMs: 0 }) } });
-    assert.equal(result.status, "success");
-    assert.equal(result.timeUp, true);
-    assert.match(result.output, /## More Time\n10 minutes — the tests/);
-  });
-});
-
-test("rpc: a hard allowance includes reporting after a user-approved extension", async () => {
-  const script = rpcStub(`
-    if (cmd.type === "steer" && !sent) { sent = true; report("## Left Off\\nunfinished"); settle(); }
-    if (cmd.type === "prompt" && !cmd.message.startsWith("Task:")) return;`, "let sent = false;");
-  await withStub(script, async () => {
-    const started = Date.now();
-    const result = await runPiAgent({ cwd: process.cwd(), task: "build", timeoutMs: 20_000,
-      time: { hardLimit: true, upAtMs: 150, upMessage: "report now", graceMs: 15_000, onTimeUp: async () => ({ extraMs: 1200, message: "continue" }) },
-    });
-    assert.equal(result.status, "timeout");
-    assert.ok(Date.now() - started < 10_000, "reporting cannot add 15 seconds to the granted allowance");
-  });
-});
-
-test("rpc: while the user decides, neither the deadline nor the stall watchdog stops the waiting agent", async () => {
-  await withStub(TIMED_STUB, async () => {
-    const result = await runPiAgent({
-      cwd: process.cwd(), task: "build it", timeoutMs: 4_000, stallTimeoutMs: 3_000,
-      time: { upAtMs: 2_000, upMessage: "time is up", graceMs: 3_000, onTimeUp: () => new Promise((resolve) => setTimeout(() => resolve({ extraMs: 5_000, message: "carry on" }), 5_000)) },
-    });
-    assert.equal(result.status, "success", result.error);
-    assert.equal(result.output, "## Completed\nall of it");
   });
 });
 
@@ -575,17 +504,15 @@ function askingStub(): string {
     }`);
 }
 
-test("rpc: a relayed question waits on the user with the deadline, the allotment and the watchdog held, and the answers go back", async () => {
+test("rpc: a relayed question waits on the user with the watchdog held, and the answers go back", async () => {
   await withStub(askingStub(), async (log) => {
     const events: string[] = [];
     let asked: unknown;
     const result = await runPiAgent({
       cwd: process.cwd(),
       task: "t",
-      timeoutMs: 4_000,
       stallTimeoutMs: 3_000,
       toolStallTimeoutMs: 3_000,
-      time: { upAtMs: 3_000, upMessage: "time is up", graceMs: 1_000 },
       onEvent: (event) => events.push(event.type === "answered" ? `answered after ${event.waitedMs >= 900 ? "900+" : event.waitedMs}ms` : event.type),
       onAsk: async (questions) => {
         asked = questions;
@@ -596,14 +523,14 @@ test("rpc: a relayed question waits on the user with the deadline, the allotment
     assert.equal(result.status, "success", result.error);
     assert.match(result.output, /## chose Sidebar/);
     assert.deepEqual(asked, LAYOUT_QUESTIONS);
-    assert.deepEqual(events.filter((type) => type.startsWith("ask") || type.startsWith("answered") || type === "time_up"), ["asking", "answered after 900+ms"]);
-    assert.ok(!log.read().some((command) => command.type === "steer" || command.type === "abort"), "no time-up steer and no abort while the user answered");
+    assert.deepEqual(events.filter((type) => type.startsWith("ask") || type.startsWith("answered")), ["asking", "answered after 900+ms"]);
+    assert.ok(!log.read().some((command) => command.type === "steer" || command.type === "abort"), "no steer and no abort while the user answered");
   });
 });
 
 test("rpc: without a relay the agent's question is cancelled; a run that ends first puts the questions away", async () => {
   await withStub(askingStub(), async () => {
-    const result = await runPiAgent({ cwd: process.cwd(), task: "t", timeoutMs: 20_000 });
+    const result = await runPiAgent({ cwd: process.cwd(), task: "t" });
     assert.match(result.output, /## chose nothing/, "no relay: cancelled like any dialog");
   });
   await withStub(askingStub(), async () => {
@@ -612,7 +539,6 @@ test("rpc: without a relay the agent's question is cancelled; a run that ends fi
     const result = await runPiAgent({
       cwd: process.cwd(),
       task: "t",
-      timeoutMs: 20_000,
       signal: controller.signal,
       onAsk: (_questions, asked) => {
         signal = asked;

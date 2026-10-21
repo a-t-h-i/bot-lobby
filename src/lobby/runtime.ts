@@ -126,7 +126,7 @@ function handToQuickFix(state: Runtime, request: string, builder: Domain | undef
   const job = state.quickfix.submit(request, Date.now(), {
     force: true,
     ...(profile ? { profile } : {}),
-    note: `The oracle sent your request here: ${reason.replace(/[.\s]+$/, "")}.${builder ? ` A quick feature: it runs on ${builder === "designer" ? "DESIGN" : "DEV"}'s model, thinking and time limit.` : ""}`,
+    note: `The oracle sent your request here: ${reason.replace(/[.\s]+$/, "")}.${builder ? ` A quick feature: it runs on ${builder === "designer" ? "DESIGN" : "DEV"}'s model, thinking and grants.` : ""}`,
   });
   lobbyTopics.bump("quickfix");
   pushNotice("The oracle sent your request to the quick-fix agent.", "info");

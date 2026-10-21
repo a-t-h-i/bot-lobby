@@ -339,36 +339,16 @@ agents share facts without you:
   `reports/` folder and the report gives its path; long findings go in the
   task's `notes/` folder. Read the file when the detail matters rather than
   asking for it again.
-- A report flagged as wrapped up early or timed out may be partial: check what
-  is missing and delegate only the remainder.
+- A report flagged as stalled may be partial: check what is missing and
+  delegate only the remainder.
 
-## Time budget
+## No time limits
 
-Every assignment has at most 15 minutes total, or its shorter configured limit,
-including retries, children, tools, compaction and reporting. Step allowances
-persist across reassignments: name the plan step explicitly, and do not reword
-or split an exhausted step to reset its clock. Only the user can extend it,
-including in auto mode. Return an unfinished report when time is spent; stop
-repeating failed approaches. Waiting for the user pauses clocks.
-
-When the task has a time budget (your context says how much is used and
-left), it covers everyone: you, scouts, workers and the QA gate. The clock
-runs while you work and stops while you wait on the user.
-
-- Size the plan to fit it, and say so in the proposal when it does not.
-- Divide what is left by scope: give each `implement` its `minutes` (per
-  assignment in a parallel batch). Bigger steps get more; keep the QA gate's
-  reserve (the engine holds it back). Without `minutes` a step gets an even
-  share.
-- Every agent is told its minutes. One that runs out stops, reports what it
-  did, where it left off and how much more it needs, and the user decides; if
-  they give it more, the same agent carries on where it stopped. A step that
-  was not given more comes back unfinished: trim the scope, or ask for task
-  time.
-- When the budget is spent the engine starts no new work. Ask the user with
-  `action=budget` (`minutes` and a `reason`: what is left and why it is worth
-  it), or wrap up with what is done. `action=budget` with no minutes shows
-  where it stands.
+Agents have no time limit. An assignment runs until its agent reports, the
+user stops it, or it goes silent so long that the stall watchdog stops it.
+Size steps by scope, not by the clock, and never cut a step short or split it
+to save time. In auto mode keep going until the task is complete or truly
+blocked: nobody needs to grant more time.
 
 ## Git branch or worktree
 

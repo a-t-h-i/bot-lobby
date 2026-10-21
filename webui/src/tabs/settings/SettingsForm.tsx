@@ -1,14 +1,14 @@
 /**
  * The settings form: each agent's model and effort (a slider with a stop per
- * level, skipping what the model cannot do), the workflow, the lobby and the
- * classifier, read from `settings.get` and saved back with a minimal
+ * level, skipping what the model cannot do), the MCP tools and skills each
+ * agent is granted, the workflow, the lobby and the classifier, read from `settings.get` and saved back with a minimal
  * `settings.set` patch. A refused patch (`bad_request`) shows the server's own
  * message and leaves the field reading its saved value, because every control
  * is driven by the config the server last returned. The appearance,
  * notification and install rows are page-only and never sent to the server.
  */
 import { useEffect, useRef, useState } from "react"
-import { Brain, Check, ChevronRight, CircleAlert, CircleCheck, Download, Maximize, Minimize } from "lucide-react"
+import { Brain, Check, ChevronRight, CircleAlert, CircleCheck, Download, Maximize, Minimize, Wrench } from "lucide-react"
 import { toast } from "@/lib/toast"
 import { useFullscreen, useInstallPrompt, useInstalled } from "@/app/install"
 import { disableNotifications, enableNotifications, useNotificationsEnabled } from "@/app/notify"
@@ -26,6 +26,7 @@ import { Section } from "@/ui/Section"
 import { Segmented } from "@/ui/Segmented"
 import { Choice, Field, Rows, type ChoiceItem } from "./parts"
 import { ThemeGroup } from "./ThemeGroup"
+import { GrantsGroup, grantsLine, grantsOf } from "./GrantsGroup"
 import type { BotLobbyConfig, SettingsClassifierModel, SettingsModelInfo } from "@protocol"
 import {
   AGENT_LABELS,
@@ -37,6 +38,7 @@ import {
   CUSTOM_MODEL,
   FIXED_SCOUT_THINKING,
   GIT_ISOLATION_ITEMS,
+  GRANTS,
   RECOMMENDED_THINKING,
   GIT_LABEL,
   GROUP_TITLES,
@@ -71,9 +73,9 @@ interface AgentView {
   model: string
   thinking: string
   autoCompact?: boolean
-  timeoutMs?: number
   instructions?: string
   mcpTools?: string[]
+  skills?: string[]
 }
 
 /** Where each agent's fields live in the config (`agents.<kind>` for the three domains). */
@@ -102,8 +104,8 @@ function entryOf(config: Config, kind: AgentKind): AgentView {
       return {
         model: config.scout.model,
         thinking: FIXED_SCOUT_THINKING,
-        timeoutMs: config.scout.timeoutMs,
         mcpTools: config.scout.mcpTools,
+        ...(config.scout.skills ? { skills: config.scout.skills } : {}),
         ...(config.scout.autoCompact === false ? { autoCompact: false } : {}),
       }
     case "researcher":
@@ -247,7 +249,7 @@ function InstructionsField({ value, label, onSave }: { value: string; label: str
   )
 }
 
-function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Config; models: SettingsModelInfo[]; save: Save }) {
+function AgentCard({ kind, config, models, save, onGrants }: { kind: AgentKind; config: Config; models: SettingsModelInfo[]; save: Save; onGrants: () => void }) {
   const entry = entryOf(config, kind)
   const set = (fields: Record<string, unknown>) => save(patchOf(kind, fields))
   const name = AGENT_LABELS[kind]
@@ -280,14 +282,11 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
         name={`${name} auto-compact`}
       />
       <div hidden={!open} className="grid gap-2 border-t border-border pt-2">
-        {kind !== "master" ? (
-          <Field stacked label="Time limit" help="Minutes before this agent's run stops.">
-            <MinutesField value={entry.timeoutMs ?? config.workflow.agentTimeoutMs} label={`${name} time limit`} onSave={(ms) => set({ timeoutMs: ms })} />
-          </Field>
-        ) : null}
         {hasInstructions ? <InstructionsField value={entry.instructions ?? ""} label={`${name} instructions`} onSave={(text) => set({ instructions: text })} /> : null}
-        <InstructionsField value={(entry.mcpTools ?? []).join("\n")} label={`${name} MCP tool grants (one exact tool name per line)`} onSave={(text) => set({ mcpTools: text.split(/\s+/).filter(Boolean) })} />
-        <p className="text-xs text-muted-foreground">Grant exact names such as mcp__github__get_issue. Children inherit these grants; read-only agents also require read-only tools.</p>
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+          <p className="min-w-[7rem] flex-1 break-words text-xs text-muted-foreground">{grantsLine(grantsOf(config, kind), kind)}</p>
+          <ActionButton label={GRANTS.edit} icon={Wrench} onClick={onGrants} />
+        </div>
       </div>
     </section>
   )
@@ -296,7 +295,7 @@ function AgentCard({ kind, config, models, save }: { kind: AgentKind; config: Co
 /** How many settings under More differ from their defaults, shown on the collapsed row. */
 function customCount(entry: AgentView, kind: AgentKind): number {
   const notes = kind !== "scout" && kind !== "researcher" && Boolean(entry.instructions)
-  return [entry.timeoutMs !== undefined, notes, (entry.mcpTools ?? []).length > 0].filter(Boolean).length
+  return [notes, (entry.mcpTools ?? []).length > 0, kind !== "master" && entry.skills !== undefined].filter(Boolean).length
 }
 
 function ScoutEffort() {
@@ -557,12 +556,17 @@ function InstallGroup() {
   )
 }
 
-const SECTIONS = ["Agents", "Workflow", "Lobby", "Classifier", "Appearance & notifications"] as const
+const SECTIONS = ["Agents", "Tools & skills", "Workflow", "Lobby", "Classifier", "Appearance & notifications"] as const
 type SectionName = (typeof SECTIONS)[number]
 const sectionId = (name: SectionName) => `settings-${name.split(" ")[0]}`
 
 export function SettingsForm({ config, models, classifierModels = [], onConfig }: { config: Config; models: SettingsModelInfo[]; classifierModels?: SettingsClassifierModel[]; onConfig: (config: Config) => void }) {
   const [section, setSection] = useState<SectionName>("Agents")
+  const [grantee, setGrantee] = useState<AgentKind>("master")
+  const openGrants = (kind: AgentKind) => {
+    setGrantee(kind)
+    setSection("Tools & skills")
+  }
   // One save at a time, in the order they were made: the form shows the config of the last reply, so replies must come back in order.
   const queue = useRef<Promise<unknown>>(Promise.resolve())
   const save: Save = (patch) => {
@@ -595,8 +599,11 @@ export function SettingsForm({ config, models, classifierModels = [], onConfig }
       <div id={sectionId("Agents")} hidden={section !== "Agents"} aria-hidden={section !== "Agents"}>
         <h2 className="sr-only">{GROUP_TITLES.agents}</h2>
         <div className="grid grid-cols-2 items-start gap-3 lg:grid-cols-3">
-          {AGENT_ORDER.map((kind) => <AgentCard key={kind} kind={kind} config={config} models={models} save={save} />)}
+          {AGENT_ORDER.map((kind) => <AgentCard key={kind} kind={kind} config={config} models={models} save={save} onGrants={() => openGrants(kind)} />)}
         </div>
+      </div>
+      <div id={sectionId("Tools & skills")} hidden={section !== "Tools & skills"} aria-hidden={section !== "Tools & skills"}>
+        <GrantsGroup config={config} save={save} agent={grantee} onAgent={setGrantee} />
       </div>
       <div id={sectionId("Workflow")} hidden={section !== "Workflow"} aria-hidden={section !== "Workflow"}>
         <div className="flex flex-col gap-6"><WorkflowGroup config={config} save={save} /><LintGroup config={config} save={save} /></div>

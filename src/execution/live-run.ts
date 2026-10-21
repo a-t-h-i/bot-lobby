@@ -3,7 +3,7 @@ import type { AgentRun } from "../schemas/findings.ts";
 import type { PiStreamEvent } from "./pi-runner.ts";
 import { EditLog } from "../state/changes.ts";
 import { activityDetail, activityWord, describeToolCall } from "../pi/activity.ts";
-import { shortDuration, truncate } from "../text.ts";
+import { truncate } from "../text.ts";
 
 const THROTTLE_MS = 2000;
 
@@ -12,7 +12,7 @@ const THROTTLE_MS = 2000;
  * `onUpdate`: activity changes, retries and notes immediately, counters and
  * heartbeats at most every couple of seconds.
  */
-export function createLiveRun(base: AgentRun, request: Pick<AgentRequest, "onUpdate" | "timeoutMs" | "time">, edits: EditLog) {
+export function createLiveRun(base: AgentRun, request: Pick<AgentRequest, "onUpdate">, edits: EditLog) {
   let state: AgentRun = base;
   let lastEmit = 0;
   const emit = (patch: Partial<AgentRun>, force: boolean) => {
@@ -55,22 +55,11 @@ export function createLiveRun(base: AgentRun, request: Pick<AgentRequest, "onUpd
       case "compaction_end":
         emit({ note: event.error, noteKind: event.error ? "warning" : undefined }, true);
         return;
-      case "wrap_up":
-        emit({ note: `asked to wrap up (${shortDuration(request.timeoutMs)} limit)`, noteKind: "warning", wrappedUp: true }, true);
-        return;
-      case "time_up":
-        emit({ note: request.time?.onTimeUp ? "out of time: reporting where it left off" : "out of time: reporting", noteKind: "warning" }, true);
-        return;
-      case "extended":
-        emit({ endsAt: request.time?.endsAt, extendedMs: (state.extendedMs ?? 0) + event.ms }, true);
-        return;
       case "asking":
         emit({ note: `waiting on you: ${event.questions} question${event.questions === 1 ? "" : "s"}`, noteKind: "info" }, true);
         return;
       case "answered":
-        // Its time waited with it.
-        if (request.time) request.time.endsAt += event.waitedMs;
-        emit({ note: "you answered; carrying on", noteKind: "info", ...(request.time ? { endsAt: request.time.endsAt } : {}) }, true);
+        emit({ note: "you answered; carrying on", noteKind: "info" }, true);
         return;
       case "usage": {
         const usage = state.usage ?? { input: 0, output: 0, cost: 0, turns: 0 };

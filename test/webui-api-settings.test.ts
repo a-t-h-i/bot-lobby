@@ -87,17 +87,21 @@ test("settings.get answers the effective config and the models Pi offers", async
 test("settings.set merges, normalises and saves the patch; the terminal rereads it", async () => {
   const { call, close } = await setup();
   try {
-    const set = await call("settings.set", { patch: { master: { thinking: "low" }, agents: { backend: { timeoutMs: 300_000 } } } });
+    const set = await call("settings.set", { patch: { master: { thinking: "low" }, agents: { backend: { mcpTools: ["mcp__github__get_issue"], skills: ["pdf-tools"] } } } });
     assert.equal(set.status, 200, set.body);
     const saved = set.payload.result!.config as Record<string, unknown>;
     assert.equal((saved.master as Record<string, unknown>).thinking, "low");
-    assert.equal(((saved.agents as Record<string, unknown>).backend as Record<string, unknown>).timeoutMs, 300_000);
+    assert.deepEqual(((saved.agents as Record<string, unknown>).backend as Record<string, unknown>).mcpTools, ["mcp__github__get_issue"]);
     // Other entries are untouched by the patch.
     assert.equal((saved.master as Record<string, unknown>).model, "inherit");
     assert.deepEqual((saved.lobby as Record<string, unknown>).web, { port: 7347, openBrowser: true });
     // The file the terminal reads holds it.
     assert.equal(loadConfig().master.thinking, "low");
-    assert.equal(loadConfig().agents.backend.timeoutMs, 300_000);
+    assert.deepEqual(loadConfig().agents.backend.skills, ["pdf-tools"]);
+    // `skills: null` gives the agent every skill pi finds again.
+    const all = await call("settings.set", { patch: { agents: { backend: { skills: null } } } });
+    assert.equal(all.status, 200, all.body);
+    assert.equal("skills" in loadConfig().agents.backend, false);
     const again = await call("settings.get");
     assert.equal(((again.payload.result!.config as Record<string, unknown>).master as Record<string, unknown>).thinking, "low");
   } finally {
@@ -127,9 +131,10 @@ test("invalid input is refused with the terminal's message", async () => {
     const port = await call("settings.set", { patch: { lobby: { web: { port: 99999 } } } });
     assert.equal(port.status, 400, port.body);
     assert.deepEqual(port.payload, { ok: false, error: '"99999" is not a port (0, or 1-65535).', code: "bad_request" });
+    // Time limits are gone: an old one in a patch is dropped, never refused or stored.
     const timeout = await call("settings.set", { patch: { agents: { qa: { timeoutMs: 0 } } } });
-    assert.equal(timeout.status, 400, timeout.body);
-    assert.deepEqual(timeout.payload, { ok: false, error: '"0" is not a positive number of minutes.', code: "bad_request" });
+    assert.equal(timeout.status, 200, timeout.body);
+    assert.equal("timeoutMs" in loadConfig().agents.qa, false);
     const shape = await call("settings.set", { patch: 5 });
     assert.equal(shape.status, 400, shape.body);
     assert.equal(shape.payload.code, "bad_request");
@@ -156,4 +161,18 @@ test("stripSecrets removes secret fields at every depth but keeps the key bindin
   assert.equal(nested.authorization, undefined);
   assert.deepEqual((nested.list as Array<Record<string, unknown>>)[0], { keep: 1 });
   assert.deepEqual((clean.lobby as Record<string, unknown>).keys, { hide: "alt+l" });
+});
+
+test("settings.grants lists the MCP tools and skills pi offers to grant", async () => {
+  const { call, close } = await setup();
+  try {
+    const answer = await call("settings.grants");
+    assert.equal(answer.status, 200, answer.body);
+    assert.deepEqual(answer.payload.result, {
+      mcpTools: [{ name: "mcp__github__get_issue", server: "github", description: "Read an issue.", readOnly: true }],
+      skills: [{ name: "pdf-tools", description: "Read PDFs.", path: "/skills/pdf-tools/SKILL.md" }],
+    });
+  } finally {
+    await close();
+  }
 });

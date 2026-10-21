@@ -210,6 +210,28 @@ export interface SettingsClassifierModel {
   label: string;
 }
 
+/** An MCP tool Settings can grant (`settings.grants`). */
+export interface SettingsMcpTool {
+  name: string;
+  server: string;
+  description: string;
+  /** The server marks it read-only: read-only agents (scouts, QA, researcher) may call it. */
+  readOnly: boolean;
+}
+
+/** A skill Settings can grant (`settings.grants`). */
+export interface SettingsSkill {
+  name: string;
+  description: string;
+  path: string;
+}
+
+/** `settings.grants`: what pi offers to grant agents now. */
+export interface SettingsGrants {
+  mcpTools: SettingsMcpTool[];
+  skills: SettingsSkill[];
+}
+
 /** One message on the event stream (`GET /api/events`, server-sent events). */
 export type StreamEvent =
   | { type: "hello"; versions: Partial<Record<LobbyTopic, number>> }
@@ -606,6 +628,7 @@ export interface Api {
   "settings.get": { request: Record<string, never>; result: SettingsInfo };
   "settings.set": { request: { patch: Record<string, unknown> }; result: { config: BotLobbyConfig } };
   "settings.linters": { request: Record<string, never>; result: { linters: SettingsLinter[] } };
+  "settings.grants": { request: Record<string, never>; result: SettingsGrants };
   "themes.get": { request: Record<string, never>; result: ThemeStoreInfo };
   "themes.save": { request: { name: string; light?: Record<string, string>; dark?: Record<string, string> }; result: ThemeStoreInfo & { id: string } };
   "themes.rename": { request: { id: string; name: string }; result: ThemeStoreInfo };

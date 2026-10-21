@@ -251,15 +251,47 @@ for (const width of [1280, 360]) {
     await gotoRoute(page, "#/settings", "Each agent's model and effort");
     const card = page.locator('[data-slot="agent-row"]').filter({ hasText: "Backend" }).first();
     await card.getByRole("button", { name: /^More/ }).click();
-    const limit = card.getByRole("spinbutton", { name: /time limit$/ });
-    await expect(limit).toBeVisible();
-    await expect(card.getByRole("textbox", { name: /instructions$/ })).toBeVisible();
-    await expect(card.getByRole("textbox", { name: /MCP tool grants/ })).toBeVisible();
-    const help = card.getByText("Minutes before this agent's run stops.");
-    expect((await help.boundingBox())!.width, "the help is not crushed").toBeGreaterThan(120);
+    await expect(card.getByRole("spinbutton", { name: /time limit$/ }), "agents have no time limit").toHaveCount(0)
+    const notes = card.getByRole("textbox", { name: /instructions$/ });
+    await expect(notes).toBeVisible();
+    const grants = card.getByText("no MCP tools · all skills");
+    await expect(grants).toBeVisible();
+    expect((await grants.boundingBox())!.width, "the grants line is not crushed").toBeGreaterThan(80);
     const box = (await card.boundingBox())!;
-    const field = (await limit.boundingBox())!;
+    const field = (await notes.boundingBox())!;
     expect(field.x + field.width, "the field fits the card").toBeLessThanOrEqual(box.x + box.width + 1);
     await expectNoSidewaysScroll(page);
   });
 }
+
+test("Tools & skills grants each agent MCP tools and skills, and saves every tick", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await gotoRoute(page, "#/settings", "Each agent's model and effort");
+  // An agent card's More leads straight to that agent's grants.
+  const card = page.locator('[data-slot="agent-row"]').filter({ hasText: "Backend" }).first();
+  await card.getByRole("button", { name: /^More/ }).click();
+  await card.getByRole("button", { name: "Tools & skills" }).click();
+  const grants = page.getByLabel("Backend tools and skills");
+  await expect(grants).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Agents" }).getByRole("button", { name: /Backend/ })).toHaveAttribute("aria-current", "true");
+  // One tool, then a whole server.
+  await grants.getByRole("checkbox", { name: /get_issue/ }).click();
+  await expect(page.getByRole("navigation", { name: "Agents" }).getByRole("button", { name: /Backend/ })).toContainText("1 MCP tool · all skills");
+  await grants.getByRole("checkbox", { name: "Every figma tool" }).click();
+  await expect(page.getByRole("navigation", { name: "Agents" }).getByRole("button", { name: /Backend/ })).toContainText("3 MCP tools");
+  // Skills: every one by default; switching that off keeps them all ticked, and unticking one narrows the grant.
+  await grants.getByRole("switch", { name: /every skill pi finds/ }).click();
+  await grants.getByRole("checkbox", { name: /tailwind-review/ }).click();
+  await expect(page.getByRole("navigation", { name: "Agents" }).getByRole("button", { name: /Backend/ })).toContainText("3 MCP tools · 2 skills");
+  // A read-only agent cannot be given a tool that writes.
+  await page.getByRole("navigation", { name: "Agents" }).getByRole("button", { name: /Scout/ }).click();
+  const scout = page.getByLabel("Scout tools and skills");
+  await expect(scout.getByRole("checkbox", { name: /create_pull_request/ })).toBeDisabled();
+  await expect(scout.getByRole("checkbox", { name: /search_code/ })).toBeEnabled();
+  // A tool whose server is offline can be granted by its exact name, and shows as not connected.
+  await scout.getByRole("textbox", { name: "Grant a tool by its exact name" }).fill("mcp__linear__get_issue");
+  await scout.getByRole("button", { name: "Grant" }).click();
+  await expect(scout.getByText("not connected", { exact: true })).toBeVisible();
+  await expectNoSidewaysScroll(page);
+});

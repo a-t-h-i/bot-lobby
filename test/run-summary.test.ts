@@ -38,10 +38,8 @@ test("describeRun reads like a receipt: agent, role, time, turns, tools, tokens,
   assert.equal(line, "✓ DEV worker · 3m 12s · 9 turns · 23 tools · 41k↑ 6k↓ · $0.12 · p/fast");
 });
 
-test("describeRun flags stalls, time limits, early wrap-ups and retries", () => {
+test("describeRun flags stalls and retries", () => {
   assert.match(describeRun(run({ status: "timeout", stalled: true, error: "stalled: no output for 3m while running npm test", attempts: 2 })), /✗ DEV worker · 3m 12s · stalled · 2 attempts — stalled: no output for 3m while running npm test/);
-  assert.match(describeRun(run({ status: "timeout", error: "hit the 15m time limit" })), /hit its time limit — hit the 15m time limit/);
-  assert.match(describeRun(run({ wrappedUp: true })), /wrapped up early — report may be partial/);
   assert.match(describeRun(run({ domain: "designer", role: "researcher" })), /RESEARCH researcher/);
 });
 
@@ -50,7 +48,7 @@ test("tokens are compact", () => {
 });
 
 test("the run log round-trips through its persisted form", () => {
-  const original = run({ turns: 4, tools: 7, model: "p/m", usage: { input: 10, output: 5, cost: 0.01, turns: 4 }, wrappedUp: true, output: "big report" });
+  const original = run({ turns: 4, tools: 7, model: "p/m", usage: { input: 10, output: 5, cost: 0.01, turns: 4 }, stalled: true, output: "big report" });
   const entry = runLogEntry(original);
   assert.equal(entry.output, 5, "output is the token count, never the report text");
   assert.equal(describeRun(runFromLog(entry, "TASK-1")), describeRun(original));

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { clockTask, pauseClocks, resetClocks, resumeClocks, startClock, stopClocks, turnStarted, whileAsking } from "../src/state/budget.ts";
+import { clockTask, pauseClocks, resetClocks, resumeClocks, startClock, stopClocks, turnStarted, whileAsking } from "../src/state/work-clock.ts";
 import { noteWorkerRun, projectWork, readWork, resetNotedRuns, updateWork, WORK_FRESH_MS } from "../src/state/work-time.ts";
 import { stepWork } from "../src/pi/plan-checklist.ts";
 import { stepViews } from "../src/webui/api/plan-facts.ts";

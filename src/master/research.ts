@@ -2,7 +2,7 @@ import { join } from "node:path";
 import type { Domain } from "../schemas/agent.ts";
 import { profileFor, type BotLobbyConfig, type ProfileResolver } from "../schemas/configuration.ts";
 import type { AgentRun, ResearchResult } from "../schemas/findings.ts";
-import { runAgent, watchdogOptions, type AgentRequest, type AgentTime } from "../execution/agent-runner.ts";
+import { runAgent, watchdogOptions, type AgentRequest } from "../execution/agent-runner.ts";
 import { spawnPiProcess, type ProcessRunner } from "../execution/pi-runner.ts";
 import { writeFileEnsured } from "../knowledge/store.ts";
 import { isResearchResultUsable, parseResearchResult, validateResearchResult } from "../roles/researcher.ts";
@@ -26,8 +26,6 @@ export interface ResearchRequest {
   profile?: ProfileResolver;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
-  /** Under a task time budget: the researcher's time. */
-  time?: AgentTime;
 }
 
 export function researchResultPath(taskDir: string, domain: Domain): string {
@@ -42,7 +40,7 @@ function researchContext(request: ResearchRequest): AgentRequest["context"] {
   return {
     task: request.instruction,
     instructions: request.config.agents[request.domain].instructions,
-    workflowContext: [`Task state: research requested by the Master. Domain: ${request.domain}. Read-only; report cited findings only.`, request.time?.note ?? ""].filter(Boolean).join("\n\n"),
+    workflowContext: [`Task state: research requested by the Master. Domain: ${request.domain}. Read-only; report cited findings only.`].join("\n\n"),
   };
 }
 
@@ -71,10 +69,9 @@ export async function runResearch(request: ResearchRequest, run: ProcessRunner =
       context: researchContext(request),
       model: profile.model,
       mcpTools: profile.mcpTools,
+      ...(profile.skills ? { skills: profile.skills } : {}),
       ...(profile.autoCompact === false ? { autoCompact: false } : {}),
       thinking: profile.thinking,
-      timeoutMs: profile.timeoutMs,
-      ...(request.time ? { time: request.time } : {}),
       cwd: request.cwd,
       signal: request.signal,
       onUpdate: request.onUpdate,

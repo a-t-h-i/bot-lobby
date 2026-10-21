@@ -4,7 +4,7 @@ import { profileFor, type BotLobbyConfig, type ProfileResolver } from "../schema
 import type { Domain } from "../schemas/agent.ts";
 import type { AgentRun, ReviewResult, ScoutResult, WorkerResult } from "../schemas/findings.ts";
 import { domainSpec } from "../agents/registry.ts";
-import { boundedAgentTime, runAgent, runParallel, watchdogOptions, type AgentRequest, type AgentTime } from "../execution/agent-runner.ts";
+import { runAgent, runParallel, watchdogOptions, type AgentRequest } from "../execution/agent-runner.ts";
 import { spawnPiProcess, type ProcessRunner, type RelayAsk } from "../execution/pi-runner.ts";
 import { knowledgeFilePath, readAgentKnowledge, writeFileEnsured } from "../knowledge/store.ts";
 import { taskDir } from "../knowledge/paths.ts";
@@ -34,8 +34,6 @@ export interface ScoutOutcome {
 }
 
 export interface ScoutRequest {
-  /** Under a task time budget: the batch's time (every scout runs within it). */
-  time?: AgentTime;
   taskId: string;
   /** Requirements/objective text used for context selection. */
   taskText: string;
@@ -46,7 +44,7 @@ export interface ScoutRequest {
   dataRoots: readonly string[];
   taskDir: string;
   config: BotLobbyConfig;
-  /** Settings-derived model/thinking/time limit, clamped to the model; plain settings when absent. */
+  /** Settings-derived model/thinking/grants, clamped to the model; plain settings when absent. */
   profile?: ProfileResolver;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
@@ -58,10 +56,10 @@ export interface ScoutRequest {
   effort?: EffortRouter;
 }
 
-/** Model, thinking and time limit for one run, from settings. */
+/** Model, thinking and grants for one run, from settings. */
 function profileFields(config: BotLobbyConfig, resolver: ProfileResolver | undefined, domain: Domain, role: AgentRequest["role"]) {
   const profile = profileFor(config, resolver, domain, role);
-  return { model: profile.model, mcpTools: profile.mcpTools, ...(profile.autoCompact === false ? { autoCompact: false } : {}), thinking: profile.thinking, timeoutMs: profile.timeoutMs, time: boundedAgentTime(profile.timeoutMs) };
+  return { model: profile.model, mcpTools: profile.mcpTools, ...(profile.skills ? { skills: profile.skills } : {}), ...(profile.autoCompact === false ? { autoCompact: false } : {}), thinking: profile.thinking };
 }
 
 function scoutInstruction(request: ScoutRequest, domain: Domain): string {
@@ -104,7 +102,7 @@ function scoutContext(request: ScoutRequest, domain: Domain, selected: Knowledge
     task: request.taskText,
     ...selected,
     instructions: request.config.agents[domain].instructions,
-    workflowContext: [`Task state: scouting. Domain: ${domain}. Read-only reconnaissance; no implementation.`, toolBudgetNote(request.config.scout.maxToolCalls), likely, request.time?.note ?? ""].filter(Boolean).join("\n\n"),
+    workflowContext: [`Task state: scouting. Domain: ${domain}. Read-only reconnaissance; no implementation.`, toolBudgetNote(request.config.scout.maxToolCalls), likely].filter(Boolean).join("\n\n"),
   };
 }
 
@@ -195,7 +193,6 @@ async function scoutDomains(request: ScoutRequest, run: ProcessRunner): Promise<
     ...(extraTools.length > 0 ? { extraTools } : {}),
     env: toolBudgetEnv(request.config.scout.maxToolCalls),
     ...profileFields(request.config, request.profile, domain, "scout"),
-    ...(request.time ? { time: { ...request.time } } : {}),
     cwd: request.cwd,
     signal: request.signal,
     onUpdate: request.onUpdate,
@@ -207,7 +204,7 @@ async function scoutDomains(request: ScoutRequest, run: ProcessRunner): Promise<
   const runs = await runParallel(first, request.config.workflow.maxParallelScouts, run);
   let outcomes = runs.map((agentRun) => toOutcome(agentRun, agentRun.domain));
   // A routed scout that came back unusable runs again on its configured model.
-  const again = outcomes.map((outcome, index) => (routes[index] && !outcome.usable && outcome.run.status !== "cancelled" && !request.signal?.aborted && requests[index]!.time!.endsAt > Date.now() ? index : -1)).filter((index) => index >= 0);
+  const again = outcomes.map((outcome, index) => (routes[index] && !outcome.usable && outcome.run.status !== "cancelled" && !request.signal?.aborted ? index : -1)).filter((index) => index >= 0);
   if (again.length > 0) {
     const reruns = await runParallel(again.map((index) => requests[index]!), request.config.workflow.maxParallelScouts, run);
     outcomes = outcomes.map((outcome, index) => {
@@ -270,7 +267,7 @@ export interface WorkerRequest {
   cwd: string;
   dataRoots: readonly string[];
   config: BotLobbyConfig;
-  /** Settings-derived model/thinking/time limit, clamped to the model; plain settings when absent. */
+  /** Settings-derived model/thinking/grants, clamped to the model; plain settings when absent. */
   profile?: ProfileResolver;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
@@ -280,8 +277,6 @@ export interface WorkerRequest {
   knowledge?: KnowledgePicker;
   /** Lowers thinking (or the model) for a step the classifier judges simple or trivial. */
   effort?: EffortRouter;
-  /** Under a task time budget: the step's time, and who decides on more when it runs out. */
-  time?: AgentTime;
   /** The worker may ask the user (the designer): its questions are relayed, and its images saved in `previews`. */
   ask?: { onAsk: RelayAsk; previews: string };
   /** A QA step's verification budget: Jev's QA risk read of the change so far. */
@@ -348,7 +343,6 @@ function workerWorkflowContext(request: WorkerRequest, likely = ""): string {
     request.risk ?? "",
     alongsideGuidance(request),
     boardGuidance(request),
-    request.time?.note ?? "",
     request.ask ? askGuidance(request.ask.previews) : "",
     request.dataRoots[0] ? `Scripts you draft for the shared library go in \`${join(taskDir(request.dataRoots[0], request.taskId), "scripts")}\`.` : "",
     request.dataRoots[0] ? `Long findings (an investigation, a list of call sites, a log excerpt) go in a file under \`${join(taskDir(request.dataRoots[0], request.taskId), "notes")}\`: give its path under Notes instead of pasting them into your report, so whoever needs them reads them whole.` : "",
@@ -392,13 +386,11 @@ export async function runWorker(
     ...request.agent,
     ...(env ? { env } : {}),
     ...(extraTools.length > 0 ? { extraTools } : {}),
-    // One allotment for the step: a routed attempt that falls short re-runs on what is left of it.
-    ...(request.time ? { time: request.time } : {}),
     ...(request.ask ? { onAsk: request.ask.onAsk } : {}),
   };
   let outcome = workerOutcome(request.domain, await runAgent(route ? { ...base, ...routedFields(route) } : base, run));
   // A routed step that fell short runs again at the configured model and thinking.
-  if (route && fellShort(outcome.run, outcome.issues) && !request.signal?.aborted && base.time!.endsAt > Date.now()) {
+  if (route && fellShort(outcome.run, outcome.issues) && !request.signal?.aborted) {
     const routed = outcome.run.edited ?? [];
     outcome = workerOutcome(request.domain, await runAgent(base, run));
     // The step owns what the routed attempt edited too.
@@ -443,13 +435,11 @@ export interface ReviewerRequest {
   board?: string;
   /** Review with a clean context: no worker summaries or scout findings, only the request, plan, board and diff. */
   clean?: boolean;
-  /** Under a task time budget: the gate's time. */
-  time?: AgentTime;
   instruction?: string;
   cwd: string;
   dataRoots: readonly string[];
   config: BotLobbyConfig;
-  /** Settings-derived model/thinking/time limit, clamped to the model; plain settings when absent. */
+  /** Settings-derived model/thinking/grants, clamped to the model; plain settings when absent. */
   profile?: ProfileResolver;
   signal?: AbortSignal;
   onUpdate?: (run: AgentRun) => void;
@@ -474,7 +464,6 @@ function reviewerContext(request: ReviewerRequest): string {
     request.provenance ? `Who changed each file (bot-lobby's record of every agent's edit and write calls; judge each as your role's Change provenance says):\n${request.provenance}` : "",
     request.lint ?? "",
     request.board ?? "",
-    request.time?.note ?? "",
     `Repository changes:\n${request.diff}`,
   ]
     .filter((line) => line.length > 0)
@@ -507,7 +496,6 @@ function reviewerAgentRequest(request: ReviewerRequest, selected: KnowledgeSelec
       workflowContext: reviewerContext(request),
     },
     ...profileFields(request.config, request.profile, request.domain, "reviewer"),
-    ...(request.time ? { time: request.time } : {}),
     cwd: request.cwd,
     signal: request.signal,
     onUpdate: request.onUpdate,
@@ -531,7 +519,7 @@ export async function runReviewer(
   const agentRequest = reviewerAgentRequest(request, selected);
   const attempts = Math.max(1, request.config.workflow.maxAgentRetries + 1);
   let agentRun = await runAgent(agentRequest, run);
-  for (let attempt = 2; attempt <= attempts && isRetryableReviewRun(agentRun) && agentRequest.time!.endsAt > Date.now(); attempt++) {
+  for (let attempt = 2; attempt <= attempts && isRetryableReviewRun(agentRun); attempt++) {
     agentRun = await runAgent(agentRequest, run);
   }
   const result = parseReviewResult(request.domain, agentRun.output);

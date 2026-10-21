@@ -94,8 +94,8 @@ function byModel(answers: Record<string, string | undefined>, seen: Array<{ mode
     const model = arg(args, "--model") ?? "session";
     seen.push({ model, thinking: arg(args, "--thinking") ?? "" });
     const text = answers[model];
-    if (text === undefined) return { exitCode: 1, stdout: "", stderr: `${model} crashed`, killed: false, timedOut: false };
-    return { exitCode: 0, stdout: reply(text), stderr: "", killed: false, timedOut: false };
+    if (text === undefined) return { exitCode: 1, stdout: "", stderr: `${model} crashed`, killed: false };
+    return { exitCode: 0, stdout: reply(text), stderr: "", killed: false };
   };
 }
 
@@ -144,7 +144,7 @@ async function drain(queue: QuickFixQueue): Promise<void> {
 test("a routed quick fix records its routed attempt and re-runs on the configured profile when it falls short", async () => {
   const root = mkdtempSync(join(tmpdir(), "bl-effort-qf-"));
   const seen: Array<{ model: string; thinking: string }> = [];
-  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ model: "p/big", thinking: "medium", timeoutMs: 60_000 }), runProcess: byModel({ "p/big": "## Done\nx" }, seen), effort: router(0, 0.9) });
+  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ model: "p/big", thinking: "medium" }), runProcess: byModel({ "p/big": "## Done\nx" }, seen), effort: router(0, 0.9) });
   const job = queue.submit("fix the typo");
   await drain(queue);
   assert.deepEqual(seen, [{ model: "p/cheap", thinking: "low" }, { model: "p/big", thinking: "medium" }]);
@@ -153,7 +153,7 @@ test("a routed quick fix records its routed attempt and re-runs on the configure
   const metrics = readMetrics(root, ".pi").filter((record) => record.kind === "quickfix");
   assert.deepEqual(metrics.map((record) => [record.status, record.routedFrom]), [["failed", "p/big · medium"], ["success", undefined]]);
 
-  const fine = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ model: "p/big", thinking: "medium", timeoutMs: 60_000 }), runProcess: byModel({ "p/cheap": "## Done\nx" }, []), effort: router(0, 0.9) });
+  const fine = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ model: "p/big", thinking: "medium" }), runProcess: byModel({ "p/cheap": "## Done\nx" }, []), effort: router(0, 0.9) });
   const cheap = fine.submit("fix another typo");
   await drain(fine);
   assert.equal(cheap.route, "trivial 0.90: p/big · medium → p/cheap · low");
@@ -168,13 +168,13 @@ test("planning seats share one effort score per round; a routed seat that fails 
     const who = /You are (DEV|QA) on the planning panel/.exec(options.prompt ?? "")?.[1] ?? "ORACLE";
     const model = arg(args, "--model") ?? "";
     seen.push({ who, model, thinking: arg(args, "--thinking") ?? "" });
-    if (who === "QA" && arg(args, "--thinking") === "low") return { exitCode: 1, stdout: "", stderr: "crash on the routed profile", killed: false, timedOut: false };
-    return { exitCode: 0, stdout: reply(who === "ORACLE" ? "## Status\nREADY\n## Plan\n1. x" : "## Status\nREADY"), stderr: "", killed: false, timedOut: false };
+    if (who === "QA" && arg(args, "--thinking") === "low") return { exitCode: 1, stdout: "", stderr: "crash on the routed profile", killed: false };
+    return { exitCode: 0, stdout: reply(who === "ORACLE" ? "## Status\nREADY\n## Plan\n1. x" : "## Status\nREADY"), stderr: "", killed: false };
   };
   const session = new PlanningSession({
     cwd: root, root, configDir: ".pi", panel: ["backend", "qa"],
-    profile: () => ({ model: "p/oracle", thinking: "high", timeoutMs: 60_000 }),
-    memberProfile: (member) => ({ model: member === "qa" ? "p/qa" : "p/dev", thinking: "medium", timeoutMs: 60_000 }),
+    profile: () => ({ model: "p/oracle", thinking: "high" }),
+    memberProfile: (member) => ({ model: member === "qa" ? "p/qa" : "p/dev", thinking: "medium" }),
     runProcess: runner,
     effort: router(1, 0.8, {}, calls),
   });

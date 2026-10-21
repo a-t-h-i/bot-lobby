@@ -91,7 +91,7 @@ export function createProfileResolver(config: BotLobbyConfig, options: ResolverO
   };
 }
 
-type RunProfile = { model?: string; thinking: string; timeoutMs: number; instructions?: string; mcpTools?: string[] };
+type RunProfile = { model?: string; thinking: string; instructions?: string; mcpTools?: string[]; skills?: string[] };
 
 /** Unset models run on the session's; thinking is clamped to the model, with a one-time warning. */
 function resolveRunProfile(profile: RunProfile, label: string, options: ResolverOptions): RunProfile {
@@ -109,27 +109,27 @@ function resolveRunProfile(profile: RunProfile, label: string, options: Resolver
 
 /** The model ask_expert consults on: the expert setting's, else the oracle's, else the session's; thinking clamped to it. */
 export function resolveExpertProfile(config: BotLobbyConfig, options: ResolverOptions): { model?: string; thinking: string } {
-  const { model, thinking } = resolveRunProfile({ ...expertProfile(config), timeoutMs: 0 }, "Expert consult", options);
+  const { model, thinking } = resolveRunProfile(expertProfile(config), "Expert consult", options);
   return { ...(model ? { model } : {}), thinking };
 }
 
-/** A lobby agent's model, thinking and time limit. */
+/** A lobby agent's model, thinking and grants. */
 export function resolveLobbyProfile(config: BotLobbyConfig, kind: LobbyAgentKind, options: ResolverOptions): RunProfile {
   return resolveRunProfile(lobbyAgentProfile(config, kind), kindLabel(kind), options);
 }
 
-/** A planning panel seat's model, thinking and time limit, from its domain's (or the researcher's) settings. */
+/** A planning panel seat's model, thinking and grants, from its domain's (or the researcher's) settings. */
 export function resolvePanelProfile(config: BotLobbyConfig, member: PanelMember, options: ResolverOptions): RunProfile {
   return resolveRunProfile(panelMemberProfile(config, member), kindLabel(member), options);
 }
 
 /**
- * The model, thinking and time limit a pull request review runs on: QA's, the
+ * The model, thinking and grants a pull request review runs on: QA's, the
  * agent whose job is judging work, with its custom instructions.
  */
 export function resolveReviewProfile(config: BotLobbyConfig, options: ResolverOptions): RunProfile {
   const profile = agentProfile(config, "qa", "reviewer");
-  return resolveRunProfile({ model: profile.model, thinking: profile.thinking, timeoutMs: profile.timeoutMs, ...(profile.instructions ? { instructions: profile.instructions } : {}) }, kindLabel("qa"), options);
+  return resolveRunProfile({ model: profile.model, thinking: profile.thinking, ...(profile.instructions ? { instructions: profile.instructions } : {}), ...(profile.mcpTools ? { mcpTools: profile.mcpTools } : {}), ...(profile.skills ? { skills: profile.skills } : {}) }, kindLabel("qa"), options);
 }
 
 /** Every configured subagent whose thinking level its model does not support, for `/bot-lobby config`. */

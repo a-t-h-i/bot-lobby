@@ -73,4 +73,4 @@ Settings live in `~/.pi/bot-lobby/config.json` (`BOT_LOBBY_CONFIG_DIR` moves the
 project knowledge stay in `.pi/bot-lobby/` inside your project.
 
 The [guide](docs/guide.md) covers the rest: delivery and commits, crash recovery, knowledge and
-shared scripts, the classifier, delegation, time limits, compaction and MCP tools.
+shared scripts, the classifier, delegation, compaction, and MCP tools and skills.

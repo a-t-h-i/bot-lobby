@@ -8,7 +8,7 @@ import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { classifier, effortFor, hintsFor, knowledgeFor, triageFor } from "../classifier/instance.ts";
 import { truncate } from "../text.ts";
 import { applyStatus, reportRuns, summarizeRun } from "./ui.ts";
-import { whileAsking } from "../state/budget.ts";
+import { whileAsking } from "../state/work-clock.ts";
 import { askChoice, askText, askUser, canAsk } from "../ask/web.ts";
 import type { AskQuestion } from "../ask/types.ts";
 import { unescapeBreaks } from "../lobby/blocks.ts";
@@ -43,18 +43,16 @@ const OrchestrateSchema = Type.Object({
       Type.Object({
         domain: Type.String({ description: "designer, backend, or qa" }),
         task: Type.String({ description: "a self-contained brief for that domain's worker: Goal, exact Files, numbered What to do, Contracts (in full), Constraints, Done when, If stuck. No assumptions" }),
-        minutes: Type.Optional(Type.Number({ description: "under a time budget: minutes for this worker, by its scope" })),
       }),
       { description: "implement: run several domains in parallel (distinct domains); workers share files through the file desk" },
     ),
   ),
-  minutes: Type.Optional(Type.Number({ description: "implement (under a time budget): minutes for this step, by its scope; budget: more minutes to ask the user for" })),
   approvalId: Type.Optional(Type.String({ description: "resolve_approval: the approval id from a worker result" })),
   decision: Type.Optional(
     StringEnum(["approved", "rejected"] as const, { description: "resolve_approval: approve or reject the request" }),
   ),
   note: Type.Optional(Type.String({ description: "resolve_approval: rationale, or what to do instead when rejected" })),
-  reason: Type.Optional(Type.String({ description: "block: why the task cannot continue; budget: why the task needs more time; track: why the task takes that path or needs those members; complete: why gaps the goal check named are deliberate (the user agreed)" })),
+  reason: Type.Optional(Type.String({ description: "block: why the task cannot continue; track: why the task takes that path or needs those members; complete: why gaps the goal check named are deliberate (the user agreed)" })),
   track: Type.Optional(
     StringEnum(["fast", "full"] as const, { description: "track: fast (straight to the roster's agents, no scouts, proposal or plan; QA only for tests) or full (the whole workflow)" }),
   ),
@@ -81,8 +79,8 @@ const DESCRIPTION = [
   "review), knowledge (record approved project knowledge or a decision; works without a task),",
   "compact (replace a knowledge file with a rewritten version, archiving the old one; works without a task; disperse domain-relevant facts to action=knowledge (domain=designer|backend|qa) first), script (save a script to the shared scripts library, or replace one, for a job that comes back; works without a task),",
   "resolve_approval (approve or reject a request), complete (declare the task done after the gates",
-  "pass, then ask the user to confirm merging and pushing main and removing its worktree), block/resume (escalate or continue), budget (under a time budget: where it stands, or ask the",
-  "user for more minutes with a reason), track (the task's path and who takes part: show it, or correct it with",
+  "pass, then ask the user to confirm merging and pushing main and removing its worktree), block/resume (escalate or continue),",
+  "track (the task's path and who takes part: show it, or correct it with",
   "track=fast|full, roster and a reason), status, cancel.",
   "Every instruction you give an agent is read by a possibly smaller, cheaper model that cannot infer intent: write each one as a complete, explicit brief with the goal, files, actions, contracts, constraints and done criteria, then check the report against it.",
   "The engine validates every step against the task state machine, so a rejected action means the workflow is not at that step yet.",
@@ -131,7 +129,7 @@ export function workflowDeps(
     classifier: classifier(),
     triage: (request, triageSignal) => triageFor({ cwd: ctx.cwd, root, configDir }, request, triageSignal),
     effort: effortFor((model, thinking) => checkThinking(modelLookup(ctx)(model), thinking).level),
-    // Time spent waiting on the user is not the task's: its budget clock waits too.
+    // Time spent waiting on the user is not the task's: its work clock waits too.
     // The questions go to the web page, where a free-text answer may run to several lines.
     ask: async (question) => (canAsk() ? whileAsking(() => askText(question, undefined, ctx)) : undefined),
     choose: async (title, options) => (canAsk() ? whileAsking(() => askChoice(title, options, undefined, ctx)) : undefined),
@@ -190,14 +188,13 @@ function registerBotLobbyEntries(pi: ExtensionAPI): void {
   });
 }
 
-/** A transcript line per finished run, plus a warning for anything that stalled or ran out of time. */
+/** A transcript line per finished run, plus a warning for anything that stalled. */
 function reportFinishedRuns(pi: ExtensionAPI, ctx: ExtensionContext, result: WorkflowResult): void {
   for (const run of result.runs ?? []) {
-    const ok = run.status === "success" && !run.wrappedUp;
+    const ok = run.status === "success";
     pi.appendEntry("bot-lobby", { kind: "run", taskId: result.taskId, text: describeRun(run), ok });
     if (!ctx.hasUI) continue;
-    if (run.stalled) ctx.ui.notify(`bot-lobby: ${agentName(run)} ${run.role} stalled — ${run.error ?? "no output"}`, "warning");
-    else if (run.status === "timeout") ctx.ui.notify(`bot-lobby: ${agentName(run)} ${run.role} ${run.error ?? "hit its time limit"}`, "warning");
+    if (run.stalled || run.status === "timeout") ctx.ui.notify(`bot-lobby: ${agentName(run)} ${run.role} stalled — ${run.error ?? "no output"}`, "warning");
   }
 }
 

@@ -23,7 +23,6 @@ export const EXPERT_TOOL = "ask_expert";
 /** Consults one step may make: advice on the hard part, not a second worker. */
 export const MAX_CONSULTS = 2;
 /** Longest an expert may take to answer. */
-export const EXPERT_TIMEOUT_MS = 5 * 60 * 1000;
 /** Marks an expert's run, so its host gives it an adviser's note rather than a child's. */
 export const EXPERT_ENV = "BOT_LOBBY_EXPERT";
 
@@ -85,7 +84,7 @@ export interface AgentPolicy {
   depth: number;
 }
 
-/** The host owns quotas, deadlines, file identities and child lifetimes, outside model context. */
+/** The host owns quotas, file identities and child lifetimes, outside model context. */
 export async function delegationHost(options: PiRunOptions, run: ProcessRunner) {
   const config = loadConfig();
   const id = options.agent?.runId ?? randomUUID();
@@ -112,14 +111,11 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
   desk ??= ownedDesk;
   const controller = new AbortController();
   const lifetime = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
-  let timeController = new AbortController();
-  const childSignal = () => AbortSignal.any([lifetime, timeController.signal]);
+  const childSignal = () => lifetime;
   const key = `${options.cwd}:${agent.taskId}`;
   const pool = pools.get(key) ?? { active: 0, users: 0, waiters: [] };
   pool.users += 1;
   pools.set(key, pool);
-  let deadlineAt = Date.now() + (options.time?.upAtMs ?? options.timeoutMs);
-  let deadline = setTimeout(() => timeController.abort(), Math.max(1, deadlineAt - Date.now()));
   const children = new Map<string, AgentRun>();
   const pending = new Set<Promise<AgentRun>>();
   const parentDeskId = options.env?.[DESK_ENV.worker] ?? id;
@@ -137,18 +133,16 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
 
   const childRun = async (brief: string, signal: AbortSignal): Promise<AgentRun> => {
     const childId = randomUUID();
-    const base: AgentRun = { runId: childId, parentRunId: id, depth: 2, taskId: agent.taskId, domain: agent.domain, role: agent.role, instruction: brief, stepInstruction: options.task, status: "running", endsAt: deadlineAt, output: "", attempts: 1, startedAt: new Date().toISOString(), ...(options.thinking ? { thinking: options.thinking } : {}) };
+    const base: AgentRun = { runId: childId, parentRunId: id, depth: 2, taskId: agent.taskId, domain: agent.domain, role: agent.role, instruction: brief, stepInstruction: options.task, status: "running", output: "", attempts: 1, startedAt: new Date().toISOString(), ...(options.thinking ? { thinking: options.thinking } : {}) };
     const edits = new EditLog(options.cwd);
-    const live = createLiveRun(base, { onUpdate: update, timeoutMs: options.timeoutMs }, edits);
+    const live = createLiveRun(base, { onUpdate: update }, edits);
     update(base);
     try {
       const configured = options.effortProfile ?? { model: options.model, thinking: options.thinking ?? "medium" };
       const effort = options.effort ?? effortFor();
       const route = await effort.childRoute?.(brief, configured, { context: options.task, signal }).catch(() => undefined);
       const attempt = async (model: string | undefined, thinking: string) => {
-        const left = deadlineAt - Date.now();
         signal.throwIfAborted();
-        if (left <= 0) throw new Error("The parent's time is up.");
         const routed = route && model === route.model && thinking === route.thinking;
         live.annotate({ model, thinking, route: routed ? routeLabel(route) : undefined, routedFrom: routed ? profileLabel(route.from) : undefined, note: routed ? routeLabel(route) : undefined, noteKind: "info" });
         return runPiAgent({
@@ -159,10 +153,7 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
         thinking,
         tools: [...new Set([...tools.filter((tool) => tool !== DELEGATE_TOOL && tool !== EXPERT_TOOL), ...(childDesk ? childDesk.tools().filter((tool) => !PEER_TOOLS.includes(tool)) : [])])],
         mcpTools,
-        timeoutMs: left,
         signal,
-        time: undefined,
-        wrapUpAtMs: Math.floor(left * 0.85),
         delegationQuota: undefined,
         onChildRun: undefined,
         onEvent: live.onEvent,
@@ -172,7 +163,7 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
       };
       let result = await attempt(route?.model ?? configured.model, route?.thinking ?? configured.thinking);
       let retried = false;
-      if (route && (route.level === "simple" || route.level === "trivial") && fellShort(result) && !signal.aborted && deadlineAt - Date.now() >= 60_000) {
+      if (route && (route.level === "simple" || route.level === "trivial") && fellShort(result) && !signal.aborted) {
         retried = true;
         result = await attempt(configured.model, configured.thinking);
       }
@@ -180,7 +171,7 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
       update(final);
       return final;
     } catch (error) {
-      const final: AgentRun = { ...live.current(), edited: edits.list(), status: Date.now() >= deadlineAt ? "timeout" : signal.aborted ? "cancelled" : "failed", error: (error as Error).message, finishedAt: new Date().toISOString(), note: undefined, noteKind: undefined };
+      const final: AgentRun = { ...live.current(), edited: edits.list(), status: signal.aborted ? "cancelled" : "failed", error: (error as Error).message, finishedAt: new Date().toISOString(), note: undefined, noteKind: undefined };
       update(final);
       return final;
     } finally {
@@ -192,14 +183,12 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
   quota.consults ??= 0;
   const consultations = new Map<string, AbortController>();
   const consult = async (question: string, signal: AbortSignal): Promise<{ ok: boolean; text: string }> => {
-    const left = Math.min(EXPERT_TIMEOUT_MS, deadlineAt - Date.now());
-    if (left < 30_000) return { ok: false, text: "Too little of your time is left to consult; carry on with your best reading." };
     // The oracle resolves the expert (its session model when settings name none); settings alone, then the worker's own, without it.
     const settled = options.expert ?? expertProfile(config);
     const expert = { model: settled.model ?? options.model, thinking: settled.thinking };
     const expertId = randomUUID();
-    const base: AgentRun = { runId: expertId, parentRunId: id, depth: 2, taskId: agent.taskId, domain: agent.domain, role: "reviewer", instruction: question, stepInstruction: options.task, status: "running", endsAt: Date.now() + left, output: "", attempts: 1, startedAt: new Date().toISOString(), thinking: expert.thinking, ...(expert.model ? { model: expert.model } : {}), note: "expert consult", noteKind: "info" };
-    const live = createLiveRun(base, { onUpdate: update, timeoutMs: left }, new EditLog(options.cwd));
+    const base: AgentRun = { runId: expertId, parentRunId: id, depth: 2, taskId: agent.taskId, domain: agent.domain, role: "reviewer", instruction: question, stepInstruction: options.task, status: "running", output: "", attempts: 1, startedAt: new Date().toISOString(), thinking: expert.thinking, ...(expert.model ? { model: expert.model } : {}), note: "expert consult", noteKind: "info" };
+    const live = createLiveRun(base, { onUpdate: update }, new EditLog(options.cwd));
     update(base);
     let final: AgentRun;
     try {
@@ -212,8 +201,6 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
         mcpTools: [],
         ...(expert.model ? { model: expert.model } : {}),
         thinking: expert.thinking,
-        timeoutMs: left,
-        wrapUpAtMs: Math.floor(left * 0.8),
         ...(options.stallTimeoutMs !== undefined ? { stallTimeoutMs: options.stallTimeoutMs } : {}),
         ...(options.toolStallTimeoutMs !== undefined ? { toolStallTimeoutMs: options.toolStallTimeoutMs } : {}),
         signal,
@@ -275,7 +262,6 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
     const results = await Promise.all(runs);
     return { ok: true, text: JSON.stringify(results.map((child) => ({ runId: child.runId, status: child.status, report: child.output.slice(0, 12_000), reportPath: join(dataRoot(detectProjectRoot(options.cwd, CONFIG_DIR_NAME), CONFIG_DIR_NAME), "delegations", `${child.runId}.json`), error: child.error, usage: child.usage }))) };
   }, () => controller.abort()).catch(async (error) => {
-    clearTimeout(deadline);
     if (ownedDesk) await ownedDesk.close();
     pool.users -= 1;
     if (pool.users === 0) pools.delete(key);
@@ -286,25 +272,17 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
   return {
     tools: desk ? [...new Set([...tools, ...desk.tools()])] : tools,
     mcpTools,
-    env: { ...options.env, ...(desk ? desk.env(parentDeskId) : {}), [AGENT_ENV]: JSON.stringify({ ...policy, tools: desk ? [...new Set([...tools, ...desk.tools()])] : tools }), [DELEGATION_ENV]: JSON.stringify({ address: server.address, token, timeoutMs: options.timeoutMs }) },
-    note: `${consults ? `When you are stuck on a hard step after a real attempt, or about to make a choice you are unsure of (a tricky algorithm, a subtle bug, an unfamiliar API), ${EXPERT_TOOL} asks a stronger model for advice, at most ${MAX_CONSULTS} times; it reads the repository and answers, you still do the work. ` : ""}${canDelegate(agent, quota.used) ? `Work directly when you can finish the brief yourself. Use ${DELEGATE_TOOL} only for useful, separable work with disjoint files, at most five children total; children share your remaining time and cannot delegate further. Integrate and verify their work yourself. ` : ""}Use codemode for concise parallel calls, inspect failures, and return only useful evidence.${desk?.usesClaims ? " Before edit/write, claim_file; handover_file when finished. Release files before delegating or waiting." : ""}`,
+    env: { ...options.env, ...(desk ? desk.env(parentDeskId) : {}), [AGENT_ENV]: JSON.stringify({ ...policy, tools: desk ? [...new Set([...tools, ...desk.tools()])] : tools }), [DELEGATION_ENV]: JSON.stringify({ address: server.address, token }) },
+    note: `${consults ? `When you are stuck on a hard step after a real attempt, or about to make a choice you are unsure of (a tricky algorithm, a subtle bug, an unfamiliar API), ${EXPERT_TOOL} asks a stronger model for advice, at most ${MAX_CONSULTS} times; it reads the repository and answers, you still do the work. ` : ""}${canDelegate(agent, quota.used) ? `Work directly when you can finish the brief yourself. Use ${DELEGATE_TOOL} only for useful, separable work with disjoint files, at most five children total; children cannot delegate further. Integrate and verify their work yourself. ` : ""}Use codemode for concise parallel calls, inspect failures, and return only useful evidence.${desk?.usesClaims ? " Before edit/write, claim_file; handover_file when finished. Release files before delegating or waiting." : ""}`,
     onStart: (handle: Parameters<NonNullable<PiRunOptions["onStart"]>>[0]) => {
       desk?.attach(parentDeskId, { runId: id, steer: handle.steer, annotate: () => {} });
       options.onStart?.(handle);
     },
     get children() { return [...children.values()]; },
-    pause() { clearTimeout(deadline); },
-    extend(ms: number, reset = false) {
-      deadlineAt = reset ? Date.now() + ms : deadlineAt + ms;
-      clearTimeout(deadline);
-      if (timeController.signal.aborted) timeController = new AbortController();
-      deadline = setTimeout(() => timeController.abort(), Math.max(1, deadlineAt - Date.now()));
-    },
     async close() {
       if (closed) return;
       closed = true;
       controller.abort();
-      clearTimeout(deadline);
       await Promise.allSettled([...pending]);
       await server.close();
       if (ownedDesk) { ownedDesk.release(parentDeskId, () => "Parent finished; re-read before editing."); await ownedDesk.close(); }

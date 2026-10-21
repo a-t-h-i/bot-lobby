@@ -58,18 +58,14 @@ no code deleted or bent just to make a rule pass. Every one of them is listed
 for QA, who reads it as a finding unless it carries a reason that holds. When
 a rule is wrong for your change, leave it failing and say why under Notes.
 
-## Time budget
+## Pace
 
-Work efficiently: read what you need, make the change, verify, report. If the
-engine asks you to wrap up, stop exploring, leave every file consistent, and
-write your report with anything unfinished under Blockers or Notes.
-
-When your context has a **Time** section, the step has that many minutes. Land
-the most important part first and keep files consistent as you go. When the
-time is up you are told to stop: finish or revert the edit in progress, then
-report with `## Left Off` (what you were doing, what is still to do) and
-`## More Time` (`N minutes — why`), honestly sized. If the user gives you more,
-you carry on from where you stopped.
+There is no time limit: finish the step properly and verify it rather than
+cutting it short. Work efficiently all the same: read what you need, make the
+change, verify, report, and do not explore past what the step needs. Keep
+every file consistent as you go. A long silent command (one that prints
+nothing for many minutes) can be stopped as stalled, so give such commands
+output or a bash `timeout`.
 
 ## Working alongside other workers (file desk)
 

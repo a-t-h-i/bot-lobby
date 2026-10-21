@@ -184,11 +184,11 @@ async function drain(queue: QuickFixQueue): Promise<void> {
 test("a quick fix the classifier judges a task is held, not run; r runs it anyway, t moves it to a task", async () => {
   const root = mkdtempSync(join(tmpdir(), "bl-qf-"));
   const runs: string[] = [];
-  const runner: ProcessRunner = async (_args, options) => (runs.push(options.prompt ?? ""), { exitCode: 0, stdout: reply("## Done\nx"), stderr: "", killed: false, timedOut: false });
+  const runner: ProcessRunner = async (_args, options) => (runs.push(options.prompt ?? ""), { exitCode: 0, stdout: reply("## Done\nx"), stderr: "", killed: false });
   const sizes: Array<[number, number]> = [[3, 0.9], [0.2, 0.9], [3, 0.6], [3, 0.95]];
   const fetch: FetchLike = async (url, init) => scriptedJev({ size: sizes.shift() })(url, init);
   const logged: string[] = [];
-  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low", timeoutMs: 60_000 }), runProcess: runner, classifier: jev(fetch), feed: { log: (_source: string, text: string) => logged.push(text), step: () => {}, end: () => {}, thought: () => {}, liveThought: () => {}, settleThought: () => {} } as never });
+  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), runProcess: runner, classifier: jev(fetch), feed: { log: (_source: string, text: string) => logged.push(text), step: () => {}, end: () => {}, thought: () => {}, liveThought: () => {}, settleThought: () => {} } as never });
   const big = queue.submit("rewrite the auth system to use OAuth");
   await drain(queue);
   assert.equal(big.status, "held");
@@ -221,8 +221,8 @@ test("a quick fix the classifier judges a task is held, not run; r runs it anywa
 test("a large quick fix that is still one engineer's work runs instead of being held", async () => {
   const root = mkdtempSync(join(tmpdir(), "bl-qf-solo-"));
   const runs: string[] = [];
-  const runner: ProcessRunner = async (_args, options) => (runs.push(options.prompt ?? ""), { exitCode: 0, stdout: reply("## Done\nx"), stderr: "", killed: false, timedOut: false });
-  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low", timeoutMs: 60_000 }), runProcess: runner, classifier: jev(scriptedJev({ size: [3, 0.95], solo: 0.9 })) });
+  const runner: ProcessRunner = async (_args, options) => (runs.push(options.prompt ?? ""), { exitCode: 0, stdout: reply("## Done\nx"), stderr: "", killed: false });
+  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), runProcess: runner, classifier: jev(scriptedJev({ size: [3, 0.95], solo: 0.9 })) });
   const page = queue.submit("build a realistic three.js hourglass timer in one html file");
   await drain(queue);
   assert.equal(page.status, "success", "large, but one file one engineer can build");

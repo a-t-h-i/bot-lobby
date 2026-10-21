@@ -32,7 +32,6 @@ export const AGENT_LABELS: Record<AgentKind, string> = {
 export const FIELD_LABELS = {
   model: "Model",
   thinking: "Effort",
-  timeout: "Time limit",
   instructions: "Instructions",
 } as const
 
@@ -62,6 +61,7 @@ export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhig
 /** The page's groups. */
 export const GROUP_TITLES = {
   agents: "Agents",
+  grants: "Tools & skills",
   workflow: "Workflow",
   lint: "Linting",
   lobby: "Lobby",
@@ -69,6 +69,46 @@ export const GROUP_TITLES = {
   appearance: "Appearance",
   notifications: "Notifications",
   install: "Install as app",
+} as const
+
+/** Agents that only read: they may call only the MCP tools their server marks read-only. */
+export const READ_ONLY_AGENTS: ReadonlySet<AgentKind> = new Set(["scout", "researcher", "planner"])
+
+/** The Tools & skills section's copy. */
+export const GRANTS = {
+  intro: "Choose what each agent may use beyond its own tools. MCP tools come from the servers pi has connected; skills are the ones pi finds in your skill folders and packages. Children an agent delegates to get the same grants. Every change saves at once.",
+  agents: "Agents",
+  cardLabel: "tools and skills",
+  tools: "MCP tools",
+  toolsHelp: "Granted tools are the only MCP tools this agent can call, directly or from codemode.",
+  readOnlyHelp: "This agent only reads, so it can call only tools their server marks read-only.",
+  qaHelp: "QA's tests may use any granted tool; the QA gate, which only reads, calls only the read-only ones.",
+  blockedHelp: "This agent only reads; the server does not mark this tool read-only.",
+  filter: "Filter tools",
+  looking: "Asking pi…",
+  noServers: "pi has no MCP servers connected. Add one, then reopen Settings:",
+  unknownServer: "other",
+  readOnly: "read-only",
+  writes: "writes",
+  notConnected: "not connected",
+  notConnectedHelp: "Granted, but its server is not connected now. It works again once the server is back.",
+  addLabel: "Grant a tool by its exact name",
+  add: "Grant",
+  badName: "A tool name reads mcp__server__tool, such as mcp__github__get_issue.",
+  noTools: "no MCP tools",
+  skills: "Skills",
+  skillsHelp: "An agent sees each granted skill's name and description, and reads its instructions when the work calls for them.",
+  sessionSkills: "this session's",
+  masterSkills: "The oracle is this pi session, so it uses the skills pi loads for it (pi's own skill settings).",
+  everySkill: "Every skill pi finds",
+  everySkillHelp: "Off: only the skills ticked below.",
+  allSkills: "all skills",
+  noSkills: "no skills",
+  noSkillsFound: "pi finds no skills. Put one in ~/.pi/agent/skills/ or the project's .pi/skills/ or .agents/skills/.",
+  notFound: "not found",
+  skillMissingHelp: "Granted, but pi no longer finds this skill.",
+  noneWarning: "This agent gets no skills at all.",
+  edit: "Tools & skills",
 } as const
 
 /** The lobby's on/off switches. `panel:*` are the Lobby tab's panes. */

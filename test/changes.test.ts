@@ -131,9 +131,9 @@ test("the QA gate and the Master are told which changes are planned, a quick fix
       const edit: PiStreamEvent = { type: "tool_execution_start", toolName: "edit", args: { path: "src/a.ts" } };
       options.onEvent?.(edit);
       writeFileSync(join(dir, "src/a.ts"), "export const a = 1;\n");
-      return { exitCode: 0, stdout: reply("## Completed\nAdded a.\n\n## Files Changed\n- src/a.ts — added a"), stderr: "", killed: false, timedOut: false };
+      return { exitCode: 0, stdout: reply("## Completed\nAdded a.\n\n## Files Changed\n- src/a.ts — added a"), stderr: "", killed: false };
     }
-    return { exitCode: 0, stdout: reply("## Verdict\nPASS\n\n## Verification\n- `npm test` — passing"), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: reply("## Verdict\nPASS\n\n## Verification\n- `npm test` — passing"), stderr: "", killed: false };
   };
   const deps: WorkflowDeps = { root: dir, configDir: ".pi", cwd: dir, config: DEFAULT_CONFIG, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess };
   ensureProjectStructure(dir, ".pi");
@@ -172,7 +172,7 @@ test("the QA gate and the Master are told which changes are planned, a quick fix
 
 test("a task already under way before provenance existed is not misread", async () => {
   const dir = gitRepo();
-  const runProcess: ProcessRunner = async () => ({ exitCode: 0, stdout: reply("## Verdict\nPASS\n\n## Verification\n- `npm test` — passing"), stderr: "", killed: false, timedOut: false });
+  const runProcess: ProcessRunner = async () => ({ exitCode: 0, stdout: reply("## Verdict\nPASS\n\n## Verification\n- `npm test` — passing"), stderr: "", killed: false });
   const deps: WorkflowDeps = { root: dir, configDir: ".pi", cwd: dir, config: DEFAULT_CONFIG, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess };
   ensureProjectStructure(dir, ".pi");
   const task = createTask("TASK-1", "Add a");
@@ -204,7 +204,7 @@ test("a task from before start commits were recorded is reviewed from the last c
   const prompts: string[] = [];
   const runProcess: ProcessRunner = async (args) => {
     prompts.push(readFileSync(args[args.indexOf("--append-system-prompt") + 1]!, "utf8"));
-    return { exitCode: 0, stdout: reply("## Verdict\nPASS\n\n## Verification\n- `npm test` — passing"), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: reply("## Verdict\nPASS\n\n## Verification\n- `npm test` — passing"), stderr: "", killed: false };
   };
   const deps: WorkflowDeps = { root: dir, configDir: ".pi", cwd: dir, config: DEFAULT_CONFIG, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess };
   ensureProjectStructure(dir, ".pi");

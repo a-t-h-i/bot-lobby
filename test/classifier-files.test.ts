@@ -202,7 +202,7 @@ function recorder(text: string, seen: Array<{ tools: string; system: string; tas
   return async (args, options) => {
     const file = args[args.indexOf("--append-system-prompt") + 1];
     seen.push({ tools: args[args.indexOf("--tools") + 1] ?? "", system: file ? readFileSync(file, "utf8") : "", task: options.prompt ?? "" });
-    return { exitCode: 0, stdout: reply(text), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: reply(text), stderr: "", killed: false };
   };
 }
 
@@ -223,14 +223,14 @@ test("scouts and workers start with their likely files and may look more up; the
 test("a quick fix and a planning round get their likely files too", async () => {
   const root = tempDir();
   const seen: Array<{ tools: string; system: string; task: string }> = [];
-  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low", timeoutMs: 60_000 }), runProcess: recorder("## Done\nx", seen), hints: HINTS });
+  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), runProcess: recorder("## Done\nx", seen), hints: HINTS });
   queue.submit("rename getUser");
   for (let i = 0; i < 20 && queue.running; i++) await new Promise((resolve) => setTimeout(resolve, 5));
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.match(seen[0]!.task, /^Task: rename getUser\n\n## Likely files/);
   assert.ok(seen[0]!.tools.split(",").includes(FIND_FILES_TOOL));
 
-  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: ["qa"], profile: () => ({ thinking: "high", timeoutMs: 60_000 }), runProcess: recorder("## Status\nREADY\n## Plan\n1. x", seen), hints: HINTS });
+  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: ["qa"], profile: () => ({ thinking: "high" }), runProcess: recorder("## Status\nREADY\n## Plan\n1. x", seen), hints: HINTS });
   await session.send("dark mode");
   const round = seen.slice(1);
   assert.equal(round.length, 2, "QA, then the oracle");

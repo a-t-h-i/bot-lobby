@@ -33,7 +33,7 @@ function makeDeps(overrides: Partial<WorkflowDeps> = {}): WorkflowDeps {
     ask: async () => undefined,
     choose: async () => undefined,
     notify: () => {},
-    runProcess: async () => ({ exitCode: 0, stdout: review(PASS), stderr: "", killed: false, timedOut: false }),
+    runProcess: async () => ({ exitCode: 0, stdout: review(PASS), stderr: "", killed: false }),
     ...overrides,
   };
 }
@@ -81,7 +81,7 @@ test("qa runs the gate, records the verdict, and reports a pass", async () => {
 });
 
 test("a failing QA gate tells the Master to send work back", async () => {
-  const runner: ProcessRunner = async () => ({ exitCode: 0, stdout: review(FAIL), stderr: "", killed: false, timedOut: false });
+  const runner: ProcessRunner = async () => ({ exitCode: 0, stdout: review(FAIL), stderr: "", killed: false });
   const deps = makeDeps({ runProcess: runner });
   withTask(deps);
   const result = await act(deps, { action: "qa" });
@@ -107,7 +107,7 @@ test("qa is accepted from implementing and transitions to reviewing, which every
 });
 
 test("a failing QA gate iterates until the review limit, then blocks", async () => {
-  const runner: ProcessRunner = async () => ({ exitCode: 0, stdout: review(FAIL), stderr: "", killed: false, timedOut: false });
+  const runner: ProcessRunner = async () => ({ exitCode: 0, stdout: review(FAIL), stderr: "", killed: false });
   const deps = makeDeps({ runProcess: runner });
   withTask(deps, { state: "implementing" });
   const first = await act(deps, { action: "qa" });
@@ -225,7 +225,7 @@ function reviewer(outputs: string[], prompts: string[] = []): ProcessRunner {
     const file = args[args.indexOf("--append-system-prompt") + 1];
     if (file) prompts.push(readFileSync(file, "utf8"));
     const text = outputs[Math.min(index++, outputs.length - 1)]!;
-    return { exitCode: 0, stdout: review(text), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: review(text), stderr: "", killed: false };
   };
 }
 

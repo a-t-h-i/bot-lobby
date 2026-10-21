@@ -16,7 +16,7 @@ function reply(text: string): string {
 }
 
 function outcome(stdout: string, overrides: Partial<ProcessOutcome> = {}): ProcessOutcome {
-  return { exitCode: 0, stdout, stderr: "", killed: false, timedOut: false, ...overrides };
+  return { exitCode: 0, stdout, stderr: "", killed: false, ...overrides };
 }
 
 function request(overrides: Partial<AgentRequest> = {}): AgentRequest {
@@ -26,7 +26,6 @@ function request(overrides: Partial<AgentRequest> = {}): AgentRequest {
     role: "scout",
     instruction: "Inspect",
     context: { task: "x" },
-    timeoutMs: 120_000,
     cwd: process.cwd(),
     ...overrides,
   };
@@ -58,15 +57,15 @@ test("retries are bounded and report the last failure", async () => {
   assert.equal(run.attempts, 3);
 });
 
-test("a spent deadline is never retried and never reported as success", async () => {
+test("a stopped agent is never retried and never reported as success", async () => {
   let calls = 0;
-  const slow: ProcessRunner = async () => {
+  const stopped: ProcessRunner = async () => {
     calls += 1;
-    return outcome(reply("partial"), { killed: true, timedOut: true });
+    return outcome(reply("partial"), { killed: true });
   };
-  const run = await runAgent(request({ retries: 1 }), slow);
-  assert.equal(calls, 1, "a deadline timeout would only time out again");
-  assert.equal(run.status, "timeout");
+  const run = await runAgent(request({ retries: 1 }), stopped);
+  assert.equal(calls, 1, "a stop is the user's: it is not retried");
+  assert.equal(run.status, "cancelled");
   assert.equal(run.output, "partial", "partial output is kept");
 });
 
@@ -92,7 +91,7 @@ test("cancellation is never retried", async () => {
       options.signal?.addEventListener("abort", () => resolve(outcome("", { killed: true })));
     });
   };
-  const pending = runAgent(request({ retries: 3, timeoutMs: 60_000 }), hanging);
+  const pending = runAgent(request({ retries: 3 }), hanging);
   cancelAllRuns();
   const run = await pending;
   assert.equal(calls, 0, "cancellation during host setup never starts a process");

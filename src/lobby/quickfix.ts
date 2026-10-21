@@ -89,9 +89,10 @@ export interface SubmitOptions {
 export interface QuickFixProfile {
   model?: string;
   thinking: string;
-  timeoutMs: number;
   instructions?: string;
   mcpTools?: string[];
+  /** Skill names it may load; absent keeps every skill pi finds. */
+  skills?: string[];
   /** False when its settings turn the agent's auto-compaction off. */
   autoCompact?: boolean;
   /** Where the job goes when its model runs out of usage or is unavailable. */
@@ -101,7 +102,7 @@ export interface QuickFixDeps {
   cwd: string;
   root: string;
   configDir: string;
-  /** Model, thinking and time limit for the next job, read from settings at start time. */
+  /** Model, thinking and grants for the next job, read from settings at start time. */
   profile: () => QuickFixProfile;
   stallTimeoutMs?: number;
   toolStallTimeoutMs?: number;
@@ -355,7 +356,7 @@ export class QuickFixQueue {
             if (child.status !== "running") this.deps.feed?.end(child.runId, child.status !== "success");
             this.changed();
           },
-          timeoutMs: profile.timeoutMs,
+          ...(profile.skills ? { skills: profile.skills } : {}),
           signal: controller.signal,
           stallTimeoutMs: this.deps.stallTimeoutMs,
           toolStallTimeoutMs: this.deps.toolStallTimeoutMs,

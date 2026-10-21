@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 /**
  * Reviewing pull requests from the Git tab. A read-only agent (on QA's model,
- * thinking and time limit) gets the pull request's description, changed files
+ * thinking and grants) gets the pull request's description, changed files
  * and diff from `gh`, may read the repository for context, and writes a
  * review: verdict, summary, findings, tests, questions. Jev can read a pull
  * request first, in a moment, and say whether a full review is worth its
@@ -74,7 +74,7 @@ export interface PullReviewDeps {
   root: string;
   configDir: string;
   exec: Exec;
-  /** QA's model, thinking and time limit, read as a review starts. */
+  /** QA's model, thinking and grants, read as a review starts. */
   profile: () => QuickFixProfile;
   stallTimeoutMs?: number;
   toolStallTimeoutMs?: number;
@@ -285,7 +285,7 @@ export class PullReviews {
           if (child.status !== "running") this.deps.feed?.end(child.runId, child.status !== "success");
           this.deps.onChange?.();
         },
-        timeoutMs: profile.timeoutMs,
+        ...(profile.skills ? { skills: profile.skills } : {}),
         signal,
         stallTimeoutMs: this.deps.stallTimeoutMs,
         toolStallTimeoutMs: this.deps.toolStallTimeoutMs,

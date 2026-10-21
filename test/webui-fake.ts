@@ -14,6 +14,7 @@ export function fakeWebService(feed = new LobbyFeed()): LobbyService {
     masterBusy: () => false,
     models: () => [{ id: "mock/model", label: "Mock Model", thinkingLevels: ["low", "medium", "high"] }],
     classifierModels: () => [{ id: "openrouter/liquid/d1", label: "Liquid D1" }],
+    grants: () => ({ mcpTools: [{ name: "mcp__github__get_issue", server: "github", description: "Read an issue.", readOnly: true }], skills: [{ name: "pdf-tools", description: "Read PDFs.", path: "/skills/pdf-tools/SKILL.md" }] }),
     issuesEnabled: () => false,
     workspace: () => ({ name: "bot-lobby", branch: "main" }),
     zen: () => ({ runs: [] }),

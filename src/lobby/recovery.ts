@@ -16,7 +16,6 @@
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { loadTask, ownedTask, saveTask } from "../state/persistence.ts";
 import { resolvePhaseTiming } from "../state/phase-timing.ts";
-import { updateBudget } from "../state/budget.ts";
 import { clearStaleRuns } from "../state/work-time.ts";
 import { livePresence } from "../state/presence.ts";
 import {
@@ -59,8 +58,8 @@ const INTERRUPTED_DECISION = "pi stopped unexpectedly; the task carried on in th
 
 /**
  * Clear what the stopped process left marked as under way on a task: the
- * questions it was waiting on (they no longer wait), the time given to the
- * steps it was running, and the runs it noted as active. A decision records
+ * questions it was waiting on (they no longer wait) and the runs it noted as
+ * active. A decision records
  * the stop, so the task's history says what happened.
  */
 export function settleInterrupted(root: string, configDir: string, taskId: string, now = new Date(), note = INTERRUPTED_DECISION): void {
@@ -71,13 +70,6 @@ export function settleInterrupted(root: string, configDir: string, taskId: strin
   task.decisions.push({ domain: "master", text: note, createdAt: at });
   task.updatedAt = at;
   saveTask(root, configDir, task);
-  updateBudget(root, configDir, taskId, (budget) => {
-    for (const allotment of budget.allotments) {
-      if (allotment.endedAt) continue;
-      allotment.endedAt = at;
-      allotment.outcome = "stopped";
-    }
-  });
   clearStaleRuns(root, configDir, taskId);
 }
 

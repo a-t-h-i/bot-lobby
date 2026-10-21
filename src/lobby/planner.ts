@@ -139,7 +139,7 @@ export interface PlannerDeps {
   configDir: string;
   /** The oracle chairing the panel (the Planner settings entry). */
   profile: () => QuickFixProfile;
-  /** A seat's model, thinking and time limit; the oracle's profile when absent. */
+  /** A seat's model, thinking and grants; the oracle's profile when absent. */
   memberProfile?: (member: PanelMember) => QuickFixProfile;
   /** Seats on the panel when the session starts; every seat when absent. */
   panel?: readonly PanelMember[];
@@ -1015,7 +1015,7 @@ export class PlanningSession {
             if (child.status !== "running") this.deps.feed?.end(child.runId, child.status !== "success");
             this.deps.onChange?.();
           },
-          timeoutMs: profile.timeoutMs,
+          ...(profile.skills ? { skills: profile.skills } : {}),
           signal,
           stallTimeoutMs: this.deps.stallTimeoutMs,
           toolStallTimeoutMs: this.deps.toolStallTimeoutMs,

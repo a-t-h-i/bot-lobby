@@ -29,9 +29,9 @@ function fakeRunner(text: string, events: PiStreamEvent[] = [], seen: Array<{ ar
   return (args, options) => {
     seen.push({ args, options });
     for (const event of events) options.onEvent?.(event);
-    if (!hang) return Promise.resolve({ exitCode: 0, stdout: reply(text), stderr: "", killed: false, timedOut: false } satisfies ProcessOutcome);
+    if (!hang) return Promise.resolve({ exitCode: 0, stdout: reply(text), stderr: "", killed: false } satisfies ProcessOutcome);
     return new Promise((resolve) => {
-      options.signal?.addEventListener("abort", () => resolve({ exitCode: 1, stdout: "", stderr: "", killed: true, timedOut: false }), { once: true });
+      options.signal?.addEventListener("abort", () => resolve({ exitCode: 1, stdout: "", stderr: "", killed: true }), { once: true });
     });
   };
 }
@@ -165,7 +165,7 @@ test("quick fixes run one at a time with full tools and land in metrics", async 
   const events: PiStreamEvent[] = [{ type: "turn_start" }, { type: "tool_execution_start", toolName: "edit", args: { path: "src/a.ts" } }, { type: "thought", text: "tiny change" }];
   const queue = new QuickFixQueue({
     cwd: root, root, configDir: ".pi", feed,
-    profile: () => ({ model: "p/fast", thinking: "low", timeoutMs: 60_000, instructions: "keep it tiny" }),
+    profile: () => ({ model: "p/fast", thinking: "low", instructions: "keep it tiny" }),
     runProcess: fakeRunner("## Done\nRenamed it.", events, seen),
   });
   const first = queue.submit("rename foo to bar\nin a.ts");
@@ -196,7 +196,7 @@ test("quick fixes run one at a time with full tools and land in metrics", async 
 
 test("a running quick fix can be cancelled and a queued one is dropped", async () => {
   const root = tempRoot();
-  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low", timeoutMs: 60_000 }), runProcess: fakeRunner("", [], [], true) });
+  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), runProcess: fakeRunner("", [], [], true) });
   const first = queue.submit("slow one");
   const second = queue.submit("next one");
   await settle();
@@ -276,7 +276,7 @@ function panelRunner(answers: Record<string, string | undefined>, seen: Array<{ 
     const who = /You are (DEV|DESIGN|QA|RESEARCH) on the planning panel/.exec(prompt)?.[1] ?? "ORACLE";
     seen.push({ who, args, prompt });
     const text = answers[who];
-    if (text === undefined) return Promise.resolve({ exitCode: 1, stdout: "", stderr: `${who} crashed`, killed: false, timedOut: false });
+    if (text === undefined) return Promise.resolve({ exitCode: 1, stdout: "", stderr: `${who} crashed`, killed: false });
     return fakeRunner(text)(args, options);
   };
 }
@@ -295,8 +295,8 @@ test("a panel round asks every seat on its own model, then lets the oracle fold 
   const session = new PlanningSession(
     {
       cwd: root, root, configDir: ".pi",
-      profile: () => ({ model: "p/oracle", thinking: "high", timeoutMs: 60_000 }),
-      memberProfile: (member) => ({ model: models[member], thinking: "medium", timeoutMs: 60_000 }),
+      profile: () => ({ model: "p/oracle", thinking: "high" }),
+      memberProfile: (member) => ({ model: models[member], thinking: "medium" }),
       panel: ["backend", "qa", "researcher"],
       runProcess: panelRunner(answers, seen),
     },
@@ -351,7 +351,7 @@ test("a seat that fails does not sink the round, but keeps the plan from READY",
   const root = tempRoot();
   const seen: Array<{ who: string; args: string[]; prompt: string }> = [];
   const answers: Record<string, string | undefined> = { DEV: "## Status\nREADY", ORACLE: "## Status\nREADY\n## Plan\n1. x" };
-  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high", timeoutMs: 60_000 }), panel: ["backend", "qa"], runProcess: panelRunner(answers, seen) });
+  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high" }), panel: ["backend", "qa"], runProcess: panelRunner(answers, seen) });
   await session.send("idea");
   assert.deepEqual(session.members.map((member) => [member.member, member.status]), [["backend", "done"], ["qa", "failed"]]);
   assert.match(seen.at(-1)!.prompt, /### QA — no answer this round \(QA crashed\)/);
@@ -366,8 +366,8 @@ test("a seat that fails does not sink the round, but keeps the plan from READY",
 
 test("a failed oracle keeps the conversation and reports the error", async () => {
   const root = tempRoot();
-  const runner: ProcessRunner = async () => ({ exitCode: 1, stdout: "", stderr: "boom", killed: false, timedOut: false });
-  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high", timeoutMs: 60_000 }), panel: [], runProcess: runner });
+  const runner: ProcessRunner = async () => ({ exitCode: 1, stdout: "", stderr: "boom", killed: false });
+  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high" }), panel: [], runProcess: runner });
   await session.send("idea");
   assert.match(session.error!, /the oracle's part of the round failed — boom/);
   assert.equal(session.status, "idle");
@@ -384,7 +384,7 @@ test("line comments wait for the answers when questions are open, and start a ro
   const rounds: Array<[number, boolean]> = [];
   const session = new PlanningSession({
     cwd: root, root, configDir: ".pi", panel: [],
-    profile: () => ({ thinking: "high", timeoutMs: 60_000 }),
+    profile: () => ({ thinking: "high" }),
     runProcess: panelRunner(answers, seen),
     onRound: (current) => rounds.push([current.turns, current.awaitingAnswers]),
   });
@@ -415,7 +415,7 @@ test("a round that fails after you answered never puts the answered questions ba
     ORACLE: "## Status\nGRILLING\n## Questions\n1. [DEV] REST or RPC?\n   - REST (Recommended) — follows the API\n   - RPC — one endpoint\n## Plan\n### Steps\n1. Build it",
   };
   const rounds: boolean[] = [];
-  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: [], profile: () => ({ thinking: "high", timeoutMs: 60_000 }), runProcess: panelRunner(answers, seen), onRound: (current) => rounds.push(current.awaitingAnswers) });
+  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: [], profile: () => ({ thinking: "high" }), runProcess: panelRunner(answers, seen), onRound: (current) => rounds.push(current.awaitingAnswers) });
   await session.send("an API");
   assert.equal(session.awaitingAnswers, true);
 
@@ -447,7 +447,7 @@ test("the panel is never allowed to ask a question the user already settled, wha
     DEV: "## Status\nOPEN\n## Questions\n1. REST or RPC?",
     ORACLE: "## Status\nGRILLING\n## Questions\n1. [DEV] REST or RPC?\n2. [QA] Which browsers?\n## Plan\n1. x",
   };
-  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: ["backend"], feed, profile: () => ({ thinking: "high", timeoutMs: 60_000 }), runProcess: panelRunner(answers, seen) });
+  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: ["backend"], feed, profile: () => ({ thinking: "high" }), runProcess: panelRunner(answers, seen) });
   await session.send("an API");
   assert.deepEqual(session.questions.map((question) => question.text), ["REST or RPC?", "Which browsers?"]);
 
@@ -512,7 +512,7 @@ test("at the round limit the oracle settles the plan alone, and later replies on
   const grilling = "## Status\nGRILLING\n## Questions\n1. [DEV] REST or RPC?\n   - RPC — one endpoint\n   - REST (Recommended) — follows the API\n## Plan\n### Steps\n1. Build it\n### Assumptions\n- [QA] Evergreen";
   const answers: Record<string, string | undefined> = { DEV: "## Status\nOPEN\n## Questions\n1. REST or RPC?", ORACLE: grilling };
   let limit = 2;
-  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: ["backend"], maxRounds: () => limit, profile: () => ({ thinking: "high", timeoutMs: 60_000 }), runProcess: panelRunner(answers, seen) });
+  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: ["backend"], maxRounds: () => limit, profile: () => ({ thinking: "high" }), runProcess: panelRunner(answers, seen) });
   assert.equal(session.nextMode, "normal");
   await session.send("an API");
   assert.deepEqual(seen.map((call) => call.who), ["DEV", "ORACLE"]);
@@ -615,9 +615,9 @@ test("a finished quick fix commits only the files it edited, with its message", 
     options.onEvent?.({ type: "tool_execution_start", toolName: "write", args: { path: "a.txt" } } as PiStreamEvent);
     options.onEvent?.({ type: "tool_execution_start", toolName: "edit", args: { path: "mine.txt" } } as PiStreamEvent);
     writeFileSync(join(root, "a.txt"), "b\n");
-    return { exitCode: 0, stdout: reply("## Done\nChanged a.\n\n## Commit\nChange a to b"), stderr: "", killed: false, timedOut: false };
+    return { exitCode: 0, stdout: reply("## Done\nChanged a.\n\n## Commit\nChange a to b"), stderr: "", killed: false };
   };
-  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low", timeoutMs: 60_000 }), runProcess: runner, feed: { log: (_source: string, text: string) => logged.push(text), step: () => {}, end: () => {}, thought: () => {}, liveThought: () => {}, settleThought: () => {} } as never });
+  const queue = new QuickFixQueue({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), runProcess: runner, feed: { log: (_source: string, text: string) => logged.push(text), step: () => {}, end: () => {}, thought: () => {}, liveThought: () => {}, settleThought: () => {} } as never });
   const job = queue.submit("change a to b");
   for (let i = 0; i < 100 && !job.commit; i++) await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(git("log", "-1", "--format=%s", "--name-only").trim(), "Change a to b\n\na.txt", "its own file, its message");

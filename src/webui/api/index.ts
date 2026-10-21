@@ -21,7 +21,7 @@ import { plansDiscard, plansGet, plansStart } from "./plans.ts";
 import { gitCancelReview, gitJev, gitPull, gitPulls, gitReview } from "./git.ts";
 import { issuesCreate, issuesGet, issuesList } from "./issues.ts";
 import { sessionsAnswer, sessionsArchive, sessionsChat, sessionsList, sessionsMessage, sessionsRename, sessionsStart, sessionsStop, sessionsSwitch } from "./sessions.ts";
-import { settingsGet, settingsLinters, settingsSet } from "./settings.ts";
+import { settingsGet, settingsGrants, settingsLinters, settingsSet } from "./settings.ts";
 import { terminalClose, terminalInput, terminalList, terminalOpen, terminalResize } from "./terminal.ts";
 import { MAX_INPUT_CHARS } from "../terminal.ts";
 import { themesChoose, themesGet, themesRemove, themesRename, themesSave } from "./themes.ts";
@@ -385,6 +385,7 @@ function buildRoutes(): Record<string, Route> {
     run: (body, ctx) => settingsSet(body as { patch: Record<string, unknown> }, ctx),
   };
   routes["settings.linters"] = { schema: Empty, run: (_body, ctx) => settingsLinters(ctx) };
+  routes["settings.grants"] = { schema: Empty, run: (_body, ctx) => settingsGrants(ctx) };
   const ThemeId = Type.String({ minLength: 1, maxLength: 40 });
   const ThemeName = Type.String({ minLength: 1, maxLength: 200 });
   const ThemeVars = Type.Optional(Type.Record(Type.String({ maxLength: 60 }), Type.String({ maxLength: 400 })));
