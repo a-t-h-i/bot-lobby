@@ -66,6 +66,7 @@ export const GROUP_TITLES = {
   lint: "Linting",
   lobby: "Lobby",
   classifier: "Classifier",
+  harnesses: "Harnesses",
   appearance: "Appearance",
   notifications: "Notifications",
   install: "Install as app",
@@ -247,4 +248,46 @@ export const PAGE = {
   fullscreenHelp: "Hide the browser's own bars for this tab (F11 does the same).",
   fullscreenOn: "Exit fullscreen",
   fullscreenOff: "Go fullscreen",
+} as const
+
+/** Agents that can run on a third-party harness: every subagent but the planner, which lives in the pi session with the oracle. */
+export const HARNESS_AGENTS: ReadonlySet<AgentKind> = new Set(["designer", "backend", "qa", "scout", "researcher", "quickfix"])
+
+/** The built-in harness; agents run on pi unless their settings name another. */
+export const PI_HARNESS = "pi"
+
+/** Words for the harness picker on each agent and the Harnesses section. */
+export const HARNESS = {
+  label: "Harness",
+  piLabel: "pi",
+  piHelp: "Bot Lobby's own agent, with your pi logins",
+  missing: "not found",
+  model: "Model",
+  defaultModel: "Harness default",
+  defaultModelHelp: "Whatever the harness is set to use",
+  older: "older",
+  effortNote: "Applied when the agent offers effort levels in its session.",
+  agentNote: "Runs in this harness with Bot Lobby's prompts. It cannot ask you questions or use Bot Lobby's own tools (desk, board, ask_expert).",
+  intro: "Run any agent but the oracle and the planner on another coding agent. The oracle stays on pi and hands each step over: the harness gets the agent's role prompt, and its own login and models. Pick the harness per agent under Agents.",
+  installed: "Installed",
+  notFound: "Not found",
+  usedBy: "Used by",
+  unused: "No agent uses it yet",
+  binary: "Command",
+  binaryHelp: "The executable to start; empty uses the usual command on PATH.",
+  args: "Launch arguments",
+  argsHelp: "Added to every run, quoted as in a shell.",
+  argsAcpHelp: "The arguments that start the agent in ACP mode.",
+  home: "Home folder",
+  homeHelp: (env: string) => `Sets ${env} for its config and login; empty keeps its own.`,
+  provider: "Model provider",
+  providerHelp: "Who serves the models.",
+  compact: "Compact after",
+  compactHelp: "Tokens before it compacts an agent's context (10,000 to 2,000,000); empty keeps the harness's own. An agent with Auto-compact off never compacts.",
+  inject: "Inject Bot Lobby's prompts",
+  injectHelp: "Give it the agent's role prompt, knowledge and standards. Off sends the task and the report format only.",
+  custom: "Extra models",
+  customHelp: "Model ids it should also offer, separated by spaces.",
+  harnessPath: "Harness path",
+  harnessPathHelp: "Antigravity's localharness_external, when its ACP server does not find it itself.",
 } as const

@@ -5,7 +5,9 @@
 The web UI's look (colours, radii, shadows, control and dialog styles, the
 sidebar rail, the chat rows, the work log, the composer (its surface, footer controls and send button), the select
 fields and drop-down lists, the loading and status animations and the
-built-in colour themes) is adapted from T3 Code,
+built-in colour themes), and the third-party harness support (the model
+manifest, CLI flags, prompt injection and ACP handling behind Settings >
+Harnesses), is adapted from T3 Code,
 https://github.com/pingdotgg/t3code. No T3 Code package is a
 dependency; the styles and markup below were ported into this repository and
 rewired to bot-lobby's own data layer. Each adapted file starts with a comment
@@ -37,6 +39,15 @@ naming the file it came from.
 | `webui/src/app/TerminalDrawer.tsx` | `apps/web/src/components/ThreadTerminalDrawer.tsx` (the drawer, its floating toolbar and terminal list) |
 | `webui/src/tabs/lobby/InlineActivity.tsx` | `apps/web/src/components/chat/WorkLog.tsx` |
 | `src/webui/palette-core.ts` (the built-in themes) | `packages/shared/src/themePalettes.ts` (Blossom is their T3 Chat theme, renamed) |
+| `src/harness/model-manifest.json` (copied as is) | `apps/server/src/provider/model-manifest.json` |
+| `src/harness/catalog.ts` | `apps/server/src/provider/ClaudeModelCatalog.ts` (effort descriptors and maps), `CodexProvider.ts` (effort levels), `antigravityAuthSupport.ts` (`buildAntigravityAcpSpawnInput`) |
+| `src/harness/cli-args.ts` | `packages/shared/src/cliArgs.ts` (`tokenizeCliArgs`) |
+| `src/harness/instructions.ts` | `packages/provider-core/src/server/runtimeInstructions.ts`, `orchestrationInstructions.ts` (`t3AcpPromptWithInstructions`) |
+| `src/harness/codex.ts` | `apps/server/src/textGeneration/CodexTextGeneration.ts`, `apps/server/src/provider/codexLaunchArgs.ts` |
+| `src/harness/claude.ts` | `apps/server/src/textGeneration/ClaudeTextGeneration.ts`, `apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts` (auto-compact window) |
+| `src/harness/claude-sdk.ts` | `apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts` (Agent SDK query options) |
+| `src/harness/acp.ts` | `apps/server/src/provider/acp/AntigravityProtocol.ts` (permission answers), `packages/provider-acp/src/server/sessionConfig.ts` (session option categories) |
+| `src/schemas/harness.ts`, `webui/src/tabs/settings/HarnessesGroup.tsx` | `packages/contracts/src/settings.ts` (provider settings fields), `apps/web/src/components/settings/ProviderInstanceCard.tsx` |
 
 ```
 MIT License

@@ -9,6 +9,7 @@ import { runPiAgent, spawnPiProcess, type ProcessRunner, type RelayAsk } from ".
 import { ASK_ENV } from "../ask/relay.ts";
 import type { EffortRouter, RunProfileLike } from "../classifier/effort.ts";
 import { ASK_TOOL } from "../ask/types.ts";
+import type { HarnessRun } from "../schemas/harness.ts";
 
 export interface AgentContext {
   task: string;
@@ -75,6 +76,8 @@ export interface AgentRequest {
   route?: string;
   /** Lets the agent ask the user (ask_user_question, relayed through the master). */
   onAsk?: RelayAsk;
+  /** Run on this third-party harness instead of pi. */
+  harness?: HarnessRun;
 }
 
 /** The watchdog fields of an AgentRequest, taken from the workflow config. */
@@ -190,6 +193,7 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
       thinking: request.thinking,
       signal,
       ...(request.onAsk ? { onAsk: request.onAsk } : {}),
+      ...(request.harness ? { harness: request.harness } : {}),
       env: request.onAsk ? { ...request.env, [ASK_ENV]: "1" } : request.env,
       stallTimeoutMs: request.stallTimeoutMs,
       toolStallTimeoutMs: request.toolStallTimeoutMs,

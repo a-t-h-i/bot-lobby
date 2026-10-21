@@ -71,6 +71,7 @@ export async function runResearch(request: ResearchRequest, run: ProcessRunner =
       mcpTools: profile.mcpTools,
       ...(profile.skills ? { skills: profile.skills } : {}),
       ...(profile.autoCompact === false ? { autoCompact: false } : {}),
+      ...(profile.harness ? { harness: profile.harness } : {}),
       thinking: profile.thinking,
       cwd: request.cwd,
       signal: request.signal,

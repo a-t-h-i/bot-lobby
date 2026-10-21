@@ -295,3 +295,49 @@ test("Tools & skills grants each agent MCP tools and skills, and saves every tic
   await expect(scout.getByText("not connected", { exact: true })).toBeVisible();
   await expectNoSidewaysScroll(page);
 });
+
+test("an agent runs on a third-party harness with that harness's models, effort and compaction", { tag: "@theme" }, async ({ page, server }, info) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await gotoRoute(page, "#/settings", "Each agent's model and effort");
+  const card = page.locator('[data-slot="agent-row"]').filter({ hasText: "Backend" }).first();
+  // The oracle and the planner stay on pi: no harness picker on their cards.
+  await expect(page.locator('[data-slot="agent-row"]').filter({ hasText: "Master" }).first().getByRole("combobox", { name: "Master harness" })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Planner harness" })).toHaveCount(0);
+  await card.getByRole("combobox", { name: "Backend harness" }).click();
+  await expect(page.getByRole("option", { name: /Gemini CLI.*not found/ })).toBeVisible();
+  await page.getByRole("option", { name: /^Claude Code/ }).click();
+  await expect(card.getByRole("combobox", { name: "Backend harness" })).toContainText("Claude Code");
+  // The model list is Claude Code's own; Sonnet 4.6 has no Extra high, so the slider skips it.
+  await card.getByRole("combobox", { name: "Backend model" }).click();
+  await expect(page.getByRole("option", { name: /Claude Opus 5\.5/ })).toBeVisible();
+  await page.getByRole("option", { name: /Claude Sonnet 4\.6/ }).click();
+  await expect(card.getByRole("combobox", { name: "Backend model" })).toContainText("Claude Sonnet 4.6");
+  const slider = card.getByRole("slider", { name: "Backend effort" });
+  await slider.focus();
+  await page.keyboard.press("End");
+  await expect(card.locator('[data-slot="effort-value"]')).toHaveText("Max");
+  await page.keyboard.press("ArrowLeft");
+  await expect(card.locator('[data-slot="effort-value"]')).toHaveText("High");
+  await expect(card.getByRole("switch", { name: "Backend auto-compact" })).toBeChecked();
+  await card.screenshot({ path: info.outputPath("harness-agent.png") });
+  // Harnesses: the card says who uses it, and its compaction threshold is a number box.
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Harnesses", exact: true }).click();
+  const claude = page.locator('[data-slot="harness-card"]').filter({ hasText: "Claude Code" });
+  await expect(claude).toContainText("Installed · 2.1.306");
+  await expect(claude).toContainText("Used by: Backend");
+  await expect(page.locator('[data-slot="harness-card"]').filter({ hasText: "Gemini CLI" })).toContainText("Not found");
+  const compact = claude.getByRole("spinbutton", { name: "Claude Code compact after" });
+  await compact.fill("300000");
+  await compact.press("Enter");
+  await expect(page.getByText("Settings saved").first()).toBeVisible();
+  await expect(compact).toHaveValue("300000");
+  await page.screenshot({ path: info.outputPath("harnesses.png"), fullPage: true });
+  await expectNoSidewaysScroll(page);
+  // Back on pi, the card shows pi's models again.
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Agents", exact: true }).click();
+  await card.getByRole("combobox", { name: "Backend harness" }).click();
+  await page.getByRole("option", { name: /^pi/ }).click();
+  await expect(card.getByRole("combobox", { name: "Backend harness" })).toContainText("pi");
+  await expect(card.getByRole("combobox", { name: "Backend model" })).not.toContainText("Claude Sonnet 4.6");
+});

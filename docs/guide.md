@@ -287,6 +287,35 @@ In `config.json` the fields are `mcpTools: ["mcp__github__get_issue"]` and
 absent `skills` means all and `[]` means none. Children inherit their parent's grants. A granted
 skill Pi no longer finds is skipped.
 
+## Harnesses
+
+Any subagent except the planner can run on another coding agent instead of pi: Codex CLI, Claude
+Code, Antigravity, Gemini CLI, OpenCode, or any agent that speaks the Agent Client Protocol (ACP).
+Pick one per agent with the **Harness** menu on its card in Settings > Agents. The model menu then
+lists that harness's own models, and the effort slider offers the levels the chosen model takes.
+The oracle and the planner always run in the pi session, because the workflow, the knowledge base
+and compaction live there. Give the oracle a Claude model through pi's own Anthropic login
+(`/login`).
+
+Claude Code runs through the Claude Agent SDK (an optional dependency, installed by default), which
+is Anthropic's supported way for apps to drive it on a Claude plan. It starts your installed
+`claude`, or the command set under Harnesses, else the SDK's own build; without the SDK, Bot Lobby
+falls back to `claude -p`. On a Claude plan, Anthropic bills app use from the plan's Agent SDK
+credit and then extra usage.
+
+Each step still gets its role prompt (instructions, knowledge, standards and the report format).
+Codex gets it as developer instructions, Claude Code appends it to its own system prompt, and ACP
+agents receive it in front of the first message. Read-only roles stay read-only: a read-only sandbox
+on Codex, only the matching tools in `dontAsk` mode on Claude Code, and refused permission requests
+on ACP agents. A harness uses its own login. It cannot ask you questions, and it has no access to Bot Lobby's own tools (the file desk, the task board, `ask_expert`).
+
+Settings > Harnesses shows whether each one is installed. Each harness has these settings: its
+command, launch arguments, home folder (`CODEX_HOME`, `CLAUDE_CONFIG_DIR`), model provider (Codex:
+OpenAI, Ollama, LM Studio or a `model_provider` from its config; Claude Code: Anthropic, Bedrock or
+Vertex), the token count it compacts at, extra model ids, and whether Bot Lobby's prompts go in. An
+agent's Auto-compact switch turns compaction off on Codex and Claude Code too. ACP agents compact on
+their own.
+
 ## Keys
 
 The lobby is keyboard-first, and every action button shows its key (`Archive E`, `Delete Del`).

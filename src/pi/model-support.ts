@@ -13,6 +13,7 @@ import {
   type SubagentKind,
   type ThinkingLevelName,
 } from "../schemas/configuration.ts";
+import type { HarnessRun } from "../schemas/harness.ts";
 
 /** Find a model by `provider/id` (or bare id); undefined when the registry does not know it. */
 export type ModelLookup = (ref: string) => Model<Api> | undefined;
@@ -78,6 +79,8 @@ const warned = new Set<string>();
 export function createProfileResolver(config: BotLobbyConfig, options: ResolverOptions): ProfileResolver {
   return (domain, role) => {
     const profile = agentProfile(config, domain, role);
+    // A harness run picks its own model and effort; pi's model and its thinking clamp do not apply.
+    if (profile.harness) return profile;
     const model = profile.model ?? options.sessionModel;
     const check = checkThinking(model ? options.lookup(model) : undefined, profile.thinking);
     if (check.warning) {
@@ -91,10 +94,11 @@ export function createProfileResolver(config: BotLobbyConfig, options: ResolverO
   };
 }
 
-type RunProfile = { model?: string; thinking: string; instructions?: string; mcpTools?: string[]; skills?: string[] };
+type RunProfile = { model?: string; thinking: string; instructions?: string; mcpTools?: string[]; skills?: string[]; autoCompact?: boolean; harness?: HarnessRun };
 
 /** Unset models run on the session's; thinking is clamped to the model, with a one-time warning. */
 function resolveRunProfile(profile: RunProfile, label: string, options: ResolverOptions): RunProfile {
+  if (profile.harness) return profile;
   const model = profile.model ?? options.sessionModel;
   const check = checkThinking(model ? options.lookup(model) : undefined, profile.thinking);
   if (check.warning) {
@@ -129,7 +133,7 @@ export function resolvePanelProfile(config: BotLobbyConfig, member: PanelMember,
  */
 export function resolveReviewProfile(config: BotLobbyConfig, options: ResolverOptions): RunProfile {
   const profile = agentProfile(config, "qa", "reviewer");
-  return resolveRunProfile({ model: profile.model, thinking: profile.thinking, ...(profile.instructions ? { instructions: profile.instructions } : {}), ...(profile.mcpTools ? { mcpTools: profile.mcpTools } : {}), ...(profile.skills ? { skills: profile.skills } : {}) }, kindLabel("qa"), options);
+  return resolveRunProfile({ model: profile.model, thinking: profile.thinking, ...(profile.instructions ? { instructions: profile.instructions } : {}), ...(profile.mcpTools ? { mcpTools: profile.mcpTools } : {}), ...(profile.skills ? { skills: profile.skills } : {}), ...(profile.autoCompact === false ? { autoCompact: false } : {}), ...(profile.harness ? { harness: profile.harness } : {}) }, kindLabel("qa"), options);
 }
 
 /** Every configured subagent whose thinking level its model does not support, for `/bot-lobby config`. */

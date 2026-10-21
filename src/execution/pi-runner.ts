@@ -13,6 +13,8 @@ import { shortDuration } from "../text.ts";
 import { readRelayRequest } from "../ask/relay.ts";
 import type { AskQuestion, AskResult } from "../ask/types.ts";
 import type { EffortRouter, RunProfileLike } from "../classifier/effort.ts";
+import type { HarnessRun } from "../schemas/harness.ts";
+import { runHarnessAgent } from "../harness/runner.ts";
 
 /** Live control over one running subagent: queue a steering message for its next turn. */
 export interface RunHandle {
@@ -59,6 +61,8 @@ export interface PiRunOptions {
   onStart?: (handle: RunHandle) => void;
   /** Answers the agent's relayed questions; without it they are cancelled like any other dialog. */
   onAsk?: RelayAsk;
+  /** Run on this third-party harness instead of pi (`model` is then ignored for the harness's own). */
+  harness?: HarnessRun;
 }
 
 export interface ProcessOutcome {
@@ -402,10 +406,10 @@ export function isPiLauncher(script: string): boolean {
   return base === "pi" || base === "pi.js" || script.includes("pi-coding-agent");
 }
 
-const POSIX = process.platform !== "win32";
+export const POSIX = process.platform !== "win32";
 
 /** Signal the child's whole process group (POSIX), so grandchildren go too. */
-function signalGroup(proc: ChildProcess, signal: NodeJS.Signals): void {
+export function signalGroup(proc: ChildProcess, signal: NodeJS.Signals): void {
   if (proc.pid === undefined) return;
   if (POSIX) {
     try {
@@ -422,7 +426,7 @@ function signalGroup(proc: ChildProcess, signal: NodeJS.Signals): void {
   }
 }
 
-function terminate(proc: ChildProcess, graceMs = 5000): void {
+export function terminate(proc: ChildProcess, graceMs = 5000): void {
   signalGroup(proc, "SIGTERM");
   const escalation = setTimeout(() => signalGroup(proc, "SIGKILL"), graceMs);
   escalation.unref();
@@ -465,7 +469,7 @@ interface RunState {
 }
 
 /** Smallest positive limit, used to pick a watchdog cadence that can see it. */
-function watchInterval(...limits: Array<number | undefined>): number {
+export function watchInterval(...limits: Array<number | undefined>): number {
   const positive = limits.filter((limit): limit is number => typeof limit === "number" && limit > 0);
   const smallest = positive.length > 0 ? Math.min(...positive) : 4000;
   return Math.max(25, Math.min(1000, Math.floor(smallest / 4)));
@@ -651,6 +655,7 @@ function writePromptFile(prompt: string): { file: string; cleanup: () => void } 
 
 /** Run one isolated subagent and normalise its outcome. */
 export async function runPiAgent(given: PiRunOptions, run: ProcessRunner = spawnPiProcess): Promise<PiRunResult> {
+  if (given.harness) return runHarnessAgent({ ...given, harness: given.harness });
   const options = given.autoCompact === false ? { ...given, env: { ...given.env, [AUTO_COMPACT_ENV]: "0" } } : given;
   const host = await delegationHost(options, run);
   let prompt: ReturnType<typeof writePromptFile> | undefined;

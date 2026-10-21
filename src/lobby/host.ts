@@ -150,6 +150,8 @@ export interface LobbyService {
   models?(): ModelChoice[];
   /** The MCP tools and skills pi offers to grant agents, for the settings page. */
   grants?(): { mcpTools: Array<{ name: string; server: string; description: string; readOnly: boolean }>; skills: Array<{ name: string; description: string; path: string }> };
+  /** Each harness's status and models; absent probes the machine (the dev server answers with a fixture). */
+  harnesses?(): import("../harness/status.ts").HarnessStatus[];
   /** The classifier models pi can call with its logins, for the classifier's picker. */
   classifierModels?(): Array<{ id: string; label: string }>;
   /** The model this window's session runs on (`provider/id`), when it has one. */
