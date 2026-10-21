@@ -1,18 +1,20 @@
 /**
- * Whether the terminal drawer is open and how tall it is, remembered in this
- * browser only. Every read and write is guarded: a blocked store just means
+ * Whether the terminal is open, whether it sits in the drawer or in a pop-up,
+ * and how tall the drawer is, remembered in this browser only. Every read and write is guarded: a blocked store just means
  * the drawer starts closed at its usual height.
  */
 import { useSyncExternalStore } from "react"
 
 const OPEN_KEY = "bot-lobby.terminal.open"
 const HEIGHT_KEY = "bot-lobby.terminal.height"
+const POPUP_KEY = "bot-lobby.terminal.popup"
 /** The drawer's height in px: as it starts, and as far as dragging its top takes it. */
 export const TERMINAL_HEIGHT = { start: 280, min: 140 }
 
 const listeners = new Set<() => void>()
 let open: boolean | undefined
 let height: number | undefined
+let popup: boolean | undefined
 
 function read(key: string): string | null {
   try {
@@ -77,4 +79,20 @@ export function useTerminalOpen(): boolean {
 
 export function useTerminalHeight(): number {
   return useSyncExternalStore(subscribe, currentHeight, () => TERMINAL_HEIGHT.start)
+}
+
+function inPopup(): boolean {
+  popup ??= read(POPUP_KEY) === "1"
+  return popup
+}
+
+/** Show the terminal in a pop-up over the page (true) or in the drawer under the composer (false). */
+export function setTerminalPopup(next: boolean): void {
+  popup = next
+  write(POPUP_KEY, next ? "1" : "0")
+  emit()
+}
+
+export function useTerminalPopup(): boolean {
+  return useSyncExternalStore(subscribe, inPopup, () => false)
 }

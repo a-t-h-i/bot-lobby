@@ -1,7 +1,7 @@
 // Adapted from T3 Code (MIT), apps/web/src/components/Sidebar.tsx and apps/web/src/components/ui/sidebar.tsx
 /**
  * The sidebar on the left of every page, laid out like the coding harness it
- * takes after. At its top the app's name and the fold button, then a search
+ * takes after. At its top the open project's name and the fold button, then a search
  * over the sessions and a New session button; then the sessions as thin rows
  * under small labels (this window's, then the background sessions it
  * started), with the ones in other terminals and the ended ones in groups at
@@ -355,6 +355,16 @@ function Sessions({ query }: { query: string }) {
   )
 }
 
+/** The sidebar's title: the name of the project open in this window (the app's name only until the status arrives). */
+function ProjectTitle() {
+  const name = useTopic<StatusInfo>("status").data?.workspace.name
+  return (
+    <span data-slot="sidebar-title" title={name} className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight text-sidebar-foreground">
+      {name ?? "Bot Lobby"}
+    </span>
+  )
+}
+
 /** Settings and the app's switches at the sidebar's foot. */
 function Foot({ route, keys, onHelp }: SidebarProps) {
   const hint = keys.settings ?? "Alt+S"
@@ -501,7 +511,7 @@ export function Sidebar(props: SidebarProps) {
     >
       <div className="sidebar-panel flex min-h-0 flex-1 flex-col" style={{ width: `${width}rem` }}>
         <div className="flex min-h-12 items-center gap-2 pr-1 pl-3">
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight text-sidebar-foreground">Bot Lobby</span>
+          <ProjectTitle />
           <Tip label="Collapse sidebar" hint={props.keys.sidebar}>
             <button type="button" aria-label="Collapse sidebar" aria-expanded aria-controls="app-sidebar" aria-keyshortcuts={props.keys.sidebar} onClick={toggle} className={ICON_BUTTON}>
               <PanelLeftClose aria-hidden="true" className="size-4" />

@@ -1323,6 +1323,9 @@
 }
 .terminal-edge:hover::after, .terminal-edge:focus-visible::after { background: var(--ring); }
 html[data-resizing="row"] * { cursor: row-resize !important; user-select: none; }
+/* In the pop-up the terminal keeps a solid fill of its own under the glass, so the shell reads cleanly. */
+.terminal-pop { --terminal-background: var(--background); }
+.terminal-pop #terminal-drawer { background: var(--terminal-background); }
 .terminal-view .xterm { height: 100%; }
 .terminal-view .xterm-viewport { background-color: transparent !important; }
 @media (prefers-reduced-motion: reduce) {

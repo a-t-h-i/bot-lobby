@@ -15,6 +15,7 @@ test("the sidebar lists the sessions as thin rows under labels, searches them, f
   const header = page.getByRole("banner");
   const list = sidebar.getByRole("navigation", { name: "Sessions list" });
   const here = list.getByRole("button", { name: "mock lobby, this window" });
+  await expect(sidebar.locator('[data-slot="sidebar-title"]'), "the title is the open project's name, not the app's").toHaveText("bot-lobby");
   await expect(here, "this window first, marked current").toHaveAttribute("aria-current", "true");
   await expect(here, "the session's name stays").toContainText("mock lobby");
   await expect(here, "no duplicate location label on the current row").not.toContainText("This window");

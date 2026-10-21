@@ -1,6 +1,6 @@
 {
-  "hash": "799da17f6d515c6f69061fcfc9c037a10d9b43762bc3cb7639c71138b5c64885",
-  "builtAt": "2026-10-21T10:44:44.191Z",
+  "hash": "22c14419454cec7f2b7c340ebebc0e7dda4968d2da04d985491c79d2010fd4e0",
+  "builtAt": "2026-10-21T16:39:49.686Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -56,11 +56,11 @@
     },
     {
       "path": "webui/src/app/Shell.tsx",
-      "sha256": "8a74bf8103081743f82a4b1a97e2022b7d43990704e0c240427faad983094e34"
+      "sha256": "574473bf09b4e7fe3860e57b3cb73414fbf78de242d2854f2bc3cf888e7fa1ff"
     },
     {
       "path": "webui/src/app/Sidebar.tsx",
-      "sha256": "49d51633d4ecfdb30ab2aaefee758054055bed05afe7a5adebff6f2820423ade"
+      "sha256": "69a58e523fb6bcc51f030accd6f8964efd8abc5a5591cc85cdaabe3256f28797"
     },
     {
       "path": "webui/src/app/SignIn.tsx",
@@ -80,7 +80,7 @@
     },
     {
       "path": "webui/src/app/TerminalDrawer.tsx",
-      "sha256": "8480996048574b6b48aa63c6a3e238ddfe71d32ed51b13ce9847917e8bd8811f"
+      "sha256": "3d83e974585ba2a378c34770f907324675e2d8e9c0a5f85daf4b6f3986e1a69d"
     },
     {
       "path": "webui/src/app/TerminalView.tsx",
@@ -160,7 +160,7 @@
     },
     {
       "path": "webui/src/app/terminalStore.ts",
-      "sha256": "e86852f3c68b640b71388b7d3df2d9ef20376fb0c1ff7f2bbdb8f2082156ad9d"
+      "sha256": "45e3f2c1ebe7c60888c308a5475850c9b013ab02645d6bbced648bef72d1a765"
     },
     {
       "path": "webui/src/app/typeface.ts",
@@ -240,7 +240,7 @@
     },
     {
       "path": "webui/src/components/ui/popup.tsx",
-      "sha256": "a7c8e658b7497e17126235492d1f5a1afcfa9c92f1f480ed7f6b9f55ef8feea9"
+      "sha256": "6ec3c2ef92103023a4f61f73eb40d2da38c94c01f4be3476c13b08debe413c46"
     },
     {
       "path": "webui/src/components/ui/sheet.tsx",
@@ -276,7 +276,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "683c81ae82297fc0015cc664b786869060881f36eb40c0ec1eb8af28989b1e2e"
+      "sha256": "b4e60d0729a77fbad112bb82cc230c20ae64fe67546516a2365b6e3fe57972ef"
     },
     {
       "path": "webui/src/lib/act.ts",
