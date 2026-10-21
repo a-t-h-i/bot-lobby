@@ -13,6 +13,8 @@ import { cleanSessionName } from "../../lobby/sessions.ts";
 import type { PlanComment } from "../../state/comments.ts";
 import type { LobbyService } from "../../lobby/host.ts";
 import { loadScenario, type ScenarioFixture } from "./fixtures.ts";
+import { HARNESSES, harnessCommand, harnessModels } from "../../harness/catalog.ts";
+import { HARNESS_IDS } from "../../schemas/harness.ts";
 import type { PlanRecord, PlanSummary } from "../../state/plan-history.ts";
 
 interface StreamState {
@@ -408,6 +410,17 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     },
     configChanged: () => {},
     models: () => models.map((model) => ({ id: model.id, label: model.label, thinkingLevels: [...model.thinkingLevels] })),
+    // A fixed machine for screenshots and browser tests: Codex and Claude Code installed, the rest not.
+    harnesses: () => HARNESS_IDS.map((id) => {
+      const info = HARNESSES[id];
+      const installed: Partial<Record<string, string>> = { codex: "0.163.0", claude: "2.1.306" };
+      const command = harnessCommand(id, config.harnesses[id]).command;
+      return {
+        id, label: info.label, blurb: info.blurb, protocol: info.protocol, command, providers: info.providers, effort: info.effort,
+        ...(installed[id] ? { path: `/usr/local/bin/${command}`, version: installed[id] } : {}),
+        models: harnessModels(id, config.harnesses[id]),
+      };
+    }),
     classifierModels: () => [{ id: "opencode/jev-1.13-free", label: "Jev 1.13 (free)" }, { id: "openrouter/liquid/d1", label: "Liquid D1" }],
     grants: () => ({
       mcpTools: [

@@ -44,7 +44,7 @@ test("a step's working agents unfold from it in Tasks, and leave when finished",
 
 test.afterEach(() => { releasePending?.(); releasePending = undefined; });
 
-const SECTIONS = ["Agents", "Tools & skills", "Workflow", "Lobby", "Classifier", "Appearance & notifications"];
+const SECTIONS = ["Agents", "Harnesses", "Tools & skills", "Workflow", "Lobby", "Classifier", "Appearance & notifications"];
 const PAGES = ["lobby", "tasks", "plan", "quickfix", "git/issues", "git", "knowledge", "settings"];
 
 async function route(page: Page, name: string): Promise<void> {
@@ -151,7 +151,7 @@ test("Thinking hover motion respects reduced motion and disabled panel hides bub
   await expect(bubble).toHaveCount(0);
 });
 
-test("six Settings sections preserve custom model draft without fallback controls", async ({ page, server }) => {
+test("seven Settings sections preserve custom model draft without fallback controls", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await route(page, "settings");
   await expect(page.getByRole("navigation", { name: "Settings sections" }).getByRole("button")).toHaveText(SECTIONS);

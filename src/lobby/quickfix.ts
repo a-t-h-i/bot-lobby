@@ -25,6 +25,7 @@ import type { LintExec } from "../execution/lint.ts";
 import { scriptsFor, type ScriptPicker } from "../scripts/pick.ts";
 import { dataRoot } from "../state/project.ts";
 import { lintFeed, runLintGate } from "../workflow/lint.ts";
+import type { HarnessRun } from "../schemas/harness.ts";
 
 /** A quick fix edits code, so it gets the full coding tool set. */
 export const QUICK_FIX_TOOLS: readonly string[] = ["read", "bash", "edit", "write", "grep", "find", "ls"];
@@ -95,6 +96,8 @@ export interface QuickFixProfile {
   skills?: string[];
   /** False when its settings turn the agent's auto-compaction off. */
   autoCompact?: boolean;
+  /** The third-party harness it runs on; absent runs it on pi. */
+  harness?: HarnessRun;
   /** Where the job goes when its model runs out of usage or is unavailable. */
 }
 
@@ -343,8 +346,8 @@ export class QuickFixQueue {
           model,
           thinking,
           mcpTools: profile.mcpTools,
-        ...(profile.autoCompact === false ? { autoCompact: false } : {}),
           ...(profile.autoCompact === false ? { autoCompact: false } : {}),
+          ...(profile.harness ? { harness: profile.harness } : {}),
           delegationQuota: quota,
           agent: { runId: job.id, taskId: job.id, domain: "backend", role: "worker" },
           onChildRun: (child) => {

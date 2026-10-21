@@ -1,4 +1,5 @@
 import type { Domain, Role } from "./agent.ts";
+import { bridgeModelRef, defaultHarnesses, harnessChoiceFields, harnessRunOf, normalizeHarnesses, type HarnessChoice, type HarnessesConfig, type HarnessRun } from "./harness.ts";
 
 export type ModelRef = "inherit" | string;
 
@@ -22,7 +23,7 @@ export function isThinkingLevel(value: string): value is ThinkingLevelName {
   return (THINKING_LEVELS as readonly string[]).includes(value);
 }
 
-export interface AgentModelConfig {
+export interface AgentModelConfig extends HarnessChoice {
   model: ModelRef;
   thinking: string;
   /** Free-form instructions layered on top of this agent's built-in prompt. */
@@ -36,7 +37,7 @@ export interface AgentModelConfig {
 }
 
 /** Scouts pick a model only; their thinking is fixed at `SCOUT_THINKING`. */
-export interface ScoutConfig {
+export interface ScoutConfig extends HarnessChoice {
   mcpTools?: string[];
   /** See AgentModelConfig.skills. */
   skills?: string[];
@@ -271,6 +272,8 @@ export interface BotLobbyConfig {
   knowledge: KnowledgeConfig;
   lobby: LobbyConfig;
   classifier: ClassifierConfig;
+  /** Third-party harnesses a subagent can run on instead of pi, each with its own settings. */
+  harnesses: HarnessesConfig;
 }
 
 export const DEFAULT_CONFIG: BotLobbyConfig = {
@@ -349,6 +352,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     effort: { cheapModel: INHERIT_MODEL },
     exclude: [],
   },
+  harnesses: defaultHarnesses(),
 };
 
 /** Choices the settings menu cycles through for the planning round limit; 0 = unlimited. */
@@ -376,12 +380,19 @@ export function normalizeMcpTools(value: unknown): string[] {
   return Array.isArray(value) ? [...new Set(value.filter((tool): tool is string => typeof tool === "string" && /^mcp__[A-Za-z0-9_]+__[A-Za-z0-9_]+$/.test(tool)))] : [];
 }
 
-/** Merge one agent's override over its default; legacy `inherit` or unknown thinking falls back to the default level. */
+/**
+ * Merge one agent's override over its default; legacy `inherit` or unknown
+ * thinking falls back to the default level. A harness (`pi` or an unknown
+ * one drops the field) runs a subagent on it directly; the oracle and the
+ * planner live in pi, so pi drives theirs as its model (`livingModel`), and
+ * `model` keeps the pi model to go back to.
+ */
 function normalizeAgent(base: AgentModelConfig, override: Partial<AgentModelConfig> | undefined): AgentModelConfig {
   const merged = { ...base, ...(override ?? {}) };
   const thinking = isThinkingLevel(merged.thinking) ? merged.thinking : base.thinking;
   const mcpTools = normalizeMcpTools(merged.mcpTools);
-  return { model: merged.model, thinking, ...(mcpTools.length ? { mcpTools } : {}), ...skillsField(merged.skills), ...(typeof merged.instructions === "string" ? { instructions: merged.instructions } : {}), ...(merged.autoCompact === false ? { autoCompact: false } : {}) };
+  const choice = harnessChoiceFields(merged);
+  return { model: merged.model, thinking, ...(mcpTools.length ? { mcpTools } : {}), ...skillsField(merged.skills), ...(typeof merged.instructions === "string" ? { instructions: merged.instructions } : {}), ...(merged.autoCompact === false ? { autoCompact: false } : {}), ...choice };
 }
 
 /** Scouts keep a model and a tool-call cap; any thinking value in the file is dropped. */
@@ -394,6 +405,7 @@ function normalizeScout(override: Partial<ScoutConfig> | undefined): ScoutConfig
     ...(mcpTools.length ? { mcpTools } : {}),
     ...skillsField(override?.skills),
     ...(override?.autoCompact === false ? { autoCompact: false } : {}),
+    ...harnessChoiceFields(override ?? {}),
   };
 }
 
@@ -532,6 +544,7 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
     knowledge,
     lobby: normalizeLobby(src.lobby),
     classifier: normalizeClassifier(src.classifier),
+    harnesses: normalizeHarnesses(src.harnesses),
   };
 }
 
@@ -553,6 +566,22 @@ export interface AgentProfile {
   skills?: string[];
   /** False when its settings turn auto-compaction off. */
   autoCompact?: boolean;
+  /** The third-party harness it runs on; absent runs it on pi. */
+  harness?: HarnessRun;
+}
+
+/**
+ * The pi model an agent that lives in pi (the oracle, the planner) thinks on:
+ * its harness's pi provider when it names one, else its own model.
+ */
+export function livingModel(entry: AgentModelConfig): string {
+  return entry.harness ? bridgeModelRef(entry.harness, entry.harnessModel) : entry.model;
+}
+
+/** `{ harness }` when an entry runs on a third-party harness, else nothing. */
+function harnessField(config: BotLobbyConfig, entry: HarnessChoice): { harness?: HarnessRun } {
+  const harness = harnessRunOf(entry, config.harnesses);
+  return harness ? { harness } : {};
 }
 
 /** `{ autoCompact: false }` when an entry turns auto-compaction off, else nothing. */
@@ -586,10 +615,10 @@ export function agentProfile(config: BotLobbyConfig, domain: Domain, role: Role)
   const kind = profileKind(domain, role);
   const instructions = config.agents[domain].instructions;
   if (kind === "scout") {
-    return { kind, model: modelOf(config.scout.model), thinking: SCOUT_THINKING, instructions, ...grantFields(config.scout), ...compactField(config.scout) };
+    return { kind, model: modelOf(config.scout.model), thinking: SCOUT_THINKING, instructions, ...grantFields(config.scout), ...compactField(config.scout), ...harnessField(config, config.scout) };
   }
   const entry = kind === "researcher" ? config.researcher : config.agents[kind];
-  return { kind, model: modelOf(entry.model), thinking: entry.thinking, instructions, ...grantFields(entry), ...compactField(entry) };
+  return { kind, model: modelOf(entry.model), thinking: entry.thinking, instructions, ...grantFields(entry), ...compactField(entry), ...harnessField(config, entry) };
 }
 
 /** The settings entry of a lobby agent (quick fix or planner). */
@@ -598,23 +627,24 @@ export function lobbyAgentConfig(config: BotLobbyConfig, kind: LobbyAgentKind): 
 }
 
 /** Profile for a lobby agent run, from settings alone; `model` is undefined while unset. */
-export function lobbyAgentProfile(config: BotLobbyConfig, kind: LobbyAgentKind): { model?: string; thinking: string; instructions?: string; mcpTools?: string[]; skills?: string[]; autoCompact?: boolean } {
+export function lobbyAgentProfile(config: BotLobbyConfig, kind: LobbyAgentKind): { model?: string; thinking: string; instructions?: string; mcpTools?: string[]; skills?: string[]; autoCompact?: boolean; harness?: HarnessRun } {
   const entry = lobbyAgentConfig(config, kind);
-  return { model: modelOf(entry.model), thinking: entry.thinking, instructions: entry.instructions, ...grantFields(entry), ...compactField(entry) };
+  // The planner lives in pi: a harness is its model there, not a harness run.
+  return { model: modelOf(kind === "planner" ? livingModel(entry) : entry.model), thinking: entry.thinking, instructions: entry.instructions, ...grantFields(entry), ...compactField(entry), ...(kind === "quickfix" ? harnessField(config, entry) : {}) };
 }
 
 /**
  * A planning panel seat's profile: the domain's (or the researcher's) model,
  * thinking, custom instructions and grants.
  */
-export function panelMemberProfile(config: BotLobbyConfig, member: PanelMember): { model?: string; thinking: string; instructions?: string; mcpTools?: string[]; skills?: string[]; autoCompact?: boolean } {
+export function panelMemberProfile(config: BotLobbyConfig, member: PanelMember): { model?: string; thinking: string; instructions?: string; mcpTools?: string[]; skills?: string[]; autoCompact?: boolean; harness?: HarnessRun } {
   const entry = member === "researcher" ? config.researcher : config.agents[member];
-  return { model: modelOf(entry.model), thinking: entry.thinking, instructions: entry.instructions, ...grantFields(entry), ...compactField(entry) };
+  return { model: modelOf(entry.model), thinking: entry.thinking, instructions: entry.instructions, ...grantFields(entry), ...compactField(entry), ...harnessField(config, entry) };
 }
 
 /** The model and thinking a worker's `ask_expert` consults: the configured expert, or the oracle's model. */
 export function expertProfile(config: BotLobbyConfig): { model?: string; thinking: string } {
-  const model = config.workflow.expertModel ? modelOf(config.workflow.expertModel) : modelOf(config.master.model);
+  const model = config.workflow.expertModel ? modelOf(config.workflow.expertModel) : modelOf(livingModel(config.master));
   return { ...(model ? { model } : {}), thinking: "high" };
 }
 

@@ -27,7 +27,8 @@ import { Segmented } from "@/ui/Segmented"
 import { Choice, Field, Rows, type ChoiceItem } from "./parts"
 import { ThemeGroup } from "./ThemeGroup"
 import { GrantsGroup, grantsLine, grantsOf } from "./GrantsGroup"
-import type { BotLobbyConfig, SettingsClassifierModel, SettingsModelInfo } from "@protocol"
+import { HarnessesGroup } from "./HarnessesGroup"
+import type { BotLobbyConfig, HarnessModel, HarnessStatus, SettingsClassifierModel, SettingsModelInfo } from "@protocol"
 import {
   AGENT_LABELS,
   AGENT_ORDER,
@@ -42,6 +43,9 @@ import {
   RECOMMENDED_THINKING,
   GIT_LABEL,
   GROUP_TITLES,
+  HARNESS,
+  HARNESS_AGENTS,
+  BRIDGED_AGENTS,
   INHERIT_HELP,
   INHERIT_LABEL,
   INHERIT_MODEL,
@@ -52,6 +56,7 @@ import {
   PAGE,
   PANEL_HELP,
   PANEL_ITEMS,
+  PI_HARNESS,
   ROUNDS_HELP,
   ROUNDS_LABEL,
   ROUND_CHOICES,
@@ -76,6 +81,8 @@ interface AgentView {
   instructions?: string
   mcpTools?: string[]
   skills?: string[]
+  harness?: string
+  harnessModel?: string
 }
 
 /** Where each agent's fields live in the config (`agents.<kind>` for the three domains). */
@@ -107,6 +114,8 @@ function entryOf(config: Config, kind: AgentKind): AgentView {
         mcpTools: config.scout.mcpTools,
         ...(config.scout.skills ? { skills: config.scout.skills } : {}),
         ...(config.scout.autoCompact === false ? { autoCompact: false } : {}),
+        ...(config.scout.harness ? { harness: config.scout.harness } : {}),
+        ...(config.scout.harnessModel ? { harnessModel: config.scout.harnessModel } : {}),
       }
     case "researcher":
       return config.researcher
@@ -249,11 +258,81 @@ function InstructionsField({ value, label, onSave }: { value: string; label: str
   )
 }
 
-function AgentCard({ kind, config, models, save, onGrants }: { kind: AgentKind; config: Config; models: SettingsModelInfo[]; save: Save; onGrants: () => void }) {
+/** pi, then every third-party harness, marking the ones not found on this machine. */
+function HarnessChoice({ value, statuses, label, onChange }: { value: string; statuses: HarnessStatus[]; label: string; onChange: (value: string) => void }) {
+  const items: ChoiceItem[] = [
+    { value: PI_HARNESS, label: HARNESS.piLabel, help: HARNESS.piHelp },
+    ...statuses.map((status) => ({ value: status.id, label: status.label, help: status.path ? (status.version ? `v${status.version}` : HARNESS.installed) : HARNESS.missing })),
+  ]
+  if (!items.some((item) => item.value === value)) items.push({ value, label: value })
+  return <Choice value={value} items={items} label={label} onChange={onChange} />
+}
+
+/** The harness's own models (current first, then older), the ones typed into its settings, and its default. */
+function HarnessModelChoice({ value, models, label, onChange }: { value: string; models: HarnessModel[]; label: string; onChange: (value: string) => void }) {
+  const [typing, setTyping] = useState(false)
+  const [text, setText] = useState("")
+  const known = value === "" || models.some((model) => model.id === value)
+  const items: ChoiceItem[] = [
+    { value: "", label: HARNESS.defaultModel, help: HARNESS.defaultModelHelp },
+    ...models.map((model) => ({ value: model.id, label: model.label, help: model.custom ? CUSTOM_HELP : model.current ? model.id : `${model.id} · ${HARNESS.older}` })),
+    ...(!known ? [{ value, label: value, help: CUSTOM_HELP }] : []),
+    { value: CUSTOM_MODEL, label: CUSTOM_LABEL, help: CUSTOM_HELP },
+  ]
+  const choose = (next: string) => {
+    if (next !== CUSTOM_MODEL) return onChange(next)
+    setText(known ? "" : value)
+    setTyping(true)
+  }
+  const use = () => {
+    const next = text.trim()
+    setTyping(false)
+    if (next && next !== value) onChange(next)
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <Choice value={value} items={items} label={label} onChange={choose} />
+      {typing ? (
+        <div className="flex min-w-0 flex-wrap items-start gap-2">
+          <Input autoFocus value={text} placeholder="model id" aria-label="Harness model id" className="min-w-0 flex-1" onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); use() } }} />
+          <ActionButton label="Use this model" icon={Check} tone="primary" onClick={use} />
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+/** The effort levels a harness model takes; an agent whose harness sets effort per session may try every level. */
+function harnessLevels(status: HarnessStatus | undefined, model: string): readonly string[] {
+  const found = status?.models.find((entry) => entry.id === model)
+  if (found && found.efforts.length > 0) return found.efforts
+  if (status?.effort === "session") return THINKING_LEVELS
+  const efforts = status?.models.find((entry) => entry.efforts.length > 0)?.efforts
+  return efforts && efforts.length > 0 ? efforts : THINKING_LEVELS
+}
+
+function AgentCard({ kind, config, models, harnesses, save, onGrants }: { kind: AgentKind; config: Config; models: SettingsModelInfo[]; harnesses: HarnessStatus[]; save: Save; onGrants: () => void }) {
   const entry = entryOf(config, kind)
   const set = (fields: Record<string, unknown>) => save(patchOf(kind, fields))
   const name = AGENT_LABELS[kind]
-  const supported = levelsFor(models, entry.model)
+  const harness = entry.harness ? harnesses.find((status) => status.id === entry.harness) : undefined
+  const onHarness = Boolean(entry.harness)
+  const harnessModel = entry.harnessModel ?? ""
+  const supported = onHarness ? harnessLevels(harness, harnessModel) : levelsFor(models, entry.model)
+  const chooseHarness = (next: string) => {
+    if (next === (entry.harness ?? PI_HARNESS)) return
+    if (next === PI_HARNESS) return void set({ harness: PI_HARNESS })
+    const levels = harnessLevels(harnesses.find((status) => status.id === next), "")
+    const fields: Record<string, unknown> = { harness: next, harnessModel: "" }
+    if (kind !== "scout" && !levels.includes(entry.thinking)) fields.thinking = levelOn(levels, entry.thinking)
+    void set(fields)
+  }
+  const chooseHarnessModel = (model: string) => {
+    const levels = harnessLevels(harness, model)
+    const fields: Record<string, unknown> = { harnessModel: model }
+    if (kind !== "scout" && !levels.includes(entry.thinking)) fields.thinking = levelOn(levels, entry.thinking)
+    void set(fields)
+  }
   // Changing the model carries the effort along to what the new model supports.
   const chooseModel = (model: string) => {
     const fields: Record<string, unknown> = { model }
@@ -269,19 +348,26 @@ function AgentCard({ kind, config, models, save, onGrants }: { kind: AgentKind; 
         <h3 className="flex min-w-0 items-center gap-2 break-words text-sm font-semibold"><AgentIcon source={kind} className="size-4 shrink-0 text-muted-foreground" />{name}</h3>
         <MoreButton open={open} custom={custom} onToggle={() => setOpen((now) => !now)} />
       </div>
-      <ModelChoice value={entry.model} models={models} label={`${name} model`} inherit={kind === "master"} onChange={chooseModel} />
+      {HARNESS_AGENTS.has(kind) ? <HarnessChoice value={entry.harness ?? PI_HARNESS} statuses={harnesses} label={`${name} ${HARNESS.label.toLowerCase()}`} onChange={chooseHarness} /> : null}
+      {onHarness ? (
+        <HarnessModelChoice value={harnessModel} models={harness?.models ?? []} label={`${name} model`} onChange={chooseHarnessModel} />
+      ) : (
+        <ModelChoice value={entry.model} models={models} label={`${name} model`} inherit={kind === "master"} onChange={chooseModel} />
+      )}
       {kind === "scout" ? <ScoutEffort /> : (
         <EffortSlider value={entry.thinking} levels={THINKING_LEVELS} supported={supported} recommended={RECOMMENDED_THINKING[kind]}
-          model={entry.model === INHERIT_MODEL ? "the session model" : entry.model} label={`${name} effort`} onChange={(level) => set({ thinking: level })} />
+          model={onHarness ? (harnessModel || `${harness?.label ?? entry.harness}'s default model`) : entry.model === INHERIT_MODEL ? "the session model" : entry.model} label={`${name} effort`} onChange={(level) => set({ thinking: level })} />
       )}
+      {onHarness && harness?.effort === "session" && kind !== "scout" ? <p className="-mt-1 text-xs text-muted-foreground">{HARNESS.effortNote}</p> : null}
       <ToggleField
         label="Auto-compact"
-        help={kind === "master" ? "Compacts the oracle's context as it fills, and files what it learned into the knowledge base, shared with the agents it concerns." : "Compacts this agent's context as it fills."}
+        help={kind === "master" ? "Compacts the oracle's context as it fills, and files what it learned into the knowledge base, shared with the agents it concerns." : onHarness && !BRIDGED_AGENTS.has(kind) ? (harness?.protocol === "acp" ? `${harness.label} compacts on its own; this switch applies to pi, Codex and Claude Code.` : `Lets ${harness?.label ?? "the harness"} compact this agent's context, at the threshold under Harnesses.`) : "Compacts this agent's context as it fills."}
         checked={entry.autoCompact !== false}
         onChange={(on) => set({ autoCompact: on })}
         name={`${name} auto-compact`}
       />
       <div hidden={!open} className="grid gap-2 border-t border-border pt-2">
+        {onHarness ? <p className="break-words text-xs text-muted-foreground">{BRIDGED_AGENTS.has(kind) ? HARNESS.bridgeNote : HARNESS.agentNote}</p> : null}
         {hasInstructions ? <InstructionsField value={entry.instructions ?? ""} label={`${name} instructions`} onSave={(text) => set({ instructions: text })} /> : null}
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <p className="min-w-[7rem] flex-1 break-words text-xs text-muted-foreground">{grantsLine(grantsOf(config, kind), kind)}</p>
@@ -556,7 +642,7 @@ function InstallGroup() {
   )
 }
 
-const SECTIONS = ["Agents", "Tools & skills", "Workflow", "Lobby", "Classifier", "Appearance & notifications"] as const
+const SECTIONS = ["Agents", "Harnesses", "Tools & skills", "Workflow", "Lobby", "Classifier", "Appearance & notifications"] as const
 type SectionName = (typeof SECTIONS)[number]
 const sectionId = (name: SectionName) => `settings-${name.split(" ")[0]}`
 
@@ -567,6 +653,17 @@ export function SettingsForm({ config, models, classifierModels = [], onConfig }
     setGrantee(kind)
     setSection("Tools & skills")
   }
+  const harnessRead = useApiRead("settings.harnesses", {}, [])
+  // Extra models and commands change what the harnesses offer: read them again after a change.
+  const harnessKey = JSON.stringify(config.harnesses)
+  const reloadHarnesses = harnessRead.reload
+  const seenKey = useRef(harnessKey)
+  useEffect(() => {
+    if (seenKey.current === harnessKey) return
+    seenKey.current = harnessKey
+    reloadHarnesses()
+  }, [harnessKey, reloadHarnesses])
+  const harnesses = harnessRead.data?.harnesses ?? []
   // One save at a time, in the order they were made: the form shows the config of the last reply, so replies must come back in order.
   const queue = useRef<Promise<unknown>>(Promise.resolve())
   const save: Save = (patch) => {
@@ -599,8 +696,11 @@ export function SettingsForm({ config, models, classifierModels = [], onConfig }
       <div id={sectionId("Agents")} hidden={section !== "Agents"} aria-hidden={section !== "Agents"}>
         <h2 className="sr-only">{GROUP_TITLES.agents}</h2>
         <div className="grid grid-cols-2 items-start gap-3 lg:grid-cols-3">
-          {AGENT_ORDER.map((kind) => <AgentCard key={kind} kind={kind} config={config} models={models} save={save} onGrants={() => openGrants(kind)} />)}
+          {AGENT_ORDER.map((kind) => <AgentCard key={kind} kind={kind} config={config} models={models} harnesses={harnesses} save={save} onGrants={() => openGrants(kind)} />)}
         </div>
+      </div>
+      <div id={sectionId("Harnesses")} hidden={section !== "Harnesses"} aria-hidden={section !== "Harnesses"}>
+        <HarnessesGroup config={config} statuses={harnessRead.data?.harnesses} {...(harnessRead.error ? { error: harnessRead.error } : {})} save={save} />
       </div>
       <div id={sectionId("Tools & skills")} hidden={section !== "Tools & skills"} aria-hidden={section !== "Tools & skills"}>
         <GrantsGroup config={config} save={save} agent={grantee} onAgent={setGrantee} />

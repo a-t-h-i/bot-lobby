@@ -8,7 +8,7 @@
 import type { KnowledgeAgent } from "../../knowledge/paths.ts";
 import type { EntryRef } from "../../lobby/knowledge.ts";
 import type { KnowledgeAgentName, KnowledgeFileInfo, KnowledgeViewData } from "../protocol.ts";
-import { INHERIT_MODEL, type BotLobbyConfig } from "../../schemas/configuration.ts";
+import { INHERIT_MODEL, livingModel, type BotLobbyConfig } from "../../schemas/configuration.ts";
 import { loadConfig } from "../../state/project.ts";
 import type { ApiContext } from "./index.ts";
 import { fail } from "./index.ts";
@@ -49,7 +49,7 @@ export function knowledgeFiles(ctx: ApiContext): { files: KnowledgeFileInfo[]; m
 /** The model each knowledge-keeping agent runs on, as the tree names it ("session model" when none is pinned). */
 export function agentModels(config: BotLobbyConfig): Record<KnowledgeAgentName, string> {
   const named = (model: string) => (model === INHERIT_MODEL || !model.trim() ? "session model" : model);
-  return { master: named(config.master.model), designer: named(config.agents.designer.model), backend: named(config.agents.backend.model), qa: named(config.agents.qa.model) };
+  return { master: named(livingModel(config.master)), designer: named(config.agents.designer.model), backend: named(config.agents.backend.model), qa: named(config.agents.qa.model) };
 }
 
 /** One file as entries with their notes. */

@@ -22,6 +22,8 @@ import { registerAskTool } from "./ask/tool.ts";
 import { registerWebTools } from "./web/tools.ts";
 import { registerToolBudget } from "./pi/tool-budget.ts";
 import { bindGrants } from "./pi/grants.ts";
+import { registerHarnessProviders } from "./harness/bridge/provider.ts";
+import { loadConfig } from "./state/project.ts";
 
 export default function (pi: ExtensionAPI): void {
   registerAgentPermissions(pi);
@@ -30,7 +32,15 @@ export default function (pi: ExtensionAPI): void {
   // Settings lists this session's MCP tools and skills to grant, and agents find their granted skills through it.
   if (!isSubagentProcess()) bindGrants(pi);
   let root = detectProjectRoot(process.cwd(), CONFIG_DIR_NAME);
-  pi.on("session_start", (_event, ctx) => { root = detectProjectRoot(ctx.cwd, CONFIG_DIR_NAME); });
+  let cwd = process.cwd();
+  // Each third-party harness as a pi model provider, so the oracle and the planner can think on one (models typed into settings show up on the next session).
+  const harnessHost = { config: loadConfig, cwd: () => cwd };
+  registerHarnessProviders(pi, harnessHost);
+  pi.on("session_start", (_event, ctx) => {
+    root = detectProjectRoot(ctx.cwd, CONFIG_DIR_NAME);
+    cwd = ctx.cwd;
+    registerHarnessProviders(pi, harnessHost);
+  });
   // First, so every session_start handler below finds the classifier bound to this session's keys.
   registerClassifier(pi, CONFIG_DIR_NAME);
   // Before the lifecycle, so a task that ended while the oracle was idle is closed before it builds the next turn's prompt.

@@ -10,7 +10,8 @@ import { lobbyTopics } from "../../lobby/topics.ts";
 import { prefillModels } from "../../pi/model-settings.ts";
 import { kindLabel } from "../../pi/model-support.ts";
 import { pushNotice } from "../notices.ts";
-import type { SettingsGrants, SettingsInfo, SettingsLinter } from "../protocol.ts";
+import type { SettingsGrants, SettingsHarnesses, SettingsInfo, SettingsLinter } from "../protocol.ts";
+import { harnessStatuses } from "../../harness/status.ts";
 import type { ApiContext } from "./index.ts";
 import { fail } from "./index.ts";
 
@@ -86,6 +87,11 @@ export function settingsLinters(ctx: ApiContext): { linters: SettingsLinter[] } 
 /** The MCP tools and skills pi offers now, for each agent's grants. */
 export function settingsGrants(ctx: ApiContext): SettingsGrants {
   return ctx.service.grants?.() ?? { mcpTools: [], skills: [] };
+}
+
+/** Each harness, found on PATH or not, with its models; the dev server's fake service answers for itself. */
+export async function settingsHarnesses(ctx: ApiContext): Promise<SettingsHarnesses> {
+  return { harnesses: ctx.service.harnesses?.() ?? await harnessStatuses(readConfig(ctx).harnesses) };
 }
 
 /** Merge, normalise and save the patch; the lobby rereads the config. */

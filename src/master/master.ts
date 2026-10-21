@@ -59,7 +59,7 @@ export interface ScoutRequest {
 /** Model, thinking and grants for one run, from settings. */
 function profileFields(config: BotLobbyConfig, resolver: ProfileResolver | undefined, domain: Domain, role: AgentRequest["role"]) {
   const profile = profileFor(config, resolver, domain, role);
-  return { model: profile.model, mcpTools: profile.mcpTools, ...(profile.skills ? { skills: profile.skills } : {}), ...(profile.autoCompact === false ? { autoCompact: false } : {}), thinking: profile.thinking };
+  return { model: profile.model, mcpTools: profile.mcpTools, ...(profile.skills ? { skills: profile.skills } : {}), ...(profile.autoCompact === false ? { autoCompact: false } : {}), ...(profile.harness ? { harness: profile.harness } : {}), thinking: profile.thinking };
 }
 
 function scoutInstruction(request: ScoutRequest, domain: Domain): string {
@@ -198,8 +198,8 @@ async function scoutDomains(request: ScoutRequest, run: ProcessRunner): Promise<
     onUpdate: request.onUpdate,
     ...watchdogOptions(request.config.workflow),
   }));
-  // Scouts think at a fixed level; a trivial one may move to the cheaper model.
-  const routes = await Promise.all(requests.map((entry) => routeFor(request.effort, entry.instruction, { ...(entry.model ? { model: entry.model } : {}), thinking: entry.thinking ?? "low" }, { thinkingFixed: true, context: request.taskText, ...(request.signal ? { signal: request.signal } : {}) })));
+  // Scouts think at a fixed level; a trivial one may move to the cheaper model (a pi model, so not on another harness).
+  const routes = await Promise.all(requests.map((entry) => entry.harness ? undefined : routeFor(request.effort, entry.instruction, { ...(entry.model ? { model: entry.model } : {}), thinking: entry.thinking ?? "low" }, { thinkingFixed: true, context: request.taskText, ...(request.signal ? { signal: request.signal } : {}) })));
   const first = requests.map((entry, index) => (routes[index] ? { ...entry, ...routedFields(routes[index]!) } : entry));
   const runs = await runParallel(first, request.config.workflow.maxParallelScouts, run);
   let outcomes = runs.map((agentRun) => toOutcome(agentRun, agentRun.domain));

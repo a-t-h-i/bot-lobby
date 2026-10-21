@@ -8,6 +8,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import {
   INHERIT_MODEL,
   isThinkingLevel,
+  livingModel,
   SUBAGENT_KINDS,
   type AgentModelConfig,
   type BotLobbyConfig,
@@ -53,9 +54,10 @@ export function patchEntry(config: BotLobbyConfig, kind: SettingsKind, patch: En
   return next;
 }
 
-/** Apply the master model/thinking to the live session; "inherit" leaves it alone. */
+/** Apply the master model/thinking to the live session (a harness through its pi provider); "inherit" leaves it alone. */
 export async function applyMasterModel(pi: ExtensionAPI, ctx: ExtensionContext, config: BotLobbyConfig): Promise<void> {
-  const { model, thinking } = config.master;
+  const { thinking } = config.master;
+  const model = livingModel(config.master);
   if (model !== INHERIT_MODEL) {
     const found = modelLookup(ctx)(model);
     if (!found) ctx.ui.notify(`bot-lobby: unknown master model "${model}".`, "warning");

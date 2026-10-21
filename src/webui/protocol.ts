@@ -15,6 +15,8 @@ import type { BotLobbyConfig, PanelMember } from "../schemas/configuration.ts";
 import type { QaRiskAssessment } from "../schemas/task.ts";
 import type { MemberState, PanelNote, PanelQuestion, PlannerMessage } from "../lobby/planner.ts";
 import type { QuickFixJob } from "../lobby/quickfix.ts";
+import type { HarnessStatus } from "../harness/status.ts";
+import type { HarnessModel } from "../harness/catalog.ts";
 
 export interface ProjectInfo { id: string; name: string; cwd: string; port: number }
 export interface FolderListing { path: string; parent?: string; folders: Array<{ name: string; path: string }>; truncated: boolean }
@@ -23,6 +25,7 @@ export type { WebPrompt };
 export type { LobbyTopic };
 export type { DialogAnswer, SessionDialog, TaskRow, PlanComment };
 export type { LiveSession };
+export type { HarnessStatus, HarnessModel };
 export type { PanelMember, MemberState, PanelNote, PanelQuestion, PlannerMessage, QuickFixJob, BotLobbyConfig };
 
 /** Every API answer: the result, or why not. */
@@ -230,6 +233,11 @@ export interface SettingsSkill {
 export interface SettingsGrants {
   mcpTools: SettingsMcpTool[];
   skills: SettingsSkill[];
+}
+
+/** `settings.harnesses`: each third-party harness, whether it is installed, and the models it offers. */
+export interface SettingsHarnesses {
+  harnesses: HarnessStatus[];
 }
 
 /** One message on the event stream (`GET /api/events`, server-sent events). */
@@ -629,6 +637,7 @@ export interface Api {
   "settings.set": { request: { patch: Record<string, unknown> }; result: { config: BotLobbyConfig } };
   "settings.linters": { request: Record<string, never>; result: { linters: SettingsLinter[] } };
   "settings.grants": { request: Record<string, never>; result: SettingsGrants };
+  "settings.harnesses": { request: Record<string, never>; result: SettingsHarnesses };
   "themes.get": { request: Record<string, never>; result: ThemeStoreInfo };
   "themes.save": { request: { name: string; light?: Record<string, string>; dark?: Record<string, string> }; result: ThemeStoreInfo & { id: string } };
   "themes.rename": { request: { id: string; name: string }; result: ThemeStoreInfo };
