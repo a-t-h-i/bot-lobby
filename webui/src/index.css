@@ -1192,6 +1192,13 @@
 .composer-shell { --composer-fill: color-mix(in srgb, var(--chat-composer-glass-surface) 94%, var(--background)); }
 .composer-shell [data-chat-composer-main-surface] { background-color: var(--composer-fill); }
 .composer-strip::before { background-color: var(--composer-fill); }
+/*
+ * A thin border you can see, so the composer stands out on a background of its own colour, in either theme. The box
+ * draws it on its own layer, since its solid fill covers the outline the host draws underneath.
+ */
+.composer-shell, .dark .composer-shell { --chat-composer-outline: color-mix(in srgb, var(--foreground) 16%, transparent); }
+.composer-shell [data-chat-composer-main-surface]::after { display: block; }
+.composer-strip::before, .dark .composer-strip::before { border-color: var(--chat-composer-outline); }
 
 /*
  * The sidebar on the left of every page: the running sessions, the app's

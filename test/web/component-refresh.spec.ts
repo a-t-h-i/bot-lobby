@@ -235,3 +235,16 @@ for (const width of [1280, 360]) {
     await expect.poll(async () => Math.abs((await composerGlass(page)).gap), "and its glass ends with the pill").toBeLessThan(1);
   });
 }
+
+test("the composer box draws a thin border you can see, so it stands out on a background of its own colour @theme", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const outline = await page.locator("[data-chat-composer-main-surface]").first().evaluate((el: any) => {
+    const style = (globalThis as any).getComputedStyle(el, "::after");
+    const alpha = Number(/\/\s*([\d.]+)\)$/.exec(style.borderTopColor)?.[1] ?? /rgba\([^)]*,\s*([\d.]+)\)$/.exec(style.borderTopColor)?.[1] ?? 1);
+    return { display: style.display, width: Number.parseFloat(style.borderTopWidth), alpha };
+  });
+  expect(outline.display, "drawn over the box's own fill").not.toBe("none");
+  expect(outline.width).toBe(1);
+  expect(outline.alpha, "strong enough to see").toBeGreaterThanOrEqual(0.12);
+});
