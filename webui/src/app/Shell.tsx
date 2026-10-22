@@ -23,6 +23,8 @@ import { useProjects } from "./ProjectSwitcher.tsx"
 import { Sidebar, SidebarOpenButton, SIDEBAR_KEY } from "./Sidebar.tsx"
 import { TerminalDrawer, TerminalToggle } from "./TerminalDrawer.tsx"
 import { toggleTerminal } from "./terminalStore.ts"
+import { CodeToggle, CodeViewer } from "./code/CodeViewer.tsx"
+import { toggleCode } from "./code/codeStore.ts"
 import { SignIn } from "./SignIn.tsx"
 import { ErrorState, LoadingState, ReconnectingState } from "./States.tsx"
 import { TabStrip } from "./TabStrip.tsx"
@@ -49,6 +51,7 @@ function handleAction(action: string, route: Route, toggleHelp: () => void, cycl
   else if (action === "thinking") toggleCollapsed("lobby.thinking")
   else if (action === "sidebar") toggleSidebar()
   else if (action === "terminal") toggleTerminal()
+  else if (action === "code") toggleCode()
   else if (action === "activity") {
     // Activity is the steps between the Lobby's messages: there the key opens or folds them all, elsewhere it takes you there first.
     if (route.kind === "tab" && route.tab === "lobby") toggleCollapsed(ACTIVITY_OPEN)
@@ -196,7 +199,12 @@ export function Shell() {
         tabs={tabStrip}
         extra={putAway && prompts.length > 0 ? <QuestionsPill count={prompts.length} onOpen={() => setPutAway(false)} /> : null}
         // With no sidebar yet (signing in, loading) light or dark and the sounds wait in the bar.
-        tools={signedIn ? <TerminalToggle hint={keyLabels.terminal} className={TERMINAL_TOOL} /> : (
+        tools={signedIn ? (
+          <>
+            <CodeToggle hint={keyLabels.code} className={TERMINAL_TOOL} />
+            <TerminalToggle hint={keyLabels.terminal} className={TERMINAL_TOOL} />
+          </>
+        ) : (
           <>
             <ThemeToggle className={BAR_TOOL} side="bottom" />
             <SoundToggle className={BAR_TOOL} side="bottom" />
@@ -251,6 +259,7 @@ export function Shell() {
       </div>
       </div>
       <Thinking status={status} lobby={lobbyRecord.data} />
+      <CodeViewer codeKey={keys.find((key) => key.action === "code")?.key} />
       <QuestionPopup prompts={prompts} answer={answer} dismiss={dismiss} minimized={putAway} onMinimize={setPutAway} />
       <AltH open={help} onOpenChange={setHelp} keys={keys} tabs={tabs} />
     </div>

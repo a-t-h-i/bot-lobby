@@ -20,6 +20,13 @@ import type { HarnessModel } from "../harness/catalog.ts";
 export interface ProjectInfo { id: string; name: string; cwd: string; port: number }
 export interface FolderListing { path: string; parent?: string; folders: Array<{ name: string; path: string }>; truncated: boolean }
 
+/** A file changed in the working tree against HEAD (`code.changes`); counts are lines, absent for binary files. */
+export interface CodeChange { path: string; status: "modified" | "added" | "deleted" | "renamed" | "untracked"; from?: string; additions?: number; deletions?: number }
+export interface CodeChanges { git: boolean; files: CodeChange[]; truncated: boolean }
+/** One file for the code viewer (`code.read`): its text unless binary or too large, its change, and HEAD's text when it had one. */
+export interface CodeFile { path: string; size: number; mtimeMs: number; exists: boolean; contents?: string; binary?: boolean; tooLarge?: boolean; change?: CodeChange; original?: string }
+export interface CodeSaved { path: string; mtimeMs: number; notice: string }
+
 export type { WebPrompt };
 export type { LobbyTopic };
 export type { DialogAnswer, SessionDialog, TaskRow, PlanComment };
@@ -610,6 +617,9 @@ export interface Api {
   "planner.previousDelete": { request: { id: string }; result: { notice: string } };
   "planner.previousOpen": { request: { id: string }; result: { notice: string } };
   "planner.save": { request: Record<string, never>; result: { notice: string } };
+  "code.changes": { request: Record<string, never>; result: CodeChanges };
+  "code.read": { request: { path: string }; result: CodeFile };
+  "code.save": { request: { path: string; contents: string; mtimeMs?: number; force?: boolean }; result: CodeSaved };
   "projects.browse": { request: { path?: string }; result: FolderListing };
   "projects.open": { request: { path: string }; result: { project: ProjectInfo } };
   "knowledge.files": { request: Record<string, never>; result: { files: KnowledgeFileInfo[]; models?: Partial<Record<KnowledgeAgentName, string>> } };

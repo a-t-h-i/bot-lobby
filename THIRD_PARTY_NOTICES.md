@@ -4,12 +4,13 @@
 
 The web UI's look (colours, radii, shadows, control and dialog styles, the
 sidebar rail, the chat rows, the work log, the composer (its surface, footer controls and send button), the select
-fields and drop-down lists, the loading and status animations and the
-built-in colour themes), and the third-party harness support (the model
+fields and drop-down lists, the loading and status animations, the code
+viewer with its diff mode and the built-in colour themes), and the third-party harness support (the model
 manifest, CLI flags, prompt injection and ACP handling behind Settings >
 Harnesses), is adapted from T3 Code,
 https://github.com/pingdotgg/t3code. No T3 Code package is a
-dependency; the styles and markup below were ported into this repository and
+dependency (the code viewer uses the same diff and highlighting library T3
+Code does, `@pierre/diffs`, as an ordinary npm dependency); the styles and markup below were ported into this repository and
 rewired to bot-lobby's own data layer. Each adapted file starts with a comment
 naming the file it came from.
 
@@ -38,6 +39,9 @@ naming the file it came from.
 | `webui/src/app/Composer.tsx` | `apps/web/src/components/chat/ComposerSurface.tsx`, `ChatComposer.tsx`, `ComposerPrimaryActions.tsx`, `ComposerControl.tsx` |
 | `webui/src/app/composer/ComposerCommandMenu.tsx` | `apps/web/src/components/chat/ComposerCommandMenu.tsx`, `ComposerBanner.tsx` (the attached drawer surface), `composer-logic.ts` (the `/` and `@` trigger) |
 | `webui/src/app/TerminalDrawer.tsx` | `apps/web/src/components/ThreadTerminalDrawer.tsx` (the drawer, its floating toolbar and terminal list) |
+| `webui/src/app/code/CodeViewer.tsx` | `apps/web/src/components/DiffPanel.tsx`, `DiffPanelShell.tsx` (diff layout and wrap toggles), `components/diffs/DiffFileTree.tsx` (changed files list), `components/files/FilePreviewPanel.tsx` (file header) |
+| `webui/src/app/code/CodeSurface.tsx` | `apps/web/src/components/files/FilePreviewPanel.tsx` (`EditableFileSurface`), `components/files/ReadOnlySourcePreview.tsx`, `components/DiffPanel.tsx` |
+| `webui/src/app/code/codeRendering.ts` | `apps/web/src/lib/diffRendering.ts` (`DIFF_SURFACE_THEME_UNSAFE_CSS`, `resolveDiffThemeName`), `lib/syntaxHighlighting.ts` (`PREFERRED_HIGHLIGHTER`), `components/diffs/StyledDiffCodeView.tsx`, `components/files/fileSurfaceChrome.tsx` |
 | `webui/src/tabs/lobby/InlineActivity.tsx` | `apps/web/src/components/chat/WorkLog.tsx` |
 | `src/webui/palette-core.ts` (the built-in themes) | `packages/shared/src/themePalettes.ts` (Blossom is their T3 Chat theme, renamed) |
 | `src/harness/model-manifest.json` (copied as is) | `apps/server/src/provider/model-manifest.json` |
@@ -88,3 +92,12 @@ Jakarta Sans Project Authors), Figtree (The Figtree Project Authors), Outfit
 Grotesk (The Space Grotesk Project Authors), Source Sans 3 and Source Code Pro
 (Adobe), Fira Code (The Fira Code Project Authors) and Roboto Mono (The Roboto
 Mono Project Authors).
+
+## Code viewer libraries
+
+The code viewer's chunks in `webui/dist/assets` bundle `@pierre/diffs`,
+`@pierre/theming` and `@pierre/theme` (The Pierre Computer Company, Apache
+License 2.0, https://www.apache.org/licenses/LICENSE-2.0), Shiki and its
+grammars (`shiki`, `@shikijs/*`, Pine Wu and Anthony Fu, MIT; each grammar
+keeps its own licence, listed in `@shikijs/langs`) and `diff` (Kevin Decker,
+BSD 3-Clause).
