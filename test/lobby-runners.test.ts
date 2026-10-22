@@ -112,6 +112,16 @@ test("a running agent's thought stays live until its next one or until the run e
   assert.equal(feed.thoughts.at(-1)!.live, false);
 });
 
+test("a turn's end settles the Master's steps that never closed, and only its own", () => {
+  const feed = new LobbyFeed();
+  feed.begin("MASTER", "running the tests", "call-1");
+  feed.begin("MASTER", "reading a.ts", "call-2");
+  feed.end("call-2");
+  feed.step("DESIGN", "editing a.css", "CHAT-1");
+  feed.endAll("MASTER");
+  assert.deepEqual(feed.activity.map((entry) => [entry.source, entry.pending]), [["MASTER", false], ["MASTER", false], ["DESIGN", true]]);
+});
+
 test("the feed streams the Master's thought into one entry and closes it", () => {
   const feed = new LobbyFeed();
   feed.thinkDelta("MASTER", "Let me ");

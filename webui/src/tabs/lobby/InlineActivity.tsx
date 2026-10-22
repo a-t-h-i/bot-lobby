@@ -16,6 +16,7 @@ import { useCollapsed } from "@/lib/collapsed"
 import { formatClock } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { WorkingMark } from "@/ui/WorkingMark"
+import { ShimmerWord } from "./ChatParts"
 import { sourceColor, sourceLabel, sourceTone, type ActivityEntry } from "./types"
 
 /** Whether every run of steps is open; remembered in this browser (`useCollapsed` stores it, folded is the default). */
@@ -125,17 +126,5 @@ export function InlineActivity({ entries }: { entries: ActivityEntry[] }) {
         </ol>
       ) : null}
     </div>
-  )
-}
-
-/** A word a light passes over letter by letter, then rests, on a loop (see `.activity-shimmer` in index.css). */
-function ShimmerWord({ text }: { text: string }) {
-  return (
-    <span className="activity-shimmer">
-      <span className="sr-only">{text}</span>
-      {[...text].map((letter, index) => (
-        <span key={index} aria-hidden="true" style={{ "--i": index } as CSSProperties}>{letter}</span>
-      ))}
-    </span>
   )
 }

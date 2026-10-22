@@ -133,6 +133,11 @@ export class LobbyFeed {
     if (this.settle(undefined, key, isError ? "error" : undefined)) this.touch();
   }
 
+  /** Settle every step `source` still has open (a turn that ended without closing its tool calls). */
+  endAll(source: string): void {
+    if (this.settle(source, undefined)) this.touch();
+  }
+
   /** The next step of an agent that reports one step at a time: the previous one settles. */
   step(source: string, text: string, key: string, at = Date.now()): void {
     this.settle(undefined, key);

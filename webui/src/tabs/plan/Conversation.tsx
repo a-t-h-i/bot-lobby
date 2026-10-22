@@ -3,7 +3,7 @@
  * bubble on the right, the panel beside its avatar, its questions as cards
  * (who asks, the question, the options, and the mockups a seat drew for them,
  * which expand into the mockup viewer), questions the classifier settled
- * marked with a tick, three dots while a round runs, and everything else as
+ * marked with a tick, the panel's name shimmering while a round runs, and everything else as
  * Markdown.
  */
 import { useState, type CSSProperties } from "react"
@@ -19,7 +19,7 @@ import { formatClock } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Markdown } from "@/ui/Markdown"
 import { AgentIcon } from "@/ui/AgentIcon"
-import { AgentMessage, ChatNote, TypingDots, YourMessage } from "../lobby/ChatParts"
+import { AgentMessage, ChatNote, YourMessage } from "../lobby/ChatParts"
 import { sourceColor, sourceLabel, sourceTone } from "../lobby/types"
 
 /** The page width a mockup is laid out at before it is scaled into its thumbnail. */
@@ -152,9 +152,7 @@ export function PanelConversation({ messages, seed, busy = false, readOnly = fal
         <Turn key={`${message.at}-${index}`} message={message} index={index} busy={busy} readOnly={readOnly} />
       ))}
       {busy ? (
-        <AgentMessage source="PLANNER" name="Panel" head live aside="the panel is thinking">
-          <TypingDots className="mt-1" />
-        </AgentMessage>
+        <AgentMessage source="PLANNER" name="Panel" head live waiting aside="the panel is thinking" />
       ) : null}
     </div>
   )

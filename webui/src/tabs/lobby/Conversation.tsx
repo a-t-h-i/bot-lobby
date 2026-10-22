@@ -5,7 +5,7 @@
  * on the right with who it went to when that was not the Master, messages from one speaker within five minutes
  * under one header (a follow-on shows its time when pointed at), notes as
  * rules across the column, the agents' activity folded in place between the
- * messages it came between (see `InlineActivity.tsx`), three dots until the reply starts (none while a working step already shows), older history loaded from
+ * messages it came between (see `InlineActivity.tsx`), the speaker's name shimmering until the reply starts (not while a working step already shows), older history loaded from
  * `lobby.history` at the top, and a "Jump to latest" button while scrolled
  * up. New messages ease in; settled ones are memoised by id, so only the
  * streaming reply redraws on each delta.
@@ -13,7 +13,7 @@
 import { memo, useCallback, useEffect, useMemo, useState, type RefObject } from "react"
 import { useStickToBottom } from "@/lib/useStickToBottom"
 import { MessageSquare } from "lucide-react"
-import { AgentMessage, ChatNote, TypingDots, YourMessage } from "./ChatParts"
+import { AgentMessage, ChatNote, YourMessage } from "./ChatParts"
 import { motion } from "motion/react"
 import { JumpToLatest } from "@/ui/JumpToLatest"
 import { ScrollHints } from "@/ui/ScrollHints"
@@ -75,14 +75,14 @@ const Message = memo(
     before.entry.to === after.entry.to
 )
 
-/** The reply on its way: the oracle's as it streams, or another agent's (`answering`); three dots until it starts, unless a working step above already says the work is under way. */
+/** The reply on its way: the oracle's as it streams, or another agent's (`answering`); until it starts, its speaker's name shimmers, unless a working step above already says the work is under way. */
 function LiveReply({ text, busy, working, answering }: { text?: string; busy: boolean; working: boolean; answering?: string }) {
   const writing = Boolean(text?.trim())
   if (!writing && (!busy || working)) return null
   const source = writing ? "MASTER" : (answering ?? "MASTER")
   return (
-    <AgentMessage source={source} name={sourceLabel(source)} head named live={busy} aside={busy && writing ? "writing…" : undefined}>
-      {writing ? <Markdown text={text ?? ""} /> : <TypingDots className="mt-1" />}
+    <AgentMessage source={source} name={sourceLabel(source)} head named live={busy} waiting={!writing} aside={busy && writing ? "writing…" : undefined}>
+      {writing ? <Markdown text={text ?? ""} /> : null}
     </AgentMessage>
   )
 }
@@ -173,7 +173,7 @@ export function Conversation({
   hasTask: boolean
 }) {
   const steps = useMemo(() => activity.slice(-STEPS_CAP), [activity])
-  const { ref, atBottom, stick, onScroll } = useStickToBottom(`${chat.length}:${reply?.length ?? 0}:${steps.length}:${steps.at(-1)?.pending ?? ""}`)
+  const { ref, atBottom, stick, onScroll } = useStickToBottom(`${chat.length}:${reply?.length ?? 0}:${steps.length}:${steps.at(-1)?.pending ?? ""}:${answering ?? ""}`)
   const { merged, more, loading, load } = useOlderChat(chat, hasOlder, ref)
   const handleScroll = useCallback(() => {
     onScroll()

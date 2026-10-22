@@ -333,6 +333,9 @@ export function registerLobbyEvents(pi: ExtensionAPI, configDir: string): void {
     const finished = turn;
     turn = undefined;
     lobbyFeed.replyEnd();
+    // A tool call cut off by a stop or a steer never ends on its own; the turn's end closes it.
+    lobbyFeed.endAll("MASTER");
+    lobbyTopics.bump("status");
     const taskId = finished?.taskId ?? currentZenTask()?.id;
     if (!finished || !taskId || !runtime) return;
     appendMetrics(runtime.root, configDir, [{
@@ -352,6 +355,10 @@ export function registerLobbyEvents(pi: ExtensionAPI, configDir: string): void {
       taskId,
     }]);
     lobbyTopics.bump("metrics");
+  });
+  // pi is idle only once the run has settled (after agent_end, retries and continuations): the page's busy flag rereads then.
+  pi.on("agent_settled", () => {
+    lobbyFeed.endAll("MASTER");
     lobbyTopics.bump("status");
   });
 }

@@ -2,8 +2,9 @@
  * The pieces both chats (the Lobby's and the planning panel's) are made of,
  * so they read as one, after the coding harnesses: the agents' words as plain
  * prose across the column, yours in a filled bubble on the right, notes as a
- * quiet centred line, and three dots while someone is still typing. A reply
- * still being written ends in a beating dot, in its speaker's colour.
+ * quiet centred line, and the speaker's name shimmering (as "Working" does)
+ * while their reply is on its way. A reply still being written ends in a
+ * beating dot, in its speaker's colour.
  */
 import type { CSSProperties, ReactNode } from "react"
 import { cn } from "@/lib/utils"
@@ -17,9 +18,11 @@ import { sourceTone } from "./types"
  * other agents speak too (`named`: the Lobby, where any agent may answer).
  * The time shows under the message while it is pointed at. `bubble={false}`
  * is kept for content that brings its own cards (the panel's questions).
+ * `waiting`: the reply has not started, so the name shimmers and nothing
+ * is under it yet.
  */
-export function AgentMessage({ source, name, time, head, live, children, aside, named: always }: { source: string; name: string; time?: string; head: boolean; live?: boolean; children: ReactNode; aside?: ReactNode; bubble?: boolean; named?: boolean }) {
-  const named = head && (always || !isOracle(source))
+export function AgentMessage({ source, name, time, head, live, children, aside, named: always, waiting }: { source: string; name: string; time?: string; head: boolean; live?: boolean; children?: ReactNode; aside?: ReactNode; bubble?: boolean; named?: boolean; waiting?: boolean }) {
+  const named = waiting || (head && (always || !isOracle(source)))
   return (
     <div className="chat-agent group/msg" data-live={live || undefined} style={live ? ({ "--orb": sourceTone(source) } as CSSProperties) : undefined}>
       {named || aside ? (
@@ -27,14 +30,14 @@ export function AgentMessage({ source, name, time, head, live, children, aside, 
           {named ? (
             <span className="inline-flex items-center gap-1.5 font-medium text-foreground" style={{ "--orb": sourceTone(source) } as CSSProperties}>
               <AgentIcon source={source} strokeWidth={2.25} className="size-3.5 text-[color-mix(in_oklab,var(--orb)_85%,var(--foreground))]" />
-              {name}
+              {waiting ? <ShimmerWord text={name} /> : name}
             </span>
           ) : null}
           {named && time ? <time className="text-xs text-muted-foreground tabular-nums">{time}</time> : null}
           {aside ? <span className="flex items-center gap-1.5 text-xs text-muted-foreground">{aside}</span> : null}
         </p>
       ) : null}
-      <div className="chat-prose">{children}</div>
+      {waiting ? null : <div className="chat-prose">{children}</div>}
       {time && !named ? <time className="chat-meta">{time}</time> : null}
     </div>
   )
@@ -66,13 +69,14 @@ export function ChatNote({ failed, children }: { failed?: boolean; children: Rea
   )
 }
 
-/** Three dots in a wave that lights them in the speaker's colour, for a reply on its way. */
-export function TypingDots({ className }: { className?: string }) {
+/** A word whose letters light up in a wave, every 2.4s: "Working", or the name of an agent whose reply is on its way. */
+export function ShimmerWord({ text }: { text: string }) {
   return (
-    <span aria-hidden="true" className={cn("typing-dots", className)}>
-      <span />
-      <span />
-      <span />
+    <span className="activity-shimmer">
+      <span className="sr-only">{text}</span>
+      {[...text].map((letter, index) => (
+        <span key={index} aria-hidden="true" style={{ "--i": index } as CSSProperties}>{letter}</span>
+      ))}
     </span>
   )
 }
