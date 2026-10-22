@@ -370,10 +370,15 @@ export function chatText(role: "user" | "assistant", text: string): Array<{ role
     const request = /\nRequest: ([\s\S]*?)(?:\nState: |$)/.exec(body)?.[1]?.trim();
     return [{ role: "note", text: `task started · ${kickoff[2]}` }, ...(request ? [{ role: "you" as const, text: request }] : [])];
   }
+  // Auto mode's nudge to keep going (pi/owner.ts autoNudge) shows as one short line.
+  if (/^Auto mode: \S+ is \S+\. Keep driving it to completion/.test(body)) return [{ role: "note", text: AUTO_NOTE }];
   const comment = /^The user left (?:a comment|\d+ comments) on (the approved plan|the proposal) of (\S+) from the lobby:/.exec(body);
   if (comment) return [{ role: "note", text: `your comment on ${comment[1]} went to the oracle` }];
   return [{ role: "you", text: body }];
 }
+
+/** What the conversation shows where auto mode kept the oracle going. */
+export const AUTO_NOTE = "auto mode";
 
 /** The session entry bot-lobby leaves where the oracle's context starts over (see pi/fresh-context.ts). */
 export const CONTEXT_MARK = "bot-lobby-context";

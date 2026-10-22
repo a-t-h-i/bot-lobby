@@ -13,6 +13,7 @@ import { isAutoMode, setAutoMode } from "../src/state/auto.ts";
 import { inboxMessage, markInboxDelivered, readInbox, sendToInbox } from "../src/state/inbox.ts";
 import { autoNudge, autoStep, deliverInbox, driveAuto, MAX_IDLE_NUDGES, registerOwner, setAuto, startOwner, taskFingerprint, toggleOwnAuto } from "../src/pi/owner.ts";
 import { masterTaskContext } from "../src/pi/events.ts";
+import { AUTO_NOTE, chatText } from "../src/lobby/feed.ts";
 
 const SESSION = "session-1";
 
@@ -187,4 +188,37 @@ test("in auto mode ask_user_question is blocked with a reason, and the auto key 
   assert.equal(await call("read"), undefined, "other tools are untouched");
   assert.equal(driveAuto(), false, "a busy oracle is not nudged");
   for (const handler of session.handlers.get("session_shutdown") ?? []) await handler({}, session.ctx);
+});
+
+test("stopping the oracle in auto mode holds it until the user starts a turn or switches auto mode", async () => {
+  const root = project();
+  ownedTask(root);
+  const session = fakeSession(root);
+  registerOwner(session.pi, ".pi");
+  for (const handler of session.handlers.get("session_start") ?? []) await handler({}, session.ctx);
+  const fire = async (name: string, event: unknown) => {
+    for (const handler of session.handlers.get(name) ?? []) await handler(event, session.ctx);
+  };
+  setAutoMode(root, ".pi", "TASK-1", true);
+  await fire("agent_end", { messages: [{ role: "user" }, { role: "assistant", stopReason: "stop" }] });
+  assert.equal(driveAuto(), true, "a turn that ended on its own: auto mode carries on");
+  await fire("agent_end", { messages: [{ role: "assistant", stopReason: "aborted" }] });
+  assert.equal(driveAuto(), false, "stopped by the user: no new turn");
+  assert.equal(driveAuto(), false, "still held on the next tick");
+  await fire("agent_start", {});
+  await fire("agent_end", { messages: [{ role: "assistant", stopReason: "stop" }] });
+  assert.equal(driveAuto(), true, "the user's next turn lets auto mode go on");
+  await fire("agent_end", { messages: [{ role: "assistant", stopReason: "aborted" }] });
+  assert.equal(driveAuto(), false);
+  setAuto(root, ".pi", "TASK-1", false);
+  setAuto(root, ".pi", "TASK-1", true);
+  assert.match(session.sent.at(-1)!.text, /^Auto mode: TASK-1/, "switching auto mode back on starts it again");
+  for (const handler of session.handlers.get("session_shutdown") ?? []) await handler({}, session.ctx);
+});
+
+test("the lobby shows auto mode's nudge as a short auto mode line", () => {
+  const task = createTask("TASK-9", "x");
+  assert.deepEqual(chatText("user", autoNudge(task)), [{ role: "note", text: AUTO_NOTE }]);
+  assert.equal(AUTO_NOTE, "auto mode");
+  assert.deepEqual(chatText("user", "Auto mode: please"), [{ role: "you", text: "Auto mode: please" }], "the user's own words stay theirs");
 });

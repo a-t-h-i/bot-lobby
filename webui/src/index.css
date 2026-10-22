@@ -1131,6 +1131,10 @@
 .chat-note { display: flex; min-width: 0; align-items: center; gap: 0.5rem; padding-block: 0.25rem; font-size: var(--text-2xs); color: var(--muted-foreground); }
 .chat-note::before, .chat-note::after { content: ""; height: 1px; flex: 1; background: color-mix(in srgb, var(--border) 70%, transparent); }
 .chat-note > span { max-width: 80%; padding: 0.25rem 0.5rem; text-align: center; font-weight: 500; }
+/* Auto mode: just the words, in a muted green that follows the theme. */
+.auto-mode-text, .chat-note-auto { color: color-mix(in srgb, var(--success) 62%, var(--muted-foreground)); font-weight: 500; }
+.chat-note-auto { justify-content: center; }
+.chat-note-auto::before, .chat-note-auto::after { content: none; }
 /* A reply still being written ends in a beating dot, in its speaker's colour. */
 .chat-agent[data-live] .md-body > :is(p, h1, h2, h3, h4, blockquote):last-child::after,
 .chat-agent[data-live] .md-body > :is(ul, ol):last-child > li:last-child::after {

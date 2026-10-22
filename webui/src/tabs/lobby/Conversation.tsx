@@ -17,6 +17,7 @@ import { AgentMessage, ChatNote, YourMessage } from "./ChatParts"
 import { motion } from "motion/react"
 import { JumpToLatest } from "@/ui/JumpToLatest"
 import { ScrollHints } from "@/ui/ScrollHints"
+import { AUTO_NOTE } from "@/ui/task-facts"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Keys } from "@/components/ui/kbd"
 import { call } from "@/lib/api"
@@ -35,6 +36,7 @@ const NO_TASK_HINT = "Ask a question or ask for a change below: the right agent 
 const NOTHING_SAID = "Nothing said yet. Type below to talk to the oracle about this task."
 
 function NoteEntry({ entry }: { entry: ChatEntry }) {
+  if (entry.text === AUTO_NOTE) return <ChatNote auto>{AUTO_NOTE}</ChatNote>
   return (
     <ChatNote failed={entry.text.startsWith("✗")}>
       {entry.text}

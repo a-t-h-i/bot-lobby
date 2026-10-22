@@ -37,3 +37,11 @@ export function CheckMark({ check, className }: { check: "open" | "done" | "drop
   const Icon = check === "done" ? CheckCircle2 : check === "dropped" ? XCircle : Circle
   return <Icon aria-hidden="true" className={cn("size-4 shrink-0", check === "done" ? "text-success" : "text-muted-foreground", className)} />
 }
+
+/** What a task in auto mode shows, and the line the lobby leaves where auto mode kept the oracle going (src/lobby/feed.ts AUTO_NOTE). */
+export const AUTO_NOTE = "auto mode"
+
+/** `auto mode`, in muted green. */
+export function AutoModeText() {
+  return <span className="auto-mode-text">{AUTO_NOTE}</span>
+}
