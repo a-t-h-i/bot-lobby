@@ -60,10 +60,10 @@ export function YourMessage({ time, head: _head, note, children, below, actions 
   )
 }
 
-/** A quiet line centred in the column: `task started · 10:44`. */
-export function ChatNote({ failed, children }: { failed?: boolean; children: ReactNode }) {
+/** A quiet line centred in the column: `task started · 10:44`; auto mode's is plain green text. */
+export function ChatNote({ failed, auto, children }: { failed?: boolean; auto?: boolean; children: ReactNode }) {
   return (
-    <div role="note" className={cn("chat-note", failed && "text-destructive")}>
+    <div role="note" className={cn("chat-note", failed && "text-destructive", auto && "chat-note-auto")}>
       <span>{children}</span>
     </div>
   )

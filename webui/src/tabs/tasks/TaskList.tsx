@@ -5,7 +5,7 @@
  */
 import type { TaskRow } from "@protocol"
 import { cn } from "@/lib/utils"
-import { CheckMark, Pips } from "@/ui/task-facts"
+import { AutoModeText, CheckMark, Pips } from "@/ui/task-facts"
 import { CHECK_WORDS, SECTION_TITLES, detailsLine, groupRows } from "./words"
 import { Rule } from "@/ui/Frame"
 import { GROUP, ROW, ROWS } from "@/ui/rows"
@@ -33,7 +33,7 @@ function titleClass(row: TaskRow): string {
 
 function TaskItemFacts({ row }: { row: TaskRow }) {
   return <>
-    {row.check === "open" ? <span className="pl-6 text-xs text-muted-foreground">{detailsLine(row)}</span> : null}
+    {row.check === "open" ? <span className="pl-6 text-xs text-muted-foreground">{detailsLine(row)}{row.auto ? <> · <AutoModeText /></> : null}</span> : null}
     {row.kind !== "plan" ? <span className="pl-6 text-xs text-muted-foreground"><PhaseTiming timing={row.timing} {...(row.work ? { work: row.work } : {})} stopped={row.check !== "open"} /></span> : null}
     {row.delivery ? <span className="pl-6 text-xs text-foreground">Delivery: {row.delivery.status.replaceAll("_", " ")} · open task to review</span> : null}
   </>

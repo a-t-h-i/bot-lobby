@@ -32,7 +32,8 @@ export type OwnerEvent =
   | { kind: "messages"; count: number }
   | { kind: "auto"; taskId: string; on: boolean }
   | { kind: "nudge"; taskId: string }
-  | { kind: "stalled"; taskId: string };
+  | { kind: "stalled"; taskId: string }
+  | { kind: "held"; taskId: string };
 
 interface Owner {
   pi: ExtensionAPI;
@@ -43,6 +44,8 @@ interface Owner {
   configDir: string;
   timer?: ReturnType<typeof setInterval>;
   auto?: AutoTrack;
+  /** The user stopped the oracle: auto mode waits until they start a turn again or switch it. */
+  held?: boolean;
   /** The session's task as this tick read it: one read serves the whole tick. */
   tick?: { task: Task | undefined };
 }
@@ -177,7 +180,7 @@ export function driveAuto(): boolean {
     state.auto = undefined;
     return false;
   }
-  if (!state.ctx.isIdle()) return false;
+  if (state.held || !state.ctx.isIdle()) return false;
   const step = autoStep(state.auto, taskFingerprint(task));
   state.auto = step.track;
   if (step.stalledNow) {
@@ -199,6 +202,7 @@ export function setAuto(root: string, configDir: string, taskId: string, on: boo
   const task = ownTask(state);
   if (task?.id !== taskId) return;
   state.auto = undefined;
+  state.held = false;
   if (on) driveAuto();
 }
 
@@ -211,6 +215,27 @@ export function toggleOwnAuto(): string {
   const on = !isAutoMode(state.root, state.configDir, task.id);
   setAuto(state.root, state.configDir, task.id, on, state.ctx.sessionManager.getSessionId());
   return on ? `auto mode on for ${task.id}: the oracle drives it to completion without asking you` : `auto mode off for ${task.id}: the oracle asks you again`;
+}
+
+/** Whether a finished turn was stopped by the user (its last reply was aborted). */
+export function stoppedTurn(messages: readonly unknown[] | undefined): boolean {
+  const last = [...(messages ?? [])].reverse().find((message) => (message as { role?: string })?.role === "assistant") as { stopReason?: string } | undefined;
+  return last?.stopReason === "aborted";
+}
+
+/**
+ * A turn ended. One the user stopped holds auto mode, so the next tick does
+ * not start the task again; any turn that starts after it (the user's next
+ * message) lets auto mode carry on.
+ */
+export function turnEnded(messages: readonly unknown[] | undefined): void {
+  const state = owner;
+  if (!state || !stoppedTurn(messages)) return;
+  const task = ownTask(state);
+  if (state.held || !live(task) || !isAutoMode(state.root, state.configDir, task.id)) return;
+  state.held = true;
+  state.auto = undefined;
+  listener?.({ kind: "held", taskId: task.id });
 }
 
 /** One tick of the owner's clock. */
@@ -260,8 +285,14 @@ export function registerOwner(pi: ExtensionAPI, configDir: string): void {
   };
   pi.on("session_start", (_event, ctx) => startOwner(pi, ctx, configDir));
   pi.on("session_shutdown", () => stop());
-  pi.on("agent_start", (_event, ctx) => track(ctx));
-  pi.on("agent_end", (_event, ctx) => track(ctx));
+  pi.on("agent_start", (_event, ctx) => {
+    track(ctx);
+    if (owner) owner.held = false;
+  });
+  pi.on("agent_end", (event, ctx) => {
+    track(ctx);
+    turnEnded((event as { messages?: readonly unknown[] }).messages);
+  });
   // Auto mode has nobody to answer a question: tell the oracle to decide instead.
   pi.on("tool_call", (event, ctx) => {
     if (event.toolName !== "ask_user_question" || !owner) return undefined;

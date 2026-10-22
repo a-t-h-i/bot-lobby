@@ -1,6 +1,6 @@
 {
-  "hash": "65255c331e3eaac33f1abc30fcff456f30aea5050f4f0781eebd8f7859164632",
-  "builtAt": "2026-10-22T16:49:27.005Z",
+  "hash": "9e6769553425d78d4b13973f4382179ce073b8f66a83ed229089d4ce1bda5935",
+  "builtAt": "2026-10-22T19:28:31.493Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -280,7 +280,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "af7abcf1752d22e0150565213c330063158e1e7ba936554df22622fee02c593a"
+      "sha256": "c02f661a5504299633fc376ef2274e92d90d8949431e33f47424969177adc8c4"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -464,11 +464,11 @@
     },
     {
       "path": "webui/src/tabs/lobby/ChatParts.tsx",
-      "sha256": "ff5599ad149c2699028ca9a4a16d84120c9a51bcb5615856aa37b79b2904712a"
+      "sha256": "638142d61172595629c6d099a04a65e90e94dba3bd935c00ded6227b79a7c0a7"
     },
     {
       "path": "webui/src/tabs/lobby/Conversation.tsx",
-      "sha256": "42d3d3fa6c937da66e25f4e9a445a0918681e3b43888110aa4f51135d69419a2"
+      "sha256": "9ac10fe1875fb1045ba879ba6610c5f436348af36913945f6abc0e9648a1ae22"
     },
     {
       "path": "webui/src/tabs/lobby/InlineActivity.tsx",
@@ -616,7 +616,7 @@
     },
     {
       "path": "webui/src/tabs/tasks/TaskList.tsx",
-      "sha256": "d66ca6c78f40279aacd8062933cb2cc13c94c8dfc9a871e577a46e7e935dacde"
+      "sha256": "a881a6a363c0fee11ec872f0384ce3dffb781e32576d97bf4cdee03db5097578"
     },
     {
       "path": "webui/src/tabs/tasks/TasksTab.tsx",
@@ -624,7 +624,7 @@
     },
     {
       "path": "webui/src/tabs/tasks/words.ts",
-      "sha256": "2052d195d78fdeff7acfc9a768713011d2e1bb46ed5d48ea449d863f17a792a7"
+      "sha256": "9cc4002f51d68449abf768672d9a4a2db39d7f6d45a3a2d6075db0a41cd5c171"
     },
     {
       "path": "webui/src/ui/Actions.tsx",
@@ -700,7 +700,7 @@
     },
     {
       "path": "webui/src/ui/task-facts.tsx",
-      "sha256": "613c91230e6ee9b85c1773d044e1be016f8a298ef4beeb5fa04d71c8c5383bff"
+      "sha256": "9c0b3c5a600e0325a9003b4c6b003a984f3e0af46cdc502753d54a2eb36cf10c"
     },
     {
       "path": "webui/src/ui/useEffortSlider.ts",

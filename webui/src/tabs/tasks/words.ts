@@ -43,13 +43,13 @@ export function agoWords(age: string): string {
   return age === "now" ? "just now" : `${age} ago`
 }
 
-/** The line under an open row's title: state, who drives it, auto mode; a plan's age and issue. */
+/** The line under an open row's title: state and who drives it (the list adds auto mode in green); a plan's age and issue. */
 export function detailsLine(row: TaskRow): string {
   if (row.kind === "plan") {
     return ["planned", row.age ? (row.age === "now" ? "saved just now" : `saved ${row.age} ago`) : "", row.issue ? `#${row.issue}` : ""].filter(Boolean).join(" · ")
   }
   const owner = row.owner ?? (row.section === "mine" ? "this session" : "")
-  return [stateWords(row.status, row.paused), row.auto ? "auto" : "", owner].filter(Boolean).join(" · ")
+  return [stateWords(row.status, row.paused), owner].filter(Boolean).join(" · ")
 }
 
 /** Rows grouped under their section, in the order the API sent them. */
