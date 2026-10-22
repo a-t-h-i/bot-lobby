@@ -306,6 +306,9 @@ function streamReply(service: object, feed: LobbyFeed, fixture: ScenarioFixture)
   }
 }
 
+/** How long a scripted @ mention reply takes, so the page shows the agent at work first. */
+const ANSWER_MS = 1500;
+
 /** A `LobbyService` answering from the `name` scenario's fixtures. */
 export function createFixtureService(name: string, feed = new LobbyFeed()): LobbyService {
   const fixture = loadScenario(name);
@@ -318,6 +321,8 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
   const auto = new Set(fixture.autoTasks ?? []);
   const comments = new Map<string, Array<Record<string, unknown>>>(Object.entries(fixture.taskComments ?? {}));
   const backgrounds = (fixture.backgroundSessions ?? []).map(fakeBackground);
+  // The agent other than the oracle answering an @ mention, for as long as its scripted reply takes.
+  let answering: string | undefined;
   const archivedBackgrounds: BackgroundSession[] = [];
   let sessionName = fixture.status.sessionName;
   let planning = fakePlanner(fixture.mockPlanner ?? defaultPlanner());
@@ -344,7 +349,8 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
   const service = {
     sessionId: () => fixture.status.sessionId,
     sessionName: () => sessionName,
-    masterBusy: () => fixture.status.busy,
+    masterBusy: () => fixture.status.busy || answering !== undefined,
+    answering: () => answering,
     config: () => config,
     linters: () => fixture.settings?.linters ?? [{ tool: "ESLint", folder: "", installed: true }, { tool: "Ruff", folder: "services/api", installed: false }],
     saveConfig: (next: BotLobbyConfig) => {
@@ -389,8 +395,16 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
       const mention = parseMention(text);
       if (mention && mention.agent !== "master") {
         const source = CHAT_AGENT_SOURCES[mention.agent];
+        answering = source;
         feed.say("you", mention.rest, Date.now(), { to: source });
-        const reply = setTimeout(() => feed.say("oracle", `${source} here: looked into it, and it is done.`, Date.now(), { agent: source }), 400);
+        lobbyTopics.bump("lobby");
+        lobbyTopics.bump("status");
+        const reply = setTimeout(() => {
+          answering = undefined;
+          feed.say("oracle", `${source} here: looked into it, and it is done.`, Date.now(), { agent: source });
+          lobbyTopics.bump("lobby");
+          lobbyTopics.bump("status");
+        }, ANSWER_MS);
         unref(reply);
         return undefined;
       }
