@@ -21,7 +21,10 @@ export function moveNav(root: ParentNode, from: Element | null, to: number | "fi
 }
 
 /** Whether the key press is going into a text field (so letters and arrows belong to it). */
-export function isTyping(target: EventTarget | null): boolean {
+export function isTyping(eventTarget: EventTarget | null): boolean {
+  // An editor inside a shadow root (the code viewer) shows up as its host; look at what is focused within it.
+  let target = eventTarget
+  while (target instanceof HTMLElement && target.shadowRoot?.activeElement) target = target.shadowRoot.activeElement
   return target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement || (target instanceof HTMLInputElement && !["checkbox", "radio", "button"].includes(target.type)) || (target instanceof HTMLElement && target.isContentEditable)
 }
 

@@ -25,6 +25,7 @@ import { terminalClose, terminalInput, terminalList, terminalOpen, terminalResiz
 import { MAX_INPUT_CHARS } from "../terminal.ts";
 import { themesChoose, themesGet, themesRemove, themesRename, themesSave } from "./themes.ts";
 import { noticeText, pushNotice } from "../notices.ts";
+import { codeChanges, codeRead, codeSave } from "../code.ts";
 
 /** What a handler reads besides the request body. */
 export interface ApiContext {
@@ -359,6 +360,17 @@ function buildRoutes(): Record<string, Route> {
   routes["issues.create"] = {
     schema: Type.Object({ text: Type.String({ maxLength: 20_000 }) }, { additionalProperties: false }),
     run: (body, ctx) => issuesCreate(body as { text: string }, ctx),
+  };
+  const codeRoot = (ctx: ApiContext) => ctx.service.projectRoot?.() ?? process.cwd();
+  const CodePath = Type.String({ minLength: 1, maxLength: 4096 });
+  routes["code.changes"] = { schema: Empty, run: (_body, ctx) => codeChanges(codeRoot(ctx)) };
+  routes["code.read"] = {
+    schema: Type.Object({ path: CodePath }, { additionalProperties: false }),
+    run: (body, ctx) => codeRead(codeRoot(ctx), (body as { path: string }).path),
+  };
+  routes["code.save"] = {
+    schema: Type.Object({ path: CodePath, contents: Type.String({ maxLength: 900_000 }), mtimeMs: Type.Optional(Type.Number()), force: Type.Optional(Type.Boolean()) }, { additionalProperties: false }),
+    run: (body, ctx) => codeSave(codeRoot(ctx), body as { path: string; contents: string; mtimeMs?: number; force?: boolean }),
   };
   routes["settings.get"] = { schema: Empty, run: (_body, ctx) => settingsGet(ctx) };
   routes["settings.set"] = {

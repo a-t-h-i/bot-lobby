@@ -46,11 +46,14 @@ export function freshNonce(): string {
   return randomBytes(16).toString("base64");
 }
 
-/** The page loads nothing from anywhere else, so model Markdown cannot pull in a tracker or a script. */
+/**
+ * The page loads nothing from anywhere else, so model Markdown cannot pull in a tracker or a script.
+ * `'wasm-unsafe-eval'` lets the code viewer's highlighter compile its own bundled WebAssembly; it allows no `eval` of script.
+ */
 export function cspHeader(nonce: string): string {
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}'`,
+    `script-src 'self' 'nonce-${nonce}' 'wasm-unsafe-eval'`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "connect-src 'self'",

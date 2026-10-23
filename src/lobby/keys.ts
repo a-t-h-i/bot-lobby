@@ -13,6 +13,7 @@ export const LOBBY_ACTIONS = {
   activity: { key: "alt+a", help: "open or fold every step in the Lobby conversation" },
   thinking: { key: "alt+t", help: "show or hide Thinking on the Lobby" },
   terminal: { key: "ctrl+`", help: "show or hide the terminal" },
+  code: { key: "alt+e", help: "open or close the code viewer: changed files, diffs and editing" },
   nextTab: { key: "alt+]", help: "next tab" },
   prevTab: { key: "alt+[", help: "previous tab" },
 } as const;

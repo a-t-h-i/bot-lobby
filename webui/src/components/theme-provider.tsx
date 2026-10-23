@@ -57,7 +57,10 @@ function disableTransitionsTemporarily() {
   }
 }
 
-function isEditableTarget(target: EventTarget | null) {
+function isEditableTarget(eventTarget: EventTarget | null) {
+  // A key typed in an editor inside a shadow root (the code viewer) reaches the window retargeted to its host.
+  let target = eventTarget
+  while (target instanceof HTMLElement && target.shadowRoot?.activeElement) target = target.shadowRoot.activeElement
   if (!(target instanceof HTMLElement)) {
     return false
   }

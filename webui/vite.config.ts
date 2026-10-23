@@ -16,11 +16,15 @@ export default defineConfig({
     emptyOutDir: true,
   },
   resolve: {
-    alias: {
-      "@": resolve(root, "src"),
-      "@protocol": resolve(root, "../src/webui/protocol.ts"),
-      "@shared": resolve(root, "../src/lobby/prompts.ts"),
-      "@palette": resolve(root, "../src/webui/palette-core.ts"),
-    },
+    alias: [
+      // The diff library's "shiki" with a short list of languages (see the file).
+      { find: /^shiki$/, replacement: resolve(root, "src/app/code/shiki.ts") },
+      // Only its own Pierre themes, not the dozens of Shiki themes beside them.
+      { find: /^@pierre\/theming\/themes$/, replacement: resolve(root, "src/app/code/themes.ts") },
+      { find: "@", replacement: resolve(root, "src") },
+      { find: "@protocol", replacement: resolve(root, "../src/webui/protocol.ts") },
+      { find: "@shared", replacement: resolve(root, "../src/lobby/prompts.ts") },
+      { find: "@palette", replacement: resolve(root, "../src/webui/palette-core.ts") },
+    ],
   },
 })

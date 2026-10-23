@@ -64,6 +64,7 @@ test("index.html replaces every nonce placeholder and the CSP carries the same n
     assert.ok(occurrences >= 3, `the nonce occurs in the body, got ${occurrences}`);
     const csp = String(first.headers["content-security-policy"]);
     assert.ok(csp.includes(`script-src 'self' 'nonce-${nonce}'`), "script-src stays nonce-locked");
+    assert.ok(!/'unsafe-eval'/.test(csp), "no script eval; only WebAssembly may compile ('wasm-unsafe-eval')");
     assert.ok(csp.includes("style-src 'self' 'unsafe-inline'"), "style-src allows Radix inline style attributes");
     const styleSrc = /style-src ([^;]*)/.exec(csp)?.[1] ?? "";
     assert.ok(!styleSrc.includes("'nonce-"), "no nonce in the style-src directive");

@@ -11,6 +11,8 @@ import { projectUrl } from "@/lib/project"
 import { toast } from "@/lib/toast"
 import { AttachmentList, splitAttachments } from "./Attachments"
 import { useGradual } from "@/lib/useGradual"
+import { FileLink } from "@/app/code/FileLink"
+import { filePathOf } from "@/app/code/codeStore"
 
 interface Node {
   type?: string; value?: string; tagName?: string; position?: SourcePosition
@@ -26,6 +28,35 @@ function annotate(node: Node, blocked = false): void {
   }
 }
 function copyPlugin() { return (tree: unknown) => annotate(tree as Node) }
+
+/** A path with at least one folder in running text (`src/pi/zen.ts`, `./README.md:12`); not part of a URL or a longer word. */
+const PATH_IN_TEXT = /(?<![\w/@.:-])((?:\.{1,2}\/)?(?:[\w@.-]+\/)+[\w@.-]*[A-Za-z_][\w@-]*\.[A-Za-z]\w{0,9})(:\d+)?(?![\w/])/g
+/** Paths an agent wrote in plain text become file links (spans the `span` component renders); code, links and blocks are left alone. */
+function pathsIn(node: Node): void {
+  if (node.tagName === "code" || node.tagName === "pre" || node.tagName === "a") return
+  const children = node.children
+  if (!children) return
+  const next: Node[] = []
+  for (const child of children) {
+    if (child.type !== "text" || !child.value || !child.value.includes("/")) {
+      pathsIn(child)
+      next.push(child)
+      continue
+    }
+    let last = 0
+    for (const match of child.value.matchAll(PATH_IN_TEXT)) {
+      const path = filePathOf(match[1]!)
+      if (!path) continue
+      if (match.index > last) next.push({ type: "text", value: child.value.slice(last, match.index) })
+      next.push({ type: "element", tagName: "span", properties: { dataFilePath: path }, children: [{ type: "text", value: match[0] }] })
+      last = match.index + match[0].length
+    }
+    if (last === 0) next.push(child)
+    else if (last < child.value.length) next.push({ type: "text", value: child.value.slice(last) })
+  }
+  node.children = next
+}
+function pathPlugin() { return (tree: unknown) => pathsIn(tree as Node) }
 
 function useCopy(text: string) {
   const [copied, setCopied] = useState(false)
@@ -67,7 +98,13 @@ function componentsFor(source: string): Components {
       const n = node as Node | undefined
       if (n?.properties?.copyBlocked) return <code>{children}</code>
       const block = Boolean(n?.properties?.blockCode)
+      const path = block ? undefined : filePathOf(hastText(n))
+      if (path) return <FileLink path={path}><code>{children}</code></FileLink>
       return <CopyableCode text={codeSource(source, n?.position, block) ?? hastText(n)} block={block}>{children}</CopyableCode>
+    },
+    span: ({ node, children, ...rest }) => {
+      const path = (node as Node | undefined)?.properties?.dataFilePath
+      return typeof path === "string" ? <FileLink path={path}>{children}</FileLink> : <span {...rest}>{children}</span>
     },
     a: ({ href, children }) => <a href={href ? projectUrl(href) : undefined} target="_blank" rel="noopener noreferrer nofollow">{children}</a>,
     img: ({ src, alt }) => <img src={src ? projectUrl(src) : undefined} alt={alt ?? ""} loading="lazy" />,
@@ -76,7 +113,7 @@ function componentsFor(source: string): Components {
 }
 
 const Section = memo(function Section({ text }: { text: string }) {
-  return <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[copyPlugin]} urlTransform={safeHref} components={componentsFor(text)}>{text}</ReactMarkdown>
+  return <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[copyPlugin, pathPlugin]} urlTransform={safeHref} components={componentsFor(text)}>{text}</ReactMarkdown>
 })
 
 export const Markdown = memo(function Markdown({ text, className }: { text: string; className?: string }) {

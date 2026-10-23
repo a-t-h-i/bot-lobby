@@ -16,6 +16,7 @@ import { useCollapsed } from "@/lib/collapsed"
 import { formatClock } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { WorkingMark } from "@/ui/WorkingMark"
+import { linkFiles } from "@/app/code/FileLink"
 import { ShimmerWord } from "./ChatParts"
 import { sourceColor, sourceLabel, sourceTone, type ActivityEntry } from "./types"
 
@@ -39,7 +40,7 @@ function StepRow({ entry }: { entry: ActivityEntry }) {
       <span className="sr-only">{entry.pending ? "pending" : entry.kind}</span>
       <span className="min-w-0 break-words">
         <span className={cn("font-medium", sourceColor(entry.source))}>{sourceLabel(entry.source)}</span>{" "}
-        <span className={entry.kind === "error" ? "text-destructive" : entry.pending ? "text-foreground" : undefined}>{entry.pending ? `${entry.text}…` : entry.text}</span>
+        <span className={entry.kind === "error" ? "text-destructive" : entry.pending ? "text-foreground" : undefined}>{linkFiles(entry.text)}{entry.pending ? "…" : ""}</span>
       </span>
     </li>
   )
