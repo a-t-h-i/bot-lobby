@@ -1,10 +1,10 @@
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTask } from "../src/schemas/task.ts";
-import { createTaskDir, listTasks, loadTask, saveTask } from "../src/state/persistence.ts";
+import { createTaskDir, listTasks, loadTask, saveTask, taskDirFor } from "../src/state/persistence.ts";
 import { captureCheckpoint, checkpointSummary, checkpointTaskStatus, settledDecisions } from "../src/state/checkpoint.ts";
 
 function fixture(t: TestContext) {
@@ -86,4 +86,37 @@ test("settled decisions survive stale saves and are directly available without r
   saveTask(root, ".pi", stale);
   assert.match(settledDecisions(load()), /backend: Preserve existing authorization/);
   assert.equal(settledDecisions(load()).match(/Preserve existing authorization/g)?.length, 1);
+});
+
+test("restart and compaction differ: reload restores the record, the summary never restores claims", (t) => {
+  const { root, task, load } = fixture(t);
+  task.amendments.push("User correction");
+  task.decisions.push({ domain: "backend", text: "Reuse the desk lock", createdAt: "2026-01-01T00:00:00.000Z" });
+  task.workerRuns = [
+    { runId: "run-1", domain: "backend", instruction: "not copied", status: "success", startedAt: "t1" },
+    { runId: "run-2", domain: "qa", instruction: "not copied", status: "success", startedAt: "t2" },
+  ];
+  task.checkpoint = captureCheckpoint(task, root, {});
+  saveTask(root, ".pi", task);
+  const resumed = load();
+  assert.deepEqual(resumed.checkpoint, task.checkpoint, "a restart reloads the task record: the checkpoint is derived state stored nowhere else");
+  assert.deepEqual(resumed.amendments, ["User correction"]);
+  assert.match(settledDecisions(resumed), /Reuse the desk lock/);
+  assert.equal(checkpointTaskStatus(resumed.checkpoint!, resumed), "current-task-state");
+  const dir = taskDirFor(root, ".pi", task.id);
+  const files = readdirSync(dir).sort();
+  const summary = checkpointSummary(resumed);
+  assert.match(summary, /2 completed run references \(0 omitted\)/, "the compaction summary carries the run count, not the claims");
+  assert.match(summary, /still require revalidation/);
+  assert.match(summary, /no claims or completed actions are restored/);
+  assert.equal(checkpointSummary(resumed), summary, "summarizing is pure: nothing is restored by asking again");
+  assert.deepEqual(readdirSync(dir).sort(), files, "summarizing writes nothing: only saveTask persists");
+});
+
+test("a torn state.json is surfaced as absent, never half-read", (t) => {
+  const { root, task, load } = fixture(t);
+  saveTask(root, ".pi", task);
+  assert.ok(load());
+  writeFileSync(join(taskDirFor(root, ".pi", task.id), "state.json"), '{"id":"TASK-1","amendm');
+  assert.equal(loadTask(root, ".pi", task.id), undefined, "an unparsable record reads as absent, not as a partial task");
 });

@@ -278,3 +278,24 @@ test("a holder whose lock is broken mid-write does not remove its breaker's lock
   assert.throws(() => withFileLock(path, () => "beside"), new RegExp(LOCK_BUSY));
   rmSync(`${path}.lock`, { recursive: true, force: true });
 });
+
+test("an amendment is owed until its addressee acknowledges it: delivery proves nothing and no sibling can ack it", () => {
+  const path = boardPath(tempDir());
+  appendPost(path, { from: "designer", kind: "contract", text: "GET /api/items" });
+  appendPost(path, { from: "oracle", kind: "note", text: "amendment: the cache stays", to: ["backend:9f2c1e"] });
+  appendPost(path, { from: "designer", kind: "contract", text: "POST /api/items" });
+  const worker = assignment("backend:9f2c1e", "backend");
+  const replay = replayFor(readBoard(path), undefined, worker);
+  assert.deepEqual(replay.posts.map((post) => post.seq), [1, 2, 3], "the amendment reaches its addressee on its first catch-up");
+  const state = deliveryPath(path);
+  markDelivered(state, worker.recipient, replay.through);
+  const delivered = readDelivery(state).recipients["backend:9f2c1e"]!;
+  assert.equal(delivered.lastSeq, 3);
+  assert.equal(delivered.handledSeq, undefined, "delivery is not incorporation: the amendment stays owed until acknowledged");
+  const sibling = markHandled(path, "backend:8ad0c2f4", [1, 2, 3]);
+  assert.deepEqual(sibling.refused, ["#2"], "a sibling cannot acknowledge the amendment on the addressee's behalf");
+  assert.equal(sibling.state.handledSeq, undefined, "the refused call records nothing for the sibling either");
+  assert.equal(readDelivery(state).recipients["backend:9f2c1e"]!.handledSeq, undefined, "and it moved nothing for the addressee");
+  const settled = markHandled(path, "backend:9f2c1e", [1, 2, 3]);
+  assert.equal(settled.state.handledSeq, 3, "only the addressee's own acknowledgement settles it");
+});

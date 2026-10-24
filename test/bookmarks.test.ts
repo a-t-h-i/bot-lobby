@@ -370,3 +370,56 @@ test("an update that loses a race still lands atomically: the lock serializes co
     rmSync(root, { recursive: true, force: true });
   });
 });
+
+test("one resume across a catalogue rebuild, narrowed access and a stale ref: corrections name what changed, hidden sources stay nameless, and a fresh pin recovers", () => {
+  const root = makeRoot();
+  const catalogue = writeRoot(root);
+  const entries = catalogue.entries.filter((entry) => entry.freshness !== "stale");
+  const board = entries.find((entry) => entry.locator.heading?.includes("Board delivery"))!;
+  const sampler = entries.find((entry) => entry.locator.heading?.includes("Sampling"))!;
+  applySelection(root, "T1", "backend", "assign-1", catalogue.revision, [
+    { ref: board.id, reason: "bears on the board work", revision: board.revision },
+    { ref: sampler.id, reason: "buffer contract", revision: sampler.revision },
+  ], "lexical");
+  // While the assignment is away: one passage is edited, one is deleted, one is added —
+  // and the catalogue rebuilds twice. An edit never silently re-points: the old
+  // reference goes stale and a new id is minted for the new text.
+  const edited = KNOWLEDGE
+    .replace("- Post board updates through the typed board; the lock contract is recorded in decisions.", "- Post board updates through the typed board; delivery is at-least-once.")
+    .replace("## Sampling\n- The sampler keeps its own buffer; do not share it with the board code.\n\n", "")
+    + "\n\n## Cache\n- The cache warms on demand; never preload it in src/cache.ts.";
+  writeFileSync(join(root, "Master", "knowledge", "knowledge.md"), edited);
+  const rebuilt = refreshCatalogue([root]).catalogue;
+  const again = refreshCatalogue([root]).catalogue;
+  assert.equal(again.revision, rebuilt.revision + 1, "a second rebuild only advances the revision");
+  const boardEntry = again.entries.find((entry) => entry.id === board.id)!;
+  assert.equal(boardEntry.freshness, "stale", "the edited passage's old reference is never silently replaced");
+  const cache = again.entries.find((entry) => entry.locator.heading?.includes("Cache"))!;
+  // The resumed state also still carries a record from a foreign catalogue generation.
+  const mixed = updateBookmarks(root, "T1", (current) => ({
+    ...current,
+    records: [...current.records, { ref: "K-00000000-0000-4000-8000-000000000000-9", recipient: "backend", authority: "lexical", reason: "old generation", sourceVersion: "0", revision: 1, at: new Date().toISOString() }],
+  }));
+  // Under narrowed access nothing is delivered, the two own-root references are hidden
+  // un-named, and only the already-unresolvable foreign ref appears — as a correction.
+  const otherRoot = makeRoot();
+  const denied = deliverBookmarks(mixed, "backend", again, access(otherRoot));
+  assert.equal(denied.lines.length, 0);
+  assert.equal(denied.hidden, 2, "the two real references are hidden and never named");
+  assert.equal(denied.corrections.length, 1, "only the foreign-generation correction is named");
+  // Back under full access: stale references still deliver — with a re-verify demand —
+  // and the foreign-generation record is reported unresolvable, not delivered.
+  const resumed = deliverBookmarks(mixed, "backend", again, access(root));
+  assert.equal(resumed.lines.length, 2);
+  assert.match(resumed.lines.find((text) => text.startsWith(board.id))!, /changed since it was filed/);
+  assert.match(resumed.lines.find((text) => text.startsWith(sampler.id))!, /stale/);
+  assert.equal(resumed.corrections.filter((text) => text.includes("changed since it was filed")).length, 2);
+  assert.ok(resumed.corrections.some((text) => text.startsWith("K-00000000") && text.includes("another catalogue generation")));
+  assert.equal(resumed.hidden, 0);
+  // Recovery: pinning a live entry of the rebuilt catalogue restores a deliverable bookmark.
+  const pinned = oracleBookmarkOp(root, "T1", "pin", [cache.id], { recipient: "backend", reason: "cache contract" });
+  const recovered = deliverBookmarks(pinned.state, "backend", again, access(root));
+  assert.ok(recovered.lines.some((text) => text.startsWith(cache.id) && text.includes("pinned")), "the fresh pin delivers again");
+  rmSync(root, { recursive: true, force: true });
+  rmSync(otherRoot, { recursive: true, force: true });
+});
