@@ -3,7 +3,11 @@ import { activeTask } from "../state/persistence.ts";
 import { detectProjectRoot, loadConfig, readDataRoots } from "../state/project.ts";
 import { compilePrompt } from "../prompts/compiler.ts";
 import { readAgentKnowledge } from "../knowledge/store.ts";
-import { selectKnowledge } from "../knowledge/selector.ts";
+import { selectKnowledge, selectRelevant } from "../knowledge/selector.ts";
+import { applySelection, assignmentKey, bookmarkBlock, lexicalBookmarks } from "../knowledge/bookmarks.ts";
+import { refreshCatalogue } from "../knowledge/catalogue.ts";
+import { readNotes } from "../knowledge/notes.ts";
+import { KNOWLEDGE_BUDGET_CHARS } from "../classifier/knowledge.ts";
 import { libraryBlock } from "../scripts/pick.ts";
 import { cancelAllRuns } from "../execution/agent-runner.ts";
 import { describeTask } from "../workflow/workflow.ts";
@@ -62,6 +66,26 @@ export const LOBBY_CHAT_NOTE = [
   "DESIGN, DEV, QA, RESEARCH and the scout answer in this chat too when the user names one with @ or the classifier gives a message to one; those lines reach you as \"The user asked …\" and \"… answered\" messages, for context: you need not answer them.",
   "Bot Lobby's workflow (scouts, a plan, the QA gate) runs only when the user types /plan (plan it with the panel) or /task (start it as a task). When a request is large, risky or spans several areas, suggest one of them in a line; never start one yourself.",
 ].join("\n");
+
+/**
+ * The oracle's own bookmarks for the active task, in retrieval mode: lexical
+ * picks over the catalogue (the event path is synchronous, so no model call),
+ * persisted in the task's storage and revalidated at delivery. Standards and
+ * the task context stay direct; the knowledge and decision dumps are replaced.
+ */
+function masterBookmarks(root: string, configDir: string, dataRoots: readonly string[], taskId: string, query: string): string {
+  const dir = dataRoots[0];
+  if (!dir) return "";
+  try {
+    const { catalogue, coverage } = refreshCatalogue(dataRoots);
+    const picks = lexicalBookmarks(query, catalogue.entries.filter((entry) => entry.freshness !== "stale"));
+    const state = applySelection(dir, taskId, "master", assignmentKey(query), catalogue.revision, picks, "lexical");
+    const block = bookmarkBlock(state, "master", catalogue, { dataRoots, cwd: root }, readNotes(dir));
+    return block || `No bookmarks were selected for this assignment (catalogue coverage: ${coverage}); search_knowledge finds the recorded knowledge.`;
+  } catch {
+    return "";
+  }
+}
 
 export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
   // Web tools the oracle put away for the task in hand, given back when it ends.
@@ -137,13 +161,18 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
     }
     const dataRoots = readDataRoots(root, configDir);
     const slices = readAgentKnowledge(dataRoots, "master");
-    const selected = selectKnowledge(`${taskRequest(task)} ${task.proposal ?? ""}`, slices);
+    const query = `${taskRequest(task)} ${task.proposal ?? ""}`;
+    const retrieval = loadConfig().workflow.knowledgeRetrieval;
+    const selected = retrieval
+      ? { knowledge: "", decisions: "", standards: selectRelevant(query, slices.standards ?? "", KNOWLEDGE_BUDGET_CHARS) }
+      : selectKnowledge(query, slices);
     event.systemPromptOptions.sections["bot-lobby"] = compilePrompt({
       domain: "master",
       task: masterTaskContext(task, readPlanComments(root, configDir, task.id), isAutoMode(root, configDir, task.id)),
       standards: selected.standards,
       knowledge: selected.knowledge,
       decisions: selected.decisions,
+      bookmarks: retrieval ? masterBookmarks(root, configDir, dataRoots, task.id, query) : "",
       scripts: dataRoots[0] ? libraryBlock(dataRoots[0]) : "",
       workflowContext: masterWorkflowContext(task),
       instructions: loadConfig().master.instructions,

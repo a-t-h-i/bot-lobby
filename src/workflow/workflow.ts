@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
+import { checkpointSummary, settledDecisions } from "../state/checkpoint.ts";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { BotLobbyConfig, ProfileResolver } from "../schemas/configuration.ts";
 import type { AgentRun, Pushback, ResearchResult, ReviewResult } from "../schemas/findings.ts";
@@ -20,6 +21,7 @@ import { loadTask, ownerlessTask, readTaskArtifact, removeTaskScratchpads, saveT
 import { dataRoot, readDataRoots } from "../state/project.ts";
 import { appendCompletedTask, appendDecision, applyKnowledge, readFileOr, writeFileEnsured, type KnowledgeKind } from "../knowledge/store.ts";
 import { compactKnowledgeFile, overThreshold } from "../knowledge/compactor.ts";
+import { oracleBookmarkOp, retireBookmarks, type OracleBookmarkOp } from "../knowledge/bookmarks.ts";
 import { knowledgeDir, type KnowledgeAgent } from "../knowledge/paths.ts";
 import { lobbyTopics } from "../lobby/topics.ts";
 import { writeScratchpad } from "../state/persistence.ts";
@@ -48,7 +50,8 @@ import {
 import { researchResultPath, runResearch, type ResearchOutcome, type ResearchRequest } from "../master/research.ts";
 import { assessReconnaissance, completionBlockers, decideReviewLoop, recordDecision } from "../master/decisions.ts";
 import { detectSharedFiles, summarizeOutcomes } from "../master/synthesis.ts";
-import { boardContext, boardPath, filterPosts, formatPosts, readBoard } from "../desk/board.ts";
+import { assignmentId, boardContext, boardPath, filterPosts, formatPosts, readBoard, roleOf } from "../desk/board.ts";
+import { seedDelivery } from "../desk/delivery.ts";
 import { runGoalCheck } from "../master/goal-check.ts";
 import { createHash } from "node:crypto";
 import { tail, truncate } from "../text.ts";
@@ -91,6 +94,7 @@ export const ORCHESTRATE_ACTIONS = [
   "resolve_approval",
   "qa",
   "knowledge",
+  "bookmark",
   "compact",
   "script",
   "complete",
@@ -125,6 +129,10 @@ export interface OrchestrateParams {
   assignments?: Array<{ domain: string; task: string }>;
   /** knowledge: which persistent file the text belongs to. */
   kind?: KnowledgeKind;
+  /** bookmark: the operation on the task's bookmark list. */
+  op?: "add" | "remove" | "pin" | "unpin" | "exclude";
+  /** bookmark: the reference ids, exactly as search_knowledge returned them. */
+  refs?: string[];
   /** compact: the knowledge file being rewritten; script: a drafted script to take instead of `text`. */
   file?: string;
   /** script: the script's file name (`seed_public_holidays.py`). */
@@ -257,6 +265,8 @@ export function describeTask(task: Task): string {
       : "",
     task.blockers.length > 0 ? `Blockers: ${task.blockers.map((b) => b.reason).join("; ")}` : "",
     skippedStepsNote(task.plan, task.skippedSteps),
+    settledDecisions(task),
+    checkpointSummary(task),
     `Next legal states: ${nextStates(task.state).join(", ")}`,
   ];
   return lines.filter((line) => line.length > 0).join("\n");
@@ -694,6 +704,7 @@ function workerTaskText(task: Task, planBudget = 6000): string {
     `Requirements: ${task.approvedPlan && task.plan ? requestBesidePlan(taskRequest(task)) : taskRequest(task)}`,
     task.proposal ? `Approved objective: ${task.proposal}` : "",
     task.plan ? `Approved plan:\n${planWithin(task.plan, planBudget)}` : "",
+    settledDecisions(task),
     task.amendments.length > 0 ? `User amendments:\n${task.amendments.map((entry) => `- ${entry}`).join("\n")}` : "",
   ]
     .filter((line) => line.length > 0)
@@ -705,16 +716,23 @@ function taskBoard(deps: WorkflowDeps, task: Task): string {
   return boardPath(taskDirFor(deps.root, deps.configDir, task.id));
 }
 
+/** The board lines a starting agent is shown, recorded as a delivery so pushes never re-send or skip them. */
+function seedAndReadBoard(path: string, reader: string): string {
+  seedDelivery(path, reader);
+  return boardContext(path, reader);
+}
+
 /** What the agents posted to the board during this action, for the oracle. */
 function boardNews(deps: WorkflowDeps, task: Task, after: number): string {
   const posts = filterPosts(readBoard(taskBoard(deps, task)), { after, limit: 40 });
   return posts.length > 0 ? `Task board, new posts:\n${formatPosts(posts)}` : "";
 }
 
-function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instruction: string, alongside?: readonly Domain[]): WorkerRequest {
+function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instruction: string, alongside?: readonly Domain[], boardFrom?: string): WorkerRequest {
   const ask = askRelay(task, deps, domain);
   return {
     board: taskBoard(deps, task),
+    boardFrom: boardFrom ?? assignmentId(domain),
     ...(alongside && alongside.length > 1 ? { alongside } : {}),
     ...(ask ? { ask } : {}),
     // QA writing tests works to the same budget as the gate: the risk of what is built so far.
@@ -1153,6 +1171,7 @@ function stepLine(instruction: string): string {
  */
 async function runParallelWorkers(task: Task, deps: WorkflowDeps, assignments: Assignment[]): Promise<string> {
   const batch = assignments.map((entry) => entry.domain);
+  const runs = assignments.map((entry) => ({ domain: entry.domain, instruction: entry.instruction, worker: assignmentId(entry.domain) }));
   const opened = deps.config.workflow.parallelMode === "worktrees" ? await openWorkerTrees(deps.cwd, batch) : undefined;
   const trees = opened && typeof opened !== "string" ? opened : undefined;
   const session = new DeskSession({ cwd: deps.cwd, boardPath: taskBoard(deps, task), peers: true, ...(trees ? { claims: false } : {}) });
@@ -1162,25 +1181,25 @@ async function runParallelWorkers(task: Task, deps: WorkflowDeps, assignments: A
   let merged = "";
   try {
     try {
-      outcomes = await mapConcurrent(assignments, deps.config.workflow.maxParallelWorkers, ({ domain, instruction }) => {
-        const request = workerRequest(deps, task, domain, instruction, batch);
+      outcomes = await mapConcurrent(runs, deps.config.workflow.maxParallelWorkers, ({ domain, instruction, worker }) => {
+        const request = workerRequest(deps, task, domain, instruction, batch, worker);
         const tree = trees?.trees.get(domain);
         if (tree) {
           request.cwd = tree.cwd;
           request.ownCheckout = true;
         }
         request.agent = {
-          env: session.env(domain),
+          env: session.env(worker),
           extraTools: session.tools(),
-          onStart: (handle) => session.attach(domain, handle),
+          onStart: (handle) => session.attach(worker, handle),
           onAttemptEnd: (run) => {
             const result = parseWorkerResult(domain, run.output);
-            session.release(domain, (path, next) => autoNote(domain, path, next, result.filesChanged, result.completed));
+            session.release(worker, (path, next) => autoNote(domain, path, next, result.filesChanged, result.completed));
           },
         };
         return runWorker(request, deps.runProcess ?? spawnPiProcess);
       });
-      unenforced = trees ? [] : assignments.map((entry) => entry.domain).filter((domain) => !session.greetedBy(domain));
+      unenforced = trees ? [] : runs.filter((run) => !session.greetedBy(run.worker)).map((run) => run.domain);
     } finally {
       await session.close();
     }
@@ -1214,7 +1233,7 @@ async function runParallelWorkers(task: Task, deps: WorkflowDeps, assignments: A
 
 /** What came of applying each worker's worktree back to the task's tree. */
 function mergeReport(results: readonly MergeOutcome[]): string {
-  const label = (worker: string): string => AGENT_LABELS[worker as Domain] ?? worker;
+  const label = (worker: string): string => AGENT_LABELS[(roleOf(worker) ?? worker) as Domain] ?? worker;
   const applied = results.filter((entry) => entry.status === "applied").map((entry) => label(entry.worker));
   const kept = results.filter((entry): entry is Extract<MergeOutcome, { status: "conflict" | "partial" }> => entry.status === "conflict" || entry.status === "partial");
   return [
@@ -1232,7 +1251,7 @@ function mergeReport(results: readonly MergeOutcome[]): string {
 
 function handoverLog(handovers: readonly Handover[]): string {
   if (handovers.length === 0) return "";
-  const lines = handovers.map((entry) => `- ${entry.path}: ${entry.from} → ${entry.to}${entry.auto ? " (on finish)" : ""} — ${truncate(entry.note, 200)}`);
+  const lines = handovers.map((entry) => `- ${entry.path}: ${workerLabel(entry.from)} → ${workerLabel(entry.to)}${entry.auto ? " (on finish)" : ""} — ${truncate(entry.note, 200)}`);
   return `File handovers:\n${lines.join("\n")}`;
 }
 
@@ -1324,7 +1343,8 @@ function qaRequest(deps: WorkflowDeps, task: Task, diff: string, risk: QaRiskAss
     scoutOutcomes: deps.config.workflow.cleanReview ? [] : loadScoutResults(taskReadDirs(deps.root, deps.configDir, task.id), [...new Set<Domain>(["qa", ...task.domains])]),
     diff,
     risk: qaRiskBrief(risk),
-    board: boardContext(taskBoard(deps, task), "qa"),
+    // The gate's board lines are a delivery to the qa reader; record them before the agent starts.
+    board: seedAndReadBoard(taskBoard(deps, task), "qa"),
     ...(provenance && provenance.length > 0 ? { provenance: provenanceLines(provenance) } : {}),
     ...(lint ? { lint: lintContext(lint, deps.config.lint.mode) } : {}),
     instruction: instruction?.trim() || qaInstruction(risk),
@@ -1561,6 +1581,26 @@ function handleKnowledge(task: Task | undefined, params: OrchestrateParams, deps
 }
 
 /**
+ * The oracle manages the task's assignment bookmarks through its own tool:
+ * add, remove, pin, unpin or exclude catalogue references for a recipient
+ * (a domain, or everyone when no domain is given). No approval gate: this is
+ * the existing planning and delegation flow. Pins and exclusions survive
+ * every later automatic selection.
+ */
+function handleBookmark(task: Task | undefined, params: OrchestrateParams, deps: WorkflowDeps): string {
+  if (!task) throw new Error("bookmark requires a task");
+  if (!params.op) throw new Error("bookmark requires op: add, remove, pin, unpin or exclude");
+  const refs = (params.refs ?? []).map((ref) => ref.trim()).filter(Boolean);
+  if (refs.length === 0) throw new Error("bookmark requires refs (reference ids exactly as search_knowledge returned them)");
+  const outcome = oracleBookmarkOp(dataRoot(deps.root, deps.configDir), task.id, params.op as OracleBookmarkOp, refs, {
+    ...(params.domain && isDomain(params.domain) ? { recipient: params.domain } : {}),
+    ...(params.note?.trim() ? { reason: params.note.trim() } : {}),
+  });
+  lobbyTopics.bump("knowledge");
+  return `${outcome.message} Deliveries revalidate every reference; pins and exclusions survive automatic refresh.`;
+}
+
+/**
  * The oracle adds a script to the shared library, or replaces one, so every
  * agent can run it the next time the job comes up. Its body is `text`, or a
  * file a worker drafted (`file`, inside the project or the task's directory).
@@ -1642,6 +1682,11 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
   task.blockers = [];
   if (task.state === "implementing") transition(task, "reviewing");
   transition(task, "completed");
+  try {
+    retireBookmarks(dataRoot(deps.root, deps.configDir), task.id);
+  } catch {
+    // A busy bookmark list is not worth failing completion over; it stays revalidated either way.
+  }
   task.delivery = await completionReview(task, deps.root, { cwd: deps.root, exec: deps.exec ?? execCommand });
   deps.notify(`Task ${task.id} is completed. Delivery review is available; publishing requires your approval.`, "info");
   flushDecisions(deps, task);
@@ -1901,6 +1946,11 @@ function oneLine(text: string, max: number): string {
 
 const AGENT_LABELS: Record<Domain, string> = { backend: "DEV", designer: "DESIGN", qa: "QA" };
 
+/** A worker identity (domain or assignment id) named the way records read: its role when it has one, the id itself otherwise. */
+function workerLabel(worker: string): string {
+  return roleOf(worker) ?? worker;
+}
+
 /** Questions to the user one at a time, even when parallel workers ask together. */
 let asking: Promise<unknown> = Promise.resolve();
 function oneAtATime<T>(ask: () => Promise<T>): Promise<T> {
@@ -1919,6 +1969,7 @@ const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams
   resolve_approval: handleResolveApproval,
   qa: handleQa,
   knowledge: handleKnowledge,
+  bookmark: handleBookmark,
   script: handleScript,
   compact: handleCompact,
   complete: handleComplete,

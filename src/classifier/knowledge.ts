@@ -12,10 +12,13 @@
  * keyword selection, which is what agents got before.
  */
 import { basename } from "node:path";
+import { createHash } from "node:crypto";
 import { score, selectRelevant, splitSections, tokenize, type KnowledgeInput, type KnowledgeSelection } from "../knowledge/selector.ts";
+import { BOOKMARK_DEADLINE_MS, lexicalBookmarks, MAX_AUTO_BOOKMARKS, type Selection } from "../knowledge/bookmarks.ts";
+import type { CatalogueEntry } from "../knowledge/catalogue.ts";
 import type { Classifier } from "./classifier.ts";
-import { noul, yesOf, type SystemOneRequest } from "./client.ts";
 import { clip } from "./limits.ts";
+import { noul, yesOf, type SystemOneRequest } from "./client.ts";
 import type { ScriptPicker } from "../scripts/pick.ts";
 
 /** How many characters of each knowledge file a prompt has room for. */
@@ -106,6 +109,8 @@ export interface KnowledgePicker {
   select(task: string, files: KnowledgeInput, options?: { signal?: AbortSignal; paths?: KnowledgePaths }): Promise<KnowledgeSelection>;
   /** Which shared scripts fit a step; shared words when absent. */
   scripts?: ScriptPicker;
+  /** Picks assignment bookmarks from bounded catalogue metadata; absent leaves bookmarks to the lexical fallback. */
+  bookmarks?: BookmarkSelector;
 }
 
 const SLICES: readonly KnowledgeSlice[] = ["knowledge", "standards", "decisions"];
@@ -156,6 +161,124 @@ export function knowledgePicker(classifier: Classifier, log?: (text: string) => 
         }
       }));
       return { knowledge: picked[0]!, standards: picked[1]!, decisions: picked[2]! };
+    },
+  };
+}
+
+/**
+ * Bookmark selection. The classifier sees bounded catalogue metadata — one
+ * short line per candidate reference, never a knowledge passage — and answers
+ * one yes/no per candidate. Candidates are the lexically best twelve, so the
+ * call is small and bounded; the whole preparation waits at most
+ * `BOOKMARK_DEADLINE_MS` and any failure, disablement or timeout falls back to
+ * the deterministic lexical selection, which never blocks work. Selections are
+ * cached by assignment input and catalogue revision, so unrelated task
+ * activity does not rebuild them.
+ */
+export const BOOKMARK_CANDIDATES = 12;
+const META_LINE_CHARS = 400;
+const CACHE_LIMIT = 64;
+
+/** A candidate reference as the classifier sees it: id, title, kind, agent and a bounded description. */
+export function metaLine(entry: CatalogueEntry): string {
+  const heading = entry.locator.heading ? ` > ${entry.locator.heading}` : "";
+  return clip(`${entry.id} · ${entry.title}${heading} · ${entry.kind} by ${entry.agent} · ${entry.description}`, META_LINE_CHARS);
+}
+
+/** One request that asks about each candidate reference. */
+export function refRequest(assignment: string, metas: readonly string[]): SectionCall {
+  const entries: Record<string, string> = {};
+  const questions: SystemOneRequest["questions"] = {};
+  const keys = new Map<string, number>();
+  metas.forEach((meta, position) => {
+    const key = `r${position + 1}`;
+    entries[key] = meta;
+    questions[key] = noul(`Should reference \`sections.${key}\` be bookmarked for an agent doing \`task\`? Yes when the knowledge, standard, decision or finding it points to bears on the code, files, conventions or choices the task touches; no when it is about something else or only shares words with it.`);
+    keys.set(key, position);
+  });
+  return { request: { state: { task: clip(assignment, 3000), sections: entries }, questions }, keys };
+}
+
+export interface BookmarkPick {
+  ref: string;
+  reason: string;
+  revision: number;
+  /** Who picked it: the classifier judged it, or the lexical fallback did. */
+  source: "classifier" | "lexical";
+}
+
+export interface BookmarkSelectorInput {
+  assignment: string;
+  /** Non-stale catalogue entries this caller may see. */
+  entries: readonly CatalogueEntry[];
+  /** The catalogue revision the entries stand for; it forms the cache key. */
+  catalogueRevision: number;
+  /** Distinguishes parallel selections with the same assignment (task and recipient). */
+  cacheKey?: string;
+  signal?: AbortSignal;
+}
+
+export type BookmarkSource = BookmarkPick["source"];
+
+export interface BookmarkSelector {
+  select(input: BookmarkSelectorInput): Promise<BookmarkPick[]>;
+}
+
+/** The picks the classifier's answers keep: relevant candidates, best first, within the automatic cap. */
+export function picksFromAnswers(relevance: ReadonlyMap<number, number>, candidates: readonly CatalogueEntry[], floor: number): BookmarkPick[] {
+  return [...relevance]
+    .filter(([, value]) => value >= floor)
+    .sort((a, b) => b[1] - a[1] || a[0] - b[0])
+    .slice(0, MAX_AUTO_BOOKMARKS)
+    .map(([index]) => ({ ref: candidates[index]!.id, reason: "judged relevant to this assignment", revision: candidates[index]!.revision, source: "classifier" as const }));
+}
+
+function lexicalPicks(input: BookmarkSelectorInput): BookmarkPick[] {
+  const picks: Selection[] = lexicalBookmarks(input.assignment, input.entries);
+  return picks.map((pick) => ({ ref: pick.ref, reason: pick.reason, revision: pick.revision, source: "lexical" as const }));
+}
+
+/** The cache key: one assignment of one recipient, against one catalogue revision. */
+function cacheKeyOf(input: BookmarkSelectorInput): string {
+ const assignment = createHash("sha1").update(input.assignment).digest("hex").slice(0, 16);
+  return `${input.cacheKey ?? ""}:${assignment}:${input.catalogueRevision}`;
+}
+
+const cache = new Map<string, BookmarkPick[]>();
+
+/** Ask Jev about the lexically best candidates; anything short of an answer falls back to the lexical picks. */
+async function classifierPicks(classifier: Classifier, input: BookmarkSelectorInput, log?: (text: string) => void): Promise<BookmarkPick[]> {
+  const ranked: Selection[] = lexicalBookmarks(input.assignment, input.entries, BOOKMARK_CANDIDATES);
+  if (ranked.length === 0) return [];
+  const byRef = new Map(ranked.map((pick) => [pick.ref, input.entries.find((entry) => entry.id === pick.ref)!]));
+  const candidates = ranked.map((pick) => byRef.get(pick.ref)!);
+  const call = refRequest(input.assignment, candidates.map(metaLine));
+  const result = await classifier.ask("knowledge", call.request, { ...(input.signal ? { signal: input.signal } : {}), timeoutMs: Math.min(classifier.config.timeoutMs, BOOKMARK_DEADLINE_MS) });
+  if (!result) return lexicalPicks(input);
+  const relevance = new Map<number, number>();
+  for (const [key, index] of call.keys) {
+    const value = yesOf(result.answers, key);
+    if (value !== undefined) relevance.set(index, value);
+  }
+  if (relevance.size === 0) return lexicalPicks(input);
+  const picks = picksFromAnswers(relevance, candidates, classifier.config.thresholds.knowledgeRelevantAt);
+  log?.(`bookmarks: kept ${picks.length} of ${candidates.length} catalogue references · ${result.ms} ms`);
+  return picks.length > 0 ? picks : lexicalPicks(input);
+}
+
+/** A bookmark selector on Jev: metadata in, references out, deterministic fallback on any failure. */
+export function bookmarkSelector(classifier: Classifier, log?: (text: string) => void): BookmarkSelector {
+  return {
+    async select(input) {
+      const key = cacheKeyOf(input);
+      const cached = cache.get(key);
+      if (cached) return cached;
+      const picks = !classifier.enabled("knowledge") || !input.assignment.trim()
+        ? lexicalPicks(input)
+        : await classifierPicks(classifier, input, log).catch(() => lexicalPicks(input));
+      if (cache.size >= CACHE_LIMIT) cache.clear();
+      cache.set(key, picks);
+      return picks;
     },
   };
 }

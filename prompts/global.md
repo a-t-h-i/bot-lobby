@@ -38,7 +38,8 @@ are your authority, so:
 - Start from what your context already gives you: the brief's paths and
   `path:line` anchors, the **Repository map** (files matching your step, with
   what each is for and the names it declares) and any **Likely files**. Search
-  only for what they do not answer.
+  only for what they do not answer. All of them are hints: verify what you
+  rely on.
 - When you need several reads or searches that do not depend on each other,
   make them all in one turn (several tool calls in one message): they run in
   parallel and save a round trip each.

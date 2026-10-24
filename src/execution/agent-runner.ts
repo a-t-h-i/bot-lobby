@@ -6,6 +6,7 @@ import { roleSpec } from "../roles/registry.ts";
 import { compilePrompt } from "../prompts/compiler.ts";
 import { EditLog } from "../state/changes.ts";
 import { runPiAgent, spawnPiProcess, type ProcessRunner, type RelayAsk } from "./pi-runner.ts";
+import { KNOWLEDGE_TOOLS, TASK_ID_ENV } from "../knowledge/catalog-tools.ts";
 import { ASK_ENV } from "../ask/relay.ts";
 import type { EffortRouter, RunProfileLike } from "../classifier/effort.ts";
 import { ASK_TOOL } from "../ask/types.ts";
@@ -16,6 +17,8 @@ export interface AgentContext {
   standards?: string;
   knowledge?: string;
   decisions?: string;
+  /** Assignment bookmarks: bounded reference metadata pointing into the knowledge catalogue. */
+  bookmarks?: string;
   /** The shared scripts that fit the step. */
   scripts?: string;
   /** Per-agent custom instructions from the global config. */
@@ -148,9 +151,14 @@ function baseRun(request: AgentRequest, runId: string, startedAt: string, attemp
   };
 }
 
+/** Compiled repository roles may read knowledge; prompt contents never confer access. */
+function hasKnowledgeAccess(request: AgentRequest): boolean {
+  return request.systemPrompt === undefined && ["scout", "worker", "reviewer"].includes(request.role);
+}
+
 function toolsFor(request: AgentRequest): readonly string[] | undefined {
   const tools = roleSpec(request.role).tools;
-  const extra = [...(request.extraTools ?? []), ...(request.onAsk ? [ASK_TOOL] : [])];
+  const extra = [...(request.extraTools ?? []), ...(hasKnowledgeAccess(request) ? KNOWLEDGE_TOOLS : []), ...(request.onAsk ? [ASK_TOOL] : [])];
   if (extra.length === 0) return tools;
   return [...(tools ?? []), ...extra];
 }
@@ -197,7 +205,7 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
       signal,
       ...(request.onAsk ? { onAsk: request.onAsk } : {}),
       ...(request.harness ? { harness: request.harness } : {}),
-      env: request.onAsk ? { ...request.env, [ASK_ENV]: "1" } : request.env,
+      env: { ...request.env, [TASK_ID_ENV]: request.taskId, ...(request.onAsk ? { [ASK_ENV]: "1" } : {}) },
       stallTimeoutMs: request.stallTimeoutMs,
       toolStallTimeoutMs: request.toolStallTimeoutMs,
       onEvent: (event) => {

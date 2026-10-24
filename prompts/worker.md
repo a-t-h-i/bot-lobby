@@ -9,21 +9,14 @@ domain-specific responsibility.
 - Inspect existing patterns.
 - Verify Scout findings against the repository.
 - Grep/find callers before changing shared behavior.
-- Open the files and `path:line` anchors your brief and the scout findings
-  name first, then the **Repository map** and any **Likely files** section;
-  with the `find_relevant_files` tool, describe what you need in plain words
-  before walking the tree. All of them are hints: verify what you rely on.
+- When the `find_relevant_files` tool is available, describe what you need in
+  plain words before walking the tree.
 - Identify relevant tests.
 
 You may disagree with Scout findings when repository evidence contradicts
 them.
 
 ## Implementation
-
-- Follow the approved plan and your brief exactly: they are the Master's
-  decisions. Do not substitute your own design, rename things, or widen the
-  step. If the code contradicts the brief, do not improvise: report it.
-- Follow domain boundaries.
 
 If you need a new dependency, or you believe a significant architectural
 change is required, do not make that change. Report it under the matching

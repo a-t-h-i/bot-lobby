@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { runAgent, runParallel, cancelAllRuns, type AgentRequest } from "../src/execution/agent-runner.ts";
+import { KNOWLEDGE_TOOLS } from "../src/knowledge/catalog-tools.ts";
+import { invariantPrefix } from "../src/prompts/compiler.ts";
 import type { ProcessOutcome, ProcessRunner } from "../src/execution/pi-runner.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
 
@@ -60,16 +63,69 @@ test("runAgent returns metadata and role-restricted tools", async () => {
   assert.equal(run.taskId, "TASK-1");
   assert.equal(run.domain, "backend");
   assert.equal(run.role, "scout");
-  assert.equal(tools, "read,grep,find,ls,codemode,tool_search");
+  assert.equal(tools, "read,grep,find,ls,search_knowledge,open_knowledge,list_bookmarks,codemode,tool_search");
   assert.ok(run.finishedAt);
 });
 
 test("workers get the full built-in tool set plus any extra tools", async () => {
   const capture: ProcessRunner = async (args) => ok(reply(args[args.indexOf("--tools") + 1]!));
   const run = await runAgent(request({ role: "worker" }), capture);
-  assert.equal(run.output, "read,bash,edit,write,grep,find,ls,codemode,tool_search,delegate_subtasks,ask_expert,claim_file,handover_file,my_files,wait_for_files");
+  assert.equal(run.output, "read,bash,edit,write,grep,find,ls,search_knowledge,open_knowledge,list_bookmarks,codemode,tool_search,delegate_subtasks,ask_expert,claim_file,handover_file,my_files,wait_for_files");
   const desk = await runAgent(request({ role: "worker", extraTools: ["claim_file"] }), capture);
-  assert.equal(desk.output, "read,bash,edit,write,grep,find,ls,claim_file,codemode,tool_search,delegate_subtasks,ask_expert,handover_file,my_files,wait_for_files");
+  assert.equal(desk.output, "read,bash,edit,write,grep,find,ls,claim_file,search_knowledge,open_knowledge,list_bookmarks,codemode,tool_search,delegate_subtasks,ask_expert,handover_file,my_files,wait_for_files");
+});
+
+test("authorized repository roles keep identical knowledge tools with empty or populated context", async () => {
+  const capture: ProcessRunner = async (args) => ok(reply(args[args.indexOf("--tools") + 1]!));
+  for (const role of ["scout", "worker", "reviewer"] as const) {
+    const empty = await runAgent(request({ role }), capture);
+    const populated = await runAgent(request({ role, context: {
+      task: "Add pagination", knowledge: "Finding", standards: "Standard", decisions: "Decision", bookmarks: "K-ref",
+    } }), capture);
+    assert.equal(empty.status, "success");
+    assert.equal(populated.status, "success");
+    assert.equal(empty.output, populated.output, role);
+    for (const tool of KNOWLEDGE_TOOLS) assert.ok(empty.output.split(",").includes(tool), `${role}: ${tool}`);
+  }
+});
+
+test("bookmarks never grant denied roles or whole-prompt overrides knowledge tools", async () => {
+  const capture: ProcessRunner = async (args) => ok(reply(args[args.indexOf("--tools") + 1]!));
+  for (const overrides of [{ role: "researcher" as const }, { systemPrompt: "Verbatim override." }, { systemPrompt: "" }]) {
+    for (const context of [{ task: "Inspect" }, { task: "Inspect", bookmarks: "K-ref", knowledge: "Finding", standards: "Standard", decisions: "Decision" }]) {
+      const run = await runAgent(request({ ...overrides, context }), capture);
+      assert.equal(run.status, "success");
+      for (const tool of KNOWLEDGE_TOOLS) assert.ok(!run.output.split(",").includes(tool), tool);
+    }
+  }
+  const explicit = await runAgent(request({ role: "researcher", systemPrompt: "Custom", extraTools: ["open_knowledge", "custom_read"] }), capture);
+  assert.equal(explicit.status, "success");
+  assert.ok(explicit.output.split(",").includes("open_knowledge"));
+  assert.ok(explicit.output.split(",").includes("custom_read"));
+  assert.ok(!explicit.output.split(",").includes("search_knowledge"));
+});
+
+test("an explicit systemPrompt override reaches pi verbatim, not the compiled prompt", async () => {
+  const capture: ProcessRunner = async (args) => {
+    const file = args[args.indexOf("--append-system-prompt") + 1]!;
+    return ok(reply(readFileSync(file, "utf8")));
+  };
+  const run = await runAgent(request({ systemPrompt: "Verbatim override." }), capture);
+  assert.equal(run.status, "success");
+  assert.ok(run.output!.startsWith("Verbatim override."), `got: ${run.output!.slice(0, 80)}`);
+  assert.ok(!run.output!.includes("Global Engineering Agent"), "override replaces the compiled prompt");
+});
+
+test("the compiled system prompt starts with the role's invariant prefix, contract before task context", async () => {
+  const capture: ProcessRunner = async (args) => {
+    const file = args[args.indexOf("--append-system-prompt") + 1]!;
+    return ok(reply(readFileSync(file, "utf8")));
+  };
+  const run = await runAgent(request({ role: "worker", context: { task: "Implement it" } }), capture);
+  assert.equal(run.status, "success");
+  const prompt = run.output!;
+  assert.ok(prompt.startsWith(invariantPrefix("backend", "worker")));
+  assert.ok(prompt.indexOf("### Output contract") < prompt.indexOf("Implement it"));
 });
 
 test("runAgent reports a failed run without throwing", async () => {

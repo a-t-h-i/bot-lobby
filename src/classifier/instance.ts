@@ -14,7 +14,7 @@ import type { ScriptPicker } from "../scripts/pick.ts";
 import type { KeySource, KeyStatus } from "./hosts.ts";
 import { fileHinter, type FileHinter, type FileScope } from "./files.ts";
 import { withRepoMap } from "../knowledge/repo-map.ts";
-import { knowledgePicker, type KnowledgePicker } from "./knowledge.ts";
+import { bookmarkSelector, knowledgePicker, type KnowledgePicker } from "./knowledge.ts";
 import { lobbyFeed } from "../lobby/feed.ts";
 import { triageLine, triageWithContext } from "./triage.ts";
 import type { TaskTriage } from "../schemas/task.ts";
@@ -67,7 +67,7 @@ export function hintsFor(scope: FileScope): FileHinter {
 /** Relevant knowledge and shared scripts for agents, with what Jev kept and matched logged to the lobby's activity feed. */
 export function knowledgeFor(): KnowledgePicker {
   const log = (text: string) => lobbyFeed.log("CLASSIFIER", text, "info");
-  return { ...knowledgePicker(classifier(), log), scripts: scriptPicker(classifier(), log) };
+  return { ...knowledgePicker(classifier(), log), scripts: scriptPicker(classifier(), log), bookmarks: bookmarkSelector(classifier(), log) };
 }
 
 /** Shared scripts for a lobby chat agent, with what Jev matched logged to the lobby's activity feed. */

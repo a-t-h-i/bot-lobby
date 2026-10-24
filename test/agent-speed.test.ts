@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { purposeOf, symbolsOf, type FileHinter, type IndexedFile } from "../src/classifier/files.ts";
-import { rankForMap, renderRepoMap, repoMap, withRepoMap } from "../src/knowledge/repo-map.ts";
+import { heuristicPointers, rankForMap, renderRepoMap, repoMap, withPointers, withoutMapped, withRepoMap } from "../src/knowledge/repo-map.ts";
 import { readFileNotes, recordFileNotes } from "../src/knowledge/file-notes.ts";
 import { runScouts, type ScoutRequest } from "../src/master/master.ts";
 import { summarizeOutcomes } from "../src/master/synthesis.ts";
@@ -86,10 +86,52 @@ test("a scout's file notes show in the map only while the file is unchanged", as
   let on = true;
   const hinter = withRepoMap(likely, scope, () => ({ on, exclude: [] }));
   const both = await hinter.block(query);
-  assert.ok(both.startsWith("## Likely files") && both.includes("## Repository map"));
+  assert.ok(both.startsWith("## Repository map"), "a likely file the map already lists is not printed twice");
+  assert.doesNotMatch(both.split("## Repository map")[0]!, /session\.ts/, "the whole likely block goes when the map covers it");
+  const partly: FileHinter = { block: async () => "## Likely files\n\n- `src/auth/session.ts` (0.9)\n- `src/router.ts` (0.8)", tools: () => ["find_relevant_files"] };
+  const deduped = await withRepoMap(partly, scope, () => ({ on, exclude: [] })).block(query);
+  assert.match(deduped, /^## Likely files\n\n- `src\/router\.ts` \(0\.8\)\n\n## Repository map/, "a file the map lacks stays in the likely block, mapped ones do not");
   on = false;
   assert.equal(await hinter.block(query), "## Likely files\n\n- `src/auth/session.ts` (0.9)", "workflow.repoMap off leaves the classifier's hints alone");
   assert.deepEqual(hinter.tools(), ["find_relevant_files"]);
+});
+
+test("the map adds sibling guesses by filename, labelled as guesses and last to lose budget", () => {
+  const file = (path: string): IndexedFile => ({ path, excerpt: "", symbols: [], purpose: "" });
+  const pool = [file("src/auth/session.ts"), file("src/auth/session.test.ts"), file("src/cart/checkout.ts"), file("src/cart/index.ts"), file("src/util.ts")];
+  assert.deepEqual(heuristicPointers([file("src/auth/session.ts")], pool).map((line) => line.split(" — ")[0]), ["- `src/auth/session.test.ts`"], "a same-folder test file is the first guess");
+  assert.match(heuristicPointers([file("src/auth/session.ts")], pool)[0]!, /heuristic guess, verify it/);
+  assert.deepEqual(heuristicPointers([file("src/cart/checkout.ts")], pool).map((line) => line.split(" — ")[0]), ["- `src/cart/index.ts`"], "a folder with no tests falls back to its entry point");
+  assert.deepEqual(heuristicPointers([file("src/util.ts")], pool), [], "a lone file with no sibling gets nothing");
+  const caller: IndexedFile = { path: "src/router.ts", excerpt: 'import { signIn } from "./auth/session.ts";', symbols: [], purpose: "" };
+  assert.deepEqual(
+    heuristicPointers([file("src/auth/session.ts")], [...pool, caller]),
+    ["- `src/auth/session.test.ts` — beside `src/auth/session.ts`: likely its tests (heuristic guess, verify it)", "- `src/router.ts` — imports `src/auth/session.ts`: likely calls into it (heuristic guess, verify it)"],
+    "a pool file whose excerpt imports a ranked file is pointed at as a likely caller",
+  );
+  const noExt: IndexedFile = { path: "src/server.ts", excerpt: 'import { session } from "./auth/session";', symbols: [], purpose: "" };
+  assert.ok(heuristicPointers([file("src/auth/session.ts")], [...pool, noExt]).some((line) => line.startsWith("- `src/server.ts`")), "an extensionless specifier resolves too");
+  const map = renderRepoMap("src/ (1)", [file("src/auth/session.ts")], new Map(), 3500);
+  const withGuesses = withPointers(map, heuristicPointers([file("src/auth/session.ts")], pool), 3500);
+  assert.match(withGuesses, /Likely beside them \(found by filename, not facts\):\n- `src\/auth\/session\.test\.ts` — beside `src\/auth\/session\.ts`:/, "guesses ride along under the map");
+  const tight = withPointers("x".repeat(3410), ["- `a.test.ts` — guess", "- `src/bigger-name.test.ts` — guess"], 3500);
+  assert.ok(tight.includes("a.test.ts") && !tight.includes("bigger-name") && tight.length <= 3500, "pointer lines go first when the budget is tight");
+  assert.equal(withPointers(map, [], 3500), map, "no guesses, no new section");
+  assert.equal(withoutMapped("## Likely files\n\n- `src/a.ts` — one\n- `src/b.ts` — two", "## Repository map\n- `src/a.ts` — mapped"), "## Likely files\n\n- `src/b.ts` — two", "a likely line the map carries is dropped, others stay");
+  assert.equal(withoutMapped("- `src/a.ts` — one", "- `src/a.ts` — mapped"), "", "a likely block the map fully covers disappears");
+  assert.equal(withoutMapped("- `src/b.ts` — two", ""), "- `src/b.ts` — two", "no map, nothing to drop");
+});
+
+test("concurrent scouts' notes are merged, never lost", async () => {
+  const root = repo(FILES);
+  const dataDir = join(root, ".pi", "bot-lobby");
+  await Promise.all([
+    recordFileNotes(dataDir, root, "backend", [{ path: "src/auth/session.ts", reason: "expiry check is missing" }]),
+    recordFileNotes(dataDir, root, "designer", [{ path: "src/router.ts", reason: "hash routing lives here" }]),
+    recordFileNotes(dataDir, root, "qa", [{ path: "docs/guide.md", reason: "sessions section is stale" }]),
+  ]);
+  const notes = readFileNotes(dataDir);
+  assert.deepEqual(Object.keys(notes).sort(), ["docs/guide.md", "src/auth/session.ts", "src/router.ts"], "every scout's note survived the concurrent write");
 });
 
 test("scouts report line anchors, and the summary hands them on as path:lines with the reason", () => {

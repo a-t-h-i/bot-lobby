@@ -1,9 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { clearPromptCache, loadPrompt } from "../src/prompts/loader.ts";
-import { compilePrompt } from "../src/prompts/compiler.ts";
+import { compilePrompt, invariantPrefix } from "../src/prompts/compiler.ts";
 import { ROLE_SPECS } from "../src/roles/registry.ts";
+import { WORKER_TOOLS } from "../src/roles/worker.ts";
 import { DOMAINS, ROLES } from "../src/schemas/agent.ts";
+import { buildPiArgs, MCP_RESOURCE_TOOLS } from "../src/execution/pi-runner.ts";
 
 test("all prompt layers load and are non-empty", () => {
   const files = [
@@ -18,7 +20,7 @@ test("all prompt layers load and are non-empty", () => {
   assert.ok(loadPrompt("global.md").includes("Global Engineering Agent"));
 });
 
-test("compiler layers global, domain, role, task, then contract in order", () => {
+test("compiler layers the invariant prefix first, then task context and knowledge", () => {
   const prompt = compilePrompt({
     domain: "backend",
     role: "worker",
@@ -33,12 +35,12 @@ test("compiler layers global, domain, role, task, then contract in order", () =>
     "Global Engineering Agent",
     "Backend Domain Agent",
     "Worker Role",
+    "### Output contract",
     "Add pagination to /users",
     "Always validate input.",
     "Service layer lives in src/services.",
     "REST over GraphQL.",
     "Task state: implementing.",
-    "### Output contract",
   ];
   let cursor = -1;
   for (const marker of order) {
@@ -49,17 +51,17 @@ test("compiler layers global, domain, role, task, then contract in order", () =>
   assert.ok(prompt.includes("Add pagination to /users"));
 });
 
-test("compiler layers custom instructions between the role and the task", () => {
+test("compiler layers custom instructions between the contract and the task", () => {
   const prompt = compilePrompt({
     domain: "backend",
     role: "worker",
     task: "Add pagination to /users",
     instructions: "Always add focused unit tests.",
   });
-  const roleAt = prompt.indexOf("Worker Role");
+  const contractAt = prompt.indexOf("### Output contract");
   const instructionsAt = prompt.indexOf("## Custom Instructions");
   const taskAt = prompt.indexOf("Add pagination to /users");
-  assert.ok(instructionsAt > roleAt, "instructions come after the role prompt");
+  assert.ok(contractAt < instructionsAt, "instructions keep precedence over the role contract");
   assert.ok(instructionsAt < taskAt, "instructions come before the task context");
   assert.ok(prompt.includes("Always add focused unit tests."));
 });
@@ -90,6 +92,53 @@ test("every domain and role pair compiles with its own prompt and contract", () 
       assert.ok(prompt.includes("Global Engineering Agent"));
     }
   }
+});
+
+test("the invariant prefix is byte-identical when task-selected context changes", () => {
+  const first = compilePrompt({
+    domain: "backend",
+    role: "worker",
+    task: "First task",
+    standards: "s1",
+    knowledge: "k1",
+    decisions: "d1",
+    scripts: "sc1",
+    workflowContext: "w1",
+  });
+  const second = compilePrompt({ domain: "backend", role: "worker", task: "Second task", instructions: "custom" });
+  const prefix = invariantPrefix("backend", "worker");
+  assert.ok(prefix.includes("### Output contract"), "the contract is part of the invariant prefix");
+  assert.ok(first.startsWith(prefix) && second.startsWith(prefix));
+  let shared = 0;
+  while (shared < Math.min(first.length, second.length) && first[shared] === second[shared]) shared += 1;
+  const sep = "\n\n---\n\n";
+  assert.ok(
+    first.startsWith(prefix + sep) && second.startsWith(prefix + sep),
+    "task-selected context follows the invariant prefix and the layer separator",
+  );
+  assert.ok(
+    shared > prefix.length + sep.length,
+    "nothing before the changing sections differs from the invariant prefix",
+  );
+});
+
+test("every role's compiled prompt starts with its byte-identical invariant prefix", () => {
+  for (const domain of DOMAINS) {
+    for (const role of ROLES) {
+      const prompt = compilePrompt({ domain, role, task: "t" });
+      assert.ok(prompt.startsWith(invariantPrefix(domain, role)), `${domain}/${role} prefix`);
+    }
+  }
+  const master = compilePrompt({ domain: "master", task: "t" });
+  assert.ok(master.startsWith(invariantPrefix("master")));
+});
+
+test("tool allowlists keep their fixed deterministic order across execution paths", () => {
+  assert.deepEqual(WORKER_TOOLS, ["read", "bash", "edit", "write", "grep", "find", "ls"]);
+  // pi-runner keeps the granted order and appends MCP tools after it, never sorting.
+  const args = buildPiArgs({ cwd: "/p", tools: [...WORKER_TOOLS], mcpTools: ["mcp__rea_one", "plain"] } as Parameters<typeof buildPiArgs>[0]);
+  const granted = args[args.indexOf("--tools") + 1]!;
+  assert.equal(granted, [...WORKER_TOOLS, "mcp__rea_one", ...MCP_RESOURCE_TOOLS].join(","));
 });
 
 test("read-only roles keep their tool restrictions", () => {

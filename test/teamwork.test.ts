@@ -4,7 +4,8 @@ import { execFileSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendPost, BOARD_ENV as BOARD_ENV_NAME, boardContext, boardPath, filterPosts, formatPost, readBoard, subscriptionFor } from "../src/desk/board.ts";
+import { appendPost, BOARD_ENV as BOARD_ENV_NAME, boardContext, boardPath, filterPosts, formatPost, readBoard, roleOf, subscriptionFor } from "../src/desk/board.ts";
+import { deliveryPath, readDelivery } from "../src/desk/delivery.ts";
 import { registerBoardClient } from "../src/desk/board-client.ts";
 import { createDeskClient } from "../src/desk/ipc.ts";
 import { DESK_ENV, DESK_TOOLS, DeskSession, PEER_TOOLS, peerId } from "../src/desk/session.ts";
@@ -63,18 +64,98 @@ test("contracts reach running peers at once; posts land on the board", async () 
     session.attach("qa", handle("q", toQa));
     session.attach("backend", handle("b", toDev));
     const dev = createDeskClient(session.env("backend")[DESK_ENV.address]!, "backend");
+    const qa = createDeskClient(session.env("qa")[DESK_ENV.address]!, "qa");
+    await qa.request({ op: "claim", path: "src/auth.ts", intent: "covering the login tests" });
     const posted = await dev.request({ op: "post", kind: "contract", text: "POST /api/login takes { email, password }", files: ["src/auth.ts"] });
-    assert.match(posted.text, /Posted #1\. (DESIGN, QA|QA, DESIGN) were told now\./);
-    assert.match(toDesign.at(-1)!, /^bot-lobby board: #1 \[contract\] DEV \(src\/auth\.ts\): POST \/api\/login/);
+    assert.match(posted.text, /Posted #1\. QA was told now\./, "a post naming files reaches the holder of one");
+    assert.match(toQa.at(-1)!, /^bot-lobby board: #1 \[contract\] DEV \(src\/auth\.ts\): POST \/api\/login/);
+    assert.equal(toDesign.length, 0, "a worker holding none of the files is not pushed it");
     assert.equal(toDev.length, 0, "the poster is not told its own post");
     await dev.request({ op: "post", kind: "note", text: "refactored a helper" });
-    assert.equal(toDesign.length, 1, "notes wait on the board until someone reads it");
+    assert.equal(toQa.length, 1, "notes wait on the board until someone reads it");
     assert.match((await dev.request({ op: "post", kind: "rumour", text: "x" })).text, /Unknown post kind/);
     assert.deepEqual(readBoard(path).map((post) => post.kind), ["contract", "note"]);
+    dev.close();
+    qa.close();
+  } finally {
+    await session.close();
+  }
+});
+
+test("a post that lands while its reader is away reaches it on attach, never twice and never skipped", async () => {
+  const path = boardPath(tempDir());
+  const session = new DeskSession({ cwd: "/repo", boardPath: path, peers: true });
+  await session.open();
+  try {
+    let toDesign: string[] = [];
+    session.attach("designer", handle("d", toDesign));
+    session.attach("backend", handle("b", []));
+    const dev = createDeskClient(session.env("backend")[DESK_ENV.address]!, "backend");
+    await dev.request({ op: "post", kind: "contract", text: "the token is --accent" });
+    assert.match(toDesign.at(-1)!, /#1 \[contract\]/);
+
+    // The designer goes away (a restart); a note and a blocker land with nobody to steer.
+    session.release("designer", () => "");
+    await dev.request({ op: "post", kind: "note", text: "routine chatter" });
+    await dev.request({ op: "post", kind: "blocker", text: "waiting on the colour token" });
+    // It comes back and is caught up on exactly what it missed.
+    toDesign = [];
+    session.attach("designer", handle("d2", toDesign));
+    assert.equal(toDesign.length, 1, "only the missed blocker is sent, not the note it does not follow");
+    assert.match(toDesign[0]!, /^bot-lobby board: #3 \[blocker\] DEV: waiting on the colour token$/);
+    assert.equal(readDelivery(deliveryPath(path)).recipients["designer"]!.lastSeq, 3, "the cursor records what the catch-up showed");
+
+    session.release("designer", () => "");
+    session.attach("designer", handle("d3", toDesign));
+    assert.equal(toDesign.length, 1, "an attach after a full catch-up steers nothing");
     dev.close();
   } finally {
     await session.close();
   }
+});
+
+test("a steer that cannot be sent is retried with the next post, and nothing is skipped", async () => {
+  const path = boardPath(tempDir());
+  const session = new DeskSession({ cwd: "/repo", boardPath: path, peers: true });
+  await session.open();
+  try {
+    const toDesign: string[] = [];
+    let reachable = false;
+    session.attach("designer", { runId: "d", steer: (text) => {
+      if (!reachable) throw new Error("agent is starting up");
+      toDesign.push(text);
+    }, annotate: () => {} });
+    session.attach("backend", handle("b", []));
+    const dev = createDeskClient(session.env("backend")[DESK_ENV.address]!, "backend");
+    const missed = await dev.request({ op: "post", kind: "contract", text: "GET /api/items returns { items }" });
+    assert.match(missed.text, /^Posted #1\.$/, "a peer that could not be told is not claimed as told");
+    assert.equal(readDelivery(deliveryPath(path)).recipients["designer"], undefined, "the missed post stays undelivered");
+
+    reachable = true;
+    const next = await dev.request({ op: "post", kind: "blocker", text: "still need the shape" });
+    assert.match(next.text, /DESIGN was told now\./);
+    assert.equal(toDesign.length, 1);
+    assert.match(toDesign[0]!, /#1 \[contract\][\s\S]*#2 \[blocker\]/, "the retry carries the missed post with the new one, oldest first");
+    assert.equal(readDelivery(deliveryPath(path)).recipients["designer"]!.lastSeq, 2);
+    dev.close();
+  } finally {
+    await session.close();
+  }
+});
+
+test("posts carry stable ids, and a retried post that already landed is not posted twice", async () => {
+  const path = boardPath(tempDir());
+  const first = appendPost(path, { from: "backend", kind: "contract", text: "the cursor field is `next`" });
+  assert.match(first.id!, /^[0-9a-f-]{36}$/, "every post gets a stable id");
+  const tools = new Map<string, { execute: (...args: unknown[]) => Promise<{ content: Array<{ text: string }> }> }>();
+  const failingDesk = { request: () => Promise.reject(new Error("socket hung up")), close: () => {} };
+  registerBoardClient({ on: () => {}, registerTool: (tool: { name: string }) => tools.set(tool.name, tool as never) } as never, { BOT_LOBBY_BOARD: path, BOT_LOBBY_BOARD_FROM: "backend" }, failingDesk as never);
+  const again = await tools.get("post_board")!.execute("1", { kind: "contract", text: "the cursor field is `next`" });
+  assert.match(again.content[0]!.text, /#1 \(already on the board\)/, "an ambiguous retry adopts the post that landed rather than duplicating it");
+  assert.equal(readBoard(path).length, 1);
+  const fresh = await tools.get("post_board")!.execute("2", { kind: "contract", text: "`limit` caps the page at 100" });
+  assert.match(fresh.content[0]!.text, /^Posted #2\.$/, "a genuinely new post still lands");
+  assert.equal(readBoard(path).length, 2);
 });
 
 test("workers in a batch can ask each other questions, never wait on each other in a cycle, and time out", async () => {
@@ -157,14 +238,127 @@ test("the board tools post straight to the file without a desk and read by role"
   const tools = new Map<string, { execute: (...args: unknown[]) => Promise<{ content: Array<{ text: string }> }> }>();
   const pi = { on: () => {}, registerTool: (tool: { name: string }) => tools.set(tool.name, tool as never) };
   registerBoardClient(pi as never, { BOT_LOBBY_BOARD: path, BOT_LOBBY_BOARD_FROM: "qa" });
-  assert.deepEqual([...tools.keys()].sort(), ["post_board", "read_board"]);
+  assert.deepEqual([...tools.keys()].sort(), ["ack_board", "post_board", "read_board"]);
   assert.equal((await tools.get("post_board")!.execute("1", { kind: "done", text: "tests for login written" })).content[0]!.text, "Posted #1.");
   appendPost(path, { from: "backend", kind: "note", text: "renamed a variable" });
   assert.equal((await tools.get("read_board")!.execute("2", {})).content[0]!.text, "#1 [done] QA: tests for login written", "QA does not follow notes");
   assert.match((await tools.get("read_board")!.execute("3", { kinds: ["note"] })).content[0]!.text, /renamed a variable/);
+  assert.equal(readDelivery(deliveryPath(path)).recipients["qa"]!.lastSeq, 2, "a read records receipt");
+  assert.equal(readDelivery(deliveryPath(path)).recipients["qa"]!.handledSeq, undefined, "but never acknowledgement");
+  assert.match((await tools.get("ack_board")!.execute("4", { events: [1, 7] })).content[0]!.text, /Acknowledged #1\. No board event matches: 7\./, "a stable number acknowledges, an event naming nothing is reported");
+  assert.equal(readDelivery(deliveryPath(path)).recipients["qa"]!.handledSeq, 1, "only the ack moved the handled cursor");
+  assert.match((await tools.get("ack_board")!.execute("5", { events: [2] })).content[0]!.text, /Not acknowledged: #2 is outside what your role follows/, "a note is not QA's business, kind or no kind");
   const none = new Map<string, unknown>();
   registerBoardClient({ on: () => {}, registerTool: (tool: { name: string }) => none.set(tool.name, tool) } as never, {});
   assert.equal(none.size, 0, "no board, no tools");
+});
+
+test("a read proves receipt of exactly what its window showed", async () => {
+  const path = boardPath(tempDir());
+  const tools = new Map<string, { execute: (...args: unknown[]) => Promise<{ content: Array<{ text: string }> }> }>();
+  registerBoardClient({ on: () => {}, registerTool: (tool: { name: string }) => tools.set(tool.name, tool as never) } as never, { BOT_LOBBY_BOARD: path, BOT_LOBBY_BOARD_FROM: "qa" });
+  appendPost(path, { from: "backend", kind: "contract", text: "GET /api/items" });
+  appendPost(path, { from: "oracle", kind: "note", text: "for qa only", to: ["qa"] });
+  appendPost(path, { from: "backend", kind: "done", text: "route ready" });
+  await tools.get("read_board")!.execute("1", {});
+  const read = readDelivery(deliveryPath(path)).recipients["qa"]!;
+  assert.equal(read.lastSeq, 1, "the kinds filter hid the note addressed to qa, so the cursor stops below it");
+  assert.deepEqual(read.seen, [3], "the post shown above the cursor is recorded out of order");
+  const long = boardPath(tempDir());
+  const window = new Map<string, { execute: (...args: unknown[]) => Promise<{ content: Array<{ text: string }> }> }>();
+  registerBoardClient({ on: () => {}, registerTool: (tool: { name: string }) => window.set(tool.name, tool as never) } as never, { BOT_LOBBY_BOARD: long, BOT_LOBBY_BOARD_FROM: "qa" });
+  for (let index = 0; index < 52; index += 1) appendPost(long, { from: "backend", kind: "contract", text: `shape ${index}` });
+  const shown = await window.get("read_board")!.execute("2", {});
+  assert.match(shown.content[0]!.text, /#52 \[contract\]/, "the window shows the newest fifty");
+  assert.doesNotMatch(shown.content[0]!.text, /#1 \[contract\]/, "the oldest two are cut off");
+  const truncated = readDelivery(deliveryPath(long)).recipients["qa"]!;
+  assert.equal(truncated.lastSeq, 0, "a window that omitted relevant posts proves nothing below them");
+  assert.equal(truncated.seen?.length, 50, "the fifty shown are recorded out of order instead");
+});
+
+test("a pushed post never marks the backlog it could not show as seen", async () => {
+  const path = boardPath(tempDir());
+  const session = new DeskSession({ cwd: "/repo", boardPath: path, peers: true });
+  await session.open();
+  try {
+    const toDesign: string[] = [];
+    let reachable = false;
+    session.attach("designer", { runId: "d", steer: (text: string) => { if (!reachable) throw new Error("starting up"); toDesign.push(text); }, annotate: () => {} });
+    session.attach("backend", handle("b", []));
+    const dev = createDeskClient(session.env("backend")[DESK_ENV.address]!, "backend");
+    for (let index = 0; index < 10; index += 1) await dev.request({ op: "post", kind: "contract", text: `shape ${index}` });
+    assert.equal(readDelivery(deliveryPath(path)).recipients["designer"], undefined, "nothing was delivered while the designer was unreachable");
+    reachable = true;
+    assert.match((await dev.request({ op: "post", kind: "blocker", text: "still need the shape" })).text, /DESIGN was told now\./);
+    assert.match(toDesign[0]!, /\(\+2 older board posts waiting/, "the waiting count names only what was not shown");
+    const pushed = readDelivery(deliveryPath(path)).recipients["designer"]!;
+    assert.equal(pushed.lastSeq, 8, "the batch proved the oldest eight");
+    assert.deepEqual(pushed.seen, [11], "only the pushed post shown beyond the batch is recorded");
+    session.release("designer", () => "");
+    const caught: string[] = [];
+    session.attach("designer", handle("d2", caught));
+    assert.match(caught[0]!, /#9 \[contract\][\s\S]*#10 \[contract\]/, "the unseen backlog is caught up later, never skipped");
+    dev.close();
+  } finally {
+    await session.close();
+  }
+});
+
+test("an addressed post reaches only its targets, and acknowledgement is explicit, scope-checked and idempotent", async () => {
+  const path = boardPath(tempDir());
+  const session = new DeskSession({ cwd: "/repo", boardPath: path, peers: true });
+  await session.open();
+  try {
+    const toDesign: string[] = [];
+    const toQa: string[] = [];
+    session.attach("designer", handle("d", toDesign));
+    session.attach("qa", handle("q", toQa));
+    const dev = createDeskClient(session.env("backend")[DESK_ENV.address]!, "backend");
+    const qa = createDeskClient(session.env("qa")[DESK_ENV.address]!, "qa");
+    const noted = await dev.request({ op: "post", kind: "note", text: "for design only", targets: ["DESIGN"] });
+    assert.match(noted.text, /^Posted #1\. DESIGN was told now\.$/);
+    assert.match(toDesign.at(-1)!, /#1 \[note\] DEV → DESIGN/);
+    assert.equal(toQa.length, 0, "a note addressed to DESIGN is nobody else's, even a subscriber's");
+    await dev.request({ op: "post", kind: "contract", text: "GET /api/items returns { items }" });
+    assert.equal(toQa.length, 1, "an unaddressed contract reaches every subscriber at once");
+    // QA cannot acknowledge the designer's note: outside its scope, and the whole call records nothing.
+    const refused = await qa.request({ op: "ack", events: ["#2", 1] });
+    assert.match(refused.text, /Not acknowledged: #1 is outside what your role follows\. Nothing was recorded\./);
+    assert.equal(readDelivery(deliveryPath(path)).recipients["qa"]!.handledSeq, undefined);
+    const acked = await qa.request({ op: "ack", events: ["#2"] });
+    assert.match(acked.text, /Acknowledged #2\./);
+    const again = await qa.request({ op: "ack", events: [2] });
+    assert.match(again.text, /Acknowledged #2\./, "acknowledging twice records nothing new and never fails");
+    assert.equal(readDelivery(deliveryPath(path)).recipients["qa"]!.handledSeq, 2);
+    dev.close();
+    qa.close();
+  } finally {
+    await session.close();
+  }
+});
+
+test("a post naming files reaches the holders of those files, and only them among its subscribers", async () => {
+  const path = boardPath(tempDir());
+  const session = new DeskSession({ cwd: "/repo", boardPath: path, peers: true });
+  await session.open();
+  try {
+    const toDesign: string[] = [];
+    const toQa: string[] = [];
+    session.attach("designer", handle("d", toDesign));
+    session.attach("qa", handle("q", toQa));
+    const dev = createDeskClient(session.env("backend")[DESK_ENV.address]!, "backend");
+    const design = createDeskClient(session.env("designer")[DESK_ENV.address]!, "designer");
+    await design.request({ op: "claim", path: "src/ui/Card.tsx", intent: "restyling" });
+    const posted = await dev.request({ op: "post", kind: "contract", text: "GET /api/items returns { items }", files: ["src/ui/Card.tsx", "src/api.ts"] });
+    assert.match(posted.text, /^Posted #1\. DESIGN was told now\.$/, "the holder of a named file is told at once");
+    assert.equal(toQa.length, 0, "QA holds none of the files, so it reads the contract when it reads");
+    await dev.request({ op: "post", kind: "note", text: "helper renamed", files: ["src/ui/Card.tsx"] });
+    assert.equal(toDesign.length, 1, "a note about the file still waits on the board: kinds come first");
+    dev.close();
+    design.close();
+  } finally {
+    await session.close();
+  }
 });
 
 // --- the goal check ---
@@ -521,7 +715,8 @@ test("a parallel batch in worktrees mode gives each worker its own checkout and 
   const root = repo();
   const seen: Array<{ domain: string; cwd: string; tools: string }> = [];
   const runner: ProcessRunner = async (args, options) => {
-    const domain = options.env?.BOT_LOBBY_BOARD_FROM ?? "?";
+    const domain = roleOf(options.env?.BOT_LOBBY_BOARD_FROM ?? "?") ?? options.env?.BOT_LOBBY_BOARD_FROM ?? "?";
+    assert.match(options.env?.BOT_LOBBY_BOARD_FROM ?? "", /^\w+(:[0-9a-f-]+)?$/, "the worker's board identity is its domain or a per-run assignment of it");
     seen.push({ domain, cwd: options.cwd, tools: args[args.indexOf("--tools") + 1] ?? "" });
     writeFileSync(join(options.cwd, `${domain}.txt`), `${domain} was here\n`);
     return { exitCode: 0, stdout: message(WORKER), stderr: "", killed: false };

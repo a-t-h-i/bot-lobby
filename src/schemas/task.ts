@@ -1,6 +1,7 @@
 import type { LintReport } from "./lint.ts";
 import type { Domain, Role } from "./agent.ts";
 import type { Delivery } from "../delivery/types.ts";
+import type { TaskCheckpoint } from "../state/checkpoint.ts";
 
 export const TASK_STATES = [
   "created",
@@ -73,6 +74,33 @@ export interface WorkerRunRecord {
 
 /** Upper bound on persisted worker records; plans cap at 50 steps. */
 export const MAX_WORKER_RECORDS = 64;
+
+/** What one assignment-scoped identity may do: reads only, granted by the parent that issued it. */
+export type AssignmentGrant = "artifact.read" | "checkpoint.read";
+export type AssignmentState = "active" | "cancelled" | "revoked";
+
+/**
+ * A parent-issued assignment identity for one agent run: the durable basis
+ * for reading output artifacts and checkpoints, revalidated live on every use.
+ */
+export interface AssignmentRecord {
+  /** A-<uuid>; the identity artifacts, checkpoints and child assignments are bound to. */
+  id: string;
+  ownerSessionId: string;
+  runId: string;
+  worktree: string;
+  domain: Domain;
+  role: Role;
+  state: AssignmentState;
+  grants: AssignmentGrant[];
+  /** The assignment that issued this one (delegated children). */
+  parentAssignmentId?: string;
+  issuedAt: string;
+  endedAt?: string;
+}
+
+/** Upper bound on the persisted assignment registry; terminal records are never trimmed. */
+export const MAX_ASSIGNMENTS = 64;
 
 /** One finished subagent run of any role, kept for `/bot-lobby runs`. */
 export interface RunLogEntry {
@@ -226,6 +254,8 @@ export interface PhaseTiming {
 }
 
 export interface Task {
+  /** Advisory task-state checkpoint; external references require live revalidation. */
+  checkpoint?: TaskCheckpoint;
   /** Canonical waits, including legacy tasks without a reliable clock. */
   blockingRequestIds?: string[];
   phaseTiming?: PhaseTiming;
@@ -248,6 +278,8 @@ export interface Task {
   approvals: Approval[];
   /** Worker delegations in start order; absent on tasks created before tracking. */
   workerRuns?: WorkerRunRecord[];
+  /** Parent-issued assignment identities for artifact/checkpoint reads; terminal records are final. */
+  assignments?: AssignmentRecord[];
   /** Recent finished runs of every role, newest last. */
   runLog?: RunLogEntry[];
   createdAt: string;

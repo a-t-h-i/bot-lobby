@@ -7,10 +7,15 @@
  *
  * It lives in the task's directory as `board.jsonl`, so later steps, the QA
  * gate and the oracle read the same record; a worker without a running desk
- * (a single step) appends to the file directly.
+ * (a single step) appends to the file directly. A post may name recipients
+ * (`to`) or files: those route its *delivery* — an addressed post is pushed
+ * only to its targets, a file-named one to the workers holding those files —
+ * while the board itself stays readable to every role.
  */
-import { appendFileSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { LOCK_BUSY, withFileLock } from "./lock.ts";
 
 export const POST_KINDS = ["contract", "decision", "blocker", "question", "done", "note"] as const;
 export type PostKind = (typeof POST_KINDS)[number];
@@ -22,12 +27,16 @@ export function isPostKind(value: unknown): value is PostKind {
 export interface BoardPost {
   /** Order on the board, from 1. */
   seq: number;
-  /** Who posted it: a domain (`backend`, `designer`, `qa`), a child run id, or `oracle`. */
+  /** Stable unique id minted at append; posts written before it exists have none, and stay readable. */
+  id?: string;
+  /** Who posted it: a domain (`backend`, `designer`, `qa`), an assignment id (`backend:9f2c1e`), a child run id, or `oracle`. */
   from: string;
   kind: PostKind;
   text: string;
   /** Repository files the post is about, when it names any. */
   files?: string[];
+  /** Recipients the post is addressed to (worker ids or domains): only they are pushed it; everyone can still read it. */
+  to?: string[];
   at: string;
 }
 
@@ -35,7 +44,7 @@ export interface BoardPost {
 export const BOARD_ENV = "BOT_LOBBY_BOARD";
 
 /** Tools every worker gets when its task has a board. */
-export const BOARD_TOOLS: readonly string[] = ["post_board", "read_board"];
+export const BOARD_TOOLS: readonly string[] = ["post_board", "read_board", "ack_board"];
 
 /**
  * What each role reads by default. A builder needs the contracts and
@@ -51,11 +60,30 @@ export const SUBSCRIPTIONS: Readonly<Record<string, readonly PostKind[]>> = {
 
 const DEFAULT_SUBSCRIPTION: readonly PostKind[] = ["contract", "decision", "blocker"];
 
-/** Kinds a running peer is told about the moment they are posted, not only when it next reads. */
-export const PUSHED_KINDS: ReadonlySet<PostKind> = new Set(["contract", "blocker"]);
+/** Kinds a running peer is told about the moment they are posted, not only when it next reads: the consequential ones, never routine notes. */
+export const PUSHED_KINDS: ReadonlySet<PostKind> = new Set(["contract", "decision", "blocker"]);
 
 export function subscriptionFor(reader: string): readonly PostKind[] {
-  return SUBSCRIPTIONS[reader] ?? DEFAULT_SUBSCRIPTION;
+  return SUBSCRIPTIONS[reader] ?? SUBSCRIPTIONS[roleOf(reader) ?? ""] ?? DEFAULT_SUBSCRIPTION;
+}
+
+/** A recipient named the way posts address it: DEV/design/backend all mean `backend`; anything else (a child run id, `oracle`) is itself. */
+export function recipientId(name: string): string {
+  const key = name.trim().toLowerCase();
+  const ids: Record<string, string> = { dev: "backend", backend: "backend", design: "designer", designer: "designer", qa: "qa", oracle: "oracle" };
+  return ids[key] ?? name.trim();
+}
+
+/** The role a recipient answers to: `backend`, `backend:9f2c1e` and `DEV` are backend; an unrelated id (a bare child run id) has none. */
+export function roleOf(name: string): string | undefined {
+  const [head = ""] = name.trim().split(":", 1);
+  const role = recipientId(head);
+  return SUBSCRIPTIONS[role] ? role : undefined;
+}
+
+/** One assignment's board identity: unique per worker run (`backend:9f2c1e`), so two same-role workers never share delivery state while posts addressed to their role still reach both. */
+export function assignmentId(domain: string): string {
+  return `${recipientId(domain)}:${randomUUID().slice(0, 8)}`;
 }
 
 export const MAX_POST_CHARS = 1500;
@@ -102,61 +130,41 @@ export interface NewPost {
   kind: PostKind;
   text: string;
   files?: readonly string[];
+  /** Recipients the post is addressed to; an addressed post is pushed only to them. */
+  to?: readonly string[];
 }
 
 /** Longest a board path in a post may be. */
 const MAX_FILE_CHARS = 300;
-/** How long a writer waits for another process's append, and when a lock is taken to be left behind. */
-const LOCK_WAIT_MS = 2000;
-const STALE_LOCK_MS = 10_000;
 
-function sleep(ms: number): void {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-}
+/** Most recipients one post may name. */
+const MAX_TARGETS = 8;
 
-/**
- * Run `write` holding the board's lock (a directory beside it, made
- * atomically), so posts from several processes get distinct sequence
- * numbers. A lock left by a crashed writer is broken once stale; past the
- * wait the post goes in anyway rather than being lost.
- */
-function withLock<T>(path: string, write: () => T): T {
-  const lock = `${path}.lock`;
-  const until = Date.now() + LOCK_WAIT_MS;
-  let held = false;
-  while (!held) {
-    try {
-      mkdirSync(lock);
-      held = true;
-    } catch {
-      try {
-        if (Date.now() - statSync(lock).mtimeMs > STALE_LOCK_MS) rmSync(lock, { recursive: true, force: true });
-      } catch {
-        // Released meanwhile.
-      }
-      if (Date.now() > until) break;
-      sleep(5);
-    }
-  }
-  try {
-    return write();
-  } finally {
-    if (held) rmSync(lock, { recursive: true, force: true });
-  }
-}
-
-/** Append a post and return it as stored. Throws on an empty text, so the caller can tell the agent. */
+/** Append a post and return it as stored. Throws on an empty text or a busy board, so the caller can tell the agent. */
 export function appendPost(path: string, post: NewPost, now = new Date()): BoardPost {
   const text = clean(post.text, MAX_POST_CHARS);
   if (!text) throw new Error("a board post needs text");
   const files = (post.files ?? []).map((file) => clean(file, MAX_FILE_CHARS)).filter(Boolean).slice(0, MAX_FILES);
+  const to = [...new Set((post.to ?? []).map((target) => clean(target, 80)).filter(Boolean))].slice(0, MAX_TARGETS);
   mkdirSync(dirname(path), { recursive: true });
-  return withLock(path, () => {
-    const seq = (readBoard(path).at(-1)?.seq ?? 0) + 1;
-    const stored: BoardPost = { seq, from: post.from, kind: post.kind, text, ...(files.length > 0 ? { files } : {}), at: now.toISOString() };
-    appendFileSync(path, `${JSON.stringify(stored)}\n`, "utf8");
-    return stored;
-  });
+  try {
+    return withFileLock(path, () => {
+      const seq = (readBoard(path).at(-1)?.seq ?? 0) + 1;
+      const stored: BoardPost = { seq, id: randomUUID(), from: post.from, kind: post.kind, text, ...(files.length > 0 ? { files } : {}), ...(to.length > 0 ? { to } : {}), at: now.toISOString() };
+      appendFileSync(path, `${JSON.stringify(stored)}\n`, "utf8");
+      return stored;
+    });
+  } catch (error) {
+    throw new Error((error as Error).message === LOCK_BUSY ? `Not posted: ${LOCK_BUSY}` : (error as Error).message);
+  }
+}
+
+/** The newest post already on the board with this sender, kind and exact text, if one exists: a retry can adopt it instead of duplicating it. */
+export function recentPost(path: string, from: string, kind: PostKind, text: string): BoardPost | undefined {
+  const wanted = clean(text, MAX_POST_CHARS);
+  return readBoard(path)
+    .filter((post) => post.from === from && post.kind === kind && post.text === wanted)
+    .at(-1);
 }
 
 export interface BoardFilter {
@@ -179,13 +187,16 @@ export function filterPosts(posts: readonly BoardPost[], filter: BoardFilter): B
 const NAMES: Record<string, string> = { backend: "DEV", designer: "DESIGN", qa: "QA", oracle: "ORACLE" };
 
 export function posterName(from: string): string {
+  const role = roleOf(from);
+  if (role && from !== role) return `${NAMES[role] ?? role.toUpperCase()}(${from.slice(role.length + 1)})`;
   return NAMES[from] ?? (from.length > 12 ? `child ${from.slice(0, 8)}` : from.toUpperCase());
 }
 
 /** One post on one line: its text is flattened, so a post can never pass for a line of the engine's own. */
 export function formatPost(post: BoardPost): string {
   const files = post.files?.length ? ` (${post.files.join(", ")})` : "";
-  return `#${post.seq} [${post.kind}] ${posterName(post.from)}${files}: ${post.text.replace(/\s+/g, " ")}`;
+  const to = post.to?.length ? ` → ${post.to.map(posterName).join(", ")}` : "";
+  return `#${post.seq} [${post.kind}] ${posterName(post.from)}${to}${files}: ${post.text.replace(/\s+/g, " ")}`;
 }
 
 export function formatPosts(posts: readonly BoardPost[]): string {

@@ -98,6 +98,8 @@ export interface WorkflowConfig {
   gitIsolation: GitIsolation;
   /** Scouts, workers, lobby chat replies and the planner get the repository map: the layout and the files matching their step, with each file's purpose, names and unchanged scout notes. */
   repoMap: boolean;
+  /** Assignment bookmarks and the knowledge catalogue replace the historical knowledge and decision dumps in prompts; false keeps the legacy keyword-selected dumps (the rollback switch; never both). */
+  knowledgeRetrieval: boolean;
   /** A scout asked the same thing again for the same task, on a tree that has not changed, reuses its findings instead of running. */
   reuseScouts: boolean;
   /** How a parallel batch shares the repository: one checkout with the file desk (`desk`), or a worktree per worker whose changes are merged back when the batch ends (`worktrees`). */
@@ -299,6 +301,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     briefCheck: true,
     gitIsolation: "off",
     repoMap: true,
+    knowledgeRetrieval: true,
     reuseScouts: true,
     parallelMode: "desk",
     cleanReview: true,
@@ -528,6 +531,7 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
   workflow.fastTrack = workflow.fastTrack !== false;
   workflow.briefCheck = workflow.briefCheck !== false;
   workflow.repoMap = workflow.repoMap !== false;
+  workflow.knowledgeRetrieval = workflow.knowledgeRetrieval !== false;
   workflow.reuseScouts = workflow.reuseScouts !== false;
   workflow.parallelMode = isParallelMode(workflow.parallelMode) ? workflow.parallelMode : DEFAULT_CONFIG.workflow.parallelMode;
   workflow.cleanReview = workflow.cleanReview !== false;

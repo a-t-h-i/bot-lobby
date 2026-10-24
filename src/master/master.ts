@@ -8,7 +8,12 @@ import { runAgent, runParallel, watchdogOptions, type AgentRequest } from "../ex
 import { spawnPiProcess, type ProcessRunner, type RelayAsk } from "../execution/pi-runner.ts";
 import { knowledgeFilePath, readAgentKnowledge, writeFileEnsured } from "../knowledge/store.ts";
 import { taskDir } from "../knowledge/paths.ts";
-import { selectKnowledge, type KnowledgeSelection } from "../knowledge/selector.ts";
+import { selectKnowledge, selectRelevant, type KnowledgeSelection } from "../knowledge/selector.ts";
+import { appendPost, assignmentId } from "../desk/board.ts";
+import { refreshCatalogue } from "../knowledge/catalogue.ts";
+import { notesFor } from "../knowledge/retrieval.ts";
+import { assignmentKey, applySelection, bookmarkBlock, BOOKMARK_DEADLINE_MS, BOOKMARKS_VERSION, deliverBookmarks, fitHints, lexicalBookmarks, type BookmarkState, type Selection } from "../knowledge/bookmarks.ts";
+import { KNOWLEDGE_BUDGET_CHARS, type BookmarkPick, type BookmarkSelectorInput, type KnowledgePaths, type KnowledgePicker } from "../classifier/knowledge.ts";
 import { scriptsFor } from "../scripts/pick.ts";
 import { summarizeOutcomes } from "./synthesis.ts";
 import { parseWorkerResult, validateWorkerResult } from "../roles/worker.ts";
@@ -20,8 +25,8 @@ import { toolBudgetEnv, toolBudgetNote } from "../pi/tool-budget.ts";
 import { recordFileNotes } from "../knowledge/file-notes.ts";
 import { readCachedScout, scoutKey, writeCachedScout } from "./scout-cache.ts";
 import { BOARD_ENV, BOARD_TOOLS, boardContext } from "../desk/board.ts";
+import { seedDelivery } from "../desk/delivery.ts";
 import type { FileHinter } from "../classifier/files.ts";
-import type { KnowledgePaths, KnowledgePicker } from "../classifier/knowledge.ts";
 import { fellShort, profileLabel, routeLabel, type EffortRoute, type EffortRouter } from "../classifier/effort.ts";
 
 export interface ScoutOutcome {
@@ -82,13 +87,21 @@ function knowledgePaths(dataRoots: readonly string[], agent: Domain): KnowledgeP
  * the files that are too long when a picker is given, the keyword selection
  * otherwise and whenever the picker fails; and the shared scripts that fit it.
  */
-async function pickKnowledge(request: { knowledge?: KnowledgePicker; dataRoots: readonly string[]; signal?: AbortSignal }, agent: Domain, query: string): Promise<KnowledgeSelection> {
+/** Retrieval mode replaces the historical knowledge and decision dumps with assignment bookmarks; standards stay direct. */
+function retrievalMode(request: { config?: BotLobbyConfig }): boolean {
+  return request.config?.workflow.knowledgeRetrieval !== false && request.config !== undefined;
+}
+
+async function pickKnowledge(request: { config?: BotLobbyConfig; knowledge?: KnowledgePicker; dataRoots: readonly string[]; signal?: AbortSignal }, agent: Domain, query: string): Promise<KnowledgeSelection> {
   const [selected, scripts] = await Promise.all([pickFiles(request, agent, query), scriptsFor(request.dataRoots[0], query, request.knowledge?.scripts, request.signal)]);
   return scripts ? { ...selected, scripts } : selected;
 }
 
-async function pickFiles(request: { knowledge?: KnowledgePicker; dataRoots: readonly string[]; signal?: AbortSignal }, agent: Domain, query: string): Promise<KnowledgeSelection> {
+async function pickFiles(request: { config?: BotLobbyConfig; knowledge?: KnowledgePicker; dataRoots: readonly string[]; signal?: AbortSignal }, agent: Domain, query: string): Promise<KnowledgeSelection> {
   const slices = readAgentKnowledge(request.dataRoots, agent);
+  if (retrievalMode(request)) {
+    return { knowledge: "", decisions: "", standards: selectRelevant(query, slices.standards ?? "", KNOWLEDGE_BUDGET_CHARS) };
+  }
   if (!request.knowledge) return selectKnowledge(query, slices);
   try {
     return await request.knowledge.select(query, slices, { paths: knowledgePaths(request.dataRoots, agent), ...(request.signal ? { signal: request.signal } : {}) });
@@ -97,10 +110,91 @@ async function pickFiles(request: { knowledge?: KnowledgePicker; dataRoots: read
   }
 }
 
-function scoutContext(request: ScoutRequest, domain: Domain, selected: KnowledgeSelection, likely = ""): AgentRequest["context"] {
+/** Resolve with the value, or `fallback` once `ms` pass: bookmark preparation never blocks the step. */
+async function within<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms);
+  });
+  return Promise.race([promise, late]).finally(() => clearTimeout(timer));
+}
+
+/** The lexical picks as the bookmark list records them. */
+function lexicalPicks(input: BookmarkSelectorInput): BookmarkPick[] {
+  return lexicalBookmarks(input.assignment, input.entries).map((pick) => ({ ...pick, source: "lexical" as const }));
+}
+
+/** Post a bookmark's correction signals to the task board as oracle notes; the delivered mark says verify regardless. */
+function postCorrections(board: string | undefined, corrections: readonly string[]): void {
+  for (const text of corrections) {
+    try {
+      appendPost(board!, { from: "oracle", kind: "note", text });
+    } catch {
+      // No board (or it is busy): the delivered bookmark still carries its changed/stale mark.
+    }
+  }
+}
+
+/**
+ * Select and deliver one recipient's assignment bookmarks: bounded catalogue
+ * metadata in, at most eight references out (the classifier's picks, or the
+ * lexical fallback when it is off, slow or failing), persisted in the task's
+ * storage, revalidated at delivery, rendered within the 3,000-character
+ * metadata budget. Returns "" in legacy mode; a coverage line when nothing
+ * was selected, so the agent knows the retrieval tools are there.
+ */
+async function prepareBookmarks(
+  request: { taskId: string; cwd: string; dataRoots: readonly string[]; config: BotLobbyConfig; knowledge?: KnowledgePicker; board?: string; signal?: AbortSignal },
+  recipient: string,
+  query: string,
+): Promise<string> {
+  const dir = request.dataRoots[0];
+  if (!request.config.workflow.knowledgeRetrieval || !dir) return "";
+  const { catalogue, coverage } = refreshCatalogue(request.dataRoots);
+  const input: BookmarkSelectorInput = {
+    assignment: query,
+    entries: catalogue.entries.filter((entry) => entry.freshness !== "stale"),
+    catalogueRevision: catalogue.revision,
+    cacheKey: `${request.taskId}:${recipient}`,
+    ...(request.signal ? { signal: request.signal } : {}),
+  };
+  const picks = request.knowledge?.bookmarks
+    ? await within(request.knowledge.bookmarks.select(input), BOOKMARK_DEADLINE_MS + 500, lexicalPicks(input))
+    : lexicalPicks(input);
+  const selections: Selection[] = picks.map(({ ref, reason, revision }) => ({ ref, reason, revision }));
+  const authority = picks.some((pick) => pick.source === "classifier") ? "classifier" : "lexical";
+  const state = bookmarkState(dir, request, recipient, query, catalogue.revision, selections, authority);
+  const access = { dataRoots: request.dataRoots, cwd: request.cwd };
+  const notes = notesFor(dir);
+  postCorrections(request.board, deliverBookmarks(state, recipient, catalogue, access, notes).corrections);
+  return bookmarkBlock(state, recipient, catalogue, access, notes) || `No bookmarks were selected for this assignment (catalogue coverage: ${coverage}); search_knowledge finds the recorded knowledge.`;
+}
+
+/** The persisted bookmark list after this selection; a busy list still delivers this run's picks. */
+function bookmarkState(
+  dir: string,
+  request: { taskId: string },
+  recipient: string,
+  query: string,
+  sourceRevision: number,
+  selections: Selection[],
+  authority: "classifier" | "lexical",
+): BookmarkState {
+  try {
+    return applySelection(dir, request.taskId, recipient, assignmentKey(query), sourceRevision, selections, authority);
+  } catch {
+    return {
+      version: BOOKMARKS_VERSION, taskId: request.taskId, assignment: assignmentKey(query), sourceRevision,
+      records: selections.map((pick) => ({ ref: pick.ref, recipient, authority, reason: pick.reason, sourceVersion: `${sourceRevision}`, revision: pick.revision, at: new Date().toISOString() })),
+    };
+  }
+}
+
+function scoutContext(request: ScoutRequest, domain: Domain, selected: KnowledgeSelection, likely = "", bookmarks = ""): AgentRequest["context"] {
   return {
     task: request.taskText,
     ...selected,
+    ...(bookmarks ? { bookmarks } : {}),
     instructions: request.config.agents[domain].instructions,
     workflowContext: [`Task state: scouting. Domain: ${domain}. Read-only reconnaissance; no implementation.`, toolBudgetNote(request.config.scout.maxToolCalls), likely].filter(Boolean).join("\n\n"),
   };
@@ -176,20 +270,23 @@ async function remember(dataDir: string, request: ScoutRequest, outcomes: readon
 }
 
 async function scoutDomains(request: ScoutRequest, run: ProcessRunner): Promise<ScoutOutcome[]> {
-  // Each scout gets the files most likely to answer its own instruction and focus.
-  const [likely, selected] = await Promise.all([
+  // Each scout gets the files most likely to answer its own instruction and focus, and its assignment's bookmarks.
+  const [likely, selected, bookmarked] = await Promise.all([
     Promise.all(request.domains.map((domain) => likelyFor(request.hints, `${request.instruction}\n${domainSpec(domain).scoutFocus}`, request.signal, request.taskText))),
     Promise.all(request.domains.map((domain) => pickKnowledge(request, domain, `${request.instruction}\n${domainSpec(domain).scoutFocus}\n\n${request.taskText}`))),
+    Promise.all(request.domains.map((domain) => prepareBookmarks(request, domain, `${request.instruction}\n${domainSpec(domain).scoutFocus}\n\n${request.taskText}`))),
   ]);
   const extraTools = request.hints?.tools() ?? [];
-  const requests: AgentRequest[] = request.domains.map((domain, index) => ({
+  const requests: AgentRequest[] = request.domains.map((domain, index) => {
+    const hints = fitHints(bookmarked[index] ?? "", likely[index] ?? "");
+    return {
     delegationQuota: { used: 0 },
     effort: request.effort,
     taskId: request.taskId,
     domain,
     role: "scout",
     instruction: scoutInstruction(request, domain),
-    context: scoutContext(request, domain, selected[index]!, likely[index]),
+    context: scoutContext(request, domain, selected[index]!, hints.likely, hints.bookmarks),
     ...(extraTools.length > 0 ? { extraTools } : {}),
     env: toolBudgetEnv(request.config.scout.maxToolCalls),
     ...profileFields(request.config, request.profile, domain, "scout"),
@@ -197,7 +294,8 @@ async function scoutDomains(request: ScoutRequest, run: ProcessRunner): Promise<
     signal: request.signal,
     onUpdate: request.onUpdate,
     ...watchdogOptions(request.config.workflow),
-  }));
+    };
+  });
   // Scouts think at a fixed level; a trivial one may move to the cheaper model (a pi model, so not on another harness).
   const routes = await Promise.all(requests.map((entry) => entry.harness ? undefined : routeFor(request.effort, entry.instruction, { ...(entry.model ? { model: entry.model } : {}), thinking: entry.thinking ?? "low" }, { thinkingFixed: true, context: request.taskText, ...(request.signal ? { signal: request.signal } : {}) })));
   const first = requests.map((entry, index) => (routes[index] ? { ...entry, ...routedFields(routes[index]!) } : entry));
@@ -283,6 +381,8 @@ export interface WorkerRequest {
   risk?: string;
   /** The task board's file: the worker reads what its role follows and posts contracts, decisions and blockers. */
   board?: string;
+  /** The worker's board identity (`backend:9f2c1e`): one per assignment, so two same-role workers never share delivery state. Minted when omitted. */
+  boardFrom?: string;
   /** Domains working at the same time as this one, in a parallel batch. */
   alongside?: readonly Domain[];
   /** The worker has a worktree of its own for the batch; its change is applied back when the batch ends. */
@@ -292,11 +392,13 @@ export interface WorkerRequest {
 }
 
 /** How a worker uses the task board, and what it already says for its role. */
-function boardGuidance(request: WorkerRequest): string {
+function boardGuidance(request: WorkerRequest, reader: string): string {
   if (!request.board) return "";
+  // The board lines below are a delivery: record them before any push can race the read.
+  seedDelivery(request.board, reader);
   return [
-    "Task board: post with `post_board` whenever you settle something another agent builds against or must follow (`contract`: a route, payload, type, event or file location; `decision`), when you are blocked on someone else's part (`blocker`), and when a piece is finished and testable (`done`). Exact facts in a line or two; no progress chatter. `read_board` shows what the others posted.",
-    boardContext(request.board, request.domain),
+    "Task board: post with `post_board` whenever you settle something another agent builds against or must follow (`contract`: a route, payload, type, event or file location; `decision`), when you are blocked on someone else's part (`blocker`), and when a piece is finished and testable (`done`). Exact facts in a line or two; no progress chatter. `read_board` shows what the others posted; `ack_board` records the events you actually incorporated — reading alone does not.",
+    boardContext(request.board, reader),
   ].filter(Boolean).join("\n\n");
 }
 
@@ -327,7 +429,7 @@ function askGuidance(previews: string): string {
   ].join(" ");
 }
 
-function workerWorkflowContext(request: WorkerRequest, likely = ""): string {
+function workerWorkflowContext(request: WorkerRequest, boardFrom: string, likely = ""): string {
   const spec = domainSpec(request.domain);
   const own = request.scoutOutcomes.filter(
     (outcome) => outcome.result.domain === request.domain && outcome.usable,
@@ -342,7 +444,7 @@ function workerWorkflowContext(request: WorkerRequest, likely = ""): string {
     likely,
     request.risk ?? "",
     alongsideGuidance(request),
-    boardGuidance(request),
+    boardGuidance(request, boardFrom),
     request.ask ? askGuidance(request.ask.previews) : "",
     request.dataRoots[0] ? `Scripts you draft for the shared library go in \`${join(taskDir(request.dataRoots[0], request.taskId), "scripts")}\`.` : "",
     request.dataRoots[0] ? `Long findings (an investigation, a list of call sites, a log excerpt) go in a file under \`${join(taskDir(request.dataRoots[0], request.taskId), "notes")}\`: give its path under Notes instead of pasting them into your report, so whoever needs them reads them whole.` : "",
@@ -355,14 +457,17 @@ export async function runWorker(
   run: ProcessRunner = spawnPiProcess,
 ): Promise<WorkerOutcome> {
   const configured = profileFields(request.config, request.profile, request.domain, "worker");
-  const [selected, likely, route] = await Promise.all([
+  const [selected, likely, route, bookmarked] = await Promise.all([
     pickKnowledge(request, request.domain, `${request.instruction}\n\n${request.taskText}`),
     likelyFor(request.hints, request.instruction, request.signal, request.taskText),
     routeFor(request.effort, request.instruction, { ...(configured.model ? { model: configured.model } : {}), thinking: configured.thinking }, { context: request.taskText, ...(request.signal ? { signal: request.signal } : {}) }),
+    prepareBookmarks(request, request.domain, `${request.instruction}\n\n${request.taskText}`),
   ]);
+  const hints = fitHints(bookmarked, likely);
   const hintTools = request.hints?.tools() ?? [];
+  const boardFrom = request.boardFrom ?? assignmentId(request.domain);
   const extraTools = [...(request.agent?.extraTools ?? []), ...hintTools, ...(request.board ? BOARD_TOOLS : [])];
-  const env = request.board ? { ...request.agent?.env, [BOARD_ENV]: request.board, BOT_LOBBY_BOARD_FROM: request.domain } : request.agent?.env;
+  const env = request.board ? { ...request.agent?.env, [BOARD_ENV]: request.board, BOT_LOBBY_BOARD_FROM: boardFrom } : request.agent?.env;
   const base: AgentRequest = {
     delegationQuota: { used: 0 },
     ...(request.expert ? { expert: request.expert } : {}),
@@ -375,8 +480,9 @@ export async function runWorker(
     context: {
       task: request.taskText,
       ...selected,
+      ...(hints.bookmarks ? { bookmarks: hints.bookmarks } : {}),
       instructions: request.config.agents[request.domain].instructions,
-      workflowContext: workerWorkflowContext(request, likely),
+      workflowContext: workerWorkflowContext(request, boardFrom, hints.likely),
     },
     ...configured,
     cwd: request.cwd,
@@ -480,7 +586,7 @@ function isRetryableReviewRun(run: AgentRun): boolean {
   return run.status !== "cancelled" && (run.status !== "success" || !hasReviewVerdict(run.output));
 }
 
-function reviewerAgentRequest(request: ReviewerRequest, selected: KnowledgeSelection): AgentRequest {
+function reviewerAgentRequest(request: ReviewerRequest, selected: KnowledgeSelection, bookmarks = ""): AgentRequest {
   return {
     taskId: request.taskId,
     domain: request.domain,
@@ -492,6 +598,7 @@ function reviewerAgentRequest(request: ReviewerRequest, selected: KnowledgeSelec
     context: {
       task: request.taskText,
       ...selected,
+      ...(bookmarks ? { bookmarks } : {}),
       instructions: request.config.agents[request.domain].instructions,
       workflowContext: reviewerContext(request),
     },
@@ -515,8 +622,12 @@ export async function runReviewer(
   request: ReviewerRequest,
   run: ProcessRunner = spawnPiProcess,
 ): Promise<ReviewerOutcome> {
-  const selected = await pickKnowledge(request, request.domain, `${request.taskText} ${request.workerSummary}`);
-  const agentRequest = reviewerAgentRequest(request, selected);
+  const query = `${request.taskText} ${request.workerSummary}`;
+  const [selected, bookmarked] = await Promise.all([
+    pickKnowledge(request, request.domain, query),
+    prepareBookmarks(request, request.domain, query),
+  ]);
+  const agentRequest = reviewerAgentRequest(request, selected, bookmarked);
   const attempts = Math.max(1, request.config.workflow.maxAgentRetries + 1);
   let agentRun = await runAgent(agentRequest, run);
   for (let attempt = 2; attempt <= attempts && isRetryableReviewRun(agentRun); attempt++) {

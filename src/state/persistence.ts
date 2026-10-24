@@ -1,8 +1,9 @@
+import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join, sep } from "node:path";
 import type { KnowledgeConfig } from "../schemas/configuration.ts";
-import type { Domain } from "../schemas/agent.ts";
-import { TERMINAL_STATES, isTaskState, type Task } from "../schemas/task.ts";
+import type { Domain, Role } from "../schemas/agent.ts";
+import { MAX_ASSIGNMENTS, TERMINAL_STATES, isTaskState, type AssignmentGrant, type AssignmentRecord, type Task } from "../schemas/task.ts";
 import { dataRoot, firstLegacyDataRoot, readDataRoots } from "./project.ts";
 import {
   AGENT_DIR_NAMES,
@@ -17,10 +18,14 @@ import { DEFAULT_KNOWLEDGE_CONTENT, ensureFile, readFileOr, writeFileEnsured } f
 import { forgetCached, forgetCachedUnder, readJsonCached } from "./file-cache.ts";
 import { taskName } from "../text.ts";
 import { mergePhaseTiming, timingBaseline, type TimingBaseline } from "./timing-merge.ts";
+import { captureCheckpoint } from "./checkpoint.ts";
 
 const timingBaselines = new WeakMap<Task, TimingBaseline>();
+type UserBaseline = Pick<Task, "plan" | "approvedPlan" | "amendments"> & { checkpoint?: string };
+const userBaselines = new WeakMap<Task, UserBaseline>();
 function rememberTiming(task: Task): Task {
   timingBaselines.set(task, timingBaseline(task));
+  userBaselines.set(task, { plan: task.plan, approvedPlan: task.approvedPlan, amendments: [...(task.amendments ?? [])], checkpoint: JSON.stringify(task.checkpoint) });
   return task;
 }
 
@@ -46,6 +51,7 @@ export function createTaskDir(root: string, configDir: string, task: Task): void
   const dir = taskDir(dataRoot(root, configDir), task.id);
   mkdirSync(dir, { recursive: true });
   forgetCached(join(dir, "state.json"));
+  refreshCheckpoint(task, root);
   writeFileEnsured(join(dir, "state.json"), JSON.stringify(task, null, 2));
   rememberTiming(task);
   ensureFile(join(dir, "proposal.md"), "");
@@ -87,6 +93,106 @@ export function readTaskArtifact(
   return undefined;
 }
 
+export interface AssignmentIssue {
+  ownerSessionId: string;
+  runId: string;
+  worktree: string;
+  domain: Domain;
+  role: Role;
+  grants?: readonly AssignmentGrant[];
+  parentAssignmentId?: string;
+}
+
+/** Issue one assignment identity; only the owning session of a live task may. */
+export function issueAssignment(root: string, configDir: string, taskId: string, issue: AssignmentIssue): AssignmentRecord | undefined {
+  const task = loadTask(root, configDir, taskId);
+  if (!task || TERMINAL_STATES.includes(task.state) || !task.ownerSessionId || task.ownerSessionId !== issue.ownerSessionId) return undefined;
+  const record: AssignmentRecord = {
+    id: `A-${randomUUID()}`,
+    ownerSessionId: issue.ownerSessionId,
+    runId: issue.runId,
+    worktree: issue.worktree,
+    domain: issue.domain,
+    role: issue.role,
+    state: "active",
+    grants: [...(issue.grants ?? ["artifact.read", "checkpoint.read"])],
+    ...(issue.parentAssignmentId ? { parentAssignmentId: issue.parentAssignmentId } : {}),
+    issuedAt: new Date().toISOString(),
+  };
+  task.assignments = [...(task.assignments ?? []), record];
+  supersedeAssignments(task, record);
+  saveTask(root, configDir, task);
+  return record;
+}
+
+/** Transition one assignment to a terminal state; terminal records never reactivate. */
+export function transitionAssignment(root: string, configDir: string, taskId: string, id: string, state: "cancelled" | "revoked"): AssignmentRecord | undefined {
+  const task = loadTask(root, configDir, taskId);
+  const record = task?.assignments?.find((entry) => entry.id === id);
+  if (!task || !record) return undefined;
+  if (record.state === "active") {
+    record.state = state;
+    record.endedAt = new Date().toISOString();
+  }
+  saveTask(root, configDir, task);
+  return record;
+}
+
+/** The current registry entry for one assignment id, or none. */
+export function assignmentRecord(root: string, configDir: string, taskId: string, id: string): AssignmentRecord | undefined {
+  return loadTask(root, configDir, taskId)?.assignments?.find((entry) => entry.id === id);
+}
+
+const ARTIFACT_REF_PATTERN = /^O-[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
+const MAX_ARTIFACT_REFS = 16;
+
+/** Record one durable artifact reference on the task checkpoint so later runs can re-find it. */
+export function recordArtifactRef(root: string, configDir: string, taskId: string, ref: string): boolean {
+  const task = loadTask(root, configDir, taskId);
+  if (!task || !ARTIFACT_REF_PATTERN.test(ref)) return false;
+  const checkpoint = task.checkpoint ?? captureCheckpoint(task, task.git?.path ?? root);
+  const items = checkpoint.artifacts.items;
+  if (items.includes(ref)) return true;
+  task.checkpoint = { ...checkpoint, artifacts: { items: [...items, ref].slice(-MAX_ARTIFACT_REFS), omitted: Math.max(checkpoint.artifacts.omitted, items.length + 1 - MAX_ARTIFACT_REFS) } };
+  saveTask(root, configDir, task);
+  return true;
+}
+
+/** A new run for one domain/role slot supersedes its active predecessors (run or worktree change). */
+function supersedeAssignments(task: Task, issued: AssignmentRecord): void {
+  const at = new Date().toISOString();
+  for (const record of task.assignments ?? []) {
+    const superseded = record.id !== issued.id && record.state === "active" && record.domain === issued.domain && record.role === issued.role && (record.runId !== issued.runId || record.worktree !== issued.worktree);
+    if (superseded) {
+      record.state = "cancelled";
+      record.endedAt = at;
+    }
+  }
+}
+
+/** Terminal assignments are final: a stale in-flight save must not resurrect them. */
+function preserveAssignments(task: Task, latest: Task): void {
+  const next = new Map((task.assignments ?? []).map((record) => [record.id, record]));
+  const merged = (latest.assignments ?? []).map((record) => {
+    const mine = next.get(record.id);
+    next.delete(record.id);
+    return !mine || mine.state === "active" ? record : mine;
+  });
+  const records = trimAssignments([...merged, ...next.values()]);
+  if (records.length > 0) task.assignments = records;
+}
+
+/** Oldest active records are dropped first; terminal records stay for audit. */
+function trimAssignments(records: AssignmentRecord[]): AssignmentRecord[] {
+  const kept = [...records];
+  while (kept.length > MAX_ASSIGNMENTS) {
+    const index = kept.findIndex((record) => record.state === "active");
+    if (index < 0) break;
+    kept.splice(index, 1);
+  }
+  return kept;
+}
+
 export function saveTask(root: string, configDir: string, task: Task): void {
   const latest = loadTask(root, configDir, task.id);
   // Abandonment is final: an in-flight action must not overwrite its audit or resurrect it.
@@ -96,12 +202,41 @@ export function saveTask(root: string, configDir: string, task: Task): void {
   }
   if (latest) {
     preserveUserInterventions(task, latest);
+    preserveUserConstraints(task, latest);
     mergePhaseTiming(task, timingBaselines.get(task), latest);
+    preserveAssignments(task, latest);
   }
+  refreshCheckpoint(task, root, latest?.checkpoint);
   const path = join(taskDir(dataRoot(root, configDir), task.id), "state.json");
   forgetCached(path);
   writeFileEnsured(path, JSON.stringify(task, null, 2));
   rememberTiming(task);
+}
+
+/** Preserve newer user constraints without mistaking an intentional local edit for a stale snapshot. */
+function preserveUserConstraints(task: Task, latest: Task): void {
+  const baseline = userBaselines.get(task);
+  for (const field of ["plan", "approvedPlan"] as const) {
+    if (!baseline || latest[field] !== baseline[field]) task[field] = latest[field];
+  }
+  const original = new Set(baseline?.amendments ?? latest.amendments);
+  const additions = task.amendments.filter((entry) => !original.has(entry) && !latest.amendments.includes(entry));
+  task.amendments = [...latest.amendments, ...additions];
+}
+
+/** Task-only capture: no source reads, bookmark opening, claim restoration or delivery advancement. */
+function refreshCheckpoint(task: Task, root: string, latest?: Task["checkpoint"]): void {
+  const unchanged = userBaselines.get(task)?.checkpoint === JSON.stringify(task.checkpoint);
+  const previous = unchanged && latest ? latest : task.checkpoint;
+  const checkpoint = captureCheckpoint(task, task.git?.path ?? root);
+  if (previous) {
+    checkpoint.bookmarks = previous.bookmarks;
+    checkpoint.artifacts = previous.artifacts;
+    checkpoint.ownership = previous.ownership;
+    checkpoint.delivery = previous.delivery;
+    checkpoint.verification.sources = previous.verification.sources;
+  }
+  task.checkpoint = checkpoint;
 }
 
 /** Explicit user waivers, skipped steps and resolved approvals must survive an in-flight worker's snapshot. */
@@ -156,7 +291,7 @@ function readTaskAt(dir: string): Task | undefined {
   const path = join(dir, "state.json");
   if (!existsSync(path)) return undefined;
   try {
-    return JSON.parse(readFileSync(path, "utf8")) as Task;
+    return rememberTiming(JSON.parse(readFileSync(path, "utf8")) as Task);
   } catch {
     return undefined;
   }

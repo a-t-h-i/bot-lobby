@@ -8,6 +8,7 @@
  * the classifier off; a large repository that is not indexed in time is left
  * out rather than waited for.
  */
+import { posix as pathPosix } from "node:path";
 import type { FileHinter, FileScope, IndexedFile } from "../classifier/files.ts";
 import { indexFiles, terms } from "../classifier/files.ts";
 import { dataRoot } from "../state/project.ts";
@@ -138,6 +139,55 @@ function within<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
   return Promise.race([promise, late]).finally(() => clearTimeout(timer));
 }
 
+/** Relative module paths an excerpt's import lines name, with or without a TS extension — hints, not a graph. */
+function importedPaths(file: IndexedFile): string[] {
+  const dir = file.path.slice(0, file.path.lastIndexOf("/") + 1);
+  const specs = [...file.excerpt.matchAll(/(?:from|import|require)\s*\(?\s*["'](\.[^"']+)["']/g)].map((match) => match[1]!);
+  return specs.flatMap((spec) => {
+    const base = pathPosix.normalize(`${dir}${spec}`);
+    return [base, `${base}.ts`, `${base}/index.ts`];
+  });
+}
+
+/** A ranked file's likely sibling by name alone: its tests, or the folder's barrel — never facts, just where to look next. */
+function siblingPointer(file: IndexedFile, byPath: Map<string, IndexedFile>, taken: readonly string[]): string | undefined {
+  const stem = file.path.replace(/\.[^./]+$/, "");
+  const dir = stem.slice(0, stem.lastIndexOf("/") + 1);
+  const base = stem.slice(dir.length);
+  for (const [candidate, why] of [[`${dir}${base}.test.ts`, "likely its tests"], [`test/${base}.test.ts`, "likely its tests"], [`${dir}index.ts`, "the folder's entry point"]] as const) {
+    const guess = byPath.get(candidate);
+    if (!guess || guess.path === file.path || taken.some((line) => line.startsWith(`- \`${guess.path}\``))) continue;
+    return `- \`${guess.path}\` — beside \`${file.path}\`: ${why} (heuristic guess, verify it)`;
+  }
+  return undefined;
+}
+
+/** Conservative guesses beside the ranked files: sibling tests and barrels by name, and pool files whose excerpt imports one. */
+export function heuristicPointers(files: readonly IndexedFile[], pool: readonly IndexedFile[], max = 6): string[] {
+  const byPath = new Map(pool.map((file) => [file.path, file]));
+  const pointers: string[] = [];
+  for (const file of files.slice(0, max)) {
+    const guess = siblingPointer(file, byPath, pointers);
+    if (guess) pointers.push(guess);
+  }
+  const ranked = new Set(files.map((file) => file.path));
+  for (const candidate of pool) {
+    if (pointers.length >= max || ranked.has(candidate.path) || !candidate.excerpt) continue;
+    const target = importedPaths(candidate).map((path) => byPath.get(path)).find((file) => file && ranked.has(file.path));
+    if (target) pointers.push(`- \`${candidate.path}\` — imports \`${target.path}\`: likely calls into it (heuristic guess, verify it)`);
+  }
+  return pointers;
+}
+
+/** The map plus its pointer section, kept within `maxChars`: pointer lines go first when the budget is tight. */
+export function withPointers(map: string, pointers: readonly string[], maxChars: number): string {
+  if (pointers.length === 0) return map;
+  const header = `${map}\n\nLikely beside them (found by filename, not facts):`;
+  let kept = pointers;
+  while (kept.length > 0 && header.length + kept.join("\n").length + 1 > maxChars) kept = kept.slice(0, -1);
+  return kept.length > 0 ? `${header}\n${kept.join("\n")}` : map;
+}
+
 /** The repository map for a step; "" when nothing matches, the index fails or it is not ready within the budget. */
 export async function repoMap(scope: FileScope, query: string, options: RepoMapOptions = {}): Promise<string> {
   const indexing = indexFiles(scope, options.exclude ?? []);
@@ -148,7 +198,22 @@ export async function repoMap(scope: FileScope, query: string, options: RepoMapO
   // Rank twice: notes only exist for some files, so read them for a wider first cut, then rank with them.
   const wide = rankForMap(query, files, max * 2);
   const notes = await currentNotes(dataRoot(scope.root, scope.configDir), scope.cwd, wide.map((file) => file.path));
-  return renderRepoMap(layoutLine(files), rankForMap(query, wide, max, notes), notes, options.maxChars ?? REPO_MAP_CHARS);
+  const ranked = rankForMap(query, wide, max, notes);
+  const maxChars = options.maxChars ?? REPO_MAP_CHARS;
+  const text = renderRepoMap(layoutLine(files), ranked, notes, maxChars);
+  return text ? withPointers(text, heuristicPointers(ranked, wide), maxChars) : "";
+}
+
+/** Drop from `likely` the file lines the map already carries, so one file is named once, not twice. */
+export function withoutMapped(likely: string, mapped: string): string {
+  if (!likely || !mapped) return likely;
+  const listed = new Set([...mapped.matchAll(/^- `([^`]+)`/gm)].map((match) => match[1]!));
+  if (listed.size === 0) return likely;
+  const kept = likely.split("\n").filter((line) => {
+    const path = line.match(/^- `([^`]+)`/)?.[1];
+    return path === undefined || !listed.has(path);
+  });
+  return kept.some((line) => /^- `/.test(line)) ? kept.filter((line, index) => line !== "" || kept[index - 1] !== "").join("\n") : "";
 }
 
 /** A hinter that also hands each step the repository map, while `on()` says so. */
@@ -158,7 +223,7 @@ export function withRepoMap(hinter: FileHinter, scope: FileScope, settings: () =
       const { on, exclude } = settings();
       const map = on ? repoMap(scope, query, { exclude }).catch(() => "") : Promise.resolve("");
       const [likely, mapped] = await Promise.all([hinter.block(query, signal, context), map]);
-      return [likely, mapped].filter(Boolean).join("\n\n");
+      return [withoutMapped(likely, mapped), mapped].filter(Boolean).join("\n\n");
     },
     tools: () => hinter.tools(),
   };

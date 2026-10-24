@@ -10,6 +10,8 @@ import { chatFromEntries, chatText, LobbyFeed, MAX_CHAT, textOf } from "../src/l
 import { CHAT_BUILDER_TOOLS, ChatAgents, chatAgentPrompt, chatAgentTask, type ChatJob } from "../src/lobby/chat-agents.ts";
 import { parseLobbyCommand, parseMention } from "../src/lobby/prompts.ts";
 import { PLANNER_TOOLS, RESEARCH_PANEL_TOOLS, PlanningSession, appendAssumptions, commentBlock, memberPrompt, oracleClosing, optionLabel, panelSection, parseMemberReply, parseOption, parsePlannerReply, plannerSays, plannerTranscript, recommendedOption, roundMode, roundQuestions, sameQuestion, settledBlock, withoutSettled } from "../src/lobby/planner.ts";
+import { invariantPrefix } from "../src/prompts/compiler.ts";
+import { loadPrompt } from "../src/prompts/loader.ts";
 import { MAX_QUESTIONS } from "../src/lobby/ask.ts";
 import { createIssue, ghError, IssuesState, listIssues, splitIssueText, viewIssue, type Exec } from "../src/lobby/issues.ts";
 import { listPlannedTasks } from "../src/state/backlog.ts";
@@ -290,8 +292,17 @@ test("the transcript carries the issue, every attributed question and the curren
 test("each seat gets its domain's prompt layers, the panel role and its seat", () => {
   const dev = memberPrompt("backend", "prefer REST");
   assert.match(dev, /Global Engineering Agent[\s\S]*Backend Domain Agent[\s\S]*## Custom Instructions\n\nprefer REST[\s\S]*Planning Panel Member[\s\S]*## Your seat\n\nYou are DEV/);
+  assert.ok(dev.startsWith(invariantPrefix("backend")), "the dev seat starts with its byte-identical invariant prefix");
   assert.match(memberPrompt("researcher"), /Global Engineering Agent[\s\S]*Planning Panel Member[\s\S]*You are RESEARCH/);
   assert.doesNotMatch(memberPrompt("researcher"), /Backend Domain Agent/);
+});
+
+test("chat agents get their domain's invariant prefix before the seat and instructions", () => {
+  const backend = chatAgentPrompt("backend", "keep it tiny");
+  assert.ok(backend.startsWith(invariantPrefix("backend")), "the backend chat agent starts with its invariant prefix");
+  assert.ok(backend.indexOf("keep it tiny") < backend.indexOf("## Your seat"), "custom instructions precede the seat");
+  assert.ok(chatAgentPrompt("designer").startsWith(invariantPrefix("designer")), "the designer chat agent starts with its invariant prefix");
+  assert.ok(chatAgentPrompt("researcher").startsWith(loadPrompt("global.md")), "the researcher chat agent starts with the global layer");
 });
 
 /** A fake pi that answers as whichever seat (or the oracle) the task names. */

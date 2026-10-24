@@ -12,6 +12,7 @@ import { readFile, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import type { Domain } from "../schemas/agent.ts";
 import type { RelevantFile } from "../schemas/findings.ts";
+import { tempName, withFileLock } from "../desk/lock.ts";
 
 export interface FileNote {
   note: string;
@@ -51,8 +52,9 @@ function writeFileNotes(dataDir: string, files: Record<string, FileNote>): void 
   const path = fileNotesPath(dataDir);
   try {
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(`${path}.tmp`, JSON.stringify({ version: 1, files } satisfies NotesFile));
-    renameSync(`${path}.tmp`, path);
+    const temp = tempName(path);
+    writeFileSync(temp, JSON.stringify({ version: 1, files } satisfies NotesFile));
+    renameSync(temp, path);
   } catch {
     // Notes are an optimisation; without them agents search as before.
   }
@@ -89,10 +91,18 @@ export async function recordFileNotes(dataDir: string, cwd: string, domain: Doma
   }));
   const fresh = entries.filter((entry): entry is [string, FileNote] => entry !== undefined);
   if (fresh.length === 0) return 0;
-  const notes = { ...readFileNotes(dataDir), ...Object.fromEntries(fresh) };
-  const kept = Object.entries(notes).sort((a, b) => b[1].at.localeCompare(a[1].at)).slice(0, MAX_NOTES);
-  writeFileNotes(dataDir, Object.fromEntries(kept));
-  return fresh.length;
+  try {
+    // Scouts run in parallel: hold the notes' lock across the read-merge-write so one writer's notes cannot overwrite another's.
+    return withFileLock(fileNotesPath(dataDir), () => {
+      const notes = { ...readFileNotes(dataDir), ...Object.fromEntries(fresh) };
+      const kept = Object.entries(notes).sort((a, b) => b[1].at.localeCompare(a[1].at)).slice(0, MAX_NOTES);
+      writeFileNotes(dataDir, Object.fromEntries(kept));
+      return fresh.length;
+    });
+  } catch {
+    // A busy notes file is an optimisation lost for this scout, not a failure of its task.
+    return 0;
+  }
 }
 
 /** The notes for `paths` whose file is unchanged since the note was taken. */

@@ -68,6 +68,16 @@ const OrchestrateSchema = Type.Object({
       description: "knowledge: which persistent file the text belongs to",
     }),
   ),
+  op: Type.Optional(
+    StringEnum(["add", "remove", "pin", "unpin", "exclude"] as const, {
+      description: "bookmark: the operation on the task's assignment bookmark list",
+    }),
+  ),
+  refs: Type.Optional(
+    Type.Array(Type.String(), {
+      description: "bookmark: the reference ids (K-…), exactly as search_knowledge returned them",
+    }),
+  ),
 });
 
 const DESCRIPTION = [
@@ -76,7 +86,8 @@ const DESCRIPTION = [
   "read-only researcher for cited internet evidence on a complex change, tool, plugin, doc set or",
   "dependency), propose (record the proposal and request approval), plan (record the internal",
   "plan, or amend it later with the full revised plan), implement (delegate a step to a domain worker, or several domains in parallel with assignments), qa (final quality gate and the only",
-  "review), knowledge (record approved project knowledge or a decision; works without a task),",
+  "review), knowledge (record approved project knowledge or a decision; works without a task),"
+  + "bookmark (manage the task's assignment bookmark list: op=add|remove|pin|unpin|exclude with refs — reference ids from search_knowledge — and optionally domain and note),",
   "compact (replace a knowledge file with a rewritten version, archiving the old one; works without a task; disperse domain-relevant facts to action=knowledge (domain=designer|backend|qa) first), script (save a script to the shared scripts library, or replace one, for a job that comes back; works without a task),",
   "resolve_approval (approve or reject a request), complete (declare the task done after the gates",
   "pass, then ask the user to confirm merging and pushing main and removing its worktree), block/resume (escalate or continue),",

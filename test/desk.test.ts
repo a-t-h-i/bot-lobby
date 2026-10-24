@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { FileDesk, type DeskEvent } from "../src/desk/desk.ts";
 import { createDeskClient, startDeskServer } from "../src/desk/ipc.ts";
 import { autoNote, DESK_ENV, DESK_TOOLS, DeskSession, grantMessage, PEER_TOOLS, queueMessage } from "../src/desk/session.ts";
+import { roleOf } from "../src/desk/board.ts";
 import { registerDeskClient } from "../src/desk/client-extension.ts";
 import type { AgentHandle } from "../src/execution/agent-runner.ts";
 import type { ProcessRunner } from "../src/execution/pi-runner.ts";
@@ -224,7 +225,7 @@ test("implement with assignments runs domains in parallel and hands shared files
     const client = createDeskClient(options.env![DESK_ENV.address]!, worker);
     await client.request({ op: "hello" });
     let report: string;
-    if (worker === "designer") {
+    if (roleOf(worker) === "designer") {
       await client.request({ op: "claim", path: "src/api.ts", intent: "add theme prop" });
       designHolds();
       await new Promise((done) => setTimeout(done, 50));

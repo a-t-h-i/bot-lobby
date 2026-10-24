@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Classifier } from "../src/classifier/classifier.ts";
@@ -58,6 +58,19 @@ test("an excerpt keeps the leading comment, signatures (headings for Markdown) a
   assert.equal(excerptOf("docs/guide.md", "# Guide\n\nSome text.\n\n## Install\n\nMore.\n"), "# Guide\n## Install");
   assert.equal(excerptOf("data.csv", "a,b\n1,2\n"), "a,b\n1,2", "the first lines when nothing else fits");
   assert.ok(excerptOf("big.ts", Array.from({ length: 200 }, (_, i) => `export const value${i} = function () {};`).join("\n")).length <= 400);
+});
+
+test("the excerpt cache is scoped per canonical worktree: parallel trees share a data root but not a cache", () => {
+  const shared = tempDir("bl-data-");
+  const treeA = tempDir();
+  const treeB = tempDir();
+  const linkToA = join(tempDir(), "link-to-a");
+  symlinkSync(realpathSync(treeA), linkToA);
+  const cacheFor = (cwd: string) => fileCachePath({ cwd, root: shared, configDir: ".pi" });
+  const a = cacheFor(treeA);
+  assert.equal(cacheFor(linkToA), a, "a symlinked path shares its target's cache");
+  assert.notEqual(cacheFor(treeB), a, "a second worktree beside the first gets its own cache, so the two stop evicting each other");
+  assert.notEqual(cacheFor(join(shared, "nowhere")), a, "a missing tree keeps a distinct slug instead of thrashing the default");
 });
 
 test("the index lists what git would track, skips secrets, binaries, lockfiles and bot-lobby's own state, and caches excerpts", async () => {
@@ -210,13 +223,13 @@ test("scouts and workers start with their likely files and may look more up; the
   const seen: Array<{ tools: string; system: string; task: string }> = [];
   const data = tempDir();
   await runScouts({ taskId: "T", taskText: "Add pagination", instruction: "Find the list endpoints.", domains: ["backend"], cwd: data, dataRoots: [data], taskDir: tempDir(), config: DEFAULT_CONFIG, hints: HINTS }, recorder("## Scope\nx", seen));
-  assert.equal(seen[0]!.tools, `read,grep,find,ls,${FIND_FILES_TOOL},codemode,tool_search`);
+  assert.equal(seen[0]!.tools, `read,grep,find,ls,${FIND_FILES_TOOL},search_knowledge,open_knowledge,list_bookmarks,codemode,tool_search`);
   assert.match(seen[0]!.system, /## Workflow Context\n\nTask state: scouting[\s\S]*## Likely files\n\n- `src\/api\.ts` \(0\.91\) for Find the list endpoints\./);
   await runWorker({ taskId: "T", domain: "backend", instruction: "Step 2: add the cursor param", taskText: "Add pagination", scoutOutcomes: [], cwd: data, dataRoots: [data], config: DEFAULT_CONFIG, hints: HINTS, agent: { extraTools: ["claim_file", "handover_file"] } }, recorder("## Completed\nx", seen));
-  assert.equal(seen[1]!.tools, `read,bash,edit,write,grep,find,ls,claim_file,handover_file,${FIND_FILES_TOOL},codemode,tool_search,delegate_subtasks,ask_expert,my_files,wait_for_files`);
+  assert.equal(seen[1]!.tools, `read,bash,edit,write,grep,find,ls,claim_file,handover_file,${FIND_FILES_TOOL},search_knowledge,open_knowledge,list_bookmarks,codemode,tool_search,delegate_subtasks,ask_expert,my_files,wait_for_files`);
   assert.match(seen[1]!.system, /## Likely files\n\n- `src\/api\.ts` \(0\.91\) for Step 2: add the cursor param/);
   await runWorker({ taskId: "T", domain: "backend", instruction: "x", taskText: "y", scoutOutcomes: [], cwd: data, dataRoots: [data], config: DEFAULT_CONFIG }, recorder("## Completed\nx", seen));
-  assert.equal(seen[2]!.tools, "read,bash,edit,write,grep,find,ls,codemode,tool_search,delegate_subtasks,ask_expert,claim_file,handover_file,my_files,wait_for_files", "no hints");
+  assert.equal(seen[2]!.tools, "read,bash,edit,write,grep,find,ls,search_knowledge,open_knowledge,list_bookmarks,codemode,tool_search,delegate_subtasks,ask_expert,claim_file,handover_file,my_files,wait_for_files", "no hints");
   assert.doesNotMatch(seen[2]!.system, /## Likely files/);
 });
 

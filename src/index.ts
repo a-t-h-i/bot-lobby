@@ -12,6 +12,7 @@ import { pingTransition } from "./pi/notify.ts";
 import { isSubagentProcess } from "./pi/quiet.ts";
 import { registerDeskClient } from "./desk/client-extension.ts";
 import { registerBoardClient } from "./desk/board-client.ts";
+import { registerKnowledgeTools } from "./knowledge/catalog-tools.ts";
 import { registerLobbyEvents } from "./lobby/runtime.ts";
 import { registerOwner } from "./pi/owner.ts";
 import { registerClassifier } from "./classifier/instance.ts";
@@ -55,6 +56,8 @@ export default function (pi: ExtensionAPI): void {
   if (isSubagentProcess()) registerBoardClient(pi);
   // Subagents look files up with the classifier (the engine allows the tool only while file hints are on).
   if (isSubagentProcess()) registerClassifierTools(pi);
+  // Search/open over the derived knowledge catalogue; the engine grants it only where the run carries knowledge access.
+  registerKnowledgeTools(pi, CONFIG_DIR_NAME);
   // A subagent given a tool budget (scouts) is warned, then refused, so it reports instead of searching on.
   if (isSubagentProcess()) registerToolBudget(pi);
 }

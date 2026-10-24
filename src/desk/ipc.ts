@@ -9,7 +9,22 @@ import { createConnection, createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-export type DeskOp = "hello" | "check" | "claim" | "handover" | "mine" | "wait" | "delegate" | "cancel_delegate" | "consult" | "cancel_consult" | "post" | "ask" | "answer";
+export type DeskOp =
+  | "hello"
+  | "check"
+  | "claim"
+  | "handover"
+  | "mine"
+  | "wait"
+  | "delegate"
+  | "cancel_delegate"
+  | "consult"
+  | "cancel_consult"
+  | "post"
+  | "ack"
+  | "ask"
+  | "answer"
+  | "artifact";
 
 export interface DeskRequest {
   id: number;
@@ -25,12 +40,30 @@ export interface DeskRequest {
   kind?: string;
   text?: string;
   files?: string[];
+  /** post: recipients the post is addressed to (worker ids or domains); it is pushed only to them. */
+  targets?: string[];
+  /** ack: the board events (sequences or stable ids) the caller says it incorporated. */
+  events?: Array<string | number>;
   /** ask: who the question is for (DEV, DESIGN, QA); `path` asks whoever holds that file. */
   to?: string;
   /** answer: the question being answered. */
   questionId?: number;
   /** An expert consult's own id, so the worker can cancel it. */
   consultId?: string;
+  /** artifact: the caller's own assignment id; volunteered, never trusted on its own. */
+  assignment?: string;
+  /** artifact: the O-… reference to open. */
+  ref?: string;
+  /** artifact: byte offset to continue from. */
+  offset?: number;
+}
+
+/**
+ * The artifact op's caller identity: the socket token already names the caller, and any
+ * assignment it volunteers must be the host's own, so unrelated or unregistered ids deny.
+ */
+export function artifactIdentity(request: Pick<DeskRequest, "op" | "assignment">, hostAssignment: string | undefined): boolean {
+  return request.op === "artifact" && typeof hostAssignment === "string" && hostAssignment.length > 0 && request.assignment === hostAssignment;
 }
 
 export interface DeskResponse {

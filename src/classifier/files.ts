@@ -13,11 +13,12 @@
  * indexed.
  */
 import { execFile } from "node:child_process";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { dataRoot } from "../state/project.ts";
+import { tempName, withFileLock } from "../desk/lock.ts";
 import type { Classifier } from "./classifier.ts";
 import { noul, yesOf, type SystemOneRequest } from "./client.ts";
 import { clip, LIMITS } from "./limits.ts";
@@ -240,7 +241,15 @@ interface CacheFile {
 }
 
 export function fileCachePath(scope: FileScope): string {
-  return join(dataRoot(scope.root, scope.configDir), "cache", "files.json");
+  // One cache per canonical worktree (symlinks resolved): parallel worktrees share a data root but not a cache, so they stop evicting each other.
+  let slug = "default";
+  try {
+    slug = realpathSync(scope.cwd).replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+/, "").slice(-48) || "default";
+  } catch {
+    // A missing tree gets no cache to thrash; the slug stays distinct from any real one.
+    slug = `missing-${scope.cwd.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+/, "").slice(-40)}` || "default";
+  }
+  return join(dataRoot(scope.root, scope.configDir), "cache", `files-${slug}.json`);
 }
 
 function readCache(scope: FileScope): Record<string, CacheEntry> {
@@ -255,11 +264,14 @@ function readCache(scope: FileScope): Record<string, CacheEntry> {
 function writeCache(scope: FileScope, files: Record<string, CacheEntry>): void {
   const path = fileCachePath(scope);
   try {
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(`${path}.tmp`, JSON.stringify({ version: 1, cwd: scope.cwd, files } satisfies CacheFile));
-    renameSync(`${path}.tmp`, path);
+    withFileLock(path, () => {
+      mkdirSync(dirname(path), { recursive: true });
+      const temp = tempName(path);
+      writeFileSync(temp, JSON.stringify({ version: 1, cwd: scope.cwd, files } satisfies CacheFile));
+      renameSync(temp, path);
+    });
   } catch {
-    // The cache is an optimisation; a read-only tree just re-reads next time.
+    // The cache is an optimisation; a busy or read-only tree just re-reads next time.
   }
 }
 

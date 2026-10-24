@@ -143,6 +143,9 @@ test("any failure, a slow Jev, or the switch turned off keeps the keyword select
   assert.deepEqual(await knowledgePicker(slow).select(task, files, { paths: PATHS }), expected, "out of time: keywords");
 });
 
+/** The rollback branch: the legacy keyword-selected dumps, with bookmarks off. */
+const LEGACY = { ...DEFAULT_CONFIG, workflow: { ...DEFAULT_CONFIG.workflow, knowledgeRetrieval: false } };
+
 test("a picker that throws never stops an agent starting", async () => {
   const seen: string[] = [];
   const data = mkdtempSync(join(tmpdir(), "bl-kn-"));
@@ -154,7 +157,7 @@ test("a picker that throws never stops an agent starting", async () => {
     return { exitCode: 0, stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "## Completed\nx" }], model: "p/m", stopReason: "stop", usage: { input: 1, output: 1, cost: { total: 0 } } } }), stderr: "", killed: false };
   };
   const picker = { select: async () => { throw new Error("boom"); } };
-  await runWorker({ taskId: "T", domain: "backend", instruction: "step", taskText: "Fix billing", scoutOutcomes: [], cwd: data, dataRoots: [data], config: DEFAULT_CONFIG, knowledge: picker }, runner);
+  await runWorker({ taskId: "T", domain: "backend", instruction: "step", taskText: "Fix billing", scoutOutcomes: [], cwd: data, dataRoots: [data], config: LEGACY, knowledge: picker }, runner);
   assert.match(seen[0]!, /## Knowledge\n\n# Knowledge\n\nBilling uses cents\./);
 });
 
@@ -177,7 +180,7 @@ test("scouts, workers and the QA gate carry Jev's picks from a long decisions fi
   const calls: Call[] = [];
   const picker = knowledgePicker(jev(sectionJev((text) => (text.startsWith("## webhooks") ? 0.9 : 0.05), calls)));
   const seen: string[] = [];
-  const common = { taskId: "T", cwd: data, dataRoots: [data], config: DEFAULT_CONFIG, knowledge: picker };
+  const common = { taskId: "T", cwd: data, dataRoots: [data], config: LEGACY, knowledge: picker };
   await runScouts({ ...common, taskText: "Retry failed deliveries", instruction: "Find the webhooks code.", domains: ["backend"], taskDir: mkdtempSync(join(tmpdir(), "bl-kn-t-")) }, recorder(seen));
   await runWorker({ ...common, domain: "backend", instruction: "Step 1: retry webhooks with backoff", taskText: "Retry failed deliveries", scoutOutcomes: [] }, recorder(seen));
   await runReviewer({ ...common, domain: "qa", taskText: "Retry failed deliveries with webhooks", workerSummary: "webhooks retried", scoutOutcomes: [], diff: "diff" }, recorder(seen));

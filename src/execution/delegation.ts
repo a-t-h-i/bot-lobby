@@ -13,7 +13,11 @@ import { dataRoot, detectProjectRoot, loadConfig } from "../state/project.ts";
 import { EditLog } from "../state/changes.ts";
 import { createLiveRun } from "./live-run.ts";
 import { runPiAgent, type PiRunOptions, type ProcessRunner } from "./pi-runner.ts";
-import { startDeskServer } from "../desk/ipc.ts";
+import { openOutputArtifact, type OutputArtifactAccess } from "./output-artifacts.ts";
+import { artifactIdentity, startDeskServer, type DeskRequest, type DeskResponse } from "../desk/ipc.ts";
+import { assignmentRecord, issueAssignment, loadTask, recordArtifactRef, taskDirFor } from "../state/persistence.ts";
+import { persistedRunMarks } from "../state/checkpoint.ts";
+import { TERMINAL_STATES, type AssignmentGrant, type AssignmentRecord, type TaskState } from "../schemas/task.ts";
 import { DESK_ENV, DeskSession, deskSessionAt, PEER_TOOLS } from "../desk/session.ts";
 import { BOARD_ENV } from "../desk/board.ts";
 import { mcpGrant } from "../pi/grants.ts";
@@ -21,6 +25,7 @@ import { mcpGrant } from "../pi/grants.ts";
 export const MAX_CHILDREN = 5;
 export const DELEGATE_TOOL = "delegate_subtasks";
 export const EXPERT_TOOL = "ask_expert";
+export const DURABLE_OUTPUT_TOOL = "read_durable_output_artifacts";
 /** Consults one step may make: advice on the hard part, not a second worker. */
 export const MAX_CONSULTS = 2;
 /** Longest an expert may take to answer. */
@@ -50,6 +55,19 @@ export function canConsult(agent: { runId: string; taskId: string; role: Role; d
 }
 
 /** One shared child pool per task; parents waiting on children never hold its slots. */
+/** A child host: no delegation of its own, but durable reads under its own assignment when issued one. */
+async function childHost(options: PiRunOptions, policy: AgentPolicy, tools: string[], mcpTools: string[], artifactTool: string | undefined) {
+  const note = options.env?.[EXPERT_ENV] ? "You are advising a worker: read what you need, answer its question, and change nothing." : "You are a child agent. Finish only your assigned brief and report evidence to your parent; you cannot delegate further.";
+  const access = artifactTool ? options.runtimeAccess : undefined;
+  if (!access) return { tools, mcpTools, env: { ...options.env, [AGENT_ENV]: JSON.stringify(policy), [DELEGATION_ENV]: "" }, note, close: async () => {}, onStart: options.onStart, children: [] as AgentRun[] };
+  const token = randomUUID();
+  const server = await startDeskServer(async (request) => {
+    if (request.worker !== token) return { ok: false, text: "Unknown parent agent." };
+    return artifactPage(access, request);
+  }, () => {});
+  return { tools, mcpTools, env: { ...options.env, [AGENT_ENV]: JSON.stringify(policy), [DELEGATION_ENV]: JSON.stringify({ address: server.address, token, assignment: access.assignmentId }) }, note, close: async () => { await server.close(); }, onStart: options.onStart, children: [] as AgentRun[] };
+}
+
 const pools = new Map<string, { active: number; users: number; waiters: Array<() => void> }>();
 
 async function inPool<T>(key: string, limit: number, signal: AbortSignal, work: () => Promise<T>): Promise<T> {
@@ -85,6 +103,132 @@ export interface AgentPolicy {
   depth: number;
 }
 
+const ARTIFACT_REF_PATTERN = /^O-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
+
+/** What RuntimeAccess.checkpoint() exposes: task state and run marks, nothing else. */
+export interface RuntimeCheckpointView {
+  taskState: TaskState;
+  runMarks: string[];
+}
+
+/** The parent-side scope a child assignment is issued within. */
+export interface AssignmentScope {
+  taskId: string;
+  ownerSessionId: string;
+  runId: string;
+  worktree: string;
+}
+
+/** A child run's identity: a new assignment is minted for it, never credentials reuse. */
+export interface ChildIdentity {
+  runId: string;
+  worktree: string;
+  domain: Domain;
+  role: Role;
+}
+
+/** Assignment-scoped durable authorization: reads only, revalidated live against the task registry. */
+export interface RuntimeAccess {
+  readonly assignmentId: string;
+  readonly ownerSessionId: string;
+  authorize(grant: string, kind?: string, ref?: string): boolean;
+  readonly artifactAccess: OutputArtifactAccess;
+  checkpoint(): RuntimeCheckpointView | undefined;
+  issueChild(parentScope: AssignmentScope, child: ChildIdentity): RuntimeAccess | undefined;
+  recordArtifact(ref: string): void;
+}
+
+export interface RuntimeAccessOptions {
+  root: string;
+  configDir: string;
+  taskId: string;
+  ownerSessionId: string;
+  runId: string;
+  worktree: string;
+  domain: Domain;
+  role: Role;
+  grants?: readonly AssignmentGrant[];
+  parentAssignmentId?: string;
+  signal?: AbortSignal;
+}
+
+/** Issues one assignment identity and returns its live-validated access; the registry is the sole authority. */
+export function createRuntimeAccess(options: RuntimeAccessOptions): RuntimeAccess | undefined {
+  const issued = issueAssignment(options.root, options.configDir, options.taskId, {
+    ownerSessionId: options.ownerSessionId,
+    runId: options.runId,
+    worktree: options.worktree,
+    domain: options.domain,
+    role: options.role,
+    ...(options.grants ? { grants: options.grants } : {}),
+    ...(options.parentAssignmentId ? { parentAssignmentId: options.parentAssignmentId } : {}),
+  });
+  if (!issued) return undefined;
+  const childKeys: string[] = [];
+  const view = runtimeView(options, issued, childKeys);
+  return {
+    assignmentId: issued.id,
+    ownerSessionId: issued.ownerSessionId,
+    authorize: view.authorize,
+    artifactAccess: view.artifactAccess,
+    checkpoint: view.checkpoint,
+    issueChild: (parentScope, child) => issueChildAccess(options, issued, parentScope, child, childKeys),
+    recordArtifact: (ref) => { recordArtifactRef(options.root, options.configDir, options.taskId, ref); },
+  };
+}
+
+/** Every check re-reads the registry: revoked, cancelled, unowned or terminal always deny. */
+function runtimeView(options: RuntimeAccessOptions, issued: AssignmentRecord, childKeys: string[]) {
+  const authorize = (grant: string, kind?: string, ref?: string): boolean => {
+    if (options.signal?.aborted) return false;
+    const record = assignmentRecord(options.root, options.configDir, options.taskId, issued.id);
+    if (!record || record.state !== "active" || !record.grants.includes(grant as AssignmentGrant)) return false;
+    if (kind === "artifact" && ref !== undefined && !ARTIFACT_REF_PATTERN.test(ref)) return false;
+    const task = loadTask(options.root, options.configDir, options.taskId);
+    return !!task && task.ownerSessionId === record.ownerSessionId && !TERMINAL_STATES.includes(task.state);
+  };
+  const artifactAccess: OutputArtifactAccess = {
+    repository: options.root,
+    worktree: options.worktree,
+    taskDir: taskDirFor(options.root, options.configDir, options.taskId),
+    taskId: options.taskId,
+    callerKey: issued.id,
+    allowedCallerKeys: childKeys,
+    onRead: (ref) => { recordArtifactRef(options.root, options.configDir, options.taskId, ref); },
+    authorize: () => authorize("artifact.read"),
+  };
+  return { authorize, artifactAccess, checkpoint: () => checkpointView(options, issued, authorize) };
+}
+
+/** Run marks pass through an access callback, so an unauthorized caller reads none of them. */
+function checkpointView(options: RuntimeAccessOptions, issued: AssignmentRecord, authorize: RuntimeAccess["authorize"]): RuntimeCheckpointView | undefined {
+  if (!authorize("checkpoint.read")) return undefined;
+  const task = loadTask(options.root, options.configDir, options.taskId);
+  if (!task || task.ownerSessionId !== issued.ownerSessionId) return undefined;
+  return { taskState: task.state, runMarks: persistedRunMarks(task.checkpoint, () => true) };
+}
+
+/** Children get fresh identities within the parent's own scope, with the parent's grants. */
+function issueChildAccess(options: RuntimeAccessOptions, issued: AssignmentRecord, parentScope: AssignmentScope, child: ChildIdentity, childKeys: string[]): RuntimeAccess | undefined {
+  if (issued.state !== "active") return undefined;
+  if (parentScope.taskId !== options.taskId || parentScope.ownerSessionId !== issued.ownerSessionId || parentScope.worktree !== options.worktree) return undefined;
+  const access = createRuntimeAccess({ root: options.root, configDir: options.configDir, taskId: options.taskId, ownerSessionId: parentScope.ownerSessionId, runId: child.runId, domain: child.domain, role: child.role, worktree: child.worktree, grants: issued.grants, parentAssignmentId: issued.id, ...(options.signal ? { signal: options.signal } : {}) });
+  if (access) childKeys.push(access.assignmentId);
+  return access;
+}
+
+/** Durable reads under assignment scope: identity, grant and scope revalidate on every page. */
+function artifactPage(access: RuntimeAccess | undefined, request: DeskRequest): Omit<DeskResponse, "id"> {
+  const ref = request.ref ?? "";
+  if (!access || !artifactIdentity(request, access.assignmentId)) return { ok: false, text: "Permission denied: no durable artifact access for this identity." };
+  if (!access.authorize("artifact.read", "artifact", ref)) return { ok: false, text: "Permission denied: artifact access was revoked or never granted." };
+  try {
+    return { ok: true, text: JSON.stringify(openOutputArtifact(access.artifactAccess, ref, request.offset ?? 0)) };
+  } catch {
+    return { ok: false, text: "Output artifact unavailable or unauthorized" };
+  }
+}
+
 /** The host owns quotas, file identities and child lifetimes, outside model context. */
 export async function delegationHost(options: PiRunOptions, run: ProcessRunner) {
   const config = loadConfig();
@@ -95,11 +239,13 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
   const depth = agent.depth ?? 1;
   const quota = options.delegationQuota ?? { used: 0 };
   const consults = canConsult(agent, config.workflow.consultExpert);
-  const tools = [...new Set([...baseTools, "codemode", "tool_search", ...(canDelegate(agent, quota.used) ? [DELEGATE_TOOL] : []), ...(consults ? [EXPERT_TOOL] : [])])];
+  // Durable artifact reads appear only when the caller handed the host a live assignment access.
+  const artifactTool = options.runtimeAccess?.authorize("artifact.read") === true ? DURABLE_OUTPUT_TOOL : undefined;
+  const tools = [...new Set([...baseTools, "codemode", "tool_search", ...(artifactTool ? [artifactTool] : []), ...(canDelegate(agent, quota.used) ? [DELEGATE_TOOL] : []), ...(consults ? [EXPERT_TOOL] : {})])];
   // A caller that passes its profile's grant (even an absent one, meaning every connected tool) wins over the role's.
   const mcpTools = mcpGrant("mcpTools" in options ? options.mcpTools : agentProfile(config, agent.domain, agent.role).mcpTools, !editable);
   const policy: AgentPolicy = { tools, mcpTools, readOnly: !editable, depth };
-  if (depth > 1) return { tools, mcpTools, env: { ...options.env, [AGENT_ENV]: JSON.stringify(policy), [DELEGATION_ENV]: "" }, note: options.env?.[EXPERT_ENV] ? "You are advising a worker: read what you need, answer its question, and change nothing." : "You are a child agent. Finish only your assigned brief and report evidence to your parent; you cannot delegate further.", close: async () => {}, onStart: options.onStart, children: [] as AgentRun[] };
+  if (depth > 1) return childHost(options, policy, tools, mcpTools, artifactTool);
 
   const address = options.env?.[DESK_ENV.address];
   let desk = address ? deskSessionAt(address) : undefined;
@@ -135,6 +281,10 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
 
   const childRun = async (brief: string, signal: AbortSignal): Promise<AgentRun> => {
     const childId = randomUUID();
+    // The child's board and desk identity carries its parent's role, so a post addressed to the role reaches every worker of it while the child keeps its own cursors.
+    const childWorker = `${agent.domain}:${childId}`;
+    // Each child runs under its own assignment identity, issued within the parent's live scope.
+    const childAccess = options.runtimeAccess?.issueChild({ taskId: agent.taskId, ownerSessionId: options.runtimeAccess.ownerSessionId, runId: id, worktree: options.cwd }, { runId: childId, domain: agent.domain, role: agent.role, worktree: options.cwd });
     const base: AgentRun = { runId: childId, parentRunId: id, depth: 2, taskId: agent.taskId, domain: agent.domain, role: agent.role, instruction: brief, stepInstruction: options.task, status: "running", output: "", attempts: 1, startedAt: new Date().toISOString(), ...(options.thinking ? { thinking: options.thinking } : {}) };
     const edits = new EditLog(options.cwd);
     const live = createLiveRun(base, { onUpdate: update }, edits);
@@ -153,14 +303,16 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
         task: brief,
         model,
         thinking,
-        tools: [...new Set([...tools.filter((tool) => tool !== DELEGATE_TOOL && tool !== EXPERT_TOOL), ...(childDesk ? childDesk.tools().filter((tool) => !PEER_TOOLS.includes(tool)) : [])])],
+        tools: [...new Set([...tools.filter((tool) => tool !== DELEGATE_TOOL && tool !== EXPERT_TOOL && (tool !== DURABLE_OUTPUT_TOOL || !!childAccess)), ...(childDesk ? childDesk.tools().filter((tool) => !PEER_TOOLS.includes(tool)) : [])])],
         mcpTools,
+        ...(childAccess ? { runtimeAccess: childAccess } : {}),
         signal,
         delegationQuota: undefined,
         onChildRun: undefined,
         onEvent: live.onEvent,
-        env: { ...options.env, ...(childDesk ? childDesk.env(childId) : {}) },
-        onStart: (handle) => childDesk?.attach(childId, { runId: childId, steer: handle.steer, annotate: live.annotate }),
+        // A child keeps the board but under its own identity, so its reads, pushes and acknowledgements never collide with its parent's or a same-role sibling's.
+        env: { ...options.env, ...(board ? { BOT_LOBBY_BOARD_FROM: childWorker } : {}), ...(childDesk ? childDesk.env(childWorker) : {}) },
+        onStart: (handle) => childDesk?.attach(childWorker, { runId: childId, steer: handle.steer, annotate: live.annotate }),
       }, run);
       };
       let result = await attempt(route?.model ?? configured.model, route?.thinking ?? configured.thinking);
@@ -249,6 +401,7 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
         parent.removeEventListener("abort", stop);
       }
     }
+    if (request.op === "artifact") return artifactPage(options.runtimeAccess, request);
     if (request.op !== "delegate") return { ok: false, text: "Unknown delegation operation." };
     const signal = childSignal();
     signal.throwIfAborted();
@@ -274,7 +427,7 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
   return {
     tools: desk ? [...new Set([...tools, ...desk.tools()])] : tools,
     mcpTools,
-    env: { ...options.env, ...(desk ? desk.env(parentDeskId) : {}), [AGENT_ENV]: JSON.stringify({ ...policy, tools: desk ? [...new Set([...tools, ...desk.tools()])] : tools }), [DELEGATION_ENV]: JSON.stringify({ address: server.address, token }) },
+    env: { ...options.env, ...(desk ? desk.env(parentDeskId) : {}), [AGENT_ENV]: JSON.stringify({ ...policy, tools: desk ? [...new Set([...tools, ...desk.tools()])] : tools }), [DELEGATION_ENV]: JSON.stringify({ address: server.address, token, ...(options.runtimeAccess ? { assignment: options.runtimeAccess.assignmentId } : {}) }) },
     note: `${consults ? `When you are stuck on a hard step after a real attempt, or about to make a choice you are unsure of (a tricky algorithm, a subtle bug, an unfamiliar API), ${EXPERT_TOOL} asks a stronger model for advice, at most ${MAX_CONSULTS} times; it reads the repository and answers, you still do the work. ` : ""}${canDelegate(agent, quota.used) ? `Work directly when you can finish the brief yourself. Use ${DELEGATE_TOOL} only for useful, separable work with disjoint files, at most five children total; children cannot delegate further. Integrate and verify their work yourself. ` : ""}Use codemode for concise parallel calls, inspect failures, and return only useful evidence.${desk?.usesClaims ? " Before edit/write, claim_file; handover_file when finished. Release files before delegating or waiting." : ""}`,
     onStart: (handle: Parameters<NonNullable<PiRunOptions["onStart"]>>[0]) => {
       desk?.attach(parentDeskId, { runId: id, steer: handle.steer, annotate: () => {} });
