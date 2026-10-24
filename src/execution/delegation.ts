@@ -241,7 +241,7 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
   const consults = canConsult(agent, config.workflow.consultExpert);
   // Durable artifact reads appear only when the caller handed the host a live assignment access.
   const artifactTool = options.runtimeAccess?.authorize("artifact.read") === true ? DURABLE_OUTPUT_TOOL : undefined;
-  const tools = [...new Set([...baseTools, "codemode", "tool_search", ...(artifactTool ? [artifactTool] : []), ...(canDelegate(agent, quota.used) ? [DELEGATE_TOOL] : []), ...(consults ? [EXPERT_TOOL] : {})])];
+  const tools = [...new Set([...baseTools, "codemode", "tool_search", ...(artifactTool ? [artifactTool] : []), ...(canDelegate(agent, quota.used) ? [DELEGATE_TOOL] : []), ...(consults ? [EXPERT_TOOL] : [])])];
   // A caller that passes its profile's grant (even an absent one, meaning every connected tool) wins over the role's.
   const mcpTools = mcpGrant("mcpTools" in options ? options.mcpTools : agentProfile(config, agent.domain, agent.role).mcpTools, !editable);
   const policy: AgentPolicy = { tools, mcpTools, readOnly: !editable, depth };
