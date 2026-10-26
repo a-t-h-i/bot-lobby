@@ -8,11 +8,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { execFileSync, spawnSync } from "node:child_process";
 import { Classifier } from "../src/classifier/classifier.ts";
 import type { Answer, FetchLike, Question } from "../src/classifier/client.ts";
 import { scriptPicker } from "../src/classifier/scripts.ts";
-import { listScripts, saveScript, scriptName, scriptsDir } from "../src/scripts/library.ts";
+import { allScripts, BUILTIN_SCRIPTS_DIR, builtinScripts, listScripts, saveScript, scriptName, scriptsDir } from "../src/scripts/library.ts";
 import { keywordScripts, libraryBlock, scriptsBlock, scriptsFor } from "../src/scripts/pick.ts";
 import { parseScriptProposals, parseWorkerResult } from "../src/roles/worker.ts";
 import { runWorker } from "../src/master/master.ts";
@@ -83,8 +84,8 @@ test("without Jev a script fits a step when its name or purpose shares words wit
   assert.match(block, /These shared scripts do part of this step/);
   assert.match(block, /- `seed_public_holidays\.py` — Seed the public holidays table for a year\n {2}run: `python3 x\.py --year 2026`/);
   assert.ok(block.includes(`The shared scripts library (2 scripts) is \`${scriptsDir(data)}\``));
-  assert.match(await scriptsFor(data, "Rename the export button"), /^None of the shared scripts fits this step\./);
-  assert.equal(await scriptsFor(library(), "anything"), "", "no library, no section");
+  assert.match(await scriptsFor(data, "Recolour the banner"), /^None of the shared scripts fits this step/);
+  assert.match(await scriptsFor(library(), "anything"), /^None of the shared scripts fits this step exactly\. Built-in scripts/, "no library of its own: the built-ins still show");
   assert.equal(scriptsBlock(data, [], []), "");
   assert.match(libraryBlock(data), /Shared scripts \(.*\):\n- `check_links\.mjs` — Check every link in the docs\n- `seed_public_holidays\.py`/);
   assert.match(libraryBlock(library()), /is empty/);
@@ -181,4 +182,98 @@ test("the oracle saves a script with action=script, from its text or a worker's 
   assert.match((await act(workflow, { action: "script", name: "evil_script.sh", purpose: "x", file: outside })).message, /inside the project/);
   assert.match((await act(workflow, { action: "script", name: "bad", purpose: "x", text: "echo" })).message, /extension/);
   assert.match((await act(workflow, { action: "script", name: "no_body.sh", purpose: "x" })).message, /requires text/);
+});
+
+test("built-in scripts ship for every project, read their usage with the real path, and a project script of the same name wins", () => {
+  const builtins = builtinScripts();
+  assert.deepEqual(builtins.map((entry) => entry.name), [
+    "affected_packages.mjs", "check_changed.mjs", "check_contract_breakage.mjs", "circular_dependency_check.mjs",
+    "code_duplication_check.mjs", "diff_summary.mjs", "failure_digest.mjs", "find_generated_files.mjs", "find_symbol.mjs",
+    "find_test_fixtures.mjs", "find_tests_for.mjs", "outline_file.mjs", "project_commands.mjs", "recent_changes.mjs",
+    "repo_map.mjs", "run_changed_tests.mjs",
+  ]);
+  for (const entry of builtins) {
+    assert.ok(entry.builtin && entry.purpose.length > 30, entry.name);
+    assert.ok(entry.usage.startsWith(`node ${entry.path}`), `${entry.name}: ${entry.usage}`);
+  }
+  const root = mkdtempSync(join(tmpdir(), "bl-builtin-"));
+  const data = dataRoot(root, ".pi");
+  saveScript({ dataRoot: data, name: "find_symbol.mjs", purpose: "Our own symbol finder", body: "console.log(1)" });
+  const all = allScripts(data);
+  assert.equal(all.filter((entry) => entry.name === "find_symbol.mjs").length, 1);
+  assert.equal(all.find((entry) => entry.name === "find_symbol.mjs")?.builtin, undefined, "the project's own wins");
+  assert.match(libraryBlock(data), /Built-in scripts every agent can run/);
+});
+
+test("the built-in scripts run: outline, symbol lookup, tests for a file, the project's commands, --help", () => {
+  const run = (name: string, ...args: string[]) => execFileSync("node", [join(BUILTIN_SCRIPTS_DIR, name), ...args], { encoding: "utf8" });
+  assert.match(run("outline_file.mjs", "src/scripts/library.ts"), /\d+ {2}export function listScripts/);
+  const symbol = run("find_symbol.mjs", "builtinScripts");
+  assert.match(symbol, /## Defined \(\d+\)\nsrc\/scripts\/library\.ts:\d+ {2}export function builtinScripts/);
+  assert.match(symbol, /## Used \(\d+ in \d+ files\)[\s\S]*src\/scripts\/library\.ts:\d+ .*builtinScripts\(\)/);
+  assert.match(run("find_tests_for.mjs", "src/scripts/library.ts"), /test\/scripts\.test\.ts/);
+  assert.match(run("project_commands.mjs"), /npm run test {2}→ {2}node --test/);
+  assert.match(run("run_changed_tests.mjs", "src/scripts/pick.ts", "--dry-run"), /\$ node --test .*test\/scripts\.test\.ts/);
+  assert.match(run("repo_map.mjs", "src", "--depth", "1"), /^## src \(\d+ files\)\nagents\//);
+  assert.match(run("diff_summary.mjs", "--help"), /^purpose: .*\nusage: node .*diff_summary\.mjs/);
+});
+
+test("the review scripts find breaks, cycles, copies, generated files, affected packages, fixtures and failures in a branch", () => {
+  const repo = mkdtempSync(join(tmpdir(), "bl-review-"));
+  const git = (...args: string[]) => execFileSync("git", ["-c", "user.email=a@b", "-c", "user.name=a", ...args], { cwd: repo, encoding: "utf8" });
+  const write = (file: string, text: string) => {
+    mkdirSync(dirname(join(repo, file)), { recursive: true });
+    writeFileSync(join(repo, file), text);
+  };
+  const run = (name: string, ...args: string[]) => {
+    const result = spawnSync("node", [join(BUILTIN_SCRIPTS_DIR, name), ...args], { cwd: repo, encoding: "utf8" });
+    return { code: result.status, out: result.stdout };
+  };
+  const body = Array.from({ length: 8 }, (_, i) => `  total = total + values[${i}] * weight(${i});`).join("\n");
+  git("init", "-q", "-b", "main");
+  write("package.json", JSON.stringify({ workspaces: ["packages/*"], scripts: { gen: "protoc --ts_out=packages/core/gen api.proto" } }));
+  write("packages/core/package.json", JSON.stringify({ name: "@x/core" }));
+  write("packages/app/package.json", JSON.stringify({ name: "@x/app", dependencies: { "@x/core": "*" } }));
+  write("packages/core/math.ts", `export function sum(values: number[]): number {\n  let total = 0;\n${body}\n  return total;\n}\nexport const LIMIT = 3;\n`);
+  write("packages/app/main.ts", 'import { sum, LIMIT } from "../core/math";\nexport const shown = sum([LIMIT]);\n');
+  write("packages/core/gen/api_pb.ts", "// Code generated by protoc-gen-ts from api.proto. DO NOT EDIT.\nexport const x = 1;\n");
+  write("test/fixtures/users.json", "[]");
+  write("test/helpers/factory.ts", "export function makeUser() { return {}; }\n");
+  write("test/app.test.ts", 'import { makeUser } from "./helpers/factory";\n');
+  git("add", "-A");
+  git("commit", "-qm", "base");
+  git("checkout", "-qb", "work");
+  // The branch: renames sum, adds a module cycle and copies sum's body.
+  write("packages/core/math.ts", `import { shown } from "../app/main";\nexport function total(values: number[]): number {\n  let total = 0;\n${body}\n  return total + shown;\n}\nexport const LIMIT = 3;\n`);
+  write("packages/core/copy.ts", `export function again(values: number[]): number {\n  let total = 0;\n${body}\n  return total;\n}\n`);
+  git("add", "-A");
+  git("commit", "-qm", "work");
+
+  const contract = run("check_contract_breakage.mjs");
+  assert.equal(contract.code, 1);
+  assert.match(contract.out, /renamed to total\?: sum {2}— used in 1 file\(s\): packages\/app\/main\.ts/);
+  const cycle = run("circular_dependency_check.mjs");
+  assert.equal(cycle.code, 1);
+  assert.match(cycle.out, /packages\/core\/math\.ts\n {2}→ packages\/app\/main\.ts\n {2}→ packages\/core\/math\.ts/);
+  assert.match(run("code_duplication_check.mjs").out, /packages\/core\/copy\.ts:\d+-\d+ {2}≈ {2}packages\/core\/math\.ts/);
+  const generated = run("find_generated_files.mjs").out;
+  assert.match(generated, /api_pb\.ts {2}\[header\]/);
+  assert.match(generated, /made by: npm run gen/);
+  assert.match(generated, /source: api\.proto/);
+  const affected = run("affected_packages.mjs").out;
+  assert.match(affected, /changed {2}@x\/core \(packages\/core/);
+  assert.match(affected, /affected @x\/app \(packages\/app, through @x\/core\) {2}→ {2}npm test -w packages\/app/);
+  const fixtures = run("find_test_fixtures.mjs").out;
+  assert.match(fixtures, /test\/helpers\/factory\.ts \(\d+ lines, used by 1 test file\(s\)\)\n {4}makeUser/);
+  assert.match(fixtures, /## data test\/fixtures\/ \(1\)/);
+  assert.match(run("diff_summary.mjs").out, /changed: total\*/);
+  assert.match(run("outline_file.mjs", "packages/core/math.ts").out, /export function total\(values: number\[\]\): number {2}\[12 lines, depth 0\]/);
+  write("log.txt", "src/a.ts(3,5): error TS2322: Type 'string' is not assignable to type 'number'.\n");
+  assert.match(run("failure_digest.mjs", "log.txt").out, /## Errors by file\nsrc\/a\.ts\n {2}3: TS2322/);
+  write(".env", "API_URL=http://x\n");
+  write("packages/core/env.ts", "export const url = process.env.API_URL;\n");
+  git("add", "-A");
+  const config = run("find_symbol.mjs", "--config", "API_URL").out;
+  assert.match(config, /## Set in config or env files \(1\)\n\.env:1/);
+  assert.match(config, /## Read from the environment \(1\)\npackages\/core\/env\.ts:1/);
 });
