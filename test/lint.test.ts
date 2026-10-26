@@ -205,7 +205,7 @@ function reply(text: string): string {
   return JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], stopReason: "stop" } });
 }
 
-test("the engine lints what a task's workers touched after each step, gives QA the result, and in block mode holds completion", async () => {
+test("the engine lints what a task's workers touched once the work is in, gives QA the result, and in block mode holds completion", async () => {
   const dir = eslintRepo({ "src/a.ts": "export const old = 1;\nconsole.log(old);\n", "src/other.ts": "debugger;\n" });
   const prompts: string[] = [];
   let fixed = false;
@@ -240,17 +240,14 @@ test("the engine lints what a task's workers touched after each step, gives QA t
 
   const implemented = await act({ action: "implement", domain: "backend", task: "Add a to src/a.ts" });
   assert.equal(implemented.ok, true, implemented.message);
-  assert.match(implemented.message, /Lint — ESLint on 1 touched file: 1 new error \(1 problem already there before this task\)\./, "only the touched file, never src/other.ts");
-  assert.match(implemented.message, /- src\/a\.ts:4:1 \[no-debugger\] [^\n]* — error \(DEV\)/, "with the domain that touched it");
-  assert.match(implemented.message, /Completion is held until the new errors are fixed/);
-  assert.match(implemented.message, /- src\/a\.ts:3 — \/\/ eslint-disable-next-line no-console/);
-  assert.deepEqual(linted.map((args) => args.slice(-3)), [["--format", "json", "src/a.ts"]]);
-  assert.match(linted[0]![0]!, /node_modules\/eslint\/bin\/eslint\.js$/, "the project's own ESLint");
-  assert.equal(loadTask(dir, ".pi", "TASK-1")!.lint?.state, "failing", "the report is kept on the task");
+  assert.doesNotMatch(implemented.message, /Lint —/, "a step does not lint");
+  assert.equal(linted.length, 0);
 
   const qa = await act({ action: "qa" });
   assert.equal(qa.ok, true, qa.message);
-  assert.equal(linted.length, 1, "unchanged since the step: the same report, no second run");
+  assert.deepEqual(linted.map((args) => args.slice(-3)), [["--format", "json", "src/a.ts"]], "only the touched file, never src/other.ts");
+  assert.match(linted[0]![0]!, /node_modules\/eslint\/bin\/eslint\.js$/, "the project's own ESLint");
+  assert.equal(loadTask(dir, ".pi", "TASK-1")!.lint?.state, "failing", "the report is kept on the task");
   const reviewer = prompts.at(-1)!;
   assert.match(reviewer, /## Lint\n\nWhen your context has a Lint section/, "the reviewer's role says how to judge it");
   assert.match(reviewer, /Lint, run by the engine on the files this task touched \(block mode\): ESLint on 1 touched file: 1 new error/);
@@ -264,11 +261,11 @@ test("the engine lints what a task's workers touched after each step, gives QA t
   fixed = true;
   const again = await act({ action: "implement", domain: "backend", task: "Step 2: fix the lint error in src/a.ts at the cause" });
   assert.equal(again.ok, true, again.message);
-  assert.match(again.message, /Lint — ESLint on 1 touched file: no new problems \(1 problem already there before this task\)\./);
-  assert.equal(linted.length, 2);
-  assert.ok(feed.length === 2 && /1 new error/.test(feed[0]!) && /no new problems/.test(feed[1]!), "each new result is a line in the lobby's activity log");
   const qa2 = await act({ action: "qa" });
   assert.equal(qa2.ok, true, qa2.message);
+  assert.match(qa2.message, /Lint — ESLint on 1 touched file: no new problems/);
+  assert.equal(linted.length, 2);
+  assert.ok(feed.length === 2 && /1 new error/.test(feed[0]!) && /no new problems/.test(feed[1]!), "each new result is a line in the lobby's activity log");
   const uncommitted = await act({ action: "complete", text: "Added a." });
   assert.equal(uncommitted.ok, false);
   assert.match(uncommitted.message, /cannot complete: commit the agents' changes first\. Call complete again with message[^\n]*: src\/a\.ts$/);

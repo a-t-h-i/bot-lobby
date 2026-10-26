@@ -77,7 +77,6 @@ export function isGitIsolation(value: unknown): value is GitIsolation {
 export interface WorkflowConfig {
   maxReviewIterations: number;
   maxParallelScouts: number;
-  requireApprovalForFeatures: boolean;
   requireApprovalForDependencies: boolean;
   requireApprovalForArchitectureChanges: boolean;
   /** Bounded retries for transient agent failures (crash/stall), §59. A cancel never retries. */
@@ -106,24 +105,8 @@ export interface WorkflowConfig {
   prefetchScout: boolean;
   /** A structured assignment that only reads (reference files, no edit or write) runs on the scout's model and thinking instead of the worker's. */
   readOnlyOnScoutModel: boolean;
-  /** How a parallel batch shares the repository: one checkout with the file desk (`desk`), or a worktree per worker whose changes are merged back when the batch ends (`worktrees`). */
-  parallelMode: ParallelMode;
   /** The QA gate reviews with a clean context: the request, plan, board contracts and diff, not the workers' own accounts of their work. */
   cleanReview: boolean;
-  /** Before a task completes, one read-only agent checks the change against the user's original request (not the plan) and names any gap. */
-  goalCheck: boolean;
-  /** Workers may ask a stronger model for advice on a hard step (`ask_expert`), a couple of times per step. */
-  consultExpert: boolean;
-  /** The model `ask_expert` consults; empty uses the oracle's. */
-  expertModel: string;
-}
-
-/** How workers in one parallel batch share the repository. */
-export const PARALLEL_MODES = ["desk", "worktrees"] as const;
-export type ParallelMode = (typeof PARALLEL_MODES)[number];
-
-export function isParallelMode(value: unknown): value is ParallelMode {
-  return typeof value === "string" && (PARALLEL_MODES as readonly string[]).includes(value);
 }
 
 /**
@@ -196,11 +179,6 @@ export interface LobbyConfig {
    * round skips the seats and asks nothing; later replies only revise. 0 = unlimited.
    */
   maxPlanningRounds: number;
-  /**
-   * A plan with more steps than this is offered to be split into up to five
-   * tasks when it is saved (the oracle proposes, the user decides); 0 = never.
-   */
-  splitPlanAbove: number;
   /** The loopback web UI (port, browser, where its questions are answered). */
   web: LobbyWebConfig;
 }
@@ -293,7 +271,6 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
   workflow: {
     maxReviewIterations: 2,
     maxParallelScouts: 3,
-    requireApprovalForFeatures: true,
     requireApprovalForDependencies: true,
     requireApprovalForArchitectureChanges: true,
     maxAgentRetries: 1,
@@ -309,11 +286,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     reuseScouts: true,
     prefetchScout: true,
     readOnlyOnScoutModel: true,
-    parallelMode: "desk",
     cleanReview: true,
-    goalCheck: true,
-    consultExpert: true,
-    expertModel: "",
   },
   lint: { mode: "advise", command: "", extensions: [], timeoutMs: 2 * 60 * 1000 },
   knowledge: {
@@ -329,7 +302,6 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     panels: { conversation: true, activity: true, thinking: true },
     keys: {},
     maxPlanningRounds: 5,
-    splitPlanAbove: 8,
     web: { port: 7347, openBrowser: true },
   },
   classifier: {
@@ -435,7 +407,7 @@ function flag(value: unknown, fallback: boolean): boolean {
 }
 
 function normalizeLobby(value: unknown): LobbyConfig {
-  const source = value as { planningPanel?: unknown; issues?: unknown; startOn?: unknown; panels?: unknown; keys?: unknown; maxPlanningRounds?: unknown; splitPlanAbove?: unknown; web?: unknown } | undefined;
+  const source = value as { planningPanel?: unknown; issues?: unknown; startOn?: unknown; panels?: unknown; keys?: unknown; maxPlanningRounds?: unknown; web?: unknown } | undefined;
   const defaults = DEFAULT_CONFIG.lobby;
   const panel = Array.isArray(source?.planningPanel)
     ? [...new Set(source.planningPanel.filter((entry): entry is PanelMember => typeof entry === "string" && isPanelMember(entry)))]
@@ -449,7 +421,6 @@ function normalizeLobby(value: unknown): LobbyConfig {
     panels: Object.fromEntries(LOBBY_PANELS.map((name) => [name, flag(panels[name], defaults.panels[name])])) as Record<LobbyPanel, boolean>,
     keys: Object.fromEntries(Object.entries(keys).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0)),
     maxPlanningRounds: roundLimit(source?.maxPlanningRounds, defaults.maxPlanningRounds),
-    splitPlanAbove: roundLimit(source?.splitPlanAbove, defaults.splitPlanAbove),
     web: normalizeLobbyWeb(source?.web, defaults.web),
   };
 }
@@ -541,15 +512,12 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
   workflow.reuseScouts = workflow.reuseScouts !== false;
   workflow.prefetchScout = workflow.prefetchScout !== false;
   workflow.readOnlyOnScoutModel = workflow.readOnlyOnScoutModel !== false;
-  workflow.parallelMode = isParallelMode(workflow.parallelMode) ? workflow.parallelMode : DEFAULT_CONFIG.workflow.parallelMode;
   workflow.cleanReview = workflow.cleanReview !== false;
-  workflow.goalCheck = workflow.goalCheck !== false;
-  workflow.consultExpert = workflow.consultExpert !== false;
-  workflow.expertModel = typeof workflow.expertModel === "string" ? workflow.expertModel.trim() : "";
   workflow.gitIsolation = isGitIsolation(workflow.gitIsolation) ? workflow.gitIsolation : DEFAULT_CONFIG.workflow.gitIsolation;
   // Agent time limits are gone: a config file that still names them is cleaned on its next save.
   // So are quick fixes: the lobby chat does that work now.
-  for (const key of ["agentTimeoutMs", "wrapUpAt", "taskBudgetMinutes", "routeQuickFixes"]) delete (workflow as unknown as Record<string, unknown>)[key];
+  // The goal check, expert consults, worktrees mode and the feature approval stop are gone too.
+  for (const key of ["agentTimeoutMs", "wrapUpAt", "taskBudgetMinutes", "routeQuickFixes", "goalCheck", "consultExpert", "expertModel", "parallelMode", "requireApprovalForFeatures"]) delete (workflow as unknown as Record<string, unknown>)[key];
   const knowledge = { ...DEFAULT_CONFIG.knowledge, ...(src.knowledge as Partial<KnowledgeConfig> | undefined) };
   const srcAgents = (src.agents ?? {}) as Partial<BotLobbyConfig["agents"]>;
   return {
@@ -656,12 +624,6 @@ export function lobbyAgentProfile(config: BotLobbyConfig, kind: LobbyAgentKind):
 export function panelMemberProfile(config: BotLobbyConfig, member: PanelMember): { model?: string; thinking: string; instructions?: string; mcpTools?: string[]; skills?: string[]; autoCompact?: boolean; compactAt?: number; harness?: HarnessRun } {
   const entry = member === "researcher" ? config.researcher : config.agents[member];
   return { model: modelOf(entry.model), thinking: entry.thinking, instructions: entry.instructions, ...grantFields(entry), ...compactField(entry), ...harnessField(config, entry) };
-}
-
-/** The model and thinking a worker's `ask_expert` consults: the configured expert, or the oracle's model. */
-export function expertProfile(config: BotLobbyConfig): { model?: string; thinking: string } {
-  const model = config.workflow.expertModel ? modelOf(config.workflow.expertModel) : modelOf(config.master.model);
-  return { ...(model ? { model } : {}), thinking: "high" };
 }
 
 /** Resolves the model, thinking and grants one subagent run uses. */

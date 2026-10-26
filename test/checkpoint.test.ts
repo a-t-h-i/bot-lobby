@@ -67,7 +67,7 @@ test("bounded authorized fingerprints detect changes and reject symlinks, escape
 
 test("revocation filters all references; bookmarks require independent revalidation and never open sources", (t) => {
   const { cwd, task } = fixture(t);
-  task.goalCheck = { key: "diff-hash", verdict: "met", gaps: [], at: "now" };
+  task.lint = { at: "now", state: "passing", files: [], runs: [], errors: 0, warnings: 0, freshErrors: 0, freshWarnings: 0, suppressions: [], fingerprint: "f" };
   writeFileSync(join(cwd, "code.ts"), "authorized at capture");
   const checkpoint = captureCheckpoint(task, cwd, { changedFiles: ["code.ts"], authorize: allow, bookmarks: [bookmark], artifactRefs: ["artifact:1"], ownershipRefs: ["desk:1"], deliveryRefs: ["board:1"] });
   const before = JSON.stringify(checkpoint);
@@ -77,7 +77,7 @@ test("revocation filters all references; bookmarks require independent revalidat
   const granted = reconcileCheckpoint(checkpoint, { cwd, task, authorize: allow });
   assert.deepEqual(granted.ownership, ["desk:1"]);
   assert.equal(granted.evidence[0]?.status, "recorded");
-  task.goalCheck.verdict = "not_met";
+  task.lint!.state = "failing";
   assert.equal(reconcileCheckpoint(checkpoint, { cwd, task, authorize: allow }).evidence[0]?.status, "changed-or-unavailable");
   assert.equal(JSON.stringify(checkpoint), before);
   assert.deepEqual(reconcileCheckpoint(checkpoint, { cwd, task, authorize: () => { throw Error("revoked"); } }).bookmarks, []);

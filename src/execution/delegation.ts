@@ -7,8 +7,7 @@ import type { AgentRun } from "../schemas/findings.ts";
 import type { Domain, Role } from "../schemas/agent.ts";
 import { effortFor } from "../classifier/instance.ts";
 import { fellShort, profileLabel, routeLabel } from "../classifier/effort.ts";
-import { agentProfile, expertProfile } from "../schemas/configuration.ts";
-import { loadPrompt } from "../prompts/loader.ts";
+import { agentProfile } from "../schemas/configuration.ts";
 import { dataRoot, detectProjectRoot, loadConfig } from "../state/project.ts";
 import { EditLog } from "../state/changes.ts";
 import { createLiveRun } from "./live-run.ts";
@@ -18,26 +17,13 @@ import { artifactIdentity, startDeskServer, type DeskRequest, type DeskResponse 
 import { assignmentRecord, issueAssignment, loadTask, recordArtifactRef, taskDirFor } from "../state/persistence.ts";
 import { persistedRunMarks } from "../state/checkpoint.ts";
 import { TERMINAL_STATES, type AssignmentGrant, type AssignmentRecord, type TaskState } from "../schemas/task.ts";
-import { DESK_ENV, DeskSession, deskSessionAt, PEER_TOOLS } from "../desk/session.ts";
+import { DESK_ENV, DeskSession, deskSessionAt } from "../desk/session.ts";
 import { BOARD_ENV } from "../desk/board.ts";
 import { mcpGrant } from "../pi/grants.ts";
 
 export const MAX_CHILDREN = 5;
 export const DELEGATE_TOOL = "delegate_subtasks";
-export const EXPERT_TOOL = "ask_expert";
 export const DURABLE_OUTPUT_TOOL = "read_durable_output_artifacts";
-/** Consults one step may make: advice on the hard part, not a second worker. */
-export const MAX_CONSULTS = 2;
-/** Longest an expert may take to answer. */
-/** Marks an expert's run, so its host gives it an adviser's note rather than a child's. */
-export const EXPERT_ENV = "BOT_LOBBY_EXPERT";
-
-/** The worker's env without its desk and board: an expert only reads and answers. */
-function withoutTeamEnv(env: Record<string, string> | undefined): Record<string, string> {
-  const { [DESK_ENV.address]: _address, [DESK_ENV.worker]: _worker, [BOARD_ENV]: _board, BOT_LOBBY_BOARD_FROM: _from, ...rest } = env ?? {};
-  return rest;
-}
-const EXPERT_TOOLS = ["read", "grep", "find", "ls"];
 export const AGENT_ENV = "BOT_LOBBY_AGENT_POLICY";
 export const DELEGATION_ENV = "BOT_LOBBY_DELEGATION";
 
@@ -48,16 +34,10 @@ export function canDelegate(agent: { role: Role; domain: Domain; depth?: number 
   return agent.role === "reviewer" && agent.domain === "qa";
 }
 
-/** A task's DESIGN/DEV workers (not their children, nor lobby chat agents) may consult a stronger model, when the setting is on. */
-export function canConsult(agent: { runId: string; taskId: string; role: Role; domain: Domain; depth?: number }, enabled: boolean): boolean {
-  // A lobby chat agent runs as its own task: it is one agent answering the user, not a task's worker.
-  return enabled && agent.taskId !== agent.runId && (agent.depth ?? 1) === 1 && agent.role === "worker" && (agent.domain === "designer" || agent.domain === "backend");
-}
-
 /** One shared child pool per task; parents waiting on children never hold its slots. */
 /** A child host: no delegation of its own, but durable reads under its own assignment when issued one. */
 async function childHost(options: PiRunOptions, policy: AgentPolicy, tools: string[], mcpTools: string[], artifactTool: string | undefined) {
-  const note = options.env?.[EXPERT_ENV] ? "You are advising a worker: read what you need, answer its question, and change nothing." : "You are a child agent. Finish only your assigned brief and report evidence to your parent; you cannot delegate further.";
+  const note = "You are a child agent. Finish only your assigned brief and report evidence to your parent; you cannot delegate further.";
   const access = artifactTool ? options.runtimeAccess : undefined;
   if (!access) return { tools, mcpTools, env: { ...options.env, [AGENT_ENV]: JSON.stringify(policy), [DELEGATION_ENV]: "" }, note, close: async () => {}, onStart: options.onStart, children: [] as AgentRun[] };
   const token = randomUUID();
@@ -238,10 +218,9 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
   const agent = options.agent ?? { runId: id, taskId: id, domain: "backend" as const, role: editable ? "worker" as const : "reviewer" as const };
   const depth = agent.depth ?? 1;
   const quota = options.delegationQuota ?? { used: 0 };
-  const consults = canConsult(agent, config.workflow.consultExpert);
   // Durable artifact reads appear only when the caller handed the host a live assignment access.
   const artifactTool = options.runtimeAccess?.authorize("artifact.read") === true ? DURABLE_OUTPUT_TOOL : undefined;
-  const tools = [...new Set([...baseTools, "codemode", "tool_search", ...(artifactTool ? [artifactTool] : []), ...(canDelegate(agent, quota.used) ? [DELEGATE_TOOL] : []), ...(consults ? [EXPERT_TOOL] : [])])];
+  const tools = [...new Set([...baseTools, "codemode", "tool_search", ...(artifactTool ? [artifactTool] : []), ...(canDelegate(agent, quota.used) ? [DELEGATE_TOOL] : [])])];
   // A caller that passes its profile's grant (even an absent one, meaning every connected tool) wins over the role's.
   const mcpTools = mcpGrant("mcpTools" in options ? options.mcpTools : agentProfile(config, agent.domain, agent.role).mcpTools, !editable);
   const policy: AgentPolicy = { tools, mcpTools, readOnly: !editable, depth };
@@ -251,10 +230,10 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
   let desk = address ? deskSessionAt(address) : undefined;
   if (address && !desk) throw new Error("The inherited file desk is unavailable.");
   const board = options.env?.[BOARD_ENV];
-  // A worker with a checkout of its own (no claims on the batch desk) still needs claims among its children.
-  const ownedDesk = editable && (!desk || !desk.usesClaims) ? new DeskSession({ cwd: options.cwd, ...(board ? { boardPath: board } : {}) }) : undefined;
+  // A worker without a batch desk still needs claims among its children.
+  const ownedDesk = editable && !desk ? new DeskSession({ cwd: options.cwd, ...(board ? { boardPath: board } : {}) }) : undefined;
   if (ownedDesk) await ownedDesk.open();
-  // Children claim files among themselves; the parent keeps the batch desk (and its peers) when it has one.
+  // Children claim files among themselves; the parent keeps the batch desk when it has one.
   const childDesk = ownedDesk ?? desk;
   desk ??= ownedDesk;
   const controller = new AbortController();
@@ -303,7 +282,7 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
         task: brief,
         model,
         thinking,
-        tools: [...new Set([...tools.filter((tool) => tool !== DELEGATE_TOOL && tool !== EXPERT_TOOL && (tool !== DURABLE_OUTPUT_TOOL || !!childAccess)), ...(childDesk ? childDesk.tools().filter((tool) => !PEER_TOOLS.includes(tool)) : [])])],
+        tools: [...new Set([...tools.filter((tool) => tool !== DELEGATE_TOOL && (tool !== DURABLE_OUTPUT_TOOL || !!childAccess)), ...(childDesk ? childDesk.tools() : [])])],
         mcpTools,
         ...(childAccess ? { runtimeAccess: childAccess } : {}),
         signal,
@@ -333,74 +312,10 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
     }
   };
 
-  // Kept on the quota, which a step's retries share, so a retry does not grant fresh consults.
-  quota.consults ??= 0;
-  const consultations = new Map<string, AbortController>();
-  const consult = async (question: string, signal: AbortSignal): Promise<{ ok: boolean; text: string }> => {
-    // The oracle resolves the expert (its session model when settings name none); settings alone, then the worker's own, without it.
-    const settled = options.expert ?? expertProfile(config);
-    const expert = { model: settled.model ?? options.model, thinking: settled.thinking };
-    const expertId = randomUUID();
-    const base: AgentRun = { runId: expertId, parentRunId: id, depth: 2, taskId: agent.taskId, domain: agent.domain, role: "reviewer", instruction: question, stepInstruction: options.task, status: "running", output: "", attempts: 1, startedAt: new Date().toISOString(), thinking: expert.thinking, ...(expert.model ? { model: expert.model } : {}), note: "expert consult", noteKind: "info" };
-    const live = createLiveRun(base, { onUpdate: update }, new EditLog(options.cwd));
-    update(base);
-    let final: AgentRun;
-    try {
-      const result = await runPiAgent({
-        cwd: options.cwd,
-        agent: { ...agent, runId: expertId, role: "reviewer", depth: 2 },
-        task: [`A worker asks: ${question}`, `The worker's brief, for context:\n${options.task.slice(0, 8000)}`].join("\n\n"),
-        systemPrompt: loadPrompt("expert.md"),
-        tools: EXPERT_TOOLS,
-        mcpTools: [],
-        ...(expert.model ? { model: expert.model } : {}),
-        thinking: expert.thinking,
-        ...(options.stallTimeoutMs !== undefined ? { stallTimeoutMs: options.stallTimeoutMs } : {}),
-        ...(options.toolStallTimeoutMs !== undefined ? { toolStallTimeoutMs: options.toolStallTimeoutMs } : {}),
-        signal,
-        onEvent: live.onEvent,
-        // Its own env: the expert is not one of the worker's children, nor on its desk or board.
-        env: { ...withoutTeamEnv(options.env), [EXPERT_ENV]: "1" },
-      }, run);
-      final = { ...live.current(), ...result, finishedAt: new Date().toISOString(), note: undefined, noteKind: undefined };
-    } catch (error) {
-      final = { ...live.current(), status: signal.aborted ? "cancelled" : "failed", error: (error as Error).message, finishedAt: new Date().toISOString(), note: undefined, noteKind: undefined };
-    }
-    update(final);
-    if (final.status === "success" && final.output.trim()) return { ok: true, text: final.output.trim().slice(0, 8000) };
-    // An expert that never answered does not use up a consult.
-    quota.consults = Math.max(0, (quota.consults ?? 1) - 1);
-    return { ok: false, text: `The expert did not answer (${final.status}${final.error ? `: ${final.error}` : ""}); carry on with your best reading.` };
-  };
-
   const token = randomUUID();
   const server = await startDeskServer(async (request) => {
     if (request.worker !== token) return { ok: false, text: "Unknown parent agent." };
     if (request.op === "cancel_delegate") { controller.abort(); return { ok: true, text: "Children cancelled." }; }
-    if (request.op === "cancel_consult") {
-      consultations.get(request.consultId ?? "")?.abort();
-      return { ok: true, text: "Consult cancelled." };
-    }
-    if (request.op === "consult") {
-      if (!consults) return { ok: false, text: "Consulting is off for this agent." };
-      if ((quota.consults ?? 0) >= MAX_CONSULTS) return { ok: false, text: `You have used your ${MAX_CONSULTS} consults for this step; decide with what you have, or report the open question.` };
-      const question = (request.text ?? "").trim();
-      if (!question) return { ok: false, text: "ask_expert needs a question." };
-      quota.consults = (quota.consults ?? 0) + 1;
-      // Its own controller, so the worker abandoning its tool call stops this expert and nothing else.
-      const own = new AbortController();
-      const parent = childSignal();
-      const stop = () => own.abort();
-      parent.addEventListener("abort", stop, { once: true });
-      const consultId = request.consultId ?? randomUUID();
-      consultations.set(consultId, own);
-      try {
-        return await consult(question.slice(0, 6000), own.signal);
-      } finally {
-        consultations.delete(consultId);
-        parent.removeEventListener("abort", stop);
-      }
-    }
     if (request.op === "artifact") return artifactPage(options.runtimeAccess, request);
     if (request.op !== "delegate") return { ok: false, text: "Unknown delegation operation." };
     const signal = childSignal();
@@ -428,7 +343,7 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
     tools: desk ? [...new Set([...tools, ...desk.tools()])] : tools,
     mcpTools,
     env: { ...options.env, ...(desk ? desk.env(parentDeskId) : {}), [AGENT_ENV]: JSON.stringify({ ...policy, tools: desk ? [...new Set([...tools, ...desk.tools()])] : tools }), [DELEGATION_ENV]: JSON.stringify({ address: server.address, token, ...(options.runtimeAccess ? { assignment: options.runtimeAccess.assignmentId } : {}) }) },
-    note: `${consults ? `When you are stuck on a hard step after a real attempt, or about to make a choice you are unsure of (a tricky algorithm, a subtle bug, an unfamiliar API), ${EXPERT_TOOL} asks a stronger model for advice, at most ${MAX_CONSULTS} times; it reads the repository and answers, you still do the work. ` : ""}${canDelegate(agent, quota.used) ? `Work directly when you can finish the brief yourself. Use ${DELEGATE_TOOL} only for useful, separable work with disjoint files, at most five children total; children cannot delegate further. Integrate and verify their work yourself. ` : ""}Use codemode for concise parallel calls, inspect failures, and return only useful evidence.${desk?.usesClaims ? " Before edit/write, claim_file; handover_file when finished. Release files before delegating or waiting." : ""}`,
+    note: `${canDelegate(agent, quota.used) ? `Work directly when you can finish the brief yourself. Use ${DELEGATE_TOOL} only for useful, separable work with disjoint files, at most five children total; children cannot delegate further. Integrate and verify their work yourself. ` : ""}Use codemode for concise parallel calls, inspect failures, and return only useful evidence.${desk ? " Before edit/write, claim_file; handover_file when finished. Release files before delegating or waiting." : ""}`,
     onStart: (handle: Parameters<NonNullable<PiRunOptions["onStart"]>>[0]) => {
       desk?.attach(parentDeskId, { runId: id, steer: handle.steer, annotate: () => {} });
       options.onStart?.(handle);

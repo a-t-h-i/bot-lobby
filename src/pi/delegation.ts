@@ -1,15 +1,14 @@
-import { randomUUID } from "node:crypto";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { createDeskClient } from "../desk/ipc.ts";
-import { AGENT_ENV, DELEGATION_ENV, DELEGATE_TOOL, EXPERT_TOOL, MAX_CHILDREN, MAX_CONSULTS, type AgentPolicy } from "../execution/delegation.ts";
+import { AGENT_ENV, DELEGATION_ENV, DELEGATE_TOOL, MAX_CHILDREN, type AgentPolicy } from "../execution/delegation.ts";
 import { loadConfig } from "../state/project.ts";
 import { isSubagentProcess } from "./quiet.ts";
 
 export function allowedAgentTool(policy: AgentPolicy, name: string, readOnlyHint?: boolean, hidden = false): boolean {
   if (hidden) return false;
   if (name.startsWith("mcp__")) return policy.mcpTools.includes(name) && (!policy.readOnly || readOnlyHint === true);
-  if ((name === DELEGATE_TOOL || name === EXPERT_TOOL) && policy.depth > 1) return false;
+  if (name === DELEGATE_TOOL && policy.depth > 1) return false;
   return policy.tools.includes(name);
 }
 
@@ -65,24 +64,6 @@ export function registerDelegation(pi: ExtensionAPI): void {
         if (!answer.ok) throw new Error(answer.text);
         const children = JSON.parse(answer.text) as Array<{ runId: string; status: string; report: string; reportPath?: string; error?: string }>;
         return { content: [{ type: "text", text: children.map((child) => `Child ${child.runId}: ${child.status}\n${child.report}${child.reportPath ? `\nFull report: ${child.reportPath}` : ""}${child.error ? `\nError: ${child.error}` : ""}`).join("\n\n") }], details: { children } };
-      } finally { signal?.removeEventListener("abort", cancel); }
-    },
-  });
-  pi.registerTool({
-    name: EXPERT_TOOL,
-    label: "Ask an expert",
-    description: `Ask a stronger model for advice on a hard step: a bug you cannot find after a real attempt, a tricky algorithm, an unfamiliar API, or a choice you are unsure of. Say what you are trying to do, what you tried and what happened, and point to the files and lines. It reads the repository and answers; it does not change anything, and you still do the work. At most ${MAX_CONSULTS} per step.`,
-    parameters: Type.Object({ question: Type.String({ minLength: 1, maxLength: 6000, description: "The question, with what you tried and the files and lines involved" }) }),
-    executionMode: "sequential",
-    async execute(_id, params, signal) {
-      signal?.throwIfAborted();
-      const consultId = randomUUID();
-      const cancel = () => { void client.request({ op: "cancel_consult", consultId }); };
-      signal?.addEventListener("abort", cancel, { once: true });
-      try {
-        const answer = await client.request({ op: "consult", text: params.question, consultId }, 0);
-        if (!answer.ok) throw new Error(answer.text);
-        return { content: [{ type: "text", text: `Expert advice:\n${answer.text}` }], details: undefined };
       } finally { signal?.removeEventListener("abort", cancel); }
     },
   });

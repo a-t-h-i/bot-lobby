@@ -340,18 +340,6 @@ export interface Task {
   lintWaiver?: { at: string };
   /** Plan steps the user skipped, each with their reason; the oracle is told not to work on them. */
   skippedSteps?: SkippedStep[];
-  /** The last goal check: the change (by its diff's hash) read against the user's request before completion. */
-  goalCheck?: GoalCheckRecord;
-}
-
-export interface GoalCheckRecord {
-  /** Hash of the diff it read: the same change is not checked twice. */
-  key: string;
-  verdict: "met" | "not_met";
-  gaps: string[];
-  at: string;
-  /** When completion was refused for these gaps: only then can the oracle complete anyway with a reason. */
-  refusedAt?: string;
 }
 
 export function createTask(

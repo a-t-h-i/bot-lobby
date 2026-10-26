@@ -325,7 +325,7 @@ test("a panel round asks every seat on its own model, then lets the oracle fold 
     QA: "## Status\nREADY\n## Notes\n- e2e tests in tests/e2e",
     RESEARCH: "## Status\nOPEN\n## Questions\n1. prefers-color-scheme only, or a stored override?",
     // The oracle relays DEV's question, adds its own, and decides RESEARCH's (an assumption in the plan).
-    ORACLE: "## Status\nGRILLING\n## Title\nDark mode\n## Questions\n1. [DEV] REST or RPC?\n2. [ORACLE] Ship behind a flag?\n## Plan\n### Steps\n1. draft\n### Assumptions\n- [RESEARCH] Stored override",
+    ORACLE: "## Status\nGRILLING\n## Title\nDark mode\n## Questions\n1. [DEV] REST or RPC?\n2. [ORACLE] Ship behind a flag?\n## Consult\nDEV\n## Plan\n### Steps\n1. draft\n### Assumptions\n- [RESEARCH] Stored override",
   };
   const models: Record<string, string> = { backend: "p/dev", qa: "p/qa", researcher: "p/research" };
   const session = new PlanningSession(
@@ -356,12 +356,12 @@ test("a panel round asks every seat on its own model, then lets the oracle fold 
   assert.deepEqual(session.notes, [{ from: "DEV", text: "routes live in src/api" }, { from: "QA", text: "e2e tests in tests/e2e" }]);
   assert.equal(session.reply?.status, "grilling");
 
-  // Everyone settles: DEV and RESEARCH go READY, the oracle too; the answers reach every seat.
+  // After the first round only the seat the oracle called back sits: DEV goes READY, the oracle too.
   answers.DEV = "## Status\nREADY\n## Notes\n- REST, as the user chose";
-  answers.RESEARCH = "## Status\nREADY";
   answers.ORACLE = "## Status\nREADY\n## Title\nDark mode toggle";
   await session.send("1. no flag 2. REST 3. stored override");
-  assert.ok(seen.slice(4, 7).every((call) => call.prompt.includes("1. no flag 2. REST 3. stored override")), "every seat reads every answer");
+  assert.deepEqual(seen.slice(4).map((call) => call.who), ["DEV", "ORACLE"], "QA and RESEARCH were not called back");
+  assert.ok(seen.slice(4).every((call) => call.prompt.includes("1. no flag 2. REST 3. stored override")), "the seat and the oracle read every answer");
   assert.equal(session.reply?.status, "ready");
   assert.deepEqual(session.questions, []);
   assert.equal(session.reply?.plan, "### Steps\n1. draft\n### Assumptions\n- [RESEARCH] Stored override", "a round without a plan keeps the previous draft");
@@ -579,12 +579,12 @@ test("at the round limit the oracle settles the plan alone, and later replies on
   answers.ORACLE = undefined;
   await session.send("one more thing");
   assert.ok(session.retryable);
-  answers.ORACLE = "## Status\nREADY\n## Plan\n1. z";
+  answers.ORACLE = "## Status\nREADY\n## Consult\nDEV\n## Plan\n1. z";
   await session.retry();
   assert.equal(session.turns, 4, "the retried round keeps its number");
   assert.equal(session.reply?.plan, "1. z");
 
-  // Raising the limit mid-session brings the seats back.
+  // Raising the limit mid-session lets the oracle call a seat back.
   limit = 0;
   answers.DEV = "## Status\nREADY";
   await session.send("more");
@@ -628,3 +628,26 @@ test("gh failures read as one actionable line", async () => {
   assert.equal(state.loading, false);
 });
 
+
+test("seats sit the first round only; later rounds seat just the members the oracle names under Consult, or the user pins", async () => {
+  const root = tempRoot();
+  const seen: Array<{ who: string; args: string[]; prompt: string }> = [];
+  const answers: Record<string, string | undefined> = { DEV: "## Status\nOPEN\n## Questions\n1. Which store?", QA: "## Status\nREADY", ORACLE: "## Status\nGRILLING\n## Questions\n1. [DEV] Which store?\n## Plan\n### Steps\n1. a" };
+  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: ["backend", "qa"], profile: () => ({ thinking: "high" }), runProcess: panelRunner(answers, seen) });
+  await session.send("an idea");
+  assert.deepEqual(seen.map((call) => call.who), ["DEV", "QA", "ORACLE"]);
+  await session.send("1. sqlite");
+  assert.deepEqual(seen.slice(3).map((call) => call.who), ["ORACLE"], "nobody called back: the oracle plans alone");
+  assert.match(seen[3]!.prompt, /planning alone\. Name a seat under ## Consult/);
+  answers.ORACLE = "## Status\nGRILLING\n## Consult\nQA\n## Plan\n### Steps\n1. a";
+  await session.send("go on");
+  assert.deepEqual(parsePlannerReply("## Consult\n- DESIGN, research").consult, ["designer", "researcher"]);
+  await session.send("next");
+  assert.deepEqual(seen.slice(5).map((call) => call.who), ["QA", "ORACLE"], "the oracle called QA back");
+  session.toggle("qa");
+  session.toggle("backend");
+  session.toggle("backend");
+  answers.ORACLE = "## Status\nGRILLING\n## Plan\n### Steps\n1. a";
+  await session.send("again");
+  assert.deepEqual(seen.slice(7).map((call) => call.who), ["DEV", "ORACLE"], "a pinned seat sits every round");
+});

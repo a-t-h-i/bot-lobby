@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FileDesk, type DeskEvent } from "../src/desk/desk.ts";
 import { createDeskClient, startDeskServer } from "../src/desk/ipc.ts";
-import { autoNote, DESK_ENV, DESK_TOOLS, DeskSession, grantMessage, PEER_TOOLS, queueMessage } from "../src/desk/session.ts";
+import { autoNote, DESK_ENV, DESK_TOOLS, DeskSession, grantMessage, queueMessage } from "../src/desk/session.ts";
 import { roleOf } from "../src/desk/board.ts";
 import { registerDeskClient } from "../src/desk/client-extension.ts";
 import type { AgentHandle } from "../src/execution/agent-runner.ts";
@@ -187,7 +187,7 @@ test("the worker-side extension blocks unclaimed edits and registers the desk to
     close: () => {},
   };
   registerDeskClient(pi as never, client);
-  assert.deepEqual([...tools.keys()].sort(), [...DESK_TOOLS, ...PEER_TOOLS].sort());
+  assert.deepEqual([...tools.keys()].sort(), [...DESK_TOOLS].sort());
   const toolCall = handlers.get("tool_call")!;
   assert.deepEqual(await toolCall({ toolName: "edit", input: { path: "a.ts" } }), { block: true, reason: "claim it first" });
   assert.equal(await toolCall({ toolName: "read", input: { path: "a.ts" } }), undefined, "reads are free");

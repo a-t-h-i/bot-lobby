@@ -432,10 +432,6 @@ export interface WorkerRequest {
   boardFrom?: string;
   /** Domains working at the same time as this one, in a parallel batch. */
   alongside?: readonly Domain[];
-  /** The worker has a worktree of its own for the batch; its change is applied back when the batch ends. */
-  ownCheckout?: boolean;
-  /** The model ask_expert consults on. */
-  expert?: { model?: string; thinking: string };
 }
 
 /** How a worker uses the task board, and what it already says for its role. */
@@ -454,13 +450,10 @@ function alongsideGuidance(request: WorkerRequest): string {
   const others = (request.alongside ?? []).filter((domain) => domain !== request.domain);
   if (others.length === 0) return "";
   const names = others.map((domain) => ({ backend: "DEV", designer: "DESIGN", qa: "QA" })[domain]).join(" and ");
-  const peers = `You work at the same time as ${names}. When you need a fact about their part (a name, a shape, a route), ask them with \`ask_peer\` instead of guessing; answer their questions with \`answer_peer\`. Questions only: neither of you takes work from the other.`;
-  const checkout = request.ownCheckout
-    ? " You work in a checkout of your own (no file claims needed): edit only the files your brief names, because when the batch ends your change is applied onto the others', and overlapping lines will not apply."
-    : "";
-  if (request.domain !== "qa") return `${peers}${checkout}`;
+  const peers = `You work at the same time as ${names}. Settle what they build against through the board's \`contract\` posts, and read theirs before you guess.`;
+  if (request.domain !== "qa") return peers;
   return [
-    `${peers}${checkout}`,
+    peers,
     "You write the tests while the others build, so nobody waits for the build to finish first: work from the approved plan's contracts and acceptance criteria and the board's `contract` posts, not from their code. Write and claim test files only. When a builder posts `done` for a piece (or before you report), run your tests against what is there; a failing test against finished work is a finding for its owner, never a production fix of yours.",
   ].join(" ");
 }
@@ -579,7 +572,6 @@ export async function runWorker(
   const base: AgentRequest = {
     delegationQuota: { used: 0 },
     ...(assignment ? { assignment: { brief: assignment, taskDir: taskDir(request.dataRoots[0]!, request.taskId) } } : {}),
-    ...(request.expert ? { expert: request.expert } : {}),
     effort: request.effort,
     effortProfile: configured,
     taskId: request.taskId,

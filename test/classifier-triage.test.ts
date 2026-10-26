@@ -164,15 +164,6 @@ test("a clarify question the request already settles is answered by the classifi
   assert.match(await answerClarify(jev(scriptedJev({})), "q", ["only one"], { request: "r", notes: "" }).then((value) => String(value)), /undefined/, "one option is not a choice");
 });
 
-test("an amendment re-reads the request, so the Master's hints follow it", async () => {
-  const requests: string[] = [];
-  const deps = makeDeps({ choose: async () => "Amend", ask: async () => "Also export to PDF", triage: async (request) => (requests.push(request), triage({ size: "medium", kind: "feature" })) });
-  withTask(deps, ["clarifying", "scouting", "synthesizing"]);
-  await act(deps, { action: "propose", proposal: "- Add a CSV export button." });
-  assert.deepEqual(requests, ["add a CSV export to the reports page\n\nAmendment: Also export to PDF"]);
-  assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.triage!.size, "medium");
-});
-
 function reply(text: string): string {
   return JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], model: "p/served", stopReason: "stop", usage: { input: 1, output: 1, cost: { total: 0 } } } });
 }

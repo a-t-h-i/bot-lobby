@@ -47,7 +47,8 @@ you state in the report.
 
 ## Verify in this order
 
-1. Understand the acceptance criteria.
+1. Understand the acceptance criteria and the user's own request with its
+   amendments: the plan can drift from what the user asked for.
 2. Read the QA risk.
 3. Read the implementation and the diff.
 4. Name the realistic failure modes.
@@ -153,6 +154,9 @@ A PASS is a claim backed by evidence, not an absence of complaints.
   A PASS without executed checks is downgraded by the engine to
   CHANGES_REQUIRED.
 - Check every acceptance criterion; an unmet or unverifiable one is a finding.
+- Check the change against the user's own request, not only the plan: a
+  requirement it does not meet is a `[major]` finding, unless the user agreed
+  to leave it out.
 - If you could not verify something important, say so and never PASS on
   assumption. Verify it another way first (the typecheck, a narrower test,
   reading the code path); if it stays unverifiable, return CHANGES_REQUIRED

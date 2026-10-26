@@ -18,12 +18,8 @@ export type DeskOp =
   | "wait"
   | "delegate"
   | "cancel_delegate"
-  | "consult"
-  | "cancel_consult"
   | "post"
   | "ack"
-  | "ask"
-  | "answer"
   | "artifact";
 
 export interface DeskRequest {
@@ -44,12 +40,6 @@ export interface DeskRequest {
   targets?: string[];
   /** ack: the board events (sequences or stable ids) the caller says it incorporated. */
   events?: Array<string | number>;
-  /** ask: who the question is for (DEV, DESIGN, QA); `path` asks whoever holds that file. */
-  to?: string;
-  /** answer: the question being answered. */
-  questionId?: number;
-  /** An expert consult's own id, so the worker can cancel it. */
-  consultId?: string;
   /** artifact: the caller's own assignment id; volunteered, never trusted on its own. */
   assignment?: string;
   /** artifact: the O-… reference to open. */
@@ -203,7 +193,7 @@ export function createDeskClient(address: string, worker: string): DeskClient {
     request(request, timeoutMs = 10_000) {
       const id = nextId++;
       return new Promise((done) => {
-        // 0 waits for as long as the answer takes (a delegation, a consult): no time limit.
+        // 0 waits for as long as the answer takes (a delegation): no time limit.
         const timer = timeoutMs > 0 ? setTimeout(() => {
           pending.delete(id);
           done({ id, ok: false, text: "the file desk did not answer" });

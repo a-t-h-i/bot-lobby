@@ -955,13 +955,9 @@ function panelAsker(state: Runtime): Asker {
 export async function savePlan(state: Runtime | undefined): Promise<string> {
   const session = state?.planner;
   if (!state || !session) return "no planning session";
-  if (state.asking) return "a questionnaire is already open";
-  state.asking = true;
   try {
-    const asker = panelAsker(state);
-    return await session.saveWithSplit((questions, signal) => asker(questions, state.ctx, signal, "planner"), { splitAbove: loadConfig().lobby.splitPlanAbove });
+    return session.savePlan();
   } finally {
-    state.asking = false;
     lobbyTopics.bump("planner");
   }
 }

@@ -178,30 +178,13 @@ test("propose approval moves to planning", async () => {
   assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.proposal, "- Add Z while keeping the login flow.");
 });
 
-test("propose decline abandons the task", async () => {
-  const deps = makeDeps({ choose: async () => "Decline" });
-  withTask(deps, "synthesizing");
-  const result = await act(deps, { action: "propose", proposal: "- Replace the endpoint." });
-  assert.equal(result.state, "abandoned");
-});
-
-test("propose amend records the amendment and stays awaiting approval", async () => {
-  const deps = makeDeps({ choose: async () => "Amend", ask: async () => "Keep the old endpoint" });
-  withTask(deps, "synthesizing");
-  const result = await act(deps, { action: "propose", proposal: "- Replace the endpoint." });
-  assert.equal(result.state, "awaiting_approval");
-  const task = loadTask(deps.root, deps.configDir, "TASK-1")!;
-  assert.deepEqual(task.amendments, ["Keep the old endpoint"]);
-  const again = await act(deps, { action: "propose", proposal: "- Keep the old endpoint and add a new one." });
-  assert.equal(again.ok, true, again.message);
-});
-
-test("propose without UI leaves the proposal awaiting approval", async () => {
-  const deps = makeDeps();
+test("a proposal goes straight on: the user is not asked to approve it", async () => {
+  let asked = 0;
+  const deps = makeDeps({ choose: async () => (asked++, "Decline") });
   withTask(deps, "synthesizing");
   const result = await act(deps, { action: "propose", proposal: "- Do the thing." });
-  assert.equal(result.state, "awaiting_approval");
-  assert.match(result.message, /Awaiting approval/);
+  assert.equal(result.state, "planning");
+  assert.equal(asked, 0);
 });
 
 test("implementation cannot start before approval", async () => {

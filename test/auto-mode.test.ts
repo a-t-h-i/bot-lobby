@@ -75,19 +75,16 @@ test("in auto mode the workflow never asks: clarify is decided by the oracle and
   const proposed = await act(workflow, { action: "propose", proposal: "- Add a login form." });
   assert.equal(workflow.asked.length, 0);
   assert.equal(proposed.state, "planning");
-  assert.match(proposed.message, /No approval needed: auto mode is on/);
   const task = loadTask(root, ".pi", "TASK-1")!;
   assert.ok(task.decisions.some((decision) => /Not asked \(auto mode\): Email or username\?/.test(decision.text)));
-  assert.ok(task.decisions.some((decision) => decision.text === "Proposal approved without asking (auto mode)."));
 });
 
-test("a task started from an agreed plan skips the approval; without auto or a plan the user is still asked", async () => {
+test("a proposal never waits for approval, with or without an agreed plan", async () => {
   const root = project();
   ownedTask(root, ["clarifying"], { approvedPlan: "PLAN-login" });
   const workflow = deps(root);
   const proposed = await act(workflow, { action: "propose", proposal: "- Add a login form." });
   assert.equal(proposed.state, "planning");
-  assert.match(proposed.message, /the user agreed this plan in the planning panel \(PLAN-login\)/);
   assert.equal(workflow.asked.length, 0);
   assert.match(masterTaskContext(loadTask(root, ".pi", "TASK-1")!), /agreed this task's plan in the planning panel \(PLAN-login\)/);
 
@@ -95,8 +92,8 @@ test("a task started from an agreed plan skips the approval; without auto or a p
   ownedTask(plain);
   const asking = deps(plain);
   const pending = await act(asking, { action: "propose", proposal: "- Add a login form." });
-  assert.equal(pending.state, "awaiting_approval");
-  assert.equal(asking.asked.length, 1, "the proposal still goes to the user");
+  assert.equal(pending.state, "planning");
+  assert.equal(asking.asked.length, 0, "nobody is asked");
   assert.match(masterTaskContext(loadTask(plain, ".pi", "TASK-1")!, [], true), /AUTO MODE is on/);
 });
 

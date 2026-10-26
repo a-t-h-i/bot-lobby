@@ -62,9 +62,7 @@ export interface AgentRequest {
   autoCompact?: boolean;
   /** Tokens at which this agent compacts, when its settings set it. */
   compactAt?: number;
-  delegationQuota?: { used: number; consults?: number };
-  /** See PiRunOptions.expert. */
-  expert?: { model?: string; thinking: string };
+  delegationQuota?: { used: number };
   thinking?: string;
   /** Skill files this agent may load; absent keeps pi's own discovery. */
   skills?: string[];
@@ -218,7 +216,6 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
       cwd: request.cwd,
       agent: { runId: base.runId, taskId: request.taskId, domain: request.domain, role: request.role },
       delegationQuota: quota,
-      ...(request.expert ? { expert: request.expert } : {}),
       effort: request.effort,
       effortProfile: request.effortProfile,
       onChildRun: (child) => {

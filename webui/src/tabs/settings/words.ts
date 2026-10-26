@@ -149,10 +149,6 @@ export const ROUNDS_LABEL = "Planning rounds"
 export const ROUNDS_HELP = "how many rounds the panel gets before the oracle settles the rest alone"
 /** `PLANNING_ROUND_CHOICES`: 0 = unlimited. */
 export const ROUND_CHOICES = [2, 3, 5, 8, 0] as const
-export const SPLIT_LABEL = "Split long plans"
-export const SPLIT_HELP = "saving a plan with more steps offers to split it into up to 5 tasks"
-/** `SPLIT_PLAN_CHOICES`: 0 = never. */
-export const SPLIT_CHOICES = [6, 8, 10, 12, 0] as const
 
 export const WEB_PORT_LABEL = "Port"
 export const WEB_PORT_HELP = "the base port (then the next free up to +20); 0 means any free port; applies the next time pi starts"
@@ -289,7 +285,7 @@ export const HARNESS = {
   defaultModelHelp: "Whatever the harness is set to use",
   older: "older",
   effortNote: "Applied when the agent offers effort levels in its session.",
-  agentNote: "Runs in this harness with Bot Lobby's prompts. It cannot ask you questions or use Bot Lobby's own tools (desk, board, ask_expert).",
+  agentNote: "Runs in this harness with Bot Lobby's prompts. It cannot ask you questions or use Bot Lobby's own tools (desk, board).",
   intro: "Run any agent but the oracle and the planner on another coding agent. The oracle stays on pi and hands each step over: the harness gets the agent's role prompt, and its own login and models. Pick the harness per agent under Agents.",
   installed: "Installed",
   notFound: "Not found",

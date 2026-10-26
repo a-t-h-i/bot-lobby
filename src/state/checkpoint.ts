@@ -128,7 +128,6 @@ function bookmarks(records: readonly BookmarkRecord[] = []): CheckpointList<Book
 function evidence(task: Task): CheckpointList<CheckpointTaskRef> {
   const records: CheckpointTaskRef[] = task.reviewRecords.slice(-8).map((record, i) => ({ ...taskRef(`task.reviewRecords[${Math.max(0, task.reviewRecords.length - 8) + i}]`, record), result: record.verdict }));
   if (task.lint) records.push({ ...taskRef("task.lint", task.lint), result: task.lint.state });
-  if (task.goalCheck) records.push({ ...taskRef("task.goalCheck", task.goalCheck), result: task.goalCheck.verdict });
   return { ...list(records), omitted: Math.max(0, task.reviewRecords.length - 8) };
 }
 

@@ -14,7 +14,7 @@ import { HARNESSES } from "./catalog.ts";
 /** Pi's tool names in the role prompts, and what stands in for them on another harness. */
 const HARNESS_NOTE = `## Running on another harness
 
-You run in Bot Lobby through a third-party harness, not pi. Where these instructions name pi's tools (read, edit, write, bash, grep, find, ls), use your own equivalents. Bot Lobby's own tools (ask_user_question, ask_expert, the file desk and task board tools, web_search and fetch_content) are not available here: work from the brief, use your own web tools if you have them, and put any open question or blocker in your report instead of asking.`;
+You run in Bot Lobby through a third-party harness, not pi. Where these instructions name pi's tools (read, edit, write, bash, grep, find, ls), use your own equivalents. Bot Lobby's own tools (ask_user_question, the file desk and task board tools, web_search and fetch_content) are not available here: work from the brief, use your own web tools if you have them, and put any open question or blocker in your report instead of asking.`;
 
 function toSingleLine(value: string): string {
   return value.replaceAll(/\s+/g, " ").trim();

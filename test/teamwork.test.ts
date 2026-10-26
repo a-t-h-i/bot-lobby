@@ -8,14 +8,12 @@ import { appendPost, BOARD_ENV as BOARD_ENV_NAME, boardContext, boardPath, filte
 import { deliveryPath, readDelivery } from "../src/desk/delivery.ts";
 import { registerBoardClient } from "../src/desk/board-client.ts";
 import { createDeskClient } from "../src/desk/ipc.ts";
-import { DESK_ENV, DESK_TOOLS, DeskSession, PEER_TOOLS, peerId } from "../src/desk/session.ts";
+import { DESK_ENV, DESK_TOOLS, DeskSession } from "../src/desk/session.ts";
 import type { AgentHandle } from "../src/execution/agent-runner.ts";
-import { AGENT_ENV, canConsult, DELEGATION_ENV, type AgentPolicy } from "../src/execution/delegation.ts";
+import { AGENT_ENV, DELEGATION_ENV, type AgentPolicy } from "../src/execution/delegation.ts";
 import { runPiAgent, type ProcessOutcome } from "../src/execution/pi-runner.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
-import { closeWorkerTrees, mapToTop, mergeWorkerTrees, openWorkerTrees, snapshotTree } from "../src/execution/worker-trees.ts";
-import { parseGoalCheck } from "../src/master/goal-check.ts";
-import { DEFAULT_CONFIG, expertProfile, resolveConfig } from "../src/schemas/configuration.ts";
+import { DEFAULT_CONFIG, resolveConfig } from "../src/schemas/configuration.ts";
 import { createTask } from "../src/schemas/task.ts";
 import { createTaskDir, ensureProjectStructure, loadTask, saveTask } from "../src/state/persistence.ts";
 import { transition } from "../src/state/task-state.ts";
@@ -54,7 +52,7 @@ test("the board keeps typed posts in order and each role reads what it follows",
 
 test("contracts reach running peers at once; posts land on the board", async () => {
   const path = boardPath(tempDir());
-  const session = new DeskSession({ cwd: "/repo", boardPath: path, peers: true });
+  const session = new DeskSession({ cwd: "/repo", boardPath: path });
   await session.open();
   try {
     const toDesign: string[] = [];
@@ -84,7 +82,7 @@ test("contracts reach running peers at once; posts land on the board", async () 
 
 test("a post that lands while its reader is away reaches it on attach, never twice and never skipped", async () => {
   const path = boardPath(tempDir());
-  const session = new DeskSession({ cwd: "/repo", boardPath: path, peers: true });
+  const session = new DeskSession({ cwd: "/repo", boardPath: path });
   await session.open();
   try {
     let toDesign: string[] = [];
@@ -116,7 +114,7 @@ test("a post that lands while its reader is away reaches it on attach, never twi
 
 test("a steer that cannot be sent is retried with the next post, and nothing is skipped", async () => {
   const path = boardPath(tempDir());
-  const session = new DeskSession({ cwd: "/repo", boardPath: path, peers: true });
+  const session = new DeskSession({ cwd: "/repo", boardPath: path });
   await session.open();
   try {
     const toDesign: string[] = [];
@@ -156,81 +154,6 @@ test("posts carry stable ids, and a retried post that already landed is not post
   const fresh = await tools.get("post_board")!.execute("2", { kind: "contract", text: "`limit` caps the page at 100" });
   assert.match(fresh.content[0]!.text, /^Posted #2\.$/, "a genuinely new post still lands");
   assert.equal(readBoard(path).length, 2);
-});
-
-test("workers in a batch can ask each other questions, never wait on each other in a cycle, and time out", async () => {
-  const path = boardPath(tempDir());
-  const session = new DeskSession({ cwd: "/repo", boardPath: path, peers: true });
-  await session.open();
-  try {
-    const toDesign: string[] = [];
-    const toDev: string[] = [];
-    session.attach("designer", handle("d", toDesign));
-    session.attach("backend", handle("b", toDev));
-    const design = createDeskClient(session.env("designer")[DESK_ENV.address]!, "designer");
-    const dev = createDeskClient(session.env("backend")[DESK_ENV.address]!, "backend");
-
-    const asked = design.request({ op: "ask", to: "DEV", text: "Is the cursor field called next or cursor?", timeoutMs: 10_000 }, 15_000);
-    while (toDev.length === 0) await new Promise((done) => setTimeout(done, 5));
-    assert.match(toDev[0]!, /question #1 from DESIGN: Is the cursor field called next or cursor\? Answer it now with answer_peer \(id 1\)/);
-    // While DESIGN waits on DEV, DEV asking DESIGN back would deadlock both: it is refused.
-    assert.match((await dev.request({ op: "ask", to: "designer", text: "which page?" })).text, /DESIGN is waiting on your answer to its question #1/);
-    assert.match((await design.request({ op: "answer", questionId: 1, text: "x" })).text, /no open question #1 for you/, "only the one asked answers");
-    assert.match((await dev.request({ op: "answer", questionId: 1, text: "It is `next`, a string." })).text, /Answer sent to DESIGN/);
-    assert.equal((await asked).text, "DEV answers: It is `next`, a string.");
-    assert.match(readBoard(path).at(-1)!.text, /^Asked DEV: Is the cursor field called next or cursor\? Answer: It is `next`, a string\.$/, "the exchange is on the board for the oracle");
-
-    assert.match((await dev.request({ op: "ask", to: "QA", text: "ready?" })).text, /QA is not working right now/);
-    assert.match((await dev.request({ op: "ask", to: "DEV", text: "me?" })).text, /That is you/);
-    const silent = await dev.request({ op: "ask", to: "DESIGN", text: "which breakpoint?", timeoutMs: 5000 }, 10_000);
-    assert.match(silent.text, /DESIGN did not answer within 5 seconds/);
-    design.close();
-    dev.close();
-  } finally {
-    await session.close();
-  }
-});
-
-test("a finished worker's open questions are released, and a desk without peers refuses questions", async () => {
-  const session = new DeskSession({ cwd: "/repo", peers: true });
-  await session.open();
-  try {
-    session.attach("designer", handle("d", []));
-    session.attach("backend", handle("b", []));
-    const design = createDeskClient(session.env("designer")[DESK_ENV.address]!, "designer");
-    const asked = design.request({ op: "ask", to: "backend", text: "done yet?", timeoutMs: 60_000 }, 65_000);
-    await new Promise((done) => setTimeout(done, 20));
-    session.release("backend", () => "");
-    assert.match((await asked).text, /DEV did not answer/);
-    design.close();
-  } finally {
-    await session.close();
-  }
-  const lone = new DeskSession({ cwd: "/repo" });
-  await lone.open();
-  try {
-    const client = createDeskClient(lone.env("backend")[DESK_ENV.address]!, "backend");
-    assert.match((await client.request({ op: "ask", to: "DESIGN", text: "x" })).text, /No peers work alongside you/);
-    assert.deepEqual(lone.tools(), DESK_TOOLS);
-    client.close();
-  } finally {
-    await lone.close();
-  }
-  assert.equal(peerId("Dev"), "backend");
-  assert.equal(peerId("DESIGN"), "designer");
-});
-
-test("a desk for workers with their own checkouts lets every edit through and offers questions only", async () => {
-  const session = new DeskSession({ cwd: "/repo", claims: false, peers: true });
-  await session.open();
-  try {
-    const client = createDeskClient(session.env("backend")[DESK_ENV.address]!, "backend");
-    assert.equal((await client.request({ op: "check", path: "src/api.ts" })).allowed, true);
-    assert.deepEqual(session.tools(), PEER_TOOLS);
-    client.close();
-  } finally {
-    await session.close();
-  }
 });
 
 test("the board tools post straight to the file without a desk and read by role", async () => {
@@ -278,7 +201,7 @@ test("a read proves receipt of exactly what its window showed", async () => {
 
 test("a pushed post never marks the backlog it could not show as seen", async () => {
   const path = boardPath(tempDir());
-  const session = new DeskSession({ cwd: "/repo", boardPath: path, peers: true });
+  const session = new DeskSession({ cwd: "/repo", boardPath: path });
   await session.open();
   try {
     const toDesign: string[] = [];
@@ -306,7 +229,7 @@ test("a pushed post never marks the backlog it could not show as seen", async ()
 
 test("an addressed post reaches only its targets, and acknowledgement is explicit, scope-checked and idempotent", async () => {
   const path = boardPath(tempDir());
-  const session = new DeskSession({ cwd: "/repo", boardPath: path, peers: true });
+  const session = new DeskSession({ cwd: "/repo", boardPath: path });
   await session.open();
   try {
     const toDesign: string[] = [];
@@ -339,7 +262,7 @@ test("an addressed post reaches only its targets, and acknowledgement is explici
 
 test("a post naming files reaches the holders of those files, and only them among its subscribers", async () => {
   const path = boardPath(tempDir());
-  const session = new DeskSession({ cwd: "/repo", boardPath: path, peers: true });
+  const session = new DeskSession({ cwd: "/repo", boardPath: path });
   await session.open();
   try {
     const toDesign: string[] = [];
@@ -361,226 +284,12 @@ test("a post naming files reaches the holders of those files, and only them amon
   }
 });
 
-// --- the goal check ---
+// --- the settings ---
 
-test("the goal check's report reads as met, not met with its gaps, or unread", () => {
-  assert.deepEqual(parseGoalCheck("## Verdict\nMET\n\n## Requirements\n- blue button — met — src/b.css:3\n\n## Gaps\n- none"), { verdict: "met", gaps: [] });
-  assert.deepEqual(parseGoalCheck("## Verdict\nNOT MET\n\n## Requirements\n- x — not met — y\n\n## Gaps\n- the export button the user asked for is missing\n- dates are not shown in UTC"), {
-    verdict: "not_met",
-    gaps: ["the export button the user asked for is missing", "dates are not shown in UTC"],
-  });
-  assert.deepEqual(parseGoalCheck("## Verdict\nNOT MET\n\n## Requirements\n- export to CSV — not met — no route\n- keep the header — met — a.ts:1"), { verdict: "not_met", gaps: ["export to CSV — not met — no route"] }, "the requirements list stands in for missing gaps");
-  assert.equal(parseGoalCheck("Looks fine to me.").verdict, "unread");
-  for (const said of ["## Verdict\nNOT-MET", "## Verdict\nNOT_MET", "## Verdict\nUNMET", "## Verdict\nPARTIALLY MET", "## Verdict\nMET, except the CSV option", "**Verdict:** NOT MET", "# Verdict: MOSTLY MET", "### Verdict\nMET\n\n### Gaps\n- dates are not in UTC"]) {
-    assert.equal(parseGoalCheck(said).verdict, "not_met", said);
-  }
-  for (const said of ["**Verdict:** MET", "# Verdict\nMET.", "## Verdict: MET\n\n## Gaps\n- none"]) assert.equal(parseGoalCheck(said).verdict, "met", said);
-  assert.equal(parseGoalCheck("## Verdict\nMET or NOT MET").verdict, "unread", "the format line copied back says nothing");
-});
-
-// --- the expert and the settings ---
-
-test("only a task's DESIGN and DEV workers consult the expert, and the settings default to the new ways of working", () => {
-  assert.equal(canConsult({ runId: "r", taskId: "T", role: "worker", domain: "backend" }, true), true);
-  assert.equal(canConsult({ runId: "r", taskId: "T", role: "worker", domain: "designer", depth: 2 }, true), false, "children do not");
-  assert.equal(canConsult({ runId: "T", taskId: "T", role: "worker", domain: "backend" }, true), false, "a lobby chat reply does not");
-  assert.equal(canConsult({ runId: "r", taskId: "T", role: "reviewer", domain: "qa" }, true), false);
-  assert.equal(canConsult({ runId: "r", taskId: "T", role: "worker", domain: "backend" }, false), false);
-  const config = resolveConfig({});
-  assert.equal(config.workflow.parallelMode, "desk");
-  assert.equal(config.workflow.cleanReview, true);
-  assert.equal(config.workflow.goalCheck, true);
-  assert.equal(config.workflow.consultExpert, true);
-  assert.equal(resolveConfig({ workflow: { parallelMode: "swarm" } }).workflow.parallelMode, "desk");
-  assert.equal(resolveConfig({ workflow: { parallelMode: "worktrees", goalCheck: false } }).workflow.goalCheck, false);
-  assert.deepEqual(expertProfile(config), { thinking: "high" }, "the oracle's model, inherited");
-  assert.deepEqual(expertProfile(resolveConfig({ master: { model: "anthropic/big" } })), { model: "anthropic/big", thinking: "high" });
-  assert.deepEqual(expertProfile(resolveConfig({ master: { model: "anthropic/big" }, workflow: { expertModel: "openai/bigger" } })), { model: "openai/bigger", thinking: "high" });
-});
-
-// --- a worktree per worker ---
-
-function gitIn(cwd: string, ...args: string[]): string {
-  return execFileSync("git", args, { cwd, encoding: "utf8", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } }).trim();
-}
-
-function repo(): string {
-  const dir = tempDir("bl-repo-");
-  gitIn(dir, "init", "-q");
-  writeFileSync(join(dir, ".gitignore"), "node_modules/\n");
-  writeFileSync(join(dir, "a.txt"), "one\ntwo\nthree\n");
-  writeFileSync(join(dir, "b.txt"), "alpha\n");
-  gitIn(dir, "add", "-A");
-  gitIn(dir, "commit", "-qm", "init");
-  return dir;
-}
-
-test("each worker gets a checkout of the tree as it stands, and disjoint changes merge back", async () => {
-  const top = repo();
-  writeFileSync(join(top, "a.txt"), "one\ntwo\nthree\nfour\n");
-  writeFileSync(join(top, "new.txt"), "untracked work in progress\n");
-  mkdirSync(join(top, "node_modules", "dep"), { recursive: true });
-  writeFileSync(join(top, "node_modules", "dep", "index.js"), "module.exports = 1;\n");
-  const indexBefore = gitIn(top, "diff", "--cached", "--name-only");
-
-  const batch = await openWorkerTrees(top, ["backend", "designer"]);
-  assert.ok(typeof batch !== "string", String(batch));
-  try {
-    const dev = batch.trees.get("backend")!;
-    const design = batch.trees.get("designer")!;
-    assert.equal(readFileSync(join(dev.dir, "a.txt"), "utf8"), "one\ntwo\nthree\nfour\n", "uncommitted changes are in the checkout");
-    assert.equal(readFileSync(join(dev.dir, "new.txt"), "utf8"), "untracked work in progress\n", "so are untracked files");
-    assert.ok(lstatSync(join(dev.dir, "node_modules")).isSymbolicLink(), "ignored folders are borrowed, so the worker can build and test");
-    assert.equal(readFileSync(join(dev.dir, "node_modules", "dep", "index.js"), "utf8"), "module.exports = 1;\n");
-
-    writeFileSync(join(dev.dir, "b.txt"), "alpha\nbeta\n");
-    writeFileSync(join(dev.dir, "api.txt"), "GET /items\n");
-    writeFileSync(join(design.dir, "a.txt"), "ONE\ntwo\nthree\nfour\n");
-    assert.equal(readFileSync(join(top, "b.txt"), "utf8"), "alpha\n", "the task's tree is untouched while they work");
-
-    const results = await mergeWorkerTrees(batch, ["backend", "designer"], join(tempDir(), "patches"));
-    assert.deepEqual(results.map((entry) => entry.status), ["applied", "applied"]);
-    assert.equal(readFileSync(join(top, "b.txt"), "utf8"), "alpha\nbeta\n");
-    assert.equal(readFileSync(join(top, "api.txt"), "utf8"), "GET /items\n");
-    assert.equal(readFileSync(join(top, "a.txt"), "utf8"), "ONE\ntwo\nthree\nfour\n");
-    assert.ok(lstatSync(join(top, "node_modules")).isDirectory() && !lstatSync(join(top, "node_modules")).isSymbolicLink(), "the borrowed folder never comes back as a change");
-    assert.equal(gitIn(top, "diff", "--cached", "--name-only"), indexBefore, "the user's index is never touched");
-    assert.equal(mapToTop(batch, "backend", join(dev.dir, "b.txt")), join(top, "b.txt"));
-    assert.equal(mapToTop(batch, "backend", "/elsewhere/x.txt"), "/elsewhere/x.txt");
-  } finally {
-    await closeWorkerTrees(batch);
-  }
-  assert.equal(existsSync(batch.home), false, "the worktrees are removed");
-  assert.ok(existsSync(join(top, "node_modules", "dep", "index.js")), "and the borrowed folder survives their removal");
-  assert.equal(gitIn(top, "worktree", "list").split("\n").length, 1, "only the main checkout is left");
-});
-
-test("a worker's change that clashes with an earlier one is kept as a patch, never half-applied", async () => {
-  const top = repo();
-  const batch = await openWorkerTrees(top, ["backend", "designer", "qa"]);
-  assert.ok(typeof batch !== "string", String(batch));
-  const patches = join(tempDir(), "patches");
-  try {
-    writeFileSync(join(batch.trees.get("backend")!.dir, "a.txt"), "one\nTWO (dev)\nthree\n");
-    writeFileSync(join(batch.trees.get("designer")!.dir, "a.txt"), "one\nTWO (design)\nthree\n");
-    writeFileSync(join(batch.trees.get("designer")!.dir, "b.txt"), "alpha (design)\n");
-    const results = await mergeWorkerTrees(batch, ["backend", "designer", "qa"], patches);
-    assert.deepEqual(results.map((entry) => entry.status), ["applied", "conflict", "empty"]);
-    const conflict = results[1]!;
-    assert.ok(conflict.status === "conflict" && existsSync(conflict.patch));
-    assert.equal(readFileSync(join(top, "a.txt"), "utf8"), "one\nTWO (dev)\nthree\n");
-    assert.equal(readFileSync(join(top, "b.txt"), "utf8"), "alpha\n", "none of the clashing worker's change is applied");
-  } finally {
-    await closeWorkerTrees(batch);
-  }
-  assert.equal(await openWorkerTrees(tempDir(), ["backend"]), "this folder is not a git repository");
-  assert.match(await snapshotTree(top), /^[0-9a-f]{40}$/);
-});
-
-test("a clashing change is also kept as a git ref, staged borrowed folders never come back, and a nested repository is refused", async () => {
-  const top = repo();
-  mkdirSync(join(top, "node_modules", "dep"), { recursive: true });
-  writeFileSync(join(top, "node_modules", "dep", "index.js"), "module.exports = 1;\n");
-  const batch = await openWorkerTrees(top, ["backend", "designer", "qa"]);
-  assert.ok(typeof batch !== "string", String(batch));
-  try {
-    const dev = batch.trees.get("backend")!;
-    const design = batch.trees.get("designer")!;
-    const qa = batch.trees.get("qa")!;
-    // DEV stages everything itself, the borrowed folder included, and commits.
-    writeFileSync(join(dev.dir, "a.txt"), "one\nTWO (dev)\nthree\n");
-    gitIn(dev.dir, "add", "-A", "-f");
-    gitIn(dev.dir, "commit", "-qm", "dev work");
-    writeFileSync(join(design.dir, "a.txt"), "one\nTWO (design)\nthree\n");
-    mkdirSync(join(qa.dir, "newpkg"));
-    writeFileSync(join(qa.dir, "newpkg", "index.js"), "export {};\n");
-    gitIn(join(qa.dir, "newpkg"), "init", "-q");
-    gitIn(join(qa.dir, "newpkg"), "add", "-A");
-    gitIn(join(qa.dir, "newpkg"), "commit", "-qm", "nested");
-
-    const results = await mergeWorkerTrees(batch, ["backend", "designer", "qa"], join(tempDir(), "patches"));
-    assert.deepEqual(results.map((entry) => entry.status), ["applied", "conflict", "conflict"]);
-    assert.equal(readFileSync(join(top, "a.txt"), "utf8"), "one\nTWO (dev)\nthree\n");
-    assert.ok(lstatSync(join(top, "node_modules")).isDirectory() && !lstatSync(join(top, "node_modules")).isSymbolicLink());
-    assert.ok(existsSync(join(top, "node_modules", "dep", "index.js")));
-    const clash = results[1]!;
-    assert.ok(clash.status === "conflict" && clash.saved.startsWith("refs/bot-lobby/designer-"));
-    assert.match(gitIn(top, "show", `${clash.saved}:a.txt`), /TWO \(design\)/, "the ref holds the change");
-    const nested = results[2]!;
-    assert.ok(nested.status === "conflict" && /nested git repository \(newpkg\)/.test(nested.reason));
-    assert.equal(existsSync(join(top, "newpkg")), false, "no empty folder stands in for it");
-    assert.equal(qa.keep, true);
-  } finally {
-    await closeWorkerTrees(batch);
-  }
-  const qaDir = batch.trees.get("qa")!.dir;
-  assert.ok(existsSync(join(qaDir, "newpkg", "index.js")), "the worktree holding the nested repository is kept");
-  assert.equal(existsSync(join(batch.trees.get("backend")!.dir)), false);
-  assert.ok(existsSync(join(top, "node_modules", "dep", "index.js")));
-});
-
-test("worktree mode is not used when the task's folder lies inside a borrowed folder, and a new task folder exists in each checkout", async () => {
-  const top = repo();
-  mkdirSync(join(top, "node_modules", "dep"), { recursive: true });
-  assert.match(String(await openWorkerTrees(join(top, "node_modules", "dep"), ["backend"])), /inside the ignored folder node_modules/);
-  mkdirSync(join(top, "fresh"));
-  const batch = await openWorkerTrees(join(top, "fresh"), ["backend"]);
-  assert.ok(typeof batch !== "string", String(batch));
-  try {
-    assert.ok(existsSync(batch.trees.get("backend")!.cwd));
-  } finally {
-    await closeWorkerTrees(batch);
-  }
-});
-
-test("an expert consult runs on the oracle's model, reports once when it fails, does not count a failure, and its limit holds across retries", async () => {
-  process.env.BOT_LOBBY_CONFIG_DIR ??= tempDir("bl-cfg-");
-  const cwd = tempDir();
-  mkdirSync(join(cwd, ".pi"));
-  const reply = (text: string): ProcessOutcome => ({ exitCode: 0, killed: false, stderr: "", stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], usage: { input: 10, output: 5, cost: { total: 0.01 } } } }) });
-  const updates: AgentRun[] = [];
-  const expertArgs: string[][] = [];
-  const expertEnv: Record<string, string>[] = [];
-  let expertFails = true;
-  const answers: string[] = [];
-  const runner: ProcessRunner = async (args, options) => {
-    const policy = JSON.parse(options.env![AGENT_ENV]!) as AgentPolicy;
-    if (policy.depth === 2) {
-      expertArgs.push(args);
-      expertEnv.push(options.env!);
-      return expertFails ? { exitCode: 1, killed: false, stderr: "boom", stdout: "" } : reply("Use a binary search.");
-    }
-    const target = JSON.parse(options.env![DELEGATION_ENV]!) as { address: string; token: string };
-    const client = createDeskClient(target.address, target.token);
-    try {
-      for (let index = 0; index < 3; index++) {
-        const answer = await client.request({ op: "consult", text: "how do I find the bad commit?" }, 60_000);
-        answers.push(`${answer.ok}:${answer.text}`);
-      }
-    } finally {
-      client.close();
-    }
-    return reply("done");
-  };
-  const quota = { used: 0 };
-  const options = { cwd, task: "Step 1: find the regression", tools: ["read", "edit", "write"], delegationQuota: quota, expert: { model: "anthropic/oracle-model", thinking: "high" }, env: { [BOARD_ENV_NAME]: "/x/board.jsonl", KEEP: "1" }, agent: { runId: "w1", taskId: "TASK-1", domain: "backend" as const, role: "worker" as const }, onChildRun: (run: AgentRun) => updates.push(run) };
-
-  await runPiAgent(options, runner);
-  assert.ok(answers.every((answer) => answer.startsWith("false:The expert did not answer")), answers.join("\n"));
-  assert.equal(expertArgs.length, 3, "a failed consult does not use one up");
-  assert.ok(expertArgs[0]!.join(" ").includes("--model anthropic/oracle-model"), expertArgs[0]!.join(" "));
-  assert.equal(expertEnv[0]![BOARD_ENV_NAME], undefined, "the expert is not on the worker's board");
-  assert.equal(expertEnv[0]!.KEEP, "1");
-  const finals = updates.filter((run) => run.status !== "running");
-  assert.equal(finals.length, 3, `one final report per expert: ${finals.map((run) => run.status).join(", ")}`);
-
-  expertFails = false;
-  answers.length = 0;
-  await runPiAgent(options, runner);
-  assert.deepEqual(answers.map((answer) => answer.split(":")[0]), ["true", "true", "false"]);
-  answers.length = 0;
-  await runPiAgent(options, runner);
-  assert.ok(answers.every((answer) => /used your 2 consults/.test(answer)), "a retry of the same step gets no fresh consults");
+test("clean review is on by default, and the removed goal check, expert, worktrees and feature-approval settings are dropped on load", () => {
+  assert.equal(resolveConfig({}).workflow.cleanReview, true);
+  const old = resolveConfig({ workflow: { parallelMode: "worktrees", goalCheck: false, consultExpert: true, expertModel: "a/b", requireApprovalForFeatures: true } as never }).workflow as unknown as Record<string, unknown>;
+  for (const key of ["parallelMode", "goalCheck", "consultExpert", "expertModel", "requireApprovalForFeatures"]) assert.equal(key in old, false, key);
 });
 
 // --- the engine ---
@@ -590,99 +299,6 @@ function message(text: string): string {
 }
 
 const WORKER = ["## Completed", "Added the export button.", "", "## Files Changed", "- `export.txt` — the button", "", "## Verdict", "PASS", "", "## Verification", "- `npm test` — passing"].join("\n");
-
-test("the goal check holds completion on a gap until it is fixed or the oracle says why it is deliberate", async () => {
-  const root = repo();
-  const verdicts = ["NOT MET", "NOT MET", "MET"];
-  const goalPrompts: string[] = [];
-  const runner: ProcessRunner = async (args, options) => {
-    const file = args[args.indexOf("--append-system-prompt") + 1];
-    const system = file ? readFileSync(file, "utf8") : "";
-    if (system.startsWith("# Goal Check")) {
-      goalPrompts.push(options.prompt ?? "");
-      const verdict = verdicts.shift()!;
-      return { exitCode: 0, stdout: message(`## Verdict\n${verdict}\n\n## Gaps\n${verdict === "MET" ? "- none" : "- the CSV option the user asked for is missing"}`), stderr: "", killed: false };
-    }
-    writeFileSync(join(root, "export.txt"), `export ${goalPrompts.length}\n`);
-    return { exitCode: 0, stdout: message(WORKER), stderr: "", killed: false };
-  };
-  const deps: WorkflowDeps = { root, configDir: ".pi", cwd: root, config: { ...DEFAULT_CONFIG, workflow: { ...DEFAULT_CONFIG.workflow, briefCheck: false } }, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess: runner };
-  ensureProjectStructure(root, ".pi");
-  gitIn(root, "add", "-A");
-  gitIn(root, "commit", "-qm", "project structure");
-  const request = "add an export button to the report page with CSV and PDF options";
-  const task = createTask("TASK-1", "task", "2026-01-01T00:00:00.000Z", request);
-  task.track = { ...chooseTrack("change the submit button colour to blue", undefined, { fastTrack: true }, "2026-01-01T00:00:00.000Z"), roster: ["designer"] };
-  createTaskDir(root, ".pi", task);
-  transition(task, "clarifying");
-  saveTask(root, ".pi", task);
-  const act = (params: Partial<OrchestrateParams>) => runWorkflowAction({ action: "status", taskId: "TASK-1", ...params } as OrchestrateParams, deps);
-
-  assert.equal((await act({ action: "implement", domain: "designer", task: "Step 1: add the export button" })).ok, true);
-  const refused = await act({ action: "complete", message: "Add export button" });
-  assert.equal(refused.ok, false);
-  assert.match(refused.message, /goal check read the change against the user's request[\s\S]*- the CSV option the user asked for is missing/);
-  assert.match(goalPrompts[0]!, /## The user's request\n\nadd an export button to the report page with CSV and PDF options/);
-  assert.match(goalPrompts[0]!, /export\.txt/, "it reads the change itself");
-  assert.equal(loadTask(root, ".pi", "TASK-1")!.goalCheck!.verdict, "not_met");
-
-  const again = await act({ action: "complete", message: "Add export button" });
-  assert.equal(again.ok, false, "the same change is not checked twice, and still holds");
-  assert.equal(goalPrompts.length, 1);
-
-  // A fix step changes the tree, so the next completion checks the new change.
-  await act({ action: "implement", domain: "designer", task: "Step 2: add the CSV option" });
-  const still = await act({ action: "complete", message: "Add export button" });
-  assert.equal(still.ok, false);
-  assert.equal(goalPrompts.length, 2);
-  const accepted = await act({ action: "complete", message: "Add export button", reason: "the user dropped CSV for now" });
-  assert.equal(accepted.ok, true, accepted.message);
-  assert.equal(accepted.state, "completed");
-  assert.match(loadTask(root, ".pi", "TASK-1")!.decisions.map((entry) => entry.text).join("\n"), /Completed although the goal check named gaps \(the CSV option the user asked for is missing\): the user dropped CSV for now/);
-});
-
-test("an unreadable goal check is tried twice and never recorded, and a reason does not skip a check that has not refused yet", async () => {
-  const root = repo();
-  const replies = ["I could not decide.", "Still unsure.", "## Verdict\nNOT MET\n\n## Gaps\n- the PDF option is missing"];
-  let checks = 0;
-  const runner: ProcessRunner = async (args) => {
-    const file = args[args.indexOf("--append-system-prompt") + 1];
-    if ((file ? readFileSync(file, "utf8") : "").startsWith("# Goal Check")) {
-      checks += 1;
-      return { exitCode: 0, stdout: message(replies.shift() ?? "## Verdict\nNOT MET\n\n## Gaps\n- the PDF option is missing"), stderr: "", killed: false };
-    }
-    writeFileSync(join(root, "export.txt"), `export ${checks}\n`);
-    return { exitCode: 0, stdout: message(WORKER), stderr: "", killed: false };
-  };
-  const deps: WorkflowDeps = { root, configDir: ".pi", cwd: root, config: { ...DEFAULT_CONFIG, workflow: { ...DEFAULT_CONFIG.workflow, briefCheck: false } }, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess: runner };
-  ensureProjectStructure(root, ".pi");
-  gitIn(root, "add", "-A");
-  gitIn(root, "commit", "-qm", "project structure");
-  const task = createTask("TASK-1", "task", "2026-01-01T00:00:00.000Z", "add an export button with CSV and PDF options");
-  task.track = { ...chooseTrack("change the submit button colour to blue", undefined, { fastTrack: true }, "2026-01-01T00:00:00.000Z"), roster: ["designer"] };
-  createTaskDir(root, ".pi", task);
-  transition(task, "clarifying");
-  saveTask(root, ".pi", task);
-  const act = (params: Partial<OrchestrateParams>) => runWorkflowAction({ action: "status", taskId: "TASK-1", ...params } as OrchestrateParams, deps);
-
-  await act({ action: "implement", domain: "designer", task: "Step 1: add the export button" });
-  // Undo the completion the unread check lets through, so the same change is checked again.
-  const before = loadTask(root, ".pi", "TASK-1")!;
-  const done = await act({ action: "complete", message: "Add export button" });
-  assert.equal(done.ok, true, done.message);
-  assert.equal(checks, 2, "an unread check is read once more");
-  assert.match(done.message, /goal check could not be read \(twice\)[\s\S]*tell the user/);
-  assert.equal(loadTask(root, ".pi", "TASK-1")!.goalCheck, undefined, "nothing is recorded, so the next complete checks again");
-
-  saveTask(root, ".pi", before);
-  gitIn(root, "reset", "-q", "--soft", "HEAD~1");
-  const upfront = await act({ action: "complete", message: "Add export button", reason: "the user dropped PDF" });
-  assert.equal(upfront.ok, false, "a reason given before the check refused is not an answer to it");
-  assert.match(upfront.message, /- the PDF option is missing/);
-  const answered = await act({ action: "complete", message: "Add export button", reason: "the user dropped PDF" });
-  assert.equal(answered.ok, true, answered.message);
-  assert.match(answered.message, /gaps left open, because: the user dropped PDF[\s\S]*- the PDF option is missing/);
-});
 
 test("worker reports name the long report's file, and workers are told about the board", async () => {
   const root = tempDir();
@@ -709,40 +325,4 @@ test("worker reports name the long report's file, and workers are told about the
   assert.match(systems[0]!, /Task board: post with `post_board`/);
   assert.match(systems[0]!, /#1 \[contract\] DEV: the colour token is --accent/);
   assert.match(systems[0]!, /Long findings[\s\S]*notes/);
-});
-
-test("a parallel batch in worktrees mode gives each worker its own checkout and merges their work back", async () => {
-  const root = repo();
-  const seen: Array<{ domain: string; cwd: string; tools: string }> = [];
-  const runner: ProcessRunner = async (args, options) => {
-    const domain = roleOf(options.env?.BOT_LOBBY_BOARD_FROM ?? "?") ?? options.env?.BOT_LOBBY_BOARD_FROM ?? "?";
-    assert.match(options.env?.BOT_LOBBY_BOARD_FROM ?? "", /^\w+(:[0-9a-f-]+)?$/, "the worker's board identity is its domain or a per-run assignment of it");
-    seen.push({ domain, cwd: options.cwd, tools: args[args.indexOf("--tools") + 1] ?? "" });
-    writeFileSync(join(options.cwd, `${domain}.txt`), `${domain} was here\n`);
-    return { exitCode: 0, stdout: message(WORKER), stderr: "", killed: false };
-  };
-  const config = { ...DEFAULT_CONFIG, workflow: { ...DEFAULT_CONFIG.workflow, briefCheck: false, parallelMode: "worktrees" as const } };
-  const deps: WorkflowDeps = { root, configDir: ".pi", cwd: root, config, ask: async () => undefined, choose: async () => undefined, notify: () => {}, runProcess: runner };
-  ensureProjectStructure(root, ".pi");
-  writeFileSync(join(root, ".gitignore"), "node_modules/\n.pi/\n");
-  gitIn(root, "add", "-A");
-  gitIn(root, "commit", "-qm", "ignore data");
-  const task = createTask("TASK-1", "task", "2026-01-01T00:00:00.000Z", "change the submit button colour to blue");
-  task.track = { ...chooseTrack("change the submit button colour to blue", undefined, { fastTrack: true }, "2026-01-01T00:00:00.000Z"), roster: ["designer", "backend"] };
-  createTaskDir(root, ".pi", task);
-  transition(task, "clarifying");
-  saveTask(root, ".pi", task);
-  const built = await runWorkflowAction({ action: "implement", taskId: "TASK-1", assignments: [{ domain: "designer", task: "Step 1: the page" }, { domain: "backend", task: "Step 2: the route" }] } as OrchestrateParams, deps);
-  assert.equal(built.ok, true, built.message);
-  assert.match(built.message, /Parallel batch: designer, backend \(a worktree each\)\./);
-  assert.match(built.message, /Worktrees merged back: DESIGN, DEV\./);
-  assert.equal(readFileSync(join(root, "designer.txt"), "utf8"), "designer was here\n");
-  assert.equal(readFileSync(join(root, "backend.txt"), "utf8"), "backend was here\n");
-  assert.equal(new Set(seen.map((entry) => entry.cwd)).size, 2, "each worker ran in a checkout of its own");
-  assert.ok(seen.every((entry) => entry.cwd !== root));
-  for (const entry of seen) {
-    assert.match(entry.tools, /ask_peer,answer_peer/);
-    assert.doesNotMatch(entry.tools, /claim_file/, "no claims in a checkout of one's own");
-  }
-  assert.equal(gitIn(root, "worktree", "list").split("\n").length, 1);
 });

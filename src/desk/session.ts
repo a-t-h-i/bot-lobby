@@ -15,15 +15,6 @@ import { deliveryPath, markDelivered, markHandled, markSeen, readDelivery, repla
 /** Tools the desk adds to every parallel worker's allowlist. */
 export const DESK_TOOLS: readonly string[] = ["claim_file", "handover_file", "my_files", "wait_for_files"];
 
-/** The desk tools of a worker with a checkout of its own: questions only, no claims. */
-export const PEER_TOOLS: readonly string[] = ["ask_peer", "answer_peer"];
-
-/** How long `ask_peer` waits for an answer by default, and at most. */
-export const ASK_WAIT_MS = 90_000;
-export const MAX_ASK_WAIT_MS = 180_000;
-const MAX_QUESTION = 800;
-const MAX_ANSWER = 1500;
-
 /** Env names the desk client extension reads inside a worker process. */
 export const DESK_ENV = { address: "BOT_LOBBY_DESK", worker: "BOT_LOBBY_DESK_ID" } as const;
 
@@ -42,25 +33,6 @@ function label(worker: WorkerId): string {
 
 /** A holder named for a handover message: its role when it has one (the note speaks for the role), its full identity otherwise. */
 const roleLabel = (worker: WorkerId): string => label((roleOf(worker) ?? worker) as WorkerId);
-
-/** A peer named the way workers know each other (DEV, DESIGN, QA) or by domain; a child run id is itself. */
-export function peerId(name: string): WorkerId {
-  return recipientId(name) as WorkerId;
-}
-
-function flat(text: string, max: number): string {
-  const value = text.replace(/\s+/g, " ").trim();
-  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
-}
-
-interface PeerQuestion {
-  id: number;
-  from: WorkerId;
-  to: WorkerId;
-  question: string;
-  resolve: (answer: string | undefined) => void;
-  timer: ReturnType<typeof setTimeout>;
-}
 
 function queueLines(queue: readonly Claim[]): string {
   return queue.map((claim, index) => `${index + 1}) ${label(claim.worker)} — ${claim.intent}`).join("; ");
@@ -93,10 +65,6 @@ export interface DeskSessionOptions {
   cwd: string;
   /** The task board's file: workers post to it through the desk, and contracts and blockers reach the other workers at once. */
   boardPath?: string;
-  /** False when every worker has a checkout of its own: edits need no claim, and the desk only carries questions and the board. */
-  claims?: boolean;
-  /** Workers of one parallel batch may ask each other questions (`ask_peer`). */
-  peers?: boolean;
   /** A worker that finished without handing a file over leaves this note for the next worker. */
   onHandover?: (handover: Handover) => void;
 }
@@ -114,8 +82,6 @@ export class DeskSession {
   private readonly handles = new Map<WorkerId, AgentHandle>();
   private readonly greeted = new Set<WorkerId>();
   private readonly options: DeskSessionOptions;
-  private readonly questions = new Map<number, PeerQuestion>();
-  private nextQuestion = 1;
 
   constructor(options: DeskSessionOptions) {
     this.options = options;
@@ -139,14 +105,9 @@ export class DeskSession {
     this.catchUp(worker);
   }
 
-  /** False when every worker has a checkout of its own and edits need no claim. */
-  get usesClaims(): boolean {
-    return this.options.claims !== false;
-  }
-
-  /** The desk tools its workers get: claims, questions, or both. */
+  /** The desk tools its workers get. */
   tools(): readonly string[] {
-    return [...(this.usesClaims ? DESK_TOOLS : []), ...(this.options.peers ? PEER_TOOLS : [])];
+    return DESK_TOOLS;
   }
 
   /** True once the worker's desk extension has checked in. */
@@ -158,10 +119,6 @@ export class DeskSession {
   release(worker: WorkerId, note: (path: string, next: Claim) => string): void {
     this.releaseFiles(worker, note);
     this.handles.delete(worker);
-    // A finished worker can no longer answer, and its own questions need no answer.
-    for (const question of [...this.questions.values()]) {
-      if (question.to === worker || question.from === worker) this.settle(question, undefined);
-    }
   }
 
 
@@ -176,7 +133,6 @@ export class DeskSession {
   }
 
   async close(): Promise<void> {
-    for (const question of [...this.questions.values()]) this.settle(question, undefined);
     if (this.server) sessions.delete(this.server.address);
     this.desk.close();
     await this.server?.close();
@@ -220,17 +176,13 @@ export class DeskSession {
         return this.post(request.from?.trim() || worker, worker, request.kind ?? "", request.text ?? "", request.files ?? [], request.targets ?? []);
       case "ack":
         return this.ack(worker, request.events ?? []);
-      case "ask":
-        return this.ask(worker, request.to ?? "", request.path ?? "", request.text ?? "", Math.min(MAX_ASK_WAIT_MS, Math.max(5000, request.timeoutMs ?? ASK_WAIT_MS)));
-      case "answer":
-        return this.answer(worker, request.questionId ?? 0, request.text ?? "");
       default:
         return { ok: false, text: `unknown desk operation ${String(request.op)}` };
     }
   }
 
   private check(worker: WorkerId, path: string): Omit<DeskResponse, "id"> {
-    if (this.options.claims === false || this.desk.holds(worker, path)) return { ok: true, allowed: true, text: "" };
+    if (this.desk.holds(worker, path)) return { ok: true, allowed: true, text: "" };
     const key = this.desk.normalize(path);
     const holder = this.desk.holderOf(path);
     if (!holder) {
@@ -320,12 +272,11 @@ export class DeskSession {
     return [...this.handles.keys()].filter((peer) => peer !== worker && routedTo(post, this.scopeFor(peer)));
   }
 
-  /** One peer's delivery scope: its subscription, its role, and the files it holds or is queued for (when claims carry meaning). */
+  /** One peer's delivery scope: its subscription, its role, and the files it holds or is queued for. */
   private scopeFor(peer: WorkerId): RecipientScope {
     const kinds = subscriptionFor(peer);
     const role = roleOf(peer);
     const base = { recipient: peer, ...(role && role !== peer ? { role } : {}), kinds };
-    if (!this.usesClaims) return base;
     const files = [...this.desk.heldBy(peer).map((file) => file.path), ...this.desk.waitingFor(peer).map((entry) => entry.path)];
     return { ...base, files };
   }
@@ -364,54 +315,6 @@ export class DeskSession {
     markDelivered(path, worker, through);
   }
 
-  private async ask(worker: WorkerId, to: string, path: string, question: string, timeoutMs: number): Promise<Omit<DeskResponse, "id">> {
-    if (!this.options.peers) return { ok: false, text: "No peers work alongside you here." };
-    const text = flat(question, MAX_QUESTION);
-    if (!text) return { ok: false, text: "ask_peer needs a question." };
-    if (path.trim() && !this.usesClaims) return { ok: false, text: "Every worker in this batch has a checkout of its own, so nobody holds files: name the peer (DEV, DESIGN or QA) instead." };
-    const target = path.trim() ? this.desk.holderOf(path)?.worker : to.trim() ? peerId(to) : undefined;
-    if (!target) return { ok: false, text: path.trim() ? `Nobody holds \`${this.desk.normalize(path)}\`; read it yourself.` : "Name the peer (DEV, DESIGN or QA) or a file its holder should answer about." };
-    if (target === worker) return { ok: false, text: "That is you." };
-    if (!this.handles.has(target)) return { ok: false, text: `${label(target)} is not working right now. Post a \`question\` on the board instead; the oracle sees it.` };
-    // A worker waiting on its own question cannot answer until that returns: asking it would chain the waits (or close a cycle).
-    const theirs = [...this.questions.values()].find((entry) => entry.from === target);
-    if (theirs?.to === worker) return { ok: false, text: `${label(target)} is waiting on your answer to its question #${theirs.id} ("${theirs.question}"). Answer it with answer_peer first.` };
-    if (theirs) return { ok: false, text: `${label(target)} is waiting on an answer from ${label(theirs.to)} and cannot answer yet. Carry on with your other work and ask again shortly, or post a \`question\` on the board.` };
-    const id = this.nextQuestion++;
-    const answer = await new Promise<string | undefined>((resolve) => {
-      const timer = setTimeout(() => this.settle(this.questions.get(id), undefined), timeoutMs);
-      this.questions.set(id, { id, from: worker, to: target, question: text, resolve, timer });
-      this.steer(target, `bot-lobby desk: question #${id} from ${label(worker)}: ${text} Answer it now with answer_peer (id ${id}) in a line or two, from what you know or have built, then carry on with your own work. It is a question, not a task: you take work only from your brief.`);
-      this.handles.get(worker)?.annotate({ note: `asked ${label(target)}`, noteKind: "info" });
-    });
-    if (answer === undefined) {
-      return { ok: true, text: `${label(target)} did not answer within ${Math.round(timeoutMs / 1000)} seconds (it may be in a long command, or it finished). Carry on with your best reading of the brief and the board, and list the open question under Notes.` };
-    }
-    if (this.options.boardPath) {
-      try {
-        appendPost(this.options.boardPath, { from: worker, kind: "note", text: `Asked ${label(target)}: ${text} Answer: ${answer}` });
-      } catch {
-        // The answer still reaches the asker.
-      }
-    }
-    return { ok: true, text: `${label(target)} answers: ${answer}` };
-  }
-
-  private answer(worker: WorkerId, id: number, text: string): Omit<DeskResponse, "id"> {
-    const question = this.questions.get(id);
-    if (!question || question.to !== worker) return { ok: false, text: `There is no open question #${id} for you (it may have timed out).` };
-    const answer = flat(text, MAX_ANSWER);
-    if (!answer) return { ok: false, text: "answer_peer needs an answer." };
-    this.settle(question, answer);
-    return { ok: true, text: `Answer sent to ${label(question.from)}.` };
-  }
-
-  private settle(question: PeerQuestion | undefined, answer: string | undefined): void {
-    if (!question || !this.questions.has(question.id)) return;
-    clearTimeout(question.timer);
-    this.questions.delete(question.id);
-    question.resolve(answer);
-  }
 }
 
 /** A handover note for `next`, written from a finished worker's report. */

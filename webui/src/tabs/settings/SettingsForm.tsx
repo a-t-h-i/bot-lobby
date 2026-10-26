@@ -60,9 +60,6 @@ import {
   ROUNDS_HELP,
   ROUNDS_LABEL,
   ROUND_CHOICES,
-  SPLIT_CHOICES,
-  SPLIT_HELP,
-  SPLIT_LABEL,
   THINKING_LEVELS,
   WEB_BROWSER_HELP,
   WEB_BROWSER_LABEL,
@@ -144,7 +141,6 @@ function levelOn(supported: readonly string[], level: string): string {
 }
 
 const roundLabel = (value: number): string => (value > 0 ? `${value} round${value === 1 ? "" : "s"}` : "unlimited")
-const splitLabel = (value: number): string => (value > 0 ? `over ${value} steps` : "never")
 
 /** A small label above a control, for the dense grids inside an agent's card. */
 function ModelChoice(props: { value: string; models: SettingsModelInfo[]; label: string; none?: boolean; inherit?: boolean; onChange: (value: string) => void }) {
@@ -535,9 +531,6 @@ function LobbyGroup({ config, save }: { config: Config; save: Save }) {
         {LOBBY_TOGGLES.map((item) => <LobbyToggle key={item.id} config={config} item={item} save={save} />)}
         <Field label={ROUNDS_LABEL} help={ROUNDS_HELP}>
           <Choice value={String(config.lobby.maxPlanningRounds)} items={ROUND_CHOICES.map((value) => ({ value: String(value), label: roundLabel(value) }))} label={ROUNDS_LABEL} onChange={(value) => void save({ lobby: { maxPlanningRounds: Number(value) } })} />
-        </Field>
-        <Field label={SPLIT_LABEL} help={SPLIT_HELP}>
-          <Choice value={String(config.lobby.splitPlanAbove)} items={SPLIT_CHOICES.map((value) => ({ value: String(value), label: splitLabel(value) }))} label={SPLIT_LABEL} onChange={(value) => void save({ lobby: { splitPlanAbove: Number(value) } })} />
         </Field>
         <Field label={WEB_PORT_LABEL} help={WEB_PORT_HELP}>
           <PortField value={web.port} onSave={(port) => void save({ lobby: { web: { port } } })} />

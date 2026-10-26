@@ -95,9 +95,9 @@ test("runAgent returns metadata and role-restricted tools", async () => {
 test("workers get the full built-in tool set plus any extra tools", async () => {
   const capture: ProcessRunner = async (args) => ok(reply(args[args.indexOf("--tools") + 1]!));
   const run = await runAgent(request({ role: "worker" }), capture);
-  assert.equal(run.output, "read,bash,edit,write,grep,find,ls,search_knowledge,open_knowledge,list_bookmarks,codemode,tool_search,delegate_subtasks,ask_expert,claim_file,handover_file,my_files,wait_for_files");
+  assert.equal(run.output, "read,bash,edit,write,grep,find,ls,search_knowledge,open_knowledge,list_bookmarks,codemode,tool_search,delegate_subtasks,claim_file,handover_file,my_files,wait_for_files");
   const desk = await runAgent(request({ role: "worker", extraTools: ["claim_file"] }), capture);
-  assert.equal(desk.output, "read,bash,edit,write,grep,find,ls,claim_file,search_knowledge,open_knowledge,list_bookmarks,codemode,tool_search,delegate_subtasks,ask_expert,handover_file,my_files,wait_for_files");
+  assert.equal(desk.output, "read,bash,edit,write,grep,find,ls,claim_file,search_knowledge,open_knowledge,list_bookmarks,codemode,tool_search,delegate_subtasks,handover_file,my_files,wait_for_files");
 });
 
 test("authorized repository roles keep identical knowledge tools with empty or populated context", async () => {

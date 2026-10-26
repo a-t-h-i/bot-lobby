@@ -25,9 +25,7 @@ import { runPiAgent, spawnPiProcess, type PiStreamEvent, type ProcessRunner } fr
 import { describeToolCall } from "../pi/activity.ts";
 import { appendMetrics, type MetricRecord } from "../state/metrics.ts";
 import { savePlannedTask, type IssueRef, type PlannedTask } from "../state/backlog.ts";
-import { planSteps } from "../pi/plan-checklist.ts";
-import { KEEP_WHOLE, MAX_SPLIT_REVISIONS, partBrief, partInfo, parseSplit, splitFailedQuestion, splitProblems, splitPrompt, splitQuestion, splitRequest, type SplitProposal } from "./split.ts";
-import type { AskQuestion, AskResult } from "../ask/types.ts";
+import type { AskResult } from "../ask/types.ts";
 import { PANEL_MEMBERS, type PanelMember } from "../schemas/configuration.ts";
 import { truncate } from "../text.ts";
 import type { LobbyFeed } from "./feed.ts";
@@ -105,6 +103,8 @@ export interface PlannerReply {
   title?: string;
   questions: AskedQuestion[];
   plan?: string;
+  /** Seats the oracle calls back for the next round; after the first round only these (and pinned ones) sit. */
+  consult?: PanelMember[];
 }
 
 /** A seat's reply: whether its domain is settled, its questions and what the plan must respect. */
@@ -366,7 +366,15 @@ export function parsePlannerReply(text: string): PlannerReply {
   const plan = parts.get("plan") ?? parts.get("draft plan");
   let questions = questionItems(parts.get("questions"));
   if (parts.size === 0 && text.trim()) questions = [{ text: text.trim(), options: [] }];
-  return { status, questions, ...(title ? { title } : {}), ...(plan ? { plan } : {}) };
+  const consult = consultSeats(parts.get("consult"));
+  return { status, questions, ...(title ? { title } : {}), ...(plan ? { plan } : {}), ...(consult.length > 0 ? { consult } : {}) };
+}
+
+/** The seats a `## Consult` section names (DEV, DESIGN, QA, RESEARCH or their domain names). */
+function consultSeats(body: string | undefined): PanelMember[] {
+  if (!body) return [];
+  const named = new Set((body.match(/[A-Za-z]+/g) ?? []).map((word) => word.toLowerCase()));
+  return PANEL_MEMBERS.filter((member) => named.has(member) || named.has(MEMBER_LABELS[member].toLowerCase()));
 }
 
 /** Read a seat's reply the same forgiving way: a READY seat asks nothing. */
@@ -470,7 +478,7 @@ export function settledBlock(settled: readonly SettledQuestion[]): string {
 
 /** The seats' output for the oracle: each seat's status, questions and notes, or its failure. */
 export function panelSection(outcomes: readonly MemberOutcome[]): string {
-  if (outcomes.length === 0) return "## Panel this round\n\nNo domain seats this round; you are planning alone.";
+  if (outcomes.length === 0) return "## Panel this round\n\nNo domain seats this round; you are planning alone. Name a seat under ## Consult to hear from it next round.";
   const blocks = outcomes.map((outcome) => {
     const label = MEMBER_LABELS[outcome.member];
     if (!outcome.reply) return `### ${label} — no answer this round (${outcome.error ?? "failed"})`;
@@ -864,119 +872,12 @@ export class PlanningSession {
     return this.saved;
   }
 
-  /** Save each part of a split plan as its own pending task, in order, each knowing the others. */
-  saveParts(proposal: SplitProposal, now = new Date()): PlannedTask[] {
-    const plan = this.reply?.plan;
-    if (!plan) throw new Error("there is no draft plan to save yet");
-    const steps = planSteps(plan);
-    const group = `SPLIT-${now.getTime().toString(36)}`;
-    // Part 1 is saved last of all timestamps' newest, so the newest-first pending list reads in part order.
-    const parts = proposal.tasks.map((task, index) => savePlannedTask(this.deps.root, this.deps.configDir, {
-      title: task.title,
-      brief: partBrief({ plan, steps, proposal, index }),
-      ...(this.seed ? { issue: this.seed.issue } : {}),
-      split: partInfo(proposal, index, group),
-      panel: this.panel,
-    }, new Date(now.getTime() + (proposal.tasks.length - index))));
-    this.savedParts = parts;
-    this.saved = parts[0];
-    this.deps.feed?.log(ORACLE_LABEL, `split the plan into ${parts.length} tasks: ${parts.map((part) => part.id).join(", ")}`, "success");
-    this.deps.onChange?.();
-    return parts;
-  }
-
-  /**
-   * The oracle's proposal for splitting the plan: run, read, and checked
-   * against the rules (once more with the problems when it breaks one).
-   * `feedback` is the user's change request on an earlier proposal. A string
-   * is the reason there is no proposal.
-   */
-  private async proposeSplit(plan: string, steps: readonly string[], feedback: { previous: SplitProposal; words: string } | undefined, signal: AbortSignal): Promise<SplitProposal | string> {
-    const profile = this.deps.profile();
-    const title = this.title ?? "the plan";
-    let rejected: string[] = [];
-    let reason = "";
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      this.step = attempt === 0 ? "deciding how to split the plan" : "fixing the split";
-      this.deps.onChange?.();
-      const lead = await this.run(ORACLE_LABEL, "planner", profile, {
-        task: splitRequest({ title, plan, steps, ...(feedback ? { revision: feedback } : {}), ...(rejected.length > 0 ? { rejected } : {}) }),
-        systemPrompt: splitPrompt(profile.instructions),
-        tools: this.tools(PLANNER_TOOLS),
-      }, signal, (step) => (this.step = step));
-      if (signal.aborted) throw new Error("stopped");
-      if (lead.status !== "success") return lead.error ?? lead.status;
-      try {
-        const proposal = parseSplit(lead.output);
-        rejected = splitProblems(proposal, steps.length);
-        if (rejected.length === 0) return proposal;
-        reason = rejected[0]!;
-      } catch (error) {
-        rejected = [(error as Error).message];
-        reason = rejected[0]!;
-      }
-    }
-    return reason;
-  }
-
-  /**
-   * Save the plan as a pending task; when it has more steps than
-   * `splitAbove`, first let the oracle propose splitting it into up to five
-   * tasks and let the user decide: take it, keep the plan whole, or say what to
-   * change (the oracle revises, a few times). Nothing the user leaves open is
-   * decided for them: a questionnaire they put away saves nothing. Returns the
-   * notice for the lobby.
-   */
-  async saveWithSplit(ask: (questions: AskQuestion[], signal: AbortSignal) => Promise<AskResult>, options: { splitAbove: number }): Promise<string> {
-    const plan = this.reply?.plan;
-    if (!plan) throw new Error("there is no draft plan to save yet");
-    const steps = planSteps(plan);
-    const unagreed = this.reply?.status === "ready" ? "" : " (the panel had not agreed yet)";
-    const whole = () => `saved ${this.save().id} to the pending tasks — start it from the Tasks tab${unagreed}`;
-    if (options.splitAbove <= 0 || steps.length <= options.splitAbove) return whole();
-    if (this.busy) return "the panel is still working — save again once it is done, and the oracle will look at splitting this plan";
-    const controller = new AbortController();
-    this.controller = controller;
-    this.status = "thinking";
-    this.error = undefined;
-    this.deps.onChange?.();
-    try {
-      let proposal = await this.proposeSplit(plan, steps, undefined, controller.signal);
-      if (typeof proposal === "string") {
-        const reason = proposal;
-        this.deps.feed?.log(ORACLE_LABEL, `could not split the plan — ${reason.split("\n")[0]}`, "warning");
-        this.step = "waiting for you";
-        const answer = (await ask([splitFailedQuestion(reason)], controller.signal)).answers[0];
-        if (controller.signal.aborted) throw new Error("stopped");
-        return answer?.answer === "Save it as one task" ? whole() : "the plan was not saved — ctrl+s tries again";
-      }
-      for (let revisions = 0; ; revisions += 1) {
-        this.step = "waiting for you";
-        this.deps.onChange?.();
-        const result = await ask([splitQuestion({ stepCount: steps.length, proposal, steps, revisions })], controller.signal);
-        // A stopped questionnaire comes back empty too; it was stopped, not left open.
-        if (controller.signal.aborted) throw new Error("stopped");
-        const answer = result.answers[0];
-        if (!answer) return "the split question was left open, so nothing was saved — ctrl+s asks again";
-        if (answer.kind === "option") {
-          if (answer.answer === KEEP_WHOLE) return whole();
-          const parts = this.saveParts(proposal);
-          return `split into ${parts.length} tasks — ${parts.map((part) => part.id).join(", ")}; start them from the Tasks tab, in order${unagreed}`;
-        }
-        if (revisions >= MAX_SPLIT_REVISIONS) return `that was the last revision, and nothing was saved — ctrl+s asks again and the oracle starts over`;
-        const revised = await this.proposeSplit(plan, steps, { previous: proposal, words: answer.answer ?? "" }, controller.signal);
-        if (typeof revised === "string") return `the oracle could not apply that (${revised.split("\n")[0]}) — nothing was saved; ctrl+s asks again`;
-        proposal = revised;
-      }
-    } catch (error) {
-      if (controller.signal.aborted) return "stopped — nothing was saved";
-      return `could not save the plan: ${(error as Error).message}`;
-    } finally {
-      this.status = "idle";
-      this.step = undefined;
-      this.controller = undefined;
-      this.deps.onChange?.();
-    }
+  /** Save the plan as a pending task; returns the notice for the lobby. */
+  savePlan(): string {
+    if (!this.reply?.plan) throw new Error("there is no draft plan to save yet");
+    if (this.busy) return "the panel is still working — save again once it is done";
+    const unagreed = this.reply.status === "ready" ? "" : " (the panel had not agreed yet)";
+    return `saved ${this.save().id} to the pending tasks — start it from the Tasks tab${unagreed}`;
   }
 
   private stepKey(who: string): string {
@@ -1103,8 +1004,10 @@ export class PlanningSession {
     const limit = this.limit;
     const mode = roundMode(this.turns, limit);
     this.mode = mode;
+    // The seats sit the first round; after it only the ones the oracle calls back (or the user pins) do.
     // At and past the limit the oracle works alone: the seats have had their rounds.
-    const eligible = mode === "normal" ? PANEL_MEMBERS.filter((member) => this.seats.has(member)) : [];
+    const called = new Set(this.reply?.consult ?? []);
+    const eligible = mode !== "normal" ? [] : PANEL_MEMBERS.filter((member) => this.seats.has(member) && (this.turns === 1 || this.pins.has(member) || called.has(member)));
     this.members = [];
     this.satOut = new Map();
     this.step = "reading the conversation";
