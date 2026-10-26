@@ -1,6 +1,6 @@
 {
-  "hash": "3d63dc2a9cdffdd4f1e93adcde0dec9bf33867de41520936a77737847fc10857",
-  "builtAt": "2026-10-22T21:55:50.456Z",
+  "hash": "63a013a9802fc9965e55e990662e5445b8fb8b479f0bc09a64f04661ab824064",
+  "builtAt": "2026-10-24T22:30:28.030Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -8,7 +8,7 @@
     },
     {
       "path": "src/webui/protocol.ts",
-      "sha256": "e2b90b9a5d39aabe644636fd4754544672e79a8f23b6e5b4c2d0259eaa69b2ef"
+      "sha256": "54396a8b3427ab17e3d63f73f04bbaf6ad125505fbe25fd356c5b7837dd458e7"
     },
     {
       "path": "webui/components.json",
@@ -256,7 +256,7 @@
     },
     {
       "path": "webui/src/components/ui/combobox.tsx",
-      "sha256": "8f4751582ab5958537ace121438b93249af4bd8643da465c4639a57f605ad848"
+      "sha256": "12896175f820b1eab3fd2d71720d5bb3ae2ff4c37e2f03d6e2694f6b143a3301"
     },
     {
       "path": "webui/src/components/ui/empty.tsx",
@@ -308,7 +308,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "a5cc7578bdbbe2dffcbafff8382f6fc8f055318b17f313751d1a41f96525fb59"
+      "sha256": "cb7a3190cbcc3e47dc033e2da5964c91d97d31f55dd09d6d45e01bd12d0db203"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -584,7 +584,7 @@
     },
     {
       "path": "webui/src/tabs/settings/SettingsForm.tsx",
-      "sha256": "b9c98030b33c5e718f48f8fa6cf6668e02cb38f81d7e5087d7b822e5e92517d7"
+      "sha256": "2eef494a7f406797adcebcde2ea707dd58b8678d7c312fb7f42412a6dc7d3626"
     },
     {
       "path": "webui/src/tabs/settings/SettingsTab.tsx",
@@ -596,11 +596,11 @@
     },
     {
       "path": "webui/src/tabs/settings/parts.tsx",
-      "sha256": "500eef39ddd442ad537c88f46a3aecdb01b50f5c14b8f98e2477a7f205f8ae54"
+      "sha256": "51e4d30706ef34b4a95a04d80d13c05d89a0bc097b231107790e5e1fff30d936"
     },
     {
       "path": "webui/src/tabs/settings/words.ts",
-      "sha256": "49b444691e37e2d9065365b981928fbe42235ff86564877926d3d95f63521670"
+      "sha256": "263b3df49644d3d87d032d8d22e04b767a89e60abedb57e3af1cf0e718f39b8b"
     },
     {
       "path": "webui/src/tabs/tasks/Comments.tsx",
@@ -671,8 +671,8 @@
       "sha256": "b3b9fc08374cebc0cbfd24b28d07084ccec7504e620516dc195cf910900532c8"
     },
     {
-      "path": "webui/src/ui/EffortSlider.tsx",
-      "sha256": "fde152ede5aa2c41ee6f6df6532da694e3f79b9f8ce0bab1d6112f1cfaba3f7c"
+      "path": "webui/src/ui/EffortChoice.tsx",
+      "sha256": "70a97a95e49b25dc822a1f45d77dd856871b7f8f4615080b016a2469c8b8bb34"
     },
     {
       "path": "webui/src/ui/Frame.tsx",
@@ -720,7 +720,7 @@
     },
     {
       "path": "webui/src/ui/effortLevels.ts",
-      "sha256": "3f52d5343480c0b49516caa9dbca1e4bb7ccc89ee33876fe02b952c6bf37b8bb"
+      "sha256": "ec5ded82a0269f17a057449dfdb2a3c59142efd49ada42c901d6117c67625a44"
     },
     {
       "path": "webui/src/ui/rows.ts",
@@ -729,10 +729,6 @@
     {
       "path": "webui/src/ui/task-facts.tsx",
       "sha256": "9c0b3c5a600e0325a9003b4c6b003a984f3e0af46cdc502753d54a2eb36cf10c"
-    },
-    {
-      "path": "webui/src/ui/useEffortSlider.ts",
-      "sha256": "35787149c59162fd6abfb97c2543a9d19b0386f8f174af946b851f7639cfbafe"
     },
     {
       "path": "webui/tsconfig.json",

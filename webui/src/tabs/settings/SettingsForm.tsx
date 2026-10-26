@@ -1,6 +1,6 @@
 /**
- * The settings form: each agent's model and effort (a slider with a stop per
- * level, skipping what the model cannot do), the MCP tools and skills each
+ * The settings form: each agent's model and effort (a drop-down listing every
+ * level, the ones the model cannot do shown but not choosable), the MCP tools and skills each
  * agent is granted, the workflow, the lobby and the classifier, read from `settings.get` and saved back with a minimal
  * `settings.set` patch. A refused patch (`bad_request`) shows the server's own
  * message and leaves the field reading its saved value, because every control
@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils"
 import { ActionButton } from "@/ui/Actions"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { EffortSlider } from "@/ui/EffortSlider"
+import { EffortChoice } from "@/ui/EffortChoice"
 import { nearestSupported } from "@/ui/effortLevels"
 import { AgentIcon } from "@/ui/AgentIcon"
 import { call } from "@/lib/api"
@@ -56,6 +56,7 @@ import {
   PANEL_HELP,
   PANEL_ITEMS,
   PI_HARNESS,
+  RETAIN,
   ROUNDS_HELP,
   ROUNDS_LABEL,
   ROUND_CHOICES,
@@ -381,7 +382,7 @@ function AgentCard({ kind, config, models, harnesses, save, onGrants }: { kind: 
         <ModelChoice value={entry.model} models={models} label={`${name} model`} inherit={kind === "master"} onChange={chooseModel} />
       )}
       {kind === "scout" ? <ScoutEffort /> : (
-        <EffortSlider value={entry.thinking} levels={THINKING_LEVELS} supported={supported} recommended={RECOMMENDED_THINKING[kind]}
+        <EffortChoice value={entry.thinking} levels={THINKING_LEVELS} supported={supported} recommended={RECOMMENDED_THINKING[kind]}
           model={onHarness ? (harnessModel || `${harness?.label ?? entry.harness}'s default model`) : entry.model === INHERIT_MODEL ? "the session model" : entry.model} label={`${name} effort`} onChange={(level) => set({ thinking: level })} />
       )}
       {onHarness && harness?.effort === "session" && kind !== "scout" ? <p className="-mt-1 text-xs text-muted-foreground">{HARNESS.effortNote}</p> : null}
@@ -542,8 +543,33 @@ function LobbyGroup({ config, save }: { config: Config; save: Save }) {
           <PortField value={web.port} onSave={(port) => void save({ lobby: { web: { port } } })} />
         </Field>
         <ToggleField label={WEB_BROWSER_LABEL} help={WEB_BROWSER_HELP} checked={web.openBrowser} onChange={(next) => void save({ lobby: { web: { openBrowser: next } } })} />
+        <RetentionToggle />
       </Rows>
     </Section>
+  )
+}
+
+/**
+ * Whether this repository tracks `.pi/bot-lobby` in git, read from the repository's own .gitignore: the switch
+ * rewrites that file and reads its state back from it, so a hand-edited file still shows what git does.
+ */
+function RetentionToggle() {
+  const read = useApiRead("lobby.retention", {}, [])
+  const set = async (enabled: boolean) => {
+    try {
+      await call("lobby.setRetention", { enabled })
+      read.reload()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "That did not work. Try again.")
+    }
+  }
+  return (
+    <ToggleField
+      label={RETAIN.label}
+      help={read.error ? RETAIN.error : RETAIN.help}
+      checked={read.data?.enabled ?? false}
+      onChange={(next) => void set(next)}
+    />
   )
 }
 

@@ -1,11 +1,17 @@
 import { randomUUID } from "node:crypto";
+import { validateAssignment, type WorkerAssignment } from "./assignment.ts";
+import { assignmentPrompt } from "../roles/worker.ts";
+import { selectAssignmentTools } from "./assignment-policy.ts";
+import { prepareAssignmentDiscovery } from "./assignment-discovery.ts";
+import { delegationHost } from "./delegation.ts";
+import { grantableTools } from "../pi/grants.ts";
 import { createLiveRun } from "./live-run.ts";
 import type { Domain, Role } from "../schemas/agent.ts";
 import type { AgentRun } from "../schemas/findings.ts";
 import { roleSpec } from "../roles/registry.ts";
 import { compilePrompt } from "../prompts/compiler.ts";
 import { EditLog } from "../state/changes.ts";
-import { runPiAgent, spawnPiProcess, type ProcessRunner, type RelayAsk } from "./pi-runner.ts";
+import { MCP_RESOURCE_TOOLS, runPiAgent, spawnPiProcess, type PiRunOptions, type ProcessRunner, type RelayAsk } from "./pi-runner.ts";
 import { KNOWLEDGE_TOOLS, TASK_ID_ENV } from "../knowledge/catalog-tools.ts";
 import { ASK_ENV } from "../ask/relay.ts";
 import type { EffortRouter, RunProfileLike } from "../classifier/effort.ts";
@@ -37,6 +43,8 @@ export interface AgentHandle {
 }
 
 export interface AgentRequest {
+  /** Host-owned storage and master-authored brief; never inferred from worker output. */
+  assignment?: { brief: WorkerAssignment; taskDir: string };
   taskId: string;
   domain: Domain;
   role: Role;
@@ -112,6 +120,13 @@ function retryable(run: AgentRun): boolean {
  * time limit: an agent works until it reports, is cancelled, or stalls.
  */
 export async function runAgent(request: AgentRequest, run: ProcessRunner = spawnPiProcess): Promise<AgentRun> {
+  if (request.assignment !== undefined) {
+    if (!request.assignment || typeof request.assignment !== "object") throw new Error("Invalid structured assignment: expected brief and host-owned taskDir.");
+    if (request.role !== "worker") throw new Error("Structured assignments require the worker role.");
+    if (!request.assignment.taskDir) throw new Error("Assigned execution requires host-owned task storage.");
+    const brief = await validateAssignment(request.assignment.brief, request.cwd);
+    request = { ...request, assignment: { ...request.assignment, brief } };
+  }
   const startedAt = new Date().toISOString();
   const attempts = Math.max(1, (request.retries ?? 0) + 1);
   // A failed attempt may have edited files before the retry: the run owns every edit.
@@ -163,6 +178,22 @@ function toolsFor(request: AgentRequest): readonly string[] | undefined {
   return [...(tools ?? []), ...extra];
 }
 
+/** Inspect complete existing grants, then replace them; never dispatch through the temporary host. */
+async function prepareAssignedPolicy(options: PiRunOptions, request: AgentRequest, run: ProcessRunner): Promise<void> {
+  if (!request.assignment) return;
+  const host = await delegationHost(options, run);
+  try {
+    const connected = grantableTools().map((tool) => tool.name);
+    const granted = [...host.tools, ...host.mcpTools];
+    const available = [...host.tools.filter((name) => !name.startsWith("mcp__")), ...connected, ...MCP_RESOURCE_TOOLS];
+    const selected = selectAssignmentTools(request.assignment.brief, { granted, known: [...granted, ...connected, ...MCP_RESOURCE_TOOLS], available });
+    options.tools = selected;
+    options.mcpTools = selected.filter((name) => name.startsWith("mcp__") || MCP_RESOURCE_TOOLS.includes(name));
+    const state = await prepareAssignmentDiscovery(request.assignment.taskDir, request.assignment.brief.id, request.assignment.brief.revision, request.assignment.brief.discoveryLimit);
+    options.assignedSession!.consumedDiscovery = state.consumed;
+  } finally { await host.close(); }
+}
+
 /**
  * Run one domain/role agent in an isolated pi process. The role's tool
  * allowlist comes from its spec, so read-only roles cannot modify anything.
@@ -182,7 +213,7 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
   const signal = request.signal ? AbortSignal.any([request.signal, controller.signal]) : controller.signal;
   try {
     const systemPrompt = request.systemPrompt ?? compilePrompt({ domain: request.domain, role: request.role, ...request.context });
-    const result = await runPiAgent({
+    const options: PiRunOptions = {
       cwd: request.cwd,
       agent: { runId: base.runId, taskId: request.taskId, domain: request.domain, role: request.role },
       delegationQuota: quota,
@@ -197,7 +228,15 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
       ...(request.skills ? { skills: request.skills } : {}),
       ...(request.autoCompact === false ? { autoCompact: false } : {}),
       ...(request.compactAt ? { compactAt: request.compactAt } : {}),
-      task: request.instruction,
+      task: [request.instruction, request.assignment ? assignmentPrompt(request.assignment.brief) : ""].filter(Boolean).join("\n\n"),
+      ...(request.assignment ? { assignedSession: {
+        taskDir: request.assignment.taskDir,
+        assignmentId: request.assignment.brief.id,
+        revision: request.assignment.brief.revision,
+        evidence: request.assignment.brief.evidence,
+        completedWork: request.assignment.brief.completedWork,
+        needs: request.assignment.brief.needs,
+      } } : {}),
       systemPrompt,
       tools: toolsFor(request),
       model: request.model,
@@ -214,7 +253,10 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
         live.onEvent(event);
       },
       onStart: (handle) => request.onStart?.({ runId: base.runId, steer: handle.steer, annotate: live.annotate }),
-    }, run);
+    };
+    await prepareAssignedPolicy(options, request, run);
+    // Native and harness assigned execution still refuse before any provider/tool request.
+    const result = await runPiAgent(options, run);
     const current = live.current();
     const final: AgentRun = {
       ...base,

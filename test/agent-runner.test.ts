@@ -1,11 +1,34 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { WorkerAssignment } from "../src/execution/assignment.ts";
 import { runAgent, runParallel, cancelAllRuns, type AgentRequest } from "../src/execution/agent-runner.ts";
 import { KNOWLEDGE_TOOLS } from "../src/knowledge/catalog-tools.ts";
 import { invariantPrefix } from "../src/prompts/compiler.ts";
 import type { ProcessOutcome, ProcessRunner } from "../src/execution/pi-runner.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
+
+test("structured assignments validate before dispatch and never fall back on compatibility failure", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "assigned-agent-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const brief: WorkerAssignment = {
+    id: "inspection", revision: 1, objective: "Inspect package contract", actions: [{ step: 1, instruction: "Read package.json" }],
+    files: [{ path: "package.json", access: "reference", purpose: "Package contract" }], tools: [],
+    contracts: [], constraints: [], exclusions: [], verification: ["Report contract"], evidence: [], completedWork: [], needs: [],
+  };
+  let spawns = 0;
+  const runner: ProcessRunner = async () => { spawns++; throw new Error("Must not spawn"); };
+  const req = request({ role: "worker", cwd: process.cwd(), assignment: { brief, taskDir: root } });
+  const result = await runAgent(req, runner);
+  assert.equal(result.status, "failed");
+  assert.match(result.error!, /compatibility.*declared and callable/i);
+  assert.equal(spawns, 0);
+  brief.files[0]!.path = "missing-assignment-reference";
+  await assert.rejects(runAgent(req, runner), /Invalid worker assignment.*reference path/);
+  assert.equal(spawns, 0);
+});
 
 function reply(text: string): string {
   return JSON.stringify({

@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
+import type { WorkerAssignment } from "../execution/assignment.ts";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join, sep } from "node:path";
 import type { KnowledgeConfig } from "../schemas/configuration.ts";
@@ -193,6 +195,59 @@ function trimAssignments(records: AssignmentRecord[]): AssignmentRecord[] {
   return kept;
 }
 
+/** Preflight a whole batch before any state mutation or worker dispatch. */
+export function checkWorkerAssignments(task: Task, batch: { domain: Domain; assignment: WorkerAssignment }[]): void {
+  const ids = new Set<string>();
+  for (const { domain, assignment } of batch) {
+    if (ids.has(assignment.id)) throw new Error(`Duplicate worker assignment id ${assignment.id} in batch`);
+    ids.add(assignment.id);
+    const prior = task.workerAssignments?.find((entry) => entry.brief.id === assignment.id);
+    if (!prior) continue;
+    if (prior.domain !== domain) throw new Error(`Assignment ${assignment.id} belongs to ${prior.domain}; keep its domain stable`);
+    if (assignment.revision < prior.brief.revision) throw new Error(`Stale assignment ${assignment.id}; current revision is ${prior.brief.revision}`);
+    if (assignment.revision === prior.brief.revision && !isDeepStrictEqual(assignment, prior.brief)) throw new Error(`Conflicting assignment ${assignment.id} revision ${assignment.revision}; increase revision for changes`);
+  }
+}
+
+/** Inputs must first pass validateAssignment and workflow approval-ledger checks. */
+export function recordWorkerAssignments(task: Task, batch: { domain: Domain; assignment: WorkerAssignment }[]): void {
+  checkWorkerAssignments(task, batch);
+  task.workerAssignments ??= [];
+  for (const { domain, assignment } of batch) {
+    const prior = task.workerAssignments.find((entry) => entry.brief.id === assignment.id);
+    if (!prior) task.workerAssignments.push({ domain, brief: structuredClone(assignment), revisions: [structuredClone(assignment)], outcomes: [] });
+    else if (assignment.revision > prior.brief.revision) {
+      prior.brief = structuredClone(assignment);
+      prior.revisions.push(structuredClone(assignment));
+    }
+  }
+}
+
+/** Preserve newer revisions and independently recorded outcomes during stale saves. */
+function preserveWorkerAssignments(task: Task, latest: Task): void {
+  const merged = new Map((latest.workerAssignments ?? []).map((entry) => [entry.brief.id, structuredClone(entry)]));
+  for (const mine of task.workerAssignments ?? []) {
+    const prior = merged.get(mine.brief.id);
+    if (!prior) { merged.set(mine.brief.id, mine); continue; }
+    if (mine.domain !== prior.domain) throw new Error(`Conflicting assignment domain ${mine.brief.id}`);
+    for (const revision of mine.revisions) {
+      const existing = prior.revisions.find((entry) => entry.revision === revision.revision);
+      if (existing && !isDeepStrictEqual(existing, revision)) throw new Error(`Conflicting assignment ${revision.id} revision ${revision.revision}`);
+      if (!existing) prior.revisions.push(revision);
+    }
+    prior.revisions.sort((a, b) => a.revision - b.revision);
+    prior.brief = prior.revisions.at(-1)!;
+    for (const outcome of mine.outcomes) {
+      const existing = prior.outcomes.find((entry) => entry.runId === outcome.runId);
+      if (!existing) { prior.outcomes.push(outcome); continue; }
+      // Never let a stale save restore an invalidated evidence verdict.
+      if (outcome.freshness?.status === "invalidated") existing.freshness = structuredClone(outcome.freshness);
+      if (existing.issues || outcome.issues) existing.issues = [...new Set([...(existing.issues ?? []), ...(outcome.issues ?? [])])];
+    }
+  }
+  if (merged.size) task.workerAssignments = [...merged.values()];
+}
+
 export function saveTask(root: string, configDir: string, task: Task): void {
   const latest = loadTask(root, configDir, task.id);
   // Abandonment is final: an in-flight action must not overwrite its audit or resurrect it.
@@ -205,6 +260,7 @@ export function saveTask(root: string, configDir: string, task: Task): void {
     preserveUserConstraints(task, latest);
     mergePhaseTiming(task, timingBaselines.get(task), latest);
     preserveAssignments(task, latest);
+    preserveWorkerAssignments(task, latest);
   }
   refreshCheckpoint(task, root, latest?.checkpoint);
   const path = join(taskDir(dataRoot(root, configDir), task.id), "state.json");

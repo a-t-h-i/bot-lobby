@@ -1,3 +1,4 @@
+import type { AssignmentExpansionRequest, WorkerAssignment } from "../execution/assignment.ts";
 import type { Domain, RoleSpec } from "../schemas/agent.ts";
 import type { Blocker } from "../schemas/task.ts";
 import type { FileChange, KnowledgeProposal, ScriptProposal, WorkerResult } from "../schemas/findings.ts";
@@ -86,9 +87,81 @@ export function realAsks(items: readonly string[]): string[] {
   return items.filter((item) => !NOTHING.test(item.trim()));
 }
 
+/** Find the end of one JSON container without treating braces in strings as delimiters. */
+function jsonEnd(text: string, start: number): number {
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const char = text[i];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') quoted = false;
+      continue;
+    }
+    if (char === '"') quoted = true;
+    else if (char === "{" || char === "[") depth++;
+    else if ((char === "}" || char === "]") && --depth === 0) return i + 1;
+  }
+  return text.length;
+}
+
+/** Notes can contain prose plus standalone JSON objects, optionally fenced. */
+function expansionJson(notes: string): string[] {
+  const candidates: string[] = [];
+  const plain = notes.replace(/```(?:json)?[ \t]*\r?\n([\s\S]*?)(?:```|$)/gi, (_block, body: string) => {
+    candidates.push(body.trim());
+    return "\n";
+  });
+  const starts = /(?:^|\n)[ \t]*(?:[-*][ \t]+)?(?=[{[])/g;
+  let match: RegExpExecArray | null;
+  while ((match = starts.exec(plain))) {
+    const start = match.index + match[0].length;
+    const end = jsonEnd(plain, start);
+    candidates.push(plain.slice(start, end));
+    starts.lastIndex = end;
+  }
+  return candidates;
+}
+
+function expansionIssue(value: unknown): string | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return "must be an object";
+  const need = value as Record<string, unknown>;
+  const unknown = Object.keys(need).find((key) => !["kind", "reason", "requested"].includes(key));
+  if (unknown) return `unknown key ${unknown}; only kind, reason and requested are allowed`;
+  if (typeof need.kind !== "string" || !["files", "tools", "discovery", "decision"].includes(need.kind)) {
+    return "kind must be files, tools, discovery or decision";
+  }
+  if (typeof need.reason !== "string" || !need.reason.trim()) return "reason must be nonempty text";
+  if (!Array.isArray(need.requested) || need.requested.length === 0 ||
+    need.requested.some((item: unknown) => typeof item !== "string" || !item.trim())) {
+    return "requested must be a nonempty array of nonempty strings";
+  }
+  return undefined;
+}
+
+function parseExpansions(notes: string): { needs: AssignmentExpansionRequest[]; issues: string[] } {
+  const needs: AssignmentExpansionRequest[] = [];
+  const issues: string[] = [];
+  for (const [index, candidate] of expansionJson(notes).entries()) {
+    try {
+      const value: unknown = JSON.parse(candidate);
+      const issue = expansionIssue(value);
+      if (issue) issues.push(`Notes expansion request ${index + 1}: ${issue}`);
+      else needs.push(value as AssignmentExpansionRequest);
+    } catch {
+      issues.push(`Notes expansion request ${index + 1}: invalid JSON; provide a standalone request object`);
+    }
+  }
+  return { needs, issues };
+}
+
 /** Parse a worker's markdown into a structured result (never throws). */
 export function parseWorkerResult(domain: Domain, raw: string, now = new Date().toISOString()): WorkerResult {
   const sections = parseSections(raw);
+  const notes = findSection(sections, "notes") ?? "";
+  const { needs } = parseExpansions(notes);
   return {
     domain,
     role: "worker",
@@ -98,7 +171,8 @@ export function parseWorkerResult(domain: Domain, raw: string, now = new Date().
       return { path: file.path, change: file.reason };
     }),
     verification: findSection(sections, "verification") ?? "",
-    notes: findSection(sections, "notes") ?? "",
+    notes,
+    ...(needs.length > 0 ? { needs } : {}),
     blockers: parseBlockers(sections, domain, now),
     knowledgeProposals: parseKnowledgeProposals(domain, findSection(sections, "knowledge proposals")),
     scriptProposals: parseScriptProposals(domain, findSection(sections, "script proposals")),
@@ -109,13 +183,41 @@ export function parseWorkerResult(domain: Domain, raw: string, now = new Date().
   };
 }
 
+/** Assignment-specific content belongs in the user instruction, not the shared system prefix. */
+export function assignmentPrompt(assignment: WorkerAssignment): string {
+  return [
+    "## Validated master assignment",
+    JSON.stringify(assignment, null, 2),
+    "Actions are numbered and authoritative. Begin with assigned files; paths and purposes are provided, not file bodies.",
+    "Read current contents before editing; re-read after file handover. Reference paths are read-only. Only edit/create paths authorize changes.",
+    `Discovery allowance: ${assignment.discoveryLimit ?? 2} total targeted lookups. Each nested or batched discovery call counts separately; retries and revisions do not reset consumed allowance. Assigned-file reads and assigned verification are exempt. Shell discovery follows the same limit.`,
+    "Discovery never authorizes editing a newly found file. Tools listed here are a replacement selection intersected with existing grants; an empty list grants no tools. Codemode does not grant unselected nested or MCP tools.",
+    "If files, tools, discovery allowance or decisions are missing, report each expansion request under Notes as a standalone JSON object (optionally in a json fence), with exactly these keys: {\"kind\":\"files|tools|discovery|decision\",\"reason\":\"why needed\",\"requested\":[\"exact path, tool, allowance or decision\"]}. Continue unaffected work; do not expand permissions yourself.",
+    "Report completed work and evidence, outstanding needs, and one Brief Check per verification criterion. Reference-only work may succeed without edits; do not make artificial changes. Every changed file still requires verification.",
+  ].join("\n\n");
+}
+
 /** Report contract deviations so the Master does not accept unverified work. */
-export function validateWorkerResult(result: WorkerResult): string[] {
-  const issues: string[] = [];
+export function validateWorkerResult(result: WorkerResult, assignment?: WorkerAssignment): string[] {
+  const issues = parseExpansions(result.notes).issues;
+  if (result.needs !== undefined) {
+    if (!Array.isArray(result.needs)) issues.push("needs must be an array of expansion requests");
+    else result.needs.forEach((need, index) => {
+      const issue = expansionIssue(need);
+      if (issue) issues.push(`needs[${index}]: ${issue}`);
+    });
+  }
   if (!result.completed) issues.push("missing Completed section");
-  if (result.filesChanged.length > 0 && !result.verification) issues.push("changed files without verification");
+  if (result.filesChanged.length > 0 && !result.verification?.trim()) issues.push("changed files without verification");
   const claimedNothing = /no changes|nothing to change|no modifications/i.test(result.raw);
-  if (result.filesChanged.length === 0 && result.blockers.length === 0 && !claimedNothing) {
+  const referenceOnly = assignment !== undefined && assignment.files.every((file) => file.access === "reference");
+  if (assignment) {
+    const writable = new Set(assignment.files.filter((file) => file.access !== "reference").map((file) => file.path));
+    for (const file of result.filesChanged) {
+      if (!writable.has(file.path)) issues.push(`changed file outside assignment edit/create paths: ${file.path}`);
+    }
+  }
+  if (result.filesChanged.length === 0 && result.blockers.length === 0 && !claimedNothing && !referenceOnly) {
     issues.push("no files changed and no blocker reported");
   }
   return issues;

@@ -563,6 +563,8 @@ export interface Api {
   "lobby.history": { request: { before?: number }; result: { entries: unknown[]; hasOlder: boolean } };
   "lobby.send": { request: { text: string; attachments?: string[] }; result: { notice?: string; open?: "plan" } };
   "lobby.abort": { request: Record<string, never>; result: Record<string, never> };
+  "lobby.retention": { request: Record<string, never>; result: { enabled: boolean } };
+  "lobby.setRetention": { request: { enabled: boolean }; result: { enabled: boolean } };
   "tasks.list": { request: Record<string, never>; result: { rows: TaskRow[] } };
   "tasks.archived": { request: Record<string, never>; result: { rows: TaskRow[] } };
   "tasks.comments": { request: { taskId: string }; result: { comments: PlanComment[] } };

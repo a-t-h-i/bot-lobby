@@ -7,6 +7,10 @@
  * CSP violations. One server per spec (the shared worker fixture), one size.
  */
 import { expect, openScenario, test, type Page } from "./fixture.ts";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 /** DOM ambient for `page.evaluate` callbacks (the root tsconfig has no DOM lib). */
 declare const document: any;
@@ -182,6 +186,10 @@ test("settings change saves with a notice and round-trips", async ({ page, serve
   await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Lobby", exact: true }).click();
   const mouse = page.getByRole("switch", { name: "Issues", exact: true });
   await expect(mouse, "Issues toggle").toBeVisible();
+  // Retention reads the repo's own .gitignore and is off while that file ignores .pi/.
+  const retain = page.getByRole("switch", { name: "Retain lobby data in git" });
+  await expect(retain, "the retention switch is offered in Lobby settings").toBeVisible();
+  await expect(retain, "retention is off by default").not.toBeChecked();
   const before = await mouse.getAttribute("aria-checked");
   await mouse.click();
   await expect(page.getByText("Settings saved"), "saved notice").toBeVisible();
@@ -198,6 +206,48 @@ test("settings change saves with a notice and round-trips", async ({ page, serve
   trap.stop();
 });
 
+test("retaining lobby data in git rewrites the repo's .gitignore and reads back from it", async ({ page, server }) => {
+  const trap = await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  // The mock service has no project root; point it at a throwaway git repo so the switch writes there, never here.
+  const root = mkdtempSync(join(tmpdir(), "bot-lobby-retain-"));
+  execFileSync("git", ["-C", root, "init", "-q"]);
+  const file = join(root, ".gitignore");
+  writeFileSync(file, "node_modules/\n# bot-lobby local task state, knowledge and config\n.pi/\n", "utf8");
+  await server.start((service) => { service.projectRoot = () => root; });
+  const toLobby = async () => {
+    await page.goto(server.link);
+    await page.getByRole("tablist").first().waitFor();
+    await page.evaluate(() => { window.location.hash = "#/settings"; });
+    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Lobby", exact: true }).click();
+  };
+  await toLobby();
+  const read = () => readFileSync(file, "utf8");
+  const ignored = (path: string) => {
+    try { execFileSync("git", ["-C", root, "check-ignore", "-q", path]); return true; } catch { return false; }
+  };
+  const retain = page.getByRole("switch", { name: "Retain lobby data in git" });
+  await expect(retain, "the switch starts off, as today's .gitignore ignores .pi/").not.toBeChecked();
+  await retain.click();
+  await expect(retain).toBeChecked();
+  expect(read(), "on: everything under .pi/ is ignored except the lobby itself").toBe(
+    "node_modules/\n# bot-lobby local task state and config (bot-lobby retained in git)\n.pi/*\n!.pi/bot-lobby/\n",
+  );
+  expect(ignored(".pi/bot-lobby/knowledge/knowledge.md"), "the lobby's files stop being ignored").toBe(false);
+  expect(ignored(".pi/workspace.json"), "everything else under .pi/ still is").toBe(true);
+  await toLobby(); // a reload must show the state read back from the file, not memory
+  await expect(page.getByRole("switch", { name: "Retain lobby data in git" })).toBeChecked();
+  await page.getByRole("switch", { name: "Retain lobby data in git" }).click();
+  await expect(page.getByRole("switch", { name: "Retain lobby data in git" })).not.toBeChecked();
+  expect(read(), "off: today's plain block again, other lines untouched").toBe(
+    "node_modules/\n# bot-lobby local task state, knowledge and config\n.pi/\n",
+  );
+  expect(ignored(".pi/bot-lobby/knowledge/knowledge.md"), "and the lobby is ignored again").toBe(true);
+  expect(cspErrors(trap.errors), "no CSP violations").toEqual([]);
+  expect(trap.errors, "no console errors").toEqual([]);
+  trap.stop();
+  rmSync(root, { recursive: true, force: true });
+});
 
 test("removed routes resolve to Lobby @theme", async ({ page, server }) => {
   const trap = await openScenario(page, server, "full");
@@ -320,17 +370,29 @@ test("an agent runs on a third-party harness with that harness's models, effort 
   await expect(page.getByRole("option", { name: /Gemini CLI.*not found/ })).toBeVisible();
   await page.getByRole("option", { name: /^Claude Code/ }).click();
   await expect(card.getByRole("combobox", { name: "Backend harness" })).toContainText("Claude Code");
-  // The model list is Claude Code's own; Sonnet 4.6 has no Extra high, so the slider skips it.
+  // First, on pi, save a level Claude Code's Sonnet 4.6 cannot do.
+  await card.getByRole("combobox", { name: "Backend effort" }).click();
+  await page.getByRole("listbox", { name: "Backend effort" }).getByRole("option", { name: /^Extra high\b/ }).click();
+  await expect(card.getByRole("combobox", { name: "Backend effort" })).toContainText("Extra high");
+  // The model list is Claude Code's own; Sonnet 4.6 has no Extra high, so the dropdown lists it but will not pick it.
   await card.getByRole("combobox", { name: "Backend model" }).click();
   await expect(page.getByRole("option", { name: /Claude Opus 5\.5/ })).toBeVisible();
   await page.getByRole("option", { name: /Claude Sonnet 4\.6/ }).click();
   await expect(card.getByRole("combobox", { name: "Backend model" })).toContainText("Claude Sonnet 4.6");
-  const slider = card.getByRole("slider", { name: "Backend effort" });
-  await slider.focus();
+  const effort = card.getByRole("combobox", { name: "Backend effort" });
+  await expect(effort, "a saved level the model cannot do shows the one it runs at").toContainText("High");
+  await expect(card.getByText(/is not supported by .+, so it runs at high\./)).toBeVisible();
+  await effort.click();
+  const list = page.getByRole("listbox", { name: "Backend effort" });
+  const extra = list.getByRole("option", { name: /^Extra high\b/ });
+  await expect(extra, "the unsupported level stays listed").toBeVisible();
+  await expect(extra).toHaveAttribute("aria-disabled", "true");
+  await extra.click();
+  await expect(effort, "clicking it picks nothing").toContainText("High");
+  // The keyboard skips it too: End lands on the highest level the model can run.
   await page.keyboard.press("End");
-  await expect(card.locator('[data-slot="effort-value"]')).toHaveText("Max");
-  await page.keyboard.press("ArrowLeft");
-  await expect(card.locator('[data-slot="effort-value"]')).toHaveText("High");
+  await page.keyboard.press("Enter");
+  await expect(effort).toContainText("Max");
   await expect(card.getByRole("switch", { name: "Backend auto-compact" })).toBeChecked();
   await card.screenshot({ path: info.outputPath("harness-agent.png") });
   // Harnesses: the card says who uses it, and its compaction threshold is a number box.
@@ -352,6 +414,8 @@ test("an agent runs on a third-party harness with that harness's models, effort 
   await page.getByRole("option", { name: /^pi/ }).click();
   await expect(card.getByRole("combobox", { name: "Backend harness" })).toContainText("pi");
   await expect(card.getByRole("combobox", { name: "Backend model" })).not.toContainText("Claude Sonnet 4.6");
+  await expect(effort, "back on pi the saved level runs as itself again").toContainText("Extra high");
+  await expect(card.getByText(/is not supported by/), "and the note is gone").toHaveCount(0);
 });
 
 test("each agent's compaction threshold is a number box: a whole number saves, junk is refused, empty restores the built-in", async ({ page, server }) => {

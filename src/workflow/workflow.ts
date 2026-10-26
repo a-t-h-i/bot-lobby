@@ -1,3 +1,8 @@
+import { validateAssignment, type WorkerAssignment, type AssignmentExpansionRequest } from "../execution/assignment.ts";
+import { verifyEvidenceHint } from "../master/evidence-freshness.ts";
+import { approveAssignmentDiscovery, prepareAssignmentDiscovery, readAssignmentDiscovery } from "../execution/assignment-discovery.ts";
+import { cleanupTaskAssignedSessions } from "../execution/assigned-session.ts";
+import { checkWorkerAssignments, recordWorkerAssignments } from "../state/persistence.ts";
 import { existsSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
 import { checkpointSummary, settledDecisions } from "../state/checkpoint.ts";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -14,6 +19,7 @@ import {
   type Task,
   type TaskState,
   type WorkerRunRecord,
+  type WorkerAssignmentRecord,
 } from "../schemas/task.ts";
 import { isDomain, type Domain } from "../schemas/agent.ts";
 import { transition } from "../state/task-state.ts";
@@ -35,7 +41,7 @@ import { parseWorkerResult } from "../roles/worker.ts";
 import { autoNote, DeskSession } from "../desk/session.ts";
 import { closeWorkerTrees, mapToTop, mergeWorkerTrees, openWorkerTrees, type MergeOutcome } from "../execution/worker-trees.ts";
 import type { Handover } from "../desk/desk.ts";
-import { changedFiles, commitBefore, commitFiles, commitMessage, headCommit, readRepositoryDiff, uncommitted } from "../execution/git.ts";
+import { treeState, changedFiles, commitBefore, commitFiles, commitMessage, headCommit, readRepositoryDiff, uncommitted } from "../execution/git.ts";
 import { appendChange, explainChanges, provenanceLines, provenanceSummary, readChanges, type FileProvenance } from "../state/changes.ts";
 import {
   loadScoutResults,
@@ -126,7 +132,9 @@ export interface OrchestrateParams {
   /** implement: the concrete instruction for the worker. */
   task?: string;
   /** implement: several domains at once, run in parallel through the file desk. */
-  assignments?: Array<{ domain: string; task: string }>;
+  workerAssignment?: WorkerAssignment;
+  assignments?: Array<{ domain: string; task?: string; workerAssignment?: WorkerAssignment }>;
+  discoveryAllowance?: { assignmentId: string; revision: number; decisionId: string; reason: string; limit: number };
   /** knowledge: which persistent file the text belongs to. */
   kind?: KnowledgeKind;
   /** bookmark: the operation on the task's bookmark list. */
@@ -264,12 +272,18 @@ export function describeTask(task: Task): string {
       ? `Pending approvals: ${pendingApprovals(task).map((a) => `${a.id} ${a.kind} for ${a.domain}: ${truncate(a.detail, 120)}`).join("; ")}`
       : "",
     task.blockers.length > 0 ? `Blockers: ${task.blockers.map((b) => b.reason).join("; ")}` : "",
+    ...(task.workerAssignments ?? []).map(assignmentStatus),
     skippedStepsNote(task.plan, task.skippedSteps),
     settledDecisions(task),
     checkpointSummary(task),
     `Next legal states: ${nextStates(task.state).join(", ")}`,
   ];
   return lines.filter((line) => line.length > 0).join("\n");
+}
+
+function assignmentStatus(entry: WorkerAssignmentRecord): string {
+  const outcome = entry.outcomes.filter((outcome) => outcome.revision === entry.brief.revision).at(-1);
+  return `Assignment ${entry.brief.id} r${entry.brief.revision} (${entry.domain}): ${outcome?.status ?? "prepared"}; freshness=${outcome?.freshness?.status ?? "unverified hints"}; issues=${JSON.stringify(outcome?.issues ?? [])}; verification=${JSON.stringify(outcome?.verification ?? "")}; completedWork=${JSON.stringify(outcome?.completedWork ?? entry.brief.completedWork)}; needs=${JSON.stringify(outcome?.needs ?? entry.brief.needs)}`;
 }
 
 /** Knowledge files past the compaction threshold, for status reporting. */
@@ -650,6 +664,7 @@ function workerReport(outcome: WorkerOutcome, approvals: Approval[], pushback?: 
     result.scriptProposals?.length
       ? `Script proposals (save with action=script name purpose usage file=<draft>, when the job will come back; or ignore): ${result.scriptProposals.map((proposal) => `${proposal.name}${proposal.purpose ? ` — ${truncate(proposal.purpose, 120)}` : ""}${proposal.draft ? ` (draft: ${proposal.draft})` : ""}`).join("; ")}`
       : "",
+    workerNeeds(outcome).length > 0 ? `Expansion requests: ${JSON.stringify(workerNeeds(outcome))}` : "",
     issues.length > 0 ? `Issues: ${issues.join("; ")}` : "",
     pushback && objection
       ? `Pushback recorded (${pushback.id}): ${truncate(objection.reason, 240)}. Resolve with action=resolve_approval before re-delegating ${result.domain}.`
@@ -728,9 +743,15 @@ function boardNews(deps: WorkflowDeps, task: Task, after: number): string {
   return posts.length > 0 ? `Task board, new posts:\n${formatPosts(posts)}` : "";
 }
 
-function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instruction: string, alongside?: readonly Domain[], boardFrom?: string): WorkerRequest {
+function workerRequest(deps: WorkflowDeps, task: Task, domain: Domain, instruction: string, alongside?: readonly Domain[], boardFrom?: string, assignment?: WorkerAssignment): WorkerRequest {
   const ask = askRelay(task, deps, domain);
   return {
+    ...(assignment ? {
+      assignment,
+      onFreshness: (freshness) => {
+        deps.notify(`Assignment ${freshness.assignmentId} r${freshness.revision}: ${freshness.status}${freshness.pause ? "; pause dependent work and recheck it" : ""}.`, freshness.pause ? "warning" : "info");
+      },
+    } : {}),
     board: taskBoard(deps, task),
     boardFrom: boardFrom ?? assignmentId(domain),
     ...(alongside && alongside.length > 1 ? { alongside } : {}),
@@ -824,24 +845,93 @@ function recordWorkerRun(task: Task, run: AgentRun): void {
 interface Assignment {
   domain: Domain;
   instruction: string;
+  assignment?: WorkerAssignment;
 }
 
 /** The delegation as a list: `assignments` for a parallel batch, otherwise the single domain/task. */
-function parseAssignments(params: OrchestrateParams): Assignment[] {
-  if (params.assignments && params.assignments.length > 0) {
-    const list = params.assignments.map((entry) => {
-      const instruction = entry.task?.trim();
-      if (!instruction) throw new Error("every assignment needs a task (what to implement)");
-      return { domain: parseDomain(entry.domain, "implement"), instruction };
-    });
-    const domains = list.map((entry) => entry.domain);
-    if (new Set(domains).size !== domains.length) throw new Error("parallel assignments need distinct domains (one worker per domain)");
-    return list;
+async function parseAssignments(params: OrchestrateParams, cwd: string): Promise<Assignment[]> {
+  if (params.assignments !== undefined && (params.workerAssignment !== undefined || params.domain !== undefined || params.task !== undefined)) throw new Error("Use either assignments or a single domain/workerAssignment, not both");
+  const entries = params.assignments ?? [{ domain: params.domain, task: params.task, workerAssignment: params.workerAssignment }];
+  if (!Array.isArray(entries) || entries.length === 0) throw new Error("implement assignments must not be empty");
+  const list: Assignment[] = [];
+  for (const entry of entries) {
+    const domain = parseDomain(entry.domain, "implement");
+    if (entry.workerAssignment === undefined) {
+      if (!entry.task?.trim()) throw new Error("implement requires task or workerAssignment");
+      list.push({ domain, instruction: entry.task.trim() });
+    } else {
+      const assignment = await validateAssignment(entry.workerAssignment, cwd);
+      list.push({ domain, instruction: entry.task?.trim() || assignment.objective, assignment });
+    }
   }
-  const domain = parseDomain(params.domain, "implement");
-  const instruction = params.task?.trim();
-  if (!instruction) throw new Error("implement requires task (what to implement)");
-  return [{ domain, instruction }];
+  if (new Set(list.map((entry) => entry.domain)).size !== list.length) throw new Error("parallel assignments need distinct domains (one worker per domain)");
+  return list;
+}
+
+async function checkDiscoveryAllowances(task: Task, batch: { assignment: WorkerAssignment }[], deps: WorkflowDeps): Promise<void> {
+  for (const { assignment } of batch) {
+    if ((assignment.discoveryLimit ?? 2) <= 2) continue;
+    const prior = task.workerAssignments?.find((entry) => entry.brief.id === assignment.id);
+    if (!prior) throw new Error(`Assignment ${assignment.id}: persist a brief with the default discovery allowance before requesting a master decision`);
+    const ledger = await readAssignmentDiscovery(taskDirFor(deps.root, deps.configDir, task.id), assignment.id, prior.brief.revision);
+    if ((assignment.discoveryLimit ?? 2) > ledger.limit) throw new Error(`Assignment ${assignment.id}: discovery limit requires an explicit master allowance decision`);
+  }
+}
+
+async function decideDiscoveryAllowance(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
+  if (params.domain !== undefined && params.domain !== "master") throw new Error("discoveryAllowance is master-only");
+  const allowance = params.discoveryAllowance!;
+  const keys = ["assignmentId", "revision", "decisionId", "reason", "limit"];
+  if (!allowance || Object.keys(allowance).some((key) => !keys.includes(key)) || typeof allowance.assignmentId !== "string" || typeof allowance.decisionId !== "string" || !allowance.decisionId.trim() || typeof allowance.reason !== "string" || !allowance.reason.trim() || !Number.isSafeInteger(allowance.limit) || allowance.limit < 0) throw new Error("discoveryAllowance requires exactly assignmentId, revision, decisionId, reason and a non-negative integer limit");
+  const record = task.workerAssignments?.find((entry) => entry.brief.id === allowance.assignmentId);
+  if (!record || record.brief.revision !== allowance.revision) throw new Error("discoveryAllowance must identify the current persisted assignment revision");
+  const dir = taskDirFor(deps.root, deps.configDir, task.id);
+  let ledger;
+  try {
+    ledger = await readAssignmentDiscovery(dir, allowance.assignmentId, allowance.revision);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes("ledger missing;") && !message.includes("is not prepared; current revision is")) throw error;
+    ledger = await prepareAssignmentDiscovery(dir, allowance.assignmentId, allowance.revision, Math.min(record.brief.discoveryLimit ?? 2, 2));
+  }
+  const existing = ledger.decisions.find((entry) => entry.decisionId === allowance.decisionId);
+  if (existing && (existing.reason !== allowance.reason || existing.limit !== allowance.limit)) throw new Error("discoveryAllowance decisionId already records different content");
+  if (!existing && allowance.limit <= ledger.limit) throw new Error("discoveryAllowance must increase the approved total");
+  // Durable audit first: a crash may leave a decision awaiting application, never an unaudited increase.
+  const text = `Discovery allowance: ${JSON.stringify(allowance)}`;
+  if (!task.decisions.some((entry) => entry.domain === "master" && entry.text === text)) {
+    recordDecision(task, text, "master");
+    task.decisions.at(-1)!.discoveryAllowance = structuredClone(allowance);
+  }
+  saveTask(deps.root, deps.configDir, task);
+  await approveAssignmentDiscovery(dir, allowance.assignmentId, allowance.revision, allowance);
+  return `Discovery allowance recorded (${allowance.assignmentId} r${allowance.revision}, limit ${allowance.limit}). Revise the brief to use the approved limit.`;
+}
+
+async function refreshAssignmentEvidence(task: Task, deps: WorkflowDeps): Promise<void> {
+  for (const entry of task.workerAssignments ?? []) {
+    const outcome = entry.outcomes.filter((item) => item.revision === entry.brief.revision).at(-1);
+    const freshness = outcome?.freshness;
+    if (!freshness || freshness.status !== "verified") continue;
+    // Legacy metadata without source snapshots cannot establish current evidence.
+    const checks = await Promise.all((freshness.hints ?? []).map((hint) => verifyEvidenceHint(deps.cwd, hint, () => treeState(deps.cwd, readDataRoots(deps.root, deps.configDir)))));
+    if (freshness.hints && checks.every(Boolean)) continue;
+    freshness.status = "invalidated";
+    freshness.pause = true;
+    freshness.recheckCompletedWork = true;
+    outcome!.issues = [...(outcome!.issues ?? []), "Evidence changed or source snapshots are missing; recheck dependent work in a new assignment revision"];
+    deps.notify(`Assignment ${entry.brief.id} r${entry.brief.revision}: evidence invalidated; recheck dependent work.`, "warning");
+  }
+}
+
+export function workerAssignmentHolds(task: Task): string[] {
+  return (task.workerAssignments ?? []).flatMap(({ brief, outcomes }) => {
+    const latest = outcomes.filter((outcome) => outcome.revision === brief.revision).at(-1);
+    const fresh = latest?.freshness;
+    const verified = latest?.verification?.trim();
+    if (latest?.status === "success" && Array.isArray(latest.issues) && latest.issues.length === 0 && latest.needs.length === 0 && fresh?.assignmentId === brief.id && fresh.revision === brief.revision && fresh.status === "verified" && (brief.files.every((file) => file.access === "reference") || verified)) return [];
+    return [`Assignment ${brief.id} r${brief.revision} needs a successful issue-free latest outcome, resolved needs, current verified evidence and verification for edits`];
+  });
 }
 
 /**
@@ -941,7 +1031,8 @@ function provenanceNote(files: readonly FileProvenance[] | undefined): string {
 }
 
 /** Record one worker's outcome on the task and return its report for the Master. */
-function absorbWorkerOutcome(task: Task, deps: WorkflowDeps, outcome: WorkerOutcome): string {
+function absorbWorkerOutcome(task: Task, deps: WorkflowDeps, outcome: WorkerOutcome, assignment?: WorkerAssignment): string {
+  if (assignment) recordAssignmentOutcome(task, outcome, assignment);
   const domain = outcome.result.domain;
   recordWorkerRun(task, outcome.run);
   appendChange(deps.root, deps.configDir, {
@@ -963,6 +1054,26 @@ function absorbWorkerOutcome(task: Task, deps: WorkflowDeps, outcome: WorkerOutc
   const full = saveFullReport(deps, task, outcome);
   const report = workerReport(outcome, approvals, pushback, onFastTrack(task) ? fastNext(task) : qaRequired(task) ? FULL_NEXT : PLANNED_NEXT, full);
   return [report, grown].filter(Boolean).join("\n");
+}
+
+function recordAssignmentOutcome(task: Task, outcome: WorkerOutcome, assignment: WorkerAssignment): void {
+  const record = task.workerAssignments?.find((entry) => entry.brief.id === assignment.id);
+  if (!record) throw new Error(`Missing persisted worker assignment ${assignment.id}`);
+  record.outcomes.push({
+    revision: assignment.revision,
+    runId: outcome.run.runId,
+    status: outcome.run.status,
+    issues: [...outcome.issues],
+    verification: outcome.result.verification,
+    ...(outcome.freshness ? { freshness: structuredClone(outcome.freshness) } : {}),
+    completedWork: [...new Set([...assignment.completedWork, ...(outcome.result.completed ? [outcome.result.completed] : [])])],
+    needs: structuredClone([...assignment.needs, ...workerNeeds(outcome)]),
+    ...(outcome.run.finishedAt ? { finishedAt: outcome.run.finishedAt } : {}),
+  });
+}
+
+function workerNeeds(outcome: WorkerOutcome): AssignmentExpansionRequest[] {
+  return (outcome.result as typeof outcome.result & { needs?: AssignmentExpansionRequest[] }).needs ?? [];
 }
 
 /** Reports longer than this are kept whole in a file and the oracle gets the path. */
@@ -1042,12 +1153,18 @@ async function handleImplement(task: Task, params: OrchestrateParams, deps: Work
     throw new Error(`action not allowed in state "${task.state}": on the full workflow the user approves a proposal first (a small, clear change can take the fast track: action=track track=fast)`);
   }
   if (!starting) requireState(task, ["planning", "implementing", "reviewing"]);
-  const assignments = parseAssignments(params);
+  const assignments = await parseAssignments(params, deps.cwd);
+  const structured = assignments.flatMap(({ domain, assignment }) => assignment ? [{ domain, assignment }] : []);
+  checkWorkerAssignments(task, structured);
+  await checkDiscoveryAllowances(task, structured, deps);
   const benched = assignments.map((entry) => benchedRefusal(task, entry.domain)).filter(Boolean);
   if (benched.length > 0) throw new Error(benched.join("\n"));
-  const short = !deps.config.workflow.briefCheck ? [] : assignments.map((entry) => briefRejection(task.id, entry.domain, entry.instruction)).filter(Boolean);
+  const short = !deps.config.workflow.briefCheck ? [] : assignments.filter((entry) => !entry.assignment).map((entry) => briefRejection(task.id, entry.domain, entry.instruction)).filter(Boolean);
   if (short.length > 0) throw new Error(short.join("\n"));
   for (const { domain } of assignments) assertNoPendingApprovals(task, domain);
+  if (structured.length) recordWorkerAssignments(task, structured);
+  saveTask(deps.root, deps.configDir, task);
+  checkWorkerAssignments(task, structured);
   for (const { domain } of assignments) if (!task.domains.includes(domain)) task.domains.push(domain);
   if (task.track && onFastTrack(task)) task.track.roster = parseRoster([...task.track.roster, ...assignments.map((entry) => entry.domain)]);
   if (starting) startFast(task);
@@ -1059,9 +1176,9 @@ async function handleImplement(task: Task, params: OrchestrateParams, deps: Work
   const boardBefore = readBoard(taskBoard(deps, task)).at(-1)?.seq ?? 0;
   let report: string;
   if (assignments.length === 1) {
-    const { domain, instruction } = assignments[0]!;
-    const outcome = await runWorker(workerRequest(deps, task, domain, instruction), deps.runProcess ?? spawnPiProcess);
-    report = absorbWorkerOutcome(task, deps, outcome);
+    const { domain, instruction, assignment } = assignments[0]!;
+    const outcome = await runWorker(workerRequest(deps, task, domain, instruction, undefined, undefined, assignment), deps.runProcess ?? spawnPiProcess);
+    report = absorbWorkerOutcome(task, deps, outcome, assignment);
   } else report = await runParallelWorkers(task, deps, assignments);
   const tree = await changeState(deps, task, task.baseline?.head);
   const lint = lintNote(await lintTask(task, deps, tree), deps.config.lint.mode, ownersOf(tree?.files));
@@ -1171,7 +1288,7 @@ function stepLine(instruction: string): string {
  */
 async function runParallelWorkers(task: Task, deps: WorkflowDeps, assignments: Assignment[]): Promise<string> {
   const batch = assignments.map((entry) => entry.domain);
-  const runs = assignments.map((entry) => ({ domain: entry.domain, instruction: entry.instruction, worker: assignmentId(entry.domain) }));
+  const runs = assignments.map((entry) => ({ ...entry, worker: assignmentId(entry.domain) }));
   const opened = deps.config.workflow.parallelMode === "worktrees" ? await openWorkerTrees(deps.cwd, batch) : undefined;
   const trees = opened && typeof opened !== "string" ? opened : undefined;
   const session = new DeskSession({ cwd: deps.cwd, boardPath: taskBoard(deps, task), peers: true, ...(trees ? { claims: false } : {}) });
@@ -1181,8 +1298,8 @@ async function runParallelWorkers(task: Task, deps: WorkflowDeps, assignments: A
   let merged = "";
   try {
     try {
-      outcomes = await mapConcurrent(runs, deps.config.workflow.maxParallelWorkers, ({ domain, instruction, worker }) => {
-        const request = workerRequest(deps, task, domain, instruction, batch, worker);
+      outcomes = await mapConcurrent(runs, deps.config.workflow.maxParallelWorkers, ({ domain, instruction, worker, assignment }) => {
+        const request = workerRequest(deps, task, domain, instruction, batch, worker, assignment);
         const tree = trees?.trees.get(domain);
         if (tree) {
           request.cwd = tree.cwd;
@@ -1216,7 +1333,7 @@ async function runParallelWorkers(task: Task, deps: WorkflowDeps, assignments: A
   } finally {
     if (trees) await closeWorkerTrees(trees);
   }
-  const reports = outcomes.map((outcome) => absorbWorkerOutcome(task, deps, outcome));
+  const reports = outcomes.map((outcome) => absorbWorkerOutcome(task, deps, outcome, assignments.find((entry) => entry.domain === outcome.result.domain)!.assignment));
   return [
     `Parallel batch: ${batch.join(", ")}${trees ? " (a worktree each)" : ""}.`,
     typeof opened === "string" ? `Worktrees were not used (${opened}); the workers shared the file desk.` : "",
@@ -1654,6 +1771,9 @@ function handleCompact(task: Task | undefined, params: OrchestrateParams, deps: 
 async function handleComplete(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
   // The fast track (and a plan QA sat out) completes straight from its work; the full workflow from review.
   requireState(task, onFastTrack(task) || !qaRequired(task) ? ["implementing", "reviewing", "blocked"] : ["reviewing", "blocked"]);
+  await refreshAssignmentEvidence(task, deps);
+  const assignmentHolds = workerAssignmentHolds(task);
+  if (assignmentHolds.length) throw new Error(`cannot complete: ${assignmentHolds.join("; ")}`);
   const joined = await qaJoinsRiskyFastTask(task, deps);
   if (joined) throw new Error(joined);
   // Without QA's part (where the track asks for it) only the user can let the task finish: they are asked, never overruled.
@@ -1927,7 +2047,8 @@ async function handleTrack(task: Task, params: OrchestrateParams, deps: Workflow
   return `Full workflow: ${rosterWords(roster)}. Scout what the request touches, then propose a short bullet list for approval.`;
 }
 
-function handleDecide(task: Task, params: OrchestrateParams): string {
+async function handleDecide(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
+  if (params.discoveryAllowance !== undefined) return decideDiscoveryAllowance(task, params, deps);
   const text = params.text?.trim();
   if (!text) throw new Error("decide requires text");
   const domain = params.domain && isDomain(params.domain) ? params.domain : "master";
@@ -2061,6 +2182,7 @@ export async function runWorkflowAction(params: OrchestrateParams, deps: Workflo
     execution.signal.throwIfAborted();
     const runs = recordRunLog(task, finished, deps);
     saveTask(deps.root, deps.configDir, task);
+    if (TERMINAL_STATES.includes(task.state)) cleanupTaskAssignedSessions(taskDirFor(deps.root, deps.configDir, task.id));
     return { ok: true, taskId: task.id, state: task.state, message: `${message}${runsFooter(runs)}`, runs };
   } catch (error) {
     const runs = recordRunLog(task, finished, deps);

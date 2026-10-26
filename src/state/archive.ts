@@ -12,6 +12,7 @@ import { taskDir, tasksRoot } from "../knowledge/paths.ts";
 import { transition } from "./task-state.ts";
 import { dataRoot, readDataRoots } from "./project.ts";
 import { forgetCachedUnder, readJsonCached } from "./file-cache.ts";
+import { cleanupTaskAssignedSessions } from "../execution/assigned-session.ts";
 
 export function archiveRoot(root: string, configDir: string): string {
   return join(dataRoot(root, configDir), "archive", "tasks");
@@ -81,6 +82,7 @@ export function archiveTask(root: string, configDir: string, taskId: string, now
   }
   task.archivedAt = stamp;
   writeAt(from, task);
+  cleanupTaskAssignedSessions(from);
   mkdirSync(dirname(to), { recursive: true });
   renameSync(from, to);
   return task;
@@ -93,6 +95,7 @@ export function restoreTask(root: string, configDir: string, taskId: string): Ta
   if (!task) throw new Error(`${taskId} is not in the archive`);
   const to = taskDir(dataRoot(root, configDir), taskId);
   if (existsSync(to)) throw new Error(`a task ${taskId} is already on the list`);
+  if (TERMINAL_STATES.includes(task.state)) cleanupTaskAssignedSessions(from);
   delete task.archivedAt;
   writeAt(from, task);
   mkdirSync(tasksRoot(dataRoot(root, configDir)), { recursive: true });
@@ -104,5 +107,12 @@ export function restoreTask(root: string, configDir: string, taskId: string): Ta
 export function deleteTask(root: string, configDir: string, taskId: string, where: "list" | "archive" = "list"): void {
   const dir = where === "archive" ? archivedDir(root, configDir, taskId) : liveDir(root, configDir, checkId(taskId));
   if (!dir || !existsSync(dir)) throw new Error(where === "archive" ? `${taskId} is not in the archive` : `no task ${taskId}`);
+  const task = readAt(dir);
+  if (task && !TERMINAL_STATES.includes(task.state)) {
+    transition(task, "abandoned", new Date().toISOString());
+    writeAt(dir, task);
+  }
+  // Refuse deletion while an assignment owns a live lock; never erase a running conversation.
+  cleanupTaskAssignedSessions(dir);
   rmSync(dir, { recursive: true, force: true });
 }

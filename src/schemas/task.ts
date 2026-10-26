@@ -1,3 +1,4 @@
+import type { WorkerAssignment, AssignmentExpansionRequest } from "../execution/assignment.ts";
 import type { LintReport } from "./lint.ts";
 import type { Domain, Role } from "./agent.ts";
 import type { Delivery } from "../delivery/types.ts";
@@ -34,6 +35,7 @@ export interface Blocker {
 export interface Decision {
   domain: Domain | "master";
   text: string;
+  discoveryAllowance?: { assignmentId: string; revision: number; decisionId: string; reason: string; limit: number };
   createdAt: string;
 }
 
@@ -253,7 +255,35 @@ export interface PhaseTiming {
   blockingRequestIds: string[];
 }
 
+/** Master-authored briefs, separate from runtime artifact access identities. */
+export interface WorkerAssignmentRecord {
+  domain: Domain;
+  brief: WorkerAssignment;
+  revisions: WorkerAssignment[];
+  outcomes: {
+    revision: number;
+    runId: string;
+    status: WorkerRunRecord["status"];
+    completedWork: string[];
+    needs: AssignmentExpansionRequest[];
+    /** Absent on legacy outcomes; acceptance must require current evidence. */
+    issues?: string[];
+    verification?: string;
+    freshness?: {
+      assignmentId: string;
+      revision: number;
+      status: "unverified hints" | "verified" | "invalidated" | "superseded";
+      hintIds: string[];
+      hints?: { id: string; scope: "file" | "repository"; source: string; fingerprint: string }[];
+      pause?: true;
+      recheckCompletedWork?: boolean;
+    };
+    finishedAt?: string;
+  }[];
+}
+
 export interface Task {
+  workerAssignments?: WorkerAssignmentRecord[];
   /** Advisory task-state checkpoint; external references require live revalidation. */
   checkpoint?: TaskCheckpoint;
   /** Canonical waits, including legacy tasks without a reliable clock. */

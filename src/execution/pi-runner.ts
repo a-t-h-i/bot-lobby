@@ -1,6 +1,6 @@
 import type { AgentRun } from "../schemas/findings.ts";
 import type { Domain, Role } from "../schemas/agent.ts";
-import { delegationHost } from "./delegation.ts";
+import { delegationHost, type RuntimeAccess } from "./delegation.ts";
 import { AUTO_COMPACT_ENV, COMPACT_AT_ENV } from "../pi/quiet.ts";
 import { fileURLToPath } from "node:url";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -15,6 +15,7 @@ import type { AskQuestion, AskResult } from "../ask/types.ts";
 import type { EffortRouter, RunProfileLike } from "../classifier/effort.ts";
 import type { HarnessRun } from "../schemas/harness.ts";
 import { runHarnessAgent } from "../harness/runner.ts";
+import { assignedSessionFile, openAssignedSession, type AssignedSession } from "./assigned-session.ts";
 
 /** Live control over one running subagent: queue a steering message for its next turn. */
 export interface RunHandle {
@@ -28,6 +29,9 @@ export interface RunHandle {
 export type RelayAsk = (questions: AskQuestion[], signal: AbortSignal) => Promise<AskResult>;
 
 export interface PiRunOptions {
+  /** Host-owned task conversation, reused across validated assignment revisions. */
+  assignedSession?: AssignedSession;
+  runtimeAccess?: RuntimeAccess;
   effort?: EffortRouter;
   effortProfile?: RunProfileLike;
   agent?: { runId: string; taskId: string; domain: Domain; role: Role; depth?: number };
@@ -323,7 +327,7 @@ export const MCP_RESOURCE_TOOLS: readonly string[] = ["list_mcp_resources", "lis
 
 /** Build the `pi` argv for one isolated, headless RPC agent run; the task goes over stdin. */
 export function buildPiArgs(options: Omit<PiRunOptions, "task"> & { systemPromptFile?: string; skillFiles?: string[] }): string[] {
-  const args = ["--mode", "rpc", "--no-session", "--no-prompt-templates", "--no-themes", "--extension", fileURLToPath(new URL("../index.ts", import.meta.url))];
+  const args = ["--mode", "rpc", ...(options.assignedSession ? ["--session", assignedSessionFile(options.assignedSession), "--session-dir", join(options.assignedSession.taskDir, "sessions")] : ["--no-session"]), "--no-prompt-templates", "--no-themes", "--extension", fileURLToPath(new URL("../index.ts", import.meta.url))];
   if (options.model && options.model !== "inherit") args.push("--model", options.model);
   if (options.thinking) args.push("--thinking", options.thinking);
   // A skill grant replaces pi's own discovery with exactly the granted skills.
@@ -331,7 +335,11 @@ export function buildPiArgs(options: Omit<PiRunOptions, "task"> & { systemPrompt
     args.push("--no-skills");
     for (const file of options.skillFiles) args.push("--skill", file);
   }
-  if (options.tools && options.tools.length > 0) {
+  if (options.assignedSession) {
+    const selected = [...new Set(options.tools ?? [])].sort();
+    args.push(...(selected.length ? ["--tools", selected.join(",")] : ["--no-tools"]));
+    if (!selected.some((name) => name.startsWith("mcp__") || MCP_RESOURCE_TOOLS.includes(name))) args.push("--no-mcp");
+  } else if (options.tools && options.tools.length > 0) {
     // pi keeps every MCP tool under --tools unless an entry names one, so name the granted ones (and the resource
     // tools their servers need), or run without MCP at all when nothing is granted.
     const mcp = options.mcpTools?.filter((name) => name.startsWith("mcp__")) ?? [];
@@ -655,8 +663,22 @@ function writePromptFile(prompt: string): { file: string; cleanup: () => void } 
   return { file, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
+/** Fail closed until the subprocess protocol can attest both tool inventories. */
+function assignedCompatibilityFailure(options: PiRunOptions): PiRunResult {
+  let error = "Assigned execution compatibility: installed Pi RPC cannot inspect declared and callable tool inventories before execution; a verified inventory guard is required (no fresh-session fallback).";
+  if (options.harness) error = "Assigned execution compatibility: third-party harness has no verified conversation sanitation and declared/callable tool inventory support.";
+  else {
+    try {
+      const session = openAssignedSession(options.assignedSession!, options.cwd);
+      session.release();
+    } catch (issue) { error = issue instanceof Error ? issue.message : String(issue); }
+  }
+  return { status: "failed", output: "", error, usage: { input: 0, output: 0, cost: 0, turns: 0 } };
+}
+
 /** Run one isolated subagent and normalise its outcome. */
 export async function runPiAgent(given: PiRunOptions, run: ProcessRunner = spawnPiProcess): Promise<PiRunResult> {
+  if (given.assignedSession) return assignedCompatibilityFailure(given);
   if (given.harness) return runHarnessAgent({ ...given, harness: given.harness });
   const compactEnv = { ...(given.autoCompact === false ? { [AUTO_COMPACT_ENV]: "0" } : {}), ...(given.compactAt ? { [COMPACT_AT_ENV]: String(given.compactAt) } : {}) };
   const options = Object.keys(compactEnv).length ? { ...given, env: { ...given.env, ...compactEnv } } : given;

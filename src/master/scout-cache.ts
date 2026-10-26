@@ -35,7 +35,7 @@ export function scoutKey(domain: Domain, instruction: string, taskText: string):
 export function readCachedScout(dataDir: string, key: string, tree: string): ScoutOutcome | undefined {
   try {
     const cached = JSON.parse(readFileSync(join(scoutCacheDir(dataDir), `${key}.json`), "utf8")) as Partial<CachedScout>;
-    if (cached.version !== 1 || cached.tree !== tree || !cached.outcome?.usable || !cached.at) return undefined;
+    if (cached.version !== 1 || cached.tree !== tree || !cached.outcome?.usable || !cached.outcome.run?.runId || !cached.at) return undefined;
     return { ...cached.outcome, reused: cached.at };
   } catch {
     return undefined;

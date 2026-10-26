@@ -1,3 +1,4 @@
+import type { AssignmentExpansionRequest } from "../execution/assignment.ts";
 import type { Domain, Role } from "./agent.ts";
 import type { Blocker, Verdict } from "./task.ts";
 
@@ -63,6 +64,8 @@ export interface WorkerResult {
   scriptProposals?: ScriptProposal[];
   dependencyNeeds: string[];
   architectureChanges: string[];
+  /** Validated requests only; requests never grant additional permissions. */
+  needs?: AssignmentExpansionRequest[];
   pushback?: Pushback;
   raw: string;
 }

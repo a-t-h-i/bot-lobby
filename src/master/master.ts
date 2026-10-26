@@ -1,10 +1,11 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { validateAssignment, type WorkerAssignment } from "../execution/assignment.ts";
+import { join, resolve } from "node:path";
 import { profileFor, type BotLobbyConfig, type ProfileResolver } from "../schemas/configuration.ts";
 import type { Domain } from "../schemas/agent.ts";
 import type { AgentRun, ReviewResult, ScoutResult, WorkerResult } from "../schemas/findings.ts";
 import { domainSpec } from "../agents/registry.ts";
-import { runAgent, runParallel, watchdogOptions, type AgentRequest } from "../execution/agent-runner.ts";
+import { runAgent, watchdogOptions, type AgentRequest } from "../execution/agent-runner.ts";
 import { spawnPiProcess, type ProcessRunner, type RelayAsk } from "../execution/pi-runner.ts";
 import { knowledgeFilePath, readAgentKnowledge, writeFileEnsured } from "../knowledge/store.ts";
 import { taskDir } from "../knowledge/paths.ts";
@@ -22,8 +23,10 @@ import { truncate } from "../text.ts";
 import { isScoutResultUsable, parseScoutResult, validateScoutResult } from "../roles/scout.ts";
 import { treeState } from "../execution/git.ts";
 import { toolBudgetEnv, toolBudgetNote } from "../pi/tool-budget.ts";
-import { recordFileNotes } from "../knowledge/file-notes.ts";
+import { fileNoteHints, recordFileNotes, treePath, type FileNoteHint } from "../knowledge/file-notes.ts";
+import { EvidenceFreshness, verifyEvidenceHint, type EvidenceHint, type EvidenceStatus, type FreshnessInvalidation } from "./evidence-freshness.ts";
 import { readCachedScout, scoutKey, writeCachedScout } from "./scout-cache.ts";
+import { acquireScoutLock } from "./scout-lock.ts";
 import { BOARD_ENV, BOARD_TOOLS, boardContext } from "../desk/board.ts";
 import { seedDelivery } from "../desk/delivery.ts";
 import type { FileHinter } from "../classifier/files.ts";
@@ -74,6 +77,17 @@ function scoutInstruction(request: ScoutRequest, domain: Domain): string {
     `Domain focus: ${domainSpec(domain).scoutFocus}.`,
     "Investigate the repository and report structured findings. Do not modify any file.",
   ].join("\n");
+}
+
+function sharedScoutInstruction(request: ScoutRequest): string {
+  if (request.domains.length === 1) return scoutInstruction(request, request.domains[0]!);
+  return [
+    request.instruction,
+    "One shared read-only investigation covers all selected domains; inspect shared code only once.",
+    ...request.domains.map((domain) => `${domain}: ${domainSpec(domain).scoutFocus}.`),
+    "For each selected domain, emit `# Domain: <domain>` followed by the usual scout sections. Attribute evidence to that domain; do not omit domains.",
+    "Identify relevant files with line anchors and purposes, contracts, callers, tests and risks. Distinguish verified evidence from assumptions. Do not modify any file.",
+  ].join("\n\n");
 }
 
 /** Where an agent's knowledge files are, for the note that says what a prompt left out. */
@@ -238,21 +252,27 @@ function toOutcome(run: AgentRun, domain: Domain): ScoutOutcome {
   return { result, run, issues: validateScoutResult(result), usable: isScoutResultUsable(result) };
 }
 
-/**
- * Run the selected domain scouts concurrently and persist their findings. A
- * domain asked the same thing before on an unchanged tree reuses its earlier
- * findings (`workflow.reuseScouts`); every new finding's Relevant Files are
- * kept as file notes for the repository map.
- */
+/** One preparation/execution per task, including targeted followups. No cache miss implicitly invokes this API. */
 export async function runScouts(request: ScoutRequest, run: ProcessRunner = spawnPiProcess): Promise<ScoutOutcome[]> {
+  const release = acquireScoutLock(request.taskDir);
+  try {
+    return await prepareScouts({ ...request, domains: [...new Set(request.domains)] }, run);
+  } finally {
+    release();
+  }
+}
+
+async function prepareScouts(request: ScoutRequest, run: ProcessRunner): Promise<ScoutOutcome[]> {
+  if (request.domains.length === 0) return [];
+  request.signal?.throwIfAborted();
   const dataDir = request.dataRoots[0];
   const tree = dataDir && request.config.workflow.reuseScouts ? await treeState(request.cwd, request.dataRoots) : undefined;
-  const keys = request.domains.map((domain) => scoutKey(domain, scoutInstruction(request, domain), request.taskText));
+  const instruction = sharedScoutInstruction(request);
+  const keys = request.domains.map((domain) => scoutKey(domain, instruction, request.taskText));
   const cached = keys.map((key) => (dataDir && tree ? readCachedScout(dataDir, key, tree) : undefined));
-  const fresh = request.domains.filter((_domain, index) => !cached[index]);
-  const ran = fresh.length > 0 ? await scoutDomains({ ...request, domains: fresh }, run) : [];
-  let next = 0;
-  const outcomes = request.domains.map((_domain, index) => cached[index] ?? ran[next++]!);
+  // Never mix execution identities from a partially cached preparation.
+  const outcomes = cached.every((outcome) => outcome !== undefined && outcome.run.runId === cached[0]?.run.runId)
+    ? cached as ScoutOutcome[] : await scoutDomains(request, run);
   saveScoutResults(request.taskDir, outcomes);
   if (dataDir) await remember(dataDir, request, outcomes, keys, tree);
   return outcomes;
@@ -270,47 +290,59 @@ async function remember(dataDir: string, request: ScoutRequest, outcomes: readon
 }
 
 async function scoutDomains(request: ScoutRequest, run: ProcessRunner): Promise<ScoutOutcome[]> {
-  // Each scout gets the files most likely to answer its own instruction and focus, and its assignment's bookmarks.
-  const [likely, selected, bookmarked] = await Promise.all([
-    Promise.all(request.domains.map((domain) => likelyFor(request.hints, `${request.instruction}\n${domainSpec(domain).scoutFocus}`, request.signal, request.taskText))),
-    Promise.all(request.domains.map((domain) => pickKnowledge(request, domain, `${request.instruction}\n${domainSpec(domain).scoutFocus}\n\n${request.taskText}`))),
-    Promise.all(request.domains.map((domain) => prepareBookmarks(request, domain, `${request.instruction}\n${domainSpec(domain).scoutFocus}\n\n${request.taskText}`))),
-  ]);
-  const extraTools = request.hints?.tools() ?? [];
-  const requests: AgentRequest[] = request.domains.map((domain, index) => {
-    const hints = fitHints(bookmarked[index] ?? "", likely[index] ?? "");
-    return {
-    delegationQuota: { used: 0 },
-    effort: request.effort,
-    taskId: request.taskId,
-    domain,
-    role: "scout",
-    instruction: scoutInstruction(request, domain),
-    context: scoutContext(request, domain, selected[index]!, hints.likely, hints.bookmarks),
-    ...(extraTools.length > 0 ? { extraTools } : {}),
-    env: toolBudgetEnv(request.config.scout.maxToolCalls),
-    ...profileFields(request.config, request.profile, domain, "scout"),
-    cwd: request.cwd,
-    signal: request.signal,
-    onUpdate: request.onUpdate,
-    ...watchdogOptions(request.config.workflow),
-    };
-  });
-  // Scouts think at a fixed level; a trivial one may move to the cheaper model (a pi model, so not on another harness).
-  const routes = await Promise.all(requests.map((entry) => entry.harness ? undefined : routeFor(request.effort, entry.instruction, { ...(entry.model ? { model: entry.model } : {}), thinking: entry.thinking ?? "low" }, { thinkingFixed: true, context: request.taskText, ...(request.signal ? { signal: request.signal } : {}) })));
-  const first = requests.map((entry, index) => (routes[index] ? { ...entry, ...routedFields(routes[index]!) } : entry));
-  const runs = await runParallel(first, request.config.workflow.maxParallelScouts, run);
-  let outcomes = runs.map((agentRun) => toOutcome(agentRun, agentRun.domain));
-  // A routed scout that came back unusable runs again on its configured model.
-  const again = outcomes.map((outcome, index) => (routes[index] && !outcome.usable && outcome.run.status !== "cancelled" && !request.signal?.aborted ? index : -1)).filter((index) => index >= 0);
-  if (again.length > 0) {
-    const reruns = await runParallel(again.map((index) => requests[index]!), request.config.workflow.maxParallelScouts, run);
-    outcomes = outcomes.map((outcome, index) => {
-      const position = again.indexOf(index);
-      return position >= 0 ? toOutcome(reruns[position]!, reruns[position]!.domain) : outcome;
-    });
+  const entry = await sharedScoutRequest(request);
+  const route = entry.harness ? undefined : await routeFor(request.effort, entry.instruction, { ...(entry.model ? { model: entry.model } : {}), thinking: entry.thinking ?? "low" }, { thinkingFixed: true, context: request.taskText, ...(request.signal ? { signal: request.signal } : {}) });
+  let agentRun = await runAgent(route ? { ...entry, ...routedFields(route) } : entry, run);
+  let outcomes = sharedScoutOutcomes(agentRun, request.domains);
+  if (route && outcomes.some((outcome) => !outcome.usable) && agentRun.status !== "cancelled" && !request.signal?.aborted) {
+    agentRun = await runAgent(entry, run);
+    outcomes = sharedScoutOutcomes(agentRun, request.domains);
   }
   return outcomes;
+}
+
+async function sharedScoutRequest(request: ScoutRequest): Promise<AgentRequest> {
+  const domain = request.domains[0]!;
+  const instruction = sharedScoutInstruction(request);
+  const query = `${instruction}\n\n${request.taskText}`;
+  const [likely, selections, bookmarked] = await Promise.all([
+    likelyFor(request.hints, instruction, request.signal, request.taskText),
+    Promise.all(request.domains.map((selected) => pickKnowledge(request, selected, query))),
+    prepareBookmarks(request, request.domains.length === 1 ? domain : `scout:${request.domains.join("+")}`, query),
+  ]);
+  const hints = fitHints(bookmarked, likely);
+  return {
+    delegationQuota: { used: 0 }, effort: request.effort, taskId: request.taskId, domain, role: "scout",
+    instruction, context: sharedScoutContext(request, selections, hints), extraTools: request.hints?.tools() ?? [], env: toolBudgetEnv(request.config.scout.maxToolCalls),
+    ...profileFields(request.config, request.profile, domain, "scout"),
+    cwd: request.cwd, signal: request.signal, onUpdate: request.onUpdate, ...watchdogOptions(request.config.workflow),
+  };
+}
+
+function sharedScoutContext(request: ScoutRequest, selections: KnowledgeSelection[], hints: { likely: string; bookmarks: string }): AgentRequest["context"] {
+  const selected = mergeScoutKnowledge(request.domains, selections);
+  const context = scoutContext(request, request.domains[0]!, selected, hints.likely, hints.bookmarks);
+  context.instructions = request.domains.map((domain) => request.config.agents[domain].instructions ? `${domain}: ${request.config.agents[domain].instructions}` : "").filter(Boolean).join("\n\n");
+  context.workflowContext += `\nSelected domains: ${request.domains.join(", ")}. One shared scout; keep evidence attributed to each domain.`;
+  return context;
+}
+
+function mergeScoutKnowledge(domains: Domain[], selections: KnowledgeSelection[]): KnowledgeSelection {
+  if (selections.length === 1) return selections[0]!;
+  const merge = (key: keyof KnowledgeSelection) => selections.map((selected, index) => selected[key] ? `### ${domains[index]}\n${selected[key]}` : "").filter(Boolean).join("\n\n");
+  return { knowledge: merge("knowledge"), standards: merge("standards"), decisions: merge("decisions"), scripts: merge("scripts") };
+}
+
+/** Domain projections retain the original execution object: usage/work events are emitted only once. */
+function sharedScoutOutcomes(run: AgentRun, domains: Domain[]): ScoutOutcome[] {
+  if (domains.length === 1) return [toOutcome(run, domains[0]!)];
+  const sections = run.output.split(/^# Domain: (designer|backend|qa)\s*$/m);
+  return domains.map((domain) => {
+    const index = sections.findIndex((value, index) => index % 2 === 1 && value === domain);
+    const raw = index < 0 ? "" : sections[index + 1] ?? "";
+    const outcome = toOutcome({ ...run, output: raw }, domain);
+    return { ...outcome, run, issues: index < 0 ? [...outcome.issues, `missing shared scout section for ${domain}`] : outcome.issues };
+  });
 }
 export function scoutResultPath(taskDir: string, domain: Domain): string {
   return join(taskDir, `scout-${domain}.json`);
@@ -346,13 +378,28 @@ function readScoutArtifact(dirs: readonly string[], domain: Domain): ScoutOutcom
   return undefined;
 }
 
+export interface WorkerFreshness {
+  assignmentId: string;
+  revision: number;
+  status: EvidenceStatus;
+  hintIds: string[];
+  hints?: EvidenceHint[];
+  pause?: true;
+  recheckCompletedWork?: boolean;
+}
+
 export interface WorkerOutcome {
   result: WorkerResult;
   run: AgentRun;
   issues: string[];
+  freshness?: WorkerFreshness;
 }
 
 export interface WorkerRequest {
+  /** Optional until the installed runtime supports fail-closed revised loadouts. */
+  assignment?: WorkerAssignment;
+  /** Existing task status can expose background hint verification without a preparation gate. */
+  onFreshness?: (status: WorkerFreshness) => void;
   /** Extra run wiring for parallel batches: the file desk's env, tools and hooks. */
   agent?: Pick<AgentRequest, "env" | "extraTools" | "onStart" | "onAttemptEnd">;
   taskId: string;
@@ -439,7 +486,7 @@ function workerWorkflowContext(request: WorkerRequest, boardFrom: string, likely
     `Domain boundary: ${spec.boundary}`,
     "Dependency policy: never add a dependency or make a significant architectural change yourself; list them under the matching output section and stop that part of the work.",
     own.length > 0
-      ? `Scout findings for your domain:\n${summarizeOutcomes(own, 1500)}`
+      ? `${request.assignment ? "Unverified broad scout navigation hints only; repository freshness is not established. Re-read current assigned files and verify callers/tests rather than relying on these findings." : "Scout findings for your domain:"}\n${summarizeOutcomes(own, 1500)}`
       : "No scout findings were collected for your domain; verify the repository yourself.",
     likely,
     request.risk ?? "",
@@ -451,15 +498,56 @@ function workerWorkflowContext(request: WorkerRequest, boardFrom: string, likely
   ].filter(Boolean).join("\n\n");
 }
 
+interface TaskFreshness {
+  checks: EvidenceFreshness;
+  listeners: Map<string, (event: FreshnessInvalidation) => void>;
+}
+
+// Only overlapping dispatches share checks; no persistent evidence verdict cache.
+const workerFreshness = new Map<string, TaskFreshness>();
+
+function taskFreshness(key: string, request: WorkerRequest): TaskFreshness {
+  const existing = workerFreshness.get(key);
+  if (existing) return existing;
+  const listeners = new Map<string, (event: FreshnessInvalidation) => void>();
+  const checks = new EvidenceFreshness(
+    (hint) => verifyEvidenceHint(request.cwd, hint, () => treeState(request.cwd, request.dataRoots)),
+    (event) => listeners.get(JSON.stringify([event.assignmentId, event.revision]))?.(event),
+  );
+  const state = { checks, listeners };
+  workerFreshness.set(key, state);
+  return state;
+}
+
+function freshnessHints(hints: readonly FileNoteHint[]): string {
+  if (!hints.length) return "";
+  return [
+    "Unverified hints (file-local navigation only; not current callers, tests or repository behavior). Read assigned files now; checks run alongside this work.",
+    ...hints.map((hint) => `${hint.id}: ${hint.source} — ${hint.note.note}`),
+    "If a hint is invalidated, pause only work depending on it, continue independent assigned work, and request corrected evidence/revision. Completed dependent work must be rechecked before acceptance.",
+  ].join("\n");
+}
+
+function reportFreshness(request: WorkerRequest, reader: string, status: WorkerFreshness): void {
+  request.onFreshness?.(status);
+  if (!request.board) return;
+  appendPost(request.board, {
+    from: "oracle", kind: status.pause ? "blocker" : "note", to: ["oracle", reader],
+    text: `Assignment ${status.assignmentId} revision ${status.revision}: ${status.status}. Hints: ${status.hintIds.join(", ") || "none"}.${status.pause ? " Pause only dependent work; continue independent assigned work. Recheck completed dependent work before acceptance; request corrected evidence in a new revision." : " File-local navigation only; use current assigned-file reads."}`,
+  });
+}
+
 /** Delegate one implementation step to a domain worker. */
 export async function runWorker(
   request: WorkerRequest,
   run: ProcessRunner = spawnPiProcess,
 ): Promise<WorkerOutcome> {
   const configured = profileFields(request.config, request.profile, request.domain, "worker");
+  const assignment = request.assignment !== undefined ? await validateAssignment(request.assignment, request.cwd) : undefined;
+  if (assignment && !request.dataRoots[0]) throw new Error("Assigned worker requires host-owned task storage in dataRoots.");
   const [selected, likely, route, bookmarked] = await Promise.all([
     pickKnowledge(request, request.domain, `${request.instruction}\n\n${request.taskText}`),
-    likelyFor(request.hints, request.instruction, request.signal, request.taskText),
+    assignment ? Promise.resolve("") : likelyFor(request.hints, request.instruction, request.signal, request.taskText),
     routeFor(request.effort, request.instruction, { ...(configured.model ? { model: configured.model } : {}), thinking: configured.thinking }, { context: request.taskText, ...(request.signal ? { signal: request.signal } : {}) }),
     prepareBookmarks(request, request.domain, `${request.instruction}\n\n${request.taskText}`),
   ]);
@@ -470,6 +558,7 @@ export async function runWorker(
   const env = request.board ? { ...request.agent?.env, [BOARD_ENV]: request.board, BOT_LOBBY_BOARD_FROM: boardFrom } : request.agent?.env;
   const base: AgentRequest = {
     delegationQuota: { used: 0 },
+    ...(assignment ? { assignment: { brief: assignment, taskDir: taskDir(request.dataRoots[0]!, request.taskId) } } : {}),
     ...(request.expert ? { expert: request.expert } : {}),
     effort: request.effort,
     effortProfile: configured,
@@ -494,11 +583,12 @@ export async function runWorker(
     ...(extraTools.length > 0 ? { extraTools } : {}),
     ...(request.ask ? { onAsk: request.ask.onAsk } : {}),
   };
-  let outcome = workerOutcome(request.domain, await runAgent(route ? { ...base, ...routedFields(route) } : base, run));
+  if (assignment) return runFreshWorker(request, assignment, base, route, boardFrom, run);
+  let outcome = workerOutcome(request.domain, await runAgent(route ? { ...base, ...routedFields(route) } : base, run), request.cwd, assignment);
   // A routed step that fell short runs again at the configured model and thinking.
   if (route && fellShort(outcome.run, outcome.issues) && !request.signal?.aborted) {
     const routed = outcome.run.edited ?? [];
-    outcome = workerOutcome(request.domain, await runAgent(base, run));
+    outcome = workerOutcome(request.domain, await runAgent(base, run), request.cwd, assignment);
     // The step owns what the routed attempt edited too.
     const edited = [...new Set([...routed, ...(outcome.run.edited ?? [])])];
     if (edited.length > 0) outcome = { ...outcome, run: { ...outcome.run, edited } };
@@ -506,12 +596,67 @@ export async function runWorker(
   return outcome;
 }
 
-function workerOutcome(domain: Domain, agentRun: AgentRun): WorkerOutcome {
+async function runFreshWorker(request: WorkerRequest, assignment: WorkerAssignment, base: AgentRequest, route: EffortRoute | undefined, reader: string, run: ProcessRunner): Promise<WorkerOutcome> {
+  const key = JSON.stringify([request.cwd, taskDir(request.dataRoots[0]!, request.taskId)]);
+  const state = taskFreshness(key, request);
+  const listenerKey = JSON.stringify([assignment.id, assignment.revision]);
+  if (state.listeners.has(listenerKey)) throw new Error("Assignment revision is already checking freshness; wait for its dispatch to finish.");
+  const hints = fileNoteHints(request.dataRoots[0]!, assignment.files.flatMap((file) => {
+    const path = treePath(request.cwd, file.path);
+    return path ? [path] : [];
+  }));
+  const status = (): WorkerFreshness => {
+    const current = state.checks.status(assignment.id, assignment.revision);
+    return { assignmentId: assignment.id, revision: assignment.revision, status: current, hintIds: hints.map((hint) => hint.id), hints: hints.map(({ id, scope, source, fingerprint }) => ({ id, scope, source, fingerprint })), ...(current === "invalidated" ? { pause: true as const, recheckCompletedWork: true } : {}) };
+  };
+  state.listeners.set(listenerKey, (event) => reportFreshness(request, reader, { ...status(), ...event }));
+  let checkError: unknown;
+  let checking: Promise<void> | undefined;
+  try {
+    checking = state.checks.start({ assignmentId: assignment.id, revision: assignment.revision, hints }).catch((error: unknown) => { checkError = error; });
+    if (assignment.completedWork.length) state.checks.completed(assignment.id, assignment.revision);
+    reportFreshness(request, reader, status());
+    const instruction = [base.instruction, freshnessHints(hints)].filter(Boolean).join("\n\n");
+    // Assignment-local navigation hints belong in user content, not the shared system prefix.
+    // Start actual dispatch now, before awaiting any source-file hashes.
+    const outcome = await dispatchFreshWorker({ ...base, instruction }, request, assignment, route, state.checks, run);
+    state.checks.completed(assignment.id, assignment.revision);
+    await checking;
+    const freshness = status();
+    if (freshness.status !== "superseded") reportFreshness(request, reader, freshness);
+    const issues = state.checks.canAccept(assignment.id, assignment.revision) && !checkError ? outcome.issues : [...outcome.issues, `Assignment evidence ${freshness.status}; acceptance requires current verified hints and rechecked dependent work.${checkError ? " Freshness notification failed; restore task status/board delivery before retrying." : ""}`];
+    return { ...outcome, issues, freshness };
+  } finally {
+    await checking;
+    state.checks.completed(assignment.id, assignment.revision);
+    state.listeners.delete(listenerKey);
+    if (!state.listeners.size) workerFreshness.delete(key);
+  }
+}
+
+async function dispatchFreshWorker(base: AgentRequest, request: WorkerRequest, assignment: WorkerAssignment, route: EffortRoute | undefined, checks: EvidenceFreshness, run: ProcessRunner): Promise<WorkerOutcome> {
+  const outcome = workerOutcome(request.domain, await runAgent(route ? { ...base, ...routedFields(route) } : base, run), request.cwd, assignment);
+  if (!route || !fellShort(outcome.run, outcome.issues) || request.signal?.aborted || ["invalidated", "superseded"].includes(checks.status(assignment.id, assignment.revision))) return outcome;
+  const edited = outcome.run.edited ?? [];
+  const retry = await runAgent(base, run);
+  const combined = [...new Set([...edited, ...(retry.edited ?? [])])];
+  return workerOutcome(request.domain, { ...retry, edited: combined }, request.cwd, assignment);
+}
+
+function workerOutcome(domain: Domain, agentRun: AgentRun, cwd: string, assignment?: WorkerAssignment): WorkerOutcome {
   const result = parseWorkerResult(domain, agentRun.output);
   const issues =
     agentRun.status === "success"
-      ? validateWorkerResult(result)
+      ? validateWorkerResult(result, assignment)
       : [`worker ${agentRun.status}: ${agentRun.error ?? "no detail"}`];
+  if (assignment && agentRun.edited?.length) {
+    const root = realpathSync(cwd);
+    const writable = new Set(assignment.files.filter((file) => file.access !== "reference").map((file) => resolve(root, file.path)));
+    for (const path of agentRun.edited) {
+      if (!writable.has(resolve(root, path))) issues.push(`observed edit outside assignment edit/create paths: ${path}`);
+    }
+    if (!result.verification.trim() && !issues.includes("changed files without verification")) issues.push("changed files without verification");
+  }
   return { result, run: agentRun, issues };
 }
 

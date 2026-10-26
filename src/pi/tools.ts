@@ -26,6 +26,31 @@ import {
   type WorkflowResult,
 } from "../workflow/workflow.ts";
 
+export const WorkerAssignmentSchema = Type.Object({
+  id: Type.String({ minLength: 1 }),
+  revision: Type.Integer({ minimum: 1 }),
+  objective: Type.String({ minLength: 1 }),
+  actions: Type.Array(Type.Object({ step: Type.Integer({ minimum: 1 }), instruction: Type.String({ minLength: 1 }) }, { additionalProperties: false }), { minItems: 1 }),
+  files: Type.Array(Type.Object({
+    path: Type.String({ minLength: 1 }),
+    access: StringEnum(["reference", "edit", "create"] as const),
+    purpose: Type.String({ minLength: 1 }),
+  }, { additionalProperties: false }), { minItems: 1 }),
+  contracts: Type.Array(Type.String({ minLength: 1 })),
+  constraints: Type.Array(Type.String({ minLength: 1 })),
+  exclusions: Type.Array(Type.String({ minLength: 1 })),
+  tools: Type.Array(Type.Object({ name: Type.String({ minLength: 1 }), purpose: Type.String({ minLength: 1 }) }, { additionalProperties: false })),
+  verification: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
+  evidence: Type.Array(Type.String({ minLength: 1 })),
+  completedWork: Type.Array(Type.String({ minLength: 1 })),
+  needs: Type.Array(Type.Object({
+    kind: StringEnum(["files", "tools", "discovery", "decision"] as const),
+    reason: Type.String({ minLength: 1 }),
+    requested: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
+  }, { additionalProperties: false })),
+  discoveryLimit: Type.Optional(Type.Integer({ minimum: 0 })),
+}, { additionalProperties: false });
+
 const OrchestrateSchema = Type.Object({
   action: StringEnum(ORCHESTRATE_ACTIONS, { description: "Workflow step to run" }),
   taskId: Type.Optional(Type.String({ description: "Task id; defaults to the active task. For knowledge/compact, omit to update project facts without changing a task." })),
@@ -37,16 +62,25 @@ const OrchestrateSchema = Type.Object({
   concerns: Type.Optional(Type.Array(Type.String(), { description: "propose: concerns raised while challenging the request" })),
   plan: Type.Optional(Type.String({ description: "plan: the detailed internal plan (while implementing or reviewing, the full revised plan that replaces it). Every step names its files, its concrete actions and its done criteria, and the contracts between domains are written out; no decision is left to the workers" })),
   domain: Type.Optional(Type.String({ description: "implement/research: designer, backend, or qa" })),
-  task: Type.Optional(Type.String({ description: "implement: a self-contained brief for that domain's worker (which may be a small, literal model): Goal, exact Files, numbered What to do with names/shapes/values, Contracts, Constraints, Done when (checkable criteria and commands), If stuck. Decide everything yourself; leave nothing to be assumed" })),
+  task: Type.Optional(Type.String({ description: "implement: legacy worker instruction, or optional Step N label alongside the authoritative workerAssignment" })),
+  workerAssignment: Type.Optional(WorkerAssignmentSchema),
   assignments: Type.Optional(
     Type.Array(
       Type.Object({
         domain: Type.String({ description: "designer, backend, or qa" }),
-        task: Type.String({ description: "a self-contained brief for that domain's worker: Goal, exact Files, numbered What to do, Contracts (in full), Constraints, Done when, If stuck. No assumptions" }),
+        task: Type.Optional(Type.String({ description: "Optional step label; the structured workerAssignment is the authoritative brief" })),
+        workerAssignment: Type.Optional(WorkerAssignmentSchema),
       }),
       { description: "implement: run several domains in parallel (distinct domains); workers share files through the file desk" },
     ),
   ),
+  discoveryAllowance: Type.Optional(Type.Object({
+    assignmentId: Type.String({ minLength: 1 }),
+    revision: Type.Integer({ minimum: 1 }),
+    decisionId: Type.String({ minLength: 1 }),
+    reason: Type.String({ minLength: 1 }),
+    limit: Type.Integer({ minimum: 0 }),
+  }, { additionalProperties: false, description: "decide: master-only audited discovery allowance for the current persisted assignment revision" })),
   approvalId: Type.Optional(Type.String({ description: "resolve_approval: the approval id from a worker result" })),
   decision: Type.Optional(
     StringEnum(["approved", "rejected"] as const, { description: "resolve_approval: approve or reject the request" }),

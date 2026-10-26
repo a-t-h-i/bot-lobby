@@ -7,6 +7,8 @@ export interface ChoiceItem {
   value: string
   label: string
   help?: string
+  /** Listed and searchable, but cannot be picked. */
+  disabled?: boolean
 }
 
 /** A setting as a row: its name and help on the left, the control on the right (or below, `stacked`). */
@@ -29,7 +31,8 @@ export function Rows({ children }: { children: ReactNode }) {
 }
 
 /** Every drop-down on the page is a searchable one. */
-export function Choice({ value, items, label, onChange }: { value: string; items: ChoiceItem[]; label: string; onChange: (value: string) => void }) {
-  return <Combobox value={value} options={items.map((item) => ({ value: item.value, label: item.label, ...(item.help ? { hint: item.help } : {}) }))} label={label} onChange={onChange} />
+export function Choice({ value, items, label, disabled, onChange }: { value: string; items: ChoiceItem[]; label: string; disabled?: boolean; onChange: (value: string) => void }) {
+  const options = items.map((item) => ({ value: item.value, label: item.label, ...(item.help ? { hint: item.help } : {}), ...(item.disabled ? { disabled: item.disabled } : {}) }))
+  return <Combobox value={value} options={options} label={label} disabled={disabled} onChange={onChange} />
 }
 

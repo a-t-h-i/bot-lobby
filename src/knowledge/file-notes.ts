@@ -8,8 +8,8 @@
  */
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative } from "node:path";
+import { readFile, realpath, stat } from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { Domain } from "../schemas/agent.ts";
 import type { RelevantFile } from "../schemas/findings.ts";
 import { tempName, withFileLock } from "../desk/lock.ts";
@@ -22,6 +22,8 @@ export interface FileNote {
   hash: string;
   domain: Domain;
   at: string;
+  /** File-local provenance, never evidence of callers or repository-wide behavior. */
+  provenance?: { kind: "scout"; scope: "file"; usage: "navigation-only" };
 }
 
 interface NotesFile {
@@ -42,7 +44,10 @@ export function fileNotesPath(dataDir: string): string {
 export function readFileNotes(dataDir: string): Record<string, FileNote> {
   try {
     const parsed = JSON.parse(readFileSync(fileNotesPath(dataDir), "utf8")) as Partial<NotesFile>;
-    return parsed.version === 1 && parsed.files && typeof parsed.files === "object" ? parsed.files : {};
+    if (parsed.version !== 1 || !parsed.files || typeof parsed.files !== "object") return {};
+    return Object.fromEntries(Object.entries(parsed.files).filter(([, note]) =>
+      note && typeof note.note === "string" && typeof note.hash === "string" && typeof note.at === "string",
+    ));
   } catch {
     return {};
   }
@@ -63,7 +68,11 @@ function writeFileNotes(dataDir: string, files: Record<string, FileNote>): void 
 /** A file's content hash, or undefined when it is missing, not a file or too large. */
 export async function contentHash(cwd: string, path: string): Promise<string | undefined> {
   try {
-    const full = join(cwd, path);
+    const local = treePath(cwd, path);
+    if (!local) return undefined;
+    const root = await realpath(cwd);
+    const full = await realpath(join(root, local));
+    if (!treePath(root, full)) return undefined;
     const info = await stat(full);
     if (!info.isFile() || info.size > MAX_HASHED_BYTES) return undefined;
     return createHash("sha1").update(await readFile(full)).digest("hex");
@@ -76,8 +85,8 @@ export async function contentHash(cwd: string, path: string): Promise<string | u
 export function treePath(cwd: string, path: string): string | undefined {
   const plain = path.trim().replace(/^\.\//, "");
   if (!plain) return undefined;
-  const rel = isAbsolute(plain) ? relative(cwd, plain) : plain;
-  return !rel || rel.startsWith("..") || isAbsolute(rel) ? undefined : rel.split("\\").join("/");
+  const rel = relative(resolve(cwd), resolve(cwd, plain));
+  return !rel || rel === ".." || rel.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) || isAbsolute(rel) ? undefined : rel.split("\\").join("/");
 }
 
 /** Record a scout's Relevant Files as notes, each with its file's current hash; files that are not there are skipped. */
@@ -87,7 +96,7 @@ export async function recordFileNotes(dataDir: string, cwd: string, domain: Doma
     const hash = path ? await contentHash(cwd, path) : undefined;
     if (!path || !hash) return undefined;
     const note = file.reason.trim().replace(/\s+/g, " ").slice(0, MAX_NOTE_CHARS);
-    return [path, { note, ...(file.lines ? { lines: file.lines } : {}), hash, domain, at: now.toISOString() }];
+    return [path, { note, ...(file.lines ? { lines: file.lines } : {}), hash, domain, at: now.toISOString(), provenance: { kind: "scout", scope: "file", usage: "navigation-only" } }];
   }));
   const fresh = entries.filter((entry): entry is [string, FileNote] => entry !== undefined);
   if (fresh.length === 0) return 0;
@@ -105,7 +114,26 @@ export async function recordFileNotes(dataDir: string, cwd: string, domain: Doma
   }
 }
 
-/** The notes for `paths` whose file is unchanged since the note was taken. */
+export interface FileNoteHint {
+  id: string;
+  scope: "file";
+  source: string;
+  fingerprint: string;
+  usage: "navigation-only";
+  status: "unverified hints";
+  note: FileNote;
+}
+
+/** Relevant notes only; callers must validate their source before relying on them. */
+export function fileNoteHints(dataDir: string, paths: readonly string[]): FileNoteHint[] {
+  const notes = readFileNotes(dataDir);
+  return [...new Set(paths)].flatMap((path) => notes[path] ? [{
+    id: `file-note:${path}`, scope: "file" as const, source: path, fingerprint: notes[path]!.hash,
+    usage: "navigation-only" as const, status: "unverified hints" as const, note: notes[path]!,
+  }] : []);
+}
+
+/** The notes for `paths` whose source is unchanged; navigation only, not broad claims. */
 export async function currentNotes(dataDir: string, cwd: string, paths: readonly string[]): Promise<Map<string, FileNote>> {
   const notes = readFileNotes(dataDir);
   const wanted = paths.filter((path) => notes[path]);

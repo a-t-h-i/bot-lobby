@@ -4,62 +4,64 @@ declare const document: any;
 declare const window: any;
 declare const getComputedStyle: any;
 
-test("effort is a drag slider that names every level, steps by key and snaps when dragged", { tag: "@theme" }, async ({ page, server }, info) => {
+test("effort is a dropdown that names every level, marks the recommended one and stays keyboard-first", { tag: "@theme" }, async ({ page, server }, info) => {
   const trap = await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 844 });
   await page.evaluate(() => { window.location.hash = "#/settings"; });
   const card = page.locator("section.glass", { hasText: "Backend" }).first();
-  const slider = card.getByRole("slider", { name: "Backend effort" });
-  await expect(slider).toHaveAttribute("aria-valuetext", "medium");
-  await expect(card.locator('[data-slot="effort-recommended"]'), "the default level is marked").toHaveText("Recommended");
-  await slider.focus();
-  await slider.press("Home");
-  const levels = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
-  await expect(slider).toHaveAttribute("aria-valuetext", "off");
-  for (const level of levels.slice(1)) {
-    await slider.press("ArrowRight");
-    await expect(slider).toHaveAttribute("aria-valuetext", level);
+  const trigger = card.getByRole("combobox", { name: "Backend effort" });
+  await expect(trigger, "the saved level names itself on the trigger").toContainText("Medium");
+  await trigger.click();
+  const list = page.getByRole("listbox", { name: "Backend effort" });
+  for (const name of ["Off", "Minimal", "Low", "Medium", "High", "Extra high", "Max"]) {
+    await expect(list.getByRole("option", { name: new RegExp(`^${name}\\b`) }), "every level is listed").toBeVisible();
   }
-  await expect(card.locator('[data-slot="effort-value"]')).toHaveText("Max");
-  await expect(card.locator('[data-slot="effort-hint"]'), "the level's meaning describes the slider").toHaveText("As deep as the model goes.");
-  await expect(card.locator('[data-slot="effort-recommended"]'), "away from it, the mark names it").toHaveText("Recommended");
-  await expect(card.locator('[data-slot="effort-recommended-mark"]'), "and a bar on the track marks its stop").toBeVisible();
-  await expect(card.locator('[data-slot="effort-sheen"]'), "the top level sends a sheen along the fill").toBeAttached();
+  await expect(list.getByRole("option", { name: /^Max\b/ }), "each level says what it does").toContainText("As deep as the model goes.");
+  const recommended = list.getByRole("option", { name: /^Medium\b/ });
+  await expect(recommended, "the level this agent is meant to run at says so").toContainText("Recommended.");
+  await expect(list.locator('[aria-disabled="true"]'), "pi supports every level, so nothing is unpickable here").toHaveCount(0);
+  // The keyboard walks the list: two stops down from the saved level, Enter picks it.
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(trigger).toContainText("Extra high");
+  // The trigger opens on a key too, and the chosen option is marked in the list.
+  await trigger.focus();
+  await trigger.press("ArrowDown");
+  await expect(list).toBeVisible();
+  await expect(list.getByRole("option", { name: /^Extra high\b/ })).toHaveAttribute("aria-selected", "true");
+  await list.getByRole("option", { name: /^Max\b/ }).click();
+  await expect(trigger).toContainText("Max");
+  await page.keyboard.press("Escape");
   await card.scrollIntoViewIfNeeded();
-  await card.screenshot({ path: info.outputPath("effort-slider.png") });
-
-  await slider.press("Home");
-  const box = (await slider.boundingBox())!;
-  await page.mouse.move(box.x + 1, box.y + box.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 4 });
-  await expect(slider, "dragging follows the pointer").toHaveAttribute("data-dragging", "true");
-  await page.mouse.up();
-  await expect(slider, "and snaps to the stop under it").toHaveAttribute("aria-valuetext", "medium");
+  await card.screenshot({ path: info.outputPath("effort-dropdown.png") });
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
   expect(trap.errors).toEqual([]);
   trap.stop();
 });
 
-test("a press on a stop jumps to it", async ({ page, server }) => {
+test("a click on a level picks it", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => { window.location.hash = "#/settings"; });
   const card = page.locator("section.glass", { hasText: "Backend" }).first();
-  const slider = card.getByRole("slider", { name: "Backend effort" });
-  await card.locator('[data-stop="high"]').click({ force: true });
-  await expect(slider).toHaveAttribute("aria-valuetext", "high");
-  await card.locator('[data-stop="off"]').click({ force: true });
-  await expect(slider).toHaveAttribute("aria-valuetext", "off");
+  const trigger = card.getByRole("combobox", { name: "Backend effort" });
+  await trigger.click();
+  const list = page.getByRole("listbox", { name: "Backend effort" });
+  await list.getByRole("option", { name: /^High\b/ }).click();
+  await expect(trigger).toContainText("High");
+  await trigger.click();
+  await list.getByRole("option", { name: /^Off\b/ }).click();
+  await expect(trigger).toContainText("Off");
 });
 
 test("a toast is centred over the composer, clear of it", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(() => { window.location.hash = "#/settings"; });
-  const slider = page.getByRole("slider", { name: "Backend effort" });
-  await slider.focus();
-  await slider.press("ArrowRight");
+  const card = page.locator("section.glass", { hasText: "Backend" }).first();
+  await card.getByRole("combobox", { name: "Backend effort" }).click();
+  await page.getByRole("listbox", { name: "Backend effort" }).getByRole("option", { name: /^High\b/ }).click();
   const toast = page.locator('[role="status"] > div').filter({ hasText: "Settings saved" });
   await expect(toast).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(400);

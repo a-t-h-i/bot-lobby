@@ -21,6 +21,7 @@ import { gitCancelReview, gitJev, gitPull, gitPulls, gitReview } from "./git.ts"
 import { issuesCreate, issuesGet, issuesList } from "./issues.ts";
 import { sessionsAnswer, sessionsArchive, sessionsChat, sessionsList, sessionsMessage, sessionsRename, sessionsStart, sessionsStop, sessionsSwitch } from "./sessions.ts";
 import { settingsGet, settingsGrants, settingsHarnesses, settingsLinters, settingsSet } from "./settings.ts";
+import { lobbyRetention, lobbySetRetention } from "./retention.ts";
 import { terminalClose, terminalInput, terminalList, terminalOpen, terminalResize } from "./terminal.ts";
 import { MAX_INPUT_CHARS } from "../terminal.ts";
 import { themesChoose, themesGet, themesRemove, themesRename, themesSave } from "./themes.ts";
@@ -118,6 +119,11 @@ function buildRoutes(): Record<string, Route> {
     run: (body, ctx) => lobbySend(body as { text: string; attachments?: string[] }, ctx),
   };
   routes["lobby.abort"] = { schema: Empty, run: (_body, ctx) => lobbyAbort(ctx) };
+  routes["lobby.retention"] = { schema: Empty, run: (_body, ctx) => lobbyRetention(ctx) };
+  routes["lobby.setRetention"] = {
+    schema: Type.Object({ enabled: Type.Boolean() }, { additionalProperties: false }),
+    run: (body, ctx) => lobbySetRetention(body as { enabled: boolean }, ctx),
+  };
   routes["tasks.list"] = { schema: Empty, run: (_body, ctx) => tasksList(ctx) };
   routes["tasks.archived"] = { schema: Empty, run: (_body, ctx) => tasksArchived(ctx) };
   routes["tasks.get"] = {

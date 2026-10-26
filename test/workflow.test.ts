@@ -32,8 +32,9 @@ const PATHS: Partial<Record<TaskState, TaskState[]>> = {
   reviewing: ["clarifying", "scouting", "synthesizing", "awaiting_approval", "planning", "implementing", "reviewing"],
 };
 
-function scoutReply(): string {
-  const text = ["## Scope", "x", "", "## Findings", "- found", "", "## Confidence", "High"].join("\n");
+function scoutReply(domains?: string[]): string {
+  const evidence = ["## Scope", "x", "", "## Findings", "- found", "", "## Confidence", "High"].join("\n");
+  const text = domains ? domains.map((domain) => `# Domain: ${domain}\n${evidence}`).join("\n") : evidence;
   return JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], stopReason: "stop" } });
 }
 
@@ -121,18 +122,19 @@ test("scout requires valid domains", async () => {
   assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.state, "created");
 });
 
-test("scout runs the domains and moves to synthesizing", async () => {
+test("one shared scout covers selected domains and moves to synthesizing", async () => {
   const seen: string[] = [];
-  const runner: ProcessRunner = async (args) => {
-    seen.push(String(args.at(-1)));
-    return { exitCode: 0, stdout: scoutReply(), stderr: "", killed: false };
+  const runner: ProcessRunner = async (_args, options) => {
+    seen.push(options.prompt ?? "");
+    return { exitCode: 0, stdout: scoutReply(["backend", "qa"]), stderr: "", killed: false };
   };
   const deps = makeDeps({ runProcess: runner });
   withTask(deps, "clarifying");
   const result = await act(deps, { action: "scout", domains: ["backend", "qa"] });
   assert.equal(result.ok, true, result.message);
   assert.equal(result.state, "synthesizing");
-  assert.equal(seen.length, 2);
+  assert.equal(seen.length, 1);
+  assert.match(seen[0]!, /One shared read-only investigation/);
   assert.match(result.message, /Scout results/);
   const task = loadTask(deps.root, deps.configDir, "TASK-1")!;
   assert.deepEqual(task.domains, ["backend", "qa"]);

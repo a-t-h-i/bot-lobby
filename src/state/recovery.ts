@@ -12,7 +12,10 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
-import { dataRoot } from "./project.ts";
+import { dataRoot, readDataRoots } from "./project.ts";
+import { tasksRoot } from "../knowledge/paths.ts";
+import { TERMINAL_STATES } from "../schemas/task.ts";
+import { cleanupTaskAssignedSessions } from "../execution/assigned-session.ts";
 import { processAlive } from "./presence.ts";
 
 /** A background session a window drives, as the next window relaunches it. */
@@ -121,6 +124,7 @@ export function stoppedWindows(root: string, configDir: string, alive: (pid: num
  * the same work. Returns the records this process took.
  */
 export function claimStoppedWindows(root: string, configDir: string, alive: (pid: number) => boolean = processAlive): WindowRecord[] {
+  retryTerminalAssignedSessionCleanup(root, configDir);
   const claimed: WindowRecord[] = [];
   for (const record of stoppedWindows(root, configDir, alive)) {
     const path = windowPath(root, configDir, record.pid, record.token);
@@ -133,6 +137,34 @@ export function claimStoppedWindows(root: string, configDir: string, alive: (pid
     claimed.push(record);
   }
   return claimed;
+}
+
+/** Terminal cleanup is retried independently: one locked/corrupt task never prevents other recovery. */
+export function retryTerminalAssignedSessionCleanup(root: string, configDir: string): { taskDir: string; error: string }[] {
+  const issues: { taskDir: string; error: string }[] = [];
+  for (const dr of readDataRoots(root, configDir)) {
+    for (const tree of [tasksRoot(dr), join(dr, "archive", "tasks")]) {
+      if (!existsSync(tree)) continue;
+      for (const entry of readdirSync(tree, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        const dir = join(tree, entry.name);
+        const task = readJson(join(dir, "state.json")) as { state?: unknown } | undefined;
+        if (!task || !TERMINAL_STATES.some(state => state === task.state)) continue;
+        retryTaskCleanup(dir, issues);
+      }
+    }
+  }
+  return issues;
+}
+function retryTaskCleanup(dir: string, issues: { taskDir: string; error: string }[]): void {
+  const issueFile = join(dir, "assigned-session-cleanup-issue.json");
+  try { cleanupTaskAssignedSessions(dir); rmSync(issueFile, { force: true }); }
+  catch (error) {
+    const issue = { taskDir: dir, error: error instanceof Error ? error.message : String(error) };
+    issues.push(issue);
+    try { writeAtomic(issueFile, issue); }
+    catch (failure) { issue.error += `; could not persist recovery issue: ${failure instanceof Error ? failure.message : String(failure)}`; }
+  }
 }
 
 function statePath(root: string, configDir: string, kind: SessionStateKind, sessionId: string): string | undefined {

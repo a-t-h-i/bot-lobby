@@ -16,6 +16,8 @@ export interface ComboOption {
   label: string
   /** A second line under the label, searched too. */
   hint?: string
+  /** Shown and named, but never chosen: the keyboard and the pointer leave it alone. */
+  disabled?: boolean
 }
 
 interface ComboboxProps {
@@ -37,6 +39,17 @@ function matches(option: ComboOption, query: string): boolean {
     .every((word) => text.includes(word))
 }
 
+/** The first option from `from` (inclusive) stepping by `step` that can be chosen, else `fallback`. */
+function enabledFrom(shown: readonly ComboOption[], from: number, step: 1 | -1, fallback: number): number {
+  for (let i = from; i >= 0 && i < shown.length; i += step) if (!shown[i]!.disabled) return i
+  return fallback
+}
+
+/** The first option that can be chosen, or 0 when none can. */
+function firstEnabled(shown: readonly ComboOption[]): number {
+  return enabledFrom(shown, 0, 1, 0)
+}
+
 export function Combobox({ value, options, onChange, label, className, disabled }: ComboboxProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -46,25 +59,26 @@ export function Combobox({ value, options, onChange, label, className, disabled 
   const shown = useMemo(() => options.filter((option) => matches(option, query)), [options, query])
   const chosen = options.find((option) => option.value === value)
 
-  // Each opening starts clean, on the chosen option.
+  // Each opening starts clean, on the chosen option (or the first one that can be chosen).
   useEffect(() => {
     if (!open) return
     setQuery("")
-    setActive(Math.max(0, options.findIndex((option) => option.value === value)))
+    setActive(enabledFrom(options, Math.max(0, options.findIndex((option) => option.value === value)), 1, firstEnabled(options)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  // Typing narrows the list; the first match is active.
-  useEffect(() => {
-    if (query) setActive(0)
-  }, [query])
+  // Typing narrows the list; the first option that can be chosen becomes active.
+  function search(next: string) {
+    setQuery(next)
+    setActive(firstEnabled(options.filter((option) => matches(option, next))))
+  }
 
   useEffect(() => {
     list.current?.querySelector<HTMLElement>(`[data-index="${active}"]`)?.scrollIntoView({ block: "nearest" })
   }, [active, open, shown.length])
 
   function pick(option: ComboOption | undefined) {
-    if (!option) return
+    if (!option || option.disabled) return
     setOpen(false)
     if (option.value !== value) onChange(option.value)
   }
@@ -72,16 +86,16 @@ export function Combobox({ value, options, onChange, label, className, disabled 
   function onKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key === "ArrowDown") {
       event.preventDefault()
-      setActive((now) => Math.min(shown.length - 1, now + 1))
+      setActive((now) => enabledFrom(shown, Math.min(shown.length - 1, now + 1), -1, now))
     } else if (event.key === "ArrowUp") {
       event.preventDefault()
-      setActive((now) => Math.max(0, now - 1))
+      setActive((now) => enabledFrom(shown, Math.max(0, now - 1), 1, now))
     } else if (event.key === "Home" && !query) {
       event.preventDefault()
-      setActive(0)
+      setActive(firstEnabled(shown))
     } else if (event.key === "End" && !query) {
       event.preventDefault()
-      setActive(Math.max(0, shown.length - 1))
+      setActive(enabledFrom(shown, shown.length - 1, -1, 0))
     } else if (event.key === "Tab") {
       // Leaving the field closes the list; focus goes back to the trigger.
       setOpen(false)
@@ -134,7 +148,7 @@ export function Combobox({ value, options, onChange, label, className, disabled 
           <Search aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
           <input
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => search(event.target.value)}
             onKeyDown={onKeyDown}
             role="searchbox"
             aria-label={`Search ${label}`}
@@ -154,10 +168,19 @@ export function Combobox({ value, options, onChange, label, className, disabled 
               id={`${id}-${index}`}
               role="option"
               aria-selected={option.value === value}
+              aria-disabled={option.disabled || undefined}
               data-index={index}
-              onPointerMove={() => setActive(index)}
+              data-disabled={option.disabled || undefined}
+              onPointerMove={() => {
+                if (!option.disabled) setActive(index)
+              }}
               onClick={() => pick(option)}
-              className={cn("flex min-h-8 cursor-pointer items-center gap-2 rounded-sm px-2 py-1 text-sm select-none sm:min-h-7", option.value === value && "bg-foreground/[0.08]", index === active && "bg-accent text-accent-foreground")}
+              className={cn(
+                "flex min-h-8 items-center gap-2 rounded-sm px-2 py-1 text-sm select-none sm:min-h-7",
+                option.disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+                !option.disabled && option.value === value && "bg-foreground/[0.08]",
+                !option.disabled && index === active && "bg-accent text-accent-foreground"
+              )}
             >
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate">{option.label}</span>

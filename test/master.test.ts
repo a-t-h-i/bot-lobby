@@ -65,13 +65,14 @@ function outcome(domain: ScoutResult["domain"], files: string[], overrides: Part
   return { result, run, issues: [], usable: true, ...overrides };
 }
 
-test("runScouts runs the selected domains in parallel and persists results", async () => {
+test("runScouts runs one shared scout for selected domains and persists attributed results", async () => {
   const taskDir = mkdtempSync(join(tmpdir(), "dh-scout-"));
-  const runner: ProcessRunner = async (args) => {
-    const task = String(args.at(-1));
-    const text = task.includes("Domain focus: backend")
-      ? scoutMarkdown(["src/api.ts"])
-      : scoutMarkdown(["src/ui.tsx"]);
+  let calls = 0;
+  let task = "";
+  const runner: ProcessRunner = async (_args, options) => {
+    calls++;
+    task = options.prompt ?? "";
+    const text = `# Domain: backend\n${scoutMarkdown(["src/api.ts"])}\n# Domain: designer\n${scoutMarkdown(["src/ui.tsx"])}`;
     return { exitCode: 0, stdout: reply(text), stderr: "", killed: false };
   };
   const outcomes = await runScouts(
@@ -87,7 +88,11 @@ test("runScouts runs the selected domains in parallel and persists results", asy
     },
     runner,
   );
+  assert.equal(calls, 1);
+  assert.match(task, /One shared read-only investigation/);
   assert.equal(outcomes.length, 2);
+  assert.strictEqual(outcomes[0]!.run, outcomes[1]!.run);
+  assert.deepEqual(outcomes.map((entry) => entry.result.relevantFiles[0]!.path), ["src/api.ts", "src/ui.tsx"]);
   assert.ok(outcomes.every((entry) => entry.usable));
   const reloaded = loadScoutResults(taskDir, ["backend", "designer", "qa"]);
   assert.equal(reloaded.length, 2, "only persisted domains are returned");

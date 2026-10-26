@@ -130,6 +130,13 @@ export const LOBBY_SWITCH_ITEMS = [
   { id: "issues", label: "Issues", help: "GitHub issues under Git" },
 ] as const
 
+/** Whether the repository tracks this lobby's own data: the switch rewrites the repository's .gitignore. */
+export const RETAIN = {
+  label: "Retain lobby data in git",
+  help: "Track this lobby's data (.pi/bot-lobby: tasks, knowledge, scripts, reports) in git. Off keeps it local and gitignored.",
+  error: "Couldn't read this repository's .gitignore.",
+} as const
+
 /** The panes the Lobby tab can show. */
 export const PANEL_ITEMS = [
   { id: "conversation", label: "Conversation pane" },

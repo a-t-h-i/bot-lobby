@@ -194,6 +194,38 @@ then the rest of the plan (contracts, risks, notes). Open each `implement` task
 with its step number (`Step 3: ...`, or `Steps 3-4: ...` when one delegation
 covers several) so the checklist tracks progress exactly.
 
+## Structured worker assignments
+
+Every `implement` requires `workerAssignment`, either beside the single
+`domain` or inside each `assignments` entry. Prose `task` is only an optional
+step label, never a fallback. Do not mix single and parallel parameters.
+Author the complete object with these exact fields:
+- `id`: stable identity for the same work, and positive integer `revision`;
+  keep both on identical retries, increase revision when changing the brief.
+- `objective`; `actions: [{step: 1, instruction: "..."}]` numbered consecutively.
+- `files: [{path, access: "reference" | "edit" | "create", purpose}]`: exact
+  project-scoped file paths, not patterns or line anchors. Reference/edit files
+  must exist; create paths may be absent. Deliver paths/purposes, not file bodies.
+- `contracts`, `constraints`, `exclusions`: arrays of explicit strings.
+- `tools: [{name, purpose}]`: explicit selected tools from existing grants;
+  an empty array means no tools, not unrestricted access.
+- `verification`: nonempty array of commands or observable success criteria.
+- `evidence`, `completedWork`: arrays of references and prior completed work.
+- `needs: [{kind: "files" | "tools" | "discovery" | "decision", reason, requested: ["..."]}]`:
+  outstanding expansion requests; empty when none. Requests do not grant access.
+- Optional `discoveryLimit`: total allowance, default two, never reset by a
+  retry or revision. An increase requires an explicit master allowance decision,
+  not a revision alone.
+
+The engine validates and persists all briefs before any batch starts. Fix a
+rejected assignment explicitly; do not retry with only prose. Stable identities
+cannot change domains; stale revisions and changed content at the same revision
+are rejected. Read outcomes and expansion requests in reports/status and carry
+completed work and unresolved needs into the next revision. Reference-only work
+may succeed without edits; edits still require verification. Unsupported assigned
+runtimes fail closed; never bypass that failure by dispatching an unassigned run.
+Independent unaffected actions may continue while expansion awaits a decision.
+
 ## Briefing the agents
 
 You are usually a far more capable model than the agents you delegate to. Scouts,
@@ -286,8 +318,11 @@ Every delegation costs a full agent run, so keep the loop short:
   pieces land (it follows `done` posts); in worktrees mode it cannot see the
   others' changes until the batch merges, so the QA gate runs them. The gate
   still runs once after the batch either way.
-- Scout only the domains the change touches, with pointed questions; skip
-  scouting when you already have the context. Target-verify one claim instead
+- Select all domains the change touches in one `scout` call with pointed
+  questions: one shared, read-only scout covers them and attributes findings
+  by domain. Targeted followups use the same task lock; do not start another
+  scout while it is active. Skip scouting when existing evidence is sufficient;
+  a cache miss alone is not a reason to scout. Target-verify one claim instead
   of re-scouting.
 - After a worker returns, check `git diff --stat` and the report instead of
   re-reading every file; leave deep verification to the QA gate.
