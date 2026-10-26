@@ -25,9 +25,8 @@ interface RouteCheck {
   empty: string;
   /**
    * The route intentionally fires a request that 404s in the `empty`
-   * scenario (`#/git/42` pulls a fixture PR that does not exist there),
-   * so the empty-state check tolerates exactly the one resource-load line
-   * and nothing else.
+   * scenario, so the empty-state check tolerates exactly the one
+   * resource-load line and nothing else.
    */
   allow404?: boolean;
 }
@@ -54,26 +53,9 @@ const ROUTES: RouteCheck[] = [
     empty: "No runs recorded yet.",
   },
   {
-    route: "#/git",
-    full: ["Add the dark mode toggle"],
-    empty: "No open pull requests.",
-  },
-  {
-    route: "#/git/42",
-    full: ["Add the dark mode toggle", "nothing is posted to GitHub"],
-    // No fixture pull 42 in `empty`: the detail honestly reports the miss.
-    empty: "Could not resolve to a PullRequest",
-    allow404: true,
-  },
-  {
     route: "#/knowledge/master/knowledge.md",
     full: ["Mock what the offline page needs."],
     empty: "No knowledge files yet.",
-  },
-  {
-    route: "#/git/issues",
-    full: ["issues are off (lobby.issues)"],
-    empty: "issues are off (lobby.issues)",
   },
 ];
 
@@ -147,37 +129,6 @@ for (const check of ROUTES) {
     trap.stop();
   });
 }
-
-test("Git issues lists issues @theme", async ({ page, server }) => {
-  const trap = await openScenario(page, server, "issues");
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await gotoRoute(page, "#/git/issues", "Dark mode flashes white on load");
-  await expectNoSidewaysScroll(page);
-  expect(cspErrors(trap.errors), "no CSP violations").toEqual([]);
-  expect(trap.errors, "no console errors").toEqual([]);
-  trap.stop();
-});
-
-test("Plan it starts a planning session from an issue (issues)", async ({ page, server }) => {
-  await openScenario(page, server, "issues");
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.evaluate(() => { (globalThis as any).location.hash = "#/git/issues/57"; });
-  const detail = page.getByRole("article", { name: "Issue #57" });
-  await detail.getByRole("button", { name: "Plan #57 with the panel" }).click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "Plan it" }).click();
-  await expect(page, "the Plan tab opens on it").toHaveURL(/#\/plan$/);
-  await expect(page.getByText("The page paints white for a moment before the theme applies.").first()).toBeVisible();
-});
-
-test("Git issues is off without lobby.issues @theme", async ({ page, server }) => {
-  const trap = await openScenario(page, server, "empty");
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await gotoRoute(page, "#/git/issues", "issues are off (lobby.issues)");
-  await expectNoSidewaysScroll(page);
-  expect(cspErrors(trap.errors), "no CSP violations").toEqual([]);
-  expect(trap.errors, "no console errors").toEqual([]);
-  trap.stop();
-});
 
 test("settings change saves with a notice and round-trips", async ({ page, server }) => {
   const trap = await openScenario(page, server, "full");
@@ -262,7 +213,7 @@ test("removed routes resolve to Lobby @theme", async ({ page, server }) => {
 test("hidden composer retains drafts and rejects focus shortcuts @theme", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.locator("#composer-text").fill("Keep my draft");
-  for (const hash of ["#/git", "#/metrics", "#/settings"]) {
+  for (const hash of ["#/metrics", "#/settings"]) {
     await page.evaluate((to) => { window.location.hash = to; }, hash);
     await expect(page.locator("#app-dock")).toBeHidden();
     await expect(page.locator("#composer-text")).toBeAttached();
@@ -272,21 +223,6 @@ test("hidden composer retains drafts and rejects focus shortcuts @theme", async 
   }
   await page.evaluate(() => { window.location.hash = "#/lobby"; });
   await expect(page.locator("#composer-text")).toHaveValue("Keep my draft");
-});
-
-test("Git switch routes keyboard selection and legacy bookmarks @theme", async ({ page, server }) => {
-  await openScenario(page, server, "issues");
-  await page.evaluate(() => { window.location.hash = "#/issues/42"; });
-  await expect(page).toHaveURL(/#\/git\/issues\/42$/);
-  const issues = page.getByRole("radio", { name: "Issues", exact: true });
-  await issues.focus();
-  await page.keyboard.press("ArrowLeft");
-  await expect(page).toHaveURL(/#\/git$/);
-  await expect(page.getByRole("radio", { name: "Pull requests", exact: true })).toBeFocused();
-  await page.keyboard.press("ArrowRight");
-  await expect(page).toHaveURL(/#\/git\/issues$/);
-  await expect(issues).toBeVisible();
-  expect((await issues.boundingBox())!.height, "a compact segment").toBeGreaterThanOrEqual(24);
 });
 
 for (const width of [1280, 360]) {

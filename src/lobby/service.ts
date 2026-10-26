@@ -14,7 +14,7 @@ import { cancelTaskExecutions } from "../execution/task-cancellation.ts";
 import { refreshReview, deferReview } from "../delivery/review.ts";
 import { deliver, type DeliveryRequest } from "../delivery/operations.ts";
 import { deliveryStore, deliveryTask } from "../delivery/store.ts";
-import { execCommand } from "./issues.ts";
+import { execCommand } from "./exec.ts";
 import { releaseAttachments } from "../state/attachments.ts";
 import { loadConfig, readDataRoots, saveConfig as writeConfig } from "../state/project.ts";
 import { knowledgeQuestion } from "./knowledge.ts";
@@ -29,7 +29,7 @@ import { applyStatus, currentZenTask, taskSnapshot } from "../pi/ui.ts";
 import { taskName } from "../text.ts";
 import { describeWorkspace } from "../execution/workspace.ts";
 import { stripStartFlags } from "../pi/start-flags.ts";
-import { checkThinking, modelRef, resolveChatProfile, resolveLobbyProfile, resolvePanelProfile, resolveReviewProfile, supportedThinking } from "../pi/model-support.ts";
+import { checkThinking, modelRef, resolveChatProfile, resolveLobbyProfile, resolvePanelProfile, supportedThinking } from "../pi/model-support.ts";
 import { modelLookup } from "../pi/tools.ts";
 import { startPlannedTask, startTask } from "../pi/start-task.ts";
 import { deliverComments, setAuto } from "../pi/owner.ts";
@@ -843,15 +843,6 @@ function deleteTask(state: Runtime, taskId: string, where: "list" | "archive"): 
   return `deleted ${taskId} for good`;
 }
 
-/** What a pull request review runs on: QA's model, thinking and grants. */
-export function reviewProfile(state: Runtime) {
-  return resolveReviewProfile(loadConfig(), {
-    lookup: modelLookup(state.ctx),
-    sessionModel: sessionModel(state.ctx),
-    warn: (message) => lobbyNotify(state, message, "warning"),
-  });
-}
-
 export function seatProfile(state: Runtime, member: PanelMember) {
   return resolvePanelProfile(loadConfig(), member, {
     lookup: modelLookup(state.ctx),
@@ -1115,15 +1106,11 @@ export function createLobbyService(state: Runtime): LobbyService {
     },
     classifierModels: () => availableClassifiers().map((model) => ({ id: model.id, label: model.label })),
     grants: () => ({ mcpTools: grantableTools(state.pi), skills: grantableSkills(state.root, state.pi) }),
-    issuesEnabled: () => loadConfig().lobby.issues,
     recovered: () => state.recovered,
     seatLabel: (member) => {
       const profile = seatProfile(state, member);
       return `${profile.model ?? "session model"} · ${profile.thinking}`;
     },
-    issues: state.issues,
-    pulls: state.pulls,
-    reviews: state.reviews,
     knowledge: state.knowledge,
     profileLabel: (kind) => {
       const profile = lobbyProfile(state, kind);

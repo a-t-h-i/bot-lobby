@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ANSWERED_ELSEWHERE, TAB_IDS, TAB_LABELS, visibleTabs } from "../src/lobby/prompts.ts";
+import { ANSWERED_ELSEWHERE, TAB_IDS, TAB_LABELS } from "../src/lobby/prompts.ts";
 import { keyMap, keyLabel, LOBBY_ACTIONS } from "../src/lobby/keys.ts";
 
 test("TAB_IDS keeps the lobby's tab order", () => {
-  assert.deepEqual([...TAB_IDS], ["lobby", "tasks", "plan", "git", "knowledge"]);
+  assert.deepEqual([...TAB_IDS], ["lobby", "tasks", "plan", "knowledge"]);
 });
 
 test("TAB_LABELS keeps the lobby's tab names", () => {
@@ -12,14 +12,8 @@ test("TAB_LABELS keeps the lobby's tab names", () => {
     lobby: "Lobby",
     tasks: "Tasks",
     plan: "Plan",
-    git: "Git",
     knowledge: "Knowledge",
   });
-});
-
-test("Git remains visible while Issues is switched off", () => {
-  assert.deepEqual(visibleTabs(false), ["lobby", "tasks", "plan", "git", "knowledge"]);
-  assert.deepEqual(visibleTabs(true), [...TAB_IDS]);
 });
 
 test("the key map cycles tabs with alt+[ / alt+] and honours overrides", () => {

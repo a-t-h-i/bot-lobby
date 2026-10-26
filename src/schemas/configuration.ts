@@ -166,8 +166,6 @@ export interface LobbyWebConfig {
 export interface LobbyConfig {
   /** Who sits on the planning panel next to the oracle, until toggled in the Plan tab. */
   planningPanel: PanelMember[];
-  /** Show the GitHub Issues tab (off for now). */
-  issues: boolean;
   /** Bot-lobby is on when pi starts; off (the default), pi starts as plain pi until ctrl+shift+m or /bot-lobby on. */
   startOn: boolean;
   /** Which panes the Lobby tab shows. */
@@ -297,7 +295,6 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
   },
   lobby: {
     planningPanel: [...PANEL_MEMBERS],
-    issues: false,
     startOn: false,
     panels: { conversation: true, activity: true, thinking: true },
     keys: {},
@@ -407,7 +404,7 @@ function flag(value: unknown, fallback: boolean): boolean {
 }
 
 function normalizeLobby(value: unknown): LobbyConfig {
-  const source = value as { planningPanel?: unknown; issues?: unknown; startOn?: unknown; panels?: unknown; keys?: unknown; maxPlanningRounds?: unknown; web?: unknown } | undefined;
+  const source = value as { planningPanel?: unknown; startOn?: unknown; panels?: unknown; keys?: unknown; maxPlanningRounds?: unknown; web?: unknown } | undefined;
   const defaults = DEFAULT_CONFIG.lobby;
   const panel = Array.isArray(source?.planningPanel)
     ? [...new Set(source.planningPanel.filter((entry): entry is PanelMember => typeof entry === "string" && isPanelMember(entry)))]
@@ -416,7 +413,6 @@ function normalizeLobby(value: unknown): LobbyConfig {
   const keys = source?.keys && typeof source.keys === "object" ? source.keys as Record<string, unknown> : {};
   return {
     planningPanel: PANEL_MEMBERS.filter((member) => panel.includes(member)),
-    issues: flag(source?.issues, defaults.issues),
     startOn: flag(source?.startOn, defaults.startOn),
     panels: Object.fromEntries(LOBBY_PANELS.map((name) => [name, flag(panels[name], defaults.panels[name])])) as Record<LobbyPanel, boolean>,
     keys: Object.fromEntries(Object.entries(keys).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0)),

@@ -1,4 +1,4 @@
-import type { Exec } from "../lobby/issues.ts";
+import type { Exec } from "../lobby/exec.ts";
 
 export interface DeliveryContext { exec: Exec; cwd: string }
 export async function command(ctx: DeliveryContext, tool: string, args: string[]): Promise<string> {

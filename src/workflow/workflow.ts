@@ -83,7 +83,7 @@ import { missingWorktree, taskCwd } from "../execution/workspace.ts";
 import { completionReview, deferReview, refreshReview } from "../delivery/review.ts";
 import { deliver } from "../delivery/operations.ts";
 import { deliveryStore } from "../delivery/store.ts";
-import { execCommand, type Exec } from "../lobby/issues.ts";
+import { execCommand, type Exec } from "../lobby/exec.ts";
 import type { LintExec } from "../execution/lint.ts";
 import type { LintReport } from "../schemas/lint.ts";
 import { lintBrief, lintContext, lintHolds, lintRefusal, lintSummary, runLintGate } from "./lint.ts";

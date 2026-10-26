@@ -8,7 +8,7 @@ import { createTask } from "../src/schemas/task.ts";
 import { completionReview, refreshReview } from "../src/delivery/review.ts";
 import { deliver, type DeliveryRequest } from "../src/delivery/operations.ts";
 import { acquireDeliveryLock, recoverDeliveryLock, type LockIdentity } from "../src/delivery/lock.ts";
-import type { Exec } from "../src/lobby/issues.ts";
+import type { Exec } from "../src/lobby/exec.ts";
 import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
 import { createTaskDir, loadTask, saveTask } from "../src/state/persistence.ts";
 import { setAutoMode } from "../src/state/auto.ts";

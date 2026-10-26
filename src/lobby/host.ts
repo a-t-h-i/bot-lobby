@@ -13,13 +13,10 @@ import type { ChatEntry, LobbyFeed } from "./feed.ts";
 import type { BackgroundSession } from "./sessions.ts";
 import type { PlannerSeed, PlanningSession } from "./planner.ts";
 import type { PlanRecord, PlanSummary } from "../state/plan-history.ts";
-import type { IssuesState } from "./issues.ts";
-import type { PullsState } from "./pulls.ts";
-import type { PullReviews } from "./pr-review.ts";
 import type { KnowledgeBook } from "./knowledge.ts";
 import type { WorkspaceInfo } from "../execution/workspace.ts";
 
-export { TAB_IDS, TAB_LABELS, visibleTabs } from "./prompts.ts";
+export { TAB_IDS, TAB_LABELS } from "./prompts.ts";
 export type { TabId } from "./prompts.ts";
 
 /**
@@ -137,11 +134,6 @@ export interface LobbyService {
   planningRounds?(): number;
   /** `model · thinking` a panel seat runs on. */
   seatLabel(member: PanelMember): string;
-  issues: IssuesState;
-  /** The Git tab's pull requests, read through `gh`. */
-  pulls: PullsState;
-  /** Reviews of pull requests by an agent, and Jev's reads of them. */
-  reviews: PullReviews;
   /** Every agent's knowledge files: read, edited, commented on. */
   knowledge: KnowledgeBook;
   /** The effective config, never a secret; the web settings page reads it. */
@@ -160,8 +152,6 @@ export interface LobbyService {
   classifierModels?(): Array<{ id: string; label: string }>;
   /** The model this window's session runs on (`provider/id`), when it has one. */
   sessionModel?(): string | undefined;
-  /** Git's Issues view is switched on (`lobby.issues`). */
-  issuesEnabled(): boolean;
   /** What this window carried on from one that stopped unexpectedly, when it did. */
   recovered?(): { at: number; text: string } | undefined;
   /** This window's pi session name, when it has one. */

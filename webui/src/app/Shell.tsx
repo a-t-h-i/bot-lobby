@@ -253,7 +253,7 @@ export function Shell() {
           {routeBody(route)}
         </motion.div>
       </main>
-      <Composer route={route} keys={keyLabels} projects={projects} onHelp={toggleHelp} />
+      <Composer route={route} projects={projects} />
       </div>
       <TerminalDrawer toggleKey={keyLabels.terminal ?? "Ctrl+`"} />
       </div>

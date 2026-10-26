@@ -197,10 +197,10 @@ function Step({ step, index, stopped, skip }: { step: StepData; index: number; s
 }
 
 function StepsSection({ steps, stopped, skip }: { steps: TaskDetailData["steps"]; stopped: boolean; skip?: SkipProps | undefined }) {
-  const done = steps.filter((step) => step.status === "done").length
+  // How many are done shows once, in the task's header; here only what the header leaves out.
   const skipped = steps.filter((step) => step.status === "skipped").length
   return (
-    <Section title="Steps" right={`${done}/${steps.length} done${skipped ? ` · ${skipped} skipped` : ""}`}>
+    <Section title="Steps" {...(skipped ? { right: `${skipped} skipped` } : {})}>
       <ol className="flex flex-col gap-2" aria-label="Steps">
         {steps.map((step, index) => (
           <Step key={`${index}-${step.text}`} step={step} index={index} stopped={stopped} skip={skip} />

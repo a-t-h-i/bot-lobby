@@ -6,13 +6,9 @@
  * run again, Previous, Save, New plan. When the header is too narrow for both
  * the seats drop below the buttons.
  */
-import { useRef } from "react"
-import { ChevronRight, FilePlus, History, MessageCircleQuestion, RotateCw, Save } from "lucide-react"
+import { FilePlus, History, MessageCircleQuestion, RotateCw, Save } from "lucide-react"
 import { go, tabHash } from "@/app/router"
-import { Keys } from "@/components/ui/kbd"
-import { Spinner } from "@/components/ui/spinner"
 import { act } from "@/lib/act"
-import { useHotkey } from "@/lib/hotkeys"
 import type { PlannerSnapshot, StatusInfo } from "@protocol"
 import { useTopic } from "@/app/hooks"
 import { ActionButton } from "@/ui/Actions"
@@ -25,22 +21,8 @@ function Status({ snap }: { snap: PlannerSnapshot }) {
   const failed = !snap.busy && failure(snap) !== undefined
   return (
     <p role="status" className={failed ? "inline-flex items-center gap-2 text-sm text-destructive" : "inline-flex items-center gap-2 text-sm text-muted-foreground"}>
-      {snap.busy ? <Spinner className="size-3.5" aria-hidden="true" /> : null}
       {parts.join(" · ")}
     </p>
-  )
-}
-
-/** The way to the draft: a link, since it only shows the plan (in a slide-out). */
-function ViewPlan({ onOpen }: { onOpen: () => void }) {
-  const node = useRef<HTMLButtonElement>(null)
-  useHotkey("v", () => node.current?.click())
-  return (
-    <button ref={node} type="button" aria-haspopup="dialog" aria-keyshortcuts="V" onClick={onOpen} className="plan-link group">
-      View plan
-      <ChevronRight aria-hidden="true" className="size-3.5 transition-transform duration-150 group-hover:translate-x-0.5 motion-reduce:transition-none" />
-      <Keys chord="V" className="kbd-hint ml-1" />
-    </button>
   )
 }
 
@@ -73,13 +55,12 @@ function Actions({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }
   )
 }
 
-export function PlanHeader({ snap, onDone, onViewPlan }: { snap: PlannerSnapshot; onDone: () => void; onViewPlan: () => void }) {
+export function PlanHeader({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) {
   return (
     <header className="@container flex shrink-0 flex-col gap-2.5 border-b border-border px-5 pt-3 pb-3">
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
         <h2 className="text-lg font-semibold tracking-tight">Planning</h2>
         <Status snap={snap} />
-        {snap.draft ? <ViewPlan onOpen={onViewPlan} /> : null}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 @min-[68rem]:flex-nowrap">
         <Roster cells={seatCells(snap)} intro={false} onToggled={onDone} className="order-last basis-full @min-[68rem]:order-none @min-[68rem]:min-w-0 @min-[68rem]:basis-auto" />

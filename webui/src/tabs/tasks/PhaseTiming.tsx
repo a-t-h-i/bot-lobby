@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { executionMs, executionWords, type PhaseClock, type WorkClock } from "@/lib/phaseTiming"
 import { useElapsed } from "@/lib/useElapsed"
 
-/** A task without a work clock (from before it was kept): its phase's execution time. */
+/** A task without a work clock (from before it was kept): its phase's execution time. The phase itself shows beside the title, so it is not repeated. */
 function Clock({ timing, stopped }: { timing: PhaseClock; stopped: boolean }) {
   const [delta, setDelta] = useState(0)
   useEffect(() => {
@@ -12,7 +12,7 @@ function Clock({ timing, stopped }: { timing: PhaseClock; stopped: boolean }) {
     const timer = window.setInterval(() => setDelta(performance.now() - sampled), 1000)
     return () => window.clearInterval(timer)
   }, [timing, stopped])
-  return <span className="tabular-nums break-words">{timing.waiting ? "Waiting for you · " : ""}{timing.phase.replaceAll("_", " ")} · {executionWords(executionMs(timing, delta, stopped))} execution</span>
+  return <span className="tabular-nums break-words">{timing.waiting ? "Waiting for you · " : ""}{executionWords(executionMs(timing, delta, stopped))} execution</span>
 }
 
 /** How long the task's agents have worked on it, idle time left out, ticking while they work. */
@@ -22,7 +22,6 @@ function Worked({ work, timing, stopped }: { work: WorkClock; timing?: PhaseCloc
   return (
     <span className="tabular-nums break-words" data-work-clock={counting ? "running" : "stopped"}>
       {timing?.waiting ? "Waiting for you · " : ""}
-      {timing ? `${timing.phase.replaceAll("_", " ")} · ` : ""}
       worked {executionWords(work.workedMs + elapsed)}
     </span>
   )

@@ -68,119 +68,6 @@ function defaultPlanner(): NonNullable<ScenarioFixture["mockPlanner"]> {
 
 const DETAIL_ONLY = ["body", "state", "mergeable", "files", "notes", "comments"] as const;
 
-/** A list row: the detail fixture without the fields only a detail carries. */
-function summaryOf(entry: Record<string, unknown>): Record<string, unknown> {
-  const row: Record<string, unknown> = { ...entry };
-  for (const key of DETAIL_ONLY) delete row[key];
-  return row;
-}
-
-/** The Git tab's `PullsState` as canned fixture data (`gh` is never run). */
-function fakePulls(entries: Array<Record<string, unknown>>) {
-  const details = new Map<number, Record<string, unknown>>();
-  const state = {
-    pulls: [] as Array<Record<string, unknown>>,
-    details,
-    loading: false,
-    loaded: false,
-    error: undefined as string | undefined,
-    async refresh() {
-      state.pulls = entries.map(summaryOf);
-      state.loaded = true;
-      lobbyTopics.bump("git");
-    },
-    async detail(number: number) {
-      const found = entries.find((entry) => entry.number === number);
-      if (!found) {
-        state.error = "GraphQL: Could not resolve to a PullRequest with the number of " + number + ".";
-        return undefined;
-      }
-      state.error = undefined;
-      details.set(number, found);
-      return { ...found };
-    },
-    forget() {
-      details.clear();
-    },
-  };
-  return state;
-}
-
-/** Reviews and Jev's reads as canned data; a started review finishes after a moment. */
-function fakeReviews(saved: Array<Record<string, unknown>>, savedReads: Array<Record<string, unknown>>) {
-  const reviews = new Map<number, Record<string, unknown>>(saved.map((review) => [review.number as number, { ...review }]));
-  const reads = new Map<number, Record<string, unknown>>(savedReads.map((read) => [read.number as number, { ...read }]));
-  const finish = (after: () => void): void => {
-    const timer = setTimeout(() => {
-      after();
-      lobbyTopics.bump("git");
-    }, 400);
-    timer.unref?.();
-  };
-  return {
-    reviews,
-    reads,
-    review: (number: number) => reviews.get(number),
-    running: (number: number) => reviews.get(number)?.status === "running",
-    async start(number: number, options: { focus?: string } = {}) {
-      const review: Record<string, unknown> = { number, status: "running", startedAt: Date.now(), steps: ["reading the pull request from GitHub"], ...(options.focus ? { focus: options.focus } : {}) };
-      reviews.set(number, review);
-      lobbyTopics.bump("git");
-      finish(() => Object.assign(review, { status: "done", verdict: "comment", finishedAt: Date.now(), model: "mock/qa", thinking: "medium", text: "## Verdict\nCOMMENT\n\n## Summary\nA canned review from the mock.\n\n## Findings\nNone." }));
-      return review;
-    },
-    cancel(number: number): boolean {
-      const review = reviews.get(number);
-      if (review?.status !== "running") return false;
-      review.status = "cancelled";
-      review.finishedAt = Date.now();
-      lobbyTopics.bump("git");
-      return true;
-    },
-    async readWithJev(number: number) {
-      const read: Record<string, unknown> = { number, status: "running" };
-      reads.set(number, read);
-      lobbyTopics.bump("git");
-      finish(() => Object.assign(read, { status: "done", line: "small · low risk", read: { size: "small", sizeConfidence: 0.9, risky: 0.1, breaking: 0.05, security: 0.02, testsMissing: 0.2, model: "mock/jev", ms: 200 } }));
-      return read;
-    },
-  };
-}
-
-/** The Issues tab's `IssuesState` as canned fixture data. */
-function fakeIssues(entries: Array<Record<string, unknown>>) {
-  const details = new Map<number, Record<string, unknown>>();
-  const state = {
-    issues: [] as Array<Record<string, unknown>>,
-    details,
-    loading: false,
-    loaded: false,
-    error: undefined as string | undefined,
-    notice: undefined as string | undefined,
-    async refresh() {
-      state.issues = entries.map(summaryOf);
-      state.loaded = true;
-      lobbyTopics.bump("issues");
-    },
-    async detail(number: number) {
-      const found = entries.find((entry) => entry.number === number);
-      if (!found) {
-        state.error = "GraphQL: Could not resolve to an Issue with the number of " + number + ".";
-        return undefined;
-      }
-      return { ...found };
-    },
-    async create(text: string) {
-      const title = text.trim().split("\n")[0]!.replace(/^#+\s*/, "");
-      const number = Math.max(0, ...entries.map((entry) => entry.number as number)) + 1;
-      entries.unshift({ number, title, labels: [], body: text.trim().split("\n").slice(1).join("\n").trim(), state: "OPEN", comments: [] });
-      state.notice = `created #${number} — https://github.com/example/bot-lobby/issues/${number}`;
-      await state.refresh();
-    },
-  };
-  return state;
-}
-
 /** The models the mock offers, unless a scenario's settings name its own. */
 const DEFAULT_MODELS: Array<{ id: string; label: string; thinkingLevels: string[] }> = [
   { id: "mock/gpt-5", label: "Mock GPT-5", thinkingLevels: ["low", "medium", "high"] },
@@ -384,7 +271,6 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
         { name: "tailwind-review", description: "Check Tailwind classes against the design tokens.", path: ".agents/skills/tailwind-review/SKILL.md" },
       ],
     }),
-    issuesEnabled: () => fixture.status.issuesEnabled,
     workspace: () => ({ ...fixture.status.workspace }),
     zen: () => ({ ...(fixture.zen.task ? { task: { ...fixture.zen.task } } : {}), runs: [...fixture.zen.runs] }),
     feed,
@@ -560,9 +446,6 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     },
     defaultPanel: () => ["backend", "designer", "qa", "researcher"],
     planningRounds: () => 5,
-    pulls: fakePulls(fixture.mockPulls ?? []),
-    reviews: fakeReviews(fixture.mockReviews ?? [], fixture.mockReads ?? []),
-    issues: fakeIssues((fixture.mockIssues ?? []).map((issue) => ({ ...issue }))),
     sessionChat: () => [],
     hasOlderChat: () => false,
     switchTo: async (target: { name: string }) => (fixture.status.busy ? `${sessionName ?? "this window's session"} carries on in the background; switching this window to ${target.name}…` : `switching this window to ${target.name}…`),

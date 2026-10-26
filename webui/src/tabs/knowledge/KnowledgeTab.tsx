@@ -48,9 +48,9 @@ function KnowledgeChat() {
 type KnowledgeRead = ReturnType<typeof useApiRead<"knowledge.files">>
 
 function FilesList({ read, selected }: { read: KnowledgeRead; selected?: string }) {
-  const notes = read.data?.files.reduce((total, info) => total + info.notes, 0) ?? 0
+  // The tree's top row already counts files, agents and notes.
   return <>
-    <PaneHeader title="Knowledge" count={notes > 0 ? `${notes} note${notes === 1 ? "" : "s"}` : undefined} />
+    <PaneHeader title="Knowledge" />
     <FilesContent read={read} selected={selected} />
   </>
 }

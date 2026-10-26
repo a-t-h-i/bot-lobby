@@ -62,8 +62,8 @@ async function waitFor(check: () => boolean | Promise<boolean>, ms = 3000): Prom
 
 type Call = (api: string, body?: unknown) => Promise<Answer>;
 
-test("all ten scenario files exist and unknown names default to full", () => {
-  assert.deepEqual([...SCENARIOS], ["full", "empty", "loading", "error", "reconnecting", "question", "questions3", "issues", "mockups"]);
+test("every scenario file exist and unknown names default to full", () => {
+  assert.deepEqual([...SCENARIOS], ["full", "empty", "loading", "error", "reconnecting", "question", "questions3", "mockups"]);
   for (const name of SCENARIOS) assert.equal(existsSync(fixturePath(name)), true, name);
   assert.equal(resolveScenario("nope"), "full");
   assert.equal(resolveScenario(undefined), "full");
@@ -157,9 +157,8 @@ async function checkStatus(name: string, fixture: ScenarioFixture, call: Call): 
   assert.equal((result.workspace as { name: string }).name, fixture.status.workspace.name, `${name}: workspace`);
   assert.equal(result.sessionId, fixture.status.sessionId, `${name}: sessionId`);
   assert.equal(result.busy, fixture.status.busy, `${name}: busy`);
-  assert.equal(result.issuesEnabled, fixture.status.issuesEnabled, `${name}: issuesEnabled`);
   const tabs = result.tabs as Array<{ id: string; label: string; key: string }>;
-  assert.equal(tabs.length, 5, `${name}: tab count`);
+  assert.equal(tabs.length, 4, `${name}: tab count`);
   assert.ok(tabs.every((tab) => tab.id && tab.label && tab.key), `${name}: tab shape`);
   assert.ok(Array.isArray(result.keys) && (result.keys as unknown[]).length > 0, `${name}: keys`);
   assert.deepEqual(result.windows, [], `${name}: windows`);

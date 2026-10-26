@@ -1,8 +1,7 @@
 /**
  * The tab pills' icons, drawn part by part from Lucide's own shapes so each
  * can play a little animation of its own: the Lobby's bubble talks, Tasks
- * ticks its boxes, Plan draws its route, Issues pulses, the
- * Git draws its branch and Knowledge claps its book.
+ * ticks its boxes, Plan draws its route and Knowledge claps its book.
  * A play is numbered: each new number plays once
  * (the parts remount and run from the start), and before the first the icon
  * simply rests. Every animation ends on the icon exactly as Lucide draws it.
@@ -88,28 +87,6 @@ function Plan({ play }: { play: number }) {
   )
 }
 
-function Issues({ play }: { play: number }) {
-  return (
-    <>
-      {/* A ripple spreads out from the ring and fades. */}
-      <motion.circle cx={12} cy={12} r={10} style={about()} {...part(play, { scale: [1, 1, 1.4], strokeOpacity: [0, 0.5, 0] }, { times: [0, 0.25, 1], ease: "easeOut" })} />
-      <motion.circle cx={12} cy={12} r={10} style={about()} {...part(play, { scale: [1, 0.86, 1.06, 1] }, { times: [0, 0.25, 0.55, 1], ease: "easeInOut" })} />
-      <motion.circle cx={12} cy={12} r={1} fill="currentColor" style={about()} {...part(play, { scale: [1, 2.4, 0.8, 1] }, { times: [0, 0.3, 0.6, 1], ease: "easeInOut" })} />
-    </>
-  )
-}
-
-function Git({ play }: { play: number }) {
-  return (
-    <>
-      <motion.circle cx={6} cy={6} r={3} style={about()} {...pulse(play, 0)} />
-      <motion.line x1={6} x2={6} y1={9} y2={21} {...draw(play, 0.05, 0.45)} />
-      <motion.path d="M13 6h3a2 2 0 0 1 2 2v7" {...draw(play, 0.2, 0.62)} />
-      <motion.circle cx={18} cy={18} r={3} style={about()} {...pop(play, 0.58)} />
-    </>
-  )
-}
-
 function Knowledge({ play }: { play: number }) {
   return (
     <motion.g style={about()} {...part(play, { scaleX: [1, 0.55, 1.08, 1], y: [0, -1, 0, 0] }, { times: [0, 0.35, 0.65, 1], ease: "easeInOut" })}>
@@ -123,8 +100,6 @@ const ICONS: Record<string, (props: { play: number }) => ReactNode> = {
   lobby: Lobby,
   tasks: Tasks,
   plan: Plan,
-  issues: Issues,
-  git: Git,
   knowledge: Knowledge,
 }
 

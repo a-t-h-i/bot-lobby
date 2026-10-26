@@ -19,7 +19,6 @@ export const SCENARIOS = [
   "reconnecting",
   "question",
   "questions3",
-  "issues",
   "mockups",
 ] as const;
 
@@ -42,7 +41,6 @@ export interface ScenarioFixture {
     sessionId: string;
     sessionName: string;
     busy: boolean;
-    issuesEnabled: boolean;
   };
   zen: { task?: Partial<SnapshotTask> & { id: string; title: string; state: string; plan?: string }; runs: unknown[] };
   feed: {
@@ -99,14 +97,6 @@ export interface ScenarioFixture {
   mockKnowledge?: Array<{ agent: string; file: string; label: string; chars: number; over: boolean; notes: number }>;
   /** One open knowledge file for `knowledge.open` (absent means an empty file). */
   mockKnowledgeView?: { agent: string; file: string; label: string; chars: number; over: boolean; notes: number; content: string; entries: Array<Record<string, unknown>>; attached: Array<Record<string, unknown>>; detached: Array<Record<string, unknown>> };
-  /** Open pull requests for the `git.*` calls, each with its detail fields (absent means none). */
-  mockPulls?: Array<Record<string, unknown>>;
-  /** Saved reviews of those pull requests, by number. */
-  mockReviews?: Array<Record<string, unknown>>;
-  /** Jev's reads of those pull requests, by number. */
-  mockReads?: Array<Record<string, unknown>>;
-  /** Open issues for the `issues.*` calls, each with its detail fields (absent means none). */
-  mockIssues?: Array<Record<string, unknown>>;
 }
 
 /** Whether `value` names a scenario. */
@@ -140,8 +130,8 @@ export function loadScenario(name: string | undefined): ScenarioFixture {
   if (!hasKeys(parsed, ["status", "zen", "feed", "history", "prompts", "oracleReply"])) {
     throw new Error(`fixtures/${scenario}.json must cover status, zen, feed, history, prompts and oracleReply`);
   }
-  if (!hasKeys(parsed.status, ["workspace", "sessionId", "sessionName", "busy", "issuesEnabled"])) {
-    throw new Error(`fixtures/${scenario}.json status must carry workspace, session, busy and issuesEnabled`);
+  if (!hasKeys(parsed.status, ["workspace", "sessionId", "sessionName", "busy"])) {
+    throw new Error(`fixtures/${scenario}.json status must carry workspace, session and busy`);
   }
   if (!hasKeys(parsed.zen, ["runs"]) || !hasKeys(parsed.feed, ["chat", "activity", "thoughts", "reply", "chatOlder"])) {
     throw new Error(`fixtures/${scenario}.json zen/feed are missing their fields`);
@@ -166,10 +156,6 @@ export function loadScenario(name: string | undefined): ScenarioFixture {
     mockClassifierMetrics: Array.isArray(parsed.mockClassifierMetrics) ? (parsed.mockClassifierMetrics as ScenarioFixture["mockClassifierMetrics"]) : [],
     mockKnowledge: Array.isArray(parsed.mockKnowledge) ? (parsed.mockKnowledge as ScenarioFixture["mockKnowledge"]) : [],
     mockKnowledgeView: isRecord(parsed.mockKnowledgeView) ? (parsed.mockKnowledgeView as unknown as ScenarioFixture["mockKnowledgeView"]) : undefined,
-    mockPulls: Array.isArray(parsed.mockPulls) ? (parsed.mockPulls as ScenarioFixture["mockPulls"]) : [],
-    mockReviews: Array.isArray(parsed.mockReviews) ? (parsed.mockReviews as ScenarioFixture["mockReviews"]) : [],
-    mockReads: Array.isArray(parsed.mockReads) ? (parsed.mockReads as ScenarioFixture["mockReads"]) : [],
-    mockIssues: Array.isArray(parsed.mockIssues) ? (parsed.mockIssues as ScenarioFixture["mockIssues"]) : [],
     settings: isRecord(parsed.settings) ? (parsed.settings as ScenarioFixture["settings"]) : undefined,
   };
 }

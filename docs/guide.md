@@ -90,29 +90,13 @@ on the engine's checks with no QA agent, and a small one gets a light check. One
 security, data, concurrency or orchestration gets a deep, adversarial review. The test budget is a
 ceiling, never a quota, and the Tasks tab shows the classifier's read and why. With it off, the engine's rules decide.
 
-## Issues and pull requests
-
-**Git** has a **Pull requests / Issues** switch in its list header. `#/git` lists pull requests
-and `#/git/<number>` opens a pull request; `#/git/issues` lists issues and
-`#/git/issues/<number>` opens an issue. Legacy `#/issues` and `#/issues/<number>` bookmarks
-redirect to their Git equivalents without adding a dead page to browser history.
-
-Issues retain descriptions, existing comments, the local **File issue** form (even when the list
-is empty) and **Plan it**, which starts planning from an issue. With `lobby.issues` off, the Issues
-view explains the disabled state; issue APIs still return `404/not_found`, and pull requests remain
-accessible. The switch stays visible through loading, empty, disabled and error states; its targets
-are at least 44px, with arrow-key navigation. `R` refreshes both lists independently when Issues is
-on, or only pull requests when off. Pull-request details and agent review workflows are unchanged:
-reviews are read-only and nothing is posted to GitHub. Both lists use `gh`.
-
 ## Composer and removed pages
 
 The composer is available only on **Lobby**, **Tasks**, **Plan** and **Knowledge**,
-including their detail routes and Knowledge's Docs/Chat views. On Git, Metrics and Settings it stays
+including their detail routes and Knowledge's Docs/Chat views. On Metrics and Settings it stays
 mounted but hidden and inert: no focus, attachment input, submission or composer shortcut can activate
 it, and `--composer-h` is zero so the page reclaims its space. Draft text, completed attachments and
 uploads finishing while hidden return intact. Phone navigation remains available independently.
-Git's local **File issue** form is not the global composer and remains available.
 
 Focus motion lasts about 360ms with ease-out timing and scale within about ±3%. Only the box
 animates, anchored at its top edge; the attached tray stays stationary and icons do not wobble.

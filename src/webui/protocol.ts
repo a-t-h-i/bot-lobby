@@ -113,7 +113,6 @@ export interface StatusInfo {
   sessionName?: string;
   busy: boolean;
   port: number;
-  issuesEnabled: boolean;
   /** Which panes the Lobby tab shows (`lobby.panels`). */
   panels: Record<"conversation" | "activity" | "thinking", boolean>;
   tabs: TabInfo[];
@@ -423,139 +422,6 @@ export interface PlanDetail {
   startedTaskId?: string;
 }
 
-/** The checks of a pull request as one state. */
-export type PullChecks = "passing" | "failing" | "pending";
-
-/** How a pull request's review stands, for the list's marks. */
-export interface PullReviewMark {
-  status: "running" | "done" | "failed" | "cancelled" | "timeout";
-  verdict?: "approve" | "changes" | "comment";
-  /** The pull request has commits the review did not see. */
-  stale: boolean;
-}
-
-/** One open pull request in the Git list. */
-export interface PullInfo {
-  number: number;
-  title: string;
-  author?: string;
-  headRef: string;
-  baseRef: string;
-  draft: boolean;
-  updatedAt?: string;
-  url?: string;
-  additions: number;
-  deletions: number;
-  changedFiles: number;
-  decision?: string;
-  checks?: PullChecks;
-  checkCount: number;
-  labels: string[];
-  review?: PullReviewMark;
-}
-
-/** One changed file. */
-export interface PullFileInfo {
-  path: string;
-  additions: number;
-  deletions: number;
-}
-
-/** A review or a comment on a pull request. */
-export interface PullNoteInfo {
-  author?: string;
-  body: string;
-  at?: string;
-  state?: string;
-}
-
-/** A pull request with its description, files and discussion. */
-export interface PullDetailInfo extends PullInfo {
-  body: string;
-  state?: string;
-  mergeable?: string;
-  files: PullFileInfo[];
-  notes: PullNoteInfo[];
-}
-
-/** The agent's review of a pull request (never posted to GitHub). */
-export interface PullReviewInfo {
-  number: number;
-  status: "running" | "done" | "failed" | "cancelled" | "timeout";
-  focus?: string;
-  startedAt: number;
-  finishedAt?: number;
-  steps: string[];
-  text?: string;
-  verdict?: "approve" | "changes" | "comment";
-  error?: string;
-  model?: string;
-  thinking?: string;
-  stale: boolean;
-  /** Kept from an earlier session rather than run now. */
-  saved?: boolean;
-}
-
-/** Jev's quick read of a pull request. */
-export interface PullReadInfo {
-  number: number;
-  status: "running" | "done" | "failed";
-  line?: string;
-  error?: string;
-  read?: {
-    size: string;
-    sizeConfidence: number;
-    risky: number;
-    breaking: number;
-    security: number;
-    testsMissing: number;
-    kind?: string;
-    kindProbability?: number;
-    model: string;
-    ms: number;
-  };
-}
-
-/** `git.pulls`: the open pull requests, or why they could not be read. */
-export interface GitPulls {
-  pulls: PullInfo[];
-  loading: boolean;
-  loaded: boolean;
-  error?: string;
-}
-
-/** `git.pull`: one pull request with our review and Jev's read of it. */
-export interface GitPull {
-  pull: PullDetailInfo;
-  review?: PullReviewInfo;
-  read?: PullReadInfo;
-}
-
-/** One open issue in the Issues list. */
-export interface IssueInfo {
-  number: number;
-  title: string;
-  labels: string[];
-  author?: string;
-  updatedAt?: string;
-  url?: string;
-}
-
-/** An issue with its description and comments. */
-export interface IssueDetailInfo extends IssueInfo {
-  body: string;
-  state?: string;
-  comments: Array<{ author?: string; body: string; createdAt?: string }>;
-}
-
-/** `issues.list`: the open issues, or why they could not be read. */
-export interface IssuesList {
-  issues: IssueInfo[];
-  loading: boolean;
-  loaded: boolean;
-  error?: string;
-}
-
 /** The calls the server answers: `POST /api/<name>` with the request as the JSON body. */
 export interface Api {
   "status.get": { request: Record<string, never>; result: StatusInfo };
@@ -633,14 +499,6 @@ export interface Api {
   "knowledge.replaceFile": { request: { agent: KnowledgeAgentName; file: string; text: string }; result: { notice: string } };
   "knowledge.comment": { request: { agent: KnowledgeAgentName; file: string; ref: EntryRefInfo; text: string }; result: { notice: string } };
   "knowledge.unnote": { request: { id: string }; result: { notice: string } };
-  "git.pulls": { request: { refresh?: boolean }; result: GitPulls };
-  "git.pull": { request: { number: number }; result: GitPull };
-  "git.review": { request: { number: number; focus?: string }; result: { notice: string } };
-  "git.cancelReview": { request: { number: number }; result: { notice: string } };
-  "git.jev": { request: { number: number }; result: { notice: string } };
-  "issues.list": { request: { refresh?: boolean }; result: IssuesList };
-  "issues.get": { request: { number: number }; result: { issue: IssueDetailInfo } };
-  "issues.create": { request: { text: string }; result: { notice: string } };
   "settings.get": { request: Record<string, never>; result: SettingsInfo };
   "settings.set": { request: { patch: Record<string, unknown> }; result: { config: BotLobbyConfig } };
   "settings.linters": { request: Record<string, never>; result: { linters: SettingsLinter[] } };

@@ -115,7 +115,7 @@ test("the stream says hello with every topic's versions", async () => {
       await wait(50);
       assert.equal(stream.events[0]?.type, "hello");
       const versions = stream.events[0]?.versions as Record<string, number>;
-      for (const topic of ["lobby", "tasks", "plans", "planner", "sessions", "metrics", "git", "issues", "knowledge", "prompts", "notices", "status"]) {
+      for (const topic of ["lobby", "tasks", "plans", "planner", "sessions", "metrics", "knowledge", "prompts", "notices", "status"]) {
         assert.ok(typeof versions[topic] === "number", `hello carries ${topic}`);
       }
     } finally {

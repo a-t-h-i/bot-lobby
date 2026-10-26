@@ -17,8 +17,6 @@ import { plannerAnswer, plannerCommentLine, plannerGet, plannerNew, plannerRetry
 import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksEditComment, tasksGet, tasksList, tasksMessage, tasksRestore, tasksOpen, tasksResume, tasksDeliveryReview, tasksDeliveryDefer, tasksDeliver, tasksAccept, tasksSkipStep, tasksForceClose, tasksResolveApproval } from "./tasks.ts";
 import { knowledgeAdd, knowledgeAsk, knowledgeComment, knowledgeEdit, knowledgeFiles, knowledgeOpen, knowledgeRemove, knowledgeReplaceFile, knowledgeUnnote } from "./knowledge.ts";
 import { plansDiscard, plansGet, plansStart } from "./plans.ts";
-import { gitCancelReview, gitJev, gitPull, gitPulls, gitReview } from "./git.ts";
-import { issuesCreate, issuesGet, issuesList } from "./issues.ts";
 import { sessionsAnswer, sessionsArchive, sessionsChat, sessionsList, sessionsMessage, sessionsRename, sessionsStart, sessionsStop, sessionsSwitch } from "./sessions.ts";
 import { settingsGet, settingsGrants, settingsHarnesses, settingsLinters, settingsSet } from "./settings.ts";
 import { lobbyRetention, lobbySetRetention } from "./retention.ts";
@@ -78,7 +76,6 @@ interface Route {
 
 const Empty = Type.Object({}, { additionalProperties: false });
 const TaskId = Type.String({ minLength: 1, maxLength: 200 });
-const GhNumber = Type.Integer({ minimum: 1, maximum: 1_000_000_000 });
 const NoticeText = Type.String({ maxLength: 20_000 });
 /** Ids of files uploaded through `files.upload`; the message names them by path. */
 const Attachments = Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { maxItems: 8 }));
@@ -334,38 +331,6 @@ function buildRoutes(): Record<string, Route> {
   routes["knowledge.unnote"] = {
     schema: Type.Object({ id: TaskId }, { additionalProperties: false }),
     run: (body, ctx) => knowledgeUnnote(body as { id: string }, ctx),
-  };
-  routes["git.pulls"] = {
-    schema: Type.Object({ refresh: Type.Optional(Type.Boolean()) }, { additionalProperties: false }),
-    run: (body, ctx) => gitPulls(body as { refresh?: boolean }, ctx),
-  };
-  routes["git.pull"] = {
-    schema: Type.Object({ number: GhNumber }, { additionalProperties: false }),
-    run: (body, ctx) => gitPull(body as { number: number }, ctx),
-  };
-  routes["git.review"] = {
-    schema: Type.Object({ number: GhNumber, focus: Type.Optional(Type.String({ maxLength: 2000 })) }, { additionalProperties: false }),
-    run: (body, ctx) => gitReview(body as { number: number; focus?: string }, ctx),
-  };
-  routes["git.cancelReview"] = {
-    schema: Type.Object({ number: GhNumber }, { additionalProperties: false }),
-    run: (body, ctx) => gitCancelReview(body as { number: number }, ctx),
-  };
-  routes["git.jev"] = {
-    schema: Type.Object({ number: GhNumber }, { additionalProperties: false }),
-    run: (body, ctx) => gitJev(body as { number: number }, ctx),
-  };
-  routes["issues.list"] = {
-    schema: Type.Object({ refresh: Type.Optional(Type.Boolean()) }, { additionalProperties: false }),
-    run: (body, ctx) => issuesList(body as { refresh?: boolean }, ctx),
-  };
-  routes["issues.get"] = {
-    schema: Type.Object({ number: GhNumber }, { additionalProperties: false }),
-    run: (body, ctx) => issuesGet(body as { number: number }, ctx),
-  };
-  routes["issues.create"] = {
-    schema: Type.Object({ text: Type.String({ maxLength: 20_000 }) }, { additionalProperties: false }),
-    run: (body, ctx) => issuesCreate(body as { text: string }, ctx),
   };
   const codeRoot = (ctx: ApiContext) => ctx.service.projectRoot?.() ?? process.cwd();
   const CodePath = Type.String({ minLength: 1, maxLength: 4096 });

@@ -58,7 +58,6 @@ function Progress({ row }: { row: TaskRow }) {
       <span>
         {row.progress.done} of {row.progress.total} steps
       </span>
-
     </p>
   )
 }

@@ -127,7 +127,6 @@ export const GRANTS = {
 /** The lobby's on/off switches. `panel:*` are the Lobby tab's panes. */
 export const LOBBY_SWITCH_ITEMS = [
   { id: "startOn", label: "On when pi starts", help: "off: pi starts as plain pi, and ctrl+shift+m or /bot-lobby on turns bot-lobby on (a session that owns a task under way always starts on)" },
-  { id: "issues", label: "Issues", help: "GitHub issues under Git" },
 ] as const
 
 /** Whether the repository tracks this lobby's own data: the switch rewrites the repository's .gitignore. */

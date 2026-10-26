@@ -48,7 +48,6 @@ test("the service exposes data and actions with no TUI", () => {
   assert.deepEqual(service.tasks(), []);
   assert.equal(typeof service.toOracle, "function");
   assert.equal(service.comment("TASK-nope", "hello"), "no task TASK-nope");
-  assert.equal(typeof service.issuesEnabled(), "boolean");
 });
 
 test("accept persists explicit waivers and audit through a stale worker save without completing", async () => {

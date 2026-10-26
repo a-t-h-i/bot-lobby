@@ -47,7 +47,6 @@ const PAGES: Array<{ id: string; page: string; keys: Array<[string, string]> }> 
   { id: "tasks", page: "Tasks", keys: [["E", "archive"], ["R", "restore"], ["A", "auto mode"], ["Delete", "delete"]] },
   { id: "saved", page: "Saved plan", keys: [["S", "start here"], ["N", "new session"], ["Delete", "discard"]] },
   { id: "plan", page: "Plan", keys: [["A", "answer"], ["R", "retry"], ["Ctrl+S", "save"], ["N", "new plan"]] },
-  { id: "git", page: "Git", keys: [["R", "refresh both lists"], ["V", "review"], ["Q", "Jev's read"], ["X", "stop"], ["N", "plan an issue"]] },
   { id: "knowledge", page: "Knowledge", keys: [["E", "edit"], ["A", "add"], ["C", "comment"], ["F", "edit file"], ["Delete", "delete"]] },
   { id: "confirm", page: "Asked to confirm", keys: [["Y", "yes, do it"], ["Esc", "keep it"]] },
 ]

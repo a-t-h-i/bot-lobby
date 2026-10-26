@@ -36,7 +36,7 @@ import { useCollapsed } from "@/lib/collapsed"
 import { toast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 import { ScrollHints } from "@/ui/ScrollHints"
-import { AppearanceButton, FullscreenToggle, HelpButton, NotifyToggle, SoundToggle, ThemeToggle } from "./AppTools.tsx"
+import { AppearanceButton, FullscreenToggle, HelpButton, NotifyToggle, SoundToggle } from "./AppTools.tsx"
 import { useMediaQuery, useTopic } from "./hooks.ts"
 import { NARROW_SIDEBAR } from "@/lib/panePreference"
 import { NewSessionDialog } from "./NewSessionDialog.tsx"
@@ -383,7 +383,6 @@ function Foot({ route, keys, onHelp }: SidebarProps) {
       </a>
       <div className="flex items-center justify-between">
         <HelpButton hint={keys.help ?? "Alt+H"} onHelp={onHelp} className={ICON_BUTTON} />
-        <ThemeToggle className={ICON_BUTTON} />
         <SoundToggle className={ICON_BUTTON} />
         <AppearanceButton className={ICON_BUTTON} />
         <NotifyToggle className={ICON_BUTTON} />

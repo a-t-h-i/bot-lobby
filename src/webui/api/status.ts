@@ -5,12 +5,12 @@
  */
 import { loadConfig } from "../../state/project.ts";
 import { LOBBY_ACTIONS, keyLabel, keyMap } from "../../lobby/keys.ts";
-import { TAB_LABELS, visibleTabs } from "../../lobby/prompts.ts";
+import { TAB_IDS, TAB_LABELS } from "../../lobby/prompts.ts";
 import type { ApiContext } from "./index.ts";
 import type { KeyInfo, StatusInfo, TabInfo } from "../protocol.ts";
 
-function tabs(issuesEnabled: boolean): TabInfo[] {
-  return visibleTabs(issuesEnabled).map((id, index) => ({ id, label: TAB_LABELS[id], key: `Alt+${index + 1}` }));
+function tabs(): TabInfo[] {
+  return TAB_IDS.map((id, index) => ({ id, label: TAB_LABELS[id], key: `Alt+${index + 1}` }));
 }
 
 function keys(overrides: Readonly<Record<string, string>>): KeyInfo[] {
@@ -26,7 +26,6 @@ function keys(overrides: Readonly<Record<string, string>>): KeyInfo[] {
 /** The page shell's first call. */
 export function statusGet(ctx: ApiContext): StatusInfo {
   const service = ctx.service;
-  const issuesEnabled = service.issuesEnabled();
   const workspace = service.workspace?.() ?? { name: "bot-lobby" };
   // The service's own config when it has one, so a saved panes or keys change shows without a restart.
   const config = service.config?.() ?? loadConfig();
@@ -38,9 +37,8 @@ export function statusGet(ctx: ApiContext): StatusInfo {
     sessionName: service.sessionName() ?? undefined,
     busy: service.masterBusy(),
     port: ctx.port,
-    issuesEnabled,
     panels: config.lobby.panels,
-    tabs: tabs(issuesEnabled),
+    tabs: tabs(),
     keys: keys(config.lobby.keys),
     windows: [],
     ...(recovered ? { recovered } : {}),

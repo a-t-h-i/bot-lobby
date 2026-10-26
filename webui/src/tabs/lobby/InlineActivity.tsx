@@ -24,7 +24,8 @@ import { sourceColor, sourceLabel, sourceTone, type ActivityEntry } from "./type
 export const ACTIVITY_OPEN = "lobby.activity.open"
 
 function KindMark({ entry }: { entry: ActivityEntry }) {
-  if (entry.pending) return <WorkingMark className="size-3" />
+  // The run's header already spins for the live step; a pending row is a tinted dot, not a second spinner.
+  if (entry.pending) return <span className="size-1.5 rounded-full bg-[var(--orb)]" />
   if (entry.kind === "error") return <X aria-hidden="true" className="size-3.5 text-destructive" />
   if (entry.kind === "warning") return <AlertTriangle aria-hidden="true" className="size-3.5 text-warning" />
   if (entry.kind === "success") return <Check aria-hidden="true" className="size-3.5 text-success" />

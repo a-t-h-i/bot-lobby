@@ -45,7 +45,7 @@ test("a step's working agents unfold from it in Tasks, and leave when finished",
 test.afterEach(() => { releasePending?.(); releasePending = undefined; });
 
 const SECTIONS = ["Agents", "Harnesses", "Tools & skills", "Workflow", "Lobby", "Classifier", "Appearance & notifications"];
-const PAGES = ["lobby", "tasks", "plan", "git/issues", "git", "knowledge", "settings"];
+const PAGES = ["lobby", "tasks", "plan", "knowledge", "settings"];
 
 async function route(page: Page, name: string): Promise<void> {
   await page.evaluate((hash) => { window.location.hash = hash; }, `#/${name}`);
@@ -60,7 +60,7 @@ async function section(page: Page, name: string): Promise<void> {
 
 for (const name of PAGES) {
   test(`refresh ${name}: reachable, grouped, no sideways scroll and keyboard focus`, async ({ page, server }, info) => {
-    await openScenario(page, server, "issues");
+    await openScenario(page, server, "full");
     await route(page, name);
     await expect(page.locator("#main")).toBeVisible();
     await expect(page.locator("#main")).not.toBeEmpty();

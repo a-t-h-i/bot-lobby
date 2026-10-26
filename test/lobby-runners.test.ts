@@ -13,7 +13,7 @@ import { PLANNER_TOOLS, RESEARCH_PANEL_TOOLS, PlanningSession, appendAssumptions
 import { invariantPrefix } from "../src/prompts/compiler.ts";
 import { loadPrompt } from "../src/prompts/loader.ts";
 import { MAX_QUESTIONS } from "../src/lobby/ask.ts";
-import { createIssue, ghError, IssuesState, listIssues, splitIssueText, viewIssue, type Exec } from "../src/lobby/issues.ts";
+import type { Exec } from "../src/lobby/exec.ts";
 import { listPlannedTasks } from "../src/state/backlog.ts";
 import { readMetrics } from "../src/state/metrics.ts";
 import { readChanges } from "../src/state/changes.ts";
@@ -599,35 +599,6 @@ function fakeExec(responses: Record<string, { stdout?: string; stderr?: string; 
     return { stdout: response.stdout ?? "", stderr: response.stderr ?? "", code: response.code ?? 0 };
   };
 }
-
-test("issues list, view and create through gh", async () => {
-  const calls: string[][] = [];
-  const exec = fakeExec({
-    "issue list": { stdout: JSON.stringify([{ number: 3, title: "Crash on save", labels: [{ name: "bug" }], author: { login: "ana" }, url: "https://gh/3" }, { title: "no number" }]) },
-    "issue view": { stdout: JSON.stringify({ number: 3, title: "Crash on save", body: "Steps...", state: "OPEN", labels: [], author: { login: "ana" }, comments: [{ author: { login: "bo" }, body: "same here" }] }) },
-    "issue create": { stdout: "Creating issue...\nhttps://github.com/o/r/issues/9\n" },
-  }, calls);
-  const issues = await listIssues(exec, "/repo");
-  assert.deepEqual(issues, [{ number: 3, title: "Crash on save", labels: ["bug"], author: "ana", url: "https://gh/3" }]);
-  const detail = await viewIssue(exec, "/repo", 3);
-  assert.deepEqual([detail.body, detail.comments], ["Steps...", [{ body: "same here", author: "bo" }]]);
-  assert.deepEqual(await createIssue(exec, "/repo", "New bug", "details"), { url: "https://github.com/o/r/issues/9", number: 9 });
-  assert.deepEqual(calls[2], ["issue", "create", "--title", "New bug", "--body", "details"]);
-  await assert.rejects(createIssue(exec, "/repo", "  ", ""), /needs a title/);
-  assert.deepEqual(splitIssueText("\n# Title here\nline 1\nline 2\n"), { title: "Title here", body: "line 1\nline 2" });
-});
-
-test("gh failures read as one actionable line", async () => {
-  assert.match(ghError({ code: 127, stderr: "" }), /not installed/);
-  assert.match(ghError({ error: "spawn gh ENOENT" }), /not installed/);
-  assert.match(ghError({ code: 4, stderr: "To get started with GitHub CLI, please run:  gh auth login" }), /not signed in/);
-  assert.match(ghError({ code: 1, stderr: "none of the git remotes configured for this repository point to a known GitHub host" }), /no GitHub remote/);
-  const state = new IssuesState(fakeExec({ "issue list": { code: 127 } }), "/repo");
-  await state.refresh();
-  assert.match(state.error!, /not installed/);
-  assert.equal(state.loading, false);
-});
-
 
 test("seats sit the first round only; later rounds seat just the members the oracle names under Consult, or the user pins", async () => {
   const root = tempRoot();

@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTask } from "../src/schemas/task.ts";
-import type { Exec } from "../src/lobby/issues.ts";
+import type { Exec } from "../src/lobby/exec.ts";
 import { readChecks } from "../src/delivery/checks.ts";
 import { readRules } from "../src/delivery/rules.ts";
 import { completionReview, deferReview, refreshReview, localVerified, validateReview } from "../src/delivery/review.ts";

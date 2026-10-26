@@ -20,12 +20,9 @@ import { classifier, effortFor, hintsFor, scriptsPickerFor } from "../classifier
 import { checkThinking } from "../pi/model-support.ts";
 import type { Asker } from "../ask/types.ts";
 import { ChatAgents } from "./chat-agents.ts";
-import { execCommand, IssuesState } from "./issues.ts";
-import { PullsState } from "./pulls.ts";
-import { PullReviews } from "./pr-review.ts";
 import { KnowledgeBook } from "./knowledge.ts";
 import type { LobbyService } from "./host.ts";
-import { backgroundSessions, carryHandOff, chatProfile, chatReplied, chatHistoryLines, createLobbyService, lobbyNotify, lobbyProfile, plannerDeps, resumeSession, reviewProfile, seatProfile, setServiceState, savePlan as serviceSavePlan, answerPanel as serviceAnswerPanel } from "./service.ts";
+import { backgroundSessions, carryHandOff, chatProfile, chatReplied, chatHistoryLines, createLobbyService, lobbyNotify, lobbyProfile, plannerDeps, resumeSession, seatProfile, setServiceState, savePlan as serviceSavePlan, answerPanel as serviceAnswerPanel } from "./service.ts";
 import { lobbyTopics } from "./topics.ts";
 export { backgroundSessions, setSessionLauncher } from "./service.ts";
 import { deliverComments, onOwnerEvent } from "../pi/owner.ts";
@@ -43,9 +40,6 @@ export interface Runtime {
   /** The lobby chat's agents other than the oracle, answering one at a time. */
   chat: ChatAgents;
   planner?: PlanningSession;
-  issues: IssuesState;
-  pulls: PullsState;
-  reviews: PullReviews;
   knowledge: KnowledgeBook;
   unsubscribeFeed?: () => void;
   /** Puts the panel's questions to the user: the web page's questionnaire unless a test sets another. */
@@ -79,13 +73,12 @@ export async function answerPanel(state: Runtime | undefined = runtime): Promise
   return serviceAnswerPanel(state);
 }
 
-/** What the lobby is running now (a chat agent's reply, a review, a planning round), in words, or undefined. */
+/** What the lobby is running now (a chat agent's reply, a planning round), in words, or undefined. */
 export function lobbyWorkRunning(): string | undefined {
   const state = runtime;
   if (!state) return undefined;
   if (state.chat.running) return "A chat reply";
   if (state.planner?.busy) return "A planning round";
-  if (state.reviews.busy) return "A pull request review";
   return undefined;
 }
 
@@ -108,7 +101,6 @@ function shutdown(carryOn: boolean): void {
   setServiceState(undefined);
   state.unsubscribeFeed?.();
   state.chat.cancelAll();
-  state.reviews.cancelAll();
   state.planner?.cancel();
   onRunUpdates(undefined);
 }
@@ -130,9 +122,6 @@ export function startLobbyService(pi: ExtensionAPI, ctx: ExtensionContext, confi
     asking: false,
     workspace: { name: basename(ctx.cwd) || ctx.cwd },
     readingWorkspace: false,
-    issues: new IssuesState(execCommand, ctx.cwd, () => lobbyTopics.bump("issues")),
-    pulls: new PullsState(execCommand, ctx.cwd, () => lobbyTopics.bump("git")),
-    reviews: undefined as unknown as PullReviews,
     chat: undefined as unknown as ChatAgents,
     knowledge: new KnowledgeBook({
       root,
@@ -142,19 +131,6 @@ export function startLobbyService(pi: ExtensionAPI, ctx: ExtensionContext, confi
       sessionId: () => ctx.sessionManager.getSessionId(),
     }),
   };
-  state.reviews = new PullReviews({
-    cwd: ctx.cwd,
-    root,
-    configDir,
-    exec: execCommand,
-    profile: () => reviewProfile(state),
-    stallTimeoutMs: workflow.stallTimeoutMs,
-    toolStallTimeoutMs: workflow.toolStallTimeoutMs,
-    feed: lobbyFeed,
-    onChange: () => lobbyTopics.bump("git"),
-    notify: (message, level) => lobbyNotify(state, message, level),
-    classifier: classifier(),
-  });
   state.chat = new ChatAgents({
     cwd: ctx.cwd,
     root,

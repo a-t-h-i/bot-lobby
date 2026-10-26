@@ -19,7 +19,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type RefObject } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { FileText, Paperclip, X } from "lucide-react"
-import { Keys, KeyHint } from "@/components/ui/kbd"
+import { KeyHint } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Button } from "@/components/ui/button"
@@ -41,7 +41,6 @@ import { KnowledgePaneToggle } from "./KnowledgePaneToggle"
 import { ProjectSwitcher, type Projects } from "./ProjectSwitcher"
 import { taskRoute } from "./taskRoute"
 import { ComposerSurface } from "./composer/ComposerSurface"
-import { ComposerControl } from "./composer/ComposerControl"
 import { ComposerSendButton, ComposerStopButton } from "./composer/ComposerPrimaryActions"
 import { ComposerCommandMenu, composerItems, composerSuggestionOptionId, composerTrigger, type ComposerCommandItem } from "./composer/ComposerCommandMenu"
 
@@ -187,7 +186,7 @@ function useShrinkOnScroll(dock: RefObject<HTMLDivElement | null>, active: boole
   return { shrunk, expand }
 }
 
-export function Composer({ route, keys, projects, onHelp }: { route: Route; keys: Record<string, string>; projects: Projects; onHelp: () => void }) {
+export function Composer({ route, projects }: { route: Route; projects: Projects }) {
   const [text, setText] = useState("")
   const [files, setFiles] = useState<Pending[]>([])
   const [sending, setSending] = useState(false)
@@ -420,27 +419,9 @@ export function Composer({ route, keys, projects, onHelp }: { route: Route; keys
         <ComposerSurface.ContextStrip role="group" aria-label="Message context" className="composer-strip gap-1 text-xs font-normal text-muted-foreground/70">
           <ProjectSwitcher projects={projects} tab={route.kind === "tab" ? route.tab : route.kind} name={project} branch={branch} />
           <div className="@container ml-auto flex min-w-0 flex-1 items-center justify-end gap-3 overflow-hidden pe-1">
-            {route.kind === "tab" && route.tab === "plan" ? (
-              <KeyHint chord={keys.savePlan ?? "Ctrl+S"} className="hidden @[24rem]:inline-flex">
-                save plan
-              </KeyHint>
-            ) : null}
             <KeyHint chord="Shift+Enter" className="hidden @[14rem]:inline-flex">
               new line
             </KeyHint>
-            <ComposerControl
-              size="xs"
-              aria-keyshortcuts="Enter Space"
-              aria-describedby="focused-action-help"
-              aria-label="Keyboard shortcuts"
-              aria-haspopup="dialog"
-              data-compact
-              onClick={onHelp}
-              className="kbd-hint"
-            >
-              <Keys chord={keys.help ?? "Alt+H"} className="kbd-hint" />
-              <span className="hidden @[8rem]:inline">shortcuts</span>
-            </ComposerControl>
           </div>
         </ComposerSurface.ContextStrip>
       </div>

@@ -58,11 +58,11 @@ test("switching tabs pours the colour along the connectors like a straw, runs it
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.waitForTimeout(500);
-  const run = await recordSwitch(page, "Git");
+  const run = await recordSwitch(page, "Knowledge");
   const links = run.frames[0]!.liquid.length;
   const wet = new Set(run.frames.flatMap((frame: any) => frame.liquid.map((width: number, n: number) => (width > 1 ? n : -1)).filter((n: number) => n >= 0)));
   expect(links, "dotted connectors join the tabs").toBeGreaterThan(3);
-  expect(wet.size, "the colour flows through every connector between Lobby and Git").toBeGreaterThanOrEqual(3);
+  expect(wet.size, "the colour flows through every connector between Lobby and Knowledge").toBeGreaterThanOrEqual(3);
   expect(run.frames.some((frame: any) => frame.drain > 2 && frame.drain < run.from - 2), "Lobby drains into the straw").toBe(true);
   expect(run.frames.some((frame: any) => frame.unring.amount > 0.05 && frame.unring.amount < 0.95 && frame.unring.port === "right"), "and its ring is sucked back round to the side the straw leaves from").toBe(true);
   // The ring starts on Git's left, where the colour comes in, only once the colour has reached the connector beside it.
@@ -92,8 +92,8 @@ test("switching tabs pours the colour along the connectors like a straw, runs it
   expect(Math.abs(run.end.width - run.tab.width), "at the tab's width").toBeLessThan(2);
   expect(Math.abs(run.end.top - run.tab.top) + Math.abs(run.end.height - run.tab.height), "and its height, so the label sits in the middle").toBeLessThan(2);
   expect(Math.abs(run.ring.left - run.tab.left) + Math.abs(run.ring.width - run.tab.width) + Math.abs(run.ring.top - run.tab.top) + Math.abs(run.ring.height - run.tab.height), "the ring sits on the tab's edge").toBeLessThan(3);
-  await expect(page.getByRole("tab", { name: /Git/ })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByRole("tab", { name: /Git/ }), "the tab shows its number").toContainText("6");
+  await expect(page.getByRole("tab", { name: /Knowledge/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: /Knowledge/ }), "the tab shows its number").toContainText("6");
   // Back to the left: the colour comes into Tasks from its right.
   const back = await recordSwitch(page, "Tasks");
   expect(back.frames.find((frame: any) => frame.ring.amount > 0 && frame.ring.amount < 1)?.ring.port, "coming back, the ring starts on the right").toBe("right");
@@ -128,7 +128,7 @@ test("each tab's icon plays an animation of its own when the pointer comes onto 
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   const ids = await page.locator('[role="tab"] svg[data-tab-icon]').evaluateAll((icons: any[]) => icons.map((icon) => icon.dataset.tabIcon));
-  expect(ids, "every tab has its own icon").toEqual(["lobby", "tasks", "plan", "git", "knowledge"]);
+  expect(ids, "every tab has its own icon").toEqual(["lobby", "tasks", "plan", "knowledge"]);
   await expect(page.locator('svg[data-tab-icon][data-play="0"]'), "resting until something happens").toHaveCount(5);
   // Hovering Tasks ticks its boxes: the strokes are drawn again from nothing, then the icon rests as Lucide draws it.
   await page.getByRole("tab", { name: /Tasks/ }).hover();
@@ -145,14 +145,14 @@ test("each tab's icon plays an animation of its own when the pointer comes onto 
   expect(route.slice(first).some((frame: any) => frame.drawn.some((part: number) => part > 0.1 && part < 0.9)), "the route draws itself").toBe(true);
   expect(route.at(-1)!.drawn.every((part: number) => part === 1), "and is whole again").toBe(true);
   // Hovering a tab and then clicking it plays once, not twice.
-  await page.getByRole("tab", { name: /Git/ }).hover();
-  await page.getByRole("tab", { name: /Git/ }).click();
+  await page.getByRole("tab", { name: /Knowledge/ }).hover();
+  await page.getByRole("tab", { name: /Knowledge/ }).click();
   await page.waitForTimeout(400);
-  await expect(page.locator('svg[data-tab-icon="git"]'), "hover then click plays once").toHaveAttribute("data-play", "1");
+  await expect(page.locator('svg[data-tab-icon="knowledge"]'), "hover then click plays once").toHaveAttribute("data-play", "1");
   await page.waitForTimeout(700);
   await page.mouse.move(700, 600);
-  await page.getByRole("tab", { name: /Git/ }).hover();
-  await expect(page.locator('svg[data-tab-icon="git"]'), "and again on the next visit").toHaveAttribute("data-play", "2");
+  await page.getByRole("tab", { name: /Knowledge/ }).hover();
+  await expect(page.locator('svg[data-tab-icon="knowledge"]'), "and again on the next visit").toHaveAttribute("data-play", "2");
 });
 
 test("under reduced motion the tab icons stay still", async ({ page, server }) => {
@@ -160,7 +160,7 @@ test("under reduced motion the tab icons stay still", async ({ page, server }) =
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole("tab", { name: /Tasks/ }).hover();
-  await page.getByRole("tab", { name: /Git/ }).click();
+  await page.getByRole("tab", { name: /Knowledge/ }).click();
   await page.waitForTimeout(500);
   await expect(page.locator('svg[data-tab-icon][data-play="0"]'), "no icon plays").toHaveCount(5);
 });
@@ -464,7 +464,7 @@ test("keyboard hints: the box prints its keys, the header button opens the key l
 test("the page itself never scrolls: no empty page below the composer, whatever the tab", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1024, height: 700 });
-  for (const hash of ["#/lobby", "#/tasks", "#/plan", "#/settings", "#/knowledge", "#/git"]) {
+  for (const hash of ["#/lobby", "#/tasks", "#/plan", "#/settings", "#/knowledge"]) {
     await page.evaluate((h) => {
       window.location.hash = h;
     }, hash);
@@ -680,10 +680,10 @@ test("switching tabs puts the cursor in the message box; Esc leaves it for the b
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
   const box = page.locator("#composer-text");
-  await page.getByRole("tab", { name: /Git/ }).click();
+  await page.getByRole("tab", { name: /Knowledge/ }).click();
   await expect(box, "a tab switch puts the cursor in the message box").toBeFocused();
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("tab", { name: /Git/ }), "Esc leaves it for the tab bar").toBeFocused();
+  await expect(page.getByRole("tab", { name: /Knowledge/ }), "Esc leaves it for the tab bar").toBeFocused();
   await page.keyboard.press("2");
   await expect(page, "where a bare digit jumps").toHaveURL(/#\/tasks/);
   await expect(box, "and the new page's switch puts the cursor back in the box").toBeFocused();
@@ -1247,7 +1247,7 @@ test("the Thinking pane's edge pulses in the working agent's colour while anyone
     await expect(pane.locator(".thought-aura")).toHaveAttribute("data-working", working);
     await page.keyboard.press("Escape");
   }
-  await openScenario(page, server, "issues");
+  await openScenario(page, server, "full");
   await page.getByRole("button", { name: "Open Thinking" }).click();
   await expect(page.locator(".thought-pane"), "a thought trail, nobody at work: still").not.toHaveClass(/thought-pane-live/);
 });
@@ -1262,7 +1262,7 @@ test("with no thoughts and nobody at work there is no orb; the Thinking key stil
   await expect(page.getByRole("dialog", { name: "Thinking", exact: true })).toBeVisible();
   await expect(page.getByText("Thoughts from the oracle and every agent appear here")).toBeVisible();
   await page.keyboard.press("Escape");
-  await openScenario(page, server, "issues");
+  await openScenario(page, server, "full");
   await expect(page.getByRole("button", { name: "Open Thinking" }), "a thought trail: the orb is there").toBeVisible();
   await openScenario(page, server, "loading");
   await expect(page.getByRole("button", { name: "Open Thinking" }), "agents at work: the orb is there").toBeVisible();
@@ -1450,8 +1450,8 @@ test("the Plan tab is one conversation; View plan opens the draft in a slide-out
   await expect(main.getByRole("log", { name: "Panel conversation" })).toBeVisible();
   await expect(main.getByText("Agreed plan"), "the draft is not a second card beside the conversation").toHaveCount(0);
   const link = main.getByRole("button", { name: /^View plan/ }).first();
-  await expect(link, "a link to the draft once there is one").toBeVisible();
-  expect(await link.evaluate((el: any) => getComputedStyle(el).borderTopWidth), "drawn as a link, not a button").toBe("0px");
+  await expect(link, "one pill to the draft once there is one").toBeVisible();
+  await expect(main.getByRole("button", { name: /^View plan/ }), "and only one").toHaveCount(1);
   await link.click();
   const sheet = page.getByRole("dialog", { name: "Draft plan" });
   await expect(sheet).toBeVisible();

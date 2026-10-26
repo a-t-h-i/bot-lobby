@@ -72,11 +72,10 @@ test("status.get has the C5 shape: workspace, tabs, keys, windows", async () => 
     assert.equal(result.sessionId, "session-1");
     assert.equal(result.sessionName, "test session");
     assert.equal(result.busy, false);
-    assert.equal(result.issuesEnabled, false);
     assert.ok(typeof result.port === "number");
     const tabs = result.tabs as Array<{ id: string; label: string; key: string }>;
-    assert.deepEqual(tabs.map((tab) => tab.id), ["lobby", "tasks", "plan", "git", "knowledge"]);
-    assert.deepEqual(tabs.map((tab) => tab.key), ["Alt+1", "Alt+2", "Alt+3", "Alt+4", "Alt+5"]);
+    assert.deepEqual(tabs.map((tab) => tab.id), ["lobby", "tasks", "plan", "knowledge"]);
+    assert.deepEqual(tabs.map((tab) => tab.key), ["Alt+1", "Alt+2", "Alt+3", "Alt+4"]);
     assert.equal(tabs[0]?.label, "Lobby");
     assert.equal(tabs[0]?.key, "Alt+1");
     const keys = result.keys as Array<{ action: string; key: string; label: string; help: string }>;

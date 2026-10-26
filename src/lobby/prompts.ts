@@ -5,21 +5,15 @@
  * `node:*`): the web page imports this file directly.
  */
 
-export const TAB_IDS = ["lobby", "tasks", "plan", "git", "knowledge"] as const;
+export const TAB_IDS = ["lobby", "tasks", "plan", "knowledge"] as const;
 export type TabId = (typeof TAB_IDS)[number];
 
 export const TAB_LABELS: Record<TabId, string> = {
   lobby: "Lobby",
   tasks: "Tasks",
   plan: "Plan",
-  git: "Git",
   knowledge: "Knowledge",
 };
-
-/** The tabs on show; issues are available inside Git. */
-export function visibleTabs(_issues: boolean): TabId[] {
-  return [...TAB_IDS];
-}
 
 /** A question answered in another window of the page (or put away) before this one's answer arrived. */
 export const ANSWERED_ELSEWHERE = "already answered in another window";
