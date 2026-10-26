@@ -537,14 +537,34 @@ function reportFreshness(request: WorkerRequest, reader: string, status: WorkerF
   });
 }
 
+/** True when an assignment only reads: every file is reference and no edit or write tool is selected. */
+export function readOnlyAssignment(assignment: WorkerAssignment): boolean {
+  return assignment.files.every((file) => file.access === "reference") && !assignment.tools.some((tool) => tool.name === "edit" || tool.name === "write");
+}
+
+/**
+ * The worker's model, thinking and grants. A read-only assignment needs no
+ * builder: it runs on the scout's model and thinking (keeping the worker's grants,
+ * which its tool selection was checked against), unless the scout is on a harness.
+ */
+function workerProfile(request: WorkerRequest, assignment: WorkerAssignment | undefined) {
+  const worker = profileFields(request.config, request.profile, request.domain, "worker");
+  if (!assignment || !request.config.workflow.readOnlyOnScoutModel || !readOnlyAssignment(assignment)) return worker;
+  const scout = profileFields(request.config, request.profile, request.domain, "scout");
+  if (scout.harness || worker.harness) return worker;
+  // A scout that inherits the session's model would make this run dearer: keep the worker's model, at the scout's thinking.
+  const model = scout.model && scout.model !== "inherit" ? scout.model : worker.model;
+  return { ...worker, model, thinking: scout.thinking };
+}
+
 /** Delegate one implementation step to a domain worker. */
 export async function runWorker(
   request: WorkerRequest,
   run: ProcessRunner = spawnPiProcess,
 ): Promise<WorkerOutcome> {
-  const configured = profileFields(request.config, request.profile, request.domain, "worker");
   const assignment = request.assignment !== undefined ? await validateAssignment(request.assignment, request.cwd) : undefined;
   if (assignment && !request.dataRoots[0]) throw new Error("Assigned worker requires host-owned task storage in dataRoots.");
+  const configured = workerProfile(request, assignment);
   const [selected, likely, route, bookmarked] = await Promise.all([
     pickKnowledge(request, request.domain, `${request.instruction}\n\n${request.taskText}`),
     assignment ? Promise.resolve("") : likelyFor(request.hints, request.instruction, request.signal, request.taskText),
@@ -684,6 +704,8 @@ export interface ReviewerRequest {
   risk?: string;
   /** The task board's contracts, decisions, blockers and finished pieces, as posted by the task's agents. */
   board?: string;
+  /** The assignments behind the change: the files each could change and its verification commands, for QA to start from. */
+  assignmentChecks?: string;
   /** Review with a clean context: no worker summaries or scout findings, only the request, plan, board and diff. */
   clean?: boolean;
   instruction?: string;
@@ -715,6 +737,7 @@ function reviewerContext(request: ReviewerRequest): string {
     request.provenance ? `Who changed each file (bot-lobby's record of every agent's edit and write calls; judge each as your role's Change provenance says):\n${request.provenance}` : "",
     request.lint ?? "",
     request.board ?? "",
+    request.assignmentChecks ?? "",
     `Repository changes:\n${request.diff}`,
   ]
     .filter((line) => line.length > 0)

@@ -316,7 +316,12 @@ Every delegation costs a full agent run, so keep the loop short:
 
 - Delegate fewer calls, not vaguer ones: one `implement` per domain covering
   its consecutive steps (`Steps 2-4: ...`) rather than one call per step, each
-  step still briefed in full (see Briefing the agents).
+  step still briefed in full (see Briefing the agents). Small steps of one
+  domain that each touch a file or less go out as one assignment: the draft
+  assignments the engine returns with a plan already fold them together.
+- A brief that only reads (every file `reference`, no `edit` or `write`)
+  runs on the scout's cheaper model; keep investigation-only work in such
+  briefs rather than mixing it into an edit.
 - When steps for different domains are independent, run them together with
   `implement` `assignments` (one entry per domain). Workers then share files
   through the file desk: they claim files, queue for busy ones, and hand them
@@ -334,7 +339,9 @@ Every delegation costs a full agent run, so keep the loop short:
 - Select all domains the change touches in one `scout` call with pointed
   questions: one shared, read-only scout covers them and attributes findings
   by domain. Targeted followups use the same task lock; do not start another
-  scout while it is active. Skip scouting when existing evidence is sufficient;
+  scout while it is active. A scout over the triage's domains may already have
+  started with the task: your first scout call covering those domains returns
+  its findings. Skip scouting when existing evidence is sufficient;
   a cache miss alone is not a reason to scout. Target-verify one claim instead
   of re-scouting.
 - After a worker returns, check `git diff --stat` and the report instead of

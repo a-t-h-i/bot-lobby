@@ -102,6 +102,10 @@ export interface WorkflowConfig {
   knowledgeRetrieval: boolean;
   /** A scout asked the same thing again for the same task, on a tree that has not changed, reuses its findings instead of running. */
   reuseScouts: boolean;
+  /** A new task on the full workflow starts one shared scout over the domains the classifier's triage names, while the oracle reads the request; its first scout call takes those findings. */
+  prefetchScout: boolean;
+  /** A structured assignment that only reads (reference files, no edit or write) runs on the scout's model and thinking instead of the worker's. */
+  readOnlyOnScoutModel: boolean;
   /** How a parallel batch shares the repository: one checkout with the file desk (`desk`), or a worktree per worker whose changes are merged back when the batch ends (`worktrees`). */
   parallelMode: ParallelMode;
   /** The QA gate reviews with a clean context: the request, plan, board contracts and diff, not the workers' own accounts of their work. */
@@ -303,6 +307,8 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     repoMap: true,
     knowledgeRetrieval: true,
     reuseScouts: true,
+    prefetchScout: true,
+    readOnlyOnScoutModel: true,
     parallelMode: "desk",
     cleanReview: true,
     goalCheck: true,
@@ -533,6 +539,8 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
   workflow.repoMap = workflow.repoMap !== false;
   workflow.knowledgeRetrieval = workflow.knowledgeRetrieval !== false;
   workflow.reuseScouts = workflow.reuseScouts !== false;
+  workflow.prefetchScout = workflow.prefetchScout !== false;
+  workflow.readOnlyOnScoutModel = workflow.readOnlyOnScoutModel !== false;
   workflow.parallelMode = isParallelMode(workflow.parallelMode) ? workflow.parallelMode : DEFAULT_CONFIG.workflow.parallelMode;
   workflow.cleanReview = workflow.cleanReview !== false;
   workflow.goalCheck = workflow.goalCheck !== false;

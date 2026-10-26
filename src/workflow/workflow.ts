@@ -5,6 +5,8 @@ import { cleanupTaskAssignedSessions } from "../execution/assigned-session.ts";
 import { checkWorkerAssignments, recordWorkerAssignments } from "../state/persistence.ts";
 import { existsSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
 import { checkpointSummary, settledDecisions } from "../state/checkpoint.ts";
+import { draftAssignments, draftAssignmentsNote } from "./draft-assignments.ts";
+import { prefetchDomains, startScoutPrefetch, stopScoutPrefetch, takeScoutPrefetch } from "../master/scout-prefetch.ts";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { profileFor, type BotLobbyConfig, type ProfileResolver } from "../schemas/configuration.ts";
 import type { AgentRun, Pushback, ResearchResult, ReviewResult } from "../schemas/findings.ts";
@@ -50,6 +52,7 @@ import {
   runWorker,
   type ReviewerRequest,
   type ScoutOutcome,
+  type ScoutRequest,
   type WorkerOutcome,
   type WorkerRequest,
 } from "../master/master.ts";
@@ -378,37 +381,62 @@ async function clarifyByClassifier(task: Task, question: string, options: readon
   }
 }
 
+/** The scout request for a task, as the oracle's scout action and the task's opening scout both make it. */
+function scoutRequestFor(task: Task, deps: WorkflowDeps, instruction: string, domains: Domain[], signal = deps.signal): ScoutRequest {
+  return {
+    taskId: task.id,
+    taskText: taskRequest(task),
+    instruction,
+    domains,
+    cwd: deps.cwd,
+    dataRoots: readDataRoots(deps.root, deps.configDir),
+    taskDir: taskDirFor(deps.root, deps.configDir, task.id),
+    config: deps.config,
+    profile: deps.profile,
+    signal,
+    onUpdate: deps.onUpdate,
+    ...(deps.hints ? { hints: deps.hints } : {}),
+    ...(deps.knowledge ? { knowledge: deps.knowledge } : {}),
+    ...(deps.effort ? { effort: deps.effort } : {}),
+  };
+}
+
+const DEFAULT_SCOUT_INSTRUCTION = "Investigate this request and report findings the Master needs.";
+
+/**
+ * Start the task's opening scout while the oracle reads the request: the full
+ * workflow only (the fast track and an agreed plan skip scouting), over the
+ * domains the triage names. Returns the domains it scouts; none when it did not start.
+ */
+export function prefetchScouts(task: Task, config: BotLobbyConfig, makeDeps: () => WorkflowDeps): Domain[] {
+  if (!config.workflow.prefetchScout || task.approvedPlan || task.track?.path === "fast") return [];
+  const domains = prefetchDomains(task.triage);
+  if (domains.length === 0) return [];
+  const deps = makeDeps();
+  const cwd = taskCwd(task, deps.cwd);
+  const started = startScoutPrefetch(task.id, domains, (signal, onRun) => runScouts({ ...scoutRequestFor(task, { ...deps, cwd }, DEFAULT_SCOUT_INSTRUCTION, domains, signal), onUpdate: onRun }, deps.runProcess ?? spawnPiProcess));
+  return started ? domains : [];
+}
+
 async function handleScout(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
   requireState(task, ["created", "clarifying", "scouting", "synthesizing"]);
   const domains = deriveDomains(params.domains);
   if (task.state === "created") transition(task, "clarifying");
   if (task.state === "clarifying") transition(task, "scouting");
   const verifying = task.state === "synthesizing";
-  const instruction = params.instruction?.trim() || "Investigate this request and report findings the Master needs.";
-  const outcomes = await runScouts(
-    {
-      taskId: task.id,
-      taskText: taskRequest(task),
-      instruction,
-      domains,
-      cwd: deps.cwd,
-      dataRoots: readDataRoots(deps.root, deps.configDir),
-      taskDir: taskDirFor(deps.root, deps.configDir, task.id),
-      config: deps.config,
-      profile: deps.profile,
-      signal: deps.signal,
-      onUpdate: deps.onUpdate,
-      ...(deps.hints ? { hints: deps.hints } : {}),
-      ...(deps.knowledge ? { knowledge: deps.knowledge } : {}),
-      ...(deps.effort ? { effort: deps.effort } : {}),
-    },
-    deps.runProcess ?? spawnPiProcess,
-  );
+  const instruction = params.instruction?.trim() || DEFAULT_SCOUT_INSTRUCTION;
+  // The scout that started with the task answers the first ask it covers; a pointed follow-up runs on its own.
+  const prefetch = verifying ? await stopScoutPrefetch(task.id) : await takeScoutPrefetch(task.id, domains);
+  // Its runs are this action's too, used or not, so the task's run log and costs count them once.
+  for (const run of prefetch?.runs ?? []) deps.onUpdate?.(run);
+  const early = prefetch?.outcomes;
+  const outcomes = early ?? await runScouts(scoutRequestFor(task, deps, instruction, domains), deps.runProcess ?? spawnPiProcess);
   if (!verifying) transition(task, "synthesizing");
   const involved = outcomes.filter((outcome) => outcome.usable).map((outcome) => outcome.result.domain);
   task.domains = [...new Set([...task.domains, ...involved])];
   recordAdvisoryPushbacks(task, outcomes.map((outcome) => ({ pushback: outcome.result.pushback, who: outcome.result.domain })));
-  return scoutReport(outcomes, verifying);
+  const report = scoutReport(outcomes, verifying);
+  return early ? `${report}\n\nThese findings come from the scout that started with the task (it investigated the request as a whole). For a specific gap, scout again with a pointed instruction.` : report;
 }
 
 /** Research is evidence gathering, so it is legal in every non-terminal state. */
@@ -591,7 +619,8 @@ function handlePlan(task: Task, params: OrchestrateParams, deps: WorkflowDeps): 
     recordDecision(task, `Plan amended${addressed > 0 ? ` for ${addressed} user comment${addressed === 1 ? "" : "s"}` : ""}.`);
     return `Plan amended.${commentsNote(addressed)} Next: continue with action=implement for the next open step (or action=qa when the work is complete).`;
   }
-  return `Plan recorded.${commentsNote(addressed)} Next: call action=implement with domain and task for the first step.`;
+  const drafts = draftAssignmentsNote(draftAssignments(plan, deps.cwd));
+  return [`Plan recorded.${commentsNote(addressed)} Next: call action=implement with domain and workerAssignment for the first step.`, drafts].filter(Boolean).join("\n\n");
 }
 
 /** Record approvals a worker asked for; auto-approve when config allows it. */
@@ -1467,6 +1496,7 @@ function qaRequest(deps: WorkflowDeps, task: Task, diff: string, risk: QaRiskAss
     board: seedAndReadBoard(taskBoard(deps, task), "qa"),
     ...(provenance && provenance.length > 0 ? { provenance: provenanceLines(provenance) } : {}),
     ...(lint ? { lint: lintContext(lint, deps.config.lint.mode) } : {}),
+    ...(assignmentChecks(task, deps.config.workflow.cleanReview) ? { assignmentChecks: assignmentChecks(task, deps.config.workflow.cleanReview) } : {}),
     instruction: instruction?.trim() || qaInstruction(risk),
     cwd: deps.cwd,
     dataRoots: readDataRoots(deps.root, deps.configDir),
@@ -1476,6 +1506,22 @@ function qaRequest(deps: WorkflowDeps, task: Task, diff: string, risk: QaRiskAss
     onUpdate: deps.onUpdate,
     ...(deps.knowledge ? { knowledge: deps.knowledge } : {}),
   };
+}
+
+/**
+ * What the assignments already settle for QA: the files each one was allowed to
+ * change, and the verification it was briefed with (and, outside a clean review,
+ * what the worker reported). QA starts there,
+ * runs those commands first and widens only where the diff reaches further.
+ */
+export function assignmentChecks(task: Task, clean = false): string {
+  const lines = (task.workerAssignments ?? []).flatMap(({ domain, brief, outcomes }) => {
+    const latest = outcomes.filter((outcome) => outcome.revision === brief.revision).at(-1);
+    if (!latest || latest.status !== "success") return [];
+    const changed = brief.files.filter((file) => file.access !== "reference").map((file) => file.path);
+    return [`- ${brief.id} r${brief.revision} (${domain}): ${changed.length ? `may change ${changed.join(", ")}` : "read only"}; verify with ${brief.verification.map((entry) => JSON.stringify(entry)).join(", ")}${!clean && latest.verification?.trim() ? `; the worker reported: ${truncate(latest.verification.trim().replace(/\s+/g, " "), 300)}` : ""}`];
+  });
+  return lines.length ? ["Assignments behind this change. Check these files first and run these verification commands before anything broader; widen only where the diff or a failure reaches other code:", ...lines].join("\n") : "";
 }
 
 /** What the loop does after a QA round: finish, fix and review again, stop, or (the user's call) accept the work as it is. */
@@ -2185,7 +2231,10 @@ export async function runWorkflowAction(params: OrchestrateParams, deps: Workflo
     execution.signal.throwIfAborted();
     const runs = recordRunLog(task, finished, deps);
     saveTask(deps.root, deps.configDir, task);
-    if (TERMINAL_STATES.includes(task.state)) cleanupTaskAssignedSessions(taskDirFor(deps.root, deps.configDir, task.id));
+    if (TERMINAL_STATES.includes(task.state)) {
+      cleanupTaskAssignedSessions(taskDirFor(deps.root, deps.configDir, task.id));
+      void stopScoutPrefetch(task.id);
+    }
     return { ok: true, taskId: task.id, state: task.state, message: `${message}${runsFooter(runs)}`, runs };
   } catch (error) {
     const runs = recordRunLog(task, finished, deps);

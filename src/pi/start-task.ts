@@ -8,7 +8,8 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { createTask, taskRequest, type Task, type TaskTrack, type TaskTriage, type TrackPath } from "../schemas/task.ts";
 import type { Domain } from "../schemas/agent.ts";
 import { chooseTrack, qaRequired, rosterWords, trackLine, trackSummary } from "../workflow/track.ts";
-import { startFromAgreedPlan } from "../workflow/workflow.ts";
+import { prefetchScouts, startFromAgreedPlan } from "../workflow/workflow.ts";
+import { workflowDeps } from "./tools.ts";
 import { lobbyFeed } from "../lobby/feed.ts";
 import { createTaskDir, ensureProjectStructure, loadTask, nextTaskId, ownedTask, saveTask, taskDirFor } from "../state/persistence.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
@@ -21,7 +22,8 @@ import { setAutoMode } from "../state/auto.ts";
 import { listPlannedTasks, loadPlannedTask, markPlannedTaskStarted, plannedTaskRequest, type PlannedTask } from "../state/backlog.ts";
 import { triageFor } from "../classifier/instance.ts";
 import { freshContextOn, markContext } from "./fresh-context.ts";
-import { createWorkspace, gitLine } from "../execution/workspace.ts";
+import { createWorkspace, gitLine, taskCwd } from "../execution/workspace.ts";
+import { draftAssignments, draftAssignmentsNote } from "../workflow/draft-assignments.ts";
 import type { GitIsolation } from "../schemas/configuration.ts";
 
 function uniqueTaskId(root: string, configDir: string, request: string): string {
@@ -53,7 +55,7 @@ function fastSteps(track: TaskTrack): string[] {
 }
 
 /** A task from an agreed plan: straight to building its steps; QA only when it took part in the panel. */
-function plannedSteps(task: Task): string[] {
+function plannedSteps(task: Task, cwd?: string): string[] {
   const qa = qaRequired(task);
   const steps = [
     'Delegate the plan\'s steps now with orchestrate action=implement, opening each task with "Step N:" and briefing it in full from the plan. Give one domain its consecutive steps in one call, and run independent domains together with assignments.',
@@ -68,10 +70,11 @@ function plannedSteps(task: Task): string[] {
     out.length > 0 ? `Only the members who sat on the panel work on it (${rosterWords(task.track?.roster ?? [])}). ${rosterWords(out)} sat out, so give ${out.length === 1 ? "it" : "them"} nothing; if a step truly needs one, ask the user with orchestrate action=track (the roster with it, and why).` : "",
     ...steps.map((step, index) => `${index + 1}. ${step}`),
     "If the code contradicts the plan, amend it with action=plan (the plan with the change made) and tell the user in one line, rather than starting over.",
+    cwd && task.plan ? draftAssignmentsNote(draftAssignments(task.plan, cwd)) : "",
   ].filter(Boolean);
 }
 
-export function kickoff(task: Task, options: { fastTrack?: boolean } = {}): string {
+export function kickoff(task: Task, options: { fastTrack?: boolean; cwd?: string; scouting?: readonly Domain[] } = {}): string {
   const track = task.track;
   const head = [
     `A bot-lobby task is active: ${task.id}`,
@@ -83,13 +86,15 @@ export function kickoff(task: Task, options: { fastTrack?: boolean } = {}): stri
     "",
   ];
   if (track?.path === "fast") return [...head, ...fastSteps(track)].join("\n");
-  if (task.approvedPlan && task.plan && task.state === "planning") return [...head, ...plannedSteps(task)].join("\n");
+  if (task.approvedPlan && task.plan && task.state === "planning") return [...head, ...plannedSteps(task, options.cwd)].join("\n");
   const fastAllowed = Boolean(track) && options.fastTrack !== false && track?.userChoice !== "full" && track?.source !== "plan";
   return [
     ...head,
     "Drive it with the orchestrate tool:",
     "1. clarify if the request is genuinely ambiguous,",
-    "2. scout the domains the request touches,",
+    options.scouting && options.scouting.length > 0
+      ? `2. scout the domains the request touches: a scout over ${options.scouting.join(", ")} started with the task, and your first scout call covering them (without a pointed instruction is fine) returns its findings,`
+      : "2. scout the domains the request touches,",
     "3. synthesize the findings and propose a short `- ` bullet list for approval.",
     "Do not implement anything before the user approves the proposal.",
     ...(fastAllowed ? ["If it is in fact a small, clear, low-risk change, take the fast track instead: orchestrate action=track track=fast with a reason."] : []),
@@ -175,8 +180,14 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   ctx.ui.notify(`bot-lobby ${task.id} started`, "info");
   // The oracle takes the task on with a clean context: nothing said before the kickoff is sent to its model.
   if (freshContextOn()) markContext(pi, { kind: "start", taskId: task.id, at: Date.now() });
+  // The full workflow scouts first: start it now, so the findings are on their way while the oracle reads the request.
+  // It is only a head start: anything that stops it leaves the oracle to scout as before.
+  let scouting: Domain[] = [];
+  try { scouting = prefetchScouts(task, config, () => workflowDeps(ctx, configDir, undefined, undefined)); }
+  catch { scouting = []; }
+  if (scouting.length > 0) lobbyFeed.log("LOBBY", `${task.id}: scouting ${scouting.join(", ")} while the oracle reads the request`, "info");
   // A kickoff while pi is still busy (another turn) queues behind it instead of throwing.
-  pi.sendUserMessage(kickoff(task, { fastTrack: config.workflow.fastTrack }), ctx.isIdle() ? undefined : { deliverAs: "followUp" });
+  pi.sendUserMessage(kickoff(task, { fastTrack: config.workflow.fastTrack, cwd: taskCwd(task, ctx.cwd), scouting }), ctx.isIdle() ? undefined : { deliverAs: "followUp" });
   return task;
 }
 
