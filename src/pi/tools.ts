@@ -85,16 +85,16 @@ const OrchestrateSchema = Type.Object({
   decision: Type.Optional(
     StringEnum(["approved", "rejected"] as const, { description: "resolve_approval: approve or reject the request" }),
   ),
-  note: Type.Optional(Type.String({ description: "resolve_approval: rationale, or what to do instead when rejected" })),
+  note: Type.Optional(Type.String({ description: "resolve_approval: rationale, or what to do instead when rejected; design: user when the user stated the choice (an agent's choice otherwise)" })),
   reason: Type.Optional(Type.String({ description: "block: why the task cannot continue; track: why the task takes that path or needs those members; complete: why gaps the goal check named are deliberate (the user agreed)" })),
   track: Type.Optional(
     StringEnum(["fast", "full"] as const, { description: "track: fast (straight to the roster's agents, no scouts, proposal or plan; QA only for tests) or full (the whole workflow)" }),
   ),
   roster: Type.Optional(Type.Array(Type.String(), { description: "track: who takes part — any of designer, backend, qa, researcher" })),
-  text: Type.Optional(Type.String({ description: "decide/complete/knowledge/script: the decision, completion summary, knowledge text, or the script itself" })),
+  text: Type.Optional(Type.String({ description: "decide/complete/knowledge/script/design: the decision, completion summary, knowledge text, the script itself, or the design value" })),
   message: Type.Optional(Type.String({ description: "complete: the commit message for the agents' changes, which the engine commits (only their files): a first line of 72 characters or fewer saying what changed, at most three short lines below it" })),
   file: Type.Optional(Type.String({ description: "compact: the knowledge file to rewrite, e.g. knowledge.md; script: a script a worker drafted, to save instead of text" })),
-  name: Type.Optional(Type.String({ description: "script: the file name, what it does in snake_case with its language's extension (seed_public_holidays.py, run_changed_tests.sh)" })),
+  name: Type.Optional(Type.String({ description: "script: the file name, what it does in snake_case with its language's extension (seed_public_holidays.py, run_changed_tests.sh); design: the field (spacing, radius, borders, shadows, hover, motion)" })),
   purpose: Type.Optional(Type.String({ description: "script: one line on what the script does" })),
   usage: Type.Optional(Type.String({ description: "script: the command that runs it, with its arguments" })),
   kind: Type.Optional(
@@ -122,7 +122,7 @@ const DESCRIPTION = [
   "plan, or amend it later with the full revised plan), implement (delegate a step to a domain worker, or several domains in parallel with assignments), qa (final quality gate and the only",
   "review), knowledge (record approved project knowledge or a decision; works without a task),"
   + "bookmark (manage the task's assignment bookmark list: op=add|remove|pin|unpin|exclude with refs — reference ids from search_knowledge — and optionally domain and note),",
-  "compact (replace a knowledge file with a rewritten version, archiving the old one; works without a task; disperse domain-relevant facts to action=knowledge (domain=designer|backend|qa) first), script (save a script to the shared scripts library, or replace one, for a job that comes back; works without a task),",
+  "compact (replace a knowledge file with a rewritten version, archiving the old one; works without a task; disperse domain-relevant facts to action=knowledge (domain=designer|backend|qa) first), script (save a script to the shared scripts library, or replace one, for a job that comes back; works without a task), design (record a visual choice in the design record: name=field, text=value; works without a task),",
   "resolve_approval (approve or reject a request), complete (declare the task done after the gates",
   "pass, then ask the user to confirm merging and pushing main and removing its worktree), block/resume (escalate or continue),",
   "track (the task's path and who takes part: show it, or correct it with",

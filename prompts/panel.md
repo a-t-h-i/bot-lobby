@@ -76,3 +76,10 @@ Omit Questions when READY.)
 
 ## Notes
 - …
+
+## Style
+spacing, radius
+
+(DESIGN only, and only when the work changes what the user sees: the keys of
+the design record fields it touches that the record lists as not settled.
+The user is asked those with fixed options; omit the section otherwise.)

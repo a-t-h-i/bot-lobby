@@ -622,3 +622,19 @@ test("seats sit the first round only; later rounds seat just the members the ora
   await session.send("again");
   assert.deepEqual(seen.slice(7).map((call) => call.who), ["DEV", "ORACLE"], "a pinned seat sits every round");
 });
+
+test("DESIGN reads the design record; the style fields it names that are still open are asked with fixed options, never auto-answered, and hold READY", async () => {
+  const root = tempRoot();
+  const seen: Array<{ who: string; args: string[]; prompt: string }> = [];
+  const answers: Record<string, string | undefined> = {
+    DESIGN: "## Status\nREADY\n## Style\nradius, motion",
+    ORACLE: "## Status\nREADY\n## Plan\n### Steps\n1. a",
+  };
+  const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: ["designer"], profile: () => ({ thinking: "high" }), runProcess: panelRunner(answers, seen) });
+  writeFileSync(join(root, "app.css"), ":root{--radius: 4px}");
+  await session.send("a settings page");
+  assert.match(seen[0]!.prompt, /## Design record[\s\S]*Corner radius: follow the code — tokens --radius: 4px/);
+  assert.deepEqual(session.questions.map((question) => [question.from, question.record]), [["DESIGN", "motion"]], "radius is settled by the code");
+  assert.equal(session.reply?.status, "grilling", "a style question keeps the plan open");
+  assert.ok(session.questions[0]!.options.every((option) => option.mockup));
+});
