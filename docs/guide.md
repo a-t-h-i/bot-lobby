@@ -19,9 +19,14 @@ A member you pin with its key sits every round.
 
 Every project gets bot-lobby's read-only scripts (`scripts/builtin/`), offered to every agent with
 how to run them: `run_changed_tests` and `check_changed` run only the tests, typecheck and lint for
-what changed; `diff_summary` sums up the branch; `find_symbol`, `outline_file` and `find_tests_for`
-find code without rounds of grep; `repo_map`, `project_commands` and `recent_changes` orient an
-agent in a project it has not seen. Each detects the project's tooling (npm, pnpm, yarn, bun,
+what changed, and `failure_digest` cuts a long failing log down to the errors and the code around
+them; `diff_summary` sums up the branch (changed functions, and those no test names), with
+`check_contract_breakage` (exports removed, renamed or changed, and who still uses them),
+`circular_dependency_check` and `code_duplication_check` to review it; `find_symbol` (with
+`--config` for settings and environment variables), `outline_file` (with each function's length and
+nesting), `find_tests_for`, `find_test_fixtures` and `find_generated_files` find code without rounds
+of grep; `affected_packages` names the monorepo packages a change reaches; `repo_map`,
+`project_commands` and `recent_changes` orient an agent in a project it has not seen. Each detects the project's tooling (npm, pnpm, yarn, bun,
 pytest, Go, Cargo) on its own and prints its usage with `--help`. A script the project saves under
 the same name replaces the built-in one.
 

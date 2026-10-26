@@ -247,10 +247,14 @@ step and name it in the brief.
 
 Every project also has bot-lobby's read-only built-in scripts:
 `run_changed_tests` and `check_changed` (only what the branch changed),
-`diff_summary`, `find_symbol`, `outline_file`, `find_tests_for`,
-`repo_map`, `project_commands` and `recent_changes`. Point briefs at them
-(for example "verify with run_changed_tests") instead of whole-suite runs or
-hand searches. A project script of the same name replaces one.
+`failure_digest` (a long failing log cut to errors with their code),
+`diff_summary`, `check_contract_breakage`, `circular_dependency_check` and
+`code_duplication_check` (reviewing the branch), `find_symbol` (also
+`--config`), `outline_file`, `find_tests_for`, `find_test_fixtures`,
+`find_generated_files`, `affected_packages`, `repo_map`, `project_commands`
+and `recent_changes`. Point briefs at them (for example "verify with
+run_changed_tests", "check_contract_breakage before QA") instead of
+whole-suite runs or hand searches. A project script of the same name replaces one.
 
 ## Review
 
