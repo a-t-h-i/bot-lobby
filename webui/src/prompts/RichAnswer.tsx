@@ -85,7 +85,8 @@ export const RichAnswer = forwardRef<RichAnswerHandle, {
   /** Lit when the focus animation lands on the field. */
   landed?: boolean
   onChange: (markdown: string, html: string) => void
-  onFocusChange: (focused: boolean) => void
+  /** Focus came or went; on leaving, `next` is what takes it (null when nothing focusable does). */
+  onFocusChange: (focused: boolean, next?: Element | null) => void
   onSubmit: () => void
   onUp: () => void
 }>(function RichAnswer({ html, placeholder, label, landed, onChange, onFocusChange, onSubmit, onUp }, handle) {
@@ -173,7 +174,7 @@ export const RichAnswer = forwardRef<RichAnswerHandle, {
           document.execCommand("insertText", false, event.clipboardData.getData("text/plain"))
         }}
         onFocus={() => { setFocused(true); onFocusChange(true) }}
-        onBlur={() => { setFocused(false); onFocusChange(false) }}
+        onBlur={(event) => { setFocused(false); onFocusChange(false, event.relatedTarget) }}
         className="q-own-text min-h-9 w-full min-w-0 px-4 py-2 text-sm break-words outline-none [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.8125rem] [&_ol]:list-decimal [&_ol]:ps-5 [&_ul]:list-disc [&_ul]:ps-5"
       />
       <div role="toolbar" aria-label="Formatting" aria-hidden={!focused} className={cn("q-own-bar flex items-center gap-0.5 px-2 pb-1.5", !focused && "pointer-events-none")}>

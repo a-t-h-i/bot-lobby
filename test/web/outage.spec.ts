@@ -23,6 +23,6 @@ test("pi stopping and coming back leaves the page as it was, and says what carri
   await expect(page.getByText(CARRIED)).toBeVisible();
   await expect(page.getByRole("tab", { name: /Plan/ }), "still on the same tab").toHaveAttribute("aria-selected", "true");
   await expect(box, "and the draft survived the outage").toHaveValue("half-written idea for the panel");
-  await expect(page.locator("header").first().getByLabel("Connected", { exact: true })).toBeVisible();
+  await expect(page.locator("header").first().getByText("reconnecting…"), "back online: the bar is quiet again").toHaveCount(0);
   await page.screenshot({ path: info.outputPath("back.png") });
 });
