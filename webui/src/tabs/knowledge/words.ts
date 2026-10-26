@@ -11,14 +11,14 @@ export type KnowledgeAgentName = KnowledgeFileInfo["agent"]
 export const AGENT_ORDER: readonly KnowledgeAgentName[] = ["master", "designer", "backend", "qa"]
 
 export const AGENT_LABELS: Record<KnowledgeAgentName, string> = {
-  master: "Master (oracle)",
+  master: "Oracle",
   designer: "Designer",
   backend: "Backend",
   qa: "QA",
 }
 
 export const AGENT_DIR_NAMES: Record<KnowledgeAgentName, string> = {
-  master: "Master",
+  master: "Oracle",
   designer: "Designer",
   backend: "Backend",
   qa: "QA",

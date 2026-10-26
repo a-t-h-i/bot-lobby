@@ -18,7 +18,7 @@ export type AgentKind = (typeof AGENT_ORDER)[number]
 
 /** What each agent is called. */
 export const AGENT_LABELS: Record<AgentKind, string> = {
-  master: "Master",
+  master: "Oracle",
   designer: "Designer",
   backend: "Backend",
   qa: "QA",
@@ -203,8 +203,8 @@ export const JEV_HOST_ITEMS = [
 export const CLASSIFIER_FEATURE_ITEMS = [
   { id: "seats", label: "Planning seats", help: "each round, only the seats your idea or latest answers touch sit; 1-4 in the Plan tab pins one" },
   { id: "answers", label: "Obvious answers", help: "a panel question whose recommended option the conversation already makes clearly right is answered for you (listed under Assumptions)" },
-  { id: "lobby", label: "Lobby replies", help: "each lobby message goes to the agent whose area it is: a frontend question to Design, a library question to Research, \"how does this work\" to a scout; when it is unsure, or off, the Master answers. Naming an agent with @ always decides" },
-  { id: "triage", label: "Task triage", help: "a new task's size, domains and research need reach the Master as hints" },
+  { id: "lobby", label: "Lobby replies", help: "each lobby message goes to the agent whose area it is: a frontend question to Design, a library question to Research, \"how does this work\" to a scout; when it is unsure, or off, the Oracle answers. Naming an agent with @ always decides" },
+  { id: "triage", label: "Task triage", help: "a new task's size, domains and research need reach the Oracle as hints" },
   { id: "effort", label: "Effort routing", help: "a simple step runs one thinking level lower, a trivial one on the cheaper model below; a routed run that falls short runs again on your settings" },
   { id: "qa", label: "QA risk", help: "once a task's work is in, the classifier reads the diff and sizes QA to it: no QA agent for a change with nothing that runs, a light check for a small one, deep review where a defect would spread; with it off the engine's rules decide" },
   { id: "review", label: "Pull request read", help: "the Git tab's quick read of a pull request: its size, and how likely it is risky, security-relevant, breaking or untested, before an agent reviews it" },
