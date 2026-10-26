@@ -66,8 +66,15 @@ For anything the user will see, show the choices: ask with
 `ask_user_question` and give each option an `htmlPreview` mockup in the
 project's design language (name its `stylesheets`, build from its own
 component markup, about 1200px wide). When a choice needs real design work,
-leave it to the designer, who may ask the user itself with its own mockups;
-its answers are recorded as the task's decisions, so do not ask them again.
+leave it to the designer.
+
+Visual style (spacing and padding, radius, borders, shadows, hover and press,
+motion) is never asked during a task: the design record and the code settle
+it, and planning asks the gaps once. When a designer's report lists
+**Design choices** it made where nothing was recorded, record each with
+`action=design` (`name` the field, `text` the value) and mention them in
+your summary so the user can overrule them. When the user states a style
+preference, record it the same way with `note=user`.
 
 ## Thinking as the architect
 

@@ -1,4 +1,5 @@
 import { validateAssignment, type WorkerAssignment, type AssignmentExpansionRequest } from "../execution/assignment.ts";
+import { DESIGN_FIELD_KEYS, isDesignField, recordDesignChoices } from "../knowledge/design-record.ts";
 import { verifyEvidenceHint } from "../master/evidence-freshness.ts";
 import { approveAssignmentDiscovery, prepareAssignmentDiscovery, readAssignmentDiscovery } from "../execution/assignment-discovery.ts";
 import { cleanupTaskAssignedSessions } from "../execution/assigned-session.ts";
@@ -103,6 +104,7 @@ export const ORCHESTRATE_ACTIONS = [
   "bookmark",
   "compact",
   "script",
+  "design",
   "complete",
   "block",
   "resume",
@@ -1669,6 +1671,24 @@ function handleKnowledge(task: Task | undefined, params: OrchestrateParams, deps
 }
 
 /**
+ * The oracle records a visual choice in the project's design record: one a
+ * designer made during a task where nothing was recorded (the user may
+ * overrule it in Knowledge), or one the user stated in chat. `name` is the
+ * field, `text` the value.
+ */
+function handleDesign(task: Task | undefined, params: OrchestrateParams, deps: WorkflowDeps): string {
+  const field = params.name?.trim().toLowerCase() ?? "";
+  if (!isDesignField(field)) throw new Error(`design requires name: one of ${DESIGN_FIELD_KEYS.join(", ")}`);
+  const value = params.text?.trim();
+  if (!value) throw new Error("design requires text: the value chosen");
+  const by = params.note?.trim().toLowerCase() === "user" ? "you" : "agent";
+  const path = recordDesignChoices(dataRoot(deps.root, deps.configDir), [{ field, value, by, ...(task && by === "agent" ? { taskId: task.id } : {}), date: new Date().toISOString().slice(0, 10) }]);
+  if (task) recordDecision(task, `Design record: ${field} = ${truncate(value, 120)} (${by === "you" ? "the user" : "agent"})`);
+  lobbyTopics.bump("knowledge");
+  return `Recorded ${field} in the design record (${path}).`;
+}
+
+/**
  * The oracle manages the task's assignment bookmarks through its own tool:
  * add, remove, pin, unpin or exclude catalogue references for a recipient
  * (a domain, or everyone when no domain is given). No approval gate: this is
@@ -2003,6 +2023,7 @@ const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams
   knowledge: handleKnowledge,
   bookmark: handleBookmark,
   script: handleScript,
+  design: handleDesign,
   compact: handleCompact,
   complete: handleComplete,
   block: handleBlock,
@@ -2019,9 +2040,9 @@ const HANDLERS: Record<OrchestrateAction, (task: Task, params: OrchestrateParams
  */
 export async function runWorkflowAction(params: OrchestrateParams, deps: WorkflowDeps): Promise<WorkflowResult> {
   // Project knowledge can be learned without starting or changing a task.
-  if ((params.action === "knowledge" || params.action === "compact" || params.action === "script") && !params.taskId) {
+  if ((params.action === "knowledge" || params.action === "compact" || params.action === "script" || params.action === "design") && !params.taskId) {
     try {
-      const message = params.action === "knowledge" ? handleKnowledge(undefined, params, deps) : params.action === "script" ? handleScript(undefined, params, deps) : handleCompact(undefined, params, deps);
+      const message = params.action === "knowledge" ? handleKnowledge(undefined, params, deps) : params.action === "script" ? handleScript(undefined, params, deps) : params.action === "design" ? handleDesign(undefined, params, deps) : handleCompact(undefined, params, deps);
       return { ok: true, taskId: "", state: "created", message };
     } catch (error) {
       return { ok: false, taskId: "", state: "created", message: `Rejected: ${(error as Error).message}` };

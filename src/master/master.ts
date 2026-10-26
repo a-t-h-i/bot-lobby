@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { designRecordBlock, designStanding, withoutDesignRecord } from "../knowledge/design-record.ts";
 import { validateAssignment, type WorkerAssignment } from "../execution/assignment.ts";
 import { join, resolve } from "node:path";
 import { profileFor, type BotLobbyConfig, type ProfileResolver } from "../schemas/configuration.ts";
@@ -106,13 +107,26 @@ function retrievalMode(request: { config?: BotLobbyConfig }): boolean {
   return request.config?.workflow.knowledgeRetrieval !== false && request.config !== undefined;
 }
 
-async function pickKnowledge(request: { config?: BotLobbyConfig; knowledge?: KnowledgePicker; dataRoots: readonly string[]; signal?: AbortSignal }, agent: Domain, query: string): Promise<KnowledgeSelection> {
+async function pickKnowledge(request: { config?: BotLobbyConfig; knowledge?: KnowledgePicker; dataRoots: readonly string[]; signal?: AbortSignal; cwd?: string }, agent: Domain, query: string): Promise<KnowledgeSelection> {
   const [selected, scripts] = await Promise.all([pickFiles(request, agent, query), scriptsFor(request.dataRoots[0], query, request.knowledge?.scripts, request.signal)]);
   return scripts ? { ...selected, scripts } : selected;
 }
 
-async function pickFiles(request: { config?: BotLobbyConfig; knowledge?: KnowledgePicker; dataRoots: readonly string[]; signal?: AbortSignal }, agent: Domain, query: string): Promise<KnowledgeSelection> {
-  const slices = readAgentKnowledge(request.dataRoots, agent);
+/**
+ * The designer always gets the whole design record (it is short, and a value
+ * left out would be asked about or guessed); the rest of its standards are
+ * selected as usual.
+ */
+async function pickFiles(request: { config?: BotLobbyConfig; knowledge?: KnowledgePicker; dataRoots: readonly string[]; signal?: AbortSignal; cwd?: string }, agent: Domain, query: string): Promise<KnowledgeSelection> {
+  if (agent !== "designer" || !request.dataRoots[0]) return selectFiles(request, agent, query);
+  const selected = await selectFiles(request, agent, query, withoutDesignRecord);
+  const record = designRecordBlock(designStanding(request.dataRoots[0], request.cwd ?? ""), "task");
+  return { ...selected, standards: [record, selected.standards].filter(Boolean).join("\n\n") };
+}
+
+async function selectFiles(request: { config?: BotLobbyConfig; knowledge?: KnowledgePicker; dataRoots: readonly string[]; signal?: AbortSignal }, agent: Domain, query: string, standards: (text: string) => string = (text) => text): Promise<KnowledgeSelection> {
+  const read = readAgentKnowledge(request.dataRoots, agent);
+  const slices = { ...read, standards: standards(read.standards) };
   if (retrievalMode(request)) {
     return { knowledge: "", decisions: "", standards: selectRelevant(query, slices.standards ?? "", KNOWLEDGE_BUDGET_CHARS) };
   }

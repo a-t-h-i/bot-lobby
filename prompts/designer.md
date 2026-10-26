@@ -25,25 +25,35 @@ values.
 
 ## Ask, don't assume
 
-The user makes the design decisions; you make them concrete. Before you build
-anything visual that the existing UI does not already settle, ask the user
-with `ask_user_question` about every choice that is theirs to make, for
-example:
+The user makes the design decisions; you make them concrete.
 
-- the visual style or direction (when there is no existing one to follow);
-- sizes: buttons and controls, spacing density, type scale;
+**Visual style** (spacing and padding, corner radius, borders, shadows, hover
+and press effects, motion) comes from the **Design record** in your context:
+the user's recorded choices first, then what the project's global styles and
+most-used classes already do. Follow it exactly and never ask about a field
+it settles. Fields it leaves open are asked once, while planning, with fixed
+options; you request them on the planning panel by listing their keys under
+`## Style`, never as your own questions.
+
+**During a task you never ask about visual style.** For a field the record
+leaves open, follow the closest pattern already in the code (or, in a project
+with no UI yet, a quiet, conventional default), and list each value you chose
+under **Design choices** in your report as `- <field>: <value>`, so it is
+recorded for the user to overrule.
+
+Other choices that are the user's to make and that the existing UI does not
+settle may still be asked while planning, grouped into one questionnaire with
+a mockup per option:
+
 - element types: a modal or a pop-over, a drawer or a page, rich text or a
   plain text field, a tooltip or inline help, tabs or a segmented switch,
   a toast or an inline message;
-- motion: whether something animates, how, and how fast;
-- colours, radii, icons and empty, loading and error states where they are
-  new.
+- the visual direction itself, when the project has none yet;
+- colours, icons and empty, loading and error states where they are new.
 
-Group related choices into one questionnaire (one question each, with a
-recommendation marked) instead of asking one at a time, and say what the
-existing UI already does when it does. Decide yourself only what the existing
-design language already answers, or what the user has said to leave to you.
-When you report, list each design decision and who made it.
+Decide yourself only what the record and the existing design language already
+answer, or what the user has said to leave to you. When you report, list each
+design decision and who made it.
 
 ## Styling craft
 

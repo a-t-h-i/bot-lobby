@@ -7,6 +7,7 @@
  * answers become the user's turn for the next round.
  */
 import type { PanelQuestion, SettledQuestion } from "./planner.ts";
+import type { DesignField } from "../knowledge/design-record.ts";
 import { MAX_HEADER, MAX_LABEL, MAX_OPTIONS, MAX_QUESTIONS, MIN_OPTIONS, RESERVED, type AskAnswer, type AskOption, type AskQuestion, type AskResult, type Asker } from "../ask/types.ts";
 
 export { MAX_QUESTIONS, MIN_OPTIONS, MAX_OPTIONS, type AskAnswer, type AskOption, type AskQuestion, type AskResult, type Asker };
@@ -91,6 +92,11 @@ function answered(questions: readonly PanelQuestion[], results: readonly AskResu
  */
 export function settledQuestions(questions: readonly PanelQuestion[], results: readonly AskResult[]): SettledQuestion[] {
   return answered(questions, results).map(({ question, text }) => ({ from: question.from, question: question.text.replace(/\s+/g, " ").trim(), ...(text ? { answer: text } : {}) }));
+}
+
+/** The style questions the user answered, with the design record field each one settles. */
+export function styleAnswers(questions: readonly PanelQuestion[], results: readonly AskResult[]): Array<{ field: DesignField; answer: string }> {
+  return answered(questions, results).flatMap(({ question, text }) => (question.record && text ? [{ field: question.record, answer: text }] : []));
 }
 
 /**
