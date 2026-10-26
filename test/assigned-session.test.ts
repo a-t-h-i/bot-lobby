@@ -169,11 +169,11 @@ test("an assigned run holds its conversation lock, carries the guard and needs t
       if (attest) writeFileSync(guard.attestation, JSON.stringify({ assignmentId: guard.assignmentId, revision: guard.revision, allowed: guard.tools, declared: guard.tools, blockedCallable: [], unauthorized: [], ok: true }));
       return { exitCode: 0, stdout: reply, stderr: "", killed: false };
     };
-    const tools = ["read", "edit", "read"];
-    const unattested = await runPiAgent({ cwd: "/repo", task: "go", tools, assignedSession: guarded }, runner(false));
+    const grants = { tools: ["read", "bash", "edit", "write", "grep", "find", "ls"], assignedTools: ["read", "edit", "read"] };
+    const unattested = await runPiAgent({ cwd: "/repo", task: "go", ...grants, assignedSession: guarded }, runner(false));
     assert.equal(unattested.status, "failed");
     assert.match(unattested.error!, /never attested/);
-    const attested = await runPiAgent({ cwd: "/repo", task: "go", tools, assignedSession: guarded }, runner(true));
+    const attested = await runPiAgent({ cwd: "/repo", task: "go", ...grants, assignedSession: guarded }, runner(true));
     assert.equal(attested.status, "success", attested.error);
     const guard = JSON.parse(seen!.env[ASSIGNMENT_ENV]!);
     // Replacement allowlist: the host's codemode, tool_search, delegation and expert stay out; the file desk's

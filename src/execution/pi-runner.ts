@@ -34,6 +34,8 @@ export type RelayAsk = (questions: AskQuestion[], signal: AbortSignal) => Promis
 export interface PiRunOptions {
   /** Host-owned task conversation, reused across validated assignment revisions. */
   assignedSession?: AssignedSession;
+  /** The assignment's validated replacement selection, applied inside the run's existing grants. */
+  assignedTools?: string[];
   runtimeAccess?: RuntimeAccess;
   effort?: EffortRouter;
   effortProfile?: RunProfileLike;
@@ -694,14 +696,15 @@ async function runAssignedAgent(options: PiRunOptions, run: ProcessRunner): Prom
   catch (error) { return failedRun(error instanceof Error ? error.message : String(error)); }
   const attestation = join(dirname(session.file), "attestation.json");
   rmSync(attestation, { force: true });
-  const selected = [...new Set(options.tools ?? [])].sort();
-  const host = await delegationHost({ ...options, tools: selected }, run);
+  const selected = [...new Set(options.assignedTools ?? [])].sort();
+  const host = await delegationHost(options, run);
   let prompt: ReturnType<typeof writePromptFile> | undefined;
   try {
     // Replacement, not additive: the host's own extras stay out unless selected, except the file desk's
     // claim/handover protocol, without which a selected edit cannot happen in a shared batch.
     const edits = selected.includes("edit") || selected.includes("write");
-    const allowed = [...new Set([...selected.filter((name) => host.tools.includes(name) || host.mcpTools.includes(name) || MCP_RESOURCE_TOOLS.includes(name)), ...(edits ? host.tools.filter((name) => DESK_TOOLS.includes(name)) : [])])].sort();
+    const granted = new Set([...host.tools, ...host.mcpTools, ...(host.mcpTools.length > 0 ? MCP_RESOURCE_TOOLS : [])]);
+    const allowed = [...new Set([...selected.filter((name) => granted.has(name)), ...(edits ? host.tools.filter((name) => DESK_TOOLS.includes(name)) : [])])].sort();
     const mcpTools = allowed.filter((name) => name.startsWith("mcp__"));
     const policy = JSON.parse(host.env[AGENT_ENV] ?? "{}") as AgentPolicy;
     const guard: AssignmentGuardSpec = {

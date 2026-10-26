@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { ASSIGNMENT_ENV } from "../src/pi/assignment-guard.ts";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -18,22 +19,34 @@ function request(taskDir: string, tools: string[]): AgentRequest {
   return { taskId: "policy-task", domain: "backend", role: "worker", instruction: "Inspect", context: { task: "Inspect" }, cwd: process.cwd(), assignment: { taskDir, brief } };
 }
 
-test("assigned preflight sees host-added tools before selection, then native and harness remain fail closed", async (t) => {
+/** A worker process stand-in whose guard attests the allowlist it was handed. */
+function attesting(seen: string[][]): ProcessRunner {
+  return async (_args, options) => {
+    const guard = JSON.parse(options.env![ASSIGNMENT_ENV]!);
+    seen.push(guard.tools);
+    writeFileSync(guard.attestation, JSON.stringify({ assignmentId: guard.assignmentId, revision: guard.revision, allowed: guard.tools, declared: guard.tools, blockedCallable: [], unauthorized: [], ok: true }));
+    return { exitCode: 0, killed: false, stderr: "", stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "Done" }], stopReason: "stop", usage: { input: 1, output: 1 } } }) };
+  };
+}
+
+test("assigned preflight sees host-added tools before selection; the run gets exactly the selection", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "assignment-preflight-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
+  const seen: string[][] = [];
+  for (const selected of [[], ["codemode", "tool_search"], ["search_knowledge", "open_knowledge"]]) {
+    const result = await runAgent(request(root, selected), attesting(seen));
+    assert.equal(result.status, "success", result.error);
+  }
+  assert.deepEqual(seen, [[], ["codemode", "tool_search"], ["open_knowledge", "search_knowledge"]]);
   let spawns = 0;
   const runner: ProcessRunner = async () => { spawns++; throw new Error("must not spawn"); };
-  for (const selected of [[], ["codemode", "tool_search"], ["claim_file"], ["search_knowledge", "open_knowledge"]]) {
-    const result = await runAgent(request(root, selected), runner);
-    assert.match(result.error!, /compatibility.*declared and callable/i);
-  }
   const harness = await runAgent({ ...request(root, []), harness: { id: "codex", model: "", settings: DEFAULT_HARNESS_SETTINGS } }, runner);
   assert.match(harness.error!, /compatibility.*third-party harness/i);
   const unknown = await runAgent(request(root, ["unknown_assignment_tool"]), runner);
   assert.match(unknown.error!, /unknown tool unknown_assignment_tool/);
   const unavailable = await runAgent({ ...request(root, ["mcp__offline__get"]), mcpTools: ["mcp__offline__get"] }, runner);
   assert.match(unavailable.error!, /unavailable tool mcp__offline__get/);
-  const resources = await runAgent({ ...request(root, ["read_mcp_resource"]), mcpTools: ["mcp__offline__get"] }, runner);
+  const resources = await runAgent({ ...request(root, ["read_mcp_resource"]) }, runner);
   assert.match(resources.error!, /ungranted tool read_mcp_resource/);
   assert.equal(spawns, 0);
 });

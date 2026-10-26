@@ -10,7 +10,7 @@ import { invariantPrefix } from "../src/prompts/compiler.ts";
 import type { ProcessOutcome, ProcessRunner } from "../src/execution/pi-runner.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
 
-test("structured assignments validate before dispatch and never fall back on compatibility failure", async (t) => {
+test("structured assignments validate before dispatch and never fall back when the guard does not attest", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "assigned-agent-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const brief: WorkerAssignment = {
@@ -19,12 +19,14 @@ test("structured assignments validate before dispatch and never fall back on com
     contracts: [], constraints: [], exclusions: [], verification: ["Report contract"], evidence: [], completedWork: [], needs: [],
   };
   let spawns = 0;
-  const runner: ProcessRunner = async () => { spawns++; throw new Error("Must not spawn"); };
+  // A worker whose guard never attests (an old runtime, a missing extension) fails; nothing reruns it unassigned.
+  const runner: ProcessRunner = async () => { spawns++; return ok(reply("Done")); };
   const req = request({ role: "worker", cwd: process.cwd(), assignment: { brief, taskDir: root } });
   const result = await runAgent(req, runner);
   assert.equal(result.status, "failed");
-  assert.match(result.error!, /compatibility.*declared and callable/i);
-  assert.equal(spawns, 0);
+  assert.match(result.error!, /compatibility.*never attested/i);
+  assert.equal(spawns, 1);
+  spawns = 0;
   brief.files[0]!.path = "missing-assignment-reference";
   await assert.rejects(runAgent(req, runner), /Invalid worker assignment.*reference path/);
   assert.equal(spawns, 0);

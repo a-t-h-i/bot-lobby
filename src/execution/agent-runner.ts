@@ -188,8 +188,8 @@ async function prepareAssignedPolicy(options: PiRunOptions, request: AgentReques
     const granted = [...host.tools, ...host.mcpTools, ...(host.mcpTools.length > 0 ? MCP_RESOURCE_TOOLS : [])];
     const available = [...host.tools.filter((name) => !name.startsWith("mcp__")), ...connected, ...MCP_RESOURCE_TOOLS];
     const selected = selectAssignmentTools(request.assignment.brief, { granted, known: [...granted, ...connected, ...MCP_RESOURCE_TOOLS], available });
-    options.tools = selected;
-    options.mcpTools = selected.filter((name) => name.startsWith("mcp__") || MCP_RESOURCE_TOOLS.includes(name));
+    // The grants stay as they are for the run's host; the selection replaces them inside it.
+    options.assignedTools = selected;
     const state = await prepareAssignmentDiscovery(request.assignment.taskDir, request.assignment.brief.id, request.assignment.brief.revision, request.assignment.brief.discoveryLimit);
     options.assignedSession!.consumedDiscovery = state.consumed;
   } finally { await host.close(); }

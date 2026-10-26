@@ -38,9 +38,10 @@ test("assigned dispatch labels local hints, rejects stale acceptance and notifie
   let processes = 0;
   const outcome = await runWorker({ ...request(root), onFreshness: (status) => { statuses.push(status); } }, async () => {
     processes++;
-    throw new Error("Assigned native execution must remain refused");
+    throw new Error("the worker process failed");
   });
-  assert.equal(processes, 0);
+  // Checks run alongside dispatch: the worker started while its hint was still unverified.
+  assert.equal(processes, 1);
   assert.equal(statuses[0]?.status, "unverified hints");
   assert.equal(outcome.freshness?.status, "invalidated");
   assert.ok(outcome.issues.some((issue) => issue.includes("acceptance requires current verified hints")));
@@ -60,7 +61,7 @@ test("assigned dispatch verifies only relevant file notes through unrelated chan
   ]);
   await writeFile(join(root, "unrelated.ts"), "changed");
   const outcome = await runWorker({ ...request(root), assignment: assignment(join(root, "source.ts")) }, async () => {
-    throw new Error("Assigned native execution must remain refused");
+    throw new Error("the worker process failed");
   });
   assert.equal(outcome.freshness?.status, "verified");
   assert.deepEqual(outcome.freshness?.hintIds, ["file-note:source.ts"]);
@@ -68,7 +69,7 @@ test("assigned dispatch verifies only relevant file notes through unrelated chan
   assert.equal(outcome.freshness?.hints?.[0]?.scope, "file");
   assert.ok(outcome.freshness?.hints?.[0]?.fingerprint);
   assert.ok(!outcome.issues.some((issue) => issue.includes("Assignment evidence")));
-  // Verified hints never convert the installed runtime's explicit refusal into success.
+  // Verified hints never turn a failed run into success.
   assert.notEqual(outcome.run.status, "success");
 });
 
