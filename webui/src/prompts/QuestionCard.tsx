@@ -250,7 +250,8 @@ function useDotRail(rail: RefObject<HTMLDivElement | null>, panel: RefObject<HTM
     const reduced = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
     const dropEl = drop.current
     if (dropEl) dropEl.style.opacity = "0"
-    if (to === undefined || start === undefined || from === active || reduced || !dropEl) {
+    // Leaving the own-answer field snaps the ring onto its option: no drop runs up out of the field.
+    if (to === undefined || start === undefined || from === active || from === OWN || reduced || !dropEl) {
       place(active === OWN ? undefined : to)
       if (active === OWN && from !== active && from !== undefined) landOwn.current()
       return
@@ -453,6 +454,8 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
   const [landed, setLanded] = useState(false)
   const ownField = useRef<RichAnswerHandle>(null)
   const [focused, setFocused] = useState<Record<number, number>>({})
+  // The option a pointer pressed on, so a click from the own-answer field lands there in one step.
+  const pressed = useRef<number | undefined>(undefined)
   const form = useRef<HTMLFormElement>(null)
   const rail = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -633,7 +636,17 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
         <Markdown text={question.question} className="mt-1 text-base font-medium" />
       </div>
       <div className="relative grid min-w-0 grid-cols-[2.25rem_minmax(0,1fr)] gap-x-3">
-        <div ref={rail} role={multi ? "group" : "radiogroup"} aria-label="Options" className="q-rail relative flex min-w-0 flex-col justify-evenly py-2">
+        <div
+          ref={rail}
+          role={multi ? "group" : "radiogroup"}
+          aria-label="Options"
+          className="q-rail relative flex min-w-0 flex-col justify-evenly py-2"
+          onPointerDown={(event) => {
+            if (!ownFocused) return
+            const at = (event.target as HTMLElement).closest(".q-dot")?.querySelector("[data-option]")?.getAttribute("data-option")
+            pressed.current = at != null ? Number(at) : undefined
+          }}
+        >
           <span ref={dots.track} aria-hidden="true" className="q-rail-line pointer-events-none absolute top-0 left-1/2 h-0 -translate-x-1/2" />
           <span ref={dots.drop} aria-hidden="true" className="q-drop pointer-events-none absolute top-0 left-1/2 w-[3px] -translate-x-1/2 rounded-full opacity-0" />
           <span ref={dots.ring} aria-hidden="true" className="q-ring pointer-events-none absolute top-0 left-1/2 z-20 size-7 rounded-full opacity-0" />
@@ -667,7 +680,17 @@ function QuestionnaireCard({ questions, submitting, onAnswer, onCancel, expanded
             setOwnHtml((now) => ({ ...now, [index]: html }))
             if (markdown) setPicks((now) => ({ ...now, [index]: [] }))
           }}
-          onFocusChange={setOwnFocused}
+          onFocusChange={(on, next) => {
+            if (!on) {
+              // Leaving the field, the ring lands at once on the option taking the focus (or the one clicked),
+              // else on the last option, the one next to the field; never on a stale option first.
+              const to = (next as HTMLElement | null | undefined)?.closest?.("[data-option]")?.getAttribute("data-option")
+              const target = to != null ? Number(to) : pressed.current ?? question.options.length - 1
+              setFocused((now) => ({ ...now, [index]: target }))
+            }
+            pressed.current = undefined
+            setOwnFocused(on)
+          }}
           onSubmit={() => { if (!submitting) proceed(picks, own) }}
           onUp={() => { const root = form.current; if (root) moveNav(root, ownField.current?.element ?? null, -1) }}
         />

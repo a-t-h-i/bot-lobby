@@ -96,18 +96,13 @@ function useSwitch(): (entry: SessionEntry) => Promise<void> {
   }, [])
 }
 
-/** A session's state as a small dot: breathing while it works or starts, amber while it asks you something, hollow once it ended. */
-function StateDot({ entry }: { entry: SessionEntry }) {
-  return <span aria-hidden="true" data-state={entry.where === "elsewhere" ? "elsewhere" : entry.state} className="session-dot relative" />
-}
-
 /**
  * What the row shows at its end: a question count while it asks you something, a turning ring while it
- * works or starts, otherwise its state dot. The state is spelt out for screen readers.
+ * works or starts, otherwise nothing (an idle or ended session needs no mark; the group says which).
+ * The state is spelt out for screen readers.
  */
 function RowStatus({ entry }: { entry: SessionEntry }) {
-  if (entry.where === "elsewhere") return <StateDot entry={entry} />
-  if (entry.state === "asking")
+  if (entry.where !== "elsewhere" && entry.state === "asking")
     return (
       <span className="inline-flex shrink-0 items-center gap-1 text-xs text-warning tabular-nums">
         <MessageCircleQuestion aria-hidden="true" className="size-3.5" />
@@ -115,19 +110,14 @@ function RowStatus({ entry }: { entry: SessionEntry }) {
         <span className="sr-only">{entry.waiting === 1 ? " question" : " questions"}, Waiting</span>
       </span>
     )
-  if (entry.state === "working" || entry.state === "starting")
+  if (entry.where !== "elsewhere" && (entry.state === "working" || entry.state === "starting"))
     return (
       <span className={cn("inline-flex shrink-0", entry.state === "working" ? "text-primary" : "text-muted-foreground")}>
         <CircleDashed aria-hidden="true" className="session-spin size-3.5" />
         <span className="sr-only">{entry.state === "working" ? "Working" : "Starting"}</span>
       </span>
     )
-  return (
-    <span className="inline-flex shrink-0">
-      <StateDot entry={entry} />
-      <span className="sr-only">{entry.state === "exited" ? "Ended" : "Idle"}</span>
-    </span>
-  )
+  return <span className="sr-only">{entry.where === "elsewhere" ? "Other terminal" : entry.state === "exited" ? "Ended" : "Idle"}</span>
 }
 
 const WHERE = { here: "This window", background: "Background", elsewhere: "Other terminal" }

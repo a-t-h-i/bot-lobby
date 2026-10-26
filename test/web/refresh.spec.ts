@@ -81,7 +81,7 @@ test("toolbar touch targets, context, keyboard hint activation and modal guard",
   const header = page.locator("header").first();
   // The project sits over the composer.
   await expect(page.getByRole("combobox", { name: "Project", exact: true })).toBeVisible();
-  await expect(header.getByLabel("Connected", { exact: true })).toBeVisible();
+  await expect(header.getByLabel("Connected", { exact: true }), "no online dot").toHaveCount(0);
   const controls = header.locator("button:visible, a:visible");
   // Drawn slim everywhere (never under WCAG 2.5.8's 24px); under a finger an invisible margin makes each 40px to hit.
   const targets = await controls.evaluateAll((els) => {

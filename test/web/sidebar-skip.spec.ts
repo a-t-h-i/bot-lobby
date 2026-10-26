@@ -20,8 +20,7 @@ test("the sidebar lists the sessions as thin rows under labels, searches them, f
   await expect(here, "the session's name stays").toContainText("mock lobby");
   await expect(here, "no duplicate location label on the current row").not.toContainText("This window");
   await expect(here).toContainText(/Idle|Working|Waiting/);
-  const dot = here.locator(".session-dot");
-  expect(await dot.evaluate((el: any) => (globalThis as any).getComputedStyle(el, "::after").animationName), "the state dot does not ping").toBe("none");
+  await expect(sidebar.locator(".session-dot"), "no online dots on the rows").toHaveCount(0);
   await expect(list.getByRole("button", { name: "Switch to Mock background task" })).toContainText("1 question");
   const shelf = list.getByRole("region", { name: "Other terminals" });
   await expect(shelf.getByRole("button", { name: "Other window, in another terminal" }), "other terminals sit on their own shelf").toBeVisible();
