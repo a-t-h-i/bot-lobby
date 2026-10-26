@@ -364,3 +364,31 @@ test("scrolling past the end of a chat full of code never drags the Lobby page u
   }
   await expect(page.getByRole("tab", { name: /Lobby/ }), "the tabs are still in view").toBeInViewport();
 });
+
+test("leaving the own-answer field snaps the ring straight onto the option taking focus, or the last one", async ({ page, server }) => {
+  await openScenario(page, server, "questions3");
+  const field = page.getByRole("textbox", { name: "Your own answer" });
+  const ringYs = (action: () => Promise<void>) => async () => {
+    const frames = page.evaluate(() => new Promise((done: (ys: number[]) => void) => {
+      const g = globalThis as any;
+      const ring = g.document.querySelector(".q-ring");
+      const seen: number[] = [];
+      const start = performance.now();
+      const tick = () => {
+        const y = /translate\(-50%, ([\d.]+)px\)/.exec(ring.style.transform);
+        if (Number(ring.style.opacity) > 0 && y) seen.push(Math.round(Number(y[1])));
+        if (performance.now() - start < 600) g.requestAnimationFrame(tick); else done([...new Set(seen)]);
+      };
+      g.requestAnimationFrame(tick);
+    }));
+    await action();
+    return frames;
+  };
+  await field.click();
+  const up = await ringYs(() => page.keyboard.press("ArrowUp"))();
+  expect(up, "Up from the field: the last option, at once").toHaveLength(1);
+  await field.click();
+  const click = await ringYs(() => page.locator(".q-dot").first().click())();
+  expect(click, "a click from the field lands on that option, no stop on another first").toHaveLength(1);
+  expect(click[0]).toBeLessThan(up[0]!);
+});

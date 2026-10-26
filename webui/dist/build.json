@@ -1,6 +1,6 @@
 {
-  "hash": "43306c6499e962b0913a30dde2e9fd10767b9b2c8c744030ac9e5048264a16cd",
-  "builtAt": "2026-10-26T20:09:21.533Z",
+  "hash": "9daf4b1c80f8b38aa243160e4a46f5d420348e2126ea8a4f14d6b49480fc4e32",
+  "builtAt": "2026-10-26T20:53:56.781Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -36,7 +36,7 @@
     },
     {
       "path": "webui/src/app/Header.tsx",
-      "sha256": "07796847476b77054a93b0621e946c9b7f80a0b701d09a75de5ad16d5fb05d8c"
+      "sha256": "643a6ff0eabdff560eebf6e336884f2edac399505febf52e719b8ac51fb107d8"
     },
     {
       "path": "webui/src/app/KnowledgePaneToggle.tsx",
@@ -60,7 +60,7 @@
     },
     {
       "path": "webui/src/app/Sidebar.tsx",
-      "sha256": "38aac69eb3a0c79f4ac990d54d0c1731471a076626d2d38051f9457f5757a2a5"
+      "sha256": "52aeacd2da6c487672313f254a5695e060d5f8be91379f7f5ff526d1a5b65a47"
     },
     {
       "path": "webui/src/app/SignIn.tsx",
@@ -308,7 +308,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "cb7a3190cbcc3e47dc033e2da5964c91d97d31f55dd09d6d45e01bd12d0db203"
+      "sha256": "313f7640e76f9def391c9c9964c147c0f3db9c5e35dd1d551a535dbd7a866c18"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -416,7 +416,7 @@
     },
     {
       "path": "webui/src/prompts/QuestionCard.tsx",
-      "sha256": "7f31a3215e97c26f6a0b42e1a01439baaaca752bbab64f3d6572859e69979b6b"
+      "sha256": "fcabedc5c1661a387b10f3c71d7c81fc2a20c711af5b0b031e36f7b0e76263ad"
     },
     {
       "path": "webui/src/prompts/QuestionPopup.tsx",
@@ -424,7 +424,7 @@
     },
     {
       "path": "webui/src/prompts/RichAnswer.tsx",
-      "sha256": "4fdceaa63b6107dc220eac6221e84da871b6b2f53c5e29d857f3f5ce771fdb75"
+      "sha256": "1f796370733a4b1b2c5809327f302060b796fa2e2e1b65a24a531b17bbd84833"
     },
     {
       "path": "webui/src/prompts/StaticPreview.tsx",

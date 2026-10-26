@@ -6,24 +6,12 @@
  * the project in the composer.
  */
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { ConnectionState } from "@/lib/events"
 import { ProjectNotice, type Projects } from "./ProjectSwitcher.tsx"
 
-/** What the link to the server is doing: a green dot when live, words when it is not. */
+/** What the link to the server is doing: nothing while it is live, words when it is not. */
 function Connection({ state }: { state: ConnectionState }) {
-  if (state === "live") {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span role="img" aria-label="Connected" className="grid size-6 place-items-center">
-            <span className="size-2 rounded-full bg-success" />
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>Connected</TooltipContent>
-      </Tooltip>
-    )
-  }
+  if (state === "live") return null
   if (state === "connecting") {
     return (
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">

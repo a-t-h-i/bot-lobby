@@ -15,6 +15,14 @@ The panel's members (DEV, DESIGN, QA, RESEARCH) sit the first round. After that 
 alone and calls a member back only when it needs that member's view, so later rounds stay quick.
 A member you pin with its key sits every round.
 
+Visual style is asked once per project, not per task. The **Design record** (in Knowledge, under the
+Designer's **Design language**) holds spacing and padding, corner radius, borders, shadows, hover and
+press effects, and motion. A field the project's global styles or most-used classes already settle
+is read from the code. When planning work you will see, DESIGN asks only the fields still open, with
+fixed options drawn on a small sample, and your answers go straight into the record. Tasks never ask:
+for a field still open the designer follows the closest pattern in the code and the oracle records
+that choice as the agent's, for you to change in Knowledge.
+
 ## Built-in scripts
 
 Every project gets bot-lobby's read-only scripts (`scripts/builtin/`), offered to every agent with

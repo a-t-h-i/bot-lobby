@@ -215,7 +215,7 @@ test("droplet snapshots quiet, same-count new IDs once, rerenders quiet and mute
   });
   await page.route((url) => url.pathname === "/api/prompts.list", (request) => request.fulfill({ json: { ok: true, result: { prompts } } }));
   await openScenario(page, server, "full");
-  await expect(page.getByLabel("Connected", { exact: true })).toBeVisible();
+  await expect(page.locator("header").first().getByText("reconnecting…")).toHaveCount(0);
   await page.locator("#composer-text").click();
   await page.waitForTimeout(300);
   expect(await page.evaluate(() => window.tones)).toBe(0);

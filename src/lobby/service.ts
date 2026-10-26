@@ -16,7 +16,10 @@ import { deliver, type DeliveryRequest } from "../delivery/operations.ts";
 import { deliveryStore, deliveryTask } from "../delivery/store.ts";
 import { execCommand } from "./exec.ts";
 import { releaseAttachments } from "../state/attachments.ts";
-import { loadConfig, readDataRoots, saveConfig as writeConfig } from "../state/project.ts";
+import { dataRoot, loadConfig, readDataRoots, saveConfig as writeConfig } from "../state/project.ts";
+import { choiceValue, recordDesignChoices } from "../knowledge/design-record.ts";
+import type { AskResult } from "../ask/types.ts";
+import type { PanelQuestion } from "./planner.ts";
 import { knowledgeQuestion } from "./knowledge.ts";
 import { addPlanComment, editComment, readPlanComments, type PlanComment } from "../state/comments.ts";
 import { isAutoMode } from "../state/auto.ts";
@@ -41,7 +44,7 @@ import { availableClassifiers, classifier, effortFor, hintsFor } from "../classi
 import { cleanSessionName, launchPi, SessionRegistry, type BackgroundSession, type SessionLauncher } from "./sessions.ts";
 import { askForSession } from "./session-questions.ts";
 import { SessionChats } from "./session-files.ts";
-import { answerMessage, questionnaires, settledQuestions } from "./ask.ts";
+import { answerMessage, questionnaires, settledQuestions, styleAnswers } from "./ask.ts";
 import { askUser } from "../ask/web.ts";
 import type { Asker } from "../ask/types.ts";
 import { PlanningSession, type PlannerDeps, type PlannerSeed } from "./planner.ts";
@@ -982,13 +985,29 @@ export async function answerPanel(state: Runtime | undefined): Promise<string> {
       session.answered = [];
       return "nothing was answered — the questions stay open";
     }
+    const recorded = recordStyleAnswers(state, session.questions, session.answered);
     void session.send(message, settledQuestions(session.questions, session.answered));
-    return "answers sent — the panel is on the next round";
+    return `answers sent — the panel is on the next round${recorded > 0 ? ` · ${recorded} design choice${recorded === 1 ? "" : "s"} recorded` : ""}`;
   } catch (error) {
     return `could not put the questions: ${(error as Error).message}`;
   } finally {
     state.asking = false;
     lobbyTopics.bump("planner");
+  }
+}
+
+/** The user's answers to style questions go into the design record, so no agent asks them again. Returns how many. */
+function recordStyleAnswers(state: Runtime, questions: readonly PanelQuestion[], results: readonly AskResult[]): number {
+  const date = new Date().toISOString().slice(0, 10);
+  const choices = styleAnswers(questions, results).map(({ field, answer }) => ({ field, value: choiceValue(field, answer), by: "you" as const, date }));
+  if (choices.length === 0) return 0;
+  try {
+    recordDesignChoices(dataRoot(state.root, state.configDir), choices);
+    lobbyTopics.bump("knowledge");
+    return choices.length;
+  } catch (error) {
+    lobbyFeed.log("DESIGN", `could not record the design choices — ${(error as Error).message}`, "error");
+    return 0;
   }
 }
 

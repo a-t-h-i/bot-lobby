@@ -28,6 +28,8 @@ import { savePlannedTask, type IssueRef, type PlannedTask } from "../state/backl
 import type { AskResult } from "../ask/types.ts";
 import { PANEL_MEMBERS, type PanelMember } from "../schemas/configuration.ts";
 import { truncate } from "../text.ts";
+import { dataRoot } from "../state/project.ts";
+import { designRecordBlock, designStanding, styleFields, styleQuestions, type DesignField, type DesignStanding } from "../knowledge/design-record.ts";
 import type { LobbyFeed } from "./feed.ts";
 import type { LobbyRunProfile } from "./profile.ts";
 import { MAX_QUESTIONS } from "./ask.ts";
@@ -75,6 +77,8 @@ export interface AskedQuestion {
 export interface PanelQuestion extends AskedQuestion {
   /** DEV, DESIGN, QA, RESEARCH or ORACLE. */
   from: string;
+  /** A style question: the design record field its answer is recorded under. */
+  record?: DesignField;
 }
 
 /** One of the panel's questions as the user's reply settled it: answered, or left open (`answer` absent). */
@@ -112,6 +116,8 @@ export interface MemberReply {
   status: "open" | "ready";
   questions: AskedQuestion[];
   notes: string[];
+  /** DESIGN: the open design record fields this work touches, for the engine to ask (`## Style`). */
+  style?: DesignField[];
 }
 
 export interface MemberState {
@@ -383,7 +389,8 @@ export function parseMemberReply(text: string): MemberReply {
   const ready = /\bready\b/i.test(parts.get("status") ?? "");
   let questions = ready ? [] : questionItems(parts.get("questions"));
   if (parts.size === 0 && text.trim()) questions = [{ text: text.trim(), options: [] }];
-  return { status: ready ? "ready" : "open", questions, notes: listItems(parts.get("notes")) };
+  const style = styleFields(parts.get("style"));
+  return { status: ready ? "ready" : "open", questions, notes: listItems(parts.get("notes")), ...(style.length > 0 ? { style } : {}) };
 }
 
 function optionLines(options: readonly PanelOption[], marks = false): string[] {
@@ -967,8 +974,9 @@ export class PlanningSession {
     const member = state.member;
     const label = MEMBER_LABELS[member];
     const profile = this.deps.memberProfile?.(member) ?? this.deps.profile();
+    const record = member === "designer" ? this.design() : undefined;
     const request = {
-      task: `${transcript}\n\nYou are ${label} on the planning panel${roundNote(this.turns, this.limit)}: ask your seat's open questions, or declare READY.`,
+      task: `${transcript}${record ? `\n\n${designRecordBlock(record, "planning")}` : ""}\n\nYou are ${label} on the planning panel${roundNote(this.turns, this.limit)}: ask your seat's open questions, or declare READY.`,
       systemPrompt: memberPrompt(member, profile.instructions),
       tools: this.tools(member === "researcher" ? RESEARCH_PANEL_TOOLS : PLANNER_TOOLS),
     };
@@ -1115,7 +1123,8 @@ export class PlanningSession {
     if (!jev?.enabled("answers")) return;
     this.step = "checking for obvious answers";
     this.deps.onChange?.();
-    const candidates = this.questions.map((question, index) => {
+    // Style questions are the user's taste: never answered for them.
+    const candidates = this.questions.flatMap((question, index) => question.record ? [] : [{ question, index }]).map(({ question, index }) => {
       const recommended = recommendedOption(question);
       return { index, from: question.from, text: question.text, options: question.options.map((option) => ({ label: optionLabel(option), description: option.description })), recommended: recommended ? optionLabel(recommended) : "" };
     });
@@ -1139,14 +1148,28 @@ export class PlanningSession {
    * recommended option and recorded in the plan's Assumptions, and a plan
    * that exists is READY.
    */
+  /** Where the project's design stands: the record, what the code settles, and what is open. */
+  private design(): DesignStanding {
+    return designStanding(dataRoot(this.deps.root, this.deps.configDir), this.deps.root);
+  }
+
+  /** The style questions DESIGN asked for, limited to fields still open: once settled, never asked again. */
+  private styleAsks(outcomes: readonly MemberOutcome[]): PanelQuestion[] {
+    const wanted = outcomes.find((outcome) => outcome.member === "designer")?.reply?.style ?? [];
+    if (wanted.length === 0) return [];
+    const open = new Set(this.design().gaps);
+    return styleQuestions(wanted.filter((field) => open.has(field))).map((question) => ({ ...question, from: MEMBER_LABELS.designer }));
+  }
+
   private finishRound(outcomes: readonly MemberOutcome[], lead: RunOutcome, mode: RoundMode): void {
     const reply = lead.status === "success" ? parsePlannerReply(lead.output) : undefined;
     const seatQuestions = outcomes.flatMap((outcome) => (outcome.reply?.questions ?? []).map((question) => ({ ...question, from: MEMBER_LABELS[outcome.member] })));
-    const { asked, repeats } = withoutSettled(roundQuestions(reply, seatQuestions), this.settled);
+    const style = mode === "normal" ? this.styleAsks(outcomes) : [];
+    const { asked, repeats } = withoutSettled([...roundQuestions(reply, seatQuestions), ...style], this.settled);
     let questions = asked;
     if (repeats.length > 0) this.deps.feed?.log(ORACLE_LABEL, `held back ${repeats.length} question${repeats.length === 1 ? "" : "s"} you already settled: ${repeats.map((question) => brief(question.text, 60)).join("; ")}`, "info");
     const seatsReady = outcomes.every((outcome) => outcome.reply?.status === "ready");
-    let ready = Boolean(reply && reply.status === "ready" && seatsReady);
+    let ready = Boolean(reply && reply.status === "ready" && seatsReady && !questions.some((question) => question.record));
     if (reply) {
       // A round without a plan keeps the previous draft.
       let plan = reply.plan ?? this.reply?.plan;
