@@ -573,35 +573,78 @@ function RetentionToggle() {
   )
 }
 
+/** The provider half of a `provider/id` reference; empty for one without a slash. */
+function providerOf(ref: string): string {
+  const slash = ref.indexOf("/")
+  return slash > 0 ? ref.slice(0, slash) : ""
+}
+
+interface EngineOption {
+  id: string
+  label: string
+  kind: "classifier" | "chat"
+}
+
+/** Every model the classifier can use, classifier models first, without repeats. */
+function engineOptions(models: SettingsModelInfo[], classifiers: SettingsClassifierModel[]): EngineOption[] {
+  const seen = new Set<string>()
+  const out: EngineOption[] = []
+  for (const model of classifiers) if (!seen.has(model.id)) { seen.add(model.id); out.push({ id: model.id, label: model.label, kind: "classifier" }) }
+  for (const model of models) if (!seen.has(model.id)) { seen.add(model.id); out.push({ id: model.id, label: model.label, kind: "chat" }) }
+  return out
+}
+
 /**
- * Who answers the classifier's questions: Jev on a host (the rows below it),
- * or any classifier or chat model pi is signed in to, picked from the models
- * your logins offer (or typed as `provider/id`).
+ * Who answers the classifier's questions, in two steps: the provider (Jev on a
+ * host, or any provider your pi logins offer), then that provider's model,
+ * classifier models first. A model pi does not list can be typed as `provider/id`.
  */
 function EngineChoice({ value, models, classifiers, onChange }: { value: string; models: SettingsModelInfo[]; classifiers: SettingsClassifierModel[]; onChange: (value: string) => void }) {
   const [typing, setTyping] = useState(false)
   const [text, setText] = useState("")
-  const ids = new Set([...classifiers.map((model) => model.id), ...models.map((model) => model.id)])
-  const items: ChoiceItem[] = [
-    { value: "", label: CLASSIFIER_LABELS.engineJev, help: CLASSIFIER_LABELS.engineJevHelp },
-    ...classifiers.map((model) => ({ value: model.id, label: model.id, help: `${CLASSIFIER_LABELS.engineClassifier}${model.label !== model.id ? ` · ${model.label}` : ""}` })),
-    ...models.map((model) => ({ value: model.id, label: model.id, help: `${CLASSIFIER_LABELS.engineChat}${model.label && model.label !== model.id ? ` · ${model.label}` : ""}` })),
-    ...(value && !ids.has(value) ? [{ value, label: value, help: CUSTOM_HELP }] : []),
+  const options = engineOptions(models, classifiers)
+  const current = providerOf(value)
+  const [picked, setPicked] = useState(current)
+  const provider = value ? current : picked
+  const providers = [...new Set([...options.map((option) => providerOf(option.id)), ...(current ? [current] : [])])].filter(Boolean).sort()
+  const providerItems: ChoiceItem[] = [
+    { value: JEV_PROVIDER, label: CLASSIFIER_LABELS.engineJev, help: CLASSIFIER_LABELS.engineJevHelp },
+    ...providers.map((name) => {
+      const own = options.filter((option) => providerOf(option.id) === name)
+      const scorers = own.filter((option) => option.kind === "classifier").length
+      const chats = own.length - scorers
+      const help = [scorers ? `${scorers} ${CLASSIFIER_LABELS.engineClassifier}${scorers === 1 ? "" : "s"}` : "", chats ? `${chats} chat model${chats === 1 ? "" : "s"}` : ""].filter(Boolean).join(", ")
+      return { value: name, label: name, ...(help ? { help } : {}) }
+    }),
+  ]
+  const own = options.filter((option) => providerOf(option.id) === provider)
+  const modelItems: ChoiceItem[] = [
+    ...own.map((option) => ({ value: option.id, label: option.id.slice(provider.length + 1), help: `${option.kind === "classifier" ? CLASSIFIER_LABELS.engineClassifier : CLASSIFIER_LABELS.engineChat}${option.label && option.label !== option.id ? ` · ${option.label}` : ""}` })),
+    ...(value && !own.some((option) => option.id === value) ? [{ value, label: value.slice(provider.length + 1) || value, help: CUSTOM_HELP }] : []),
     { value: CUSTOM_MODEL, label: CUSTOM_LABEL, help: CUSTOM_HELP },
   ]
-  const choose = (next: string) => {
+  const chooseProvider = (next: string) => {
+    setTyping(false)
+    if (next === JEV_PROVIDER) { setPicked(""); return onChange("") }
+    setPicked(next)
+    // A provider is used through one of its models: the first classifier model, else its first chat model.
+    const first = options.find((option) => providerOf(option.id) === next && option.kind === "classifier") ?? options.find((option) => providerOf(option.id) === next)
+    if (first) onChange(first.id)
+  }
+  const chooseModel = (next: string) => {
     if (next !== CUSTOM_MODEL) return onChange(next)
-    setText(ids.has(value) ? "" : value)
+    setText(value && !own.some((option) => option.id === value) ? value : `${provider}/`)
     setTyping(true)
   }
   const use = () => {
     const next = text.trim()
     setTyping(false)
-    if (next !== value) onChange(next)
+    if (next && next !== value) onChange(next)
   }
   return (
     <div className="flex flex-col gap-2">
-      <Choice value={value} items={items} label={CLASSIFIER_LABELS.engine} onChange={choose} />
+      <Choice value={provider || JEV_PROVIDER} items={providerItems} label={CLASSIFIER_LABELS.provider} onChange={chooseProvider} />
+      {provider ? <Choice value={value || CUSTOM_MODEL} items={modelItems} label={CLASSIFIER_LABELS.engineModel} onChange={chooseModel} /> : null}
       {typing ? (
         <div className="flex min-w-0 flex-wrap items-start gap-2">
           <Input autoFocus value={text} placeholder="provider/model" aria-label="Classifier model id" className="min-w-0 flex-1" onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); use() } }} />
@@ -611,6 +654,9 @@ function EngineChoice({ value, models, classifiers, onChange }: { value: string;
     </div>
   )
 }
+
+/** The provider picker's value for Jev on a host (the empty engine). */
+const JEV_PROVIDER = "__jev__"
 
 function ClassifierGroup({ config, models, classifiers, save }: { config: Config; models: SettingsModelInfo[]; classifiers: SettingsClassifierModel[]; save: Save }) {
   const classifier = config.classifier

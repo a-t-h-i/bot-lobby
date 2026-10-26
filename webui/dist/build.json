@@ -1,6 +1,6 @@
 {
-  "hash": "63a013a9802fc9965e55e990662e5445b8fb8b479f0bc09a64f04661ab824064",
-  "builtAt": "2026-10-24T22:30:28.030Z",
+  "hash": "43f820e29eccf878c7c830058bf37530005ea3fb05a02743e2afda959cbe83a0",
+  "builtAt": "2026-10-26T13:37:23.499Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -584,7 +584,7 @@
     },
     {
       "path": "webui/src/tabs/settings/SettingsForm.tsx",
-      "sha256": "2eef494a7f406797adcebcde2ea707dd58b8678d7c312fb7f42412a6dc7d3626"
+      "sha256": "cd7a434570af3a54c80bfcaf2710a746e8c658634086e21ee83cf4c79215211c"
     },
     {
       "path": "webui/src/tabs/settings/SettingsTab.tsx",
@@ -600,7 +600,7 @@
     },
     {
       "path": "webui/src/tabs/settings/words.ts",
-      "sha256": "263b3df49644d3d87d032d8d22e04b767a89e60abedb57e3af1cf0e718f39b8b"
+      "sha256": "750f9d82e03712900fa1f94e05f51cfb01633b5483cf3d240270d21cc2205375"
     },
     {
       "path": "webui/src/tabs/tasks/Comments.tsx",
