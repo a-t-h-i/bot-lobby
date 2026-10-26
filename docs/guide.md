@@ -11,6 +11,10 @@ slide-out, where you comment on any line. Plans you leave without saving them as
 **Plan → Previous**. You can read, carry on, archive or delete them there. A plan saved as a task
 leaves that list.
 
+The panel's members (DEV, DESIGN, QA, RESEARCH) sit the first round. After that the oracle plans
+alone and calls a member back only when it needs that member's view, so later rounds stay quick.
+A member you pin with its key sits every round.
+
 ## Tasks
 
 Follow the agents in **Lobby** and **Tasks**: in a task's steps, the one being worked on reads
@@ -75,7 +79,7 @@ yours, so QA never reverts them) and anything no agent made are left uncommitted
 
 ## Checks
 
-After every worker step, before QA and at completion, the engine runs the project's own linter
+Before QA and at completion, the engine runs the project's own linter
 (ESLint, Biome, Oxlint, Ruff, or a command you set) on the files the task touched. Only problems on
 changed lines count, and QA judges any lint suppression a worker adds. **Settings → Linting** sets it
 to off, advise or block. Visual questions come with interactive mockups that expand and scroll side by side; they are drawn with the project's own stylesheets (its tokens and component classes) when it has them.
@@ -252,26 +256,12 @@ without going through it:
   entries there: `contract`, `decision`, `blocker`, `question`, `done` and `note`. Each role reads
   only the kinds it follows, and running workers hear about new contracts and blockers straight
   away. Later steps and the QA gate read the board too, and each step's report lists its new posts.
-- **Peer questions.** Workers in one parallel batch can ask each other short questions with
-  `ask_peer` instead of guessing. The answer goes back to whoever asked and onto the board.
-  Questions only: no worker gives another work.
 - **QA alongside the build.** On the full workflow, QA can write its tests in the same batch as
   the build. It works from the plan's contracts and acceptance criteria, then runs the tests as
   pieces are posted `done`.
-- **A worktree per worker** (`workflow.parallelMode: "worktrees"`; the default is `"desk"`). Each
-  worker in a batch gets its own checkout, so nobody queues for files. Ignored folders such as
-  `node_modules` are linked in from your checkout. When the batch ends, each worker's change is
-  applied back in turn. A change that clashes with an earlier one is saved as a patch under the
-  task's `patches/` folder for the oracle to hand back. It is never half-applied.
-- **Expert advice** (`workflow.consultExpert`, on by default). A task's DESIGN and DEV workers can
-  ask a stronger model for advice on a hard step with `ask_expert`, up to twice per step. It uses
-  the oracle's model unless `workflow.expertModel` names another.
 - **Clean review** (`workflow.cleanReview`, on by default). The QA gate sees the request, the
-  plan, the board and the diff. It does not see the workers' own accounts of their work.
-- **Goal check** (`workflow.goalCheck`, on by default). Before a task completes, one read-only
-  agent compares the change with what you asked for, not with the plan. Gaps hold completion
-  until they are fixed, or until the oracle completes with a reason, such as that you agreed to
-  leave something out.
+  plan, the board and the diff. It does not see the workers' own accounts of their work. It also
+  checks the change against what you asked for, not only against the plan.
 - **Files, not relays.** A long worker report is kept whole under the task's `reports/` folder,
   and the oracle gets its path.
 
@@ -337,7 +327,7 @@ Each step still gets its role prompt (instructions, knowledge, standards and the
 Codex gets it as developer instructions, Claude Code appends it to its own system prompt, and ACP
 agents receive it in front of the first message. Read-only roles stay read-only: a read-only sandbox
 on Codex, only the matching tools in `dontAsk` mode on Claude Code, and refused permission requests
-on ACP agents. A harness uses its own login. It cannot ask you questions, and it has no access to Bot Lobby's own tools (the file desk, the task board, `ask_expert`).
+on ACP agents. A harness uses its own login. It cannot ask you questions, and it has no access to Bot Lobby's own tools (the file desk, the task board).
 
 Settings > Harnesses shows whether each one is installed. Each harness has these settings: its
 command, launch arguments, home folder (`CODEX_HOME`, `CLAUDE_CONFIG_DIR`), model provider (Codex:

@@ -89,13 +89,6 @@ repository at the same time, and files are checked out like physical documents:
   `blocker` on someone else's part, and `done` when a piece is finished and
   testable. Exact facts, a line or two each; never progress chatter. Read the
   board (`read_board`) before you build against another domain's part.
-- **Peers.** When `ask_peer` is available, ask the worker who owns a part a
-  short question instead of guessing a name or a shape; answer theirs with
-  `answer_peer` straight away. Nobody takes work from a peer: only from the
-  brief.
-- **Expert.** When `ask_expert` is available and you are stuck after a real
-  attempt, or unsure about a hard choice, ask it with what you tried and the
-  files involved. Use it for the hard part, not to think for you.
 - **Long findings** go in a file under the task's notes folder (your context
   names it); give its path under Notes.
 
