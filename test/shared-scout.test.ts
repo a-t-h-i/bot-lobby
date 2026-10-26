@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { runScouts, type ScoutRequest } from "../src/master/master.ts";
@@ -53,14 +53,14 @@ test("initial scout and targeted followup cannot overlap, but followup succeeds 
   const first = runScouts(request(root), runner);
   await running;
   try {
-    await assert.rejects(runScouts({ ...request(root), instruction: "Verify one caller" }, runner), /Scout preparation is locked.*Wait for the active scout/);
+    await assert.rejects(runScouts({ ...request(root), instruction: "Verify one caller" }, runner), /scout is already running.*Wait for its findings/);
   } finally { finish(); }
   await first;
   const next = await runScouts({ ...request(root), instruction: "Verify one caller" }, async () => reply());
   assert.equal(next.length, 2);
 });
 
-test("failure and aborted preparation release the task lock; interrupted locks fail actionably", async (t) => {
+test("failure and aborted preparation release the task lock; a live lock refuses, a dead one is taken over", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "bl-shared-failure-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const failed = await runScouts(request(root), async () => { throw new Error("interrupted"); });
@@ -69,8 +69,11 @@ test("failure and aborted preparation release the task lock; interrupted locks f
   controller.abort();
   await assert.rejects(runScouts({ ...request(root), signal: controller.signal }, async () => reply()), /abort/i);
   const release = acquireScoutLock(request(root).taskDir);
-  assert.throws(() => acquireScoutLock(request(root).taskDir), /confirm its process has stopped/);
+  assert.throws(() => acquireScoutLock(request(root).taskDir), /already running/);
   release();
+  // A lock left by a process that died is taken over instead of blocking every later scout.
+  writeFileSync(join(request(root).taskDir, "scout.lock"), JSON.stringify({ token: "dead", pid: 2147483646, host: hostname() }));
+  acquireScoutLock(request(root).taskDir)();
   const next = await runScouts(request(root), async () => reply());
   assert.ok(next.every((outcome) => outcome.usable));
 });

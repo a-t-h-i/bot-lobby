@@ -107,7 +107,7 @@ export function approveAssignmentDiscovery(taskDir: string, id: string, revision
     if (old && (old.limit !== decision.limit || old.reason !== decision.reason)) throw new AssignmentDiscoveryError("decision id already records a different allowance");
     if (old) return state;
     if (decision.limit <= state.limit) throw new AssignmentDiscoveryError("allowance decision must increase the existing total limit");
-    return { ...state, limit: decision.limit, decisions: [...state.decisions, { ...decision }] };
+    return { ...state, limit: decision.limit, decisions: [...state.decisions, { decisionId: decision.decisionId, reason: decision.reason, limit: decision.limit }] };
   });
 }
 

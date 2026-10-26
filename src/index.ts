@@ -22,6 +22,7 @@ import { registerAskTool } from "./ask/tool.ts";
 import { registerWebTools } from "./web/tools.ts";
 import { registerToolBudget } from "./pi/tool-budget.ts";
 import { bindGrants } from "./pi/grants.ts";
+import { registerAssignmentGuard } from "./pi/assignment-guard.ts";
 
 export default function (pi: ExtensionAPI): void {
   registerAgentPermissions(pi);
@@ -60,4 +61,6 @@ export default function (pi: ExtensionAPI): void {
   registerKnowledgeTools(pi, CONFIG_DIR_NAME);
   // A subagent given a tool budget (scouts) is warned, then refused, so it reports instead of searching on.
   if (isSubagentProcess()) registerToolBudget(pi);
+  // A worker on a structured assignment: its replacement allowlist, edit scope and discovery ledger.
+  if (isSubagentProcess()) registerAssignmentGuard(pi);
 }

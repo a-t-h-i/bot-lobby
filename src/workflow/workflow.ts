@@ -6,7 +6,7 @@ import { checkWorkerAssignments, recordWorkerAssignments } from "../state/persis
 import { existsSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
 import { checkpointSummary, settledDecisions } from "../state/checkpoint.ts";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
-import type { BotLobbyConfig, ProfileResolver } from "../schemas/configuration.ts";
+import { profileFor, type BotLobbyConfig, type ProfileResolver } from "../schemas/configuration.ts";
 import type { AgentRun, Pushback, ResearchResult, ReviewResult } from "../schemas/findings.ts";
 import {
   MAX_RUN_LOG,
@@ -1156,6 +1156,9 @@ async function handleImplement(task: Task, params: OrchestrateParams, deps: Work
   const assignments = await parseAssignments(params, deps.cwd);
   const structured = assignments.flatMap(({ domain, assignment }) => assignment ? [{ domain, assignment }] : []);
   checkWorkerAssignments(task, structured);
+  // A harness cannot keep a sanitized conversation or attest its tools: refuse here, before anything is recorded.
+  const harnessed = structured.filter(({ domain }) => profileFor(deps.config, deps.profile, domain, "worker").harness).map(({ domain }) => domain);
+  if (harnessed.length > 0) throw new Error(`${harnessed.join(", ")} runs on a third-party harness, which cannot run a structured workerAssignment; send that step as a prose task instead.`);
   await checkDiscoveryAllowances(task, structured, deps);
   const benched = assignments.map((entry) => benchedRefusal(task, entry.domain)).filter(Boolean);
   if (benched.length > 0) throw new Error(benched.join("\n"));

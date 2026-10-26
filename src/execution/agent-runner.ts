@@ -184,7 +184,8 @@ async function prepareAssignedPolicy(options: PiRunOptions, request: AgentReques
   const host = await delegationHost(options, run);
   try {
     const connected = grantableTools().map((tool) => tool.name);
-    const granted = [...host.tools, ...host.mcpTools];
+    // MCP resource tools are never appended for an assigned run: the master selects them, and only an MCP grant permits them.
+    const granted = [...host.tools, ...host.mcpTools, ...(host.mcpTools.length > 0 ? MCP_RESOURCE_TOOLS : [])];
     const available = [...host.tools.filter((name) => !name.startsWith("mcp__")), ...connected, ...MCP_RESOURCE_TOOLS];
     const selected = selectAssignmentTools(request.assignment.brief, { granted, known: [...granted, ...connected, ...MCP_RESOURCE_TOOLS], available });
     options.tools = selected;
@@ -236,6 +237,8 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
         evidence: request.assignment.brief.evidence,
         completedWork: request.assignment.brief.completedWork,
         needs: request.assignment.brief.needs,
+        files: request.assignment.brief.files,
+        verification: request.assignment.brief.verification,
       } } : {}),
       systemPrompt,
       tools: toolsFor(request),
@@ -255,7 +258,7 @@ async function runAgentOnce(request: AgentRequest, run: ProcessRunner, attempt: 
       onStart: (handle) => request.onStart?.({ runId: base.runId, steer: handle.steer, annotate: live.annotate }),
     };
     await prepareAssignedPolicy(options, request, run);
-    // Native and harness assigned execution still refuse before any provider/tool request.
+    // An assigned run gets its own conversation and in-process guard; a harness is refused before any request.
     const result = await runPiAgent(options, run);
     const current = live.current();
     const final: AgentRun = {

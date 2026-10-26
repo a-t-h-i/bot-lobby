@@ -198,7 +198,9 @@ covers several) so the checklist tracks progress exactly.
 
 Every `implement` requires `workerAssignment`, either beside the single
 `domain` or inside each `assignments` entry. Prose `task` is only an optional
-step label, never a fallback. Do not mix single and parallel parameters.
+step label, never a fallback, except for a domain whose worker runs on a
+third-party harness: the engine refuses a structured assignment there, so send
+that step as a prose `task`. Do not mix single and parallel parameters.
 Author the complete object with these exact fields:
 - `id`: stable identity for the same work, and positive integer `revision`;
   keep both on identical retries, increase revision when changing the brief.
@@ -208,7 +210,15 @@ Author the complete object with these exact fields:
   must exist; create paths may be absent. Deliver paths/purposes, not file bodies.
 - `contracts`, `constraints`, `exclusions`: arrays of explicit strings.
 - `tools: [{name, purpose}]`: explicit selected tools from existing grants;
-  an empty array means no tools, not unrestricted access.
+  an empty array means no tools, not unrestricted access. The selection
+  replaces the worker's tools: `read`, `bash`, `edit`, `write`, `grep`, `find`,
+  `ls`, `codemode`, `tool_search`, `ask_expert`, `delegate_subtasks`, the board
+  (`post_board`, `read_board`, `ack_board`), knowledge (`search_knowledge`,
+  `open_knowledge`, `list_bookmarks`), `find_relevant_files` and the domain's
+  granted `mcp__…` tools (plus `list_mcp_resources`/`read_mcp_resource` only
+  when you name them). Name `bash` when verification runs commands. With `edit`
+  or `write`, the file desk's claim/handover tools come along by themselves.
+  Codemode reaches only the tools you selected.
 - `verification`: nonempty array of commands or observable success criteria.
 - `evidence`, `completedWork`: arrays of references and prior completed work.
 - `needs: [{kind: "files" | "tools" | "discovery" | "decision", reason, requested: ["..."]}]`:
@@ -222,8 +232,11 @@ rejected assignment explicitly; do not retry with only prose. Stable identities
 cannot change domains; stale revisions and changed content at the same revision
 are rejected. Read outcomes and expansion requests in reports/status and carry
 completed work and unresolved needs into the next revision. Reference-only work
-may succeed without edits; edits still require verification. Unsupported assigned
-runtimes fail closed; never bypass that failure by dispatching an unassigned run.
+may succeed without edits; edits still require verification. The worker's
+reads of its assigned files and its verification are free; every other lookup
+spends the allowance, and an edit outside its edit/create paths is refused, so
+list every file it must change. Unsupported assigned runtimes (a third-party
+harness) fail closed; never bypass that failure by dispatching an unassigned run.
 Independent unaffected actions may continue while expansion awaits a decision.
 
 ## Briefing the agents

@@ -1,12 +1,15 @@
 import type { AgentRun } from "../schemas/findings.ts";
 import type { Domain, Role } from "../schemas/agent.ts";
-import { delegationHost, type RuntimeAccess } from "./delegation.ts";
+import { AGENT_ENV, delegationHost, type AgentPolicy, type RuntimeAccess } from "./delegation.ts";
+import { DESK_TOOLS } from "../desk/session.ts";
+import { ASSIGNMENT_ENV, type AssignmentAttestation, type AssignmentGuardSpec } from "../pi/assignment-guard.ts";
+import { readAssignmentDiscovery } from "./assignment-discovery.ts";
 import { AUTO_COMPACT_ENV, COMPACT_AT_ENV } from "../pi/quiet.ts";
 import { fileURLToPath } from "node:url";
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { activityWord } from "../pi/activity.ts";
 import { skillFiles } from "../pi/grants.ts";
 import { shortDuration } from "../text.ts";
@@ -663,25 +666,89 @@ function writePromptFile(prompt: string): { file: string; cleanup: () => void } 
   return { file, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
-/** Fail closed until the subprocess protocol can attest both tool inventories. */
-function assignedCompatibilityFailure(options: PiRunOptions): PiRunResult {
-  let error = "Assigned execution compatibility: installed Pi RPC cannot inspect declared and callable tool inventories before execution; a verified inventory guard is required (no fresh-session fallback).";
-  if (options.harness) error = "Assigned execution compatibility: third-party harness has no verified conversation sanitation and declared/callable tool inventory support.";
-  else {
-    try {
-      const session = openAssignedSession(options.assignedSession!, options.cwd);
-      session.release();
-    } catch (issue) { error = issue instanceof Error ? issue.message : String(issue); }
-  }
+function failedRun(error: string): PiRunResult {
   return { status: "failed", output: "", error, usage: { input: 0, output: 0, cost: 0, turns: 0 } };
+}
+
+/** The attestation the worker's guard wrote for this revision, or why there is none. */
+function attestationIssue(path: string, revision: number): string | undefined {
+  let attestation: AssignmentAttestation;
+  try { attestation = JSON.parse(readFileSync(path, "utf8")) as AssignmentAttestation; }
+  catch { return "Assigned execution compatibility: the worker's tool guard never attested its declared tools, so the run is not accepted (no unrestricted fallback)."; }
+  if (attestation.revision !== revision) return `Assigned execution compatibility: the tool guard attested revision ${attestation.revision}, not ${revision}.`;
+  if (!attestation.ok) return `Assigned execution compatibility: ${attestation.unauthorized.join(", ")} stayed declared after the allowlist was reapplied.`;
+  return undefined;
+}
+
+/**
+ * A structured assignment's run: its own task-owned conversation (locked for the
+ * process's lifetime, sanitized of restored tool declarations), a replacement tool
+ * allowlist, and the in-process guard, whose attestation the run must carry.
+ * Third-party harnesses cannot meet this and are refused before any request.
+ */
+async function runAssignedAgent(options: PiRunOptions, run: ProcessRunner): Promise<PiRunResult> {
+  if (options.harness) return failedRun("Assigned execution compatibility: a third-party harness cannot keep a sanitized task conversation or attest its tool inventory; run this assignment's agent on pi, or dispatch it without a structured assignment.");
+  const assigned = options.assignedSession!;
+  let session: ReturnType<typeof openAssignedSession>;
+  try { session = openAssignedSession(assigned, options.cwd); }
+  catch (error) { return failedRun(error instanceof Error ? error.message : String(error)); }
+  const attestation = join(dirname(session.file), "attestation.json");
+  rmSync(attestation, { force: true });
+  const selected = [...new Set(options.tools ?? [])].sort();
+  const host = await delegationHost({ ...options, tools: selected }, run);
+  let prompt: ReturnType<typeof writePromptFile> | undefined;
+  try {
+    // Replacement, not additive: the host's own extras stay out unless selected, except the file desk's
+    // claim/handover protocol, without which a selected edit cannot happen in a shared batch.
+    const edits = selected.includes("edit") || selected.includes("write");
+    const allowed = [...new Set([...selected.filter((name) => host.tools.includes(name) || host.mcpTools.includes(name) || MCP_RESOURCE_TOOLS.includes(name)), ...(edits ? host.tools.filter((name) => DESK_TOOLS.includes(name)) : [])])].sort();
+    const mcpTools = allowed.filter((name) => name.startsWith("mcp__"));
+    const policy = JSON.parse(host.env[AGENT_ENV] ?? "{}") as AgentPolicy;
+    const guard: AssignmentGuardSpec = {
+      taskDir: assigned.taskDir, assignmentId: assigned.assignmentId, revision: assigned.revision, tools: allowed, cwd: options.cwd,
+      files: (assigned.files ?? []).map((file) => ({ path: resolve(options.cwd, file.path), access: file.access })), verification: assigned.verification ?? [], attestation,
+    };
+    const env = { ...host.env, [AGENT_ENV]: JSON.stringify({ ...policy, tools: allowed, mcpTools }), [ASSIGNMENT_ENV]: JSON.stringify(guard) };
+    prompt = writePromptFile([options.systemPrompt, host.note].filter(Boolean).join("\n\n"));
+    if (options.signal?.aborted) return { status: "cancelled", output: "", usage: { input: 0, output: 0, cost: 0, turns: 0 } };
+    const args = buildPiArgs({ ...options, tools: allowed, mcpTools, systemPromptFile: prompt.file, ...(options.skills ? { skillFiles: skillFiles(options.skills, options.cwd) } : {}) });
+    const outcome = await run(args, {
+      cwd: options.cwd,
+      signal: options.signal,
+      prompt: `Task: ${options.task}`,
+      env,
+      stallTimeoutMs: options.stallTimeoutMs,
+      toolStallTimeoutMs: options.toolStallTimeoutMs,
+      ...(options.onAsk ? { onAsk: options.onAsk } : {}),
+      onStart: host.onStart,
+      onEvent: (event) => {
+        if (event.type === "tool_execution_start") options.onActivity?.(activityWord(event.toolName));
+        options.onEvent?.(event);
+      },
+    });
+    let result = toResult(parsePiStream(outcome.stdout), outcome, options.signal?.aborted === true, options);
+    const issue = result.status === "cancelled" ? undefined : attestationIssue(attestation, assigned.revision);
+    if (issue) result = { ...result, status: "failed", error: [issue, result.error].filter(Boolean).join(" ") };
+    try {
+      const ledger = await readAssignmentDiscovery(assigned.taskDir, assigned.assignmentId, assigned.revision);
+      session.state.consumedDiscovery = Math.max(session.state.consumedDiscovery, ledger.consumed);
+    } catch { /* the ledger's own errors surface on the next dispatch */ }
+    session.save();
+    await host.close();
+    return host.children.length ? { ...result, children: host.children } : result;
+  } finally {
+    prompt?.cleanup();
+    await host.close();
+    session.release();
+  }
 }
 
 /** Run one isolated subagent and normalise its outcome. */
 export async function runPiAgent(given: PiRunOptions, run: ProcessRunner = spawnPiProcess): Promise<PiRunResult> {
-  if (given.assignedSession) return assignedCompatibilityFailure(given);
-  if (given.harness) return runHarnessAgent({ ...given, harness: given.harness });
   const compactEnv = { ...(given.autoCompact === false ? { [AUTO_COMPACT_ENV]: "0" } : {}), ...(given.compactAt ? { [COMPACT_AT_ENV]: String(given.compactAt) } : {}) };
   const options = Object.keys(compactEnv).length ? { ...given, env: { ...given.env, ...compactEnv } } : given;
+  if (options.assignedSession) return runAssignedAgent(options, run);
+  if (given.harness) return runHarnessAgent({ ...given, harness: given.harness });
   const host = await delegationHost(options, run);
   let prompt: ReturnType<typeof writePromptFile> | undefined;
   try {

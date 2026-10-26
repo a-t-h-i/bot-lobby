@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { ASSIGNMENT_ENV } from "../src/pi/assignment-guard.ts";
+import { assignedSessionFile } from "../src/execution/assigned-session.ts";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { WorkerAssignment } from "../src/execution/assignment.ts";
@@ -41,10 +43,11 @@ function fixture() {
 }
 
 test("orchestrate schema exposes the exact assignment keys and closed nested shapes", () => {
-  assert.equal(WorkerAssignmentSchema.additionalProperties, false);
+  const closed = (schema: unknown) => (schema as { additionalProperties?: boolean }).additionalProperties;
+  assert.equal(closed(WorkerAssignmentSchema), false);
   assert.deepEqual(Object.keys(WorkerAssignmentSchema.properties).sort(), Object.keys(brief()).sort());
-  assert.equal(WorkerAssignmentSchema.properties.files.items.additionalProperties, false);
-  assert.equal(WorkerAssignmentSchema.properties.needs.items.additionalProperties, false);
+  assert.equal(closed(WorkerAssignmentSchema.properties.files.items), false);
+  assert.equal(closed(WorkerAssignmentSchema.properties.needs.items), false);
 });
 
 test("implement rejects invalid explicit briefs without process fallback", async () => {
@@ -74,16 +77,35 @@ test("parallel preflight validates the entire batch before persisting any brief"
   } finally { f.cleanup(); }
 });
 
-test("valid reference-only orchestrated brief persists through fail-closed assigned dispatch", async () => {
+test("a valid reference-only brief runs under its guard, succeeds without edits and keeps its conversation", async () => {
   const f = fixture();
   try {
-    const result = await runWorkflowAction({ action: "implement", taskId: f.task.id, domain: "backend", workerAssignment: brief() }, f.deps);
+    const report = ["## Completed", "Read source.ts: it exports value = 1.", "## Files Changed", "## Verification", "- Report the observed contract — value is 1", "## Brief Check", "- Report the observed contract — met — source.ts:1", "## Notes", "None.", "## Blockers", "None."].join("\n");
+    let guard: { tools: string[]; attestation: string; assignmentId: string; revision: number } | undefined;
+    f.deps.runProcess = async (_args, options) => {
+      guard = JSON.parse(options.env![ASSIGNMENT_ENV]!);
+      writeFileSync(guard!.attestation, JSON.stringify({ assignmentId: guard!.assignmentId, revision: guard!.revision, allowed: guard!.tools, declared: guard!.tools, blockedCallable: [], unauthorized: [], ok: true }));
+      return { exitCode: 0, killed: false, stderr: "", stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: report }], stopReason: "stop", usage: { input: 1, output: 1, cost: { total: 0 } } } }) };
+    };
+    const result = await runWorkflowAction({ action: "implement", taskId: f.task.id, domain: "backend", workerAssignment: { ...brief(), tools: [{ name: "read", purpose: "Read the source" }] } }, f.deps);
     const saved = loadTask(f.root, ".pi", f.task.id)!;
+    assert.deepEqual(guard?.tools, ["read"], "an empty or narrow selection is not widened");
+    const outcome = saved.workerAssignments?.[0]?.outcomes[0];
+    assert.equal(outcome?.status, "success", result.message);
+    assert.deepEqual(outcome?.issues, []);
+    assert.match(describeTask(saved), /backend-step r1.*success/);
+    assert.ok(existsSync(assignedSessionFile({ taskDir: taskDirFor(f.root, ".pi", f.task.id), assignmentId: "backend-step" })));
+  } finally { f.cleanup(); }
+});
+
+test("an ungranted tool selection fails the run with an actionable error and never starts a process", async () => {
+  const f = fixture();
+  try {
+    const result = await runWorkflowAction({ action: "implement", taskId: f.task.id, domain: "backend", workerAssignment: { ...brief(), tools: [{ name: "mcp__nowhere__thing", purpose: "x" }] } }, f.deps);
     assert.equal(f.calls(), 0);
-    assert.deepEqual(saved.workerAssignments?.[0]?.brief, brief());
-    assert.equal(saved.workerAssignments?.[0]?.outcomes.length, 1, result.message);
-    assert.equal(saved.workerAssignments?.[0]?.outcomes[0]?.status, "failed");
-    assert.match(describeTask(saved), /backend-step r1.*failed/);
+    const outcome = loadTask(f.root, ".pi", f.task.id)!.workerAssignments?.[0]?.outcomes[0];
+    assert.equal(outcome?.status, "failed", result.message);
+    assert.match(result.message, /unknown tool mcp__nowhere__thing/);
   } finally { f.cleanup(); }
 });
 
@@ -196,5 +218,17 @@ test("completion invalidates changed evidence before review or completion side e
     const saved = loadTask(f.root, ".pi", f.task.id)!;
     assert.equal(saved.workerAssignments![0]!.outcomes[0]!.freshness!.status, "invalidated");
     assert.match(saved.workerAssignments![0]!.outcomes[0]!.issues!.join(), /Evidence changed/);
+  } finally { f.cleanup(); }
+});
+
+test("a structured assignment for a domain on a third-party harness is refused before anything is recorded", async () => {
+  const f = fixture();
+  try {
+    f.deps.profile = (domain, role) => ({ kind: domain, model: "inherit", thinking: "medium", harness: { kind: "codex" } } as never);
+    const result = await runWorkflowAction({ action: "implement", taskId: f.task.id, domain: "backend", workerAssignment: brief() }, f.deps);
+    assert.equal(result.ok, false);
+    assert.match(result.message, /third-party harness.*prose task/);
+    assert.equal(f.calls(), 0);
+    assert.equal(loadTask(f.root, ".pi", f.task.id)?.workerAssignments, undefined);
   } finally { f.cleanup(); }
 });

@@ -12,6 +12,9 @@ export interface AssignedSession {
   completedWork?: string[];
   needs?: unknown[];
   consumedDiscovery?: number;
+  /** The assignment's files and verification, for the worker's in-process guard. */
+  files?: { path: string; access: "reference" | "edit" | "create" }[];
+  verification?: string[];
 }
 export interface AssignedSessionState {
   version: 1;
@@ -35,11 +38,13 @@ function object(value: unknown): Entry {
 }
 const ENTRY_TYPES = new Set(["message", "model_change", "thinking_level_change", "usage", "compaction", "context_edit", "branch_summary", "custom", "custom_message", "label", "session_info"]);
 const ROLES = new Set(["system", "user", "assistant", "toolResult", "custom", "bashExecution", "compactionSummary", "branchSummary"]);
+const TOOL_LISTING = /<tools>[\s\S]*?<\/tools>\n?/g;
 function sanitizeSystem(value: unknown): Entry {
   const message = object(value);
   if (message.role !== "system") throw new SessionRecoveryError("invalid system checkpoint role");
-  if (message.content !== "") throw new SessionRecoveryError("unsupported nonempty system content; cannot separate declarations from unrelated instructions without losing history");
-  const clean: Entry = { ...message };
+  if (typeof message.content !== "string") throw new SessionRecoveryError("unsupported system content; cannot separate declarations from unrelated instructions without losing history");
+  // A compaction checkpoint carries the composed prompt as text: only its tool listing is a declaration.
+  const clean: Entry = { ...message, content: message.content.replace(TOOL_LISTING, "") };
   delete clean.toolsAdded;
   delete clean.toolsRemoved;
   if (message.sections !== undefined) {

@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { assignedSessionFile, cleanupAssignedSession, openAssignedSession, sanitizeSession, type AssignedSession } from "../src/execution/assigned-session.ts";
 import { buildPiArgs, runPiAgent } from "../src/execution/pi-runner.ts";
+import { ASSIGNMENT_ENV } from "../src/pi/assignment-guard.ts";
 
 const header = { type: "session", version: 3, id: "session", cwd: "/repo" };
 const system = { role: "system", content: "", sections: { tools: "old tools", cwd: "/repo" }, toolsAdded: [{ name: "write" }], toolsRemoved: [{ name: "read" }], timestamp: 1 };
@@ -38,9 +39,19 @@ test("sanitation preserves conversations, graph, summaries, accounting and reten
   assert.deepEqual(clean[5].usage, { input: 2 });
 });
 
-test("nonempty system content stops without erasing unrelated instructions", () => {
-  const source = [header, entry("s", null, { type: "message", message: { ...system, content: "Preserve these instructions" } })].map(row => JSON.stringify(row)).join("\n");
-  assert.throws(() => sanitizeSession(source), /unsupported nonempty system content/);
+test("composed system text keeps its instructions and loses only its tool listing", () => {
+  const content = "Preserve these instructions\n<tools>\n- write: old\n</tools>\nAnd these";
+  const source = [header,
+    entry("s", null, { type: "message", message: { ...system, content } }),
+    entry("u", "s", { type: "message", message: { role: "user", content: "keep me" } }),
+    entry("c", "u", { type: "compaction", summary: "kept", firstKeptEntryId: "u", tokensBefore: 9, systemMessage: { role: "system", content, toolsAdded: [{ name: "write" }], timestamp: 2 } }),
+  ].map(row => JSON.stringify(row)).join("\n");
+  const clean = sanitizeSession(source).trim().split("\n").map(line => JSON.parse(line));
+  for (const message of [clean[1].message, clean[3].systemMessage]) {
+    assert.equal(message.content, "Preserve these instructions\nAnd these");
+    assert.equal(message.toolsAdded, undefined);
+  }
+  assert.equal(clean[2].message.content, "keep me");
 });
 
 test("system context edits cannot reintroduce undeclared system payloads", () => {
@@ -144,17 +155,61 @@ test("assigned argv preserves exact tool selection without implicit MCP resource
   assert.ok(!resource.includes("--no-mcp"));
 });
 
-test("assigned native execution fails before model work when inventories cannot be inspected", async () => {
+test("an assigned run holds its conversation lock, carries the guard and needs the guard's attestation", async () => {
+  const { assignment, cleanup } = fixture();
+  try {
+    const guarded = { ...assignment, files: [{ path: "src/a.ts", access: "edit" as const }], verification: ["npm test"] };
+    let seen: { args: string[]; env: Record<string, string> } | undefined;
+    const reply = JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "done" }], stopReason: "stop", usage: { input: 1, output: 1, cost: { total: 0 } } } });
+    const runner = (attest: boolean) => async (args: string[], options: { env?: Record<string, string> }) => {
+      seen = { args, env: options.env ?? {} };
+      // The conversation is locked while the worker runs.
+      assert.throws(() => openAssignedSession(guarded, "/repo"), /locked/);
+      const guard = JSON.parse(options.env![ASSIGNMENT_ENV]!);
+      if (attest) writeFileSync(guard.attestation, JSON.stringify({ assignmentId: guard.assignmentId, revision: guard.revision, allowed: guard.tools, declared: guard.tools, blockedCallable: [], unauthorized: [], ok: true }));
+      return { exitCode: 0, stdout: reply, stderr: "", killed: false };
+    };
+    const tools = ["read", "edit", "read"];
+    const unattested = await runPiAgent({ cwd: "/repo", task: "go", tools, assignedSession: guarded }, runner(false));
+    assert.equal(unattested.status, "failed");
+    assert.match(unattested.error!, /never attested/);
+    const attested = await runPiAgent({ cwd: "/repo", task: "go", tools, assignedSession: guarded }, runner(true));
+    assert.equal(attested.status, "success", attested.error);
+    const guard = JSON.parse(seen!.env[ASSIGNMENT_ENV]!);
+    // Replacement allowlist: the host's codemode, tool_search, delegation and expert stay out; the file desk's
+    // claim/handover protocol comes with a selected edit.
+    const expected = ["claim_file", "edit", "handover_file", "my_files", "read", "wait_for_files"];
+    assert.deepEqual(guard.tools, expected);
+    assert.deepEqual(guard.files, [{ path: "/repo/src/a.ts", access: "edit" }]);
+    assert.deepEqual(JSON.parse(seen!.env.BOT_LOBBY_AGENT_POLICY!).tools, expected);
+    assert.equal(seen!.args[seen!.args.indexOf("--tools") + 1], expected.join(","));
+    assert.ok(seen!.args.includes("--no-mcp"));
+    assert.equal(seen!.args[seen!.args.indexOf("--session") + 1], assignedSessionFile(assignment));
+    // Released afterwards: the next revision resumes the same conversation.
+    openAssignedSession({ ...guarded, revision: 2 }, "/repo").release();
+  } finally { cleanup(); }
+});
+
+test("assigned execution on a third-party harness is refused before any process starts", async () => {
   const { assignment, cleanup } = fixture();
   try {
     let spawned = false;
-    const result = await runPiAgent({ cwd: "/repo", task: "revision", assignedSession: assignment }, async () => { spawned = true; throw new Error("must not spawn"); });
+    const result = await runPiAgent({ cwd: "/repo", task: "go", assignedSession: assignment, harness: { kind: "codex" } as never }, async () => { spawned = true; throw new Error("must not spawn"); });
     assert.equal(result.status, "failed");
-    assert.match(result.error!, /declared and callable/);
+    assert.match(result.error!, /third-party harness/);
     assert.equal(spawned, false);
-    assert.ok(existsSync(assignedSessionFile(assignment)));
-    const args = buildPiArgs({ cwd: "/repo", assignedSession: assignment });
-    assert.equal(args[args.indexOf("--session") + 1], assignedSessionFile(assignment));
-    assert.ok(!args.includes("--no-session"));
+  } finally { cleanup(); }
+});
+
+test("a corrupt task conversation is a recovery issue, never a fresh start", async () => {
+  const { assignment, cleanup } = fixture();
+  try {
+    openAssignedSession(assignment, "/repo").release();
+    writeFileSync(assignedSessionFile(assignment), "{not json\n");
+    let spawned = false;
+    const result = await runPiAgent({ cwd: "/repo", task: "go", assignedSession: { ...assignment, revision: 2 } }, async () => { spawned = true; throw new Error("must not spawn"); });
+    assert.equal(result.status, "failed");
+    assert.match(result.error!, /malformed JSONL/);
+    assert.equal(spawned, false);
   } finally { cleanup(); }
 });
