@@ -15,6 +15,16 @@ The panel's members (DEV, DESIGN, QA, RESEARCH) sit the first round. After that 
 alone and calls a member back only when it needs that member's view, so later rounds stay quick.
 A member you pin with its key sits every round.
 
+## Built-in scripts
+
+Every project gets bot-lobby's read-only scripts (`scripts/builtin/`), offered to every agent with
+how to run them: `run_changed_tests` and `check_changed` run only the tests, typecheck and lint for
+what changed; `diff_summary` sums up the branch; `find_symbol`, `outline_file` and `find_tests_for`
+find code without rounds of grep; `repo_map`, `project_commands` and `recent_changes` orient an
+agent in a project it has not seen. Each detects the project's tooling (npm, pnpm, yarn, bun,
+pytest, Go, Cargo) on its own and prints its usage with `--help`. A script the project saves under
+the same name replaces the built-in one.
+
 ## Tasks
 
 Follow the agents in **Lobby** and **Tasks**: in a task's steps, the one being worked on reads

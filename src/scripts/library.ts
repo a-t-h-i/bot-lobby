@@ -12,6 +12,7 @@
  */
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /** The languages a script may be written in: how it is run and how its header lines are commented. */
 export const SCRIPT_LANGUAGES = {
@@ -46,7 +47,16 @@ export interface ScriptEntry {
   purpose: string;
   /** How to run it, with its arguments; the runner and path when the header gives none. */
   usage: string;
+  /** Shipped with bot-lobby (`scripts/builtin/`), for every project; a project script of the same name wins. */
+  builtin?: boolean;
 }
+
+/**
+ * The scripts bot-lobby ships for every project: read-only helpers for the
+ * jobs every task repeats (the tests and checks for what changed, where a
+ * symbol lives, a file's outline, the project's commands, a map of the repo).
+ */
+export const BUILTIN_SCRIPTS_DIR = fileURLToPath(new URL("../../scripts/builtin/", import.meta.url));
 
 export function scriptsDir(dataRoot: string): string {
   return join(dataRoot, "scripts");
@@ -95,7 +105,9 @@ function readEntry(dir: string, name: string): ScriptEntry | undefined {
     if (!statSync(path).isFile()) return undefined;
     const lines = readFileSync(path, "utf8").split("\n").slice(0, HEADER_LINES);
     const entry = { name, path, language: language(name) };
-    return { ...entry, purpose: headerValue(lines, "purpose") ?? nameWords(name), usage: headerValue(lines, "usage") ?? runCommand(entry) };
+    // `{script}` in a usage line stands for the script's own path.
+    const usage = headerValue(lines, "usage")?.replaceAll("{script}", path) ?? runCommand(entry);
+    return { ...entry, purpose: headerValue(lines, "purpose") ?? nameWords(name), usage };
   } catch {
     return undefined;
   }
@@ -110,6 +122,24 @@ export function listScripts(dataRoot: string): ScriptEntry[] {
     .sort()
     .map((name) => readEntry(dir, name))
     .filter((entry): entry is ScriptEntry => entry !== undefined);
+}
+
+/** The built-in scripts, by name. */
+export function builtinScripts(dir = BUILTIN_SCRIPTS_DIR): ScriptEntry[] {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((name) => NAME.test(name))
+    .sort()
+    .map((name) => readEntry(dir, name))
+    .filter((entry): entry is ScriptEntry => entry !== undefined)
+    .map((entry) => ({ ...entry, builtin: true }));
+}
+
+/** The project's scripts, then the built-in ones it does not replace with its own of the same name. */
+export function allScripts(dataRoot: string): ScriptEntry[] {
+  const own = listScripts(dataRoot);
+  const names = new Set(own.map((entry) => entry.name));
+  return [...own, ...builtinScripts().filter((entry) => !names.has(entry.name))];
 }
 
 /** The body with any header lines of its own taken out, and a shebang it starts with kept apart. */
