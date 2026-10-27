@@ -39,6 +39,36 @@ test("previous plans: read, archive, bring back and delete; a plan saved as a ta
   await expect(page.getByText("No archived plans.")).toBeVisible();
 });
 
+test("rapid theme choices keep the latest selection when responses arrive out of order", { tag: "@theme" }, async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.evaluate(() => { window.location.hash = "#/settings"; });
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Appearance & notifications", exact: true }).click();
+  const picker = page.getByRole("radiogroup", { name: "Colour theme" });
+  const radios = picker.getByRole("radio");
+  const latestId = await radios.nth(2).getAttribute("data-theme-id");
+  const replies: any[] = [];
+  page.on("response", (response) => {
+    if (new URL(response.url()).pathname.endsWith("/api/themes.choose")) replies.push(response);
+  });
+  let first = true;
+  await page.route("**/api/themes.choose", async (route) => {
+    if (first) {
+      first = false;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    await route.continue();
+  });
+
+  await radios.nth(1).click();
+  await radios.nth(1).press("ArrowRight");
+  await expect.poll(() => replies.length).toBe(2);
+  await Promise.all(replies.map((reply) => reply.finished()));
+  await expect(radios.nth(2)).toHaveAttribute("aria-checked", "true");
+  await expect(radios.nth(2)).toBeFocused();
+  const kept = JSON.parse(readFileSync(join(process.env.BOT_LOBBY_CONFIG_DIR!, "themes.json"), "utf8"));
+  expect(kept.active).toBe(latestId);
+});
+
 test("a theme is saved under its own name, renamed, and kept with pi for every session", { tag: "@theme" }, async ({ page, server, browser }, info) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });

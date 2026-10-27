@@ -95,6 +95,7 @@ function adoptStore(store: ThemeStoreInfo): void {
 }
 
 let synced: Promise<void> | undefined
+let choosing: Promise<void> = Promise.resolve()
 
 /**
  * Read the themes pi keeps (once per page, and again on demand), handing it a
@@ -159,7 +160,8 @@ export function usePalette(): PaletteState {
   const current = useSyncExternalStore(subscribe, () => state, () => state)
   const choose = useCallback((id: string) => {
     commit({ ...state, id })
-    if (id !== LEGACY_ID) void call("themes.choose", { id }).then(adoptStore, () => {})
+    if (id === LEGACY_ID) return
+    choosing = choosing.then(() => call("themes.choose", { id })).then(adoptStore, () => {})
   }, [])
   const adopt = useCallback(async (parsed: Parsed, name: string): Promise<Palette> => {
     const store = await call("themes.save", { name, ...(parsed.light ? { light: parsed.light } : {}), ...(parsed.dark ? { dark: parsed.dark } : {}) })
