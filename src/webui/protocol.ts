@@ -107,6 +107,7 @@ export interface ThemeStoreInfo {
 }
 
 export interface StatusInfo {
+  commands?: import("../lobby/pi-commands.ts").LobbySlashCommand[];
   workspace: { name: string; branch?: string };
   branch?: string;
   sessionId?: string;

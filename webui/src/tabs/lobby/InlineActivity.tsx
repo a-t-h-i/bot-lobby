@@ -15,7 +15,6 @@ import { AlertTriangle, Check, ChevronDown, X } from "lucide-react"
 import { useCollapsed } from "@/lib/collapsed"
 import { formatClock } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { WorkingMark } from "@/ui/WorkingMark"
 import { linkFiles } from "@/app/code/FileLink"
 import { ShimmerWord } from "./ChatParts"
 import { sourceColor, sourceLabel, sourceTone, type ActivityEntry } from "./types"
@@ -24,7 +23,7 @@ import { sourceColor, sourceLabel, sourceTone, type ActivityEntry } from "./type
 export const ACTIVITY_OPEN = "lobby.activity.open"
 
 function KindMark({ entry }: { entry: ActivityEntry }) {
-  // The run's header already spins for the live step; a pending row is a tinted dot, not a second spinner.
+  // The live word already animates; pending rows need only a tinted dot.
   if (entry.pending) return <span className="size-1.5 rounded-full bg-[var(--orb)]" />
   if (entry.kind === "error") return <X aria-hidden="true" className="size-3.5 text-destructive" />
   if (entry.kind === "warning") return <AlertTriangle aria-hidden="true" className="size-3.5 text-warning" />
@@ -97,7 +96,6 @@ export function InlineActivity({ entries }: { entries: ActivityEntry[] }) {
       <button type="button" aria-expanded={open} aria-controls={list} onClick={() => setOwn(!open)} className="activity-toggle">
         {live ? (
           <>
-            <WorkingMark />
             <span className="min-w-0 truncate">
               <ShimmerWord text="Working" />
               <span className="text-muted-foreground"> · </span>

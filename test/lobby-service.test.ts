@@ -50,6 +50,17 @@ test("the service exposes data and actions with no TUI", () => {
   assert.equal(service.comment("TASK-nope", "hello"), "no task TASK-nope");
 });
 
+test("web chat compact reaches Pi compaction, not a model prompt, including leading whitespace", () => {
+  const state = fakeState(); const instructions: Array<string | undefined> = [];
+  state.ctx.compact = (options) => { instructions.push(options?.customInstructions); };
+  state.pi.sendUserMessage = () => { assert.fail("native compact must not prompt the model"); };
+  const service = createLobbyService(state);
+  assert.ok(service.commands!().some((command) => command.name === "compact"));
+  assert.match(String(service.toOracle("  /compact keep decisions")), /compacting/);
+  assert.match(String(service.toOracle("/compact")), /compacting/);
+  assert.deepEqual(instructions, ["keep decisions", undefined]);
+});
+
 test("accept persists explicit waivers and audit through a stale worker save without completing", async () => {
   const state = fakeState();
   const messages: string[] = [];

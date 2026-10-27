@@ -53,6 +53,7 @@ import { carryOnMessage, resumeRoute, RESUMED_DECISION, type Drivers } from "./r
 import { archivePlan as archivePlanOnDisk, deletePlan as deletePlanOnDisk, isPlanId, previousPlans, readPlan, type PlanRecord, type PlanSummary } from "../state/plan-history.ts";
 import { applyMasterModel } from "../pi/model-settings.ts";
 import { grantableSkills, grantableTools } from "../pi/grants.ts";
+import { piCommands, sendPiCommand } from "./pi-commands.ts";
 import { lobbyTopics } from "./topics.ts";
 import type { LobbyAgentKind, PanelMember } from "../schemas/configuration.ts";
 import type { LiveSession, LobbyService, SwitchTarget } from "./host.ts";
@@ -159,10 +160,7 @@ function toOracle(state: Runtime, text: string): LobbySendResult {
   const busy = !state.ctx.isIdle();
   const command = parseLobbyCommand(text);
   if (command) return lobbyCommand(state, command.command, command.rest);
-  if (text.startsWith("/")) {
-    state.pi.sendUserMessage(text, { expandPromptTemplates: true, ...(busy ? { deliverAs: "followUp" as const } : {}) });
-    return `sent ${text.split(/\s+/)[0]} to pi`;
-  }
+  if (text.trimStart().startsWith("/")) return sendPiCommand(state.pi, state.ctx, text);
   // A task in this session: the oracle drives it, and what you say goes to it.
   if (currentZenTask()) return toMaster(state, text);
   const mention = parseMention(text);
@@ -1074,6 +1072,7 @@ export function createLobbyService(state: Runtime): LobbyService {
     comments: (taskId) => readPlanComments(state.root, state.configDir, taskId),
     metrics: () => readMetrics(state.root, state.configDir),
     classifierMetrics: () => readClassifierMetrics(state.root, state.configDir),
+    commands: () => piCommands(state.pi),
     toOracle: (text) => toOracle(state, text),
     askKnowledge: (text) => {
       state.pi.sendUserMessage(knowledgeQuestion(text, readDataRoots(state.root, state.configDir)), state.ctx.isIdle() ? undefined : { deliverAs: "followUp" });

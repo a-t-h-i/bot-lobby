@@ -103,6 +103,7 @@ export interface LobbyService {
    * to open when it moved somewhere else.
    */
   toOracle(text: string): string | { notice: string; open: "plan" } | undefined;
+  commands?(): import("./pi-commands.ts").LobbySlashCommand[];
   /** Answer a project question and learn from the codebase, without creating a task. */
   askKnowledge(text: string): void;
   comment(taskId: string, text: string): string;

@@ -12,7 +12,7 @@ pi install npm:@a-t-h-i/bot-lobby
 
 Try it first with `pi -e npm:@a-t-h-i/bot-lobby`, or from a checkout with `pi -e ./src/index.ts`.
 The questionnaire and web tools are built in, so don't also install extensions with the same tool names.
-Requires **Pi 1.3.x** (1.3.0 or later).
+Requires **Pi 1.4.x** (1.4.0 or later).
 
 ## Use
 
@@ -26,6 +26,10 @@ Requires **Pi 1.3.x** (1.3.0 or later).
 3. Type `/plan <idea>` to plan it with the panel in **Plan**, or `/task <request>` to start it as a
    task for the team. Follow the agents in **Lobby** and **Tasks**; their steps fold into one line in
    the conversation and open in place.
+4. Type `/` to browse Pi commands, installed `/skill:name` skills, extension commands and prompt
+   templates. `/compact [instructions]` compacts this session directly (stop active work first).
+   Other native Pi commands are prepared in Pi’s terminal: press Enter there to run them. The
+   handoff preserves terminal drafts; sessions without a terminal show an explicit notice instead.
 
 `/bot-lobby <request>` in Pi also starts a task. `--fast` / `--full` picks the workflow, and
 `--branch` / `--worktree` isolates it in git. Workers never commit: the oracle commits only the

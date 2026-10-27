@@ -36,6 +36,7 @@ export function statusGet(ctx: ApiContext): StatusInfo {
     sessionId: service.sessionId() ?? undefined,
     sessionName: service.sessionName() ?? undefined,
     busy: service.masterBusy(),
+    commands: service.commands?.() ?? [],
     port: ctx.port,
     panels: config.lobby.panels,
     tabs: tabs(),

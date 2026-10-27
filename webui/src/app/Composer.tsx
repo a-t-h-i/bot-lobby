@@ -54,7 +54,7 @@ interface Target {
   taskId?: string
 }
 
-const ORACLE: Target = { id: "oracle", label: "Message the team", placeholder: "Message the team… @ picks who answers, / for /plan and /task" }
+const ORACLE: Target = { id: "oracle", label: "Message the team", placeholder: "Message the team… @ picks who answers, / for commands and skills" }
 
 /** The tabs that carry the composer; everywhere else it stays mounted (drafts and uploads survive) but hidden and inert. */
 const COMPOSER_TABS: ReadonlySet<string> = new Set(["lobby", "tasks", "plan", "knowledge"])
@@ -214,12 +214,12 @@ export function Composer({ route, projects }: { route: Route; projects: Projects
   const [activeItem, setActiveItem] = useState<string | null>(null)
   const [dismissedFor, setDismissedFor] = useState<string | undefined>(undefined)
   const trigger = target.id === "oracle" ? composerTrigger(text, caret) : undefined
-  const menuItems = useMemo(() => (trigger ? composerItems(trigger) : []), [trigger?.kind, trigger?.query])
+  const menuItems = useMemo(() => (trigger ? composerItems(trigger, status.data?.commands) : []), [trigger?.kind, trigger?.query, status.data?.commands])
   const menuOpen = Boolean(trigger) && menuItems.length > 0 && dismissedFor !== text && visible && !blocked
   const lit = menuOpen ? (menuItems.find((item) => item.id === activeItem) ?? menuItems[0]!) : undefined
   const listId = "composer-suggestions"
   const pick = useCallback((item: ComposerCommandItem) => {
-    const rest = text.replace(/^\s*[/@][a-z]*\s*/i, "")
+    const rest = text.replace(/^\s*[/@][a-z0-9:_.-]*\s*/i, "")
     const value = `${item.insert} ${rest}`
     const end = item.insert.length + 1
     selection.current = { start: end, end }

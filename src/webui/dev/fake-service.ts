@@ -9,6 +9,7 @@ import { LobbyFeed } from "../../lobby/feed.ts";
 import { promptHub } from "../../lobby/prompt-hub.ts";
 import { lobbyTopics } from "../../lobby/topics.ts";
 import { CHAT_AGENT_SOURCES, parseLobbyCommand, parseMention } from "../../lobby/prompts.ts";
+import { piCommands } from "../../lobby/pi-commands.ts";
 import type { BackgroundSession, DialogAnswer, SessionDialog } from "../../lobby/sessions.ts";
 import { cleanSessionName } from "../../lobby/sessions.ts";
 import type { PlanComment } from "../../state/comments.ts";
@@ -236,6 +237,13 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
   const service = {
     sessionId: () => fixture.status.sessionId,
     sessionName: () => sessionName,
+    commands: () => [...piCommands(),
+      { name: "skill:pdf-tools", description: "Extract text and tables from PDF files." },
+      { name: "skill:release-notes", description: "Write release notes from merged pull requests." },
+      { name: "skill:tailwind-review", description: "Check Tailwind classes against the design tokens." },
+      { name: "mcp", description: "Manage MCP servers" },
+      { name: "review", description: "Review changes" },
+    ],
     masterBusy: () => fixture.status.busy || answering !== undefined,
     answering: () => answering,
     config: () => config,

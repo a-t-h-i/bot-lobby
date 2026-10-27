@@ -6,9 +6,10 @@
  * row per suggestion with its name and what it does, the active row filled.
  * The text box keeps focus and drives it (a combobox: Up and Down move, Enter
  * or Tab takes the row, Esc closes); a pointer picks a row too. The harness's
- * file, skill and pull request rows, and its menu primitive, are left out.
+ * file and pull request rows, and its menu primitive, are left out.
  */
 import { memo, useLayoutEffect, useRef } from "react"
+import type { StatusInfo } from "@protocol"
 import { cn } from "@/lib/utils"
 import { AgentIcon } from "@/ui/AgentIcon"
 import { CHAT_AGENT_SOURCES, CHAT_MENTIONS, LOBBY_COMMANDS, type ChatAgent } from "@shared"
@@ -27,18 +28,29 @@ export interface ComposerCommandItem {
 
 /** The `/` or `@` word being typed at the start of the message, when the caret is still in it. */
 export function composerTrigger(text: string, caret: number): { kind: ComposerTriggerKind; query: string } | undefined {
-  const match = /^\s*([/@])([a-z]*)$/i.exec(text.slice(0, caret))
+  const match = /^\s*([/@])([a-z0-9:_.-]*)$/i.exec(text.slice(0, caret))
   if (!match || /\S/.test(text.slice(caret, caret + 1))) return undefined
   return { kind: match[1] === "/" ? "slash-command" : "mention", query: match[2]!.toLowerCase() }
 }
 
+function slashItems(commands: NonNullable<StatusInfo["commands"]>): ComposerCommandItem[] {
+  const lobby = LOBBY_COMMANDS.map((command) => ({
+    name: command.name, description: `${command.hint} · /${command.name} ${command.args}`,
+  }))
+  return [...lobby, ...commands].map((command) => ({
+    id: `/${command.name}`, insert: `/${command.name}`, label: `/${command.name}`,
+    description: command.description + ("terminal" in command && command.terminal ? " · continue in Pi terminal" : ""),
+  }))
+}
+
 /** The rows for a trigger, those whose name starts with what is typed first. */
-export function composerItems(trigger: { kind: ComposerTriggerKind; query: string }): ComposerCommandItem[] {
+export function composerItems(trigger: { kind: ComposerTriggerKind; query: string }, commands: StatusInfo["commands"] = []): ComposerCommandItem[] {
   const rows: ComposerCommandItem[] = trigger.kind === "slash-command"
-    ? LOBBY_COMMANDS.map((command) => ({ id: `/${command.name}`, insert: `/${command.name}`, label: `/${command.name}`, description: `${command.hint} · /${command.name} ${command.args}` }))
+    ? slashItems(commands)
     : CHAT_MENTIONS.map((mention) => ({ id: `@${mention.name}`, insert: `@${mention.name}`, label: `@${mention.name}`, description: mention.hint, agent: mention.agent }))
-  const starts = rows.filter((row) => row.label.slice(1).startsWith(trigger.query))
-  const contains = rows.filter((row) => !starts.includes(row) && row.label.slice(1).includes(trigger.query))
+  const unique = rows.filter((row, index) => rows.findIndex((other) => other.id === row.id) === index)
+  const starts = unique.filter((row) => row.label.slice(1).startsWith(trigger.query))
+  const contains = unique.filter((row) => !starts.includes(row) && row.label.slice(1).includes(trigger.query))
   return [...starts, ...contains]
 }
 

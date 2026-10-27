@@ -814,7 +814,7 @@ test("Activity opens in place in the conversation, there is no Activity pane, an
   await expect(main.getByRole("log", { name: "Thinking" }), "there is no fixed Thinking pane").toHaveCount(0);
 });
 
-test("a running step shows on the folded line with a spinner", async ({ page, server }) => {
+test("a running step shows on the folded line without a redundant spinner", async ({ page, server }) => {
   await page.route("**/api/lobby.snapshot", async (route) => {
     const response = await route.fetch();
     const envelope = await response.json();
@@ -827,6 +827,8 @@ test("a running step shows on the folded line with a spinner", async ({ page, se
   const run = page.locator("#main").getByRole("button", { name: /running the type checker/ });
   await expect(run, "the step at work names itself").toContainText("Dev running the type checker…");
   await expect(run).toContainText("11 steps");
+  await expect(run.locator('[data-slot="working-mark"], [data-slot="spinner"]')).toHaveCount(0);
+  await expect(run.locator(".activity-shimmer")).toBeVisible();
 });
 
 test("the project switcher is a list you open with P, not a native select", async ({ page, server }) => {
