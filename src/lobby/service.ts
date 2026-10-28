@@ -958,14 +958,16 @@ export async function savePlan(state: Runtime | undefined): Promise<string> {
  * The oracle puts the round's questions to the user, one at a time; answered
  * questionnaires are kept if the user stops, so the next call resumes there.
  * Once every questionnaire is done, the answers (and any line comments) start
- * the next round. Returns a notice for the lobby.
+ * the next round. Returns a notice for the lobby (empty when the questions
+ * are already open: pressing Answer questions again only shows them).
  */
 export async function answerPanel(state: Runtime | undefined): Promise<string> {
   const session = state?.planner;
   if (!state || !session) return "no planning session";
   if (session.busy) return "the panel is still thinking";
   if (session.questions.length === 0) return "no open questions";
-  if (state.asking) return "the questions are already open";
+  // Already asking: the page brings its put-away questions back itself, so there is nothing to say.
+  if (state.asking) return "";
   state.asking = true;
   try {
     const asker = panelAsker(state);

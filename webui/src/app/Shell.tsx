@@ -30,6 +30,8 @@ import { ErrorState, LoadingState, ReconnectingState } from "./States.tsx"
 import { TabStrip } from "./TabStrip.tsx"
 import { Thinking } from "./Thinking.tsx"
 import { QuestionPopup, QuestionsPill } from "@/prompts/QuestionPopup"
+import { setPutAway, usePutAway } from "@/prompts/putAway"
+import { Lightbox } from "@/ui/Lightbox"
 import { useEvents } from "./useEvents.ts"
 import { useRecoveredNotice } from "./recovered.ts"
 import { syncThemes } from "./palette.ts"
@@ -115,10 +117,10 @@ export function Shell() {
   const route: Route = useRoute()
   const statusRecord = useTopic<StatusInfo>("status")
   const lobbyRecord = useTopic<LobbySnapshot>("lobby")
-  const { prompts, answer, dismiss } = usePrompts()
+  const { prompts, loading: promptsLoading, answer, dismiss } = usePrompts()
   const { connection, signedOut } = useStatus()
   const [help, setHelp] = useState(false)
-  const [putAway, setPutAway] = useState(false)
+  const putAway = usePutAway()
   const rootRef = useRef<HTMLDivElement>(null)
   const retry = useEvents()
   useDesktopNotifications()
@@ -260,7 +262,8 @@ export function Shell() {
       </div>
       <Thinking status={status} lobby={lobbyRecord.data} />
       <CodeViewer codeKey={keys.find((key) => key.action === "code")?.key} />
-      <QuestionPopup prompts={prompts} answer={answer} dismiss={dismiss} minimized={putAway} onMinimize={setPutAway} />
+      <QuestionPopup prompts={prompts} loading={promptsLoading} answer={answer} dismiss={dismiss} minimized={putAway} onMinimize={setPutAway} />
+      <Lightbox />
       <AltH open={help} onOpenChange={setHelp} keys={keys} tabs={tabs} />
     </div>
   )

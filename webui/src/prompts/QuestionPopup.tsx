@@ -31,6 +31,8 @@ interface QuestionPopupProps {
   prompts: WebPrompt[]
   answer: (id: string, value: unknown) => Promise<void>
   dismiss: (id: string) => Promise<void>
+  /** True until the first list of questions arrives (an empty list then says nothing). */
+  loading?: boolean
   /** Whether the popup is put away (the header shows the button that brings it back). */
   minimized: boolean
   onMinimize: (minimized: boolean) => void
@@ -63,7 +65,7 @@ export function QuestionsPill({ count, onOpen }: { count: number; onOpen: () => 
   )
 }
 
-export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize }: QuestionPopupProps) {
+export function QuestionPopup({ prompts, loading, answer, dismiss, minimized, onMinimize }: QuestionPopupProps) {
   const [leaving, setLeaving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -75,13 +77,23 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
   const view = active ? parsePrompt(active) : undefined
   const wants = count > 0 && !minimized
   const shown = useOverlaySlot(wants, PRIORITY.question)
+  const open = wants && shown && Boolean(active)
+
+  // The page behind an open question holds still (see `:root[data-question-open]` in index.css).
+  useEffect(() => {
+    if (!open) return
+    document.documentElement.dataset.questionOpen = ""
+    return () => {
+      delete document.documentElement.dataset.questionOpen
+    }
+  }, [open])
 
   useEffect(() => {
-    if (count === 0) {
+    if (count === 0 && !loading) {
       setLeaving(false)
       onMinimize(false)
     }
-  }, [count, onMinimize])
+  }, [count, loading, onMinimize])
 
   // Each question starts with its mockups folded.
   const activeId = active?.id
@@ -104,7 +116,7 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
   const who = active?.from ? `${active.from} asks` : "A question"
   return (
     <Popup
-      open={wants && shown && Boolean(active)}
+      open={open}
       label="Question from the lobby"
       dismissOnBackdrop={false}
       onOpenChange={(open) => {
@@ -114,7 +126,7 @@ export function QuestionPopup({ prompts, answer, dismiss, minimized, onMinimize 
         else onMinimize(true)
       }}
       className={cn(
-        "transition-[max-width] duration-300 ease-snap",
+        "glass-still transition-[max-width] duration-200 ease-snap motion-reduce:transition-none",
         expanded ? "h-[min(92svh,60rem)] max-h-[min(92svh,60rem)] max-w-7xl" : SIZES[view?.kind === "questionnaire" ? size : "md"],
       )}
     >

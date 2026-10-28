@@ -671,6 +671,14 @@
     .glass-pop { background-color: var(--card); }
   }
 
+  /* The question pop-up's pane: the same glass look, but it does not blur again what the backdrop already blurred.
+     A second full-size blur repainted on every frame the lobby moved behind it, which made answering feel heavy. */
+  .glass-pop.glass-still {
+    background-color: color-mix(in oklab, var(--popover) 92%, var(--card));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
   /* A toast: the same glass, visibly see-through (78% of the popover colour) and
      blurred hard enough that busy content behind it stays a soft wash under the text. */
   .glass-toast {
@@ -1620,11 +1628,10 @@ html[data-resizing="row"] * { cursor: row-resize !important; user-select: none; 
 .q-dot-tag {
   translate: -4px 0;
   color: var(--popover-foreground);
-  background: var(--popover);
+  /* Solid: it sits on the pop-up's own surface, and a blur inside a blur costs a repaint for little. */
+  background: var(--card);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
 }
 .q-dot:hover .q-dot-tag, .q-dot:has(:focus-visible) .q-dot-tag { translate: 0 0; }
 .q-ring { box-shadow: inset 0 0 0 2px var(--primary), 0 0 0 3px color-mix(in oklab, var(--primary) 18%, transparent); }
@@ -1635,7 +1642,7 @@ html[data-resizing="row"] * { cursor: row-resize !important; user-select: none; 
   background-image: var(--glass-fill);
 }
 /* The option in view: its number, name and what it means, readable at a glance; solid once it is the choice. */
-.q-panel { transition: border-color 200ms ease, opacity 300ms ease; }
+.q-panel { transition: border-color 160ms ease, opacity 180ms ease; }
 .q-panel[data-chosen] { border-style: solid; border-color: color-mix(in oklab, var(--primary) 45%, transparent); }
 .q-panel-number { background: color-mix(in oklab, var(--foreground) 8%, transparent); color: var(--muted-foreground); }
 .q-panel[data-chosen] .q-panel-number { background: var(--primary); color: var(--primary-foreground); }
@@ -1680,7 +1687,7 @@ html[data-resizing="row"] * { cursor: row-resize !important; user-select: none; 
   .q-own-wrap, .q-own, .q-own-text, .q-own-bar { transition: none; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .q-panel-body { animation: q-panel-in 240ms var(--ease-snap, ease-out); }
+  .q-panel-body { animation: q-panel-in 160ms var(--ease-snap, ease-out); }
   .q-own[data-landed] { animation: q-own-land 620ms cubic-bezier(0.34, 1.56, 0.64, 1); }
 }
 @keyframes q-own-land {
@@ -1688,7 +1695,7 @@ html[data-resizing="row"] * { cursor: row-resize !important; user-select: none; 
   35% { scale: 1.012; }
   100% { scale: 1; box-shadow: 0 0 0 10px color-mix(in oklab, var(--primary) 0%, transparent); }
 }
-@keyframes q-panel-in { from { opacity: 0; transform: translateY(4px); filter: blur(2px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes q-panel-in { from { opacity: 0; translate: 0 3px; } to { opacity: 1; translate: 0 0; } }
 
 /* A file name an agent wrote, opening the code viewer (app/code/FileLink): it reads as the text it was, with a quiet dotted underline that firms up on hover. */
 .file-link {
@@ -1708,3 +1715,31 @@ html[data-resizing="row"] * { cursor: row-resize !important; user-select: none; 
 .file-link:hover { color: var(--primary); text-decoration-color: currentColor; }
 .file-link:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
 .file-link > code { text-decoration: inherit; text-underline-offset: inherit; }
+
+/* The image lightbox (see `ui/Lightbox.tsx`): a picture in Markdown is a button
+   that opens it, and the lightbox's two corner tools are small glass circles. */
+@layer components {
+  .md-image {
+    @apply block max-w-full cursor-zoom-in rounded-lg outline-none transition-[scale] duration-150 ease-snap focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99] motion-reduce:transition-none;
+  }
+  .md-image > img {
+    @apply max-w-full rounded-lg;
+  }
+  .lightbox-tool {
+    border-color: var(--glass-border);
+    background-color: var(--popover);
+    box-shadow: var(--glass-shadow);
+    @apply border text-popover-foreground inline-flex size-9 items-center justify-center rounded-full text-foreground outline-none transition-[scale,background-color] duration-150 ease-snap hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.94] motion-reduce:active:scale-100;
+  }
+  .lightbox-image {
+    box-shadow: var(--glass-shadow);
+  }
+}
+
+/* While a question is on screen the page behind it holds still: its looping CSS animations (the working
+   shimmer, the orb's pulse) would otherwise repaint the blurred backdrop on every frame. */
+:root[data-question-open] #main *,
+:root[data-question-open] #main *::before,
+:root[data-question-open] #main *::after {
+  animation-play-state: paused !important;
+}

@@ -10,6 +10,7 @@ import { codeSource, shouldCopy, writeCode, type SourcePosition } from "@/lib/co
 import { projectUrl } from "@/lib/project"
 import { toast } from "@/lib/toast"
 import { AttachmentList, splitAttachments } from "./Attachments"
+import { isImageHref, lightboxClick } from "./Lightbox"
 import { useGradual } from "@/lib/useGradual"
 import { FileLink } from "@/app/code/FileLink"
 import { filePathOf } from "@/app/code/codeStore"
@@ -106,8 +107,16 @@ function componentsFor(source: string): Components {
       const path = (node as Node | undefined)?.properties?.dataFilePath
       return typeof path === "string" ? <FileLink path={path}>{children}</FileLink> : <span {...rest}>{children}</span>
     },
-    a: ({ href, children }) => <a href={href ? projectUrl(href) : undefined} target="_blank" rel="noopener noreferrer nofollow">{children}</a>,
-    img: ({ src, alt }) => <img src={src ? projectUrl(src) : undefined} alt={alt ?? ""} loading="lazy" />,
+    a: ({ node, href, children }) => {
+      const url = href ? projectUrl(href) : undefined
+      // A link to an image opens it in the lightbox; a picture inside the link opens what the link points at.
+      return <a href={url} target="_blank" rel="noopener noreferrer nofollow" onClick={url && isImageHref(href) ? lightboxClick({ src: url, alt: hastText(node as Node | undefined) || undefined }) : undefined}>{children}</a>
+    },
+    img: ({ src, alt }) => {
+      const url = typeof src === "string" ? projectUrl(src) : undefined
+      const image = <img src={url} alt={alt ?? ""} loading="lazy" />
+      return url ? <button type="button" className="md-image" aria-label={alt ? `${alt}: open the image` : "Open the image"} onClick={lightboxClick({ src: url, alt: alt ?? undefined })}>{image}</button> : image
+    },
     table: ({ children }) => <div className="my-3 w-full overflow-x-auto"><table className="w-full border-collapse text-sm">{children}</table></div>,
   }
 }

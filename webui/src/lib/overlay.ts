@@ -36,8 +36,12 @@ function holder(): string | undefined {
   return best?.id
 }
 
-/** Priorities: a question beats everything; confirmations beat the help and detail sheets. */
-export const PRIORITY = { question: 30, confirm: 20, help: 10, sheet: 5 } as const
+/**
+ * Priorities: a question beats everything but an image someone just opened
+ * (it is closed in a click, and the question comes back as it was);
+ * confirmations beat the help and detail sheets.
+ */
+export const PRIORITY = { image: 40, question: 30, confirm: 20, help: 10, sheet: 5 } as const
 
 /** Whether this overlay may show now. Pass whether it wants to be open. */
 export function useOverlaySlot(wantsOpen: boolean, priority: number): boolean {

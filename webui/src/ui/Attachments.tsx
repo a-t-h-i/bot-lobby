@@ -8,6 +8,7 @@
 import { FileText, Paperclip } from "lucide-react"
 import { ATTACHMENTS_MARK } from "@shared"
 import { projectUrl } from "@/lib/project"
+import { lightboxClick } from "./Lightbox"
 
 export interface AttachmentRef {
   id: string
@@ -42,7 +43,7 @@ export function AttachmentList({ files }: { files: AttachmentRef[] }) {
       {files.map((file) => (
         <li key={file.id}>
           {IMAGES.has(file.mime) ? (
-            <a href={projectUrl(`/files/preview/attachments/${file.id}`)} target="_blank" rel="noopener noreferrer" className="block max-w-full overflow-hidden rounded-lg border border-border bg-muted/40 transition-transform duration-150 ease-snap hover:scale-[1.02] focus-visible:outline-2 focus-visible:outline-ring">
+            <a href={projectUrl(`/files/preview/attachments/${file.id}`)} target="_blank" rel="noopener noreferrer" onClick={lightboxClick({ src: projectUrl(`/files/preview/attachments/${file.id}`), alt: file.name })} aria-label={`${file.name}: open the image`} className="block max-w-full overflow-hidden rounded-lg border border-border bg-muted/40 transition-transform duration-150 ease-snap hover:scale-[1.02] focus-visible:outline-2 focus-visible:outline-ring">
               <img src={projectUrl(`/files/preview/attachments/${file.id}`)} alt={file.name} loading="lazy" className="max-h-40 max-w-[min(14rem,100%)] object-cover" />
             </a>
           ) : (
