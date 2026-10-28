@@ -4,6 +4,9 @@ import { Dialog } from "radix-ui"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { cn } from "@/lib/utils"
 
+/** The pane's way in: a quick spring that settles with a hint of overshoot, not a long ease-out tail. */
+const OPEN_SPRING = { type: "spring", stiffness: 560, damping: 34, mass: 0.7, opacity: { duration: 0.14, ease: "easeOut" } } as const
+
 interface PopupProps {
   open: boolean
   /** Called when Escape, the backdrop or a close control asks to close it. */
@@ -70,8 +73,8 @@ export function Popup({ open, onOpenChange, label, description, dismissOnBackdro
                   style={style}
                   initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.98, y: reduceMotion ? 0 : 6 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: reduceMotion ? 1 : 0.98, transition: { duration: 0.15, ease: "easeIn" } }}
-                  transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
+                  exit={{ opacity: 0, scale: reduceMotion ? 1 : 0.98, transition: { duration: 0.12, ease: "easeIn" } }}
+                  transition={reduceMotion ? { duration: 0.12 } : OPEN_SPRING}
                 >
                   <Dialog.Title className="sr-only">{label}</Dialog.Title>
                   {description ? <Dialog.Description className="sr-only">{description}</Dialog.Description> : null}

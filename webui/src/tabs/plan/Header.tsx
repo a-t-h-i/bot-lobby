@@ -11,6 +11,7 @@ import { go, tabHash } from "@/app/router"
 import { act } from "@/lib/act"
 import type { PlannerSnapshot, StatusInfo } from "@protocol"
 import { useTopic } from "@/app/hooks"
+import { reopenQuestions } from "@/prompts/putAway"
 import { ActionButton } from "@/ui/Actions"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { Roster } from "./Roster"
@@ -38,7 +39,11 @@ function Actions({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }
   }
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1 @min-[68rem]:shrink-0">
-      {snap.questions.length > 0 && !snap.busy ? <ActionButton label="Answer questions" icon={MessageCircleQuestion} tone="primary" shortcut="A" onClick={() => void run("planner.answer")()} /> : null}
+      {snap.questions.length > 0 && !snap.busy ? <ActionButton label="Answer questions" icon={MessageCircleQuestion} tone="primary" shortcut="A" onClick={() => {
+        // Questions put away are brought back here; the call below opens them when none are open yet.
+        reopenQuestions()
+        void run("planner.answer")()
+      }} /> : null}
       {snap.retryable ? <ActionButton label="Retry" icon={RotateCw} shortcut="R" onClick={() => void run("planner.retry")()} /> : null}
       <PreviousButton />
       <ActionButton data-plan-save label="Save the plan" text="Save" icon={Save} shortcut={shortcut ?? "Ctrl+S"} disabled={!snap.draft || snap.busy} onClick={() => void run("planner.save")()} />
