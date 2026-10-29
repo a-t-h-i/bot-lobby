@@ -1186,23 +1186,411 @@
   row-gap: 0.125rem;
   padding: 0.5rem 0.75rem 0.25rem;
 }
-/* The composer is the coding harness's own (app/composer/ComposerSurface.tsx); the key hints in its strip stay quiet. */
-.composer-strip .kbd-hint, .composer-strip kbd { pointer-events: none; }
 /*
- * The box and the strip under it each carry their own near-solid fill, so the page never reads through them. The
- * shell's glass backdrop alone covered them only where the browser cuts its curved outline (clip-path: shape())
- * and blurs behind it; without that, the strip had no fill at all and the text under the composer showed through.
+ * The composer, after the user's design (docs/web-ui/composer-design): one fluid bubble, raised a little like a
+ * keycap or a water drop, its menus growing out of its top edge and merging with it (composer/ComposerSurface.tsx
+ * draws the ghost layers and the goo filters). Colours come from the theme, so every palette carries it.
  */
-.composer-shell { --composer-fill: color-mix(in srgb, var(--chat-composer-glass-surface) 94%, var(--background)); }
-.composer-shell [data-chat-composer-main-surface] { background-color: var(--composer-fill); }
-.composer-strip::before { background-color: var(--composer-fill); }
-/*
- * A thin border you can see, so the composer stands out on a background of its own colour, in either theme. The box
- * draws it on its own layer, since its solid fill covers the outline the host draws underneath.
- */
-.composer-shell, .dark .composer-shell { --chat-composer-outline: color-mix(in srgb, var(--foreground) 16%, transparent); }
-.composer-shell [data-chat-composer-main-surface]::after { display: block; }
-.composer-strip::before, .dark .composer-strip::before { border-color: var(--chat-composer-outline); }
+.bubble {
+  --bubble-fill: var(--card);
+  --bubble-edge: color-mix(in srgb, var(--foreground) 20%, var(--card));
+  --bubble-ink: var(--foreground);
+  --bubble-muted: var(--muted-foreground);
+  --bubble-faint: color-mix(in srgb, var(--muted-foreground) 62%, var(--background));
+  --bubble-hover: color-mix(in srgb, var(--foreground) 5%, var(--card));
+  --bubble-well: color-mix(in srgb, var(--foreground) 11%, var(--card));
+  --bubble-accent: var(--primary);
+  --bubble-ehl: rgb(255 255 255 / 0.4);
+  --bubble-esh: rgb(40 40 70 / 0.5);
+  --bubble-hl: rgb(255 255 255);
+  --bubble-sh: rgb(40 40 70 / 0.09);
+  --bubble-press: inset 0 2px 4px rgb(40 40 70 / 0.36), inset 0 0 0 1px rgb(40 40 70 / 0.14), 0 1px 0 rgb(255 255 255 / 0.95);
+  --bubble-press-deep: inset 0 3px 6px rgb(40 40 70 / 0.46), inset 0 0 0 1px rgb(40 40 70 / 0.18), 0 1px 0 rgb(255 255 255 / 0.95);
+  --bubble-inset: inset 0 1px 2px rgb(40 40 70 / 0.14), 0 1px 0 rgb(255 255 255 / 0.9);
+  --bubble-drop1: 0 3px 10px rgb(0 0 0 / 0.035);
+  --bubble-drop2: 0 14px 36px rgb(0 0 0 / 0.045);
+  --bubble-row-hl: rgb(255 255 255);
+  --bubble-row-sh: rgb(40 40 70 / 0.09);
+  /* The box: 106px open (60px of text, 46px of tools) or as tall as its content, 14px-cornered 44px pill folded. */
+  --ch: var(--ch-open, 106px);
+  --cw: 100%;
+  --cr: 20px;
+  --tp: 14px;
+  --morph: height 160ms cubic-bezier(0.22, 1, 0.36, 1), width 340ms cubic-bezier(0.22, 1, 0.36, 1), border-radius 360ms cubic-bezier(0.22, 1, 0.36, 1);
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  max-width: var(--chat-content-max-width);
+  margin-inline: auto;
+  color: var(--bubble-ink);
+}
+.dark .bubble {
+  --bubble-fill: color-mix(in srgb, var(--foreground) 7.5%, var(--background));
+  --bubble-edge: color-mix(in srgb, var(--foreground) 25%, var(--background));
+  --bubble-muted: color-mix(in srgb, var(--muted-foreground) 75%, var(--foreground));
+  --bubble-faint: color-mix(in srgb, var(--muted-foreground) 80%, var(--background));
+  --bubble-hover: color-mix(in srgb, var(--foreground) 8%, transparent);
+  --bubble-well: rgb(0 0 0 / 0.3);
+  --bubble-ehl: rgb(255 255 255 / 0.3);
+  --bubble-esh: rgb(0 0 0 / 0.85);
+  --bubble-hl: rgb(255 255 255 / 0.14);
+  --bubble-sh: rgb(0 0 0 / 0.4);
+  --bubble-press: inset 0 2px 5px rgb(0 0 0 / 0.9), inset 0 0 0 1px rgb(0 0 0 / 0.6), inset 0 -1px 0 rgb(255 255 255 / 0.05), 0 1px 0 rgb(255 255 255 / 0.2);
+  --bubble-press-deep: inset 0 3px 7px rgb(0 0 0 / 1), inset 0 0 0 1px rgb(0 0 0 / 0.75), inset 0 -1px 0 rgb(255 255 255 / 0.04), 0 1px 0 rgb(255 255 255 / 0.2);
+  --bubble-inset: inset 0 1px 3px rgb(0 0 0 / 0.6), 0 1px 0 rgb(255 255 255 / 0.05);
+  --bubble-drop1: 0 3px 10px rgb(0 0 0 / 0.3);
+  --bubble-drop2: 0 14px 36px rgb(0 0 0 / 0.3);
+  --bubble-row-hl: rgb(255 255 255 / 0.14);
+  --bubble-row-sh: rgb(0 0 0 / 0.4);
+}
+/* Unfolding eases in over 360ms after a 20ms beat; folding takes 300ms, ease in and out. No overshoot. */
+.bubble[data-morphing]:not([data-shrunk]) {
+  --morph: height 360ms cubic-bezier(0.22, 1, 0.36, 1) 20ms, width 340ms cubic-bezier(0.22, 1, 0.36, 1), border-radius 360ms cubic-bezier(0.22, 1, 0.36, 1) 20ms;
+}
+.bubble[data-shrunk] {
+  --ch: 44px;
+  --cw: min(26rem, 100%);
+  --cr: 14px;
+  --tp: 11px;
+  --morph: height 300ms cubic-bezier(0.4, 0, 0.2, 1), width 280ms cubic-bezier(0.4, 0, 0.2, 1), border-radius 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* The ghost layers: 30px of room on every side for the blur, the menu's shape over the composer's. */
+.bubble-layer {
+  position: absolute;
+  inset: -30px;
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+  z-index: 0;
+}
+.bubble-edge { --shape: var(--bubble-edge); filter: url(#bubble-gooedge) drop-shadow(var(--bubble-drop1)) drop-shadow(var(--bubble-drop2)); }
+.bubble-fill { --shape: var(--bubble-fill); filter: url(#bubble-goolit); }
+.bubble-layer .bubble-menu-clip { background: var(--shape); }
+.bubble-edge .bubble-menu-clip, .bubble-edge .bubble-ghost { box-shadow: 0 0 0 1px var(--shape); }
+.bubble-ghost {
+  flex: none;
+  height: var(--ch);
+  width: var(--cw);
+  margin: 0 auto;
+  border-radius: var(--cr);
+  background: var(--shape);
+  transition: var(--morph);
+}
+.bubble-real { position: relative; z-index: 1; display: flex; flex-direction: column; }
+
+/* A menu: sized from --w and --h, rising from its bottom centre. It opens over 190/170/210ms and closes in 110ms. */
+.bubble-menu {
+  flex: none;
+  width: var(--w);
+  height: var(--h);
+  max-width: calc(100% - 80px);
+  margin: 0 auto;
+  transform: scale(0.85);
+  transform-origin: 50% 100%;
+  transition: height 110ms cubic-bezier(0.5, 0, 0.75, 0), width 110ms cubic-bezier(0.5, 0, 0.75, 0), transform 110ms cubic-bezier(0.5, 0, 0.75, 0);
+}
+.bubble[data-open] .bubble-menu {
+  transform: scale(1);
+  transition: height 190ms cubic-bezier(0.22, 1, 0.36, 1), width 170ms cubic-bezier(0.22, 1, 0.36, 1), transform 210ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.bubble-menu-clip {
+  height: 100%;
+  overflow: hidden;
+  border-radius: 18px 18px 0 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.bubble-real .bubble-menu { pointer-events: none; }
+.bubble[data-open] .bubble-real .bubble-menu { pointer-events: auto; }
+.bubble-menu-body { opacity: 0; transition: opacity 50ms ease; }
+.bubble[data-open] .bubble-menu-body { opacity: 1; transition: opacity 110ms ease 30ms; }
+@keyframes bubble-pane-in { from { opacity: 0; } to { opacity: 1; } }
+.bubble-pane { width: 100%; flex: none; animation: bubble-pane-in 120ms ease both; }
+/* Rows rise from the bottom one after another, 22ms apart. */
+@keyframes bubble-row-pop { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
+.bubble[data-open] :is(.bubble-row, .bubble-prow) {
+  transform-origin: 50% 100%;
+  animation: bubble-row-pop 240ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: var(--delay, 0ms);
+}
+.bubble-scroll { scrollbar-width: thin; scrollbar-color: var(--bubble-faint) transparent; overscroll-behavior: contain; }
+
+/* Rows: 36px with a 16px radius, concentric inside the menu; the lit one raised a hair. */
+.bubble-row {
+  flex: none;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+}
+.bubble-row:hover, .bubble-row[data-active], .bubble-row:focus-visible { background: var(--bubble-hover); }
+.bubble-row[data-active], .bubble-prow { box-shadow: inset 0 1px 0 var(--bubble-row-hl), inset 0 -1px 0 var(--bubble-row-sh); }
+.bubble-prow { background: var(--bubble-hover); }
+.bubble-row:focus-visible { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--bubble-accent) 55%, transparent); }
+.bubble-glyph {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--bubble-edge);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bubble-muted);
+}
+.bubble-kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--bubble-edge);
+  border-radius: 4px;
+  background: var(--bubble-hover);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--bubble-muted);
+}
+
+/* The folder browser: a recessed path bar, a list fading out at its foot, sliding in from the side you went. */
+.bubble-wellbar { background: var(--bubble-well); box-shadow: var(--bubble-inset); }
+.bubble-crumb {
+  flex: none;
+  height: 28px;
+  max-width: 12rem;
+  padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 13px;
+  color: var(--bubble-muted);
+  cursor: pointer;
+  outline: none;
+}
+.bubble-crumb:hover, .bubble-crumb:focus-visible { background: var(--bubble-fill); color: var(--bubble-ink); }
+.bubble-crumb[data-last] { color: var(--bubble-ink); font-weight: 500; }
+.bubble-flist {
+  flex: none;
+  height: 216px;
+  overflow-y: auto;
+  padding: 2px 0 14px;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
+}
+@keyframes bubble-slide-fwd { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@keyframes bubble-slide-back { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+.bubble-flist[data-dir="fwd"] { animation: bubble-slide-fwd 170ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.bubble-flist[data-dir="back"] { animation: bubble-slide-back 170ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.bubble-frow {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px 0 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  font-size: 13px;
+  text-align: left;
+  color: var(--bubble-ink);
+  cursor: pointer;
+  outline: none;
+}
+.bubble-frow:hover, .bubble-frow:focus-visible { background: var(--bubble-hover); }
+.bubble-ftile {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--bubble-hover);
+}
+.bubble-frow:is(:hover, :focus-visible) .bubble-ftile { background: var(--bubble-fill); }
+.bubble-go { opacity: 0; color: var(--bubble-muted); transition: opacity 100ms; }
+.bubble-frow:is(:hover, :focus-visible) .bubble-go { opacity: 1; }
+.bubble-btn {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+}
+.bubble-btn:disabled { cursor: default; opacity: 0.5; }
+.bubble-btn.bubble-key { background: var(--bubble-accent); color: var(--primary-foreground); }
+.bubble-btn.bubble-key:disabled { box-shadow: none; filter: none; transform: none; }
+
+/* The box itself: no paint of its own (the fill layer paints it), as tall as --ch, as wide as --cw. */
+.bubble-composer {
+  position: relative;
+  flex: none;
+  height: var(--ch);
+  width: var(--cw);
+  max-width: 100%;
+  margin: 0 auto;
+  border-radius: var(--cr);
+  transition: var(--morph);
+}
+.bubble[data-shrunk] .bubble-composer, .bubble[data-morphing] .bubble-composer { overflow: hidden; }
+.bubble[data-shrunk] .bubble-composer { cursor: text; }
+.bubble-composer[data-dragging] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bubble-accent) 70%, transparent); background: color-mix(in srgb, var(--bubble-accent) 8%, transparent); }
+.bubble-text {
+  display: block;
+  width: 100%;
+  field-sizing: content;
+  min-height: 60px;
+  max-height: 13rem;
+  padding: var(--tp) 18px 4px;
+  overflow-y: auto;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--bubble-ink);
+  caret-color: var(--bubble-accent);
+  white-space: pre-wrap;
+  transition: padding 380ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.bubble-text::placeholder { color: var(--bubble-muted); opacity: 1; }
+.bubble[data-shrunk] .bubble-text { height: 44px; min-height: 44px; max-height: 44px; padding-bottom: 0; overflow: hidden; }
+.bubble[data-shrunk] .composer-files { display: none; }
+.bubble-tools {
+  container-type: inline-size;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px 8px;
+}
+.bubble[data-shrunk] .bubble-tools { opacity: 0; pointer-events: none; transition: opacity 80ms ease; }
+/* On unfolding, the tools pop in one after another: attach, project, hints, send. */
+@keyframes bubble-tool-pop { from { opacity: 0; transform: translateY(6px) scale(0.4); } to { opacity: 1; transform: none; } }
+.bubble[data-morphing]:not([data-shrunk]) .bubble-tool {
+  transform-origin: 50% 100%;
+  animation: bubble-tool-pop 250ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: calc(110ms + var(--i, 0) * 45ms);
+}
+.bubble-hints { display: flex; align-items: center; gap: 4px; margin-right: 8px; font-size: 11px; color: var(--bubble-muted); white-space: nowrap; }
+@container (max-width: 26rem) { .bubble-hints { display: none; } }
+
+/* Embedded buttons: they look pressed in on hover and while their menu is open, deeper while pressed. */
+.bubble-iconbtn, .bubble-chip, .bubble-ghostbtn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--bubble-muted);
+  cursor: pointer;
+  outline: none;
+  transition: background 90ms ease, box-shadow 90ms ease, color 90ms ease;
+}
+.bubble-chip { height: 28px; gap: 6px; padding: 0 8px; border-radius: 8px; font-size: 12px; }
+.bubble-iconbtn:hover:not(:disabled), .bubble-chip:hover:not(:disabled), .bubble-chip[data-on], .bubble-iconbtn[data-on], .bubble-ghostbtn:hover:not(:disabled) {
+  background: var(--bubble-well);
+  box-shadow: var(--bubble-press);
+}
+.bubble-chip[data-on], .bubble-iconbtn[data-on], .bubble-ghostbtn:hover:not(:disabled) { color: var(--bubble-ink); }
+.bubble-iconbtn:active:not(:disabled), .bubble-chip:active:not(:disabled), .bubble-ghostbtn:active:not(:disabled) { box-shadow: var(--bubble-press-deep); }
+.bubble-iconbtn:disabled { opacity: 0.35; cursor: default; }
+:is(.bubble-iconbtn, .bubble-chip, .bubble-ghostbtn, .bubble-btn, .bubble-send):focus-visible { box-shadow: 0 0 0 2px var(--ring); }
+
+/* Keycaps: a lit top edge and a darker underside; pressed, they sink 1.5px (50ms down, 150ms back). */
+.bubble-key {
+  transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 150ms cubic-bezier(0.22, 1, 0.36, 1), filter 120ms ease;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.32), inset 0 -2px 0 rgb(0 0 0 / 0.24), 0 1px 0 rgb(0 0 0 / 0.2), 0 3px 6px -2px rgb(0 0 0 / 0.3);
+}
+.bubble-key:hover:not(:disabled) { filter: brightness(1.07); }
+.bubble-key:active:not(:disabled) {
+  transform: translateY(1.5px) scale(0.97);
+  filter: brightness(0.96);
+  box-shadow: inset 0 2px 4px rgb(0 0 0 / 0.38), inset 0 -1px 0 rgb(255 255 255 / 0.1), 0 0 0 rgb(0 0 0 / 0);
+  transition-duration: 50ms;
+}
+.bubble-send {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  outline: none;
+  cursor: pointer;
+}
+.bubble-send.bubble-key { background: var(--bubble-accent); color: var(--primary-foreground); }
+.bubble-send.bubble-stop { background: var(--stop-action); color: #fff; }
+.bubble-send:disabled { cursor: default; background: var(--bubble-hover); color: var(--bubble-faint); }
+.bubble-plane { transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1); }
+.bubble-key:hover .bubble-plane { transform: translate(1px, -1px); }
+.bubble-key:active .bubble-plane { transform: translate(2px, -2px) scale(0.92); transition-duration: 50ms; }
+
+/* Tooltips: a tiny muted label above the button after a 500ms hover; never while pressing or while its menu is open. */
+.bubble-tip { position: relative; }
+.bubble-tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translate(-50%, 3px);
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: var(--bubble-fill);
+  border: 1px solid var(--bubble-edge);
+  color: var(--bubble-muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.16);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 5;
+  transition: opacity 90ms ease, transform 90ms ease;
+}
+.bubble-tip:hover::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  transition: opacity 140ms ease 500ms, transform 160ms cubic-bezier(0.22, 1, 0.36, 1) 500ms;
+}
+.bubble-tip:active::after, .bubble-tip[data-on]:hover::after, .bubble-tip:disabled:hover::after {
+  opacity: 0;
+  transform: translate(-50%, 3px);
+  transition: opacity 60ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble :is(.bubble-menu, .bubble-menu-body, .bubble-pane, .bubble-row, .bubble-prow, .bubble-composer, .bubble-ghost, .bubble-text, .bubble-tool, .bubble-flist, .bubble-key, .bubble-plane),
+  .bubble-tip::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
 
 /*
  * The sidebar on the left of every page: the running sessions, the app's
@@ -1560,46 +1948,6 @@ html[data-resizing="row"] * { cursor: row-resize !important; user-select: none; 
   from { opacity: 0; translate: 0 -4px; }
 }
 
-/*
- * The composer keeps its motion quiet: no swell on focus, and folding to the slim pill and back eases
- * calmly, with no overshoot.
- */
-.composer-shell { transform-origin: 50% 100%; transition: max-width 220ms var(--ease-calm); }
-
-/*
- * Shrunk while you scroll (Composer's useShrinkOnScroll): a slim pill of one line, its strip, attachments and
- * footer folded away, narrower, back to full size on focus.
- */
-.composer-strip, .composer-tools, .composer-files {
-  transition: max-height 200ms var(--ease-calm), opacity 140ms ease, padding 200ms var(--ease-calm), margin 200ms var(--ease-calm);
-}
-.composer-strip { max-height: 4rem; }
-.composer-tools { max-height: 6rem; }
-#app-dock[data-shrunk] .composer-shell { max-width: min(26rem, 100%); }
-#app-dock[data-shrunk] :is(.composer-strip, .composer-tools, .composer-files) {
-  max-height: 0;
-  opacity: 0;
-  padding-block: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-#app-dock[data-shrunk] .composer-strip { margin-top: 0; }
-/* With the strip folded away, the glass and outline drop the strip's cut-out and keep the pill's own rounded shape. */
-#app-dock[data-shrunk] .composer-shell::before { clip-path: none; bottom: 0; }
-#app-dock[data-shrunk] .composer-shell [data-slot="composer-host"]::after,
-#app-dock[data-shrunk] .composer-shell [data-chat-composer-main-surface]::after { clip-path: none; }
-/* One line exactly as tall as the box: no block padding or margin on the textarea, so the text sits centred in the pill. */
-#app-dock[data-shrunk] .composer-text { padding-block: 0.3rem; }
-#app-dock[data-shrunk] .composer-text textarea {
-  min-height: 1.5rem;
-  max-height: 1.5rem;
-  padding-block: 0;
-  margin-block: 0;
-  line-height: 1.5rem;
-  overflow: hidden;
-  cursor: text;
-}
-#app-dock[data-shrunk] .composer-box { cursor: text; }
 
 /*
  * Questionnaire, after the user's sketch: the options as dots on a dotted line, the one in view ringed and joined

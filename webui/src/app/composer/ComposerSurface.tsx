@@ -1,101 +1,133 @@
-// Adapted from T3 Code (MIT), apps/web/src/components/chat/ComposerSurface.tsx
 /**
- * The composer's surface, as the coding harness draws it: a glass shell whose
- * backdrop runs on, through a cut-out curve, into the context strip tucked
- * under the box (Shell), the box's outline and drop (Host), its inner layer
- * (Main), and the strip itself (ContextStrip). Copied as is; only the harness's
- * own theme hooks are left out.
+ * The composer's surface, after the user's design (docs/web-ui/composer-design): one fluid bubble, raised a little
+ * like a keycap or a drop of water. The `/` and `@` suggestions, the attach menu, the running projects and the
+ * folder browser are not pop-ups: each is a smaller bubble that grows out of the composer's top edge and merges with
+ * it into one shape, with smooth joins and no sharp corners.
+ *
+ * The merged shape is drawn by two ghost layers behind the real content, each holding copies of the menu and
+ * composer shapes: the edge layer (the shapes 1px bigger, through `#bubble-gooedge`, with the faint cast shadows)
+ * and the fill layer on top of it (the shapes at size, through `#bubble-goolit`). The goo filters blur the shapes
+ * and cut the blur back to a hard edge, so where the menu meets the composer the two flow into one; the fill layer
+ * adds a lit top edge and a shaded bottom one, the edge layer a 1px rim that runs from light to dark round the
+ * curves. Ghost and real menus share `--w`/`--h` and the composer `--ch` on the bubble, so they move together.
  */
-import type { ComponentProps } from "react";
+import { useEffect, useState, type ComponentProps, type CSSProperties, type ReactNode } from "react"
+import { cn } from "@/lib/utils"
 
-import { cn } from "@/lib/utils";
+/** The goo filters, once per page. Light falls from the top left. */
+function BubbleFilters() {
+  return (
+    <svg width="0" height="0" className="absolute" aria-hidden="true" focusable="false">
+      <defs>
+        <filter id="bubble-goolit" x="-10%" y="-10%" width="120%" height="120%" colorInterpolationFilters="sRGB">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="b" />
+          <feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" result="shape" />
+          <feOffset in="shape" dx="0.9" dy="1.3" result="dn" />
+          <feComposite in="shape" in2="dn" operator="out" result="rimA" />
+          <feGaussianBlur in="rimA" stdDeviation="0.4" result="rimB" />
+          <feComposite in="rimB" in2="shape" operator="in" result="rimC" />
+          <feFlood style={{ floodColor: "var(--bubble-hl)" }} result="hlc" />
+          <feComposite in="hlc" in2="rimC" operator="in" result="hl" />
+          <feOffset in="shape" dx="-0.9" dy="-1.3" result="up" />
+          <feComposite in="shape" in2="up" operator="out" result="shA" />
+          <feGaussianBlur in="shA" stdDeviation="0.4" result="shB" />
+          <feComposite in="shB" in2="shape" operator="in" result="shC" />
+          <feFlood style={{ floodColor: "var(--bubble-sh)" }} result="shc" />
+          <feComposite in="shc" in2="shC" operator="in" result="sh" />
+          <feMerge>
+            <feMergeNode in="shape" />
+            <feMergeNode in="sh" />
+            <feMergeNode in="hl" />
+          </feMerge>
+        </filter>
+        <filter id="bubble-gooedge" x="-10%" y="-10%" width="120%" height="120%" colorInterpolationFilters="sRGB">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="b" />
+          <feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" result="shape" />
+          <feOffset in="shape" dx="2" dy="3" result="dn" />
+          <feComposite in="shape" in2="dn" operator="out" result="tS0" />
+          <feGaussianBlur in="tS0" stdDeviation="0.8" result="tS1" />
+          <feComposite in="tS1" in2="shape" operator="in" result="tS" />
+          <feFlood style={{ floodColor: "var(--bubble-ehl)" }} result="tc" />
+          <feComposite in="tc" in2="tS" operator="in" result="eh" />
+          <feOffset in="shape" dx="-2" dy="-3" result="up" />
+          <feComposite in="shape" in2="up" operator="out" result="bS0" />
+          <feGaussianBlur in="bS0" stdDeviation="0.8" result="bS1" />
+          <feComposite in="bS1" in2="shape" operator="in" result="bS" />
+          <feFlood style={{ floodColor: "var(--bubble-esh)" }} result="bc" />
+          <feComposite in="bc" in2="bS" operator="in" result="es" />
+          <feMerge>
+            <feMergeNode in="shape" />
+            <feMergeNode in="eh" />
+            <feMergeNode in="es" />
+          </feMerge>
+        </filter>
+      </defs>
+    </svg>
+  )
+}
 
-function Shell({
-  contextStrip = false,
+/** One ghost layer: the menu's shape over the composer's, painted in the layer's colour. */
+function Ghost({ kind }: { kind: "edge" | "fill" }) {
+  return (
+    <div className={cn("bubble-layer", kind === "edge" ? "bubble-edge" : "bubble-fill")} aria-hidden="true">
+      <div className="bubble-menu">
+        <div className="bubble-menu-clip" />
+      </div>
+      <div className="bubble-ghost" />
+    </div>
+  )
+}
+
+/**
+ * The bubble: `menu` is what grows out of the top (shown while `open`, sized `size`), `children` the composer box.
+ * `shrunk` folds it to the slim pill; `morphing` is set for the length of a fold or unfold, which then eases slowly.
+ */
+export function ComposerBubble({
+  open,
+  size,
+  shrunk,
+  morphing,
+  menu,
+  children,
   className,
+  style,
   ...props
-}: ComponentProps<"div"> & { contextStrip?: boolean }) {
+}: Omit<ComponentProps<"div">, "children"> & {
+  open: boolean
+  size: { w: number; h: number }
+  shrunk: boolean
+  morphing: boolean
+  menu: ReactNode
+  children: ReactNode
+}) {
+  // A closing menu keeps its content while it falls away, then lets it go (the page reads an open list box or menu as a pop-up).
+  const [lingering, setLingering] = useState(open)
+  useEffect(() => {
+    if (open) return setLingering(true)
+    const timer = setTimeout(() => setLingering(false), 140)
+    return () => clearTimeout(timer)
+  }, [open])
   return (
     <div
       data-slot="composer-shell"
-      data-with-context={contextStrip || undefined}
-      className={cn(
-        "@container/composer-surface group/composer-surface relative isolate mx-auto w-full max-w-(--chat-content-max-width)",
-        "[--chat-composer-drawer-inset:1.375rem] [--chat-composer-glass-surface:var(--card)] [--chat-composer-outline:rgb(0_0_0/8%)]",
-        "dark:[--chat-composer-glass-surface:var(--surface-raised)] dark:[--chat-composer-highlight:rgb(255_255_255/3%)] dark:[--chat-composer-outline:color-mix(in_srgb,var(--color-white)_5%,transparent)]",
-        "before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-3xl before:bg-(--chat-composer-glass-surface)/(--glass-opacity) before:backdrop-blur-(--glass-blur) before:backdrop-saturate-(--glass-saturation)",
-        "not-supports-[((backdrop-filter:blur(1px))_or_(-webkit-backdrop-filter:blur(1px)))]:before:bg-(--chat-composer-glass-surface)",
-        "has-data-[composer-banner-surface=attached]:before:hidden data-model-strip-transition:before:hidden",
-        contextStrip && [
-          "[--chat-composer-context-extension:2.25rem] sm:[--chat-composer-context-extension:2rem]",
-          "before:[clip-path:shape(from_0_22px,curve_to_22px_0_with_0_9.85px/9.85px_0,line_to_calc(100%-22px)_0,curve_to_100%_22px_with_calc(100%-9.85px)_0/100%_9.85px,line_to_100%_calc(100%-var(--chat-composer-context-extension)-var(--chat-composer-drawer-inset)),curve_to_calc(100%-var(--chat-composer-drawer-inset))_calc(100%-var(--chat-composer-context-extension))_with_100%_calc(100%-var(--chat-composer-context-extension)-var(--chat-composer-drawer-inset)*0.4477)/calc(100%-var(--chat-composer-drawer-inset)*0.4477)_calc(100%-var(--chat-composer-context-extension)),line_to_calc(100%-var(--chat-composer-drawer-inset))_calc(100%-16px),curve_to_calc(100%-var(--chat-composer-drawer-inset)-16px)_100%_with_calc(100%-var(--chat-composer-drawer-inset))_calc(100%-7.16px)/calc(100%-var(--chat-composer-drawer-inset)-7.16px)_100%,line_to_calc(var(--chat-composer-drawer-inset)+16px)_100%,curve_to_var(--chat-composer-drawer-inset)_calc(100%-16px)_with_calc(var(--chat-composer-drawer-inset)+7.16px)_100%/var(--chat-composer-drawer-inset)_calc(100%-7.16px),line_to_var(--chat-composer-drawer-inset)_calc(100%-var(--chat-composer-context-extension)),curve_to_0_calc(100%-var(--chat-composer-context-extension)-var(--chat-composer-drawer-inset))_with_calc(var(--chat-composer-drawer-inset)*0.4477)_calc(100%-var(--chat-composer-context-extension))/0_calc(100%-var(--chat-composer-context-extension)-var(--chat-composer-drawer-inset)*0.4477),line_to_0_22px,close)]",
-          "not-supports-[clip-path:shape(from_0_0,line_to_1px_1px)]:before:bottom-(--chat-composer-context-extension)",
-        ],
-        className,
-      )}
+      data-open={open || undefined}
+      data-shrunk={shrunk || undefined}
+      data-morphing={morphing || undefined}
+      className={cn("bubble", className)}
+      style={{ ...style, "--w": `${size.w}px`, "--h": `${open ? size.h : 0}px` } as CSSProperties}
       {...props}
-    />
-  );
+    >
+      <BubbleFilters />
+      <Ghost kind="edge" />
+      <Ghost kind="fill" />
+      <div className="bubble-real">
+        <div className="bubble-menu" inert={!open}>
+          <div className="bubble-menu-clip">
+            <div className="bubble-menu-body">{open || lingering ? menu : null}</div>
+          </div>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
 }
-
-const outlineClasses =
-  "after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:border after:border-(--chat-composer-outline) dark:after:inset-shadow-2xs dark:after:inset-shadow-(color:--chat-composer-highlight)";
-
-const contextSeamClasses =
-  "group-data-with-context/composer-surface:after:[clip-path:polygon(0_0,100%_0,100%_100%,calc(100%-22px)_100%,calc(100%-22px)_calc(100%-2px),22px_calc(100%-2px),22px_100%,0_100%)]";
-
-function Host({ className, ...props }: ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="composer-host"
-      className={cn(
-        "relative z-10 w-full rounded-3xl shadow-composer after:z-1 dark:shadow-none",
-        outlineClasses,
-        contextSeamClasses,
-        "group-has-data-[composer-banner-surface=attached]/composer-surface:shadow-none group-has-data-[composer-banner-surface=attached]/composer-surface:after:hidden",
-        className,
-      )}
-      {...props}
-    />
-  );
-}
-
-function Main({ className, ...props }: ComponentProps<"div">) {
-  return (
-    <div
-      data-chat-composer-main-surface="true"
-      className={cn(
-        "group relative z-10 rounded-3xl p-px",
-        "group-data-model-strip-transition/composer-surface:bg-(--chat-composer-glass-surface)/(--glass-opacity) group-data-model-strip-transition/composer-surface:backdrop-blur-(--glass-blur) group-data-model-strip-transition/composer-surface:backdrop-saturate-(--glass-saturation)",
-        outlineClasses,
-        contextSeamClasses,
-        "after:z-20 after:hidden group-has-data-[composer-banner-surface=attached]/composer-surface:after:block group-data-model-strip-transition/composer-surface:after:block",
-        "group-has-data-[composer-banner-surface=attached]/composer-surface:bg-(--chat-composer-glass-surface)/(--glass-opacity) group-has-data-[composer-banner-surface=attached]/composer-surface:backdrop-blur-(--glass-blur) group-has-data-[composer-banner-surface=attached]/composer-surface:backdrop-saturate-(--glass-saturation)",
-        "group-has-data-[composer-banner-surface=attached]/composer-surface:shadow-composer dark:group-has-data-[composer-banner-surface=attached]/composer-surface:shadow-none",
-        "not-supports-[((backdrop-filter:blur(1px))_or_(-webkit-backdrop-filter:blur(1px)))]:group-has-data-[composer-banner-surface=attached]/composer-surface:bg-(--chat-composer-glass-surface)",
-        "group-has-data-[composer-banner-surface=attached]/composer-surface:**:data-[chat-composer-mobile-collapsed=true]:min-h-[calc(1rem+1px)]",
-        className,
-      )}
-      {...props}
-    />
-  );
-}
-
-function ContextStrip({ className, ...props }: ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="composer-context-strip"
-      className={cn(
-        "group/composer-context relative isolate mx-auto -mt-4 flex w-[calc(100%-2*var(--chat-composer-drawer-inset))] items-center gap-2 overflow-x-clip overflow-y-visible px-2 pt-5 pb-1",
-        "before:absolute before:inset-0 before:-z-1 before:rounded-b-2xl before:border before:border-(--chat-composer-outline) before:mask-b-from-transparent before:mask-b-from-4 before:mask-b-to-black before:mask-b-to-4 before:shadow-composer",
-        "dark:before:border-white/7 dark:before:bg-composer-seam-below dark:before:shadow-composer-dark",
-        "group-has-data-[composer-banner-surface=attached]/composer-surface:before:bg-(--chat-composer-glass-surface)/(--glass-opacity) group-has-data-[composer-banner-surface=attached]/composer-surface:before:backdrop-blur-(--glass-blur) group-has-data-[composer-banner-surface=attached]/composer-surface:before:backdrop-saturate-(--glass-saturation)",
-        "not-supports-[clip-path:shape(from_0_0,line_to_1px_1px)]:before:bg-(--chat-composer-glass-surface)/(--glass-opacity) not-supports-[clip-path:shape(from_0_0,line_to_1px_1px)]:before:backdrop-blur-(--glass-blur) not-supports-[clip-path:shape(from_0_0,line_to_1px_1px)]:before:backdrop-saturate-(--glass-saturation)",
-        className,
-      )}
-      {...props}
-    />
-  );
-}
-
-export const ComposerSurface = { Shell, Host, Main, ContextStrip };

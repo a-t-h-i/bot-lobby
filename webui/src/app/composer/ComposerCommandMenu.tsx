@@ -1,19 +1,13 @@
 // Adapted from T3 Code (MIT), apps/web/src/components/chat/ComposerCommandMenu.tsx, ComposerBanner.tsx
 /**
- * The drawer of suggestions that rises out of the composer's top edge while
- * you type a `/command` or an `@agent` at the start of a message, as the
- * coding harness draws its own: a glass sheet tucked under the box's rim, one
- * row per suggestion with its name and what it does, the active row filled.
- * The text box keeps focus and drives it (a combobox: Up and Down move, Enter
- * or Tab takes the row, Esc closes); a pointer picks a row too. The harness's
- * file and pull request rows, and its menu primitive, are left out.
+ * The suggestions that grow out of the composer's top edge, as a bubble of their own, while you type a `/command`
+ * or an `@agent` at the start of a message: one 36px row per suggestion, a tile with its first letter, its name
+ * without the symbol and what it does. The text box keeps focus and drives it (a combobox: Up and Down move, Enter
+ * or Tab takes the row, Esc closes); a pointer picks a row too. Rows rise from the bottom one after another.
  */
-import { memo, useLayoutEffect, useRef } from "react"
+import { memo, useLayoutEffect, useRef, type CSSProperties } from "react"
 import type { StatusInfo } from "@protocol"
-import { cn } from "@/lib/utils"
-import { AgentIcon } from "@/ui/AgentIcon"
-import { CHAT_AGENT_SOURCES, CHAT_MENTIONS, LOBBY_COMMANDS, type ChatAgent } from "@shared"
-import { ListChecks, Route } from "lucide-react"
+import { CHAT_MENTIONS, LOBBY_COMMANDS, type ChatAgent } from "@shared"
 
 export type ComposerTriggerKind = "slash-command" | "mention"
 
@@ -63,10 +57,32 @@ const LISTBOX_LABEL_BY_TRIGGER: Record<ComposerTriggerKind, string> = {
   mention: "Agents",
 }
 
-function ItemIcon({ item }: { item: ComposerCommandItem }) {
-  if (item.agent) return <AgentIcon source={CHAT_AGENT_SOURCES[item.agent]} strokeWidth={2} className="size-4 shrink-0 text-muted-foreground" />
-  const Icon = item.id === "/plan" ? Route : ListChecks
-  return <Icon aria-hidden="true" strokeWidth={2} className="size-4 shrink-0 text-muted-foreground" />
+/** At most this many rows show; more scroll. */
+export const SUGGESTION_ROWS = 8
+
+/** The bubble's height for these rows: 6px padding above and below, 36px a row. */
+export function suggestionHeight(count: number): number {
+  return 12 + Math.min(count, SUGGESTION_ROWS) * 36
+}
+
+let measurer: CanvasRenderingContext2D | null | undefined
+
+/** The bubble's width for these rows, from their text in the composer's own typeface, between 200 and 640px. */
+export function suggestionWidth(items: ComposerCommandItem[], family: string): number {
+  let width = 0
+  try {
+    measurer ??= document.createElement("canvas").getContext("2d")
+    if (!measurer) throw new Error("no canvas")
+    for (const item of items) {
+      measurer.font = `500 14px ${family}`
+      const name = measurer.measureText(item.label.slice(1)).width
+      measurer.font = `400 13px ${family}`
+      width = Math.max(width, name + measurer.measureText(item.description).width)
+    }
+  } catch {
+    for (const item of items) width = Math.max(width, item.label.length * 8 + item.description.length * 6.6)
+  }
+  return Math.min(Math.max(Math.ceil(width) + 98, 200), 640)
 }
 
 export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
@@ -85,48 +101,41 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
     el?.scrollIntoView({ block: "nearest" })
   }, [props.activeItemId])
 
+  const shown = Math.min(props.items.length, SUGGESTION_ROWS)
   return (
     <div
       ref={listRef}
+      id={props.listId}
+      role="listbox"
+      aria-label={LISTBOX_LABEL_BY_TRIGGER[props.triggerKind]}
       data-composer-command-drawer="true"
-      className={cn(
-        "composer-command-drawer relative isolate flex min-h-0 w-full flex-col overflow-hidden pb-[calc(1rem+1px)]",
-        "before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-t-2xl before:border before:border-(--chat-composer-outline)",
-        "before:bg-(--chat-composer-glass-surface)/(--glass-opacity) before:backdrop-blur-(--glass-blur) before:backdrop-saturate-(--glass-saturation)",
-        "before:mask-t-from-transparent before:mask-t-from-4 before:mask-t-to-black before:mask-t-to-4 before:shadow-composer dark:before:shadow-none",
-        "not-supports-[((backdrop-filter:blur(1px))_or_(-webkit-backdrop-filter:blur(1px)))]:before:bg-(--chat-composer-glass-surface)"
-      )}
+      className="bubble-pane bubble-scroll overflow-y-auto p-1.5"
+      style={{ height: suggestionHeight(props.items.length) }}
     >
-      <div id={props.listId} role="listbox" aria-label={LISTBOX_LABEL_BY_TRIGGER[props.triggerKind]} className="max-h-72 min-h-0 overflow-y-auto p-2">
-        {props.items.map((item) => {
-          const active = props.activeItemId === item.id
-          return (
-            <div
-              key={item.id}
-              id={composerSuggestionOptionId(props.listId, item.id)}
-              role="option"
-              aria-selected={active}
-              data-composer-item-id={item.id}
-              data-active={active || undefined}
-              onMouseMove={() => {
-                if (!active) props.onHighlightedItemChange(item.id)
-              }}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => props.onSelect(item)}
-              className={cn(
-                "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm outline-none select-none",
-                active && "bg-accent text-accent-foreground"
-              )}
-            >
-              <ItemIcon item={item} />
-              <span className="flex min-w-0 flex-1 items-center gap-2">
-                <span className="min-w-0 max-w-[45%] shrink-0 truncate font-sans text-xs font-medium">{item.label}</span>
-                <span className="min-w-0 flex-1 truncate text-left text-xs text-muted-foreground">{item.description}</span>
-              </span>
-            </div>
-          )
-        })}
-      </div>
+      {props.items.map((item, index) => {
+        const active = props.activeItemId === item.id
+        return (
+          <div
+            key={item.id}
+            id={composerSuggestionOptionId(props.listId, item.id)}
+            role="option"
+            aria-selected={active}
+            data-composer-item-id={item.id}
+            data-active={active || undefined}
+            onMouseMove={() => {
+              if (!active) props.onHighlightedItemChange(item.id)
+            }}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => props.onSelect(item)}
+            className="bubble-row"
+            style={{ "--delay": `${Math.max(0, shown - 1 - index) * 22}ms` } as CSSProperties}
+          >
+            <span className="bubble-glyph" aria-hidden="true">{item.label.charAt(1).toUpperCase()}</span>
+            <span className="shrink-0 text-sm font-medium text-(--bubble-ink)">{item.label.slice(1)}</span>
+            <span className="min-w-0 truncate text-[13px] text-(--bubble-muted)">{item.description}</span>
+          </div>
+        )
+      })}
     </div>
   )
 })
