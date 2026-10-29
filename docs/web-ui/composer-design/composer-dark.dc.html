@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Composer dark</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.theme-dark{color-scheme:dark;--ground:#0A0A0A;--fill:#1C1C1F;--edge:#44444B;--ehl:rgba(255,255,255,0.3);--esh:rgba(0,0,0,0.85);--ink:#F5F5F5;--muted:#A6A6AE;--faint:#76767E;--hover:rgba(255,255,255,0.08);--well:rgba(0,0,0,0.3);--press:inset 0 2px 5px rgba(0,0,0,0.9),inset 0 0 0 1px rgba(0,0,0,0.6),inset 0 -1px 0 rgba(255,255,255,0.05),0 1px 0 rgba(255,255,255,0.2);--press-deep:inset 0 3px 7px rgba(0,0,0,1),inset 0 0 0 1px rgba(0,0,0,0.75),inset 0 -1px 0 rgba(255,255,255,0.04),0 1px 0 rgba(255,255,255,0.2);--inset:inset 0 1px 3px rgba(0,0,0,0.6),0 1px 0 rgba(255,255,255,0.05);--drop1:0 3px 10px rgba(0,0,0,0.3);--drop2:0 14px 36px rgba(0,0,0,0.3);--hl:rgba(255,255,255,0.14);--sh:rgba(0,0,0,0.4)}
+.bubble{--edge-now:var(--edge);position:relative;isolation:isolate;width:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;color:var(--ink)}
+.layer{position:absolute;inset:-30px;box-sizing:border-box;padding:30px;display:flex;flex-direction:column;pointer-events:none;z-index:0}
+.layer.edge{--shape:var(--edge-now);filter:url(#gooedge) drop-shadow(var(--drop1)) drop-shadow(var(--drop2))}
+.layer.fill{--shape:var(--fill);filter:url(#goolit)}
+.real{position:relative;z-index:1;display:flex;flex-direction:column}
+.menu{box-sizing:border-box;width:var(--w);height:var(--h);max-width:calc(100% - 80px);margin:0 auto;transform:scale(0.85);transform-origin:50% 100%;transition:height 110ms cubic-bezier(0.5,0,0.75,0),width 110ms cubic-bezier(0.5,0,0.75,0),transform 110ms cubic-bezier(0.5,0,0.75,0)}
+.menu[data-open="true"]{transform:scale(1);transition:height 190ms cubic-bezier(0.22,1,0.36,1),width 170ms cubic-bezier(0.22,1,0.36,1),transform 210ms cubic-bezier(0.34,1.56,0.64,1)}
+.menu-clip{box-sizing:border-box;height:100%;overflow:hidden;border-radius:18px 18px 0 0;display:flex;flex-direction:column;justify-content:flex-end}
+.layer .menu-clip{background:var(--shape)}
+.layer.edge .menu-clip{box-shadow:0 0 0 1px var(--shape)}
+.real .menu{pointer-events:none}
+.real .menu[data-open="true"]{pointer-events:auto}
+.real .menu-body{opacity:0;transition:opacity 50ms ease}
+.real .menu[data-open="true"] .menu-body{opacity:1;transition:opacity 110ms ease 30ms}
+@keyframes paneIn{from{opacity:0}to{opacity:1}}
+.pane{box-sizing:border-box;width:100%;animation:paneIn 120ms ease both}
+@keyframes rowPop{from{opacity:0;transform:scale(0.5)}to{opacity:1;transform:scale(1)}}
+.menu[data-open="true"] .row,.menu[data-open="true"] .prow{transform-origin:50% 100%;animation:rowPop 240ms cubic-bezier(0.22,1,0.36,1) backwards}
+.bubble{--morph:height 360ms cubic-bezier(0.22,1,0.36,1) 20ms,width 340ms cubic-bezier(0.22,1,0.36,1),border-radius 360ms cubic-bezier(0.22,1,0.36,1) 20ms;--ch:106px;--cw:100%;--cr:20px;--th:60px;--tp:14px}
+.bubble[data-shrunk="true"]{--morph:height 300ms cubic-bezier(0.4,0,0.2,1),width 280ms cubic-bezier(0.4,0,0.2,1),border-radius 300ms cubic-bezier(0.4,0,0.2,1);--ch:44px;--cw:416px;--cr:14px;--th:44px;--tp:11px}
+.thread{scrollbar-width:thin;scrollbar-color:var(--faint) transparent;position:absolute;inset:44px 0 0 0;box-sizing:border-box;overflow-y:auto;padding:12px 120px 190px;-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 110px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 110px),transparent);display:flex;flex-direction:column;gap:18px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;color:var(--ink)}
+.umsg{align-self:flex-end;max-width:70%;padding:8px 14px;border-radius:18px;background:var(--hover);font-size:14px;line-height:1.5}
+.amsg b{font-size:13px;font-weight:600}
+.amsg p{margin:2px 0 0;font-size:14px;line-height:1.5;color:var(--ink)}
+.gcomposer{height:var(--ch);width:var(--cw);margin:0 auto;border-radius:var(--cr);background:var(--shape);transition:var(--morph)}
+.layer.edge .gcomposer{box-shadow:0 0 0 1px var(--shape)}
+.composer{position:relative;height:var(--ch);width:var(--cw);max-width:100%;margin:0 auto;border-radius:var(--cr);transition:var(--morph)}
+@keyframes toolPop{0%{opacity:0;transform:translateY(6px) scale(0.4)}100%{opacity:1;transform:none}}
+.bubble:not([data-shrunk="true"]) .tools>*{transform-origin:50% 100%;animation:toolPop 250ms cubic-bezier(0.22,1,0.36,1) backwards}
+.bubble:not([data-shrunk="true"]) .tools>*:nth-child(1){animation-delay:110ms}
+.bubble:not([data-shrunk="true"]) .tools>*:nth-child(2){animation-delay:155ms}
+.bubble:not([data-shrunk="true"]) .tools>*:nth-child(4){animation-delay:200ms}
+.bubble:not([data-shrunk="true"]) .tools>*:nth-child(5){animation-delay:245ms}
+.bubble[data-shrunk="true"] .tools{opacity:0;pointer-events:none;transition:opacity 80ms ease}
+.composer textarea{box-sizing:border-box;display:block;width:100%;height:var(--th);padding:var(--tp) 18px 4px;overflow:hidden;transition:height 380ms cubic-bezier(0.22,1,0.36,1),padding 380ms cubic-bezier(0.22,1,0.36,1);border:0;outline:none;resize:none;background:transparent;font-family:inherit;font-size:15px;line-height:1.5;color:var(--ink)}
+.composer textarea::placeholder{color:var(--muted);opacity:1}
+.row{box-sizing:border-box;width:100%;height:36px;padding:0 10px;display:flex;align-items:center;gap:10px;border:0;border-radius:16px;background:transparent;font-family:inherit;text-align:left;color:inherit;cursor:pointer}
+.row[data-active="true"],.row:hover{background:var(--hover)}
+.glyph{flex:none;width:22px;height:22px;display:flex;align-items:center;justify-content:center;border:1px solid var(--edge);border-radius:7px;font-size:12px;font-weight:600;color:var(--muted)}
+.iconbtn,.chip{border:0;background:transparent;color:var(--muted);font-family:inherit;cursor:pointer}
+.iconbtn:hover,.chip:hover,.chip[data-on="true"],.iconbtn[data-on="true"]{background:var(--hover)}
+.chip[data-on="true"],.iconbtn[data-on="true"]{color:var(--ink)}
+.sep{height:1px;background:transparent}
+.prow{box-sizing:border-box;width:100%;height:52px;padding:0 10px;display:flex;align-items:center;gap:10px;border:0;border-radius:16px;background:var(--hover);font-family:inherit;text-align:left;color:inherit;cursor:pointer}
+.frow{box-sizing:border-box;width:100%;height:36px;padding:0 10px 0 6px;display:flex;align-items:center;gap:10px;border:0;border-radius:14px;background:transparent;font-family:inherit;font-size:13px;text-align:left;color:var(--ink);cursor:pointer}
+.ftile{flex:none;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:var(--hover)}
+.frow:hover .ftile{background:var(--fill)}
+.fname{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.go{flex:none;opacity:0;color:var(--muted);transition:opacity 100ms}
+.frow:hover .go{opacity:1}
+.flist{box-sizing:border-box;height:216px;overflow-y:auto;padding:2px 0 14px;scrollbar-width:thin;-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 20px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 20px),transparent)}
+@keyframes fwdA{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
+@keyframes fwdB{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
+@keyframes backA{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+@keyframes backB{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+.flist[data-d="fwd"][data-p="0"]{animation:fwdA 170ms cubic-bezier(0.22,1,0.36,1) both}
+.flist[data-d="fwd"][data-p="1"]{animation:fwdB 170ms cubic-bezier(0.22,1,0.36,1) both}
+.flist[data-d="back"][data-p="0"]{animation:backA 170ms cubic-bezier(0.22,1,0.36,1) both}
+.flist[data-d="back"][data-p="1"]{animation:backB 170ms cubic-bezier(0.22,1,0.36,1) both}
+.crumb{flex:none;height:28px;padding:0 8px;border:0;border-radius:10px;background:transparent;font-family:inherit;font-size:13px;color:var(--muted);cursor:pointer}
+.crumb:hover{background:var(--fill);color:var(--ink)}
+.crumb[data-last="true"]{color:var(--ink);font-weight:500}
+.iconbtn,.chip,.btn.ghost{transition:background 90ms ease,box-shadow 90ms ease,color 90ms ease}
+.iconbtn:hover:not(:disabled),.chip:hover,.chip[data-on="true"],.iconbtn[data-on="true"],.btn.ghost:hover{background:var(--well);box-shadow:var(--press)}
+.iconbtn:active:not(:disabled),.chip:active,.btn.ghost:active{box-shadow:var(--press-deep)}
+.row[data-active="true"],.prow{box-shadow:inset 0 1px 0 var(--hl),inset 0 -1px 0 var(--sh)}
+.wellbar{background:var(--well);box-shadow:var(--inset)}
+.flist{scrollbar-color:var(--faint) transparent}
+.key{transition:transform 150ms cubic-bezier(0.22,1,0.36,1),box-shadow 150ms cubic-bezier(0.22,1,0.36,1),filter 120ms ease;box-shadow:inset 0 1px 0 rgba(255,255,255,0.32),inset 0 -2px 0 rgba(0,0,0,0.24),0 1px 0 rgba(0,0,0,0.2),0 3px 6px -2px rgba(0,0,0,0.3)}
+.key:hover{filter:brightness(1.07)}
+.key:active{transform:translateY(1.5px) scale(0.97);filter:brightness(0.96);box-shadow:inset 0 2px 4px rgba(0,0,0,0.38),inset 0 -1px 0 rgba(255,255,255,0.1),0 0 0 rgba(0,0,0,0);transition-duration:50ms}
+.key .plane{transition:transform 150ms cubic-bezier(0.22,1,0.36,1)}
+.key:hover .plane{transform:translate(1px,-1px)}
+.key:active .plane{transform:translate(2px,-2px) scale(0.92);transition-duration:50ms}
+.sendbtn{flex:none;width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;border:0;border-radius:50%;cursor:pointer}
+.sendbtn:disabled{cursor:default;background:var(--hover);color:var(--faint)}
+.tip{position:relative}
+.tip::after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 8px);transform:translate(-50%,3px);padding:4px 8px;border-radius:8px;background:var(--fill);border:1px solid var(--edge);color:var(--muted);font-size:11px;font-weight:500;line-height:1.3;white-space:nowrap;box-shadow:0 4px 12px -2px rgba(0,0,0,0.16);opacity:0;pointer-events:none;z-index:5;transition:opacity 90ms ease,transform 90ms ease}
+.tip:hover::after{opacity:1;transform:translate(-50%,0);transition:opacity 140ms ease 500ms,transform 160ms cubic-bezier(0.22,1,0.36,1) 500ms}
+.tip:active::after,.tip[data-on="true"]:hover::after,.tip:disabled:hover::after{opacity:0;transform:translate(-50%,3px);transition:opacity 60ms ease}
+.bubble[data-shrunk="true"] .composer{overflow:hidden}
+.iconbtn:disabled{opacity:0.35;cursor:default;background:transparent}
+.btn.ghost{border:0;background:transparent;color:var(--muted)}
+.btn.ghost:hover{color:var(--ink)}
+.frow:hover{background:var(--hover)}
+.frow[data-hidden="true"]{color:var(--muted)}
+.btn{box-sizing:border-box;height:28px;padding:0 10px;border-radius:8px;font-family:inherit;font-size:12px;font-weight:500;cursor:pointer}
+kbd{padding:1px 5px;border:1px solid var(--edge);border-radius:4px;background:var(--hover);font-family:inherit;font-size:11px}
+@media (prefers-reduced-motion:reduce){.menu,.menu-body,.pane,.row,.prow,.composer,.gcomposer,.composer textarea,.tools>*{transition:none !important;animation:none !important}}
+</style>
+</helmet>
+<div class="theme-dark" style="box-sizing: border-box; width: 960px; height: 560px; position: relative; overflow: hidden; background: var(--ground); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif">
+
+<svg width="0" height="0" style="position: absolute" aria-hidden="true" focusable="false"><defs><filter id="goo" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceGraphic" stdDeviation="9" result="b"/><feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10"/></filter><filter id="goolit" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceGraphic" stdDeviation="9" result="b"/><feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" result="shape"/><feOffset in="shape" dx="0.9" dy="1.3" result="dn"/><feComposite in="shape" in2="dn" operator="out" result="rimA"/><feGaussianBlur in="rimA" stdDeviation="0.4" result="rimB"/><feComposite in="rimB" in2="shape" operator="in" result="rimC"/><feFlood style="flood-color:var(--hl)" result="hlc"/><feComposite in="hlc" in2="rimC" operator="in" result="hl"/><feOffset in="shape" dx="-0.9" dy="-1.3" result="up"/><feComposite in="shape" in2="up" operator="out" result="shA"/><feGaussianBlur in="shA" stdDeviation="0.4" result="shB"/><feComposite in="shB" in2="shape" operator="in" result="shC"/><feFlood style="flood-color:var(--sh)" result="shc"/><feComposite in="shc" in2="shC" operator="in" result="sh"/><feMerge><feMergeNode in="shape"/><feMergeNode in="sh"/><feMergeNode in="hl"/></feMerge></filter><filter id="gooedge" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceGraphic" stdDeviation="9" result="b"/><feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" result="shape"/><feOffset in="shape" dx="2" dy="3" result="dn"/><feComposite in="shape" in2="dn" operator="out" result="tS0"/><feGaussianBlur in="tS0" stdDeviation="0.8" result="tS1"/><feComposite in="tS1" in2="shape" operator="in" result="tS"/><feFlood style="flood-color:var(--ehl)" result="tc"/><feComposite in="tc" in2="tS" operator="in" result="eh"/><feOffset in="shape" dx="-2" dy="-3" result="up"/><feComposite in="shape" in2="up" operator="out" result="bS0"/><feGaussianBlur in="bS0" stdDeviation="0.8" result="bS1"/><feComposite in="bS1" in2="shape" operator="in" result="bS"/><feFlood style="flood-color:var(--esh)" result="bc"/><feComposite in="bc" in2="bS" operator="in" result="es"/><feMerge><feMergeNode in="shape"/><feMergeNode in="eh"/><feMergeNode in="es"/></feMerge></filter></defs></svg>
+
+<span style="position: absolute; top: 16px; left: 120px; right: 120px; font-size: 12px; color: var(--muted)">Scroll the thread to shrink the composer. Focus or click it to expand.</span>
+
+<div class="thread" onScroll="{{onThreadScroll}}">
+<div class="umsg">Cover empty, loading, error and reconnect states too.</div>
+<div class="amsg"><b>Oracle</b><p>Done: ten sets, from empty to three open questions.</p></div>
+<div class="umsg">Stream the reply like the oracle does.</div>
+<div class="amsg"><b>Oracle</b><p>Streaming now — deltas, then the final message.</p></div>
+<div class="umsg">What about a long markdown reply?</div>
+<div class="amsg"><b>Oracle</b><p>Covered: headings, a list, code, and a table.</p></div>
+<div class="umsg">Where does the stream get its deltas from?</div>
+<div class="amsg"><b>Scout</b><p>From narrateEvent in src/lobby/feed.ts: each text_delta goes to feed.replyDelta, and the page reads reply from the lobby snapshot.</p></div>
+<div class="umsg">Ship it.</div>
+<div class="amsg"><b>Oracle</b><p>Worked · 10 steps · Oracle, Dev, QA +1</p></div>
+</div>
+
+<div class="bubble" data-shrunk="{{shrunk}}" style="position: absolute; left: 120px; right: 120px; bottom: 40px; width: auto">
+
+<div class="layer edge" aria-hidden="true">
+<div class="menu" data-open="{{open}}" style="--w: {{menuW}}px; --h: {{menuH}}px"><div class="menu-clip"></div></div>
+<div class="gcomposer"></div>
+</div>
+<div class="layer fill" aria-hidden="true">
+<div class="menu" data-open="{{open}}" style="--w: {{menuW}}px; --h: {{menuH}}px"><div class="menu-clip"></div></div>
+<div class="gcomposer"></div>
+</div>
+
+<div class="real" onKeyDown="{{onBubbleKey}}" onFocus="{{onFocus}}" onBlur="{{onBlur}}">
+<div class="menu" data-open="{{open}}" style="--w: {{menuW}}px; --h: {{menuH}}px">
+<div class="menu-clip">
+<div class="menu-body">
+
+<sc-if value="{{isSuggest}}" hint-placeholder-val="{{ true }}">
+<div class="pane" style="padding: 6px">
+<sc-for list="{{items}}" as="item" hint-placeholder-count="5">
+<button class="row" type="button" data-active="{{item.active}}" onClick="{{item.pick}}" onMouseEnter="{{item.hover}}" onMouseDown="{{keepFocus}}" tabindex="-1" style="animation-delay: {{item.delay}}ms">
+<span class="glyph" aria-hidden="true">{{item.initial}}</span>
+<span style="font-size: 14px; font-weight: 500; color: var(--ink)">{{item.label}}</span>
+<span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--muted)">{{item.desc}}</span>
+</button>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{isAttach}}" hint-placeholder-val="{{ false }}">
+<div class="pane" style="padding: 6px">
+<button class="row" type="button" style="height: 40px; animation-delay: 24ms" onClick="{{closePanel}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+<span style="font-size: 14px; font-weight: 500; color: var(--ink)">Upload a file…</span>
+</button>
+<button class="row" type="button" style="height: 40px; animation-delay: 12ms" onClick="{{closePanel}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/></svg>
+<span style="font-size: 14px; font-weight: 500; color: var(--ink)">Upload an image…</span>
+</button>
+<div class="sep"></div>
+<div style="height: 32px; padding: 0 10px; display: flex; align-items: center; font-size: 12px; color: var(--muted)">Or drop files on the composer</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isProjects}}" hint-placeholder-val="{{ false }}">
+<div class="pane" style="padding: 6px">
+<div style="height: 36px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between">
+<span style="font-size: 13px; font-weight: 500; color: var(--muted)">Running projects</span>
+<span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg>Refresh<kbd>R</kbd></span>
+</div>
+<div class="sep"></div>
+<button class="prow" type="button" onClick="{{closePanel}}" style="animation-delay: 40ms">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{accent}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+<span style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: 14px; font-weight: 500; color: var(--ink)">bot-lobby</span><span style="font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">/home/user/a-t-h-i/bot-lobby · :7347</span></span>
+</button>
+<div class="sep"></div>
+<button class="row" type="button" style="height: 40px; animation-delay: 0ms" onClick="{{openBrowse}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1H8l-3 8"/><path d="M5 19l3-9h14l-3 9z"/></svg>
+<span style="font-size: 14px; font-weight: 500; color: var(--ink)">Open folder…</span>
+</button>
+</div>
+</sc-if>
+
+<sc-if value="{{isBrowse}}" hint-placeholder-val="{{ false }}">
+<div class="pane" style="padding: 8px; display: flex; flex-direction: column; gap: 6px">
+<div class="wellbar" style="box-sizing: border-box; height: 40px; display: flex; align-items: center; gap: 2px; padding: 0 4px; border-radius: 16px">
+<button class="iconbtn" type="button" aria-label="Parent folder" disabled="{{cannotUp}}" onClick="{{up}}" style="flex: none; width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 12px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+<div style="flex: 1 1 0; min-width: 0; display: flex; align-items: center; overflow: hidden; white-space: nowrap">
+<sc-if value="{{hasMore}}" hint-placeholder-val="{{ false }}"><span style="flex: none; padding: 0 6px; font-size: 13px; color: var(--muted)">…</span></sc-if>
+<sc-for list="{{crumbs}}" as="c" hint-placeholder-count="4">
+<sc-if value="{{c.lead}}" hint-placeholder-val="{{ true }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M9 6l6 6-6 6"/></svg></sc-if>
+<button class="crumb" type="button" data-last="{{c.last}}" onClick="{{c.go}}">{{c.name}}</button>
+</sc-for>
+</div>
+</div>
+<div class="flist" data-p="{{navP}}" data-d="{{navD}}">
+<sc-for list="{{folders}}" as="f" hint-placeholder-count="6">
+<button class="frow" type="button" data-hidden="{{f.hidden}}" onClick="{{f.go}}">
+<span class="ftile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+<span class="fname">{{f.name}}</span>
+<svg class="go" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+</button>
+</sc-for>
+<sc-if value="{{noFolders}}" hint-placeholder-val="{{ false }}"><div style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: var(--muted)"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>No subfolders here. You can open this folder.</span></div></sc-if>
+</div>
+<div style="height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 0 0 10px">
+<span style="font-size: 12px; color: var(--muted)">{{countText}}</span>
+<span style="display: flex; align-items: center; gap: 4px">
+<button class="btn ghost" type="button" onClick="{{closePanel}}">Cancel</button>
+<button class="btn key" type="button" onClick="{{closePanel}}" style="border: 0; background: {{accent}}; color: #FFFFFF">Open this folder</button>
+</span>
+</div>
+</div>
+</sc-if>
+
+</div>
+</div>
+</div>
+
+<div class="composer" onMouseDown="{{expand}}">
+<textarea rows="2" aria-label="Message" placeholder="{{placeholder}}" value="{{text}}" onInput="{{onInput}}" onKeyDown="{{onKeyDown}}"></textarea>
+<div class="tools" style="display: flex; align-items: center; gap: 4px; padding: 6px 10px 8px">
+<button class="iconbtn tip" data-tip="Attach a file" type="button" aria-label="Attach a file" data-on="{{attachOpen}}" aria-expanded="{{attachOpen}}" onClick="{{toggleAttach}}" style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 50%"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l9-9a3.7 3.7 0 0 1 5.2 5.2l-9 9a1.8 1.8 0 0 1-2.6-2.6l8.3-8.3"/></svg></button>
+<button class="chip tip" data-tip="Switch project" type="button" data-on="{{panelOpen}}" aria-label="Project" aria-expanded="{{panelOpen}}" onClick="{{toggleProjects}}" style="height: 28px; padding: 0 8px; display: flex; align-items: center; gap: 6px; border-radius: 8px; font-size: 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>bot-lobby<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+<span style="flex: 1 1 0"></span>
+<span style="display: flex; align-items: center; gap: 4px; margin-right: 8px; font-size: 11px; color: var(--muted)">
+<sc-if value="{{hintSuggest}}" hint-placeholder-val="{{ true }}"><kbd>↑</kbd><kbd>↓</kbd>choose<kbd>↵</kbd>insert</sc-if>
+<sc-if value="{{hintPanel}}" hint-placeholder-val="{{ false }}"><kbd>Esc</kbd>close</sc-if>
+<sc-if value="{{hintNew}}" hint-placeholder-val="{{ false }}"><kbd>Shift</kbd><kbd>↵</kbd>new line</sc-if>
+</span>
+<sc-if value="{{canSend}}" hint-placeholder-val="{{ false }}">
+<button class="sendbtn key tip" data-tip="Send" type="button" aria-label="Send" style="background: {{accent}}; color: #FFFFFF"><svg class="plane" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg></button>
+</sc-if>
+<sc-if value="{{cannotSend}}" hint-placeholder-val="{{ true }}">
+<button class="sendbtn" type="button" disabled aria-label="Send"><svg class="plane" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg></button>
+</sc-if>
+</div>
+</div>
+</div>
+
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#346BF1","options":["#346BF1","#1B4ED8","#F5F5F5","#34D399"]},"$preview":{"width":960,"height":560}}'>
+class Component extends DCLogic {
+state = { text: '', idx: 0, dismissed: false, panel: null, path: '/home/user/a-t-h-i/bot-lobby', nav: 0, dir: 'fwd', shrunk: false, focused: false };
+
+lists() {
+return {
+'/': [
+{ name: '/plan', desc: 'Plan it with the panel on the Plan tab' },
+{ name: '/task', desc: 'Start it as a task for the team' },
+{ name: '/settings', desc: 'Open Pi settings · continue in Pi terminal' },
+{ name: '/model', desc: 'Select model · continue in Pi terminal' },
+{ name: '/tree', desc: 'Navigate the session tree · continue in Pi terminal' }
+],
+'@': [
+{ name: '@master', desc: 'The oracle: anything, and changes across the project' },
+{ name: '@design', desc: 'Frontend: pages, components, styling and UX' },
+{ name: '@dev', desc: 'Backend: APIs, data and server code' },
+{ name: '@qa', desc: 'Tests, and how to check a change' },
+{ name: '@research', desc: 'Facts from the web: libraries, versions, docs' },
+{ name: '@scout', desc: 'Reads the code and explains how something works' }
+]
+};
+}
+
+tree() {
+return {
+'/': ['home'],
+'/home': ['user'],
+'/home/user': ['a-t-h-i'],
+'/home/user/a-t-h-i': ['bot-lobby'],
+'/home/user/a-t-h-i/bot-lobby': ['.github', 'docs', 'prompts', 'scripts', 'src', 'test', 'webui'],
+'/home/user/a-t-h-i/bot-lobby/src': ['agents', 'ask', 'classifier', 'delivery', 'desk', 'execution', 'lobby', 'pi', 'state', 'web', 'webui']
+};
+}
+
+parent(p) {
+if (p === '/') return '/';
+const i = p.lastIndexOf('/');
+return i <= 0 ? '/' : p.slice(0, i);
+}
+
+found() {
+const m = /^([\/@])(\S*)$/.exec(this.state.text);
+if (!m) return [];
+const q = m[2].toLowerCase();
+return this.lists()[m[1]].filter((i) => i.name.slice(1).toLowerCase().indexOf(q) === 0);
+}
+
+measure(list) {
+let w = 0;
+try {
+if (!this._ctx) this._ctx = document.createElement('canvas').getContext('2d');
+const c = this._ctx;
+const fam = "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif";
+list.forEach((it) => {
+c.font = '500 14px ' + fam;
+const a = c.measureText(it.name.slice(1)).width;
+c.font = '400 13px ' + fam;
+const b = c.measureText(it.desc).width;
+w = Math.max(w, a + b);
+});
+} catch (e) {
+list.forEach((it) => { w = Math.max(w, it.name.length * 8 + it.desc.length * 6.6); });
+}
+return Math.min(Math.max(Math.ceil(w) + 98, 200), 640);
+}
+
+insert(name) {
+this.setState({ text: name + ' ', idx: 0, dismissed: false });
+}
+
+renderVals() {
+const s = this.state;
+const found = this.found();
+const sugOpen = !s.panel && found.length > 0 && !s.dismissed;
+const open = !!s.panel || sugOpen;
+if (found.length) this._last = found;
+const list = sugOpen ? found : (this._last || found);
+let pane = s.panel ? s.panel : 'suggest';
+if (open) this._pane = pane; else pane = this._pane || 'suggest';
+
+let w, h;
+if (open) {
+if (pane === 'suggest') { w = this.measure(list); h = 12 + list.length * 36; }
+else if (pane === 'attach') { w = 300; h = 125; }
+else if (pane === 'projects') { w = 400; h = 142; }
+else { w = 540; h = 324; }
+this._w = w;
+} else { w = this._w || 320; h = 0; }
+
+const idx = Math.min(s.idx, Math.max(list.length - 1, 0));
+const items = list.map((it, i) => ({
+name: it.name,
+label: it.name.slice(1),
+initial: it.name.charAt(1).toUpperCase(),
+desc: it.desc,
+delay: (list.length - 1 - i) * 22,
+active: sugOpen && i === idx,
+pick: () => this.insert(it.name),
+hover: () => this.setState({ idx: i })
+}));
+
+const kids = this.tree()[s.path] || [];
+const folders = kids.map((n) => ({
+name: n,
+hidden: n.charAt(0) === '.',
+go: () => this.setState({ path: (s.path === '/' ? '' : s.path) + '/' + n, nav: s.nav + 1, dir: 'fwd' })
+}));
+
+const segs = s.path.split('/').filter(Boolean);
+const shown = segs.slice(-4);
+const offset = segs.length - shown.length;
+const crumbs = segs.length === 0 ? [{ name: '/', lead: false, last: true, go: () => {} }] : shown.map((name, i) => {
+const target = '/' + segs.slice(0, offset + i + 1).join('/');
+return {
+name: name,
+lead: i > 0,
+last: offset + i === segs.length - 1,
+go: () => { if (target !== s.path) this.setState({ path: target, nav: s.nav + 1, dir: 'back' }); }
+};
+});
+
+const canSend = s.text.trim().length > 0;
+return {
+accent: this.props.accent ?? '#346BF1',
+text: s.text,
+open: open,
+menuW: w,
+menuH: h,
+isSuggest: pane === 'suggest',
+isProjects: pane === 'projects',
+isBrowse: pane === 'browse',
+panelOpen: s.panel === 'projects' || s.panel === 'browse',
+attachOpen: s.panel === 'attach',
+isAttach: pane === 'attach',
+hintSuggest: sugOpen,
+hintPanel: !!s.panel,
+hintNew: !open,
+canSend: canSend,
+cannotSend: !canSend,
+items: items,
+glyph: list.length ? list[0].name.charAt(0) : '@',
+folders: folders,
+noFolders: kids.length === 0,
+countText: kids.length === 0 ? 'No subfolders' : kids.length + (kids.length === 1 ? ' folder' : ' folders'),
+crumbs: crumbs,
+hasMore: offset > 0,
+navP: String(s.nav % 2),
+navD: s.dir,
+path: s.path,
+cannotUp: s.path === '/',
+up: () => this.setState({ path: this.parent(s.path), nav: s.nav + 1, dir: 'back' }),
+toggleProjects: () => this.setState({ panel: (s.panel === 'projects' || s.panel === 'browse') ? null : 'projects' }),
+toggleAttach: () => this.setState({ panel: s.panel === 'attach' ? null : 'attach' }),
+openBrowse: () => this.setState({ panel: 'browse' }),
+closePanel: () => this.setState({ panel: null }),
+keepFocus: (e) => e.preventDefault(),
+shrunk: s.shrunk,
+placeholder: s.shrunk ? 'Write a message…' : 'Write a message, run a command, or ask an agent',
+onFocus: () => this.setState({ focused: true, shrunk: false }),
+onBlur: () => this.setState({ focused: false }),
+expand: () => { if (this.state.shrunk) this.setState({ shrunk: false }); },
+onThreadScroll: () => { if (!this.state.shrunk && !this.state.focused && !open) this.setState({ shrunk: true }); },
+onBubbleKey: (e) => { if (e.key === 'Escape' && this.state.panel) { this.setState({ panel: null }); } },
+onInput: (e) => this.setState({ text: e.target.value, idx: 0, dismissed: false, panel: null }),
+onKeyDown: (e) => {
+if (this.state.panel) return;
+const found2 = this.found();
+if (!found2.length || this.state.dismissed) return;
+const n = found2.length;
+const cur = Math.min(this.state.idx, n - 1);
+if (e.key === 'ArrowDown') { e.preventDefault(); this.setState({ idx: (cur + 1) % n }); }
+else if (e.key === 'ArrowUp') { e.preventDefault(); this.setState({ idx: (cur + n - 1) % n }); }
+else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); this.insert(found2[cur].name); }
+else if (e.key === 'Escape') { e.preventDefault(); this.setState({ dismissed: true }); }
+}
+};
+}
+}
+</script>
+</body>
+</html>
