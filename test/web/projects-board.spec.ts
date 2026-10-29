@@ -7,20 +7,20 @@ declare const getComputedStyle: any;
 async function mockFolders(page: Page) {
   await page.route("**/api/projects.browse", (route) => {
     const path = route.request().postDataJSON().path ?? "/workspace";
-    const result = { path, parent: path === "/workspace" ? undefined : "/workspace", folders: path === "/workspace" ? [{ name: "Second project", path: "/workspace/second" }] : [], truncated: false };
-    return route.fulfill({ json: path === "/private" ? { ok: false, code: "forbidden", error: "Folder permission denied" } : { ok: true, result } });
+    const result = { path, parent: path === "/workspace" ? undefined : "/workspace", folders: path === "/workspace" ? [{ name: "Second project", path: "/workspace/second" }, { name: "Private", path: "/workspace/private" }] : [], truncated: false };
+    return route.fulfill({ json: path === "/workspace/private" ? { ok: false, code: "forbidden", error: "Folder permission denied" } : { ok: true, result } });
   });
 }
 
+/** The folder the browser's path bar says it is in. */
+const here = (page: Page) => page.getByRole("navigation", { name: "Folder path" }).locator('[aria-current="location"]')
+
 async function openFolders(page: Page) {
-  // The project is a chip over the composer.
+  // The project is a chip in the composer; "Open folder…" turns its bubble into the folder browser.
   await page.getByRole("combobox", { name: "Project", exact: true }).click();
   await page.getByRole("button", { name: "Open folder…" }).click();
-  await expect(page.getByRole("dialog", { name: "Open project folder" })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Folder path" })).toHaveValue("/workspace");
-  const dialog = (await page.getByRole("dialog", { name: "Open project folder" }).boundingBox())!;
-  const foot = (await page.getByRole("button", { name: "Open this folder" }).locator("xpath=..").boundingBox())!;
-  expect(Math.abs(foot.x - dialog.x) + Math.abs(foot.x + foot.width - (dialog.x + dialog.width)), "the content fills the pop-up edge to edge").toBeLessThan(4);
+  await expect(page.getByRole("group", { name: "Open project folder" })).toBeVisible();
+  await expect(here(page)).toHaveText("workspace");
 }
 
 for (const width of [1280, 768]) {
@@ -33,7 +33,7 @@ for (const width of [1280, 768]) {
     await page.route("**/api/projects.open", (route) => route.fulfill({ json: { ok: true, result: { project: result.project } } }));
     await openFolders(page);
     await page.getByRole("button", { name: "Second project", exact: true }).click();
-    await expect(page.getByRole("textbox", { name: "Folder path" })).toHaveValue("/workspace/second");
+    await expect(here(page)).toHaveText("second");
     const opened = page.waitForRequest("**/api/projects.open");
     await page.getByRole("button", { name: "Open this folder" }).click();
     expect((await opened).postDataJSON()).toEqual({ path: "/workspace/second" });
@@ -46,12 +46,10 @@ test("folder browser remains available without running-project results and recov
   await page.route("**/api/projects.list", (route) => route.fulfill({ json: { ok: false, code: "failed", error: "Lookup unavailable" } }));
   await openScenario(page, server, "full");
   await openFolders(page);
-  await page.getByRole("textbox", { name: "Folder path" }).fill("/private");
-  await page.getByRole("button", { name: "Go", exact: true }).click();
+  await page.getByRole("button", { name: "Private", exact: true }).click();
   await expect(page.getByRole("alert").filter({ hasText: "Folder permission denied" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open this folder" })).toBeDisabled();
-  await page.getByRole("textbox", { name: "Folder path" }).fill("/workspace");
-  await page.getByRole("button", { name: "Go", exact: true }).click();
+  await page.getByRole("navigation", { name: "Folder path" }).getByRole("button", { name: "workspace", exact: true }).click();
   await expect(page.getByRole("button", { name: "Open this folder" })).toBeEnabled();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Project", exact: true })).toBeFocused();

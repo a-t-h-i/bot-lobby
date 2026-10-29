@@ -1,28 +1,20 @@
-// Adapted from T3 Code (MIT), apps/web/src/components/chat/ComposerSurface.tsx, ChatComposer.tsx, ComposerPrimaryActions.tsx, ComposerControl.tsx
 /**
- * The one text box for everything, built from the coding harness's own
- * composer (ComposerSurface, ComposerControl, ComposerPrimaryActions, copied
- * into ./composer): a glass box with the attachments and the text on top and a
- * footer row under them: the Knowledge pane toggle on its left (on Knowledge),
- * attach, stop and a round send button on its right. The context
- * strip tucked under the box carries the project (its explorer opens from
- * there) and the key hints. It grows with what you type up to a cap, takes images, PDFs and
- * other files (pick, paste or drop them) and sends Markdown to whoever the page
- * talks to, with no picker: the team's chat on Lobby and Tasks, the docs on
- * Knowledge, the planning panel on Plan, a comment on the open task's plan on
- * Tasks. In the chat, a message that starts with `@` names the agent who
- * answers and one that starts with `/` is a command (`/plan`, `/task`); a
- * drawer of suggestions rises out of the box while you type either (see
- * ./composer/ComposerCommandMenu). While a pop-up is open it steps aside, so
- * only one thing asks for you at a time.
+ * The one text box for everything, after the user's design (docs/web-ui/composer-design): one fluid bubble (see
+ * ./composer/ComposerSurface) with the attachments and the text on top and a tools row under them: attach, the
+ * project chip and the Knowledge pane toggle (on Knowledge) on the left, the key hints, stop and a round send key on
+ * the right. The `/` suggestions, the `@` agents, the attach menu, the running projects and the folder browser grow
+ * out of its top edge as smaller bubbles that merge with it. It grows with what you type up to a cap, takes images,
+ * PDFs and other files (pick, paste or drop them) and sends Markdown to whoever the page talks to, with no picker:
+ * the team's chat on Lobby and Tasks, the docs on Knowledge, the planning panel on Plan, a comment on the open
+ * task's plan on Tasks. In the chat, a message that starts with `@` names the agent who answers and one that starts
+ * with `/` is a command (`/plan`, `/task`). While a pop-up is open it steps aside, so only one thing asks for you at
+ * a time.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type RefObject } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type KeyboardEvent, type RefObject } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { FileText, Paperclip, X } from "lucide-react"
-import { KeyHint } from "@/components/ui/kbd"
+import { FileText, Image, Paperclip, X } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { Button } from "@/components/ui/button"
+import { useHotkey } from "@/lib/hotkeys"
 import { call } from "@/lib/api"
 import { act } from "@/lib/act"
 import { useComposerContext } from "@/lib/composerContext"
@@ -38,11 +30,12 @@ import { useTopic } from "./hooks"
 import { go, parseHash, tabHash, type Route } from "./router"
 import { knowledgeHash } from "./knowledgeView"
 import { KnowledgePaneToggle } from "./KnowledgePaneToggle"
-import { ProjectSwitcher, type Projects } from "./ProjectSwitcher"
+import { OPEN_PROJECTS, ProjectChip, ProjectsPane, projectsSize, type Projects } from "./ProjectSwitcher"
+import { FOLDER_SIZE, FolderPane } from "./ProjectFolderDialog"
 import { taskRoute } from "./taskRoute"
-import { ComposerSurface } from "./composer/ComposerSurface"
+import { ComposerBubble } from "./composer/ComposerSurface"
 import { ComposerSendButton, ComposerStopButton } from "./composer/ComposerPrimaryActions"
-import { ComposerCommandMenu, composerItems, composerSuggestionOptionId, composerTrigger, type ComposerCommandItem } from "./composer/ComposerCommandMenu"
+import { ComposerCommandMenu, composerItems, composerSuggestionOptionId, composerTrigger, suggestionHeight, suggestionWidth, type ComposerCommandItem } from "./composer/ComposerCommandMenu"
 
 type TargetId = "oracle" | "knowledge" | "panel" | "comment"
 
@@ -54,7 +47,7 @@ interface Target {
   taskId?: string
 }
 
-const ORACLE: Target = { id: "oracle", label: "Message the team", placeholder: "Message the team… @ picks who answers, / for commands and skills" }
+const ORACLE: Target = { id: "oracle", label: "Message the team", placeholder: "Write a message, run a command, or ask an agent" }
 
 /** The tabs that carry the composer; everywhere else it stays mounted (drafts and uploads survive) but hidden and inert. */
 const COMPOSER_TABS: ReadonlySet<string> = new Set(["lobby", "tasks", "plan", "knowledge"])
@@ -71,6 +64,12 @@ function targetFor(route: Route, openTask: string | undefined): Target {
   const task = route.tab === "tasks" ? taskRoute(route.rest).id ?? openTask : undefined
   return task ? { id: "comment", label: `Comment on ${task}`, placeholder: `Comment on ${task}'s plan…`, taskId: task } : ORACLE
 }
+
+/** A bubble that grows out of the composer's top: the suggestions, or one of the panels a button opens. */
+type Pane = "suggest" | "attach" | "projects" | "browse"
+type Panel = Exclude<Pane, "suggest">
+
+const ATTACH_SIZE = { w: 300, h: 125 } as const
 
 interface Pending {
   key: string
@@ -114,7 +113,7 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
         exit={{ opacity: 0, scale: 0.96 }}
         transition={EASE}
         title={`${file.name} · ${sizeLabel(file.size)}`}
-        className="relative size-16 shrink-0 overflow-hidden rounded-lg border border-border/80 bg-background"
+        className="relative size-16 shrink-0 overflow-hidden rounded-xl border border-(--bubble-edge) bg-background"
       >
         <img src={projectUrl(file.image)} alt={file.name} className="size-full object-cover" />
         {file.state === "uploading" ? (
@@ -150,10 +149,12 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
 /**
  * The composer gets out of the way while you read: a scroll of the page under it (by wheel, touch or the
  * scroll keys, not the page following a reply) shrinks it to a slim pill, and focus, or a press on it, opens
- * it back up. It never shrinks while it has focus.
+ * it back up. It never shrinks while it has focus or while one of its bubbles is open.
  */
-function useShrinkOnScroll(dock: RefObject<HTMLDivElement | null>, active: boolean, route: Route) {
+function useShrinkOnScroll(dock: RefObject<HTMLDivElement | null>, active: boolean, route: Route, hold: boolean) {
   const [shrunk, setShrunk] = useState(false)
+  const holdRef = useRef(hold)
+  holdRef.current = hold
   const place = route.kind === "tab" ? route.tab : route.kind
   useEffect(() => setShrunk(false), [place])
   useEffect(() => {
@@ -167,7 +168,7 @@ function useShrinkOnScroll(dock: RefObject<HTMLDivElement | null>, active: boole
     }
     const onScroll = (event: Event) => {
       const el = dock.current
-      if (!el || performance.now() - intent > 400) return
+      if (!el || holdRef.current || performance.now() - intent > 400) return
       if (el.contains(document.activeElement) || el.contains(event.target as Node)) return
       setShrunk(true)
     }
@@ -186,11 +187,17 @@ function useShrinkOnScroll(dock: RefObject<HTMLDivElement | null>, active: boole
   return { shrunk, expand }
 }
 
+/** A key cap in the tools row's hints. */
+function Kbd({ children }: { children: string }) {
+  return <kbd className="bubble-kbd">{children}</kbd>
+}
+
 export function Composer({ route, projects }: { route: Route; projects: Projects }) {
   const [text, setText] = useState("")
   const [files, setFiles] = useState<Pending[]>([])
   const [sending, setSending] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const [panel, setPanel] = useState<Panel | null>(null)
   const status = useTopic<StatusInfo>("status")
   const lobby = useTopic<LobbySnapshot>("lobby")
   const blocked = useAnyOverlay()
@@ -201,23 +208,97 @@ export function Composer({ route, projects }: { route: Route; projects: Projects
   visibleRef.current = visible
   const { taskId: openTask } = useComposerContext()
   const target = useMemo(() => targetFor(route, openTask), [route, openTask])
+  const tab = route.kind === "tab" ? route.tab : route.kind
 
   const card = useRef<HTMLDivElement>(null)
-  const { shrunk, expand } = useShrinkOnScroll(card, visible && !blocked, route)
+  const bubble = useRef<HTMLDivElement>(null)
+  const box = useRef<HTMLDivElement>(null)
+  const inner = useRef<HTMLDivElement>(null)
   const field = useRef<HTMLTextAreaElement>(null)
   const picker = useRef<HTMLInputElement>(null)
+  const imagePicker = useRef<HTMLInputElement>(null)
   const filesRef = useRef(files)
   filesRef.current = files
   const selection = useRef<{ start: number; end: number } | undefined>(undefined)
-  // The `/command` or `@agent` drawer: where the caret is, which row is lit, and the text Esc closed it for.
+  // The `/command` or `@agent` suggestions: where the caret is, which row is lit, and the text Esc closed them for.
   const [caret, setCaret] = useState(0)
   const [activeItem, setActiveItem] = useState<string | null>(null)
   const [dismissedFor, setDismissedFor] = useState<string | undefined>(undefined)
-  const trigger = target.id === "oracle" ? composerTrigger(text, caret) : undefined
+  const trigger = target.id === "oracle" && !panel ? composerTrigger(text, caret) : undefined
   const menuItems = useMemo(() => (trigger ? composerItems(trigger, status.data?.commands) : []), [trigger?.kind, trigger?.query, status.data?.commands])
   const menuOpen = Boolean(trigger) && menuItems.length > 0 && dismissedFor !== text && visible && !blocked
   const lit = menuOpen ? (menuItems.find((item) => item.id === activeItem) ?? menuItems[0]!) : undefined
   const listId = "composer-suggestions"
+  const open = menuOpen || (panel !== null && visible && !blocked)
+  const { shrunk, expand } = useShrinkOnScroll(card, visible && !blocked, route, open)
+
+  // Folding to the pill and back eases slowly; the rest of the time the box follows its text quickly.
+  const [morphing, setMorphing] = useState(false)
+  const firstShrunk = useRef(shrunk)
+  useEffect(() => {
+    if (firstShrunk.current === shrunk) return
+    firstShrunk.current = shrunk
+    setMorphing(true)
+    const timer = setTimeout(() => setMorphing(false), 420)
+    return () => clearTimeout(timer)
+  }, [shrunk])
+
+  // A panel closes when the page changes under it or the composer goes away.
+  useEffect(() => setPanel(null), [tab])
+  useEffect(() => {
+    if (!visible || blocked) setPanel(null)
+  }, [visible, blocked])
+
+  // A press outside the bubble closes its panel.
+  useEffect(() => {
+    if (!panel) return
+    const away = (event: PointerEvent) => {
+      if (!bubble.current?.contains(event.target as Node)) setPanel(null)
+    }
+    document.addEventListener("pointerdown", away, { capture: true })
+    return () => document.removeEventListener("pointerdown", away, { capture: true })
+  }, [panel])
+
+  const togglePanel = useCallback((next: Panel) => {
+    expand()
+    setPanel((now) => (now === next || (next === "projects" && now === "browse") ? null : next))
+  }, [expand])
+
+  /** Closes the panel and gives focus back to the button that opened it. */
+  const closePanel = useCallback(() => {
+    setPanel((now) => {
+      const opener = now === "attach" ? "[data-composer-attach]" : now ? '[role="combobox"][aria-label="Project"]' : undefined
+      if (opener) requestAnimationFrame(() => bubble.current?.querySelector<HTMLElement>(opener)?.focus({ preventScroll: true }))
+      return null
+    })
+  }, [])
+
+  useHotkey("p", () => togglePanel("projects"), { enabled: visible && !blocked && panel === null })
+  useEffect(() => {
+    const show = () => {
+      expand()
+      setPanel("projects")
+    }
+    window.addEventListener(OPEN_PROJECTS, show)
+    return () => window.removeEventListener(OPEN_PROJECTS, show)
+  }, [expand])
+
+  // The bubble that shows (or last showed, while it closes) and its size: closing keeps the last pane and width while the height falls.
+  const shownPane = useRef<Pane>("suggest")
+  const shownSize = useRef({ w: 320, h: 0 })
+  const pane: Pane = panel ?? (menuOpen ? "suggest" : shownPane.current)
+  if (open) {
+    shownPane.current = pane
+    const family = field.current ? getComputedStyle(field.current).fontFamily : "system-ui, sans-serif"
+    shownSize.current = pane === "suggest" ? { w: suggestionWidth(menuItems, family), h: suggestionHeight(menuItems.length) }
+      : pane === "attach" ? ATTACH_SIZE
+        : pane === "projects" ? projectsSize(projects)
+          : FOLDER_SIZE
+  }
+  // The suggestions as they last showed, so the closing bubble keeps its rows.
+  const lastMenu = useRef<{ items: ComposerCommandItem[]; kind: NonNullable<typeof trigger>["kind"]; lit?: string }>({ items: [], kind: "slash-command" })
+  if (menuOpen && trigger && lit) lastMenu.current = { items: menuItems, kind: trigger.kind, lit: lit.id }
+
   const pick = useCallback((item: ComposerCommandItem) => {
     const rest = text.replace(/^\s*[/@][a-z0-9:_.-]*\s*/i, "")
     const value = `${item.insert} ${rest}`
@@ -244,29 +325,50 @@ export function Composer({ route, projects }: { route: Route; projects: Projects
     setText(change.value)
   }, [])
 
-  // The toasts sit just above the composer and centred on it, wherever its height and the sidebar have put it.
-  useEffect(() => {
-    const el = card.current
-    if (!el) return
-    const root = document.documentElement
+  // The box's height follows its content (text, attachments, tools): measured here and handed to the bubble, so the
+  // ghost shapes behind it and the box itself ease to it together. The pill's height comes from the stylesheet.
+  useLayoutEffect(() => {
+    const el = inner.current
+    const host = bubble.current
+    if (!el || !host) return
     const set = () => {
-      const box = el.getBoundingClientRect()
-      root.style.setProperty("--composer-h", blocked || !visible ? "0px" : `${Math.ceil(box.height)}px`)
-      // A hidden composer measures 0 wide: the toasts then centre on the window instead of shrinking to nothing.
-      if (!visible || box.width === 0) {
-        root.style.removeProperty("--composer-x")
-        root.style.removeProperty("--composer-w")
-        return
-      }
-      root.style.setProperty("--composer-x", `${Math.round(box.left)}px`)
-      root.style.setProperty("--composer-w", `${Math.round(box.width)}px`)
+      if (host.hasAttribute("data-shrunk")) return
+      host.style.setProperty("--ch-open", `${Math.ceil(el.getBoundingClientRect().height)}px`)
     }
     set()
     const observer = new ResizeObserver(set)
     observer.observe(el)
+    return () => observer.disconnect()
+  }, [shrunk])
+
+  // The toasts sit just above the composer box and centred on it, wherever its height and the sidebar have put it.
+  useEffect(() => {
+    const el = box.current
+    const dock = card.current
+    if (!el || !dock) return
+    const root = document.documentElement
+    const set = () => {
+      const rect = el.getBoundingClientRect()
+      const bottom = dock.getBoundingClientRect().bottom
+      root.style.setProperty("--composer-h", blocked || !visible ? "0px" : `${Math.ceil(bottom - rect.top)}px`)
+      // A hidden composer measures 0 wide: the toasts then centre on the window instead of shrinking to nothing.
+      if (!visible || rect.width === 0) {
+        root.style.removeProperty("--composer-x")
+        root.style.removeProperty("--composer-w")
+        return
+      }
+      root.style.setProperty("--composer-x", `${Math.round(rect.left)}px`)
+      root.style.setProperty("--composer-w", `${Math.round(rect.width)}px`)
+    }
+    set()
+    const observer = new ResizeObserver(set)
+    observer.observe(el)
+    // The box eases to new sizes; measure again once it settles.
+    el.addEventListener("transitionend", set)
     window.addEventListener("resize", set)
     return () => {
       observer.disconnect()
+      el.removeEventListener("transitionend", set)
       window.removeEventListener("resize", set)
       root.style.setProperty("--composer-h", "0px")
       root.style.removeProperty("--composer-x")
@@ -356,16 +458,17 @@ export function Composer({ route, projects }: { route: Route; projects: Projects
         return
       }
       if (event.key === "Escape") {
-        // Esc closes the drawer first; the next one leaves the box.
+        // Esc closes the suggestions first; the next one leaves the box.
         event.preventDefault()
         setDismissedFor(text)
         return
       }
     }
     if (event.key === "Escape" && !event.nativeEvent.isComposing) {
-      // Esc leaves the box (what you typed stays) for the tab bar.
       event.preventDefault()
-      focusTab()
+      // Esc closes an open panel first; then it leaves the box (what you typed stays) for the tab bar.
+      if (panel) setPanel(null)
+      else focusTab()
       return
     }
     const box = event.currentTarget
@@ -413,19 +516,47 @@ export function Composer({ route, projects }: { route: Route; projects: Projects
   const knowledge = route.kind === "tab" && route.tab === "knowledge"
   const project = status.data?.workspace.name ?? "bot-lobby"
   const branch = status.data?.branch ?? status.data?.workspace.branch
-  const strip = (
-    <div className="min-h-0">
-      <div className="relative z-0">
-        <ComposerSurface.ContextStrip role="group" aria-label="Message context" className="composer-strip gap-1 text-xs font-normal text-muted-foreground/70">
-          <ProjectSwitcher projects={projects} tab={route.kind === "tab" ? route.tab : route.kind} name={project} branch={branch} />
-          <div className="@container ml-auto flex min-w-0 flex-1 items-center justify-end gap-3 overflow-hidden pe-1">
-            <KeyHint chord="Shift+Enter" className="hidden @[14rem]:inline-flex">
-              new line
-            </KeyHint>
-          </div>
-        </ComposerSurface.ContextStrip>
-      </div>
+  const steering = busy && target.id === "oracle"
+  const placeholder = shrunk ? "Write a message…" : steering ? "The oracle is working. Enter steers it…" : target.placeholder
+  const pickFiles = (input: RefObject<HTMLInputElement | null>) => {
+    setPanel(null)
+    input.current?.click()
+  }
+
+  const menu = pane === "suggest" ? (
+    <ComposerCommandMenu
+      key="suggest"
+      listId={listId}
+      items={menuOpen ? menuItems : lastMenu.current.items}
+      triggerKind={menuOpen && trigger ? trigger.kind : lastMenu.current.kind}
+      activeItemId={lit?.id ?? null}
+      onHighlightedItemChange={setActiveItem}
+      onSelect={pick}
+    />
+  ) : pane === "attach" ? (
+    <div key="attach" role="menu" aria-label="Attach" className="bubble-pane flex flex-col p-1.5"
+      onKeyDown={(event) => {
+        if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return
+        event.preventDefault()
+        const items = [...event.currentTarget.querySelectorAll<HTMLElement>("[role='menuitem']")]
+        const at = items.indexOf(document.activeElement as HTMLElement)
+        items[(at + (event.key === "ArrowDown" ? 1 : items.length - 1)) % items.length]?.focus()
+      }}>
+      <button type="button" role="menuitem" className="bubble-row h-10" style={{ "--delay": "24ms" } as CSSProperties} onClick={() => pickFiles(picker)}>
+        <FileText aria-hidden="true" className="size-4 shrink-0 text-(--bubble-muted)" strokeWidth={1.7} />
+        <span className="text-sm font-medium text-(--bubble-ink)">Upload a file…</span>
+      </button>
+      <button type="button" role="menuitem" className="bubble-row h-10" style={{ "--delay": "12ms" } as CSSProperties} onClick={() => pickFiles(imagePicker)}>
+        <Image aria-hidden="true" className="size-4 shrink-0 text-(--bubble-muted)" strokeWidth={1.7} />
+        <span className="text-sm font-medium text-(--bubble-ink)">Upload an image…</span>
+      </button>
+      <div className="h-px" />
+      <div className="flex h-8 items-center px-2.5 text-xs text-(--bubble-muted)">Or drop files on the composer</div>
     </div>
+  ) : pane === "projects" ? (
+    <ProjectsPane key="projects" projects={projects} tab={tab} onBrowse={() => setPanel("browse")} onClose={() => setPanel(null)} />
+  ) : (
+    <FolderPane key="browse" tab={tab} onClose={closePanel} />
   )
 
   return (
@@ -442,149 +573,128 @@ export function Composer({ route, projects }: { route: Route; projects: Projects
       aria-hidden={visible ? undefined : true}
       inert={blocked || !visible}
     >
-      <ComposerSurface.Shell contextStrip className="composer-shell pointer-events-auto">
-        <AnimatePresence initial={false}>
-          {menuOpen && trigger && lit ? (
-            <motion.div
-              key="commands"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 6 }}
-              transition={EASE}
-              data-composer-drawer-layer="true"
-              className="absolute inset-x-(--chat-composer-drawer-inset) bottom-full z-0 -mb-[calc(1rem+1px)] flex flex-col"
-            >
-              <ComposerCommandMenu listId={listId} items={menuItems} triggerKind={trigger.kind} activeItemId={lit.id} onHighlightedItemChange={setActiveItem} onSelect={pick} />
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-        <ComposerSurface.Host onPointerDown={expand}>
-          <div className="relative z-10">
-            <ComposerSurface.Main
-              className="group/composer composer-box"
-              onDragOver={(event) => {
-                if (!event.dataTransfer.types.includes("Files")) return
-                event.preventDefault()
-                setDragging(true)
-              }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={onDrop}
-            >
-              <div
-                data-chat-composer-surface="true"
-                className={cn(
-                  "rounded-3xl transition-[background-color] duration-200",
-                  dragging && "bg-accent/45 ring-1 ring-inset ring-primary/70"
-                )}
-              >
-                <div
-                  data-chat-composer-body="true"
-                  className={cn(
-                    "composer-text relative px-3 pb-2 sm:px-4",
-                    "pt-3.5 sm:pt-4"
-                  )}
+      <ComposerBubble
+        ref={bubble}
+        open={open}
+        size={shownSize.current}
+        shrunk={shrunk}
+        morphing={morphing}
+        menu={menu}
+        className="composer-shell pointer-events-auto"
+        onKeyDown={(event) => {
+          if (event.key !== "Escape" || !panel || event.defaultPrevented) return
+          event.preventDefault()
+          closePanel()
+        }}
+      >
+        <div
+          ref={box}
+          className="bubble-composer group/composer composer-box"
+          data-dragging={dragging || undefined}
+          data-chat-composer-main-surface="true"
+          onPointerDown={expand}
+          onDragOver={(event) => {
+            if (!event.dataTransfer.types.includes("Files")) return
+            event.preventDefault()
+            setDragging(true)
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+        >
+          <div ref={inner} data-chat-composer-surface="true">
+            <AnimatePresence initial={false}>
+              {files.length > 0 ? (
+                <motion.ul
+                  key="files"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  aria-label="Attachments"
+                  className="composer-files flex max-w-full flex-wrap gap-2 overflow-hidden px-3.5 pt-3"
                 >
-                  <AnimatePresence initial={false}>
-                    {files.length > 0 ? (
-                      <motion.ul
-                        key="files"
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.18, ease: "easeOut" }}
-                        aria-label="Attachments"
-                        className="composer-files mb-3 flex max-w-full flex-wrap gap-2 overflow-hidden"
-                      >
-                        {files.map((file) => (
-                          <Chip key={file.key} file={file} onRemove={() => forget(file.key)} />
-                        ))}
-                      </motion.ul>
-                    ) : null}
-                  </AnimatePresence>
-
-                  <div className="relative flow-root font-sans text-sm max-sm:pointer-coarse:text-base">
-                    <textarea
-                      ref={field}
-                      id="composer-text"
-                      aria-label={target.label}
-                      {...(target.id === "oracle" ? { role: "combobox", "aria-autocomplete": "list" as const, "aria-expanded": menuOpen, "aria-controls": menuOpen ? listId : undefined } : {})}
-                      {...(lit ? { "aria-activedescendant": composerSuggestionOptionId(listId, lit.id) } : {})}
-                      value={text}
-                      onChange={(event) => {
-                        setText(event.target.value)
-                        setCaret(event.target.selectionStart)
-                      }}
-                      onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
-                      onKeyDown={onKeyDown}
-                      onPaste={onPaste}
-                      placeholder={busy && target.id === "oracle" ? "The oracle is working. Enter steers it…" : target.placeholder}
-                      rows={1}
-                      className={cn(
-                        "-m-1 block field-sizing-content max-h-52 min-h-19.5 w-[calc(100%+0.5rem)] resize-none overflow-y-auto bg-transparent p-1 leading-relaxed whitespace-pre-wrap text-foreground caret-primary outline-none placeholder:text-placeholder/75"
-                      )}
-                    />
-                  </div>
-                </div>
-
-                <div
-                  data-chat-composer-footer="true"
-                  className={cn(
-                    "composer-tools flex min-w-0 flex-nowrap items-center justify-between gap-2 overflow-visible px-3 pb-3 sm:gap-0 sm:px-4 sm:pb-4"
-                  )}
-                >
-                  <div
-                    data-chat-composer-controls="left"
-                    className="composer-controls relative -m-1 -ms-3.5 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-1 ps-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                  >
-                    {knowledge ? <KnowledgePaneToggle rest={route.kind === "tab" ? route.rest : []} /> : null}
-                  </div>
-
-                  <div data-chat-composer-actions="right" className="flex shrink-0 flex-nowrap items-center justify-end gap-2">
-                    <input
-                      ref={picker}
-                      type="file"
-                      multiple
-                      hidden
-                      tabIndex={-1}
-                      aria-label="Attach files"
-                      onChange={(event) => {
-                        attach(event.target.files ?? [])
-                        event.target.value = ""
-                      }}
-                    />
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="Attach images, PDFs or files"
-                          data-compact
-                          onPointerDown={(event) => event.preventDefault()}
-                          onClick={() => picker.current?.click()}
-                          className="pointer-coarse:after:absolute pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11"
-                        >
-                          <Paperclip aria-hidden="true" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">Attach files</TooltipContent>
-                    </Tooltip>
-                    {busy && target.id === "oracle" ? <ComposerStopButton onStop={() => void stop()} /> : null}
-                    <ComposerSendButton sending={sending} disabled={!canSend} steering={busy && target.id === "oracle"} onSend={() => void send()} />
-                  </div>
-                </div>
-              </div>
-
-              {dragging ? (
-                <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-[inherit] text-sm font-medium text-primary">
-                  Drop to attach
-                </div>
+                  {files.map((file) => (
+                    <Chip key={file.key} file={file} onRemove={() => forget(file.key)} />
+                  ))}
+                </motion.ul>
               ) : null}
-            </ComposerSurface.Main>
+            </AnimatePresence>
+
+            <textarea
+              ref={field}
+              id="composer-text"
+              aria-label={target.label}
+              {...(target.id === "oracle" ? { role: "combobox", "aria-autocomplete": "list" as const, "aria-expanded": menuOpen, "aria-controls": menuOpen ? listId : undefined } : {})}
+              {...(lit ? { "aria-activedescendant": composerSuggestionOptionId(listId, lit.id) } : {})}
+              value={text}
+              onChange={(event) => {
+                setText(event.target.value)
+                setCaret(event.target.selectionStart)
+                setPanel(null)
+              }}
+              onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
+              onKeyDown={onKeyDown}
+              onPaste={onPaste}
+              placeholder={placeholder}
+              rows={1}
+              className="bubble-text"
+            />
+
+            <div data-chat-composer-footer="true" className="bubble-tools composer-tools">
+              <button
+                type="button"
+                data-composer-attach
+                aria-label="Attach images, PDFs or files"
+                aria-haspopup="menu"
+                aria-expanded={panel === "attach"}
+                data-on={panel === "attach" || undefined}
+                data-tip="Attach a file"
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={() => togglePanel("attach")}
+                className="bubble-iconbtn bubble-tip bubble-tool size-8 rounded-full"
+                style={{ "--i": 0 } as CSSProperties}
+              >
+                <Paperclip aria-hidden="true" className="size-4" strokeWidth={1.7} />
+              </button>
+              <span className="bubble-tool flex min-w-0" style={{ "--i": 1 } as CSSProperties}>
+                <ProjectChip projects={projects} name={project} branch={branch} open={panel === "projects" || panel === "browse"} onToggle={() => togglePanel("projects")} />
+              </span>
+              {knowledge ? (
+                <span className="bubble-tool ms-1 flex" style={{ "--i": 2 } as CSSProperties}>
+                  <KnowledgePaneToggle rest={route.kind === "tab" ? route.rest : []} />
+                </span>
+              ) : null}
+              <span className="flex-1" />
+              <span className="bubble-hints bubble-tool" style={{ "--i": 2 } as CSSProperties} aria-hidden="true">
+                {menuOpen ? <><Kbd>↑</Kbd><Kbd>↓</Kbd>choose<Kbd>↵</Kbd>insert</>
+                  : panel ? <><Kbd>Esc</Kbd>close</>
+                    : <><Kbd>Shift</Kbd><Kbd>↵</Kbd>new line</>}
+              </span>
+              <span data-chat-composer-actions="right" className="bubble-tool flex shrink-0 items-center gap-2" style={{ "--i": 3 } as CSSProperties}>
+                {steering ? <ComposerStopButton onStop={() => void stop()} /> : null}
+                <ComposerSendButton sending={sending} disabled={!canSend} steering={steering} onSend={() => void send()} />
+              </span>
+            </div>
           </div>
-        </ComposerSurface.Host>
-        {strip}
-      </ComposerSurface.Shell>
+
+          <input ref={picker} type="file" multiple hidden tabIndex={-1} aria-label="Attach files"
+            onChange={(event) => {
+              attach(event.target.files ?? [])
+              event.target.value = ""
+            }} />
+          <input ref={imagePicker} type="file" accept="image/*" multiple hidden tabIndex={-1} aria-label="Attach images"
+            onChange={(event) => {
+              attach(event.target.files ?? [])
+              event.target.value = ""
+            }} />
+
+          {dragging ? (
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-[inherit] text-sm font-medium text-(--bubble-accent)">
+              Drop to attach
+            </div>
+          ) : null}
+        </div>
+      </ComposerBubble>
     </div>
   )
 }

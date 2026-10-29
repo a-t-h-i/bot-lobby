@@ -178,37 +178,32 @@ test("workspace panels have distinct fills and visible boundaries in both themes
   trap.stop();
 });
 
-const composerGlass = (page: Page) => page.evaluate(() => {
-  const shell = document.querySelector(".composer-shell");
-  const host = shell.querySelector('[data-slot="composer-host"]');
-  const before = getComputedStyle(shell, "::before");
-  const gap = shell.getBoundingClientRect().bottom - parseFloat(before.bottom) - host.getBoundingClientRect().bottom;
-  return { radius: before.borderTopLeftRadius, clip: before.clipPath, gap, outline: getComputedStyle(host, "::after").display };
-});
-
+/** Folds the composer by hand, as a scroll would. */
 const setShrunk = (page: Page, shrunk: boolean) => page.evaluate((on: boolean) => {
-  const dock = document.querySelector("#app-dock");
-  if (on) dock.setAttribute("data-shrunk", "");
-  else dock.removeAttribute("data-shrunk");
+  for (const el of [document.querySelector("#app-dock"), document.querySelector(".bubble")]) {
+    if (on) el.setAttribute("data-shrunk", "");
+    else el.removeAttribute("data-shrunk");
+  }
 }, shrunk);
 
-/** How far the textarea's one line sits from the middle of the shrunk pill's text row. */
+/** How far the textarea's one line sits from the middle of the shrunk pill. */
 const shrunkOffset = (page: Page) => page.evaluate(() => {
   const field = document.querySelector("#composer-text");
-  const row = document.querySelector(".composer-text").getBoundingClientRect();
+  const pill = document.querySelector(".bubble-composer").getBoundingClientRect();
   const box = field.getBoundingClientRect();
-  const line = parseFloat(getComputedStyle(field).lineHeight);
-  return { centre: Math.abs(box.top + box.height / 2 - (row.top + row.height / 2)), spare: Math.abs(box.height - line) };
+  const style = getComputedStyle(field);
+  const middle = box.top + parseFloat(style.paddingTop) + parseFloat(style.lineHeight) / 2;
+  return { centre: Math.abs(middle - (pill.top + pill.height / 2)), height: pill.height };
 });
 
 test("the shrunk composer centres its placeholder and typed line", { tag: "@theme" }, async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 800 });
   await setShrunk(page, true);
+  await expect.poll(async () => (await shrunkOffset(page)).height, "a 44px pill").toBe(44);
   for (const value of ["", "typed line"]) {
     await page.locator("#composer-text").evaluate((el: any, v: string) => { el.value = v; }, value);
-    await expect.poll(async () => (await shrunkOffset(page)).centre, `"${value}" sits mid-pill`).toBeLessThan(1);
-    expect((await shrunkOffset(page)).spare, "the line fills the box, nothing pushes it down").toBeLessThan(1);
+    expect((await shrunkOffset(page)).centre, `"${value}" sits mid-pill`).toBeLessThan(1.5);
   }
 });
 
@@ -223,30 +218,43 @@ test("rounded task panes clip their frosted headers to the corner", { tag: "@the
   }
 });
 
+/** The box and the ghost shapes the bubble paints it with. */
+const bubbleShapes = (page: Page) => page.evaluate(() => {
+  const box = document.querySelector(".bubble-composer").getBoundingClientRect();
+  const ghosts = [...document.querySelectorAll(".bubble-ghost")].map((el: any) => el.getBoundingClientRect());
+  return { box: { w: Math.round(box.width), h: Math.round(box.height) }, ghosts: ghosts.map((g: any) => ({ w: Math.round(g.width), h: Math.round(g.height) })) };
+});
+
 for (const width of [1280, 360]) {
-  test(`the composer's glass follows its rounded shape, open and shrunk, at ${width}px @theme`, { tag: "@theme" }, async ({ page, server }) => {
+  test(`the bubble's painted shape follows the box, open and shrunk, at ${width}px @theme`, { tag: "@theme" }, async ({ page, server }) => {
     await openScenario(page, server, "full");
     await page.setViewportSize({ width, height: 800 });
-    await setShrunk(page, false);
-    const open = await composerGlass(page);
-    expect(open.radius, "the glass keeps its corners under the strip's cut-out").toBe("22px");
-    expect(open.outline, "the outline stays drawn").not.toBe("none");
+    await expect.poll(async () => { const s = await bubbleShapes(page); return s.ghosts.every((g: any) => g.w === s.box.w && g.h === s.box.h); }, "open").toBe(true);
     await setShrunk(page, true);
-    await expect(page.locator("#app-dock")).toHaveAttribute("data-shrunk", "");
-    await expect.poll(async () => (await composerGlass(page)).clip, "the shrunk pill drops the strip's cut-out").toBe("none");
-    await expect.poll(async () => Math.abs((await composerGlass(page)).gap), "and its glass ends with the pill").toBeLessThan(1);
+    await expect.poll(async () => (await bubbleShapes(page)).box.h, "the pill").toBe(44);
+    await expect.poll(async () => { const s = await bubbleShapes(page); return s.ghosts.every((g: any) => g.w === s.box.w && g.h === s.box.h); }, "shrunk").toBe(true);
   });
 }
 
-test("the composer box draws a thin border you can see, so it stands out on a background of its own colour @theme", async ({ page, server }) => {
+test("the composer suggestions grow out of the bubble and merge with it", async ({ page, server }) => {
   await openScenario(page, server, "full");
   await page.setViewportSize({ width: 1280, height: 900 });
-  const outline = await page.locator("[data-chat-composer-main-surface]").first().evaluate((el: any) => {
-    const style = (globalThis as any).getComputedStyle(el, "::after");
-    const alpha = Number(/\/\s*([\d.]+)\)$/.exec(style.borderTopColor)?.[1] ?? /rgba\([^)]*,\s*([\d.]+)\)$/.exec(style.borderTopColor)?.[1] ?? 1);
-    return { display: style.display, width: Number.parseFloat(style.borderTopWidth), alpha };
+  await page.getByLabel("Message the team").fill("/");
+  await expect(page.locator(".bubble")).toHaveAttribute("data-open", "true");
+  const menus = page.locator(".bubble-menu");
+  await expect.poll(async () => (await menus.evaluateAll((els) => els.map((el: any) => Math.round(el.getBoundingClientRect().height)))).every((h: number, _: number, all: number[]) => h > 0 && h === all[0]), "ghost and real menus share one size").toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".bubble")).not.toHaveAttribute("data-open", "true");
+});
+
+test("the composer box draws a thin rim you can see, so it stands out on a background of its own colour @theme", async ({ page, server }) => {
+  await openScenario(page, server, "full");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const rim = await page.locator(".bubble-edge .bubble-ghost").evaluate((el: any) => {
+    const style = (globalThis as any).getComputedStyle(el);
+    const layer = (globalThis as any).getComputedStyle(el.parentElement);
+    return { shadow: style.boxShadow, filter: layer.filter };
   });
-  expect(outline.display, "drawn over the box's own fill").not.toBe("none");
-  expect(outline.width).toBe(1);
-  expect(outline.alpha, "strong enough to see").toBeGreaterThanOrEqual(0.12);
+  expect(rim.shadow, "the edge shape is 1px bigger than the box").toMatch(/0px 0px 0px 1px/);
+  expect(rim.filter, "through the edge filter").toContain("bubble-gooedge");
 });

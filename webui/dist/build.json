@@ -1,6 +1,6 @@
 {
-  "hash": "3cc5f61ebb2d53fb7601188bef97aa7f07fe7219e3b224bdd0ec9940578b44a3",
-  "builtAt": "2026-10-28T15:08:01.681Z",
+  "hash": "6109638bb60cdba4a9b08b7231ff68541b68e6d74ccc7d1bfa9e76eee19cbac0",
+  "builtAt": "2026-10-29T09:45:58.206Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -32,7 +32,7 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "0f9623530ee8edf3a0d3d37c193ad3e8fe599bf22cc3e230a9e361299edb3c26"
+      "sha256": "a92cd19760bee2670ef29c3a7284e40ebf10916258a9a0bc15267521f55a9d4c"
     },
     {
       "path": "webui/src/app/Header.tsx",
@@ -48,11 +48,11 @@
     },
     {
       "path": "webui/src/app/ProjectFolderDialog.tsx",
-      "sha256": "25a27ff4c1b4aba17ca1c8177abf7a6dc6c6fabcc216ef86faa4ad85489506cd"
+      "sha256": "36cde22e377c92212b106592b6cc1670535376cce95029d21b0500f6de6245e0"
     },
     {
       "path": "webui/src/app/ProjectSwitcher.tsx",
-      "sha256": "3b7093da12eec0f206b1d33e735fe48e75ba6ff893615dbd570079caecd1eaff"
+      "sha256": "cb97dbc7a3bc967a92723486a05a96b778834c6688c8a86869eb5ac832b1912f"
     },
     {
       "path": "webui/src/app/Shell.tsx",
@@ -124,19 +124,15 @@
     },
     {
       "path": "webui/src/app/composer/ComposerCommandMenu.tsx",
-      "sha256": "9cfa3227fee4f71cdee5420bbf4a43f18e64c5cccb50ff9c560733273dcaca0a"
-    },
-    {
-      "path": "webui/src/app/composer/ComposerControl.tsx",
-      "sha256": "1e8410c8894e9fb252fd42abeda5cfcac3eebf3a1fb16e9844535aeca938e57b"
+      "sha256": "4736edffa8262f6f5c65cc2509b285efc7e636afef4df4aa84cbc45b9cf3d28b"
     },
     {
       "path": "webui/src/app/composer/ComposerPrimaryActions.tsx",
-      "sha256": "0adb196f0665225b598f259a8a39fe13defb187ad8b1738dba3523b9f5cb7fb8"
+      "sha256": "df0a36c54c946007c8e2a9acb87fef81d032b970fb80b11d279db46ffa2b0886"
     },
     {
       "path": "webui/src/app/composer/ComposerSurface.tsx",
-      "sha256": "c249e3cda6263bccc82d042e5883994c5330a687b0d95ca62a7c01853f196b14"
+      "sha256": "9f1396ae66121185682538882422b0d38ac0a56a89a41b4557cab59265d0521a"
     },
     {
       "path": "webui/src/app/hooks.ts",
@@ -308,7 +304,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "1a7192f6cd210f0a196ea39e06b781ed988e82cb1a49d3b0b37507b2578f39af"
+      "sha256": "a6da766456699b0e1298ce301ea36380be6e98362efcab7e731815835997ebd7"
     },
     {
       "path": "webui/src/lib/act.ts",
