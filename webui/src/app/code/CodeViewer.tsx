@@ -48,7 +48,7 @@ export function CodeToggle({ hint, className }: { hint?: string | undefined; cla
   return (
     <Tip label="Code and changes" hint={hint}>
       <button type="button" aria-label="Code" aria-pressed={open} aria-keyshortcuts={hint} onClick={() => (open ? closeCode() : openCode())} className={className}>
-        <FileCode2 aria-hidden="true" className="size-4" />
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6" /></svg>
       </button>
     </Tip>
   )

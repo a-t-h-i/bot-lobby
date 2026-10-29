@@ -4,8 +4,7 @@ import { cn } from "@/lib/utils"
 
 /** The look of one key cap: a quiet muted fill with no edge, as in the harnesses. It reads on a button, in a tooltip and on the page. */
 export const KBD_CLASS = cn(
-  "pointer-events-none inline-flex h-[1.125rem] min-w-[1.125rem] w-fit items-center justify-center gap-1 rounded-[4px] bg-accent px-1 font-sans text-2xs leading-none font-medium text-muted-foreground select-none",
-  "in-data-[slot=tooltip-content]:bg-accent in-data-[slot=tooltip-content]:text-muted-foreground",
+  "pointer-events-none inline-flex h-[1.125rem] min-w-[1.125rem] w-fit items-center justify-center gap-1 rounded-[4px] border border-[var(--edge)] bg-[var(--hover)] px-[5px] font-sans text-[11px] leading-none font-medium text-muted-foreground select-none",
   "in-data-[variant=default]:bg-primary-foreground/16 in-data-[variant=default]:text-primary-foreground",
   "in-data-[variant=destructive]:bg-white/16 in-data-[variant=destructive]:text-current",
   "[&_svg:not([class*='size-'])]:size-3"

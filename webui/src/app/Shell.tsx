@@ -18,18 +18,17 @@ import type { TabId } from "@shared"
 import { AltH } from "./AltH.tsx"
 import { SoundToggle, ThemeToggle } from "./AppTools.tsx"
 import { Composer } from "./Composer.tsx"
-import { Header } from "./Header.tsx"
-import { useProjects } from "./ProjectSwitcher.tsx"
-import { Sidebar, SidebarOpenButton, SIDEBAR_KEY } from "./Sidebar.tsx"
+import { ProjectNotice, useProjects } from "./ProjectSwitcher.tsx"
+import { toggleSidebarPin, useSidebar } from "./Sidebar.tsx"
+import { RightBay, ShellFilters, useTabNavigator } from "./Bays.tsx"
 import { TerminalDrawer, TerminalToggle } from "./TerminalDrawer.tsx"
 import { toggleTerminal } from "./terminalStore.ts"
 import { CodeToggle, CodeViewer } from "./code/CodeViewer.tsx"
 import { toggleCode } from "./code/codeStore.ts"
 import { SignIn } from "./SignIn.tsx"
 import { ErrorState, LoadingState, ReconnectingState } from "./States.tsx"
-import { TabStrip } from "./TabStrip.tsx"
 import { Thinking } from "./Thinking.tsx"
-import { QuestionPopup, QuestionsPill } from "@/prompts/QuestionPopup"
+import { QuestionPopup } from "@/prompts/QuestionPopup"
 import { setPutAway, usePutAway } from "@/prompts/putAway"
 import { Lightbox } from "@/ui/Lightbox"
 import { useEvents } from "./useEvents.ts"
@@ -38,13 +37,12 @@ import { syncThemes } from "./palette.ts"
 import { useLobbyKeys } from "./useLobbyKeys.ts"
 import { useDesktopNotifications } from "./notify.ts"
 import { usePrompts } from "./usePrompts.ts"
-import { useMediaQuery, useStatus, useTopic } from "./hooks.ts"
+import { useStatus, useTopic } from "./hooks.ts"
 import { go, parseHash, tabHash, useRoute, type Route } from "./router.ts"
 import { routeBody } from "@/tabs/registry.tsx"
 import { ACTIVITY_OPEN } from "@/tabs/lobby/InlineActivity"
 import { focusTab, isTyping, tabWalk } from "@/prompts/nav"
-import { toggleCollapsed, useCollapsed } from "@/lib/collapsed"
-import { NARROW_SIDEBAR } from "@/lib/panePreference"
+import { toggleCollapsed } from "@/lib/collapsed"
 
 function handleAction(action: string, route: Route, toggleHelp: () => void, cycle: (delta: number) => void, toggleSidebar: () => void): void {
   if (action === "search") (document.querySelector<HTMLElement>("#main input[type='search']") ?? document.getElementById("composer-text"))?.focus()
@@ -63,13 +61,8 @@ function handleAction(action: string, route: Route, toggleHelp: () => void, cycl
   else if (action === "savePlan" && route.kind === "tab" && route.tab === "plan") void act("planner.save", {})
 }
 
-/** The app's switches in the bar, before there is a sidebar to hold them. */
-const BAR_TOOL =
-  "toolbar-button inline-flex size-8 shrink-0 items-center justify-center rounded-lg border text-foreground transition-[background-color,border-color,scale] duration-150 ease-snap outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.97] motion-reduce:active:scale-100"
-
-/** The bar's Terminal button: quiet like the sidebar's icons, lit while the drawer is open. */
-const TERMINAL_TOOL =
-  "inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,scale] duration-150 ease-snap outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.97] aria-pressed:bg-accent aria-pressed:text-foreground motion-reduce:active:scale-100"
+/** A button in the top right bay. */
+const BAY_TOOL = "cs-iconbtn cs-sq10"
 
 /** How long a stream that was live may be reconnecting before the page says pi is gone. */
 const OUTAGE_MS = 2500
@@ -137,7 +130,6 @@ export function Shell() {
   const activeId = route.kind === "tab" ? route.tab : undefined
 
   const select = useCallback((id: string) => go(tabHash(id as TabId)), [])
-  const tabStrip = <TabStrip tabs={tabs} activeId={activeId} onSelect={select} />
   const cycle = useCallback(
     (delta: number) => {
       if (tabs.length === 0) return
@@ -149,23 +141,27 @@ export function Shell() {
   )
   const toggleHelp = useCallback(() => setHelp((open) => !open), [])
   const projects = useProjects()
-  // Read again when the window crosses the narrow width, where an unpicked sidebar folds.
-  useMediaQuery(NARROW_SIDEBAR)
-  const [sidebarFolded] = useCollapsed(SIDEBAR_KEY)
-  // The key folds the sidebar off the page or brings it back.
-  const toggleSidebar = useCallback(() => toggleCollapsed(SIDEBAR_KEY), [])
+  // The key pins the sidebar open or lets it fold back to its rail.
+  const toggleSidebar = useCallback(() => toggleSidebarPin(), [])
+  // A tab key opens the tab navigator for a moment, so you see where it took you.
+  const flashTabs = useRef<(() => void) | null>(null)
   const onAction = useCallback((action: string) => {
     if ((action === "thinking" || action === "activity") && status?.panels?.[action] === false) return
+    if (action === "nextTab" || action === "prevTab") flashTabs.current?.()
     // The route as the address bar has it right now: a key pressed in the frame after a jump must not act on the page just left.
     handleAction(action, parseHash(window.location.hash) ?? route, toggleHelp, cycle, toggleSidebar)
   }, [route, toggleHelp, cycle, toggleSidebar, status?.panels])
+  const onTab = useCallback((id: string) => {
+    flashTabs.current?.()
+    select(id)
+  }, [select])
   const insideApp = useCallback(() => {
     const el = document.activeElement
     if (!el || el === document.body || rootRef.current?.contains(el) === true || el.closest(".thinking-bubble, .terminal-pop")) return true
     // A pop-up on its way out still holds focus for a moment; it is no longer in the way.
     return el.closest("[data-state='closed']") !== null
   }, [])
-  useLobbyKeys({ enabled: Boolean(status), keys, tabs, insideApp, onAction, onTab: select })
+  useLobbyKeys({ enabled: Boolean(status), keys, tabs, insideApp, onAction, onTab })
   const reload = useCallback(() => lobbyStore.onHello({}), [])
 
   // Switching tabs puts the cursor in the message box, ready to write; Esc leaves it for the tab bar, and Down
@@ -191,75 +187,65 @@ export function Shell() {
   }, [tab, ready])
 
   const keyLabels = Object.fromEntries(keys.map((key) => [key.action, key.label]))
-  const signedIn = Boolean(status) && !signedOut
-  // The bar starts with the way back to a folded sidebar.
-  const lead = signedIn ? <SidebarOpenButton hint={keyLabels.sidebar} /> : null
-  const header = <Header
-        connection={connection}
-        projects={projects}
-        lead={lead}
-        tabs={tabStrip}
-        extra={putAway && prompts.length > 0 ? <QuestionsPill count={prompts.length} onOpen={() => setPutAway(false)} /> : null}
-        // With no sidebar yet (signing in, loading) light or dark and the sounds wait in the bar.
-        tools={signedIn ? (
-          <>
-            <CodeToggle hint={keyLabels.code} className={TERMINAL_TOOL} />
-            <TerminalToggle hint={keyLabels.terminal} className={TERMINAL_TOOL} />
-          </>
-        ) : (
-          <>
-            <ThemeToggle className={BAR_TOOL} side="bottom" />
-            <SoundToggle className={BAR_TOOL} side="bottom" />
-          </>
-        )}
-      />
+  const nav = useTabNavigator({ tabs, activeId, label: { id: "settings", text: "Settings" }, onSelect: select, flashRef: flashTabs })
+  const sidebar = useSidebar({ route, keys: keyLabels, onHelp: toggleHelp })
   if (signedOut || !status) return (
-    <div ref={rootRef} className="fixed inset-0 flex flex-col">
-      {header}
-      <main className="surface flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <div ref={rootRef} className="cs-frame">
+      <ShellFilters />
+      <main id="main" tabIndex={-1} className="cs-main">
         {signedOut ? <SignIn /> : statusRecord.error ? <ErrorState message={statusRecord.error} onRetry={reload} /> : <LoadingState />}
       </main>
+      <RightBay>
+        <ThemeToggle className={BAY_TOOL} side="bottom" />
+        <SoundToggle className={BAY_TOOL} side="bottom" />
+      </RightBay>
     </div>
   )
-  const sidebarProps = { route, keys: keyLabels, onHelp: toggleHelp }
   return (
-    // The sidebar and the bar are one surface, the app's frame; the page sits in it on a rounded inner corner.
-    <div ref={rootRef} className="app-chrome fixed inset-0 flex" data-sidebar={sidebarFolded ? "folded" : "open"}>
-      <Sidebar {...sidebarProps} />
-      <div className="relative flex min-w-0 flex-1 flex-col">
-      {header}
-      <div className="app-page relative flex min-h-0 flex-1 flex-col">
-      <Banner connection={connection} onRetry={retry} />
-      {/* The page and the composer floating over its foot; the terminal drawer, when open, sits under both. */}
-      <div className="relative flex min-h-0 flex-1 flex-col">
-      <main
-        id="main"
-        tabIndex={-1}
-        onKeyDown={(event) => {
-          // Esc from the page goes back up to the tab bar.
-          if (event.key !== "Escape" || event.defaultPrevented || isTyping(event.target)) return
-          if ((event.target as HTMLElement).closest("[role='dialog'], [role='menu'], [role='listbox']")) return
-          if (focusTab()) event.preventDefault()
-        }}
-        role={activeId ? "tabpanel" : undefined}
-        aria-labelledby={activeId ? `tab-${activeId}` : undefined}
-        className="surface flex min-h-0 flex-1 flex-col overflow-y-auto outline-none"
-      >
-        <motion.div
-          key={routeKey(route)}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}
-          className="flex min-h-0 flex-1 flex-col"
-        >
-          {routeBody(route)}
-        </motion.div>
-      </main>
-      <Composer route={route} projects={projects} />
+    // The page lies flat over the whole window; the sidebar, the tabs and the tools are bays on its edges.
+    <div ref={rootRef} className="cs-frame" data-sb={sidebar.open ? "open" : "closed"} data-tb={nav.open ? "open" : "closed"}>
+      <ShellFilters />
+      <div className="cs-body">
+        <Banner connection={connection} onRetry={retry} />
+        {/* The page and the composer floating over its foot; the terminal drawer, when open, sits under both. */}
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <main
+            id="main"
+            tabIndex={-1}
+            onKeyDown={(event) => {
+              // Esc from the page goes back up to the tab bar.
+              if (event.key !== "Escape" || event.defaultPrevented || isTyping(event.target)) return
+              if ((event.target as HTMLElement).closest("[role='dialog'], [role='menu'], [role='listbox']")) return
+              if (focusTab()) event.preventDefault()
+            }}
+            role={activeId ? "tabpanel" : undefined}
+            aria-labelledby={activeId ? `tab-${activeId}` : undefined}
+            className="cs-main surface"
+          >
+            <motion.div
+              key={routeKey(route)}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.17, ease: [0.22, 1, 0.36, 1] }}
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              {routeBody(route)}
+            </motion.div>
+          </main>
+          <Composer route={route} projects={projects} />
+        </div>
+        <TerminalDrawer toggleKey={keyLabels.terminal ?? "Ctrl+`"} />
       </div>
-      <TerminalDrawer toggleKey={keyLabels.terminal ?? "Ctrl+`"} />
-      </div>
-      </div>
+      {sidebar.ghost}
+      {nav.ghost}
+      <RightBay>
+        <CodeToggle hint={keyLabels.code} className={BAY_TOOL} />
+        <TerminalToggle hint={keyLabels.terminal} className={BAY_TOOL} />
+      </RightBay>
+      {sidebar.bay}
+      {nav.bay}
+      <ProjectNotice projects={projects} />
+      <span id="focused-action-help" className="sr-only">Focused buttons: Enter or Space. Links: Enter. Checkboxes: Space.</span>
       <Thinking status={status} lobby={lobbyRecord.data} />
       <CodeViewer codeKey={keys.find((key) => key.action === "code")?.key} />
       <QuestionPopup prompts={prompts} loading={promptsLoading} answer={answer} dismiss={dismiss} minimized={putAway} onMinimize={setPutAway} />

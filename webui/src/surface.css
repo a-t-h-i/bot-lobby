@@ -1,0 +1,217 @@
+/*
+ * The Composer Surface design (docs/web-ui/composer-surface): the whole web UI built around the bubble composer.
+ * Pages lie flat on the page colour (cards are a hairline on the fill, wells are sunk, separators are 1px lines);
+ * only buttons, the composer, the chat bubbles and the shell's bays are raised. Things that appear or snap back
+ * spring (cubic-bezier(0.34, 1.4–1.5, 0.5, 1)); everything else eases out (cubic-bezier(0.22, 1, 0.36, 1)).
+ * Every colour comes from the theme's own variables, so all the themes carry it.
+ *
+ * Class names start with `cs-` so they never meet a utility class of the same name.
+ */
+
+/* The surface's tokens, worked out from the theme's colours. */
+:root {
+  --page: var(--background);
+  --fill: var(--card);
+  --edge: var(--border);
+  --faint: color-mix(in srgb, var(--muted-foreground) 62%, var(--background));
+  --hover: color-mix(in srgb, var(--foreground) 5%, var(--card));
+  --well: color-mix(in srgb, var(--foreground) 11%, var(--card));
+  --sunk: color-mix(in srgb, var(--page) 92%, #2a2a50);
+  --ok: #17935a;
+  --warn: #b26a00;
+  --bad: #cc3838;
+  --hl: rgb(255 255 255);
+  --sh: rgb(40 40 70 / 0.09);
+  --ehl: rgb(255 255 255 / 0.4);
+  --esh: rgb(40 40 70 / 0.5);
+  --tdsh: rgb(30 30 70 / 0.3);
+  --tdhl: rgb(255 255 255);
+  --drop1: 0 3px 10px rgb(0 0 0 / 0.035);
+  --drop2: 0 14px 36px rgb(0 0 0 / 0.045);
+  --press: inset 0 2px 4px rgb(40 40 70 / 0.36), inset 0 0 0 1px rgb(40 40 70 / 0.14), 0 1px 0 rgb(255 255 255 / 0.95);
+  --press-deep: inset 0 3px 6px rgb(40 40 70 / 0.46), inset 0 0 0 1px rgb(40 40 70 / 0.18), 0 1px 0 rgb(255 255 255 / 0.95);
+  --inset: inset 0 1px 2px rgb(40 40 70 / 0.14), 0 1px 0 rgb(255 255 255 / 0.9);
+  /* Raised (a keycap) and sunk (a well): the only bevels, for buttons and knobs. */
+  --rs: 0 0 0 1px var(--edge), inset 1.5px 2px 2px -1px var(--hl), inset -1.5px -2px 3px -1.5px var(--sh), 0 3px 10px rgb(30 30 60 / 0.08);
+  --ss: inset 1.8px 2.6px 3.2px -1px var(--tdsh), inset -1px -1.6px 2px -1px var(--tdhl), 0 1px 0 var(--tdhl);
+  /* The agents' colours: the oracle wears the accent. */
+  --c-orc: var(--primary);
+  --c-des: var(--source-design);
+  --c-dev: var(--source-dev);
+  --c-qa: var(--source-qa);
+  --c-res: var(--source-research);
+  --c-sc: var(--source-scout);
+  --c-pl: var(--source-planner);
+  --spring: cubic-bezier(0.34, 1.5, 0.5, 1);
+  --out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+.dark {
+  --hover: color-mix(in srgb, var(--foreground) 9%, transparent);
+  --well: rgb(0 0 0 / 0.3);
+  --sunk: color-mix(in srgb, var(--page) 52%, #000);
+  --ok: #58c88f;
+  --warn: #e8aa4a;
+  --bad: #f07575;
+  --hl: rgb(255 255 255 / 0.2);
+  --sh: rgb(0 0 0 / 0.4);
+  --ehl: rgb(255 255 255 / 0.4);
+  --esh: rgb(0 0 0 / 0.85);
+  --tdsh: rgb(0 0 0 / 0.7);
+  --tdhl: rgb(255 255 255 / 0.15);
+  --drop1: 0 3px 10px rgb(0 0 0 / 0.3);
+  --drop2: 0 14px 36px rgb(0 0 0 / 0.3);
+  --press: inset 0 2px 5px rgb(0 0 0 / 0.9), inset 0 0 0 1px rgb(0 0 0 / 0.6), inset 0 -1px 0 rgb(255 255 255 / 0.05), 0 1px 0 rgb(255 255 255 / 0.2);
+  --press-deep: inset 0 3px 7px rgb(0 0 0 / 1), inset 0 0 0 1px rgb(0 0 0 / 0.75), inset 0 -1px 0 rgb(255 255 255 / 0.04), 0 1px 0 rgb(255 255 255 / 0.2);
+  --inset: inset 0 1px 3px rgb(0 0 0 / 0.6), 0 1px 0 rgb(255 255 255 / 0.05);
+  --rs: 0 0 0 1px var(--edge), inset 1.5px 2px 2px -1px var(--hl), inset -1.5px -2px 3px -1.5px var(--sh), 0 3px 10px rgb(0 0 0 / 0.28);
+}
+
+/* ---------------------------------------------------------------------------------------------------------------
+ * The shell: the page lies flat over the whole window; the sidebar, the tab navigator and the code/terminal
+ * buttons are bays that grow out of the window's edges. Each bay is drawn like the composer: an edge layer and a
+ * lit fill layer through goo filters, under the real content, sized by --wL/--hL (sidebar) and --wT/--hT (tabs).
+ * ------------------------------------------------------------------------------------------------------------- */
+@property --wL { syntax: "<length>"; inherits: true; initial-value: 46px; }
+@property --hL { syntax: "<length>"; inherits: true; initial-value: 148px; }
+@property --wT { syntax: "<length>"; inherits: true; initial-value: 122px; }
+@property --hT { syntax: "<length>"; inherits: true; initial-value: 30px; }
+
+.cs-frame {
+  --gR: 28px;
+  --wR: 84px;
+  --hR: 40px;
+  --tL: --wL 255ms var(--out), --hL 255ms var(--out);
+  --tT: --wT 238ms var(--out), --hT 238ms var(--out);
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--page);
+  color: var(--foreground);
+}
+.cs-frame[data-sb="closed"] { --tL: --wL 187ms cubic-bezier(0.4, 0, 0.2, 1), --hL 187ms cubic-bezier(0.4, 0, 0.2, 1); }
+.cs-frame[data-tb="closed"] { --tT: --wT 544ms cubic-bezier(0.34, 1.5, 0.5, 1), --hT 544ms cubic-bezier(0.34, 1.7, 0.5, 1); }
+.cs-gl, .cs-gt, .cs-sbwrap, .cs-tbwrap { transition: var(--tL), var(--tT); }
+
+/* The ghost layers of a bay: the shape runs 40px past the window's edge, so only its inner corners round. */
+.cs-gl, .cs-gt, .cs-gr { position: absolute; z-index: 40; pointer-events: none; }
+.cs-gl { left: -40px; top: calc(50% - var(--hL) / 2); width: calc(var(--wL) + 40px); height: var(--hL); }
+.cs-gt { left: calc(50% - var(--wT) / 2); top: -40px; width: var(--wT); height: calc(var(--hT) + 40px); }
+.cs-gr { right: var(--gR); top: -40px; width: var(--wR); height: calc(var(--hR) + 40px); }
+.cs-layer { position: absolute; inset: -30px; box-sizing: border-box; padding: 30px; display: flex; flex-direction: column; pointer-events: none; }
+.cs-layer.cs-edge { --shape: var(--edge); filter: url(#cs-bayedge) drop-shadow(var(--drop1)) drop-shadow(var(--drop2)); }
+.cs-layer.cs-fill { --shape: var(--fill); filter: url(#cs-baylit); }
+.cs-bb { flex: 1 1 auto; min-height: 0; background: var(--shape); }
+.cs-edge .cs-bb { box-shadow: 0 0 0 1px var(--shape); }
+.cs-gl .cs-bb { border-radius: 0 12px 12px 0; }
+.cs-gt .cs-bb { border-radius: 0 0 12px 12px; }
+.cs-gr .cs-bb { border-radius: 0 0 10px 10px; }
+
+/* The sidebar: a mini rail (sessions, new session, settings) that grows into the full list on hover or pin. */
+.cs-sbwrap { position: absolute; z-index: 41; left: 0; top: calc(50% - max(var(--hL), 260px) / 2); width: max(var(--wL), 30px); height: max(var(--hL), 260px); }
+.cs-sbx { position: absolute; left: 0; top: calc(50% - var(--hL) / 2); width: var(--wL); height: var(--hL); overflow: hidden; border-radius: 0 14px 14px 0; }
+.cs-sbmini { position: absolute; left: 0; top: 0; width: 46px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; opacity: 1; transition: opacity 76ms ease 76ms; }
+.cs-frame[data-sb="open"] .cs-sbmini { opacity: 0; pointer-events: none; transition: opacity 51ms ease; }
+.cs-sbfull { position: absolute; left: 0; top: 0; width: 244px; height: var(--sb-open-h); box-sizing: border-box; padding: 12px 10px 10px; display: flex; flex-direction: column; opacity: 0; pointer-events: none; transition: opacity 68ms ease; }
+.cs-frame[data-sb="open"] .cs-sbfull { opacity: 1; pointer-events: auto; transition: opacity 119ms ease 76ms; }
+.cs-sbfull :is(.cs-sr, .cs-sh) { transform-origin: 0 50%; }
+.cs-frame[data-sb="open"] .cs-sbfull :is(.cs-sr, .cs-sh) { animation: cs-row-pop 204ms var(--out) backwards; animation-delay: calc(60ms + var(--i, 0) * 20ms); }
+@keyframes cs-row-pop { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
+.cs-sh { height: 26px; padding: 0 10px; display: flex; align-items: flex-end; gap: 6px; font-size: 11px; font-weight: 500; letter-spacing: 0.02em; color: var(--faint); }
+.cs-sr { box-sizing: border-box; width: 100%; height: 30px; padding: 0 10px; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 12px; background: transparent; font: inherit; font-size: 13px; color: var(--foreground); text-align: left; cursor: pointer; outline: none; transition: background 76ms ease; }
+.cs-sr:hover { background: var(--hover); }
+.cs-sr:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
+.cs-sr[aria-current="true"], .cs-sr[aria-current="page"], .cs-sr[data-active="true"] { background: var(--well); box-shadow: var(--inset); }
+.cs-sr[data-dim="true"] { color: var(--muted-foreground); }
+.cs-sr .cs-grow { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-search { cursor: text; color: var(--muted-foreground); background: var(--well); box-shadow: var(--inset); }
+.cs-search:hover { background: var(--well); }
+.cs-search input { flex: 1 1 0; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; color: var(--foreground); }
+.cs-search input::placeholder { color: var(--muted-foreground); }
+.cs-search input::-webkit-search-cancel-button { display: none; }
+.cs-badge { display: inline-flex; flex: none; align-items: center; gap: 3px; font-size: 11px; color: #c2410c; font-variant-numeric: tabular-nums; }
+.dark .cs-badge { color: var(--warn); }
+.cs-sbfoot { margin-top: auto; display: flex; flex-direction: column; gap: 4px; padding-top: 8px; }
+.cs-sblist { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0 -4px; padding: 0 4px; scrollbar-width: none; }
+.cs-sblist::-webkit-scrollbar { display: none; }
+.cs-sbfoot .cs-tools { justify-content: space-between; padding: 0 6px; cursor: default; background: transparent; }
+.cs-sbfoot .cs-tools:hover { background: transparent; }
+/* Sessions keep their rename and archive buttons, shown in place of the state on hover. */
+.cs-srow { position: relative; }
+.cs-srow .cs-sacts { position: absolute; right: 4px; top: 0; bottom: 0; display: none; align-items: center; gap: 2px; }
+.cs-srow:hover .cs-sacts, .cs-srow:focus-within .cs-sacts { display: flex; }
+.cs-srow:hover .cs-sstate, .cs-srow:focus-within .cs-sstate { visibility: hidden; }
+.cs-sact { width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--muted-foreground); cursor: pointer; }
+.cs-sact:hover { background: var(--fill); color: var(--foreground); }
+
+/* An embedded icon button or chip: pressed in on hover and while its menu is open, deeper while pressed. */
+.cs-iconbtn, .cs-chip { display: inline-flex; flex: none; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--muted-foreground); font: inherit; cursor: pointer; outline: none; transition: background 76ms ease, box-shadow 76ms ease, color 76ms ease; }
+.cs-iconbtn { width: 32px; height: 32px; padding: 0; border-radius: 50%; }
+.cs-iconbtn.cs-sq10 { border-radius: 10px; }
+.cs-iconbtn.cs-sm { width: 28px; height: 28px; }
+.cs-iconbtn:hover:not(:disabled), .cs-chip:hover, .cs-chip:is([data-on="true"], [aria-pressed="true"]), .cs-iconbtn:is([data-on="true"], [aria-pressed="true"], [aria-current="page"]) { background: var(--well); box-shadow: var(--press); }
+.cs-chip:is([data-on="true"], [aria-pressed="true"]), .cs-iconbtn:is([data-on="true"], [aria-pressed="true"], [aria-current="page"]) { color: var(--foreground); }
+.cs-iconbtn:active:not(:disabled), .cs-chip:active { box-shadow: var(--press-deep); }
+.cs-iconbtn:focus-visible, .cs-chip:focus-visible { box-shadow: 0 0 0 2px var(--ring); }
+.cs-iconbtn:disabled { opacity: 0.35; cursor: default; }
+
+/* A tooltip: a tiny muted label after a 500ms hover; never while pressing or while its menu is open. */
+.cs-tip { position: relative; }
+.cs-tip::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translate(-50%, 3px); padding: 4px 8px; border-radius: 8px; background: var(--fill); border: 1px solid var(--edge); color: var(--muted-foreground); font-size: 11px; font-weight: 500; line-height: 1.3; white-space: nowrap; box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.16); opacity: 0; pointer-events: none; z-index: 5; transition: opacity 76ms ease, transform 76ms ease; }
+.cs-tip:hover::after { opacity: 1; transform: translate(-50%, 0); transition: opacity 119ms ease 500ms, transform 136ms var(--out) 500ms; }
+.cs-tip:active::after, .cs-tip:is([data-on="true"], [aria-pressed="true"]):hover::after, .cs-tip:disabled:hover::after { opacity: 0; transform: translate(-50%, 3px); transition: opacity 51ms ease; }
+.cs-tip.cs-b::after { bottom: auto; top: calc(100% + 8px); transform: translate(-50%, -3px); }
+.cs-tip.cs-b:hover::after { transform: translate(-50%, 0); }
+.cs-tip.cs-b:active::after, .cs-tip.cs-b:is([data-on="true"], [aria-pressed="true"]):hover::after { transform: translate(-50%, -3px); }
+/* A tooltip to the left (the plan's side rail). */
+.cs-tipl { position: relative; }
+.cs-tipl::after { content: attr(data-tip); position: absolute; right: calc(100% + 10px); top: 50%; transform: translate(3px, -50%); padding: 4px 8px; border-radius: 8px; background: var(--fill); border: 1px solid var(--edge); color: var(--muted-foreground); font-size: 11px; font-weight: 500; line-height: 1.3; white-space: nowrap; box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.16); opacity: 0; pointer-events: none; z-index: 5; transition: opacity 65ms ease, transform 65ms ease; }
+.cs-tipl:hover::after { opacity: 1; transform: translate(0, -50%); transition: opacity 101ms ease 255ms, transform 116ms var(--out) 255ms; }
+.cs-kbd { padding: 1px 5px; border: 1px solid var(--edge); border-radius: 4px; background: var(--hover); font: inherit; font-size: 11px; line-height: 1.4; color: var(--muted-foreground); }
+
+/* The tab navigator: only the active tab while closed; on hover or a tab key it opens into all four. */
+.cs-tbwrap { position: absolute; z-index: 41; left: calc(50% - max(var(--wT), 220px) / 2); top: 0; width: max(var(--wT), 220px); height: max(var(--hT), 56px); }
+.cs-tbx { position: absolute; left: calc(50% - var(--wT) / 2); top: 0; width: var(--wT); height: var(--hT); overflow: hidden; border-radius: 0 0 14px 14px; }
+.cs-tbc { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 13px; font-weight: 500; color: var(--foreground); opacity: 1; transform: none; pointer-events: none; transition: opacity 136ms ease 119ms, transform 442ms var(--spring) 85ms; }
+.cs-frame[data-tb="open"] .cs-tbc { opacity: 0; transform: scale(0.82); transition: opacity 42ms ease, transform 102ms ease; }
+.cs-tbo { position: absolute; left: 0; right: 0; top: 0; height: 38px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 2px; opacity: 0; transform: scale(0.7); transform-origin: 50% 0; pointer-events: none; transition: opacity 110ms ease, transform 357ms cubic-bezier(0.34, 1.4, 0.5, 1); }
+.cs-frame[data-tb="open"] .cs-tbo { opacity: 1; transform: none; pointer-events: auto; transition: opacity 119ms ease 68ms, transform 323ms var(--out); }
+.cs-frame[data-tb="open"] .cs-tab { animation: cs-row-pop 187ms var(--out) backwards; animation-delay: calc(51ms + var(--i, 0) * 22ms); transform-origin: 50% 0; }
+.cs-lb { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+.cs-lb[data-p="0"] { animation: cs-lb-a 136ms var(--out) both; }
+.cs-lb[data-p="1"] { animation: cs-lb-b 136ms var(--out) both; }
+@keyframes cs-lb-a { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+@keyframes cs-lb-b { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+.cs-ti { display: flex; width: 15px; height: 15px; flex: none; color: var(--muted-foreground); transition: color 76ms ease; }
+.cs-tbc .cs-ti, .cs-tab[aria-selected="true"] .cs-ti { color: var(--primary); }
+.cs-tab:hover .cs-ti { color: var(--foreground); }
+.cs-tab[aria-selected="true"]:hover .cs-ti { color: var(--primary); }
+.cs-tab { position: relative; z-index: 1; white-space: nowrap; flex: none; height: 28px; padding: 0 10px; display: flex; align-items: center; gap: 5px; border: 0; border-radius: 9px; background: transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--muted-foreground); text-decoration: none; cursor: pointer; outline: none; transition: background 76ms ease, color 76ms ease; }
+.cs-tab:hover { background: var(--hover); color: var(--foreground); }
+.cs-tab[aria-selected="true"], .cs-tab[aria-selected="true"]:hover { background: transparent; color: var(--foreground); }
+.cs-tab:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
+/* The indicator under the active tab: a dent pressed into the bay and a goo-softened tint over it. */
+.cs-track { position: relative; display: flex; align-items: center; gap: 2px; height: 100%; }
+.cs-tabind { position: absolute; inset: 0; pointer-events: none; transition: opacity 170ms ease; }
+.cs-tabind i { position: absolute; top: 5px; height: 28px; left: 0; right: 0; border-radius: 10px; }
+.cs-tabind.cs-dent { filter: url(#cs-tabdent); }
+.cs-tabind.cs-dent i { background: color-mix(in srgb, var(--fill) 88%, #000); }
+.dark .cs-tabind.cs-dent i { background: color-mix(in srgb, var(--fill) 62%, #000); }
+.cs-tabind.cs-tint { filter: url(#cs-indgoo); opacity: 0.16; }
+.dark .cs-tabind.cs-tint { opacity: 0.26; }
+.cs-tabind.cs-tint i { background: var(--primary); }
+.cs-tbo[data-none] .cs-tabind { opacity: 0; }
+
+/* The code viewer and terminal buttons, in their own bay at the top right. */
+.cs-rbx { position: absolute; z-index: 41; right: var(--gR); top: 0; width: var(--wR); height: var(--hR); display: flex; align-items: center; justify-content: center; gap: 4px; padding-bottom: 2px; box-sizing: border-box; }
+
+/* The page area: the whole window, under the bays. */
+.cs-body { position: relative; display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; }
+.cs-main { position: relative; display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow-y: auto; outline: none; background: var(--page); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cs-frame, .cs-frame *, .cs-frame *::before, .cs-frame *::after { transition-duration: 0ms !important; animation: none !important; }
+}
+/* Why no project can be chosen: a line under the tab navigator. */
+.cs-frame > .notice { position: absolute; z-index: 39; top: 44px; left: 0; right: 0; justify-content: center; pointer-events: none; }

@@ -1,45 +1,25 @@
 // Adapted from T3 Code (MIT), apps/web/src/components/Sidebar.tsx and apps/web/src/components/ui/sidebar.tsx
 /**
- * The sidebar on the left of every page, laid out like the coding harness it
- * takes after. At its top the open project's name and the fold button, then a search
- * over the sessions and a New session button; then the sessions as thin rows
- * under small labels (this window's, then the background sessions it
- * started), with the ones in other terminals and the ended ones in groups at
- * the foot that fold away; and last Settings and the app's switches. Switching
- * to a session is a click on its row.
- *
- * It folds off the page altogether (the button at its top, the sidebar key, or
- * a click on its edge), and a button at the start of the bar brings it back.
- * Dragging its edge makes it wider or narrower, a double-click puts the width
- * back, and both the width and whether it is folded are remembered in this
- * browser; unpicked it starts folded on a window under 1024 px. The project
- * itself is chosen in the composer.
+ * The sidebar, after the user's design (docs/web-ui/composer-surface): a mini rail on the window's left edge
+ * (sessions, new session, settings) that grows into the full sidebar while the pointer is on it, or stays open
+ * when pinned (the rail's sessions button or the sidebar key). The full sidebar holds a search over the sessions
+ * with the New session button, the sessions as thin rows under small labels (this window's, then the background
+ * ones it started, then those in other terminals and the ended ones in groups that fold away), and at its foot
+ * Settings and the app's switches. Switching to a session is a click on its row.
  */
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react"
-import {
-  Archive,
-  ChevronDown,
-  CircleDashed,
-  MessageCircleQuestion,
-  PanelLeft,
-  PanelLeftClose,
-  Pencil,
-  Search,
-  Settings,
-  SquarePen,
-} from "lucide-react"
+import { useCallback, useId, useRef, useState, type CSSProperties, type ReactNode } from "react"
+import { Archive, ChevronDown, CircleDashed, Pencil } from "lucide-react"
 import type { StatusInfo } from "@protocol"
 import { Keys } from "@/components/ui/kbd"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { act } from "@/lib/act"
-import { useCollapsed } from "@/lib/collapsed"
+import { toggleCollapsed, useCollapsed } from "@/lib/collapsed"
 import { toast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
-import { ScrollHints } from "@/ui/ScrollHints"
 import { AppearanceButton, FullscreenToggle, HelpButton, NotifyToggle, SoundToggle } from "./AppTools.tsx"
-import { useMediaQuery, useTopic } from "./hooks.ts"
-import { NARROW_SIDEBAR } from "@/lib/panePreference"
+import { useTopic } from "./hooks.ts"
 import { NewSessionDialog } from "./NewSessionDialog.tsx"
+import { BayGhost, TabGlyph, useHoverBay } from "./Bays.tsx"
 import { go, type Route } from "./router.ts"
 import { sessionEntries, type SessionEntry } from "./sessionList.ts"
 import { useApiRead } from "./useApiRead"
@@ -50,20 +30,15 @@ export interface SidebarProps {
   onHelp: () => void
 }
 
-/** Where the sidebar's folded state is remembered (`useCollapsed`). */
-export const SIDEBAR_KEY = "app.sidebar"
+/** Whether the sidebar is pinned open (`useCollapsed`'s store, remembered in this browser). */
+export const SIDEBAR_KEY = "app.sidebar.pinned"
 
-/** The sidebar's width in rem: as it starts, and as far as dragging its edge takes it. */
-const WIDTH = { start: 16, min: 13, max: 24 }
-const WIDTH_KEY = "bot-lobby.sidebar.width"
+export const toggleSidebarPin = () => toggleCollapsed(SIDEBAR_KEY)
 
-/** An icon button in the sidebar (and the bar's open button): 28 px as in the harness. */
-const ICON_BUTTON =
-  "inline-flex size-7 shrink-0 items-center justify-center rounded-md text-[var(--sidebar-icon)] outline-none transition-[background-color,color,scale] duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.96] aria-pressed:text-sidebar-foreground aria-[current=page]:bg-[var(--sidebar-selected)] aria-[current=page]:text-sidebar-foreground motion-reduce:active:scale-100"
+/** The open sidebar's size: 244px wide, 520px tall where the window has room. */
+const OPEN = { w: 244, h: "min(520px, calc(100vh - 112px))" }
 
-/** A session as a thin row, as the chat app's sidebar draws its conversations: one line, a soft pill when it is the current one. */
-const ROW =
-  "session-row flex h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2.5 text-left text-sm outline-none transition-colors duration-150 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-[current=true]:bg-[var(--sidebar-selected)]"
+const TOOL = "cs-iconbtn cs-sm"
 
 function Tip({ label, hint, side = "bottom", children }: { label: string; hint?: string | undefined; side?: "right" | "top" | "bottom"; children: ReactNode }) {
   return (
@@ -77,10 +52,10 @@ function Tip({ label, hint, side = "bottom", children }: { label: string; hint?:
 }
 
 /** The sessions as the sidebar lists them, read live (`sessions` and `status` topics). */
-function useSessions(): { entries: SessionEntry[]; branch: string | undefined } {
+function useSessions(): SessionEntry[] {
   const status = useTopic<StatusInfo>("status").data
   const list = useApiRead("sessions.list", {}, ["sessions"])
-  return { entries: sessionEntries(status, list.data), branch: status?.branch ?? status?.workspace.branch }
+  return sessionEntries(status, list.data)
 }
 
 /**
@@ -98,14 +73,13 @@ function useSwitch(): (entry: SessionEntry) => Promise<void> {
 
 /**
  * What the row shows at its end: a question count while it asks you something, a turning ring while it
- * works or starts, otherwise nothing (an idle or ended session needs no mark; the group says which).
- * The state is spelt out for screen readers.
+ * works or starts, otherwise nothing. The state is spelt out for screen readers.
  */
 function RowStatus({ entry }: { entry: SessionEntry }) {
   if (entry.where !== "elsewhere" && entry.state === "asking")
     return (
-      <span className="inline-flex shrink-0 items-center gap-1 text-xs text-warning tabular-nums">
-        <MessageCircleQuestion aria-hidden="true" className="size-3.5" />
+      <span className="cs-badge">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M9.1 9a3 3 0 015.8 1c0 2-3 2.5-3 4M12 17h.01" /></svg>
         {entry.waiting}
         <span className="sr-only">{entry.waiting === 1 ? " question" : " questions"}, Waiting</span>
       </span>
@@ -159,27 +133,24 @@ function RenameField({ entry, onDone }: { entry: SessionEntry; onDone: () => voi
           onDone()
         }
       }}
-      className="-mx-1 h-6 w-[calc(100%+0.5rem)] min-w-0 rounded-sm bg-background px-1 text-sm leading-5 text-sidebar-foreground outline-none ring-2 ring-ring"
+      className="h-6 w-full min-w-0 rounded-md bg-[var(--fill)] px-1.5 text-[13px] text-foreground outline-none ring-2 ring-ring"
     />
   )
 }
 
-const ROW_ACTION =
-  "inline-flex size-[1.625rem] items-center justify-center rounded-md text-muted-foreground outline-none transition-[background-color,color] duration-150 hover:bg-[var(--sidebar-selected)] hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-
 /** A session as a thin row: its name and, at the end, its state; Rename and Archive take the state's place on hover. */
-function SessionRow({ entry }: { entry: SessionEntry }) {
+function SessionRow({ entry, index }: { entry: SessionEntry; index: number }) {
   const pick = useSwitch()
   const [renaming, setRenaming] = useState(false)
   const quiet = entry.state === "exited" || entry.where === "elsewhere"
-  const nameClass = cn("min-w-0 flex-1 truncate", entry.where === "here" ? "font-medium text-sidebar-foreground" : quiet ? "text-muted-foreground" : "text-sidebar-foreground")
   const canRename = entry.where !== "elsewhere"
   const canArchive = entry.where === "background" && entry.state === "exited" && Boolean(entry.key)
   const hasActions = canRename || canArchive
+  const style = { "--i": index } as CSSProperties
   return (
-    <li className="session-enter session-item relative">
+    <li className="cs-srow session-item">
       {renaming ? (
-        <div aria-current={entry.where === "here" ? "true" : undefined} className={cn(ROW, "hover:bg-transparent")}>
+        <div className="cs-sr" data-active={entry.where === "here" || undefined} style={style}>
           <RenameField entry={entry} onDone={() => setRenaming(false)} />
         </div>
       ) : (
@@ -190,32 +161,34 @@ function SessionRow({ entry }: { entry: SessionEntry }) {
           title={entry.name}
           data-where={entry.where}
           data-state={entry.state}
+          data-dim={quiet || undefined}
           onClick={() => void pick(entry)}
           onDoubleClick={(event) => {
             if (!canRename) return
             event.preventDefault()
             setRenaming(true)
           }}
-          className={ROW}
+          className="cs-sr session-row"
+          style={style}
         >
-          <span className={nameClass}>{entry.name}</span>
-          <span className={cn("flex shrink-0 items-center", hasActions && "session-state")}>
+          <span className="cs-grow">{entry.name}</span>
+          <span className={cn("flex shrink-0 items-center", hasActions && "cs-sstate")}>
             <RowStatus entry={entry} />
           </span>
         </button>
       )}
       {!renaming && hasActions ? (
-        <span className="session-actions absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-0.5">
+        <span className="cs-sacts">
           {canRename ? (
             <Tip label="Rename">
-              <button type="button" aria-label={`Rename ${entry.name}`} onClick={() => setRenaming(true)} className={ROW_ACTION}>
+              <button type="button" aria-label={`Rename ${entry.name}`} onClick={() => setRenaming(true)} className="cs-sact">
                 <Pencil aria-hidden="true" className="size-3.5" />
               </button>
             </Tip>
           ) : null}
           {canArchive ? (
             <Tip label="Archive">
-              <button type="button" aria-label={`Archive ${entry.name}`} onClick={() => void archive(entry)} className={ROW_ACTION}>
+              <button type="button" aria-label={`Archive ${entry.name}`} onClick={() => void archive(entry)} className="cs-sact">
                 <Archive aria-hidden="true" className="size-3.5" />
               </button>
             </Tip>
@@ -226,41 +199,32 @@ function SessionRow({ entry }: { entry: SessionEntry }) {
   )
 }
 
-/** A section label over a group of rows, as "Pinned" and "Recents" sit in the chat app. */
-const LABEL = "flex h-7 items-center px-2.5 pt-2 text-xs font-medium text-muted-foreground"
-
 /** A group of sessions under its label; it folds away when its label is clicked, remembered. */
-function Shelf({ id, label, entries, archivable = false }: { id: string; label: string; entries: SessionEntry[]; archivable?: boolean }) {
+function Shelf({ id, label, entries, start, archivable = false }: { id: string; label: string; entries: SessionEntry[]; start: number; archivable?: boolean }) {
   const [folded, toggle] = useCollapsed(`app.sidebar.${id}`)
   const body = useId()
   if (entries.length === 0) return null
   return (
     <section aria-label={label} className="group/shelf flex flex-col">
-      <div className="flex items-center gap-1 pt-2">
-        <button
-          type="button"
-          aria-expanded={!folded}
-          aria-controls={body}
-          onClick={toggle}
-          className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-muted-foreground outline-none transition-colors duration-150 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-        >
+      <div className="cs-sh" style={{ "--i": start } as CSSProperties}>
+        <button type="button" aria-expanded={!folded} aria-controls={body} onClick={toggle} className="flex min-w-0 flex-1 items-center gap-1.5 text-left outline-none hover:text-foreground focus-visible:underline">
           <span>{label}</span>
           {folded ? <span className="tabular-nums">{entries.length}</span> : null}
-          <ChevronDown aria-hidden="true" className={cn("size-3 opacity-0 transition-[opacity,rotate] duration-150 group-hover/shelf:opacity-100 group-focus-within/shelf:opacity-100 motion-reduce:transition-none", folded && "-rotate-90 opacity-100")} />
+          <ChevronDown aria-hidden="true" className={cn("size-3 opacity-0 transition-[opacity,rotate] duration-150 group-hover/shelf:opacity-100 group-focus-within/shelf:opacity-100", folded && "-rotate-90 opacity-100")} />
         </button>
         {archivable ? (
           <button
             type="button"
             onClick={() => void (async () => { for (const entry of entries) if (entry.key) await act("sessions.archive", { key: entry.key }) })()}
-            className="h-[1.625rem] shrink-0 rounded-md px-1.5 text-xs text-muted-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            className="shrink-0 outline-none hover:text-foreground focus-visible:underline"
           >
             Archive all
           </button>
         ) : null}
       </div>
       {folded ? null : (
-        <ul id={body} className="flex flex-col gap-px">
-          {entries.map((entry) => <SessionRow key={entry.id} entry={entry} />)}
+        <ul id={body} className="flex flex-col">
+          {entries.map((entry, index) => <SessionRow key={entry.id} entry={entry} index={start + 1 + index} />)}
         </ul>
       )}
     </section>
@@ -273,85 +237,70 @@ function matches(entry: SessionEntry, query: string): boolean {
   return words.every((word) => text.includes(word))
 }
 
-/** The search field and the New session button under the sidebar's top. */
+/** The search field with the New session button at its end, sunk into the sidebar. */
 function SearchRow({ query, onQuery, onNew }: { query: string; onQuery: (query: string) => void; onNew: () => void }) {
   return (
-    <div className="flex items-center gap-1 px-1 pb-2">
-      <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition-colors duration-150 hover:bg-sidebar-accent focus-within:bg-sidebar-accent focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring">
-        <Search aria-hidden="true" className="size-4 shrink-0" />
-        <input
-          type="search"
-          value={query}
-          aria-label="Search sessions"
-          placeholder="Search"
-          onChange={(event) => onQuery(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape" && query) {
-              event.preventDefault()
-              event.stopPropagation()
-              onQuery("")
-            }
-          }}
-          className="min-w-0 flex-1 bg-transparent text-sidebar-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
-        />
-      </label>
+    <label className="cs-sr cs-search" style={{ "--i": 0 } as CSSProperties}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+      <input
+        type="search"
+        value={query}
+        aria-label="Search sessions"
+        placeholder="Search"
+        onChange={(event) => onQuery(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && query) {
+            event.preventDefault()
+            event.stopPropagation()
+            onQuery("")
+          }
+        }}
+      />
       <Tip label="New session">
-        <button type="button" aria-label="New session" aria-haspopup="dialog" onClick={onNew} className={ICON_BUTTON}>
-          <SquarePen aria-hidden="true" className="size-4" />
+        <button type="button" aria-label="New session" aria-haspopup="dialog" onClick={onNew} className="flex text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" /></svg>
         </button>
       </Tip>
-    </div>
+    </label>
   )
 }
 
 /** The sessions: this window's under its label, then the background ones, then other terminals and ended ones. */
 function Sessions({ query }: { query: string }) {
-  const { entries } = useSessions()
+  const entries = useSessions()
   const shown = entries.filter((entry) => matches(entry, query))
   const here = shown.filter((entry) => entry.where === "here" && entry.state !== "exited")
   const background = shown.filter((entry) => entry.where === "background" && entry.state !== "exited")
   const elsewhere = shown.filter((entry) => entry.where === "elsewhere")
   const ended = shown.filter((entry) => entry.where !== "elsewhere" && entry.state === "exited")
-  const list = useRef<HTMLElement>(null)
+  let i = 1
+  const at = (count: number) => {
+    const start = i
+    i += count + 1
+    return start
+  }
+  const hereAt = at(here.length)
+  const backAt = at(background.length)
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
-      <nav ref={list} aria-label="Sessions list" className="flex min-h-0 flex-1 flex-col overflow-y-auto px-1 pb-2">
-        {shown.length === 0 ? <p className="px-2.5 py-1.5 text-xs text-muted-foreground">No sessions match “{query.trim()}”.</p> : null}
-        {here.length > 0 ? (
-          <>
-            <p className={LABEL}>This window</p>
-            <ul className="flex flex-col gap-px">
-              {here.map((entry) => <SessionRow key={entry.id} entry={entry} />)}
-            </ul>
-          </>
-        ) : null}
-        {background.length > 0 ? (
-          <>
-            <p className={cn(LABEL, "mt-2")}>Background</p>
-            <ul className="flex flex-col gap-px">
-              {background.map((entry) => <SessionRow key={entry.id} entry={entry} />)}
-            </ul>
-          </>
-        ) : !query.trim() && entries.length === 1 ? (
-          <p className="px-2.5 pt-2 text-xs text-muted-foreground">No other sessions are running.</p>
-        ) : null}
-        <div className="mt-auto flex flex-col pt-2">
-          <Shelf id="elsewhere" label="Other terminals" entries={elsewhere} />
-          <Shelf id="ended" label="Ended" entries={ended} archivable />
-        </div>
-      </nav>
-      <ScrollHints target={list} />
-    </div>
-  )
-}
-
-/** The sidebar's title: the name of the project open in this window (the app's name only until the status arrives). */
-function ProjectTitle() {
-  const name = useTopic<StatusInfo>("status").data?.workspace.name
-  return (
-    <span data-slot="sidebar-title" title={name} className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight text-sidebar-foreground">
-      {name ?? "Bot Lobby"}
-    </span>
+    <nav aria-label="Sessions list" className="cs-sblist">
+      {shown.length === 0 ? <p className="px-2.5 py-1.5 text-xs text-muted-foreground">No sessions match “{query.trim()}”.</p> : null}
+      {here.length > 0 ? (
+        <>
+          <p className="cs-sh" style={{ "--i": hereAt } as CSSProperties}>This window</p>
+          <ul className="flex flex-col">{here.map((entry, index) => <SessionRow key={entry.id} entry={entry} index={hereAt + 1 + index} />)}</ul>
+        </>
+      ) : null}
+      {background.length > 0 ? (
+        <>
+          <p className="cs-sh" style={{ "--i": backAt } as CSSProperties}>Background</p>
+          <ul className="flex flex-col">{background.map((entry, index) => <SessionRow key={entry.id} entry={entry} index={backAt + 1 + index} />)}</ul>
+        </>
+      ) : !query.trim() && entries.length === 1 ? (
+        <p className="cs-sh" style={{ "--i": backAt } as CSSProperties}>No other sessions are running.</p>
+      ) : null}
+      <Shelf id="elsewhere" label="Other terminals" entries={elsewhere} start={at(elsewhere.length)} />
+      <Shelf id="ended" label="Ended" entries={ended} start={at(ended.length)} archivable />
+    </nav>
   )
 }
 
@@ -359,175 +308,66 @@ function ProjectTitle() {
 function Foot({ route, keys, onHelp }: SidebarProps) {
   const hint = keys.settings ?? "Alt+S"
   return (
-    <div className="sidebar-foot flex flex-col gap-1 border-t border-[var(--sidebar-border)] px-1 py-2">
-      <a
-        href="#/settings"
-        aria-label="Settings"
-        aria-current={route.kind === "settings" ? "page" : undefined}
-        aria-keyshortcuts={hint}
-        className="flex h-8 items-center gap-2 rounded-md px-2 text-sm text-sidebar-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-[current=page]:bg-[var(--sidebar-selected)] aria-[current=page]:font-medium [&>svg]:text-[var(--sidebar-icon)]"
-      >
-        <Settings aria-hidden="true" className="size-4 shrink-0" />
-        <span className="flex-1">Settings</span>
+    <div className="cs-sbfoot">
+      <a href="#/settings" aria-label="Settings" aria-current={route.kind === "settings" ? "page" : undefined} aria-keyshortcuts={hint} className="cs-sr" style={{ "--i": 20 } as CSSProperties}>
+        <TabGlyph id="settings" />
+        <span className="cs-grow">Settings</span>
         <Keys chord={hint} />
       </a>
-      <div className="flex items-center justify-between">
-        <HelpButton hint={keys.help ?? "Alt+H"} onHelp={onHelp} className={ICON_BUTTON} />
-        <SoundToggle className={ICON_BUTTON} />
-        <AppearanceButton className={ICON_BUTTON} />
-        <NotifyToggle className={ICON_BUTTON} />
-        <FullscreenToggle className={ICON_BUTTON} />
+      <div className="cs-sr cs-tools" style={{ "--i": 21 } as CSSProperties}>
+        <HelpButton hint={keys.help ?? "Alt+H"} onHelp={onHelp} className={TOOL} />
+        <SoundToggle className={TOOL} />
+        <AppearanceButton className={TOOL} />
+        <NotifyToggle className={TOOL} />
+        <FullscreenToggle className={TOOL} />
       </div>
     </div>
   )
 }
 
-function readWidth(): number {
-  try {
-    const stored = Number(localStorage.getItem(WIDTH_KEY))
-    if (stored >= WIDTH.min && stored <= WIDTH.max) return stored
-  } catch {
-    // A blocked store: the sidebar starts at its usual width.
-  }
-  return WIDTH.start
-}
-
-function saveWidth(width: number): void {
-  try {
-    if (width === WIDTH.start) localStorage.removeItem(WIDTH_KEY)
-    else localStorage.setItem(WIDTH_KEY, String(width))
-  } catch {
-    // The width then lasts until the page reloads.
-  }
-}
-
-const clamp = (width: number) => Math.min(WIDTH.max, Math.max(WIDTH.min, Math.round(width * 4) / 4))
-
 /**
- * The sidebar's edge: drag it to resize, double-click to put the width back,
- * click to fold the sidebar away. From the keyboard the arrows resize it and
- * Enter folds it.
+ * The sidebar bay. Returns whether it is open (the frame marks it, so the ghost and the bay grow together), its
+ * ghost and the bay itself.
  */
-function EdgeHandle({ width, onWidth, onResizing, onFold }: { width: number; onWidth: (width: number) => void; onResizing: (resizing: boolean) => void; onFold: () => void }) {
-  const drag = useRef<{ x: number; width: number; moved: boolean } | null>(null)
-  const dragged = useRef(false)
-  const fold = useRef<number | undefined>(undefined)
-  useEffect(() => () => window.clearTimeout(fold.current), [])
-  const rem = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
-  return (
-    <div
-      role="separator"
-      tabIndex={0}
-      aria-label="Resize sidebar"
-      aria-orientation="vertical"
-      aria-controls="app-sidebar"
-      aria-valuemin={WIDTH.min}
-      aria-valuemax={WIDTH.max}
-      aria-valuenow={width}
-      title="Drag to resize, click to fold, double-click to reset"
-      className="sidebar-edge"
-      onPointerDown={(event) => {
-        if (event.button !== 0) return
-        event.currentTarget.setPointerCapture?.(event.pointerId)
-        drag.current = { x: event.clientX, width, moved: false }
-      }}
-      onPointerMove={(event) => {
-        const start = drag.current
-        if (!start) return
-        const dx = event.clientX - start.x
-        if (!start.moved && Math.abs(dx) < 3) return
-        if (!start.moved) onResizing(true)
-        start.moved = true
-        onWidth(clamp(start.width + dx / rem()))
-      }}
-      onPointerUp={() => {
-        const start = drag.current
-        drag.current = null
-        if (!start) return
-        dragged.current = start.moved
-        onResizing(false)
-      }}
-      onClick={(event) => {
-        // A click (no drag) folds it, a moment later so that a double-click can reset the width instead.
-        if (dragged.current || event.detail !== 1) return
-        fold.current = window.setTimeout(onFold, 240)
-      }}
-      onPointerCancel={() => {
-        drag.current = null
-        onResizing(false)
-      }}
-      onDoubleClick={() => {
-        window.clearTimeout(fold.current)
-        onWidth(WIDTH.start)
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-          event.preventDefault()
-          onWidth(clamp(width + (event.key === "ArrowRight" ? 1 : -1)))
-        } else if (event.key === "Home" || event.key === "End") {
-          event.preventDefault()
-          onWidth(event.key === "Home" ? WIDTH.min : WIDTH.max)
-        } else if (event.key === "Enter") {
-          event.preventDefault()
-          onFold()
-        }
-      }}
-    />
-  )
-}
-
-export function Sidebar(props: SidebarProps) {
-  // Read again when the window crosses the narrow width: unpicked, the sidebar folds below it.
-  useMediaQuery(NARROW_SIDEBAR)
-  const [folded, toggle] = useCollapsed(SIDEBAR_KEY)
-  const [width, setWidth] = useState(readWidth)
-  const [resizing, setResizing] = useState(false)
+export function useSidebar(props: SidebarProps) {
+  const [pinned, togglePin] = useCollapsed(SIDEBAR_KEY)
+  const bay = useHoverBay(160)
   const [query, setQuery] = useState("")
   const [starting, setStarting] = useState(false)
-  const resize = useCallback((next: number) => {
-    setWidth(next)
-    saveWidth(next)
-  }, [])
-  return (
-    <aside
-      id="app-sidebar"
-      aria-label="Sidebar"
-      data-folded={folded ? "" : undefined}
-      data-resizing={resizing ? "" : undefined}
-      inert={folded}
-      style={{ width: folded ? 0 : `${width}rem` }}
-      className="app-sidebar"
-    >
-      <div className="sidebar-panel flex min-h-0 flex-1 flex-col" style={{ width: `${width}rem` }}>
-        <div className="flex min-h-12 items-center gap-2 pr-1 pl-3">
-          <ProjectTitle />
-          <Tip label="Collapse sidebar" hint={props.keys.sidebar}>
-            <button type="button" aria-label="Collapse sidebar" aria-expanded aria-controls="app-sidebar" aria-keyshortcuts={props.keys.sidebar} onClick={toggle} className={ICON_BUTTON}>
-              <PanelLeftClose aria-hidden="true" className="size-4" />
-            </button>
-          </Tip>
-        </div>
-        <SearchRow query={query} onQuery={setQuery} onNew={() => setStarting(true)} />
-        <Sessions query={query} />
-        <Foot {...props} />
+  const open = pinned || bay.open || starting
+  const vars = { "--wL": `${open ? OPEN.w : 46}px`, "--hL": open ? OPEN.h : "148px", "--sb-open-h": OPEN.h } as CSSProperties
+  const newSession = useCallback(() => setStarting(true), [])
+  return {
+    open,
+    ghost: <BayGhost className="cs-gl" style={vars} />,
+    bay: (
+      <div className="cs-sbwrap" style={vars} {...bay.handlers}>
+        <aside id="app-sidebar" aria-label="Sidebar" className="cs-sbx">
+          <div className="cs-sbmini" inert={open}>
+            <Tip label={pinned ? "Unpin sidebar" : "Pin sidebar"} hint={props.keys.sidebar} side="right">
+              <button type="button" aria-label="Sessions" aria-pressed={pinned} aria-keyshortcuts={props.keys.sidebar} onClick={togglePin} className="cs-iconbtn">
+                <TabGlyph id="lobby" />
+              </button>
+            </Tip>
+            <Tip label="New session" side="right">
+              <button type="button" aria-label="New session" aria-haspopup="dialog" onClick={newSession} className="cs-iconbtn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" /></svg>
+              </button>
+            </Tip>
+            <Tip label="Settings" hint={props.keys.settings ?? "Alt+S"} side="right">
+              <a href="#/settings" aria-label="Settings" aria-current={props.route.kind === "settings" ? "page" : undefined} className="cs-iconbtn">
+                <TabGlyph id="settings" />
+              </a>
+            </Tip>
+          </div>
+          <div className="cs-sbfull" inert={!open}>
+            <SearchRow query={query} onQuery={setQuery} onNew={newSession} />
+            <Sessions query={query} />
+            <Foot {...props} />
+          </div>
+        </aside>
+        <NewSessionDialog open={starting} onOpenChange={setStarting} />
       </div>
-      <EdgeHandle width={width} onWidth={resize} onResizing={setResizing} onFold={toggle} />
-      <NewSessionDialog open={starting} onOpenChange={setStarting} />
-    </aside>
-  )
-}
-
-/** The button at the start of the bar that brings a folded sidebar back. */
-export function SidebarOpenButton({ hint }: { hint?: string | undefined }) {
-  // Read again when the window crosses the narrow width, as the sidebar itself does.
-  useMediaQuery(NARROW_SIDEBAR)
-  const [folded, toggle] = useCollapsed(SIDEBAR_KEY)
-  if (!folded) return null
-  return (
-    <Tip label="Expand sidebar" hint={hint}>
-      <button type="button" aria-label="Expand sidebar" aria-expanded={false} aria-controls="app-sidebar" aria-keyshortcuts={hint} onClick={toggle} className={cn(ICON_BUTTON, "sidebar-open size-8 text-foreground")}>
-        <PanelLeft aria-hidden="true" className="size-4" />
-      </button>
-    </Tip>
-  )
+    ),
+  }
 }
