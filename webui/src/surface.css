@@ -215,3 +215,47 @@
 }
 /* Why no project can be chosen: a line under the tab navigator. */
 .cs-frame > .notice { position: absolute; z-index: 39; top: 44px; left: 0; right: 0; justify-content: center; pointer-events: none; }
+
+/* ---------------------------------------------------------------------------------------------------------------
+ * The Lobby's thread: the agents' words as plain prose under their name, yours in a speech bubble on the right.
+ * ------------------------------------------------------------------------------------------------------------- */
+:root { --chat-content-max-width: 48.75rem; }
+.chat-speaker { display: flex; align-items: baseline; gap: 8px; }
+.chat-name { font-size: 13px; font-weight: 600; color: var(--foreground); }
+.chat-agent { gap: 2px; }
+.chat-prose { font-size: 14px; line-height: 1.5; }
+.chat-bubble.cs-umsg { position: relative; max-width: 70%; margin-right: 9px; padding: 8px 14px; border-radius: 0; background: none; box-shadow: none; color: var(--foreground); font-size: 14px; line-height: 1.5; }
+.cs-umsg :is(.cs-ue, .cs-uf) { position: absolute; inset: 0; display: block; pointer-events: none; }
+.cs-umsg .cs-ue { --shape: var(--edge); filter: url(#cs-bayedge) drop-shadow(0 2px 5px rgb(0 0 0 / 0.14)); }
+.cs-umsg .cs-uf { --shape: var(--fill); filter: url(#cs-baylit); }
+.cs-umsg .cs-ub { position: absolute; inset: 0; border-radius: 18px; background: var(--shape); }
+.cs-umsg .cs-ue .cs-ub { box-shadow: 0 0 0 1px var(--shape); }
+.cs-umsg .cs-ut { position: absolute; right: -8px; bottom: 0; width: 17px; height: 14px; background: var(--shape); clip-path: polygon(0 0, 100% 100%, 0 100%); }
+.cs-umsg .cs-ue .cs-ut { right: -9px; bottom: -1px; width: 19px; height: 16px; }
+.cs-umsg .cs-ux { position: relative; min-width: 0; }
+.cs-umsg[data-new] { transform-origin: 100% 100%; animation: cs-um-pop 391ms cubic-bezier(0.34, 1.1, 0.5, 1) both; }
+@keyframes cs-um-pop { 0% { transform: scale(0.35, 0.3) translateY(14px); opacity: 0; } 30% { opacity: 1; } 58% { transform: scale(1.07, 0.93) translateY(-2px); } 80% { transform: scale(0.985, 1.02); } 100% { transform: none; opacity: 1; } }
+.cs-umsg[data-new] .cs-ut { animation: cs-um-tail 391ms cubic-bezier(0.34, 1.1, 0.5, 1) both; transform-origin: 0 100%; }
+@keyframes cs-um-tail { 0%, 40% { transform: scale(0); } 75% { transform: scale(1.2); } 100% { transform: scale(1); } }
+.cs-thread { padding-top: 48px; -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 4px, #000 40px, #000 calc(100% - 130px), transparent); mask-image: linear-gradient(to bottom, transparent 0, transparent 4px, #000 40px, #000 calc(100% - 130px), transparent); }
+.chat-column { gap: 18px; max-width: var(--chat-content-max-width); }
+
+/* The agents' work between the messages: one quiet row that opens into the steps. While a step runs, "Working"
+   glints in the accent and its dots count up. */
+.cs-work { display: flex; flex-direction: column; align-items: flex-start; margin-block: -4px; }
+.cs-wrow { display: flex; max-width: 100%; align-items: center; gap: 10px; height: 32px; padding: 0 10px; margin-left: -10px; border: 0; border-radius: 12px; background: transparent; font: inherit; font-size: 13px; color: var(--muted-foreground); cursor: pointer; outline: none; transition: background 76ms ease; }
+.cs-wrow:hover { background: var(--hover); }
+.cs-wrow:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
+.cs-wtx { flex: none; font-weight: 600; color: transparent; background: linear-gradient(100deg, var(--muted-foreground) 35%, var(--foreground) 50%, var(--primary) 56%, var(--muted-foreground) 70%) 100% 0 / 250% 100% no-repeat; -webkit-background-clip: text; background-clip: text; animation: cs-wshim 1.6s linear infinite; }
+.cs-wtx::after { content: ""; display: inline-block; width: 1.1em; text-align: left; animation: cs-wdots 1.4s steps(1, end) infinite; }
+@keyframes cs-wshim { from { background-position: 100% 0; } to { background-position: 0% 0; } }
+@keyframes cs-wdots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+.cs-wrow .cs-chev { color: var(--faint); transition: transform 187ms var(--out); }
+.cs-work[data-open] .cs-chev { transform: rotate(180deg); }
+.cs-wbody { display: grid; grid-template-rows: 0fr; width: 100%; transition: grid-template-rows 221ms var(--out); }
+.cs-work[data-open] .cs-wbody { grid-template-rows: 1fr; }
+.cs-wi { overflow: hidden; min-height: 0; }
+.cs-wlines { padding: 2px 0 4px; display: flex; flex-direction: column; gap: 2px; }
+.cs-wl { display: flex; gap: 6px; font-size: 13px; line-height: 1.5; color: var(--muted-foreground); }
+.cs-wl b { margin-right: 2px; font-weight: 600; color: var(--foreground); }
+@media (prefers-reduced-motion: reduce) { .cs-wtx { animation: none; color: var(--foreground); background: none; } .cs-wtx::after { content: "…"; animation: none; } }
