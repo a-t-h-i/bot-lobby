@@ -259,3 +259,190 @@
 .cs-wl { display: flex; gap: 6px; font-size: 13px; line-height: 1.5; color: var(--muted-foreground); }
 .cs-wl b { margin-right: 2px; font-weight: 600; color: var(--foreground); }
 @media (prefers-reduced-motion: reduce) { .cs-wtx { animation: none; color: var(--foreground); background: none; } .cs-wtx::after { content: "…"; animation: none; } }
+
+/* ---------------------------------------------------------------------------------------------------------------
+ * Controls shared by every page. Keycaps (`cs-kc`) and knobs are the only raised things on a page; cards are a
+ * hairline on the fill, wells are sunk.
+ * ------------------------------------------------------------------------------------------------------------- */
+.cs-kc { appearance: none; border: 0; font: inherit; font-size: 13px; font-weight: 500; color: var(--foreground); height: 32px; padding: 0 14px; border-radius: 12px; background: var(--fill); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 7px; box-shadow: var(--rs); outline: none; text-decoration: none; transition: box-shadow 76ms ease, background 76ms ease, transform 76ms ease, color 76ms ease; white-space: nowrap; }
+.cs-kc:hover:not(:disabled) { background: var(--sunk); box-shadow: var(--ss), 0 0 0 1px var(--edge); }
+.cs-kc:active:not(:disabled) { transform: translateY(1px); }
+.cs-kc:focus-visible { box-shadow: var(--rs), 0 0 0 2px var(--ring); }
+.cs-kc:disabled { opacity: 0.5; cursor: default; }
+.cs-kc.cs-pri { color: var(--primary); background: color-mix(in srgb, var(--primary) 11%, var(--fill)); }
+.cs-kc.cs-pri:hover:not(:disabled) { background: color-mix(in srgb, var(--primary) 12%, var(--sunk)); }
+.cs-kc.cs-dng { color: var(--bad); }
+.cs-kc.cs-sm { height: 28px; padding: 0 11px; font-size: 12.5px; border-radius: 10px; }
+.cs-kc.cs-ib { width: 34px; height: 32px; padding: 0; }
+.cs-kc.cs-sm.cs-ib { width: 28px; height: 28px; }
+.cs-kc svg { flex: none; }
+.cs-kc:is([data-on="true"], [aria-pressed="true"]) { background: color-mix(in srgb, var(--primary) 9%, var(--sunk)); box-shadow: var(--ss), 0 0 0 1px color-mix(in srgb, var(--primary) 34%, transparent); }
+.cs-kb { font: 600 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--faint); background: var(--sunk); padding: 1px 6px; border-radius: 6px; margin-left: 2px; }
+
+/* A segmented control: a sunk track and a raised thumb that springs between the options. */
+.cs-seg { position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); padding: 3px; border-radius: 13px; background: var(--sunk); }
+.cs-seg .cs-thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / var(--n)); border-radius: 10px; background: color-mix(in srgb, var(--fill) 88%, #fff); box-shadow: 0 1px 2px rgb(0 0 0 / 0.22), inset 0 0 0 1px var(--edge); transform: translateX(calc(var(--k) * 100%)); transition: transform 357ms cubic-bezier(0.34, 1.35, 0.5, 1); }
+.dark .cs-seg .cs-thumb { background: color-mix(in srgb, var(--fill) 88%, #fff); }
+.cs-seg button { position: relative; z-index: 1; appearance: none; border: 0; background: none; font: inherit; font-size: 12.5px; font-weight: 500; height: 26px; padding: 0 12px; color: var(--muted-foreground); cursor: pointer; transition: color 102ms; white-space: nowrap; outline: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 10px; }
+.cs-seg button:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
+.cs-seg button[aria-pressed="true"], .cs-seg button[aria-selected="true"], .cs-seg button[data-on="true"] { color: var(--foreground); }
+
+/* A switch: a sunk track whose knob springs across and stretches while pressed. */
+.cs-sw { appearance: none; border: 0; padding: 0; width: 46px; height: 26px; border-radius: 13px; background: var(--sunk); position: relative; cursor: pointer; flex: none; transition: background 170ms ease; outline: none; }
+.cs-sw::after { content: ""; position: absolute; left: 3px; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: color-mix(in srgb, var(--fill) 78%, #fff); box-shadow: 0 1px 2px rgb(0 0 0 / 0.28); transition: transform 323ms cubic-bezier(0.34, 1.45, 0.5, 1), width 136ms ease; }
+.cs-sw[aria-checked="true"] { background: color-mix(in srgb, var(--primary) 36%, var(--sunk)); }
+.cs-sw[aria-checked="true"]::after { transform: translateX(20px); }
+.cs-sw:active::after { width: 25px; }
+.cs-sw[aria-checked="true"]:active::after { transform: translateX(15px); }
+.cs-sw.cs-sm { width: 36px; height: 21px; border-radius: 11px; }
+.cs-sw.cs-sm::after { width: 15px; height: 15px; }
+.cs-sw.cs-sm[aria-checked="true"]::after { transform: translateX(15px); }
+.cs-sw.cs-sm:active::after { width: 19px; }
+.cs-sw.cs-sm[aria-checked="true"]:active::after { transform: translateX(11px); }
+.cs-sw:focus-visible { box-shadow: 0 0 0 2px var(--ring); }
+.cs-sw:disabled { opacity: 0.5; cursor: default; }
+
+/* A check box: a hairline square that fills with the accent, its tick springing in. */
+.cs-cb { width: 18px; height: 18px; border-radius: 6px; flex: none; display: grid; place-items: center; background: var(--fill); box-shadow: inset 0 0 0 1px var(--edge); color: #fff; transition: background 136ms, transform 238ms var(--spring); }
+.cs-cb svg { width: 11px; height: 11px; transform: scale(0); transition: transform 238ms cubic-bezier(0.34, 1.6, 0.5, 1); }
+.cs-cb[data-on="true"] { background: var(--primary); box-shadow: none; }
+.cs-cb[data-on="true"] svg { transform: scale(1); }
+.cs-cb.cs-sm { width: 15px; height: 15px; border-radius: 5px; }
+.cs-cb.cs-sm svg { width: 9px; height: 9px; }
+
+/* Badges, status marks, progress pips and tracks. */
+.cs-bdg { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 10px; border-radius: 11px; font-size: 11.5px; font-weight: 600; background: var(--sunk); color: var(--muted-foreground); white-space: nowrap; flex: none; }
+.cs-bdg[data-t="ok"] { color: var(--ok); }
+.cs-bdg[data-t="warn"] { color: var(--warn); }
+.cs-bdg[data-t="bad"] { color: var(--bad); }
+.cs-bdg[data-t="acc"] { color: var(--primary); }
+.cs-mk { width: 18px; height: 18px; border-radius: 50%; flex: none; display: grid; place-items: center; background: var(--sunk); color: #fff; }
+.cs-mk svg { display: none; width: 11px; height: 11px; }
+.cs-mk[data-s="done"] { background: var(--ok); }
+.dark .cs-mk[data-s="done"] { color: #0c2a1b; }
+.cs-mk[data-s="done"] .cs-ck { display: block; }
+.cs-mk:is([data-s="drop"], [data-s="skip"]) { color: var(--muted-foreground); }
+.cs-mk[data-s="drop"] .cs-xx { display: block; }
+.cs-mk[data-s="skip"] .cs-sl { display: block; }
+.cs-mk[data-s="now"]::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); animation: cs-mkp 1190ms ease-in-out infinite; }
+.cs-mk[data-s="warn"]::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+@keyframes cs-mkp { 50% { transform: scale(0.6); opacity: 0.55; } }
+.cs-pips { display: inline-block; position: relative; height: 6px; width: calc(var(--n) * 14px - 2px); flex: none; background: color-mix(in srgb, var(--muted-foreground) 30%, transparent); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='6'%3E%3Crect width='12' height='6' rx='3'/%3E%3C/svg%3E") 0 0/14px 6px repeat-x; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='6'%3E%3Crect width='12' height='6' rx='3'/%3E%3C/svg%3E") 0 0/14px 6px repeat-x; }
+.cs-pips::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--d) * 14px); background: var(--primary); transition: width 340ms var(--out); }
+.cs-trk { height: 8px; border-radius: 4px; background: var(--sunk); overflow: hidden; flex: none; }
+.cs-trk i { display: block; height: 100%; border-radius: 4px; background: var(--primary); transition: width 340ms var(--out); }
+.cs-trk[data-over="true"] i { background: var(--warn); }
+
+/* A section rule: a label, a hairline, and a note at its end. */
+.cs-rl { display: flex; align-items: center; gap: 12px; margin: 24px 0 10px; font-size: 12px; font-weight: 600; color: var(--muted-foreground); }
+.cs-rl::after { content: ""; flex: 1; order: 1; height: 1px; background: var(--edge); }
+.cs-rl .cs-rr { order: 2; font-weight: 500; color: var(--faint); font-size: 11.5px; }
+.cs-rl.cs-first { margin-top: 0; }
+
+/* Page headings and the flat surfaces pages are built of. */
+.cs-pg { width: 100%; margin-inline: auto; padding: 56px 24px 0; box-sizing: border-box; }
+.cs-pgh { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 0 0 18px; }
+.cs-hd1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; color: var(--foreground); }
+.cs-hd2 { margin: 4px 0 0; font-size: 13px; color: var(--muted-foreground); }
+.cs-card { background: var(--fill); box-shadow: inset 0 0 0 1px var(--edge); border-radius: 16px; }
+.cs-sunk { background: var(--sunk); border-radius: 15px; }
+.cs-note { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 15px; font-size: 13px; color: var(--muted-foreground); background: var(--sunk); }
+.cs-note b { color: var(--foreground); font-weight: 600; }
+.cs-sel { appearance: none; border: 0; font: inherit; display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; height: 34px; padding: 0 12px; border-radius: 12px; background: var(--sunk); font-size: 13px; color: var(--foreground); text-align: left; cursor: pointer; box-sizing: border-box; outline: none; }
+.cs-sel:hover { box-shadow: inset 0 0 0 1px var(--edge); }
+.cs-sel:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
+.cs-fi { display: flex; align-items: center; height: 34px; padding: 0 12px; border-radius: 12px; background: var(--sunk); font-size: 13px; color: var(--foreground); gap: 8px; box-sizing: border-box; }
+.cs-tile { width: 22px; height: 22px; border-radius: 8px; flex: none; display: grid; place-items: center; font-weight: 700; font-size: 11px; color: #fff; background: var(--ac); }
+.cs-tile.cs-lg { width: 30px; height: 30px; border-radius: 11px; font-size: 12.5px; }
+.cs-spn { width: 11px; height: 11px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: cs-spn 680ms linear infinite; flex: none; box-sizing: border-box; }
+@keyframes cs-spn { to { transform: rotate(360deg); } }
+.cs-fold { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0; border: 0; background: none; font: inherit; font-size: 13px; color: var(--muted-foreground); cursor: pointer; outline: none; }
+.cs-fold:hover { color: var(--foreground); }
+.cs-fold svg { transition: transform 221ms var(--spring); }
+.cs-fold[aria-expanded="true"] svg { transform: rotate(90deg); }
+
+/* A slide-over: a sheet that slides in from the right over a blurred page. */
+.cs-shw { position: fixed; inset: 0; z-index: 60; pointer-events: none; }
+.cs-shw[data-open="true"] { pointer-events: auto; }
+.cs-shbd { position: absolute; inset: 0; background: color-mix(in srgb, var(--page) 42%, transparent); -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px); opacity: 0; transition: opacity 238ms ease; }
+.cs-shw[data-open="true"] .cs-shbd { opacity: 1; }
+.cs-shp { position: absolute; top: 12px; bottom: 12px; right: 12px; width: min(620px, calc(100vw - 24px)); border-radius: 28px; background: var(--fill); box-shadow: inset 0 0 0 1px var(--edge), 0 24px 70px rgb(0 0 0 / 0.3); transform: translateX(calc(100% + 40px)); transition: transform 476ms cubic-bezier(0.34, 1.18, 0.5, 1); display: flex; flex-direction: column; overflow: hidden; outline: none; }
+.cs-shw[data-open="true"] .cs-shp { transform: none; }
+.cs-shh { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px 12px; flex: none; }
+.cs-shh h3 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.cs-shh p { margin: 2px 0 0; font-size: 12px; color: var(--muted-foreground); }
+.cs-shb { flex: 1; min-height: 0; overflow: auto; padding: 4px 20px 28px; }
+
+/* ---------------------------------------------------------------------------------------------------------------
+ * The composer's menus (composer/*): the bubble timings of this design, no scrollbars, colour-coded `/` commands
+ * and `@` agents, a light blur behind an open menu, the bubbles above the composer and the questionnaire drawer.
+ * ------------------------------------------------------------------------------------------------------------- */
+.bubble { --morph: height 306ms var(--out) 17ms, width 289ms var(--out), border-radius 306ms var(--out) 17ms; }
+.bubble[data-morphing]:not([data-shrunk]) { --morph: height 306ms var(--out) 17ms, width 289ms var(--out), border-radius 306ms var(--out) 17ms; }
+.bubble[data-shrunk] { --morph: height 255ms cubic-bezier(0.4, 0, 0.2, 1), width 238ms cubic-bezier(0.4, 0, 0.2, 1), border-radius 255ms cubic-bezier(0.4, 0, 0.2, 1); }
+.bubble-menu { transition: height 94ms cubic-bezier(0.5, 0, 0.75, 0), width 94ms cubic-bezier(0.5, 0, 0.75, 0), transform 94ms cubic-bezier(0.5, 0, 0.75, 0); }
+.bubble[data-open] .bubble-menu { transition: height 162ms var(--out), width 144ms var(--out), transform 178ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.bubble-menu-body { transition: opacity 42ms ease; }
+.bubble[data-open] .bubble-menu-body { transition: opacity 94ms ease 26ms; }
+.bubble-pane { animation-duration: 102ms; }
+.bubble[data-open] :is(.bubble-row, .bubble-prow) { animation-duration: 204ms; }
+/* No scrollbars in the menus: the rows scroll under the finger and the wheel. */
+.bubble-menu, .bubble-menu * { scrollbar-width: none !important; -ms-overflow-style: none; }
+.bubble-menu *::-webkit-scrollbar, .bubble-menu::-webkit-scrollbar { display: none !important; width: 0; height: 0; }
+
+/* A glyph or label in a row's own colour: commands by where they come from, agents by who they are. */
+.bubble-glyph.cs-kg { color: var(--k); background: color-mix(in srgb, var(--k) 14%, transparent); border-color: color-mix(in srgb, var(--k) 38%, transparent); }
+.bubble-glyph.cs-kg svg { width: 14px; height: 14px; }
+.cs-ktag { margin-left: auto; flex: none; padding-left: 12px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: var(--k); }
+
+/* While a menu is open, the page behind the composer blurs a little (1.5px, an 8% tint), fading in and out. */
+.cs-scrim { position: absolute; inset: 0; z-index: 29; pointer-events: none; opacity: 0; background: color-mix(in srgb, var(--page) 8%, transparent); -webkit-backdrop-filter: blur(1.5px); backdrop-filter: blur(1.5px); transition: opacity 204ms ease; }
+.cs-scrim[data-open] { opacity: 1; }
+
+/* The bubbles above the composer: one line each, side by side, in the same merged shape as the menus. */
+.cs-pbar { display: inline-flex; gap: 4px; }
+.cs-pbar .bubble-row { width: auto; flex: none; padding: 0 14px 0 12px; }
+.cs-pbq svg { flex: none; color: var(--muted-foreground); }
+.cs-pbq.cs-acc svg { color: var(--primary); }
+
+/* The questionnaire drawer: who asks and from where, n of N, the question in large type, then numbered options
+   (or mockup thumbnails). The reply is typed in the composer itself. */
+.cs-askh { box-sizing: border-box; padding: 6px 10px 10px; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+.cs-asks { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--bubble-muted); }
+.cs-asks b { font-size: 12.5px; font-weight: 600; }
+.cs-asks .bubble-glyph { width: 20px; height: 20px; border-radius: 6px; font-size: 11px; }
+.cs-askf { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-askn { font-variant-numeric: tabular-nums; color: var(--bubble-faint); }
+.cs-askq { margin: 0; font-size: 15.5px; line-height: 1.35; font-weight: 500; color: var(--bubble-ink); letter-spacing: -0.005em; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cs-askx { appearance: none; border: 0; background: none; font: inherit; font-size: 12px; color: var(--bubble-faint); cursor: pointer; padding: 2px 6px; border-radius: 8px; }
+.cs-askx:hover { background: var(--bubble-hover); color: var(--bubble-ink); }
+.cs-askx[data-confirm] { color: var(--bad); }
+.cs-askopts { max-height: 216px; overflow-y: auto; }
+.cs-askm { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 6px 4px; }
+.cs-mko { appearance: none; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 7px; padding: 6px; border-radius: 14px; text-align: left; min-width: 0; animation: bubble-row-pop 204ms var(--out) backwards; outline: none; }
+.cs-mko:hover, .cs-mko:focus-visible, .cs-mko[data-on] { background: var(--bubble-hover); }
+.cs-mkl { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; font-weight: 500; color: var(--bubble-ink); }
+.cs-mkl > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-mkl .bubble-glyph { width: 20px; height: 20px; border-radius: 6px; font-size: 11px; }
+.cs-mk3 { position: relative; aspect-ratio: 3 / 2; border-radius: 11px; background: var(--sunk); overflow: hidden; }
+.cs-mk3 > :is(img, iframe, .cs-mktext) { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cs-mktext { padding: 8px; font: 9px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; overflow: hidden; color: var(--muted-foreground); box-sizing: border-box; }
+.cs-mk3 .static-thumb { position: absolute; inset: 0; height: 100% !important; border: 0; border-radius: 0; }
+.cs-mxb { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; background: var(--fill); color: var(--muted-foreground); box-shadow: 0 1px 3px rgb(0 0 0 / 0.2); opacity: 0.92; transition: opacity 102ms ease, transform 136ms ease; cursor: zoom-in; z-index: 2; }
+.cs-mko:hover .cs-mxb { opacity: 1; transform: scale(1.08); }
+.cs-mxb:hover { color: var(--foreground); }
+.bubble-row .cs-cb { margin-left: auto; }
+
+/* The mockup lightbox: the large mockup over a blurred page, with who asked, "Choose this" and prev/next. */
+.cs-mxw { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; pointer-events: none; }
+.cs-mxw[data-open="true"] { pointer-events: auto; }
+.cs-mxw .cs-shbd { opacity: 0; }
+.cs-mxw[data-open="true"] .cs-shbd { opacity: 1; }
+.cs-mxc { position: relative; width: min(980px, calc(100% - 80px)); max-height: calc(100% - 80px); box-sizing: border-box; padding: 14px; border-radius: 22px; background: var(--fill); box-shadow: 0 0 0 1px var(--edge), 0 30px 80px rgb(0 0 0 / 0.35); display: flex; flex-direction: column; gap: 12px; opacity: 0; transform: scale(0.94) translateY(10px); transition: opacity 170ms ease, transform 357ms cubic-bezier(0.34, 1.3, 0.5, 1); outline: none; }
+.cs-mxw[data-open="true"] .cs-mxc { opacity: 1; transform: none; }
+.cs-mxbig { position: relative; min-height: 0; flex: 1 1 auto; aspect-ratio: 16 / 10; max-height: calc(100vh - 200px); border-radius: 14px; background: var(--sunk); overflow: hidden; }
+.cs-mxbig > * { position: absolute; inset: 0; width: 100%; height: 100% !important; object-fit: contain; border: 0; border-radius: 0; }
+.cs-mxbig .cs-mktext { font-size: 12px; overflow: auto; }
+.cs-mxf { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.cs-mxf .bubble-glyph { width: 22px; height: 22px; }
+.cs-mxwho { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--muted-foreground); }

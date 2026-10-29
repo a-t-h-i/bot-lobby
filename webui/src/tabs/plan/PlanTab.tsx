@@ -7,9 +7,10 @@
  * slideout, started by Answer questions. Line comments are remembered here
  * only (the snapshot does not carry them) and go with the session.
  */
-import { useRef, useState } from "react"
-import { ArrowDown, FileText, Route } from "lucide-react"
-import { KeyHint, Keys } from "@/components/ui/kbd"
+import { useCallback, useRef, useState } from "react"
+import { useOfferViewPlan } from "@/lib/composerBubbles"
+import { ArrowDown, Route } from "lucide-react"
+import { KeyHint } from "@/components/ui/kbd"
 import { useHotkey } from "@/lib/hotkeys"
 import { ErrorState } from "@/app/States"
 import { useApiRead } from "@/app/useApiRead"
@@ -111,33 +112,25 @@ function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) 
   )
 }
 
-/** The draft, one click away from anywhere in the chat: a pill that stays at the top of the conversation as it scrolls. */
-/** The one way to the draft (V); the header already says which round it is. */
-function PlanPill({ snap, onOpen }: { snap: PlannerSnapshot; onOpen: () => void }) {
-  const node = useRef<HTMLButtonElement>(null)
-  useHotkey("v", () => node.current?.click())
-  if (!snap.draft) return null
-  return (
-    <div className="pointer-events-none sticky top-0 z-10 -mt-2 mb-3 flex justify-center">
-      <button ref={node} type="button" aria-haspopup="dialog" aria-keyshortcuts="V" onClick={onOpen} className="plan-pill pointer-events-auto inline-flex items-center gap-2 rounded-full border py-1.5 ps-2.5 pe-3 text-sm font-medium shadow-card backdrop-blur-sm">
-        <FileText aria-hidden="true" className="size-4 text-primary" />
-        View plan
-        <Keys chord="V" className="kbd-hint" />
-      </button>
-    </div>
-  )
+/** The one way to the draft (V, or "View plan" above the composer). */
+function useViewPlanBubble(snap: PlannerSnapshot, onOpen: () => void) {
+  const open = useRef(onOpen)
+  open.current = onOpen
+  const view = useCallback(() => open.current(), [])
+  useHotkey("v", view, { enabled: Boolean(snap.draft) })
+  useOfferViewPlan(snap.draft ? view : undefined)
 }
 
 function Session({ snap, reload }: { snap: PlannerSnapshot; reload: () => void }) {
   const [viewing, setViewing] = useState(false)
   const [comments, setComments] = useState<Comments>(new Map())
+  useViewPlanBubble(snap, () => setViewing(true))
   const remember = (at: string, text: string) => setComments((now) => new Map(now).set(at, [...(now.get(at) ?? []), text]))
   const { ref, onScroll } = useStickToBottom(`${JSON.stringify(snap.messages)}${snap.busy}`)
   return (
     <>
       <PlanHeader snap={snap} onDone={reload} />
       <div ref={ref} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-5 pb-dock">
-        <PlanPill snap={snap} onOpen={() => setViewing(true)} />
         <PanelConversation messages={snap.messages} busy={snap.busy} />
       </div>
       <ScrollHints target={ref} />

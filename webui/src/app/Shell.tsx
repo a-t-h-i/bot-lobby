@@ -28,7 +28,7 @@ import { toggleCode } from "./code/codeStore.ts"
 import { SignIn } from "./SignIn.tsx"
 import { ErrorState, LoadingState, ReconnectingState } from "./States.tsx"
 import { Thinking } from "./Thinking.tsx"
-import { QuestionPopup } from "@/prompts/QuestionPopup"
+import { useDrawer } from "@/prompts/Drawer"
 import { setPutAway, usePutAway } from "@/prompts/putAway"
 import { Lightbox } from "@/ui/Lightbox"
 import { useEvents } from "./useEvents.ts"
@@ -111,9 +111,14 @@ export function Shell() {
   const statusRecord = useTopic<StatusInfo>("status")
   const lobbyRecord = useTopic<LobbySnapshot>("lobby")
   const { prompts, loading: promptsLoading, answer, dismiss } = usePrompts()
+  const drawer = useDrawer(prompts, answer, dismiss)
   const { connection, signedOut } = useStatus()
   const [help, setHelp] = useState(false)
   const putAway = usePutAway()
+  // With every question answered, the next one opens the drawer again.
+  useEffect(() => {
+    if (prompts.length === 0 && !promptsLoading) setPutAway(false)
+  }, [prompts.length, promptsLoading])
   const rootRef = useRef<HTMLDivElement>(null)
   const retry = useEvents()
   useDesktopNotifications()
@@ -232,7 +237,7 @@ export function Shell() {
               {routeBody(route)}
             </motion.div>
           </main>
-          <Composer route={route} projects={projects} />
+          <Composer route={route} projects={projects} drawer={drawer} drawerOpen={prompts.length > 0 && !putAway} />
         </div>
         <TerminalDrawer toggleKey={keyLabels.terminal ?? "Ctrl+`"} />
       </div>
@@ -248,7 +253,6 @@ export function Shell() {
       <span id="focused-action-help" className="sr-only">Focused buttons: Enter or Space. Links: Enter. Checkboxes: Space.</span>
       <Thinking status={status} lobby={lobbyRecord.data} />
       <CodeViewer codeKey={keys.find((key) => key.action === "code")?.key} />
-      <QuestionPopup prompts={prompts} loading={promptsLoading} answer={answer} dismiss={dismiss} minimized={putAway} onMinimize={setPutAway} />
       <Lightbox />
       <AltH open={help} onOpenChange={setHelp} keys={keys} tabs={tabs} />
     </div>

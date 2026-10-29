@@ -27,15 +27,16 @@ import { cn } from "@/lib/utils"
 import { projectUrl } from "@/lib/project"
 import type { LobbySnapshot, StatusInfo, UploadInfo } from "@protocol"
 import { useTopic } from "./hooks"
-import { go, parseHash, tabHash, type Route } from "./router"
-import { knowledgeHash } from "./knowledgeView"
-import { KnowledgePaneToggle } from "./KnowledgePaneToggle"
+import { go, tabHash, type Route } from "./router"
 import { OPEN_PROJECTS, ProjectChip, ProjectsPane, projectsSize, type Projects } from "./ProjectSwitcher"
 import { FOLDER_SIZE, FolderPane } from "./ProjectFolderDialog"
 import { taskRoute } from "./taskRoute"
 import { ComposerBubble } from "./composer/ComposerSurface"
 import { ComposerSendButton, ComposerStopButton } from "./composer/ComposerPrimaryActions"
 import { ComposerCommandMenu, composerItems, composerSuggestionOptionId, composerTrigger, suggestionHeight, suggestionWidth, type ComposerCommandItem } from "./composer/ComposerCommandMenu"
+import { DrawerPane, MockupLightbox, type Drawer } from "@/prompts/Drawer"
+import { setPutAway } from "@/prompts/putAway"
+import { KNOWLEDGE_ASKED, useViewPlan } from "@/lib/composerBubbles"
 
 type TargetId = "oracle" | "knowledge" | "panel" | "comment"
 
@@ -56,18 +57,23 @@ export function composerVisible(route: Route): boolean {
   return route.kind === "tab" && COMPOSER_TABS.has(route.tab)
 }
 
-/** The one recipient this route's messages go to: the page decides, the user does not pick. */
-function targetFor(route: Route, openTask: string | undefined): Target {
+const ASK_KNOWLEDGE: Target = { id: "knowledge", label: "Ask what the agents know", placeholder: "Ask what the agents know…" }
+
+/** The one recipient this route's messages go to: the page decides, the user does not pick (on Knowledge, "Ask the knowledge" turns asking on). */
+function targetFor(route: Route, openTask: string | undefined, asking: boolean): Target {
   if (route.kind !== "tab") return ORACLE
-  if (route.tab === "knowledge") return { id: "knowledge", label: "Ask the oracle about this project", placeholder: "Ask about this project — the oracle searches the code and learns what is missing…" }
+  if (route.tab === "knowledge") return asking ? ASK_KNOWLEDGE : ORACLE
   if (route.tab === "plan") return { id: "panel", label: "Message the panel", placeholder: "Describe a task, or answer the panel…" }
   const task = route.tab === "tasks" ? taskRoute(route.rest).id ?? openTask : undefined
   return task ? { id: "comment", label: `Comment on ${task}`, placeholder: `Comment on ${task}'s plan…`, taskId: task } : ORACLE
 }
 
-/** A bubble that grows out of the composer's top: the suggestions, or one of the panels a button opens. */
-type Pane = "suggest" | "attach" | "projects" | "browse"
-type Panel = Exclude<Pane, "suggest">
+/**
+ * A bubble that grows out of the composer's top: the suggestions, one of the panels a button opens, the question
+ * drawer, or the bar of bubbles (Answer questions, View plan, Ask the knowledge) that waits there otherwise.
+ */
+type Pane = "suggest" | "attach" | "projects" | "browse" | "ask" | "bar"
+type Panel = Exclude<Pane, "suggest" | "ask" | "bar">
 
 const ATTACH_SIZE = { w: 300, h: 125 } as const
 
@@ -192,7 +198,19 @@ function Kbd({ children }: { children: string }) {
   return <kbd className="bubble-kbd">{children}</kbd>
 }
 
-export function Composer({ route, projects }: { route: Route; projects: Projects }) {
+/** A pane that sizes its bubble from its own content: its width (bar) or its height (drawer), measured after each render. */
+function useMeasured(pane: Pane, ref: RefObject<HTMLDivElement | null>): { w: number; h: number } {
+  const [size, setSize] = useState({ w: 250, h: 48 })
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const next = pane === "bar" ? { w: Math.ceil(el.scrollWidth) + 12, h: 48 } : { w: 580, h: Math.ceil(el.scrollHeight) }
+    setSize((now) => (now.w === next.w && now.h === next.h ? now : next))
+  })
+  return size
+}
+
+export function Composer({ route, projects, drawer, drawerOpen }: { route: Route; projects: Projects; drawer: Drawer; drawerOpen: boolean }) {
   const [text, setText] = useState("")
   const [files, setFiles] = useState<Pending[]>([])
   const [sending, setSending] = useState(false)
@@ -207,8 +225,13 @@ export function Composer({ route, projects }: { route: Route; projects: Projects
   const visibleRef = useRef(visible)
   visibleRef.current = visible
   const { taskId: openTask } = useComposerContext()
-  const target = useMemo(() => targetFor(route, openTask), [route, openTask])
   const tab = route.kind === "tab" ? route.tab : route.kind
+  // "Ask the knowledge": on Knowledge, the box asks what the agents know until Esc or the question goes.
+  const [asking, setAsking] = useState(false)
+  useEffect(() => setAsking(false), [tab])
+  const target = useMemo(() => targetFor(route, openTask, asking), [route, openTask, asking])
+  const viewPlan = useViewPlan()
+  const [mockup, setMockup] = useState(-1)
 
   const card = useRef<HTMLDivElement>(null)
   const bubble = useRef<HTMLDivElement>(null)
@@ -224,13 +247,22 @@ export function Composer({ route, projects }: { route: Route; projects: Projects
   const [caret, setCaret] = useState(0)
   const [activeItem, setActiveItem] = useState<string | null>(null)
   const [dismissedFor, setDismissedFor] = useState<string | undefined>(undefined)
-  const trigger = target.id === "oracle" && !panel ? composerTrigger(text, caret) : undefined
+  const ask = drawerOpen && Boolean(drawer.step) && visible && !blocked && panel === null
+  const trigger = target.id === "oracle" && !panel && !ask ? composerTrigger(text, caret) : undefined
   const menuItems = useMemo(() => (trigger ? composerItems(trigger, status.data?.commands) : []), [trigger?.kind, trigger?.query, status.data?.commands])
   const menuOpen = Boolean(trigger) && menuItems.length > 0 && dismissedFor !== text && visible && !blocked
   const lit = menuOpen ? (menuItems.find((item) => item.id === activeItem) ?? menuItems[0]!) : undefined
   const listId = "composer-suggestions"
-  const open = menuOpen || (panel !== null && visible && !blocked)
-  const { shrunk, expand } = useShrinkOnScroll(card, visible && !blocked, route, open)
+  // The bubbles that wait above the composer while nothing else is open there.
+  const bubbles = {
+    answer: drawer.left > 0 && !drawerOpen,
+    plan: tab === "plan" && Boolean(viewPlan),
+    knowledge: tab === "knowledge" && !asking,
+  }
+  const bar = !menuOpen && panel === null && !ask && visible && !blocked && (bubbles.answer || bubbles.plan || bubbles.knowledge)
+  const blur = menuOpen || ask || (panel !== null && visible && !blocked)
+  const open = blur || bar
+  const { shrunk, expand } = useShrinkOnScroll(card, visible && !blocked, route, open && !bar)
 
   // Folding to the pill and back eases slowly; the rest of the time the box follows its text quickly.
   const [morphing, setMorphing] = useState(false)
@@ -286,14 +318,17 @@ export function Composer({ route, projects }: { route: Route; projects: Projects
   // The bubble that shows (or last showed, while it closes) and its size: closing keeps the last pane and width while the height falls.
   const shownPane = useRef<Pane>("suggest")
   const shownSize = useRef({ w: 320, h: 0 })
-  const pane: Pane = panel ?? (menuOpen ? "suggest" : shownPane.current)
+  const pane: Pane = panel ?? (ask ? "ask" : menuOpen ? "suggest" : bar ? "bar" : shownPane.current)
+  const paneRef = useRef<HTMLDivElement>(null)
+  const measured = useMeasured(pane, paneRef)
   if (open) {
     shownPane.current = pane
     const family = field.current ? getComputedStyle(field.current).fontFamily : "system-ui, sans-serif"
     shownSize.current = pane === "suggest" ? { w: suggestionWidth(menuItems, family), h: suggestionHeight(menuItems.length) }
       : pane === "attach" ? ATTACH_SIZE
         : pane === "projects" ? projectsSize(projects)
-          : FOLDER_SIZE
+          : pane === "bar" || pane === "ask" ? measured
+            : FOLDER_SIZE
   }
   // The suggestions as they last showed, so the closing bubble keeps its rows.
   const lastMenu = useRef<{ items: ComposerCommandItem[]; kind: NonNullable<typeof trigger>["kind"]; lit?: string }>({ items: [], kind: "slash-command" })
@@ -417,10 +452,14 @@ export function Composer({ route, projects }: { route: Route; projects: Projects
         const result = await call("lobby.send", body)
         if (result.notice) toast(result.notice)
         if (result.open === "plan") go(tabHash("plan"))
+        // From Knowledge a message goes to the team, so the page goes where they answer.
+        else if (tab === "knowledge") go(tabHash("lobby"))
       } else if (target.id === "knowledge") {
         done = (await act("knowledge.ask", body)) !== undefined
-        const now = parseHash(window.location.hash)
-        if (done && now?.kind === "tab" && now.tab === "knowledge") go(knowledgeHash(now.rest, true))
+        if (done) {
+          window.dispatchEvent(new CustomEvent(KNOWLEDGE_ASKED, { detail: text.trim() }))
+          setAsking(false)
+        }
       } else if (target.id === "panel") done = (await act("planner.send", body)) !== undefined
       else done = (await act("tasks.comment", { taskId: target.taskId!, ...body })) !== undefined
       if (done) {
@@ -433,7 +472,7 @@ export function Composer({ route, projects }: { route: Route; projects: Projects
     } finally {
       setSending(false)
     }
-  }, [canSend, ready, target, text, route])
+  }, [canSend, ready, target, text, route, tab])
 
   const stop = useCallback(async () => {
     try {
@@ -466,9 +505,19 @@ export function Composer({ route, projects }: { route: Route; projects: Projects
     }
     if (event.key === "Escape" && !event.nativeEvent.isComposing) {
       event.preventDefault()
-      // Esc closes an open panel first; then it leaves the box (what you typed stays) for the tab bar.
+      // Esc closes an open panel, the question drawer (the questions wait in their bubble) or asking first;
+      // then it leaves the box (what you typed stays) for the tab bar.
       if (panel) setPanel(null)
+      else if (ask) setPutAway(true)
+      else if (asking) setAsking(false)
       else focusTab()
+      return
+    }
+    if (ask && isSend(event)) {
+      // In the drawer, Enter answers the question in view with what you typed.
+      event.preventDefault()
+      if (drawer.reply(text)) setText("")
+      else if (!text.trim() && drawer.step?.multi) drawer.submitPicks()
       return
     }
     const box = event.currentTarget
@@ -513,17 +562,53 @@ export function Composer({ route, projects }: { route: Route; projects: Projects
     if (event.dataTransfer.files.length > 0) attach(event.dataTransfer.files)
   }
 
-  const knowledge = route.kind === "tab" && route.tab === "knowledge"
   const project = status.data?.workspace.name ?? "bot-lobby"
   const branch = status.data?.branch ?? status.data?.workspace.branch
   const steering = busy && target.id === "oracle"
-  const placeholder = shrunk ? "Write a message…" : steering ? "The oracle is working. Enter steers it…" : target.placeholder
+  const placeholder = shrunk ? "Write a message…"
+    : ask ? (drawer.step?.typed ? drawer.step.placeholder : "Pick an answer above")
+      : steering ? "The oracle is working. Enter steers it…" : target.placeholder
   const pickFiles = (input: RefObject<HTMLInputElement | null>) => {
     setPanel(null)
     input.current?.click()
   }
 
-  const menu = pane === "suggest" ? (
+  const answerQuestions = () => {
+    setPutAway(false)
+    requestAnimationFrame(() => field.current?.focus({ preventScroll: true }))
+  }
+  const askKnowledge = () => {
+    setAsking(true)
+    requestAnimationFrame(() => field.current?.focus({ preventScroll: true }))
+  }
+  const menu = pane === "ask" ? (
+    <div key="ask" ref={paneRef}><DrawerPane drawer={drawer} onExpand={setMockup} /></div>
+  ) : pane === "bar" ? (
+    <div key="bar" ref={paneRef} className="bubble-pane p-1.5" style={{ width: "max-content" }}>
+      <div className="cs-pbar">
+        {bubbles.answer ? (
+          <button type="button" className="bubble-row cs-pbq cs-acc" onMouseDown={(event) => event.preventDefault()} onClick={answerQuestions}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-4.6A8 8 0 1121 12z" /><path d="M9.6 9.5a2.5 2.5 0 014.8.9c0 1.6-2.4 2-2.4 3.4M12 16.5h.01" /></svg>
+            <span className="text-sm font-medium text-(--bubble-accent)">Answer questions</span>
+            <span className="cs-ktag" style={{ "--k": "var(--primary)" } as CSSProperties}>{drawer.left} left</span>
+          </button>
+        ) : null}
+        {bubbles.plan ? (
+          <button type="button" className="bubble-row cs-pbq" aria-keyshortcuts="V" onMouseDown={(event) => event.preventDefault()} onClick={() => viewPlan?.()}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z" /><path d="M14 3v5h5M9 13h6M9 17h4" /></svg>
+            <span className="text-sm font-medium text-(--bubble-ink)">View plan</span>
+            <span className="cs-kb">V</span>
+          </button>
+        ) : null}
+        {bubbles.knowledge ? (
+          <button type="button" className="bubble-row cs-pbq" onMouseDown={(event) => event.preventDefault()} onClick={askKnowledge}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" /></svg>
+            <span className="text-sm font-medium text-(--bubble-ink)">Ask the knowledge</span>
+          </button>
+        ) : null}
+      </div>
+    </div>
+  ) : pane === "suggest" ? (
     <ComposerCommandMenu
       key="suggest"
       listId={listId}
@@ -560,6 +645,8 @@ export function Composer({ route, projects }: { route: Route; projects: Projects
   )
 
   return (
+    <>
+    <div className="cs-scrim" data-open={blur || undefined} aria-hidden="true" />
     <div
       id="app-dock"
       ref={card}
@@ -582,9 +669,14 @@ export function Composer({ route, projects }: { route: Route; projects: Projects
         menu={menu}
         className="composer-shell pointer-events-auto"
         onKeyDown={(event) => {
-          if (event.key !== "Escape" || !panel || event.defaultPrevented) return
-          event.preventDefault()
-          closePanel()
+          if (event.key !== "Escape" || event.defaultPrevented) return
+          if (panel) {
+            event.preventDefault()
+            closePanel()
+          } else if (ask) {
+            event.preventDefault()
+            setPutAway(true)
+          }
         }}
       >
         <div
@@ -659,11 +751,6 @@ export function Composer({ route, projects }: { route: Route; projects: Projects
               <span className="bubble-tool flex min-w-0" style={{ "--i": 1 } as CSSProperties}>
                 <ProjectChip projects={projects} name={project} branch={branch} open={panel === "projects" || panel === "browse"} onToggle={() => togglePanel("projects")} />
               </span>
-              {knowledge ? (
-                <span className="bubble-tool ms-1 flex" style={{ "--i": 2 } as CSSProperties}>
-                  <KnowledgePaneToggle rest={route.kind === "tab" ? route.rest : []} />
-                </span>
-              ) : null}
               <span className="flex-1" />
               <span className="bubble-hints bubble-tool" style={{ "--i": 2 } as CSSProperties} aria-hidden="true">
                 {menuOpen ? <><Kbd>↑</Kbd><Kbd>↓</Kbd>choose<Kbd>↵</Kbd>insert</>
@@ -696,5 +783,7 @@ export function Composer({ route, projects }: { route: Route; projects: Projects
         </div>
       </ComposerBubble>
     </div>
+    <MockupLightbox drawer={drawer} at={ask ? mockup : -1} onAt={setMockup} />
+    </>
   )
 }
