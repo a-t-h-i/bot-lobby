@@ -40,33 +40,35 @@ export function SignIn() {
 
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-6">
-      <form onSubmit={submit} className="glass flex min-h-0 w-full max-w-md flex-col gap-4 rounded-xl p-6">
-        <div className="flex items-center gap-2">
-          <KeyRound className="size-5" aria-hidden="true" />
-          <h1 className="text-base font-medium">Sign in to bot-lobby</h1>
+      <form onSubmit={submit} className="cs-dlg w-full max-w-[420px]">
+        <div className="cs-dh flex items-center gap-3.5 pt-[22px]">
+          <span className="cs-drop" aria-hidden="true"><KeyRound className="size-[18px]" /></span>
+          <h1>Sign in to bot-lobby</h1>
         </div>
-        <p className="break-words text-sm text-muted-foreground">
-          Pi printed a link when it started (or run <code className="rounded-lg bg-muted px-1.5 py-0.5 font-mono text-xs">/bot-lobby web</code>
-          to see it again). Paste it here.
-        </p>
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium">Lobby link or token</span>
-          <input
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-            placeholder="http://127.0.0.1:7347/#token=…"
-            className="h-8 min-w-0 rounded-lg border border-input bg-background px-3.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
-          />
-        </label>
-        {error ? (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
+        <div className="cs-db">
+          <p className="mb-3.5 text-[12.5px] leading-relaxed text-muted-foreground">
+            Pi printed a link when it started (or run <code className="cs-cd">/bot-lobby web</code> to see it again). Paste it here.
           </p>
-        ) : null}
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="ghost" disabled={busy} onClick={() => void attempt(undefined)}>
+          <label>
+            <span>Lobby link or token</span>
+            <input
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+              autoFocus
+              placeholder="http://127.0.0.1:7347/#token=…"
+              className="cs-inp"
+            />
+          </label>
+          {error ? (
+            <p role="alert" className="mt-2.5 text-[12.5px] text-[var(--bad)]">
+              {error}
+            </p>
+          ) : null}
+        </div>
+        <div className="cs-df">
+          <Button type="button" variant="outline" disabled={busy} onClick={() => void attempt(undefined)}>
             Retry
           </Button>
           <Button type="submit" disabled={busy || !value.trim()}>

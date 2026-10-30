@@ -6,6 +6,7 @@
 import { useId, useState } from "react"
 import { Popup } from "@/components/ui/popup"
 import { Button } from "@/components/ui/button"
+import { Keys } from "@/components/ui/kbd"
 import { Textarea } from "@/components/ui/textarea"
 import { call } from "@/lib/api"
 import { PRIORITY, useOverlaySlot } from "@/lib/overlay"
@@ -39,14 +40,14 @@ export function NewSessionDialog({ open, onOpenChange }: { open: boolean; onOpen
     }
   }
   return (
-    <Popup open={shown} label="New session" description="Starts a task in a session of its own, in the background." onOpenChange={(next) => { if (!next) close() }} dismissOnBackdrop={!busy}>
-      <div className="flex w-[min(32rem,calc(100vw-2rem))] flex-col">
-        <div className="flex flex-col gap-1 border-b border-border px-4 py-3">
-          <h2 className="text-[0.9375rem] font-semibold">New session</h2>
-          <p className="text-xs text-muted-foreground">It runs in the background and shows up in the sidebar; this window carries on with what it is doing.</p>
+    <Popup open={shown} label="New session" description="Starts a task in a session of its own, in the background." onOpenChange={(next) => { if (!next) close() }} dismissOnBackdrop={!busy} className="max-w-[460px]">
+      <div className="flex w-full flex-col">
+        <div className="cs-dh">
+          <h2>New session</h2>
+          <p className="mt-[5px] text-[12.5px] leading-normal text-muted-foreground">It runs in the background and shows up in the sidebar; this window carries on with what it is doing.</p>
         </div>
-        <div className="flex flex-col gap-1.5 p-4">
-          <label htmlFor={field} className="text-sm font-medium">What should it do?</label>
+        <div className="cs-db flex flex-col">
+          <label htmlFor={field} className="mb-[7px] text-[12.5px] font-semibold">What should it do?</label>
           <Textarea
             id={field}
             value={request}
@@ -54,7 +55,7 @@ export function NewSessionDialog({ open, onOpenChange }: { open: boolean; onOpen
             disabled={busy}
             aria-invalid={error ? true : undefined}
             placeholder="Fix the flaky login test, add dark mode to Settings…"
-            className="max-h-60 min-h-24"
+            className="cs-nsta max-h-60 min-h-[108px]"
             onChange={(event) => setRequest(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
@@ -65,7 +66,8 @@ export function NewSessionDialog({ open, onOpenChange }: { open: boolean; onOpen
           />
           {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-muted/30 px-4 py-3">
+        <div className="cs-df">
+          <span className="mr-auto flex items-center gap-1.5 text-xs text-[var(--faint)]"><Keys chord="Ctrl+Enter" /> to start</span>
           <Button variant="outline" onClick={close} disabled={busy}>Cancel</Button>
           <Button onClick={() => void start()} disabled={!request.trim() || busy} aria-busy={busy}>{busy ? "Starting…" : "Start session"}</Button>
         </div>

@@ -857,3 +857,47 @@
 .cs-set section[data-slot="agent-row"] h3 { font-size: 14.5px; gap: 9px; }
 .cs-set section[data-slot="agent-row"] h3 .cs-tile { width: 22px; height: 22px; border-radius: 7px; }
 .cs-set section[data-slot="agent-row"] h3 .cs-tile svg { width: 12px; height: 12px; color: #fff; }
+
+/* Gates and dialogs: raised cards (24px corners, the keycap bevel and a deep soft shadow) on a lightly blurred page. */
+.glass-pop, .cs-dlg { border: 0; border-radius: 24px; background: var(--fill); box-shadow: var(--rs), 0 24px 60px rgb(0 0 0 / 0.22); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.dark :is(.glass-pop, .cs-dlg) { box-shadow: var(--rs), 0 24px 60px rgb(0 0 0 / 0.5); }
+[data-slot="alert-dialog-content"] { padding: 20px 22px 18px; gap: 14px; }
+[data-slot="alert-dialog-content"] [data-slot="alert-dialog-title"], [data-slot="alert-dialog-content"] h2 { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+[data-slot="alert-dialog-content"] [data-slot="button"] { height: 32px; padding: 0 14px; font-size: 13px; border-radius: 12px; }
+.cs-dlg { overflow: hidden; }
+.cs-dh { padding: 18px 22px 6px; }
+.cs-dh h1, .cs-dh h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.cs-db { padding: 12px 22px 6px; }
+.cs-db label { display: block; }
+.cs-db label > span { display: block; font-size: 12.5px; font-weight: 600; margin: 0 0 7px; }
+.cs-df { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 14px 22px 18px; }
+.cs-drop { width: 40px; height: 40px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--sunk); color: var(--primary); }
+.cs-cd { display: inline-block; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; padding: 2px 7px; border-radius: 7px; background: var(--sunk); color: var(--foreground); }
+.cs-inp { width: 100%; box-sizing: border-box; height: 38px; border: 0; border-radius: 14px; background: var(--sunk); padding: 0 14px; font: inherit; font-size: 13px; color: var(--foreground); outline: none; transition: box-shadow 119ms ease; }
+.cs-inp::placeholder { color: var(--faint); }
+.cs-inp:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 45%, transparent); }
+.cs-errc { width: min(380px, 100%); padding: 26px 24px 22px; text-align: center; }
+.cs-errc h2 { margin: 0; font-size: 16px; font-weight: 600; display: flex; gap: 8px; align-items: center; justify-content: center; }
+.cs-errc p { margin: 8px 0 16px; font-size: 12.5px; line-height: 1.55; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.cs-banner { display: flex; align-items: center; gap: 12px; margin: 0 12px 6px; padding: 10px 12px 10px 16px; border-radius: 18px; background: var(--fill); box-shadow: var(--rs); font-size: 13px; color: var(--foreground); }
+.cs-banner .cs-wi { color: var(--bad); flex: none; }
+.cs-gi { position: relative; flex: none; width: 36px; height: 22px; filter: url(#cs-loadgoo); }
+.cs-gi.cs-big { width: 60px; height: 34px; transform: scale(1.4); }
+.cs-gb { position: absolute; border-radius: 50%; background: var(--primary); }
+.cs-gb.cs-a { left: 3px; top: 5px; width: 12px; height: 12px; animation: cs-gba 1.7s ease-in-out infinite; }
+.cs-gb.cs-b { left: 14px; top: 4px; width: 14px; height: 14px; animation: cs-gbb 2.1s ease-in-out infinite; }
+.cs-gb.cs-c { left: 22px; top: 8px; width: 7px; height: 7px; animation: cs-gbc 1.5s ease-in-out infinite; }
+@keyframes cs-gba { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(2px, -3px) scale(0.8); } }
+@keyframes cs-gbb { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-2px, 2px) scale(1.18); } }
+@keyframes cs-gbc { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-15px, -5px) scale(1.35); } }
+@media (prefers-reduced-motion: reduce) { .cs-gb { animation: none; } }
+textarea[data-slot="textarea"].cs-nsta { border-radius: 14px; padding: 12px 14px; font-size: 13px; }
+
+/* The code viewer and the terminal: the code sits in a sunk well inside the raised card; tool groups are keycaps. */
+.code-pane { margin: 0 12px 12px; border-radius: 18px; background: var(--sunk); overflow: hidden; }
+.code-rail { border-right: 0; }
+.code-rail form label { border: 0; border-radius: 12px; background: var(--sunk); height: 34px; }
+.code-rail form label:focus-within { box-shadow: inset 0 0 0 2px var(--ring); }
+.terminal-tools { border: 0; border-radius: 10px; background: var(--fill); box-shadow: var(--rs); }
+.terminal-drawer { border-top: 0; border-radius: 20px 20px 0 0; background: var(--fill); box-shadow: 0 0 0 1px var(--edge), 0 -10px 30px rgb(0 0 0 / 0.08); }
+nav[aria-label="Terminals"] button[aria-current="true"] { background: color-mix(in srgb, var(--primary) 12%, var(--sunk)); color: var(--foreground); }
