@@ -20,11 +20,12 @@
   --ok: #17935a;
   --warn: #b26a00;
   --bad: #cc3838;
-  /* A flat, paper-like surface: a hairline edge, a lighter top line, a crisp bottom line and a faint drop. */
-  --hl: rgb(255 255 255 / 0.7);
-  --sh: rgb(40 40 70 / 0.05);
-  --ehl: rgb(255 255 255 / 0.55);
-  --esh: rgb(40 40 70 / 0.2);
+  /* A very light bevel, just enough for a card to read as an object: a soft light along the top, a slightly
+   * darker bottom edge, a faint drop. */
+  --hl: rgb(255 255 255 / 0.95);
+  --sh: rgb(40 40 70 / 0.07);
+  --ehl: rgb(255 255 255 / 0.8);
+  --esh: rgb(40 40 70 / 0.26);
   --tdsh: rgb(30 30 70 / 0.16);
   --tdhl: rgb(255 255 255 / 0.8);
   --drop1: 0 1px 2px rgb(0 0 0 / 0.05);
@@ -32,8 +33,8 @@
   --press: inset 0 1px 2px rgb(40 40 70 / 0.12), inset 0 0 0 1px rgb(40 40 70 / 0.08);
   --press-deep: inset 0 1px 3px rgb(40 40 70 / 0.2), inset 0 0 0 1px rgb(40 40 70 / 0.1);
   --inset: inset 0 1px 2px rgb(40 40 70 / 0.08), inset 0 0 0 1px rgb(40 40 70 / 0.05);
-  /* Raised (a button or card) and sunk (a well): flat, edged, never a heavy bevel. */
-  --rs: 0 0 0 1px var(--edge), inset 0 1px 0 var(--hl), 0 1px 0 rgb(40 40 70 / 0.08), 0 2px 6px -2px rgb(30 30 60 / 0.08);
+  /* Raised (a button or card) and sunk (a well): a very light bevel, never a heavy one. */
+  --rs: 0 0 0 1px var(--edge), inset 0 1.5px 1px -0.5px var(--hl), inset 0 -1.5px 1.5px -0.5px var(--sh), 0 1px 0 rgb(40 40 70 / 0.1), 0 2px 5px -2px rgb(30 30 60 / 0.1);
   --ss: inset 0 1px 2px var(--tdsh), inset 0 0 0 1px rgb(40 40 70 / 0.05);
   /* A faint paper grain over the page. */
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.07 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
@@ -55,10 +56,10 @@
   --ok: #58c88f;
   --warn: #e8aa4a;
   --bad: #f07575;
-  --hl: rgb(255 255 255 / 0.07);
-  --sh: rgb(0 0 0 / 0.2);
-  --ehl: rgb(255 255 255 / 0.1);
-  --esh: rgb(0 0 0 / 0.55);
+  --hl: rgb(255 255 255 / 0.11);
+  --sh: rgb(0 0 0 / 0.3);
+  --ehl: rgb(255 255 255 / 0.16);
+  --esh: rgb(0 0 0 / 0.65);
   --tdsh: rgb(0 0 0 / 0.45);
   --tdhl: rgb(255 255 255 / 0.06);
   --drop1: 0 1px 2px rgb(0 0 0 / 0.35);
@@ -66,7 +67,7 @@
   --press: inset 0 1px 3px rgb(0 0 0 / 0.45), inset 0 0 0 1px rgb(0 0 0 / 0.3);
   --press-deep: inset 0 1px 4px rgb(0 0 0 / 0.6), inset 0 0 0 1px rgb(0 0 0 / 0.4);
   --inset: inset 0 1px 2px rgb(0 0 0 / 0.35), inset 0 0 0 1px rgb(0 0 0 / 0.2);
-  --rs: 0 0 0 1px var(--edge), inset 0 1px 0 var(--hl), 0 1px 0 rgb(0 0 0 / 0.4), 0 2px 8px -2px rgb(0 0 0 / 0.3);
+  --rs: 0 0 0 1px var(--edge), inset 0 1.5px 1px -0.5px var(--hl), inset 0 -1.5px 1.5px -0.5px var(--sh), 0 1px 0 rgb(0 0 0 / 0.45), 0 2px 8px -2px rgb(0 0 0 / 0.3);
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
