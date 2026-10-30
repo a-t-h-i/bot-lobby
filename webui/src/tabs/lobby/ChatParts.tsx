@@ -41,6 +41,17 @@ export function AgentMessage({ source, name, time, head, live, children, aside, 
   )
 }
 
+/** The tail, one curve flowing on from the bubble's straight right edge: its outline drawn first, then the fill over it. */
+const TAIL = "C13 7.5 15.4 12.6 20.6 14.8C21.4 15.2 21.1 16 20.2 16"
+function BubbleTail() {
+  return (
+    <svg className="cs-ut" viewBox="0 0 22 16" aria-hidden="true" focusable="false">
+      <path d={`M13 0${TAIL}H6`} className="cs-ut-edge" />
+      <path d={`M0 0H13${TAIL}H0Z`} className="cs-ut-fill" />
+    </svg>
+  )
+}
+
 /**
  * Your message: a speech bubble on the right, its tail at the bottom right, drawn like the bays (an edge layer and
  * a lit fill layer through the goo filters). A message you just sent pops in, squashing and settling like a drop.
@@ -50,8 +61,9 @@ export function YourMessage({ time, head: _head, note, children, below, actions,
   return (
     <div className="group/msg relative flex flex-col items-end gap-1">
       <div className="chat-bubble cs-umsg" data-new={fresh || undefined} title={time}>
-        <i className="cs-ue" aria-hidden="true"><b className="cs-ub" /><b className="cs-ut" /></i>
-        <i className="cs-uf" aria-hidden="true"><b className="cs-ub" /><b className="cs-ut" /></i>
+        <i className="cs-ue" aria-hidden="true"><b className="cs-ub" /></i>
+        <i className="cs-uf" aria-hidden="true"><b className="cs-ub" /></i>
+        <BubbleTail />
         <div className="cs-ux">{children}</div>
       </div>
       {note ? (

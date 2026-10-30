@@ -1,6 +1,6 @@
 {
-  "hash": "4aa8e36e1a3862e5fb45040ec901eed0e3ad6156fbd7714f05940081be8af009",
-  "builtAt": "2026-10-30T18:13:59.951Z",
+  "hash": "8847788a3cc49a550e7ecfdf77ff3fc97ae5369edb059d631ea76e1331e55929",
+  "builtAt": "2026-10-30T18:17:13.943Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -428,7 +428,7 @@
     },
     {
       "path": "webui/src/surface.css",
-      "sha256": "04074ff987cdd8d2426cd85284dd5f3c5177b9e7b203ecc97e70b65a5127a1e1"
+      "sha256": "8584c25c893c34472719a18bb745d858942312206d8fbf2c8a2ef6514dd796a8"
     },
     {
       "path": "webui/src/tabs/knowledge/AgentCards.tsx",
@@ -468,7 +468,7 @@
     },
     {
       "path": "webui/src/tabs/lobby/ChatParts.tsx",
-      "sha256": "d2c96cf97df0e4e091679785d58c1c30390cfcfdd06eca243c5969257bf6c805"
+      "sha256": "0430368789c88a686eb0fa76b3d70ede8e7c5bcea2e67bdb8fecb0526ff3830f"
     },
     {
       "path": "webui/src/tabs/lobby/Conversation.tsx",
