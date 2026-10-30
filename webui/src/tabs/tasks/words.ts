@@ -31,6 +31,7 @@ export function qaRiskNote(risk: { source: string; qaRequired: boolean; testBudg
   return `${by} · ${min === max ? max : `${min}-${max}`} new tests at most`
 }
 
+export const EMPTY_ARCHIVE = "Nothing archived. Archive a finished task from its detail to keep this list short."
 export const EMPTY_LIST = "No tasks yet. Start one from the Lobby tab, or plan one in the Plan tab."
 
 /** A task's state in words: `awaiting approval`, `implementing · paused`. */
