@@ -195,7 +195,7 @@ export function useDrawer(prompts: WebPrompt[], answer: (id: string, value: unkn
 /** A mockup at thumbnail size, or large in the lightbox: static HTML in its sandbox, an image, or a text sketch. */
 export function MockupFace({ option, large }: { option: MockupOption; large?: boolean }) {
   const label = plainLabel(option.label)
-  if (option.htmlPreview) return <StaticPreview preview={option.htmlPreview} label={label} frameWidth={large ? undefined : 1200} minWidth={large ? 1024 : undefined} className="static-thumb h-full" />
+  if (option.htmlPreview) return <StaticPreview preview={option.htmlPreview} label={label} frameWidth={large ? undefined : 880} minWidth={large ? 1024 : undefined} className="static-thumb h-full" />
   if (option.image) return <img src={projectUrl(option.image)} alt={large ? `Mockup: ${label}` : ""} loading="lazy" />
   if (option.preview) return large ? <div className="cs-mktext"><Markdown text={option.preview} /></div> : <pre className="cs-mktext">{option.preview}</pre>
   return null

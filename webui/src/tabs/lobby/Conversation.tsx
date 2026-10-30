@@ -12,15 +12,12 @@
  */
 import { memo, useCallback, useEffect, useMemo, useState, type RefObject } from "react"
 import { useStickToBottom } from "@/lib/useStickToBottom"
-import { MessageSquare } from "lucide-react"
 import { AgentMessage, ChatNote, YourMessage } from "./ChatParts"
 import { motion } from "motion/react"
 import { JumpToLatest } from "@/ui/JumpToLatest"
 import { ScrollHints } from "@/ui/ScrollHints"
 import { AUTO_NOTE } from "@/ui/task-facts"
 import { agentColor } from "@/ui/AgentIcon"
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import { Keys } from "@/components/ui/kbd"
 import { call } from "@/lib/api"
 import { formatClock } from "@/lib/format"
 import { Frame } from "@/ui/Frame"
@@ -29,13 +26,15 @@ import { InlineActivity, summary } from "./InlineActivity"
 import { InlineThinking, freshThoughts } from "./InlineThinking"
 import { sourceLabel, speakerOf, type ActivityEntry, type ChatEntry, type ThoughtEntry } from "./types"
 import { weave } from "./weave"
+import { splitRoutes, type Split } from "./route"
 
 /** Messages from one speaker this close together share a header. */
 const GROUP_MS = 5 * 60_000
 
-const NO_TASK = "Talk to the team."
-const NO_TASK_HINT = "Ask a question or ask for a change below: the right agent answers and does it here."
-const NOTHING_SAID = "Nothing said yet. Type below to talk to the oracle about this task."
+const GREETING = "What's on your mind?"
+const GREETING_HINT = "Ask a question or for a change below."
+const NOTHING_SAID = "Talk about this task"
+const NOTHING_SAID_HINT = "The oracle answers here."
 
 function NoteEntry({ entry }: { entry: ChatEntry }) {
   if (entry.text === AUTO_NOTE) return <ChatNote auto>{AUTO_NOTE}</ChatNote>
@@ -102,27 +101,19 @@ function LiveReply({ text, busy, working, answering }: { text?: string; busy: bo
   )
 }
 
+/** The classifier's pick, said in one plain line, the agent's name in its colour. */
+function RouteLine({ route }: { route: Extract<Split<ChatEntry>, { kind: "route" }>["route"] }) {
+  if ("knowledge" in route) return <p className="cs-route">Classifier chose <b style={{ color: "var(--primary)" }}>the project's knowledge</b></p>
+  return <p className="cs-route">Classifier chose <b style={{ color: agentColor(route.agent) }}>{sourceLabel(route.agent)}</b></p>
+}
+
+/** An empty Lobby: one quiet greeting, centred, as on the Plan tab. */
 function ConversationEmpty({ hasTask }: { hasTask: boolean }) {
   return (
-    <Empty className="h-full border-0">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <MessageSquare aria-hidden="true" />
-        </EmptyMedia>
-        {hasTask ? null : <EmptyTitle>{NO_TASK}</EmptyTitle>}
-        <EmptyDescription>{hasTask ? NOTHING_SAID : NO_TASK_HINT}</EmptyDescription>
-      </EmptyHeader>
-      {hasTask ? null : (
-        <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
-          <li className="flex items-center justify-center gap-2">
-            <Keys chord="@" /> names who answers: @design, @dev, @qa, @research, @scout
-          </li>
-          <li className="flex items-center justify-center gap-2">
-            <Keys chord="/" /> /plan plans it with the panel, /task starts it as a task
-          </li>
-        </ul>
-      )}
-    </Empty>
+    <div className="cs-pg cs-blank">
+      <h2>{hasTask ? NOTHING_SAID : GREETING}</h2>
+      <p>{hasTask ? NOTHING_SAID_HINT : GREETING_HINT}</p>
+    </div>
   )
 }
 
@@ -199,7 +190,7 @@ export function Conversation({
     const el = ref.current
     if (el && el.scrollTop < 80 && more && !loading) void load()
   }, [onScroll, ref, more, loading, load])
-  const timeline = useMemo(() => weave(merged, steps), [merged, steps])
+  const timeline = useMemo(() => splitRoutes<ChatEntry>(weave(merged, steps)), [merged, steps])
   const empty = merged.length === 0 && steps.length === 0 && thoughts.length === 0 && !reply?.trim() && !busy
   const last = timeline.at(-1)
   const thinking = useMemo(() => freshThoughts(thoughts, merged.at(-1)?.at ?? 0), [thoughts, merged])
@@ -217,6 +208,7 @@ export function Conversation({
             {more ? <p className="mb-4 text-center text-xs text-muted-foreground">Earlier messages load as you scroll up.</p> : null}
             {timeline.map((item, index) => {
               if (item.kind === "activity") return <InlineActivity key={item.key} entries={item.entries} />
+              if (item.kind === "route") return <RouteLine key={item.key} route={item.route} />
               const before = timeline[index - 1]
               const previous = before?.kind === "message" ? before.entry : undefined
               // Steps in between start the next message afresh, with its speaker.

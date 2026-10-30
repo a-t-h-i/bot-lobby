@@ -37,6 +37,7 @@ import { ComposerSendButton, ComposerStopButton } from "./composer/ComposerPrima
 import { ComposerCommandMenu, composerItems, composerSuggestionOptionId, composerTrigger, suggestionHeight, suggestionWidth, type ComposerCommandItem } from "./composer/ComposerCommandMenu"
 import { DrawerPane, MockupLightbox, type Drawer } from "@/prompts/Drawer"
 import { setPutAway } from "@/prompts/putAway"
+import { hasMockup } from "@/prompts/MockupViewer"
 import { KNOWLEDGE_ASKED, useViewPlan } from "@/lib/composerBubbles"
 
 type TargetId = "oracle" | "knowledge" | "panel" | "comment"
@@ -202,13 +203,21 @@ function Kbd({ children }: { children: string }) {
 }
 
 /** A pane that sizes its bubble from its own content: its width (bar) or its height (drawer), measured after each render. */
-function useMeasured(pane: Pane, ref: RefObject<HTMLDivElement | null>): { w: number; h: number } {
+/** `wide` is the drawer's width when its question shows mockups (the composer's own); otherwise it is 580px. */
+function useMeasured(pane: Pane, ref: RefObject<HTMLDivElement | null>, wide?: number): { w: number; h: number } {
   const [size, setSize] = useState({ w: 250, h: 48 })
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
-    const next = pane === "bar" ? { w: Math.ceil(el.scrollWidth) + 12, h: 48 } : { w: 580, h: Math.ceil(el.scrollHeight) }
-    setSize((now) => (now.w === next.w && now.h === next.h ? now : next))
+    const measure = () => {
+      const next = pane === "bar" ? { w: Math.ceil(el.scrollWidth) + 12, h: 48 } : { w: wide ?? 580, h: Math.ceil(el.scrollHeight) }
+      setSize((now) => (now.w === next.w && now.h === next.h ? now : next))
+    }
+    measure()
+    // Content that settles after the first paint (mockups, fonts, a wrapped question) is measured again.
+    const observer = new ResizeObserver(measure)
+    for (const child of el.children) observer.observe(child)
+    return () => observer.disconnect()
   })
   return size
 }
@@ -324,7 +333,9 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
   const shownSize = useRef({ w: 320, h: 0 })
   const pane: Pane = panel ?? (ask ? "ask" : menuOpen ? "suggest" : bar ? "bar" : shownPane.current)
   const paneRef = useRef<HTMLDivElement>(null)
-  const measured = useMeasured(pane, paneRef)
+  // Mockups need room: the drawer then takes the composer's width (up to 960px), so each one reads as a page.
+  const mockupAsk = pane === "ask" && Boolean(drawer.step?.options.some(hasMockup))
+  const measured = useMeasured(pane, paneRef, mockupAsk ? Math.max(580, Math.min(960, (box.current?.clientWidth ?? 740) - 12)) : undefined)
   if (open) {
     shownPane.current = pane
     const family = field.current ? getComputedStyle(field.current).fontFamily : "system-ui, sans-serif"
