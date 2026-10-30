@@ -85,7 +85,8 @@ export default function TerminalView({ id, active, toggleKey, onExit }: { id: st
     terminal.open(host)
     term.current = terminal
     // The terminal key toggles the drawer; every other key, the page's shortcuts too, belongs to the shell.
-    terminal.attachCustomKeyEventHandler((event) => !matchKey(event, toggleKey))
+    // The terminal key and the terminal switch keys (Ctrl+PageUp/PageDown) belong to the page, not the shell.
+    terminal.attachCustomKeyEventHandler((event) => !matchKey(event, toggleKey) && !(event.ctrlKey && (event.key === "PageUp" || event.key === "PageDown")))
     const send = inputQueue(id)
     const typed = terminal.onData(send)
     const binary = terminal.onBinary(send)

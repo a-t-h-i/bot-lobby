@@ -10,6 +10,7 @@ import type { ApiContext } from "./index.ts";
 import { withAttachments } from "../uploads.ts";
 import { fail } from "./index.ts";
 import type { BackgroundSessionInfo } from "../protocol.ts";
+import type { SavedSession } from "../../lobby/saved-sessions.ts";
 
 function infoOf(session: BackgroundSession): BackgroundSessionInfo {
   return {
@@ -26,8 +27,8 @@ function infoOf(session: BackgroundSession): BackgroundSessionInfo {
 }
 
 /** Background sessions this window started, plus live sessions elsewhere. */
-export function sessionsList(ctx: ApiContext): { background: BackgroundSessionInfo[]; live: unknown[] } {
-  return { background: ctx.service.sessions().map(infoOf), live: [...ctx.service.liveSessions()] };
+export function sessionsList(ctx: ApiContext): { background: BackgroundSessionInfo[]; live: unknown[]; saved: SavedSession[] } {
+  return { background: ctx.service.sessions().map(infoOf), live: [...ctx.service.liveSessions()], saved: ctx.service.savedSessions?.() ?? [] };
 }
 
 /** Find a background session by its key or its pi session id. */
@@ -101,6 +102,8 @@ export async function sessionsSwitch(body: { key?: string; sessionId?: string; c
     return { notice: await ctx.service.switchTo({ name: background.name, ...(background.sessionId ? { sessionId: background.sessionId } : {}), background }) };
   }
   const live = ctx.service.liveSessions().find((session) => session.sessionId === body.sessionId);
+  const saved = live ? undefined : ctx.service.savedSessions?.().find((session) => session.sessionId === body.sessionId);
+  if (saved) return { notice: await ctx.service.switchTo({ name: saved.name, sessionId: saved.sessionId }) };
   const name = live?.name ?? "that session";
   return { notice: `${name} is running in another terminal — switch there, or close it first and resume it here` };
 }
@@ -125,10 +128,22 @@ export function sessionsRename(body: { key?: string; name: string }, ctx: ApiCon
 }
 
 /** Put an ended background session away from the list (`archived` true, the default), or bring it back. */
-export function sessionsArchive(body: { key: string; archived?: boolean }, ctx: ApiContext): { notice: string } {
-  if (!ctx.service.archiveSession) fail(501, "unsupported", "this lobby cannot archive sessions");
+export function sessionsArchive(body: { key?: string; sessionId?: string; archived?: boolean }, ctx: ApiContext): { notice: string } {
+  if (!body.key && !body.sessionId) fail(400, "bad_request", "a session key or id is required");
+  if (body.key ? !ctx.service.archiveSession : !ctx.service.archiveSaved) fail(501, "unsupported", "this lobby cannot archive sessions");
   try {
-    return { notice: ctx.service.archiveSession!(body.key, body.archived ?? true) };
+    return { notice: body.key ? ctx.service.archiveSession!(body.key, body.archived ?? true) : ctx.service.archiveSaved!(body.sessionId!, body.archived ?? true) };
+  } catch (error) {
+    const message = (error as Error).message;
+    fail(/^no /.test(message) ? 404 : 409, /^no /.test(message) ? "not_found" : "conflict", message);
+  }
+}
+
+/** Delete a saved session's file for good. */
+export function sessionsDelete(body: { sessionId: string }, ctx: ApiContext): { notice: string } {
+  if (!ctx.service.deleteSaved) fail(501, "unsupported", "this lobby cannot delete sessions");
+  try {
+    return { notice: ctx.service.deleteSaved!(body.sessionId) };
   } catch (error) {
     const message = (error as Error).message;
     fail(/^no /.test(message) ? 404 : 409, /^no /.test(message) ? "not_found" : "conflict", message);

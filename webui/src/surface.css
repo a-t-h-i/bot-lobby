@@ -962,3 +962,7 @@ nav[aria-label="Terminals"] button[aria-current="true"] { background: color-mix(
 .cs-fixnote { font-size: 11.5px; color: var(--faint); }
 /* A page's own padding would win over pb-dock: give it the room under the composer, and the questions pill over it. */
 .cs-pg.pb-dock { padding-bottom: calc(var(--composer-h, 0px) + 4.5rem); scroll-padding-bottom: calc(var(--composer-h, 0px) + 4.5rem); }
+/* The Plan start page: one quiet question, centred in the space above the composer. */
+.cs-pg.cs-blank { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding-top: 0; }
+.cs-blank h2 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; color: var(--foreground); }
+.cs-blank p { margin: 10px 0 0; max-width: 34rem; font-size: 14px; line-height: 1.5; color: var(--muted-foreground); }

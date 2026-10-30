@@ -25,7 +25,8 @@ import { formatClock } from "@/lib/format"
 import { Frame } from "@/ui/Frame"
 import { Markdown } from "@/ui/Markdown"
 import { InlineActivity, summary } from "./InlineActivity"
-import { sourceLabel, speakerOf, type ActivityEntry, type ChatEntry } from "./types"
+import { InlineThinking, freshThoughts } from "./InlineThinking"
+import { sourceLabel, speakerOf, type ActivityEntry, type ChatEntry, type ThoughtEntry } from "./types"
 import { weave } from "./weave"
 
 /** Messages from one speaker this close together share a header. */
@@ -155,10 +156,12 @@ function useOlderChat(chat: ChatEntry[], hasOlder: boolean, scrollRef: RefObject
 /** The feed keeps 400 steps; so does the conversation. */
 const STEPS_CAP = 400
 const NO_STEPS: ActivityEntry[] = []
+const NO_THOUGHTS: ThoughtEntry[] = []
 
 export function Conversation({
   chat,
   activity = NO_STEPS,
+  thoughts = NO_THOUGHTS,
   reply,
   busy,
   answering,
@@ -168,6 +171,8 @@ export function Conversation({
   chat: ChatEntry[]
   /** The agents' steps, woven in between the messages; none when the Activity panel is off. */
   activity?: ActivityEntry[]
+  /** The agents' thoughts, shown inline under the latest message; none when Thinking is off. */
+  thoughts?: ThoughtEntry[]
   reply?: string
   busy: boolean
   /** The agent other than the oracle answering now. */
@@ -176,7 +181,7 @@ export function Conversation({
   hasTask: boolean
 }) {
   const steps = useMemo(() => activity.slice(-STEPS_CAP), [activity])
-  const { ref, atBottom, stick, onScroll } = useStickToBottom(`${chat.length}:${reply?.length ?? 0}:${steps.length}:${steps.at(-1)?.pending ?? ""}:${answering ?? ""}`)
+  const { ref, atBottom, stick, onScroll } = useStickToBottom(`${chat.length}:${reply?.length ?? 0}:${steps.length}:${steps.at(-1)?.pending ?? ""}:${answering ?? ""}:${thoughts.at(-1)?.id ?? ""}:${thoughts.at(-1)?.text.length ?? 0}`)
   const { merged, more, loading, load } = useOlderChat(chat, hasOlder, ref)
   const handleScroll = useCallback(() => {
     onScroll()
@@ -184,8 +189,9 @@ export function Conversation({
     if (el && el.scrollTop < 80 && more && !loading) void load()
   }, [onScroll, ref, more, loading, load])
   const timeline = useMemo(() => weave(merged, steps), [merged, steps])
-  const empty = merged.length === 0 && steps.length === 0 && !reply?.trim() && !busy
+  const empty = merged.length === 0 && steps.length === 0 && thoughts.length === 0 && !reply?.trim() && !busy
   const last = timeline.at(-1)
+  const thinking = useMemo(() => freshThoughts(thoughts, merged.at(-1)?.at ?? 0), [thoughts, merged])
   const liveRun = last?.kind === "activity" && Boolean(summary(last.entries).live)
   // Messages present when the pane first drew do not ease in; later ones do.
   const [settled, setSettled] = useState(false)
@@ -206,6 +212,7 @@ export function Conversation({
               const head = !previous || speakerOf(previous) !== speakerOf(item.entry) || item.entry.at - previous.at > GROUP_MS
               return <Message key={item.entry.id} entry={item.entry} head={head} fresh={settled} />
             })}
+            <InlineThinking thoughts={thinking} />
             <LiveReply text={reply} busy={busy} working={liveRun} {...(answering ? { answering } : {})} />
           </div>
         )}

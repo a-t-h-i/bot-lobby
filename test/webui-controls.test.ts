@@ -18,18 +18,16 @@ test("configured actions work while typing, never behind an overlay, and plan sa
   assert.equal(blocksConfiguredAction("savePlan", { ...ready, overlay: true }), true);
 });
 
-test("Thinking starts minimized regardless of legacy preference; Activity still persists", () => {
+test("Thinking starts folded regardless of legacy preference; Activity still persists", () => {
   for (const stored of [undefined, null, "0", "1"]) assert.equal(initiallyCollapsed("lobby.thinking", stored), true);
   assert.equal(initiallyCollapsed("lobby.activity", "1"), true);
   assert.equal(initiallyCollapsed("lobby.activity", "0"), false);
   assert.equal(initiallyCollapsed("lobby.activity"), false);
-  const thoughts = source("tabs/lobby/Thoughts.tsx");
-  assert.match(thoughts, /latestThoughts\(thoughts\)/);
-  assert.match(thoughts, /label="Thinking"/);
-  assert.match(thoughts, /onCloseAutoFocus/);
-  assert.doesNotMatch(thoughts, /Minimize|<header|<h2/, "the pane has no title bar and no minimize hint");
-  assert.match(thoughts, /thoughtSteps\(thought\.text\)/);
-  assert.match(source("index.css"), /prefers-reduced-motion: reduce\) \{\s*\.thinking-bubble/);
+  const thinking = source("tabs/lobby/InlineThinking.tsx");
+  assert.match(thinking, /latestThoughts\(thoughts\)/);
+  assert.match(thinking, /useCollapsed\("lobby\.thinking"\)/, "Alt+T opens or folds the inline thinking");
+  assert.match(thinking, /thoughtSteps\(thought\.text\)/);
+  assert.match(source("tabs/lobby/Conversation.tsx"), /<InlineThinking thoughts=\{thinking\} \/>/, "thinking sits inline in the Lobby, not in a floating bubble");
 });
 
 test("all five Settings sections remain mounted behind hidden wrappers", () => {
@@ -77,4 +75,11 @@ test("the sidebar lists this window first, then its background sessions, then ot
     ["Terminal two", "elsewhere", "idle"],
   ]);
   assert.equal(sessionEntries(undefined, undefined)[0]!.name, "This window");
+  const saved = [
+    { sessionId: "s-saved", name: "Yesterday's chat", at: 5 },
+    { sessionId: "s-gone", name: "Put away", at: 4, archived: true },
+    { sessionId: "s-old", name: "Old run, saved", at: 3 },
+  ];
+  const withSaved = sessionEntries({ sessionId: "s-here", sessionName: "main", busy: false }, { background, live, saved });
+  assert.deepEqual(withSaved.filter((entry) => entry.where === "saved").map((entry) => [entry.name, entry.state]), [["Yesterday's chat", "exited"]], "saved sessions stay listed until archived, once each");
 });
