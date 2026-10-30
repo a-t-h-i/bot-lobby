@@ -23,7 +23,6 @@ export function AgentMessage({ source, name, time, head, live, children, aside, 
   if (tile) {
     return (
       <div className="cs-pmsg">
-        <span aria-hidden="true" className="cs-tile cs-lg" style={{ "--ac": "var(--c-orc)" } as CSSProperties}>O</span>
         <AgentMessage source={source} name={name} head={head} {...{ time, live, children, aside, waiting }} named={always ?? true} />
       </div>
     )

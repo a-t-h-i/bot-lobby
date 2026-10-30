@@ -978,3 +978,11 @@ nav[aria-label="Terminals"] button[aria-current="true"] { background: color-mix(
 /* The classifier's pick in the Lobby: one plain line, no fold. */
 .cs-route { margin: 0; font-size: 12.5px; color: var(--muted-foreground); }
 .cs-route b { font-weight: 600; }
+
+/* No agent icons or letter tiles (the user found them fussy): agents are named, in their colour, and nothing more.
+ * A history timeline keeps a small dot in the agent's colour as its marker. */
+.cs-kat { display: none; }
+.cs-kwi .cs-kat { display: block; width: 8px; height: 8px; margin: 6px 5px 0; border-radius: 50%; font-size: 0; background: var(--c); }
+.cs-kdot { flex: none; width: 24px; height: 24px; display: grid; place-items: center; }
+.cs-kdot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--k); }
+.cs-sq .cs-sqt { font-size: 11px; font-weight: 650; letter-spacing: -0.01em; color: currentColor; }

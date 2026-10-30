@@ -65,7 +65,6 @@ function StepAgents({ id, agents, stepText }: { id: string; agents: StepAgent[];
           <li key={agent.runId} className="cs-arow" data-child={child ? "true" : undefined} style={{ "--ac": agentColor(name) } as CSSProperties}>
             <span aria-hidden="true" className="cs-bt" />
             <span aria-hidden="true" className="cs-be" />
-            <span aria-hidden="true" className="cs-tile">{sourceLabel(name)[0]}</span>
             <span className="cs-ab2">
               <span className="cs-ab2h">
                 <b>{sourceLabel(name)}</b>

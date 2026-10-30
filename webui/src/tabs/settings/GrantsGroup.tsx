@@ -15,7 +15,6 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { ActionButton } from "@/ui/Actions"
-import { AgentIcon } from "@/ui/AgentIcon"
 import { ROW } from "@/ui/rows"
 import { Section } from "@/ui/Section"
 import { cn } from "@/lib/utils"
@@ -82,7 +81,7 @@ export function GrantsGroup({ config, save, agent, onAgent }: { config: BotLobby
         <nav aria-label={GRANTS.agents} className="flex flex-col gap-0.5">
           {AGENT_ORDER.map((kind) => (
             <button key={kind} type="button" aria-current={kind === agent} onClick={() => onAgent(kind)} className={cn(ROW, "min-h-0 gap-0.5 py-2")}>
-              <span className="flex items-center gap-2 text-[0.8125rem] font-medium"><AgentIcon source={kind} className="size-4 shrink-0 text-muted-foreground" />{AGENT_LABELS[kind]}</span>
+              <span className="flex items-center gap-2 text-[0.8125rem] font-medium">{AGENT_LABELS[kind]}</span>
               <span className="pl-6 text-xs text-muted-foreground">{grantsLine(grantsOf(config, kind), kind)}</span>
             </button>
           ))}

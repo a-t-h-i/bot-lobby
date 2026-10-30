@@ -9,7 +9,7 @@
 import { memo, useLayoutEffect, useRef, type CSSProperties } from "react"
 import type { StatusInfo } from "@protocol"
 import { CHAT_MENTIONS, LOBBY_COMMANDS, type ChatAgent } from "@shared"
-import { AgentIcon, agentColor } from "@/ui/AgentIcon"
+import { agentColor } from "@/ui/AgentIcon"
 
 export type ComposerTriggerKind = "slash-command" | "mention"
 
@@ -141,9 +141,11 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
             className="bubble-row"
             style={{ "--delay": `${Math.max(0, shown - 1 - index) * 22}ms` } as CSSProperties}
           >
-            <span className="bubble-glyph cs-kg" aria-hidden="true" style={{ "--k": itemColor(item) } as CSSProperties}>
-              {item.agent ? <AgentIcon source={item.agent} strokeWidth={2} /> : item.label.charAt(1).toUpperCase()}
-            </span>
+            {item.agent ? (
+              <span className="cs-kdot" aria-hidden="true" style={{ "--k": itemColor(item) } as CSSProperties} />
+            ) : (
+              <span className="bubble-glyph cs-kg" aria-hidden="true" style={{ "--k": itemColor(item) } as CSSProperties}>{item.label.charAt(1).toUpperCase()}</span>
+            )}
             <span className="shrink-0 text-sm font-medium text-(--bubble-ink)">{item.label.slice(1)}</span>
             <span className="min-w-0 truncate text-[13px] text-(--bubble-muted)">{item.description}</span>
             <span className="cs-ktag" style={{ "--k": itemColor(item) } as CSSProperties}>{item.tag}</span>

@@ -63,7 +63,6 @@ function Asked({ questions }: { questions: PanelQuestion[] }) {
         <li key={index} className="cs-qc" style={{ "--ac": agentColor(question.from) } as CSSProperties}>
           <p className="cs-qh">
             <span className="cs-qwho">
-              <span aria-hidden="true" className="cs-tile">{sourceLabel(question.from)[0]}</span>
               {sourceLabel(question.from)}
             </span>
             <span className="min-w-0">

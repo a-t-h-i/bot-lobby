@@ -7,7 +7,7 @@
  * is driven by the config the server last returned. The appearance,
  * notification and install rows are page-only and never sent to the server.
  */
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Brain, Check, ChevronRight, CircleAlert, CircleCheck, Download, Maximize, Minimize, Wrench } from "lucide-react"
 import { toast } from "@/lib/toast"
 import { useFullscreen, useInstallPrompt, useInstalled } from "@/app/install"
@@ -19,7 +19,6 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { EffortChoice } from "@/ui/EffortChoice"
 import { nearestSupported } from "@/ui/effortLevels"
-import { agentColor } from "@/ui/AgentIcon"
 import { call } from "@/lib/api"
 import { useApiRead } from "@/app/useApiRead"
 import { Section } from "@/ui/Section"
@@ -368,7 +367,7 @@ function AgentCard({ kind, config, models, harnesses, save, onGrants }: { kind: 
   return (
     <section data-slot="agent-row" className="glass flex min-w-0 flex-col gap-2.5 rounded-xl border px-3.5 pt-2.5 pb-3">
       <div className="flex min-w-0 items-center justify-between gap-2">
-        <h3 className="flex min-w-0 items-center gap-2 break-words text-sm font-semibold"><span aria-hidden="true" className="cs-tile" style={{ "--ac": agentColor(kind) } as CSSProperties}>{name[0]}</span>{name}</h3>
+        <h3 className="flex min-w-0 items-center gap-2 break-words text-sm font-semibold">{name}</h3>
         <MoreButton open={open} custom={custom} onToggle={() => setOpen((now) => !now)} />
       </div>
       {/* Every card keeps the same rows, so the cards line up: a fixed setting shows as a still row in its place. */}
