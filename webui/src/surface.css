@@ -166,16 +166,17 @@
 
 /* A tooltip: a tiny muted label after a 500ms hover; never while pressing or while its menu is open. */
 .cs-tip { position: relative; }
-.cs-tip::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translate(-50%, 3px); padding: 4px 8px; border-radius: 8px; background: var(--fill); border: 1px solid var(--edge); color: var(--muted-foreground); font-size: 11px; font-weight: 500; line-height: 1.3; white-space: nowrap; box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.16); opacity: 0; pointer-events: none; z-index: 5; transition: opacity 76ms ease, transform 76ms ease; }
-.cs-tip:hover::after { opacity: 1; transform: translate(-50%, 0); transition: opacity 119ms ease 500ms, transform 136ms var(--out) 500ms; }
+.cs-tip::after { content: attr(data-tip); position: absolute; left: 50%; width: max-content; bottom: calc(100% + 8px); transform: translate(-50%, 3px); padding: 4px 8px; border-radius: 8px; background: var(--fill); border: 1px solid var(--edge); color: var(--muted-foreground); font-size: 11px; font-weight: 500; line-height: 1.3; white-space: nowrap; box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.16); opacity: 0; pointer-events: none; z-index: 5; transition: opacity 76ms ease, transform 76ms ease; }
+@media (hover: hover) { .cs-tip:hover::after { opacity: 1; transform: translate(-50%, 0); transition: opacity 119ms ease 500ms, transform 136ms var(--out) 500ms; } }
 .cs-tip:active::after, .cs-tip:is([data-on="true"], [aria-pressed="true"]):hover::after, .cs-tip:disabled:hover::after { opacity: 0; transform: translate(-50%, 3px); transition: opacity 51ms ease; }
 .cs-tip.cs-b::after { bottom: auto; top: calc(100% + 8px); transform: translate(-50%, -3px); }
 .cs-tip.cs-b:hover::after { transform: translate(-50%, 0); }
 .cs-tip.cs-b:active::after, .cs-tip.cs-b:is([data-on="true"], [aria-pressed="true"]):hover::after { transform: translate(-50%, -3px); }
 /* A tooltip to the left (the plan's side rail). */
 .cs-tipl { position: relative; }
-.cs-tipl::after { content: attr(data-tip); position: absolute; right: calc(100% + 10px); top: 50%; transform: translate(3px, -50%); padding: 4px 8px; border-radius: 8px; background: var(--fill); border: 1px solid var(--edge); color: var(--muted-foreground); font-size: 11px; font-weight: 500; line-height: 1.3; white-space: nowrap; box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.16); opacity: 0; pointer-events: none; z-index: 5; transition: opacity 65ms ease, transform 65ms ease; }
-.cs-tipl:hover::after { opacity: 1; transform: translate(0, -50%); transition: opacity 101ms ease 255ms, transform 116ms var(--out) 255ms; }
+.cs-tipl::after { content: attr(data-tip); position: absolute; right: calc(100% + 10px); width: max-content; top: 50%; transform: translate(3px, -50%); padding: 4px 8px; border-radius: 8px; background: var(--fill); border: 1px solid var(--edge); color: var(--muted-foreground); font-size: 11px; font-weight: 500; line-height: 1.3; white-space: nowrap; box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.16); opacity: 0; pointer-events: none; z-index: 5; transition: opacity 65ms ease, transform 65ms ease; }
+/* Only where there is a real hover: on a touch screen a tap would leave the label stuck open over the rail. */
+@media (hover: hover) { .cs-tipl:hover::after { opacity: 1; transform: translate(0, -50%); transition: opacity 101ms ease 255ms, transform 116ms var(--out) 255ms; } }
 .cs-kbd { padding: 1px 5px; border: 1px solid var(--edge); border-radius: 4px; background: var(--hover); font: inherit; font-size: 11px; line-height: 1.4; color: var(--muted-foreground); }
 
 /* The tab navigator: only the active tab while closed; on hover or a tab key it opens into all four. */
