@@ -17,10 +17,9 @@ import { ErrorState } from "@/app/States"
 import { useApiRead } from "@/app/useApiRead"
 import type { PlannerSnapshot } from "@protocol"
 import { PanelConversation } from "./Conversation"
-import { PlanFailure, PlanRail, PreviousButton } from "./Header"
+import { PlanFailure, PlanRail } from "./Header"
 import { PlanSheet } from "./PlanSheet"
 import { PreviousPlans } from "./Previous"
-import { Seats } from "./Roster"
 import { INTRO_LEAD, PLAN_STEPS, isFresh, seatCells, seatedCount } from "./words"
 import { ScrollHints } from "@/ui/ScrollHints"
 
@@ -28,22 +27,10 @@ import { useStickToBottom } from "@/lib/useStickToBottom"
 
 type Comments = ReadonlyMap<string, string[]>
 
-/** The rounds the panel has, the last one the oracle's. */
-function Rounds({ limit }: { limit: number }) {
-  if (limit <= 0) return null
-  return (
-    <span className="cs-rounds">
-      <span aria-hidden="true" className="cs-bars">
-        {Array.from({ length: limit }, (_, round) => <i key={round} data-last={round === limit - 1 || undefined} />)}
-      </span>
-      <span>up to {limit} rounds, the last the oracle's</span>
-    </span>
-  )
-}
-
 /**
- * Before anyone speaks: what planning is, the panel as seats you can fill or
- * leave empty, how a plan comes together, and where to start.
+ * Before anyone speaks: what planning is, how a plan comes together and
+ * where to start; the panel's seats are already in the side rail, as during
+ * a session, where they can be filled or left empty.
  */
 function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) {
   const cells = seatCells(snap)
@@ -60,16 +47,10 @@ function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) 
                 <p>{INTRO_LEAD}</p>
               </div>
             </div>
-            <div className="cs-ir">
-              <PreviousButton />
-              <Rounds limit={snap.limit} />
-            </div>
           </header>
-
-          <section aria-labelledby="plan-panel">
-            <h3 id="plan-panel" className="cs-rl">The panel<span className="cs-rr">{seatedCount(cells)}</span></h3>
-            <Seats cells={cells} onToggled={onDone} />
-          </section>
+          <p className="cs-ipanel">
+            {seatedCount(cells)}{snap.limit > 0 ? ` · up to ${snap.limit} rounds, the last the oracle's` : ""}. Click a seat in the rail at the right to leave it out of this plan.
+          </p>
 
           <section aria-labelledby="plan-steps">
             <h3 id="plan-steps" className="cs-rl">How a plan comes together</h3>
@@ -95,6 +76,7 @@ function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) 
         </div>
       </div>
       <ScrollHints target={pane} />
+      <PlanRail snap={snap} onDone={onDone} />
     </>
   )
 }
@@ -139,7 +121,7 @@ function CurrentPlan() {
   if (!snap) return <p role="status" className="p-5 text-sm text-muted-foreground">Loading the plan…</p>
   const fresh = isFresh(snap)
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col">
       {fresh ? <Intro snap={snap} onDone={read.reload} /> : <Session snap={snap} reload={read.reload} />}
     </div>
   )
