@@ -278,7 +278,7 @@ export function useTabNavigator({ tabs, activeId, label, onSelect, flashRef }: {
   }
 
   const open = bay.open
-  const vars = { "--wT": `${open ? width.open : width.closed}px`, "--hT": open ? "38px" : "30px" } as CSSProperties
+  const vars = { "--wT": `${open ? width.open : width.closed}px`, "--hT": "40px" } as CSSProperties
   return { open, vars, ghost: <BayGhost className="cs-gt" style={vars} />, bay: (
     <div className="cs-tbwrap" style={vars} {...bay.handlers}>
       <div className="cs-tbx">

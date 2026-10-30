@@ -36,7 +36,7 @@ export const SIDEBAR_KEY = "app.sidebar.pinned"
 export const toggleSidebarPin = () => toggleCollapsed(SIDEBAR_KEY)
 
 /** The open sidebar's size: 244px wide, 520px tall where the window has room. */
-const OPEN = { w: 244, h: "min(520px, calc(100vh - 112px))" }
+const OPEN = { w: 244, h: "min(600px, calc(100vh - 40px))" }
 
 const TOOL = "cs-iconbtn cs-sm"
 
@@ -334,7 +334,7 @@ export function useSidebar(props: SidebarProps) {
   const [query, setQuery] = useState("")
   const [starting, setStarting] = useState(false)
   const open = pinned || bay.open || starting
-  const vars = { "--wL": `${open ? OPEN.w : 46}px`, "--hL": open ? OPEN.h : "148px", "--sb-open-h": OPEN.h } as CSSProperties
+  const vars = { "--wL": `${open ? OPEN.w : 122}px`, "--hL": open ? OPEN.h : "40px", "--sb-open-h": OPEN.h } as CSSProperties
   const newSession = useCallback(() => setStarting(true), [])
   return {
     open,
@@ -343,17 +343,17 @@ export function useSidebar(props: SidebarProps) {
       <div className="cs-sbwrap" style={vars} {...bay.handlers}>
         <aside id="app-sidebar" aria-label="Sidebar" className="cs-sbx">
           <div className="cs-sbmini" inert={open}>
-            <Tip label={pinned ? "Unpin sidebar" : "Pin sidebar"} hint={props.keys.sidebar} side="right">
+            <Tip label={pinned ? "Unpin sidebar" : "Pin sidebar"} hint={props.keys.sidebar} side="bottom">
               <button type="button" aria-label="Sessions" aria-pressed={pinned} aria-keyshortcuts={props.keys.sidebar} onClick={togglePin} className="cs-iconbtn">
                 <TabGlyph id="lobby" />
               </button>
             </Tip>
-            <Tip label="New session" side="right">
+            <Tip label="New session" side="bottom">
               <button type="button" aria-label="New session" aria-haspopup="dialog" onClick={newSession} className="cs-iconbtn">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" /></svg>
               </button>
             </Tip>
-            <Tip label="Settings" hint={props.keys.settings ?? "Alt+S"} side="right">
+            <Tip label="Settings" hint={props.keys.settings ?? "Alt+S"} side="bottom">
               <a href="#/settings" aria-label="Settings" aria-current={props.route.kind === "settings" ? "page" : undefined} className="cs-iconbtn">
                 <TabGlyph id="settings" />
               </a>
