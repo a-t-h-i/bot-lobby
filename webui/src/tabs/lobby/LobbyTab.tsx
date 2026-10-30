@@ -1,9 +1,9 @@
 /*
  * The Lobby: the chat with the team (the oracle and, when a message is
  * theirs, the other agents), the agents' activity folded in place between its
- * messages (Alt+A opens or folds every run of steps). One column at every
- * width. Thinking is not a pane: its orb floats over every
- * page (see `app/Thinking.tsx`).
+ * messages (Alt+A opens or folds every run of steps), and their thinking
+ * inline under the latest message (Alt+T opens or folds it). One column at
+ * every width.
  */
 import { ErrorState } from "@/app/States"
 import { useTopic } from "@/app/hooks"
@@ -11,7 +11,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { lobbyStore } from "@/lib/store"
 import type { LobbySnapshot, StatusInfo } from "@protocol"
 import { Conversation } from "./Conversation"
-import type { ActivityEntry } from "./types"
+import type { ActivityEntry, ThoughtEntry } from "./types"
 
 const panesOf = (status?: StatusInfo) => status?.panels ?? { conversation: true, activity: true, thinking: true }
 
@@ -19,11 +19,13 @@ function LobbyView({ data, status }: { data?: LobbySnapshot; status?: StatusInfo
   const panes = panesOf(status)
   if (!panes.conversation) return null
   const activity = panes.activity ? (data?.activity as ActivityEntry[] | undefined) : undefined
+  const thoughts = panes.thinking ? (data?.thoughts as ThoughtEntry[] | undefined) : undefined
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <Conversation
         chat={data?.chat ?? []}
         {...(activity ? { activity } : {})}
+        {...(thoughts ? { thoughts } : {})}
         reply={data?.reply}
         busy={status?.busy ?? false}
         {...(data?.answering ? { answering: data.answering } : {})}

@@ -11,6 +11,7 @@ import type { MetricRecord } from "../state/metrics.ts";
 import type { BotLobbyConfig, LobbyAgentKind, PanelMember } from "../schemas/configuration.ts";
 import type { ChatEntry, LobbyFeed } from "./feed.ts";
 import type { BackgroundSession } from "./sessions.ts";
+import type { SavedSession } from "./saved-sessions.ts";
 import type { PlannerSeed, PlanningSession } from "./planner.ts";
 import type { PlanRecord, PlanSummary } from "../state/plan-history.ts";
 import type { KnowledgeBook } from "./knowledge.ts";
@@ -163,6 +164,12 @@ export interface LobbyService {
   renameSession?(key: string | undefined, name: string): string;
   /** Put an ended background session away from the list, or bring it back; returns a notice (throws when it cannot). */
   archiveSession?(key: string, archived: boolean): string;
+  /** The project's saved sessions not listed otherwise, newest first (archived ones marked). */
+  savedSessions?(): SavedSession[];
+  /** Put a saved session away from the list, or bring it back; returns a notice (throws when it cannot). */
+  archiveSaved?(sessionId: string, archived: boolean): string;
+  /** Delete a saved session's file; returns a notice (throws when it cannot). */
+  deleteSaved?(sessionId: string): string;
   /** Start a task in a new background session, named after the task; the session, or why not. */
   startSession(start: { request?: string; plan?: PlannedTask; auto?: boolean }): BackgroundSession | string;
   /** Auto mode for any task, whichever session drives it. */

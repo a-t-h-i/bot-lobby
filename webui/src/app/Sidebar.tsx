@@ -8,7 +8,8 @@
  * Settings and the app's switches. Switching to a session is a click on its row.
  */
 import { useCallback, useId, useRef, useState, type CSSProperties, type ReactNode } from "react"
-import { Archive, ChevronDown, CircleDashed, Pencil } from "lucide-react"
+import { Archive, ChevronDown, CircleDashed, Pencil, Trash2 } from "lucide-react"
+import { ConfirmButton } from "@/ui/ConfirmButton"
 import type { StatusInfo } from "@protocol"
 import { Keys } from "@/components/ui/kbd"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -36,7 +37,7 @@ export const SIDEBAR_KEY = "app.sidebar.pinned"
 export const toggleSidebarPin = () => toggleCollapsed(SIDEBAR_KEY)
 
 /** The open sidebar's size: 244px wide, 520px tall where the window has room. */
-const OPEN = { w: 244, h: "min(520px, calc(100vh - 112px))" }
+const OPEN = { w: 244, h: "min(600px, calc(100vh - 40px))" }
 
 const TOOL = "cs-iconbtn cs-sm"
 
@@ -63,12 +64,29 @@ function useSessions(): SessionEntry[] {
  * into this window (if this window is at work, its session carries on in the
  * background); one in another terminal stays there.
  */
+async function switchTo(entry: SessionEntry): Promise<void> {
+  if (entry.where === "here") return go("#/lobby")
+  if (entry.where === "elsewhere") return void toast.info(`${entry.name} runs in another terminal. Switch to that terminal to work in it.`)
+  if (await act("sessions.switch", entry.key ? { key: entry.key } : { sessionId: entry.sessionId! })) go("#/lobby")
+}
+
 function useSwitch(): (entry: SessionEntry) => Promise<void> {
-  return useCallback(async (entry: SessionEntry) => {
-    if (entry.where === "here") return go("#/lobby")
-    if (entry.where === "elsewhere") return void toast.info(`${entry.name} runs in another terminal. Switch to that terminal to work in it.`)
-    if (await act("sessions.switch", entry.key ? { key: entry.key } : { sessionId: entry.sessionId! })) go("#/lobby")
-  }, [])
+  return useCallback(switchTo, [])
+}
+
+/** The sessions as the sidebar last listed them, and how to show the sidebar for a moment: for the session keys. */
+const listed: { entries: SessionEntry[]; flash?: () => void } = { entries: [] }
+
+/**
+ * Switch to the next (1) or previous (-1) session the sidebar lists, past the ones in other terminals, which
+ * cannot be switched to from here; the sidebar opens for a moment to show where the key went.
+ */
+export async function cycleSession(delta: number): Promise<void> {
+  const ring = listed.entries.filter((entry) => entry.where !== "elsewhere")
+  const at = ring.findIndex((entry) => entry.where === "here")
+  if (ring.length < 2 || at < 0) return void toast.info("No other session to switch to.")
+  listed.flash?.()
+  await switchTo(ring[(at + delta + ring.length) % ring.length]!)
 }
 
 /**
@@ -94,12 +112,12 @@ function RowStatus({ entry }: { entry: SessionEntry }) {
   return <span className="sr-only">{entry.where === "elsewhere" ? "Other terminal" : entry.state === "exited" ? "Ended" : "Idle"}</span>
 }
 
-const WHERE = { here: "This window", background: "Background", elsewhere: "Other terminal" }
+const WHERE = { here: "This window", background: "Background", elsewhere: "Other terminal", saved: "Recent" }
 
 /** Put an ended session away, with Undo on the notice. */
 function archive(entry: SessionEntry): Promise<unknown> {
-  const key = entry.key!
-  return act("sessions.archive", { key }, { undo: () => void act("sessions.archive", { key, archived: false }) })
+  const which = entry.key ? { key: entry.key } : { sessionId: entry.sessionId! }
+  return act("sessions.archive", which, { undo: () => void act("sessions.archive", { ...which, archived: false }) })
 }
 
 /** The name, as a field while it is being renamed: Enter or leaving it saves, Esc keeps the old name. */
@@ -143,9 +161,10 @@ function SessionRow({ entry, index }: { entry: SessionEntry; index: number }) {
   const pick = useSwitch()
   const [renaming, setRenaming] = useState(false)
   const quiet = entry.state === "exited" || entry.where === "elsewhere"
-  const canRename = entry.where !== "elsewhere"
-  const canArchive = entry.where === "background" && entry.state === "exited" && Boolean(entry.key)
-  const hasActions = canRename || canArchive
+  const canRename = entry.where === "here" || entry.where === "background"
+  const canArchive = (entry.where === "background" && entry.state === "exited" && Boolean(entry.key)) || entry.where === "saved"
+  const canDelete = entry.where === "saved"
+  const hasActions = canRename || canArchive || canDelete
   const style = { "--i": index } as CSSProperties
   return (
     <li className="cs-srow session-item">
@@ -193,6 +212,20 @@ function SessionRow({ entry, index }: { entry: SessionEntry; index: number }) {
               </button>
             </Tip>
           ) : null}
+          {canDelete ? (
+            <ConfirmButton
+              iconOnly
+              className="cs-sact"
+              side="bottom"
+              label={`Delete ${entry.name}`}
+              icon={Trash2}
+              variant="destructive"
+              title={`Delete ${entry.name}?`}
+              description="Its conversation file is removed for good. Archive it instead to keep it."
+              confirmLabel="Delete"
+              onConfirm={() => void act("sessions.delete", { sessionId: entry.sessionId! })}
+            />
+          ) : null}
         </span>
       ) : null}
     </li>
@@ -215,7 +248,7 @@ function Shelf({ id, label, entries, start, archivable = false }: { id: string; 
         {archivable ? (
           <button
             type="button"
-            onClick={() => void (async () => { for (const entry of entries) if (entry.key) await act("sessions.archive", { key: entry.key }) })()}
+            onClick={() => void (async () => { for (const entry of entries) await act("sessions.archive", entry.key ? { key: entry.key } : { sessionId: entry.sessionId! }) })()}
             className="shrink-0 outline-none hover:text-foreground focus-visible:underline"
           >
             Archive all
@@ -272,6 +305,7 @@ function Sessions({ query }: { query: string }) {
   const here = shown.filter((entry) => entry.where === "here" && entry.state !== "exited")
   const background = shown.filter((entry) => entry.where === "background" && entry.state !== "exited")
   const elsewhere = shown.filter((entry) => entry.where === "elsewhere")
+  // Ended background sessions first, then the project's saved ones, newest first: they stay until archived or deleted.
   const ended = shown.filter((entry) => entry.where !== "elsewhere" && entry.state === "exited")
   let i = 1
   const at = (count: number) => {
@@ -299,7 +333,7 @@ function Sessions({ query }: { query: string }) {
         <p className="cs-sh" style={{ "--i": backAt } as CSSProperties}>No other sessions are running.</p>
       ) : null}
       <Shelf id="elsewhere" label="Other terminals" entries={elsewhere} start={at(elsewhere.length)} />
-      <Shelf id="ended" label="Ended" entries={ended} start={at(ended.length)} archivable />
+      <Shelf id="ended" label="Recent" entries={ended} start={at(ended.length)} archivable />
     </nav>
   )
 }
@@ -330,11 +364,13 @@ function Foot({ route, keys, onHelp }: SidebarProps) {
  */
 export function useSidebar(props: SidebarProps) {
   const [pinned, togglePin] = useCollapsed(SIDEBAR_KEY)
-  const bay = useHoverBay(160)
+  const bay = useHoverBay(160, 1600)
+  listed.entries = useSessions()
+  listed.flash = bay.flash
   const [query, setQuery] = useState("")
   const [starting, setStarting] = useState(false)
   const open = pinned || bay.open || starting
-  const vars = { "--wL": `${open ? OPEN.w : 46}px`, "--hL": open ? OPEN.h : "148px", "--sb-open-h": OPEN.h } as CSSProperties
+  const vars = { "--wL": `${open ? OPEN.w : 122}px`, "--hL": open ? OPEN.h : "40px", "--sb-open-h": OPEN.h } as CSSProperties
   const newSession = useCallback(() => setStarting(true), [])
   return {
     open,
@@ -343,17 +379,17 @@ export function useSidebar(props: SidebarProps) {
       <div className="cs-sbwrap" style={vars} {...bay.handlers}>
         <aside id="app-sidebar" aria-label="Sidebar" className="cs-sbx">
           <div className="cs-sbmini" inert={open}>
-            <Tip label={pinned ? "Unpin sidebar" : "Pin sidebar"} hint={props.keys.sidebar} side="right">
+            <Tip label={pinned ? "Unpin sidebar" : "Pin sidebar"} hint={props.keys.sidebar} side="bottom">
               <button type="button" aria-label="Sessions" aria-pressed={pinned} aria-keyshortcuts={props.keys.sidebar} onClick={togglePin} className="cs-iconbtn">
                 <TabGlyph id="lobby" />
               </button>
             </Tip>
-            <Tip label="New session" side="right">
+            <Tip label="New session" side="bottom">
               <button type="button" aria-label="New session" aria-haspopup="dialog" onClick={newSession} className="cs-iconbtn">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" /></svg>
               </button>
             </Tip>
-            <Tip label="Settings" hint={props.keys.settings ?? "Alt+S"} side="right">
+            <Tip label="Settings" hint={props.keys.settings ?? "Alt+S"} side="bottom">
               <a href="#/settings" aria-label="Settings" aria-current={props.route.kind === "settings" ? "page" : undefined} className="cs-iconbtn">
                 <TabGlyph id="settings" />
               </a>

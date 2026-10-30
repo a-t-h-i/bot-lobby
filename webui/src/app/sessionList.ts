@@ -1,12 +1,13 @@
 /**
  * The sessions the sidebar lists, in one order: this window's own first, then
  * the background sessions it started (the ones it can switch to), then the
- * live sessions in other terminals (shown, but they stay where they run).
- * Pure, so the page and its tests read the same list.
+ * live sessions in other terminals (shown, but they stay where they run), then
+ * the project's saved sessions, newest first, which stay until archived or
+ * deleted. Pure, so the page and its tests read the same list.
  */
-import type { BackgroundSessionInfo, LiveSession, StatusInfo } from "@protocol"
+import type { BackgroundSessionInfo, LiveSession, SavedSession, StatusInfo } from "@protocol"
 
-export type SessionWhere = "here" | "background" | "elsewhere"
+export type SessionWhere = "here" | "background" | "elsewhere" | "saved"
 export type SessionState = "working" | "idle" | "starting" | "exited" | "asking"
 
 export interface SessionEntry {
@@ -19,6 +20,8 @@ export interface SessionEntry {
   waiting: number
   key?: string
   sessionId?: string
+  /** When it last changed (saved sessions). */
+  at?: number
 }
 
 function backgroundState(session: BackgroundSessionInfo): SessionState {
@@ -28,7 +31,7 @@ function backgroundState(session: BackgroundSessionInfo): SessionState {
   return session.status === "starting" ? "starting" : "idle"
 }
 
-export function sessionEntries(status: Pick<StatusInfo, "sessionId" | "sessionName" | "busy"> | undefined, list: { background: BackgroundSessionInfo[]; live: LiveSession[] } | undefined): SessionEntry[] {
+export function sessionEntries(status: Pick<StatusInfo, "sessionId" | "sessionName" | "busy"> | undefined, list: { background: BackgroundSessionInfo[]; live: LiveSession[]; saved?: SavedSession[] } | undefined): SessionEntry[] {
   const own = status?.sessionId
   const here: SessionEntry = { id: "here", name: status?.sessionName?.trim() || "This window", where: "here", state: status?.busy ? "working" : "idle", waiting: 0, ...(own ? { sessionId: own } : {}) }
   const background = (list?.background ?? [])
@@ -48,5 +51,9 @@ export function sessionEntries(status: Pick<StatusInfo, "sessionId" | "sessionNa
     .map((session): SessionEntry => ({ id: `live:${session.sessionId}`, name: session.name?.trim() || "Unnamed session", where: "elsewhere", state: "idle", waiting: 0, sessionId: session.sessionId }))
   // Ended background sessions go last among their kind: the live ones are what you switch between.
   background.sort((a, b) => Number(a.state === "exited") - Number(b.state === "exited"))
-  return [here, ...background, ...elsewhere]
+  const listed = new Set([...known, ...elsewhere.map((entry) => entry.sessionId)])
+  const saved = (list?.saved ?? [])
+    .filter((session) => !session.archived && !listed.has(session.sessionId))
+    .map((session): SessionEntry => ({ id: `saved:${session.sessionId}`, name: session.name, where: "saved", state: "exited", waiting: 0, sessionId: session.sessionId, at: session.at }))
+  return [here, ...background, ...elsewhere, ...saved]
 }

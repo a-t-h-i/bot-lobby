@@ -32,6 +32,7 @@ import { OPEN_PROJECTS, ProjectChip, ProjectsPane, projectsSize, type Projects }
 import { FOLDER_SIZE, FolderPane } from "./ProjectFolderDialog"
 import { taskRoute } from "./taskRoute"
 import { ComposerBubble } from "./composer/ComposerSurface"
+import { MarkdownMirror } from "./composer/MarkdownMirror"
 import { ComposerSendButton, ComposerStopButton } from "./composer/ComposerPrimaryActions"
 import { ComposerCommandMenu, composerItems, composerSuggestionOptionId, composerTrigger, suggestionHeight, suggestionWidth, type ComposerCommandItem } from "./composer/ComposerCommandMenu"
 import { DrawerPane, MockupLightbox, type Drawer } from "@/prompts/Drawer"
@@ -87,6 +88,8 @@ interface Pending {
 }
 
 let keySeq = 0
+/** Measures the message box's lines, for its width. */
+const measure = document.createElement("canvas").getContext("2d")!
 
 function isSend(event: KeyboardEvent): boolean {
   return event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing
@@ -238,6 +241,7 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
   const box = useRef<HTMLDivElement>(null)
   const inner = useRef<HTMLDivElement>(null)
   const field = useRef<HTMLTextAreaElement>(null)
+  const mirror = useRef<HTMLDivElement>(null)
   const picker = useRef<HTMLInputElement>(null)
   const imagePicker = useRef<HTMLInputElement>(null)
   const filesRef = useRef(files)
@@ -375,6 +379,24 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
     observer.observe(el)
     return () => observer.disconnect()
   }, [shrunk])
+
+  // A long line widens the box before it wraps: the longest line's width goes to the bubble, which grows from the
+  // chat column's width to its ceiling (in the stylesheet) in 48px steps. Folded, or with short lines, it stays put.
+  useLayoutEffect(() => {
+    const el = field.current
+    const host = bubble.current
+    if (!el || !host) return
+    if (shrunk || !text) return void host.style.removeProperty("--cg")
+    const style = getComputedStyle(el)
+    measure.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+    const longest = Math.max(...text.split("\n").map((line) => measure.measureText(line).width))
+    host.style.setProperty("--cg", `${Math.ceil((longest + 44) / 48) * 48}px`)
+  }, [text, shrunk])
+
+  // The styled layer behind the text keeps to the box's scroll.
+  useLayoutEffect(() => {
+    if (mirror.current && field.current) mirror.current.scrollTop = field.current.scrollTop
+  })
 
   // The toasts sit just above the composer box and centred on it, wherever its height and the sidebar have put it.
   useEffect(() => {
@@ -712,25 +734,31 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
               ) : null}
             </AnimatePresence>
 
-            <textarea
-              ref={field}
-              id="composer-text"
-              aria-label={target.label}
-              {...(target.id === "oracle" ? { role: "combobox", "aria-autocomplete": "list" as const, "aria-expanded": menuOpen, "aria-controls": menuOpen ? listId : undefined } : {})}
-              {...(lit ? { "aria-activedescendant": composerSuggestionOptionId(listId, lit.id) } : {})}
-              value={text}
-              onChange={(event) => {
-                setText(event.target.value)
-                setCaret(event.target.selectionStart)
-                setPanel(null)
-              }}
-              onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
-              onKeyDown={onKeyDown}
-              onPaste={onPaste}
-              placeholder={placeholder}
-              rows={1}
-              className="bubble-text"
-            />
+            <div className="bubble-field">
+              <MarkdownMirror ref={mirror} text={text} />
+              <textarea
+                ref={field}
+                id="composer-text"
+                aria-label={target.label}
+                {...(target.id === "oracle" ? { role: "combobox", "aria-autocomplete": "list" as const, "aria-expanded": menuOpen, "aria-controls": menuOpen ? listId : undefined } : {})}
+                {...(lit ? { "aria-activedescendant": composerSuggestionOptionId(listId, lit.id) } : {})}
+                value={text}
+                onChange={(event) => {
+                  setText(event.target.value)
+                  setCaret(event.target.selectionStart)
+                  setPanel(null)
+                }}
+                onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
+                onKeyDown={onKeyDown}
+                onPaste={onPaste}
+                onScroll={(event) => {
+                  if (mirror.current) mirror.current.scrollTop = event.currentTarget.scrollTop
+                }}
+                placeholder={placeholder}
+                rows={1}
+                className="bubble-text bubble-input"
+              />
+            </div>
 
             <div data-chat-composer-footer="true" className="bubble-tools composer-tools">
               <button

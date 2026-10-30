@@ -42,7 +42,6 @@ naming the file it came from.
 | `webui/src/app/code/CodeSurface.tsx` | `apps/web/src/components/files/FilePreviewPanel.tsx` (`EditableFileSurface`), `components/files/ReadOnlySourcePreview.tsx`, `components/DiffPanel.tsx` |
 | `webui/src/app/code/codeRendering.ts` | `apps/web/src/lib/diffRendering.ts` (`DIFF_SURFACE_THEME_UNSAFE_CSS`, `resolveDiffThemeName`), `lib/syntaxHighlighting.ts` (`PREFERRED_HIGHLIGHTER`), `components/diffs/StyledDiffCodeView.tsx`, `components/files/fileSurfaceChrome.tsx` |
 | `webui/src/tabs/lobby/InlineActivity.tsx` | `apps/web/src/components/chat/WorkLog.tsx` |
-| `src/webui/palette-core.ts` (the built-in themes) | `packages/shared/src/themePalettes.ts` (Blossom is their T3 Chat theme, renamed) |
 | `src/harness/model-manifest.json` (copied as is) | `apps/server/src/provider/model-manifest.json` |
 | `src/harness/catalog.ts` | `apps/server/src/provider/ClaudeModelCatalog.ts` (effort descriptors and maps), `CodexProvider.ts` (effort levels), `antigravityAuthSupport.ts` (`buildAntigravityAcpSpawnInput`) |
 | `src/harness/cli-args.ts` | `packages/shared/src/cliArgs.ts` (`tokenizeCliArgs`) |

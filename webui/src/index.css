@@ -14,15 +14,15 @@
   --radius: 0.625rem;
 
   /* Page and ink */
-  --background: #f3f3f5;
-  --foreground: #27272a;
-  --muted-foreground: #6b6b75;
+  --background: #faf9f5;
+  --foreground: #141413;
+  --muted-foreground: #73726c;
 
   /* Surfaces: white cards, glass pop-ups */
   --card: #ffffff;
-  --card-foreground: #27272a;
-  --popover: rgb(255 255 255 / 0.8);
-  --popover-foreground: #27272a;
+  --card-foreground: #141413;
+  --popover: rgb(255 255 255 / 0.92);
+  --popover-foreground: #141413;
   --glass-border: color-mix(in srgb, var(--foreground) 10%, transparent);
   --glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7), 0 24px 64px -24px rgb(0 0 0 / 0.35);
   --glass-blur: 22px;
@@ -35,22 +35,22 @@
   --glass-edge: color-mix(in oklab, var(--border) 85%, transparent);
   --glass-lift: inset 0 1px 0 rgb(255 255 255 / 0.75), 0 1px 2px rgb(0 0 0 / 0.03), 0 10px 30px -18px rgb(0 0 0 / 0.16);
   /* The page's wash: two faint pools of colour from the theme, as light behind the glass. */
-  --wash-a: color-mix(in oklab, var(--primary) 7%, transparent);
-  --wash-b: color-mix(in oklab, oklch(0.72 0.15 350) 6%, transparent);
+  --wash-a: transparent;
+  --wash-b: transparent;
   --scrim: color-mix(in srgb, var(--background) 30%, transparent);
   /* A control's contact shadow (shadow-xs/5) and a card's. */
   --control-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --card-shadow: var(--glass-lift);
   --surface-shadow: none;
 
-  /* The accent: one warm orange */
-  --primary: #e8590c;
+  /* The accent: Claude's clay orange; the surfaces below are Claude's warm ivory (light) and warm charcoal (dark). */
+  --primary: #c96442;
   --primary-foreground: #ffffff;
-  --accent: #f4f4f5;
-  --accent-foreground: #18181b;
+  --accent: #f0eee6;
+  --accent-foreground: #141413;
   --ring: var(--primary);
   --typing: var(--primary);
-  --tab-active: #f4f4f5;
+  --tab-active: #f0eee6;
   /* The chosen tab's fill and the colour that flows between tabs, both from the accent so themes follow. */
   --tab-fill: color-mix(in oklab, var(--primary) 10%, transparent);
   --tab-outline: color-mix(in srgb, var(--foreground) 30%, var(--background));
@@ -60,14 +60,14 @@
   --tab-rim: color-mix(in oklab, var(--primary) 72%, var(--background));
 
   /* Quiet fills and lines */
-  --secondary: #fafafa;
-  --secondary-foreground: #27272a;
-  --muted: #fafafa;
-  --border: #d2d2da;
-  --input: #d8d8dd;
-  --you: #e9e9eb;
+  --secondary: #f5f4ee;
+  --secondary-foreground: #141413;
+  --muted: #f5f4ee;
+  --border: #dedcd1;
+  --input: #dedcd1;
+  --you: #f0eee6;
   /* Your message: a soft filled block, as in the harnesses. */
-  --bubble: color-mix(in oklab, var(--foreground) 9%, var(--background));
+  --bubble: #f0eee6;
   --bubble-foreground: var(--foreground);
 
   /* Meaning */
@@ -75,7 +75,7 @@
   --success: #047857;
   --warning: #b45309;
   --info: #1d4ed8;
-  --heading: #18181b;
+  --heading: #141413;
   /* Links stay blue: orange text is too faint on the light page. */
   --link: #1b4ed8;
   --code: #9d174d;
@@ -97,11 +97,11 @@
   --source-scout: #3fb892;
   --source-planner: #e0708f;
 
-  --sidebar: #fafafa;
+  --sidebar: #f5f4ee;
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: #f4f4f5;
+  --sidebar-accent: #f0eee6;
   --sidebar-accent-foreground: var(--accent-foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
@@ -143,14 +143,14 @@
 
 .dark {
   /* Close to the neutral-black canvas: borders and hover fills separate, not grey slabs. */
-  --background: #1b1b1b;
-  --foreground: #ececec;
-  --muted-foreground: #b2b2b2;
+  --background: #262624;
+  --foreground: #faf9f5;
+  --muted-foreground: #a6a39a;
 
-  --card: #303030;
-  --card-foreground: #ececec;
-  --popover: rgb(22 22 24 / 0.72);
-  --popover-foreground: #f5f5f5;
+  --card: #30302e;
+  --card-foreground: #faf9f5;
+  --popover: rgb(48 48 46 / 0.92);
+  --popover-foreground: #faf9f5;
   --glass-border: rgb(255 255 255 / 0.1);
   --glass-shadow: inset 0 1px rgb(255 255 255 / 0.08), 0 24px 72px -20px rgb(0 0 0 / 0.9);
   --glass-blur: 24px;
@@ -158,28 +158,28 @@
   --glass-fill: linear-gradient(180deg, rgb(255 255 255 / 0.055), rgb(255 255 255 / 0.025));
   --glass-edge: rgb(255 255 255 / 0.075);
   --glass-lift: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 12px 32px -20px rgb(0 0 0 / 0.8);
-  --wash-a: color-mix(in oklab, var(--primary) 11%, transparent);
-  --wash-b: color-mix(in oklab, oklch(0.62 0.17 340) 8%, transparent);
+  --wash-a: transparent;
+  --wash-b: transparent;
   --scrim: color-mix(in srgb, var(--background) 38%, transparent);
   --control-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   --card-shadow: var(--glass-lift);
 
-  --primary: #f26b1d;
+  --primary: #d97757;
   --primary-foreground: #ffffff;
-  --accent: rgb(255 255 255 / 0.05);
-  --accent-foreground: #f5f5f5;
-  --tab-active: #191919;
+  --accent: rgb(250 249 245 / 0.06);
+  --accent-foreground: #faf9f5;
+  --tab-active: #1f1e1d;
   --tab-fill: color-mix(in oklab, var(--primary) 22%, transparent);
   --tab-liquid: color-mix(in oklab, var(--primary) 80%, transparent);
   --tab-rim: color-mix(in oklab, var(--primary) 80%, var(--background));
 
-  --secondary: rgb(255 255 255 / 0.03);
-  --secondary-foreground: #f5f5f5;
-  --muted: rgb(255 255 255 / 0.03);
-  --border: #4a4a4a;
-  --input: #2c2c2f;
-  --you: #262626;
-  --bubble: color-mix(in oklab, var(--foreground) 15%, var(--background));
+  --secondary: rgb(250 249 245 / 0.04);
+  --secondary-foreground: #faf9f5;
+  --muted: rgb(250 249 245 / 0.04);
+  --border: #3e3e38;
+  --input: #3e3e38;
+  --you: #1f1e1d;
+  --bubble: #1f1e1d;
 
   --destructive: #f87171;
   /* Dark mode's red is a light tint, under white too pale: its muted Stop mixes from the deeper red. */
@@ -188,7 +188,7 @@
   --success: #34d399;
   --warning: #fbbf24;
   --info: #60a5fa;
-  --heading: #fafafa;
+  --heading: #faf9f5;
   --link: #6b93f5;
   --code: #f9a8d4;
 
@@ -197,13 +197,13 @@
   --chart-4: #e879f9;
 
 
-  --sidebar: var(--card);
-  --sidebar-accent: rgb(255 255 255 / 0.08);
+  --sidebar: #1f1e1d;
+  --sidebar-accent: rgb(250 249 245 / 0.07);
   --sidebar-selected: rgb(255 255 255 / 0.07);
 
 
-  --dock: rgb(24 24 27 / 0.72);
-  --dock-solid: color-mix(in srgb, rgb(24 24 27) 72%, var(--background));
+  --dock: #30302e;
+  --dock-solid: #30302e;
   --dock-border: rgb(255 255 255 / 0.09);
   --dock-shadow: inset 0 1px rgb(255 255 255 / 0.06), 0 18px 40px -20px rgb(0 0 0 / 0.9);
   --surface-raised: color-mix(in srgb, var(--background) 97%, #ffffff);
@@ -1162,12 +1162,14 @@
   position: relative;
   isolation: isolate;
   width: 100%;
-  max-width: var(--chat-content-max-width);
+  /* As wide as the chat column, or as its longest line (--cg, from the composer) up to 64rem. */
+  max-width: clamp(var(--chat-content-max-width), var(--cg, 0px), 64rem);
   margin-inline: auto;
   color: var(--bubble-ink);
+  transition: max-width 340ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .dark .bubble {
-  --bubble-fill: color-mix(in srgb, var(--foreground) 7.5%, var(--background));
+  --bubble-fill: var(--card);
   --bubble-edge: color-mix(in srgb, var(--foreground) 25%, var(--background));
   --bubble-muted: color-mix(in srgb, var(--muted-foreground) 75%, var(--foreground));
   --bubble-faint: color-mix(in srgb, var(--muted-foreground) 80%, var(--background));
@@ -1400,7 +1402,7 @@
   width: 100%;
   field-sizing: content;
   min-height: 60px;
-  max-height: 13rem;
+  max-height: min(40vh, 22rem);
   padding: var(--tp) 18px 4px;
   overflow-y: auto;
   border: 0;
@@ -1416,6 +1418,35 @@
   transition: padding 380ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .bubble-text::placeholder { color: var(--bubble-muted); opacity: 1; }
+/* The typing happens in the clear box; its Markdown shows in the mirror behind, which must wrap exactly as the box. */
+.bubble-field { position: relative; mask-image: linear-gradient(transparent, #000 10px, #000 calc(100% - 4px), transparent); }
+.bubble-text { overflow-wrap: break-word; word-break: normal; tab-size: 4; scrollbar-width: none; }
+.bubble-text::-webkit-scrollbar { display: none; }
+.bubble-input { position: relative; z-index: 1; color: transparent; }
+.bubble-input::selection { color: transparent; background: color-mix(in srgb, var(--bubble-accent) 26%, transparent); }
+.bubble-mirror {
+  position: absolute;
+  inset: 0;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+.bubble-mirror .md-mark { color: var(--bubble-faint); }
+.bubble-mirror :is(.md-strong, .md-heading) { -webkit-text-stroke: 0.5px currentColor; }
+.bubble-mirror .md-heading:not(.md-mark) { color: var(--bubble-ink); }
+/* The faces come with upright styles only, so italics are slanted from them, at the same widths. */
+.bubble-mirror .md-em { font-style: italic; }
+.bubble-mirror .md-strike { text-decoration: line-through; text-decoration-color: var(--bubble-muted); }
+.bubble-mirror :is(.md-code, .md-codeblock) { background: var(--bubble-well); border-radius: 4px; box-shadow: 0 0 0 1.5px var(--bubble-well); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.bubble-mirror .md-codeblock { border-radius: 0; }
+.bubble-mirror :is(.md-link, .md-list) { color: var(--bubble-accent); }
+/* A /command or @name: its colour (set inline) and bolder than the text round it, at the same widths. */
+.bubble-mirror .md-mention { -webkit-text-stroke: 0.55px currentColor; }
+.bubble-mirror .md-link { text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--bubble-accent) 45%, transparent); text-underline-offset: 2px; }
+.bubble-mirror .md-quote:not(.md-mark) { color: var(--bubble-muted); }
 .bubble[data-shrunk] .bubble-text { height: 44px; min-height: 44px; max-height: 44px; padding-bottom: 0; overflow: hidden; }
 .bubble[data-shrunk] .composer-files { display: none; }
 .bubble-tools {

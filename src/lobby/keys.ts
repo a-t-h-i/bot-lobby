@@ -16,6 +16,8 @@ export const LOBBY_ACTIONS = {
   code: { key: "alt+e", help: "open or close the code viewer: changed files, diffs and editing" },
   nextTab: { key: "alt+]", help: "next tab" },
   prevTab: { key: "alt+[", help: "previous tab" },
+  nextSession: { key: "alt+down", help: "switch to the next session in the sidebar" },
+  prevSession: { key: "alt+up", help: "switch to the previous session in the sidebar" },
 } as const;
 
 export type LobbyAction = keyof typeof LOBBY_ACTIONS;

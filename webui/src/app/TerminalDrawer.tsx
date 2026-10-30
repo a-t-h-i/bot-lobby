@@ -152,6 +152,20 @@ export function TerminalDrawer({ toggleKey }: { toggleKey: string }) {
     await reload()
   }, [reload])
 
+  // Ctrl+PageDown and Ctrl+PageUp step through the terminals, from anywhere while the drawer is open.
+  useEffect(() => {
+    if (!open || terminals.length < 2) return
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (!event.ctrlKey || event.altKey || event.metaKey || (event.key !== "PageDown" && event.key !== "PageUp")) return
+      event.preventDefault()
+      const at = Math.max(0, terminals.findIndex((terminal) => terminal.id === shown?.id))
+      const next = terminals[(at + (event.key === "PageDown" ? 1 : -1) + terminals.length) % terminals.length]!
+      setActive(next.id)
+    }
+    window.addEventListener("keydown", onKey, true)
+    return () => window.removeEventListener("keydown", onKey, true)
+  }, [open, terminals, shown?.id])
+
   // Opened with no terminal yet, it starts one: opening the drawer is asking for a shell.
   const started = useRef(false)
   useEffect(() => {

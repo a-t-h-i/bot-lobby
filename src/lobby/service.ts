@@ -42,6 +42,8 @@ import type { ChatJob, ChatWorker } from "./chat-agents.ts";
 import { routeChatMessage } from "../classifier/lobby.ts";
 import { availableClassifiers, classifier, effortFor, hintsFor } from "../classifier/instance.ts";
 import { cleanSessionName, launchPi, SessionRegistry, type BackgroundSession, type SessionLauncher } from "./sessions.ts";
+import { archivedSessionsFile, readArchivedSessions, savedSessions, writeArchivedSessions, type SavedSession, type SessionFileInfo } from "./saved-sessions.ts";
+import { rmSync } from "node:fs";
 import { askForSession } from "./session-questions.ts";
 import { SessionChats } from "./session-files.ts";
 import { answerMessage, questionnaires, settledQuestions, styleAnswers } from "./ask.ts";
@@ -308,15 +310,85 @@ let exitHooked = false;
 /** How many questions of each session were already announced, and which exits, so each is said once. */
 const announced = new Map<string, number>();
 const exitsSaid = new Set<string>();
-/** Other sessions' conversations, read from their files. */
-const chats = new SessionChats(async () => {
+/** Every saved pi session of this project, as pi lists them from disk. */
+async function listSessionFiles(): Promise<SessionFileInfo[]> {
   const state = serviceState;
   if (!state) return [];
   const dirs = new Map<string, string | undefined>([[state.ctx.cwd, state.ctx.sessionManager.getSessionDir()]]);
   if (!dirs.has(state.root)) dirs.set(state.root, undefined);
   const lists = await Promise.all([...dirs].map(([cwd, dir]) => SessionManager.list(cwd, dir).catch(() => [])));
   return lists.flat();
-}, () => lobbyTopics.bump("sessions"));
+}
+
+/** Other sessions' conversations, read from their files. */
+const chats = new SessionChats(listSessionFiles, () => lobbyTopics.bump("sessions"));
+
+/** How long a read of the saved sessions is reused before pi's list is read again. */
+const SAVED_READ_MS = 4000;
+let savedSeen: { at: number; root: string; files: SessionFileInfo[]; reading?: boolean } | undefined;
+
+/** The session files last read; a stale read starts a fresh one, and the sidebar is told when it lands. */
+function sessionFiles(state: Runtime): SessionFileInfo[] {
+  const now = Date.now();
+  if (savedSeen?.root !== state.root) savedSeen = { at: Number.NEGATIVE_INFINITY, root: state.root, files: [] };
+  const seen = savedSeen;
+  if (now - seen.at >= SAVED_READ_MS && !seen.reading) {
+    seen.reading = true;
+    void listSessionFiles()
+      .then((files) => {
+        const before = seen.files.map((file) => `${file.id}:${file.modified.getTime()}:${file.name ?? ""}`).join("|");
+        seen.files = files;
+        if (files.map((file) => `${file.id}:${file.modified.getTime()}:${file.name ?? ""}`).join("|") !== before) lobbyTopics.bump("sessions");
+      })
+      .catch(() => {})
+      .finally(() => {
+        seen.at = Date.now();
+        seen.reading = false;
+      });
+  }
+  return seen.files;
+}
+
+/** The project's saved sessions not shown otherwise (this window, its background sessions, other terminals'). */
+function listSavedSessions(state: Runtime): SavedSession[] {
+  const shown = new Set<string>([
+    state.ctx.sessionManager.getSessionId(),
+    ...backgroundSessions().flatMap((session) => (session.sessionId ? [session.sessionId] : [])),
+    ...liveSessions(state).map((session) => session.sessionId),
+  ]);
+  return savedSessions(sessionFiles(state), shown, readArchivedSessions(archivedSessionsFile(state.root, state.configDir)));
+}
+
+/** Put a saved session away from the sidebar, or bring it back; remembered in the project's data folder. */
+function archiveSaved(state: Runtime, sessionId: string, archived: boolean): string {
+  const saved = savedSessions(sessionFiles(state), new Set(), new Set()).find((session) => session.sessionId === sessionId);
+  if (!saved) throw new Error(`no saved session ${sessionId}`);
+  const file = archivedSessionsFile(state.root, state.configDir);
+  const ids = readArchivedSessions(file);
+  if (archived) ids.add(sessionId);
+  else ids.delete(sessionId);
+  writeArchivedSessions(file, ids);
+  lobbyTopics.bump("sessions");
+  return archived ? `archived ${saved.name}` : `brought back ${saved.name}`;
+}
+
+/** Delete a saved session's file for good; never this window's, a running one's, or one in another terminal. */
+function deleteSaved(state: Runtime, sessionId: string): string {
+  const busy = state.ctx.sessionManager.getSessionId() === sessionId
+    || backgroundSessions().some((session) => session.alive && session.sessionId === sessionId)
+    || liveSessions(state).some((session) => session.sessionId === sessionId);
+  if (busy) throw new Error("that session is open: switch away from it or stop it first");
+  const files = sessionFiles(state).filter((file) => file.id === sessionId);
+  if (!files.length) throw new Error(`no saved session ${sessionId}`);
+  const name = savedSessions(files, new Set(), new Set())[0]?.name ?? sessionId;
+  for (const file of files) rmSync(file.path, { force: true });
+  if (savedSeen) savedSeen = { ...savedSeen, files: savedSeen.files.filter((file) => file.id !== sessionId) };
+  const archive = archivedSessionsFile(state.root, state.configDir);
+  const ids = readArchivedSessions(archive);
+  if (ids.delete(sessionId)) writeArchivedSessions(archive, ids);
+  lobbyTopics.bump("sessions");
+  return `deleted ${name}`;
+}
 
 /** Launch background sessions with something else (tests); resets the registry. */
 export function setSessionLauncher(next: SessionLauncher | undefined): void {
@@ -1142,6 +1214,9 @@ export function createLobbyService(state: Runtime): LobbyService {
     sessions: () => backgroundSessions().filter((session) => session.projectRoot === state.root),
     renameSession: (key, name) => renameSession(state, key, name),
     archiveSession: (key, archived) => archiveSession(state, key, archived),
+    savedSessions: () => listSavedSessions(state),
+    archiveSaved: (sessionId, archived) => archiveSaved(state, sessionId, archived),
+    deleteSaved: (sessionId) => deleteSaved(state, sessionId),
     startSession: (start) => startSession(state, start),
     isAuto: (taskId) => autoFor(state, taskId),
     setAuto: (taskId, on) => switchAuto(state, taskId, on),

@@ -16,7 +16,7 @@
   --faint: color-mix(in srgb, var(--muted-foreground) 62%, var(--background));
   --hover: color-mix(in srgb, var(--foreground) 5%, var(--card));
   --well: color-mix(in srgb, var(--foreground) 11%, var(--card));
-  --sunk: color-mix(in srgb, var(--page) 92%, #2a2a50);
+  --sunk: color-mix(in srgb, var(--page) 93%, #3d3929);
   --ok: #17935a;
   --warn: #b26a00;
   --bad: #cc3838;
@@ -74,13 +74,13 @@
 
 /* ---------------------------------------------------------------------------------------------------------------
  * The shell: the page lies flat over the whole window; the sidebar, the tab navigator and the code/terminal
- * buttons are bays floating just inside the window's edges, fully rounded, as the composer floats at the bottom. Each bay is drawn like the composer: an edge layer and a
+ * buttons are bays floating just inside the window's edges, all three along the top, fully rounded, as the composer floats at the bottom. Each bay is drawn like the composer: an edge layer and a
  * lit fill layer through goo filters, under the real content, sized by --wL/--hL (sidebar) and --wT/--hT (tabs).
  * ------------------------------------------------------------------------------------------------------------- */
-@property --wL { syntax: "<length>"; inherits: true; initial-value: 46px; }
-@property --hL { syntax: "<length>"; inherits: true; initial-value: 148px; }
+@property --wL { syntax: "<length>"; inherits: true; initial-value: 122px; }
+@property --hL { syntax: "<length>"; inherits: true; initial-value: 40px; }
 @property --wT { syntax: "<length>"; inherits: true; initial-value: 122px; }
-@property --hT { syntax: "<length>"; inherits: true; initial-value: 30px; }
+@property --hT { syntax: "<length>"; inherits: true; initial-value: 40px; }
 
 .cs-frame {
   /* How far the floating bays sit in from the window's edges. */
@@ -105,7 +105,7 @@
 
 /* The ghost layers of a bay: like the composer, each floats --fi in from its window edge, fully rounded. */
 .cs-gl, .cs-gt, .cs-gr { position: absolute; z-index: 40; pointer-events: none; }
-.cs-gl { left: var(--fi); top: calc(50% - var(--hL) / 2); width: var(--wL); height: var(--hL); }
+.cs-gl { left: var(--fi); top: var(--fi); width: var(--wL); height: var(--hL); }
 .cs-gt { left: calc(50% - var(--wT) / 2); top: var(--fi); width: var(--wT); height: var(--hT); }
 .cs-gr { right: var(--gR); top: var(--fi); width: var(--wR); height: var(--hR); }
 .cs-layer { position: absolute; inset: -30px; box-sizing: border-box; padding: 30px; display: flex; flex-direction: column; pointer-events: none; }
@@ -116,10 +116,11 @@
 /* One corner for every floating surface, the composer's: a gently rounded rectangle, never a pill. */
 .cs-gl .cs-bb, .cs-sbx, .cs-gt .cs-bb, .cs-tbx, .cs-gr .cs-bb { border-radius: var(--float-r); }
 
-/* The sidebar: a mini rail (sessions, new session, settings) that grows into the full list on hover or pin. */
-.cs-sbwrap { position: absolute; z-index: 41; left: 0; top: calc(50% - max(var(--hL), 260px) / 2); width: calc(max(var(--wL), 30px) + var(--fi)); height: max(var(--hL), 260px); }
-.cs-sbx { position: absolute; left: var(--fi); top: calc(50% - var(--hL) / 2); width: var(--wL); height: var(--hL); overflow: hidden; }
-.cs-sbmini { position: absolute; left: 0; top: 0; width: 46px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; opacity: 1; transition: opacity 76ms ease 76ms; }
+/* The sidebar: a bubble at the top left, level with the tab bar and the tools (sessions, new session, settings),
+ * that grows down and across into the full list on hover or pin. */
+.cs-sbwrap { position: absolute; z-index: 41; left: 0; top: 0; width: calc(var(--wL) + var(--fi)); height: calc(var(--hL) + var(--fi)); }
+.cs-sbx { position: absolute; left: var(--fi); top: var(--fi); width: var(--wL); height: var(--hL); overflow: hidden; }
+.cs-sbmini { position: absolute; left: 0; top: 0; width: 122px; height: 40px; display: flex; align-items: center; justify-content: center; gap: 4px; opacity: 1; transition: opacity 76ms ease 76ms; }
 .cs-frame[data-sb="open"] .cs-sbmini { opacity: 0; pointer-events: none; transition: opacity 51ms ease; }
 .cs-sbfull { position: absolute; left: 0; top: 0; width: 244px; height: var(--sb-open-h); box-sizing: border-box; padding: 12px 10px 10px; display: flex; flex-direction: column; opacity: 0; pointer-events: none; transition: opacity 68ms ease; }
 .cs-frame[data-sb="open"] .cs-sbfull { opacity: 1; pointer-events: auto; transition: opacity 119ms ease 76ms; }
@@ -166,16 +167,17 @@
 
 /* A tooltip: a tiny muted label after a 500ms hover; never while pressing or while its menu is open. */
 .cs-tip { position: relative; }
-.cs-tip::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translate(-50%, 3px); padding: 4px 8px; border-radius: 8px; background: var(--fill); border: 1px solid var(--edge); color: var(--muted-foreground); font-size: 11px; font-weight: 500; line-height: 1.3; white-space: nowrap; box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.16); opacity: 0; pointer-events: none; z-index: 5; transition: opacity 76ms ease, transform 76ms ease; }
-.cs-tip:hover::after { opacity: 1; transform: translate(-50%, 0); transition: opacity 119ms ease 500ms, transform 136ms var(--out) 500ms; }
+.cs-tip::after { content: attr(data-tip); position: absolute; left: 50%; width: max-content; bottom: calc(100% + 8px); transform: translate(-50%, 3px); padding: 4px 8px; border-radius: 8px; background: var(--fill); border: 1px solid var(--edge); color: var(--muted-foreground); font-size: 11px; font-weight: 500; line-height: 1.3; white-space: nowrap; box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.16); opacity: 0; pointer-events: none; z-index: 5; transition: opacity 76ms ease, transform 76ms ease; }
+@media (hover: hover) { .cs-tip:hover::after { opacity: 1; transform: translate(-50%, 0); transition: opacity 119ms ease 500ms, transform 136ms var(--out) 500ms; } }
 .cs-tip:active::after, .cs-tip:is([data-on="true"], [aria-pressed="true"]):hover::after, .cs-tip:disabled:hover::after { opacity: 0; transform: translate(-50%, 3px); transition: opacity 51ms ease; }
 .cs-tip.cs-b::after { bottom: auto; top: calc(100% + 8px); transform: translate(-50%, -3px); }
 .cs-tip.cs-b:hover::after { transform: translate(-50%, 0); }
 .cs-tip.cs-b:active::after, .cs-tip.cs-b:is([data-on="true"], [aria-pressed="true"]):hover::after { transform: translate(-50%, -3px); }
 /* A tooltip to the left (the plan's side rail). */
 .cs-tipl { position: relative; }
-.cs-tipl::after { content: attr(data-tip); position: absolute; right: calc(100% + 10px); top: 50%; transform: translate(3px, -50%); padding: 4px 8px; border-radius: 8px; background: var(--fill); border: 1px solid var(--edge); color: var(--muted-foreground); font-size: 11px; font-weight: 500; line-height: 1.3; white-space: nowrap; box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.16); opacity: 0; pointer-events: none; z-index: 5; transition: opacity 65ms ease, transform 65ms ease; }
-.cs-tipl:hover::after { opacity: 1; transform: translate(0, -50%); transition: opacity 101ms ease 255ms, transform 116ms var(--out) 255ms; }
+.cs-tipl::after { content: attr(data-tip); position: absolute; right: calc(100% + 10px); width: max-content; top: 50%; transform: translate(3px, -50%); padding: 4px 8px; border-radius: 8px; background: var(--fill); border: 1px solid var(--edge); color: var(--muted-foreground); font-size: 11px; font-weight: 500; line-height: 1.3; white-space: nowrap; box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.16); opacity: 0; pointer-events: none; z-index: 5; transition: opacity 65ms ease, transform 65ms ease; }
+/* Only where there is a real hover: on a touch screen a tap would leave the label stuck open over the rail. */
+@media (hover: hover) { .cs-tipl:hover::after { opacity: 1; transform: translate(0, -50%); transition: opacity 101ms ease 255ms, transform 116ms var(--out) 255ms; } }
 .cs-kbd { padding: 1px 5px; border: 1px solid var(--edge); border-radius: 4px; background: var(--hover); font: inherit; font-size: 11px; line-height: 1.4; color: var(--muted-foreground); }
 
 /* The tab navigator: only the active tab while closed; on hover or a tab key it opens into all four. */
@@ -183,7 +185,7 @@
 .cs-tbx { position: absolute; left: calc(50% - var(--wT) / 2); top: var(--fi); width: var(--wT); height: var(--hT); overflow: hidden; }
 .cs-tbc { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 13px; font-weight: 500; color: var(--foreground); opacity: 1; transform: none; pointer-events: none; transition: opacity 136ms ease 119ms, transform 442ms var(--spring) 85ms; }
 .cs-frame[data-tb="open"] .cs-tbc { opacity: 0; transform: scale(0.82); transition: opacity 42ms ease, transform 102ms ease; }
-.cs-tbo { position: absolute; left: 0; right: 0; top: 0; height: 38px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 2px; opacity: 0; transform: scale(0.7); transform-origin: 50% 0; pointer-events: none; transition: opacity 110ms ease, transform 357ms cubic-bezier(0.34, 1.4, 0.5, 1); }
+.cs-tbo { position: absolute; left: 0; right: 0; top: 0; height: 40px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 2px; opacity: 0; transform: scale(0.7); transform-origin: 50% 0; pointer-events: none; transition: opacity 110ms ease, transform 357ms cubic-bezier(0.34, 1.4, 0.5, 1); }
 .cs-frame[data-tb="open"] .cs-tbo { opacity: 1; transform: none; pointer-events: auto; transition: opacity 119ms ease 68ms, transform 323ms var(--out); }
 .cs-frame[data-tb="open"] .cs-tab { animation: cs-row-pop 187ms var(--out) backwards; animation-delay: calc(51ms + var(--i, 0) * 22ms); transform-origin: 50% 0; }
 .cs-lb { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
@@ -202,7 +204,7 @@
 /* The indicator under the active tab: a dent pressed into the bay and a goo-softened tint over it. */
 .cs-track { position: relative; display: flex; align-items: center; gap: 2px; height: 100%; }
 .cs-tabind { position: absolute; inset: 0; pointer-events: none; transition: opacity 170ms ease; }
-.cs-tabind i { position: absolute; top: 5px; height: 28px; left: 0; right: 0; border-radius: 9px; }
+.cs-tabind i { position: absolute; top: 6px; height: 28px; left: 0; right: 0; border-radius: 9px; }
 .cs-tabind.cs-dent { filter: url(#cs-tabdent); }
 .cs-tabind.cs-dent i { background: color-mix(in srgb, var(--fill) 88%, #000); }
 .dark .cs-tabind.cs-dent i { background: color-mix(in srgb, var(--fill) 62%, #000); }
@@ -217,6 +219,8 @@
 /* The page area: the whole window, under the bays. */
 .cs-body { position: relative; display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; }
 .cs-main { position: relative; display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow-y: auto; outline: none; background: var(--grain) fixed, var(--page); }
+/* A page's content fades out under the floating bays at the top instead of running beneath them. */
+.cs-main:has(.cs-pg) { -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 10px, #000 60px); mask-image: linear-gradient(to bottom, transparent 0, transparent 10px, #000 60px); }
 
 @media (prefers-reduced-motion: reduce) {
   .cs-frame, .cs-frame *, .cs-frame *::before, .cs-frame *::after { transition-duration: 0ms !important; animation: none !important; }
@@ -234,15 +238,17 @@
 .chat-prose { font-size: 14px; line-height: 1.5; }
 .chat-bubble.cs-umsg { position: relative; max-width: 70%; margin-right: 9px; padding: 8px 14px; border-radius: 0; background: none; box-shadow: none; color: var(--foreground); font-size: 14px; line-height: 1.5; }
 .cs-umsg :is(.cs-ue, .cs-uf) { position: absolute; inset: 0; display: block; pointer-events: none; }
-.cs-umsg .cs-ue { --shape: var(--edge); }
-.cs-umsg .cs-uf { --shape: var(--fill); }
+.cs-umsg .cs-ue { --shape: var(--bubble); }
+.cs-umsg .cs-uf { --shape: var(--bubble); }
 .cs-umsg .cs-ub { position: absolute; inset: 0; border-radius: 18px 18px 6px 18px; background: var(--shape); }
 /* The tail: an SVG curve that leaves the bubble's straight right edge tangentially and ends in a rounded tip. */
 .cs-umsg .cs-ut { position: absolute; right: -9px; bottom: 0; width: 22px; height: 16px; overflow: visible; pointer-events: none; }
-.cs-ut-edge { fill: none; stroke: var(--edge); stroke-width: 2; stroke-linejoin: round; stroke-linecap: butt; }
-.cs-ut-fill { fill: var(--fill); }
+.cs-ut-edge { fill: none; stroke: var(--bubble); stroke-width: 2; stroke-linejoin: round; stroke-linecap: butt; }
+.cs-ut-fill { fill: var(--bubble); }
 .cs-umsg .cs-ue .cs-ub { box-shadow: 0 0 0 1px var(--shape); }
 .cs-umsg .cs-ux { position: relative; min-width: 0; }
+/* The @name or /command a message starts with: in its colour, bolder, running into the first line. */
+.cs-umsg .cs-lead { float: left; margin-right: 0.3em; font-weight: 650; }
 .cs-umsg[data-new] { transform-origin: 100% 100%; animation: cs-um-pop 391ms cubic-bezier(0.34, 1.1, 0.5, 1) both; }
 @keyframes cs-um-pop { 0% { transform: scale(0.35, 0.3) translateY(14px); opacity: 0; } 30% { opacity: 1; } 58% { transform: scale(1.07, 0.93) translateY(-2px); } 80% { transform: scale(0.985, 1.02); } 100% { transform: none; opacity: 1; } }
 .cs-umsg[data-new] .cs-ut { animation: cs-um-tail 391ms cubic-bezier(0.34, 1.1, 0.5, 1) both; transform-origin: 0 100%; }
@@ -498,15 +504,21 @@
 /* Tasks: one table, a section label over the first row of each section; the detail is a slide-over. */
 .cs-pg.cs-ts { max-width: 928px; }
 .cs-tbh, .cs-trw { display: grid; grid-template-columns: 18px minmax(0, 1fr) 108px 52px 34px; column-gap: 14px; align-items: center; box-sizing: border-box; width: 100%; }
-.cs-tbh { height: 26px; padding: 0 10px; font-size: 11px; color: var(--faint); border-bottom: 1px solid var(--edge); }
+.cs-tbh { height: 28px; padding: 0 12px; font-size: 11px; font-weight: 500; color: var(--faint); border-bottom: 1px solid var(--edge); }
 .cs-tbh span:nth-child(4), .cs-tbh span:nth-child(5), .cs-trw .cs-ttm, .cs-trw .cs-tag { text-align: right; }
 .cs-lst { list-style: none; margin: 0; padding: 0; }
-.cs-tsec { margin: 18px 0 2px; padding: 0 10px; font-size: 11.5px; font-weight: 600; color: var(--muted-foreground); display: flex; gap: 8px; align-items: baseline; }
-.cs-tsec b { font-weight: 500; color: var(--faint); }
-.cs-trw { appearance: none; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--edge) 55%, transparent); background: none; font: inherit; font-size: 13px; color: var(--foreground); text-align: left; height: 34px; padding: 0 10px; cursor: pointer; outline: none; transition: background 119ms ease; }
-.cs-trw:hover { background: color-mix(in srgb, var(--foreground) 3.5%, transparent); }
-.cs-trw:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); border-radius: 8px; }
-.cs-trw[aria-current="true"] { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.cs-tsec { margin: 20px 0 4px; padding: 0 12px; font-size: 11.5px; font-weight: 600; color: var(--muted-foreground); display: flex; gap: 8px; align-items: center; }
+.cs-tsec b { min-width: 18px; height: 16px; padding: 0 5px; border-radius: 8px; display: inline-grid; place-items: center; box-sizing: border-box; background: var(--sunk); font-size: 10.5px; font-weight: 500; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+/* Rows sit apart on the page, no rules between them: a soft rounded light under the pointer, the open one tinted. */
+.cs-trw { appearance: none; border: 0; border-radius: 10px; background: none; font: inherit; font-size: 13px; color: var(--foreground); text-align: left; height: 36px; padding: 0 12px; cursor: pointer; outline: none; transition: background 119ms ease, box-shadow 119ms ease; }
+.cs-lst li + li .cs-trw { margin-top: 1px; }
+.cs-trw:hover { background: color-mix(in srgb, var(--foreground) 4%, transparent); }
+.cs-trw:active { box-shadow: var(--press); }
+.cs-trw:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
+.cs-trw[aria-current="true"] { background: color-mix(in srgb, var(--primary) 9%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 18%, transparent); }
+.cs-trw[aria-current="true"] .cs-t { font-weight: 500; }
+.cs-tshow .cs-cn { min-width: 18px; height: 16px; padding: 0 5px; border-radius: 8px; display: inline-grid; place-items: center; box-sizing: border-box; background: color-mix(in srgb, var(--foreground) 6%, transparent); font-size: 10.5px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.cs-tnone { padding: 28px 12px; text-align: center; font-size: 13px; color: var(--muted-foreground); }
 .cs-trw .cs-mk { width: 16px; height: 16px; }
 .cs-trw .cs-tt1 { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 .cs-trw .cs-t { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -841,8 +853,14 @@
 /* Settings: a flat page; the sections switch spans it; each agent a raised card with its tile. */
 .cs-pg.cs-set { max-width: 1168px; }
 .cs-secn { margin: 0 0 20px; }
-.cs-secn .cs-seg { width: 100%; box-sizing: border-box; }
-.cs-secn .cs-seg button { font-size: 12px; padding: 0 4px; }
+/* The sections switch wears the tab bar's look: a raised bay, each section as wide as its name, the current one
+ * pressed into the bay and tinted. */
+.cs-secn .cs-seg { display: flex; gap: 2px; width: 100%; box-sizing: border-box; padding: 4px; border-radius: var(--float-r); background: var(--fill); box-shadow: var(--rs); }
+.cs-secn .cs-seg .cs-thumb { display: none; }
+.cs-secn .cs-seg button { flex: 1 1 auto; height: 30px; font-size: 13px; padding: 0 10px; border-radius: 9px; transition: color 102ms ease, background 136ms ease, box-shadow 136ms ease; }
+.cs-secn .cs-seg button:hover:not([data-on]) { background: var(--hover); }
+.cs-secn .cs-seg button[data-on] { background: color-mix(in srgb, var(--primary) 7%, color-mix(in srgb, var(--fill) 92%, #000)); box-shadow: var(--press); }
+.dark .cs-secn .cs-seg button[data-on] { background: color-mix(in srgb, var(--primary) 12%, color-mix(in srgb, var(--fill) 62%, #000)); }
 .cs-set section[data-slot="agent-row"] { gap: 11px; padding: 14px 16px 16px; border: 0; border-radius: 22px; background: var(--fill); box-shadow: var(--rs); -webkit-backdrop-filter: none; backdrop-filter: none; }
 .cs-set section[data-slot="agent-row"] h3 { font-size: 14.5px; gap: 9px; }
 .cs-set section[data-slot="agent-row"] h3 .cs-tile { width: 22px; height: 22px; border-radius: 7px; }
@@ -944,3 +962,15 @@ nav[aria-label="Terminals"] button[aria-current="true"] { background: color-mix(
 @keyframes cs-cfm-in { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: none; } }
 @keyframes cs-cfm-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(0.95); } }
 @media (prefers-reduced-motion: reduce) { .cs-cfm[data-state] { animation: none; } }
+
+/* Settings agents: every card the same width and height (the tallest one's), while no card has More open. */
+.cs-agrid { align-items: stretch; }
+.cs-agrid:not(:has([aria-expanded="true"])) { grid-auto-rows: 1fr; }
+.cs-fixrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 34px; padding-inline: 12px; box-sizing: border-box; border-radius: 12px; background: var(--sunk); font-size: 13px; color: var(--muted-foreground); }
+.cs-fixnote { font-size: 11.5px; color: var(--faint); }
+/* A page's own padding would win over pb-dock: give it the room under the composer, and the questions pill over it. */
+.cs-pg.pb-dock { padding-bottom: calc(var(--composer-h, 0px) + 4.5rem); scroll-padding-bottom: calc(var(--composer-h, 0px) + 4.5rem); }
+/* The Plan start page: one quiet question, centred in the space above the composer. */
+.cs-pg.cs-blank { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding-top: 0; }
+.cs-blank h2 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; color: var(--foreground); }
+.cs-blank p { margin: 10px 0 0; max-width: 34rem; font-size: 14px; line-height: 1.5; color: var(--muted-foreground); }
