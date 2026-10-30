@@ -68,7 +68,7 @@
 
 /* ---------------------------------------------------------------------------------------------------------------
  * The shell: the page lies flat over the whole window; the sidebar, the tab navigator and the code/terminal
- * buttons are bays that grow out of the window's edges. Each bay is drawn like the composer: an edge layer and a
+ * buttons are bays floating just inside the window's edges, fully rounded, as the composer floats at the bottom. Each bay is drawn like the composer: an edge layer and a
  * lit fill layer through goo filters, under the real content, sized by --wL/--hL (sidebar) and --wT/--hT (tabs).
  * ------------------------------------------------------------------------------------------------------------- */
 @property --wL { syntax: "<length>"; inherits: true; initial-value: 46px; }
@@ -77,7 +77,9 @@
 @property --hT { syntax: "<length>"; inherits: true; initial-value: 30px; }
 
 .cs-frame {
-  --gR: 28px;
+  /* How far the floating bays sit in from the window's edges. */
+  --fi: 12px;
+  --gR: 16px;
   --wR: 84px;
   --hR: 40px;
   --tL: --wL 255ms var(--out), --hL 255ms var(--out);
@@ -94,23 +96,23 @@
 .cs-frame[data-tb="closed"] { --tT: --wT 544ms cubic-bezier(0.34, 1.5, 0.5, 1), --hT 544ms cubic-bezier(0.34, 1.7, 0.5, 1); }
 .cs-gl, .cs-gt, .cs-sbwrap, .cs-tbwrap { transition: var(--tL), var(--tT); }
 
-/* The ghost layers of a bay: the shape runs 40px past the window's edge, so only its inner corners round. */
+/* The ghost layers of a bay: like the composer, each floats --fi in from its window edge, fully rounded. */
 .cs-gl, .cs-gt, .cs-gr { position: absolute; z-index: 40; pointer-events: none; }
-.cs-gl { left: -40px; top: calc(50% - var(--hL) / 2); width: calc(var(--wL) + 40px); height: var(--hL); }
-.cs-gt { left: calc(50% - var(--wT) / 2); top: -40px; width: var(--wT); height: calc(var(--hT) + 40px); }
-.cs-gr { right: var(--gR); top: -40px; width: var(--wR); height: calc(var(--hR) + 40px); }
+.cs-gl { left: var(--fi); top: calc(50% - var(--hL) / 2); width: var(--wL); height: var(--hL); }
+.cs-gt { left: calc(50% - var(--wT) / 2); top: var(--fi); width: var(--wT); height: var(--hT); }
+.cs-gr { right: var(--gR); top: var(--fi); width: var(--wR); height: var(--hR); }
 .cs-layer { position: absolute; inset: -30px; box-sizing: border-box; padding: 30px; display: flex; flex-direction: column; pointer-events: none; }
 .cs-layer.cs-edge { --shape: var(--edge); filter: url(#cs-bayedge) drop-shadow(var(--drop1)) drop-shadow(var(--drop2)); }
 .cs-layer.cs-fill { --shape: var(--fill); filter: url(#cs-baylit); }
 .cs-bb { flex: 1 1 auto; min-height: 0; background: var(--shape); }
 .cs-edge .cs-bb { box-shadow: 0 0 0 1px var(--shape); }
-.cs-gl .cs-bb { border-radius: 0 12px 12px 0; }
-.cs-gt .cs-bb { border-radius: 0 0 12px 12px; }
-.cs-gr .cs-bb { border-radius: 0 0 10px 10px; }
+.cs-gl .cs-bb, .cs-sbx { border-radius: min(22px, calc(var(--wL) / 2)); }
+.cs-gt .cs-bb, .cs-tbx { border-radius: min(20px, calc(var(--hT) / 2)); }
+.cs-gr .cs-bb { border-radius: calc(var(--hR) / 2); }
 
 /* The sidebar: a mini rail (sessions, new session, settings) that grows into the full list on hover or pin. */
-.cs-sbwrap { position: absolute; z-index: 41; left: 0; top: calc(50% - max(var(--hL), 260px) / 2); width: max(var(--wL), 30px); height: max(var(--hL), 260px); }
-.cs-sbx { position: absolute; left: 0; top: calc(50% - var(--hL) / 2); width: var(--wL); height: var(--hL); overflow: hidden; border-radius: 0 14px 14px 0; }
+.cs-sbwrap { position: absolute; z-index: 41; left: 0; top: calc(50% - max(var(--hL), 260px) / 2); width: calc(max(var(--wL), 30px) + var(--fi)); height: max(var(--hL), 260px); }
+.cs-sbx { position: absolute; left: var(--fi); top: calc(50% - var(--hL) / 2); width: var(--wL); height: var(--hL); overflow: hidden; }
 .cs-sbmini { position: absolute; left: 0; top: 0; width: 46px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; opacity: 1; transition: opacity 76ms ease 76ms; }
 .cs-frame[data-sb="open"] .cs-sbmini { opacity: 0; pointer-events: none; transition: opacity 51ms ease; }
 .cs-sbfull { position: absolute; left: 0; top: 0; width: 244px; height: var(--sb-open-h); box-sizing: border-box; padding: 12px 10px 10px; display: flex; flex-direction: column; opacity: 0; pointer-events: none; transition: opacity 68ms ease; }
@@ -171,8 +173,8 @@
 .cs-kbd { padding: 1px 5px; border: 1px solid var(--edge); border-radius: 4px; background: var(--hover); font: inherit; font-size: 11px; line-height: 1.4; color: var(--muted-foreground); }
 
 /* The tab navigator: only the active tab while closed; on hover or a tab key it opens into all four. */
-.cs-tbwrap { position: absolute; z-index: 41; left: calc(50% - max(var(--wT), 220px) / 2); top: 0; width: max(var(--wT), 220px); height: max(var(--hT), 56px); }
-.cs-tbx { position: absolute; left: calc(50% - var(--wT) / 2); top: 0; width: var(--wT); height: var(--hT); overflow: hidden; border-radius: 0 0 14px 14px; }
+.cs-tbwrap { position: absolute; z-index: 41; left: calc(50% - max(var(--wT), 220px) / 2); top: 0; width: max(var(--wT), 220px); height: calc(max(var(--hT), 56px) + var(--fi)); }
+.cs-tbx { position: absolute; left: calc(50% - var(--wT) / 2); top: var(--fi); width: var(--wT); height: var(--hT); overflow: hidden; }
 .cs-tbc { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 13px; font-weight: 500; color: var(--foreground); opacity: 1; transform: none; pointer-events: none; transition: opacity 136ms ease 119ms, transform 442ms var(--spring) 85ms; }
 .cs-frame[data-tb="open"] .cs-tbc { opacity: 0; transform: scale(0.82); transition: opacity 42ms ease, transform 102ms ease; }
 .cs-tbo { position: absolute; left: 0; right: 0; top: 0; height: 38px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 2px; opacity: 0; transform: scale(0.7); transform-origin: 50% 0; pointer-events: none; transition: opacity 110ms ease, transform 357ms cubic-bezier(0.34, 1.4, 0.5, 1); }
@@ -204,7 +206,7 @@
 .cs-tbo[data-none] .cs-tabind { opacity: 0; }
 
 /* The code viewer and terminal buttons, in their own bay at the top right. */
-.cs-rbx { position: absolute; z-index: 41; right: var(--gR); top: 0; width: var(--wR); height: var(--hR); display: flex; align-items: center; justify-content: center; gap: 4px; padding-bottom: 2px; box-sizing: border-box; }
+.cs-rbx { position: absolute; z-index: 41; right: var(--gR); top: var(--fi); width: var(--wR); height: var(--hR); display: flex; align-items: center; justify-content: center; gap: 4px; box-sizing: border-box; }
 
 /* The page area: the whole window, under the bays. */
 .cs-body { position: relative; display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; }
