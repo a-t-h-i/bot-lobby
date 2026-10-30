@@ -7,7 +7,7 @@
  * is driven by the config the server last returned. The appearance,
  * notification and install rows are page-only and never sent to the server.
  */
-import { useEffect, useRef, useState, type CSSProperties } from "react"
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
 import { Brain, Check, ChevronRight, CircleAlert, CircleCheck, Download, Maximize, Minimize, Wrench } from "lucide-react"
 import { toast } from "@/lib/toast"
 import { useFullscreen, useInstallPrompt, useInstalled } from "@/app/install"
@@ -371,7 +371,8 @@ function AgentCard({ kind, config, models, harnesses, save, onGrants }: { kind: 
         <h3 className="flex min-w-0 items-center gap-2 break-words text-sm font-semibold"><span aria-hidden="true" className="cs-tile" style={{ "--ac": agentColor(kind) } as CSSProperties}>{name[0]}</span>{name}</h3>
         <MoreButton open={open} custom={custom} onToggle={() => setOpen((now) => !now)} />
       </div>
-      {HARNESS_AGENTS.has(kind) ? <HarnessChoice value={entry.harness ?? PI_HARNESS} statuses={harnesses} label={`${name} ${HARNESS.label.toLowerCase()}`} onChange={chooseHarness} /> : null}
+      {/* Every card keeps the same rows, so the cards line up: a fixed setting shows as a still row in its place. */}
+      {HARNESS_AGENTS.has(kind) ? <HarnessChoice value={entry.harness ?? PI_HARNESS} statuses={harnesses} label={`${name} ${HARNESS.label.toLowerCase()}`} onChange={chooseHarness} /> : <FixedRow value={HARNESS.piLabel} note={`always ${HARNESS.piLabel}`} label={`${name} ${HARNESS.label.toLowerCase()}`} />}
       {onHarness ? (
         <HarnessModelChoice value={harnessModel} models={harness?.models ?? []} label={`${name} model`} onChange={chooseHarnessModel} />
       ) : (
@@ -382,6 +383,7 @@ function AgentCard({ kind, config, models, harnesses, save, onGrants }: { kind: 
           model={onHarness ? (harnessModel || `${harness?.label ?? entry.harness}'s default model`) : entry.model === INHERIT_MODEL ? "the session model" : entry.model} label={`${name} effort`} onChange={(level) => set({ thinking: level })} />
       )}
       {onHarness && harness?.effort === "session" && kind !== "scout" ? <p className="-mt-1 text-xs text-muted-foreground">{HARNESS.effortNote}</p> : null}
+      <div className="mt-auto grid gap-2.5">
       <ToggleField
         label="Auto-compact"
         help={kind === "master" ? "Compacts the oracle's context as it fills, and files what it learned into the knowledge base, shared with the agents it concerns." : onHarness ? (harness?.protocol === "acp" ? `${harness.label} compacts on its own; this switch applies to pi, Codex and Claude Code.` : `Lets ${harness?.label ?? "the harness"} compact this agent's context, at the threshold under Harnesses.`) : "Compacts this agent's context as it fills."}
@@ -390,6 +392,7 @@ function AgentCard({ kind, config, models, harnesses, save, onGrants }: { kind: 
         name={`${name} auto-compact`}
       />
       {entry.autoCompact !== false && !onHarness ? <CompactAtField value={entry.compactAt} label={`${name} compact at`} onSave={(tokens) => set({ compactAt: tokens })} /> : null}
+      </div>
       <div hidden={!open} className="grid gap-2 border-t border-border pt-2">
         {onHarness ? <p className="break-words text-xs text-muted-foreground">{HARNESS.agentNote}</p> : null}
         {hasInstructions ? <InstructionsField value={entry.instructions ?? ""} label={`${name} instructions`} onSave={(text) => set({ instructions: text })} /> : null}
@@ -409,11 +412,16 @@ function customCount(entry: AgentView, kind: AgentKind): number {
 }
 
 function ScoutEffort() {
+  return <FixedRow value={<><Brain aria-hidden="true" className="size-3.5" /><span className="capitalize">{FIXED_SCOUT_THINKING}</span></>} note="fixed for scouts" label="Scout effort" />
+}
+
+/** A setting that can't change here, drawn as a still row the size of a picker so the cards keep one shape. */
+function FixedRow({ value, note, label }: { value: ReactNode; note: string; label: string }) {
   return (
-    <p className="flex min-h-[4.5rem] items-center gap-2 text-sm text-muted-foreground">
-      <Brain aria-hidden="true" className="size-4" />
-      Effort <span className="capitalize">{FIXED_SCOUT_THINKING}</span> (fixed for scouts)
-    </p>
+    <div role="group" aria-label={`${label}: ${note}`} className="cs-fixrow">
+      <span className="flex items-center gap-1.5">{value}</span>
+      <span className="cs-fixnote">{note}</span>
+    </div>
   )
 }
 
@@ -787,7 +795,7 @@ export function SettingsForm({ config, models, classifierModels = [], onConfig }
       </nav>
       <div id={sectionId("Agents")} hidden={section !== "Agents"} aria-hidden={section !== "Agents"}>
         <h2 className="sr-only">{GROUP_TITLES.agents}</h2>
-        <div className="grid grid-cols-2 items-start gap-3.5 lg:grid-cols-3">
+        <div className="cs-agrid grid grid-cols-2 gap-3.5 lg:grid-cols-3">
           {AGENT_ORDER.map((kind) => <AgentCard key={kind} kind={kind} config={config} models={models} harnesses={harnesses} save={save} onGrants={() => openGrants(kind)} />)}
         </div>
       </div>
