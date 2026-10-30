@@ -20,20 +20,24 @@
   --ok: #17935a;
   --warn: #b26a00;
   --bad: #cc3838;
-  --hl: rgb(255 255 255);
-  --sh: rgb(40 40 70 / 0.09);
-  --ehl: rgb(255 255 255 / 0.4);
-  --esh: rgb(40 40 70 / 0.5);
-  --tdsh: rgb(30 30 70 / 0.3);
-  --tdhl: rgb(255 255 255);
-  --drop1: 0 3px 10px rgb(0 0 0 / 0.035);
-  --drop2: 0 14px 36px rgb(0 0 0 / 0.045);
-  --press: inset 0 2px 4px rgb(40 40 70 / 0.36), inset 0 0 0 1px rgb(40 40 70 / 0.14), 0 1px 0 rgb(255 255 255 / 0.95);
-  --press-deep: inset 0 3px 6px rgb(40 40 70 / 0.46), inset 0 0 0 1px rgb(40 40 70 / 0.18), 0 1px 0 rgb(255 255 255 / 0.95);
-  --inset: inset 0 1px 2px rgb(40 40 70 / 0.14), 0 1px 0 rgb(255 255 255 / 0.9);
-  /* Raised (a keycap) and sunk (a well): the only bevels, for buttons and knobs. */
-  --rs: 0 0 0 1px var(--edge), inset 1.5px 2px 2px -1px var(--hl), inset -1.5px -2px 3px -1.5px var(--sh), 0 3px 10px rgb(30 30 60 / 0.08);
-  --ss: inset 1.8px 2.6px 3.2px -1px var(--tdsh), inset -1px -1.6px 2px -1px var(--tdhl), 0 1px 0 var(--tdhl);
+  /* A very light bevel, just enough for a card to read as an object: a soft light along the top, a slightly
+   * darker bottom edge, a faint drop. */
+  --hl: rgb(255 255 255 / 0.95);
+  --sh: rgb(40 40 70 / 0.07);
+  --ehl: rgb(255 255 255 / 0.8);
+  --esh: rgb(40 40 70 / 0.26);
+  --tdsh: rgb(30 30 70 / 0.16);
+  --tdhl: rgb(255 255 255 / 0.8);
+  --drop1: 0 1px 2px rgb(0 0 0 / 0.05);
+  --drop2: 0 4px 12px rgb(0 0 0 / 0.035);
+  --press: inset 0 1px 2px rgb(40 40 70 / 0.12), inset 0 0 0 1px rgb(40 40 70 / 0.08);
+  --press-deep: inset 0 1px 3px rgb(40 40 70 / 0.2), inset 0 0 0 1px rgb(40 40 70 / 0.1);
+  --inset: inset 0 1px 2px rgb(40 40 70 / 0.08), inset 0 0 0 1px rgb(40 40 70 / 0.05);
+  /* Raised (a button or card) and sunk (a well): a very light bevel, never a heavy one. */
+  --rs: 0 0 0 1px var(--edge), inset 0 1.5px 1px -0.5px var(--hl), inset 0 -1.5px 1.5px -0.5px var(--sh), 0 1px 0 rgb(40 40 70 / 0.1), 0 2px 5px -2px rgb(30 30 60 / 0.1);
+  --ss: inset 0 1px 2px var(--tdsh), inset 0 0 0 1px rgb(40 40 70 / 0.05);
+  /* A faint paper grain over the page. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.07 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
   /* The agents' colours: the oracle wears the accent. */
   --c-orc: var(--primary);
   --c-des: var(--source-design);
@@ -52,18 +56,19 @@
   --ok: #58c88f;
   --warn: #e8aa4a;
   --bad: #f07575;
-  --hl: rgb(255 255 255 / 0.2);
-  --sh: rgb(0 0 0 / 0.4);
-  --ehl: rgb(255 255 255 / 0.4);
-  --esh: rgb(0 0 0 / 0.85);
-  --tdsh: rgb(0 0 0 / 0.7);
-  --tdhl: rgb(255 255 255 / 0.15);
-  --drop1: 0 3px 10px rgb(0 0 0 / 0.3);
-  --drop2: 0 14px 36px rgb(0 0 0 / 0.3);
-  --press: inset 0 2px 5px rgb(0 0 0 / 0.9), inset 0 0 0 1px rgb(0 0 0 / 0.6), inset 0 -1px 0 rgb(255 255 255 / 0.05), 0 1px 0 rgb(255 255 255 / 0.2);
-  --press-deep: inset 0 3px 7px rgb(0 0 0 / 1), inset 0 0 0 1px rgb(0 0 0 / 0.75), inset 0 -1px 0 rgb(255 255 255 / 0.04), 0 1px 0 rgb(255 255 255 / 0.2);
-  --inset: inset 0 1px 3px rgb(0 0 0 / 0.6), 0 1px 0 rgb(255 255 255 / 0.05);
-  --rs: 0 0 0 1px var(--edge), inset 1.5px 2px 2px -1px var(--hl), inset -1.5px -2px 3px -1.5px var(--sh), 0 3px 10px rgb(0 0 0 / 0.28);
+  --hl: rgb(255 255 255 / 0.11);
+  --sh: rgb(0 0 0 / 0.3);
+  --ehl: rgb(255 255 255 / 0.16);
+  --esh: rgb(0 0 0 / 0.65);
+  --tdsh: rgb(0 0 0 / 0.45);
+  --tdhl: rgb(255 255 255 / 0.06);
+  --drop1: 0 1px 2px rgb(0 0 0 / 0.35);
+  --drop2: 0 6px 16px rgb(0 0 0 / 0.22);
+  --press: inset 0 1px 3px rgb(0 0 0 / 0.45), inset 0 0 0 1px rgb(0 0 0 / 0.3);
+  --press-deep: inset 0 1px 4px rgb(0 0 0 / 0.6), inset 0 0 0 1px rgb(0 0 0 / 0.4);
+  --inset: inset 0 1px 2px rgb(0 0 0 / 0.35), inset 0 0 0 1px rgb(0 0 0 / 0.2);
+  --rs: 0 0 0 1px var(--edge), inset 0 1.5px 1px -0.5px var(--hl), inset 0 -1.5px 1.5px -0.5px var(--sh), 0 1px 0 rgb(0 0 0 / 0.45), 0 2px 8px -2px rgb(0 0 0 / 0.3);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 /* ---------------------------------------------------------------------------------------------------------------
@@ -79,6 +84,7 @@
 .cs-frame {
   /* How far the floating bays sit in from the window's edges. */
   --fi: 5px;
+  --float-r: 12px;
   --gR: var(--fi);
   --wR: 84px;
   --hR: 40px;
@@ -89,7 +95,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--page);
+  background: var(--grain), var(--page);
   color: var(--foreground);
 }
 .cs-frame[data-sb="closed"] { --tL: --wL 187ms cubic-bezier(0.4, 0, 0.2, 1), --hL 187ms cubic-bezier(0.4, 0, 0.2, 1); }
@@ -106,9 +112,8 @@
 .cs-layer.cs-fill { --shape: var(--fill); filter: url(#cs-baylit); }
 .cs-bb { flex: 1 1 auto; min-height: 0; background: var(--shape); }
 .cs-edge .cs-bb { box-shadow: 0 0 0 1px var(--shape); }
-.cs-gl .cs-bb, .cs-sbx { border-radius: min(26px, calc(var(--wL) / 2)); }
-.cs-gt .cs-bb, .cs-tbx { border-radius: calc(var(--hT) / 2); }
-.cs-gr .cs-bb { border-radius: calc(var(--hR) / 2); }
+/* One corner for every floating surface, the composer's: a gently rounded rectangle, never a pill. */
+.cs-gl .cs-bb, .cs-sbx, .cs-gt .cs-bb, .cs-tbx, .cs-gr .cs-bb { border-radius: var(--float-r); }
 
 /* The sidebar: a mini rail (sessions, new session, settings) that grows into the full list on hover or pin. */
 .cs-sbwrap { position: absolute; z-index: 41; left: 0; top: calc(50% - max(var(--hL), 260px) / 2); width: calc(max(var(--wL), 30px) + var(--fi)); height: max(var(--hL), 260px); }
@@ -121,7 +126,7 @@
 .cs-frame[data-sb="open"] .cs-sbfull :is(.cs-sr, .cs-sh) { animation: cs-row-pop 204ms var(--out) backwards; animation-delay: calc(60ms + var(--i, 0) * 20ms); }
 @keyframes cs-row-pop { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
 .cs-sh { height: 26px; padding: 0 10px; display: flex; align-items: flex-end; gap: 6px; font-size: 11px; font-weight: 500; letter-spacing: 0.02em; color: var(--faint); }
-.cs-sr { box-sizing: border-box; width: 100%; height: 30px; padding: 0 10px; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 15px; background: transparent; font: inherit; font-size: 13px; color: var(--foreground); text-align: left; cursor: pointer; outline: none; transition: background 76ms ease; }
+.cs-sr { box-sizing: border-box; width: 100%; height: 30px; padding: 0 10px; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 10px; background: transparent; font: inherit; font-size: 13px; color: var(--foreground); text-align: left; cursor: pointer; outline: none; transition: background 76ms ease; }
 .cs-sr:hover { background: var(--hover); }
 .cs-sr:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
 .cs-sr[aria-current="true"], .cs-sr[aria-current="page"], .cs-sr[data-active="true"] { background: var(--well); box-shadow: var(--inset); }
@@ -189,14 +194,14 @@
 .cs-tbc .cs-ti, .cs-tab[aria-selected="true"] .cs-ti { color: var(--primary); }
 .cs-tab:hover .cs-ti { color: var(--foreground); }
 .cs-tab[aria-selected="true"]:hover .cs-ti { color: var(--primary); }
-.cs-tab { position: relative; z-index: 1; white-space: nowrap; flex: none; height: 28px; padding: 0 10px; display: flex; align-items: center; gap: 5px; border: 0; border-radius: 14px; background: transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--muted-foreground); text-decoration: none; cursor: pointer; outline: none; transition: background 76ms ease, color 76ms ease; }
+.cs-tab { position: relative; z-index: 1; white-space: nowrap; flex: none; height: 28px; padding: 0 10px; display: flex; align-items: center; gap: 5px; border: 0; border-radius: 9px; background: transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--muted-foreground); text-decoration: none; cursor: pointer; outline: none; transition: background 76ms ease, color 76ms ease; }
 .cs-tab:hover { background: var(--hover); color: var(--foreground); }
 .cs-tab[aria-selected="true"], .cs-tab[aria-selected="true"]:hover { background: transparent; color: var(--foreground); }
 .cs-tab:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
 /* The indicator under the active tab: a dent pressed into the bay and a goo-softened tint over it. */
 .cs-track { position: relative; display: flex; align-items: center; gap: 2px; height: 100%; }
 .cs-tabind { position: absolute; inset: 0; pointer-events: none; transition: opacity 170ms ease; }
-.cs-tabind i { position: absolute; top: 5px; height: 28px; left: 0; right: 0; border-radius: 14px; }
+.cs-tabind i { position: absolute; top: 5px; height: 28px; left: 0; right: 0; border-radius: 9px; }
 .cs-tabind.cs-dent { filter: url(#cs-tabdent); }
 .cs-tabind.cs-dent i { background: color-mix(in srgb, var(--fill) 88%, #000); }
 .dark .cs-tabind.cs-dent i { background: color-mix(in srgb, var(--fill) 62%, #000); }
@@ -210,7 +215,7 @@
 
 /* The page area: the whole window, under the bays. */
 .cs-body { position: relative; display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; }
-.cs-main { position: relative; display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow-y: auto; outline: none; background: var(--page); }
+.cs-main { position: relative; display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow-y: auto; outline: none; background: var(--grain) fixed, var(--page); }
 
 @media (prefers-reduced-motion: reduce) {
   .cs-frame, .cs-frame *, .cs-frame *::before, .cs-frame *::after { transition-duration: 0ms !important; animation: none !important; }

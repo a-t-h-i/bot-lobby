@@ -1,6 +1,6 @@
 {
-  "hash": "5621688d20644c0c1292c3464e44ef08325fb76afdea8638b7bd2248af1ff75a",
-  "builtAt": "2026-10-30T13:21:39.190Z",
+  "hash": "a17bbf879bb39473eef351f9c5c2b02eab916ab30b88766f6975e88a86c3dfff",
+  "builtAt": "2026-10-30T17:45:03.370Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -28,11 +28,11 @@
     },
     {
       "path": "webui/src/app/AppTools.tsx",
-      "sha256": "56cc95bac29dd4e9a4dde13ca9d84ba5ef50e2d84ccf11fffca2aeaaeacf366b"
+      "sha256": "38a7767821e93a5b0460e7c2f9b59c6a4deb2b47762311a1881d0e8956c0e5b2"
     },
     {
       "path": "webui/src/app/Bays.tsx",
-      "sha256": "855bc6a02f24e276b9d1b964ebc6e582230d18102c3214c501469241376bb0be"
+      "sha256": "947e64bb5fcc10cc70de0f184427c8357adbbf8570a5a220e8a056bfc049fb0c"
     },
     {
       "path": "webui/src/app/Composer.tsx",
@@ -56,7 +56,7 @@
     },
     {
       "path": "webui/src/app/Sidebar.tsx",
-      "sha256": "78804912b963b45b6053bb7f66926d0e3531edd35642396f43b1bb6881fbdd34"
+      "sha256": "679a294396b935f8309dfbb8d3b6346316b9f0150fd67f23692c9a9f80d9eb3f"
     },
     {
       "path": "webui/src/app/SignIn.tsx",
@@ -120,7 +120,7 @@
     },
     {
       "path": "webui/src/app/composer/ComposerSurface.tsx",
-      "sha256": "9f1396ae66121185682538882422b0d38ac0a56a89a41b4557cab59265d0521a"
+      "sha256": "c3594107ab7844448c1dba262e8a084e3017b3d271cb6a8c13eabb38e9dc1aa4"
     },
     {
       "path": "webui/src/app/hooks.ts",
@@ -288,7 +288,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "80411531668c8d359852dbba1c5d3de28c361a673e51b0b4a90a549b5173bbe4"
+      "sha256": "4f0db348071f3652d1467e6c564fab37a8f818671d17feb7a6a670b7f53f84a1"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -428,7 +428,7 @@
     },
     {
       "path": "webui/src/surface.css",
-      "sha256": "a7732fb3facbc59eec705c47d434abc4874ecb1131b705edce43b3a3f9630e85"
+      "sha256": "9b5e8d5c398fb51fdaac27a201361d1e45c2f5fe3ea6e5d9b2d6db278da35331"
     },
     {
       "path": "webui/src/tabs/knowledge/AgentCards.tsx",

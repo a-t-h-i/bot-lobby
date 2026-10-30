@@ -43,8 +43,8 @@
   --card-shadow: var(--glass-lift);
   --surface-shadow: none;
 
-  /* The accent: one saturated blue */
-  --primary: #1b4ed8;
+  /* The accent: one warm orange */
+  --primary: #e8590c;
   --primary-foreground: #ffffff;
   --accent: #f4f4f5;
   --accent-foreground: #18181b;
@@ -76,7 +76,8 @@
   --warning: #b45309;
   --info: #1d4ed8;
   --heading: #18181b;
-  --link: var(--primary);
+  /* Links stay blue: orange text is too faint on the light page. */
+  --link: #1b4ed8;
   --code: #9d174d;
   --codeblock: var(--foreground);
   --bullet: var(--muted-foreground);
@@ -163,7 +164,7 @@
   --control-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   --card-shadow: var(--glass-lift);
 
-  --primary: #d97757;
+  --primary: #f26b1d;
   --primary-foreground: #ffffff;
   --accent: rgb(255 255 255 / 0.05);
   --accent-foreground: #f5f5f5;
@@ -1141,21 +1142,21 @@
   --bubble-hover: color-mix(in srgb, var(--foreground) 5%, var(--card));
   --bubble-well: color-mix(in srgb, var(--foreground) 11%, var(--card));
   --bubble-accent: var(--primary);
-  --bubble-ehl: rgb(255 255 255 / 0.4);
-  --bubble-esh: rgb(40 40 70 / 0.5);
-  --bubble-hl: rgb(255 255 255);
-  --bubble-sh: rgb(40 40 70 / 0.09);
-  --bubble-press: inset 0 2px 4px rgb(40 40 70 / 0.36), inset 0 0 0 1px rgb(40 40 70 / 0.14), 0 1px 0 rgb(255 255 255 / 0.95);
-  --bubble-press-deep: inset 0 3px 6px rgb(40 40 70 / 0.46), inset 0 0 0 1px rgb(40 40 70 / 0.18), 0 1px 0 rgb(255 255 255 / 0.95);
-  --bubble-inset: inset 0 1px 2px rgb(40 40 70 / 0.14), 0 1px 0 rgb(255 255 255 / 0.9);
-  --bubble-drop1: 0 3px 10px rgb(0 0 0 / 0.035);
-  --bubble-drop2: 0 14px 36px rgb(0 0 0 / 0.045);
+  --bubble-ehl: rgb(255 255 255 / 0.8);
+  --bubble-esh: rgb(40 40 70 / 0.26);
+  --bubble-hl: rgb(255 255 255 / 0.95);
+  --bubble-sh: rgb(40 40 70 / 0.07);
+  --bubble-press: inset 0 1px 2px rgb(40 40 70 / 0.12), inset 0 0 0 1px rgb(40 40 70 / 0.08);
+  --bubble-press-deep: inset 0 1px 3px rgb(40 40 70 / 0.2), inset 0 0 0 1px rgb(40 40 70 / 0.1);
+  --bubble-inset: inset 0 1px 2px rgb(40 40 70 / 0.08), inset 0 0 0 1px rgb(40 40 70 / 0.05);
+  --bubble-drop1: 0 1px 2px rgb(0 0 0 / 0.05);
+  --bubble-drop2: 0 4px 12px rgb(0 0 0 / 0.035);
   --bubble-row-hl: rgb(255 255 255);
   --bubble-row-sh: rgb(40 40 70 / 0.09);
-  /* The box: 106px open (60px of text, 46px of tools) or as tall as its content, 14px-cornered 44px pill folded. */
+  /* The box: 106px open (60px of text, 46px of tools) or as tall as its content, 14px corners; 44px tall with 12px corners folded. */
   --ch: var(--ch-open, 106px);
   --cw: 100%;
-  --cr: 20px;
+  --cr: 14px;
   --tp: 14px;
   --morph: height 160ms cubic-bezier(0.22, 1, 0.36, 1), width 340ms cubic-bezier(0.22, 1, 0.36, 1), border-radius 360ms cubic-bezier(0.22, 1, 0.36, 1);
   position: relative;
@@ -1172,15 +1173,15 @@
   --bubble-faint: color-mix(in srgb, var(--muted-foreground) 80%, var(--background));
   --bubble-hover: color-mix(in srgb, var(--foreground) 8%, transparent);
   --bubble-well: rgb(0 0 0 / 0.3);
-  --bubble-ehl: rgb(255 255 255 / 0.3);
-  --bubble-esh: rgb(0 0 0 / 0.85);
-  --bubble-hl: rgb(255 255 255 / 0.14);
-  --bubble-sh: rgb(0 0 0 / 0.4);
-  --bubble-press: inset 0 2px 5px rgb(0 0 0 / 0.9), inset 0 0 0 1px rgb(0 0 0 / 0.6), inset 0 -1px 0 rgb(255 255 255 / 0.05), 0 1px 0 rgb(255 255 255 / 0.2);
-  --bubble-press-deep: inset 0 3px 7px rgb(0 0 0 / 1), inset 0 0 0 1px rgb(0 0 0 / 0.75), inset 0 -1px 0 rgb(255 255 255 / 0.04), 0 1px 0 rgb(255 255 255 / 0.2);
-  --bubble-inset: inset 0 1px 3px rgb(0 0 0 / 0.6), 0 1px 0 rgb(255 255 255 / 0.05);
-  --bubble-drop1: 0 3px 10px rgb(0 0 0 / 0.3);
-  --bubble-drop2: 0 14px 36px rgb(0 0 0 / 0.3);
+  --bubble-ehl: rgb(255 255 255 / 0.16);
+  --bubble-esh: rgb(0 0 0 / 0.65);
+  --bubble-hl: rgb(255 255 255 / 0.11);
+  --bubble-sh: rgb(0 0 0 / 0.3);
+  --bubble-press: inset 0 1px 3px rgb(0 0 0 / 0.45), inset 0 0 0 1px rgb(0 0 0 / 0.3);
+  --bubble-press-deep: inset 0 1px 4px rgb(0 0 0 / 0.6), inset 0 0 0 1px rgb(0 0 0 / 0.4);
+  --bubble-inset: inset 0 1px 2px rgb(0 0 0 / 0.35), inset 0 0 0 1px rgb(0 0 0 / 0.2);
+  --bubble-drop1: 0 1px 2px rgb(0 0 0 / 0.35);
+  --bubble-drop2: 0 6px 16px rgb(0 0 0 / 0.22);
   --bubble-row-hl: rgb(255 255 255 / 0.14);
   --bubble-row-sh: rgb(0 0 0 / 0.4);
 }
@@ -1191,7 +1192,7 @@
 .bubble[data-shrunk] {
   --ch: 44px;
   --cw: min(26rem, 100%);
-  --cr: 14px;
+  --cr: 12px;
   --tp: 11px;
   --morph: height 300ms cubic-bezier(0.4, 0, 0.2, 1), width 280ms cubic-bezier(0.4, 0, 0.2, 1), border-radius 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }

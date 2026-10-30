@@ -22,15 +22,15 @@ function BubbleFilters() {
         <filter id="bubble-goolit" x="-10%" y="-10%" width="120%" height="120%" colorInterpolationFilters="sRGB">
           <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="b" />
           <feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" result="shape" />
-          <feOffset in="shape" dx="0.9" dy="1.3" result="dn" />
+          <feOffset in="shape" dx="0" dy="1.5" result="dn" />
           <feComposite in="shape" in2="dn" operator="out" result="rimA" />
-          <feGaussianBlur in="rimA" stdDeviation="0.4" result="rimB" />
+          <feGaussianBlur in="rimA" stdDeviation="0.6" result="rimB" />
           <feComposite in="rimB" in2="shape" operator="in" result="rimC" />
           <feFlood style={{ floodColor: "var(--bubble-hl)" }} result="hlc" />
           <feComposite in="hlc" in2="rimC" operator="in" result="hl" />
-          <feOffset in="shape" dx="-0.9" dy="-1.3" result="up" />
+          <feOffset in="shape" dx="0" dy="-1" result="up" />
           <feComposite in="shape" in2="up" operator="out" result="shA" />
-          <feGaussianBlur in="shA" stdDeviation="0.4" result="shB" />
+          <feGaussianBlur in="shA" stdDeviation="0.6" result="shB" />
           <feComposite in="shB" in2="shape" operator="in" result="shC" />
           <feFlood style={{ floodColor: "var(--bubble-sh)" }} result="shc" />
           <feComposite in="shc" in2="shC" operator="in" result="sh" />
@@ -43,15 +43,15 @@ function BubbleFilters() {
         <filter id="bubble-gooedge" x="-10%" y="-10%" width="120%" height="120%" colorInterpolationFilters="sRGB">
           <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="b" />
           <feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" result="shape" />
-          <feOffset in="shape" dx="2" dy="3" result="dn" />
+          <feOffset in="shape" dx="0" dy="1.5" result="dn" />
           <feComposite in="shape" in2="dn" operator="out" result="tS0" />
-          <feGaussianBlur in="tS0" stdDeviation="0.8" result="tS1" />
+          <feGaussianBlur in="tS0" stdDeviation="0.3" result="tS1" />
           <feComposite in="tS1" in2="shape" operator="in" result="tS" />
           <feFlood style={{ floodColor: "var(--bubble-ehl)" }} result="tc" />
           <feComposite in="tc" in2="tS" operator="in" result="eh" />
-          <feOffset in="shape" dx="-2" dy="-3" result="up" />
+          <feOffset in="shape" dx="0" dy="-1" result="up" />
           <feComposite in="shape" in2="up" operator="out" result="bS0" />
-          <feGaussianBlur in="bS0" stdDeviation="0.8" result="bS1" />
+          <feGaussianBlur in="bS0" stdDeviation="0.3" result="bS1" />
           <feComposite in="bS1" in2="shape" operator="in" result="bS" />
           <feFlood style={{ floodColor: "var(--bubble-esh)" }} result="bc" />
           <feComposite in="bc" in2="bS" operator="in" result="es" />
