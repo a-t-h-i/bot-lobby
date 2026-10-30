@@ -74,13 +74,13 @@
 
 /* ---------------------------------------------------------------------------------------------------------------
  * The shell: the page lies flat over the whole window; the sidebar, the tab navigator and the code/terminal
- * buttons are bays floating just inside the window's edges, fully rounded, as the composer floats at the bottom. Each bay is drawn like the composer: an edge layer and a
+ * buttons are bays floating just inside the window's edges, all three along the top, fully rounded, as the composer floats at the bottom. Each bay is drawn like the composer: an edge layer and a
  * lit fill layer through goo filters, under the real content, sized by --wL/--hL (sidebar) and --wT/--hT (tabs).
  * ------------------------------------------------------------------------------------------------------------- */
-@property --wL { syntax: "<length>"; inherits: true; initial-value: 46px; }
-@property --hL { syntax: "<length>"; inherits: true; initial-value: 148px; }
+@property --wL { syntax: "<length>"; inherits: true; initial-value: 122px; }
+@property --hL { syntax: "<length>"; inherits: true; initial-value: 40px; }
 @property --wT { syntax: "<length>"; inherits: true; initial-value: 122px; }
-@property --hT { syntax: "<length>"; inherits: true; initial-value: 30px; }
+@property --hT { syntax: "<length>"; inherits: true; initial-value: 40px; }
 
 .cs-frame {
   /* How far the floating bays sit in from the window's edges. */
@@ -105,7 +105,7 @@
 
 /* The ghost layers of a bay: like the composer, each floats --fi in from its window edge, fully rounded. */
 .cs-gl, .cs-gt, .cs-gr { position: absolute; z-index: 40; pointer-events: none; }
-.cs-gl { left: var(--fi); top: calc(50% - var(--hL) / 2); width: var(--wL); height: var(--hL); }
+.cs-gl { left: var(--fi); top: var(--fi); width: var(--wL); height: var(--hL); }
 .cs-gt { left: calc(50% - var(--wT) / 2); top: var(--fi); width: var(--wT); height: var(--hT); }
 .cs-gr { right: var(--gR); top: var(--fi); width: var(--wR); height: var(--hR); }
 .cs-layer { position: absolute; inset: -30px; box-sizing: border-box; padding: 30px; display: flex; flex-direction: column; pointer-events: none; }
@@ -116,10 +116,11 @@
 /* One corner for every floating surface, the composer's: a gently rounded rectangle, never a pill. */
 .cs-gl .cs-bb, .cs-sbx, .cs-gt .cs-bb, .cs-tbx, .cs-gr .cs-bb { border-radius: var(--float-r); }
 
-/* The sidebar: a mini rail (sessions, new session, settings) that grows into the full list on hover or pin. */
-.cs-sbwrap { position: absolute; z-index: 41; left: 0; top: calc(50% - max(var(--hL), 260px) / 2); width: calc(max(var(--wL), 30px) + var(--fi)); height: max(var(--hL), 260px); }
-.cs-sbx { position: absolute; left: var(--fi); top: calc(50% - var(--hL) / 2); width: var(--wL); height: var(--hL); overflow: hidden; }
-.cs-sbmini { position: absolute; left: 0; top: 0; width: 46px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; opacity: 1; transition: opacity 76ms ease 76ms; }
+/* The sidebar: a bubble at the top left, level with the tab bar and the tools (sessions, new session, settings),
+ * that grows down and across into the full list on hover or pin. */
+.cs-sbwrap { position: absolute; z-index: 41; left: 0; top: 0; width: calc(var(--wL) + var(--fi)); height: calc(var(--hL) + var(--fi)); }
+.cs-sbx { position: absolute; left: var(--fi); top: var(--fi); width: var(--wL); height: var(--hL); overflow: hidden; }
+.cs-sbmini { position: absolute; left: 0; top: 0; width: 122px; height: 40px; display: flex; align-items: center; justify-content: center; gap: 4px; opacity: 1; transition: opacity 76ms ease 76ms; }
 .cs-frame[data-sb="open"] .cs-sbmini { opacity: 0; pointer-events: none; transition: opacity 51ms ease; }
 .cs-sbfull { position: absolute; left: 0; top: 0; width: 244px; height: var(--sb-open-h); box-sizing: border-box; padding: 12px 10px 10px; display: flex; flex-direction: column; opacity: 0; pointer-events: none; transition: opacity 68ms ease; }
 .cs-frame[data-sb="open"] .cs-sbfull { opacity: 1; pointer-events: auto; transition: opacity 119ms ease 76ms; }
@@ -183,7 +184,7 @@
 .cs-tbx { position: absolute; left: calc(50% - var(--wT) / 2); top: var(--fi); width: var(--wT); height: var(--hT); overflow: hidden; }
 .cs-tbc { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 13px; font-weight: 500; color: var(--foreground); opacity: 1; transform: none; pointer-events: none; transition: opacity 136ms ease 119ms, transform 442ms var(--spring) 85ms; }
 .cs-frame[data-tb="open"] .cs-tbc { opacity: 0; transform: scale(0.82); transition: opacity 42ms ease, transform 102ms ease; }
-.cs-tbo { position: absolute; left: 0; right: 0; top: 0; height: 38px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 2px; opacity: 0; transform: scale(0.7); transform-origin: 50% 0; pointer-events: none; transition: opacity 110ms ease, transform 357ms cubic-bezier(0.34, 1.4, 0.5, 1); }
+.cs-tbo { position: absolute; left: 0; right: 0; top: 0; height: 40px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 2px; opacity: 0; transform: scale(0.7); transform-origin: 50% 0; pointer-events: none; transition: opacity 110ms ease, transform 357ms cubic-bezier(0.34, 1.4, 0.5, 1); }
 .cs-frame[data-tb="open"] .cs-tbo { opacity: 1; transform: none; pointer-events: auto; transition: opacity 119ms ease 68ms, transform 323ms var(--out); }
 .cs-frame[data-tb="open"] .cs-tab { animation: cs-row-pop 187ms var(--out) backwards; animation-delay: calc(51ms + var(--i, 0) * 22ms); transform-origin: 50% 0; }
 .cs-lb { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
@@ -202,7 +203,7 @@
 /* The indicator under the active tab: a dent pressed into the bay and a goo-softened tint over it. */
 .cs-track { position: relative; display: flex; align-items: center; gap: 2px; height: 100%; }
 .cs-tabind { position: absolute; inset: 0; pointer-events: none; transition: opacity 170ms ease; }
-.cs-tabind i { position: absolute; top: 5px; height: 28px; left: 0; right: 0; border-radius: 9px; }
+.cs-tabind i { position: absolute; top: 6px; height: 28px; left: 0; right: 0; border-radius: 9px; }
 .cs-tabind.cs-dent { filter: url(#cs-tabdent); }
 .cs-tabind.cs-dent i { background: color-mix(in srgb, var(--fill) 88%, #000); }
 .dark .cs-tabind.cs-dent i { background: color-mix(in srgb, var(--fill) 62%, #000); }
