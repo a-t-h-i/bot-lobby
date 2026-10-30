@@ -8,7 +8,6 @@ import { useEffect, useId, useMemo, useState, type CSSProperties } from "react"
 import { ChevronDown } from "lucide-react"
 import { useCollapsed } from "@/lib/collapsed"
 import { formatSince } from "@/lib/format"
-import { AgentIcon } from "@/ui/AgentIcon"
 import { Markdown } from "@/ui/Markdown"
 import { latestThoughts, sourceLabel, sourceTone, type ThoughtEntry } from "./types"
 import { thoughtSteps } from "./thoughtSteps"
@@ -28,7 +27,6 @@ function ThoughtSteps({ thought }: { thought: ThoughtEntry }) {
     <li className="thought" style={toneStyle(sourceTone(thought.source))} data-live={thought.live || undefined} aria-label={`${label}${thought.live ? ", thinking" : ""}`}>
       <div className="flex items-center gap-2">
         <span className="thought-label">
-          <AgentIcon source={thought.source} strokeWidth={2.25} className="size-3.5" />
           {label}
         </span>
         <span className="text-xs text-muted-foreground">{thought.live ? "thinking…" : formatSince(Date.now() - thought.at)}</span>

@@ -12,7 +12,7 @@ import type { WebPrompt } from "@protocol"
 import { ApiError } from "@/lib/api"
 import { projectUrl } from "@/lib/project"
 import { toast } from "@/lib/toast"
-import { agentColor, AgentIcon } from "@/ui/AgentIcon"
+import { agentColor } from "@/ui/AgentIcon"
 import { Markdown } from "@/ui/Markdown"
 import { hasMockup, plainLabel, type MockupOption } from "./MockupViewer"
 import { parsePrompt, type AskAnswer, type AskQuestion, type PromptView } from "./payload"
@@ -119,6 +119,10 @@ export interface Drawer {
   /** Answers with what was typed in the composer; false when this question cannot take a typed reply. */
   reply: (text: string) => boolean
   dismiss: () => void
+  /** Back to the questionnaire's previous question, its answer taken back to change; absent on its first question. */
+  back?: () => void
+  /** What this question was answered with before you went back to it. */
+  was?: string
 }
 
 /** The drawer's state over the pending prompts: the question in view and the ways to answer it. */
@@ -128,6 +132,8 @@ export function useDrawer(prompts: WebPrompt[], answer: (id: string, value: unkn
   const [picks, setPicks] = useState<number[]>([])
   const [busy, setBusy] = useState(false)
   const [answered, setAnswered] = useState(0)
+  // The question you went back to and its earlier answer, so the drawer can show what you picked.
+  const [revisit, setRevisit] = useState<{ id: string; index: number; answer: string }>()
   const views = useMemo(() => prompts.map((prompt) => ({ prompt, view: parsePrompt(prompt) })), [prompts])
   const first = views[0]
   const step = first?.view ? stepOf(first.prompt, first.view, partial[first.prompt.id]?.length ?? 0) : undefined
@@ -189,16 +195,30 @@ export function useDrawer(prompts: WebPrompt[], answer: (id: string, value: unkn
     if (!step) return
     void dismissPrompt(step.prompt.id).catch((error: unknown) => toast.error(error instanceof Error ? error.message : "Could not dismiss the question"))
   }, [dismissPrompt, step])
-  return { ...(step ? { step } : {}), position: answered + 1, total: answered + left, left, picks, busy, choose, toggle, submitPicks, reply, dismiss }
+  const so = step ? partial[step.prompt.id] : undefined
+  const back = useCallback(() => {
+    if (!step || busy || !so?.length) return
+    const last = so.at(-1)!
+    setPartial((now) => ({ ...now, [step.prompt.id]: so.slice(0, -1) }))
+    setAnswered((now) => Math.max(0, now - 1))
+    setRevisit({ id: step.prompt.id, index: last.questionIndex, answer: last.answer ?? "" })
+  }, [busy, so, step])
+  const was = revisit && step && revisit.id === step.prompt.id && revisit.index === step.index ? revisit.answer : undefined
+  return { ...(step ? { step } : {}), position: answered + 1, total: answered + left, left, picks, busy, choose, toggle, submitPicks, reply, dismiss, ...(so?.length ? { back } : {}), ...(was ? { was } : {}) }
 }
 
 /** A mockup at thumbnail size, or large in the lightbox: static HTML in its sandbox, an image, or a text sketch. */
 export function MockupFace({ option, large }: { option: MockupOption; large?: boolean }) {
   const label = plainLabel(option.label)
-  if (option.htmlPreview) return <StaticPreview preview={option.htmlPreview} label={label} frameWidth={large ? undefined : 1200} minWidth={large ? 1024 : undefined} className="static-thumb h-full" />
+  if (option.htmlPreview) return <StaticPreview preview={option.htmlPreview} label={label} frameWidth={large ? undefined : 880} minWidth={large ? 1024 : undefined} className="static-thumb h-full" />
   if (option.image) return <img src={projectUrl(option.image)} alt={large ? `Mockup: ${label}` : ""} loading="lazy" />
   if (option.preview) return large ? <div className="cs-mktext"><Markdown text={option.preview} /></div> : <pre className="cs-mktext">{option.preview}</pre>
   return null
+}
+
+/** Whether an option was this question's answer before you went back (a multi-pick answer lists several). */
+function isWas(was: string | undefined, label: string): boolean {
+  return was !== undefined && (was === label || was.split(", ").includes(label))
 }
 
 function Glyph({ color, children }: { color: string; children: ReactNode }) {
@@ -219,9 +239,13 @@ export function DrawerPane({ drawer, onExpand }: { drawer: Drawer; onExpand: (op
     <div className="bubble-pane p-1.5" role="group" aria-label="Question">
       <div className="cs-askh">
         <div className="cs-asks">
-          <Glyph color={color}><AgentIcon source={who} strokeWidth={2.2} className="size-3" /></Glyph>
           <b style={{ color }}>{askerName(step.prompt, step.header)}</b>
           <span className="cs-askf">{sourceOf(step.prompt, step.header)}</span>
+          {drawer.back ? (
+            <button type="button" className="cs-askx" aria-label="Back to the previous question" onMouseDown={(event) => event.preventDefault()} onClick={drawer.back}>
+              ‹ Back
+            </button>
+          ) : null}
           <span className="cs-askn">{drawer.position} of {drawer.total}</span>
           <button type="button" className="cs-askx" data-confirm={confirming || undefined} onMouseDown={(event) => event.preventDefault()} onClick={() => (confirming ? drawer.dismiss() : setConfirming(true))} onBlur={() => setConfirming(false)}>
             {confirming ? "Dismiss it?" : "Dismiss"}
@@ -232,7 +256,7 @@ export function DrawerPane({ drawer, onExpand }: { drawer: Drawer; onExpand: (op
       {mockups ? (
         <div className="cs-askm">
           {step.options.map((option, index) => (
-            <button key={option.label} type="button" className="cs-mko" data-on={drawer.picks.includes(index) || undefined} onMouseDown={(event) => event.preventDefault()} onClick={() => drawer.choose(index)} style={{ animationDelay: `${index * 30}ms` }}>
+            <button key={option.label} type="button" className="cs-mko" data-on={drawer.picks.includes(index) || isWas(drawer.was, option.label) || undefined} onMouseDown={(event) => event.preventDefault()} onClick={() => drawer.choose(index)} style={{ animationDelay: `${index * 30}ms` }}>
               <div className="cs-mk3">
                 <MockupFace option={option} />
                 <span className="cs-mxb" role="button" aria-label={`Expand ${plainLabel(option.label)}`} onClick={(event) => {
@@ -249,7 +273,7 @@ export function DrawerPane({ drawer, onExpand }: { drawer: Drawer; onExpand: (op
       ) : (
         <div className="cs-askopts">
           {step.options.map((option, index) => (
-            <button key={option.label} type="button" className="bubble-row" data-active={drawer.picks.includes(index) || undefined} onMouseDown={(event) => event.preventDefault()} onClick={() => drawer.choose(index)} style={{ "--delay": `${(rows - 1 - index) * 22}ms` } as CSSProperties}>
+            <button key={option.label} type="button" className="bubble-row" data-active={drawer.picks.includes(index) || isWas(drawer.was, option.label) || undefined} onMouseDown={(event) => event.preventDefault()} onClick={() => drawer.choose(index)} style={{ "--delay": `${(rows - 1 - index) * 22}ms` } as CSSProperties}>
               <Glyph color={color}>{index + 1}</Glyph>
               <span className="shrink-0 text-sm font-medium text-(--bubble-ink)">{plainLabel(option.label)}</span>
               {option.description ? <span className="min-w-0 truncate text-[13px] text-(--bubble-muted)" title={option.description}>{option.description}</span> : null}

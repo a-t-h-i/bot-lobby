@@ -14,7 +14,7 @@ import { act } from "@/lib/act"
 import type { PlannerSnapshot, StatusInfo } from "@protocol"
 import { useTopic } from "@/app/hooks"
 import { ActionButton } from "@/ui/Actions"
-import { AgentIcon, agentColor, sameAgent } from "@/ui/AgentIcon"
+import { agentColor, sameAgent } from "@/ui/AgentIcon"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { sourceLabel } from "../lobby/types"
 import { failure, seatCells, statusParts, type SeatCell } from "./words"
@@ -28,6 +28,12 @@ export function PreviousButton({ iconOnly, className, side }: { iconOnly?: boole
 export function PlanFailure({ snap }: { snap: PlannerSnapshot }) {
   if (snap.busy || failure(snap) === undefined) return null
   return <p role="status" className="cs-note mx-auto mb-4 max-w-[48.75rem] text-[var(--bad)]">{statusParts(snap).join(" · ")}</p>
+}
+
+/** A seat's short name on the rail: `Ora`, `Dev`, `Des`, `QA`, `Res`, `Sco`. */
+function seatShort(label: string): string {
+  const name = sourceLabel(label.toUpperCase() === "MASTER" ? "MASTER" : label.toUpperCase())
+  return name.length <= 3 ? name : name.slice(0, 3)
 }
 
 function Seat({ cell, asked, onToggled }: { cell: SeatCell; asked: number; onToggled: () => void }) {
@@ -51,7 +57,7 @@ function Seat({ cell, asked, onToggled }: { cell: SeatCell; asked: number; onTog
         style={{ "--c": agentColor(cell.label) } as CSSProperties}
         onClick={cell.member ? () => void toggle() : undefined}
       >
-        <AgentIcon source={cell.label} className="size-[17px]" />
+        <span className="cs-sqt">{seatShort(cell.label)}</span>
         {asked > 0 ? <span className="cs-sqn">{asked}</span> : null}
       </button>
     </li>

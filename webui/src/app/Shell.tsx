@@ -40,6 +40,7 @@ import { usePrompts } from "./usePrompts.ts"
 import { useStatus, useTopic } from "./hooks.ts"
 import { go, parseHash, tabHash, useRoute, type Route } from "./router.ts"
 import { routeBody } from "@/tabs/registry.tsx"
+import { TabBoundary } from "@/ui/TabBoundary"
 import { ACTIVITY_OPEN } from "@/tabs/lobby/InlineActivity"
 import { focusTab, isTyping, tabWalk } from "@/prompts/nav"
 import { toggleCollapsed } from "@/lib/collapsed"
@@ -244,10 +245,17 @@ export function Shell() {
               transition={{ duration: 0.17, ease: [0.22, 1, 0.36, 1] }}
               className="flex min-h-0 flex-1 flex-col"
             >
-              {routeBody(route)}
+              <TabBoundary>{routeBody(route)}</TabBoundary>
             </motion.div>
           </main>
-          <Composer route={route} projects={projects} drawer={drawer} drawerOpen={allPrompts.length > 0 && !putAway} />
+          <TabBoundary fallback={(error, retry) => (
+            <div role="alert" className="pointer-events-auto absolute inset-x-0 bottom-6 z-30 mx-auto w-fit rounded-xl bg-card px-4 py-2 text-sm shadow">
+              The message box hit a snag: {error.message}{" "}
+              <button type="button" className="font-medium text-primary underline" onClick={retry}>Try again</button>
+            </div>
+          )}>
+            <Composer route={route} projects={projects} drawer={drawer} drawerOpen={allPrompts.length > 0 && !putAway} />
+          </TabBoundary>
         </div>
         <TerminalDrawer toggleKey={keyLabels.terminal ?? "Ctrl+`"} />
       </div>
