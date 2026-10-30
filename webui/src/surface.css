@@ -218,6 +218,8 @@
 /* The page area: the whole window, under the bays. */
 .cs-body { position: relative; display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; }
 .cs-main { position: relative; display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow-y: auto; outline: none; background: var(--grain) fixed, var(--page); }
+/* A page's content fades out under the floating bays at the top instead of running beneath them. */
+.cs-main:has(.cs-pg) { -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 10px, #000 60px); mask-image: linear-gradient(to bottom, transparent 0, transparent 10px, #000 60px); }
 
 @media (prefers-reduced-motion: reduce) {
   .cs-frame, .cs-frame *, .cs-frame *::before, .cs-frame *::after { transition-duration: 0ms !important; animation: none !important; }
@@ -842,8 +844,14 @@
 /* Settings: a flat page; the sections switch spans it; each agent a raised card with its tile. */
 .cs-pg.cs-set { max-width: 1168px; }
 .cs-secn { margin: 0 0 20px; }
-.cs-secn .cs-seg { width: 100%; box-sizing: border-box; }
-.cs-secn .cs-seg button { font-size: 12px; padding: 0 4px; }
+/* The sections switch wears the tab bar's look: a raised bay, each section as wide as its name, the current one
+ * pressed into the bay and tinted. */
+.cs-secn .cs-seg { display: flex; gap: 2px; width: 100%; box-sizing: border-box; padding: 4px; border-radius: var(--float-r); background: var(--fill); box-shadow: var(--rs); }
+.cs-secn .cs-seg .cs-thumb { display: none; }
+.cs-secn .cs-seg button { flex: 1 1 auto; height: 30px; font-size: 13px; padding: 0 10px; border-radius: 9px; transition: color 102ms ease, background 136ms ease, box-shadow 136ms ease; }
+.cs-secn .cs-seg button:hover:not([data-on]) { background: var(--hover); }
+.cs-secn .cs-seg button[data-on] { background: color-mix(in srgb, var(--primary) 7%, color-mix(in srgb, var(--fill) 92%, #000)); box-shadow: var(--press); }
+.dark .cs-secn .cs-seg button[data-on] { background: color-mix(in srgb, var(--primary) 12%, color-mix(in srgb, var(--fill) 62%, #000)); }
 .cs-set section[data-slot="agent-row"] { gap: 11px; padding: 14px 16px 16px; border: 0; border-radius: 22px; background: var(--fill); box-shadow: var(--rs); -webkit-backdrop-filter: none; backdrop-filter: none; }
 .cs-set section[data-slot="agent-row"] h3 { font-size: 14.5px; gap: 9px; }
 .cs-set section[data-slot="agent-row"] h3 .cs-tile { width: 22px; height: 22px; border-radius: 7px; }
@@ -945,3 +953,11 @@ nav[aria-label="Terminals"] button[aria-current="true"] { background: color-mix(
 @keyframes cs-cfm-in { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: none; } }
 @keyframes cs-cfm-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(0.95); } }
 @media (prefers-reduced-motion: reduce) { .cs-cfm[data-state] { animation: none; } }
+
+/* Settings agents: every card the same width and height (the tallest one's), while no card has More open. */
+.cs-agrid { align-items: stretch; }
+.cs-agrid:not(:has([aria-expanded="true"])) { grid-auto-rows: 1fr; }
+.cs-fixrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 34px; padding-inline: 12px; box-sizing: border-box; border-radius: 12px; background: var(--sunk); font-size: 13px; color: var(--muted-foreground); }
+.cs-fixnote { font-size: 11.5px; color: var(--faint); }
+/* A page's own padding would win over pb-dock: give it the room under the composer, and the questions pill over it. */
+.cs-pg.pb-dock { padding-bottom: calc(var(--composer-h, 0px) + 4.5rem); scroll-padding-bottom: calc(var(--composer-h, 0px) + 4.5rem); }
