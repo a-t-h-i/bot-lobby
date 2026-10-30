@@ -923,8 +923,8 @@ export const PRESETS: readonly Palette[] = [
 
 /** Colours for a preview swatch, per mode: the default's own values by hand, the rest from the theme. */
 const MIST_SWATCH = {
-  light: { background: "#fcfcfc", card: "#ffffff", primary: "#1b4ed8", accent: "#f4f4f5" },
-  dark: { background: "#0a0a0a", card: "#111111", primary: "#346bf1", accent: "#141414" },
+  light: { background: "#fcfcfc", card: "#ffffff", primary: "#e8590c", accent: "#f4f4f5" },
+  dark: { background: "#0a0a0a", card: "#111111", primary: "#f26b1d", accent: "#141414" },
 } as const
 
 export function swatch(palette: Palette, dark: boolean): { background: string; card: string; primary: string; accent: string } {
