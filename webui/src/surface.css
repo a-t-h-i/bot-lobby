@@ -78,8 +78,8 @@
 
 .cs-frame {
   /* How far the floating bays sit in from the window's edges. */
-  --fi: 12px;
-  --gR: 16px;
+  --fi: 5px;
+  --gR: var(--fi);
   --wR: 84px;
   --hR: 40px;
   --tL: --wL 255ms var(--out), --hL 255ms var(--out);
