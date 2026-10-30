@@ -235,10 +235,12 @@
 .cs-umsg :is(.cs-ue, .cs-uf) { position: absolute; inset: 0; display: block; pointer-events: none; }
 .cs-umsg .cs-ue { --shape: var(--edge); }
 .cs-umsg .cs-uf { --shape: var(--fill); }
-.cs-umsg .cs-ub { position: absolute; inset: 0; border-radius: 18px; background: var(--shape); }
+.cs-umsg .cs-ub { position: absolute; inset: 0; border-radius: 18px 18px 6px 18px; background: var(--shape); }
+/* The tail: an SVG curve that leaves the bubble's straight right edge tangentially and ends in a rounded tip. */
+.cs-umsg .cs-ut { position: absolute; right: -9px; bottom: 0; width: 22px; height: 16px; overflow: visible; pointer-events: none; }
+.cs-ut-edge { fill: none; stroke: var(--edge); stroke-width: 2; stroke-linejoin: round; stroke-linecap: butt; }
+.cs-ut-fill { fill: var(--fill); }
 .cs-umsg .cs-ue .cs-ub { box-shadow: 0 0 0 1px var(--shape); }
-.cs-umsg .cs-ut { position: absolute; right: -8px; bottom: 0; width: 17px; height: 14px; background: var(--shape); clip-path: polygon(0 0, 100% 100%, 0 100%); }
-.cs-umsg .cs-ue .cs-ut { right: -9px; bottom: -1px; width: 19px; height: 16px; }
 .cs-umsg .cs-ux { position: relative; min-width: 0; }
 .cs-umsg[data-new] { transform-origin: 100% 100%; animation: cs-um-pop 391ms cubic-bezier(0.34, 1.1, 0.5, 1) both; }
 @keyframes cs-um-pop { 0% { transform: scale(0.35, 0.3) translateY(14px); opacity: 0; } 30% { opacity: 1; } 58% { transform: scale(1.07, 0.93) translateY(-2px); } 80% { transform: scale(0.985, 1.02); } 100% { transform: none; opacity: 1; } }
