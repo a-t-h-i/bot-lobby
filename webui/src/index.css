@@ -1442,7 +1442,9 @@
 .bubble-mirror .md-strike { text-decoration: line-through; text-decoration-color: var(--bubble-muted); }
 .bubble-mirror :is(.md-code, .md-codeblock) { background: var(--bubble-well); border-radius: 4px; box-shadow: 0 0 0 1.5px var(--bubble-well); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .bubble-mirror .md-codeblock { border-radius: 0; }
-.bubble-mirror :is(.md-link, .md-mention, .md-list) { color: var(--bubble-accent); }
+.bubble-mirror :is(.md-link, .md-list) { color: var(--bubble-accent); }
+/* A /command or @name: its colour (set inline) and bolder than the text round it, at the same widths. */
+.bubble-mirror .md-mention { -webkit-text-stroke: 0.55px currentColor; }
 .bubble-mirror .md-link { text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--bubble-accent) 45%, transparent); text-underline-offset: 2px; }
 .bubble-mirror .md-quote:not(.md-mark) { color: var(--bubble-muted); }
 .bubble[data-shrunk] .bubble-text { height: 44px; min-height: 44px; max-height: 44px; padding-bottom: 0; overflow: hidden; }

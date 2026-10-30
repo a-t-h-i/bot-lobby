@@ -18,6 +18,7 @@ import { motion } from "motion/react"
 import { JumpToLatest } from "@/ui/JumpToLatest"
 import { ScrollHints } from "@/ui/ScrollHints"
 import { AUTO_NOTE } from "@/ui/task-facts"
+import { agentColor } from "@/ui/AgentIcon"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Keys } from "@/components/ui/kbd"
 import { call } from "@/lib/api"
@@ -46,11 +47,21 @@ function NoteEntry({ entry }: { entry: ChatEntry }) {
   )
 }
 
+/** Who your message went to (`@Scout`) or the command it began with (`/plan`), set off at its start in their colour. */
+function leadOf(entry: ChatEntry): { token: string; color: string; text: string } | undefined {
+  const command = /^\/[a-z][\w-]*(?=\s|$)/i.exec(entry.text)
+  if (command) return { token: command[0], color: "var(--primary)", text: entry.text.slice(command[0].length).trimStart() }
+  if (entry.to && entry.to !== "MASTER") return { token: `@${sourceLabel(entry.to)}`, color: agentColor(entry.to), text: entry.text }
+  return undefined
+}
+
 function MessageBody({ entry, head, fresh }: { entry: ChatEntry; head: boolean; fresh: boolean }) {
   if (entry.role === "you") {
+    const lead = leadOf(entry)
     return (
-      <YourMessage time={formatClock(entry.at)} head={head} fresh={fresh} {...(entry.to ? { note: `to ${sourceLabel(entry.to)}` } : {})}>
-        <Markdown text={entry.text} />
+      <YourMessage time={formatClock(entry.at)} head={head} fresh={fresh}>
+        {lead ? <span className="cs-lead" style={{ color: lead.color }}>{lead.token}</span> : null}
+        <Markdown text={lead ? lead.text : entry.text} />
       </YourMessage>
     )
   }

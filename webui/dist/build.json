@@ -1,6 +1,6 @@
 {
-  "hash": "0021a56e2f79c865ea49d301eec1b9b35516a49c37b1a11a7071644566f41346",
-  "builtAt": "2026-10-30T20:26:58.613Z",
+  "hash": "7120c189a776b5bf7591a347c8a11424c652de56930c2997bf707c265660a340",
+  "builtAt": "2026-10-30T20:31:20.009Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -120,7 +120,7 @@
     },
     {
       "path": "webui/src/app/composer/MarkdownMirror.tsx",
-      "sha256": "ebb839193158004f6566e2950c7ddcdc26178d6c40a29bbdb40732970e6c7d72"
+      "sha256": "8c5466a2fd39c45fa0dc5e9a11146fe22d83f2861802c36a0b601c766779cf08"
     },
     {
       "path": "webui/src/app/composer/markdownMirror.ts",
@@ -292,7 +292,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "7c8368f6962ba69ac37485b8b89fd7c7c7ad2cbf1773df62b9bbec07a5da9085"
+      "sha256": "d54a88c9bed52fe96a8e6e4bdfdff50acb39d48281ab765c87c0cb645a5c2876"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -432,7 +432,7 @@
     },
     {
       "path": "webui/src/surface.css",
-      "sha256": "a32600a8bd37a72efaa8fe9e62025a5247e111f278624b89c69c497c35693384"
+      "sha256": "c22dea75942e8cffcbf9862b8e4697e5902d9ef0ed30a1f07f5e9f76d7701f8f"
     },
     {
       "path": "webui/src/tabs/knowledge/AgentCards.tsx",
@@ -476,7 +476,7 @@
     },
     {
       "path": "webui/src/tabs/lobby/Conversation.tsx",
-      "sha256": "d9f11dd1a1d01ac56a35ea12cea76e59e33425285ba783f7c450700f831dab2a"
+      "sha256": "5393a782153cee83b848f0c567fa6c212ef3f30abe0c4daee73c5662b757f672"
     },
     {
       "path": "webui/src/tabs/lobby/InlineActivity.tsx",
