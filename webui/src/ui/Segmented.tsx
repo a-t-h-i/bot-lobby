@@ -1,15 +1,13 @@
 /**
- * A segmented switch: a few options on one glass track, the chosen one lifted
- * onto a raised thumb that springs across to whichever is picked (a squash on
- * the way, like the tab bar's pills). It serves as tabs (`role="tablist"`, a
+ * A segmented switch: a few equal options on a sunk track, the chosen one on a
+ * raised thumb that springs across to whichever is picked (`cs-seg`). It serves as tabs (`role="tablist"`, a
  * page section each) or as a radio group (`role="radiogroup"`, one value).
  * Arrow keys move between options with a roving tabindex; Home and End jump
  * to the ends. As `nav` the options are plain buttons marking the open one with
- * `aria-current`, for a caller that wraps them in its own `<nav>`. Under reduced motion the thumb simply moves. Short and compact
- * (28px).
+ * `aria-current`, for a caller that wraps them in its own `<nav>`. Under reduced motion the thumb simply moves.
  */
-import { useId, type KeyboardEvent, type ReactNode } from "react"
-import { motion, useReducedMotion } from "motion/react"
+import { useId, type CSSProperties, type KeyboardEvent, type ReactNode } from "react"
+import { useReducedMotion } from "motion/react"
 import { cn } from "@/lib/utils"
 
 export interface SegmentedItem<T extends string> {
@@ -20,8 +18,6 @@ export interface SegmentedItem<T extends string> {
   /** For tabs: the panel the option controls. */
   controls?: string
 }
-
-const THUMB = { type: "spring", stiffness: 520, damping: 34, mass: 0.8 } as const
 
 export function Segmented<T extends string>({
   items,
@@ -67,14 +63,18 @@ export function Segmented<T extends string>({
     requestAnimationFrame(land)
   }
 
+  const at = Math.max(0, items.findIndex((item) => item.id === value))
   return (
     <div
       role={as === "tab" ? "tablist" : as === "radio" ? "radiogroup" : undefined}
       aria-label={as === "nav" ? undefined : label}
       onKeyDown={onKeyDown}
       data-slot="segmented"
-      className={cn("segmented relative inline-flex max-w-full min-w-0 items-center gap-0.5 overflow-x-auto rounded-[10px] p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", className)}
+      data-reduce={reduce || undefined}
+      style={{ "--n": items.length, "--k": at } as CSSProperties}
+      className={cn("cs-seg", size === "sm" && "cs-sm", className)}
     >
+      <i aria-hidden="true" className="cs-thumb" />
       {items.map((item) => {
         const on = item.id === value
         return (
@@ -83,25 +83,13 @@ export function Segmented<T extends string>({
             id={`${prefix}-${item.id}`}
             type="button"
             data-segment={item.id}
+            data-on={on ? "true" : undefined}
             role={as === "nav" ? undefined : as}
             {...(as === "tab" ? { "aria-selected": on, "aria-controls": item.controls } : as === "radio" ? { "aria-checked": on } : { "aria-current": on ? ("page" as const) : undefined, "aria-controls": item.controls })}
             aria-label={item.name}
             tabIndex={on || as === "nav" ? 0 : -1}
             onClick={() => onChange(item.id)}
-            className={cn(
-              "relative isolate inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 font-medium whitespace-nowrap outline-none transition-colors duration-200 ease-snap focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-              size === "sm" ? "h-7 text-[0.8125rem]" : "h-8 text-sm",
-              on ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-            )}
           >
-            {on ? (
-              <motion.span
-                aria-hidden="true"
-                layoutId={`segment-thumb-${group}`}
-                className="segmented-thumb absolute inset-0 -z-10 rounded-lg"
-                transition={reduce ? { duration: 0 } : THUMB}
-              />
-            ) : null}
             {item.label}
           </button>
         )
