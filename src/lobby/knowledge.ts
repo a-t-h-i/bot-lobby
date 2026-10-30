@@ -12,7 +12,9 @@ import { compactKnowledgeFile } from "../knowledge/compactor.ts";
 import { findEntry, insertAfter, parseEntries, removeEntry, replaceEntry, type KnowledgeEntry } from "../knowledge/edit.ts";
 import { addNote, moveNotes, readNotes, removeNote, removeNotesOn, type KnowledgeNote } from "../knowledge/notes.ts";
 import { AGENT_DIR_NAMES, KNOWLEDGE_FILES, knowledgeDir, type KnowledgeAgent } from "../knowledge/paths.ts";
-import { readFirstExisting } from "../knowledge/store.ts";
+import { applyKnowledge, readFirstExisting } from "../knowledge/store.ts";
+import { dropEntry, moveEntry, readLedger, recordEvent, setPin, takeProposal, type LedgerEvent, type LedgerPin, type LedgerProposal } from "../knowledge/ledger.ts";
+import { readMetrics } from "../state/metrics.ts";
 import { dataRoot, readDataRoots } from "../state/project.ts";
 
 /** What each knowledge file is, in words. */
@@ -84,6 +86,34 @@ export interface KnowledgeDeps {
 
 const CHANGED = "that entry changed on disk since it was drawn — r reloads the file";
 
+/** One run that loaded an agent's knowledge: when, and for which task. */
+export interface KnowledgeRun {
+  at: string;
+  taskId?: string;
+}
+
+/** What the Knowledge page shows beside the files: pins, each note's history, the Inbox and how often each agent ran. */
+export interface KnowledgeLedgerView {
+  pins: LedgerPin[];
+  events: LedgerEvent[];
+  proposals: LedgerProposal[];
+  /** Each agent's runs in the last 30 days (every run loads its knowledge), newest first, and its last run ever. */
+  runs: Partial<Record<KnowledgeAgent, { recent: KnowledgeRun[]; lastAt?: string }>>;
+}
+
+/** The metrics' agent names (`DEV`, `DESIGN`, `MASTER`, …) as knowledge agents. */
+function runAgent(name: string): KnowledgeAgent | undefined {
+  const key = name.toUpperCase();
+  if (key === "MASTER" || key === "ORACLE") return "master";
+  if (key === "DEV" || key === "BACKEND") return "backend";
+  if (key === "DESIGN" || key === "DESIGNER" || key === "FRONTEND") return "designer";
+  if (key === "QA") return "qa";
+  return undefined;
+}
+
+/** Short names, as the page's history lines use them. */
+const SHORT_NAMES: Record<KnowledgeAgent, string> = { master: "Oracle", designer: "Designer", backend: "Backend", qa: "QA" };
+
 export class KnowledgeBook {
   private readonly deps: KnowledgeDeps;
 
@@ -146,6 +176,10 @@ export class KnowledgeBook {
     if (next.trim() === content.trim()) return "nothing changed";
     const notice = this.write(agent, file, next);
     const moved = moveNotes(this.data, agent, file, entry.text, text.replace(/\s+$/, ""), this.deps.now?.());
+    this.note(() => {
+      moveEntry(this.data, { agent, file, entry: entry.text }, { agent, file, entry: text.trim() });
+      recordEvent(this.data, { agent, file, entry: text.trim(), by: "you", what: "edited it", before: entry.text }, this.deps.now?.());
+    });
     return `${notice}${moved > 0 ? `; ${moved} note${moved === 1 ? "" : "s"} stayed with it` : ""}`;
   }
 
@@ -156,7 +190,9 @@ export class KnowledgeBook {
     if (after && !entry) return CHANGED;
     const next = insertAfter(content, entry, text);
     if (next === content) return "nothing to add";
-    return this.write(agent, file, next);
+    const notice = this.write(agent, file, next);
+    this.note(() => recordEvent(this.data, { agent, file, entry: text.trim(), by: "you", what: "wrote this", source: "You" }, this.deps.now?.()));
+    return notice;
   }
 
   /** Delete an entry, and the notes on it. */
@@ -166,6 +202,7 @@ export class KnowledgeBook {
     if (!entry) return CHANGED;
     const notice = this.write(agent, file, removeEntry(content, entry));
     const gone = removeNotesOn(this.data, agent, file, entry.text, this.deps.now?.());
+    this.note(() => dropEntry(this.data, agent, file, entry.text));
     return `${notice}${gone > 0 ? `; its ${gone} note${gone === 1 ? "" : "s"} went with it` : ""}`;
   }
 
@@ -186,6 +223,107 @@ export class KnowledgeBook {
       return (error as Error).message;
     }
     return "note saved — every agent reads it under this entry";
+  }
+
+  /** History and pins never stop a write: they are the page's record, not the knowledge. */
+  private note(write: () => void): void {
+    try {
+      write();
+    } catch {
+      // Left out of the history.
+    }
+  }
+
+  /** Characters past which a file is over its compaction threshold. */
+  threshold(): number {
+    return this.deps.threshold();
+  }
+
+  /** Pins, history, the Inbox and the agents' recent runs. */
+  ledger(): KnowledgeLedgerView {
+    const ledger = readLedger(this.data);
+    const now = (this.deps.now?.() ?? new Date()).getTime();
+    const since = now - 30 * 24 * 3600 * 1000;
+    const runs: KnowledgeLedgerView["runs"] = {};
+    let records: ReturnType<typeof readMetrics> = [];
+    try {
+      records = readMetrics(this.deps.root, this.deps.configDir);
+    } catch {
+      records = [];
+    }
+    for (const record of records) {
+      const agent = runAgent(record.agent);
+      const at = Date.parse(record.startedAt);
+      if (!agent || Number.isNaN(at)) continue;
+      const mine = (runs[agent] ??= { recent: [] });
+      if (!mine.lastAt || at > Date.parse(mine.lastAt)) mine.lastAt = record.startedAt;
+      if (at >= since) mine.recent.push({ at: record.startedAt, ...(record.taskId ? { taskId: record.taskId } : {}) });
+    }
+    for (const mine of Object.values(runs)) mine?.recent.sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).splice(500);
+    return { pins: ledger.pins, events: ledger.events, proposals: ledger.proposals, runs };
+  }
+
+  /** Pin a note to the top of its file (it loads first), or unpin it. */
+  pin(agent: KnowledgeAgent, file: string, ref: EntryRef, on: boolean): string {
+    const entry = findEntry(this.read(agent, file), ref.text, ref.occurrence);
+    if (!entry) return CHANGED;
+    setPin(this.data, agent, file, entry.text, on, this.deps.now?.());
+    return on ? "pinned — it loads first for this agent" : "unpinned";
+  }
+
+  /** Put back the text an edit replaced. */
+  restore(agent: KnowledgeAgent, file: string, ref: EntryRef, eventId: string): string {
+    const event = readLedger(this.data).events.find((one) => one.id === eventId);
+    if (!event?.before) return "that version is no longer in the history";
+    const notice = this.edit(agent, file, ref, event.before);
+    return notice.startsWith("saved") ? `restored the earlier version — ${notice}` : notice;
+  }
+
+  /** Move a note to another agent's file: added there, then removed here, its comments, pin and history with it. */
+  move(agent: KnowledgeAgent, file: string, ref: EntryRef, to: KnowledgeAgent, toFile: string): string {
+    if (agent === to && file === toFile) return "it is already there";
+    const content = this.read(agent, file);
+    const entry = findEntry(content, ref.text, ref.occurrence);
+    if (!entry) return CHANGED;
+    const target = this.read(to, toFile);
+    this.write(to, toFile, insertAfter(target, undefined, entry.text));
+    const notice = this.write(agent, file, removeEntry(content, entry));
+    const notes = readNotes(this.data).filter((note) => note.agent === agent && note.file === file && note.entry === entry.text);
+    for (const note of notes) {
+      addNote(this.data, { agent: to, file: toFile, entry: entry.text, text: note.text, ...(note.by ? { by: note.by } : {}) }, this.deps.now?.());
+      removeNote(this.data, note.id, this.deps.now?.());
+    }
+    this.note(() => {
+      moveEntry(this.data, { agent, file, entry: entry.text }, { agent: to, file: toFile, entry: entry.text });
+      recordEvent(this.data, { agent: to, file: toFile, entry: entry.text, by: "you", what: `moved it from ${SHORT_NAMES[agent]}` }, this.deps.now?.());
+    });
+    return `moved to ${AGENT_LABELS[to]}'s ${toFile} — ${notice}`;
+  }
+
+  /** Accept a note from the Inbox (as written, or with the user's edit): saved, and the note it replaces updated. */
+  accept(id: string, text?: string): string {
+    const proposal = takeProposal(this.data, id);
+    if (!proposal) return "that proposal was already handled";
+    const body = (text ?? proposal.text).trim();
+    if (proposal.replaces) {
+      for (const file of KNOWLEDGE_FILES[proposal.agent]) {
+        const entry = findEntry(this.read(proposal.agent, file), proposal.replaces, 0) ?? parseEntries(this.read(proposal.agent, file)).find((one) => one.text.replace(/^[-*+]\s+/, "").trim() === proposal.replaces!.trim());
+        if (entry) {
+          const notice = this.edit(proposal.agent, file, { text: entry.text, occurrence: 0 }, entry.kind === "bullet" ? `- ${body.replace(/^[-*+]\s+/, "")}` : body);
+          this.note(() => recordEvent(this.data, { agent: proposal.agent, file, entry: entry.kind === "bullet" ? `- ${body.replace(/^[-*+]\s+/, "")}` : body, by: "you", what: `accepted it from the Inbox (${proposal.source})` }, this.deps.now?.()));
+          return `accepted — ${notice}`;
+        }
+      }
+    }
+    const kind = proposal.kind;
+    const line = kind === "decision" ? body : body.startsWith("-") ? body : `- ${body}`;
+    const outcome = applyKnowledge({ dataRoot: this.data, agent: proposal.agent, kind, text: line, by: SHORT_NAMES[proposal.agent], what: `proposed this after ${proposal.source.toLowerCase()}; you accepted it`, source: `Inbox · from ${proposal.source}`, ...(this.deps.now ? { now: this.deps.now() } : {}) });
+    return outcome.result === "duplicate" ? "already saved — nothing changed" : `accepted — saved for ${AGENT_LABELS[proposal.agent]}`;
+  }
+
+  /** Dismiss a note from the Inbox. */
+  dismiss(id: string): string {
+    return takeProposal(this.data, id) ? "dismissed" : "that proposal was already handled";
   }
 
   /** Take a note back. */

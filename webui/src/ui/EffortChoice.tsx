@@ -41,6 +41,7 @@ export function EffortChoice({ value, levels, supported, recommended, model, lab
       label: EFFORT_LABELS[name] ?? name,
       help: ok && name === recommended ? `${help} Recommended.` : help,
       disabled: !ok,
+      ...(ok && name === recommended ? { tag: "Recommended" } : {}),
     }
   })
   return (

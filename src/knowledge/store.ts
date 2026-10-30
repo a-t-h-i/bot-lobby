@@ -1,7 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { knowledgeDir, STANDARDS_FILE, type KnowledgeAgent } from "./paths.ts";
 import { annotate, readNotes } from "./notes.ts";
+import { pinnedEntries, recordEvent, settleProposals } from "./ledger.ts";
+
+/** The agent's name as the Knowledge page shows it. */
+const AGENT_NAMES: Record<KnowledgeAgent, string> = { master: "Oracle", designer: "Designer", backend: "Backend", qa: "QA" };
 
 export function readFileOr(path: string, fallback = ""): string {
   try {
@@ -73,6 +77,10 @@ export interface KnowledgeEntry {
   kind: KnowledgeKind;
   text: string;
   now?: Date;
+  /** Who wrote it and how, for the note's history on the Knowledge page ("Backend", "wrote this while working on task 8f3a21"). */
+  by?: string;
+  what?: string;
+  source?: string;
 }
 
 /**
@@ -89,6 +97,16 @@ export function applyKnowledge(entry: KnowledgeEntry): { path: string; result: "
   if (entry.kind === "decision") appendDecision(dirname(path), text, now);
   else if (entry.kind === "completed") appendCompletedTask(dirname(path), text, now);
   else writeFileEnsured(path, `${existing.trimEnd()}\n\n${text}\n`);
+  if (entry.kind !== "completed") {
+    const file = basename(path);
+    const by = entry.by ?? AGENT_NAMES[entry.agent];
+    try {
+      recordEvent(entry.dataRoot, { agent: entry.agent, file, entry: text, by, what: entry.what ?? "wrote this", ...(entry.source ? { source: entry.source } : {}) }, now);
+      settleProposals(entry.dataRoot, entry.agent, text);
+    } catch {
+      // The history is a nicety; the knowledge itself is saved.
+    }
+  }
   return { path, result: "added" };
 }
 
@@ -114,12 +132,21 @@ export function readKnowledgeSlices(
 export function readAgentKnowledge(roots: readonly string[], agent: KnowledgeAgent) {
   const slices = readKnowledgeSlices(roots.map((root) => knowledgeDir(root, agent)), STANDARDS_FILE[agent]);
   const notes = readNotes(roots[0]).filter((note) => note.agent === agent);
-  if (notes.length === 0) return slices;
   const about = (file: string) => notes.filter((note) => note.file === file);
+  // Pinned notes load first: repeated at the top of their file, so a trimmed slice still carries them.
+  const shaped = (content: string, file: string) => pinFirst(notes.length ? annotate(content, about(file)) : content, pinnedEntries(roots[0], agent, file));
   return {
-    knowledge: annotate(slices.knowledge, about("knowledge.md")),
-    standards: annotate(slices.standards, about(STANDARDS_FILE[agent])),
-    decisions: annotate(slices.decisions, about("decisions.md")),
-    completed: annotate(slices.completed, about("completed-tasks.md")),
+    knowledge: shaped(slices.knowledge, "knowledge.md"),
+    standards: shaped(slices.standards, STANDARDS_FILE[agent]),
+    decisions: shaped(slices.decisions, "decisions.md"),
+    completed: shaped(slices.completed, "completed-tasks.md"),
   };
+}
+
+/** The pins still in the file, as a "Pinned" list above it. */
+function pinFirst(content: string, pins: readonly string[]): string {
+  const lines = content.split("\n").map((line) => line.trim());
+  const kept = pins.filter((pin) => lines.includes(pin.trim()));
+  if (kept.length === 0) return content;
+  return `## Pinned (always loaded first)\n\n${kept.map((pin) => (/^[-*+]\s/.test(pin.trim()) ? pin.trim() : `- ${pin.trim()}`)).join("\n")}\n\n${content}`;
 }

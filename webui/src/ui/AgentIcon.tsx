@@ -68,6 +68,12 @@ export function agentColor(source: string | undefined): string {
   return "var(--muted-foreground)"
 }
 
+/** Whether two source names (`DEV`, `backend`, `Dev`, …) are the same agent. */
+export function sameAgent(a: string | undefined, b: string | undefined): boolean {
+  const key = glyphKey(a)
+  return key ? key === glyphKey(b) : a?.toUpperCase() === b?.toUpperCase()
+}
+
 export function isOracle(source: string | undefined): boolean {
   const name = source?.toUpperCase()
   return name === "ORACLE" || name === "MASTER"

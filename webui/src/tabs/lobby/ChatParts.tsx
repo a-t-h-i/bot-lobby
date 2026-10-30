@@ -8,7 +8,7 @@
  */
 import type { CSSProperties, ReactNode } from "react"
 import { cn } from "@/lib/utils"
-import { AgentIcon, isOracle } from "@/ui/AgentIcon"
+import { isOracle } from "@/ui/AgentIcon"
 import { sourceTone } from "./types"
 
 /**
@@ -23,7 +23,7 @@ export function AgentMessage({ source, name, time, head, live, children, aside, 
   if (tile) {
     return (
       <div className="cs-pmsg">
-        <span aria-hidden="true" className="cs-tile cs-lg" style={{ "--ac": "var(--c-orc)" } as CSSProperties}><AgentIcon source="MASTER" /></span>
+        <span aria-hidden="true" className="cs-tile cs-lg" style={{ "--ac": "var(--c-orc)" } as CSSProperties}>O</span>
         <AgentMessage source={source} name={name} head={head} {...{ time, live, children, aside, waiting }} named={always ?? true} />
       </div>
     )
@@ -48,17 +48,20 @@ export function AgentMessage({ source, name, time, head, live, children, aside, 
  */
 export function YourMessage({ time, head: _head, note, children, below, actions, fresh }: { time?: string; head: boolean; note?: string; children: ReactNode; below?: ReactNode; actions?: ReactNode; fresh?: boolean }) {
   return (
-    <div className="group/msg flex flex-col items-end gap-1">
+    <div className="group/msg relative flex flex-col items-end gap-1">
       <div className="chat-bubble cs-umsg" data-new={fresh || undefined} title={time}>
         <i className="cs-ue" aria-hidden="true"><b className="cs-ub" /><b className="cs-ut" /></i>
         <i className="cs-uf" aria-hidden="true"><b className="cs-ub" /><b className="cs-ut" /></i>
         <div className="cs-ux">{children}</div>
       </div>
-      {note || actions ? (
-        <div className="chat-meta flex items-center gap-2 pr-[9px]" data-note={note ? "" : undefined}>
+      {note ? (
+        <div className="chat-meta flex items-center gap-2 pr-[9px]" data-note="">
           {actions}
-          {note ? <span>{note}</span> : null}
+          <span>{note}</span>
         </div>
+      ) : actions ? (
+        // Edit and the like wait beside the bubble, so the message takes no more room than the design's.
+        <div className="chat-meta absolute top-1/2 right-full mr-2 flex -translate-y-1/2 items-center gap-2">{actions}</div>
       ) : null}
       {below}
     </div>

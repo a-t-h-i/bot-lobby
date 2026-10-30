@@ -42,8 +42,9 @@ interface RefBody extends FileBody {
 }
 
 /** Every agent's files with their size and note counts, in tab order. */
-export function knowledgeFiles(ctx: ApiContext): { files: KnowledgeFileInfo[]; models: Record<KnowledgeAgentName, string> } {
-  return { files: ctx.service.knowledge.files(), models: agentModels(ctx.service.config?.() ?? loadConfig()) };
+export function knowledgeFiles(ctx: ApiContext): { files: KnowledgeFileInfo[]; models: Record<KnowledgeAgentName, string>; threshold?: number } {
+  const threshold = ctx.service.knowledge.threshold?.();
+  return { files: ctx.service.knowledge.files(), models: agentModels(ctx.service.config?.() ?? loadConfig()), ...(threshold ? { threshold } : {}) };
 }
 
 /** The model each knowledge-keeping agent runs on, as the tree names it ("session model" when none is pinned). */
@@ -93,4 +94,40 @@ export function knowledgeComment(body: RefBody & { text: string }, ctx: ApiConte
 /** Take a note back. */
 export function knowledgeUnnote(body: { id: string }, ctx: ApiContext): { notice: string } {
   return { notice: ctx.service.knowledge.unnote(body.id) };
+}
+
+/** Pins, history, the Inbox and the agents' recent runs. */
+export function knowledgeLedger(ctx: ApiContext): ReturnType<ApiContext["service"]["knowledge"]["ledger"]> {
+  return ctx.service.knowledge.ledger();
+}
+
+/** Pin a note (it loads first), or unpin it. */
+export function knowledgePin(body: RefBody & { on: boolean }, ctx: ApiContext): { notice: string } {
+  const notice = ctx.service.knowledge.pin(body.agent, body.file, body.ref, body.on);
+  if (isStale(notice)) stale(notice);
+  return { notice };
+}
+
+/** Put back the text an edit replaced. */
+export function knowledgeRestore(body: RefBody & { event: string }, ctx: ApiContext): { notice: string } {
+  const notice = ctx.service.knowledge.restore(body.agent, body.file, body.ref, body.event);
+  if (isStale(notice)) stale(notice);
+  return { notice };
+}
+
+/** Move a note to another agent's file. */
+export function knowledgeMove(body: RefBody & { to: KnowledgeAgent; toFile: string }, ctx: ApiContext): { notice: string } {
+  const notice = ctx.service.knowledge.move(body.agent, body.file, body.ref, body.to, body.toFile);
+  if (isStale(notice)) stale(notice);
+  return { notice };
+}
+
+/** Accept an Inbox note, as proposed or edited. */
+export function knowledgeAccept(body: { id: string; text?: string }, ctx: ApiContext): { notice: string } {
+  return { notice: ctx.service.knowledge.accept(body.id, body.text) };
+}
+
+/** Dismiss an Inbox note. */
+export function knowledgeDismiss(body: { id: string }, ctx: ApiContext): { notice: string } {
+  return { notice: ctx.service.knowledge.dismiss(body.id) };
 }

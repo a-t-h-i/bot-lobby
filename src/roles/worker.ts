@@ -18,7 +18,7 @@ export const workerSpec: RoleSpec = {
     "### Output contract",
     "Respond with exactly these sections and nothing else: `## Completed`, `## Files Changed`,",
     "`## Verification`, `## Brief Check` (one `- criterion — met|not met — evidence` line per \"Done when\" item of your brief), `## Notes`, `## Blockers`, `## Dependencies Needed`, `## Architecture Changes`,",
-    "`## Knowledge Proposals` (`- knowledge: ...`, `- standard: ...`, or `- decision: ...`).",
+    "`## Knowledge Proposals` (`- knowledge: ...`, `- standard: ...`, or `- decision: ...`; end a line with `— NN%` for how sure you are, and `(replaces: old text)` when it corrects a saved note).",
     "An optional `## Script Proposals` (`- \\`name.ext\\` — what it does — draft: \\`path\\``) proposes a script you wrote for a job that will come back, for the shared library.",
     "`## Files Changed` entries are `- \\`path\\` — change`.",
     "`## Verification` entries are `- command — result`.",

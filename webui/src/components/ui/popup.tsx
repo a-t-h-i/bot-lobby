@@ -42,14 +42,14 @@ export function Popup({ open, onOpenChange, label, description, dismissOnBackdro
           <Dialog.Portal forceMount>
             <Dialog.Overlay asChild forceMount>
               <motion.div
-                className="fixed inset-0 z-50 bg-scrim backdrop-blur-sm"
+                className="fixed inset-0 z-[1000] bg-scrim backdrop-blur-sm"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.16, ease: "easeOut" }}
               />
             </Dialog.Overlay>
-            <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center p-4">
+            <div className="pointer-events-none fixed inset-0 z-[1000] grid place-items-center p-4">
               <Dialog.Content
                 asChild
                 forceMount

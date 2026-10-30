@@ -8,7 +8,7 @@
  * (the question, the key help) and toasts sit above everything, one at a
  * time. Clicking a tab or pressing a shortcut moves the hash route.
  */
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { motion } from "motion/react"
 import { lobbyStore } from "@/lib/store"
 import { act } from "@/lib/act"
@@ -29,6 +29,7 @@ import { SignIn } from "./SignIn.tsx"
 import { ErrorState, LoadingState, ReconnectingState } from "./States.tsx"
 import { Thinking } from "./Thinking.tsx"
 import { useDrawer } from "@/prompts/Drawer"
+import { isPlanPrompt, usePlanPrompts } from "@/prompts/planQuestions"
 import { setPutAway, usePutAway } from "@/prompts/putAway"
 import { Lightbox } from "@/ui/Lightbox"
 import { useEvents } from "./useEvents.ts"
@@ -111,14 +112,19 @@ export function Shell() {
   const statusRecord = useTopic<StatusInfo>("status")
   const lobbyRecord = useTopic<LobbySnapshot>("lobby")
   const { prompts, loading: promptsLoading, answer, dismiss } = usePrompts()
-  const drawer = useDrawer(prompts, answer, dismiss)
+  // The planning panel's open questions wait in the same drawer, after the Lobby's.
+  const plan = usePlanPrompts()
+  const allPrompts = useMemo(() => [...prompts, ...plan.prompts], [prompts, plan.prompts])
+  const answerAny = useCallback((id: string, value: unknown) => (isPlanPrompt(id) ? plan.answer(id, value) : answer(id, value)), [answer, plan.answer])
+  const dismissAny = useCallback((id: string) => (isPlanPrompt(id) ? plan.dismiss(id) : dismiss(id)), [dismiss, plan.dismiss])
+  const drawer = useDrawer(allPrompts, answerAny, dismissAny)
   const { connection, signedOut } = useStatus()
   const [help, setHelp] = useState(false)
   const putAway = usePutAway()
   // With every question answered, the next one opens the drawer again.
   useEffect(() => {
-    if (prompts.length === 0 && !promptsLoading) setPutAway(false)
-  }, [prompts.length, promptsLoading])
+    if (allPrompts.length === 0 && !promptsLoading) setPutAway(false)
+  }, [allPrompts.length, promptsLoading])
   const rootRef = useRef<HTMLDivElement>(null)
   const retry = useEvents()
   useDesktopNotifications()
@@ -237,7 +243,7 @@ export function Shell() {
               {routeBody(route)}
             </motion.div>
           </main>
-          <Composer route={route} projects={projects} drawer={drawer} drawerOpen={prompts.length > 0 && !putAway} />
+          <Composer route={route} projects={projects} drawer={drawer} drawerOpen={allPrompts.length > 0 && !putAway} />
         </div>
         <TerminalDrawer toggleKey={keyLabels.terminal ?? "Ctrl+`"} />
       </div>

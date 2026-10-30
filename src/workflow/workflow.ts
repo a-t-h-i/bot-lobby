@@ -29,6 +29,7 @@ import { transition } from "../state/task-state.ts";
 import { loadTask, ownerlessTask, readTaskArtifact, removeTaskScratchpads, saveTask, selectTask, taskDirFor, taskReadDirs } from "../state/persistence.ts";
 import { dataRoot, readDataRoots } from "../state/project.ts";
 import { appendCompletedTask, appendDecision, applyKnowledge, readFileOr, writeFileEnsured, type KnowledgeKind } from "../knowledge/store.ts";
+import { proposalParts, propose } from "../knowledge/ledger.ts";
 import { compactKnowledgeFile, overThreshold } from "../knowledge/compactor.ts";
 import { oracleBookmarkOp, retireBookmarks, type OracleBookmarkOp } from "../knowledge/bookmarks.ts";
 import { knowledgeDir, type KnowledgeAgent } from "../knowledge/paths.ts";
@@ -1049,8 +1050,26 @@ function absorbWorkerOutcome(task: Task, deps: WorkflowDeps, outcome: WorkerOutc
   updateScratchpad(deps, task, outcome);
   const grown = qaJoinsGrownFastTask(task, outcome);
   const full = saveFullReport(deps, task, outcome);
+  inboxProposals(deps, task, outcome);
   const report = workerReport(outcome, approvals, pushback, onFastTrack(task) ? fastNext(task) : qaRequired(task) ? FULL_NEXT : PLANNED_NEXT, full);
   return [report, grown].filter(Boolean).join("\n");
+}
+
+/** A worker's knowledge proposals wait in the Knowledge Inbox too, until the oracle records them or the user accepts them. */
+function inboxProposals(deps: WorkflowDeps, task: Task, outcome: WorkerOutcome): void {
+  const root = dataRoot(deps.root, deps.configDir);
+  let added = false;
+  for (const proposal of outcome.result.knowledgeProposals) {
+    if (proposal.kind === "completed") continue;
+    const parts = proposalParts(proposal.content);
+    if (!parts.text) continue;
+    try {
+      added = propose(root, { agent: proposal.domain, kind: proposal.kind, ...parts, source: `Task ${task.id}`, taskId: task.id }) || added;
+    } catch {
+      // The Inbox is a nicety; the oracle still sees the proposal in the report.
+    }
+  }
+  if (added) lobbyTopics.bump("knowledge");
 }
 
 function recordAssignmentOutcome(task: Task, outcome: WorkerOutcome, assignment: WorkerAssignment): void {
@@ -1662,7 +1681,15 @@ function handleKnowledge(task: Task | undefined, params: OrchestrateParams, deps
   if (!text) throw new Error("knowledge requires text");
   const kind: KnowledgeKind = params.kind ?? "knowledge";
   const agent: KnowledgeAgent = params.domain && isDomain(params.domain) ? params.domain : "master";
-  const outcome = applyKnowledge({ dataRoot: dataRoot(deps.root, deps.configDir), agent, kind, text });
+  const outcome = applyKnowledge({
+    dataRoot: dataRoot(deps.root, deps.configDir),
+    agent,
+    kind,
+    text,
+    by: "Oracle",
+    what: task ? `recorded this while working on task ${task.id}` : "saved this from a chat with you",
+    source: task ? `Task ${task.id}` : "Chat with you",
+  });
   if (outcome.result === "empty") throw new Error("knowledge text is empty");
   if (outcome.result === "duplicate") return `Already recorded in ${outcome.path}; nothing changed.`;
   if (task) recordDecision(task, `Recorded ${kind} for ${agent}: ${truncate(text, 200)}`);

@@ -19,7 +19,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { EffortChoice } from "@/ui/EffortChoice"
 import { nearestSupported } from "@/ui/effortLevels"
-import { AgentIcon, agentColor } from "@/ui/AgentIcon"
+import { agentColor } from "@/ui/AgentIcon"
 import { call } from "@/lib/api"
 import { useApiRead } from "@/app/useApiRead"
 import { Section } from "@/ui/Section"
@@ -368,7 +368,7 @@ function AgentCard({ kind, config, models, harnesses, save, onGrants }: { kind: 
   return (
     <section data-slot="agent-row" className="glass flex min-w-0 flex-col gap-2.5 rounded-xl border px-3.5 pt-2.5 pb-3">
       <div className="flex min-w-0 items-center justify-between gap-2">
-        <h3 className="flex min-w-0 items-center gap-2 break-words text-sm font-semibold"><span aria-hidden="true" className="cs-tile" style={{ "--ac": agentColor(kind) } as CSSProperties}><AgentIcon source={kind} /></span>{name}</h3>
+        <h3 className="flex min-w-0 items-center gap-2 break-words text-sm font-semibold"><span aria-hidden="true" className="cs-tile" style={{ "--ac": agentColor(kind) } as CSSProperties}>{name[0]}</span>{name}</h3>
         <MoreButton open={open} custom={custom} onToggle={() => setOpen((now) => !now)} />
       </div>
       {HARNESS_AGENTS.has(kind) ? <HarnessChoice value={entry.harness ?? PI_HARNESS} statuses={harnesses} label={`${name} ${HARNESS.label.toLowerCase()}`} onChange={chooseHarness} /> : null}
