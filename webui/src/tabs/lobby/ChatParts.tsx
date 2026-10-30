@@ -12,47 +12,52 @@ import { AgentIcon, isOracle } from "@/ui/AgentIcon"
 import { sourceTone } from "./types"
 
 /**
- * One message from an agent, the way the coding harnesses write theirs: plain
- * prose across the column, no bubble and no avatar. A speaker gets a small
- * line with its icon and name over the first of a run; the oracle only where
- * other agents speak too (`named`: the Lobby, where any agent may answer).
- * The time shows under the message while it is pointed at. `bubble={false}`
- * is kept for content that brings its own cards (the panel's questions).
- * `waiting`: the reply has not started, so the name shimmers and nothing
- * is under it yet.
+ * One message from an agent, as the design writes them: the speaker's name in small bold type over plain prose
+ * across the column, no bubble and no avatar. The name heads the first of a run; the oracle's only where other
+ * agents speak too (`named`: the Lobby, where any agent may answer). The time is the name's tooltip.
+ * `waiting`: the reply has not started, so the name shimmers and nothing is under it yet.
  */
-export function AgentMessage({ source, name, time, head, live, children, aside, named: always, waiting }: { source: string; name: string; time?: string; head: boolean; live?: boolean; children?: ReactNode; aside?: ReactNode; bubble?: boolean; named?: boolean; waiting?: boolean }) {
+export function AgentMessage({ source, name, time, head, live, children, aside, named: always, waiting, tile }: { source: string; name: string; time?: string; head: boolean; live?: boolean; children?: ReactNode; aside?: ReactNode; bubble?: boolean; named?: boolean; waiting?: boolean; tile?: boolean }) {
   const named = waiting || (head && (always || !isOracle(source)))
+  // The planning panel speaks beside the oracle's tile; the Lobby's agents by name alone.
+  if (tile) {
+    return (
+      <div className="cs-pmsg">
+        <span aria-hidden="true" className="cs-tile cs-lg" style={{ "--ac": "var(--c-orc)" } as CSSProperties}><AgentIcon source="MASTER" /></span>
+        <AgentMessage source={source} name={name} head={head} {...{ time, live, children, aside, waiting }} named={always ?? true} />
+      </div>
+    )
+  }
   return (
     <div className="chat-agent group/msg" data-live={live || undefined} style={live ? ({ "--orb": sourceTone(source) } as CSSProperties) : undefined}>
       {named || aside ? (
         <p className="chat-speaker">
-          {named ? (
-            <span className="inline-flex items-center gap-1.5 font-medium text-foreground" style={{ "--orb": sourceTone(source) } as CSSProperties}>
-              <AgentIcon source={source} strokeWidth={2.25} className="size-3.5 text-[color-mix(in_oklab,var(--orb)_85%,var(--foreground))]" />
-              {waiting ? <ShimmerWord text={name} /> : name}
-            </span>
-          ) : null}
-          {named && time ? <time className="text-xs text-muted-foreground tabular-nums">{time}</time> : null}
+          {named ? <b className="chat-name" title={time}>{waiting ? <ShimmerWord text={name} /> : name}</b> : null}
           {aside ? <span className="flex items-center gap-1.5 text-xs text-muted-foreground">{aside}</span> : null}
         </p>
       ) : null}
-      {waiting ? null : <div className="chat-prose">{children}</div>}
-      {time && !named ? <time className="chat-meta">{time}</time> : null}
+      {waiting ? null : <div className="chat-prose" title={named ? undefined : time}>{children}</div>}
     </div>
   )
 }
 
-/** Your message: a filled bubble on the right; its time shows under it while it is pointed at. */
-export function YourMessage({ time, head: _head, note, children, below, actions }: { time?: string; head: boolean; note?: string; children: ReactNode; below?: ReactNode; actions?: ReactNode }) {
+/**
+ * Your message: a speech bubble on the right, its tail at the bottom right, drawn like the bays (an edge layer and
+ * a lit fill layer through the goo filters). A message you just sent pops in, squashing and settling like a drop.
+ * Who it went to shows under it; its time is its tooltip.
+ */
+export function YourMessage({ time, head: _head, note, children, below, actions, fresh }: { time?: string; head: boolean; note?: string; children: ReactNode; below?: ReactNode; actions?: ReactNode; fresh?: boolean }) {
   return (
     <div className="group/msg flex flex-col items-end gap-1">
-      <div className="chat-bubble">{children}</div>
-      {time || note || actions ? (
-        <div className="chat-meta flex items-center gap-2" data-note={note ? "" : undefined}>
+      <div className="chat-bubble cs-umsg" data-new={fresh || undefined} title={time}>
+        <i className="cs-ue" aria-hidden="true"><b className="cs-ub" /><b className="cs-ut" /></i>
+        <i className="cs-uf" aria-hidden="true"><b className="cs-ub" /><b className="cs-ut" /></i>
+        <div className="cs-ux">{children}</div>
+      </div>
+      {note || actions ? (
+        <div className="chat-meta flex items-center gap-2 pr-[9px]" data-note={note ? "" : undefined}>
           {actions}
           {note ? <span>{note}</span> : null}
-          {time ? <time className="tabular-nums">{time}</time> : null}
         </div>
       ) : null}
       {below}

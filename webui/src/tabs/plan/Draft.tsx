@@ -8,12 +8,12 @@
 import { memo, useMemo, type ReactNode } from "react"
 import { MessageSquarePlus } from "lucide-react"
 import type { PanelNote } from "@protocol"
-import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { Markdown } from "@/ui/Markdown"
 import { Section } from "@/ui/Section"
 import { useGradual } from "@/lib/useGradual"
-import { sourceColor, sourceLabel } from "../lobby/types"
+import { sourceLabel } from "../lobby/types"
+import { agentColor } from "@/ui/AgentIcon"
 import { SEATS_NEED } from "./words"
 
 export interface DraftRow {
@@ -36,7 +36,7 @@ function Notes({ notes }: { notes: string[] }) {
   return (
     <>
       {notes.map((note, index) => (
-        <p key={index} className="ml-6 rounded-lg border border-primary/15 bg-accent px-3 py-1.5 text-sm text-foreground italic">
+        <p key={index} className="cs-dnote">
           {note}
         </p>
       ))}
@@ -61,20 +61,22 @@ const Line = memo(function Line({ row, index, notes, form, onComment }: LineProp
   const open = () => onComment(index)
   return (
     // Lines out of view are not laid out until scrolled to: a plan of hundreds of lines lands in one cheap frame.
-    <li data-line={index} className={cn("group/line", !form && "[contain-intrinsic-size:auto_2.75rem] [content-visibility:auto]")}>
-      <div className="flex min-w-0 items-start gap-1">
-        <span className="flex w-4 shrink-0 justify-center pt-3.5" aria-hidden="true">
-          {notes.length > 0 ? <span className="size-2 rounded-full bg-primary" /> : null}
+    <li data-line={index} className={cn("cs-dr", !form && "[contain-intrinsic-size:auto_2.75rem] [content-visibility:auto]")}>
+      <div className="cs-dln">
+        <span className="cs-dd" aria-hidden="true">
+          {notes.length > 0 ? <i /> : null}
         </span>
         <div
-          className={cn("min-w-0 flex-1 cursor-pointer rounded-lg px-2 py-1.5 transition-colors hover:bg-muted", form && "bg-muted", row.fenced && "font-mono text-sm whitespace-pre-wrap break-words")}
+          className={cn("cs-dtx", row.fenced && "font-mono text-[12.5px] whitespace-pre-wrap break-words")}
+          data-on={form ? "true" : undefined}
+          data-k={/^#{1,6}\s/.test(line) ? "h" : undefined}
           onClick={(event) => !(event.target as HTMLElement).closest("a") && open()}
         >
           {row.fenced ? row.text : <Markdown text={row.text} />}
         </div>
-        <Button type="button" variant="ghost" size="icon" className="shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/line:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100" aria-label={`Comment on this line: ${line}`} onClick={open}>
-          <MessageSquarePlus aria-hidden="true" />
-        </Button>
+        <button type="button" className="cs-dcb" aria-label={`Comment on this line: ${line}`} onClick={open}>
+          <MessageSquarePlus aria-hidden="true" className="size-[15px]" />
+        </button>
       </div>
       <Notes notes={notes} />
       {form}
@@ -88,7 +90,7 @@ export function DraftBody({ draft, comments, commenting, form, onComment }: { dr
   // A screenful at once, the rest a chunk a frame: a long plan never holds up the tab switch that shows it.
   const shown = useGradual(rows.length)
   return (
-    <ul className="flex flex-col" aria-label="Draft plan lines">
+    <ul className="cs-drl" aria-label="Draft plan lines">
       {rows.slice(0, shown).map((row, index) =>
         row.text.trim() ? (
           <Line key={index} row={row} index={index} notes={comments.get(row.text.trim()) ?? NO_NOTES} form={index === commenting ? form : undefined} onComment={onComment} />
@@ -107,7 +109,7 @@ export function SeatNeeds({ notes }: { notes: PanelNote[] }) {
       <dl className="flex flex-col gap-2 text-sm">
         {notes.map((note, index) => (
           <div key={index} className="flex min-w-0 gap-3">
-            <dt className={cn("w-20 shrink-0 font-medium", sourceColor(note.from))}>{sourceLabel(note.from)}</dt>
+            <dt className="w-20 shrink-0 font-semibold" style={{ color: agentColor(note.from) }}>{sourceLabel(note.from)}</dt>
             <dd className="min-w-0 flex-1">
               <Markdown text={note.text} />
             </dd>

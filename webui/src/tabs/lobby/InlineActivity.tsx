@@ -16,7 +16,6 @@ import { useCollapsed } from "@/lib/collapsed"
 import { formatClock } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { linkFiles } from "@/app/code/FileLink"
-import { ShimmerWord } from "./ChatParts"
 import { sourceColor, sourceLabel, sourceTone, type ActivityEntry } from "./types"
 
 /** Whether every run of steps is open; remembered in this browser (`useCollapsed` stores it, folded is the default). */
@@ -33,13 +32,13 @@ function KindMark({ entry }: { entry: ActivityEntry }) {
 
 function StepRow({ entry }: { entry: ActivityEntry }) {
   return (
-    <li className="activity-step" title={formatClock(entry.at)} style={entry.pending ? ({ "--orb": sourceTone(entry.source) } as CSSProperties) : undefined}>
-      <span aria-hidden="true" className="flex h-5 w-6 items-center justify-center">
+    <li className="cs-wl activity-step" title={formatClock(entry.at)} style={entry.pending ? ({ "--orb": sourceTone(entry.source) } as CSSProperties) : undefined}>
+      <span aria-hidden="true" className="flex h-5 w-5 shrink-0 items-center justify-center">
         <KindMark entry={entry} />
       </span>
       <span className="sr-only">{entry.pending ? "pending" : entry.kind}</span>
       <span className="min-w-0 break-words">
-        <span className={cn("font-medium", sourceColor(entry.source))}>{sourceLabel(entry.source)}</span>{" "}
+        <b>{sourceLabel(entry.source)}</b>{" "}
         <span className={entry.kind === "error" ? "text-destructive" : entry.pending ? "text-foreground" : undefined}>{linkFiles(entry.text)}{entry.pending ? "…" : ""}</span>
       </span>
     </li>
@@ -92,16 +91,13 @@ export function InlineActivity({ entries }: { entries: ActivityEntry[] }) {
   const now = useNow(Boolean(live))
   const style = live ? ({ "--orb": sourceTone(live.source) } as CSSProperties) : undefined
   return (
-    <div className="activity-run" data-live={live ? true : undefined} data-open={open || undefined} style={style}>
-      <button type="button" aria-expanded={open} aria-controls={list} onClick={() => setOwn(!open)} className="activity-toggle">
+    <div className="cs-work activity-run" data-live={live ? true : undefined} data-open={open || undefined} style={style}>
+      <button type="button" aria-expanded={open} aria-controls={list} onClick={() => setOwn(!open)} className="cs-wrow activity-toggle">
         {live ? (
           <>
-            <span className="min-w-0 truncate">
-              <ShimmerWord text="Working" />
-              <span className="text-muted-foreground"> · </span>
-              <span key={live.id} className="activity-live-step">
-                <span className={cn("font-medium", sourceColor(live.source))}>{sourceLabel(live.source)}</span> <span className="text-foreground">{live.text}…</span>
-              </span>
+            <span className="cs-wtx">Working</span>
+            <span key={live.id} className="activity-live-step min-w-0 truncate">
+              <span className={cn("font-medium", sourceColor(live.source))}>{sourceLabel(live.source)}</span> {live.text}
             </span>
             <span className="shrink-0 tabular-nums">
               {count}
@@ -110,21 +106,20 @@ export function InlineActivity({ entries }: { entries: ActivityEntry[] }) {
           </>
         ) : (
           <span className="min-w-0 truncate">
-            <span className="font-medium">{took >= 1000 ? `Worked for ${workedFor(took)}` : "Worked"}</span>
-            <span> · {count}{sources ? ` · ${sources}` : ""}</span>
+            {took >= 1000 ? `Worked for ${workedFor(took)}` : "Worked"} · {count}{sources ? ` · ${sources}` : ""}
           </span>
         )}
-        {errors ? <span className="shrink-0 text-destructive">{errors} {errors === 1 ? "error" : "errors"}</span> : null}
-        {warnings ? <span className="shrink-0 text-warning">{warnings} {warnings === 1 ? "warning" : "warnings"}</span> : null}
-        <ChevronDown aria-hidden="true" className="activity-chevron size-3.5 shrink-0" />
+        {errors ? <span className="shrink-0 text-[var(--bad)]">{errors} {errors === 1 ? "error" : "errors"}</span> : null}
+        {warnings ? <span className="shrink-0 text-[var(--warn)]">{warnings} {warnings === 1 ? "warning" : "warnings"}</span> : null}
+        <ChevronDown aria-hidden="true" className="cs-chev size-3.5 shrink-0" />
       </button>
-      {open ? (
-        <ol id={list} aria-label="Activity" className="activity-steps">
-          {entries.map((entry) => (
-            <StepRow key={entry.id} entry={entry} />
-          ))}
-        </ol>
-      ) : null}
+      <div className="cs-wbody" inert={!open}>
+        <div className="cs-wi">
+          <ol id={list} aria-label="Activity" className="cs-wlines">
+            {open ? entries.map((entry) => <StepRow key={entry.id} entry={entry} />) : null}
+          </ol>
+        </div>
+      </div>
     </div>
   )
 }

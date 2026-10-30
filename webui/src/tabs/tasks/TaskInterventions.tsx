@@ -127,7 +127,7 @@ function ApprovalActions({ taskId, item, onDone }: { taskId: string; item: Waiti
     call("tasks.resolveApproval", { taskId, approvalId: item.id, decision })
   const what = `${item.kind}${item.domain ? ` for ${item.domain}` : ""}`
   return (
-    <span className="flex flex-wrap gap-2">
+    <span className="flex flex-wrap gap-1.5">
       <AskButton label="Approve" icon={Check} title={`Approve the ${what}?`} description={`${item.detail} The task's oracle is told and carries on with it.`} confirmLabel="Approve" run={resolve("approved")} onDone={onDone} />
       <AskButton label="Reject" icon={X} tone="danger" title={`Reject the ${what}?`} description={`${item.detail} The task's oracle is told and works without it.`} confirmLabel="Reject" run={resolve("rejected")} onDone={onDone} />
     </span>
@@ -138,7 +138,7 @@ function WaitingRow({ taskId, item, live, onDone }: { taskId: string; item: Wait
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-2">
       <span className="flex min-w-0 flex-1 basis-60 gap-2">
-        <AlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning" />
+        <AlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-[var(--warn)]" />
         <span className="min-w-0 break-words text-muted-foreground">
           {item.kind} {item.detail}
         </span>
@@ -151,7 +151,7 @@ function WaitingRow({ taskId, item, live, onDone }: { taskId: string; item: Wait
 function Blockers({ blockers }: { blockers: TaskDetailData["blockers"] }) {
   return blockers.map((blocker, index) => (
     <li key={`${index}-${blocker.reason}`} className="flex gap-2">
-      <XCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-destructive" />
+      <XCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-[var(--bad)]" />
       <span className="min-w-0 break-words text-muted-foreground">
         {blocker.reason} (needs: {blocker.need})
       </span>
@@ -162,7 +162,7 @@ function Blockers({ blockers }: { blockers: TaskDetailData["blockers"] }) {
 function TaskActions({ row, detail, onChanged }: { row: TaskRow; detail: TaskDetailData; onChanged: () => void }) {
   const taskId = row.id
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="cs-wacts">
       {row.resumable ? <ResumeTask row={row} onResumed={onChanged} /> : null}
       {detail.canAccept ? (
         <AskButton label="Accept as is" icon={ShieldCheck} title={`Accept "${row.title}" as is?`} description="You accept the work unverified: missing QA and lint checks are waived on your word. The task's oracle is asked to complete it; nothing is merged." confirmLabel="Accept as is" run={() => call("tasks.accept", { taskId })} onDone={onChanged} />
@@ -182,13 +182,15 @@ export function TaskInterventions({ row, detail, onChanged }: Props) {
   if (waiting.length === 0 && detail.blockers.length === 0 && !acts) return null
   return (
     <Section title="Waiting on">
-      <ul className="flex flex-col gap-2 text-sm">
-        {waiting.map((item, index) => (
-          <WaitingRow key={`${index}-${item.id || item.kind}`} taskId={row.id} item={item} live={live} onDone={onChanged} />
-        ))}
-        <Blockers blockers={detail.blockers} />
-      </ul>
-      {acts ? <TaskActions row={row} detail={detail} onChanged={onChanged} /> : null}
+      <div className="cs-sunkbox cs-cal">
+        <ul className="flex flex-col gap-2.5 text-[13px]">
+          {waiting.map((item, index) => (
+            <WaitingRow key={`${index}-${item.id || item.kind}`} taskId={row.id} item={item} live={live} onDone={onChanged} />
+          ))}
+          <Blockers blockers={detail.blockers} />
+        </ul>
+        {acts ? <TaskActions row={row} detail={detail} onChanged={onChanged} /> : null}
+      </div>
     </Section>
   )
 }

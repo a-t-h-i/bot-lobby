@@ -7,7 +7,7 @@
  * is driven by the config the server last returned. The appearance,
  * notification and install rows are page-only and never sent to the server.
  */
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type CSSProperties } from "react"
 import { Brain, Check, ChevronRight, CircleAlert, CircleCheck, Download, Maximize, Minimize, Wrench } from "lucide-react"
 import { toast } from "@/lib/toast"
 import { useFullscreen, useInstallPrompt, useInstalled } from "@/app/install"
@@ -19,7 +19,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { EffortChoice } from "@/ui/EffortChoice"
 import { nearestSupported } from "@/ui/effortLevels"
-import { AgentIcon } from "@/ui/AgentIcon"
+import { AgentIcon, agentColor } from "@/ui/AgentIcon"
 import { call } from "@/lib/api"
 import { useApiRead } from "@/app/useApiRead"
 import { Section } from "@/ui/Section"
@@ -368,7 +368,7 @@ function AgentCard({ kind, config, models, harnesses, save, onGrants }: { kind: 
   return (
     <section data-slot="agent-row" className="glass flex min-w-0 flex-col gap-2.5 rounded-xl border px-3.5 pt-2.5 pb-3">
       <div className="flex min-w-0 items-center justify-between gap-2">
-        <h3 className="flex min-w-0 items-center gap-2 break-words text-sm font-semibold"><AgentIcon source={kind} className="size-4 shrink-0 text-muted-foreground" />{name}</h3>
+        <h3 className="flex min-w-0 items-center gap-2 break-words text-sm font-semibold"><span aria-hidden="true" className="cs-tile" style={{ "--ac": agentColor(kind) } as CSSProperties}><AgentIcon source={kind} /></span>{name}</h3>
         <MoreButton open={open} custom={custom} onToggle={() => setOpen((now) => !now)} />
       </div>
       {HARNESS_AGENTS.has(kind) ? <HarnessChoice value={entry.harness ?? PI_HARNESS} statuses={harnesses} label={`${name} ${HARNESS.label.toLowerCase()}`} onChange={chooseHarness} /> : null}
@@ -775,19 +775,19 @@ export function SettingsForm({ config, models, classifierModels = [], onConfig }
     return next
   }
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-6 pt-6 pb-dock">
-      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+    <div className="cs-pg cs-set flex flex-col pb-dock">
+      <header className="cs-pgh">
         <div className="min-w-0">
-          <h1 className="text-lg font-semibold tracking-tight">{PAGE.title}</h1>
-          <p className="max-w-xl text-xs text-muted-foreground">{PAGE.intro}</p>
+          <h1 className="cs-hd1">{PAGE.title}</h1>
+          <p className="cs-hd2">{PAGE.intro}</p>
         </div>
-        <nav aria-label="Settings sections" className="min-w-0 max-w-full">
-          <Segmented as="nav" label="Settings sections" items={SECTIONS.map((name) => ({ id: name, label: name, controls: sectionId(name) }))} value={section} onChange={setSection} />
-        </nav>
       </header>
+      <nav aria-label="Settings sections" className="cs-secn">
+        <Segmented as="nav" size="md" label="Settings sections" items={SECTIONS.map((name) => ({ id: name, label: name, controls: sectionId(name) }))} value={section} onChange={setSection} />
+      </nav>
       <div id={sectionId("Agents")} hidden={section !== "Agents"} aria-hidden={section !== "Agents"}>
         <h2 className="sr-only">{GROUP_TITLES.agents}</h2>
-        <div className="grid grid-cols-2 items-start gap-3 lg:grid-cols-3">
+        <div className="grid grid-cols-2 items-start gap-3.5 lg:grid-cols-3">
           {AGENT_ORDER.map((kind) => <AgentCard key={kind} kind={kind} config={config} models={models} harnesses={harnesses} save={save} onGrants={() => openGrants(kind)} />)}
         </div>
       </div>

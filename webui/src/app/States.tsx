@@ -4,15 +4,25 @@
  */
 import { RotateCw, TriangleAlert, WifiOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
-import { Spinner } from "@/components/ui/spinner"
-import { Alert, AlertAction, AlertDescription } from "@/components/reui/alert"
 
-/** First paint, before the first answer lands. */
+/** The goo filter the loading blobs melt together through; drawn with them, so it works before the shell is up. */
+function GooFilter() {
+  return (
+    <svg aria-hidden="true" width="0" height="0" className="absolute">
+      <filter id="cs-loadgoo" x="-40%" y="-90%" width="180%" height="280%" colorInterpolationFilters="sRGB">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="3.2" result="b" />
+        <feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" />
+      </filter>
+    </svg>
+  )
+}
+
+/** First paint, before the first answer lands: three accent blobs that drift and merge. */
 export function LoadingState({ label = "Connecting…" }: { label?: string }) {
   return (
-    <div className="flex min-h-48 min-w-0 w-full max-w-full flex-1 items-center justify-center gap-2 overflow-y-auto px-4 py-8 text-sm text-muted-foreground">
-      <Spinner />
+    <div role="status" className="flex min-h-48 min-w-0 w-full max-w-full flex-1 items-center justify-center gap-5 overflow-y-auto px-4 py-8 text-sm text-muted-foreground">
+      <GooFilter />
+      <span aria-hidden="true" className="cs-gi cs-big"><span className="cs-gb cs-a" /><span className="cs-gb cs-b" /><span className="cs-gb cs-c" /></span>
       <span>{label}</span>
     </div>
   )
@@ -21,40 +31,28 @@ export function LoadingState({ label = "Connecting…" }: { label?: string }) {
 /** A topic that failed to load, with a retry that rereads it. */
 export function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => void }) {
   return (
-    <Empty className="m-4 min-h-0 min-w-0 flex-1 overflow-y-auto">
-      <EmptyHeader>
-        <EmptyTitle className="flex items-center gap-2">
-          <TriangleAlert className="size-4 text-destructive" aria-hidden="true" />
-          Could not load this view
-        </EmptyTitle>
-        <EmptyDescription>{message ?? "The request failed. Try again."}</EmptyDescription>
-      </EmptyHeader>
-      {onRetry ? (
-        <Button variant="outline" onClick={onRetry}>
-          <RotateCw aria-hidden="true" />
-          Try again
-        </Button>
-      ) : null}
-    </Empty>
+    <div className="grid min-h-0 min-w-0 flex-1 place-items-center overflow-y-auto p-4">
+      <div role="alert" className="cs-dlg cs-errc">
+        <h2><TriangleAlert className="size-[18px] text-[var(--bad)]" aria-hidden="true" />Could not load this view</h2>
+        <p>{message ?? "The request failed. Try again."}</p>
+        {onRetry ? (
+          <Button variant="outline" onClick={onRetry}>
+            <RotateCw aria-hidden="true" />
+            Try again
+          </Button>
+        ) : null}
+      </div>
+    </div>
   )
 }
 
 /** A dropped stream (pi stopped or restarting); data stays on screen, the banner offers a manual retry. */
 export function ReconnectingState({ onRetry }: { onRetry?: () => void }) {
   return (
-    <Alert variant="destructive"
-      role="status"
-      className="mx-3 mb-1 max-h-32 w-auto min-w-0 overflow-y-auto max-sm:mx-2"
-    >
-      <WifiOff className="size-4" aria-hidden="true" />
-      <AlertDescription>Lost pi — reconnecting every 2 s. Your planning session and tasks carry on when it is back.</AlertDescription>
-      {onRetry ? (
-        <AlertAction>
-        <Button variant="link" className="h-8 px-1 text-destructive" onClick={onRetry}>
-          Retry now
-        </Button>
-        </AlertAction>
-      ) : null}
-    </Alert>
+    <div role="status" className="cs-banner">
+      <WifiOff className="cs-wi size-[18px]" aria-hidden="true" />
+      <span className="min-w-0 flex-1">Lost pi — reconnecting every 2 s. Your planning session and tasks carry on when it is back.</span>
+      {onRetry ? <Button onClick={onRetry}>Retry now</Button> : null}
+    </div>
   )
 }

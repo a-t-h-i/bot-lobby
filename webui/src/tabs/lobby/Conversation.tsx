@@ -45,10 +45,10 @@ function NoteEntry({ entry }: { entry: ChatEntry }) {
   )
 }
 
-function MessageBody({ entry, head }: { entry: ChatEntry; head: boolean }) {
+function MessageBody({ entry, head, fresh }: { entry: ChatEntry; head: boolean; fresh: boolean }) {
   if (entry.role === "you") {
     return (
-      <YourMessage time={formatClock(entry.at)} head={head} {...(entry.to ? { note: `to ${sourceLabel(entry.to)}` } : {})}>
+      <YourMessage time={formatClock(entry.at)} head={head} fresh={fresh} {...(entry.to ? { note: `to ${sourceLabel(entry.to)}` } : {})}>
         <Markdown text={entry.text} />
       </YourMessage>
     )
@@ -64,8 +64,9 @@ function MessageBody({ entry, head }: { entry: ChatEntry; head: boolean }) {
 const Message = memo(
   function Message({ entry, head, fresh }: { entry: ChatEntry; head: boolean; fresh: boolean }) {
     return (
-      <motion.div initial={fresh ? { opacity: 0, y: 10 } : false} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 420, damping: 32 }}>
-        {entry.role === "note" ? <NoteEntry entry={entry} /> : <MessageBody entry={entry} head={head} />}
+      // Your own message pops in by itself (the bubble's own animation); the others rise into place.
+      <motion.div initial={fresh && entry.role !== "you" ? { opacity: 0, y: 6 } : false} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.221, ease: [0.22, 1, 0.36, 1] }}>
+        {entry.role === "note" ? <NoteEntry entry={entry} /> : <MessageBody entry={entry} head={head} fresh={fresh} />}
       </motion.div>
     )
   },
@@ -191,7 +192,7 @@ export function Conversation({
   useEffect(() => setSettled(true), [])
   return (
     <Frame aria-label="Conversation" data-bare className="flex-1 rounded-none border-0 shadow-none">
-      <div ref={ref} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-4 pb-dock outline-none focus-visible:bg-muted/30" role="log" aria-label="Conversation" tabIndex={0}>
+      <div ref={ref} onScroll={handleScroll} className="cs-thread min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pb-dock outline-none" role="log" aria-label="Conversation" tabIndex={0}>
         {empty ? (
           <ConversationEmpty hasTask={hasTask} />
         ) : (

@@ -39,9 +39,11 @@ interface ConfirmButtonProps {
   iconOnly?: boolean
   /** A small button for a tight toolbar (the message box), under the 40px floor. */
   compact?: boolean
+  className?: string
+  side?: "top" | "right" | "bottom" | "left"
 }
 
-export function ConfirmButton({ label, text, shortcut, title, description, confirmLabel, onConfirm, icon, disabled, variant = "outline", iconOnly, compact }: ConfirmButtonProps) {
+export function ConfirmButton({ label, text, shortcut, title, description, confirmLabel, onConfirm, icon, disabled, variant = "outline", iconOnly, compact, className, side }: ConfirmButtonProps) {
   const [asking, setAsking] = useState(false)
   const shown = useOverlaySlot(asking, PRIORITY.confirm)
   const destructive = variant === "destructive"
@@ -59,7 +61,8 @@ export function ConfirmButton({ label, text, shortcut, title, description, confi
         disabled={disabled}
         shortcut={shortcut}
         iconOnly={iconOnly}
-        {...(compact ? { "data-compact": true, className: "size-8" } : {})}
+        {...(compact ? { "data-compact": true, className: "size-8" } : className ? { className } : {})}
+        {...(side ? { side } : {})}
         {...(text ? { text } : {})}
         onClick={() => setAsking(true)}
       />

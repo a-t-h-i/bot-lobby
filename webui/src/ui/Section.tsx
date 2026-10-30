@@ -1,15 +1,18 @@
-/** A detail section: a small muted heading with an optional note at the far end, then its content. `prominent` is for the groups of a page (Settings). */
+/**
+ * A detail section as the design draws it: a small label running into a hairline, with an optional note at
+ * the far end, then its content on the flat page (no card). `prominent` is for the groups of a page (Settings).
+ */
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
-import { Rule } from "./Frame"
 
 export function Section({ title, right, prominent, children }: { title: string; right?: string; prominent?: boolean; children: ReactNode }) {
   return (
-    <section className={cn("flex min-w-0 flex-col", prominent ? "gap-4" : "workspace-section gap-3 rounded-xl border p-4 shadow-xs")}>
-      <h3 className="text-sm font-semibold text-foreground">
-        <Rule title={title} right={right} className={prominent ? "[&>span:first-child]:font-semibold" : undefined} />
+    <section className={cn("cs-sec flex min-w-0 flex-col", prominent && "cs-prom")}>
+      <h3 className="cs-rl">
+        <span className="min-w-0 truncate">{title}</span>
+        {right ? <span className="cs-rr">{right}</span> : null}
       </h3>
-      {children}
+      <div className="flex min-w-0 flex-col gap-3">{children}</div>
     </section>
   )
 }

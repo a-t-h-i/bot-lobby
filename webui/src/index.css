@@ -14,7 +14,7 @@
   --radius: 0.625rem;
 
   /* Page and ink */
-  --background: #fcfcfc;
+  --background: #f3f3f5;
   --foreground: #27272a;
   --muted-foreground: #6b6b75;
 
@@ -63,7 +63,7 @@
   --secondary: #fafafa;
   --secondary-foreground: #27272a;
   --muted: #fafafa;
-  --border: #e6e6ea;
+  --border: #d2d2da;
   --input: #d8d8dd;
   --you: #e9e9eb;
   /* Your message: a soft filled block, as in the harnesses. */
@@ -88,11 +88,13 @@
   --chart-5: var(--warning);
 
   /* Each agent's colour in the activity log and the metrics bars. */
-  --source-dev: var(--success);
-  --source-design: #a21caf;
-  --source-qa: var(--warning);
-  --source-research: #0f766e;
-  --source-scout: var(--primary);
+  /* Fixed agent colours, used everywhere (menus, cards, badges); the oracle wears the accent. */
+  --source-dev: #4f9fe0;
+  --source-design: #c27ad1;
+  --source-qa: #e0a43c;
+  --source-research: #8b7cf6;
+  --source-scout: #3fb892;
+  --source-planner: #e0708f;
 
   --sidebar: #fafafa;
   --sidebar-foreground: var(--foreground);
@@ -140,12 +142,12 @@
 
 .dark {
   /* Close to the neutral-black canvas: borders and hover fills separate, not grey slabs. */
-  --background: #0a0a0a;
-  --foreground: #f5f5f5;
-  --muted-foreground: #8a8a8a;
+  --background: #1b1b1b;
+  --foreground: #ececec;
+  --muted-foreground: #b2b2b2;
 
-  --card: #111111;
-  --card-foreground: #f5f5f5;
+  --card: #303030;
+  --card-foreground: #ececec;
   --popover: rgb(22 22 24 / 0.72);
   --popover-foreground: #f5f5f5;
   --glass-border: rgb(255 255 255 / 0.1);
@@ -161,7 +163,7 @@
   --control-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   --card-shadow: var(--glass-lift);
 
-  --primary: #346bf1;
+  --primary: #d97757;
   --primary-foreground: #ffffff;
   --accent: rgb(255 255 255 / 0.05);
   --accent-foreground: #f5f5f5;
@@ -173,7 +175,7 @@
   --secondary: rgb(255 255 255 / 0.03);
   --secondary-foreground: #f5f5f5;
   --muted: rgb(255 255 255 / 0.03);
-  --border: #222224;
+  --border: #4a4a4a;
   --input: #2c2c2f;
   --you: #262626;
   --bubble: color-mix(in oklab, var(--foreground) 15%, var(--background));
@@ -193,9 +195,6 @@
   --chart-3: #5eead4;
   --chart-4: #e879f9;
 
-  --source-design: #e879f9;
-  --source-research: #5eead4;
-  --source-scout: #6b93f5;
 
   --sidebar: var(--card);
   --sidebar-accent: rgb(255 255 255 / 0.08);
@@ -494,7 +493,6 @@
   /* The pane every tab lives in: the page itself, edge to edge beside the sidebar, with no frame of its own. */
   .surface {
     @apply min-h-0 min-w-0 overflow-hidden bg-background text-foreground;
-    background-image: radial-gradient(60rem 36rem at 12% -10%, var(--wash-a), transparent 70%), radial-gradient(48rem 32rem at 100% 110%, var(--wash-b), transparent 70%);
   }
   /* A bordered block inside the page (a settings card, a metric): a white card on a hairline, flat. */
   .glass {
@@ -884,43 +882,6 @@
   background-color: var(--accent);
 }
 
-/*
- * The Knowledge tree, drawn like an editor's file explorer: compact rows with a chevron, a folder or file-type
- * icon and the name; children indented on a faint guide line; the open file highlighted.
- */
-.ktree { --guide: color-mix(in oklab, var(--foreground) 12%, transparent); font-size: 0.8125rem; }
-.ktree-branches, .ktree-leaves { list-style: none; margin: 0; padding: 0; }
-.ktree-row {
-  display: flex;
-  width: 100%;
-  min-height: 1.75rem;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.125rem 0.5rem;
-  border-radius: var(--radius-md);
-  text-align: left;
-  outline: none;
-  color: var(--foreground);
-  transition: background-color 120ms ease;
-}
-.ktree-node:hover, .ktree-file:hover { background: color-mix(in oklab, var(--foreground) 6%, transparent); }
-.ktree-node:focus-visible, .ktree-file:focus-visible { box-shadow: inset 0 0 0 1.5px var(--ring); }
-.ktree-file[aria-current="true"] { background: color-mix(in oklab, var(--primary) 14%, transparent); }
-.ktree-file[aria-current="true"]:focus-visible { box-shadow: inset 0 0 0 1.5px var(--ring); }
-.ktree-chevron { width: 0.875rem; height: 0.875rem; flex: none; color: var(--muted-foreground); transition: rotate 160ms var(--ease-snap); }
-.ktree-icon { width: 1rem; height: 1rem; flex: none; color: var(--muted-foreground); stroke-width: 1.75; }
-.ktree-folder { color: color-mix(in oklab, var(--foreground) 62%, transparent); }
-.ktree-icon[data-ext="md"] { color: oklch(0.62 0.12 245); }
-.ktree-icon[data-ext="data"] { color: oklch(0.68 0.13 85); }
-.dark .ktree-icon[data-ext="md"] { color: oklch(0.74 0.11 245); }
-.ktree-root { padding-left: 0.5rem; }
-/* Folders sit one step in from the root, files one more, each level on a guide line under its parent's icon. */
-.ktree-branches { margin-left: 0.75rem; }
-.ktree-leaves { position: relative; margin-left: 1.625rem; }
-.ktree-branches, .ktree-leaves { border-left: 1px solid var(--guide); }
-.ktree-branch .ktree-node { padding-left: 0.375rem; }
-.ktree-leaf .ktree-file { padding-left: 0.875rem; }
-
 /* One agent's bubble, edged and tinted in its colour, its name on a tag. */
 .thought {
   display: grid;
@@ -1166,26 +1127,6 @@
   .chat-meta { transition: none; }
 }
 
-/*
- * The top bar: where you are on the left, the tabs in the middle, the session
- * and its tools on the right, on one row when they fit. When they do not, the
- * tabs (numbers, words and their connectors) take a row of their own so
- * nothing is squeezed.
- */
-.app-header {
-  /* Above the page's card, so the tabs' tap margins reach a little over its top edge. */
-  position: relative;
-  z-index: 2;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas:
-    "where tools"
-    "tabs tabs";
-  align-items: center;
-  column-gap: 0.75rem;
-  row-gap: 0.125rem;
-  padding: 0.5rem 0.75rem 0.25rem;
-}
 /*
  * The composer, after the user's design (docs/web-ui/composer-design): one fluid bubble, raised a little like a
  * keycap or a water drop, its menus growing out of its top edge and merging with it (composer/ComposerSurface.tsx
@@ -1592,78 +1533,8 @@
   }
 }
 
-/*
- * The sidebar on the left of every page: the running sessions, the app's
- * switches and Settings, a quiet column on the page's own background. It folds
- * off the page altogether, sliding on an iOS-like ease while its panel keeps
- * its width (so nothing reflows on the way), and its edge drags to resize it.
- */
-.app-sidebar {
-  position: relative;
-  display: flex;
-  flex-shrink: 0;
-  min-height: 0;
-  overflow: hidden;
-  color: var(--sidebar-foreground);
-  background: var(--sidebar);
-  border-right: 1px solid var(--sidebar-border);
-  transition: width 320ms cubic-bezier(0.32, 0.72, 0, 1), border-color 320ms;
-}
-.app-sidebar[data-folded] { border-right-color: transparent; }
-/*
- * The app's frame: the sidebar and the bar are one surface in the sidebar's
- * colour, with no line between them, and the page sits in it on a hairline
- * with its inner corner rounded where the two meet. With the sidebar folded
- * away there is no corner to round, so the page runs to the window's edge.
- */
-.app-chrome { background: var(--sidebar); }
-.app-chrome .app-sidebar { background: transparent; border-right-color: transparent; }
-.app-chrome .app-page {
-  background: var(--background);
-  border-top: 1px solid var(--sidebar-border);
-  border-left: 1px solid var(--sidebar-border);
-  border-top-left-radius: 0.875rem;
-  overflow: hidden;
-  transition: border-top-left-radius 320ms cubic-bezier(0.32, 0.72, 0, 1), border-left-color 320ms;
-}
-.app-chrome[data-sidebar="folded"] .app-page { border-top-left-radius: 0; border-left-color: transparent; }
-@media (prefers-reduced-motion: reduce) {
-  .app-chrome .app-page { transition: none; }
-}
-
-.app-sidebar[data-resizing] { transition: none; user-select: none; }
-.app-sidebar .sidebar-panel {
-  flex-shrink: 0;
-  padding: 0 0.25rem;
-  transition: opacity 240ms ease, translate 320ms cubic-bezier(0.32, 0.72, 0, 1);
-}
-.app-sidebar[data-folded] .sidebar-panel { opacity: 0; translate: -1.5rem 0; }
-/* The edge: a thin strip to drag, lit while hovered or focused. */
-.sidebar-edge {
-  position: absolute;
-  inset-block: 0;
-  right: 0;
-  width: 0.375rem;
-  cursor: col-resize;
-  outline: none;
-  touch-action: none;
-  z-index: 1;
-}
-.sidebar-edge::after {
-  content: "";
-  position: absolute;
-  inset-block: 0;
-  right: 0;
-  width: 2px;
-  background: transparent;
-  transition: background-color 150ms;
-}
-.sidebar-edge:hover::after, .sidebar-edge:focus-visible::after, .app-sidebar[data-resizing] .sidebar-edge::after { background: var(--ring); }
-.app-sidebar[data-folded] .sidebar-edge { display: none; }
 .session-spin { animation: session-spin 2.4s linear infinite; }
 @keyframes session-spin { to { rotate: 360deg; } }
-/* The bar's open button springs in when the sidebar folds away. */
-.sidebar-open { animation: session-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 /* A session row fades in when it appears. */
 .session-enter { animation: session-fade 160ms ease-out both; }
 @keyframes session-fade { from { opacity: 0; } }
@@ -1672,8 +1543,7 @@
   to { opacity: 1; scale: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .app-sidebar, .app-sidebar .sidebar-panel { transition: none; }
-  .session-enter, .session-spin, .sidebar-open { animation: none; }
+  .session-enter, .session-spin { animation: none; }
 }
 /*
  * The terminal drawer under the composer (`TerminalDrawer.tsx`): the page's
@@ -1760,29 +1630,6 @@ html[data-resizing="row"] * { cursor: row-resize !important; user-select: none; 
   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent);
 }
 .project-mark[data-problem] { background: var(--destructive); }
-
-/* Everything on one row when it fits (Header measures it); equal side columns keep the tabs at the bar's centre. */
-.app-header[data-one-row] {
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  grid-template-areas: "where tabs tools";
-  padding: 0.375rem 0.75rem;
-}
-.app-header > .where {
-  grid-area: where;
-}
-.app-header > .tabs {
-  grid-area: tabs;
-  /* Centred on its row too when the bar is two rows. */
-  justify-self: center;
-  max-width: 100%;
-}
-.app-header > .tools {
-  grid-area: tools;
-}
-/* Why no project can be chosen, on a row of its own under the bar. */
-.app-header > .notice {
-  grid-column: 1 / -1;
-}
 
 /* The activity indicator: three dots that hop in turn. */
 @keyframes hop {

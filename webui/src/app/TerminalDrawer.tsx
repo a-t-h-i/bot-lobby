@@ -46,7 +46,7 @@ export function TerminalToggle({ hint, className }: { hint?: string | undefined;
   return (
     <Tip label={open ? "Hide terminal" : "Terminal"} hint={hint}>
       <button type="button" aria-label="Terminal" aria-pressed={open} aria-controls={open ? "terminal-drawer" : undefined} aria-keyshortcuts={hint} onClick={toggleTerminal} className={className}>
-        <SquareTerminal aria-hidden="true" className="size-4" />
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 17l6-6-6-6M12 19h8" /></svg>
       </button>
     </Tip>
   )

@@ -37,9 +37,11 @@ export interface ActionButtonProps extends Omit<ComponentProps<typeof Button>, "
   text?: string
   /** Just the icon, the word in a tooltip. */
   iconOnly?: boolean
+  /** Where an icon-only button's tooltip opens. */
+  side?: "top" | "right" | "bottom" | "left"
 }
 
-export function ActionButton({ label, icon: Icon, tone = "neutral", shortcut, href, pressed, text, iconOnly, className, disabled, ...props }: ActionButtonProps) {
+export function ActionButton({ label, icon: Icon, tone = "neutral", shortcut, href, pressed, text, iconOnly, side, className, disabled, ...props }: ActionButtonProps) {
   const node = useRef<HTMLButtonElement & HTMLAnchorElement>(null)
   const bound = isHotkey(shortcut)
   useHotkey(bound ? shortcut : undefined, () => node.current?.click(), { enabled: bound && !disabled })
@@ -89,7 +91,7 @@ export function ActionButton({ label, icon: Icon, tone = "neutral", shortcut, hr
   return (
     <Tooltip>
       <TooltipTrigger asChild>{button}</TooltipTrigger>
-      <TooltipContent>
+      <TooltipContent {...(side ? { side } : {})}>
         {label}
         <Keys chord={shortcut ?? (href ? "Enter" : "Enter / Space")} />
       </TooltipContent>
@@ -97,7 +99,7 @@ export function ActionButton({ label, icon: Icon, tone = "neutral", shortcut, hr
   )
 }
 
-/** The bar of a detail pane: pinned to its top edge while the pane scrolls, flush with its sides. */
+/** The bar of a detail: a row of keycaps at the top of its slide-over, beside the close button. */
 export function ActionBar({ children, className }: { children: ReactNode; className?: string }) {
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0
@@ -115,7 +117,7 @@ export function ActionBar({ children, className }: { children: ReactNode; classN
       role="toolbar"
       aria-label="Actions"
       onKeyDown={onKeyDown}
-      className={cn("sticky -top-5 z-10 -mx-5 -mt-5 flex min-h-12 flex-wrap items-center gap-1 border-b border-[var(--glass-edge)] sticky-glass px-4 py-2 [&>[data-tone=danger]:not(:first-child)]:ml-auto", className)}
+      className={cn("cs-ab", className)}
     >
       {children}
     </div>

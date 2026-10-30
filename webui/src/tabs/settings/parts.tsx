@@ -14,7 +14,7 @@ export interface ChoiceItem {
 /** A setting as a row: its name and help on the left, the control on the right (or below, `stacked`). */
 export function Field({ label, help, children, stacked }: { label: string; help?: string; children: ReactNode; stacked?: boolean }) {
   return (
-    <div className={stacked ? "grid gap-1" : "grid grid-cols-[minmax(0,1fr)_minmax(0,18rem)] items-center gap-4"}>
+    <div className={stacked ? "grid gap-1" : "grid grid-cols-[minmax(0,1fr)_minmax(0,332px)] items-center gap-4"}>
       <div className="min-w-0 break-words">
         <div className="break-words text-[0.8125rem] font-medium">{label}</div>
         {help ? <p className="break-words text-xs text-muted-foreground">{help}</p> : null}
