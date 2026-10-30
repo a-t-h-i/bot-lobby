@@ -287,8 +287,9 @@ export function MockupLightbox({ drawer, at, onAt }: { drawer: Drawer; at: numbe
       <div className="cs-shbd" onClick={() => onAt(-1)} />
       <div
         ref={card}
-        role="dialog"
-        aria-modal="true"
+        // Only a dialog while open: a closed one left in the page would hold back every shortcut.
+        role={open ? "dialog" : undefined}
+        aria-modal={open ? "true" : undefined}
         aria-label={option ? `Mockup: ${plainLabel(option.label)}` : "Mockup"}
         tabIndex={-1}
         className="cs-mxc"

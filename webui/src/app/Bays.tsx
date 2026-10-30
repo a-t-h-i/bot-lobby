@@ -124,7 +124,38 @@ export function useHoverBay(linger: number) {
     setHover(true)
     timer.current = window.setTimeout(() => setHover(false), linger)
   }, [linger])
+  // A touch has no hover: a tap on the closed bay opens it, a tap outside it (or on a tab in it) closes it.
+  const touchAway = useRef<(() => void) | undefined>(undefined)
+  useEffect(() => () => touchAway.current?.(), [])
+  const onTouch = (event: React.PointerEvent) => {
+    if (event.pointerType !== "touch") return
+    const wrap = event.currentTarget as HTMLElement
+    if (!hover) {
+      window.clearTimeout(timer.current)
+      setHover(true)
+      touchAway.current?.()
+      const away = (down: PointerEvent) => {
+        if (wrap.contains(down.target as Node)) return
+        window.clearTimeout(timer.current)
+        setHover(false)
+        touchAway.current?.()
+      }
+      document.addEventListener("pointerdown", away, true)
+      // The tap that opened the bay must not also press whatever opened under the finger.
+      const swallow = (click: Event) => {
+        click.preventDefault()
+        click.stopPropagation()
+      }
+      wrap.addEventListener("click", swallow, { capture: true, once: true })
+      window.setTimeout(() => wrap.removeEventListener("click", swallow, true), 500)
+      touchAway.current = () => {
+        document.removeEventListener("pointerdown", away, true)
+        touchAway.current = undefined
+      }
+    } else if ((event.target as HTMLElement).closest("[role='tab']")) leave()
+  }
   const handlers = {
+    onPointerDown: onTouch,
     onPointerEnter: (event: React.PointerEvent) => {
       if (event.pointerType !== "touch") enter()
     },
