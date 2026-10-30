@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PRESETS, cleanVars, paletteCss, parseTheme, safeValue, swatch } from "../src/webui/palette-core.ts";
+import { PRESETS, paletteCss, parseTheme, safeValue, swatch } from "../src/webui/palette-core.ts";
 
 const TWEAKCN = `
 :root {
@@ -86,47 +86,10 @@ test("the style sheet carries the theme, fills in the page's own variables, and 
   assert.doesNotMatch(css, /url\(/);
 });
 
-test("the built-in themes: the default sets nothing, the others set both modes, and each has a preview", () => {
+test("the only built-in theme is the page's own, which sets nothing and has a preview", () => {
+  assert.deepEqual(PRESETS.map((preset) => preset.id), ["mist"]);
   assert.equal(paletteCss(PRESETS[0]!), "");
-  assert.deepEqual(PRESETS.map((preset) => preset.id), ["mist", "blossom", "grove", "ocean", "ember", "iris", "slate", "sand", "rosewood", "aurora", "midnight", "graphite", "lagoon", "dune", "plum", "moss", "crimson"]);
-  assert.equal(new Set(PRESETS.map((preset) => preset.id)).size, 17);
-  for (const preset of PRESETS.slice(1)) {
-    assert.ok(preset.light && preset.dark, preset.id);
-    assert.ok(safeValue(preset.light.primary!));
-    assert.match(paletteCss(preset), /--primary:/);
-    assert.deepEqual(cleanVars(preset.light), preset.light);
-    assert.deepEqual(cleanVars(preset.dark), preset.dark);
-    const parsed = parseTheme(paletteCss(preset));
-    assert.deepEqual(parsed, { light: preset.light, dark: preset.dark }, `${preset.id} CSS import roundtrip`);
-    for (const mode of [false, true]) assert.ok(swatch(preset, mode).primary, `${preset.id} ${mode}`);
-  }
-});
-
-function luminance(hex: string): number {
-  const channels = hex.slice(1).match(/../g)!.map((part) => parseInt(part, 16) / 255);
-  const [r, g, b] = channels.map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
-  return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
-}
-
-function contrast(a: string, b: string): number {
-  const values = [luminance(a), luminance(b)];
-  return (Math.max(...values) + 0.05) / (Math.min(...values) + 0.05);
-}
-
-test("the complementary palettes have AA text and contrasting focus rings in both modes", () => {
-  const textPairs = [
-    ["foreground", "background"], ["card-foreground", "card"], ["popover-foreground", "popover"],
-    ["primary-foreground", "primary"], ["secondary-foreground", "secondary"],
-    ["muted-foreground", "muted"], ["muted-foreground", "background"], ["muted-foreground", "card"],
-    ["accent-foreground", "accent"], ["primary", "background"],
-  ];
-  const variants = PRESETS.slice(6).flatMap((preset) => [
-    { id: `${preset.id} light`, vars: preset.light! }, { id: `${preset.id} dark`, vars: preset.dark! },
-  ]);
-  for (const { id, vars } of variants) {
-    for (const [text, surface] of textPairs) assert.ok(contrast(vars[text!]!, vars[surface!]!) >= 4.5, `${id}: ${text} on ${surface}`);
-    for (const surface of ["background", "card", "muted", "accent"]) assert.ok(contrast(vars.ring!, vars[surface]!) >= 3, `${id}: ring on ${surface}`);
-  }
+  for (const mode of [false, true]) assert.ok(swatch(PRESETS[0]!, mode).primary);
 });
 
 test("minified CSS with the blocks touching each other still gives both modes", () => {

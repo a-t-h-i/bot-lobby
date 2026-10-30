@@ -16,7 +16,7 @@
   --faint: color-mix(in srgb, var(--muted-foreground) 62%, var(--background));
   --hover: color-mix(in srgb, var(--foreground) 5%, var(--card));
   --well: color-mix(in srgb, var(--foreground) 11%, var(--card));
-  --sunk: color-mix(in srgb, var(--page) 92%, #2a2a50);
+  --sunk: color-mix(in srgb, var(--page) 93%, #3d3929);
   --ok: #17935a;
   --warn: #b26a00;
   --bad: #cc3838;
@@ -238,13 +238,13 @@
 .chat-prose { font-size: 14px; line-height: 1.5; }
 .chat-bubble.cs-umsg { position: relative; max-width: 70%; margin-right: 9px; padding: 8px 14px; border-radius: 0; background: none; box-shadow: none; color: var(--foreground); font-size: 14px; line-height: 1.5; }
 .cs-umsg :is(.cs-ue, .cs-uf) { position: absolute; inset: 0; display: block; pointer-events: none; }
-.cs-umsg .cs-ue { --shape: var(--edge); }
-.cs-umsg .cs-uf { --shape: var(--fill); }
+.cs-umsg .cs-ue { --shape: var(--bubble); }
+.cs-umsg .cs-uf { --shape: var(--bubble); }
 .cs-umsg .cs-ub { position: absolute; inset: 0; border-radius: 18px 18px 6px 18px; background: var(--shape); }
 /* The tail: an SVG curve that leaves the bubble's straight right edge tangentially and ends in a rounded tip. */
 .cs-umsg .cs-ut { position: absolute; right: -9px; bottom: 0; width: 22px; height: 16px; overflow: visible; pointer-events: none; }
-.cs-ut-edge { fill: none; stroke: var(--edge); stroke-width: 2; stroke-linejoin: round; stroke-linecap: butt; }
-.cs-ut-fill { fill: var(--fill); }
+.cs-ut-edge { fill: none; stroke: var(--bubble); stroke-width: 2; stroke-linejoin: round; stroke-linecap: butt; }
+.cs-ut-fill { fill: var(--bubble); }
 .cs-umsg .cs-ue .cs-ub { box-shadow: 0 0 0 1px var(--shape); }
 .cs-umsg .cs-ux { position: relative; min-width: 0; }
 .cs-umsg[data-new] { transform-origin: 100% 100%; animation: cs-um-pop 391ms cubic-bezier(0.34, 1.1, 0.5, 1) both; }
