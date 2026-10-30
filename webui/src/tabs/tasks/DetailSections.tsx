@@ -7,17 +7,16 @@
  * Waiting on, QA risk (Jev's read of the built change) and Recent runs. The
  * plan text and steps arrive with `tasks.get`.
  */
-import { useEffect, useId, useState } from "react"
-import { CheckCircle2, ChevronDown, ChevronRight, Circle, CircleSlash } from "lucide-react"
+import { useEffect, useId, useState, type CSSProperties } from "react"
+import { ChevronDown, ChevronRight } from "lucide-react"
 import type { TaskDetail as TaskDetailData } from "@protocol"
 import { executionWords } from "@/lib/phaseTiming"
 import { useElapsed } from "@/lib/useElapsed"
-import { cn } from "@/lib/utils"
 import { Markdown } from "@/ui/Markdown"
 import { Section } from "@/ui/Section"
-import { agentName, sourceColor, sourceLabel } from "@/tabs/lobby/types"
-import { AgentIcon } from "@/ui/AgentIcon"
-import { WorkingMark } from "@/ui/WorkingMark"
+import { agentName, sourceLabel } from "@/tabs/lobby/types"
+import { AgentIcon, agentColor } from "@/ui/AgentIcon"
+import { MarkDot } from "@/ui/task-facts"
 import { QA_RISK_WORDS, qaRiskNote } from "./words"
 import { SkipStep } from "./SkipStep"
 
@@ -35,16 +34,6 @@ function StepTime({ step, stopped }: { step: StepData; stopped: boolean }) {
   return <span className="tabular-nums">{executionWords((step.workedMs ?? 0) + elapsed)}</span>
 }
 
-/** The mark of a step under way: a dot that breathes while a worker is on it. */
-function ActiveMark() {
-  return (
-    <span aria-hidden="true" className="relative mt-[0.3125rem] grid size-4 shrink-0 place-items-center">
-      <span className="absolute size-2.5 rounded-full bg-primary/30 motion-safe:animate-status-ping" />
-      <span className="size-2 rounded-full bg-primary" />
-    </span>
-  )
-}
-
 type StepAgent = NonNullable<StepData["agents"]>[number]
 
 /** What an agent was told, without the `Step 2:` its brief opens with (the row is under that step already). */
@@ -53,16 +42,9 @@ export function briefLine(instruction: string): string {
   return first.replace(/^steps?\s+\d+(?:\s*[-–]\s*\d+)?\s*[:.\-–]\s*/i, "").replace(/^\*\*?goal\*\*?\s*[:\-–]\s*/i, "")
 }
 
-/** An agent's mark: its icon on a tile in its colour. */
-function AgentTile({ name, className }: { name: string; className?: string }) {
-  return (
-    <span aria-hidden="true" className={cn("grid size-5 shrink-0 place-items-center rounded-md border border-border bg-card", sourceColor(name), className)}>
-      <AgentIcon source={name} className="size-3" />
-    </span>
-  )
-}
+const nameOf = (agent: StepAgent) => agentName({ domain: agent.domain } as Parameters<typeof agentName>[0])
 
-/** The step's agents right now, children beneath their parent, each with what it was told and how long it has worked. */
+/** The step's agents right now as a thin tree, children beneath their parent: a branch that flows in the agent's colour, its tile, what it was told and how long it has worked. */
 function StepAgents({ id, agents, stepText }: { id: string; agents: StepAgent[]; stepText: string }) {
   const [now, setNow] = useState(Date.now)
   useEffect(() => {
@@ -72,27 +54,27 @@ function StepAgents({ id, agents, stepText }: { id: string; agents: StepAgent[];
   const top = agents.filter((agent) => !agent.parentRunId || !agents.some((parent) => parent.runId === agent.parentRunId))
   const ordered = top.flatMap((parent) => [parent, ...agents.filter((child) => child.parentRunId === parent.runId)])
   return (
-    <ul id={id} aria-label="Agents on this step" className="mt-2 flex flex-col overflow-hidden rounded-lg border border-border bg-card">
+    <ul id={id} aria-label="Agents on this step" className="cs-arows">
       {ordered.map((agent) => {
-        const name = agentName({ domain: agent.domain } as Parameters<typeof agentName>[0])
+        const name = nameOf(agent)
         const child = Boolean(agent.parentRunId) && agents.some((parent) => parent.runId === agent.parentRunId)
         const started = Date.parse(agent.startedAt)
         const brief = briefLine(agent.instruction)
         const own = brief && brief.toLowerCase() !== stepText.trim().toLowerCase() ? brief : ""
         return (
-          <li key={agent.runId} className="flex min-w-0 items-center gap-2.5 border-b border-border px-3 py-2 text-xs last:border-b-0">
-            {child ? <span aria-hidden="true" className="ml-1.5 h-4 w-3 shrink-0 rounded-bl-md border-b border-l border-border" /> : null}
-            <AgentTile name={name} />
-            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="flex min-w-0 items-center gap-1.5">
-                <span className={cn("font-medium", sourceColor(name))}>{sourceLabel(name)}</span>
+          <li key={agent.runId} className="cs-arow" data-child={child ? "true" : undefined} style={{ "--ac": agentColor(name) } as CSSProperties}>
+            <span aria-hidden="true" className="cs-bt" />
+            <span aria-hidden="true" className="cs-be" />
+            <span aria-hidden="true" className="cs-tile"><AgentIcon source={name} /></span>
+            <span className="cs-ab2">
+              <span className="cs-ab2h">
+                <b>{sourceLabel(name)}</b>
                 {child ? <span className="text-muted-foreground">child</span> : null}
-                <WorkingMark className="size-3 text-muted-foreground" />
-                <span className="text-muted-foreground">working</span>
+                <span className="cs-live">working</span>
               </span>
-              {own ? <span className="truncate text-muted-foreground" title={agent.instruction}>{own}</span> : null}
+              {own ? <span className="cs-br" title={agent.instruction}>{own}</span> : null}
             </span>
-            {Number.isFinite(started) ? <span className="shrink-0 tabular-nums text-muted-foreground">{executionWords(Math.max(0, now - started))}</span> : null}
+            {Number.isFinite(started) ? <span className="cs-tm">{executionWords(Math.max(0, now - started))}</span> : null}
           </li>
         )
       })}
@@ -100,27 +82,25 @@ function StepAgents({ id, agents, stepText }: { id: string; agents: StepAgent[];
   )
 }
 
-/** The agents on a step at a glance: their icons, how many, and how long the step has been worked on. */
+/** The agents on a step at a glance: their round tiles pulsing, how many, and how long the step has been worked on. */
 function AgentsBadge({ agents, count, step, stopped }: { agents: StepAgent[]; count: number; step: StepData; stopped: boolean }) {
-  const names = [...new Set(agents.map((agent) => agentName({ domain: agent.domain } as Parameters<typeof agentName>[0])))].slice(0, 3)
+  const names = [...new Set(agents.map(nameOf))].slice(0, 3)
   return (
     <>
       {names.length > 0 ? (
-        <span className="flex -space-x-1.5">
-          {names.map((name) => <AgentTile key={name} name={name} className="size-[1.125rem] ring-2 ring-card" />)}
+        <span className="cs-avs" aria-hidden="true">
+          {names.map((name) => <i key={name} style={{ "--ac": agentColor(name) } as CSSProperties}><AgentIcon source={name} /></i>)}
         </span>
       ) : null}
-      <span>
+      <span className="cs-cn1">
         {count} {count === 1 ? "agent" : "agents"}
         <span className="sr-only"> working</span>
       </span>
-      <span aria-hidden="true" className="text-muted-foreground/60">·</span>
+      <span aria-hidden="true" className="cs-dm">·</span>
       <StepTime step={step} stopped={stopped} />
     </>
   )
 }
-
-const BADGE = "inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 pr-2 pl-1 text-xs font-medium text-primary"
 
 /** When a step was skipped, as "16 Oct, 22:49". */
 function skippedAt(at: string): string {
@@ -133,18 +113,18 @@ function skippedAt(at: string): string {
 function SkippedStep({ step, index }: { step: StepData; index: number }) {
   const when = step.skip ? skippedAt(step.skip.at) : ""
   return (
-    <li className="flex min-w-0 flex-col" data-step="skipped">
-      <div className="flex min-w-0 items-start gap-2.5 text-sm">
-        <CircleSlash aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-        <span className="shrink-0 text-xs leading-5 text-muted-foreground tabular-nums">{index + 1}.</span>
-        <span className="min-w-0 break-words text-muted-foreground line-through decoration-muted-foreground/50">{step.text}</span>
-        <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">skipped</span>
+    <li className="cs-stp" data-k="skip" data-step="skipped">
+      <div className="cs-stpa">
+        <MarkDot mark="skip" />
+        <span className="cs-n">{index + 1}.</span>
+        <span className="cs-tx">{step.text}</span>
+        <span className="cs-skd">skipped</span>
       </div>
       {step.skip ? (
-        <p className="step-skip-reason mt-1 ml-[3.25rem] border-l-2 border-border pl-2.5 text-xs break-words text-muted-foreground">
-          <span className="font-medium text-foreground/80">Why: </span>
+        <p className="cs-why step-skip-reason">
+          <b>Why: </b>
           {step.skip.reason}
-          {when ? <span className="text-muted-foreground/70"> · {when}</span> : null}
+          {when ? <span className="text-[var(--faint)]"> · {when}</span> : null}
         </p>
       ) : null}
     </li>
@@ -158,40 +138,29 @@ function Step({ step, index, stopped, skip }: { step: StepData; index: number; s
   const [open, setOpen] = useState(false)
   const listId = useId()
   const done = step.status === "done"
-  const markClass = done ? "text-success" : step.status === "current" ? "text-primary" : "text-muted-foreground"
-  const Icon = done ? CheckCircle2 : Circle
   if (step.status === "skipped") return <SkippedStep step={step} index={index} />
+  const next = step.status === "current" && !stopped
+  const kind = active ? "now" : done ? "done" : next ? "next" : "todo"
   return (
-    <li className="group/step flex min-w-0 flex-col" data-step={active ? "active" : step.status}>
-      <div className="flex min-w-0 items-start gap-2.5 text-sm">
-        {active ? <ActiveMark /> : <Icon aria-hidden="true" className={`mt-0.5 size-4 shrink-0 ${markClass}`} />}
-        <span className="shrink-0 text-xs leading-5 text-muted-foreground tabular-nums">{index + 1}.</span>
-        <span className={cn("min-w-0 break-words", active || step.status === "current" ? "text-foreground" : "text-muted-foreground")}>{step.text}</span>
-        {active && agents.length > 0 ? (
-          <button
-            type="button"
-            aria-expanded={open}
-            aria-controls={listId}
-            onClick={() => setOpen((value) => !value)}
-            className={cn(BADGE, "-my-0.5 transition-colors outline-none hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring")}
-          >
+    <li className="cs-stp" data-k={kind} data-step={active ? "active" : step.status}>
+      <div className="cs-stpa">
+        <MarkDot mark={active ? "now" : done ? "done" : "open"} />
+        <span className="cs-n">{index + 1}.</span>
+        <span className="cs-tx">{step.text}</span>
+        {active ? (
+          <button type="button" aria-expanded={agents.length > 0 ? open : undefined} aria-controls={agents.length > 0 ? listId : undefined} disabled={agents.length === 0} onClick={() => setOpen((value) => !value)} className="cs-abdg">
             <AgentsBadge agents={agents} count={count} step={step} stopped={stopped} />
-            <ChevronDown aria-hidden="true" className={cn("size-3 transition-transform duration-200", open && "rotate-180")} />
+            {agents.length > 0 ? <ChevronDown aria-hidden="true" className="size-3" /> : null}
             <span className="sr-only"> (being worked on now)</span>
           </button>
-        ) : active ? (
-          <span className={cn(BADGE, "-my-0.5")}>
-            <AgentsBadge agents={agents} count={count} step={step} stopped={stopped} />
-            <span className="sr-only"> (being worked on now)</span>
-          </span>
-        ) : step.status === "current" && !stopped ? (
-          <span className="shrink-0 rounded-md bg-accent px-2 py-0.5 text-xs font-medium">
+        ) : next ? (
+          <span className="cs-nx">
             next<span className="sr-only"> (the step up next)</span>
           </span>
         ) : null}
         {skip && !done && !stopped ? <SkipStep taskId={skip.taskId} index={index} text={step.text} onSkipped={skip.onSkipped} /> : null}
       </div>
-      {open && agents.length > 0 ? <div className="pl-[3.25rem]"><StepAgents id={listId} agents={agents} stepText={step.text} /></div> : null}
+      {open && agents.length > 0 ? <StepAgents id={listId} agents={agents} stepText={step.text} /> : null}
     </li>
   )
 }
@@ -201,7 +170,7 @@ function StepsSection({ steps, stopped, skip }: { steps: TaskDetailData["steps"]
   const skipped = steps.filter((step) => step.status === "skipped").length
   return (
     <Section title="Steps" {...(skipped ? { right: `${skipped} skipped` } : {})}>
-      <ol className="flex flex-col gap-2" aria-label="Steps">
+      <ol className="cs-stl" aria-label="Steps">
         {steps.map((step, index) => (
           <Step key={`${index}-${step.text}`} step={step} index={index} stopped={stopped} skip={skip} />
         ))}
@@ -221,13 +190,13 @@ function FullPlan({ text }: { text: string }) {
         aria-expanded={open}
         aria-controls={body}
         onClick={() => setOpen((now) => !now)}
-        className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        className="cs-fold w-fit"
       >
-        <ChevronRight aria-hidden="true" className={cn("size-4 transition-transform duration-200 ease-snap", open && "rotate-90")} />
+        <ChevronRight aria-hidden="true" className="size-4" />
         {open ? "Hide the details" : "Read the details of each step"}
       </button>
       {open ? (
-        <div id={body}>
+        <div id={body} className="cs-fpb">
           <Markdown text={text} />
         </div>
       ) : null}
@@ -264,7 +233,7 @@ function Amendments({ amendments }: { amendments: string[] }) {
   if (amendments.length === 0) return null
   return (
     <Section title="Amendments">
-      <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-muted-foreground">
+      <ul className="cs-bl">
         {amendments.map((amendment) => (
           <li key={amendment} className="break-words">
             {amendment}
@@ -280,18 +249,18 @@ function QaRisk({ risk }: { risk: NonNullable<TaskDetailData["qaRisk"]> }) {
   const words = QA_RISK_WORDS[risk.risk]
   return (
     <Section title="QA risk" right={qaRiskNote(risk)}>
-      <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm" data-qa-risk={risk.risk}>
-        <span className={cn("rounded-md px-2 py-0.5 text-xs font-medium", words.tone)}>{words.label}</span>
+      <p className="cs-qa1" data-qa-risk={risk.risk}>
+        <span className="cs-bdg" data-t={words.tone}>{words.label}</span>
         <span className="text-muted-foreground">{words.depth}</span>
       </p>
       {risk.focusAreas.length > 0 ? (
-        <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-muted-foreground" aria-label="What QA looks at first">
+        <ul className="cs-bl" aria-label="What QA looks at first">
           {risk.focusAreas.map((area) => (
             <li key={area} className="break-words">{area}</li>
           ))}
         </ul>
       ) : null}
-      <p className="text-xs break-words text-muted-foreground">
+      <p className="cs-qaf">
         {risk.riskFactors.join(" · ")}
         {risk.qaRequired ? ` · existing tests ${risk.existingTestsLikelySufficient ? "likely enough" : "likely not enough"}` : ""}
       </p>
@@ -303,7 +272,7 @@ function Runs({ runs }: { runs: string[] }) {
   if (runs.length === 0) return null
   return (
     <Section title="Recent runs">
-      <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
+      <ul className="cs-bl cs-plain">
         {runs.map((run, index) => (
           <li key={`${index}-${run}`} className="break-words">
             {run}

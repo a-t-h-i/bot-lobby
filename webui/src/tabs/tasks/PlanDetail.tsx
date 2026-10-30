@@ -59,7 +59,8 @@ function PlanSections({ planId }: { planId: string }) {
   )
 }
 
-export function PlanDetail({ row, onGone }: { row: TaskRow; onGone: () => void }) {
+/** A saved plan's action bar, at the top of its slide-over. */
+export function PlanActions({ row, onGone }: { row: TaskRow; onGone: () => void }) {
   const start = async (where: "here" | "session") => {
     if (await act("plans.start", { planId: row.id, where })) onGone()
   }
@@ -67,28 +68,33 @@ export function PlanDetail({ row, onGone }: { row: TaskRow; onGone: () => void }
     if (await act("plans.discard", { planId: row.id })) onGone()
   }
   return (
-    <article className="flex min-w-0 flex-col gap-4" aria-label={row.title}>
-      <ActionBar>
-        <ActionButton label="Start here" icon={Play} tone="primary" shortcut="S" onClick={() => void start("here")} />
-        <ActionButton label="Start in a new session" text="New session" icon={SquareArrowOutUpRight} shortcut="N" onClick={() => void start("session")} />
-        <ConfirmButton
-          icon={Trash2}
-          label="Discard"
-          shortcut="Delete"
-          title={`Discard "${row.title}"?`}
-          description="The saved plan is removed from the list. This cannot be undone."
-          confirmLabel="Discard"
-          variant="destructive"
-          onConfirm={() => void discard()}
-        />
-      </ActionBar>
-      <header className="flex flex-col gap-1">
-        <h2 className="flex items-start gap-2.5 text-lg font-medium">
-          <CheckMark check="open" className="mt-1.5" />
+    <ActionBar>
+      <ActionButton label="Start here" icon={Play} tone="primary" shortcut="S" onClick={() => void start("here")} />
+      <ActionButton label="Start in a new session" text="New session" icon={SquareArrowOutUpRight} shortcut="N" onClick={() => void start("session")} />
+      <ConfirmButton
+        icon={Trash2}
+        label="Discard"
+        shortcut="Delete"
+        title={`Discard "${row.title}"?`}
+        description="The saved plan is removed from the list. This cannot be undone."
+        confirmLabel="Discard"
+        variant="destructive"
+        onConfirm={() => void discard()}
+      />
+    </ActionBar>
+  )
+}
+
+export function PlanDetail({ row }: { row: TaskRow }) {
+  return (
+    <article className="cs-dt flex min-w-0 flex-col" aria-label={row.title}>
+      <header>
+        <h2>
+          <CheckMark check="open" />
           <span className="min-w-0 break-words">{row.title}</span>
         </h2>
-        <p className="text-sm text-muted-foreground">pending{row.age ? ` · saved ${agoWords(row.age)}` : ""}</p>
-        <p className="text-xs text-muted-foreground break-all">{row.id}</p>
+        <p className="cs-sub"><span className="cs-bdg">planned</span>{row.age ? <span>saved {agoWords(row.age)}</span> : null}</p>
+        <p className="cs-ids">{row.id}</p>
       </header>
       <PlanSections planId={row.id} />
     </article>

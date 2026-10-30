@@ -15,12 +15,12 @@ export const SECTION_TITLES: Record<TaskSection, string> = {
 /** What a screen reader hears where the box is drawn. */
 export const CHECK_WORDS: Record<CheckState, string> = { open: "open", done: "done", dropped: "abandoned" }
 
-/** A QA risk level's words: the pill, how deep QA goes, and its tone. */
+/** A QA risk level's words: the badge, how deep QA goes, and its tone (`cs-bdg` `data-t`). */
 export const QA_RISK_WORDS: Record<"none" | "low" | "medium" | "high", { label: string; depth: string; tone: string }> = {
-  none: { label: "None", depth: "nothing that runs changed: the engine's checks decide, no QA agent", tone: "bg-accent text-muted-foreground" },
-  low: { label: "Low", depth: "a light check: the diff, the nearest tests, done once confident", tone: "bg-success/10 text-success" },
-  medium: { label: "Medium", depth: "a standard check: the acceptance criteria and realistic regressions", tone: "bg-warning/10 text-warning" },
-  high: { label: "High", depth: "a deep, adversarial review: invariants, recovery and everything the change reaches", tone: "bg-destructive/10 text-destructive" },
+  none: { label: "None", depth: "nothing that runs changed: the engine's checks decide, no QA agent", tone: "" },
+  low: { label: "Low", depth: "a light check: the diff, the nearest tests, done once confident", tone: "ok" },
+  medium: { label: "Medium", depth: "a standard check: the acceptance criteria and realistic regressions", tone: "warn" },
+  high: { label: "High", depth: "a deep, adversarial review: invariants, recovery and everything the change reaches", tone: "bad" },
 }
 
 /** `Jev · 0-1 new tests at most`, or `rules · no QA agent`. */

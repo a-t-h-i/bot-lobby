@@ -9,7 +9,6 @@ import { SkipForward } from "lucide-react"
 import { call } from "@/lib/api"
 import { toast } from "@/lib/toast"
 import { PRIORITY, useOverlaySlot } from "@/lib/overlay"
-import { cn } from "@/lib/utils"
 import { Textarea } from "@/components/ui/textarea"
 import {
   AlertDialog,
@@ -71,10 +70,7 @@ export function SkipStep({ taskId, index, text, onSkipped }: Props) {
         type="button"
         aria-label={`Skip step ${index + 1}`}
         onClick={() => change(true)}
-        className={cn(
-          "step-skip -my-0.5 ml-auto inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground outline-none",
-          "transition-[opacity,background-color,color,scale] duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.96] motion-reduce:active:scale-100",
-        )}
+        className="cs-skp step-skip"
       >
         <SkipForward aria-hidden="true" className="size-3.5" />
         Skip

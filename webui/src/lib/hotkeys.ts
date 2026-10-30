@@ -5,7 +5,7 @@
  * browser, the message box or the page's own `j`/`k`/`g` keys. Alt and Ctrl
  * chords stay with `useLobbyKeys`.
  */
-import { useEffect, useRef } from "react"
+import { createContext, useContext, useEffect, useRef, type RefObject } from "react"
 import { hasOverlay } from "@/lib/overlay"
 import { isTyping } from "@/prompts/nav"
 
@@ -29,6 +29,16 @@ function popupOpen(): boolean {
   return hasOverlay() || Boolean(document.querySelector("[role='dialog'], [role='alertdialog'], [role='menu'], [role='listbox']"))
 }
 
+/**
+ * Set by a slide-over around what it holds: its buttons' keys work while it is the top pop-up
+ * (`current` is true while it holds the overlay slot) and no confirmation, menu or list box is open over it.
+ */
+export const SheetScope = createContext<RefObject<boolean> | null>(null)
+
+function blockedInSheet(top: RefObject<boolean>): boolean {
+  return !top.current || Boolean(document.querySelector("[role='alertdialog'], [role='menu'], [role='listbox']"))
+}
+
 interface HotkeyOptions {
   /** Off while false (a disabled button, a form that is open). */
   enabled?: boolean
@@ -43,6 +53,7 @@ interface HotkeyOptions {
 export function useHotkey(spec: string | undefined, run: () => void, { enabled = true, inDialog = false }: HotkeyOptions = {}): void {
   const latest = useRef(run)
   latest.current = run
+  const sheet = useContext(SheetScope)
   useEffect(() => {
     if (!enabled || !spec) return
     const onKeyDown = (event: KeyboardEvent) => {
@@ -50,11 +61,11 @@ export function useHotkey(spec: string | undefined, run: () => void, { enabled =
       if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
       if (!matches(event, spec)) return
       if (isTyping(event.target)) return
-      if (!inDialog && popupOpen()) return
+      if (!inDialog && (sheet ? blockedInSheet(sheet) : popupOpen())) return
       event.preventDefault()
       latest.current()
     }
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [spec, enabled, inDialog])
+  }, [spec, enabled, inDialog, sheet])
 }

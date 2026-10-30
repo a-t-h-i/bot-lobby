@@ -340,7 +340,7 @@
 .cs-rl.cs-first { margin-top: 0; }
 
 /* Page headings and the flat surfaces pages are built of. */
-.cs-pg { width: 100%; margin-inline: auto; padding: 56px 24px 0; box-sizing: border-box; }
+.cs-pg { width: 100%; margin-inline: auto; padding: 46px 24px 0; box-sizing: border-box; }
 .cs-pgh { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 0 0 18px; }
 .cs-hd1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; color: var(--foreground); }
 .cs-hd2 { margin: 4px 0 0; font-size: 13px; color: var(--muted-foreground); }
@@ -446,3 +446,162 @@
 .cs-mxf { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .cs-mxf .bubble-glyph { width: 22px; height: 22px; }
 .cs-mxwho { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--muted-foreground); }
+
+/* ---------------------------------------------------------------------------------------------------------------
+ * The shared controls in this design's dress: every Button is a keycap (outlined ones on --fill, the main one
+ * tinted with the accent, a destructive one in --bad), ghost ones stay bare until pointed at, a key cap on a
+ * button is the small monospace `cs-kb`, switches are `cs-sw` and checkboxes `cs-cb`.
+ * ------------------------------------------------------------------------------------------------------------- */
+[data-slot="button"]:is([data-variant="outline"], [data-variant="soft"], [data-variant="secondary"], [data-variant="default"], [data-variant="destructive"]) { border-color: transparent; border-radius: 12px; background: var(--fill); box-shadow: var(--rs); color: var(--foreground); transition: box-shadow 76ms ease, background 76ms ease, transform 76ms ease, color 76ms ease; }
+[data-slot="button"]:is([data-variant="outline"], [data-variant="soft"], [data-variant="secondary"], [data-variant="default"], [data-variant="destructive"]):hover:not(:disabled) { background: var(--sunk); box-shadow: var(--ss), 0 0 0 1px var(--edge); }
+[data-slot="button"]:is([data-variant="outline"], [data-variant="soft"], [data-variant="secondary"]):is([aria-pressed="true"], [aria-expanded="true"]) { background: color-mix(in srgb, var(--primary) 9%, var(--sunk)); box-shadow: var(--ss), 0 0 0 1px color-mix(in srgb, var(--primary) 34%, transparent); }
+[data-slot="button"][data-variant="default"] { color: var(--primary); background: color-mix(in srgb, var(--primary) 11%, var(--fill)); }
+[data-slot="button"][data-variant="default"]:hover:not(:disabled) { background: color-mix(in srgb, var(--primary) 12%, var(--sunk)); }
+[data-slot="button"][data-variant="destructive"], [data-slot="button"][data-tone="danger"] { color: var(--bad); }
+[data-slot="button"][data-variant="destructive"] svg, [data-slot="button"][data-tone="danger"] svg { color: currentColor; }
+[data-slot="button"][data-variant="ghost"] { border-radius: 10px; }
+[data-slot="button"][data-variant="ghost"]:hover:not(:disabled) { background: var(--hover); }
+[data-slot="button"]:is([data-size="sm"], [data-size="xs"], [data-size="icon-sm"], [data-size="icon-xs"]) { border-radius: 10px; }
+[data-slot="button"]:active:not(:disabled) { scale: none; transform: translateY(1px); }
+[data-slot="button"]:disabled { box-shadow: none; background: var(--sunk); }
+[data-slot="button"][data-variant="ghost"]:disabled { background: transparent; }
+[data-slot="button"] [data-slot="kbd"] { height: auto; min-width: 0; border: 0; padding: 1px 6px; border-radius: 6px; background: var(--sunk); color: var(--faint); font: 600 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* Switches and checkboxes (Radix): the thumb is the switch's own ::after, the tick scales in. */
+.cs-sw[data-state] { display: inline-block; }
+.cs-cb[data-state="checked"] { background: var(--primary); box-shadow: none; }
+.cs-cb[data-state="checked"] svg { transform: scale(1); }
+.cs-cb[data-state] { cursor: pointer; outline: none; position: relative; }
+.cs-cb[data-state]:focus-visible { box-shadow: 0 0 0 2px var(--ring); }
+.cs-cb[data-state]:disabled { opacity: 0.5; cursor: default; }
+.cs-cb[data-state]::before { content: ""; position: absolute; inset: -8px; }
+
+/* ---------------------------------------------------------------------------------------------------------------
+ * Pages: a scrolling column on the flat page, a title row, then the page's own content.
+ * ------------------------------------------------------------------------------------------------------------- */
+.cs-scroll { position: relative; flex: 1; min-height: 0; min-width: 0; overflow-x: hidden; overflow-y: auto; outline: none; }
+.cs-chk { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 6px 0 10px; border-radius: 11px; font: inherit; font-size: 12.5px; font-weight: 500; border: 0; background: var(--fill); box-shadow: var(--rs); color: var(--foreground); cursor: pointer; flex: none; outline: none; transition: box-shadow 76ms ease, background 76ms ease; }
+.cs-chk:hover { background: var(--sunk); box-shadow: var(--ss), 0 0 0 1px var(--edge); }
+.cs-chk:focus-visible { box-shadow: var(--rs), 0 0 0 2px var(--ring); }
+.cs-chk .cs-cn { min-width: 20px; height: 18px; padding: 0 6px; border-radius: 9px; display: inline-grid; place-items: center; background: var(--sunk); font-size: 11px; color: var(--muted-foreground); box-sizing: border-box; }
+
+/* Tasks: one table, a section label over the first row of each section; the detail is a slide-over. */
+.cs-pg.cs-ts { max-width: 880px; }
+.cs-tbh, .cs-trw { display: grid; grid-template-columns: 18px minmax(0, 1fr) 108px 52px 34px; column-gap: 14px; align-items: center; box-sizing: border-box; width: 100%; }
+.cs-tbh { height: 26px; padding: 0 10px; font-size: 11px; color: var(--faint); border-bottom: 1px solid var(--edge); }
+.cs-tbh span:nth-child(4), .cs-tbh span:nth-child(5), .cs-trw .cs-ttm, .cs-trw .cs-tag { text-align: right; }
+.cs-lst { list-style: none; margin: 0; padding: 0; }
+.cs-tsec { margin: 18px 0 2px; padding: 0 10px; font-size: 11.5px; font-weight: 600; color: var(--muted-foreground); display: flex; gap: 8px; align-items: baseline; }
+.cs-tsec b { font-weight: 500; color: var(--faint); }
+.cs-trw { appearance: none; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--edge) 55%, transparent); background: none; font: inherit; font-size: 13px; color: var(--foreground); text-align: left; height: 34px; padding: 0 10px; cursor: pointer; outline: none; transition: background 119ms ease; }
+.cs-trw:hover { background: color-mix(in srgb, var(--foreground) 3.5%, transparent); }
+.cs-trw:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); border-radius: 8px; }
+.cs-trw[aria-current="true"] { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.cs-trw .cs-mk { width: 16px; height: 16px; }
+.cs-trw .cs-tt1 { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.cs-trw .cs-t { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-trw .cs-t:is([data-k="done"], [data-k="arch"]) { color: var(--muted-foreground); }
+.cs-trw .cs-t[data-k="drop"] { color: var(--muted-foreground); text-decoration: line-through; text-decoration-color: var(--faint); }
+.cs-trw .cs-mt { flex: 1 1 0; min-width: 0; font-size: 12px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-trw .cs-mt[data-w="warn"] { color: var(--warn); }
+.cs-trw .cs-tpg { display: inline-flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.cs-trw :is(.cs-ttm, .cs-tag) { font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cs-shw.cs-tdw .cs-shp { width: min(640px, calc(100vw - 24px)); border-radius: 20px; }
+.cs-tdw .cs-shh { align-items: flex-start; padding: 14px 14px 6px 18px; gap: 8px; }
+.cs-tdw .cs-shb { padding: 8px 22px 28px; }
+@media (max-width: 720px) { .cs-tbh, .cs-trw { grid-template-columns: 18px minmax(0, 1fr) 34px; } .cs-tbh span:nth-child(3), .cs-tbh span:nth-child(4), .cs-trw .cs-tpg, .cs-trw .cs-ttm { display: none; } }
+
+/* A detail's action bar: keycaps and a bare Auto switch. */
+.cs-ab { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin: 0; }
+.cs-ab [data-slot="button"] { height: 30px; padding: 0 10px; font-size: 12.5px; border-radius: 11px; gap: 7px; }
+.cs-ab [data-slot="button"] svg { width: 14px; height: 14px; color: currentColor; }
+.cs-autol { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px 0 10px; border-radius: 11px; font-size: 12.5px; font-weight: 500; cursor: pointer; border: 0; background: none; color: var(--foreground); }
+.cs-autol:hover { background: var(--hover); }
+.cs-autol > svg { color: var(--muted-foreground); }
+.cs-autol [data-slot="kbd"] { border: 0; padding: 1px 6px; border-radius: 6px; background: var(--sunk); color: var(--faint); font: 600 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; height: auto; }
+
+/* A task's detail in its slide-over: the header, then sections under hairline labels. */
+.cs-sec:first-child > .cs-rl { margin-top: 4px; }
+.cs-dt h2 { margin: 0; display: flex; align-items: flex-start; gap: 10px; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.35; }
+.cs-dt h2 .cs-mk { margin-top: 2px; }
+.cs-dt .cs-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 10px 0 0; font-size: 12.5px; color: var(--muted-foreground); }
+.cs-dtl { appearance: none; border: 0; background: none; font: inherit; font-size: 12px; color: var(--faint); cursor: pointer; padding: 0 2px; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; }
+.cs-dtl:hover { color: var(--foreground); text-decoration-color: currentColor; }
+.cs-ids { margin: 8px 0 0; font-size: 12px; color: var(--faint); word-break: break-all; }
+.cs-prog { display: flex; align-items: center; gap: 10px; margin: 14px 0 0; font-size: 12.5px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.cs-sunkbox { padding: 14px 16px; border-radius: 18px; background: var(--sunk); }
+.cs-stl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.cs-stp { display: flex; flex-direction: column; min-width: 0; }
+.cs-stpa { display: flex; align-items: flex-start; gap: 10px; font-size: 13.5px; min-width: 0; }
+.cs-stpa .cs-mk { margin-top: 1px; }
+.cs-stpa .cs-n { font-size: 11.5px; color: var(--faint); line-height: 20px; font-variant-numeric: tabular-nums; min-width: 13px; }
+.cs-stpa .cs-tx { min-width: 0; line-height: 20px; flex: 0 1 auto; overflow-wrap: anywhere; color: var(--muted-foreground); }
+.cs-stp[data-k="skip"] .cs-tx { text-decoration: line-through; text-decoration-color: var(--faint); }
+.cs-stp[data-k="now"] .cs-tx { color: var(--foreground); font-weight: 500; }
+.cs-stp[data-k="next"] .cs-tx { color: var(--foreground); }
+.cs-nx, .cs-skd { height: 22px; padding: 0 9px; border-radius: 8px; display: inline-grid; place-items: center; font-size: 11.5px; font-weight: 600; background: var(--sunk); color: var(--foreground); margin-top: -1px; flex: none; }
+.cs-skd { color: var(--muted-foreground); }
+.cs-skp { margin-left: auto; appearance: none; border: 0; background: none; font: inherit; font-size: 12px; color: var(--faint); cursor: pointer; height: 22px; padding: 0 8px; border-radius: 8px; display: inline-flex; align-items: center; gap: 5px; flex: none; outline: none; }
+.cs-skp:hover { background: var(--hover); color: var(--foreground); }
+.cs-skp:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
+.cs-why { margin: 5px 0 0 41px; padding-left: 10px; border-left: 2px solid var(--sunk); font-size: 12px; color: var(--muted-foreground); line-height: 1.5; overflow-wrap: anywhere; }
+.cs-why b { color: var(--foreground); font-weight: 500; }
+/* The working agents on a step: a quiet inline indicator with pulsing round tiles, and a thin tree under it. */
+.cs-abdg { appearance: none; border: 0; font: inherit; display: inline-flex; align-items: center; gap: 8px; height: 22px; padding: 0 4px 0 0; margin-top: -1px; border-radius: 11px; font-size: 11.5px; font-weight: 500; color: var(--muted-foreground); background: none; cursor: pointer; font-variant-numeric: tabular-nums; white-space: nowrap; flex: none; outline: none; transition: color 119ms ease; }
+.cs-abdg:hover { color: var(--foreground); }
+.cs-abdg:focus-visible { box-shadow: 0 0 0 2px var(--ring); }
+.cs-abdg > svg { color: var(--faint); transition: transform 255ms var(--spring); }
+.cs-abdg[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.cs-abdg .cs-cn1 { color: var(--foreground); }
+.cs-abdg .cs-dm { color: var(--faint); }
+.cs-avs { display: inline-flex; padding-left: 6px; }
+.cs-avs i { width: 18px; height: 18px; border-radius: 50%; margin-left: -6px; background: var(--ac); box-shadow: 0 0 0 2px var(--fill); display: grid; place-items: center; color: #fff; animation: cs-agp 1870ms ease-out infinite; }
+.cs-avs i svg { width: 10px; height: 10px; }
+.cs-avs i + i { animation-delay: 595ms; }
+@keyframes cs-agp { 0% { box-shadow: 0 0 0 2px var(--fill), 0 0 0 2px color-mix(in srgb, var(--ac) 55%, transparent); } 70%, 100% { box-shadow: 0 0 0 2px var(--fill), 0 0 0 7px transparent; } }
+.cs-arows { list-style: none; margin: 0; padding: 0; }
+.cs-arow { display: flex; align-items: center; gap: 10px; margin: 0 0 0 8px; padding: 7px 0 7px 22px; font-size: 12px; position: relative; min-width: 0; }
+.cs-arow[data-child="true"] { margin-left: 28px; }
+.cs-arow .cs-tile { width: 20px; height: 20px; border-radius: 50%; }
+.cs-arow .cs-tile svg { width: 11px; height: 11px; }
+.cs-arow[data-child="true"] .cs-tile { box-shadow: 0 0 0 2px var(--fill); }
+.cs-arow .cs-ab2 { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.cs-arow .cs-ab2h { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.cs-arow .cs-ab2h b { font-weight: 600; }
+.cs-arow .cs-live { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--muted-foreground); }
+.cs-arow .cs-live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); animation: cs-mkp 1190ms ease-in-out infinite; }
+.cs-arow .cs-br { font-size: 12px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-arow .cs-tm { font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums; flex: none; }
+/* The animated branch: information flows from each agent along its elbow, then up the trunk to the step. */
+.cs-arow .cs-bt, .cs-arow .cs-be { position: absolute; display: block; background-color: var(--edge); border-radius: 1px; background-repeat: no-repeat; pointer-events: none; }
+.cs-arow .cs-bt { left: 0; top: 0; bottom: 0; width: 2px; background-image: linear-gradient(180deg, transparent, var(--ac), transparent); background-size: 100% 30px; background-position: 0 calc(100% + 30px); animation: cs-flowy 1445ms cubic-bezier(0.4, 0, 0.6, 1) infinite; animation-delay: 408ms; }
+.cs-arow .cs-be { left: 0; top: 17px; width: 19px; height: 2px; background-image: linear-gradient(90deg, transparent, var(--ac), transparent); background-size: 14px 100%; background-position: calc(100% + 14px) 0; animation: cs-flowx 1445ms cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.cs-arow[data-child="true"] .cs-bt { left: -20px; }
+.cs-arow[data-child="true"] .cs-be { left: -20px; width: 39px; }
+.cs-arow:last-child .cs-bt { bottom: auto; height: 18px; }
+@keyframes cs-flowy { 0% { background-position: 0 calc(100% + 30px); } 70%, 100% { background-position: 0 -30px; } }
+@keyframes cs-flowx { 0% { background-position: calc(100% + 14px) 0; } 30%, 100% { background-position: -14px 0; } }
+.cs-bl { margin: 0; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted-foreground); line-height: 1.5; overflow-wrap: anywhere; }
+.cs-bl.cs-plain { list-style: none; padding: 0; }
+.cs-qa1 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 10px; font-size: 13px; }
+.cs-qaf { margin: 0; font-size: 12px; color: var(--faint); line-height: 1.5; overflow-wrap: anywhere; }
+.cs-fpb { padding: 14px 16px; border-radius: 15px; background: var(--sunk); }
+.cs-cm { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.cs-cmc { padding: 11px 14px; border-radius: 15px; background: var(--sunk); min-width: 0; }
+.cs-cmc .cs-cmeta { display: flex; align-items: center; gap: 7px; margin-top: 6px; font-size: 12px; color: var(--muted-foreground); }
+.cs-cmc .cs-cmeta svg { flex: none; }
+.cs-cmc .cs-cmeta[data-s="addressed"] svg { color: var(--ok); }
+.cs-eb { margin-left: auto; appearance: none; border: 0; background: none; font: inherit; font-size: 12px; color: var(--muted-foreground); cursor: pointer; padding: 2px 8px; border-radius: 8px; }
+.cs-eb:hover { background: var(--hover); color: var(--foreground); }
+.cs-ta2 { width: 100%; box-sizing: border-box; min-height: 72px; max-height: 40vh; padding: 10px 12px; border: 0; border-radius: 12px; background: var(--sunk); font: inherit; font-size: 13px; line-height: 1.5; color: var(--foreground); resize: vertical; outline: none; }
+.cs-ta2:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
+.cs-fa { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.cs-hint2 { margin-right: auto; font-size: 11.5px; color: var(--faint); }
+@media (prefers-reduced-motion: reduce) { .cs-arow :is(.cs-bt, .cs-be), .cs-avs i, .cs-arow .cs-live::before { animation: none; } }
+.cs-cal .cs-wacts { display: flex; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 2px solid var(--page); flex-wrap: wrap; }
+.cs-sunkbox [data-slot="button"] { height: 28px; padding: 0 11px; font-size: 12.5px; border-radius: 10px; }
+.cs-dlv dl { margin: 2px 0 0; display: grid; gap: 3px; color: var(--muted-foreground); word-break: break-all; }
+.cs-dlv dl div { display: flex; gap: 6px; }
+.cs-dlv dt { color: var(--faint); flex: none; width: 76px; }
+.cs-dlv dd { margin: 0; color: var(--foreground); }
+.cs-dlv p { margin: 0; line-height: 1.5; color: var(--muted-foreground); }
