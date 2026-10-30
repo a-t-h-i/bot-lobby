@@ -37,9 +37,11 @@ export interface ActionButtonProps extends Omit<ComponentProps<typeof Button>, "
   text?: string
   /** Just the icon, the word in a tooltip. */
   iconOnly?: boolean
+  /** Where an icon-only button's tooltip opens. */
+  side?: "top" | "right" | "bottom" | "left"
 }
 
-export function ActionButton({ label, icon: Icon, tone = "neutral", shortcut, href, pressed, text, iconOnly, className, disabled, ...props }: ActionButtonProps) {
+export function ActionButton({ label, icon: Icon, tone = "neutral", shortcut, href, pressed, text, iconOnly, side, className, disabled, ...props }: ActionButtonProps) {
   const node = useRef<HTMLButtonElement & HTMLAnchorElement>(null)
   const bound = isHotkey(shortcut)
   useHotkey(bound ? shortcut : undefined, () => node.current?.click(), { enabled: bound && !disabled })
@@ -89,7 +91,7 @@ export function ActionButton({ label, icon: Icon, tone = "neutral", shortcut, hr
   return (
     <Tooltip>
       <TooltipTrigger asChild>{button}</TooltipTrigger>
-      <TooltipContent>
+      <TooltipContent {...(side ? { side } : {})}>
         {label}
         <Keys chord={shortcut ?? (href ? "Enter" : "Enter / Space")} />
       </TooltipContent>

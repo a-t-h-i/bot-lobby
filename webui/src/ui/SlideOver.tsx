@@ -25,9 +25,13 @@ interface SlideOverProps {
   head?: ReactNode
   children: ReactNode
   className?: string
+  /** Esc, before it closes the sheet: call `preventDefault` to keep it open (a comment being written goes first). */
+  onEscape?: (event: KeyboardEvent) => void
+  /** The close button as `Close Esc` rather than a bare cross. */
+  closeText?: boolean
 }
 
-export function SlideOver({ open, onClose, label, head, children, className }: SlideOverProps) {
+export function SlideOver({ open, onClose, label, head, children, className, onEscape, closeText }: SlideOverProps) {
   const top = useRef(false)
   top.current = useOverlaySlot(open, PRIORITY.sheet)
   const live = open
@@ -55,13 +59,19 @@ export function SlideOver({ open, onClose, label, head, children, className }: S
       <Dialog.Portal forceMount>
         <div className={cn("cs-shw", className)} data-open={on && live ? "true" : undefined}>
           <Dialog.Overlay forceMount className="cs-shbd" />
-          <Dialog.Content forceMount aria-describedby={undefined} className="cs-shp">
+          <Dialog.Content forceMount aria-describedby={undefined} className="cs-shp" {...(onEscape ? { onEscapeKeyDown: onEscape } : {})}>
             <Dialog.Title className="sr-only">{label}</Dialog.Title>
             <div className="cs-shh">
               <div className="min-w-0 flex-1">{last.current.head}</div>
-              <Dialog.Close className="cs-kc cs-sm cs-ib" aria-label="Close" title="Close · Esc">
-                <X aria-hidden="true" className="size-3.5" />
-              </Dialog.Close>
+              {closeText ? (
+                <Dialog.Close className="cs-kc cs-sm" title="Close · Esc">
+                  Close <span className="cs-kb">Esc</span>
+                </Dialog.Close>
+              ) : (
+                <Dialog.Close className="cs-kc cs-sm cs-ib" aria-label="Close" title="Close · Esc">
+                  <X aria-hidden="true" className="size-3.5" />
+                </Dialog.Close>
+              )}
             </div>
             <div ref={body} data-pane="detail" className="cs-shb">{last.current.children}</div>
             <ScrollHints target={body} />

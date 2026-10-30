@@ -1,7 +1,8 @@
 /**
  * The Plan tab: the seating intro before a session, then the panel's
  * conversation across the page, like the Lobby's; once there is a draft, the
- * "View plan" link in the header opens it in a slide-out. The floating box
+ * "View plan" bubble above the composer (or V) opens it in a slide-out; the
+ * round, the seats and the session's actions sit in a rail at the right. The floating box
  * sends to the panel (its Panel target). The session is read again on every
  * `planner` topic change; the panel's questions arrive through the prompt
  * slideout, started by Answer questions. Line comments are remembered here
@@ -14,15 +15,13 @@ import { KeyHint } from "@/components/ui/kbd"
 import { useHotkey } from "@/lib/hotkeys"
 import { ErrorState } from "@/app/States"
 import { useApiRead } from "@/app/useApiRead"
-import { cn } from "@/lib/utils"
 import type { PlannerSnapshot } from "@protocol"
 import { PanelConversation } from "./Conversation"
-import { PlanHeader, PreviousButton } from "./Header"
+import { PlanFailure, PlanRail, PreviousButton } from "./Header"
 import { PlanSheet } from "./PlanSheet"
 import { PreviousPlans } from "./Previous"
 import { Seats } from "./Roster"
 import { INTRO_LEAD, PLAN_STEPS, isFresh, seatCells, seatedCount } from "./words"
-import { Rule } from "@/ui/Frame"
 import { ScrollHints } from "@/ui/ScrollHints"
 
 import { useStickToBottom } from "@/lib/useStickToBottom"
@@ -33,15 +32,11 @@ type Comments = ReadonlyMap<string, string[]>
 function Rounds({ limit }: { limit: number }) {
   if (limit <= 0) return null
   return (
-    <span className="flex items-center gap-2 text-xs text-muted-foreground">
-      <span aria-hidden="true" className="flex gap-1">
-        {Array.from({ length: limit }, (_, round) => (
-          <span key={round} className={cn("h-1.5 w-4 rounded-full", round === limit - 1 ? "bg-primary" : "bg-border")} />
-        ))}
+    <span className="cs-rounds">
+      <span aria-hidden="true" className="cs-bars">
+        {Array.from({ length: limit }, (_, round) => <i key={round} data-last={round === limit - 1 || undefined} />)}
       </span>
-      <span>
-        up to {limit} rounds, the last the oracle's
-      </span>
+      <span>up to {limit} rounds, the last the oracle's</span>
     </span>
   )
 }
@@ -55,52 +50,44 @@ function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) 
   const pane = useRef<HTMLDivElement>(null)
   return (
     <>
-      <div ref={pane} className="@container flex-1 overflow-y-auto px-8 pt-10 pb-dock">
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
-          <header className="flex flex-col gap-4 @3xl:flex-row @3xl:items-end @3xl:justify-between">
-            <div className="flex items-start gap-4">
-              <span aria-hidden="true" className="card-flat grid size-11 shrink-0 place-items-center rounded-xl border text-primary">
-                <Route className="size-5" />
-              </span>
-              <div className="flex flex-col gap-1">
-                <h2 className="text-xl font-semibold tracking-tight">Plan with the panel</h2>
-                <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">{INTRO_LEAD}</p>
+      <div ref={pane} className="cs-scroll pb-dock">
+        <div className="cs-pg cs-intro">
+          <header className="cs-ih">
+            <div className="cs-ic">
+              <span aria-hidden="true" className="cs-ico"><Route className="size-5" /></span>
+              <div>
+                <h2>Plan with the panel</h2>
+                <p>{INTRO_LEAD}</p>
               </div>
             </div>
-            <div className="flex flex-col items-start gap-2 @3xl:items-end">
+            <div className="cs-ir">
               <PreviousButton />
               <Rounds limit={snap.limit} />
             </div>
           </header>
 
-          <section aria-labelledby="plan-panel" className="flex flex-col gap-3">
-            <h3 id="plan-panel" className="text-xs text-muted-foreground">
-              <Rule title="The panel" right={seatedCount(cells)} />
-            </h3>
+          <section aria-labelledby="plan-panel">
+            <h3 id="plan-panel" className="cs-rl">The panel<span className="cs-rr">{seatedCount(cells)}</span></h3>
             <Seats cells={cells} onToggled={onDone} />
           </section>
 
-          <section aria-labelledby="plan-steps" className="flex flex-col gap-3">
-            <h3 id="plan-steps" className="text-xs text-muted-foreground">
-              <Rule title="How a plan comes together" />
-            </h3>
-            <ol className="grid gap-3 @2xl:grid-cols-2 @4xl:grid-cols-4">
+          <section aria-labelledby="plan-steps">
+            <h3 id="plan-steps" className="cs-rl">How a plan comes together</h3>
+            <ol className="cs-stepg">
               {PLAN_STEPS.map((step, index) => (
-                <li key={step.title} className="card-flat relative flex gap-3 rounded-xl border p-3.5">
-                  <span aria-hidden="true" className="grid size-6 shrink-0 place-items-center rounded-full bg-accent text-xs font-semibold text-primary tabular-nums">
-                    {index + 1}
-                  </span>
-                  <span className="flex min-w-0 flex-col gap-0.5">
-                    <span className="text-sm font-medium">{step.title}</span>
-                    <span className="text-xs leading-relaxed text-muted-foreground">{step.text}</span>
+                <li key={step.title}>
+                  <span aria-hidden="true" className="cs-no">{index + 1}</span>
+                  <span className="min-w-0">
+                    <b>{step.title}</b>
+                    <span>{step.text}</span>
                   </span>
                 </li>
               ))}
             </ol>
           </section>
 
-          <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-            <ArrowDown aria-hidden="true" className="size-4 text-primary motion-safe:animate-bounce" />
+          <p className="cs-starth">
+            <ArrowDown aria-hidden="true" className="size-4" />
             Start in the box below.
             <KeyHint chord="/">write</KeyHint>
             <KeyHint chord="Enter">send to the panel</KeyHint>
@@ -128,14 +115,15 @@ function Session({ snap, reload }: { snap: PlannerSnapshot; reload: () => void }
   const remember = (at: string, text: string) => setComments((now) => new Map(now).set(at, [...(now.get(at) ?? []), text]))
   const { ref, onScroll } = useStickToBottom(`${JSON.stringify(snap.messages)}${snap.busy}`)
   return (
-    <>
-      <PlanHeader snap={snap} onDone={reload} />
-      <div ref={ref} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-5 pb-dock">
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div ref={ref} onScroll={onScroll} className="cs-thread min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pb-dock">
+        <PlanFailure snap={snap} />
         <PanelConversation messages={snap.messages} busy={snap.busy} />
       </div>
       <ScrollHints target={ref} />
+      <PlanRail snap={snap} onDone={reload} />
       <PlanSheet open={viewing} onClose={() => setViewing(false)} snap={snap} comments={comments} onSent={remember} />
-    </>
+    </div>
   )
 }
 

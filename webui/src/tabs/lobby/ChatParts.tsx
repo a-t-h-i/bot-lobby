@@ -8,7 +8,7 @@
  */
 import type { CSSProperties, ReactNode } from "react"
 import { cn } from "@/lib/utils"
-import { isOracle } from "@/ui/AgentIcon"
+import { AgentIcon, isOracle } from "@/ui/AgentIcon"
 import { sourceTone } from "./types"
 
 /**
@@ -17,8 +17,17 @@ import { sourceTone } from "./types"
  * agents speak too (`named`: the Lobby, where any agent may answer). The time is the name's tooltip.
  * `waiting`: the reply has not started, so the name shimmers and nothing is under it yet.
  */
-export function AgentMessage({ source, name, time, head, live, children, aside, named: always, waiting }: { source: string; name: string; time?: string; head: boolean; live?: boolean; children?: ReactNode; aside?: ReactNode; bubble?: boolean; named?: boolean; waiting?: boolean }) {
+export function AgentMessage({ source, name, time, head, live, children, aside, named: always, waiting, tile }: { source: string; name: string; time?: string; head: boolean; live?: boolean; children?: ReactNode; aside?: ReactNode; bubble?: boolean; named?: boolean; waiting?: boolean; tile?: boolean }) {
   const named = waiting || (head && (always || !isOracle(source)))
+  // The planning panel speaks beside the oracle's tile; the Lobby's agents by name alone.
+  if (tile) {
+    return (
+      <div className="cs-pmsg">
+        <span aria-hidden="true" className="cs-tile cs-lg" style={{ "--ac": "var(--c-orc)" } as CSSProperties}><AgentIcon source="MASTER" /></span>
+        <AgentMessage source={source} name={name} head={head} {...{ time, live, children, aside, waiting }} named={always ?? true} />
+      </div>
+    )
+  }
   return (
     <div className="chat-agent group/msg" data-live={live || undefined} style={live ? ({ "--orb": sourceTone(source) } as CSSProperties) : undefined}>
       {named || aside ? (
