@@ -1,14 +1,16 @@
 /**
  * A note card: who keeps it (a tile and the agent's name in its colour) and
  * in which file, the note itself (a click opens it in the slide-over), the
- * comments left on it, then its tags and where it sits. Pointing at it shows
- * a grip to drag it onto another agent, Edit and Delete; Edit turns the card
- * into a box in place (Enter saves, Shift+Enter breaks the line, Esc cancels).
+ * comments left on it, a stale or conflict flag with its action, then its
+ * tags, where it came from and how often it was used. Pointing at it shows a
+ * grip to drag it onto another agent, Pin (always shown once pinned), Edit and
+ * Delete; Edit turns the card into a box in place (Enter saves, Shift+Enter
+ * breaks the line, Esc cancels).
  */
 import { useState, type CSSProperties, type DragEvent, type KeyboardEvent } from "react"
-import { FileText, GripVertical, MessageSquare, Pencil, Trash2 } from "lucide-react"
+import { CircleAlert, GripVertical, Link2, MessageSquare, Pencil, Pin, Trash2 } from "lucide-react"
 import { ConfirmButton } from "@/ui/ConfirmButton"
-import { AGENT_COLORS, initial, type Note } from "./notes"
+import { AGENT_COLORS, ago, initial, usesWords, type Note } from "./notes"
 import { AGENT_LABELS, ARCHIVE_HINT } from "./words"
 
 /** The note's text with `code` spans drawn as code. */
@@ -60,10 +62,24 @@ interface NoteCardProps {
   onDragEnd: () => void
   onSave: (text: string) => Promise<boolean>
   onDelete: () => void
+  onPin: () => void
+  /** The flag's action: Review opens the Inbox (a conflict); Archive deletes a stale note. */
+  onReview: () => void
+  /** Edit in place, started from outside (the slide-over's Edit). */
+  editing?: boolean
+  onEditing?: (on: boolean) => void
 }
 
-export function NoteCard({ note, selected, dragging, activeTags, onOpen, onTag, onDragStart, onDragEnd, onSave, onDelete }: NoteCardProps) {
-  const [editing, setEditing] = useState(false)
+/** The note's last line: where it came from and when, or the file it sits in. */
+export function provenance(note: Note): string {
+  const when = ago(note.since)
+  return note.source ? `${note.source}${when ? ` · ${when}` : ""}` : `${AGENT_LABELS[note.agent]} · ${note.file}`
+}
+
+export function NoteCard({ note, selected, dragging, activeTags, onOpen, onTag, onDragStart, onDragEnd, onSave, onDelete, onPin, onReview, editing: outside, onEditing }: NoteCardProps) {
+  const [own, setOwn] = useState(false)
+  const editing = outside ?? own
+  const setEditing = (on: boolean) => (onEditing ? onEditing(on) : setOwn(on))
   const color = AGENT_COLORS[note.agent]
   const drag = (event: DragEvent<HTMLElement>) => {
     event.dataTransfer.effectAllowed = "move"
@@ -78,6 +94,7 @@ export function NoteCard({ note, selected, dragging, activeTags, onOpen, onTag, 
         <b>{AGENT_LABELS[note.agent]}</b>
         <span className="cs-fl">· {note.file}</span>
         <div className="cs-kna">
+          <button type="button" className="cs-knb cs-pin cs-tip cs-b" data-on={note.pinned ? "true" : "false"} data-tip={note.pinned ? "Unpin" : "Pin to the top"} aria-label={note.pinned ? "Unpin" : "Pin to the top"} aria-pressed={note.pinned} onClick={onPin}><Pin className="size-3.5" aria-hidden="true" /></button>
           <button type="button" className="cs-knb cs-h cs-tip cs-b" data-tip="Edit" aria-label="Edit the note" onClick={() => setEditing(true)}><Pencil className="size-3.5" aria-hidden="true" /></button>
           <ConfirmButton iconOnly className="cs-knb cs-h cs-dg" icon={Trash2} label="Delete the note" title="Delete this note?" description="The note and its comments are removed. The version before is archived." confirmLabel="Delete note" variant="destructive" onConfirm={onDelete} />
         </div>
@@ -90,6 +107,17 @@ export function NoteCard({ note, selected, dragging, activeTags, onOpen, onTag, 
           {note.comments.map((comment) => (
             <p key={comment.id} className="cs-knn"><MessageSquare aria-hidden="true" className="size-3.5" /><span>{comment.text}</span></p>
           ))}
+          {note.flag ? (
+            <p className="cs-knfl">
+              <CircleAlert aria-hidden="true" className="size-3.5" />
+              <span>{note.flag.kind === "stale" ? `Not used in ${note.flag.days} days` : "A newer proposal in the Inbox disagrees with this"}</span>
+              {note.flag.kind === "stale" ? (
+                <button type="button" className="cs-kc cs-sm" title="Takes it out of the file; the version before is archived" onClick={onDelete}>Archive</button>
+              ) : (
+                <button type="button" className="cs-kc cs-sm" onClick={onReview}>Review</button>
+              )}
+            </p>
+          ) : null}
           <div className="cs-knf3">
             {note.tags.length ? (
               <div className="cs-tg">
@@ -97,8 +125,8 @@ export function NoteCard({ note, selected, dragging, activeTags, onOpen, onTag, 
               </div>
             ) : null}
             <div className="cs-pv">
-              <button type="button" className="cs-src" onClick={onOpen}><FileText aria-hidden="true" className="size-3.5 flex-none" /><span>{AGENT_LABELS[note.agent]} · {note.file}</span></button>
-              {note.comments.length ? <span className="cs-use">{note.comments.length} {note.comments.length === 1 ? "comment" : "comments"}</span> : null}
+              <button type="button" className="cs-src" onClick={onOpen}><Link2 aria-hidden="true" className="size-3 flex-none" /><span>{provenance(note)}</span></button>
+              <span className="cs-use"><span className="cs-ubar" aria-hidden="true"><i style={{ width: `${Math.min(100, note.uses.length * 6)}%` }} /></span>{usesWords(note.uses.length)}</span>
             </div>
           </div>
         </>

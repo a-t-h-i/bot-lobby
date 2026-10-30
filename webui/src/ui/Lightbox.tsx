@@ -79,7 +79,7 @@ export function Lightbox() {
           <Dialog.Portal forceMount>
             <Dialog.Overlay asChild forceMount>
               <motion.div
-                className="fixed inset-0 z-50 bg-scrim backdrop-blur-sm"
+                className="fixed inset-0 z-[1000] bg-scrim backdrop-blur-sm"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -89,7 +89,7 @@ export function Lightbox() {
             <Dialog.Content
               forceMount
               aria-describedby={undefined}
-              className="fixed inset-0 z-50 flex flex-col outline-none"
+              className="fixed inset-0 z-[1000] flex flex-col outline-none"
               onClick={(event) => {
                 // A click beside the picture closes it, like the backdrop.
                 if (event.target === event.currentTarget) closeImage()

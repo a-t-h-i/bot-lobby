@@ -128,7 +128,7 @@ test("force close cancels an actual workflow worker signal and rejects unsupport
   saveTask(state.root, state.configDir, task);
   let started!: () => void; const ready = new Promise<void>((resolve) => { started = resolve; });
   let cancelled = false;
-  const work = runWorkflowAction({ action: "scout", taskId: task.id }, {
+  const work = runWorkflowAction({ action: "scout", taskId: task.id, domains: ["backend"] }, {
     root: state.root, configDir: state.configDir, cwd: state.root, sessionId: "session-1", config: DEFAULT_CONFIG,
     ask: async () => undefined, choose: async () => undefined, notify: () => {},
     runProcess: async (_args, options) => {

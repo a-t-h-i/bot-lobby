@@ -24,7 +24,7 @@ export function SelectTrigger({ className, children, ...props }: ComponentProps<
 
 export function SelectContent({ className, children, position = "popper", align = "start", ...props }: ComponentProps<typeof Primitive.Content>) {
   return <Primitive.Portal><Primitive.Content data-slot="select-content" position={position} align={align} sideOffset={4}
-    className={cn("dropdown-glass z-50 max-h-(--radix-select-content-available-height) min-w-(--radix-select-trigger-width) origin-(--radix-select-content-transform-origin) overflow-hidden rounded-lg p-1 text-foreground data-open:animate-in data-open:fade-in-0 data-open:zoom-in-[0.98] motion-reduce:animate-none", className)} {...props}>
+    className={cn("dropdown-glass z-[1100] max-h-(--radix-select-content-available-height) min-w-(--radix-select-trigger-width) origin-(--radix-select-content-transform-origin) overflow-hidden rounded-lg p-1 text-foreground data-open:animate-in data-open:fade-in-0 data-open:zoom-in-[0.98] motion-reduce:animate-none", className)} {...props}>
     <Primitive.ScrollUpButton className="flex h-6 justify-center items-center"><ChevronUp aria-hidden="true" className="size-4" /></Primitive.ScrollUpButton>
     <Primitive.Viewport>{children}</Primitive.Viewport>
     <Primitive.ScrollDownButton className="flex h-6 justify-center items-center"><ChevronDown aria-hidden="true" className="size-4" /></Primitive.ScrollDownButton>

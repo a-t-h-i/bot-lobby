@@ -15,7 +15,7 @@ import { useElapsed } from "@/lib/useElapsed"
 import { Markdown } from "@/ui/Markdown"
 import { Section } from "@/ui/Section"
 import { agentName, sourceLabel } from "@/tabs/lobby/types"
-import { AgentIcon, agentColor } from "@/ui/AgentIcon"
+import { agentColor } from "@/ui/AgentIcon"
 import { MarkDot } from "@/ui/task-facts"
 import { QA_RISK_WORDS, qaRiskNote } from "./words"
 import { SkipStep } from "./SkipStep"
@@ -65,7 +65,7 @@ function StepAgents({ id, agents, stepText }: { id: string; agents: StepAgent[];
           <li key={agent.runId} className="cs-arow" data-child={child ? "true" : undefined} style={{ "--ac": agentColor(name) } as CSSProperties}>
             <span aria-hidden="true" className="cs-bt" />
             <span aria-hidden="true" className="cs-be" />
-            <span aria-hidden="true" className="cs-tile"><AgentIcon source={name} /></span>
+            <span aria-hidden="true" className="cs-tile">{sourceLabel(name)[0]}</span>
             <span className="cs-ab2">
               <span className="cs-ab2h">
                 <b>{sourceLabel(name)}</b>
@@ -89,12 +89,11 @@ function AgentsBadge({ agents, count, step, stopped }: { agents: StepAgent[]; co
     <>
       {names.length > 0 ? (
         <span className="cs-avs" aria-hidden="true">
-          {names.map((name) => <i key={name} style={{ "--ac": agentColor(name) } as CSSProperties}><AgentIcon source={name} /></i>)}
+          {names.map((name) => <i key={name} style={{ "--ac": agentColor(name) } as CSSProperties}>{sourceLabel(name)[0]}</i>)}
         </span>
       ) : null}
       <span className="cs-cn1">
-        {count} {count === 1 ? "agent" : "agents"}
-        <span className="sr-only"> working</span>
+        {count} {stopped ? (count === 1 ? "agent" : "agents") : "working"}
       </span>
       <span aria-hidden="true" className="cs-dm">·</span>
       <StepTime step={step} stopped={stopped} />
@@ -135,7 +134,7 @@ function Step({ step, index, stopped, skip }: { step: StepData; index: number; s
   const active = Boolean(step.active) && !stopped
   const agents = active ? step.agents ?? [] : []
   const count = agents.length || (step.activeAgentCount ?? 1)
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const listId = useId()
   const done = step.status === "done"
   if (step.status === "skipped") return <SkippedStep step={step} index={index} />

@@ -16,6 +16,8 @@ export interface ComboOption {
   label: string
   /** A second line under the label, searched too. */
   hint?: string
+  /** A short word beside the label in the trigger once chosen (`Recommended`). */
+  tag?: string
   /** Shown and named, but never chosen: the keyboard and the pointer leave it alone. */
   disabled?: boolean
 }
@@ -132,6 +134,7 @@ export function Combobox({ value, options, onChange, label, className, disabled 
         )}
       >
         <span className="min-w-0 truncate">{chosen?.label ?? value}</span>
+        {chosen?.tag ? <span className="cs-rec">{chosen.tag}</span> : null}
         <ChevronDown aria-hidden="true" strokeWidth={2.25} className={SELECT_CHEVRON} />
       </PopoverTrigger>
       <PopoverContent

@@ -14,7 +14,7 @@ import { act } from "@/lib/act"
 import type { PlannerSnapshot, StatusInfo } from "@protocol"
 import { useTopic } from "@/app/hooks"
 import { ActionButton } from "@/ui/Actions"
-import { AgentIcon, agentColor } from "@/ui/AgentIcon"
+import { AgentIcon, agentColor, sameAgent } from "@/ui/AgentIcon"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { sourceLabel } from "../lobby/types"
 import { failure, seatCells, statusParts, type SeatCell } from "./words"
@@ -58,6 +58,12 @@ function Seat({ cell, asked, onToggled }: { cell: SeatCell; asked: number; onTog
   )
 }
 
+/** The questions still waiting on the user: the panel's latest message's, until the user replies. */
+function openQuestions(snap: PlannerSnapshot) {
+  const last = snap.messages.at(-1)
+  return last?.role === "planner" ? last.questions ?? [] : []
+}
+
 export function PlanRail({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) {
   const shortcut = useTopic<StatusInfo>("status").data?.keys.find((key) => key.action === "savePlan")?.label
   const run = (name: "planner.retry" | "planner.save") => async () => {
@@ -75,7 +81,7 @@ export function PlanRail({ snap, onDone }: { snap: PlannerSnapshot; onDone: () =
       ) : <span className="sr-only" role="status">{status}</span>}
       <ul className="cs-chips" aria-label="Panel">
         {seatCells(snap).map((cell) => (
-          <Seat key={cell.label} cell={cell} asked={snap.questions.filter((question) => question.from === cell.label).length} onToggled={onDone} />
+          <Seat key={cell.label} cell={cell} asked={openQuestions(snap).filter((question) => sameAgent(question.from, cell.label)).length} onToggled={onDone} />
         ))}
       </ul>
       <div className="cs-sqsep" />

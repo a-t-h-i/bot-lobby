@@ -232,6 +232,14 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     replaceFile: () => "saved mock/agent/mock.md — the version before is in archive/Mock",
     comment: () => "note saved — every agent reads it under this entry",
     unnote: () => "note removed",
+    // A few days of history, an Inbox and recent runs, so the Knowledge page shows pins, usage and proposals offline.
+    ledger: () => mockLedger(fixture.mockKnowledgeView),
+    pin: (_agent: string, _file: string, _ref: unknown, on: boolean) => (on ? "pinned — it loads first for this agent" : "unpinned"),
+    restore: () => "restored the earlier version",
+    move: () => "moved — saved mock/agent/mock.md",
+    accept: () => "accepted — saved",
+    dismiss: () => "dismissed",
+    threshold: () => 6000,
   };
   let commentSeq = 0;
   const service = {
@@ -506,4 +514,36 @@ function previousPlansFake(seed: NonNullable<ScenarioFixture["mockPreviousPlans"
     },
     reopenPlan: (id: string) => `carrying on "${find(id).title}"`,
   }
+}
+
+/** The mock Knowledge ledger: the first note pinned with a history, one note edited, an Inbox of two, and a month of runs. */
+function mockLedger(view: { agent: string; file: string; entries: Array<Record<string, unknown>> } | undefined) {
+  const day = 24 * 3600 * 1000;
+  const now = Date.now();
+  const iso = (ago: number) => new Date(now - ago).toISOString();
+  const bullets = (view?.entries ?? []).filter((entry) => entry.kind === "bullet") as Array<{ text: string }>;
+  const agent = (view?.agent ?? "master") as "master";
+  const file = view?.file ?? "knowledge.md";
+  const first = bullets[0]?.text ?? "- Mock what the offline page needs.";
+  const second = bullets[1]?.text ?? first;
+  const third = bullets[3]?.text ?? first;
+  return {
+    pins: [{ agent, file, entry: first, at: iso(3 * day) }],
+    events: [
+      { id: "ev1", agent, file, entry: first, by: "Oracle", what: "wrote this while planning the offline mock", source: "Planning · offline mock", at: iso(9 * day) },
+      { id: "ev2", agent, file, entry: first, by: "you", what: "edited it", before: "- Mock everything the page needs.", at: iso(3 * day) },
+      { id: "ev3", agent, file, entry: second, by: "Oracle", what: "saved this from a chat with you", source: "Chat with you", at: iso(14 * day) },
+      { id: "ev4", agent, file, entry: third, by: "Backend", what: "wrote this while working on task T-mock-1", source: "Task T-mock-1", at: iso(2 * day) },
+    ],
+    proposals: [
+      { id: "pr1", agent: "backend", kind: "knowledge", text: "Upload retries use exponential backoff, capped at 30 seconds.", source: "Task T-mock-6", confidence: 94, taskId: "T-mock-6", at: iso(2 * 3600 * 1000) },
+      { id: "pr2", agent: "qa", kind: "knowledge", text: "The Playwright run goes last; it takes about 40 seconds.", source: "Task T-mock-1", confidence: 88, at: iso(5 * 3600 * 1000) },
+      { id: "pr3", agent, kind: "knowledge", text: "Mock what the offline page needs, and nothing it does not.", source: "Task T-mock-1", confidence: 71, replaces: first.replace(/^- /, ""), at: iso(6 * 3600 * 1000) },
+    ],
+    runs: {
+      master: { recent: Array.from({ length: 18 }, (_, index) => ({ at: iso(index * 1.6 * day + 3600 * 1000), ...(index % 3 === 0 ? { taskId: "T-mock-1" } : index % 3 === 1 ? { taskId: "T-mock-5" } : {}) })), lastAt: iso(3600 * 1000) },
+      backend: { recent: Array.from({ length: 6 }, (_, index) => ({ at: iso(index * 4 * day + 7200 * 1000), taskId: "T-mock-6" })), lastAt: iso(7200 * 1000) },
+      designer: { recent: [], lastAt: iso(74 * day) },
+    },
+  };
 }

@@ -50,11 +50,11 @@ interface Target {
 
 const ORACLE: Target = { id: "oracle", label: "Message the team", placeholder: "Write a message, run a command, or ask an agent" }
 
-/** The tabs that carry the composer; everywhere else it stays mounted (drafts and uploads survive) but hidden and inert. */
+/** The tabs that carry the composer (Settings too); everywhere else it stays mounted (drafts and uploads survive) but hidden and inert. */
 const COMPOSER_TABS: ReadonlySet<string> = new Set(["lobby", "tasks", "plan", "knowledge"])
 
 export function composerVisible(route: Route): boolean {
-  return route.kind === "tab" && COMPOSER_TABS.has(route.tab)
+  return route.kind === "settings" || (route.kind === "tab" && COMPOSER_TABS.has(route.tab))
 }
 
 const ASK_KNOWLEDGE: Target = { id: "knowledge", label: "Ask what the agents know", placeholder: "Ask what the agents know…" }
@@ -653,7 +653,7 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
       data-shrunk={shrunk || undefined}
       onFocus={expand}
       className={cn(
-        "dock pointer-events-none absolute inset-x-0 bottom-0 z-30 px-6 pb-[max(1rem,env(safe-area-inset-bottom))] transition-opacity duration-200 ease-snap",
+        "dock pointer-events-none absolute inset-x-0 bottom-0 z-30 px-6 pb-[max(24px,env(safe-area-inset-bottom))] transition-opacity duration-200 ease-snap",
         blocked && "opacity-0"
       )}
       hidden={!visible}

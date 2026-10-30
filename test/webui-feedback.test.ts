@@ -147,7 +147,7 @@ test("delivery actions use authoritative blocks, explicit APIs and confirmed dir
   assert.match(panel, /setConfirm\(true\)/);
   assert.match(panel, /project === selectedProject\(\)/);
   const detail = source("tabs/tasks/TaskDetail.tsx");
-  assert.match(detail, /call\("tasks.open", \{ taskId \}\)/);
+  assert.match(source("tabs/tasks/OpenInSession.tsx"), /call\("tasks.open", \{ taskId: row.id \}\)/);
   assert.doesNotMatch(detail, /sessions\.(switch|start|stop)/, "opening the conversation never moves a session");
   const move = source("tabs/tasks/OpenInSession.tsx");
   assert.doesNotMatch(move, /sessions\.(start|stop)/, "opening a task in its session never starts or stops one");

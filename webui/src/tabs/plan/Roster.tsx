@@ -6,7 +6,7 @@
 import { act } from "@/lib/act"
 import type { CSSProperties } from "react"
 import { sourceLabel } from "../lobby/types"
-import { AgentIcon, agentColor } from "@/ui/AgentIcon"
+import { agentColor } from "@/ui/AgentIcon"
 import { SEAT_ROLES, type SeatCell } from "./words"
 
 /** One seat on the start page: a keycap card in its colour with what it brings and a checkbox (dashed when it sits out; the oracle always chairs). */
@@ -18,7 +18,7 @@ function SeatCard({ cell, onToggled }: { cell: SeatCell; onToggled: () => void }
     <>
       <span className="cs-sht">
         <span>
-          <span aria-hidden="true" className="cs-tile" style={{ "--ac": agentColor(cell.label) } as CSSProperties}><AgentIcon source={cell.label} /></span>
+          <span aria-hidden="true" className="cs-tile" style={{ "--ac": agentColor(cell.label) } as CSSProperties}>{name[0]}</span>
           {name}
         </span>
         {member ? <span aria-hidden="true" className="cs-cb" data-on={cell.seated ? "true" : undefined}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span> : null}

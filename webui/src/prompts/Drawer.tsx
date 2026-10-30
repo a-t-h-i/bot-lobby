@@ -68,7 +68,9 @@ function askerName(prompt: WebPrompt, header?: string): string {
 
 /** Where the question comes from: planning, a task or the Lobby. */
 function sourceOf(prompt: WebPrompt, header?: string): string {
-  const where = askerOf(prompt) === "PLANNER" ? "From planning" : prompt.taskId ? `From task ${prompt.taskId}` : "From the Lobby"
+  const { round, limit } = (prompt.payload ?? {}) as { round?: number; limit?: number }
+  const planning = round ? `From planning · round ${limit ? `${Math.min(round, limit)}/${limit}` : round}` : "From planning"
+  const where = askerOf(prompt) === "PLANNER" ? planning : prompt.taskId ? `From task ${prompt.taskId}` : "From the Lobby"
   return header && header !== "Question" && whoAsks(prompt, header) === askerOf(prompt) ? `${where} · ${header}` : where
 }
 

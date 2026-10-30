@@ -15,7 +15,7 @@ import { lobbyAbort, lobbyHistory, lobbySend, lobbySnapshot } from "./lobby.ts";
 import { promptsAnswer, promptsDismiss, promptsList } from "./prompts.ts";
 import { plannerAnswer, plannerCommentLine, plannerGet, plannerNew, plannerRetry, plannerSend, plannerEditMessage, plannerToggleSeat, plannerSave, plannerPrevious, plannerPreviousArchive, plannerPreviousDelete, plannerPreviousGet, plannerPreviousOpen } from "./planner.ts";
 import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksEditComment, tasksGet, tasksList, tasksMessage, tasksRestore, tasksOpen, tasksResume, tasksDeliveryReview, tasksDeliveryDefer, tasksDeliver, tasksAccept, tasksSkipStep, tasksForceClose, tasksResolveApproval } from "./tasks.ts";
-import { knowledgeAdd, knowledgeAsk, knowledgeComment, knowledgeEdit, knowledgeFiles, knowledgeOpen, knowledgeRemove, knowledgeReplaceFile, knowledgeUnnote } from "./knowledge.ts";
+import { knowledgeAccept, knowledgeAdd, knowledgeAsk, knowledgeComment, knowledgeDismiss, knowledgeEdit, knowledgeFiles, knowledgeLedger, knowledgeMove, knowledgeOpen, knowledgePin, knowledgeRemove, knowledgeReplaceFile, knowledgeRestore, knowledgeUnnote } from "./knowledge.ts";
 import { plansDiscard, plansGet, plansStart } from "./plans.ts";
 import { sessionsAnswer, sessionsArchive, sessionsChat, sessionsList, sessionsMessage, sessionsRename, sessionsStart, sessionsStop, sessionsSwitch } from "./sessions.ts";
 import { settingsGet, settingsGrants, settingsHarnesses, settingsLinters, settingsSet } from "./settings.ts";
@@ -327,6 +327,29 @@ function buildRoutes(): Record<string, Route> {
   routes["knowledge.comment"] = {
     schema: Type.Object({ agent: KnowledgeAgent, file: KnowledgeFile, ref: EntryRef, text: Type.String({ minLength: 1, maxLength: 2000 }) }, { additionalProperties: false }),
     run: (body, ctx) => knowledgeComment(body as { agent: "master" | "designer" | "backend" | "qa"; file: string; ref: { text: string; occurrence: number }; text: string }, ctx),
+  };
+  type Agent = "master" | "designer" | "backend" | "qa";
+  type Ref = { text: string; occurrence: number };
+  routes["knowledge.ledger"] = { schema: Empty, run: (_body, ctx) => knowledgeLedger(ctx) };
+  routes["knowledge.pin"] = {
+    schema: Type.Object({ agent: KnowledgeAgent, file: KnowledgeFile, ref: EntryRef, on: Type.Boolean() }, { additionalProperties: false }),
+    run: (body, ctx) => knowledgePin(body as { agent: Agent; file: string; ref: Ref; on: boolean }, ctx),
+  };
+  routes["knowledge.restore"] = {
+    schema: Type.Object({ agent: KnowledgeAgent, file: KnowledgeFile, ref: EntryRef, event: Type.String({ minLength: 1, maxLength: 64 }) }, { additionalProperties: false }),
+    run: (body, ctx) => knowledgeRestore(body as { agent: Agent; file: string; ref: Ref; event: string }, ctx),
+  };
+  routes["knowledge.move"] = {
+    schema: Type.Object({ agent: KnowledgeAgent, file: KnowledgeFile, ref: EntryRef, to: KnowledgeAgent, toFile: KnowledgeFile }, { additionalProperties: false }),
+    run: (body, ctx) => knowledgeMove(body as { agent: Agent; file: string; ref: Ref; to: Agent; toFile: string }, ctx),
+  };
+  routes["knowledge.accept"] = {
+    schema: Type.Object({ id: Type.String({ minLength: 1, maxLength: 64 }), text: Type.Optional(KnowledgeText) }, { additionalProperties: false }),
+    run: (body, ctx) => knowledgeAccept(body as { id: string; text?: string }, ctx),
+  };
+  routes["knowledge.dismiss"] = {
+    schema: Type.Object({ id: Type.String({ minLength: 1, maxLength: 64 }) }, { additionalProperties: false }),
+    run: (body, ctx) => knowledgeDismiss(body as { id: string }, ctx),
   };
   routes["knowledge.unnote"] = {
     schema: Type.Object({ id: TaskId }, { additionalProperties: false }),

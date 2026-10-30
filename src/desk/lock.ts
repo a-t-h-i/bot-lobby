@@ -7,8 +7,8 @@
  * holder and losing changes. Temp names carry the pid and a random suffix,
  * so concurrent writers never collide.
  */
-import { mkdirSync, rmSync, statSync } from "node:fs";
-import { dirname } from "node:path";
+import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 
 /** How long a writer waits for another process's write, and when a lock is taken to be left behind. */
@@ -21,10 +21,21 @@ function sleep(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-/** A lock's identity: the inode of the directory currently holding it. */
+/** A lock's identity: the token its taker wrote inside it (an inode can be reused at once by a breaker's new lock). */
 function lockIdentity(lock: string): string | undefined {
   try {
-    return String(statSync(lock).ino);
+    return readFileSync(join(lock, "owner"), "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+/** Mark a just-made lock as ours; undefined when it was broken before the mark landed. */
+function claim(lock: string): string | undefined {
+  const token = `${process.pid}.${randomUUID()}`;
+  try {
+    writeFileSync(join(lock, "owner"), token, { flag: "wx" });
+    return token;
   } catch {
     return undefined;
   }
@@ -60,7 +71,7 @@ export function withFileLock<T>(path: string, write: () => T): T {
       sleep(5);
       continue;
     }
-    const identity = lockIdentity(lock);
+    const identity = claim(lock);
     if (!stillOurs(lock, identity)) {
       // Broken from under us before the write: take it again rather than write beside the breaker.
       if (Date.now() > until) throw new Error(LOCK_BUSY);

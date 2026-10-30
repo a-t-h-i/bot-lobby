@@ -17,7 +17,7 @@ import { Check, Pencil } from "lucide-react"
 import type { PlannerMessage, PanelQuestion } from "@protocol"
 import { formatClock } from "@/lib/format"
 import { Markdown } from "@/ui/Markdown"
-import { AgentIcon, agentColor } from "@/ui/AgentIcon"
+import { agentColor } from "@/ui/AgentIcon"
 import { AgentMessage, ChatNote, YourMessage } from "../lobby/ChatParts"
 import { sourceLabel } from "../lobby/types"
 
@@ -63,7 +63,7 @@ function Asked({ questions }: { questions: PanelQuestion[] }) {
         <li key={index} className="cs-qc" style={{ "--ac": agentColor(question.from) } as CSSProperties}>
           <p className="cs-qh">
             <span className="cs-qwho">
-              <span aria-hidden="true" className="cs-tile"><AgentIcon source={question.from} /></span>
+              <span aria-hidden="true" className="cs-tile">{sourceLabel(question.from)[0]}</span>
               {sourceLabel(question.from)}
             </span>
             <span className="min-w-0">

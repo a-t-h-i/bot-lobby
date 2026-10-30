@@ -370,6 +370,48 @@ export interface KnowledgeViewData extends KnowledgeFileInfo {
   detached: KnowledgeNoteInfo[];
 }
 
+/** A pinned note: it loads first for its agent. */
+export interface KnowledgePinInfo {
+  agent: KnowledgeAgentName;
+  file: string;
+  entry: string;
+  at: string;
+}
+
+/** One thing that happened to a note: who, in words, and the text before an edit (restorable). */
+export interface KnowledgeEventInfo {
+  id: string;
+  agent: KnowledgeAgentName;
+  file: string;
+  entry: string;
+  by: string;
+  what: string;
+  source?: string;
+  before?: string;
+  at: string;
+}
+
+/** A note finished work proposed, waiting in the Inbox. */
+export interface KnowledgeProposalInfo {
+  id: string;
+  agent: KnowledgeAgentName;
+  kind: "knowledge" | "standard" | "decision";
+  text: string;
+  source: string;
+  confidence?: number;
+  replaces?: string;
+  taskId?: string;
+  at: string;
+}
+
+/** Pins, history, the Inbox and each agent's recent runs (every run loads the agent's knowledge). */
+export interface KnowledgeLedgerData {
+  pins: KnowledgePinInfo[];
+  events: KnowledgeEventInfo[];
+  proposals: KnowledgeProposalInfo[];
+  runs: Partial<Record<KnowledgeAgentName, { recent: Array<{ at: string; taskId?: string }>; lastAt?: string }>>;
+}
+
 /** An entry picked in the tab: its text, and which of several identical ones it is. */
 export interface EntryRefInfo {
   text: string;
@@ -491,7 +533,7 @@ export interface Api {
   "code.save": { request: { path: string; contents: string; mtimeMs?: number; force?: boolean }; result: CodeSaved };
   "projects.browse": { request: { path?: string }; result: FolderListing };
   "projects.open": { request: { path: string }; result: { project: ProjectInfo } };
-  "knowledge.files": { request: Record<string, never>; result: { files: KnowledgeFileInfo[]; models?: Partial<Record<KnowledgeAgentName, string>> } };
+  "knowledge.files": { request: Record<string, never>; result: { files: KnowledgeFileInfo[]; models?: Partial<Record<KnowledgeAgentName, string>>; threshold?: number } };
   "knowledge.ask": { request: { text: string; attachments?: string[] }; result: { notice: string } };
   "knowledge.open": { request: { agent: KnowledgeAgentName; file: string }; result: { view: KnowledgeViewData } };
   "knowledge.edit": { request: { agent: KnowledgeAgentName; file: string; ref: EntryRefInfo; text: string }; result: { notice: string } };
@@ -499,6 +541,12 @@ export interface Api {
   "knowledge.remove": { request: { agent: KnowledgeAgentName; file: string; ref: EntryRefInfo }; result: { notice: string } };
   "knowledge.replaceFile": { request: { agent: KnowledgeAgentName; file: string; text: string }; result: { notice: string } };
   "knowledge.comment": { request: { agent: KnowledgeAgentName; file: string; ref: EntryRefInfo; text: string }; result: { notice: string } };
+  "knowledge.ledger": { request: Record<string, never>; result: KnowledgeLedgerData };
+  "knowledge.pin": { request: { agent: KnowledgeAgentName; file: string; ref: EntryRefInfo; on: boolean }; result: { notice: string } };
+  "knowledge.restore": { request: { agent: KnowledgeAgentName; file: string; ref: EntryRefInfo; event: string }; result: { notice: string } };
+  "knowledge.move": { request: { agent: KnowledgeAgentName; file: string; ref: EntryRefInfo; to: KnowledgeAgentName; toFile: string }; result: { notice: string } };
+  "knowledge.accept": { request: { id: string; text?: string }; result: { notice: string } };
+  "knowledge.dismiss": { request: { id: string }; result: { notice: string } };
   "knowledge.unnote": { request: { id: string }; result: { notice: string } };
   "settings.get": { request: Record<string, never>; result: SettingsInfo };
   "settings.set": { request: { patch: Record<string, unknown> }; result: { config: BotLobbyConfig } };

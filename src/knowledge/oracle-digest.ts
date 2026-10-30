@@ -54,7 +54,7 @@ export function shareDigest(dataRoot: string, items: readonly DigestItem[], now 
   const added: Partial<Record<KnowledgeAgent, number>> = {};
   for (const item of items) {
     const text = item.kind === "decision" ? item.text : `- ${item.text}`;
-    if (applyKnowledge({ dataRoot, agent: item.agent, kind: item.kind, text, now }).result === "added") added[item.agent] = (added[item.agent] ?? 0) + 1;
+    if (applyKnowledge({ dataRoot, agent: item.agent, kind: item.kind, text, now, by: "Oracle", what: "filed this when it compacted its context", source: "Compaction" }).result === "added") added[item.agent] = (added[item.agent] ?? 0) + 1;
   }
   return added;
 }

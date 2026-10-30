@@ -288,7 +288,9 @@ export class DeskSession {
     const queue = undeliveredFor(readBoard(board), readDelivery(path).recipients[peer], this.scopeFor(peer));
     const batch = queue.slice(0, REPLAY_LIMIT);
     const extra = queue.filter((entry) => !batch.includes(entry));
-    const shown = extra.includes(post) ? [...batch, post] : batch;
+    // The board is read afresh, so the fresh post is matched by its number, not by identity.
+    const beyond = extra.some((entry) => entry.seq === post.seq);
+    const shown = beyond ? [...batch, post] : batch;
     const waiting = queue.length - shown.length;
     try {
       this.steer(peer, `bot-lobby board: ${formatPosts(shown)}${waiting > 0 ? `\n(+${waiting} older board posts waiting; read_board shows them.)` : ""}`);
@@ -297,7 +299,7 @@ export class DeskSession {
     }
     markDelivered(path, peer, batch.at(-1)?.seq ?? post.seq);
     // Only the batch and the fresh post were shown; the backlog beyond them stays pending for the next catch-up.
-    if (extra.includes(post)) markSeen(path, peer, post.seq);
+    if (beyond) markSeen(path, peer, post.seq);
     return true;
   }
 
