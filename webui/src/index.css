@@ -43,8 +43,8 @@
   --card-shadow: var(--glass-lift);
   --surface-shadow: none;
 
-  /* The accent: one saturated blue */
-  --primary: #1b4ed8;
+  /* The accent: one warm orange */
+  --primary: #e8590c;
   --primary-foreground: #ffffff;
   --accent: #f4f4f5;
   --accent-foreground: #18181b;
@@ -76,7 +76,8 @@
   --warning: #b45309;
   --info: #1d4ed8;
   --heading: #18181b;
-  --link: var(--primary);
+  /* Links stay blue: orange text is too faint on the light page. */
+  --link: #1b4ed8;
   --code: #9d174d;
   --codeblock: var(--foreground);
   --bullet: var(--muted-foreground);
@@ -163,7 +164,7 @@
   --control-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   --card-shadow: var(--glass-lift);
 
-  --primary: #d97757;
+  --primary: #f26b1d;
   --primary-foreground: #ffffff;
   --accent: rgb(255 255 255 / 0.05);
   --accent-foreground: #f5f5f5;
