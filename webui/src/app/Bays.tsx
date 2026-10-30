@@ -17,13 +17,13 @@ export function ShellFilters() {
     <filter id={id} x="-20%" y="-35%" width="140%" height="170%" colorInterpolationFilters="sRGB">
       <feGaussianBlur in="SourceGraphic" stdDeviation={blur} result="b" />
       <feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" result="shape" />
-      <feOffset in="shape" dx="0.9" dy="1.3" result="dn" />
+      <feOffset in="shape" dx="0" dy="1" result="dn" />
       <feComposite in="shape" in2="dn" operator="out" result="rimA" />
       <feGaussianBlur in="rimA" stdDeviation="0.4" result="rimB" />
       <feComposite in="rimB" in2="shape" operator="in" result="rimC" />
       <feFlood style={{ floodColor: "var(--hl)" }} result="hlc" />
       <feComposite in="hlc" in2="rimC" operator="in" result="hl" />
-      <feOffset in="shape" dx="-0.9" dy="-1.3" result="up" />
+      <feOffset in="shape" dx="0" dy="-1" result="up" />
       <feComposite in="shape" in2="up" operator="out" result="shA" />
       <feGaussianBlur in="shA" stdDeviation="0.4" result="shB" />
       <feComposite in="shB" in2="shape" operator="in" result="shC" />
@@ -44,15 +44,15 @@ export function ShellFilters() {
         <filter id="cs-bayedge" x="-20%" y="-35%" width="140%" height="170%" colorInterpolationFilters="sRGB">
           <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b" />
           <feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" result="shape" />
-          <feOffset in="shape" dx="2" dy="3" result="dn" />
+          <feOffset in="shape" dx="0" dy="1" result="dn" />
           <feComposite in="shape" in2="dn" operator="out" result="tS0" />
-          <feGaussianBlur in="tS0" stdDeviation="0.8" result="tS1" />
+          <feGaussianBlur in="tS0" stdDeviation="0.3" result="tS1" />
           <feComposite in="tS1" in2="shape" operator="in" result="tS" />
           <feFlood style={{ floodColor: "var(--ehl)" }} result="tc" />
           <feComposite in="tc" in2="tS" operator="in" result="eh" />
-          <feOffset in="shape" dx="-2" dy="-3" result="up" />
+          <feOffset in="shape" dx="0" dy="-1" result="up" />
           <feComposite in="shape" in2="up" operator="out" result="bS0" />
-          <feGaussianBlur in="bS0" stdDeviation="0.8" result="bS1" />
+          <feGaussianBlur in="bS0" stdDeviation="0.3" result="bS1" />
           <feComposite in="bS1" in2="shape" operator="in" result="bS" />
           <feFlood style={{ floodColor: "var(--esh)" }} result="bc" />
           <feComposite in="bc" in2="bS" operator="in" result="es" />
@@ -65,13 +65,13 @@ export function ShellFilters() {
         <filter id="cs-tabdent" x="-10%" y="-45%" width="120%" height="190%" colorInterpolationFilters="sRGB">
           <feGaussianBlur in="SourceGraphic" stdDeviation="2.6" result="b" />
           <feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" result="shape" />
-          <feOffset in="shape" dx="2.2" dy="3" result="dn" />
+          <feOffset in="shape" dx="0" dy="1.5" result="dn" />
           <feComposite in="shape" in2="dn" operator="out" result="sA" />
           <feGaussianBlur in="sA" stdDeviation="1.5" result="sB" />
           <feComposite in="sB" in2="shape" operator="in" result="sC" />
           <feFlood style={{ floodColor: "var(--tdsh)" }} result="shc" />
           <feComposite in="shc" in2="sC" operator="in" result="sh" />
-          <feOffset in="shape" dx="-1.4" dy="-2" result="up" />
+          <feOffset in="shape" dx="0" dy="-1" result="up" />
           <feComposite in="shape" in2="up" operator="out" result="hA" />
           <feGaussianBlur in="hA" stdDeviation="1" result="hB" />
           <feComposite in="hB" in2="shape" operator="in" result="hC" />

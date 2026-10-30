@@ -20,20 +20,23 @@
   --ok: #17935a;
   --warn: #b26a00;
   --bad: #cc3838;
-  --hl: rgb(255 255 255);
-  --sh: rgb(40 40 70 / 0.09);
-  --ehl: rgb(255 255 255 / 0.4);
-  --esh: rgb(40 40 70 / 0.5);
-  --tdsh: rgb(30 30 70 / 0.3);
-  --tdhl: rgb(255 255 255);
-  --drop1: 0 3px 10px rgb(0 0 0 / 0.035);
-  --drop2: 0 14px 36px rgb(0 0 0 / 0.045);
-  --press: inset 0 2px 4px rgb(40 40 70 / 0.36), inset 0 0 0 1px rgb(40 40 70 / 0.14), 0 1px 0 rgb(255 255 255 / 0.95);
-  --press-deep: inset 0 3px 6px rgb(40 40 70 / 0.46), inset 0 0 0 1px rgb(40 40 70 / 0.18), 0 1px 0 rgb(255 255 255 / 0.95);
-  --inset: inset 0 1px 2px rgb(40 40 70 / 0.14), 0 1px 0 rgb(255 255 255 / 0.9);
-  /* Raised (a keycap) and sunk (a well): the only bevels, for buttons and knobs. */
-  --rs: 0 0 0 1px var(--edge), inset 1.5px 2px 2px -1px var(--hl), inset -1.5px -2px 3px -1.5px var(--sh), 0 3px 10px rgb(30 30 60 / 0.08);
-  --ss: inset 1.8px 2.6px 3.2px -1px var(--tdsh), inset -1px -1.6px 2px -1px var(--tdhl), 0 1px 0 var(--tdhl);
+  /* A flat, paper-like surface: a hairline edge, a lighter top line, a crisp bottom line and a faint drop. */
+  --hl: rgb(255 255 255 / 0.7);
+  --sh: rgb(40 40 70 / 0.05);
+  --ehl: rgb(255 255 255 / 0.55);
+  --esh: rgb(40 40 70 / 0.2);
+  --tdsh: rgb(30 30 70 / 0.16);
+  --tdhl: rgb(255 255 255 / 0.8);
+  --drop1: 0 1px 2px rgb(0 0 0 / 0.05);
+  --drop2: 0 4px 12px rgb(0 0 0 / 0.035);
+  --press: inset 0 1px 2px rgb(40 40 70 / 0.12), inset 0 0 0 1px rgb(40 40 70 / 0.08);
+  --press-deep: inset 0 1px 3px rgb(40 40 70 / 0.2), inset 0 0 0 1px rgb(40 40 70 / 0.1);
+  --inset: inset 0 1px 2px rgb(40 40 70 / 0.08), inset 0 0 0 1px rgb(40 40 70 / 0.05);
+  /* Raised (a button or card) and sunk (a well): flat, edged, never a heavy bevel. */
+  --rs: 0 0 0 1px var(--edge), inset 0 1px 0 var(--hl), 0 1px 0 rgb(40 40 70 / 0.08), 0 2px 6px -2px rgb(30 30 60 / 0.08);
+  --ss: inset 0 1px 2px var(--tdsh), inset 0 0 0 1px rgb(40 40 70 / 0.05);
+  /* A faint paper grain over the page. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.07 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
   /* The agents' colours: the oracle wears the accent. */
   --c-orc: var(--primary);
   --c-des: var(--source-design);
@@ -52,18 +55,19 @@
   --ok: #58c88f;
   --warn: #e8aa4a;
   --bad: #f07575;
-  --hl: rgb(255 255 255 / 0.2);
-  --sh: rgb(0 0 0 / 0.4);
-  --ehl: rgb(255 255 255 / 0.4);
-  --esh: rgb(0 0 0 / 0.85);
-  --tdsh: rgb(0 0 0 / 0.7);
-  --tdhl: rgb(255 255 255 / 0.15);
-  --drop1: 0 3px 10px rgb(0 0 0 / 0.3);
-  --drop2: 0 14px 36px rgb(0 0 0 / 0.3);
-  --press: inset 0 2px 5px rgb(0 0 0 / 0.9), inset 0 0 0 1px rgb(0 0 0 / 0.6), inset 0 -1px 0 rgb(255 255 255 / 0.05), 0 1px 0 rgb(255 255 255 / 0.2);
-  --press-deep: inset 0 3px 7px rgb(0 0 0 / 1), inset 0 0 0 1px rgb(0 0 0 / 0.75), inset 0 -1px 0 rgb(255 255 255 / 0.04), 0 1px 0 rgb(255 255 255 / 0.2);
-  --inset: inset 0 1px 3px rgb(0 0 0 / 0.6), 0 1px 0 rgb(255 255 255 / 0.05);
-  --rs: 0 0 0 1px var(--edge), inset 1.5px 2px 2px -1px var(--hl), inset -1.5px -2px 3px -1.5px var(--sh), 0 3px 10px rgb(0 0 0 / 0.28);
+  --hl: rgb(255 255 255 / 0.07);
+  --sh: rgb(0 0 0 / 0.2);
+  --ehl: rgb(255 255 255 / 0.1);
+  --esh: rgb(0 0 0 / 0.55);
+  --tdsh: rgb(0 0 0 / 0.45);
+  --tdhl: rgb(255 255 255 / 0.06);
+  --drop1: 0 1px 2px rgb(0 0 0 / 0.35);
+  --drop2: 0 6px 16px rgb(0 0 0 / 0.22);
+  --press: inset 0 1px 3px rgb(0 0 0 / 0.45), inset 0 0 0 1px rgb(0 0 0 / 0.3);
+  --press-deep: inset 0 1px 4px rgb(0 0 0 / 0.6), inset 0 0 0 1px rgb(0 0 0 / 0.4);
+  --inset: inset 0 1px 2px rgb(0 0 0 / 0.35), inset 0 0 0 1px rgb(0 0 0 / 0.2);
+  --rs: 0 0 0 1px var(--edge), inset 0 1px 0 var(--hl), 0 1px 0 rgb(0 0 0 / 0.4), 0 2px 8px -2px rgb(0 0 0 / 0.3);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 /* ---------------------------------------------------------------------------------------------------------------
@@ -90,7 +94,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--page);
+  background: var(--grain), var(--page);
   color: var(--foreground);
 }
 .cs-frame[data-sb="closed"] { --tL: --wL 187ms cubic-bezier(0.4, 0, 0.2, 1), --hL 187ms cubic-bezier(0.4, 0, 0.2, 1); }
@@ -210,7 +214,7 @@
 
 /* The page area: the whole window, under the bays. */
 .cs-body { position: relative; display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; }
-.cs-main { position: relative; display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow-y: auto; outline: none; background: var(--page); }
+.cs-main { position: relative; display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow-y: auto; outline: none; background: var(--grain) fixed, var(--page); }
 
 @media (prefers-reduced-motion: reduce) {
   .cs-frame, .cs-frame *, .cs-frame *::before, .cs-frame *::after { transition-duration: 0ms !important; animation: none !important; }
