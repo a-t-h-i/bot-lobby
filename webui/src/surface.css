@@ -79,6 +79,7 @@
 .cs-frame {
   /* How far the floating bays sit in from the window's edges. */
   --fi: 5px;
+  --float-r: 12px;
   --gR: var(--fi);
   --wR: 84px;
   --hR: 40px;
@@ -106,9 +107,8 @@
 .cs-layer.cs-fill { --shape: var(--fill); filter: url(#cs-baylit); }
 .cs-bb { flex: 1 1 auto; min-height: 0; background: var(--shape); }
 .cs-edge .cs-bb { box-shadow: 0 0 0 1px var(--shape); }
-.cs-gl .cs-bb, .cs-sbx { border-radius: min(26px, calc(var(--wL) / 2)); }
-.cs-gt .cs-bb, .cs-tbx { border-radius: calc(var(--hT) / 2); }
-.cs-gr .cs-bb { border-radius: calc(var(--hR) / 2); }
+/* One corner for every floating surface, the composer's: a gently rounded rectangle, never a pill. */
+.cs-gl .cs-bb, .cs-sbx, .cs-gt .cs-bb, .cs-tbx, .cs-gr .cs-bb { border-radius: var(--float-r); }
 
 /* The sidebar: a mini rail (sessions, new session, settings) that grows into the full list on hover or pin. */
 .cs-sbwrap { position: absolute; z-index: 41; left: 0; top: calc(50% - max(var(--hL), 260px) / 2); width: calc(max(var(--wL), 30px) + var(--fi)); height: max(var(--hL), 260px); }
@@ -121,7 +121,7 @@
 .cs-frame[data-sb="open"] .cs-sbfull :is(.cs-sr, .cs-sh) { animation: cs-row-pop 204ms var(--out) backwards; animation-delay: calc(60ms + var(--i, 0) * 20ms); }
 @keyframes cs-row-pop { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
 .cs-sh { height: 26px; padding: 0 10px; display: flex; align-items: flex-end; gap: 6px; font-size: 11px; font-weight: 500; letter-spacing: 0.02em; color: var(--faint); }
-.cs-sr { box-sizing: border-box; width: 100%; height: 30px; padding: 0 10px; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 15px; background: transparent; font: inherit; font-size: 13px; color: var(--foreground); text-align: left; cursor: pointer; outline: none; transition: background 76ms ease; }
+.cs-sr { box-sizing: border-box; width: 100%; height: 30px; padding: 0 10px; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 10px; background: transparent; font: inherit; font-size: 13px; color: var(--foreground); text-align: left; cursor: pointer; outline: none; transition: background 76ms ease; }
 .cs-sr:hover { background: var(--hover); }
 .cs-sr:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
 .cs-sr[aria-current="true"], .cs-sr[aria-current="page"], .cs-sr[data-active="true"] { background: var(--well); box-shadow: var(--inset); }
@@ -189,14 +189,14 @@
 .cs-tbc .cs-ti, .cs-tab[aria-selected="true"] .cs-ti { color: var(--primary); }
 .cs-tab:hover .cs-ti { color: var(--foreground); }
 .cs-tab[aria-selected="true"]:hover .cs-ti { color: var(--primary); }
-.cs-tab { position: relative; z-index: 1; white-space: nowrap; flex: none; height: 28px; padding: 0 10px; display: flex; align-items: center; gap: 5px; border: 0; border-radius: 14px; background: transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--muted-foreground); text-decoration: none; cursor: pointer; outline: none; transition: background 76ms ease, color 76ms ease; }
+.cs-tab { position: relative; z-index: 1; white-space: nowrap; flex: none; height: 28px; padding: 0 10px; display: flex; align-items: center; gap: 5px; border: 0; border-radius: 9px; background: transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--muted-foreground); text-decoration: none; cursor: pointer; outline: none; transition: background 76ms ease, color 76ms ease; }
 .cs-tab:hover { background: var(--hover); color: var(--foreground); }
 .cs-tab[aria-selected="true"], .cs-tab[aria-selected="true"]:hover { background: transparent; color: var(--foreground); }
 .cs-tab:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
 /* The indicator under the active tab: a dent pressed into the bay and a goo-softened tint over it. */
 .cs-track { position: relative; display: flex; align-items: center; gap: 2px; height: 100%; }
 .cs-tabind { position: absolute; inset: 0; pointer-events: none; transition: opacity 170ms ease; }
-.cs-tabind i { position: absolute; top: 5px; height: 28px; left: 0; right: 0; border-radius: 14px; }
+.cs-tabind i { position: absolute; top: 5px; height: 28px; left: 0; right: 0; border-radius: 9px; }
 .cs-tabind.cs-dent { filter: url(#cs-tabdent); }
 .cs-tabind.cs-dent i { background: color-mix(in srgb, var(--fill) 88%, #000); }
 .dark .cs-tabind.cs-dent i { background: color-mix(in srgb, var(--fill) 62%, #000); }

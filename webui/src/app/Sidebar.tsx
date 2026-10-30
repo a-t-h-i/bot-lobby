@@ -16,7 +16,7 @@ import { act } from "@/lib/act"
 import { toggleCollapsed, useCollapsed } from "@/lib/collapsed"
 import { toast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
-import { AppearanceButton, FullscreenToggle, HelpButton, NotifyToggle, SoundToggle } from "./AppTools.tsx"
+import { FullscreenToggle, HelpButton, NotifyToggle, SoundToggle } from "./AppTools.tsx"
 import { useTopic } from "./hooks.ts"
 import { NewSessionDialog } from "./NewSessionDialog.tsx"
 import { BayGhost, TabGlyph, useHoverBay } from "./Bays.tsx"
@@ -317,7 +317,6 @@ function Foot({ route, keys, onHelp }: SidebarProps) {
       <div className="cs-sr cs-tools" style={{ "--i": 21 } as CSSProperties}>
         <HelpButton hint={keys.help ?? "Alt+H"} onHelp={onHelp} className={TOOL} />
         <SoundToggle className={TOOL} />
-        <AppearanceButton className={TOOL} />
         <NotifyToggle className={TOOL} />
         <FullscreenToggle className={TOOL} />
       </div>
