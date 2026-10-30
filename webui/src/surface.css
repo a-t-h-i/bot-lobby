@@ -837,5 +837,23 @@
 .cs-kwmv .cs-knb[data-on] { box-shadow: inset 0 0 0 1.5px var(--c); cursor: default; opacity: 1; }
 @media (max-width: 900px) { .cs-knl { grid-template-columns: minmax(0, 1fr); } .cs-knr { position: static; } .cs-kng, .cs-kag4 { grid-template-columns: minmax(0, 1fr); } }
 @media (prefers-reduced-motion: reduce) { .cs-knc, .cs-knask { animation: none; } }
-[data-slot="button"].cs-ibk { width: 30px; height: 30px; padding: 0; border-radius: 10px; background: var(--fill); box-shadow: var(--rs); color: var(--foreground); }
+[data-slot="button"].cs-ibk { width: 30px; height: 30px; padding: 0; border-radius: 10px; background: var(--fill); box-shadow: var(--rs); }
 [data-slot="button"].cs-ibk:hover:not(:disabled) { background: var(--sunk); box-shadow: var(--ss), 0 0 0 1px var(--edge); }
+
+/* Fields: drop-downs and text boxes are sunk wells (34px, no edge), lit by a hairline when pointed at and the ring when focused. */
+[data-slot="select-trigger"], input[data-slot="input"], textarea[data-slot="textarea"] { border-color: transparent; border-radius: 12px; background: var(--sunk); box-shadow: none; font-size: 13px; color: var(--foreground); }
+[data-slot="select-trigger"], input[data-slot="input"] { height: 34px; padding-inline: 12px; }
+:is([data-slot="select-trigger"], input[data-slot="input"], textarea[data-slot="textarea"]):hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--edge); }
+:is([data-slot="select-trigger"], input[data-slot="input"], textarea[data-slot="textarea"]):focus-visible { outline: none; border-color: transparent; box-shadow: inset 0 0 0 2px var(--ring); }
+[data-slot="select-trigger"] svg { color: var(--faint); opacity: 1; }
+.dark :is([data-slot="select-trigger"], input[data-slot="input"], textarea[data-slot="textarea"]) { background: var(--sunk); }
+
+/* Settings: a flat page; the sections switch spans it; each agent a raised card with its tile. */
+.cs-pg.cs-set { max-width: 1168px; }
+.cs-secn { margin: 0 0 20px; }
+.cs-secn .cs-seg { width: 100%; box-sizing: border-box; }
+.cs-secn .cs-seg button { font-size: 12px; padding: 0 4px; }
+.cs-set section[data-slot="agent-row"] { gap: 11px; padding: 14px 16px 16px; border: 0; border-radius: 22px; background: var(--fill); box-shadow: var(--rs); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.cs-set section[data-slot="agent-row"] h3 { font-size: 14.5px; gap: 9px; }
+.cs-set section[data-slot="agent-row"] h3 .cs-tile { width: 22px; height: 22px; border-radius: 7px; }
+.cs-set section[data-slot="agent-row"] h3 .cs-tile svg { width: 12px; height: 12px; color: #fff; }
