@@ -1,6 +1,6 @@
 {
-  "hash": "a17bbf879bb39473eef351f9c5c2b02eab916ab30b88766f6975e88a86c3dfff",
-  "builtAt": "2026-10-30T18:05:14.038Z",
+  "hash": "09dd9785a75d96b2776c42b254f0ab3f6cbf18f0d0f557d8cb20e8d74405f9ca",
+  "builtAt": "2026-10-30T18:32:59.762Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -32,7 +32,7 @@
     },
     {
       "path": "webui/src/app/Bays.tsx",
-      "sha256": "947e64bb5fcc10cc70de0f184427c8357adbbf8570a5a220e8a056bfc049fb0c"
+      "sha256": "21d3480c81ce2f341878ae7045542ac83a01d940057b0c796a8c9c722205ad5b"
     },
     {
       "path": "webui/src/app/Composer.tsx",
@@ -400,7 +400,7 @@
     },
     {
       "path": "webui/src/prompts/Drawer.tsx",
-      "sha256": "3f099ee13a1066292363f1db5ab842eeb9b13559b82f21cd265b6a7b4c03840b"
+      "sha256": "1f0eb144649263c00c850e421b7b85b941adb9782909c1f805f4b818537ad532"
     },
     {
       "path": "webui/src/prompts/MockupViewer.tsx",
