@@ -1162,9 +1162,11 @@
   position: relative;
   isolation: isolate;
   width: 100%;
-  max-width: var(--chat-content-max-width);
+  /* As wide as the chat column, or as its longest line (--cg, from the composer) up to 64rem. */
+  max-width: clamp(var(--chat-content-max-width), var(--cg, 0px), 64rem);
   margin-inline: auto;
   color: var(--bubble-ink);
+  transition: max-width 340ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .dark .bubble {
   --bubble-fill: color-mix(in srgb, var(--foreground) 7.5%, var(--background));
@@ -1400,7 +1402,7 @@
   width: 100%;
   field-sizing: content;
   min-height: 60px;
-  max-height: 13rem;
+  max-height: min(40vh, 22rem);
   padding: var(--tp) 18px 4px;
   overflow-y: auto;
   border: 0;
@@ -1416,6 +1418,33 @@
   transition: padding 380ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .bubble-text::placeholder { color: var(--bubble-muted); opacity: 1; }
+/* The typing happens in the clear box; its Markdown shows in the mirror behind, which must wrap exactly as the box. */
+.bubble-field { position: relative; mask-image: linear-gradient(transparent, #000 10px, #000 calc(100% - 4px), transparent); }
+.bubble-text { overflow-wrap: break-word; word-break: normal; tab-size: 4; scrollbar-width: none; }
+.bubble-text::-webkit-scrollbar { display: none; }
+.bubble-input { position: relative; z-index: 1; color: transparent; }
+.bubble-input::selection { color: transparent; background: color-mix(in srgb, var(--bubble-accent) 26%, transparent); }
+.bubble-mirror {
+  position: absolute;
+  inset: 0;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+.bubble-mirror .md-mark { color: var(--bubble-faint); }
+.bubble-mirror :is(.md-strong, .md-heading) { -webkit-text-stroke: 0.5px currentColor; }
+.bubble-mirror .md-heading:not(.md-mark) { color: var(--bubble-ink); }
+/* The faces come with upright styles only, so italics are slanted from them, at the same widths. */
+.bubble-mirror .md-em { font-style: italic; }
+.bubble-mirror .md-strike { text-decoration: line-through; text-decoration-color: var(--bubble-muted); }
+.bubble-mirror :is(.md-code, .md-codeblock) { background: var(--bubble-well); border-radius: 4px; box-shadow: 0 0 0 1.5px var(--bubble-well); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.bubble-mirror .md-codeblock { border-radius: 0; }
+.bubble-mirror :is(.md-link, .md-mention, .md-list) { color: var(--bubble-accent); }
+.bubble-mirror .md-link { text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--bubble-accent) 45%, transparent); text-underline-offset: 2px; }
+.bubble-mirror .md-quote:not(.md-mark) { color: var(--bubble-muted); }
 .bubble[data-shrunk] .bubble-text { height: 44px; min-height: 44px; max-height: 44px; padding-bottom: 0; overflow: hidden; }
 .bubble[data-shrunk] .composer-files { display: none; }
 .bubble-tools {

@@ -502,15 +502,21 @@
 /* Tasks: one table, a section label over the first row of each section; the detail is a slide-over. */
 .cs-pg.cs-ts { max-width: 928px; }
 .cs-tbh, .cs-trw { display: grid; grid-template-columns: 18px minmax(0, 1fr) 108px 52px 34px; column-gap: 14px; align-items: center; box-sizing: border-box; width: 100%; }
-.cs-tbh { height: 26px; padding: 0 10px; font-size: 11px; color: var(--faint); border-bottom: 1px solid var(--edge); }
+.cs-tbh { height: 28px; padding: 0 12px; font-size: 11px; font-weight: 500; color: var(--faint); border-bottom: 1px solid var(--edge); }
 .cs-tbh span:nth-child(4), .cs-tbh span:nth-child(5), .cs-trw .cs-ttm, .cs-trw .cs-tag { text-align: right; }
 .cs-lst { list-style: none; margin: 0; padding: 0; }
-.cs-tsec { margin: 18px 0 2px; padding: 0 10px; font-size: 11.5px; font-weight: 600; color: var(--muted-foreground); display: flex; gap: 8px; align-items: baseline; }
-.cs-tsec b { font-weight: 500; color: var(--faint); }
-.cs-trw { appearance: none; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--edge) 55%, transparent); background: none; font: inherit; font-size: 13px; color: var(--foreground); text-align: left; height: 34px; padding: 0 10px; cursor: pointer; outline: none; transition: background 119ms ease; }
-.cs-trw:hover { background: color-mix(in srgb, var(--foreground) 3.5%, transparent); }
-.cs-trw:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); border-radius: 8px; }
-.cs-trw[aria-current="true"] { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.cs-tsec { margin: 20px 0 4px; padding: 0 12px; font-size: 11.5px; font-weight: 600; color: var(--muted-foreground); display: flex; gap: 8px; align-items: center; }
+.cs-tsec b { min-width: 18px; height: 16px; padding: 0 5px; border-radius: 8px; display: inline-grid; place-items: center; box-sizing: border-box; background: var(--sunk); font-size: 10.5px; font-weight: 500; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+/* Rows sit apart on the page, no rules between them: a soft rounded light under the pointer, the open one tinted. */
+.cs-trw { appearance: none; border: 0; border-radius: 10px; background: none; font: inherit; font-size: 13px; color: var(--foreground); text-align: left; height: 36px; padding: 0 12px; cursor: pointer; outline: none; transition: background 119ms ease, box-shadow 119ms ease; }
+.cs-lst li + li .cs-trw { margin-top: 1px; }
+.cs-trw:hover { background: color-mix(in srgb, var(--foreground) 4%, transparent); }
+.cs-trw:active { box-shadow: var(--press); }
+.cs-trw:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
+.cs-trw[aria-current="true"] { background: color-mix(in srgb, var(--primary) 9%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 18%, transparent); }
+.cs-trw[aria-current="true"] .cs-t { font-weight: 500; }
+.cs-tshow .cs-cn { min-width: 18px; height: 16px; padding: 0 5px; border-radius: 8px; display: inline-grid; place-items: center; box-sizing: border-box; background: color-mix(in srgb, var(--foreground) 6%, transparent); font-size: 10.5px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.cs-tnone { padding: 28px 12px; text-align: center; font-size: 13px; color: var(--muted-foreground); }
 .cs-trw .cs-mk { width: 16px; height: 16px; }
 .cs-trw .cs-tt1 { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 .cs-trw .cs-t { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
