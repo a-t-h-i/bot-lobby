@@ -217,6 +217,8 @@
 /* The page area: the whole window, under the bays. */
 .cs-body { position: relative; display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; }
 .cs-main { position: relative; display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow-y: auto; outline: none; background: var(--grain) fixed, var(--page); }
+/* A page's content fades out under the floating bays at the top instead of running beneath them. */
+.cs-main:has(.cs-pg) { -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 10px, #000 60px); mask-image: linear-gradient(to bottom, transparent 0, transparent 10px, #000 60px); }
 
 @media (prefers-reduced-motion: reduce) {
   .cs-frame, .cs-frame *, .cs-frame *::before, .cs-frame *::after { transition-duration: 0ms !important; animation: none !important; }
