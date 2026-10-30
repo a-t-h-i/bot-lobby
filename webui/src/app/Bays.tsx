@@ -3,7 +3,7 @@
  * window and three bays grow out of its edges, drawn like the composer (an edge layer and a lit fill layer through
  * goo filters, under the real content). The sidebar's mini rail sits on the left edge and grows into the session
  * list on hover or pin; the tab navigator hangs from the top showing only the active tab, opens into all four on
- * hover or a tab key, waits 600ms after the last one, then snaps back with a springy morph; the code viewer and
+ * hover or a tab key, waits 1.1s after the pointer leaves (2s after a key), then snaps back with a springy morph; the code viewer and
  * terminal buttons sit in a small bay at the top right.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react"
@@ -104,9 +104,9 @@ export function BayGhost({ className, style }: { className: string; style?: CSSP
 
 /**
  * Whether a bay is open from the pointer: it opens as soon as the pointer comes onto it and closes `linger` ms after
- * it leaves. `flash` opens it for that long without the pointer (a tab key). Focus inside keeps it open.
+ * it leaves. `flash` opens it for `flashFor` ms without the pointer (a tab key). Focus inside keeps it open.
  */
-export function useHoverBay(linger: number) {
+export function useHoverBay(linger: number, flashFor = linger) {
   const [hover, setHover] = useState(false)
   const [focus, setFocus] = useState(false)
   const timer = useRef<number | undefined>(undefined)
@@ -122,8 +122,8 @@ export function useHoverBay(linger: number) {
   const flash = useCallback(() => {
     window.clearTimeout(timer.current)
     setHover(true)
-    timer.current = window.setTimeout(() => setHover(false), linger)
-  }, [linger])
+    timer.current = window.setTimeout(() => setHover(false), flashFor)
+  }, [flashFor])
   // A touch has no hover: a tap on the closed bay opens it, a tap outside it (or on a tab in it) closes it.
   const touchAway = useRef<(() => void) | undefined>(undefined)
   useEffect(() => () => touchAway.current?.(), [])
@@ -197,7 +197,8 @@ export function useTabNavigator({ tabs, activeId, label, onSelect, flashRef }: {
   /** Filled with a function that opens the bay for a moment (the tab keys). */
   flashRef: { current: (() => void) | null }
 }) {
-  const bay = useHoverBay(600)
+  // It stays open a while after the pointer leaves, and longer after a tab key, so you can see where you landed.
+  const bay = useHoverBay(1100, 2000)
   flashRef.current = bay.flash
   const strip = useRef<HTMLDivElement>(null)
   const closedLabel = useRef<HTMLSpanElement>(null)

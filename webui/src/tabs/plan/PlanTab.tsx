@@ -10,8 +10,6 @@
  */
 import { useCallback, useRef, useState } from "react"
 import { useOfferViewPlan } from "@/lib/composerBubbles"
-import { ArrowDown, Route } from "lucide-react"
-import { KeyHint } from "@/components/ui/kbd"
 import { useHotkey } from "@/lib/hotkeys"
 import { ErrorState } from "@/app/States"
 import { useApiRead } from "@/app/useApiRead"
@@ -20,7 +18,7 @@ import { PanelConversation } from "./Conversation"
 import { PlanFailure, PlanRail } from "./Header"
 import { PlanSheet } from "./PlanSheet"
 import { PreviousPlans } from "./Previous"
-import { INTRO_LEAD, PLAN_STEPS, isFresh, seatCells, seatedCount } from "./words"
+import { isFresh } from "./words"
 import { ScrollHints } from "@/ui/ScrollHints"
 
 import { useStickToBottom } from "@/lib/useStickToBottom"
@@ -28,51 +26,17 @@ import { useStickToBottom } from "@/lib/useStickToBottom"
 type Comments = ReadonlyMap<string, string[]>
 
 /**
- * Before anyone speaks: what planning is, how a plan comes together and
- * where to start; the panel's seats are already in the side rail, as during
- * a session, where they can be filled or left empty.
+ * Before anyone speaks: one quiet line asking what to plan, centred on the page; the panel's seats are already
+ * in the side rail, where they can be filled or left empty.
  */
 function Intro({ snap, onDone }: { snap: PlannerSnapshot; onDone: () => void }) {
-  const cells = seatCells(snap)
   const pane = useRef<HTMLDivElement>(null)
   return (
     <>
       <div ref={pane} className="cs-scroll pb-dock">
-        <div className="cs-pg cs-intro">
-          <header className="cs-ih">
-            <div className="cs-ic">
-              <span aria-hidden="true" className="cs-ico"><Route className="size-5" /></span>
-              <div>
-                <h2>Plan with the panel</h2>
-                <p>{INTRO_LEAD}</p>
-              </div>
-            </div>
-          </header>
-          <p className="cs-ipanel">
-            {seatedCount(cells)}{snap.limit > 0 ? ` · up to ${snap.limit} rounds, the last the oracle's` : ""}. Click a seat in the rail at the right to leave it out of this plan.
-          </p>
-
-          <section aria-labelledby="plan-steps">
-            <h3 id="plan-steps" className="cs-rl">How a plan comes together</h3>
-            <ol className="cs-stepg">
-              {PLAN_STEPS.map((step, index) => (
-                <li key={step.title}>
-                  <span aria-hidden="true" className="cs-no">{index + 1}</span>
-                  <span className="min-w-0">
-                    <b>{step.title}</b>
-                    <span>{step.text}</span>
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </section>
-
-          <p className="cs-starth">
-            <ArrowDown aria-hidden="true" className="size-4" />
-            Start in the box below.
-            <KeyHint chord="/">write</KeyHint>
-            <KeyHint chord="Enter">send to the panel</KeyHint>
-          </p>
+        <div className="cs-pg cs-intro cs-blank">
+          <h2>What are we planning?</h2>
+          <p>Describe it below. The panel asks what it needs, then drafts the plan.</p>
         </div>
       </div>
       <ScrollHints target={pane} />

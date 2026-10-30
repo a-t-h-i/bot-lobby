@@ -37,6 +37,8 @@ const NAMED: Record<string, string> = {
   space: "Space",
   pageup: "PageUp",
   pagedown: "PageDown",
+  up: "ArrowUp",
+  down: "ArrowDown",
   home: "Home",
   end: "End",
   "`": "Backquote",

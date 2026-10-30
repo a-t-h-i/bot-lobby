@@ -19,7 +19,7 @@ import { AltH } from "./AltH.tsx"
 import { SoundToggle, ThemeToggle } from "./AppTools.tsx"
 import { Composer } from "./Composer.tsx"
 import { ProjectNotice, useProjects } from "./ProjectSwitcher.tsx"
-import { toggleSidebarPin, useSidebar } from "./Sidebar.tsx"
+import { cycleSession, toggleSidebarPin, useSidebar } from "./Sidebar.tsx"
 import { RightBay, ShellFilters, useTabNavigator } from "./Bays.tsx"
 import { TerminalDrawer, TerminalToggle } from "./TerminalDrawer.tsx"
 import { toggleTerminal } from "./terminalStore.ts"
@@ -27,7 +27,6 @@ import { CodeToggle, CodeViewer } from "./code/CodeViewer.tsx"
 import { toggleCode } from "./code/codeStore.ts"
 import { SignIn } from "./SignIn.tsx"
 import { ErrorState, LoadingState, ReconnectingState } from "./States.tsx"
-import { Thinking } from "./Thinking.tsx"
 import { useDrawer } from "@/prompts/Drawer"
 import { isPlanPrompt, usePlanPrompts } from "@/prompts/planQuestions"
 import { setPutAway, usePutAway } from "@/prompts/putAway"
@@ -49,7 +48,11 @@ function handleAction(action: string, route: Route, toggleHelp: () => void, cycl
   if (action === "search") (document.querySelector<HTMLElement>("#main input[type='search']") ?? document.getElementById("composer-text"))?.focus()
   else if (action === "help") toggleHelp()
   else if (action === "settings") go("#/settings")
-  else if (action === "thinking") toggleCollapsed("lobby.thinking")
+  else if (action === "thinking") {
+    // Thinking sits inline in the Lobby: there the key opens or folds it, elsewhere it takes you there first.
+    if (route.kind === "tab" && route.tab === "lobby") toggleCollapsed("lobby.thinking")
+    else go(tabHash("lobby"))
+  } else if (action === "nextSession" || action === "prevSession") void cycleSession(action === "nextSession" ? 1 : -1)
   else if (action === "sidebar") toggleSidebar()
   else if (action === "terminal") toggleTerminal()
   else if (action === "code") toggleCode()
@@ -110,7 +113,8 @@ function routeKey(route: Route): string {
 export function Shell() {
   const route: Route = useRoute()
   const statusRecord = useTopic<StatusInfo>("status")
-  const lobbyRecord = useTopic<LobbySnapshot>("lobby")
+  // The Lobby topic stays subscribed on every page, so going back to the Lobby is instant.
+  useTopic<LobbySnapshot>("lobby")
   const { prompts, loading: promptsLoading, answer, dismiss } = usePrompts()
   // The planning panel's open questions wait in the same drawer, after the Lobby's.
   const plan = usePlanPrompts()
@@ -168,7 +172,7 @@ export function Shell() {
   }, [select])
   const insideApp = useCallback(() => {
     const el = document.activeElement
-    if (!el || el === document.body || rootRef.current?.contains(el) === true || el.closest(".thinking-bubble, .terminal-pop")) return true
+    if (!el || el === document.body || rootRef.current?.contains(el) === true || el.closest(".terminal-pop")) return true
     // A pop-up on its way out still holds focus for a moment; it is no longer in the way.
     return el.closest("[data-state='closed']") !== null
   }, [])
@@ -257,7 +261,6 @@ export function Shell() {
       {nav.bay}
       <ProjectNotice projects={projects} />
       <span id="focused-action-help" className="sr-only">Focused buttons: Enter or Space. Links: Enter. Checkboxes: Space.</span>
-      <Thinking status={status} lobby={lobbyRecord.data} />
       <CodeViewer codeKey={keys.find((key) => key.action === "code")?.key} />
       <Lightbox />
       <AltH open={help} onOpenChange={setHelp} keys={keys} tabs={tabs} />

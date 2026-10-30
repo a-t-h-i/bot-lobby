@@ -212,6 +212,12 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
   // The agent other than the oracle answering an @ mention, for as long as its scripted reply takes.
   let answering: string | undefined;
   const archivedBackgrounds: BackgroundSession[] = [];
+  // Saved sessions of the project, as pi would list them: a couple from earlier days.
+  const saved = [
+    { sessionId: "saved-1", name: "Tidy the settings page", at: Date.now() - 26 * 3600_000 },
+    { sessionId: "saved-2", name: "Why does the router double-render?", at: Date.now() - 3 * 86_400_000 },
+  ];
+  const savedArchived = new Set<string>();
   let sessionName = fixture.status.sessionName;
   let planning = fakePlanner(fixture.mockPlanner ?? defaultPlanner());
   let config: BotLobbyConfig = resolveConfig(fixture.settings?.config ?? {});
@@ -444,6 +450,22 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
       return session;
     },
     liveSessions: () => [...(fixture.liveSessions ?? [])],
+    savedSessions: () => saved.map((session) => ({ ...session, ...(savedArchived.has(session.sessionId) ? { archived: true } : {}) })),
+    archiveSaved: (sessionId: string, archived: boolean) => {
+      const session = saved.find((entry) => entry.sessionId === sessionId);
+      if (!session) throw new Error(`no saved session ${sessionId}`);
+      if (archived) savedArchived.add(sessionId);
+      else savedArchived.delete(sessionId);
+      lobbyTopics.bump("sessions");
+      return archived ? `archived ${session.name}` : `brought back ${session.name}`;
+    },
+    deleteSaved: (sessionId: string) => {
+      const index = saved.findIndex((entry) => entry.sessionId === sessionId);
+      if (index < 0) throw new Error(`no saved session ${sessionId}`);
+      const [session] = saved.splice(index, 1);
+      lobbyTopics.bump("sessions");
+      return `deleted ${session!.name}`;
+    },
     planner: () => planning,
     ...previousPlansFake(fixture.mockPreviousPlans ?? []),
     newPlanner: (seed?: { issue: { number: number; title: string; url?: string }; body: string }, seats?: string[]) => {

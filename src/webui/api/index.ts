@@ -17,7 +17,7 @@ import { plannerAnswer, plannerCommentLine, plannerGet, plannerNew, plannerRetry
 import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksEditComment, tasksGet, tasksList, tasksMessage, tasksRestore, tasksOpen, tasksResume, tasksDeliveryReview, tasksDeliveryDefer, tasksDeliver, tasksAccept, tasksSkipStep, tasksForceClose, tasksResolveApproval } from "./tasks.ts";
 import { knowledgeAccept, knowledgeAdd, knowledgeAsk, knowledgeComment, knowledgeDismiss, knowledgeEdit, knowledgeFiles, knowledgeLedger, knowledgeMove, knowledgeOpen, knowledgePin, knowledgeRemove, knowledgeReplaceFile, knowledgeRestore, knowledgeUnnote } from "./knowledge.ts";
 import { plansDiscard, plansGet, plansStart } from "./plans.ts";
-import { sessionsAnswer, sessionsArchive, sessionsChat, sessionsList, sessionsMessage, sessionsRename, sessionsStart, sessionsStop, sessionsSwitch } from "./sessions.ts";
+import { sessionsAnswer, sessionsArchive, sessionsChat, sessionsDelete, sessionsList, sessionsMessage, sessionsRename, sessionsStart, sessionsStop, sessionsSwitch } from "./sessions.ts";
 import { settingsGet, settingsGrants, settingsHarnesses, settingsLinters, settingsSet } from "./settings.ts";
 import { lobbyRetention, lobbySetRetention } from "./retention.ts";
 import { terminalClose, terminalInput, terminalList, terminalOpen, terminalResize } from "./terminal.ts";
@@ -253,8 +253,12 @@ function buildRoutes(): Record<string, Route> {
     run: (body, ctx) => sessionsRename(body as { key?: string; name: string }, ctx),
   };
   routes["sessions.archive"] = {
-    schema: Type.Object({ key: TaskId, archived: Type.Optional(Type.Boolean()) }, { additionalProperties: false }),
-    run: (body, ctx) => sessionsArchive(body as { key: string; archived?: boolean }, ctx),
+    schema: Type.Object({ key: Type.Optional(TaskId), sessionId: Type.Optional(TaskId), archived: Type.Optional(Type.Boolean()) }, { additionalProperties: false }),
+    run: (body, ctx) => sessionsArchive(body as { key?: string; sessionId?: string; archived?: boolean }, ctx),
+  };
+  routes["sessions.delete"] = {
+    schema: Type.Object({ sessionId: TaskId }, { additionalProperties: false }),
+    run: (body, ctx) => sessionsDelete(body as { sessionId: string }, ctx),
   };
   routes["sessions.answer"] = {
     schema: Type.Object({ key: TaskId, dialogId: TaskId, answer: DialogAnswer }, { additionalProperties: false }),

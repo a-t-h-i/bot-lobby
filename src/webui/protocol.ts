@@ -174,6 +174,15 @@ export interface LobbySnapshot {
   hasOlderChat: boolean;
 }
 
+/** A saved session of the project, listed until it is archived or deleted. */
+export interface SavedSession {
+  sessionId: string;
+  name: string;
+  /** When it last changed, ms since the epoch. */
+  at: number;
+  archived?: boolean;
+}
+
 /** One background session as `sessions.list` describes it. */
 export interface BackgroundSessionInfo {
   key: string;
@@ -497,7 +506,7 @@ export interface Api {
   "plans.get": { request: { planId: string }; result: PlanDetail };
   "plans.start": { request: { planId: string; where: "here" | "session"; auto?: boolean }; result: { notice: string; key?: string } };
   "plans.discard": { request: { planId: string }; result: { notice: string } };
-  "sessions.list": { request: Record<string, never>; result: { background: BackgroundSessionInfo[]; live: LiveSession[] } };
+  "sessions.list": { request: Record<string, never>; result: { background: BackgroundSessionInfo[]; live: LiveSession[]; saved?: SavedSession[] } };
   "sessions.chat": { request: { key?: string; sessionId?: string; before?: number }; result: { entries: unknown[]; hasOlder: boolean } };
   "sessions.start": { request: { request?: string; planId?: string; auto?: boolean; attachments?: string[] }; result: { notice: string; key?: string } };
   "sessions.stop": { request: { key: string }; result: { notice: string } };
@@ -505,7 +514,8 @@ export interface Api {
   "sessions.switch": { request: { key?: string; sessionId?: string; claimTaskId?: string }; result: { notice: string } };
   "sessions.answer": { request: { key: string; dialogId: string; answer: DialogAnswer }; result: { notice: string } };
   "sessions.rename": { request: { key?: string; name: string }; result: { notice: string } };
-  "sessions.archive": { request: { key: string; archived?: boolean }; result: { notice: string } };
+  "sessions.archive": { request: { key?: string; sessionId?: string; archived?: boolean }; result: { notice: string } };
+  "sessions.delete": { request: { sessionId: string }; result: { notice: string } };
   "terminal.list": { request: Record<string, never>; result: { available: boolean; reason?: string; terminals: TerminalInfo[] } };
   "terminal.open": { request: { cols: number; rows: number }; result: TerminalInfo };
   "terminal.input": { request: { id: string; data: string }; result: Record<string, never> };
