@@ -27,7 +27,6 @@
   --ehl: rgb(255 255 255 / 0.8);
   --esh: rgb(40 40 70 / 0.26);
   --tdsh: rgb(30 30 70 / 0.16);
-  --tdhl: rgb(255 255 255 / 0.8);
   --drop1: 0 1px 2px rgb(0 0 0 / 0.05);
   --drop2: 0 4px 12px rgb(0 0 0 / 0.035);
   /* Pressed in: the raised bevel turned inside out, a soft shade under the top edge and a faint light along the bottom, no hard ring. */
@@ -62,7 +61,6 @@
   --ehl: rgb(255 255 255 / 0.16);
   --esh: rgb(0 0 0 / 0.65);
   --tdsh: rgb(0 0 0 / 0.45);
-  --tdhl: rgb(255 255 255 / 0.06);
   --drop1: 0 1px 2px rgb(0 0 0 / 0.35);
   --drop2: 0 6px 16px rgb(0 0 0 / 0.22);
   --press: inset 0 1.5px 2.5px -0.5px rgb(0 0 0 / 0.5), inset 0 -1.5px 1.5px -0.5px rgb(255 255 255 / 0.09), inset 0 0 0 1px rgb(0 0 0 / 0.14);
@@ -194,18 +192,14 @@
 .cs-tab:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
 /* The indicator under the active tab: a dent pressed into the bay and a goo-softened tint over it. */
 .cs-track { position: relative; display: flex; align-items: center; gap: 2px; height: 100%; }
-.cs-tabind { position: absolute; inset: 0; pointer-events: none; transition: opacity 170ms ease; }
-.cs-tabind i { position: absolute; top: 3px; height: 34px; left: 0; right: 0; border-radius: 10px; }
-.cs-tabind.cs-dent { filter: url(#cs-tabdent); }
-.cs-tabind.cs-dent i { background: color-mix(in srgb, var(--fill) 94%, #000); }
-.dark .cs-tabind.cs-dent i { background: color-mix(in srgb, var(--fill) 62%, #000); }
-.cs-tabind.cs-tint { filter: url(#cs-indgoo); opacity: 0.07; }
-.dark .cs-tabind.cs-tint { opacity: 0.14; }
-.cs-tabind.cs-tint i { background: var(--primary); }
-/* The pressed-in bevel on the active tab: very light, a soft shade under the top edge and a faint light along the
- * bottom. It rides the same sprung edges as the dent and the tint. */
-.cs-tabind.cs-bevel i { box-shadow: var(--press); }
-.cs-tbo[data-none] .cs-tabind { opacity: 0; }
+/* The chosen tab's highlight, pressed lightly into the bay. Choosing another tab is a quick poof: the old one
+ * shrinks and fades out (150ms) while the new one grows in with a small spring (240ms), at the same time. */
+.cs-tab::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: var(--r-in); background: color-mix(in srgb, var(--primary) 7%, color-mix(in srgb, var(--fill) 94%, #000)); box-shadow: var(--press); opacity: 0; transform: scale(0.55); filter: blur(2px); transition: opacity 150ms ease-in, transform 150ms cubic-bezier(0.4, 0, 1, 1), filter 150ms ease-in; pointer-events: none; }
+.dark .cs-tab::before { background: color-mix(in srgb, var(--primary) 14%, color-mix(in srgb, var(--fill) 62%, #000)); }
+.cs-tab[aria-selected="true"]::before { opacity: 1; transform: none; filter: none; transition: opacity 120ms ease-out, transform 240ms cubic-bezier(0.34, 1.45, 0.5, 1), filter 160ms ease-out; }
+.cs-tl { display: inline-grid; }
+.cs-tl::after { content: attr(data-t); font-weight: 600; height: 0; overflow: hidden; visibility: hidden; }
+.cs-tab[aria-selected="true"] .cs-tl { font-weight: 600; }
 
 /* The code viewer and terminal buttons, in their own bay at the top right. */
 .cs-rbx { position: absolute; z-index: 41; right: var(--gR); top: var(--fi); width: var(--wR); height: var(--hR); display: flex; align-items: center; justify-content: center; gap: 4px; box-sizing: border-box; }
@@ -1005,7 +999,7 @@ nav[aria-label="Terminals"] button[aria-current="true"] { background: color-mix(
  * row never turns sharp. Dots stay round.
  * ------------------------------------------------------------------------------------------------------------- */
 /* Inside a 4px-padded menu, bay or segmented control: 8 − 4. */
-.cs-tab, .cs-tabind i, .cs-sr, .cs-secn .cs-seg button,
+.cs-tab, .cs-sr, .cs-secn .cs-seg button,
 .cs-chk .cs-cn, .cs-tshow .cs-cn, .cs-cn, .cs-kb, .cs-dform textarea, .cs-tile { border-radius: var(--r-in); }
 /* Inside a 3px-padded segmented control or switch: 8 − 3. */
 .cs-seg .cs-thumb, .cs-sw::after { border-radius: 7px; }
@@ -1031,3 +1025,15 @@ textarea[data-slot="textarea"], textarea[data-slot="textarea"].cs-nsta, .cs-bdg 
 .bubble-row.cs-orow { height: 32px; }
 /* Buttons inside a 4px-padded menu: the menu's 10px less the padding. */
 .bubble-pane .bubble-btn { border-radius: var(--r-in); }
+
+/* Choosing a tab gives its icon a small playful motion of its own (never on hover): the bubble wiggles, the tick
+ * pops, the map unfolds, the book tips open. Reduced motion turns these off with the rest of the frame's motion. */
+.cs-tab[aria-selected="true"] .cs-ti { animation: cs-ti-pop 420ms cubic-bezier(0.34, 1.45, 0.5, 1); }
+.cs-tab[aria-selected="true"]#tab-lobby .cs-ti { animation-name: cs-ti-wiggle; }
+.cs-tab[aria-selected="true"]#tab-plan .cs-ti { animation-name: cs-ti-unfold; }
+.cs-tab[aria-selected="true"]#tab-knowledge .cs-ti { animation-name: cs-ti-tip; }
+@keyframes cs-ti-pop { 0% { transform: scale(0.6); } 55% { transform: scale(1.18); } 100% { transform: none; } }
+@keyframes cs-ti-wiggle { 0% { transform: scale(0.8) rotate(0); } 30% { transform: scale(1.12) rotate(-14deg); } 60% { transform: scale(1.04) rotate(9deg); } 100% { transform: none; } }
+@keyframes cs-ti-unfold { 0% { transform: scaleX(0.4); } 60% { transform: scaleX(1.15); } 100% { transform: none; } }
+@keyframes cs-ti-tip { 0% { transform: rotate(0) translateY(0); } 35% { transform: rotate(-10deg) translateY(-2px); } 70% { transform: rotate(4deg) translateY(0); } 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .cs-tab .cs-ti { animation: none !important; } }
