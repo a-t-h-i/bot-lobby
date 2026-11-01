@@ -283,17 +283,17 @@
   --background-image-composer-seam-below:
     linear-gradient(to bottom, transparent 0 1rem, rgb(0 0 0 / 18%) 1rem, transparent calc(1rem + 10px)),
     linear-gradient(rgb(255 255 255 / 1%), rgb(255 255 255 / 1%));
-  /* Corners: 10px for outer surfaces, 8px for controls; nested ones take the outer less their padding (--r-in 6px). Only dots stay round. */
-  --radius-sm: 6px;
+  /* Corners: 12px for outer surfaces, 10px for controls; nested ones take the outer less their padding (--r-in 8px). Only dots stay round. */
+  --radius-sm: 8px;
   /* Outer surfaces 8px; inside a padded surface, the outer radius less the padding. */
-  --r-out: 10px;
-  --r-mid: 8px;
-  --r-in: 6px;
-  --radius-md: 8px;
-  --radius-lg: 8px;
-  --radius-xl: 10px;
-  --radius-2xl: 10px;
-  --radius-3xl: 10px;
+  --r-out: 12px;
+  --r-mid: 10px;
+  --r-in: 8px;
+  --radius-md: 10px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 12px;
+  --radius-3xl: 12px;
   --color-tab: var(--tab-active);
   --color-tab-fill: var(--tab-fill);
   --color-tab-liquid: var(--tab-liquid);
@@ -1164,7 +1164,7 @@
   /* The box: 106px open (60px of text, 46px of tools) or as tall as its content, 14px corners; 44px tall with 12px corners folded. */
   --ch: var(--ch-open, 106px);
   --cw: 100%;
-  --cr: 10px;
+  --cr: 12px;
   --tp: 14px;
   --morph: height 160ms cubic-bezier(0.22, 1, 0.36, 1), width 340ms cubic-bezier(0.22, 1, 0.36, 1), border-radius 360ms cubic-bezier(0.22, 1, 0.36, 1);
   position: relative;
@@ -1202,7 +1202,7 @@
 .bubble[data-shrunk] {
   --ch: 44px;
   --cw: min(26rem, 100%);
-  --cr: 10px;
+  --cr: 12px;
   --tp: 11px;
   --morph: height 300ms cubic-bezier(0.4, 0, 0.2, 1), width 280ms cubic-bezier(0.4, 0, 0.2, 1), border-radius 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -1309,7 +1309,7 @@
 .bubble-kbd {
   padding: 1px 5px;
   border: 1px solid var(--bubble-edge);
-  border-radius: 4px;
+  border-radius: 6px;
   background: var(--bubble-hover);
   font-family: inherit;
   font-size: 11px;
@@ -1373,7 +1373,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 5px;
+  border-radius: 7px;
   background: var(--bubble-hover);
 }
 .bubble-frow:is(:hover, :focus-visible) .bubble-ftile { background: var(--bubble-fill); }
@@ -1383,7 +1383,7 @@
   height: 28px;
   padding: 0 10px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
@@ -1462,7 +1462,7 @@
 /* The faces come with upright styles only, so italics are slanted from them, at the same widths. */
 .bubble-mirror .md-em { font-style: italic; }
 .bubble-mirror .md-strike { text-decoration: line-through; text-decoration-color: var(--bubble-muted); }
-.bubble-mirror :is(.md-code, .md-codeblock) { background: var(--bubble-well); border-radius: 4px; box-shadow: 0 0 0 1.5px var(--bubble-well); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.bubble-mirror :is(.md-code, .md-codeblock) { background: var(--bubble-well); border-radius: 6px; box-shadow: 0 0 0 1.5px var(--bubble-well); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .bubble-mirror .md-codeblock { border-radius: 0; }
 .bubble-mirror :is(.md-link, .md-list) { color: var(--bubble-accent); }
 /* A /command or @name: its colour (set inline) and bolder than the text round it, at the same widths. */
@@ -1555,7 +1555,7 @@
   bottom: calc(100% + 8px);
   transform: translate(-50%, 3px);
   padding: 4px 8px;
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--bubble-fill);
   border: 1px solid var(--bubble-edge);
   color: var(--bubble-muted);
@@ -1959,7 +1959,7 @@ html[data-resizing="row"] * { cursor: row-resize !important; user-select: none; 
   cursor: pointer;
   text-decoration: underline dotted color-mix(in srgb, currentColor 45%, transparent);
   text-underline-offset: 3px;
-  border-radius: 4px;
+  border-radius: 6px;
   transition: color 150ms, text-decoration-color 150ms;
 }
 .file-link:hover { color: var(--primary); text-decoration-color: currentColor; }
