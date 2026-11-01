@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils"
 import { useApiRead } from "./useApiRead"
 
 /** The folder browser's bubble size. */
-export const FOLDER_SIZE = { w: 540, h: 324 } as const
+export const FOLDER_SIZE = { w: 500, h: 304 } as const
 
 function useOpenProject(tab: string) {
   const [opening, setOpening] = useState(false)
@@ -87,10 +87,10 @@ export function FolderPane({ tab, onClose }: { tab: string; onClose: () => void 
       : count === 0 ? "No subfolders"
         : `${count.toLocaleString()} ${count === 1 ? "folder" : "folders"}${read.data?.truncated ? " (first 2,000)" : ""}`
   return (
-    <div role="group" aria-label="Open project folder" className="bubble-pane flex flex-col gap-1.5 p-2" style={{ height: FOLDER_SIZE.h }}>
-      <div className="bubble-wellbar flex h-10 shrink-0 items-center gap-0.5 rounded-2xl px-1">
+    <div role="group" aria-label="Open project folder" className="bubble-pane flex flex-col gap-1 p-1" style={{ height: FOLDER_SIZE.h }}>
+      <div className="bubble-wellbar flex h-9 shrink-0 items-center gap-0.5 rounded-sm px-1">
         <button type="button" aria-label="Parent folder" title="Parent folder (Backspace)" disabled={busy || !read.data?.parent} onClick={() => read.data?.parent && go(read.data.parent, "back")}
-          className="bubble-iconbtn size-8 rounded-xl">
+          className="bubble-iconbtn size-8 rounded-sm">
           <ArrowUp aria-hidden="true" className="size-4" strokeWidth={1.8} />
         </button>
         <nav aria-label="Folder path" className="flex min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap" title={here}>
@@ -134,7 +134,7 @@ export function FolderPane({ tab, onClose }: { tab: string; onClose: () => void 
           </div>
         ) : null}
       </div>
-      <div className="flex h-10 shrink-0 items-center justify-between gap-2 ps-2.5">
+      <div className="flex h-9 shrink-0 items-center justify-between gap-2 ps-2">
         <span role={read.error || project.error ? "alert" : "status"} className={cn("min-w-0 truncate text-xs", read.error || project.error ? "text-destructive" : "text-(--bubble-muted)")}>{countText}</span>
         <span className="flex shrink-0 items-center gap-1">
           {read.error ? <button type="button" className="bubble-btn bubble-ghostbtn" onClick={read.reload} disabled={read.loading}>Retry</button> : null}

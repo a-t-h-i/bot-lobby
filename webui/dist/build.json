@@ -1,6 +1,6 @@
 {
-  "hash": "69996d98190554d349aab67653d078939860f2c4271c5a6a793c969960e93100",
-  "builtAt": "2026-11-01T09:39:48.269Z",
+  "hash": "b9b0a2112946a28b968b84b11bcd201b335cb04fc409744b64b57a8ba02615d4",
+  "builtAt": "2026-11-01T09:47:03.441Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -36,7 +36,7 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "6ac002e05c84be01fd697210e98d39a1d6c1a069f3f82f52023f459737159fad"
+      "sha256": "379d26bec32c3479ba3b4a9e4f4873f55423a94b91b6b92a7969577aaf0b0791"
     },
     {
       "path": "webui/src/app/NewSessionDialog.tsx",
@@ -44,11 +44,11 @@
     },
     {
       "path": "webui/src/app/ProjectFolderDialog.tsx",
-      "sha256": "36cde22e377c92212b106592b6cc1670535376cce95029d21b0500f6de6245e0"
+      "sha256": "e9b9e066c807af71b845e561fc21110706e4da2914562a6679174629090d1b0c"
     },
     {
       "path": "webui/src/app/ProjectSwitcher.tsx",
-      "sha256": "cb97dbc7a3bc967a92723486a05a96b778834c6688c8a86869eb5ac832b1912f"
+      "sha256": "d8a06c2bd7faed58513060d7c2d25cadb0d3af1d9651a47a93ba9e7b4385cb43"
     },
     {
       "path": "webui/src/app/Shell.tsx",
@@ -108,7 +108,7 @@
     },
     {
       "path": "webui/src/app/composer/ComposerCommandMenu.tsx",
-      "sha256": "3995ee007c5a503d2c455701fd30585151bfdfd4dfe821c0ad529374829c1fa4"
+      "sha256": "6a68d33e14eda8241fbeff5643980fc979aaca4afaa93425f04bc082b3ac3887"
     },
     {
       "path": "webui/src/app/composer/ComposerPrimaryActions.tsx",
@@ -292,7 +292,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "729c0498982efd862bdd3f5b987b2bc3cbf45ea5046be88105034bd145fbf5ae"
+      "sha256": "429bef0844828cb58b4bcec9a793dd8ba6baa728532cad6e19b34ab424cc2826"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -432,7 +432,7 @@
     },
     {
       "path": "webui/src/surface.css",
-      "sha256": "d16d52dbeab0474f8dc5af7efb72d9a8f0bb7ed8b2076087a1e77b45bd3de809"
+      "sha256": "445e31afe68e04de458d3a0373e443f478f68f765b393c91fa87dbcf9b398a6e"
     },
     {
       "path": "webui/src/tabs/knowledge/AgentCards.tsx",

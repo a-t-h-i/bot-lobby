@@ -11,7 +11,7 @@
  * lives in this one block: change a token here and the whole page follows.
  */
 :root {
-  --radius: 0.625rem;
+  --radius: 0.5rem;
 
   /* Page and ink */
   --background: #faf9f5;
@@ -284,12 +284,16 @@
     linear-gradient(to bottom, transparent 0 1rem, rgb(0 0 0 / 18%) 1rem, transparent calc(1rem + 10px)),
     linear-gradient(rgb(255 255 255 / 1%), rgb(255 255 255 / 1%));
   /* Corners: 8px for controls and rows, 12px for cards, 18px for dialogs and sheets, 22px for the composer. Only dots, bars and switches stay fully round. */
-  --radius-sm: 6px;
+  --radius-sm: 4px;
+  /* Outer surfaces 8px; inside a padded surface, the outer radius less the padding. */
+  --r-out: 8px;
+  --r-mid: 6px;
+  --r-in: 4px;
   --radius-md: 8px;
   --radius-lg: 8px;
-  --radius-xl: 14px;
-  --radius-2xl: 18px;
-  --radius-3xl: 22px;
+  --radius-xl: 8px;
+  --radius-2xl: 8px;
+  --radius-3xl: 8px;
   --color-tab: var(--tab-active);
   --color-tab-fill: var(--tab-fill);
   --color-tab-liquid: var(--tab-liquid);
@@ -819,7 +823,7 @@
   align-items: center;
   height: 1.5rem;
   padding: 0 0.625rem;
-  border-radius: 9999px;
+  border-radius: var(--r-mid);
   border: 1px solid color-mix(in oklab, var(--orb) 22%, var(--dock-border));
   background: color-mix(in oklab, var(--card) 88%, transparent);
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 4px 14px -6px color-mix(in oklab, var(--orb) 45%, transparent);
@@ -903,7 +907,7 @@
   gap: 0.375rem;
   height: 1.375rem;
   padding: 0 0.5rem;
-  border-radius: 9999px;
+  border-radius: var(--r-mid);
   background: color-mix(in oklab, var(--orb) 12%, transparent);
   color: color-mix(in oklab, var(--orb) 82%, var(--foreground));
   font-size: 0.75rem;
@@ -1159,7 +1163,7 @@
   /* The box: 106px open (60px of text, 46px of tools) or as tall as its content, 14px corners; 44px tall with 12px corners folded. */
   --ch: var(--ch-open, 106px);
   --cw: 100%;
-  --cr: 14px;
+  --cr: 8px;
   --tp: 14px;
   --morph: height 160ms cubic-bezier(0.22, 1, 0.36, 1), width 340ms cubic-bezier(0.22, 1, 0.36, 1), border-radius 360ms cubic-bezier(0.22, 1, 0.36, 1);
   position: relative;
@@ -1197,7 +1201,7 @@
 .bubble[data-shrunk] {
   --ch: 44px;
   --cw: min(26rem, 100%);
-  --cr: 12px;
+  --cr: 8px;
   --tp: 11px;
   --morph: height 300ms cubic-bezier(0.4, 0, 0.2, 1), width 280ms cubic-bezier(0.4, 0, 0.2, 1), border-radius 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -1245,7 +1249,7 @@
 .bubble-menu-clip {
   height: 100%;
   overflow: hidden;
-  border-radius: 18px 18px 0 0;
+  border-radius: var(--r-out) var(--r-out) 0 0;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -1265,17 +1269,18 @@
 }
 .bubble-scroll { scrollbar-width: thin; scrollbar-color: var(--bubble-faint) transparent; overscroll-behavior: contain; }
 
-/* Rows: 36px with a 16px radius, concentric inside the menu; the lit one raised a hair. */
+/* Rows: 30px with a 4px radius, concentric inside the menu's 4px padding (8 − 4); the lit one raised a hair. */
 .bubble-row {
   flex: none;
   width: 100%;
-  height: 36px;
-  padding: 0 10px;
+  height: 30px;
+  padding: 0 8px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   border: 0;
-  border-radius: 16px;
+  border-radius: var(--r-in);
+  font-size: 13px;
   background: transparent;
   text-align: left;
   color: inherit;
@@ -1289,14 +1294,14 @@
 .bubble-row:focus-visible { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--bubble-accent) 55%, transparent); }
 .bubble-glyph {
   flex: none;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--bubble-edge);
-  border-radius: 7px;
-  font-size: 12px;
+  border-radius: var(--r-in);
+  font-size: 10.5px;
   font-weight: 600;
   color: var(--bubble-muted);
 }
@@ -1315,15 +1320,15 @@
 .bubble-wellbar { background: var(--bubble-well); box-shadow: var(--bubble-inset); }
 .bubble-crumb {
   flex: none;
-  height: 28px;
+  height: 26px;
   max-width: 12rem;
   padding: 0 8px;
   overflow: hidden;
   text-overflow: ellipsis;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--r-in);
   background: transparent;
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--bubble-muted);
   cursor: pointer;
   outline: none;
@@ -1343,15 +1348,15 @@
 .bubble-flist[data-dir="back"] { animation: bubble-slide-back 170ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 .bubble-frow {
   width: 100%;
-  height: 36px;
-  padding: 0 10px 0 6px;
+  height: 30px;
+  padding: 0 8px 0 6px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--r-in);
   background: transparent;
-  font-size: 13px;
+  font-size: 12.5px;
   text-align: left;
   color: var(--bubble-ink);
   cursor: pointer;
@@ -1495,7 +1500,7 @@
   outline: none;
   transition: background 90ms ease, box-shadow 90ms ease, color 90ms ease;
 }
-.bubble-chip { height: 28px; gap: 6px; padding: 0 8px; border-radius: 8px; font-size: 12px; }
+.bubble-chip { height: 28px; gap: 6px; padding: 0 8px; border-radius: var(--r-mid); font-size: 12px; }
 .bubble-iconbtn:hover:not(:disabled), .bubble-chip:hover:not(:disabled), .bubble-chip[data-on], .bubble-iconbtn[data-on], .bubble-ghostbtn:hover:not(:disabled) {
   background: var(--bubble-well);
   box-shadow: var(--bubble-press);
@@ -1526,7 +1531,7 @@
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: 50%;
+  border-radius: var(--r-out);
   outline: none;
   cursor: pointer;
 }
@@ -1913,11 +1918,11 @@ html[data-resizing="row"] * { cursor: row-resize !important; user-select: none; 
 .q-own-wrap:has([data-open]) { max-width: 100%; }
 .q-own {
   border-color: var(--glass-edge);
-  border-radius: 1.25rem;
+  border-radius: 0.5rem;
   background: color-mix(in oklab, var(--card) 70%, transparent);
   transition: border-radius 300ms ease, border-color 200ms ease, box-shadow 300ms ease, background-color 200ms ease;
 }
-.q-own[data-open] { border-radius: 0.875rem; background: var(--card); }
+.q-own[data-open] { border-radius: 0.5rem; background: var(--card); }
 .q-own:focus-within { border-color: color-mix(in oklab, var(--primary) 55%, var(--glass-edge)); box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 16%, transparent), 0 10px 30px -18px rgb(0 0 0 / 0.4); }
 .q-own-text { text-align: center; max-height: 16rem; overflow-y: auto; transition: min-height 460ms cubic-bezier(0.34, 1.36, 0.5, 1); }
 .q-own[data-open] .q-own-text { text-align: start; min-height: 6rem; }

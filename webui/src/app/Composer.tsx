@@ -77,7 +77,7 @@ function targetFor(route: Route, openTask: string | undefined, asking: boolean):
 type Pane = "suggest" | "attach" | "projects" | "browse" | "ask" | "bar"
 type Panel = Exclude<Pane, "suggest" | "ask" | "bar">
 
-const ATTACH_SIZE = { w: 300, h: 125 } as const
+const ATTACH_SIZE = { w: 260, h: 97 } as const
 
 interface Pending {
   key: string
@@ -205,12 +205,12 @@ function Kbd({ children }: { children: string }) {
 /** A pane that sizes its bubble from its own content: its width (bar) or its height (drawer), measured after each render. */
 /** `wide` is the drawer's width when its question shows mockups (the composer's own); otherwise it is 580px. */
 function useMeasured(pane: Pane, ref: RefObject<HTMLDivElement | null>, wide?: number): { w: number; h: number } {
-  const [size, setSize] = useState({ w: 250, h: 48 })
+  const [size, setSize] = useState({ w: 250, h: 38 })
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
     const measure = () => {
-      const next = pane === "bar" ? { w: Math.ceil(el.scrollWidth) + 12, h: 48 } : { w: wide ?? 580, h: Math.ceil(el.scrollHeight) }
+      const next = pane === "bar" ? { w: Math.ceil(el.scrollWidth) + 8, h: 38 } : { w: wide ?? 580, h: Math.ceil(el.scrollHeight) }
       setSize((now) => (now.w === next.w && now.h === next.h ? now : next))
     }
     measure()
@@ -617,7 +617,7 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
   const menu = pane === "ask" ? (
     <div key="ask" ref={paneRef}><DrawerPane drawer={drawer} onExpand={setMockup} /></div>
   ) : pane === "bar" ? (
-    <div key="bar" ref={paneRef} className="bubble-pane p-1.5" style={{ width: "max-content" }}>
+    <div key="bar" ref={paneRef} className="bubble-pane p-1" style={{ width: "max-content" }}>
       <div className="cs-pbar">
         {bubbles.answer ? (
           <button type="button" className="bubble-row cs-pbq cs-acc" onMouseDown={(event) => event.preventDefault()} onClick={answerQuestions}>
@@ -652,7 +652,7 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
       onSelect={pick}
     />
   ) : pane === "attach" ? (
-    <div key="attach" role="menu" aria-label="Attach" className="bubble-pane flex flex-col p-1.5"
+    <div key="attach" role="menu" aria-label="Attach" className="bubble-pane flex flex-col p-1"
       onKeyDown={(event) => {
         if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return
         event.preventDefault()
@@ -660,16 +660,16 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
         const at = items.indexOf(document.activeElement as HTMLElement)
         items[(at + (event.key === "ArrowDown" ? 1 : items.length - 1)) % items.length]?.focus()
       }}>
-      <button type="button" role="menuitem" className="bubble-row h-10" style={{ "--delay": "24ms" } as CSSProperties} onClick={() => pickFiles(picker)}>
+      <button type="button" role="menuitem" className="bubble-row" style={{ "--delay": "24ms" } as CSSProperties} onClick={() => pickFiles(picker)}>
         <FileText aria-hidden="true" className="size-4 shrink-0 text-(--bubble-muted)" strokeWidth={1.7} />
         <span className="text-sm font-medium text-(--bubble-ink)">Upload a file…</span>
       </button>
-      <button type="button" role="menuitem" className="bubble-row h-10" style={{ "--delay": "12ms" } as CSSProperties} onClick={() => pickFiles(imagePicker)}>
+      <button type="button" role="menuitem" className="bubble-row" style={{ "--delay": "12ms" } as CSSProperties} onClick={() => pickFiles(imagePicker)}>
         <Image aria-hidden="true" className="size-4 shrink-0 text-(--bubble-muted)" strokeWidth={1.7} />
         <span className="text-sm font-medium text-(--bubble-ink)">Upload an image…</span>
       </button>
       <div className="h-px" />
-      <div className="flex h-8 items-center px-2.5 text-xs text-(--bubble-muted)">Or drop files on the composer</div>
+      <div className="flex h-7 items-center px-2 text-[11.5px] text-(--bubble-muted)">Or drop files on the composer</div>
     </div>
   ) : pane === "projects" ? (
     <ProjectsPane key="projects" projects={projects} tab={tab} onBrowse={() => setPanel("browse")} onClose={() => setPanel(null)} />
