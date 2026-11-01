@@ -38,10 +38,10 @@ export function ShellFilters() {
   return (
     <svg width="0" height="0" className="absolute" aria-hidden="true" focusable="false">
       <defs>
-        {lit("cs-baylit", 5)}
+        {lit("cs-baylit", 3)}
         {lit("cs-worklit", 3.2)}
         <filter id="cs-bayedge" x="-20%" y="-35%" width="140%" height="170%" colorInterpolationFilters="sRGB">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b" />
+          <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="b" />
           <feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" result="shape" />
           <feOffset in="shape" dx="0" dy="1.5" result="dn" />
           <feComposite in="shape" in2="dn" operator="out" result="tS0" />
@@ -62,7 +62,7 @@ export function ShellFilters() {
           </feMerge>
         </filter>
         <filter id="cs-tabdent" x="-10%" y="-45%" width="120%" height="190%" colorInterpolationFilters="sRGB">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="2.6" result="b" />
+          <feGaussianBlur in="SourceGraphic" stdDeviation="1.6" result="b" />
           <feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" result="shape" />
           <feOffset in="shape" dx="0" dy="1.5" result="dn" />
           <feComposite in="shape" in2="dn" operator="out" result="sA" />
@@ -83,7 +83,7 @@ export function ShellFilters() {
           </feMerge>
         </filter>
         <filter id="cs-indgoo" x="-20%" y="-80%" width="140%" height="260%" colorInterpolationFilters="sRGB">
-          <feGaussianBlur stdDeviation="2.6" />
+          <feGaussianBlur stdDeviation="1.6" />
           <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -10" />
         </filter>
       </defs>
