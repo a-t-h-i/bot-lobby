@@ -247,7 +247,7 @@
 .cs-wrow { display: flex; max-width: 100%; align-items: center; gap: 10px; height: 32px; padding: 0 10px; margin-left: -10px; border: 0; border-radius: 10px; background: transparent; font: inherit; font-size: 13px; color: var(--muted-foreground); cursor: pointer; outline: none; transition: background 76ms ease; }
 .cs-wrow:hover { background: var(--hover); }
 .cs-wrow:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
-.cs-wtx { flex: none; font-weight: 600; color: transparent; background: linear-gradient(100deg, var(--muted-foreground) 35%, var(--foreground) 50%, var(--primary) 56%, var(--muted-foreground) 70%) 100% 0 / 250% 100% no-repeat; -webkit-background-clip: text; background-clip: text; animation: cs-wshim 1.6s linear infinite; }
+.cs-wtx { flex: none; font-weight: 600; color: transparent; background: linear-gradient(100deg, var(--muted-foreground) 35%, var(--foreground) 50%, var(--tone, var(--live, var(--primary))) 56%, var(--muted-foreground) 70%) 100% 0 / 250% 100% no-repeat; -webkit-background-clip: text; background-clip: text; animation: cs-wshim 1.6s linear infinite; }
 .cs-wtx::after { content: ""; display: inline-block; width: 1.1em; text-align: left; animation: cs-wdots 1.4s steps(1, end) infinite; }
 @keyframes cs-wshim { from { background-position: 100% 0; } to { background-position: 0% 0; } }
 @keyframes cs-wdots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
@@ -259,7 +259,45 @@
 .cs-wlines { padding: 2px 0 4px; display: flex; flex-direction: column; gap: 2px; }
 .cs-wl { display: flex; gap: 6px; font-size: 13px; line-height: 1.5; color: var(--muted-foreground); }
 .cs-wl b { margin-right: 2px; font-weight: 600; color: var(--foreground); }
-@media (prefers-reduced-motion: reduce) { .cs-wtx { animation: none; color: var(--foreground); background: none; } .cs-wtx::after { content: "…"; animation: none; } }
+/* Each role's working word (tabs/lobby/RoleWord.tsx): the shimmer in the agent's colour (--tone) and one small motion
+   that acts out the job, drawn on an overlay (.cs-rw-o) so the word itself never moves. Only the oracle and an
+   unnamed agent keep the trailing dots; the others' motion says "still going" instead. */
+.cs-rw { position: relative; display: inline-flex; align-items: center; flex: none; }
+.cs-rw-o { position: absolute; inset: 0; pointer-events: none; }
+.cs-rw-o::before, .cs-rw-o::after { content: ""; position: absolute; }
+.cs-rw:not([data-role="oracle"], [data-role="agent"]) .cs-wtx::after, .cs-rw-name .cs-wtx::after { display: none; }
+/* Oracle: the word glows softly, like a lamp turned up and down. */
+.cs-rw[data-role="oracle"] .cs-wtx { animation: cs-wshim 1.6s linear infinite, cs-lamp 2.4s ease-in-out infinite; }
+@keyframes cs-lamp { 0%, 100% { filter: none; } 50% { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--tone) 60%, transparent)); } }
+/* Panel: a dotted route draws under the word a step at a time, then starts over. */
+.cs-rw[data-role="planner"] .cs-rw-o::after { left: 0; right: 0; bottom: -3px; height: 3px; background: radial-gradient(circle, var(--tone) 1px, transparent 1.4px) 0 50% / 6px 3px repeat-x; animation: cs-route 2.4s steps(6, jump-none) infinite; }
+@keyframes cs-route { 0% { clip-path: inset(0 100% 0 0); } 75%, 100% { clip-path: inset(0 0 0 0); } }
+/* Scout: a small lens with its handle sweeps across the word and back. */
+.cs-rw[data-role="scout"] .cs-rw-o::after { top: 50%; left: 0; width: 12px; height: 12px; margin-top: -7px; border-radius: 50%; border: 1.5px solid var(--tone); background: color-mix(in srgb, var(--tone) 12%, transparent); animation: cs-lens 2.2s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; }
+.cs-rw[data-role="scout"] .cs-rw-o::before { top: 50%; left: 0; width: 5px; height: 1.5px; margin-top: 5px; border-radius: 1px; background: var(--tone); transform-origin: 0 50%; rotate: 45deg; translate: 10px 0; animation: cs-lens-h 2.2s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; }
+@keyframes cs-lens { from { left: -3px; } to { left: calc(100% - 9px); } }
+@keyframes cs-lens-h { from { left: -3px; } to { left: calc(100% - 9px); } }
+/* Research: a little book before the word turns its pages. */
+.cs-rw[data-role="research"] { padding-left: 17px; }
+.cs-rw[data-role="research"] .cs-rw-o::before { left: 0; top: 50%; width: 12px; height: 10px; margin-top: -5px; border: 1.5px solid var(--tone); border-radius: 2px; background: linear-gradient(var(--tone), var(--tone)) 50% 0 / 1.5px 100% no-repeat; }
+.cs-rw[data-role="research"] .cs-rw-o::after { left: 6px; top: 50%; width: 5px; height: 8px; margin-top: -4px; border-radius: 0 1px 1px 0; background: color-mix(in srgb, var(--tone) 55%, transparent); transform-origin: 0 50%; animation: cs-page 1.4s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+@keyframes cs-page { 0%, 15% { transform: perspective(24px) rotateY(0deg); } 65%, 100% { transform: perspective(24px) rotateY(-180deg); } }
+/* Dev: the word types itself out behind a caret, rests, and is typed again. */
+.cs-rw[data-role="dev"] .cs-wtx { animation: cs-wshim 1.6s linear infinite, cs-type 3s steps(var(--n), jump-none) infinite; }
+.cs-rw[data-role="dev"] .cs-rw-o::after { top: 15%; bottom: 10%; left: 0; width: 1.5px; margin-left: 1px; border-radius: 1px; background: var(--tone); animation: cs-caret 3s steps(var(--n), jump-none) infinite, cs-blink 0.5s steps(1, end) infinite alternate; }
+@keyframes cs-type { 0% { clip-path: inset(0 100% 0 0); } 55%, 100% { clip-path: inset(0 0 0 0); } }
+@keyframes cs-caret { 0% { left: 0; } 55%, 100% { left: 100%; } }
+@keyframes cs-blink { 50% { opacity: 0; } }
+/* QA: a scan line sweeps over the word, then a tick pops in after it. */
+.cs-rw[data-role="qa"] { padding-right: 15px; }
+.cs-rw[data-role="qa"] .cs-rw-o::after { top: -2px; bottom: -2px; left: 0; width: 2px; border-radius: 1px; background: var(--tone); box-shadow: 0 0 6px color-mix(in srgb, var(--tone) 70%, transparent); animation: cs-scan 2.2s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+.cs-rw[data-role="qa"] .cs-rw-o::before { right: 0; top: 50%; width: 9px; height: 5px; margin-top: -4px; border-left: 1.75px solid var(--tone); border-bottom: 1.75px solid var(--tone); rotate: -45deg; animation: cs-tick 2.2s var(--spring) infinite; }
+@keyframes cs-scan { 0% { left: 0; opacity: 0; } 8% { opacity: 1; } 55% { left: calc(100% - 15px); opacity: 1; } 62%, 100% { left: calc(100% - 15px); opacity: 0; } }
+@keyframes cs-tick { 0%, 55% { opacity: 0; scale: 0.3; } 68%, 90% { opacity: 1; scale: 1; } 100% { opacity: 0; scale: 1; } }
+/* Design: a freehand line is sketched under the word, held, and sketched again. */
+.cs-rw[data-role="design"] .cs-rw-o::after { left: -1px; right: -1px; bottom: -4px; height: 4px; background: var(--tone); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 4' preserveAspectRatio='none'%3E%3Cpath d='M1 2.6C8 1 14 3.4 21 2.2S34 1 41 2.6 53 3.2 59 1.6' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 4' preserveAspectRatio='none'%3E%3Cpath d='M1 2.6C8 1 14 3.4 21 2.2S34 1 41 2.6 53 3.2 59 1.6' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; animation: cs-sketch 2.6s cubic-bezier(0.5, 0, 0.3, 1) infinite; }
+@keyframes cs-sketch { 0% { clip-path: inset(0 100% 0 0); opacity: 1; } 50%, 82% { clip-path: inset(0 0 0 0); opacity: 1; } 100% { clip-path: inset(0 0 0 0); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .cs-wtx, .cs-rw .cs-wtx { animation: none; color: var(--foreground); background: none; clip-path: none; filter: none; } .cs-wtx::after { content: "…"; animation: none; } .cs-rw-o { display: none; } .cs-rw[data-role] { padding: 0; } }
 
 /* ---------------------------------------------------------------------------------------------------------------
  * Controls shared by every page. Keycaps (`cs-kc`) and knobs are the only raised things on a page; cards are a

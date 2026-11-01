@@ -1046,24 +1046,6 @@
  * along the rule under the line. All still under reduced motion.
  */
 .activity-run[data-live] { --live: color-mix(in oklab, var(--orb, var(--primary)) 80%, var(--foreground)); }
-/*
- * The working word: a light runs through it letter by letter, each letter
- * brightening to the agent's colour and lifting a hair as the light passes,
- * then the word rests until the next pass. One pass every 2.4s; the letters
- * are 60ms apart, so the light reads as travelling.
- */
-.activity-shimmer { display: inline-flex; color: var(--muted-foreground); }
-.activity-shimmer > [aria-hidden] { display: inline-block; white-space: pre; }
-@media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
-  .activity-shimmer > [aria-hidden] {
-    animation: activity-shimmer 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-    animation-delay: calc(var(--i, 0) * 60ms);
-  }
-}
-@keyframes activity-shimmer {
-  0%, 30%, 100% { color: var(--muted-foreground); translate: 0 0; text-shadow: none; }
-  12% { color: var(--live, var(--foreground)); translate: 0 -1px; text-shadow: 0 0 8px color-mix(in oklab, var(--live, var(--foreground)) 45%, transparent); }
-}
 .activity-live-step { display: inline; animation: activity-step-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 @keyframes activity-step-in {
   from { opacity: 0; translate: 0 0.4em; filter: blur(2px); }
@@ -1102,7 +1084,6 @@
 @keyframes working-orbit-head { from { rotate: 0.78turn; } to { rotate: 1.78turn; } }
 @media (prefers-reduced-motion: reduce) {
   .activity-chevron, .activity-toggle { transition: none; }
-  .activity-shimmer > [aria-hidden] { animation: none; }
   .activity-live-step, .working-mark::before, .working-mark::after { animation: none; }
 }
 /* Adapted from T3 Code (MIT), TimelineSystemDivider.tsx: a note is a quiet label on a hairline across the column. */

@@ -2,7 +2,7 @@
  * The pieces both chats (the Lobby's and the planning panel's) are made of,
  * so they read as one, after the coding harnesses: the agents' words as plain
  * prose across the column, yours in a filled bubble on the right, notes as a
- * quiet centred line, and the speaker's name shimmering (as "Working" does)
+ * quiet centred line, and the speaker's name shimmering with its role's motion (as the working word does)
  * while their reply is on its way. A reply still being written ends in a
  * beating dot, in its speaker's colour.
  */
@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils"
 import { isOracle } from "@/ui/AgentIcon"
 import { sourceTone } from "./types"
 import { agentColor } from "@/ui/AgentIcon"
+import { RoleWord } from "./RoleWord"
 
 /**
  * One message from an agent, as the design writes them: the speaker's name in small bold type over plain prose
@@ -32,7 +33,7 @@ export function AgentMessage({ source, name, time, head, live, children, aside, 
     <div className="chat-agent group/msg" data-live={live || undefined} style={live ? ({ "--orb": sourceTone(source) } as CSSProperties) : undefined}>
       {named || aside ? (
         <p className="chat-speaker">
-          {named ? <b className="chat-name" title={time} style={{ "--who": agentColor(source) } as CSSProperties}>{waiting ? <ShimmerWord text={name} /> : name}</b> : null}
+          {named ? <b className="chat-name" title={time} style={{ "--who": agentColor(source) } as CSSProperties}>{waiting ? <RoleWord source={source} text={name} className="cs-rw-name" /> : name}</b> : null}
           {aside ? <span className="flex items-center gap-1.5 text-xs text-muted-foreground">{aside}</span> : null}
         </p>
       ) : null}
@@ -85,17 +86,5 @@ export function ChatNote({ failed, auto, children }: { failed?: boolean; auto?: 
     <div role="note" className={cn("chat-note", failed && "text-destructive", auto && "chat-note-auto")}>
       <span>{children}</span>
     </div>
-  )
-}
-
-/** A word whose letters light up in a wave, every 2.4s: "Working", or the name of an agent whose reply is on its way. */
-export function ShimmerWord({ text }: { text: string }) {
-  return (
-    <span className="activity-shimmer">
-      <span className="sr-only">{text}</span>
-      {[...text].map((letter, index) => (
-        <span key={index} aria-hidden="true" style={{ "--i": index } as CSSProperties}>{letter}</span>
-      ))}
-    </span>
   )
 }
