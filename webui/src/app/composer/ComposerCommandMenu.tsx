@@ -71,9 +71,9 @@ const LISTBOX_LABEL_BY_TRIGGER: Record<ComposerTriggerKind, string> = {
 /** At most this many rows show; more scroll. */
 export const SUGGESTION_ROWS = 8
 
-/** The bubble's height for these rows: 6px padding above and below, 36px a row. */
+/** The bubble's height for these rows: 4px padding above and below, 30px a row. */
 export function suggestionHeight(count: number): number {
-  return 12 + Math.min(count, SUGGESTION_ROWS) * 36
+  return 8 + Math.min(count, SUGGESTION_ROWS) * 30
 }
 
 let measurer: CanvasRenderingContext2D | null | undefined
@@ -85,15 +85,15 @@ export function suggestionWidth(items: ComposerCommandItem[], family: string): n
     measurer ??= document.createElement("canvas").getContext("2d")
     if (!measurer) throw new Error("no canvas")
     for (const item of items) {
-      measurer.font = `500 14px ${family}`
+      measurer.font = `500 13px ${family}`
       const name = measurer.measureText(item.label.slice(1)).width
-      measurer.font = `400 13px ${family}`
+      measurer.font = `400 12px ${family}`
       width = Math.max(width, name + measurer.measureText(item.description).width)
     }
   } catch {
-    for (const item of items) width = Math.max(width, item.label.length * 8 + item.description.length * 6.6)
+    for (const item of items) width = Math.max(width, item.label.length * 7.4 + item.description.length * 6.1)
   }
-  return Math.min(Math.max(Math.ceil(width) + 150, 200), 640)
+  return Math.min(Math.max(Math.ceil(width) + 128, 180), 600)
 }
 
 export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
@@ -120,7 +120,7 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
       role="listbox"
       aria-label={LISTBOX_LABEL_BY_TRIGGER[props.triggerKind]}
       data-composer-command-drawer="true"
-      className="bubble-pane bubble-scroll overflow-y-auto p-1.5"
+      className="bubble-pane bubble-scroll overflow-y-auto p-1"
       style={{ height: suggestionHeight(props.items.length) }}
     >
       {props.items.map((item, index) => {
