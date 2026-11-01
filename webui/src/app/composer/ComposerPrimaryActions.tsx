@@ -1,10 +1,11 @@
 /**
  * The composer's actions at the right of its tools row: Send, a round keycap with a paper plane (a lit top edge, a
- * darker underside; it sinks when pressed, and the plane nudges up and right on hover), a flat circle while there
- * is nothing to send, a spinner while it sends; and, while the oracle works, a muted red keycap to stop it. Stop
+ * darker underside; it sinks when pressed, the plane lifts and tilts on hover, and on sending it takes off up and to
+ * the right while a fresh plane glides in from the lower left), a flat circle while there is nothing to send, a
+ * spinner only if sending takes a while; and, while the oracle works, a muted red keycap to stop it. Stop
  * still asks first (the reply in progress is lost), on the page's own confirm dialog.
  */
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Keys } from "@/components/ui/kbd"
 import { Spinner } from "@/components/ui/spinner"
 import { useHotkey } from "@/lib/hotkeys"
@@ -35,7 +36,7 @@ export function ComposerStopButton({ onStop }: { onStop: () => void }) {
     <AlertDialog open={asking && shown} onOpenChange={setAsking}>
       <button
         type="button"
-        className="bubble-send bubble-key bubble-stop bubble-tip"
+        className="bubble-send bubble-key bubble-stop"
         data-tip="Interrupt"
         onPointerDown={preventPointerFocus}
         onClick={() => setAsking(true)}
@@ -67,24 +68,48 @@ export function ComposerStopButton({ onStop }: { onStop: () => void }) {
 }
 
 export function ComposerSendButton({ sending, disabled, steering, onSend }: { sending: boolean; disabled: boolean; steering: boolean; onSend: () => void }) {
+  // Each send launches the plane once (a new key restarts the flight); the spinner waits 600ms, so a quick send
+  // shows only the flight.
+  const [flight, setFlight] = useState(0)
+  const [slow, setSlow] = useState(false)
+  const [flying, setFlying] = useState(false)
+  const was = useRef(sending)
+  // The button keeps its colour while the plane is in the air, though the emptied box has nothing more to send.
+  useEffect(() => {
+    if (!flight) return
+    setFlying(true)
+    const timer = setTimeout(() => setFlying(false), 640)
+    return () => clearTimeout(timer)
+  }, [flight])
+  useEffect(() => {
+    if (sending && !was.current) setFlight((n) => n + 1)
+    was.current = sending
+    if (!sending) return setSlow(false)
+    const timer = setTimeout(() => setSlow(true), 600)
+    return () => clearTimeout(timer)
+  }, [sending])
   return (
     <button
       type="button"
-      className={cn("bubble-send bubble-tip", !disabled && "bubble-key")}
+      className={cn("bubble-send", (!disabled || flying) && "bubble-key")}
       data-tip={steering ? "Steer" : "Send"}
+      data-flying={flying || undefined}
       onPointerDown={preventPointerFocus}
       onClick={onSend}
       disabled={disabled}
       aria-label="Send"
       aria-keyshortcuts="Enter"
     >
-      {sending ? (
+      {slow ? (
         <Spinner aria-hidden="true" role="presentation" className="size-3.5" />
       ) : (
-        <svg className="bubble-plane" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M22 2L11 13" />
-          <path d="M22 2l-7 20-4-9-9-4z" />
-        </svg>
+        <span key={flight} className="bubble-plane-wrap" data-fly={flight > 0 ? "" : undefined} aria-hidden="true">
+          <svg className="bubble-plane" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 2L11 13" />
+            <path d="M22 2l-7 20-4-9-9-4z" />
+          </svg>
+          <span className="bubble-trail" />
+        </span>
       )}
     </button>
   )

@@ -61,10 +61,10 @@ export function composerVisible(route: Route): boolean {
 
 const ASK_KNOWLEDGE: Target = { id: "knowledge", label: "Ask what the agents know", placeholder: "Ask what the agents know…" }
 
-/** The one recipient this route's messages go to: the page decides, the user does not pick (on Knowledge, "Ask the knowledge" turns asking on). */
-function targetFor(route: Route, openTask: string | undefined, asking: boolean): Target {
+/** The one recipient this route's messages go to: the page decides, the user does not pick (on Knowledge, the box asks what the agents know). */
+function targetFor(route: Route, openTask: string | undefined): Target {
   if (route.kind !== "tab") return ORACLE
-  if (route.tab === "knowledge") return asking ? ASK_KNOWLEDGE : ORACLE
+  if (route.tab === "knowledge") return ASK_KNOWLEDGE
   if (route.tab === "plan") return { id: "panel", label: "Message the panel", placeholder: "Describe a task, or answer the panel…" }
   const task = route.tab === "tasks" ? taskRoute(route.rest).id ?? openTask : undefined
   return task ? { id: "comment", label: `Comment on ${task}`, placeholder: `Comment on ${task}'s plan…`, taskId: task } : ORACLE
@@ -72,7 +72,7 @@ function targetFor(route: Route, openTask: string | undefined, asking: boolean):
 
 /**
  * A bubble that grows out of the composer's top: the suggestions, one of the panels a button opens, the question
- * drawer, or the bar of bubbles (Answer questions, View plan, Ask the knowledge) that waits there otherwise.
+ * drawer, or the bar of bubbles (Answer questions, View plan) that waits there otherwise.
  */
 type Pane = "suggest" | "attach" | "projects" | "browse" | "ask" | "bar"
 type Panel = Exclude<Pane, "suggest" | "ask" | "bar">
@@ -238,10 +238,7 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
   visibleRef.current = visible
   const { taskId: openTask } = useComposerContext()
   const tab = route.kind === "tab" ? route.tab : route.kind
-  // "Ask the knowledge": on Knowledge, the box asks what the agents know until Esc or the question goes.
-  const [asking, setAsking] = useState(false)
-  useEffect(() => setAsking(false), [tab])
-  const target = useMemo(() => targetFor(route, openTask, asking), [route, openTask, asking])
+  const target = useMemo(() => targetFor(route, openTask), [route, openTask])
   const viewPlan = useViewPlan()
   const [mockup, setMockup] = useState(-1)
 
@@ -270,21 +267,10 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
   const bubbles = {
     answer: drawer.left > 0 && !drawerOpen,
     plan: tab === "plan" && Boolean(viewPlan),
-    knowledge: tab === "knowledge" && !asking,
   }
-  const barWanted = !menuOpen && panel === null && !ask && visible && !blocked && (bubbles.answer || bubbles.plan || bubbles.knowledge)
+  const barWanted = !menuOpen && panel === null && !ask && visible && !blocked && (bubbles.answer || bubbles.plan)
   const blur = menuOpen || ask || (panel !== null && visible && !blocked)
   const { shrunk, expand } = useShrinkOnScroll(card, visible && !blocked, route, blur)
-  // Folded to its pill, the box is one clean shape: the pill bar over it waits until it unfolds.
-  const bar = barWanted && !shrunk
-  const open = blur || bar
-  // The pill bar over the box (Answer questions, View plan, Ask the knowledge) is part of what pages must scroll clear of.
-  useEffect(() => {
-    const root = document.documentElement
-    root.style.setProperty("--dock-bar", bar ? "44px" : "0px")
-    return () => root.style.setProperty("--dock-bar", "0px")
-  }, [bar])
-
   // Folding to the pill and back eases slowly; the rest of the time the box follows its text quickly.
   const [morphing, setMorphing] = useState(false)
   const firstShrunk = useRef(shrunk)
@@ -292,9 +278,19 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
     if (firstShrunk.current === shrunk) return
     firstShrunk.current = shrunk
     setMorphing(true)
-    const timer = setTimeout(() => setMorphing(false), 420)
+    const timer = setTimeout(() => setMorphing(false), 400)
     return () => clearTimeout(timer)
   }, [shrunk])
+
+  // Folded to its pill, the box is one clean shape: the pill bar over it rises once the box has finished unfolding.
+  const bar = barWanted && !shrunk && !morphing
+  const open = blur || bar
+  // The pill bar's room (Answer questions, View plan) stays reserved while the box folds, so the page never jumps.
+  useEffect(() => {
+    const root = document.documentElement
+    root.style.setProperty("--dock-bar", barWanted ? "44px" : "0px")
+    return () => root.style.setProperty("--dock-bar", "0px")
+  }, [barWanted])
 
   // A panel closes when the page changes under it or the composer goes away.
   useEffect(() => setPanel(null), [tab])
@@ -426,6 +422,9 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
     const set = () => {
       const rect = el.getBoundingClientRect()
       const bottom = dock.getBoundingClientRect().bottom
+      // Folded or mid-fold, the page keeps the open box's room: it never shifts while the composer folds and unfolds.
+      const folding = dock.hasAttribute("data-shrunk") || el.closest(".bubble")?.hasAttribute("data-morphing")
+      if (folding && visible && !blocked) return
       root.style.setProperty("--composer-h", blocked || !visible ? "0px" : `${Math.ceil(bottom - rect.top)}px`)
       // A hidden composer measures 0 wide: the toasts then centre on the window instead of shrinking to nothing.
       if (!visible || rect.width === 0) {
@@ -489,7 +488,9 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
     const body = { text, ...(attachments ? { attachments } : {}) }
     try {
       let done = true
-      if (target.id === "oracle") {
+      // On Knowledge the box asks the knowledge; a /command or @agent still goes to the team.
+      const toTeam = target.id === "knowledge" && /^\s*[/@]/.test(text)
+      if (target.id === "oracle" || toTeam) {
         const result = await call("lobby.send", body)
         if (result.notice) toast(result.notice)
         if (result.open === "plan") go(tabHash("plan"))
@@ -499,7 +500,6 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
         done = (await act("knowledge.ask", body)) !== undefined
         if (done) {
           window.dispatchEvent(new CustomEvent(KNOWLEDGE_ASKED, { detail: text.trim() }))
-          setAsking(false)
         }
       } else if (target.id === "panel") done = (await act("planner.send", body)) !== undefined
       else done = (await act("tasks.comment", { taskId: target.taskId!, ...body })) !== undefined
@@ -546,11 +546,10 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
     }
     if (event.key === "Escape" && !event.nativeEvent.isComposing) {
       event.preventDefault()
-      // Esc closes an open panel, the question drawer (the questions wait in their bubble) or asking first;
+      // Esc closes an open panel or the question drawer (the questions wait in their bubble) first;
       // then it leaves the box (what you typed stays) for the tab bar.
       if (panel) setPanel(null)
       else if (ask) setPutAway(true)
-      else if (asking) setAsking(false)
       else focusTab()
       return
     }
@@ -606,7 +605,7 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
   const project = status.data?.workspace.name ?? "bot-lobby"
   const branch = status.data?.branch ?? status.data?.workspace.branch
   const steering = busy && target.id === "oracle"
-  const placeholder = shrunk ? (bubbles.knowledge ? "Write a message or ask the knowledge…" : "Write a message…")
+  const placeholder = shrunk ? (tab === "knowledge" ? "Ask what the agents know…" : "Write a message…")
     : ask ? (drawer.step?.typed ? drawer.step.placeholder : "Pick an answer above")
       : steering ? "The oracle is working. Enter steers it…" : target.placeholder
   const pickFiles = (input: RefObject<HTMLInputElement | null>) => {
@@ -616,10 +615,6 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
 
   const answerQuestions = () => {
     setPutAway(false)
-    requestAnimationFrame(() => field.current?.focus({ preventScroll: true }))
-  }
-  const askKnowledge = () => {
-    setAsking(true)
     requestAnimationFrame(() => field.current?.focus({ preventScroll: true }))
   }
   const menu = pane === "ask" ? (
@@ -639,12 +634,6 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z" /><path d="M14 3v5h5M9 13h6M9 17h4" /></svg>
             <span className="text-sm font-medium text-(--bubble-ink)">View plan</span>
             <span className="cs-kb">V</span>
-          </button>
-        ) : null}
-        {bubbles.knowledge ? (
-          <button type="button" className="bubble-row cs-pbq" onMouseDown={(event) => event.preventDefault()} onClick={askKnowledge}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" /></svg>
-            <span className="text-sm font-medium text-(--bubble-ink)">Ask the knowledge</span>
           </button>
         ) : null}
       </div>
