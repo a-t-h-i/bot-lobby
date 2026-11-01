@@ -489,8 +489,9 @@
  * short of it too.
  */
 @utility pb-dock {
-  padding-bottom: calc(var(--composer-h, 0px) + 1rem);
-  scroll-padding-bottom: calc(var(--composer-h, 0px) + 1rem);
+  /* The box, any pill bar over it, and the fade above them: the last row scrolls fully clear. */
+  padding-bottom: calc(var(--composer-h, 0px) + var(--dock-bar, 0px) + 4.5rem);
+  scroll-padding-bottom: calc(var(--composer-h, 0px) + var(--dock-bar, 0px) + 4.5rem);
 }
 @utility bottom-dock {
   bottom: calc(var(--composer-h, 0px) + 0.5rem);

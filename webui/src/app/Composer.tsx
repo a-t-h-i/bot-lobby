@@ -275,6 +275,12 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
   const bar = !menuOpen && panel === null && !ask && visible && !blocked && (bubbles.answer || bubbles.plan || bubbles.knowledge)
   const blur = menuOpen || ask || (panel !== null && visible && !blocked)
   const open = blur || bar
+  // The pill bar over the box (Answer questions, View plan, Ask the knowledge) is part of what pages must scroll clear of.
+  useEffect(() => {
+    const root = document.documentElement
+    root.style.setProperty("--dock-bar", bar ? "44px" : "0px")
+    return () => root.style.setProperty("--dock-bar", "0px")
+  }, [bar])
   const { shrunk, expand } = useShrinkOnScroll(card, visible && !blocked, route, open && !bar)
 
   // Folding to the pill and back eases slowly; the rest of the time the box follows its text quickly.
