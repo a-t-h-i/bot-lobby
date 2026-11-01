@@ -100,7 +100,6 @@
   color: var(--foreground);
 }
 .cs-frame[data-sb="closed"] { --tL: --wL 187ms cubic-bezier(0.4, 0, 0.2, 1), --hL 187ms cubic-bezier(0.4, 0, 0.2, 1); }
-.cs-frame[data-tb="closed"] { --tT: --wT 544ms cubic-bezier(0.34, 1.5, 0.5, 1), --hT 544ms cubic-bezier(0.34, 1.7, 0.5, 1); }
 .cs-gl, .cs-gt, .cs-sbwrap, .cs-tbwrap { transition: var(--tL), var(--tT); }
 
 /* The ghost layers of a bay: like the composer, each floats --fi in from its window edge, fully rounded. */
@@ -180,21 +179,13 @@
 @media (hover: hover) { .cs-tipl:hover::after { opacity: 1; transform: translate(0, -50%); transition: opacity 101ms ease 255ms, transform 116ms var(--out) 255ms; } }
 .cs-kbd { padding: 1px 5px; border: 1px solid var(--edge); border-radius: 4px; background: var(--hover); font: inherit; font-size: 11px; line-height: 1.4; color: var(--muted-foreground); }
 
-/* The tab navigator: only the active tab while closed; on hover or a tab key it opens into all four. */
+/* The tab navigator: always open, every tab showing. */
 .cs-tbwrap { position: absolute; z-index: 41; left: calc(50% - max(var(--wT), 220px) / 2); top: 0; width: max(var(--wT), 220px); height: calc(max(var(--hT), 56px) + var(--fi)); }
 .cs-tbx { position: absolute; left: calc(50% - var(--wT) / 2); top: var(--fi); width: var(--wT); height: var(--hT); overflow: hidden; }
-.cs-tbc { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 13px; font-weight: 500; color: var(--foreground); opacity: 1; transform: none; pointer-events: none; transition: opacity 136ms ease 119ms, transform 442ms var(--spring) 85ms; }
-.cs-frame[data-tb="open"] .cs-tbc { opacity: 0; transform: scale(0.82); transition: opacity 42ms ease, transform 102ms ease; }
-.cs-tbo { position: absolute; left: 0; right: 0; top: 0; height: 40px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 2px; opacity: 0; transform: scale(0.7); transform-origin: 50% 0; pointer-events: none; transition: opacity 110ms ease, transform 357ms cubic-bezier(0.34, 1.4, 0.5, 1); }
-.cs-frame[data-tb="open"] .cs-tbo { opacity: 1; transform: none; pointer-events: auto; transition: opacity 119ms ease 68ms, transform 323ms var(--out); }
-.cs-frame[data-tb="open"] .cs-tab { animation: cs-row-pop 187ms var(--out) backwards; animation-delay: calc(51ms + var(--i, 0) * 22ms); transform-origin: 50% 0; }
-.cs-lb { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
-.cs-lb[data-p="0"] { animation: cs-lb-a 136ms var(--out) both; }
-.cs-lb[data-p="1"] { animation: cs-lb-b 136ms var(--out) both; }
-@keyframes cs-lb-a { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
-@keyframes cs-lb-b { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+.cs-tbo { position: absolute; left: 0; right: 0; top: 0; height: 40px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 2px; }
+.cs-tab { animation: cs-row-pop 187ms var(--out) backwards; animation-delay: calc(51ms + var(--i, 0) * 22ms); transform-origin: 50% 0; }
 .cs-ti { display: flex; width: 15px; height: 15px; flex: none; color: var(--muted-foreground); transition: color 76ms ease; }
-.cs-tbc .cs-ti, .cs-tab[aria-selected="true"] .cs-ti { color: var(--primary); }
+.cs-tab[aria-selected="true"] .cs-ti { color: var(--primary); }
 .cs-tab:hover .cs-ti { color: var(--foreground); }
 .cs-tab[aria-selected="true"]:hover .cs-ti { color: var(--primary); }
 .cs-tab { position: relative; z-index: 1; white-space: nowrap; flex: none; height: 28px; padding: 0 10px; display: flex; align-items: center; gap: 5px; border: 0; border-radius: 9px; background: transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--muted-foreground); text-decoration: none; cursor: pointer; outline: none; transition: background 76ms ease, color 76ms ease; }
@@ -211,6 +202,9 @@
 .cs-tabind.cs-tint { filter: url(#cs-indgoo); opacity: 0.16; }
 .dark .cs-tabind.cs-tint { opacity: 0.26; }
 .cs-tabind.cs-tint i { background: var(--primary); }
+/* The pressed-in bevel on the active tab: very light, a soft shade under the top edge and a faint light along the
+ * bottom. It rides the same sprung edges as the dent and the tint. */
+.cs-tabind.cs-bevel i { box-shadow: var(--press); }
 .cs-tbo[data-none] .cs-tabind { opacity: 0; }
 
 /* The code viewer and terminal buttons, in their own bay at the top right. */
@@ -238,12 +232,12 @@
 .chat-prose { font-size: 14px; line-height: 1.5; }
 .chat-bubble.cs-umsg { position: relative; max-width: 70%; margin-right: 9px; padding: 8px 14px; border-radius: 0; background: none; box-shadow: none; color: var(--foreground); font-size: 14px; line-height: 1.5; }
 .cs-umsg :is(.cs-ue, .cs-uf) { position: absolute; inset: 0; display: block; pointer-events: none; }
-.cs-umsg .cs-ue { --shape: var(--bubble); }
+.cs-umsg .cs-ue { --shape: var(--bubble-line); }
 .cs-umsg .cs-uf { --shape: var(--bubble); }
 .cs-umsg .cs-ub { position: absolute; inset: 0; border-radius: 18px 18px 6px 18px; background: var(--shape); }
 /* The tail: an SVG curve that leaves the bubble's straight right edge tangentially and ends in a rounded tip. */
 .cs-umsg .cs-ut { position: absolute; right: -9px; bottom: 0; width: 22px; height: 16px; overflow: visible; pointer-events: none; }
-.cs-ut-edge { fill: none; stroke: var(--bubble); stroke-width: 2; stroke-linejoin: round; stroke-linecap: butt; }
+.cs-ut-edge { fill: none; stroke: var(--bubble-line); stroke-width: 2; stroke-linejoin: round; stroke-linecap: butt; }
 .cs-ut-fill { fill: var(--bubble); }
 .cs-umsg .cs-ue .cs-ub { box-shadow: 0 0 0 1px var(--shape); }
 .cs-umsg .cs-ux { position: relative; min-width: 0; }
