@@ -10,6 +10,7 @@ import type { CSSProperties, ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { isOracle } from "@/ui/AgentIcon"
 import { sourceTone } from "./types"
+import { agentColor } from "@/ui/AgentIcon"
 
 /**
  * One message from an agent, as the design writes them: the speaker's name in small bold type over plain prose
@@ -31,7 +32,7 @@ export function AgentMessage({ source, name, time, head, live, children, aside, 
     <div className="chat-agent group/msg" data-live={live || undefined} style={live ? ({ "--orb": sourceTone(source) } as CSSProperties) : undefined}>
       {named || aside ? (
         <p className="chat-speaker">
-          {named ? <b className="chat-name" title={time} style={{ "--who": sourceTone(source) } as CSSProperties}>{waiting ? <ShimmerWord text={name} /> : name}</b> : null}
+          {named ? <b className="chat-name" title={time} style={{ "--who": agentColor(source) } as CSSProperties}>{waiting ? <ShimmerWord text={name} /> : name}</b> : null}
           {aside ? <span className="flex items-center gap-1.5 text-xs text-muted-foreground">{aside}</span> : null}
         </p>
       ) : null}
@@ -64,15 +65,14 @@ export function YourMessage({ time, head: _head, note, children, below, actions,
         <i className="cs-uf" aria-hidden="true"><b className="cs-ub" /></i>
         <BubbleTail />
         <div className="cs-ux">{children}</div>
+        {/* Edit and the like wait just left of the bubble, bound to it, shown on hover or focus. */}
+        {actions && !note ? <div className="chat-meta absolute top-1/2 right-full mr-2 flex -translate-y-1/2 items-center gap-2 whitespace-nowrap">{actions}</div> : null}
       </div>
       {note ? (
         <div className="chat-meta flex items-center gap-2 pr-[9px]" data-note="">
           {actions}
           <span>{note}</span>
         </div>
-      ) : actions ? (
-        // Edit and the like wait beside the bubble, so the message takes no more room than the design's.
-        <div className="chat-meta absolute top-1/2 right-full mr-2 flex -translate-y-1/2 items-center gap-2">{actions}</div>
       ) : null}
       {below}
     </div>

@@ -1,6 +1,6 @@
 {
-  "hash": "b9b0a2112946a28b968b84b11bcd201b335cb04fc409744b64b57a8ba02615d4",
-  "builtAt": "2026-11-01T09:47:03.441Z",
+  "hash": "b93f986393b5683e6b76db64540f003e725a49b33cc9b4879e1ddf0870b9df22",
+  "builtAt": "2026-11-01T10:04:17.854Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -36,7 +36,7 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "379d26bec32c3479ba3b4a9e4f4873f55423a94b91b6b92a7969577aaf0b0791"
+      "sha256": "eb9bc80b9fa425345f90380c2e0eae013ac42a67426a7c895cd8cbc4bdba317d"
     },
     {
       "path": "webui/src/app/NewSessionDialog.tsx",
@@ -292,7 +292,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "429bef0844828cb58b4bcec9a793dd8ba6baa728532cad6e19b34ab424cc2826"
+      "sha256": "a267b821bebab27cc10b530cec73ae4662f30db481e2df67dfc54cc256cb7a15"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -432,7 +432,7 @@
     },
     {
       "path": "webui/src/surface.css",
-      "sha256": "445e31afe68e04de458d3a0373e443f478f68f765b393c91fa87dbcf9b398a6e"
+      "sha256": "84bcb07e03b60487f69bfccccf6a9ec1a7dda08427712e2ff8fc925f55c4ccf3"
     },
     {
       "path": "webui/src/tabs/knowledge/AgentCards.tsx",
@@ -472,7 +472,7 @@
     },
     {
       "path": "webui/src/tabs/lobby/ChatParts.tsx",
-      "sha256": "21deb62119924952a851e8c48ef8409718bbc29e3bf77f626b815eda9a5e212d"
+      "sha256": "7588ac39c0fa236a388fb73e0062585ab4e0d792e2bc2dcfaa623ca185d6d33a"
     },
     {
       "path": "webui/src/tabs/lobby/Conversation.tsx",
@@ -616,7 +616,7 @@
     },
     {
       "path": "webui/src/tabs/tasks/TaskList.tsx",
-      "sha256": "878c7387c90cad39f11348a8ff1802b049faf3d71359d991002f05da7f398980"
+      "sha256": "b03ffcc21716973e90eb48724bf3127f2ed91c8d299f6db40dbdcc6be8fc59a5"
     },
     {
       "path": "webui/src/tabs/tasks/TasksTab.tsx",

@@ -66,8 +66,9 @@ export function TaskList({ rows, selectedId, onSelect }: { rows: readonly TaskRo
         <span>Age</span>
       </div>
       <ul className="cs-lst">
-        {groupRows(rows).flatMap(({ rows: group }) =>
-          group.map((row, at) => <TaskItem key={`${row.kind}-${row.id}`} row={row} head={at === 0} count={group.length} selected={row.id === selectedId} onSelect={onSelect} />),
+        {groupRows(rows).flatMap(({ rows: group }, _, groups) =>
+          // One section alone needs no label: the Tasks / Archived switch above already names it and counts it.
+          group.map((row, at) => <TaskItem key={`${row.kind}-${row.id}`} row={row} head={at === 0 && groups.length > 1} count={group.length} selected={row.id === selectedId} onSelect={onSelect} />),
         )}
       </ul>
     </>
