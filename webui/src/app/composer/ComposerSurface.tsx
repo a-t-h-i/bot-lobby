@@ -20,7 +20,7 @@ function BubbleFilters() {
     <svg width="0" height="0" className="absolute" aria-hidden="true" focusable="false">
       <defs>
         <filter id="bubble-goolit" x="-10%" y="-10%" width="120%" height="120%" colorInterpolationFilters="sRGB">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="b" />
+          <feGaussianBlur in="SourceGraphic" stdDeviation="4.5" result="b" />
           <feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" result="shape" />
           <feOffset in="shape" dx="0" dy="1.5" result="dn" />
           <feComposite in="shape" in2="dn" operator="out" result="rimA" />
@@ -41,7 +41,7 @@ function BubbleFilters() {
           </feMerge>
         </filter>
         <filter id="bubble-gooedge" x="-10%" y="-10%" width="120%" height="120%" colorInterpolationFilters="sRGB">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="b" />
+          <feGaussianBlur in="SourceGraphic" stdDeviation="4.5" result="b" />
           <feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" result="shape" />
           <feOffset in="shape" dx="0" dy="1.5" result="dn" />
           <feComposite in="shape" in2="dn" operator="out" result="tS0" />

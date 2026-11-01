@@ -85,7 +85,7 @@
 .cs-frame {
   /* How far the floating bays sit in from the window's edges. */
   --fi: 5px;
-  --float-r: 8px;
+  --float-r: 10px;
   --gR: var(--fi);
   --wR: 84px;
   --hR: 40px;
@@ -182,20 +182,20 @@
 /* The tab navigator: always open, every tab showing. */
 .cs-tbwrap { position: absolute; z-index: 41; left: calc(50% - max(var(--wT), 220px) / 2); top: 0; width: max(var(--wT), 220px); height: calc(max(var(--hT), 56px) + var(--fi)); }
 .cs-tbx { position: absolute; left: calc(50% - var(--wT) / 2); top: var(--fi); width: var(--wT); height: var(--hT); overflow: hidden; }
-.cs-tbo { position: absolute; left: 0; right: 0; top: 0; height: 40px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 2px; }
+.cs-tbo { position: absolute; left: 0; right: 0; top: 0; height: 40px; padding: 0 4px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 2px; }
 .cs-tab { animation: cs-row-pop 187ms var(--out) backwards; animation-delay: calc(51ms + var(--i, 0) * 22ms); transform-origin: 50% 0; }
 .cs-ti { display: flex; width: 15px; height: 15px; flex: none; color: var(--muted-foreground); transition: color 76ms ease; }
 .cs-tab[aria-selected="true"] .cs-ti { color: var(--primary); }
 .cs-tab:hover .cs-ti { color: var(--foreground); }
 .cs-tab[aria-selected="true"]:hover .cs-ti { color: var(--primary); }
-.cs-tab { position: relative; z-index: 1; white-space: nowrap; flex: none; height: 28px; padding: 0 10px; display: flex; align-items: center; gap: 5px; border: 0; border-radius: 8px; background: transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--muted-foreground); text-decoration: none; cursor: pointer; outline: none; transition: background 76ms ease, color 76ms ease; }
+.cs-tab { position: relative; z-index: 1; white-space: nowrap; flex: none; height: 32px; padding: 0 13px; display: flex; align-items: center; gap: 6px; border: 0; border-radius: 8px; background: transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--muted-foreground); text-decoration: none; cursor: pointer; outline: none; transition: background 76ms ease, color 76ms ease; }
 .cs-tab:hover { background: var(--hover); color: var(--foreground); }
 .cs-tab[aria-selected="true"], .cs-tab[aria-selected="true"]:hover { background: transparent; color: var(--foreground); }
 .cs-tab:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
 /* The indicator under the active tab: a dent pressed into the bay and a goo-softened tint over it. */
 .cs-track { position: relative; display: flex; align-items: center; gap: 2px; height: 100%; }
 .cs-tabind { position: absolute; inset: 0; pointer-events: none; transition: opacity 170ms ease; }
-.cs-tabind i { position: absolute; top: 6px; height: 28px; left: 0; right: 0; border-radius: 8px; }
+.cs-tabind i { position: absolute; top: 4px; height: 32px; left: 0; right: 0; border-radius: 8px; }
 .cs-tabind.cs-dent { filter: url(#cs-tabdent); }
 .cs-tabind.cs-dent i { background: color-mix(in srgb, var(--fill) 94%, #000); }
 .dark .cs-tabind.cs-dent i { background: color-mix(in srgb, var(--fill) 62%, #000); }
@@ -238,7 +238,7 @@
 .cs-umsg :is(.cs-ue, .cs-uf) { position: absolute; inset: 0; display: block; pointer-events: none; }
 .cs-umsg .cs-ue { --shape: var(--bubble-line); }
 .cs-umsg .cs-uf { --shape: var(--bubble); }
-.cs-umsg .cs-ub { position: absolute; inset: 0; border-radius: 8px 8px 6px 8px; background: var(--shape); }
+.cs-umsg .cs-ub { position: absolute; inset: 0; border-radius: 12px 12px 6px 12px; background: var(--shape); }
 /* The tail: an SVG curve that leaves the bubble's straight right edge tangentially and ends in a rounded tip. */
 .cs-umsg .cs-ut { position: absolute; right: -9px; bottom: 0; width: 22px; height: 16px; overflow: visible; pointer-events: none; }
 .cs-ut-edge { fill: none; stroke: var(--bubble-line); stroke-width: 2; stroke-linejoin: round; stroke-linecap: butt; }
@@ -367,8 +367,8 @@
 .cs-pgh:not(:has(.cs-hd2)) { align-items: center; }
 .cs-hd1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; color: var(--foreground); }
 .cs-hd2 { margin: 4px 0 0; font-size: 13px; color: var(--muted-foreground); }
-.cs-card { background: var(--fill); box-shadow: inset 0 0 0 1px var(--edge); border-radius: 8px; }
-.cs-sunk { background: var(--sunk); border-radius: 8px; }
+.cs-card { background: var(--fill); box-shadow: inset 0 0 0 1px var(--edge); border-radius: var(--r-out); }
+.cs-sunk { background: var(--sunk); border-radius: var(--r-out); }
 .cs-note { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 8px; font-size: 13px; color: var(--muted-foreground); background: var(--sunk); }
 .cs-note b { color: var(--foreground); font-weight: 600; }
 .cs-sel { appearance: none; border: 0; font: inherit; display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; height: 34px; padding: 0 12px; border-radius: 8px; background: var(--sunk); font-size: 13px; color: var(--foreground); text-align: left; cursor: pointer; box-sizing: border-box; outline: none; }
@@ -389,7 +389,7 @@
 .cs-shw[data-open="true"] { pointer-events: auto; }
 .cs-shbd { position: absolute; inset: 0; background: color-mix(in srgb, var(--page) 42%, transparent); -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px); opacity: 0; transition: opacity 238ms ease; }
 .cs-shw[data-open="true"] .cs-shbd { opacity: 1; }
-.cs-shp { position: absolute; top: 12px; bottom: 12px; right: 12px; width: min(620px, calc(100vw - 24px)); border-radius: 8px; background: var(--fill); box-shadow: inset 0 0 0 1px var(--edge), 0 24px 70px rgb(0 0 0 / 0.3); transform: translateX(calc(100% + 40px)); transition: transform 476ms cubic-bezier(0.34, 1.18, 0.5, 1); display: flex; flex-direction: column; overflow: hidden; outline: none; }
+.cs-shp { position: absolute; top: 12px; bottom: 12px; right: 12px; width: min(620px, calc(100vw - 24px)); border-radius: var(--r-out); background: var(--fill); box-shadow: inset 0 0 0 1px var(--edge), 0 24px 70px rgb(0 0 0 / 0.3); transform: translateX(calc(100% + 40px)); transition: transform 476ms cubic-bezier(0.34, 1.18, 0.5, 1); display: flex; flex-direction: column; overflow: hidden; outline: none; }
 .cs-shw[data-open="true"] .cs-shp { transform: none; }
 .cs-shh { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px 12px; flex: none; }
 .cs-shh h3 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
@@ -463,7 +463,7 @@
 .cs-mxw[data-open="true"] { pointer-events: auto; }
 .cs-mxw .cs-shbd { opacity: 0; }
 .cs-mxw[data-open="true"] .cs-shbd { opacity: 1; }
-.cs-mxc { position: relative; width: min(980px, calc(100% - 80px)); max-height: calc(100% - 80px); box-sizing: border-box; padding: 14px; border-radius: 8px; background: var(--fill); box-shadow: 0 0 0 1px var(--edge), 0 30px 80px rgb(0 0 0 / 0.35); display: flex; flex-direction: column; gap: 12px; opacity: 0; transform: scale(0.94) translateY(10px); transition: opacity 170ms ease, transform 357ms cubic-bezier(0.34, 1.3, 0.5, 1); outline: none; }
+.cs-mxc { position: relative; width: min(980px, calc(100% - 80px)); max-height: calc(100% - 80px); box-sizing: border-box; padding: 14px; border-radius: var(--r-out); background: var(--fill); box-shadow: 0 0 0 1px var(--edge), 0 30px 80px rgb(0 0 0 / 0.35); display: flex; flex-direction: column; gap: 12px; opacity: 0; transform: scale(0.94) translateY(10px); transition: opacity 170ms ease, transform 357ms cubic-bezier(0.34, 1.3, 0.5, 1); outline: none; }
 .cs-mxw[data-open="true"] .cs-mxc { opacity: 1; transform: none; }
 .cs-mxbig { position: relative; min-height: 0; flex: 1 1 auto; aspect-ratio: 16 / 10; max-height: calc(100vh - 200px); border-radius: 8px; background: var(--sunk); overflow: hidden; }
 .cs-mxbig > * { position: absolute; inset: 0; width: 100%; height: 100% !important; object-fit: contain; border: 0; border-radius: 0; }
@@ -537,7 +537,7 @@
 .cs-trw .cs-mt[data-w="warn"] { color: var(--warn); }
 .cs-trw .cs-tpg { display: inline-flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
 .cs-trw :is(.cs-ttm, .cs-tag) { font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.cs-shw.cs-tdw .cs-shp { width: min(640px, calc(100vw - 24px)); border-radius: 8px; }
+.cs-shw.cs-tdw .cs-shp { width: min(640px, calc(100vw - 24px)); border-radius: var(--r-out); }
 .cs-tdw .cs-shh { align-items: flex-start; padding: 14px 14px 6px 18px; gap: 8px; }
 .cs-tdw .cs-shb { padding: 14px 22px 28px; }
 @media (max-width: 720px) { .cs-tbh, .cs-trw { grid-template-columns: 18px minmax(0, 1fr) 34px; } .cs-tbh span:nth-child(3), .cs-tbh span:nth-child(4), .cs-trw .cs-tpg, .cs-trw .cs-ttm { display: none; } }
@@ -560,7 +560,7 @@
 .cs-dtl:hover { color: var(--foreground); text-decoration-color: currentColor; }
 .cs-ids { margin: 8px 0 0; font-size: 12px; color: var(--faint); word-break: break-all; }
 .cs-prog { display: flex; align-items: center; gap: 10px; margin: 14px 0 0; font-size: 12.5px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
-.cs-sunkbox { padding: 14px 16px; border-radius: 8px; background: var(--sunk); }
+.cs-sunkbox { padding: 14px 16px; border-radius: var(--r-out); background: var(--sunk); }
 .cs-stl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
 .cs-stp { display: flex; flex-direction: column; min-width: 0; }
 .cs-stpa { display: flex; align-items: flex-start; gap: 10px; font-size: 13.5px; min-width: 0; }
@@ -754,7 +754,7 @@
 .cs-kns input::placeholder { color: var(--faint); }
 .cs-kx { appearance: none; border: 0; background: none; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; color: var(--muted-foreground); cursor: pointer; }
 .cs-kx:hover { background: var(--hover); color: var(--foreground); }
-.cs-knask { margin: 0 0 14px; padding: 14px 16px; border-radius: 8px; background: color-mix(in srgb, var(--primary) 5%, var(--fill)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 26%, var(--edge)); animation: cs-knin 255ms var(--out); }
+.cs-knask { margin: 0 0 14px; padding: 14px 16px; border-radius: var(--r-out); background: color-mix(in srgb, var(--primary) 5%, var(--fill)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 26%, var(--edge)); animation: cs-knin 255ms var(--out); }
 .cs-knask .cs-ah { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--primary); }
 .cs-knask .cs-aq { margin: 8px 0 0; font-size: 12.5px; color: var(--muted-foreground); }
 .cs-knask .cs-aa { margin: 6px 0 0; font-size: 14px; line-height: 1.6; color: var(--foreground); }
@@ -769,7 +769,7 @@
 .cs-knask .cs-aact { display: flex; gap: 8px; margin-top: 12px; }
 .cs-kng { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
 .cs-kcol { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.cs-knc { position: relative; border-radius: 8px; padding: 12px 14px; background: var(--fill); box-shadow: inset 0 0 0 1px var(--edge); transition: box-shadow 119ms, opacity 119ms; animation: cs-knin 238ms var(--out) backwards; }
+.cs-knc { position: relative; border-radius: var(--r-out); padding: 12px 14px; background: var(--fill); box-shadow: inset 0 0 0 1px var(--edge); transition: box-shadow 119ms, opacity 119ms; animation: cs-knin 238ms var(--out) backwards; }
 .cs-knc:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 20%, var(--edge)); }
 .cs-knc[data-sel] { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--primary) 55%, var(--edge)); }
 .cs-knc[data-drag] { opacity: 0.5; box-shadow: inset 0 0 0 1.5px var(--faint); }
@@ -805,7 +805,7 @@
 .cs-knempty { padding: 44px 0; text-align: center; font-size: 13.5px; color: var(--muted-foreground); }
 .cs-knempty b { display: block; margin-bottom: 4px; font-size: 15px; color: var(--foreground); font-weight: 600; }
 .cs-kag4 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
-.cs-kagc { border-radius: 8px; padding: 18px 20px 16px; background: var(--fill); box-shadow: inset 0 0 0 1px var(--edge); min-width: 0; }
+.cs-kagc { border-radius: var(--r-out); padding: 18px 20px 16px; background: var(--fill); box-shadow: inset 0 0 0 1px var(--edge); min-width: 0; }
 .cs-kagh { display: flex; align-items: center; gap: 12px; }
 .cs-kagh .cs-kat { width: 30px; height: 30px; border-radius: 8px; font-size: 14px; }
 .cs-kagh h3 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
@@ -829,7 +829,7 @@
 .cs-kagr li::before { content: ""; flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--c); transform: translateY(-1px); }
 .cs-kagr li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cs-kagr li i { font-style: normal; flex: none; font-size: 11.5px; color: var(--muted-foreground); }
-.cs-shw.cs-knw .cs-shp { width: min(560px, calc(100vw - 24px)); border-radius: 8px; }
+.cs-shw.cs-knw .cs-shp { width: min(560px, calc(100vw - 24px)); border-radius: var(--r-out); }
 .cs-knw .cs-shh { align-items: flex-start; padding: 16px 18px 8px; }
 .cs-knw .cs-shb { padding: 6px 22px 28px; }
 .cs-knwh { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted-foreground); min-height: 28px; }
@@ -870,13 +870,13 @@
 .cs-secn .cs-seg button:hover:not([data-on]) { background: var(--hover); }
 .cs-secn .cs-seg button[data-on] { background: color-mix(in srgb, var(--primary) 7%, color-mix(in srgb, var(--fill) 92%, #000)); box-shadow: var(--press); }
 .dark .cs-secn .cs-seg button[data-on] { background: color-mix(in srgb, var(--primary) 12%, color-mix(in srgb, var(--fill) 62%, #000)); }
-.cs-set section[data-slot="agent-row"] { gap: 11px; padding: 14px 16px 16px; border: 0; border-radius: 8px; background: var(--fill); box-shadow: var(--rs); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.cs-set section[data-slot="agent-row"] { gap: 11px; padding: 14px 16px 16px; border: 0; border-radius: var(--r-out); background: var(--fill); box-shadow: var(--rs); -webkit-backdrop-filter: none; backdrop-filter: none; }
 .cs-set section[data-slot="agent-row"] h3 { font-size: 14.5px; gap: 9px; }
 .cs-set section[data-slot="agent-row"] h3 .cs-tile { width: 22px; height: 22px; border-radius: 7px; }
 .cs-set section[data-slot="agent-row"] h3 .cs-tile svg { width: 12px; height: 12px; color: #fff; }
 
 /* Gates and dialogs: raised cards (24px corners, the keycap bevel and a deep soft shadow) on a lightly blurred page. */
-.glass-pop, .cs-dlg { border: 0; border-radius: 8px; background: var(--fill); box-shadow: var(--rs), 0 24px 60px rgb(0 0 0 / 0.22); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.glass-pop, .cs-dlg { border: 0; border-radius: var(--r-out); background: var(--fill); box-shadow: var(--rs), 0 24px 60px rgb(0 0 0 / 0.22); -webkit-backdrop-filter: none; backdrop-filter: none; }
 .dark :is(.glass-pop, .cs-dlg) { box-shadow: var(--rs), 0 24px 60px rgb(0 0 0 / 0.5); }
 [data-slot="alert-dialog-content"] { padding: 20px 22px 18px; gap: 14px; }
 [data-slot="alert-dialog-content"] [data-slot="alert-dialog-title"], [data-slot="alert-dialog-content"] h2 { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
@@ -896,7 +896,7 @@
 .cs-errc { width: min(380px, 100%); padding: 26px 24px 22px; text-align: center; }
 .cs-errc h2 { margin: 0; font-size: 16px; font-weight: 600; display: flex; gap: 8px; align-items: center; justify-content: center; }
 .cs-errc p { margin: 8px 0 16px; font-size: 12.5px; line-height: 1.55; color: var(--muted-foreground); overflow-wrap: anywhere; }
-.cs-banner { display: flex; align-items: center; gap: 12px; margin: 0 12px 6px; padding: 10px 12px 10px 16px; border-radius: 8px; background: var(--fill); box-shadow: var(--rs); font-size: 13px; color: var(--foreground); }
+.cs-banner { display: flex; align-items: center; gap: 12px; margin: 0 12px 6px; padding: 10px 12px 10px 16px; border-radius: var(--r-out); background: var(--fill); box-shadow: var(--rs); font-size: 13px; color: var(--foreground); }
 .cs-banner .cs-wi { color: var(--bad); flex: none; }
 .cs-gi { position: relative; flex: none; width: 36px; height: 22px; filter: url(#cs-loadgoo); }
 .cs-gi.cs-big { width: 60px; height: 34px; transform: scale(1.4); }
@@ -911,12 +911,12 @@
 textarea[data-slot="textarea"].cs-nsta { border-radius: 8px; padding: 12px 14px; font-size: 13px; }
 
 /* The code viewer and the terminal: the code sits in a sunk well inside the raised card; tool groups are keycaps. */
-.code-pane { margin: 0 12px 12px; border-radius: 8px; background: var(--sunk); overflow: hidden; }
+.code-pane { margin: 0 12px 12px; border-radius: var(--r-out); background: var(--sunk); overflow: hidden; }
 .code-rail { border-right: 0; }
 .code-rail form label { border: 0; border-radius: 8px; background: var(--sunk); height: 34px; }
 .code-rail form label:focus-within { box-shadow: inset 0 0 0 2px var(--ring); }
 .terminal-tools { border: 0; border-radius: 8px; background: var(--fill); box-shadow: var(--rs); }
-.terminal-drawer { border-top: 0; border-radius: 8px 8px 0 0; background: var(--fill); box-shadow: 0 0 0 1px var(--edge), 0 -10px 30px rgb(0 0 0 / 0.08); }
+.terminal-drawer { border-top: 0; border-radius: var(--r-out) var(--r-out) 0 0; background: var(--fill); box-shadow: 0 0 0 1px var(--edge), 0 -10px 30px rgb(0 0 0 / 0.08); }
 nav[aria-label="Terminals"] button[aria-current="true"] { background: color-mix(in srgb, var(--primary) 12%, var(--sunk)); color: var(--foreground); }
 [class*="group/mock"]:hover > .cs-mxb { opacity: 1; transform: scale(1.08); }
 [data-slot="select-trigger"] .cs-rec { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--primary); margin-right: 2px; flex: none; }
@@ -1021,3 +1021,10 @@ textarea[data-slot="textarea"], textarea[data-slot="textarea"].cs-nsta, .cs-bdg 
 .bubble-row .cs-kdot::before { width: 7px; height: 7px; }
 .bubble-row .cs-ktag { font-size: 10.5px; padding-left: 10px; }
 .cs-pbar .bubble-row { padding: 0 12px 0 10px; }
+
+/* The project menu: two-line rows with room above and below, and a plain Open folder row. */
+.bubble-row.cs-prow { height: 46px; padding-block: 6px; align-items: center; }
+.bubble-row.cs-prow .text-xs { font-size: 11.5px; line-height: 15px; }
+.bubble-row.cs-orow { height: 32px; }
+/* Buttons inside a 4px-padded menu: the menu's 10px less the padding. */
+.bubble-pane .bubble-btn { border-radius: var(--r-in); }
