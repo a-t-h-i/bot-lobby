@@ -2,9 +2,8 @@
  * The shell's bays, after the user's design (docs/web-ui/composer-surface): the page lies flat over the whole
  * window and three bays grow out of its edges, drawn like the composer (an edge layer and a lit fill layer through
  * goo filters, under the real content). The sidebar's mini rail sits on the left edge and grows into the session
- * list on hover or pin; the tab navigator hangs from the top showing only the active tab, opens into all four on
- * hover or a tab key, waits 1.1s after the pointer leaves (2s after a key), then snaps back with a springy morph; the code viewer and
- * terminal buttons sit in a small bay at the top right.
+ * list on hover or pin; the tab navigator hangs from the top, always open with every tab showing (the user asked for
+ * it never to fold away); the code viewer and terminal buttons sit in a small bay at the top right.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react"
 import type { TabInfo } from "@protocol"
@@ -182,47 +181,37 @@ export function TabGlyph({ id }: { id: string }) {
 
 const LEAD = "cubic-bezier(0.3,1.2,0.5,1)"
 const TRAIL = "cubic-bezier(0.22,1,0.36,1)"
+/** The liquid's timings: the leading edge, the trailing edge (and its small lag), and the squash. Kept quick. */
+const LEAD_MS = 190
+const TRAIL_MS = 290
+const TRAIL_LAG = 14
+const SQUASH_MS = 300
 
 /**
- * The tab navigator. Closed it shows the active tab (or Settings, which is no tab); open, all four tabs with the
- * active one pressed into the bay. Moving between tabs, the indicator's leading edge springs ahead and its trailing
+ * The tab navigator: every tab, always showing, with the active one pressed into the bay (a light inset bevel). Moving between tabs, the indicator's leading edge springs ahead and its trailing
  * edge follows, and it squashes as it goes. Arrow keys follow the WAI-ARIA tabs pattern with a roving tabindex.
  */
-export function useTabNavigator({ tabs, activeId, label, onSelect, flashRef }: {
+export function useTabNavigator({ tabs, activeId, onSelect }: {
   tabs: TabInfo[]
   activeId: string | undefined
-  /** What the closed bay shows when no tab is active (Settings). */
-  label: { id: string; text: string }
   onSelect: (id: string) => void
-  /** Filled with a function that opens the bay for a moment (the tab keys). */
-  flashRef: { current: (() => void) | null }
 }) {
-  // It stays open a while after the pointer leaves, and longer after a tab key, so you can see where you landed.
-  const bay = useHoverBay(1100, 2000)
-  flashRef.current = bay.flash
   const strip = useRef<HTMLDivElement>(null)
-  const closedLabel = useRef<HTMLSpanElement>(null)
   const cells = useRef<Record<string, HTMLAnchorElement | null>>({})
-  const [width, setWidth] = useState({ closed: 99, open: 346 })
-  const [flip, setFlip] = useState(0)
+  const [width, setWidth] = useState(346)
   const last = useRef<{ left?: number; placed: boolean }>({ placed: false })
-  const shown = tabs.find((tab) => tab.id === activeId)
-  const closedId = shown?.id ?? label.id
-  const closedText = shown?.label ?? label.text
+  const labels = tabs.map((tab) => tab.label).join("|")
 
-  // The bay's widths come from its content: the active label closed, every tab open.
+  // The bay's width comes from its content: every tab.
   useLayoutEffect(() => {
     const measure = () => {
-      const closed = closedLabel.current ? Math.ceil(closedLabel.current.getBoundingClientRect().width) + 40 : 99
       const tabsIn = strip.current ? [...strip.current.querySelectorAll<HTMLElement>("[role='tab']")] : []
       const open = tabsIn.length ? Math.ceil(tabsIn.reduce((sum, tab) => sum + tab.offsetWidth, 0) + (tabsIn.length - 1) * 2) + 20 : 346
-      setWidth((now) => (now.closed === closed && now.open === open ? now : { closed, open }))
+      setWidth(open)
     }
     measure()
     void document.fonts?.ready.then(measure)
-  }, [closedText, tabs.length])
-
-  useEffect(() => setFlip((now) => now + 1), [closedId])
+  }, [labels])
 
   // The indicator: placed under the active tab, its edges sprung as it moves.
   const place = useCallback(() => {
@@ -245,17 +234,19 @@ export function useTabNavigator({ tabs, activeId, label, onSelect, flashRef }: {
         continue
       }
       if (left === last.current.left) continue
-      el.style.transition = goingRight ? `left 520ms ${TRAIL} 24ms, right 320ms ${LEAD}` : `left 320ms ${LEAD}, right 520ms ${TRAIL} 24ms`
+      el.style.transition = goingRight
+        ? `left ${TRAIL_MS}ms ${TRAIL} ${TRAIL_LAG}ms, right ${LEAD_MS}ms ${LEAD}`
+        : `left ${LEAD_MS}ms ${LEAD}, right ${TRAIL_MS}ms ${TRAIL} ${TRAIL_LAG}ms`
       el.style.left = `${left}px`
       el.style.right = `${right}px`
-      layer.animate?.([{ transform: "scaleY(1)" }, { transform: "scaleY(0.84)", offset: 0.35 }, { transform: "scaleY(1.05)", offset: 0.75 }, { transform: "scaleY(1)" }], { duration: 540, easing: "ease-in-out" })
+      layer.animate?.([{ transform: "scaleY(1)" }, { transform: "scaleY(0.84)", offset: 0.35 }, { transform: "scaleY(1.05)", offset: 0.75 }, { transform: "scaleY(1)" }], { duration: SQUASH_MS, easing: "ease-in-out" })
     }
     if (track.offsetWidth > 0) last.current = { left, placed: true }
   }, [activeId])
   useLayoutEffect(() => {
     const frame = requestAnimationFrame(() => requestAnimationFrame(place))
     return () => cancelAnimationFrame(frame)
-  }, [place, width.open])
+  }, [place, width])
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "ArrowDown" && !event.altKey) {
@@ -278,21 +269,15 @@ export function useTabNavigator({ tabs, activeId, label, onSelect, flashRef }: {
     cells.current[next.id]?.focus({ preventScroll: true })
   }
 
-  const open = bay.open
-  const vars = { "--wT": `${open ? width.open : width.closed}px`, "--hT": "40px" } as CSSProperties
-  return { open, vars, ghost: <BayGhost className="cs-gt" style={vars} />, bay: (
-    <div className="cs-tbwrap" style={vars} {...bay.handlers}>
+  const vars = { "--wT": `${width}px`, "--hT": "40px" } as CSSProperties
+  return { vars, ghost: <BayGhost className="cs-gt" style={vars} />, bay: (
+    <div className="cs-tbwrap" style={vars}>
       <div className="cs-tbx">
-        <div className="cs-tbc" aria-hidden="true">
-          <span ref={closedLabel} key={closedId} className="cs-lb" data-p={String(flip % 2)}>
-            <span className="cs-ti"><TabGlyph id={closedId} /></span>
-            {closedText}
-          </span>
-        </div>
         <div className="cs-tbo" data-none={activeId ? undefined : ""}>
         <div ref={strip} role="tablist" aria-label="Lobby tabs" onKeyDown={onKeyDown} className="cs-track">
           <span className="cs-tabind cs-dent" aria-hidden="true"><i /></span>
           <span className="cs-tabind cs-tint" aria-hidden="true"><i /></span>
+          <span className="cs-tabind cs-bevel" aria-hidden="true"><i /></span>
           {tabs.map((tab, index) => (
             <a
               key={tab.id}

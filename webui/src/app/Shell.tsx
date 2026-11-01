@@ -159,18 +159,12 @@ export function Shell() {
   const projects = useProjects()
   // The key pins the sidebar open or lets it fold back to its rail.
   const toggleSidebar = useCallback(() => toggleSidebarPin(), [])
-  // A tab key opens the tab navigator for a moment, so you see where it took you.
-  const flashTabs = useRef<(() => void) | null>(null)
   const onAction = useCallback((action: string) => {
     if ((action === "thinking" || action === "activity") && status?.panels?.[action] === false) return
-    if (action === "nextTab" || action === "prevTab") flashTabs.current?.()
     // The route as the address bar has it right now: a key pressed in the frame after a jump must not act on the page just left.
     handleAction(action, parseHash(window.location.hash) ?? route, toggleHelp, cycle, toggleSidebar)
   }, [route, toggleHelp, cycle, toggleSidebar, status?.panels])
-  const onTab = useCallback((id: string) => {
-    flashTabs.current?.()
-    select(id)
-  }, [select])
+  const onTab = select
   const insideApp = useCallback(() => {
     const el = document.activeElement
     if (!el || el === document.body || rootRef.current?.contains(el) === true || el.closest(".terminal-pop")) return true
@@ -203,7 +197,7 @@ export function Shell() {
   }, [tab, ready])
 
   const keyLabels = Object.fromEntries(keys.map((key) => [key.action, key.label]))
-  const nav = useTabNavigator({ tabs, activeId, label: { id: "settings", text: "Settings" }, onSelect: select, flashRef: flashTabs })
+  const nav = useTabNavigator({ tabs, activeId, onSelect: select })
   const sidebar = useSidebar({ route, keys: keyLabels, onHelp: toggleHelp })
   if (signedOut || !status) return (
     <div ref={rootRef} className="cs-frame">
@@ -219,7 +213,7 @@ export function Shell() {
   )
   return (
     // The page lies flat over the whole window; the sidebar, the tabs and the tools are bays on its edges.
-    <div ref={rootRef} className="cs-frame" data-sb={sidebar.open ? "open" : "closed"} data-tb={nav.open ? "open" : "closed"}>
+    <div ref={rootRef} className="cs-frame" data-sb={sidebar.open ? "open" : "closed"} data-tb="open">
       <ShellFilters />
       <div className="cs-body">
         <Banner connection={connection} onRetry={retry} />

@@ -67,7 +67,9 @@
   --input: #dedcd1;
   --you: #f0eee6;
   /* Your message: a soft filled block, as in the harnesses. */
-  --bubble: #f0eee6;
+  /* Clearly set off from the page (the user found the old fill hard to see), still muted. */
+  --bubble: #e9e6db;
+  --bubble-line: color-mix(in srgb, var(--foreground) 14%, var(--bubble));
   --bubble-foreground: var(--foreground);
 
   /* Meaning */
@@ -179,7 +181,8 @@
   --border: #3e3e38;
   --input: #3e3e38;
   --you: #1f1e1d;
-  --bubble: #1f1e1d;
+  --bubble: #393835;
+  --bubble-line: color-mix(in srgb, var(--foreground) 16%, var(--bubble));
 
   --destructive: #f87171;
   /* Dark mode's red is a light tint, under white too pale: its muted Stop mixes from the deeper red. */
