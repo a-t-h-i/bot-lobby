@@ -13,12 +13,16 @@ function mentionColor(text: string): string {
   return colour === "var(--muted-foreground)" ? "var(--primary)" : colour
 }
 
-/** What was just typed: the span between what stayed the same at the start and at the end. `seq` counts the edits. */
+/** Text typed lately: the span each keystroke added, `seq` naming the edit and `at` when it happened. */
 interface Fresh {
   start: number
   end: number
   seq: number
+  at: number
 }
+
+/** How long typed text keeps its own span: a little over the fade in the stylesheet (.md-new), so a fade is never cut. */
+const FADE_MS = 520
 
 function insertion(before: string, after: string): { start: number; end: number } | undefined {
   if (after.length <= before.length) return undefined
@@ -31,7 +35,22 @@ function insertion(before: string, after: string): { start: number; end: number 
   return end - start > 0 && end - start <= 24 ? { start, end } : undefined
 }
 
-const Runs = memo(function Runs({ text, fresh }: { text: string; fresh?: Fresh }) {
+/**
+ * The fresh spans after an edit: the new keystroke's span added, the ones after it moved along, and spans whose fade
+ * has finished let go. Each keystroke keeps its own span (and key) until its fade ends, so fast typing never cuts
+ * the last letter's fade short. Anything but an insertion (a delete, a paste) shows at once.
+ */
+function nextFresh(before: string, after: string, now: Fresh[], seq: number, at: number): Fresh[] {
+  const span = insertion(before, after)
+  if (!span) return []
+  const size = span.end - span.start
+  const kept = now
+    .filter((fresh) => at - fresh.at < FADE_MS && !(fresh.start < span.start && fresh.end > span.start))
+    .map((fresh) => (fresh.start >= span.start ? { ...fresh, start: fresh.start + size, end: fresh.end + size } : fresh))
+  return [...kept, { ...span, seq, at }].sort((x, y) => x.start - y.start)
+}
+
+const Runs = memo(function Runs({ text, fresh }: { text: string; fresh: Fresh[] }) {
   let at = 0
   return (
     <>
@@ -40,15 +59,23 @@ const Runs = memo(function Runs({ text, fresh }: { text: string; fresh?: Fresh }
         at += run.text.length
         const className = run.kind ? run.kind.split(" ").map((kind) => `md-${kind}`).join(" ") : ""
         const style = run.kind === "mention" ? { color: mentionColor(run.text) } : undefined
-        // The run cut where the fresh text starts and ends, the fresh part keyed by the edit so its fade restarts.
-        const cuts = fresh && fresh.start < at && fresh.end > from
-          ? [[from, Math.max(from, fresh.start)], [Math.max(from, fresh.start), Math.min(at, fresh.end)], [Math.min(at, fresh.end), at]]
-          : [[from, at]]
-        return cuts.filter(([a, b]) => b! > a!).map(([a, b]) => {
-          const isNew = fresh !== undefined && cuts.length > 1 && a === Math.max(from, fresh.start)
-          const piece = run.text.slice(a! - from, b! - from)
+        // The run cut at each fresh span inside it; a fresh piece is keyed by its edit, so its fade runs on to the end.
+        const pieces: { a: number; b: number; seq?: number }[] = []
+        let cursor = from
+        for (const span of fresh) {
+          const a = Math.max(from, span.start)
+          const b = Math.min(at, span.end)
+          if (b <= a) continue
+          if (a > cursor) pieces.push({ a: cursor, b: a })
+          pieces.push({ a, b, seq: span.seq })
+          cursor = b
+        }
+        if (cursor < at) pieces.push({ a: cursor, b: at })
+        return pieces.map(({ a, b, seq }) => {
+          const piece = run.text.slice(a - from, b - from)
+          const isNew = seq !== undefined
           return className || isNew ? (
-            <span key={isNew ? `n${fresh!.seq}-${index}` : `${index}-${a}`} className={[className, isNew ? "md-new" : ""].filter(Boolean).join(" ")} style={style}>
+            <span key={isNew ? `n${seq}-${index}` : `${index}-${a}`} className={[className, isNew ? "md-new" : ""].filter(Boolean).join(" ")} style={style}>
               {piece}
             </span>
           ) : (
@@ -63,15 +90,14 @@ const Runs = memo(function Runs({ text, fresh }: { text: string; fresh?: Fresh }
 })
 
 export const MarkdownMirror = forwardRef<HTMLDivElement, { text: string }>(function MarkdownMirror({ text }, ref) {
-  const last = useRef({ text, fresh: undefined as Fresh | undefined, seq: 0 })
+  const last = useRef({ text, fresh: [] as Fresh[], seq: 0 })
   if (last.current.text !== text) {
-    const span = insertion(last.current.text, text)
     const seq = last.current.seq + 1
-    last.current = { text, seq, fresh: span ? { ...span, seq } : undefined }
+    last.current = { text, seq, fresh: nextFresh(last.current.text, text, last.current.fresh, seq, performance.now()) }
   }
   return (
     <div ref={ref} className="bubble-text bubble-mirror" aria-hidden="true">
-      <Runs text={text} {...(last.current.fresh ? { fresh: last.current.fresh } : {})} />
+      <Runs text={text} fresh={last.current.fresh} />
     </div>
   )
 })
