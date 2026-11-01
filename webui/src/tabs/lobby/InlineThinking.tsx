@@ -11,6 +11,7 @@ import { formatSince } from "@/lib/format"
 import { Markdown } from "@/ui/Markdown"
 import { latestThoughts, sourceLabel, sourceTone, type ThoughtEntry } from "./types"
 import { thoughtSteps } from "./thoughtSteps"
+import { RoleWord } from "./RoleWord"
 
 /** Steps an agent's thought shows before the earlier ones fold away. */
 const SHOWN_STEPS = 4
@@ -76,7 +77,7 @@ export function InlineThinking({ thoughts }: { thoughts: ThoughtEntry[] }) {
       <button type="button" aria-expanded={open} aria-controls={list} onClick={() => setOwn(!open)} className="cs-wrow activity-toggle">
         {live ? (
           <>
-            <span className="cs-wtx">Thinking</span>
+            <RoleWord source={live.source} text="Thinking" />
             <span key={live.id} className="activity-live-step min-w-0 truncate">
               <span className="font-medium">{sourceLabel(live.source)}</span> {lastStep(live)}
             </span>

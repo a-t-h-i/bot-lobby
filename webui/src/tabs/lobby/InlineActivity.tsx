@@ -3,8 +3,8 @@
  * Activity in the conversation, as work-log rows after the coding harnesses: each run of
  * agents' steps between two messages folds into one quiet line ("Worked
  * for 2m 59s · 6 steps · Master, Dev, QA"), or, while a step is running, that
- * step beside the working mark, in its agent's colour: the word "Working"
- * glints, each new step slides in over the last and the clock counts up.
+ * step beside the working mark, in its agent's colour: the agent's own verb
+ * ("Scouting", "Checking"…) shimmers with its role's motion (RoleWord), each new step slides in over the last and the clock counts up.
  * Opening it lists the steps as quiet lines, each with a
  * mark per kind (the working mark for a running step, a tick for done, an alert for a
  * warning, a cross for an error) and its agent in its colour. Colour is never
@@ -17,6 +17,7 @@ import { formatClock } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { linkFiles } from "@/app/code/FileLink"
 import { sourceColor, sourceLabel, sourceTone, type ActivityEntry } from "./types"
+import { RoleWord } from "./RoleWord"
 
 /** Whether every run of steps is open; remembered in this browser (`useCollapsed` stores it, folded is the default). */
 export const ACTIVITY_OPEN = "lobby.activity.open"
@@ -95,7 +96,7 @@ export function InlineActivity({ entries }: { entries: ActivityEntry[] }) {
       <button type="button" aria-expanded={open} aria-controls={list} onClick={() => setOwn(!open)} className="cs-wrow activity-toggle">
         {live ? (
           <>
-            <span className="cs-wtx">Working</span>
+            <RoleWord source={live.source} />
             <span key={live.id} className="activity-live-step min-w-0 truncate">
               <span className={cn("font-medium", sourceColor(live.source))}>{sourceLabel(live.source)}</span> {live.text}
             </span>

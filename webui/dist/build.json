@@ -1,6 +1,6 @@
 {
-  "hash": "f6d3ac373fa5e58a407af8c76b5a1755b427d55e9ba26c7f9705751b90fbf009",
-  "builtAt": "2026-11-01T11:18:20.931Z",
+  "hash": "858eb1568f7d3aedb8b49c9968cbdc5fd969e9f9ee596791b9f9e778e074ae0e",
+  "builtAt": "2026-11-01T11:23:00.767Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -296,7 +296,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "8b5e35ee323292cbfcf0aa859f5c4843072c89ba8ab6306be5a2e9733337b1f8"
+      "sha256": "fc7cac30ac1ee3d3337e31d86db8a2cb1dc81bd31afb404eeff871cd120c00f3"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -436,7 +436,7 @@
     },
     {
       "path": "webui/src/surface.css",
-      "sha256": "69d0a1e9f6a71aab8a06d83a2c57ffbf068c3a03bba4d17e16635100af626e04"
+      "sha256": "de64b014b8ca4258657a3a046b392c7c3f2254dbeb4014dedeb3628c5928caef"
     },
     {
       "path": "webui/src/tabs/knowledge/AgentCards.tsx",
@@ -476,7 +476,7 @@
     },
     {
       "path": "webui/src/tabs/lobby/ChatParts.tsx",
-      "sha256": "7588ac39c0fa236a388fb73e0062585ab4e0d792e2bc2dcfaa623ca185d6d33a"
+      "sha256": "a5f5d52ce41aa815d3d81fbbdba137092f2d8a37afc51b7e760467128f8fb966"
     },
     {
       "path": "webui/src/tabs/lobby/Conversation.tsx",
@@ -484,15 +484,19 @@
     },
     {
       "path": "webui/src/tabs/lobby/InlineActivity.tsx",
-      "sha256": "1b56e106950fd3e2cbcac28eb9181a5dce474c0512c786406e2041f447845f67"
+      "sha256": "2da9e4117fef287f7e2c6337be0ad1c3e1f5e749a1ae4125cf118b5bf5111745"
     },
     {
       "path": "webui/src/tabs/lobby/InlineThinking.tsx",
-      "sha256": "0e2666c92f9f65226f7aea1aa50185da026caea9e02a81a881da2053d1608809"
+      "sha256": "bbacdd83a804547907b74bf28af042f0f0c8d5ccaac1ecd8fc2e0d15fa487014"
     },
     {
       "path": "webui/src/tabs/lobby/LobbyTab.tsx",
       "sha256": "7616b0956fe49e10d42193d700b81d6969a16b6ca38d8f1f02276dbb2e6a7f42"
+    },
+    {
+      "path": "webui/src/tabs/lobby/RoleWord.tsx",
+      "sha256": "60180e78a30f34de87ee44f0128be55de9db9ddac801a5997e03f97487aca1be"
     },
     {
       "path": "webui/src/tabs/lobby/busy.ts",
