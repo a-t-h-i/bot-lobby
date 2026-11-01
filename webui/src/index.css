@@ -1426,7 +1426,7 @@
   color: var(--bubble-ink);
   caret-color: var(--bubble-accent);
   white-space: pre-wrap;
-  transition: padding 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: padding 380ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 .bubble-text::placeholder { color: var(--bubble-muted); opacity: 1; }
 /* The typing happens in the clear box; its Markdown shows in the mirror behind, which must wrap exactly as the box. */
@@ -1479,14 +1479,9 @@
   gap: 4px;
   padding: 6px 10px 8px;
 }
-.bubble[data-shrunk] .bubble-tools { opacity: 0; pointer-events: none; transition: opacity 80ms ease; }
-/* On unfolding, the tools pop in one after another: attach, project, hints, send. */
-@keyframes bubble-tool-pop { from { opacity: 0; transform: translateY(6px) scale(0.4); } to { opacity: 1; transform: none; } }
-.bubble[data-morphing]:not([data-shrunk]) .bubble-tool {
-  transform-origin: 50% 100%;
-  animation: bubble-tool-pop 250ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
-  animation-delay: calc(110ms + var(--i, 0) * 45ms);
-}
+/* The tools ride the fold: they fade and sink as it closes, and rise back as it opens, on the box's own curve. */
+.bubble-tools { transition: opacity 260ms ease 90ms, transform 380ms cubic-bezier(0.32, 0.72, 0, 1); }
+.bubble[data-shrunk] .bubble-tools { opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity 140ms ease, transform 380ms cubic-bezier(0.32, 0.72, 0, 1); }
 .bubble-hints { display: flex; align-items: center; gap: 4px; margin-right: 8px; font-size: 11px; color: var(--bubble-muted); white-space: nowrap; }
 @container (max-width: 26rem) { .bubble-hints { display: none; } }
 
@@ -1542,47 +1537,36 @@
 .bubble-send.bubble-key { background: var(--bubble-accent); color: var(--primary-foreground); }
 .bubble-send.bubble-stop { background: var(--stop-action); color: #fff; }
 .bubble-send:disabled { cursor: default; background: var(--bubble-hover); color: var(--bubble-faint); }
-.bubble-plane { transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1); }
-.bubble-key:hover .bubble-plane { transform: translate(1px, -1px); }
-.bubble-key:active .bubble-plane { transform: translate(2px, -2px) scale(0.92); transition-duration: 50ms; }
-
-/* Tooltips: a tiny muted label above the button after a 500ms hover; never while pressing or while its menu is open. */
-.bubble-tip { position: relative; }
-.bubble-tip::after {
-  content: attr(data-tip);
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  transform: translate(-50%, 3px);
-  padding: 4px 8px;
-  border-radius: 10px;
-  background: var(--bubble-fill);
-  border: 1px solid var(--bubble-edge);
-  color: var(--bubble-muted);
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1.3;
-  white-space: nowrap;
-  box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.16);
-  opacity: 0;
-  pointer-events: none;
-  z-index: 5;
-  transition: opacity 90ms ease, transform 90ms ease;
+/* The paper plane: it lifts and tilts toward its heading on hover, crouches when pressed, and on each send flies off
+   up and to the right with a short trail, while a fresh plane glides in from the lower left and settles. */
+.bubble-send { overflow: hidden; }
+.bubble-plane-wrap { position: relative; display: grid; place-items: center; width: 16px; height: 16px; }
+.bubble-plane { transition: transform 220ms cubic-bezier(0.34, 1.5, 0.5, 1); transform-origin: 40% 60%; }
+.bubble-key:hover .bubble-plane { transform: translate(1px, -1.5px) rotate(-8deg); }
+.bubble-key:active .bubble-plane { transform: translate(-1px, 1px) scale(0.86) rotate(4deg); transition: transform 70ms ease; }
+.bubble-trail { position: absolute; left: -2px; bottom: -2px; width: 14px; height: 2px; border-radius: 2px; background: currentColor; opacity: 0; transform-origin: 100% 50%; rotate: -45deg; pointer-events: none; }
+.bubble-plane-wrap[data-fly] .bubble-plane { animation: plane-fly 620ms cubic-bezier(0.5, 0, 0.3, 1) both; }
+.bubble-plane-wrap[data-fly] .bubble-trail { animation: plane-trail 300ms ease-out both; }
+.bubble-plane-wrap[data-fly] { animation: send-kick 380ms cubic-bezier(0.34, 1.5, 0.5, 1); }
+.bubble-send[data-flying]:disabled { cursor: default; background: var(--bubble-accent); color: var(--primary-foreground); }
+@keyframes plane-fly {
+  0% { transform: none; opacity: 1; }
+  14% { transform: translate(-2px, 2px) scale(0.9) rotate(6deg); opacity: 1; }
+  44% { transform: translate(18px, -18px) scale(0.7) rotate(-14deg); opacity: 0; }
+  45% { transform: translate(-16px, 16px) scale(0.7) rotate(-14deg); opacity: 0; }
+  58% { opacity: 1; }
+  84% { transform: translate(1px, -1px) scale(1.05) rotate(-4deg); }
+  100% { transform: none; opacity: 1; }
 }
-.bubble-tip:hover::after {
-  opacity: 1;
-  transform: translate(-50%, 0);
-  transition: opacity 140ms ease 500ms, transform 160ms cubic-bezier(0.22, 1, 0.36, 1) 500ms;
+@keyframes plane-trail {
+  0%, 10% { opacity: 0; transform: translate(4px, -4px) scaleX(0); }
+  30% { opacity: 0.55; transform: translate(10px, -10px) scaleX(1); }
+  100% { opacity: 0; transform: translate(22px, -22px) scaleX(0.2); }
 }
-.bubble-tip:active::after, .bubble-tip[data-on]:hover::after, .bubble-tip:disabled:hover::after {
-  opacity: 0;
-  transform: translate(-50%, 3px);
-  transition: opacity 60ms ease;
-}
+@keyframes send-kick { 0% { scale: 1; } 20% { scale: 0.92; } 60% { scale: 1.04; } 100% { scale: 1; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .bubble :is(.bubble-menu, .bubble-menu-body, .bubble-pane, .bubble-row, .bubble-prow, .bubble-composer, .bubble-ghost, .bubble-text, .bubble-tool, .bubble-flist, .bubble-key, .bubble-plane),
-  .bubble-tip::after {
+  .bubble :is(.bubble-menu, .bubble-menu-body, .bubble-pane, .bubble-row, .bubble-prow, .bubble-composer, .bubble-ghost, .bubble-text, .bubble-tool, .bubble-tools, .bubble-flist, .bubble-key, .bubble-plane, .bubble-trail, .bubble-send) {
     transition: none !important;
     animation: none !important;
   }

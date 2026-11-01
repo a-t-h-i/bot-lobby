@@ -90,7 +90,8 @@ function useOutage(connection: ConnectionState): boolean {
 }
 
 function Banner({ connection, onRetry }: { connection: ConnectionState; onRetry: () => void }) {
-  return useOutage(connection) ? <ReconnectingState onRetry={onRetry} /> : null
+  // Lost the server: a card in the middle of the window, over the page, until it is back.
+  return useOutage(connection) ? <div className="cs-outage"><ReconnectingState onRetry={onRetry} /></div> : null
 }
 
 /**

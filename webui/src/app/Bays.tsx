@@ -9,6 +9,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProp
 import type { TabInfo } from "@protocol"
 import { focusPage, tabWalk } from "@/prompts/nav"
 import { cn } from "@/lib/utils"
+import { TabIcon } from "./TabIcons.tsx"
 
 /** The bays' goo filters, once per page: the edge with its light and shade, the lit fill, the tab dent and its tint. */
 export function ShellFilters() {
@@ -168,6 +169,15 @@ export function useTabNavigator({ tabs, activeId, onSelect }: {
   const cells = useRef<Record<string, HTMLAnchorElement | null>>({})
   const [width, setWidth] = useState(346)
   const labels = tabs.map((tab) => tab.label).join("|")
+  // Each time a tab becomes the chosen one, its icon plays its own little animation (never on hover or first load).
+  const [plays, setPlays] = useState<Record<string, number>>({})
+  const seen = useRef(activeId)
+  useEffect(() => {
+    if (seen.current === activeId) return
+    seen.current = activeId
+    if (!activeId || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+    setPlays((now) => ({ ...now, [activeId]: (now[activeId] ?? 0) + 1 }))
+  }, [activeId])
 
   // The bay's width comes from its content: every tab.
   useLayoutEffect(() => {
@@ -223,7 +233,7 @@ export function useTabNavigator({ tabs, activeId, onSelect }: {
               className="cs-tab"
               style={{ "--i": index } as CSSProperties}
             >
-              <span className="cs-ti"><TabGlyph id={tab.id} /></span>
+              <span className="cs-ti"><TabIcon id={tab.id} play={plays[tab.id] ?? 0} className="size-[15px]" /></span>
               {/* The bold copy holds the width, so the bar never shifts when the chosen tab's label turns bolder. */}
               <span className="cs-tl" data-t={tab.label}>{tab.label}</span>
             </a>
